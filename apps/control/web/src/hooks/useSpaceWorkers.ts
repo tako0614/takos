@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useState } from 'react';
-import { rpc, rpcJson } from '../lib/rpc';
+import { createSignal, onMount } from 'solid-js';
+import { rpc, rpcJson, rpcPath } from '../lib/rpc';
 import { useConfirmDialog } from '../store/confirm-dialog';
 import { useI18n } from '../store/i18n';
 import { useToast } from '../store/toast';
@@ -20,15 +20,15 @@ export function useSpaceWorkers(spaceId: string | null) {
   const { showToast } = useToast();
   const { confirm } = useConfirmDialog();
 
-  const [cfWorkers, setCfWorkers] = useState<Worker[]>([]);
-  const [loadingCfWorkers, setLoadingCfWorkers] = useState(true);
+  const [cfWorkers, setCfWorkers] = createSignal<Worker[]>([]);
+  const [loadingCfWorkers, setLoadingCfWorkers] = createSignal(true);
 
-  const refreshWorkers = useCallback(async () => {
+  const refreshWorkers = async () => {
     setLoadingCfWorkers(true);
     try {
       const res = spaceId
         ? await fetch(`/api/workers/space/${encodeURIComponent(spaceId)}`)
-        : await rpc.workers.$get();
+        : await rpcPath(rpc, 'workers').$get({ param: {} }) as Response;
       const data = await rpcJson<{ workers: Worker[] }>(res);
       setCfWorkers(data.workers || []);
     } catch {
@@ -36,13 +36,13 @@ export function useSpaceWorkers(spaceId: string | null) {
     } finally {
       setLoadingCfWorkers(false);
     }
-  }, [spaceId]);
+  };
 
-  useEffect(() => {
+  onMount(() => {
     refreshWorkers();
-  }, [refreshWorkers]);
+  });
 
-  const deleteWorker = useCallback(async (worker: Worker) => {
+  const deleteWorker = async (worker: Worker) => {
     const baseMessage = t('confirmDeleteWorker');
     const warning = isYurucommuWorker(worker)
       ? `${baseMessage}\n\nWarning: This worker is linked to Yurucommu. Deleting it may break your Yurucommu instance.`
@@ -55,7 +55,7 @@ export function useSpaceWorkers(spaceId: string | null) {
     });
     if (!confirmed) return false;
     try {
-      const res = await rpc.workers[':id'].$delete({ param: { id: worker.id } });
+      const res = await rpcPath(rpc, 'workers', ':id').$delete({ param: { id: worker.id } }) as Response;
       await rpcJson(res);
       showToast('success', t('deleted'));
       await refreshWorkers();
@@ -64,7 +64,7 @@ export function useSpaceWorkers(spaceId: string | null) {
       showToast('error', t('failedToDelete'));
       return false;
     }
-  }, [confirm, refreshWorkers, showToast, t]);
+  };
 
   return {
     cfWorkers,

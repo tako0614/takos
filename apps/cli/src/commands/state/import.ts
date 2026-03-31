@@ -1,9 +1,9 @@
 import { Command } from 'commander';
-import chalk from 'chalk';
-import { readState, writeState, getStateDir } from '../../lib/state/state-file.js';
-import { cliExit } from '../../lib/command-exit.js';
-import type { TakosState } from '../../lib/state/state-types.js';
-import { toAccessOpts } from './helpers.js';
+import { green, red } from '@std/fmt/colors';
+import { readState, writeState, getStateDir } from '../../lib/state/state-file.ts';
+import { cliExit } from '../../lib/command-exit.ts';
+import type { TakosState } from '../../lib/state/state-types.ts';
+import { toAccessOpts } from './helpers.ts';
 
 export function registerStateImportCommand(stateCmd: Command): void {
   stateCmd
@@ -42,7 +42,7 @@ export function registerStateImportCommand(stateCmd: Command): void {
 
       const parts = key.split('.');
       if (parts.length !== 2) {
-        console.log(chalk.red('Key must be in the format "category.name" (e.g. resources.db)'));
+        console.log(red('Key must be in the format "category.name" (e.g. resources.db)'));
         cliExit(1);
       }
 
@@ -71,12 +71,12 @@ export function registerStateImportCommand(stateCmd: Command): void {
           imageHash: '',
         };
       } else {
-        console.log(chalk.red(`Unknown category: ${category}. Use "resources", "workers", "containers", or "services".`));
+        console.log(red(`Unknown category: ${category}. Use "resources", "workers", "containers", or "services".`));
         cliExit(1);
       }
 
       state.updatedAt = now;
       await writeState(stateDir, group, state, accessOpts);
-      console.log(chalk.green(`Imported ${key} with id ${id}`));
+      console.log(green(`Imported ${key} with id ${id}`));
     });
 }

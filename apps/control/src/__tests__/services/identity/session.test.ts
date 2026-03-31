@@ -1,5 +1,3 @@
-import { describe, expect, it, vi, beforeEach } from 'vitest';
-
 import {
   generateSessionId,
   normalizeSessionId,
@@ -19,118 +17,98 @@ import {
 // Pure function tests (no mocks needed)
 // ---------------------------------------------------------------------------
 
-describe('generateSessionId', () => {
-  it('produces a base64url-encoded string of sufficient length', () => {
-    const id = generateSessionId();
-    expect(typeof id).toBe('string');
+
+import { assertEquals, assertNotEquals, assert, assertRejects, assertStringIncludes } from 'jsr:@std/assert';
+import { assertSpyCalls } from 'jsr:@std/testing/mock';
+
+  Deno.test('generateSessionId - produces a base64url-encoded string of sufficient length', () => {
+  const id = generateSessionId();
+    assertEquals(typeof id, 'string');
     // 32 random bytes -> at least 43 base64url chars
-    expect(id.length).toBeGreaterThanOrEqual(43);
-  });
-
-  it('produces unique values on successive calls', () => {
-    const a = generateSessionId();
+    assert(id.length >= 43);
+})
+  Deno.test('generateSessionId - produces unique values on successive calls', () => {
+  const a = generateSessionId();
     const b = generateSessionId();
-    expect(a).not.toBe(b);
-  });
-});
+    assertNotEquals(a, b);
+})
 
-describe('normalizeSessionId', () => {
-  it('returns null for null / undefined / empty string', () => {
-    expect(normalizeSessionId(null)).toBeNull();
-    expect(normalizeSessionId(undefined)).toBeNull();
-    expect(normalizeSessionId('')).toBeNull();
-    expect(normalizeSessionId('   ')).toBeNull();
-  });
+  Deno.test('normalizeSessionId - returns null for null / undefined / empty string', () => {
+  assertEquals(normalizeSessionId(null), null);
+    assertEquals(normalizeSessionId(undefined), null);
+    assertEquals(normalizeSessionId(''), null);
+    assertEquals(normalizeSessionId('   '), null);
+})
+  Deno.test('normalizeSessionId - returns null for strings shorter than minimum length (16)', () => {
+  assertEquals(normalizeSessionId('short'), null);
+    assertEquals(normalizeSessionId('a'.repeat(15)), null);
+})
+  Deno.test('normalizeSessionId - returns null for strings exceeding maximum length (128)', () => {
+  assertEquals(normalizeSessionId('a'.repeat(129)), null);
+})
+  Deno.test('normalizeSessionId - returns null for strings with invalid characters', () => {
+  assertEquals(normalizeSessionId('a'.repeat(16) + '!@#$'), null);
+    assertEquals(normalizeSessionId('a'.repeat(16) + ' spaces'), null);
+})
+  Deno.test('normalizeSessionId - accepts valid base64url-like session IDs', () => {
+  const valid = 'ABCDEFGHabcdefgh0123456789_-';
+    assertEquals(normalizeSessionId(valid), valid);
+})
+  Deno.test('normalizeSessionId - trims whitespace before validation', () => {
+  const id = 'A'.repeat(32);
+    assertEquals(normalizeSessionId(`  ${id}  `), id);
+})
+  Deno.test('normalizeSessionId - accepts exactly 16-character and 128-character IDs', () => {
+  assertEquals(normalizeSessionId('a'.repeat(16)), 'a'.repeat(16));
+    assertEquals(normalizeSessionId('a'.repeat(128)), 'a'.repeat(128));
+})
 
-  it('returns null for strings shorter than minimum length (16)', () => {
-    expect(normalizeSessionId('short')).toBeNull();
-    expect(normalizeSessionId('a'.repeat(15))).toBeNull();
-  });
+  Deno.test('SESSION_COOKIE_NAME - uses the __Host- prefix for cookie hardening', () => {
+  assertEquals(SESSION_COOKIE_NAME, '__Host-tp_session');
+})
 
-  it('returns null for strings exceeding maximum length (128)', () => {
-    expect(normalizeSessionId('a'.repeat(129))).toBeNull();
-  });
+  Deno.test('setSessionCookie - generates a Secure, HttpOnly, SameSite=Strict cookie', () => {
+  const cookie = setSessionCookie('sess-abc', 604800);
+    assertStringIncludes(cookie, `${SESSION_COOKIE_NAME}=sess-abc`);
+    assertStringIncludes(cookie, 'Path=/');
+    assertStringIncludes(cookie, 'Secure');
+    assertStringIncludes(cookie, 'HttpOnly');
+    assertStringIncludes(cookie, 'SameSite=Strict');
+    assertStringIncludes(cookie, 'Max-Age=604800');
+})
 
-  it('returns null for strings with invalid characters', () => {
-    expect(normalizeSessionId('a'.repeat(16) + '!@#$')).toBeNull();
-    expect(normalizeSessionId('a'.repeat(16) + ' spaces')).toBeNull();
-  });
+  Deno.test('clearSessionCookie - clears the cookie by setting Max-Age=0', () => {
+  const cookie = clearSessionCookie();
+    assertStringIncludes(cookie, `${SESSION_COOKIE_NAME}=`);
+    assertStringIncludes(cookie, 'Max-Age=0');
+    assertStringIncludes(cookie, 'Secure');
+    assertStringIncludes(cookie, 'HttpOnly');
+})
 
-  it('accepts valid base64url-like session IDs', () => {
-    const valid = 'ABCDEFGHabcdefgh0123456789_-';
-    expect(normalizeSessionId(valid)).toBe(valid);
-  });
-
-  it('trims whitespace before validation', () => {
-    const id = 'A'.repeat(32);
-    expect(normalizeSessionId(`  ${id}  `)).toBe(id);
-  });
-
-  it('accepts exactly 16-character and 128-character IDs', () => {
-    expect(normalizeSessionId('a'.repeat(16))).toBe('a'.repeat(16));
-    expect(normalizeSessionId('a'.repeat(128))).toBe('a'.repeat(128));
-  });
-});
-
-describe('SESSION_COOKIE_NAME', () => {
-  it('uses the __Host- prefix for cookie hardening', () => {
-    expect(SESSION_COOKIE_NAME).toBe('__Host-tp_session');
-  });
-});
-
-describe('setSessionCookie', () => {
-  it('generates a Secure, HttpOnly, SameSite=Strict cookie', () => {
-    const cookie = setSessionCookie('sess-abc', 604800);
-    expect(cookie).toContain(`${SESSION_COOKIE_NAME}=sess-abc`);
-    expect(cookie).toContain('Path=/');
-    expect(cookie).toContain('Secure');
-    expect(cookie).toContain('HttpOnly');
-    expect(cookie).toContain('SameSite=Strict');
-    expect(cookie).toContain('Max-Age=604800');
-  });
-});
-
-describe('clearSessionCookie', () => {
-  it('clears the cookie by setting Max-Age=0', () => {
-    const cookie = clearSessionCookie();
-    expect(cookie).toContain(`${SESSION_COOKIE_NAME}=`);
-    expect(cookie).toContain('Max-Age=0');
-    expect(cookie).toContain('Secure');
-    expect(cookie).toContain('HttpOnly');
-  });
-});
-
-describe('getSessionIdFromCookie', () => {
-  it('returns null for null/undefined/empty cookie header', () => {
-    expect(getSessionIdFromCookie(null)).toBeNull();
-    expect(getSessionIdFromCookie(undefined)).toBeNull();
-    expect(getSessionIdFromCookie('')).toBeNull();
-  });
-
-  it('extracts the session cookie when present', () => {
-    const sid = 'A'.repeat(43);
+  Deno.test('getSessionIdFromCookie - returns null for null/undefined/empty cookie header', () => {
+  assertEquals(getSessionIdFromCookie(null), null);
+    assertEquals(getSessionIdFromCookie(undefined), null);
+    assertEquals(getSessionIdFromCookie(''), null);
+})
+  Deno.test('getSessionIdFromCookie - extracts the session cookie when present', () => {
+  const sid = 'A'.repeat(43);
     const header = `other=value; ${SESSION_COOKIE_NAME}=${sid}; another=x`;
-    expect(getSessionIdFromCookie(header)).toBe(sid);
-  });
-
-  it('returns null when session cookie is missing', () => {
-    const header = 'other_cookie=value; foo=bar';
-    expect(getSessionIdFromCookie(header)).toBeNull();
-  });
-
-  it('returns null when session value fails normalization', () => {
-    // value too short for normalizeSessionId
+    assertEquals(getSessionIdFromCookie(header), sid);
+})
+  Deno.test('getSessionIdFromCookie - returns null when session cookie is missing', () => {
+  const header = 'other_cookie=value; foo=bar';
+    assertEquals(getSessionIdFromCookie(header), null);
+})
+  Deno.test('getSessionIdFromCookie - returns null when session value fails normalization', () => {
+  // value too short for normalizeSessionId
     const header = `${SESSION_COOKIE_NAME}=short`;
-    expect(getSessionIdFromCookie(header)).toBeNull();
-  });
-
-  it('skips malformed cookie entries without =', () => {
-    const sid = 'A'.repeat(43);
+    assertEquals(getSessionIdFromCookie(header), null);
+})
+  Deno.test('getSessionIdFromCookie - skips malformed cookie entries without =', () => {
+  const sid = 'A'.repeat(43);
     const header = `badcookie; ${SESSION_COOKIE_NAME}=${sid}`;
-    expect(getSessionIdFromCookie(header)).toBe(sid);
-  });
-});
-
+    assertEquals(getSessionIdFromCookie(header), sid);
+})
 // ---------------------------------------------------------------------------
 // Durable Object interaction tests (mock fetch)
 // ---------------------------------------------------------------------------
@@ -141,133 +119,112 @@ function createMockSessionStore() {
   const idMock = { toString: () => 'mock-id' };
 
   const sessionStore = {
-    idFromName: vi.fn(() => idMock),
-    get: vi.fn(() => stubMock),
+    idFromName: () => idMock,
+    get: () => stubMock,
   };
 
   return { sessionStore, fetchMock };
 }
 
-describe('createSession', () => {
-  it('sends a POST to session/create and returns a valid session', async () => {
-    const { sessionStore, fetchMock } = createMockSessionStore();
-    fetchMock.mockResolvedValue(new Response(null, { status: 200 }));
+
+  Deno.test('createSession - sends a POST to session/create and returns a valid session', async () => {
+  const { sessionStore, fetchMock } = createMockSessionStore();
+    fetchMock = (async () => new Response(null, { status: 200 })) as any;
 
     const session = await createSession(sessionStore as never, 'user-1');
 
-    expect(session.user_id).toBe('user-1');
-    expect(session.id).toBeTruthy();
-    expect(session.expires_at).toBeGreaterThan(Date.now());
-    expect(session.created_at).toBeLessThanOrEqual(Date.now());
-    expect(fetchMock).toHaveBeenCalledTimes(1);
-    const [url, init] = fetchMock.mock.calls[0]!;
-    expect(url).toBe('http://internal/session/create');
-    expect(init?.method).toBe('POST');
-  });
+    assertEquals(session.user_id, 'user-1');
+    assert(session.id);
+    assert(session.expires_at > Date.now());
+    assert(session.created_at <= Date.now());
+    assertSpyCalls(fetchMock, 1);
+    const [url, init] = fetchMock.calls[0]!;
+    assertEquals(url, 'http://internal/session/create');
+    assertEquals(init?.method, 'POST');
+})
+  Deno.test('createSession - throws when the DO returns a non-OK response', async () => {
+  const { sessionStore, fetchMock } = createMockSessionStore();
+    fetchMock = (async () => new Response(null, { status: 500 })) as any;
 
-  it('throws when the DO returns a non-OK response', async () => {
-    const { sessionStore, fetchMock } = createMockSessionStore();
-    fetchMock.mockResolvedValue(new Response(null, { status: 500 }));
+    await await assertRejects(async () => { await createSession(sessionStore as never, 'user-1'); }, 'Session service unavailable');
+})
+  Deno.test('createSession - throws when the DO fetch fails', async () => {
+  const { sessionStore, fetchMock } = createMockSessionStore();
+    fetchMock = (async () => { throw new Error('network error'); }) as any;
 
-    await expect(createSession(sessionStore as never, 'user-1')).rejects.toThrow('Session service unavailable');
-  });
+    await await assertRejects(async () => { await createSession(sessionStore as never, 'user-1'); }, 'Session service unavailable');
+})
 
-  it('throws when the DO fetch fails', async () => {
-    const { sessionStore, fetchMock } = createMockSessionStore();
-    fetchMock.mockRejectedValue(new Error('network error'));
-
-    await expect(createSession(sessionStore as never, 'user-1')).rejects.toThrow('Session service unavailable');
-  });
-});
-
-describe('getSession', () => {
-  it('returns the session when the DO returns a valid payload', async () => {
-    const { sessionStore, fetchMock } = createMockSessionStore();
+  Deno.test('getSession - returns the session when the DO returns a valid payload', async () => {
+  const { sessionStore, fetchMock } = createMockSessionStore();
     const validSession = {
       id: 'A'.repeat(43),
       user_id: 'user-1',
       expires_at: Date.now() + 3600_000,
       created_at: Date.now() - 1000,
     };
-    fetchMock.mockResolvedValue(
-      new Response(JSON.stringify({ session: validSession }), { status: 200 }),
-    );
+    fetchMock = (async () => new Response(JSON.stringify({ session: validSession }), { status: 200 }),) as any;
 
     const result = await getSession(sessionStore as never, 'A'.repeat(43));
-    expect(result).toEqual(validSession);
-  });
-
-  it('returns null for an invalid session ID', async () => {
-    const { sessionStore } = createMockSessionStore();
+    assertEquals(result, validSession);
+})
+  Deno.test('getSession - returns null for an invalid session ID', async () => {
+  const { sessionStore } = createMockSessionStore();
     const result = await getSession(sessionStore as never, 'bad');
-    expect(result).toBeNull();
-  });
-
-  it('returns null when the DO returns no session', async () => {
-    const { sessionStore, fetchMock } = createMockSessionStore();
-    fetchMock.mockResolvedValue(
-      new Response(JSON.stringify({ session: null }), { status: 200 }),
-    );
+    assertEquals(result, null);
+})
+  Deno.test('getSession - returns null when the DO returns no session', async () => {
+  const { sessionStore, fetchMock } = createMockSessionStore();
+    fetchMock = (async () => new Response(JSON.stringify({ session: null }), { status: 200 }),) as any;
 
     const result = await getSession(sessionStore as never, 'A'.repeat(43));
-    expect(result).toBeNull();
-  });
-
-  it('returns null for a malformed session payload', async () => {
-    const { sessionStore, fetchMock } = createMockSessionStore();
-    fetchMock.mockResolvedValue(
-      new Response(JSON.stringify({ session: { id: 'bad' } }), { status: 200 }),
-    );
+    assertEquals(result, null);
+})
+  Deno.test('getSession - returns null for a malformed session payload', async () => {
+  const { sessionStore, fetchMock } = createMockSessionStore();
+    fetchMock = (async () => new Response(JSON.stringify({ session: { id: 'bad' } }), { status: 200 }),) as any;
 
     const result = await getSession(sessionStore as never, 'A'.repeat(43));
-    expect(result).toBeNull();
-  });
-
-  it('returns null when the DO returns a non-OK status', async () => {
-    const { sessionStore, fetchMock } = createMockSessionStore();
-    fetchMock.mockResolvedValue(new Response(null, { status: 500 }));
-
-    const result = await getSession(sessionStore as never, 'A'.repeat(43));
-    expect(result).toBeNull();
-  });
-
-  it('returns null when the DO fetch throws', async () => {
-    const { sessionStore, fetchMock } = createMockSessionStore();
-    fetchMock.mockRejectedValue(new Error('network'));
+    assertEquals(result, null);
+})
+  Deno.test('getSession - returns null when the DO returns a non-OK status', async () => {
+  const { sessionStore, fetchMock } = createMockSessionStore();
+    fetchMock = (async () => new Response(null, { status: 500 })) as any;
 
     const result = await getSession(sessionStore as never, 'A'.repeat(43));
-    expect(result).toBeNull();
-  });
-});
+    assertEquals(result, null);
+})
+  Deno.test('getSession - returns null when the DO fetch throws', async () => {
+  const { sessionStore, fetchMock } = createMockSessionStore();
+    fetchMock = (async () => { throw new Error('network'); }) as any;
 
-describe('deleteSession', () => {
-  it('sends a POST to session/delete', async () => {
-    const { sessionStore, fetchMock } = createMockSessionStore();
-    fetchMock.mockResolvedValue(new Response(null, { status: 200 }));
+    const result = await getSession(sessionStore as never, 'A'.repeat(43));
+    assertEquals(result, null);
+})
+
+  Deno.test('deleteSession - sends a POST to session/delete', async () => {
+  const { sessionStore, fetchMock } = createMockSessionStore();
+    fetchMock = (async () => new Response(null, { status: 200 })) as any;
 
     await deleteSession(sessionStore as never, 'A'.repeat(43));
-    expect(fetchMock).toHaveBeenCalledTimes(1);
-    const [url] = fetchMock.mock.calls[0]!;
-    expect(url).toBe('http://internal/session/delete');
-  });
-
-  it('does nothing for an invalid session ID', async () => {
-    const { sessionStore, fetchMock } = createMockSessionStore();
+    assertSpyCalls(fetchMock, 1);
+    const [url] = fetchMock.calls[0]!;
+    assertEquals(url, 'http://internal/session/delete');
+})
+  Deno.test('deleteSession - does nothing for an invalid session ID', async () => {
+  const { sessionStore, fetchMock } = createMockSessionStore();
     await deleteSession(sessionStore as never, 'bad');
-    expect(fetchMock).not.toHaveBeenCalled();
-  });
+    assertSpyCalls(fetchMock, 0);
+})
+  Deno.test('deleteSession - does not throw on DO error', async () => {
+  const { sessionStore, fetchMock } = createMockSessionStore();
+    fetchMock = (async () => { throw new Error('network'); }) as any;
+    await assertEquals(await deleteSession(sessionStore as never, 'A'.repeat(43)), undefined);
+})
 
-  it('does not throw on DO error', async () => {
-    const { sessionStore, fetchMock } = createMockSessionStore();
-    fetchMock.mockRejectedValue(new Error('network'));
-    await expect(deleteSession(sessionStore as never, 'A'.repeat(43))).resolves.toBeUndefined();
-  });
-});
-
-describe('createOIDCState', () => {
-  it('sends a POST to oidc-state/create', async () => {
-    const { sessionStore, fetchMock } = createMockSessionStore();
-    fetchMock.mockResolvedValue(new Response(null, { status: 200 }));
+  Deno.test('createOIDCState - sends a POST to oidc-state/create', async () => {
+  const { sessionStore, fetchMock } = createMockSessionStore();
+    fetchMock = (async () => new Response(null, { status: 200 })) as any;
 
     const oidcState = {
       state: 'test-state',
@@ -278,17 +235,16 @@ describe('createOIDCState', () => {
     };
 
     await createOIDCState(sessionStore as never, oidcState);
-    expect(fetchMock).toHaveBeenCalledTimes(1);
-    const [url, init] = fetchMock.mock.calls[0]!;
-    expect(url).toBe('http://internal/oidc-state/create');
-    expect(init?.method).toBe('POST');
-  });
+    assertSpyCalls(fetchMock, 1);
+    const [url, init] = fetchMock.calls[0]!;
+    assertEquals(url, 'http://internal/oidc-state/create');
+    assertEquals(init?.method, 'POST');
+})
+  Deno.test('createOIDCState - throws when DO returns non-OK status', async () => {
+  const { sessionStore, fetchMock } = createMockSessionStore();
+    fetchMock = (async () => new Response(null, { status: 500 })) as any;
 
-  it('throws when DO returns non-OK status', async () => {
-    const { sessionStore, fetchMock } = createMockSessionStore();
-    fetchMock.mockResolvedValue(new Response(null, { status: 500 }));
-
-    await expect(
+    await await assertRejects(async () => { await 
       createOIDCState(sessionStore as never, {
         state: 's',
         nonce: 'n',
@@ -296,13 +252,11 @@ describe('createOIDCState', () => {
         return_to: '/',
         expires_at: Date.now(),
       }),
-    ).rejects.toThrow('Session service unavailable');
-  });
-});
+    ; }, 'Session service unavailable');
+})
 
-describe('getOIDCState', () => {
-  it('returns OIDC state from the DO', async () => {
-    const { sessionStore, fetchMock } = createMockSessionStore();
+  Deno.test('getOIDCState - returns OIDC state from the DO', async () => {
+  const { sessionStore, fetchMock } = createMockSessionStore();
     const state = {
       state: 'test-state',
       nonce: 'n',
@@ -310,37 +264,30 @@ describe('getOIDCState', () => {
       return_to: '/',
       expires_at: Date.now() + 600_000,
     };
-    fetchMock.mockResolvedValue(
-      new Response(JSON.stringify({ oidcState: state }), { status: 200 }),
-    );
+    fetchMock = (async () => new Response(JSON.stringify({ oidcState: state }), { status: 200 }),) as any;
 
     const result = await getOIDCState(sessionStore as never, 'test-state');
-    expect(result).toEqual(state);
-  });
-
-  it('returns null on error', async () => {
-    const { sessionStore, fetchMock } = createMockSessionStore();
-    fetchMock.mockRejectedValue(new Error('network'));
+    assertEquals(result, state);
+})
+  Deno.test('getOIDCState - returns null on error', async () => {
+  const { sessionStore, fetchMock } = createMockSessionStore();
+    fetchMock = (async () => { throw new Error('network'); }) as any;
 
     const result = await getOIDCState(sessionStore as never, 'test-state');
-    expect(result).toBeNull();
-  });
-});
+    assertEquals(result, null);
+})
 
-describe('deleteOIDCState', () => {
-  it('sends a POST to oidc-state/delete', async () => {
-    const { sessionStore, fetchMock } = createMockSessionStore();
-    fetchMock.mockResolvedValue(new Response(null, { status: 200 }));
+  Deno.test('deleteOIDCState - sends a POST to oidc-state/delete', async () => {
+  const { sessionStore, fetchMock } = createMockSessionStore();
+    fetchMock = (async () => new Response(null, { status: 200 })) as any;
 
     await deleteOIDCState(sessionStore as never, 'test-state');
-    expect(fetchMock).toHaveBeenCalledTimes(1);
-    const [url] = fetchMock.mock.calls[0]!;
-    expect(url).toBe('http://internal/oidc-state/delete');
-  });
-
-  it('does not throw on error', async () => {
-    const { sessionStore, fetchMock } = createMockSessionStore();
-    fetchMock.mockRejectedValue(new Error('network'));
-    await expect(deleteOIDCState(sessionStore as never, 'test-state')).resolves.toBeUndefined();
-  });
-});
+    assertSpyCalls(fetchMock, 1);
+    const [url] = fetchMock.calls[0]!;
+    assertEquals(url, 'http://internal/oidc-state/delete');
+})
+  Deno.test('deleteOIDCState - does not throw on error', async () => {
+  const { sessionStore, fetchMock } = createMockSessionStore();
+    fetchMock = (async () => { throw new Error('network'); }) as any;
+    await assertEquals(await deleteOIDCState(sessionStore as never, 'test-state'), undefined);
+})

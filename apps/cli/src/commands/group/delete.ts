@@ -2,12 +2,12 @@
  * `takos group delete` subcommand.
  */
 import { Command } from 'commander';
-import chalk from 'chalk';
-import { readState, getStateDir, deleteStateFile } from '../../lib/state/state-file.js';
-import { cliExit } from '../../lib/command-exit.js';
-import { api } from '../../lib/api.js';
-import { confirmPrompt } from '../../lib/cli-utils.js';
-import { validateGroupName, toAccessOpts, requireApiGroupByName, resolveGroupSpaceId } from './helpers.js';
+import { bold, dim, green, red } from '@std/fmt/colors';
+import { readState, getStateDir, deleteStateFile } from '../../lib/state/state-file.ts';
+import { cliExit } from '../../lib/command-exit.ts';
+import { api } from '../../lib/api.ts';
+import { confirmPrompt } from '../../lib/cli-utils.ts';
+import { validateGroupName, toAccessOpts, requireApiGroupByName, resolveGroupSpaceId } from './helpers.ts';
 
 export function registerGroupDeleteCommand(groupCmd: Command): void {
   groupCmd
@@ -27,13 +27,13 @@ export function registerGroupDeleteCommand(groupCmd: Command): void {
 
           if (!options.force) {
             console.log('');
-            console.log(chalk.bold(`Group: ${name}`));
-            console.log(chalk.dim('  Empty groups only. Delete fails if resources/services are still attached.'));
+            console.log(bold(`Group: ${name}`));
+            console.log(dim('  Empty groups only. Delete fails if resources/services are still attached.'));
             console.log('');
 
-            const confirmed = await confirmPrompt(chalk.red.bold('Delete this group?'));
+            const confirmed = await confirmPrompt(bold(red('Delete this group?')));
             if (!confirmed) {
-              console.log(chalk.dim('Cancelled.'));
+              console.log(dim('Cancelled.'));
               return;
             }
           }
@@ -45,10 +45,10 @@ export function registerGroupDeleteCommand(groupCmd: Command): void {
             throw new Error(res.error);
           }
 
-          console.log(chalk.green(`Deleted group '${name}'`));
+          console.log(green(`Deleted group '${name}'`));
           return;
         } catch (error) {
-          console.log(chalk.red(error instanceof Error ? error.message : String(error)));
+          console.log(red(error instanceof Error ? error.message : String(error)));
           cliExit(1);
           return;
         }
@@ -60,8 +60,8 @@ export function registerGroupDeleteCommand(groupCmd: Command): void {
       const state = await readState(stateDir, name, accessOpts);
 
       if (!state) {
-        console.log(chalk.red(`Group not found: ${name}`));
-        console.log(chalk.dim('Use `takos group list` to see available groups.'));
+        console.log(red(`Group not found: ${name}`));
+        console.log(dim('Use `takos group list` to see available groups.'));
         cliExit(1);
         return; // unreachable
       }
@@ -74,20 +74,20 @@ export function registerGroupDeleteCommand(groupCmd: Command): void {
 
       if (!options.force) {
         console.log('');
-        console.log(chalk.bold(`Group: ${name}`));
+        console.log(bold(`Group: ${name}`));
         console.log(`  ${totalCount} entit${totalCount === 1 ? 'y' : 'ies'} will be removed from state.`);
-        console.log(chalk.dim('  (Actual cloud resources will NOT be deleted.)'));
+        console.log(dim('  (Actual cloud resources will NOT be deleted.)'));
         console.log('');
 
-        const confirmed = await confirmPrompt(chalk.red.bold('Delete this group?'));
+        const confirmed = await confirmPrompt(bold(red('Delete this group?')));
         if (!confirmed) {
-          console.log(chalk.dim('Cancelled.'));
+          console.log(dim('Cancelled.'));
           return;
         }
       }
 
       await deleteStateFile(stateDir, name, accessOpts);
-      console.log(chalk.green(`Deleted group '${name}'`));
-      console.log(chalk.dim('Actual cloud resources were NOT deleted.'));
+      console.log(green(`Deleted group '${name}'`));
+      console.log(dim('Actual cloud resources were NOT deleted.'));
     });
 }

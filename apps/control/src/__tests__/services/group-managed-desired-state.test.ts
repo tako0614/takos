@@ -1,25 +1,19 @@
-import { describe, expect, it, vi } from 'vitest';
 import { compileGroupDesiredState } from '@/services/deployment/group-state';
 
-const mocks = vi.hoisted(() => ({
-  replaceLocalEnvVars: vi.fn(),
-  replaceResourceBindings: vi.fn(),
-  saveRuntimeConfig: vi.fn(),
-}));
+import { assertSpyCallArgs } from 'jsr:@std/testing/mock';
 
-vi.mock('@/services/platform/worker-desired-state', () => ({
-  ServiceDesiredStateService: vi.fn().mockImplementation(() => ({
-    replaceLocalEnvVars: mocks.replaceLocalEnvVars,
-    replaceResourceBindings: mocks.replaceResourceBindings,
-    saveRuntimeConfig: mocks.saveRuntimeConfig,
-  })),
-}));
+const mocks = ({
+  replaceLocalEnvVars: ((..._args: any[]) => undefined) as any,
+  replaceResourceBindings: ((..._args: any[]) => undefined) as any,
+  saveRuntimeConfig: ((..._args: any[]) => undefined) as any,
+});
 
+// [Deno] vi.mock removed - manually stub imports from '@/services/platform/worker-desired-state'
 import { syncGroupManagedDesiredState } from '@/services/deployment/group-managed-desired-state';
 
-describe('group managed desired state sync', () => {
-  it('syncs env, bindings, and MCP runtime config into the canonical desired-state tables', async () => {
-    const desired = compileGroupDesiredState({
+
+  Deno.test('group managed desired state sync - syncs env, bindings, and MCP runtime config into the canonical desired-state tables', async () => {
+  const desired = compileGroupDesiredState({
       apiVersion: 'takos.dev/v1alpha1',
       kind: 'App',
       metadata: { name: 'demo-app' },
@@ -277,48 +271,47 @@ describe('group managed desired state sync', () => {
       ],
     });
 
-    expect(mocks.replaceLocalEnvVars).toHaveBeenNthCalledWith(1, expect.objectContaining({
+    assertSpyCallArgs(mocks.replaceLocalEnvVars, 0, [({
       serviceId: 'svc-edge',
-      variables: expect.arrayContaining([
-        expect.objectContaining({ name: 'API_URL', value: 'http://10.0.0.2:8080/api', secret: false }),
-        expect.objectContaining({ name: 'AUTH_TOKEN', value: 'secret-value', secret: true }),
-        expect.objectContaining({ name: 'WORKER_MODE', value: 'edge', secret: false }),
+      variables: ([
+        ({ name: 'API_URL', value: 'http://10.0.0.2:8080/api', secret: false }),
+        ({ name: 'AUTH_TOKEN', value: 'secret-value', secret: true }),
+        ({ name: 'WORKER_MODE', value: 'edge', secret: false }),
       ]),
-    }));
-    expect(mocks.replaceLocalEnvVars).toHaveBeenNthCalledWith(2, expect.objectContaining({
+    })]);
+    assertSpyCallArgs(mocks.replaceLocalEnvVars, 1, [({
       serviceId: 'svc-api',
-      variables: expect.arrayContaining([
-        expect.objectContaining({ name: 'API_URL', value: 'http://10.0.0.2:8080/api', secret: false }),
-        expect.objectContaining({ name: 'AUTH_TOKEN', value: 'secret-value', secret: true }),
-        expect.objectContaining({ name: 'API_MODE', value: 'service', secret: false }),
+      variables: ([
+        ({ name: 'API_URL', value: 'http://10.0.0.2:8080/api', secret: false }),
+        ({ name: 'AUTH_TOKEN', value: 'secret-value', secret: true }),
+        ({ name: 'API_MODE', value: 'service', secret: false }),
       ]),
-    }));
+    })]);
 
-    expect(mocks.replaceResourceBindings).toHaveBeenNthCalledWith(1, expect.objectContaining({
+    assertSpyCallArgs(mocks.replaceResourceBindings, 0, [({
       serviceId: 'svc-edge',
-      bindings: expect.arrayContaining([
-        expect.objectContaining({ name: 'DB', type: 'sql', resourceId: 'res-db' }),
-        expect.objectContaining({ name: 'JOBS', type: 'queue', resourceId: 'res-jobs' }),
-        expect.objectContaining({ name: 'INDEX', type: 'vector_index', resourceId: 'res-idx' }),
-        expect.objectContaining({ name: 'EVENTS', type: 'analytics_store', resourceId: 'res-events' }),
-        expect.objectContaining({ name: 'FLOW', type: 'workflow_runtime', resourceId: 'res-flow', config: { workflow_name: 'flow', class_name: 'MainWorkflow', script_name: 'api' } }),
-        expect.objectContaining({ name: 'COUNTER', type: 'durable_namespace', resourceId: 'res-counter', config: { class_name: 'Counter', script_name: 'edge-worker' } }),
+      bindings: ([
+        ({ name: 'DB', type: 'sql', resourceId: 'res-db' }),
+        ({ name: 'JOBS', type: 'queue', resourceId: 'res-jobs' }),
+        ({ name: 'INDEX', type: 'vector_index', resourceId: 'res-idx' }),
+        ({ name: 'EVENTS', type: 'analytics_store', resourceId: 'res-events' }),
+        ({ name: 'FLOW', type: 'workflow_runtime', resourceId: 'res-flow', config: { workflow_name: 'flow', class_name: 'MainWorkflow', script_name: 'api' } }),
+        ({ name: 'COUNTER', type: 'durable_namespace', resourceId: 'res-counter', config: { class_name: 'Counter', script_name: 'edge-worker' } }),
       ]),
-    }));
-    expect(mocks.replaceResourceBindings).toHaveBeenNthCalledWith(2, expect.objectContaining({
+    })]);
+    assertSpyCallArgs(mocks.replaceResourceBindings, 1, [({
       serviceId: 'svc-api',
       bindings: [
-        expect.objectContaining({ name: 'DB', type: 'sql', resourceId: 'res-db' }),
+        ({ name: 'DB', type: 'sql', resourceId: 'res-db' }),
       ],
-    }));
+    })]);
 
-    expect(mocks.saveRuntimeConfig).toHaveBeenNthCalledWith(1, expect.objectContaining({
+    assertSpyCallArgs(mocks.saveRuntimeConfig, 0, [({
       serviceId: 'svc-edge',
       mcpServer: { enabled: true, name: 'tools', path: '/mcp' },
-    }));
-    expect(mocks.saveRuntimeConfig).toHaveBeenNthCalledWith(2, expect.objectContaining({
+    })]);
+    assertSpyCallArgs(mocks.saveRuntimeConfig, 1, [({
       serviceId: 'svc-api',
       mcpServer: undefined,
-    }));
-  });
-});
+    })]);
+})

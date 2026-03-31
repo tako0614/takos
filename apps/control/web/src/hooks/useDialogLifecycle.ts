@@ -1,4 +1,4 @@
-import { useEffect, useCallback, useRef } from 'react';
+import { createEffect, onCleanup } from 'solid-js';
 
 const layerStack: string[] = [];
 
@@ -10,63 +10,54 @@ interface UseDialogLifecycleOptions {
   lockBodyScroll?: boolean;
 }
 
-export function useDialogLifecycle({
-  isOpen,
-  layerId,
-  onEscape,
-  closeOnEscape = true,
-  lockBodyScroll = true,
-}: UseDialogLifecycleOptions): () => boolean {
-  const layerIdRef = useRef(layerId);
-  layerIdRef.current = layerId;
+export function useDialogLifecycle(options: UseDialogLifecycleOptions): () => boolean {
+  const currentLayerId = options.layerId;
 
-  useEffect(() => {
-    if (!isOpen || !layerIdRef.current) return;
+  createEffect(() => {
+    if (!options.isOpen || !currentLayerId) return;
 
-    const id = layerIdRef.current;
+    const id = currentLayerId;
     layerStack.push(id);
 
-    return () => {
+    onCleanup(() => {
       const idx = layerStack.indexOf(id);
       if (idx !== -1) layerStack.splice(idx, 1);
-    };
-  }, [isOpen]);
+    });
+  });
 
-  useEffect(() => {
-    if (!isOpen) {
-      return;
-    }
+  createEffect(() => {
+    if (!options.isOpen) return;
 
     const previousOverflow = document.body.style.overflow;
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.isComposing || event.keyCode === 229) {
         return;
       }
-      if (closeOnEscape && event.key === 'Escape') {
-        if (layerIdRef.current && layerStack[layerStack.length - 1] !== layerIdRef.current) {
+      if ((options.closeOnEscape ?? true) && event.key === 'Escape') {
+        if (currentLayerId && layerStack[layerStack.length - 1] !== currentLayerId) {
           return;
         }
-        onEscape?.();
+        options.onEscape?.();
       }
     };
 
     document.addEventListener('keydown', handleKeyDown);
-    if (lockBodyScroll) {
+    if (options.lockBodyScroll ?? true) {
       document.body.style.overflow = 'hidden';
     }
 
-    return () => {
+    onCleanup(() => {
       document.removeEventListener('keydown', handleKeyDown);
-      if (lockBodyScroll) {
+      if (options.lockBodyScroll ?? true) {
         document.body.style.overflow = previousOverflow;
       }
-    };
-  }, [closeOnEscape, isOpen, lockBodyScroll, onEscape]);
+    });
+  });
 
-  const isTopLayer = useCallback(() => {
-    if (!layerIdRef.current) return true;
-    return layerStack[layerStack.length - 1] === layerIdRef.current;
-  }, []);
+  const isTopLayer = () => {
+    if (!currentLayerId) return true;
+    return layerStack[layerStack.length - 1] === currentLayerId;
+  };
 
   return isTopLayer;
 }

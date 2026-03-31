@@ -25,7 +25,7 @@ export const execCommand: CommandRunner = (
 ) => new Promise((resolve) => {
   const proc = execFile(command, args, {
     cwd: options?.cwd,
-    env: { ...process.env, ...options?.env },
+    env: { ...Deno.env.toObject(), ...options?.env },
     maxBuffer: 10 * 1024 * 1024,
   }, (error, stdout, stderr) => {
     const errorCode = error ? (error as { code?: number | string }).code : undefined;

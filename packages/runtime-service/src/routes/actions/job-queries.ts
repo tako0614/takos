@@ -2,7 +2,7 @@ import { Hono } from 'hono';
 import {
   jobManager,
   sanitizeOutputs,
-} from '../../runtime/actions/job-manager.js';
+} from '../../runtime/actions/job-manager.ts';
 import { notFound } from 'takos-common/middleware/hono';
 
 const app = new Hono();

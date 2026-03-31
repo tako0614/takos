@@ -1,71 +1,37 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { Hono } from 'hono';
 import type { Env, User } from '@/types';
 import { createMockEnv } from '../../../test/integration/setup';
 
-const mocks = vi.hoisted(() => ({
-  checkThreadAccess: vi.fn(),
-  createMessage: vi.fn(),
-  createThread: vi.fn(),
-  listThreads: vi.fn(),
-  updateThread: vi.fn(),
-  updateThreadStatus: vi.fn(),
-  createThreadShare: vi.fn(),
-  listThreadShares: vi.fn(),
-  revokeThreadShare: vi.fn(),
-  searchSpaceThreads: vi.fn(),
-  searchThreadMessages: vi.fn(),
-  getThreadTimeline: vi.fn(),
-  getThreadHistory: vi.fn(),
-  exportThread: vi.fn(),
-  requireSpaceAccess: vi.fn(),
-  getPlatformServices: vi.fn(),
-}));
+import { assertEquals, assert } from 'jsr:@std/assert';
+import { assertSpyCallArgs } from 'jsr:@std/testing/mock';
 
-vi.mock('@/services/threads/thread-service', () => ({
-  checkThreadAccess: mocks.checkThreadAccess,
-  createMessage: mocks.createMessage,
-  createThread: mocks.createThread,
-  listThreads: mocks.listThreads,
-  updateThread: mocks.updateThread,
-  updateThreadStatus: mocks.updateThreadStatus,
-}));
-
-vi.mock('@/services/threads/thread-shares', () => ({
-  createThreadShare: mocks.createThreadShare,
-  listThreadShares: mocks.listThreadShares,
-  revokeThreadShare: mocks.revokeThreadShare,
-}));
-
-vi.mock('@/services/threads/thread-search', () => ({
-  searchSpaceThreads: mocks.searchSpaceThreads,
-  searchThreadMessages: mocks.searchThreadMessages,
-}));
-
-vi.mock('@/services/threads/thread-timeline', () => ({
-  getThreadTimeline: mocks.getThreadTimeline,
-}));
-
-vi.mock('@/services/threads/thread-history', () => ({
-  getThreadHistory: mocks.getThreadHistory,
-}));
-
-vi.mock('@/services/threads/thread-export', () => ({
-  exportThread: mocks.exportThread,
-}));
-
-vi.mock('@/routes/shared/helpers', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('@/routes/shared/helpers')>();
-  return {
-    ...actual,
-    requireSpaceAccess: mocks.requireSpaceAccess,
-  };
+const mocks = ({
+  checkThreadAccess: ((..._args: any[]) => undefined) as any,
+  createMessage: ((..._args: any[]) => undefined) as any,
+  createThread: ((..._args: any[]) => undefined) as any,
+  listThreads: ((..._args: any[]) => undefined) as any,
+  updateThread: ((..._args: any[]) => undefined) as any,
+  updateThreadStatus: ((..._args: any[]) => undefined) as any,
+  createThreadShare: ((..._args: any[]) => undefined) as any,
+  listThreadShares: ((..._args: any[]) => undefined) as any,
+  revokeThreadShare: ((..._args: any[]) => undefined) as any,
+  searchSpaceThreads: ((..._args: any[]) => undefined) as any,
+  searchThreadMessages: ((..._args: any[]) => undefined) as any,
+  getThreadTimeline: ((..._args: any[]) => undefined) as any,
+  getThreadHistory: ((..._args: any[]) => undefined) as any,
+  exportThread: ((..._args: any[]) => undefined) as any,
+  requireSpaceAccess: ((..._args: any[]) => undefined) as any,
+  getPlatformServices: ((..._args: any[]) => undefined) as any,
 });
 
-vi.mock('@/platform/accessors.ts', () => ({
-  getPlatformServices: mocks.getPlatformServices,
-}));
-
+// [Deno] vi.mock removed - manually stub imports from '@/services/threads/thread-service'
+// [Deno] vi.mock removed - manually stub imports from '@/services/threads/thread-shares'
+// [Deno] vi.mock removed - manually stub imports from '@/services/threads/thread-search'
+// [Deno] vi.mock removed - manually stub imports from '@/services/threads/thread-timeline'
+// [Deno] vi.mock removed - manually stub imports from '@/services/threads/thread-history'
+// [Deno] vi.mock removed - manually stub imports from '@/services/threads/thread-export'
+// [Deno] vi.mock removed - manually stub imports from '@/routes/shared/helpers'
+// [Deno] vi.mock removed - manually stub imports from '@/platform/accessors.ts'
 import threadsRoute from '@/routes/threads';
 
 function createUser(): User {
@@ -93,20 +59,16 @@ function createApp(user: User) {
   return app;
 }
 
-describe('threads routes', () => {
+
   const env = createMockEnv();
-
-  beforeEach(() => {
-    vi.clearAllMocks();
-    mocks.requireSpaceAccess.mockResolvedValue({ workspace: { id: 'ws-1' } });
-    mocks.getPlatformServices.mockReturnValue({
-      documents: { renderPdf: vi.fn() },
-    });
-  });
-
-  describe('GET /api/spaces/:spaceId/threads', () => {
-    it('returns threads list', async () => {
-      mocks.listThreads.mockResolvedValue([{ id: 't-1', title: 'Test' }]);
+  
+    Deno.test('threads routes - GET /api/spaces/:spaceId/threads - returns threads list', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+    mocks.requireSpaceAccess = (async () => ({ workspace: { id: 'ws-1' } })) as any;
+    mocks.getPlatformServices = (() => ({
+      documents: { renderPdf: ((..._args: any[]) => undefined) as any },
+    })) as any;
+  mocks.listThreads = (async () => [{ id: 't-1', title: 'Test' }]) as any;
 
       const app = createApp(createUser());
       const res = await app.fetch(
@@ -115,14 +77,18 @@ describe('threads routes', () => {
         {} as ExecutionContext,
       );
 
-      expect(res.status).toBe(200);
-      await expect(res.json()).resolves.toEqual({
+      assertEquals(res.status, 200);
+      await assertEquals(await res.json(), {
         threads: [{ id: 't-1', title: 'Test' }],
       });
-    });
-
-    it('passes status filter', async () => {
-      mocks.listThreads.mockResolvedValue([]);
+})
+    Deno.test('threads routes - GET /api/spaces/:spaceId/threads - passes status filter', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+    mocks.requireSpaceAccess = (async () => ({ workspace: { id: 'ws-1' } })) as any;
+    mocks.getPlatformServices = (() => ({
+      documents: { renderPdf: ((..._args: any[]) => undefined) as any },
+    })) as any;
+  mocks.listThreads = (async () => []) as any;
 
       const app = createApp(createUser());
       await app.fetch(
@@ -131,17 +97,20 @@ describe('threads routes', () => {
         {} as ExecutionContext,
       );
 
-      expect(mocks.listThreads).toHaveBeenCalledWith(
+      assertSpyCallArgs(mocks.listThreads, 0, [
         env.DB,
         'ws-1',
         { status: 'active' },
-      );
-    });
-  });
-
-  describe('POST /api/spaces/:spaceId/threads', () => {
-    it('creates a thread and returns 201', async () => {
-      mocks.createThread.mockResolvedValue({ id: 't-new', title: 'New Thread' });
+      ]);
+})  
+  
+    Deno.test('threads routes - POST /api/spaces/:spaceId/threads - creates a thread and returns 201', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+    mocks.requireSpaceAccess = (async () => ({ workspace: { id: 'ws-1' } })) as any;
+    mocks.getPlatformServices = (() => ({
+      documents: { renderPdf: ((..._args: any[]) => undefined) as any },
+    })) as any;
+  mocks.createThread = (async () => ({ id: 't-new', title: 'New Thread' })) as any;
 
       const app = createApp(createUser());
       const res = await app.fetch(
@@ -154,18 +123,21 @@ describe('threads routes', () => {
         {} as ExecutionContext,
       );
 
-      expect(res.status).toBe(201);
+      assertEquals(res.status, 201);
       const json = await res.json() as Record<string, unknown>;
-      expect(json).toHaveProperty('thread');
-    });
-  });
-
-  describe('GET /api/threads/:id', () => {
-    it('returns thread with access role', async () => {
-      mocks.checkThreadAccess.mockResolvedValue({
+      assert('thread' in json);
+})  
+  
+    Deno.test('threads routes - GET /api/threads/:id - returns thread with access role', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+    mocks.requireSpaceAccess = (async () => ({ workspace: { id: 'ws-1' } })) as any;
+    mocks.getPlatformServices = (() => ({
+      documents: { renderPdf: ((..._args: any[]) => undefined) as any },
+    })) as any;
+  mocks.checkThreadAccess = (async () => ({
         thread: { id: 't-1', title: 'Test', space_id: 'ws-1' },
         role: 'owner',
-      });
+      })) as any;
 
       const app = createApp(createUser());
       const res = await app.fetch(
@@ -174,14 +146,18 @@ describe('threads routes', () => {
         {} as ExecutionContext,
       );
 
-      expect(res.status).toBe(200);
+      assertEquals(res.status, 200);
       const json = await res.json() as Record<string, unknown>;
-      expect(json).toHaveProperty('thread');
-      expect(json).toHaveProperty('role', 'owner');
-    });
-
-    it('returns 404 when access denied', async () => {
-      mocks.checkThreadAccess.mockResolvedValue(null);
+      assert('thread' in json);
+      assert('role' in json); assertEquals((json as any)['role'], 'owner');
+})
+    Deno.test('threads routes - GET /api/threads/:id - returns 404 when access denied', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+    mocks.requireSpaceAccess = (async () => ({ workspace: { id: 'ws-1' } })) as any;
+    mocks.getPlatformServices = (() => ({
+      documents: { renderPdf: ((..._args: any[]) => undefined) as any },
+    })) as any;
+  mocks.checkThreadAccess = (async () => null) as any;
 
       const app = createApp(createUser());
       const res = await app.fetch(
@@ -190,17 +166,20 @@ describe('threads routes', () => {
         {} as ExecutionContext,
       );
 
-      expect(res.status).toBe(404);
-    });
-  });
-
-  describe('PATCH /api/threads/:id', () => {
-    it('updates thread title', async () => {
-      mocks.checkThreadAccess.mockResolvedValue({
+      assertEquals(res.status, 404);
+})  
+  
+    Deno.test('threads routes - PATCH /api/threads/:id - updates thread title', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+    mocks.requireSpaceAccess = (async () => ({ workspace: { id: 'ws-1' } })) as any;
+    mocks.getPlatformServices = (() => ({
+      documents: { renderPdf: ((..._args: any[]) => undefined) as any },
+    })) as any;
+  mocks.checkThreadAccess = (async () => ({
         thread: { id: 't-1', space_id: 'ws-1' },
         role: 'owner',
-      });
-      mocks.updateThread.mockResolvedValue({ id: 't-1', title: 'Updated' });
+      })) as any;
+      mocks.updateThread = (async () => ({ id: 't-1', title: 'Updated' })) as any;
 
       const app = createApp(createUser());
       const res = await app.fetch(
@@ -213,14 +192,18 @@ describe('threads routes', () => {
         {} as ExecutionContext,
       );
 
-      expect(res.status).toBe(200);
-    });
-
-    it('returns 400 when no valid updates provided', async () => {
-      mocks.checkThreadAccess.mockResolvedValue({
+      assertEquals(res.status, 200);
+})
+    Deno.test('threads routes - PATCH /api/threads/:id - returns 400 when no valid updates provided', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+    mocks.requireSpaceAccess = (async () => ({ workspace: { id: 'ws-1' } })) as any;
+    mocks.getPlatformServices = (() => ({
+      documents: { renderPdf: ((..._args: any[]) => undefined) as any },
+    })) as any;
+  mocks.checkThreadAccess = (async () => ({
         thread: { id: 't-1', space_id: 'ws-1' },
         role: 'owner',
-      });
+      })) as any;
 
       const app = createApp(createUser());
       const res = await app.fetch(
@@ -233,11 +216,15 @@ describe('threads routes', () => {
         {} as ExecutionContext,
       );
 
-      expect(res.status).toBe(400);
-    });
-
-    it('validates context_window range', async () => {
-      const app = createApp(createUser());
+      assertEquals(res.status, 400);
+})
+    Deno.test('threads routes - PATCH /api/threads/:id - validates context_window range', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+    mocks.requireSpaceAccess = (async () => ({ workspace: { id: 'ws-1' } })) as any;
+    mocks.getPlatformServices = (() => ({
+      documents: { renderPdf: ((..._args: any[]) => undefined) as any },
+    })) as any;
+  const app = createApp(createUser());
       const res = await app.fetch(
         new Request('http://localhost/api/threads/t-1', {
           method: 'PATCH',
@@ -248,17 +235,20 @@ describe('threads routes', () => {
         {} as ExecutionContext,
       );
 
-      expect(res.status).toBe(422);
-    });
-  });
-
-  describe('DELETE /api/threads/:id', () => {
-    it('soft-deletes a thread', async () => {
-      mocks.checkThreadAccess.mockResolvedValue({
+      assertEquals(res.status, 422);
+})  
+  
+    Deno.test('threads routes - DELETE /api/threads/:id - soft-deletes a thread', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+    mocks.requireSpaceAccess = (async () => ({ workspace: { id: 'ws-1' } })) as any;
+    mocks.getPlatformServices = (() => ({
+      documents: { renderPdf: ((..._args: any[]) => undefined) as any },
+    })) as any;
+  mocks.checkThreadAccess = (async () => ({
         thread: { id: 't-1', space_id: 'ws-1' },
         role: 'owner',
-      });
-      mocks.updateThreadStatus.mockResolvedValue(undefined);
+      })) as any;
+      mocks.updateThreadStatus = (async () => undefined) as any;
 
       const app = createApp(createUser());
       const res = await app.fetch(
@@ -267,19 +257,22 @@ describe('threads routes', () => {
         {} as ExecutionContext,
       );
 
-      expect(res.status).toBe(200);
-      await expect(res.json()).resolves.toEqual({ success: true });
-      expect(mocks.updateThreadStatus).toHaveBeenCalledWith(env.DB, 't-1', 'deleted');
-    });
-  });
-
-  describe('POST /api/threads/:id/archive', () => {
-    it('archives a thread', async () => {
-      mocks.checkThreadAccess.mockResolvedValue({
+      assertEquals(res.status, 200);
+      await assertEquals(await res.json(), { success: true });
+      assertSpyCallArgs(mocks.updateThreadStatus, 0, [env.DB, 't-1', 'deleted']);
+})  
+  
+    Deno.test('threads routes - POST /api/threads/:id/archive - archives a thread', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+    mocks.requireSpaceAccess = (async () => ({ workspace: { id: 'ws-1' } })) as any;
+    mocks.getPlatformServices = (() => ({
+      documents: { renderPdf: ((..._args: any[]) => undefined) as any },
+    })) as any;
+  mocks.checkThreadAccess = (async () => ({
         thread: { id: 't-1', space_id: 'ws-1' },
         role: 'owner',
-      });
-      mocks.updateThreadStatus.mockResolvedValue(undefined);
+      })) as any;
+      mocks.updateThreadStatus = (async () => undefined) as any;
 
       const app = createApp(createUser());
       const res = await app.fetch(
@@ -288,18 +281,21 @@ describe('threads routes', () => {
         {} as ExecutionContext,
       );
 
-      expect(res.status).toBe(200);
-      expect(mocks.updateThreadStatus).toHaveBeenCalledWith(env.DB, 't-1', 'archived');
-    });
-  });
-
-  describe('POST /api/threads/:id/unarchive', () => {
-    it('unarchives a thread', async () => {
-      mocks.checkThreadAccess.mockResolvedValue({
+      assertEquals(res.status, 200);
+      assertSpyCallArgs(mocks.updateThreadStatus, 0, [env.DB, 't-1', 'archived']);
+})  
+  
+    Deno.test('threads routes - POST /api/threads/:id/unarchive - unarchives a thread', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+    mocks.requireSpaceAccess = (async () => ({ workspace: { id: 'ws-1' } })) as any;
+    mocks.getPlatformServices = (() => ({
+      documents: { renderPdf: ((..._args: any[]) => undefined) as any },
+    })) as any;
+  mocks.checkThreadAccess = (async () => ({
         thread: { id: 't-1', space_id: 'ws-1' },
         role: 'editor',
-      });
-      mocks.updateThreadStatus.mockResolvedValue(undefined);
+      })) as any;
+      mocks.updateThreadStatus = (async () => undefined) as any;
 
       const app = createApp(createUser());
       const res = await app.fetch(
@@ -308,18 +304,21 @@ describe('threads routes', () => {
         {} as ExecutionContext,
       );
 
-      expect(res.status).toBe(200);
-      expect(mocks.updateThreadStatus).toHaveBeenCalledWith(env.DB, 't-1', 'active');
-    });
-  });
-
-  describe('GET /api/threads/:id/messages', () => {
-    it('returns timeline messages', async () => {
-      mocks.checkThreadAccess.mockResolvedValue({
+      assertEquals(res.status, 200);
+      assertSpyCallArgs(mocks.updateThreadStatus, 0, [env.DB, 't-1', 'active']);
+})  
+  
+    Deno.test('threads routes - GET /api/threads/:id/messages - returns timeline messages', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+    mocks.requireSpaceAccess = (async () => ({ workspace: { id: 'ws-1' } })) as any;
+    mocks.getPlatformServices = (() => ({
+      documents: { renderPdf: ((..._args: any[]) => undefined) as any },
+    })) as any;
+  mocks.checkThreadAccess = (async () => ({
         thread: { id: 't-1', space_id: 'ws-1' },
         role: 'owner',
-      });
-      mocks.getThreadTimeline.mockResolvedValue({ messages: [] });
+      })) as any;
+      mocks.getThreadTimeline = (async () => ({ messages: [] })) as any;
 
       const app = createApp(createUser());
       const res = await app.fetch(
@@ -328,17 +327,20 @@ describe('threads routes', () => {
         {} as ExecutionContext,
       );
 
-      expect(res.status).toBe(200);
-    });
-  });
-
-  describe('POST /api/threads/:id/messages', () => {
-    it('creates a message and returns 201', async () => {
-      mocks.checkThreadAccess.mockResolvedValue({
+      assertEquals(res.status, 200);
+})  
+  
+    Deno.test('threads routes - POST /api/threads/:id/messages - creates a message and returns 201', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+    mocks.requireSpaceAccess = (async () => ({ workspace: { id: 'ws-1' } })) as any;
+    mocks.getPlatformServices = (() => ({
+      documents: { renderPdf: ((..._args: any[]) => undefined) as any },
+    })) as any;
+  mocks.checkThreadAccess = (async () => ({
         thread: { id: 't-1', space_id: 'ws-1' },
         role: 'owner',
-      });
-      mocks.createMessage.mockResolvedValue({ id: 'msg-1', content: 'Hi' });
+      })) as any;
+      mocks.createMessage = (async () => ({ id: 'msg-1', content: 'Hi' })) as any;
 
       const app = createApp(createUser());
       const res = await app.fetch(
@@ -351,14 +353,18 @@ describe('threads routes', () => {
         {} as ExecutionContext,
       );
 
-      expect(res.status).toBe(201);
-    });
-
-    it('rejects empty content without attachments', async () => {
-      mocks.checkThreadAccess.mockResolvedValue({
+      assertEquals(res.status, 201);
+})
+    Deno.test('threads routes - POST /api/threads/:id/messages - rejects empty content without attachments', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+    mocks.requireSpaceAccess = (async () => ({ workspace: { id: 'ws-1' } })) as any;
+    mocks.getPlatformServices = (() => ({
+      documents: { renderPdf: ((..._args: any[]) => undefined) as any },
+    })) as any;
+  mocks.checkThreadAccess = (async () => ({
         thread: { id: 't-1', space_id: 'ws-1' },
         role: 'owner',
-      });
+      })) as any;
 
       const app = createApp(createUser());
       const res = await app.fetch(
@@ -371,11 +377,15 @@ describe('threads routes', () => {
         {} as ExecutionContext,
       );
 
-      expect(res.status).toBe(400);
-    });
-
-    it('rejects invalid role', async () => {
-      const app = createApp(createUser());
+      assertEquals(res.status, 400);
+})
+    Deno.test('threads routes - POST /api/threads/:id/messages - rejects invalid role', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+    mocks.requireSpaceAccess = (async () => ({ workspace: { id: 'ws-1' } })) as any;
+    mocks.getPlatformServices = (() => ({
+      documents: { renderPdf: ((..._args: any[]) => undefined) as any },
+    })) as any;
+  const app = createApp(createUser());
       const res = await app.fetch(
         new Request('http://localhost/api/threads/t-1/messages', {
           method: 'POST',
@@ -386,24 +396,31 @@ describe('threads routes', () => {
         {} as ExecutionContext,
       );
 
-      expect(res.status).toBe(422);
-    });
-  });
-
-  describe('GET /api/spaces/:spaceId/threads/search', () => {
-    it('returns 400 when q is missing', async () => {
-      const app = createApp(createUser());
+      assertEquals(res.status, 422);
+})  
+  
+    Deno.test('threads routes - GET /api/spaces/:spaceId/threads/search - returns 400 when q is missing', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+    mocks.requireSpaceAccess = (async () => ({ workspace: { id: 'ws-1' } })) as any;
+    mocks.getPlatformServices = (() => ({
+      documents: { renderPdf: ((..._args: any[]) => undefined) as any },
+    })) as any;
+  const app = createApp(createUser());
       const res = await app.fetch(
         new Request('http://localhost/api/spaces/sp-1/threads/search'),
         env as unknown as Env,
         {} as ExecutionContext,
       );
 
-      expect(res.status).toBe(400);
-    });
-
-    it('returns search results', async () => {
-      mocks.searchSpaceThreads.mockResolvedValue({ threads: [] });
+      assertEquals(res.status, 400);
+})
+    Deno.test('threads routes - GET /api/spaces/:spaceId/threads/search - returns search results', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+    mocks.requireSpaceAccess = (async () => ({ workspace: { id: 'ws-1' } })) as any;
+    mocks.getPlatformServices = (() => ({
+      documents: { renderPdf: ((..._args: any[]) => undefined) as any },
+    })) as any;
+  mocks.searchSpaceThreads = (async () => ({ threads: [] })) as any;
 
       const app = createApp(createUser());
       const res = await app.fetch(
@@ -412,16 +429,19 @@ describe('threads routes', () => {
         {} as ExecutionContext,
       );
 
-      expect(res.status).toBe(200);
-    });
-  });
-
-  describe('GET /api/threads/:id/messages/search', () => {
-    it('returns 400 when q is missing', async () => {
-      mocks.checkThreadAccess.mockResolvedValue({
+      assertEquals(res.status, 200);
+})  
+  
+    Deno.test('threads routes - GET /api/threads/:id/messages/search - returns 400 when q is missing', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+    mocks.requireSpaceAccess = (async () => ({ workspace: { id: 'ws-1' } })) as any;
+    mocks.getPlatformServices = (() => ({
+      documents: { renderPdf: ((..._args: any[]) => undefined) as any },
+    })) as any;
+  mocks.checkThreadAccess = (async () => ({
         thread: { id: 't-1', space_id: 'ws-1' },
         role: 'owner',
-      });
+      })) as any;
 
       const app = createApp(createUser());
       const res = await app.fetch(
@@ -430,20 +450,23 @@ describe('threads routes', () => {
         {} as ExecutionContext,
       );
 
-      expect(res.status).toBe(400);
-    });
-  });
-
-  describe('POST /api/threads/:id/share', () => {
-    it('creates a share and returns 201', async () => {
-      mocks.checkThreadAccess.mockResolvedValue({
+      assertEquals(res.status, 400);
+})  
+  
+    Deno.test('threads routes - POST /api/threads/:id/share - creates a share and returns 201', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+    mocks.requireSpaceAccess = (async () => ({ workspace: { id: 'ws-1' } })) as any;
+    mocks.getPlatformServices = (() => ({
+      documents: { renderPdf: ((..._args: any[]) => undefined) as any },
+    })) as any;
+  mocks.checkThreadAccess = (async () => ({
         thread: { id: 't-1', space_id: 'ws-1' },
         role: 'owner',
-      });
-      mocks.createThreadShare.mockResolvedValue({
+      })) as any;
+      mocks.createThreadShare = (async () => ({
         share: { token: 'abc123', mode: 'public' },
         passwordRequired: false,
-      });
+      })) as any;
 
       const app = createApp(createUser());
       const res = await app.fetch(
@@ -456,16 +479,20 @@ describe('threads routes', () => {
         {} as ExecutionContext,
       );
 
-      expect(res.status).toBe(201);
+      assertEquals(res.status, 201);
       const json = await res.json() as Record<string, unknown>;
-      expect(json).toHaveProperty('share_url');
-    });
-
-    it('rejects invalid expires_in_days', async () => {
-      mocks.checkThreadAccess.mockResolvedValue({
+      assert('share_url' in json);
+})
+    Deno.test('threads routes - POST /api/threads/:id/share - rejects invalid expires_in_days', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+    mocks.requireSpaceAccess = (async () => ({ workspace: { id: 'ws-1' } })) as any;
+    mocks.getPlatformServices = (() => ({
+      documents: { renderPdf: ((..._args: any[]) => undefined) as any },
+    })) as any;
+  mocks.checkThreadAccess = (async () => ({
         thread: { id: 't-1', space_id: 'ws-1' },
         role: 'owner',
-      });
+      })) as any;
 
       const app = createApp(createUser());
       const res = await app.fetch(
@@ -478,19 +505,22 @@ describe('threads routes', () => {
         {} as ExecutionContext,
       );
 
-      expect(res.status).toBe(400);
-    });
-  });
-
-  describe('GET /api/threads/:id/shares', () => {
-    it('returns share list with links', async () => {
-      mocks.checkThreadAccess.mockResolvedValue({
+      assertEquals(res.status, 400);
+})  
+  
+    Deno.test('threads routes - GET /api/threads/:id/shares - returns share list with links', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+    mocks.requireSpaceAccess = (async () => ({ workspace: { id: 'ws-1' } })) as any;
+    mocks.getPlatformServices = (() => ({
+      documents: { renderPdf: ((..._args: any[]) => undefined) as any },
+    })) as any;
+  mocks.checkThreadAccess = (async () => ({
         thread: { id: 't-1', space_id: 'ws-1' },
         role: 'owner',
-      });
-      mocks.listThreadShares.mockResolvedValue([
+      })) as any;
+      mocks.listThreadShares = (async () => [
         { id: 's-1', token: 'abc123' },
-      ]);
+      ]) as any;
 
       const app = createApp(createUser());
       const res = await app.fetch(
@@ -499,19 +529,22 @@ describe('threads routes', () => {
         {} as ExecutionContext,
       );
 
-      expect(res.status).toBe(200);
+      assertEquals(res.status, 200);
       const json = await res.json() as { shares: Array<{ share_path: string; share_url: string }> };
-      expect(json.shares[0].share_path).toBe('/share/abc123');
-    });
-  });
-
-  describe('POST /api/threads/:id/shares/:shareId/revoke', () => {
-    it('revokes a share', async () => {
-      mocks.checkThreadAccess.mockResolvedValue({
+      assertEquals(json.shares[0].share_path, '/share/abc123');
+})  
+  
+    Deno.test('threads routes - POST /api/threads/:id/shares/:shareId/revoke - revokes a share', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+    mocks.requireSpaceAccess = (async () => ({ workspace: { id: 'ws-1' } })) as any;
+    mocks.getPlatformServices = (() => ({
+      documents: { renderPdf: ((..._args: any[]) => undefined) as any },
+    })) as any;
+  mocks.checkThreadAccess = (async () => ({
         thread: { id: 't-1', space_id: 'ws-1' },
         role: 'owner',
-      });
-      mocks.revokeThreadShare.mockResolvedValue(true);
+      })) as any;
+      mocks.revokeThreadShare = (async () => true) as any;
 
       const app = createApp(createUser());
       const res = await app.fetch(
@@ -522,16 +555,20 @@ describe('threads routes', () => {
         {} as ExecutionContext,
       );
 
-      expect(res.status).toBe(200);
-      await expect(res.json()).resolves.toEqual({ success: true });
-    });
-
-    it('returns 404 when share not found', async () => {
-      mocks.checkThreadAccess.mockResolvedValue({
+      assertEquals(res.status, 200);
+      await assertEquals(await res.json(), { success: true });
+})
+    Deno.test('threads routes - POST /api/threads/:id/shares/:shareId/revoke - returns 404 when share not found', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+    mocks.requireSpaceAccess = (async () => ({ workspace: { id: 'ws-1' } })) as any;
+    mocks.getPlatformServices = (() => ({
+      documents: { renderPdf: ((..._args: any[]) => undefined) as any },
+    })) as any;
+  mocks.checkThreadAccess = (async () => ({
         thread: { id: 't-1', space_id: 'ws-1' },
         role: 'owner',
-      });
-      mocks.revokeThreadShare.mockResolvedValue(false);
+      })) as any;
+      mocks.revokeThreadShare = (async () => false) as any;
 
       const app = createApp(createUser());
       const res = await app.fetch(
@@ -542,7 +579,5 @@ describe('threads routes', () => {
         {} as ExecutionContext,
       );
 
-      expect(res.status).toBe(404);
-    });
-  });
-});
+      assertEquals(res.status, 404);
+})  

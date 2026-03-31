@@ -2,14 +2,14 @@ import { spawn, type ChildProcess } from 'child_process';
 import * as fs from 'fs/promises';
 import * as path from 'path';
 import { randomUUID } from 'crypto';
-import { pushLog } from '../logging.js';
-import { SANDBOX_LIMITS } from '../../shared/config.js';
+import { pushLog } from '../logging.ts';
+import { SANDBOX_LIMITS } from '../../shared/config.ts';
 import { getErrorMessage } from 'takos-common/errors';
 import { createLogger } from 'takos-common/logger';
-import { gracefulKill } from '../../utils/process-kill.js';
+import { gracefulKill } from '../../utils/process-kill.ts';
 
 const logger = createLogger({ service: 'process-spawner' });
-import type { ExecutorStepResult } from './executor.js';
+import type { ExecutorStepResult } from './executor.ts';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -134,8 +134,8 @@ export function createRuntimeEnv(
   };
 
   for (const key of ['PATH', 'HOME'] as const) {
-    if (!runtimeEnv[key] && process.env[key]) {
-      runtimeEnv[key] = process.env[key]!;
+    if (!runtimeEnv[key] && Deno.env.get(key)) {
+      runtimeEnv[key] = Deno.env.get(key)!;
     }
   }
 

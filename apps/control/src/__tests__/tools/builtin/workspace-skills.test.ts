@@ -1,4 +1,3 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ToolContext } from '@/tools/types';
 import type { D1Database } from '@cloudflare/workers-types';
 import type { Env } from '@/types';
@@ -7,26 +6,8 @@ import type { Env } from '@/types';
 // Mocks
 // ---------------------------------------------------------------------------
 
-vi.mock('@/services/source/skills', () => ({
-  createSkill: vi.fn(),
-  describeAgentSkill: vi.fn(),
-  getSkill: vi.fn(),
-  deleteSkillByName: vi.fn(),
-  formatSkill: vi.fn((skill: unknown) => skill),
-  getSkillByName: vi.fn(),
-  listSkillCatalog: vi.fn(),
-  listSkillContext: vi.fn(),
-  listSkills: vi.fn(),
-  updateSkill: vi.fn(),
-  updateSkillEnabled: vi.fn(),
-  updateSkillByName: vi.fn(),
-  updateSkillEnabledByName: vi.fn(),
-}));
-
-vi.mock('@/services/agent/official-skills', () => ({
-  resolveSkillLocale: vi.fn(({ preferredLocale }: { preferredLocale?: string }) => preferredLocale || 'en'),
-}));
-
+// [Deno] vi.mock removed - manually stub imports from '@/services/source/skills'
+// [Deno] vi.mock removed - manually stub imports from '@/services/agent/official-skills'
 import {
   createSkill,
   describeAgentSkill,
@@ -69,6 +50,9 @@ import {
 // Helpers
 // ---------------------------------------------------------------------------
 
+import { assertEquals, assert, assertRejects, assertStringIncludes } from 'jsr:@std/assert';
+import { assertSpyCallArgs } from 'jsr:@std/testing/mock';
+
 function makeContext(overrides: Partial<ToolContext> = {}): ToolContext {
   return {
     spaceId: 'ws-test',
@@ -78,9 +62,9 @@ function makeContext(overrides: Partial<ToolContext> = {}): ToolContext {
     capabilities: [],
     env: {} as Env,
     db: {} as D1Database,
-    setSessionId: vi.fn(),
-    getLastContainerStartFailure: vi.fn(() => undefined),
-    setLastContainerStartFailure: vi.fn(),
+    setSessionId: ((..._args: any[]) => undefined) as any,
+    getLastContainerStartFailure: () => undefined,
+    setLastContainerStartFailure: ((..._args: any[]) => undefined) as any,
     ...overrides,
   };
 }
@@ -89,147 +73,126 @@ function makeContext(overrides: Partial<ToolContext> = {}): ToolContext {
 // Tool definitions
 // ---------------------------------------------------------------------------
 
-describe('workspace skill tool definitions', () => {
-  it('defines all nine tools', () => {
-    expect(WORKSPACE_SKILL_TOOLS).toHaveLength(9);
+
+  Deno.test('workspace skill tool definitions - defines all nine tools', () => {
+  assertEquals(WORKSPACE_SKILL_TOOLS.length, 9);
     const names = WORKSPACE_SKILL_TOOLS.map((t) => t.name);
-    expect(names).toContain('skill_list');
-    expect(names).toContain('skill_get');
-    expect(names).toContain('skill_create');
-    expect(names).toContain('skill_update');
-    expect(names).toContain('skill_toggle');
-    expect(names).toContain('skill_delete');
-    expect(names).toContain('skill_context');
-    expect(names).toContain('skill_catalog');
-    expect(names).toContain('skill_describe');
-  });
-
-  it('all tools have workspace category', () => {
-    for (const def of WORKSPACE_SKILL_TOOLS) {
-      expect(def.category).toBe('workspace');
+    assertStringIncludes(names, 'skill_list');
+    assertStringIncludes(names, 'skill_get');
+    assertStringIncludes(names, 'skill_create');
+    assertStringIncludes(names, 'skill_update');
+    assertStringIncludes(names, 'skill_toggle');
+    assertStringIncludes(names, 'skill_delete');
+    assertStringIncludes(names, 'skill_context');
+    assertStringIncludes(names, 'skill_catalog');
+    assertStringIncludes(names, 'skill_describe');
+})
+  Deno.test('workspace skill tool definitions - all tools have workspace category', () => {
+  for (const def of WORKSPACE_SKILL_TOOLS) {
+      assertEquals(def.category, 'workspace');
     }
-  });
-
-  it('WORKSPACE_SKILL_HANDLERS maps all tools', () => {
-    for (const def of WORKSPACE_SKILL_TOOLS) {
-      expect(WORKSPACE_SKILL_HANDLERS).toHaveProperty(def.name);
+})
+  Deno.test('workspace skill tool definitions - WORKSPACE_SKILL_HANDLERS maps all tools', () => {
+  for (const def of WORKSPACE_SKILL_TOOLS) {
+      assert(def.name in WORKSPACE_SKILL_HANDLERS);
     }
-  });
-
-  it('skill_create requires name and instructions', () => {
-    expect(SKILL_CREATE.parameters.required).toEqual(['name', 'instructions']);
-  });
-
-  it('skill_toggle requires enabled', () => {
-    expect(SKILL_TOGGLE.parameters.required).toEqual(['enabled']);
-  });
-
-  it('skill_list has no required params', () => {
-    expect(SKILL_LIST.parameters.required).toBeUndefined();
-  });
-});
-
+})
+  Deno.test('workspace skill tool definitions - skill_create requires name and instructions', () => {
+  assertEquals(SKILL_CREATE.parameters.required, ['name', 'instructions']);
+})
+  Deno.test('workspace skill tool definitions - skill_toggle requires enabled', () => {
+  assertEquals(SKILL_TOGGLE.parameters.required, ['enabled']);
+})
+  Deno.test('workspace skill tool definitions - skill_list has no required params', () => {
+  assertEquals(SKILL_LIST.parameters.required, undefined);
+})
 // ---------------------------------------------------------------------------
 // skillListHandler
 // ---------------------------------------------------------------------------
 
-describe('skillListHandler', () => {
-  beforeEach(() => vi.clearAllMocks());
 
-  it('returns a list of skills', async () => {
-    vi.mocked(listSkills).mockResolvedValue([
+  
+  Deno.test('skillListHandler - returns a list of skills', async () => {
+  listSkills = (async () => [
       { id: 's1', name: 'research', enabled: true },
       { id: 's2', name: 'coding', enabled: false },
-    ] as any);
+    ] as any) as any;
 
     const result = JSON.parse(await skillListHandler({}, makeContext()));
 
-    expect(result.count).toBe(2);
-    expect(result.skills).toHaveLength(2);
-  });
-
-  it('returns empty list', async () => {
-    vi.mocked(listSkills).mockResolvedValue([]);
+    assertEquals(result.count, 2);
+    assertEquals(result.skills.length, 2);
+})
+  Deno.test('skillListHandler - returns empty list', async () => {
+  listSkills = (async () => []) as any;
 
     const result = JSON.parse(await skillListHandler({}, makeContext()));
-    expect(result.count).toBe(0);
-  });
-});
-
+    assertEquals(result.count, 0);
+})
 // ---------------------------------------------------------------------------
 // skillGetHandler
 // ---------------------------------------------------------------------------
 
-describe('skillGetHandler', () => {
-  beforeEach(() => vi.clearAllMocks());
 
-  it('throws when neither skill_id nor skill_name is provided', async () => {
-    await expect(skillGetHandler({}, makeContext())).rejects.toThrow(
+  
+  Deno.test('skillGetHandler - throws when neither skill_id nor skill_name is provided', async () => {
+  await await assertRejects(async () => { await skillGetHandler({}, makeContext()); }, 
       'skill_id or skill_name is required',
     );
-  });
-
-  it('gets skill by id', async () => {
-    vi.mocked(getSkill).mockResolvedValue({ id: 's1', name: 'research' } as any);
+})
+  Deno.test('skillGetHandler - gets skill by id', async () => {
+  getSkill = (async () => ({ id: 's1', name: 'research' } as any)) as any;
 
     const result = JSON.parse(
       await skillGetHandler({ skill_id: 's1' }, makeContext()),
     );
-    expect(result.skill.id).toBe('s1');
-  });
-
-  it('gets skill by name', async () => {
-    vi.mocked(getSkillByName).mockResolvedValue({ id: 's1', name: 'research' } as any);
+    assertEquals(result.skill.id, 's1');
+})
+  Deno.test('skillGetHandler - gets skill by name', async () => {
+  getSkillByName = (async () => ({ id: 's1', name: 'research' } as any)) as any;
 
     const result = JSON.parse(
       await skillGetHandler({ skill_name: 'research' }, makeContext()),
     );
-    expect(result.skill.name).toBe('research');
-  });
+    assertEquals(result.skill.name, 'research');
+})
+  Deno.test('skillGetHandler - throws when skill not found', async () => {
+  getSkill = (async () => null) as any;
 
-  it('throws when skill not found', async () => {
-    vi.mocked(getSkill).mockResolvedValue(null);
-
-    await expect(
+    await await assertRejects(async () => { await 
       skillGetHandler({ skill_id: 'missing' }, makeContext()),
-    ).rejects.toThrow('Skill not found');
-  });
-});
-
+    ; }, 'Skill not found');
+})
 // ---------------------------------------------------------------------------
 // skillCreateHandler
 // ---------------------------------------------------------------------------
 
-describe('skillCreateHandler', () => {
-  beforeEach(() => vi.clearAllMocks());
 
-  it('throws when name is empty', async () => {
-    await expect(
+  
+  Deno.test('skillCreateHandler - throws when name is empty', async () => {
+  await await assertRejects(async () => { await 
       skillCreateHandler({ name: '', instructions: 'test' }, makeContext()),
-    ).rejects.toThrow('name is required');
-  });
-
-  it('throws when instructions is empty', async () => {
-    await expect(
+    ; }, 'name is required');
+})
+  Deno.test('skillCreateHandler - throws when instructions is empty', async () => {
+  await await assertRejects(async () => { await 
       skillCreateHandler({ name: 'test', instructions: '' }, makeContext()),
-    ).rejects.toThrow('instructions is required');
-  });
+    ; }, 'instructions is required');
+})
+  Deno.test('skillCreateHandler - throws when skill already exists', async () => {
+  getSkillByName = (async () => ({ id: 's1' } as any)) as any;
 
-  it('throws when skill already exists', async () => {
-    vi.mocked(getSkillByName).mockResolvedValue({ id: 's1' } as any);
-
-    await expect(
+    await await assertRejects(async () => { await 
       skillCreateHandler({ name: 'existing', instructions: 'test' }, makeContext()),
-    ).rejects.toThrow('Skill already exists');
-  });
-
-  it('creates a skill', async () => {
-    vi.mocked(getSkillByName).mockResolvedValue(null);
-    vi.mocked(createSkill).mockResolvedValue({
+    ; }, 'Skill already exists');
+})
+  Deno.test('skillCreateHandler - creates a skill', async () => {
+  getSkillByName = (async () => null) as any;
+    createSkill = (async () => ({
       id: 's-new',
       name: 'new-skill',
       instructions: 'Do something',
-    } as any);
+    } as any)) as any;
 
     const result = JSON.parse(
       await skillCreateHandler(
@@ -238,34 +201,30 @@ describe('skillCreateHandler', () => {
       ),
     );
 
-    expect(result.skill.id).toBe('s-new');
-    expect(createSkill).toHaveBeenCalledWith(
+    assertEquals(result.skill.id, 's-new');
+    assertSpyCallArgs(createSkill, 0, [
       expect.anything(),
       'ws-test',
-      expect.objectContaining({
+      ({
         name: 'new-skill',
         instructions: 'Do something',
         triggers: ['hello'],
       }),
-    );
-  });
-});
-
+    ]);
+})
 // ---------------------------------------------------------------------------
 // skillUpdateHandler
 // ---------------------------------------------------------------------------
 
-describe('skillUpdateHandler', () => {
-  beforeEach(() => vi.clearAllMocks());
 
-  it('throws when neither id nor name is provided', async () => {
-    await expect(
+  
+  Deno.test('skillUpdateHandler - throws when neither id nor name is provided', async () => {
+  await await assertRejects(async () => { await 
       skillUpdateHandler({ instructions: 'new' }, makeContext()),
-    ).rejects.toThrow('skill_id or skill_name is required');
-  });
-
-  it('updates skill by id', async () => {
-    vi.mocked(updateSkill).mockResolvedValue({ id: 's1', name: 'updated' } as any);
+    ; }, 'skill_id or skill_name is required');
+})
+  Deno.test('skillUpdateHandler - updates skill by id', async () => {
+  updateSkill = (async () => ({ id: 's1', name: 'updated' } as any)) as any;
 
     const result = JSON.parse(
       await skillUpdateHandler(
@@ -273,11 +232,10 @@ describe('skillUpdateHandler', () => {
         makeContext(),
       ),
     );
-    expect(result.skill.name).toBe('updated');
-  });
-
-  it('updates skill by name', async () => {
-    vi.mocked(updateSkillByName).mockResolvedValue({ id: 's1', name: 'research' } as any);
+    assertEquals(result.skill.name, 'updated');
+})
+  Deno.test('skillUpdateHandler - updates skill by name', async () => {
+  updateSkillByName = (async () => ({ id: 's1', name: 'research' } as any)) as any;
 
     const result = JSON.parse(
       await skillUpdateHandler(
@@ -285,207 +243,182 @@ describe('skillUpdateHandler', () => {
         makeContext(),
       ),
     );
-    expect(result.skill.name).toBe('research');
-  });
+    assertEquals(result.skill.name, 'research');
+})
+  Deno.test('skillUpdateHandler - throws when skill not found', async () => {
+  updateSkill = (async () => null) as any;
 
-  it('throws when skill not found', async () => {
-    vi.mocked(updateSkill).mockResolvedValue(null);
-
-    await expect(
+    await await assertRejects(async () => { await 
       skillUpdateHandler({ skill_id: 'missing', instructions: 'x' }, makeContext()),
-    ).rejects.toThrow('Skill not found');
-  });
-});
-
+    ; }, 'Skill not found');
+})
 // ---------------------------------------------------------------------------
 // skillToggleHandler
 // ---------------------------------------------------------------------------
 
-describe('skillToggleHandler', () => {
-  beforeEach(() => vi.clearAllMocks());
 
-  it('throws when neither id nor name is provided', async () => {
-    await expect(
+  
+  Deno.test('skillToggleHandler - throws when neither id nor name is provided', async () => {
+  await await assertRejects(async () => { await 
       skillToggleHandler({ enabled: true }, makeContext()),
-    ).rejects.toThrow('skill_id or skill_name is required');
-  });
-
-  it('toggles skill by id', async () => {
-    vi.mocked(getSkill).mockResolvedValue({ id: 's1', name: 'test' } as any);
+    ; }, 'skill_id or skill_name is required');
+})
+  Deno.test('skillToggleHandler - toggles skill by id', async () => {
+  getSkill = (async () => ({ id: 's1', name: 'test' } as any)) as any;
 
     const result = JSON.parse(
       await skillToggleHandler({ skill_id: 's1', enabled: true }, makeContext()),
     );
 
-    expect(result.success).toBe(true);
-    expect(result.enabled).toBe(true);
-    expect(updateSkillEnabled).toHaveBeenCalledWith(expect.anything(), 's1', true);
-  });
-
-  it('toggles skill by name', async () => {
-    const result = JSON.parse(
+    assertEquals(result.success, true);
+    assertEquals(result.enabled, true);
+    assertSpyCallArgs(updateSkillEnabled, 0, [expect.anything(), 's1', true]);
+})
+  Deno.test('skillToggleHandler - toggles skill by name', async () => {
+  const result = JSON.parse(
       await skillToggleHandler({ skill_name: 'research', enabled: false }, makeContext()),
     );
 
-    expect(result.success).toBe(true);
-    expect(result.enabled).toBe(false);
-    expect(updateSkillEnabledByName).toHaveBeenCalled();
-  });
+    assertEquals(result.success, true);
+    assertEquals(result.enabled, false);
+    assert(updateSkillEnabledByName.calls.length > 0);
+})
+  Deno.test('skillToggleHandler - throws when skill_id not found', async () => {
+  getSkill = (async () => null) as any;
 
-  it('throws when skill_id not found', async () => {
-    vi.mocked(getSkill).mockResolvedValue(null);
-
-    await expect(
+    await await assertRejects(async () => { await 
       skillToggleHandler({ skill_id: 'missing', enabled: true }, makeContext()),
-    ).rejects.toThrow('Skill not found');
-  });
-});
-
+    ; }, 'Skill not found');
+})
 // ---------------------------------------------------------------------------
 // skillDeleteHandler
 // ---------------------------------------------------------------------------
 
-describe('skillDeleteHandler', () => {
-  beforeEach(() => vi.clearAllMocks());
 
-  it('throws when neither id nor name is provided', async () => {
-    await expect(
+  
+  Deno.test('skillDeleteHandler - throws when neither id nor name is provided', async () => {
+  await await assertRejects(async () => { await 
       skillDeleteHandler({}, makeContext()),
-    ).rejects.toThrow('skill_id or skill_name is required');
-  });
-
-  it('deletes by id', async () => {
-    vi.mocked(getSkill).mockResolvedValue({ id: 's1', name: 'test' } as any);
+    ; }, 'skill_id or skill_name is required');
+})
+  Deno.test('skillDeleteHandler - deletes by id', async () => {
+  getSkill = (async () => ({ id: 's1', name: 'test' } as any)) as any;
 
     const result = JSON.parse(
       await skillDeleteHandler({ skill_id: 's1' }, makeContext()),
     );
 
-    expect(result.success).toBe(true);
-    expect(deleteSkillByName).toHaveBeenCalledWith(expect.anything(), 'ws-test', 'test');
-  });
-
-  it('deletes by name', async () => {
-    const result = JSON.parse(
+    assertEquals(result.success, true);
+    assertSpyCallArgs(deleteSkillByName, 0, [expect.anything(), 'ws-test', 'test']);
+})
+  Deno.test('skillDeleteHandler - deletes by name', async () => {
+  const result = JSON.parse(
       await skillDeleteHandler({ skill_name: 'research' }, makeContext()),
     );
 
-    expect(result.success).toBe(true);
-    expect(deleteSkillByName).toHaveBeenCalledWith(expect.anything(), 'ws-test', 'research');
-  });
+    assertEquals(result.success, true);
+    assertSpyCallArgs(deleteSkillByName, 0, [expect.anything(), 'ws-test', 'research']);
+})
+  Deno.test('skillDeleteHandler - throws when skill_id not found', async () => {
+  getSkill = (async () => null) as any;
 
-  it('throws when skill_id not found', async () => {
-    vi.mocked(getSkill).mockResolvedValue(null);
-
-    await expect(
+    await await assertRejects(async () => { await 
       skillDeleteHandler({ skill_id: 'missing' }, makeContext()),
-    ).rejects.toThrow('Skill not found');
-  });
-});
-
+    ; }, 'Skill not found');
+})
 // ---------------------------------------------------------------------------
 // skillContextHandler
 // ---------------------------------------------------------------------------
 
-describe('skillContextHandler', () => {
-  beforeEach(() => vi.clearAllMocks());
 
-  it('returns skill context with locale', async () => {
-    vi.mocked(listSkillContext).mockResolvedValue({
+  
+  Deno.test('skillContextHandler - returns skill context with locale', async () => {
+  listSkillContext = (async () => ({
       locale: 'ja',
       available_skills: [{ id: 'official-1', name: 'Research Brief' }],
-    } as any);
+    } as any)) as any;
 
     const result = JSON.parse(
       await skillContextHandler({ locale: 'ja' }, makeContext()),
     );
 
-    expect(result.locale).toBe('ja');
-    expect(result.count).toBe(1);
-    expect(result.available_skills[0].name).toBe('Research Brief');
-  });
-});
-
+    assertEquals(result.locale, 'ja');
+    assertEquals(result.count, 1);
+    assertEquals(result.available_skills[0].name, 'Research Brief');
+})
 // ---------------------------------------------------------------------------
 // skillCatalogHandler
 // ---------------------------------------------------------------------------
 
-describe('skillCatalogHandler', () => {
-  beforeEach(() => vi.clearAllMocks());
 
-  it('returns full catalog', async () => {
-    vi.mocked(listSkillCatalog).mockResolvedValue({
+  
+  Deno.test('skillCatalogHandler - returns full catalog', async () => {
+  listSkillCatalog = (async () => ({
       locale: 'en',
       available_skills: [
         { id: 'o1', name: 'Research' },
         { id: 'c1', name: 'Custom Skill' },
       ],
-    } as any);
+    } as any)) as any;
 
     const result = JSON.parse(await skillCatalogHandler({}, makeContext()));
 
-    expect(result.locale).toBe('en');
-    expect(result.count).toBe(2);
-  });
-});
-
+    assertEquals(result.locale, 'en');
+    assertEquals(result.count, 2);
+})
 // ---------------------------------------------------------------------------
 // skillDescribeHandler
 // ---------------------------------------------------------------------------
 
-describe('skillDescribeHandler', () => {
-  beforeEach(() => vi.clearAllMocks());
 
-  it('describes a skill', async () => {
-    vi.mocked(describeAgentSkill).mockResolvedValue({
+  
+  Deno.test('skillDescribeHandler - describes a skill', async () => {
+  describeAgentSkill = (async () => ({
       id: 'o1',
       name: 'Research Brief',
       source: 'official',
       instructions: 'Research and summarize',
-    } as any);
+    } as any)) as any;
 
     const result = JSON.parse(
       await skillDescribeHandler({ skill_ref: 'research-brief' }, makeContext()),
     );
 
-    expect(result.skill.name).toBe('Research Brief');
-    expect(describeAgentSkill).toHaveBeenCalledWith(
+    assertEquals(result.skill.name, 'Research Brief');
+    assertSpyCallArgs(describeAgentSkill, 0, [
       expect.anything(),
       'ws-test',
-      expect.objectContaining({ skillRef: 'research-brief' }),
-    );
-  });
-
-  it('passes source hint', async () => {
-    vi.mocked(describeAgentSkill).mockResolvedValue({ id: 'c1' } as any);
+      ({ skillRef: 'research-brief' }),
+    ]);
+})
+  Deno.test('skillDescribeHandler - passes source hint', async () => {
+  describeAgentSkill = (async () => ({ id: 'c1' } as any)) as any;
 
     await skillDescribeHandler(
       { skill_ref: 'my-skill', source: 'custom' },
       makeContext(),
     );
 
-    expect(describeAgentSkill).toHaveBeenCalledWith(
+    assertSpyCallArgs(describeAgentSkill, 0, [
       expect.anything(),
       'ws-test',
-      expect.objectContaining({ source: 'custom' }),
-    );
-  });
-
-  it('passes deprecated skill_id and skill_name', async () => {
-    vi.mocked(describeAgentSkill).mockResolvedValue({ id: 'o1' } as any);
+      ({ source: 'custom' }),
+    ]);
+})
+  Deno.test('skillDescribeHandler - passes deprecated skill_id and skill_name', async () => {
+  describeAgentSkill = (async () => ({ id: 'o1' } as any)) as any;
 
     await skillDescribeHandler(
       { skill_id: 'old-id', skill_name: 'old-name' },
       makeContext(),
     );
 
-    expect(describeAgentSkill).toHaveBeenCalledWith(
+    assertSpyCallArgs(describeAgentSkill, 0, [
       expect.anything(),
       'ws-test',
-      expect.objectContaining({
+      ({
         skillId: 'old-id',
         skillName: 'old-name',
       }),
-    );
-  });
-});
+    ]);
+})

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { createSignal } from 'solid-js';
 import { Icons } from '../../lib/Icons';
 import { useI18n } from '../../store/i18n';
 import { Modal } from '../../components/ui/Modal';
@@ -38,12 +38,12 @@ export function SourceFilterStatusBar({ loading, total, hasActiveFilters, onClea
   const { t } = useI18n();
 
   return (
-    <div className="flex-shrink-0 px-4 pb-2 text-xs text-zinc-500 dark:text-zinc-400 flex items-center justify-between">
+    <div class="flex-shrink-0 px-4 pb-2 text-xs text-zinc-500 dark:text-zinc-400 flex items-center justify-between">
       <span>{loading ? t('searchingEllipsis') : t('resultsCount', { count: String(total) })}</span>
       {hasActiveFilters && (
         <button
           type="button"
-          className="text-xs font-medium text-zinc-600 dark:text-zinc-300 hover:text-zinc-900 dark:hover:text-zinc-100 transition-colors"
+          class="text-xs font-medium text-zinc-600 dark:text-zinc-300 hover:text-zinc-900 dark:hover:text-zinc-100 transition-colors"
           onClick={onClearFilters}
         >
           {t('clearFilters')}
@@ -74,25 +74,25 @@ function SortDropdown({
   const currentSortOpt = SORT_OPTIONS.find((o) => o.value === sort) ?? SORT_OPTIONS[0];
 
   return (
-    <div className="relative flex-shrink-0">
+    <div class="relative flex-shrink-0">
       <button
         type="button"
         onClick={() => setSortOpen(!sortOpen)}
-        className={buttonClassName ?? "flex items-center gap-1 px-3 py-1.5 rounded-full bg-white dark:bg-zinc-900 text-xs font-medium text-zinc-600 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors"}
+        class={buttonClassName ?? "flex items-center gap-1 px-3 py-1.5 rounded-full bg-white dark:bg-zinc-900 text-xs font-medium text-zinc-600 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors"}
       >
         {t(currentSortOpt.labelKey as never)}
-        <Icons.ChevronDown className="w-3 h-3" />
+        <Icons.ChevronDown class="w-3 h-3" />
       </button>
       {sortOpen && (
         <>
-          <div className="fixed inset-0 z-10" onClick={() => setSortOpen(false)} />
-          <div className={`absolute ${align === 'right' ? 'right-0' : 'left-0'} top-full mt-1 z-20 bg-white dark:bg-zinc-900 rounded-xl shadow-lg border border-zinc-100 dark:border-zinc-800 overflow-hidden min-w-[120px]`}>
+          <div class="fixed inset-0 z-10" onClick={() => setSortOpen(false)} />
+          <div class={`absolute ${align === 'right' ? 'right-0' : 'left-0'} top-full mt-1 z-20 bg-white dark:bg-zinc-900 rounded-xl shadow-lg border border-zinc-100 dark:border-zinc-800 overflow-hidden min-w-[120px]`}>
             {SORT_OPTIONS.map((opt) => (
               <button
-                key={opt.value}
+
                 type="button"
                 onClick={() => { setSort(opt.value); setSortOpen(false); }}
-                className={`w-full text-left px-4 py-2.5 text-xs transition-colors ${
+                class={`w-full text-left px-4 py-2.5 text-xs transition-colors ${
                   sort === opt.value
                     ? 'text-zinc-900 dark:text-zinc-100 font-semibold'
                     : 'text-zinc-600 dark:text-zinc-300 hover:bg-zinc-50 dark:hover:bg-zinc-800'
@@ -131,13 +131,13 @@ export function DesktopFilterBar({
   isAuthenticated, onRequireLogin,
 }: DesktopFilterBarProps) {
   const { t } = useI18n();
-  const [sortOpen, setSortOpen] = useState(false);
+  const [sortOpen, setSortOpen] = createSignal(false);
 
   return (
-    <div className="flex-shrink-0 flex items-center gap-1.5 px-4 pb-3 overflow-x-auto scrollbar-none">
+    <div class="flex-shrink-0 flex items-center gap-1.5 px-4 pb-3 overflow-x-auto scrollbar-none">
       {FILTER_CHIPS.map((chip) => (
         <button
-          key={chip.value}
+
           type="button"
           onClick={() => {
             if (!isAuthenticated && (chip.value === 'mine' || chip.value === 'starred')) {
@@ -146,7 +146,7 @@ export function DesktopFilterBar({
             }
             setFilter(chip.value);
           }}
-          className={`flex-shrink-0 px-3.5 py-1.5 rounded-full text-xs font-medium transition-colors ${
+          class={`flex-shrink-0 px-3.5 py-1.5 rounded-full text-xs font-medium transition-colors ${
             filter === chip.value
               ? 'bg-zinc-900 dark:bg-zinc-50 text-white dark:text-zinc-900'
               : 'bg-white dark:bg-zinc-900 text-zinc-600 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-800'
@@ -156,14 +156,14 @@ export function DesktopFilterBar({
         </button>
       ))}
 
-      <div className="w-px h-4 bg-zinc-200 dark:bg-zinc-700 flex-shrink-0 mx-0.5" />
+      <div class="w-px h-4 bg-zinc-200 dark:bg-zinc-700 flex-shrink-0 mx-0.5" />
 
       {CATEGORY_CHIPS.map((chip) => (
         <button
-          key={chip.value}
+
           type="button"
           onClick={() => setCategory(category === chip.value ? '' : chip.value)}
-          className={`flex-shrink-0 px-3.5 py-1.5 rounded-full text-xs font-medium transition-colors ${
+          class={`flex-shrink-0 px-3.5 py-1.5 rounded-full text-xs font-medium transition-colors ${
             category === chip.value
               ? 'bg-zinc-900 dark:bg-zinc-50 text-white dark:text-zinc-900'
               : 'bg-white dark:bg-zinc-900 text-zinc-600 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-800'
@@ -177,13 +177,13 @@ export function DesktopFilterBar({
         <button
           type="button"
           onClick={() => setOfficialOnly((v) => !v)}
-          className={`flex-shrink-0 flex items-center gap-1 px-3.5 py-1.5 rounded-full text-xs font-medium transition-colors ${
+          class={`flex-shrink-0 flex items-center gap-1 px-3.5 py-1.5 rounded-full text-xs font-medium transition-colors ${
             officialOnly
               ? 'bg-blue-600 text-white'
               : 'bg-white dark:bg-zinc-900 text-zinc-600 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-800'
           }`}
         >
-          <Icons.Check className="w-3 h-3" />
+          <Icons.Check class="w-3 h-3" />
           {t('officialLabel')}
         </button>
       )}
@@ -192,7 +192,7 @@ export function DesktopFilterBar({
         <SortDropdown
           sort={sort}
           setSort={setSort}
-          sortOpen={sortOpen}
+          sortOpen={sortOpen()}
           setSortOpen={setSortOpen}
           align="right"
           buttonClassName="flex items-center gap-1 px-3 py-1.5 rounded-full bg-white dark:bg-zinc-900 text-xs font-medium text-zinc-600 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors"
@@ -217,13 +217,13 @@ export function MobileFilterBar({
   hasActiveFilters, onShowFilters,
 }: MobileFilterBarProps) {
   const { t } = useI18n();
-  const [sortOpen, setSortOpen] = useState(false);
+  const [sortOpen, setSortOpen] = createSignal(false);
 
   return (
-    <div className="flex-shrink-0 px-4 pb-3 flex items-center gap-2">
+    <div class="flex-shrink-0 px-4 pb-3 flex items-center gap-2">
       <button
         type="button"
-        className={`min-h-[44px] px-3.5 rounded-xl text-xs font-medium border transition-colors ${
+        class={`min-h-[44px] px-3.5 rounded-xl text-xs font-medium border transition-colors ${
           hasActiveFilters
             ? 'bg-zinc-900 text-white border-zinc-900 dark:bg-zinc-100 dark:text-zinc-900 dark:border-zinc-100'
             : 'bg-white dark:bg-zinc-900 text-zinc-600 dark:text-zinc-300 border-zinc-200 dark:border-zinc-700'
@@ -236,7 +236,7 @@ export function MobileFilterBar({
         <SortDropdown
           sort={sort}
           setSort={setSort}
-          sortOpen={sortOpen}
+          sortOpen={sortOpen()}
           setSortOpen={setSortOpen}
           align="left"
           buttonClassName="min-h-[44px] flex items-center gap-1 px-3.5 rounded-xl bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 text-xs font-medium text-zinc-600 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors"
@@ -277,15 +277,15 @@ export function MobileFiltersModal({
       title={t('filtersTitle')}
       size="lg"
     >
-      <div className="space-y-5">
+      <div class="space-y-5">
         <div>
-          <p className="text-xs font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400 mb-2">
+          <p class="text-xs font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400 mb-2">
             {t('categoryType')}
           </p>
-          <div className="grid grid-cols-3 gap-2">
+          <div class="grid grid-cols-3 gap-2">
             {FILTER_CHIPS.map((chip) => (
               <button
-                key={chip.value}
+
                 type="button"
                 onClick={() => {
                   if (!isAuthenticated && (chip.value === 'mine' || chip.value === 'starred')) {
@@ -294,7 +294,7 @@ export function MobileFiltersModal({
                   }
                   setFilter(chip.value);
                 }}
-                className={`min-h-[44px] rounded-xl text-xs font-medium transition-colors ${
+                class={`min-h-[44px] rounded-xl text-xs font-medium transition-colors ${
                   filter === chip.value
                     ? 'bg-zinc-900 text-white dark:bg-zinc-100 dark:text-zinc-900'
                     : 'bg-zinc-100 text-zinc-700 dark:bg-zinc-800 dark:text-zinc-300'
@@ -307,16 +307,16 @@ export function MobileFiltersModal({
         </div>
 
         <div>
-          <p className="text-xs font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400 mb-2">
+          <p class="text-xs font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400 mb-2">
             {t('categoryLabel')}
           </p>
-          <div className="flex flex-wrap gap-2">
+          <div class="flex flex-wrap gap-2">
             {CATEGORY_CHIPS.map((chip) => (
               <button
-                key={chip.value}
+
                 type="button"
                 onClick={() => setCategory(category === chip.value ? '' : chip.value)}
-                className={`min-h-[44px] px-3.5 rounded-xl text-xs font-medium transition-colors ${
+                class={`min-h-[44px] px-3.5 rounded-xl text-xs font-medium transition-colors ${
                   category === chip.value
                     ? 'bg-zinc-900 text-white dark:bg-zinc-100 dark:text-zinc-900'
                     : 'bg-zinc-100 text-zinc-700 dark:bg-zinc-800 dark:text-zinc-300'
@@ -332,7 +332,7 @@ export function MobileFiltersModal({
           <button
             type="button"
             onClick={() => setOfficialOnly((v) => !v)}
-            className={`w-full min-h-[44px] rounded-xl text-sm font-medium transition-colors ${
+            class={`w-full min-h-[44px] rounded-xl text-sm font-medium transition-colors ${
               officialOnly
                 ? 'bg-blue-600 text-white'
                 : 'bg-zinc-100 text-zinc-700 dark:bg-zinc-800 dark:text-zinc-300'
@@ -344,7 +344,7 @@ export function MobileFiltersModal({
 
         <button
           type="button"
-          className="w-full min-h-[44px] rounded-xl border border-zinc-200 dark:border-zinc-700 text-sm text-zinc-700 dark:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors"
+          class="w-full min-h-[44px] rounded-xl border border-zinc-200 dark:border-zinc-700 text-sm text-zinc-700 dark:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors"
           onClick={() => {
             setFilter('all');
             setCategory('');

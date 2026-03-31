@@ -1,5 +1,4 @@
-import { useCallback, useMemo } from 'react';
-import { useAtomValue, useSetAtom } from 'jotai';
+import { useAtomValue, useSetAtom } from 'solid-jotai';
 import { useI18n } from '../store/i18n';
 import { useToast } from '../store/toast';
 import type { User, Space, UserSettings } from '../types';
@@ -50,39 +49,27 @@ export function useAuth(): AuthContextValue {
   const { t } = useI18n();
   const { showToast } = useToast();
 
-  const deps: AuthActionDeps = useMemo(() => ({ showToast, t }), [showToast, t]);
+  const deps: AuthActionDeps = { showToast, t };
 
-  const fetchUser = useCallback(
-    () => dispatchFetchUser(deps),
-    [dispatchFetchUser, deps],
-  );
+  const fetchUser = () => dispatchFetchUser(deps);
 
-  const fetchSpaces = useCallback(
-    (currentUser?: User | null, options?: FetchSpacesOptions) =>
-      dispatchFetchSpaces({ currentUser, options, deps }),
-    [dispatchFetchSpaces, deps],
-  );
+  const fetchSpaces = (currentUser?: User | null, options?: FetchSpacesOptions) =>
+    dispatchFetchSpaces({ currentUser, options, deps });
 
-  const fetchUserSettings = useCallback(
-    () => dispatchFetchUserSettings(),
-    [dispatchFetchUserSettings],
-  );
+  const fetchUserSettings = () => dispatchFetchUserSettings();
 
-  const handleLogin = useCallback(() => {
+  const handleLogin = () => {
     redirectToLogin();
-  }, []);
+  };
 
-  const handleLogout = useCallback(
-    () => dispatchLogout(),
-    [dispatchLogout],
-  );
+  const handleLogout = () => dispatchLogout();
 
-  return useMemo((): AuthContextValue => ({
-    authState,
-    user,
-    userSettings,
-    spaces,
-    spacesLoaded,
+  return {
+    get authState() { return authState(); },
+    get user() { return user(); },
+    get userSettings() { return userSettings(); },
+    get spaces() { return spaces(); },
+    get spacesLoaded() { return spacesLoaded(); },
     setUserSettings,
     fetchUser,
     fetchSpaces,
@@ -90,17 +77,5 @@ export function useAuth(): AuthContextValue {
     handleLogin,
     handleLogout,
     redirectToLogin,
-  }), [
-    authState,
-    user,
-    userSettings,
-    spaces,
-    spacesLoaded,
-    setUserSettings,
-    fetchUser,
-    fetchSpaces,
-    fetchUserSettings,
-    handleLogin,
-    handleLogout,
-  ]);
+  };
 }

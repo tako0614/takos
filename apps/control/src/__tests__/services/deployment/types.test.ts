@@ -1,4 +1,3 @@
-import { describe, it, expect } from 'vitest';
 import type {
   DeployState,
   DeploymentStatus,
@@ -13,9 +12,11 @@ import type {
   DeploymentTargetArtifact,
 } from '@/services/deployment/types';
 
-describe('deployment types', () => {
-  it('DeployState has all expected values', () => {
-    const states: DeployState[] = [
+
+import { assertEquals } from 'jsr:@std/assert';
+
+  Deno.test('deployment types - DeployState has all expected values', () => {
+  const states: DeployState[] = [
       'pending',
       'uploading_bundle',
       'creating_resources',
@@ -26,32 +27,28 @@ describe('deployment types', () => {
       'failed',
       'rolled_back',
     ];
-    expect(states).toHaveLength(9);
-  });
-
-  it('DeploymentStatus has all expected values', () => {
-    const statuses: DeploymentStatus[] = [
+    assertEquals(states.length, 9);
+})
+  Deno.test('deployment types - DeploymentStatus has all expected values', () => {
+  const statuses: DeploymentStatus[] = [
       'pending',
       'in_progress',
       'success',
       'failed',
       'rolled_back',
     ];
-    expect(statuses).toHaveLength(5);
-  });
-
-  it('RoutingStatus has all expected values', () => {
-    const statuses: RoutingStatus[] = ['active', 'canary', 'rollback', 'archived'];
-    expect(statuses).toHaveLength(4);
-  });
-
-  it('DeploymentProviderName has all expected values', () => {
-    const providers: DeploymentProviderName[] = ['workers-dispatch', 'oci'];
-    expect(providers).toHaveLength(2);
-  });
-
-  it('Deployment interface has required fields', () => {
-    const deployment: Deployment = {
+    assertEquals(statuses.length, 5);
+})
+  Deno.test('deployment types - RoutingStatus has all expected values', () => {
+  const statuses: RoutingStatus[] = ['active', 'canary', 'rollback', 'archived'];
+    assertEquals(statuses.length, 4);
+})
+  Deno.test('deployment types - DeploymentProviderName has all expected values', () => {
+  const providers: DeploymentProviderName[] = ['workers-dispatch', 'oci'];
+    assertEquals(providers.length, 2);
+})
+  Deno.test('deployment types - Deployment interface has required fields', () => {
+  const deployment: Deployment = {
       id: 'dep-1',
       service_id: 'w-1',
       worker_id: 'w-1',
@@ -90,26 +87,24 @@ describe('deployment types', () => {
       updated_at: '2026-01-01T00:00:00.000Z',
     };
 
-    expect(deployment.id).toBe('dep-1');
-    expect(deployment.service_id).toBe('w-1');
-    expect(deployment.version).toBe(1);
-    expect(deployment.routing_weight).toBe(100);
-  });
-
-  it('CreateDeploymentInput has required and optional fields', () => {
-    const input: CreateDeploymentInput = {
+    assertEquals(deployment.id, 'dep-1');
+    assertEquals(deployment.service_id, 'w-1');
+    assertEquals(deployment.version, 1);
+    assertEquals(deployment.routing_weight, 100);
+})
+  Deno.test('deployment types - CreateDeploymentInput has required and optional fields', () => {
+  const input: CreateDeploymentInput = {
       workerId: 'w-1',
       spaceId: 'space-1',
       bundleContent: 'export default { fetch() { return new Response("Hello") } }',
     };
 
-    expect(input.workerId).toBe('w-1');
-    expect(input.strategy).toBeUndefined();
-    expect(input.canaryWeight).toBeUndefined();
-  });
-
-  it('CreateDeploymentInput supports canary strategy', () => {
-    const input: CreateDeploymentInput = {
+    assertEquals(input.workerId, 'w-1');
+    assertEquals(input.strategy, undefined);
+    assertEquals(input.canaryWeight, undefined);
+})
+  Deno.test('deployment types - CreateDeploymentInput supports canary strategy', () => {
+  const input: CreateDeploymentInput = {
       workerId: 'w-1',
       spaceId: 'space-1',
       bundleContent: 'code',
@@ -117,22 +112,20 @@ describe('deployment types', () => {
       canaryWeight: 10,
     };
 
-    expect(input.strategy).toBe('canary');
-    expect(input.canaryWeight).toBe(10);
-  });
-
-  it('RollbackInput has required fields', () => {
-    const input: RollbackInput = {
+    assertEquals(input.strategy, 'canary');
+    assertEquals(input.canaryWeight, 10);
+})
+  Deno.test('deployment types - RollbackInput has required fields', () => {
+  const input: RollbackInput = {
       workerId: 'w-1',
       userId: 'user-1',
     };
 
-    expect(input.workerId).toBe('w-1');
-    expect(input.targetVersion).toBeUndefined();
-  });
-
-  it('DeploymentTarget supports service-ref endpoints', () => {
-    const target: DeploymentTarget = {
+    assertEquals(input.workerId, 'w-1');
+    assertEquals(input.targetVersion, undefined);
+})
+  Deno.test('deployment types - DeploymentTarget supports service-ref endpoints', () => {
+  const target: DeploymentTarget = {
       route_ref: 'my-worker',
       endpoint: {
         kind: 'service-ref',
@@ -140,27 +133,24 @@ describe('deployment types', () => {
       },
     };
 
-    expect(target.endpoint?.kind).toBe('service-ref');
-  });
-
-  it('DeploymentTarget supports http-url endpoints', () => {
-    const target: DeploymentTarget = {
+    assertEquals(target.endpoint?.kind, 'service-ref');
+})
+  Deno.test('deployment types - DeploymentTarget supports http-url endpoints', () => {
+  const target: DeploymentTarget = {
       endpoint: {
         kind: 'http-url',
         base_url: 'https://example.com',
       },
     };
 
-    expect(target.endpoint?.kind).toBe('http-url');
-  });
-
-  it('DeploymentTargetArtifact has optional fields', () => {
-    const artifact: DeploymentTargetArtifact = {
+    assertEquals(target.endpoint?.kind, 'http-url');
+})
+  Deno.test('deployment types - DeploymentTargetArtifact has optional fields', () => {
+  const artifact: DeploymentTargetArtifact = {
       image_ref: 'docker.io/my-image:latest',
       exposed_port: 8080,
     };
 
-    expect(artifact.image_ref).toBe('docker.io/my-image:latest');
-    expect(artifact.exposed_port).toBe(8080);
-  });
-});
+    assertEquals(artifact.image_ref, 'docker.io/my-image:latest');
+    assertEquals(artifact.exposed_port, 8080);
+})

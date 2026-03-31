@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { createSignal, onMount, onCleanup } from 'solid-js';
 import { DeploySection, RouteState, View, isDeploySection } from '../types';
 
 function parseDeploySection(section: string | undefined): DeploySection | undefined {
@@ -363,30 +363,30 @@ export function buildPath(state: RouteState): string {
 }
 
 export function useRouter() {
-  const [route, setRouteState] = useState<RouteState>(() => parseRoute(window.location.pathname, window.location.search));
+  const [route, setRouteState] = createSignal<RouteState>(parseRoute(window.location.pathname, window.location.search));
 
-  useEffect(() => {
+  onMount(() => {
     const handlePopState = () => {
       setRouteState(parseRoute(window.location.pathname, window.location.search));
     };
     window.addEventListener('popstate', handlePopState);
-    return () => window.removeEventListener('popstate', handlePopState);
-  }, []);
+    onCleanup(() => window.removeEventListener('popstate', handlePopState));
+  });
 
-  const navigate = useCallback((newState: Partial<RouteState>) => {
-    const merged = { ...route, ...newState };
+  const navigate = (newState: Partial<RouteState>) => {
+    const merged = { ...route(), ...newState };
     const path = buildPath(merged);
     if (window.location.pathname !== path) {
       window.history.pushState(null, '', path);
     }
     setRouteState(merged);
-  }, [route]);
+  };
 
-  const replace = useCallback((newState: RouteState) => {
+  const replace = (newState: RouteState) => {
     const path = buildPath(newState);
     window.history.replaceState(null, '', path);
     setRouteState(newState);
-  }, []);
+  };
 
-  return { route, navigate, replace };
+  return { get route() { return route(); }, navigate, replace };
 }

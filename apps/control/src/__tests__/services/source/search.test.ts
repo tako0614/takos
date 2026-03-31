@@ -1,73 +1,59 @@
-import { describe, expect, it, vi, beforeEach } from 'vitest';
 import type { D1Database, R2Bucket } from '@cloudflare/workers-types';
 
-const mocks = vi.hoisted(() => ({
-  getDb: vi.fn(),
-  isEmbeddingsAvailable: vi.fn().mockReturnValue(false),
-  createEmbeddingsService: vi.fn().mockReturnValue(null),
-}));
+import { assertEquals, assert } from 'jsr:@std/assert';
+import { assertSpyCalls } from 'jsr:@std/testing/mock';
 
-vi.mock('@/db', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/db')>()),
-  getDb: mocks.getDb,
-}));
+const mocks = ({
+  getDb: ((..._args: any[]) => undefined) as any,
+  isEmbeddingsAvailable: (() => false),
+  createEmbeddingsService: (() => null),
+});
 
-vi.mock('@/services/execution/embeddings', () => ({
-  isEmbeddingsAvailable: mocks.isEmbeddingsAvailable,
-  createEmbeddingsService: mocks.createEmbeddingsService,
-}));
-
+// [Deno] vi.mock removed - manually stub imports from '@/db'
+// [Deno] vi.mock removed - manually stub imports from '@/services/execution/embeddings'
 import { searchFilenames, searchContent, quickSearchPaths } from '@/services/source/search';
 
 function createDrizzleMock() {
-  const getMock = vi.fn();
-  const allMock = vi.fn();
+  const getMock = ((..._args: any[]) => undefined) as any;
+  const allMock = ((..._args: any[]) => undefined) as any;
   const chain = {
-    from: vi.fn().mockReturnThis(),
-    where: vi.fn().mockReturnThis(),
-    orderBy: vi.fn().mockReturnThis(),
-    limit: vi.fn().mockReturnThis(),
+    from: (function(this: any) { return this; }),
+    where: (function(this: any) { return this; }),
+    orderBy: (function(this: any) { return this; }),
+    limit: (function(this: any) { return this; }),
     get: getMock,
     all: allMock,
   };
   return {
-    select: vi.fn(() => chain),
+    select: () => chain,
     _: { get: getMock, all: allMock },
   };
 }
 
-describe('quickSearchPaths', () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-  });
 
-  it('returns matching file paths', async () => {
-    const drizzle = createDrizzleMock();
-    drizzle._.all.mockResolvedValueOnce([{ path: 'src/main.ts' }, { path: 'src/main.test.ts' }]);
-    mocks.getDb.mockReturnValue(drizzle);
+  Deno.test('quickSearchPaths - returns matching file paths', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+  const drizzle = createDrizzleMock();
+    drizzle._.all = (async () => [{ path: 'src/main.ts' }, { path: 'src/main.test.ts' }]) as any;
+    mocks.getDb = (() => drizzle) as any;
 
     const result = await quickSearchPaths({} as D1Database, 'ws-1', 'main');
-    expect(result).toEqual(['src/main.ts', 'src/main.test.ts']);
-  });
-
-  it('returns empty array when no matches', async () => {
-    const drizzle = createDrizzleMock();
-    drizzle._.all.mockResolvedValueOnce([]);
-    mocks.getDb.mockReturnValue(drizzle);
+    assertEquals(result, ['src/main.ts', 'src/main.test.ts']);
+})
+  Deno.test('quickSearchPaths - returns empty array when no matches', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+  const drizzle = createDrizzleMock();
+    drizzle._.all = (async () => []) as any;
+    mocks.getDb = (() => drizzle) as any;
 
     const result = await quickSearchPaths({} as D1Database, 'ws-1', 'zzz');
-    expect(result).toEqual([]);
-  });
-});
+    assertEquals(result, []);
+})
 
-describe('searchFilenames', () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-  });
-
-  it('returns file matches with scores', async () => {
-    const drizzle = createDrizzleMock();
-    drizzle._.all.mockResolvedValueOnce([
+  Deno.test('searchFilenames - returns file matches with scores', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+  const drizzle = createDrizzleMock();
+    drizzle._.all = (async () => [
       {
         id: 'f1',
         accountId: 'ws-1',
@@ -80,40 +66,35 @@ describe('searchFilenames', () => {
         createdAt: '2026-01-01T00:00:00.000Z',
         updatedAt: '2026-01-01T00:00:00.000Z',
       },
-    ]);
-    mocks.getDb.mockReturnValue(drizzle);
+    ]) as any;
+    mocks.getDb = (() => drizzle) as any;
 
     const result = await searchFilenames({} as D1Database, 'ws-1', 'index');
 
-    expect(result).toHaveLength(1);
-    expect(result[0].type).toBe('file');
-    expect(result[0].file.path).toBe('src/index.ts');
-    expect(result[0].score).toBeGreaterThan(0);
-  });
-
-  it('returns empty array when no matches', async () => {
-    const drizzle = createDrizzleMock();
-    drizzle._.all.mockResolvedValueOnce([]);
-    mocks.getDb.mockReturnValue(drizzle);
+    assertEquals(result.length, 1);
+    assertEquals(result[0].type, 'file');
+    assertEquals(result[0].file.path, 'src/index.ts');
+    assert(result[0].score > 0);
+})
+  Deno.test('searchFilenames - returns empty array when no matches', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+  const drizzle = createDrizzleMock();
+    drizzle._.all = (async () => []) as any;
+    mocks.getDb = (() => drizzle) as any;
 
     const result = await searchFilenames({} as D1Database, 'ws-1', 'nonexistent');
-    expect(result).toEqual([]);
-  });
-});
+    assertEquals(result, []);
+})
 
-describe('searchContent', () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-  });
-
-  it('returns empty when storage is undefined', async () => {
-    const result = await searchContent({} as D1Database, undefined, 'ws-1', 'hello');
-    expect(result).toEqual([]);
-  });
-
-  it('finds content matches in text files', async () => {
-    const drizzle = createDrizzleMock();
-    drizzle._.all.mockResolvedValueOnce([
+  Deno.test('searchContent - returns empty when storage is undefined', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+  const result = await searchContent({} as D1Database, undefined, 'ws-1', 'hello');
+    assertEquals(result, []);
+})
+  Deno.test('searchContent - finds content matches in text files', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+  const drizzle = createDrizzleMock();
+    drizzle._.all = (async () => [
       {
         id: 'f1',
         accountId: 'ws-1',
@@ -126,27 +107,27 @@ describe('searchContent', () => {
         createdAt: '2026-01-01T00:00:00.000Z',
         updatedAt: '2026-01-01T00:00:00.000Z',
       },
-    ]);
-    mocks.getDb.mockReturnValue(drizzle);
+    ]) as any;
+    mocks.getDb = (() => drizzle) as any;
 
     const bucket = {
-      get: vi.fn().mockResolvedValue({
-        text: vi.fn().mockResolvedValue('Hello world\nThis is a test'),
-      }),
+      get: (async () => ({
+        text: (async () => 'Hello world\nThis is a test'),
+      })),
     } as unknown as R2Bucket;
 
     const result = await searchContent({} as D1Database, bucket, 'ws-1', 'Hello');
 
-    expect(result).toHaveLength(1);
-    expect(result[0].type).toBe('content');
-    expect(result[0].matches).toBeDefined();
-    expect(result[0].matches!.length).toBeGreaterThan(0);
-    expect(result[0].matches![0].line).toBe(1);
-  });
-
-  it('skips large files', async () => {
-    const drizzle = createDrizzleMock();
-    drizzle._.all.mockResolvedValueOnce([
+    assertEquals(result.length, 1);
+    assertEquals(result[0].type, 'content');
+    assert(result[0].matches !== undefined);
+    assert(result[0].matches!.length > 0);
+    assertEquals(result[0].matches![0].line, 1);
+})
+  Deno.test('searchContent - skips large files', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+  const drizzle = createDrizzleMock();
+    drizzle._.all = (async () => [
       {
         id: 'f1',
         accountId: 'ws-1',
@@ -159,13 +140,12 @@ describe('searchContent', () => {
         createdAt: '2026-01-01T00:00:00.000Z',
         updatedAt: '2026-01-01T00:00:00.000Z',
       },
-    ]);
-    mocks.getDb.mockReturnValue(drizzle);
+    ]) as any;
+    mocks.getDb = (() => drizzle) as any;
 
-    const bucket = { get: vi.fn() } as unknown as R2Bucket;
+    const bucket = { get: ((..._args: any[]) => undefined) as any } as unknown as R2Bucket;
 
     const result = await searchContent({} as D1Database, bucket, 'ws-1', 'test');
-    expect(result).toEqual([]);
-    expect(bucket.get).not.toHaveBeenCalled();
-  });
-});
+    assertEquals(result, []);
+    assertSpyCalls(bucket.get, 0);
+})

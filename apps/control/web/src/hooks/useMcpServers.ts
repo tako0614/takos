@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { createSignal, createEffect, on } from 'solid-js';
 import { useToast } from '../store/toast';
 import { useI18n } from '../store/i18n';
 import { getErrorMessage } from 'takos-common/errors';
@@ -13,12 +13,12 @@ export function useMcpServers({ spaceId }: UseMcpServersOptions) {
   const { showToast } = useToast();
   const { t } = useI18n();
   const { confirm } = useConfirmDialog();
-  const [servers, setServers] = useState<McpServerRecord[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [servers, setServers] = createSignal<McpServerRecord[]>([]);
+  const [loading, setLoading] = createSignal(true);
 
   const basePath = `/api/mcp/servers?spaceId=${encodeURIComponent(spaceId)}`;
 
-  const refresh = useCallback(async () => {
+  const refresh = async () => {
     if (!spaceId) {
       setServers([]);
       setLoading(false);
@@ -36,13 +36,13 @@ export function useMcpServers({ spaceId }: UseMcpServersOptions) {
     } finally {
       setLoading(false);
     }
-  }, [basePath, spaceId]);
+  };
 
-  useEffect(() => {
+  createEffect(on(() => spaceId, () => {
     refresh();
-  }, [refresh]);
+  }));
 
-  const createExternalServer = useCallback(async (input: { name: string; url: string; scope?: string }) => {
+  const createExternalServer = async (input: { name: string; url: string; scope?: string }) => {
     const res = await fetch(basePath, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -60,9 +60,9 @@ export function useMcpServers({ spaceId }: UseMcpServersOptions) {
       auth_url?: string;
       message: string;
     };
-  }, [basePath, refresh]);
+  };
 
-  const updateServer = useCallback(async (serverId: string, input: { enabled?: boolean; name?: string }) => {
+  const updateServer = async (serverId: string, input: { enabled?: boolean; name?: string }) => {
     const res = await fetch(`/api/mcp/servers/${serverId}?spaceId=${encodeURIComponent(spaceId)}`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
@@ -74,9 +74,9 @@ export function useMcpServers({ spaceId }: UseMcpServersOptions) {
     }
     await refresh();
     return data.data as McpServerRecord;
-  }, [refresh, spaceId]);
+  };
 
-  const toggleServer = useCallback(async (server: McpServerRecord) => {
+  const toggleServer = async (server: McpServerRecord) => {
     try {
       await updateServer(server.id, { enabled: !server.enabled });
       return true;
@@ -84,9 +84,9 @@ export function useMcpServers({ spaceId }: UseMcpServersOptions) {
       showToast('error', getErrorMessage(error, t('failedToUpdateMcpServer')));
       return false;
     }
-  }, [showToast, updateServer]);
+  };
 
-  const deleteServer = useCallback(async (server: McpServerRecord) => {
+  const deleteServer = async (server: McpServerRecord) => {
     const confirmed = await confirm({
       title: t('removeMcpServer'),
       message: t('removeMcpServerConfirm', { name: server.name }),
@@ -110,9 +110,9 @@ export function useMcpServers({ spaceId }: UseMcpServersOptions) {
       showToast('error', getErrorMessage(error, t('failedToRemoveMcpServer')));
       return false;
     }
-  }, [confirm, refresh, showToast, spaceId]);
+  };
 
-  const fetchServerTools = useCallback(async (serverId: string): Promise<{ name: string; description: string }[]> => {
+  const fetchServerTools = async (serverId: string): Promise<{ name: string; description: string }[]> => {
     const res = await fetch(`/api/mcp/servers/${serverId}/tools?spaceId=${encodeURIComponent(spaceId)}`);
     if (!res.ok) {
       const data = await res.json().catch(() => ({})) as { error?: string };
@@ -120,7 +120,7 @@ export function useMcpServers({ spaceId }: UseMcpServersOptions) {
     }
     const data = await res.json() as { data: { tools: { name: string; description: string }[] } };
     return data.data.tools;
-  }, [spaceId]);
+  };
 
   return {
     servers,

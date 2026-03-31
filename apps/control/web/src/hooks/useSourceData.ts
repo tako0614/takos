@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { createEffect, on } from 'solid-js';
 import type { Space } from '../types';
 import { useSourceFiltering, type SourceFilter, type SourceSort } from './useSourceFiltering';
 import { useSourcePagination } from './useSourcePagination';
@@ -80,29 +80,32 @@ export function useSourceData({ spaces, onNavigateToRepo, isAuthenticated, onReq
   });
 
   // Refetch whenever filter/sort/category/officialOnly/query/space changes
-  useEffect(() => {
-    fetching.appendInFlightRef.current = false;
-    const requestId = fetching.requestSeqRef.current + 1;
-    fetching.requestSeqRef.current = requestId;
-    fetching.setItems([]);
-    fetching.setSelectedItem(null);
-    pagination.resetOffset();
-    if (filtering.filter === 'all') {
-      void fetching.fetchAll(0, false, requestId);
-    } else if (filtering.filter === 'mine') {
-      void fetching.fetchMine(requestId);
-    } else {
-      void fetching.fetchStarred(0, false, requestId);
-    }
-  }, [filtering.filter, filtering.sort, filtering.category, filtering.officialOnly, filtering.debouncedQuery, filtering.effectiveSpaceId, isAuthenticated, fetching.fetchAll, fetching.fetchMine, fetching.fetchStarred]);
+  createEffect(on(
+    () => [filtering.filter(), filtering.sort(), filtering.category(), filtering.officialOnly(), filtering.debouncedQuery(), filtering.effectiveSpaceId(), isAuthenticated],
+    () => {
+      fetching.appendInFlightRef = false;
+      const requestId = fetching.requestSeqRef + 1;
+      fetching.requestSeqRef = requestId;
+      fetching.setItems([]);
+      fetching.setSelectedItem(null);
+      pagination.resetOffset();
+      if (filtering.filter() === 'all') {
+        void fetching.fetchAll(0, false, requestId);
+      } else if (filtering.filter() === 'mine') {
+        void fetching.fetchMine(requestId);
+      } else {
+        void fetching.fetchStarred(0, false, requestId);
+      }
+    },
+  ));
 
   const loadMore = () => {
     pagination.loadMore(
-      filtering.filter,
-      fetching.loading,
-      fetching.hasMore,
-      fetching.appendInFlightRef,
-      fetching.requestSeqRef,
+      filtering.filter(),
+      fetching.loading(),
+      fetching.hasMore(),
+      fetching,
+      fetching,
       fetching.fetchAll,
       fetching.fetchStarred,
     );

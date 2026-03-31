@@ -1,8 +1,8 @@
 import { Command } from 'commander';
-import chalk from 'chalk';
-import { validateAppManifest } from '../lib/app-manifest.js';
-import { cliExit } from '../lib/command-exit.js';
-import { printJson } from '../lib/cli-utils.js';
+import { green, red } from '@std/fmt/colors';
+import { validateAppManifest } from '../lib/app-manifest.ts';
+import { cliExit } from '../lib/command-exit.ts';
+import { printJson } from '../lib/cli-utils.ts';
 
 type DeployCommandOptions = {
   space?: string;
@@ -20,7 +20,7 @@ const DEPLOY_REMOVED_MESSAGE = [
 ];
 
 function exitRemovedDeployCommand(commandName: string): never {
-  console.log(chalk.red(`${commandName} is removed.`));
+  console.log(red(`${commandName} is removed.`));
   for (const line of DEPLOY_REMOVED_MESSAGE) {
     console.log(line);
   }
@@ -64,7 +64,7 @@ export function registerDeployCommand(program: Command): void {
         return;
       }
 
-      console.log(chalk.green('Manifest is valid.'));
+      console.log(green('Manifest is valid.'));
       console.log(`  File:      ${summary.manifest_path}`);
       console.log(`  App:       ${summary.app}`);
       console.log(`  Version:   ${summary.version}`);

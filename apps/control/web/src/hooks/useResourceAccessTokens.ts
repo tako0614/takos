@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { createSignal, createEffect, on } from 'solid-js';
 import { rpc, rpcJson } from '../lib/rpc';
 import { useToast } from '../store/toast';
 import { useI18n } from '../store/i18n';
@@ -26,14 +26,14 @@ export function useResourceAccessTokens(resource: Resource | null) {
   const { showToast } = useToast();
   const { t } = useI18n();
 
-  const [tokens, setTokens] = useState<ResourceAccessToken[]>([]);
-  const [loadingTokens, setLoadingTokens] = useState(false);
-  const [connectionInfo, setConnectionInfo] = useState<ResourceConnectionInfo | null>(null);
-  const [loadingConnection, setLoadingConnection] = useState(false);
-  const [creatingToken, setCreatingToken] = useState(false);
-  const [deletingTokenId, setDeletingTokenId] = useState<string | null>(null);
+  const [tokens, setTokens] = createSignal<ResourceAccessToken[]>([]);
+  const [loadingTokens, setLoadingTokens] = createSignal(false);
+  const [connectionInfo, setConnectionInfo] = createSignal<ResourceConnectionInfo | null>(null);
+  const [loadingConnection, setLoadingConnection] = createSignal(false);
+  const [creatingToken, setCreatingToken] = createSignal(false);
+  const [deletingTokenId, setDeletingTokenId] = createSignal<string | null>(null);
 
-  const fetchTokens = useCallback(async () => {
+  const fetchTokens = async () => {
     if (!resource) return;
     setLoadingTokens(true);
     try {
@@ -47,9 +47,9 @@ export function useResourceAccessTokens(resource: Resource | null) {
     } finally {
       setLoadingTokens(false);
     }
-  }, [resource]);
+  };
 
-  const fetchConnectionInfo = useCallback(async () => {
+  const fetchConnectionInfo = async () => {
     if (!resource) return;
     setLoadingConnection(true);
     try {
@@ -63,9 +63,9 @@ export function useResourceAccessTokens(resource: Resource | null) {
     } finally {
       setLoadingConnection(false);
     }
-  }, [resource]);
+  };
 
-  const createToken = useCallback(async (
+  const createToken = async (
     tokenName: string,
     permission: 'read' | 'write' = 'read',
     expiresInDays?: number
@@ -91,9 +91,9 @@ export function useResourceAccessTokens(resource: Resource | null) {
     } finally {
       setCreatingToken(false);
     }
-  }, [resource, showToast, t, fetchTokens]);
+  };
 
-  const deleteToken = useCallback(async (tokenId: string): Promise<boolean> => {
+  const deleteToken = async (tokenId: string): Promise<boolean> => {
     if (!resource) return false;
     setDeletingTokenId(tokenId);
     try {
@@ -110,9 +110,9 @@ export function useResourceAccessTokens(resource: Resource | null) {
     } finally {
       setDeletingTokenId(null);
     }
-  }, [resource, showToast, t, fetchTokens]);
+  };
 
-  useEffect(() => {
+  createEffect(on(() => resource?.name, () => {
     if (resource) {
       fetchTokens();
       fetchConnectionInfo();
@@ -120,7 +120,7 @@ export function useResourceAccessTokens(resource: Resource | null) {
       setTokens([]);
       setConnectionInfo(null);
     }
-  }, [resource?.name]);
+  }));
 
   return {
     tokens,

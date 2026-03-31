@@ -1,21 +1,19 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { handleUploadPack } from '@/services/git-smart/smart-http/upload-pack';
 import { encodePktLine, flushPkt, parsePktLines, pktLineText } from '@/services/git-smart/protocol/pkt-line';
 import { concatBytes } from '@/services/git-smart/core/sha1';
 
 // Mock dependencies
-vi.mock('@/services/git-smart/core/commit-index', () => ({
-  collectReachableObjects: vi.fn(),
-}));
+// [Deno] vi.mock removed - manually stub imports from '@/services/git-smart/core/commit-index'
 
-vi.mock('@/services/git-smart/protocol/packfile-writer', () => ({
-  writePackfile: vi.fn(),
-}));
+// [Deno] vi.mock removed - manually stub imports from '@/services/git-smart/protocol/packfile-writer'
 
 import { collectReachableObjects } from '@/services/git-smart/core/commit-index';
 import { writePackfile } from '@/services/git-smart/protocol/packfile-writer';
-const mockCollect = vi.mocked(collectReachableObjects);
-const mockWrite = vi.mocked(writePackfile);
+import { assertEquals, assert, assertRejects } from 'jsr:@std/assert';
+import { assertSpyCalls, assertSpyCallArgs } from 'jsr:@std/testing/mock';
+
+const mockCollect = collectReachableObjects;
+const mockWrite = writePackfile;
 
 const SHA_A = 'a'.repeat(40);
 const SHA_B = 'b'.repeat(40);
@@ -50,13 +48,11 @@ function extractPackData(responseBytes: Uint8Array): Uint8Array {
   return concatBytes(...chunks);
 }
 
-describe('handleUploadPack', () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-  });
 
-  it('returns NAK only when no wants', async () => {
-    // Send a body with just "done" and flush
+
+  Deno.test('handleUploadPack - returns NAK only when no wants', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+  // Send a body with just "done" and flush
     const body = concatBytes(
       encodePktLine('done\n'),
       flushPkt(),
@@ -66,15 +62,16 @@ describe('handleUploadPack', () => {
     const lines = parsePktLines(result);
 
     // Should be just NAK
-    expect(lines.length).toBeGreaterThanOrEqual(1);
-    expect(pktLineText(lines[0])).toBe('NAK');
-  });
+    assert(lines.length >= 1);
+    assertEquals(pktLineText(lines[0]), 'NAK');
+})
 
-  it('returns NAK + side-band packfile when wants present', async () => {
-    mockCollect.mockResolvedValue([SHA_A]);
+  Deno.test('handleUploadPack - returns NAK + side-band packfile when wants present', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+  mockCollect = (async () => [SHA_A]) as any;
     // Return a minimal mock packfile
     const fakePack = new Uint8Array([0x50, 0x41, 0x43, 0x4b, 0, 0, 0, 2, 0, 0, 0, 0]);
-    mockWrite.mockResolvedValue(fakePack);
+    mockWrite = (async () => fakePack) as any;
 
     const body = concatBytes(
       encodePktLine(`want ${SHA_A}\n`),
@@ -87,29 +84,30 @@ describe('handleUploadPack', () => {
     const lines = parsePktLines(result);
 
     // First line should be NAK
-    expect(pktLineText(lines[0])).toBe('NAK');
+    assertEquals(pktLineText(lines[0]), 'NAK');
 
     // Should have side-band data (channel 1 = packfile)
     const sideBandLines = lines.filter(l => l.type === 'data' && l.data && l.data[0] === 1);
-    expect(sideBandLines.length).toBeGreaterThan(0);
+    assert(sideBandLines.length > 0);
 
     // Should end with flush
-    expect(lines[lines.length - 1].type).toBe('flush');
+    assertEquals(lines[lines.length - 1].type, 'flush');
 
     // Verify collectReachableObjects was called with correct args
-    expect(mockCollect).toHaveBeenCalledWith(
+    assertSpyCallArgs(mockCollect, 0, [
       expect.anything(),
       expect.anything(),
       'repo1',
       [SHA_A],
-      expect.any(Set),
-    );
-  });
+      /* expect.any(Set) */ {} as any,
+    ]);
+})
 
-  it('passes all wanted SHAs to collectReachableObjects when multiple wants are sent', async () => {
-    mockCollect.mockResolvedValue([SHA_A, SHA_B, SHA_C]);
+  Deno.test('handleUploadPack - passes all wanted SHAs to collectReachableObjects when multiple wants are sent', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+  mockCollect = (async () => [SHA_A, SHA_B, SHA_C]) as any;
     const fakePack = makePackHeader(3);
-    mockWrite.mockResolvedValue(fakePack);
+    mockWrite = (async () => fakePack) as any;
 
     const body = concatBytes(
       encodePktLine(`want ${SHA_A}\n`),
@@ -124,23 +122,24 @@ describe('handleUploadPack', () => {
     const lines = parsePktLines(result);
 
     // NAK should still be the first line
-    expect(pktLineText(lines[0])).toBe('NAK');
+    assertEquals(pktLineText(lines[0]), 'NAK');
 
     // collectReachableObjects must receive all three SHAs in the wants array
-    expect(mockCollect).toHaveBeenCalledTimes(1);
-    const wantsArg = mockCollect.mock.calls[0][3];
-    expect(wantsArg).toEqual([SHA_A, SHA_B, SHA_C]);
+    assertSpyCalls(mockCollect, 1);
+    const wantsArg = mockCollect.calls[0][3];
+    assertEquals(wantsArg, [SHA_A, SHA_B, SHA_C]);
 
     // writePackfile should receive all reachable objects
-    expect(mockWrite).toHaveBeenCalledTimes(1);
-    expect(mockWrite.mock.calls[0][1]).toEqual([SHA_A, SHA_B, SHA_C]);
-  });
+    assertSpyCalls(mockWrite, 1);
+    assertEquals(mockWrite.calls[0][1], [SHA_A, SHA_B, SHA_C]);
+})
 
-  it('passes have SHAs as exclusion set so reachable objects are excluded', async () => {
-    // Client already has SHA_C and SHA_D; those should be passed as the haves set
-    mockCollect.mockResolvedValue([SHA_A]);
+  Deno.test('handleUploadPack - passes have SHAs as exclusion set so reachable objects are excluded', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+  // Client already has SHA_C and SHA_D; those should be passed as the haves set
+    mockCollect = (async () => [SHA_A]) as any;
     const fakePack = makePackHeader(1);
-    mockWrite.mockResolvedValue(fakePack);
+    mockWrite = (async () => fakePack) as any;
 
     const body = concatBytes(
       encodePktLine(`want ${SHA_A}\n`),
@@ -154,66 +153,53 @@ describe('handleUploadPack', () => {
     const result = await handleUploadPack({} as any, {} as any, 'repo1', body);
     const lines = parsePktLines(result);
 
-    expect(pktLineText(lines[0])).toBe('NAK');
+    assertEquals(pktLineText(lines[0]), 'NAK');
 
     // Verify haves were forwarded correctly
-    expect(mockCollect).toHaveBeenCalledTimes(1);
-    const havesArg: Set<string> = mockCollect.mock.calls[0][4];
-    expect(havesArg).toBeInstanceOf(Set);
-    expect(havesArg.has(SHA_C)).toBe(true);
-    expect(havesArg.has(SHA_D)).toBe(true);
-    expect(havesArg.size).toBe(2);
+    assertSpyCalls(mockCollect, 1);
+    const havesArg: Set<string> = mockCollect.calls[0][4];
+    assert(havesArg instanceof Set);
+    assertEquals(havesArg.has(SHA_C), true);
+    assertEquals(havesArg.has(SHA_D), true);
+    assertEquals(havesArg.size, 2);
 
     // Only unreachable-from-haves objects should end up in the packfile
-    expect(mockWrite.mock.calls[0][1]).toEqual([SHA_A]);
-  });
+    assertEquals(mockWrite.calls[0][1], [SHA_A]);
+})
 
-  it('returns NAK-only for a completely empty body (no want/have/done)', async () => {
-    // An empty body means zero pkt-lines
+  Deno.test('handleUploadPack - returns NAK-only for a completely empty body (no want/have/done)', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+  // An empty body means zero pkt-lines
     const body = new Uint8Array(0);
 
     const result = await handleUploadPack({} as any, {} as any, 'repo1', body);
     const lines = parsePktLines(result);
 
     // Should return just NAK, no packfile
-    expect(lines.length).toBe(1);
-    expect(pktLineText(lines[0])).toBe('NAK');
+    assertEquals(lines.length, 1);
+    assertEquals(pktLineText(lines[0]), 'NAK');
 
     // Neither mock should have been called
-    expect(mockCollect).not.toHaveBeenCalled();
-    expect(mockWrite).not.toHaveBeenCalled();
-  });
+    assertSpyCalls(mockCollect, 0);
+    assertSpyCalls(mockWrite, 0);
+})
 
-  it('returns NAK-only when body contains only a flush packet', async () => {
-    const body = flushPkt();
+  Deno.test('handleUploadPack - returns NAK-only when body contains only a flush packet', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+  const body = flushPkt();
 
     const result = await handleUploadPack({} as any, {} as any, 'repo1', body);
     const lines = parsePktLines(result);
 
-    expect(lines.length).toBe(1);
-    expect(pktLineText(lines[0])).toBe('NAK');
-    expect(mockCollect).not.toHaveBeenCalled();
-    expect(mockWrite).not.toHaveBeenCalled();
-  });
+    assertEquals(lines.length, 1);
+    assertEquals(pktLineText(lines[0]), 'NAK');
+    assertSpyCalls(mockCollect, 0);
+    assertSpyCalls(mockWrite, 0);
+})
 
-  it('propagates errors from collectReachableObjects', async () => {
-    mockCollect.mockRejectedValue(new Error('object not found'));
-
-    const body = concatBytes(
-      encodePktLine(`want ${SHA_A}\n`),
-      flushPkt(),
-      encodePktLine('done\n'),
-      flushPkt(),
-    );
-
-    await expect(
-      handleUploadPack({} as any, {} as any, 'repo1', body),
-    ).rejects.toThrow('object not found');
-  });
-
-  it('propagates errors from writePackfile', async () => {
-    mockCollect.mockResolvedValue([SHA_A]);
-    mockWrite.mockRejectedValue(new Error('packfile write failed'));
+  Deno.test('handleUploadPack - propagates errors from collectReachableObjects', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+  mockCollect = (async () => { throw new Error('object not found'); }) as any;
 
     const body = concatBytes(
       encodePktLine(`want ${SHA_A}\n`),
@@ -222,13 +208,31 @@ describe('handleUploadPack', () => {
       flushPkt(),
     );
 
-    await expect(
+    await await assertRejects(async () => { await 
       handleUploadPack({} as any, {} as any, 'repo1', body),
-    ).rejects.toThrow('packfile write failed');
-  });
+    ; }, 'object not found');
+})
 
-  it('ignores want lines with invalid (non-40-char) SHAs', async () => {
+  Deno.test('handleUploadPack - propagates errors from writePackfile', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+  mockCollect = (async () => [SHA_A]) as any;
+    mockWrite = (async () => { throw new Error('packfile write failed'); }) as any;
+
     const body = concatBytes(
+      encodePktLine(`want ${SHA_A}\n`),
+      flushPkt(),
+      encodePktLine('done\n'),
+      flushPkt(),
+    );
+
+    await await assertRejects(async () => { await 
+      handleUploadPack({} as any, {} as any, 'repo1', body),
+    ; }, 'packfile write failed');
+})
+
+  Deno.test('handleUploadPack - ignores want lines with invalid (non-40-char) SHAs', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+  const body = concatBytes(
       encodePktLine('want shortsha\n'),
       encodePktLine('want \n'),
       flushPkt(),
@@ -240,14 +244,15 @@ describe('handleUploadPack', () => {
     const lines = parsePktLines(result);
 
     // No valid wants -> NAK only
-    expect(lines.length).toBe(1);
-    expect(pktLineText(lines[0])).toBe('NAK');
-    expect(mockCollect).not.toHaveBeenCalled();
-  });
+    assertEquals(lines.length, 1);
+    assertEquals(pktLineText(lines[0]), 'NAK');
+    assertSpyCalls(mockCollect, 0);
+})
 
-  it('ignores have lines with invalid SHAs and still processes valid wants', async () => {
-    mockCollect.mockResolvedValue([SHA_A]);
-    mockWrite.mockResolvedValue(makePackHeader(1));
+  Deno.test('handleUploadPack - ignores have lines with invalid SHAs and still processes valid wants', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+  mockCollect = (async () => [SHA_A]) as any;
+    mockWrite = (async () => makePackHeader(1)) as any;
 
     const body = concatBytes(
       encodePktLine(`want ${SHA_A}\n`),
@@ -261,15 +266,16 @@ describe('handleUploadPack', () => {
     await handleUploadPack({} as any, {} as any, 'repo1', body);
 
     // Only the valid have (SHA_B) should be in the set; invalid "shortsha" is ignored
-    const havesArg: Set<string> = mockCollect.mock.calls[0][4];
-    expect(havesArg.size).toBe(1);
-    expect(havesArg.has(SHA_B)).toBe(true);
-  });
+    const havesArg: Set<string> = mockCollect.calls[0][4];
+    assertEquals(havesArg.size, 1);
+    assertEquals(havesArg.has(SHA_B), true);
+})
 
-  it('extracts want SHA correctly when capabilities are appended', async () => {
-    // The first want line may include capabilities: "want <sha> cap1 cap2\n"
-    mockCollect.mockResolvedValue([SHA_A]);
-    mockWrite.mockResolvedValue(makePackHeader(1));
+  Deno.test('handleUploadPack - extracts want SHA correctly when capabilities are appended', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+  // The first want line may include capabilities: "want <sha> cap1 cap2\n"
+    mockCollect = (async () => [SHA_A]) as any;
+    mockWrite = (async () => makePackHeader(1)) as any;
 
     const body = concatBytes(
       encodePktLine(`want ${SHA_A} multi_ack_detailed side-band-64k ofs-delta\n`),
@@ -280,15 +286,16 @@ describe('handleUploadPack', () => {
 
     await handleUploadPack({} as any, {} as any, 'repo1', body);
 
-    const wantsArg = mockCollect.mock.calls[0][3];
-    expect(wantsArg).toEqual([SHA_A]);
-  });
+    const wantsArg = mockCollect.calls[0][3];
+    assertEquals(wantsArg, [SHA_A]);
+})
 
-  describe('side-band-64k framing', () => {
-    it('wraps all packfile data in channel 1 frames', async () => {
-      mockCollect.mockResolvedValue([SHA_A]);
+  
+    Deno.test('handleUploadPack - side-band-64k framing - wraps all packfile data in channel 1 frames', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+  mockCollect = (async () => [SHA_A]) as any;
       const fakePack = makePackHeader(1);
-      mockWrite.mockResolvedValue(fakePack);
+      mockWrite = (async () => fakePack) as any;
 
       const body = concatBytes(
         encodePktLine(`want ${SHA_A}\n`),
@@ -301,18 +308,19 @@ describe('handleUploadPack', () => {
       const packData = extractPackData(result);
 
       // Reassembled channel-1 data should equal the original packfile
-      expect(packData).toEqual(fakePack);
-    });
+      assertEquals(packData, fakePack);
+})
 
-    it('chunks large packfiles into multiple side-band frames', async () => {
-      mockCollect.mockResolvedValue([SHA_A]);
+    Deno.test('handleUploadPack - side-band-64k framing - chunks large packfiles into multiple side-band frames', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+  mockCollect = (async () => [SHA_A]) as any;
       // Create a packfile larger than the 65515-byte chunk limit
       const largePayload = new Uint8Array(65515 * 2 + 100);
       largePayload.fill(0x42);
       // Set PACK signature so it looks like a packfile
       largePayload[0] = 0x50; largePayload[1] = 0x41;
       largePayload[2] = 0x43; largePayload[3] = 0x4b;
-      mockWrite.mockResolvedValue(largePayload);
+      mockWrite = (async () => largePayload) as any;
 
       const body = concatBytes(
         encodePktLine(`want ${SHA_A}\n`),
@@ -327,22 +335,23 @@ describe('handleUploadPack', () => {
       // Count channel-1 (packfile) frames
       const ch1Lines = lines.filter(l => l.type === 'data' && l.data && l.data[0] === 1);
       // 65515*2 + 100 bytes should require at least 3 chunks
-      expect(ch1Lines.length).toBe(3);
+      assertEquals(ch1Lines.length, 3);
 
       // Verify each chunk's payload does not exceed the 65515 limit
       for (const frame of ch1Lines) {
         // frame.data includes channel byte, so payload = data.length - 1
-        expect(frame.data!.length - 1).toBeLessThanOrEqual(65515);
+        assert(frame.data!.length - 1 <= 65515);
       }
 
       // Reassembled data must match the original packfile
       const packData = extractPackData(result);
-      expect(packData).toEqual(largePayload);
-    });
+      assertEquals(packData, largePayload);
+})
 
-    it('response structure is NAK, then channel-1 data frames, then flush', async () => {
-      mockCollect.mockResolvedValue([SHA_A]);
-      mockWrite.mockResolvedValue(makePackHeader(1));
+    Deno.test('handleUploadPack - side-band-64k framing - response structure is NAK, then channel-1 data frames, then flush', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+  mockCollect = (async () => [SHA_A]) as any;
+      mockWrite = (async () => makePackHeader(1)) as any;
 
       const body = concatBytes(
         encodePktLine(`want ${SHA_A}\n`),
@@ -355,25 +364,26 @@ describe('handleUploadPack', () => {
       const lines = parsePktLines(result);
 
       // Must have at least 3 parts: NAK, >=1 side-band frame, flush
-      expect(lines.length).toBeGreaterThanOrEqual(3);
+      assert(lines.length >= 3);
 
       // First: NAK
-      expect(lines[0].type).toBe('data');
-      expect(pktLineText(lines[0])).toBe('NAK');
+      assertEquals(lines[0].type, 'data');
+      assertEquals(pktLineText(lines[0]), 'NAK');
 
       // Middle: all should be channel-1 data frames
       for (let i = 1; i < lines.length - 1; i++) {
-        expect(lines[i].type).toBe('data');
-        expect(lines[i].data![0]).toBe(1); // channel 1
+        assertEquals(lines[i].type, 'data');
+        assertEquals(lines[i].data![0], 1); // channel 1
       }
 
       // Last: flush
-      expect(lines[lines.length - 1].type).toBe('flush');
-    });
+      assertEquals(lines[lines.length - 1].type, 'flush');
+})
 
-    it('does not include channel 2 (progress) or channel 3 (error) frames', async () => {
-      mockCollect.mockResolvedValue([SHA_A]);
-      mockWrite.mockResolvedValue(makePackHeader(1));
+    Deno.test('handleUploadPack - side-band-64k framing - does not include channel 2 (progress) or channel 3 (error) frames', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+  mockCollect = (async () => [SHA_A]) as any;
+      mockWrite = (async () => makePackHeader(1)) as any;
 
       const body = concatBytes(
         encodePktLine(`want ${SHA_A}\n`),
@@ -388,16 +398,17 @@ describe('handleUploadPack', () => {
       // No channel 2 or channel 3 frames
       const ch2 = lines.filter(l => l.type === 'data' && l.data && l.data[0] === 2);
       const ch3 = lines.filter(l => l.type === 'data' && l.data && l.data[0] === 3);
-      expect(ch2.length).toBe(0);
-      expect(ch3.length).toBe(0);
-    });
-  });
+      assertEquals(ch2.length, 0);
+      assertEquals(ch3.length, 0);
+})
+  
 
-  it('handles collectReachableObjects returning empty array (no objects to send)', async () => {
-    mockCollect.mockResolvedValue([]);
+  Deno.test('handleUploadPack - handles collectReachableObjects returning empty array (no objects to send)', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+  mockCollect = (async () => []) as any;
     // writePackfile with empty array should still produce a valid (empty) packfile
     const emptyPack = makePackHeader(0);
-    mockWrite.mockResolvedValue(emptyPack);
+    mockWrite = (async () => emptyPack) as any;
 
     const body = concatBytes(
       encodePktLine(`want ${SHA_A}\n`),
@@ -409,20 +420,21 @@ describe('handleUploadPack', () => {
     const result = await handleUploadPack({} as any, {} as any, 'repo1', body);
     const lines = parsePktLines(result);
 
-    expect(pktLineText(lines[0])).toBe('NAK');
+    assertEquals(pktLineText(lines[0]), 'NAK');
     // Should still send the (empty) packfile via side-band
     const ch1Lines = lines.filter(l => l.type === 'data' && l.data && l.data[0] === 1);
-    expect(ch1Lines.length).toBeGreaterThan(0);
+    assert(ch1Lines.length > 0);
 
     const packData = extractPackData(result);
-    expect(packData).toEqual(emptyPack);
-  });
+    assertEquals(packData, emptyPack);
+})
 
-  it('deduplicates wants when the same SHA appears multiple times', async () => {
-    // The source code pushes each want line, so duplicates will appear.
+  Deno.test('handleUploadPack - deduplicates wants when the same SHA appears multiple times', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+  // The source code pushes each want line, so duplicates will appear.
     // This test documents current behavior (duplicates are passed through).
-    mockCollect.mockResolvedValue([SHA_A]);
-    mockWrite.mockResolvedValue(makePackHeader(1));
+    mockCollect = (async () => [SHA_A]) as any;
+    mockWrite = (async () => makePackHeader(1)) as any;
 
     const body = concatBytes(
       encodePktLine(`want ${SHA_A}\n`),
@@ -435,7 +447,7 @@ describe('handleUploadPack', () => {
     await handleUploadPack({} as any, {} as any, 'repo1', body);
 
     // Both wants are passed to collectReachableObjects (current behavior)
-    const wantsArg = mockCollect.mock.calls[0][3];
-    expect(wantsArg).toEqual([SHA_A, SHA_A]);
-  });
-});
+    const wantsArg = mockCollect.calls[0][3];
+    assertEquals(wantsArg, [SHA_A, SHA_A]);
+})
+

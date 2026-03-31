@@ -1,15 +1,14 @@
 import { Hono } from 'hono';
-import { serve } from '@hono/node-server';
 import { createLogger } from 'takos-common/logger';
 import { parseIntEnv } from 'takos-common/env-parse';
 import { isPrivateIP, isLocalhost } from 'takos-common/validation';
-import { BrowserManager } from './browser-manager.js';
+import { BrowserManager } from './browser-manager.ts';
 import type {
   BrowserAction,
   BootstrapPayload,
   GotoPayload,
   ExtractPayload,
-} from './browser-manager.js';
+} from './browser-manager.ts';
 
 export type BrowserServiceOptions = {
   port?: number;
@@ -146,34 +145,31 @@ export function createBrowserServiceApp(options: BrowserServiceOptions = {}) {
 
 export function startBrowserService(options: BrowserServiceOptions = {}) {
   const port = options.port ?? parseIntEnv('PORT', 8080, { min: 1, max: 65535 });
-  // グレースピリオドは 15 秒。ブラウザ終了処理は
-  // ページクローズと切断が比較的高速に完了します。
-  // executor 側は実行中ジョブの終了待ちが必要なため 30 秒を使用。
   const shutdownGraceMs = options.shutdownGraceMs ?? parseIntEnv('SHUTDOWN_GRACE_MS', 15000, { min: 0 });
   const { app, browser, logger } = createBrowserServiceApp(options);
-  const server = serve({ fetch: app.fetch, port }, () => {
-    logger.info(`[browserd] Listening on port ${port}`);
-  });
+
+  const abortController = new AbortController();
+  const server = Deno.serve({ port, signal: abortController.signal }, app.fetch);
+  logger.info(`[browserd] Listening on port ${port}`);
 
   async function shutdown(signal: string): Promise<void> {
     logger.info(`[browserd] Received ${signal}, shutting down`);
     await browser.close();
-    server.close(() => {
-      logger.info('[browserd] Server closed');
-      process.exit(0);
-    });
-    setTimeout(() => {
-      logger.warn(`[browserd] Force exit after ${shutdownGraceMs}ms`);
-      process.exit(1);
-    }, shutdownGraceMs).unref();
+    abortController.abort();
+    await server.finished;
+    logger.info('[browserd] Server closed');
+    Deno.exit(0);
   }
 
-  process.once('SIGTERM', () => {
-    void shutdown('SIGTERM');
-  });
-  process.once('SIGINT', () => {
-    void shutdown('SIGINT');
-  });
+  const forceExit = () => {
+    setTimeout(() => {
+      logger.warn(`[browserd] Force exit after ${shutdownGraceMs}ms`);
+      Deno.exit(1);
+    }, shutdownGraceMs);
+  };
+
+  Deno.addSignalListener('SIGTERM', () => { forceExit(); void shutdown('SIGTERM'); });
+  Deno.addSignalListener('SIGINT', () => { forceExit(); void shutdown('SIGINT'); });
 
   return { app, browser, server, logger };
 }

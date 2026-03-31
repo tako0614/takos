@@ -1,52 +1,30 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-
 // Mock fs/promises and logger before importing the module under test.
-// Each test uses vi.resetModules() + dynamic import to get fresh module state
+// Each test uses /* modules reset (no-op in Deno) */ void 0 + dynamic import to get fresh module state
 // (the module caches `dirEnsured` at module scope).
 
-const mockAppendFile = vi.fn();
-const mockMkdir = vi.fn();
-const mockStat = vi.fn();
-const mockRename = vi.fn();
-const mockUnlink = vi.fn();
+import { assertEquals, assert, assertStringIncludes } from 'jsr:@std/assert';
+import { assertSpyCalls } from 'jsr:@std/testing/mock';
 
-vi.mock('fs/promises', async () => {
-  const actual = await vi.importActual<typeof import('fs/promises')>('fs/promises');
-  return {
-    ...actual,
-    appendFile: (...args: any[]) => mockAppendFile(...args),
-    mkdir: (...args: any[]) => mockMkdir(...args),
-    stat: (...args: any[]) => mockStat(...args),
-    rename: (...args: any[]) => mockRename(...args),
-    unlink: (...args: any[]) => mockUnlink(...args),
-  };
-});
+const mockAppendFile = ((..._args: any[]) => undefined) as any;
+const mockMkdir = ((..._args: any[]) => undefined) as any;
+const mockStat = ((..._args: any[]) => undefined) as any;
+const mockRename = ((..._args: any[]) => undefined) as any;
+const mockUnlink = ((..._args: any[]) => undefined) as any;
 
-vi.mock('takos-common/logger', () => ({
-  createLogger: () => ({
-    info: vi.fn(),
-    warn: vi.fn(),
-    error: vi.fn(),
-    debug: vi.fn(),
-  }),
-}));
-
+// [Deno] vi.mock removed - manually stub imports from 'fs/promises'
+// [Deno] vi.mock removed - manually stub imports from 'takos-common/logger'
 async function freshWriteAuditLog() {
-  vi.resetModules();
-  const mod = await import('../../utils/audit-log.js');
+  /* modules reset (no-op in Deno) */ void 0;
+  const mod = await import('../../utils/audit-log.ts');
   return mod.writeAuditLog;
 }
 
-beforeEach(() => {
-  vi.clearAllMocks();
-  mockMkdir.mockResolvedValue(undefined);
-  mockStat.mockRejectedValue(new Error('ENOENT'));
-  mockAppendFile.mockResolvedValue(undefined);
-});
-
-describe('writeAuditLog', () => {
-  it('writes audit entry as JSONL', async () => {
-    const writeAuditLog = await freshWriteAuditLog();
+  Deno.test('writeAuditLog - writes audit entry as JSONL', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+  mockMkdir = (async () => undefined) as any;
+  mockStat = (async () => { throw new Error('ENOENT'); }) as any;
+  mockAppendFile = (async () => undefined) as any;
+  const writeAuditLog = await freshWriteAuditLog();
 
     await writeAuditLog({
       timestamp: '2024-01-01T00:00:00Z',
@@ -56,17 +34,20 @@ describe('writeAuditLog', () => {
       status: 'completed',
     });
 
-    expect(mockAppendFile).toHaveBeenCalledOnce();
-    const writtenLine = mockAppendFile.mock.calls[0][1] as string;
-    expect(writtenLine.endsWith('\n')).toBe(true);
+    assertSpyCalls(mockAppendFile, 1);
+    const writtenLine = mockAppendFile.calls[0][1] as string;
+    assertEquals(writtenLine.endsWith('\n'), true);
     const parsed = JSON.parse(writtenLine.trim());
-    expect(parsed.event).toBe('exec');
-    expect(parsed.spaceId).toBe('ws1');
-    expect(parsed.command).toBe('echo hello');
-  });
-
-  it('redacts credentials in URLs', async () => {
-    const writeAuditLog = await freshWriteAuditLog();
+    assertEquals(parsed.event, 'exec');
+    assertEquals(parsed.spaceId, 'ws1');
+    assertEquals(parsed.command, 'echo hello');
+})
+  Deno.test('writeAuditLog - redacts credentials in URLs', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+  mockMkdir = (async () => undefined) as any;
+  mockStat = (async () => { throw new Error('ENOENT'); }) as any;
+  mockAppendFile = (async () => undefined) as any;
+  const writeAuditLog = await freshWriteAuditLog();
 
     await writeAuditLog({
       timestamp: '2024-01-01T00:00:00Z',
@@ -76,14 +57,17 @@ describe('writeAuditLog', () => {
       status: 'started',
     });
 
-    const writtenLine = mockAppendFile.mock.calls[0][1] as string;
+    const writtenLine = mockAppendFile.calls[0][1] as string;
     const parsed = JSON.parse(writtenLine.trim());
-    expect(parsed.command).not.toContain('password');
-    expect(parsed.command).toContain('***@');
-  });
-
-  it('redacts Authorization header values', async () => {
-    const writeAuditLog = await freshWriteAuditLog();
+    assert(!(parsed.command).includes('password'));
+    assertStringIncludes(parsed.command, '***@');
+})
+  Deno.test('writeAuditLog - redacts Authorization header values', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+  mockMkdir = (async () => undefined) as any;
+  mockStat = (async () => { throw new Error('ENOENT'); }) as any;
+  mockAppendFile = (async () => undefined) as any;
+  const writeAuditLog = await freshWriteAuditLog();
 
     await writeAuditLog({
       timestamp: '2024-01-01T00:00:00Z',
@@ -93,14 +77,17 @@ describe('writeAuditLog', () => {
       status: 'started',
     });
 
-    const writtenLine = mockAppendFile.mock.calls[0][1] as string;
+    const writtenLine = mockAppendFile.calls[0][1] as string;
     const parsed = JSON.parse(writtenLine.trim());
-    expect(parsed.command).not.toContain('my-secret-token');
-    expect(parsed.command).toContain('Authorization: ***');
-  });
-
-  it('redacts SECRET_KEY=value patterns', async () => {
-    const writeAuditLog = await freshWriteAuditLog();
+    assert(!(parsed.command).includes('my-secret-token'));
+    assertStringIncludes(parsed.command, 'Authorization: ***');
+})
+  Deno.test('writeAuditLog - redacts SECRET_KEY=value patterns', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+  mockMkdir = (async () => undefined) as any;
+  mockStat = (async () => { throw new Error('ENOENT'); }) as any;
+  mockAppendFile = (async () => undefined) as any;
+  const writeAuditLog = await freshWriteAuditLog();
 
     await writeAuditLog({
       timestamp: '2024-01-01T00:00:00Z',
@@ -110,14 +97,17 @@ describe('writeAuditLog', () => {
       status: 'started',
     });
 
-    const writtenLine = mockAppendFile.mock.calls[0][1] as string;
+    const writtenLine = mockAppendFile.calls[0][1] as string;
     const parsed = JSON.parse(writtenLine.trim());
-    expect(parsed.command).not.toContain('mysecret');
-    expect(parsed.command).toContain('SECRET_KEY=***');
-  });
-
-  it('redacts commands array', async () => {
-    const writeAuditLog = await freshWriteAuditLog();
+    assert(!(parsed.command).includes('mysecret'));
+    assertStringIncludes(parsed.command, 'SECRET_KEY=***');
+})
+  Deno.test('writeAuditLog - redacts commands array', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+  mockMkdir = (async () => undefined) as any;
+  mockStat = (async () => { throw new Error('ENOENT'); }) as any;
+  mockAppendFile = (async () => undefined) as any;
+  const writeAuditLog = await freshWriteAuditLog();
 
     await writeAuditLog({
       timestamp: '2024-01-01T00:00:00Z',
@@ -130,26 +120,32 @@ describe('writeAuditLog', () => {
       status: 'started',
     });
 
-    const writtenLine = mockAppendFile.mock.calls[0][1] as string;
+    const writtenLine = mockAppendFile.calls[0][1] as string;
     const parsed = JSON.parse(writtenLine.trim());
-    expect(parsed.commands[0]).not.toContain('token1');
-    expect(parsed.commands[1]).toContain('TOKEN=***');
-  });
-
-  it('does not throw on write failure', async () => {
-    mockAppendFile.mockRejectedValue(new Error('write failed'));
+    assert(!(parsed.commands[0]).includes('token1'));
+    assertStringIncludes(parsed.commands[1], 'TOKEN=***');
+})
+  Deno.test('writeAuditLog - does not throw on write failure', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+  mockMkdir = (async () => undefined) as any;
+  mockStat = (async () => { throw new Error('ENOENT'); }) as any;
+  mockAppendFile = (async () => undefined) as any;
+  mockAppendFile = (async () => { throw new Error('write failed'); }) as any;
     const writeAuditLog = await freshWriteAuditLog();
 
-    await expect(writeAuditLog({
+    await await writeAuditLog({
       timestamp: '2024-01-01T00:00:00Z',
       event: 'exec',
       spaceId: 'ws1',
       status: 'started',
-    })).resolves.not.toThrow();
-  });
-
-  it('ensures directory is created on first call', async () => {
-    const writeAuditLog = await freshWriteAuditLog();
+    });
+})
+  Deno.test('writeAuditLog - ensures directory is created on first call', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+  mockMkdir = (async () => undefined) as any;
+  mockStat = (async () => { throw new Error('ENOENT'); }) as any;
+  mockAppendFile = (async () => undefined) as any;
+  const writeAuditLog = await freshWriteAuditLog();
 
     await writeAuditLog({
       timestamp: '2024-01-01T00:00:00Z',
@@ -158,6 +154,5 @@ describe('writeAuditLog', () => {
       status: 'started',
     });
 
-    expect(mockMkdir).toHaveBeenCalled();
-  });
-});
+    assert(mockMkdir.calls.length > 0);
+})

@@ -1,4 +1,3 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
 import type { ToolContext } from '@/tools/types';
 import type { D1Database } from '@cloudflare/workers-types';
 import type { Env } from '@/types';
@@ -7,52 +6,13 @@ import type { Env } from '@/types';
 // Mocks
 // ---------------------------------------------------------------------------
 
-const mockSelectAll = vi.fn();
-const mockSelectGet = vi.fn();
-const mockUpdateWhere = vi.fn();
+import { assertEquals, assertRejects, assertStringIncludes } from 'jsr:@std/assert';
 
-vi.mock('@/db', () => {
-  const chain = {
-    from: vi.fn(() => chain),
-    innerJoin: vi.fn(() => chain),
-    where: vi.fn(() => chain),
-    orderBy: vi.fn(() => chain),
-    get: vi.fn(() => mockSelectGet()),
-    all: vi.fn(() => mockSelectAll()),
-  };
+const mockSelectAll = ((..._args: any[]) => undefined) as any;
+const mockSelectGet = ((..._args: any[]) => undefined) as any;
+const mockUpdateWhere = ((..._args: any[]) => undefined) as any;
 
-  return {
-    getDb: () => ({
-      select: vi.fn(() => chain),
-      update: vi.fn(() => ({
-        set: vi.fn(() => ({
-          where: vi.fn((...args: unknown[]) => mockUpdateWhere(...args)),
-        })),
-      })),
-    }),
-    sessionRepos: {
-      id: 'id',
-      sessionId: 'session_id',
-      repoId: 'repo_id',
-      branch: 'branch',
-      mountPath: 'mount_path',
-      isPrimary: 'is_primary',
-      createdAt: 'created_at',
-    },
-    sessions: {
-      id: 'id',
-      repoId: 'repo_id',
-      branch: 'branch',
-      updatedAt: 'updated_at',
-    },
-    repositories: {
-      id: 'id',
-      name: 'name',
-      accountId: 'account_id',
-    },
-  };
-});
-
+// [Deno] vi.mock removed - manually stub imports from '@/db'
 import {
   repoListHandler,
   repoStatusHandler,
@@ -77,9 +37,9 @@ function makeContext(overrides: Partial<ToolContext> = {}): ToolContext {
     sessionId: 'session-1',
     env: {} as Env,
     db: {} as D1Database,
-    setSessionId: vi.fn(),
-    getLastContainerStartFailure: vi.fn(() => undefined),
-    setLastContainerStartFailure: vi.fn(),
+    setSessionId: ((..._args: any[]) => undefined) as any,
+    getLastContainerStartFailure: () => undefined,
+    setLastContainerStartFailure: ((..._args: any[]) => undefined) as any,
     ...overrides,
   };
 }
@@ -88,49 +48,45 @@ function makeContext(overrides: Partial<ToolContext> = {}): ToolContext {
 // Tests
 // ---------------------------------------------------------------------------
 
-describe('repo tools', () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-  });
 
-  describe('definitions', () => {
-    it('REPO_LIST has correct properties', () => {
-      expect(REPO_LIST.name).toBe('repo_list');
-      expect(REPO_LIST.category).toBe('container');
-    });
-
-    it('REPO_STATUS has correct properties', () => {
-      expect(REPO_STATUS.name).toBe('repo_status');
-      expect(REPO_STATUS.category).toBe('container');
-    });
-
-    it('REPO_SWITCH requires repo_id', () => {
-      expect(REPO_SWITCH.name).toBe('repo_switch');
-      expect(REPO_SWITCH.parameters.required).toEqual(['repo_id']);
-    });
-
-    it('REPO_TOOLS exports all three tools', () => {
-      expect(REPO_TOOLS).toHaveLength(3);
-      expect(REPO_TOOLS.map(t => t.name)).toEqual(['repo_list', 'repo_status', 'repo_switch']);
-    });
-  });
-
-  describe('repoListHandler', () => {
-    it('throws when no container session is active', async () => {
-      await expect(
+  
+    Deno.test('repo tools - definitions - REPO_LIST has correct properties', () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+  assertEquals(REPO_LIST.name, 'repo_list');
+      assertEquals(REPO_LIST.category, 'container');
+})
+    Deno.test('repo tools - definitions - REPO_STATUS has correct properties', () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+  assertEquals(REPO_STATUS.name, 'repo_status');
+      assertEquals(REPO_STATUS.category, 'container');
+})
+    Deno.test('repo tools - definitions - REPO_SWITCH requires repo_id', () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+  assertEquals(REPO_SWITCH.name, 'repo_switch');
+      assertEquals(REPO_SWITCH.parameters.required, ['repo_id']);
+})
+    Deno.test('repo tools - definitions - REPO_TOOLS exports all three tools', () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+  assertEquals(REPO_TOOLS.length, 3);
+      assertEquals(REPO_TOOLS.map(t => t.name), ['repo_list', 'repo_status', 'repo_switch']);
+})  
+  
+    Deno.test('repo tools - repoListHandler - throws when no container session is active', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+  await await assertRejects(async () => { await 
         repoListHandler({}, makeContext({ sessionId: undefined })),
-      ).rejects.toThrow(/container/i);
-    });
-
-    it('returns empty message when no repos mounted', async () => {
-      mockSelectAll.mockResolvedValue([]);
+      ; }, /container/i);
+})
+    Deno.test('repo tools - repoListHandler - returns empty message when no repos mounted', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+  mockSelectAll = (async () => []) as any;
 
       const result = await repoListHandler({}, makeContext());
-      expect(result).toContain('No repositories are mounted');
-    });
-
-    it('lists mounted repositories', async () => {
-      mockSelectAll.mockResolvedValue([
+      assertStringIncludes(result, 'No repositories are mounted');
+})
+    Deno.test('repo tools - repoListHandler - lists mounted repositories', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+  mockSelectAll = (async () => [
         {
           repoId: 'repo-1',
           branch: 'main',
@@ -145,94 +101,90 @@ describe('repo tools', () => {
           isPrimary: false,
           repoName: 'lib-shared',
         },
-      ]);
+      ]) as any;
 
       const result = await repoListHandler({}, makeContext());
 
-      expect(result).toContain('my-project');
-      expect(result).toContain('repo-1');
-      expect(result).toContain('[primary]');
-      expect(result).toContain('lib-shared');
-      expect(result).toContain('develop');
-    });
-  });
-
-  describe('repoStatusHandler', () => {
-    it('throws when no container session is active', async () => {
-      await expect(
+      assertStringIncludes(result, 'my-project');
+      assertStringIncludes(result, 'repo-1');
+      assertStringIncludes(result, '[primary]');
+      assertStringIncludes(result, 'lib-shared');
+      assertStringIncludes(result, 'develop');
+})  
+  
+    Deno.test('repo tools - repoStatusHandler - throws when no container session is active', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+  await await assertRejects(async () => { await 
         repoStatusHandler({}, makeContext({ sessionId: undefined })),
-      ).rejects.toThrow(/container/i);
-    });
-
-    it('returns no active repository message', async () => {
-      mockSelectGet.mockResolvedValue(null);
+      ; }, /container/i);
+})
+    Deno.test('repo tools - repoStatusHandler - returns no active repository message', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+  mockSelectGet = (async () => null) as any;
 
       const result = await repoStatusHandler({}, makeContext());
-      expect(result).toContain('No active repository');
-    });
-
-    it('shows the active repository', async () => {
-      mockSelectGet.mockResolvedValue({
+      assertStringIncludes(result, 'No active repository');
+})
+    Deno.test('repo tools - repoStatusHandler - shows the active repository', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+  mockSelectGet = (async () => ({
         repoId: 'repo-1',
         branch: 'main',
         mountPath: '/',
         repoName: 'my-project',
-      });
+      })) as any;
 
       const result = await repoStatusHandler({}, makeContext());
 
-      expect(result).toContain('Active repository');
-      expect(result).toContain('my-project');
-      expect(result).toContain('repo-1');
-      expect(result).toContain('main');
-    });
-  });
-
-  describe('repoSwitchHandler', () => {
-    it('throws when no container session is active', async () => {
-      await expect(
+      assertStringIncludes(result, 'Active repository');
+      assertStringIncludes(result, 'my-project');
+      assertStringIncludes(result, 'repo-1');
+      assertStringIncludes(result, 'main');
+})  
+  
+    Deno.test('repo tools - repoSwitchHandler - throws when no container session is active', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+  await await assertRejects(async () => { await 
         repoSwitchHandler({ repo_id: 'repo-1' }, makeContext({ sessionId: undefined })),
-      ).rejects.toThrow(/container/i);
-    });
-
-    it('throws when repo_id is missing', async () => {
-      await expect(
+      ; }, /container/i);
+})
+    Deno.test('repo tools - repoSwitchHandler - throws when repo_id is missing', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+  await await assertRejects(async () => { await 
         repoSwitchHandler({}, makeContext()),
-      ).rejects.toThrow('repo_id is required');
-    });
-
-    it('throws when repo_id is not a string', async () => {
-      await expect(
+      ; }, 'repo_id is required');
+})
+    Deno.test('repo tools - repoSwitchHandler - throws when repo_id is not a string', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+  await await assertRejects(async () => { await 
         repoSwitchHandler({ repo_id: 123 }, makeContext()),
-      ).rejects.toThrow('repo_id is required');
-    });
+      ; }, 'repo_id is required');
+})
+    Deno.test('repo tools - repoSwitchHandler - throws when repository is not mounted', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+  mockSelectGet = (async () => null) as any;
 
-    it('throws when repository is not mounted', async () => {
-      mockSelectGet.mockResolvedValue(null);
-
-      await expect(
+      await await assertRejects(async () => { await 
         repoSwitchHandler({ repo_id: 'repo-unknown' }, makeContext()),
-      ).rejects.toThrow('not mounted');
-    });
-
-    it('switches the active repository', async () => {
-      mockSelectGet.mockResolvedValue({
+      ; }, 'not mounted');
+})
+    Deno.test('repo tools - repoSwitchHandler - switches the active repository', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+  mockSelectGet = (async () => ({
         id: 'sr-1',
         repoId: 'repo-2',
         branch: 'develop',
         mountPath: '/libs',
         repoName: 'lib-shared',
-      });
-      mockUpdateWhere.mockResolvedValue({});
+      })) as any;
+      mockUpdateWhere = (async () => ({})) as any;
 
       const result = await repoSwitchHandler(
         { repo_id: 'repo-2' },
         makeContext(),
       );
 
-      expect(result).toContain('switched to');
-      expect(result).toContain('lib-shared');
-      expect(result).toContain('repo-2');
-    });
-  });
-});
+      assertStringIncludes(result, 'switched to');
+      assertStringIncludes(result, 'lib-shared');
+      assertStringIncludes(result, 'repo-2');
+})  

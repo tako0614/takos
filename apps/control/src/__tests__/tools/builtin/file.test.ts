@@ -1,4 +1,3 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ToolContext } from '@/tools/types';
 import type { D1Database } from '@cloudflare/workers-types';
 import type { Env } from '@/types';
@@ -7,40 +6,20 @@ import type { Env } from '@/types';
 // Mocks
 // ---------------------------------------------------------------------------
 
-const mockCallSessionApi = vi.fn();
-const mockRequireContainer = vi.fn();
-const mockResolveMountPath = vi.fn();
-const mockBuildSessionPath = vi.fn();
-const mockSetupFileOperation = vi.fn();
-const mockHandleSessionApiResponse = vi.fn();
+import { assertEquals, assert, assertRejects, assertStringIncludes } from 'jsr:@std/assert';
+import { assertSpyCallArgs } from 'jsr:@std/testing/mock';
 
-vi.mock('@/tools/builtin/file/session', () => ({
-  callSessionApi: (...args: unknown[]) => mockCallSessionApi(...args),
-  requireContainer: (...args: unknown[]) => mockRequireContainer(...args),
-  resolveMountPath: (...args: unknown[]) => mockResolveMountPath(...args),
-  buildSessionPath: (...args: unknown[]) => mockBuildSessionPath(...args),
-}));
+const mockCallSessionApi = ((..._args: any[]) => undefined) as any;
+const mockRequireContainer = ((..._args: any[]) => undefined) as any;
+const mockResolveMountPath = ((..._args: any[]) => undefined) as any;
+const mockBuildSessionPath = ((..._args: any[]) => undefined) as any;
+const mockSetupFileOperation = ((..._args: any[]) => undefined) as any;
+const mockHandleSessionApiResponse = ((..._args: any[]) => undefined) as any;
 
-vi.mock('@/tools/builtin/file/helpers', () => ({
-  setupFileOperation: (...args: unknown[]) => mockSetupFileOperation(...args),
-  handleSessionApiResponse: (...args: unknown[]) => mockHandleSessionApiResponse(...args),
-}));
-
-vi.mock('@/tools/builtin/file/limits', async (importOriginal) => {
-  const actual = await importOriginal() as Record<string, unknown>;
-  return {
-    ...actual,
-    isBinaryFile: vi.fn((path: string) => path.endsWith('.png') || path.endsWith('.jpg')),
-    validateContent: vi.fn(),
-    validateBinaryContent: vi.fn(),
-  };
-});
-
-vi.mock('@/shared/utils/logger', () => ({
-  logError: vi.fn(),
-  logWarn: vi.fn(),
-}));
-
+// [Deno] vi.mock removed - manually stub imports from '@/tools/builtin/file/session'
+// [Deno] vi.mock removed - manually stub imports from '@/tools/builtin/file/helpers'
+// [Deno] vi.mock removed - manually stub imports from '@/tools/builtin/file/limits'
+// [Deno] vi.mock removed - manually stub imports from '@/shared/utils/logger'
 import {
   FILE_READ,
   FILE_WRITE,
@@ -78,18 +57,18 @@ function makeContext(overrides: Partial<ToolContext> = {}): ToolContext {
     userId: 'user-1',
     capabilities: [],
     env: {
-      RUNTIME_HOST: { fetch: vi.fn() },
+      RUNTIME_HOST: { fetch: ((..._args: any[]) => undefined) as any },
     } as unknown as Env,
     db: {} as D1Database,
     storage: {
-      put: vi.fn(),
-      get: vi.fn(),
-      delete: vi.fn(),
-      list: vi.fn(async () => ({ objects: [] })),
+      put: ((..._args: any[]) => undefined) as any,
+      get: ((..._args: any[]) => undefined) as any,
+      delete: ((..._args: any[]) => undefined) as any,
+      list: async () => ({ objects: [] }),
     } as unknown as ToolContext['storage'],
-    setSessionId: vi.fn(),
-    getLastContainerStartFailure: vi.fn(() => undefined),
-    setLastContainerStartFailure: vi.fn(),
+    setSessionId: ((..._args: any[]) => undefined) as any,
+    getLastContainerStartFailure: () => undefined,
+    setLastContainerStartFailure: ((..._args: any[]) => undefined) as any,
     ...overrides,
   };
 }
@@ -105,318 +84,308 @@ function makeJsonResponse(data: unknown, status = 200): Response {
 // Tool definitions
 // ---------------------------------------------------------------------------
 
-describe('file tool definitions', () => {
-  it('defines all eight file tools', () => {
-    expect(FILE_TOOLS).toHaveLength(8);
+
+  Deno.test('file tool definitions - defines all eight file tools', () => {
+  assertEquals(FILE_TOOLS.length, 8);
     const names = FILE_TOOLS.map((t) => t.name);
-    expect(names).toContain('file_read');
-    expect(names).toContain('file_write');
-    expect(names).toContain('file_write_binary');
-    expect(names).toContain('file_list');
-    expect(names).toContain('file_delete');
-    expect(names).toContain('file_mkdir');
-    expect(names).toContain('file_rename');
-    expect(names).toContain('file_copy');
-  });
-
-  it('all tools have file category', () => {
-    for (const def of FILE_TOOLS) {
-      expect(def.category).toBe('file');
+    assertStringIncludes(names, 'file_read');
+    assertStringIncludes(names, 'file_write');
+    assertStringIncludes(names, 'file_write_binary');
+    assertStringIncludes(names, 'file_list');
+    assertStringIncludes(names, 'file_delete');
+    assertStringIncludes(names, 'file_mkdir');
+    assertStringIncludes(names, 'file_rename');
+    assertStringIncludes(names, 'file_copy');
+})
+  Deno.test('file tool definitions - all tools have file category', () => {
+  for (const def of FILE_TOOLS) {
+      assertEquals(def.category, 'file');
     }
-  });
-
-  it('file_read requires path', () => {
-    expect(FILE_READ.parameters.required).toEqual(['path']);
-  });
-
-  it('file_write requires path and content', () => {
-    expect(FILE_WRITE.parameters.required).toEqual(['path', 'content']);
-  });
-
-  it('file_write_binary requires path and content_base64', () => {
-    expect(FILE_WRITE_BINARY.parameters.required).toEqual(['path', 'content_base64']);
-  });
-
-  it('file_rename requires old_path and new_path', () => {
-    expect(FILE_RENAME.parameters.required).toEqual(['old_path', 'new_path']);
-  });
-
-  it('file_copy requires source_path and dest_path', () => {
-    expect(FILE_COPY.parameters.required).toEqual(['source_path', 'dest_path']);
-  });
-
-  it('file_delete requires path', () => {
-    expect(FILE_DELETE.parameters.required).toEqual(['path']);
-  });
-
-  it('file_mkdir requires path', () => {
-    expect(FILE_MKDIR.parameters.required).toEqual(['path']);
-  });
-
-  it('file_list has no required parameters', () => {
-    expect(FILE_LIST.parameters.required).toEqual([]);
-  });
-
-  it('FILE_HANDLERS maps all tools', () => {
-    expect(Object.keys(FILE_HANDLERS)).toHaveLength(8);
+})
+  Deno.test('file tool definitions - file_read requires path', () => {
+  assertEquals(FILE_READ.parameters.required, ['path']);
+})
+  Deno.test('file tool definitions - file_write requires path and content', () => {
+  assertEquals(FILE_WRITE.parameters.required, ['path', 'content']);
+})
+  Deno.test('file tool definitions - file_write_binary requires path and content_base64', () => {
+  assertEquals(FILE_WRITE_BINARY.parameters.required, ['path', 'content_base64']);
+})
+  Deno.test('file tool definitions - file_rename requires old_path and new_path', () => {
+  assertEquals(FILE_RENAME.parameters.required, ['old_path', 'new_path']);
+})
+  Deno.test('file tool definitions - file_copy requires source_path and dest_path', () => {
+  assertEquals(FILE_COPY.parameters.required, ['source_path', 'dest_path']);
+})
+  Deno.test('file tool definitions - file_delete requires path', () => {
+  assertEquals(FILE_DELETE.parameters.required, ['path']);
+})
+  Deno.test('file tool definitions - file_mkdir requires path', () => {
+  assertEquals(FILE_MKDIR.parameters.required, ['path']);
+})
+  Deno.test('file tool definitions - file_list has no required parameters', () => {
+  assertEquals(FILE_LIST.parameters.required, []);
+})
+  Deno.test('file tool definitions - FILE_HANDLERS maps all tools', () => {
+  assertEquals(Object.keys(FILE_HANDLERS).length, 8);
     for (const def of FILE_TOOLS) {
-      expect(FILE_HANDLERS).toHaveProperty(def.name);
+      assert(def.name in FILE_HANDLERS);
     }
-  });
-
-  it('file tools support repo_id and mount_path parameters', () => {
-    for (const def of FILE_TOOLS) {
-      expect(def.parameters.properties).toHaveProperty('repo_id');
-      expect(def.parameters.properties).toHaveProperty('mount_path');
+})
+  Deno.test('file tool definitions - file tools support repo_id and mount_path parameters', () => {
+  for (const def of FILE_TOOLS) {
+      assert('repo_id' in def.parameters.properties);
+      assert('mount_path' in def.parameters.properties);
     }
-  });
-});
-
+})
 // ---------------------------------------------------------------------------
 // limits module
 // ---------------------------------------------------------------------------
 
-describe('file limits', () => {
-  it('isBinaryFile detects binary extensions', () => {
-    expect(isBinaryFile('photo.png')).toBe(true);
-    expect(isBinaryFile('image.jpg')).toBe(true);
-  });
 
-  it('BINARY_EXTENSIONS contains expected extensions', () => {
-    expect(BINARY_EXTENSIONS).toBeDefined();
-  });
-});
-
+  Deno.test('file limits - isBinaryFile detects binary extensions', () => {
+  assertEquals(isBinaryFile('photo.png'), true);
+    assertEquals(isBinaryFile('image.jpg'), true);
+})
+  Deno.test('file limits - BINARY_EXTENSIONS contains expected extensions', () => {
+  assert(BINARY_EXTENSIONS !== undefined);
+})
 // ---------------------------------------------------------------------------
 // file_read handler
 // ---------------------------------------------------------------------------
 
-describe('fileReadHandler', () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-    mockSetupFileOperation.mockResolvedValue({ path: '', mountPath: '', sessionId: 'session-1' });
-    mockResolveMountPath.mockResolvedValue('');
-    mockBuildSessionPath.mockImplementation((_mount: string, path: string) => path);
-  });
 
-  it('reads a text file', async () => {
-    mockSetupFileOperation.mockResolvedValue({ path: 'src/index.ts', mountPath: '', sessionId: 'session-1' });
-    mockCallSessionApi.mockResolvedValue(makeJsonResponse({ content: 'hello world', size: 11 }));
-    mockHandleSessionApiResponse.mockResolvedValue({ content: 'hello world', size: 11 });
+  Deno.test('fileReadHandler - reads a text file', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+    mockSetupFileOperation = (async () => ({ path: '', mountPath: '', sessionId: 'session-1' })) as any;
+    mockResolveMountPath = (async () => '') as any;
+    mockBuildSessionPath = (_mount: string, path: string) => path as any;
+  mockSetupFileOperation = (async () => ({ path: 'src/index.ts', mountPath: '', sessionId: 'session-1' })) as any;
+    mockCallSessionApi = (async () => makeJsonResponse({ content: 'hello world', size: 11 })) as any;
+    mockHandleSessionApiResponse = (async () => ({ content: 'hello world', size: 11 })) as any;
 
     const result = await fileReadHandler({ path: 'src/index.ts' }, makeContext());
-    expect(result).toBe('hello world');
-  });
-
-  it('reads a binary file as base64 preview', async () => {
-    mockSetupFileOperation.mockResolvedValue({ path: 'logo.png', mountPath: '', sessionId: 'session-1' });
+    assertEquals(result, 'hello world');
+})
+  Deno.test('fileReadHandler - reads a binary file as base64 preview', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+    mockSetupFileOperation = (async () => ({ path: '', mountPath: '', sessionId: 'session-1' })) as any;
+    mockResolveMountPath = (async () => '') as any;
+    mockBuildSessionPath = (_mount: string, path: string) => path as any;
+  mockSetupFileOperation = (async () => ({ path: 'logo.png', mountPath: '', sessionId: 'session-1' })) as any;
     const response = makeJsonResponse({ content: 'iVBORw0KGgo=', size: 1024, is_binary: true });
-    mockCallSessionApi.mockResolvedValue(response);
-    mockHandleSessionApiResponse.mockResolvedValue({ content: 'iVBORw0KGgo=', size: 1024, is_binary: true });
+    mockCallSessionApi = (async () => response) as any;
+    mockHandleSessionApiResponse = (async () => ({ content: 'iVBORw0KGgo=', size: 1024, is_binary: true })) as any;
 
     const result = await fileReadHandler({ path: 'logo.png' }, makeContext());
 
-    expect(result).toContain('[Binary file: logo.png]');
-    expect(result).toContain('1024 bytes');
-  });
+    assertStringIncludes(result, '[Binary file: logo.png]');
+    assertStringIncludes(result, '1024 bytes');
+})
+  Deno.test('fileReadHandler - throws when file not found (404)', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+    mockSetupFileOperation = (async () => ({ path: '', mountPath: '', sessionId: 'session-1' })) as any;
+    mockResolveMountPath = (async () => '') as any;
+    mockBuildSessionPath = (_mount: string, path: string) => path as any;
+  mockSetupFileOperation = (async () => ({ path: 'missing.ts', mountPath: '', sessionId: 'session-1' })) as any;
+    mockCallSessionApi = (async () => makeJsonResponse({ error: 'not found' }, 404)) as any;
 
-  it('throws when file not found (404)', async () => {
-    mockSetupFileOperation.mockResolvedValue({ path: 'missing.ts', mountPath: '', sessionId: 'session-1' });
-    mockCallSessionApi.mockResolvedValue(makeJsonResponse({ error: 'not found' }, 404));
-
-    await expect(fileReadHandler({ path: 'missing.ts' }, makeContext())).rejects.toThrow(
+    await await assertRejects(async () => { await fileReadHandler({ path: 'missing.ts' }, makeContext()); }, 
       'File not found',
     );
-  });
-
-  it('throws on non-ok response via handleSessionApiResponse', async () => {
-    mockSetupFileOperation.mockResolvedValue({ path: 'test.ts', mountPath: '', sessionId: 'session-1' });
+})
+  Deno.test('fileReadHandler - throws on non-ok response via handleSessionApiResponse', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+    mockSetupFileOperation = (async () => ({ path: '', mountPath: '', sessionId: 'session-1' })) as any;
+    mockResolveMountPath = (async () => '') as any;
+    mockBuildSessionPath = (_mount: string, path: string) => path as any;
+  mockSetupFileOperation = (async () => ({ path: 'test.ts', mountPath: '', sessionId: 'session-1' })) as any;
     const response = makeJsonResponse({ error: 'disk full' }, 500);
-    mockCallSessionApi.mockResolvedValue(response);
-    mockHandleSessionApiResponse.mockRejectedValue(new Error('disk full'));
+    mockCallSessionApi = (async () => response) as any;
+    mockHandleSessionApiResponse = (async () => { throw new Error('disk full'); }) as any;
 
-    await expect(fileReadHandler({ path: 'test.ts' }, makeContext())).rejects.toThrow(
+    await await assertRejects(async () => { await fileReadHandler({ path: 'test.ts' }, makeContext()); }, 
       'disk full',
     );
-  });
-
-  it('truncates base64 content at 200 characters for binary preview', async () => {
-    const longBase64 = 'A'.repeat(300);
-    mockSetupFileOperation.mockResolvedValue({ path: 'big.png', mountPath: '', sessionId: 'session-1' });
-    mockCallSessionApi.mockResolvedValue(makeJsonResponse({ content: longBase64, size: 5000, is_binary: true }));
-    mockHandleSessionApiResponse.mockResolvedValue({ content: longBase64, size: 5000, is_binary: true });
+})
+  Deno.test('fileReadHandler - truncates base64 content at 200 characters for binary preview', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+    mockSetupFileOperation = (async () => ({ path: '', mountPath: '', sessionId: 'session-1' })) as any;
+    mockResolveMountPath = (async () => '') as any;
+    mockBuildSessionPath = (_mount: string, path: string) => path as any;
+  const longBase64 = 'A'.repeat(300);
+    mockSetupFileOperation = (async () => ({ path: 'big.png', mountPath: '', sessionId: 'session-1' })) as any;
+    mockCallSessionApi = (async () => makeJsonResponse({ content: longBase64, size: 5000, is_binary: true })) as any;
+    mockHandleSessionApiResponse = (async () => ({ content: longBase64, size: 5000, is_binary: true })) as any;
 
     const result = await fileReadHandler({ path: 'big.png' }, makeContext());
 
-    expect(result).toContain('...');
-    expect(result).toContain('[Binary file: big.png]');
-  });
-});
-
+    assertStringIncludes(result, '...');
+    assertStringIncludes(result, '[Binary file: big.png]');
+})
 // ---------------------------------------------------------------------------
 // file_write handler
 // ---------------------------------------------------------------------------
 
-describe('fileWriteHandler', () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-    mockSetupFileOperation.mockResolvedValue({ path: 'src/index.ts', mountPath: '', sessionId: 'session-1' });
-    mockResolveMountPath.mockResolvedValue('');
-    mockBuildSessionPath.mockImplementation((_mount: string, path: string) => path);
-  });
 
-  it('writes a file and returns success message', async () => {
-    const response = makeJsonResponse({ path: 'src/index.ts', size: 22 });
-    mockCallSessionApi.mockResolvedValue(response);
-    mockHandleSessionApiResponse.mockResolvedValue({ path: 'src/index.ts', size: 22 });
+  Deno.test('fileWriteHandler - writes a file and returns success message', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+    mockSetupFileOperation = (async () => ({ path: 'src/index.ts', mountPath: '', sessionId: 'session-1' })) as any;
+    mockResolveMountPath = (async () => '') as any;
+    mockBuildSessionPath = (_mount: string, path: string) => path as any;
+  const response = makeJsonResponse({ path: 'src/index.ts', size: 22 });
+    mockCallSessionApi = (async () => response) as any;
+    mockHandleSessionApiResponse = (async () => ({ path: 'src/index.ts', size: 22 })) as any;
 
     const result = await fileWriteHandler(
       { path: 'src/index.ts', content: 'console.log("hello")' },
       makeContext(),
     );
 
-    expect(result).toContain('Written file');
-    expect(result).toContain('22 bytes');
-  });
+    assertStringIncludes(result, 'Written file');
+    assertStringIncludes(result, '22 bytes');
+})
+  Deno.test('fileWriteHandler - throws when runtime write fails', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+    mockSetupFileOperation = (async () => ({ path: 'src/index.ts', mountPath: '', sessionId: 'session-1' })) as any;
+    mockResolveMountPath = (async () => '') as any;
+    mockBuildSessionPath = (_mount: string, path: string) => path as any;
+  mockCallSessionApi = (async () => { throw new Error('connection refused'); }) as any;
 
-  it('throws when runtime write fails', async () => {
-    mockCallSessionApi.mockRejectedValue(new Error('connection refused'));
-
-    await expect(
+    await await assertRejects(async () => { await 
       fileWriteHandler({ path: 'test.ts', content: 'test' }, makeContext()),
-    ).rejects.toThrow('Failed to write file');
-  });
-
-  it('calls validateContent with content and path', async () => {
-    const response = makeJsonResponse({ path: 'src/app.ts', size: 10 });
-    mockCallSessionApi.mockResolvedValue(response);
-    mockHandleSessionApiResponse.mockResolvedValue({ path: 'src/app.ts', size: 10 });
+    ; }, 'Failed to write file');
+})
+  Deno.test('fileWriteHandler - calls validateContent with content and path', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+    mockSetupFileOperation = (async () => ({ path: 'src/index.ts', mountPath: '', sessionId: 'session-1' })) as any;
+    mockResolveMountPath = (async () => '') as any;
+    mockBuildSessionPath = (_mount: string, path: string) => path as any;
+  const response = makeJsonResponse({ path: 'src/app.ts', size: 10 });
+    mockCallSessionApi = (async () => response) as any;
+    mockHandleSessionApiResponse = (async () => ({ path: 'src/app.ts', size: 10 })) as any;
 
     await fileWriteHandler(
       { path: 'src/app.ts', content: 'test content' },
       makeContext(),
     );
 
-    expect(validateContent).toHaveBeenCalledWith('test content', 'src/index.ts');
-  });
-
-  it('writes to R2 backup alongside runtime', async () => {
-    const ctx = makeContext();
+    assertSpyCallArgs(validateContent, 0, ['test content', 'src/index.ts']);
+})
+  Deno.test('fileWriteHandler - writes to R2 backup alongside runtime', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+    mockSetupFileOperation = (async () => ({ path: 'src/index.ts', mountPath: '', sessionId: 'session-1' })) as any;
+    mockResolveMountPath = (async () => '') as any;
+    mockBuildSessionPath = (_mount: string, path: string) => path as any;
+  const ctx = makeContext();
     const response = makeJsonResponse({ path: 'src/main.ts', size: 5 });
-    mockCallSessionApi.mockResolvedValue(response);
-    mockHandleSessionApiResponse.mockResolvedValue({ path: 'src/main.ts', size: 5 });
+    mockCallSessionApi = (async () => response) as any;
+    mockHandleSessionApiResponse = (async () => ({ path: 'src/main.ts', size: 5 })) as any;
 
     await fileWriteHandler(
       { path: 'src/main.ts', content: 'hello' },
       ctx,
     );
 
-    expect(ctx.storage!.put).toHaveBeenCalled();
-  });
-});
-
+    assert(ctx.storage!.put.calls.length > 0);
+})
 // ---------------------------------------------------------------------------
 // file_list handler
 // ---------------------------------------------------------------------------
 
-describe('fileListHandler', () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-    mockSetupFileOperation.mockResolvedValue({ path: '', mountPath: '', sessionId: 'session-1' });
-    mockResolveMountPath.mockResolvedValue('');
-    mockBuildSessionPath.mockImplementation((_mount: string, path: string) => path || '');
-  });
 
-  it('lists files with sorting (dirs first)', async () => {
-    mockCallSessionApi.mockResolvedValue(
-      makeJsonResponse({
+  Deno.test('fileListHandler - lists files with sorting (dirs first)', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+    mockSetupFileOperation = (async () => ({ path: '', mountPath: '', sessionId: 'session-1' })) as any;
+    mockResolveMountPath = (async () => '') as any;
+    mockBuildSessionPath = (_mount: string, path: string) => path || '' as any;
+  mockCallSessionApi = (async () => makeJsonResponse({
         entries: [
           { name: 'file.ts', type: 'file', size: 100 },
           { name: 'src', type: 'dir' },
           { name: 'app.ts', type: 'file', size: 200 },
         ],
-      }),
-    );
-    mockHandleSessionApiResponse.mockResolvedValue({
+      }),) as any;
+    mockHandleSessionApiResponse = (async () => ({
       entries: [
         { name: 'file.ts', type: 'file', size: 100 },
         { name: 'src', type: 'dir' },
         { name: 'app.ts', type: 'file', size: 200 },
       ],
-    });
+    })) as any;
 
     const result = await fileListHandler({}, makeContext());
 
     // Directories should come first
     const lines = result.split('\n');
-    expect(lines[0]).toContain('src/');
-    expect(lines[1]).toContain('app.ts');
-    expect(lines[2]).toContain('file.ts');
-  });
-
-  it('returns message when no files found', async () => {
-    mockCallSessionApi.mockResolvedValue(makeJsonResponse({ entries: [] }));
-    mockHandleSessionApiResponse.mockResolvedValue({ entries: [] });
+    assertStringIncludes(lines[0], 'src/');
+    assertStringIncludes(lines[1], 'app.ts');
+    assertStringIncludes(lines[2], 'file.ts');
+})
+  Deno.test('fileListHandler - returns message when no files found', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+    mockSetupFileOperation = (async () => ({ path: '', mountPath: '', sessionId: 'session-1' })) as any;
+    mockResolveMountPath = (async () => '') as any;
+    mockBuildSessionPath = (_mount: string, path: string) => path || '' as any;
+  mockCallSessionApi = (async () => makeJsonResponse({ entries: [] })) as any;
+    mockHandleSessionApiResponse = (async () => ({ entries: [] })) as any;
 
     const result = await fileListHandler({}, makeContext());
-    expect(result).toContain('No files found');
-  });
+    assertStringIncludes(result, 'No files found');
+})
+  Deno.test('fileListHandler - throws when list fails', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+    mockSetupFileOperation = (async () => ({ path: '', mountPath: '', sessionId: 'session-1' })) as any;
+    mockResolveMountPath = (async () => '') as any;
+    mockBuildSessionPath = (_mount: string, path: string) => path || '' as any;
+  mockCallSessionApi = (async () => makeJsonResponse({ error: 'session lost' }, 500)) as any;
+    mockHandleSessionApiResponse = (async () => { throw new Error('session lost'); }) as any;
 
-  it('throws when list fails', async () => {
-    mockCallSessionApi.mockResolvedValue(makeJsonResponse({ error: 'session lost' }, 500));
-    mockHandleSessionApiResponse.mockRejectedValue(new Error('session lost'));
-
-    await expect(fileListHandler({}, makeContext())).rejects.toThrow('session lost');
-  });
-
-  it('sorts files alphabetically within type', async () => {
-    mockCallSessionApi.mockResolvedValue(
-      makeJsonResponse({
+    await await assertRejects(async () => { await fileListHandler({}, makeContext()); }, 'session lost');
+})
+  Deno.test('fileListHandler - sorts files alphabetically within type', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+    mockSetupFileOperation = (async () => ({ path: '', mountPath: '', sessionId: 'session-1' })) as any;
+    mockResolveMountPath = (async () => '') as any;
+    mockBuildSessionPath = (_mount: string, path: string) => path || '' as any;
+  mockCallSessionApi = (async () => makeJsonResponse({
         entries: [
           { name: 'zebra.ts', type: 'file', size: 10 },
           { name: 'alpha.ts', type: 'file', size: 20 },
           { name: 'beta', type: 'dir' },
           { name: 'alpha', type: 'dir' },
         ],
-      }),
-    );
-    mockHandleSessionApiResponse.mockResolvedValue({
+      }),) as any;
+    mockHandleSessionApiResponse = (async () => ({
       entries: [
         { name: 'zebra.ts', type: 'file', size: 10 },
         { name: 'alpha.ts', type: 'file', size: 20 },
         { name: 'beta', type: 'dir' },
         { name: 'alpha', type: 'dir' },
       ],
-    });
+    })) as any;
 
     const result = await fileListHandler({}, makeContext());
     const lines = result.split('\n');
 
     // Dirs first, then files, both alphabetically sorted
-    expect(lines[0]).toContain('alpha/');
-    expect(lines[1]).toContain('beta/');
-    expect(lines[2]).toContain('alpha.ts');
-    expect(lines[3]).toContain('zebra.ts');
-  });
-});
-
+    assertStringIncludes(lines[0], 'alpha/');
+    assertStringIncludes(lines[1], 'beta/');
+    assertStringIncludes(lines[2], 'alpha.ts');
+    assertStringIncludes(lines[3], 'zebra.ts');
+})
 // ---------------------------------------------------------------------------
 // file_write_binary handler
 // ---------------------------------------------------------------------------
 
-describe('fileWriteBinaryHandler', () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-    mockResolveMountPath.mockResolvedValue('');
-    mockBuildSessionPath.mockImplementation((_mount: string, path: string) => path);
-    mockRequireContainer.mockReturnValue(undefined);
-  });
 
-  it('writes binary content and returns success message', async () => {
-    const validBase64 = btoa('hello binary');
-    mockCallSessionApi.mockResolvedValue(
-      makeJsonResponse({ path: 'image.png', size: 12 }),
-    );
+  Deno.test('fileWriteBinaryHandler - writes binary content and returns success message', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+    mockResolveMountPath = (async () => '') as any;
+    mockBuildSessionPath = (_mount: string, path: string) => path as any;
+    mockRequireContainer = (() => undefined) as any;
+  const validBase64 = btoa('hello binary');
+    mockCallSessionApi = (async () => makeJsonResponse({ path: 'image.png', size: 12 }),) as any;
 
     const ctx = makeContext();
     const result = await fileWriteBinaryHandler(
@@ -424,13 +393,16 @@ describe('fileWriteBinaryHandler', () => {
       ctx,
     );
 
-    expect(result).toContain('Written binary file');
-    expect(result).toContain('12 bytes');
-  });
-
-  it('throws on invalid base64 content', async () => {
-    // atob will throw on completely invalid base64
-    mockCallSessionApi.mockRejectedValue(new Error('should not be called'));
+    assertStringIncludes(result, 'Written binary file');
+    assertStringIncludes(result, '12 bytes');
+})
+  Deno.test('fileWriteBinaryHandler - throws on invalid base64 content', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+    mockResolveMountPath = (async () => '') as any;
+    mockBuildSessionPath = (_mount: string, path: string) => path as any;
+    mockRequireContainer = (() => undefined) as any;
+  // atob will throw on completely invalid base64
+    mockCallSessionApi = (async () => { throw new Error('should not be called'); }) as any;
 
     // The handler decodes base64 before the API call. Invalid base64 should throw.
     // We need to craft a string that is truly invalid for atob.
@@ -440,33 +412,35 @@ describe('fileWriteBinaryHandler', () => {
     const ctx = makeContext();
 
     // Using a string that will fail atob
-    await expect(
+    await await assertRejects(async () => { await 
       fileWriteBinaryHandler(
         { path: 'bad.png', content_base64: '!!!invalid-base64!!!' },
         ctx,
       ),
-    ).rejects.toThrow('Invalid base64 content');
-  });
-
-  it('calls validateBinaryContent for size limit checks', async () => {
-    const validBase64 = btoa('small content');
-    mockCallSessionApi.mockResolvedValue(
-      makeJsonResponse({ path: 'icon.png', size: 13 }),
-    );
+    ; }, 'Invalid base64 content');
+})
+  Deno.test('fileWriteBinaryHandler - calls validateBinaryContent for size limit checks', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+    mockResolveMountPath = (async () => '') as any;
+    mockBuildSessionPath = (_mount: string, path: string) => path as any;
+    mockRequireContainer = (() => undefined) as any;
+  const validBase64 = btoa('small content');
+    mockCallSessionApi = (async () => makeJsonResponse({ path: 'icon.png', size: 13 }),) as any;
 
     await fileWriteBinaryHandler(
       { path: 'icon.png', content_base64: validBase64 },
       makeContext(),
     );
 
-    expect(validateBinaryContent).toHaveBeenCalledWith(validBase64, 'icon.png');
-  });
-
-  it('calls requireContainer to verify session', async () => {
-    const validBase64 = btoa('content');
-    mockCallSessionApi.mockResolvedValue(
-      makeJsonResponse({ path: 'file.png', size: 7 }),
-    );
+    assertSpyCallArgs(validateBinaryContent, 0, [validBase64, 'icon.png']);
+})
+  Deno.test('fileWriteBinaryHandler - calls requireContainer to verify session', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+    mockResolveMountPath = (async () => '') as any;
+    mockBuildSessionPath = (_mount: string, path: string) => path as any;
+    mockRequireContainer = (() => undefined) as any;
+  const validBase64 = btoa('content');
+    mockCallSessionApi = (async () => makeJsonResponse({ path: 'file.png', size: 7 }),) as any;
 
     const ctx = makeContext();
     await fileWriteBinaryHandler(
@@ -474,14 +448,15 @@ describe('fileWriteBinaryHandler', () => {
       ctx,
     );
 
-    expect(mockRequireContainer).toHaveBeenCalledWith(ctx);
-  });
-
-  it('writes to R2 backup alongside runtime', async () => {
-    const validBase64 = btoa('binary data');
-    mockCallSessionApi.mockResolvedValue(
-      makeJsonResponse({ path: 'data.bin', size: 11 }),
-    );
+    assertSpyCallArgs(mockRequireContainer, 0, [ctx]);
+})
+  Deno.test('fileWriteBinaryHandler - writes to R2 backup alongside runtime', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+    mockResolveMountPath = (async () => '') as any;
+    mockBuildSessionPath = (_mount: string, path: string) => path as any;
+    mockRequireContainer = (() => undefined) as any;
+  const validBase64 = btoa('binary data');
+    mockCallSessionApi = (async () => makeJsonResponse({ path: 'data.bin', size: 11 }),) as any;
 
     const ctx = makeContext();
     await fileWriteBinaryHandler(
@@ -489,212 +464,204 @@ describe('fileWriteBinaryHandler', () => {
       ctx,
     );
 
-    expect(ctx.storage!.put).toHaveBeenCalled();
-  });
-
-  it('throws when runtime binary write fails', async () => {
-    const validBase64 = btoa('content');
-    mockCallSessionApi.mockRejectedValue(new Error('runtime down'));
+    assert(ctx.storage!.put.calls.length > 0);
+})
+  Deno.test('fileWriteBinaryHandler - throws when runtime binary write fails', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+    mockResolveMountPath = (async () => '') as any;
+    mockBuildSessionPath = (_mount: string, path: string) => path as any;
+    mockRequireContainer = (() => undefined) as any;
+  const validBase64 = btoa('content');
+    mockCallSessionApi = (async () => { throw new Error('runtime down'); }) as any;
 
     const ctx = makeContext();
-    await expect(
+    await await assertRejects(async () => { await 
       fileWriteBinaryHandler(
         { path: 'image.png', content_base64: validBase64 },
         ctx,
       ),
-    ).rejects.toThrow('Failed to write binary file');
-  });
-
-  it('throws when response is not ok', async () => {
-    const validBase64 = btoa('content');
-    mockCallSessionApi.mockResolvedValue(
-      makeJsonResponse({ error: 'quota exceeded' }, 413),
-    );
+    ; }, 'Failed to write binary file');
+})
+  Deno.test('fileWriteBinaryHandler - throws when response is not ok', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+    mockResolveMountPath = (async () => '') as any;
+    mockBuildSessionPath = (_mount: string, path: string) => path as any;
+    mockRequireContainer = (() => undefined) as any;
+  const validBase64 = btoa('content');
+    mockCallSessionApi = (async () => makeJsonResponse({ error: 'quota exceeded' }, 413),) as any;
 
     const ctx = makeContext();
-    await expect(
+    await await assertRejects(async () => { await 
       fileWriteBinaryHandler(
         { path: 'large.png', content_base64: validBase64 },
         ctx,
       ),
-    ).rejects.toThrow('quota exceeded');
-  });
-});
-
+    ; }, 'quota exceeded');
+})
 // ---------------------------------------------------------------------------
 // file_delete handler
 // ---------------------------------------------------------------------------
 
-describe('fileDeleteHandler', () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-    mockSetupFileOperation.mockResolvedValue({ path: 'old-file.ts', mountPath: '', sessionId: 'session-1' });
-  });
 
-  it('deletes a file and returns success message', async () => {
-    const response = makeJsonResponse({ deleted: true });
-    mockCallSessionApi.mockResolvedValue(response);
-    mockHandleSessionApiResponse.mockResolvedValue({ deleted: true });
+  Deno.test('fileDeleteHandler - deletes a file and returns success message', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+    mockSetupFileOperation = (async () => ({ path: 'old-file.ts', mountPath: '', sessionId: 'session-1' })) as any;
+  const response = makeJsonResponse({ deleted: true });
+    mockCallSessionApi = (async () => response) as any;
+    mockHandleSessionApiResponse = (async () => ({ deleted: true })) as any;
 
     const ctx = makeContext();
     const result = await fileDeleteHandler({ path: 'old-file.ts' }, ctx);
 
-    expect(result).toBe('Deleted file: old-file.ts');
-  });
+    assertEquals(result, 'Deleted file: old-file.ts');
+})
+  Deno.test('fileDeleteHandler - throws when file not found (404)', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+    mockSetupFileOperation = (async () => ({ path: 'old-file.ts', mountPath: '', sessionId: 'session-1' })) as any;
+  mockCallSessionApi = (async () => makeJsonResponse({ error: 'not found' }, 404)) as any;
 
-  it('throws when file not found (404)', async () => {
-    mockCallSessionApi.mockResolvedValue(makeJsonResponse({ error: 'not found' }, 404));
-
-    await expect(
+    await await assertRejects(async () => { await 
       fileDeleteHandler({ path: 'missing.ts' }, makeContext()),
-    ).rejects.toThrow('File not found: old-file.ts');
-  });
+    ; }, 'File not found: old-file.ts');
+})
+  Deno.test('fileDeleteHandler - throws when runtime delete fails', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+    mockSetupFileOperation = (async () => ({ path: 'old-file.ts', mountPath: '', sessionId: 'session-1' })) as any;
+  mockCallSessionApi = (async () => { throw new Error('connection lost'); }) as any;
 
-  it('throws when runtime delete fails', async () => {
-    mockCallSessionApi.mockRejectedValue(new Error('connection lost'));
-
-    await expect(
+    await await assertRejects(async () => { await 
       fileDeleteHandler({ path: 'file.ts' }, makeContext()),
-    ).rejects.toThrow('Failed to delete file');
-  });
-
-  it('also deletes from R2 backup', async () => {
-    const response = makeJsonResponse({ deleted: true });
-    mockCallSessionApi.mockResolvedValue(response);
-    mockHandleSessionApiResponse.mockResolvedValue({ deleted: true });
+    ; }, 'Failed to delete file');
+})
+  Deno.test('fileDeleteHandler - also deletes from R2 backup', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+    mockSetupFileOperation = (async () => ({ path: 'old-file.ts', mountPath: '', sessionId: 'session-1' })) as any;
+  const response = makeJsonResponse({ deleted: true });
+    mockCallSessionApi = (async () => response) as any;
+    mockHandleSessionApiResponse = (async () => ({ deleted: true })) as any;
 
     const ctx = makeContext();
     await fileDeleteHandler({ path: 'file.ts' }, ctx);
 
-    expect(ctx.storage!.delete).toHaveBeenCalledWith(
+    assertSpyCallArgs(ctx.storage!.delete, 0, [
       'session-files/ws-test/session-1/old-file.ts',
-    );
-  });
-
-  it('handles R2 delete failure gracefully', async () => {
-    const response = makeJsonResponse({ deleted: true });
-    mockCallSessionApi.mockResolvedValue(response);
-    mockHandleSessionApiResponse.mockResolvedValue({ deleted: true });
+    ]);
+})
+  Deno.test('fileDeleteHandler - handles R2 delete failure gracefully', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+    mockSetupFileOperation = (async () => ({ path: 'old-file.ts', mountPath: '', sessionId: 'session-1' })) as any;
+  const response = makeJsonResponse({ deleted: true });
+    mockCallSessionApi = (async () => response) as any;
+    mockHandleSessionApiResponse = (async () => ({ deleted: true })) as any;
 
     const ctx = makeContext();
-    (ctx.storage!.delete as ReturnType<typeof vi.fn>).mockRejectedValue(new Error('R2 error'));
+    (ctx.storage!.delete as ReturnType<typeof vi.fn>) = (async () => { throw new Error('R2 error'); }) as any;
 
     // Should not throw despite R2 failure
     const result = await fileDeleteHandler({ path: 'file.ts' }, ctx);
-    expect(result).toBe('Deleted file: old-file.ts');
-  });
+    assertEquals(result, 'Deleted file: old-file.ts');
+})
+  Deno.test('fileDeleteHandler - throws non-404 error via handleSessionApiResponse', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+    mockSetupFileOperation = (async () => ({ path: 'old-file.ts', mountPath: '', sessionId: 'session-1' })) as any;
+  const response = makeJsonResponse({ error: 'internal error' }, 500);
+    mockCallSessionApi = (async () => response) as any;
+    mockHandleSessionApiResponse = (async () => { throw new Error('internal error'); }) as any;
 
-  it('throws non-404 error via handleSessionApiResponse', async () => {
-    const response = makeJsonResponse({ error: 'internal error' }, 500);
-    mockCallSessionApi.mockResolvedValue(response);
-    mockHandleSessionApiResponse.mockRejectedValue(new Error('internal error'));
-
-    await expect(
+    await await assertRejects(async () => { await 
       fileDeleteHandler({ path: 'file.ts' }, makeContext()),
-    ).rejects.toThrow('internal error');
-  });
-});
-
+    ; }, 'internal error');
+})
 // ---------------------------------------------------------------------------
 // file_mkdir handler
 // ---------------------------------------------------------------------------
 
-describe('fileMkdirHandler', () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-    mockResolveMountPath.mockResolvedValue('');
-    mockBuildSessionPath.mockImplementation((_mount: string, path: string) => path.replace(/\/+$/, ''));
-    mockRequireContainer.mockReturnValue(undefined);
-  });
 
-  it('creates a directory by writing a .gitkeep file', async () => {
-    mockCallSessionApi.mockResolvedValue(
-      makeJsonResponse({ path: 'new-dir/.gitkeep', size: 0 }),
-    );
+  Deno.test('fileMkdirHandler - creates a directory by writing a .gitkeep file', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+    mockResolveMountPath = (async () => '') as any;
+    mockBuildSessionPath = (_mount: string, path: string) => path.replace(/\/+$/, '') as any;
+    mockRequireContainer = (() => undefined) as any;
+  mockCallSessionApi = (async () => makeJsonResponse({ path: 'new-dir/.gitkeep', size: 0 }),) as any;
 
     const result = await fileMkdirHandler({ path: 'new-dir' }, makeContext());
 
-    expect(result).toContain('Created directory');
-    expect(result).toContain('new-dir/');
+    assertStringIncludes(result, 'Created directory');
+    assertStringIncludes(result, 'new-dir/');
 
     // Verify it writes a .gitkeep file
-    expect(mockCallSessionApi).toHaveBeenCalledWith(
+    assertSpyCallArgs(mockCallSessionApi, 0, [
       expect.anything(),
       '/session/file/write',
-      expect.objectContaining({
+      ({
         path: 'new-dir/.gitkeep',
         content: '',
       }),
-    );
-  });
-
-  it('strips trailing slashes from path', async () => {
-    mockBuildSessionPath.mockImplementation((_mount: string, path: string) => path);
-    mockCallSessionApi.mockResolvedValue(
-      makeJsonResponse({ path: 'my-dir/.gitkeep', size: 0 }),
-    );
+    ]);
+})
+  Deno.test('fileMkdirHandler - strips trailing slashes from path', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+    mockResolveMountPath = (async () => '') as any;
+    mockBuildSessionPath = (_mount: string, path: string) => path.replace(/\/+$/, '') as any;
+    mockRequireContainer = (() => undefined) as any;
+  mockBuildSessionPath = (_mount: string, path: string) => path as any;
+    mockCallSessionApi = (async () => makeJsonResponse({ path: 'my-dir/.gitkeep', size: 0 }),) as any;
 
     await fileMkdirHandler({ path: 'my-dir/' }, makeContext());
 
     // buildSessionPath receives the path without trailing slash
-    expect(mockBuildSessionPath).toHaveBeenCalledWith('', 'my-dir');
-  });
+    assertSpyCallArgs(mockBuildSessionPath, 0, ['', 'my-dir']);
+})
+  Deno.test('fileMkdirHandler - throws when creation fails', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+    mockResolveMountPath = (async () => '') as any;
+    mockBuildSessionPath = (_mount: string, path: string) => path.replace(/\/+$/, '') as any;
+    mockRequireContainer = (() => undefined) as any;
+  mockCallSessionApi = (async () => makeJsonResponse({ error: 'permission denied' }, 403),) as any;
 
-  it('throws when creation fails', async () => {
-    mockCallSessionApi.mockResolvedValue(
-      makeJsonResponse({ error: 'permission denied' }, 403),
-    );
-
-    await expect(
+    await await assertRejects(async () => { await 
       fileMkdirHandler({ path: 'restricted-dir' }, makeContext()),
-    ).rejects.toThrow('permission denied');
-  });
-
-  it('calls requireContainer to verify session', async () => {
-    mockCallSessionApi.mockResolvedValue(
-      makeJsonResponse({ path: 'dir/.gitkeep', size: 0 }),
-    );
+    ; }, 'permission denied');
+})
+  Deno.test('fileMkdirHandler - calls requireContainer to verify session', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+    mockResolveMountPath = (async () => '') as any;
+    mockBuildSessionPath = (_mount: string, path: string) => path.replace(/\/+$/, '') as any;
+    mockRequireContainer = (() => undefined) as any;
+  mockCallSessionApi = (async () => makeJsonResponse({ path: 'dir/.gitkeep', size: 0 }),) as any;
 
     const ctx = makeContext();
     await fileMkdirHandler({ path: 'dir' }, ctx);
 
-    expect(mockRequireContainer).toHaveBeenCalledWith(ctx);
-  });
-
-  it('handles already-exists case (server returns success for idempotent write)', async () => {
-    mockCallSessionApi.mockResolvedValue(
-      makeJsonResponse({ path: 'existing-dir/.gitkeep', size: 0 }),
-    );
+    assertSpyCallArgs(mockRequireContainer, 0, [ctx]);
+})
+  Deno.test('fileMkdirHandler - handles already-exists case (server returns success for idempotent write)', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+    mockResolveMountPath = (async () => '') as any;
+    mockBuildSessionPath = (_mount: string, path: string) => path.replace(/\/+$/, '') as any;
+    mockRequireContainer = (() => undefined) as any;
+  mockCallSessionApi = (async () => makeJsonResponse({ path: 'existing-dir/.gitkeep', size: 0 }),) as any;
 
     const result = await fileMkdirHandler({ path: 'existing-dir' }, makeContext());
-    expect(result).toContain('Created directory');
-  });
-});
-
+    assertStringIncludes(result, 'Created directory');
+})
 // ---------------------------------------------------------------------------
 // file_rename handler
 // ---------------------------------------------------------------------------
 
-describe('fileRenameHandler', () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-    mockResolveMountPath.mockResolvedValue('');
-    mockBuildSessionPath.mockImplementation((_mount: string, path: string) => path);
-    mockRequireContainer.mockReturnValue(undefined);
-  });
 
-  it('renames a text file successfully', async () => {
-    // First call: read old file
+  Deno.test('fileRenameHandler - renames a text file successfully', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+    mockResolveMountPath = (async () => '') as any;
+    mockBuildSessionPath = (_mount: string, path: string) => path as any;
+    mockRequireContainer = (() => undefined) as any;
+  // First call: read old file
     mockCallSessionApi
-      .mockResolvedValueOnce(
-        makeJsonResponse({ content: 'file content', is_binary: false }),
-      )
+       = (async () => makeJsonResponse({ content: 'file content', is_binary: false }),) as any
       // Second call: write new file
-      .mockResolvedValueOnce(
-        makeJsonResponse({ path: 'new-name.ts', size: 12 }),
-      )
+       = (async () => makeJsonResponse({ path: 'new-name.ts', size: 12 }),) as any
       // Third call: delete old file
-      .mockResolvedValueOnce(makeJsonResponse({ deleted: true }));
+       = (async () => makeJsonResponse({ deleted: true })) as any;
 
     const ctx = makeContext();
     const result = await fileRenameHandler(
@@ -702,52 +669,51 @@ describe('fileRenameHandler', () => {
       ctx,
     );
 
-    expect(result).toBe('Renamed: old-name.ts -> new-name.ts');
-  });
+    assertEquals(result, 'Renamed: old-name.ts -> new-name.ts');
+})
+  Deno.test('fileRenameHandler - throws when source file not found', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+    mockResolveMountPath = (async () => '') as any;
+    mockBuildSessionPath = (_mount: string, path: string) => path as any;
+    mockRequireContainer = (() => undefined) as any;
+  mockCallSessionApi = (async () => makeJsonResponse({ error: 'not found' }, 404),) as any;
 
-  it('throws when source file not found', async () => {
-    mockCallSessionApi.mockResolvedValueOnce(
-      makeJsonResponse({ error: 'not found' }, 404),
-    );
-
-    await expect(
+    await await assertRejects(async () => { await 
       fileRenameHandler(
         { old_path: 'missing.ts', new_path: 'new.ts' },
         makeContext(),
       ),
-    ).rejects.toThrow('Source file not found: missing.ts');
-  });
+    ; }, 'Source file not found: missing.ts');
+})
+  Deno.test('fileRenameHandler - throws when write to new path fails', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+    mockResolveMountPath = (async () => '') as any;
+    mockBuildSessionPath = (_mount: string, path: string) => path as any;
+    mockRequireContainer = (() => undefined) as any;
+  mockCallSessionApi
+       = (async () => makeJsonResponse({ content: 'data', is_binary: false }),) as any
+       = (async () => makeJsonResponse({ error: 'conflict' }, 409),) as any;
 
-  it('throws when write to new path fails', async () => {
-    mockCallSessionApi
-      .mockResolvedValueOnce(
-        makeJsonResponse({ content: 'data', is_binary: false }),
-      )
-      .mockResolvedValueOnce(
-        makeJsonResponse({ error: 'conflict' }, 409),
-      );
-
-    await expect(
+    await await assertRejects(async () => { await 
       fileRenameHandler(
         { old_path: 'a.ts', new_path: 'b.ts' },
         makeContext(),
       ),
-    ).rejects.toThrow('conflict');
-  });
-
-  it('renames a binary file (reads as base64, writes as binary)', async () => {
-    const base64Content = btoa('binary data');
+    ; }, 'conflict');
+})
+  Deno.test('fileRenameHandler - renames a binary file (reads as base64, writes as binary)', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+    mockResolveMountPath = (async () => '') as any;
+    mockBuildSessionPath = (_mount: string, path: string) => path as any;
+    mockRequireContainer = (() => undefined) as any;
+  const base64Content = btoa('binary data');
     // isBinaryFile mock returns true for .png
-    mockBuildSessionPath.mockImplementation((_mount: string, path: string) => path);
+    mockBuildSessionPath = (_mount: string, path: string) => path as any;
 
     mockCallSessionApi
-      .mockResolvedValueOnce(
-        makeJsonResponse({ content: base64Content, is_binary: true, encoding: 'base64' }),
-      )
-      .mockResolvedValueOnce(
-        makeJsonResponse({ path: 'new-logo.png', size: 11 }),
-      )
-      .mockResolvedValueOnce(makeJsonResponse({ deleted: true }));
+       = (async () => makeJsonResponse({ content: base64Content, is_binary: true, encoding: 'base64' }),) as any
+       = (async () => makeJsonResponse({ path: 'new-logo.png', size: 11 }),) as any
+       = (async () => makeJsonResponse({ deleted: true })) as any;
 
     const ctx = makeContext();
     const result = await fileRenameHandler(
@@ -755,25 +721,24 @@ describe('fileRenameHandler', () => {
       ctx,
     );
 
-    expect(result).toBe('Renamed: logo.png -> new-logo.png');
+    assertEquals(result, 'Renamed: logo.png -> new-logo.png');
 
     // Should have used write-binary endpoint for the second call
-    expect(mockCallSessionApi).toHaveBeenCalledWith(
+    assertSpyCallArgs(mockCallSessionApi, 0, [
       expect.anything(),
       '/session/file/write-binary',
-      expect.objectContaining({ content_base64: base64Content }),
-    );
-  });
-
-  it('updates R2 backup (writes new key, deletes old key)', async () => {
-    mockCallSessionApi
-      .mockResolvedValueOnce(
-        makeJsonResponse({ content: 'content', is_binary: false }),
-      )
-      .mockResolvedValueOnce(
-        makeJsonResponse({ path: 'new.ts', size: 7 }),
-      )
-      .mockResolvedValueOnce(makeJsonResponse({ deleted: true }));
+      ({ content_base64: base64Content }),
+    ]);
+})
+  Deno.test('fileRenameHandler - updates R2 backup (writes new key, deletes old key)', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+    mockResolveMountPath = (async () => '') as any;
+    mockBuildSessionPath = (_mount: string, path: string) => path as any;
+    mockRequireContainer = (() => undefined) as any;
+  mockCallSessionApi
+       = (async () => makeJsonResponse({ content: 'content', is_binary: false }),) as any
+       = (async () => makeJsonResponse({ path: 'new.ts', size: 7 }),) as any
+       = (async () => makeJsonResponse({ deleted: true })) as any;
 
     const ctx = makeContext();
     await fileRenameHandler(
@@ -781,119 +746,107 @@ describe('fileRenameHandler', () => {
       ctx,
     );
 
-    expect(ctx.storage!.put).toHaveBeenCalled();
-    expect(ctx.storage!.delete).toHaveBeenCalled();
-  });
-
-  it('calls requireContainer to verify session', async () => {
-    mockCallSessionApi
-      .mockResolvedValueOnce(
-        makeJsonResponse({ content: 'data', is_binary: false }),
-      )
-      .mockResolvedValueOnce(
-        makeJsonResponse({ path: 'b.ts', size: 4 }),
-      )
-      .mockResolvedValueOnce(makeJsonResponse({ deleted: true }));
+    assert(ctx.storage!.put.calls.length > 0);
+    assert(ctx.storage!.delete.calls.length > 0);
+})
+  Deno.test('fileRenameHandler - calls requireContainer to verify session', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+    mockResolveMountPath = (async () => '') as any;
+    mockBuildSessionPath = (_mount: string, path: string) => path as any;
+    mockRequireContainer = (() => undefined) as any;
+  mockCallSessionApi
+       = (async () => makeJsonResponse({ content: 'data', is_binary: false }),) as any
+       = (async () => makeJsonResponse({ path: 'b.ts', size: 4 }),) as any
+       = (async () => makeJsonResponse({ deleted: true })) as any;
 
     const ctx = makeContext();
     await fileRenameHandler({ old_path: 'a.ts', new_path: 'b.ts' }, ctx);
 
-    expect(mockRequireContainer).toHaveBeenCalledWith(ctx);
-  });
-});
-
+    assertSpyCallArgs(mockRequireContainer, 0, [ctx]);
+})
 // ---------------------------------------------------------------------------
 // file_copy handler
 // ---------------------------------------------------------------------------
 
-describe('fileCopyHandler', () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-    mockResolveMountPath.mockResolvedValue('');
-    mockBuildSessionPath.mockImplementation((_mount: string, path: string) => path);
-    mockRequireContainer.mockReturnValue(undefined);
-  });
 
-  it('copies a text file successfully', async () => {
-    mockCallSessionApi
-      .mockResolvedValueOnce(
-        makeJsonResponse({ content: 'source content', is_binary: false }),
-      )
-      .mockResolvedValueOnce(
-        makeJsonResponse({ path: 'dest.ts', size: 14 }),
-      );
+  Deno.test('fileCopyHandler - copies a text file successfully', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+    mockResolveMountPath = (async () => '') as any;
+    mockBuildSessionPath = (_mount: string, path: string) => path as any;
+    mockRequireContainer = (() => undefined) as any;
+  mockCallSessionApi
+       = (async () => makeJsonResponse({ content: 'source content', is_binary: false }),) as any
+       = (async () => makeJsonResponse({ path: 'dest.ts', size: 14 }),) as any;
 
     const result = await fileCopyHandler(
       { source_path: 'src.ts', dest_path: 'dest.ts' },
       makeContext(),
     );
 
-    expect(result).toBe('Copied: src.ts -> dest.ts');
-  });
+    assertEquals(result, 'Copied: src.ts -> dest.ts');
+})
+  Deno.test('fileCopyHandler - throws when source file not found', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+    mockResolveMountPath = (async () => '') as any;
+    mockBuildSessionPath = (_mount: string, path: string) => path as any;
+    mockRequireContainer = (() => undefined) as any;
+  mockCallSessionApi = (async () => makeJsonResponse({ error: 'not found' }, 404),) as any;
 
-  it('throws when source file not found', async () => {
-    mockCallSessionApi.mockResolvedValueOnce(
-      makeJsonResponse({ error: 'not found' }, 404),
-    );
-
-    await expect(
+    await await assertRejects(async () => { await 
       fileCopyHandler(
         { source_path: 'missing.ts', dest_path: 'dest.ts' },
         makeContext(),
       ),
-    ).rejects.toThrow('Source file not found: missing.ts');
-  });
+    ; }, 'Source file not found: missing.ts');
+})
+  Deno.test('fileCopyHandler - throws when write to destination fails', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+    mockResolveMountPath = (async () => '') as any;
+    mockBuildSessionPath = (_mount: string, path: string) => path as any;
+    mockRequireContainer = (() => undefined) as any;
+  mockCallSessionApi
+       = (async () => makeJsonResponse({ content: 'data' }),) as any
+       = (async () => makeJsonResponse({ error: 'disk full' }, 507),) as any;
 
-  it('throws when write to destination fails', async () => {
-    mockCallSessionApi
-      .mockResolvedValueOnce(
-        makeJsonResponse({ content: 'data' }),
-      )
-      .mockResolvedValueOnce(
-        makeJsonResponse({ error: 'disk full' }, 507),
-      );
-
-    await expect(
+    await await assertRejects(async () => { await 
       fileCopyHandler(
         { source_path: 'src.ts', dest_path: 'dest.ts' },
         makeContext(),
       ),
-    ).rejects.toThrow('disk full');
-  });
-
-  it('copies a binary file using binary write endpoint', async () => {
-    const base64Content = btoa('binary content');
-    mockBuildSessionPath.mockImplementation((_mount: string, path: string) => path);
+    ; }, 'disk full');
+})
+  Deno.test('fileCopyHandler - copies a binary file using binary write endpoint', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+    mockResolveMountPath = (async () => '') as any;
+    mockBuildSessionPath = (_mount: string, path: string) => path as any;
+    mockRequireContainer = (() => undefined) as any;
+  const base64Content = btoa('binary content');
+    mockBuildSessionPath = (_mount: string, path: string) => path as any;
 
     mockCallSessionApi
-      .mockResolvedValueOnce(
-        makeJsonResponse({ content: base64Content, is_binary: true, encoding: 'base64' }),
-      )
-      .mockResolvedValueOnce(
-        makeJsonResponse({ path: 'dest.png', size: 14 }),
-      );
+       = (async () => makeJsonResponse({ content: base64Content, is_binary: true, encoding: 'base64' }),) as any
+       = (async () => makeJsonResponse({ path: 'dest.png', size: 14 }),) as any;
 
     const result = await fileCopyHandler(
       { source_path: 'src.png', dest_path: 'dest.png' },
       makeContext(),
     );
 
-    expect(result).toBe('Copied: src.png -> dest.png');
-    expect(mockCallSessionApi).toHaveBeenCalledWith(
+    assertEquals(result, 'Copied: src.png -> dest.png');
+    assertSpyCallArgs(mockCallSessionApi, 0, [
       expect.anything(),
       '/session/file/write-binary',
-      expect.objectContaining({ content_base64: base64Content }),
-    );
-  });
-
-  it('writes to R2 backup', async () => {
-    mockCallSessionApi
-      .mockResolvedValueOnce(
-        makeJsonResponse({ content: 'data', is_binary: false }),
-      )
-      .mockResolvedValueOnce(
-        makeJsonResponse({ path: 'dest.ts', size: 4 }),
-      );
+      ({ content_base64: base64Content }),
+    ]);
+})
+  Deno.test('fileCopyHandler - writes to R2 backup', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+    mockResolveMountPath = (async () => '') as any;
+    mockBuildSessionPath = (_mount: string, path: string) => path as any;
+    mockRequireContainer = (() => undefined) as any;
+  mockCallSessionApi
+       = (async () => makeJsonResponse({ content: 'data', is_binary: false }),) as any
+       = (async () => makeJsonResponse({ path: 'dest.ts', size: 4 }),) as any;
 
     const ctx = makeContext();
     await fileCopyHandler(
@@ -901,17 +854,16 @@ describe('fileCopyHandler', () => {
       ctx,
     );
 
-    expect(ctx.storage!.put).toHaveBeenCalled();
-  });
-
-  it('calls requireContainer to verify session', async () => {
-    mockCallSessionApi
-      .mockResolvedValueOnce(
-        makeJsonResponse({ content: 'data', is_binary: false }),
-      )
-      .mockResolvedValueOnce(
-        makeJsonResponse({ path: 'b.ts', size: 4 }),
-      );
+    assert(ctx.storage!.put.calls.length > 0);
+})
+  Deno.test('fileCopyHandler - calls requireContainer to verify session', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+    mockResolveMountPath = (async () => '') as any;
+    mockBuildSessionPath = (_mount: string, path: string) => path as any;
+    mockRequireContainer = (() => undefined) as any;
+  mockCallSessionApi
+       = (async () => makeJsonResponse({ content: 'data', is_binary: false }),) as any
+       = (async () => makeJsonResponse({ path: 'b.ts', size: 4 }),) as any;
 
     const ctx = makeContext();
     await fileCopyHandler(
@@ -919,20 +871,19 @@ describe('fileCopyHandler', () => {
       ctx,
     );
 
-    expect(mockRequireContainer).toHaveBeenCalledWith(ctx);
-  });
-
-  it('handles R2 backup write failure gracefully', async () => {
-    mockCallSessionApi
-      .mockResolvedValueOnce(
-        makeJsonResponse({ content: 'data', is_binary: false }),
-      )
-      .mockResolvedValueOnce(
-        makeJsonResponse({ path: 'dest.ts', size: 4 }),
-      );
+    assertSpyCallArgs(mockRequireContainer, 0, [ctx]);
+})
+  Deno.test('fileCopyHandler - handles R2 backup write failure gracefully', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+    mockResolveMountPath = (async () => '') as any;
+    mockBuildSessionPath = (_mount: string, path: string) => path as any;
+    mockRequireContainer = (() => undefined) as any;
+  mockCallSessionApi
+       = (async () => makeJsonResponse({ content: 'data', is_binary: false }),) as any
+       = (async () => makeJsonResponse({ path: 'dest.ts', size: 4 }),) as any;
 
     const ctx = makeContext();
-    (ctx.storage!.put as ReturnType<typeof vi.fn>).mockRejectedValue(new Error('R2 error'));
+    (ctx.storage!.put as ReturnType<typeof vi.fn>) = (async () => { throw new Error('R2 error'); }) as any;
 
     // Should succeed despite R2 failure
     const result = await fileCopyHandler(
@@ -940,6 +891,5 @@ describe('fileCopyHandler', () => {
       ctx,
     );
 
-    expect(result).toBe('Copied: src.ts -> dest.ts');
-  });
-});
+    assertEquals(result, 'Copied: src.ts -> dest.ts');
+})

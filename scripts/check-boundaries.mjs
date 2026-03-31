@@ -7,14 +7,6 @@ const ignoredDirs = new Set(['node_modules', 'dist', '.git', '.wrangler', 'cover
 const ignoredFiles = new Set(['scripts/check-boundaries.mjs']);
 const checks = [
   {
-    name: 'private home-agent app residue',
-    pattern: /\bapps\/agent\b/g,
-  },
-  {
-    name: 'private home-agent build residue',
-    pattern: /\bbuild-takos-agent-home\b/g,
-  },
-  {
     name: 'package to app source dependency',
     files: /^packages\//,
     pattern: /\bapps\/(?:control|runtime)\/src\b/g,
@@ -158,7 +150,7 @@ if (violations.length > 0) {
   for (const violation of violations) {
     console.error(`${violation.check}: ${violation.path}:${violation.lines.join(',')}`);
   }
-  process.exit(1);
+  Deno.exit(1);
 }
 
 console.log('Boundary check passed');

@@ -1,4 +1,4 @@
-import { useState, useCallback, type FormEvent } from 'react';
+import { createSignal } from 'solid-js';
 import { Icons } from '../lib/Icons';
 import { useI18n } from '../store/i18n';
 import { useMemoryData } from '../hooks/useMemoryData';
@@ -22,9 +22,9 @@ const getPriorityClasses = (pri: Reminder['priority']) => {
 
 export function MemoryPage({ spaceId, onBack }: MemoryPageProps) {
   const { t } = useI18n();
-  const [showReminders, setShowReminders] = useState(false);
-  const [showCreateMemory, setShowCreateMemory] = useState(false);
-  const [showCreateReminder, setShowCreateReminder] = useState(false);
+  const [showReminders, setShowReminders] = createSignal(false);
+  const [showCreateMemory, setShowCreateMemory] = createSignal(false);
+  const [showCreateReminder, setShowCreateReminder] = createSignal(false);
 
   const {
     memories, reminders, loading,
@@ -36,49 +36,49 @@ export function MemoryPage({ spaceId, onBack }: MemoryPageProps) {
     getTypeIcon, getTypeLabel, getTriggerIcon,
   } = useMemoryData(spaceId);
 
-  const handleCreateMemory = useCallback(async (e: FormEvent) => {
+  const handleCreateMemory = async (e: Event & { currentTarget: HTMLFormElement }) => {
     await baseCreateMemory(e);
-    if (memoryForm.content.trim()) {
+    if (memoryForm().content.trim()) {
       setShowCreateMemory(false);
     }
-  }, [baseCreateMemory, memoryForm.content]);
+  };
 
-  const handleCreateReminder = useCallback(async (e: FormEvent) => {
+  const handleCreateReminder = async (e: Event & { currentTarget: HTMLFormElement }) => {
     await baseCreateReminder(e);
-    if (reminderForm.content.trim() && reminderForm.triggerValue.trim()) {
+    if (reminderForm().content.trim() && reminderForm().triggerValue.trim()) {
       setShowCreateReminder(false);
     }
-  }, [baseCreateReminder, reminderForm.content, reminderForm.triggerValue]);
+  };
 
   return (
-    <div className="flex flex-col h-full bg-white dark:bg-zinc-900">
-      <header className="flex items-center gap-4 px-6 py-4 border-b border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800">
+    <div class="flex flex-col h-full bg-white dark:bg-zinc-900">
+      <header class="flex items-center gap-4 px-6 py-4 border-b border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800">
         <button
-          className="p-2 rounded-lg text-zinc-500 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100 hover:bg-zinc-200 dark:hover:bg-zinc-700 transition-colors"
+          class="p-2 rounded-lg text-zinc-500 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100 hover:bg-zinc-200 dark:hover:bg-zinc-700 transition-colors"
           onClick={onBack}
         >
           <Icons.ArrowLeft />
         </button>
-        <h1 className="flex items-center gap-2 text-xl font-semibold text-zinc-900 dark:text-zinc-100">
+        <h1 class="flex items-center gap-2 text-xl font-semibold text-zinc-900 dark:text-zinc-100">
           <Icons.HardDrive />
           <span>Memory</span>
         </h1>
-        <div className="ml-auto">
+        <div class="ml-auto">
           <button
-            className="inline-flex items-center justify-center gap-2 px-4 py-2 rounded-lg font-medium text-sm bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900 hover:bg-zinc-700 dark:hover:bg-zinc-300 transition-colors cursor-pointer"
-            onClick={() => showReminders ? setShowCreateReminder(true) : setShowCreateMemory(true)}
+            class="inline-flex items-center justify-center gap-2 px-4 py-2 rounded-lg font-medium text-sm bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900 hover:bg-zinc-700 dark:hover:bg-zinc-300 transition-colors cursor-pointer"
+            onClick={() => showReminders() ? setShowCreateReminder(true) : setShowCreateMemory(true)}
           >
             <Icons.Plus />
-            <span>{showReminders ? t('createReminder') : t('createMemory')}</span>
+            <span>{showReminders() ? t('createReminder') : t('createMemory')}</span>
           </button>
         </div>
       </header>
 
       <MemoryList
-        memories={memories}
-        reminders={reminders}
-        loading={loading}
-        showReminders={showReminders}
+        memories={memories()}
+        reminders={reminders()}
+        loading={loading()}
+        showReminders={showReminders()}
         onShowRemindersChange={setShowReminders}
         onDeleteMemory={deleteMemory}
         onDeleteReminder={deleteReminder}
@@ -88,9 +88,9 @@ export function MemoryPage({ spaceId, onBack }: MemoryPageProps) {
         getPriorityClasses={getPriorityClasses}
       />
 
-      {showCreateMemory && (
+      {showCreateMemory() && (
         <MemoryCreateForm
-          memoryForm={memoryForm}
+          memoryForm={memoryForm()}
           onFormChange={setMemoryForm}
           onSubmit={handleCreateMemory}
           onClose={() => setShowCreateMemory(false)}
@@ -98,9 +98,9 @@ export function MemoryPage({ spaceId, onBack }: MemoryPageProps) {
         />
       )}
 
-      {showCreateReminder && (
+      {showCreateReminder() && (
         <ReminderCreateForm
-          reminderForm={reminderForm}
+          reminderForm={reminderForm()}
           onFormChange={setReminderForm}
           onSubmit={handleCreateReminder}
           onClose={() => setShowCreateReminder(false)}

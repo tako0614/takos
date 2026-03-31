@@ -1,7 +1,8 @@
-import { describe, expect, it, beforeEach } from 'vitest';
 import { CandidateSelector, DISCOVERY_TOOL_NAMES, type SelectionContext } from '@/tools/candidate-selector';
 import { CapabilityRegistry } from '@/tools/capability-registry';
 import type { CapabilityDescriptor } from '@/tools/capability-types';
+
+import { assertEquals, assert } from 'jsr:@std/assert';
 
 function makeDescriptor(overrides: Partial<CapabilityDescriptor> & { id: string; name: string }): CapabilityDescriptor {
   return {
@@ -18,22 +19,18 @@ function makeDescriptor(overrides: Partial<CapabilityDescriptor> & { id: string;
   };
 }
 
-describe('CandidateSelector', () => {
+
   let registry: CapabilityRegistry;
   let selector: CandidateSelector;
-
-  beforeEach(() => {
-    registry = new CapabilityRegistry();
-    selector = new CandidateSelector({ topKTools: 5, topKSkills: 2 });
-  });
-
   const baseCtx: SelectionContext = {
     capabilities: [],
     userQuery: '',
   };
 
-  it('selects tools up to topK', () => {
-    for (let i = 0; i < 10; i++) {
+  Deno.test('CandidateSelector - selects tools up to topK', () => {
+  registry = new CapabilityRegistry();
+    selector = new CandidateSelector({ topKTools: 5, topKSkills: 2 });
+  for (let i = 0; i < 10; i++) {
       registry.register(makeDescriptor({
         id: `tool:t${i}`,
         name: `tool_${i}`,
@@ -42,21 +39,23 @@ describe('CandidateSelector', () => {
     }
 
     const result = selector.select(registry, baseCtx);
-    expect(result.tools).toHaveLength(5);
-    expect(result.totalAvailable).toBe(10);
-  });
-
-  it('separates tools from skills', () => {
-    registry.register(makeDescriptor({ id: 'tool:a', name: 'a', kind: 'tool' }));
+    assertEquals(result.tools.length, 5);
+    assertEquals(result.totalAvailable, 10);
+})
+  Deno.test('CandidateSelector - separates tools from skills', () => {
+  registry = new CapabilityRegistry();
+    selector = new CandidateSelector({ topKTools: 5, topKSkills: 2 });
+  registry.register(makeDescriptor({ id: 'tool:a', name: 'a', kind: 'tool' }));
     registry.register(makeDescriptor({ id: 'skill:b', name: 'b', kind: 'skill' }));
 
     const result = selector.select(registry, baseCtx);
-    expect(result.tools).toHaveLength(1);
-    expect(result.skills).toHaveLength(1);
-  });
-
-  it('applies hard filter on policy.selectable', () => {
-    registry.register(makeDescriptor({
+    assertEquals(result.tools.length, 1);
+    assertEquals(result.skills.length, 1);
+})
+  Deno.test('CandidateSelector - applies hard filter on policy.selectable', () => {
+  registry = new CapabilityRegistry();
+    selector = new CandidateSelector({ topKTools: 5, topKSkills: 2 });
+  registry.register(makeDescriptor({
       id: 'tool:hidden',
       name: 'hidden',
       discoverable: true, selectable: false,
@@ -67,11 +66,12 @@ describe('CandidateSelector', () => {
     }));
 
     const result = selector.select(registry, baseCtx);
-    expect(result.tools.map(d => d.name)).toEqual(['visible']);
-  });
-
-  it('filters out high-risk tools for viewers', () => {
-    registry.register(makeDescriptor({
+    assertEquals(result.tools.map(d => d.name), ['visible']);
+})
+  Deno.test('CandidateSelector - filters out high-risk tools for viewers', () => {
+  registry = new CapabilityRegistry();
+    selector = new CandidateSelector({ topKTools: 5, topKSkills: 2 });
+  registry.register(makeDescriptor({
       id: 'tool:deploy',
       name: 'deploy',
       risk_level: 'high',
@@ -83,11 +83,12 @@ describe('CandidateSelector', () => {
     }));
 
     const result = selector.select(registry, { ...baseCtx, role: 'viewer' });
-    expect(result.tools.map(d => d.name)).toEqual(['read']);
-  });
-
-  it('scores higher for query-matching tools', () => {
-    registry.register(makeDescriptor({
+    assertEquals(result.tools.map(d => d.name), ['read']);
+})
+  Deno.test('CandidateSelector - scores higher for query-matching tools', () => {
+  registry = new CapabilityRegistry();
+    selector = new CandidateSelector({ topKTools: 5, topKSkills: 2 });
+  registry.register(makeDescriptor({
       id: 'tool:file_read',
       name: 'file_read',
       tags: ['file'],
@@ -103,11 +104,12 @@ describe('CandidateSelector', () => {
     }));
 
     const result = selector.select(registry, { ...baseCtx, userQuery: 'read a file' });
-    expect(result.tools[0].name).toBe('file_read');
-  });
-
-  it('applies session state boost', () => {
-    registry.register(makeDescriptor({
+    assertEquals(result.tools[0].name, 'file_read');
+})
+  Deno.test('CandidateSelector - applies session state boost', () => {
+  registry = new CapabilityRegistry();
+    selector = new CandidateSelector({ topKTools: 5, topKSkills: 2 });
+  registry.register(makeDescriptor({
       id: 'tool:browser_screenshot',
       name: 'browser_screenshot',
       namespace: 'browser',
@@ -124,11 +126,12 @@ describe('CandidateSelector', () => {
       ...baseCtx,
       sessionState: { hasActiveContainer: false, hasActiveBrowser: true },
     });
-    expect(result.tools[0].name).toBe('browser_screenshot');
-  });
-
-  it('boosts recently used tools', () => {
-    registry.register(makeDescriptor({
+    assertEquals(result.tools[0].name, 'browser_screenshot');
+})
+  Deno.test('CandidateSelector - boosts recently used tools', () => {
+  registry = new CapabilityRegistry();
+    selector = new CandidateSelector({ topKTools: 5, topKSkills: 2 });
+  registry.register(makeDescriptor({
       id: 'tool:a',
       name: 'a',
       family: 'fam_a',
@@ -143,11 +146,12 @@ describe('CandidateSelector', () => {
       ...baseCtx,
       recentToolCalls: ['b'],
     });
-    expect(result.tools[0].name).toBe('b');
-  });
-
-  it('enforces diversity (MAX_PER_FAMILY)', () => {
-    // Create 12 tools in the same family — only 8 should survive diversity filter
+    assertEquals(result.tools[0].name, 'b');
+})
+  Deno.test('CandidateSelector - enforces diversity (MAX_PER_FAMILY)', () => {
+  registry = new CapabilityRegistry();
+    selector = new CandidateSelector({ topKTools: 5, topKSkills: 2 });
+  // Create 12 tools in the same family — only 8 should survive diversity filter
     for (let i = 0; i < 12; i++) {
       registry.register(makeDescriptor({
         id: `tool:same_${i}`,
@@ -158,11 +162,12 @@ describe('CandidateSelector', () => {
 
     const bigSelector = new CandidateSelector({ topKTools: 15, topKSkills: 0 });
     const result = bigSelector.select(registry, baseCtx);
-    expect(result.tools.length).toBeLessThanOrEqual(8);
-  });
-
-  it('applies boosted families from skills', () => {
-    registry.register(makeDescriptor({
+    assert(result.tools.length <= 8);
+})
+  Deno.test('CandidateSelector - applies boosted families from skills', () => {
+  registry = new CapabilityRegistry();
+    selector = new CandidateSelector({ topKTools: 5, topKSkills: 2 });
+  registry.register(makeDescriptor({
       id: 'tool:container_start',
       name: 'container_start',
       family: 'container.lifecycle',
@@ -177,11 +182,12 @@ describe('CandidateSelector', () => {
       ...baseCtx,
       boostedFamilies: ['container.lifecycle'],
     });
-    expect(result.tools[0].name).toBe('container_start');
-  });
-
-  it('checks required_capabilities', () => {
-    registry.register(makeDescriptor({
+    assertEquals(result.tools[0].name, 'container_start');
+})
+  Deno.test('CandidateSelector - checks required_capabilities', () => {
+  registry = new CapabilityRegistry();
+    selector = new CandidateSelector({ topKTools: 5, topKSkills: 2 });
+  registry.register(makeDescriptor({
       id: 'tool:web_fetch',
       name: 'web_fetch',
       required_capabilities: ['egress.http'],
@@ -198,12 +204,13 @@ describe('CandidateSelector', () => {
     });
     // web_fetch has no required_capabilities check in hard filter (it only checks if ALL are present)
     // Since web_fetch has required_capabilities=['egress.http'] and ctx.capabilities=[], it should be filtered
-    expect(result.tools.some(d => d.name === 'web_fetch')).toBe(false);
-    expect(result.tools.some(d => d.name === 'file_read')).toBe(true);
-  });
-
-  it('excludes discovery tools from scoring', () => {
-    for (const name of DISCOVERY_TOOL_NAMES) {
+    assertEquals(result.tools.some(d => d.name === 'web_fetch'), false);
+    assertEquals(result.tools.some(d => d.name === 'file_read'), true);
+})
+  Deno.test('CandidateSelector - excludes discovery tools from scoring', () => {
+  registry = new CapabilityRegistry();
+    selector = new CandidateSelector({ topKTools: 5, topKSkills: 2 });
+  for (const name of DISCOVERY_TOOL_NAMES) {
       registry.register(makeDescriptor({
         id: `tool:${name}`,
         name,
@@ -215,12 +222,13 @@ describe('CandidateSelector', () => {
 
     const result = selector.select(registry, baseCtx);
     // Discovery tools should NOT be in selected tools
-    expect(result.tools.every(d => !DISCOVERY_TOOL_NAMES.has(d.name))).toBe(true);
-    expect(result.tools.some(d => d.name === 'real_tool')).toBe(true);
-  });
-
-  it('handles zero tools after filtering', () => {
-    // All tools require a capability the context doesn't have
+    assertEquals(result.tools.every(d => !DISCOVERY_TOOL_NAMES.has(d.name)), true);
+    assertEquals(result.tools.some(d => d.name === 'real_tool'), true);
+})
+  Deno.test('CandidateSelector - handles zero tools after filtering', () => {
+  registry = new CapabilityRegistry();
+    selector = new CandidateSelector({ topKTools: 5, topKSkills: 2 });
+  // All tools require a capability the context doesn't have
     registry.register(makeDescriptor({
       id: 'tool:gated',
       name: 'gated',
@@ -228,12 +236,13 @@ describe('CandidateSelector', () => {
     }));
 
     const result = selector.select(registry, { ...baseCtx, capabilities: [] });
-    expect(result.tools).toHaveLength(0);
-    expect(result.totalAvailable).toBe(1);
-  });
-
-  it('limits query terms to prevent performance issues', () => {
-    registry.register(makeDescriptor({
+    assertEquals(result.tools.length, 0);
+    assertEquals(result.totalAvailable, 1);
+})
+  Deno.test('CandidateSelector - limits query terms to prevent performance issues', () => {
+  registry = new CapabilityRegistry();
+    selector = new CandidateSelector({ topKTools: 5, topKSkills: 2 });
+  registry.register(makeDescriptor({
       id: 'tool:a',
       name: 'a',
       summary: 'A tool',
@@ -243,6 +252,5 @@ describe('CandidateSelector', () => {
     // 200-word query should not cause issues (capped at 50 terms internally)
     const longQuery = Array.from({ length: 200 }, (_, i) => `word${i}`).join(' ');
     const result = selector.select(registry, { ...baseCtx, userQuery: longQuery });
-    expect(result.tools).toBeDefined();
-  });
-});
+    assert(result.tools !== undefined);
+})

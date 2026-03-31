@@ -8,14 +8,14 @@ import type {
   ExecutionPlan,
   ExecutionContext,
   Conclusion,
-} from '../workflow-models.js';
-import { evaluateCondition } from '../parser/expression.js';
+} from '../workflow-models.ts';
+import { evaluateCondition } from '../parser/expression.ts';
 import {
   buildDependencyGraph,
   groupIntoPhases,
   type DependencyGraph,
-} from './dependency.js';
-import { StepRunner, type StepRunnerOptions } from './step.js';
+} from './dependency.ts';
+import { StepRunner, type StepRunnerOptions } from './step.ts';
 import {
   buildNeedsContext,
   buildJobExecutionContext,
@@ -26,7 +26,7 @@ import {
   finalizeJobResult,
   getDependencySkipReason,
   type JobExecutionState,
-} from './job-policy.js';
+} from './job-policy.ts';
 
 // --- needsInput 正規化 ---
 

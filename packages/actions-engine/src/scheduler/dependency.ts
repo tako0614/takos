@@ -1,8 +1,8 @@
 /**
  * DAG（有向非巡回グラフ）で依存関係を解決
  */
-import type { Workflow } from '../workflow-models.js';
-import { normalizeNeedsInput } from './job.js';
+import type { Workflow } from '../workflow-models.ts';
+import { normalizeNeedsInput } from './job.ts';
 
 /**
  * 依存関係解決失敗時に投げるエラー

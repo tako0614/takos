@@ -1,22 +1,14 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { assertEquals, assert, assertRejects } from 'jsr:@std/assert';
+import { assertSpyCalls } from 'jsr:@std/testing/mock';
 
-const mocks = vi.hoisted(() => ({
-  getDb: vi.fn(),
-  generateId: vi.fn().mockReturnValue('notif-id-1'),
-  now: vi.fn().mockReturnValue('2025-01-01T00:00:00.000Z'),
-}));
+const mocks = ({
+  getDb: ((..._args: any[]) => undefined) as any,
+  generateId: (() => 'notif-id-1'),
+  now: (() => '2025-01-01T00:00:00.000Z'),
+});
 
-vi.mock('@/db', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/db')>()),
-  getDb: mocks.getDb,
-}));
-
-vi.mock('@/shared/utils', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/shared/utils')>()),
-  generateId: mocks.generateId,
-  now: mocks.now,
-}));
-
+// [Deno] vi.mock removed - manually stub imports from '@/db'
+// [Deno] vi.mock removed - manually stub imports from '@/shared/utils'
 import {
   ensureNotificationSettings,
   getNotificationsMutedUntil,
@@ -44,44 +36,44 @@ import type { Env } from '@/types';
 
 function makeChain(overrides: Record<string, unknown> = {}) {
   const c: Record<string, unknown> = {};
-  c.from = vi.fn().mockReturnValue(c);
-  c.where = vi.fn().mockReturnValue(c);
-  c.orderBy = vi.fn().mockReturnValue(c);
-  c.limit = vi.fn().mockReturnValue(c);
-  c.get = vi.fn().mockResolvedValue(null);
-  c.all = vi.fn().mockResolvedValue([]);
-  c.run = vi.fn().mockResolvedValue({ meta: { changes: 1 } });
-  c.returning = vi.fn().mockReturnValue(c);
+  c.from = (() => c);
+  c.where = (() => c);
+  c.orderBy = (() => c);
+  c.limit = (() => c);
+  c.get = (async () => null);
+  c.all = (async () => []);
+  c.run = (async () => ({ meta: { changes: 1 } }));
+  c.returning = (() => c);
   Object.assign(c, overrides);
   return c;
 }
 
 function makeDrizzle() {
   return {
-    select: vi.fn().mockImplementation(() => makeChain()),
-    insert: vi.fn().mockImplementation(() => {
+    select: () => makeChain(),
+    insert: () => {
       const c: Record<string, unknown> = {};
-      c.values = vi.fn().mockReturnValue(c);
-      c.run = vi.fn().mockResolvedValue({ meta: { changes: 1 } });
-      c.returning = vi.fn().mockReturnValue(c);
-      c.get = vi.fn().mockResolvedValue(null);
+      c.values = (() => c);
+      c.run = (async () => ({ meta: { changes: 1 } }));
+      c.returning = (() => c);
+      c.get = (async () => null);
       return c;
-    }),
-    update: vi.fn().mockImplementation(() => {
+    },
+    update: () => {
       const c: Record<string, unknown> = {};
-      c.set = vi.fn().mockReturnValue(c);
-      c.where = vi.fn().mockReturnValue(c);
-      c.run = vi.fn().mockResolvedValue({ meta: { changes: 1 } });
-      c.returning = vi.fn().mockReturnValue(c);
-      c.get = vi.fn().mockResolvedValue(null);
+      c.set = (() => c);
+      c.where = (() => c);
+      c.run = (async () => ({ meta: { changes: 1 } }));
+      c.returning = (() => c);
+      c.get = (async () => null);
       return c;
-    }),
-    delete: vi.fn().mockImplementation(() => {
+    },
+    delete: () => {
       const c: Record<string, unknown> = {};
-      c.where = vi.fn().mockReturnValue(c);
-      c.run = vi.fn().mockResolvedValue({ meta: { changes: 1 } });
+      c.where = (() => c);
+      c.run = (async () => ({ meta: { changes: 1 } }));
       return c;
-    }),
+    },
   };
 }
 
@@ -89,304 +81,268 @@ function makeDrizzle() {
 // Zod schemas
 // ---------------------------------------------------------------------------
 
-describe('updateNotificationPreferencesSchema', () => {
-  it('accepts valid updates', () => {
-    const result = updateNotificationPreferencesSchema.safeParse({
+
+  Deno.test('updateNotificationPreferencesSchema - accepts valid updates', () => {
+  const result = updateNotificationPreferencesSchema.safeParse({
       updates: [{ type: 'run.completed', channel: 'in_app', enabled: true }],
     });
-    expect(result.success).toBe(true);
-  });
-
-  it('rejects empty updates array', () => {
-    const result = updateNotificationPreferencesSchema.safeParse({ updates: [] });
-    expect(result.success).toBe(false);
-  });
-
-  it('rejects invalid notification type', () => {
-    const result = updateNotificationPreferencesSchema.safeParse({
+    assertEquals(result.success, true);
+})
+  Deno.test('updateNotificationPreferencesSchema - rejects empty updates array', () => {
+  const result = updateNotificationPreferencesSchema.safeParse({ updates: [] });
+    assertEquals(result.success, false);
+})
+  Deno.test('updateNotificationPreferencesSchema - rejects invalid notification type', () => {
+  const result = updateNotificationPreferencesSchema.safeParse({
       updates: [{ type: 'invalid.type', channel: 'in_app', enabled: true }],
     });
-    expect(result.success).toBe(false);
-  });
-
-  it('rejects invalid channel', () => {
-    const result = updateNotificationPreferencesSchema.safeParse({
+    assertEquals(result.success, false);
+})
+  Deno.test('updateNotificationPreferencesSchema - rejects invalid channel', () => {
+  const result = updateNotificationPreferencesSchema.safeParse({
       updates: [{ type: 'run.completed', channel: 'sms', enabled: true }],
     });
-    expect(result.success).toBe(false);
-  });
-});
+    assertEquals(result.success, false);
+})
 
-describe('setMutedUntilSchema', () => {
-  it('accepts valid datetime string', () => {
-    const result = setMutedUntilSchema.safeParse({ muted_until: '2025-12-31T23:59:59Z' });
-    expect(result.success).toBe(true);
-  });
+  Deno.test('setMutedUntilSchema - accepts valid datetime string', () => {
+  const result = setMutedUntilSchema.safeParse({ muted_until: '2025-12-31T23:59:59Z' });
+    assertEquals(result.success, true);
+})
+  Deno.test('setMutedUntilSchema - accepts null', () => {
+  const result = setMutedUntilSchema.safeParse({ muted_until: null });
+    assertEquals(result.success, true);
+})
+  Deno.test('setMutedUntilSchema - rejects invalid datetime string', () => {
+  const result = setMutedUntilSchema.safeParse({ muted_until: 'not-a-date' });
+    assertEquals(result.success, false);
+})
 
-  it('accepts null', () => {
-    const result = setMutedUntilSchema.safeParse({ muted_until: null });
-    expect(result.success).toBe(true);
-  });
-
-  it('rejects invalid datetime string', () => {
-    const result = setMutedUntilSchema.safeParse({ muted_until: 'not-a-date' });
-    expect(result.success).toBe(false);
-  });
-});
-
-describe('listNotificationsQuerySchema', () => {
-  it('accepts valid limit and before', () => {
-    const result = listNotificationsQuerySchema.safeParse({
+  Deno.test('listNotificationsQuerySchema - accepts valid limit and before', () => {
+  const result = listNotificationsQuerySchema.safeParse({
       limit: 10,
       before: '2025-01-01T00:00:00Z',
     });
-    expect(result.success).toBe(true);
-  });
-
-  it('rejects limit over 50', () => {
-    const result = listNotificationsQuerySchema.safeParse({ limit: 100 });
-    expect(result.success).toBe(false);
-  });
-
-  it('rejects non-positive limit', () => {
-    const result = listNotificationsQuerySchema.safeParse({ limit: 0 });
-    expect(result.success).toBe(false);
-  });
-});
-
+    assertEquals(result.success, true);
+})
+  Deno.test('listNotificationsQuerySchema - rejects limit over 50', () => {
+  const result = listNotificationsQuerySchema.safeParse({ limit: 100 });
+    assertEquals(result.success, false);
+})
+  Deno.test('listNotificationsQuerySchema - rejects non-positive limit', () => {
+  const result = listNotificationsQuerySchema.safeParse({ limit: 0 });
+    assertEquals(result.success, false);
+})
 // ---------------------------------------------------------------------------
 // ensureNotificationSettings
 // ---------------------------------------------------------------------------
 
-describe('ensureNotificationSettings', () => {
-  beforeEach(() => vi.clearAllMocks());
 
-  it('inserts settings when none exist', async () => {
-    const drizzle = makeDrizzle();
-    mocks.getDb.mockReturnValue(drizzle);
+  
+  Deno.test('ensureNotificationSettings - inserts settings when none exist', async () => {
+  const drizzle = makeDrizzle();
+    mocks.getDb = (() => drizzle) as any;
 
     await ensureNotificationSettings({} as never, 'user-1');
 
-    expect(drizzle.select).toHaveBeenCalled();
-    expect(drizzle.insert).toHaveBeenCalled();
-  });
-
-  it('does not insert when settings already exist', async () => {
-    const selectChain = makeChain({
-      get: vi.fn().mockResolvedValue({ accountId: 'user-1' }),
+    assert(drizzle.select.calls.length > 0);
+    assert(drizzle.insert.calls.length > 0);
+})
+  Deno.test('ensureNotificationSettings - does not insert when settings already exist', async () => {
+  const selectChain = makeChain({
+      get: (async () => ({ accountId: 'user-1' })),
     });
     const drizzle = makeDrizzle();
-    drizzle.select = vi.fn().mockReturnValue(selectChain);
-    mocks.getDb.mockReturnValue(drizzle);
+    drizzle.select = (() => selectChain);
+    mocks.getDb = (() => drizzle) as any;
 
     await ensureNotificationSettings({} as never, 'user-1');
 
-    expect(drizzle.insert).not.toHaveBeenCalled();
-  });
-
-  it('throws descriptive error when table is missing', async () => {
-    const drizzle = makeDrizzle();
-    drizzle.select = vi.fn().mockImplementation(() => {
+    assertSpyCalls(drizzle.insert, 0);
+})
+  Deno.test('ensureNotificationSettings - throws descriptive error when table is missing', async () => {
+  const drizzle = makeDrizzle();
+    drizzle.select = () => {
       throw new Error('no such table: notification_settings');
-    });
-    mocks.getDb.mockReturnValue(drizzle);
+    };
+    mocks.getDb = (() => drizzle) as any;
 
-    await expect(ensureNotificationSettings({} as never, 'user-1')).rejects.toThrow(
+    await await assertRejects(async () => { await ensureNotificationSettings({} as never, 'user-1'); }, 
       'Required table',
     );
-  });
-});
-
+})
 // ---------------------------------------------------------------------------
 // getNotificationsMutedUntil / isNotificationsMuted
 // ---------------------------------------------------------------------------
 
-describe('getNotificationsMutedUntil', () => {
-  beforeEach(() => vi.clearAllMocks());
 
-  it('returns null when no settings row found', async () => {
-    const drizzle = makeDrizzle();
-    mocks.getDb.mockReturnValue(drizzle);
-
-    const result = await getNotificationsMutedUntil({} as never, 'user-1');
-    expect(result).toBeNull();
-  });
-
-  it('returns muted_until value when set', async () => {
-    const selectChain = makeChain({
-      get: vi.fn().mockResolvedValue({ mutedUntil: '2025-12-31T23:59:59Z' }),
-    });
-    const drizzle = makeDrizzle();
-    drizzle.select = vi.fn().mockReturnValue(selectChain);
-    mocks.getDb.mockReturnValue(drizzle);
+  
+  Deno.test('getNotificationsMutedUntil - returns null when no settings row found', async () => {
+  const drizzle = makeDrizzle();
+    mocks.getDb = (() => drizzle) as any;
 
     const result = await getNotificationsMutedUntil({} as never, 'user-1');
-    expect(result).toBe('2025-12-31T23:59:59Z');
-  });
-});
-
-describe('isNotificationsMuted', () => {
-  beforeEach(() => vi.clearAllMocks());
-
-  it('returns false when no muted_until is set', async () => {
-    const drizzle = makeDrizzle();
-    mocks.getDb.mockReturnValue(drizzle);
-
-    const result = await isNotificationsMuted({} as never, 'user-1');
-    expect(result).toBe(false);
-  });
-
-  it('returns true when muted_until is in the future', async () => {
-    const futureDate = new Date(Date.now() + 3600_000).toISOString();
-    const selectChain = makeChain({
-      get: vi.fn().mockResolvedValue({ mutedUntil: futureDate }),
+    assertEquals(result, null);
+})
+  Deno.test('getNotificationsMutedUntil - returns muted_until value when set', async () => {
+  const selectChain = makeChain({
+      get: (async () => ({ mutedUntil: '2025-12-31T23:59:59Z' })),
     });
     const drizzle = makeDrizzle();
-    drizzle.select = vi.fn().mockReturnValue(selectChain);
-    mocks.getDb.mockReturnValue(drizzle);
+    drizzle.select = (() => selectChain);
+    mocks.getDb = (() => drizzle) as any;
+
+    const result = await getNotificationsMutedUntil({} as never, 'user-1');
+    assertEquals(result, '2025-12-31T23:59:59Z');
+})
+
+  
+  Deno.test('isNotificationsMuted - returns false when no muted_until is set', async () => {
+  const drizzle = makeDrizzle();
+    mocks.getDb = (() => drizzle) as any;
 
     const result = await isNotificationsMuted({} as never, 'user-1');
-    expect(result).toBe(true);
-  });
-
-  it('returns false when muted_until is in the past', async () => {
-    const pastDate = new Date(Date.now() - 3600_000).toISOString();
+    assertEquals(result, false);
+})
+  Deno.test('isNotificationsMuted - returns true when muted_until is in the future', async () => {
+  const futureDate = new Date(Date.now() + 3600_000).toISOString();
     const selectChain = makeChain({
-      get: vi.fn().mockResolvedValue({ mutedUntil: pastDate }),
+      get: (async () => ({ mutedUntil: futureDate })),
     });
     const drizzle = makeDrizzle();
-    drizzle.select = vi.fn().mockReturnValue(selectChain);
-    mocks.getDb.mockReturnValue(drizzle);
+    drizzle.select = (() => selectChain);
+    mocks.getDb = (() => drizzle) as any;
 
     const result = await isNotificationsMuted({} as never, 'user-1');
-    expect(result).toBe(false);
-  });
-});
+    assertEquals(result, true);
+})
+  Deno.test('isNotificationsMuted - returns false when muted_until is in the past', async () => {
+  const pastDate = new Date(Date.now() - 3600_000).toISOString();
+    const selectChain = makeChain({
+      get: (async () => ({ mutedUntil: pastDate })),
+    });
+    const drizzle = makeDrizzle();
+    drizzle.select = (() => selectChain);
+    mocks.getDb = (() => drizzle) as any;
 
+    const result = await isNotificationsMuted({} as never, 'user-1');
+    assertEquals(result, false);
+})
 // ---------------------------------------------------------------------------
 // setNotificationsMutedUntil
 // ---------------------------------------------------------------------------
 
-describe('setNotificationsMutedUntil', () => {
-  beforeEach(() => vi.clearAllMocks());
 
-  it('updates existing settings row', async () => {
-    const selectChain = makeChain({
-      get: vi.fn().mockResolvedValue({ mutedUntil: null }),
+  
+  Deno.test('setNotificationsMutedUntil - updates existing settings row', async () => {
+  const selectChain = makeChain({
+      get: (async () => ({ mutedUntil: null })),
     });
     const updateChain = makeChain({
-      get: vi.fn().mockResolvedValue({ mutedUntil: '2025-06-01T00:00:00.000Z' }),
+      get: (async () => ({ mutedUntil: '2025-06-01T00:00:00.000Z' })),
     });
     const drizzle = makeDrizzle();
-    drizzle.select = vi.fn().mockReturnValue(selectChain);
-    drizzle.update = vi.fn().mockImplementation(() => {
+    drizzle.select = (() => selectChain);
+    drizzle.update = () => {
       const c: Record<string, unknown> = {};
-      c.set = vi.fn().mockReturnValue(c);
-      c.where = vi.fn().mockReturnValue(c);
-      c.returning = vi.fn().mockReturnValue(c);
-      c.get = vi.fn().mockResolvedValue({ mutedUntil: '2025-06-01T00:00:00.000Z' });
+      c.set = (() => c);
+      c.where = (() => c);
+      c.returning = (() => c);
+      c.get = (async () => ({ mutedUntil: '2025-06-01T00:00:00.000Z' }));
       return c;
-    });
-    mocks.getDb.mockReturnValue(drizzle);
+    };
+    mocks.getDb = (() => drizzle) as any;
 
     const result = await setNotificationsMutedUntil({} as never, 'user-1', '2025-06-01T00:00:00Z');
-    expect(result.muted_until).toBe('2025-06-01T00:00:00.000Z');
-  });
-
-  it('clears muted_until when null is passed', async () => {
-    const selectChain = makeChain({
-      get: vi.fn().mockResolvedValue({ mutedUntil: '2025-06-01T00:00:00Z' }),
+    assertEquals(result.muted_until, '2025-06-01T00:00:00.000Z');
+})
+  Deno.test('setNotificationsMutedUntil - clears muted_until when null is passed', async () => {
+  const selectChain = makeChain({
+      get: (async () => ({ mutedUntil: '2025-06-01T00:00:00Z' })),
     });
     const drizzle = makeDrizzle();
-    drizzle.select = vi.fn().mockReturnValue(selectChain);
-    drizzle.update = vi.fn().mockImplementation(() => {
+    drizzle.select = (() => selectChain);
+    drizzle.update = () => {
       const c: Record<string, unknown> = {};
-      c.set = vi.fn().mockReturnValue(c);
-      c.where = vi.fn().mockReturnValue(c);
-      c.returning = vi.fn().mockReturnValue(c);
-      c.get = vi.fn().mockResolvedValue({ mutedUntil: null });
+      c.set = (() => c);
+      c.where = (() => c);
+      c.returning = (() => c);
+      c.get = (async () => ({ mutedUntil: null }));
       return c;
-    });
-    mocks.getDb.mockReturnValue(drizzle);
+    };
+    mocks.getDb = (() => drizzle) as any;
 
     const result = await setNotificationsMutedUntil({} as never, 'user-1', null);
-    expect(result.muted_until).toBeNull();
-  });
-});
-
+    assertEquals(result.muted_until, null);
+})
 // ---------------------------------------------------------------------------
 // getNotificationPreferences / ensureNotificationPreferences
 // ---------------------------------------------------------------------------
 
-describe('getNotificationPreferences', () => {
-  beforeEach(() => vi.clearAllMocks());
 
-  it('returns default preferences when no rows exist', async () => {
-    const drizzle = makeDrizzle();
+  
+  Deno.test('getNotificationPreferences - returns default preferences when no rows exist', async () => {
+  const drizzle = makeDrizzle();
     // All selects return empty (no existing preferences)
-    mocks.getDb.mockReturnValue(drizzle);
+    mocks.getDb = (() => drizzle) as any;
 
     const prefs = await getNotificationPreferences({} as never, 'user-1');
 
     // Check that all types and channels are present
     for (const type of NOTIFICATION_TYPES) {
-      expect(prefs[type]).toBeDefined();
+      assert(prefs[type] !== undefined);
       for (const channel of NOTIFICATION_CHANNELS) {
-        expect(typeof prefs[type][channel]).toBe('boolean');
+        assertEquals(typeof prefs[type][channel], 'boolean');
       }
     }
-  });
-
-  it('merges stored preferences with defaults', async () => {
-    let callCount = 0;
+})
+  Deno.test('getNotificationPreferences - merges stored preferences with defaults', async () => {
+  let callCount = 0;
     const drizzle = makeDrizzle();
-    drizzle.select = vi.fn().mockImplementation(() => {
+    drizzle.select = () => {
       callCount++;
       if (callCount === 1) {
         // ensureNotificationPreferences: existing rows
-        return makeChain({ all: vi.fn().mockResolvedValue([]) });
+        return makeChain({ all: (async () => []) });
       }
       // getNotificationPreferences: stored rows
       return makeChain({
-        all: vi.fn().mockResolvedValue([
+        all: (async () => [
           { type: 'run.completed', channel: 'in_app', enabled: false },
         ]),
       });
-    });
-    mocks.getDb.mockReturnValue(drizzle);
+    };
+    mocks.getDb = (() => drizzle) as any;
 
     const prefs = await getNotificationPreferences({} as never, 'user-1');
     // The stored value should override the default
-    expect(prefs['run.completed'].in_app).toBe(false);
+    assertEquals(prefs['run.completed'].in_app, false);
     // Other defaults should still be present
-    expect(prefs['deploy.completed'].in_app).toBe(true);
-  });
-});
-
+    assertEquals(prefs['deploy.completed'].in_app, true);
+})
 // ---------------------------------------------------------------------------
 // updateNotificationPreferences
 // ---------------------------------------------------------------------------
 
-describe('updateNotificationPreferences', () => {
-  beforeEach(() => vi.clearAllMocks());
 
-  it('creates new preferences for missing combos and updates existing', async () => {
-    let selectCount = 0;
+  
+  Deno.test('updateNotificationPreferences - creates new preferences for missing combos and updates existing', async () => {
+  let selectCount = 0;
     const drizzle = makeDrizzle();
-    drizzle.select = vi.fn().mockImplementation(() => {
+    drizzle.select = () => {
       selectCount++;
       if (selectCount === 1) {
         // Existing rows check
         return makeChain({
-          all: vi.fn().mockResolvedValue([
+          all: (async () => [
             { type: 'run.completed', channel: 'in_app' },
           ]),
         });
       }
       // ensureNotificationPreferences + getNotificationPreferences (subsequent calls)
-      return makeChain({ all: vi.fn().mockResolvedValue([]) });
-    });
-    mocks.getDb.mockReturnValue(drizzle);
+      return makeChain({ all: (async () => []) });
+    };
+    mocks.getDb = (() => drizzle) as any;
 
     const result = await updateNotificationPreferences({} as never, 'user-1', [
       { type: 'run.completed', channel: 'in_app', enabled: false },
@@ -394,21 +350,18 @@ describe('updateNotificationPreferences', () => {
     ]);
 
     // update should be called for existing combo
-    expect(drizzle.update).toHaveBeenCalled();
+    assert(drizzle.update.calls.length > 0);
     // insert should be called for new combo
-    expect(drizzle.insert).toHaveBeenCalled();
-  });
-});
-
+    assert(drizzle.insert.calls.length > 0);
+})
 // ---------------------------------------------------------------------------
 // listNotifications
 // ---------------------------------------------------------------------------
 
-describe('listNotifications', () => {
-  beforeEach(() => vi.clearAllMocks());
 
-  it('returns empty when no enabled notification types', async () => {
-    // All notification types have in_app disabled
+  
+  Deno.test('listNotifications - returns empty when no enabled notification types', async () => {
+  // All notification types have in_app disabled
     const emptyPrefs: Record<string, Record<string, boolean>> = {};
     for (const t of NOTIFICATION_TYPES) {
       emptyPrefs[t] = { in_app: false, email: false, push: false };
@@ -416,117 +369,101 @@ describe('listNotifications', () => {
 
     let selectCount = 0;
     const drizzle = makeDrizzle();
-    drizzle.select = vi.fn().mockImplementation(() => {
+    drizzle.select = () => {
       selectCount++;
       if (selectCount <= 1) {
         // ensureNotificationPreferences
-        return makeChain({ all: vi.fn().mockResolvedValue([]) });
+        return makeChain({ all: (async () => []) });
       }
       if (selectCount <= 2) {
         // getNotificationPreferences: all disabled
         return makeChain({
-          all: vi.fn().mockResolvedValue(
-            NOTIFICATION_TYPES.flatMap(t =>
+          all: (async () => NOTIFICATION_TYPES.flatMap(t =>
               NOTIFICATION_CHANNELS.map(c => ({ type: t, channel: c, enabled: false }))
-            ),
-          ),
+            ),),
         });
       }
       return makeChain();
-    });
-    mocks.getDb.mockReturnValue(drizzle);
+    };
+    mocks.getDb = (() => drizzle) as any;
 
     const result = await listNotifications({} as never, 'user-1');
-    expect(result.notifications).toEqual([]);
-  });
-});
-
+    assertEquals(result.notifications, []);
+})
 // ---------------------------------------------------------------------------
 // getUnreadCount
 // ---------------------------------------------------------------------------
 
-describe('getUnreadCount', () => {
-  beforeEach(() => vi.clearAllMocks());
 
-  it('returns 0 when no enabled types', async () => {
-    let selectCount = 0;
+  
+  Deno.test('getUnreadCount - returns 0 when no enabled types', async () => {
+  let selectCount = 0;
     const drizzle = makeDrizzle();
-    drizzle.select = vi.fn().mockImplementation(() => {
+    drizzle.select = () => {
       selectCount++;
       if (selectCount <= 2) {
         return makeChain({
-          all: vi.fn().mockResolvedValue(
-            NOTIFICATION_TYPES.flatMap(t =>
+          all: (async () => NOTIFICATION_TYPES.flatMap(t =>
               NOTIFICATION_CHANNELS.map(c => ({ type: t, channel: c, enabled: false }))
-            ),
-          ),
+            ),),
         });
       }
       return makeChain();
-    });
-    mocks.getDb.mockReturnValue(drizzle);
+    };
+    mocks.getDb = (() => drizzle) as any;
 
     const count = await getUnreadCount({} as never, 'user-1');
-    expect(count).toBe(0);
-  });
-});
-
+    assertEquals(count, 0);
+})
 // ---------------------------------------------------------------------------
 // markNotificationRead
 // ---------------------------------------------------------------------------
 
-describe('markNotificationRead', () => {
-  beforeEach(() => vi.clearAllMocks());
 
-  it('updates notification readAt field', async () => {
-    const drizzle = makeDrizzle();
-    mocks.getDb.mockReturnValue(drizzle);
+  
+  Deno.test('markNotificationRead - updates notification readAt field', async () => {
+  const drizzle = makeDrizzle();
+    mocks.getDb = (() => drizzle) as any;
 
     const result = await markNotificationRead({} as never, 'user-1', 'notif-1');
-    expect(result).toEqual({ success: true });
-    expect(drizzle.update).toHaveBeenCalled();
-  });
-
-  it('throws when notification table is missing', async () => {
-    const drizzle = makeDrizzle();
-    drizzle.update = vi.fn().mockImplementation(() => {
+    assertEquals(result, { success: true });
+    assert(drizzle.update.calls.length > 0);
+})
+  Deno.test('markNotificationRead - throws when notification table is missing', async () => {
+  const drizzle = makeDrizzle();
+    drizzle.update = () => {
       throw new Error('no such table: notifications');
-    });
-    mocks.getDb.mockReturnValue(drizzle);
+    };
+    mocks.getDb = (() => drizzle) as any;
 
-    await expect(markNotificationRead({} as never, 'user-1', 'notif-1')).rejects.toThrow(
+    await await assertRejects(async () => { await markNotificationRead({} as never, 'user-1', 'notif-1'); }, 
       'Required table',
     );
-  });
-});
-
+})
 // ---------------------------------------------------------------------------
 // createNotification
 // ---------------------------------------------------------------------------
 
-describe('createNotification', () => {
-  beforeEach(() => vi.clearAllMocks());
 
-  it('returns null notification_id when user disabled all channels', async () => {
-    // All channels disabled for deploy.completed
+  
+  Deno.test('createNotification - returns null notification_id when user disabled all channels', async () => {
+  // All channels disabled for deploy.completed
     let selectCount = 0;
     const drizzle = makeDrizzle();
-    drizzle.select = vi.fn().mockImplementation(() => {
+    drizzle.select = () => {
       selectCount++;
       if (selectCount <= 2) {
         return makeChain({
-          all: vi.fn().mockResolvedValue(
-            NOTIFICATION_CHANNELS.map(c => ({
+          all: (async () => NOTIFICATION_CHANNELS.map(c => ({
               type: 'deploy.completed',
               channel: c,
               enabled: false,
-            })),
-          ),
+            })),),
         });
       }
       return makeChain();
-    });
-    mocks.getDb.mockReturnValue(drizzle);
+    };
+    mocks.getDb = (() => drizzle) as any;
 
     const env = { DB: {} as never } as unknown as Env;
     const result = await createNotification(env, {
@@ -535,18 +472,17 @@ describe('createNotification', () => {
       title: 'Deploy done',
     });
 
-    expect(result.notification_id).toBeNull();
-  });
-
-  it('inserts notification and returns id when in_app is enabled', async () => {
-    let selectCount = 0;
+    assertEquals(result.notification_id, null);
+})
+  Deno.test('createNotification - inserts notification and returns id when in_app is enabled', async () => {
+  let selectCount = 0;
     const drizzle = makeDrizzle();
-    drizzle.select = vi.fn().mockImplementation(() => {
+    drizzle.select = () => {
       selectCount++;
       // ensureNotificationPreferences + getNotificationPreferences
       if (selectCount <= 2) {
         return makeChain({
-          all: vi.fn().mockResolvedValue([
+          all: (async () => [
             { type: 'deploy.completed', channel: 'in_app', enabled: true },
             { type: 'deploy.completed', channel: 'email', enabled: false },
             { type: 'deploy.completed', channel: 'push', enabled: false },
@@ -554,9 +490,9 @@ describe('createNotification', () => {
         });
       }
       // isNotificationsMuted: no muted_until
-      return makeChain({ get: vi.fn().mockResolvedValue(null) });
-    });
-    mocks.getDb.mockReturnValue(drizzle);
+      return makeChain({ get: (async () => null) });
+    };
+    mocks.getDb = (() => drizzle) as any;
 
     const env = { DB: {} as never } as unknown as Env;
     const result = await createNotification(env, {
@@ -567,32 +503,31 @@ describe('createNotification', () => {
       data: { appId: 'app-1' },
     });
 
-    expect(result.notification_id).toBe('notif-id-1');
-    expect(drizzle.insert).toHaveBeenCalled();
-  });
-
-  it('emits notification via durable object when not muted', async () => {
-    let selectCount = 0;
+    assertEquals(result.notification_id, 'notif-id-1');
+    assert(drizzle.insert.calls.length > 0);
+})
+  Deno.test('createNotification - emits notification via durable object when not muted', async () => {
+  let selectCount = 0;
     const drizzle = makeDrizzle();
-    drizzle.select = vi.fn().mockImplementation(() => {
+    drizzle.select = () => {
       selectCount++;
       if (selectCount <= 2) {
         return makeChain({
-          all: vi.fn().mockResolvedValue([
+          all: (async () => [
             { type: 'run.completed', channel: 'in_app', enabled: true },
           ]),
         });
       }
-      return makeChain({ get: vi.fn().mockResolvedValue(null) });
-    });
-    mocks.getDb.mockReturnValue(drizzle);
+      return makeChain({ get: (async () => null) });
+    };
+    mocks.getDb = (() => drizzle) as any;
 
-    const stubFetch = vi.fn().mockResolvedValue(new Response('ok'));
+    const stubFetch = (async () => new Response('ok'));
     const env = {
       DB: {} as never,
       NOTIFICATION_NOTIFIER: {
-        idFromName: vi.fn().mockReturnValue('id'),
-        get: vi.fn().mockReturnValue({ fetch: stubFetch }),
+        idFromName: (() => 'id'),
+        get: (() => ({ fetch: stubFetch })),
       },
     } as unknown as Env;
 
@@ -602,6 +537,5 @@ describe('createNotification', () => {
       title: 'Run done',
     });
 
-    expect(stubFetch).toHaveBeenCalledTimes(1);
-  });
-});
+    assertSpyCalls(stubFetch, 1);
+})

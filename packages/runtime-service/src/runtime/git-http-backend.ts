@@ -1,7 +1,7 @@
 import { spawn, type ChildProcess } from 'child_process';
-import { filterSafeEnv } from '../utils/sandbox-env.js';
+import { filterSafeEnv } from '../utils/sandbox-env.ts';
 import { createLogger } from 'takos-common/logger';
-import { gracefulKill } from '../utils/process-kill.js';
+import { gracefulKill } from '../utils/process-kill.ts';
 
 const logger = createLogger({ service: 'takos-runtime' });
 
@@ -71,7 +71,7 @@ export async function runGitHttpBackend(
 ): Promise<GitHttpBackendResponse> {
   return new Promise((resolve, reject) => {
     const env: NodeJS.ProcessEnv = {
-      ...filterSafeEnv(process.env),
+      ...filterSafeEnv(Deno.env.toObject()),
       GIT_PROJECT_ROOT: request.projectRoot,
       GIT_HTTP_EXPORT_ALL: '1',
       PATH_INFO: request.gitPath,

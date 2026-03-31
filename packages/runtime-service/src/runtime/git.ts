@@ -1,4 +1,4 @@
-import { runCommand } from './command.js';
+import { runCommand } from './command.ts';
 
 export async function runGitCommand(
   args: string[],

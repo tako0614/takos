@@ -1,4 +1,5 @@
-import { useEffect, useState } from 'react';
+import { createSignal, createEffect, on } from 'solid-js';
+import { Show } from 'solid-js';
 import { Icons } from '../../../lib/Icons';
 import { useToast } from '../../../store/toast';
 import { useConfirmDialog } from '../../../store/confirm-dialog';
@@ -18,35 +19,31 @@ interface ActionsTabProps {
   repoId: string;
 }
 
-export function ActionsTab({ repoId }: ActionsTabProps) {
+export function ActionsTab(props: ActionsTabProps) {
   const { t } = useI18n();
   const { showToast } = useToast();
   const { confirm } = useConfirmDialog();
-  const [runs, setRuns] = useState<WorkflowRunSummary[]>([]);
-  const [loadingRuns, setLoadingRuns] = useState(true);
-  const [runsError, setRunsError] = useState<string | null>(null);
-  const [selectedRun, setSelectedRun] = useState<WorkflowRunDetail | null>(null);
-  const [loadingRun, setLoadingRun] = useState(false);
-  const [jobLogs, setJobLogs] = useState<Record<string, JobLogState>>({});
-  const [loadingJobId, setLoadingJobId] = useState<string | null>(null);
-  const [dispatchOpen, setDispatchOpen] = useState(false);
-  const [workflowPath, setWorkflowPath] = useState('');
-  const [workflowRef, setWorkflowRef] = useState('');
-  const [workflowInputs, setWorkflowInputs] = useState('');
-  const [dispatching, setDispatching] = useState(false);
+  const [runs, setRuns] = createSignal<WorkflowRunSummary[]>([]);
+  const [loadingRuns, setLoadingRuns] = createSignal(true);
+  const [runsError, setRunsError] = createSignal<string | null>(null);
+  const [selectedRun, setSelectedRun] = createSignal<WorkflowRunDetail | null>(null);
+  const [loadingRun, setLoadingRun] = createSignal(false);
+  const [jobLogs, setJobLogs] = createSignal<Record<string, JobLogState>>({});
+  const [loadingJobId, setLoadingJobId] = createSignal<string | null>(null);
+  const [dispatchOpen, setDispatchOpen] = createSignal(false);
+  const [workflowPath, setWorkflowPath] = createSignal('');
+  const [workflowRef, setWorkflowRef] = createSignal('');
+  const [workflowInputs, setWorkflowInputs] = createSignal('');
+  const [dispatching, setDispatching] = createSignal(false);
 
-  const selectedRunId = selectedRun?.id;
-
-  useEffect(() => {
-    fetchRuns();
-  }, [repoId]);
+  const selectedRunId = () => selectedRun()?.id;
 
   const fetchRuns = async () => {
     try {
       setLoadingRuns(true);
       setRunsError(null);
       const res = await rpc.repos[':repoId'].actions.runs.$get({
-        param: { repoId },
+        param: { repoId: props.repoId },
         query: { limit: '25' },
       });
       const data = await rpcJson<{ runs?: WorkflowRunSummary[] }>(res);
@@ -58,11 +55,15 @@ export function ActionsTab({ repoId }: ActionsTabProps) {
     }
   };
 
+  createEffect(on(() => props.repoId, () => {
+    fetchRuns();
+  }));
+
   const fetchRunDetail = async (runId: string) => {
     try {
       setLoadingRun(true);
       const res = await rpc.repos[':repoId'].actions.runs[':runId'].$get({
-        param: { repoId, runId },
+        param: { repoId: props.repoId, runId },
       });
       const data = await rpcJson<{ run: WorkflowRunDetail }>(res);
       setSelectedRun(data.run);
@@ -90,12 +91,12 @@ export function ActionsTab({ repoId }: ActionsTabProps) {
 
     try {
       const res = await rpc.repos[':repoId'].actions.runs[':runId'].cancel.$post({
-        param: { repoId, runId },
+        param: { repoId: props.repoId, runId },
       });
       await rpcJson(res);
       showToast('success', t('runCancelled'));
       await fetchRuns();
-      if (selectedRunId === runId) {
+      if (selectedRunId() === runId) {
         await fetchRunDetail(runId);
       }
     } catch (err) {
@@ -106,7 +107,7 @@ export function ActionsTab({ repoId }: ActionsTabProps) {
   const handleRerun = async (runId: string) => {
     try {
       const res = await rpc.repos[':repoId'].actions.runs[':runId'].rerun.$post({
-        param: { repoId, runId },
+        param: { repoId: props.repoId, runId },
       });
       await rpcJson(res);
       showToast('success', t('workflowRerunQueued'));
@@ -117,11 +118,11 @@ export function ActionsTab({ repoId }: ActionsTabProps) {
   };
 
   const handleLoadLogs = async (jobId: string, offset = 0, append = false) => {
-    if (jobLogs[jobId] && offset === 0) return;
+    if (jobLogs()[jobId] && offset === 0) return;
     try {
       setLoadingJobId(jobId);
       const res = await rpc.repos[':repoId'].actions.jobs[':jobId'].logs.$get({
-        param: { repoId, jobId },
+        param: { repoId: props.repoId, jobId },
         query: { offset: String(offset), limit: String(LOG_CHUNK_BYTES) },
       });
       const data = await rpcJson<{ logs?: string; next_offset?: number; has_more?: boolean; total_size?: number | null }>(res);
@@ -147,21 +148,21 @@ export function ActionsTab({ repoId }: ActionsTabProps) {
   };
 
   const handleLoadMore = (jobId: string) => {
-    const logState = jobLogs[jobId];
+    const logState = jobLogs()[jobId];
     if (!logState || !logState.hasMore) return;
     handleLoadLogs(jobId, logState.nextOffset, true);
   };
 
   const handleDispatch = async () => {
-    if (!workflowPath.trim()) {
+    if (!workflowPath().trim()) {
       showToast('error', t('workflowPathRequired'));
       return;
     }
 
     let parsedInputs: Record<string, unknown> | undefined;
-    if (workflowInputs.trim()) {
+    if (workflowInputs().trim()) {
       try {
-        parsedInputs = JSON.parse(workflowInputs) as Record<string, unknown>;
+        parsedInputs = JSON.parse(workflowInputs()) as Record<string, unknown>;
       } catch {
         showToast('error', t('inputsMustBeValidJson'));
         return;
@@ -171,10 +172,10 @@ export function ActionsTab({ repoId }: ActionsTabProps) {
     try {
       setDispatching(true);
       const res = await rpc.repos[':repoId'].actions.runs.$post({
-        param: { repoId },
+        param: { repoId: props.repoId },
         json: {
-          workflow: workflowPath.trim(),
-          ref: workflowRef.trim() || undefined,
+          workflow: workflowPath().trim(),
+          ref: workflowRef().trim() || undefined,
           inputs: parsedInputs,
         },
       });
@@ -191,57 +192,57 @@ export function ActionsTab({ repoId }: ActionsTabProps) {
   };
 
   return (
-    <div className="flex flex-col gap-6 p-6">
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-2 text-zinc-800 dark:text-zinc-200">
-          <Icons.Terminal className="w-5 h-5 text-zinc-500" />
-          <h3 className="text-lg font-semibold">{t('actionsTitle')}</h3>
+    <div class="flex flex-col gap-6 p-6">
+      <div class="flex items-center justify-between">
+        <div class="flex items-center gap-2 text-zinc-800 dark:text-zinc-200">
+          <Icons.Terminal class="w-5 h-5 text-zinc-500" />
+          <h3 class="text-lg font-semibold">{t('actionsTitle')}</h3>
         </div>
-        <div className="flex items-center gap-2">
+        <div class="flex items-center gap-2">
           <button
-            className="flex items-center gap-2 px-3 py-1.5 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-zinc-100 dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100 hover:bg-zinc-200 dark:hover:bg-zinc-700 transition-colors"
+            class="flex items-center gap-2 px-3 py-1.5 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-zinc-100 dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100 hover:bg-zinc-200 dark:hover:bg-zinc-700 transition-colors"
             onClick={() => setDispatchOpen((prev) => !prev)}
           >
-            <Icons.Play className="w-4 h-4" />
+            <Icons.Play class="w-4 h-4" />
             <span>{t('runWorkflow')}</span>
           </button>
           <button
-            className="flex items-center gap-2 px-3 py-1.5 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-zinc-100 dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100 hover:bg-zinc-200 dark:hover:bg-zinc-700 transition-colors"
+            class="flex items-center gap-2 px-3 py-1.5 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-zinc-100 dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100 hover:bg-zinc-200 dark:hover:bg-zinc-700 transition-colors"
             onClick={fetchRuns}
           >
-            <Icons.Refresh className="w-4 h-4" />
+            <Icons.Refresh class="w-4 h-4" />
             <span>{t('refresh')}</span>
           </button>
         </div>
       </div>
 
-      {dispatchOpen && (
+      <Show when={dispatchOpen()}>
         <DispatchWorkflowForm
-          workflowPath={workflowPath}
+          workflowPath={workflowPath()}
           setWorkflowPath={setWorkflowPath}
-          workflowRef={workflowRef}
+          workflowRef={workflowRef()}
           setWorkflowRef={setWorkflowRef}
-          workflowInputs={workflowInputs}
+          workflowInputs={workflowInputs()}
           setWorkflowInputs={setWorkflowInputs}
-          dispatching={dispatching}
+          dispatching={dispatching()}
           onDispatch={handleDispatch}
         />
-      )}
+      </Show>
 
-      <div className="grid grid-cols-1 xl:grid-cols-[1.1fr_1fr] gap-6">
+      <div class="grid grid-cols-1 xl:grid-cols-[1.1fr_1fr] gap-6">
         <RunsList
-          runs={runs}
-          selectedRunId={selectedRunId}
-          loadingRuns={loadingRuns}
-          runsError={runsError}
+          runs={runs()}
+          selectedRunId={selectedRunId()}
+          loadingRuns={loadingRuns()}
+          runsError={runsError()}
           onSelectRun={handleSelectRun}
         />
 
         <RunDetail
-          run={selectedRun}
-          loadingRun={loadingRun}
-          jobLogs={jobLogs}
-          loadingJobId={loadingJobId}
+          run={selectedRun()}
+          loadingRun={loadingRun()}
+          jobLogs={jobLogs()}
+          loadingJobId={loadingJobId()}
           onRerun={handleRerun}
           onCancel={handleCancelRun}
           onLoadLogs={handleLoadLogs}

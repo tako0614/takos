@@ -1,6 +1,7 @@
-import { describe, expect, it } from 'vitest';
 import { existsSync, readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
+
+import { assert, assertStringIncludes } from 'jsr:@std/assert';
 
 const docsCandidates = [
   process.env.TAKOS_DOCS_DIR ? resolve(process.env.TAKOS_DOCS_DIR, 'takos/reference/database.md') : null,
@@ -153,85 +154,78 @@ function extractBaselineTableBlock(source: string, table: string): string {
 
 function expectDocsTable(table: string): void {
   if (table === 'service_runtimes') {
-    expect(docsDatabase).toMatch(/CREATE TABLE (service_runtimes|infra_workers)\s*\(/);
+    assert(/CREATE TABLE (service_runtimes|infra_workers)\s*\(/.test(docsDatabase));
     return;
   }
   if (table === 'service_mcp_endpoints') {
-    expect(docsDatabase).toMatch(/CREATE TABLE (service_mcp_endpoints|worker_mcp_endpoints)\s*\(/);
+    assert(/CREATE TABLE (service_mcp_endpoints|worker_mcp_endpoints)\s*\(/.test(docsDatabase));
     return;
   }
-  expect(docsDatabase).toMatch(new RegExp(`CREATE TABLE ${table}\\s*\\(`));
+  assertStringIncludes(docsDatabase, new RegExp(`CREATE TABLE ${table}\\s*\\(`));
 }
 
 function expectBaselineTable(table: string): void {
   if (table === 'service_runtimes') {
-    expect(baselineSql).toMatch(/CREATE TABLE "(service_runtimes|infra_workers)"/);
+    assert(/CREATE TABLE "(service_runtimes|infra_workers)"/.test(baselineSql));
     return;
   }
   if (table === 'service_mcp_endpoints') {
-    expect(baselineSql).toMatch(/CREATE TABLE "(service_mcp_endpoints|worker_mcp_endpoints)"/);
+    assert(/CREATE TABLE "(service_mcp_endpoints|worker_mcp_endpoints)"/.test(baselineSql));
     return;
   }
-  expect(baselineSql).toContain(`CREATE TABLE "${table}"`);
+  assertStringIncludes(baselineSql, `CREATE TABLE "${table}"`);
 }
 
 describe.skipIf(!docsDatabase)('DB contract reset canon', () => {
-  it('keeps the reset-critical tables aligned across docs and baseline SQL', () => {
-    for (const table of requiredTables) {
+  Deno.test('keeps the reset-critical tables aligned across docs and baseline SQL', () => {
+  for (const table of requiredTables) {
       expectDocsTable(table);
       expectBaselineTable(table);
     }
-  });
-
-  it('keeps unified account tables present in all sources', () => {
-    for (const table of unifiedAccountTables) {
+})
+  Deno.test('keeps unified account tables present in all sources', () => {
+  for (const table of unifiedAccountTables) {
       expectBaselineTable(table);
       expectDocsTable(table);
     }
-  });
-
-  it('documents the canonical table inventory that previously drifted out of the database reference', () => {
-    for (const table of docsInventoryTables) {
+})
+  Deno.test('documents the canonical table inventory that previously drifted out of the database reference', () => {
+  for (const table of docsInventoryTables) {
       expectDocsTable(table);
       expectBaselineTable(table);
     }
-  });
-
-  it('removes legacy tables from docs and baseline SQL', () => {
-    for (const table of forbiddenTables) {
-      expect(baselineSql).not.toContain(`CREATE TABLE "${table}"`);
-      expect(docsDatabase).not.toMatch(new RegExp(`CREATE TABLE ${table}\\s*\\(`));
+})
+  Deno.test('removes legacy tables from docs and baseline SQL', () => {
+  for (const table of forbiddenTables) {
+      assert(!(baselineSql).includes(`CREATE TABLE "${table}"`));
+      assert(!(new RegExp(`CREATE TABLE ${table}\\s*\\(`)).test(docsDatabase));
     }
-  });
+})
+  Deno.test('removes mixed-product schema text from Takos database docs', () => {
+  assert(!(docsDatabase).includes('Yurucommu Schema'));
+    assert(!(docsDatabase).includes('actors'));
+    assert(!(docsDatabase).includes('likes'));
+})
+  Deno.test('uses snapshot deployment columns and normalized bundle asset references', () => {
+  assertStringIncludes(baselineSql, '"runtime_config_snapshot_json"');
+    assertStringIncludes(baselineSql, '"bindings_snapshot_encrypted"');
+    assertStringIncludes(baselineSql, '"env_vars_snapshot_encrypted"');
+    assert(!(baselineSql).includes('"completed_steps"'));
+    assertStringIncludes(baselineSql, '"bundle_format"');
+    assertStringIncludes(baselineSql, '"bundle_meta_json"');
 
-  it('removes mixed-product schema text from Takos database docs', () => {
-    expect(docsDatabase).not.toContain('Yurucommu Schema');
-    expect(docsDatabase).not.toContain('actors');
-    expect(docsDatabase).not.toContain('likes');
-  });
-
-  it('uses snapshot deployment columns and normalized bundle asset references', () => {
-    expect(baselineSql).toContain('"runtime_config_snapshot_json"');
-    expect(baselineSql).toContain('"bindings_snapshot_encrypted"');
-    expect(baselineSql).toContain('"env_vars_snapshot_encrypted"');
-    expect(baselineSql).not.toContain('"completed_steps"');
-    expect(baselineSql).toContain('"bundle_format"');
-    expect(baselineSql).toContain('"bundle_meta_json"');
-
-    expect(docsDatabase).toContain('runtime_config_snapshot_json');
-    expect(docsDatabase).toContain('bundle_format');
-    expect(docsDatabase).toContain('bundle_meta_json');
-  });
-
-  it('keeps critical column contracts aligned across docs and baseline SQL', () => {
-    for (const [table, columns] of Object.entries(criticalColumns)) {
+    assertStringIncludes(docsDatabase, 'runtime_config_snapshot_json');
+    assertStringIncludes(docsDatabase, 'bundle_format');
+    assertStringIncludes(docsDatabase, 'bundle_meta_json');
+})
+  Deno.test('keeps critical column contracts aligned across docs and baseline SQL', () => {
+  for (const [table, columns] of Object.entries(criticalColumns)) {
       const docsBlock = extractDocsTableBlock(docsDatabase, table);
       const baselineBlock = extractBaselineTableBlock(baselineSql, table);
 
       for (const column of columns) {
-        expect(docsBlock).toContain(column);
-        expect(baselineBlock).toContain(column);
+        assertStringIncludes(docsBlock, column);
+        assertStringIncludes(baselineBlock, column);
       }
     }
-  });
-});
+})});

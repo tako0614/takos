@@ -1,5 +1,3 @@
-import { describe, expect, it } from 'vitest';
-
 import type {
   SkillLocale,
   OfficialSkillCategory,
@@ -11,42 +9,38 @@ import type {
   CustomSkillMetadata,
 } from '@/services/agent/skill-contracts';
 
-describe('skill-contracts type definitions', () => {
-  it('SkillLocale accepts ja and en', () => {
-    const ja: SkillLocale = 'ja';
+
+import { assertEquals, assertStringIncludes } from 'jsr:@std/assert';
+
+  Deno.test('skill-contracts type definitions - SkillLocale accepts ja and en', () => {
+  const ja: SkillLocale = 'ja';
     const en: SkillLocale = 'en';
-    expect(ja).toBe('ja');
-    expect(en).toBe('en');
-  });
-
-  it('OfficialSkillCategory covers all expected values', () => {
-    const categories: OfficialSkillCategory[] = ['research', 'writing', 'planning', 'slides', 'software'];
-    expect(categories).toHaveLength(5);
-  });
-
-  it('SkillCategory extends OfficialSkillCategory with custom', () => {
-    const custom: SkillCategory = 'custom';
-    expect(custom).toBe('custom');
-  });
-
-  it('DurableOutputHint covers expected values', () => {
-    const hints: DurableOutputHint[] = ['artifact', 'reminder', 'repo', 'app', 'workspace_file'];
-    expect(hints).toHaveLength(5);
-  });
-
-  it('SkillOutputMode includes chat and all durable hints', () => {
-    const modes: SkillOutputMode[] = ['chat', 'artifact', 'reminder', 'repo', 'app', 'workspace_file'];
-    expect(modes).toHaveLength(6);
-    expect(modes).toContain('chat');
-  });
-
-  it('SkillSource accepts official and custom', () => {
-    const sources: SkillSource[] = ['official', 'custom'];
-    expect(sources).toHaveLength(2);
-  });
-
-  it('SkillExecutionContract has required fields', () => {
-    const contract: SkillExecutionContract = {
+    assertEquals(ja, 'ja');
+    assertEquals(en, 'en');
+})
+  Deno.test('skill-contracts type definitions - OfficialSkillCategory covers all expected values', () => {
+  const categories: OfficialSkillCategory[] = ['research', 'writing', 'planning', 'slides', 'software'];
+    assertEquals(categories.length, 5);
+})
+  Deno.test('skill-contracts type definitions - SkillCategory extends OfficialSkillCategory with custom', () => {
+  const custom: SkillCategory = 'custom';
+    assertEquals(custom, 'custom');
+})
+  Deno.test('skill-contracts type definitions - DurableOutputHint covers expected values', () => {
+  const hints: DurableOutputHint[] = ['artifact', 'reminder', 'repo', 'app', 'workspace_file'];
+    assertEquals(hints.length, 5);
+})
+  Deno.test('skill-contracts type definitions - SkillOutputMode includes chat and all durable hints', () => {
+  const modes: SkillOutputMode[] = ['chat', 'artifact', 'reminder', 'repo', 'app', 'workspace_file'];
+    assertEquals(modes.length, 6);
+    assertStringIncludes(modes, 'chat');
+})
+  Deno.test('skill-contracts type definitions - SkillSource accepts official and custom', () => {
+  const sources: SkillSource[] = ['official', 'custom'];
+    assertEquals(sources.length, 2);
+})
+  Deno.test('skill-contracts type definitions - SkillExecutionContract has required fields', () => {
+  const contract: SkillExecutionContract = {
       preferred_tools: ['tool1'],
       durable_output_hints: ['artifact'],
       output_modes: ['chat', 'artifact'],
@@ -54,15 +48,14 @@ describe('skill-contracts type definitions', () => {
       template_ids: ['template1'],
     };
 
-    expect(contract.preferred_tools).toEqual(['tool1']);
-    expect(contract.durable_output_hints).toEqual(['artifact']);
-    expect(contract.output_modes).toEqual(['chat', 'artifact']);
-    expect(contract.required_mcp_servers).toEqual(['server1']);
-    expect(contract.template_ids).toEqual(['template1']);
-  });
-
-  it('CustomSkillMetadata allows all optional fields', () => {
-    const meta: CustomSkillMetadata = {
+    assertEquals(contract.preferred_tools, ['tool1']);
+    assertEquals(contract.durable_output_hints, ['artifact']);
+    assertEquals(contract.output_modes, ['chat', 'artifact']);
+    assertEquals(contract.required_mcp_servers, ['server1']);
+    assertEquals(contract.template_ids, ['template1']);
+})
+  Deno.test('skill-contracts type definitions - CustomSkillMetadata allows all optional fields', () => {
+  const meta: CustomSkillMetadata = {
       locale: 'ja',
       category: 'research',
       activation_tags: ['tag1'],
@@ -72,17 +65,15 @@ describe('skill-contracts type definitions', () => {
       },
     };
 
-    expect(meta.locale).toBe('ja');
-    expect(meta.category).toBe('research');
-    expect(meta.activation_tags).toEqual(['tag1']);
-    expect(meta.execution_contract?.preferred_tools).toEqual(['tool']);
-  });
-
-  it('CustomSkillMetadata allows empty object', () => {
-    const meta: CustomSkillMetadata = {};
-    expect(meta.locale).toBeUndefined();
-    expect(meta.category).toBeUndefined();
-    expect(meta.activation_tags).toBeUndefined();
-    expect(meta.execution_contract).toBeUndefined();
-  });
-});
+    assertEquals(meta.locale, 'ja');
+    assertEquals(meta.category, 'research');
+    assertEquals(meta.activation_tags, ['tag1']);
+    assertEquals(meta.execution_contract?.preferred_tools, ['tool']);
+})
+  Deno.test('skill-contracts type definitions - CustomSkillMetadata allows empty object', () => {
+  const meta: CustomSkillMetadata = {};
+    assertEquals(meta.locale, undefined);
+    assertEquals(meta.category, undefined);
+    assertEquals(meta.activation_tags, undefined);
+    assertEquals(meta.execution_contract, undefined);
+})

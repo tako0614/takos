@@ -10,9 +10,9 @@
  * silently fall back to the file-based backend — no extra login required.
  */
 
-import { api } from '../api.js';
-import { getConfig, isAuthenticated } from '../config-auth.js';
-import type { TakosState } from './state-types.js';
+import { api } from '../api.ts';
+import { getConfig, isAuthenticated } from '../config-auth.ts';
+import type { TakosState } from './state-types.ts';
 
 // ---------------------------------------------------------------------------
 // Types — API response shapes

@@ -1,24 +1,13 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { assertEquals, assertNotEquals, assert, assertStringIncludes } from 'jsr:@std/assert';
+import { assertSpyCalls } from 'jsr:@std/testing/mock';
 
-const mocks = vi.hoisted(() => ({
-  getDb: vi.fn(),
-  logError: vi.fn(),
-}));
-
-vi.mock('@/db', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('@/db')>();
-  return {
-    ...actual,
-    getDb: mocks.getDb,
-  };
+const mocks = ({
+  getDb: ((..._args: any[]) => undefined) as any,
+  logError: ((..._args: any[]) => undefined) as any,
 });
 
-vi.mock('@/shared/utils/logger', () => ({
-  logError: mocks.logError,
-  logWarn: vi.fn(),
-  logInfo: vi.fn(),
-}));
-
+// [Deno] vi.mock removed - manually stub imports from '@/db'
+// [Deno] vi.mock removed - manually stub imports from '@/shared/utils/logger'
 import { exportThread } from '@/services/threads/thread-export';
 import type { D1Database } from '@cloudflare/workers-types';
 
@@ -60,39 +49,36 @@ function buildDrizzleMock(options: {
 }) {
   let selectIdx = 0;
   return {
-    select: vi.fn().mockImplementation(() => {
+    select: () => {
       selectIdx++;
       if (selectIdx === 1) {
         // thread lookup
         return {
-          from: vi.fn().mockReturnValue({
-            where: vi.fn().mockReturnValue({
-              get: vi.fn().mockResolvedValue(options.threadGet),
-            }),
-          }),
+          from: (() => ({
+            where: (() => ({
+              get: (async () => options.threadGet),
+            })),
+          })),
         };
       }
       // messages lookup
       return {
-        from: vi.fn().mockReturnValue({
-          where: vi.fn().mockReturnValue({
-            orderBy: vi.fn().mockReturnValue({
-              all: vi.fn().mockResolvedValue(options.messagesAll ?? []),
-            }),
-          }),
-        }),
+        from: (() => ({
+          where: (() => ({
+            orderBy: (() => ({
+              all: (async () => options.messagesAll ?? []),
+            })),
+          })),
+        })),
       };
-    }),
+    },
   };
 }
 
-describe('exportThread', () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-  });
 
-  it('returns null when thread is not found', async () => {
-    mocks.getDb.mockReturnValue(buildDrizzleMock({ threadGet: undefined }));
+  Deno.test('exportThread - returns null when thread is not found', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+  mocks.getDb = (() => buildDrizzleMock({ threadGet: undefined })) as any;
 
     const result = await exportThread({
       db: {} as MockDb,
@@ -102,13 +88,13 @@ describe('exportThread', () => {
       format: 'json',
     });
 
-    expect(result).toBeNull();
-  });
-
-  it('returns null when thread is deleted', async () => {
-    mocks.getDb.mockReturnValue(buildDrizzleMock({
+    assertEquals(result, null);
+})
+  Deno.test('exportThread - returns null when thread is deleted', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+  mocks.getDb = (() => buildDrizzleMock({
       threadGet: makeThreadRow({ status: 'deleted' }),
-    }));
+    })) as any;
 
     const result = await exportThread({
       db: {} as MockDb,
@@ -118,16 +104,16 @@ describe('exportThread', () => {
       format: 'json',
     });
 
-    expect(result).toBeNull();
-  });
-
-  it('exports thread as JSON with correct headers', async () => {
-    const thread = makeThreadRow();
+    assertEquals(result, null);
+})
+  Deno.test('exportThread - exports thread as JSON with correct headers', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+  const thread = makeThreadRow();
     const msgs = [
       makeMessageRow({ role: 'user', content: 'Hi', sequence: 0 }),
       makeMessageRow({ role: 'assistant', content: 'Hello!', sequence: 1 }),
     ];
-    mocks.getDb.mockReturnValue(buildDrizzleMock({ threadGet: thread, messagesAll: msgs }));
+    mocks.getDb = (() => buildDrizzleMock({ threadGet: thread, messagesAll: msgs })) as any;
 
     const result = await exportThread({
       db: {} as MockDb,
@@ -137,26 +123,26 @@ describe('exportThread', () => {
       format: 'json',
     });
 
-    expect(result).not.toBeNull();
-    expect(result!.status).toBe(200);
-    expect(result!.headers.get('Content-Type')).toBe('application/json; charset=utf-8');
-    expect(result!.headers.get('Content-Disposition')).toContain('.json');
-    expect(result!.headers.get('Cache-Control')).toBe('no-store');
+    assertNotEquals(result, null);
+    assertEquals(result!.status, 200);
+    assertEquals(result!.headers.get('Content-Type'), 'application/json; charset=utf-8');
+    assertStringIncludes(result!.headers.get('Content-Disposition'), '.json');
+    assertEquals(result!.headers.get('Cache-Control'), 'no-store');
 
     const body = await result!.json() as { thread: { id: string }; messages: unknown[] };
-    expect(body.thread.id).toBe('thread-1');
-    expect(body.messages).toHaveLength(2);
-  });
-
-  it('filters internal roles (system, tool) when includeInternal is false', async () => {
-    const thread = makeThreadRow();
+    assertEquals(body.thread.id, 'thread-1');
+    assertEquals(body.messages.length, 2);
+})
+  Deno.test('exportThread - filters internal roles (system, tool) when includeInternal is false', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+  const thread = makeThreadRow();
     const msgs = [
       makeMessageRow({ role: 'user', content: 'Hello', sequence: 0 }),
       makeMessageRow({ role: 'system', content: 'Internal prompt', sequence: 1 }),
       makeMessageRow({ role: 'assistant', content: 'Reply', sequence: 2 }),
       makeMessageRow({ role: 'tool', content: '{"result": 42}', sequence: 3 }),
     ];
-    mocks.getDb.mockReturnValue(buildDrizzleMock({ threadGet: thread, messagesAll: msgs }));
+    mocks.getDb = (() => buildDrizzleMock({ threadGet: thread, messagesAll: msgs })) as any;
 
     const result = await exportThread({
       db: {} as MockDb,
@@ -167,19 +153,19 @@ describe('exportThread', () => {
     });
 
     const body = await result!.json() as { messages: Array<{ role: string }> };
-    expect(body.messages).toHaveLength(2);
-    expect(body.messages.map(m => m.role)).toEqual(['user', 'assistant']);
-  });
-
-  it('includes all roles when includeInternal and includeInternalRolesAllowed are both true', async () => {
-    const thread = makeThreadRow();
+    assertEquals(body.messages.length, 2);
+    assertEquals(body.messages.map(m => m.role), ['user', 'assistant']);
+})
+  Deno.test('exportThread - includes all roles when includeInternal and includeInternalRolesAllowed are both true', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+  const thread = makeThreadRow();
     const msgs = [
       makeMessageRow({ role: 'user', content: 'Hello', sequence: 0 }),
       makeMessageRow({ role: 'system', content: 'System prompt', sequence: 1 }),
       makeMessageRow({ role: 'tool', content: 'tool result', sequence: 2 }),
       makeMessageRow({ role: 'assistant', content: 'Reply', sequence: 3 }),
     ];
-    mocks.getDb.mockReturnValue(buildDrizzleMock({ threadGet: thread, messagesAll: msgs }));
+    mocks.getDb = (() => buildDrizzleMock({ threadGet: thread, messagesAll: msgs })) as any;
 
     const result = await exportThread({
       db: {} as MockDb,
@@ -190,16 +176,16 @@ describe('exportThread', () => {
     });
 
     const body = await result!.json() as { messages: Array<{ role: string }> };
-    expect(body.messages).toHaveLength(4);
-  });
-
-  it('does not include internal roles when only includeInternal is true but includeInternalRolesAllowed is false', async () => {
-    const thread = makeThreadRow();
+    assertEquals(body.messages.length, 4);
+})
+  Deno.test('exportThread - does not include internal roles when only includeInternal is true but includeInternalRolesAllowed is false', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+  const thread = makeThreadRow();
     const msgs = [
       makeMessageRow({ role: 'user', content: 'Hello', sequence: 0 }),
       makeMessageRow({ role: 'system', content: 'System prompt', sequence: 1 }),
     ];
-    mocks.getDb.mockReturnValue(buildDrizzleMock({ threadGet: thread, messagesAll: msgs }));
+    mocks.getDb = (() => buildDrizzleMock({ threadGet: thread, messagesAll: msgs })) as any;
 
     const result = await exportThread({
       db: {} as MockDb,
@@ -210,16 +196,16 @@ describe('exportThread', () => {
     });
 
     const body = await result!.json() as { messages: Array<{ role: string }> };
-    expect(body.messages).toHaveLength(1);
-    expect(body.messages[0].role).toBe('user');
-  });
-
-  it('exports thread as markdown format', async () => {
-    const thread = makeThreadRow({ title: 'My Thread' });
+    assertEquals(body.messages.length, 1);
+    assertEquals(body.messages[0].role, 'user');
+})
+  Deno.test('exportThread - exports thread as markdown format', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+  const thread = makeThreadRow({ title: 'My Thread' });
     const msgs = [
       makeMessageRow({ role: 'user', content: 'Hey there', sequence: 0 }),
     ];
-    mocks.getDb.mockReturnValue(buildDrizzleMock({ threadGet: thread, messagesAll: msgs }));
+    mocks.getDb = (() => buildDrizzleMock({ threadGet: thread, messagesAll: msgs })) as any;
 
     const result = await exportThread({
       db: {} as MockDb,
@@ -229,20 +215,20 @@ describe('exportThread', () => {
       format: 'markdown',
     });
 
-    expect(result!.status).toBe(200);
-    expect(result!.headers.get('Content-Type')).toBe('text/markdown; charset=utf-8');
-    expect(result!.headers.get('Content-Disposition')).toContain('.md');
+    assertEquals(result!.status, 200);
+    assertEquals(result!.headers.get('Content-Type'), 'text/markdown; charset=utf-8');
+    assertStringIncludes(result!.headers.get('Content-Disposition'), '.md');
 
     const body = await result!.text();
-    expect(body).toContain('# My Thread');
-    expect(body).toContain('## Messages');
-    expect(body).toContain('Hey there');
-  });
-
-  it('exports thread as markdown when format is "md"', async () => {
-    const thread = makeThreadRow();
+    assertStringIncludes(body, '# My Thread');
+    assertStringIncludes(body, '## Messages');
+    assertStringIncludes(body, 'Hey there');
+})
+  Deno.test('exportThread - exports thread as markdown when format is "md"', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+  const thread = makeThreadRow();
     const msgs = [makeMessageRow()];
-    mocks.getDb.mockReturnValue(buildDrizzleMock({ threadGet: thread, messagesAll: msgs }));
+    mocks.getDb = (() => buildDrizzleMock({ threadGet: thread, messagesAll: msgs })) as any;
 
     const result = await exportThread({
       db: {} as MockDb,
@@ -252,13 +238,13 @@ describe('exportThread', () => {
       format: 'md',
     });
 
-    expect(result!.status).toBe(200);
-    expect(result!.headers.get('Content-Type')).toBe('text/markdown; charset=utf-8');
-  });
-
-  it('returns 503 when PDF format requested without renderPdf', async () => {
-    const thread = makeThreadRow();
-    mocks.getDb.mockReturnValue(buildDrizzleMock({ threadGet: thread, messagesAll: [] }));
+    assertEquals(result!.status, 200);
+    assertEquals(result!.headers.get('Content-Type'), 'text/markdown; charset=utf-8');
+})
+  Deno.test('exportThread - returns 503 when PDF format requested without renderPdf', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+  const thread = makeThreadRow();
+    mocks.getDb = (() => buildDrizzleMock({ threadGet: thread, messagesAll: [] })) as any;
 
     const result = await exportThread({
       db: {} as MockDb,
@@ -268,18 +254,18 @@ describe('exportThread', () => {
       format: 'pdf',
     });
 
-    expect(result!.status).toBe(503);
+    assertEquals(result!.status, 503);
     const body = await result!.json() as { error: string };
-    expect(body.error).toContain('PDF export requires Browser rendering');
-  });
-
-  it('exports thread as PDF when renderPdf is provided', async () => {
-    const thread = makeThreadRow({ title: 'PDF Test' });
+    assertStringIncludes(body.error, 'PDF export requires Browser rendering');
+})
+  Deno.test('exportThread - exports thread as PDF when renderPdf is provided', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+  const thread = makeThreadRow({ title: 'PDF Test' });
     const msgs = [makeMessageRow({ content: 'PDF content' })];
-    mocks.getDb.mockReturnValue(buildDrizzleMock({ threadGet: thread, messagesAll: msgs }));
+    mocks.getDb = (() => buildDrizzleMock({ threadGet: thread, messagesAll: msgs })) as any;
 
     const pdfBuffer = new ArrayBuffer(8);
-    const mockRenderPdf = vi.fn().mockResolvedValue(pdfBuffer);
+    const mockRenderPdf = (async () => pdfBuffer);
 
     const result = await exportThread({
       db: {} as MockDb,
@@ -290,22 +276,22 @@ describe('exportThread', () => {
       format: 'pdf',
     });
 
-    expect(result!.status).toBe(200);
-    expect(result!.headers.get('Content-Type')).toBe('application/pdf');
-    expect(result!.headers.get('Content-Disposition')).toContain('.pdf');
-    expect(mockRenderPdf).toHaveBeenCalledOnce();
+    assertEquals(result!.status, 200);
+    assertEquals(result!.headers.get('Content-Type'), 'application/pdf');
+    assertStringIncludes(result!.headers.get('Content-Disposition'), '.pdf');
+    assertSpyCalls(mockRenderPdf, 1);
 
     // Verify the HTML passed to renderPdf contains the title
-    const htmlArg = mockRenderPdf.mock.calls[0][0] as string;
-    expect(htmlArg).toContain('PDF Test');
-    expect(htmlArg).toContain('PDF content');
-  });
+    const htmlArg = mockRenderPdf.calls[0][0] as string;
+    assertStringIncludes(htmlArg, 'PDF Test');
+    assertStringIncludes(htmlArg, 'PDF content');
+})
+  Deno.test('exportThread - returns 500 when renderPdf throws a generic error', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+  const thread = makeThreadRow();
+    mocks.getDb = (() => buildDrizzleMock({ threadGet: thread, messagesAll: [] })) as any;
 
-  it('returns 500 when renderPdf throws a generic error', async () => {
-    const thread = makeThreadRow();
-    mocks.getDb.mockReturnValue(buildDrizzleMock({ threadGet: thread, messagesAll: [] }));
-
-    const mockRenderPdf = vi.fn().mockRejectedValue(new Error('render crash'));
+    const mockRenderPdf = (async () => { throw new Error('render crash'); });
 
     const result = await exportThread({
       db: {} as MockDb,
@@ -316,16 +302,16 @@ describe('exportThread', () => {
       format: 'pdf',
     });
 
-    expect(result!.status).toBe(500);
+    assertEquals(result!.status, 500);
     const body = await result!.json() as { error: string };
-    expect(body.error).toBe('Failed to generate PDF');
-  });
+    assertEquals(body.error, 'Failed to generate PDF');
+})
+  Deno.test('exportThread - returns 501 when renderPdf throws a "not supported" error', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+  const thread = makeThreadRow();
+    mocks.getDb = (() => buildDrizzleMock({ threadGet: thread, messagesAll: [] })) as any;
 
-  it('returns 501 when renderPdf throws a "not supported" error', async () => {
-    const thread = makeThreadRow();
-    mocks.getDb.mockReturnValue(buildDrizzleMock({ threadGet: thread, messagesAll: [] }));
-
-    const mockRenderPdf = vi.fn().mockRejectedValue(new Error('PDF rendering not supported'));
+    const mockRenderPdf = (async () => { throw new Error('PDF rendering not supported'); });
 
     const result = await exportThread({
       db: {} as MockDb,
@@ -336,12 +322,12 @@ describe('exportThread', () => {
       format: 'pdf',
     });
 
-    expect(result!.status).toBe(501);
-  });
-
-  it('returns 400 for an unsupported format', async () => {
-    const thread = makeThreadRow();
-    mocks.getDb.mockReturnValue(buildDrizzleMock({ threadGet: thread, messagesAll: [] }));
+    assertEquals(result!.status, 501);
+})
+  Deno.test('exportThread - returns 400 for an unsupported format', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+  const thread = makeThreadRow();
+    mocks.getDb = (() => buildDrizzleMock({ threadGet: thread, messagesAll: [] })) as any;
 
     const result = await exportThread({
       db: {} as MockDb,
@@ -351,14 +337,14 @@ describe('exportThread', () => {
       format: 'xml',
     });
 
-    expect(result!.status).toBe(400);
+    assertEquals(result!.status, 400);
     const body = await result!.json() as { error: string };
-    expect(body.error).toContain('Invalid format');
-  });
-
-  it('sanitizes thread title for filename', async () => {
-    const thread = makeThreadRow({ title: 'My Thread!@#$%^& with special chars' });
-    mocks.getDb.mockReturnValue(buildDrizzleMock({ threadGet: thread, messagesAll: [] }));
+    assertStringIncludes(body.error, 'Invalid format');
+})
+  Deno.test('exportThread - sanitizes thread title for filename', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+  const thread = makeThreadRow({ title: 'My Thread!@#$%^& with special chars' });
+    mocks.getDb = (() => buildDrizzleMock({ threadGet: thread, messagesAll: [] })) as any;
 
     const result = await exportThread({
       db: {} as MockDb,
@@ -370,12 +356,12 @@ describe('exportThread', () => {
 
     const disposition = result!.headers.get('Content-Disposition')!;
     // Should not contain special chars except - and _
-    expect(disposition).toMatch(/filename="[A-Za-z0-9_-]+-thread-1\.json"/);
-  });
-
-  it('defaults to "thread" when title is null', async () => {
-    const thread = makeThreadRow({ title: null });
-    mocks.getDb.mockReturnValue(buildDrizzleMock({ threadGet: thread, messagesAll: [] }));
+    assert(/filename="[A-Za-z0-9_-]+-thread-1\.json"/.test(disposition));
+})
+  Deno.test('exportThread - defaults to "thread" when title is null', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+  const thread = makeThreadRow({ title: null });
+    mocks.getDb = (() => buildDrizzleMock({ threadGet: thread, messagesAll: [] })) as any;
 
     const result = await exportThread({
       db: {} as MockDb,
@@ -386,15 +372,15 @@ describe('exportThread', () => {
     });
 
     const disposition = result!.headers.get('Content-Disposition')!;
-    expect(disposition).toContain('thread-thread-1.json');
-  });
-
-  it('escapes HTML in PDF export to prevent XSS', async () => {
-    const thread = makeThreadRow({ title: '<script>alert("xss")</script>' });
+    assertStringIncludes(disposition, 'thread-thread-1.json');
+})
+  Deno.test('exportThread - escapes HTML in PDF export to prevent XSS', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+  const thread = makeThreadRow({ title: '<script>alert("xss")</script>' });
     const msgs = [makeMessageRow({ content: '<img onerror="evil()">' })];
-    mocks.getDb.mockReturnValue(buildDrizzleMock({ threadGet: thread, messagesAll: msgs }));
+    mocks.getDb = (() => buildDrizzleMock({ threadGet: thread, messagesAll: msgs })) as any;
 
-    const mockRenderPdf = vi.fn().mockResolvedValue(new ArrayBuffer(8));
+    const mockRenderPdf = (async () => new ArrayBuffer(8));
 
     await exportThread({
       db: {} as MockDb,
@@ -405,10 +391,9 @@ describe('exportThread', () => {
       format: 'pdf',
     });
 
-    const htmlArg = mockRenderPdf.mock.calls[0][0] as string;
-    expect(htmlArg).not.toContain('<script>');
-    expect(htmlArg).toContain('&lt;script&gt;');
-    expect(htmlArg).not.toContain('<img onerror');
-    expect(htmlArg).toContain('&lt;img onerror');
-  });
-});
+    const htmlArg = mockRenderPdf.calls[0][0] as string;
+    assert(!(htmlArg).includes('<script>'));
+    assertStringIncludes(htmlArg, '&lt;script&gt;');
+    assert(!(htmlArg).includes('<img onerror'));
+    assertStringIncludes(htmlArg, '&lt;img onerror');
+})

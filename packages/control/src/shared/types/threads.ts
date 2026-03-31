@@ -16,7 +16,7 @@ export interface Thread {
 
 /**
  * Canonical MessageRole definition.
- * Duplicated in takos-computer/packages/computer-core/src/shared/types.ts (cross-repo boundary).
+ * Duplicated in takos-agent/packages/computer-core/src/shared/types.ts (cross-repo boundary).
  */
 export type MessageRole = 'user' | 'assistant' | 'system' | 'tool';
 

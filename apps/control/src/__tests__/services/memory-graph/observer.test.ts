@@ -1,18 +1,15 @@
-import { describe, expect, it, beforeEach } from 'vitest';
 import { createToolObserver } from '@/services/memory-graph/observer';
 import { RunOverlay } from '@/services/memory-graph/overlay';
 
-describe('ToolObserver', () => {
+
+import { assertEquals, assert } from 'jsr:@std/assert';
+
   let overlay: RunOverlay;
   const accountId = 'acct1';
   const runId = 'run1';
-
-  beforeEach(() => {
-    overlay = new RunOverlay();
-  });
-
-  it('creates claim + evidence from remember tool', () => {
-    const observer = createToolObserver(accountId, runId, overlay);
+  Deno.test('ToolObserver - creates claim + evidence from remember tool', () => {
+  overlay = new RunOverlay();
+  const observer = createToolObserver(accountId, runId, overlay);
 
     observer.observe({
       toolName: 'remember',
@@ -25,19 +22,19 @@ describe('ToolObserver', () => {
     });
 
     const claims = observer.getOverlayClaims();
-    expect(claims).toHaveLength(1);
-    expect(claims[0].claimType).toBe('fact');
-    expect(claims[0].subject).toBe('User');
-    expect(claims[0].predicate).toBe('prefers');
+    assertEquals(claims.length, 1);
+    assertEquals(claims[0].claimType, 'fact');
+    assertEquals(claims[0].subject, 'User');
+    assertEquals(claims[0].predicate, 'prefers');
 
     const evidence = observer.getOverlayEvidence();
-    expect(evidence).toHaveLength(1);
-    expect(evidence[0].kind).toBe('supports');
-    expect(evidence[0].trust).toBe(0.9);
-  });
-
-  it('creates claim from remember with procedural type', () => {
-    const observer = createToolObserver(accountId, runId, overlay);
+    assertEquals(evidence.length, 1);
+    assertEquals(evidence[0].kind, 'supports');
+    assertEquals(evidence[0].trust, 0.9);
+})
+  Deno.test('ToolObserver - creates claim from remember with procedural type', () => {
+  overlay = new RunOverlay();
+  const observer = createToolObserver(accountId, runId, overlay);
 
     observer.observe({
       toolName: 'remember',
@@ -50,12 +47,12 @@ describe('ToolObserver', () => {
     });
 
     const claims = observer.getOverlayClaims();
-    expect(claims).toHaveLength(1);
-    expect(claims[0].claimType).toBe('preference');
-  });
-
-  it('adds taint evidence on tool errors for related claims', () => {
-    const observer = createToolObserver(accountId, runId, overlay);
+    assertEquals(claims.length, 1);
+    assertEquals(claims[0].claimType, 'preference');
+})
+  Deno.test('ToolObserver - adds taint evidence on tool errors for related claims', () => {
+  overlay = new RunOverlay();
+  const observer = createToolObserver(accountId, runId, overlay);
 
     // First, create a claim that mentions a tool
     overlay.addClaim({
@@ -77,14 +74,14 @@ describe('ToolObserver', () => {
     });
 
     const evidence = observer.getOverlayEvidence();
-    expect(evidence.length).toBeGreaterThanOrEqual(1);
+    assert(evidence.length >= 1);
     const taintedEvidence = evidence.find(e => e.taint === 'tool_error');
-    expect(taintedEvidence).toBeDefined();
-    expect(taintedEvidence!.trust).toBe(0.5);
-  });
-
-  it('adds context evidence from recall tool', () => {
-    const observer = createToolObserver(accountId, runId, overlay);
+    assert(taintedEvidence !== undefined);
+    assertEquals(taintedEvidence!.trust, 0.5);
+})
+  Deno.test('ToolObserver - adds context evidence from recall tool', () => {
+  overlay = new RunOverlay();
+  const observer = createToolObserver(accountId, runId, overlay);
 
     // Pre-populate overlay with a claim
     overlay.addClaim({
@@ -105,12 +102,12 @@ describe('ToolObserver', () => {
 
     const evidence = observer.getOverlayEvidence();
     const contextEvidence = evidence.find(e => e.sourceType === 'memory_recall');
-    expect(contextEvidence).toBeDefined();
-    expect(contextEvidence!.kind).toBe('context');
-  });
-
-  it('ignores remember with no content', () => {
-    const observer = createToolObserver(accountId, runId, overlay);
+    assert(contextEvidence !== undefined);
+    assertEquals(contextEvidence!.kind, 'context');
+})
+  Deno.test('ToolObserver - ignores remember with no content', () => {
+  overlay = new RunOverlay();
+  const observer = createToolObserver(accountId, runId, overlay);
 
     observer.observe({
       toolName: 'remember',
@@ -119,20 +116,19 @@ describe('ToolObserver', () => {
       timestamp: Date.now(),
     });
 
-    expect(observer.getOverlayClaims()).toHaveLength(0);
-  });
-
-  it('never throws on observer errors', () => {
-    const observer = createToolObserver(accountId, runId, overlay);
+    assertEquals(observer.getOverlayClaims().length, 0);
+})
+  Deno.test('ToolObserver - never throws on observer errors', () => {
+  overlay = new RunOverlay();
+  const observer = createToolObserver(accountId, runId, overlay);
 
     // Should not throw even with unusual input
-    expect(() => {
+    try { () => {
       observer.observe({
         toolName: 'remember',
         arguments: { content: null as unknown as string, type: 'semantic' },
         result: '',
         timestamp: Date.now(),
       });
-    }).not.toThrow();
-  });
-});
+    }; } catch (_e) { throw new Error('Expected no throw'); };
+})

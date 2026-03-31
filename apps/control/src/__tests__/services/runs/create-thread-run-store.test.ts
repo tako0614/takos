@@ -1,40 +1,20 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { D1Database } from '@cloudflare/workers-types';
 
-const mocks = vi.hoisted(() => ({
-  getDb: vi.fn(),
-  resolveActorPrincipalId: vi.fn(),
-  isInvalidArrayBufferError: vi.fn(),
-  logError: vi.fn(),
-  logWarn: vi.fn(),
-}));
+import { assertEquals, assertNotEquals, assert, assertStringIncludes } from 'jsr:@std/assert';
+import { assertSpyCallArgs } from 'jsr:@std/testing/mock';
 
-vi.mock('@/db', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('@/db')>();
-  return {
-    ...actual,
-    getDb: mocks.getDb,
-  };
+const mocks = ({
+  getDb: ((..._args: any[]) => undefined) as any,
+  resolveActorPrincipalId: ((..._args: any[]) => undefined) as any,
+  isInvalidArrayBufferError: ((..._args: any[]) => undefined) as any,
+  logError: ((..._args: any[]) => undefined) as any,
+  logWarn: ((..._args: any[]) => undefined) as any,
 });
 
-vi.mock('@/services/identity/principals', () => ({
-  resolveActorPrincipalId: mocks.resolveActorPrincipalId,
-}));
-
-vi.mock('@/shared/utils/db-guards', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('@/shared/utils/db-guards')>();
-  return {
-    ...actual,
-    isInvalidArrayBufferError: mocks.isInvalidArrayBufferError,
-  };
-});
-
-vi.mock('@/shared/utils/logger', () => ({
-  logError: mocks.logError,
-  logWarn: mocks.logWarn,
-  logInfo: vi.fn(),
-}));
-
+// [Deno] vi.mock removed - manually stub imports from '@/db'
+// [Deno] vi.mock removed - manually stub imports from '@/services/identity/principals'
+// [Deno] vi.mock removed - manually stub imports from '@/shared/utils/db-guards'
+// [Deno] vi.mock removed - manually stub imports from '@/shared/utils/logger'
 import {
   getRunHierarchyNode,
   getSpaceModel,
@@ -49,75 +29,72 @@ function buildDrizzleMock(options: {
   selectAll?: unknown[];
   insertRun?: unknown;
 } = {}) {
-  const runFn = vi.fn().mockResolvedValue(undefined);
+  const runFn = (async () => undefined);
   const chain: Record<string, unknown> = {};
-  chain.from = vi.fn().mockReturnValue(chain);
-  chain.where = vi.fn().mockReturnValue(chain);
-  chain.orderBy = vi.fn().mockReturnValue(chain);
-  chain.limit = vi.fn().mockReturnValue(chain);
-  chain.get = vi.fn().mockResolvedValue(options.selectGet);
-  chain.all = vi.fn().mockResolvedValue(options.selectAll ?? []);
+  chain.from = (() => chain);
+  chain.where = (() => chain);
+  chain.orderBy = (() => chain);
+  chain.limit = (() => chain);
+  chain.get = (async () => options.selectGet);
+  chain.all = (async () => options.selectAll ?? []);
 
   const insertChain: Record<string, unknown> = {};
-  insertChain.values = vi.fn().mockReturnValue(insertChain);
-  insertChain.returning = vi.fn().mockReturnValue(insertChain);
-  insertChain.get = vi.fn().mockResolvedValue(options.insertRun);
+  insertChain.values = (() => insertChain);
+  insertChain.returning = (() => insertChain);
+  insertChain.get = (async () => options.insertRun);
   insertChain.run = runFn;
 
   const updateChain: Record<string, unknown> = {};
-  updateChain.set = vi.fn().mockReturnValue(updateChain);
-  updateChain.where = vi.fn().mockReturnValue(updateChain);
-  updateChain.returning = vi.fn().mockReturnValue(updateChain);
+  updateChain.set = (() => updateChain);
+  updateChain.where = (() => updateChain);
+  updateChain.returning = (() => updateChain);
   updateChain.run = runFn;
 
   return {
-    select: vi.fn().mockReturnValue(chain),
-    insert: vi.fn().mockReturnValue(insertChain),
-    update: vi.fn().mockReturnValue(updateChain),
+    select: (() => chain),
+    insert: (() => insertChain),
+    update: (() => updateChain),
     _runFn: runFn,
   };
 }
 
 function buildSequentialDrizzleMock(selectResults: unknown[]) {
   let selectIdx = 0;
-  const runFn = vi.fn().mockResolvedValue(undefined);
+  const runFn = (async () => undefined);
 
   return {
-    select: vi.fn().mockImplementation(() => {
+    select: () => {
       const result = selectResults[selectIdx++];
       const chain: Record<string, unknown> = {};
-      chain.from = vi.fn().mockReturnValue(chain);
-      chain.where = vi.fn().mockReturnValue(chain);
-      chain.orderBy = vi.fn().mockReturnValue(chain);
-      chain.limit = vi.fn().mockReturnValue(chain);
-      chain.get = vi.fn().mockResolvedValue(result);
-      chain.all = vi.fn().mockResolvedValue(Array.isArray(result) ? result : []);
+      chain.from = (() => chain);
+      chain.where = (() => chain);
+      chain.orderBy = (() => chain);
+      chain.limit = (() => chain);
+      chain.get = (async () => result);
+      chain.all = (async () => Array.isArray(result) ? result : []);
       return chain;
-    }),
-    insert: vi.fn().mockReturnValue({
-      values: vi.fn().mockReturnValue({
+    },
+    insert: (() => ({
+      values: (() => ({
         run: runFn,
-      }),
-    }),
-    update: vi.fn().mockReturnValue({
-      set: vi.fn().mockReturnValue({
-        where: vi.fn().mockReturnValue({
+      })),
+    })),
+    update: (() => ({
+      set: (() => ({
+        where: (() => ({
           run: runFn,
-        }),
-      }),
-    }),
+        })),
+      })),
+    })),
     _runFn: runFn,
   };
 }
 
-describe('getRunHierarchyNode', () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-    mocks.isInvalidArrayBufferError.mockReturnValue(false);
-  });
 
-  it('returns the hierarchy node when found', async () => {
-    const row = {
+  Deno.test('getRunHierarchyNode - returns the hierarchy node when found', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+    mocks.isInvalidArrayBufferError = (() => false) as any;
+  const row = {
       id: 'run-1',
       threadId: 'thread-1',
       accountId: 'space-1',
@@ -125,11 +102,11 @@ describe('getRunHierarchyNode', () => {
       rootThreadId: 'thread-1',
       rootRunId: 'run-1',
     };
-    mocks.getDb.mockReturnValue(buildDrizzleMock({ selectGet: row }));
+    mocks.getDb = (() => buildDrizzleMock({ selectGet: row })) as any;
 
     const result = await getRunHierarchyNode({} as D1Database, 'run-1');
 
-    expect(result).toEqual({
+    assertEquals(result, {
       id: 'run-1',
       threadId: 'thread-1',
       accountId: 'space-1',
@@ -137,17 +114,19 @@ describe('getRunHierarchyNode', () => {
       rootThreadId: 'thread-1',
       rootRunId: 'run-1',
     });
-  });
-
-  it('returns null when run not found', async () => {
-    mocks.getDb.mockReturnValue(buildDrizzleMock({ selectGet: undefined }));
+})
+  Deno.test('getRunHierarchyNode - returns null when run not found', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+    mocks.isInvalidArrayBufferError = (() => false) as any;
+  mocks.getDb = (() => buildDrizzleMock({ selectGet: undefined })) as any;
 
     const result = await getRunHierarchyNode({} as D1Database, 'nonexistent');
-    expect(result).toBeNull();
-  });
-
-  it('normalizes parentRunId null fallback', async () => {
-    const row = {
+    assertEquals(result, null);
+})
+  Deno.test('getRunHierarchyNode - normalizes parentRunId null fallback', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+    mocks.isInvalidArrayBufferError = (() => false) as any;
+  const row = {
       id: 'run-1',
       threadId: 'thread-1',
       accountId: 'space-1',
@@ -155,80 +134,73 @@ describe('getRunHierarchyNode', () => {
       rootThreadId: undefined,
       rootRunId: undefined,
     };
-    mocks.getDb.mockReturnValue(buildDrizzleMock({ selectGet: row }));
+    mocks.getDb = (() => buildDrizzleMock({ selectGet: row })) as any;
 
     const result = await getRunHierarchyNode({} as D1Database, 'run-1');
-    expect(result!.parentRunId).toBeNull();
-    expect(result!.rootThreadId).toBeNull();
-    expect(result!.rootRunId).toBeNull();
-  });
-
-  it('falls back to D1 raw query on InvalidArrayBuffer error', async () => {
-    mocks.isInvalidArrayBufferError.mockReturnValue(true);
+    assertEquals(result!.parentRunId, null);
+    assertEquals(result!.rootThreadId, null);
+    assertEquals(result!.rootRunId, null);
+})
+  Deno.test('getRunHierarchyNode - falls back to D1 raw query on InvalidArrayBuffer error', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+    mocks.isInvalidArrayBufferError = (() => false) as any;
+  mocks.isInvalidArrayBufferError = (() => true) as any;
     const drizzle = buildDrizzleMock({});
-    (drizzle.select as ReturnType<typeof vi.fn>).mockImplementation(() => {
+    (drizzle.select as ReturnType<typeof vi.fn>) = () => {
       throw new Error('Invalid array buffer length');
-    });
-    mocks.getDb.mockReturnValue(drizzle);
+    } as any;
+    mocks.getDb = (() => drizzle) as any;
 
     const mockD1 = {
-      prepare: vi.fn().mockReturnValue({
-        bind: vi.fn().mockReturnValue({
-          first: vi.fn().mockResolvedValue({
+      prepare: (() => ({
+        bind: (() => ({
+          first: (async () => ({
             id: 'run-1',
             threadId: 'thread-1',
             accountId: 'space-1',
             parentRunId: null,
             rootThreadId: null,
             rootRunId: null,
-          }),
-        }),
-      }),
+          })),
+        })),
+      })),
     };
 
     const result = await getRunHierarchyNode(mockD1 as unknown as D1Database, 'run-1');
-    expect(result).not.toBeNull();
-    expect(result!.id).toBe('run-1');
-  });
-});
+    assertNotEquals(result, null);
+    assertEquals(result!.id, 'run-1');
+})
 
-describe('getSpaceModel', () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-    mocks.isInvalidArrayBufferError.mockReturnValue(false);
-  });
-
-  it('returns aiModel when workspace found', async () => {
-    mocks.getDb.mockReturnValue(buildDrizzleMock({ selectGet: { aiModel: 'gpt-5.4-mini' } }));
+  Deno.test('getSpaceModel - returns aiModel when workspace found', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+    mocks.isInvalidArrayBufferError = (() => false) as any;
+  mocks.getDb = (() => buildDrizzleMock({ selectGet: { aiModel: 'gpt-5.4-mini' } })) as any;
 
     const result = await getSpaceModel({} as D1Database, 'space-1');
 
-    expect(result).toEqual({ aiModel: 'gpt-5.4-mini' });
-  });
-
-  it('returns null when workspace not found', async () => {
-    mocks.getDb.mockReturnValue(buildDrizzleMock({ selectGet: undefined }));
+    assertEquals(result, { aiModel: 'gpt-5.4-mini' });
+})
+  Deno.test('getSpaceModel - returns null when workspace not found', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+    mocks.isInvalidArrayBufferError = (() => false) as any;
+  mocks.getDb = (() => buildDrizzleMock({ selectGet: undefined })) as any;
 
     const result = await getSpaceModel({} as D1Database, 'missing');
-    expect(result).toBeNull();
-  });
-
-  it('normalizes null aiModel', async () => {
-    mocks.getDb.mockReturnValue(buildDrizzleMock({ selectGet: { aiModel: undefined } }));
+    assertEquals(result, null);
+})
+  Deno.test('getSpaceModel - normalizes null aiModel', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+    mocks.isInvalidArrayBufferError = (() => false) as any;
+  mocks.getDb = (() => buildDrizzleMock({ selectGet: { aiModel: undefined } })) as any;
 
     const result = await getSpaceModel({} as D1Database, 'space-1');
-    expect(result).toEqual({ aiModel: null });
-  });
-});
+    assertEquals(result, { aiModel: null });
+})
 
-describe('getRunResponse', () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-    mocks.isInvalidArrayBufferError.mockReturnValue(false);
-  });
-
-  it('returns a Run API object when found', async () => {
-    const row = {
+  Deno.test('getRunResponse - returns a Run API object when found', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+    mocks.isInvalidArrayBufferError = (() => false) as any;
+  const row = {
       id: 'run-1',
       threadId: 'thread-1',
       accountId: 'space-1',
@@ -249,35 +221,31 @@ describe('getRunResponse', () => {
       completedAt: '2026-03-01T00:01:00.000Z',
       createdAt: '2026-03-01T00:00:00.000Z',
     };
-    mocks.getDb.mockReturnValue(buildDrizzleMock({ selectGet: row }));
+    mocks.getDb = (() => buildDrizzleMock({ selectGet: row })) as any;
 
     const result = await getRunResponse({} as D1Database, 'run-1');
 
-    expect(result).not.toBeNull();
-    expect(result!.id).toBe('run-1');
-    expect(result!.thread_id).toBe('thread-1');
-    expect(result!.space_id).toBe('space-1');
-    expect(result!.status).toBe('completed');
-    expect(result!.output).toBe('{"result": true}');
-  });
-
-  it('returns null when run not found', async () => {
-    mocks.getDb.mockReturnValue(buildDrizzleMock({ selectGet: undefined }));
+    assertNotEquals(result, null);
+    assertEquals(result!.id, 'run-1');
+    assertEquals(result!.thread_id, 'thread-1');
+    assertEquals(result!.space_id, 'space-1');
+    assertEquals(result!.status, 'completed');
+    assertEquals(result!.output, '{"result": true}');
+})
+  Deno.test('getRunResponse - returns null when run not found', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+    mocks.isInvalidArrayBufferError = (() => false) as any;
+  mocks.getDb = (() => buildDrizzleMock({ selectGet: undefined })) as any;
 
     const result = await getRunResponse({} as D1Database, 'missing');
-    expect(result).toBeNull();
-  });
-});
+    assertEquals(result, null);
+})
 
-describe('createPendingRun', () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-    mocks.isInvalidArrayBufferError.mockReturnValue(false);
-  });
-
-  it('inserts a pending run via Drizzle', async () => {
-    const drizzle = buildDrizzleMock();
-    mocks.getDb.mockReturnValue(drizzle);
+  Deno.test('createPendingRun - inserts a pending run via Drizzle', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+    mocks.isInvalidArrayBufferError = (() => false) as any;
+  const drizzle = buildDrizzleMock();
+    mocks.getDb = (() => drizzle) as any;
 
     await createPendingRun({} as D1Database, {
       runId: 'run-new',
@@ -293,12 +261,13 @@ describe('createPendingRun', () => {
       createdAt: '2026-03-01T00:00:00.000Z',
     });
 
-    expect(drizzle.insert).toHaveBeenCalled();
-  });
-
-  it('inserts a child run with parentRunId and childThreadId', async () => {
-    const drizzle = buildDrizzleMock();
-    mocks.getDb.mockReturnValue(drizzle);
+    assert(drizzle.insert.calls.length > 0);
+})
+  Deno.test('createPendingRun - inserts a child run with parentRunId and childThreadId', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+    mocks.isInvalidArrayBufferError = (() => false) as any;
+  const drizzle = buildDrizzleMock();
+    mocks.getDb = (() => drizzle) as any;
 
     await createPendingRun({} as D1Database, {
       runId: 'run-child',
@@ -314,19 +283,14 @@ describe('createPendingRun', () => {
       createdAt: '2026-03-01T00:00:00.000Z',
     });
 
-    expect(drizzle.insert).toHaveBeenCalled();
-  });
-});
+    assert(drizzle.insert.calls.length > 0);
+})
 
-describe('updateRunStatus', () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-    mocks.isInvalidArrayBufferError.mockReturnValue(false);
-  });
-
-  it('updates a run status to queued', async () => {
-    const drizzle = buildDrizzleMock();
-    mocks.getDb.mockReturnValue(drizzle);
+  Deno.test('updateRunStatus - updates a run status to queued', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+    mocks.isInvalidArrayBufferError = (() => false) as any;
+  const drizzle = buildDrizzleMock();
+    mocks.getDb = (() => drizzle) as any;
 
     await updateRunStatus({} as D1Database, {
       runId: 'run-1',
@@ -334,12 +298,13 @@ describe('updateRunStatus', () => {
       error: null,
     });
 
-    expect(drizzle.update).toHaveBeenCalled();
-  });
-
-  it('updates a run status to failed with error', async () => {
-    const drizzle = buildDrizzleMock();
-    mocks.getDb.mockReturnValue(drizzle);
+    assert(drizzle.update.calls.length > 0);
+})
+  Deno.test('updateRunStatus - updates a run status to failed with error', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+    mocks.isInvalidArrayBufferError = (() => false) as any;
+  const drizzle = buildDrizzleMock();
+    mocks.getDb = (() => drizzle) as any;
 
     await updateRunStatus({} as D1Database, {
       runId: 'run-1',
@@ -347,102 +312,109 @@ describe('updateRunStatus', () => {
       error: 'Something went wrong',
     });
 
-    expect(drizzle.update).toHaveBeenCalled();
-  });
-});
+    assert(drizzle.update.calls.length > 0);
+})
 
-describe('checkRunRateLimits', () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-    mocks.isInvalidArrayBufferError.mockReturnValue(false);
-    mocks.resolveActorPrincipalId.mockResolvedValue(null);
-  });
-
-  it('allows a run when all limits are within bounds', async () => {
-    const drizzle = buildSequentialDrizzleMock([
+  Deno.test('checkRunRateLimits - allows a run when all limits are within bounds', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+    mocks.isInvalidArrayBufferError = (() => false) as any;
+    mocks.resolveActorPrincipalId = (async () => null) as any;
+  const drizzle = buildSequentialDrizzleMock([
       [{ accountId: 'space-1' }],   // user workspaces
       { count: 0 },                  // minute count
       { count: 0 },                  // hour count
       { count: 0 },                  // concurrent count
     ]);
-    mocks.getDb.mockReturnValue(drizzle);
+    mocks.getDb = (() => drizzle) as any;
 
     const result = await checkRunRateLimits({} as D1Database, 'user-1', 'space-1');
 
-    expect(result.allowed).toBe(true);
-    expect(result.reason).toBeUndefined();
-  });
-
-  it('rejects when per-minute limit is exceeded', async () => {
-    const drizzle = buildSequentialDrizzleMock([
+    assertEquals(result.allowed, true);
+    assertEquals(result.reason, undefined);
+})
+  Deno.test('checkRunRateLimits - rejects when per-minute limit is exceeded', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+    mocks.isInvalidArrayBufferError = (() => false) as any;
+    mocks.resolveActorPrincipalId = (async () => null) as any;
+  const drizzle = buildSequentialDrizzleMock([
       [{ accountId: 'space-1' }],
       { count: 30 },  // at or above max
     ]);
-    mocks.getDb.mockReturnValue(drizzle);
+    mocks.getDb = (() => drizzle) as any;
 
     const result = await checkRunRateLimits({} as D1Database, 'user-1', 'space-1');
 
-    expect(result.allowed).toBe(false);
-    expect(result.reason).toContain('max 30 runs per minute');
-  });
-
-  it('rejects when per-hour limit is exceeded', async () => {
-    const drizzle = buildSequentialDrizzleMock([
+    assertEquals(result.allowed, false);
+    assertStringIncludes(result.reason, 'max 30 runs per minute');
+})
+  Deno.test('checkRunRateLimits - rejects when per-hour limit is exceeded', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+    mocks.isInvalidArrayBufferError = (() => false) as any;
+    mocks.resolveActorPrincipalId = (async () => null) as any;
+  const drizzle = buildSequentialDrizzleMock([
       [{ accountId: 'space-1' }],
       { count: 5 },    // minute ok
       { count: 500 },  // at or above hourly max
     ]);
-    mocks.getDb.mockReturnValue(drizzle);
+    mocks.getDb = (() => drizzle) as any;
 
     const result = await checkRunRateLimits({} as D1Database, 'user-1', 'space-1');
 
-    expect(result.allowed).toBe(false);
-    expect(result.reason).toContain('max 500 runs per hour');
-  });
-
-  it('rejects when concurrent limit is exceeded', async () => {
-    const drizzle = buildSequentialDrizzleMock([
+    assertEquals(result.allowed, false);
+    assertStringIncludes(result.reason, 'max 500 runs per hour');
+})
+  Deno.test('checkRunRateLimits - rejects when concurrent limit is exceeded', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+    mocks.isInvalidArrayBufferError = (() => false) as any;
+    mocks.resolveActorPrincipalId = (async () => null) as any;
+  const drizzle = buildSequentialDrizzleMock([
       [{ accountId: 'space-1' }],
       { count: 5 },    // minute ok
       { count: 50 },   // hour ok
       { count: 20 },   // at or above concurrent max
     ]);
-    mocks.getDb.mockReturnValue(drizzle);
+    mocks.getDb = (() => drizzle) as any;
 
     const result = await checkRunRateLimits({} as D1Database, 'user-1', 'space-1');
 
-    expect(result.allowed).toBe(false);
-    expect(result.reason).toContain('max 20');
-    expect(result.reason).toContain('concurrent');
-  });
-
-  it('uses child run rate limits when isChildRun is true', async () => {
-    const drizzle = buildSequentialDrizzleMock([
+    assertEquals(result.allowed, false);
+    assertStringIncludes(result.reason, 'max 20');
+    assertStringIncludes(result.reason, 'concurrent');
+})
+  Deno.test('checkRunRateLimits - uses child run rate limits when isChildRun is true', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+    mocks.isInvalidArrayBufferError = (() => false) as any;
+    mocks.resolveActorPrincipalId = (async () => null) as any;
+  const drizzle = buildSequentialDrizzleMock([
       [{ accountId: 'space-1' }],
       { count: 20 },  // at child per-minute max
     ]);
-    mocks.getDb.mockReturnValue(drizzle);
+    mocks.getDb = (() => drizzle) as any;
 
     const result = await checkRunRateLimits({} as D1Database, 'user-1', 'space-1', { isChildRun: true });
 
-    expect(result.allowed).toBe(false);
-    expect(result.reason).toContain('Child run rate limit');
-    expect(result.reason).toContain('max 20 child runs per minute');
-  });
-
-  it('allows when user has no workspaces', async () => {
-    const drizzle = buildSequentialDrizzleMock([
+    assertEquals(result.allowed, false);
+    assertStringIncludes(result.reason, 'Child run rate limit');
+    assertStringIncludes(result.reason, 'max 20 child runs per minute');
+})
+  Deno.test('checkRunRateLimits - allows when user has no workspaces', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+    mocks.isInvalidArrayBufferError = (() => false) as any;
+    mocks.resolveActorPrincipalId = (async () => null) as any;
+  const drizzle = buildSequentialDrizzleMock([
       [],  // no workspace memberships
     ]);
-    mocks.getDb.mockReturnValue(drizzle);
+    mocks.getDb = (() => drizzle) as any;
 
     const result = await checkRunRateLimits({} as D1Database, 'orphan-user', 'space-1');
 
-    expect(result.allowed).toBe(true);
-  });
-
-  it('tries resolveActorPrincipalId when no workspaces found for direct actor', async () => {
-    mocks.resolveActorPrincipalId.mockResolvedValue('principal-1');
+    assertEquals(result.allowed, true);
+})
+  Deno.test('checkRunRateLimits - tries resolveActorPrincipalId when no workspaces found for direct actor', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+    mocks.isInvalidArrayBufferError = (() => false) as any;
+    mocks.resolveActorPrincipalId = (async () => null) as any;
+  mocks.resolveActorPrincipalId = (async () => 'principal-1') as any;
 
     const drizzle = buildSequentialDrizzleMock([
       [],                            // first memberships query: empty
@@ -451,33 +423,34 @@ describe('checkRunRateLimits', () => {
       { count: 0 },                  // hour
       { count: 0 },                  // concurrent
     ]);
-    mocks.getDb.mockReturnValue(drizzle);
+    mocks.getDb = (() => drizzle) as any;
 
     const result = await checkRunRateLimits({} as D1Database, 'user-1', 'space-1');
 
-    expect(result.allowed).toBe(true);
-    expect(mocks.resolveActorPrincipalId).toHaveBeenCalledWith(expect.anything(), 'user-1');
-  });
-
-  it('falls back to D1 on InvalidArrayBuffer error', async () => {
-    mocks.isInvalidArrayBufferError.mockReturnValue(true);
+    assertEquals(result.allowed, true);
+    assertSpyCallArgs(mocks.resolveActorPrincipalId, 0, [expect.anything(), 'user-1']);
+})
+  Deno.test('checkRunRateLimits - falls back to D1 on InvalidArrayBuffer error', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+    mocks.isInvalidArrayBufferError = (() => false) as any;
+    mocks.resolveActorPrincipalId = (async () => null) as any;
+  mocks.isInvalidArrayBufferError = (() => true) as any;
     const drizzle = buildDrizzleMock({});
     const selectMock = drizzle.select as ReturnType<typeof vi.fn>;
-    selectMock.mockImplementation(() => {
+    selectMock = () => {
       throw new Error('Invalid array buffer length');
-    });
-    mocks.getDb.mockReturnValue(drizzle);
+    } as any;
+    mocks.getDb = (() => drizzle) as any;
 
     const mockD1 = {
-      prepare: vi.fn().mockReturnValue({
-        bind: vi.fn().mockReturnValue({
-          first: vi.fn().mockResolvedValue({ count: 0 }),
-        }),
-      }),
+      prepare: (() => ({
+        bind: (() => ({
+          first: (async () => ({ count: 0 })),
+        })),
+      })),
     };
 
     const result = await checkRunRateLimits(mockD1 as unknown as D1Database, 'user-1', 'space-1');
 
-    expect(result.allowed).toBe(true);
-  });
-});
+    assertEquals(result.allowed, true);
+})

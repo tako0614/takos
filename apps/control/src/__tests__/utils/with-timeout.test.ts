@@ -1,38 +1,38 @@
-import { describe, expect, it, vi } from 'vitest';
 import { withTimeout } from '@/utils/with-timeout';
 
-describe('withTimeout', () => {
-  it('resolves when promise completes before timeout', async () => {
-    const result = await withTimeout(
+
+import { assertEquals, assert, assertRejects } from 'jsr:@std/assert';
+import { stub } from 'jsr:@std/testing/mock';
+import { FakeTime } from 'jsr:@std/testing/time';
+
+  Deno.test('withTimeout - resolves when promise completes before timeout', async () => {
+  const result = await withTimeout(
       Promise.resolve('ok'),
       1000,
       'Timed out'
     );
-    expect(result).toBe('ok');
-  });
-
-  it('rejects with timeout error when promise is too slow', async () => {
-    vi.useFakeTimers();
+    assertEquals(result, 'ok');
+})
+  Deno.test('withTimeout - rejects with timeout error when promise is too slow', async () => {
+  new FakeTime();
     const slow = new Promise<string>((resolve) => {
       setTimeout(() => resolve('late'), 5000);
     });
 
     const promise = withTimeout(slow, 100, 'Operation timed out');
-    vi.advanceTimersByTime(150);
+    fakeTime.tick(150);
 
-    await expect(promise).rejects.toThrow('Operation timed out');
-    vi.useRealTimers();
-  });
-
-  it('propagates the original error if promise rejects before timeout', async () => {
-    const failing = Promise.reject(new Error('original error'));
-    await expect(
+    await await assertRejects(async () => { await promise; }, 'Operation timed out');
+    /* TODO: call fakeTime.restore() */ void 0;
+})
+  Deno.test('withTimeout - propagates the original error if promise rejects before timeout', async () => {
+  const failing = Promise.reject(new Error('original error'));
+    await await assertRejects(async () => { await 
       withTimeout(failing, 5000, 'Timed out')
-    ).rejects.toThrow('original error');
-  });
-
-  it('accepts a factory function and passes abort signal', async () => {
-    let receivedSignal: AbortSignal | undefined;
+    ; }, 'original error');
+})
+  Deno.test('withTimeout - accepts a factory function and passes abort signal', async () => {
+  let receivedSignal: AbortSignal | undefined;
 
     const result = await withTimeout(
       (signal) => {
@@ -43,12 +43,11 @@ describe('withTimeout', () => {
       'Timed out'
     );
 
-    expect(result).toBe(42);
-    expect(receivedSignal).toBeInstanceOf(AbortSignal);
-  });
-
-  it('aborts the signal on timeout', async () => {
-    vi.useFakeTimers();
+    assertEquals(result, 42);
+    assert(receivedSignal instanceof AbortSignal);
+})
+  Deno.test('withTimeout - aborts the signal on timeout', async () => {
+  new FakeTime();
     let receivedSignal: AbortSignal | undefined;
 
     const promise = withTimeout(
@@ -62,16 +61,15 @@ describe('withTimeout', () => {
       'Timed out'
     );
 
-    vi.advanceTimersByTime(150);
-    await expect(promise).rejects.toThrow('Timed out');
-    expect(receivedSignal?.aborted).toBe(true);
-    vi.useRealTimers();
-  });
+    fakeTime.tick(150);
+    await await assertRejects(async () => { await promise; }, 'Timed out');
+    assertEquals(receivedSignal?.aborted, true);
+    /* TODO: call fakeTime.restore() */ void 0;
+})
+  Deno.test('withTimeout - aborts the signal when factory function throws', async () => {
+  let receivedSignal: AbortSignal | undefined;
 
-  it('aborts the signal when factory function throws', async () => {
-    let receivedSignal: AbortSignal | undefined;
-
-    await expect(
+    await await assertRejects(async () => { await 
       withTimeout(
         (signal) => {
           receivedSignal = signal;
@@ -80,20 +78,18 @@ describe('withTimeout', () => {
         1000,
         'Timed out'
       )
-    ).rejects.toThrow('factory error');
+    ; }, 'factory error');
 
-    expect(receivedSignal?.aborted).toBe(true);
-  });
-
-  it('clears timeout after successful resolution', async () => {
-    const clearSpy = vi.spyOn(globalThis, 'clearTimeout');
+    assertEquals(receivedSignal?.aborted, true);
+})
+  Deno.test('withTimeout - clears timeout after successful resolution', async () => {
+  const clearSpy = stub(globalThis, 'clearTimeout');
     await withTimeout(Promise.resolve('ok'), 5000, 'Timed out');
-    expect(clearSpy).toHaveBeenCalled();
-    clearSpy.mockRestore();
-  });
-
-  it('handles zero timeout', async () => {
-    vi.useFakeTimers();
+    assert(clearSpy.calls.length > 0);
+    clearSpy.restore();
+})
+  Deno.test('withTimeout - handles zero timeout', async () => {
+  new FakeTime();
     const promise = withTimeout(
       new Promise<string>((resolve) => {
         setTimeout(() => resolve('late'), 100);
@@ -101,8 +97,7 @@ describe('withTimeout', () => {
       0,
       'Zero timeout'
     );
-    vi.advanceTimersByTime(1);
-    await expect(promise).rejects.toThrow('Zero timeout');
-    vi.useRealTimers();
-  });
-});
+    fakeTime.tick(1);
+    await await assertRejects(async () => { await promise; }, 'Zero timeout');
+    /* TODO: call fakeTime.restore() */ void 0;
+})

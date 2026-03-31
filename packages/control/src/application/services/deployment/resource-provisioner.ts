@@ -8,12 +8,12 @@
  * For secretRef with generate: creates a random token value.
  */
 import { randomBytes } from 'node:crypto';
-import type { AppResource } from './group-deploy-manifest.js';
+import type { AppResource } from './group-deploy-manifest.ts';
 import type {
   ProvisionedResource,
   ResourceProvisionResult,
-} from './group-deploy-types.js';
-import type { CloudflareApiClient } from '../cloudflare/api-client.js';
+} from './group-deploy-types.ts';
+import type { CloudflareApiClient } from '../cloudflare/api-client.ts';
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 

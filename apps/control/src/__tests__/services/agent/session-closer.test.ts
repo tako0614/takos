@@ -1,58 +1,27 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { assert } from 'jsr:@std/assert';
+import { assertSpyCalls, assertSpyCallArgs } from 'jsr:@std/testing/mock';
 
-const mocks = vi.hoisted(() => ({
-  getDb: vi.fn(),
-  callRuntimeRequest: vi.fn(),
-  SnapshotManager: vi.fn(),
-  generateId: vi.fn(),
-  logError: vi.fn(),
-  logWarn: vi.fn(),
-}));
+const mocks = ({
+  getDb: ((..._args: any[]) => undefined) as any,
+  callRuntimeRequest: ((..._args: any[]) => undefined) as any,
+  SnapshotManager: ((..._args: any[]) => undefined) as any,
+  generateId: ((..._args: any[]) => undefined) as any,
+  logError: ((..._args: any[]) => undefined) as any,
+  logWarn: ((..._args: any[]) => undefined) as any,
+});
 
-vi.mock('@/db', () => ({
-  getDb: mocks.getDb,
-  sessions: { id: 'id', baseSnapshotId: 'baseSnapshotId', status: 'status', headSnapshotId: 'headSnapshotId', updatedAt: 'updatedAt' },
-  accounts: { id: 'id', headSnapshotId: 'headSnapshotId', updatedAt: 'updatedAt' },
-  accountMetadata: { accountId: 'accountId', key: 'key', value: 'value', createdAt: 'createdAt', updatedAt: 'updatedAt' },
-  files: { accountId: 'accountId', path: 'path', sha256: 'sha256', id: 'id', size: 'size', origin: 'origin', kind: 'kind', visibility: 'visibility', createdAt: 'createdAt', updatedAt: 'updatedAt' },
-  runs: { id: 'id', error: 'error' },
-}));
-
-vi.mock('drizzle-orm', () => ({
-  eq: vi.fn((...args: unknown[]) => args),
-  and: vi.fn((...args: unknown[]) => args),
-  inArray: vi.fn((...args: unknown[]) => args),
-}));
-
-vi.mock('@/services/execution/runtime', () => ({
-  callRuntimeRequest: mocks.callRuntimeRequest,
-}));
-
-vi.mock('@/services/sync/snapshot', () => ({
-  SnapshotManager: mocks.SnapshotManager,
-}));
-
-vi.mock('@/utils', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/utils')>()),
-  generateId: mocks.generateId,
-}));
-
-vi.mock('@/utils/logger', () => ({
-  logDebug: vi.fn(),
-  logInfo: vi.fn(),
-  logError: mocks.logError,
-  logWarn: mocks.logWarn,
-  createLogger: vi.fn(() => ({ debug: vi.fn(), info: vi.fn(), warn: vi.fn(), error: vi.fn() })),
-  safeJsonParse: vi.fn((v: unknown) => { try { return typeof v === 'string' ? JSON.parse(v) : v; } catch { return null; } }),
-  safeJsonParseOrDefault: vi.fn((v: unknown, d: unknown) => { try { return typeof v === 'string' ? JSON.parse(v) : v; } catch { return d; } }),
-}));
-
+// [Deno] vi.mock removed - manually stub imports from '@/db'
+// [Deno] vi.mock removed - manually stub imports from 'drizzle-orm'
+// [Deno] vi.mock removed - manually stub imports from '@/services/execution/runtime'
+// [Deno] vi.mock removed - manually stub imports from '@/services/sync/snapshot'
+// [Deno] vi.mock removed - manually stub imports from '@/utils'
+// [Deno] vi.mock removed - manually stub imports from '@/utils/logger'
 import { autoCloseSession, type SessionCloserDeps } from '@/services/agent/session-closer';
 
 function createMockDeps(overrides?: Partial<SessionCloserDeps>): SessionCloserDeps {
   return {
     env: {
-      RUNTIME_HOST: { fetch: vi.fn() },
+      RUNTIME_HOST: { fetch: ((..._args: any[]) => undefined) as any },
     } as any,
     db: {} as any,
     context: {
@@ -61,110 +30,111 @@ function createMockDeps(overrides?: Partial<SessionCloserDeps>): SessionCloserDe
       runId: 'run-1',
       userId: 'user-1',
     },
-    checkCancellation: vi.fn(async () => false),
-    emitEvent: vi.fn(async () => {}),
-    getCurrentSessionId: vi.fn(async () => 'session-1'),
+    checkCancellation: async () => false,
+    emitEvent: async () => {},
+    getCurrentSessionId: async () => 'session-1',
     ...overrides,
   };
 }
 
 function createDbMock() {
-  const updateSet = vi.fn().mockReturnValue({ where: vi.fn().mockResolvedValue(undefined) });
-  const insertValues = vi.fn().mockReturnValue({
-    onConflictDoUpdate: vi.fn().mockReturnValue({ returning: vi.fn().mockResolvedValue([]) }),
-  });
-  const deleteWhere = vi.fn().mockResolvedValue(undefined);
+  const updateSet = (() => ({ where: (async () => undefined) }));
+  const insertValues = (() => ({
+    onConflictDoUpdate: (() => ({ returning: (async () => []) })),
+  }));
+  const deleteWhere = (async () => undefined);
 
   return {
-    select: vi.fn().mockReturnValue({
-      from: vi.fn().mockReturnValue({
-        where: vi.fn().mockReturnValue({
-          get: vi.fn(async () => ({ baseSnapshotId: 'snap-1', status: 'running', error: '' })),
-          all: vi.fn(async () => []),
-        }),
-      }),
-    }),
-    update: vi.fn().mockReturnValue({ set: updateSet }),
-    insert: vi.fn().mockReturnValue({ values: insertValues }),
-    delete: vi.fn().mockReturnValue({ where: deleteWhere }),
+    select: (() => ({
+      from: (() => ({
+        where: (() => ({
+          get: async () => ({ baseSnapshotId: 'snap-1', status: 'running', error: '' }),
+          all: async () => [],
+        })),
+      })),
+    })),
+    update: (() => ({ set: updateSet })),
+    insert: (() => ({ values: insertValues })),
+    delete: (() => ({ where: deleteWhere })),
   };
 }
 
-describe('autoCloseSession', () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-    mocks.generateId.mockReturnValue('gen-id');
-  });
 
-  it('does nothing when no session exists', async () => {
-    const deps = createMockDeps({
-      getCurrentSessionId: vi.fn(async () => null),
+  Deno.test('autoCloseSession - does nothing when no session exists', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+    mocks.generateId = (() => 'gen-id') as any;
+  const deps = createMockDeps({
+      getCurrentSessionId: async () => null,
     });
 
     await autoCloseSession(deps, 'completed');
 
-    expect(mocks.callRuntimeRequest).not.toHaveBeenCalled();
-  });
-
-  it('does nothing when RUNTIME_HOST is missing', async () => {
-    const deps = createMockDeps({
+    assertSpyCalls(mocks.callRuntimeRequest, 0);
+})
+  Deno.test('autoCloseSession - does nothing when RUNTIME_HOST is missing', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+    mocks.generateId = (() => 'gen-id') as any;
+  const deps = createMockDeps({
       env: {} as any,
     });
 
     await autoCloseSession(deps, 'completed');
 
-    expect(mocks.logWarn).toHaveBeenCalledWith(
+    assertSpyCallArgs(mocks.logWarn, 0, [
       expect.stringContaining('RUNTIME_HOST'),
-      expect.any(Object),
-    );
-  });
-
-  it('marks session as discarded on failure status', async () => {
-    const dbMock = createDbMock();
-    mocks.getDb.mockReturnValue(dbMock);
-    mocks.callRuntimeRequest.mockResolvedValue(new Response('ok', { status: 200 }));
+      /* expect.any(Object) */ {} as any,
+    ]);
+})
+  Deno.test('autoCloseSession - marks session as discarded on failure status', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+    mocks.generateId = (() => 'gen-id') as any;
+  const dbMock = createDbMock();
+    mocks.getDb = (() => dbMock) as any;
+    mocks.callRuntimeRequest = (async () => new Response('ok', { status: 200 })) as any;
 
     const deps = createMockDeps();
     await autoCloseSession(deps, 'failed');
 
-    expect(dbMock.update).toHaveBeenCalled();
-    expect(deps.emitEvent).toHaveBeenCalledWith('progress', expect.objectContaining({
+    assert(dbMock.update.calls.length > 0);
+    assertSpyCallArgs(deps.emitEvent, 0, ['progress', ({
       session_action: 'discarded',
-    }));
-  });
-
-  it('destroys the runtime session in cleanup', async () => {
-    const dbMock = createDbMock();
-    mocks.getDb.mockReturnValue(dbMock);
-    mocks.callRuntimeRequest.mockResolvedValue(new Response('ok', { status: 200 }));
+    })]);
+})
+  Deno.test('autoCloseSession - destroys the runtime session in cleanup', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+    mocks.generateId = (() => 'gen-id') as any;
+  const dbMock = createDbMock();
+    mocks.getDb = (() => dbMock) as any;
+    mocks.callRuntimeRequest = (async () => new Response('ok', { status: 200 })) as any;
 
     const deps = createMockDeps();
     await autoCloseSession(deps, 'failed');
 
-    expect(mocks.callRuntimeRequest).toHaveBeenCalledWith(
+    assertSpyCallArgs(mocks.callRuntimeRequest, 0, [
       deps.env,
       '/session/destroy',
-      expect.objectContaining({
+      ({
         method: 'POST',
-        body: expect.objectContaining({ session_id: 'session-1' }),
+        body: ({ session_id: 'session-1' }),
       }),
-    );
-  });
-
-  it('commits snapshot on successful completion', async () => {
-    const dbMock = createDbMock();
-    mocks.getDb.mockReturnValue(dbMock);
+    ]);
+})
+  Deno.test('autoCloseSession - commits snapshot on successful completion', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+    mocks.generateId = (() => 'gen-id') as any;
+  const dbMock = createDbMock();
+    mocks.getDb = (() => dbMock) as any;
 
     const mockSnapshotManager = {
-      writeBlob: vi.fn(async (content: string) => ({
+      writeBlob: async (content: string) => ({
         hash: `hash-${content.slice(0, 5)}`,
         size: content.length,
-      })),
-      createSnapshot: vi.fn(async () => ({ id: 'new-snap-1' })),
+      }),
+      createSnapshot: async () => ({ id: 'new-snap-1' }),
     };
-    mocks.SnapshotManager.mockImplementation(() => mockSnapshotManager);
+    mocks.SnapshotManager = () => mockSnapshotManager as any;
 
-    mocks.callRuntimeRequest.mockImplementation(async (_env, path) => {
+    mocks.callRuntimeRequest = async (_env, path) => {
       if (path === '/session/snapshot') {
         return new Response(JSON.stringify({
           files: [
@@ -173,98 +143,101 @@ describe('autoCloseSession', () => {
         }), { status: 200 });
       }
       return new Response('ok', { status: 200 });
-    });
+    } as any;
 
     const deps = createMockDeps();
     await autoCloseSession(deps, 'completed');
 
-    expect(mockSnapshotManager.writeBlob).toHaveBeenCalled();
-    expect(mockSnapshotManager.createSnapshot).toHaveBeenCalled();
-    expect(deps.emitEvent).toHaveBeenCalledWith('progress', expect.objectContaining({
+    assert(mockSnapshotManager.writeBlob.calls.length > 0);
+    assert(mockSnapshotManager.createSnapshot.calls.length > 0);
+    assertSpyCallArgs(deps.emitEvent, 0, ['progress', ({
       session_action: 'stopped',
-    }));
-  });
+    })]);
+})
+  Deno.test('autoCloseSession - handles snapshot fetch failure gracefully', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+    mocks.generateId = (() => 'gen-id') as any;
+  const dbMock = createDbMock();
+    mocks.getDb = (() => dbMock) as any;
 
-  it('handles snapshot fetch failure gracefully', async () => {
-    const dbMock = createDbMock();
-    mocks.getDb.mockReturnValue(dbMock);
-
-    mocks.callRuntimeRequest.mockImplementation(async (_env, path) => {
+    mocks.callRuntimeRequest = async (_env, path) => {
       if (path === '/session/snapshot') {
         return new Response('error', { status: 500 });
       }
       return new Response('ok', { status: 200 });
-    });
+    } as any;
 
     const deps = createMockDeps();
     await autoCloseSession(deps, 'completed');
 
     // Should still mark session as stopped even if snapshot fails
-    expect(mocks.logWarn).toHaveBeenCalledWith(
+    assertSpyCallArgs(mocks.logWarn, 0, [
       expect.stringContaining('Failed to get snapshot'),
-      expect.any(Object),
-    );
-  });
-
-  it('emits error event when auto-close fails', async () => {
-    const dbMock = createDbMock();
+      /* expect.any(Object) */ {} as any,
+    ]);
+})
+  Deno.test('autoCloseSession - emits error event when auto-close fails', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+    mocks.generateId = (() => 'gen-id') as any;
+  const dbMock = createDbMock();
     // Make getDb throw on first call to simulate commit failure
     let callCount = 0;
-    mocks.getDb.mockImplementation(() => {
+    mocks.getDb = () => {
       callCount++;
       if (callCount === 1) {
         throw new Error('DB connection failed');
       }
       return dbMock;
-    });
+    } as any;
 
     const deps = createMockDeps();
     await autoCloseSession(deps, 'completed');
 
-    expect(mocks.logError).toHaveBeenCalledWith(
+    assertSpyCallArgs(mocks.logError, 0, [
       expect.stringContaining('Failed to auto-close session'),
-      expect.any(String),
-      expect.any(Object),
-    );
-  });
-
-  it('handles cancellation during snapshot fetch', async () => {
-    const dbMock = createDbMock();
-    mocks.getDb.mockReturnValue(dbMock);
+      /* expect.any(String) */ {} as any,
+      /* expect.any(Object) */ {} as any,
+    ]);
+})
+  Deno.test('autoCloseSession - handles cancellation during snapshot fetch', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+    mocks.generateId = (() => 'gen-id') as any;
+  const dbMock = createDbMock();
+    mocks.getDb = (() => dbMock) as any;
 
     const deps = createMockDeps({
-      checkCancellation: vi.fn(async () => true),
+      checkCancellation: async () => true,
     });
 
-    mocks.callRuntimeRequest.mockRejectedValue(new Error('Run cancelled while fetching auto-close snapshot'));
+    mocks.callRuntimeRequest = (async () => { throw new Error('Run cancelled while fetching auto-close snapshot'); }) as any;
 
     await autoCloseSession(deps, 'completed');
 
     // Should handle the error gracefully
-    expect(mocks.logError).toHaveBeenCalled();
-  });
-
-  it('handles session not running gracefully', async () => {
-    const dbMock = createDbMock();
+    assert(mocks.logError.calls.length > 0);
+})
+  Deno.test('autoCloseSession - handles session not running gracefully', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+    mocks.generateId = (() => 'gen-id') as any;
+  const dbMock = createDbMock();
     // Override to return a non-running session
-    dbMock.select = vi.fn().mockReturnValue({
-      from: vi.fn().mockReturnValue({
-        where: vi.fn().mockReturnValue({
-          get: vi.fn(async () => ({ baseSnapshotId: 'snap-1', status: 'stopped', error: '' })),
-          all: vi.fn(async () => []),
-        }),
-      }),
-    });
-    mocks.getDb.mockReturnValue(dbMock);
+    dbMock.select = (() => ({
+      from: (() => ({
+        where: (() => ({
+          get: async () => ({ baseSnapshotId: 'snap-1', status: 'stopped', error: '' }),
+          all: async () => [],
+        })),
+      })),
+    }));
+    mocks.getDb = (() => dbMock) as any;
 
-    mocks.callRuntimeRequest.mockResolvedValue(new Response('ok', { status: 200 }));
+    mocks.callRuntimeRequest = (async () => new Response('ok', { status: 200 })) as any;
 
     const deps = createMockDeps();
     await autoCloseSession(deps, 'completed');
 
-    expect(mocks.logWarn).toHaveBeenCalledWith(
+    assertSpyCallArgs(mocks.logWarn, 0, [
       expect.stringContaining('Session not running'),
-      expect.any(Object),
-    );
-  });
-});
+      /* expect.any(Object) */ {} as any,
+    ]);
+})

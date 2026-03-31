@@ -1,23 +1,15 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Env } from '@/types';
 
-const mocks = vi.hoisted(() => ({
-  getDb: vi.fn(),
-  listThreadMessages: vi.fn(),
-}));
+import { assertEquals, assertObjectMatch } from 'jsr:@std/assert';
+import { assertSpyCalls } from 'jsr:@std/testing/mock';
 
-vi.mock('@/db', async (importOriginal) => ({ ...(await importOriginal<typeof import('@/db')>()),
-  getDb: mocks.getDb,
-}));
-
-vi.mock('@/services/threads/thread-service', async () => {
-  const actual = await vi.importActual<typeof import('@/services/threads/thread-service')>('@/services/threads/thread-service');
-  return {
-    ...actual,
-    listThreadMessages: mocks.listThreadMessages,
-  };
+const mocks = ({
+  getDb: ((..._args: any[]) => undefined) as any,
+  listThreadMessages: ((..._args: any[]) => undefined) as any,
 });
 
+// [Deno] vi.mock removed - manually stub imports from '@/db'
+// [Deno] vi.mock removed - manually stub imports from '@/services/threads/thread-service'
 import { getThreadHistory } from '@/services/threads/thread-history';
 
 function makeDbMock(selectAllResults: unknown[], selectGetResults: unknown[] = []) {
@@ -25,26 +17,23 @@ function makeDbMock(selectAllResults: unknown[], selectGetResults: unknown[] = [
   let getIndex = 0;
   const chain = () => {
     const c: Record<string, unknown> = {};
-    c.from = vi.fn().mockReturnValue(c);
-    c.where = vi.fn().mockReturnValue(c);
-    c.orderBy = vi.fn().mockReturnValue(c);
-    c.limit = vi.fn().mockReturnValue(c);
-    c.all = vi.fn(async () => selectAllResults[allIndex++] ?? []);
-    c.get = vi.fn(async () => selectGetResults[getIndex++] ?? null);
+    c.from = (() => c);
+    c.where = (() => c);
+    c.orderBy = (() => c);
+    c.limit = (() => c);
+    c.all = async () => selectAllResults[allIndex++] ?? [];
+    c.get = async () => selectGetResults[getIndex++] ?? null;
     return c;
   };
   return {
-    select: vi.fn().mockImplementation(() => chain()),
+    select: () => chain(),
   };
 }
 
-describe('getThreadHistory', () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-  });
 
-  it('assembles a parent-centric root snapshot across child threads', async () => {
-    mocks.listThreadMessages.mockResolvedValue({
+  Deno.test('getThreadHistory - assembles a parent-centric root snapshot across child threads', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+  mocks.listThreadMessages = (async () => ({
       messages: [
         {
           id: 'msg-1',
@@ -60,9 +49,9 @@ describe('getThreadHistory', () => {
       ],
       total: 1,
       runs: [],
-    });
+    })) as any;
 
-    mocks.getDb.mockReturnValue(makeDbMock([
+    mocks.getDb = (() => makeDbMock([
       [ // thread-local runs
         {
           id: 'run-active',
@@ -207,32 +196,32 @@ describe('getThreadHistory', () => {
           updatedAt: '2026-03-10T00:03:00.000Z',
         },
       ],
-    ]));
+    ])) as any;
 
     const result = await getThreadHistory({ DB: {} } as Env, 'thread-1', {
       limit: 100,
       offset: 0,
     });
 
-    expect(result.focus).toEqual({
+    assertEquals(result.focus, {
       latest_run_id: 'run-child',
       latest_active_run_id: 'run-child',
       latest_failed_run_id: 'run-failed',
       latest_completed_run_id: null,
       resume_run_id: 'run-child',
     });
-    expect(result.taskContext).toEqual({
+    assertEquals(result.taskContext, {
       id: 'task-1',
       title: 'Investigate',
       status: 'in_progress',
       priority: 'high',
     });
-    expect(result.runs.map((entry) => entry.run.id)).toEqual(['run-failed', 'run-active', 'run-child']);
-    expect(result.runs[0]).toMatchObject({
+    assertEquals(result.runs.map((entry) => entry.run.id), ['run-failed', 'run-active', 'run-child']);
+    assertObjectMatch(result.runs[0], {
       run: { id: 'run-failed', status: 'failed' },
       artifact_count: 1,
     });
-    expect(result.runs[1]).toMatchObject({
+    assertObjectMatch(result.runs[1], {
       run: { id: 'run-active', status: 'running' },
       child_thread_id: 'child-thread-1',
       child_run_count: 1,
@@ -241,7 +230,7 @@ describe('getThreadHistory', () => {
         thread_id: 'child-thread-1',
       }],
     });
-    expect(result.runs[2]).toMatchObject({
+    assertObjectMatch(result.runs[2], {
       run: {
         id: 'run-child',
         thread_id: 'child-thread-1',
@@ -249,11 +238,11 @@ describe('getThreadHistory', () => {
       },
       latest_event_at: '2026-03-10T00:02:30.000Z',
     });
-    expect(result.activeRun?.id).toBe('run-child');
-  });
-
-  it('can return a root-run scoped snapshot without reloading messages', async () => {
-    mocks.listThreadMessages.mockResolvedValue({
+    assertEquals(result.activeRun?.id, 'run-child');
+})
+  Deno.test('getThreadHistory - can return a root-run scoped snapshot without reloading messages', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+  mocks.listThreadMessages = (async () => ({
       messages: [
         {
           id: 'msg-1',
@@ -269,9 +258,9 @@ describe('getThreadHistory', () => {
       ],
       total: 1,
       runs: [],
-    });
+    })) as any;
 
-    mocks.getDb.mockReturnValue(makeDbMock([
+    mocks.getDb = (() => makeDbMock([
       [ // thread-local runs
         {
           id: 'run-root',
@@ -363,7 +352,7 @@ describe('getThreadHistory', () => {
       [], // artifacts
       [], // runEvents
       [], // agentTasks
-    ]));
+    ])) as any;
 
     const result = await getThreadHistory({ DB: {} } as Env, 'thread-1', {
       limit: 100,
@@ -372,20 +361,20 @@ describe('getThreadHistory', () => {
       rootRunId: 'run-root',
     });
 
-    expect(mocks.listThreadMessages).not.toHaveBeenCalled();
-    expect(result.messages).toEqual([]);
-    expect(result.runs.map((entry) => entry.run.id)).toEqual(['run-root', 'run-child']);
-    expect(result.focus.resume_run_id).toBe('run-child');
-  });
-
-  it('defaults a child thread request to its own delegated subtree', async () => {
-    mocks.listThreadMessages.mockResolvedValue({
+    assertSpyCalls(mocks.listThreadMessages, 0);
+    assertEquals(result.messages, []);
+    assertEquals(result.runs.map((entry) => entry.run.id), ['run-root', 'run-child']);
+    assertEquals(result.focus.resume_run_id, 'run-child');
+})
+  Deno.test('getThreadHistory - defaults a child thread request to its own delegated subtree', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+  mocks.listThreadMessages = (async () => ({
       messages: [],
       total: 0,
       runs: [],
-    });
+    })) as any;
 
-    mocks.getDb.mockReturnValue(makeDbMock([
+    mocks.getDb = (() => makeDbMock([
       [ // thread-local runs
         {
           id: 'run-child',
@@ -498,7 +487,7 @@ describe('getThreadHistory', () => {
       [], // artifacts
       [], // runEvents
       [], // agentTasks
-    ]));
+    ])) as any;
 
     const result = await getThreadHistory({ DB: {} } as Env, 'child-thread-1', {
       limit: 100,
@@ -506,10 +495,9 @@ describe('getThreadHistory', () => {
       includeMessages: false,
     });
 
-    expect(result.runs.map((entry) => entry.run.id)).toEqual(['run-child', 'run-grandchild']);
-    expect(result.focus.resume_run_id).toBe('run-grandchild');
-    expect(result.runs[0]?.child_runs).toEqual([expect.objectContaining({
+    assertEquals(result.runs.map((entry) => entry.run.id), ['run-child', 'run-grandchild']);
+    assertEquals(result.focus.resume_run_id, 'run-grandchild');
+    assertEquals(result.runs[0]?.child_runs, [({
       run_id: 'run-grandchild',
     })]);
-  });
-});
+})

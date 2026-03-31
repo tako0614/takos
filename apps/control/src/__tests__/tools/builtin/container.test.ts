@@ -1,4 +1,3 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ToolContext, ContainerStartFailure } from '@/tools/types';
 import type { D1Database } from '@cloudflare/workers-types';
 import type { Env } from '@/types';
@@ -7,99 +6,60 @@ import type { Env } from '@/types';
 // Drizzle-chainable mock
 // ---------------------------------------------------------------------------
 
-const mockSelectGet = vi.fn();
-const mockSelectAll = vi.fn();
-const mockInsert = vi.fn(async () => ({}));
-const mockUpdateResult = vi.fn(() => ({ meta: { changes: 1 } }));
+import { assertEquals, assert, assertRejects, assertStringIncludes } from 'jsr:@std/assert';
+import { assertSpyCallArgs } from 'jsr:@std/testing/mock';
+
+const mockSelectGet = ((..._args: any[]) => undefined) as any;
+const mockSelectAll = ((..._args: any[]) => undefined) as any;
+const mockInsert = async () => ({});
+const mockUpdateResult = () => ({ meta: { changes: 1 } });
 
 function createDrizzleMock() {
   return {
-    select: vi.fn(() => {
+    select: () => {
       const chain = {
-        from: vi.fn(() => chain),
-        where: vi.fn(() => chain),
-        orderBy: vi.fn(() => chain),
-        limit: vi.fn(() => chain),
-        innerJoin: vi.fn(() => chain),
-        get: vi.fn(async () => mockSelectGet()),
-        all: vi.fn(async () => mockSelectAll()),
+        from: () => chain,
+        where: () => chain,
+        orderBy: () => chain,
+        limit: () => chain,
+        innerJoin: () => chain,
+        get: async () => mockSelectGet(),
+        all: async () => mockSelectAll(),
         _table: null as unknown,
       };
       return chain;
-    }),
-    insert: vi.fn(() => ({
-      values: vi.fn(() => ({
+    },
+    insert: () => ({
+      values: () => ({
         run: mockInsert,
-        returning: vi.fn(async () => [{}]),
-      })),
-    })),
-    update: vi.fn(() => ({
-      set: vi.fn(() => ({
-        where: vi.fn(async () => mockUpdateResult()),
-        run: vi.fn(async () => ({})),
-      })),
-    })),
-    delete: vi.fn(() => ({
-      where: vi.fn(async () => ({})),
-    })),
+        returning: async () => [{}],
+      }),
+    }),
+    update: () => ({
+      set: () => ({
+        where: async () => mockUpdateResult(),
+        run: async () => ({}),
+      }),
+    }),
+    delete: () => ({
+      where: async () => ({}),
+    }),
   };
 }
 
-vi.mock('@/db', () => {
-  const mock = createDrizzleMock();
-  return {
-    getDb: () => mock,
-    sessions: { id: 'id', status: 'status', accountId: 'account_id', repoId: 'repo_id', branch: 'branch', lastHeartbeat: 'last_heartbeat', createdAt: 'created_at', updatedAt: 'updated_at', userAccountId: 'user_account_id', baseSnapshotId: 'base_snapshot_id' },
-    sessionRepos: { id: 'id', sessionId: 'session_id', repoId: 'repo_id', branch: 'branch', mountPath: 'mount_path', isPrimary: 'is_primary', createdAt: 'created_at' },
-    repositories: { id: 'id', name: 'name', accountId: 'account_id', defaultBranch: 'default_branch', createdAt: 'created_at' },
-    runs: { id: 'id', sessionId: 'session_id' },
-    accounts: { id: 'id', name: 'name', email: 'email' },
-  };
-});
-
+// [Deno] vi.mock removed - manually stub imports from '@/db'
 const mockRuntimeManager = {
-  setRepositories: vi.fn(),
-  initSession: vi.fn(async () => ({ branch: 'main', file_count: 5 })),
-  getSnapshot: vi.fn(async () => ({ files: [] })),
-  syncSnapshotToRepo: vi.fn(async () => ({ committed: true, commitHash: 'abc123', error: undefined })),
+  setRepositories: ((..._args: any[]) => undefined) as any,
+  initSession: async () => ({ branch: 'main', file_count: 5 }),
+  getSnapshot: async () => ({ files: [] }),
+  syncSnapshotToRepo: async () => ({ committed: true, commitHash: 'abc123', error: undefined }),
 };
 
-vi.mock('@/services/sync', () => ({
-  RuntimeSessionManager: vi.fn(() => mockRuntimeManager),
-}));
-
-vi.mock('@/services/execution/runtime', () => ({
-  callRuntimeRequest: vi.fn(async () => new Response(JSON.stringify({ files: [], file_count: 0 }), { status: 200 })),
-}));
-
-vi.mock('@/services/source/repos', () => ({
-  createRepository: vi.fn(async () => ({
-    id: 'repo-new',
-    name: 'main',
-    default_branch: 'main',
-  })),
-  RepositoryCreationError: class extends Error { constructor(msg: string) { super(msg); } },
-}));
-
-vi.mock('@/utils', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('@/utils')>();
-  return {
-    ...actual,
-    generateId: vi.fn(() => 'generated-id'),
-  };
-});
-
-vi.mock('@/shared/utils/logger', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('@/shared/utils/logger')>();
-  return {
-    ...actual,
-    logDebug: vi.fn(),
-    logInfo: vi.fn(),
-    logWarn: vi.fn(),
-    logError: vi.fn(),
-  };
-});
-
+// [Deno] vi.mock removed - manually stub imports from '@/services/sync'
+// [Deno] vi.mock removed - manually stub imports from '@/services/execution/runtime'
+// [Deno] vi.mock removed - manually stub imports from '@/services/source/repos'
+// [Deno] vi.mock removed - manually stub imports from '@/utils'
+// [Deno] vi.mock removed - manually stub imports from '@/shared/utils/logger'
 import {
   CONTAINER_START,
   CONTAINER_COMMIT,
@@ -129,20 +89,20 @@ function makeContext(overrides: Partial<ToolContext> = {}): ToolContext {
     userId: 'user-1',
     capabilities: [],
     env: {
-      RUNTIME_HOST: { fetch: vi.fn() },
+      RUNTIME_HOST: { fetch: ((..._args: any[]) => undefined) as any },
       GIT_OBJECTS: {},
     } as unknown as Env,
     db: {} as D1Database,
     storage: {
-      put: vi.fn(),
-      get: vi.fn(),
-      delete: vi.fn(),
-      list: vi.fn(async () => ({ objects: [] })),
+      put: ((..._args: any[]) => undefined) as any,
+      get: ((..._args: any[]) => undefined) as any,
+      delete: ((..._args: any[]) => undefined) as any,
+      list: async () => ({ objects: [] }),
     } as unknown as ToolContext['storage'],
     get sessionId() { return sessionId; },
-    setSessionId: vi.fn((id: string | undefined) => { sessionId = id; }),
-    getLastContainerStartFailure: vi.fn(() => lastFailure),
-    setLastContainerStartFailure: vi.fn((f: ContainerStartFailure | undefined) => { lastFailure = f; }),
+    setSessionId: (id: string | undefined) => { sessionId = id; },
+    getLastContainerStartFailure: () => lastFailure,
+    setLastContainerStartFailure: (f: ContainerStartFailure | undefined) => { lastFailure = f; },
     ...overrides,
   };
 }
@@ -151,137 +111,145 @@ function makeContext(overrides: Partial<ToolContext> = {}): ToolContext {
 // Tool definitions
 // ---------------------------------------------------------------------------
 
-describe('container tool definitions', () => {
-  it('defines all five container tools', () => {
-    expect(CONTAINER_TOOLS).toHaveLength(5);
+
+  Deno.test('container tool definitions - defines all five container tools', () => {
+  assertEquals(CONTAINER_TOOLS.length, 5);
     const names = CONTAINER_TOOLS.map((t) => t.name);
-    expect(names).toContain('container_start');
-    expect(names).toContain('container_status');
-    expect(names).toContain('container_commit');
-    expect(names).toContain('container_stop');
-    expect(names).toContain('create_repository');
-  });
-
-  it('all tools have container category', () => {
-    for (const def of CONTAINER_TOOLS) {
-      expect(def.category).toBe('container');
+    assertStringIncludes(names, 'container_start');
+    assertStringIncludes(names, 'container_status');
+    assertStringIncludes(names, 'container_commit');
+    assertStringIncludes(names, 'container_stop');
+    assertStringIncludes(names, 'create_repository');
+})
+  Deno.test('container tool definitions - all tools have container category', () => {
+  for (const def of CONTAINER_TOOLS) {
+      assertEquals(def.category, 'container');
     }
-  });
-
-  it('CONTAINER_HANDLERS maps all tools', () => {
-    const handlerKeys = Object.keys(CONTAINER_HANDLERS);
-    expect(handlerKeys).toHaveLength(5);
-    expect(handlerKeys).toContain('container_start');
-    expect(handlerKeys).toContain('container_status');
-    expect(handlerKeys).toContain('container_commit');
-    expect(handlerKeys).toContain('container_stop');
-    expect(handlerKeys).toContain('create_repository');
-  });
-
-  it('container_start has optional repo_id parameter', () => {
-    expect(CONTAINER_START.parameters.properties).toHaveProperty('repo_id');
-    expect(CONTAINER_START.parameters.required).toEqual([]);
-  });
-
-  it('container_commit has optional message parameter', () => {
-    expect(CONTAINER_COMMIT.parameters.properties).toHaveProperty('message');
-  });
-
-  it('create_repository has optional name parameter', () => {
-    expect(CREATE_REPOSITORY.parameters.properties).toHaveProperty('name');
-    expect(CREATE_REPOSITORY.parameters.required).toEqual([]);
-  });
-});
-
+})
+  Deno.test('container tool definitions - CONTAINER_HANDLERS maps all tools', () => {
+  const handlerKeys = Object.keys(CONTAINER_HANDLERS);
+    assertEquals(handlerKeys.length, 5);
+    assertStringIncludes(handlerKeys, 'container_start');
+    assertStringIncludes(handlerKeys, 'container_status');
+    assertStringIncludes(handlerKeys, 'container_commit');
+    assertStringIncludes(handlerKeys, 'container_stop');
+    assertStringIncludes(handlerKeys, 'create_repository');
+})
+  Deno.test('container tool definitions - container_start has optional repo_id parameter', () => {
+  assert('repo_id' in CONTAINER_START.parameters.properties);
+    assertEquals(CONTAINER_START.parameters.required, []);
+})
+  Deno.test('container tool definitions - container_commit has optional message parameter', () => {
+  assert('message' in CONTAINER_COMMIT.parameters.properties);
+})
+  Deno.test('container tool definitions - create_repository has optional name parameter', () => {
+  assert('name' in CREATE_REPOSITORY.parameters.properties);
+    assertEquals(CREATE_REPOSITORY.parameters.required, []);
+})
 // ---------------------------------------------------------------------------
 // container_start handler
 // ---------------------------------------------------------------------------
 
-describe('containerStartHandler', () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-    mockRuntimeManager.setRepositories.mockClear();
-    mockRuntimeManager.initSession.mockReset();
-    mockRuntimeManager.initSession.mockResolvedValue({ branch: 'main', file_count: 5 });
-  });
 
-  it('returns already running message if session is active', async () => {
-    // When sessionId is set and DB says session is running
-    mockSelectGet.mockResolvedValue({ status: 'running', repoId: 'repo-1', branch: 'main' });
+  Deno.test('containerStartHandler - returns already running message if session is active', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+    mockRuntimeManager.setRepositories;
+    mockRuntimeManager.initSession;
+    mockRuntimeManager.initSession = (async () => ({ branch: 'main', file_count: 5 })) as any;
+  // When sessionId is set and DB says session is running
+    mockSelectGet = (async () => ({ status: 'running', repoId: 'repo-1', branch: 'main' })) as any;
 
     const ctx = makeContext({ sessionId: 'session-existing' });
     const result = await containerStartHandler({}, ctx);
 
-    expect(result).toContain('already running');
-    expect(result).toContain('session-existing');
-  });
-
-  it('starts new session when no existing session', async () => {
-    // First call: session lookup returns null (no existing session)
+    assertStringIncludes(result, 'already running');
+    assertStringIncludes(result, 'session-existing');
+})
+  Deno.test('containerStartHandler - starts new session when no existing session', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+    mockRuntimeManager.setRepositories;
+    mockRuntimeManager.initSession;
+    mockRuntimeManager.initSession = (async () => ({ branch: 'main', file_count: 5 })) as any;
+  // First call: session lookup returns null (no existing session)
     // Then: repo lookup by name returns a repo
     // Then: multi-repo lookup .all() returns the repo
-    mockSelectGet.mockResolvedValue({ id: 'repo-1', name: 'main', defaultBranch: 'main' });
-    mockSelectAll.mockResolvedValue([{ id: 'repo-1', name: 'main', defaultBranch: 'main' }]);
+    mockSelectGet = (async () => ({ id: 'repo-1', name: 'main', defaultBranch: 'main' })) as any;
+    mockSelectAll = (async () => [{ id: 'repo-1', name: 'main', defaultBranch: 'main' }]) as any;
 
     const ctx = makeContext({ sessionId: undefined });
     const result = await containerStartHandler({}, ctx);
 
-    expect(result).toContain('Container started in Git mode');
-    expect(result).toContain('file_read');
-    expect(result).toContain('container_commit');
-    expect(ctx.setSessionId).toHaveBeenCalled();
-    expect(RuntimeSessionManager).toHaveBeenCalled();
-    expect(mockRuntimeManager.setRepositories).toHaveBeenCalled();
-    expect(mockRuntimeManager.initSession).toHaveBeenCalled();
-  });
-
-  it('creates session with explicit repo_id', async () => {
-    // repo lookup by id (from inArray) returns the repo
-    mockSelectGet.mockResolvedValue(null); // no existing session
-    mockSelectAll.mockResolvedValue([{ id: 'repo-explicit', name: 'my-project', defaultBranch: 'develop' }]);
+    assertStringIncludes(result, 'Container started in Git mode');
+    assertStringIncludes(result, 'file_read');
+    assertStringIncludes(result, 'container_commit');
+    assert(ctx.setSessionId.calls.length > 0);
+    assert(RuntimeSessionManager.calls.length > 0);
+    assert(mockRuntimeManager.setRepositories.calls.length > 0);
+    assert(mockRuntimeManager.initSession.calls.length > 0);
+})
+  Deno.test('containerStartHandler - creates session with explicit repo_id', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+    mockRuntimeManager.setRepositories;
+    mockRuntimeManager.initSession;
+    mockRuntimeManager.initSession = (async () => ({ branch: 'main', file_count: 5 })) as any;
+  // repo lookup by id (from inArray) returns the repo
+    mockSelectGet = (async () => null) as any; // no existing session
+    mockSelectAll = (async () => [{ id: 'repo-explicit', name: 'my-project', defaultBranch: 'develop' }]) as any;
 
     const ctx = makeContext({ sessionId: undefined });
     const result = await containerStartHandler({ repo_id: 'repo-explicit' }, ctx);
 
-    expect(result).toContain('Container started in Git mode');
-    expect(result).toContain('my-project');
-  });
-
-  it('throws when no repository found in workspace', async () => {
-    // Lookup by name returns null, lookup by oldest returns null
-    mockSelectGet.mockResolvedValue(undefined);
+    assertStringIncludes(result, 'Container started in Git mode');
+    assertStringIncludes(result, 'my-project');
+})
+  Deno.test('containerStartHandler - throws when no repository found in workspace', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+    mockRuntimeManager.setRepositories;
+    mockRuntimeManager.initSession;
+    mockRuntimeManager.initSession = (async () => ({ branch: 'main', file_count: 5 })) as any;
+  // Lookup by name returns null, lookup by oldest returns null
+    mockSelectGet = (async () => undefined) as any;
 
     const ctx = makeContext({ sessionId: undefined });
-    await expect(containerStartHandler({}, ctx)).rejects.toThrow('No repository found');
-  });
-
-  it('throws when RUNTIME_HOST is missing', async () => {
-    mockSelectGet.mockResolvedValue({ id: 'repo-1', name: 'main', defaultBranch: 'main' });
+    await await assertRejects(async () => { await containerStartHandler({}, ctx); }, 'No repository found');
+})
+  Deno.test('containerStartHandler - throws when RUNTIME_HOST is missing', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+    mockRuntimeManager.setRepositories;
+    mockRuntimeManager.initSession;
+    mockRuntimeManager.initSession = (async () => ({ branch: 'main', file_count: 5 })) as any;
+  mockSelectGet = (async () => ({ id: 'repo-1', name: 'main', defaultBranch: 'main' })) as any;
 
     const ctx = makeContext({
       sessionId: undefined,
       env: { RUNTIME_HOST: undefined, GIT_OBJECTS: {} } as unknown as Env,
     });
 
-    await expect(containerStartHandler({}, ctx)).rejects.toThrow('RUNTIME_HOST binding is required');
-  });
-
-  it('stores failure info when initSession fails', async () => {
-    mockSelectGet.mockResolvedValue({ id: 'repo-1', name: 'main', defaultBranch: 'main' });
-    mockSelectAll.mockResolvedValue([{ id: 'repo-1', name: 'main', defaultBranch: 'main' }]);
-    mockRuntimeManager.initSession.mockRejectedValue(new Error('Runtime connection failed'));
+    await await assertRejects(async () => { await containerStartHandler({}, ctx); }, 'RUNTIME_HOST binding is required');
+})
+  Deno.test('containerStartHandler - stores failure info when initSession fails', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+    mockRuntimeManager.setRepositories;
+    mockRuntimeManager.initSession;
+    mockRuntimeManager.initSession = (async () => ({ branch: 'main', file_count: 5 })) as any;
+  mockSelectGet = (async () => ({ id: 'repo-1', name: 'main', defaultBranch: 'main' })) as any;
+    mockSelectAll = (async () => [{ id: 'repo-1', name: 'main', defaultBranch: 'main' }]) as any;
+    mockRuntimeManager.initSession = (async () => { throw new Error('Runtime connection failed'); }) as any;
 
     const ctx = makeContext({ sessionId: undefined });
-    await expect(containerStartHandler({}, ctx)).rejects.toThrow('Runtime connection failed');
+    await await assertRejects(async () => { await containerStartHandler({}, ctx); }, 'Runtime connection failed');
 
-    expect(ctx.setLastContainerStartFailure).toHaveBeenCalledWith(
-      expect.objectContaining({ message: 'Runtime connection failed' }),
-    );
-  });
-
-  it('clears previous failure on successful start', async () => {
-    mockSelectGet.mockResolvedValue({ id: 'repo-1', name: 'main', defaultBranch: 'main' });
-    mockSelectAll.mockResolvedValue([{ id: 'repo-1', name: 'main', defaultBranch: 'main' }]);
+    assertSpyCallArgs(ctx.setLastContainerStartFailure, 0, [
+      ({ message: 'Runtime connection failed' }),
+    ]);
+})
+  Deno.test('containerStartHandler - clears previous failure on successful start', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+    mockRuntimeManager.setRepositories;
+    mockRuntimeManager.initSession;
+    mockRuntimeManager.initSession = (async () => ({ branch: 'main', file_count: 5 })) as any;
+  mockSelectGet = (async () => ({ id: 'repo-1', name: 'main', defaultBranch: 'main' })) as any;
+    mockSelectAll = (async () => [{ id: 'repo-1', name: 'main', defaultBranch: 'main' }]) as any;
 
     const ctx = makeContext({ sessionId: undefined });
     // Simulate an existing failure
@@ -290,179 +258,175 @@ describe('containerStartHandler', () => {
     await containerStartHandler({}, ctx);
 
     // setLastContainerStartFailure should be called with undefined to clear
-    expect(ctx.setLastContainerStartFailure).toHaveBeenCalledWith(undefined);
-  });
-
-  it('throws when repos from different workspace are specified', async () => {
-    // inArray lookup returns empty - repo not found
-    mockSelectGet.mockResolvedValue(null);
-    mockSelectAll.mockResolvedValue([]);
+    assertSpyCallArgs(ctx.setLastContainerStartFailure, 0, [undefined]);
+})
+  Deno.test('containerStartHandler - throws when repos from different workspace are specified', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+    mockRuntimeManager.setRepositories;
+    mockRuntimeManager.initSession;
+    mockRuntimeManager.initSession = (async () => ({ branch: 'main', file_count: 5 })) as any;
+  // inArray lookup returns empty - repo not found
+    mockSelectGet = (async () => null) as any;
+    mockSelectAll = (async () => []) as any;
 
     const ctx = makeContext({ sessionId: undefined });
-    await expect(
+    await await assertRejects(async () => { await 
       containerStartHandler({ repo_id: 'foreign-repo' }, ctx),
-    ).rejects.toThrow('not found');
-  });
-
-  it('rejects multiple primary repos in mounts', async () => {
-    mockSelectGet.mockResolvedValue(null);
-    mockSelectAll.mockResolvedValue([
+    ; }, 'not found');
+})
+  Deno.test('containerStartHandler - rejects multiple primary repos in mounts', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+    mockRuntimeManager.setRepositories;
+    mockRuntimeManager.initSession;
+    mockRuntimeManager.initSession = (async () => ({ branch: 'main', file_count: 5 })) as any;
+  mockSelectGet = (async () => null) as any;
+    mockSelectAll = (async () => [
       { id: 'repo-a', name: 'alpha', defaultBranch: 'main' },
       { id: 'repo-b', name: 'beta', defaultBranch: 'main' },
-    ]);
+    ]) as any;
 
     const ctx = makeContext({ sessionId: undefined });
-    await expect(
+    await await assertRejects(async () => { await 
       containerStartHandler({
         mounts: [
           { repo_id: 'repo-a', is_primary: true },
           { repo_id: 'repo-b', is_primary: true },
         ],
       }, ctx),
-    ).rejects.toThrow('Only one primary');
-  });
-
-  it('output includes file count from initSession', async () => {
-    mockSelectGet.mockResolvedValue({ id: 'repo-1', name: 'main', defaultBranch: 'main' });
-    mockSelectAll.mockResolvedValue([{ id: 'repo-1', name: 'main', defaultBranch: 'main' }]);
-    mockRuntimeManager.initSession.mockResolvedValue({ branch: 'develop', file_count: 42 });
+    ; }, 'Only one primary');
+})
+  Deno.test('containerStartHandler - output includes file count from initSession', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+    mockRuntimeManager.setRepositories;
+    mockRuntimeManager.initSession;
+    mockRuntimeManager.initSession = (async () => ({ branch: 'main', file_count: 5 })) as any;
+  mockSelectGet = (async () => ({ id: 'repo-1', name: 'main', defaultBranch: 'main' })) as any;
+    mockSelectAll = (async () => [{ id: 'repo-1', name: 'main', defaultBranch: 'main' }]) as any;
+    mockRuntimeManager.initSession = (async () => ({ branch: 'develop', file_count: 42 })) as any;
 
     const ctx = makeContext({ sessionId: undefined });
     const result = await containerStartHandler({}, ctx);
 
-    expect(result).toContain('Files: 42');
-  });
-});
-
+    assertStringIncludes(result, 'Files: 42');
+})
 // ---------------------------------------------------------------------------
 // container_status handler
 // ---------------------------------------------------------------------------
 
-describe('containerStatusHandler', () => {
-  beforeEach(() => vi.clearAllMocks());
 
-  it('reports no container running when sessionId is absent', async () => {
-    const ctx = makeContext({ sessionId: undefined });
+  
+  Deno.test('containerStatusHandler - reports no container running when sessionId is absent', async () => {
+  const ctx = makeContext({ sessionId: undefined });
 
     const result = await containerStatusHandler({}, ctx);
 
-    expect(result).toContain('No container is running');
-  });
-
-  it('includes failure details when last start failed', async () => {
-    const ctx = makeContext({ sessionId: undefined });
+    assertStringIncludes(result, 'No container is running');
+})
+  Deno.test('containerStatusHandler - includes failure details when last start failed', async () => {
+  const ctx = makeContext({ sessionId: undefined });
     // Manually set the failure
     (ctx as any).setLastContainerStartFailure({ message: 'init boom', sessionId: 'sess-dead' });
     // Update the mock to return the failure
     const failure = { message: 'init boom', sessionId: 'sess-dead' };
-    ctx.getLastContainerStartFailure = vi.fn(() => failure);
+    ctx.getLastContainerStartFailure = () => failure;
 
     const result = await containerStatusHandler({}, ctx);
 
-    expect(result).toContain('container_start failed');
-    expect(result).toContain('init boom');
-  });
-});
-
+    assertStringIncludes(result, 'container_start failed');
+    assertStringIncludes(result, 'init boom');
+})
 // ---------------------------------------------------------------------------
 // container_stop handler
 // ---------------------------------------------------------------------------
 
-describe('containerStopHandler', () => {
-  beforeEach(() => vi.clearAllMocks());
 
-  it('returns message when no container is running', async () => {
-    const ctx = makeContext({ sessionId: undefined });
+  
+  Deno.test('containerStopHandler - returns message when no container is running', async () => {
+  const ctx = makeContext({ sessionId: undefined });
 
     const result = await containerStopHandler({}, ctx);
 
-    expect(result).toContain('No container is running');
-  });
-
-  it('stops running container and discards changes', async () => {
-    // session lookup returns running
-    mockSelectGet.mockResolvedValue({ status: 'running' });
-    mockUpdateResult.mockReturnValue({ meta: { changes: 1 } });
+    assertStringIncludes(result, 'No container is running');
+})
+  Deno.test('containerStopHandler - stops running container and discards changes', async () => {
+  // session lookup returns running
+    mockSelectGet = (async () => ({ status: 'running' })) as any;
+    mockUpdateResult = (() => ({ meta: { changes: 1 } })) as any;
 
     const ctx = makeContext({ sessionId: 'session-active' });
     const result = await containerStopHandler({}, ctx);
 
-    expect(result).toContain('Container stopped');
-    expect(result).toContain('DISCARDED');
-    expect(ctx.setSessionId).toHaveBeenCalledWith(undefined);
-  });
-
-  it('returns early when session not found in DB', async () => {
-    mockSelectGet.mockResolvedValue(null);
+    assertStringIncludes(result, 'Container stopped');
+    assertStringIncludes(result, 'DISCARDED');
+    assertSpyCallArgs(ctx.setSessionId, 0, [undefined]);
+})
+  Deno.test('containerStopHandler - returns early when session not found in DB', async () => {
+  mockSelectGet = (async () => null) as any;
 
     const ctx = makeContext({ sessionId: 'session-ghost' });
     const result = await containerStopHandler({}, ctx);
 
-    expect(result).toContain('not found');
-  });
-
-  it('returns early when session is not running', async () => {
-    mockSelectGet.mockResolvedValue({ status: 'stopped' });
+    assertStringIncludes(result, 'not found');
+})
+  Deno.test('containerStopHandler - returns early when session is not running', async () => {
+  mockSelectGet = (async () => ({ status: 'stopped' })) as any;
 
     const ctx = makeContext({ sessionId: 'session-old' });
     const result = await containerStopHandler({}, ctx);
 
-    expect(result).toContain('not running');
-    expect(result).toContain('stopped');
-  });
-
-  it('includes custom reason in output', async () => {
-    mockSelectGet.mockResolvedValue({ status: 'running' });
-    mockUpdateResult.mockReturnValue({ meta: { changes: 1 } });
+    assertStringIncludes(result, 'not running');
+    assertStringIncludes(result, 'stopped');
+})
+  Deno.test('containerStopHandler - includes custom reason in output', async () => {
+  mockSelectGet = (async () => ({ status: 'running' })) as any;
+    mockUpdateResult = (() => ({ meta: { changes: 1 } })) as any;
 
     const ctx = makeContext({ sessionId: 'session-active' });
     const result = await containerStopHandler({ reason: 'User wants to restart' }, ctx);
 
-    expect(result).toContain('User wants to restart');
-  });
-
-  it('handles concurrent state change (0 update changes)', async () => {
-    mockSelectGet.mockResolvedValue({ status: 'running' });
-    mockUpdateResult.mockReturnValue({ meta: { changes: 0 } });
+    assertStringIncludes(result, 'User wants to restart');
+})
+  Deno.test('containerStopHandler - handles concurrent state change (0 update changes)', async () => {
+  mockSelectGet = (async () => ({ status: 'running' })) as any;
+    mockUpdateResult = (() => ({ meta: { changes: 0 } })) as any;
 
     const ctx = makeContext({ sessionId: 'session-race' });
     const result = await containerStopHandler({}, ctx);
 
-    expect(result).toContain('state changed');
-  });
-});
-
+    assertStringIncludes(result, 'state changed');
+})
 // ---------------------------------------------------------------------------
 // container_commit handler
 // ---------------------------------------------------------------------------
 
-describe('containerCommitHandler', () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-    mockRuntimeManager.getSnapshot.mockReset();
-    mockRuntimeManager.getSnapshot.mockResolvedValue({ files: [] });
-    mockRuntimeManager.syncSnapshotToRepo.mockReset();
-    mockRuntimeManager.syncSnapshotToRepo.mockResolvedValue({ committed: true, commitHash: 'abc123', error: undefined });
-  });
 
-  it('throws when no session is running', async () => {
-    const ctx = makeContext({ sessionId: undefined });
+  Deno.test('containerCommitHandler - throws when no session is running', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+    mockRuntimeManager.getSnapshot;
+    mockRuntimeManager.getSnapshot = (async () => ({ files: [] })) as any;
+    mockRuntimeManager.syncSnapshotToRepo;
+    mockRuntimeManager.syncSnapshotToRepo = (async () => ({ committed: true, commitHash: 'abc123', error: undefined })) as any;
+  const ctx = makeContext({ sessionId: undefined });
 
-    await expect(containerCommitHandler({}, ctx)).rejects.toThrow(
+    await await assertRejects(async () => { await containerCommitHandler({}, ctx); }, 
       'No container is running',
     );
-  });
-
-  it('commits changes and stops the container', async () => {
-    // checkSessionHealth mock: session found and healthy
-    mockSelectGet.mockResolvedValue({
+})
+  Deno.test('containerCommitHandler - commits changes and stops the container', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+    mockRuntimeManager.getSnapshot;
+    mockRuntimeManager.getSnapshot = (async () => ({ files: [] })) as any;
+    mockRuntimeManager.syncSnapshotToRepo;
+    mockRuntimeManager.syncSnapshotToRepo = (async () => ({ committed: true, commitHash: 'abc123', error: undefined })) as any;
+  // checkSessionHealth mock: session found and healthy
+    mockSelectGet = (async () => ({
       id: 'session-active',
       status: 'running',
       lastHeartbeat: new Date().toISOString(),
       createdAt: new Date(Date.now() - 60000).toISOString(),
-    });
+    })) as any;
     // .all() for mounted repos
-    mockSelectAll.mockResolvedValue([{
+    mockSelectAll = (async () => [{
       id: 'sr-1',
       repoId: 'repo-1',
       branch: 'main',
@@ -470,26 +434,30 @@ describe('containerCommitHandler', () => {
       isPrimary: true,
       createdAt: new Date().toISOString(),
       repoName: 'main',
-    }]);
+    }]) as any;
 
     const ctx = makeContext({ sessionId: 'session-active' });
     const result = await containerCommitHandler({}, ctx);
 
-    expect(result).toContain('pushed to git');
-    expect(result).toContain('abc123');
-    expect(ctx.setSessionId).toHaveBeenCalledWith(undefined);
-    expect(mockRuntimeManager.getSnapshot).toHaveBeenCalled();
-    expect(mockRuntimeManager.syncSnapshotToRepo).toHaveBeenCalled();
-  });
-
-  it('includes custom commit message in output', async () => {
-    mockSelectGet.mockResolvedValue({
+    assertStringIncludes(result, 'pushed to git');
+    assertStringIncludes(result, 'abc123');
+    assertSpyCallArgs(ctx.setSessionId, 0, [undefined]);
+    assert(mockRuntimeManager.getSnapshot.calls.length > 0);
+    assert(mockRuntimeManager.syncSnapshotToRepo.calls.length > 0);
+})
+  Deno.test('containerCommitHandler - includes custom commit message in output', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+    mockRuntimeManager.getSnapshot;
+    mockRuntimeManager.getSnapshot = (async () => ({ files: [] })) as any;
+    mockRuntimeManager.syncSnapshotToRepo;
+    mockRuntimeManager.syncSnapshotToRepo = (async () => ({ committed: true, commitHash: 'abc123', error: undefined })) as any;
+  mockSelectGet = (async () => ({
       id: 'session-active',
       status: 'running',
       lastHeartbeat: new Date().toISOString(),
       createdAt: new Date(Date.now() - 60000).toISOString(),
-    });
-    mockSelectAll.mockResolvedValue([{
+    })) as any;
+    mockSelectAll = (async () => [{
       id: 'sr-1',
       repoId: 'repo-1',
       branch: 'main',
@@ -497,22 +465,26 @@ describe('containerCommitHandler', () => {
       isPrimary: true,
       createdAt: new Date().toISOString(),
       repoName: 'main',
-    }]);
+    }]) as any;
 
     const ctx = makeContext({ sessionId: 'session-active' });
     const result = await containerCommitHandler({ message: 'fix: resolve bug' }, ctx);
 
-    expect(result).toContain('fix: resolve bug');
-  });
-
-  it('reports no changes when syncSnapshotToRepo returns committed=false', async () => {
-    mockSelectGet.mockResolvedValue({
+    assertStringIncludes(result, 'fix: resolve bug');
+})
+  Deno.test('containerCommitHandler - reports no changes when syncSnapshotToRepo returns committed=false', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+    mockRuntimeManager.getSnapshot;
+    mockRuntimeManager.getSnapshot = (async () => ({ files: [] })) as any;
+    mockRuntimeManager.syncSnapshotToRepo;
+    mockRuntimeManager.syncSnapshotToRepo = (async () => ({ committed: true, commitHash: 'abc123', error: undefined })) as any;
+  mockSelectGet = (async () => ({
       id: 'session-active',
       status: 'running',
       lastHeartbeat: new Date().toISOString(),
       createdAt: new Date(Date.now() - 60000).toISOString(),
-    });
-    mockSelectAll.mockResolvedValue([{
+    })) as any;
+    mockSelectAll = (async () => [{
       id: 'sr-1',
       repoId: 'repo-1',
       branch: 'main',
@@ -520,51 +492,45 @@ describe('containerCommitHandler', () => {
       isPrimary: true,
       createdAt: new Date().toISOString(),
       repoName: 'main',
-    }]);
-    mockRuntimeManager.syncSnapshotToRepo.mockResolvedValue({
+    }]) as any;
+    mockRuntimeManager.syncSnapshotToRepo = (async () => ({
       committed: false,
       commitHash: '',
       error: undefined,
-    });
+    })) as any;
 
     const ctx = makeContext({ sessionId: 'session-active' });
     const result = await containerCommitHandler({}, ctx);
 
-    expect(result).toContain('No changes to commit');
-  });
-});
-
+    assertStringIncludes(result, 'No changes to commit');
+})
 // ---------------------------------------------------------------------------
 // create_repository handler
 // ---------------------------------------------------------------------------
 
-describe('createRepositoryHandler', () => {
-  beforeEach(() => vi.clearAllMocks());
 
-  it('returns existing repository message when one already exists', async () => {
-    mockSelectGet.mockResolvedValue({ id: 'repo-existing', name: 'main' });
-
-    const result = await createRepositoryHandler({}, makeContext());
-
-    expect(result).toContain('already exists');
-    expect(result).toContain('repo-existing');
-  });
-
-  it('creates a new repository when none exists', async () => {
-    mockSelectGet.mockResolvedValue(null);
+  
+  Deno.test('createRepositoryHandler - returns existing repository message when one already exists', async () => {
+  mockSelectGet = (async () => ({ id: 'repo-existing', name: 'main' })) as any;
 
     const result = await createRepositoryHandler({}, makeContext());
 
-    expect(result).toContain('Repository created successfully');
-    expect(result).toContain('repo-new');
-    expect(result).toContain('container_start');
-  });
+    assertStringIncludes(result, 'already exists');
+    assertStringIncludes(result, 'repo-existing');
+})
+  Deno.test('createRepositoryHandler - creates a new repository when none exists', async () => {
+  mockSelectGet = (async () => null) as any;
 
-  it('uses custom name when provided', async () => {
-    mockSelectGet.mockResolvedValue(null);
+    const result = await createRepositoryHandler({}, makeContext());
+
+    assertStringIncludes(result, 'Repository created successfully');
+    assertStringIncludes(result, 'repo-new');
+    assertStringIncludes(result, 'container_start');
+})
+  Deno.test('createRepositoryHandler - uses custom name when provided', async () => {
+  mockSelectGet = (async () => null) as any;
 
     const result = await createRepositoryHandler({ name: 'my-repo' }, makeContext());
 
-    expect(result).toContain('Repository created successfully');
-  });
-});
+    assertStringIncludes(result, 'Repository created successfully');
+})

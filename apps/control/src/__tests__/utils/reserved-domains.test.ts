@@ -1,4 +1,3 @@
-import { describe, expect, it } from 'vitest';
 import {
   RESERVED_SUBDOMAINS,
   isReservedSubdomain,
@@ -6,117 +5,93 @@ import {
   isDomainReserved,
 } from '@/utils/domain-validation';
 
-describe('RESERVED_SUBDOMAINS', () => {
-  it('is a non-empty Set', () => {
-    expect(RESERVED_SUBDOMAINS).toBeInstanceOf(Set);
-    expect(RESERVED_SUBDOMAINS.size).toBeGreaterThan(0);
-  });
 
-  it('contains admin subdomains', () => {
-    expect(RESERVED_SUBDOMAINS.has('admin')).toBe(true);
-    expect(RESERVED_SUBDOMAINS.has('root')).toBe(true);
-  });
+import { assertEquals, assert } from 'jsr:@std/assert';
 
-  it('contains API subdomains', () => {
-    expect(RESERVED_SUBDOMAINS.has('api')).toBe(true);
-    expect(RESERVED_SUBDOMAINS.has('graphql')).toBe(true);
-  });
+  Deno.test('RESERVED_SUBDOMAINS - is a non-empty Set', () => {
+  assert(RESERVED_SUBDOMAINS instanceof Set);
+    assert(RESERVED_SUBDOMAINS.size > 0);
+})
+  Deno.test('RESERVED_SUBDOMAINS - contains admin subdomains', () => {
+  assertEquals(RESERVED_SUBDOMAINS.has('admin'), true);
+    assertEquals(RESERVED_SUBDOMAINS.has('root'), true);
+})
+  Deno.test('RESERVED_SUBDOMAINS - contains API subdomains', () => {
+  assertEquals(RESERVED_SUBDOMAINS.has('api'), true);
+    assertEquals(RESERVED_SUBDOMAINS.has('graphql'), true);
+})
+  Deno.test('RESERVED_SUBDOMAINS - contains web subdomains', () => {
+  assertEquals(RESERVED_SUBDOMAINS.has('www'), true);
+    assertEquals(RESERVED_SUBDOMAINS.has('www1'), true);
+})
+  Deno.test('RESERVED_SUBDOMAINS - contains brand protection', () => {
+  assertEquals(RESERVED_SUBDOMAINS.has('takos'), true);
+    assertEquals(RESERVED_SUBDOMAINS.has('yurucommu'), true);
+})
+  Deno.test('RESERVED_SUBDOMAINS - contains infrastructure subdomains', () => {
+  assertEquals(RESERVED_SUBDOMAINS.has('cdn'), true);
+    assertEquals(RESERVED_SUBDOMAINS.has('static'), true);
+    assertEquals(RESERVED_SUBDOMAINS.has('mail'), true);
+})
 
-  it('contains web subdomains', () => {
-    expect(RESERVED_SUBDOMAINS.has('www')).toBe(true);
-    expect(RESERVED_SUBDOMAINS.has('www1')).toBe(true);
-  });
+  Deno.test('isReservedSubdomain - returns true for reserved subdomain', () => {
+  assertEquals(isReservedSubdomain('admin'), true);
+})
+  Deno.test('isReservedSubdomain - is case-insensitive', () => {
+  assertEquals(isReservedSubdomain('Admin'), true);
+    assertEquals(isReservedSubdomain('ADMIN'), true);
+})
+  Deno.test('isReservedSubdomain - returns false for non-reserved subdomain', () => {
+  assertEquals(isReservedSubdomain('mycompany'), false);
+})
+  Deno.test('isReservedSubdomain - returns false for empty string', () => {
+  assertEquals(isReservedSubdomain(''), false);
+})
 
-  it('contains brand protection', () => {
-    expect(RESERVED_SUBDOMAINS.has('takos')).toBe(true);
-    expect(RESERVED_SUBDOMAINS.has('yurucommu')).toBe(true);
-  });
+  Deno.test('hasReservedSubdomain - returns true when first label is reserved', () => {
+  assertEquals(hasReservedSubdomain('admin.example.com'), true);
+})
+  Deno.test('hasReservedSubdomain - returns false when first label is not reserved', () => {
+  assertEquals(hasReservedSubdomain('mysite.example.com'), false);
+})
+  Deno.test('hasReservedSubdomain - only checks the first label', () => {
+  assertEquals(hasReservedSubdomain('mysite.admin.com'), false);
+})
+  Deno.test('hasReservedSubdomain - is case-insensitive', () => {
+  assertEquals(hasReservedSubdomain('API.example.com'), true);
+})
+  Deno.test('hasReservedSubdomain - handles single-label domain', () => {
+  // First label of "admin" is "admin" itself
+    assertEquals(hasReservedSubdomain('admin'), true);
+})
 
-  it('contains infrastructure subdomains', () => {
-    expect(RESERVED_SUBDOMAINS.has('cdn')).toBe(true);
-    expect(RESERVED_SUBDOMAINS.has('static')).toBe(true);
-    expect(RESERVED_SUBDOMAINS.has('mail')).toBe(true);
-  });
-});
-
-describe('isReservedSubdomain', () => {
-  it('returns true for reserved subdomain', () => {
-    expect(isReservedSubdomain('admin')).toBe(true);
-  });
-
-  it('is case-insensitive', () => {
-    expect(isReservedSubdomain('Admin')).toBe(true);
-    expect(isReservedSubdomain('ADMIN')).toBe(true);
-  });
-
-  it('returns false for non-reserved subdomain', () => {
-    expect(isReservedSubdomain('mycompany')).toBe(false);
-  });
-
-  it('returns false for empty string', () => {
-    expect(isReservedSubdomain('')).toBe(false);
-  });
-});
-
-describe('hasReservedSubdomain', () => {
-  it('returns true when first label is reserved', () => {
-    expect(hasReservedSubdomain('admin.example.com')).toBe(true);
-  });
-
-  it('returns false when first label is not reserved', () => {
-    expect(hasReservedSubdomain('mysite.example.com')).toBe(false);
-  });
-
-  it('only checks the first label', () => {
-    expect(hasReservedSubdomain('mysite.admin.com')).toBe(false);
-  });
-
-  it('is case-insensitive', () => {
-    expect(hasReservedSubdomain('API.example.com')).toBe(true);
-  });
-
-  it('handles single-label domain', () => {
-    // First label of "admin" is "admin" itself
-    expect(hasReservedSubdomain('admin')).toBe(true);
-  });
-});
-
-describe('isDomainReserved', () => {
   const baseDomain = 'takos.jp';
 
-  it('returns true for the platform domain itself', () => {
-    expect(isDomainReserved('takos.jp', baseDomain)).toBe(true);
-  });
-
-  it('returns true for subdomains of platform domain', () => {
-    expect(isDomainReserved('anything.takos.jp', baseDomain)).toBe(true);
-    expect(isDomainReserved('sub.anything.takos.jp', baseDomain)).toBe(true);
-  });
-
-  it('returns true for domains with reserved first label', () => {
-    expect(isDomainReserved('admin.example.com', baseDomain)).toBe(true);
-    expect(isDomainReserved('api.example.com', baseDomain)).toBe(true);
-  });
-
-  it('returns false for non-reserved external domains', () => {
-    expect(isDomainReserved('mysite.example.com', baseDomain)).toBe(false);
-  });
-
-  it('handles case-insensitive comparison', () => {
-    expect(isDomainReserved('TAKOS.JP', baseDomain)).toBe(true);
-    expect(isDomainReserved('Admin.Example.COM', baseDomain)).toBe(true);
-  });
-
-  it('handles trailing dots', () => {
-    expect(isDomainReserved('takos.jp.', baseDomain)).toBe(true);
-  });
-
-  it('handles whitespace', () => {
-    expect(isDomainReserved('  takos.jp  ', baseDomain)).toBe(true);
-  });
-
-  it('returns false for domains that merely contain the base domain string', () => {
-    // "not-takos.jp" should not match as a subdomain of "takos.jp"
-    expect(isDomainReserved('not-takos.jp', baseDomain)).toBe(false);
-  });
-});
+  Deno.test('isDomainReserved - returns true for the platform domain itself', () => {
+  assertEquals(isDomainReserved('takos.jp', baseDomain), true);
+})
+  Deno.test('isDomainReserved - returns true for subdomains of platform domain', () => {
+  assertEquals(isDomainReserved('anything.takos.jp', baseDomain), true);
+    assertEquals(isDomainReserved('sub.anything.takos.jp', baseDomain), true);
+})
+  Deno.test('isDomainReserved - returns true for domains with reserved first label', () => {
+  assertEquals(isDomainReserved('admin.example.com', baseDomain), true);
+    assertEquals(isDomainReserved('api.example.com', baseDomain), true);
+})
+  Deno.test('isDomainReserved - returns false for non-reserved external domains', () => {
+  assertEquals(isDomainReserved('mysite.example.com', baseDomain), false);
+})
+  Deno.test('isDomainReserved - handles case-insensitive comparison', () => {
+  assertEquals(isDomainReserved('TAKOS.JP', baseDomain), true);
+    assertEquals(isDomainReserved('Admin.Example.COM', baseDomain), true);
+})
+  Deno.test('isDomainReserved - handles trailing dots', () => {
+  assertEquals(isDomainReserved('takos.jp.', baseDomain), true);
+})
+  Deno.test('isDomainReserved - handles whitespace', () => {
+  assertEquals(isDomainReserved('  takos.jp  ', baseDomain), true);
+})
+  Deno.test('isDomainReserved - returns false for domains that merely contain the base domain string', () => {
+  // "not-takos.jp" should not match as a subdomain of "takos.jp"
+    assertEquals(isDomainReserved('not-takos.jp', baseDomain), false);
+})

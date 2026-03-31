@@ -181,20 +181,20 @@ export function resolveConfig(options: GlobalOptions): ResolvedConfig {
   // CF_ACCOUNT_ID is deprecated but kept as a fallback for backward compatibility.
   const accountId =
     options.accountIdOverride ||
-    process.env.CLOUDFLARE_ACCOUNT_ID ||
-    process.env.CF_ACCOUNT_ID ||
+    Deno.env.get('CLOUDFLARE_ACCOUNT_ID') ||
+    Deno.env.get('CF_ACCOUNT_ID') ||
     inferAccountId(options.environment, wranglerToml);
 
   // Canonical env var: CLOUDFLARE_API_TOKEN
   // CF_API_TOKEN is deprecated but kept as a fallback for backward compatibility.
   const apiToken =
     options.apiTokenOverride ||
-    process.env.CLOUDFLARE_API_TOKEN ||
-    process.env.CF_API_TOKEN;
+    Deno.env.get('CLOUDFLARE_API_TOKEN') ||
+    Deno.env.get('CF_API_TOKEN');
 
   const d1DatabaseId =
     options.databaseIdOverride ||
-    process.env.TAKOS_D1_DATABASE_ID ||
+    Deno.env.get('TAKOS_D1_DATABASE_ID') ||
     inferD1DatabaseId(options.environment, wranglerToml);
 
   if (!accountId) {

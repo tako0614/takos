@@ -5,8 +5,8 @@ import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 
-import type { WranglerDirectDeployOptions, WranglerDirectDeployResult } from './deploy-models.js';
-import { execCommand } from './cloudflare-utils.js';
+import type { WranglerDirectDeployOptions, WranglerDirectDeployResult } from './deploy-models.ts';
+import { execCommand } from './cloudflare-utils.ts';
 
 // ── Wrangler Direct Deploy ───────────────────────────────────────────────────
 

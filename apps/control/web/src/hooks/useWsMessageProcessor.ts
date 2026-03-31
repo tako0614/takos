@@ -1,6 +1,6 @@
-import { useCallback, useRef, useState } from 'react';
+import { createSignal, type Setter } from 'solid-js';
 import type { TranslationKey } from '../store/i18n';
-import { rpc, rpcJson } from '../lib/rpc';
+import { rpc, rpcJson, rpcPath } from '../lib/rpc';
 import type {
   Run,
   ThreadHistoryFocus,
@@ -12,7 +12,7 @@ import type {
   ChatRunMetaMap,
   ChatStreamingState,
   ChatTimelineEntry,
-} from '../views/chat/types';
+} from '../views/chat/chat-types';
 import {
   normalizeTimelineEventType,
   parseEventData,
@@ -35,6 +35,8 @@ import { ACTIVE_RUN_STATUSES } from './wsEventHandlers';
 
 export { parseEventData, type WebSocketEventPayload } from '../views/chat/timeline';
 
+type MutableRefObject<T> = { current: T };
+
 export const EMPTY_STREAMING: ChatStreamingState = {
   thinking: null,
   toolCalls: [],
@@ -43,7 +45,7 @@ export const EMPTY_STREAMING: ChatStreamingState = {
 
 export interface UseWsMessageProcessorOptions {
   t: (key: TranslationKey, params?: Record<string, string | number>) => string;
-  isMountedRef: React.MutableRefObject<boolean>;
+  isMountedRef: MutableRefObject<boolean>;
   fetchMessages: (showError?: boolean) => Promise<void>;
   setError: (value: string | null) => void;
   fetchSessionDiff: (sessionId: string) => Promise<void>;
@@ -51,15 +53,15 @@ export interface UseWsMessageProcessorOptions {
 
 export interface UseWsMessageProcessorResult {
   currentRun: Run | null;
-  setCurrentRun: React.Dispatch<React.SetStateAction<Run | null>>;
+  setCurrentRun: Setter<Run | null>;
   isLoading: boolean;
-  setIsLoading: React.Dispatch<React.SetStateAction<boolean>>;
+  setIsLoading: Setter<boolean>;
   streaming: ChatStreamingState;
-  setStreaming: React.Dispatch<React.SetStateAction<ChatStreamingState>>;
+  setStreaming: Setter<ChatStreamingState>;
   resetStreamingState: () => void;
   timelineEntries: ChatTimelineEntry[];
   runMetaById: ChatRunMetaMap;
-  runMetaRef: React.MutableRefObject<ChatRunMetaMap>;
+  runMetaRef: MutableRefObject<ChatRunMetaMap>;
   artifactsByRunId: ChatRunArtifactMap;
   historyFocus: ThreadHistoryFocus | null;
   taskContext: ThreadHistoryTaskContext | null;
@@ -78,14 +80,14 @@ export interface UseWsMessageProcessorResult {
     createdAt?: number,
   ) => void;
   verifyRunStatus: (runId: string, refreshMessages?: boolean) => Promise<boolean>;
-  handleRunCompletedRef: React.MutableRefObject<(run?: Partial<Run>, sessionId?: string | null) => Promise<void>>;
-  handleWebSocketEventRef: React.MutableRefObject<(
+  handleRunCompletedRef: MutableRefObject<(run?: Partial<Run>, sessionId?: string | null) => Promise<void>>;
+  handleWebSocketEventRef: MutableRefObject<(
     eventType: string,
     data: unknown,
     eventId?: number,
     sourceRunId?: string,
   ) => void>;
-  runEventCursorRef: React.MutableRefObject<Map<string, number>>;
+  runEventCursorRef: MutableRefObject<Map<string, number>>;
 }
 
 export function useWsMessageProcessor({
@@ -95,33 +97,33 @@ export function useWsMessageProcessor({
   setError,
   fetchSessionDiff,
 }: UseWsMessageProcessorOptions): UseWsMessageProcessorResult {
-  const [currentRun, setCurrentRun] = useState<Run | null>(null);
-  const [isLoading, setIsLoading] = useState(false);
-  const [streaming, setStreaming] = useState<ChatStreamingState>(EMPTY_STREAMING);
-  const [timelineEntries, setTimelineEntries] = useState<ChatTimelineEntry[]>([]);
-  const [runMetaById, setRunMetaById] = useState<ChatRunMetaMap>({});
-  const [artifactsByRunId, setArtifactsByRunId] = useState<ChatRunArtifactMap>({});
-  const [historyFocus, setHistoryFocus] = useState<ThreadHistoryFocus | null>(null);
-  const [taskContext, setTaskContext] = useState<ThreadHistoryTaskContext | null>(null);
+  const [currentRun, setCurrentRun] = createSignal<Run | null>(null);
+  const [isLoading, setIsLoading] = createSignal(false);
+  const [streaming, setStreaming] = createSignal<ChatStreamingState>(EMPTY_STREAMING);
+  const [timelineEntries, setTimelineEntries] = createSignal<ChatTimelineEntry[]>([]);
+  const [runMetaById, setRunMetaById] = createSignal<ChatRunMetaMap>({});
+  const [artifactsByRunId, setArtifactsByRunId] = createSignal<ChatRunArtifactMap>({});
+  const [historyFocus, setHistoryFocus] = createSignal<ThreadHistoryFocus | null>(null);
+  const [taskContext, setTaskContext] = createSignal<ThreadHistoryTaskContext | null>(null);
 
-  const runEventCursorRef = useRef<Map<string, number>>(new Map());
-  const runMetaRef = useRef<ChatRunMetaMap>({});
+  let runEventCursorRef: MutableRefObject<Map<string, number>> = { current: new Map() };
+  let runMetaRef: MutableRefObject<ChatRunMetaMap> = { current: {} };
 
-  const handleRunCompletedRef = useRef<(run?: Partial<Run>, sessionId?: string | null) => Promise<void>>(
-    async () => {},
-  );
-  const handleWebSocketEventRef = useRef<(
+  let handleRunCompletedRef: MutableRefObject<(run?: Partial<Run>, sessionId?: string | null) => Promise<void>> = {
+    current: async () => {},
+  };
+  let handleWebSocketEventRef: MutableRefObject<(
     eventType: string,
     data: unknown,
     eventId?: number,
     sourceRunId?: string,
-  ) => void>(() => {});
+  ) => void> = { current: () => {} };
 
-  const resetStreamingState = useCallback((): void => {
+  const resetStreamingState = (): void => {
     setStreaming(EMPTY_STREAMING);
-  }, []);
+  };
 
-  const resetTimeline = useCallback((): void => {
+  const resetTimeline = (): void => {
     runEventCursorRef.current = new Map();
     runMetaRef.current = {};
     setTimelineEntries([]);
@@ -129,9 +131,9 @@ export function useWsMessageProcessor({
     setArtifactsByRunId({});
     setHistoryFocus(null);
     setTaskContext(null);
-  }, []);
+  };
 
-  const applyHistorySnapshot = useCallback((snapshot: {
+  const applyHistorySnapshot = (snapshot: {
     runs: ThreadHistoryRunNode[];
     focus: ThreadHistoryFocus | null;
     taskContext: ThreadHistoryTaskContext | null;
@@ -184,9 +186,9 @@ export function useWsMessageProcessor({
     setTimelineEntries(nextTimelineEntries);
     setHistoryFocus(snapshot.focus);
     setTaskContext(snapshot.taskContext);
-  }, [t]);
+  };
 
-  const upsertRunMeta = useCallback((run: Partial<Run> & { id: string }) => {
+  const upsertRunMeta = (run: Partial<Run> & { id: string }) => {
     setRunMetaById((prev) => {
       const next: ChatRunMetaMap = {
         ...prev,
@@ -200,9 +202,9 @@ export function useWsMessageProcessor({
       runMetaRef.current = next;
       return next;
     });
-  }, []);
+  };
 
-  const appendTimelineEntry = useCallback((
+  const appendTimelineEntry = (
     runId: string,
     eventType: string,
     payload: WebSocketEventPayload,
@@ -259,13 +261,13 @@ export function useWsMessageProcessor({
       ));
       return next;
     });
-  }, [t]);
+  };
 
-  const verifyRunStatus = useCallback(async (runId: string, refreshMessages = true): Promise<boolean> => {
+  const verifyRunStatus = async (runId: string, refreshMessages = true): Promise<boolean> => {
     try {
-      const res = await rpc.runs[':id'].$get({
+      const res = await rpcPath(rpc, 'runs', ':id').$get({
         param: { id: runId },
-      });
+      }) as Response;
       const data = await rpcJson<{ run: Run }>(res);
       const status = data.run?.status;
       if (data.run) {
@@ -291,22 +293,22 @@ export function useWsMessageProcessor({
     } catch {
       return false;
     }
-  }, [resetStreamingState, fetchMessages, fetchSessionDiff, upsertRunMeta]);
+  };
 
   return {
-    currentRun,
+    get currentRun() { return currentRun(); },
     setCurrentRun,
-    isLoading,
+    get isLoading() { return isLoading(); },
     setIsLoading,
-    streaming,
+    get streaming() { return streaming(); },
     setStreaming,
     resetStreamingState,
-    timelineEntries,
-    runMetaById,
+    get timelineEntries() { return timelineEntries(); },
+    get runMetaById() { return runMetaById(); },
     runMetaRef,
-    artifactsByRunId,
-    historyFocus,
-    taskContext,
+    get artifactsByRunId() { return artifactsByRunId(); },
+    get historyFocus() { return historyFocus(); },
+    get taskContext() { return taskContext(); },
     resetTimeline,
     applyHistorySnapshot,
     upsertRunMeta,

@@ -50,14 +50,14 @@ export function readBearerToken(value: string | null): string | null {
 }
 
 export function resolveServiceUrl(envVarName: string, defaultPort: number): string {
-  const explicit = process.env[envVarName]?.trim();
+  const explicit = Deno.env.get(envVarName)?.trim();
   if (explicit) return explicit;
   return `http://127.0.0.1:${defaultPort}/`;
 }
 
 export function resolveOptionalServiceForwardUrl(envVarName: string, defaultPort: number): string | null {
-  const explicit = process.env[envVarName]?.trim();
+  const explicit = Deno.env.get(envVarName)?.trim();
   if (explicit) return explicit;
-  if (process.env.VITEST) return null;
+  if (Deno.env.get('VITEST')) return null;
   return `http://127.0.0.1:${defaultPort}/`;
 }

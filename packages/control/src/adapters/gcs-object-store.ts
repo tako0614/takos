@@ -1,6 +1,4 @@
-import { Storage } from '@google-cloud/storage';
-import type { FileMetadata, GetFilesOptions } from '@google-cloud/storage';
-import { randomUUID } from 'node:crypto';
+import type { FileMetadata, GetFilesOptions, Storage } from '@google-cloud/storage';
 import type {
   R2Bucket,
   R2Object,
@@ -36,16 +34,19 @@ export type GcsObjectStoreConfig = {
 // Helpers
 // ---------------------------------------------------------------------------
 
-function lazyStorage(config: GcsObjectStoreConfig): () => Storage {
-  let storage: Storage | undefined;
-  return () => {
-    if (!storage) {
-      storage = new Storage({
-        ...(config.projectId ? { projectId: config.projectId } : {}),
-        ...(config.keyFilePath ? { keyFilename: config.keyFilePath } : {}),
-      });
+function lazyStorage(config: GcsObjectStoreConfig): () => Promise<Storage> {
+  let storagePromise: Promise<Storage> | undefined;
+  return async () => {
+    if (!storagePromise) {
+      storagePromise = (async () => {
+        const { Storage } = await import('@google-cloud/storage');
+        return new Storage({
+          ...(config.projectId ? { projectId: config.projectId } : {}),
+          ...(config.keyFilePath ? { keyFilename: config.keyFilePath } : {}),
+        });
+      })();
     }
-    return storage;
+    return storagePromise;
   };
 }
 
@@ -88,7 +89,7 @@ function gcsToR2Object(
 /**
  * Consume a GCS download buffer and return its contents as an ArrayBuffer.
  */
-function bufferToArrayBuffer(buf: Buffer): ArrayBuffer {
+function bufferToArrayBuffer(buf: Uint8Array): ArrayBuffer {
   return buf.buffer.slice(buf.byteOffset, buf.byteOffset + buf.byteLength) as ArrayBuffer;
 }
 
@@ -97,7 +98,7 @@ function bufferToArrayBuffer(buf: Buffer): ArrayBuffer {
  */
 function gcsToR2ObjectBody(
   key: string,
-  buffer: Buffer,
+  buffer: Uint8Array,
   metadata: FileMetadata,
   range?: R2RangeLike,
 ): R2ObjectBody {
@@ -113,15 +114,16 @@ function gcsToR2ObjectBody(
 export function createGcsObjectStore(config: GcsObjectStoreConfig): R2Bucket {
   const getStorage = lazyStorage(config);
 
-  function getBucket() {
-    return getStorage().bucket(config.bucket);
+  async function getBucket() {
+    return (await getStorage()).bucket(config.bucket);
   }
 
   const store = {
     // ----- head -----
     async head(key: string): Promise<R2Object | null> {
       try {
-        const file = getBucket().file(key);
+        const bucket = await getBucket();
+        const file = bucket.file(key);
         const [metadata] = await file.getMetadata();
         return gcsToR2Object(key, metadata);
       } catch (err: unknown) {
@@ -140,7 +142,8 @@ export function createGcsObjectStore(config: GcsObjectStoreConfig): R2Bucket {
       },
     ): Promise<R2ObjectBody | null> {
       try {
-        const file = getBucket().file(key);
+        const bucket = await getBucket();
+        const file = bucket.file(key);
 
         // Build download options for range requests
         const downloadOptions: Record<string, unknown> = {};
@@ -194,7 +197,8 @@ export function createGcsObjectStore(config: GcsObjectStoreConfig): R2Bucket {
       },
     ): Promise<R2Object | null> {
       const body = await normaliseBody(value);
-      const file = getBucket().file(key);
+      const bucket = await getBucket();
+      const file = bucket.file(key);
 
       const saveOptions: Record<string, unknown> = {};
       if (options?.httpMetadata?.contentType) {
@@ -214,7 +218,8 @@ export function createGcsObjectStore(config: GcsObjectStoreConfig): R2Bucket {
     async delete(keys: string | string[]): Promise<void> {
       if (typeof keys === 'string') {
         try {
-          await getBucket().file(keys).delete();
+          const bucket = await getBucket();
+          await bucket.file(keys).delete();
         } catch (err: unknown) {
           // Ignore 404 on delete (matches S3/R2 behavior)
           if (!isGcsError(err) || err.code !== 404) throw err;
@@ -230,9 +235,11 @@ export function createGcsObjectStore(config: GcsObjectStoreConfig): R2Bucket {
         const batch = keys.slice(i, i + BATCH);
         await Promise.all(
           batch.map((k) =>
-            getBucket().file(k).delete().catch((err: unknown) => {
-              if (!isGcsError(err) || err.code !== 404) throw err;
-            }),
+            getBucket().then((bucket) =>
+              bucket.file(k).delete().catch((err: unknown) => {
+                if (!isGcsError(err) || err.code !== 404) throw err;
+              }),
+            ),
           ),
         );
       }
@@ -256,7 +263,8 @@ export function createGcsObjectStore(config: GcsObjectStoreConfig): R2Bucket {
         ...(options?.delimiter ? { delimiter: options.delimiter } : {}),
       };
 
-      const [files, nextQuery, apiResponse] = await getBucket().getFiles(queryOptions);
+      const bucket = await getBucket();
+      const [files, nextQuery, apiResponse] = await bucket.getFiles(queryOptions);
 
       const objects: R2Object[] = files.map((file) =>
         gcsToR2Object(file.name, file.metadata),
@@ -284,7 +292,7 @@ export function createGcsObjectStore(config: GcsObjectStoreConfig): R2Bucket {
         httpMetadata?: { contentType?: string; [k: string]: unknown } | Headers;
       },
     ) {
-      const uploadId = randomUUID();
+      const uploadId = crypto.randomUUID();
 
       // Store options for use during complete()
       const contentType =
@@ -307,7 +315,8 @@ export function createGcsObjectStore(config: GcsObjectStoreConfig): R2Bucket {
         ): Promise<{ partNumber: number; etag: string }> {
           const body = await normaliseBody(value);
           const tempKey = `${partPrefix}${String(partNumber).padStart(6, '0')}`;
-          const file = getBucket().file(tempKey);
+          const bucket = await getBucket();
+          const file = bucket.file(tempKey);
 
           await file.save(body ?? '', {
             resumable: false,
@@ -340,7 +349,7 @@ export function createGcsObjectStore(config: GcsObjectStoreConfig): R2Bucket {
             return partInfo.tempKey;
           });
 
-          const bucket = getBucket();
+          const bucket = await getBucket();
           const destFile = bucket.file(key);
 
           if (sourceKeys.length === 0) {
@@ -416,7 +425,8 @@ export function createGcsObjectStore(config: GcsObjectStoreConfig): R2Bucket {
 
         async abort(): Promise<void> {
           // Delete all temporary part objects
-          const [tempFiles] = await getBucket().getFiles({
+          const bucket = await getBucket();
+          const [tempFiles] = await bucket.getFiles({
             prefix: partPrefix,
           });
           await Promise.all(

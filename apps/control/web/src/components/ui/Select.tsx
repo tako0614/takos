@@ -1,4 +1,5 @@
-import { useState, useRef, useEffect, type CSSProperties } from 'react';
+import { createSignal, onMount, onCleanup, Show, For } from 'solid-js';
+import type { JSX } from 'solid-js';
 
 interface SelectOption {
   value: string;
@@ -13,117 +14,109 @@ interface SelectProps {
   onChange?: (value: string) => void;
   disabled?: boolean;
   error?: string;
-  className?: string;
-  style?: CSSProperties;
+  class?: string;
+  style?: JSX.CSSProperties;
 }
 
-export function Select({
-  options,
-  value,
-  placeholder = 'Select an option',
-  onChange,
-  disabled = false,
-  error,
-  className = '',
-  style,
-}: SelectProps) {
-  const [isOpen, setIsOpen] = useState(false);
-  const ref = useRef<HTMLDivElement>(null);
+export function Select(props: SelectProps) {
+  const [isOpen, setIsOpen] = createSignal(false);
+  let ref: HTMLDivElement | undefined;
 
-  const selectedOption = options.find((opt) => opt.value === value);
-
-  useEffect(() => {
+  onMount(() => {
     const handleClickOutside = (e: MouseEvent) => {
-      if (ref.current && e.target instanceof Node && !ref.current.contains(e.target)) {
+      if (ref && e.target instanceof Node && !ref.contains(e.target)) {
         setIsOpen(false);
       }
     };
     document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, []);
+    onCleanup(() => document.removeEventListener('mousedown', handleClickOutside));
+  });
 
-  const triggerStyle: CSSProperties = {
+  const selectedOption = () => props.options.find((opt) => opt.value === props.value);
+
+  const triggerStyle = (): JSX.CSSProperties => ({
     width: '100%',
     padding: '0.5rem 0.75rem',
-    fontSize: '0.875rem',
-    backgroundColor: 'var(--color-surface-primary)',
-    color: selectedOption ? 'var(--color-text-primary)' : 'var(--color-text-tertiary)',
-    border: `1px solid ${error ? 'var(--color-error)' : 'var(--color-border-primary)'}`,
-    borderRadius: 'var(--radius-md)',
-    cursor: disabled ? 'not-allowed' : 'pointer',
+    'font-size': '0.875rem',
+    'background-color': 'var(--color-surface-primary)',
+    color: selectedOption() ? 'var(--color-text-primary)' : 'var(--color-text-tertiary)',
+    border: `1px solid ${props.error ? 'var(--color-error)' : 'var(--color-border-primary)'}`,
+    'border-radius': 'var(--radius-md)',
+    cursor: props.disabled ? 'not-allowed' : 'pointer',
     display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    opacity: disabled ? 0.5 : 1,
+    'align-items': 'center',
+    'justify-content': 'space-between',
+    opacity: props.disabled ? '0.5' : '1',
     transition: 'var(--transition-colors)',
-  };
+  });
 
-  const dropdownStyle: CSSProperties = {
+  const dropdownStyle: JSX.CSSProperties = {
     position: 'absolute',
     top: '100%',
-    left: 0,
-    right: 0,
-    marginTop: '0.25rem',
-    backgroundColor: 'var(--color-surface-elevated)',
+    left: '0',
+    right: '0',
+    'margin-top': '0.25rem',
+    'background-color': 'var(--color-surface-elevated)',
     border: '1px solid var(--color-border-primary)',
-    borderRadius: 'var(--radius-md)',
-    boxShadow: 'var(--shadow-lg)',
-    zIndex: 50,
-    maxHeight: '15rem',
-    overflowY: 'auto',
+    'border-radius': 'var(--radius-md)',
+    'box-shadow': 'var(--shadow-lg)',
+    'z-index': '50',
+    'max-height': '15rem',
+    'overflow-y': 'auto',
   };
 
-  const optionStyle = (opt: SelectOption, isSelected: boolean): CSSProperties => ({
+  const optionStyle = (opt: SelectOption, isSelected: boolean): JSX.CSSProperties => ({
     padding: '0.5rem 0.75rem',
-    fontSize: '0.875rem',
+    'font-size': '0.875rem',
     cursor: opt.disabled ? 'not-allowed' : 'pointer',
-    backgroundColor: isSelected ? 'var(--color-bg-tertiary)' : 'transparent',
+    'background-color': isSelected ? 'var(--color-bg-tertiary)' : 'transparent',
     color: opt.disabled ? 'var(--color-text-tertiary)' : 'var(--color-text-primary)',
-    opacity: opt.disabled ? 0.5 : 1,
+    opacity: opt.disabled ? '0.5' : '1',
     transition: 'var(--transition-colors)',
   });
 
   return (
-    <div ref={ref} className={className} style={{ position: 'relative', ...style }}>
+    <div ref={ref} class={props.class} style={{ position: 'relative', ...props.style }}>
       <button
         type="button"
-        style={triggerStyle}
-        onClick={() => !disabled && setIsOpen(!isOpen)}
-        disabled={disabled}
+        style={triggerStyle()}
+        onClick={() => !props.disabled && setIsOpen(!isOpen())}
+        disabled={props.disabled}
       >
-        <span>{selectedOption?.label || placeholder}</span>
-        <ChevronIcon isOpen={isOpen} />
+        <span>{selectedOption()?.label || props.placeholder || 'Select an option'}</span>
+        <ChevronIcon isOpen={isOpen()} />
       </button>
 
-      {isOpen && (
+      <Show when={isOpen()}>
         <div style={dropdownStyle}>
-          {options.map((opt) => (
-            <div
-              key={opt.value}
-              style={optionStyle(opt, opt.value === value)}
-              onClick={() => {
-                if (!opt.disabled) {
-                  onChange?.(opt.value);
-                  setIsOpen(false);
-                }
-              }}
-            >
-              {opt.label}
-            </div>
-          ))}
+          <For each={props.options}>
+            {(opt) => (
+              <div
+                style={optionStyle(opt, opt.value === props.value)}
+                onClick={() => {
+                  if (!opt.disabled) {
+                    props.onChange?.(opt.value);
+                    setIsOpen(false);
+                  }
+                }}
+              >
+                {opt.label}
+              </div>
+            )}
+          </For>
         </div>
-      )}
+      </Show>
 
-      {error && (
-        <p style={{ marginTop: '0.25rem', fontSize: '0.75rem', color: 'var(--color-error)' }}>
-          {error}
+      <Show when={props.error}>
+        <p style={{ 'margin-top': '0.25rem', 'font-size': '0.75rem', color: 'var(--color-error)' }}>
+          {props.error}
         </p>
-      )}
+      </Show>
     </div>
   );
 }
 
-function ChevronIcon({ isOpen }: { isOpen: boolean }) {
+function ChevronIcon(props: { isOpen: boolean }) {
   return (
     <svg
       width="16"
@@ -131,10 +124,10 @@ function ChevronIcon({ isOpen }: { isOpen: boolean }) {
       viewBox="0 0 24 24"
       fill="none"
       stroke="currentColor"
-      strokeWidth="2"
+      stroke-width="2"
       style={{
         transition: 'transform 0.15s ease',
-        transform: isOpen ? 'rotate(180deg)' : 'rotate(0deg)',
+        transform: props.isOpen ? 'rotate(180deg)' : 'rotate(0deg)',
       }}
     >
       <path d="M6 9l6 6 6-6" />

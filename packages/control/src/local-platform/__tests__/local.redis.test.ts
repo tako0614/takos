@@ -1,6 +1,6 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { assertEquals, assert } from 'jsr:@std/assert';
 
-const redisMock = vi.hoisted(() => {
+const redisMock = {
   type Store = {
     strings: Map<string, string>;
     lists: Map<string, string[]>;
@@ -62,47 +62,28 @@ const redisMock = vi.hoisted(() => {
   return {
     calls,
     stores,
-    createClient: vi.fn((options: { url: string }) => {
+    createClient: (options: { url: string }) => {
       calls.push({ url: options.url });
       return createMockClient(options.url);
-    }),
+    },
   };
-});
+};
 
-vi.mock('redis', () => ({
-  createClient: redisMock.createClient,
-}));
-
+// [Deno] vi.mock removed - manually stub imports from 'redis'
 import { createNodeWebEnv, resetNodePlatformStateForTests } from '../../node-platform/env-builder';
 import type { RoutingTarget } from '../../application/services/routing/routing-models.ts';
 
-describe('local redis-backed bindings', () => {
+
   const originalEnv = {
     REDIS_URL: process.env.REDIS_URL,
   };
-
-  beforeEach(async () => {
-    process.env.REDIS_URL = 'redis://localhost:6379';
+  Deno.test('local redis-backed bindings - uses redis for local queue and routing persistence when REDIS_URL is set', async () => {
+  process.env.REDIS_URL = 'redis://localhost:6379';
     redisMock.calls.length = 0;
     redisMock.stores.clear();
     await resetNodePlatformStateForTests();
-  });
-
-  afterEach(async () => {
-    const { REDIS_URL } = originalEnv;
-    if (REDIS_URL === undefined) {
-      delete process.env.REDIS_URL;
-    } else {
-      process.env.REDIS_URL = REDIS_URL;
-    }
-    vi.useRealTimers();
-    await resetNodePlatformStateForTests();
-    vi.unstubAllGlobals();
-    vi.restoreAllMocks();
-  });
-
-  it('uses redis for local queue and routing persistence when REDIS_URL is set', async () => {
-    const env = await createNodeWebEnv();
+  try {
+  const env = await createNodeWebEnv();
     const target: RoutingTarget = {
       type: 'deployments',
       deployments: [{ routeRef: 'tenant-app', weight: 100, status: 'active' }],
@@ -116,12 +97,12 @@ describe('local redis-backed bindings', () => {
     });
     await env.ROUTING_STORE!.putRecord('Redis.Example', target, 1710000001234);
 
-    expect(redisMock.calls.length).toBeGreaterThanOrEqual(1);
-    expect(redisMock.calls).toContainEqual({ url: 'redis://localhost:6379' });
+    assert(redisMock.calls.length >= 1);
+    assert(redisMock.calls.some((item: any) => JSON.stringify(item) === JSON.stringify({ url: 'redis://localhost:6379' })));
 
     const store = redisMock.stores.get('redis://localhost:6379');
-    expect(store).toBeDefined();
-    expect(store?.lists.get('takos:local:queue:takos-runs')).toEqual([
+    assert(store !== undefined);
+    assertEquals(store?.lists.get('takos:local:queue:takos-runs'), [
       JSON.stringify({
         body: {
           version: 2,
@@ -132,18 +113,29 @@ describe('local redis-backed bindings', () => {
       }),
     ]);
 
-    expect(store?.strings.get('takos:local:routing:redis.example')).toBe(JSON.stringify({
+    assertEquals(store?.strings.get('takos:local:routing:redis.example'), JSON.stringify({
       hostname: 'redis.example',
       target,
       version: 1,
       updatedAt: 1710000001234,
     }));
 
-    await expect(env.ROUTING_STORE!.getRecord('redis.example')).resolves.toEqual({
+    await assertEquals(await env.ROUTING_STORE!.getRecord('redis.example'), {
       hostname: 'redis.example',
       target,
       version: 1,
       updatedAt: 1710000001234,
     });
-  });
-});
+  } finally {
+  const { REDIS_URL } = originalEnv;
+    if (REDIS_URL === undefined) {
+      delete process.env.REDIS_URL;
+    } else {
+      process.env.REDIS_URL = REDIS_URL;
+    }
+    /* TODO: call fakeTime.restore() */ void 0;
+    await resetNodePlatformStateForTests();
+    /* TODO: restore stubbed globals manually */ void 0;
+    /* TODO: restore mocks manually */ void 0;
+  }
+})

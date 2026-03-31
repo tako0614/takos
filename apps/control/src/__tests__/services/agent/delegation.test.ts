@@ -1,5 +1,3 @@
-import { describe, expect, it } from 'vitest';
-
 import {
   normalizeStringArray,
   isDelegationLocale,
@@ -14,79 +12,65 @@ import {
   type DelegationPacket,
 } from '@/services/agent/delegation';
 
-describe('normalizeStringArray', () => {
-  it('filters and trims string arrays', () => {
-    expect(normalizeStringArray(['  hello ', ' world ', '', '  '])).toEqual(['hello', 'world']);
-  });
 
-  it('returns empty array for non-array input', () => {
-    expect(normalizeStringArray('not-an-array')).toEqual([]);
-    expect(normalizeStringArray(null)).toEqual([]);
-    expect(normalizeStringArray(undefined)).toEqual([]);
-    expect(normalizeStringArray(42)).toEqual([]);
-  });
+import { assertEquals, assertNotEquals, assert, assertThrows, assertStringIncludes } from 'jsr:@std/assert';
 
-  it('filters out non-string items', () => {
-    expect(normalizeStringArray([1, null, 'valid', undefined, 'ok'])).toEqual(['valid', 'ok']);
-  });
-});
+  Deno.test('normalizeStringArray - filters and trims string arrays', () => {
+  assertEquals(normalizeStringArray(['  hello ', ' world ', '', '  ']), ['hello', 'world']);
+})
+  Deno.test('normalizeStringArray - returns empty array for non-array input', () => {
+  assertEquals(normalizeStringArray('not-an-array'), []);
+    assertEquals(normalizeStringArray(null), []);
+    assertEquals(normalizeStringArray(undefined), []);
+    assertEquals(normalizeStringArray(42), []);
+})
+  Deno.test('normalizeStringArray - filters out non-string items', () => {
+  assertEquals(normalizeStringArray([1, null, 'valid', undefined, 'ok']), ['valid', 'ok']);
+})
 
-describe('isDelegationLocale', () => {
-  it('accepts ja and en', () => {
-    expect(isDelegationLocale('ja')).toBe(true);
-    expect(isDelegationLocale('en')).toBe(true);
-  });
+  Deno.test('isDelegationLocale - accepts ja and en', () => {
+  assertEquals(isDelegationLocale('ja'), true);
+    assertEquals(isDelegationLocale('en'), true);
+})
+  Deno.test('isDelegationLocale - rejects other values', () => {
+  assertEquals(isDelegationLocale('fr'), false);
+    assertEquals(isDelegationLocale(''), false);
+    assertEquals(isDelegationLocale(null), false);
+    assertEquals(isDelegationLocale(undefined), false);
+    assertEquals(isDelegationLocale(42), false);
+})
 
-  it('rejects other values', () => {
-    expect(isDelegationLocale('fr')).toBe(false);
-    expect(isDelegationLocale('')).toBe(false);
-    expect(isDelegationLocale(null)).toBe(false);
-    expect(isDelegationLocale(undefined)).toBe(false);
-    expect(isDelegationLocale(42)).toBe(false);
-  });
-});
-
-describe('isProductHint', () => {
-  it('accepts all known product hints', () => {
-    for (const hint of PRODUCT_HINTS) {
-      expect(isProductHint(hint)).toBe(true);
+  Deno.test('isProductHint - accepts all known product hints', () => {
+  for (const hint of PRODUCT_HINTS) {
+      assertEquals(isProductHint(hint), true);
     }
-  });
+})
+  Deno.test('isProductHint - rejects unknown values', () => {
+  assertEquals(isProductHint('unknown-product'), false);
+    assertEquals(isProductHint(''), false);
+    assertEquals(isProductHint(null), false);
+    assertEquals(isProductHint(42), false);
+})
 
-  it('rejects unknown values', () => {
-    expect(isProductHint('unknown-product')).toBe(false);
-    expect(isProductHint('')).toBe(false);
-    expect(isProductHint(null)).toBe(false);
-    expect(isProductHint(42)).toBe(false);
-  });
-});
+  Deno.test('parseRunInputObject - parses JSON string into object', () => {
+  assertEquals(parseRunInputObject('{"task":"do it"}'), { task: 'do it' });
+})
+  Deno.test('parseRunInputObject - returns empty object for invalid JSON string', () => {
+  assertEquals(parseRunInputObject('not-json'), {});
+})
+  Deno.test('parseRunInputObject - returns empty object for array JSON', () => {
+  assertEquals(parseRunInputObject('[1,2,3]'), {});
+})
+  Deno.test('parseRunInputObject - passes through object input', () => {
+  assertEquals(parseRunInputObject({ task: 'test' }), { task: 'test' });
+})
+  Deno.test('parseRunInputObject - returns empty object for non-object types', () => {
+  assertEquals(parseRunInputObject(null), {});
+    assertEquals(parseRunInputObject(undefined), {});
+    assertEquals(parseRunInputObject(42), {});
+    assertEquals(parseRunInputObject([]), {});
+})
 
-describe('parseRunInputObject', () => {
-  it('parses JSON string into object', () => {
-    expect(parseRunInputObject('{"task":"do it"}')).toEqual({ task: 'do it' });
-  });
-
-  it('returns empty object for invalid JSON string', () => {
-    expect(parseRunInputObject('not-json')).toEqual({});
-  });
-
-  it('returns empty object for array JSON', () => {
-    expect(parseRunInputObject('[1,2,3]')).toEqual({});
-  });
-
-  it('passes through object input', () => {
-    expect(parseRunInputObject({ task: 'test' })).toEqual({ task: 'test' });
-  });
-
-  it('returns empty object for non-object types', () => {
-    expect(parseRunInputObject(null)).toEqual({});
-    expect(parseRunInputObject(undefined)).toEqual({});
-    expect(parseRunInputObject(42)).toEqual({});
-    expect(parseRunInputObject([])).toEqual({});
-  });
-});
-
-describe('getDelegationPacketFromRunInput', () => {
   const validInput = {
     task: 'Fix the bug',
     parent_run_id: 'run-1',
@@ -103,77 +87,64 @@ describe('getDelegationPacketFromRunInput', () => {
     thread_key_points: ['Module X is affected'],
   };
 
-  it('extracts a valid delegation packet from object input', () => {
-    const result = getDelegationPacketFromRunInput(validInput);
-    expect(result).not.toBeNull();
-    expect(result!.task).toBe('Fix the bug');
-    expect(result!.goal).toBe('Make it pass tests');
-    expect(result!.product_hint).toBe('takos');
-    expect(result!.locale).toBe('ja');
-    expect(result!.constraints).toEqual(['Do not break API']);
-  });
-
-  it('extracts from nested delegation object', () => {
-    const result = getDelegationPacketFromRunInput({ delegation: validInput });
-    expect(result).not.toBeNull();
-    expect(result!.task).toBe('Fix the bug');
-  });
-
-  it('extracts from JSON string', () => {
-    const result = getDelegationPacketFromRunInput(JSON.stringify(validInput));
-    expect(result).not.toBeNull();
-    expect(result!.task).toBe('Fix the bug');
-  });
-
-  it('returns null when required fields are missing', () => {
-    expect(getDelegationPacketFromRunInput({ task: 'no parent run id' })).toBeNull();
-    expect(getDelegationPacketFromRunInput({})).toBeNull();
-    expect(getDelegationPacketFromRunInput(null)).toBeNull();
-  });
-
-  it('normalizes invalid product_hint and locale to null', () => {
-    const result = getDelegationPacketFromRunInput({
+  Deno.test('getDelegationPacketFromRunInput - extracts a valid delegation packet from object input', () => {
+  const result = getDelegationPacketFromRunInput(validInput);
+    assertNotEquals(result, null);
+    assertEquals(result!.task, 'Fix the bug');
+    assertEquals(result!.goal, 'Make it pass tests');
+    assertEquals(result!.product_hint, 'takos');
+    assertEquals(result!.locale, 'ja');
+    assertEquals(result!.constraints, ['Do not break API']);
+})
+  Deno.test('getDelegationPacketFromRunInput - extracts from nested delegation object', () => {
+  const result = getDelegationPacketFromRunInput({ delegation: validInput });
+    assertNotEquals(result, null);
+    assertEquals(result!.task, 'Fix the bug');
+})
+  Deno.test('getDelegationPacketFromRunInput - extracts from JSON string', () => {
+  const result = getDelegationPacketFromRunInput(JSON.stringify(validInput));
+    assertNotEquals(result, null);
+    assertEquals(result!.task, 'Fix the bug');
+})
+  Deno.test('getDelegationPacketFromRunInput - returns null when required fields are missing', () => {
+  assertEquals(getDelegationPacketFromRunInput({ task: 'no parent run id' }), null);
+    assertEquals(getDelegationPacketFromRunInput({}), null);
+    assertEquals(getDelegationPacketFromRunInput(null), null);
+})
+  Deno.test('getDelegationPacketFromRunInput - normalizes invalid product_hint and locale to null', () => {
+  const result = getDelegationPacketFromRunInput({
       ...validInput,
       product_hint: 'unknown',
       locale: 'fr',
     });
-    expect(result!.product_hint).toBeNull();
-    expect(result!.locale).toBeNull();
-  });
-});
+    assertEquals(result!.product_hint, null);
+    assertEquals(result!.locale, null);
+})
 
-describe('inferProductHintFromTextSamples', () => {
-  it('detects takos from text samples', () => {
-    expect(inferProductHintFromTextSamples(['Fix apps/control module'])).toBe('takos');
-    expect(inferProductHintFromTextSamples(['Update takos-control'])).toBe('takos');
-  });
+  Deno.test('inferProductHintFromTextSamples - detects takos from text samples', () => {
+  assertEquals(inferProductHintFromTextSamples(['Fix apps/control module']), 'takos');
+    assertEquals(inferProductHintFromTextSamples(['Update takos-control']), 'takos');
+})
+  Deno.test('inferProductHintFromTextSamples - detects yurucommu from text samples', () => {
+  assertEquals(inferProductHintFromTextSamples(['Update yurucommu feature']), 'yurucommu');
+})
+  Deno.test('inferProductHintFromTextSamples - detects roadtome from text samples', () => {
+  assertEquals(inferProductHintFromTextSamples(['road-to-me improvements']), 'roadtome');
+    assertEquals(inferProductHintFromTextSamples(['road to me product']), 'roadtome');
+})
+  Deno.test('inferProductHintFromTextSamples - returns null when no product is detected', () => {
+  assertEquals(inferProductHintFromTextSamples(['generic task']), null);
+    assertEquals(inferProductHintFromTextSamples([]), null);
+})
+  Deno.test('inferProductHintFromTextSamples - returns null for ambiguous (tied) scores', () => {
+  assertEquals(inferProductHintFromTextSamples(['takos yurucommu']), null);
+})
+  Deno.test('inferProductHintFromTextSamples - skips null/undefined samples', () => {
+  assertEquals(inferProductHintFromTextSamples([null, undefined, 'takos stuff']), 'takos');
+})
 
-  it('detects yurucommu from text samples', () => {
-    expect(inferProductHintFromTextSamples(['Update yurucommu feature'])).toBe('yurucommu');
-  });
-
-  it('detects roadtome from text samples', () => {
-    expect(inferProductHintFromTextSamples(['road-to-me improvements'])).toBe('roadtome');
-    expect(inferProductHintFromTextSamples(['road to me product'])).toBe('roadtome');
-  });
-
-  it('returns null when no product is detected', () => {
-    expect(inferProductHintFromTextSamples(['generic task'])).toBeNull();
-    expect(inferProductHintFromTextSamples([])).toBeNull();
-  });
-
-  it('returns null for ambiguous (tied) scores', () => {
-    expect(inferProductHintFromTextSamples(['takos yurucommu'])).toBeNull();
-  });
-
-  it('skips null/undefined samples', () => {
-    expect(inferProductHintFromTextSamples([null, undefined, 'takos stuff'])).toBe('takos');
-  });
-});
-
-describe('buildDelegationPacket', () => {
-  it('builds a packet with explicit fields', () => {
-    const { packet, observability } = buildDelegationPacket({
+  Deno.test('buildDelegationPacket - builds a packet with explicit fields', () => {
+  const { packet, observability } = buildDelegationPacket({
       task: 'Implement feature',
       goal: 'Ship the feature',
       deliverable: 'Code + tests',
@@ -189,15 +160,14 @@ describe('buildDelegationPacket', () => {
       threadKeyPoints: ['Key point 1'],
     });
 
-    expect(packet.task).toBe('Implement feature');
-    expect(packet.goal).toBe('Ship the feature');
-    expect(packet.product_hint).toBe('takos');
-    expect(packet.locale).toBe('ja');
-    expect(observability.explicit_field_count).toBeGreaterThanOrEqual(7);
-  });
-
-  it('infers goal from latestUserMessage when not explicitly provided', () => {
-    const { packet, observability } = buildDelegationPacket({
+    assertEquals(packet.task, 'Implement feature');
+    assertEquals(packet.goal, 'Ship the feature');
+    assertEquals(packet.product_hint, 'takos');
+    assertEquals(packet.locale, 'ja');
+    assert(observability.explicit_field_count >= 7);
+})
+  Deno.test('buildDelegationPacket - infers goal from latestUserMessage when not explicitly provided', () => {
+  const { packet, observability } = buildDelegationPacket({
       task: 'Fix bug',
       latestUserMessage: 'Make it work properly',
       parentRunId: 'run-1',
@@ -205,23 +175,21 @@ describe('buildDelegationPacket', () => {
       rootThreadId: 'root-1',
     });
 
-    expect(packet.goal).toBe('Make it work properly');
-    expect(observability.inferred_field_count).toBeGreaterThanOrEqual(1);
-  });
-
-  it('infers product hint from text samples', () => {
-    const { packet } = buildDelegationPacket({
+    assertEquals(packet.goal, 'Make it work properly');
+    assert(observability.inferred_field_count >= 1);
+})
+  Deno.test('buildDelegationPacket - infers product hint from text samples', () => {
+  const { packet } = buildDelegationPacket({
       task: 'Fix apps/control module in takos',
       parentRunId: 'run-1',
       parentThreadId: 'thread-1',
       rootThreadId: 'root-1',
     });
 
-    expect(packet.product_hint).toBe('takos');
-  });
-
-  it('infers locale from parent run input', () => {
-    const { packet } = buildDelegationPacket({
+    assertEquals(packet.product_hint, 'takos');
+})
+  Deno.test('buildDelegationPacket - infers locale from parent run input', () => {
+  const { packet } = buildDelegationPacket({
       task: 'Fix bug',
       parentRunId: 'run-1',
       parentThreadId: 'thread-1',
@@ -229,18 +197,17 @@ describe('buildDelegationPacket', () => {
       parentRunInput: { locale: 'ja' },
     });
 
-    expect(packet.locale).toBe('ja');
-  });
-
-  it('falls back to threadLocale and spaceLocale', () => {
-    const { packet: p1 } = buildDelegationPacket({
+    assertEquals(packet.locale, 'ja');
+})
+  Deno.test('buildDelegationPacket - falls back to threadLocale and spaceLocale', () => {
+  const { packet: p1 } = buildDelegationPacket({
       task: 'Fix',
       parentRunId: 'r1',
       parentThreadId: 't1',
       rootThreadId: 'rt1',
       threadLocale: 'en',
     });
-    expect(p1.locale).toBe('en');
+    assertEquals(p1.locale, 'en');
 
     const { packet: p2 } = buildDelegationPacket({
       task: 'Fix',
@@ -249,22 +216,20 @@ describe('buildDelegationPacket', () => {
       rootThreadId: 'rt1',
       spaceLocale: 'ja',
     });
-    expect(p2.locale).toBe('ja');
-  });
-
-  it('throws when task is empty', () => {
-    expect(() =>
+    assertEquals(p2.locale, 'ja');
+})
+  Deno.test('buildDelegationPacket - throws when task is empty', () => {
+  assertThrows(() => { () =>
       buildDelegationPacket({
         task: '  ',
         parentRunId: 'r1',
         parentThreadId: 't1',
         rootThreadId: 'rt1',
       }),
-    ).toThrow('Delegation task must be a non-empty string');
-  });
-
-  it('tracks observability counters accurately', () => {
-    const { observability } = buildDelegationPacket({
+    ; }, 'Delegation task must be a non-empty string');
+})
+  Deno.test('buildDelegationPacket - tracks observability counters accurately', () => {
+  const { observability } = buildDelegationPacket({
       task: 'Do work',
       parentRunId: 'run-1',
       parentThreadId: 'thread-1',
@@ -272,13 +237,11 @@ describe('buildDelegationPacket', () => {
       threadSummary: 'Summary exists',
     });
 
-    expect(observability.has_thread_summary).toBe(true);
-    expect(observability.constraints_count).toBe(0);
-    expect(observability.context_count).toBe(0);
-  });
-});
+    assertEquals(observability.has_thread_summary, true);
+    assertEquals(observability.constraints_count, 0);
+    assertEquals(observability.context_count, 0);
+})
 
-describe('buildDelegationSystemMessage', () => {
   const packet: DelegationPacket = {
     task: 'Implement the fix',
     goal: 'Improve autonomy',
@@ -295,24 +258,23 @@ describe('buildDelegationSystemMessage', () => {
     thread_key_points: ['Sub-agent context'],
   };
 
-  it('includes all non-empty fields in the system message', () => {
-    const msg = buildDelegationSystemMessage(packet);
-    expect(msg.role).toBe('system');
-    expect(msg.content).toContain('Delegated execution context:');
-    expect(msg.content).toContain('Goal: Improve autonomy');
-    expect(msg.content).toContain('Product hint: takos');
-    expect(msg.content).toContain('Deliverable: Code changes');
-    expect(msg.content).toContain('Parent thread summary: Agent delegation fix');
-    expect(msg.content).toContain('Constraints:');
-    expect(msg.content).toContain('- Do not break API');
-    expect(msg.content).toContain('Relevant context:');
-    expect(msg.content).toContain('- Parent isolated the bug');
-    expect(msg.content).toContain('Acceptance criteria:');
-    expect(msg.content).toContain('- Tests pass');
-  });
-
-  it('omits empty optional fields', () => {
-    const minimalPacket: DelegationPacket = {
+  Deno.test('buildDelegationSystemMessage - includes all non-empty fields in the system message', () => {
+  const msg = buildDelegationSystemMessage(packet);
+    assertEquals(msg.role, 'system');
+    assertStringIncludes(msg.content, 'Delegated execution context:');
+    assertStringIncludes(msg.content, 'Goal: Improve autonomy');
+    assertStringIncludes(msg.content, 'Product hint: takos');
+    assertStringIncludes(msg.content, 'Deliverable: Code changes');
+    assertStringIncludes(msg.content, 'Parent thread summary: Agent delegation fix');
+    assertStringIncludes(msg.content, 'Constraints:');
+    assertStringIncludes(msg.content, '- Do not break API');
+    assertStringIncludes(msg.content, 'Relevant context:');
+    assertStringIncludes(msg.content, '- Parent isolated the bug');
+    assertStringIncludes(msg.content, 'Acceptance criteria:');
+    assertStringIncludes(msg.content, '- Tests pass');
+})
+  Deno.test('buildDelegationSystemMessage - omits empty optional fields', () => {
+  const minimalPacket: DelegationPacket = {
       task: 'Do it',
       goal: null,
       deliverable: null,
@@ -328,13 +290,11 @@ describe('buildDelegationSystemMessage', () => {
       thread_key_points: [],
     };
     const msg = buildDelegationSystemMessage(minimalPacket);
-    expect(msg.content).toBe('Delegated execution context:');
-  });
-});
+    assertEquals(msg.content, 'Delegated execution context:');
+})
 
-describe('buildDelegationUserMessage', () => {
-  it('creates a user message with parent run reference', () => {
-    const packet: DelegationPacket = {
+  Deno.test('buildDelegationUserMessage - creates a user message with parent run reference', () => {
+  const packet: DelegationPacket = {
       task: 'Implement feature X',
       goal: null,
       deliverable: null,
@@ -350,8 +310,7 @@ describe('buildDelegationUserMessage', () => {
       thread_key_points: [],
     };
     const msg = buildDelegationUserMessage(packet);
-    expect(msg.role).toBe('user');
-    expect(msg.content).toContain('run: run-42');
-    expect(msg.content).toContain('Implement feature X');
-  });
-});
+    assertEquals(msg.role, 'user');
+    assertStringIncludes(msg.content, 'run: run-42');
+    assertStringIncludes(msg.content, 'Implement feature X');
+})

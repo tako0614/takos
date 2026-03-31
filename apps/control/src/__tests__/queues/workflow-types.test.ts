@@ -1,4 +1,3 @@
-import { describe, expect, it, vi } from 'vitest';
 import {
   createInitialState,
   asDurableObjectFetcher,
@@ -20,33 +19,33 @@ import {
 // createInitialState
 // ---------------------------------------------------------------------------
 
-describe('createInitialState', () => {
-  it('returns a fresh state with default values', () => {
-    const state = createInitialState();
 
-    expect(state.jobConclusion).toBe('success');
-    expect(state.runtimeStarted).toBe(false);
-    expect(state.runtimeCancelled).toBe(false);
-    expect(state.runtimeSpaceId).toBeNull();
-    expect(state.completionConclusion).toBeNull();
-    expect(state.logs).toEqual([]);
-    expect(state.stepResults).toEqual([]);
-    expect(state.stepOutputs).toEqual({});
-  });
+import { assertEquals } from 'jsr:@std/assert';
 
-  it('returns independent instances on each call', () => {
-    const state1 = createInitialState();
+  Deno.test('createInitialState - returns a fresh state with default values', () => {
+  const state = createInitialState();
+
+    assertEquals(state.jobConclusion, 'success');
+    assertEquals(state.runtimeStarted, false);
+    assertEquals(state.runtimeCancelled, false);
+    assertEquals(state.runtimeSpaceId, null);
+    assertEquals(state.completionConclusion, null);
+    assertEquals(state.logs, []);
+    assertEquals(state.stepResults, []);
+    assertEquals(state.stepOutputs, {});
+})
+  Deno.test('createInitialState - returns independent instances on each call', () => {
+  const state1 = createInitialState();
     const state2 = createInitialState();
 
     state1.logs.push('test');
     state1.jobConclusion = 'failure';
 
-    expect(state2.logs).toEqual([]);
-    expect(state2.jobConclusion).toBe('success');
-  });
-
-  it('allows mutation of returned state', () => {
-    const state = createInitialState();
+    assertEquals(state2.logs, []);
+    assertEquals(state2.jobConclusion, 'success');
+})
+  Deno.test('createInitialState - allows mutation of returned state', () => {
+  const state = createInitialState();
 
     state.jobConclusion = 'failure';
     state.runtimeStarted = true;
@@ -63,41 +62,36 @@ describe('createInitialState', () => {
     });
     state.stepOutputs['step1'] = { key: 'value' };
 
-    expect(state.jobConclusion).toBe('failure');
-    expect(state.runtimeStarted).toBe(true);
-    expect(state.runtimeCancelled).toBe(true);
-    expect(state.runtimeSpaceId).toBe('ws-123');
-    expect(state.completionConclusion).toBe('success');
-    expect(state.logs).toHaveLength(1);
-    expect(state.stepResults).toHaveLength(1);
-    expect(state.stepOutputs['step1']).toEqual({ key: 'value' });
-  });
-});
-
+    assertEquals(state.jobConclusion, 'failure');
+    assertEquals(state.runtimeStarted, true);
+    assertEquals(state.runtimeCancelled, true);
+    assertEquals(state.runtimeSpaceId, 'ws-123');
+    assertEquals(state.completionConclusion, 'success');
+    assertEquals(state.logs.length, 1);
+    assertEquals(state.stepResults.length, 1);
+    assertEquals(state.stepOutputs['step1'], { key: 'value' });
+})
 // ---------------------------------------------------------------------------
 // asDurableObjectFetcher
 // ---------------------------------------------------------------------------
 
-describe('asDurableObjectFetcher', () => {
-  it('casts any object to DurableObjectFetchLike', () => {
-    const stub = {
+
+  Deno.test('asDurableObjectFetcher - casts any object to DurableObjectFetchLike', () => {
+  const stub = {
       fetch: async () => new Response('ok'),
     };
     const fetcher = asDurableObjectFetcher(stub);
-    expect(fetcher).toBe(stub);
-    expect(typeof fetcher.fetch).toBe('function');
-  });
-
-  it('casts null without throwing', () => {
-    const fetcher = asDurableObjectFetcher(null);
-    expect(fetcher).toBeNull();
-  });
-
-  it('casts a mock DO stub', () => {
-    const mockStub = {
-      fetch: vi.fn().mockResolvedValue(new Response('{"ok":true}')),
+    assertEquals(fetcher, stub);
+    assertEquals(typeof fetcher.fetch, 'function');
+})
+  Deno.test('asDurableObjectFetcher - casts null without throwing', () => {
+  const fetcher = asDurableObjectFetcher(null);
+    assertEquals(fetcher, null);
+})
+  Deno.test('asDurableObjectFetcher - casts a mock DO stub', () => {
+  const mockStub = {
+      fetch: (async () => new Response('{"ok":true}')),
     };
     const fetcher = asDurableObjectFetcher(mockStub);
-    expect(fetcher.fetch).toBe(mockStub.fetch);
-  });
-});
+    assertEquals(fetcher.fetch, mockStub.fetch);
+})

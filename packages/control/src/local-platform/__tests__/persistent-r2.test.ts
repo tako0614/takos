@@ -1,9 +1,10 @@
 import os from 'node:os';
 import path from 'node:path';
 import { mkdtemp } from 'node:fs/promises';
-import { afterEach, describe, expect, it } from 'vitest';
 import { createPersistentR2Bucket } from '../persistent-r2.ts';
 import { removeLocalDataDir } from '../persistent-shared.ts';
+
+import { assertEquals, assertNotEquals, assertRejects, assertObjectMatch } from 'jsr:@std/assert';
 
 const tempDirs: string[] = [];
 
@@ -13,13 +14,9 @@ async function createBucketFile(): Promise<string> {
   return path.join(tempDir, 'bucket.json');
 }
 
-afterEach(async () => {
-  await Promise.all(tempDirs.splice(0).map((dir) => removeLocalDataDir(dir)));
-});
-
-describe('createPersistentR2Bucket multipart upload', () => {
-  it('reassembles parts, preserves metadata, and supports resuming across adapter reloads', async () => {
-    const filePath = await createBucketFile();
+  Deno.test('createPersistentR2Bucket multipart upload - reassembles parts, preserves metadata, and supports resuming across adapter reloads', async () => {
+  try {
+  const filePath = await createBucketFile();
     const firstBucket = createPersistentR2Bucket(filePath);
     const upload = await firstBucket.createMultipartUpload('docs/report.txt', {
       customMetadata: { owner: 'alice' },
@@ -37,12 +34,12 @@ describe('createPersistentR2Bucket multipart upload', () => {
     const secondPart = await resumed.uploadPart(2, new Uint8Array([119, 111, 114, 108, 100]));
 
     const completed = await resumed.complete([secondPart, firstPart]);
-    expect(completed.key).toBe('docs/report.txt');
+    assertEquals(completed.key, 'docs/report.txt');
 
     const reloadedBucket = createPersistentR2Bucket(filePath);
     const head = await reloadedBucket.head('docs/report.txt');
-    expect(head).not.toBeNull();
-    expect(head).toMatchObject({
+    assertNotEquals(head, null);
+    assertObjectMatch(head, {
       customMetadata: { owner: 'alice' },
       httpMetadata: {
         'cache-control': 'max-age=60',
@@ -52,11 +49,14 @@ describe('createPersistentR2Bucket multipart upload', () => {
     });
 
     const stored = await reloadedBucket.get('docs/report.txt');
-    expect(await stored?.text()).toBe('hello world');
-  });
-
-  it('aborts multipart uploads and prevents later part uploads after adapter reload', async () => {
-    const filePath = await createBucketFile();
+    assertEquals(await stored?.text(), 'hello world');
+  } finally {
+  await Promise.all(tempDirs.splice(0).map((dir) => removeLocalDataDir(dir)));
+  }
+})
+  Deno.test('createPersistentR2Bucket multipart upload - aborts multipart uploads and prevents later part uploads after adapter reload', async () => {
+  try {
+  const filePath = await createBucketFile();
     const firstBucket = createPersistentR2Bucket(filePath);
     const upload = await firstBucket.createMultipartUpload('docs/aborted.txt');
 
@@ -66,7 +66,9 @@ describe('createPersistentR2Bucket multipart upload', () => {
     const reloadedBucket = createPersistentR2Bucket(filePath);
     const resumed = reloadedBucket.resumeMultipartUpload('docs/aborted.txt', upload.uploadId);
 
-    await expect(resumed.uploadPart(1, 'discard me')).rejects.toThrow(/not active/i);
-    await expect(reloadedBucket.head('docs/aborted.txt')).resolves.toBeNull();
-  });
-});
+    await await assertRejects(async () => { await resumed.uploadPart(1, 'discard me'); }, /not active/i);
+    await assertEquals(await reloadedBucket.head('docs/aborted.txt'), null);
+  } finally {
+  await Promise.all(tempDirs.splice(0).map((dir) => removeLocalDataDir(dir)));
+  }
+})

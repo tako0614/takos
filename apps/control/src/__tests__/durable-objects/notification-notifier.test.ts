@@ -1,22 +1,25 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { NotificationNotifierDO } from '@/durable-objects/notification-notifier';
 
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
 
+import { assertEquals, assert, assertStringIncludes } from 'jsr:@std/assert';
+import { assertSpyCalls, assertSpyCallArgs } from 'jsr:@std/testing/mock';
+import { FakeTime } from 'jsr:@std/testing/time';
+
 function createMockStorage() {
   const store = new Map<string, unknown>();
   let alarm: number | null = null;
 
   return {
-    get: vi.fn(async <T>(key: string): Promise<T | undefined> => store.get(key) as T | undefined),
-    put: vi.fn(async (key: string, value: unknown) => { store.set(key, value); }),
-    delete: vi.fn(async (key: string) => { store.delete(key); return true; }),
-    setAlarm: vi.fn(async (ms: number) => { alarm = ms; }),
-    deleteAlarm: vi.fn(async () => { alarm = null; }),
-    getAlarm: vi.fn(async () => alarm),
-    list: vi.fn(async () => new Map()),
+    get: async <T>(key: string): Promise<T | undefined> => store.get(key) as T | undefined,
+    put: async (key: string, value: unknown) => { store.set(key, value); },
+    delete: async (key: string) => { store.delete(key); return true; },
+    setAlarm: async (ms: number) => { alarm = ms; },
+    deleteAlarm: async () => { alarm = null; },
+    getAlarm: async () => alarm,
+    list: async () => new Map(),
     _store: store,
   };
 }
@@ -24,10 +27,10 @@ function createMockStorage() {
 function createMockState(storage = createMockStorage()) {
   return {
     storage,
-    blockConcurrencyWhile: vi.fn(async <T>(fn: () => Promise<T>): Promise<T> => fn()),
-    acceptWebSocket: vi.fn(),
-    getWebSockets: vi.fn(() => []),
-    getTags: vi.fn(() => []),
+    blockConcurrencyWhile: async <T>(fn: () => Promise<T>): Promise<T> => fn(),
+    acceptWebSocket: ((..._args: any[]) => undefined) as any,
+    getWebSockets: () => [],
+    getTags: () => [],
   };
 }
 
@@ -104,77 +107,73 @@ async function jsonBody(response: Response): Promise<Record<string, unknown>> {
 // Tests
 // ---------------------------------------------------------------------------
 
-describe('NotificationNotifierDO', () => {
-  beforeEach(() => {
-    vi.restoreAllMocks();
-  });
 
-  describe('fetch routing', () => {
-    it('returns 401 for non-internal, non-WebSocket requests', async () => {
-      const { doInstance } = createDO();
+  
+    Deno.test('NotificationNotifierDO - fetch routing - returns 401 for non-internal, non-WebSocket requests', async () => {
+  /* TODO: restore mocks manually */ void 0;
+  const { doInstance } = createDO();
       const req = new Request('https://do.internal/emit', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({}),
       });
       const res = await doInstance.fetch(req);
-      expect(res.status).toBe(401);
-    });
-
-    it('returns 404 for unknown paths', async () => {
-      const { doInstance } = createDO();
+      assertEquals(res.status, 401);
+})
+    Deno.test('NotificationNotifierDO - fetch routing - returns 404 for unknown paths', async () => {
+  /* TODO: restore mocks manually */ void 0;
+  const { doInstance } = createDO();
       const res = await doInstance.fetch(getRequest('/unknown'));
-      expect(res.status).toBe(404);
-    });
-  });
-
-  describe('/emit', () => {
-    it('emits an event and returns success', async () => {
-      const { doInstance } = createDO();
+      assertEquals(res.status, 404);
+})  
+  
+    Deno.test('NotificationNotifierDO - /emit - emits an event and returns success', async () => {
+  /* TODO: restore mocks manually */ void 0;
+  const { doInstance } = createDO();
       const res = await doInstance.fetch(postJSON('/emit', { type: 'test_event', data: { msg: 'hello' } }));
-      expect(res.status).toBe(200);
+      assertEquals(res.status, 200);
 
       const body = await jsonBody(res);
-      expect(body.success).toBe(true);
-      expect(body.eventId).toBe(1);
-      expect(body.clients).toBe(0);
-    });
-
-    it('assigns sequential event IDs', async () => {
-      const { doInstance } = createDO();
+      assertEquals(body.success, true);
+      assertEquals(body.eventId, 1);
+      assertEquals(body.clients, 0);
+})
+    Deno.test('NotificationNotifierDO - /emit - assigns sequential event IDs', async () => {
+  /* TODO: restore mocks manually */ void 0;
+  const { doInstance } = createDO();
 
       const r1 = await jsonBody(await doInstance.fetch(postJSON('/emit', { type: 'a', data: null })));
       const r2 = await jsonBody(await doInstance.fetch(postJSON('/emit', { type: 'b', data: null })));
       const r3 = await jsonBody(await doInstance.fetch(postJSON('/emit', { type: 'c', data: null })));
 
-      expect(r1.eventId).toBe(1);
-      expect(r2.eventId).toBe(2);
-      expect(r3.eventId).toBe(3);
-    });
-
-    it('accepts preferred event_id', async () => {
-      const { doInstance } = createDO();
+      assertEquals(r1.eventId, 1);
+      assertEquals(r2.eventId, 2);
+      assertEquals(r3.eventId, 3);
+})
+    Deno.test('NotificationNotifierDO - /emit - accepts preferred event_id', async () => {
+  /* TODO: restore mocks manually */ void 0;
+  const { doInstance } = createDO();
 
       const r1 = await jsonBody(await doInstance.fetch(postJSON('/emit', { type: 'a', data: null, event_id: 10 })));
-      expect(r1.eventId).toBe(10);
+      assertEquals(r1.eventId, 10);
 
       const r2 = await jsonBody(await doInstance.fetch(postJSON('/emit', { type: 'b', data: null })));
-      expect(r2.eventId).toBe(11);
-    });
-
-    it('persists state after emit', async () => {
-      const state = createMockState();
+      assertEquals(r2.eventId, 11);
+})
+    Deno.test('NotificationNotifierDO - /emit - persists state after emit', async () => {
+  /* TODO: restore mocks manually */ void 0;
+  const state = createMockState();
       const { doInstance } = createDO(state);
 
       await doInstance.fetch(postJSON('/emit', { type: 'test', data: null }));
 
-      expect(state.storage.put).toHaveBeenCalledWith('bufferState', expect.objectContaining({
+      assertSpyCallArgs(state.storage.put, 0, ['bufferState', ({
         eventIdCounter: 1,
-      }));
-    });
-
-    it('broadcasts to connected WebSocket clients', async () => {
-      const state = createMockState();
+      })]);
+})
+    Deno.test('NotificationNotifierDO - /emit - broadcasts to connected WebSocket clients', async () => {
+  /* TODO: restore mocks manually */ void 0;
+  const state = createMockState();
       const { doInstance } = createDO(state);
 
       // Simulate a connected WebSocket
@@ -186,16 +185,16 @@ describe('NotificationNotifierDO', () => {
 
       const res = await doInstance.fetch(postJSON('/emit', { type: 'test', data: { msg: 'hi' } }));
       const body = await jsonBody(res);
-      expect(body.clients).toBe(1);
-      expect(ws.sent.length).toBeGreaterThan(0);
+      assertEquals(body.clients, 1);
+      assert(ws.sent.length > 0);
 
       const sent = JSON.parse(ws.sent[ws.sent.length - 1]);
-      expect(sent.type).toBe('test');
-      expect(sent.data).toEqual({ msg: 'hi' });
-    });
-
-    it('removes failed WebSocket connections on broadcast', async () => {
-      const state = createMockState();
+      assertEquals(sent.type, 'test');
+      assertEquals(sent.data, { msg: 'hi' });
+})
+    Deno.test('NotificationNotifierDO - /emit - removes failed WebSocket connections on broadcast', async () => {
+  /* TODO: restore mocks manually */ void 0;
+  const state = createMockState();
       const { doInstance } = createDO(state);
 
       const ws = new MockWebSocket();
@@ -208,13 +207,12 @@ describe('NotificationNotifierDO', () => {
       await doInstance.fetch(postJSON('/emit', { type: 'test', data: null }));
 
       const connections = (doInstance as unknown as { connections: Map<string, unknown> }).connections;
-      expect(connections.has('conn-fail')).toBe(false);
-    });
-  });
-
-  describe('/events', () => {
-    it('returns events after a given ID', async () => {
-      const { doInstance } = createDO();
+      assertEquals(connections.has('conn-fail'), false);
+})  
+  
+    Deno.test('NotificationNotifierDO - /events - returns events after a given ID', async () => {
+  /* TODO: restore mocks manually */ void 0;
+  const { doInstance } = createDO();
 
       // Emit some events
       await doInstance.fetch(postJSON('/emit', { type: 'a', data: 1 }));
@@ -222,81 +220,79 @@ describe('NotificationNotifierDO', () => {
       await doInstance.fetch(postJSON('/emit', { type: 'c', data: 3 }));
 
       const res = await doInstance.fetch(getRequest('/events?after=1'));
-      expect(res.status).toBe(200);
+      assertEquals(res.status, 200);
 
       const body = await jsonBody(res);
       const events = body.events as Array<{ type: string; event_id: string }>;
-      expect(events).toHaveLength(2);
-      expect(events[0].type).toBe('b');
-      expect(events[1].type).toBe('c');
-    });
-
-    it('returns all events when after=0', async () => {
-      const { doInstance } = createDO();
+      assertEquals(events.length, 2);
+      assertEquals(events[0].type, 'b');
+      assertEquals(events[1].type, 'c');
+})
+    Deno.test('NotificationNotifierDO - /events - returns all events when after=0', async () => {
+  /* TODO: restore mocks manually */ void 0;
+  const { doInstance } = createDO();
       await doInstance.fetch(postJSON('/emit', { type: 'a', data: null }));
       await doInstance.fetch(postJSON('/emit', { type: 'b', data: null }));
 
       const res = await doInstance.fetch(getRequest('/events?after=0'));
       const body = await jsonBody(res);
-      expect((body.events as unknown[]).length).toBe(2);
-      expect(body.lastEventId).toBe(2);
-    });
-
-    it('returns empty events when buffer is empty', async () => {
-      const { doInstance } = createDO();
+      assertEquals((body.events as unknown[]).length, 2);
+      assertEquals(body.lastEventId, 2);
+})
+    Deno.test('NotificationNotifierDO - /events - returns empty events when buffer is empty', async () => {
+  /* TODO: restore mocks manually */ void 0;
+  const { doInstance } = createDO();
       const res = await doInstance.fetch(getRequest('/events'));
       const body = await jsonBody(res);
-      expect(body.events).toEqual([]);
-      expect(body.lastEventId).toBe(0);
-    });
-
-    it('rejects invalid after cursors', async () => {
-      const { doInstance } = createDO();
+      assertEquals(body.events, []);
+      assertEquals(body.lastEventId, 0);
+})
+    Deno.test('NotificationNotifierDO - /events - rejects invalid after cursors', async () => {
+  /* TODO: restore mocks manually */ void 0;
+  const { doInstance } = createDO();
       const res = await doInstance.fetch(getRequest('/events?after=abc'));
 
-      expect(res.status).toBe(400);
-      await expect(jsonBody(res)).resolves.toEqual({
+      assertEquals(res.status, 400);
+      await assertEquals(await jsonBody(res), {
         error: 'Invalid after cursor',
       });
-    });
-  });
-
-  describe('/state', () => {
-    it('returns current state', async () => {
-      const { doInstance } = createDO();
+})  
+  
+    Deno.test('NotificationNotifierDO - /state - returns current state', async () => {
+  /* TODO: restore mocks manually */ void 0;
+  const { doInstance } = createDO();
       await doInstance.fetch(postJSON('/emit', { type: 'test', data: null }));
 
       const res = await doInstance.fetch(getRequest('/state'));
-      expect(res.status).toBe(200);
+      assertEquals(res.status, 200);
 
       const body = await jsonBody(res);
-      expect(body.eventCount).toBe(1);
-      expect(body.lastEventId).toBe(1);
-      expect(body.connectionCount).toBe(0);
-    });
-  });
-
-  describe('WebSocket handling', () => {
-    it('rejects WebSocket connections without auth validation', async () => {
-      const { doInstance } = createDO();
+      assertEquals(body.eventCount, 1);
+      assertEquals(body.lastEventId, 1);
+      assertEquals(body.connectionCount, 0);
+})  
+  
+    Deno.test('NotificationNotifierDO - WebSocket handling - rejects WebSocket connections without auth validation', async () => {
+  /* TODO: restore mocks manually */ void 0;
+  const { doInstance } = createDO();
       const req = new Request('https://do.internal/ws', {
         headers: { Upgrade: 'websocket' },
       });
       const res = await doInstance.fetch(req);
-      expect(res.status).toBe(401);
-    });
-
-    it('rejects WebSocket connections without user ID', async () => {
-      const { doInstance } = createDO();
+      assertEquals(res.status, 401);
+})
+    Deno.test('NotificationNotifierDO - WebSocket handling - rejects WebSocket connections without user ID', async () => {
+  /* TODO: restore mocks manually */ void 0;
+  const { doInstance } = createDO();
       const req = new Request('https://do.internal/ws', {
         headers: { Upgrade: 'websocket', 'X-WS-Auth-Validated': 'true' },
       });
       const res = await doInstance.fetch(req);
-      expect(res.status).toBe(401);
-    });
-
-    it('rejects WebSocket connections with mismatched user ID', async () => {
-      const state = createMockState();
+      assertEquals(res.status, 401);
+})
+    Deno.test('NotificationNotifierDO - WebSocket handling - rejects WebSocket connections with mismatched user ID', async () => {
+  /* TODO: restore mocks manually */ void 0;
+  const state = createMockState();
       const { doInstance } = createDO(state);
 
       // Set userId via internal state
@@ -310,11 +306,11 @@ describe('NotificationNotifierDO', () => {
         },
       });
       const res = await doInstance.fetch(req);
-      expect(res.status).toBe(403);
-    });
-
-    it('rejects connections when hard cap is reached', async () => {
-      const state = createMockState();
+      assertEquals(res.status, 403);
+})
+    Deno.test('NotificationNotifierDO - WebSocket handling - rejects connections when hard cap is reached', async () => {
+  /* TODO: restore mocks manually */ void 0;
+  const state = createMockState();
       const { doInstance } = createDO(state);
 
       // Fill the connections map to the hard cap
@@ -331,11 +327,11 @@ describe('NotificationNotifierDO', () => {
         },
       });
       const res = await doInstance.fetch(req);
-      expect(res.status).toBe(503);
-    });
-
-    it('rejects invalid last_event_id values before upgrading', async () => {
-      const { doInstance } = createDO();
+      assertEquals(res.status, 503);
+})
+    Deno.test('NotificationNotifierDO - WebSocket handling - rejects invalid last_event_id values before upgrading', async () => {
+  /* TODO: restore mocks manually */ void 0;
+  const { doInstance } = createDO();
       const req = new Request('https://do.internal/ws?last_event_id=abc', {
         headers: {
           Upgrade: 'websocket',
@@ -345,39 +341,37 @@ describe('NotificationNotifierDO', () => {
       });
       const res = await doInstance.fetch(req);
 
-      expect(res.status).toBe(400);
-      await expect(jsonBody(res)).resolves.toEqual({
+      assertEquals(res.status, 400);
+      await assertEquals(await jsonBody(res), {
         error: 'Invalid last_event_id',
       });
-    });
-  });
-
-  describe('webSocketMessage', () => {
-    it('responds to ping with pong', async () => {
-      const { doInstance } = createDO();
+})  
+  
+    Deno.test('NotificationNotifierDO - webSocketMessage - responds to ping with pong', async () => {
+  /* TODO: restore mocks manually */ void 0;
+  const { doInstance } = createDO();
       const ws = new MockWebSocket();
       ws.connectionId = 'conn-1';
 
       await doInstance.webSocketMessage(ws as unknown as WebSocket, 'ping');
 
-      expect(ws.sent).toContain('pong');
-    });
-
-    it('updates lastActivity on any message', async () => {
-      const { doInstance } = createDO();
+      assertStringIncludes(ws.sent, 'pong');
+})
+    Deno.test('NotificationNotifierDO - webSocketMessage - updates lastActivity on any message', async () => {
+  /* TODO: restore mocks manually */ void 0;
+  const { doInstance } = createDO();
       const ws = new MockWebSocket();
       ws.connectionId = 'conn-1';
       ws.lastActivity = 0;
 
       const before = Date.now();
       await doInstance.webSocketMessage(ws as unknown as WebSocket, 'ping');
-      expect(ws.lastActivity).toBeGreaterThanOrEqual(before);
-    });
-  });
-
-  describe('webSocketClose', () => {
-    it('removes connection from map on close', async () => {
-      const { doInstance } = createDO();
+      assert(ws.lastActivity >= before);
+})  
+  
+    Deno.test('NotificationNotifierDO - webSocketClose - removes connection from map on close', async () => {
+  /* TODO: restore mocks manually */ void 0;
+  const { doInstance } = createDO();
       const connections = (doInstance as unknown as { connections: Map<string, unknown> }).connections;
 
       const ws = new MockWebSocket();
@@ -386,13 +380,12 @@ describe('NotificationNotifierDO', () => {
 
       await doInstance.webSocketClose(ws as unknown as WebSocket);
 
-      expect(connections.has('conn-close')).toBe(false);
-    });
-  });
-
-  describe('webSocketError', () => {
-    it('removes connection on error', async () => {
-      const { doInstance } = createDO();
+      assertEquals(connections.has('conn-close'), false);
+})  
+  
+    Deno.test('NotificationNotifierDO - webSocketError - removes connection on error', async () => {
+  /* TODO: restore mocks manually */ void 0;
+  const { doInstance } = createDO();
       const connections = (doInstance as unknown as { connections: Map<string, unknown> }).connections;
 
       const ws = new MockWebSocket();
@@ -401,13 +394,12 @@ describe('NotificationNotifierDO', () => {
 
       await doInstance.webSocketError(ws as unknown as WebSocket, new Error('test error'));
 
-      expect(connections.has('conn-err')).toBe(false);
-    });
-  });
-
-  describe('alarm', () => {
-    it('reschedules alarm when connections exist', async () => {
-      const state = createMockState();
+      assertEquals(connections.has('conn-err'), false);
+})  
+  
+    Deno.test('NotificationNotifierDO - alarm - reschedules alarm when connections exist', async () => {
+  /* TODO: restore mocks manually */ void 0;
+  const state = createMockState();
       const { doInstance } = createDO(state);
 
       // Add a connection with recent activity
@@ -418,33 +410,26 @@ describe('NotificationNotifierDO', () => {
 
       await doInstance.alarm();
 
-      expect(state.storage.setAlarm).toHaveBeenCalled();
-    });
-
-    it('does not reschedule alarm when no connections exist', async () => {
-      const state = createMockState();
+      assert(state.storage.setAlarm.calls.length > 0);
+})
+    Deno.test('NotificationNotifierDO - alarm - does not reschedule alarm when no connections exist', async () => {
+  /* TODO: restore mocks manually */ void 0;
+  const state = createMockState();
       const { doInstance } = createDO(state);
 
       // Reset mock counts from constructor
-      state.storage.setAlarm.mockClear();
+      state.storage.setAlarm;
 
       await doInstance.alarm();
 
-      expect(state.storage.setAlarm).not.toHaveBeenCalled();
-    });
-  });
-
-  describe('constructor hydration', () => {
-    beforeEach(() => {
-      vi.useFakeTimers();
-    });
-
-    afterEach(() => {
-      vi.useRealTimers();
-    });
-
-    it('restores state from storage on construction', async () => {
-      const storage = createMockStorage();
+      assertSpyCalls(state.storage.setAlarm, 0);
+})  
+  
+    Deno.test('NotificationNotifierDO - constructor hydration - restores state from storage on construction', async () => {
+  /* TODO: restore mocks manually */ void 0;
+  new FakeTime();
+  try {
+  const storage = createMockStorage();
       storage._store.set('bufferState', {
         eventBuffer: [{ id: 5, type: 'restored', data: null, timestamp: Date.now() }],
         eventIdCounter: 5,
@@ -455,31 +440,37 @@ describe('NotificationNotifierDO', () => {
       const doInstance = new NotificationNotifierDO(state as unknown as DurableObjectState);
 
       // Flush microtasks from the constructor's floating blockConcurrencyWhile promise
-      await vi.advanceTimersByTimeAsync(0);
+      await await fakeTime.tickAsync(0);
 
       // Verify state was restored by emitting and checking the counter
       const res = await doInstance.fetch(getRequest('/state'));
       const body = await jsonBody(res);
-      expect(body.userId).toBe('user-restored');
-      expect(body.eventCount).toBe(1);
-      expect(body.lastEventId).toBe(5);
-    });
-
-    it('starts with defaults when storage load fails', async () => {
-      const storage = createMockStorage();
-      storage.get.mockRejectedValueOnce(new Error('storage unavailable'));
+      assertEquals(body.userId, 'user-restored');
+      assertEquals(body.eventCount, 1);
+      assertEquals(body.lastEventId, 5);
+  } finally {
+  /* TODO: call fakeTime.restore() */ void 0;
+  }
+})
+    Deno.test('NotificationNotifierDO - constructor hydration - starts with defaults when storage load fails', async () => {
+  /* TODO: restore mocks manually */ void 0;
+  new FakeTime();
+  try {
+  const storage = createMockStorage();
+      storage.get = (async () => { throw new Error('storage unavailable'); }) as any;
 
       const state = createMockState(storage);
       const doInstance = new NotificationNotifierDO(state as unknown as DurableObjectState);
 
       // Flush microtasks from the constructor's floating blockConcurrencyWhile promise
-      await vi.advanceTimersByTimeAsync(0);
+      await await fakeTime.tickAsync(0);
 
       const res = await doInstance.fetch(getRequest('/state'));
       const body = await jsonBody(res);
-      expect(body.eventCount).toBe(0);
-      expect(body.lastEventId).toBe(0);
-      expect(body.userId).toBeNull();
-    });
-  });
-});
+      assertEquals(body.eventCount, 0);
+      assertEquals(body.lastEventId, 0);
+      assertEquals(body.userId, null);
+  } finally {
+  /* TODO: call fakeTime.restore() */ void 0;
+  }
+})  

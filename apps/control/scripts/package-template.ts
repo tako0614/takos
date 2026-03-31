@@ -110,7 +110,7 @@ async function main() {
   if (args.length < 2) {
     console.error('Usage: npx tsx scripts/package-template.ts <template-slug> <source-dir>');
     console.error('Example: npx tsx scripts/package-template.ts my-template ../template-source');
-    process.exit(1);
+    Deno.exit(1);
   }
 
   const [templateSlug, sourceDir] = args;
@@ -118,12 +118,12 @@ async function main() {
 
   if (!TEMPLATE_SLUG_PATTERN.test(templateSlug)) {
     console.error('Invalid template slug. Use lowercase letters, numbers, and hyphens only.');
-    process.exit(1);
+    Deno.exit(1);
   }
 
   if (!fs.existsSync(absoluteSourceDir)) {
     console.error(`Source directory not found: ${absoluteSourceDir}`);
-    process.exit(1);
+    Deno.exit(1);
   }
 
   console.log(`📦 Packaging template: ${templateSlug}`);
@@ -135,7 +135,7 @@ async function main() {
     runCommand('npm', ['run', 'build'], { cwd: absoluteSourceDir, stdio: 'inherit' });
   } catch {
     console.error('Failed to build frontend');
-    process.exit(1);
+    Deno.exit(1);
   }
 
   // Build worker with wrangler
@@ -148,7 +148,7 @@ async function main() {
     );
   } catch {
     console.error('Failed to build worker');
-    process.exit(1);
+    Deno.exit(1);
   }
 
   // Step 2: Find the built files
@@ -157,7 +157,7 @@ async function main() {
 
   if (!fs.existsSync(wranglerBuildDir)) {
     console.error('Wrangler build output not found');
-    process.exit(1);
+    Deno.exit(1);
   }
 
   // Find worker bundle and WASM
@@ -167,7 +167,7 @@ async function main() {
 
   if (!bundleFile) {
     console.error('Worker bundle (index.js) not found');
-    process.exit(1);
+    Deno.exit(1);
   }
 
   const bundleContent = fs.readFileSync(path.join(wranglerBuildDir, bundleFile));

@@ -1,19 +1,21 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { Hono } from 'hono';
 import { AppError, ErrorCodes, isAppError } from 'takos-common/errors';
 import type { Env, User } from '@/types';
 import type { AuthenticatedRouteEnv } from '@/routes/route-auth';
 import { createMockEnv } from '../../../../test/integration/setup';
 
-const mocks = vi.hoisted(() => {
-  const listWorkersForUser = vi.fn();
-  const listWorkersForWorkspace = vi.fn();
-  const createWorker = vi.fn();
-  const countWorkersInWorkspace = vi.fn();
-  const deleteWorker = vi.fn();
-  const getWorkerForUser = vi.fn();
-  const getWorkerForUserWithRole = vi.fn();
-  const slugifyWorkerName = vi.fn((s: string) => s.toLowerCase().replace(/[^a-z0-9-]/g, '-'));
+import { assertEquals, assertStringIncludes, assertObjectMatch } from 'jsr:@std/assert';
+import { assertSpyCalls, assertSpyCallArgs } from 'jsr:@std/testing/mock';
+
+const mocks = {
+  const listWorkersForUser = ((..._args: any[]) => undefined) as any;
+  const listWorkersForWorkspace = ((..._args: any[]) => undefined) as any;
+  const createWorker = ((..._args: any[]) => undefined) as any;
+  const countWorkersInWorkspace = ((..._args: any[]) => undefined) as any;
+  const deleteWorker = ((..._args: any[]) => undefined) as any;
+  const getWorkerForUser = ((..._args: any[]) => undefined) as any;
+  const getWorkerForUserWithRole = ((..._args: any[]) => undefined) as any;
+  const slugifyWorkerName = (s: string) => s.toLowerCase().replace(/[^a-z0-9-]/g, '-');
 
   return {
     listWorkersForUser,
@@ -26,108 +28,34 @@ const mocks = vi.hoisted(() => {
     slugifyWorkerName,
     WORKSPACE_WORKER_LIMITS: { maxWorkers: 20 },
     WORKSPACE_SERVICE_LIMITS: { maxServices: 20 },
-    requireSpaceAccess: vi.fn(),
-    deleteHostnameRouting: vi.fn(),
-    resolveHostnameRouting: vi.fn(),
-    upsertHostnameRouting: vi.fn(),
-    createCloudflareApiClient: vi.fn(),
-    deleteCloudflareCustomHostname: vi.fn(),
-    CommonEnvService: vi.fn(),
-    deleteServiceTakosAccessTokenConfig: vi.fn(),
-    ServiceDesiredStateService: vi.fn(),
-    createOptionalCloudflareWfpProvider: vi.fn(),
-    getDb: vi.fn(),
-    upsertGroupDesiredWorkload: vi.fn(),
-    removeGroupDesiredWorkload: vi.fn(),
-    renameGroupDesiredWorkload: vi.fn(),
+    requireSpaceAccess: ((..._args: any[]) => undefined) as any,
+    deleteHostnameRouting: ((..._args: any[]) => undefined) as any,
+    resolveHostnameRouting: ((..._args: any[]) => undefined) as any,
+    upsertHostnameRouting: ((..._args: any[]) => undefined) as any,
+    createCloudflareApiClient: ((..._args: any[]) => undefined) as any,
+    deleteCloudflareCustomHostname: ((..._args: any[]) => undefined) as any,
+    CommonEnvService: ((..._args: any[]) => undefined) as any,
+    deleteServiceTakosAccessTokenConfig: ((..._args: any[]) => undefined) as any,
+    ServiceDesiredStateService: ((..._args: any[]) => undefined) as any,
+    createOptionalCloudflareWfpProvider: ((..._args: any[]) => undefined) as any,
+    getDb: ((..._args: any[]) => undefined) as any,
+    upsertGroupDesiredWorkload: ((..._args: any[]) => undefined) as any,
+    removeGroupDesiredWorkload: ((..._args: any[]) => undefined) as any,
+    renameGroupDesiredWorkload: ((..._args: any[]) => undefined) as any,
   };
-});
+};
 
-vi.mock('@/services/platform/workers', () => ({
-  listServicesForUser: mocks.listWorkersForUser,
-  listServicesForSpace: mocks.listWorkersForWorkspace,
-  createService: mocks.createWorker,
-  countServicesInSpace: mocks.countWorkersInWorkspace,
-  deleteService: mocks.deleteWorker,
-  getServiceForUser: mocks.getWorkerForUser,
-  getServiceForUserWithRole: mocks.getWorkerForUserWithRole,
-  slugifyServiceName: mocks.slugifyWorkerName,
-  WORKSPACE_WORKER_LIMITS: mocks.WORKSPACE_WORKER_LIMITS,
-  WORKSPACE_SERVICE_LIMITS: mocks.WORKSPACE_SERVICE_LIMITS,
-}));
-
-vi.mock('/home/tako/Desktop/takos/takos/packages/control/src/server/routes/route-auth.ts', async (importOriginal) => {
-  const actual = await importOriginal();
-  return {
-    ...actual,
-    requireSpaceAccess: mocks.requireSpaceAccess,
-  };
-});
-
-vi.mock('@/services/routing', () => ({
-  deleteHostnameRouting: mocks.deleteHostnameRouting,
-  resolveHostnameRouting: mocks.resolveHostnameRouting,
-  upsertHostnameRouting: mocks.upsertHostnameRouting,
-}));
-
-vi.mock('@/platform/providers/cloudflare/api-client.ts', () => ({
-  createCloudflareApiClient: mocks.createCloudflareApiClient,
-}));
-
-vi.mock('@/platform/providers/cloudflare/custom-domains.ts', () => ({
-  deleteCloudflareCustomHostname: mocks.deleteCloudflareCustomHostname,
-}));
-
-vi.mock('/home/tako/Desktop/takos/takos/packages/control/src/application/services/common-env/index.ts', async (importOriginal) => {
-  const actual = await importOriginal();
-  return {
-    ...actual,
-    CommonEnvService: mocks.CommonEnvService,
-    deleteServiceTakosAccessTokenConfig: mocks.deleteServiceTakosAccessTokenConfig,
-    createCommonEnvDeps: vi.fn(() => ({
-      manualLink: {
-        deleteServiceTakosAccessTokenConfig: vi.fn(),
-      },
-    })),
-  };
-});
-
-vi.mock('@/services/platform/worker-desired-state', () => ({
-  ServiceDesiredStateService: mocks.ServiceDesiredStateService,
-}));
-
-vi.mock('@/platform/providers/cloudflare/wfp.ts', () => ({
-  createOptionalCloudflareWfpProvider: mocks.createOptionalCloudflareWfpProvider,
-}));
-
-vi.mock('@/db', async (importOriginal) => ({
-  ...(await importOriginal()),
-  getDb: mocks.getDb,
-}));
-
-vi.mock('@/services/deployment/group-desired-projector', () => ({
-  upsertGroupDesiredWorkload: mocks.upsertGroupDesiredWorkload,
-  removeGroupDesiredWorkload: mocks.removeGroupDesiredWorkload,
-  renameGroupDesiredWorkload: mocks.renameGroupDesiredWorkload,
-}));
-
-vi.mock('/home/tako/Desktop/takos/takos/packages/control/src/application/services/platform/workers.ts', async (importOriginal) => {
-  const actual = await importOriginal();
-  return {
-    ...actual,
-    listServicesForUser: mocks.listWorkersForUser,
-    listServicesForSpace: mocks.listWorkersForWorkspace,
-    createService: mocks.createWorker,
-    countServicesInSpace: mocks.countWorkersInWorkspace,
-    deleteService: mocks.deleteWorker,
-    getServiceForUser: mocks.getWorkerForUser,
-    getServiceForUserWithRole: mocks.getWorkerForUserWithRole,
-    slugifyServiceName: mocks.slugifyWorkerName,
-    WORKSPACE_WORKER_LIMITS: mocks.WORKSPACE_WORKER_LIMITS,
-    WORKSPACE_SERVICE_LIMITS: mocks.WORKSPACE_SERVICE_LIMITS,
-  };
-});
-
+// [Deno] vi.mock removed - manually stub imports from '@/services/platform/workers'
+// [Deno] vi.mock removed - manually stub imports from '/home/tako/Desktop/takos/takos/packages/control/src/server/routes/route-auth.ts'
+// [Deno] vi.mock removed - manually stub imports from '@/services/routing'
+// [Deno] vi.mock removed - manually stub imports from '@/platform/providers/cloudflare/api-client.ts'
+// [Deno] vi.mock removed - manually stub imports from '@/platform/providers/cloudflare/custom-domains.ts'
+// [Deno] vi.mock removed - manually stub imports from '/home/tako/Desktop/takos/takos/packages/control/src/application/services/common-env/index.ts'
+// [Deno] vi.mock removed - manually stub imports from '@/services/platform/worker-desired-state'
+// [Deno] vi.mock removed - manually stub imports from '@/platform/providers/cloudflare/wfp.ts'
+// [Deno] vi.mock removed - manually stub imports from '@/db'
+// [Deno] vi.mock removed - manually stub imports from '@/services/deployment/group-desired-projector'
+// [Deno] vi.mock removed - manually stub imports from '/home/tako/Desktop/takos/takos/packages/control/src/application/services/platform/workers.ts'
 import workersBase from '@/routes/workers/routes';
 import workersSlug from '@/routes/workers/slug';
 
@@ -165,20 +93,16 @@ function createApp(user: User, routeModule: Hono<AuthenticatedRouteEnv> = worker
   return app;
 }
 
-describe('services base routes', () => {
+
   let env: Env;
-
-  beforeEach(() => {
-    vi.clearAllMocks();
+  
+    Deno.test('services base routes - GET /api/services - returns services list for the authenticated user', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
     env = createMockEnv() as unknown as Env;
-  });
-
-  describe('GET /api/services', () => {
-    it('returns services list for the authenticated user', async () => {
-      const workerList = [
+  const workerList = [
         { id: 'w-1', slug: 'my-worker', status: 'active' },
       ];
-      mocks.listWorkersForUser.mockResolvedValue(workerList);
+      mocks.listWorkersForUser = (async () => workerList) as any;
 
       const app = createApp(createUser());
       const res = await app.fetch(
@@ -187,22 +111,22 @@ describe('services base routes', () => {
         {} as ExecutionContext,
       );
 
-      expect(res.status).toBe(200);
+      assertEquals(res.status, 200);
       const json = await res.json() as { services: unknown[] };
-      expect(json.services).toEqual(workerList);
-      expect(mocks.listWorkersForUser).toHaveBeenCalledWith(env.DB, 'user-1');
-    });
-  });
-
-  describe('GET /api/services/space/:spaceId', () => {
-    it('returns services for the specified workspace', async () => {
-      mocks.requireSpaceAccess.mockResolvedValue({
+      assertEquals(json.services, workerList);
+      assertSpyCallArgs(mocks.listWorkersForUser, 0, [env.DB, 'user-1']);
+})  
+  
+    Deno.test('services base routes - GET /api/services/space/:spaceId - returns services for the specified workspace', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+    env = createMockEnv() as unknown as Env;
+  mocks.requireSpaceAccess = (async () => ({
         space: { id: 'ws-1', name: 'My Space' },
         membership: { role: 'owner' },
-      });
-      mocks.listWorkersForWorkspace.mockResolvedValue([
+      })) as any;
+      mocks.listWorkersForWorkspace = (async () => [
         { id: 'w-2', slug: 'space-worker' },
-      ]);
+      ]) as any;
 
       const app = createApp(createUser());
       const res = await app.fetch(
@@ -211,16 +135,15 @@ describe('services base routes', () => {
         {} as ExecutionContext,
       );
 
-      expect(res.status).toBe(200);
+      assertEquals(res.status, 200);
       const json = await res.json() as { services: unknown[] };
-      expect(json.services).toHaveLength(1);
-      expect(mocks.listWorkersForWorkspace).toHaveBeenCalledWith(env.DB, 'ws-1');
-    });
-
-    it('returns error when workspace access is denied', async () => {
-      mocks.requireSpaceAccess.mockRejectedValue(
-        new AppError('Workspace not found', ErrorCodes.NOT_FOUND, 404),
-      );
+      assertEquals(json.services.length, 1);
+      assertSpyCallArgs(mocks.listWorkersForWorkspace, 0, [env.DB, 'ws-1']);
+})
+    Deno.test('services base routes - GET /api/services/space/:spaceId - returns error when workspace access is denied', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+    env = createMockEnv() as unknown as Env;
+  mocks.requireSpaceAccess = (async () => { throw new AppError('Workspace not found', ErrorCodes.NOT_FOUND, 404),; }) as any;
 
       const app = createApp(createUser());
       const res = await app.fetch(
@@ -229,17 +152,17 @@ describe('services base routes', () => {
         {} as ExecutionContext,
       );
 
-      expect(res.status).toBe(404);
-      expect(mocks.listWorkersForWorkspace).not.toHaveBeenCalled();
-    });
-  });
-
-  describe('POST /api/services', () => {
-    it('creates a service and returns 201', async () => {
-      mocks.countWorkersInWorkspace.mockResolvedValue(0);
-      mocks.createWorker.mockResolvedValue({
+      assertEquals(res.status, 404);
+      assertSpyCalls(mocks.listWorkersForWorkspace, 0);
+})  
+  
+    Deno.test('services base routes - POST /api/services - creates a service and returns 201', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+    env = createMockEnv() as unknown as Env;
+  mocks.countWorkersInWorkspace = (async () => 0) as any;
+      mocks.createWorker = (async () => ({
         service: { id: 'w-new', slug: 'new-worker', status: 'pending' },
-      });
+      })) as any;
 
       const app = createApp(createUser());
       const res = await app.fetch(
@@ -252,17 +175,18 @@ describe('services base routes', () => {
         {} as ExecutionContext,
       );
 
-      expect(res.status).toBe(201);
+      assertEquals(res.status, 201);
       const json = await res.json() as { service: { id: string } };
-      expect(json.service.id).toBe('w-new');
-      expect(mocks.createWorker).toHaveBeenCalledWith(
+      assertEquals(json.service.id, 'w-new');
+      assertSpyCallArgs(mocks.createWorker, 0, [
         env.DB,
-        expect.objectContaining({ workerType: 'service' }),
-      );
-    });
-
-    it('returns 429 when workspace reaches max services', async () => {
-      mocks.countWorkersInWorkspace.mockResolvedValue(20);
+        ({ workerType: 'service' }),
+      ]);
+})
+    Deno.test('services base routes - POST /api/services - returns 429 when workspace reaches max services', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+    env = createMockEnv() as unknown as Env;
+  mocks.countWorkersInWorkspace = (async () => 20) as any;
 
       const app = createApp(createUser());
       const res = await app.fetch(
@@ -275,21 +199,22 @@ describe('services base routes', () => {
         {} as ExecutionContext,
       );
 
-      expect(res.status).toBe(429);
+      assertEquals(res.status, 429);
       const json = await res.json() as { error: string };
-      expect(json.error).toContain('maximum number of services');
-      expect(mocks.createWorker).not.toHaveBeenCalled();
-    });
-
-    it('respects space_id to scope service creation to a workspace', async () => {
-      mocks.requireSpaceAccess.mockResolvedValue({
+      assertStringIncludes(json.error, 'maximum number of services');
+      assertSpyCalls(mocks.createWorker, 0);
+})
+    Deno.test('services base routes - POST /api/services - respects space_id to scope service creation to a workspace', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+    env = createMockEnv() as unknown as Env;
+  mocks.requireSpaceAccess = (async () => ({
         space: { id: 'ws-2' },
         membership: { role: 'admin' },
-      });
-      mocks.countWorkersInWorkspace.mockResolvedValue(0);
-      mocks.createWorker.mockResolvedValue({
+      })) as any;
+      mocks.countWorkersInWorkspace = (async () => 0) as any;
+      mocks.createWorker = (async () => ({
         service: { id: 'w-scoped', slug: 'scoped' },
-      });
+      })) as any;
 
       const app = createApp(createUser());
       const res = await app.fetch(
@@ -302,29 +227,30 @@ describe('services base routes', () => {
         {} as ExecutionContext,
       );
 
-      expect(res.status).toBe(201);
-      expect(mocks.createWorker).toHaveBeenCalledWith(
+      assertEquals(res.status, 201);
+      assertSpyCallArgs(mocks.createWorker, 0, [
         env.DB,
-        expect.objectContaining({ spaceId: 'ws-2' }),
-      );
-    });
-
-    it('projects grouped service creation back into desired state', async () => {
-      mocks.requireSpaceAccess.mockResolvedValue({
+        ({ spaceId: 'ws-2' }),
+      ]);
+})
+    Deno.test('services base routes - POST /api/services - projects grouped service creation back into desired state', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+    env = createMockEnv() as unknown as Env;
+  mocks.requireSpaceAccess = (async () => ({
         space: { id: 'ws-1' },
         membership: { role: 'admin' },
-      });
-      mocks.countWorkersInWorkspace.mockResolvedValue(0);
-      mocks.createWorker.mockResolvedValue({
+      })) as any;
+      mocks.countWorkersInWorkspace = (async () => 0) as any;
+      mocks.createWorker = (async () => ({
         service: { id: 'svc-1', slug: 'api-service', status: 'pending' },
-      });
-      mocks.getDb.mockReturnValue({
-        select: vi.fn(() => ({
-          from: vi.fn().mockReturnThis(),
-          where: vi.fn().mockReturnThis(),
-          get: vi.fn().mockResolvedValue({ id: 'group-1', spaceId: 'ws-1' }),
-        })),
-      });
+      })) as any;
+      mocks.getDb = (() => ({
+        select: () => ({
+          from: (function(this: any) { return this; }),
+          where: (function(this: any) { return this; }),
+          get: (async () => ({ id: 'group-1', spaceId: 'ws-1' })),
+        }),
+      })) as any;
 
       const app = createApp(createUser());
       const res = await app.fetch(
@@ -347,10 +273,10 @@ describe('services base routes', () => {
         {} as ExecutionContext,
       );
 
-      expect(res.status).toBe(201);
-      expect(mocks.upsertGroupDesiredWorkload).toHaveBeenCalledWith(
+      assertEquals(res.status, 201);
+      assertSpyCallArgs(mocks.upsertGroupDesiredWorkload, 0, [
         env,
-        expect.objectContaining({
+        ({
           groupId: 'group-1',
           category: 'service',
           name: 'api-service',
@@ -368,25 +294,26 @@ describe('services base routes', () => {
             },
           },
         }),
-      );
-    });
-
-    it('projects grouped app creation back into desired state', async () => {
-      mocks.requireSpaceAccess.mockResolvedValue({
+      ]);
+})
+    Deno.test('services base routes - POST /api/services - projects grouped app creation back into desired state', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+    env = createMockEnv() as unknown as Env;
+  mocks.requireSpaceAccess = (async () => ({
         space: { id: 'ws-1' },
         membership: { role: 'admin' },
-      });
-      mocks.countWorkersInWorkspace.mockResolvedValue(0);
-      mocks.createWorker.mockResolvedValue({
+      })) as any;
+      mocks.countWorkersInWorkspace = (async () => 0) as any;
+      mocks.createWorker = (async () => ({
         service: { id: 'app-1', slug: 'web-app', status: 'pending' },
-      });
-      mocks.getDb.mockReturnValue({
-        select: vi.fn(() => ({
-          from: vi.fn().mockReturnThis(),
-          where: vi.fn().mockReturnThis(),
-          get: vi.fn().mockResolvedValue({ id: 'group-1', spaceId: 'ws-1' }),
-        })),
-      });
+      })) as any;
+      mocks.getDb = (() => ({
+        select: () => ({
+          from: (function(this: any) { return this; }),
+          where: (function(this: any) { return this; }),
+          get: (async () => ({ id: 'group-1', spaceId: 'ws-1' })),
+        }),
+      })) as any;
 
       const app = createApp(createUser());
       const res = await app.fetch(
@@ -403,10 +330,10 @@ describe('services base routes', () => {
         {} as ExecutionContext,
       );
 
-      expect(res.status).toBe(201);
-      expect(mocks.upsertGroupDesiredWorkload).toHaveBeenCalledWith(
+      assertEquals(res.status, 201);
+      assertSpyCallArgs(mocks.upsertGroupDesiredWorkload, 0, [
         env,
-        expect.objectContaining({
+        ({
           groupId: 'group-1',
           category: 'worker',
           name: 'web-app',
@@ -416,16 +343,16 @@ describe('services base routes', () => {
             },
           },
         }),
-      );
-    });
-  });
-
-  describe('GET /api/services/:id', () => {
-    it('returns service details for the owner', async () => {
-      mocks.getWorkerForUser.mockResolvedValue({
+      ]);
+})  
+  
+    Deno.test('services base routes - GET /api/services/:id - returns service details for the owner', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+    env = createMockEnv() as unknown as Env;
+  mocks.getWorkerForUser = (async () => ({
         id: 'w-1',
         slug: 'test-worker',
-      });
+      })) as any;
 
       const app = createApp(createUser());
       const res = await app.fetch(
@@ -434,13 +361,14 @@ describe('services base routes', () => {
         {} as ExecutionContext,
       );
 
-      expect(res.status).toBe(200);
+      assertEquals(res.status, 200);
       const json = await res.json() as { service: { id: string } };
-      expect(json.service.id).toBe('w-1');
-    });
-
-    it('returns 404 when service not found', async () => {
-      mocks.getWorkerForUser.mockResolvedValue(null);
+      assertEquals(json.service.id, 'w-1');
+})
+    Deno.test('services base routes - GET /api/services/:id - returns 404 when service not found', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+    env = createMockEnv() as unknown as Env;
+  mocks.getWorkerForUser = (async () => null) as any;
 
       const app = createApp(createUser());
       const res = await app.fetch(
@@ -449,16 +377,16 @@ describe('services base routes', () => {
         {} as ExecutionContext,
       );
 
-      expect(res.status).toBe(404);
-    });
-  });
-
-  describe('GET /api/services/:id/logs', () => {
-    it('returns empty invocations when no active deployment', async () => {
-      mocks.getWorkerForUser.mockResolvedValue({ id: 'w-1' });
-      mocks.ServiceDesiredStateService.mockReturnValue({
-        getCurrentDeploymentArtifactRef: vi.fn().mockResolvedValue(null),
-      });
+      assertEquals(res.status, 404);
+})  
+  
+    Deno.test('services base routes - GET /api/services/:id/logs - returns empty invocations when no active deployment', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+    env = createMockEnv() as unknown as Env;
+  mocks.getWorkerForUser = (async () => ({ id: 'w-1' })) as any;
+      mocks.ServiceDesiredStateService = (() => ({
+        getCurrentDeploymentArtifactRef: (async () => null),
+      })) as any;
 
       const app = createApp(createUser());
       const res = await app.fetch(
@@ -467,13 +395,14 @@ describe('services base routes', () => {
         {} as ExecutionContext,
       );
 
-      expect(res.status).toBe(200);
+      assertEquals(res.status, 200);
       const json = await res.json() as { invocations: unknown[] };
-      expect(json.invocations).toEqual([]);
-    });
-
-    it('returns 404 when service not found', async () => {
-      mocks.getWorkerForUser.mockResolvedValue(null);
+      assertEquals(json.invocations, []);
+})
+    Deno.test('services base routes - GET /api/services/:id/logs - returns 404 when service not found', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+    env = createMockEnv() as unknown as Env;
+  mocks.getWorkerForUser = (async () => null) as any;
 
       const app = createApp(createUser());
       const res = await app.fetch(
@@ -482,13 +411,13 @@ describe('services base routes', () => {
         {} as ExecutionContext,
       );
 
-      expect(res.status).toBe(404);
-    });
-  });
-
-  describe('DELETE /api/services/:id', () => {
-    it('returns 404 when service not found or unauthorized', async () => {
-      mocks.getWorkerForUserWithRole.mockResolvedValue(null);
+      assertEquals(res.status, 404);
+})  
+  
+    Deno.test('services base routes - DELETE /api/services/:id - returns 404 when service not found or unauthorized', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+    env = createMockEnv() as unknown as Env;
+  mocks.getWorkerForUserWithRole = (async () => null) as any;
 
       const app = createApp(createUser());
       const res = await app.fetch(
@@ -497,27 +426,28 @@ describe('services base routes', () => {
         {} as ExecutionContext,
       );
 
-      expect(res.status).toBe(404);
-      expect(mocks.deleteWorker).not.toHaveBeenCalled();
-    });
-
-    it('deletes service and returns success', async () => {
-      const mockDbChain: any = {
-        select: vi.fn().mockReturnThis(),
-        from: vi.fn().mockReturnThis(),
-        where: vi.fn().mockReturnThis(),
-        all: vi.fn().mockResolvedValue([]),
-        delete: vi.fn().mockReturnValue({ where: vi.fn().mockResolvedValue(undefined) }),
+      assertEquals(res.status, 404);
+      assertSpyCalls(mocks.deleteWorker, 0);
+})
+    Deno.test('services base routes - DELETE /api/services/:id - deletes service and returns success', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+    env = createMockEnv() as unknown as Env;
+  const mockDbChain: any = {
+        select: (function(this: any) { return this; }),
+        from: (function(this: any) { return this; }),
+        where: (function(this: any) { return this; }),
+        all: (async () => []),
+        delete: (() => ({ where: (async () => undefined) })),
       };
-      mocks.getDb.mockReturnValue(mockDbChain);
-      mocks.getWorkerForUserWithRole.mockResolvedValue({
+      mocks.getDb = (() => mockDbChain) as any;
+      mocks.getWorkerForUserWithRole = (async () => ({
         id: 'w-1',
         space_id: 'ws-1',
         hostname: null,
         service_name: null,
-      });
-      mocks.deleteServiceTakosAccessTokenConfig.mockResolvedValue(undefined);
-      mocks.createOptionalCloudflareWfpProvider.mockReturnValue(null);
+      })) as any;
+      mocks.deleteServiceTakosAccessTokenConfig = (async () => undefined) as any;
+      mocks.createOptionalCloudflareWfpProvider = (() => null) as any;
 
       const app = createApp(createUser());
       const res = await app.fetch(
@@ -526,49 +456,42 @@ describe('services base routes', () => {
         {} as ExecutionContext,
       );
 
-      expect(res.status).toBe(200);
+      assertEquals(res.status, 200);
       const json = await res.json() as { success: boolean };
-      expect(json.success).toBe(true);
-      expect(mocks.deleteWorker).toHaveBeenCalledWith(env.DB, 'w-1');
-    });
-  });
-});
+      assertEquals(json.success, true);
+      assertSpyCallArgs(mocks.deleteWorker, 0, [env.DB, 'w-1']);
+})  
 
-describe('services slug routes', () => {
   let env: Env;
-
-  beforeEach(() => {
-    vi.clearAllMocks();
+  
+    Deno.test('services slug routes - PATCH /api/services/:id/slug - renames grouped desired workload keys after slug updates', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
     env = createMockEnv() as unknown as Env;
-  });
-
-  describe('PATCH /api/services/:id/slug', () => {
-    it('renames grouped desired workload keys after slug updates', async () => {
-      mocks.slugifyWorkerName.mockReturnValue('new-slug');
-      mocks.getWorkerForUserWithRole.mockResolvedValue({
+  mocks.slugifyWorkerName = (() => 'new-slug') as any;
+      mocks.getWorkerForUserWithRole = (async () => ({
         id: 'w-1',
         group_id: 'group-1',
         service_type: 'service',
         slug: 'old-slug',
         hostname: null,
-      });
-      mocks.ServiceDesiredStateService.mockReturnValue({
-        getRoutingTarget: vi.fn().mockResolvedValue(null),
-      });
+      })) as any;
+      mocks.ServiceDesiredStateService = (() => ({
+        getRoutingTarget: (async () => null),
+      })) as any;
 
-      const updateWhere = vi.fn().mockResolvedValue(undefined);
-      mocks.getDb.mockReturnValue({
-        select: vi.fn(() => ({
-          from: vi.fn().mockReturnThis(),
-          where: vi.fn().mockReturnThis(),
-          get: vi.fn().mockResolvedValue(null),
-        })),
-        update: vi.fn(() => ({
-          set: vi.fn(() => ({
+      const updateWhere = (async () => undefined);
+      mocks.getDb = (() => ({
+        select: () => ({
+          from: (function(this: any) { return this; }),
+          where: (function(this: any) { return this; }),
+          get: (async () => null),
+        }),
+        update: () => ({
+          set: () => ({
             where: updateWhere,
-          })),
-        })),
-      });
+          }),
+        }),
+      })) as any;
 
       const app = createApp(createUser(), workersSlug);
       const res = await app.fetch(
@@ -581,17 +504,18 @@ describe('services slug routes', () => {
         {} as ExecutionContext,
       );
 
-      expect(res.status).toBe(200);
-      expect(mocks.renameGroupDesiredWorkload).toHaveBeenCalledWith(env, {
+      assertEquals(res.status, 200);
+      assertSpyCallArgs(mocks.renameGroupDesiredWorkload, 0, [env, {
         groupId: 'group-1',
         category: 'service',
         fromName: 'old-slug',
         toName: 'new-slug',
-      });
-    });
-
-    it('returns 404 when service not found', async () => {
-      mocks.getWorkerForUserWithRole.mockResolvedValue(null);
+      }]);
+})
+    Deno.test('services slug routes - PATCH /api/services/:id/slug - returns 404 when service not found', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+    env = createMockEnv() as unknown as Env;
+  mocks.getWorkerForUserWithRole = (async () => null) as any;
 
       const app = createApp(createUser(), workersSlug);
       const res = await app.fetch(
@@ -604,11 +528,12 @@ describe('services slug routes', () => {
         {} as ExecutionContext,
       );
 
-      expect(res.status).toBe(404);
-    });
-
-    it('rejects slugs shorter than 3 characters', async () => {
-      mocks.slugifyWorkerName.mockReturnValue('ab');
+      assertEquals(res.status, 404);
+})
+    Deno.test('services slug routes - PATCH /api/services/:id/slug - rejects slugs shorter than 3 characters', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+    env = createMockEnv() as unknown as Env;
+  mocks.slugifyWorkerName = (() => 'ab') as any;
 
       const app = createApp(createUser(), workersSlug);
       const res = await app.fetch(
@@ -621,16 +546,17 @@ describe('services slug routes', () => {
         {} as ExecutionContext,
       );
 
-      expect(res.status).toBe(400);
+      assertEquals(res.status, 400);
       const json = await res.json() as { error: string };
-      expect(json.error).toMatchObject({
+      assertObjectMatch(json.error, {
         code: 'BAD_REQUEST',
         message: expect.stringContaining('between 3 and 32'),
       });
-    });
-
-    it('rejects reserved subdomains', async () => {
-      mocks.slugifyWorkerName.mockReturnValue('admin');
+})
+    Deno.test('services slug routes - PATCH /api/services/:id/slug - rejects reserved subdomains', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+    env = createMockEnv() as unknown as Env;
+  mocks.slugifyWorkerName = (() => 'admin') as any;
 
       const app = createApp(createUser(), workersSlug);
       const res = await app.fetch(
@@ -643,16 +569,17 @@ describe('services slug routes', () => {
         {} as ExecutionContext,
       );
 
-      expect(res.status).toBe(400);
+      assertEquals(res.status, 400);
       const json = await res.json() as { error: string };
-      expect(json.error).toMatchObject({
+      assertObjectMatch(json.error, {
         code: 'BAD_REQUEST',
         message: expect.stringContaining('reserved'),
       });
-    });
-
-    it('rejects empty slug', async () => {
-      const app = createApp(createUser(), workersSlug);
+})
+    Deno.test('services slug routes - PATCH /api/services/:id/slug - rejects empty slug', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+    env = createMockEnv() as unknown as Env;
+  const app = createApp(createUser(), workersSlug);
       const res = await app.fetch(
         new Request('http://localhost/api/services/w-1/slug', {
           method: 'PATCH',
@@ -663,24 +590,25 @@ describe('services slug routes', () => {
         {} as ExecutionContext,
       );
 
-      expect(res.status).toBe(400);
-    });
-
-    it('detects slug collision and returns 409', async () => {
-      mocks.slugifyWorkerName.mockReturnValue('taken-slug');
-      mocks.getWorkerForUserWithRole.mockResolvedValue({
+      assertEquals(res.status, 400);
+})
+    Deno.test('services slug routes - PATCH /api/services/:id/slug - detects slug collision and returns 409', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+    env = createMockEnv() as unknown as Env;
+  mocks.slugifyWorkerName = (() => 'taken-slug') as any;
+      mocks.getWorkerForUserWithRole = (async () => ({
         id: 'w-1',
         hostname: 'old.app.test.takos.jp',
         slug: 'old-slug',
-      });
+      })) as any;
 
       const mockDbChain: any = {
-        select: vi.fn().mockReturnThis(),
-        from: vi.fn().mockReturnThis(),
-        where: vi.fn().mockReturnThis(),
-        get: vi.fn().mockResolvedValue({ id: 'w-other' }),
+        select: (function(this: any) { return this; }),
+        from: (function(this: any) { return this; }),
+        where: (function(this: any) { return this; }),
+        get: (async () => ({ id: 'w-other' })),
       };
-      mocks.getDb.mockReturnValue(mockDbChain);
+      mocks.getDb = (() => mockDbChain) as any;
 
       const app = createApp(createUser(), workersSlug);
       const res = await app.fetch(
@@ -693,7 +621,5 @@ describe('services slug routes', () => {
         {} as ExecutionContext,
       );
 
-      expect(res.status).toBe(409);
-    });
-  });
-});
+      assertEquals(res.status, 409);
+})  

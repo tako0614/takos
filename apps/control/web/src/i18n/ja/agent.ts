@@ -85,6 +85,11 @@ export const agent = {
     'workHistoryFilter.subagents': 'サブエージェント',
     'workHistoryFilter.artifacts': '成果物',
 
+    // Official / Custom skills
+    officialSkills: '公式スキル',
+    officialSkillsHint: 'チームが管理するビルトインスキル',
+    customSkills: 'カスタムスキル',
+
     // Model Settings
     modelProvider: 'プロバイダー',
     saveModelSettings: 'モデル設定を保存',

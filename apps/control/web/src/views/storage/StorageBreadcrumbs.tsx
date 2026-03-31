@@ -1,4 +1,4 @@
-import { Fragment } from 'react';
+import { For, Show } from 'solid-js';
 import { useI18n } from '../../store/i18n';
 import { Icons } from '../../lib/Icons';
 
@@ -7,43 +7,43 @@ interface StorageBreadcrumbsProps {
   onNavigate: (path: string) => void;
 }
 
-export function StorageBreadcrumbs({ currentPath, onNavigate }: StorageBreadcrumbsProps) {
+export function StorageBreadcrumbs(props: StorageBreadcrumbsProps) {
   const { t } = useI18n();
-  const breadcrumbParts = currentPath === '/' ? [] : currentPath.split('/').filter(Boolean);
+  const breadcrumbParts = () => props.currentPath === '/' ? [] : props.currentPath.split('/').filter(Boolean);
 
   return (
-    <div className="flex-shrink-0 flex items-center gap-1 px-5 pb-2 overflow-x-auto">
+    <div class="flex-shrink-0 flex items-center gap-1 px-5 pb-2 overflow-x-auto">
       <button
-        onClick={() => onNavigate('/')}
-        className={
+        onClick={() => props.onNavigate('/')}
+        class={
           'flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm transition-colors '
-          + (breadcrumbParts.length === 0
+          + (breadcrumbParts().length === 0
             ? 'font-medium text-zinc-900 dark:text-zinc-100 bg-zinc-200/60 dark:bg-zinc-800'
             : 'text-zinc-600 dark:text-zinc-400 hover:bg-zinc-200/60 dark:hover:bg-zinc-800')
         }
       >
-        <Icons.HardDrive className="w-4 h-4" />
+        <Icons.HardDrive class="w-4 h-4" />
         {t('storageTitle')}
       </button>
-      {breadcrumbParts.map((part, index) => {
-        const isLast = index === breadcrumbParts.length - 1;
+      <For each={breadcrumbParts()}>{(part, index) => {
+        const isLast = () => index() === breadcrumbParts().length - 1;
         return (
-          <Fragment key={index}>
-            <Icons.ChevronRight className="w-4 h-4 text-zinc-400 flex-shrink-0" />
+          <>
+            <Icons.ChevronRight class="w-4 h-4 text-zinc-400 flex-shrink-0" />
             <button
-              onClick={() => onNavigate('/' + breadcrumbParts.slice(0, index + 1).join('/'))}
-              className={
+              onClick={() => props.onNavigate('/' + breadcrumbParts().slice(0, index() + 1).join('/'))}
+              class={
                 'px-3 py-1.5 rounded-lg text-sm truncate max-w-[200px] transition-colors '
-                + (isLast
+                + (isLast()
                   ? 'font-medium text-zinc-900 dark:text-zinc-100 bg-zinc-200/60 dark:bg-zinc-800'
                   : 'text-zinc-600 dark:text-zinc-400 hover:bg-zinc-200/60 dark:hover:bg-zinc-800')
               }
             >
               {part}
             </button>
-          </Fragment>
+          </>
         );
-      })}
+      }}</For>
     </div>
   );
 }

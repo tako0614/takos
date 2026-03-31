@@ -1,4 +1,3 @@
-import { describe, expect, it, vi } from 'vitest';
 import {
   createWorkersDispatchDeploymentProvider,
   createDeploymentProvider,
@@ -8,9 +7,12 @@ import {
   serializeDeploymentTarget,
 } from '@/services/deployment/provider';
 
-describe('deployment provider helpers', () => {
-  it('serializes and parses an OCI deployment target', () => {
-    const serialized = serializeDeploymentTarget({
+
+import { assertEquals, assertRejects } from 'jsr:@std/assert';
+import { assertSpyCalls, assertSpyCallArgs } from 'jsr:@std/testing/mock';
+
+  Deno.test('deployment provider helpers - serializes and parses an OCI deployment target', () => {
+  const serialized = serializeDeploymentTarget({
       provider: { name: 'oci' },
       target: {
         route_ref: 'takos-worker',
@@ -25,11 +27,11 @@ describe('deployment provider helpers', () => {
       },
     });
 
-    expect(serialized.providerName).toBe('oci');
-    expect(parseDeploymentTargetConfig({
+    assertEquals(serialized.providerName, 'oci');
+    assertEquals(parseDeploymentTargetConfig({
       provider_name: 'oci',
       target_json: serialized.targetJson,
-    })).toEqual({
+    }), {
       route_ref: 'takos-worker',
       endpoint: {
         kind: 'http-url',
@@ -40,26 +42,24 @@ describe('deployment provider helpers', () => {
         exposed_port: 8080,
       },
     });
-  });
-
-  it('returns a cloudflare default provider when config is absent', () => {
-    expect(serializeDeploymentTarget(undefined)).toEqual({
+})
+  Deno.test('deployment provider helpers - returns a cloudflare default provider when config is absent', () => {
+  assertEquals(serializeDeploymentTarget(undefined), {
       providerName: 'workers-dispatch',
       targetJson: '{}',
       providerStateJson: '{}',
     });
-    expect(parseDeploymentTargetConfig({
+    assertEquals(parseDeploymentTargetConfig({
       provider_name: 'workers-dispatch',
       target_json: '{}',
-    })).toEqual({});
-  });
-
-  it('delegates cloudflare deploys to WFP', async () => {
-    const wfp = {
+    }), {});
+})
+  Deno.test('deployment provider helpers - delegates cloudflare deploys to WFP', async () => {
+  const wfp = {
       workers: {
-        createWorker: vi.fn().mockResolvedValue(undefined),
-        createWorkerWithWasm: vi.fn().mockResolvedValue(undefined),
-        workerExists: vi.fn().mockResolvedValue(true),
+        createWorker: (async () => undefined),
+        createWorkerWithWasm: (async () => undefined),
+        workerExists: (async () => true),
       },
     };
     const provider = createWorkersDispatchDeploymentProvider(wfp as never);
@@ -79,17 +79,16 @@ describe('deployment provider helpers', () => {
       },
     });
 
-    expect(wfp.workers.createWorker).toHaveBeenCalledWith(expect.objectContaining({
+    assertSpyCallArgs(wfp.workers.createWorker, 0, [({
       workerName: 'artifact-ref',
       workerScript: 'export default {}',
-    }));
-    await expect(provider.assertRollbackTarget('artifact-ref')).resolves.toBeUndefined();
-  });
+    })]);
+    await assertEquals(await provider.assertRollbackTarget('artifact-ref'), undefined);
+})
+  Deno.test('deployment provider helpers - accepts runtime-host worker deploys without a remote provider call', async () => {
+  const provider = createRuntimeHostDeploymentProvider();
 
-  it('accepts runtime-host worker deploys without a remote provider call', async () => {
-    const provider = createRuntimeHostDeploymentProvider();
-
-    await expect(provider.deploy({
+    await assertEquals(await provider.deploy({
       deployment: {} as never,
       artifactRef: 'artifact-ref',
       bundleContent: 'export default {}',
@@ -102,13 +101,12 @@ describe('deployment provider helpers', () => {
           compatibility_flags: [],
         },
       },
-    })).resolves.toBeUndefined();
+    }), undefined);
 
-    await expect(provider.assertRollbackTarget('artifact-ref')).resolves.toBeUndefined();
-  });
-
-  it('resolves provider config from the attached registry before falling back to env config', async () => {
-    const fetchImpl = vi.fn().mockResolvedValue(new Response(null, { status: 202 }));
+    await assertEquals(await provider.assertRollbackTarget('artifact-ref'), undefined);
+})
+  Deno.test('deployment provider helpers - resolves provider config from the attached registry before falling back to env config', async () => {
+  const fetchImpl = (async () => new Response(null, { status: 202 }));
     const provider = createDeploymentProvider({
       provider_name: 'oci',
       target_json: JSON.stringify({
@@ -134,7 +132,7 @@ describe('deployment provider helpers', () => {
       fetchImpl,
     });
 
-    await expect(provider.deploy({
+    await assertEquals(await provider.deploy({
       deployment: { id: 'dep-1', space_id: 'space-1' } as never,
       artifactRef: 'artifact-ref',
       bundleContent: 'export default {}',
@@ -147,13 +145,12 @@ describe('deployment provider helpers', () => {
           compatibility_flags: [],
         },
       },
-    })).resolves.toBeUndefined();
-    expect(fetchImpl).toHaveBeenCalledWith(
+    }), undefined);
+    assertSpyCallArgs(fetchImpl, 0, [
       'https://orchestrator.example.test/deploy',
-      expect.any(Object),
-    );
-  });
-
+      /* expect.any(Object) */ {} as any,
+    ]);
+})
   it.each([
     ['ecs', 'https://ecs-orchestrator.example.test', 'ecs-token', {
       region: 'us-east-1',
@@ -170,7 +167,7 @@ describe('deployment provider helpers', () => {
       deploymentName: 'takos-worker',
     }],
   ] as const)('treats %s as an OCI-backed deployment provider and forwards provider config', async (providerName, orchestratorUrl, orchestratorToken, providerConfig) => {
-    const fetchImpl = vi.fn().mockResolvedValue(new Response(null, { status: 202 }));
+    const fetchImpl = (async () => new Response(null, { status: 202 }));
     const provider = createDeploymentProvider({
       provider_name: providerName,
       target_json: JSON.stringify({
@@ -219,17 +216,17 @@ describe('deployment provider helpers', () => {
       },
     });
 
-    expect(fetchImpl).toHaveBeenCalledWith(
+    assertSpyCallArgs(fetchImpl, 0, [
       `${orchestratorUrl}/deploy`,
-      expect.objectContaining({
+      ({
         method: 'POST',
-        headers: expect.objectContaining({
+        headers: ({
           Authorization: `Bearer ${orchestratorToken}`,
         }),
       }),
-    );
-    const body = JSON.parse((fetchImpl.mock.calls[0]?.[1] as RequestInit).body as string);
-    expect(body).toEqual(expect.objectContaining({
+    ]);
+    const body = JSON.parse((fetchImpl.calls[0]?.[1] as RequestInit).body as string);
+    assertEquals(body, ({
       deployment_id: 'dep-1',
       space_id: 'space-1',
       artifact_ref: 'artifact-ref',
@@ -258,8 +255,8 @@ describe('deployment provider helpers', () => {
     }));
   });
 
-  it('validates OCI deployment target configuration', async () => {
-    const provider = createOciDeploymentProvider({
+  Deno.test('deployment provider helpers - validates OCI deployment target configuration', async () => {
+  const provider = createOciDeploymentProvider({
       provider_name: 'oci',
       target_json: JSON.stringify({
         route_ref: 'takos-worker',
@@ -269,7 +266,7 @@ describe('deployment provider helpers', () => {
       }),
     });
 
-    await expect(provider.deploy({
+    await await assertRejects(async () => { await provider.deploy({
       deployment: {} as never,
       artifactRef: 'artifact-ref',
       bundleContent: 'export default {}',
@@ -282,11 +279,10 @@ describe('deployment provider helpers', () => {
           compatibility_flags: [],
         },
       },
-    })).rejects.toThrow('OCI deployment target exposed_port must be a positive integer');
-  });
-
-  it('posts OCI image targets to the configured orchestrator endpoint', async () => {
-    const fetchImpl = vi.fn().mockResolvedValue(new Response(null, { status: 202 }));
+    }); }, 'OCI deployment target exposed_port must be a positive integer');
+})
+  Deno.test('deployment provider helpers - posts OCI image targets to the configured orchestrator endpoint', async () => {
+  const fetchImpl = (async () => new Response(null, { status: 202 }));
     const provider = createOciDeploymentProvider({
       provider_name: 'oci',
       target_json: JSON.stringify({
@@ -322,18 +318,18 @@ describe('deployment provider helpers', () => {
       },
     });
 
-    expect(fetchImpl).toHaveBeenCalledWith(
+    assertSpyCallArgs(fetchImpl, 0, [
       'https://orchestrator.example.test/deploy',
-      expect.objectContaining({
+      ({
         method: 'POST',
-        headers: expect.objectContaining({
+        headers: ({
           'Content-Type': 'application/json',
           Authorization: 'Bearer secret-token',
         }),
       }),
-    );
-    const body = JSON.parse((fetchImpl.mock.calls[0]?.[1] as RequestInit).body as string);
-    expect(body).toEqual(expect.objectContaining({
+    ]);
+    const body = JSON.parse((fetchImpl.calls[0]?.[1] as RequestInit).body as string);
+    assertEquals(body, ({
       deployment_id: 'dep-1',
       space_id: 'space-1',
       artifact_ref: 'artifact-ref',
@@ -356,10 +352,9 @@ describe('deployment provider helpers', () => {
         limits: { cpu_ms: 50 },
       },
     }));
-  });
-
-  it('does not call the OCI orchestrator for routing-only public targets', async () => {
-    const fetchImpl = vi.fn();
+})
+  Deno.test('deployment provider helpers - does not call the OCI orchestrator for routing-only public targets', async () => {
+  const fetchImpl = ((..._args: any[]) => undefined) as any;
     const provider = createOciDeploymentProvider({
       provider_name: 'oci',
       target_json: JSON.stringify({
@@ -388,11 +383,10 @@ describe('deployment provider helpers', () => {
       },
     });
 
-    expect(fetchImpl).not.toHaveBeenCalled();
-  });
-
-  it('requires an orchestrator URL for OCI image deployments', async () => {
-    const provider = createOciDeploymentProvider({
+    assertSpyCalls(fetchImpl, 0);
+})
+  Deno.test('deployment provider helpers - requires an orchestrator URL for OCI image deployments', async () => {
+  const provider = createOciDeploymentProvider({
       provider_name: 'oci',
       target_json: JSON.stringify({
         route_ref: 'takos-worker',
@@ -406,7 +400,7 @@ describe('deployment provider helpers', () => {
       }),
     });
 
-    await expect(provider.deploy({
+    await await assertRejects(async () => { await provider.deploy({
       deployment: { id: 'dep-1', space_id: 'space-1' } as never,
       artifactRef: 'artifact-ref',
       bundleContent: 'export default {}',
@@ -419,6 +413,5 @@ describe('deployment provider helpers', () => {
           compatibility_flags: [],
         },
       },
-    })).rejects.toThrow('OCI deployment target requires OCI_ORCHESTRATOR_URL');
-  });
-});
+    }); }, 'OCI deployment target requires OCI_ORCHESTRATOR_URL');
+})

@@ -1,247 +1,206 @@
-import { describe, expect, it } from 'vitest';
 import {
   SecretsSanitizer,
   mightExposeSecrets,
   shouldBlockForSecretExposure,
   createSecretsSanitizer,
   collectSensitiveEnvValues,
-} from '../../runtime/actions/secrets.js';
+} from '../../runtime/actions/secrets.ts';
 
 // ---------------------------------------------------------------------------
 // SecretsSanitizer
 // ---------------------------------------------------------------------------
 
-describe('SecretsSanitizer', () => {
-  it('sanitizes known secret values', () => {
-    const sanitizer = new SecretsSanitizer();
+
+import { assertEquals, assertNotEquals, assert, assertStringIncludes } from 'jsr:@std/assert';
+
+  Deno.test('SecretsSanitizer - sanitizes known secret values', () => {
+  const sanitizer = new SecretsSanitizer();
     sanitizer.registerSecrets({ API_KEY: 'my-secret-key' });
 
-    expect(sanitizer.sanitize('token is my-secret-key here')).toBe('token is *** here');
-  });
-
-  it('sanitizes multiple secrets', () => {
-    const sanitizer = new SecretsSanitizer();
+    assertEquals(sanitizer.sanitize('token is my-secret-key here'), 'token is *** here');
+})
+  Deno.test('SecretsSanitizer - sanitizes multiple secrets', () => {
+  const sanitizer = new SecretsSanitizer();
     sanitizer.registerSecrets({
       KEY1: 'secret1',
       KEY2: 'secret2',
     });
 
-    expect(sanitizer.sanitize('secret1 and secret2')).toBe('*** and ***');
-  });
-
-  it('handles empty secrets', () => {
-    const sanitizer = new SecretsSanitizer();
+    assertEquals(sanitizer.sanitize('secret1 and secret2'), '*** and ***');
+})
+  Deno.test('SecretsSanitizer - handles empty secrets', () => {
+  const sanitizer = new SecretsSanitizer();
     sanitizer.registerSecrets({});
-    expect(sanitizer.sanitize('no secrets here')).toBe('no secrets here');
-  });
-
-  it('ignores empty string values in secrets', () => {
-    const sanitizer = new SecretsSanitizer();
+    assertEquals(sanitizer.sanitize('no secrets here'), 'no secrets here');
+})
+  Deno.test('SecretsSanitizer - ignores empty string values in secrets', () => {
+  const sanitizer = new SecretsSanitizer();
     sanitizer.registerSecrets({ EMPTY: '' });
-    expect(sanitizer.sanitize('some text')).toBe('some text');
-  });
-
-  it('returns input unchanged when no secrets registered', () => {
-    const sanitizer = new SecretsSanitizer();
-    expect(sanitizer.sanitize('hello world')).toBe('hello world');
-  });
-
-  it('returns empty string unchanged', () => {
-    const sanitizer = new SecretsSanitizer();
+    assertEquals(sanitizer.sanitize('some text'), 'some text');
+})
+  Deno.test('SecretsSanitizer - returns input unchanged when no secrets registered', () => {
+  const sanitizer = new SecretsSanitizer();
+    assertEquals(sanitizer.sanitize('hello world'), 'hello world');
+})
+  Deno.test('SecretsSanitizer - returns empty string unchanged', () => {
+  const sanitizer = new SecretsSanitizer();
     sanitizer.registerSecrets({ KEY: 'secret' });
-    expect(sanitizer.sanitize('')).toBe('');
-  });
-
-  it('handles regex special characters in secrets', () => {
-    const sanitizer = new SecretsSanitizer();
+    assertEquals(sanitizer.sanitize(''), '');
+})
+  Deno.test('SecretsSanitizer - handles regex special characters in secrets', () => {
+  const sanitizer = new SecretsSanitizer();
     sanitizer.registerSecrets({ KEY: 'special.chars+and*more' });
 
-    expect(sanitizer.sanitize('has special.chars+and*more in it')).toBe('has *** in it');
-  });
-
-  it('handles multiple occurrences of same secret', () => {
-    const sanitizer = new SecretsSanitizer();
+    assertEquals(sanitizer.sanitize('has special.chars+and*more in it'), 'has *** in it');
+})
+  Deno.test('SecretsSanitizer - handles multiple occurrences of same secret', () => {
+  const sanitizer = new SecretsSanitizer();
     sanitizer.registerSecrets({ KEY: 'abc' });
 
-    expect(sanitizer.sanitize('abc abc abc')).toBe('*** *** ***');
-  });
-
-  it('sanitizes logs array', () => {
-    const sanitizer = new SecretsSanitizer();
+    assertEquals(sanitizer.sanitize('abc abc abc'), '*** *** ***');
+})
+  Deno.test('SecretsSanitizer - sanitizes logs array', () => {
+  const sanitizer = new SecretsSanitizer();
     sanitizer.registerSecrets({ KEY: 'secret' });
 
     const logs = ['line with secret', 'clean line', 'another secret'];
     const sanitized = sanitizer.sanitizeLogs(logs);
-    expect(sanitized).toEqual(['line with ***', 'clean line', 'another ***']);
-  });
-
-  it('handles long secrets via string replacement fallback', () => {
-    const longSecret = 'a'.repeat(5000);
+    assertEquals(sanitized, ['line with ***', 'clean line', 'another ***']);
+})
+  Deno.test('SecretsSanitizer - handles long secrets via string replacement fallback', () => {
+  const longSecret = 'a'.repeat(5000);
     const sanitizer = new SecretsSanitizer();
     sanitizer.registerSecrets({ KEY: longSecret });
 
     const text = `prefix ${longSecret} suffix`;
-    expect(sanitizer.sanitize(text)).toBe('prefix *** suffix');
-  });
-
-  it('registerSecretValues adds values', () => {
-    const sanitizer = new SecretsSanitizer();
+    assertEquals(sanitizer.sanitize(text), 'prefix *** suffix');
+})
+  Deno.test('SecretsSanitizer - registerSecretValues adds values', () => {
+  const sanitizer = new SecretsSanitizer();
     sanitizer.registerSecretValues(['val1', 'val2']);
 
-    expect(sanitizer.sanitize('val1 and val2')).toBe('*** and ***');
-  });
-
-  it('clear removes all secrets', () => {
-    const sanitizer = new SecretsSanitizer();
+    assertEquals(sanitizer.sanitize('val1 and val2'), '*** and ***');
+})
+  Deno.test('SecretsSanitizer - clear removes all secrets', () => {
+  const sanitizer = new SecretsSanitizer();
     sanitizer.registerSecrets({ KEY: 'secret' });
     sanitizer.clear();
 
-    expect(sanitizer.sanitize('secret')).toBe('secret');
-  });
-});
-
+    assertEquals(sanitizer.sanitize('secret'), 'secret');
+})
 // ---------------------------------------------------------------------------
 // createSecretsSanitizer
 // ---------------------------------------------------------------------------
 
-describe('createSecretsSanitizer', () => {
-  it('creates sanitizer with secrets', () => {
-    const sanitizer = createSecretsSanitizer({ KEY: 'value' });
-    expect(sanitizer.sanitize('the value is here')).toBe('the *** is here');
-  });
 
-  it('masks non-empty secrets regardless of length', () => {
-    const sanitizer = createSecretsSanitizer({
+  Deno.test('createSecretsSanitizer - creates sanitizer with secrets', () => {
+  const sanitizer = createSecretsSanitizer({ KEY: 'value' });
+    assertEquals(sanitizer.sanitize('the value is here'), 'the *** is here');
+})
+  Deno.test('createSecretsSanitizer - masks non-empty secrets regardless of length', () => {
+  const sanitizer = createSecretsSanitizer({
       ONE: 'x',
       THREE: 'abc',
       EMPTY: '',
     });
 
-    expect(sanitizer.sanitize('x abc value')).toBe('*** *** value');
-  });
-
-  it('creates sanitizer with extra values', () => {
-    const sanitizer = createSecretsSanitizer({}, ['extra']);
-    expect(sanitizer.sanitize('extra text')).toBe('*** text');
-  });
-
-  it('creates sanitizer with both secrets and extras', () => {
-    const sanitizer = createSecretsSanitizer({ KEY: 'secret' }, ['extra']);
-    expect(sanitizer.sanitize('secret and extra')).toBe('*** and ***');
-  });
-});
-
+    assertEquals(sanitizer.sanitize('x abc value'), '*** *** value');
+})
+  Deno.test('createSecretsSanitizer - creates sanitizer with extra values', () => {
+  const sanitizer = createSecretsSanitizer({}, ['extra']);
+    assertEquals(sanitizer.sanitize('extra text'), '*** text');
+})
+  Deno.test('createSecretsSanitizer - creates sanitizer with both secrets and extras', () => {
+  const sanitizer = createSecretsSanitizer({ KEY: 'secret' }, ['extra']);
+    assertEquals(sanitizer.sanitize('secret and extra'), '*** and ***');
+})
 // ---------------------------------------------------------------------------
 // mightExposeSecrets
 // ---------------------------------------------------------------------------
 
-describe('mightExposeSecrets', () => {
-  it('detects bare "env" command', () => {
-    expect(mightExposeSecrets('env')).not.toBeNull();
-    expect(mightExposeSecrets('  env  ')).not.toBeNull();
-  });
 
-  it('detects bare "printenv" command', () => {
-    expect(mightExposeSecrets('printenv')).not.toBeNull();
-  });
-
-  it('detects "export -p"', () => {
-    expect(mightExposeSecrets('export -p')).not.toBeNull();
-  });
-
-  it('returns null for safe commands', () => {
-    expect(mightExposeSecrets('echo hello')).toBeNull();
-    expect(mightExposeSecrets('npm install')).toBeNull();
-  });
-
-  it('returns null for env with arguments', () => {
-    expect(mightExposeSecrets('env VAR=value command')).toBeNull();
-  });
-
-  it('returns null for printenv with arguments', () => {
-    expect(mightExposeSecrets('printenv HOME')).toBeNull();
-  });
-
-  it('skips comment lines', () => {
-    expect(mightExposeSecrets('# env')).toBeNull();
-  });
-
-  it('skips empty lines', () => {
-    expect(mightExposeSecrets('\n\n')).toBeNull();
-  });
-
-  it('detects in multiline command', () => {
-    expect(mightExposeSecrets('echo hello\nenv')).not.toBeNull();
-  });
-});
-
+  Deno.test('mightExposeSecrets - detects bare "env" command', () => {
+  assertNotEquals(mightExposeSecrets('env'), null);
+    assertNotEquals(mightExposeSecrets('  env  '), null);
+})
+  Deno.test('mightExposeSecrets - detects bare "printenv" command', () => {
+  assertNotEquals(mightExposeSecrets('printenv'), null);
+})
+  Deno.test('mightExposeSecrets - detects "export -p"', () => {
+  assertNotEquals(mightExposeSecrets('export -p'), null);
+})
+  Deno.test('mightExposeSecrets - returns null for safe commands', () => {
+  assertEquals(mightExposeSecrets('echo hello'), null);
+    assertEquals(mightExposeSecrets('npm install'), null);
+})
+  Deno.test('mightExposeSecrets - returns null for env with arguments', () => {
+  assertEquals(mightExposeSecrets('env VAR=value command'), null);
+})
+  Deno.test('mightExposeSecrets - returns null for printenv with arguments', () => {
+  assertEquals(mightExposeSecrets('printenv HOME'), null);
+})
+  Deno.test('mightExposeSecrets - skips comment lines', () => {
+  assertEquals(mightExposeSecrets('# env'), null);
+})
+  Deno.test('mightExposeSecrets - skips empty lines', () => {
+  assertEquals(mightExposeSecrets('\n\n'), null);
+})
+  Deno.test('mightExposeSecrets - detects in multiline command', () => {
+  assertNotEquals(mightExposeSecrets('echo hello\nenv'), null);
+})
 // ---------------------------------------------------------------------------
 // shouldBlockForSecretExposure
 // ---------------------------------------------------------------------------
 
-describe('shouldBlockForSecretExposure', () => {
-  it('blocks bare env', () => {
-    expect(shouldBlockForSecretExposure('env')).toBe(true);
-  });
 
-  it('does not block safe commands', () => {
-    expect(shouldBlockForSecretExposure('npm test')).toBe(false);
-  });
-});
-
+  Deno.test('shouldBlockForSecretExposure - blocks bare env', () => {
+  assertEquals(shouldBlockForSecretExposure('env'), true);
+})
+  Deno.test('shouldBlockForSecretExposure - does not block safe commands', () => {
+  assertEquals(shouldBlockForSecretExposure('npm test'), false);
+})
 // ---------------------------------------------------------------------------
 // collectSensitiveEnvValues
 // ---------------------------------------------------------------------------
 
-describe('collectSensitiveEnvValues', () => {
-  it('returns empty array for undefined env', () => {
-    expect(collectSensitiveEnvValues(undefined)).toEqual([]);
-  });
 
-  it('returns empty array for env with no sensitive keys', () => {
-    expect(collectSensitiveEnvValues({ CI: 'true', NODE_ENV: 'test' })).toEqual([]);
-  });
-
-  it('collects TAKOS_TOKEN value', () => {
-    expect(collectSensitiveEnvValues({ TAKOS_TOKEN: 'tok123' })).toEqual(['tok123']);
-  });
-
-  it('collects TAKOS_SESSION_ID value', () => {
-    expect(collectSensitiveEnvValues({ TAKOS_SESSION_ID: 'sess123' })).toEqual(['sess123']);
-  });
-
-  it('collects keys matching SECRET pattern', () => {
-    expect(collectSensitiveEnvValues({ MY_SECRET: 'val' })).toEqual(['val']);
-  });
-
-  it('collects keys matching PASSWORD pattern', () => {
-    expect(collectSensitiveEnvValues({ DB_PASSWORD: 'pass' })).toEqual(['pass']);
-  });
-
-  it('collects keys matching TOKEN pattern', () => {
-    expect(collectSensitiveEnvValues({ API_TOKEN: 'tok' })).toEqual(['tok']);
-  });
-
-  it('collects keys matching API_KEY pattern', () => {
-    expect(collectSensitiveEnvValues({ MY_API_KEY: 'key' })).toEqual(['key']);
-  });
-
-  it('collects keys matching AUTH pattern', () => {
-    expect(collectSensitiveEnvValues({ AUTH_HEADER: 'bearer xyz' })).toEqual(['bearer xyz']);
-  });
-
-  it('skips empty values', () => {
-    expect(collectSensitiveEnvValues({ MY_SECRET: '' })).toEqual([]);
-  });
-
-  it('collects multiple sensitive values', () => {
-    const result = collectSensitiveEnvValues({
+  Deno.test('collectSensitiveEnvValues - returns empty array for undefined env', () => {
+  assertEquals(collectSensitiveEnvValues(undefined), []);
+})
+  Deno.test('collectSensitiveEnvValues - returns empty array for env with no sensitive keys', () => {
+  assertEquals(collectSensitiveEnvValues({ CI: 'true', NODE_ENV: 'test' }), []);
+})
+  Deno.test('collectSensitiveEnvValues - collects TAKOS_TOKEN value', () => {
+  assertEquals(collectSensitiveEnvValues({ TAKOS_TOKEN: 'tok123' }), ['tok123']);
+})
+  Deno.test('collectSensitiveEnvValues - collects TAKOS_SESSION_ID value', () => {
+  assertEquals(collectSensitiveEnvValues({ TAKOS_SESSION_ID: 'sess123' }), ['sess123']);
+})
+  Deno.test('collectSensitiveEnvValues - collects keys matching SECRET pattern', () => {
+  assertEquals(collectSensitiveEnvValues({ MY_SECRET: 'val' }), ['val']);
+})
+  Deno.test('collectSensitiveEnvValues - collects keys matching PASSWORD pattern', () => {
+  assertEquals(collectSensitiveEnvValues({ DB_PASSWORD: 'pass' }), ['pass']);
+})
+  Deno.test('collectSensitiveEnvValues - collects keys matching TOKEN pattern', () => {
+  assertEquals(collectSensitiveEnvValues({ API_TOKEN: 'tok' }), ['tok']);
+})
+  Deno.test('collectSensitiveEnvValues - collects keys matching API_KEY pattern', () => {
+  assertEquals(collectSensitiveEnvValues({ MY_API_KEY: 'key' }), ['key']);
+})
+  Deno.test('collectSensitiveEnvValues - collects keys matching AUTH pattern', () => {
+  assertEquals(collectSensitiveEnvValues({ AUTH_HEADER: 'bearer xyz' }), ['bearer xyz']);
+})
+  Deno.test('collectSensitiveEnvValues - skips empty values', () => {
+  assertEquals(collectSensitiveEnvValues({ MY_SECRET: '' }), []);
+})
+  Deno.test('collectSensitiveEnvValues - collects multiple sensitive values', () => {
+  const result = collectSensitiveEnvValues({
       TAKOS_TOKEN: 'tok',
       MY_SECRET: 'sec',
       SAFE_KEY: 'safe',
     });
-    expect(result).toContain('tok');
-    expect(result).toContain('sec');
-    expect(result).not.toContain('safe');
-  });
-});
+    assertStringIncludes(result, 'tok');
+    assertStringIncludes(result, 'sec');
+    assert(!(result).includes('safe'));
+})

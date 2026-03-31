@@ -1,5 +1,3 @@
-import { beforeEach, describe, expect, it, vi, afterEach } from 'vitest';
-
 import {
   createAssetsUploadSession,
   uploadAssets,
@@ -12,10 +10,13 @@ import type { WFPConfig, WfpClient, CFAPIResponse } from '@/services/wfp/client'
 // createAssetsUploadSession
 // ---------------------------------------------------------------------------
 
-describe('createAssetsUploadSession', () => {
-  it('returns jwt and flattened uploadNeeded from buckets', async () => {
-    const mockClient = {
-      fetch: vi.fn().mockResolvedValue({
+
+import { assertEquals, assertRejects, assertStringIncludes } from 'jsr:@std/assert';
+import { assertSpyCalls } from 'jsr:@std/testing/mock';
+
+  Deno.test('createAssetsUploadSession - returns jwt and flattened uploadNeeded from buckets', async () => {
+  const mockClient = {
+      fetch: (async () => ({
         result: {
           jwt: 'session-jwt-token',
           buckets: [['hash1', 'hash2'], ['hash3']],
@@ -23,7 +24,7 @@ describe('createAssetsUploadSession', () => {
         success: true,
         errors: [],
         messages: [],
-      } satisfies CFAPIResponse<{ jwt: string; buckets: string[][] }>),
+      } satisfies CFAPIResponse<{ jwt: string; buckets: string[][] }>)),
     } as unknown as WfpClient;
 
     const config: WFPConfig = {
@@ -36,63 +37,54 @@ describe('createAssetsUploadSession', () => {
       'index.html': { hash: 'hash1', size: 100 },
     });
 
-    expect(result.jwt).toBe('session-jwt-token');
-    expect(result.uploadNeeded).toEqual(['hash1', 'hash2', 'hash3']);
-  });
-
-  it('returns empty uploadNeeded when buckets is absent', async () => {
-    const mockClient = {
-      fetch: vi.fn().mockResolvedValue({
+    assertEquals(result.jwt, 'session-jwt-token');
+    assertEquals(result.uploadNeeded, ['hash1', 'hash2', 'hash3']);
+})
+  Deno.test('createAssetsUploadSession - returns empty uploadNeeded when buckets is absent', async () => {
+  const mockClient = {
+      fetch: (async () => ({
         result: { jwt: 'token' },
         success: true,
         errors: [],
         messages: [],
-      }),
+      })),
     } as unknown as WfpClient;
 
     const config: WFPConfig = { accountId: 'a', apiToken: 't', dispatchNamespace: 'ns' };
     const result = await createAssetsUploadSession(mockClient, config, 'w', {});
-    expect(result.uploadNeeded).toEqual([]);
-  });
-
-  it('calls the correct API path', async () => {
-    const mockFetch = vi.fn().mockResolvedValue({
+    assertEquals(result.uploadNeeded, []);
+})
+  Deno.test('createAssetsUploadSession - calls the correct API path', async () => {
+  const mockFetch = (async () => ({
       result: { jwt: 'x' },
       success: true,
       errors: [],
       messages: [],
-    });
+    }));
     const mockClient = { fetch: mockFetch } as unknown as WfpClient;
     const config: WFPConfig = { accountId: 'acc-1', apiToken: 't', dispatchNamespace: 'ns-1' };
 
     await createAssetsUploadSession(mockClient, config, 'my-worker', {});
 
-    expect(mockFetch).toHaveBeenCalledTimes(1);
-    const path = mockFetch.mock.calls[0][0] as string;
-    expect(path).toContain('/accounts/acc-1/');
-    expect(path).toContain('/scripts/my-worker/assets-upload-session');
-  });
-});
-
+    assertSpyCalls(mockFetch, 1);
+    const path = mockFetch.calls[0][0] as string;
+    assertStringIncludes(path, '/accounts/acc-1/');
+    assertStringIncludes(path, '/scripts/my-worker/assets-upload-session');
+})
 // ---------------------------------------------------------------------------
 // uploadAssets
 // ---------------------------------------------------------------------------
 
-describe('uploadAssets', () => {
-  afterEach(() => {
-    vi.unstubAllGlobals();
-  });
 
-  it('posts FormData to the upload endpoint and returns completion JWT', async () => {
-    const fetchMock = vi.fn().mockResolvedValue(
-      new Response(JSON.stringify({
+  Deno.test('uploadAssets - posts FormData to the upload endpoint and returns completion JWT', async () => {
+  try {
+  const fetchMock = (async () => new Response(JSON.stringify({
         success: true,
         result: { jwt: 'completion-jwt' },
         errors: [],
         messages: [],
-      }), { status: 200 }),
-    );
-    vi.stubGlobal('fetch', fetchMock);
+      }), { status: 200 }),);
+    (globalThis as any).fetch = fetchMock;
 
     const config: WFPConfig = { accountId: 'acc-1', apiToken: 'tok', dispatchNamespace: 'ns' };
     const files: Record<string, AssetUploadFile> = {
@@ -100,65 +92,68 @@ describe('uploadAssets', () => {
     };
 
     const jwt = await uploadAssets(config, 'session-jwt', files);
-    expect(jwt).toBe('completion-jwt');
+    assertEquals(jwt, 'completion-jwt');
 
-    expect(fetchMock).toHaveBeenCalledTimes(1);
-    const [url, init] = fetchMock.mock.calls[0];
-    expect(url).toContain('/accounts/acc-1/workers/assets/upload');
-    expect(init.method).toBe('POST');
-    expect(init.headers.Authorization).toBe('Bearer session-jwt');
-  });
-
-  it('throws on non-ok response', async () => {
-    const fetchMock = vi.fn().mockResolvedValue(
-      new Response('Internal Server Error', { status: 500 }),
-    );
-    vi.stubGlobal('fetch', fetchMock);
-
-    const config: WFPConfig = { accountId: 'a', apiToken: 't', dispatchNamespace: 'ns' };
-    await expect(uploadAssets(config, 'jwt', {})).rejects.toThrow('Assets upload failed');
-  });
-
-  it('throws when response is ok but missing completion JWT', async () => {
-    const fetchMock = vi.fn().mockResolvedValue(
-      new Response(JSON.stringify({ success: false, result: {} }), { status: 200 }),
-    );
-    vi.stubGlobal('fetch', fetchMock);
+    assertSpyCalls(fetchMock, 1);
+    const [url, init] = fetchMock.calls[0];
+    assertStringIncludes(url, '/accounts/acc-1/workers/assets/upload');
+    assertEquals(init.method, 'POST');
+    assertEquals(init.headers.Authorization, 'Bearer session-jwt');
+  } finally {
+  /* TODO: restore stubbed globals manually */ void 0;
+  }
+})
+  Deno.test('uploadAssets - throws on non-ok response', async () => {
+  try {
+  const fetchMock = (async () => new Response('Internal Server Error', { status: 500 }),);
+    (globalThis as any).fetch = fetchMock;
 
     const config: WFPConfig = { accountId: 'a', apiToken: 't', dispatchNamespace: 'ns' };
-    await expect(uploadAssets(config, 'jwt', {})).rejects.toThrow('no completion JWT');
-  });
+    await await assertRejects(async () => { await uploadAssets(config, 'jwt', {}); }, 'Assets upload failed');
+  } finally {
+  /* TODO: restore stubbed globals manually */ void 0;
+  }
+})
+  Deno.test('uploadAssets - throws when response is ok but missing completion JWT', async () => {
+  try {
+  const fetchMock = (async () => new Response(JSON.stringify({ success: false, result: {} }), { status: 200 }),);
+    (globalThis as any).fetch = fetchMock;
 
-  it('throws timeout error on abort', async () => {
-    const fetchMock = vi.fn().mockImplementation(() => {
+    const config: WFPConfig = { accountId: 'a', apiToken: 't', dispatchNamespace: 'ns' };
+    await await assertRejects(async () => { await uploadAssets(config, 'jwt', {}); }, 'no completion JWT');
+  } finally {
+  /* TODO: restore stubbed globals manually */ void 0;
+  }
+})
+  Deno.test('uploadAssets - throws timeout error on abort', async () => {
+  try {
+  const fetchMock = () => {
       const err = new Error('Aborted');
       err.name = 'AbortError';
       return Promise.reject(err);
-    });
-    vi.stubGlobal('fetch', fetchMock);
+    };
+    (globalThis as any).fetch = fetchMock;
 
     const config: WFPConfig = { accountId: 'a', apiToken: 't', dispatchNamespace: 'ns' };
-    await expect(uploadAssets(config, 'jwt', {})).rejects.toThrow('timeout');
-  });
-});
-
+    await await assertRejects(async () => { await uploadAssets(config, 'jwt', {}); }, 'timeout');
+  } finally {
+  /* TODO: restore stubbed globals manually */ void 0;
+  }
+})
 // ---------------------------------------------------------------------------
 // uploadAllAssets
 // ---------------------------------------------------------------------------
 
-describe('uploadAllAssets', () => {
-  afterEach(() => {
-    vi.unstubAllGlobals();
-  });
 
-  it('returns session JWT directly when all assets are cached', async () => {
-    const mockClient = {
-      fetch: vi.fn().mockResolvedValue({
+  Deno.test('uploadAllAssets - returns session JWT directly when all assets are cached', async () => {
+  try {
+  const mockClient = {
+      fetch: (async () => ({
         result: { jwt: 'cached-jwt', buckets: [] },
         success: true,
         errors: [],
         messages: [],
-      }),
+      })),
     } as unknown as WfpClient;
 
     const config: WFPConfig = { accountId: 'a', apiToken: 't', dispatchNamespace: 'ns' };
@@ -168,19 +163,22 @@ describe('uploadAllAssets', () => {
       { path: 'index.html', content },
     ]);
 
-    expect(jwt).toBe('cached-jwt');
-  });
-
-  it('uploads needed files and returns completion JWT', async () => {
-    // We need to mock crypto.subtle.digest for hash computation
-    const mockDigest = vi.fn().mockResolvedValue(new ArrayBuffer(32));
-    vi.stubGlobal('crypto', {
+    assertEquals(jwt, 'cached-jwt');
+  } finally {
+  /* TODO: restore stubbed globals manually */ void 0;
+  }
+})
+  Deno.test('uploadAllAssets - uploads needed files and returns completion JWT', async () => {
+  try {
+  // We need to mock crypto.subtle.digest for hash computation
+    const mockDigest = (async () => new ArrayBuffer(32));
+    (globalThis as any).crypto = {
       subtle: { digest: mockDigest },
-    });
+    };
 
     // Client returns one hash that needs uploading
     const mockClient = {
-      fetch: vi.fn().mockResolvedValue({
+      fetch: (async () => ({
         result: {
           jwt: 'session-jwt',
           buckets: [['00000000000000000000000000000000']],
@@ -188,19 +186,17 @@ describe('uploadAllAssets', () => {
         success: true,
         errors: [],
         messages: [],
-      }),
+      })),
     } as unknown as WfpClient;
 
     // Mock global fetch for the upload call
-    const fetchMock = vi.fn().mockResolvedValue(
-      new Response(JSON.stringify({
+    const fetchMock = (async () => new Response(JSON.stringify({
         success: true,
         result: { jwt: 'completion-jwt' },
         errors: [],
         messages: [],
-      }), { status: 200 }),
-    );
-    vi.stubGlobal('fetch', fetchMock);
+      }), { status: 200 }),);
+    (globalThis as any).fetch = fetchMock;
 
     const config: WFPConfig = { accountId: 'a', apiToken: 't', dispatchNamespace: 'ns' };
     const content = new TextEncoder().encode('test').buffer as ArrayBuffer;
@@ -209,6 +205,8 @@ describe('uploadAllAssets', () => {
       { path: 'index.html', content },
     ]);
 
-    expect(jwt).toBe('completion-jwt');
-  });
-});
+    assertEquals(jwt, 'completion-jwt');
+  } finally {
+  /* TODO: restore stubbed globals manually */ void 0;
+  }
+})

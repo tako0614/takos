@@ -1,8 +1,8 @@
 import { spawn, type ChildProcess } from 'child_process';
 import { Readable } from 'stream';
-import { pushLog } from './logging.js';
-import { filterSafeEnv } from '../utils/sandbox-env.js';
-import { gracefulKill } from '../utils/process-kill.js';
+import { pushLog } from './logging.ts';
+import { filterSafeEnv } from '../utils/sandbox-env.ts';
+import { gracefulKill } from '../utils/process-kill.ts';
 
 const DEFAULT_COMMAND_TIMEOUT_MS = 60 * 60 * 1000;
 const MAX_COMMAND_TIMEOUT_MS = 24 * 60 * 60 * 1000;
@@ -77,7 +77,7 @@ export function runCommand(
     let isTimedOut = false;
 
     const childEnv = {
-      ...filterSafeEnv(process.env),
+      ...filterSafeEnv(Deno.env.toObject()),
       ...sanitizeUserEnv(options.env ?? {}),
       NODE_OPTIONS: `--max-old-space-size=${MAX_CHILD_MEMORY_MB}`,
     };

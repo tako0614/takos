@@ -1,4 +1,4 @@
-export type { SpaceListItem } from './space-crud.js';
+export type { SpaceListItem } from './space-crud.ts';
 export {
   findLatestRepositoryBySpaceId,
   loadSpaceById,
@@ -12,7 +12,7 @@ export {
   getPersonalWorkspace,
   getOrCreatePersonalWorkspace,
   ensurePersonalWorkspace,
-} from './space-crud.js';
+} from './space-crud.ts';
 
 export {
   listSpaceMembers,
@@ -21,9 +21,9 @@ export {
   createSpaceMember,
   updateSpaceMemberRole,
   deleteSpaceMember,
-} from './space-members.js';
+} from './space-members.ts';
 
 export {
   getWorkspaceModelSettings,
   updateWorkspaceModel,
-} from './space-models.js';
+} from './space-models.ts';

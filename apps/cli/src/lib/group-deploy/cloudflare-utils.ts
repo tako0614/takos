@@ -46,7 +46,7 @@ export function execCommand(
   return new Promise((resolve) => {
     const proc = execFile(command, args, {
       cwd: opts?.cwd,
-      env: { ...process.env, ...opts?.env },
+      env: { ...Deno.env.toObject(), ...opts?.env },
       maxBuffer: 10 * 1024 * 1024,
     }, (error, stdout, stderr) => {
       resolve({

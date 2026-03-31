@@ -5,8 +5,8 @@ import { createHash } from 'node:crypto';
 import { lstatSync, readdirSync, readFileSync } from 'node:fs';
 import { isAbsolute, relative, resolve } from 'node:path';
 
-import { MAX_FROM_JSON_SIZE } from '../constants.js';
-import type { ExecutionContext } from '../workflow-models.js';
+import { MAX_FROM_JSON_SIZE } from '../constants.ts';
+import type { ExecutionContext } from '../workflow-models.ts';
 
 const GLOB_PATTERN_CHARS = /[*?[\]]/;
 const REGEXP_META_CHARS = /[|\\{}()[\]^$+?.]/g;

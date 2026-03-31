@@ -1,29 +1,16 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { assertEquals, assertNotEquals, assert, assertRejects } from 'jsr:@std/assert';
+import { assertSpyCalls } from 'jsr:@std/testing/mock';
 
-const mocks = vi.hoisted(() => ({
-  getDb: vi.fn(),
-  generateId: vi.fn().mockReturnValue('snap-id-1'),
-  now: vi.fn().mockReturnValue('2025-01-01T00:00:00.000Z'),
-  computeSHA256: vi.fn().mockResolvedValue('sha256-hash'),
-}));
+const mocks = ({
+  getDb: ((..._args: any[]) => undefined) as any,
+  generateId: (() => 'snap-id-1'),
+  now: (() => '2025-01-01T00:00:00.000Z'),
+  computeSHA256: (async () => 'sha256-hash'),
+});
 
-vi.mock('@/db', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/db')>()),
-  getDb: mocks.getDb,
-}));
-
-vi.mock('@/shared/utils', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/shared/utils')>()),
-  generateId: mocks.generateId,
-  now: mocks.now,
-}));
-
-vi.mock('@/shared/utils/hash', () => ({
-  computeSHA256: mocks.computeSHA256,
-  verifyBundleHash: vi.fn(async () => true),
-  constantTimeEqual: vi.fn((a: string, b: string) => a === b),
-}));
-
+// [Deno] vi.mock removed - manually stub imports from '@/db'
+// [Deno] vi.mock removed - manually stub imports from '@/shared/utils'
+// [Deno] vi.mock removed - manually stub imports from '@/shared/utils/hash'
 import { SnapshotManager } from '@/services/sync/snapshot';
 import type { Env } from '@/types';
 import type { SnapshotTree } from '@/services/sync/types';
@@ -31,42 +18,42 @@ import { MockR2Bucket } from '../../../../test/integration/setup';
 
 function createChainableMock(overrides: Record<string, unknown> = {}) {
   const c: Record<string, unknown> = {};
-  c.from = vi.fn().mockReturnValue(c);
-  c.where = vi.fn().mockReturnValue(c);
-  c.orderBy = vi.fn().mockReturnValue(c);
-  c.limit = vi.fn().mockReturnValue(c);
-  c.get = vi.fn().mockResolvedValue(null);
-  c.all = vi.fn().mockResolvedValue([]);
-  c.run = vi.fn().mockResolvedValue({ meta: { changes: 1 } });
+  c.from = (() => c);
+  c.where = (() => c);
+  c.orderBy = (() => c);
+  c.limit = (() => c);
+  c.get = (async () => null);
+  c.all = (async () => []);
+  c.run = (async () => ({ meta: { changes: 1 } }));
   Object.assign(c, overrides);
   return c;
 }
 
 function createDrizzleMock() {
   return {
-    select: vi.fn().mockImplementation(() => createChainableMock()),
-    selectDistinct: vi.fn().mockImplementation(() => createChainableMock()),
-    insert: vi.fn().mockImplementation(() => {
+    select: () => createChainableMock(),
+    selectDistinct: () => createChainableMock(),
+    insert: () => {
       const c: Record<string, unknown> = {};
-      c.values = vi.fn().mockReturnValue(c);
-      c.run = vi.fn().mockResolvedValue({ meta: { changes: 1 } });
+      c.values = (() => c);
+      c.run = (async () => ({ meta: { changes: 1 } }));
       return c;
-    }),
-    update: vi.fn().mockImplementation(() => {
+    },
+    update: () => {
       const c: Record<string, unknown> = {};
-      c.set = vi.fn().mockReturnValue(c);
-      c.where = vi.fn().mockReturnValue(c);
-      c.run = vi.fn().mockResolvedValue({ meta: { changes: 1 } });
-      c.returning = vi.fn().mockReturnValue(c);
-      c.get = vi.fn().mockResolvedValue(null);
+      c.set = (() => c);
+      c.where = (() => c);
+      c.run = (async () => ({ meta: { changes: 1 } }));
+      c.returning = (() => c);
+      c.get = (async () => null);
       return c;
-    }),
-    delete: vi.fn().mockImplementation(() => {
+    },
+    delete: () => {
       const c: Record<string, unknown> = {};
-      c.where = vi.fn().mockReturnValue(c);
-      c.run = vi.fn().mockResolvedValue({ meta: { changes: 1 } });
+      c.where = (() => c);
+      c.run = (async () => ({ meta: { changes: 1 } }));
       return c;
-    }),
+    },
   };
 }
 
@@ -78,17 +65,13 @@ function makeMockEnv(overrides: Partial<Env> = {}): Env {
   } as Env;
 }
 
-describe('SnapshotManager', () => {
+
   const spaceId = 'ws-1';
-
-  beforeEach(() => {
-    vi.clearAllMocks();
-  });
-
-  describe('createSnapshot', () => {
-    it('stores compressed tree in R2, inserts snapshot row, and increases blob refcount', async () => {
-      const drizzle = createDrizzleMock();
-      mocks.getDb.mockReturnValue(drizzle);
+  
+    Deno.test('SnapshotManager - createSnapshot - stores compressed tree in R2, inserts snapshot row, and increases blob refcount', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+  const drizzle = createDrizzleMock();
+      mocks.getDb = (() => drizzle) as any;
       const env = makeMockEnv();
 
       const mgr = new SnapshotManager(env, spaceId);
@@ -98,72 +81,70 @@ describe('SnapshotManager', () => {
 
       const snapshot = await mgr.createSnapshot(tree, ['parent-1'], 'test snapshot', 'user');
 
-      expect(snapshot.id).toBe('snap-id-1');
-      expect(snapshot.space_id).toBe(spaceId);
-      expect(snapshot.parent_ids).toEqual(['parent-1']);
-      expect(snapshot.status).toBe('pending');
-      expect(snapshot.author).toBe('user');
+      assertEquals(snapshot.id, 'snap-id-1');
+      assertEquals(snapshot.space_id, spaceId);
+      assertEquals(snapshot.parent_ids, ['parent-1']);
+      assertEquals(snapshot.status, 'pending');
+      assertEquals(snapshot.author, 'user');
 
       // Verify R2 put was called
       const stored = await (env.TENANT_SOURCE as unknown as MockR2Bucket).get(snapshot.tree_key);
-      expect(stored).not.toBeNull();
+      assertNotEquals(stored, null);
 
       // Verify DB insert
-      expect(drizzle.insert).toHaveBeenCalled();
+      assert(drizzle.insert.calls.length > 0);
 
       // Verify refcount increase (update for blob)
-      expect(drizzle.update).toHaveBeenCalled();
-    });
-
-    it('throws when TENANT_SOURCE is not configured', async () => {
-      const drizzle = createDrizzleMock();
-      mocks.getDb.mockReturnValue(drizzle);
+      assert(drizzle.update.calls.length > 0);
+})
+    Deno.test('SnapshotManager - createSnapshot - throws when TENANT_SOURCE is not configured', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+  const drizzle = createDrizzleMock();
+      mocks.getDb = (() => drizzle) as any;
       const env = makeMockEnv({ TENANT_SOURCE: undefined } as never);
 
       const mgr = new SnapshotManager(env, spaceId);
-      await expect(mgr.createSnapshot({}, [])).rejects.toThrow('Storage not configured');
-    });
-
-    it('does not call increaseBlobRefcount for empty tree', async () => {
-      const drizzle = createDrizzleMock();
-      mocks.getDb.mockReturnValue(drizzle);
+      await await assertRejects(async () => { await mgr.createSnapshot({}, []); }, 'Storage not configured');
+})
+    Deno.test('SnapshotManager - createSnapshot - does not call increaseBlobRefcount for empty tree', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+  const drizzle = createDrizzleMock();
+      mocks.getDb = (() => drizzle) as any;
       const env = makeMockEnv();
 
       const mgr = new SnapshotManager(env, spaceId);
       await mgr.createSnapshot({}, [], 'empty');
 
       // insert is called for the snapshot row only, update is not called (no blob refcount)
-      expect(drizzle.insert).toHaveBeenCalledTimes(1);
-      expect(drizzle.update).not.toHaveBeenCalled();
-    });
-  });
-
-  describe('completeSnapshot', () => {
-    it('updates snapshot status from pending to complete', async () => {
-      const drizzle = createDrizzleMock();
-      mocks.getDb.mockReturnValue(drizzle);
+      assertSpyCalls(drizzle.insert, 1);
+      assertSpyCalls(drizzle.update, 0);
+})  
+  
+    Deno.test('SnapshotManager - completeSnapshot - updates snapshot status from pending to complete', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+  const drizzle = createDrizzleMock();
+      mocks.getDb = (() => drizzle) as any;
       const env = makeMockEnv();
 
       const mgr = new SnapshotManager(env, spaceId);
       await mgr.completeSnapshot('snap-1');
 
-      expect(drizzle.update).toHaveBeenCalled();
-    });
-  });
-
-  describe('getSnapshot', () => {
-    it('returns null when snapshot not found', async () => {
-      const drizzle = createDrizzleMock();
-      mocks.getDb.mockReturnValue(drizzle);
+      assert(drizzle.update.calls.length > 0);
+})  
+  
+    Deno.test('SnapshotManager - getSnapshot - returns null when snapshot not found', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+  const drizzle = createDrizzleMock();
+      mocks.getDb = (() => drizzle) as any;
       const env = makeMockEnv();
 
       const mgr = new SnapshotManager(env, spaceId);
       const result = await mgr.getSnapshot('nonexistent');
-      expect(result).toBeNull();
-    });
-
-    it('returns parsed snapshot with parent_ids array', async () => {
-      const row = {
+      assertEquals(result, null);
+})
+    Deno.test('SnapshotManager - getSnapshot - returns parsed snapshot with parent_ids array', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+  const row = {
         id: 'snap-1',
         accountId: spaceId,
         parentIds: '["parent-1","parent-2"]',
@@ -173,23 +154,23 @@ describe('SnapshotManager', () => {
         status: 'complete',
         createdAt: '2025-01-01T00:00:00Z',
       };
-      const selectChain = createChainableMock({ get: vi.fn().mockResolvedValue(row) });
+      const selectChain = createChainableMock({ get: (async () => row) });
       const drizzle = createDrizzleMock();
-      drizzle.select = vi.fn().mockReturnValue(selectChain);
-      mocks.getDb.mockReturnValue(drizzle);
+      drizzle.select = (() => selectChain);
+      mocks.getDb = (() => drizzle) as any;
 
       const env = makeMockEnv();
       const mgr = new SnapshotManager(env, spaceId);
       const snapshot = await mgr.getSnapshot('snap-1');
 
-      expect(snapshot).not.toBeNull();
-      expect(snapshot!.id).toBe('snap-1');
-      expect(snapshot!.parent_ids).toEqual(['parent-1', 'parent-2']);
-      expect(snapshot!.status).toBe('complete');
-    });
-
-    it('handles null parentIds gracefully', async () => {
-      const row = {
+      assertNotEquals(snapshot, null);
+      assertEquals(snapshot!.id, 'snap-1');
+      assertEquals(snapshot!.parent_ids, ['parent-1', 'parent-2']);
+      assertEquals(snapshot!.status, 'complete');
+})
+    Deno.test('SnapshotManager - getSnapshot - handles null parentIds gracefully', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+  const row = {
         id: 'snap-2',
         accountId: spaceId,
         parentIds: null,
@@ -199,173 +180,164 @@ describe('SnapshotManager', () => {
         status: 'pending',
         createdAt: '2025-01-01T00:00:00Z',
       };
-      const selectChain = createChainableMock({ get: vi.fn().mockResolvedValue(row) });
+      const selectChain = createChainableMock({ get: (async () => row) });
       const drizzle = createDrizzleMock();
-      drizzle.select = vi.fn().mockReturnValue(selectChain);
-      mocks.getDb.mockReturnValue(drizzle);
+      drizzle.select = (() => selectChain);
+      mocks.getDb = (() => drizzle) as any;
 
       const env = makeMockEnv();
       const mgr = new SnapshotManager(env, spaceId);
       const snapshot = await mgr.getSnapshot('snap-2');
 
-      expect(snapshot!.parent_ids).toEqual([]);
-    });
-  });
-
-  describe('getTree', () => {
-    it('throws when snapshot not found', async () => {
-      const drizzle = createDrizzleMock();
-      mocks.getDb.mockReturnValue(drizzle);
+      assertEquals(snapshot!.parent_ids, []);
+})  
+  
+    Deno.test('SnapshotManager - getTree - throws when snapshot not found', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+  const drizzle = createDrizzleMock();
+      mocks.getDb = (() => drizzle) as any;
       const env = makeMockEnv();
 
       const mgr = new SnapshotManager(env, spaceId);
-      await expect(mgr.getTree('nonexistent')).rejects.toThrow('Snapshot not found');
-    });
-
-    it('throws when TENANT_SOURCE is not configured', async () => {
-      const row = {
+      await await assertRejects(async () => { await mgr.getTree('nonexistent'); }, 'Snapshot not found');
+})
+    Deno.test('SnapshotManager - getTree - throws when TENANT_SOURCE is not configured', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+  const row = {
         id: 'snap-1', accountId: spaceId, parentIds: '[]',
         treeKey: 'trees/ws-1/snap-1.json', message: null, author: null,
         status: 'complete', createdAt: '2025-01-01T00:00:00Z',
       };
-      const selectChain = createChainableMock({ get: vi.fn().mockResolvedValue(row) });
+      const selectChain = createChainableMock({ get: (async () => row) });
       const drizzle = createDrizzleMock();
-      drizzle.select = vi.fn().mockReturnValue(selectChain);
-      mocks.getDb.mockReturnValue(drizzle);
+      drizzle.select = (() => selectChain);
+      mocks.getDb = (() => drizzle) as any;
 
       const env = makeMockEnv({ TENANT_SOURCE: undefined } as never);
       const mgr = new SnapshotManager(env, spaceId);
-      await expect(mgr.getTree('snap-1')).rejects.toThrow('Storage not configured');
-    });
-  });
-
-  describe('createTreeFromWorkspace', () => {
-    it('builds a tree from file rows', async () => {
-      const files = [
+      await await assertRejects(async () => { await mgr.getTree('snap-1'); }, 'Storage not configured');
+})  
+  
+    Deno.test('SnapshotManager - createTreeFromWorkspace - builds a tree from file rows', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+  const files = [
         { path: 'src/index.ts', sha256: 'abc', size: 100 },
         { path: 'README.md', sha256: 'def', size: 50 },
       ];
-      const selectChain = createChainableMock({ all: vi.fn().mockResolvedValue(files) });
+      const selectChain = createChainableMock({ all: (async () => files) });
       const drizzle = createDrizzleMock();
-      drizzle.select = vi.fn().mockReturnValue(selectChain);
-      mocks.getDb.mockReturnValue(drizzle);
+      drizzle.select = (() => selectChain);
+      mocks.getDb = (() => drizzle) as any;
 
       const env = makeMockEnv();
       const mgr = new SnapshotManager(env, spaceId);
       const tree = await mgr.createTreeFromWorkspace();
 
-      expect(tree['src/index.ts']).toBeDefined();
-      expect(tree['src/index.ts'].hash).toBe('abc');
-      expect(tree['src/index.ts'].type).toBe('file');
-      expect(tree['README.md'].size).toBe(50);
-    });
-  });
-
-  describe('writeBlob', () => {
-    it('writes blob to R2 and inserts DB row', async () => {
-      const drizzle = createDrizzleMock();
+      assert(tree['src/index.ts'] !== undefined);
+      assertEquals(tree['src/index.ts'].hash, 'abc');
+      assertEquals(tree['src/index.ts'].type, 'file');
+      assertEquals(tree['README.md'].size, 50);
+})  
+  
+    Deno.test('SnapshotManager - writeBlob - writes blob to R2 and inserts DB row', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+  const drizzle = createDrizzleMock();
       // head returns null (blob doesn't exist yet)
-      const selectChain = createChainableMock({ get: vi.fn().mockResolvedValue(null) });
-      drizzle.select = vi.fn().mockReturnValue(selectChain);
-      mocks.getDb.mockReturnValue(drizzle);
+      const selectChain = createChainableMock({ get: (async () => null) });
+      drizzle.select = (() => selectChain);
+      mocks.getDb = (() => drizzle) as any;
 
       const env = makeMockEnv();
       const mgr = new SnapshotManager(env, spaceId);
       const result = await mgr.writeBlob('hello world');
 
-      expect(result.hash).toBe('sha256-hash');
-      expect(result.size).toBeGreaterThan(0);
-      expect(drizzle.insert).toHaveBeenCalled();
-    });
-  });
-
-  describe('increaseBlobRefcount', () => {
-    it('does nothing for empty hash array', async () => {
-      const drizzle = createDrizzleMock();
-      mocks.getDb.mockReturnValue(drizzle);
+      assertEquals(result.hash, 'sha256-hash');
+      assert(result.size > 0);
+      assert(drizzle.insert.calls.length > 0);
+})  
+  
+    Deno.test('SnapshotManager - increaseBlobRefcount - does nothing for empty hash array', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+  const drizzle = createDrizzleMock();
+      mocks.getDb = (() => drizzle) as any;
 
       const env = makeMockEnv();
       const mgr = new SnapshotManager(env, spaceId);
       await mgr.increaseBlobRefcount([]);
-      expect(drizzle.update).not.toHaveBeenCalled();
-    });
-
-    it('calls update for each hash', async () => {
-      const drizzle = createDrizzleMock();
-      mocks.getDb.mockReturnValue(drizzle);
+      assertSpyCalls(drizzle.update, 0);
+})
+    Deno.test('SnapshotManager - increaseBlobRefcount - calls update for each hash', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+  const drizzle = createDrizzleMock();
+      mocks.getDb = (() => drizzle) as any;
 
       const env = makeMockEnv();
       const mgr = new SnapshotManager(env, spaceId);
       await mgr.increaseBlobRefcount(['hash1', 'hash2']);
-      expect(drizzle.update).toHaveBeenCalledTimes(2);
-    });
-  });
-
-  describe('decreaseBlobRefcount', () => {
-    it('does nothing for empty hash array', async () => {
-      const drizzle = createDrizzleMock();
-      mocks.getDb.mockReturnValue(drizzle);
+      assertSpyCalls(drizzle.update, 2);
+})  
+  
+    Deno.test('SnapshotManager - decreaseBlobRefcount - does nothing for empty hash array', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+  const drizzle = createDrizzleMock();
+      mocks.getDb = (() => drizzle) as any;
 
       const env = makeMockEnv();
       const mgr = new SnapshotManager(env, spaceId);
       await mgr.decreaseBlobRefcount([]);
-      expect(drizzle.update).not.toHaveBeenCalled();
-    });
-  });
-
-  describe('cleanupPendingSnapshots', () => {
-    it('returns 0 when no old pending snapshots exist', async () => {
-      const selectChain = createChainableMock({ all: vi.fn().mockResolvedValue([]) });
+      assertSpyCalls(drizzle.update, 0);
+})  
+  
+    Deno.test('SnapshotManager - cleanupPendingSnapshots - returns 0 when no old pending snapshots exist', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+  const selectChain = createChainableMock({ all: (async () => []) });
       const drizzle = createDrizzleMock();
-      drizzle.select = vi.fn().mockReturnValue(selectChain);
-      mocks.getDb.mockReturnValue(drizzle);
+      drizzle.select = (() => selectChain);
+      mocks.getDb = (() => drizzle) as any;
 
       const env = makeMockEnv();
       const mgr = new SnapshotManager(env, spaceId);
       const count = await mgr.cleanupPendingSnapshots();
-      expect(count).toBe(0);
-    });
-  });
-
-  describe('createBlobFetcher', () => {
-    it('returns null when TENANT_SOURCE is not configured', async () => {
-      const env = makeMockEnv({ TENANT_SOURCE: undefined } as never);
+      assertEquals(count, 0);
+})  
+  
+    Deno.test('SnapshotManager - createBlobFetcher - returns null when TENANT_SOURCE is not configured', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+  const env = makeMockEnv({ TENANT_SOURCE: undefined } as never);
       const mgr = new SnapshotManager(env, spaceId);
       const fetcher = mgr.createBlobFetcher();
       const result = await fetcher('any-hash');
-      expect(result).toBeNull();
-    });
-
-    it('returns null when blob is not found in R2', async () => {
-      const env = makeMockEnv();
+      assertEquals(result, null);
+})
+    Deno.test('SnapshotManager - createBlobFetcher - returns null when blob is not found in R2', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+  const env = makeMockEnv();
       const mgr = new SnapshotManager(env, spaceId);
       const fetcher = mgr.createBlobFetcher();
       const result = await fetcher('missing-hash');
-      expect(result).toBeNull();
-    });
-
-    it('returns content when blob exists and hash matches', async () => {
-      const tenant = new MockR2Bucket();
+      assertEquals(result, null);
+})
+    Deno.test('SnapshotManager - createBlobFetcher - returns content when blob exists and hash matches', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+  const tenant = new MockR2Bucket();
       await tenant.put(`blobs/${spaceId}/sha256-hash`, 'blob content');
-      mocks.computeSHA256.mockResolvedValue('sha256-hash');
+      mocks.computeSHA256 = (async () => 'sha256-hash') as any;
 
       const env = makeMockEnv({ TENANT_SOURCE: tenant } as never);
       const mgr = new SnapshotManager(env, spaceId);
       const fetcher = mgr.createBlobFetcher();
       const result = await fetcher('sha256-hash');
-      expect(result).toBe('blob content');
-    });
-
-    it('returns null when hash does not match (integrity check)', async () => {
-      const tenant = new MockR2Bucket();
+      assertEquals(result, 'blob content');
+})
+    Deno.test('SnapshotManager - createBlobFetcher - returns null when hash does not match (integrity check)', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+  const tenant = new MockR2Bucket();
       await tenant.put(`blobs/${spaceId}/claimed-hash`, 'blob content');
-      mocks.computeSHA256.mockResolvedValue('different-hash');
+      mocks.computeSHA256 = (async () => 'different-hash') as any;
 
       const env = makeMockEnv({ TENANT_SOURCE: tenant } as never);
       const mgr = new SnapshotManager(env, spaceId);
       const fetcher = mgr.createBlobFetcher();
       const result = await fetcher('claimed-hash');
-      expect(result).toBeNull();
-    });
-  });
-});
+      assertEquals(result, null);
+})  

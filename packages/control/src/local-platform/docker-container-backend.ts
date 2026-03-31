@@ -12,7 +12,7 @@ import type {
   ContainerCreateResult,
 } from './container-backend.ts';
 
-const DOCKER_SOCKET = process.env.DOCKER_SOCKET_PATH || '/var/run/docker.sock';
+const DOCKER_SOCKET = Deno.env.get('DOCKER_SOCKET_PATH') || '/var/run/docker.sock';
 
 // ─── Docker Engine API helpers ───
 

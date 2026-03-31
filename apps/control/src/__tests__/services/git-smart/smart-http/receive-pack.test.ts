@@ -1,48 +1,36 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { handleReceivePack, handleReceivePackFromStream, readReceivePackStream, tryParsePktLineCommands } from '@/services/git-smart/smart-http/receive-pack';
 import { encodePktLine, flushPkt, parsePktLines, pktLineText } from '@/services/git-smart/protocol/pkt-line';
 import { concatBytes } from '@/services/git-smart/core/sha1';
+
+import { assertEquals, assertNotEquals, assert, assertRejects, assertStringIncludes } from 'jsr:@std/assert';
+import { assertSpyCalls, assertSpyCallArgs } from 'jsr:@std/testing/mock';
 
 const ZERO_SHA = '0000000000000000000000000000000000000000';
 const SHA_A = 'a'.repeat(40);
 const SHA_B = 'b'.repeat(40);
 
 // Mock dependencies
-vi.mock('@/services/git-smart/protocol/packfile-reader', () => ({
-  readPackfileAsync: vi.fn(),
-}));
+// [Deno] vi.mock removed - manually stub imports from '@/services/git-smart/protocol/packfile-reader'
 
-vi.mock('@/services/git-smart/core/commit-index', () => ({
-  indexCommit: vi.fn(),
-  getCommit: vi.fn(),
-  isAncestor: vi.fn(),
-}));
+// [Deno] vi.mock removed - manually stub imports from '@/services/git-smart/core/commit-index'
 
-vi.mock('@/services/git-smart/core/refs', () => ({
-  updateBranch: vi.fn(),
-  createBranch: vi.fn(),
-  deleteBranch: vi.fn(),
-  createTag: vi.fn(),
-  deleteTag: vi.fn(),
-  getBranch: vi.fn(),
-  isValidRefName: vi.fn(),
-}));
+// [Deno] vi.mock removed - manually stub imports from '@/services/git-smart/core/refs'
 
 import { readPackfileAsync } from '@/services/git-smart/protocol/packfile-reader';
 import { indexCommit, getCommit, isAncestor } from '@/services/git-smart/core/commit-index';
 import { updateBranch, createBranch, deleteBranch, createTag, deleteTag, getBranch, isValidRefName } from '@/services/git-smart/core/refs';
 
-const mockReadPackfile = vi.mocked(readPackfileAsync);
-const mockIndexCommit = vi.mocked(indexCommit);
-const mockGetCommit = vi.mocked(getCommit);
-const mockIsAncestor = vi.mocked(isAncestor);
-const mockUpdateBranch = vi.mocked(updateBranch);
-const mockCreateBranch = vi.mocked(createBranch);
-const mockDeleteBranch = vi.mocked(deleteBranch);
-const mockCreateTag = vi.mocked(createTag);
-const mockDeleteTag = vi.mocked(deleteTag);
-const mockGetBranch = vi.mocked(getBranch);
-const mockIsValidRefName = vi.mocked(isValidRefName);
+const mockReadPackfile = readPackfileAsync;
+const mockIndexCommit = indexCommit;
+const mockGetCommit = getCommit;
+const mockIsAncestor = isAncestor;
+const mockUpdateBranch = updateBranch;
+const mockCreateBranch = createBranch;
+const mockDeleteBranch = deleteBranch;
+const mockCreateTag = createTag;
+const mockDeleteTag = deleteTag;
+const mockGetBranch = getBranch;
+const mockIsValidRefName = isValidRefName;
 
 function buildReceiveBody(commands: string[], includePackfile = false): Uint8Array {
   const parts: Uint8Array[] = [];
@@ -96,29 +84,34 @@ function parseReportStatus(response: Uint8Array): { unpack: string; refs: Array<
   return { unpack, refs };
 }
 
-describe('handleReceivePack', () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-    mockReadPackfile.mockResolvedValue([]);
-    mockGetCommit.mockResolvedValue(null);
-    mockIndexCommit.mockResolvedValue(undefined);
-    mockIsAncestor.mockResolvedValue(true);
-    mockIsValidRefName.mockReturnValue(true);
-    mockGetBranch.mockResolvedValue(null);
-  });
 
-  it('returns ok with empty refs for 0 commands', async () => {
-    const body = flushPkt(); // just flush, no commands
+
+  Deno.test('handleReceivePack - returns ok with empty refs for 0 commands', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+    mockReadPackfile = (async () => []) as any;
+    mockGetCommit = (async () => null) as any;
+    mockIndexCommit = (async () => undefined) as any;
+    mockIsAncestor = (async () => true) as any;
+    mockIsValidRefName = (() => true) as any;
+    mockGetBranch = (async () => null) as any;
+  const body = flushPkt(); // just flush, no commands
     const { response, updatedRefs } = await handleReceivePack({} as any, {} as any, 'repo1', body);
 
-    expect(updatedRefs).toEqual([]);
+    assertEquals(updatedRefs, []);
     const status = parseReportStatus(response);
-    expect(status.unpack).toBe('ok');
-    expect(status.refs).toHaveLength(0);
-  });
+    assertEquals(status.unpack, 'ok');
+    assertEquals(status.refs.length, 0);
+})
 
-  it('rejects when ref count exceeds limit', async () => {
-    const commands: string[] = [];
+  Deno.test('handleReceivePack - rejects when ref count exceeds limit', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+    mockReadPackfile = (async () => []) as any;
+    mockGetCommit = (async () => null) as any;
+    mockIndexCommit = (async () => undefined) as any;
+    mockIsAncestor = (async () => true) as any;
+    mockIsValidRefName = (() => true) as any;
+    mockGetBranch = (async () => null) as any;
+  const commands: string[] = [];
     for (let i = 0; i < 51; i++) {
       commands.push(`${ZERO_SHA} ${SHA_A} refs/heads/branch-${i}`);
     }
@@ -126,13 +119,20 @@ describe('handleReceivePack', () => {
 
     const { response, updatedRefs } = await handleReceivePack({} as any, {} as any, 'repo1', body);
 
-    expect(updatedRefs).toEqual([]);
+    assertEquals(updatedRefs, []);
     const status = parseReportStatus(response);
-    expect(status.unpack).toBe('too many ref updates');
-  });
+    assertEquals(status.unpack, 'too many ref updates');
+})
 
-  it('rejects when object count exceeds limit', async () => {
-    const commands = [`${ZERO_SHA} ${SHA_A} refs/heads/main`];
+  Deno.test('handleReceivePack - rejects when object count exceeds limit', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+    mockReadPackfile = (async () => []) as any;
+    mockGetCommit = (async () => null) as any;
+    mockIndexCommit = (async () => undefined) as any;
+    mockIsAncestor = (async () => true) as any;
+    mockIsValidRefName = (() => true) as any;
+    mockGetBranch = (async () => null) as any;
+  const commands = [`${ZERO_SHA} ${SHA_A} refs/heads/main`];
     const parts: Uint8Array[] = [];
     for (const cmd of commands) {
       parts.push(encodePktLine(cmd + '\n'));
@@ -150,13 +150,20 @@ describe('handleReceivePack', () => {
     const body = concatBytes(...parts);
     const { response, updatedRefs } = await handleReceivePack({} as any, {} as any, 'repo1', body);
 
-    expect(updatedRefs).toEqual([]);
+    assertEquals(updatedRefs, []);
     const status = parseReportStatus(response);
-    expect(status.unpack).toBe('too many objects');
-  });
+    assertEquals(status.unpack, 'too many objects');
+})
 
-  it('creates branch successfully', async () => {
-    mockCreateBranch.mockResolvedValue({ success: true });
+  Deno.test('handleReceivePack - creates branch successfully', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+    mockReadPackfile = (async () => []) as any;
+    mockGetCommit = (async () => null) as any;
+    mockIndexCommit = (async () => undefined) as any;
+    mockIsAncestor = (async () => true) as any;
+    mockIsValidRefName = (() => true) as any;
+    mockGetBranch = (async () => null) as any;
+  mockCreateBranch = (async () => ({ success: true })) as any;
 
     const body = buildReceiveBody(
       [`${ZERO_SHA} ${SHA_A} refs/heads/feature`],
@@ -165,20 +172,27 @@ describe('handleReceivePack', () => {
 
     const { response, updatedRefs } = await handleReceivePack({} as any, {} as any, 'repo1', body);
 
-    expect(updatedRefs).toHaveLength(1);
-    expect(updatedRefs[0].refName).toBe('refs/heads/feature');
+    assertEquals(updatedRefs.length, 1);
+    assertEquals(updatedRefs[0].refName, 'refs/heads/feature');
     const status = parseReportStatus(response);
-    expect(status.unpack).toBe('ok');
-    expect(status.refs[0].status).toBe('ok');
-  });
+    assertEquals(status.unpack, 'ok');
+    assertEquals(status.refs[0].status, 'ok');
+})
 
-  it('updates branch with CAS when fast-forward', async () => {
-    mockGetBranch.mockResolvedValue({
+  Deno.test('handleReceivePack - updates branch with CAS when fast-forward', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+    mockReadPackfile = (async () => []) as any;
+    mockGetCommit = (async () => null) as any;
+    mockIndexCommit = (async () => undefined) as any;
+    mockIsAncestor = (async () => true) as any;
+    mockIsValidRefName = (() => true) as any;
+    mockGetBranch = (async () => null) as any;
+  mockGetBranch = (async () => ({
       id: '1', repo_id: 'repo1', name: 'main', commit_sha: SHA_A,
       is_default: true, is_protected: false, created_at: '', updated_at: '',
-    });
-    mockIsAncestor.mockResolvedValue(true);
-    mockUpdateBranch.mockResolvedValue({ success: true });
+    })) as any;
+    mockIsAncestor = (async () => true) as any;
+    mockUpdateBranch = (async () => ({ success: true })) as any;
 
     const body = buildReceiveBody(
       [`${SHA_A} ${SHA_B} refs/heads/main`],
@@ -187,21 +201,28 @@ describe('handleReceivePack', () => {
 
     const { updatedRefs } = await handleReceivePack({} as any, {} as any, 'repo1', body);
 
-    expect(updatedRefs).toHaveLength(1);
-    expect(mockIsAncestor).toHaveBeenCalledWith(
+    assertEquals(updatedRefs.length, 1);
+    assertSpyCallArgs(mockIsAncestor, 0, [
       expect.anything(), expect.anything(), 'repo1', SHA_A, SHA_B,
-    );
-    expect(mockUpdateBranch).toHaveBeenCalledWith(
+    ]);
+    assertSpyCallArgs(mockUpdateBranch, 0, [
       expect.anything(), 'repo1', 'main', SHA_A, SHA_B,
-    );
-  });
+    ]);
+})
 
-  it('rejects non-fast-forward branch update', async () => {
-    mockGetBranch.mockResolvedValue({
+  Deno.test('handleReceivePack - rejects non-fast-forward branch update', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+    mockReadPackfile = (async () => []) as any;
+    mockGetCommit = (async () => null) as any;
+    mockIndexCommit = (async () => undefined) as any;
+    mockIsAncestor = (async () => true) as any;
+    mockIsValidRefName = (() => true) as any;
+    mockGetBranch = (async () => null) as any;
+  mockGetBranch = (async () => ({
       id: '1', repo_id: 'repo1', name: 'main', commit_sha: SHA_A,
       is_default: false, is_protected: false, created_at: '', updated_at: '',
-    });
-    mockIsAncestor.mockResolvedValue(false);
+    })) as any;
+    mockIsAncestor = (async () => false) as any;
 
     const body = buildReceiveBody(
       [`${SHA_A} ${SHA_B} refs/heads/main`],
@@ -210,17 +231,24 @@ describe('handleReceivePack', () => {
 
     const { response, updatedRefs } = await handleReceivePack({} as any, {} as any, 'repo1', body);
 
-    expect(updatedRefs).toHaveLength(0);
-    expect(mockUpdateBranch).not.toHaveBeenCalled();
+    assertEquals(updatedRefs.length, 0);
+    assertSpyCalls(mockUpdateBranch, 0);
     const status = parseReportStatus(response);
-    expect(status.refs[0].status).toContain('non-fast-forward');
-  });
+    assertStringIncludes(status.refs[0].status, 'non-fast-forward');
+})
 
-  it('rejects push to protected branch', async () => {
-    mockGetBranch.mockResolvedValue({
+  Deno.test('handleReceivePack - rejects push to protected branch', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+    mockReadPackfile = (async () => []) as any;
+    mockGetCommit = (async () => null) as any;
+    mockIndexCommit = (async () => undefined) as any;
+    mockIsAncestor = (async () => true) as any;
+    mockIsValidRefName = (() => true) as any;
+    mockGetBranch = (async () => null) as any;
+  mockGetBranch = (async () => ({
       id: '1', repo_id: 'repo1', name: 'main', commit_sha: SHA_A,
       is_default: true, is_protected: true, created_at: '', updated_at: '',
-    });
+    })) as any;
 
     const body = buildReceiveBody(
       [`${SHA_A} ${SHA_B} refs/heads/main`],
@@ -229,15 +257,22 @@ describe('handleReceivePack', () => {
 
     const { response, updatedRefs } = await handleReceivePack({} as any, {} as any, 'repo1', body);
 
-    expect(updatedRefs).toHaveLength(0);
-    expect(mockUpdateBranch).not.toHaveBeenCalled();
-    expect(mockIsAncestor).not.toHaveBeenCalled();
+    assertEquals(updatedRefs.length, 0);
+    assertSpyCalls(mockUpdateBranch, 0);
+    assertSpyCalls(mockIsAncestor, 0);
     const status = parseReportStatus(response);
-    expect(status.refs[0].status).toContain('protected branch');
-  });
+    assertStringIncludes(status.refs[0].status, 'protected branch');
+})
 
-  it('rejects invalid ref name', async () => {
-    mockIsValidRefName.mockReturnValue(false);
+  Deno.test('handleReceivePack - rejects invalid ref name', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+    mockReadPackfile = (async () => []) as any;
+    mockGetCommit = (async () => null) as any;
+    mockIndexCommit = (async () => undefined) as any;
+    mockIsAncestor = (async () => true) as any;
+    mockIsValidRefName = (() => true) as any;
+    mockGetBranch = (async () => null) as any;
+  mockIsValidRefName = (() => false) as any;
 
     const body = buildReceiveBody(
       [`${ZERO_SHA} ${SHA_A} refs/heads/bad..name`],
@@ -246,13 +281,20 @@ describe('handleReceivePack', () => {
 
     const { response, updatedRefs } = await handleReceivePack({} as any, {} as any, 'repo1', body);
 
-    expect(updatedRefs).toHaveLength(0);
+    assertEquals(updatedRefs.length, 0);
     const status = parseReportStatus(response);
-    expect(status.refs[0].status).toContain('invalid ref name');
-  });
+    assertStringIncludes(status.refs[0].status, 'invalid ref name');
+})
 
-  it('rejects invalid tag name', async () => {
-    mockIsValidRefName.mockReturnValue(false);
+  Deno.test('handleReceivePack - rejects invalid tag name', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+    mockReadPackfile = (async () => []) as any;
+    mockGetCommit = (async () => null) as any;
+    mockIndexCommit = (async () => undefined) as any;
+    mockIsAncestor = (async () => true) as any;
+    mockIsValidRefName = (() => true) as any;
+    mockGetBranch = (async () => null) as any;
+  mockIsValidRefName = (() => false) as any;
 
     const body = buildReceiveBody(
       [`${ZERO_SHA} ${SHA_A} refs/tags/bad~name`],
@@ -261,13 +303,20 @@ describe('handleReceivePack', () => {
 
     const { response, updatedRefs } = await handleReceivePack({} as any, {} as any, 'repo1', body);
 
-    expect(updatedRefs).toHaveLength(0);
+    assertEquals(updatedRefs.length, 0);
     const status = parseReportStatus(response);
-    expect(status.refs[0].status).toContain('invalid ref name');
-  });
+    assertStringIncludes(status.refs[0].status, 'invalid ref name');
+})
 
-  it('deletes branch', async () => {
-    mockDeleteBranch.mockResolvedValue({ success: true });
+  Deno.test('handleReceivePack - deletes branch', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+    mockReadPackfile = (async () => []) as any;
+    mockGetCommit = (async () => null) as any;
+    mockIndexCommit = (async () => undefined) as any;
+    mockIsAncestor = (async () => true) as any;
+    mockIsValidRefName = (() => true) as any;
+    mockGetBranch = (async () => null) as any;
+  mockDeleteBranch = (async () => ({ success: true })) as any;
 
     const body = buildReceiveBody(
       [`${SHA_A} ${ZERO_SHA} refs/heads/old-branch`],
@@ -275,12 +324,19 @@ describe('handleReceivePack', () => {
 
     const { updatedRefs } = await handleReceivePack({} as any, {} as any, 'repo1', body);
 
-    expect(updatedRefs).toHaveLength(1);
-    expect(mockDeleteBranch).toHaveBeenCalledWith(expect.anything(), 'repo1', 'old-branch');
-  });
+    assertEquals(updatedRefs.length, 1);
+    assertSpyCallArgs(mockDeleteBranch, 0, [expect.anything(), 'repo1', 'old-branch']);
+})
 
-  it('creates tag', async () => {
-    mockCreateTag.mockResolvedValue({ success: true });
+  Deno.test('handleReceivePack - creates tag', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+    mockReadPackfile = (async () => []) as any;
+    mockGetCommit = (async () => null) as any;
+    mockIndexCommit = (async () => undefined) as any;
+    mockIsAncestor = (async () => true) as any;
+    mockIsValidRefName = (() => true) as any;
+    mockGetBranch = (async () => null) as any;
+  mockCreateTag = (async () => ({ success: true })) as any;
 
     const body = buildReceiveBody(
       [`${ZERO_SHA} ${SHA_A} refs/tags/v1.0`],
@@ -289,12 +345,19 @@ describe('handleReceivePack', () => {
 
     const { updatedRefs } = await handleReceivePack({} as any, {} as any, 'repo1', body);
 
-    expect(updatedRefs).toHaveLength(1);
-    expect(mockCreateTag).toHaveBeenCalledWith(expect.anything(), 'repo1', 'v1.0', SHA_A);
-  });
+    assertEquals(updatedRefs.length, 1);
+    assertSpyCallArgs(mockCreateTag, 0, [expect.anything(), 'repo1', 'v1.0', SHA_A]);
+})
 
-  it('deletes tag', async () => {
-    mockDeleteTag.mockResolvedValue({ success: true });
+  Deno.test('handleReceivePack - deletes tag', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+    mockReadPackfile = (async () => []) as any;
+    mockGetCommit = (async () => null) as any;
+    mockIndexCommit = (async () => undefined) as any;
+    mockIsAncestor = (async () => true) as any;
+    mockIsValidRefName = (() => true) as any;
+    mockGetBranch = (async () => null) as any;
+  mockDeleteTag = (async () => ({ success: true })) as any;
 
     const body = buildReceiveBody(
       [`${SHA_A} ${ZERO_SHA} refs/tags/v0.9`],
@@ -302,12 +365,19 @@ describe('handleReceivePack', () => {
 
     const { updatedRefs } = await handleReceivePack({} as any, {} as any, 'repo1', body);
 
-    expect(updatedRefs).toHaveLength(1);
-    expect(mockDeleteTag).toHaveBeenCalledWith(expect.anything(), 'repo1', 'v0.9');
-  });
+    assertEquals(updatedRefs.length, 1);
+    assertSpyCallArgs(mockDeleteTag, 0, [expect.anything(), 'repo1', 'v0.9']);
+})
 
-  it('rejects when packfile size exceeds limit', async () => {
-    const commands = [`${ZERO_SHA} ${SHA_A} refs/heads/main`];
+  Deno.test('handleReceivePack - rejects when packfile size exceeds limit', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+    mockReadPackfile = (async () => []) as any;
+    mockGetCommit = (async () => null) as any;
+    mockIndexCommit = (async () => undefined) as any;
+    mockIsAncestor = (async () => true) as any;
+    mockIsValidRefName = (() => true) as any;
+    mockGetBranch = (async () => null) as any;
+  const commands = [`${ZERO_SHA} ${SHA_A} refs/heads/main`];
     const parts: Uint8Array[] = [];
     for (const cmd of commands) {
       parts.push(encodePktLine(cmd + '\n'));
@@ -326,14 +396,21 @@ describe('handleReceivePack', () => {
     const body = concatBytes(...parts);
     const { response, updatedRefs } = await handleReceivePack({} as any, {} as any, 'repo1', body);
 
-    expect(updatedRefs).toEqual([]);
+    assertEquals(updatedRefs, []);
     const status = parseReportStatus(response);
-    expect(status.unpack).toBe('packfile too large');
-    expect(status.refs[0].status).toContain('packfile-size limit exceeded');
-  });
+    assertEquals(status.unpack, 'packfile too large');
+    assertStringIncludes(status.refs[0].status, 'packfile-size limit exceeded');
+})
 
-  it('reports error on packfile unpack failure', async () => {
-    mockReadPackfile.mockRejectedValue(new Error('Pack object count 999 exceeds limit of 100'));
+  Deno.test('handleReceivePack - reports error on packfile unpack failure', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+    mockReadPackfile = (async () => []) as any;
+    mockGetCommit = (async () => null) as any;
+    mockIndexCommit = (async () => undefined) as any;
+    mockIsAncestor = (async () => true) as any;
+    mockIsValidRefName = (() => true) as any;
+    mockGetBranch = (async () => null) as any;
+  mockReadPackfile = (async () => { throw new Error('Pack object count 999 exceeds limit of 100'); }) as any;
 
     const body = buildReceiveBody(
       [`${ZERO_SHA} ${SHA_A} refs/heads/main`],
@@ -342,25 +419,32 @@ describe('handleReceivePack', () => {
 
     const { response, updatedRefs } = await handleReceivePack({} as any, {} as any, 'repo1', body);
 
-    expect(updatedRefs).toEqual([]);
+    assertEquals(updatedRefs, []);
     const status = parseReportStatus(response);
-    expect(status.unpack).toContain('Pack object count 999 exceeds limit');
-    expect(status.refs[0].status).toContain('ng');
-  });
+    assertStringIncludes(status.unpack, 'Pack object count 999 exceeds limit');
+    assertStringIncludes(status.refs[0].status, 'ng');
+})
 
-  it('reports ng for unsupported ref type', async () => {
-    const body = buildReceiveBody(
+  Deno.test('handleReceivePack - reports ng for unsupported ref type', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+    mockReadPackfile = (async () => []) as any;
+    mockGetCommit = (async () => null) as any;
+    mockIndexCommit = (async () => undefined) as any;
+    mockIsAncestor = (async () => true) as any;
+    mockIsValidRefName = (() => true) as any;
+    mockGetBranch = (async () => null) as any;
+  const body = buildReceiveBody(
       [`${ZERO_SHA} ${SHA_A} refs/notes/commits`],
       true,
     );
 
     const { response, updatedRefs } = await handleReceivePack({} as any, {} as any, 'repo1', body);
 
-    expect(updatedRefs).toHaveLength(0);
+    assertEquals(updatedRefs.length, 0);
     const status = parseReportStatus(response);
-    expect(status.refs[0].status).toContain('unsupported ref type');
-  });
-});
+    assertStringIncludes(status.refs[0].status, 'unsupported ref type');
+})
+
 
 // --- Streaming tests ---
 
@@ -379,33 +463,33 @@ function toStream(data: Uint8Array, chunkSize = 64): ReadableStream<Uint8Array> 
   });
 }
 
-describe('tryParsePktLineCommands', () => {
-  it('returns null when buffer has incomplete data', () => {
-    const partial = new TextEncoder().encode('00'); // incomplete hex prefix
-    expect(tryParsePktLineCommands(partial)).toBeNull();
-  });
 
-  it('parses commands up to flush and returns endOffset', () => {
-    const body = concatBytes(
+  Deno.test('tryParsePktLineCommands - returns null when buffer has incomplete data', () => {
+  const partial = new TextEncoder().encode('00'); // incomplete hex prefix
+    assertEquals(tryParsePktLineCommands(partial), null);
+})
+
+  Deno.test('tryParsePktLineCommands - parses commands up to flush and returns endOffset', () => {
+  const body = concatBytes(
       encodePktLine(`${ZERO_SHA} ${SHA_A} refs/heads/main\n`),
       flushPkt(),
     );
     const result = tryParsePktLineCommands(body);
-    expect(result).not.toBeNull();
-    expect(result!.commands).toHaveLength(1);
-    expect(result!.commands[0].refName).toBe('refs/heads/main');
-    expect(result!.endOffset).toBe(body.length);
-  });
+    assertNotEquals(result, null);
+    assertEquals(result!.commands.length, 1);
+    assertEquals(result!.commands[0].refName, 'refs/heads/main');
+    assertEquals(result!.endOffset, body.length);
+})
 
-  it('returns null when no flush packet is found', () => {
-    const body = encodePktLine(`${ZERO_SHA} ${SHA_A} refs/heads/main\n`);
-    expect(tryParsePktLineCommands(body)).toBeNull();
-  });
-});
+  Deno.test('tryParsePktLineCommands - returns null when no flush packet is found', () => {
+  const body = encodePktLine(`${ZERO_SHA} ${SHA_A} refs/heads/main\n`);
+    assertEquals(tryParsePktLineCommands(body), null);
+})
 
-describe('readReceivePackStream', () => {
-  it('parses commands and packfile from stream', async () => {
-    const body = buildReceiveBody(
+
+
+  Deno.test('readReceivePackStream - parses commands and packfile from stream', async () => {
+  const body = buildReceiveBody(
       [`${ZERO_SHA} ${SHA_A} refs/heads/feature`],
       true,
     );
@@ -413,17 +497,17 @@ describe('readReceivePackStream', () => {
     const stream = toStream(body, 32);
     const { commands, packfileData } = await readReceivePackStream(stream, 1024 * 1024);
 
-    expect(commands).toHaveLength(1);
-    expect(commands[0].refName).toBe('refs/heads/feature');
-    expect(packfileData).not.toBeNull();
-    expect(packfileData!.length).toBeGreaterThan(0);
+    assertEquals(commands.length, 1);
+    assertEquals(commands[0].refName, 'refs/heads/feature');
+    assertNotEquals(packfileData, null);
+    assert(packfileData!.length > 0);
     // Verify packfile signature
     const sig = new TextDecoder().decode(packfileData!.subarray(0, 4));
-    expect(sig).toBe('PACK');
-  });
+    assertEquals(sig, 'PACK');
+})
 
-  it('handles delete-only push without packfile', async () => {
-    const body = buildReceiveBody(
+  Deno.test('readReceivePackStream - handles delete-only push without packfile', async () => {
+  const body = buildReceiveBody(
       [`${SHA_A} ${ZERO_SHA} refs/heads/old`],
       false,
     );
@@ -431,24 +515,24 @@ describe('readReceivePackStream', () => {
     const stream = toStream(body, 16);
     const { commands, packfileData } = await readReceivePackStream(stream, 1024 * 1024);
 
-    expect(commands).toHaveLength(1);
-    expect(packfileData).toBeNull();
-  });
+    assertEquals(commands.length, 1);
+    assertEquals(packfileData, null);
+})
 
-  it('throws when stream exceeds byte limit', async () => {
-    const body = buildReceiveBody(
+  Deno.test('readReceivePackStream - throws when stream exceeds byte limit', async () => {
+  const body = buildReceiveBody(
       [`${ZERO_SHA} ${SHA_A} refs/heads/main`],
       true,
     );
 
     const stream = toStream(body, 16);
-    await expect(
+    await await assertRejects(async () => { await 
       readReceivePackStream(stream, 10), // tiny limit
-    ).rejects.toThrow(/exceeds limit/);
-  });
+    ; }, /exceeds limit/);
+})
 
-  it('parses multiple commands from stream', async () => {
-    const body = buildReceiveBody([
+  Deno.test('readReceivePackStream - parses multiple commands from stream', async () => {
+  const body = buildReceiveBody([
       `${ZERO_SHA} ${SHA_A} refs/heads/feature-1`,
       `${ZERO_SHA} ${SHA_B} refs/heads/feature-2`,
     ], true);
@@ -456,25 +540,23 @@ describe('readReceivePackStream', () => {
     const stream = toStream(body, 50);
     const { commands } = await readReceivePackStream(stream, 1024 * 1024);
 
-    expect(commands).toHaveLength(2);
-    expect(commands[0].refName).toBe('refs/heads/feature-1');
-    expect(commands[1].refName).toBe('refs/heads/feature-2');
-  });
-});
+    assertEquals(commands.length, 2);
+    assertEquals(commands[0].refName, 'refs/heads/feature-1');
+    assertEquals(commands[1].refName, 'refs/heads/feature-2');
+})
 
-describe('handleReceivePackFromStream', () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-    mockReadPackfile.mockResolvedValue([]);
-    mockGetCommit.mockResolvedValue(null);
-    mockIndexCommit.mockResolvedValue(undefined);
-    mockIsAncestor.mockResolvedValue(true);
-    mockIsValidRefName.mockReturnValue(true);
-    mockGetBranch.mockResolvedValue(null);
-  });
 
-  it('creates branch via streaming path', async () => {
-    mockCreateBranch.mockResolvedValue({ success: true });
+
+
+  Deno.test('handleReceivePackFromStream - creates branch via streaming path', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+    mockReadPackfile = (async () => []) as any;
+    mockGetCommit = (async () => null) as any;
+    mockIndexCommit = (async () => undefined) as any;
+    mockIsAncestor = (async () => true) as any;
+    mockIsValidRefName = (() => true) as any;
+    mockGetBranch = (async () => null) as any;
+  mockCreateBranch = (async () => ({ success: true })) as any;
 
     const body = buildReceiveBody(
       [`${ZERO_SHA} ${SHA_A} refs/heads/stream-feature`],
@@ -486,21 +568,28 @@ describe('handleReceivePackFromStream', () => {
       {} as any, {} as any, 'repo1', stream, 1024 * 1024,
     );
 
-    expect(updatedRefs).toHaveLength(1);
-    expect(updatedRefs[0].refName).toBe('refs/heads/stream-feature');
+    assertEquals(updatedRefs.length, 1);
+    assertEquals(updatedRefs[0].refName, 'refs/heads/stream-feature');
     const status = parseReportStatus(response);
-    expect(status.unpack).toBe('ok');
-  });
+    assertEquals(status.unpack, 'ok');
+})
 
-  it('rejects when stream body exceeds maxBodyBytes', async () => {
-    const body = buildReceiveBody(
+  Deno.test('handleReceivePackFromStream - rejects when stream body exceeds maxBodyBytes', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+    mockReadPackfile = (async () => []) as any;
+    mockGetCommit = (async () => null) as any;
+    mockIndexCommit = (async () => undefined) as any;
+    mockIsAncestor = (async () => true) as any;
+    mockIsValidRefName = (() => true) as any;
+    mockGetBranch = (async () => null) as any;
+  const body = buildReceiveBody(
       [`${ZERO_SHA} ${SHA_A} refs/heads/main`],
       true,
     );
 
     const stream = toStream(body, 16);
-    await expect(
+    await await assertRejects(async () => { await 
       handleReceivePackFromStream({} as any, {} as any, 'repo1', stream, 10),
-    ).rejects.toThrow(/exceeds limit/);
-  });
-});
+    ; }, /exceeds limit/);
+})
+

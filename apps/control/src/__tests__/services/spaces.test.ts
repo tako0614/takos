@@ -1,61 +1,59 @@
-import { describe, expect, it, vi } from 'vitest';
 import type { D1Database } from '@cloudflare/workers-types';
 import type { Env } from '@/types';
 
-const mocks = vi.hoisted(() => ({
-  getDb: vi.fn(),
-}));
+import { assertEquals, assert } from 'jsr:@std/assert';
 
-vi.mock('@/db', async (importOriginal) => ({ ...(await importOriginal<typeof import('@/db')>()),
-  getDb: mocks.getDb,
-}));
+const mocks = ({
+  getDb: ((..._args: any[]) => undefined) as any,
+});
 
+// [Deno] vi.mock removed - manually stub imports from '@/db'
 import { getWorkspaceModelSettings, listWorkspacesForUser } from '@/services/identity/spaces';
 
 function createDrizzleMock() {
-  const getMock = vi.fn();
-  const allMock = vi.fn();
-  const runMock = vi.fn();
+  const getMock = ((..._args: any[]) => undefined) as any;
+  const allMock = ((..._args: any[]) => undefined) as any;
+  const runMock = ((..._args: any[]) => undefined) as any;
   const chain = {
-    from: vi.fn().mockReturnThis(),
-    where: vi.fn().mockReturnThis(),
-    set: vi.fn().mockReturnThis(),
-    values: vi.fn().mockReturnThis(),
-    returning: vi.fn().mockReturnThis(),
-    orderBy: vi.fn().mockReturnThis(),
-    limit: vi.fn().mockReturnThis(),
-    offset: vi.fn().mockReturnThis(),
-    leftJoin: vi.fn().mockReturnThis(),
-    innerJoin: vi.fn().mockReturnThis(),
-    onConflictDoUpdate: vi.fn().mockReturnThis(),
-    onConflictDoNothing: vi.fn().mockReturnThis(),
+    from: (function(this: any) { return this; }),
+    where: (function(this: any) { return this; }),
+    set: (function(this: any) { return this; }),
+    values: (function(this: any) { return this; }),
+    returning: (function(this: any) { return this; }),
+    orderBy: (function(this: any) { return this; }),
+    limit: (function(this: any) { return this; }),
+    offset: (function(this: any) { return this; }),
+    leftJoin: (function(this: any) { return this; }),
+    innerJoin: (function(this: any) { return this; }),
+    onConflictDoUpdate: (function(this: any) { return this; }),
+    onConflictDoNothing: (function(this: any) { return this; }),
     get: getMock,
     all: allMock,
     run: runMock,
   };
   return {
-    select: vi.fn(() => chain),
-    insert: vi.fn(() => chain),
-    update: vi.fn(() => chain),
-    delete: vi.fn(() => chain),
+    select: () => chain,
+    insert: () => chain,
+    update: () => chain,
+    delete: () => chain,
     _: { get: getMock, all: allMock, run: runMock, chain },
   };
 }
 
-describe('spaces service queries', () => {
-  it('lists spaces for a human principal from the canonical tables', async () => {
-    const drizzle = createDrizzleMock();
-    mocks.getDb.mockReturnValue(drizzle);
+
+  Deno.test('spaces service queries - lists spaces for a human principal from the canonical tables', async () => {
+  const drizzle = createDrizzleMock();
+    mocks.getDb = (() => drizzle) as any;
 
     // Call sequence:
     // 1. resolveUserPrincipalId: select({id}).from(accounts).where().get() -> {id: 'user-1'}
     // 2. listWorkspacesForUser main query: select({...}).from(accountMemberships).innerJoin().where().orderBy().all() -> memberships
     // 3. findLatestRepositoryBySpaceId: select({...}).from(repositories).where().orderBy().limit().get() -> repo
     drizzle._.get
-      .mockResolvedValueOnce({ id: 'user-1' }) // resolveUserPrincipalId
-      .mockResolvedValueOnce({ id: 'repo-1', name: 'main', default_branch: 'main' }); // findLatestRepositoryBySpaceId
+       = (async () => ({ id: 'user-1' })) as any // resolveUserPrincipalId
+       = (async () => ({ id: 'repo-1', name: 'main', default_branch: 'main' })) as any; // findLatestRepositoryBySpaceId
 
-    drizzle._.all.mockResolvedValueOnce([
+    drizzle._.all = (async () => [
       {
         memberRole: 'owner',
         spaceId: 'ws-1',
@@ -68,11 +66,11 @@ describe('spaces service queries', () => {
         spaceCreatedAt: '2026-02-13T00:00:00.000Z',
         spaceUpdatedAt: '2026-02-13T00:00:00.000Z',
       },
-    ]);
+    ]) as any;
 
     const result = await listWorkspacesForUser({ DB: {} as D1Database } as unknown as Env, 'user-1');
 
-    expect(result).toEqual([{
+    assertEquals(result, [{
       id: 'ws-1',
       kind: 'user',
       name: 'User One',
@@ -90,26 +88,24 @@ describe('spaces service queries', () => {
         default_branch: 'main',
       },
     }]);
-    expect(drizzle.select).toHaveBeenCalled();
-  });
+    assert(drizzle.select.calls.length > 0);
+})
+  Deno.test('spaces service queries - reads model settings from spaces', async () => {
+  const drizzle = createDrizzleMock();
+    mocks.getDb = (() => drizzle) as any;
 
-  it('reads model settings from spaces', async () => {
-    const drizzle = createDrizzleMock();
-    mocks.getDb.mockReturnValue(drizzle);
-
-    drizzle._.get.mockResolvedValueOnce({
+    drizzle._.get = (async () => ({
       ai_model: 'gpt-5.4-nano',
       ai_provider: 'openai',
       security_posture: 'standard',
-    });
+    })) as any;
 
     const result = await getWorkspaceModelSettings({} as D1Database, 'ws-1');
 
-    expect(result).toEqual({
+    assertEquals(result, {
       ai_model: 'gpt-5.4-nano',
       ai_provider: 'openai',
       security_posture: 'standard',
     });
-    expect(drizzle.select).toHaveBeenCalled();
-  });
-});
+    assert(drizzle.select.calls.length > 0);
+})

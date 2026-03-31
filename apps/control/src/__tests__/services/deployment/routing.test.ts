@@ -1,67 +1,60 @@
-import { describe, it, expect, vi } from 'vitest';
 import { collectHostnames, buildRoutingTarget } from '@/services/deployment/routing';
 
-describe('collectHostnames', () => {
-  it('returns empty array when no hostnames', () => {
-    const result = collectHostnames({ hostname: null, customDomains: [] });
-    expect(result).toEqual([]);
-  });
 
-  it('includes the worker hostname', () => {
-    const result = collectHostnames({ hostname: 'my-worker.example.com', customDomains: [] });
-    expect(result).toEqual(['my-worker.example.com']);
-  });
+import { assertEquals, assertThrows, assertStringIncludes } from 'jsr:@std/assert';
 
-  it('includes custom domains', () => {
-    const result = collectHostnames({
+  Deno.test('collectHostnames - returns empty array when no hostnames', () => {
+  const result = collectHostnames({ hostname: null, customDomains: [] });
+    assertEquals(result, []);
+})
+  Deno.test('collectHostnames - includes the worker hostname', () => {
+  const result = collectHostnames({ hostname: 'my-worker.example.com', customDomains: [] });
+    assertEquals(result, ['my-worker.example.com']);
+})
+  Deno.test('collectHostnames - includes custom domains', () => {
+  const result = collectHostnames({
       hostname: null,
       customDomains: [
         { domain: 'custom1.com' },
         { domain: 'custom2.com' },
       ],
     });
-    expect(result).toEqual(['custom1.com', 'custom2.com']);
-  });
-
-  it('combines worker hostname and custom domains', () => {
-    const result = collectHostnames({
+    assertEquals(result, ['custom1.com', 'custom2.com']);
+})
+  Deno.test('collectHostnames - combines worker hostname and custom domains', () => {
+  const result = collectHostnames({
       hostname: 'worker.example.com',
       customDomains: [{ domain: 'custom.com' }],
     });
-    expect(result).toContain('worker.example.com');
-    expect(result).toContain('custom.com');
-    expect(result).toHaveLength(2);
-  });
-
-  it('deduplicates hostnames (case insensitive)', () => {
-    const result = collectHostnames({
+    assertStringIncludes(result, 'worker.example.com');
+    assertStringIncludes(result, 'custom.com');
+    assertEquals(result.length, 2);
+})
+  Deno.test('collectHostnames - deduplicates hostnames (case insensitive)', () => {
+  const result = collectHostnames({
       hostname: 'Worker.Example.Com',
       customDomains: [{ domain: 'worker.example.com' }],
     });
-    expect(result).toHaveLength(1);
-    expect(result[0]).toBe('worker.example.com');
-  });
-
-  it('skips null custom domains', () => {
-    const result = collectHostnames({
+    assertEquals(result.length, 1);
+    assertEquals(result[0], 'worker.example.com');
+})
+  Deno.test('collectHostnames - skips null custom domains', () => {
+  const result = collectHostnames({
       hostname: 'worker.example.com',
       customDomains: [{ domain: null }, { domain: 'custom.com' }],
     });
-    expect(result).toHaveLength(2);
-    expect(result).toContain('worker.example.com');
-    expect(result).toContain('custom.com');
-  });
-
-  it('lowercases all hostnames', () => {
-    const result = collectHostnames({
+    assertEquals(result.length, 2);
+    assertStringIncludes(result, 'worker.example.com');
+    assertStringIncludes(result, 'custom.com');
+})
+  Deno.test('collectHostnames - lowercases all hostnames', () => {
+  const result = collectHostnames({
       hostname: 'UPPER.EXAMPLE.COM',
       customDomains: [{ domain: 'MiXeD.CaSe.COM' }],
     });
-    expect(result).toEqual(['upper.example.com', 'mixed.case.com']);
-  });
-});
+    assertEquals(result, ['upper.example.com', 'mixed.case.com']);
+})
 
-describe('buildRoutingTarget', () => {
   const baseServiceRouteRecord = {
     id: 'w-1',
     hostname: 'test.example.com',
@@ -69,8 +62,8 @@ describe('buildRoutingTarget', () => {
     customDomains: [],
   };
 
-  it('builds active deployment routing target', () => {
-    const ctx = {
+  Deno.test('buildRoutingTarget - builds active deployment routing target', () => {
+  const ctx = {
       deploymentId: 'dep-1',
       deploymentVersion: 2,
       deployArtifactRef: 'worker-w-1-v2',
@@ -83,18 +76,17 @@ describe('buildRoutingTarget', () => {
 
     const result = buildRoutingTarget(ctx, ['test.example.com']);
 
-    expect(result.target.type).toBe('deployments');
+    assertEquals(result.target.type, 'deployments');
     if (result.target.type === 'deployments') {
-      expect(result.target.deployments).toHaveLength(1);
-      expect(result.target.deployments[0].weight).toBe(100);
-      expect(result.target.deployments[0].status).toBe('active');
-      expect(result.target.deployments[0].routeRef).toBe('worker-w-1-v2');
+      assertEquals(result.target.deployments.length, 1);
+      assertEquals(result.target.deployments[0].weight, 100);
+      assertEquals(result.target.deployments[0].status, 'active');
+      assertEquals(result.target.deployments[0].routeRef, 'worker-w-1-v2');
     }
-    expect(result.auditDetails.mode).toBe('active');
-  });
-
-  it('builds rollback deployment routing target', () => {
-    const ctx = {
+    assertEquals(result.auditDetails.mode, 'active');
+})
+  Deno.test('buildRoutingTarget - builds rollback deployment routing target', () => {
+  const ctx = {
       deploymentId: 'dep-1',
       deploymentVersion: 1,
       deployArtifactRef: 'worker-w-1-v1',
@@ -108,13 +100,12 @@ describe('buildRoutingTarget', () => {
     const result = buildRoutingTarget(ctx, ['test.example.com']);
 
     if (result.target.type === 'deployments') {
-      expect(result.target.deployments[0].status).toBe('rollback');
+      assertEquals(result.target.deployments[0].status, 'rollback');
     }
-    expect(result.auditDetails.mode).toBe('rollback');
-  });
-
-  it('builds canary deployment routing target with active+canary split', () => {
-    const ctx = {
+    assertEquals(result.auditDetails.mode, 'rollback');
+})
+  Deno.test('buildRoutingTarget - builds canary deployment routing target with active+canary split', () => {
+  const ctx = {
       deploymentId: 'dep-2',
       deploymentVersion: 2,
       deployArtifactRef: 'worker-w-1-v2',
@@ -133,17 +124,16 @@ describe('buildRoutingTarget', () => {
     const result = buildRoutingTarget(ctx, ['test.example.com']);
 
     if (result.target.type === 'deployments') {
-      expect(result.target.deployments).toHaveLength(2);
+      assertEquals(result.target.deployments.length, 2);
       const activeSlot = result.target.deployments.find((d) => d.status === 'active');
       const canarySlot = result.target.deployments.find((d) => d.status === 'canary');
-      expect(activeSlot?.weight).toBe(90);
-      expect(canarySlot?.weight).toBe(10);
+      assertEquals(activeSlot?.weight, 90);
+      assertEquals(canarySlot?.weight, 10);
     }
-    expect(result.auditDetails.mode).toBe('canary');
-  });
-
-  it('normalizes canary weight to integer between 1 and 99', () => {
-    const ctx = {
+    assertEquals(result.auditDetails.mode, 'canary');
+})
+  Deno.test('buildRoutingTarget - normalizes canary weight to integer between 1 and 99', () => {
+  const ctx = {
       deploymentId: 'dep-2',
       deploymentVersion: 2,
       deployArtifactRef: 'worker-w-1-v2',
@@ -163,12 +153,11 @@ describe('buildRoutingTarget', () => {
 
     if (result.target.type === 'deployments') {
       const canarySlot = result.target.deployments.find((d) => d.status === 'canary');
-      expect(canarySlot?.weight).toBe(99);
+      assertEquals(canarySlot?.weight, 99);
     }
-  });
-
-  it('throws when canary is requested but active route ref is missing', () => {
-    const ctx = {
+})
+  Deno.test('buildRoutingTarget - throws when canary is requested but active route ref is missing', () => {
+  const ctx = {
       deploymentId: 'dep-2',
       deploymentVersion: 2,
       deployArtifactRef: 'worker-w-1-v2',
@@ -184,11 +173,10 @@ describe('buildRoutingTarget', () => {
       },
     };
 
-    expect(() => buildRoutingTarget(ctx, ['test.example.com'])).toThrow('Active deployment route ref is missing');
-  });
-
-  it('throws when deployment route ref is missing for non-http-url target', () => {
-    const ctx = {
+    assertThrows(() => { () => buildRoutingTarget(ctx, ['test.example.com']); }, 'Active deployment route ref is missing');
+})
+  Deno.test('buildRoutingTarget - throws when deployment route ref is missing for non-http-url target', () => {
+  const ctx = {
       deploymentId: 'dep-1',
       deploymentVersion: 1,
       deployArtifactRef: '',
@@ -199,11 +187,10 @@ describe('buildRoutingTarget', () => {
       activeDeployment: null,
     };
 
-    expect(() => buildRoutingTarget(ctx, ['test.example.com'])).toThrow('Deployment route ref is missing');
-  });
-
-  it('builds http-url routing target', () => {
-    const ctx = {
+    assertThrows(() => { () => buildRoutingTarget(ctx, ['test.example.com']); }, 'Deployment route ref is missing');
+})
+  Deno.test('buildRoutingTarget - builds http-url routing target', () => {
+  const ctx = {
       deploymentId: 'dep-1',
       deploymentVersion: 1,
       deployArtifactRef: 'worker-w-1-v1',
@@ -222,12 +209,11 @@ describe('buildRoutingTarget', () => {
 
     const result = buildRoutingTarget(ctx, ['test.example.com']);
 
-    expect(result.target.type).toBe('http-endpoint-set');
-    expect(result.auditDetails.mode).toBe('http-url');
-  });
-
-  it('throws when canary requested for http-url target', () => {
-    const ctx = {
+    assertEquals(result.target.type, 'http-endpoint-set');
+    assertEquals(result.auditDetails.mode, 'http-url');
+})
+  Deno.test('buildRoutingTarget - throws when canary requested for http-url target', () => {
+  const ctx = {
       deploymentId: 'dep-1',
       deploymentVersion: 1,
       deployArtifactRef: 'worker-w-1-v1',
@@ -243,6 +229,5 @@ describe('buildRoutingTarget', () => {
       activeDeployment: null,
     };
 
-    expect(() => buildRoutingTarget(ctx, ['test.example.com'])).toThrow('http-url deployment targets do not support canary routing');
-  });
-});
+    assertThrows(() => { () => buildRoutingTarget(ctx, ['test.example.com']); }, 'http-url deployment targets do not support canary routing');
+})

@@ -1,4 +1,5 @@
-import { useRef, useId, useEffect, useCallback, type ReactNode, type TouchEvent } from 'react';
+import { createUniqueId, createEffect, onCleanup, Show } from 'solid-js';
+import type { JSX } from 'solid-js';
 import { Icons } from '../../lib/Icons';
 import { useDialogLifecycle } from '../../hooks/useDialogLifecycle';
 import { useI18n } from '../../store/i18n';
@@ -6,7 +7,7 @@ import { useI18n } from '../../store/i18n';
 interface MobileDrawerProps {
   isOpen: boolean;
   onClose: () => void;
-  children: ReactNode;
+  children: JSX.Element;
   title?: string;
   side?: 'left' | 'right';
   panelId?: string;
@@ -40,33 +41,28 @@ function shouldRestoreFocus(previousFocusedElement: HTMLElement | null, currentC
   return openDialogs.some((dialog) => dialog.contains(previousFocusedElement));
 }
 
-export function MobileDrawer({
-  isOpen,
-  onClose,
-  children,
-  title,
-  side = 'left',
-  panelId,
-}: MobileDrawerProps) {
+export function MobileDrawer(props: MobileDrawerProps) {
   const { t } = useI18n();
-  const drawerRef = useRef<HTMLDivElement>(null);
-  const titleId = useId();
-  const layerId = useId();
-  const startXRef = useRef<number>(0);
-  const currentXRef = useRef<number>(0);
+  let drawerRef: HTMLDivElement | undefined;
+  const titleId = createUniqueId();
+  const layerId = createUniqueId();
+  let startX = 0;
+  let currentX = 0;
+
+  const side = () => props.side ?? 'left';
 
   const isTopLayer = useDialogLifecycle({
-    isOpen,
+    get isOpen() { return props.isOpen; },
     layerId,
-    onEscape: onClose,
+    onEscape: props.onClose,
     closeOnEscape: true,
     lockBodyScroll: true,
   });
 
-  useEffect(() => {
-    if (!isOpen || !drawerRef.current) return;
+  createEffect(() => {
+    if (!props.isOpen || !drawerRef) return;
 
-    const container = drawerRef.current;
+    const container = drawerRef;
     const previousFocusedElement = document.activeElement instanceof HTMLElement
       ? document.activeElement
       : null;
@@ -102,92 +98,92 @@ export function MobileDrawer({
     };
 
     document.addEventListener('keydown', handleTabKey);
-    return () => {
+    onCleanup(() => {
       document.removeEventListener('keydown', handleTabKey);
       if (previousFocusedElement && shouldRestoreFocus(previousFocusedElement, container)) {
         previousFocusedElement.focus();
       }
-    };
-  }, [isOpen, isTopLayer]);
+    });
+  });
 
-  const handleTouchStart = useCallback((e: TouchEvent) => {
-    startXRef.current = e.touches[0].clientX;
-    currentXRef.current = e.touches[0].clientX;
-  }, []);
+  const handleTouchStart = (e: TouchEvent) => {
+    startX = e.touches[0].clientX;
+    currentX = e.touches[0].clientX;
+  };
 
-  const handleTouchMove = useCallback((e: TouchEvent) => {
-    currentXRef.current = e.touches[0].clientX;
-    const diff = currentXRef.current - startXRef.current;
+  const handleTouchMove = (e: TouchEvent) => {
+    currentX = e.touches[0].clientX;
+    const diff = currentX - startX;
 
-    if (side === 'left' && diff < 0) {
+    if (side() === 'left' && diff < 0) {
       const translateX = Math.max(diff, -280);
-      if (drawerRef.current) {
-        drawerRef.current.style.transform = `translateX(${translateX}px)`;
+      if (drawerRef) {
+        drawerRef.style.transform = `translateX(${translateX}px)`;
       }
-    } else if (side === 'right' && diff > 0) {
+    } else if (side() === 'right' && diff > 0) {
       const translateX = Math.min(diff, 280);
-      if (drawerRef.current) {
-        drawerRef.current.style.transform = `translateX(${translateX}px)`;
+      if (drawerRef) {
+        drawerRef.style.transform = `translateX(${translateX}px)`;
       }
     }
-  }, [side]);
+  };
 
-  const handleTouchEnd = useCallback(() => {
-    const diff = currentXRef.current - startXRef.current;
+  const handleTouchEnd = () => {
+    const diff = currentX - startX;
     const threshold = 80;
 
-    if ((side === 'left' && diff < -threshold) || (side === 'right' && diff > threshold)) {
-      onClose();
+    if ((side() === 'left' && diff < -threshold) || (side() === 'right' && diff > threshold)) {
+      props.onClose();
     }
 
-    if (drawerRef.current) {
-      drawerRef.current.style.transform = '';
+    if (drawerRef) {
+      drawerRef.style.transform = '';
     }
-  }, [side, onClose]);
-
-  if (!isOpen) return null;
+  };
 
   return (
-    <div className="fixed inset-0 z-50">
-      <div
-        className="absolute inset-0 bg-black/50 animate-fade-in"
-        onClick={onClose}
-      />
+    <Show when={props.isOpen}>
+      <div class="fixed inset-0 z-50">
+        <div
+          class="absolute inset-0 bg-black/50 animate-fade-in"
+          onClick={props.onClose}
+        />
 
-      <div
-        id={panelId}
-        ref={drawerRef}
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby={title ? titleId : undefined}
-        aria-label={title ? undefined : t('menu')}
-        tabIndex={-1}
-        className={`absolute top-0 bottom-0 w-[280px] max-w-[85vw] bg-white dark:bg-zinc-900 shadow-xl ${side === 'left' ? 'animate-slide-in-left' : 'animate-slide-in-right'} flex flex-col pt-[var(--spacing-safe-top)] ${
-          side === 'left' ? 'left-0 pl-[var(--spacing-safe-left)]' : 'right-0 pr-[var(--spacing-safe-right)]'
-        }`}
-        onTouchStart={handleTouchStart}
-        onTouchMove={handleTouchMove}
-        onTouchEnd={handleTouchEnd}
-      >
-        {title && (
-          <div className="flex items-center justify-between px-4 py-3 border-b border-zinc-100 dark:border-zinc-800">
-            <h2 id={titleId} className="text-lg font-semibold text-zinc-900 dark:text-zinc-100">{title}</h2>
-            <button
-              type="button"
-              className="w-10 h-10 flex items-center justify-center rounded-lg hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors"
-              onClick={onClose}
-              aria-label={t('close')}
-            >
-              <Icons.X className="w-5 h-5 text-zinc-500 dark:text-zinc-400" />
-            </button>
+        <div
+          id={props.panelId}
+          ref={drawerRef}
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby={props.title ? titleId : undefined}
+          aria-label={props.title ? undefined : t('menu')}
+          tabIndex={-1}
+          class={`absolute top-0 bottom-0 w-[280px] max-w-[85vw] bg-white dark:bg-zinc-900 shadow-xl ${side() === 'left' ? 'animate-slide-in-left' : 'animate-slide-in-right'} flex flex-col pt-[var(--spacing-safe-top)] ${
+            side() === 'left' ? 'left-0 pl-[var(--spacing-safe-left)]' : 'right-0 pr-[var(--spacing-safe-right)]'
+          }`}
+          onTouchStart={handleTouchStart}
+          onTouchMove={handleTouchMove}
+          onTouchEnd={handleTouchEnd}
+        >
+          <Show when={props.title}>
+            <div class="flex items-center justify-between px-4 py-3 border-b border-zinc-100 dark:border-zinc-800">
+              <h2 id={titleId} class="text-lg font-semibold text-zinc-900 dark:text-zinc-100">{props.title}</h2>
+              <button
+                type="button"
+                class="w-10 h-10 flex items-center justify-center rounded-lg hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors"
+                onClick={props.onClose}
+                aria-label={t('close')}
+              >
+                <Icons.X class="w-5 h-5 text-zinc-500 dark:text-zinc-400" />
+              </button>
+            </div>
+          </Show>
+
+          <div class="flex-1 overflow-y-auto">
+            {props.children}
           </div>
-        )}
-
-        <div className="flex-1 overflow-y-auto">
-          {children}
         </div>
       </div>
-    </div>
+    </Show>
   );
 }
 

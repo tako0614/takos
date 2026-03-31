@@ -59,7 +59,7 @@ export function createLocalExecutorGatewayStub(executorServiceUrl: string | null
       const serviceId = body.serviceId || body.workerId;
       const controlToken = crypto.randomUUID().replace(/-/g, '');
       const controlConfig: AgentExecutorControlConfig = {
-        controlRpcBaseUrl: process.env.CONTROL_RPC_BASE_URL
+        controlRpcBaseUrl: Deno.env.get('CONTROL_RPC_BASE_URL')
           ?? `http://127.0.0.1:${DEFAULT_LOCAL_PORTS.executorHost}`,
         controlRpcToken: controlToken,
       };

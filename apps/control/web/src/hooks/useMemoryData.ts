@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef, type FormEvent } from 'react';
+import { createSignal, createEffect, on, type Setter } from 'solid-js';
 import { rpc, rpcJson } from '../lib/rpc';
 import { useI18n } from '../store/i18n';
 import { useToast } from '../store/toast';
@@ -35,24 +35,24 @@ export interface CreateReminderData {
 }
 
 export interface UseMemoryDataReturn {
-  memories: Memory[];
-  reminders: Reminder[];
-  loading: boolean;
-  error: string | null;
+  memories: () => Memory[];
+  reminders: () => Reminder[];
+  loading: () => boolean;
+  error: () => string | null;
   fetchMemories: () => Promise<void>;
   fetchReminders: () => Promise<void>;
   deleteMemory: (id: string) => Promise<void>;
   deleteReminder: (id: string) => Promise<void>;
   createMemory: (data: CreateMemoryData) => Promise<void>;
   createReminder: (data: CreateReminderData) => Promise<void>;
-  savingMemory: boolean;
-  savingReminder: boolean;
-  memoryForm: MemoryFormState;
-  setMemoryForm: React.Dispatch<React.SetStateAction<MemoryFormState>>;
-  reminderForm: ReminderFormState;
-  setReminderForm: React.Dispatch<React.SetStateAction<ReminderFormState>>;
-  handleCreateMemory: (e: FormEvent) => Promise<void>;
-  handleCreateReminder: (e: FormEvent) => Promise<void>;
+  savingMemory: () => boolean;
+  savingReminder: () => boolean;
+  memoryForm: () => MemoryFormState;
+  setMemoryForm: Setter<MemoryFormState>;
+  reminderForm: () => ReminderFormState;
+  setReminderForm: Setter<ReminderFormState>;
+  handleCreateMemory: (e: Event) => Promise<void>;
+  handleCreateReminder: (e: Event) => Promise<void>;
   getTypeIcon: (type: Memory['type']) => string;
   getTypeLabel: (type: Memory['type']) => string;
   getTriggerIcon: (type: Reminder['trigger_type']) => string;
@@ -63,21 +63,21 @@ export function useMemoryData(spaceId: string): UseMemoryDataReturn {
   const { showToast } = useToast();
   const { confirm } = useConfirmDialog();
 
-  const [memories, setMemories] = useState<Memory[]>([]);
-  const [reminders, setReminders] = useState<Reminder[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const memoriesSeqRef = useRef(0);
-  const remindersSeqRef = useRef(0);
+  const [memories, setMemories] = createSignal<Memory[]>([]);
+  const [reminders, setReminders] = createSignal<Reminder[]>([]);
+  const [loading, setLoading] = createSignal(true);
+  const [error, setError] = createSignal<string | null>(null);
+  let memoriesSeqRef = 0;
+  let remindersSeqRef = 0;
 
-  const [memoryForm, setMemoryForm] = useState<MemoryFormState>({
+  const [memoryForm, setMemoryForm] = createSignal<MemoryFormState>({
     content: '',
     type: 'semantic',
     category: '',
     saving: false,
   });
 
-  const [reminderForm, setReminderForm] = useState<ReminderFormState>({
+  const [reminderForm, setReminderForm] = createSignal<ReminderFormState>({
     content: '',
     triggerType: 'time',
     triggerValue: '',
@@ -85,54 +85,56 @@ export function useMemoryData(spaceId: string): UseMemoryDataReturn {
     saving: false,
   });
 
-  const fetchMemories = useCallback(async () => {
-    const seq = ++memoriesSeqRef.current;
+  const fetchMemories = async () => {
+    const seq = ++memoriesSeqRef;
     setLoading(true);
     setError(null);
     try {
       const res = await rpc.spaces[':spaceId'].memories.$get({
         param: { spaceId },
+        query: {},
       });
-      if (seq !== memoriesSeqRef.current) return;
+      if (seq !== memoriesSeqRef) return;
       const data = await rpcJson<{ memories: Memory[] }>(res);
-      if (seq !== memoriesSeqRef.current) return;
+      if (seq !== memoriesSeqRef) return;
       setMemories(data.memories || []);
     } catch (err) {
-      if (seq !== memoriesSeqRef.current) return;
+      if (seq !== memoriesSeqRef) return;
       setError(err instanceof Error ? err.message : 'Failed to fetch memories');
       setMemories([]);
     } finally {
-      if (seq === memoriesSeqRef.current) {
+      if (seq === memoriesSeqRef) {
         setLoading(false);
       }
     }
-  }, [spaceId]);
+  };
 
-  const fetchReminders = useCallback(async () => {
-    const seq = ++remindersSeqRef.current;
+  const fetchReminders = async () => {
+    const seq = ++remindersSeqRef;
     try {
       const res = await rpc.spaces[':spaceId'].reminders.$get({
         param: { spaceId },
+        query: {},
       });
-      if (seq !== remindersSeqRef.current) return;
+      if (seq !== remindersSeqRef) return;
       const data = await rpcJson<{ reminders: Reminder[] }>(res);
-      if (seq !== remindersSeqRef.current) return;
+      if (seq !== remindersSeqRef) return;
       setReminders(data.reminders || []);
     } catch (err) {
-      if (seq !== remindersSeqRef.current) return;
+      if (seq !== remindersSeqRef) return;
       setError(err instanceof Error ? err.message : 'Failed to fetch reminders');
       setReminders([]);
     }
-  }, [spaceId]);
+  };
 
-  useEffect(() => {
+  createEffect(on(() => spaceId, () => {
     if (spaceId) {
       fetchMemories();
       fetchReminders();
     }
-  }, [spaceId, fetchMemories, fetchReminders]);
+  }));
 
-  const deleteMemory = useCallback(async (id: string) => {
+  const deleteMemory = async (id: string) => {
     const confirmed = await confirm({
       title: t('confirmDelete'),
       message: t('confirmDeleteMemory'),
@@ -148,9 +150,9 @@ export function useMemoryData(spaceId: string): UseMemoryDataReturn {
     } catch {
       showToast('error', t('failedToDelete'));
     }
-  }, [confirm, showToast, t]);
+  };
 
-  const deleteReminder = useCallback(async (id: string) => {
+  const deleteReminder = async (id: string) => {
     const confirmed = await confirm({
       title: t('confirmDelete'),
       message: t('confirmDeleteReminder'),
@@ -166,9 +168,9 @@ export function useMemoryData(spaceId: string): UseMemoryDataReturn {
     } catch {
       showToast('error', t('failedToDelete'));
     }
-  }, [confirm, showToast, t]);
+  };
 
-  const createMemory = useCallback(async (data: CreateMemoryData) => {
+  const createMemory = async (data: CreateMemoryData) => {
     setMemoryForm(prev => ({ ...prev, saving: true }));
     try {
       const res = await rpc.spaces[':spaceId'].memories.$post({
@@ -188,9 +190,9 @@ export function useMemoryData(spaceId: string): UseMemoryDataReturn {
     } finally {
       setMemoryForm(prev => ({ ...prev, saving: false }));
     }
-  }, [spaceId, showToast, t]);
+  };
 
-  const createReminder = useCallback(async (data: CreateReminderData) => {
+  const createReminder = async (data: CreateReminderData) => {
     setReminderForm(prev => ({ ...prev, saving: true }));
     try {
       const res = await rpc.spaces[':spaceId'].reminders.$post({
@@ -210,19 +212,20 @@ export function useMemoryData(spaceId: string): UseMemoryDataReturn {
     } finally {
       setReminderForm(prev => ({ ...prev, saving: false }));
     }
-  }, [spaceId, showToast, t]);
+  };
 
-  const handleCreateMemory = useCallback(async (e: FormEvent) => {
+  const handleCreateMemory = async (e: Event) => {
     e.preventDefault();
-    if (!memoryForm.content.trim()) return;
+    const form = memoryForm();
+    if (!form.content.trim()) return;
     setMemoryForm(prev => ({ ...prev, saving: true }));
     try {
       const res = await rpc.spaces[':spaceId'].memories.$post({
         param: { spaceId },
         json: {
-          content: memoryForm.content.trim(),
-          type: memoryForm.type,
-          category: memoryForm.category.trim() || undefined,
+          content: form.content.trim(),
+          type: form.type,
+          category: form.category.trim() || undefined,
         },
       });
       const data = await rpcJson<{ memory: Memory }>(res);
@@ -234,20 +237,21 @@ export function useMemoryData(spaceId: string): UseMemoryDataReturn {
     } finally {
       setMemoryForm(prev => ({ ...prev, saving: false }));
     }
-  }, [memoryForm.content, memoryForm.type, memoryForm.category, spaceId, showToast, t]);
+  };
 
-  const handleCreateReminder = useCallback(async (e: FormEvent) => {
+  const handleCreateReminder = async (e: Event) => {
     e.preventDefault();
-    if (!reminderForm.content.trim() || !reminderForm.triggerValue.trim()) return;
+    const form = reminderForm();
+    if (!form.content.trim() || !form.triggerValue.trim()) return;
     setReminderForm(prev => ({ ...prev, saving: true }));
     try {
       const res = await rpc.spaces[':spaceId'].reminders.$post({
         param: { spaceId },
         json: {
-          content: reminderForm.content.trim(),
-          trigger_type: reminderForm.triggerType,
-          trigger_value: reminderForm.triggerValue.trim(),
-          priority: reminderForm.priority,
+          content: form.content.trim(),
+          trigger_type: form.triggerType,
+          trigger_value: form.triggerValue.trim(),
+          priority: form.priority,
         },
       });
       const data = await rpcJson<{ reminder: Reminder }>(res);
@@ -259,31 +263,31 @@ export function useMemoryData(spaceId: string): UseMemoryDataReturn {
     } finally {
       setReminderForm(prev => ({ ...prev, saving: false }));
     }
-  }, [reminderForm.content, reminderForm.triggerType, reminderForm.triggerValue, reminderForm.priority, spaceId, showToast, t]);
+  };
 
-  const getTypeIcon = useCallback((type: Memory['type']) => {
+  const getTypeIcon = (type: Memory['type']) => {
     switch (type) {
       case 'episode': return '\u{1F4C5}';
       case 'semantic': return '\u{1F4A1}';
       case 'procedural': return '\u{1F4CB}';
     }
-  }, []);
+  };
 
-  const getTypeLabel = useCallback((type: Memory['type']) => {
+  const getTypeLabel = (type: Memory['type']) => {
     switch (type) {
       case 'episode': return t('memoryEpisode');
       case 'semantic': return t('memorySemantic');
       case 'procedural': return t('memoryProcedural');
     }
-  }, [t]);
+  };
 
-  const getTriggerIcon = useCallback((type: Reminder['trigger_type']) => {
+  const getTriggerIcon = (type: Reminder['trigger_type']) => {
     switch (type) {
       case 'time': return '\u23F0';
       case 'condition': return '\u{1F3AF}';
       case 'context': return '\u{1F4AC}';
     }
-  }, []);
+  };
 
   return {
     memories,
@@ -296,8 +300,8 @@ export function useMemoryData(spaceId: string): UseMemoryDataReturn {
     deleteReminder,
     createMemory,
     createReminder,
-    savingMemory: memoryForm.saving,
-    savingReminder: reminderForm.saving,
+    savingMemory: () => memoryForm().saving,
+    savingReminder: () => reminderForm().saving,
     memoryForm,
     setMemoryForm,
     reminderForm,

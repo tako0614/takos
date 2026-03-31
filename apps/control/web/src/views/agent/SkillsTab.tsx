@@ -1,8 +1,8 @@
-import { useEffect, useState, type FormEvent } from 'react';
+import { createEffect, onMount, onCleanup, createSignal } from 'solid-js';
 import { useI18n } from '../../store/i18n';
 import { useToast } from '../../store/toast';
 import { useConfirmDialog } from '../../store/confirm-dialog';
-import { rpc, rpcJson } from '../../lib/rpc';
+import { rpc, rpcJson, rpcPath } from '../../lib/rpc';
 import { getErrorMessage } from '../../lib/errors';
 import { SkeletonList } from '../../components/Skeleton';
 import type { OfficialSkill, Skill } from '../../types';
@@ -20,31 +20,31 @@ export function SkillsTab({ spaceId }: { spaceId: string }) {
   const { t } = useI18n();
   const { showToast } = useToast();
   const { confirm } = useConfirmDialog();
-  const [skills, setSkills] = useState<Skill[]>([]);
-  const [officialSkills, setOfficialSkills] = useState<OfficialSkill[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [editingSkill, setEditingSkill] = useState<Skill | null>(null);
-  const [isCreating, setIsCreating] = useState(false);
+  const [skills, setSkills] = createSignal<Skill[]>([]);
+  const [officialSkills, setOfficialSkills] = createSignal<OfficialSkill[]>([]);
+  const [loading, setLoading] = createSignal(true);
+  const [editingSkill, setEditingSkill] = createSignal<Skill | null>(null);
+  const [isCreating, setIsCreating] = createSignal(false);
 
-  const [form, setForm] = useState<SkillFormData>(INITIAL_SKILL_FORM);
-  const [saving, setSaving] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
+  const [form, setForm] = createSignal<SkillFormData>(INITIAL_SKILL_FORM);
+  const [saving, setSaving] = createSignal(false);
+  const [error, setError] = createSignal<string | null>(null);
+  const [fieldErrors, setFieldErrors] = createSignal<Record<string, string>>({});
 
-  useEffect(() => {
+  createEffect(() => {
     void fetchSkills();
-  }, [spaceId]);
+  });
 
   const fetchSkills = async () => {
     setLoading(true);
     try {
       const [customRes, officialRes] = await Promise.all([
-        rpc.spaces[':spaceId'].skills.$get({
+        rpcPath(rpc, 'spaces', ':spaceId', 'skills').$get({
           param: { spaceId },
-        }),
-        rpc.spaces[':spaceId']['official-skills'].$get({
+        }) as Promise<Response>,
+        rpcPath(rpc, 'spaces', ':spaceId', 'official-skills').$get({
           param: { spaceId },
-        }),
+        }) as Promise<Response>,
       ]);
       const customData = await rpcJson<{ skills: Skill[] }>(customRes);
       const officialData = await rpcJson<{ skills: OfficialSkill[] }>(officialRes);
@@ -98,37 +98,38 @@ export function SkillsTab({ spaceId }: { spaceId: string }) {
     resetForm();
   };
 
-  const handleSubmit = async (e: FormEvent) => {
+  const handleSubmit = async (e: Event & { currentTarget: HTMLFormElement }) => {
     e.preventDefault();
-    if (!form.name.trim() || !form.instructions.trim()) return;
+    const f = form();
+    if (!f.name.trim() || !f.instructions.trim()) return;
 
     setSaving(true);
     setError(null);
     setFieldErrors({});
 
-    const triggersArray = splitCsv(form.triggers);
-    const metadata = buildSkillMetadata(form);
+    const triggersArray = splitCsv(f.triggers);
+    const metadata = buildSkillMetadata(f);
 
     try {
-      if (editingSkill) {
-        const res = await rpc.spaces[':spaceId'].skills.id[':skillId'].$put({
-          param: { spaceId, skillId: editingSkill.id },
+      if (editingSkill()) {
+        const res = await rpcPath(rpc, 'spaces', ':spaceId', 'skills', 'id', ':skillId').$put({
+          param: { spaceId, skillId: editingSkill()!.id },
           json: {
-            name: form.name.trim(),
-            description: form.description.trim() || undefined,
-            instructions: form.instructions.trim(),
+            name: f.name.trim(),
+            description: f.description.trim() || undefined,
+            instructions: f.instructions.trim(),
             triggers: triggersArray,
             metadata,
           },
         });
         await readSkillMutationResponse(res);
       } else {
-        const res = await rpc.spaces[':spaceId'].skills.$post({
+        const res = await rpcPath(rpc, 'spaces', ':spaceId', 'skills').$post({
           param: { spaceId },
           json: {
-            name: form.name.trim(),
-            description: form.description.trim() || undefined,
-            instructions: form.instructions.trim(),
+            name: f.name.trim(),
+            description: f.description.trim() || undefined,
+            instructions: f.instructions.trim(),
             triggers: triggersArray,
             metadata,
           },
@@ -160,9 +161,9 @@ export function SkillsTab({ spaceId }: { spaceId: string }) {
     if (!confirmed) return;
 
     try {
-      const res = await rpc.spaces[':spaceId'].skills.id[':skillId'].$delete({
+      const res = await rpcPath(rpc, 'spaces', ':spaceId', 'skills', 'id', ':skillId').$delete({
         param: { spaceId, skillId: skill.id },
-      });
+      }) as Response;
       await rpcJson(res);
       await fetchSkills();
     } catch {
@@ -172,7 +173,7 @@ export function SkillsTab({ spaceId }: { spaceId: string }) {
 
   const handleToggle = async (skill: Skill) => {
     try {
-      const res = await rpc.spaces[':spaceId'].skills.id[':skillId'].$patch({
+      const res = await rpcPath(rpc, 'spaces', ':spaceId', 'skills', 'id', ':skillId').$patch({
         param: { spaceId, skillId: skill.id },
         json: { enabled: !skill.enabled },
       });
@@ -183,19 +184,19 @@ export function SkillsTab({ spaceId }: { spaceId: string }) {
     }
   };
 
-  if (loading) {
+  if (loading()) {
     return <SkeletonList count={3} />;
   }
 
-  if (isCreating) {
+  if (isCreating()) {
     return (
       <SkillFormView
-        form={form}
+        form={form()}
         setForm={setForm}
-        isEditing={!!editingSkill}
-        saving={saving}
-        error={error}
-        fieldErrors={fieldErrors}
+        isEditing={!!editingSkill()}
+        saving={saving()}
+        error={error()}
+        fieldErrors={fieldErrors()}
         onSubmit={handleSubmit}
         onClose={closeForm}
       />
@@ -204,8 +205,8 @@ export function SkillsTab({ spaceId }: { spaceId: string }) {
 
   return (
     <SkillList
-      skills={skills}
-      officialSkills={officialSkills}
+      skills={skills()}
+      officialSkills={officialSkills()}
       onEdit={openEditForm}
       onDelete={handleDelete}
       onToggle={handleToggle}

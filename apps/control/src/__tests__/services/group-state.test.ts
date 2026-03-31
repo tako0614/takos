@@ -1,6 +1,7 @@
-import { describe, expect, it } from 'vitest';
 import { compileGroupDesiredState, materializeRoutes } from '@/services/deployment/group-state';
 import { computeDiff } from '@/services/deployment/diff';
+
+import { assertEquals, assertThrows, assertObjectMatch } from 'jsr:@std/assert';
 
 function makeManifest() {
   return {
@@ -48,28 +49,27 @@ function makeManifest() {
   } as const;
 }
 
-describe('group desired state compiler', () => {
-  it('compiles a manifest into canonical workload/resource/route state', () => {
-    const compiled = compileGroupDesiredState(makeManifest(), {
+
+  Deno.test('group desired state compiler - compiles a manifest into canonical workload/resource/route state', () => {
+  const compiled = compileGroupDesiredState(makeManifest(), {
       groupName: 'demo-prod',
       provider: 'cloudflare',
       envName: 'production',
     });
 
-    expect(compiled.groupName).toBe('demo-prod');
-    expect(compiled.env).toBe('production');
-    expect(compiled.resources.db.bindingName).toBe('DB');
-    expect(compiled.resources.db.resourceClass).toBe('sql');
-    expect(compiled.resources.db.backing).toBe('d1');
-    expect(compiled.workloads.api.sourceKind).toBe('worker');
-    expect(compiled.workloads.api.executionProfile).toBe('workers');
-    expect(compiled.workloads.api.routeNames).toEqual(['api-route']);
-    expect((compiled.workloads.api.spec as { env?: Record<string, string> }).env?.MODE).toBe('prod');
-    expect(compiled.routes['web-route']).toMatchObject({ target: 'web', path: '/' });
-  });
-
-  it('rejects duplicated component names across workload categories', () => {
-    const manifest = {
+    assertEquals(compiled.groupName, 'demo-prod');
+    assertEquals(compiled.env, 'production');
+    assertEquals(compiled.resources.db.bindingName, 'DB');
+    assertEquals(compiled.resources.db.resourceClass, 'sql');
+    assertEquals(compiled.resources.db.backing, 'd1');
+    assertEquals(compiled.workloads.api.sourceKind, 'worker');
+    assertEquals(compiled.workloads.api.executionProfile, 'workers');
+    assertEquals(compiled.workloads.api.routeNames, ['api-route']);
+    assertEquals((compiled.workloads.api.spec as { env?: Record<string, string> }).env?.MODE, 'prod');
+    assertObjectMatch(compiled.routes['web-route'], { target: 'web', path: '/' });
+})
+  Deno.test('group desired state compiler - rejects duplicated component names across workload categories', () => {
+  const manifest = {
       ...makeManifest(),
       spec: {
         ...makeManifest().spec,
@@ -82,13 +82,11 @@ describe('group desired state compiler', () => {
       },
     };
 
-    expect(() => compileGroupDesiredState(manifest as never)).toThrow(/Component names must be unique/);
-  });
-});
+    assertThrows(() => { () => compileGroupDesiredState(manifest as never); }, /Component names must be unique/);
+})
 
-describe('group diff', () => {
-  it('detects resource, workload, and route updates from canonical state', () => {
-    const desired = compileGroupDesiredState(makeManifest(), {
+  Deno.test('group diff - detects resource, workload, and route updates from canonical state', () => {
+  const desired = compileGroupDesiredState(makeManifest(), {
       groupName: 'demo-prod',
       provider: 'cloudflare',
       envName: 'production',
@@ -174,13 +172,12 @@ describe('group diff', () => {
       },
     });
 
-    expect(diff.summary.update).toBe(3);
-    expect(diff.entries).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({ name: 'db', category: 'resource', action: 'update' }),
-        expect.objectContaining({ name: 'api', category: 'service', sourceKind: 'worker', action: 'update' }),
-        expect.objectContaining({ name: 'web-route', category: 'route', action: 'update' }),
+    assertEquals(diff.summary.update, 3);
+    assertEquals(diff.entries, 
+      ([
+        ({ name: 'db', category: 'resource', action: 'update' }),
+        ({ name: 'api', category: 'service', sourceKind: 'worker', action: 'update' }),
+        ({ name: 'web-route', category: 'route', action: 'update' }),
       ]),
     );
-  });
-});
+})

@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { createSignal, createEffect } from 'solid-js';
+import type { Setter } from 'solid-js';
 import type { TranslationKey } from '../store/i18n';
 import { rpcJson } from '../lib/rpc';
 import type { Message } from '../types';
@@ -10,11 +11,11 @@ export interface UseMessagePollingOptions {
 
 export interface UseMessagePollingResult {
   messages: Message[];
-  setMessages: React.Dispatch<React.SetStateAction<Message[]>>;
-  messagesCountRef: React.MutableRefObject<number>;
-  isMountedRef: React.MutableRefObject<boolean>;
+  setMessages: Setter<Message[]>;
+  messagesCountRef: { current: number };
+  isMountedRef: { current: boolean };
   fetchMessages: (showError?: boolean) => Promise<void>;
-  startMessagePolling: (currentRunIdRef: React.MutableRefObject<string | null>) => void;
+  startMessagePolling: (currentRunIdRef: { current: string | null }) => void;
   stopMessagePolling: () => void;
   abortPendingFetch: () => void;
   error: string | null;
@@ -25,31 +26,31 @@ export function useMessagePolling({
   threadId,
   t,
 }: UseMessagePollingOptions): UseMessagePollingResult {
-  const [messages, setMessages] = useState<Message[]>([]);
-  const [error, setError] = useState<string | null>(null);
-  const messagesCountRef = useRef<number>(0);
-  const isMountedRef = useRef<boolean>(true);
-  const messagePollingRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const messageFetchAbortRef = useRef<AbortController | null>(null);
-  const messageFetchSeqRef = useRef<number>(0);
+  const [messages, setMessages] = createSignal<Message[]>([]);
+  const [error, setError] = createSignal<string | null>(null);
+  let messagesCountRef = { current: 0 as number };
+  let isMountedRef = { current: true as boolean };
+  let messagePollingRef: ReturnType<typeof setInterval> | null = null;
+  let messageFetchAbortRef: AbortController | null = null;
+  let messageFetchSeqRef = 0;
 
   // Keep error in a ref so fetchMessages can read the latest value without
   // needing error in its dependency array (avoids re-creating the callback on
   // every error change, which would destabilize all consumers).
-  const errorRef = useRef<string | null>(error);
-  useEffect(() => {
-    errorRef.current = error;
-  }, [error]);
+  let errorRef: string | null = error();
+  createEffect(() => {
+    errorRef = error();
+  });
 
-  useEffect(() => {
-    messagesCountRef.current = messages.length;
-  }, [messages]);
+  createEffect(() => {
+    messagesCountRef.current = messages().length;
+  });
 
-  const fetchMessages = useCallback(async (showError = false): Promise<void> => {
-    messageFetchAbortRef.current?.abort();
+  const fetchMessages = async (showError = false): Promise<void> => {
+    messageFetchAbortRef?.abort();
     const controller = new AbortController();
-    messageFetchAbortRef.current = controller;
-    const requestSeq = ++messageFetchSeqRef.current;
+    messageFetchAbortRef = controller;
+    const requestSeq = ++messageFetchSeqRef;
 
     try {
       const res = await fetch(`/api/threads/${encodeURIComponent(threadId)}/messages`, {
@@ -60,41 +61,41 @@ export function useMessagePolling({
 
       if (controller.signal.aborted) return;
       if (!isMountedRef.current) return;
-      if (requestSeq !== messageFetchSeqRef.current) return;
+      if (requestSeq !== messageFetchSeqRef) return;
       setMessages(data.messages);
-      if (errorRef.current) setError(null);
+      if (errorRef) setError(null);
     } catch (err) {
       if ((err as Error).name === 'AbortError') return;
       if (showError) {
         setError(t('failedToLoadMessages' as TranslationKey) || 'Failed to load messages');
       }
     } finally {
-      if (messageFetchAbortRef.current === controller) {
-        messageFetchAbortRef.current = null;
+      if (messageFetchAbortRef === controller) {
+        messageFetchAbortRef = null;
       }
     }
-  }, [threadId, t]);
+  };
 
-  const stopMessagePolling = useCallback((): void => {
-    if (messagePollingRef.current) {
-      clearInterval(messagePollingRef.current);
-      messagePollingRef.current = null;
+  const stopMessagePolling = (): void => {
+    if (messagePollingRef) {
+      clearInterval(messagePollingRef);
+      messagePollingRef = null;
     }
-  }, []);
+  };
 
   // No-op: message polling is disabled in favour of WebSocket events +
   // explicit fetchMessages() calls (run completed, verify run status, etc.).
-  const startMessagePolling = useCallback((_currentRunIdRef: React.MutableRefObject<string | null>): void => {
+  const startMessagePolling = (_currentRunIdRef: { current: string | null }): void => {
     stopMessagePolling();
-  }, [stopMessagePolling]);
+  };
 
-  const abortPendingFetch = useCallback((): void => {
-    messageFetchAbortRef.current?.abort();
-    messageFetchAbortRef.current = null;
-  }, []);
+  const abortPendingFetch = (): void => {
+    messageFetchAbortRef?.abort();
+    messageFetchAbortRef = null;
+  };
 
   return {
-    messages,
+    get messages() { return messages(); },
     setMessages,
     messagesCountRef,
     isMountedRef,
@@ -102,7 +103,7 @@ export function useMessagePolling({
     startMessagePolling,
     stopMessagePolling,
     abortPendingFetch,
-    error,
+    get error() { return error(); },
     setError,
   };
 }

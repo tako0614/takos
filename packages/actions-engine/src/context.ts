@@ -6,7 +6,7 @@ import type {
   GitHubContext,
   RunnerContext,
   InputsContext,
-} from './workflow-models.js';
+} from './workflow-models.ts';
 
 // ---------------------------------------------------------------------------
 // ベースコンテキスト
@@ -71,9 +71,9 @@ export function createBaseContext(
     name: 'local-runner',
     os: osName,
     arch: archName,
-    temp: process.env.RUNNER_TEMP || '/tmp',
-    tool_cache: process.env.RUNNER_TOOL_CACHE || '/opt/hostedtoolcache',
-    debug: process.env.RUNNER_DEBUG || '',
+    temp: Deno.env.get('RUNNER_TEMP') || '/tmp',
+    tool_cache: Deno.env.get('RUNNER_TOOL_CACHE') || '/opt/hostedtoolcache',
+    debug: Deno.env.get('RUNNER_DEBUG') || '',
     ...options.runner,
   };
 

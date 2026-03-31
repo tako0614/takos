@@ -1,26 +1,26 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { createSignal, onCleanup } from 'solid-js';
 
 export function useCopyToClipboard(resetMs = 2000) {
-  const [copied, setCopied] = useState(false);
-  const [copyFailed, setCopyFailed] = useState(false);
-  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [copied, setCopied] = createSignal(false);
+  const [copyFailed, setCopyFailed] = createSignal(false);
+  let timerRef: ReturnType<typeof setTimeout> | null = null;
 
-  const copy = useCallback(async (text: string) => {
+  const copy = async (text: string) => {
     try {
       await navigator.clipboard.writeText(text);
       setCopied(true);
       setCopyFailed(false);
-      if (timerRef.current) clearTimeout(timerRef.current);
-      timerRef.current = setTimeout(() => { setCopied(false); timerRef.current = null; }, resetMs);
+      if (timerRef) clearTimeout(timerRef);
+      timerRef = setTimeout(() => { setCopied(false); timerRef = null; }, resetMs);
     } catch (err) {
       console.debug('Failed to copy to clipboard:', err);
       setCopyFailed(true);
-      if (timerRef.current) clearTimeout(timerRef.current);
-      timerRef.current = setTimeout(() => { setCopyFailed(false); timerRef.current = null; }, resetMs);
+      if (timerRef) clearTimeout(timerRef);
+      timerRef = setTimeout(() => { setCopyFailed(false); timerRef = null; }, resetMs);
     }
-  }, [resetMs]);
+  };
 
-  useEffect(() => () => { if (timerRef.current) clearTimeout(timerRef.current); }, []);
+  onCleanup(() => { if (timerRef) clearTimeout(timerRef); });
 
   return { copied, copyFailed, copy };
 }

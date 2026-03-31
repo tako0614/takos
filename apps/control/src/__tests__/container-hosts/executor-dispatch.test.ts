@@ -1,4 +1,3 @@
-import { describe, expect, it, vi } from 'vitest';
 import {
   dispatchAgentExecutorStart,
   forwardAgentExecutorDispatch,
@@ -10,10 +9,13 @@ import type {
   AgentExecutorDispatchStub,
 } from '@/container-hosts/executor-dispatch';
 
-describe('dispatchAgentExecutorStart', () => {
-  it('starts container, waits for ports, then dispatches start', async () => {
-    const startAndWaitForPorts = vi.fn().mockResolvedValue(undefined);
-    const fetchFn = vi.fn().mockResolvedValue(new Response('{"status":"started"}', { status: 200 }));
+
+import { assertEquals, assertStringIncludes } from 'jsr:@std/assert';
+import { assertSpyCalls, assertSpyCallArgs } from 'jsr:@std/testing/mock';
+
+  Deno.test('dispatchAgentExecutorStart - starts container, waits for ports, then dispatches start', async () => {
+  const startAndWaitForPorts = (async () => undefined);
+    const fetchFn = (async () => new Response('{"status":"started"}', { status: 200 }));
 
     const target: AgentExecutorDispatchTarget = {
       startAndWaitForPorts,
@@ -33,32 +35,29 @@ describe('dispatchAgentExecutorStart', () => {
 
     const result = await dispatchAgentExecutorStart(target, body, controlConfig);
 
-    expect(startAndWaitForPorts).toHaveBeenCalledWith(8080);
-    expect(fetchFn).toHaveBeenCalledTimes(1);
+    assertSpyCallArgs(startAndWaitForPorts, 0, [8080]);
+    assertSpyCalls(fetchFn, 1);
 
     // Verify the request sent to the container
-    const requestArg = fetchFn.mock.calls[0][0] as Request;
-    expect(requestArg.url).toBe('https://executor/start');
-    expect(requestArg.method).toBe('POST');
+    const requestArg = fetchFn.calls[0][0] as Request;
+    assertEquals(requestArg.url, 'https://executor/start');
+    assertEquals(requestArg.method, 'POST');
 
     const sentBody = JSON.parse(await requestArg.text());
-    expect(sentBody.runId).toBe('run-1');
-    expect(sentBody.workerId).toBe('worker-1');
-    expect(sentBody.model).toBe('gpt-4');
-    expect(sentBody.controlRpcBaseUrl).toBe('https://control.internal');
-    expect(sentBody.controlRpcToken).toBe('token-abc');
+    assertEquals(sentBody.runId, 'run-1');
+    assertEquals(sentBody.workerId, 'worker-1');
+    assertEquals(sentBody.model, 'gpt-4');
+    assertEquals(sentBody.controlRpcBaseUrl, 'https://control.internal');
+    assertEquals(sentBody.controlRpcToken, 'token-abc');
 
-    expect(result.ok).toBe(true);
-    expect(result.status).toBe(200);
-    expect(result.body).toBe('{"status":"started"}');
-  });
-
-  it('returns error result when container returns non-ok response', async () => {
-    const target: AgentExecutorDispatchTarget = {
-      startAndWaitForPorts: vi.fn().mockResolvedValue(undefined),
-      fetch: vi.fn().mockResolvedValue(
-        new Response('{"error":"failed to start"}', { status: 500 }),
-      ),
+    assertEquals(result.ok, true);
+    assertEquals(result.status, 200);
+    assertEquals(result.body, '{"status":"started"}');
+})
+  Deno.test('dispatchAgentExecutorStart - returns error result when container returns non-ok response', async () => {
+  const target: AgentExecutorDispatchTarget = {
+      startAndWaitForPorts: (async () => undefined),
+      fetch: (async () => new Response('{"error":"failed to start"}', { status: 500 }),),
     };
 
     const result = await dispatchAgentExecutorStart(
@@ -67,15 +66,14 @@ describe('dispatchAgentExecutorStart', () => {
       { controlRpcToken: 'token' },
     );
 
-    expect(result.ok).toBe(false);
-    expect(result.status).toBe(500);
-    expect(result.body).toContain('failed to start');
-  });
-
-  it('includes leaseVersion when provided', async () => {
-    const fetchFn = vi.fn().mockResolvedValue(new Response('ok', { status: 200 }));
+    assertEquals(result.ok, false);
+    assertEquals(result.status, 500);
+    assertStringIncludes(result.body, 'failed to start');
+})
+  Deno.test('dispatchAgentExecutorStart - includes leaseVersion when provided', async () => {
+  const fetchFn = (async () => new Response('ok', { status: 200 }));
     const target: AgentExecutorDispatchTarget = {
-      startAndWaitForPorts: vi.fn().mockResolvedValue(undefined),
+      startAndWaitForPorts: (async () => undefined),
       fetch: fetchFn,
     };
 
@@ -85,19 +83,17 @@ describe('dispatchAgentExecutorStart', () => {
       { controlRpcToken: 'token' },
     );
 
-    const sentBody = JSON.parse(await (fetchFn.mock.calls[0][0] as Request).text());
-    expect(sentBody.leaseVersion).toBe(3);
-  });
-});
+    const sentBody = JSON.parse(await (fetchFn.calls[0][0] as Request).text());
+    assertEquals(sentBody.leaseVersion, 3);
+})
 
-describe('forwardAgentExecutorDispatch', () => {
-  it('forwards dispatch and returns response', async () => {
-    const stub: AgentExecutorDispatchStub = {
-      dispatchStart: vi.fn().mockResolvedValue({
+  Deno.test('forwardAgentExecutorDispatch - forwards dispatch and returns response', async () => {
+  const stub: AgentExecutorDispatchStub = {
+      dispatchStart: (async () => ({
         ok: true,
         status: 200,
         body: '{"dispatched":true}',
-      }),
+      })),
     };
 
     const response = await forwardAgentExecutorDispatch(stub, {
@@ -105,14 +101,13 @@ describe('forwardAgentExecutorDispatch', () => {
       workerId: 'worker-1',
     });
 
-    expect(response.status).toBe(200);
+    assertEquals(response.status, 200);
     const body = await response.text();
-    expect(body).toBe('{"dispatched":true}');
-  });
-
-  it('returns 500 response when dispatch throws', async () => {
-    const stub: AgentExecutorDispatchStub = {
-      dispatchStart: vi.fn().mockRejectedValue(new Error('Container startup failed')),
+    assertEquals(body, '{"dispatched":true}');
+})
+  Deno.test('forwardAgentExecutorDispatch - returns 500 response when dispatch throws', async () => {
+  const stub: AgentExecutorDispatchStub = {
+      dispatchStart: (async () => { throw new Error('Container startup failed'); }),
     };
 
     const response = await forwardAgentExecutorDispatch(stub, {
@@ -120,15 +115,14 @@ describe('forwardAgentExecutorDispatch', () => {
       workerId: 'worker-1',
     });
 
-    expect(response.status).toBe(500);
+    assertEquals(response.status, 500);
     const body = await response.json() as { error: string };
-    expect(body.error).toContain('Failed to start container');
-    expect(body.error).toContain('Container startup failed');
-  });
-
-  it('handles non-Error throw values', async () => {
-    const stub: AgentExecutorDispatchStub = {
-      dispatchStart: vi.fn().mockRejectedValue('string error'),
+    assertStringIncludes(body.error, 'Failed to start container');
+    assertStringIncludes(body.error, 'Container startup failed');
+})
+  Deno.test('forwardAgentExecutorDispatch - handles non-Error throw values', async () => {
+  const stub: AgentExecutorDispatchStub = {
+      dispatchStart: (async () => { throw 'string error'; }),
     };
 
     const response = await forwardAgentExecutorDispatch(stub, {
@@ -136,8 +130,7 @@ describe('forwardAgentExecutorDispatch', () => {
       workerId: 'worker-1',
     });
 
-    expect(response.status).toBe(500);
+    assertEquals(response.status, 500);
     const body = await response.json() as { error: string };
-    expect(body.error).toContain('string error');
-  });
-});
+    assertStringIncludes(body.error, 'string error');
+})

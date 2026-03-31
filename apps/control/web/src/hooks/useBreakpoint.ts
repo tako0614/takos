@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { createSignal, onMount, onCleanup } from 'solid-js';
 
 const BP_MD = 768;
 const BP_LG = 1024;
@@ -21,30 +21,29 @@ function calcBreakpointState(width: number): BreakpointState {
 }
 
 export function useBreakpoint(): BreakpointState {
-  const [state, setState] = useState<BreakpointState>(() => {
-    if (typeof window === 'undefined') {
-      return { isMobile: false, isTablet: false, isDesktop: true, width: 1024 };
-    }
-    return calcBreakpointState(window.innerWidth);
-  });
+  const [state, setState] = createSignal<BreakpointState>(
+    typeof window === 'undefined'
+      ? { isMobile: false, isTablet: false, isDesktop: true, width: 1024 }
+      : calcBreakpointState(window.innerWidth),
+  );
 
-  const debounceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  let debounceTimerRef: ReturnType<typeof setTimeout> | null = null;
 
-  const handleChange = useCallback(() => {
+  const handleChange = () => {
     setState(calcBreakpointState(window.innerWidth));
-  }, []);
+  };
 
-  const handleResizeDebounced = useCallback(() => {
-    if (debounceTimerRef.current) {
-      clearTimeout(debounceTimerRef.current);
+  const handleResizeDebounced = () => {
+    if (debounceTimerRef) {
+      clearTimeout(debounceTimerRef);
     }
-    debounceTimerRef.current = setTimeout(() => {
+    debounceTimerRef = setTimeout(() => {
       setState(calcBreakpointState(window.innerWidth));
-      debounceTimerRef.current = null;
+      debounceTimerRef = null;
     }, RESIZE_DEBOUNCE_MS);
-  }, []);
+  };
 
-  useEffect(() => {
+  onMount(() => {
     const mdQuery = window.matchMedia(`(min-width: ${BP_MD}px)`);
     const lgQuery = window.matchMedia(`(min-width: ${BP_LG}px)`);
 
@@ -52,15 +51,15 @@ export function useBreakpoint(): BreakpointState {
     lgQuery.addEventListener('change', handleChange);
     window.addEventListener('resize', handleResizeDebounced);
 
-    return () => {
+    onCleanup(() => {
       mdQuery.removeEventListener('change', handleChange);
       lgQuery.removeEventListener('change', handleChange);
       window.removeEventListener('resize', handleResizeDebounced);
-      if (debounceTimerRef.current) {
-        clearTimeout(debounceTimerRef.current);
+      if (debounceTimerRef) {
+        clearTimeout(debounceTimerRef);
       }
-    };
-  }, [handleChange, handleResizeDebounced]);
+    });
+  });
 
-  return state;
+  return state();
 }

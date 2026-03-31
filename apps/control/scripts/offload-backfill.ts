@@ -57,7 +57,7 @@ if (!isRemote && remoteEnvironment) {
 
 function die(message: string): never {
   console.error(`Error: ${message}`);
-  process.exit(1);
+  Deno.exit(1);
 }
 
 function getArgValue(flag: string): string | undefined {

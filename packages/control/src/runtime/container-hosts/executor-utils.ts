@@ -21,8 +21,12 @@ import type {
 // Environment types
 // ---------------------------------------------------------------------------
 
+export type ExecutorTier = 1 | 2 | 3;
+
 export interface AgentExecutorEnv extends DbEnv, StorageEnv, AiEnv {
   EXECUTOR_CONTAINER: ContainerNamespace;
+  EXECUTOR_CONTAINER_TIER2?: ContainerNamespace;
+  EXECUTOR_CONTAINER_TIER3?: ContainerNamespace;
   RUN_NOTIFIER: DurableObjectNamespace;
   TAKOS_OFFLOAD: R2Bucket;
   TAKOS_EGRESS: { fetch(input: RequestInfo | URL, init?: RequestInit): Promise<Response> };
@@ -64,6 +68,26 @@ export interface ExecutorContainerStub {
 export interface ContainerNamespace extends DurableObjectNamespace {
   get(id: unknown): ExecutorContainerStub;
   getByName(name: string): ExecutorContainerStub;
+}
+
+/**
+ * Resolve the ContainerNamespace for a given executor tier.
+ * Falls back to EXECUTOR_CONTAINER (tier 1) when the tier-specific binding is not configured.
+ */
+export function resolveContainerNamespace(env: AgentExecutorEnv, tier: ExecutorTier): ContainerNamespace {
+  if (tier === 3 && env.EXECUTOR_CONTAINER_TIER3) return env.EXECUTOR_CONTAINER_TIER3;
+  if (tier === 2 && env.EXECUTOR_CONTAINER_TIER2) return env.EXECUTOR_CONTAINER_TIER2;
+  return env.EXECUTOR_CONTAINER;
+}
+
+/**
+ * Parse executor tier from dispatch payload or proxy header.
+ * Defaults to tier 1 if not specified.
+ */
+export function parseExecutorTier(value: unknown): ExecutorTier {
+  const n = typeof value === 'number' ? value : typeof value === 'string' ? parseInt(value, 10) : NaN;
+  if (n === 2 || n === 3) return n;
+  return 1;
 }
 
 /**

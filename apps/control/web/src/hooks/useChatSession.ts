@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type ChangeEvent, type RefObject } from 'react';
+import { createSignal, createEffect, onMount, onCleanup } from 'solid-js';
 import { useI18n, type TranslationKey } from '../store/i18n';
 import { rpc, rpcJson } from '../lib/rpc';
 import type {
@@ -13,7 +13,7 @@ import type {
   ChatRunMetaMap,
   ChatStreamingState,
   ChatTimelineEntry,
-} from '../views/chat/types';
+} from '../views/chat/chat-types';
 import { useMessagePolling } from './useMessagePolling';
 import { useWebSocketConnection, type SessionDiffState } from './useWebSocketConnection';
 import { useFileAttachment } from './useFileAttachment';
@@ -56,10 +56,10 @@ export interface UseChatSessionResult {
   setError: (value: string | null) => void;
   attachedFiles: File[];
   addFiles: (files: File[]) => void;
-  handleFileSelect: (e: ChangeEvent<HTMLInputElement>) => void;
+  handleFileSelect: (e: Event & { currentTarget: HTMLInputElement }) => void;
   removeAttachedFile: (index: number) => void;
   sendMessage: () => Promise<void>;
-  messagesEndRef: RefObject<HTMLDivElement>;
+  messagesEndRef: HTMLDivElement | undefined;
 }
 
 export function useChatSession({
@@ -71,14 +71,14 @@ export function useChatSession({
   focusSequence,
 }: UseChatSessionOptions): UseChatSessionResult {
   const { t, lang } = useI18n();
-  const [input, setInput] = useState(initialMessage ?? '');
+  const [input, setInput] = createSignal(initialMessage ?? '');
 
   // Scroll tracking refs (owned by orchestrator because the auto-scroll
   // effect depends on state from both the polling and WebSocket hooks)
-  const messagesEndRef = useRef<HTMLDivElement>(null);
-  const lastAutoScrollMessageCountRef = useRef<number>(0);
-  const initialScrollPendingRef = useRef<boolean>(true);
-  const autoScrollPinnedRef = useRef<boolean>(true);
+  let messagesEndRef: HTMLDivElement | undefined;
+  let lastAutoScrollMessageCount = 0;
+  let initialScrollPending = true;
+  let autoScrollPinned = true;
 
   // --- Sub-hooks ---
   const polling = useMessagePolling({ threadId, t });
@@ -110,7 +110,7 @@ export function useChatSession({
     threadId,
     lang,
     t,
-    input,
+    input: input(),
     setInput,
     selectedModel: modelSelection.selectedModel,
     onUpdateTitle,
@@ -135,7 +135,11 @@ export function useChatSession({
   });
 
   // --- Initialization effect ---
-  useEffect(() => {
+  createEffect(() => {
+    // Track threadId and focusSequence for reactivity
+    void threadId;
+    void focusSequence;
+
     polling.isMountedRef.current = true;
 
     ws.rootRunIdRef.current = null;
@@ -152,9 +156,9 @@ export function useChatSession({
     polling.setError(null);
     setInput(initialMessage ?? '');
     files.setAttachedFiles([]);
-    initialScrollPendingRef.current = true;
-    autoScrollPinnedRef.current = true;
-    lastAutoScrollMessageCountRef.current = 0;
+    initialScrollPending = true;
+    autoScrollPinned = true;
+    lastAutoScrollMessageCount = 0;
 
     const init = async () => {
       try {
@@ -201,19 +205,22 @@ export function useChatSession({
     };
     init();
 
-    return () => {
+    onCleanup(() => {
       polling.isMountedRef.current = false;
       polling.abortPendingFetch();
       ws.closeWebSocket();
       ws.currentRunIdRef.current = null;
       ws.lastEventIdRef.current = 0;
       ws.rootRunIdRef.current = null;
-    };
-  }, [threadId, focusSequence, ws.resetStreamingState, ws.resetTimeline]);
+    });
+  });
 
   // --- Scroll pinning: track whether user is near the bottom ---
-  useEffect(() => {
-    const anchor = messagesEndRef.current;
+  createEffect(() => {
+    // Track threadId for reactivity
+    void threadId;
+
+    const anchor = messagesEndRef;
     const scrollContainer = anchor?.parentElement?.parentElement;
     if (!(scrollContainer instanceof HTMLElement)) {
       return;
@@ -224,61 +231,67 @@ export function useChatSession({
         (scrollContainer as HTMLElement).scrollHeight -
         (scrollContainer as HTMLElement).scrollTop -
         (scrollContainer as HTMLElement).clientHeight;
-      autoScrollPinnedRef.current = distanceFromBottom <= 96;
+      autoScrollPinned = distanceFromBottom <= 96;
     }
 
-    autoScrollPinnedRef.current = true;
+    autoScrollPinned = true;
     scrollContainer.addEventListener('scroll', updatePinnedState, { passive: true });
-    return () => {
+    onCleanup(() => {
       scrollContainer.removeEventListener('scroll', updatePinnedState);
-    };
-  }, [threadId]);
+    });
+  });
 
   // --- Auto-scroll when messages change or streaming updates ---
-  useEffect(() => {
-    const nextCount = polling.messages.length;
-    if (initialScrollPendingRef.current) {
+  createEffect(() => {
+    const msgList = polling.messages;
+    const nextCount = msgList.length;
+    // Track streaming state for reactivity
+    void ws.streaming.currentMessage;
+    void ws.streaming.thinking;
+    void ws.streaming.toolCalls.length;
+
+    if (initialScrollPending) {
       if (nextCount === 0) {
         return;
       }
-      initialScrollPendingRef.current = false;
-      lastAutoScrollMessageCountRef.current = nextCount;
-      messagesEndRef.current?.scrollIntoView({ behavior: 'auto' });
+      initialScrollPending = false;
+      lastAutoScrollMessageCount = nextCount;
+      messagesEndRef?.scrollIntoView({ behavior: 'auto' });
       return;
     }
-    if (!autoScrollPinnedRef.current) {
-      lastAutoScrollMessageCountRef.current = nextCount;
+    if (!autoScrollPinned) {
+      lastAutoScrollMessageCount = nextCount;
       return;
     }
     const behavior: ScrollBehavior =
-      nextCount > lastAutoScrollMessageCountRef.current ? 'smooth' : 'auto';
-    lastAutoScrollMessageCountRef.current = nextCount;
-    messagesEndRef.current?.scrollIntoView({ behavior });
-  }, [polling.messages.length, ws.streaming.currentMessage, ws.streaming.thinking, ws.streaming.toolCalls.length]);
+      nextCount > lastAutoScrollMessageCount ? 'smooth' : 'auto';
+    lastAutoScrollMessageCount = nextCount;
+    messagesEndRef?.scrollIntoView({ behavior });
+  });
 
   return {
-    availableModels: modelSelection.availableModels,
-    selectedModel: modelSelection.selectedModel,
+    get availableModels() { return modelSelection.availableModels; },
+    get selectedModel() { return modelSelection.selectedModel; },
     setSelectedModel: modelSelection.setSelectedModel,
-    messages: polling.messages,
-    input,
+    get messages() { return polling.messages; },
+    get input() { return input(); },
     setInput,
-    isLoading: ws.isLoading,
-    streaming: ws.streaming,
-    timelineEntries: ws.timelineEntries,
-    runMetaById: ws.runMetaById,
-    artifactsByRunId: ws.artifactsByRunId,
-    historyFocus: ws.historyFocus,
-    taskContext: ws.taskContext,
-    sessionDiff: ws.sessionDiff,
+    get isLoading() { return ws.isLoading; },
+    get streaming() { return ws.streaming; },
+    get timelineEntries() { return ws.timelineEntries; },
+    get runMetaById() { return ws.runMetaById; },
+    get artifactsByRunId() { return ws.artifactsByRunId; },
+    get historyFocus() { return ws.historyFocus; },
+    get taskContext() { return ws.taskContext; },
+    get sessionDiff() { return ws.sessionDiff; },
     dismissSessionDiff: ws.dismissSessionDiff,
-    isMerging: ws.isMerging,
+    get isMerging() { return ws.isMerging; },
     handleMerge: ws.handleMerge,
-    isCancelling: ws.isCancelling,
+    get isCancelling() { return ws.isCancelling; },
     handleCancel: ws.handleCancel,
-    error: polling.error,
+    get error() { return polling.error; },
     setError: polling.setError,
-    attachedFiles: files.attachedFiles,
+    get attachedFiles() { return files.attachedFiles; },
     addFiles: files.addFiles,
     handleFileSelect: files.handleFileSelect,
     removeAttachedFile: files.removeAttachedFile,

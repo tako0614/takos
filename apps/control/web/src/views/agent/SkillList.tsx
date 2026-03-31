@@ -13,9 +13,9 @@ function renderTriggers(triggersToRender: string[]) {
   }
 
   return (
-    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem', marginTop: '0.75rem' }}>
+    <div style={{ display: 'flex', "flex-wrap": 'wrap', gap: '0.5rem', "margin-top": '0.75rem' }}>
       {triggersToRender.map((trigger, i) => (
-        <Badge key={i} variant="default">
+        <Badge variant="default">
           {trigger}
         </Badge>
       ))}
@@ -29,7 +29,7 @@ function renderExecutionContract(skill: Pick<OfficialSkill, 'execution_contract'
     return null;
   }
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.35rem', marginTop: '0.75rem', fontSize: '0.8rem', color: 'var(--color-text-tertiary)' }}>
+    <div style={{ display: 'flex', "flex-direction": 'column', gap: '0.35rem', "margin-top": '0.75rem', "font-size": '0.8rem', color: 'var(--color-text-tertiary)' }}>
       <span>tools: {formatList(contract.preferred_tools)}</span>
       <span>outputs: {formatList(contract.durable_output_hints)}</span>
       <span>modes: {formatList(contract.output_modes)}</span>
@@ -41,13 +41,13 @@ function renderExecutionContract(skill: Pick<OfficialSkill, 'execution_contract'
 
 function renderAvailability(skill: OfficialSkill) {
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.35rem', marginTop: '0.75rem' }}>
-      <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
+    <div style={{ display: 'flex', "flex-direction": 'column', gap: '0.35rem', "margin-top": '0.75rem' }}>
+      <div style={{ display: 'flex', gap: '0.5rem', "flex-wrap": 'wrap' }}>
         {skill.version ? <Badge variant="default">v{skill.version}</Badge> : null}
         {skill.availability ? <Badge variant="default">{skill.availability}</Badge> : null}
       </div>
       {skill.availability_reasons && skill.availability_reasons.length > 0 ? (
-        <div style={{ fontSize: '0.8rem', color: 'var(--color-text-tertiary)' }}>
+        <div style={{ "font-size": '0.8rem', color: 'var(--color-text-tertiary)' }}>
           {skill.availability_reasons.join(' / ')}
         </div>
       ) : null}
@@ -74,29 +74,29 @@ export function SkillList({
 
   return (
     <>
-      <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+      <div style={{ display: 'flex', "flex-direction": 'column', gap: '1rem' }}>
+        <div style={{ display: 'flex', "flex-direction": 'column', gap: '0.75rem' }}>
           <div>
-            <h4 style={{ fontSize: '0.95rem', fontWeight: 600, color: 'var(--color-text-primary)', margin: 0 }}>
+            <h4 style={{ "font-size": '0.95rem', "font-weight": 600, color: 'var(--color-text-primary)', margin: 0 }}>
               {tOr('officialSkills', 'Official Skills')}
             </h4>
-            <p style={{ fontSize: '0.875rem', color: 'var(--color-text-tertiary)', marginTop: '0.25rem', marginBottom: 0 }}>
+            <p style={{ "font-size": '0.875rem', color: 'var(--color-text-tertiary)', "margin-top": '0.25rem', "margin-bottom": 0 }}>
               {tOr('officialSkillsHint', 'Built-in read-only skills that ship with the Takos agent')}
             </p>
           </div>
           {officialSkills.map((skill) => (
-            <Card key={skill.id} padding="md">
-              <div style={{ display: 'flex', alignItems: 'flex-start', gap: '0.75rem' }}>
-                <div style={{ width: '2.5rem', height: '2.5rem', borderRadius: 'var(--radius-md)', backgroundColor: 'var(--color-bg-tertiary)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--color-text-primary)', flexShrink: 0 }}>
+            <Card padding="md">
+              <div style={{ display: 'flex', "align-items": 'flex-start', gap: '0.75rem' }}>
+                <div style={{ width: '2.5rem', height: '2.5rem', "border-radius": 'var(--radius-md)', "background-color": 'var(--color-bg-tertiary)', display: 'flex', "align-items": 'center', "justify-content": 'center', color: 'var(--color-text-primary)', "flex-shrink": 0 }}>
                   <Icons.Sparkles />
                 </div>
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
-                    <h4 style={{ fontWeight: 500, color: 'var(--color-text-primary)', margin: 0 }}>{skill.name}</h4>
+                <div style={{ flex: 1, "min-width": 0 }}>
+                  <div style={{ display: 'flex', "align-items": 'center', gap: '0.5rem', "flex-wrap": 'wrap' }}>
+                    <h4 style={{ "font-weight": 500, color: 'var(--color-text-primary)', margin: 0 }}>{skill.name}</h4>
                     <Badge variant="default">official</Badge>
                     <Badge variant="default">{skill.category}</Badge>
                   </div>
-                  <p style={{ fontSize: '0.875rem', color: 'var(--color-text-tertiary)', marginTop: '0.25rem', marginBottom: 0 }}>
+                  <p style={{ "font-size": '0.875rem', color: 'var(--color-text-tertiary)', "margin-top": '0.25rem', "margin-bottom": 0 }}>
                     {skill.description}
                   </p>
                   {renderAvailability(skill)}
@@ -108,18 +108,18 @@ export function SkillList({
           ))}
         </div>
 
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
-          <h4 style={{ fontSize: '0.95rem', fontWeight: 600, color: 'var(--color-text-primary)', margin: 0 }}>
+        <div style={{ display: 'flex', "flex-direction": 'column', gap: '0.75rem' }}>
+          <h4 style={{ "font-size": '0.95rem', "font-weight": 600, color: 'var(--color-text-primary)', margin: 0 }}>
             {tOr('customSkills', 'Custom Skills')}
           </h4>
           {skills.length === 0 ? (
-            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '3rem 0', color: 'var(--color-text-tertiary)', gap: '1rem' }}>
-              <div style={{ width: '4rem', height: '4rem', borderRadius: '50%', backgroundColor: 'var(--color-bg-tertiary)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--color-text-primary)' }}>
+            <div style={{ display: 'flex', "flex-direction": 'column', "align-items": 'center', "justify-content": 'center', padding: '3rem 0', color: 'var(--color-text-tertiary)', gap: '1rem' }}>
+              <div style={{ width: '4rem', height: '4rem', "border-radius": '50%', "background-color": 'var(--color-bg-tertiary)', display: 'flex', "align-items": 'center', "justify-content": 'center', color: 'var(--color-text-primary)' }}>
                 <Icons.Sparkles style={{ width: '2rem', height: '2rem' }} />
               </div>
-              <div style={{ textAlign: 'center' }}>
-                <p style={{ color: 'var(--color-text-primary)', fontWeight: 500 }}>{t('noSkills')}</p>
-                <p style={{ fontSize: '0.875rem', color: 'var(--color-text-tertiary)', marginTop: '0.25rem' }}>
+              <div style={{ "text-align": 'center' }}>
+                <p style={{ color: 'var(--color-text-primary)', "font-weight": 500 }}>{t('noSkills')}</p>
+                <p style={{ "font-size": '0.875rem', color: 'var(--color-text-tertiary)', "margin-top": '0.25rem' }}>
                   {tOr('skillsEmptyHint', 'Create custom skills to extend your agent\'s capabilities')}
                 </p>
               </div>
@@ -128,20 +128,20 @@ export function SkillList({
               </Button>
             </div>
           ) : (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+            <div style={{ display: 'flex', "flex-direction": 'column', gap: '0.75rem' }}>
               {skills.map((skill) => (
-                <Card key={skill.name} padding="md" style={{ opacity: skill.enabled ? 1 : 0.5 }}>
-                  <div style={{ display: 'flex', alignItems: 'flex-start', gap: '0.75rem' }}>
-                    <div style={{ width: '2.5rem', height: '2.5rem', borderRadius: 'var(--radius-md)', backgroundColor: 'var(--color-bg-tertiary)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--color-text-primary)', flexShrink: 0 }}>
+                <Card padding="md" style={{ opacity: skill.enabled ? 1 : 0.5 }}>
+                  <div style={{ display: 'flex', "align-items": 'flex-start', gap: '0.75rem' }}>
+                    <div style={{ width: '2.5rem', height: '2.5rem', "border-radius": 'var(--radius-md)', "background-color": 'var(--color-bg-tertiary)', display: 'flex', "align-items": 'center', "justify-content": 'center', color: 'var(--color-text-primary)', "flex-shrink": 0 }}>
                       <Icons.Code />
                     </div>
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                      <h4 style={{ fontWeight: 500, color: 'var(--color-text-primary)', margin: 0 }}>{skill.name}</h4>
+                    <div style={{ flex: 1, "min-width": 0 }}>
+                      <h4 style={{ "font-weight": 500, color: 'var(--color-text-primary)', margin: 0 }}>{skill.name}</h4>
                       {skill.description && (
-                        <span style={{ fontSize: '0.875rem', color: 'var(--color-text-tertiary)', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>{skill.description}</span>
+                        <span style={{ "font-size": '0.875rem', color: 'var(--color-text-tertiary)', display: '-webkit-box', "-webkit-line-clamp": 2, "-webkit-box-orient": 'vertical', overflow: 'hidden' }}>{skill.description}</span>
                       )}
                     </div>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.25rem', flexShrink: 0 }}>
+                    <div style={{ display: 'flex', "align-items": 'center', gap: '0.25rem', "flex-shrink": 0 }}>
                       <Button
                         variant={skill.enabled ? 'primary' : 'secondary'}
                         size="sm"
@@ -171,7 +171,7 @@ export function SkillList({
                   </div>
                   {renderTriggers(skill.triggers)}
                   {skill.metadata ? (
-                    <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', marginTop: '0.75rem' }}>
+                    <div style={{ display: 'flex', gap: '0.5rem', "flex-wrap": 'wrap', "margin-top": '0.75rem' }}>
                       {skill.metadata.locale ? <Badge variant="default">{skill.metadata.locale}</Badge> : null}
                       {skill.metadata.category ? <Badge variant="default">{skill.metadata.category}</Badge> : null}
                     </div>
@@ -186,7 +186,7 @@ export function SkillList({
         variant="secondary"
         leftIcon={<Icons.Plus />}
         onClick={onCreateNew}
-        style={{ width: '100%', marginTop: '1rem', border: '2px dashed var(--color-border-primary)' }}
+        style={{ width: '100%', "margin-top": '1rem', border: '2px dashed var(--color-border-primary)' }}
       >
         {t('addSkill')}
       </Button>

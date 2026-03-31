@@ -14,11 +14,11 @@ import type {
   WranglerConfig,
   WorkerContainerSpec,
   WorkerServiceDef,
-} from '../deploy-models.js';
-import { generateWranglerConfig, serializeWranglerToml } from '../wrangler-config.js';
-import { serializeContainerWranglerToml } from '../container.js';
-import { deployWorkerWithWrangler } from '../deploy-worker.js';
-import { collectWorkerBindingResults } from '../bindings.js';
+} from '../deploy-models.ts';
+import { generateWranglerConfig, serializeWranglerToml } from '../wrangler-config.ts';
+import { serializeContainerWranglerToml } from '../container.ts';
+import { deployWorkerWithWrangler } from '../deploy-worker.ts';
+import { collectWorkerBindingResults } from '../bindings.ts';
 
 interface WorkerPhaseContext {
   groupName: string;

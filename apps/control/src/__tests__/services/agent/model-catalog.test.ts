@@ -1,4 +1,3 @@
-import { describe, expect, it } from 'vitest';
 import { AI_MODELS, DEFAULT_AI_MODEL } from '@/services/identity/user-settings';
 import {
   DEFAULT_MODEL_ID,
@@ -8,45 +7,41 @@ import {
   resolveHistoryTokenBudget,
 } from '@/services/agent/model-catalog';
 
-describe('model catalog guardrails', () => {
-  it('keeps OpenAI models on gpt-5 catalog', () => {
-    const openaiIds = OPENAI_MODELS.map((model) => model.id);
-    expect(openaiIds).toEqual(['gpt-5.4-nano', 'gpt-5.4-mini', 'gpt-5.4']);
-    expect(openaiIds.some((id) => id.includes('gpt-4o'))).toBe(false);
-  });
 
-  it('keeps canonical defaults aligned across services', () => {
-    expect(DEFAULT_MODEL_ID).toBe('gpt-5.4-nano');
-    expect(DEFAULT_AI_MODEL).toBe(DEFAULT_MODEL_ID);
-    expect(SUPPORTED_MODEL_IDS).toEqual(['gpt-5.4-nano', 'gpt-5.4-mini', 'gpt-5.4']);
-    expect(AI_MODELS).toEqual(SUPPORTED_MODEL_IDS);
-  });
+import { assertEquals } from 'jsr:@std/assert';
 
-  it('returns correct token limits per model', () => {
-    expect(getModelTokenLimit('gpt-5.4-nano')).toBe(32_768);
-    expect(getModelTokenLimit('gpt-5.4-mini')).toBe(128_000);
-    expect(getModelTokenLimit('gpt-5.4')).toBe(128_000);
-    expect(getModelTokenLimit('unknown')).toBe(32_768);
-  });
-
-  it('resolves history budget from token limit minus reserved', () => {
-    // gpt-5.4-nano: 32768 - 16000 = 16768
-    expect(resolveHistoryTokenBudget('gpt-5.4-nano')).toBe(16_768);
+  Deno.test('model catalog guardrails - keeps OpenAI models on gpt-5 catalog', () => {
+  const openaiIds = OPENAI_MODELS.map((model) => model.id);
+    assertEquals(openaiIds, ['gpt-5.4-nano', 'gpt-5.4-mini', 'gpt-5.4']);
+    assertEquals(openaiIds.some((id) => id.includes('gpt-4o')), false);
+})
+  Deno.test('model catalog guardrails - keeps canonical defaults aligned across services', () => {
+  assertEquals(DEFAULT_MODEL_ID, 'gpt-5.4-nano');
+    assertEquals(DEFAULT_AI_MODEL, DEFAULT_MODEL_ID);
+    assertEquals(SUPPORTED_MODEL_IDS, ['gpt-5.4-nano', 'gpt-5.4-mini', 'gpt-5.4']);
+    assertEquals(AI_MODELS, SUPPORTED_MODEL_IDS);
+})
+  Deno.test('model catalog guardrails - returns correct token limits per model', () => {
+  assertEquals(getModelTokenLimit('gpt-5.4-nano'), 32_768);
+    assertEquals(getModelTokenLimit('gpt-5.4-mini'), 128_000);
+    assertEquals(getModelTokenLimit('gpt-5.4'), 128_000);
+    assertEquals(getModelTokenLimit('unknown'), 32_768);
+})
+  Deno.test('model catalog guardrails - resolves history budget from token limit minus reserved', () => {
+  // gpt-5.4-nano: 32768 - 16000 = 16768
+    assertEquals(resolveHistoryTokenBudget('gpt-5.4-nano'), 16_768);
     // gpt-5.4-mini: 128000 - 16000 = 112000
-    expect(resolveHistoryTokenBudget('gpt-5.4-mini')).toBe(112_000);
-  });
-
-  it('applies env overrides to history budget', () => {
-    const overrides = JSON.stringify({ 'gpt-5.4': 200_000 });
+    assertEquals(resolveHistoryTokenBudget('gpt-5.4-mini'), 112_000);
+})
+  Deno.test('model catalog guardrails - applies env overrides to history budget', () => {
+  const overrides = JSON.stringify({ 'gpt-5.4': 200_000 });
     // 200000 - 16000 = 184000
-    expect(resolveHistoryTokenBudget('gpt-5.4', overrides)).toBe(184_000);
+    assertEquals(resolveHistoryTokenBudget('gpt-5.4', overrides), 184_000);
     // not overridden
-    expect(resolveHistoryTokenBudget('gpt-5.4-nano', overrides)).toBe(16_768);
-  });
-
-  it('falls back to defaults when env override is invalid', () => {
-    expect(resolveHistoryTokenBudget('gpt-5.4', 'not-json')).toBe(112_000);
-    expect(resolveHistoryTokenBudget('gpt-5.4', null)).toBe(112_000);
-    expect(resolveHistoryTokenBudget('gpt-5.4', undefined)).toBe(112_000);
-  });
-});
+    assertEquals(resolveHistoryTokenBudget('gpt-5.4-nano', overrides), 16_768);
+})
+  Deno.test('model catalog guardrails - falls back to defaults when env override is invalid', () => {
+  assertEquals(resolveHistoryTokenBudget('gpt-5.4', 'not-json'), 112_000);
+    assertEquals(resolveHistoryTokenBudget('gpt-5.4', null), 112_000);
+    assertEquals(resolveHistoryTokenBudget('gpt-5.4', undefined), 112_000);
+})

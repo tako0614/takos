@@ -20,7 +20,7 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 function parseAttachments(raw: unknown): ChatAttachmentMetadata[] {
   if (!Array.isArray(raw)) return [];
   return raw
-    .map((entry) => {
+    .map((entry): ChatAttachmentMetadata | null => {
       if (!isRecord(entry) || typeof entry.name !== 'string') return null;
       return {
         file_id: typeof entry.file_id === 'string' ? entry.file_id : undefined,
@@ -28,7 +28,7 @@ function parseAttachments(raw: unknown): ChatAttachmentMetadata[] {
         name: entry.name,
         mime_type: typeof entry.mime_type === 'string' ? entry.mime_type : null,
         size: typeof entry.size === 'number' ? entry.size : undefined,
-      } satisfies ChatAttachmentMetadata;
+      };
     })
     .filter((entry): entry is ChatAttachmentMetadata => entry !== null);
 }

@@ -1,7 +1,7 @@
 import path from 'path';
 import fs from 'fs';
-import { REPOS_BASE_DIR, WORKDIR_BASE_DIR } from '../shared/config.js';
-import { SymlinkEscapeError, SymlinkNotAllowedError } from '../shared/errors.js';
+import { REPOS_BASE_DIR, WORKDIR_BASE_DIR } from '../shared/config.ts';
+import { SymlinkEscapeError, SymlinkNotAllowedError } from '../shared/errors.ts';
 
 // --- isPathWithinBase ---
 

@@ -10,24 +10,24 @@ import {
   DEFAULT_TIMEOUT_MINUTES,
   MAX_COMMAND_FILE_BYTES,
   MINUTES_TO_MS,
-} from '../constants.js';
+} from '../constants.ts';
 import type {
   Step,
   StepResult,
   ExecutionContext,
   ActionResolver,
-} from '../workflow-models.js';
-import { parseGitHubEnvFile } from '../context.js';
+} from '../workflow-models.ts';
+import { parseGitHubEnvFile } from '../context.ts';
 import {
   evaluateCondition,
   interpolateString,
   interpolateObject,
-} from '../parser/expression.js';
+} from '../parser/expression.ts';
 import {
   parseOutputs,
   iterateNormalizedLines,
   parsePathFile,
-} from './step-output-parser.js';
+} from './step-output-parser.ts';
 
 /**
  * Step runner options
@@ -162,8 +162,8 @@ const defaultShellExecutor: ShellExecutor = async (
       'NODE_ENV', 'CI',
     ];
     for (const key of ALLOWED_HOST_VARS) {
-      if (process.env[key]) {
-        safeHostEnv[key] = process.env[key]!;
+      if (Deno.env.get(key)) {
+        safeHostEnv[key] = Deno.env.get(key)!;
       }
     }
 
@@ -189,13 +189,15 @@ const defaultShellExecutor: ShellExecutor = async (
           }, options.timeout)
         : undefined;
 
-    timeout?.unref?.();
+    if (timeout && typeof timeout === 'object' && 'unref' in timeout) {
+      (timeout as { unref(): void }).unref();
+    }
 
-    child.stdout?.on('data', (chunk: string | Buffer) => {
-      stdout += chunk.toString();
+    child.stdout?.on('data', (chunk: string | Uint8Array) => {
+      stdout += typeof chunk === 'string' ? chunk : new TextDecoder().decode(chunk);
     });
-    child.stderr?.on('data', (chunk: string | Buffer) => {
-      stderr += chunk.toString();
+    child.stderr?.on('data', (chunk: string | Uint8Array) => {
+      stderr += typeof chunk === 'string' ? chunk : new TextDecoder().decode(chunk);
     });
 
     child.on('error', (error) => {
@@ -505,7 +507,7 @@ export class StepRunner {
     const pathContent = await this.readCommandFile(commandFiles.path);
     const appendedPaths = parsePathFile(pathContent);
     if (appendedPaths.length > 0) {
-      const basePath = sharedEnv.PATH ?? shellEnv.PATH ?? process.env.PATH ?? '';
+      const basePath = sharedEnv.PATH ?? shellEnv.PATH ?? Deno.env.get('PATH') ?? '';
       const prefix = appendedPaths.join(pathDelimiter);
       sharedEnv.PATH = basePath.length > 0 ? `${prefix}${pathDelimiter}${basePath}` : prefix;
     }

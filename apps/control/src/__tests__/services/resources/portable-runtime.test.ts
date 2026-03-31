@@ -1,7 +1,6 @@
 import { access, mkdtemp, readFile, rm } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import {
   deletePortableManagedResource,
   describePortableResourceResolution,
@@ -9,11 +8,12 @@ import {
   resetPortableResourceRuntimeCachesForTests,
 } from '@/services/resources/portable-runtime';
 
-describe('portable managed resource runtime', () => {
-  let tempDir: string;
 
-  beforeEach(async () => {
-    tempDir = await mkdtemp(path.join(os.tmpdir(), 'takos-portable-runtime-'));
+import { assertEquals, assert, assertRejects, assertObjectMatch } from 'jsr:@std/assert';
+
+  let tempDir: string;
+  Deno.test('portable managed resource runtime - creates and removes sqlite state for portable sql resources', async () => {
+  tempDir = await mkdtemp(path.join(os.tmpdir(), 'takos-portable-runtime-'));
     process.env.TAKOS_LOCAL_DATA_DIR = tempDir;
     delete process.env.POSTGRES_URL;
     delete process.env.DATABASE_URL;
@@ -28,16 +28,8 @@ describe('portable managed resource runtime', () => {
     delete process.env.GOOGLE_APPLICATION_CREDENTIALS;
     delete process.env.GCP_FIRESTORE_KV_COLLECTION;
     resetPortableResourceRuntimeCachesForTests();
-  });
-
-  afterEach(async () => {
-    resetPortableResourceRuntimeCachesForTests();
-    delete process.env.TAKOS_LOCAL_DATA_DIR;
-    await rm(tempDir, { recursive: true, force: true });
-  });
-
-  it('creates and removes sqlite state for portable sql resources', async () => {
-    const resource = {
+  try {
+  const resource = {
       id: 'res-sql',
       provider_name: 'local',
       provider_resource_name: 'portable-db',
@@ -45,14 +37,34 @@ describe('portable managed resource runtime', () => {
     const sqlitePath = path.join(tempDir, 'managed-resources', 'sql', 'portable-db.sqlite');
 
     await ensurePortableManagedResource(resource, 'sql');
-    await expect(access(sqlitePath)).resolves.toBeUndefined();
+    await assertEquals(await access(sqlitePath), undefined);
 
     await deletePortableManagedResource(resource, 'sql');
-    await expect(access(sqlitePath)).rejects.toBeDefined();
-  });
-
-  it('creates and removes file-backed local object, kv, and queue resources', async () => {
-    const objectStore = {
+    await await assertRejects(async () => { await access(sqlitePath); });
+  } finally {
+  resetPortableResourceRuntimeCachesForTests();
+    delete process.env.TAKOS_LOCAL_DATA_DIR;
+    await rm(tempDir, { recursive: true, force: true });
+  }
+})
+  Deno.test('portable managed resource runtime - creates and removes file-backed local object, kv, and queue resources', async () => {
+  tempDir = await mkdtemp(path.join(os.tmpdir(), 'takos-portable-runtime-'));
+    process.env.TAKOS_LOCAL_DATA_DIR = tempDir;
+    delete process.env.POSTGRES_URL;
+    delete process.env.DATABASE_URL;
+    delete process.env.PGVECTOR_ENABLED;
+    delete process.env.AWS_ACCESS_KEY_ID;
+    delete process.env.AWS_SECRET_ACCESS_KEY;
+    delete process.env.AWS_S3_ENDPOINT;
+    delete process.env.AWS_DYNAMO_KV_TABLE;
+    delete process.env.AWS_DYNAMO_HOSTNAME_ROUTING_TABLE;
+    delete process.env.REDIS_URL;
+    delete process.env.GCP_PROJECT_ID;
+    delete process.env.GOOGLE_APPLICATION_CREDENTIALS;
+    delete process.env.GCP_FIRESTORE_KV_COLLECTION;
+    resetPortableResourceRuntimeCachesForTests();
+  try {
+  const objectStore = {
       id: 'res-r2',
       provider_name: 'local',
       provider_resource_name: 'portable-bucket',
@@ -75,21 +87,41 @@ describe('portable managed resource runtime', () => {
     await ensurePortableManagedResource(kv, 'kv');
     await ensurePortableManagedResource(queue, 'queue');
 
-    await expect(access(objectPath)).resolves.toBeUndefined();
-    await expect(access(kvPath)).resolves.toBeUndefined();
-    await expect(access(queuePath)).resolves.toBeUndefined();
+    await assertEquals(await access(objectPath), undefined);
+    await assertEquals(await access(kvPath), undefined);
+    await assertEquals(await access(queuePath), undefined);
 
     await deletePortableManagedResource(objectStore, 'object_store');
     await deletePortableManagedResource(kv, 'kv');
     await deletePortableManagedResource(queue, 'queue');
 
-    await expect(access(objectPath)).rejects.toBeDefined();
-    await expect(access(kvPath)).rejects.toBeDefined();
-    await expect(access(queuePath)).rejects.toBeDefined();
-  });
-
-  it('does not materialize marker files for takos-runtime logical resources', async () => {
-    const analytics = {
+    await await assertRejects(async () => { await access(objectPath); });
+    await await assertRejects(async () => { await access(kvPath); });
+    await await assertRejects(async () => { await access(queuePath); });
+  } finally {
+  resetPortableResourceRuntimeCachesForTests();
+    delete process.env.TAKOS_LOCAL_DATA_DIR;
+    await rm(tempDir, { recursive: true, force: true });
+  }
+})
+  Deno.test('portable managed resource runtime - does not materialize marker files for takos-runtime logical resources', async () => {
+  tempDir = await mkdtemp(path.join(os.tmpdir(), 'takos-portable-runtime-'));
+    process.env.TAKOS_LOCAL_DATA_DIR = tempDir;
+    delete process.env.POSTGRES_URL;
+    delete process.env.DATABASE_URL;
+    delete process.env.PGVECTOR_ENABLED;
+    delete process.env.AWS_ACCESS_KEY_ID;
+    delete process.env.AWS_SECRET_ACCESS_KEY;
+    delete process.env.AWS_S3_ENDPOINT;
+    delete process.env.AWS_DYNAMO_KV_TABLE;
+    delete process.env.AWS_DYNAMO_HOSTNAME_ROUTING_TABLE;
+    delete process.env.REDIS_URL;
+    delete process.env.GCP_PROJECT_ID;
+    delete process.env.GOOGLE_APPLICATION_CREDENTIALS;
+    delete process.env.GCP_FIRESTORE_KV_COLLECTION;
+    resetPortableResourceRuntimeCachesForTests();
+  try {
+  const analytics = {
       id: 'res-analytics',
       provider_name: 'local',
       provider_resource_name: 'portable-events',
@@ -120,68 +152,112 @@ describe('portable managed resource runtime', () => {
     await ensurePortableManagedResource(durable, 'durable_namespace');
     await ensurePortableManagedResource(secret, 'secret');
 
-    await expect(access(analyticsPath)).rejects.toBeDefined();
-    await expect(access(workflowPath)).rejects.toBeDefined();
-    await expect(access(durablePath)).rejects.toBeDefined();
-    await expect(access(secretPath)).resolves.toBeUndefined();
+    await await assertRejects(async () => { await access(analyticsPath); });
+    await await assertRejects(async () => { await access(workflowPath); });
+    await await assertRejects(async () => { await access(durablePath); });
+    await assertEquals(await access(secretPath), undefined);
 
     const secretState = JSON.parse(await readFile(secretPath, 'utf-8')) as { value?: string };
-    expect(typeof secretState.value).toBe('string');
-    expect(secretState.value?.length).toBeGreaterThan(0);
+    assertEquals(typeof secretState.value, 'string');
+    assert(secretState.value?.length > 0);
 
     await deletePortableManagedResource(analytics, 'analytics_store');
     await deletePortableManagedResource(workflow, 'workflow_runtime');
     await deletePortableManagedResource(durable, 'durable_namespace');
     await deletePortableManagedResource(secret, 'secret');
 
-    await expect(access(analyticsPath)).rejects.toBeDefined();
-    await expect(access(workflowPath)).rejects.toBeDefined();
-    await expect(access(durablePath)).rejects.toBeDefined();
-    await expect(access(secretPath)).rejects.toBeDefined();
-  });
-
-  it('requires pgvector bootstrap for portable vector indexes', async () => {
-    const vector = {
+    await await assertRejects(async () => { await access(analyticsPath); });
+    await await assertRejects(async () => { await access(workflowPath); });
+    await await assertRejects(async () => { await access(durablePath); });
+    await await assertRejects(async () => { await access(secretPath); });
+  } finally {
+  resetPortableResourceRuntimeCachesForTests();
+    delete process.env.TAKOS_LOCAL_DATA_DIR;
+    await rm(tempDir, { recursive: true, force: true });
+  }
+})
+  Deno.test('portable managed resource runtime - requires pgvector bootstrap for portable vector indexes', async () => {
+  tempDir = await mkdtemp(path.join(os.tmpdir(), 'takos-portable-runtime-'));
+    process.env.TAKOS_LOCAL_DATA_DIR = tempDir;
+    delete process.env.POSTGRES_URL;
+    delete process.env.DATABASE_URL;
+    delete process.env.PGVECTOR_ENABLED;
+    delete process.env.AWS_ACCESS_KEY_ID;
+    delete process.env.AWS_SECRET_ACCESS_KEY;
+    delete process.env.AWS_S3_ENDPOINT;
+    delete process.env.AWS_DYNAMO_KV_TABLE;
+    delete process.env.AWS_DYNAMO_HOSTNAME_ROUTING_TABLE;
+    delete process.env.REDIS_URL;
+    delete process.env.GCP_PROJECT_ID;
+    delete process.env.GOOGLE_APPLICATION_CREDENTIALS;
+    delete process.env.GCP_FIRESTORE_KV_COLLECTION;
+    resetPortableResourceRuntimeCachesForTests();
+  try {
+  const vector = {
       id: 'res-vector',
       provider_name: 'aws',
       provider_resource_name: 'portable-vector',
     } as const;
 
-    await expect(ensurePortableManagedResource(vector, 'vector_index')).rejects.toThrow(
+    await await assertRejects(async () => { await ensurePortableManagedResource(vector, 'vector_index'); }, 
       'POSTGRES_URL or DATABASE_URL, PGVECTOR_ENABLED=true',
     );
-  });
-
-  it('describes provider-backed vs takos-runtime resolutions', () => {
-    expect(describePortableResourceResolution('aws', 'sql')).toMatchObject({
+  } finally {
+  resetPortableResourceRuntimeCachesForTests();
+    delete process.env.TAKOS_LOCAL_DATA_DIR;
+    await rm(tempDir, { recursive: true, force: true });
+  }
+})
+  Deno.test('portable managed resource runtime - describes provider-backed vs takos-runtime resolutions', () => {
+  tempDir = await mkdtemp(path.join(os.tmpdir(), 'takos-portable-runtime-'));
+    process.env.TAKOS_LOCAL_DATA_DIR = tempDir;
+    delete process.env.POSTGRES_URL;
+    delete process.env.DATABASE_URL;
+    delete process.env.PGVECTOR_ENABLED;
+    delete process.env.AWS_ACCESS_KEY_ID;
+    delete process.env.AWS_SECRET_ACCESS_KEY;
+    delete process.env.AWS_S3_ENDPOINT;
+    delete process.env.AWS_DYNAMO_KV_TABLE;
+    delete process.env.AWS_DYNAMO_HOSTNAME_ROUTING_TABLE;
+    delete process.env.REDIS_URL;
+    delete process.env.GCP_PROJECT_ID;
+    delete process.env.GOOGLE_APPLICATION_CREDENTIALS;
+    delete process.env.GCP_FIRESTORE_KV_COLLECTION;
+    resetPortableResourceRuntimeCachesForTests();
+  try {
+  assertObjectMatch(describePortableResourceResolution('aws', 'sql'), {
       mode: 'provider-backed',
       backend: 'postgres-schema-d1-adapter',
       requirements: ['POSTGRES_URL or DATABASE_URL'],
     });
-    expect(describePortableResourceResolution('aws', 'queue')).toMatchObject({
+    assertObjectMatch(describePortableResourceResolution('aws', 'queue'), {
       mode: 'provider-backed',
       backend: 'sqs-queue',
       requirements: [],
     });
-    expect(describePortableResourceResolution('aws', 'secretRef')).toMatchObject({
+    assertObjectMatch(describePortableResourceResolution('aws', 'secretRef'), {
       mode: 'provider-backed',
       backend: 'aws-secrets-manager',
       requirements: [],
     });
-    expect(describePortableResourceResolution('k8s', 'queue')).toMatchObject({
+    assertObjectMatch(describePortableResourceResolution('k8s', 'queue'), {
       mode: 'provider-backed',
       backend: 'redis-queue',
       requirements: ['REDIS_URL'],
     });
-    expect(describePortableResourceResolution('k8s', 'secretRef')).toMatchObject({
+    assertObjectMatch(describePortableResourceResolution('k8s', 'secretRef'), {
       mode: 'provider-backed',
       backend: 'k8s-secret',
-      requirements: expect.arrayContaining(['K8S_API_SERVER or in-cluster Kubernetes service env']),
+      requirements: (['K8S_API_SERVER or in-cluster Kubernetes service env']),
     });
-    expect(describePortableResourceResolution('local', 'workflow')).toMatchObject({
+    assertObjectMatch(describePortableResourceResolution('local', 'workflow'), {
       mode: 'takos-runtime',
       backend: 'workflow-binding',
       requirements: [],
     });
-  });
-});
+  } finally {
+  resetPortableResourceRuntimeCachesForTests();
+    delete process.env.TAKOS_LOCAL_DATA_DIR;
+    await rm(tempDir, { recursive: true, force: true });
+  }
+})

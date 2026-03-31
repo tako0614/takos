@@ -1,13 +1,13 @@
 import { Hono } from 'hono';
 import * as fs from 'fs/promises';
 import * as path from 'path';
-import { runGitCommand, cloneAndCheckout } from '../../runtime/git.js';
-import { resolvePathWithin, resolveRepoGitPath, verifyPathWithinAfterAccess } from '../../runtime/paths.js';
-import { writeFileWithinSpace } from '../../runtime/secure-fs.js';
-import { isValidSessionId, validateGitRef, validateGitAuthorName, validateGitAuthorEmail } from '../../runtime/validation.js';
-import { sessionStore } from './storage.js';
-import { getSessionOwnerSub, parseRequiredSessionSpaceIds, parseRequiredSpaceId } from './session-utils.js';
-import { OwnerBindingError } from '../../shared/errors.js';
+import { runGitCommand, cloneAndCheckout } from '../../runtime/git.ts';
+import { resolvePathWithin, resolveRepoGitPath, verifyPathWithinAfterAccess } from '../../runtime/paths.ts';
+import { writeFileWithinSpace } from '../../runtime/secure-fs.ts';
+import { isValidSessionId, validateGitRef, validateGitAuthorName, validateGitAuthorEmail } from '../../runtime/validation.ts';
+import { sessionStore } from './storage.ts';
+import { getSessionOwnerSub, parseRequiredSessionSpaceIds, parseRequiredSpaceId } from './session-utils.ts';
+import { OwnerBindingError } from '../../shared/errors.ts';
 import { badRequest, forbidden, notFound, internalError } from 'takos-common/middleware/hono';
 
 const app = new Hono();

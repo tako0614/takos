@@ -1,4 +1,3 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { D1Database } from '@cloudflare/workers-types';
 import type { Env } from '@/types';
 import type { ContainerStartFailure, ToolContext } from '@/tools/types';
@@ -8,24 +7,26 @@ import type { ContainerStartFailure, ToolContext } from '@/tools/types';
  * Production code uses: db.select({...}).from(table).where(...).get()
  * and db.insert(table).values({...}), db.update(table).set({...}).where(...)
  */
+import { assertEquals, assertThrows, assertRejects, assertStringIncludes } from 'jsr:@std/assert';
+
 const mockSelectResults = {
-  session: vi.fn(),       // session lookup by id
-  repository: vi.fn(),    // single repo lookup
-  repositories: vi.fn(),  // multi-repo lookup
+  session: ((..._args: any[]) => undefined) as any,       // session lookup by id
+  repository: ((..._args: any[]) => undefined) as any,    // single repo lookup
+  repositories: ((..._args: any[]) => undefined) as any,  // multi-repo lookup
 };
 
 function createDrizzleMock() {
   return {
-    select: vi.fn(() => {
+    select: () => {
       const chain = {
-        from: vi.fn((table: unknown) => {
+        from: (table: unknown) => {
           (chain as Record<string, unknown>)._table = table;
           return chain;
-        }),
-        where: vi.fn(() => chain),
-        orderBy: vi.fn(() => chain),
-        limit: vi.fn(() => chain),
-        get: vi.fn(async () => {
+        },
+        where: () => chain,
+        orderBy: () => chain,
+        limit: () => chain,
+        get: async () => {
           // Route to the correct mock based on call pattern
           // The production code calls select then from(sessions) or from(repositories)
           const table = (chain as Record<string, unknown>)._table as any;
@@ -34,51 +35,38 @@ function createDrizzleMock() {
             return mockSelectResults.session();
           }
           return mockSelectResults.repository();
-        }),
-        all: vi.fn(async () => {
+        },
+        all: async () => {
           const result = mockSelectResults.repositories();
           return Array.isArray(result) ? result : result ? [result] : [];
-        }),
+        },
         _table: null as unknown,
       };
       return chain;
+    },
+    insert: () => ({
+      values: () => ({
+        run: async () => ({}),
+        returning: async () => [{}],
+      }),
     }),
-    insert: vi.fn(() => ({
-      values: vi.fn(() => ({
-        run: vi.fn(async () => ({})),
-        returning: vi.fn(async () => [{}]),
-      })),
-    })),
-    update: vi.fn(() => ({
-      set: vi.fn(() => ({
-        where: vi.fn(async () => ({})),
-        run: vi.fn(async () => ({})),
-      })),
-    })),
+    update: () => ({
+      set: () => ({
+        where: async () => ({}),
+        run: async () => ({}),
+      }),
+    }),
   };
 }
 
 const mockRuntimeManager = {
-  setRepositories: vi.fn(),
-  initSession: vi.fn(),
+  setRepositories: ((..._args: any[]) => undefined) as any,
+  initSession: ((..._args: any[]) => undefined) as any,
 };
 
-vi.mock('@/db', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('@/db')>();
-  return {
-    ...actual,
-    getDb: () => createDrizzleMock(),
-  };
-});
-
-vi.mock('@/services/sync', () => ({
-  RuntimeSessionManager: vi.fn(() => mockRuntimeManager),
-}));
-
-vi.mock('@/utils', () => ({
-  generateId: vi.fn(),
-}));
-
+// [Deno] vi.mock removed - manually stub imports from '@/db'
+// [Deno] vi.mock removed - manually stub imports from '@/services/sync'
+// [Deno] vi.mock removed - manually stub imports from '@/utils'
 import { generateId } from '@/utils';
 import { containerStartHandler } from '@/tools/builtin/container/handlers/start';
 import { requireContainer } from '@/tools/builtin/file/session';
@@ -100,76 +88,89 @@ function makeContext(initialFailure?: ContainerStartFailure): ToolContext {
     get sessionId() {
       return sessionId;
     },
-    setSessionId: vi.fn((nextSessionId: string | undefined) => {
+    setSessionId: (nextSessionId: string | undefined) => {
       sessionId = nextSessionId;
-    }),
+    },
     getLastContainerStartFailure: () => lastFailure,
-    setLastContainerStartFailure: vi.fn((failure: ContainerStartFailure | undefined) => {
+    setLastContainerStartFailure: (failure: ContainerStartFailure | undefined) => {
       lastFailure = failure;
-    }),
+    },
   };
 }
 
-describe('container_start error propagation', () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
+
+  Deno.test('container_start error propagation - stores the failed container_start root cause for follow-up tools', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
 
     // session lookup returns null (no existing session)
-    mockSelectResults.session.mockReturnValue(null);
+    mockSelectResults.session = (() => null) as any;
     // single repo lookup returns the default repo
-    mockSelectResults.repository.mockReturnValue({
+    mockSelectResults.repository = (() => ({
       id: 'repo_main',
       name: 'main',
       defaultBranch: 'main',
-    });
+    })) as any;
     // multi-repo lookup returns the default repo
-    mockSelectResults.repositories.mockReturnValue([{
+    mockSelectResults.repositories = (() => [{
       id: 'repo_main',
       name: 'main',
       defaultBranch: 'main',
-    }]);
+    }]) as any;
 
-    mockRuntimeManager.setRepositories.mockReset();
-    mockRuntimeManager.initSession.mockReset();
-  });
-
-  it('stores the failed container_start root cause for follow-up tools', async () => {
-    vi.mocked(generateId)
-      .mockReturnValueOnce('session_failed')
-      .mockReturnValueOnce('session_repo_1');
-    mockRuntimeManager.initSession.mockRejectedValue(
-      new Error('Failed to init runtime session: boom')
-    );
+    mockRuntimeManager.setRepositories;
+    mockRuntimeManager.initSession;
+  generateId
+       = (() => 'session_failed') as any
+       = (() => 'session_repo_1') as any;
+    mockRuntimeManager.initSession = (async () => { throw new Error('Failed to init runtime session: boom'); }) as any;
 
     const context = makeContext();
 
-    await expect(containerStartHandler({}, context)).rejects.toThrow(
+    await await assertRejects(async () => { await containerStartHandler({}, context); }, 
       'Failed to init runtime session: boom'
     );
 
-    expect(context.sessionId).toBeUndefined();
-    expect(context.getLastContainerStartFailure()).toEqual({
+    assertEquals(context.sessionId, undefined);
+    assertEquals(context.getLastContainerStartFailure(), {
       message: 'Failed to init runtime session: boom',
       sessionId: 'session_failed',
     });
 
-    expect(() => requireContainer(context)).toThrowError(
+    assertThrows(() => { () => requireContainer(context); }, 
       'No container is running because the most recent container_start failed.\n\nLast start error: Failed to init runtime session: boom\nFailed session ID: session_failed\n\nResolve that error and call container_start again before using file operations.'
     );
-  });
+})
+  Deno.test('container_start error propagation - clears stale start failures after a successful container_start', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
 
-  it('clears stale start failures after a successful container_start', async () => {
-    vi.mocked(generateId)
-      .mockReturnValueOnce('session_running')
-      .mockReturnValueOnce('session_repo_1');
-    mockRuntimeManager.initSession.mockResolvedValue({
+    // session lookup returns null (no existing session)
+    mockSelectResults.session = (() => null) as any;
+    // single repo lookup returns the default repo
+    mockSelectResults.repository = (() => ({
+      id: 'repo_main',
+      name: 'main',
+      defaultBranch: 'main',
+    })) as any;
+    // multi-repo lookup returns the default repo
+    mockSelectResults.repositories = (() => [{
+      id: 'repo_main',
+      name: 'main',
+      defaultBranch: 'main',
+    }]) as any;
+
+    mockRuntimeManager.setRepositories;
+    mockRuntimeManager.initSession;
+  generateId
+       = (() => 'session_running') as any
+       = (() => 'session_repo_1') as any;
+    mockRuntimeManager.initSession = (async () => ({
       success: true,
       file_count: 12,
       session_dir: '/workspace',
       work_dir: '/workspace',
       git_mode: true,
       branch: 'main',
-    });
+    })) as any;
 
     const context = makeContext({
       message: 'Previous failure',
@@ -178,8 +179,7 @@ describe('container_start error propagation', () => {
 
     const result = await containerStartHandler({}, context);
 
-    expect(result).toContain('Session ID: session_running');
-    expect(context.sessionId).toBe('session_running');
-    expect(context.getLastContainerStartFailure()).toBeUndefined();
-  });
-});
+    assertStringIncludes(result, 'Session ID: session_running');
+    assertEquals(context.sessionId, 'session_running');
+    assertEquals(context.getLastContainerStartFailure(), undefined);
+})

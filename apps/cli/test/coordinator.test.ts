@@ -1,10 +1,11 @@
-import { describe, expect, it } from 'vitest';
-import { computeDiff } from '../src/lib/state/diff.js';
-import type { TakosState } from '../src/lib/state/state-types.js';
-import type { AppManifest } from '../src/lib/app-manifest.js';
-import type { DiffEntry, DiffResult } from '../src/lib/state/diff.js';
+import { computeDiff } from '../src/lib/state/diff.ts';
+import type { TakosState } from '../src/lib/state/state-types.ts';
+import type { AppManifest } from '../src/lib/app-manifest.ts';
+import type { DiffEntry, DiffResult } from '../src/lib/state/diff.ts';
 
 // ── Test helpers ────────────────────────────────────────────────────────────
+
+import { assertEquals, assert } from 'jsr:@std/assert';
 
 function makeState(overrides: Partial<TakosState> = {}): TakosState {
   return {
@@ -90,9 +91,9 @@ function simulateApplyDiff(diff: DiffResult): Array<{ action: string; name: stri
 
 // ── applyDiff tests ─────────────────────────────────────────────────────────
 
-describe('applyDiff', () => {
-  it('calls createResource for create entries', () => {
-    const manifest = makeManifest({
+
+  Deno.test('applyDiff - calls createResource for create entries', () => {
+  const manifest = makeManifest({
       resources: {
         db: { type: 'd1', binding: 'DB' },
         cache: { type: 'kv' },
@@ -103,12 +104,11 @@ describe('applyDiff', () => {
     const calls = simulateApplyDiff(diff);
 
     const createResourceCalls = calls.filter((c) => c.action === 'createResource');
-    expect(createResourceCalls).toHaveLength(2);
-    expect(createResourceCalls.map((c) => c.name).sort()).toEqual(['cache', 'db']);
-  });
-
-  it('calls deployWorker for create worker entries', () => {
-    const manifest = makeManifest({
+    assertEquals(createResourceCalls.length, 2);
+    assertEquals(createResourceCalls.map((c) => c.name).sort(), ['cache', 'db']);
+})
+  Deno.test('applyDiff - calls deployWorker for create worker entries', () => {
+  const manifest = makeManifest({
       workers: {
         web: {
           type: 'worker',
@@ -128,12 +128,11 @@ describe('applyDiff', () => {
     const calls = simulateApplyDiff(diff);
 
     const deployWorkerCalls = calls.filter((c) => c.action === 'deployWorker');
-    expect(deployWorkerCalls).toHaveLength(1);
-    expect(deployWorkerCalls[0].name).toBe('web');
-  });
-
-  it('calls delete for delete entries', () => {
-    const manifest = makeManifest({
+    assertEquals(deployWorkerCalls.length, 1);
+    assertEquals(deployWorkerCalls[0].name, 'web');
+})
+  Deno.test('applyDiff - calls delete for delete entries', () => {
+  const manifest = makeManifest({
       resources: {},
       workers: {},
     });
@@ -151,16 +150,15 @@ describe('applyDiff', () => {
     const calls = simulateApplyDiff(diff);
 
     const deleteResourceCalls = calls.filter((c) => c.action === 'deleteResource');
-    expect(deleteResourceCalls).toHaveLength(1);
-    expect(deleteResourceCalls[0].name).toBe('db');
+    assertEquals(deleteResourceCalls.length, 1);
+    assertEquals(deleteResourceCalls[0].name, 'db');
 
     const deleteWorkerCalls = calls.filter((c) => c.action === 'deleteWorker');
-    expect(deleteWorkerCalls).toHaveLength(1);
-    expect(deleteWorkerCalls[0].name).toBe('old');
-  });
-
-  it('skips unchanged entries', () => {
-    const manifest = makeManifest({
+    assertEquals(deleteWorkerCalls.length, 1);
+    assertEquals(deleteWorkerCalls[0].name, 'old');
+})
+  Deno.test('applyDiff - skips unchanged entries', () => {
+  const manifest = makeManifest({
       resources: {
         db: { type: 'd1', binding: 'DB' },
       },
@@ -192,12 +190,11 @@ describe('applyDiff', () => {
     const calls = simulateApplyDiff(diff);
 
     // No actions should be dispatched for unchanged entries
-    expect(calls).toHaveLength(0);
-    expect(diff.hasChanges).toBe(false);
-  });
-
-  it('respects dependsOn ordering (resources before workers)', () => {
-    const manifest = makeManifest({
+    assertEquals(calls.length, 0);
+    assertEquals(diff.hasChanges, false);
+})
+  Deno.test('applyDiff - respects dependsOn ordering (resources before workers)', () => {
+  const manifest = makeManifest({
       resources: {
         db: { type: 'd1', binding: 'DB' },
       },
@@ -228,16 +225,15 @@ describe('applyDiff', () => {
     const workerIndex = diff.entries.findIndex(
       (e) => e.category === 'worker' && e.name === 'web',
     );
-    expect(resourceIndex).toBeLessThan(workerIndex);
+    assert(resourceIndex < workerIndex);
 
     const calls = simulateApplyDiff(diff);
     const createResourceIdx = calls.findIndex((c) => c.action === 'createResource');
     const deployWorkerIdx = calls.findIndex((c) => c.action === 'deployWorker');
-    expect(createResourceIdx).toBeLessThan(deployWorkerIdx);
-  });
-
-  it('handles mixed create, delete, and unchanged', () => {
-    const manifest = makeManifest({
+    assert(createResourceIdx < deployWorkerIdx);
+})
+  Deno.test('applyDiff - handles mixed create, delete, and unchanged', () => {
+  const manifest = makeManifest({
       resources: {
         db: { type: 'd1', binding: 'DB' },       // unchanged
         newcache: { type: 'kv' },                 // create
@@ -271,13 +267,12 @@ describe('applyDiff', () => {
     const calls = simulateApplyDiff(diff);
 
     // Should have 1 create (newcache) + 1 delete (oldqueue) = 2 calls
-    expect(calls).toHaveLength(2);
-    expect(calls.find((c) => c.action === 'createResource' && c.name === 'newcache')).toBeDefined();
-    expect(calls.find((c) => c.action === 'deleteResource' && c.name === 'oldqueue')).toBeDefined();
-  });
-
-  it('handles container and service entries', () => {
-    const manifest = makeManifest() as AppManifest & {
+    assertEquals(calls.length, 2);
+    assert(calls.find((c) => c.action === 'createResource' && c.name === 'newcache') !== undefined);
+    assert(calls.find((c) => c.action === 'deleteResource' && c.name === 'oldqueue') !== undefined);
+})
+  Deno.test('applyDiff - handles container and service entries', () => {
+  const manifest = makeManifest() as AppManifest & {
       spec: AppManifest['spec'] & {
         containers: Record<string, unknown>;
         services: Record<string, unknown>;
@@ -290,11 +285,10 @@ describe('applyDiff', () => {
     const calls = simulateApplyDiff(diff);
 
     const containerCalls = calls.filter((c) => c.action === 'deployContainer');
-    expect(containerCalls).toHaveLength(1);
-    expect(containerCalls[0].name).toBe('runner');
+    assertEquals(containerCalls.length, 1);
+    assertEquals(containerCalls[0].name, 'runner');
 
     const serviceCalls = calls.filter((c) => c.action === 'deployService');
-    expect(serviceCalls).toHaveLength(1);
-    expect(serviceCalls[0].name).toBe('backend');
-  });
-});
+    assertEquals(serviceCalls.length, 1);
+    assertEquals(serviceCalls[0].name, 'backend');
+})

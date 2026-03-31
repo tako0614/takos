@@ -1,11 +1,11 @@
 import { Command } from 'commander';
-import chalk from 'chalk';
-import { readState, writeState, getStateDir } from '../../lib/state/state-file.js';
-import { refreshState } from '../../lib/state/refresh.js';
-import { createStateRefreshProvider } from '../../lib/state/cloudflare-refresh-provider.js';
-import { printJson } from '../../lib/cli-utils.js';
-import type { TakosState } from '../../lib/state/state-types.js';
-import { toAccessOpts } from './helpers.js';
+import { bold, dim, green, red, yellow } from '@std/fmt/colors';
+import { readState, writeState, getStateDir } from '../../lib/state/state-file.ts';
+import { refreshState } from '../../lib/state/refresh.ts';
+import { createStateRefreshProvider } from '../../lib/state/cloudflare-refresh-provider.ts';
+import { printJson } from '../../lib/cli-utils.ts';
+import type { TakosState } from '../../lib/state/state-types.ts';
+import { toAccessOpts } from './helpers.ts';
 
 export function registerStateRefreshCommand(stateCmd: Command): void {
   stateCmd
@@ -30,14 +30,14 @@ export function registerStateRefreshCommand(stateCmd: Command): void {
       }
 
       if (!state) {
-        console.log(chalk.dim('No state found. Nothing to refresh.'));
+        console.log(dim('No state found. Nothing to refresh.'));
         return;
       }
 
       const provider = createStateRefreshProvider({
         provider: state.provider,
-        accountId: options.accountId?.trim() || process.env.CLOUDFLARE_ACCOUNT_ID || process.env.CF_ACCOUNT_ID || undefined,
-        apiToken: options.apiToken?.trim() || process.env.CLOUDFLARE_API_TOKEN || process.env.CF_API_TOKEN || undefined,
+        accountId: options.accountId?.trim() || Deno.env.get('CLOUDFLARE_ACCOUNT_ID') || Deno.env.get('CF_ACCOUNT_ID') || undefined,
+        apiToken: options.apiToken?.trim() || Deno.env.get('CLOUDFLARE_API_TOKEN') || Deno.env.get('CF_API_TOKEN') || undefined,
       });
 
       // Work on a copy for dry-run; mutate the original otherwise
@@ -56,25 +56,25 @@ export function registerStateRefreshCommand(stateCmd: Command): void {
       const warnings = result.changes.filter((c) => c.action === 'warning').length;
 
       if (removed === 0 && warnings === 0) {
-        console.log(chalk.green('State is consistent — no orphaned entries found.'));
+        console.log(green('State is consistent — no orphaned entries found.'));
         return;
       }
 
       console.log('');
-      console.log(chalk.bold(`Refresh result for group "${group}":`));
+      console.log(bold(`Refresh result for group "${group}":`));
       for (const change of result.changes) {
-        const icon = change.action === 'removed' ? chalk.red('-') : chalk.yellow('!');
+        const icon = change.action === 'removed' ? red('-') : yellow('!');
         console.log(`  ${icon} ${change.key}: ${change.reason}`);
       }
       console.log('');
 
       if (options.dryRun) {
-        console.log(chalk.dim(`Dry run: ${removed} removal(s), ${warnings} warning(s). No changes written.`));
+        console.log(dim(`Dry run: ${removed} removal(s), ${warnings} warning(s). No changes written.`));
       } else if (removed === 0) {
-        console.log(chalk.yellow(`Verification completed with ${warnings} warning(s). No changes written.`));
+        console.log(yellow(`Verification completed with ${warnings} warning(s). No changes written.`));
       } else {
         await writeState(stateDir, group, state, accessOpts);
-        console.log(chalk.green(`Refreshed: ${removed} removed, ${warnings} warning(s).`));
+        console.log(green(`Refreshed: ${removed} removed, ${warnings} warning(s).`));
       }
     });
 }

@@ -20,7 +20,7 @@ export interface AuditEntry {
   requestId?: string;
 }
 
-const AUDIT_LOG_DIR = process.env.TAKOS_AUDIT_LOG_DIR || path.join(os.tmpdir(), 'takos-audit');
+const AUDIT_LOG_DIR = Deno.env.get('TAKOS_AUDIT_LOG_DIR') || path.join(os.tmpdir(), 'takos-audit');
 const AUDIT_LOG_FILE = path.join(AUDIT_LOG_DIR, 'execution-audit.jsonl');
 
 const MAX_AUDIT_FILE_SIZE = 50 * 1024 * 1024;

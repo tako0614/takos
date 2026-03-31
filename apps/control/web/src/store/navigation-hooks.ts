@@ -1,5 +1,5 @@
-import { useAtomValue, useSetAtom } from 'jotai';
-import { useCallback, useEffect, useMemo } from 'react';
+import { useAtomValue, useSetAtom } from 'solid-jotai';
+import { createEffect } from 'solid-js';
 import { getSpaceIdentifier } from '../lib/spaces';
 import { rpc, rpcJson } from '../lib/rpc';
 import { useBreakpoint } from '../hooks/useBreakpoint';
@@ -36,9 +36,9 @@ import {
  * Must be called once near the root of the tree (replaces NavigationProvider).
  */
 export function useNavigationSync() {
-  const { route, navigate, replace } = useRouter();
+  const router = useRouter();
   const { isMobile } = useBreakpoint();
-  const { t } = useI18n();
+  const i18n = useI18n();
   const spaces = useAtomValue(spacesAtom);
   const setRoute = useSetAtom(routeAtom);
   const setNavigateFn = useSetAtom(navigateFnAtom);
@@ -49,45 +49,48 @@ export function useNavigationSync() {
   const setThreadsBySpace = useSetAtom(threadsBySpaceAtom);
 
   // Sync route into atom
-  useEffect(() => {
-    setRoute(route);
-  }, [route, setRoute]);
+  createEffect(() => {
+    setRoute(router.route);
+  });
 
   // Sync router functions into atoms
-  useEffect(() => {
-    setNavigateFn(() => navigate);
-  }, [navigate, setNavigateFn]);
+  createEffect(() => {
+    setNavigateFn(() => router.navigate);
+  });
 
-  useEffect(() => {
-    setReplaceFn(() => replace);
-  }, [replace, setReplaceFn]);
+  createEffect(() => {
+    setReplaceFn(() => router.replace);
+  });
 
   // Sync translation label
-  useEffect(() => {
-    setPersonalLabel(t('personal'));
-  }, [t, setPersonalLabel]);
+  createEffect(() => {
+    setPersonalLabel(i18n.t('personal'));
+  });
 
   // Sync threads when spaces change
-  useEffect(() => {
-    if (spaces.length === 0) {
+  createEffect(() => {
+    const currentSpaces = spaces();
+    if (currentSpaces.length === 0) {
       setThreadsBySpace((prev) => (Object.keys(prev).length === 0 ? prev : {}));
       return;
     }
-    void dispatchFetchAllThreads(spaces);
-  }, [spaces, dispatchFetchAllThreads, setThreadsBySpace]);
+    void dispatchFetchAllThreads(currentSpaces);
+  });
 
   // Close mobile drawer when switching to desktop
-  useEffect(() => {
+  createEffect(() => {
     if (!isMobile) {
       setShowMobileNavDrawer(false);
     }
-  }, [isMobile, setShowMobileNavDrawer]);
+  });
 
   // Close mobile drawer on route change
-  useEffect(() => {
+  createEffect(() => {
     if (!isMobile) return;
+    // Access route to track it reactively
+    void router.route;
     setShowMobileNavDrawer(false);
-  }, [isMobile, route, setShowMobileNavDrawer]);
+  });
 }
 
 /**
@@ -95,14 +98,14 @@ export function useNavigationSync() {
  * Returns the same interface so consumers don't need to change their usage.
  */
 export function useNavigation() {
-  const { t } = useI18n();
+  const i18n = useI18n();
   const { isMobile } = useBreakpoint();
-  const { showToast } = useToast();
+  const toast = useToast();
   const { confirm } = useConfirmDialog();
 
   const route = useAtomValue(routeAtom);
-  const navigate = useAtomValue(navigateFnAtom);
-  const replace = useAtomValue(replaceFnAtom);
+  const navigateFn = useAtomValue(navigateFnAtom);
+  const replaceFn = useAtomValue(replaceFnAtom);
 
   const sidebarSpace = useAtomValue(sidebarSpaceAtom);
   const setSidebarSpace = useSetAtom(sidebarSpaceAtom);
@@ -123,57 +126,57 @@ export function useNavigation() {
   const dispatchFetchAllThreads = useSetAtom(fetchAllThreadsAtom);
 
   // Navigation helpers
-  const navigateToChat = useCallback((spaceId?: string, threadId?: string) => {
+  const navigateToChat = (spaceId?: string, threadId?: string) => {
     if (spaceId && threadId) {
-      navigate({ view: 'chat', spaceId, threadId, runId: undefined, messageId: undefined });
+      navigateFn()({ view: 'chat', spaceId, threadId, runId: undefined, messageId: undefined });
       return;
     }
     if (spaceId) {
-      navigate({ view: 'chat', spaceId, threadId: undefined, runId: undefined, messageId: undefined });
+      navigateFn()({ view: 'chat', spaceId, threadId: undefined, runId: undefined, messageId: undefined });
       return;
     }
-    navigate({ view: 'chat', threadId: undefined, runId: undefined, messageId: undefined });
-  }, [navigate]);
+    navigateFn()({ view: 'chat', threadId: undefined, runId: undefined, messageId: undefined });
+  };
 
-  const replaceToChat = useCallback((spaceId?: string) => {
+  const replaceToChat = (spaceId?: string) => {
     if (spaceId) {
-      replace({ view: 'chat', spaceId, runId: undefined, messageId: undefined });
+      replaceFn()({ view: 'chat', spaceId, runId: undefined, messageId: undefined });
       return;
     }
-    replace({ view: 'chat', runId: undefined, messageId: undefined });
-  }, [replace]);
+    replaceFn()({ view: 'chat', runId: undefined, messageId: undefined });
+  };
 
-  const navigateToPreferredChat = useCallback(() => {
-    navigateToChat(preferredSpaceId);
-  }, [navigateToChat, preferredSpaceId]);
+  const navigateToPreferredChat = () => {
+    navigateToChat(preferredSpaceId());
+  };
 
   // Sidebar space handlers
-  const handleEnterSpace = useCallback((ws: Space) => {
+  const handleEnterSpace = (ws: Space) => {
     setSidebarSpace(ws);
-    navigate({ view: 'chat', spaceId: getSpaceIdentifier(ws), threadId: undefined, runId: undefined, messageId: undefined });
-  }, [navigate, setSidebarSpace]);
+    navigateFn()({ view: 'chat', spaceId: getSpaceIdentifier(ws), threadId: undefined, runId: undefined, messageId: undefined });
+  };
 
-  const handleExitSpace = useCallback(() => {
+  const handleExitSpace = () => {
     setSidebarSpace(null);
-    replace({ view: 'apps', spaceId: preferredSpaceId });
-  }, [replace, preferredSpaceId, setSidebarSpace]);
+    replaceFn()({ view: 'apps', spaceId: preferredSpaceId() });
+  };
 
   // Thread fetching
-  const fetchAllThreads = useCallback(async (wsList?: Space[]) => {
+  const fetchAllThreads = async (wsList?: Space[]) => {
     await dispatchFetchAllThreads(wsList);
-  }, [dispatchFetchAllThreads]);
+  };
 
   // Thread CRUD
-  const handleNewThread = useCallback(() => {
-    if (!preferredSpaceId) return;
-    navigateToChat(preferredSpaceId);
-  }, [preferredSpaceId, navigateToChat]);
+  const handleNewThread = () => {
+    if (!preferredSpaceId()) return;
+    navigateToChat(preferredSpaceId());
+  };
 
-  const handleDeleteThread = useCallback(async (threadId: string) => {
+  const handleDeleteThread = async (threadId: string) => {
     const confirmed = await confirm({
-      title: t('confirmDelete'),
-      message: t('confirmDeleteThread'),
-      confirmText: t('delete'),
+      title: i18n.t('confirmDelete'),
+      message: i18n.t('confirmDeleteThread'),
+      confirmText: i18n.t('delete'),
       danger: true,
     });
     if (!confirmed) return;
@@ -188,16 +191,16 @@ export function useNavigation() {
         }
         return next;
       });
-      if (route.threadId === threadId) {
-        navigateToChat(selectedSpaceId ?? undefined);
+      if (route().threadId === threadId) {
+        navigateToChat(selectedSpaceId() ?? undefined);
       }
-      showToast('success', t('deleted'));
+      toast.showToast('success', i18n.t('deleted'));
     } catch {
-      showToast('error', t('failedToDelete'));
+      toast.showToast('error', i18n.t('failedToDelete'));
     }
-  }, [confirm, t, showToast, route.threadId, selectedSpaceId, navigateToChat, setThreadsBySpace]);
+  };
 
-  const toggleArchiveThread = useCallback(async (thread: Thread) => {
+  const toggleArchiveThread = async (thread: Thread) => {
     try {
       const endpoint = thread.status === 'archived' ? 'unarchive' : 'archive';
       const res = await (endpoint === 'archive'
@@ -206,51 +209,51 @@ export function useNavigation() {
       );
       await rpcJson(res);
       await fetchAllThreads();
-      showToast('success', endpoint === 'archive' ? (t('routingStatus_archived') || 'Archived') : (t('routingStatus_active') || 'Active'));
+      toast.showToast('success', endpoint === 'archive' ? (i18n.t('routingStatus_archived') || 'Archived') : (i18n.t('routingStatus_active') || 'Active'));
     } catch (err) {
-      showToast('error', err instanceof Error ? err.message : t('failedToSave'));
+      toast.showToast('error', err instanceof Error ? err.message : i18n.t('failedToSave'));
     }
-  }, [fetchAllThreads, showToast, t]);
+  };
 
-  const handleNewThreadCreated = useCallback((spaceId: string, thread: Thread) => {
+  const handleNewThreadCreated = (spaceId: string, thread: Thread) => {
     setThreadsBySpace((prev) => ({
       ...prev,
       [spaceId]: [thread, ...(prev[spaceId] ?? [])],
     }));
-  }, [setThreadsBySpace]);
+  };
 
-  const handleSelectThread = useCallback((thread: Thread) => {
-    for (const [spId, spThreads] of Object.entries(threadsBySpace)) {
+  const handleSelectThread = (thread: Thread) => {
+    for (const [spId, spThreads] of Object.entries(threadsBySpace())) {
       if (spThreads.some((t) => t.id === thread.id)) {
         navigateToChat(spId, thread.id);
         return;
       }
     }
-    navigateToChat(selectedSpaceId ?? undefined, thread.id);
-  }, [threadsBySpace, selectedSpaceId, navigateToChat]);
+    navigateToChat(selectedSpaceId() ?? undefined, thread.id);
+  };
 
   // Sidebar action wrapper
-  const runSidebarAction = useCallback((action: () => void | Promise<void>) => {
+  const runSidebarAction = (action: () => void | Promise<void>) => {
     if (isMobile) {
       setShowMobileNavDrawer(false);
     }
     void action();
-  }, [isMobile, setShowMobileNavDrawer]);
+  };
 
-  return useMemo(() => ({
-    route,
-    navigate,
-    replace,
-    sidebarSpace,
+  return {
+    get route() { return route(); },
+    get navigate() { return navigateFn(); },
+    get replace() { return replaceFn(); },
+    get sidebarSpace() { return sidebarSpace(); },
     setSidebarSpace,
     handleEnterSpace,
     handleExitSpace,
-    showMobileNavDrawer,
+    get showMobileNavDrawer() { return showMobileNavDrawer(); },
     setShowMobileNavDrawer,
     mobileNavDrawerId,
-    threadsBySpace,
+    get threadsBySpace() { return threadsBySpace(); },
     setThreadsBySpace,
-    allThreads,
+    get allThreads() { return allThreads(); },
     fetchAllThreads,
     handleNewThread,
     handleDeleteThread,
@@ -260,39 +263,11 @@ export function useNavigation() {
     navigateToChat,
     replaceToChat,
     navigateToPreferredChat,
-    preferredSpace,
-    preferredSpaceId,
-    routeSpaceId,
-    selectedSpaceId,
-    waitingForSpaceResolution,
+    get preferredSpace() { return preferredSpace(); },
+    get preferredSpaceId() { return preferredSpaceId(); },
+    get routeSpaceId() { return routeSpaceId(); },
+    get selectedSpaceId() { return selectedSpaceId(); },
+    get waitingForSpaceResolution() { return waitingForSpaceResolution(); },
     runSidebarAction,
-  }), [
-    route,
-    navigate,
-    replace,
-    sidebarSpace,
-    setSidebarSpace,
-    handleEnterSpace,
-    handleExitSpace,
-    showMobileNavDrawer,
-    setShowMobileNavDrawer,
-    threadsBySpace,
-    setThreadsBySpace,
-    allThreads,
-    fetchAllThreads,
-    handleNewThread,
-    handleDeleteThread,
-    toggleArchiveThread,
-    handleNewThreadCreated,
-    handleSelectThread,
-    navigateToChat,
-    replaceToChat,
-    navigateToPreferredChat,
-    preferredSpace,
-    preferredSpaceId,
-    routeSpaceId,
-    selectedSpaceId,
-    waitingForSpaceResolution,
-    runSidebarAction,
-  ]);
+  };
 }

@@ -1,45 +1,41 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { assertEquals } from 'jsr:@std/assert';
 
-const mocks = vi.hoisted(() => ({
-  getDb: vi.fn(),
-}));
+const mocks = ({
+  getDb: ((..._args: any[]) => undefined) as any,
+});
 
-vi.mock('@/db', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/db')>()),
-  getDb: mocks.getDb,
-}));
-
+// [Deno] vi.mock removed - manually stub imports from '@/db'
 import { toApiDeployment } from '@/services/deployment/store';
 import type { DeploymentRow } from '@/services/deployment/store';
 
 function createDrizzleMock() {
-  const getMock = vi.fn();
-  const allMock = vi.fn();
-  const runMock = vi.fn();
+  const getMock = ((..._args: any[]) => undefined) as any;
+  const allMock = ((..._args: any[]) => undefined) as any;
+  const runMock = ((..._args: any[]) => undefined) as any;
   const chain = {
-    from: vi.fn().mockReturnThis(),
-    where: vi.fn().mockReturnThis(),
-    set: vi.fn().mockReturnThis(),
-    values: vi.fn().mockReturnThis(),
-    returning: vi.fn().mockReturnThis(),
-    orderBy: vi.fn().mockReturnThis(),
-    limit: vi.fn().mockReturnThis(),
+    from: (function(this: any) { return this; }),
+    where: (function(this: any) { return this; }),
+    set: (function(this: any) { return this; }),
+    values: (function(this: any) { return this; }),
+    returning: (function(this: any) { return this; }),
+    orderBy: (function(this: any) { return this; }),
+    limit: (function(this: any) { return this; }),
     get: getMock,
     all: allMock,
     run: runMock,
   };
   return {
-    select: vi.fn(() => chain),
-    insert: vi.fn(() => chain),
-    update: vi.fn(() => chain),
-    delete: vi.fn(() => chain),
+    select: () => chain,
+    insert: () => chain,
+    update: () => chain,
+    delete: () => chain,
     _: { get: getMock, all: allMock, run: runMock, chain },
   };
 }
 
-describe('toApiDeployment', () => {
-  it('maps deployment row to API deployment format', () => {
-    const deploymentRow = {
+
+  Deno.test('toApiDeployment - maps deployment row to API deployment format', () => {
+  const deploymentRow = {
       id: 'dep-1',
       serviceId: 'w-1',
       accountId: 'space-1',
@@ -78,27 +74,26 @@ describe('toApiDeployment', () => {
 
     const result = toApiDeployment(deploymentRow);
 
-    expect(result.id).toBe('dep-1');
-    expect(result.service_id).toBe('w-1');
-    expect(result.worker_id).toBeUndefined();
-    expect(result.space_id).toBe('space-1');
-    expect(result.version).toBe(3);
-    expect(result.artifact_ref).toBe('worker-w-1-v3');
-    expect(result.bundle_r2_key).toBe('deployments/w-1/3/bundle.js');
-    expect(result.bundle_hash).toBe('sha256-abc');
-    expect(result.bundle_size).toBe(5000);
-    expect(result.status).toBe('success');
-    expect(result.routing_status).toBe('active');
-    expect(result.routing_weight).toBe(100);
-    expect(result.deployed_by).toBe('user-1');
-    expect(result.deploy_message).toBe('Fix bug');
-    expect(result.provider_name).toBe('workers-dispatch');
-    expect(result.idempotency_key).toBe('idem-1');
-    expect(result.is_rollback).toBe(false);
-  });
-
-  it('handles null dates', () => {
-    const deploymentRow = {
+    assertEquals(result.id, 'dep-1');
+    assertEquals(result.service_id, 'w-1');
+    assertEquals(result.worker_id, undefined);
+    assertEquals(result.space_id, 'space-1');
+    assertEquals(result.version, 3);
+    assertEquals(result.artifact_ref, 'worker-w-1-v3');
+    assertEquals(result.bundle_r2_key, 'deployments/w-1/3/bundle.js');
+    assertEquals(result.bundle_hash, 'sha256-abc');
+    assertEquals(result.bundle_size, 5000);
+    assertEquals(result.status, 'success');
+    assertEquals(result.routing_status, 'active');
+    assertEquals(result.routing_weight, 100);
+    assertEquals(result.deployed_by, 'user-1');
+    assertEquals(result.deploy_message, 'Fix bug');
+    assertEquals(result.provider_name, 'workers-dispatch');
+    assertEquals(result.idempotency_key, 'idem-1');
+    assertEquals(result.is_rollback, false);
+})
+  Deno.test('toApiDeployment - handles null dates', () => {
+  const deploymentRow = {
       id: 'dep-1',
       serviceId: 'w-1',
       accountId: 'space-1',
@@ -137,38 +132,28 @@ describe('toApiDeployment', () => {
 
     const result = toApiDeployment(deploymentRow);
 
-    expect(result.service_id).toBe('w-1');
-    expect(result.rolled_back_at).toBeNull();
-    expect(result.completed_at).toBeNull();
-    expect(result.deployed_by).toBeNull();
-  });
-});
+    assertEquals(result.service_id, 'w-1');
+    assertEquals(result.rolled_back_at, null);
+    assertEquals(result.completed_at, null);
+    assertEquals(result.deployed_by, null);
+})
 
-describe('getDeploymentById', () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-  });
-
-  it('returns null when deployment not found', async () => {
-    const drizzle = createDrizzleMock();
-    drizzle._.get.mockResolvedValue(undefined);
-    mocks.getDb.mockReturnValue(drizzle);
+  Deno.test('getDeploymentById - returns null when deployment not found', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+  const drizzle = createDrizzleMock();
+    drizzle._.get = (async () => undefined) as any;
+    mocks.getDb = (() => drizzle) as any;
 
     const { getDeploymentById } = await import('@/services/deployment/store');
     const result = await getDeploymentById({} as any, 'nonexistent');
 
-    expect(result).toBeNull();
-  });
-});
+    assertEquals(result, null);
+})
 
-describe('getDeploymentHistory', () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-  });
-
-  it('returns mapped deployments ordered by version desc', async () => {
-    const drizzle = createDrizzleMock();
-    drizzle._.all.mockResolvedValue([
+  Deno.test('getDeploymentHistory - returns mapped deployments ordered by version desc', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+  const drizzle = createDrizzleMock();
+    drizzle._.all = (async () => [
       {
         id: 'dep-2',
         serviceId: 'w-1',
@@ -205,51 +190,45 @@ describe('getDeploymentHistory', () => {
         createdAt: '2026-01-02T00:00:00.000Z',
         updatedAt: '2026-01-02T00:00:00.000Z',
       },
-    ]);
-    mocks.getDb.mockReturnValue(drizzle);
+    ]) as any;
+    mocks.getDb = (() => drizzle) as any;
 
     const { getDeploymentHistory } = await import('@/services/deployment/store');
     const result = await getDeploymentHistory({} as any, 'w-1', 10);
 
-    expect(result).toHaveLength(1);
-    expect(result[0].id).toBe('dep-2');
-    expect(result[0].version).toBe(2);
-  });
-});
+    assertEquals(result.length, 1);
+    assertEquals(result[0].id, 'dep-2');
+    assertEquals(result[0].version, 2);
+})
 
-describe('getServiceDeploymentBasics', () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-  });
-
-  it('returns exists: false when worker not found', async () => {
-    const drizzle = createDrizzleMock();
-    drizzle._.get.mockResolvedValue(undefined);
-    mocks.getDb.mockReturnValue(drizzle);
+  Deno.test('getServiceDeploymentBasics - returns exists: false when worker not found', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+  const drizzle = createDrizzleMock();
+    drizzle._.get = (async () => undefined) as any;
+    mocks.getDb = (() => drizzle) as any;
 
     const { getServiceDeploymentBasics } = await import('@/services/deployment/store');
     const result = await getServiceDeploymentBasics({} as any, 'nonexistent');
 
-    expect(result.exists).toBe(false);
-    expect(result.id).toBe('nonexistent');
-    expect(result.hostname).toBeNull();
-    expect(result.activeDeploymentId).toBeNull();
-  });
-
-  it('returns worker info when found', async () => {
-    const drizzle = createDrizzleMock();
-    drizzle._.get.mockResolvedValue({
+    assertEquals(result.exists, false);
+    assertEquals(result.id, 'nonexistent');
+    assertEquals(result.hostname, null);
+    assertEquals(result.activeDeploymentId, null);
+})
+  Deno.test('getServiceDeploymentBasics - returns worker info when found', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+  const drizzle = createDrizzleMock();
+    drizzle._.get = (async () => ({
       id: 'w-1',
       hostname: 'test.example.com',
       activeDeploymentId: 'dep-1',
-    });
-    mocks.getDb.mockReturnValue(drizzle);
+    })) as any;
+    mocks.getDb = (() => drizzle) as any;
 
     const { getServiceDeploymentBasics } = await import('@/services/deployment/store');
     const result = await getServiceDeploymentBasics({} as any, 'w-1');
 
-    expect(result.exists).toBe(true);
-    expect(result.hostname).toBe('test.example.com');
-    expect(result.activeDeploymentId).toBe('dep-1');
-  });
-});
+    assertEquals(result.exists, true);
+    assertEquals(result.hostname, 'test.example.com');
+    assertEquals(result.activeDeploymentId, 'dep-1');
+})

@@ -9,22 +9,22 @@ async function main() {
   const workerName = process.argv[2];
   if (!workerName) {
     console.error('Usage: npx tsx scripts/delete-wfp-worker.ts <worker-name>');
-    process.exit(1);
+    Deno.exit(1);
   }
 
   // Get required env vars
   // Canonical env vars: CLOUDFLARE_API_TOKEN, CLOUDFLARE_ACCOUNT_ID
   // CF_API_TOKEN and CF_ACCOUNT_ID are deprecated aliases kept for backward compatibility.
-  const token = process.env.CLOUDFLARE_API_TOKEN || process.env.CF_API_TOKEN;
-  const accountId = process.env.CLOUDFLARE_ACCOUNT_ID || process.env.CF_ACCOUNT_ID;
-  const namespace = process.env.CF_DISPATCH_NAMESPACE || 'takos-tenants';
+  const token = Deno.env.get('CLOUDFLARE_API_TOKEN') || Deno.env.get('CF_API_TOKEN');
+  const accountId = Deno.env.get('CLOUDFLARE_ACCOUNT_ID') || Deno.env.get('CF_ACCOUNT_ID');
+  const namespace = Deno.env.get('CF_DISPATCH_NAMESPACE') || 'takos-tenants';
   if (!token) {
     console.error('CLOUDFLARE_API_TOKEN not set');
-    process.exit(1);
+    Deno.exit(1);
   }
   if (!accountId) {
     console.error('CLOUDFLARE_ACCOUNT_ID not set');
-    process.exit(1);
+    Deno.exit(1);
   }
 
   console.log(`Deleting worker: ${workerName}`);
@@ -46,7 +46,7 @@ async function main() {
     console.log('Worker deleted successfully');
   } else {
     console.error('Failed to delete worker');
-    process.exit(1);
+    Deno.exit(1);
   }
 }
 

@@ -1,25 +1,16 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { Hono } from 'hono';
 import type { Env, User } from '@/types';
 import { createMockEnv } from '../../../test/integration/setup';
 
-const mocks = vi.hoisted(() => ({
-  getDb: vi.fn(),
-  requireSpaceAccess: vi.fn(),
-}));
+import { assertEquals } from 'jsr:@std/assert';
 
-vi.mock('@/db', async (importOriginal) => ({ ...(await importOriginal<typeof import('@/db')>()),
-  getDb: mocks.getDb,
-}));
-
-vi.mock('@/routes/shared/helpers', async () => {
-  const actual = await vi.importActual<typeof import('@/routes/shared/helpers')>('@/routes/shared/helpers');
-  return {
-    ...actual,
-    requireSpaceAccess: mocks.requireSpaceAccess,
-  };
+const mocks = ({
+  getDb: ((..._args: any[]) => undefined) as any,
+  requireSpaceAccess: ((..._args: any[]) => undefined) as any,
 });
 
+// [Deno] vi.mock removed - manually stub imports from '@/db'
+// [Deno] vi.mock removed - manually stub imports from '@/routes/shared/helpers'
 import { registerAppApiRoutes } from '@/routes/apps';
 
 function createApp() {
@@ -36,13 +27,10 @@ function createApp() {
   return app;
 }
 
-describe('apps detail workspace scoping', () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-  });
 
-  it('applies X-Takos-Space-Id to custom app detail lookups', async () => {
-    const selectGet = vi.fn().mockResolvedValue({
+  Deno.test('apps detail workspace scoping - applies X-Takos-Space-Id to custom app detail lookups', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+  const selectGet = (async () => ({
       id: 'app-1',
       name: 'custom-app',
       description: 'Custom app',
@@ -56,25 +44,25 @@ describe('apps detail workspace scoping', () => {
       accountName: 'Workspace 1',
       accountSlug: 'team-one',
       accountType: 'team',
-    });
+    }));
 
-    mocks.getDb.mockReturnValue({
-      select: vi.fn(() => {
+    mocks.getDb = (() => ({
+      select: () => {
         const chain: any = {
-          from: vi.fn(() => chain),
-          leftJoin: vi.fn(() => chain),
-          where: vi.fn(() => chain),
-          limit: vi.fn(() => chain),
+          from: () => chain,
+          leftJoin: () => chain,
+          where: () => chain,
+          limit: () => chain,
           get: selectGet,
         };
         return chain;
-      }),
-    });
-    mocks.requireSpaceAccess.mockResolvedValue({
+      },
+    })) as any;
+    mocks.requireSpaceAccess = (async () => ({
       workspace: {
         id: 'workspace-1',
       },
-    });
+    })) as any;
 
     const app = createApp();
     const response = await app.fetch(
@@ -87,12 +75,11 @@ describe('apps detail workspace scoping', () => {
       {} as ExecutionContext,
     );
 
-    expect(response.status).toBe(200);
-    await expect(response.json()).resolves.toEqual({
-      app: expect.objectContaining({
+    assertEquals(response.status, 200);
+    await assertEquals(await response.json(), {
+      app: ({
         id: 'app-1',
         space_id: 'team-one',
       }),
     });
-  });
-});
+})

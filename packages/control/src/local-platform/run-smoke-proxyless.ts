@@ -8,7 +8,7 @@ type ProxyUsageResponse = {
 };
 
 function executorHostBaseUrl(): string {
-  const raw = process.env.TAKOS_LOCAL_EXECUTOR_HOST_URL?.trim();
+  const raw = Deno.env.get('TAKOS_LOCAL_EXECUTOR_HOST_URL')?.trim();
   if (raw) {
     return raw.replace(/\/$/, '');
   }

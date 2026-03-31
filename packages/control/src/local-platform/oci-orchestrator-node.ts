@@ -5,7 +5,7 @@ import {
 } from './oci-orchestrator.ts';
 
 async function resolveBackend(): Promise<ContainerBackend> {
-  const backendEnv = (process.env.OCI_BACKEND ?? 'docker').trim().toLowerCase();
+  const backendEnv = (Deno.env.get('OCI_BACKEND') ?? 'docker').trim().toLowerCase();
 
   switch (backendEnv) {
     case 'k8s':

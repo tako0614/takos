@@ -1,7 +1,7 @@
 import { Command } from 'commander';
-import chalk from 'chalk';
-import { cliExit } from '../lib/command-exit.js';
-import { getConfig, isContainerMode, saveApiUrl } from '../lib/config.js';
+import { green, red } from '@std/fmt/colors';
+import { cliExit } from '../lib/command-exit.ts';
+import { getConfig, isContainerMode, saveApiUrl } from '../lib/config.ts';
 
 // Canonical source: DEFAULT_LOCAL_PORTS.web in
 // packages/control/src/local-platform/runtime-types.ts
@@ -27,7 +27,7 @@ export function resolveEndpointTarget(target: string): string {
 
 function ensureWritableConfigOrExit(): void {
   if (isContainerMode()) {
-    console.log(chalk.red('Cannot update endpoint in container mode. Use TAKOS_API_URL for this session.'));
+    console.log(red('Cannot update endpoint in container mode. Use TAKOS_API_URL for this session.'));
     cliExit(1);
   }
 }
@@ -49,11 +49,11 @@ export function registerEndpointCommand(program: Command): void {
         saveApiUrl(resolvedTarget);
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
-        console.log(chalk.red(`Failed to update endpoint: ${message}`));
+        console.log(red(`Failed to update endpoint: ${message}`));
         cliExit(1);
       }
 
-      console.log(chalk.green(`Endpoint updated: ${resolvedTarget}`));
+      console.log(green(`Endpoint updated: ${resolvedTarget}`));
     });
 
   endpoint

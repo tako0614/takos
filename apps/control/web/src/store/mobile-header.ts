@@ -1,19 +1,19 @@
-import { atom, useAtomValue, useSetAtom } from 'jotai';
-import { useEffect, type ReactNode } from 'react';
+import { atom } from 'jotai/vanilla';
+import { useAtomValue, useSetAtom } from 'solid-jotai';
+import { onMount, onCleanup } from 'solid-js';
+import type { JSX } from 'solid-js';
 
-export const mobileHeaderContentAtom = atom<ReactNode>(null);
+export const mobileHeaderContentAtom = atom<JSX.Element | null>(null);
 
 export function useMobileHeader() {
   const headerContent = useAtomValue(mobileHeaderContentAtom);
   const setHeaderContent = useSetAtom(mobileHeaderContentAtom);
-  return { headerContent, setHeaderContent };
+  return { get headerContent() { return headerContent(); }, setHeaderContent };
 }
 
 /** ビューがアンマウント時に自動クリアするヘルパーフック */
-export function useMobileHeaderContent(content: ReactNode) {
+export function useMobileHeaderContent(content: JSX.Element | null) {
   const setHeaderContent = useSetAtom(mobileHeaderContentAtom);
-  useEffect(() => {
-    setHeaderContent(content);
-    return () => setHeaderContent(null);
-  }, []);
+  onMount(() => setHeaderContent(content));
+  onCleanup(() => setHeaderContent(null));
 }

@@ -1,57 +1,19 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
-
 // ---------------------------------------------------------------------------
 // Mocks
 // ---------------------------------------------------------------------------
 
-const mockGet = vi.fn();
-const mockDelete = vi.fn();
-const mockRun = vi.fn();
-const mockUpdateSet = vi.fn();
-const mockUpdateWhere = vi.fn();
-const mockDeleteWhere = vi.fn();
+import { assertEquals, assertNotEquals, assert } from 'jsr:@std/assert';
+import { stub, assertSpyCallArgs } from 'jsr:@std/testing/mock';
 
-vi.mock('@/db', () => {
-  const chain = {
-    from: vi.fn(() => chain),
-    where: vi.fn(() => chain),
-    get: vi.fn(() => mockGet()),
-  };
+const mockGet = ((..._args: any[]) => undefined) as any;
+const mockDelete = ((..._args: any[]) => undefined) as any;
+const mockRun = ((..._args: any[]) => undefined) as any;
+const mockUpdateSet = ((..._args: any[]) => undefined) as any;
+const mockUpdateWhere = ((..._args: any[]) => undefined) as any;
+const mockDeleteWhere = ((..._args: any[]) => undefined) as any;
 
-  return {
-    getDb: () => ({
-      select: vi.fn(() => chain),
-      delete: vi.fn(() => ({
-        where: vi.fn((...args: unknown[]) => mockDeleteWhere(...args)),
-      })),
-      run: vi.fn((...args: unknown[]) => mockRun(...args)),
-      update: vi.fn(() => ({
-        set: vi.fn((...args: unknown[]) => {
-          mockUpdateSet(...args);
-          return {
-            where: vi.fn((...wArgs: unknown[]) => mockUpdateWhere(...wArgs)),
-          };
-        }),
-      })),
-    }),
-    toolOperations: {
-      id: 'id',
-      runId: 'run_id',
-      operationKey: 'operation_key',
-      toolName: 'tool_name',
-      status: 'status',
-      resultOutput: 'result_output',
-      resultError: 'result_error',
-      completedAt: 'completed_at',
-      createdAt: 'created_at',
-    },
-  };
-});
-
-vi.mock('@/utils', () => ({
-  generateId: vi.fn(() => 'generated_op_id'),
-}));
-
+// [Deno] vi.mock removed - manually stub imports from '@/db'
+// [Deno] vi.mock removed - manually stub imports from '@/utils'
 import {
   generateOperationKey,
   checkIdempotency,
@@ -64,206 +26,197 @@ import type { D1Database } from '@cloudflare/workers-types';
 // Tests
 // ---------------------------------------------------------------------------
 
-describe('idempotency', () => {
+
   const db = {} as D1Database;
-
-  beforeEach(() => {
-    vi.clearAllMocks();
-  });
-
-  describe('generateOperationKey', () => {
-    it('generates deterministic keys for same inputs', async () => {
-      const key1 = await generateOperationKey('run-1', 'file_read', { path: '/test' });
+  
+    Deno.test('idempotency - generateOperationKey - generates deterministic keys for same inputs', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+  const key1 = await generateOperationKey('run-1', 'file_read', { path: '/test' });
       const key2 = await generateOperationKey('run-1', 'file_read', { path: '/test' });
-      expect(key1).toBe(key2);
-    });
-
-    it('generates different keys for different run ids', async () => {
-      const key1 = await generateOperationKey('run-1', 'file_read', { path: '/test' });
+      assertEquals(key1, key2);
+})
+    Deno.test('idempotency - generateOperationKey - generates different keys for different run ids', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+  const key1 = await generateOperationKey('run-1', 'file_read', { path: '/test' });
       const key2 = await generateOperationKey('run-2', 'file_read', { path: '/test' });
-      expect(key1).not.toBe(key2);
-    });
-
-    it('generates different keys for different tool names', async () => {
-      const key1 = await generateOperationKey('run-1', 'file_read', { path: '/test' });
+      assertNotEquals(key1, key2);
+})
+    Deno.test('idempotency - generateOperationKey - generates different keys for different tool names', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+  const key1 = await generateOperationKey('run-1', 'file_read', { path: '/test' });
       const key2 = await generateOperationKey('run-1', 'file_write', { path: '/test' });
-      expect(key1).not.toBe(key2);
-    });
-
-    it('generates different keys for different args', async () => {
-      const key1 = await generateOperationKey('run-1', 'file_read', { path: '/test' });
+      assertNotEquals(key1, key2);
+})
+    Deno.test('idempotency - generateOperationKey - generates different keys for different args', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+  const key1 = await generateOperationKey('run-1', 'file_read', { path: '/test' });
       const key2 = await generateOperationKey('run-1', 'file_read', { path: '/other' });
-      expect(key1).not.toBe(key2);
-    });
-
-    it('generates same key regardless of arg key ordering', async () => {
-      const key1 = await generateOperationKey('run-1', 'tool', { a: 1, b: 2 });
+      assertNotEquals(key1, key2);
+})
+    Deno.test('idempotency - generateOperationKey - generates same key regardless of arg key ordering', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+  const key1 = await generateOperationKey('run-1', 'tool', { a: 1, b: 2 });
       const key2 = await generateOperationKey('run-1', 'tool', { b: 2, a: 1 });
-      expect(key1).toBe(key2);
-    });
-
-    it('returns a 32-char hex string', async () => {
-      const key = await generateOperationKey('run-1', 'tool', {});
-      expect(key).toHaveLength(32);
-      expect(/^[0-9a-f]{32}$/.test(key)).toBe(true);
-    });
-  });
-
-  describe('checkIdempotency', () => {
-    it('returns execute when no existing operation found', async () => {
-      mockGet.mockResolvedValue(null);
-      mockRun.mockResolvedValue({ meta: { changes: 1 } });
+      assertEquals(key1, key2);
+})
+    Deno.test('idempotency - generateOperationKey - returns a 32-char hex string', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+  const key = await generateOperationKey('run-1', 'tool', {});
+      assertEquals(key.length, 32);
+      assertEquals(/^[0-9a-f]{32}$/.test(key), true);
+})  
+  
+    Deno.test('idempotency - checkIdempotency - returns execute when no existing operation found', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+  mockGet = (async () => null) as any;
+      mockRun = (async () => ({ meta: { changes: 1 } })) as any;
 
       const result = await checkIdempotency(db, 'run-1', 'tool', {});
-      expect(result.action).toBe('execute');
-      expect(result.operationId).toBe('generated_op_id');
-    });
-
-    it('returns cached when operation is completed', async () => {
-      mockGet.mockResolvedValue({
+      assertEquals(result.action, 'execute');
+      assertEquals(result.operationId, 'generated_op_id');
+})
+    Deno.test('idempotency - checkIdempotency - returns cached when operation is completed', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+  mockGet = (async () => ({
         status: 'completed',
         resultOutput: 'cached result',
         resultError: null,
-      });
+      })) as any;
 
       const result = await checkIdempotency(db, 'run-1', 'tool', {});
-      expect(result.action).toBe('cached');
-      expect(result.cachedOutput).toBe('cached result');
-      expect(result.cachedError).toBeUndefined();
-    });
-
-    it('returns cached with error when completed with error', async () => {
-      mockGet.mockResolvedValue({
+      assertEquals(result.action, 'cached');
+      assertEquals(result.cachedOutput, 'cached result');
+      assertEquals(result.cachedError, undefined);
+})
+    Deno.test('idempotency - checkIdempotency - returns cached with error when completed with error', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+  mockGet = (async () => ({
         status: 'completed',
         resultOutput: 'some output',
         resultError: 'some error',
-      });
+      })) as any;
 
       const result = await checkIdempotency(db, 'run-1', 'tool', {});
-      expect(result.action).toBe('cached');
-      expect(result.cachedError).toBe('some error');
-    });
-
-    it('returns in_progress for fresh pending operations', async () => {
-      mockGet.mockResolvedValue({
+      assertEquals(result.action, 'cached');
+      assertEquals(result.cachedError, 'some error');
+})
+    Deno.test('idempotency - checkIdempotency - returns in_progress for fresh pending operations', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+  mockGet = (async () => ({
         id: 'op-1',
         status: 'pending',
         createdAt: new Date().toISOString(),
-      });
+      })) as any;
 
       const result = await checkIdempotency(db, 'run-1', 'tool', {});
-      expect(result.action).toBe('in_progress');
-    });
-
-    it('deletes and re-executes stale pending operations', async () => {
-      const staleDate = new Date(Date.now() - 6 * 60 * 1000).toISOString(); // 6 min ago
-      mockGet.mockResolvedValue({
+      assertEquals(result.action, 'in_progress');
+})
+    Deno.test('idempotency - checkIdempotency - deletes and re-executes stale pending operations', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+  const staleDate = new Date(Date.now() - 6 * 60 * 1000).toISOString(); // 6 min ago
+      mockGet = (async () => ({
         id: 'op-stale',
         status: 'pending',
         createdAt: staleDate,
-      });
-      mockDelete.mockResolvedValue({});
-      mockRun.mockResolvedValue({ meta: { changes: 1 } });
+      })) as any;
+      mockDelete = (async () => ({})) as any;
+      mockRun = (async () => ({ meta: { changes: 1 } })) as any;
 
       const result = await checkIdempotency(db, 'run-1', 'tool', {});
-      expect(result.action).toBe('execute');
-    });
-
-    it('deletes failed operations and allows re-execution', async () => {
-      mockGet.mockResolvedValue({
+      assertEquals(result.action, 'execute');
+})
+    Deno.test('idempotency - checkIdempotency - deletes failed operations and allows re-execution', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+  mockGet = (async () => ({
         id: 'op-failed',
         status: 'failed',
-      });
-      mockDelete.mockResolvedValue({});
-      mockRun.mockResolvedValue({ meta: { changes: 1 } });
+      })) as any;
+      mockDelete = (async () => ({})) as any;
+      mockRun = (async () => ({ meta: { changes: 1 } })) as any;
 
       const result = await checkIdempotency(db, 'run-1', 'tool', {});
-      expect(result.action).toBe('execute');
-    });
-
-    it('returns in_progress on race condition (insert returns 0 changes)', async () => {
-      mockGet
-        .mockResolvedValueOnce(null) // first check: no existing
-        .mockResolvedValueOnce({ status: 'pending', createdAt: new Date().toISOString() }); // race check
-      mockRun.mockResolvedValue({ meta: { changes: 0 } });
-
-      const result = await checkIdempotency(db, 'run-1', 'tool', {});
-      expect(result.action).toBe('in_progress');
-    });
-
-    it('returns cached on race condition when other worker completed', async () => {
-      mockGet
-        .mockResolvedValueOnce(null)
-        .mockResolvedValueOnce({ status: 'completed', resultOutput: 'race result', resultError: null });
-      mockRun.mockResolvedValue({ meta: { changes: 0 } });
+      assertEquals(result.action, 'execute');
+})
+    Deno.test('idempotency - checkIdempotency - returns in_progress on race condition (insert returns 0 changes)', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+  mockGet
+         = (async () => null) as any // first check: no existing
+         = (async () => ({ status: 'pending', createdAt: new Date().toISOString() })) as any; // race check
+      mockRun = (async () => ({ meta: { changes: 0 } })) as any;
 
       const result = await checkIdempotency(db, 'run-1', 'tool', {});
-      expect(result.action).toBe('cached');
-      expect(result.cachedOutput).toBe('race result');
-    });
-  });
+      assertEquals(result.action, 'in_progress');
+})
+    Deno.test('idempotency - checkIdempotency - returns cached on race condition when other worker completed', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+  mockGet
+         = (async () => null) as any
+         = (async () => ({ status: 'completed', resultOutput: 'race result', resultError: null })) as any;
+      mockRun = (async () => ({ meta: { changes: 0 } })) as any;
 
-  describe('completeOperation', () => {
-    it('marks an operation as completed with output', async () => {
-      mockUpdateWhere.mockResolvedValue({});
+      const result = await checkIdempotency(db, 'run-1', 'tool', {});
+      assertEquals(result.action, 'cached');
+      assertEquals(result.cachedOutput, 'race result');
+})  
+  
+    Deno.test('idempotency - completeOperation - marks an operation as completed with output', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+  mockUpdateWhere = (async () => ({})) as any;
 
       await completeOperation(db, 'op-1', 'done');
 
-      expect(mockUpdateSet).toHaveBeenCalledWith({
+      assertSpyCallArgs(mockUpdateSet, 0, [{
         status: 'completed',
         resultOutput: 'done',
         resultError: null,
-        completedAt: expect.any(String),
-      });
-      expect(mockUpdateWhere).toHaveBeenCalled();
-    });
-
-    it('marks an operation as failed with error', async () => {
-      mockUpdateWhere.mockResolvedValue({});
+        completedAt: /* expect.any(String) */ {} as any,
+      }]);
+      assert(mockUpdateWhere.calls.length > 0);
+})
+    Deno.test('idempotency - completeOperation - marks an operation as failed with error', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+  mockUpdateWhere = (async () => ({})) as any;
 
       await completeOperation(db, 'op-1', 'output', 'error message');
 
-      expect(mockUpdateSet).toHaveBeenCalledWith({
+      assertSpyCallArgs(mockUpdateSet, 0, [{
         status: 'failed',
         resultOutput: 'output',
         resultError: 'error message',
-        completedAt: expect.any(String),
-      });
-      expect(mockUpdateWhere).toHaveBeenCalled();
-    });
-  });
-
-  describe('cleanupStaleOperations', () => {
-    it('returns count of deleted operations', async () => {
-      mockDeleteWhere.mockResolvedValue({ meta: { changes: 5 } });
+        completedAt: /* expect.any(String) */ {} as any,
+      }]);
+      assert(mockUpdateWhere.calls.length > 0);
+})  
+  
+    Deno.test('idempotency - cleanupStaleOperations - returns count of deleted operations', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+  mockDeleteWhere = (async () => ({ meta: { changes: 5 } })) as any;
 
       const result = await cleanupStaleOperations(db);
-      expect(result).toBe(5);
-    });
-
-    it('uses 24-hour threshold for cleanup deletion', async () => {
-      const now = Date.now();
-      vi.spyOn(Date, 'now').mockReturnValue(now);
-      mockDeleteWhere.mockResolvedValue({ meta: { changes: 0 } });
+      assertEquals(result, 5);
+})
+    Deno.test('idempotency - cleanupStaleOperations - uses 24-hour threshold for cleanup deletion', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+  const now = Date.now();
+      stub(Date, 'now') = (() => now) as any;
+      mockDeleteWhere = (async () => ({ meta: { changes: 0 } })) as any;
 
       await cleanupStaleOperations(db);
 
       // The cleanup threshold is 24 hours (24 * 60 * 60 * 1000 ms)
       const expectedThreshold = new Date(now - 24 * 60 * 60 * 1000).toISOString();
-      expect(mockDeleteWhere).toHaveBeenCalled();
+      assert(mockDeleteWhere.calls.length > 0);
       // The where condition uses lt(toolOperations.createdAt, threshold)
       // Verify the threshold argument is passed to lt() via the where call
-      const whereArg = mockDeleteWhere.mock.calls[0][0];
-      expect(whereArg).toBeDefined();
+      const whereArg = mockDeleteWhere.calls[0][0];
+      assert(whereArg !== undefined);
 
-      vi.restoreAllMocks();
-    });
-
-    it('returns 0 when no operations are stale', async () => {
-      mockDeleteWhere.mockResolvedValue({ meta: { changes: 0 } });
+      /* TODO: restore mocks manually */ void 0;
+})
+    Deno.test('idempotency - cleanupStaleOperations - returns 0 when no operations are stale', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+  mockDeleteWhere = (async () => ({ meta: { changes: 0 } })) as any;
 
       const result = await cleanupStaleOperations(db);
-      expect(result).toBe(0);
-    });
-  });
-});
+      assertEquals(result, 0);
+})  

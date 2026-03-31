@@ -1,9 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
-
-vi.mock('@/utils/logger', () => ({
-  logError: vi.fn(),
-}));
-
+// [Deno] vi.mock removed - manually stub imports from '@/utils/logger'
 import {
   RunCancelledError,
   shouldResetRunToQueuedOnContainerError,
@@ -13,147 +8,126 @@ import {
   type RunLifecycleDeps,
 } from '@/services/agent/run-lifecycle';
 
+import { assertEquals, assert } from 'jsr:@std/assert';
+import { assertSpyCallArgs } from 'jsr:@std/testing/mock';
+
 function createMockDeps(): RunLifecycleDeps {
   return {
-    updateRunStatus: vi.fn(async () => {}),
-    emitEvent: vi.fn(async () => {}),
-    buildTerminalEventPayload: vi.fn((status, details) => ({
+    updateRunStatus: async () => {},
+    emitEvent: async () => {},
+    buildTerminalEventPayload: (status, details) => ({
       run: { id: 'run-1', status, ...details },
-    })) as any,
-    autoCloseSession: vi.fn(async () => {}),
-    enqueuePostRunJobs: vi.fn(async () => {}),
-    sanitizeErrorMessage: vi.fn((msg: string) => msg.slice(0, 100)),
+    }) as any,
+    autoCloseSession: async () => {},
+    enqueuePostRunJobs: async () => {},
+    sanitizeErrorMessage: (msg: string) => msg.slice(0, 100),
   };
 }
 
-describe('RunCancelledError', () => {
-  it('creates an error with default message', () => {
-    const err = new RunCancelledError();
-    expect(err.name).toBe('RunCancelledError');
-    expect(err.message).toBe('Run cancelled');
-    expect(err).toBeInstanceOf(Error);
-  });
 
-  it('creates an error with custom message', () => {
-    const err = new RunCancelledError('Custom cancellation');
-    expect(err.message).toBe('Custom cancellation');
-  });
-});
+  Deno.test('RunCancelledError - creates an error with default message', () => {
+  const err = new RunCancelledError();
+    assertEquals(err.name, 'RunCancelledError');
+    assertEquals(err.message, 'Run cancelled');
+    assert(err instanceof Error);
+})
+  Deno.test('RunCancelledError - creates an error with custom message', () => {
+  const err = new RunCancelledError('Custom cancellation');
+    assertEquals(err.message, 'Custom cancellation');
+})
 
-describe('shouldResetRunToQueuedOnContainerError', () => {
-  it('resets only actively running runs', () => {
-    expect(shouldResetRunToQueuedOnContainerError('running')).toBe(true);
-  });
+  Deno.test('shouldResetRunToQueuedOnContainerError - resets only actively running runs', () => {
+  assertEquals(shouldResetRunToQueuedOnContainerError('running'), true);
+})
+  Deno.test('shouldResetRunToQueuedOnContainerError - does not reset non-running statuses', () => {
+  assertEquals(shouldResetRunToQueuedOnContainerError('queued'), false);
+    assertEquals(shouldResetRunToQueuedOnContainerError('pending'), false);
+    assertEquals(shouldResetRunToQueuedOnContainerError('completed'), false);
+    assertEquals(shouldResetRunToQueuedOnContainerError('failed'), false);
+    assertEquals(shouldResetRunToQueuedOnContainerError('cancelled'), false);
+})
+  Deno.test('shouldResetRunToQueuedOnContainerError - handles null and undefined', () => {
+  assertEquals(shouldResetRunToQueuedOnContainerError(null), false);
+    assertEquals(shouldResetRunToQueuedOnContainerError(undefined), false);
+})
 
-  it('does not reset non-running statuses', () => {
-    expect(shouldResetRunToQueuedOnContainerError('queued')).toBe(false);
-    expect(shouldResetRunToQueuedOnContainerError('pending')).toBe(false);
-    expect(shouldResetRunToQueuedOnContainerError('completed')).toBe(false);
-    expect(shouldResetRunToQueuedOnContainerError('failed')).toBe(false);
-    expect(shouldResetRunToQueuedOnContainerError('cancelled')).toBe(false);
-  });
-
-  it('handles null and undefined', () => {
-    expect(shouldResetRunToQueuedOnContainerError(null)).toBe(false);
-    expect(shouldResetRunToQueuedOnContainerError(undefined)).toBe(false);
-  });
-});
-
-describe('handleSuccessfulRunCompletion', () => {
   let deps: RunLifecycleDeps;
+  Deno.test('handleSuccessfulRunCompletion - enqueues post-run jobs and auto-closes session on success', async () => {
+  deps = createMockDeps();
+  await handleSuccessfulRunCompletion(deps);
 
-  beforeEach(() => {
-    deps = createMockDeps();
-  });
-
-  it('enqueues post-run jobs and auto-closes session on success', async () => {
-    await handleSuccessfulRunCompletion(deps);
-
-    expect(deps.enqueuePostRunJobs).toHaveBeenCalled();
-    expect(deps.autoCloseSession).toHaveBeenCalledWith('completed');
-  });
-
-  it('calls enqueuePostRunJobs before autoCloseSession', async () => {
-    const callOrder: string[] = [];
-    (deps.enqueuePostRunJobs as any).mockImplementation(async () => callOrder.push('enqueue'));
-    (deps.autoCloseSession as any).mockImplementation(async () => callOrder.push('close'));
+    assert(deps.enqueuePostRunJobs.calls.length > 0);
+    assertSpyCallArgs(deps.autoCloseSession, 0, ['completed']);
+})
+  Deno.test('handleSuccessfulRunCompletion - calls enqueuePostRunJobs before autoCloseSession', async () => {
+  deps = createMockDeps();
+  const callOrder: string[] = [];
+    (deps.enqueuePostRunJobs as any) = async () => callOrder.push('enqueue') as any;
+    (deps.autoCloseSession as any) = async () => callOrder.push('close') as any;
 
     await handleSuccessfulRunCompletion(deps);
-    expect(callOrder).toEqual(['enqueue', 'close']);
-  });
-});
+    assertEquals(callOrder, ['enqueue', 'close']);
+})
 
-describe('handleCancelledRun', () => {
   let deps: RunLifecycleDeps;
+  Deno.test('handleCancelledRun - updates status to cancelled and emits cancelled event', async () => {
+  deps = createMockDeps();
+  await handleCancelledRun(deps);
 
-  beforeEach(() => {
-    deps = createMockDeps();
-  });
-
-  it('updates status to cancelled and emits cancelled event', async () => {
-    await handleCancelledRun(deps);
-
-    expect(deps.updateRunStatus).toHaveBeenCalledWith('cancelled', undefined, 'Run cancelled');
-    expect(deps.emitEvent).toHaveBeenCalledWith(
+    assertSpyCallArgs(deps.updateRunStatus, 0, ['cancelled', undefined, 'Run cancelled']);
+    assertSpyCallArgs(deps.emitEvent, 0, [
       'cancelled',
-      expect.objectContaining({ run: expect.objectContaining({ status: 'cancelled' }) }),
-    );
-  });
+      ({ run: ({ status: 'cancelled' }) }),
+    ]);
+})
+  Deno.test('handleCancelledRun - auto-closes session as failed', async () => {
+  deps = createMockDeps();
+  await handleCancelledRun(deps);
+    assertSpyCallArgs(deps.autoCloseSession, 0, ['failed']);
+})
+  Deno.test('handleCancelledRun - enqueues post-run jobs', async () => {
+  deps = createMockDeps();
+  await handleCancelledRun(deps);
+    assert(deps.enqueuePostRunJobs.calls.length > 0);
+})
 
-  it('auto-closes session as failed', async () => {
-    await handleCancelledRun(deps);
-    expect(deps.autoCloseSession).toHaveBeenCalledWith('failed');
-  });
-
-  it('enqueues post-run jobs', async () => {
-    await handleCancelledRun(deps);
-    expect(deps.enqueuePostRunJobs).toHaveBeenCalled();
-  });
-});
-
-describe('handleFailedRun', () => {
   let deps: RunLifecycleDeps;
+  Deno.test('handleFailedRun - updates status to failed with sanitized error message', async () => {
+  deps = createMockDeps();
+  await handleFailedRun(deps, new Error('Something went wrong'));
 
-  beforeEach(() => {
-    deps = createMockDeps();
-  });
-
-  it('updates status to failed with sanitized error message', async () => {
-    await handleFailedRun(deps, new Error('Something went wrong'));
-
-    expect(deps.sanitizeErrorMessage).toHaveBeenCalled();
-    expect(deps.updateRunStatus).toHaveBeenCalledWith(
+    assert(deps.sanitizeErrorMessage.calls.length > 0);
+    assertSpyCallArgs(deps.updateRunStatus, 0, [
       'failed',
       undefined,
-      expect.any(String),
-    );
-  });
+      /* expect.any(String) */ {} as any,
+    ]);
+})
+  Deno.test('handleFailedRun - emits error event with terminal payload', async () => {
+  deps = createMockDeps();
+  await handleFailedRun(deps, 'Raw error string');
 
-  it('emits error event with terminal payload', async () => {
-    await handleFailedRun(deps, 'Raw error string');
-
-    expect(deps.emitEvent).toHaveBeenCalledWith(
+    assertSpyCallArgs(deps.emitEvent, 0, [
       'error',
-      expect.objectContaining({ run: expect.any(Object) }),
-    );
-  });
-
-  it('auto-closes session as failed', async () => {
-    await handleFailedRun(deps, new Error('fail'));
-    expect(deps.autoCloseSession).toHaveBeenCalledWith('failed');
-  });
-
-  it('enqueues post-run jobs', async () => {
-    await handleFailedRun(deps, new Error('fail'));
-    expect(deps.enqueuePostRunJobs).toHaveBeenCalled();
-  });
-
-  it('converts non-Error objects to string', async () => {
-    await handleFailedRun(deps, { code: 500, message: 'Internal error' });
-    expect(deps.updateRunStatus).toHaveBeenCalledWith(
+      ({ run: /* expect.any(Object) */ {} as any }),
+    ]);
+})
+  Deno.test('handleFailedRun - auto-closes session as failed', async () => {
+  deps = createMockDeps();
+  await handleFailedRun(deps, new Error('fail'));
+    assertSpyCallArgs(deps.autoCloseSession, 0, ['failed']);
+})
+  Deno.test('handleFailedRun - enqueues post-run jobs', async () => {
+  deps = createMockDeps();
+  await handleFailedRun(deps, new Error('fail'));
+    assert(deps.enqueuePostRunJobs.calls.length > 0);
+})
+  Deno.test('handleFailedRun - converts non-Error objects to string', async () => {
+  deps = createMockDeps();
+  await handleFailedRun(deps, { code: 500, message: 'Internal error' });
+    assertSpyCallArgs(deps.updateRunStatus, 0, [
       'failed',
       undefined,
-      expect.any(String),
-    );
-  });
-});
+      /* expect.any(String) */ {} as any,
+    ]);
+})

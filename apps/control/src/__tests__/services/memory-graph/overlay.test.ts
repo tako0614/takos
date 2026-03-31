@@ -1,15 +1,12 @@
-import { describe, expect, it, beforeEach } from 'vitest';
 import { RunOverlay } from '@/services/memory-graph/overlay';
 
-describe('RunOverlay', () => {
+
+import { assertEquals, assert } from 'jsr:@std/assert';
+
   let overlay: RunOverlay;
-
-  beforeEach(() => {
-    overlay = new RunOverlay();
-  });
-
-  it('adds and retrieves a claim', () => {
-    const claim = overlay.addClaim({
+  Deno.test('RunOverlay - adds and retrieves a claim', () => {
+  overlay = new RunOverlay();
+  const claim = overlay.addClaim({
       id: 'c1',
       accountId: 'acct1',
       claimType: 'fact',
@@ -19,14 +16,14 @@ describe('RunOverlay', () => {
       confidence: 0.9,
     });
 
-    expect(claim.id).toBe('c1');
-    expect(claim.confidence).toBe(0.9);
-    expect(overlay.getClaim('c1')).toBeDefined();
-    expect(overlay.claimCount).toBe(1);
-  });
-
-  it('adds and retrieves evidence', () => {
-    overlay.addClaim({
+    assertEquals(claim.id, 'c1');
+    assertEquals(claim.confidence, 0.9);
+    assert(overlay.getClaim('c1') !== undefined);
+    assertEquals(overlay.claimCount, 1);
+})
+  Deno.test('RunOverlay - adds and retrieves evidence', () => {
+  overlay = new RunOverlay();
+  overlay.addClaim({
       id: 'c1',
       accountId: 'acct1',
       claimType: 'fact',
@@ -45,13 +42,13 @@ describe('RunOverlay', () => {
       trust: 0.9,
     });
 
-    expect(ev.id).toBe('e1');
-    expect(overlay.getEvidenceForClaim('c1')).toHaveLength(1);
-    expect(overlay.evidenceCount).toBe(1);
-  });
-
-  it('truncates evidence content to 2KB', () => {
-    overlay.addClaim({
+    assertEquals(ev.id, 'e1');
+    assertEquals(overlay.getEvidenceForClaim('c1').length, 1);
+    assertEquals(overlay.evidenceCount, 1);
+})
+  Deno.test('RunOverlay - truncates evidence content to 2KB', () => {
+  overlay = new RunOverlay();
+  overlay.addClaim({
       id: 'c1',
       accountId: 'acct1',
       claimType: 'fact',
@@ -70,11 +67,11 @@ describe('RunOverlay', () => {
       content: longContent,
     });
 
-    expect(ev.content.length).toBe(2048);
-  });
-
-  it('evicts lowest-confidence claim when at capacity', () => {
-    // Fill to max (200)
+    assertEquals(ev.content.length, 2048);
+})
+  Deno.test('RunOverlay - evicts lowest-confidence claim when at capacity', () => {
+  overlay = new RunOverlay();
+  // Fill to max (200)
     for (let i = 0; i < 200; i++) {
       overlay.addClaim({
         id: `c${i}`,
@@ -86,7 +83,7 @@ describe('RunOverlay', () => {
         confidence: i === 0 ? 0.01 : 0.5, // first one has lowest confidence
       });
     }
-    expect(overlay.claimCount).toBe(200);
+    assertEquals(overlay.claimCount, 200);
 
     // Add one more — should evict the lowest confidence
     overlay.addClaim({
@@ -99,13 +96,13 @@ describe('RunOverlay', () => {
       confidence: 0.8,
     });
 
-    expect(overlay.claimCount).toBe(200);
-    expect(overlay.getClaim('c0')).toBeUndefined(); // evicted
-    expect(overlay.getClaim('c_new')).toBeDefined();
-  });
-
-  it('searches claims by subject/predicate/object', () => {
-    overlay.addClaim({
+    assertEquals(overlay.claimCount, 200);
+    assertEquals(overlay.getClaim('c0'), undefined); // evicted
+    assert(overlay.getClaim('c_new') !== undefined);
+})
+  Deno.test('RunOverlay - searches claims by subject/predicate/object', () => {
+  overlay = new RunOverlay();
+  overlay.addClaim({
       id: 'c1',
       accountId: 'acct1',
       claimType: 'fact',
@@ -122,13 +119,13 @@ describe('RunOverlay', () => {
       object: 'frontend framework',
     });
 
-    expect(overlay.searchClaims('React')).toHaveLength(1);
-    expect(overlay.searchClaims('frontend')).toHaveLength(2);
-    expect(overlay.searchClaims('nonexistent')).toHaveLength(0);
-  });
-
-  it('clears all data', () => {
-    overlay.addClaim({
+    assertEquals(overlay.searchClaims('React').length, 1);
+    assertEquals(overlay.searchClaims('frontend').length, 2);
+    assertEquals(overlay.searchClaims('nonexistent').length, 0);
+})
+  Deno.test('RunOverlay - clears all data', () => {
+  overlay = new RunOverlay();
+  overlay.addClaim({
       id: 'c1',
       accountId: 'acct1',
       claimType: 'fact',
@@ -146,7 +143,6 @@ describe('RunOverlay', () => {
     });
 
     overlay.clear();
-    expect(overlay.claimCount).toBe(0);
-    expect(overlay.evidenceCount).toBe(0);
-  });
-});
+    assertEquals(overlay.claimCount, 0);
+    assertEquals(overlay.evidenceCount, 0);
+})

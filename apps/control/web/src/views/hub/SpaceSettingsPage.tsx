@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { createSignal } from 'solid-js';
 import { SpaceSettingsSection } from './SpaceSettingsSection';
 import type { Space } from '../../types';
 
@@ -15,13 +15,13 @@ export function SpaceSettingsPage({
   onSpaceDeleted,
   onSpaceUpdated,
 }: SpaceSettingsPageProps) {
-  const [selectedSpaceId, setSelectedSpaceId] = useState<string | null>(initialSpaceId);
+  const [selectedSpaceId, setSelectedSpaceId] = createSignal<string | null>(initialSpaceId);
 
   return (
-    <div className="flex-1 overflow-y-auto">
+    <div class="flex-1 overflow-y-auto">
       <SpaceSettingsSection
         spaces={spaces}
-        selectedSpaceId={selectedSpaceId}
+        selectedSpaceId={selectedSpaceId()}
         setSelectedSpaceId={setSelectedSpaceId}
         onSpaceDeleted={onSpaceDeleted}
         onSpaceUpdated={onSpaceUpdated}

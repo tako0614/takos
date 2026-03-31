@@ -1,4 +1,4 @@
-import { ALLOWED_COMMANDS_SET, COMMAND_BLOCKLIST_PATTERNS } from '../shared/config.js';
+import { ALLOWED_COMMANDS_SET, COMMAND_BLOCKLIST_PATTERNS } from '../shared/config.ts';
 import { createLogger } from 'takos-common/logger';
 
 /**

@@ -1,66 +1,51 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { D1Database, R2Bucket } from '@cloudflare/workers-types';
 import type { Env } from '@/types';
 
-const mocks = vi.hoisted(() => ({
-  getWorkspaceModelSettings: vi.fn(),
-  LLMClient: vi.fn(),
-  getProviderFromModel: vi.fn(),
-  getDb: vi.fn(),
-  resolveRef: vi.fn(),
-  getCommitData: vi.fn(),
-  flattenTree: vi.fn(),
-  getBlob: vi.fn(),
-}));
+import { assertEquals } from 'jsr:@std/assert';
 
-vi.mock('@/services/identity/spaces', () => ({
-  getWorkspaceModelSettings: mocks.getWorkspaceModelSettings,
-}));
+const mocks = ({
+  getWorkspaceModelSettings: ((..._args: any[]) => undefined) as any,
+  LLMClient: ((..._args: any[]) => undefined) as any,
+  getProviderFromModel: ((..._args: any[]) => undefined) as any,
+  getDb: ((..._args: any[]) => undefined) as any,
+  resolveRef: ((..._args: any[]) => undefined) as any,
+  getCommitData: ((..._args: any[]) => undefined) as any,
+  flattenTree: ((..._args: any[]) => undefined) as any,
+  getBlob: ((..._args: any[]) => undefined) as any,
+});
 
-vi.mock('@/services/agent/llm', () => ({
-  LLMClient: mocks.LLMClient,
-  getProviderFromModel: mocks.getProviderFromModel,
-}));
-
-vi.mock('@/db', async (importOriginal) => ({ ...(await importOriginal<typeof import('@/db')>()),
-  getDb: mocks.getDb,
-}));
-
-vi.mock('@/services/git-smart', () => ({
-  resolveRef: mocks.resolveRef,
-  getCommitData: mocks.getCommitData,
-  flattenTree: mocks.flattenTree,
-  getBlob: mocks.getBlob,
-}));
-
+// [Deno] vi.mock removed - manually stub imports from '@/services/identity/spaces'
+// [Deno] vi.mock removed - manually stub imports from '@/services/agent/llm'
+// [Deno] vi.mock removed - manually stub imports from '@/db'
+// [Deno] vi.mock removed - manually stub imports from '@/services/git-smart'
 import { runAiReview } from '@/services/pull-requests/ai-review';
 
 function createDrizzleMock() {
-  const getMock = vi.fn();
-  const allMock = vi.fn();
-  const runMock = vi.fn();
+  const getMock = ((..._args: any[]) => undefined) as any;
+  const allMock = ((..._args: any[]) => undefined) as any;
+  const runMock = ((..._args: any[]) => undefined) as any;
   const chain = {
-    from: vi.fn().mockReturnThis(),
-    where: vi.fn().mockReturnThis(),
-    set: vi.fn().mockReturnThis(),
-    values: vi.fn().mockReturnThis(),
-    returning: vi.fn().mockReturnThis(),
-    orderBy: vi.fn().mockReturnThis(),
-    limit: vi.fn().mockReturnThis(),
-    offset: vi.fn().mockReturnThis(),
-    leftJoin: vi.fn().mockReturnThis(),
-    innerJoin: vi.fn().mockReturnThis(),
-    onConflictDoUpdate: vi.fn().mockReturnThis(),
-    onConflictDoNothing: vi.fn().mockReturnThis(),
+    from: (function(this: any) { return this; }),
+    where: (function(this: any) { return this; }),
+    set: (function(this: any) { return this; }),
+    values: (function(this: any) { return this; }),
+    returning: (function(this: any) { return this; }),
+    orderBy: (function(this: any) { return this; }),
+    limit: (function(this: any) { return this; }),
+    offset: (function(this: any) { return this; }),
+    leftJoin: (function(this: any) { return this; }),
+    innerJoin: (function(this: any) { return this; }),
+    onConflictDoUpdate: (function(this: any) { return this; }),
+    onConflictDoNothing: (function(this: any) { return this; }),
     get: getMock,
     all: allMock,
     run: runMock,
   };
   return {
-    select: vi.fn(() => chain),
-    insert: vi.fn(() => chain),
-    update: vi.fn(() => chain),
-    delete: vi.fn(() => chain),
+    select: () => chain,
+    insert: () => chain,
+    update: () => chain,
+    delete: () => chain,
     _: { get: getMock, all: allMock, run: runMock, chain },
   };
 }
@@ -75,19 +60,16 @@ function createEnv(): Env {
   } as unknown as Env;
 }
 
-describe('runAiReview contract alignment (issue 004)', () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-  });
 
-  it('accepts db pullRequest shape and returns snake_case review/comment DTOs', async () => {
-    const db = createDrizzleMock();
-    mocks.getDb.mockReturnValue(db);
-    mocks.getWorkspaceModelSettings.mockResolvedValue(null);
-    mocks.getProviderFromModel.mockReturnValue('openai');
+  Deno.test('runAiReview contract alignment (issue 004) - accepts db pullRequest shape and returns snake_case review/comment DTOs', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+  const db = createDrizzleMock();
+    mocks.getDb = (() => db) as any;
+    mocks.getWorkspaceModelSettings = (async () => null) as any;
+    mocks.getProviderFromModel = (() => 'openai') as any;
 
-    mocks.LLMClient.mockImplementation(() => ({
-      chat: vi.fn().mockResolvedValue({
+    mocks.LLMClient = () => ({
+      chat: (async () => ({
         content: JSON.stringify({
           status: 'changes_requested',
           summary: 'Needs changes',
@@ -100,10 +82,10 @@ describe('runAiReview contract alignment (issue 004)', () => {
             },
           ],
         }),
-      }),
-    }));
+      })),
+    }) as any;
 
-    mocks.resolveRef.mockImplementation(async (_db: D1Database, _repoId: string, ref: string) => {
+    mocks.resolveRef = async (_db: D1Database, _repoId: string, ref: string) => {
       if (ref === 'main') {
         return 'sha-base';
       }
@@ -111,9 +93,9 @@ describe('runAiReview contract alignment (issue 004)', () => {
         return 'sha-head';
       }
       return null;
-    });
+    } as any;
 
-    mocks.getCommitData.mockImplementation(async (_bucket: R2Bucket, sha: string) => {
+    mocks.getCommitData = async (_bucket: R2Bucket, sha: string) => {
       if (sha === 'sha-base') {
         return { tree: 'tree-base' };
       }
@@ -121,9 +103,9 @@ describe('runAiReview contract alignment (issue 004)', () => {
         return { tree: 'tree-head' };
       }
       return null;
-    });
+    } as any;
 
-    mocks.flattenTree.mockImplementation(async (_bucket: R2Bucket, tree: string) => {
+    mocks.flattenTree = async (_bucket: R2Bucket, tree: string) => {
       if (tree === 'tree-base') {
         return [{ path: 'src/a.ts', sha: 'oid-base' }];
       }
@@ -131,9 +113,9 @@ describe('runAiReview contract alignment (issue 004)', () => {
         return [{ path: 'src/a.ts', sha: 'oid-head' }];
       }
       return [];
-    });
+    } as any;
 
-    mocks.getBlob.mockImplementation(async (_bucket: R2Bucket, oid: string) => {
+    mocks.getBlob = async (_bucket: R2Bucket, oid: string) => {
       if (oid === 'oid-base') {
         return new TextEncoder().encode('old');
       }
@@ -141,13 +123,13 @@ describe('runAiReview contract alignment (issue 004)', () => {
         return new TextEncoder().encode('new');
       }
       return null;
-    });
+    } as any;
 
     // Drizzle call sequence in runAiReview:
     // 1. insert(prReviews).values({...}).returning().get() -> review record
     // 2. insert(prComments).values({...}) -> for each comment (no terminal needed)
     // 3. select().from(prComments).where(...).all() -> comment records
-    db._.get.mockResolvedValueOnce({
+    db._.get = (async () => ({
       id: 'rev-1',
       prId: 'pr-1',
       reviewerType: 'ai',
@@ -156,9 +138,9 @@ describe('runAiReview contract alignment (issue 004)', () => {
       body: 'Needs changes',
       analysis: '{"status":"changes_requested"}',
       createdAt: '2026-02-10T00:00:00.000Z',
-    });
+    })) as any;
 
-    db._.all.mockResolvedValueOnce([
+    db._.all = (async () => [
       {
         id: 'cmt-1',
         prId: 'pr-1',
@@ -169,7 +151,7 @@ describe('runAiReview contract alignment (issue 004)', () => {
         lineNumber: 10,
         createdAt: '2026-02-10T00:00:00.000Z',
       },
-    ]);
+    ]) as any;
 
     const result = await runAiReview({
       env: createEnv(),
@@ -185,15 +167,14 @@ describe('runAiReview contract alignment (issue 004)', () => {
       spaceId: 'ws-1',
     });
 
-    expect(result.review.pr_id).toBe('pr-1');
-    expect(result.review.reviewer_type).toBe('ai');
-    expect(result.review.created_at).toBe('2026-02-10T00:00:00.000Z');
-    expect('prId' in (result.review as unknown as Record<string, unknown>)).toBe(false);
+    assertEquals(result.review.pr_id, 'pr-1');
+    assertEquals(result.review.reviewer_type, 'ai');
+    assertEquals(result.review.created_at, '2026-02-10T00:00:00.000Z');
+    assertEquals('prId' in (result.review as unknown as Record<string, unknown>), false);
 
-    expect(result.comments).toHaveLength(1);
-    expect(result.comments[0].author_type).toBe('ai');
-    expect(result.comments[0].file_path).toBe('src/a.ts');
-    expect(result.comments[0].line_number).toBe(10);
-    expect('filePath' in (result.comments[0] as unknown as Record<string, unknown>)).toBe(false);
-  });
-});
+    assertEquals(result.comments.length, 1);
+    assertEquals(result.comments[0].author_type, 'ai');
+    assertEquals(result.comments[0].file_path, 'src/a.ts');
+    assertEquals(result.comments[0].line_number, 10);
+    assertEquals('filePath' in (result.comments[0] as unknown as Record<string, unknown>), false);
+})

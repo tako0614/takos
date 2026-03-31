@@ -1,5 +1,5 @@
 {
-  "name": "@takos/common",
+  "name": "takos-common",
   "version": "1.0.0",
   "exports": {
     ".": "./src/index.ts",
@@ -11,8 +11,10 @@
     "./logger": "./src/logger.ts",
     "./env-parse": "./src/env-parse.ts"
   },
-  "publish": {
-    "include": ["src/", "LICENSE", "README.md"],
-    "exclude": ["**/*.test.ts", "**/*.spec.ts"]
+  "imports": {
+    "hono": "npm:hono@^4.12.4"
+  },
+  "tasks": {
+    "test": "deno test --allow-all src/"
   }
 }

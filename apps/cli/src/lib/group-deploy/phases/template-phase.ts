@@ -11,12 +11,12 @@ import path from 'node:path';
 import type {
   GroupDeployOptions,
   GroupDeployResult,
-} from '../deploy-models.js';
-import { execCommand } from '../cloudflare-utils.js';
+} from '../deploy-models.ts';
+import { execCommand } from '../cloudflare-utils.ts';
 import {
   buildTemplateContext,
   resolveTemplateString,
-} from '../template.js';
+} from '../template.ts';
 
 export async function resolveAndInjectTemplates(
   manifest: GroupDeployOptions['manifest'],

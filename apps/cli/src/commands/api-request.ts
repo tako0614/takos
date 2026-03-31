@@ -1,18 +1,18 @@
-import chalk from 'chalk';
+import { green, red } from '@std/fmt/colors';
 import { writeFileSync } from 'fs';
-import { cliExit } from '../lib/command-exit.js';
-import { getApiRequestTimeoutMs, getConfig } from '../lib/config.js';
-import { createAuthHeaders } from '../lib/api.js';
-import { parseKeyValue } from './api-request-body.js';
-import { prepareBody } from './api-request-body.js';
-import { parseBodyByContentType, printSuccess } from './api-request-output.js';
+import { cliExit } from '../lib/command-exit.ts';
+import { getApiRequestTimeoutMs, getConfig } from '../lib/config.ts';
+import { createAuthHeaders } from '../lib/api.ts';
+import { parseKeyValue } from './api-request-body.ts';
+import { prepareBody } from './api-request-body.ts';
+import { parseBodyByContentType, printSuccess } from './api-request-output.ts';
 
 // Re-export everything from sub-modules for backward compatibility
-export { parseKeyValue, prepareBody } from './api-request-body.js';
-export type { BodyPreparation } from './api-request-body.js';
-export { parseSseEventBlock } from './api-request-sse.js';
-export type { ParsedSseEvent } from './api-request-sse.js';
-export { tryParseJson } from './api-request-output.js';
+export { parseKeyValue, prepareBody } from './api-request-body.ts';
+export type { BodyPreparation } from './api-request-body.ts';
+export { parseSseEventBlock } from './api-request-sse.ts';
+export type { ParsedSseEvent } from './api-request-sse.ts';
+export { tryParseJson } from './api-request-output.ts';
 
 export type ApiCommandOptions = {
   query?: string[];
@@ -147,7 +147,7 @@ export function createAuthorizedRequest(path: string, options: RequestScopeOptio
 export async function executeApiRequest(methodInput: string, path: string, options: ApiCommandOptions): Promise<void> {
   const method = methodInput.toUpperCase();
   if (!isKnownHttpMethod(method)) {
-    console.log(chalk.red(`Unsupported method: ${methodInput}`));
+    console.log(red(`Unsupported method: ${methodInput}`));
     cliExit(1);
   }
 
@@ -173,11 +173,11 @@ export async function executeApiRequest(methodInput: string, path: string, optio
   } catch (error) {
     clearTimeout(timeout);
     if (error instanceof Error && error.name === 'AbortError') {
-      console.log(chalk.red(`Request timed out after ${timeoutMs}ms`));
+      console.log(red(`Request timed out after ${timeoutMs}ms`));
       cliExit(1);
     }
 
-    console.log(chalk.red(`Network error: ${String(error)}`));
+    console.log(red(`Network error: ${String(error)}`));
     cliExit(1);
   }
 
@@ -200,7 +200,7 @@ export async function executeApiRequest(methodInput: string, path: string, optio
     if (options.json) {
       console.log(JSON.stringify(report));
     } else {
-      console.log(chalk.green(`Saved response to ${options.output} (${bodyBuffer.length} bytes)`));
+      console.log(green(`Saved response to ${options.output} (${bodyBuffer.length} bytes)`));
     }
 
     if (!response.ok) {
@@ -230,12 +230,12 @@ export async function executeApiRequest(methodInput: string, path: string, optio
 
   if (!response.ok) {
     if (typeof parsedBody === 'string') {
-      console.log(chalk.red(parsedBody));
+      console.log(red(parsedBody));
     } else if (parsedBody && typeof parsedBody === 'object' && 'error' in parsedBody) {
       const errorMessage = String((parsedBody as Record<string, unknown>).error);
-      console.log(chalk.red(errorMessage));
+      console.log(red(errorMessage));
     } else {
-      console.log(chalk.red(`HTTP ${response.status} ${response.statusText}`));
+      console.log(red(`HTTP ${response.status} ${response.statusText}`));
     }
     cliExit(1);
   }

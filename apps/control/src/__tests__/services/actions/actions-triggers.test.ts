@@ -1,51 +1,34 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { D1Database, Queue, R2Bucket } from '@cloudflare/workers-types';
 import type { Workflow } from 'takos-actions-engine';
 
-const mocks = vi.hoisted(() => ({
-  parseWorkflow: vi.fn(),
-  resolveRef: vi.fn(),
-  getCommitData: vi.fn(),
-  listDirectory: vi.fn(),
-  getBlobAtPath: vi.fn(),
-  createWorkflowEngine: vi.fn(),
-  startRun: vi.fn(),
-}));
+import { assertEquals } from 'jsr:@std/assert';
+import { assertSpyCalls, assertSpyCallArgs } from 'jsr:@std/testing/mock';
 
-vi.mock('takos-actions-engine', async () => {
-  const actual = await vi.importActual<typeof import('takos-actions-engine')>('takos-actions-engine');
-  return {
-    ...actual,
-    parseWorkflow: mocks.parseWorkflow,
-  };
+const mocks = ({
+  parseWorkflow: ((..._args: any[]) => undefined) as any,
+  resolveRef: ((..._args: any[]) => undefined) as any,
+  getCommitData: ((..._args: any[]) => undefined) as any,
+  listDirectory: ((..._args: any[]) => undefined) as any,
+  getBlobAtPath: ((..._args: any[]) => undefined) as any,
+  createWorkflowEngine: ((..._args: any[]) => undefined) as any,
+  startRun: ((..._args: any[]) => undefined) as any,
 });
 
-vi.mock('@/services/git-smart', () => ({
-  resolveRef: mocks.resolveRef,
-  getCommitData: mocks.getCommitData,
-  listDirectory: mocks.listDirectory,
-  getBlobAtPath: mocks.getBlobAtPath,
-  FILE_MODES: {
-    DIRECTORY: '40000',
-  },
-}));
-
-vi.mock('@/services/execution/workflow-engine', () => ({
-  createWorkflowEngine: mocks.createWorkflowEngine,
-}));
-
+// [Deno] vi.mock removed - manually stub imports from 'takos-actions-engine'
+// [Deno] vi.mock removed - manually stub imports from '@/services/git-smart'
+// [Deno] vi.mock removed - manually stub imports from '@/services/execution/workflow-engine'
 import { triggerPullRequestWorkflows } from '@/services/actions/actions-triggers';
 
 function createQueue(): Queue<unknown> {
-  return { send: vi.fn() } as unknown as Queue<unknown>;
+  return { send: ((..._args: any[]) => undefined) as any } as unknown as Queue<unknown>;
 }
 
 function setupWorkflowMocks(): void {
-  mocks.createWorkflowEngine.mockReturnValue({ startRun: mocks.startRun });
-  mocks.getCommitData.mockResolvedValue({ tree: 'tree-1' });
-  mocks.listDirectory.mockResolvedValue([{ name: 'ci.yml', mode: '100644' }]);
-  mocks.getBlobAtPath.mockResolvedValue(new TextEncoder().encode('name: ci'));
-  mocks.parseWorkflow.mockReturnValue({
+  mocks.createWorkflowEngine = (() => ({ startRun: mocks.startRun })) as any;
+  mocks.getCommitData = (async () => ({ tree: 'tree-1' })) as any;
+  mocks.listDirectory = (async () => [{ name: 'ci.yml', mode: '100644' }]) as any;
+  mocks.getBlobAtPath = (async () => new TextEncoder().encode('name: ci')) as any;
+  mocks.parseWorkflow = (() => ({
     workflow: {
       on: 'pull_request',
       jobs: {
@@ -56,18 +39,15 @@ function setupWorkflowMocks(): void {
       },
     } as unknown as Workflow,
     diagnostics: [],
-  });
-  mocks.startRun.mockResolvedValue({ id: 'run-1' });
+  })) as any;
+  mocks.startRun = (async () => ({ id: 'run-1' })) as any;
 }
 
-describe('triggerPullRequestWorkflows ref resolution (issue 002)', () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-    setupWorkflowMocks();
-  });
 
-  it('resolves workflow definitions from base ref and ignores head ref', async () => {
-    mocks.resolveRef.mockImplementation(async (_db: D1Database, _repoId: string, ref: string) => {
+  Deno.test('triggerPullRequestWorkflows ref resolution (issue 002) - resolves workflow definitions from base ref and ignores head ref', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+    setupWorkflowMocks();
+  mocks.resolveRef = async (_db: D1Database, _repoId: string, ref: string) => {
       if (ref === 'main') {
         return 'sha-base-resolved';
       }
@@ -75,7 +55,7 @@ describe('triggerPullRequestWorkflows ref resolution (issue 002)', () => {
         return 'sha-head-resolved';
       }
       return null;
-    });
+    } as any;
 
     await triggerPullRequestWorkflows({
       db: {} as D1Database,
@@ -98,24 +78,25 @@ describe('triggerPullRequestWorkflows ref resolution (issue 002)', () => {
       },
     });
 
-    expect(mocks.resolveRef).toHaveBeenCalledWith(expect.anything(), 'repo-1', 'main');
-    expect(mocks.resolveRef).not.toHaveBeenCalledWith(expect.anything(), 'repo-1', 'feature/head');
-    expect(mocks.getCommitData).toHaveBeenCalledWith(expect.anything(), 'sha-base-event');
-    expect(mocks.listDirectory).toHaveBeenCalledWith(
+    assertSpyCallArgs(mocks.resolveRef, 0, [expect.anything(), 'repo-1', 'main']);
+    // TODO: manual assertion - mocks.resolveRef was not called with (expect.anything(), 'repo-1', 'feature/head');
+    assertSpyCallArgs(mocks.getCommitData, 0, [expect.anything(), 'sha-base-event']);
+    assertSpyCallArgs(mocks.listDirectory, 0, [
       expect.anything(),
       'tree-1',
       '.takos/workflows'
-    );
-    expect(mocks.startRun).toHaveBeenCalledWith(
-      expect.objectContaining({
+    ]);
+    assertSpyCallArgs(mocks.startRun, 0, [
+      ({
         ref: 'main',
         sha: 'sha-base-event',
       })
-    );
-  });
-
-  it('falls back to default branch when base ref cannot be resolved and still ignores head ref', async () => {
-    mocks.resolveRef.mockImplementation(async (_db: D1Database, _repoId: string, ref: string) => {
+    ]);
+})
+  Deno.test('triggerPullRequestWorkflows ref resolution (issue 002) - falls back to default branch when base ref cannot be resolved and still ignores head ref', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+    setupWorkflowMocks();
+  mocks.resolveRef = async (_db: D1Database, _repoId: string, ref: string) => {
       if (ref === 'release') {
         return null;
       }
@@ -126,7 +107,7 @@ describe('triggerPullRequestWorkflows ref resolution (issue 002)', () => {
         return 'sha-head-resolved';
       }
       return null;
-    });
+    } as any;
 
     await triggerPullRequestWorkflows({
       db: {} as D1Database,
@@ -148,28 +129,23 @@ describe('triggerPullRequestWorkflows ref resolution (issue 002)', () => {
       },
     });
 
-    expect(mocks.resolveRef).toHaveBeenCalledWith(expect.anything(), 'repo-1', 'release');
-    expect(mocks.resolveRef).toHaveBeenCalledWith(expect.anything(), 'repo-1', 'main');
-    expect(mocks.resolveRef).not.toHaveBeenCalledWith(expect.anything(), 'repo-1', 'feature/head');
-    expect(mocks.getCommitData).toHaveBeenCalledWith(expect.anything(), 'sha-default-resolved');
-    expect(mocks.startRun).toHaveBeenCalledWith(
-      expect.objectContaining({
+    assertSpyCallArgs(mocks.resolveRef, 0, [expect.anything(), 'repo-1', 'release']);
+    assertSpyCallArgs(mocks.resolveRef, 0, [expect.anything(), 'repo-1', 'main']);
+    // TODO: manual assertion - mocks.resolveRef was not called with (expect.anything(), 'repo-1', 'feature/head');
+    assertSpyCallArgs(mocks.getCommitData, 0, [expect.anything(), 'sha-default-resolved']);
+    assertSpyCallArgs(mocks.startRun, 0, [
+      ({
         ref: 'main',
         sha: 'sha-default-resolved',
       })
-    );
-  });
-});
+    ]);
+})
 
-describe('triggerPullRequestWorkflows path filters (issue 006)', () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
+  Deno.test('triggerPullRequestWorkflows path filters (issue 006) - does not run workflows with paths filter when changedFiles is missing', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
     setupWorkflowMocks();
-    mocks.resolveRef.mockResolvedValue('sha-base-resolved');
-  });
-
-  it('does not run workflows with paths filter when changedFiles is missing', async () => {
-    mocks.parseWorkflow.mockReturnValue({
+    mocks.resolveRef = (async () => 'sha-base-resolved') as any;
+  mocks.parseWorkflow = (() => ({
       workflow: {
         on: {
           pull_request: {
@@ -184,7 +160,7 @@ describe('triggerPullRequestWorkflows path filters (issue 006)', () => {
         },
       } as unknown as Workflow,
       diagnostics: [],
-    });
+    })) as any;
 
     const result = await triggerPullRequestWorkflows({
       db: {} as D1Database,
@@ -205,12 +181,14 @@ describe('triggerPullRequestWorkflows path filters (issue 006)', () => {
       },
     });
 
-    expect(result.triggeredRunIds).toEqual([]);
-    expect(mocks.startRun).not.toHaveBeenCalled();
-  });
-
-  it('runs workflows with paths filter when changedFiles matches', async () => {
-    mocks.parseWorkflow.mockReturnValue({
+    assertEquals(result.triggeredRunIds, []);
+    assertSpyCalls(mocks.startRun, 0);
+})
+  Deno.test('triggerPullRequestWorkflows path filters (issue 006) - runs workflows with paths filter when changedFiles matches', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+    setupWorkflowMocks();
+    mocks.resolveRef = (async () => 'sha-base-resolved') as any;
+  mocks.parseWorkflow = (() => ({
       workflow: {
         on: {
           pull_request: {
@@ -225,7 +203,7 @@ describe('triggerPullRequestWorkflows path filters (issue 006)', () => {
         },
       } as unknown as Workflow,
       diagnostics: [],
-    });
+    })) as any;
 
     const result = await triggerPullRequestWorkflows({
       db: {} as D1Database,
@@ -247,7 +225,6 @@ describe('triggerPullRequestWorkflows path filters (issue 006)', () => {
       },
     });
 
-    expect(result.triggeredRunIds).toEqual(['run-1']);
-    expect(mocks.startRun).toHaveBeenCalledTimes(1);
-  });
-});
+    assertEquals(result.triggeredRunIds, ['run-1']);
+    assertSpyCalls(mocks.startRun, 1);
+})

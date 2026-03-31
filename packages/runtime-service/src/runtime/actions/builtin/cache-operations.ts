@@ -3,12 +3,12 @@ import * as path from 'path';
 import { spawn } from 'child_process';
 import { createHash } from 'crypto';
 import { GetObjectCommand } from '@aws-sdk/client-s3';
-import { type ActionContext } from '../executor.js';
-import { pushLog } from '../../logging.js';
-import { s3Client, isR2Configured } from '../../../storage/r2.js';
-import { R2_BUCKET } from '../../../shared/config.js';
+import { type ActionContext } from '../executor.ts';
+import { pushLog } from '../../logging.ts';
+import { s3Client, isR2Configured } from '../../../storage/r2.ts';
+import { R2_BUCKET } from '../../../shared/config.ts';
 import { getErrorMessage } from 'takos-common/errors';
-import { parseTarEntriesFromGzipArchive } from './tar-parser.js';
+import { parseTarEntriesFromGzipArchive } from './tar-parser.ts';
 
 function toStringArray(value: string | string[]): string[] {
   return Array.isArray(value) ? value : [value];

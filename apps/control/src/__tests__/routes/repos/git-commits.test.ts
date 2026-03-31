@@ -1,28 +1,18 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { Hono } from 'hono';
 import type { Env, User } from '@/types';
 import type { AuthenticatedRouteEnv } from '@/routes/shared/helpers';
 import { createMockEnv } from '../../../../test/integration/setup';
 
-const mocks = vi.hoisted(() => ({
-  checkRepoAccess: vi.fn(),
-  resolveReadableCommitFromRef: vi.fn(),
-  getCommit: vi.fn(),
-}));
+import { assertEquals, assertObjectMatch } from 'jsr:@std/assert';
 
-vi.mock('@/services/source/repos', () => ({
-  checkRepoAccess: mocks.checkRepoAccess,
-}));
-
-vi.mock('@/services/git-smart', async () => {
-  const actual = await vi.importActual<typeof import('@/services/git-smart')>('@/services/git-smart');
-  return {
-    ...actual,
-    resolveReadableCommitFromRef: mocks.resolveReadableCommitFromRef,
-    getCommit: mocks.getCommit,
-  };
+const mocks = ({
+  checkRepoAccess: ((..._args: any[]) => undefined) as any,
+  resolveReadableCommitFromRef: ((..._args: any[]) => undefined) as any,
+  getCommit: ((..._args: any[]) => undefined) as any,
 });
 
+// [Deno] vi.mock removed - manually stub imports from '@/services/source/repos'
+// [Deno] vi.mock removed - manually stub imports from '@/services/git-smart'
 import repoGit from '@/routes/repos/git';
 
 interface CommitsPayload {
@@ -56,11 +46,11 @@ function createApp() {
   return app;
 }
 
-describe('repos git commits', () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
 
-    mocks.checkRepoAccess.mockResolvedValue({
+  Deno.test('repos git commits - paginates via first-parent traversal and returns frontend-compatible DTO', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+
+    mocks.checkRepoAccess = (async () => ({
       repo: {
         id: 'repo-1',
         name: 'repo',
@@ -80,11 +70,8 @@ describe('repos git commits', () => {
       },
       spaceId: 'ws-1',
       role: 'owner',
-    });
-  });
-
-  it('paginates via first-parent traversal and returns frontend-compatible DTO', async () => {
-    const env = createEnv();
+    })) as any;
+  const env = createEnv();
     const app = createApp();
 
     const commit1 = {
@@ -115,28 +102,28 @@ describe('repos git commits', () => {
       message: 'm3',
     };
 
-    mocks.resolveReadableCommitFromRef.mockResolvedValue({
+    mocks.resolveReadableCommitFromRef = (async () => ({
       ok: true,
       refCommitSha: 'c3',
       resolvedCommitSha: 'c3',
       degraded: false,
       commit: commit3,
-    });
+    })) as any;
 
-    mocks.getCommit.mockImplementation(async (_db: unknown, _bucket: unknown, _repoId: string, sha: string) => {
+    mocks.getCommit = async (_db: unknown, _bucket: unknown, _repoId: string, sha: string) => {
       if (sha === 'c2') return commit2;
       if (sha === 'c1') return commit1;
       return null;
-    });
+    } as any;
 
     const page1 = await app.fetch(
       new Request('http://localhost/repos/repo-1/commits?limit=2&page=1'),
       env,
       {} as ExecutionContext
     );
-    expect(page1.status).toBe(200);
+    assertEquals(page1.status, 200);
     const payload1 = await page1.json() as CommitsPayload;
-    expect(payload1).toMatchObject({
+    assertObjectMatch(payload1, {
       ref: 'main',
       resolved_commit_sha: 'c3',
       ref_commit_sha: 'c3',
@@ -151,9 +138,9 @@ describe('repos git commits', () => {
       env,
       {} as ExecutionContext
     );
-    expect(page2.status).toBe(200);
+    assertEquals(page2.status, 200);
     const payload2 = await page2.json() as CommitsPayload;
-    expect(payload2).toMatchObject({
+    assertObjectMatch(payload2, {
       ref: 'main',
       resolved_commit_sha: 'c3',
       ref_commit_sha: 'c3',
@@ -161,5 +148,4 @@ describe('repos git commits', () => {
         { sha: 'c1', message: 'm1', author: { name: 'A1', email: 'a1@example.com' }, date: '2026-02-15T00:00:01.000Z', parents: [] },
       ],
     });
-  });
-});
+})

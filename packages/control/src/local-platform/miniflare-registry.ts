@@ -53,7 +53,7 @@ type ResolvedTenantWorker = {
 };
 
 function resolveMiniflareHost(): string {
-  const explicit = process.env.TAKOS_MINIFLARE_HOST?.trim();
+  const explicit = Deno.env.get('TAKOS_MINIFLARE_HOST')?.trim();
   if (explicit) {
     return explicit;
   }
@@ -61,7 +61,7 @@ function resolveMiniflareHost(): string {
 }
 
 function resolveMiniflarePort(): number | undefined {
-  const parsed = Number.parseInt(process.env.TAKOS_MINIFLARE_PORT?.trim() ?? '', 10);
+  const parsed = Number.parseInt(Deno.env.get('TAKOS_MINIFLARE_PORT')?.trim() ?? '', 10);
   if (Number.isFinite(parsed) && parsed > 0) {
     return parsed;
   }
@@ -124,23 +124,23 @@ async function createProviderQueueAdapter(
       }
       const { createSqsQueue } = await import('../adapters/sqs-queue.ts');
       return createSqsQueue({
-        region: process.env.AWS_REGION?.trim() || 'us-east-1',
+        region: Deno.env.get('AWS_REGION')?.trim() || 'us-east-1',
         queueUrl: binding.queue_url,
-        accessKeyId: process.env.AWS_ACCESS_KEY_ID?.trim(),
-        secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY?.trim(),
+        accessKeyId: Deno.env.get('AWS_ACCESS_KEY_ID')?.trim(),
+        secretAccessKey: Deno.env.get('AWS_SECRET_ACCESS_KEY')?.trim(),
       });
     }
     case 'pubsub': {
       const { createPubSubQueue } = await import('../adapters/pubsub-queue.ts');
       return createPubSubQueue({
-        projectId: process.env.GCP_PROJECT_ID?.trim(),
-        keyFilePath: process.env.GOOGLE_APPLICATION_CREDENTIALS?.trim(),
+        projectId: Deno.env.get('GCP_PROJECT_ID')?.trim(),
+        keyFilePath: Deno.env.get('GOOGLE_APPLICATION_CREDENTIALS')?.trim(),
         topicName: binding.queue_name || binding.name,
         subscriptionName: binding.subscription_name,
       });
     }
     case 'redis': {
-      const redisUrl = process.env.REDIS_URL?.trim();
+      const redisUrl = Deno.env.get('REDIS_URL')?.trim();
       if (!redisUrl) {
         throw new Error(`Queue binding "${binding.name}" requires REDIS_URL for Redis-backed delivery`);
       }

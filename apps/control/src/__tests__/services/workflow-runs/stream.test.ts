@@ -1,32 +1,24 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Env } from '@/types';
 
-const mocks = vi.hoisted(() => ({
-  getDb: vi.fn(),
-  buildSanitizedDOHeaders: vi.fn(),
-}));
+import { assertEquals, assert } from 'jsr:@std/assert';
+import { assertSpyCallArgs } from 'jsr:@std/testing/mock';
 
-vi.mock('@/db', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('@/db')>();
-  return {
-    ...actual,
-    getDb: mocks.getDb,
-  };
+const mocks = ({
+  getDb: ((..._args: any[]) => undefined) as any,
+  buildSanitizedDOHeaders: ((..._args: any[]) => undefined) as any,
 });
 
-vi.mock('@/durable-objects/shared', () => ({
-  buildSanitizedDOHeaders: mocks.buildSanitizedDOHeaders,
-}));
-
+// [Deno] vi.mock removed - manually stub imports from '@/db'
+// [Deno] vi.mock removed - manually stub imports from '@/durable-objects/shared'
 import { connectWorkflowRunStream } from '@/services/workflow-runs/stream';
 
 function buildDrizzleMock(selectGet: unknown) {
   const chain: Record<string, unknown> = {};
-  chain.from = vi.fn().mockReturnValue(chain);
-  chain.where = vi.fn().mockReturnValue(chain);
-  chain.get = vi.fn().mockResolvedValue(selectGet);
+  chain.from = (() => chain);
+  chain.where = (() => chain);
+  chain.get = (async () => selectGet);
   return {
-    select: vi.fn().mockReturnValue(chain),
+    select: (() => chain),
   };
 }
 
@@ -39,9 +31,9 @@ function makeWebSocketResponse(): Response {
 }
 
 function makeEnv(options: { runNotifier?: boolean } = {}): Env {
-  const notifierFetch = vi.fn().mockResolvedValue(makeWebSocketResponse());
-  const notifierGet = vi.fn().mockReturnValue({ fetch: notifierFetch });
-  const notifierIdFromName = vi.fn().mockReturnValue('do-id-1');
+  const notifierFetch = (async () => makeWebSocketResponse());
+  const notifierGet = (() => ({ fetch: notifierFetch }));
+  const notifierIdFromName = (() => 'do-id-1');
 
   return {
     DB: {} as Env['DB'],
@@ -60,17 +52,14 @@ function makeRequest(upgrade: boolean, url = 'https://api.example.com/ws'): Requ
   return new Request(url, { headers });
 }
 
-describe('connectWorkflowRunStream', () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-    mocks.buildSanitizedDOHeaders.mockReturnValue({
+
+  Deno.test('connectWorkflowRunStream - returns 404 when run not found', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+    mocks.buildSanitizedDOHeaders = (() => ({
       'X-WS-Auth-Validated': 'true',
       'X-WS-User-Id': 'user-1',
-    });
-  });
-
-  it('returns 404 when run not found', async () => {
-    mocks.getDb.mockReturnValue(buildDrizzleMock(null));
+    })) as any;
+  mocks.getDb = (() => buildDrizzleMock(null)) as any;
 
     const response = await connectWorkflowRunStream(makeEnv({ runNotifier: true }), {
       repoId: 'repo-1',
@@ -79,13 +68,17 @@ describe('connectWorkflowRunStream', () => {
       request: makeRequest(true),
     });
 
-    expect(response.status).toBe(404);
+    assertEquals(response.status, 404);
     const body = await response.json() as { error: string };
-    expect(body.error).toBe('Run not found');
-  });
-
-  it('returns 426 when Upgrade header is missing', async () => {
-    mocks.getDb.mockReturnValue(buildDrizzleMock({ id: 'run-1' }));
+    assertEquals(body.error, 'Run not found');
+})
+  Deno.test('connectWorkflowRunStream - returns 426 when Upgrade header is missing', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+    mocks.buildSanitizedDOHeaders = (() => ({
+      'X-WS-Auth-Validated': 'true',
+      'X-WS-User-Id': 'user-1',
+    })) as any;
+  mocks.getDb = (() => buildDrizzleMock({ id: 'run-1' })) as any;
 
     const response = await connectWorkflowRunStream(makeEnv({ runNotifier: true }), {
       repoId: 'repo-1',
@@ -94,13 +87,17 @@ describe('connectWorkflowRunStream', () => {
       request: makeRequest(false),
     });
 
-    expect(response.status).toBe(426);
+    assertEquals(response.status, 426);
     const body = await response.json() as { error: string };
-    expect(body.error).toBe('Expected WebSocket upgrade');
-  });
-
-  it('returns 426 when Upgrade header is not "websocket"', async () => {
-    mocks.getDb.mockReturnValue(buildDrizzleMock({ id: 'run-1' }));
+    assertEquals(body.error, 'Expected WebSocket upgrade');
+})
+  Deno.test('connectWorkflowRunStream - returns 426 when Upgrade header is not "websocket"', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+    mocks.buildSanitizedDOHeaders = (() => ({
+      'X-WS-Auth-Validated': 'true',
+      'X-WS-User-Id': 'user-1',
+    })) as any;
+  mocks.getDb = (() => buildDrizzleMock({ id: 'run-1' })) as any;
 
     const headers = new Headers({ Upgrade: 'h2c' });
     const request = new Request('https://api.example.com/ws', { headers });
@@ -112,11 +109,15 @@ describe('connectWorkflowRunStream', () => {
       request,
     });
 
-    expect(response.status).toBe(426);
-  });
-
-  it('proxies to the RUN_NOTIFIER durable object on valid request', async () => {
-    mocks.getDb.mockReturnValue(buildDrizzleMock({ id: 'run-1' }));
+    assertEquals(response.status, 426);
+})
+  Deno.test('connectWorkflowRunStream - proxies to the RUN_NOTIFIER durable object on valid request', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+    mocks.buildSanitizedDOHeaders = (() => ({
+      'X-WS-Auth-Validated': 'true',
+      'X-WS-User-Id': 'user-1',
+    })) as any;
+  mocks.getDb = (() => buildDrizzleMock({ id: 'run-1' })) as any;
 
     const env = makeEnv({ runNotifier: true });
     const request = makeRequest(true, 'https://api.example.com/ws/run-1');
@@ -128,27 +129,31 @@ describe('connectWorkflowRunStream', () => {
       request,
     });
 
-    expect(response.status).toBe(101);
+    assertEquals(response.status, 101);
 
     const notifier = env.RUN_NOTIFIER as unknown as {
       idFromName: ReturnType<typeof vi.fn>;
       get: ReturnType<typeof vi.fn>;
     };
-    expect(notifier.idFromName).toHaveBeenCalledWith('run-1');
-    expect(notifier.get).toHaveBeenCalled();
+    assertSpyCallArgs(notifier.idFromName, 0, ['run-1']);
+    assert(notifier.get.calls.length > 0);
 
-    const fetcher = notifier.get.mock.results[0].value as { fetch: ReturnType<typeof vi.fn> };
-    expect(fetcher.fetch).toHaveBeenCalledWith(
+    const fetcher = notifier.get.calls[0].value as { fetch: ReturnType<typeof vi.fn> };
+    assertSpyCallArgs(fetcher.fetch, 0, [
       'https://api.example.com/ws/run-1',
-      expect.objectContaining({
+      ({
         method: 'GET',
-        headers: expect.any(Object),
+        headers: /* expect.any(Object) */ {} as any,
       }),
-    );
-  });
-
-  it('passes sanitized headers with auth metadata', async () => {
-    mocks.getDb.mockReturnValue(buildDrizzleMock({ id: 'run-1' }));
+    ]);
+})
+  Deno.test('connectWorkflowRunStream - passes sanitized headers with auth metadata', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+    mocks.buildSanitizedDOHeaders = (() => ({
+      'X-WS-Auth-Validated': 'true',
+      'X-WS-User-Id': 'user-1',
+    })) as any;
+  mocks.getDb = (() => buildDrizzleMock({ id: 'run-1' })) as any;
 
     const env = makeEnv({ runNotifier: true });
     const request = makeRequest(true);
@@ -160,17 +165,21 @@ describe('connectWorkflowRunStream', () => {
       request,
     });
 
-    expect(mocks.buildSanitizedDOHeaders).toHaveBeenCalledWith(
+    assertSpyCallArgs(mocks.buildSanitizedDOHeaders, 0, [
       request.headers,
       {
         'X-WS-Auth-Validated': 'true',
         'X-WS-User-Id': 'user-42',
       },
-    );
-  });
-
-  it('uses "anonymous" for userId when null', async () => {
-    mocks.getDb.mockReturnValue(buildDrizzleMock({ id: 'run-1' }));
+    ]);
+})
+  Deno.test('connectWorkflowRunStream - uses "anonymous" for userId when null', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+    mocks.buildSanitizedDOHeaders = (() => ({
+      'X-WS-Auth-Validated': 'true',
+      'X-WS-User-Id': 'user-1',
+    })) as any;
+  mocks.getDb = (() => buildDrizzleMock({ id: 'run-1' })) as any;
 
     const env = makeEnv({ runNotifier: true });
     const request = makeRequest(true);
@@ -182,17 +191,21 @@ describe('connectWorkflowRunStream', () => {
       request,
     });
 
-    expect(mocks.buildSanitizedDOHeaders).toHaveBeenCalledWith(
+    assertSpyCallArgs(mocks.buildSanitizedDOHeaders, 0, [
       request.headers,
       {
         'X-WS-Auth-Validated': 'true',
         'X-WS-User-Id': 'anonymous',
       },
-    );
-  });
-
-  it('uses "anonymous" for userId when undefined', async () => {
-    mocks.getDb.mockReturnValue(buildDrizzleMock({ id: 'run-1' }));
+    ]);
+})
+  Deno.test('connectWorkflowRunStream - uses "anonymous" for userId when undefined', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+    mocks.buildSanitizedDOHeaders = (() => ({
+      'X-WS-Auth-Validated': 'true',
+      'X-WS-User-Id': 'user-1',
+    })) as any;
+  mocks.getDb = (() => buildDrizzleMock({ id: 'run-1' })) as any;
 
     const env = makeEnv({ runNotifier: true });
     const request = makeRequest(true);
@@ -204,11 +217,10 @@ describe('connectWorkflowRunStream', () => {
       request,
     });
 
-    expect(mocks.buildSanitizedDOHeaders).toHaveBeenCalledWith(
+    assertSpyCallArgs(mocks.buildSanitizedDOHeaders, 0, [
       request.headers,
-      expect.objectContaining({
+      ({
         'X-WS-User-Id': 'anonymous',
       }),
-    );
-  });
-});
+    ]);
+})

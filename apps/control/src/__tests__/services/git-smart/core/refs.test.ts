@@ -1,103 +1,104 @@
-import { describe, it, expect } from 'vitest';
 import { isValidRefName } from '@/services/git-smart/core/refs';
 
-describe('isValidRefName', () => {
-  describe('valid ref names', () => {
+
+  
+import { assertEquals } from 'jsr:@std/assert';
+
     it.each([
       'main',
       'feature/branch',
       'release-1.0',
       'a',
     ])('accepts "%s"', (name) => {
-      expect(isValidRefName(name)).toBe(true);
+      assertEquals(isValidRefName(name), true);
     });
-  });
+  
 
-  describe('invalid ref names', () => {
-    it('rejects empty string', () => {
-      expect(isValidRefName('')).toBe(false);
-    });
+  
+    Deno.test('isValidRefName - invalid ref names - rejects empty string', () => {
+  assertEquals(isValidRefName(''), false);
+})
 
-    it('rejects string exceeding 255 chars', () => {
-      const longName = 'a'.repeat(256);
-      expect(isValidRefName(longName)).toBe(false);
-    });
+    Deno.test('isValidRefName - invalid ref names - rejects string exceeding 255 chars', () => {
+  const longName = 'a'.repeat(256);
+      assertEquals(isValidRefName(longName), false);
+})
 
-    it('accepts string exactly at 255 chars', () => {
-      const maxName = 'a'.repeat(255);
-      expect(isValidRefName(maxName)).toBe(true);
-    });
+    Deno.test('isValidRefName - invalid ref names - accepts string exactly at 255 chars', () => {
+  const maxName = 'a'.repeat(255);
+      assertEquals(isValidRefName(maxName), true);
+})
 
-    it('rejects name containing ".."', () => {
-      expect(isValidRefName('foo..bar')).toBe(false);
-    });
+    Deno.test('isValidRefName - invalid ref names - rejects name containing ".."', () => {
+  assertEquals(isValidRefName('foo..bar'), false);
+})
 
-    it('rejects name containing "~"', () => {
-      expect(isValidRefName('foo~bar')).toBe(false);
-    });
+    Deno.test('isValidRefName - invalid ref names - rejects name containing "~"', () => {
+  assertEquals(isValidRefName('foo~bar'), false);
+})
 
-    it('rejects name containing "^"', () => {
-      expect(isValidRefName('foo^bar')).toBe(false);
-    });
+    Deno.test('isValidRefName - invalid ref names - rejects name containing "^"', () => {
+  assertEquals(isValidRefName('foo^bar'), false);
+})
 
-    it('rejects name containing ":"', () => {
-      expect(isValidRefName('foo:bar')).toBe(false);
-    });
+    Deno.test('isValidRefName - invalid ref names - rejects name containing ":"', () => {
+  assertEquals(isValidRefName('foo:bar'), false);
+})
 
-    it('rejects name containing "?"', () => {
-      expect(isValidRefName('foo?bar')).toBe(false);
-    });
+    Deno.test('isValidRefName - invalid ref names - rejects name containing "?"', () => {
+  assertEquals(isValidRefName('foo?bar'), false);
+})
 
-    it('rejects name containing "*"', () => {
-      expect(isValidRefName('foo*bar')).toBe(false);
-    });
+    Deno.test('isValidRefName - invalid ref names - rejects name containing "*"', () => {
+  assertEquals(isValidRefName('foo*bar'), false);
+})
 
-    it('rejects name containing "["', () => {
-      expect(isValidRefName('foo[bar')).toBe(false);
-    });
+    Deno.test('isValidRefName - invalid ref names - rejects name containing "["', () => {
+  assertEquals(isValidRefName('foo[bar'), false);
+})
 
-    it('rejects name containing "\\"', () => {
-      expect(isValidRefName('foo\\bar')).toBe(false);
-    });
+    Deno.test('isValidRefName - invalid ref names - rejects name containing "\\\\"', () => {
+  assertEquals(isValidRefName('foo\\bar'), false);
+})
 
-    it('rejects name ending with ".lock"', () => {
-      expect(isValidRefName('branch.lock')).toBe(false);
-    });
+    Deno.test('isValidRefName - invalid ref names - rejects name ending with ".lock"', () => {
+  assertEquals(isValidRefName('branch.lock'), false);
+})
 
-    it('rejects name ending with "."', () => {
-      expect(isValidRefName('branch.')).toBe(false);
-    });
+    Deno.test('isValidRefName - invalid ref names - rejects name ending with "."', () => {
+  assertEquals(isValidRefName('branch.'), false);
+})
 
-    it('rejects name starting with "/"', () => {
-      expect(isValidRefName('/branch')).toBe(false);
-    });
+    Deno.test('isValidRefName - invalid ref names - rejects name starting with "/"', () => {
+  assertEquals(isValidRefName('/branch'), false);
+})
 
-    it('rejects name ending with "/"', () => {
-      expect(isValidRefName('branch/')).toBe(false);
-    });
+    Deno.test('isValidRefName - invalid ref names - rejects name ending with "/"', () => {
+  assertEquals(isValidRefName('branch/'), false);
+})
 
-    it('rejects name containing "//"', () => {
-      expect(isValidRefName('foo//bar')).toBe(false);
-    });
+    Deno.test('isValidRefName - invalid ref names - rejects name containing "//"', () => {
+  assertEquals(isValidRefName('foo//bar'), false);
+})
 
-    it('rejects name containing "@{"', () => {
-      expect(isValidRefName('foo@{bar')).toBe(false);
-    });
+    Deno.test('isValidRefName - invalid ref names - rejects name containing "@{"', () => {
+  assertEquals(isValidRefName('foo@{bar'), false);
+})
 
-    it('rejects non-ASCII characters', () => {
-      expect(isValidRefName('branch-\u00e9')).toBe(false);
-    });
+    Deno.test('isValidRefName - invalid ref names - rejects non-ASCII characters', () => {
+  assertEquals(isValidRefName('branch-\u00e9'), false);
+})
 
-    it('rejects null', () => {
-      expect(isValidRefName(null)).toBe(false);
-    });
+    Deno.test('isValidRefName - invalid ref names - rejects null', () => {
+  assertEquals(isValidRefName(null), false);
+})
 
-    it('rejects undefined', () => {
-      expect(isValidRefName(undefined)).toBe(false);
-    });
+    Deno.test('isValidRefName - invalid ref names - rejects undefined', () => {
+  assertEquals(isValidRefName(undefined), false);
+})
 
-    it('rejects number', () => {
-      expect(isValidRefName(42)).toBe(false);
-    });
-  });
-});
+    Deno.test('isValidRefName - invalid ref names - rejects number', () => {
+  assertEquals(isValidRefName(42), false);
+})
+  
+

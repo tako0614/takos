@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react';
+import type { JSX } from 'solid-js';
 import { Icons } from '../../lib/Icons';
 import type { StorageFile } from '../../types';
 
@@ -141,7 +141,7 @@ export function clearDefaultHandler(file: StorageFile): void {
   saveDefaultMap(map);
 }
 
-export function handlerDisplayName(h: ResolvedHandler, t: (key: string) => string): string {
+export function handlerDisplayName(h: ResolvedHandler, t: (key: any) => string): string {
   if (h.type === 'builtin') {
     return h.builtinId === BUILTIN_TEXT_EDITOR
       ? (t('textEditor') || 'Text Editor')
@@ -152,9 +152,9 @@ export function handlerDisplayName(h: ResolvedHandler, t: (key: string) => strin
 
 // ── File icons ──
 
-export function getFileIcon(file: StorageFile): ReactNode {
+export function getFileIcon(file: StorageFile): JSX.Element {
   if (file.type === 'folder') {
-    return <Icons.Folder className="w-5 h-5 text-zinc-500 dark:text-zinc-400" />;
+    return <Icons.Folder class="w-5 h-5 text-zinc-500 dark:text-zinc-400" />;
   }
 
   const ext = file.name.split('.').pop()?.toLowerCase() || '';
@@ -164,16 +164,16 @@ export function getFileIcon(file: StorageFile): ReactNode {
   const docExts = ['pdf', 'doc', 'docx', 'xls', 'xlsx', 'ppt', 'pptx'];
 
   if (imageExts.includes(ext)) {
-    return <Icons.Image className="w-5 h-5 text-red-400" />;
+    return <Icons.Image class="w-5 h-5 text-red-400" />;
   }
   if (codeExts.includes(ext)) {
-    return <Icons.Code className="w-5 h-5 text-blue-400" />;
+    return <Icons.Code class="w-5 h-5 text-blue-400" />;
   }
   if (archiveExts.includes(ext)) {
-    return <Icons.Archive className="w-5 h-5 text-amber-500" />;
+    return <Icons.Archive class="w-5 h-5 text-amber-500" />;
   }
   if (docExts.includes(ext)) {
-    return <Icons.FileText className="w-5 h-5 text-blue-500" />;
+    return <Icons.FileText class="w-5 h-5 text-blue-500" />;
   }
-  return <Icons.File className="w-5 h-5 text-zinc-400 dark:text-zinc-500" />;
+  return <Icons.File class="w-5 h-5 text-zinc-400 dark:text-zinc-500" />;
 }

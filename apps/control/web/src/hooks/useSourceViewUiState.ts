@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { createSignal, createEffect } from 'solid-js';
 
 const SOURCE_VIEW_UI_STATE_KEY = 'takos.source.view-ui-state.v1';
 
@@ -41,53 +41,52 @@ function writeSourceViewUiState(nextState: SourceViewUiState) {
 }
 
 export function useSourceViewUiState() {
-  const [initialState] = useState<SourceViewUiState>(() => {
-    const persisted = readSourceViewUiState();
-    return {
-      browseMode: persisted.browseMode ?? false,
-      homeScrollTop: persisted.homeScrollTop ?? 0,
-      searchScrollTop: persisted.searchScrollTop ?? 0,
-    };
+  const persisted = readSourceViewUiState();
+  const initialState: SourceViewUiState = {
+    browseMode: persisted.browseMode ?? false,
+    homeScrollTop: persisted.homeScrollTop ?? 0,
+    searchScrollTop: persisted.searchScrollTop ?? 0,
+  };
+
+  let stateRef: SourceViewUiState = initialState;
+  let scrollContainerRef: HTMLDivElement | undefined;
+  const [browseMode, setBrowseMode] = createSignal(initialState.browseMode);
+
+  const persist = (nextState: Partial<SourceViewUiState>) => {
+    stateRef = { ...stateRef, ...nextState };
+    writeSourceViewUiState(stateRef);
+  };
+
+  createEffect(() => {
+    persist({ browseMode: browseMode() });
   });
 
-  const stateRef = useRef<SourceViewUiState>(initialState);
-  const scrollContainerRef = useRef<HTMLDivElement>(null);
-  const [browseMode, setBrowseMode] = useState(initialState.browseMode);
-
-  const persist = useCallback((nextState: Partial<SourceViewUiState>) => {
-    stateRef.current = { ...stateRef.current, ...nextState };
-    writeSourceViewUiState(stateRef.current);
-  }, []);
-
-  useEffect(() => {
-    persist({ browseMode });
-  }, [browseMode, persist]);
-
-  const restoreScroll = useCallback((isSearchMode: boolean) => {
+  const restoreScroll = (isSearchMode: boolean) => {
     const targetScrollTop = isSearchMode
-      ? stateRef.current.searchScrollTop
-      : stateRef.current.homeScrollTop;
+      ? stateRef.searchScrollTop
+      : stateRef.homeScrollTop;
     const rafId = window.requestAnimationFrame(() => {
-      if (scrollContainerRef.current) {
-        scrollContainerRef.current.scrollTop = targetScrollTop;
+      if (scrollContainerRef) {
+        scrollContainerRef.scrollTop = targetScrollTop;
       }
     });
     return () => window.cancelAnimationFrame(rafId);
-  }, []);
+  };
 
-  const handleContentScroll = useCallback((isSearchMode: boolean) => {
-    const currentScrollTop = scrollContainerRef.current?.scrollTop ?? 0;
+  const handleContentScroll = (isSearchMode: boolean) => {
+    const currentScrollTop = scrollContainerRef?.scrollTop ?? 0;
     if (isSearchMode) {
       persist({ searchScrollTop: currentScrollTop });
       return;
     }
     persist({ homeScrollTop: currentScrollTop });
-  }, [persist]);
+  };
 
   return {
     browseMode,
     setBrowseMode,
-    scrollContainerRef,
+    get scrollContainerRef() { return scrollContainerRef; },
+    set scrollContainerRef(el: HTMLDivElement | undefined) { scrollContainerRef = el; },
     restoreScroll,
     handleContentScroll,
   };

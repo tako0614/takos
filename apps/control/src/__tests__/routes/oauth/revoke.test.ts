@@ -1,18 +1,20 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Env } from '@/types';
 import { createMockEnv } from '../../../../test/integration/setup';
 
-const mocks = vi.hoisted(() => {
-  const validateClientCredentials = vi.fn();
-  const verifyAccessToken = vi.fn();
-  const getRefreshToken = vi.fn();
-  const revokeToken = vi.fn();
-  const tryLogOAuthEvent = vi.fn();
-  const oauthRevokeRateLimiter = vi.fn(() => ({
-    middleware: vi.fn(() => async (_c: unknown, next: () => Promise<void>) => {
+import { assertEquals } from 'jsr:@std/assert';
+import { assertSpyCalls, assertSpyCallArgs } from 'jsr:@std/testing/mock';
+
+const mocks = {
+  const validateClientCredentials = ((..._args: any[]) => undefined) as any;
+  const verifyAccessToken = ((..._args: any[]) => undefined) as any;
+  const getRefreshToken = ((..._args: any[]) => undefined) as any;
+  const revokeToken = ((..._args: any[]) => undefined) as any;
+  const tryLogOAuthEvent = ((..._args: any[]) => undefined) as any;
+  const oauthRevokeRateLimiter = () => ({
+    middleware: () => async (_c: unknown, next: () => Promise<void>) => {
       await next();
-    }),
-  }));
+    },
+  });
 
   return {
     validateClientCredentials,
@@ -22,32 +24,12 @@ const mocks = vi.hoisted(() => {
     tryLogOAuthEvent,
     oauthRevokeRateLimiter,
   };
-});
+};
 
-vi.mock('@/services/oauth/client', () => ({
-  validateClientCredentials: mocks.validateClientCredentials,
-}));
-
-vi.mock('@/services/oauth/token', () => ({
-  verifyAccessToken: mocks.verifyAccessToken,
-  getRefreshToken: mocks.getRefreshToken,
-  revokeToken: mocks.revokeToken,
-}));
-
-vi.mock('@/routes/oauth/request-utils', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('@/routes/oauth/request-utils')>();
-  return {
-    ...actual,
-    tryLogOAuthEvent: mocks.tryLogOAuthEvent,
-  };
-});
-
-vi.mock('@/utils/rate-limiter', () => ({
-  RateLimiters: {
-    oauthRevoke: mocks.oauthRevokeRateLimiter,
-  },
-}));
-
+// [Deno] vi.mock removed - manually stub imports from '@/services/oauth/client'
+// [Deno] vi.mock removed - manually stub imports from '@/services/oauth/token'
+// [Deno] vi.mock removed - manually stub imports from '@/routes/oauth/request-utils'
+// [Deno] vi.mock removed - manually stub imports from '@/utils/rate-limiter'
 import oauthRevoke from '@/routes/oauth/revoke';
 
 function createEnv(overrides: Partial<Record<string, unknown>> = {}): Env {
@@ -87,18 +69,15 @@ async function callRevoke(
   );
 }
 
-describe('oauth revoke client ownership regression (issue 010)', () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-    mocks.validateClientCredentials.mockResolvedValue({ valid: true });
-    mocks.verifyAccessToken.mockResolvedValue(null);
-    mocks.getRefreshToken.mockResolvedValue(null);
-    mocks.revokeToken.mockResolvedValue(false);
-    mocks.tryLogOAuthEvent.mockResolvedValue(undefined);
-  });
 
-  it('returns success without revoking when refresh token belongs to another client', async () => {
-    mocks.getRefreshToken.mockResolvedValue({
+  Deno.test('oauth revoke client ownership regression (issue 010) - returns success without revoking when refresh token belongs to another client', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+    mocks.validateClientCredentials = (async () => ({ valid: true })) as any;
+    mocks.verifyAccessToken = (async () => null) as any;
+    mocks.getRefreshToken = (async () => null) as any;
+    mocks.revokeToken = (async () => false) as any;
+    mocks.tryLogOAuthEvent = (async () => undefined) as any;
+  mocks.getRefreshToken = (async () => ({
       id: 'rt-1',
       token_type: 'refresh',
       token_hash: 'hash-1',
@@ -113,7 +92,7 @@ describe('oauth revoke client ownership regression (issue 010)', () => {
       token_family: null,
       expires_at: '2099-01-01T00:00:00.000Z',
       created_at: '2026-01-01T00:00:00.000Z',
-    });
+    })) as any;
 
     const response = await callRevoke({
       token: 'refresh-token',
@@ -122,14 +101,19 @@ describe('oauth revoke client ownership regression (issue 010)', () => {
       client_secret: 'secret-b',
     });
 
-    expect(response.status).toBe(200);
-    await expect(response.text()).resolves.toBe('');
-    expect(mocks.revokeToken).not.toHaveBeenCalled();
-    expect(mocks.tryLogOAuthEvent).not.toHaveBeenCalled();
-  });
-
-  it('returns success without revoking when access token belongs to another client', async () => {
-    mocks.verifyAccessToken.mockResolvedValue({
+    assertEquals(response.status, 200);
+    await assertEquals(await response.text(), '');
+    assertSpyCalls(mocks.revokeToken, 0);
+    assertSpyCalls(mocks.tryLogOAuthEvent, 0);
+})
+  Deno.test('oauth revoke client ownership regression (issue 010) - returns success without revoking when access token belongs to another client', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+    mocks.validateClientCredentials = (async () => ({ valid: true })) as any;
+    mocks.verifyAccessToken = (async () => null) as any;
+    mocks.getRefreshToken = (async () => null) as any;
+    mocks.revokeToken = (async () => false) as any;
+    mocks.tryLogOAuthEvent = (async () => undefined) as any;
+  mocks.verifyAccessToken = (async () => ({
       iss: 'https://admin.takos.test',
       sub: 'user-1',
       aud: 'client-a',
@@ -138,7 +122,7 @@ describe('oauth revoke client ownership regression (issue 010)', () => {
       jti: 'jti-1',
       scope: 'openid profile',
       client_id: 'client-a',
-    });
+    })) as any;
 
     const response = await callRevoke({
       token: 'access-token',
@@ -147,15 +131,20 @@ describe('oauth revoke client ownership regression (issue 010)', () => {
       client_secret: 'secret-b',
     });
 
-    expect(response.status).toBe(200);
-    await expect(response.text()).resolves.toBe('');
-    expect(mocks.revokeToken).not.toHaveBeenCalled();
-    expect(mocks.tryLogOAuthEvent).not.toHaveBeenCalled();
-  });
-
-  it('continues revoking when token belongs to authenticated client', async () => {
-    const env = createEnv();
-    mocks.getRefreshToken.mockResolvedValue({
+    assertEquals(response.status, 200);
+    await assertEquals(await response.text(), '');
+    assertSpyCalls(mocks.revokeToken, 0);
+    assertSpyCalls(mocks.tryLogOAuthEvent, 0);
+})
+  Deno.test('oauth revoke client ownership regression (issue 010) - continues revoking when token belongs to authenticated client', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+    mocks.validateClientCredentials = (async () => ({ valid: true })) as any;
+    mocks.verifyAccessToken = (async () => null) as any;
+    mocks.getRefreshToken = (async () => null) as any;
+    mocks.revokeToken = (async () => false) as any;
+    mocks.tryLogOAuthEvent = (async () => undefined) as any;
+  const env = createEnv();
+    mocks.getRefreshToken = (async () => ({
       id: 'rt-1',
       token_type: 'refresh',
       token_hash: 'hash-1',
@@ -170,8 +159,8 @@ describe('oauth revoke client ownership regression (issue 010)', () => {
       token_family: null,
       expires_at: '2099-01-01T00:00:00.000Z',
       created_at: '2026-01-01T00:00:00.000Z',
-    });
-    mocks.revokeToken.mockResolvedValue(true);
+    })) as any;
+    mocks.revokeToken = (async () => true) as any;
 
     const response = await callRevoke(
       {
@@ -183,15 +172,14 @@ describe('oauth revoke client ownership regression (issue 010)', () => {
       env
     );
 
-    expect(response.status).toBe(200);
-    await expect(response.text()).resolves.toBe('');
-    expect(mocks.revokeToken).toHaveBeenCalledWith(env.DB, 'refresh-token', 'refresh_token');
-    expect(mocks.tryLogOAuthEvent).toHaveBeenCalledWith(
+    assertEquals(response.status, 200);
+    await assertEquals(await response.text(), '');
+    assertSpyCallArgs(mocks.revokeToken, 0, [env.DB, 'refresh-token', 'refresh_token']);
+    assertSpyCallArgs(mocks.tryLogOAuthEvent, 0, [
       expect.anything(),
-      expect.objectContaining({
+      ({
         clientId: 'client-a',
         eventType: 'token_revoked',
       })
-    );
-  });
-});
+    ]);
+})

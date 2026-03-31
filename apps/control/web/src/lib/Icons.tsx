@@ -1,26 +1,30 @@
-import type { JSX, ReactNode, SVGProps } from 'react';
+import type { JSX } from 'solid-js';
+import { splitProps } from 'solid-js';
 
-type IconProps = SVGProps<SVGSVGElement>;
+type IconProps = JSX.SvgSVGAttributes<SVGSVGElement>;
 
-const STROKE_DEFAULTS: Partial<IconProps> = { fill: 'none', stroke: 'currentColor', strokeWidth: 2 };
+const STROKE_DEFAULTS: Partial<IconProps> = { fill: 'none', stroke: 'currentColor', 'stroke-width': 2 };
 
 function createIcon(
-  children: ReactNode,
+  children: JSX.Element,
   defaultProps: Partial<IconProps> = {}
 ): (props: IconProps) => JSX.Element {
-  return ({ className, ...props }: IconProps) => (
-    <svg
-      viewBox="0 0 24 24"
-      className={className || 'w-5 h-5'}
-      {...defaultProps}
-      {...props}
-    >
-      {children}
-    </svg>
-  );
+  return (props: IconProps) => {
+    const [local, rest] = splitProps(props, ['class']);
+    return (
+      <svg
+        viewBox="0 0 24 24"
+        class={local.class || 'w-5 h-5'}
+        {...defaultProps}
+        {...rest}
+      >
+        {children}
+      </svg>
+    );
+  };
 }
 
-const strokeIcon = (children: ReactNode) => createIcon(children, STROKE_DEFAULTS);
+const strokeIcon = (children: JSX.Element) => createIcon(children, STROKE_DEFAULTS);
 
 export const Icons = {
   Plus: strokeIcon(
@@ -437,11 +441,11 @@ export const Icons = {
     { viewBox: '0 0 44 24', fill: 'none', 'aria-hidden': true },
   ),
   ToggleOnFilled: createIcon(
-    <path fillRule="evenodd" d="M7 6a5 5 0 0 0 0 10h10a5 5 0 0 0 0-10H7zm10 2a3 3 0 1 0 0 6 3 3 0 0 0 0-6z" clipRule="evenodd" />,
+    <path fill-rule="evenodd" d="M7 6a5 5 0 0 0 0 10h10a5 5 0 0 0 0-10H7zm10 2a3 3 0 1 0 0 6 3 3 0 0 0 0-6z" clip-rule="evenodd" />,
     { fill: 'currentColor' },
   ),
   ToggleOffFilled: createIcon(
-    <path fillRule="evenodd" d="M7 6a5 5 0 0 0 0 10h10a5 5 0 0 0 0-10H7zm0 2a3 3 0 1 0 0 6 3 3 0 0 0 0-6z" clipRule="evenodd" />,
+    <path fill-rule="evenodd" d="M7 6a5 5 0 0 0 0 10h10a5 5 0 0 0 0-10H7zm0 2a3 3 0 1 0 0 6 3 3 0 0 0 0-6z" clip-rule="evenodd" />,
     { fill: 'currentColor' },
   ),
 };

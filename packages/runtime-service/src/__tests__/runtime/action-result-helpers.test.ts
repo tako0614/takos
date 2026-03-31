@@ -1,13 +1,14 @@
-import { describe, expect, it } from 'vitest';
-import { appendOutput, buildCombinedResult } from '../../runtime/actions/action-result-converter.js';
+import { appendOutput, buildCombinedResult } from '../../runtime/actions/action-result-converter.ts';
 
 // ---------------------------------------------------------------------------
 // appendOutput
 // ---------------------------------------------------------------------------
 
-describe('appendOutput', () => {
-  it('appends stdout and stderr', () => {
-    const stdoutParts: string[] = [];
+
+import { assertEquals } from 'jsr:@std/assert';
+
+  Deno.test('appendOutput - appends stdout and stderr', () => {
+  const stdoutParts: string[] = [];
     const stderrParts: string[] = [];
 
     appendOutput(
@@ -16,12 +17,11 @@ describe('appendOutput', () => {
       stderrParts,
     );
 
-    expect(stdoutParts).toEqual(['out1']);
-    expect(stderrParts).toEqual(['err1']);
-  });
-
-  it('skips empty stdout', () => {
-    const stdoutParts: string[] = [];
+    assertEquals(stdoutParts, ['out1']);
+    assertEquals(stderrParts, ['err1']);
+})
+  Deno.test('appendOutput - skips empty stdout', () => {
+  const stdoutParts: string[] = [];
     const stderrParts: string[] = [];
 
     appendOutput(
@@ -30,12 +30,11 @@ describe('appendOutput', () => {
       stderrParts,
     );
 
-    expect(stdoutParts).toEqual([]);
-    expect(stderrParts).toEqual(['err']);
-  });
-
-  it('skips empty stderr', () => {
-    const stdoutParts: string[] = [];
+    assertEquals(stdoutParts, []);
+    assertEquals(stderrParts, ['err']);
+})
+  Deno.test('appendOutput - skips empty stderr', () => {
+  const stdoutParts: string[] = [];
     const stderrParts: string[] = [];
 
     appendOutput(
@@ -44,12 +43,11 @@ describe('appendOutput', () => {
       stderrParts,
     );
 
-    expect(stdoutParts).toEqual(['out']);
-    expect(stderrParts).toEqual([]);
-  });
-
-  it('accumulates multiple results', () => {
-    const stdoutParts: string[] = [];
+    assertEquals(stdoutParts, ['out']);
+    assertEquals(stderrParts, []);
+})
+  Deno.test('appendOutput - accumulates multiple results', () => {
+  const stdoutParts: string[] = [];
     const stderrParts: string[] = [];
 
     appendOutput(
@@ -63,12 +61,11 @@ describe('appendOutput', () => {
       stderrParts,
     );
 
-    expect(stdoutParts).toEqual(['out1', 'out2']);
-    expect(stderrParts).toEqual(['err1', 'err2']);
-  });
-
-  it('handles undefined stdout/stderr', () => {
-    const stdoutParts: string[] = [];
+    assertEquals(stdoutParts, ['out1', 'out2']);
+    assertEquals(stderrParts, ['err1', 'err2']);
+})
+  Deno.test('appendOutput - handles undefined stdout/stderr', () => {
+  const stdoutParts: string[] = [];
     const stderrParts: string[] = [];
 
     appendOutput(
@@ -77,53 +74,46 @@ describe('appendOutput', () => {
       stderrParts,
     );
 
-    expect(stdoutParts).toEqual([]);
-    expect(stderrParts).toEqual([]);
-  });
-});
-
+    assertEquals(stdoutParts, []);
+    assertEquals(stderrParts, []);
+})
 // ---------------------------------------------------------------------------
 // buildCombinedResult
 // ---------------------------------------------------------------------------
 
-describe('buildCombinedResult', () => {
-  it('builds success result', () => {
-    const result = buildCombinedResult(
+
+  Deno.test('buildCombinedResult - builds success result', () => {
+  const result = buildCombinedResult(
       ['out1', 'out2'],
       ['err1'],
       { key: 'value' },
       'success',
     );
 
-    expect(result).toEqual({
+    assertEquals(result, {
       exitCode: 0,
       stdout: 'out1\nout2',
       stderr: 'err1',
       outputs: { key: 'value' },
       conclusion: 'success',
     });
-  });
-
-  it('builds failure result with exit code 1', () => {
-    const result = buildCombinedResult([], [], {}, 'failure');
-    expect(result.exitCode).toBe(1);
-    expect(result.conclusion).toBe('failure');
-  });
-
-  it('trims trailing whitespace from joined output', () => {
-    const result = buildCombinedResult(['line1  ', 'line2  '], [], {}, 'success');
-    expect(result.stdout).toBe('line1  \nline2');
-  });
-
-  it('handles empty arrays', () => {
-    const result = buildCombinedResult([], [], {}, 'success');
-    expect(result.stdout).toBe('');
-    expect(result.stderr).toBe('');
-  });
-
-  it('preserves outputs object', () => {
-    const outputs = { a: '1', b: '2' };
+})
+  Deno.test('buildCombinedResult - builds failure result with exit code 1', () => {
+  const result = buildCombinedResult([], [], {}, 'failure');
+    assertEquals(result.exitCode, 1);
+    assertEquals(result.conclusion, 'failure');
+})
+  Deno.test('buildCombinedResult - trims trailing whitespace from joined output', () => {
+  const result = buildCombinedResult(['line1  ', 'line2  '], [], {}, 'success');
+    assertEquals(result.stdout, 'line1  \nline2');
+})
+  Deno.test('buildCombinedResult - handles empty arrays', () => {
+  const result = buildCombinedResult([], [], {}, 'success');
+    assertEquals(result.stdout, '');
+    assertEquals(result.stderr, '');
+})
+  Deno.test('buildCombinedResult - preserves outputs object', () => {
+  const outputs = { a: '1', b: '2' };
     const result = buildCombinedResult([], [], outputs, 'success');
-    expect(result.outputs).toEqual({ a: '1', b: '2' });
-  });
-});
+    assertEquals(result.outputs, { a: '1', b: '2' });
+})

@@ -1,4 +1,3 @@
-import { describe, expect, it, vi } from 'vitest';
 import { Hono } from 'hono';
 import {
   errorResponse,
@@ -22,6 +21,9 @@ import {
 } from '@/utils/error-response';
 
 // Helper: create a minimal Hono context by running a request through a Hono app
+import { assertEquals, assertStringIncludes } from 'jsr:@std/assert';
+import { stub } from 'jsr:@std/testing/mock';
+
 async function runWithContext(
   handler: (c: any) => Response | Promise<Response>
 ): Promise<{ status: number; body: any; headers: Headers }> {
@@ -32,243 +34,197 @@ async function runWithContext(
   return { status: res.status, body, headers: res.headers };
 }
 
-describe('errorResponse', () => {
-  it('returns JSON with error message', async () => {
-    const { status, body } = await runWithContext((c) =>
+
+  Deno.test('errorResponse - returns JSON with error message', async () => {
+  const { status, body } = await runWithContext((c) =>
       errorResponse(c, 400, 'Bad input')
     );
-    expect(status).toBe(400);
-    expect(body.error).toBe('Bad input');
-  });
-
-  it('includes code when provided', async () => {
-    const { body } = await runWithContext((c) =>
+    assertEquals(status, 400);
+    assertEquals(body.error, 'Bad input');
+})
+  Deno.test('errorResponse - includes code when provided', async () => {
+  const { body } = await runWithContext((c) =>
       errorResponse(c, 400, 'Bad', 'MY_CODE')
     );
-    expect(body.code).toBe('MY_CODE');
-  });
-
-  it('includes details when provided', async () => {
-    const { body } = await runWithContext((c) =>
+    assertEquals(body.code, 'MY_CODE');
+})
+  Deno.test('errorResponse - includes details when provided', async () => {
+  const { body } = await runWithContext((c) =>
       errorResponse(c, 400, 'Bad', 'CODE', { field: 'name' })
     );
-    expect(body.details).toEqual({ field: 'name' });
-  });
-
-  it('omits code and details when not provided', async () => {
-    const { body } = await runWithContext((c) =>
+    assertEquals(body.details, { field: 'name' });
+})
+  Deno.test('errorResponse - omits code and details when not provided', async () => {
+  const { body } = await runWithContext((c) =>
       errorResponse(c, 500, 'Error')
     );
-    expect(body.code).toBeUndefined();
-    expect(body.details).toBeUndefined();
-  });
-});
+    assertEquals(body.code, undefined);
+    assertEquals(body.details, undefined);
+})
 
-describe('badRequest', () => {
-  it('returns 400 with BAD_REQUEST code', async () => {
-    const { status, body } = await runWithContext((c) =>
+  Deno.test('badRequest - returns 400 with BAD_REQUEST code', async () => {
+  const { status, body } = await runWithContext((c) =>
       badRequest(c, 'Invalid field')
     );
-    expect(status).toBe(400);
-    expect(body.code).toBe('BAD_REQUEST');
-    expect(body.error).toBe('Invalid field');
-  });
-});
+    assertEquals(status, 400);
+    assertEquals(body.code, 'BAD_REQUEST');
+    assertEquals(body.error, 'Invalid field');
+})
 
-describe('unauthorized', () => {
-  it('returns 401 with default message', async () => {
-    const { status, body } = await runWithContext((c) => unauthorized(c));
-    expect(status).toBe(401);
-    expect(body.error).toBe('Authentication required');
-  });
+  Deno.test('unauthorized - returns 401 with default message', async () => {
+  const { status, body } = await runWithContext((c) => unauthorized(c));
+    assertEquals(status, 401);
+    assertEquals(body.error, 'Authentication required');
+})
+  Deno.test('unauthorized - accepts custom message', async () => {
+  const { body } = await runWithContext((c) => unauthorized(c, 'Token expired'));
+    assertEquals(body.error, 'Token expired');
+})
 
-  it('accepts custom message', async () => {
-    const { body } = await runWithContext((c) => unauthorized(c, 'Token expired'));
-    expect(body.error).toBe('Token expired');
-  });
-});
+  Deno.test('forbidden - returns 403 with default message', async () => {
+  const { status, body } = await runWithContext((c) => forbidden(c));
+    assertEquals(status, 403);
+    assertEquals(body.error, 'Access denied');
+})
 
-describe('forbidden', () => {
-  it('returns 403 with default message', async () => {
-    const { status, body } = await runWithContext((c) => forbidden(c));
-    expect(status).toBe(403);
-    expect(body.error).toBe('Access denied');
-  });
-});
+  Deno.test('notFound - returns 404 with resource name', async () => {
+  const { status, body } = await runWithContext((c) => notFound(c, 'User'));
+    assertEquals(status, 404);
+    assertEquals(body.error, 'User not found');
+})
+  Deno.test('notFound - uses default "Resource" when not specified', async () => {
+  const { body } = await runWithContext((c) => notFound(c));
+    assertEquals(body.error, 'Resource not found');
+})
 
-describe('notFound', () => {
-  it('returns 404 with resource name', async () => {
-    const { status, body } = await runWithContext((c) => notFound(c, 'User'));
-    expect(status).toBe(404);
-    expect(body.error).toBe('User not found');
-  });
-
-  it('uses default "Resource" when not specified', async () => {
-    const { body } = await runWithContext((c) => notFound(c));
-    expect(body.error).toBe('Resource not found');
-  });
-});
-
-describe('conflict', () => {
-  it('returns 409', async () => {
-    const { status, body } = await runWithContext((c) =>
+  Deno.test('conflict - returns 409', async () => {
+  const { status, body } = await runWithContext((c) =>
       conflict(c, 'Already exists')
     );
-    expect(status).toBe(409);
-    expect(body.code).toBe('CONFLICT');
-  });
-});
+    assertEquals(status, 409);
+    assertEquals(body.code, 'CONFLICT');
+})
 
-describe('validationError', () => {
-  it('returns 422', async () => {
-    const { status, body } = await runWithContext((c) =>
+  Deno.test('validationError - returns 422', async () => {
+  const { status, body } = await runWithContext((c) =>
       validationError(c, 'Invalid data', { fields: ['name'] })
     );
-    expect(status).toBe(422);
-    expect(body.code).toBe('VALIDATION_ERROR');
-    expect(body.details).toEqual({ fields: ['name'] });
-  });
-});
+    assertEquals(status, 422);
+    assertEquals(body.code, 'VALIDATION_ERROR');
+    assertEquals(body.details, { fields: ['name'] });
+})
 
-describe('internalError', () => {
-  it('returns 500 with default message', async () => {
-    const { status, body } = await runWithContext((c) => internalError(c));
-    expect(status).toBe(500);
-    expect(body.error).toBe('Internal server error');
-  });
-});
+  Deno.test('internalError - returns 500 with default message', async () => {
+  const { status, body } = await runWithContext((c) => internalError(c));
+    assertEquals(status, 500);
+    assertEquals(body.error, 'Internal server error');
+})
 
-describe('serviceUnavailable', () => {
-  it('returns 503', async () => {
-    const { status, body } = await runWithContext((c) => serviceUnavailable(c));
-    expect(status).toBe(503);
-    expect(body.code).toBe('SERVICE_UNAVAILABLE');
-  });
-});
+  Deno.test('serviceUnavailable - returns 503', async () => {
+  const { status, body } = await runWithContext((c) => serviceUnavailable(c));
+    assertEquals(status, 503);
+    assertEquals(body.code, 'SERVICE_UNAVAILABLE');
+})
 
-describe('paymentRequired', () => {
-  it('returns 402', async () => {
-    const { status, body } = await runWithContext((c) => paymentRequired(c));
-    expect(status).toBe(402);
-    expect(body.code).toBe('PAYMENT_REQUIRED');
-  });
-});
+  Deno.test('paymentRequired - returns 402', async () => {
+  const { status, body } = await runWithContext((c) => paymentRequired(c));
+    assertEquals(status, 402);
+    assertEquals(body.code, 'PAYMENT_REQUIRED');
+})
 
-describe('gone', () => {
-  it('returns 410', async () => {
-    const { status, body } = await runWithContext((c) => gone(c));
-    expect(status).toBe(410);
-    expect(body.code).toBe('GONE');
-  });
-});
+  Deno.test('gone - returns 410', async () => {
+  const { status, body } = await runWithContext((c) => gone(c));
+    assertEquals(status, 410);
+    assertEquals(body.code, 'GONE');
+})
 
-describe('payloadTooLarge', () => {
-  it('returns 413', async () => {
-    const { status, body } = await runWithContext((c) =>
+  Deno.test('payloadTooLarge - returns 413', async () => {
+  const { status, body } = await runWithContext((c) =>
       payloadTooLarge(c, 'File too big', { maxSize: 10485760 })
     );
-    expect(status).toBe(413);
-    expect(body.code).toBe('PAYLOAD_TOO_LARGE');
-  });
-});
+    assertEquals(status, 413);
+    assertEquals(body.code, 'PAYLOAD_TOO_LARGE');
+})
 
-describe('rateLimited', () => {
-  it('returns 429 with RATE_LIMITED code', async () => {
-    const { status, body } = await runWithContext((c) => rateLimited(c, 30));
-    expect(status).toBe(429);
-    expect(body.code).toBe('RATE_LIMITED');
-    expect(body.error).toBe('Rate limit exceeded');
-  });
+  Deno.test('rateLimited - returns 429 with RATE_LIMITED code', async () => {
+  const { status, body } = await runWithContext((c) => rateLimited(c, 30));
+    assertEquals(status, 429);
+    assertEquals(body.code, 'RATE_LIMITED');
+    assertEquals(body.error, 'Rate limit exceeded');
+})
+  Deno.test('rateLimited - returns 429 without retryAfter', async () => {
+  const { status, body } = await runWithContext((c) => rateLimited(c));
+    assertEquals(status, 429);
+    assertEquals(body.code, 'RATE_LIMITED');
+})
 
-  it('returns 429 without retryAfter', async () => {
-    const { status, body } = await runWithContext((c) => rateLimited(c));
-    expect(status).toBe(429);
-    expect(body.code).toBe('RATE_LIMITED');
-  });
-});
+  Deno.test('notImplemented - returns 501', async () => {
+  const { status, body } = await runWithContext((c) => notImplemented(c));
+    assertEquals(status, 501);
+    assertEquals(body.code, 'NOT_IMPLEMENTED');
+})
 
-describe('notImplemented', () => {
-  it('returns 501', async () => {
-    const { status, body } = await runWithContext((c) => notImplemented(c));
-    expect(status).toBe(501);
-    expect(body.code).toBe('NOT_IMPLEMENTED');
-  });
-});
+  Deno.test('badGateway - returns 502', async () => {
+  const { status, body } = await runWithContext((c) => badGateway(c));
+    assertEquals(status, 502);
+    assertEquals(body.code, 'BAD_GATEWAY');
+})
 
-describe('badGateway', () => {
-  it('returns 502', async () => {
-    const { status, body } = await runWithContext((c) => badGateway(c));
-    expect(status).toBe(502);
-    expect(body.code).toBe('BAD_GATEWAY');
-  });
-});
+  Deno.test('gatewayTimeout - returns 504', async () => {
+  const { status, body } = await runWithContext((c) => gatewayTimeout(c));
+    assertEquals(status, 504);
+    assertEquals(body.code, 'GATEWAY_TIMEOUT');
+})
 
-describe('gatewayTimeout', () => {
-  it('returns 504', async () => {
-    const { status, body } = await runWithContext((c) => gatewayTimeout(c));
-    expect(status).toBe(504);
-    expect(body.code).toBe('GATEWAY_TIMEOUT');
-  });
-});
-
-describe('handleDbError', () => {
-  it('returns 409 for UNIQUE constraint errors', async () => {
-    const { status, body } = await runWithContext((c) =>
+  Deno.test('handleDbError - returns 409 for UNIQUE constraint errors', async () => {
+  const { status, body } = await runWithContext((c) =>
       handleDbError(c, new Error('UNIQUE constraint failed: users.email'), 'User')
     );
-    expect(status).toBe(409);
-    expect(body.error).toBe('User already exists');
-  });
-
-  it('returns 400 for FOREIGN KEY constraint errors', async () => {
-    const { status, body } = await runWithContext((c) =>
+    assertEquals(status, 409);
+    assertEquals(body.error, 'User already exists');
+})
+  Deno.test('handleDbError - returns 400 for FOREIGN KEY constraint errors', async () => {
+  const { status, body } = await runWithContext((c) =>
       handleDbError(c, new Error('FOREIGN KEY constraint failed'), 'User')
     );
-    expect(status).toBe(400);
-    expect(body.error).toContain('user does not exist');
-  });
-
-  it('returns 422 for NOT NULL constraint errors', async () => {
-    const { status, body } = await runWithContext((c) =>
+    assertEquals(status, 400);
+    assertStringIncludes(body.error, 'user does not exist');
+})
+  Deno.test('handleDbError - returns 422 for NOT NULL constraint errors', async () => {
+  const { status, body } = await runWithContext((c) =>
       handleDbError(c, new Error('NOT NULL constraint failed: users.name'))
     );
-    expect(status).toBe(422);
-    expect(body.error).toBe('Required field is missing');
-  });
-
-  it('returns 500 for unknown database errors', async () => {
-    const spy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    assertEquals(status, 422);
+    assertEquals(body.error, 'Required field is missing');
+})
+  Deno.test('handleDbError - returns 500 for unknown database errors', async () => {
+  const spy = stub(console, 'error') = () => {} as any;
     const { status, body } = await runWithContext((c) =>
       handleDbError(c, new Error('Connection timeout'))
     );
-    expect(status).toBe(500);
-    expect(body.error).toBe('Database operation failed');
-    spy.mockRestore();
-  });
-
-  it('uses default entity name "Record"', async () => {
-    const { body } = await runWithContext((c) =>
+    assertEquals(status, 500);
+    assertEquals(body.error, 'Database operation failed');
+    spy.restore();
+})
+  Deno.test('handleDbError - uses default entity name "Record"', async () => {
+  const { body } = await runWithContext((c) =>
       handleDbError(c, new Error('UNIQUE constraint failed'))
     );
-    expect(body.error).toBe('Record already exists');
-  });
-});
+    assertEquals(body.error, 'Record already exists');
+})
 
-describe('oauth2Error', () => {
-  it('returns error in OAuth2 format', async () => {
-    const { status, body } = await runWithContext((c) =>
+  Deno.test('oauth2Error - returns error in OAuth2 format', async () => {
+  const { status, body } = await runWithContext((c) =>
       oauth2Error(c, 400, 'invalid_grant', 'Grant expired')
     );
-    expect(status).toBe(400);
-    expect(body.error).toBe('invalid_grant');
-    expect(body.error_description).toBe('Grant expired');
-  });
-
-  it('omits description when not provided', async () => {
-    const { body } = await runWithContext((c) =>
+    assertEquals(status, 400);
+    assertEquals(body.error, 'invalid_grant');
+    assertEquals(body.error_description, 'Grant expired');
+})
+  Deno.test('oauth2Error - omits description when not provided', async () => {
+  const { body } = await runWithContext((c) =>
       oauth2Error(c, 401, 'invalid_client')
     );
-    expect(body.error).toBe('invalid_client');
-    expect(body.error_description).toBeUndefined();
-  });
-});
+    assertEquals(body.error, 'invalid_client');
+    assertEquals(body.error_description, undefined);
+})

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { createSignal, createEffect } from 'solid-js';
 import { rpc, rpcJson } from '../lib/rpc';
 import { useI18n } from '../store/i18n';
 import { useToast } from '../store/toast';
@@ -57,17 +57,17 @@ export function useChatSharing(threadId: string): UseChatSharingReturn {
   const { t } = useI18n();
   const { showToast } = useToast();
 
-  const [showShareModal, setShowShareModal] = useState(false);
-  const [showExportModal, setShowExportModal] = useState(false);
-  const [sharesLoading, setSharesLoading] = useState(false);
-  const [shares, setShares] = useState<ThreadShare[]>([]);
-  const [shareMode, setShareMode] = useState<'public' | 'password'>('public');
-  const [sharePassword, setSharePassword] = useState('');
-  const [shareExpiresInDays, setShareExpiresInDays] = useState<string>('');
-  const [shareError, setShareError] = useState<string | null>(null);
-  const [creatingShare, setCreatingShare] = useState(false);
+  const [showShareModal, setShowShareModal] = createSignal(false);
+  const [showExportModal, setShowExportModal] = createSignal(false);
+  const [sharesLoading, setSharesLoading] = createSignal(false);
+  const [shares, setShares] = createSignal<ThreadShare[]>([]);
+  const [shareMode, setShareMode] = createSignal<'public' | 'password'>('public');
+  const [sharePassword, setSharePassword] = createSignal('');
+  const [shareExpiresInDays, setShareExpiresInDays] = createSignal<string>('');
+  const [shareError, setShareError] = createSignal<string | null>(null);
+  const [creatingShare, setCreatingShare] = createSignal(false);
 
-  const fetchShares = useCallback(async () => {
+  const fetchShares = async () => {
     setSharesLoading(true);
     setShareError(null);
     try {
@@ -79,24 +79,25 @@ export function useChatSharing(threadId: string): UseChatSharingReturn {
     } finally {
       setSharesLoading(false);
     }
-  }, [threadId, t]);
+  };
 
-  useEffect(() => {
-    if (showShareModal) {
+  createEffect(() => {
+    if (showShareModal()) {
       fetchShares();
     }
-  }, [showShareModal, fetchShares]);
+  });
 
-  const createShare = useCallback(async () => {
+  const createShare = async () => {
     setCreatingShare(true);
     setShareError(null);
     try {
-      const expires_in_days = shareExpiresInDays.trim() ? Number.parseInt(shareExpiresInDays.trim(), 10) : undefined;
+      const expiresStr = shareExpiresInDays().trim();
+      const expires_in_days = expiresStr ? Number.parseInt(expiresStr, 10) : undefined;
       const res = await rpc.threads[':id'].share.$post({
         param: { id: threadId },
         json: {
-          mode: shareMode,
-          password: shareMode === 'password' ? sharePassword : undefined,
+          mode: shareMode(),
+          password: shareMode() === 'password' ? sharePassword() : undefined,
           expires_in_days: typeof expires_in_days === 'number' && Number.isFinite(expires_in_days) ? expires_in_days : undefined,
         },
       });
@@ -116,9 +117,9 @@ export function useChatSharing(threadId: string): UseChatSharingReturn {
     } finally {
       setCreatingShare(false);
     }
-  }, [fetchShares, shareExpiresInDays, shareMode, sharePassword, showToast, t, threadId]);
+  };
 
-  const revokeShare = useCallback(async (shareId: string) => {
+  const revokeShare = async (shareId: string) => {
     try {
       const res = await rpc.threads[':id'].shares[':shareId'].revoke.$post({
         param: { id: threadId, shareId },
@@ -129,9 +130,9 @@ export function useChatSharing(threadId: string): UseChatSharingReturn {
     } catch (err) {
       showToast('error', err instanceof Error ? err.message : t('failedToRevoke'));
     }
-  }, [fetchShares, showToast, t, threadId]);
+  };
 
-  const downloadExport = useCallback(async (format: 'markdown' | 'json' | 'pdf') => {
+  const downloadExport = async (format: 'markdown' | 'json' | 'pdf') => {
     try {
       const res = await rpc.threads[':id'].export.$get({
         param: { id: threadId },
@@ -160,23 +161,23 @@ export function useChatSharing(threadId: string): UseChatSharingReturn {
     } catch (err) {
       showToast('error', err instanceof Error ? err.message : t('exportFailed'));
     }
-  }, [showToast, t, threadId]);
+  };
 
   return {
-    showShareModal,
+    get showShareModal() { return showShareModal(); },
     setShowShareModal,
-    showExportModal,
+    get showExportModal() { return showExportModal(); },
     setShowExportModal,
-    sharesLoading,
-    shares,
-    shareMode,
+    get sharesLoading() { return sharesLoading(); },
+    get shares() { return shares(); },
+    get shareMode() { return shareMode(); },
     setShareMode,
-    sharePassword,
+    get sharePassword() { return sharePassword(); },
     setSharePassword,
-    shareExpiresInDays,
+    get shareExpiresInDays() { return shareExpiresInDays(); },
     setShareExpiresInDays,
-    shareError,
-    creatingShare,
+    get shareError() { return shareError(); },
+    get creatingShare() { return creatingShare(); },
     fetchShares,
     createShare,
     revokeShare,

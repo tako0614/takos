@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { createSignal, createEffect, onMount, onCleanup } from 'solid-js';
 import { Icons } from '../../lib/Icons';
 import { useI18n } from '../../store/i18n';
 import { useCustomTools } from '../../hooks/useCustomTools';
@@ -35,30 +35,30 @@ export function CustomToolsSection({
     executeTool,
   } = useCustomTools({ spaceId });
 
-  const [showCreateModal, setShowCreateModal] = useState(false);
-  const [showEditModal, setShowEditModal] = useState(false);
-  const [editingTool, setEditingTool] = useState<CustomTool | null>(null);
-  const [showExecuteModal, setShowExecuteModal] = useState(false);
-  const [executeInput, setExecuteInput] = useState('{}');
-  const [executeResult, setExecuteResult] = useState<string | null>(null);
-  const [executing, setExecuting] = useState(false);
+  const [showCreateModal, setShowCreateModal] = createSignal(false);
+  const [showEditModal, setShowEditModal] = createSignal(false);
+  const [editingTool, setEditingTool] = createSignal<CustomTool | null>(null);
+  const [showExecuteModal, setShowExecuteModal] = createSignal(false);
+  const [executeInput, setExecuteInput] = createSignal('{}');
+  const [executeResult, setExecuteResult] = createSignal<string | null>(null);
+  const [executing, setExecuting] = createSignal(false);
 
-  useEffect(() => {
+  createEffect(() => {
     if (spaceId) {
       refresh();
     }
-  }, [spaceId, refresh]);
+  });
 
   const handleToggle = async (tool: CustomTool) => {
     await toggleTool(tool.id, !tool.enabled);
   };
 
   const handleExecute = async () => {
-    if (!selectedTool) return;
+    if (!selectedTool()) return;
     setExecuting(true);
     try {
-      const input = JSON.parse(executeInput);
-      const result = await executeTool(selectedTool.name, input);
+      const input = JSON.parse(executeInput());
+      const result = await executeTool(selectedTool()!.name, input);
       setExecuteResult(typeof result === 'string' ? result : JSON.stringify(result, null, 2));
     } catch (error) {
       setExecuteResult(error instanceof Error ? error.message : t('executionFailed'));
@@ -81,54 +81,54 @@ export function CustomToolsSection({
 
   if (!selectedSpaceId) {
     return (
-      <div className="flex flex-col items-center justify-center h-64 gap-4">
-        <div className="w-16 h-16 rounded-2xl bg-zinc-50 dark:bg-zinc-800 flex items-center justify-center">
-          <Icons.Wrench className="w-8 h-8 text-zinc-300 dark:text-zinc-600" />
+      <div class="flex flex-col items-center justify-center h-64 gap-4">
+        <div class="w-16 h-16 rounded-2xl bg-zinc-50 dark:bg-zinc-800 flex items-center justify-center">
+          <Icons.Wrench class="w-8 h-8 text-zinc-300 dark:text-zinc-600" />
         </div>
-        <p className="text-sm font-medium text-zinc-600 dark:text-zinc-400">{t('selectSpace')}</p>
+        <p class="text-sm font-medium text-zinc-600 dark:text-zinc-400">{t('selectSpace')}</p>
       </div>
     );
   }
 
   return (
     <>
-      {loading ? (
-          <div className="flex flex-col items-center justify-center h-64 gap-4">
-            <div className="w-8 h-8 border-2 border-zinc-200 dark:border-zinc-700 border-t-zinc-600 dark:border-t-zinc-300 rounded-full animate-spin" />
-            <span className="text-sm text-zinc-400">{t('loading')}</span>
+      {loading() ? (
+          <div class="flex flex-col items-center justify-center h-64 gap-4">
+            <div class="w-8 h-8 border-2 border-zinc-200 dark:border-zinc-700 border-t-zinc-600 dark:border-t-zinc-300 rounded-full animate-spin" />
+            <span class="text-sm text-zinc-400">{t('loading')}</span>
           </div>
-        ) : tools.length === 0 ? (
-          <div className="flex flex-col items-center justify-center h-64 gap-4">
-            <div className="w-16 h-16 rounded-2xl bg-zinc-50 dark:bg-zinc-800 flex items-center justify-center">
-              <Icons.Wrench className="w-8 h-8 text-zinc-300 dark:text-zinc-600" />
+        ) : tools().length === 0 ? (
+          <div class="flex flex-col items-center justify-center h-64 gap-4">
+            <div class="w-16 h-16 rounded-2xl bg-zinc-50 dark:bg-zinc-800 flex items-center justify-center">
+              <Icons.Wrench class="w-8 h-8 text-zinc-300 dark:text-zinc-600" />
             </div>
-            <div className="text-center">
-              <p className="text-sm font-medium text-zinc-600 dark:text-zinc-400">{t('noCustomToolsYet')}</p>
+            <div class="text-center">
+              <p class="text-sm font-medium text-zinc-600 dark:text-zinc-400">{t('noCustomToolsYet')}</p>
             </div>
             <Button
               variant="secondary"
               size="sm"
-              leftIcon={<Icons.Plus className="w-4 h-4" />}
+              leftIcon={<Icons.Plus class="w-4 h-4" />}
               onClick={() => setShowCreateModal(true)}
             >
               {t('createFirstTool')}
             </Button>
           </div>
         ) : (
-          <div className="space-y-4">
-            <div className="flex justify-end">
+          <div class="space-y-4">
+            <div class="flex justify-end">
               <button
-                className="inline-flex items-center gap-2 px-4 py-2 bg-zinc-900 dark:bg-zinc-100 hover:bg-zinc-800 dark:hover:bg-zinc-200 text-white dark:text-zinc-900 rounded-xl text-sm font-medium transition-colors"
+                class="inline-flex items-center gap-2 px-4 py-2 bg-zinc-900 dark:bg-zinc-100 hover:bg-zinc-800 dark:hover:bg-zinc-200 text-white dark:text-zinc-900 rounded-xl text-sm font-medium transition-colors"
                 onClick={() => setShowCreateModal(true)}
               >
-                <Icons.Plus className="w-4 h-4" />
+                <Icons.Plus class="w-4 h-4" />
                 {t('addTool')}
               </button>
             </div>
-            <div className="grid gap-3">
-              {tools.map(tool => (
+            <div class="grid gap-3">
+              {tools().map(tool => (
                 <ToolCard
-                  key={tool.id}
+
                   tool={tool}
                   onToggle={() => handleToggle(tool)}
                   onEdit={() => openEditModal(tool)}
@@ -140,7 +140,7 @@ export function CustomToolsSection({
           </div>
         )}
 
-      {showCreateModal && (
+      {showCreateModal() && (
         <CreateToolModal
           onClose={() => setShowCreateModal(false)}
           onCreate={async (data) => {
@@ -150,15 +150,15 @@ export function CustomToolsSection({
         />
       )}
 
-      {showEditModal && editingTool && (
+      {showEditModal() && editingTool() && (
         <EditToolModal
-          tool={editingTool}
+          tool={editingTool()!}
           onClose={() => {
             setShowEditModal(false);
             setEditingTool(null);
           }}
           onSave={async (data) => {
-            const success = await updateTool(editingTool.id, data);
+            const success = await updateTool(editingTool()!.id, data);
             if (success) {
               setShowEditModal(false);
               setEditingTool(null);
@@ -167,40 +167,40 @@ export function CustomToolsSection({
         />
       )}
 
-      {showExecuteModal && selectedTool && (
+      {showExecuteModal() && selectedTool() && (
         <Modal
           isOpen
           onClose={() => setShowExecuteModal(false)}
-          title={`${t('test')}: ${selectedTool.name}`}
+          title={`${t('test')}: ${selectedTool()!.name}`}
         >
-          <div className="flex flex-col gap-4">
+          <div class="flex flex-col gap-4">
             <div>
-              <label className="block mb-2 text-sm font-medium text-zinc-700 dark:text-zinc-300">
+              <label class="block mb-2 text-sm font-medium text-zinc-700 dark:text-zinc-300">
                 {t('inputJson')}
               </label>
               <textarea
-                value={executeInput}
-                onChange={(e) => setExecuteInput(e.target.value)}
-                className="w-full min-h-[100px] p-3 rounded-xl border border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-900 text-zinc-900 dark:text-zinc-100 font-mono text-sm resize-y focus:outline-none focus:ring-2 focus:ring-zinc-900/10 dark:focus:ring-zinc-100/10"
+                value={executeInput()}
+                onInput={(e) => setExecuteInput(e.target.value)}
+                class="w-full min-h-[100px] p-3 rounded-xl border border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-900 text-zinc-900 dark:text-zinc-100 font-mono text-sm resize-y focus:outline-none focus:ring-2 focus:ring-zinc-900/10 dark:focus:ring-zinc-100/10"
                 placeholder="{}"
               />
             </div>
 
             <Button
               onClick={handleExecute}
-              isLoading={executing}
-              leftIcon={<Icons.Play className="w-4 h-4" />}
+              isLoading={executing()}
+              leftIcon={<Icons.Play class="w-4 h-4" />}
             >
               {t('execute')}
             </Button>
 
-            {executeResult !== null && (
+            {executeResult() !== null && (
               <div>
-                <label className="block mb-2 text-sm font-medium text-zinc-700 dark:text-zinc-300">
+                <label class="block mb-2 text-sm font-medium text-zinc-700 dark:text-zinc-300">
                   {t('result')}
                 </label>
-                <pre className="p-3 rounded-xl bg-zinc-100 dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100 overflow-auto max-h-[200px] text-xs font-mono whitespace-pre-wrap">
-                  {executeResult}
+                <pre class="p-3 rounded-xl bg-zinc-100 dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100 overflow-auto max-h-[200px] text-xs font-mono whitespace-pre-wrap">
+                  {executeResult()}
                 </pre>
               </div>
             )}

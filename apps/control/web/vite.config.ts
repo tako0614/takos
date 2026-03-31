@@ -1,7 +1,7 @@
 import { defineConfig } from 'vite';
-import react from '@vitejs/plugin-react';
+import solid from 'vite-plugin-solid';
 import tailwindcss from '@tailwindcss/vite';
-import { resolve } from 'path';
+import { resolve } from 'node:path';
 import { DEFAULT_LOCAL_PORTS } from '../../../packages/control/src/local-platform/runtime-types.ts';
 
 export default defineConfig(({ mode }) => {
@@ -10,16 +10,14 @@ export default defineConfig(({ mode }) => {
 
   return {
     plugins: [
-      react({
-        jsxRuntime: 'automatic',
-      }),
+      solid(),
       tailwindcss(),
     ],
     root: resolve(__dirname),
     resolve: {
-      dedupe: ['react', 'react-dom', 'react/jsx-runtime'],
       alias: {
         'takos-control/shared/types': resolve(__dirname, '../../../packages/control/src/shared/types/index.ts'),
+        'takos-common': resolve(__dirname, '../../../packages/common/src'),
       },
     },
     build: {

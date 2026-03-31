@@ -1,6 +1,6 @@
-import { atom, useAtomValue, useSetAtom } from 'jotai';
-import { atomWithStorage, createJSONStorage } from 'jotai/utils';
-import { useMemo } from 'react';
+import { atom } from 'jotai/vanilla';
+import { useAtomValue, useSetAtom } from 'solid-jotai';
+import { atomWithStorageVanilla } from '../lib/storage-atom';
 import { type Language, type TranslationKey, type TranslationParams, getTranslation } from '../i18n';
 
 export type { TranslationKey, TranslationParams };
@@ -17,12 +17,7 @@ function detectInitialLanguage(): Language {
 }
 
 /** Persisted language preference atom. */
-export const languageAtom = atomWithStorage<Language>(
-  STORAGE_KEY,
-  detectInitialLanguage(),
-  createJSONStorage(() => localStorage),
-  { getOnInit: true },
-);
+export const languageAtom = atomWithStorageVanilla<Language>(STORAGE_KEY, detectInitialLanguage());
 
 /** Derived read-only atom providing the translation function. */
 export const translationAtom = atom((get) => {
@@ -43,10 +38,12 @@ export const translationAtom = atom((get) => {
 export function useI18n() {
   const lang = useAtomValue(languageAtom);
   const setLang = useSetAtom(languageAtom);
-  const { t, tOr } = useAtomValue(translationAtom);
+  const translation = useAtomValue(translationAtom);
 
-  return useMemo(
-    () => ({ lang, t, tOr, setLang }),
-    [lang, t, tOr, setLang],
-  );
+  return {
+    get lang() { return lang(); },
+    get t() { return translation().t; },
+    get tOr() { return translation().tOr; },
+    setLang,
+  };
 }

@@ -1,81 +1,64 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
 import type { Env } from '@/types';
 
-const mocks = vi.hoisted(() => ({
-  getDb: vi.fn(),
-  generateId: vi.fn(),
-  now: vi.fn(),
-}));
+import { assertEquals, assertNotEquals, assert } from 'jsr:@std/assert';
+import { assertSpyCalls } from 'jsr:@std/testing/mock';
 
-vi.mock('@/db', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/db')>()),
-  getDb: mocks.getDb,
-}));
-
-vi.mock('@/shared/utils', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/shared/utils')>()),
-  generateId: mocks.generateId,
-  now: mocks.now,
-}));
-
-import { hashAuditIp, writeCommonEnvAuditLog } from '@/services/common-env/audit';
-
-describe('hashAuditIp', () => {
-  it('returns undefined for empty ip', async () => {
-    const env = { AUDIT_IP_HASH_KEY: 'secret' } as unknown as Env;
-    const result = await hashAuditIp(env, '');
-    expect(result).toBeUndefined();
-  });
-
-  it('returns undefined for undefined ip', async () => {
-    const env = { AUDIT_IP_HASH_KEY: 'secret' } as unknown as Env;
-    const result = await hashAuditIp(env, undefined);
-    expect(result).toBeUndefined();
-  });
-
-  it('returns undefined when AUDIT_IP_HASH_KEY is not set', async () => {
-    const env = {} as unknown as Env;
-    const result = await hashAuditIp(env, '127.0.0.1');
-    expect(result).toBeUndefined();
-  });
-
-  it('returns a hex string for valid ip and key', async () => {
-    const env = { AUDIT_IP_HASH_KEY: 'test-secret-key' } as unknown as Env;
-    const result = await hashAuditIp(env, '192.168.1.1');
-    expect(result).toBeDefined();
-    expect(typeof result).toBe('string');
-    // HMAC-SHA-256 produces a 64-char hex string
-    expect(result!.length).toBe(64);
-    expect(/^[0-9a-f]+$/.test(result!)).toBe(true);
-  });
-
-  it('produces consistent hashes for the same input', async () => {
-    const env = { AUDIT_IP_HASH_KEY: 'test-secret-key' } as unknown as Env;
-    const result1 = await hashAuditIp(env, '10.0.0.1');
-    const result2 = await hashAuditIp(env, '10.0.0.1');
-    expect(result1).toBe(result2);
-  });
-
-  it('produces different hashes for different ips', async () => {
-    const env = { AUDIT_IP_HASH_KEY: 'test-secret-key' } as unknown as Env;
-    const result1 = await hashAuditIp(env, '10.0.0.1');
-    const result2 = await hashAuditIp(env, '10.0.0.2');
-    expect(result1).not.toBe(result2);
-  });
+const mocks = ({
+  getDb: ((..._args: any[]) => undefined) as any,
+  generateId: ((..._args: any[]) => undefined) as any,
+  now: ((..._args: any[]) => undefined) as any,
 });
 
-describe('writeCommonEnvAuditLog', () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-    mocks.generateId.mockReturnValue('audit-id-1');
-    mocks.now.mockReturnValue('2026-01-01T00:00:00.000Z');
-  });
+// [Deno] vi.mock removed - manually stub imports from '@/db'
+// [Deno] vi.mock removed - manually stub imports from '@/shared/utils'
+import { hashAuditIp, writeCommonEnvAuditLog } from '@/services/common-env/audit';
 
-  it('inserts an audit log entry with the correct fields', async () => {
-    const insertMock = vi.fn().mockReturnValue({
-      values: vi.fn().mockResolvedValue(undefined),
-    });
-    mocks.getDb.mockReturnValue({ insert: insertMock });
+
+  Deno.test('hashAuditIp - returns undefined for empty ip', async () => {
+  const env = { AUDIT_IP_HASH_KEY: 'secret' } as unknown as Env;
+    const result = await hashAuditIp(env, '');
+    assertEquals(result, undefined);
+})
+  Deno.test('hashAuditIp - returns undefined for undefined ip', async () => {
+  const env = { AUDIT_IP_HASH_KEY: 'secret' } as unknown as Env;
+    const result = await hashAuditIp(env, undefined);
+    assertEquals(result, undefined);
+})
+  Deno.test('hashAuditIp - returns undefined when AUDIT_IP_HASH_KEY is not set', async () => {
+  const env = {} as unknown as Env;
+    const result = await hashAuditIp(env, '127.0.0.1');
+    assertEquals(result, undefined);
+})
+  Deno.test('hashAuditIp - returns a hex string for valid ip and key', async () => {
+  const env = { AUDIT_IP_HASH_KEY: 'test-secret-key' } as unknown as Env;
+    const result = await hashAuditIp(env, '192.168.1.1');
+    assert(result !== undefined);
+    assertEquals(typeof result, 'string');
+    // HMAC-SHA-256 produces a 64-char hex string
+    assertEquals(result!.length, 64);
+    assertEquals(/^[0-9a-f]+$/.test(result!), true);
+})
+  Deno.test('hashAuditIp - produces consistent hashes for the same input', async () => {
+  const env = { AUDIT_IP_HASH_KEY: 'test-secret-key' } as unknown as Env;
+    const result1 = await hashAuditIp(env, '10.0.0.1');
+    const result2 = await hashAuditIp(env, '10.0.0.1');
+    assertEquals(result1, result2);
+})
+  Deno.test('hashAuditIp - produces different hashes for different ips', async () => {
+  const env = { AUDIT_IP_HASH_KEY: 'test-secret-key' } as unknown as Env;
+    const result1 = await hashAuditIp(env, '10.0.0.1');
+    const result2 = await hashAuditIp(env, '10.0.0.2');
+    assertNotEquals(result1, result2);
+})
+
+  Deno.test('writeCommonEnvAuditLog - inserts an audit log entry with the correct fields', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+    mocks.generateId = (() => 'audit-id-1') as any;
+    mocks.now = (() => '2026-01-01T00:00:00.000Z') as any;
+  const insertMock = (() => ({
+      values: (async () => undefined),
+    }));
+    mocks.getDb = (() => ({ insert: insertMock })) as any;
 
     await writeCommonEnvAuditLog({
       db: {} as any,
@@ -95,30 +78,32 @@ describe('writeCommonEnvAuditLog', () => {
       },
     });
 
-    expect(insertMock).toHaveBeenCalledTimes(1);
-    const valuesCall = insertMock.mock.results[0].value.values;
-    expect(valuesCall).toHaveBeenCalledTimes(1);
-    const values = valuesCall.mock.calls[0][0];
-    expect(values.id).toBe('audit-id-1');
-    expect(values.accountId).toBe('space-1');
-    expect(values.actorAccountId).toBe('user-1');
-    expect(values.actorType).toBe('user');
-    expect(values.eventType).toBe('workspace_env_created');
-    expect(values.envName).toBe('MY_VAR');
-    expect(values.serviceId).toBe('worker-1');
-    expect(values.linkSource).toBe('manual');
-    expect(values.requestId).toBe('req-1');
-    expect(values.ipHash).toBe('hash-1');
-    expect(values.userAgent).toBe('test-agent');
-    expect(JSON.parse(values.changeBefore)).toEqual({ exists: false });
-    expect(JSON.parse(values.changeAfter)).toEqual({ exists: true });
-  });
-
-  it('uses system actor defaults when actor is not provided', async () => {
-    const insertMock = vi.fn().mockReturnValue({
-      values: vi.fn().mockResolvedValue(undefined),
-    });
-    mocks.getDb.mockReturnValue({ insert: insertMock });
+    assertSpyCalls(insertMock, 1);
+    const valuesCall = insertMock.calls[0].value.values;
+    assertSpyCalls(valuesCall, 1);
+    const values = valuesCall.calls[0][0];
+    assertEquals(values.id, 'audit-id-1');
+    assertEquals(values.accountId, 'space-1');
+    assertEquals(values.actorAccountId, 'user-1');
+    assertEquals(values.actorType, 'user');
+    assertEquals(values.eventType, 'workspace_env_created');
+    assertEquals(values.envName, 'MY_VAR');
+    assertEquals(values.serviceId, 'worker-1');
+    assertEquals(values.linkSource, 'manual');
+    assertEquals(values.requestId, 'req-1');
+    assertEquals(values.ipHash, 'hash-1');
+    assertEquals(values.userAgent, 'test-agent');
+    assertEquals(JSON.parse(values.changeBefore), { exists: false });
+    assertEquals(JSON.parse(values.changeAfter), { exists: true });
+})
+  Deno.test('writeCommonEnvAuditLog - uses system actor defaults when actor is not provided', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+    mocks.generateId = (() => 'audit-id-1') as any;
+    mocks.now = (() => '2026-01-01T00:00:00.000Z') as any;
+  const insertMock = (() => ({
+      values: (async () => undefined),
+    }));
+    mocks.getDb = (() => ({ insert: insertMock })) as any;
 
     await writeCommonEnvAuditLog({
       db: {} as any,
@@ -127,20 +112,22 @@ describe('writeCommonEnvAuditLog', () => {
       envName: 'MY_VAR',
     });
 
-    const valuesCall = insertMock.mock.results[0].value.values;
-    const values = valuesCall.mock.calls[0][0];
-    expect(values.actorType).toBe('system');
-    expect(values.actorAccountId).toBeNull();
-    expect(values.requestId).toBeNull();
-    expect(values.ipHash).toBeNull();
-    expect(values.userAgent).toBeNull();
-  });
-
-  it('handles null/undefined optional fields', async () => {
-    const insertMock = vi.fn().mockReturnValue({
-      values: vi.fn().mockResolvedValue(undefined),
-    });
-    mocks.getDb.mockReturnValue({ insert: insertMock });
+    const valuesCall = insertMock.calls[0].value.values;
+    const values = valuesCall.calls[0][0];
+    assertEquals(values.actorType, 'system');
+    assertEquals(values.actorAccountId, null);
+    assertEquals(values.requestId, null);
+    assertEquals(values.ipHash, null);
+    assertEquals(values.userAgent, null);
+})
+  Deno.test('writeCommonEnvAuditLog - handles null/undefined optional fields', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+    mocks.generateId = (() => 'audit-id-1') as any;
+    mocks.now = (() => '2026-01-01T00:00:00.000Z') as any;
+  const insertMock = (() => ({
+      values: (async () => undefined),
+    }));
+    mocks.getDb = (() => ({ insert: insertMock })) as any;
 
     await writeCommonEnvAuditLog({
       db: {} as any,
@@ -149,11 +136,10 @@ describe('writeCommonEnvAuditLog', () => {
       envName: 'MY_VAR',
     });
 
-    const valuesCall = insertMock.mock.results[0].value.values;
-    const values = valuesCall.mock.calls[0][0];
-    expect(values.serviceId).toBeNull();
-    expect(values.linkSource).toBeNull();
-    expect(JSON.parse(values.changeBefore)).toEqual({});
-    expect(JSON.parse(values.changeAfter)).toEqual({});
-  });
-});
+    const valuesCall = insertMock.calls[0].value.values;
+    const values = valuesCall.calls[0][0];
+    assertEquals(values.serviceId, null);
+    assertEquals(values.linkSource, null);
+    assertEquals(JSON.parse(values.changeBefore), {});
+    assertEquals(JSON.parse(values.changeAfter), {});
+})

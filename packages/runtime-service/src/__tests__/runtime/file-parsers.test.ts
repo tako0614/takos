@@ -1,129 +1,109 @@
-import { describe, expect, it } from 'vitest';
-import { parseKeyValueFile, parsePathFile } from '../../runtime/actions/file-parsers.js';
+import { parseKeyValueFile, parsePathFile } from '../../runtime/actions/file-parsers.ts';
 
 // ---------------------------------------------------------------------------
 // parseKeyValueFile
 // ---------------------------------------------------------------------------
 
-describe('parseKeyValueFile', () => {
-  it('parses simple key=value pairs', () => {
-    expect(parseKeyValueFile('KEY=value')).toEqual({ KEY: 'value' });
-  });
 
-  it('parses multiple key=value pairs', () => {
-    const content = 'KEY1=value1\nKEY2=value2\nKEY3=value3';
-    expect(parseKeyValueFile(content)).toEqual({
+import { assertEquals } from 'jsr:@std/assert';
+
+  Deno.test('parseKeyValueFile - parses simple key=value pairs', () => {
+  assertEquals(parseKeyValueFile('KEY=value'), { KEY: 'value' });
+})
+  Deno.test('parseKeyValueFile - parses multiple key=value pairs', () => {
+  const content = 'KEY1=value1\nKEY2=value2\nKEY3=value3';
+    assertEquals(parseKeyValueFile(content), {
       KEY1: 'value1',
       KEY2: 'value2',
       KEY3: 'value3',
     });
-  });
-
-  it('handles empty value', () => {
-    expect(parseKeyValueFile('KEY=')).toEqual({ KEY: '' });
-  });
-
-  it('handles value containing equals sign', () => {
-    expect(parseKeyValueFile('KEY=a=b=c')).toEqual({ KEY: 'a=b=c' });
-  });
-
-  it('handles heredoc format', () => {
-    const content = 'OUTPUT<<EOF\nline1\nline2\nEOF';
-    expect(parseKeyValueFile(content)).toEqual({ OUTPUT: 'line1\nline2' });
-  });
-
-  it('handles heredoc with custom delimiter', () => {
-    const content = 'DATA<<DELIM\ncontent here\nDELIM';
-    expect(parseKeyValueFile(content)).toEqual({ DATA: 'content here' });
-  });
-
-  it('handles empty heredoc', () => {
-    const content = 'EMPTY<<EOF\nEOF';
-    expect(parseKeyValueFile(content)).toEqual({ EMPTY: '' });
-  });
-
-  it('handles CRLF line endings', () => {
-    const content = 'KEY1=value1\r\nKEY2=value2';
-    expect(parseKeyValueFile(content)).toEqual({
+})
+  Deno.test('parseKeyValueFile - handles empty value', () => {
+  assertEquals(parseKeyValueFile('KEY='), { KEY: '' });
+})
+  Deno.test('parseKeyValueFile - handles value containing equals sign', () => {
+  assertEquals(parseKeyValueFile('KEY=a=b=c'), { KEY: 'a=b=c' });
+})
+  Deno.test('parseKeyValueFile - handles heredoc format', () => {
+  const content = 'OUTPUT<<EOF\nline1\nline2\nEOF';
+    assertEquals(parseKeyValueFile(content), { OUTPUT: 'line1\nline2' });
+})
+  Deno.test('parseKeyValueFile - handles heredoc with custom delimiter', () => {
+  const content = 'DATA<<DELIM\ncontent here\nDELIM';
+    assertEquals(parseKeyValueFile(content), { DATA: 'content here' });
+})
+  Deno.test('parseKeyValueFile - handles empty heredoc', () => {
+  const content = 'EMPTY<<EOF\nEOF';
+    assertEquals(parseKeyValueFile(content), { EMPTY: '' });
+})
+  Deno.test('parseKeyValueFile - handles CRLF line endings', () => {
+  const content = 'KEY1=value1\r\nKEY2=value2';
+    assertEquals(parseKeyValueFile(content), {
       KEY1: 'value1',
       KEY2: 'value2',
     });
-  });
-
-  it('skips empty lines', () => {
-    const content = 'KEY1=value1\n\n\nKEY2=value2';
-    expect(parseKeyValueFile(content)).toEqual({
+})
+  Deno.test('parseKeyValueFile - skips empty lines', () => {
+  const content = 'KEY1=value1\n\n\nKEY2=value2';
+    assertEquals(parseKeyValueFile(content), {
       KEY1: 'value1',
       KEY2: 'value2',
     });
-  });
-
-  it('skips lines without equals sign', () => {
-    const content = 'noequals\nKEY=value';
-    expect(parseKeyValueFile(content)).toEqual({ KEY: 'value' });
-  });
-
-  it('handles mixed heredoc and regular entries', () => {
-    const content = 'SIMPLE=val\nHERE<<EOF\nmulti\nline\nEOF\nAFTER=done';
-    expect(parseKeyValueFile(content)).toEqual({
+})
+  Deno.test('parseKeyValueFile - skips lines without equals sign', () => {
+  const content = 'noequals\nKEY=value';
+    assertEquals(parseKeyValueFile(content), { KEY: 'value' });
+})
+  Deno.test('parseKeyValueFile - handles mixed heredoc and regular entries', () => {
+  const content = 'SIMPLE=val\nHERE<<EOF\nmulti\nline\nEOF\nAFTER=done';
+    assertEquals(parseKeyValueFile(content), {
       SIMPLE: 'val',
       HERE: 'multi\nline',
       AFTER: 'done',
     });
-  });
-
-  it('handles empty input', () => {
-    expect(parseKeyValueFile('')).toEqual({});
-  });
-
-  it('last value wins for duplicate keys', () => {
-    const content = 'KEY=first\nKEY=second';
-    expect(parseKeyValueFile(content)).toEqual({ KEY: 'second' });
-  });
-});
-
+})
+  Deno.test('parseKeyValueFile - handles empty input', () => {
+  assertEquals(parseKeyValueFile(''), {});
+})
+  Deno.test('parseKeyValueFile - last value wins for duplicate keys', () => {
+  const content = 'KEY=first\nKEY=second';
+    assertEquals(parseKeyValueFile(content), { KEY: 'second' });
+})
 // ---------------------------------------------------------------------------
 // parsePathFile
 // ---------------------------------------------------------------------------
 
-describe('parsePathFile', () => {
-  it('parses path entries', () => {
-    expect(parsePathFile('/usr/bin\n/home/user/.local/bin')).toEqual([
+
+  Deno.test('parsePathFile - parses path entries', () => {
+  assertEquals(parsePathFile('/usr/bin\n/home/user/.local/bin'), [
       '/usr/bin',
       '/home/user/.local/bin',
     ]);
-  });
-
-  it('trims whitespace', () => {
-    expect(parsePathFile('  /usr/bin  \n  /home/bin  ')).toEqual([
+})
+  Deno.test('parsePathFile - trims whitespace', () => {
+  assertEquals(parsePathFile('  /usr/bin  \n  /home/bin  '), [
       '/usr/bin',
       '/home/bin',
     ]);
-  });
-
-  it('filters empty lines', () => {
-    expect(parsePathFile('/usr/bin\n\n\n/home/bin\n')).toEqual([
+})
+  Deno.test('parsePathFile - filters empty lines', () => {
+  assertEquals(parsePathFile('/usr/bin\n\n\n/home/bin\n'), [
       '/usr/bin',
       '/home/bin',
     ]);
-  });
-
-  it('handles CRLF line endings', () => {
-    expect(parsePathFile('/usr/bin\r\n/home/bin')).toEqual([
+})
+  Deno.test('parsePathFile - handles CRLF line endings', () => {
+  assertEquals(parsePathFile('/usr/bin\r\n/home/bin'), [
       '/usr/bin',
       '/home/bin',
     ]);
-  });
-
-  it('returns empty array for empty input', () => {
-    expect(parsePathFile('')).toEqual([]);
-  });
-
-  it('returns empty array for whitespace-only input', () => {
-    expect(parsePathFile('   \n   \n   ')).toEqual([]);
-  });
-
-  it('handles single path entry', () => {
-    expect(parsePathFile('/single/path')).toEqual(['/single/path']);
-  });
-});
+})
+  Deno.test('parsePathFile - returns empty array for empty input', () => {
+  assertEquals(parsePathFile(''), []);
+})
+  Deno.test('parsePathFile - returns empty array for whitespace-only input', () => {
+  assertEquals(parsePathFile('   \n   \n   '), []);
+})
+  Deno.test('parsePathFile - handles single path entry', () => {
+  assertEquals(parsePathFile('/single/path'), ['/single/path']);
+})

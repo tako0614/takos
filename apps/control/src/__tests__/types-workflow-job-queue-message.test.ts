@@ -1,8 +1,9 @@
-import { describe, expect, it } from 'vitest';
 import {
   WORKFLOW_QUEUE_MESSAGE_VERSION,
   isValidWorkflowJobQueueMessage,
 } from '@/types';
+
+import { assertEquals } from 'jsr:@std/assert';
 
 function createValidMessage() {
   return {
@@ -26,19 +27,17 @@ function createValidMessage() {
   };
 }
 
-describe('isValidWorkflowJobQueueMessage', () => {
-  it('accepts canonical v3 payloads', () => {
-    expect(isValidWorkflowJobQueueMessage(createValidMessage())).toBe(true);
-  });
 
-  it('rejects v3 payloads that include a legacy secrets field', () => {
-    const withSecretsField = {
+  Deno.test('isValidWorkflowJobQueueMessage - accepts canonical v3 payloads', () => {
+  assertEquals(isValidWorkflowJobQueueMessage(createValidMessage()), true);
+})
+  Deno.test('isValidWorkflowJobQueueMessage - rejects v3 payloads that include a legacy secrets field', () => {
+  const withSecretsField = {
       ...createValidMessage(),
       secrets: {
         API_TOKEN: 'plaintext',
       },
     };
 
-    expect(isValidWorkflowJobQueueMessage(withSecretsField)).toBe(false);
-  });
-});
+    assertEquals(isValidWorkflowJobQueueMessage(withSecretsField), false);
+})

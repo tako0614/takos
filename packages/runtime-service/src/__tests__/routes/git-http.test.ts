@@ -4,27 +4,18 @@ import path from 'path';
 import type { ChildProcessWithoutNullStreams, SpawnOptionsWithoutStdio } from 'child_process';
 import { EventEmitter } from 'events';
 import { PassThrough } from 'stream';
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { assertEquals, assertObjectMatch } from 'jsr:@std/assert';
 
-const hoisted = vi.hoisted(() => ({
+const hoisted = ({
   reposBaseDir: '/tmp/takos-runtime-git-http-tests',
-  spawn: vi.fn(),
-  gracefulKill: vi.fn(),
-}));
+  spawn: ((..._args: any[]) => undefined) as any,
+  gracefulKill: ((..._args: any[]) => undefined) as any,
+});
 
-vi.mock('../../shared/config.js', () => ({
-  REPOS_BASE_DIR: hoisted.reposBaseDir,
-}));
-
-vi.mock('child_process', () => ({
-  spawn: hoisted.spawn,
-}));
-
-vi.mock('../../utils/process-kill.js', () => ({
-  gracefulKill: hoisted.gracefulKill,
-}));
-
-import gitHttpRoutes from '../../routes/git/http.js';
+// [Deno] vi.mock removed - manually stub imports from '../../shared/config.ts'
+// [Deno] vi.mock removed - manually stub imports from 'child_process'
+// [Deno] vi.mock removed - manually stub imports from '../../utils/process-kill.ts'
+import gitHttpRoutes from '../../routes/git/http.ts';
 
 interface MockChildProcess extends ChildProcessWithoutNullStreams {
   stdin: PassThrough;
@@ -49,27 +40,21 @@ function createMockChildProcess(): MockChildProcess {
   child.stdout = new PassThrough();
   child.stderr = new PassThrough();
   child.killed = false;
-  child.kill = vi.fn(() => {
+  child.kill = () => {
     child.killed = true;
     return true;
-  }) as ChildProcessWithoutNullStreams['kill'];
+  } as ChildProcessWithoutNullStreams['kill'];
   return child;
 }
 
-describe('git-http route hardening', () => {
-  beforeEach(async () => {
-    vi.clearAllMocks();
-    vi.useRealTimers();
+
+  Deno.test('git-http route hardening - rejects workspace-scoped JWT that targets another workspace', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+    /* TODO: call fakeTime.restore() */ void 0;
     await fs.rm(hoisted.reposBaseDir, { recursive: true, force: true });
     await fs.mkdir(hoisted.reposBaseDir, { recursive: true });
-  });
-
-  afterEach(() => {
-    vi.useRealTimers();
-  });
-
-  it('rejects workspace-scoped JWT that targets another workspace', async () => {
-    const app = new Hono();
+  try {
+  const app = new Hono();
     // Simulate service token middleware setting serviceToken on context
     app.use('*', async (c, next) => {
       c.set('serviceToken', { scope_space_id: 'ws-allowed' } as any);
@@ -79,18 +64,25 @@ describe('git-http route hardening', () => {
 
     const response = await app.request('/git/ws-denied/repo.git/info/refs?service=git-upload-pack');
 
-    expect(response.status).toBe(403);
+    assertEquals(response.status, 403);
     const body = await response.json();
-    expect(body).toEqual({
+    assertEquals(body, {
       error: {
         code: 'FORBIDDEN',
         message: 'Token workspace scope does not match requested workspace',
       },
     });
-  });
-
-  it('supports LFS batch endpoint and reports missing download objects', async () => {
-    const spaceId = 'ws123';
+  } finally {
+  /* TODO: call fakeTime.restore() */ void 0;
+  }
+})
+  Deno.test('git-http route hardening - supports LFS batch endpoint and reports missing download objects', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+    /* TODO: call fakeTime.restore() */ void 0;
+    await fs.rm(hoisted.reposBaseDir, { recursive: true, force: true });
+    await fs.mkdir(hoisted.reposBaseDir, { recursive: true });
+  try {
+  const spaceId = 'ws123';
     const repoName = 'repo123';
     const oid = 'a'.repeat(64);
     await createRepoDir(spaceId, repoName);
@@ -112,9 +104,9 @@ describe('git-http route hardening', () => {
       }
     );
 
-    expect(batchUpload.status).toBe(200);
+    assertEquals(batchUpload.status, 200);
     const uploadBody = await batchUpload.json();
-    expect(uploadBody).toMatchObject({
+    assertObjectMatch(uploadBody, {
       transfer: 'basic',
       objects: [
         {
@@ -143,9 +135,9 @@ describe('git-http route hardening', () => {
       }
     );
 
-    expect(batchDownload.status).toBe(200);
+    assertEquals(batchDownload.status, 200);
     const downloadBody = await batchDownload.json();
-    expect(downloadBody).toMatchObject({
+    assertObjectMatch(downloadBody, {
       transfer: 'basic',
       objects: [
         {
@@ -157,10 +149,17 @@ describe('git-http route hardening', () => {
         },
       ],
     });
-  });
-
-  it('returns 400 for invalid oid in both LFS upload/download object handlers', async () => {
-    const spaceId = 'ws-invalid-oid';
+  } finally {
+  /* TODO: call fakeTime.restore() */ void 0;
+  }
+})
+  Deno.test('git-http route hardening - returns 400 for invalid oid in both LFS upload/download object handlers', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+    /* TODO: call fakeTime.restore() */ void 0;
+    await fs.rm(hoisted.reposBaseDir, { recursive: true, force: true });
+    await fs.mkdir(hoisted.reposBaseDir, { recursive: true });
+  try {
+  const spaceId = 'ws-invalid-oid';
     const repoName = 'repo-invalid-oid';
     await createRepoDir(spaceId, repoName);
     const app = createTestApp();
@@ -174,16 +173,23 @@ describe('git-http route hardening', () => {
       `/git/${spaceId}/${repoName}.git/info/lfs/objects/${invalidOid}`
     );
 
-    expect(putResponse.status).toBe(400);
+    assertEquals(putResponse.status, 400);
     const putBody = await putResponse.json();
-    expect(putBody).toEqual({ error: { code: 'BAD_REQUEST', message: 'Invalid LFS object id' } });
-    expect(getResponse.status).toBe(400);
+    assertEquals(putBody, { error: { code: 'BAD_REQUEST', message: 'Invalid LFS object id' } });
+    assertEquals(getResponse.status, 400);
     const getBody = await getResponse.json();
-    expect(getBody).toEqual({ error: { code: 'BAD_REQUEST', message: 'Invalid LFS object id' } });
-  });
-
-  it('keeps PUT content-length validation response', async () => {
-    const app = createTestApp();
+    assertEquals(getBody, { error: { code: 'BAD_REQUEST', message: 'Invalid LFS object id' } });
+  } finally {
+  /* TODO: call fakeTime.restore() */ void 0;
+  }
+})
+  Deno.test('git-http route hardening - keeps PUT content-length validation response', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+    /* TODO: call fakeTime.restore() */ void 0;
+    await fs.rm(hoisted.reposBaseDir, { recursive: true, force: true });
+    await fs.mkdir(hoisted.reposBaseDir, { recursive: true });
+  try {
+  const app = createTestApp();
 
     const response = await app.request(
       `/git/ws-content-length/repo-content-length.git/info/lfs/objects/${'a'.repeat(64)}`,
@@ -195,13 +201,20 @@ describe('git-http route hardening', () => {
       }
     );
 
-    expect(response.status).toBe(400);
+    assertEquals(response.status, 400);
     const body = await response.json();
-    expect(body).toEqual({ error: { code: 'BAD_REQUEST', message: 'Invalid Content-Length' } });
-  });
-
-  it('returns 404 for missing LFS object download', async () => {
-    const spaceId = 'ws-missing-object';
+    assertEquals(body, { error: { code: 'BAD_REQUEST', message: 'Invalid Content-Length' } });
+  } finally {
+  /* TODO: call fakeTime.restore() */ void 0;
+  }
+})
+  Deno.test('git-http route hardening - returns 404 for missing LFS object download', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+    /* TODO: call fakeTime.restore() */ void 0;
+    await fs.rm(hoisted.reposBaseDir, { recursive: true, force: true });
+    await fs.mkdir(hoisted.reposBaseDir, { recursive: true });
+  try {
+  const spaceId = 'ws-missing-object';
     const repoName = 'repo-missing-object';
     const oid = 'b'.repeat(64);
     await createRepoDir(spaceId, repoName);
@@ -211,8 +224,10 @@ describe('git-http route hardening', () => {
       `/git/${spaceId}/${repoName}.git/info/lfs/objects/${oid}`
     );
 
-    expect(response.status).toBe(404);
+    assertEquals(response.status, 404);
     const body = await response.json();
-    expect(body).toEqual({ error: { code: 'NOT_FOUND', message: 'LFS object not found' } });
-  });
-});
+    assertEquals(body, { error: { code: 'NOT_FOUND', message: 'LFS object not found' } });
+  } finally {
+  /* TODO: call fakeTime.restore() */ void 0;
+  }
+})

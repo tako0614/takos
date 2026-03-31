@@ -114,4 +114,5 @@ export const common = {
     noStarredReposYet: 'No starred repositories yet',
     reject: 'Reject',
     accept: 'Accept',
+    new: 'New',
 } as const;

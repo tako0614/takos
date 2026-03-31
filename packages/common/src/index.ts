@@ -14,7 +14,7 @@
 // =============================================================================
 export {
   generateId,
-} from './id.js';
+} from './id.ts';
 
 // =============================================================================
 // バリデーションユーティリリティ
@@ -22,17 +22,17 @@ export {
 export {
   isLocalhost,
   isPrivateIP,
-} from './validation.js';
+} from './validation.ts';
 
 // =============================================================================
 // 構造化ロガー
 // =============================================================================
-export { createLogger, type Logger, type LogLevel } from './logger.js';
+export { createLogger, type Logger, type LogLevel } from './logger.ts';
 
 // =============================================================================
 // Abort Signal ユーティリティ
 // =============================================================================
-export { throwIfAborted } from './abort.js';
+export { throwIfAborted } from './abort.ts';
 
 // =============================================================================
 // 環境変数パース
@@ -43,7 +43,7 @@ export {
   parseIntValue,
   parseFloatEnv,
   parseFloatValue,
-} from './env-parse.js';
+} from './env-parse.ts';
 
 // =============================================================================
 // エラーハンドリング
@@ -78,4 +78,4 @@ export {
   // 型定義
   type ErrorResponse,
   type ValidationErrorDetail,
-} from './errors.js';
+} from './errors.ts';

@@ -1,9 +1,9 @@
-import { describe, expect, it } from 'vitest';
-
-import type { StepResult } from '../../workflow-models.js';
+import type { StepResult } from '../../workflow-models.ts';
 import {
   buildStepsContext,
-} from '../../scheduler/job-policy.js';
+} from '../../scheduler/job-policy.ts';
+
+import { assertEquals, assertNotEquals } from 'jsr:@std/assert';
 
 function createStepResult(overrides: Partial<StepResult> = {}): StepResult {
   return {
@@ -14,9 +14,9 @@ function createStepResult(overrides: Partial<StepResult> = {}): StepResult {
   };
 }
 
-describe('steps-context helpers', () => {
-  it('builds context entries from step results and ignores anonymous steps', () => {
-    const firstOutputs = { first: '1' };
+
+  Deno.test('steps-context helpers - builds context entries from step results and ignores anonymous steps', () => {
+  const firstOutputs = { first: '1' };
     const secondOutputs = { second: '2' };
     const stepsContext = buildStepsContext([
       createStepResult({
@@ -36,14 +36,13 @@ describe('steps-context helpers', () => {
       }),
     ]);
 
-    expect(stepsContext).toEqual({
+    assertEquals(stepsContext, {
       build: {
         outputs: { second: '2' },
         outcome: 'failure',
         conclusion: 'failure',
       },
     });
-    expect(stepsContext.build.outputs).not.toBe(secondOutputs);
-    expect(stepsContext.build.outputs).not.toBe(firstOutputs);
-  });
-});
+    assertNotEquals(stepsContext.build.outputs, secondOutputs);
+    assertNotEquals(stepsContext.build.outputs, firstOutputs);
+})

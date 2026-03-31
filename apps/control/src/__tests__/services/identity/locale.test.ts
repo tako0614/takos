@@ -1,77 +1,75 @@
-import { describe, expect, it, vi, beforeEach } from 'vitest';
 import type { D1Database } from '@cloudflare/workers-types';
 
+import { assertEquals } from 'jsr:@std/assert';
+
 function createMockDrizzleDb() {
-  const getMock = vi.fn();
+  const getMock = ((..._args: any[]) => undefined) as any;
   const chain = {
-    from: vi.fn().mockReturnThis(),
-    where: vi.fn().mockReturnThis(),
+    from: (function(this: any) { return this; }),
+    where: (function(this: any) { return this; }),
     get: getMock,
   };
   return {
-    select: vi.fn(() => chain),
+    select: () => chain,
     _: { get: getMock, chain },
   };
 }
 
 const db = createMockDrizzleDb();
 
-const mocks = vi.hoisted(() => ({
-  getDb: vi.fn(),
-}));
-
-vi.mock('@/db', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('@/db')>();
-  return { ...actual, getDb: mocks.getDb };
+const mocks = ({
+  getDb: ((..._args: any[]) => undefined) as any,
 });
 
+// [Deno] vi.mock removed - manually stub imports from '@/db'
 import { getSpaceLocale } from '@/services/identity/locale';
 
-describe('getSpaceLocale', () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-    mocks.getDb.mockReturnValue(db);
-  });
 
-  it('returns "ja" when metadata row contains "ja"', async () => {
-    db._.get.mockResolvedValueOnce({ value: 'ja' });
+  Deno.test('getSpaceLocale - returns "ja" when metadata row contains "ja"', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+    mocks.getDb = (() => db) as any;
+  db._.get = (async () => ({ value: 'ja' })) as any;
 
     const result = await getSpaceLocale({} as D1Database, 'space-1');
-    expect(result).toBe('ja');
-  });
-
-  it('returns "en" when metadata row contains "en"', async () => {
-    db._.get.mockResolvedValueOnce({ value: 'en' });
-
-    const result = await getSpaceLocale({} as D1Database, 'space-1');
-    expect(result).toBe('en');
-  });
-
-  it('returns null when no metadata row exists', async () => {
-    db._.get.mockResolvedValueOnce(null);
+    assertEquals(result, 'ja');
+})
+  Deno.test('getSpaceLocale - returns "en" when metadata row contains "en"', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+    mocks.getDb = (() => db) as any;
+  db._.get = (async () => ({ value: 'en' })) as any;
 
     const result = await getSpaceLocale({} as D1Database, 'space-1');
-    expect(result).toBeNull();
-  });
-
-  it('returns null when metadata value is not a valid locale', async () => {
-    db._.get.mockResolvedValueOnce({ value: 'fr' });
-
-    const result = await getSpaceLocale({} as D1Database, 'space-1');
-    expect(result).toBeNull();
-  });
-
-  it('returns null when metadata value is undefined', async () => {
-    db._.get.mockResolvedValueOnce({ value: undefined });
+    assertEquals(result, 'en');
+})
+  Deno.test('getSpaceLocale - returns null when no metadata row exists', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+    mocks.getDb = (() => db) as any;
+  db._.get = (async () => null) as any;
 
     const result = await getSpaceLocale({} as D1Database, 'space-1');
-    expect(result).toBeNull();
-  });
-
-  it('returns null when metadata value is null', async () => {
-    db._.get.mockResolvedValueOnce({ value: null });
+    assertEquals(result, null);
+})
+  Deno.test('getSpaceLocale - returns null when metadata value is not a valid locale', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+    mocks.getDb = (() => db) as any;
+  db._.get = (async () => ({ value: 'fr' })) as any;
 
     const result = await getSpaceLocale({} as D1Database, 'space-1');
-    expect(result).toBeNull();
-  });
-});
+    assertEquals(result, null);
+})
+  Deno.test('getSpaceLocale - returns null when metadata value is undefined', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+    mocks.getDb = (() => db) as any;
+  db._.get = (async () => ({ value: undefined })) as any;
+
+    const result = await getSpaceLocale({} as D1Database, 'space-1');
+    assertEquals(result, null);
+})
+  Deno.test('getSpaceLocale - returns null when metadata value is null', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+    mocks.getDb = (() => db) as any;
+  db._.get = (async () => ({ value: null })) as any;
+
+    const result = await getSpaceLocale({} as D1Database, 'space-1');
+    assertEquals(result, null);
+})

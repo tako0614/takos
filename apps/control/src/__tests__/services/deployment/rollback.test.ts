@@ -1,24 +1,14 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { assertSpyCalls, assertSpyCallArgs } from 'jsr:@std/testing/mock';
 
-const mocks = vi.hoisted(() => ({
-  logDeploymentEvent: vi.fn(),
-  deleteHostnameRouting: vi.fn(),
-  restoreRoutingSnapshot: vi.fn(),
-}));
+const mocks = ({
+  logDeploymentEvent: ((..._args: any[]) => undefined) as any,
+  deleteHostnameRouting: ((..._args: any[]) => undefined) as any,
+  restoreRoutingSnapshot: ((..._args: any[]) => undefined) as any,
+});
 
-vi.mock('@/services/deployment/store', () => ({
-  logDeploymentEvent: mocks.logDeploymentEvent,
-}));
-
-vi.mock('@/services/routing/service', () => ({
-  deleteHostnameRouting: mocks.deleteHostnameRouting,
-}));
-
-vi.mock('@/services/deployment/routing', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/services/deployment/routing')>()),
-  restoreRoutingSnapshot: mocks.restoreRoutingSnapshot,
-}));
-
+// [Deno] vi.mock removed - manually stub imports from '@/services/deployment/store'
+// [Deno] vi.mock removed - manually stub imports from '@/services/routing/service'
+// [Deno] vi.mock removed - manually stub imports from '@/services/deployment/routing'
 import { rollbackDeploymentSteps } from '@/services/deployment/rollback';
 import type { Deployment } from '@/services/deployment/types';
 
@@ -63,16 +53,13 @@ function createBaseDeployment(): Deployment {
   };
 }
 
-describe('rollbackDeploymentSteps', () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-    mocks.logDeploymentEvent.mockResolvedValue(undefined);
-    mocks.deleteHostnameRouting.mockResolvedValue(undefined);
-    mocks.restoreRoutingSnapshot.mockResolvedValue(undefined);
-  });
 
-  it('restores routing snapshot when update_routing was completed', async () => {
-    const snapshot = [
+  Deno.test('rollbackDeploymentSteps - restores routing snapshot when update_routing was completed', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+    mocks.logDeploymentEvent = (async () => undefined) as any;
+    mocks.deleteHostnameRouting = (async () => undefined) as any;
+    mocks.restoreRoutingSnapshot = (async () => undefined) as any;
+  const snapshot = [
       { hostname: 'test.example.com', target: { type: 'deployments' as const, deployments: [] } },
     ];
 
@@ -86,26 +73,29 @@ describe('rollbackDeploymentSteps', () => {
       deploymentArtifactRef: 'worker-w-1-v1',
       provider: {
         name: 'workers-dispatch',
-        deploy: vi.fn(),
-        assertRollbackTarget: vi.fn(),
+        deploy: ((..._args: any[]) => undefined) as any,
+        assertRollbackTarget: ((..._args: any[]) => undefined) as any,
       },
     });
 
-    expect(mocks.restoreRoutingSnapshot).toHaveBeenCalledWith(
+    assertSpyCallArgs(mocks.restoreRoutingSnapshot, 0, [
       expect.anything(),
       snapshot
-    );
-    expect(mocks.logDeploymentEvent).toHaveBeenCalledWith(
+    ]);
+    assertSpyCallArgs(mocks.logDeploymentEvent, 0, [
       expect.anything(),
       'dep-1',
       'rollback_step',
       'update_routing',
-      expect.any(String)
-    );
-  });
-
-  it('falls back to deleteHostnameRouting when no snapshot available', async () => {
-    await rollbackDeploymentSteps({
+      /* expect.any(String) */ {} as any
+    ]);
+})
+  Deno.test('rollbackDeploymentSteps - falls back to deleteHostnameRouting when no snapshot available', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+    mocks.logDeploymentEvent = (async () => undefined) as any;
+    mocks.deleteHostnameRouting = (async () => undefined) as any;
+    mocks.restoreRoutingSnapshot = (async () => undefined) as any;
+  await rollbackDeploymentSteps({
       env: { DB: {} as any, HOSTNAME_ROUTING: {} as any },
       deploymentId: 'dep-1',
       deployment: createBaseDeployment(),
@@ -115,18 +105,21 @@ describe('rollbackDeploymentSteps', () => {
       deploymentArtifactRef: null,
       provider: {
         name: 'workers-dispatch',
-        deploy: vi.fn(),
-        assertRollbackTarget: vi.fn(),
+        deploy: ((..._args: any[]) => undefined) as any,
+        assertRollbackTarget: ((..._args: any[]) => undefined) as any,
       },
     });
 
-    expect(mocks.deleteHostnameRouting).toHaveBeenCalledWith(
-      expect.objectContaining({ hostname: 'test.example.com' })
-    );
-  });
-
-  it('calls cleanupDeploymentArtifact when deploy_worker was completed', async () => {
-    const cleanupMock = vi.fn().mockResolvedValue(undefined);
+    assertSpyCallArgs(mocks.deleteHostnameRouting, 0, [
+      ({ hostname: 'test.example.com' })
+    ]);
+})
+  Deno.test('rollbackDeploymentSteps - calls cleanupDeploymentArtifact when deploy_worker was completed', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+    mocks.logDeploymentEvent = (async () => undefined) as any;
+    mocks.deleteHostnameRouting = (async () => undefined) as any;
+    mocks.restoreRoutingSnapshot = (async () => undefined) as any;
+  const cleanupMock = (async () => undefined);
 
     await rollbackDeploymentSteps({
       env: { DB: {} as any, HOSTNAME_ROUTING: {} as any },
@@ -138,23 +131,26 @@ describe('rollbackDeploymentSteps', () => {
       deploymentArtifactRef: 'worker-w-1-v1',
       provider: {
         name: 'workers-dispatch',
-        deploy: vi.fn(),
-        assertRollbackTarget: vi.fn(),
+        deploy: ((..._args: any[]) => undefined) as any,
+        assertRollbackTarget: ((..._args: any[]) => undefined) as any,
         cleanupDeploymentArtifact: cleanupMock,
       },
     });
 
-    expect(cleanupMock).toHaveBeenCalledWith('worker-w-1-v1');
-  });
-
-  it('deletes bundle from R2 when available', async () => {
-    const deleteMock = vi.fn().mockResolvedValue(undefined);
+    assertSpyCallArgs(cleanupMock, 0, ['worker-w-1-v1']);
+})
+  Deno.test('rollbackDeploymentSteps - deletes bundle from R2 when available', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+    mocks.logDeploymentEvent = (async () => undefined) as any;
+    mocks.deleteHostnameRouting = (async () => undefined) as any;
+    mocks.restoreRoutingSnapshot = (async () => undefined) as any;
+  const deleteMock = (async () => undefined);
 
     await rollbackDeploymentSteps({
       env: {
         DB: {} as any,
         HOSTNAME_ROUTING: {} as any,
-        WORKER_BUNDLES: { get: vi.fn(), put: vi.fn(), delete: deleteMock } as any,
+        WORKER_BUNDLES: { get: ((..._args: any[]) => undefined) as any, put: ((..._args: any[]) => undefined) as any, delete: deleteMock } as any,
       },
       deploymentId: 'dep-1',
       deployment: createBaseDeployment(),
@@ -164,16 +160,19 @@ describe('rollbackDeploymentSteps', () => {
       deploymentArtifactRef: null,
       provider: {
         name: 'workers-dispatch',
-        deploy: vi.fn(),
-        assertRollbackTarget: vi.fn(),
+        deploy: ((..._args: any[]) => undefined) as any,
+        assertRollbackTarget: ((..._args: any[]) => undefined) as any,
       },
     });
 
-    expect(deleteMock).toHaveBeenCalledWith('deployments/w-1/1/bundle.js');
-  });
-
-  it('deletes wasm from R2 when available', async () => {
-    const deleteMock = vi.fn().mockResolvedValue(undefined);
+    assertSpyCallArgs(deleteMock, 0, ['deployments/w-1/1/bundle.js']);
+})
+  Deno.test('rollbackDeploymentSteps - deletes wasm from R2 when available', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+    mocks.logDeploymentEvent = (async () => undefined) as any;
+    mocks.deleteHostnameRouting = (async () => undefined) as any;
+    mocks.restoreRoutingSnapshot = (async () => undefined) as any;
+  const deleteMock = (async () => undefined);
     const dep = createBaseDeployment();
     dep.wasm_r2_key = 'deployments/w-1/1/module.wasm';
 
@@ -181,7 +180,7 @@ describe('rollbackDeploymentSteps', () => {
       env: {
         DB: {} as any,
         HOSTNAME_ROUTING: {} as any,
-        WORKER_BUNDLES: { get: vi.fn(), put: vi.fn(), delete: deleteMock } as any,
+        WORKER_BUNDLES: { get: ((..._args: any[]) => undefined) as any, put: ((..._args: any[]) => undefined) as any, delete: deleteMock } as any,
       },
       deploymentId: 'dep-1',
       deployment: dep,
@@ -191,16 +190,19 @@ describe('rollbackDeploymentSteps', () => {
       deploymentArtifactRef: null,
       provider: {
         name: 'workers-dispatch',
-        deploy: vi.fn(),
-        assertRollbackTarget: vi.fn(),
+        deploy: ((..._args: any[]) => undefined) as any,
+        assertRollbackTarget: ((..._args: any[]) => undefined) as any,
       },
     });
 
-    expect(deleteMock).toHaveBeenCalledWith('deployments/w-1/1/module.wasm');
-  });
-
-  it('does nothing when no steps were completed', async () => {
-    await rollbackDeploymentSteps({
+    assertSpyCallArgs(deleteMock, 0, ['deployments/w-1/1/module.wasm']);
+})
+  Deno.test('rollbackDeploymentSteps - does nothing when no steps were completed', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+    mocks.logDeploymentEvent = (async () => undefined) as any;
+    mocks.deleteHostnameRouting = (async () => undefined) as any;
+    mocks.restoreRoutingSnapshot = (async () => undefined) as any;
+  await rollbackDeploymentSteps({
       env: { DB: {} as any, HOSTNAME_ROUTING: {} as any },
       deploymentId: 'dep-1',
       deployment: { ...createBaseDeployment(), bundle_r2_key: null },
@@ -210,17 +212,20 @@ describe('rollbackDeploymentSteps', () => {
       deploymentArtifactRef: null,
       provider: {
         name: 'workers-dispatch',
-        deploy: vi.fn(),
-        assertRollbackTarget: vi.fn(),
+        deploy: ((..._args: any[]) => undefined) as any,
+        assertRollbackTarget: ((..._args: any[]) => undefined) as any,
       },
     });
 
-    expect(mocks.restoreRoutingSnapshot).not.toHaveBeenCalled();
-    expect(mocks.deleteHostnameRouting).not.toHaveBeenCalled();
-  });
-
-  it('handles routing restore failure gracefully', async () => {
-    mocks.restoreRoutingSnapshot.mockRejectedValue(new Error('routing restore failed'));
+    assertSpyCalls(mocks.restoreRoutingSnapshot, 0);
+    assertSpyCalls(mocks.deleteHostnameRouting, 0);
+})
+  Deno.test('rollbackDeploymentSteps - handles routing restore failure gracefully', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+    mocks.logDeploymentEvent = (async () => undefined) as any;
+    mocks.deleteHostnameRouting = (async () => undefined) as any;
+    mocks.restoreRoutingSnapshot = (async () => undefined) as any;
+  mocks.restoreRoutingSnapshot = (async () => { throw new Error('routing restore failed'); }) as any;
 
     // Should not throw
     await rollbackDeploymentSteps({
@@ -233,17 +238,16 @@ describe('rollbackDeploymentSteps', () => {
       deploymentArtifactRef: null,
       provider: {
         name: 'workers-dispatch',
-        deploy: vi.fn(),
-        assertRollbackTarget: vi.fn(),
+        deploy: ((..._args: any[]) => undefined) as any,
+        assertRollbackTarget: ((..._args: any[]) => undefined) as any,
       },
     });
 
-    expect(mocks.logDeploymentEvent).toHaveBeenCalledWith(
+    assertSpyCallArgs(mocks.logDeploymentEvent, 0, [
       expect.anything(),
       'dep-1',
       'rollback_failed',
       'update_routing',
       expect.stringContaining('routing restore failed')
-    );
-  });
-});
+    ]);
+})

@@ -1,36 +1,20 @@
 import * as fs from 'fs/promises';
 import * as os from 'os';
 import path from 'path';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+// [Deno] vi.mock removed - manually stub imports from '../../shared/config.ts'
+import { downloadSpaceFiles, uploadSpaceFiles, s3Client } from '../../storage/r2.ts';
 
-vi.mock('../../shared/config.js', () => ({
-  R2_ACCOUNT_ID: 'test-account',
-  R2_ACCESS_KEY_ID: 'test-access-key',
-  R2_SECRET_ACCESS_KEY: 'test-secret',
-  R2_BUCKET: 'test-bucket',
-  S3_ENDPOINT: 'http://127.0.0.1:9000',
-  S3_REGION: 'us-east-1',
-  S3_ACCESS_KEY_ID: 'test-access-key',
-  S3_SECRET_ACCESS_KEY: 'test-secret',
-  S3_BUCKET: 'test-bucket',
-  MAX_R2_DOWNLOAD_FILE_BYTES: 1024 * 1024,
-  MAX_R2_DOWNLOAD_TOTAL_BYTES: 1024 * 1024 * 4,
-  MAX_LOG_LINES: 100_000,
-}));
-
-import { downloadSpaceFiles, uploadSpaceFiles, s3Client } from '../../storage/r2.js';
+import { assertEquals } from 'jsr:@std/assert';
+import { stub, assertSpyCalls } from 'jsr:@std/testing/mock';
 
 async function createTempDir(prefix: string): Promise<string> {
   return fs.mkdtemp(path.join(os.tmpdir(), prefix));
 }
 
-describe('r2 symlink boundary hardening', () => {
-  afterEach(() => {
-    vi.restoreAllMocks();
-  });
 
-  it('skips upload paths that symlink outside base directory', async () => {
-    const workspaceDir = await createTempDir('takos-r2-upload-ws-');
+  Deno.test('r2 symlink boundary hardening - skips upload paths that symlink outside base directory', async () => {
+  try {
+  const workspaceDir = await createTempDir('takos-r2-upload-ws-');
     const outsideDir = await createTempDir('takos-r2-upload-outside-');
     const outsideFile = path.join(outsideDir, 'outside.txt');
     const symlinkPath = path.join(workspaceDir, 'escape.txt');
@@ -39,29 +23,32 @@ describe('r2 symlink boundary hardening', () => {
       await fs.writeFile(outsideFile, 'outside');
       await fs.symlink(outsideFile, symlinkPath);
 
-      const sendSpy = vi.spyOn(s3Client, 'send');
+      const sendSpy = stub(s3Client, 'send');
       const logs: string[] = [];
 
       const uploaded = await uploadSpaceFiles('ws-upload', workspaceDir, ['escape.txt'], logs);
 
-      expect(uploaded).toBe(0);
-      expect(sendSpy).not.toHaveBeenCalled();
-      expect(logs.some((line) => line.includes('symlink escape attempt'))).toBe(true);
+      assertEquals(uploaded, 0);
+      assertSpyCalls(sendSpy, 0);
+      assertEquals(logs.some((line) => line.includes('symlink escape attempt')), true);
     } finally {
       await fs.rm(workspaceDir, { recursive: true, force: true });
       await fs.rm(outsideDir, { recursive: true, force: true });
     }
-  });
-
-  it('skips download paths that traverse through escaping symlink components', async () => {
-    const workspaceDir = await createTempDir('takos-r2-download-ws-');
+  } finally {
+  /* TODO: restore mocks manually */ void 0;
+  }
+})
+  Deno.test('r2 symlink boundary hardening - skips download paths that traverse through escaping symlink components', async () => {
+  try {
+  const workspaceDir = await createTempDir('takos-r2-download-ws-');
     const outsideDir = await createTempDir('takos-r2-download-outside-');
     const escapeLink = path.join(workspaceDir, 'escape-dir');
 
     try {
       await fs.symlink(outsideDir, escapeLink);
 
-      vi.spyOn(s3Client, 'send').mockImplementation(async (command: object) => {
+      stub(s3Client, 'send') = async (command: object) => {
         const commandName = (command as { constructor?: { name?: string } }).constructor?.name;
 
         if (commandName === 'ListObjectsV2Command') {
@@ -88,19 +75,21 @@ describe('r2 symlink boundary hardening', () => {
         }
 
         throw new Error(`Unexpected command: ${commandName}`);
-      });
+      } as any;
 
       const logs: string[] = [];
       const downloaded = await downloadSpaceFiles('ws-download', workspaceDir, logs);
       const outsideFile = path.join(outsideDir, 'evil.txt');
       const outsideFileExists = await fs.stat(outsideFile).then(() => true).catch(() => false);
 
-      expect(downloaded).toBe(0);
-      expect(outsideFileExists).toBe(false);
-      expect(logs.some((line) => line.includes('symlink escape attempt'))).toBe(true);
+      assertEquals(downloaded, 0);
+      assertEquals(outsideFileExists, false);
+      assertEquals(logs.some((line) => line.includes('symlink escape attempt')), true);
     } finally {
       await fs.rm(workspaceDir, { recursive: true, force: true });
       await fs.rm(outsideDir, { recursive: true, force: true });
     }
-  });
-});
+  } finally {
+  /* TODO: restore mocks manually */ void 0;
+  }
+})

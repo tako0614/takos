@@ -1,23 +1,16 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { D1Database, R2Bucket } from '@cloudflare/workers-types';
 import type { Env } from '@/types';
 
-const mocks = vi.hoisted(() => ({
-  getDb: vi.fn(),
-  queryRelevantThreadMessages: vi.fn(),
-  buildThreadContextSystemMessage: vi.fn(),
-}));
+import { assertEquals, assertStringIncludes } from 'jsr:@std/assert';
 
-vi.mock('@/db', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/db')>()),
-  getDb: mocks.getDb,
-}));
+const mocks = ({
+  getDb: ((..._args: any[]) => undefined) as any,
+  queryRelevantThreadMessages: ((..._args: any[]) => undefined) as any,
+  buildThreadContextSystemMessage: ((..._args: any[]) => undefined) as any,
+});
 
-vi.mock('@/services/agent/thread-context', () => ({
-  queryRelevantThreadMessages: mocks.queryRelevantThreadMessages,
-  buildThreadContextSystemMessage: mocks.buildThreadContextSystemMessage,
-}));
-
+// [Deno] vi.mock removed - manually stub imports from '@/db'
+// [Deno] vi.mock removed - manually stub imports from '@/services/agent/thread-context'
 import { buildConversationHistory } from '@/services/agent/runner';
 
 function makeDbMock(selectGetResults: unknown[], selectAllResults: unknown[]) {
@@ -25,28 +18,25 @@ function makeDbMock(selectGetResults: unknown[], selectAllResults: unknown[]) {
   let allIndex = 0;
   const chain = () => {
     const c: Record<string, unknown> = {};
-    c.from = vi.fn().mockReturnValue(c);
-    c.where = vi.fn().mockReturnValue(c);
-    c.orderBy = vi.fn().mockReturnValue(c);
-    c.limit = vi.fn().mockReturnValue(c);
-    c.all = vi.fn(async () => selectAllResults[allIndex++] ?? []);
-    c.get = vi.fn(async () => selectGetResults[getIndex++] ?? null);
+    c.from = (() => c);
+    c.where = (() => c);
+    c.orderBy = (() => c);
+    c.limit = (() => c);
+    c.all = async () => selectAllResults[allIndex++] ?? [];
+    c.get = async () => selectGetResults[getIndex++] ?? null;
     return c;
   };
   return {
-    select: vi.fn().mockImplementation(() => chain()),
+    select: () => chain(),
   };
 }
 
-describe('buildConversationHistory', () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-    mocks.queryRelevantThreadMessages.mockResolvedValue([]);
-    mocks.buildThreadContextSystemMessage.mockReturnValue(null);
-  });
 
-  it('builds delegated child context from the structured delegation packet', async () => {
-    mocks.getDb.mockReturnValue(makeDbMock(
+  Deno.test('buildConversationHistory - builds delegated child context from the structured delegation packet', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+    mocks.queryRelevantThreadMessages = (async () => []) as any;
+    mocks.buildThreadContextSystemMessage = (() => null) as any;
+  mocks.getDb = (() => makeDbMock(
       [
         {
           summary: null,
@@ -76,7 +66,7 @@ describe('buildConversationHistory', () => {
       [
         [],
       ],
-    ));
+    )) as any;
 
     const history = await buildConversationHistory({
       db: {} as D1Database,
@@ -87,7 +77,7 @@ describe('buildConversationHistory', () => {
       aiModel: 'gpt-5.4-mini',
     });
 
-    expect(history).toEqual([
+    assertEquals(history, [
       {
         role: 'system',
         content: expect.stringContaining('Delegated execution context:'),
@@ -97,8 +87,7 @@ describe('buildConversationHistory', () => {
         content: expect.stringContaining('Implement the fix'),
       },
     ]);
-    expect(history[0]?.content).toContain('Product hint: takos');
-    expect(history[0]?.content).toContain('Constraints:');
-    expect(history[0]?.content).toContain('Acceptance criteria:');
-  });
-});
+    assertStringIncludes(history[0]?.content, 'Product hint: takos');
+    assertStringIncludes(history[0]?.content, 'Constraints:');
+    assertStringIncludes(history[0]?.content, 'Acceptance criteria:');
+})

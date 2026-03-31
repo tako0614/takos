@@ -1,9 +1,9 @@
-import { useCallback, useEffect, useMemo, useState, type FormEvent } from 'react';
+import { createEffect, onMount, onCleanup, createMemo, createSignal } from 'solid-js';
 import { useI18n } from '../../store/i18n';
 import { useToast } from '../../store/toast';
 import { useRouter } from '../../hooks/useRouter';
 import { useConfirmDialog } from '../../store/confirm-dialog';
-import { rpc, rpcJson } from '../../lib/rpc';
+import { rpc, rpcJson, rpcPath } from '../../lib/rpc';
 import { getErrorMessage } from '../../lib/errors';
 import { Icons } from '../../lib/Icons';
 import { DEFAULT_MODEL_ID, FALLBACK_MODELS } from '../../lib/modelCatalog';
@@ -40,29 +40,26 @@ export function WorkTab({ spaceId }: { spaceId: string }) {
   const { showToast } = useToast();
   const { navigate } = useRouter();
   const { confirm } = useConfirmDialog();
-  const [tasks, setTasks] = useState<AgentTask[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [activeFilter, setActiveFilter] = useState<TaskFilter>('all');
-  const [isCreating, setIsCreating] = useState(false);
-  const [editingTask, setEditingTask] = useState<AgentTask | null>(null);
-  const [saving, setSaving] = useState(false);
-  const [planningTaskId, setPlanningTaskId] = useState<string | null>(null);
-  const [startingTaskId, setStartingTaskId] = useState<string | null>(null);
-  const [deletingTaskId, setDeletingTaskId] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const [modelSettings, setModelSettings] = useState<ModelSettings | null>(null);
+  const [tasks, setTasks] = createSignal<AgentTask[]>([]);
+  const [loading, setLoading] = createSignal(true);
+  const [activeFilter, setActiveFilter] = createSignal<TaskFilter>('all');
+  const [isCreating, setIsCreating] = createSignal(false);
+  const [editingTask, setEditingTask] = createSignal<AgentTask | null>(null);
+  const [saving, setSaving] = createSignal(false);
+  const [planningTaskId, setPlanningTaskId] = createSignal<string | null>(null);
+  const [startingTaskId, setStartingTaskId] = createSignal<string | null>(null);
+  const [deletingTaskId, setDeletingTaskId] = createSignal<string | null>(null);
+  const [error, setError] = createSignal<string | null>(null);
+  const [modelSettings, setModelSettings] = createSignal<ModelSettings | null>(null);
 
-  const [form, setForm] = useState<TaskFormState>(INITIAL_FORM_STATE);
-  const updateForm = useCallback(
-    <K extends keyof TaskFormState>(field: K, value: TaskFormState[K]) =>
-      setForm((prev) => ({ ...prev, [field]: value })),
-    [],
-  );
+  const [form, setForm] = createSignal<TaskFormState>(INITIAL_FORM_STATE);
+  const updateForm = <K extends keyof TaskFormState>(field: K, value: TaskFormState[K]) =>
+      setForm((prev) => ({ ...prev, [field]: value }));
 
-  useEffect(() => {
+  createEffect(() => {
     void fetchTasks();
     void fetchModelSettings();
-  }, [spaceId]);
+  });
 
   const fetchModelSettings = async () => {
     try {
@@ -83,7 +80,7 @@ export function WorkTab({ spaceId }: { spaceId: string }) {
         ai_model: resolvedModel,
         ai_provider: resolvedProvider,
       });
-      if (!form.model) {
+      if (!form().model) {
         updateForm('model', modelIds.includes(resolvedModel) ? resolvedModel : fallbackModel);
       }
     } catch (err) {
@@ -108,7 +105,7 @@ export function WorkTab({ spaceId }: { spaceId: string }) {
   };
 
   const resetForm = () => {
-    setForm({ ...INITIAL_FORM_STATE, model: modelSettings?.ai_model || DEFAULT_MODEL_ID });
+    setForm({ ...INITIAL_FORM_STATE, model: modelSettings()?.ai_model || DEFAULT_MODEL_ID });
     setError(null);
   };
 
@@ -125,7 +122,7 @@ export function WorkTab({ spaceId }: { spaceId: string }) {
       status: task.status,
       priority: task.priority,
       agentType: task.agent_type || 'default',
-      model: task.model || modelSettings?.ai_model || DEFAULT_MODEL_ID,
+      model: task.model || modelSettings()?.ai_model || DEFAULT_MODEL_ID,
       dueAt: task.due_at ? new Date(task.due_at).toISOString().slice(0, 10) : '',
     });
     setError(null);
@@ -139,27 +136,28 @@ export function WorkTab({ spaceId }: { spaceId: string }) {
     resetForm();
   };
 
-  const handleSubmit = async (e: FormEvent) => {
+  const handleSubmit = async (e: Event & { currentTarget: HTMLFormElement }) => {
     e.preventDefault();
-    if (!form.title.trim()) return;
+    if (!form().title.trim()) return;
 
     setSaving(true);
     setError(null);
 
+    const f = form();
     const payload = {
-      title: form.title.trim(),
-      description: form.description.trim() || undefined,
-      status: form.status,
-      priority: form.priority,
-      agent_type: form.agentType,
-      model: form.model || undefined,
-      due_at: form.dueAt ? new Date(`${form.dueAt}T00:00:00.000Z`).toISOString() : undefined,
+      title: f.title.trim(),
+      description: f.description.trim() || undefined,
+      status: f.status,
+      priority: f.priority,
+      agent_type: f.agentType,
+      model: f.model || undefined,
+      due_at: f.dueAt ? new Date(`${f.dueAt}T00:00:00.000Z`).toISOString() : undefined,
     };
 
     try {
-      if (editingTask) {
+      if (editingTask()) {
         const res = await rpc['agent-tasks'][':id'].$patch({
-          param: { id: editingTask.id },
+          param: { id: editingTask()!.id },
           json: payload,
         });
         await rpcJson(res);
@@ -214,7 +212,7 @@ export function WorkTab({ spaceId }: { spaceId: string }) {
   };
 
   const handlePlan = async (taskId: string) => {
-    if (planningTaskId === taskId) return;
+    if (planningTaskId() === taskId) return;
     setPlanningTaskId(taskId);
     try {
       const res = await rpc['agent-tasks'][':id'].plan.$post({ param: { id: taskId } });
@@ -229,7 +227,7 @@ export function WorkTab({ spaceId }: { spaceId: string }) {
   };
 
   const handleStart = async (task: AgentTask) => {
-    if (startingTaskId === task.id) return;
+    if (startingTaskId() === task.id) return;
     setStartingTaskId(task.id);
     try {
       let threadId = task.thread_id;
@@ -265,10 +263,10 @@ export function WorkTab({ spaceId }: { spaceId: string }) {
         runPayload.model = task.model;
       }
 
-      const runRes = await rpc.threads[':threadId'].runs.$post({
+      const runRes = await rpcPath(rpc, 'threads', ':threadId', 'runs').$post({
         param: { threadId },
         json: runPayload,
-      });
+      }) as Response;
       const runResponse = await rpcJson<{ run: Run }>(runRes);
 
       const finalRes = await rpc['agent-tasks'][':id'].$patch({
@@ -303,28 +301,29 @@ export function WorkTab({ spaceId }: { spaceId: string }) {
     });
   };
 
-  const filteredTasks = useMemo(() => {
-    if (activeFilter === 'all') return tasks;
-    return tasks.filter((task) => task.status === activeFilter);
-  }, [activeFilter, tasks]);
+  const filteredTasks = createMemo(() => {
+    if (activeFilter() === 'all') return tasks();
+    return tasks().filter((task: AgentTask) => task.status === activeFilter());
+  });
 
-  const availableModels = useMemo(() => {
-    const models = getModelsForProvider(modelSettings, modelSettings?.ai_provider || 'openai');
+  const availableModels = createMemo(() => {
+    const ms = modelSettings();
+    const models = getModelsForProvider(ms!, ms?.ai_provider || 'openai');
     const resolved = models.length > 0 ? models : [...FALLBACK_MODELS];
-    return ensureModelOption(resolved, form.model);
-  }, [form.model, modelSettings]);
+    return ensureModelOption(resolved, form().model);
+  });
 
-  if (loading) {
+  if (loading()) {
     return (
-      <div className="flex flex-col gap-6">
-        <div className="flex flex-col gap-3">
-          <div className="flex items-center justify-between">
-            <div className="h-5 w-24 bg-zinc-200/50 dark:bg-zinc-700/50 rounded animate-pulse" />
-            <div className="h-10 w-24 bg-zinc-200/50 dark:bg-zinc-700/50 rounded-lg animate-pulse" />
+      <div class="flex flex-col gap-6">
+        <div class="flex flex-col gap-3">
+          <div class="flex items-center justify-between">
+            <div class="h-5 w-24 bg-zinc-200/50 dark:bg-zinc-700/50 rounded animate-pulse" />
+            <div class="h-10 w-24 bg-zinc-200/50 dark:bg-zinc-700/50 rounded-lg animate-pulse" />
           </div>
-          <div className="flex gap-2">
+          <div class="flex gap-2">
             {[1, 2, 3, 4].map((i) => (
-              <div key={i} className="h-8 w-20 bg-zinc-200/50 dark:bg-zinc-700/50 rounded-lg animate-pulse" />
+              <div class="h-8 w-20 bg-zinc-200/50 dark:bg-zinc-700/50 rounded-lg animate-pulse" />
             ))}
           </div>
         </div>
@@ -334,83 +333,82 @@ export function WorkTab({ spaceId }: { spaceId: string }) {
   }
 
   return (
-    <div className="flex flex-col gap-6">
-      <div className="flex flex-col gap-3">
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <h4 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">{t('taskBoard')}</h4>
+    <div class="flex flex-col gap-6">
+      <div class="flex flex-col gap-3">
+        <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <h4 class="text-sm font-semibold text-zinc-900 dark:text-zinc-100">{t('taskBoard')}</h4>
           <button
             type="button"
-            className={`w-full sm:w-auto px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
-              isCreating
+            class={`w-full sm:w-auto px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
+              isCreating()
                 ? 'bg-zinc-100 dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100 hover:bg-zinc-200 dark:hover:bg-zinc-700'
                 : 'bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900 hover:bg-zinc-800 dark:hover:bg-zinc-200'
             }`}
-            onClick={isCreating ? closeForm : openCreateForm}
+            onClick={isCreating() ? closeForm : openCreateForm}
           >
-            {isCreating ? t('cancel') : t('addTask')}
+            {isCreating() ? t('cancel') : t('addTask')}
           </button>
         </div>
-        <TaskFilters activeFilter={activeFilter} onFilterChange={setActiveFilter} />
+        <TaskFilters activeFilter={activeFilter()} onFilterChange={setActiveFilter} />
       </div>
 
-      {isCreating && (
-        <div className="rounded-xl border border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-900 p-4 md:p-5">
+      {isCreating() && (
+        <div class="rounded-xl border border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-900 p-4 md:p-5">
           <TaskForm
-            editingTask={editingTask}
-            title={form.title}
+            editingTask={editingTask()}
+            title={form().title}
             setTitle={(v) => updateForm('title', v)}
-            description={form.description}
+            description={form().description}
             setDescription={(v) => updateForm('description', v)}
-            status={form.status}
+            status={form().status}
             setStatus={(v) => updateForm('status', v)}
-            priority={form.priority}
+            priority={form().priority}
             setPriority={(v) => updateForm('priority', v)}
-            agentType={form.agentType}
+            agentType={form().agentType}
             setAgentType={(v) => updateForm('agentType', v)}
-            model={form.model}
+            model={form().model}
             setModel={(v) => updateForm('model', v)}
-            dueAt={form.dueAt}
+            dueAt={form().dueAt}
             setDueAt={(v) => updateForm('dueAt', v)}
-            availableModels={availableModels}
-            saving={saving}
-            error={error}
+            availableModels={availableModels()}
+            saving={saving()}
+            error={error()}
             onSubmit={handleSubmit}
             onClose={closeForm}
           />
         </div>
       )}
 
-      {filteredTasks.length === 0 ? (
-        isCreating ? null : (
-          <div className="flex flex-col items-center justify-center py-12 text-zinc-500 dark:text-zinc-400 gap-4">
-            <div className="w-16 h-16 rounded-full bg-zinc-100 dark:bg-zinc-800 flex items-center justify-center text-zinc-900 dark:text-zinc-100">
-              <Icons.Sparkles className="w-8 h-8" />
+      {filteredTasks().length === 0 ? (
+        isCreating() ? null : (
+          <div class="flex flex-col items-center justify-center py-12 text-zinc-500 dark:text-zinc-400 gap-4">
+            <div class="w-16 h-16 rounded-full bg-zinc-100 dark:bg-zinc-800 flex items-center justify-center text-zinc-900 dark:text-zinc-100">
+              <Icons.Sparkles class="w-8 h-8" />
             </div>
-            <div className="text-center">
-              <p className="text-zinc-900 dark:text-zinc-100 font-medium">{t('noTasks')}</p>
-              <p className="text-sm text-zinc-500 dark:text-zinc-400 mt-1">
+            <div class="text-center">
+              <p class="text-zinc-900 dark:text-zinc-100 font-medium">{t('noTasks')}</p>
+              <p class="text-sm text-zinc-500 dark:text-zinc-400 mt-1">
                 {tOr('tasksEmptyHint', 'Create tasks for your agent to work on autonomously')}
               </p>
             </div>
             <button
               type="button"
-              className="px-4 py-2 bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900 rounded-lg hover:bg-zinc-800 dark:hover:bg-zinc-200 transition-colors flex items-center gap-2"
+              class="px-4 py-2 bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900 rounded-lg hover:bg-zinc-800 dark:hover:bg-zinc-200 transition-colors flex items-center gap-2"
               onClick={openCreateForm}
             >
-              <Icons.Plus className="w-4 h-4" />
+              <Icons.Plus class="w-4 h-4" />
               {t('addTask')}
             </button>
           </div>
         )
       ) : (
-        <div className="flex flex-col gap-4">
-          {filteredTasks.map((task) => (
+        <div class="flex flex-col gap-4">
+          {filteredTasks().map((task: AgentTask) => (
             <TaskCard
-              key={task.id}
               task={task}
-              isPlanning={planningTaskId === task.id}
-              isStarting={startingTaskId === task.id}
-              isDeleting={deletingTaskId === task.id}
+              isPlanning={planningTaskId() === task.id}
+              isStarting={startingTaskId() === task.id}
+              isDeleting={deletingTaskId() === task.id}
               onStart={handleStart}
               onPlan={handlePlan}
               onOpenChat={handleOpenChat}

@@ -1,4 +1,5 @@
-import React, { useState } from 'react';
+import { createSignal } from 'solid-js';
+import type { JSX } from 'solid-js';
 import { ErrorBoundary } from '../components/ui/ErrorBoundary';
 import { UserProfilePage } from './profile/UserProfilePage';
 import { LoadingScreen } from '../components/common/LoadingScreen';
@@ -26,11 +27,11 @@ import type { DeploySection, RouteState, Thread, View } from '../types';
 function SurfaceMessage({ title, description }: { title: string; description?: string }) {
   return (
     <AuthenticatedLayout>
-      <div className="flex-1 flex items-center justify-center px-6">
-        <div className="max-w-md text-center space-y-2">
-          <h1 className="text-lg font-semibold text-zinc-900 dark:text-zinc-100">{title}</h1>
+      <div class="flex-1 flex items-center justify-center px-6">
+        <div class="max-w-md text-center space-y-2">
+          <h1 class="text-lg font-semibold text-zinc-900 dark:text-zinc-100">{title}</h1>
           {description ? (
-            <p className="text-sm text-zinc-500 dark:text-zinc-400">{description}</p>
+            <p class="text-sm text-zinc-500 dark:text-zinc-400">{description}</p>
           ) : null}
         </div>
       </div>
@@ -69,7 +70,7 @@ export function AuthenticatedRoutes() {
     handleNewThreadCreated,
   } = useNavigation();
 
-  const [deploySection, setDeploySection] = useState<DeploySection>('workers');
+  const [deploySection, setDeploySection] = createSignal<DeploySection>('workers');
   const hasInvalidSpaceRoute = Boolean(route.spaceId) && !routeSpaceId && spacesLoaded;
 
   const ensureCanonicalRoute = (nextRoute: RouteState): boolean => {
@@ -155,7 +156,7 @@ export function AuthenticatedRoutes() {
       <AuthenticatedLayout>
         <ErrorBoundary>
           <ChatPage
-            key={routeSpaceId ?? 'default'}
+
             spaces={spaces}
             initialSpaceId={routeSpaceId}
             initialThreadId={route.threadId}
@@ -189,7 +190,7 @@ export function AuthenticatedRoutes() {
     if (waitingForSpaceResolution) return <LoadingScreen />;
     if (hasInvalidSpaceRoute) return renderSpaceRouteError();
     const currentDeploySection = route.deploySection
-      || deploySection
+      || deploySection()
       || 'workers';
     const deploySpaceId = routeSpaceId ?? selectedSpaceId ?? preferredSpaceId;
 
@@ -224,8 +225,8 @@ export function AuthenticatedRoutes() {
               isMobile={isMobile}
             />
           ) : (
-            <div className="flex-1 flex items-center justify-center">
-              <p className="text-zinc-500">No space available</p>
+            <div class="flex-1 flex items-center justify-center">
+              <p class="text-zinc-500">No space available</p>
             </div>
           )}
         </ErrorBoundary>
@@ -322,8 +323,8 @@ export function AuthenticatedRoutes() {
       }
       return (
         <AuthenticatedLayout>
-          <div className="flex-1 flex items-center justify-center">
-            <p className="text-zinc-500">No space available</p>
+          <div class="flex-1 flex items-center justify-center">
+            <p class="text-zinc-500">No space available</p>
           </div>
         </AuthenticatedLayout>
       );
@@ -394,7 +395,7 @@ export function AuthenticatedRoutes() {
     return <LoadingScreen />;
   };
 
-  const renderProfileView = (): React.ReactNode | undefined => {
+  const renderProfileView = (): JSX.Element | undefined => {
     if (!route.username) {
       return undefined;
     }
@@ -412,7 +413,7 @@ export function AuthenticatedRoutes() {
   };
 
   type AuthenticatedView = View;
-  type AuthenticatedViewRenderer = () => React.ReactNode | undefined;
+  type AuthenticatedViewRenderer = () => JSX.Element | undefined;
 
   const authenticatedViewRenderers: Partial<Record<AuthenticatedView, AuthenticatedViewRenderer>> = {
     home: renderHomeRedirectView,

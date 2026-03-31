@@ -1,4 +1,3 @@
-import { useCallback, useRef } from 'react';
 import {
   useConnectionManagerBase,
   type ConnectionManagerOptions,
@@ -6,17 +5,19 @@ import {
   type TransportSetupContext,
 } from './useConnectionManagerBase';
 
+type MutableRefObject<T> = { current: T };
+
 export type UseWsConnectionManagerOptions = ConnectionManagerOptions;
 export type UseWsConnectionManagerResult = ConnectionManagerResult;
 
 export function useWsConnectionManager(
   options: UseWsConnectionManagerOptions,
 ): UseWsConnectionManagerResult {
-  const wsRef = useRef<WebSocket | null>(null);
-  const heartbeatRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const lastPongRef = useRef<number>(Date.now());
+  let wsRef: MutableRefObject<WebSocket | null> = { current: null };
+  let heartbeatRef: MutableRefObject<ReturnType<typeof setInterval> | null> = { current: null };
+  let lastPongRef: MutableRefObject<number> = { current: Date.now() };
 
-  const cleanupTransport = useCallback((): void => {
+  const cleanupTransport = (): void => {
     if (heartbeatRef.current) {
       clearInterval(heartbeatRef.current);
       heartbeatRef.current = null;
@@ -33,9 +34,9 @@ export function useWsConnectionManager(
       }
       wsRef.current = null;
     }
-  }, []);
+  };
 
-  const setupTransport = useCallback((ctx: TransportSetupContext): void => {
+  const setupTransport = (ctx: TransportSetupContext): void => {
     const { runId, lastEventId, onMessage, onClose, onOpen } = ctx;
 
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
@@ -115,7 +116,7 @@ export function useWsConnectionManager(
     } catch (wsErr) {
       console.error('WebSocket creation failed:', wsErr);
     }
-  }, []);
+  };
 
   const result = useConnectionManagerBase(
     options,

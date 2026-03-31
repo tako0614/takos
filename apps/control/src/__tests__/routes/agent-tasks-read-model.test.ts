@@ -1,23 +1,16 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { Hono } from 'hono';
 import type { Env, User } from '@/types';
 import { createMockEnv } from '../../../test/integration/setup';
 
-const mocks = vi.hoisted(() => ({
-  getDb: vi.fn(),
-  checkWorkspaceAccess: vi.fn(),
-}));
+import { assertEquals, assertObjectMatch } from 'jsr:@std/assert';
 
-vi.mock('@/db', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('@/db')>();
-  return { ...actual, getDb: mocks.getDb };
+const mocks = ({
+  getDb: ((..._args: any[]) => undefined) as any,
+  checkWorkspaceAccess: ((..._args: any[]) => undefined) as any,
 });
 
-vi.mock('@/utils', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/utils')>()),
-  checkWorkspaceAccess: mocks.checkWorkspaceAccess,
-}));
-
+// [Deno] vi.mock removed - manually stub imports from '@/db'
+// [Deno] vi.mock removed - manually stub imports from '@/utils'
 import agentTasks from '@/routes/agent-tasks';
 
 type Vars = { user: User };
@@ -48,13 +41,13 @@ function createApp(user: User) {
   return app;
 }
 
-describe('agent task read-model routes', () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-    mocks.checkWorkspaceAccess.mockResolvedValue({
+
+  Deno.test('agent task read-model routes - returns latest run summary and resume target for each task', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+    mocks.checkWorkspaceAccess = (async () => ({
       workspace: { id: 'ws-1' },
       member: { role: 'owner' },
-    });
+    })) as any;
     // Build drizzle-compatible mock that returns different data for each select() call.
     // Call order: 1) agentTasks, 2) threads, 3) runs, 4) artifacts
     const selectResults = [
@@ -116,25 +109,22 @@ describe('agent task read-model routes', () => {
       ],
     ];
     let selectCallIndex = 0;
-    mocks.getDb.mockReturnValue({
-      select: vi.fn(() => {
+    mocks.getDb = (() => ({
+      select: () => {
         const resultIndex = selectCallIndex++;
         const chain: any = {
-          from: vi.fn(() => chain),
-          where: vi.fn(() => chain),
-          orderBy: vi.fn(() => chain),
-          limit: vi.fn(() => chain),
-          offset: vi.fn(() => chain),
-          all: vi.fn(async () => selectResults[resultIndex] ?? []),
-          get: vi.fn(async () => (selectResults[resultIndex] ?? [])[0] ?? undefined),
+          from: () => chain,
+          where: () => chain,
+          orderBy: () => chain,
+          limit: () => chain,
+          offset: () => chain,
+          all: async () => selectResults[resultIndex] ?? [],
+          get: async () => (selectResults[resultIndex] ?? [])[0] ?? undefined,
         };
         return chain;
-      }),
-    });
-  });
-
-  it('returns latest run summary and resume target for each task', async () => {
-    const app = createApp(createUser('user-1', 'alice'));
+      },
+    })) as any;
+  const app = createApp(createUser('user-1', 'alice'));
     const env = createMockEnv() as unknown as Env;
 
     const response = await app.fetch(
@@ -143,7 +133,7 @@ describe('agent task read-model routes', () => {
       {} as ExecutionContext,
     );
 
-    expect(response.status).toBe(200);
+    assertEquals(response.status, 200);
     const payload = await response.json() as {
       tasks: Array<{
         thread_title?: string | null;
@@ -152,7 +142,7 @@ describe('agent task read-model routes', () => {
       }>;
     };
 
-    expect(payload.tasks[0]).toMatchObject({
+    assertObjectMatch(payload.tasks[0], {
       thread_title: 'Fix history UI',
       latest_run: {
         run_id: 'run-active',
@@ -165,5 +155,4 @@ describe('agent task read-model routes', () => {
         reason: 'active',
       },
     });
-  });
-});
+})

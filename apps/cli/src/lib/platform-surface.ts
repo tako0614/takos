@@ -1,5 +1,5 @@
 import fs from 'node:fs/promises';
-import { api } from './api.js';
+import { api } from './api.ts';
 
 export type ApiServiceType = 'app' | 'service';
 

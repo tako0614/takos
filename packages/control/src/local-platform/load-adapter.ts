@@ -16,7 +16,7 @@ function resolveAdapterSpecifier(rawSpecifier: string): string {
 }
 
 async function loadLocalAdapterModule(): Promise<LocalControlAdapterModule> {
-  const rawSpecifier = process.env.TAKOS_LOCAL_ADAPTER;
+  const rawSpecifier = Deno.env.get('TAKOS_LOCAL_ADAPTER');
   if (!rawSpecifier) {
     return import(new URL('../node-platform/env-builder.ts', import.meta.url).href) as Promise<LocalControlAdapterModule>;
   }

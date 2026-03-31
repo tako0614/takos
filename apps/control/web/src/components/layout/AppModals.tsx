@@ -1,5 +1,5 @@
-import React from 'react';
-import { useAtomValue, useSetAtom } from 'jotai';
+import { Show } from 'solid-js';
+import { useAtomValue, useSetAtom } from 'solid-jotai';
 import { CreateSpaceModal } from '../../views/shared/spaces/CreateSpaceModal';
 import { ChatSearchModal } from '../../views/chat/ChatSearchModal';
 import { AgentModal } from '../../views/AgentModal';
@@ -11,7 +11,7 @@ interface AppModalsProps {
   onCreateSpace: (name: string, description: string) => Promise<void>;
 }
 
-export function AppModals({ onCreateSpace }: AppModalsProps) {
+export function AppModals(props: AppModalsProps) {
   const showCreateSpace = useAtomValue(showCreateSpaceAtom);
   const setShowCreateSpace = useSetAtom(showCreateSpaceAtom);
   const showAgentModal = useAtomValue(showAgentModalAtom);
@@ -26,20 +26,20 @@ export function AppModals({ onCreateSpace }: AppModalsProps) {
   } = useNavigation();
 
   const { spaces } = useAuth();
-  const resolvedSpaceId = selectedSpaceId ?? preferredSpaceId;
+  const resolvedSpaceId = () => selectedSpaceId ?? preferredSpaceId;
 
   return (
     <>
-      {showCreateSpace && (
+      <Show when={showCreateSpace}>
         <CreateSpaceModal
           onClose={() => setShowCreateSpace(false)}
-          onCreate={onCreateSpace}
+          onCreate={props.onCreateSpace}
         />
-      )}
+      </Show>
 
-      {showSearch && resolvedSpaceId && (
+      <Show when={showSearch() && resolvedSpaceId()}>
         <ChatSearchModal
-          spaceId={resolvedSpaceId}
+          spaceId={resolvedSpaceId()!}
           onSelectResult={(threadId) => {
             setShowSearch(false);
             navigate({
@@ -52,15 +52,15 @@ export function AppModals({ onCreateSpace }: AppModalsProps) {
           }}
           onClose={() => setShowSearch(false)}
         />
-      )}
+      </Show>
 
-      {showAgentModal && selectedSpaceId && (
+      <Show when={showAgentModal() && selectedSpaceId}>
         <AgentModal
-          spaceId={selectedSpaceId}
+          spaceId={selectedSpaceId!}
           spaces={spaces}
           onClose={() => setShowAgentModal(false)}
         />
-      )}
+      </Show>
     </>
   );
 }

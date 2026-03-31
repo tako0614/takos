@@ -1,69 +1,57 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
 import type { D1Database } from '@cloudflare/workers-types';
 
-const mocks = vi.hoisted(() => ({
-  getDb: vi.fn(),
-  generateId: vi.fn(),
-  now: vi.fn(),
-}));
+import { assertEquals, assertNotEquals, assert, assertStringIncludes } from 'jsr:@std/assert';
+import { assertSpyCalls } from 'jsr:@std/testing/mock';
 
-vi.mock('@/db', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/db')>()),
-  getDb: mocks.getDb,
-}));
+const mocks = ({
+  getDb: ((..._args: any[]) => undefined) as any,
+  generateId: ((..._args: any[]) => undefined) as any,
+  now: ((..._args: any[]) => undefined) as any,
+});
 
-vi.mock('@/shared/utils', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/shared/utils')>()),
-  generateId: mocks.generateId,
-  now: mocks.now,
-}));
-
+// [Deno] vi.mock removed - manually stub imports from '@/db'
+// [Deno] vi.mock removed - manually stub imports from '@/shared/utils'
 import { MEMORY_TYPES } from '@/services/memory/memories';
 
 function createDrizzleMock() {
-  const getMock = vi.fn();
-  const allMock = vi.fn();
-  const runMock = vi.fn();
+  const getMock = ((..._args: any[]) => undefined) as any;
+  const allMock = ((..._args: any[]) => undefined) as any;
+  const runMock = ((..._args: any[]) => undefined) as any;
   const chain = {
-    from: vi.fn().mockReturnThis(),
-    where: vi.fn().mockReturnThis(),
-    set: vi.fn().mockReturnThis(),
-    values: vi.fn().mockReturnThis(),
-    returning: vi.fn().mockReturnThis(),
-    orderBy: vi.fn().mockReturnThis(),
-    limit: vi.fn().mockReturnThis(),
-    offset: vi.fn().mockReturnThis(),
+    from: (function(this: any) { return this; }),
+    where: (function(this: any) { return this; }),
+    set: (function(this: any) { return this; }),
+    values: (function(this: any) { return this; }),
+    returning: (function(this: any) { return this; }),
+    orderBy: (function(this: any) { return this; }),
+    limit: (function(this: any) { return this; }),
+    offset: (function(this: any) { return this; }),
     get: getMock,
     all: allMock,
     run: runMock,
   };
   return {
-    select: vi.fn(() => chain),
-    insert: vi.fn(() => chain),
-    update: vi.fn(() => chain),
-    delete: vi.fn(() => chain),
+    select: () => chain,
+    insert: () => chain,
+    update: () => chain,
+    delete: () => chain,
     _: { get: getMock, all: allMock, run: runMock, chain },
   };
 }
 
-describe('MEMORY_TYPES constant', () => {
-  it('includes the expected memory types', () => {
-    expect(MEMORY_TYPES).toContain('episode');
-    expect(MEMORY_TYPES).toContain('semantic');
-    expect(MEMORY_TYPES).toContain('procedural');
-    expect(MEMORY_TYPES).toHaveLength(3);
-  });
-});
 
-describe('listMemories', () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-    mocks.now.mockReturnValue('2026-01-01T00:00:00.000Z');
-  });
+  Deno.test('MEMORY_TYPES constant - includes the expected memory types', () => {
+  assertStringIncludes(MEMORY_TYPES, 'episode');
+    assertStringIncludes(MEMORY_TYPES, 'semantic');
+    assertStringIncludes(MEMORY_TYPES, 'procedural');
+    assertEquals(MEMORY_TYPES.length, 3);
+})
 
-  it('returns mapped memories from the database', async () => {
-    const drizzle = createDrizzleMock();
-    drizzle._.all.mockResolvedValue([
+  Deno.test('listMemories - returns mapped memories from the database', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+    mocks.now = (() => '2026-01-01T00:00:00.000Z') as any;
+  const drizzle = createDrizzleMock();
+    drizzle._.all = (async () => [
       {
         id: 'm-1',
         accountId: 'space-1',
@@ -82,25 +70,26 @@ describe('listMemories', () => {
         createdAt: '2026-01-01T00:00:00.000Z',
         updatedAt: '2026-01-01T00:00:00.000Z',
       },
-    ]);
-    mocks.getDb.mockReturnValue(drizzle);
+    ]) as any;
+    mocks.getDb = (() => drizzle) as any;
 
     const { listMemories } = await import('@/services/memory/memories');
     const result = await listMemories({} as D1Database, 'space-1', {});
 
-    expect(result).toHaveLength(1);
-    expect(result[0].id).toBe('m-1');
-    expect(result[0].space_id).toBe('space-1');
-    expect(result[0].user_id).toBe('user-1');
-    expect(result[0].type).toBe('semantic');
-    expect(result[0].category).toBe('fact');
-    expect(result[0].content).toBe('User works in fintech');
-    expect(result[0].importance).toBe(0.8);
-  });
-
-  it('defaults importance to 0.5 when null', async () => {
-    const drizzle = createDrizzleMock();
-    drizzle._.all.mockResolvedValue([
+    assertEquals(result.length, 1);
+    assertEquals(result[0].id, 'm-1');
+    assertEquals(result[0].space_id, 'space-1');
+    assertEquals(result[0].user_id, 'user-1');
+    assertEquals(result[0].type, 'semantic');
+    assertEquals(result[0].category, 'fact');
+    assertEquals(result[0].content, 'User works in fintech');
+    assertEquals(result[0].importance, 0.8);
+})
+  Deno.test('listMemories - defaults importance to 0.5 when null', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+    mocks.now = (() => '2026-01-01T00:00:00.000Z') as any;
+  const drizzle = createDrizzleMock();
+    drizzle._.all = (async () => [
       {
         id: 'm-1',
         accountId: 'space-1',
@@ -119,19 +108,20 @@ describe('listMemories', () => {
         createdAt: '2026-01-01T00:00:00.000Z',
         updatedAt: '2026-01-01T00:00:00.000Z',
       },
-    ]);
-    mocks.getDb.mockReturnValue(drizzle);
+    ]) as any;
+    mocks.getDb = (() => drizzle) as any;
 
     const { listMemories } = await import('@/services/memory/memories');
     const result = await listMemories({} as D1Database, 'space-1', {});
 
-    expect(result[0].importance).toBe(0.5);
-    expect(result[0].access_count).toBe(0);
-  });
-
-  it('defaults type to semantic for unknown types', async () => {
-    const drizzle = createDrizzleMock();
-    drizzle._.all.mockResolvedValue([
+    assertEquals(result[0].importance, 0.5);
+    assertEquals(result[0].access_count, 0);
+})
+  Deno.test('listMemories - defaults type to semantic for unknown types', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+    mocks.now = (() => '2026-01-01T00:00:00.000Z') as any;
+  const drizzle = createDrizzleMock();
+    drizzle._.all = (async () => [
       {
         id: 'm-1',
         accountId: 'space-1',
@@ -150,26 +140,21 @@ describe('listMemories', () => {
         createdAt: '2026-01-01T00:00:00.000Z',
         updatedAt: '2026-01-01T00:00:00.000Z',
       },
-    ]);
-    mocks.getDb.mockReturnValue(drizzle);
+    ]) as any;
+    mocks.getDb = (() => drizzle) as any;
 
     const { listMemories } = await import('@/services/memory/memories');
     const result = await listMemories({} as D1Database, 'space-1', {});
 
-    expect(result[0].type).toBe('semantic');
-  });
-});
+    assertEquals(result[0].type, 'semantic');
+})
 
-describe('createMemory', () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-    mocks.generateId.mockReturnValue('new-mem-id');
-    mocks.now.mockReturnValue('2026-01-01T00:00:00.000Z');
-  });
-
-  it('inserts a new memory and retrieves it', async () => {
-    const drizzle = createDrizzleMock();
-    drizzle._.get.mockResolvedValue({
+  Deno.test('createMemory - inserts a new memory and retrieves it', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+    mocks.generateId = (() => 'new-mem-id') as any;
+    mocks.now = (() => '2026-01-01T00:00:00.000Z') as any;
+  const drizzle = createDrizzleMock();
+    drizzle._.get = (async () => ({
       id: 'new-mem-id',
       accountId: 'space-1',
       authorAccountId: 'user-1',
@@ -186,8 +171,8 @@ describe('createMemory', () => {
       accessCount: 0,
       createdAt: '2026-01-01T00:00:00.000Z',
       updatedAt: '2026-01-01T00:00:00.000Z',
-    });
-    mocks.getDb.mockReturnValue(drizzle);
+    })) as any;
+    mocks.getDb = (() => drizzle) as any;
 
     const { createMemory } = await import('@/services/memory/memories');
     const result = await createMemory({} as D1Database, {
@@ -200,66 +185,52 @@ describe('createMemory', () => {
       tags: ['react', 'frontend'],
     });
 
-    expect(result).not.toBeNull();
-    expect(result?.id).toBe('new-mem-id');
-    expect(result?.type).toBe('semantic');
-    expect(result?.content).toBe('Using React for frontend');
-  });
-});
+    assertNotEquals(result, null);
+    assertEquals(result?.id, 'new-mem-id');
+    assertEquals(result?.type, 'semantic');
+    assertEquals(result?.content, 'Using React for frontend');
+})
 
-describe('bumpMemoryAccess', () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-    mocks.now.mockReturnValue('2026-01-01T00:00:00.000Z');
-  });
-
-  it('does nothing for empty array', async () => {
-    const drizzle = createDrizzleMock();
-    mocks.getDb.mockReturnValue(drizzle);
+  Deno.test('bumpMemoryAccess - does nothing for empty array', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+    mocks.now = (() => '2026-01-01T00:00:00.000Z') as any;
+  const drizzle = createDrizzleMock();
+    mocks.getDb = (() => drizzle) as any;
 
     const { bumpMemoryAccess } = await import('@/services/memory/memories');
     await bumpMemoryAccess({} as D1Database, []);
 
-    expect(drizzle.update).not.toHaveBeenCalled();
-  });
-
-  it('updates access count and timestamp for given ids', async () => {
-    const drizzle = createDrizzleMock();
-    mocks.getDb.mockReturnValue(drizzle);
+    assertSpyCalls(drizzle.update, 0);
+})
+  Deno.test('bumpMemoryAccess - updates access count and timestamp for given ids', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+    mocks.now = (() => '2026-01-01T00:00:00.000Z') as any;
+  const drizzle = createDrizzleMock();
+    mocks.getDb = (() => drizzle) as any;
 
     const { bumpMemoryAccess } = await import('@/services/memory/memories');
     await bumpMemoryAccess({} as D1Database, ['m-1', 'm-2']);
 
-    expect(drizzle.update).toHaveBeenCalled();
-  });
-});
+    assert(drizzle.update.calls.length > 0);
+})
 
-describe('deleteMemory', () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-  });
-
-  it('deletes a memory by id', async () => {
-    const drizzle = createDrizzleMock();
-    mocks.getDb.mockReturnValue(drizzle);
+  Deno.test('deleteMemory - deletes a memory by id', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+  const drizzle = createDrizzleMock();
+    mocks.getDb = (() => drizzle) as any;
 
     const { deleteMemory } = await import('@/services/memory/memories');
     await deleteMemory({} as D1Database, 'm-1');
 
-    expect(drizzle.delete).toHaveBeenCalled();
-  });
-});
+    assert(drizzle.delete.calls.length > 0);
+})
 
-describe('createReminder', () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-    mocks.generateId.mockReturnValue('rem-id');
-    mocks.now.mockReturnValue('2026-01-01T00:00:00.000Z');
-  });
-
-  it('creates a reminder and returns it', async () => {
-    const drizzle = createDrizzleMock();
-    drizzle._.get.mockResolvedValue({
+  Deno.test('createReminder - creates a reminder and returns it', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+    mocks.generateId = (() => 'rem-id') as any;
+    mocks.now = (() => '2026-01-01T00:00:00.000Z') as any;
+  const drizzle = createDrizzleMock();
+    drizzle._.get = (async () => ({
       id: 'rem-id',
       accountId: 'space-1',
       ownerAccountId: 'user-1',
@@ -272,8 +243,8 @@ describe('createReminder', () => {
       priority: 'normal',
       createdAt: '2026-01-01T00:00:00.000Z',
       updatedAt: '2026-01-01T00:00:00.000Z',
-    });
-    mocks.getDb.mockReturnValue(drizzle);
+    })) as any;
+    mocks.getDb = (() => drizzle) as any;
 
     const { createReminder } = await import('@/services/memory/memories');
     const result = await createReminder({} as D1Database, {
@@ -284,24 +255,19 @@ describe('createReminder', () => {
       triggerValue: '2026-02-01T00:00:00.000Z',
     });
 
-    expect(result).not.toBeNull();
-    expect(result?.id).toBe('rem-id');
-    expect(result?.content).toBe('Follow up on PR');
-    expect(result?.trigger_type).toBe('time');
-    expect(result?.status).toBe('pending');
-    expect(result?.priority).toBe('normal');
-  });
-});
+    assertNotEquals(result, null);
+    assertEquals(result?.id, 'rem-id');
+    assertEquals(result?.content, 'Follow up on PR');
+    assertEquals(result?.trigger_type, 'time');
+    assertEquals(result?.status, 'pending');
+    assertEquals(result?.priority, 'normal');
+})
 
-describe('triggerReminder', () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-    mocks.now.mockReturnValue('2026-01-15T00:00:00.000Z');
-  });
-
-  it('sets status to triggered and updates triggeredAt', async () => {
-    const drizzle = createDrizzleMock();
-    drizzle._.get.mockResolvedValue({
+  Deno.test('triggerReminder - sets status to triggered and updates triggeredAt', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+    mocks.now = (() => '2026-01-15T00:00:00.000Z') as any;
+  const drizzle = createDrizzleMock();
+    drizzle._.get = (async () => ({
       id: 'rem-1',
       accountId: 'space-1',
       ownerAccountId: 'user-1',
@@ -314,14 +280,13 @@ describe('triggerReminder', () => {
       priority: 'high',
       createdAt: '2026-01-01T00:00:00.000Z',
       updatedAt: '2026-01-15T00:00:00.000Z',
-    });
-    mocks.getDb.mockReturnValue(drizzle);
+    })) as any;
+    mocks.getDb = (() => drizzle) as any;
 
     const { triggerReminder } = await import('@/services/memory/memories');
     const result = await triggerReminder({} as D1Database, 'rem-1');
 
-    expect(result).not.toBeNull();
-    expect(result?.status).toBe('triggered');
-    expect(result?.triggered_at).toBe('2026-01-15T00:00:00.000Z');
-  });
-});
+    assertNotEquals(result, null);
+    assertEquals(result?.status, 'triggered');
+    assertEquals(result?.triggered_at, '2026-01-15T00:00:00.000Z');
+})

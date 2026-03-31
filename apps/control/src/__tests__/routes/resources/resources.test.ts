@@ -1,4 +1,3 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { Hono } from 'hono';
 import { AppError, ErrorCodes } from 'takos-common/errors';
 import type { Env, User } from '@/types';
@@ -7,77 +6,40 @@ import type * as DbModule from '@/db';
 import type * as RouteAuthModule from '@/routes/route-auth';
 import { createMockEnv } from '../../../../test/integration/setup';
 
-const mocks = vi.hoisted(() => ({
-  requireSpaceAccess: vi.fn(),
-  listResourcesForWorkspace: vi.fn(),
-  listResourcesForUser: vi.fn(),
-  listResourcesByType: vi.fn(),
-  checkResourceAccess: vi.fn(),
-  countResourceBindings: vi.fn(),
-  deleteResource: vi.fn(),
-  getResourceById: vi.fn(),
-  getResourceByName: vi.fn(),
-  listResourceAccess: vi.fn(),
-  listResourceBindings: vi.fn(),
-  markResourceDeleting: vi.fn(),
-  provisionManagedResource: vi.fn(),
-  deleteManagedResource: vi.fn(),
-  updateResourceMetadata: vi.fn(),
-  resolveActorPrincipalId: vi.fn(),
-  getPlatformServices: vi.fn(),
-  getDb: vi.fn(),
-  CloudflareResourceService: vi.fn(),
-  upsertGroupDesiredResource: vi.fn(),
-  removeGroupDesiredResource: vi.fn(),
-}));
+import { assertEquals, assert, assertStringIncludes } from 'jsr:@std/assert';
+import { assertSpyCalls, assertSpyCallArgs } from 'jsr:@std/testing/mock';
 
-vi.mock('@/routes/route-auth', async (importOriginal) => {
-  const actual = await importOriginal<typeof RouteAuthModule>();
-  return {
-    ...actual,
-    requireSpaceAccess: mocks.requireSpaceAccess,
-  };
+const mocks = ({
+  requireSpaceAccess: ((..._args: any[]) => undefined) as any,
+  listResourcesForWorkspace: ((..._args: any[]) => undefined) as any,
+  listResourcesForUser: ((..._args: any[]) => undefined) as any,
+  listResourcesByType: ((..._args: any[]) => undefined) as any,
+  checkResourceAccess: ((..._args: any[]) => undefined) as any,
+  countResourceBindings: ((..._args: any[]) => undefined) as any,
+  deleteResource: ((..._args: any[]) => undefined) as any,
+  getResourceById: ((..._args: any[]) => undefined) as any,
+  getResourceByName: ((..._args: any[]) => undefined) as any,
+  listResourceAccess: ((..._args: any[]) => undefined) as any,
+  listResourceBindings: ((..._args: any[]) => undefined) as any,
+  markResourceDeleting: ((..._args: any[]) => undefined) as any,
+  provisionManagedResource: ((..._args: any[]) => undefined) as any,
+  deleteManagedResource: ((..._args: any[]) => undefined) as any,
+  updateResourceMetadata: ((..._args: any[]) => undefined) as any,
+  resolveActorPrincipalId: ((..._args: any[]) => undefined) as any,
+  getPlatformServices: ((..._args: any[]) => undefined) as any,
+  getDb: ((..._args: any[]) => undefined) as any,
+  CloudflareResourceService: ((..._args: any[]) => undefined) as any,
+  upsertGroupDesiredResource: ((..._args: any[]) => undefined) as any,
+  removeGroupDesiredResource: ((..._args: any[]) => undefined) as any,
 });
 
-vi.mock('@/services/resources', () => ({
-  checkResourceAccess: mocks.checkResourceAccess,
-  countResourceBindings: mocks.countResourceBindings,
-  deleteResource: mocks.deleteResource,
-  getResourceById: mocks.getResourceById,
-  getResourceByName: mocks.getResourceByName,
-  listResourceAccess: mocks.listResourceAccess,
-  listResourceBindings: mocks.listResourceBindings,
-  listResourcesByType: mocks.listResourcesByType,
-  listResourcesForUser: mocks.listResourcesForUser,
-  listResourcesForWorkspace: mocks.listResourcesForWorkspace,
-  markResourceDeleting: mocks.markResourceDeleting,
-  provisionManagedResource: mocks.provisionManagedResource,
-  deleteManagedResource: mocks.deleteManagedResource,
-  updateResourceMetadata: mocks.updateResourceMetadata,
-}));
-
-vi.mock('@/services/identity/principals', () => ({
-  resolveActorPrincipalId: mocks.resolveActorPrincipalId,
-}));
-
-vi.mock('@/platform/accessors.ts', () => ({
-  getPlatformServices: mocks.getPlatformServices,
-}));
-
-vi.mock('@/platform/providers/cloudflare/resources.ts', () => ({
-  CloudflareResourceService: mocks.CloudflareResourceService,
-}));
-
-vi.mock('@/db', async (importOriginal) => ({
-  ...(await importOriginal<typeof DbModule>()),
-  getDb: mocks.getDb,
-}));
-
-vi.mock('@/services/deployment/group-desired-projector', () => ({
-  upsertGroupDesiredResource: mocks.upsertGroupDesiredResource,
-  removeGroupDesiredResource: mocks.removeGroupDesiredResource,
-}));
-
+// [Deno] vi.mock removed - manually stub imports from '@/routes/route-auth'
+// [Deno] vi.mock removed - manually stub imports from '@/services/resources'
+// [Deno] vi.mock removed - manually stub imports from '@/services/identity/principals'
+// [Deno] vi.mock removed - manually stub imports from '@/platform/accessors.ts'
+// [Deno] vi.mock removed - manually stub imports from '@/platform/providers/cloudflare/resources.ts'
+// [Deno] vi.mock removed - manually stub imports from '@/db'
+// [Deno] vi.mock removed - manually stub imports from '@/services/deployment/group-desired-projector'
 import resourcesBase from '@/routes/resources/routes';
 
 const TEST_USER_ID = 'user-1';
@@ -108,23 +70,19 @@ function createApp(user: User): Hono<AuthenticatedRouteEnv> {
   return app;
 }
 
-describe('resources base routes', () => {
+
   let app: Hono<AuthenticatedRouteEnv>;
   let env: Env;
-
-  beforeEach(() => {
-    vi.clearAllMocks();
+  
+    Deno.test('resources base routes - GET /api/resources (no space_id) - returns owned and shared resources for the user', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
     app = createApp(createUser());
     env = createMockEnv() as unknown as Env;
-    mocks.getPlatformServices.mockReturnValue({ sql: { binding: env.DB } });
-  });
-
-  describe('GET /api/resources (no space_id)', () => {
-    it('returns owned and shared resources for the user', async () => {
-      mocks.listResourcesForUser.mockResolvedValue({
+    mocks.getPlatformServices = (() => ({ sql: { binding: env.DB } })) as any;
+  mocks.listResourcesForUser = (async () => ({
         owned: [{ id: 'res-1', name: 'my-db', type: 'd1' }],
         shared: [{ id: 'res-2', name: 'shared-kv', type: 'kv' }],
-      });
+      })) as any;
 
       const res = await app.fetch(
         new Request('http://localhost/api/resources'),
@@ -132,22 +90,24 @@ describe('resources base routes', () => {
         {} as ExecutionContext,
       );
 
-      expect(res.status).toBe(200);
+      assertEquals(res.status, 200);
       const json = await res.json() as { owned: unknown[]; shared: unknown[] };
-      expect(json.owned).toHaveLength(1);
-      expect(json.shared).toHaveLength(1);
-    });
-  });
-
-  describe('GET /api/resources?space_id=...', () => {
-    it('returns workspace-scoped resources after membership check', async () => {
-      mocks.requireSpaceAccess.mockResolvedValue({
+      assertEquals(json.owned.length, 1);
+      assertEquals(json.shared.length, 1);
+})  
+  
+    Deno.test('resources base routes - GET /api/resources?space_id=... - returns workspace-scoped resources after membership check', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+    app = createApp(createUser());
+    env = createMockEnv() as unknown as Env;
+    mocks.getPlatformServices = (() => ({ sql: { binding: env.DB } })) as any;
+  mocks.requireSpaceAccess = (async () => ({
         space: { id: 'ws-1' },
         member: { role: 'viewer' },
-      });
-      mocks.listResourcesForWorkspace.mockResolvedValue([
+      })) as any;
+      mocks.listResourcesForWorkspace = (async () => [
         { id: 'res-3', name: 'team-db' },
-      ]);
+      ]) as any;
 
       const res = await app.fetch(
         new Request('http://localhost/api/resources?space_id=ws-1'),
@@ -155,15 +115,16 @@ describe('resources base routes', () => {
         {} as ExecutionContext,
       );
 
-      expect(res.status).toBe(200);
+      assertEquals(res.status, 200);
       const json = await res.json() as { resources: unknown[] };
-      expect(json.resources).toHaveLength(1);
-    });
-
-    it('returns 404 when workspace access is denied', async () => {
-      mocks.requireSpaceAccess.mockRejectedValue(
-        new AppError('Workspace not found or access denied', ErrorCodes.NOT_FOUND, 404),
-      );
+      assertEquals(json.resources.length, 1);
+})
+    Deno.test('resources base routes - GET /api/resources?space_id=... - returns 404 when workspace access is denied', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+    app = createApp(createUser());
+    env = createMockEnv() as unknown as Env;
+    mocks.getPlatformServices = (() => ({ sql: { binding: env.DB } })) as any;
+  mocks.requireSpaceAccess = (async () => { throw new AppError('Workspace not found or access denied', ErrorCodes.NOT_FOUND, 404),; }) as any;
 
       const res = await app.fetch(
         new Request('http://localhost/api/resources?space_id=ws-unknown'),
@@ -171,16 +132,18 @@ describe('resources base routes', () => {
         {} as ExecutionContext,
       );
 
-      expect(res.status).toBe(404);
-      expect(mocks.listResourcesForWorkspace).not.toHaveBeenCalled();
-    });
-  });
-
-  describe('GET /api/resources/type/:type', () => {
-    it('returns resources filtered by valid type', async () => {
-      mocks.listResourcesByType.mockResolvedValue([
+      assertEquals(res.status, 404);
+      assertSpyCalls(mocks.listResourcesForWorkspace, 0);
+})  
+  
+    Deno.test('resources base routes - GET /api/resources/type/:type - returns resources filtered by valid type', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+    app = createApp(createUser());
+    env = createMockEnv() as unknown as Env;
+    mocks.getPlatformServices = (() => ({ sql: { binding: env.DB } })) as any;
+  mocks.listResourcesByType = (async () => [
         { id: 'res-d1-1', name: 'db-1', type: 'sql', implementation: 'd1' },
-      ]);
+      ]) as any;
 
       const res = await app.fetch(
         new Request('http://localhost/api/resources/type/sql'),
@@ -188,33 +151,38 @@ describe('resources base routes', () => {
         {} as ExecutionContext,
       );
 
-      expect(res.status).toBe(200);
+      assertEquals(res.status, 200);
       const json = await res.json() as { resources: unknown[] };
-      expect(json.resources).toHaveLength(1);
-    });
-
-    it('rejects invalid resource type', async () => {
-      const res = await app.fetch(
+      assertEquals(json.resources.length, 1);
+})
+    Deno.test('resources base routes - GET /api/resources/type/:type - rejects invalid resource type', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+    app = createApp(createUser());
+    env = createMockEnv() as unknown as Env;
+    mocks.getPlatformServices = (() => ({ sql: { binding: env.DB } })) as any;
+  const res = await app.fetch(
         new Request('http://localhost/api/resources/type/invalid_type'),
         env,
         {} as ExecutionContext,
       );
 
-      expect(res.status).toBe(400);
+      assertEquals(res.status, 400);
       const json = await res.json() as { error: string };
-      expect(json.error).toContain('Invalid resource type');
-    });
-  });
-
-  describe('GET /api/resources/:id', () => {
-    it('returns resource details for the owner', async () => {
-      mocks.getResourceById.mockResolvedValue({
+      assertStringIncludes(json.error, 'Invalid resource type');
+})  
+  
+    Deno.test('resources base routes - GET /api/resources/:id - returns resource details for the owner', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+    app = createApp(createUser());
+    env = createMockEnv() as unknown as Env;
+    mocks.getPlatformServices = (() => ({ sql: { binding: env.DB } })) as any;
+  mocks.getResourceById = (async () => ({
         id: 'res-1',
         name: 'my-db',
         owner_id: TEST_USER_ID,
-      });
-      mocks.listResourceAccess.mockResolvedValue([]);
-      mocks.listResourceBindings.mockResolvedValue([]);
+      })) as any;
+      mocks.listResourceAccess = (async () => []) as any;
+      mocks.listResourceBindings = (async () => []) as any;
 
       const res = await app.fetch(
         new Request('http://localhost/api/resources/res-1'),
@@ -222,14 +190,17 @@ describe('resources base routes', () => {
         {} as ExecutionContext,
       );
 
-      expect(res.status).toBe(200);
+      assertEquals(res.status, 200);
       const json = await res.json() as { resource: { id: string }; is_owner: boolean };
-      expect(json.resource.id).toBe('res-1');
-      expect(json.is_owner).toBe(true);
-    });
-
-    it('returns 404 when resource does not exist', async () => {
-      mocks.getResourceById.mockResolvedValue(null);
+      assertEquals(json.resource.id, 'res-1');
+      assertEquals(json.is_owner, true);
+})
+    Deno.test('resources base routes - GET /api/resources/:id - returns 404 when resource does not exist', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+    app = createApp(createUser());
+    env = createMockEnv() as unknown as Env;
+    mocks.getPlatformServices = (() => ({ sql: { binding: env.DB } })) as any;
+  mocks.getResourceById = (async () => null) as any;
 
       const res = await app.fetch(
         new Request('http://localhost/api/resources/res-missing'),
@@ -237,16 +208,19 @@ describe('resources base routes', () => {
         {} as ExecutionContext,
       );
 
-      expect(res.status).toBe(404);
-    });
-
-    it('returns 404 when user has no access', async () => {
-      mocks.getResourceById.mockResolvedValue({
+      assertEquals(res.status, 404);
+})
+    Deno.test('resources base routes - GET /api/resources/:id - returns 404 when user has no access', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+    app = createApp(createUser());
+    env = createMockEnv() as unknown as Env;
+    mocks.getPlatformServices = (() => ({ sql: { binding: env.DB } })) as any;
+  mocks.getResourceById = (async () => ({
         id: 'res-other',
         name: 'other-db',
         owner_id: 'other-user',
-      });
-      mocks.checkResourceAccess.mockResolvedValue(false);
+      })) as any;
+      mocks.checkResourceAccess = (async () => false) as any;
 
       const res = await app.fetch(
         new Request('http://localhost/api/resources/res-other'),
@@ -254,20 +228,22 @@ describe('resources base routes', () => {
         {} as ExecutionContext,
       );
 
-      expect(res.status).toBe(404);
-    });
-  });
-
-  describe('POST /api/resources', () => {
-    it('creates a sql resource and returns 201', async () => {
-      mocks.provisionManagedResource.mockResolvedValue(undefined);
-      mocks.getResourceById.mockResolvedValue({
+      assertEquals(res.status, 404);
+})  
+  
+    Deno.test('resources base routes - POST /api/resources - creates a sql resource and returns 201', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+    app = createApp(createUser());
+    env = createMockEnv() as unknown as Env;
+    mocks.getPlatformServices = (() => ({ sql: { binding: env.DB } })) as any;
+  mocks.provisionManagedResource = (async () => undefined) as any;
+      mocks.getResourceById = (async () => ({
         id: 'res-new',
         name: 'new-db',
         type: 'sql',
         implementation: 'd1',
         status: 'ready',
-      });
+      })) as any;
 
       const res = await app.fetch(
         new Request('http://localhost/api/resources', {
@@ -279,12 +255,15 @@ describe('resources base routes', () => {
         {} as ExecutionContext,
       );
 
-      expect(res.status).toBe(201);
-      expect(mocks.provisionManagedResource).toHaveBeenCalled();
-    });
-
-    it('rejects empty name', async () => {
-      const res = await app.fetch(
+      assertEquals(res.status, 201);
+      assert(mocks.provisionManagedResource.calls.length > 0);
+})
+    Deno.test('resources base routes - POST /api/resources - rejects empty name', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+    app = createApp(createUser());
+    env = createMockEnv() as unknown as Env;
+    mocks.getPlatformServices = (() => ({ sql: { binding: env.DB } })) as any;
+  const res = await app.fetch(
         new Request('http://localhost/api/resources', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -294,12 +273,15 @@ describe('resources base routes', () => {
         {} as ExecutionContext,
       );
 
-      expect(res.status).toBe(400);
-      expect(mocks.provisionManagedResource).not.toHaveBeenCalled();
-    });
-
-    it('rejects invalid resource type on POST', async () => {
-      const res = await app.fetch(
+      assertEquals(res.status, 400);
+      assertSpyCalls(mocks.provisionManagedResource, 0);
+})
+    Deno.test('resources base routes - POST /api/resources - rejects invalid resource type on POST', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+    app = createApp(createUser());
+    env = createMockEnv() as unknown as Env;
+    mocks.getPlatformServices = (() => ({ sql: { binding: env.DB } })) as any;
+  const res = await app.fetch(
         new Request('http://localhost/api/resources', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -309,24 +291,27 @@ describe('resources base routes', () => {
         {} as ExecutionContext,
       );
 
-      expect(res.status).toBe(400);
+      assertEquals(res.status, 400);
       const json = await res.json() as { error: string };
-      expect(json.error).toContain('Invalid resource type');
-    });
-
-    it('accepts explicit provider to provision resource', async () => {
-      mocks.provisionManagedResource.mockResolvedValue({
+      assertStringIncludes(json.error, 'Invalid resource type');
+})
+    Deno.test('resources base routes - POST /api/resources - accepts explicit provider to provision resource', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+    app = createApp(createUser());
+    env = createMockEnv() as unknown as Env;
+    mocks.getPlatformServices = (() => ({ sql: { binding: env.DB } })) as any;
+  mocks.provisionManagedResource = (async () => ({
         id: 'res-provider',
         providerResourceId: 'provider-id',
         providerResourceName: 'provider-name',
-      });
-      mocks.getResourceById.mockResolvedValue({
+      })) as any;
+      mocks.getResourceById = (async () => ({
         id: 'res-provider',
         name: 'new-db',
         type: 'sql',
         implementation: 'd1',
         status: 'ready',
-      });
+      })) as any;
 
       const res = await app.fetch(
         new Request('http://localhost/api/resources', {
@@ -338,26 +323,29 @@ describe('resources base routes', () => {
         {} as ExecutionContext,
       );
 
-      expect(res.status).toBe(201);
-      expect(mocks.provisionManagedResource).toHaveBeenCalledWith(
+      assertEquals(res.status, 201);
+      assertSpyCallArgs(mocks.provisionManagedResource, 0, [
         env,
-        expect.objectContaining({ providerName: 'aws' }),
-      );
-    });
-
-    it('passes analytics config through provisioning and respects dataset resource names', async () => {
-      mocks.provisionManagedResource.mockResolvedValue({
+        ({ providerName: 'aws' }),
+      ]);
+})
+    Deno.test('resources base routes - POST /api/resources - passes analytics config through provisioning and respects dataset resource names', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+    app = createApp(createUser());
+    env = createMockEnv() as unknown as Env;
+    mocks.getPlatformServices = (() => ({ sql: { binding: env.DB } })) as any;
+  mocks.provisionManagedResource = (async () => ({
         id: 'res-events',
         providerResourceId: 'provider-id',
         providerResourceName: 'tenant-events',
-      });
-      mocks.getResourceById.mockResolvedValue({
+      })) as any;
+      mocks.getResourceById = (async () => ({
         id: 'res-events',
         name: 'events',
         type: 'analyticsEngine',
         implementation: 'analytics_engine',
         status: 'ready',
-      });
+      })) as any;
 
       const res = await app.fetch(
         new Request('http://localhost/api/resources', {
@@ -376,19 +364,22 @@ describe('resources base routes', () => {
         {} as ExecutionContext,
       );
 
-      expect(res.status).toBe(201);
-      expect(mocks.provisionManagedResource).toHaveBeenCalledWith(
+      assertEquals(res.status, 201);
+      assertSpyCallArgs(mocks.provisionManagedResource, 0, [
         env,
-        expect.objectContaining({
+        ({
           providerName: 'local',
           providerResourceName: 'tenant-events',
           analyticsStore: { dataset: 'tenant-events' },
         }),
-      );
-    });
-
-    it('rejects invalid provider value', async () => {
-      const res = await app.fetch(
+      ]);
+})
+    Deno.test('resources base routes - POST /api/resources - rejects invalid provider value', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+    app = createApp(createUser());
+    env = createMockEnv() as unknown as Env;
+    mocks.getPlatformServices = (() => ({ sql: { binding: env.DB } })) as any;
+  const res = await app.fetch(
         new Request('http://localhost/api/resources', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -398,13 +389,16 @@ describe('resources base routes', () => {
         {} as ExecutionContext,
       );
 
-      expect(res.status).toBe(400);
+      assertEquals(res.status, 400);
       const json = await res.json() as { error: string };
-      expect(json.error).toContain('Invalid provider');
-    });
-
-    it('validates that unsupported capability types are rejected', async () => {
-      const res = await app.fetch(
+      assertStringIncludes(json.error, 'Invalid provider');
+})
+    Deno.test('resources base routes - POST /api/resources - validates that unsupported capability types are rejected', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+    app = createApp(createUser());
+    env = createMockEnv() as unknown as Env;
+    mocks.getPlatformServices = (() => ({ sql: { binding: env.DB } })) as any;
+  const res = await app.fetch(
         new Request('http://localhost/api/resources', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -414,25 +408,27 @@ describe('resources base routes', () => {
         {} as ExecutionContext,
       );
 
-      expect(res.status).toBe(400);
-    });
-  });
-
-  describe('PATCH /api/resources/:id', () => {
-    it('updates resource metadata for the owner and syncs grouped desired state', async () => {
-      mocks.getResourceById.mockResolvedValue({
+      assertEquals(res.status, 400);
+})  
+  
+    Deno.test('resources base routes - PATCH /api/resources/:id - updates resource metadata for the owner and syncs grouped desired state', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+    app = createApp(createUser());
+    env = createMockEnv() as unknown as Env;
+    mocks.getPlatformServices = (() => ({ sql: { binding: env.DB } })) as any;
+  mocks.getResourceById = (async () => ({
         id: 'res-1',
         name: 'my-db',
         owner_id: TEST_USER_ID,
         group_id: 'group-1',
         type: 'sql',
         config: JSON.stringify({ sql: { mode: 'rw' } }),
-      });
-      mocks.updateResourceMetadata.mockResolvedValue({
+      })) as any;
+      mocks.updateResourceMetadata = (async () => ({
         id: 'res-1',
         name: 'renamed-db',
         config: JSON.stringify({ sql: { mode: 'ro' } }),
-      });
+      })) as any;
 
       const res = await app.fetch(
         new Request('http://localhost/api/resources/res-1', {
@@ -444,26 +440,29 @@ describe('resources base routes', () => {
         {} as ExecutionContext,
       );
 
-      expect(res.status).toBe(200);
-      expect(mocks.removeGroupDesiredResource).toHaveBeenCalledWith(env, {
+      assertEquals(res.status, 200);
+      assertSpyCallArgs(mocks.removeGroupDesiredResource, 0, [env, {
         groupId: 'group-1',
         name: 'my-db',
-      });
-      expect(mocks.upsertGroupDesiredResource).toHaveBeenCalledWith(
+      }]);
+      assertSpyCallArgs(mocks.upsertGroupDesiredResource, 0, [
         env,
-        expect.objectContaining({
+        ({
           groupId: 'group-1',
           name: 'renamed-db',
         }),
-      );
-    });
-
-    it('returns 403 when non-owner tries to update', async () => {
-      mocks.getResourceById.mockResolvedValue({
+      ]);
+})
+    Deno.test('resources base routes - PATCH /api/resources/:id - returns 403 when non-owner tries to update', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+    app = createApp(createUser());
+    env = createMockEnv() as unknown as Env;
+    mocks.getPlatformServices = (() => ({ sql: { binding: env.DB } })) as any;
+  mocks.getResourceById = (async () => ({
         id: 'res-1',
         name: 'their-db',
         owner_id: 'other-user',
-      });
+      })) as any;
 
       const res = await app.fetch(
         new Request('http://localhost/api/resources/res-1', {
@@ -475,13 +474,15 @@ describe('resources base routes', () => {
         {} as ExecutionContext,
       );
 
-      expect(res.status).toBe(403);
-    });
-  });
-
-  describe('DELETE /api/resources/:id', () => {
-    it('returns 404 when resource not found', async () => {
-      mocks.getResourceById.mockResolvedValue(null);
+      assertEquals(res.status, 403);
+})  
+  
+    Deno.test('resources base routes - DELETE /api/resources/:id - returns 404 when resource not found', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+    app = createApp(createUser());
+    env = createMockEnv() as unknown as Env;
+    mocks.getPlatformServices = (() => ({ sql: { binding: env.DB } })) as any;
+  mocks.getResourceById = (async () => null) as any;
 
       const res = await app.fetch(
         new Request('http://localhost/api/resources/res-gone', { method: 'DELETE' }),
@@ -489,14 +490,17 @@ describe('resources base routes', () => {
         {} as ExecutionContext,
       );
 
-      expect(res.status).toBe(404);
-    });
-
-    it('returns 403 when non-owner tries to delete', async () => {
-      mocks.getResourceById.mockResolvedValue({
+      assertEquals(res.status, 404);
+})
+    Deno.test('resources base routes - DELETE /api/resources/:id - returns 403 when non-owner tries to delete', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+    app = createApp(createUser());
+    env = createMockEnv() as unknown as Env;
+    mocks.getPlatformServices = (() => ({ sql: { binding: env.DB } })) as any;
+  mocks.getResourceById = (async () => ({
         id: 'res-1',
         owner_id: 'other-user',
-      });
+      })) as any;
 
       const res = await app.fetch(
         new Request('http://localhost/api/resources/res-1', { method: 'DELETE' }),
@@ -504,15 +508,18 @@ describe('resources base routes', () => {
         {} as ExecutionContext,
       );
 
-      expect(res.status).toBe(403);
-    });
-
-    it('returns 409 when resource has active bindings', async () => {
-      mocks.getResourceById.mockResolvedValue({
+      assertEquals(res.status, 403);
+})
+    Deno.test('resources base routes - DELETE /api/resources/:id - returns 409 when resource has active bindings', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+    app = createApp(createUser());
+    env = createMockEnv() as unknown as Env;
+    mocks.getPlatformServices = (() => ({ sql: { binding: env.DB } })) as any;
+  mocks.getResourceById = (async () => ({
         id: 'res-1',
         owner_id: TEST_USER_ID,
-      });
-      mocks.countResourceBindings.mockResolvedValue({ count: 2 });
+      })) as any;
+      mocks.countResourceBindings = (async () => ({ count: 2 })) as any;
 
       const res = await app.fetch(
         new Request('http://localhost/api/resources/res-1', { method: 'DELETE' }),
@@ -520,25 +527,28 @@ describe('resources base routes', () => {
         {} as ExecutionContext,
       );
 
-      expect(res.status).toBe(409);
+      assertEquals(res.status, 409);
       const json = await res.json() as { error: string; binding_count: number };
-      expect(json.error).toContain('in use');
-      expect(json.binding_count).toBe(2);
-    });
-
-    it('deletes resource when no bindings remain', async () => {
-      mocks.getResourceById.mockResolvedValue({
+      assertStringIncludes(json.error, 'in use');
+      assertEquals(json.binding_count, 2);
+})
+    Deno.test('resources base routes - DELETE /api/resources/:id - deletes resource when no bindings remain', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+    app = createApp(createUser());
+    env = createMockEnv() as unknown as Env;
+    mocks.getPlatformServices = (() => ({ sql: { binding: env.DB } })) as any;
+  mocks.getResourceById = (async () => ({
         id: 'res-1',
         owner_id: TEST_USER_ID,
         type: 'sql',
         implementation: 'd1',
         provider_resource_id: 'cf-123',
         provider_resource_name: 'name',
-      });
-      mocks.countResourceBindings.mockResolvedValue({ count: 0 });
-      mocks.CloudflareResourceService.mockImplementation(() => ({
-        deleteResource: vi.fn().mockResolvedValue(undefined),
-      }));
+      })) as any;
+      mocks.countResourceBindings = (async () => ({ count: 0 })) as any;
+      mocks.CloudflareResourceService = () => ({
+        deleteResource: (async () => undefined),
+      }) as any;
 
       const res = await app.fetch(
         new Request('http://localhost/api/resources/res-1', { method: 'DELETE' }),
@@ -546,24 +556,26 @@ describe('resources base routes', () => {
         {} as ExecutionContext,
       );
 
-      expect(res.status).toBe(200);
+      assertEquals(res.status, 200);
       const json = await res.json() as { success: boolean };
-      expect(json.success).toBe(true);
-      expect(mocks.markResourceDeleting).toHaveBeenCalledWith(env.DB, 'res-1');
-      expect(mocks.deleteResource).toHaveBeenCalledWith(env.DB, 'res-1');
-    });
-  });
-
-  describe('GET /api/resources/by-name/:name', () => {
-    it('returns resource by name for the owner', async () => {
-      mocks.getResourceByName.mockResolvedValue({
+      assertEquals(json.success, true);
+      assertSpyCallArgs(mocks.markResourceDeleting, 0, [env.DB, 'res-1']);
+      assertSpyCallArgs(mocks.deleteResource, 0, [env.DB, 'res-1']);
+})  
+  
+    Deno.test('resources base routes - GET /api/resources/by-name/:name - returns resource by name for the owner', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+    app = createApp(createUser());
+    env = createMockEnv() as unknown as Env;
+    mocks.getPlatformServices = (() => ({ sql: { binding: env.DB } })) as any;
+  mocks.getResourceByName = (async () => ({
         _internal_id: 'res-1',
         name: 'my-db',
         type: 'sql',
         implementation: 'd1',
-      });
-      mocks.listResourceAccess.mockResolvedValue([]);
-      mocks.listResourceBindings.mockResolvedValue([]);
+      })) as any;
+      mocks.listResourceAccess = (async () => []) as any;
+      mocks.listResourceBindings = (async () => []) as any;
 
       const res = await app.fetch(
         new Request('http://localhost/api/resources/by-name/my-db'),
@@ -571,15 +583,18 @@ describe('resources base routes', () => {
         {} as ExecutionContext,
       );
 
-      expect(res.status).toBe(200);
+      assertEquals(res.status, 200);
       const json = await res.json() as { resource: Record<string, unknown>; is_owner: boolean };
-      expect(json.is_owner).toBe(true);
+      assertEquals(json.is_owner, true);
       // Internal id should not be exposed
-      expect(json.resource).not.toHaveProperty('_internal_id');
-    });
-
-    it('returns 404 for unknown resource name', async () => {
-      mocks.getResourceByName.mockResolvedValue(null);
+      assert(!('_internal_id' in json.resource));
+})
+    Deno.test('resources base routes - GET /api/resources/by-name/:name - returns 404 for unknown resource name', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+    app = createApp(createUser());
+    env = createMockEnv() as unknown as Env;
+    mocks.getPlatformServices = (() => ({ sql: { binding: env.DB } })) as any;
+  mocks.getResourceByName = (async () => null) as any;
 
       const res = await app.fetch(
         new Request('http://localhost/api/resources/by-name/unknown'),
@@ -587,13 +602,15 @@ describe('resources base routes', () => {
         {} as ExecutionContext,
       );
 
-      expect(res.status).toBe(404);
-    });
-  });
-
-  describe('DELETE /api/resources/by-name/:name', () => {
-    it('returns 404 when resource name not found', async () => {
-      mocks.getResourceByName.mockResolvedValue(null);
+      assertEquals(res.status, 404);
+})  
+  
+    Deno.test('resources base routes - DELETE /api/resources/by-name/:name - returns 404 when resource name not found', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+    app = createApp(createUser());
+    env = createMockEnv() as unknown as Env;
+    mocks.getPlatformServices = (() => ({ sql: { binding: env.DB } })) as any;
+  mocks.getResourceByName = (async () => null) as any;
 
       const res = await app.fetch(
         new Request('http://localhost/api/resources/by-name/gone', { method: 'DELETE' }),
@@ -601,19 +618,22 @@ describe('resources base routes', () => {
         {} as ExecutionContext,
       );
 
-      expect(res.status).toBe(404);
-    });
-
-    it('returns 409 when resource has bindings', async () => {
-      mocks.getResourceByName.mockResolvedValue({
+      assertEquals(res.status, 404);
+})
+    Deno.test('resources base routes - DELETE /api/resources/by-name/:name - returns 409 when resource has bindings', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+    app = createApp(createUser());
+    env = createMockEnv() as unknown as Env;
+    mocks.getPlatformServices = (() => ({ sql: { binding: env.DB } })) as any;
+  mocks.getResourceByName = (async () => ({
         _internal_id: 'res-2',
         name: 'in-use-db',
         type: 'sql',
         implementation: 'd1',
         provider_resource_id: null,
         provider_resource_name: null,
-      });
-      mocks.countResourceBindings.mockResolvedValue({ count: 1 });
+      })) as any;
+      mocks.countResourceBindings = (async () => ({ count: 1 })) as any;
 
       const res = await app.fetch(
         new Request('http://localhost/api/resources/by-name/in-use-db', { method: 'DELETE' }),
@@ -621,7 +641,5 @@ describe('resources base routes', () => {
         {} as ExecutionContext,
       );
 
-      expect(res.status).toBe(409);
-    });
-  });
-});
+      assertEquals(res.status, 409);
+})  

@@ -7,8 +7,8 @@
  */
 import { randomBytes } from 'node:crypto';
 
-import type { ResourceProvider, ProvisionResult } from '../resource-provider.js';
-import { cfApi, execCommand, resourceCfName } from '../cloudflare-utils.js';
+import type { ResourceProvider, ProvisionResult } from '../resource-provider.ts';
+import { cfApi, execCommand, resourceCfName } from '../cloudflare-utils.ts';
 
 export class CloudflareProvider implements ResourceProvider {
   readonly name = 'cloudflare';

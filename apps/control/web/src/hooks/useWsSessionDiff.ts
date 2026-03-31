@@ -1,6 +1,6 @@
-import { useCallback, useState } from 'react';
+import { createSignal, type Setter } from 'solid-js';
 import type { TranslationKey } from '../store/i18n';
-import { rpc, rpcJson, sessionDiff as fetchSessionDiffRpc, sessionMerge } from '../lib/rpc';
+import { rpc, rpcJson, rpcPath, sessionDiff as fetchSessionDiffRpc, sessionMerge } from '../lib/rpc';
 import type { Run, SessionDiff } from '../types';
 
 export interface SessionDiffState {
@@ -21,14 +21,14 @@ export interface UseWsSessionDiffOptions {
 
 export interface UseWsSessionDiffResult {
   sessionDiff: SessionDiffState | null;
-  setSessionDiff: React.Dispatch<React.SetStateAction<SessionDiffState | null>>;
+  setSessionDiff: Setter<SessionDiffState | null>;
   fetchSessionDiff: (sessionId: string) => Promise<void>;
   loadPendingSessionDiff: (pending: PendingSessionDiffSummary | null) => Promise<void>;
   isMerging: boolean;
   handleMerge: () => Promise<void>;
   dismissSessionDiff: () => void;
   isCancelling: boolean;
-  setIsCancelling: React.Dispatch<React.SetStateAction<boolean>>;
+  setIsCancelling: Setter<boolean>;
   handleCancel: (currentRunGetter: () => Run | null) => Promise<void>;
 }
 
@@ -36,11 +36,11 @@ export function useWsSessionDiff({
   t,
   setError,
 }: UseWsSessionDiffOptions): UseWsSessionDiffResult {
-  const [sessionDiff, setSessionDiff] = useState<SessionDiffState | null>(null);
-  const [isMerging, setIsMerging] = useState(false);
-  const [isCancelling, setIsCancelling] = useState(false);
+  const [sessionDiff, setSessionDiff] = createSignal<SessionDiffState | null>(null);
+  const [isMerging, setIsMerging] = createSignal(false);
+  const [isCancelling, setIsCancelling] = createSignal(false);
 
-  const fetchSessionDiff = useCallback(async (sessionId: string): Promise<void> => {
+  const fetchSessionDiff = async (sessionId: string): Promise<void> => {
     try {
       const res = await fetchSessionDiffRpc(sessionId);
       const data = await rpcJson<SessionDiff>(res);
@@ -50,27 +50,21 @@ export function useWsSessionDiff({
     } catch (err) {
       console.debug('Failed to fetch session diff:', err);
     }
-  }, []);
+  };
 
-  const loadPendingSessionDiff = useCallback(async (pending: PendingSessionDiffSummary | null): Promise<void> => {
+  const loadPendingSessionDiff = async (pending: PendingSessionDiffSummary | null): Promise<void> => {
     if (!pending?.sessionId) {
       setSessionDiff(null);
       return;
     }
     await fetchSessionDiff(pending.sessionId);
-  }, [fetchSessionDiff]);
+  };
 
-  const handleMerge = useCallback(async (): Promise<void> => {
-    // Read sessionDiff via setState callback to get the latest value
-    // without adding sessionDiff to the dependency array.
-    let currentSessionDiff: SessionDiffState | null = null;
-    setSessionDiff((prev) => {
-      currentSessionDiff = prev;
-      return prev;
-    });
+  const handleMerge = async (): Promise<void> => {
+    const currentSessionDiff = sessionDiff();
     if (!currentSessionDiff) return;
 
-    const { sessionId, diff } = currentSessionDiff as SessionDiffState;
+    const { sessionId, diff } = currentSessionDiff;
     setIsMerging(true);
     try {
       const res = await sessionMerge(sessionId, {
@@ -84,37 +78,37 @@ export function useWsSessionDiff({
     } finally {
       setIsMerging(false);
     }
-  }, [t, setError]);
+  };
 
-  const handleCancel = useCallback(async (currentRunGetter: () => Run | null): Promise<void> => {
+  const handleCancel = async (currentRunGetter: () => Run | null): Promise<void> => {
     const runToCancel = currentRunGetter();
     if (!runToCancel) return;
 
     setIsCancelling(true);
     try {
-      const res = await rpc.runs[':id'].cancel.$post({
+      const res = await rpcPath(rpc, 'runs', ':id', 'cancel').$post({
         param: { id: runToCancel.id },
-      });
+      }) as Response;
       await rpcJson(res);
     } catch {
       setError(t('networkError'));
     } finally {
       setIsCancelling(false);
     }
-  }, [t, setError]);
+  };
 
-  const dismissSessionDiff = useCallback((): void => {
+  const dismissSessionDiff = (): void => {
     setSessionDiff(null);
-  }, []);
+  };
 
   return {
-    sessionDiff,
+    get sessionDiff() { return sessionDiff(); },
     setSessionDiff,
     fetchSessionDiff,
     loadPendingSessionDiff,
-    isMerging,
+    get isMerging() { return isMerging(); },
     handleMerge,
-    isCancelling,
+    get isCancelling() { return isCancelling(); },
     setIsCancelling,
     handleCancel,
     dismissSessionDiff,

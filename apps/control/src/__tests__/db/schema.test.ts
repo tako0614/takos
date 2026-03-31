@@ -1,4 +1,3 @@
-import { describe, expect, it } from 'vitest';
 import { getTableName, getTableColumns } from 'drizzle-orm';
 import { getTableConfig } from 'drizzle-orm/sqlite-core';
 
@@ -170,6 +169,8 @@ import {
 } from '@/db/schema-services';
 
 // ---- helpers ----
+import { assertEquals, assert, assertStringIncludes } from 'jsr:@std/assert';
+
 const nowIso = () => new Date().toISOString();
 
 // ===================================================================
@@ -207,38 +208,32 @@ function hasColumn(table: Parameters<typeof getTableColumns>[0], name: string): 
 // Tests
 // ===================================================================
 
-describe('nowIso helper', () => {
-  it('returns an ISO-8601 formatted string', () => {
-    const result = nowIso();
-    expect(result).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}/);
-  });
-});
 
-describe('schema-services', () => {
-  it('defines physical services tables', () => {
-    expect(getTableName(services)).toBe('services');
-    expect(getTableName(serviceBindings)).toBe('service_bindings');
-    expect(getTableName(serviceCommonEnvLinks)).toBe('service_common_env_links');
-  });
+  Deno.test('nowIso helper - returns an ISO-8601 formatted string', () => {
+  const result = nowIso();
+    assert(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}/.test(result));
+})
 
-  it('exposes worker compatibility aliases', () => {
-    expect(getTableName(workers)).toBe('services');
-    expect(workerBindings.workerId).toBe(serviceBindings.serviceId);
-    expect(workerCommonEnvLinks.workerId).toBe(serviceCommonEnvLinks.serviceId);
-  });
-});
-
+  Deno.test('schema-services - defines physical services tables', () => {
+  assertEquals(getTableName(services), 'services');
+    assertEquals(getTableName(serviceBindings), 'service_bindings');
+    assertEquals(getTableName(serviceCommonEnvLinks), 'service_common_env_links');
+})
+  Deno.test('schema-services - exposes worker compatibility aliases', () => {
+  assertEquals(getTableName(workers), 'services');
+    assertEquals(workerBindings.workerId, serviceBindings.serviceId);
+    assertEquals(workerCommonEnvLinks.workerId, serviceCommonEnvLinks.serviceId);
+})
 // ===================================================================
 // schema-accounts
 // ===================================================================
-describe('schema-accounts', () => {
-  describe('accounts table', () => {
-    it('is named "accounts"', () => {
-      expect(getTableName(accounts)).toBe('accounts');
-    });
 
-    it('has all required columns', () => {
-      const cols = colNames(accounts);
+  
+    Deno.test('schema-accounts - accounts table - is named "accounts"', () => {
+  assertEquals(getTableName(accounts), 'accounts');
+})
+    Deno.test('schema-accounts - accounts table - has all required columns', () => {
+  const cols = colNames(accounts);
       const required = [
         'id', 'type', 'status', 'name', 'slug', 'description', 'picture',
         'bio', 'email', 'trustTier', 'setupCompleted', 'defaultRepositoryId',
@@ -246,1237 +241,931 @@ describe('schema-accounts', () => {
         'ownerAccountId', 'createdAt', 'updatedAt',
       ];
       for (const col of required) {
-        expect(cols).toContain(col);
+        assertStringIncludes(cols, col);
       }
-    });
-
-    it('has indexes for type, slug, owner, and email', () => {
-      const idxs = indexNames(accounts);
-      expect(idxs).toContain('idx_accounts_type');
-      expect(idxs).toContain('idx_accounts_slug');
-      expect(idxs).toContain('idx_accounts_owner_account_id');
-      expect(idxs).toContain('idx_accounts_email');
-    });
-  });
-
-  describe('accountBlocks table', () => {
-    it('is named "account_blocks"', () => {
-      expect(getTableName(accountBlocks)).toBe('account_blocks');
-    });
-
-    it('has composite primary key on blocker+blocked', () => {
-      const pks = primaryKeyNames(accountBlocks);
-      expect(pks.length).toBeGreaterThanOrEqual(1);
-    });
-
-    it('has indexes on both blocker and blocked', () => {
-      const idxs = indexNames(accountBlocks);
-      expect(idxs).toContain('idx_account_blocks_blocker_account_id');
-      expect(idxs).toContain('idx_account_blocks_blocked_account_id');
-    });
-  });
-
-  describe('accountEnvVars table', () => {
-    it('has a unique index on account_id + name', () => {
-      const uniq = uniqueIndexNames(accountEnvVars);
-      expect(uniq).toContain('idx_account_env_vars_account_id_name');
-    });
-
-    it('includes isSecret boolean column', () => {
-      expect(hasColumn(accountEnvVars, 'isSecret')).toBe(true);
-    });
-  });
-
-  describe('accountFollowRequests table', () => {
-    it('has a unique constraint on requester+target', () => {
-      const uniq = uniqueIndexNames(accountFollowRequests);
-      expect(uniq).toContain('idx_account_follow_requests_requester_target');
-    });
-
-    it('has indexes for target+status, requester, and createdAt', () => {
-      const idxs = indexNames(accountFollowRequests);
-      expect(idxs).toContain('idx_account_follow_requests_target_status');
-      expect(idxs).toContain('idx_account_follow_requests_requester');
-      expect(idxs).toContain('idx_account_follow_requests_created_at');
-    });
-  });
-
-  describe('accountFollows table', () => {
-    it('has composite primary key on follower+following', () => {
-      const pks = primaryKeyNames(accountFollows);
-      expect(pks.length).toBeGreaterThanOrEqual(1);
-    });
-  });
-
-  describe('accountMemberships table', () => {
-    it('has a unique index on account+member', () => {
-      const uniq = uniqueIndexNames(accountMemberships);
-      expect(uniq).toContain('idx_account_memberships_account_member');
-    });
-
-    it('defaults role to viewer and status to active', () => {
-      const cols = getTableColumns(accountMemberships);
-      expect(cols.role.default).toBe('viewer');
-      expect(cols.status.default).toBe('active');
-    });
-  });
-
-  describe('accountMetadata table', () => {
-    it('has composite primary key on accountId+key', () => {
-      const pks = primaryKeyNames(accountMetadata);
-      expect(pks.length).toBeGreaterThanOrEqual(1);
-    });
-  });
-
-  describe('accountModeration table', () => {
-    it('uses accountId as primary key', () => {
-      const cols = getTableColumns(accountModeration);
-      expect(cols.accountId.primary).toBe(true);
-    });
-
-    it('defaults status to active', () => {
-      const cols = getTableColumns(accountModeration);
-      expect(cols.status.default).toBe('active');
-    });
-  });
-
-  describe('accountMutes table', () => {
-    it('has composite primary key on muter+muted', () => {
-      const pks = primaryKeyNames(accountMutes);
-      expect(pks.length).toBeGreaterThanOrEqual(1);
-    });
-  });
-
-  describe('accountSettings table', () => {
-    it('is named "account_settings"', () => {
-      expect(getTableName(accountSettings)).toBe('account_settings');
-    });
-
-    it('has boolean columns with defaults', () => {
-      const cols = getTableColumns(accountSettings);
-      expect(cols.setupCompleted.default).toBe(false);
-      expect(cols.autoUpdateEnabled.default).toBe(true);
-      expect(cols.privateAccount.default).toBe(false);
-    });
-  });
-
-  describe('accountStats table', () => {
-    it('has indexes on totalSizeBytes and fileCount', () => {
-      const idxs = indexNames(accountStats);
-      expect(idxs).toContain('idx_account_stats_total_size_bytes');
-      expect(idxs).toContain('idx_account_stats_file_count');
-    });
-  });
-
-  describe('accountStorageFiles table', () => {
-    it('has unique index on accountId+path', () => {
-      const uniq = uniqueIndexNames(accountStorageFiles);
-      expect(uniq).toContain('idx_account_storage_files_account_path');
-    });
-  });
-
-  describe('authIdentities table', () => {
-    it('is named "auth_identities"', () => {
-      expect(getTableName(authIdentities)).toBe('auth_identities');
-    });
-
-    it('has a unique index on provider+providerSub', () => {
-      const uniq = uniqueIndexNames(authIdentities);
-      expect(uniq).toContain('idx_auth_identities_provider_sub');
-    });
-
-    it('has a foreign key reference from userId to accounts.id', () => {
-      const config = getTableConfig(authIdentities);
+})
+    Deno.test('schema-accounts - accounts table - has indexes for type, slug, owner, and email', () => {
+  const idxs = indexNames(accounts);
+      assertStringIncludes(idxs, 'idx_accounts_type');
+      assertStringIncludes(idxs, 'idx_accounts_slug');
+      assertStringIncludes(idxs, 'idx_accounts_owner_account_id');
+      assertStringIncludes(idxs, 'idx_accounts_email');
+})  
+  
+    Deno.test('schema-accounts - accountBlocks table - is named "account_blocks"', () => {
+  assertEquals(getTableName(accountBlocks), 'account_blocks');
+})
+    Deno.test('schema-accounts - accountBlocks table - has composite primary key on blocker+blocked', () => {
+  const pks = primaryKeyNames(accountBlocks);
+      assert(pks.length >= 1);
+})
+    Deno.test('schema-accounts - accountBlocks table - has indexes on both blocker and blocked', () => {
+  const idxs = indexNames(accountBlocks);
+      assertStringIncludes(idxs, 'idx_account_blocks_blocker_account_id');
+      assertStringIncludes(idxs, 'idx_account_blocks_blocked_account_id');
+})  
+  
+    Deno.test('schema-accounts - accountEnvVars table - has a unique index on account_id + name', () => {
+  const uniq = uniqueIndexNames(accountEnvVars);
+      assertStringIncludes(uniq, 'idx_account_env_vars_account_id_name');
+})
+    Deno.test('schema-accounts - accountEnvVars table - includes isSecret boolean column', () => {
+  assertEquals(hasColumn(accountEnvVars, 'isSecret'), true);
+})  
+  
+    Deno.test('schema-accounts - accountFollowRequests table - has a unique constraint on requester+target', () => {
+  const uniq = uniqueIndexNames(accountFollowRequests);
+      assertStringIncludes(uniq, 'idx_account_follow_requests_requester_target');
+})
+    Deno.test('schema-accounts - accountFollowRequests table - has indexes for target+status, requester, and createdAt', () => {
+  const idxs = indexNames(accountFollowRequests);
+      assertStringIncludes(idxs, 'idx_account_follow_requests_target_status');
+      assertStringIncludes(idxs, 'idx_account_follow_requests_requester');
+      assertStringIncludes(idxs, 'idx_account_follow_requests_created_at');
+})  
+  
+    Deno.test('schema-accounts - accountFollows table - has composite primary key on follower+following', () => {
+  const pks = primaryKeyNames(accountFollows);
+      assert(pks.length >= 1);
+})  
+  
+    Deno.test('schema-accounts - accountMemberships table - has a unique index on account+member', () => {
+  const uniq = uniqueIndexNames(accountMemberships);
+      assertStringIncludes(uniq, 'idx_account_memberships_account_member');
+})
+    Deno.test('schema-accounts - accountMemberships table - defaults role to viewer and status to active', () => {
+  const cols = getTableColumns(accountMemberships);
+      assertEquals(cols.role.default, 'viewer');
+      assertEquals(cols.status.default, 'active');
+})  
+  
+    Deno.test('schema-accounts - accountMetadata table - has composite primary key on accountId+key', () => {
+  const pks = primaryKeyNames(accountMetadata);
+      assert(pks.length >= 1);
+})  
+  
+    Deno.test('schema-accounts - accountModeration table - uses accountId as primary key', () => {
+  const cols = getTableColumns(accountModeration);
+      assertEquals(cols.accountId.primary, true);
+})
+    Deno.test('schema-accounts - accountModeration table - defaults status to active', () => {
+  const cols = getTableColumns(accountModeration);
+      assertEquals(cols.status.default, 'active');
+})  
+  
+    Deno.test('schema-accounts - accountMutes table - has composite primary key on muter+muted', () => {
+  const pks = primaryKeyNames(accountMutes);
+      assert(pks.length >= 1);
+})  
+  
+    Deno.test('schema-accounts - accountSettings table - is named "account_settings"', () => {
+  assertEquals(getTableName(accountSettings), 'account_settings');
+})
+    Deno.test('schema-accounts - accountSettings table - has boolean columns with defaults', () => {
+  const cols = getTableColumns(accountSettings);
+      assertEquals(cols.setupCompleted.default, false);
+      assertEquals(cols.autoUpdateEnabled.default, true);
+      assertEquals(cols.privateAccount.default, false);
+})  
+  
+    Deno.test('schema-accounts - accountStats table - has indexes on totalSizeBytes and fileCount', () => {
+  const idxs = indexNames(accountStats);
+      assertStringIncludes(idxs, 'idx_account_stats_total_size_bytes');
+      assertStringIncludes(idxs, 'idx_account_stats_file_count');
+})  
+  
+    Deno.test('schema-accounts - accountStorageFiles table - has unique index on accountId+path', () => {
+  const uniq = uniqueIndexNames(accountStorageFiles);
+      assertStringIncludes(uniq, 'idx_account_storage_files_account_path');
+})  
+  
+    Deno.test('schema-accounts - authIdentities table - is named "auth_identities"', () => {
+  assertEquals(getTableName(authIdentities), 'auth_identities');
+})
+    Deno.test('schema-accounts - authIdentities table - has a unique index on provider+providerSub', () => {
+  const uniq = uniqueIndexNames(authIdentities);
+      assertStringIncludes(uniq, 'idx_auth_identities_provider_sub');
+})
+    Deno.test('schema-accounts - authIdentities table - has a foreign key reference from userId to accounts.id', () => {
+  const config = getTableConfig(authIdentities);
       const fks = config.foreignKeys ?? [];
-      expect(fks.length).toBeGreaterThanOrEqual(1);
-    });
-  });
-});
-
+      assert(fks.length >= 1);
+})  
 // ===================================================================
 // schema-auth
 // ===================================================================
-describe('schema-auth', () => {
-  describe('authServices table', () => {
-    it('is named "auth_services"', () => {
-      expect(getTableName(authServices)).toBe('auth_services');
-    });
 
-    it('has indexes on domain and apiKeyHash', () => {
-      const idxs = indexNames(authServices);
-      expect(idxs).toContain('idx_auth_services_domain');
-      expect(idxs).toContain('idx_auth_services_api_key_hash');
-    });
-  });
-
-  describe('authSessions table', () => {
-    it('has indexes on tokenHash, expiresAt, and accountId', () => {
-      const idxs = indexNames(authSessions);
-      expect(idxs).toContain('idx_auth_sessions_token_hash');
-      expect(idxs).toContain('idx_auth_sessions_expires_at');
-      expect(idxs).toContain('idx_auth_sessions_account_id');
-    });
-  });
-
-  describe('personalAccessTokens table', () => {
-    it('is named "personal_access_tokens"', () => {
-      expect(getTableName(personalAccessTokens)).toBe('personal_access_tokens');
-    });
-
-    it('defaults scopes to wildcard', () => {
-      const cols = getTableColumns(personalAccessTokens);
-      expect(cols.scopes.default).toBe('*');
-    });
-  });
-
-  describe('serviceTokens table', () => {
-    it('is named "service_tokens"', () => {
-      expect(getTableName(serviceTokens)).toBe('service_tokens');
-    });
-
-    it('has an index on tokenHash', () => {
-      const idxs = indexNames(serviceTokens);
-      expect(idxs).toContain('idx_service_tokens_token_hash');
-    });
-  });
-});
-
+  
+    Deno.test('schema-auth - authServices table - is named "auth_services"', () => {
+  assertEquals(getTableName(authServices), 'auth_services');
+})
+    Deno.test('schema-auth - authServices table - has indexes on domain and apiKeyHash', () => {
+  const idxs = indexNames(authServices);
+      assertStringIncludes(idxs, 'idx_auth_services_domain');
+      assertStringIncludes(idxs, 'idx_auth_services_api_key_hash');
+})  
+  
+    Deno.test('schema-auth - authSessions table - has indexes on tokenHash, expiresAt, and accountId', () => {
+  const idxs = indexNames(authSessions);
+      assertStringIncludes(idxs, 'idx_auth_sessions_token_hash');
+      assertStringIncludes(idxs, 'idx_auth_sessions_expires_at');
+      assertStringIncludes(idxs, 'idx_auth_sessions_account_id');
+})  
+  
+    Deno.test('schema-auth - personalAccessTokens table - is named "personal_access_tokens"', () => {
+  assertEquals(getTableName(personalAccessTokens), 'personal_access_tokens');
+})
+    Deno.test('schema-auth - personalAccessTokens table - defaults scopes to wildcard', () => {
+  const cols = getTableColumns(personalAccessTokens);
+      assertEquals(cols.scopes.default, '*');
+})  
+  
+    Deno.test('schema-auth - serviceTokens table - is named "service_tokens"', () => {
+  assertEquals(getTableName(serviceTokens), 'service_tokens');
+})
+    Deno.test('schema-auth - serviceTokens table - has an index on tokenHash', () => {
+  const idxs = indexNames(serviceTokens);
+      assertStringIncludes(idxs, 'idx_service_tokens_token_hash');
+})  
 // ===================================================================
 // schema-billing
 // ===================================================================
-describe('schema-billing', () => {
-  describe('billingAccounts table', () => {
-    it('is named "billing_accounts"', () => {
-      expect(getTableName(billingAccounts)).toBe('billing_accounts');
-    });
 
-    it('defaults balanceCents to 0 and status to active', () => {
-      const cols = getTableColumns(billingAccounts);
-      expect(cols.balanceCents.default).toBe(0);
-      expect(cols.status.default).toBe('active');
-    });
-  });
-
-  describe('billingPlanFeatures table', () => {
-    it('has composite primary key on planId+featureKey', () => {
-      const pks = primaryKeyNames(billingPlanFeatures);
-      expect(pks.length).toBeGreaterThanOrEqual(1);
-    });
-  });
-
-  describe('billingPlanQuotas table', () => {
-    it('has composite primary key on planId+quotaKey', () => {
-      const pks = primaryKeyNames(billingPlanQuotas);
-      expect(pks.length).toBeGreaterThanOrEqual(1);
-    });
-  });
-
-  describe('billingPlanRates table', () => {
-    it('has composite primary key on planId+meterType', () => {
-      const pks = primaryKeyNames(billingPlanRates);
-      expect(pks.length).toBeGreaterThanOrEqual(1);
-    });
-  });
-
-  describe('billingPlans table', () => {
-    it('has indexes on name and isDefault', () => {
-      const idxs = indexNames(billingPlans);
-      expect(idxs).toContain('idx_billing_plans_name');
-      expect(idxs).toContain('idx_billing_plans_is_default');
-    });
-  });
-
-  describe('billingTransactions table', () => {
-    it('has columns for amountCents and balanceAfterCents', () => {
-      expect(hasColumn(billingTransactions, 'amountCents')).toBe(true);
-      expect(hasColumn(billingTransactions, 'balanceAfterCents')).toBe(true);
-    });
-  });
-
-  describe('usageEvents table', () => {
-    it('has an idempotency key with unique constraint', () => {
-      expect(hasColumn(usageEvents, 'idempotencyKey')).toBe(true);
-    });
-
-    it('uses a real column for units', () => {
-      expect(hasColumn(usageEvents, 'units')).toBe(true);
-    });
-  });
-
-  describe('usageRollups table', () => {
-    it('has a unique index on the billing scope composite', () => {
-      const uniq = uniqueIndexNames(usageRollups);
-      expect(uniq).toContain('idx_usage_rollups_billing_scope');
-    });
-  });
-});
-
+  
+    Deno.test('schema-billing - billingAccounts table - is named "billing_accounts"', () => {
+  assertEquals(getTableName(billingAccounts), 'billing_accounts');
+})
+    Deno.test('schema-billing - billingAccounts table - defaults balanceCents to 0 and status to active', () => {
+  const cols = getTableColumns(billingAccounts);
+      assertEquals(cols.balanceCents.default, 0);
+      assertEquals(cols.status.default, 'active');
+})  
+  
+    Deno.test('schema-billing - billingPlanFeatures table - has composite primary key on planId+featureKey', () => {
+  const pks = primaryKeyNames(billingPlanFeatures);
+      assert(pks.length >= 1);
+})  
+  
+    Deno.test('schema-billing - billingPlanQuotas table - has composite primary key on planId+quotaKey', () => {
+  const pks = primaryKeyNames(billingPlanQuotas);
+      assert(pks.length >= 1);
+})  
+  
+    Deno.test('schema-billing - billingPlanRates table - has composite primary key on planId+meterType', () => {
+  const pks = primaryKeyNames(billingPlanRates);
+      assert(pks.length >= 1);
+})  
+  
+    Deno.test('schema-billing - billingPlans table - has indexes on name and isDefault', () => {
+  const idxs = indexNames(billingPlans);
+      assertStringIncludes(idxs, 'idx_billing_plans_name');
+      assertStringIncludes(idxs, 'idx_billing_plans_is_default');
+})  
+  
+    Deno.test('schema-billing - billingTransactions table - has columns for amountCents and balanceAfterCents', () => {
+  assertEquals(hasColumn(billingTransactions, 'amountCents'), true);
+      assertEquals(hasColumn(billingTransactions, 'balanceAfterCents'), true);
+})  
+  
+    Deno.test('schema-billing - usageEvents table - has an idempotency key with unique constraint', () => {
+  assertEquals(hasColumn(usageEvents, 'idempotencyKey'), true);
+})
+    Deno.test('schema-billing - usageEvents table - uses a real column for units', () => {
+  assertEquals(hasColumn(usageEvents, 'units'), true);
+})  
+  
+    Deno.test('schema-billing - usageRollups table - has a unique index on the billing scope composite', () => {
+  const uniq = uniqueIndexNames(usageRollups);
+      assertStringIncludes(uniq, 'idx_usage_rollups_billing_scope');
+})  
 // ===================================================================
 // schema-agents
 // ===================================================================
-describe('schema-agents', () => {
-  describe('agentTasks table', () => {
-    it('is named "agent_tasks"', () => {
-      expect(getTableName(agentTasks)).toBe('agent_tasks');
-    });
 
-    it('defaults status to planned and priority to medium', () => {
-      const cols = getTableColumns(agentTasks);
-      expect(cols.status.default).toBe('planned');
-      expect(cols.priority.default).toBe('medium');
-    });
-
-    it('has composite index on account+status', () => {
-      const idxs = indexNames(agentTasks);
-      expect(idxs).toContain('idx_agent_tasks_account_status');
-    });
-  });
-
-  describe('messages table', () => {
-    it('is named "messages"', () => {
-      expect(getTableName(messages)).toBe('messages');
-    });
-
-    it('has required columns: id, threadId, role, content, sequence', () => {
-      for (const col of ['id', 'threadId', 'role', 'content', 'sequence']) {
-        expect(hasColumn(messages, col)).toBe(true);
+  
+    Deno.test('schema-agents - agentTasks table - is named "agent_tasks"', () => {
+  assertEquals(getTableName(agentTasks), 'agent_tasks');
+})
+    Deno.test('schema-agents - agentTasks table - defaults status to planned and priority to medium', () => {
+  const cols = getTableColumns(agentTasks);
+      assertEquals(cols.status.default, 'planned');
+      assertEquals(cols.priority.default, 'medium');
+})
+    Deno.test('schema-agents - agentTasks table - has composite index on account+status', () => {
+  const idxs = indexNames(agentTasks);
+      assertStringIncludes(idxs, 'idx_agent_tasks_account_status');
+})  
+  
+    Deno.test('schema-agents - messages table - is named "messages"', () => {
+  assertEquals(getTableName(messages), 'messages');
+})
+    Deno.test('schema-agents - messages table - has required columns: id, threadId, role, content, sequence', () => {
+  for (const col of ['id', 'threadId', 'role', 'content', 'sequence']) {
+        assertEquals(hasColumn(messages, col), true);
       }
-    });
-
-    it('has indexes for thread+sequence and thread+createdAt', () => {
-      const idxs = indexNames(messages);
-      expect(idxs).toContain('idx_messages_thread_sequence');
-      expect(idxs).toContain('idx_messages_thread_created_at');
-    });
-  });
-
-  describe('runs table', () => {
-    it('is named "runs"', () => {
-      expect(getTableName(runs)).toBe('runs');
-    });
-
-    it('defaults status to queued', () => {
-      const cols = getTableColumns(runs);
-      expect(cols.status.default).toBe('queued');
-      expect(runs.serviceId).toBe(runs.workerId);
-      expect(runs.serviceHeartbeat).toBe(runs.workerHeartbeat);
-      expect(indexNames(runs)).toContain('idx_runs_service_id');
-      expect(indexNames(runs)).toContain('idx_runs_service_heartbeat');
-    });
-
-    it('has subagent columns parentRunId, childThreadId, rootThreadId, rootRunId', () => {
-      for (const col of ['parentRunId', 'childThreadId', 'rootThreadId', 'rootRunId']) {
-        expect(hasColumn(runs, col)).toBe(true);
+})
+    Deno.test('schema-agents - messages table - has indexes for thread+sequence and thread+createdAt', () => {
+  const idxs = indexNames(messages);
+      assertStringIncludes(idxs, 'idx_messages_thread_sequence');
+      assertStringIncludes(idxs, 'idx_messages_thread_created_at');
+})  
+  
+    Deno.test('schema-agents - runs table - is named "runs"', () => {
+  assertEquals(getTableName(runs), 'runs');
+})
+    Deno.test('schema-agents - runs table - defaults status to queued', () => {
+  const cols = getTableColumns(runs);
+      assertEquals(cols.status.default, 'queued');
+      assertEquals(runs.serviceId, runs.workerId);
+      assertEquals(runs.serviceHeartbeat, runs.workerHeartbeat);
+      assertStringIncludes(indexNames(runs), 'idx_runs_service_id');
+      assertStringIncludes(indexNames(runs), 'idx_runs_service_heartbeat');
+})
+    Deno.test('schema-agents - runs table - has subagent columns parentRunId, childThreadId, rootThreadId, rootRunId', () => {
+  for (const col of ['parentRunId', 'childThreadId', 'rootThreadId', 'rootRunId']) {
+        assertEquals(hasColumn(runs, col), true);
       }
-    });
-
-    it('has a leaseVersion column for optimistic concurrency', () => {
-      expect(hasColumn(runs, 'leaseVersion')).toBe(true);
-    });
-  });
-
-  describe('runEvents table', () => {
-    it('uses auto-increment integer primary key', () => {
-      const cols = getTableColumns(runEvents);
-      expect(cols.id.primary).toBe(true);
-    });
-  });
-
-  describe('reminders table', () => {
-    it('is named "reminders"', () => {
-      expect(getTableName(reminders)).toBe('reminders');
-    });
-
-    it('has all required columns', () => {
-      for (const col of ['id', 'accountId', 'content', 'triggerType', 'status', 'priority']) {
-        expect(hasColumn(reminders, col)).toBe(true);
+})
+    Deno.test('schema-agents - runs table - has a leaseVersion column for optimistic concurrency', () => {
+  assertEquals(hasColumn(runs, 'leaseVersion'), true);
+})  
+  
+    Deno.test('schema-agents - runEvents table - uses auto-increment integer primary key', () => {
+  const cols = getTableColumns(runEvents);
+      assertEquals(cols.id.primary, true);
+})  
+  
+    Deno.test('schema-agents - reminders table - is named "reminders"', () => {
+  assertEquals(getTableName(reminders), 'reminders');
+})
+    Deno.test('schema-agents - reminders table - has all required columns', () => {
+  for (const col of ['id', 'accountId', 'content', 'triggerType', 'status', 'priority']) {
+        assertEquals(hasColumn(reminders, col), true);
       }
-    });
-  });
-
-  describe('threads table', () => {
-    it('defaults status to active', () => {
-      const cols = getTableColumns(threads);
-      expect(cols.status.default).toBe('active');
-    });
-
-    it('defaults contextWindow to 50', () => {
-      const cols = getTableColumns(threads);
-      expect(cols.contextWindow.default).toBe(50);
-    });
-  });
-
-  describe('lgCheckpoints table', () => {
-    it('has composite primary key on threadId+checkpointNs+checkpointId', () => {
-      const pks = primaryKeyNames(lgCheckpoints);
-      expect(pks.length).toBeGreaterThanOrEqual(1);
-    });
-  });
-
-  describe('lgWrites table', () => {
-    it('has 5-column composite primary key', () => {
-      const pks = primaryKeyNames(lgWrites);
-      expect(pks.length).toBeGreaterThanOrEqual(1);
-    });
-  });
-
-  describe('memories table', () => {
-    it('has indexes for type+category and importance', () => {
-      const idxs = indexNames(memories);
-      expect(idxs).toContain('idx_memories_type_category');
-      expect(idxs).toContain('idx_memories_importance');
-    });
-  });
-
-  describe('skills table', () => {
-    it('has unique index on account+name', () => {
-      const uniq = uniqueIndexNames(skills);
-      expect(uniq).toContain('idx_skills_account_name');
-    });
-  });
-
-  describe('threadShares table', () => {
-    it('has a unique token column', () => {
-      expect(hasColumn(threadShares, 'token')).toBe(true);
-    });
-  });
-
-  describe('toolOperations table', () => {
-    it('has a unique index on run+operationKey', () => {
-      const uniq = uniqueIndexNames(toolOperations);
-      expect(uniq).toContain('idx_tool_operations_key');
-    });
-  });
-
-  describe('artifacts table', () => {
-    it('defaults type to code and metadata to {}', () => {
-      const cols = getTableColumns(artifacts);
-      expect(cols.type.default).toBe('code');
-      expect(cols.metadata.default).toBe('{}');
-    });
-  });
-
-  describe('infoUnits table', () => {
-    it('defaults kind to session', () => {
-      const cols = getTableColumns(infoUnits);
-      expect(cols.kind.default).toBe('session');
-    });
-  });
-});
-
+})  
+  
+    Deno.test('schema-agents - threads table - defaults status to active', () => {
+  const cols = getTableColumns(threads);
+      assertEquals(cols.status.default, 'active');
+})
+    Deno.test('schema-agents - threads table - defaults contextWindow to 50', () => {
+  const cols = getTableColumns(threads);
+      assertEquals(cols.contextWindow.default, 50);
+})  
+  
+    Deno.test('schema-agents - lgCheckpoints table - has composite primary key on threadId+checkpointNs+checkpointId', () => {
+  const pks = primaryKeyNames(lgCheckpoints);
+      assert(pks.length >= 1);
+})  
+  
+    Deno.test('schema-agents - lgWrites table - has 5-column composite primary key', () => {
+  const pks = primaryKeyNames(lgWrites);
+      assert(pks.length >= 1);
+})  
+  
+    Deno.test('schema-agents - memories table - has indexes for type+category and importance', () => {
+  const idxs = indexNames(memories);
+      assertStringIncludes(idxs, 'idx_memories_type_category');
+      assertStringIncludes(idxs, 'idx_memories_importance');
+})  
+  
+    Deno.test('schema-agents - skills table - has unique index on account+name', () => {
+  const uniq = uniqueIndexNames(skills);
+      assertStringIncludes(uniq, 'idx_skills_account_name');
+})  
+  
+    Deno.test('schema-agents - threadShares table - has a unique token column', () => {
+  assertEquals(hasColumn(threadShares, 'token'), true);
+})  
+  
+    Deno.test('schema-agents - toolOperations table - has a unique index on run+operationKey', () => {
+  const uniq = uniqueIndexNames(toolOperations);
+      assertStringIncludes(uniq, 'idx_tool_operations_key');
+})  
+  
+    Deno.test('schema-agents - artifacts table - defaults type to code and metadata to {}', () => {
+  const cols = getTableColumns(artifacts);
+      assertEquals(cols.type.default, 'code');
+      assertEquals(cols.metadata.default, '{}');
+})  
+  
+    Deno.test('schema-agents - infoUnits table - defaults kind to session', () => {
+  const cols = getTableColumns(infoUnits);
+      assertEquals(cols.kind.default, 'session');
+})  
 // ===================================================================
 // schema-repos
 // ===================================================================
-describe('schema-repos', () => {
-  describe('repositories table', () => {
-    it('is named "repositories"', () => {
-      expect(getTableName(repositories)).toBe('repositories');
-    });
 
-    it('has unique index on account+name', () => {
-      const uniq = uniqueIndexNames(repositories);
-      expect(uniq).toContain('idx_repositories_account_name');
-    });
-
-    it('defaults visibility to private and defaultBranch to main', () => {
-      const cols = getTableColumns(repositories);
-      expect(cols.visibility.default).toBe('private');
-      expect(cols.defaultBranch.default).toBe('main');
-    });
-
-    it('has gitEnabled, isOfficial, and featured boolean columns', () => {
-      for (const col of ['gitEnabled', 'isOfficial', 'featured']) {
-        expect(hasColumn(repositories, col)).toBe(true);
+  
+    Deno.test('schema-repos - repositories table - is named "repositories"', () => {
+  assertEquals(getTableName(repositories), 'repositories');
+})
+    Deno.test('schema-repos - repositories table - has unique index on account+name', () => {
+  const uniq = uniqueIndexNames(repositories);
+      assertStringIncludes(uniq, 'idx_repositories_account_name');
+})
+    Deno.test('schema-repos - repositories table - defaults visibility to private and defaultBranch to main', () => {
+  const cols = getTableColumns(repositories);
+      assertEquals(cols.visibility.default, 'private');
+      assertEquals(cols.defaultBranch.default, 'main');
+})
+    Deno.test('schema-repos - repositories table - has gitEnabled, isOfficial, and featured boolean columns', () => {
+  for (const col of ['gitEnabled', 'isOfficial', 'featured']) {
+        assertEquals(hasColumn(repositories, col), true);
       }
-    });
-
-    it('has indexes for visibility, official, featured, and primary language', () => {
-      const idxs = indexNames(repositories);
-      expect(idxs).toContain('idx_repositories_visibility');
-      expect(idxs).toContain('idx_repositories_is_official');
-      expect(idxs).toContain('idx_repositories_featured');
-      expect(idxs).toContain('idx_repositories_primary_language');
-    });
-  });
-
-  describe('blobs table', () => {
-    it('has composite primary key on accountId+hash', () => {
-      const pks = primaryKeyNames(blobs);
-      expect(pks.length).toBeGreaterThanOrEqual(1);
-    });
-  });
-
-  describe('branches table', () => {
-    it('has unique index on repo+name', () => {
-      const uniq = uniqueIndexNames(branches);
-      expect(uniq).toContain('idx_branches_repo_name');
-    });
-  });
-
-  describe('commits table', () => {
-    it('has unique index on repo+sha', () => {
-      const uniq = uniqueIndexNames(commits);
-      expect(uniq).toContain('idx_commits_repo_sha');
-    });
-
-    it('has authorName, authorEmail, committerName, committerEmail columns', () => {
-      for (const col of ['authorName', 'authorEmail', 'committerName', 'committerEmail']) {
-        expect(hasColumn(commits, col)).toBe(true);
+})
+    Deno.test('schema-repos - repositories table - has indexes for visibility, official, featured, and primary language', () => {
+  const idxs = indexNames(repositories);
+      assertStringIncludes(idxs, 'idx_repositories_visibility');
+      assertStringIncludes(idxs, 'idx_repositories_is_official');
+      assertStringIncludes(idxs, 'idx_repositories_featured');
+      assertStringIncludes(idxs, 'idx_repositories_primary_language');
+})  
+  
+    Deno.test('schema-repos - blobs table - has composite primary key on accountId+hash', () => {
+  const pks = primaryKeyNames(blobs);
+      assert(pks.length >= 1);
+})  
+  
+    Deno.test('schema-repos - branches table - has unique index on repo+name', () => {
+  const uniq = uniqueIndexNames(branches);
+      assertStringIncludes(uniq, 'idx_branches_repo_name');
+})  
+  
+    Deno.test('schema-repos - commits table - has unique index on repo+sha', () => {
+  const uniq = uniqueIndexNames(commits);
+      assertStringIncludes(uniq, 'idx_commits_repo_sha');
+})
+    Deno.test('schema-repos - commits table - has authorName, authorEmail, committerName, committerEmail columns', () => {
+  for (const col of ['authorName', 'authorEmail', 'committerName', 'committerEmail']) {
+        assertEquals(hasColumn(commits, col), true);
       }
-    });
-  });
-
-  describe('files table', () => {
-    it('has unique index on account+path', () => {
-      const uniq = uniqueIndexNames(files);
-      expect(uniq).toContain('idx_files_account_path');
-    });
-
-    it('defaults origin to user and kind to source', () => {
-      const cols = getTableColumns(files);
-      expect(cols.origin.default).toBe('user');
-      expect(cols.kind.default).toBe('source');
-    });
-  });
-
-  describe('pullRequests table', () => {
-    it('has unique index on repo+number', () => {
-      const uniq = uniqueIndexNames(pullRequests);
-      expect(uniq).toContain('idx_pull_requests_repo_number');
-    });
-
-    it('defaults status to open', () => {
-      const cols = getTableColumns(pullRequests);
-      expect(cols.status.default).toBe('open');
-    });
-  });
-
-  describe('repoForks table', () => {
-    it('has indexes on fork and upstream', () => {
-      const idxs = indexNames(repoForks);
-      expect(idxs).toContain('idx_repo_forks_fork_repo_id');
-      expect(idxs).toContain('idx_repo_forks_upstream_repo_id');
-    });
-  });
-
-  describe('repoReleaseAssets table', () => {
-    it('has unique index on release+assetKey', () => {
-      const uniq = uniqueIndexNames(repoReleaseAssets);
-      expect(uniq).toContain('idx_repo_release_assets_release_asset_key');
-    });
-
-    it('has bundleFormat and bundleMetaJson columns', () => {
-      expect(hasColumn(repoReleaseAssets, 'bundleFormat')).toBe(true);
-      expect(hasColumn(repoReleaseAssets, 'bundleMetaJson')).toBe(true);
-    });
-  });
-
-  describe('repoReleases table', () => {
-    it('has unique index on repo+tag', () => {
-      const uniq = uniqueIndexNames(repoReleases);
-      expect(uniq).toContain('idx_repo_releases_repo_tag');
-    });
-  });
-
-  describe('repoStars table', () => {
-    it('has composite primary key on accountId+repoId', () => {
-      const pks = primaryKeyNames(repoStars);
-      expect(pks.length).toBeGreaterThanOrEqual(1);
-    });
-  });
-
-  describe('snapshots table', () => {
-    it('defaults status to pending', () => {
-      const cols = getTableColumns(snapshots);
-      expect(cols.status.default).toBe('pending');
-    });
-  });
-
-  describe('tags table', () => {
-    it('has unique index on repo+name', () => {
-      const uniq = uniqueIndexNames(tags);
-      expect(uniq).toContain('idx_tags_repo_name');
-    });
-  });
-
-  describe('gitCommits table', () => {
-    it('has columns for filesChanged, insertions, deletions', () => {
-      for (const col of ['filesChanged', 'insertions', 'deletions']) {
-        expect(hasColumn(gitCommits, col)).toBe(true);
+})  
+  
+    Deno.test('schema-repos - files table - has unique index on account+path', () => {
+  const uniq = uniqueIndexNames(files);
+      assertStringIncludes(uniq, 'idx_files_account_path');
+})
+    Deno.test('schema-repos - files table - defaults origin to user and kind to source', () => {
+  const cols = getTableColumns(files);
+      assertEquals(cols.origin.default, 'user');
+      assertEquals(cols.kind.default, 'source');
+})  
+  
+    Deno.test('schema-repos - pullRequests table - has unique index on repo+number', () => {
+  const uniq = uniqueIndexNames(pullRequests);
+      assertStringIncludes(uniq, 'idx_pull_requests_repo_number');
+})
+    Deno.test('schema-repos - pullRequests table - defaults status to open', () => {
+  const cols = getTableColumns(pullRequests);
+      assertEquals(cols.status.default, 'open');
+})  
+  
+    Deno.test('schema-repos - repoForks table - has indexes on fork and upstream', () => {
+  const idxs = indexNames(repoForks);
+      assertStringIncludes(idxs, 'idx_repo_forks_fork_repo_id');
+      assertStringIncludes(idxs, 'idx_repo_forks_upstream_repo_id');
+})  
+  
+    Deno.test('schema-repos - repoReleaseAssets table - has unique index on release+assetKey', () => {
+  const uniq = uniqueIndexNames(repoReleaseAssets);
+      assertStringIncludes(uniq, 'idx_repo_release_assets_release_asset_key');
+})
+    Deno.test('schema-repos - repoReleaseAssets table - has bundleFormat and bundleMetaJson columns', () => {
+  assertEquals(hasColumn(repoReleaseAssets, 'bundleFormat'), true);
+      assertEquals(hasColumn(repoReleaseAssets, 'bundleMetaJson'), true);
+})  
+  
+    Deno.test('schema-repos - repoReleases table - has unique index on repo+tag', () => {
+  const uniq = uniqueIndexNames(repoReleases);
+      assertStringIncludes(uniq, 'idx_repo_releases_repo_tag');
+})  
+  
+    Deno.test('schema-repos - repoStars table - has composite primary key on accountId+repoId', () => {
+  const pks = primaryKeyNames(repoStars);
+      assert(pks.length >= 1);
+})  
+  
+    Deno.test('schema-repos - snapshots table - defaults status to pending', () => {
+  const cols = getTableColumns(snapshots);
+      assertEquals(cols.status.default, 'pending');
+})  
+  
+    Deno.test('schema-repos - tags table - has unique index on repo+name', () => {
+  const uniq = uniqueIndexNames(tags);
+      assertStringIncludes(uniq, 'idx_tags_repo_name');
+})  
+  
+    Deno.test('schema-repos - gitCommits table - has columns for filesChanged, insertions, deletions', () => {
+  for (const col of ['filesChanged', 'insertions', 'deletions']) {
+        assertEquals(hasColumn(gitCommits, col), true);
       }
-    });
-  });
-
-  describe('gitFileChanges table', () => {
-    it('has changeType and oldPath columns', () => {
-      expect(hasColumn(gitFileChanges, 'changeType')).toBe(true);
-      expect(hasColumn(gitFileChanges, 'oldPath')).toBe(true);
-    });
-  });
-
-  describe('chunks table', () => {
-    it('has indexes on file, account, and vector', () => {
-      const idxs = indexNames(chunks);
-      expect(idxs).toContain('idx_chunks_file_id');
-      expect(idxs).toContain('idx_chunks_account_id');
-      expect(idxs).toContain('idx_chunks_vector_id');
-    });
-  });
-
-  describe('indexJobs table', () => {
-    it('defaults status to queued', () => {
-      const cols = getTableColumns(indexJobs);
-      expect(cols.status.default).toBe('queued');
-    });
-  });
-
-  describe('prComments table', () => {
-    it('defaults authorType to ai', () => {
-      const cols = getTableColumns(prComments);
-      expect(cols.authorType.default).toBe('ai');
-    });
-  });
-
-  describe('prReviews table', () => {
-    it('defaults reviewerType to ai', () => {
-      const cols = getTableColumns(prReviews);
-      expect(cols.reviewerType.default).toBe('ai');
-    });
-  });
-
-  describe('repoRemotes table', () => {
-    it('has unique index on repo+name', () => {
-      const uniq = uniqueIndexNames(repoRemotes);
-      expect(uniq).toContain('idx_repo_remotes_repo_name');
-    });
-
-    it('defaults name to upstream', () => {
-      const cols = getTableColumns(repoRemotes);
-      expect(cols.name.default).toBe('upstream');
-    });
-  });
-});
-
+})  
+  
+    Deno.test('schema-repos - gitFileChanges table - has changeType and oldPath columns', () => {
+  assertEquals(hasColumn(gitFileChanges, 'changeType'), true);
+      assertEquals(hasColumn(gitFileChanges, 'oldPath'), true);
+})  
+  
+    Deno.test('schema-repos - chunks table - has indexes on file, account, and vector', () => {
+  const idxs = indexNames(chunks);
+      assertStringIncludes(idxs, 'idx_chunks_file_id');
+      assertStringIncludes(idxs, 'idx_chunks_account_id');
+      assertStringIncludes(idxs, 'idx_chunks_vector_id');
+})  
+  
+    Deno.test('schema-repos - indexJobs table - defaults status to queued', () => {
+  const cols = getTableColumns(indexJobs);
+      assertEquals(cols.status.default, 'queued');
+})  
+  
+    Deno.test('schema-repos - prComments table - defaults authorType to ai', () => {
+  const cols = getTableColumns(prComments);
+      assertEquals(cols.authorType.default, 'ai');
+})  
+  
+    Deno.test('schema-repos - prReviews table - defaults reviewerType to ai', () => {
+  const cols = getTableColumns(prReviews);
+      assertEquals(cols.reviewerType.default, 'ai');
+})  
+  
+    Deno.test('schema-repos - repoRemotes table - has unique index on repo+name', () => {
+  const uniq = uniqueIndexNames(repoRemotes);
+      assertStringIncludes(uniq, 'idx_repo_remotes_repo_name');
+})
+    Deno.test('schema-repos - repoRemotes table - defaults name to upstream', () => {
+  const cols = getTableColumns(repoRemotes);
+      assertEquals(cols.name.default, 'upstream');
+})  
 // ===================================================================
 // schema-workers
 // ===================================================================
-describe('schema-workers', () => {
-  describe('workers table', () => {
-    it('compatibility alias points at services', () => {
-      expect(getTableName(workers)).toBe('services');
-    });
 
-    it('defaults serviceType to app and status to pending while preserving workerType alias', () => {
-      const cols = getTableColumns(workers);
-      expect(cols.serviceType.default).toBe('app');
-      expect(workers.workerType).toBe(workers.serviceType);
-      expect(cols.status.default).toBe('pending');
-    });
-
-    it('has unique columns hostname, routeRef, and slug', () => {
-      expect(hasColumn(workers, 'hostname')).toBe(true);
-      expect(hasColumn(workers, 'routeRef')).toBe(true);
-      expect(hasColumn(workers, 'slug')).toBe(true);
-    });
-
-    it('has unique index on id+accountId', () => {
-      const uniq = uniqueIndexNames(workers);
-      expect(uniq).toContain('idx_services_id_account');
-    });
-  });
-
-  describe('apps table', () => {
-    it('is named "apps"', () => {
-      expect(getTableName(apps)).toBe('apps');
-    });
-
-    it('has service-centric indexes on service, appType, and account', () => {
-      const idxs = indexNames(apps);
-      expect(idxs).toContain('idx_apps_service_id');
-      expect(idxs).toContain('idx_apps_app_type');
-      expect(idxs).toContain('idx_apps_account_id');
-    });
-
-    it('has physical serviceId column with workerId compatibility alias', () => {
-      expect(hasColumn(apps, 'serviceId')).toBe(true);
-      expect(apps.workerId).toBe(apps.serviceId);
-    });
-  });
-
-  describe('shortcutGroupItems table', () => {
-    it('has physical serviceId column with workerId compatibility alias', () => {
-      expect(hasColumn(shortcutGroupItems, 'serviceId')).toBe(true);
-      expect(shortcutGroupItems.workerId).toBe(shortcutGroupItems.serviceId);
-    });
-  });
-
-  describe('deployments table', () => {
-    it('has unique index on service+version', () => {
-      const uniq = uniqueIndexNames(deployments);
-      expect(uniq).toContain('idx_deployments_service_version');
-    });
-
-    it('has rollback columns', () => {
-      for (const col of ['isRollback', 'rollbackFromVersion', 'rolledBackAt', 'rolledBackBy']) {
-        expect(hasColumn(deployments, col)).toBe(true);
+  
+    Deno.test('schema-workers - workers table - compatibility alias points at services', () => {
+  assertEquals(getTableName(workers), 'services');
+})
+    Deno.test('schema-workers - workers table - defaults serviceType to app and status to pending while preserving workerType alias', () => {
+  const cols = getTableColumns(workers);
+      assertEquals(cols.serviceType.default, 'app');
+      assertEquals(workers.workerType, workers.serviceType);
+      assertEquals(cols.status.default, 'pending');
+})
+    Deno.test('schema-workers - workers table - has unique columns hostname, routeRef, and slug', () => {
+  assertEquals(hasColumn(workers, 'hostname'), true);
+      assertEquals(hasColumn(workers, 'routeRef'), true);
+      assertEquals(hasColumn(workers, 'slug'), true);
+})
+    Deno.test('schema-workers - workers table - has unique index on id+accountId', () => {
+  const uniq = uniqueIndexNames(workers);
+      assertStringIncludes(uniq, 'idx_services_id_account');
+})  
+  
+    Deno.test('schema-workers - apps table - is named "apps"', () => {
+  assertEquals(getTableName(apps), 'apps');
+})
+    Deno.test('schema-workers - apps table - has service-centric indexes on service, appType, and account', () => {
+  const idxs = indexNames(apps);
+      assertStringIncludes(idxs, 'idx_apps_service_id');
+      assertStringIncludes(idxs, 'idx_apps_app_type');
+      assertStringIncludes(idxs, 'idx_apps_account_id');
+})
+    Deno.test('schema-workers - apps table - has physical serviceId column with workerId compatibility alias', () => {
+  assertEquals(hasColumn(apps, 'serviceId'), true);
+      assertEquals(apps.workerId, apps.serviceId);
+})  
+  
+    Deno.test('schema-workers - shortcutGroupItems table - has physical serviceId column with workerId compatibility alias', () => {
+  assertEquals(hasColumn(shortcutGroupItems, 'serviceId'), true);
+      assertEquals(shortcutGroupItems.workerId, shortcutGroupItems.serviceId);
+})  
+  
+    Deno.test('schema-workers - deployments table - has unique index on service+version', () => {
+  const uniq = uniqueIndexNames(deployments);
+      assertStringIncludes(uniq, 'idx_deployments_service_version');
+})
+    Deno.test('schema-workers - deployments table - has rollback columns', () => {
+  for (const col of ['isRollback', 'rollbackFromVersion', 'rolledBackAt', 'rolledBackBy']) {
+        assertEquals(hasColumn(deployments, col), true);
       }
-    });
-  });
-
-  describe('bundleDeployments table', () => {
-    it('has unique index on account+name and account+app', () => {
-      const uniq = uniqueIndexNames(bundleDeployments);
-      expect(uniq).toContain('idx_bundle_deployments_account_name');
-      expect(uniq).toContain('idx_bundle_deployments_account_app');
-    });
-  });
-
-  describe('customDomains table', () => {
-    it('defaults status to pending', () => {
-      const cols = getTableColumns(customDomains);
-      expect(cols.status.default).toBe('pending');
-    });
-
-    it('uses service_id as the physical foreign key column', () => {
-      expect(hasColumn(customDomains, 'serviceId')).toBe(true);
-    });
-
-    it('exposes a serviceId alias for canonical core reads', () => {
-      expect(serviceCustomDomains.serviceId).toBe(customDomains.workerId);
-    });
-  });
-
-  describe('workerBindings table', () => {
-    it('has unique index on worker+bindingName', () => {
-      const uniq = uniqueIndexNames(workerBindings);
-      expect(uniq).toContain('idx_service_bindings_service_binding');
-    });
-  });
-
-  describe('workerCommonEnvLinks table', () => {
-    it('has unique index on worker+envName+source', () => {
-      const uniq = uniqueIndexNames(workerCommonEnvLinks);
-      expect(uniq).toContain('idx_service_common_env_links_service_env_source');
-    });
-  });
-
-  describe('workerEnvVars table', () => {
-    it('has unique index on service+name', () => {
-      const uniq = uniqueIndexNames(workerEnvVars);
-      expect(uniq).toContain('idx_service_env_vars_service_name');
-    });
-
-    it('uses service_id as the physical foreign key column', () => {
-      expect(hasColumn(workerEnvVars, 'serviceId')).toBe(true);
-    });
-
-    it('exposes a serviceId alias', () => {
-      expect(serviceEnvVars.serviceId).toBe(workerEnvVars.workerId);
-    });
-  });
-
-  describe('workerMcpEndpoints table', () => {
-    it('has composite primary key on serviceId+name', () => {
-      const pks = primaryKeyNames(workerMcpEndpoints);
-      expect(pks.length).toBeGreaterThanOrEqual(1);
-    });
-
-    it('uses service_id as the physical foreign key column', () => {
-      expect(hasColumn(workerMcpEndpoints, 'serviceId')).toBe(true);
-    });
-
-    it('exposes a serviceId alias', () => {
-      expect(serviceMcpEndpoints.serviceId).toBe(workerMcpEndpoints.workerId);
-    });
-  });
-
-  describe('workerRuntimeFlags table', () => {
-    it('has composite primary key on serviceId+flag', () => {
-      const pks = primaryKeyNames(workerRuntimeFlags);
-      expect(pks.length).toBeGreaterThanOrEqual(1);
-    });
-
-    it('uses service_id as the physical foreign key column', () => {
-      expect(hasColumn(workerRuntimeFlags, 'serviceId')).toBe(true);
-    });
-
-    it('exposes a serviceId alias', () => {
-      expect(serviceRuntimeFlags.serviceId).toBe(workerRuntimeFlags.workerId);
-    });
-  });
-
-  describe('workerRuntimeLimits table', () => {
-    it('uses serviceId as primary key', () => {
-      const cols = getTableColumns(workerRuntimeLimits);
-      expect(cols.serviceId.primary).toBe(true);
-    });
-
-    it('has cpuMs, memoryMb, and subrequestLimit columns', () => {
-      for (const col of ['cpuMs', 'memoryMb', 'subrequestLimit']) {
-        expect(hasColumn(workerRuntimeLimits, col)).toBe(true);
+})  
+  
+    Deno.test('schema-workers - bundleDeployments table - has unique index on account+name and account+app', () => {
+  const uniq = uniqueIndexNames(bundleDeployments);
+      assertStringIncludes(uniq, 'idx_bundle_deployments_account_name');
+      assertStringIncludes(uniq, 'idx_bundle_deployments_account_app');
+})  
+  
+    Deno.test('schema-workers - customDomains table - defaults status to pending', () => {
+  const cols = getTableColumns(customDomains);
+      assertEquals(cols.status.default, 'pending');
+})
+    Deno.test('schema-workers - customDomains table - uses service_id as the physical foreign key column', () => {
+  assertEquals(hasColumn(customDomains, 'serviceId'), true);
+})
+    Deno.test('schema-workers - customDomains table - exposes a serviceId alias for canonical core reads', () => {
+  assertEquals(serviceCustomDomains.serviceId, customDomains.workerId);
+})  
+  
+    Deno.test('schema-workers - workerBindings table - has unique index on worker+bindingName', () => {
+  const uniq = uniqueIndexNames(workerBindings);
+      assertStringIncludes(uniq, 'idx_service_bindings_service_binding');
+})  
+  
+    Deno.test('schema-workers - workerCommonEnvLinks table - has unique index on worker+envName+source', () => {
+  const uniq = uniqueIndexNames(workerCommonEnvLinks);
+      assertStringIncludes(uniq, 'idx_service_common_env_links_service_env_source');
+})  
+  
+    Deno.test('schema-workers - workerEnvVars table - has unique index on service+name', () => {
+  const uniq = uniqueIndexNames(workerEnvVars);
+      assertStringIncludes(uniq, 'idx_service_env_vars_service_name');
+})
+    Deno.test('schema-workers - workerEnvVars table - uses service_id as the physical foreign key column', () => {
+  assertEquals(hasColumn(workerEnvVars, 'serviceId'), true);
+})
+    Deno.test('schema-workers - workerEnvVars table - exposes a serviceId alias', () => {
+  assertEquals(serviceEnvVars.serviceId, workerEnvVars.workerId);
+})  
+  
+    Deno.test('schema-workers - workerMcpEndpoints table - has composite primary key on serviceId+name', () => {
+  const pks = primaryKeyNames(workerMcpEndpoints);
+      assert(pks.length >= 1);
+})
+    Deno.test('schema-workers - workerMcpEndpoints table - uses service_id as the physical foreign key column', () => {
+  assertEquals(hasColumn(workerMcpEndpoints, 'serviceId'), true);
+})
+    Deno.test('schema-workers - workerMcpEndpoints table - exposes a serviceId alias', () => {
+  assertEquals(serviceMcpEndpoints.serviceId, workerMcpEndpoints.workerId);
+})  
+  
+    Deno.test('schema-workers - workerRuntimeFlags table - has composite primary key on serviceId+flag', () => {
+  const pks = primaryKeyNames(workerRuntimeFlags);
+      assert(pks.length >= 1);
+})
+    Deno.test('schema-workers - workerRuntimeFlags table - uses service_id as the physical foreign key column', () => {
+  assertEquals(hasColumn(workerRuntimeFlags, 'serviceId'), true);
+})
+    Deno.test('schema-workers - workerRuntimeFlags table - exposes a serviceId alias', () => {
+  assertEquals(serviceRuntimeFlags.serviceId, workerRuntimeFlags.workerId);
+})  
+  
+    Deno.test('schema-workers - workerRuntimeLimits table - uses serviceId as primary key', () => {
+  const cols = getTableColumns(workerRuntimeLimits);
+      assertEquals(cols.serviceId.primary, true);
+})
+    Deno.test('schema-workers - workerRuntimeLimits table - has cpuMs, memoryMb, and subrequestLimit columns', () => {
+  for (const col of ['cpuMs', 'memoryMb', 'subrequestLimit']) {
+        assertEquals(hasColumn(workerRuntimeLimits, col), true);
       }
-    });
-
-    it('exposes a serviceId alias', () => {
-      expect(serviceRuntimeLimits.serviceId).toBe(workerRuntimeLimits.workerId);
-    });
-  });
-
-  describe('workerRuntimeSettings table', () => {
-    it('uses serviceId as primary key', () => {
-      const cols = getTableColumns(workerRuntimeSettings);
-      expect(cols.serviceId.primary).toBe(true);
-    });
-
-    it('uses service-centric account index naming', () => {
-      const idxs = indexNames(workerRuntimeSettings);
-      expect(idxs).toContain('idx_service_runtime_settings_account_id');
-    });
-
-    it('exposes a serviceId alias', () => {
-      expect(serviceRuntimeSettings.serviceId).toBe(workerRuntimeSettings.workerId);
-    });
-  });
-
-  describe('managedTakosTokens table', () => {
-    it('has unique index on service+envName', () => {
-      const uniq = uniqueIndexNames(managedTakosTokens);
-      expect(uniq).toContain('idx_managed_takos_tokens_service_env');
-    });
-
-    it('uses service_id as the physical foreign key column', () => {
-      expect(hasColumn(managedTakosTokens, 'serviceId')).toBe(true);
-    });
-
-    it('exposes a workerId compat alias', () => {
-      expect(serviceManagedTakosTokens.serviceId).toBe(managedTakosTokens.workerId);
-    });
-  });
-
-  describe('commonEnvAuditLogs table', () => {
-    it('has composite indexes for account+env+createdAt and service+createdAt', () => {
-      const idxs = indexNames(commonEnvAuditLogs);
-      expect(idxs).toContain('idx_common_env_audit_logs_account_env_created_at');
-      expect(idxs).toContain('idx_common_env_audit_logs_service_created_at');
-    });
-
-    it('exposes a workerId compat alias', () => {
-      expect(serviceCommonEnvAuditLogs.serviceId).toBe(commonEnvAuditLogs.workerId);
-    });
-  });
-
-  describe('commonEnvReconcileJobs table', () => {
-    it('has indexes on status+nextAttemptAt and account+service+status', () => {
-      const idxs = indexNames(commonEnvReconcileJobs);
-      expect(idxs).toContain('idx_common_env_reconcile_jobs_status_next_attempt');
-      expect(idxs).toContain('idx_common_env_reconcile_jobs_account_service_status');
-    });
-
-    it('uses service_id as the physical foreign key column', () => {
-      expect(hasColumn(commonEnvReconcileJobs, 'serviceId')).toBe(true);
-    });
-
-    it('exposes a workerId compat alias', () => {
-      expect(serviceCommonEnvReconcileJobs.serviceId).toBe(commonEnvReconcileJobs.workerId);
-    });
-  });
-
-  describe('deploymentEvents table', () => {
-    it('uses auto-increment integer primary key', () => {
-      const cols = getTableColumns(deploymentEvents);
-      expect(cols.id.primary).toBe(true);
-    });
-  });
-
-  describe('bundleDeploymentEvents table', () => {
-    it('has index on bundleKey and account', () => {
-      const idxs = indexNames(bundleDeploymentEvents);
-      expect(idxs).toContain('idx_bundle_deployment_events_bundle_key');
-      expect(idxs).toContain('idx_bundle_deployment_events_account_id');
-    });
-  });
-});
-
+})
+    Deno.test('schema-workers - workerRuntimeLimits table - exposes a serviceId alias', () => {
+  assertEquals(serviceRuntimeLimits.serviceId, workerRuntimeLimits.workerId);
+})  
+  
+    Deno.test('schema-workers - workerRuntimeSettings table - uses serviceId as primary key', () => {
+  const cols = getTableColumns(workerRuntimeSettings);
+      assertEquals(cols.serviceId.primary, true);
+})
+    Deno.test('schema-workers - workerRuntimeSettings table - uses service-centric account index naming', () => {
+  const idxs = indexNames(workerRuntimeSettings);
+      assertStringIncludes(idxs, 'idx_service_runtime_settings_account_id');
+})
+    Deno.test('schema-workers - workerRuntimeSettings table - exposes a serviceId alias', () => {
+  assertEquals(serviceRuntimeSettings.serviceId, workerRuntimeSettings.workerId);
+})  
+  
+    Deno.test('schema-workers - managedTakosTokens table - has unique index on service+envName', () => {
+  const uniq = uniqueIndexNames(managedTakosTokens);
+      assertStringIncludes(uniq, 'idx_managed_takos_tokens_service_env');
+})
+    Deno.test('schema-workers - managedTakosTokens table - uses service_id as the physical foreign key column', () => {
+  assertEquals(hasColumn(managedTakosTokens, 'serviceId'), true);
+})
+    Deno.test('schema-workers - managedTakosTokens table - exposes a workerId compat alias', () => {
+  assertEquals(serviceManagedTakosTokens.serviceId, managedTakosTokens.workerId);
+})  
+  
+    Deno.test('schema-workers - commonEnvAuditLogs table - has composite indexes for account+env+createdAt and service+createdAt', () => {
+  const idxs = indexNames(commonEnvAuditLogs);
+      assertStringIncludes(idxs, 'idx_common_env_audit_logs_account_env_created_at');
+      assertStringIncludes(idxs, 'idx_common_env_audit_logs_service_created_at');
+})
+    Deno.test('schema-workers - commonEnvAuditLogs table - exposes a workerId compat alias', () => {
+  assertEquals(serviceCommonEnvAuditLogs.serviceId, commonEnvAuditLogs.workerId);
+})  
+  
+    Deno.test('schema-workers - commonEnvReconcileJobs table - has indexes on status+nextAttemptAt and account+service+status', () => {
+  const idxs = indexNames(commonEnvReconcileJobs);
+      assertStringIncludes(idxs, 'idx_common_env_reconcile_jobs_status_next_attempt');
+      assertStringIncludes(idxs, 'idx_common_env_reconcile_jobs_account_service_status');
+})
+    Deno.test('schema-workers - commonEnvReconcileJobs table - uses service_id as the physical foreign key column', () => {
+  assertEquals(hasColumn(commonEnvReconcileJobs, 'serviceId'), true);
+})
+    Deno.test('schema-workers - commonEnvReconcileJobs table - exposes a workerId compat alias', () => {
+  assertEquals(serviceCommonEnvReconcileJobs.serviceId, commonEnvReconcileJobs.workerId);
+})  
+  
+    Deno.test('schema-workers - deploymentEvents table - uses auto-increment integer primary key', () => {
+  const cols = getTableColumns(deploymentEvents);
+      assertEquals(cols.id.primary, true);
+})  
+  
+    Deno.test('schema-workers - bundleDeploymentEvents table - has index on bundleKey and account', () => {
+  const idxs = indexNames(bundleDeploymentEvents);
+      assertStringIncludes(idxs, 'idx_bundle_deployment_events_bundle_key');
+      assertStringIncludes(idxs, 'idx_bundle_deployment_events_account_id');
+})  
 // ===================================================================
 // schema-oauth
 // ===================================================================
-describe('schema-oauth', () => {
-  describe('oauthClients table', () => {
-    it('is named "oauth_clients"', () => {
-      expect(getTableName(oauthClients)).toBe('oauth_clients');
-    });
 
-    it('defaults clientType to confidential and status to active', () => {
-      const cols = getTableColumns(oauthClients);
-      expect(cols.clientType.default).toBe('confidential');
-      expect(cols.status.default).toBe('active');
-    });
-  });
-
-  describe('oauthTokens table', () => {
-    it('has indexes for tokenType, tokenHash, tokenFamily, revoked, and expiresAt', () => {
-      const idxs = indexNames(oauthTokens);
-      expect(idxs).toContain('idx_oauth_tokens_token_type');
-      expect(idxs).toContain('idx_oauth_tokens_token_hash');
-      expect(idxs).toContain('idx_oauth_tokens_token_family');
-      expect(idxs).toContain('idx_oauth_tokens_revoked');
-      expect(idxs).toContain('idx_oauth_tokens_expires_at');
-    });
-  });
-
-  describe('oauthAuthorizationCodes table', () => {
-    it('has codeChallenge and codeChallengeMethod for PKCE', () => {
-      expect(hasColumn(oauthAuthorizationCodes, 'codeChallenge')).toBe(true);
-      expect(hasColumn(oauthAuthorizationCodes, 'codeChallengeMethod')).toBe(true);
-    });
-
-    it('defaults codeChallengeMethod to S256', () => {
-      const cols = getTableColumns(oauthAuthorizationCodes);
-      expect(cols.codeChallengeMethod.default).toBe('S256');
-    });
-  });
-
-  describe('oauthConsents table', () => {
-    it('has unique index on account+client', () => {
-      const uniq = uniqueIndexNames(oauthConsents);
-      expect(uniq).toContain('idx_oauth_consents_account_client');
-    });
-  });
-
-  describe('oauthDeviceCodes table', () => {
-    it('defaults status to pending', () => {
-      const cols = getTableColumns(oauthDeviceCodes);
-      expect(cols.status.default).toBe('pending');
-    });
-
-    it('defaults intervalSeconds to 5', () => {
-      const cols = getTableColumns(oauthDeviceCodes);
-      expect(cols.intervalSeconds.default).toBe(5);
-    });
-  });
-
-  describe('oauthStates table', () => {
-    it('has indexes on state and expiresAt', () => {
-      const idxs = indexNames(oauthStates);
-      expect(idxs).toContain('idx_oauth_states_state');
-      expect(idxs).toContain('idx_oauth_states_expires_at');
-    });
-  });
-
-  describe('oauthAuditLogs table', () => {
-    it('has indexes on eventType, createdAt, clientId, and accountId', () => {
-      const idxs = indexNames(oauthAuditLogs);
-      expect(idxs).toContain('idx_oauth_audit_logs_event_type');
-      expect(idxs).toContain('idx_oauth_audit_logs_created_at');
-      expect(idxs).toContain('idx_oauth_audit_logs_client_id');
-      expect(idxs).toContain('idx_oauth_audit_logs_account_id');
-    });
-  });
-
-  describe('mcpServers table', () => {
-    it('has unique index on account+name', () => {
-      const uniq = uniqueIndexNames(mcpServers);
-      expect(uniq).toContain('idx_mcp_servers_account_name');
-    });
-
-    it('defaults transport to streamable-http', () => {
-      const cols = getTableColumns(mcpServers);
-      expect(cols.transport.default).toBe('streamable-http');
-      expect(mcpServers.serviceId).toBe(mcpServers.workerId);
-      expect(indexNames(mcpServers)).toContain('idx_mcp_servers_service_id');
-    });
-  });
-
-  describe('mcpOauthPending table', () => {
-    it('has indexes on state and accountId', () => {
-      const idxs = indexNames(mcpOauthPending);
-      expect(idxs).toContain('idx_mcp_oauth_pending_state');
-      expect(idxs).toContain('idx_mcp_oauth_pending_account_id');
-    });
-  });
-});
-
+  
+    Deno.test('schema-oauth - oauthClients table - is named "oauth_clients"', () => {
+  assertEquals(getTableName(oauthClients), 'oauth_clients');
+})
+    Deno.test('schema-oauth - oauthClients table - defaults clientType to confidential and status to active', () => {
+  const cols = getTableColumns(oauthClients);
+      assertEquals(cols.clientType.default, 'confidential');
+      assertEquals(cols.status.default, 'active');
+})  
+  
+    Deno.test('schema-oauth - oauthTokens table - has indexes for tokenType, tokenHash, tokenFamily, revoked, and expiresAt', () => {
+  const idxs = indexNames(oauthTokens);
+      assertStringIncludes(idxs, 'idx_oauth_tokens_token_type');
+      assertStringIncludes(idxs, 'idx_oauth_tokens_token_hash');
+      assertStringIncludes(idxs, 'idx_oauth_tokens_token_family');
+      assertStringIncludes(idxs, 'idx_oauth_tokens_revoked');
+      assertStringIncludes(idxs, 'idx_oauth_tokens_expires_at');
+})  
+  
+    Deno.test('schema-oauth - oauthAuthorizationCodes table - has codeChallenge and codeChallengeMethod for PKCE', () => {
+  assertEquals(hasColumn(oauthAuthorizationCodes, 'codeChallenge'), true);
+      assertEquals(hasColumn(oauthAuthorizationCodes, 'codeChallengeMethod'), true);
+})
+    Deno.test('schema-oauth - oauthAuthorizationCodes table - defaults codeChallengeMethod to S256', () => {
+  const cols = getTableColumns(oauthAuthorizationCodes);
+      assertEquals(cols.codeChallengeMethod.default, 'S256');
+})  
+  
+    Deno.test('schema-oauth - oauthConsents table - has unique index on account+client', () => {
+  const uniq = uniqueIndexNames(oauthConsents);
+      assertStringIncludes(uniq, 'idx_oauth_consents_account_client');
+})  
+  
+    Deno.test('schema-oauth - oauthDeviceCodes table - defaults status to pending', () => {
+  const cols = getTableColumns(oauthDeviceCodes);
+      assertEquals(cols.status.default, 'pending');
+})
+    Deno.test('schema-oauth - oauthDeviceCodes table - defaults intervalSeconds to 5', () => {
+  const cols = getTableColumns(oauthDeviceCodes);
+      assertEquals(cols.intervalSeconds.default, 5);
+})  
+  
+    Deno.test('schema-oauth - oauthStates table - has indexes on state and expiresAt', () => {
+  const idxs = indexNames(oauthStates);
+      assertStringIncludes(idxs, 'idx_oauth_states_state');
+      assertStringIncludes(idxs, 'idx_oauth_states_expires_at');
+})  
+  
+    Deno.test('schema-oauth - oauthAuditLogs table - has indexes on eventType, createdAt, clientId, and accountId', () => {
+  const idxs = indexNames(oauthAuditLogs);
+      assertStringIncludes(idxs, 'idx_oauth_audit_logs_event_type');
+      assertStringIncludes(idxs, 'idx_oauth_audit_logs_created_at');
+      assertStringIncludes(idxs, 'idx_oauth_audit_logs_client_id');
+      assertStringIncludes(idxs, 'idx_oauth_audit_logs_account_id');
+})  
+  
+    Deno.test('schema-oauth - mcpServers table - has unique index on account+name', () => {
+  const uniq = uniqueIndexNames(mcpServers);
+      assertStringIncludes(uniq, 'idx_mcp_servers_account_name');
+})
+    Deno.test('schema-oauth - mcpServers table - defaults transport to streamable-http', () => {
+  const cols = getTableColumns(mcpServers);
+      assertEquals(cols.transport.default, 'streamable-http');
+      assertEquals(mcpServers.serviceId, mcpServers.workerId);
+      assertStringIncludes(indexNames(mcpServers), 'idx_mcp_servers_service_id');
+})  
+  
+    Deno.test('schema-oauth - mcpOauthPending table - has indexes on state and accountId', () => {
+  const idxs = indexNames(mcpOauthPending);
+      assertStringIncludes(idxs, 'idx_mcp_oauth_pending_state');
+      assertStringIncludes(idxs, 'idx_mcp_oauth_pending_account_id');
+})  
 // ===================================================================
 // schema-platform
 // ===================================================================
-describe('schema-platform', () => {
-  describe('resources table', () => {
-    it('is named "resources"', () => {
-      expect(getTableName(resources)).toBe('resources');
-    });
 
-    it('defaults status to provisioning', () => {
-      const cols = getTableColumns(resources);
-      expect(cols.status.default).toBe('provisioning');
-    });
-
-    it('has indexes on type, semanticType, providerName, status, owner, providerResourceId, and account', () => {
-      const idxs = indexNames(resources);
-      expect(idxs).toContain('idx_resources_type');
-      expect(idxs).toContain('idx_resources_semantic_type');
-      expect(idxs).toContain('idx_resources_provider_name');
-      expect(idxs).toContain('idx_resources_status');
-      expect(idxs).toContain('idx_resources_owner_account_id');
-      expect(idxs).toContain('idx_resources_provider_resource_id');
-      expect(idxs).toContain('idx_resources_account_id');
-    });
-  });
-
-  describe('resourceAccess table', () => {
-    it('has unique index on resource+account', () => {
-      const uniq = uniqueIndexNames(resourceAccess);
-      expect(uniq).toContain('idx_resource_access_resource_account');
-    });
-
-    it('defaults permission to read', () => {
-      const cols = getTableColumns(resourceAccess);
-      expect(cols.permission.default).toBe('read');
-    });
-  });
-
-  describe('resourceAccessTokens table', () => {
-    it('has indexes on tokenHash and resource', () => {
-      const idxs = indexNames(resourceAccessTokens);
-      expect(idxs).toContain('idx_resource_access_tokens_token_hash');
-      expect(idxs).toContain('idx_resource_access_tokens_resource_id');
-    });
-  });
-
-  describe('edges table', () => {
-    it('has indexes on source, target, type, and account', () => {
-      const idxs = indexNames(edges);
-      expect(idxs).toContain('idx_edges_source_id');
-      expect(idxs).toContain('idx_edges_target_id');
-      expect(idxs).toContain('idx_edges_type');
-      expect(idxs).toContain('idx_edges_account_id');
-    });
-  });
-
-  describe('nodes table', () => {
-    it('has indexes on type, refId, and account', () => {
-      const idxs = indexNames(nodes);
-      expect(idxs).toContain('idx_nodes_type');
-      expect(idxs).toContain('idx_nodes_ref_id');
-      expect(idxs).toContain('idx_nodes_account_id');
-    });
-  });
-
-  describe('notifications table', () => {
-    it('is named "notifications"', () => {
-      expect(getTableName(notifications)).toBe('notifications');
-    });
-
-    it('has email tracking columns', () => {
-      for (const col of ['emailStatus', 'emailAttempts', 'emailSentAt', 'emailError']) {
-        expect(hasColumn(notifications, col)).toBe(true);
+  
+    Deno.test('schema-platform - resources table - is named "resources"', () => {
+  assertEquals(getTableName(resources), 'resources');
+})
+    Deno.test('schema-platform - resources table - defaults status to provisioning', () => {
+  const cols = getTableColumns(resources);
+      assertEquals(cols.status.default, 'provisioning');
+})
+    Deno.test('schema-platform - resources table - has indexes on type, semanticType, providerName, status, owner, providerResourceId, and account', () => {
+  const idxs = indexNames(resources);
+      assertStringIncludes(idxs, 'idx_resources_type');
+      assertStringIncludes(idxs, 'idx_resources_semantic_type');
+      assertStringIncludes(idxs, 'idx_resources_provider_name');
+      assertStringIncludes(idxs, 'idx_resources_status');
+      assertStringIncludes(idxs, 'idx_resources_owner_account_id');
+      assertStringIncludes(idxs, 'idx_resources_provider_resource_id');
+      assertStringIncludes(idxs, 'idx_resources_account_id');
+})  
+  
+    Deno.test('schema-platform - resourceAccess table - has unique index on resource+account', () => {
+  const uniq = uniqueIndexNames(resourceAccess);
+      assertStringIncludes(uniq, 'idx_resource_access_resource_account');
+})
+    Deno.test('schema-platform - resourceAccess table - defaults permission to read', () => {
+  const cols = getTableColumns(resourceAccess);
+      assertEquals(cols.permission.default, 'read');
+})  
+  
+    Deno.test('schema-platform - resourceAccessTokens table - has indexes on tokenHash and resource', () => {
+  const idxs = indexNames(resourceAccessTokens);
+      assertStringIncludes(idxs, 'idx_resource_access_tokens_token_hash');
+      assertStringIncludes(idxs, 'idx_resource_access_tokens_resource_id');
+})  
+  
+    Deno.test('schema-platform - edges table - has indexes on source, target, type, and account', () => {
+  const idxs = indexNames(edges);
+      assertStringIncludes(idxs, 'idx_edges_source_id');
+      assertStringIncludes(idxs, 'idx_edges_target_id');
+      assertStringIncludes(idxs, 'idx_edges_type');
+      assertStringIncludes(idxs, 'idx_edges_account_id');
+})  
+  
+    Deno.test('schema-platform - nodes table - has indexes on type, refId, and account', () => {
+  const idxs = indexNames(nodes);
+      assertStringIncludes(idxs, 'idx_nodes_type');
+      assertStringIncludes(idxs, 'idx_nodes_ref_id');
+      assertStringIncludes(idxs, 'idx_nodes_account_id');
+})  
+  
+    Deno.test('schema-platform - notifications table - is named "notifications"', () => {
+  assertEquals(getTableName(notifications), 'notifications');
+})
+    Deno.test('schema-platform - notifications table - has email tracking columns', () => {
+  for (const col of ['emailStatus', 'emailAttempts', 'emailSentAt', 'emailError']) {
+        assertEquals(hasColumn(notifications, col), true);
       }
-    });
-  });
-
-  describe('notificationPreferences table', () => {
-    it('has composite primary key on accountId+type+channel', () => {
-      const pks = primaryKeyNames(notificationPreferences);
-      expect(pks.length).toBeGreaterThanOrEqual(1);
-    });
-  });
-
-  describe('notificationSettings table', () => {
-    it('uses accountId as primary key', () => {
-      const cols = getTableColumns(notificationSettings);
-      expect(cols.accountId.primary).toBe(true);
-    });
-  });
-
-  describe('sessions table', () => {
-    it('is named "sessions"', () => {
-      expect(getTableName(sessions)).toBe('sessions');
-    });
-
-    it('has columns for repoId and branch', () => {
-      expect(hasColumn(sessions, 'repoId')).toBe(true);
-      expect(hasColumn(sessions, 'branch')).toBe(true);
-    });
-  });
-
-  describe('sessionFiles table', () => {
-    it('has unique index on session+path', () => {
-      const uniq = uniqueIndexNames(sessionFiles);
-      expect(uniq).toContain('idx_session_files_session_path');
-    });
-  });
-
-  describe('sessionRepos table', () => {
-    it('has unique indexes on session+repo and session+mount', () => {
-      const uniq = uniqueIndexNames(sessionRepos);
-      expect(uniq).toContain('idx_session_repos_session_repo');
-      expect(uniq).toContain('idx_session_repos_session_mount');
-    });
-  });
-
-  describe('shortcuts table', () => {
-    it('has unique index on user+resourceType+resourceId', () => {
-      const uniq = uniqueIndexNames(shortcuts);
-      expect(uniq).toContain('idx_shortcuts_user_resource_type_id');
-    });
-  });
-
-  describe('uiExtensions table', () => {
-    it('has unique index on account+path', () => {
-      const uniq = uniqueIndexNames(uiExtensions);
-      expect(uniq).toContain('idx_ui_extensions_account_path');
-    });
-  });
-
-  describe('reports table', () => {
-    it('defaults status to open', () => {
-      const cols = getTableColumns(reports);
-      expect(cols.status.default).toBe('open');
-    });
-  });
-
-  describe('moderationAuditLogs table', () => {
-    it('has indexes on targetType+id, report, createdAt, actor, and actionType', () => {
-      const idxs = indexNames(moderationAuditLogs);
-      expect(idxs).toContain('idx_moderation_audit_logs_target_type_id');
-      expect(idxs).toContain('idx_moderation_audit_logs_report_id');
-      expect(idxs).toContain('idx_moderation_audit_logs_created_at');
-      expect(idxs).toContain('idx_moderation_audit_logs_actor_account_id');
-      expect(idxs).toContain('idx_moderation_audit_logs_action_type');
-    });
-  });
-
-  describe('infraEndpoints table', () => {
-    it('has unique index on account+name', () => {
-      const uniq = uniqueIndexNames(infraEndpoints);
-      expect(uniq).toContain('idx_infra_endpoints_account_name');
-    });
-  });
-
-  describe('serviceRuntimes table', () => {
-    it('has unique index on account+name', () => {
-      const uniq = uniqueIndexNames(serviceRuntimes);
-      expect(uniq).toContain('idx_service_runtimes_account_name');
-    });
-  });
-
-  describe('infraEndpointRoutes table', () => {
-    it('has composite primary key on endpointId+position', () => {
-      const pks = primaryKeyNames(infraEndpointRoutes);
-      expect(pks.length).toBeGreaterThanOrEqual(1);
-    });
-  });
-
-  describe('fileHandlers table', () => {
-    it('uses service_hostname as the physical hostname column', () => {
-      expect(hasColumn(fileHandlers, 'serviceHostname')).toBe(true);
-    });
-
-    it('retains workerHostname as a compatibility alias', () => {
-      expect(fileHandlers.workerHostname).toBe(fileHandlers.serviceHostname);
-    });
-  });
-
-  describe('fileHandlerMatchers table', () => {
-    it('has composite primary key on fileHandlerId+kind+value', () => {
-      const pks = primaryKeyNames(fileHandlerMatchers);
-      expect(pks.length).toBeGreaterThanOrEqual(1);
-    });
-  });
-
-  describe('dlqEntries table', () => {
-    it('is named "dlq_entries"', () => {
-      expect(getTableName(dlqEntries)).toBe('dlq_entries');
-    });
-  });
-
-  describe('storeRegistry table', () => {
-    it('has unique index on account+actorUrl', () => {
-      const uniq = uniqueIndexNames(storeRegistry);
-      expect(uniq).toContain('idx_store_registry_account_actor');
-    });
-  });
-
-  describe('storeRegistryUpdates table', () => {
-    it('has unique index on registryEntryId+activityId', () => {
-      const uniq = uniqueIndexNames(storeRegistryUpdates);
-      expect(uniq).toContain('idx_store_registry_updates_activity');
-    });
-  });
-});
-
+})  
+  
+    Deno.test('schema-platform - notificationPreferences table - has composite primary key on accountId+type+channel', () => {
+  const pks = primaryKeyNames(notificationPreferences);
+      assert(pks.length >= 1);
+})  
+  
+    Deno.test('schema-platform - notificationSettings table - uses accountId as primary key', () => {
+  const cols = getTableColumns(notificationSettings);
+      assertEquals(cols.accountId.primary, true);
+})  
+  
+    Deno.test('schema-platform - sessions table - is named "sessions"', () => {
+  assertEquals(getTableName(sessions), 'sessions');
+})
+    Deno.test('schema-platform - sessions table - has columns for repoId and branch', () => {
+  assertEquals(hasColumn(sessions, 'repoId'), true);
+      assertEquals(hasColumn(sessions, 'branch'), true);
+})  
+  
+    Deno.test('schema-platform - sessionFiles table - has unique index on session+path', () => {
+  const uniq = uniqueIndexNames(sessionFiles);
+      assertStringIncludes(uniq, 'idx_session_files_session_path');
+})  
+  
+    Deno.test('schema-platform - sessionRepos table - has unique indexes on session+repo and session+mount', () => {
+  const uniq = uniqueIndexNames(sessionRepos);
+      assertStringIncludes(uniq, 'idx_session_repos_session_repo');
+      assertStringIncludes(uniq, 'idx_session_repos_session_mount');
+})  
+  
+    Deno.test('schema-platform - shortcuts table - has unique index on user+resourceType+resourceId', () => {
+  const uniq = uniqueIndexNames(shortcuts);
+      assertStringIncludes(uniq, 'idx_shortcuts_user_resource_type_id');
+})  
+  
+    Deno.test('schema-platform - uiExtensions table - has unique index on account+path', () => {
+  const uniq = uniqueIndexNames(uiExtensions);
+      assertStringIncludes(uniq, 'idx_ui_extensions_account_path');
+})  
+  
+    Deno.test('schema-platform - reports table - defaults status to open', () => {
+  const cols = getTableColumns(reports);
+      assertEquals(cols.status.default, 'open');
+})  
+  
+    Deno.test('schema-platform - moderationAuditLogs table - has indexes on targetType+id, report, createdAt, actor, and actionType', () => {
+  const idxs = indexNames(moderationAuditLogs);
+      assertStringIncludes(idxs, 'idx_moderation_audit_logs_target_type_id');
+      assertStringIncludes(idxs, 'idx_moderation_audit_logs_report_id');
+      assertStringIncludes(idxs, 'idx_moderation_audit_logs_created_at');
+      assertStringIncludes(idxs, 'idx_moderation_audit_logs_actor_account_id');
+      assertStringIncludes(idxs, 'idx_moderation_audit_logs_action_type');
+})  
+  
+    Deno.test('schema-platform - infraEndpoints table - has unique index on account+name', () => {
+  const uniq = uniqueIndexNames(infraEndpoints);
+      assertStringIncludes(uniq, 'idx_infra_endpoints_account_name');
+})  
+  
+    Deno.test('schema-platform - serviceRuntimes table - has unique index on account+name', () => {
+  const uniq = uniqueIndexNames(serviceRuntimes);
+      assertStringIncludes(uniq, 'idx_service_runtimes_account_name');
+})  
+  
+    Deno.test('schema-platform - infraEndpointRoutes table - has composite primary key on endpointId+position', () => {
+  const pks = primaryKeyNames(infraEndpointRoutes);
+      assert(pks.length >= 1);
+})  
+  
+    Deno.test('schema-platform - fileHandlers table - uses service_hostname as the physical hostname column', () => {
+  assertEquals(hasColumn(fileHandlers, 'serviceHostname'), true);
+})
+    Deno.test('schema-platform - fileHandlers table - retains workerHostname as a compatibility alias', () => {
+  assertEquals(fileHandlers.workerHostname, fileHandlers.serviceHostname);
+})  
+  
+    Deno.test('schema-platform - fileHandlerMatchers table - has composite primary key on fileHandlerId+kind+value', () => {
+  const pks = primaryKeyNames(fileHandlerMatchers);
+      assert(pks.length >= 1);
+})  
+  
+    Deno.test('schema-platform - dlqEntries table - is named "dlq_entries"', () => {
+  assertEquals(getTableName(dlqEntries), 'dlq_entries');
+})  
+  
+    Deno.test('schema-platform - storeRegistry table - has unique index on account+actorUrl', () => {
+  const uniq = uniqueIndexNames(storeRegistry);
+      assertStringIncludes(uniq, 'idx_store_registry_account_actor');
+})  
+  
+    Deno.test('schema-platform - storeRegistryUpdates table - has unique index on registryEntryId+activityId', () => {
+  const uniq = uniqueIndexNames(storeRegistryUpdates);
+      assertStringIncludes(uniq, 'idx_store_registry_updates_activity');
+})  
 // ===================================================================
 // schema-workflows
 // ===================================================================
-describe('schema-workflows', () => {
-  describe('workflows table', () => {
-    it('is named "workflows"', () => {
-      expect(getTableName(workflows)).toBe('workflows');
-    });
 
-    it('has unique index on repo+path', () => {
-      const uniq = uniqueIndexNames(workflows);
-      expect(uniq).toContain('idx_workflows_repo_path');
-    });
-  });
-
-  describe('workflowRuns table', () => {
-    it('defaults status to queued and runAttempt to 1', () => {
-      const cols = getTableColumns(workflowRuns);
-      expect(cols.status.default).toBe('queued');
-      expect(cols.runAttempt.default).toBe(1);
-    });
-
-    it('has indexes for workflow, status, repo, event, createdAt, and actor', () => {
-      const idxs = indexNames(workflowRuns);
-      expect(idxs).toContain('idx_workflow_runs_workflow_id');
-      expect(idxs).toContain('idx_workflow_runs_status');
-      expect(idxs).toContain('idx_workflow_runs_repo_id');
-      expect(idxs).toContain('idx_workflow_runs_event');
-      expect(idxs).toContain('idx_workflow_runs_created_at');
-      expect(idxs).toContain('idx_workflow_runs_actor_account_id');
-    });
-  });
-
-  describe('workflowJobs table', () => {
-    it('defaults status to queued', () => {
-      const cols = getTableColumns(workflowJobs);
-      expect(cols.status.default).toBe('queued');
-    });
-  });
-
-  describe('workflowSteps table', () => {
-    it('defaults status to pending', () => {
-      const cols = getTableColumns(workflowSteps);
-      expect(cols.status.default).toBe('pending');
-    });
-
-    it('has indexes on job+number and jobId', () => {
-      const idxs = indexNames(workflowSteps);
-      expect(idxs).toContain('idx_workflow_steps_job_number');
-      expect(idxs).toContain('idx_workflow_steps_job_id');
-    });
-  });
-
-  describe('workflowSecrets table', () => {
-    it('has unique index on repo+name', () => {
-      const uniq = uniqueIndexNames(workflowSecrets);
-      expect(uniq).toContain('idx_workflow_secrets_repo_name');
-    });
-  });
-
-  describe('workflowArtifacts table', () => {
-    it('has indexes on run and expiresAt', () => {
-      const idxs = indexNames(workflowArtifacts);
-      expect(idxs).toContain('idx_workflow_artifacts_run_id');
-      expect(idxs).toContain('idx_workflow_artifacts_expires_at');
-    });
-  });
-});
-
+  
+    Deno.test('schema-workflows - workflows table - is named "workflows"', () => {
+  assertEquals(getTableName(workflows), 'workflows');
+})
+    Deno.test('schema-workflows - workflows table - has unique index on repo+path', () => {
+  const uniq = uniqueIndexNames(workflows);
+      assertStringIncludes(uniq, 'idx_workflows_repo_path');
+})  
+  
+    Deno.test('schema-workflows - workflowRuns table - defaults status to queued and runAttempt to 1', () => {
+  const cols = getTableColumns(workflowRuns);
+      assertEquals(cols.status.default, 'queued');
+      assertEquals(cols.runAttempt.default, 1);
+})
+    Deno.test('schema-workflows - workflowRuns table - has indexes for workflow, status, repo, event, createdAt, and actor', () => {
+  const idxs = indexNames(workflowRuns);
+      assertStringIncludes(idxs, 'idx_workflow_runs_workflow_id');
+      assertStringIncludes(idxs, 'idx_workflow_runs_status');
+      assertStringIncludes(idxs, 'idx_workflow_runs_repo_id');
+      assertStringIncludes(idxs, 'idx_workflow_runs_event');
+      assertStringIncludes(idxs, 'idx_workflow_runs_created_at');
+      assertStringIncludes(idxs, 'idx_workflow_runs_actor_account_id');
+})  
+  
+    Deno.test('schema-workflows - workflowJobs table - defaults status to queued', () => {
+  const cols = getTableColumns(workflowJobs);
+      assertEquals(cols.status.default, 'queued');
+})  
+  
+    Deno.test('schema-workflows - workflowSteps table - defaults status to pending', () => {
+  const cols = getTableColumns(workflowSteps);
+      assertEquals(cols.status.default, 'pending');
+})
+    Deno.test('schema-workflows - workflowSteps table - has indexes on job+number and jobId', () => {
+  const idxs = indexNames(workflowSteps);
+      assertStringIncludes(idxs, 'idx_workflow_steps_job_number');
+      assertStringIncludes(idxs, 'idx_workflow_steps_job_id');
+})  
+  
+    Deno.test('schema-workflows - workflowSecrets table - has unique index on repo+name', () => {
+  const uniq = uniqueIndexNames(workflowSecrets);
+      assertStringIncludes(uniq, 'idx_workflow_secrets_repo_name');
+})  
+  
+    Deno.test('schema-workflows - workflowArtifacts table - has indexes on run and expiresAt', () => {
+  const idxs = indexNames(workflowArtifacts);
+      assertStringIncludes(idxs, 'idx_workflow_artifacts_run_id');
+      assertStringIncludes(idxs, 'idx_workflow_artifacts_expires_at');
+})  
 // ===================================================================
 // Cross-schema: all tables have expected names (no accidental rename)
 // ===================================================================
-describe('all table names are stable', () => {
+
   const expectedNames: [Parameters<typeof getTableName>[0], string][] = [
     [accounts, 'accounts'],
     [accountBlocks, 'account_blocks'],
@@ -1596,6 +1285,5 @@ describe('all table names are stable', () => {
   ];
 
   it.each(expectedNames)('table %# has expected SQL name "%s"', (table, expectedSqlName) => {
-    expect(getTableName(table)).toBe(expectedSqlName);
+    assertEquals(getTableName(table), expectedSqlName);
   });
-});

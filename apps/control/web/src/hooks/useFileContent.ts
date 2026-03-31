@@ -1,24 +1,24 @@
-import { useState, useCallback } from 'react';
+import { createSignal } from 'solid-js';
 import { getErrorMessage } from 'takos-common/errors';
 
 interface UseFileContentReturn {
-  content: string | null;
-  encoding: 'utf-8' | 'base64' | null;
-  loading: boolean;
-  error: string | null;
-  saving: boolean;
+  content: () => string | null;
+  encoding: () => 'utf-8' | 'base64' | null;
+  loading: () => boolean;
+  error: () => string | null;
+  saving: () => boolean;
   loadContent: (fileId: string) => Promise<void>;
   saveContent: (fileId: string, content: string) => Promise<boolean>;
 }
 
 export function useFileContent(spaceId: string): UseFileContentReturn {
-  const [content, setContent] = useState<string | null>(null);
-  const [encoding, setEncoding] = useState<'utf-8' | 'base64' | null>(null);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [saving, setSaving] = useState(false);
+  const [content, setContent] = createSignal<string | null>(null);
+  const [encoding, setEncoding] = createSignal<'utf-8' | 'base64' | null>(null);
+  const [loading, setLoading] = createSignal(false);
+  const [error, setError] = createSignal<string | null>(null);
+  const [saving, setSaving] = createSignal(false);
 
-  const loadContent = useCallback(async (fileId: string) => {
+  const loadContent = async (fileId: string) => {
     setLoading(true);
     setError(null);
     setContent(null);
@@ -38,9 +38,9 @@ export function useFileContent(spaceId: string): UseFileContentReturn {
     } finally {
       setLoading(false);
     }
-  }, [spaceId]);
+  };
 
-  const saveContent = useCallback(async (fileId: string, newContent: string): Promise<boolean> => {
+  const saveContent = async (fileId: string, newContent: string): Promise<boolean> => {
     setSaving(true);
     setError(null);
 
@@ -62,7 +62,7 @@ export function useFileContent(spaceId: string): UseFileContentReturn {
     } finally {
       setSaving(false);
     }
-  }, [spaceId]);
+  };
 
   return { content, encoding, loading, error, saving, loadContent, saveContent };
 }

@@ -1,11 +1,11 @@
 import { readFile } from 'node:fs/promises';
 import { Command } from 'commander';
-import chalk from 'chalk';
-import { api } from '../../lib/api.js';
-import { cliExit } from '../../lib/command-exit.js';
-import { resolveSpaceId } from '../../lib/cli-utils.js';
-import { loadAppManifest } from '../../lib/app-manifest.js';
-import { validateGroupName } from './helpers.js';
+import { bold, green, red } from '@std/fmt/colors';
+import { api } from '../../lib/api.ts';
+import { cliExit } from '../../lib/command-exit.ts';
+import { resolveSpaceId } from '../../lib/cli-utils.ts';
+import { loadAppManifest } from '../../lib/app-manifest.ts';
+import { validateGroupName } from './helpers.ts';
 
 type GroupRecord = {
   id: string;
@@ -52,10 +52,10 @@ export function registerGroupDesiredCommand(groupCmd: Command): void {
         }
 
         console.log('');
-        console.log(chalk.bold(`Group desired manifest: ${name}`));
+        console.log(bold(`Group desired manifest: ${name}`));
         process.stdout.write(`${JSON.stringify(res.data.desired, null, 2)}\n`);
       } catch (error) {
-        console.log(chalk.red(error instanceof Error ? error.message : String(error)));
+        console.log(red(error instanceof Error ? error.message : String(error)));
         cliExit(1);
       }
     });
@@ -86,9 +86,9 @@ export function registerGroupDesiredCommand(groupCmd: Command): void {
           throw new Error(res.error);
         }
 
-        console.log(chalk.green(`Updated desired manifest for group: ${name}`));
+        console.log(green(`Updated desired manifest for group: ${name}`));
       } catch (error) {
-        console.log(chalk.red(error instanceof Error ? error.message : String(error)));
+        console.log(red(error instanceof Error ? error.message : String(error)));
         cliExit(1);
       }
     });

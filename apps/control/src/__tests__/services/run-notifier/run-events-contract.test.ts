@@ -1,4 +1,3 @@
-import { describe, expect, it } from 'vitest';
 import {
   buildRunFailedPayload,
   buildTerminalPayload,
@@ -6,35 +5,33 @@ import {
   parseRunEventPayload,
 } from '@/services/run-notifier/run-events-contract';
 
-describe('run-events-contract', () => {
-  it('derives terminal status from known terminal event types', () => {
-    expect(deriveTerminalStatusFromRunEvent('completed', '{}')).toBe('completed');
-    expect(deriveTerminalStatusFromRunEvent('error', '{}')).toBe('failed');
-    expect(deriveTerminalStatusFromRunEvent('cancelled', '{}')).toBe('cancelled');
-    expect(deriveTerminalStatusFromRunEvent('run.failed', '{}')).toBe('failed');
-  });
 
-  it('derives terminal status from run_status payload', () => {
-    expect(deriveTerminalStatusFromRunEvent('run_status', '{"status":"completed"}')).toBe('completed');
-    expect(deriveTerminalStatusFromRunEvent('run_status', { run: { status: 'failed' } })).toBe('failed');
-    expect(deriveTerminalStatusFromRunEvent('run_status', { run: { status: 'cancelled' } })).toBe('cancelled');
-  });
+import { assertEquals } from 'jsr:@std/assert';
 
-  it('returns null for non-terminal or malformed payloads', () => {
-    expect(deriveTerminalStatusFromRunEvent('thinking', '{}')).toBeNull();
-    expect(deriveTerminalStatusFromRunEvent('run_status', '{"status":"running"}')).toBeNull();
-    expect(deriveTerminalStatusFromRunEvent('run_status', '{not-json')).toBeNull();
-    expect(deriveTerminalStatusFromRunEvent('run_status', [])).toBeNull();
-  });
-
-  it('parses object and string payloads consistently', () => {
-    expect(parseRunEventPayload('{"ok":true}')).toEqual({ ok: true });
-    expect(parseRunEventPayload({ ok: true })).toEqual({ ok: true });
-    expect(parseRunEventPayload('null')).toBeNull();
-  });
-
-  it('builds terminal payloads with run context', () => {
-    expect(buildTerminalPayload('run-1', 'completed', { success: true }, 'sess-1')).toEqual({
+  Deno.test('run-events-contract - derives terminal status from known terminal event types', () => {
+  assertEquals(deriveTerminalStatusFromRunEvent('completed', '{}'), 'completed');
+    assertEquals(deriveTerminalStatusFromRunEvent('error', '{}'), 'failed');
+    assertEquals(deriveTerminalStatusFromRunEvent('cancelled', '{}'), 'cancelled');
+    assertEquals(deriveTerminalStatusFromRunEvent('run.failed', '{}'), 'failed');
+})
+  Deno.test('run-events-contract - derives terminal status from run_status payload', () => {
+  assertEquals(deriveTerminalStatusFromRunEvent('run_status', '{"status":"completed"}'), 'completed');
+    assertEquals(deriveTerminalStatusFromRunEvent('run_status', { run: { status: 'failed' } }), 'failed');
+    assertEquals(deriveTerminalStatusFromRunEvent('run_status', { run: { status: 'cancelled' } }), 'cancelled');
+})
+  Deno.test('run-events-contract - returns null for non-terminal or malformed payloads', () => {
+  assertEquals(deriveTerminalStatusFromRunEvent('thinking', '{}'), null);
+    assertEquals(deriveTerminalStatusFromRunEvent('run_status', '{"status":"running"}'), null);
+    assertEquals(deriveTerminalStatusFromRunEvent('run_status', '{not-json'), null);
+    assertEquals(deriveTerminalStatusFromRunEvent('run_status', []), null);
+})
+  Deno.test('run-events-contract - parses object and string payloads consistently', () => {
+  assertEquals(parseRunEventPayload('{"ok":true}'), { ok: true });
+    assertEquals(parseRunEventPayload({ ok: true }), { ok: true });
+    assertEquals(parseRunEventPayload('null'), null);
+})
+  Deno.test('run-events-contract - builds terminal payloads with run context', () => {
+  assertEquals(buildTerminalPayload('run-1', 'completed', { success: true }, 'sess-1'), {
       status: 'completed',
       run: {
         id: 'run-1',
@@ -43,7 +40,7 @@ describe('run-events-contract', () => {
       success: true,
     });
 
-    expect(buildRunFailedPayload('run-2', 'boom', { permanent: true, sessionId: 'sess-2' })).toEqual({
+    assertEquals(buildRunFailedPayload('run-2', 'boom', { permanent: true, sessionId: 'sess-2' }), {
       status: 'failed',
       run: {
         id: 'run-2',
@@ -52,5 +49,4 @@ describe('run-events-contract', () => {
       error: 'boom',
       permanent: true,
     });
-  });
-});
+})

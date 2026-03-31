@@ -1,87 +1,74 @@
-import { describe, expect, it, vi, beforeEach } from 'vitest';
 import type { D1Database, R2Bucket } from '@cloudflare/workers-types';
 
-const mocks = vi.hoisted(() => ({
-  getDb: vi.fn(),
-  generateId: vi.fn().mockReturnValue('commit-new'),
-  now: vi.fn().mockReturnValue('2026-03-24T00:00:00.000Z'),
-}));
+import { assertEquals, assertNotEquals, assert, assertStringIncludes, assertObjectMatch } from 'jsr:@std/assert';
 
-vi.mock('@/db', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/db')>()),
-  getDb: mocks.getDb,
-}));
+const mocks = ({
+  getDb: ((..._args: any[]) => undefined) as any,
+  generateId: (() => 'commit-new'),
+  now: (() => '2026-03-24T00:00:00.000Z'),
+});
 
-vi.mock('@/shared/utils', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/shared/utils')>()),
-  generateId: mocks.generateId,
-  now: mocks.now,
-}));
-
+// [Deno] vi.mock removed - manually stub imports from '@/db'
+// [Deno] vi.mock removed - manually stub imports from '@/shared/utils'
 import { GitService } from '@/services/source/git';
 
 function createDrizzleMock() {
-  const getMock = vi.fn();
-  const allMock = vi.fn();
-  const runMock = vi.fn();
+  const getMock = ((..._args: any[]) => undefined) as any;
+  const allMock = ((..._args: any[]) => undefined) as any;
+  const runMock = ((..._args: any[]) => undefined) as any;
   const chain = {
-    from: vi.fn().mockReturnThis(),
-    where: vi.fn().mockReturnThis(),
-    set: vi.fn().mockReturnThis(),
-    values: vi.fn().mockReturnThis(),
-    returning: vi.fn().mockReturnThis(),
-    orderBy: vi.fn().mockReturnThis(),
-    limit: vi.fn().mockReturnThis(),
-    offset: vi.fn().mockReturnThis(),
+    from: (function(this: any) { return this; }),
+    where: (function(this: any) { return this; }),
+    set: (function(this: any) { return this; }),
+    values: (function(this: any) { return this; }),
+    returning: (function(this: any) { return this; }),
+    orderBy: (function(this: any) { return this; }),
+    limit: (function(this: any) { return this; }),
+    offset: (function(this: any) { return this; }),
     get: getMock,
     all: allMock,
     run: runMock,
   };
   return {
-    select: vi.fn(() => chain),
-    insert: vi.fn(() => chain),
-    update: vi.fn(() => chain),
-    delete: vi.fn(() => chain),
+    select: () => chain,
+    insert: () => chain,
+    update: () => chain,
+    delete: () => chain,
     _: { get: getMock, all: allMock, run: runMock, chain },
   };
 }
 
 function createBucketMock() {
   return {
-    get: vi.fn(),
-    put: vi.fn(),
-    head: vi.fn(),
-    list: vi.fn(),
-    delete: vi.fn(),
+    get: ((..._args: any[]) => undefined) as any,
+    put: ((..._args: any[]) => undefined) as any,
+    head: ((..._args: any[]) => undefined) as any,
+    list: ((..._args: any[]) => undefined) as any,
+    delete: ((..._args: any[]) => undefined) as any,
   } as unknown as R2Bucket;
 }
 
-describe('GitService construction', () => {
-  it('creates a GitService instance', () => {
-    const service = new GitService({} as D1Database, {} as R2Bucket);
-    expect(service).toBeInstanceOf(GitService);
-  });
-});
 
-describe('GitService.log', () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-  });
+  Deno.test('GitService construction - creates a GitService instance', () => {
+  const service = new GitService({} as D1Database, {} as R2Bucket);
+    assert(service instanceof GitService);
+})
 
-  it('returns empty array when no commits', async () => {
-    const drizzle = createDrizzleMock();
-    drizzle._.all.mockResolvedValueOnce([]);
-    mocks.getDb.mockReturnValue(drizzle);
+  Deno.test('GitService.log - returns empty array when no commits', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+  const drizzle = createDrizzleMock();
+    drizzle._.all = (async () => []) as any;
+    mocks.getDb = (() => drizzle) as any;
 
     const service = new GitService({} as D1Database, createBucketMock());
     const result = await service.log('ws-1');
 
-    expect(result).toEqual([]);
-  });
-
-  it('returns commits in mapped format', async () => {
-    const drizzle = createDrizzleMock();
-    drizzle._.all.mockResolvedValueOnce([
+    assertEquals(result, []);
+})
+  Deno.test('GitService.log - returns commits in mapped format', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+  const drizzle = createDrizzleMock();
+    drizzle._.all = (async () => [
       {
         id: 'c1',
         accountId: 'ws-1',
@@ -95,14 +82,14 @@ describe('GitService.log', () => {
         treeHash: 'abc123',
         createdAt: '2026-01-01T00:00:00.000Z',
       },
-    ]);
-    mocks.getDb.mockReturnValue(drizzle);
+    ]) as any;
+    mocks.getDb = (() => drizzle) as any;
 
     const service = new GitService({} as D1Database, createBucketMock());
     const result = await service.log('ws-1');
 
-    expect(result).toHaveLength(1);
-    expect(result[0]).toMatchObject({
+    assertEquals(result.length, 1);
+    assertObjectMatch(result[0], {
       id: 'c1',
       space_id: 'ws-1',
       message: 'init',
@@ -110,14 +97,14 @@ describe('GitService.log', () => {
       parent_id: null,
       files_changed: 1,
     });
-  });
-
-  it('filters by path when provided', async () => {
-    const drizzle = createDrizzleMock();
+})
+  Deno.test('GitService.log - filters by path when provided', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+  const drizzle = createDrizzleMock();
     // gitFileChanges query for path match
     drizzle._.all
-      .mockResolvedValueOnce([{ commitId: 'c1' }]) // matching changes
-      .mockResolvedValueOnce([
+       = (async () => [{ commitId: 'c1' }]) as any // matching changes
+       = (async () => [
         {
           id: 'c1',
           accountId: 'ws-1',
@@ -131,47 +118,42 @@ describe('GitService.log', () => {
           treeHash: 'abc',
           createdAt: '2026-01-01T00:00:00.000Z',
         },
-      ]);
-    mocks.getDb.mockReturnValue(drizzle);
+      ]) as any;
+    mocks.getDb = (() => drizzle) as any;
 
     const service = new GitService({} as D1Database, createBucketMock());
     const result = await service.log('ws-1', { path: 'src/main.ts' });
 
-    expect(result).toHaveLength(1);
-    expect(result[0].id).toBe('c1');
-  });
-
-  it('returns empty when path filter has no matching commits', async () => {
-    const drizzle = createDrizzleMock();
-    drizzle._.all.mockResolvedValueOnce([]); // no matching changes
-    mocks.getDb.mockReturnValue(drizzle);
+    assertEquals(result.length, 1);
+    assertEquals(result[0].id, 'c1');
+})
+  Deno.test('GitService.log - returns empty when path filter has no matching commits', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+  const drizzle = createDrizzleMock();
+    drizzle._.all = (async () => []) as any; // no matching changes
+    mocks.getDb = (() => drizzle) as any;
 
     const service = new GitService({} as D1Database, createBucketMock());
     const result = await service.log('ws-1', { path: 'nonexistent.ts' });
 
-    expect(result).toEqual([]);
-  });
-});
+    assertEquals(result, []);
+})
 
-describe('GitService.getCommit', () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-  });
-
-  it('returns null when commit not found', async () => {
-    const drizzle = createDrizzleMock();
-    drizzle._.get.mockResolvedValueOnce(undefined);
-    mocks.getDb.mockReturnValue(drizzle);
+  Deno.test('GitService.getCommit - returns null when commit not found', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+  const drizzle = createDrizzleMock();
+    drizzle._.get = (async () => undefined) as any;
+    mocks.getDb = (() => drizzle) as any;
 
     const service = new GitService({} as D1Database, createBucketMock());
     const result = await service.getCommit('nonexistent');
 
-    expect(result).toBeNull();
-  });
-
-  it('returns commit when found', async () => {
-    const drizzle = createDrizzleMock();
-    drizzle._.get.mockResolvedValueOnce({
+    assertEquals(result, null);
+})
+  Deno.test('GitService.getCommit - returns commit when found', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+  const drizzle = createDrizzleMock();
+    drizzle._.get = (async () => ({
       id: 'c1',
       accountId: 'ws-1',
       message: 'init',
@@ -183,36 +165,31 @@ describe('GitService.getCommit', () => {
       deletions: 0,
       treeHash: 'abc',
       createdAt: '2026-01-01T00:00:00.000Z',
-    });
-    mocks.getDb.mockReturnValue(drizzle);
+    })) as any;
+    mocks.getDb = (() => drizzle) as any;
 
     const service = new GitService({} as D1Database, createBucketMock());
     const result = await service.getCommit('c1');
 
-    expect(result).not.toBeNull();
-    expect(result!.id).toBe('c1');
-  });
-});
+    assertNotEquals(result, null);
+    assertEquals(result!.id, 'c1');
+})
 
-describe('GitService.getCommitChanges', () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-  });
-
-  it('returns empty when no changes', async () => {
-    const drizzle = createDrizzleMock();
-    drizzle._.all.mockResolvedValueOnce([]);
-    mocks.getDb.mockReturnValue(drizzle);
+  Deno.test('GitService.getCommitChanges - returns empty when no changes', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+  const drizzle = createDrizzleMock();
+    drizzle._.all = (async () => []) as any;
+    mocks.getDb = (() => drizzle) as any;
 
     const service = new GitService({} as D1Database, createBucketMock());
     const result = await service.getCommitChanges('c1');
 
-    expect(result).toEqual([]);
-  });
-
-  it('maps change rows correctly', async () => {
-    const drizzle = createDrizzleMock();
-    drizzle._.all.mockResolvedValueOnce([
+    assertEquals(result, []);
+})
+  Deno.test('GitService.getCommitChanges - maps change rows correctly', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+  const drizzle = createDrizzleMock();
+    drizzle._.all = (async () => [
       {
         id: 'ch-1',
         commitId: 'c1',
@@ -225,63 +202,57 @@ describe('GitService.getCommitChanges', () => {
         insertions: 10,
         deletions: 0,
       },
-    ]);
-    mocks.getDb.mockReturnValue(drizzle);
+    ]) as any;
+    mocks.getDb = (() => drizzle) as any;
 
     const service = new GitService({} as D1Database, createBucketMock());
     const result = await service.getCommitChanges('c1');
 
-    expect(result).toHaveLength(1);
-    expect(result[0]).toMatchObject({
+    assertEquals(result.length, 1);
+    assertObjectMatch(result[0], {
       id: 'ch-1',
       commit_id: 'c1',
       path: 'src/main.ts',
       change_type: 'added',
     });
-  });
-});
+})
 
-describe('GitService.restore', () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-  });
-
-  it('returns failure when change not found', async () => {
-    const drizzle = createDrizzleMock();
-    drizzle._.get.mockResolvedValueOnce(undefined);
-    mocks.getDb.mockReturnValue(drizzle);
+  Deno.test('GitService.restore - returns failure when change not found', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+  const drizzle = createDrizzleMock();
+    drizzle._.get = (async () => undefined) as any;
+    mocks.getDb = (() => drizzle) as any;
 
     const service = new GitService({} as D1Database, createBucketMock());
     const result = await service.restore('ws-1', 'c1', 'missing.ts');
 
-    expect(result.success).toBe(false);
-    expect(result.message).toBe('File not found in commit');
-  });
-
-  it('returns failure for deleted files', async () => {
-    const drizzle = createDrizzleMock();
-    drizzle._.get.mockResolvedValueOnce({ changeType: 'deleted' });
-    mocks.getDb.mockReturnValue(drizzle);
+    assertEquals(result.success, false);
+    assertEquals(result.message, 'File not found in commit');
+})
+  Deno.test('GitService.restore - returns failure for deleted files', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+  const drizzle = createDrizzleMock();
+    drizzle._.get = (async () => ({ changeType: 'deleted' })) as any;
+    mocks.getDb = (() => drizzle) as any;
 
     const service = new GitService({} as D1Database, createBucketMock());
     const result = await service.restore('ws-1', 'c1', 'deleted.ts');
 
-    expect(result.success).toBe(false);
-    expect(result.message).toContain('Cannot restore deleted file');
-  });
-
-  it('returns failure when snapshot not found', async () => {
-    const drizzle = createDrizzleMock();
-    drizzle._.get.mockResolvedValueOnce({ changeType: 'modified', newHash: 'hash1' });
-    mocks.getDb.mockReturnValue(drizzle);
+    assertEquals(result.success, false);
+    assertStringIncludes(result.message, 'Cannot restore deleted file');
+})
+  Deno.test('GitService.restore - returns failure when snapshot not found', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+  const drizzle = createDrizzleMock();
+    drizzle._.get = (async () => ({ changeType: 'modified', newHash: 'hash1' })) as any;
+    mocks.getDb = (() => drizzle) as any;
 
     const bucket = createBucketMock();
-    (bucket.get as ReturnType<typeof vi.fn>).mockResolvedValue(null);
+    (bucket.get as ReturnType<typeof vi.fn>) = (async () => null) as any;
 
     const service = new GitService({} as D1Database, bucket);
     const result = await service.restore('ws-1', 'c1', 'src/main.ts');
 
-    expect(result.success).toBe(false);
-    expect(result.message).toBe('Snapshot not found');
-  });
-});
+    assertEquals(result.success, false);
+    assertEquals(result.message, 'Snapshot not found');
+})

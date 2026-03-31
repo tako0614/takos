@@ -1,4 +1,3 @@
-import { describe, expect, it } from 'vitest';
 import type { WorkerEnv } from '@/worker/env';
 
 /**
@@ -7,9 +6,11 @@ import type { WorkerEnv } from '@/worker/env';
  * This ensures the type structure is stable and any breaking changes
  * to the unified env type are caught.
  */
-describe('WorkerEnv type contract', () => {
-  it('accepts a minimal env with required fields', () => {
-    const env: Partial<WorkerEnv> = {
+
+import { assertEquals, assert } from 'jsr:@std/assert';
+
+  Deno.test('WorkerEnv type contract - accepts a minimal env with required fields', () => {
+  const env: Partial<WorkerEnv> = {
       DB: {} as any,
       RUN_QUEUE: {} as any,
       RUN_NOTIFIER: {} as any,
@@ -18,12 +19,11 @@ describe('WorkerEnv type contract', () => {
       HOSTNAME_ROUTING: {} as any,
     };
 
-    expect(env.ADMIN_DOMAIN).toBe('test.takos.jp');
-    expect(env.TENANT_BASE_DOMAIN).toBe('app.test.takos.jp');
-  });
-
-  it('accepts runner-specific fields', () => {
-    const env: Partial<WorkerEnv> = {
+    assertEquals(env.ADMIN_DOMAIN, 'test.takos.jp');
+    assertEquals(env.TENANT_BASE_DOMAIN, 'app.test.takos.jp');
+})
+  Deno.test('WorkerEnv type contract - accepts runner-specific fields', () => {
+  const env: Partial<WorkerEnv> = {
       DB: {} as any,
       EXECUTOR_HOST: { fetch: async () => new Response() },
       RUN_QUEUE: {} as any,
@@ -34,12 +34,11 @@ describe('WorkerEnv type contract', () => {
       HOSTNAME_ROUTING: {} as any,
     };
 
-    expect(env.EXECUTOR_HOST).toBeDefined();
-    expect(env.TAKOS_OFFLOAD).toBeDefined();
-  });
-
-  it('accepts indexer-specific fields', () => {
-    const env: Partial<WorkerEnv> = {
+    assert(env.EXECUTOR_HOST !== undefined);
+    assert(env.TAKOS_OFFLOAD !== undefined);
+})
+  Deno.test('WorkerEnv type contract - accepts indexer-specific fields', () => {
+  const env: Partial<WorkerEnv> = {
       DB: {} as any,
       AI: {} as any,
       VECTORIZE: {} as any,
@@ -56,13 +55,12 @@ describe('WorkerEnv type contract', () => {
       HOSTNAME_ROUTING: {} as any,
     };
 
-    expect(env.AI).toBeDefined();
-    expect(env.VECTORIZE).toBeDefined();
-    expect(env.OPENAI_API_KEY).toBe('sk-test');
-  });
-
-  it('accepts workflow-runner-specific fields', () => {
-    const env: Partial<WorkerEnv> = {
+    assert(env.AI !== undefined);
+    assert(env.VECTORIZE !== undefined);
+    assertEquals(env.OPENAI_API_KEY, 'sk-test');
+})
+  Deno.test('WorkerEnv type contract - accepts workflow-runner-specific fields', () => {
+  const env: Partial<WorkerEnv> = {
       DB: {} as any,
       RUNTIME_HOST: { fetch: async () => new Response() },
       ENCRYPTION_KEY: 'test-key',
@@ -80,12 +78,11 @@ describe('WorkerEnv type contract', () => {
       DEPLOY_QUEUE: {} as any,
     };
 
-    expect(env.RUNTIME_HOST).toBeDefined();
-    expect(env.ENCRYPTION_KEY).toBe('test-key');
-  });
-
-  it('accepts egress-specific fields', () => {
-    const env: Partial<WorkerEnv> = {
+    assert(env.RUNTIME_HOST !== undefined);
+    assertEquals(env.ENCRYPTION_KEY, 'test-key');
+})
+  Deno.test('WorkerEnv type contract - accepts egress-specific fields', () => {
+  const env: Partial<WorkerEnv> = {
       DB: {} as any,
       RATE_LIMITER_DO: {} as any,
       EGRESS_MAX_REQUESTS: '500',
@@ -101,7 +98,6 @@ describe('WorkerEnv type contract', () => {
       HOSTNAME_ROUTING: {} as any,
     };
 
-    expect(env.EGRESS_MAX_REQUESTS).toBe('500');
-    expect(env.EGRESS_RATE_LIMIT_ALGORITHM).toBe('sliding_window');
-  });
-});
+    assertEquals(env.EGRESS_MAX_REQUESTS, '500');
+    assertEquals(env.EGRESS_RATE_LIMIT_ALGORITHM, 'sliding_window');
+})

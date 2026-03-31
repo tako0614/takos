@@ -6,7 +6,7 @@
  * serialized to TOML for wrangler deploy, or used directly with the
  * Cloudflare API.
  */
-import type { WorkerService } from './group-deploy-manifest.js';
+import type { WorkerService } from './group-deploy-manifest.ts';
 import type {
   ProvisionedResource,
   WranglerConfig,
@@ -16,7 +16,7 @@ import type {
   WranglerServiceBinding,
   WranglerQueueProducer,
   WranglerVectorizeIndex,
-} from './group-deploy-types.js';
+} from './group-deploy-types.ts';
 
 export interface GenerateWranglerConfigOptions {
   groupName: string;

@@ -1,10 +1,5 @@
 import type { D1Database } from '@cloudflare/workers-types';
-import { describe, expect, it, vi } from 'vitest';
-
-vi.mock('@/services/platform/mcp', () => ({
-  listMcpServers: vi.fn(async () => []),
-}));
-
+// [Deno] vi.mock removed - manually stub imports from '@/services/platform/mcp'
 import {
   listLocalizedOfficialSkills,
   listOfficialSkillDefinitions,
@@ -21,6 +16,8 @@ import {
 } from '@/services/agent/skills';
 import { listOfficialSkillsCatalog } from '@/services/source/skills';
 
+import { assertEquals, assert, assertStringIncludes } from 'jsr:@std/assert';
+
 function withAvailability<T extends {
   source: 'official' | 'custom';
   execution_contract: SkillContext['execution_contract'];
@@ -32,36 +29,32 @@ function withAvailability<T extends {
   };
 }
 
-describe('official skills registry', () => {
-  it('keeps built-in official skills uniquely identified and carries execution contracts', () => {
-    const skills = listOfficialSkillDefinitions();
+
+  Deno.test('official skills registry - keeps built-in official skills uniquely identified and carries execution contracts', () => {
+  const skills = listOfficialSkillDefinitions();
     const ids = skills.map((skill) => skill.id);
 
-    expect(ids).toEqual([
+    assertEquals(ids, [
       'research-brief',
       'writing-draft',
       'planning-structurer',
       'slides-author',
       'repo-app-operator',
     ]);
-    expect(new Set(ids).size).toBe(ids.length);
-    expect(skills.every((skill) => skill.locales.ja.triggers.length > 0)).toBe(true);
-    expect(skills.every((skill) => skill.locales.en.triggers.length > 0)).toBe(true);
-    expect(skills.every((skill) => skill.execution_contract.output_modes.length > 0)).toBe(true);
-  });
-});
+    assertEquals(new Set(ids).size, ids.length);
+    assertEquals(skills.every((skill) => skill.locales.ja.triggers.length > 0), true);
+    assertEquals(skills.every((skill) => skill.locales.en.triggers.length > 0), true);
+    assertEquals(skills.every((skill) => skill.execution_contract.output_modes.length > 0), true);
+})
 
-describe('skill locale resolution', () => {
-  it('prefers explicit locale before inspecting text samples', () => {
-    expect(resolveSkillLocale({ preferredLocale: 'ja', textSamples: ['deploy an API'] })).toBe('ja');
-    expect(resolveSkillLocale({ acceptLanguage: 'ja-JP,ja;q=0.9,en;q=0.8' })).toBe('ja');
-    expect(resolveSkillLocale({ textSamples: ['スライド資料を作って'] })).toBe('ja');
-  });
-});
+  Deno.test('skill locale resolution - prefers explicit locale before inspecting text samples', () => {
+  assertEquals(resolveSkillLocale({ preferredLocale: 'ja', textSamples: ['deploy an API'] }), 'ja');
+    assertEquals(resolveSkillLocale({ acceptLanguage: 'ja-JP,ja;q=0.9,en;q=0.8' }), 'ja');
+    assertEquals(resolveSkillLocale({ textSamples: ['スライド資料を作って'] }), 'ja');
+})
 
-describe('custom skill metadata normalization', () => {
-  it('normalizes structured metadata and drops invalid values', () => {
-    expect(normalizeCustomSkillMetadata({
+  Deno.test('custom skill metadata normalization - normalizes structured metadata and drops invalid values', () => {
+  assertEquals(normalizeCustomSkillMetadata({
       locale: 'ja',
       category: 'planning',
       activation_tags: ['roadmap', 'phase'],
@@ -72,7 +65,7 @@ describe('custom skill metadata normalization', () => {
         required_mcp_servers: ['slides-mcp'],
         template_ids: ['roadmap-doc'],
       },
-    })).toEqual({
+    }), {
       locale: 'ja',
       category: 'planning',
       activation_tags: ['roadmap', 'phase'],
@@ -84,12 +77,10 @@ describe('custom skill metadata normalization', () => {
         template_ids: ['roadmap-doc'],
       },
     });
-  });
-});
+})
 
-describe('skill selection', () => {
-  it('selects the slide skill from thread and follow-up context, not just the latest message', () => {
-    const officialSkills: SkillContext[] = listLocalizedOfficialSkills('ja').map((skill) => ({
+  Deno.test('skill selection - selects the slide skill from thread and follow-up context, not just the latest message', () => {
+  const officialSkills: SkillContext[] = listLocalizedOfficialSkills('ja').map((skill) => ({
       ...skill,
       source: 'official',
       execution_contract: {
@@ -112,12 +103,11 @@ describe('skill selection', () => {
     });
 
     const slideSelection = selected.find((entry) => entry.skill.id === 'slides-author');
-    expect(slideSelection).toBeTruthy();
-    expect(slideSelection?.reasons.some((reason) => reason.includes('thread title'))).toBe(true);
-  });
-
-  it('uses delegated run input and execution contract hints for software tasks', () => {
-    const officialSkills: SkillContext[] = listLocalizedOfficialSkills('en').map((skill) => ({
+    assert(slideSelection);
+    assertEquals(slideSelection?.reasons.some((reason) => reason.includes('thread title')), true);
+})
+  Deno.test('skill selection - uses delegated run input and execution contract hints for software tasks', () => {
+  const officialSkills: SkillContext[] = listLocalizedOfficialSkills('en').map((skill) => ({
       ...skill,
       source: 'official',
       execution_contract: {
@@ -141,12 +131,11 @@ describe('skill selection', () => {
       maxPerSkillInstructionBytes: 50_000,
     });
 
-    expect(plan.selectedSkills[0]?.skill.id).toBe('repo-app-operator');
-    expect(plan.selectedSkills[0]?.reasons.some((reason) => reason.includes('output intent'))).toBe(true);
-  });
-
-  it('uses structured delegation context for skill selection and locale precedence', () => {
-    const officialSkills: SkillContext[] = listLocalizedOfficialSkills('ja').map((skill) => ({
+    assertEquals(plan.selectedSkills[0]?.skill.id, 'repo-app-operator');
+    assertEquals(plan.selectedSkills[0]?.reasons.some((reason) => reason.includes('output intent')), true);
+})
+  Deno.test('skill selection - uses structured delegation context for skill selection and locale precedence', () => {
+  const officialSkills: SkillContext[] = listLocalizedOfficialSkills('ja').map((skill) => ({
       ...skill,
       source: 'official',
       execution_contract: {
@@ -186,12 +175,11 @@ describe('skill selection', () => {
       maxPerSkillInstructionBytes: 50_000,
     });
 
-    expect(plan.locale).toBe('ja');
-    expect(plan.selectedSkills[0]?.skill.id).toBe('repo-app-operator');
-  });
-
-  it('returns no selected skills when the context has no matching signals', () => {
-    const customSkill: SkillContext = {
+    assertEquals(plan.locale, 'ja');
+    assertEquals(plan.selectedSkills[0]?.skill.id, 'repo-app-operator');
+})
+  Deno.test('skill selection - returns no selected skills when the context has no matching signals', () => {
+  const customSkill: SkillContext = {
       id: 'custom-1',
       name: 'Workspace Macro',
       description: 'Workspace-only helper',
@@ -211,13 +199,11 @@ describe('skill selection', () => {
       availability_reasons: [],
     };
 
-    expect(selectRelevantSkills([customSkill], { conversation: ['Hello there'] })).toEqual([]);
-  });
-});
+    assertEquals(selectRelevantSkills([customSkill], { conversation: ['Hello there'] }), []);
+})
 
-describe('skill prompt assembly', () => {
-  it('injects only activated skill contracts and points to introspection tools for the wider catalog', () => {
-    const availableSkills: SkillCatalogEntry[] = [
+  Deno.test('skill prompt assembly - injects only activated skill contracts and points to introspection tools for the wider catalog', () => {
+  const availableSkills: SkillCatalogEntry[] = [
       {
         ...withAvailability({
         id: 'slides-author',
@@ -284,22 +270,19 @@ describe('skill prompt assembly', () => {
       activatedSkills,
     });
 
-    expect(prompt).toContain('## Dynamic Skill Resolution');
-    expect(prompt).toContain('skill_catalog');
-    expect(prompt).toContain('## Activated Skill Contracts');
-    expect(prompt).toContain('Preferred tools');
-    expect(prompt).toContain('Build a slide-by-slide outline.');
-    expect(prompt).not.toContain('## Available Skills');
-    expect(prompt).not.toContain('Weekly update formatter.\n**Instructions:**');
-  });
-});
+    assertStringIncludes(prompt, '## Dynamic Skill Resolution');
+    assertStringIncludes(prompt, 'skill_catalog');
+    assertStringIncludes(prompt, '## Activated Skill Contracts');
+    assertStringIncludes(prompt, 'Preferred tools');
+    assertStringIncludes(prompt, 'Build a slide-by-slide outline.');
+    assert(!(prompt).includes('## Available Skills'));
+    assert(!(prompt).includes('Weekly update formatter.\n**Instructions:**'));
+})
 
-describe('official skill catalog surface', () => {
-  it('returns summary data from the list surface and reserves instructions for describe', async () => {
-    const catalog = await listOfficialSkillsCatalog({} as D1Database, 'ws-1', { preferredLocale: 'en' });
-    expect(catalog.locale).toBe('en');
-    expect(catalog.skills[0]).not.toHaveProperty('instructions');
-    expect(catalog.skills[0]?.execution_contract?.preferred_tools.length).toBeGreaterThan(0);
-    expect(catalog.skills[0]?.availability).toBe('available');
-  });
-});
+  Deno.test('official skill catalog surface - returns summary data from the list surface and reserves instructions for describe', async () => {
+  const catalog = await listOfficialSkillsCatalog({} as D1Database, 'ws-1', { preferredLocale: 'en' });
+    assertEquals(catalog.locale, 'en');
+    assert(!('instructions' in catalog.skills[0]));
+    assert(catalog.skills[0]?.execution_contract?.preferred_tools.length > 0);
+    assertEquals(catalog.skills[0]?.availability, 'available');
+})

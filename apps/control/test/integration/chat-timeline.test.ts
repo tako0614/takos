@@ -1,9 +1,9 @@
-import { describe, expect, it } from 'vitest';
-
 type TimelineEventType = 'thinking' | 'tool' | 'result' | 'error' | 'completed' | 'cancelled' | 'run_status' | 'progress' | 'run.failed';
 type TimelineEvent = { type: TimelineEventType; data: Record<string, unknown> };
 // Agent RunStatus must stay aligned with the canonical shared models definition.
 type RunStatus = 'pending' | 'queued' | 'running' | 'completed' | 'failed' | 'cancelled';
+
+import { assertEquals } from 'jsr:@std/assert';
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null;
@@ -75,82 +75,74 @@ function isRunInRootTree(runId: string, rootRunId: string, byId: Map<string, { i
   return false;
 }
 
-describe('chat timeline helpers', () => {
-  it('parses JSON payload strings', () => {
-    const parsed = parseEventData('{"message":"hello","tool":"file_read"}');
-    expect(parsed.message).toBe('hello');
-    expect(parsed.tool).toBe('file_read');
-  });
 
-  it('falls back to message payload for non-JSON strings', () => {
-    const parsed = parseEventData('plain text');
-    expect(parsed).toEqual({ message: 'plain text' });
-  });
-
-  it('normalizes unknown event types to error', () => {
-    expect(normalizeTimelineEventType('progress')).toBe('progress');
-    expect(normalizeTimelineEventType('unexpected_event')).toBe('error');
-  });
-
-  it('parses event ids from numeric and string forms', () => {
-    expect(parseTimelineEventId({ id: 42 })).toBe(42);
-    expect(parseTimelineEventId({ event_id: '11' })).toBe(11);
-    expect(parseTimelineEventId({ event_id: 'x' })).toBeUndefined();
-  });
-
-  it('maps terminal timeline event types to terminal run statuses', () => {
-    expect(getTerminalRunStatusFromTimelineEvent('completed', {})).toBe('completed');
-    expect(getTerminalRunStatusFromTimelineEvent('cancelled', {})).toBe('cancelled');
-    expect(getTerminalRunStatusFromTimelineEvent('error', {})).toBe('failed');
-    expect(getTerminalRunStatusFromTimelineEvent('run.failed', {})).toBe('failed');
-    expect(getTerminalRunStatusFromTimelineEvent('run_status', { status: 'completed' })).toBe('completed');
-    expect(getTerminalRunStatusFromTimelineEvent('run_status', { status: 'failed' })).toBe('failed');
-    expect(getTerminalRunStatusFromTimelineEvent('run_status', { status: 'cancelled' })).toBe('cancelled');
-    expect(getTerminalRunStatusFromTimelineEvent('run_status', { run: { status: 'completed' } })).toBe('completed');
-  });
-
-  it('derives terminal status from timeline events with fallback', () => {
-    expect(deriveRunStatusFromTimelineEvents('running', [
+  Deno.test('chat timeline helpers - parses JSON payload strings', () => {
+  const parsed = parseEventData('{"message":"hello","tool":"file_read"}');
+    assertEquals(parsed.message, 'hello');
+    assertEquals(parsed.tool, 'file_read');
+})
+  Deno.test('chat timeline helpers - falls back to message payload for non-JSON strings', () => {
+  const parsed = parseEventData('plain text');
+    assertEquals(parsed, { message: 'plain text' });
+})
+  Deno.test('chat timeline helpers - normalizes unknown event types to error', () => {
+  assertEquals(normalizeTimelineEventType('progress'), 'progress');
+    assertEquals(normalizeTimelineEventType('unexpected_event'), 'error');
+})
+  Deno.test('chat timeline helpers - parses event ids from numeric and string forms', () => {
+  assertEquals(parseTimelineEventId({ id: 42 }), 42);
+    assertEquals(parseTimelineEventId({ event_id: '11' }), 11);
+    assertEquals(parseTimelineEventId({ event_id: 'x' }), undefined);
+})
+  Deno.test('chat timeline helpers - maps terminal timeline event types to terminal run statuses', () => {
+  assertEquals(getTerminalRunStatusFromTimelineEvent('completed', {}), 'completed');
+    assertEquals(getTerminalRunStatusFromTimelineEvent('cancelled', {}), 'cancelled');
+    assertEquals(getTerminalRunStatusFromTimelineEvent('error', {}), 'failed');
+    assertEquals(getTerminalRunStatusFromTimelineEvent('run.failed', {}), 'failed');
+    assertEquals(getTerminalRunStatusFromTimelineEvent('run_status', { status: 'completed' }), 'completed');
+    assertEquals(getTerminalRunStatusFromTimelineEvent('run_status', { status: 'failed' }), 'failed');
+    assertEquals(getTerminalRunStatusFromTimelineEvent('run_status', { status: 'cancelled' }), 'cancelled');
+    assertEquals(getTerminalRunStatusFromTimelineEvent('run_status', { run: { status: 'completed' } }), 'completed');
+})
+  Deno.test('chat timeline helpers - derives terminal status from timeline events with fallback', () => {
+  assertEquals(deriveRunStatusFromTimelineEvents('running', [
       { type: 'thinking', data: { message: '...' } },
       { type: 'completed', data: { success: true } },
-    ])).toBe('completed');
+    ]), 'completed');
 
-    expect(deriveRunStatusFromTimelineEvents('queued', [
+    assertEquals(deriveRunStatusFromTimelineEvents('queued', [
       { type: 'progress', data: { message: 'step 1' } },
       { type: 'error', data: { error: 'boom' } },
       { type: 'cancelled', data: {} },
-    ])).toBe('cancelled');
+    ]), 'cancelled');
 
-    expect(deriveRunStatusFromTimelineEvents('running', [
+    assertEquals(deriveRunStatusFromTimelineEvents('running', [
       { type: 'run_status', data: { status: 'failed' } },
-    ])).toBe('failed');
+    ]), 'failed');
 
-    expect(deriveRunStatusFromTimelineEvents('running', [
+    assertEquals(deriveRunStatusFromTimelineEvents('running', [
       { type: 'thinking', data: { message: 'still running' } },
-    ])).toBe('running');
-  });
-
-  it('resolves whether a run belongs to a root run tree', () => {
-    const byId = new Map([
+    ]), 'running');
+})
+  Deno.test('chat timeline helpers - resolves whether a run belongs to a root run tree', () => {
+  const byId = new Map([
       ['root', { id: 'root', parent_run_id: null }],
       ['child', { id: 'child', parent_run_id: 'root' }],
       ['grandchild', { id: 'grandchild', parent_run_id: 'child' }],
       ['other', { id: 'other', parent_run_id: null }],
     ]);
 
-    expect(isRunInRootTree('root', 'root', byId)).toBe(true);
-    expect(isRunInRootTree('child', 'root', byId)).toBe(true);
-    expect(isRunInRootTree('grandchild', 'root', byId)).toBe(true);
-    expect(isRunInRootTree('other', 'root', byId)).toBe(false);
-  });
-
-  it('fails closed on cyclic parent chains', () => {
-    const byId = new Map([
+    assertEquals(isRunInRootTree('root', 'root', byId), true);
+    assertEquals(isRunInRootTree('child', 'root', byId), true);
+    assertEquals(isRunInRootTree('grandchild', 'root', byId), true);
+    assertEquals(isRunInRootTree('other', 'root', byId), false);
+})
+  Deno.test('chat timeline helpers - fails closed on cyclic parent chains', () => {
+  const byId = new Map([
       ['root', { id: 'root', parent_run_id: null }],
       ['a', { id: 'a', parent_run_id: 'b' }],
       ['b', { id: 'b', parent_run_id: 'a' }],
     ]);
 
-    expect(isRunInRootTree('a', 'root', byId)).toBe(false);
-  });
-});
+    assertEquals(isRunInRootTree('a', 'root', byId), false);
+})

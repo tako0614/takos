@@ -1,12 +1,12 @@
 /**
- * Vitest Setup for takos-control
+ * Test Setup for takos-control
  *
- * This file runs before all tests and sets up:
+ * This file provides:
  * - Global mocks for Cloudflare Workers bindings (D1, R2, KV, etc.)
  * - Test utilities and helpers
  * - Environment configuration for testing
  */
-import { vi, beforeAll, afterAll, afterEach } from 'vitest';
+import { spy } from 'jsr:@std/testing/mock';
 import { buildWorkersWebPlatform } from '@/platform/adapters/workers';
 
 // ============================================================================
@@ -54,7 +54,7 @@ export class MockD1PreparedStatement {
 
   constructor(
     private query: string,
-    private db: MockD1Database
+    private db: MockD1Database,
   ) {}
 
   bind(...values: unknown[]): MockD1PreparedStatement {
@@ -89,7 +89,7 @@ export class MockR2Bucket {
   async put(
     key: string,
     value: ReadableStream | ArrayBuffer | string,
-    options?: { customMetadata?: Record<string, string>; httpMetadata?: Record<string, string> }
+    options?: { customMetadata?: Record<string, string>; httpMetadata?: Record<string, string> },
   ): Promise<MockR2Object> {
     let body: ArrayBuffer;
     if (typeof value === 'string') {
@@ -147,7 +147,7 @@ export class MockR2Bucket {
     cursor?: string;
   }> {
     let objects = Array.from(this.objects.entries()).map(
-      ([key, { body, metadata }]) => new MockR2Object(key, body, metadata)
+      ([key, { body, metadata }]) => new MockR2Object(key, body, metadata),
     );
 
     if (options?.prefix) {
@@ -171,7 +171,7 @@ export class MockR2Object {
   constructor(
     readonly key: string,
     body: ArrayBuffer,
-    readonly customMetadata: Record<string, string>
+    readonly customMetadata: Record<string, string>,
   ) {
     this.size = body.byteLength;
     this.etag = 'mock-etag';
@@ -181,7 +181,11 @@ export class MockR2Object {
 }
 
 export class MockR2ObjectBody extends MockR2Object {
-  constructor(key: string, private _body: ArrayBuffer, customMetadata: Record<string, string>) {
+  constructor(
+    key: string,
+    private _body: ArrayBuffer,
+    customMetadata: Record<string, string>,
+  ) {
     super(key, _body, customMetadata);
   }
 
@@ -225,7 +229,7 @@ export class MockKVNamespace {
   }
 
   async getWithMetadata<T = unknown>(
-    key: string
+    key: string,
   ): Promise<{ value: string | null; metadata: T | null }> {
     const item = this.store.get(key);
     if (!item) return { value: null, metadata: null };
@@ -235,7 +239,7 @@ export class MockKVNamespace {
   async put(
     key: string,
     value: string,
-    options?: { expiration?: number; expirationTtl?: number; metadata?: unknown }
+    options?: { expiration?: number; expirationTtl?: number; metadata?: unknown },
   ): Promise<void> {
     let expiration: number | undefined;
     if (options?.expiration) {
@@ -254,7 +258,11 @@ export class MockKVNamespace {
     prefix?: string;
     limit?: number;
     cursor?: string;
-  }): Promise<{ keys: { name: string; expiration?: number; metadata?: unknown }[]; list_complete: boolean; cursor?: string }> {
+  }): Promise<{
+    keys: { name: string; expiration?: number; metadata?: unknown }[];
+    list_complete: boolean;
+    cursor?: string;
+  }> {
     let keys = Array.from(this.store.entries())
       .filter(([name]) => !options?.prefix || name.startsWith(options.prefix))
       .map(([name, { expiration, metadata }]) => ({ name, expiration, metadata }));
@@ -342,18 +350,24 @@ export class MockDurableObjectStub {
 export class MockVectorizeIndex {
   private vectors: Map<string, { id: string; values: number[]; metadata?: Record<string, unknown> }> = new Map();
 
-  async insert(vectors: Array<{ id: string; values: number[]; metadata?: Record<string, unknown> }>): Promise<void> {
+  async insert(
+    vectors: Array<{ id: string; values: number[]; metadata?: Record<string, unknown> }>,
+  ): Promise<void> {
     vectors.forEach((v) => this.vectors.set(v.id, v));
   }
 
-  async upsert(vectors: Array<{ id: string; values: number[]; metadata?: Record<string, unknown> }>): Promise<void> {
+  async upsert(
+    vectors: Array<{ id: string; values: number[]; metadata?: Record<string, unknown> }>,
+  ): Promise<void> {
     vectors.forEach((v) => this.vectors.set(v.id, v));
   }
 
   async query(
     vector: number[],
-    options?: { topK?: number; filter?: Record<string, unknown>; returnValues?: boolean; returnMetadata?: boolean }
-  ): Promise<{ matches: Array<{ id: string; score: number; values?: number[]; metadata?: Record<string, unknown> }> }> {
+    options?: { topK?: number; filter?: Record<string, unknown>; returnValues?: boolean; returnMetadata?: boolean },
+  ): Promise<{
+    matches: Array<{ id: string; score: number; values?: number[]; metadata?: Record<string, unknown> }>;
+  }> {
     const topK = options?.topK || 10;
     const matches = Array.from(this.vectors.values())
       .slice(0, topK)
@@ -406,7 +420,7 @@ export function createMockEnv(overrides: Partial<Record<string, unknown>> = {}) 
     CF_API_TOKEN: 'test-api-token',
     WFP_DISPATCH_NAMESPACE: 'takos-tenants',
     OPENAI_API_KEY: 'test-openai-key',
-    RUNTIME_HOST: { fetch: vi.fn() },
+    RUNTIME_HOST: { fetch: spy() },
     ...overrides,
   };
 
@@ -418,31 +432,6 @@ export function createMockEnv(overrides: Partial<Record<string, unknown>> = {}) 
 
   return env;
 }
-
-// ============================================================================
-// Global Setup and Teardown
-// ============================================================================
-
-beforeAll(() => {
-  // Suppress console output during tests unless DEBUG is set
-  if (!process.env.DEBUG) {
-    vi.spyOn(console, 'log').mockImplementation(() => {});
-    vi.spyOn(console, 'info').mockImplementation(() => {});
-    vi.spyOn(console, 'warn').mockImplementation(() => {});
-  }
-});
-
-afterEach(() => {
-  // Clear all mocks after each test
-  vi.useRealTimers();
-  vi.clearAllMocks();
-  vi.unstubAllGlobals();
-});
-
-afterAll(() => {
-  // Restore all mocks after all tests
-  vi.restoreAllMocks();
-});
 
 // ============================================================================
 // Re-export test utilities

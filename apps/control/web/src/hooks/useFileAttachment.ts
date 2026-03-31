@@ -1,4 +1,4 @@
-import { useState, type ChangeEvent } from 'react';
+import { createSignal } from 'solid-js';
 import { type TranslationKey } from '../store/i18n';
 
 export interface UseFileAttachmentOptions {
@@ -10,14 +10,14 @@ export interface UseFileAttachmentResult {
   attachedFiles: File[];
   setAttachedFiles: (files: File[]) => void;
   addFiles: (files: File[]) => void;
-  handleFileSelect: (e: ChangeEvent<HTMLInputElement>) => void;
+  handleFileSelect: (e: Event & { currentTarget: HTMLInputElement }) => void;
   removeAttachedFile: (index: number) => void;
 }
 
 const MAX_FILE_SIZE = 10 * 1024 * 1024 * 1024;
 
 export function useFileAttachment({ t, setError }: UseFileAttachmentOptions): UseFileAttachmentResult {
-  const [attachedFiles, setAttachedFiles] = useState<File[]>([]);
+  const [attachedFiles, setAttachedFiles] = createSignal<File[]>([]);
 
   function addFiles(files: File[]): void {
     const validFiles: File[] = [];
@@ -33,11 +33,11 @@ export function useFileAttachment({ t, setError }: UseFileAttachmentOptions): Us
     }
   }
 
-  function handleFileSelect(e: ChangeEvent<HTMLInputElement>): void {
-    const files = e.target.files;
+  function handleFileSelect(e: Event & { currentTarget: HTMLInputElement }): void {
+    const files = e.currentTarget.files;
     if (!files) return;
     addFiles(Array.from(files));
-    e.target.value = '';
+    e.currentTarget.value = '';
   }
 
   function removeAttachedFile(index: number): void {
@@ -45,8 +45,8 @@ export function useFileAttachment({ t, setError }: UseFileAttachmentOptions): Us
   }
 
   return {
-    attachedFiles,
-    setAttachedFiles,
+    get attachedFiles() { return attachedFiles(); },
+    setAttachedFiles: (files: File[]) => setAttachedFiles(files),
     addFiles,
     handleFileSelect,
     removeAttachedFile,

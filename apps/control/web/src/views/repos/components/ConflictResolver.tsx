@@ -1,4 +1,4 @@
-import { useReducer, useState, useEffect } from 'react';
+import { createSignal, createEffect, on, Show, For } from 'solid-js';
 import { useI18n } from '../../../store/i18n';
 
 interface ConflictFile {
@@ -24,80 +24,6 @@ interface Resolution {
   source: 'ours' | 'theirs' | 'manual';
 }
 
-// --- Reducer for conflict resolution state ---
-
-interface ResolverState {
-  conflicts: ConflictFile[];
-  resolutions: Map<string, Resolution>;
-  selectedFile: string | null;
-  editContent: string;
-}
-
-type ResolverAction =
-  | { type: 'LOAD_CONFLICTS'; conflicts: ConflictFile[] }
-  | { type: 'SELECT_FILE'; path: string }
-  | { type: 'SELECT_VERSION'; path: string; source: 'ours' | 'theirs' | 'delete' }
-  | { type: 'SET_MANUAL_CONTENT'; path: string; content: string }
-  | { type: 'SET_EDIT_CONTENT'; content: string };
-
-const initialResolverState: ResolverState = {
-  conflicts: [],
-  resolutions: new Map(),
-  selectedFile: null,
-  editContent: '',
-};
-
-function resolverReducer(state: ResolverState, action: ResolverAction): ResolverState {
-  switch (action.type) {
-    case 'LOAD_CONFLICTS': {
-      const first = action.conflicts[0] ?? null;
-      return {
-        ...state,
-        conflicts: action.conflicts,
-        resolutions: new Map(),
-        selectedFile: first?.path ?? null,
-        editContent: first ? (first.ours || first.theirs || '') : '',
-      };
-    }
-    case 'SELECT_FILE': {
-      const res = state.resolutions.get(action.path);
-      const conflict = state.conflicts.find(c => c.path === action.path);
-      return {
-        ...state,
-        selectedFile: action.path,
-        editContent: res?.content || conflict?.ours || conflict?.theirs || '',
-      };
-    }
-    case 'SELECT_VERSION': {
-      const conflict = state.conflicts.find(c => c.path === action.path);
-      if (!conflict) return state;
-      const newResolutions = new Map(state.resolutions);
-      if (action.source === 'delete') {
-        newResolutions.set(action.path, { path: action.path, content: '', delete: true, source: 'ours' });
-      } else {
-        const content = action.source === 'ours' ? (conflict.ours || '') : (conflict.theirs || '');
-        newResolutions.set(action.path, { path: action.path, content, source: action.source });
-      }
-      return { ...state, resolutions: newResolutions };
-    }
-    case 'SET_MANUAL_CONTENT': {
-      const newResolutions = new Map(state.resolutions);
-      newResolutions.set(action.path, { path: action.path, content: action.content, source: 'manual' });
-      return { ...state, resolutions: newResolutions };
-    }
-    case 'SET_EDIT_CONTENT':
-      return { ...state, editContent: action.content };
-  }
-}
-
-// --- Async operation state ---
-
-interface AsyncState {
-  loading: boolean;
-  submitting: boolean;
-  error: string | null;
-}
-
 interface ConflictResolverProps {
   repoId: string;
   prNumber: number;
@@ -107,62 +33,83 @@ interface ConflictResolverProps {
   onCancel: () => void;
 }
 
-export function ConflictResolver({
-  repoId,
-  prNumber,
-  baseBranch,
-  headBranch,
-  onResolved,
-  onCancel,
-}: ConflictResolverProps) {
-  const [state, dispatch] = useReducer(resolverReducer, initialResolverState);
-  const [async_, setAsync] = useState<AsyncState>({ loading: true, submitting: false, error: null });
+export function ConflictResolver(props: ConflictResolverProps) {
   const { t } = useI18n();
 
-  const { conflicts, resolutions, selectedFile, editContent } = state;
-  const { loading, submitting, error } = async_;
-
-  useEffect(() => {
-    fetchConflicts();
-  }, [repoId, prNumber]);
+  const [conflicts, setConflicts] = createSignal<ConflictFile[]>([]);
+  const [resolutions, setResolutions] = createSignal<Map<string, Resolution>>(new Map());
+  const [selectedFile, setSelectedFile] = createSignal<string | null>(null);
+  const [editContent, setEditContent] = createSignal('');
+  const [loading, setLoading] = createSignal(true);
+  const [submitting, setSubmitting] = createSignal(false);
+  const [error, setError] = createSignal<string | null>(null);
 
   const fetchConflicts = async () => {
-    setAsync(prev => ({ ...prev, loading: true, error: null }));
+    setLoading(true);
+    setError(null);
     try {
-      const res = await fetch(`/api/repos/${repoId}/pulls/${prNumber}/conflicts`);
+      const res = await fetch(`/api/repos/${props.repoId}/pulls/${props.prNumber}/conflicts`);
       const data: ConflictsResponse = await res.json();
       if (data.is_mergeable) {
-        setAsync(prev => ({ ...prev, error: t('noConflictsToResolve') }));
+        setError(t('noConflictsToResolve'));
         return;
       }
-      dispatch({ type: 'LOAD_CONFLICTS', conflicts: data.conflicts });
-    } catch (err) {
-      setAsync(prev => ({ ...prev, error: t('failedToLoadConflicts') }));
+      setConflicts(data.conflicts);
+      setResolutions(new Map());
+      const first = data.conflicts[0] ?? null;
+      setSelectedFile(first?.path ?? null);
+      setEditContent(first ? (first.ours || first.theirs || '') : '');
+    } catch {
+      setError(t('failedToLoadConflicts'));
     } finally {
-      setAsync(prev => ({ ...prev, loading: false }));
+      setLoading(false);
     }
   };
 
+  createEffect(on(
+    () => [props.repoId, props.prNumber],
+    () => { fetchConflicts(); },
+  ));
+
+  const selectFile = (path: string) => {
+    const res = resolutions().get(path);
+    const conflict = conflicts().find(c => c.path === path);
+    setSelectedFile(path);
+    setEditContent(res?.content || conflict?.ours || conflict?.theirs || '');
+  };
+
   const selectVersion = (path: string, source: 'ours' | 'theirs' | 'delete') => {
-    dispatch({ type: 'SELECT_VERSION', path, source });
+    const conflict = conflicts().find(c => c.path === path);
+    if (!conflict) return;
+    const newResolutions = new Map(resolutions());
+    if (source === 'delete') {
+      newResolutions.set(path, { path, content: '', delete: true, source: 'ours' });
+    } else {
+      const content = source === 'ours' ? (conflict.ours || '') : (conflict.theirs || '');
+      newResolutions.set(path, { path, content, source });
+    }
+    setResolutions(newResolutions);
   };
 
   const setManualContent = (path: string, content: string) => {
-    dispatch({ type: 'SET_MANUAL_CONTENT', path, content });
+    const newResolutions = new Map(resolutions());
+    newResolutions.set(path, { path, content, source: 'manual' });
+    setResolutions(newResolutions);
   };
 
-  const allResolved = conflicts.length > 0 && conflicts.every(c => resolutions.has(c.path));
+  const allResolved = () => conflicts().length > 0 && conflicts().every(c => resolutions().has(c.path));
 
   const handleSubmit = async () => {
-    if (!allResolved || submitting) return;
-    setAsync(prev => ({ ...prev, submitting: true, error: null }));
+    if (!allResolved() || submitting()) return;
+    setSubmitting(true);
+    setError(null);
 
     try {
-      const res = await fetch(`/api/repos/${repoId}/pulls/${prNumber}/resolve`, {
+      const res = await fetch(`/api/repos/${props.repoId}/pulls/${props.prNumber}/resolve`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          resolutions: Array.from(resolutions.values()).map(r => ({
+          resolutions: Array.from(resolutions().values()).map(r => ({
             path: r.path,
             content: r.content,
             delete: r.delete,
@@ -172,198 +119,199 @@ export function ConflictResolver({
 
       if (!res.ok) {
         const data = await res.json();
-        setAsync(prev => ({ ...prev, error: data.error || t('failedToSubmitResolutions') }));
+        setError(data.error || t('failedToSubmitResolutions'));
         return;
       }
 
-      onResolved();
-    } catch (err) {
-      setAsync(prev => ({ ...prev, error: t('failedToSubmitResolutions') }));
+      props.onResolved();
+    } catch {
+      setError(t('failedToSubmitResolutions'));
     } finally {
-      setAsync(prev => ({ ...prev, submitting: false }));
+      setSubmitting(false);
     }
   };
 
-  const selectedConflict = conflicts.find(c => c.path === selectedFile);
-  const selectedResolution = selectedFile ? resolutions.get(selectedFile) : null;
-
-  if (loading) {
-    return (
-      <div style={{ padding: '2rem', textAlign: 'center', color: 'var(--color-text-tertiary)' }}>
-        {t('loadingConflictDetails')}
-      </div>
-    );
-  }
-
-  if (error && conflicts.length === 0) {
-    return (
-      <div style={{ padding: '2rem', textAlign: 'center', color: 'var(--color-text-tertiary)' }}>
-        {error}
-      </div>
-    );
-  }
+  const selectedConflict = () => conflicts().find(c => c.path === selectedFile());
+  const selectedResolution = () => selectedFile() ? resolutions().get(selectedFile()!) : null;
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-        <div>
-          <h3 style={{ margin: 0, fontSize: '1rem', fontWeight: 600 }}>
-            {t('resolveConflictsTitle', { count: conflicts.length })}
-          </h3>
-          <p style={{ margin: '0.25rem 0 0', fontSize: '0.75rem', color: 'var(--color-text-tertiary)' }}>
-            {baseBranch} ← {headBranch}
-          </p>
+    <>
+      <Show when={loading()}>
+        <div style={{ padding: '2rem', "text-align": 'center', color: 'var(--color-text-tertiary)' }}>
+          {t('loadingConflictDetails')}
         </div>
-        <div style={{ display: 'flex', gap: '0.5rem' }}>
-          <button onClick={onCancel} style={{ padding: '0.5rem 1rem', borderRadius: '6px', border: '1px solid var(--color-border)', background: 'transparent', cursor: 'pointer', fontSize: '0.875rem' }}>
-            {t('cancel')}
-          </button>
-          <button
-            onClick={handleSubmit}
-            disabled={!allResolved || submitting}
-            style={{
-              padding: '0.5rem 1rem', borderRadius: '6px', border: 'none', cursor: allResolved ? 'pointer' : 'not-allowed',
-              background: allResolved ? 'var(--color-primary)' : 'var(--color-bg-tertiary)',
-              color: allResolved ? 'white' : 'var(--color-text-tertiary)',
-              fontSize: '0.875rem',
-            }}
-          >
-            {submitting ? t('merging') : t('commitMerge', { resolved: resolutions.size, total: conflicts.length })}
-          </button>
-        </div>
-      </div>
+      </Show>
 
-      {error && (
-        <div style={{ padding: '0.5rem 1rem', background: 'var(--color-error-bg, #fef2f2)', borderRadius: '6px', color: 'var(--color-error, #dc2626)', fontSize: '0.875rem' }}>
-          {error}
+      <Show when={!loading() && error() && conflicts().length === 0}>
+        <div style={{ padding: '2rem', "text-align": 'center', color: 'var(--color-text-tertiary)' }}>
+          {error()}
         </div>
-      )}
+      </Show>
 
-      <div style={{ display: 'flex', gap: '1rem', minHeight: '400px' }}>
-        <div style={{ width: '240px', flexShrink: 0, borderRight: '1px solid var(--color-border)', paddingRight: '1rem' }}>
-          {conflicts.map((conflict) => {
-            const resolved = resolutions.has(conflict.path);
-            const isSelected = selectedFile === conflict.path;
-            return (
-              <div
-                key={conflict.path}
-                onClick={() => dispatch({ type: 'SELECT_FILE', path: conflict.path })}
-                style={{
-                  padding: '0.5rem', borderRadius: '4px', cursor: 'pointer', fontSize: '0.8125rem',
-                  backgroundColor: isSelected ? 'var(--color-bg-tertiary)' : 'transparent',
-                  display: 'flex', alignItems: 'center', gap: '0.5rem',
-                }}
-              >
-                <span style={{ color: resolved ? 'var(--color-success, #16a34a)' : 'var(--color-warning, #ca8a04)' }}>
-                  {resolved ? '✓' : '!'}
-                </span>
-                <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                  {conflict.path.split('/').pop()}
-                </span>
-              </div>
-            );
-          })}
-        </div>
-
-        {selectedConflict && (
-          <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '0.75rem', minWidth: 0 }}>
-            <div style={{ fontSize: '0.8125rem', color: 'var(--color-text-secondary)', fontFamily: 'monospace' }}>
-              {selectedConflict.path}
-              <span style={{ marginLeft: '0.5rem', padding: '0.125rem 0.375rem', borderRadius: '4px', background: 'var(--color-bg-tertiary)', fontSize: '0.6875rem' }}>
-                {selectedConflict.type}
-              </span>
+      <Show when={!loading() && !(error() && conflicts().length === 0)}>
+        <div style={{ display: 'flex', "flex-direction": 'column', gap: '1rem' }}>
+          <div style={{ display: 'flex', "align-items": 'center', "justify-content": 'space-between' }}>
+            <div>
+              <h3 style={{ margin: 0, "font-size": '1rem', "font-weight": 600 }}>
+                {t('resolveConflictsTitle', { count: conflicts().length })}
+              </h3>
+              <p style={{ margin: '0.25rem 0 0', "font-size": '0.75rem', color: 'var(--color-text-tertiary)' }}>
+                {props.baseBranch} ← {props.headBranch}
+              </p>
             </div>
-
             <div style={{ display: 'flex', gap: '0.5rem' }}>
-              <button
-                onClick={() => selectVersion(selectedConflict.path, 'ours')}
-                style={{
-                  flex: 1, padding: '0.375rem', borderRadius: '4px', fontSize: '0.75rem', cursor: 'pointer',
-                  border: selectedResolution?.source === 'ours' ? '2px solid var(--color-primary)' : '1px solid var(--color-border)',
-                  background: selectedResolution?.source === 'ours' ? 'var(--color-primary-bg, #eff6ff)' : 'transparent',
-                }}
-              >
-                {t('acceptOurs', { branch: baseBranch })}
+              <button onClick={props.onCancel} style={{ padding: '0.5rem 1rem', "border-radius": '6px', border: '1px solid var(--color-border)', background: 'transparent', cursor: 'pointer', "font-size": '0.875rem' }}>
+                {t('cancel')}
               </button>
               <button
-                onClick={() => selectVersion(selectedConflict.path, 'theirs')}
+                onClick={handleSubmit}
+                disabled={!allResolved() || submitting()}
                 style={{
-                  flex: 1, padding: '0.375rem', borderRadius: '4px', fontSize: '0.75rem', cursor: 'pointer',
-                  border: selectedResolution?.source === 'theirs' ? '2px solid var(--color-primary)' : '1px solid var(--color-border)',
-                  background: selectedResolution?.source === 'theirs' ? 'var(--color-primary-bg, #eff6ff)' : 'transparent',
+                  padding: '0.5rem 1rem', "border-radius": '6px', border: 'none', cursor: allResolved() ? 'pointer' : 'not-allowed',
+                  background: allResolved() ? 'var(--color-primary)' : 'var(--color-bg-tertiary)',
+                  color: allResolved() ? 'white' : 'var(--color-text-tertiary)',
+                  "font-size": '0.875rem',
                 }}
               >
-                {t('acceptTheirs', { branch: headBranch })}
+                {submitting() ? t('merging') : t('commitMerge', { resolved: resolutions().size, total: conflicts().length })}
               </button>
-              {selectedConflict.type === 'delete-modify' && (
-                <button
-                  onClick={() => selectVersion(selectedConflict.path, 'delete')}
-                  style={{
-                    padding: '0.375rem 0.75rem', borderRadius: '4px', fontSize: '0.75rem', cursor: 'pointer',
-                    border: selectedResolution?.delete ? '2px solid var(--color-error)' : '1px solid var(--color-border)',
-                    background: selectedResolution?.delete ? '#fef2f2' : 'transparent',
-                    color: 'var(--color-error, #dc2626)',
-                  }}
-                >
-                  {t('deleteFile')}
-                </button>
-              )}
-            </div>
-
-            <div style={{ display: 'flex', gap: '0.5rem', flex: 1, minHeight: 0 }}>
-              <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0 }}>
-                <div style={{ fontSize: '0.6875rem', fontWeight: 600, padding: '0.25rem 0.5rem', background: 'var(--color-bg-tertiary)', borderRadius: '4px 4px 0 0' }}>
-                  {baseBranch} {t('oursLabel')}
-                </div>
-                <pre style={{
-                  flex: 1, margin: 0, padding: '0.5rem', fontSize: '0.75rem', fontFamily: 'monospace',
-                  overflow: 'auto', border: '1px solid var(--color-border)', borderTop: 'none',
-                  borderRadius: '0 0 4px 4px', whiteSpace: 'pre-wrap', wordBreak: 'break-all',
-                  background: selectedResolution?.source === 'ours' ? 'var(--color-primary-bg, #eff6ff)' : 'transparent',
-                }}>
-                  {selectedConflict.ours || t('fileDoesNotExist')}
-                </pre>
-              </div>
-
-              <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0 }}>
-                <div style={{ fontSize: '0.6875rem', fontWeight: 600, padding: '0.25rem 0.5rem', background: 'var(--color-bg-tertiary)', borderRadius: '4px 4px 0 0' }}>
-                  {headBranch} {t('theirsLabel')}
-                </div>
-                <pre style={{
-                  flex: 1, margin: 0, padding: '0.5rem', fontSize: '0.75rem', fontFamily: 'monospace',
-                  overflow: 'auto', border: '1px solid var(--color-border)', borderTop: 'none',
-                  borderRadius: '0 0 4px 4px', whiteSpace: 'pre-wrap', wordBreak: 'break-all',
-                  background: selectedResolution?.source === 'theirs' ? 'var(--color-primary-bg, #eff6ff)' : 'transparent',
-                }}>
-                  {selectedConflict.theirs || t('fileDoesNotExist')}
-                </pre>
-              </div>
-            </div>
-
-            <div style={{ display: 'flex', flexDirection: 'column' }}>
-              <div style={{ fontSize: '0.6875rem', fontWeight: 600, padding: '0.25rem 0.5rem', background: 'var(--color-bg-tertiary)', borderRadius: '4px 4px 0 0', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <span>{t('resolvedContent')}</span>
-                <button
-                  onClick={() => setManualContent(selectedConflict.path, editContent)}
-                  style={{ fontSize: '0.6875rem', padding: '0.125rem 0.5rem', borderRadius: '3px', border: '1px solid var(--color-border)', background: 'transparent', cursor: 'pointer' }}
-                >
-                  {t('applyEdit')}
-                </button>
-              </div>
-              <textarea
-                value={editContent}
-                onChange={(e) => dispatch({ type: 'SET_EDIT_CONTENT', content: e.target.value })}
-                style={{
-                  width: '100%', minHeight: '120px', padding: '0.5rem', fontSize: '0.75rem',
-                  fontFamily: 'monospace', border: '1px solid var(--color-border)', borderTop: 'none',
-                  borderRadius: '0 0 4px 4px', resize: 'vertical',
-                  background: selectedResolution?.source === 'manual' ? 'var(--color-primary-bg, #eff6ff)' : 'transparent',
-                }}
-              />
             </div>
           </div>
-        )}
-      </div>
-    </div>
+
+          <Show when={error()}>
+            <div style={{ padding: '0.5rem 1rem', background: 'var(--color-error-bg, #fef2f2)', "border-radius": '6px', color: 'var(--color-error, #dc2626)', "font-size": '0.875rem' }}>
+              {error()}
+            </div>
+          </Show>
+
+          <div style={{ display: 'flex', gap: '1rem', "min-height": '400px' }}>
+            <div style={{ width: '240px', "flex-shrink": 0, "border-right": '1px solid var(--color-border)', "padding-right": '1rem' }}>
+              <For each={conflicts()}>{(conflict) => {
+                const resolved = () => resolutions().has(conflict.path);
+                const isSelected = () => selectedFile() === conflict.path;
+                return (
+                  <div
+                    onClick={() => selectFile(conflict.path)}
+                    style={{
+                      padding: '0.5rem', "border-radius": '4px', cursor: 'pointer', "font-size": '0.8125rem',
+                      "background-color": isSelected() ? 'var(--color-bg-tertiary)' : 'transparent',
+                      display: 'flex', "align-items": 'center', gap: '0.5rem',
+                    }}
+                  >
+                    <span style={{ color: resolved() ? 'var(--color-success, #16a34a)' : 'var(--color-warning, #ca8a04)' }}>
+                      {resolved() ? '✓' : '!'}
+                    </span>
+                    <span style={{ overflow: 'hidden', "text-overflow": 'ellipsis', "white-space": 'nowrap' }}>
+                      {conflict.path.split('/').pop()}
+                    </span>
+                  </div>
+                );
+              }}</For>
+            </div>
+
+            <Show when={selectedConflict()}>
+              {(conflict) => (
+                <div style={{ flex: 1, display: 'flex', "flex-direction": 'column', gap: '0.75rem', "min-width": 0 }}>
+                  <div style={{ "font-size": '0.8125rem', color: 'var(--color-text-secondary)', "font-family": 'monospace' }}>
+                    {conflict().path}
+                    <span style={{ "margin-left": '0.5rem', padding: '0.125rem 0.375rem', "border-radius": '4px', background: 'var(--color-bg-tertiary)', "font-size": '0.6875rem' }}>
+                      {conflict().type}
+                    </span>
+                  </div>
+
+                  <div style={{ display: 'flex', gap: '0.5rem' }}>
+                    <button
+                      onClick={() => selectVersion(conflict().path, 'ours')}
+                      style={{
+                        flex: 1, padding: '0.375rem', "border-radius": '4px', "font-size": '0.75rem', cursor: 'pointer',
+                        border: selectedResolution()?.source === 'ours' ? '2px solid var(--color-primary)' : '1px solid var(--color-border)',
+                        background: selectedResolution()?.source === 'ours' ? 'var(--color-primary-bg, #eff6ff)' : 'transparent',
+                      }}
+                    >
+                      {t('acceptOurs', { branch: props.baseBranch })}
+                    </button>
+                    <button
+                      onClick={() => selectVersion(conflict().path, 'theirs')}
+                      style={{
+                        flex: 1, padding: '0.375rem', "border-radius": '4px', "font-size": '0.75rem', cursor: 'pointer',
+                        border: selectedResolution()?.source === 'theirs' ? '2px solid var(--color-primary)' : '1px solid var(--color-border)',
+                        background: selectedResolution()?.source === 'theirs' ? 'var(--color-primary-bg, #eff6ff)' : 'transparent',
+                      }}
+                    >
+                      {t('acceptTheirs', { branch: props.headBranch })}
+                    </button>
+                    <Show when={conflict().type === 'delete-modify'}>
+                      <button
+                        onClick={() => selectVersion(conflict().path, 'delete')}
+                        style={{
+                          padding: '0.375rem 0.75rem', "border-radius": '4px', "font-size": '0.75rem', cursor: 'pointer',
+                          border: selectedResolution()?.delete ? '2px solid var(--color-error)' : '1px solid var(--color-border)',
+                          background: selectedResolution()?.delete ? '#fef2f2' : 'transparent',
+                          color: 'var(--color-error, #dc2626)',
+                        }}
+                      >
+                        {t('deleteFile')}
+                      </button>
+                    </Show>
+                  </div>
+
+                  <div style={{ display: 'flex', gap: '0.5rem', flex: 1, "min-height": 0 }}>
+                    <div style={{ flex: 1, display: 'flex', "flex-direction": 'column', "min-width": 0 }}>
+                      <div style={{ "font-size": '0.6875rem', "font-weight": 600, padding: '0.25rem 0.5rem', background: 'var(--color-bg-tertiary)', "border-radius": '4px 4px 0 0' }}>
+                        {props.baseBranch} {t('oursLabel')}
+                      </div>
+                      <pre style={{
+                        flex: 1, margin: 0, padding: '0.5rem', "font-size": '0.75rem', "font-family": 'monospace',
+                        overflow: 'auto', border: '1px solid var(--color-border)', "border-top": 'none',
+                        "border-radius": '0 0 4px 4px', "white-space": 'pre-wrap', "word-break": 'break-all',
+                        background: selectedResolution()?.source === 'ours' ? 'var(--color-primary-bg, #eff6ff)' : 'transparent',
+                      }}>
+                        {conflict().ours || t('fileDoesNotExist')}
+                      </pre>
+                    </div>
+
+                    <div style={{ flex: 1, display: 'flex', "flex-direction": 'column', "min-width": 0 }}>
+                      <div style={{ "font-size": '0.6875rem', "font-weight": 600, padding: '0.25rem 0.5rem', background: 'var(--color-bg-tertiary)', "border-radius": '4px 4px 0 0' }}>
+                        {props.headBranch} {t('theirsLabel')}
+                      </div>
+                      <pre style={{
+                        flex: 1, margin: 0, padding: '0.5rem', "font-size": '0.75rem', "font-family": 'monospace',
+                        overflow: 'auto', border: '1px solid var(--color-border)', "border-top": 'none',
+                        "border-radius": '0 0 4px 4px', "white-space": 'pre-wrap', "word-break": 'break-all',
+                        background: selectedResolution()?.source === 'theirs' ? 'var(--color-primary-bg, #eff6ff)' : 'transparent',
+                      }}>
+                        {conflict().theirs || t('fileDoesNotExist')}
+                      </pre>
+                    </div>
+                  </div>
+
+                  <div style={{ display: 'flex', "flex-direction": 'column' }}>
+                    <div style={{ "font-size": '0.6875rem', "font-weight": 600, padding: '0.25rem 0.5rem', background: 'var(--color-bg-tertiary)', "border-radius": '4px 4px 0 0', display: 'flex', "justify-content": 'space-between', "align-items": 'center' }}>
+                      <span>{t('resolvedContent')}</span>
+                      <button
+                        onClick={() => setManualContent(conflict().path, editContent())}
+                        style={{ "font-size": '0.6875rem', padding: '0.125rem 0.5rem', "border-radius": '3px', border: '1px solid var(--color-border)', background: 'transparent', cursor: 'pointer' }}
+                      >
+                        {t('applyEdit')}
+                      </button>
+                    </div>
+                    <textarea
+                      value={editContent()}
+                      onInput={(e) => setEditContent(e.currentTarget.value)}
+                      style={{
+                        width: '100%', "min-height": '120px', padding: '0.5rem', "font-size": '0.75rem',
+                        "font-family": 'monospace', border: '1px solid var(--color-border)', "border-top": 'none',
+                        "border-radius": '0 0 4px 4px', resize: 'vertical',
+                        background: selectedResolution()?.source === 'manual' ? 'var(--color-primary-bg, #eff6ff)' : 'transparent',
+                      }}
+                    />
+                  </div>
+                </div>
+              )}
+            </Show>
+          </div>
+        </div>
+      </Show>
+    </>
   );
 }

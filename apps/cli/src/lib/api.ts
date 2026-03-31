@@ -2,7 +2,7 @@
  * API client for takos platform
  */
 
-import { getApiRequestTimeoutMs, getConfig } from './config.js';
+import { getApiRequestTimeoutMs, getConfig } from './config.ts';
 
 interface ApiError {
   error: string;

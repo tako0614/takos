@@ -1,19 +1,16 @@
-import { describe, expect, it, vi, beforeEach } from 'vitest';
 import type { ToolContext } from '@/tools/types';
 import type { D1Database } from '@cloudflare/workers-types';
 import type { Env } from '@/types';
 
 // Mock claim-store
-const mockSearchClaims = vi.fn();
-const mockGetPathsForClaim = vi.fn();
-const mockGetEvidenceForClaim = vi.fn();
+import { assertStringIncludes } from 'jsr:@std/assert';
+import { assertSpyCallArgs } from 'jsr:@std/testing/mock';
 
-vi.mock('@/services/memory-graph/claim-store', () => ({
-  searchClaims: (...args: unknown[]) => mockSearchClaims(...args),
-  getPathsForClaim: (...args: unknown[]) => mockGetPathsForClaim(...args),
-  getEvidenceForClaim: (...args: unknown[]) => mockGetEvidenceForClaim(...args),
-}));
+const mockSearchClaims = ((..._args: any[]) => undefined) as any;
+const mockGetPathsForClaim = ((..._args: any[]) => undefined) as any;
+const mockGetEvidenceForClaim = ((..._args: any[]) => undefined) as any;
 
+// [Deno] vi.mock removed - manually stub imports from '@/services/memory-graph/claim-store'
 import { memoryGraphRecallHandler } from '@/tools/builtin/memory-graph';
 
 function createMockContext(): ToolContext {
@@ -25,20 +22,17 @@ function createMockContext(): ToolContext {
     capabilities: [],
     env: {} as Env,
     db: {} as D1Database,
-    setSessionId: vi.fn(),
-    getLastContainerStartFailure: vi.fn(),
-    setLastContainerStartFailure: vi.fn(),
+    setSessionId: ((..._args: any[]) => undefined) as any,
+    getLastContainerStartFailure: ((..._args: any[]) => undefined) as any,
+    setLastContainerStartFailure: ((..._args: any[]) => undefined) as any,
   };
 }
 
-describe('memory_graph_recall handler', () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-  });
 
-  describe('claims mode', () => {
-    it('returns matching claims', async () => {
-      mockSearchClaims.mockResolvedValue([
+  
+    Deno.test('memory_graph_recall handler - claims mode - returns matching claims', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+  mockSearchClaims = (async () => [
         {
           id: 'claim1',
           accountId: 'space1',
@@ -53,43 +47,42 @@ describe('memory_graph_recall handler', () => {
           createdAt: '2024-01-01T00:00:00Z',
           updatedAt: '2024-01-01T00:00:00Z',
         },
-      ]);
+      ]) as any;
 
       const result = await memoryGraphRecallHandler(
         { query: 'TypeScript', mode: 'claims' },
         createMockContext(),
       );
 
-      expect(result).toContain('Found 1 claims');
-      expect(result).toContain('TypeScript');
-      expect(result).toContain('0.90');
-      expect(mockSearchClaims).toHaveBeenCalledWith(expect.anything(), 'space1', 'TypeScript', 10);
-    });
-
-    it('returns message when no claims found', async () => {
-      mockSearchClaims.mockResolvedValue([]);
+      assertStringIncludes(result, 'Found 1 claims');
+      assertStringIncludes(result, 'TypeScript');
+      assertStringIncludes(result, '0.90');
+      assertSpyCallArgs(mockSearchClaims, 0, [expect.anything(), 'space1', 'TypeScript', 10]);
+})
+    Deno.test('memory_graph_recall handler - claims mode - returns message when no claims found', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+  mockSearchClaims = (async () => []) as any;
 
       const result = await memoryGraphRecallHandler(
         { query: 'nonexistent', mode: 'claims' },
         createMockContext(),
       );
 
-      expect(result).toContain('No claims found');
-    });
-  });
-
-  describe('path_search mode', () => {
-    it('requires claim_id', async () => {
-      const result = await memoryGraphRecallHandler(
+      assertStringIncludes(result, 'No claims found');
+})  
+  
+    Deno.test('memory_graph_recall handler - path_search mode - requires claim_id', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+  const result = await memoryGraphRecallHandler(
         { query: 'test', mode: 'path_search' },
         createMockContext(),
       );
 
-      expect(result).toContain('claim_id is required');
-    });
-
-    it('returns paths for a claim', async () => {
-      mockGetPathsForClaim.mockResolvedValue([
+      assertStringIncludes(result, 'claim_id is required');
+})
+    Deno.test('memory_graph_recall handler - path_search mode - returns paths for a claim', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+  mockGetPathsForClaim = (async () => [
         {
           id: 'p1',
           accountId: 'space1',
@@ -102,31 +95,30 @@ describe('memory_graph_recall handler', () => {
           minConfidence: 0.85,
           createdAt: '2024-01-01T00:00:00Z',
         },
-      ]);
+      ]) as any;
 
       const result = await memoryGraphRecallHandler(
         { query: 'test', mode: 'path_search', claim_id: 'c1' },
         createMockContext(),
       );
 
-      expect(result).toContain('Found 1 paths');
-      expect(result).toContain('2 hops');
-      expect(result).toContain('supports -> depends_on');
-    });
-  });
-
-  describe('evidence mode', () => {
-    it('requires claim_id', async () => {
-      const result = await memoryGraphRecallHandler(
+      assertStringIncludes(result, 'Found 1 paths');
+      assertStringIncludes(result, '2 hops');
+      assertStringIncludes(result, 'supports -> depends_on');
+})  
+  
+    Deno.test('memory_graph_recall handler - evidence mode - requires claim_id', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+  const result = await memoryGraphRecallHandler(
         { query: 'test', mode: 'evidence' },
         createMockContext(),
       );
 
-      expect(result).toContain('claim_id is required');
-    });
-
-    it('returns evidence for a claim', async () => {
-      mockGetEvidenceForClaim.mockResolvedValue([
+      assertStringIncludes(result, 'claim_id is required');
+})
+    Deno.test('memory_graph_recall handler - evidence mode - returns evidence for a claim', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+  mockGetEvidenceForClaim = (async () => [
         {
           id: 'e1',
           accountId: 'space1',
@@ -151,17 +143,15 @@ describe('memory_graph_recall handler', () => {
           taint: 'tool_error',
           createdAt: '2024-01-01T00:00:00Z',
         },
-      ]);
+      ]) as any;
 
       const result = await memoryGraphRecallHandler(
         { query: 'test', mode: 'evidence', claim_id: 'c1' },
         createMockContext(),
       );
 
-      expect(result).toContain('Found 2 evidence');
-      expect(result).toContain('[+]'); // supports
-      expect(result).toContain('[-]'); // contradicts
-      expect(result).toContain('[taint: tool_error]');
-    });
-  });
-});
+      assertStringIncludes(result, 'Found 2 evidence');
+      assertStringIncludes(result, '[+]'); // supports
+      assertStringIncludes(result, '[-]'); // contradicts
+      assertStringIncludes(result, '[taint: tool_error]');
+})  

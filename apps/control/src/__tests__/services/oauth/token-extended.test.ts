@@ -1,4 +1,3 @@
-import { beforeAll, describe, expect, it, vi, beforeEach } from 'vitest';
 import * as jose from 'jose';
 import {
   generateAccessToken,
@@ -13,18 +12,16 @@ import { OAUTH_CONSTANTS } from '@/types/oauth';
 // Token generation and verification tests
 // ---------------------------------------------------------------------------
 
-describe('generateAccessToken', () => {
+
+import { assertEquals, assertNotEquals, assert } from 'jsr:@std/assert';
+
   let privateKeyPem: string;
   let publicKeyPem: string;
-
-  beforeAll(async () => {
-    const { privateKey, publicKey } = await jose.generateKeyPair('RS256');
+  Deno.test('generateAccessToken - generates a valid JWT with correct claims', async () => {
+  const { privateKey, publicKey } = await jose.generateKeyPair('RS256');
     privateKeyPem = await jose.exportPKCS8(privateKey);
     publicKeyPem = await jose.exportSPKI(publicKey);
-  });
-
-  it('generates a valid JWT with correct claims', async () => {
-    const { token, jti, expiresAt } = await generateAccessToken({
+  const { token, jti, expiresAt } = await generateAccessToken({
       privateKeyPem,
       issuer: 'https://admin.takos.test',
       userId: 'user-1',
@@ -32,10 +29,10 @@ describe('generateAccessToken', () => {
       scope: 'openid profile',
     });
 
-    expect(token).toBeTruthy();
-    expect(jti).toBeTruthy();
-    expect(expiresAt).toBeInstanceOf(Date);
-    expect(expiresAt.getTime()).toBeGreaterThan(Date.now());
+    assert(token);
+    assert(jti);
+    assert(expiresAt instanceof Date);
+    assert(expiresAt.getTime() > Date.now());
 
     // Verify the token
     const payload = await verifyAccessToken({
@@ -44,17 +41,19 @@ describe('generateAccessToken', () => {
       issuer: 'https://admin.takos.test',
     });
 
-    expect(payload).not.toBeNull();
-    expect(payload!.iss).toBe('https://admin.takos.test');
-    expect(payload!.sub).toBe('user-1');
-    expect(payload!.aud).toBe('client-1');
-    expect(payload!.client_id).toBe('client-1');
-    expect(payload!.scope).toBe('openid profile');
-    expect(payload!.jti).toBe(jti);
-  });
-
-  it('uses default expiry of ACCESS_TOKEN_EXPIRES_IN seconds', async () => {
-    const before = Math.floor(Date.now() / 1000);
+    assertNotEquals(payload, null);
+    assertEquals(payload!.iss, 'https://admin.takos.test');
+    assertEquals(payload!.sub, 'user-1');
+    assertEquals(payload!.aud, 'client-1');
+    assertEquals(payload!.client_id, 'client-1');
+    assertEquals(payload!.scope, 'openid profile');
+    assertEquals(payload!.jti, jti);
+})
+  Deno.test('generateAccessToken - uses default expiry of ACCESS_TOKEN_EXPIRES_IN seconds', async () => {
+  const { privateKey, publicKey } = await jose.generateKeyPair('RS256');
+    privateKeyPem = await jose.exportPKCS8(privateKey);
+    publicKeyPem = await jose.exportSPKI(publicKey);
+  const before = Math.floor(Date.now() / 1000);
     const { expiresAt } = await generateAccessToken({
       privateKeyPem,
       issuer: 'https://admin.takos.test',
@@ -65,12 +64,14 @@ describe('generateAccessToken', () => {
     const after = Math.floor(Date.now() / 1000);
 
     const expiresAtSec = Math.floor(expiresAt.getTime() / 1000);
-    expect(expiresAtSec).toBeGreaterThanOrEqual(before + OAUTH_CONSTANTS.ACCESS_TOKEN_EXPIRES_IN);
-    expect(expiresAtSec).toBeLessThanOrEqual(after + OAUTH_CONSTANTS.ACCESS_TOKEN_EXPIRES_IN + 1);
-  });
-
-  it('supports custom expiry', async () => {
-    const customExpiry = 600;
+    assert(expiresAtSec >= before + OAUTH_CONSTANTS.ACCESS_TOKEN_EXPIRES_IN);
+    assert(expiresAtSec <= after + OAUTH_CONSTANTS.ACCESS_TOKEN_EXPIRES_IN + 1);
+})
+  Deno.test('generateAccessToken - supports custom expiry', async () => {
+  const { privateKey, publicKey } = await jose.generateKeyPair('RS256');
+    privateKeyPem = await jose.exportPKCS8(privateKey);
+    publicKeyPem = await jose.exportSPKI(publicKey);
+  const customExpiry = 600;
     const before = Math.floor(Date.now() / 1000);
     const { expiresAt } = await generateAccessToken({
       privateKeyPem,
@@ -82,12 +83,14 @@ describe('generateAccessToken', () => {
     });
 
     const expiresAtSec = Math.floor(expiresAt.getTime() / 1000);
-    expect(expiresAtSec).toBeGreaterThanOrEqual(before + customExpiry);
-    expect(expiresAtSec).toBeLessThanOrEqual(before + customExpiry + 2);
-  });
-
-  it('sets at+jwt type header', async () => {
-    const { token } = await generateAccessToken({
+    assert(expiresAtSec >= before + customExpiry);
+    assert(expiresAtSec <= before + customExpiry + 2);
+})
+  Deno.test('generateAccessToken - sets at+jwt type header', async () => {
+  const { privateKey, publicKey } = await jose.generateKeyPair('RS256');
+    privateKeyPem = await jose.exportPKCS8(privateKey);
+    publicKeyPem = await jose.exportSPKI(publicKey);
+  const { token } = await generateAccessToken({
       privateKeyPem,
       issuer: 'https://admin.takos.test',
       userId: 'user-1',
@@ -96,23 +99,17 @@ describe('generateAccessToken', () => {
     });
 
     const header = jose.decodeProtectedHeader(token);
-    expect(header.alg).toBe('RS256');
-    expect(header.typ).toBe('at+jwt');
-  });
-});
+    assertEquals(header.alg, 'RS256');
+    assertEquals(header.typ, 'at+jwt');
+})
 
-describe('verifyAccessToken', () => {
   let privateKeyPem: string;
   let publicKeyPem: string;
-
-  beforeAll(async () => {
-    const { privateKey, publicKey } = await jose.generateKeyPair('RS256');
+  Deno.test('verifyAccessToken - returns null for an expired token', async () => {
+  const { privateKey, publicKey } = await jose.generateKeyPair('RS256');
     privateKeyPem = await jose.exportPKCS8(privateKey);
     publicKeyPem = await jose.exportSPKI(publicKey);
-  });
-
-  it('returns null for an expired token', async () => {
-    const { token } = await generateAccessToken({
+  const { token } = await generateAccessToken({
       privateKeyPem,
       issuer: 'https://admin.takos.test',
       userId: 'user-1',
@@ -127,11 +124,13 @@ describe('verifyAccessToken', () => {
       issuer: 'https://admin.takos.test',
     });
 
-    expect(payload).toBeNull();
-  });
-
-  it('returns null for wrong issuer', async () => {
-    const { token } = await generateAccessToken({
+    assertEquals(payload, null);
+})
+  Deno.test('verifyAccessToken - returns null for wrong issuer', async () => {
+  const { privateKey, publicKey } = await jose.generateKeyPair('RS256');
+    privateKeyPem = await jose.exportPKCS8(privateKey);
+    publicKeyPem = await jose.exportSPKI(publicKey);
+  const { token } = await generateAccessToken({
       privateKeyPem,
       issuer: 'https://admin.takos.test',
       userId: 'user-1',
@@ -145,11 +144,13 @@ describe('verifyAccessToken', () => {
       issuer: 'https://wrong-issuer.test',
     });
 
-    expect(payload).toBeNull();
-  });
-
-  it('returns null for a tampered token', async () => {
-    const { token } = await generateAccessToken({
+    assertEquals(payload, null);
+})
+  Deno.test('verifyAccessToken - returns null for a tampered token', async () => {
+  const { privateKey, publicKey } = await jose.generateKeyPair('RS256');
+    privateKeyPem = await jose.exportPKCS8(privateKey);
+    publicKeyPem = await jose.exportSPKI(publicKey);
+  const { token } = await generateAccessToken({
       privateKeyPem,
       issuer: 'https://admin.takos.test',
       userId: 'user-1',
@@ -165,11 +166,13 @@ describe('verifyAccessToken', () => {
       issuer: 'https://admin.takos.test',
     });
 
-    expect(payload).toBeNull();
-  });
-
-  it('returns null for a token signed with a different key', async () => {
-    const otherKeys = await jose.generateKeyPair('RS256');
+    assertEquals(payload, null);
+})
+  Deno.test('verifyAccessToken - returns null for a token signed with a different key', async () => {
+  const { privateKey, publicKey } = await jose.generateKeyPair('RS256');
+    privateKeyPem = await jose.exportPKCS8(privateKey);
+    publicKeyPem = await jose.exportSPKI(publicKey);
+  const otherKeys = await jose.generateKeyPair('RS256');
     const otherPrivateKeyPem = await jose.exportPKCS8(otherKeys.privateKey);
 
     const { token } = await generateAccessToken({
@@ -186,11 +189,13 @@ describe('verifyAccessToken', () => {
       issuer: 'https://admin.takos.test',
     });
 
-    expect(payload).toBeNull();
-  });
-
-  it('enforces audience when expectedAudience is provided', async () => {
-    const { token } = await generateAccessToken({
+    assertEquals(payload, null);
+})
+  Deno.test('verifyAccessToken - enforces audience when expectedAudience is provided', async () => {
+  const { privateKey, publicKey } = await jose.generateKeyPair('RS256');
+    privateKeyPem = await jose.exportPKCS8(privateKey);
+    publicKeyPem = await jose.exportSPKI(publicKey);
+  const { token } = await generateAccessToken({
       privateKeyPem,
       issuer: 'https://admin.takos.test',
       userId: 'user-1',
@@ -204,7 +209,7 @@ describe('verifyAccessToken', () => {
       issuer: 'https://admin.takos.test',
       expectedAudience: 'client-a',
     });
-    expect(correct).not.toBeNull();
+    assertNotEquals(correct, null);
 
     const wrong = await verifyAccessToken({
       token,
@@ -212,60 +217,53 @@ describe('verifyAccessToken', () => {
       issuer: 'https://admin.takos.test',
       expectedAudience: 'client-b',
     });
-    expect(wrong).toBeNull();
-  });
-
-  it('returns null for completely garbage input', async () => {
-    const payload = await verifyAccessToken({
+    assertEquals(wrong, null);
+})
+  Deno.test('verifyAccessToken - returns null for completely garbage input', async () => {
+  const { privateKey, publicKey } = await jose.generateKeyPair('RS256');
+    privateKeyPem = await jose.exportPKCS8(privateKey);
+    publicKeyPem = await jose.exportSPKI(publicKey);
+  const payload = await verifyAccessToken({
       token: 'not-a-jwt',
       publicKeyPem,
       issuer: 'https://admin.takos.test',
     });
 
-    expect(payload).toBeNull();
-  });
-});
+    assertEquals(payload, null);
+})
 
-describe('generateRefreshToken', () => {
-  it('returns a token string and expiry date', () => {
-    const { token, expiresAt } = generateRefreshToken();
+  Deno.test('generateRefreshToken - returns a token string and expiry date', () => {
+  const { token, expiresAt } = generateRefreshToken();
 
-    expect(typeof token).toBe('string');
-    expect(token.length).toBeGreaterThan(0);
-    expect(expiresAt).toBeInstanceOf(Date);
-    expect(expiresAt.getTime()).toBeGreaterThan(Date.now());
-  });
-
-  it('uses REFRESH_TOKEN_EXPIRES_IN for expiry', () => {
-    const before = Date.now();
+    assertEquals(typeof token, 'string');
+    assert(token.length > 0);
+    assert(expiresAt instanceof Date);
+    assert(expiresAt.getTime() > Date.now());
+})
+  Deno.test('generateRefreshToken - uses REFRESH_TOKEN_EXPIRES_IN for expiry', () => {
+  const before = Date.now();
     const { expiresAt } = generateRefreshToken();
     const after = Date.now();
 
     const expectedMinMs = before + OAUTH_CONSTANTS.REFRESH_TOKEN_EXPIRES_IN * 1000;
     const expectedMaxMs = after + OAUTH_CONSTANTS.REFRESH_TOKEN_EXPIRES_IN * 1000;
 
-    expect(expiresAt.getTime()).toBeGreaterThanOrEqual(expectedMinMs);
-    expect(expiresAt.getTime()).toBeLessThanOrEqual(expectedMaxMs + 100);
-  });
-
-  it('generates unique tokens', () => {
-    const a = generateRefreshToken();
+    assert(expiresAt.getTime() >= expectedMinMs);
+    assert(expiresAt.getTime() <= expectedMaxMs + 100);
+})
+  Deno.test('generateRefreshToken - generates unique tokens', () => {
+  const a = generateRefreshToken();
     const b = generateRefreshToken();
-    expect(a.token).not.toBe(b.token);
-  });
-});
+    assertNotEquals(a.token, b.token);
+})
 
-describe('buildAuthorizationCodeTokenFamily', () => {
-  it('prefixes with auth_code:', () => {
-    expect(buildAuthorizationCodeTokenFamily('code-123')).toBe('auth_code:code-123');
-  });
-});
+  Deno.test('buildAuthorizationCodeTokenFamily - prefixes with auth_code:', () => {
+  assertEquals(buildAuthorizationCodeTokenFamily('code-123'), 'auth_code:code-123');
+})
 
-describe('RefreshTokenReuseDetectedError', () => {
-  it('has the correct name and message', () => {
-    const error = new RefreshTokenReuseDetectedError();
-    expect(error.name).toBe('RefreshTokenReuseDetectedError');
-    expect(error.message).toBe('refresh_token_reuse_detected');
-    expect(error).toBeInstanceOf(Error);
-  });
-});
+  Deno.test('RefreshTokenReuseDetectedError - has the correct name and message', () => {
+  const error = new RefreshTokenReuseDetectedError();
+    assertEquals(error.name, 'RefreshTokenReuseDetectedError');
+    assertEquals(error.message, 'refresh_token_reuse_detected');
+    assert(error instanceof Error);
+})

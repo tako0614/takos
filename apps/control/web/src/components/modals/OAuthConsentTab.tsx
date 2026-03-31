@@ -1,4 +1,5 @@
-import { useState, useEffect } from 'react';
+import { createSignal, onMount } from 'solid-js';
+import { Show, For } from 'solid-js';
 import type { OAuthConsent } from './OAuthSettingsModal';
 import { useI18n } from '../../store/i18n';
 import { useConfirmDialog } from '../../store/confirm-dialog';
@@ -36,18 +37,18 @@ interface OAuthConsentTabProps {
   onLoadingChange: (loading: boolean) => void;
 }
 
-export function OAuthConsentTab({ loading, onLoadingChange }: OAuthConsentTabProps) {
+export function OAuthConsentTab(props: OAuthConsentTabProps) {
   const { t } = useI18n();
   const { confirm } = useConfirmDialog();
-  const [consents, setConsents] = useState<OAuthConsent[]>([]);
-  const [revoking, setRevoking] = useState<string | null>(null);
+  const [consents, setConsents] = createSignal<OAuthConsent[]>([]);
+  const [revoking, setRevoking] = createSignal<string | null>(null);
 
-  useEffect(() => {
+  onMount(() => {
     fetchConsents();
-  }, []);
+  });
 
   async function fetchConsents(): Promise<void> {
-    onLoadingChange(true);
+    props.onLoadingChange(true);
     try {
       const res = await rpc.me.oauth.consents.$get();
       const data = await rpcJson<{ consents: OAuthConsent[] }>(res);
@@ -55,7 +56,7 @@ export function OAuthConsentTab({ loading, onLoadingChange }: OAuthConsentTabPro
     } catch (err) {
       console.error('Failed to fetch consents:', err);
     } finally {
-      onLoadingChange(false);
+      props.onLoadingChange(false);
     }
   }
 
@@ -79,84 +80,88 @@ export function OAuthConsentTab({ loading, onLoadingChange }: OAuthConsentTabPro
     }
   }
 
-  if (loading) return null;
-
   return (
-    <div>
-      <p style={{ fontSize: '0.875rem', color: 'var(--color-text-secondary)', marginBottom: '1rem' }}>
-        {t('authorizedAppsDesc')}
-      </p>
-      {consents.length === 0 ? (
-        <div
-          style={{
-            textAlign: 'center',
-            padding: '3rem 0',
-            color: 'var(--color-text-tertiary)',
-          }}
-        >
-          <Icons.Key style={{ width: '3rem', height: '3rem', margin: '0 auto 1rem', opacity: 0.5 }} />
-          <p style={{ fontWeight: 500, color: 'var(--color-text-primary)', margin: 0 }}>{t('noAuthorizedApps')}</p>
-          <p style={{ fontSize: '0.875rem', marginTop: '0.25rem' }}>{t('noAuthorizedAppsDesc')}</p>
-        </div>
-      ) : (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
-          {consents.map(consent => {
-            const safeClientUri = toSafeHref(consent.client_uri);
-            return (
-              <Card key={consent.id}>
-                <div style={{ display: 'flex', alignItems: 'flex-start', gap: '1rem' }}>
-                  <div
-                    style={{
-                      width: '2.5rem',
-                      height: '2.5rem',
-                      borderRadius: 'var(--radius-lg)',
-                      backgroundColor: 'var(--color-surface-secondary)',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                    }}
-                  >
-                    {consent.client_logo ? (
-                      <img src={consent.client_logo} alt={consent.client_name + ' logo'} style={{ width: '2rem', height: '2rem', borderRadius: 'var(--radius-md)' }} />
-                    ) : (
-                      <Icons.Code style={{ width: '1.25rem', height: '1.25rem', color: 'var(--color-text-tertiary)' }} />
-                    )}
-                  </div>
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                      <h4 style={{ fontWeight: 500, color: 'var(--color-text-primary)', margin: 0 }}>{consent.client_name}</h4>
-                      {safeClientUri && (
-                        <a href={safeClientUri} target="_blank" rel="noopener noreferrer" style={{ color: 'var(--color-text-primary)' }} aria-label={`${consent.client_name} - ${t('openInNewTab')}`}>
-                          <Icons.ExternalLink style={{ width: '1rem', height: '1rem' }} />
-                        </a>
-                      )}
+    <Show when={!props.loading}>
+      <div>
+        <p style={{ 'font-size': '0.875rem', color: 'var(--color-text-secondary)', 'margin-bottom': '1rem' }}>
+          {t('authorizedAppsDesc')}
+        </p>
+        <Show when={consents().length > 0} fallback={
+          <div
+            style={{
+              'text-align': 'center',
+              padding: '3rem 0',
+              color: 'var(--color-text-tertiary)',
+            }}
+          >
+            <Icons.Key style={{ width: '3rem', height: '3rem', margin: '0 auto 1rem', opacity: 0.5 }} />
+            <p style={{ 'font-weight': 500, color: 'var(--color-text-primary)', margin: '0' }}>{t('noAuthorizedApps')}</p>
+            <p style={{ 'font-size': '0.875rem', 'margin-top': '0.25rem' }}>{t('noAuthorizedAppsDesc')}</p>
+          </div>
+        }>
+          <div style={{ display: 'flex', 'flex-direction': 'column', gap: '0.75rem' }}>
+            <For each={consents()}>
+              {(consent) => {
+                const safeClientUri = toSafeHref(consent.client_uri);
+                return (
+                  <Card>
+                    <div style={{ display: 'flex', 'align-items': 'flex-start', gap: '1rem' }}>
+                      <div
+                        style={{
+                          width: '2.5rem',
+                          height: '2.5rem',
+                          'border-radius': 'var(--radius-lg)',
+                          'background-color': 'var(--color-surface-secondary)',
+                          display: 'flex',
+                          'align-items': 'center',
+                          'justify-content': 'center',
+                        }}
+                      >
+                        <Show when={consent.client_logo} fallback={
+                          <Icons.Code style={{ width: '1.25rem', height: '1.25rem', color: 'var(--color-text-tertiary)' }} />
+                        }>
+                          <img src={consent.client_logo!} alt={consent.client_name + ' logo'} style={{ width: '2rem', height: '2rem', 'border-radius': 'var(--radius-md)' }} />
+                        </Show>
+                      </div>
+                      <div style={{ flex: 1, 'min-width': '0' }}>
+                        <div style={{ display: 'flex', 'align-items': 'center', gap: '0.5rem' }}>
+                          <h4 style={{ 'font-weight': 500, color: 'var(--color-text-primary)', margin: '0' }}>{consent.client_name}</h4>
+                          <Show when={safeClientUri}>
+                            <a href={safeClientUri!} target="_blank" rel="noopener noreferrer" style={{ color: 'var(--color-text-primary)' }} aria-label={`${consent.client_name} - ${t('openInNewTab')}`}>
+                              <Icons.ExternalLink style={{ width: '1rem', height: '1rem' }} />
+                            </a>
+                          </Show>
+                        </div>
+                        <p style={{ 'font-size': '0.75rem', color: 'var(--color-text-tertiary)', 'margin-top': '0.25rem' }}>
+                          {t('grantedOn')}: {formatShortDate(consent.granted_at)}
+                        </p>
+                        <div style={{ display: 'flex', 'flex-wrap': 'wrap', gap: '0.25rem', 'margin-top': '0.5rem' }}>
+                          <For each={consent.scopes}>
+                            {(scope) => (
+                              <Badge variant="default" title={SCOPE_DESCRIPTIONS[scope] || scope}>
+                                {scope}
+                              </Badge>
+                            )}
+                          </For>
+                        </div>
+                      </div>
+                      <Button
+                        variant="danger"
+                        size="sm"
+                        onClick={() => handleRevokeConsent(consent.client_id)}
+                        disabled={revoking() === consent.client_id}
+                        isLoading={revoking() === consent.client_id}
+                      >
+                        {t('revokeAccess')}
+                      </Button>
                     </div>
-                    <p style={{ fontSize: '0.75rem', color: 'var(--color-text-tertiary)', marginTop: '0.25rem' }}>
-                      {t('grantedOn')}: {formatShortDate(consent.granted_at)}
-                    </p>
-                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.25rem', marginTop: '0.5rem' }}>
-                      {consent.scopes.map(scope => (
-                        <Badge key={scope} variant="default" title={SCOPE_DESCRIPTIONS[scope] || scope}>
-                          {scope}
-                        </Badge>
-                      ))}
-                    </div>
-                  </div>
-                  <Button
-                    variant="danger"
-                    size="sm"
-                    onClick={() => handleRevokeConsent(consent.client_id)}
-                    disabled={revoking === consent.client_id}
-                    isLoading={revoking === consent.client_id}
-                  >
-                    {t('revokeAccess')}
-                  </Button>
-                </div>
-              </Card>
-            );
-          })}
-        </div>
-      )}
-    </div>
+                  </Card>
+                );
+              }}
+            </For>
+          </div>
+        </Show>
+      </div>
+    </Show>
   );
 }

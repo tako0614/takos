@@ -7,6 +7,6 @@
  * The actual implementations live in `../group-deploy/providers/`.
  * This barrel exists only for backward-compatible import paths.
  */
-export { CloudflareProvider, AWSProvider, GCPProvider, K8sProvider, DockerProvider } from '../group-deploy/providers/index.js';
-export type { ResourceProvider, ProvisionResult, ProviderOptions } from '../group-deploy/resource-provider.js';
-export { resolveProvider } from '../group-deploy/provisioner.js';
+export { CloudflareProvider, AWSProvider, GCPProvider, K8sProvider, DockerProvider } from '../group-deploy/providers/index.ts';
+export type { ResourceProvider, ProvisionResult, ProviderOptions } from '../group-deploy/resource-provider.ts';
+export { resolveProvider } from '../group-deploy/provisioner.ts';

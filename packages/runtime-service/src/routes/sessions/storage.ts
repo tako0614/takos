@@ -10,10 +10,10 @@ import {
   SESSION_CLEANUP_INTERVAL_MS,
   MAX_SESSIONS_PER_WORKSPACE,
   MAX_TOTAL_SESSIONS,
-} from '../../shared/config.js';
-import { isValidSessionId, validateSpaceId } from '../../runtime/validation.js';
-import { OwnerBindingError } from '../../shared/errors.js';
-import { startHeartbeat } from '../../runtime/heartbeat.js';
+} from '../../shared/config.ts';
+import { isValidSessionId, validateSpaceId } from '../../runtime/validation.ts';
+import { OwnerBindingError } from '../../shared/errors.ts';
+import { startHeartbeat } from '../../runtime/heartbeat.ts';
 
 const logger = createLogger({ service: 'takos-runtime' });
 

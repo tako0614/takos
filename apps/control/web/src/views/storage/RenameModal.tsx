@@ -13,42 +13,35 @@ interface RenameModalProps {
   onRename: () => void;
 }
 
-export function RenameModal({
-  isOpen,
-  renameTarget,
-  newName,
-  onNewNameChange,
-  onClose,
-  onRename,
-}: RenameModalProps) {
+export function RenameModal(props: RenameModalProps) {
   const { t } = useI18n();
 
   return (
     <Modal
-      isOpen={isOpen}
-      onClose={onClose}
-      title={`${t('renameTitle')}: ${renameTarget?.name}`}
+      isOpen={props.isOpen}
+      onClose={props.onClose}
+      title={`${t('renameTitle')}: ${props.renameTarget?.name}`}
     >
-      <div className="space-y-4">
+      <div class="space-y-4">
         <Input
-          value={newName}
-          onChange={(e) => onNewNameChange(e.target.value)}
+          value={props.newName}
+          onInput={(e) => props.onNewNameChange((e.target as HTMLInputElement).value)}
           placeholder={t('newName')}
-          autoFocus
+          autofocus
           onKeyDown={(e) => {
-            if (e.key === 'Enter' && newName.trim()) {
-              onRename();
+            if (e.key === 'Enter' && props.newName.trim()) {
+              props.onRename();
             }
           }}
         />
-        <div className="flex justify-end gap-2">
-          <Button variant="ghost" onClick={onClose}>
+        <div class="flex justify-end gap-2">
+          <Button variant="ghost" onClick={props.onClose}>
             {t('cancel')}
           </Button>
           <Button
             variant="primary"
-            onClick={onRename}
-            disabled={!newName.trim() || newName === renameTarget?.name}
+            onClick={props.onRename}
+            disabled={!props.newName.trim() || props.newName === props.renameTarget?.name}
           >
             {t('rename')}
           </Button>

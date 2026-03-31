@@ -1,73 +1,57 @@
-import { describe, expect, it } from 'vitest';
 import { slugifyName, sanitizeRepoName } from '@/utils';
 
-describe('slugifyName', () => {
-  it('lowercases and replaces spaces with hyphens', () => {
-    expect(slugifyName('My Space Name')).toBe('my-space-name');
-  });
 
-  it('removes leading and trailing hyphens', () => {
-    expect(slugifyName('---hello---')).toBe('hello');
-  });
+import { assertEquals } from 'jsr:@std/assert';
 
-  it('replaces consecutive special chars with single hyphen', () => {
-    expect(slugifyName('a   b___c')).toBe('a-b-c');
-  });
+  Deno.test('slugifyName - lowercases and replaces spaces with hyphens', () => {
+  assertEquals(slugifyName('My Space Name'), 'my-space-name');
+})
+  Deno.test('slugifyName - removes leading and trailing hyphens', () => {
+  assertEquals(slugifyName('---hello---'), 'hello');
+})
+  Deno.test('slugifyName - replaces consecutive special chars with single hyphen', () => {
+  assertEquals(slugifyName('a   b___c'), 'a-b-c');
+})
+  Deno.test('slugifyName - truncates to 32 characters', () => {
+  const long = 'a'.repeat(50);
+    assertEquals(slugifyName(long).length, 32);
+})
+  Deno.test('slugifyName - returns "space" for empty/whitespace input', () => {
+  assertEquals(slugifyName(''), 'space');
+    assertEquals(slugifyName('   '), 'space');
+    assertEquals(slugifyName('---'), 'space');
+})
+  Deno.test('slugifyName - handles unicode characters by replacing them', () => {
+  assertEquals(slugifyName('café'), 'caf');
+})
+  Deno.test('slugifyName - preserves numbers', () => {
+  assertEquals(slugifyName('Project 123'), 'project-123');
+})
+  Deno.test('slugifyName - handles mixed special characters', () => {
+  assertEquals(slugifyName('Hello@World! #2024'), 'hello-world-2024');
+})
 
-  it('truncates to 32 characters', () => {
-    const long = 'a'.repeat(50);
-    expect(slugifyName(long)).toHaveLength(32);
-  });
-
-  it('returns "space" for empty/whitespace input', () => {
-    expect(slugifyName('')).toBe('space');
-    expect(slugifyName('   ')).toBe('space');
-    expect(slugifyName('---')).toBe('space');
-  });
-
-  it('handles unicode characters by replacing them', () => {
-    expect(slugifyName('café')).toBe('caf');
-  });
-
-  it('preserves numbers', () => {
-    expect(slugifyName('Project 123')).toBe('project-123');
-  });
-
-  it('handles mixed special characters', () => {
-    expect(slugifyName('Hello@World! #2024')).toBe('hello-world-2024');
-  });
-});
-
-describe('sanitizeRepoName', () => {
-  it('lowercases and trims whitespace', () => {
-    expect(sanitizeRepoName('  MyRepo  ')).toBe('myrepo');
-  });
-
-  it('replaces invalid characters with hyphens', () => {
-    expect(sanitizeRepoName('my repo@name')).toBe('my-repo-name');
-  });
-
-  it('preserves underscores and hyphens', () => {
-    expect(sanitizeRepoName('my_repo-name')).toBe('my_repo-name');
-  });
-
-  it('preserves numbers', () => {
-    expect(sanitizeRepoName('repo123')).toBe('repo123');
-  });
-
-  it('handles all-invalid characters', () => {
-    expect(sanitizeRepoName('@@@@')).toBe('----');
-  });
-
-  it('handles empty string after trim', () => {
-    expect(sanitizeRepoName('')).toBe('');
-  });
-
-  it('replaces dots with hyphens', () => {
-    expect(sanitizeRepoName('my.repo.name')).toBe('my-repo-name');
-  });
-
-  it('handles unicode characters', () => {
-    expect(sanitizeRepoName('日本語リポ')).toBe('-----');
-  });
-});
+  Deno.test('sanitizeRepoName - lowercases and trims whitespace', () => {
+  assertEquals(sanitizeRepoName('  MyRepo  '), 'myrepo');
+})
+  Deno.test('sanitizeRepoName - replaces invalid characters with hyphens', () => {
+  assertEquals(sanitizeRepoName('my repo@name'), 'my-repo-name');
+})
+  Deno.test('sanitizeRepoName - preserves underscores and hyphens', () => {
+  assertEquals(sanitizeRepoName('my_repo-name'), 'my_repo-name');
+})
+  Deno.test('sanitizeRepoName - preserves numbers', () => {
+  assertEquals(sanitizeRepoName('repo123'), 'repo123');
+})
+  Deno.test('sanitizeRepoName - handles all-invalid characters', () => {
+  assertEquals(sanitizeRepoName('@@@@'), '----');
+})
+  Deno.test('sanitizeRepoName - handles empty string after trim', () => {
+  assertEquals(sanitizeRepoName(''), '');
+})
+  Deno.test('sanitizeRepoName - replaces dots with hyphens', () => {
+  assertEquals(sanitizeRepoName('my.repo.name'), 'my-repo-name');
+})
+  Deno.test('sanitizeRepoName - handles unicode characters', () => {
+  assertEquals(sanitizeRepoName('日本語リポ'), '-----');
+})

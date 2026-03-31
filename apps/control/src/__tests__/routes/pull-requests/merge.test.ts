@@ -1,51 +1,31 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { Hono } from 'hono';
 import type { Env, User } from '@/types';
 import type { AuthenticatedRouteEnv } from '@/routes/shared/helpers';
 import { createMockEnv } from '../../../../test/integration/setup';
 
-const mocks = vi.hoisted(() => ({
-  checkRepoAccess: vi.fn(),
-  getDb: vi.fn(),
+import { assertEquals, assertObjectMatch } from 'jsr:@std/assert';
+import { assertSpyCalls, assertSpyCallArgs } from 'jsr:@std/testing/mock';
+
+const mocks = ({
+  checkRepoAccess: ((..._args: any[]) => undefined) as any,
+  getDb: ((..._args: any[]) => undefined) as any,
   // Git store
-  getBranch: vi.fn(),
-  isAncestor: vi.fn(),
-  findMergeBase: vi.fn(),
-  getCommit: vi.fn(),
-  mergeTrees3Way: vi.fn(),
-  createCommit: vi.fn(),
+  getBranch: ((..._args: any[]) => undefined) as any,
+  isAncestor: ((..._args: any[]) => undefined) as any,
+  findMergeBase: ((..._args: any[]) => undefined) as any,
+  getCommit: ((..._args: any[]) => undefined) as any,
+  mergeTrees3Way: ((..._args: any[]) => undefined) as any,
+  createCommit: ((..._args: any[]) => undefined) as any,
   // Actions
-  scheduleActionsAutoTrigger: vi.fn(),
-  triggerPushWorkflows: vi.fn(),
-  triggerPullRequestWorkflows: vi.fn(),
-}));
-
-vi.mock('@/services/source/repos', () => ({
-  checkRepoAccess: mocks.checkRepoAccess,
-}));
-
-vi.mock('@/db', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('@/db')>();
-  return { ...actual, getDb: mocks.getDb };
+  scheduleActionsAutoTrigger: ((..._args: any[]) => undefined) as any,
+  triggerPushWorkflows: ((..._args: any[]) => undefined) as any,
+  triggerPullRequestWorkflows: ((..._args: any[]) => undefined) as any,
 });
 
-vi.mock('@/services/git-smart', () => ({
-  getBranch: mocks.getBranch,
-  isAncestor: mocks.isAncestor,
-  findMergeBase: mocks.findMergeBase,
-  getCommit: mocks.getCommit,
-  getCommitData: mocks.getCommit,
-  mergeTrees3Way: mocks.mergeTrees3Way,
-  createCommit: mocks.createCommit,
-  isValidGitPath: () => true,
-}));
-
-vi.mock('@/services/actions', () => ({
-  scheduleActionsAutoTrigger: mocks.scheduleActionsAutoTrigger,
-  triggerPushWorkflows: mocks.triggerPushWorkflows,
-  triggerPullRequestWorkflows: mocks.triggerPullRequestWorkflows,
-}));
-
+// [Deno] vi.mock removed - manually stub imports from '@/services/source/repos'
+// [Deno] vi.mock removed - manually stub imports from '@/db'
+// [Deno] vi.mock removed - manually stub imports from '@/services/git-smart'
+// [Deno] vi.mock removed - manually stub imports from '@/services/actions'
 import pullRequestsBase from '@/routes/pull-requests/routes';
 
 function createEnv(overrides: Partial<Record<string, unknown>> = {}): Env {
@@ -75,33 +55,33 @@ function createDrizzleMockDb(handlers: {
   updateReturning?: (...args: unknown[]) => unknown[];
 }) {
   const db = {
-    select: vi.fn((...selectArgs: unknown[]) => {
+    select: (...selectArgs: unknown[]) => {
       const chain = {
-        from: vi.fn((..._fromArgs: unknown[]) => ({
-          where: vi.fn((..._whereArgs: unknown[]) => ({
-            get: vi.fn(async () => handlers.selectGet?.(...selectArgs)),
-            all: vi.fn(async () => []),
-          })),
-          get: vi.fn(async () => handlers.selectGet?.(...selectArgs)),
-          all: vi.fn(async () => []),
-        })),
+        from: (..._fromArgs: unknown[]) => ({
+          where: (..._whereArgs: unknown[]) => ({
+            get: async () => handlers.selectGet?.(...selectArgs),
+            all: async () => [],
+          }),
+          get: async () => handlers.selectGet?.(...selectArgs),
+          all: async () => [],
+        }),
       };
       return chain;
-    }),
-    update: vi.fn((..._updateArgs: unknown[]) => ({
-      set: vi.fn((..._setArgs: unknown[]) => ({
-        where: vi.fn((..._whereArgs: unknown[]) => {
+    },
+    update: (..._updateArgs: unknown[]) => ({
+      set: (..._setArgs: unknown[]) => ({
+        where: (..._whereArgs: unknown[]) => {
           const returningResult = handlers.updateReturning?.() ?? [];
           return {
-            returning: vi.fn(() => {
+            returning: () => {
               const arr = returningResult;
-              (arr as any).get = vi.fn(async () => returningResult[0] ?? null);
+              (arr as any).get = async () => returningResult[0] ?? null;
               return arr;
-            }),
+            },
           };
-        }),
-      })),
-    })),
+        },
+      }),
+    }),
   };
   return db;
 }
@@ -130,11 +110,11 @@ const PR_ROW_MERGED = {
   updatedAt: '2026-02-15T00:00:01Z',
 };
 
-describe('pull request merge', () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
 
-    mocks.checkRepoAccess.mockResolvedValue({
+  Deno.test('pull request merge - returns 409 conflict when mergeTrees3Way reports conflicts', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+
+    mocks.checkRepoAccess = (async () => ({
       repo: {
         id: 'repo-1',
         name: 'repo',
@@ -154,22 +134,22 @@ describe('pull request merge', () => {
       },
       spaceId: 'ws-1',
       role: 'owner',
-    });
+    })) as any;
 
-    mocks.triggerPullRequestWorkflows.mockResolvedValue(undefined);
-    mocks.triggerPushWorkflows.mockResolvedValue(undefined);
-    mocks.scheduleActionsAutoTrigger.mockImplementation((_ctx: unknown, fn: () => void) => {
+    mocks.triggerPullRequestWorkflows = (async () => undefined) as any;
+    mocks.triggerPushWorkflows = (async () => undefined) as any;
+    mocks.scheduleActionsAutoTrigger = (_ctx: unknown, fn: () => void) => {
       void fn();
-    });
+    } as any;
 
     // Default: select returns open PR, update returns merged PR, branch update returns 1 row
     const mockDb = createDrizzleMockDb({
       selectGet: () => PR_ROW_OPEN,
       updateReturning: () => [PR_ROW_MERGED],
     });
-    mocks.getDb.mockReturnValue(mockDb);
+    mocks.getDb = (() => mockDb) as any;
 
-    mocks.getBranch.mockImplementation(async (_db: unknown, _repoId: string, name: string) => {
+    mocks.getBranch = async (_db: unknown, _repoId: string, name: string) => {
       if (name === 'main') {
         return { name: 'main', commit_sha: 'base-sha' };
       }
@@ -177,21 +157,18 @@ describe('pull request merge', () => {
         return { name: 'feature', commit_sha: 'head-sha' };
       }
       return null;
-    });
-  });
-
-  it('returns 409 conflict when mergeTrees3Way reports conflicts', async () => {
-    const env = createEnv();
+    } as any;
+  const env = createEnv();
     const app = createApp();
 
     // headIsAncestorOfBase=false, canFastForward=false
-    mocks.isAncestor.mockResolvedValueOnce(false).mockResolvedValueOnce(false);
-    mocks.findMergeBase.mockResolvedValue('merge-base-sha');
-    mocks.getCommit.mockResolvedValue({ tree: 'tree-1' });
-    mocks.mergeTrees3Way.mockResolvedValue({
+    mocks.isAncestor = (async () => false) as any = (async () => false) as any;
+    mocks.findMergeBase = (async () => 'merge-base-sha') as any;
+    mocks.getCommit = (async () => ({ tree: 'tree-1' })) as any;
+    mocks.mergeTrees3Way = (async () => ({
       tree_sha: null,
       conflicts: [{ path: 'src/main.ts', type: 'content' }],
-    });
+    })) as any;
 
     const response = await app.fetch(
       new Request('http://localhost/repos/repo-1/pulls/1/merge', {
@@ -203,28 +180,73 @@ describe('pull request merge', () => {
       {} as ExecutionContext
     );
 
-    expect(response.status).toBe(409);
-    await expect(response.json()).resolves.toEqual({
+    assertEquals(response.status, 409);
+    await assertEquals(await response.json(), {
       status: 'conflict',
       conflicts: [{ path: 'src/main.ts', type: 'content' }],
       merge_base: 'merge-base-sha',
     });
-    expect(mocks.createCommit).not.toHaveBeenCalled();
-  });
+    assertSpyCalls(mocks.createCommit, 0);
+})
+  Deno.test('pull request merge - creates a merge commit when branches diverged and mergeTrees3Way succeeds', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
 
-  it('creates a merge commit when branches diverged and mergeTrees3Way succeeds', async () => {
-    const env = createEnv();
+    mocks.checkRepoAccess = (async () => ({
+      repo: {
+        id: 'repo-1',
+        name: 'repo',
+        description: null,
+        visibility: 'private',
+        default_branch: 'main',
+        forked_from_id: null,
+        stars: 0,
+        forks: 0,
+        git_enabled: true,
+        is_official: false,
+        featured: false,
+        install_count: 0,
+        created_at: '2026-02-15T00:00:00Z',
+        updated_at: '2026-02-15T00:00:00Z',
+        space_id: 'ws-1',
+      },
+      spaceId: 'ws-1',
+      role: 'owner',
+    })) as any;
+
+    mocks.triggerPullRequestWorkflows = (async () => undefined) as any;
+    mocks.triggerPushWorkflows = (async () => undefined) as any;
+    mocks.scheduleActionsAutoTrigger = (_ctx: unknown, fn: () => void) => {
+      void fn();
+    } as any;
+
+    // Default: select returns open PR, update returns merged PR, branch update returns 1 row
+    const mockDb = createDrizzleMockDb({
+      selectGet: () => PR_ROW_OPEN,
+      updateReturning: () => [PR_ROW_MERGED],
+    });
+    mocks.getDb = (() => mockDb) as any;
+
+    mocks.getBranch = async (_db: unknown, _repoId: string, name: string) => {
+      if (name === 'main') {
+        return { name: 'main', commit_sha: 'base-sha' };
+      }
+      if (name === 'feature') {
+        return { name: 'feature', commit_sha: 'head-sha' };
+      }
+      return null;
+    } as any;
+  const env = createEnv();
     const app = createApp();
 
     // headIsAncestorOfBase=false, canFastForward=false
-    mocks.isAncestor.mockResolvedValueOnce(false).mockResolvedValueOnce(false);
-    mocks.findMergeBase.mockResolvedValue('merge-base-sha');
-    mocks.getCommit.mockResolvedValue({ tree: 'tree-1' });
-    mocks.mergeTrees3Way.mockResolvedValue({
+    mocks.isAncestor = (async () => false) as any = (async () => false) as any;
+    mocks.findMergeBase = (async () => 'merge-base-sha') as any;
+    mocks.getCommit = (async () => ({ tree: 'tree-1' })) as any;
+    mocks.mergeTrees3Way = (async () => ({
       tree_sha: 'merged-tree',
       conflicts: [],
-    });
-    mocks.createCommit.mockResolvedValue({ sha: 'merge-commit-sha' });
+    })) as any;
+    mocks.createCommit = (async () => ({ sha: 'merge-commit-sha' })) as any;
 
     const response = await app.fetch(
       new Request('http://localhost/repos/repo-1/pulls/1/merge', {
@@ -236,8 +258,8 @@ describe('pull request merge', () => {
       {} as ExecutionContext
     );
 
-    expect(response.status).toBe(200);
-    await expect(response.json()).resolves.toMatchObject({
+    assertEquals(response.status, 200);
+    await assertObjectMatch(await response.json(), {
       merge_commit: 'merge-commit-sha',
       pull_request: {
         id: 'pr-1',
@@ -245,29 +267,74 @@ describe('pull request merge', () => {
       },
     });
 
-    expect(mocks.createCommit).toHaveBeenCalledTimes(1);
-    expect(mocks.createCommit).toHaveBeenCalledWith(
+    assertSpyCalls(mocks.createCommit, 1);
+    assertSpyCallArgs(mocks.createCommit, 0, [
       expect.anything(),
       expect.anything(),
       'repo-1',
-      expect.objectContaining({
+      ({
         tree: 'merged-tree',
         parents: ['base-sha', 'head-sha'],
         message: 'Merge PR',
       })
-    );
+    ]);
 
-    expect(mocks.scheduleActionsAutoTrigger).toHaveBeenCalledTimes(1);
-  });
+    assertSpyCalls(mocks.scheduleActionsAutoTrigger, 1);
+})
+  Deno.test('pull request merge - creates a squash commit even when fast-forward is possible', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
 
-  it('creates a squash commit even when fast-forward is possible', async () => {
-    const env = createEnv();
+    mocks.checkRepoAccess = (async () => ({
+      repo: {
+        id: 'repo-1',
+        name: 'repo',
+        description: null,
+        visibility: 'private',
+        default_branch: 'main',
+        forked_from_id: null,
+        stars: 0,
+        forks: 0,
+        git_enabled: true,
+        is_official: false,
+        featured: false,
+        install_count: 0,
+        created_at: '2026-02-15T00:00:00Z',
+        updated_at: '2026-02-15T00:00:00Z',
+        space_id: 'ws-1',
+      },
+      spaceId: 'ws-1',
+      role: 'owner',
+    })) as any;
+
+    mocks.triggerPullRequestWorkflows = (async () => undefined) as any;
+    mocks.triggerPushWorkflows = (async () => undefined) as any;
+    mocks.scheduleActionsAutoTrigger = (_ctx: unknown, fn: () => void) => {
+      void fn();
+    } as any;
+
+    // Default: select returns open PR, update returns merged PR, branch update returns 1 row
+    const mockDb = createDrizzleMockDb({
+      selectGet: () => PR_ROW_OPEN,
+      updateReturning: () => [PR_ROW_MERGED],
+    });
+    mocks.getDb = (() => mockDb) as any;
+
+    mocks.getBranch = async (_db: unknown, _repoId: string, name: string) => {
+      if (name === 'main') {
+        return { name: 'main', commit_sha: 'base-sha' };
+      }
+      if (name === 'feature') {
+        return { name: 'feature', commit_sha: 'head-sha' };
+      }
+      return null;
+    } as any;
+  const env = createEnv();
     const app = createApp();
 
     // headIsAncestorOfBase=false, canFastForward=true
-    mocks.isAncestor.mockResolvedValueOnce(false).mockResolvedValueOnce(true);
-    mocks.getCommit.mockResolvedValue({ tree: 'head-tree' });
-    mocks.createCommit.mockResolvedValue({ sha: 'squash-commit-sha' });
+    mocks.isAncestor = (async () => false) as any = (async () => true) as any;
+    mocks.getCommit = (async () => ({ tree: 'head-tree' })) as any;
+    mocks.createCommit = (async () => ({ sha: 'squash-commit-sha' })) as any;
 
     const response = await app.fetch(
       new Request('http://localhost/repos/repo-1/pulls/1/merge', {
@@ -279,26 +346,71 @@ describe('pull request merge', () => {
       {} as ExecutionContext
     );
 
-    expect(response.status).toBe(200);
-    await expect(response.json()).resolves.toMatchObject({
+    assertEquals(response.status, 200);
+    await assertObjectMatch(await response.json(), {
       merge_commit: 'squash-commit-sha',
     });
 
-    expect(mocks.createCommit).toHaveBeenCalledTimes(1);
-    expect(mocks.createCommit).toHaveBeenCalledWith(
+    assertSpyCalls(mocks.createCommit, 1);
+    assertSpyCallArgs(mocks.createCommit, 0, [
       expect.anything(),
       expect.anything(),
       'repo-1',
-      expect.objectContaining({
+      ({
         tree: 'head-tree',
         parents: ['base-sha'],
         message: 'Squash PR',
       })
-    );
-  });
+    ]);
+})
+  Deno.test('pull request merge - returns REF_CONFLICT when branch head changed before atomic merge finalize', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
 
-  it('returns REF_CONFLICT when branch head changed before atomic merge finalize', async () => {
-    const env = createEnv();
+    mocks.checkRepoAccess = (async () => ({
+      repo: {
+        id: 'repo-1',
+        name: 'repo',
+        description: null,
+        visibility: 'private',
+        default_branch: 'main',
+        forked_from_id: null,
+        stars: 0,
+        forks: 0,
+        git_enabled: true,
+        is_official: false,
+        featured: false,
+        install_count: 0,
+        created_at: '2026-02-15T00:00:00Z',
+        updated_at: '2026-02-15T00:00:00Z',
+        space_id: 'ws-1',
+      },
+      spaceId: 'ws-1',
+      role: 'owner',
+    })) as any;
+
+    mocks.triggerPullRequestWorkflows = (async () => undefined) as any;
+    mocks.triggerPushWorkflows = (async () => undefined) as any;
+    mocks.scheduleActionsAutoTrigger = (_ctx: unknown, fn: () => void) => {
+      void fn();
+    } as any;
+
+    // Default: select returns open PR, update returns merged PR, branch update returns 1 row
+    const mockDb = createDrizzleMockDb({
+      selectGet: () => PR_ROW_OPEN,
+      updateReturning: () => [PR_ROW_MERGED],
+    });
+    mocks.getDb = (() => mockDb) as any;
+
+    mocks.getBranch = async (_db: unknown, _repoId: string, name: string) => {
+      if (name === 'main') {
+        return { name: 'main', commit_sha: 'base-sha' };
+      }
+      if (name === 'feature') {
+        return { name: 'feature', commit_sha: 'head-sha' };
+      }
+      return null;
+    } as any;
+  const env = createEnv();
     const app = createApp();
 
     // Override db mock: update returning empty (no rows updated), select returns current branch sha
@@ -311,9 +423,9 @@ describe('pull request merge', () => {
       updateReturning: () => [],  // branch update fails (0 rows)
     });
     let selectGet_callCount = 0;
-    mocks.getDb.mockReturnValue(mockDb);
+    mocks.getDb = (() => mockDb) as any;
 
-    mocks.isAncestor.mockResolvedValueOnce(false).mockResolvedValueOnce(true);
+    mocks.isAncestor = (async () => false) as any = (async () => true) as any;
 
     const response = await app.fetch(
       new Request('http://localhost/repos/repo-1/pulls/1/merge', {
@@ -325,21 +437,66 @@ describe('pull request merge', () => {
       {} as ExecutionContext
     );
 
-    expect(response.status).toBe(409);
-    await expect(response.json()).resolves.toMatchObject({
+    assertEquals(response.status, 409);
+    await assertObjectMatch(await response.json(), {
       error: 'REF_CONFLICT',
       current: 'other-sha',
     });
-    expect(mocks.scheduleActionsAutoTrigger).not.toHaveBeenCalled();
-  });
+    assertSpyCalls(mocks.scheduleActionsAutoTrigger, 0);
+})
+  Deno.test('pull request merge - rebases commits when branches diverged and merge_method=rebase', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
 
-  it('rebases commits when branches diverged and merge_method=rebase', async () => {
-    const env = createEnv();
+    mocks.checkRepoAccess = (async () => ({
+      repo: {
+        id: 'repo-1',
+        name: 'repo',
+        description: null,
+        visibility: 'private',
+        default_branch: 'main',
+        forked_from_id: null,
+        stars: 0,
+        forks: 0,
+        git_enabled: true,
+        is_official: false,
+        featured: false,
+        install_count: 0,
+        created_at: '2026-02-15T00:00:00Z',
+        updated_at: '2026-02-15T00:00:00Z',
+        space_id: 'ws-1',
+      },
+      spaceId: 'ws-1',
+      role: 'owner',
+    })) as any;
+
+    mocks.triggerPullRequestWorkflows = (async () => undefined) as any;
+    mocks.triggerPushWorkflows = (async () => undefined) as any;
+    mocks.scheduleActionsAutoTrigger = (_ctx: unknown, fn: () => void) => {
+      void fn();
+    } as any;
+
+    // Default: select returns open PR, update returns merged PR, branch update returns 1 row
+    const mockDb = createDrizzleMockDb({
+      selectGet: () => PR_ROW_OPEN,
+      updateReturning: () => [PR_ROW_MERGED],
+    });
+    mocks.getDb = (() => mockDb) as any;
+
+    mocks.getBranch = async (_db: unknown, _repoId: string, name: string) => {
+      if (name === 'main') {
+        return { name: 'main', commit_sha: 'base-sha' };
+      }
+      if (name === 'feature') {
+        return { name: 'feature', commit_sha: 'head-sha' };
+      }
+      return null;
+    } as any;
+  const env = createEnv();
     const app = createApp();
 
     // headIsAncestorOfBase=false, canFastForward=false
-    mocks.isAncestor.mockResolvedValueOnce(false).mockResolvedValueOnce(false);
-    mocks.findMergeBase.mockResolvedValue('merge-base-sha');
+    mocks.isAncestor = (async () => false) as any = (async () => false) as any;
+    mocks.findMergeBase = (async () => 'merge-base-sha') as any;
 
     // Commit graph: merge-base -> c1 -> c2(head)
     const commits = new Map<string, any>([
@@ -349,17 +506,17 @@ describe('pull request merge', () => {
       ['head-sha', { sha: 'head-sha', tree: 'c2-tree', parents: ['c1-sha'], message: 'c2', author: { name: 'A', email: 'a@a', timestamp: 't2' } }],
     ]);
 
-    mocks.getCommit.mockImplementation(async (_bucket: unknown, sha: string) => commits.get(sha) || null);
+    mocks.getCommit = async (_bucket: unknown, sha: string) => commits.get(sha) || null as any;
 
     // First cherry-pick: base=mb-tree local=base-tree upstream=c1-tree
     // Second cherry-pick: base=c1-tree local=rb1-tree upstream=c2-tree
     mocks.mergeTrees3Way
-      .mockResolvedValueOnce({ tree_sha: 'rb1-tree', conflicts: [] })
-      .mockResolvedValueOnce({ tree_sha: 'rb2-tree', conflicts: [] });
+       = (async () => ({ tree_sha: 'rb1-tree', conflicts: [] })) as any
+       = (async () => ({ tree_sha: 'rb2-tree', conflicts: [] })) as any;
 
     mocks.createCommit
-      .mockResolvedValueOnce({ sha: 'rb1-sha' })
-      .mockResolvedValueOnce({ sha: 'rb2-sha' });
+       = (async () => ({ sha: 'rb1-sha' })) as any
+       = (async () => ({ sha: 'rb2-sha' })) as any;
 
     const response = await app.fetch(
       new Request('http://localhost/repos/repo-1/pulls/1/merge', {
@@ -371,8 +528,8 @@ describe('pull request merge', () => {
       {} as ExecutionContext
     );
 
-    expect(response.status).toBe(200);
-    await expect(response.json()).resolves.toMatchObject({
+    assertEquals(response.status, 200);
+    await assertObjectMatch(await response.json(), {
       merge_commit: 'rb2-sha',
       pull_request: {
         id: 'pr-1',
@@ -380,44 +537,19 @@ describe('pull request merge', () => {
       },
     });
 
-    expect(mocks.mergeTrees3Way).toHaveBeenCalledTimes(2);
-    expect(mocks.mergeTrees3Way).toHaveBeenNthCalledWith(
-      1,
-      expect.anything(),
-      'mb-tree',
-      'base-tree',
-      'c1-tree'
-    );
-    expect(mocks.mergeTrees3Way).toHaveBeenNthCalledWith(
-      2,
-      expect.anything(),
-      'c1-tree',
-      'rb1-tree',
-      'c2-tree'
-    );
+    assertSpyCalls(mocks.mergeTrees3Way, 2);
+    assertSpyCallArgs(mocks.mergeTrees3Way, 0, [expect.anything(), 'mb-tree', 'base-tree', 'c1-tree']);
+    assertSpyCallArgs(mocks.mergeTrees3Way, 1, [expect.anything(), 'c1-tree', 'rb1-tree', 'c2-tree']);
 
-    expect(mocks.createCommit).toHaveBeenCalledTimes(2);
-    expect(mocks.createCommit).toHaveBeenNthCalledWith(
-      1,
-      expect.anything(),
-      expect.anything(),
-      'repo-1',
-      expect.objectContaining({
+    assertSpyCalls(mocks.createCommit, 2);
+    assertSpyCallArgs(mocks.createCommit, 0, [expect.anything(), expect.anything(), 'repo-1', ({
         tree: 'rb1-tree',
         parents: ['base-sha'],
         message: 'c1',
-      })
-    );
-    expect(mocks.createCommit).toHaveBeenNthCalledWith(
-      2,
-      expect.anything(),
-      expect.anything(),
-      'repo-1',
-      expect.objectContaining({
+      })]);
+    assertSpyCallArgs(mocks.createCommit, 1, [expect.anything(), expect.anything(), 'repo-1', ({
         tree: 'rb2-tree',
         parents: ['rb1-sha'],
         message: 'c2',
-      })
-    );
-  });
-});
+      })]);
+})

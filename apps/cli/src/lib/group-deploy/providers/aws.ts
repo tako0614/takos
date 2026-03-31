@@ -8,9 +8,9 @@
  * aws-sdk as a dependency. When the CLI is not available the provider
  * returns a graceful 'failed' result rather than throwing.
  */
-import type { ResourceProvider, ProvisionResult } from '../resource-provider.js';
-import { isAlreadyExistsError } from '../resource-provider.js';
-import { execCommand } from '../cloudflare-utils.js';
+import type { ResourceProvider, ProvisionResult } from '../resource-provider.ts';
+import { isAlreadyExistsError } from '../resource-provider.ts';
+import { execCommand } from '../cloudflare-utils.ts';
 
 const AWS_ALREADY_EXISTS_PATTERNS = [
   'already exists',
@@ -25,7 +25,7 @@ export class AWSProvider implements ResourceProvider {
   private readonly region: string;
 
   constructor(opts?: { region?: string }) {
-    this.region = opts?.region || process.env.AWS_REGION || 'us-east-1';
+    this.region = opts?.region || Deno.env.get('AWS_REGION') || 'us-east-1';
   }
 
   /** Run an aws CLI command, returning a graceful result on failure. */

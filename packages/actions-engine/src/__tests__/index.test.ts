@@ -1,12 +1,12 @@
-import { describe, expect, it } from 'vitest';
+import { JobScheduler } from '../scheduler/job.ts';
+import { createBaseContext } from '../context.ts';
+import type { Workflow } from '../workflow-models.ts';
 
-import { JobScheduler } from '../scheduler/job.js';
-import { createBaseContext } from '../context.js';
-import type { Workflow } from '../workflow-models.js';
 
-describe('JobScheduler', () => {
-  it('resets scheduler state across repeated runs and preserves listeners', async () => {
-    const workflow: Workflow = {
+import { assertEquals } from 'jsr:@std/assert';
+
+  Deno.test('JobScheduler - resets scheduler state across repeated runs and preserves listeners', async () => {
+  const workflow: Workflow = {
       name: 'runner-reset',
       on: 'push',
       jobs: {
@@ -34,22 +34,21 @@ describe('JobScheduler', () => {
       env: { BUILD_COMMAND: 'exit 1' },
     });
     const firstResults = await scheduler.run(firstContext);
-    expect(firstResults.build.conclusion).toBe('failure');
-    expect(firstResults.deploy.conclusion).toBe('cancelled');
-    expect(scheduler.getConclusion()).toBe('failure');
+    assertEquals(firstResults.build.conclusion, 'failure');
+    assertEquals(firstResults.deploy.conclusion, 'cancelled');
+    assertEquals(scheduler.getConclusion(), 'failure');
 
     const secondContext = createBaseContext({
       env: { BUILD_COMMAND: 'echo build=ok' },
     });
     const secondResults = await scheduler.run(secondContext);
-    expect(secondResults.build.conclusion).toBe('success');
-    expect(secondResults.deploy.conclusion).toBe('success');
-    expect(scheduler.getConclusion()).toBe('success');
-    expect(lifecycleEvents).toEqual([
+    assertEquals(secondResults.build.conclusion, 'success');
+    assertEquals(secondResults.deploy.conclusion, 'success');
+    assertEquals(scheduler.getConclusion(), 'success');
+    assertEquals(lifecycleEvents, [
       'workflow:start',
       'workflow:complete',
       'workflow:start',
       'workflow:complete',
     ]);
-  });
-});
+})

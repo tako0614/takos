@@ -1,8 +1,9 @@
-import { type ReactNode } from 'react';
+import type { JSX } from 'solid-js';
+
 import { Icons } from '../../../lib/Icons';
 import type { Resource } from '../../../types';
 
-export function getResourceTypeIcon(type: Resource['type']): ReactNode {
+export function getResourceTypeIcon(type: Resource['type']): JSX.Element {
   switch (type) {
     case 'd1':
       return <Icons.Database />;

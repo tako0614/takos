@@ -1,18 +1,18 @@
 /**
  * Shared helpers for `takos group` subcommands.
  */
-import chalk from 'chalk';
-import type { StateAccessOptions } from '../../lib/state/state-file.js';
-import { cliExit } from '../../lib/command-exit.js';
-import { api } from '../../lib/api.js';
-import { resolveSpaceId } from '../../lib/cli-utils.js';
+import { dim, red } from '@std/fmt/colors';
+import type { StateAccessOptions } from '../../lib/state/state-file.ts';
+import { cliExit } from '../../lib/command-exit.ts';
+import { api } from '../../lib/api.ts';
+import { resolveSpaceId } from '../../lib/cli-utils.ts';
 
 export const GROUP_NAME_PATTERN = /^[a-z0-9][a-z0-9-]*$/;
 
 export function validateGroupName(name: string): void {
   if (!GROUP_NAME_PATTERN.test(name)) {
-    console.log(chalk.red(`Invalid group name: "${name}"`));
-    console.log(chalk.dim('Group names must match: ^[a-z0-9][a-z0-9-]*$'));
+    console.log(red(`Invalid group name: "${name}"`));
+    console.log(dim('Group names must match: ^[a-z0-9][a-z0-9-]*$'));
     cliExit(1);
   }
 }

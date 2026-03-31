@@ -1,5 +1,5 @@
 import type { Context } from 'hono';
-import { sessionStore } from './storage.js';
+import { sessionStore } from './storage.ts';
 import { badRequest } from 'takos-common/middleware/hono';
 
 // ---------------------------------------------------------------------------

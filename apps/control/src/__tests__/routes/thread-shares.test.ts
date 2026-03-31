@@ -1,25 +1,18 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { Hono } from 'hono';
 import type { Env, User } from '@/types';
 import { createMockEnv } from '../../../test/integration/setup';
 
-const mocks = vi.hoisted(() => ({
-  checkThreadAccess: vi.fn(),
-  createThreadShare: vi.fn(),
-  listThreadShares: vi.fn(),
-  revokeThreadShare: vi.fn(),
-}));
+import { assertEquals, assert } from 'jsr:@std/assert';
 
-vi.mock('@/services/threads/thread-service', () => ({
-  checkThreadAccess: mocks.checkThreadAccess,
-}));
+const mocks = ({
+  checkThreadAccess: ((..._args: any[]) => undefined) as any,
+  createThreadShare: ((..._args: any[]) => undefined) as any,
+  listThreadShares: ((..._args: any[]) => undefined) as any,
+  revokeThreadShare: ((..._args: any[]) => undefined) as any,
+});
 
-vi.mock('@/services/threads/thread-shares', () => ({
-  createThreadShare: mocks.createThreadShare,
-  listThreadShares: mocks.listThreadShares,
-  revokeThreadShare: mocks.revokeThreadShare,
-}));
-
+// [Deno] vi.mock removed - manually stub imports from '@/services/threads/thread-service'
+// [Deno] vi.mock removed - manually stub imports from '@/services/threads/thread-shares'
 import threadSharesRoute from '@/routes/thread-shares';
 
 function createUser(): User {
@@ -47,23 +40,19 @@ function createApp(user: User) {
   return app;
 }
 
-describe('thread-shares routes', () => {
+
   const env = createMockEnv();
-
-  beforeEach(() => {
-    vi.clearAllMocks();
-  });
-
-  describe('POST /api/threads/:id/share', () => {
-    it('creates a public share and returns 201', async () => {
-      mocks.checkThreadAccess.mockResolvedValue({
+  
+    Deno.test('thread-shares routes - POST /api/threads/:id/share - creates a public share and returns 201', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+  mocks.checkThreadAccess = (async () => ({
         thread: { id: 't-1', space_id: 'ws-1' },
         role: 'owner',
-      });
-      mocks.createThreadShare.mockResolvedValue({
+      })) as any;
+      mocks.createThreadShare = (async () => ({
         share: { token: 'token123', mode: 'public' },
         passwordRequired: false,
-      });
+      })) as any;
 
       const app = createApp(createUser());
       const res = await app.fetch(
@@ -76,23 +65,23 @@ describe('thread-shares routes', () => {
         {} as ExecutionContext,
       );
 
-      expect(res.status).toBe(201);
+      assertEquals(res.status, 201);
       const json = await res.json() as Record<string, unknown>;
-      expect(json).toHaveProperty('share');
-      expect(json).toHaveProperty('share_path', '/share/token123');
-      expect(json).toHaveProperty('share_url');
-      expect(json.password_required).toBe(false);
-    });
-
-    it('creates a password-protected share', async () => {
-      mocks.checkThreadAccess.mockResolvedValue({
+      assert('share' in json);
+      assert('share_path' in json); assertEquals((json as any)['share_path'], '/share/token123');
+      assert('share_url' in json);
+      assertEquals(json.password_required, false);
+})
+    Deno.test('thread-shares routes - POST /api/threads/:id/share - creates a password-protected share', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+  mocks.checkThreadAccess = (async () => ({
         thread: { id: 't-1', space_id: 'ws-1' },
         role: 'owner',
-      });
-      mocks.createThreadShare.mockResolvedValue({
+      })) as any;
+      mocks.createThreadShare = (async () => ({
         share: { token: 'token456', mode: 'password' },
         passwordRequired: true,
-      });
+      })) as any;
 
       const app = createApp(createUser());
       const res = await app.fetch(
@@ -105,13 +94,13 @@ describe('thread-shares routes', () => {
         {} as ExecutionContext,
       );
 
-      expect(res.status).toBe(201);
+      assertEquals(res.status, 201);
       const json = await res.json() as Record<string, unknown>;
-      expect(json.password_required).toBe(true);
-    });
-
-    it('returns 404 when thread not found', async () => {
-      mocks.checkThreadAccess.mockResolvedValue(null);
+      assertEquals(json.password_required, true);
+})
+    Deno.test('thread-shares routes - POST /api/threads/:id/share - returns 404 when thread not found', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+  mocks.checkThreadAccess = (async () => null) as any;
 
       const app = createApp(createUser());
       const res = await app.fetch(
@@ -124,14 +113,14 @@ describe('thread-shares routes', () => {
         {} as ExecutionContext,
       );
 
-      expect(res.status).toBe(404);
-    });
-
-    it('rejects expires_in_days > 365', async () => {
-      mocks.checkThreadAccess.mockResolvedValue({
+      assertEquals(res.status, 404);
+})
+    Deno.test('thread-shares routes - POST /api/threads/:id/share - rejects expires_in_days > 365', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+  mocks.checkThreadAccess = (async () => ({
         thread: { id: 't-1', space_id: 'ws-1' },
         role: 'owner',
-      });
+      })) as any;
 
       const app = createApp(createUser());
       const res = await app.fetch(
@@ -144,14 +133,14 @@ describe('thread-shares routes', () => {
         {} as ExecutionContext,
       );
 
-      expect(res.status).toBe(400);
-    });
-
-    it('rejects expires_in_days <= 0', async () => {
-      mocks.checkThreadAccess.mockResolvedValue({
+      assertEquals(res.status, 400);
+})
+    Deno.test('thread-shares routes - POST /api/threads/:id/share - rejects expires_in_days <= 0', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+  mocks.checkThreadAccess = (async () => ({
         thread: { id: 't-1', space_id: 'ws-1' },
         role: 'owner',
-      });
+      })) as any;
 
       const app = createApp(createUser());
       const res = await app.fetch(
@@ -164,15 +153,15 @@ describe('thread-shares routes', () => {
         {} as ExecutionContext,
       );
 
-      expect(res.status).toBe(400);
-    });
-
-    it('returns 400 when createThreadShare throws', async () => {
-      mocks.checkThreadAccess.mockResolvedValue({
+      assertEquals(res.status, 400);
+})
+    Deno.test('thread-shares routes - POST /api/threads/:id/share - returns 400 when createThreadShare throws', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+  mocks.checkThreadAccess = (async () => ({
         thread: { id: 't-1', space_id: 'ws-1' },
         role: 'owner',
-      });
-      mocks.createThreadShare.mockRejectedValue(new Error('Share creation failed'));
+      })) as any;
+      mocks.createThreadShare = (async () => { throw new Error('Share creation failed'); }) as any;
 
       const app = createApp(createUser());
       const res = await app.fetch(
@@ -185,20 +174,19 @@ describe('thread-shares routes', () => {
         {} as ExecutionContext,
       );
 
-      expect(res.status).toBe(400);
-    });
-  });
-
-  describe('GET /api/threads/:id/shares', () => {
-    it('returns list of shares with URLs', async () => {
-      mocks.checkThreadAccess.mockResolvedValue({
+      assertEquals(res.status, 400);
+})  
+  
+    Deno.test('thread-shares routes - GET /api/threads/:id/shares - returns list of shares with URLs', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+  mocks.checkThreadAccess = (async () => ({
         thread: { id: 't-1', space_id: 'ws-1' },
         role: 'owner',
-      });
-      mocks.listThreadShares.mockResolvedValue([
+      })) as any;
+      mocks.listThreadShares = (async () => [
         { id: 's-1', token: 'abc', mode: 'public' },
         { id: 's-2', token: 'def', mode: 'password' },
-      ]);
+      ]) as any;
 
       const app = createApp(createUser());
       const res = await app.fetch(
@@ -207,15 +195,15 @@ describe('thread-shares routes', () => {
         {} as ExecutionContext,
       );
 
-      expect(res.status).toBe(200);
+      assertEquals(res.status, 200);
       const json = await res.json() as { shares: Array<{ share_path: string; share_url: string }> };
-      expect(json.shares).toHaveLength(2);
-      expect(json.shares[0].share_path).toBe('/share/abc');
-      expect(json.shares[1].share_path).toBe('/share/def');
-    });
-
-    it('returns 404 when thread not found', async () => {
-      mocks.checkThreadAccess.mockResolvedValue(null);
+      assertEquals(json.shares.length, 2);
+      assertEquals(json.shares[0].share_path, '/share/abc');
+      assertEquals(json.shares[1].share_path, '/share/def');
+})
+    Deno.test('thread-shares routes - GET /api/threads/:id/shares - returns 404 when thread not found', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+  mocks.checkThreadAccess = (async () => null) as any;
 
       const app = createApp(createUser());
       const res = await app.fetch(
@@ -224,17 +212,16 @@ describe('thread-shares routes', () => {
         {} as ExecutionContext,
       );
 
-      expect(res.status).toBe(404);
-    });
-  });
-
-  describe('POST /api/threads/:id/shares/:shareId/revoke', () => {
-    it('revokes a share successfully', async () => {
-      mocks.checkThreadAccess.mockResolvedValue({
+      assertEquals(res.status, 404);
+})  
+  
+    Deno.test('thread-shares routes - POST /api/threads/:id/shares/:shareId/revoke - revokes a share successfully', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+  mocks.checkThreadAccess = (async () => ({
         thread: { id: 't-1', space_id: 'ws-1' },
         role: 'owner',
-      });
-      mocks.revokeThreadShare.mockResolvedValue(true);
+      })) as any;
+      mocks.revokeThreadShare = (async () => true) as any;
 
       const app = createApp(createUser());
       const res = await app.fetch(
@@ -245,16 +232,16 @@ describe('thread-shares routes', () => {
         {} as ExecutionContext,
       );
 
-      expect(res.status).toBe(200);
-      await expect(res.json()).resolves.toEqual({ success: true });
-    });
-
-    it('returns 404 when share not found', async () => {
-      mocks.checkThreadAccess.mockResolvedValue({
+      assertEquals(res.status, 200);
+      await assertEquals(await res.json(), { success: true });
+})
+    Deno.test('thread-shares routes - POST /api/threads/:id/shares/:shareId/revoke - returns 404 when share not found', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+  mocks.checkThreadAccess = (async () => ({
         thread: { id: 't-1', space_id: 'ws-1' },
         role: 'owner',
-      });
-      mocks.revokeThreadShare.mockResolvedValue(false);
+      })) as any;
+      mocks.revokeThreadShare = (async () => false) as any;
 
       const app = createApp(createUser());
       const res = await app.fetch(
@@ -265,11 +252,11 @@ describe('thread-shares routes', () => {
         {} as ExecutionContext,
       );
 
-      expect(res.status).toBe(404);
-    });
-
-    it('returns 404 when thread not found', async () => {
-      mocks.checkThreadAccess.mockResolvedValue(null);
+      assertEquals(res.status, 404);
+})
+    Deno.test('thread-shares routes - POST /api/threads/:id/shares/:shareId/revoke - returns 404 when thread not found', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+  mocks.checkThreadAccess = (async () => null) as any;
 
       const app = createApp(createUser());
       const res = await app.fetch(
@@ -280,7 +267,5 @@ describe('thread-shares routes', () => {
         {} as ExecutionContext,
       );
 
-      expect(res.status).toBe(404);
-    });
-  });
-});
+      assertEquals(res.status, 404);
+})  

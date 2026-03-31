@@ -1,28 +1,17 @@
-import { describe, expect, it, vi, beforeEach } from 'vitest';
 import type { D1Database } from '@cloudflare/workers-types';
 
-const mocks = vi.hoisted(() => ({
-  getDb: vi.fn(),
-  generateId: vi.fn().mockReturnValue('worker-new'),
-  now: vi.fn().mockReturnValue('2026-03-24T00:00:00.000Z'),
-  resolveActorPrincipalId: vi.fn(),
-}));
+import { assertEquals, assertNotEquals, assert } from 'jsr:@std/assert';
 
-vi.mock('@/db', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/db')>()),
-  getDb: mocks.getDb,
-}));
+const mocks = ({
+  getDb: ((..._args: any[]) => undefined) as any,
+  generateId: (() => 'worker-new'),
+  now: (() => '2026-03-24T00:00:00.000Z'),
+  resolveActorPrincipalId: ((..._args: any[]) => undefined) as any,
+});
 
-vi.mock('@/shared/utils', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/shared/utils')>()),
-  generateId: mocks.generateId,
-  now: mocks.now,
-}));
-
-vi.mock('@/services/identity/principals', () => ({
-  resolveActorPrincipalId: mocks.resolveActorPrincipalId,
-}));
-
+// [Deno] vi.mock removed - manually stub imports from '@/db'
+// [Deno] vi.mock removed - manually stub imports from '@/shared/utils'
+// [Deno] vi.mock removed - manually stub imports from '@/services/identity/principals'
 import {
   slugifyWorkerName,
   countServicesInSpace,
@@ -37,27 +26,27 @@ import {
 } from '@/services/platform/workers';
 
 function createDrizzleMock() {
-  const getMock = vi.fn();
-  const allMock = vi.fn();
-  const runMock = vi.fn();
+  const getMock = ((..._args: any[]) => undefined) as any;
+  const allMock = ((..._args: any[]) => undefined) as any;
+  const runMock = ((..._args: any[]) => undefined) as any;
   const chain = {
-    from: vi.fn().mockReturnThis(),
-    where: vi.fn().mockReturnThis(),
-    set: vi.fn().mockReturnThis(),
-    values: vi.fn().mockReturnThis(),
-    returning: vi.fn().mockReturnThis(),
-    orderBy: vi.fn().mockReturnThis(),
-    limit: vi.fn().mockReturnThis(),
-    innerJoin: vi.fn().mockReturnThis(),
+    from: (function(this: any) { return this; }),
+    where: (function(this: any) { return this; }),
+    set: (function(this: any) { return this; }),
+    values: (function(this: any) { return this; }),
+    returning: (function(this: any) { return this; }),
+    orderBy: (function(this: any) { return this; }),
+    limit: (function(this: any) { return this; }),
+    innerJoin: (function(this: any) { return this; }),
     get: getMock,
     all: allMock,
     run: runMock,
   };
   return {
-    select: vi.fn(() => chain),
-    insert: vi.fn(() => chain),
-    update: vi.fn(() => chain),
-    delete: vi.fn(() => chain),
+    select: () => chain,
+    insert: () => chain,
+    update: () => chain,
+    delete: () => chain,
     _: { get: getMock, all: allMock, run: runMock },
   };
 }
@@ -76,120 +65,95 @@ const makeServiceRow = (overrides: Record<string, unknown> = {}) => ({
   ...overrides,
 });
 
-describe('slugifyWorkerName', () => {
-  it('lowercases and replaces invalid chars', () => {
-    expect(slugifyWorkerName('My App Name!')).toBe('my-app-name');
-  });
 
-  it('removes leading/trailing hyphens', () => {
-    expect(slugifyWorkerName('-test-')).toBe('test');
-  });
+  Deno.test('slugifyWorkerName - lowercases and replaces invalid chars', () => {
+  assertEquals(slugifyWorkerName('My App Name!'), 'my-app-name');
+})
+  Deno.test('slugifyWorkerName - removes leading/trailing hyphens', () => {
+  assertEquals(slugifyWorkerName('-test-'), 'test');
+})
+  Deno.test('slugifyWorkerName - truncates to 32 characters', () => {
+  const long = 'a'.repeat(50);
+    assert(slugifyWorkerName(long).length <= 32);
+})
+  Deno.test('slugifyWorkerName - handles empty string', () => {
+  assertEquals(slugifyWorkerName(''), '');
+})
 
-  it('truncates to 32 characters', () => {
-    const long = 'a'.repeat(50);
-    expect(slugifyWorkerName(long).length).toBeLessThanOrEqual(32);
-  });
+  Deno.test('WORKSPACE_WORKER_LIMITS - has a maxWorkers limit', () => {
+  assertEquals(WORKSPACE_WORKER_LIMITS.maxWorkers, 100);
+})
 
-  it('handles empty string', () => {
-    expect(slugifyWorkerName('')).toBe('');
-  });
-});
-
-describe('WORKSPACE_WORKER_LIMITS', () => {
-  it('has a maxWorkers limit', () => {
-    expect(WORKSPACE_WORKER_LIMITS.maxWorkers).toBe(100);
-  });
-});
-
-describe('countServicesInSpace', () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-  });
-
-  it('returns count from DB', async () => {
-    const drizzle = createDrizzleMock();
-    drizzle._.get.mockResolvedValueOnce({ count: 5 });
-    mocks.getDb.mockReturnValue(drizzle);
+  Deno.test('countServicesInSpace - returns count from DB', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+  const drizzle = createDrizzleMock();
+    drizzle._.get = (async () => ({ count: 5 })) as any;
+    mocks.getDb = (() => drizzle) as any;
 
     const count = await countServicesInSpace({} as D1Database, 'ws-1');
-    expect(count).toBe(5);
-  });
-
-  it('returns 0 when no workers', async () => {
-    const drizzle = createDrizzleMock();
-    drizzle._.get.mockResolvedValueOnce(undefined);
-    mocks.getDb.mockReturnValue(drizzle);
+    assertEquals(count, 5);
+})
+  Deno.test('countServicesInSpace - returns 0 when no workers', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+  const drizzle = createDrizzleMock();
+    drizzle._.get = (async () => undefined) as any;
+    mocks.getDb = (() => drizzle) as any;
 
     const count = await countServicesInSpace({} as D1Database, 'ws-1');
-    expect(count).toBe(0);
-  });
-});
+    assertEquals(count, 0);
+})
 
-describe('listServicesForSpace', () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-  });
-
-  it('returns empty array when no workers', async () => {
-    const drizzle = createDrizzleMock();
-    drizzle._.all.mockResolvedValueOnce([]);
-    mocks.getDb.mockReturnValue(drizzle);
+  Deno.test('listServicesForSpace - returns empty array when no workers', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+  const drizzle = createDrizzleMock();
+    drizzle._.all = (async () => []) as any;
+    mocks.getDb = (() => drizzle) as any;
 
     const workers = await listServicesForSpace({} as D1Database, 'ws-1');
-    expect(workers).toEqual([]);
-  });
-
-  it('returns mapped workers', async () => {
-    const drizzle = createDrizzleMock();
-    drizzle._.all.mockResolvedValueOnce([makeServiceRow()]);
-    mocks.getDb.mockReturnValue(drizzle);
+    assertEquals(workers, []);
+})
+  Deno.test('listServicesForSpace - returns mapped workers', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+  const drizzle = createDrizzleMock();
+    drizzle._.all = (async () => [makeServiceRow()]) as any;
+    mocks.getDb = (() => drizzle) as any;
 
     const workers = await listServicesForSpace({} as D1Database, 'ws-1');
-    expect(workers).toHaveLength(1);
-    expect(workers[0].id).toBe('w1');
-    expect(workers[0].space_id).toBe('ws-1');
-    expect(workers[0].service_type).toBe('app');
-    expect(workers[0].status).toBe('deployed');
-    expect(workers[0].slug).toBe('my-app');
-  });
-});
+    assertEquals(workers.length, 1);
+    assertEquals(workers[0].id, 'w1');
+    assertEquals(workers[0].space_id, 'ws-1');
+    assertEquals(workers[0].service_type, 'app');
+    assertEquals(workers[0].status, 'deployed');
+    assertEquals(workers[0].slug, 'my-app');
+})
 
-describe('getServiceById', () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-  });
-
-  it('returns null when not found', async () => {
-    const drizzle = createDrizzleMock();
-    drizzle._.get.mockResolvedValueOnce(undefined);
-    mocks.getDb.mockReturnValue(drizzle);
+  Deno.test('getServiceById - returns null when not found', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+  const drizzle = createDrizzleMock();
+    drizzle._.get = (async () => undefined) as any;
+    mocks.getDb = (() => drizzle) as any;
 
     const worker = await getServiceById({} as D1Database, 'nonexistent');
-    expect(worker).toBeNull();
-  });
-
-  it('returns mapped worker when found', async () => {
-    const drizzle = createDrizzleMock();
-    drizzle._.get.mockResolvedValueOnce(makeServiceRow());
-    mocks.getDb.mockReturnValue(drizzle);
+    assertEquals(worker, null);
+})
+  Deno.test('getServiceById - returns mapped worker when found', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+  const drizzle = createDrizzleMock();
+    drizzle._.get = (async () => makeServiceRow()) as any;
+    mocks.getDb = (() => drizzle) as any;
 
     const worker = await getServiceById({} as D1Database, 'w1');
-    expect(worker).not.toBeNull();
-    expect(worker!.id).toBe('w1');
-    expect(worker!.hostname).toBe('my-app.takos.dev');
-    expect(worker!.service_name).toBe('worker-w1');
-  });
-});
+    assertNotEquals(worker, null);
+    assertEquals(worker!.id, 'w1');
+    assertEquals(worker!.hostname, 'my-app.takos.dev');
+    assertEquals(worker!.service_name, 'worker-w1');
+})
 
-describe('createService', () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-  });
-
-  it('creates worker with generated id and hostname', async () => {
-    const drizzle = createDrizzleMock();
-    drizzle._.get.mockResolvedValueOnce(makeServiceRow({ id: 'worker-new' }));
-    mocks.getDb.mockReturnValue(drizzle);
+  Deno.test('createService - creates worker with generated id and hostname', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+  const drizzle = createDrizzleMock();
+    drizzle._.get = (async () => makeServiceRow({ id: 'worker-new' })) as any;
+    mocks.getDb = (() => drizzle) as any;
 
     const result = await createService({} as D1Database, {
       spaceId: 'ws-1',
@@ -198,16 +162,16 @@ describe('createService', () => {
       platformDomain: 'takos.dev',
     });
 
-    expect(result.id).toBe('worker-new');
-    expect(result.slug).toBe('my-app');
-    expect(result.hostname).toBe('my-app.takos.dev');
-    expect(drizzle.insert).toHaveBeenCalled();
-  });
-
-  it('generates slug from id when not provided', async () => {
-    const drizzle = createDrizzleMock();
-    drizzle._.get.mockResolvedValueOnce(makeServiceRow({ id: 'worker-new' }));
-    mocks.getDb.mockReturnValue(drizzle);
+    assertEquals(result.id, 'worker-new');
+    assertEquals(result.slug, 'my-app');
+    assertEquals(result.hostname, 'my-app.takos.dev');
+    assert(drizzle.insert.calls.length > 0);
+})
+  Deno.test('createService - generates slug from id when not provided', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+  const drizzle = createDrizzleMock();
+    drizzle._.get = (async () => makeServiceRow({ id: 'worker-new' })) as any;
+    mocks.getDb = (() => drizzle) as any;
 
     const result = await createService({} as D1Database, {
       spaceId: 'ws-1',
@@ -215,65 +179,50 @@ describe('createService', () => {
       platformDomain: 'takos.dev',
     });
 
-    expect(result.slug).toBe('worker-new');
-  });
-});
+    assertEquals(result.slug, 'worker-new');
+})
 
-describe('deleteService', () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-  });
-
-  it('deletes worker by id', async () => {
-    const drizzle = createDrizzleMock();
-    mocks.getDb.mockReturnValue(drizzle);
+  Deno.test('deleteService - deletes worker by id', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+  const drizzle = createDrizzleMock();
+    mocks.getDb = (() => drizzle) as any;
 
     await deleteService({} as D1Database, 'w1');
-    expect(drizzle.delete).toHaveBeenCalled();
-  });
-});
+    assert(drizzle.delete.calls.length > 0);
+})
 
-describe('listServicesForUser', () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-  });
-
-  it('returns empty when principal not found', async () => {
-    mocks.resolveActorPrincipalId.mockResolvedValueOnce(null);
+  Deno.test('listServicesForUser - returns empty when principal not found', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+  mocks.resolveActorPrincipalId = (async () => null) as any;
 
     const result = await listServicesForUser({} as D1Database, 'user-1');
-    expect(result).toEqual([]);
-  });
-
-  it('returns empty when no memberships', async () => {
-    mocks.resolveActorPrincipalId.mockResolvedValueOnce('principal-1');
+    assertEquals(result, []);
+})
+  Deno.test('listServicesForUser - returns empty when no memberships', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+  mocks.resolveActorPrincipalId = (async () => 'principal-1') as any;
     const drizzle = createDrizzleMock();
-    drizzle._.all.mockResolvedValueOnce([]); // memberships
-    mocks.getDb.mockReturnValue(drizzle);
+    drizzle._.all = (async () => []) as any; // memberships
+    mocks.getDb = (() => drizzle) as any;
 
     const result = await listServicesForUser({} as D1Database, 'user-1');
-    expect(result).toEqual([]);
-  });
-});
+    assertEquals(result, []);
+})
 
-describe('resolveServiceReferenceRecord', () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-  });
-
-  it('returns null for empty reference', async () => {
-    const result = await resolveServiceReferenceRecord({} as D1Database, 'ws-1', '');
-    expect(result).toBeNull();
-  });
-
-  it('returns null for whitespace-only reference', async () => {
-    const result = await resolveServiceReferenceRecord({} as D1Database, 'ws-1', '   ');
-    expect(result).toBeNull();
-  });
-
-  it('returns worker when found by id/name/slug', async () => {
-    const drizzle = createDrizzleMock();
-    drizzle._.get.mockResolvedValueOnce({
+  Deno.test('resolveServiceReferenceRecord - returns null for empty reference', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+  const result = await resolveServiceReferenceRecord({} as D1Database, 'ws-1', '');
+    assertEquals(result, null);
+})
+  Deno.test('resolveServiceReferenceRecord - returns null for whitespace-only reference', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+  const result = await resolveServiceReferenceRecord({} as D1Database, 'ws-1', '   ');
+    assertEquals(result, null);
+})
+  Deno.test('resolveServiceReferenceRecord - returns worker when found by id/name/slug', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+  const drizzle = createDrizzleMock();
+    drizzle._.get = (async () => ({
       id: 'w1',
       accountId: 'ws-1',
       workerType: 'app',
@@ -281,11 +230,10 @@ describe('resolveServiceReferenceRecord', () => {
       hostname: 'my-app.takos.dev',
       routeRef: 'worker-w1',
       slug: 'my-app',
-    });
-    mocks.getDb.mockReturnValue(drizzle);
+    })) as any;
+    mocks.getDb = (() => drizzle) as any;
 
     const result = await resolveServiceReferenceRecord({} as D1Database, 'ws-1', 'my-app');
-    expect(result).not.toBeNull();
-    expect(result!.id).toBe('w1');
-  });
-});
+    assertNotEquals(result, null);
+    assertEquals(result!.id, 'w1');
+})

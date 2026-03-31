@@ -1,4 +1,5 @@
-import { useState, useCallback } from 'react';
+import { createSignal } from 'solid-js';
+import type { Setter } from 'solid-js';
 import { useI18n } from '../store/i18n';
 import { useToast } from '../store/toast';
 import { useConfirmDialog } from '../store/confirm-dialog';
@@ -9,28 +10,28 @@ interface UseStorageActionsParams {
   downloadFolderZip: (path: string) => Promise<Response | null>;
   deleteItem: (id: string) => Promise<boolean>;
   renameItem: (id: string, name: string) => Promise<unknown>;
-  currentPath: string;
-  setSelectedFiles: React.Dispatch<React.SetStateAction<Set<string>>>;
+  currentPath: () => string;
+  setSelectedFiles: Setter<Set<string>>;
 }
 
 interface UseStorageActionsResult {
   // File viewer
-  viewingFile: StorageFile | null;
-  viewingFileDownloadUrl: string | null;
+  viewingFile: () => StorageFile | null;
+  viewingFileDownloadUrl: () => string | null;
   handleOpenFile: (file: StorageFile) => Promise<void>;
   handleCloseViewer: () => void;
   // Download
   handleDownload: (file: StorageFile) => Promise<void>;
-  downloadingZip: boolean;
-  downloadedZipBytes: number;
+  downloadingZip: () => boolean;
+  downloadedZipBytes: () => number;
   handleDownloadZip: () => Promise<void>;
   // Delete
   handleDelete: (file: StorageFile) => Promise<void>;
   // Rename
-  showRenameModal: boolean;
-  renameTarget: StorageFile | null;
-  newName: string;
-  setNewName: React.Dispatch<React.SetStateAction<string>>;
+  showRenameModal: () => boolean;
+  renameTarget: () => StorageFile | null;
+  newName: () => string;
+  setNewName: Setter<string>;
   openRenameModal: (file: StorageFile) => void;
   closeRenameModal: () => void;
   handleRename: () => Promise<void>;
@@ -49,54 +50,54 @@ export function useStorageActions({
   const { confirm } = useConfirmDialog();
 
   // File viewer state
-  const [viewingFile, setViewingFile] = useState<StorageFile | null>(null);
-  const [viewingFileDownloadUrl, setViewingFileDownloadUrl] = useState<string | null>(null);
+  const [viewingFile, setViewingFile] = createSignal<StorageFile | null>(null);
+  const [viewingFileDownloadUrl, setViewingFileDownloadUrl] = createSignal<string | null>(null);
 
   // Rename state
-  const [showRenameModal, setShowRenameModal] = useState(false);
-  const [renameTarget, setRenameTarget] = useState<StorageFile | null>(null);
-  const [newName, setNewName] = useState('');
+  const [showRenameModal, setShowRenameModal] = createSignal(false);
+  const [renameTarget, setRenameTarget] = createSignal<StorageFile | null>(null);
+  const [newName, setNewName] = createSignal('');
 
   // Zip download state
-  const [downloadingZip, setDownloadingZip] = useState(false);
-  const [downloadedZipBytes, setDownloadedZipBytes] = useState(0);
+  const [downloadingZip, setDownloadingZip] = createSignal(false);
+  const [downloadedZipBytes, setDownloadedZipBytes] = createSignal(0);
 
-  const handleOpenFile = useCallback(async (file: StorageFile) => {
+  const handleOpenFile = async (file: StorageFile) => {
     if (file.type === 'folder') return;
     const url = await getDownloadUrl(file.id);
     setViewingFileDownloadUrl(url);
     setViewingFile(file);
-  }, [getDownloadUrl]);
+  };
 
-  const handleCloseViewer = useCallback(() => {
+  const handleCloseViewer = () => {
     setViewingFile(null);
     setViewingFileDownloadUrl(null);
-  }, []);
+  };
 
-  const handleDownload = useCallback(async (file: StorageFile) => {
+  const handleDownload = async (file: StorageFile) => {
     const url = await getDownloadUrl(file.id);
     if (url) {
       window.open(url, '_blank', 'noopener,noreferrer');
     } else {
       showToast('error', t('failedToGetDownloadUrl'));
     }
-  }, [getDownloadUrl, showToast, t]);
+  };
 
-  const handleDownloadZip = useCallback(async () => {
-    if (downloadingZip) return;
+  const handleDownloadZip = async () => {
+    if (downloadingZip()) return;
     setDownloadingZip(true);
     setDownloadedZipBytes(0);
 
     try {
-      const res = await downloadFolderZip(currentPath);
+      const res = await downloadFolderZip(currentPath());
       if (!res) {
         showToast('error', t('failedToGetDownloadUrl') || 'Failed to download');
         return;
       }
 
-      const folderName = currentPath === '/'
+      const folderName = currentPath() === '/'
         ? 'workspace'
-        : currentPath.split('/').filter(Boolean).pop() || 'folder';
+        : currentPath().split('/').filter(Boolean).pop() || 'folder';
       const filename = `${folderName}.zip`;
 
       const blob = await res.blob();
@@ -115,9 +116,9 @@ export function useStorageActions({
     } finally {
       setDownloadingZip(false);
     }
-  }, [currentPath, downloadFolderZip, downloadingZip, showToast, t]);
+  };
 
-  const handleDelete = useCallback(async (file: StorageFile) => {
+  const handleDelete = async (file: StorageFile) => {
     const confirmed = await confirm({
       title: t('deleteConfirmTitle'),
       message: file.type === 'folder'
@@ -140,33 +141,35 @@ export function useStorageActions({
     } else {
       showToast('error', t('failedToDelete'));
     }
-  }, [confirm, deleteItem, showToast, t, setSelectedFiles]);
+  };
 
-  const openRenameModal = useCallback((file: StorageFile) => {
+  const openRenameModal = (file: StorageFile) => {
     setRenameTarget(file);
     setNewName(file.name);
     setShowRenameModal(true);
-  }, []);
+  };
 
-  const closeRenameModal = useCallback(() => {
+  const closeRenameModal = () => {
     setShowRenameModal(false);
     setRenameTarget(null);
     setNewName('');
-  }, []);
+  };
 
-  const handleRename = useCallback(async () => {
-    if (!renameTarget || !newName.trim()) return;
+  const handleRename = async () => {
+    const target = renameTarget();
+    const name = newName();
+    if (!target || !name.trim()) return;
 
-    const result = await renameItem(renameTarget.id, newName.trim());
+    const result = await renameItem(target.id, name.trim());
     if (result) {
-      showToast('success', t('renamedTo').replace('{name}', newName));
+      showToast('success', t('renamedTo').replace('{name}', name));
       setShowRenameModal(false);
       setRenameTarget(null);
       setNewName('');
     } else {
       showToast('error', t('failedToRename'));
     }
-  }, [renameTarget, newName, renameItem, showToast, t]);
+  };
 
   return {
     viewingFile,

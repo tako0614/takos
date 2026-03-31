@@ -1,3 +1,4 @@
+import { Show, For } from 'solid-js';
 import { Icons } from '../../lib/Icons';
 import { useI18n } from '../../store/i18n';
 import { useSidebarCallbacks } from './SidebarContext';
@@ -16,26 +17,21 @@ interface ThreadListProps {
   emptyMessage?: string;
 }
 
-export function ThreadList({ threads, selectedThreadId, emptyMessage }: ThreadListProps) {
+export function ThreadList(props: ThreadListProps) {
   const { t } = useI18n();
   const { onSelectThread, onDeleteThread, onToggleArchiveThread } = useSidebarCallbacks();
 
-  const empty = emptyMessage ?? t('startConversation');
-
-  if (threads.length === 0) {
-    return (
-      <div className="px-1 py-8 text-center text-xs text-zinc-500 dark:text-zinc-400">
-        {empty}
-      </div>
-    );
-  }
+  const empty = () => props.emptyMessage ?? t('startConversation');
 
   return (
-    <>
-      {threads.map((thread) => (
+    <Show when={props.threads.length > 0} fallback={
+      <div class="px-1 py-8 text-center text-xs text-zinc-500 dark:text-zinc-400">
+        {empty()}
+      </div>
+    }>
+      <For each={props.threads}>{(thread) => (
         <div
-          key={thread.id}
-          className={selectedThreadId === thread.id ? THREAD_ACTIVE : THREAD_DEFAULT}
+          class={props.selectedThreadId === thread.id ? THREAD_ACTIVE : THREAD_DEFAULT}
           onClick={() => onSelectThread(thread)}
           role="button"
           tabIndex={0}
@@ -46,10 +42,10 @@ export function ThreadList({ threads, selectedThreadId, emptyMessage }: ThreadLi
             }
           }}
         >
-          <Icons.MessageSquare className="w-4 h-4 shrink-0 opacity-70" />
-          <span className="flex-1 truncate">{thread.title}</span>
+          <Icons.MessageSquare class="w-4 h-4 shrink-0 opacity-70" />
+          <span class="flex-1 truncate">{thread.title}</span>
           <button
-            className={ACTION_BTN}
+            class={ACTION_BTN}
             onClick={(e) => {
               e.stopPropagation();
               onToggleArchiveThread(thread);
@@ -57,14 +53,14 @@ export function ThreadList({ threads, selectedThreadId, emptyMessage }: ThreadLi
             aria-label={thread.status === 'archived' ? t('unarchiveThread') : t('archiveThread')}
             title={thread.status === 'archived' ? t('unarchiveThread') : t('archiveThread')}
           >
-            {thread.status === 'archived' ? (
-              <Icons.Refresh className="w-3 h-3" />
-            ) : (
-              <Icons.Archive className="w-3 h-3" />
-            )}
+            <Show when={thread.status === 'archived'} fallback={
+              <Icons.Archive class="w-3 h-3" />
+            }>
+              <Icons.Refresh class="w-3 h-3" />
+            </Show>
           </button>
           <button
-            className={ACTION_BTN}
+            class={ACTION_BTN}
             onClick={(e) => {
               e.stopPropagation();
               onDeleteThread(thread.id);
@@ -72,10 +68,10 @@ export function ThreadList({ threads, selectedThreadId, emptyMessage }: ThreadLi
             aria-label={t('deleteThread')}
             title={t('deleteThread')}
           >
-            <Icons.Trash className="w-3 h-3" />
+            <Icons.Trash class="w-3 h-3" />
           </button>
         </div>
-      ))}
-    </>
+      )}</For>
+    </Show>
   );
 }

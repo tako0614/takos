@@ -1,62 +1,33 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { Hono } from 'hono';
 import { isAppError } from 'takos-common/errors';
 import type { Env, User } from '@/types';
 import type { AuthenticatedRouteEnv } from '@/routes/shared/helpers';
 import { createMockEnv } from '../../../../test/integration/setup';
 
-const mocks = vi.hoisted(() => ({
-  getDb: vi.fn(),
-  getServiceForUser: vi.fn(),
-  getServiceForUserWithRole: vi.fn(),
-  ServiceDesiredStateService: vi.fn(),
-  createCommonEnvDeps: vi.fn(),
-  listServiceCommonEnvLinks: vi.fn(),
-  listServiceBuiltins: vi.fn(),
-  listServiceManualLinkNames: vi.fn(),
-  setServiceManualLinks: vi.fn(),
-  patchServiceManualLinks: vi.fn(),
-  upsertServiceTakosAccessTokenConfig: vi.fn(),
-  deleteServiceTakosAccessTokenConfig: vi.fn(),
-  buildCommonEnvActor: vi.fn(),
-}));
+import { assertEquals, assert } from 'jsr:@std/assert';
+import { assertSpyCalls, assertSpyCallArgs } from 'jsr:@std/testing/mock';
 
-vi.mock('@/db', async (importOriginal) => ({ ...(await importOriginal<typeof import('@/db')>()),
-  getDb: mocks.getDb,
-}));
-
-vi.mock('@/services/platform/workers', () => ({
-  getServiceForUser: mocks.getServiceForUser,
-  getServiceForUserWithRole: mocks.getServiceForUserWithRole,
-}));
-
-vi.mock('@/services/platform/worker-desired-state', () => ({
-  ServiceDesiredStateService: mocks.ServiceDesiredStateService,
-}));
-
-vi.mock('@/application/services/common-env', async () => {
-  const actual = await vi.importActual<typeof import('@/application/services/common-env')>('@/application/services/common-env');
-  return {
-    ...actual,
-    createCommonEnvDeps: mocks.createCommonEnvDeps,
-    listServiceCommonEnvLinks: mocks.listServiceCommonEnvLinks,
-    listServiceBuiltins: mocks.listServiceBuiltins,
-    listServiceManualLinkNames: mocks.listServiceManualLinkNames,
-    setServiceManualLinks: mocks.setServiceManualLinks,
-    patchServiceManualLinks: mocks.patchServiceManualLinks,
-    upsertServiceTakosAccessTokenConfig: mocks.upsertServiceTakosAccessTokenConfig,
-    deleteServiceTakosAccessTokenConfig: mocks.deleteServiceTakosAccessTokenConfig,
-  };
+const mocks = ({
+  getDb: ((..._args: any[]) => undefined) as any,
+  getServiceForUser: ((..._args: any[]) => undefined) as any,
+  getServiceForUserWithRole: ((..._args: any[]) => undefined) as any,
+  ServiceDesiredStateService: ((..._args: any[]) => undefined) as any,
+  createCommonEnvDeps: ((..._args: any[]) => undefined) as any,
+  listServiceCommonEnvLinks: ((..._args: any[]) => undefined) as any,
+  listServiceBuiltins: ((..._args: any[]) => undefined) as any,
+  listServiceManualLinkNames: ((..._args: any[]) => undefined) as any,
+  setServiceManualLinks: ((..._args: any[]) => undefined) as any,
+  patchServiceManualLinks: ((..._args: any[]) => undefined) as any,
+  upsertServiceTakosAccessTokenConfig: ((..._args: any[]) => undefined) as any,
+  deleteServiceTakosAccessTokenConfig: ((..._args: any[]) => undefined) as any,
+  buildCommonEnvActor: ((..._args: any[]) => undefined) as any,
 });
 
-vi.mock('@/routes/common-env-handlers', async () => {
-  const actual = await vi.importActual<typeof import('@/routes/common-env-handlers')>('@/routes/common-env-handlers');
-  return {
-    ...actual,
-    buildCommonEnvActor: mocks.buildCommonEnvActor,
-  };
-});
-
+// [Deno] vi.mock removed - manually stub imports from '@/db'
+// [Deno] vi.mock removed - manually stub imports from '@/services/platform/workers'
+// [Deno] vi.mock removed - manually stub imports from '@/services/platform/worker-desired-state'
+// [Deno] vi.mock removed - manually stub imports from '@/application/services/common-env'
+// [Deno] vi.mock removed - manually stub imports from '@/routes/common-env-handlers'
 import workersSettings from '@/routes/workers/settings';
 
 function mockCommonEnvDeps() {
@@ -64,21 +35,21 @@ function mockCommonEnvDeps() {
     serviceLink: { kind: 'service-link' },
     manualLink: { kind: 'manual-link' },
   };
-  mocks.createCommonEnvDeps.mockReturnValue(deps);
+  mocks.createCommonEnvDeps = (() => deps) as any;
   return deps;
 }
 
 function createLinkPresenceDb(sources: string[] = []) {
   return {
-    prepare: vi.fn(() => ({
-      bind: vi.fn(() => ({
-        all: vi.fn().mockResolvedValue({
+    prepare: () => ({
+      bind: () => ({
+        all: (async () => ({
           results: sources.map((source) => ({ source })),
           success: true,
           meta: {},
-        }),
-      })),
-    })),
+        })),
+      }),
+    }),
   };
 }
 
@@ -92,18 +63,18 @@ function createDrizzleDb(options: {
   getResult?: unknown;
 } = {}) {
   const chain: Record<string, unknown> = {};
-  chain.from = vi.fn().mockReturnValue(chain);
-  chain.leftJoin = vi.fn().mockReturnValue(chain);
-  chain.where = vi.fn().mockReturnValue(chain);
-  chain.orderBy = vi.fn().mockReturnValue(chain);
-  chain.limit = vi.fn().mockReturnValue(chain);
-  chain.all = vi.fn().mockResolvedValue(options.allResults ?? []);
-  chain.get = vi.fn().mockResolvedValue(options.getResult ?? null);
+  chain.from = (() => chain);
+  chain.leftJoin = (() => chain);
+  chain.where = (() => chain);
+  chain.orderBy = (() => chain);
+  chain.limit = (() => chain);
+  chain.all = (async () => options.allResults ?? []);
+  chain.get = (async () => options.getResult ?? null);
   return {
-    select: vi.fn().mockReturnValue(chain),
-    update: vi.fn().mockReturnValue({ set: vi.fn().mockReturnValue({ where: vi.fn().mockResolvedValue(undefined) }) }),
-    insert: vi.fn().mockReturnValue({ values: vi.fn().mockResolvedValue(undefined) }),
-    delete: vi.fn().mockReturnValue({ where: vi.fn().mockResolvedValue(undefined) }),
+    select: (() => chain),
+    update: (() => ({ set: (() => ({ where: (async () => undefined) })) })),
+    insert: (() => ({ values: (async () => undefined) })),
+    delete: (() => ({ where: (async () => undefined) })),
     _chain: chain,
   };
 }
@@ -142,28 +113,25 @@ function createApp(user: User): Hono<AuthenticatedRouteEnv> {
   return app;
 }
 
-describe('services settings bindings workspace scope', () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
+
+  Deno.test('services settings bindings workspace scope - uses workspace boundary scope when listing available resources', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
     mockCommonEnvDeps();
-    mocks.listServiceCommonEnvLinks.mockResolvedValue([]);
-    mocks.listServiceBuiltins.mockResolvedValue({});
-    mocks.listServiceManualLinkNames.mockResolvedValue([]);
-    mocks.setServiceManualLinks.mockResolvedValue(undefined);
-    mocks.patchServiceManualLinks.mockResolvedValue({ added: [], removed: [] });
-    mocks.upsertServiceTakosAccessTokenConfig.mockResolvedValue(undefined);
-    mocks.deleteServiceTakosAccessTokenConfig.mockResolvedValue(undefined);
-    mocks.buildCommonEnvActor.mockResolvedValue({
+    mocks.listServiceCommonEnvLinks = (async () => []) as any;
+    mocks.listServiceBuiltins = (async () => ({})) as any;
+    mocks.listServiceManualLinkNames = (async () => []) as any;
+    mocks.setServiceManualLinks = (async () => undefined) as any;
+    mocks.patchServiceManualLinks = (async () => ({ added: [], removed: [] })) as any;
+    mocks.upsertServiceTakosAccessTokenConfig = (async () => undefined) as any;
+    mocks.deleteServiceTakosAccessTokenConfig = (async () => undefined) as any;
+    mocks.buildCommonEnvActor = (async () => ({
       type: 'user',
       userId: 'user-1',
       requestId: undefined,
       ipHash: undefined,
       userAgent: undefined,
-    });
-  });
-
-  it('uses workspace boundary scope when listing available resources', async () => {
-    // Production code uses Drizzle chains:
+    })) as any;
+  // Production code uses Drizzle chains:
     //   db.select({...}).from(resourceAccess).where(...).all() -> accessible IDs
     //   db.select({...}).from(resources).where(...).all() -> resource rows
     const drizzleDb = createDrizzleDb({
@@ -171,14 +139,14 @@ describe('services settings bindings workspace scope', () => {
     });
     // First .all() call returns resourceAccess rows, second returns resource rows
     let callCount = 0;
-    drizzleDb._chain.all = vi.fn().mockImplementation(async () => {
+    drizzleDb._chain.all = async () => {
       callCount++;
       if (callCount === 1) return [{ resourceId: 'res-1' }]; // resourceAccess rows
       return [{ id: 'res-1', name: 'db-one', providerResourceId: 'cf-d1-1', providerResourceName: 'db-one' }]; // resource rows
-    });
+    };
 
     const desiredState = {
-      listResourceBindings: vi.fn().mockResolvedValue([
+      listResourceBindings: (async () => [
         {
           id: 'binding-1',
           name: 'DB',
@@ -188,12 +156,12 @@ describe('services settings bindings workspace scope', () => {
         },
       ]),
     };
-    mocks.getDb.mockReturnValue(drizzleDb);
-    mocks.ServiceDesiredStateService.mockReturnValue(desiredState);
-    mocks.getServiceForUser.mockResolvedValue({
+    mocks.getDb = (() => drizzleDb) as any;
+    mocks.ServiceDesiredStateService = (() => desiredState) as any;
+    mocks.getServiceForUser = (async () => ({
       id: 'worker-1',
       space_id: 'ws-1',
-    });
+    })) as any;
 
       const app = createApp(createUser());
       const env = createMockEnv() as unknown as Env;
@@ -203,13 +171,28 @@ describe('services settings bindings workspace scope', () => {
       {} as ExecutionContext
     );
 
-    expect(response.status).toBe(200);
-    expect(drizzleDb.select).toHaveBeenCalled();
-    expect(desiredState.listResourceBindings).toHaveBeenCalledWith('worker-1');
-  });
-
-  it('uses workspace boundary scope when resolving resource_id on bindings update', async () => {
-    // Production code uses Drizzle chains:
+    assertEquals(response.status, 200);
+    assert(drizzleDb.select.calls.length > 0);
+    assertSpyCallArgs(desiredState.listResourceBindings, 0, ['worker-1']);
+})
+  Deno.test('services settings bindings workspace scope - uses workspace boundary scope when resolving resource_id on bindings update', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+    mockCommonEnvDeps();
+    mocks.listServiceCommonEnvLinks = (async () => []) as any;
+    mocks.listServiceBuiltins = (async () => ({})) as any;
+    mocks.listServiceManualLinkNames = (async () => []) as any;
+    mocks.setServiceManualLinks = (async () => undefined) as any;
+    mocks.patchServiceManualLinks = (async () => ({ added: [], removed: [] })) as any;
+    mocks.upsertServiceTakosAccessTokenConfig = (async () => undefined) as any;
+    mocks.deleteServiceTakosAccessTokenConfig = (async () => undefined) as any;
+    mocks.buildCommonEnvActor = (async () => ({
+      type: 'user',
+      userId: 'user-1',
+      requestId: undefined,
+      ipHash: undefined,
+      userAgent: undefined,
+    })) as any;
+  // Production code uses Drizzle chains:
     //   db.select({...}).from(resourceAccess).where(...).all() -> accessible IDs
     //   db.select({...}).from(resources).where(...).get() -> resource row
     const drizzleDb = createDrizzleDb({
@@ -217,14 +200,14 @@ describe('services settings bindings workspace scope', () => {
       getResult: { id: 'res-1', type: 'd1' }, // found resource
     });
     const desiredState = {
-      replaceResourceBindings: vi.fn().mockResolvedValue(undefined),
+      replaceResourceBindings: (async () => undefined),
     };
-    mocks.ServiceDesiredStateService.mockReturnValue(desiredState);
-    mocks.getDb.mockReturnValue(drizzleDb);
-    mocks.getServiceForUserWithRole.mockResolvedValue({
+    mocks.ServiceDesiredStateService = (() => desiredState) as any;
+    mocks.getDb = (() => drizzleDb) as any;
+    mocks.getServiceForUserWithRole = (async () => ({
       id: 'worker-1',
       space_id: 'ws-1',
-    });
+    })) as any;
 
       const app = createApp(createUser());
       const env = createMockEnv() as unknown as Env;
@@ -246,9 +229,9 @@ describe('services settings bindings workspace scope', () => {
       {} as ExecutionContext
     );
 
-    expect(response.status).toBe(200);
-    expect(drizzleDb.select).toHaveBeenCalled();
-    expect(desiredState.replaceResourceBindings).toHaveBeenCalledWith({
+    assertEquals(response.status, 200);
+    assert(drizzleDb.select.calls.length > 0);
+    assertSpyCallArgs(desiredState.replaceResourceBindings, 0, [{
       workerId: 'worker-1',
       bindings: [
         {
@@ -257,11 +240,26 @@ describe('services settings bindings workspace scope', () => {
           resourceId: 'res-1',
         },
       ],
-    });
-  });
-
-  it('returns builtins alongside service common env links', async () => {
-    mocks.listServiceCommonEnvLinks.mockResolvedValue([
+    }]);
+})
+  Deno.test('services settings bindings workspace scope - returns builtins alongside service common env links', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+    mockCommonEnvDeps();
+    mocks.listServiceCommonEnvLinks = (async () => []) as any;
+    mocks.listServiceBuiltins = (async () => ({})) as any;
+    mocks.listServiceManualLinkNames = (async () => []) as any;
+    mocks.setServiceManualLinks = (async () => undefined) as any;
+    mocks.patchServiceManualLinks = (async () => ({ added: [], removed: [] })) as any;
+    mocks.upsertServiceTakosAccessTokenConfig = (async () => undefined) as any;
+    mocks.deleteServiceTakosAccessTokenConfig = (async () => undefined) as any;
+    mocks.buildCommonEnvActor = (async () => ({
+      type: 'user',
+      userId: 'user-1',
+      requestId: undefined,
+      ipHash: undefined,
+      userAgent: undefined,
+    })) as any;
+  mocks.listServiceCommonEnvLinks = (async () => [
       {
         name: 'TAKOS_API_URL',
         source: 'manual',
@@ -269,19 +267,19 @@ describe('services settings bindings workspace scope', () => {
         sync_reason: null,
         has_value: true,
       },
-    ]);
-    mocks.listServiceBuiltins.mockResolvedValue({
+    ]) as any;
+    mocks.listServiceBuiltins = (async () => ({
       TAKOS_API_URL: {
         managed: true,
         available: true,
         sync_state: 'managed',
         sync_reason: null,
       },
-    });
-    mocks.getServiceForUser.mockResolvedValue({
+    })) as any;
+    mocks.getServiceForUser = (async () => ({
       id: 'worker-1',
       space_id: 'ws-1',
-    });
+    })) as any;
 
       const app = createApp(createUser());
       const env = createMockEnv() as unknown as Env;
@@ -291,8 +289,8 @@ describe('services settings bindings workspace scope', () => {
       {} as ExecutionContext
     );
 
-    expect(response.status).toBe(200);
-    await expect(response.json()).resolves.toEqual({
+    assertEquals(response.status, 200);
+    await assertEquals(await response.json(), {
       links: [
         {
           name: 'TAKOS_API_URL',
@@ -311,21 +309,36 @@ describe('services settings bindings workspace scope', () => {
         },
       },
     });
-    expect(mocks.listServiceCommonEnvLinks).toHaveBeenCalledWith(expect.anything(), 'ws-1', 'worker-1');
-    expect(mocks.listServiceBuiltins).toHaveBeenCalledWith(expect.anything(), 'ws-1', 'worker-1');
-  });
-
-  it('requires owner or admin to configure TAKOS_ACCESS_TOKEN builtins', async () => {
-    mocks.getServiceForUserWithRole
-      .mockResolvedValueOnce({
+    assertSpyCallArgs(mocks.listServiceCommonEnvLinks, 0, [expect.anything(), 'ws-1', 'worker-1']);
+    assertSpyCallArgs(mocks.listServiceBuiltins, 0, [expect.anything(), 'ws-1', 'worker-1']);
+})
+  Deno.test('services settings bindings workspace scope - requires owner or admin to configure TAKOS_ACCESS_TOKEN builtins', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+    mockCommonEnvDeps();
+    mocks.listServiceCommonEnvLinks = (async () => []) as any;
+    mocks.listServiceBuiltins = (async () => ({})) as any;
+    mocks.listServiceManualLinkNames = (async () => []) as any;
+    mocks.setServiceManualLinks = (async () => undefined) as any;
+    mocks.patchServiceManualLinks = (async () => ({ added: [], removed: [] })) as any;
+    mocks.upsertServiceTakosAccessTokenConfig = (async () => undefined) as any;
+    mocks.deleteServiceTakosAccessTokenConfig = (async () => undefined) as any;
+    mocks.buildCommonEnvActor = (async () => ({
+      type: 'user',
+      userId: 'user-1',
+      requestId: undefined,
+      ipHash: undefined,
+      userAgent: undefined,
+    })) as any;
+  mocks.getServiceForUserWithRole
+       = (async () => ({
         id: 'worker-1',
         space_id: 'ws-1',
-      })
-      .mockResolvedValueOnce(null);
+      })) as any
+       = (async () => null) as any;
 
     // getCurrentTakosAccessTokenLinkPresence uses Drizzle:
     // db.select({source}).from(workerCommonEnvLinks).where(...).all()
-    mocks.getDb.mockReturnValue(createDrizzleDb({ allResults: [] }));
+    mocks.getDb = (() => createDrizzleDb({ allResults: [] })) as any;
 
       const app = createApp(createUser());
       const env = createMockEnv() as unknown as Env;
@@ -346,26 +359,41 @@ describe('services settings bindings workspace scope', () => {
       {} as ExecutionContext
     );
 
-    expect(response.status).toBe(400);
-    await expect(response.json()).resolves.toEqual({
+    assertEquals(response.status, 400);
+    await assertEquals(await response.json(), {
       error: {
         code: 'BAD_REQUEST',
         message: 'Service not found',
       },
     });
-    expect(mocks.setServiceManualLinks).not.toHaveBeenCalled();
-    expect(mocks.upsertServiceTakosAccessTokenConfig).not.toHaveBeenCalled();
-  });
-
-  it('requires scopes when TAKOS_ACCESS_TOKEN is first linked', async () => {
-    mocks.listServiceBuiltins.mockResolvedValue({});
-    mocks.getServiceForUserWithRole.mockResolvedValue({
+    assertSpyCalls(mocks.setServiceManualLinks, 0);
+    assertSpyCalls(mocks.upsertServiceTakosAccessTokenConfig, 0);
+})
+  Deno.test('services settings bindings workspace scope - requires scopes when TAKOS_ACCESS_TOKEN is first linked', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+    mockCommonEnvDeps();
+    mocks.listServiceCommonEnvLinks = (async () => []) as any;
+    mocks.listServiceBuiltins = (async () => ({})) as any;
+    mocks.listServiceManualLinkNames = (async () => []) as any;
+    mocks.setServiceManualLinks = (async () => undefined) as any;
+    mocks.patchServiceManualLinks = (async () => ({ added: [], removed: [] })) as any;
+    mocks.upsertServiceTakosAccessTokenConfig = (async () => undefined) as any;
+    mocks.deleteServiceTakosAccessTokenConfig = (async () => undefined) as any;
+    mocks.buildCommonEnvActor = (async () => ({
+      type: 'user',
+      userId: 'user-1',
+      requestId: undefined,
+      ipHash: undefined,
+      userAgent: undefined,
+    })) as any;
+  mocks.listServiceBuiltins = (async () => ({})) as any;
+    mocks.getServiceForUserWithRole = (async () => ({
       id: 'worker-1',
       space_id: 'ws-1',
-    });
+    })) as any;
 
     // getCurrentTakosAccessTokenLinkPresence uses Drizzle chains
-    mocks.getDb.mockReturnValue(createDrizzleDb({ allResults: [] }));
+    mocks.getDb = (() => createDrizzleDb({ allResults: [] })) as any;
 
       const app = createApp(createUser());
       const env = createMockEnv() as unknown as Env;
@@ -381,20 +409,35 @@ describe('services settings bindings workspace scope', () => {
       {} as ExecutionContext
     );
 
-    expect(response.status).toBe(400);
-    await expect(response.json()).resolves.toEqual({
+    assertEquals(response.status, 400);
+    await assertEquals(await response.json(), {
       error: {
         code: 'BAD_REQUEST',
         message: 'TAKOS_ACCESS_TOKEN requires builtins.TAKOS_ACCESS_TOKEN.scopes when first linked',
       },
     });
-    expect(mocks.setServiceManualLinks).not.toHaveBeenCalled();
-  });
-
-  it('stores TAKOS_ACCESS_TOKEN scopes when linked explicitly', async () => {
-    mocks.listServiceBuiltins
-      .mockResolvedValueOnce({})
-      .mockResolvedValueOnce({
+    assertSpyCalls(mocks.setServiceManualLinks, 0);
+})
+  Deno.test('services settings bindings workspace scope - stores TAKOS_ACCESS_TOKEN scopes when linked explicitly', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+    mockCommonEnvDeps();
+    mocks.listServiceCommonEnvLinks = (async () => []) as any;
+    mocks.listServiceBuiltins = (async () => ({})) as any;
+    mocks.listServiceManualLinkNames = (async () => []) as any;
+    mocks.setServiceManualLinks = (async () => undefined) as any;
+    mocks.patchServiceManualLinks = (async () => ({ added: [], removed: [] })) as any;
+    mocks.upsertServiceTakosAccessTokenConfig = (async () => undefined) as any;
+    mocks.deleteServiceTakosAccessTokenConfig = (async () => undefined) as any;
+    mocks.buildCommonEnvActor = (async () => ({
+      type: 'user',
+      userId: 'user-1',
+      requestId: undefined,
+      ipHash: undefined,
+      userAgent: undefined,
+    })) as any;
+  mocks.listServiceBuiltins
+       = (async () => ({})) as any
+       = (async () => ({
         TAKOS_ACCESS_TOKEN: {
           managed: true,
           available: true,
@@ -404,8 +447,8 @@ describe('services settings bindings workspace scope', () => {
           sync_state: 'managed',
           sync_reason: null,
         },
-      });
-    mocks.listServiceCommonEnvLinks.mockResolvedValue([
+      })) as any;
+    mocks.listServiceCommonEnvLinks = (async () => [
       {
         name: 'TAKOS_ACCESS_TOKEN',
         source: 'manual',
@@ -413,14 +456,14 @@ describe('services settings bindings workspace scope', () => {
         sync_reason: null,
         has_value: true,
       },
-    ]);
-    mocks.getServiceForUserWithRole.mockResolvedValue({
+    ]) as any;
+    mocks.getServiceForUserWithRole = (async () => ({
       id: 'worker-1',
       space_id: 'ws-1',
-    });
+    })) as any;
 
     // getCurrentTakosAccessTokenLinkPresence uses Drizzle chains
-    mocks.getDb.mockReturnValue(createDrizzleDb({ allResults: [] }));
+    mocks.getDb = (() => createDrizzleDb({ allResults: [] })) as any;
 
       const app = createApp(createUser());
       const env = createMockEnv() as unknown as Env;
@@ -441,9 +484,9 @@ describe('services settings bindings workspace scope', () => {
       {} as ExecutionContext
     );
 
-    expect(response.status).toBe(200);
-    expect(mocks.setServiceManualLinks).toHaveBeenCalledWith(
-      expect.objectContaining({ kind: 'manual-link' }),
+    assertEquals(response.status, 200);
+    assertSpyCallArgs(mocks.setServiceManualLinks, 0, [
+      ({ kind: 'manual-link' }),
       {
         spaceId: 'ws-1',
         serviceId: 'worker-1',
@@ -456,16 +499,16 @@ describe('services settings bindings workspace scope', () => {
           userAgent: undefined,
         },
       },
-    );
-    expect(mocks.upsertServiceTakosAccessTokenConfig).toHaveBeenCalledWith(
-      expect.objectContaining({ kind: 'manual-link' }),
+    ]);
+    assertSpyCallArgs(mocks.upsertServiceTakosAccessTokenConfig, 0, [
+      ({ kind: 'manual-link' }),
       {
         spaceId: 'ws-1',
         serviceId: 'worker-1',
         scopes: ['repo:read'],
       },
-    );
-    await expect(response.json()).resolves.toEqual({
+    ]);
+    await assertEquals(await response.json(), {
       success: true,
       links: [
         {
@@ -488,5 +531,4 @@ describe('services settings bindings workspace scope', () => {
         },
       },
     });
-  });
-});
+})

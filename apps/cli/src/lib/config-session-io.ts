@@ -15,8 +15,8 @@ import {
   readSync,
   closeSync,
 } from 'fs';
-import { logWarning } from './cli-log.js';
-import { validateApiUrl, isValidId } from './config-validation.js';
+import { logWarning } from './cli-log.ts';
+import { validateApiUrl, isValidId } from './config-validation.ts';
 
 // ---------------------------------------------------------------------------
 // Constants & helpers

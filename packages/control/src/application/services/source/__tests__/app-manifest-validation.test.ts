@@ -1,9 +1,10 @@
-import { describe, expect, it } from 'vitest';
 import { parseResources } from '../app-manifest-validation';
 
-describe('parseResources', () => {
-  it('normalizes portable resource aliases to canonical types', () => {
-    const resources = parseResources({
+
+import { assertEquals, assertThrows } from 'jsr:@std/assert';
+
+  Deno.test('parseResources - normalizes portable resource aliases to canonical types', () => {
+  const resources = parseResources({
       resources: {
         mainDb: {
           type: 'sql',
@@ -36,15 +37,14 @@ describe('parseResources', () => {
       },
     });
 
-    expect(resources.mainDb.type).toBe('d1');
-    expect(resources.storage.type).toBe('r2');
-    expect(resources.vectors.type).toBe('vectorize');
-    expect(resources.secret.type).toBe('secretRef');
-    expect(resources.analytics.type).toBe('analyticsEngine');
-  });
-
-  it('normalizes runtime resource aliases to canonical types', () => {
-    const resources = parseResources({
+    assertEquals(resources.mainDb.type, 'd1');
+    assertEquals(resources.storage.type, 'r2');
+    assertEquals(resources.vectors.type, 'vectorize');
+    assertEquals(resources.secret.type, 'secretRef');
+    assertEquals(resources.analytics.type, 'analyticsEngine');
+})
+  Deno.test('parseResources - normalizes runtime resource aliases to canonical types', () => {
+  const resources = parseResources({
       resources: {
         workflows: {
           type: 'workflow_runtime',
@@ -69,18 +69,16 @@ describe('parseResources', () => {
       },
     });
 
-    expect(resources.workflows.type).toBe('workflow');
-    expect(resources.namespaces.type).toBe('durableObject');
-  });
-
-  it('throws for unsupported aliases', () => {
-    expect(() => parseResources({
+    assertEquals(resources.workflows.type, 'workflow');
+    assertEquals(resources.namespaces.type, 'durableObject');
+})
+  Deno.test('parseResources - throws for unsupported aliases', () => {
+  assertThrows(() => { () => parseResources({
       resources: {
         bad: {
           type: 'sql-engine',
         },
       },
     } as unknown as Record<string, unknown>, {})
-    ).toThrow('spec.resources.bad.type');
-  });
-});
+    ; }, 'spec.resources.bad.type');
+})

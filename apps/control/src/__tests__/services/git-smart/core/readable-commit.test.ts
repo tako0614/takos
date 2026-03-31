@@ -1,22 +1,16 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { assertEquals } from 'jsr:@std/assert';
+import { assertSpyCallArgs } from 'jsr:@std/testing/mock';
 
-const mockResolveRef = vi.hoisted(() => vi.fn());
-const mockGetCommit = vi.hoisted(() => vi.fn());
-const mockGetCommitLog = vi.hoisted(() => vi.fn());
-const mockGetTree = vi.hoisted(() => vi.fn());
+const mockResolveRef = ((..._args: any[]) => undefined) as any;
+const mockGetCommit = ((..._args: any[]) => undefined) as any;
+const mockGetCommitLog = ((..._args: any[]) => undefined) as any;
+const mockGetTree = ((..._args: any[]) => undefined) as any;
 
-vi.mock('@/services/git-smart/core/refs', () => ({
-  resolveRef: mockResolveRef,
-}));
+// [Deno] vi.mock removed - manually stub imports from '@/services/git-smart/core/refs'
 
-vi.mock('@/services/git-smart/core/commit-index', () => ({
-  getCommit: mockGetCommit,
-  getCommitLog: mockGetCommitLog,
-}));
+// [Deno] vi.mock removed - manually stub imports from '@/services/git-smart/core/commit-index'
 
-vi.mock('@/services/git-smart/core/tree-ops', () => ({
-  getTree: mockGetTree,
-}));
+// [Deno] vi.mock removed - manually stub imports from '@/services/git-smart/core/tree-ops'
 
 import { resolveReadableCommitFromRef } from '@/services/git-smart/core/readable-commit';
 
@@ -35,128 +29,154 @@ function makeCommit(sha: string, treeSha: string, parents: string[] = []) {
   };
 }
 
-describe('resolveReadableCommitFromRef', () => {
-  beforeEach(() => {
-    mockResolveRef.mockReset();
-    mockGetCommit.mockReset();
-    mockGetCommitLog.mockReset();
-    mockGetTree.mockReset();
-  });
 
-  it('returns ref_not_found when ref does not resolve', async () => {
-    mockResolveRef.mockResolvedValue(null);
+
+  Deno.test('resolveReadableCommitFromRef - returns ref_not_found when ref does not resolve', async () => {
+  mockResolveRef;
+    mockGetCommit;
+    mockGetCommitLog;
+    mockGetTree;
+  mockResolveRef = (async () => null) as any;
 
     const result = await resolveReadableCommitFromRef(db, bucket, REPO_ID, 'main');
 
-    expect(result).toEqual({ ok: false, reason: 'ref_not_found' });
-  });
+    assertEquals(result, { ok: false, reason: 'ref_not_found' });
+})
 
-  it('returns non-degraded when primary commit has a valid tree', async () => {
-    const commit = makeCommit('aaa', 'ttt');
-    mockResolveRef.mockResolvedValue('aaa');
-    mockGetCommit.mockResolvedValue(commit);
-    mockGetTree.mockResolvedValue({ sha: 'ttt', entries: [] });
+  Deno.test('resolveReadableCommitFromRef - returns non-degraded when primary commit has a valid tree', async () => {
+  mockResolveRef;
+    mockGetCommit;
+    mockGetCommitLog;
+    mockGetTree;
+  const commit = makeCommit('aaa', 'ttt');
+    mockResolveRef = (async () => 'aaa') as any;
+    mockGetCommit = (async () => commit) as any;
+    mockGetTree = (async () => ({ sha: 'ttt', entries: [] })) as any;
 
     const result = await resolveReadableCommitFromRef(db, bucket, REPO_ID, 'main');
 
-    expect(result).toEqual({
+    assertEquals(result, {
       ok: true,
       refCommitSha: 'aaa',
       resolvedCommitSha: 'aaa',
       degraded: false,
       commit,
     });
-  });
+})
 
-  it('falls back to ancestor when primary tree is missing', async () => {
-    const primary = makeCommit('aaa', 'ttt-broken', ['bbb']);
+  Deno.test('resolveReadableCommitFromRef - falls back to ancestor when primary tree is missing', async () => {
+  mockResolveRef;
+    mockGetCommit;
+    mockGetCommitLog;
+    mockGetTree;
+  const primary = makeCommit('aaa', 'ttt-broken', ['bbb']);
     const fallback = makeCommit('bbb', 'ttt-ok');
 
-    mockResolveRef.mockResolvedValue('aaa');
-    mockGetCommit.mockResolvedValue(primary);
+    mockResolveRef = (async () => 'aaa') as any;
+    mockGetCommit = (async () => primary) as any;
     mockGetTree
-      .mockResolvedValueOnce(null) // primary tree missing
-      .mockResolvedValueOnce({ sha: 'ttt-ok', entries: [] }); // fallback tree ok
-    mockGetCommitLog.mockResolvedValue([primary, fallback]);
+       = (async () => null) as any // primary tree missing
+       = (async () => ({ sha: 'ttt-ok', entries: [] })) as any; // fallback tree ok
+    mockGetCommitLog = (async () => [primary, fallback]) as any;
 
     const result = await resolveReadableCommitFromRef(db, bucket, REPO_ID, 'main');
 
-    expect(result).toEqual({
+    assertEquals(result, {
       ok: true,
       refCommitSha: 'aaa',
       resolvedCommitSha: 'bbb',
       degraded: true,
       commit: fallback,
     });
-  });
+})
 
-  it('returns commit_not_found when commit cannot be loaded', async () => {
-    mockResolveRef.mockResolvedValue('aaa');
-    mockGetCommit.mockResolvedValue(null);
-    mockGetCommitLog.mockResolvedValue([]);
-
-    const result = await resolveReadableCommitFromRef(db, bucket, REPO_ID, 'main');
-
-    expect(result).toEqual({ ok: false, reason: 'commit_not_found', refCommitSha: 'aaa' });
-  });
-
-  it('returns tree_not_found when no commit in history has a valid tree', async () => {
-    const primary = makeCommit('aaa', 'ttt-broken');
-    mockResolveRef.mockResolvedValue('aaa');
-    mockGetCommit.mockResolvedValue(primary);
-    mockGetTree.mockResolvedValue(null); // all trees missing
-    mockGetCommitLog.mockResolvedValue([primary]);
+  Deno.test('resolveReadableCommitFromRef - returns commit_not_found when commit cannot be loaded', async () => {
+  mockResolveRef;
+    mockGetCommit;
+    mockGetCommitLog;
+    mockGetTree;
+  mockResolveRef = (async () => 'aaa') as any;
+    mockGetCommit = (async () => null) as any;
+    mockGetCommitLog = (async () => []) as any;
 
     const result = await resolveReadableCommitFromRef(db, bucket, REPO_ID, 'main');
 
-    expect(result).toEqual({ ok: false, reason: 'tree_not_found', refCommitSha: 'aaa' });
-  });
+    assertEquals(result, { ok: false, reason: 'commit_not_found', refCommitSha: 'aaa' });
+})
 
-  it('respects fallbackLimit option', async () => {
-    const primary = makeCommit('aaa', 'ttt-broken');
-    mockResolveRef.mockResolvedValue('aaa');
-    mockGetCommit.mockResolvedValue(primary);
-    mockGetTree.mockResolvedValue(null);
-    mockGetCommitLog.mockResolvedValue([primary]);
+  Deno.test('resolveReadableCommitFromRef - returns tree_not_found when no commit in history has a valid tree', async () => {
+  mockResolveRef;
+    mockGetCommit;
+    mockGetCommitLog;
+    mockGetTree;
+  const primary = makeCommit('aaa', 'ttt-broken');
+    mockResolveRef = (async () => 'aaa') as any;
+    mockGetCommit = (async () => primary) as any;
+    mockGetTree = (async () => null) as any; // all trees missing
+    mockGetCommitLog = (async () => [primary]) as any;
+
+    const result = await resolveReadableCommitFromRef(db, bucket, REPO_ID, 'main');
+
+    assertEquals(result, { ok: false, reason: 'tree_not_found', refCommitSha: 'aaa' });
+})
+
+  Deno.test('resolveReadableCommitFromRef - respects fallbackLimit option', async () => {
+  mockResolveRef;
+    mockGetCommit;
+    mockGetCommitLog;
+    mockGetTree;
+  const primary = makeCommit('aaa', 'ttt-broken');
+    mockResolveRef = (async () => 'aaa') as any;
+    mockGetCommit = (async () => primary) as any;
+    mockGetTree = (async () => null) as any;
+    mockGetCommitLog = (async () => [primary]) as any;
 
     await resolveReadableCommitFromRef(db, bucket, REPO_ID, 'main', { fallbackLimit: 10 });
 
-    expect(mockGetCommitLog).toHaveBeenCalledWith(db, bucket, REPO_ID, 'aaa', 10);
-  });
+    assertSpyCallArgs(mockGetCommitLog, 0, [db, bucket, REPO_ID, 'aaa', 10]);
+})
 
-  it('clamps fallbackLimit to at least 1', async () => {
-    const primary = makeCommit('aaa', 'ttt-broken');
-    mockResolveRef.mockResolvedValue('aaa');
-    mockGetCommit.mockResolvedValue(primary);
-    mockGetTree.mockResolvedValue(null);
-    mockGetCommitLog.mockResolvedValue([primary]);
+  Deno.test('resolveReadableCommitFromRef - clamps fallbackLimit to at least 1', async () => {
+  mockResolveRef;
+    mockGetCommit;
+    mockGetCommitLog;
+    mockGetTree;
+  const primary = makeCommit('aaa', 'ttt-broken');
+    mockResolveRef = (async () => 'aaa') as any;
+    mockGetCommit = (async () => primary) as any;
+    mockGetTree = (async () => null) as any;
+    mockGetCommitLog = (async () => [primary]) as any;
 
     await resolveReadableCommitFromRef(db, bucket, REPO_ID, 'main', { fallbackLimit: -5 });
 
-    expect(mockGetCommitLog).toHaveBeenCalledWith(db, bucket, REPO_ID, 'aaa', 1);
-  });
+    assertSpyCallArgs(mockGetCommitLog, 0, [db, bucket, REPO_ID, 'aaa', 1]);
+})
 
-  it('skips primary commit in fallback history scan', async () => {
-    const primary = makeCommit('aaa', 'ttt-broken', ['bbb']);
+  Deno.test('resolveReadableCommitFromRef - skips primary commit in fallback history scan', async () => {
+  mockResolveRef;
+    mockGetCommit;
+    mockGetCommitLog;
+    mockGetTree;
+  const primary = makeCommit('aaa', 'ttt-broken', ['bbb']);
     const second = makeCommit('bbb', 'ttt-also-broken');
     const third = makeCommit('ccc', 'ttt-ok');
 
-    mockResolveRef.mockResolvedValue('aaa');
-    mockGetCommit.mockResolvedValue(primary);
+    mockResolveRef = (async () => 'aaa') as any;
+    mockGetCommit = (async () => primary) as any;
     mockGetTree
-      .mockResolvedValueOnce(null)   // primary tree
-      .mockResolvedValueOnce(null)   // second tree (bbb)
-      .mockResolvedValueOnce({ sha: 'ttt-ok', entries: [] }); // third tree (ccc)
-    mockGetCommitLog.mockResolvedValue([primary, second, third]);
+       = (async () => null) as any   // primary tree
+       = (async () => null) as any   // second tree (bbb)
+       = (async () => ({ sha: 'ttt-ok', entries: [] })) as any; // third tree (ccc)
+    mockGetCommitLog = (async () => [primary, second, third]) as any;
 
     const result = await resolveReadableCommitFromRef(db, bucket, REPO_ID, 'main');
 
-    expect(result).toEqual({
+    assertEquals(result, {
       ok: true,
       refCommitSha: 'aaa',
       resolvedCommitSha: 'ccc',
       degraded: true,
       commit: third,
     });
-  });
-});
+})
+

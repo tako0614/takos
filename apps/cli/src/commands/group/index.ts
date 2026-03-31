@@ -13,10 +13,10 @@
  *   takos group delete <name>     -- Delete all entities and state for a group
  */
 import { Command } from 'commander';
-import { registerGroupListCommand } from './list.js';
-import { registerGroupShowCommand } from './show.js';
-import { registerGroupDeleteCommand } from './delete.js';
-import { registerGroupDesiredCommand } from './desired.js';
+import { registerGroupListCommand } from './list.ts';
+import { registerGroupShowCommand } from './show.ts';
+import { registerGroupDeleteCommand } from './delete.ts';
+import { registerGroupDesiredCommand } from './desired.ts';
 
 export function registerGroupCommand(program: Command): void {
   const groupCmd = program

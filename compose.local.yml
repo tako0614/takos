@@ -72,7 +72,7 @@ services:
       OCI_ORCHESTRATOR_DATA_DIR: ${OCI_ORCHESTRATOR_DATA_DIR:-/var/lib/takos/control/oci-orchestrator}
       TAKOS_LOCAL_DATA_DIR: ${TAKOS_LOCAL_DATA_DIR}
       TAKOS_DOCKER_NETWORK: takos-containers
-    command: ["pnpm", "local:oci-orchestrator"]
+    command: ["deno", "task", "local:oci-orchestrator"]
     ports:
       - "${TAKOS_OCI_ORCHESTRATOR_PORT}:${TAKOS_OCI_ORCHESTRATOR_PORT}"
     volumes:
@@ -82,7 +82,7 @@ services:
       - default
       - takos-containers
     healthcheck:
-      test: ["CMD-SHELL", "node -e \"fetch('http://127.0.0.1:${TAKOS_OCI_ORCHESTRATOR_PORT}/health').then((r)=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))\""]
+      test: ["CMD-SHELL", "deno eval \"const r=await fetch('http://127.0.0.1:${TAKOS_OCI_ORCHESTRATOR_PORT}/health');Deno.exit(r.ok?0:1)\""]
       interval: 15s
       timeout: 5s
       retries: 10
@@ -102,13 +102,13 @@ services:
       ADMIN_DOMAIN: ${TAKOS_ADMIN_DOMAIN}
       TENANT_BASE_DOMAIN: ${TAKOS_TENANT_BASE_DOMAIN}
       TAKOS_LOCAL_DATA_DIR: ${TAKOS_LOCAL_DATA_DIR}
-    command: ["pnpm", "local:web"]
+    command: ["deno", "task", "local:web"]
     ports:
       - "${TAKOS_CONTROL_WEB_PORT}:${TAKOS_CONTROL_WEB_PORT}"
     volumes:
       - takos-control-data:/var/lib/takos/control
     healthcheck:
-      test: ["CMD-SHELL", "node -e \"fetch('http://127.0.0.1:${TAKOS_CONTROL_WEB_PORT}/health').then((r)=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))\""]
+      test: ["CMD-SHELL", "deno eval \"const r=await fetch('http://127.0.0.1:${TAKOS_CONTROL_WEB_PORT}/health');Deno.exit(r.ok?0:1)\""]
       interval: 15s
       timeout: 5s
       retries: 10
@@ -127,13 +127,13 @@ services:
       PORT: ${TAKOS_CONTROL_DISPATCH_PORT}
       TAKOS_LOCAL_DATA_DIR: ${TAKOS_LOCAL_DATA_DIR}
       TAKOS_LOCAL_WEB_URL: http://control-web:${TAKOS_CONTROL_WEB_PORT}/
-    command: ["pnpm", "local:dispatch"]
+    command: ["deno", "task", "local:dispatch"]
     ports:
       - "${TAKOS_CONTROL_DISPATCH_PORT}:${TAKOS_CONTROL_DISPATCH_PORT}"
     volumes:
       - takos-control-data:/var/lib/takos/control
     healthcheck:
-      test: ["CMD-SHELL", "node -e \"fetch('http://127.0.0.1:${TAKOS_CONTROL_DISPATCH_PORT}/health').then((r)=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))\""]
+      test: ["CMD-SHELL", "deno eval \"const r=await fetch('http://127.0.0.1:${TAKOS_CONTROL_DISPATCH_PORT}/health');Deno.exit(r.ok?0:1)\""]
       interval: 15s
       timeout: 5s
       retries: 10
@@ -162,11 +162,11 @@ services:
       TAKOS_LOCAL_WORKER_SCHEDULED_INTERVAL_MS: ${TAKOS_CONTROL_WORKER_SCHEDULED_INTERVAL_MS:-60000}
       TAKOS_LOCAL_WORKER_HEARTBEAT_FILE: ${TAKOS_CONTROL_WORKER_HEARTBEAT_FILE:-/var/lib/takos/control/worker-heartbeat.json}
       TAKOS_LOCAL_WORKER_HEARTBEAT_TTL_MS: ${TAKOS_CONTROL_WORKER_HEARTBEAT_TTL_MS:-120000}
-    command: ["pnpm", "local:worker"]
+    command: ["deno", "task", "local:worker"]
     volumes:
       - takos-control-data:/var/lib/takos/control
     healthcheck:
-      test: ["CMD-SHELL", "node -e \"const fs=require('node:fs'); const path=process.env.TAKOS_LOCAL_WORKER_HEARTBEAT_FILE || '/var/lib/takos/control/worker-heartbeat.json'; const ttl=Number(process.env.TAKOS_LOCAL_WORKER_HEARTBEAT_TTL_MS || '120000'); try { const age=Date.now()-fs.statSync(path).mtimeMs; process.exit(age <= ttl ? 0 : 1); } catch { process.exit(1); }\""]
+      test: ["CMD-SHELL", "deno eval \"const path=Deno.env.get('TAKOS_LOCAL_WORKER_HEARTBEAT_FILE')||'/var/lib/takos/control/worker-heartbeat.json';const ttl=Number(Deno.env.get('TAKOS_LOCAL_WORKER_HEARTBEAT_TTL_MS')||'120000');try{const s=Deno.statSync(path);const age=Date.now()-(s.mtime?.getTime()??0);Deno.exit(age<=ttl?0:1)}catch{Deno.exit(1)}\""]
       interval: 15s
       timeout: 5s
       retries: 10
@@ -181,11 +181,11 @@ services:
     environment:
       PORT: ${TAKOS_BROWSER_HOST_PORT}
       TAKOS_LOCAL_BROWSER_URL: ${TAKOS_LOCAL_BROWSER_URL}
-    command: ["pnpm", "local:browser-host"]
+    command: ["deno", "task", "local:browser-host"]
     ports:
       - "${TAKOS_BROWSER_HOST_PORT}:${TAKOS_BROWSER_HOST_PORT}"
     healthcheck:
-      test: ["CMD-SHELL", "node -e \"fetch('http://127.0.0.1:${TAKOS_BROWSER_HOST_PORT}/health').then((r)=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))\""]
+      test: ["CMD-SHELL", "deno eval \"const r=await fetch('http://127.0.0.1:${TAKOS_BROWSER_HOST_PORT}/health');Deno.exit(r.ok?0:1)\""]
       interval: 15s
       timeout: 5s
       retries: 10
@@ -206,11 +206,11 @@ services:
       TAKOS_LOCAL_WEB_URL: http://control-web:${TAKOS_CONTROL_WEB_PORT}/
       TAKOS_LOCAL_RUNTIME_URL: ${TAKOS_LOCAL_RUNTIME_URL}
       PROXY_BASE_URL: http://runtime-host:${TAKOS_RUNTIME_HOST_PORT}
-    command: ["pnpm", "local:runtime-host"]
+    command: ["deno", "task", "local:runtime-host"]
     ports:
       - "${TAKOS_RUNTIME_HOST_PORT}:${TAKOS_RUNTIME_HOST_PORT}"
     healthcheck:
-      test: ["CMD-SHELL", "node -e \"fetch('http://127.0.0.1:${TAKOS_RUNTIME_HOST_PORT}/health').then((r)=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))\""]
+      test: ["CMD-SHELL", "deno eval \"const r=await fetch('http://127.0.0.1:${TAKOS_RUNTIME_HOST_PORT}/health');Deno.exit(r.ok?0:1)\""]
       interval: 15s
       timeout: 5s
       retries: 10
@@ -234,11 +234,11 @@ services:
       TAKOS_LOCAL_EXECUTOR_URL: ${TAKOS_LOCAL_EXECUTOR_URL}
       PROXY_BASE_URL: http://executor-host:${TAKOS_EXECUTOR_HOST_PORT}
       CONTROL_RPC_BASE_URL: http://executor-host:${TAKOS_EXECUTOR_HOST_PORT}
-    command: ["pnpm", "local:executor-host"]
+    command: ["deno", "task", "local:executor-host"]
     ports:
       - "${TAKOS_EXECUTOR_HOST_PORT}:${TAKOS_EXECUTOR_HOST_PORT}"
     healthcheck:
-      test: ["CMD-SHELL", "node -e \"fetch('http://127.0.0.1:${TAKOS_EXECUTOR_HOST_PORT}/health').then((r)=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))\""]
+      test: ["CMD-SHELL", "deno eval \"const r=await fetch('http://127.0.0.1:${TAKOS_EXECUTOR_HOST_PORT}/health');Deno.exit(r.ok?0:1)\""]
       interval: 15s
       timeout: 5s
       retries: 10
@@ -261,7 +261,7 @@ services:
     ports:
       - "${TAKOS_RUNTIME_PORT}:8080"
     healthcheck:
-      test: ["CMD-SHELL", "node -e \"fetch('http://127.0.0.1:8080/health').then((r)=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))\""]
+      test: ["CMD-SHELL", "deno eval \"const r=await fetch('http://127.0.0.1:8080/health');Deno.exit(r.ok?0:1)\""]
       interval: 15s
       timeout: 5s
       retries: 10
@@ -281,7 +281,7 @@ services:
     ports:
       - "${TAKOS_BROWSER_PORT}:8080"
     healthcheck:
-      test: ["CMD-SHELL", "node -e \"fetch('http://127.0.0.1:8080/internal/healthz').then((r)=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))\""]
+      test: ["CMD-SHELL", "deno eval \"const r=await fetch('http://127.0.0.1:8080/internal/healthz');Deno.exit(r.ok?0:1)\""]
       interval: 15s
       timeout: 5s
       retries: 10

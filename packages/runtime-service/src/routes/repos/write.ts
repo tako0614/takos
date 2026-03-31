@@ -1,15 +1,15 @@
 import { Hono } from 'hono';
-import { runGitCommand } from '../../runtime/git.js';
-import { validateGitAuthorName, validateGitAuthorEmail } from '../../runtime/validation.js';
-import { mergeTempDirManager } from '../../utils/temp-dir.js';
+import { runGitCommand } from '../../runtime/git.ts';
+import { validateGitAuthorName, validateGitAuthorEmail } from '../../runtime/validation.ts';
+import { mergeTempDirManager } from '../../utils/temp-dir.ts';
 import { getErrorMessage } from 'takos-common/errors';
 import {
   getVerifiedRepoPath,
   validateRef,
   resolveAndValidateWorkDir,
   requireRepoParams,
-} from './repo-validation.js';
-import { isBoundaryViolationError } from '../../shared/errors.js';
+} from './repo-validation.ts';
+import { isBoundaryViolationError } from '../../shared/errors.ts';
 import { badRequest, forbidden, internalError } from 'takos-common/middleware/hono';
 import { ErrorCodes } from 'takos-common/errors';
 

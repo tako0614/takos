@@ -114,4 +114,5 @@ export const common = {
     noStarredReposYet: 'スター付きリポジトリはまだありません',
     reject: '拒否',
     accept: '承認',
+    new: '新規',
 } as const;

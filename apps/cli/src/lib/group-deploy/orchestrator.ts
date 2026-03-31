@@ -4,11 +4,11 @@
 import type {
   GroupDeployOptions,
   GroupDeployResult,
-} from './deploy-models.js';
-import { provisionResources } from './provisioner.js';
-import { deployStandaloneContainers, deployServices } from './phases/container-phase.js';
-import { deployWorkers } from './phases/worker-phase.js';
-import { resolveAndInjectTemplates } from './phases/template-phase.js';
+} from './deploy-models.ts';
+import { provisionResources } from './provisioner.ts';
+import { deployStandaloneContainers, deployServices } from './phases/container-phase.ts';
+import { deployWorkers } from './phases/worker-phase.ts';
+import { resolveAndInjectTemplates } from './phases/template-phase.ts';
 
 // ── Types ───────────────────────────────────────────────────────────────────
 

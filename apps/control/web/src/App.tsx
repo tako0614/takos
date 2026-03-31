@@ -1,4 +1,5 @@
-import React, { useCallback, useEffect } from 'react';
+import { onMount } from 'solid-js';
+import type { JSX } from 'solid-js';
 import { LoadingScreen } from './components/common/LoadingScreen';
 import { ToastRenderer } from './components/common/Toast';
 import { ConfirmDialogRenderer } from './components/common/ConfirmDialog';
@@ -15,7 +16,7 @@ import { useAppRouteResolver } from './hooks/useAppRouteResolver';
 import type { Space } from './types';
 
 import { useAuth } from './hooks/useAuth';
-import { useSetAtom } from 'jotai';
+import { useSetAtom } from 'solid-jotai';
 import { showCreateSpaceAtom } from './store/modal';
 import { useNavigation, useNavigationSync } from './store/navigation';
 
@@ -68,7 +69,7 @@ function AppContent() {
     t,
   });
 
-  const handleCreateSpace = useCallback(async (name: string, description: string) => {
+  const handleCreateSpace = async (name: string, description: string) => {
     const trimmedName = name.trim();
     const trimmedDescription = description.trim();
     let space: Space;
@@ -95,7 +96,7 @@ function AppContent() {
     setShowCreateSpace(false);
     const identifier = getSpaceIdentifier(space);
     navigateToChat(identifier);
-  }, [fetchSpaces, navigateToChat, setShowCreateSpace, t, user]);
+  };
 
   // Public / unauthenticated views
   const renderPublicStoreView = () => (
@@ -126,7 +127,7 @@ function AppContent() {
   };
 
   // Main content routing
-  const content: React.ReactNode = (() => {
+  const content: JSX.Element = (() => {
     // OAuth views handle their own auth (session cookie + API redirects)
     if (route.view === 'oauth-authorize') {
       return <OAuthConsentView />;
@@ -185,9 +186,9 @@ function AppWithProviders() {
   useNavigationSync();
 
   // Initialize auth state on mount (replaces AuthProvider)
-  useEffect(() => {
+  onMount(() => {
     fetchUser();
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  });
 
   return <AppContent />;
 }

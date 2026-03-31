@@ -30,7 +30,7 @@ export function parseIntEnv(
   defaultValue: number,
   options?: { min?: number; max?: number; warn?: WarnFn },
 ): number {
-  const raw = (typeof globalThis.process !== 'undefined' ? process.env[name] : undefined)?.trim();
+  const raw = (typeof Deno !== 'undefined' ? Deno.env.get(name) : undefined)?.trim();
   if (!raw) return defaultValue;
   return parseIntValue(name, raw, defaultValue, options);
 }
@@ -45,7 +45,7 @@ export function parseIntEnvRequired(
   name: string,
   options?: { min?: number; max?: number },
 ): number {
-  const raw = (typeof globalThis.process !== 'undefined' ? process.env[name] : undefined)?.trim();
+  const raw = (typeof Deno !== 'undefined' ? Deno.env.get(name) : undefined)?.trim();
   if (!raw) {
     throw new Error(`Required environment variable ${name} is not set`);
   }
@@ -63,7 +63,7 @@ export function parseIntEnvRequired(
 }
 
 /**
- * `process.env` から直接読むのではなく、文字列入力から整数をパースする。
+ * `Deno.env` から直接読むのではなく、文字列入力から整数をパースする。
  *
  * 例えば Cloudflare Workers の `Env` バインディングなど、
  * 既に文字列として読み込まれた環境値を扱う場合に利用する。
@@ -114,13 +114,13 @@ export function parseFloatEnv(
   defaultValue: number,
   options?: { min?: number; max?: number; warn?: WarnFn },
 ): number {
-  const raw = (typeof globalThis.process !== 'undefined' ? process.env[name] : undefined)?.trim();
+  const raw = (typeof Deno !== 'undefined' ? Deno.env.get(name) : undefined)?.trim();
   if (!raw) return defaultValue;
   return parseFloatValue(name, raw, defaultValue, options);
 }
 
 /**
- * `process.env` から直接読むのではなく、文字列入力から浮動小数点数をパースする。
+ * `Deno.env` から直接読むのではなく、文字列入力から浮動小数点数をパースする。
  *
  * - `undefined` / 空文字なら `defaultValue` を返す。
  * - 値が存在するが数値として不正なら警告を出して `defaultValue` を返す。

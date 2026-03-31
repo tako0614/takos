@@ -109,15 +109,15 @@ export function createSandboxEnv(
   const allAllowed = new Set([...CORE_SAFE_ENV, ...GIT_ENV, ...CI_ENV]);
 
   for (const key of allAllowed) {
-    if (process.env[key] && !BLOCKED_ENV.has(key)) {
-      sandboxEnv[key] = process.env[key]!;
+    if (Deno.env.get(key) && !BLOCKED_ENV.has(key)) {
+      sandboxEnv[key] = Deno.env.get(key)!;
     }
   }
 
   for (const [key, value] of Object.entries(baseEnv)) {
     if (value.length > maxValueLength) continue;
 
-    // Keep process.env inheritance filtered, but trust explicitly provided
+    // Keep Deno.env inheritance filtered, but trust explicitly provided
     // workflow/job/step env values even when key names look sensitive.
     const allowTakos = TAKOS_ACTIONS_ENV_ALLOWLIST.has(key);
     if (

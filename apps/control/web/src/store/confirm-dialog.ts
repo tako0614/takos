@@ -1,5 +1,5 @@
-import { atom, useSetAtom, useAtomValue } from 'jotai';
-import { useCallback } from 'react';
+import { atom } from 'jotai/vanilla';
+import { useSetAtom, useAtomValue } from 'solid-jotai';
 
 export interface ConfirmDialogOptions {
   title: string;
@@ -36,17 +36,14 @@ export const confirmDialogAtom = atom<ConfirmDialogState>(initialState);
 export function useConfirmDialog() {
   const setState = useSetAtom(confirmDialogAtom);
 
-  const confirm = useCallback(
-    (options: ConfirmDialogOptions): Promise<boolean> =>
-      new Promise<boolean>((resolve) => {
-        setState({
-          isOpen: true,
-          ...options,
-          resolve,
-        });
-      }),
-    [setState],
-  );
+  const confirm = (options: ConfirmDialogOptions): Promise<boolean> =>
+    new Promise<boolean>((resolve) => {
+      setState({
+        isOpen: true,
+        ...options,
+        resolve,
+      });
+    });
 
   return { confirm };
 }
@@ -60,19 +57,19 @@ export function useConfirmDialogState() {
 export function useConfirmDialogActions() {
   const setState = useSetAtom(confirmDialogAtom);
 
-  const handleConfirm = useCallback(() => {
+  const handleConfirm = () => {
     setState((prev) => {
       prev.resolve?.(true);
       return { ...initialState };
     });
-  }, [setState]);
+  };
 
-  const handleCancel = useCallback(() => {
+  const handleCancel = () => {
     setState((prev) => {
       prev.resolve?.(false);
       return { ...initialState };
     });
-  }, [setState]);
+  };
 
   return { handleConfirm, handleCancel };
 }

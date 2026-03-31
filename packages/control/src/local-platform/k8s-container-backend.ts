@@ -22,8 +22,8 @@ import { logInfo, logError } from '../shared/utils/logger.ts';
 // Re-export the types expected by the orchestrator
 // ---------------------------------------------------------------------------
 
-const K8S_NAMESPACE = process.env.K8S_NAMESPACE?.trim() || 'default';
-const K8S_KUBECONFIG = process.env.K8S_KUBECONFIG?.trim() || undefined;
+const K8S_NAMESPACE = Deno.env.get('K8S_NAMESPACE')?.trim() || 'default';
+const K8S_KUBECONFIG = Deno.env.get('K8S_KUBECONFIG')?.trim() || undefined;
 
 /** How long to wait for a pod to reach the Running phase. */
 const POD_READY_TIMEOUT_MS = 120_000;

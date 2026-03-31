@@ -1,7 +1,7 @@
 /**
  * Group Deploy — template resolution helpers.
  */
-import type { GroupDeployOptions, GroupDeployResult, TemplateContext } from './deploy-models.js';
+import type { GroupDeployOptions, GroupDeployResult, TemplateContext } from './deploy-models.ts';
 
 export function buildTemplateContext(
   result: GroupDeployResult,

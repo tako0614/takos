@@ -16,7 +16,7 @@ const __dirname = path.dirname(__filename);
 export const SCRIPTS_DIR = path.resolve(__dirname, '..');
 export const CONTROL_APP_DIR = path.resolve(SCRIPTS_DIR, '..');
 export const WRANGLER_TOML_PATH = path.resolve(CONTROL_APP_DIR, 'wrangler.toml');
-export const AUDIT_LOG_DIR = process.env.TAKOS_DB_AUDIT_LOG_DIR?.trim() || path.join(os.homedir(), '.takos', 'audit');
+export const AUDIT_LOG_DIR = Deno.env.get('TAKOS_DB_AUDIT_LOG_DIR')?.trim() || path.join(os.homedir(), '.takos', 'audit');
 export const AUDIT_LOG_FILE = path.join(AUDIT_LOG_DIR, 'admin-cli-operations.jsonl');
 
 // ---------------------------------------------------------------------------

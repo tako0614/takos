@@ -1,8 +1,9 @@
-import { type HTMLAttributes, type CSSProperties } from 'react';
+import { splitProps } from 'solid-js';
+import type { JSX } from 'solid-js';
 
 type AvatarSize = 'xs' | 'sm' | 'md' | 'lg' | 'xl';
 
-interface AvatarProps extends HTMLAttributes<HTMLDivElement> {
+interface AvatarProps extends JSX.HTMLAttributes<HTMLDivElement> {
   src?: string;
   alt?: string;
   name?: string;
@@ -35,47 +36,43 @@ function stringToColor(str: string): string {
   return `hsl(${hue}, 65%, 50%)`;
 }
 
-export function Avatar({
-  src,
-  alt,
-  name,
-  size = 'md',
-  className = '',
-  style,
-  ...props
-}: AvatarProps) {
-  const { size: dimension, fontSize } = sizeMap[size];
+export function Avatar(props: AvatarProps) {
+  const [local, rest] = splitProps(props, ['src', 'alt', 'name', 'size', 'class', 'style']);
 
-  const baseStyle: CSSProperties = {
-    width: dimension,
-    height: dimension,
-    borderRadius: 'var(--radius-full)',
+  const dimension = () => sizeMap[local.size ?? 'md'].size;
+  const fontSize = () => sizeMap[local.size ?? 'md'].fontSize;
+
+  const baseStyle = (): JSX.CSSProperties => ({
+    width: dimension(),
+    height: dimension(),
+    'border-radius': 'var(--radius-full)',
     overflow: 'hidden',
     display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    flexShrink: 0,
-    backgroundColor: name ? stringToColor(name) : 'var(--color-bg-tertiary)',
+    'align-items': 'center',
+    'justify-content': 'center',
+    'flex-shrink': '0',
+    'background-color': local.name ? stringToColor(local.name) : 'var(--color-bg-tertiary)',
     color: 'white',
-    fontSize: fontSize,
-    fontWeight: 500,
-  };
+    'font-size': fontSize(),
+    'font-weight': '500',
+    ...(typeof local.style === 'object' ? local.style : {}),
+  });
 
-  if (src) {
+  if (local.src) {
     return (
-      <div className={className} style={{ ...baseStyle, ...style }} {...props}>
+      <div class={local.class} style={baseStyle()} {...rest}>
         <img
-          src={src}
-          alt={alt || name || 'Avatar'}
-          style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+          src={local.src}
+          alt={local.alt || local.name || 'Avatar'}
+          style={{ width: '100%', height: '100%', 'object-fit': 'cover' }}
         />
       </div>
     );
   }
 
   return (
-    <div className={className} style={{ ...baseStyle, ...style }} {...props}>
-      {name ? getInitials(name) : '?'}
+    <div class={local.class} style={baseStyle()} {...rest}>
+      {local.name ? getInitials(local.name) : '?'}
     </div>
   );
 }

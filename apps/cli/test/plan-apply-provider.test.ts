@@ -1,39 +1,24 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { Command } from 'commander';
 
-const mocks = vi.hoisted(() => ({
-  api: vi.fn(),
-  cliExit: vi.fn(),
-  loadAppManifest: vi.fn(),
-  resolveAppManifestPath: vi.fn(),
-  resolveSpaceId: vi.fn(),
-  resolveAccountId: vi.fn(),
-  resolveApiToken: vi.fn(),
-  confirmPrompt: vi.fn(),
-}));
+import { assertSpyCalls, assertSpyCallArgs } from 'jsr:@std/testing/mock';
 
-vi.mock('../src/lib/api.js', () => ({
-  api: mocks.api,
-}));
+const mocks = ({
+  api: ((..._args: any[]) => undefined) as any,
+  cliExit: ((..._args: any[]) => undefined) as any,
+  loadAppManifest: ((..._args: any[]) => undefined) as any,
+  resolveAppManifestPath: ((..._args: any[]) => undefined) as any,
+  resolveSpaceId: ((..._args: any[]) => undefined) as any,
+  resolveAccountId: ((..._args: any[]) => undefined) as any,
+  resolveApiToken: ((..._args: any[]) => undefined) as any,
+  confirmPrompt: ((..._args: any[]) => undefined) as any,
+});
 
-vi.mock('../src/lib/command-exit.js', () => ({
-  cliExit: mocks.cliExit,
-}));
-
-vi.mock('../src/lib/app-manifest.js', () => ({
-  loadAppManifest: mocks.loadAppManifest,
-  resolveAppManifestPath: mocks.resolveAppManifestPath,
-}));
-
-vi.mock('../src/lib/cli-utils.js', () => ({
-  resolveSpaceId: mocks.resolveSpaceId,
-  resolveAccountId: mocks.resolveAccountId,
-  resolveApiToken: mocks.resolveApiToken,
-  confirmPrompt: mocks.confirmPrompt,
-}));
-
-import { registerApplyCommand } from '../src/commands/apply.js';
-import { registerPlanCommand } from '../src/commands/plan.js';
+// [Deno] vi.mock removed - manually stub imports from '../src/lib/api.ts'
+// [Deno] vi.mock removed - manually stub imports from '../src/lib/command-exit.ts'
+// [Deno] vi.mock removed - manually stub imports from '../src/lib/app-manifest.ts'
+// [Deno] vi.mock removed - manually stub imports from '../src/lib/cli-utils.ts'
+import { registerApplyCommand } from '../src/commands/apply.ts';
+import { registerPlanCommand } from '../src/commands/plan.ts';
 
 function createProgram(): Command {
   const program = new Command();
@@ -78,29 +63,26 @@ const applyData = {
   translationReport,
 };
 
-describe('plan/apply provider option', () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-    mocks.resolveAppManifestPath.mockResolvedValue('/repo/.takos/app.yml');
-    mocks.loadAppManifest.mockResolvedValue(manifest);
-    mocks.resolveSpaceId.mockReturnValue('space-1');
-    mocks.resolveAccountId.mockReturnValue('account-id');
-    mocks.resolveApiToken.mockReturnValue('api-token');
-    mocks.confirmPrompt.mockResolvedValue(true);
-    mocks.cliExit.mockImplementation((code: number) => {
-      throw new Error(`cliExit:${code}`);
-    });
-  });
 
-  it('passes provider in plan API payload', async () => {
-    mocks.api.mockResolvedValue({
+  Deno.test('plan/apply provider option - passes provider in plan API payload', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+    mocks.resolveAppManifestPath = (async () => '/repo/.takos/app.yml') as any;
+    mocks.loadAppManifest = (async () => manifest) as any;
+    mocks.resolveSpaceId = (() => 'space-1') as any;
+    mocks.resolveAccountId = (() => 'account-id') as any;
+    mocks.resolveApiToken = (() => 'api-token') as any;
+    mocks.confirmPrompt = (async () => true) as any;
+    mocks.cliExit = (code: number) => {
+      throw new Error(`cliExit:${code}`);
+    } as any;
+  mocks.api = (async () => ({
       ok: true,
       data: {
         group: { id: 'group-1', name: 'sample-app' },
         diff: noChangeDiff,
         translationReport,
       },
-    });
+    })) as any;
 
     const program = createProgram();
     await program.parseAsync([
@@ -113,10 +95,10 @@ describe('plan/apply provider option', () => {
       'production',
     ]);
 
-    expect(mocks.api).toHaveBeenCalledTimes(1);
-    expect(mocks.api).toHaveBeenCalledWith(
+    assertSpyCalls(mocks.api, 1);
+    assertSpyCallArgs(mocks.api, 0, [
       '/api/spaces/space-1/groups/plan',
-      expect.objectContaining({
+      ({
         method: 'POST',
         body: {
           group_name: 'sample-app',
@@ -125,12 +107,21 @@ describe('plan/apply provider option', () => {
           manifest,
         },
       }),
-    );
-  });
-
-  it('passes provider in both plan and apply API payloads', async () => {
-    mocks.api
-      .mockResolvedValueOnce({
+    ]);
+})
+  Deno.test('plan/apply provider option - passes provider in both plan and apply API payloads', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+    mocks.resolveAppManifestPath = (async () => '/repo/.takos/app.yml') as any;
+    mocks.loadAppManifest = (async () => manifest) as any;
+    mocks.resolveSpaceId = (() => 'space-1') as any;
+    mocks.resolveAccountId = (() => 'account-id') as any;
+    mocks.resolveApiToken = (() => 'api-token') as any;
+    mocks.confirmPrompt = (async () => true) as any;
+    mocks.cliExit = (code: number) => {
+      throw new Error(`cliExit:${code}`);
+    } as any;
+  mocks.api
+       = (async () => ({
         ok: true,
         data: {
           group: { id: 'group-1', name: 'sample-app' },
@@ -141,8 +132,8 @@ describe('plan/apply provider option', () => {
           },
           translationReport,
         },
-      })
-      .mockResolvedValueOnce({
+      })) as any
+       = (async () => ({
         ok: true,
         data: {
           ...applyData,
@@ -154,7 +145,7 @@ describe('plan/apply provider option', () => {
             entries: [{ name: 'x', category: 'resource', action: 'create' }],
           },
         },
-      });
+      })) as any;
 
     const program = createProgram();
     await program.parseAsync([
@@ -168,24 +159,23 @@ describe('plan/apply provider option', () => {
       'staging',
     ]);
 
-    expect(mocks.api).toHaveBeenCalledTimes(2);
-    expect(mocks.api).toHaveBeenNthCalledWith(1, '/api/spaces/space-1/groups/plan', expect.objectContaining({
+    assertSpyCalls(mocks.api, 2);
+    assertSpyCallArgs(mocks.api, 0, ['/api/spaces/space-1/groups/plan', ({
       method: 'POST',
-      body: expect.objectContaining({
+      body: ({
         group_name: 'sample-app',
         env: 'staging',
         provider: 'gcp',
         manifest,
       }),
-    }));
-    expect(mocks.api).toHaveBeenNthCalledWith(2, '/api/spaces/space-1/groups/apply', expect.objectContaining({
+    })]);
+    assertSpyCallArgs(mocks.api, 1, ['/api/spaces/space-1/groups/apply', ({
       method: 'POST',
-      body: expect.objectContaining({
+      body: ({
         group_name: 'sample-app',
         env: 'staging',
         provider: 'gcp',
         manifest,
       }),
-    }));
-  });
-});
+    })]);
+})

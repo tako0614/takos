@@ -6,13 +6,13 @@
  * - tokenizer.ts: トークン種別と字句解析ロジック
  * - evaluator.ts: 式のパースと評価
  */
-import { MAX_EXPRESSION_SIZE } from '../constants.js';
-import type { ExecutionContext } from '../workflow-models.js';
-import { ExpressionError, tokenize } from './tokenizer.js';
-import { ExpressionEvaluator } from './evaluator.js';
+import { MAX_EXPRESSION_SIZE } from '../constants.ts';
+import type { ExecutionContext } from '../workflow-models.ts';
+import { ExpressionError, tokenize } from './tokenizer.ts';
+import { ExpressionEvaluator } from './evaluator.ts';
 
 // このモジュール経由で利用する場合の再エクスポート
-export { ExpressionError } from './tokenizer.js';
+export { ExpressionError } from './tokenizer.ts';
 
 /**
  * `${{ }}` のラッパーから実体式を抽出する

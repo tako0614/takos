@@ -1,4 +1,4 @@
-import { useRef, useEffect } from 'react';
+import { onMount, onCleanup, Show } from 'solid-js';
 import { useI18n } from '../../store/i18n';
 import { Icons } from '../../lib/Icons';
 import type { ContextMenuState } from './storageUtils';
@@ -12,70 +12,63 @@ interface StorageContextMenuProps {
   onDelete: () => void;
 }
 
-export function StorageContextMenu({
-  state,
-  onClose,
-  onOpen,
-  onDownload,
-  onRename,
-  onDelete,
-}: StorageContextMenuProps) {
+export function StorageContextMenu(props: StorageContextMenuProps) {
   const { t } = useI18n();
-  const ref = useRef<HTMLDivElement>(null);
+  let ref: HTMLDivElement | undefined;
 
-  useEffect(() => {
+  onMount(() => {
     const handler = (e: MouseEvent) => {
-      if (ref.current && e.target instanceof Node && !ref.current.contains(e.target)) onClose();
+      if (ref && e.target instanceof Node && !ref.contains(e.target)) props.onClose();
     };
-    const keyHandler = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
+    const keyHandler = (e: KeyboardEvent) => { if (e.key === 'Escape') props.onClose(); };
     document.addEventListener('mousedown', handler);
     document.addEventListener('keydown', keyHandler);
-    return () => {
+    onCleanup(() => {
       document.removeEventListener('mousedown', handler);
       document.removeEventListener('keydown', keyHandler);
-    };
-  }, [onClose]);
+    });
+  });
 
-  const style: React.CSSProperties = {
-    position: 'fixed',
-    left: state.x,
-    top: state.y,
-    zIndex: 50,
-  };
+  const style = () => ({
+    position: 'fixed' as const,
+    left: `${props.state.x}px`,
+    top: `${props.state.y}px`,
+    'z-index': 50,
+  });
 
   return (
-    <div ref={ref} style={style} className="w-52 rounded-xl bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 shadow-xl py-1">
-      {state.file.type === 'file' && (
+    <div ref={ref} style={style()} class="w-52 rounded-xl bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 shadow-xl py-1">
+      <Show when={props.state.file.type === 'file'}>
         <button
-          className="w-full flex items-center gap-3 px-4 py-2 text-sm text-zinc-700 dark:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-700"
-          onClick={() => { onClose(); onOpen(); }}
+          class="w-full flex items-center gap-3 px-4 py-2 text-sm text-zinc-700 dark:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-700"
+          onClick={() => { props.onClose(); props.onOpen(); }}
         >
-          <Icons.Eye className="w-4 h-4 text-zinc-400" />
+          <Icons.Eye class="w-4 h-4 text-zinc-400" />
           {t('open') || 'Open'}
         </button>
-      )}
-      {state.file.type === 'file' && (
+      </Show>
+      <Show when={props.state.file.type === 'file'}>
         <button
-          className="w-full flex items-center gap-3 px-4 py-2 text-sm text-zinc-700 dark:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-700"
-          onClick={() => { onClose(); onDownload(); }}
+          class="w-full flex items-center gap-3 px-4 py-2 text-sm text-zinc-700 dark:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-700"
+          onClick={() => { props.onClose(); props.onDownload(); }}
         >
-          <Icons.Download className="w-4 h-4 text-zinc-400" />
+          <Icons.Download class="w-4 h-4 text-zinc-400" />
           {t('download')}
         </button>
-      )}
-      <div className="h-px bg-zinc-200 dark:bg-zinc-700 my-1" />
+      </Show>
+      <div class="h-px bg-zinc-200 dark:bg-zinc-700 my-1" />
       <button
-        className="w-full flex items-center gap-3 px-4 py-2 text-sm text-zinc-700 dark:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-700"
-        onClick={() => { onClose(); onRename(); }}
+        class="w-full flex items-center gap-3 px-4 py-2 text-sm text-zinc-700 dark:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-700"
+        onClick={() => { props.onClose(); props.onRename(); }}
       >
-        <Icons.Edit className="w-4 h-4 text-zinc-400" />
+        <Icons.Edit class="w-4 h-4 text-zinc-400" />
         {t('rename')}
       </button>
       <button
-        className="w-full flex items-center gap-3 px-4 py-2 text-sm text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20"
-        onClick={() => { onClose(); onDelete(); }}
+        class="w-full flex items-center gap-3 px-4 py-2 text-sm text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20"
+        onClick={() => { props.onClose(); props.onDelete(); }}
       >
-        <Icons.Trash className="w-4 h-4" />
+        <Icons.Trash class="w-4 h-4" />
         {t('delete')}
       </button>
     </div>

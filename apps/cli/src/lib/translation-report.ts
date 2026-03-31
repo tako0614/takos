@@ -1,4 +1,4 @@
-import chalk from 'chalk';
+import { bold, green, red, yellow } from '@std/fmt/colors';
 
 export type TranslationIssue = {
   category: 'resource' | 'workload' | 'route';
@@ -62,11 +62,11 @@ function formatSummary<T extends string>(
 }
 
 export function printTranslationReport(report: TranslationReport): void {
-  console.log(chalk.bold('Translation:'));
+  console.log(bold('Translation:'));
   console.log('  Spec:     Cloudflare-native');
   console.log('  Runtime:  Takos runtime');
   console.log(`  Backend:  ${describeBackend(report.provider)}`);
-  console.log(`  Status:   ${report.supported ? chalk.green('supported') : chalk.yellow('blocked')}`);
+  console.log(`  Status:   ${report.supported ? green('supported') : yellow('blocked')}`);
 
   if (report.requirements && report.requirements.length > 0) {
     console.log(`  Needs:    ${report.requirements.join(', ')}`);
@@ -98,9 +98,9 @@ export function printTranslationReport(report: TranslationReport): void {
 
   if (report.unsupported.length > 0) {
     console.log('');
-    console.log(chalk.bold('Blocked:'));
+    console.log(bold('Blocked:'));
     for (const issue of report.unsupported) {
-      console.log(`  ${chalk.red('!')} ${issue.category}.${issue.name} ${issue.message}`);
+      console.log(`  ${red('!')} ${issue.category}.${issue.name} ${issue.message}`);
     }
   }
 

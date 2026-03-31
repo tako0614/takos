@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { createEffect, onMount, onCleanup, createMemo, createSignal } from 'solid-js';
 import { rpc } from '../../lib/rpc';
 import { Icons } from '../../lib/Icons';
 import { useI18n } from '../../store/i18n';
@@ -37,25 +37,27 @@ function formatIso(iso: string): string {
 
 export function SharedThreadPage({ token }: { token: string }) {
   const { t } = useI18n();
-  const [loading, setLoading] = useState(true);
-  const [requiresPassword, setRequiresPassword] = useState(false);
-  const [password, setPassword] = useState('');
-  const [error, setError] = useState<string | null>(null);
-  const [data, setData] = useState<SharedThreadPayload | null>(null);
+  const [loading, setLoading] = createSignal(true);
+  const [requiresPassword, setRequiresPassword] = createSignal(false);
+  const [password, setPassword] = createSignal('');
+  const [error, setError] = createSignal<string | null>(null);
+  const [data, setData] = createSignal<SharedThreadPayload | null>(null);
 
-  const mappedMessages: Message[] = useMemo(() => {
-    if (!data) return [];
-    return data.messages.map((m): Message => ({
+  const mappedMessages = createMemo((): Message[] => {
+    const d = data();
+    if (!d) return [];
+    return d.messages.map((m): Message => ({
       id: m.id,
-      thread_id: data.thread.id,
+      thread_id: d.thread.id,
       role: m.role,
       content: m.content,
       metadata: '',
       created_at: m.created_at,
+      sequence: 0,
     }));
-  }, [data]);
+  });
 
-  const loadShare = useCallback(async () => {
+  const loadShare = async () => {
     setLoading(true);
     setError(null);
     setRequiresPassword(false);
@@ -86,10 +88,10 @@ export function SharedThreadPage({ token }: { token: string }) {
     } finally {
       setLoading(false);
     }
-  }, [token]);
+  };
 
-  const unlock = useCallback(async () => {
-    const pw = password;
+  const unlock = async () => {
+    const pw = password();
     if (!pw.trim()) return;
 
     setLoading(true);
@@ -118,43 +120,43 @@ export function SharedThreadPage({ token }: { token: string }) {
     } finally {
       setLoading(false);
     }
-  }, [password, token]);
+  };
 
-  useEffect(() => {
+  createEffect(() => {
     loadShare();
-  }, [loadShare]);
+  });
 
-  if (loading && !data && !requiresPassword) {
+  if (loading() && !data() && !requiresPassword()) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-white dark:bg-zinc-900">
-        <Icons.Loader className="w-8 h-8 animate-spin text-zinc-500 dark:text-zinc-400" />
+      <div class="min-h-screen flex items-center justify-center bg-white dark:bg-zinc-900">
+        <Icons.Loader class="w-8 h-8 animate-spin text-zinc-500 dark:text-zinc-400" />
       </div>
     );
   }
 
-  if (requiresPassword) {
+  if (requiresPassword()) {
     return (
-      <div className="min-h-screen bg-white dark:bg-zinc-900 flex items-center justify-center p-6">
-        <div className="w-full max-w-md bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-2xl p-6">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-zinc-100 dark:bg-zinc-700 flex items-center justify-center">
-              <Icons.Lock className="w-5 h-5 text-zinc-600 dark:text-zinc-200" />
+      <div class="min-h-screen bg-white dark:bg-zinc-900 flex items-center justify-center p-6">
+        <div class="w-full max-w-md bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-2xl p-6">
+          <div class="flex items-center gap-3">
+            <div class="w-10 h-10 rounded-xl bg-zinc-100 dark:bg-zinc-700 flex items-center justify-center">
+              <Icons.Lock class="w-5 h-5 text-zinc-600 dark:text-zinc-200" />
             </div>
-            <div className="min-w-0">
-              <h1 className="text-lg font-semibold text-zinc-900 dark:text-zinc-100 truncate">
+            <div class="min-w-0">
+              <h1 class="text-lg font-semibold text-zinc-900 dark:text-zinc-100 truncate">
                 {t('passwordRequired') || 'Password required'}
               </h1>
-              <p className="text-sm text-zinc-600 dark:text-zinc-300">
+              <p class="text-sm text-zinc-600 dark:text-zinc-300">
                 {t('enterPasswordToView') || 'Enter the password to view this shared thread.'}
               </p>
             </div>
           </div>
 
-          <div className="mt-5 space-y-3">
+          <div class="mt-5 space-y-3">
             <Input
               type="password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
+              value={password()}
+              onInput={(e) => setPassword(e.target.value)}
               placeholder={t('password') || 'Password'}
               onKeyDown={(e) => {
                 if (e.key === 'Enter') unlock();
@@ -163,25 +165,25 @@ export function SharedThreadPage({ token }: { token: string }) {
             <Button
               variant="primary"
               onClick={unlock}
-              disabled={loading || !password.trim()}
-              isLoading={loading}
-              className="w-full"
+              disabled={loading() || !password().trim()}
+              isLoading={loading()}
+              class="w-full"
             >
               {t('unlock') || 'Unlock'}
             </Button>
             <Button
               variant="ghost"
               onClick={loadShare}
-              disabled={loading}
-              className="w-full"
+              disabled={loading()}
+              class="w-full"
             >
               {t('refresh') || 'Refresh'}
             </Button>
           </div>
 
-          {error && (
-            <div className="mt-4 text-sm text-red-600 dark:text-red-400">
-              {error}
+          {error() && (
+            <div class="mt-4 text-sm text-red-600 dark:text-red-400">
+              {error()}
             </div>
           )}
         </div>
@@ -189,20 +191,20 @@ export function SharedThreadPage({ token }: { token: string }) {
     );
   }
 
-  if (!data) {
+  if (!data()) {
     return (
-      <div className="min-h-screen bg-white dark:bg-zinc-900 flex items-center justify-center p-6">
-        <div className="text-center">
-          <div className="mx-auto w-12 h-12 rounded-2xl bg-zinc-100 dark:bg-zinc-800 flex items-center justify-center">
-            <Icons.AlertTriangle className="w-6 h-6 text-zinc-600 dark:text-zinc-300" />
+      <div class="min-h-screen bg-white dark:bg-zinc-900 flex items-center justify-center p-6">
+        <div class="text-center">
+          <div class="mx-auto w-12 h-12 rounded-2xl bg-zinc-100 dark:bg-zinc-800 flex items-center justify-center">
+            <Icons.AlertTriangle class="w-6 h-6 text-zinc-600 dark:text-zinc-300" />
           </div>
-          <h1 className="mt-4 text-lg font-semibold text-zinc-900 dark:text-zinc-100">
+          <h1 class="mt-4 text-lg font-semibold text-zinc-900 dark:text-zinc-100">
             {t('notFound') || 'Not found'}
           </h1>
-          <p className="mt-2 text-sm text-zinc-600 dark:text-zinc-300">
-            {error || (t('shareNotAvailable') || 'This share is not available.')}
+          <p class="mt-2 text-sm text-zinc-600 dark:text-zinc-300">
+            {error() || (t('shareNotAvailable') || 'This share is not available.')}
           </p>
-          <div className="mt-4">
+          <div class="mt-4">
             <Button variant="secondary" onClick={loadShare}>
               {t('refresh') || 'Refresh'}
             </Button>
@@ -213,32 +215,32 @@ export function SharedThreadPage({ token }: { token: string }) {
   }
 
   return (
-    <div className="min-h-screen bg-white dark:bg-zinc-900">
-      <div className="border-b border-zinc-100 dark:border-zinc-800">
-        <div className="max-w-4xl mx-auto px-4 py-5">
-          <h1 className="text-xl font-semibold text-zinc-900 dark:text-zinc-100 truncate">
-            {data.thread.title || 'Untitled Thread'}
+    <div class="min-h-screen bg-white dark:bg-zinc-900">
+      <div class="border-b border-zinc-100 dark:border-zinc-800">
+        <div class="max-w-4xl mx-auto px-4 py-5">
+          <h1 class="text-xl font-semibold text-zinc-900 dark:text-zinc-100 truncate">
+            {data()!.thread.title || 'Untitled Thread'}
           </h1>
-          <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-zinc-500 dark:text-zinc-400">
-            <span>Share: {data.share.mode}</span>
-            {data.share.expires_at && <span>Expires: {formatIso(data.share.expires_at)}</span>}
-            <span>Updated: {formatIso(data.thread.updated_at)}</span>
+          <div class="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-zinc-500 dark:text-zinc-400">
+            <span>Share: {data()!.share.mode}</span>
+            {data()!.share.expires_at && <span>Expires: {formatIso(data()!.share.expires_at!)}</span>}
+            <span>Updated: {formatIso(data()!.thread.updated_at)}</span>
           </div>
-          {error && (
-            <div className="mt-3 text-sm text-red-600 dark:text-red-400">
-              {error}
+          {error() && (
+            <div class="mt-3 text-sm text-red-600 dark:text-red-400">
+              {error()}
             </div>
           )}
         </div>
       </div>
 
-      <div className="max-w-4xl mx-auto">
-        {mappedMessages.length === 0 ? (
-          <div className="px-4 py-12 text-center text-sm text-zinc-500 dark:text-zinc-400">
+      <div class="max-w-4xl mx-auto">
+        {mappedMessages().length === 0 ? (
+          <div class="px-4 py-12 text-center text-sm text-zinc-500 dark:text-zinc-400">
             {t('noMessages') || 'No messages.'}
           </div>
         ) : (
-          mappedMessages.map((m) => <MessageBubble key={m.id} message={m} />)
+          mappedMessages().map((m) => <MessageBubble message={m} />)
         )}
       </div>
     </div>

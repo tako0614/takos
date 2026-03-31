@@ -1,5 +1,7 @@
-import { describe, expect, it, vi } from 'vitest';
 import { executeD1RawStatement } from '@/runtime/container-hosts/d1-raw';
+
+import { assertEquals } from 'jsr:@std/assert';
+import { assertSpyCallArgs } from 'jsr:@std/testing/mock';
 
 class ProxyD1PreparedStatement {
   constructor(
@@ -32,22 +34,21 @@ class ProxyD1Database {
   }
 }
 
-describe('agent executor D1 proxy contract', () => {
-  it('forwards columnNames raw options to D1 statements on the host side', async () => {
-    const raw = vi.fn().mockResolvedValue([['id'], ['run-1']]);
+
+  Deno.test('agent executor D1 proxy contract - forwards columnNames raw options to D1 statements on the host side', async () => {
+  const raw = (async () => [['id'], ['run-1']]);
 
     const result = await executeD1RawStatement(
       { raw } as unknown as Parameters<typeof executeD1RawStatement>[0],
       { columnNames: true },
     );
 
-    expect(raw).toHaveBeenCalledWith({ columnNames: true });
-    expect(result).toEqual([['id'], ['run-1']]);
-  });
-
-  it('forwards raw options through the container proxy stub', async () => {
-    const proxy = {
-      post: vi.fn(async () => ({ results: [['id'], ['run-1']] })),
+    assertSpyCallArgs(raw, 0, [{ columnNames: true }]);
+    assertEquals(result, [['id'], ['run-1']]);
+})
+  Deno.test('agent executor D1 proxy contract - forwards raw options through the container proxy stub', async () => {
+  const proxy = {
+      post: async () => ({ results: [['id'], ['run-1']] }),
     };
 
     const db = new ProxyD1Database(proxy as never);
@@ -57,11 +58,10 @@ describe('agent executor D1 proxy contract', () => {
       .bind('run-1')
       .raw({ columnNames: true });
 
-    expect(proxy.post).toHaveBeenCalledWith('/proxy/db/raw', {
+    assertSpyCallArgs(proxy.post, 0, ['/proxy/db/raw', {
       sql: 'SELECT id FROM runs WHERE id = ?',
       params: ['run-1'],
       rawOptions: { columnNames: true },
-    });
-    expect(result).toEqual([['id'], ['run-1']]);
-  });
-});
+    }]);
+    assertEquals(result, [['id'], ['run-1']]);
+})

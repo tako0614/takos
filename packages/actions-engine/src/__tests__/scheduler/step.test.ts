@@ -2,11 +2,11 @@ import { appendFileSync, mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
-import { describe, expect, it } from 'vitest';
+import { createBaseContext } from '../../context.ts';
+import type { Step } from '../../workflow-models.ts';
+import { StepRunner } from '../../scheduler/step.ts';
 
-import { createBaseContext } from '../../context.js';
-import type { Step } from '../../workflow-models.js';
-import { StepRunner } from '../../scheduler/step.js';
+import { assertEquals, assert, assertStringIncludes } from 'jsr:@std/assert';
 
 async function withProcessPlatform<T>(
   platform: NodeJS.Platform,
@@ -25,9 +25,9 @@ async function withProcessPlatform<T>(
   }
 }
 
-describe('step output parsing', () => {
-  it('parses legacy and simple outputs while ignoring malformed lines', async () => {
-    const stdout = [
+
+  Deno.test('step output parsing - parses legacy and simple outputs while ignoring malformed lines', async () => {
+  const stdout = [
       '::set-output name=legacy::from-legacy',
       '::set-output name=legacy_empty::',
       'simple_output=from-simple',
@@ -47,16 +47,15 @@ describe('step output parsing', () => {
     const step: Step = { id: 'parse-outputs', run: 'echo output' };
     const result = await runner.runStep(step, createBaseContext());
 
-    expect(result.outputs).toEqual({
+    assertEquals(result.outputs, {
       legacy: 'from-legacy',
       legacy_empty: '',
       simple_output: 'from-simple',
       empty: '',
     });
-  });
-
-  it('handles long legacy output lines', async () => {
-    const longName = 'A'.repeat(20_000);
+})
+  Deno.test('step output parsing - handles long legacy output lines', async () => {
+  const longName = 'A'.repeat(20_000);
     const stdout = `::set-output name=${longName}::value`;
 
     const runner = new StepRunner({
@@ -70,16 +69,15 @@ describe('step output parsing', () => {
     const step: Step = { id: 'long-outputs', run: 'echo output' };
     const result = await runner.runStep(step, createBaseContext());
 
-    expect(result.outputs[longName]).toBe('value');
-  });
-
-  it('reads command-file outputs and supports empty initial GitHub vars', async () => {
-    const capturedEnv: Array<Record<string, string> | undefined> = [];
+    assertEquals(result.outputs[longName], 'value');
+})
+  Deno.test('step output parsing - reads command-file outputs and supports empty initial GitHub vars', async () => {
+  const capturedEnv: Array<Record<string, string> | undefined> = [];
     const runner = new StepRunner({
       shellExecutor: async (_command, options) => {
         capturedEnv.push(options.env);
         const outputFile = options.env?.GITHUB_OUTPUT;
-        expect(outputFile).toBeTruthy();
+        assert(outputFile);
         appendFileSync(outputFile!, 'from_file=hello\n');
         appendFileSync(outputFile!, 'multi<<EOF\nline1\nline2\nEOF\n');
         return {
@@ -94,23 +92,22 @@ describe('step output parsing', () => {
     const step: Step = { id: 'command-file-outputs', run: 'echo output' };
     const result = await runner.runStep(step, context);
 
-    expect(result.outputs).toEqual({
+    assertEquals(result.outputs, {
       from_stdout: 'ok',
       from_file: 'hello',
       multi: 'line1\nline2',
     });
 
     const firstEnv = capturedEnv[0];
-    expect(firstEnv?.GITHUB_ENV).toBeTruthy();
-    expect(firstEnv?.GITHUB_OUTPUT).toBeTruthy();
-    expect(firstEnv?.GITHUB_PATH).toBeTruthy();
-  });
-
-  it('parses command-file heredoc outputs written with CRLF line endings', async () => {
-    const runner = new StepRunner({
+    assert(firstEnv?.GITHUB_ENV);
+    assert(firstEnv?.GITHUB_OUTPUT);
+    assert(firstEnv?.GITHUB_PATH);
+})
+  Deno.test('step output parsing - parses command-file heredoc outputs written with CRLF line endings', async () => {
+  const runner = new StepRunner({
       shellExecutor: async (_command, options) => {
         const outputFile = options.env?.GITHUB_OUTPUT;
-        expect(outputFile).toBeTruthy();
+        assert(outputFile);
         appendFileSync(outputFile!, 'multi<<EOF\r\nline1\r\nline2\r\nEOF\r\n');
         return {
           exitCode: 0,
@@ -124,16 +121,14 @@ describe('step output parsing', () => {
     const step: Step = { id: 'command-file-outputs-crlf', run: 'echo output' };
     const result = await runner.runStep(step, context);
 
-    expect(result.outputs).toEqual({
+    assertEquals(result.outputs, {
       multi: 'line1\nline2',
     });
-    expect(result.outputs.multi.includes('\r')).toBe(false);
-  });
-});
+    assertEquals(result.outputs.multi.includes('\r'), false);
+})
 
-describe('step default executors', () => {
-  it('uses pwsh by default on win32', async () => {
-    let observedShell: Step['shell'] | undefined;
+  Deno.test('step default executors - uses pwsh by default on win32', async () => {
+  let observedShell: Step['shell'] | undefined;
 
     await withProcessPlatform('win32', async () => {
       const runner = new StepRunner({
@@ -146,11 +141,10 @@ describe('step default executors', () => {
       await runner.runStep({ id: 'win32-default-shell', run: 'echo ok' }, createBaseContext());
     });
 
-    expect(observedShell).toBe('pwsh');
-  });
-
-  it('uses bash by default on non-win32 platforms', async () => {
-    let observedShell: Step['shell'] | undefined;
+    assertEquals(observedShell, 'pwsh');
+})
+  Deno.test('step default executors - uses bash by default on non-win32 platforms', async () => {
+  let observedShell: Step['shell'] | undefined;
 
     await withProcessPlatform('linux', async () => {
       const runner = new StepRunner({
@@ -163,11 +157,10 @@ describe('step default executors', () => {
       await runner.runStep({ id: 'non-win32-default-shell', run: 'echo ok' }, createBaseContext());
     });
 
-    expect(observedShell).toBe('bash');
-  });
-
-  it('prioritizes explicit shell configuration over platform defaults', async () => {
-    const observedShells: Array<Step['shell'] | undefined> = [];
+    assertEquals(observedShell, 'bash');
+})
+  Deno.test('step default executors - prioritizes explicit shell configuration over platform defaults', async () => {
+  const observedShells: Array<Step['shell'] | undefined> = [];
 
     await withProcessPlatform('win32', async () => {
       const runner = new StepRunner({
@@ -185,11 +178,10 @@ describe('step default executors', () => {
       );
     });
 
-    expect(observedShells).toEqual(['bash', 'cmd']);
-  });
-
-  it('respects working directory and env for default shell executor', async () => {
-    const workingDirectory = mkdtempSync(join(tmpdir(), 'actions-engine-step-'));
+    assertEquals(observedShells, ['bash', 'cmd']);
+})
+  Deno.test('step default executors - respects working directory and env for default shell executor', async () => {
+  const workingDirectory = mkdtempSync(join(tmpdir(), 'actions-engine-step-'));
 
     try {
       const runner = new StepRunner({
@@ -207,16 +199,15 @@ describe('step default executors', () => {
 
       const result = await runner.runStep(step, createBaseContext());
 
-      expect(result.conclusion).toBe('success');
-      expect(result.outputs.cwd).toBe(workingDirectory);
-      expect(result.outputs.from_env).toBe('from-step');
+      assertEquals(result.conclusion, 'success');
+      assertEquals(result.outputs.cwd, workingDirectory);
+      assertEquals(result.outputs.from_env, 'from-step');
     } finally {
       rmSync(workingDirectory, { recursive: true, force: true });
     }
-  });
-
-  it('returns failure when default shell executor times out', async () => {
-    const runner = new StepRunner();
+})
+  Deno.test('step default executors - returns failure when default shell executor times out', async () => {
+  const runner = new StepRunner();
     const step: Step = {
       id: 'timeout-shell',
       run: 'node -e "setTimeout(() => {}, 5000)"',
@@ -225,12 +216,11 @@ describe('step default executors', () => {
 
     const result = await runner.runStep(step, createBaseContext());
 
-    expect(result.conclusion).toBe('failure');
-    expect(result.error).toContain('Exit code: 124');
-  });
-
-  it('supports builtin checkout action without a custom resolver', async () => {
-    const runner = new StepRunner();
+    assertEquals(result.conclusion, 'failure');
+    assertStringIncludes(result.error, 'Exit code: 124');
+})
+  Deno.test('step default executors - supports builtin checkout action without a custom resolver', async () => {
+  const runner = new StepRunner();
     const context = createBaseContext();
     const step: Step = {
       id: 'builtin-checkout',
@@ -239,12 +229,11 @@ describe('step default executors', () => {
 
     const result = await runner.runStep(step, context);
 
-    expect(result.conclusion).toBe('success');
-    expect(result.outputs.path).toBe(context.github.workspace);
-  });
-
-  it('fails explicitly for unsupported default actions', async () => {
-    const runner = new StepRunner();
+    assertEquals(result.conclusion, 'success');
+    assertEquals(result.outputs.path, context.github.workspace);
+})
+  Deno.test('step default executors - fails explicitly for unsupported default actions', async () => {
+  const runner = new StepRunner();
     const step: Step = {
       id: 'unsupported-action',
       uses: 'actions/cache@v4',
@@ -252,7 +241,6 @@ describe('step default executors', () => {
 
     const result = await runner.runStep(step, createBaseContext());
 
-    expect(result.conclusion).toBe('failure');
-    expect(result.error).toContain('Unsupported action: actions/cache@v4');
-  });
-});
+    assertEquals(result.conclusion, 'failure');
+    assertStringIncludes(result.error, 'Unsupported action: actions/cache@v4');
+})

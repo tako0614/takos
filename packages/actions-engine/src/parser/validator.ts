@@ -2,9 +2,9 @@
  * Zod を使ったワークフロー検証
  */
 import { z } from 'zod';
-import { buildDependencyGraph, detectCycle, DependencyError } from '../scheduler/dependency.js';
-import type { Workflow, WorkflowDiagnostic } from '../workflow-models.js';
-import { normalizeNeedsInput } from '../scheduler/job.js';
+import { buildDependencyGraph, detectCycle, DependencyError } from '../scheduler/dependency.ts';
+import type { Workflow, WorkflowDiagnostic } from '../workflow-models.ts';
+import { normalizeNeedsInput } from '../scheduler/job.ts';
 
 // =============================================================================
 // Zod スキーマ

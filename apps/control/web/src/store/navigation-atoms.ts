@@ -1,4 +1,4 @@
-import { atom } from 'jotai';
+import { atom } from 'jotai/vanilla';
 import { getSpaceIdentifier, getPersonalSpace, findSpaceByIdentifier } from '../lib/spaces';
 import { rpc, rpcJson } from '../lib/rpc';
 import { spacesAtom, spacesLoadedAtom } from './auth';

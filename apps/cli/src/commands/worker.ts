@@ -7,10 +7,10 @@
  * --offline: Delegate to the local entity operations.
  */
 import type { Command } from 'commander';
-import chalk from 'chalk';
-import { cliExit } from '../lib/command-exit.js';
-import { api } from '../lib/api.js';
-import { resolveSpaceId } from '../lib/cli-utils.js';
+import { bold, cyan, dim, green, red } from '@std/fmt/colors';
+import { cliExit } from '../lib/command-exit.ts';
+import { api } from '../lib/api.ts';
+import { resolveSpaceId } from '../lib/cli-utils.ts';
 import {
   createWorkerDeployment,
   ensureServiceInSpace,
@@ -19,7 +19,7 @@ import {
   listServicesInSpace,
   readUtf8File,
   setServiceGroup,
-} from '../lib/platform-surface.js';
+} from '../lib/platform-surface.ts';
 
 export function registerWorkerCommand(program: Command): void {
   const workerCmd = program
@@ -50,13 +50,13 @@ export function registerWorkerCommand(program: Command): void {
       offline?: boolean;
     }) => {
       if (options.offline) {
-        const { resolveAccountId, resolveApiToken } = await import('../lib/cli-utils.js');
-        const { deployWorker } = await import('../lib/entities/worker.js');
+        const { resolveAccountId, resolveApiToken } = await import('../lib/cli-utils.ts');
+        const { deployWorker } = await import('../lib/entities/worker.ts');
         const accountId = resolveAccountId(options.accountId);
         const apiToken = resolveApiToken(options.apiToken);
 
         if (!options.json) {
-          console.log(`${chalk.cyan('[DEPLOY]')} worker ${chalk.bold(name)} -> ${options.env} (offline)`);
+          console.log(`${cyan('[DEPLOY]')} worker ${bold(name)} -> ${options.env} (offline)`);
           console.log(`  Artifact: ${options.artifact}`);
         }
 
@@ -77,15 +77,15 @@ export function registerWorkerCommand(program: Command): void {
           }
 
           if (result.success) {
-            console.log(`  ${chalk.green('✓')} ${result.scriptName} deployed`);
+            console.log(`  ${green('✓')} ${result.scriptName} deployed`);
           } else {
-            console.log(`  ${chalk.red('✗')} Deploy failed`);
-            if (result.error) console.log(chalk.red(`  Error: ${result.error}`));
+            console.log(`  ${red('✗')} Deploy failed`);
+            if (result.error) console.log(red(`  Error: ${result.error}`));
             cliExit(1);
           }
         } catch (error) {
           const message = error instanceof Error ? error.message : String(error);
-          console.log(chalk.red(`Failed to deploy worker: ${message}`));
+          console.log(red(`Failed to deploy worker: ${message}`));
           cliExit(1);
         }
         return;
@@ -94,7 +94,7 @@ export function registerWorkerCommand(program: Command): void {
       const spaceId = resolveSpaceId(options.space);
 
       if (!options.json) {
-        console.log(`${chalk.cyan('[DEPLOY]')} worker ${chalk.bold(name)} -> ${options.env}`);
+        console.log(`${cyan('[DEPLOY]')} worker ${bold(name)} -> ${options.env}`);
         console.log(`  Artifact: ${options.artifact}`);
       }
 
@@ -123,14 +123,14 @@ export function registerWorkerCommand(program: Command): void {
           return;
         }
 
-        console.log(`  ${chalk.green('✓')} deployment ${result.deployment.id} v${result.deployment.version}`);
-        console.log(chalk.dim(`  status=${result.deployment.status} slug=${service.slug ?? service.id}`));
+        console.log(`  ${green('✓')} deployment ${result.deployment.id} v${result.deployment.version}`);
+        console.log(dim(`  status=${result.deployment.status} slug=${service.slug ?? service.id}`));
         if (group) {
-          console.log(chalk.dim(`  group=${group.name}`));
+          console.log(dim(`  group=${group.name}`));
         }
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
-        console.log(chalk.red(`Failed to deploy worker: ${message}`));
+        console.log(red(`Failed to deploy worker: ${message}`));
         cliExit(1);
       }
     });
@@ -145,16 +145,16 @@ export function registerWorkerCommand(program: Command): void {
         const spaceId = resolveSpaceId(options.space);
         const service = await findServiceInSpace(spaceId, name, 'app');
         if (!service) {
-          console.log(chalk.red(`Worker not found: ${name}`));
+          console.log(red(`Worker not found: ${name}`));
           cliExit(1);
           return;
         }
         const group = await ensureGroupInSpace(spaceId, options.group);
         await setServiceGroup(service.id, group.id);
-        console.log(chalk.green(`Attached worker '${name}' to group '${group.name}'.`));
+        console.log(green(`Attached worker '${name}' to group '${group.name}'.`));
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
-        console.log(chalk.red(`Failed to attach worker: ${message}`));
+        console.log(red(`Failed to attach worker: ${message}`));
         cliExit(1);
       }
     });
@@ -168,15 +168,15 @@ export function registerWorkerCommand(program: Command): void {
         const spaceId = resolveSpaceId(options.space);
         const service = await findServiceInSpace(spaceId, name, 'app');
         if (!service) {
-          console.log(chalk.red(`Worker not found: ${name}`));
+          console.log(red(`Worker not found: ${name}`));
           cliExit(1);
           return;
         }
         await setServiceGroup(service.id, null);
-        console.log(chalk.green(`Detached worker '${name}' from its group.`));
+        console.log(green(`Detached worker '${name}' from its group.`));
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
-        console.log(chalk.red(`Failed to detach worker: ${message}`));
+        console.log(red(`Failed to detach worker: ${message}`));
         cliExit(1);
       }
     });
@@ -190,7 +190,7 @@ export function registerWorkerCommand(program: Command): void {
     .option('--offline', 'Force local entity operations (skip API)')
     .action(async (options: { group: string; space?: string; json?: boolean; offline?: boolean }) => {
       if (options.offline) {
-        const { listWorkers } = await import('../lib/entities/worker.js');
+        const { listWorkers } = await import('../lib/entities/worker.ts');
         try {
           const workers = await listWorkers(options.group);
           if (options.json) {
@@ -198,21 +198,21 @@ export function registerWorkerCommand(program: Command): void {
             return;
           }
           if (workers.length === 0) {
-            console.log(chalk.dim('No workers tracked. Use `takos worker deploy` to deploy one.'));
+            console.log(dim('No workers tracked. Use `takos worker deploy` to deploy one.'));
             return;
           }
           console.log('');
-          console.log(chalk.bold('Workers:'));
+          console.log(bold('Workers:'));
           for (const worker of workers) {
-            const scriptLabel = chalk.dim(` -> ${worker.scriptName}`);
-            const hashLabel = worker.codeHash ? chalk.dim(` [${worker.codeHash}]`) : '';
+            const scriptLabel = dim(` -> ${worker.scriptName}`);
+            const hashLabel = worker.codeHash ? dim(` [${worker.codeHash}]`) : '';
             console.log(`  ${worker.name}${scriptLabel}${hashLabel}`);
           }
           console.log('');
-          console.log(chalk.dim(`${workers.length} worker(s)`));
+          console.log(dim(`${workers.length} worker(s)`));
         } catch (error) {
           const message = error instanceof Error ? error.message : String(error);
-          console.log(chalk.red(`Failed to list workers: ${message}`));
+          console.log(red(`Failed to list workers: ${message}`));
           cliExit(1);
         }
         return;
@@ -229,23 +229,23 @@ export function registerWorkerCommand(program: Command): void {
         }
 
         if (workers.length === 0) {
-          console.log(chalk.dim('No workers found.'));
+          console.log(dim('No workers found.'));
           return;
         }
 
         console.log('');
-        console.log(chalk.bold('Workers:'));
+        console.log(bold('Workers:'));
         for (const worker of workers) {
-          const slugLabel = worker.slug ? chalk.dim(` slug=${worker.slug}`) : '';
-          const hostnameLabel = worker.hostname ? chalk.dim(` host=${worker.hostname}`) : '';
-          const groupLabel = worker.group_id ? chalk.dim(` group=${worker.group_id}`) : '';
+          const slugLabel = worker.slug ? dim(` slug=${worker.slug}`) : '';
+          const hostnameLabel = worker.hostname ? dim(` host=${worker.hostname}`) : '';
+          const groupLabel = worker.group_id ? dim(` group=${worker.group_id}`) : '';
           console.log(`  ${worker.id}${slugLabel}${hostnameLabel}${groupLabel}`);
         }
         console.log('');
-        console.log(chalk.dim(`${workers.length} worker(s)`));
+        console.log(dim(`${workers.length} worker(s)`));
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
-        console.log(chalk.red(`Failed to list workers: ${message}`));
+        console.log(red(`Failed to list workers: ${message}`));
         cliExit(1);
       }
     });
@@ -260,16 +260,16 @@ export function registerWorkerCommand(program: Command): void {
     .option('--offline', 'Force local entity operations (skip API)')
     .action(async (name: string, options: { group: string; space?: string; accountId?: string; apiToken?: string; offline?: boolean }) => {
       if (options.offline) {
-        const { resolveAccountId, resolveApiToken } = await import('../lib/cli-utils.js');
-        const { deleteWorker } = await import('../lib/entities/worker.js');
+        const { resolveAccountId, resolveApiToken } = await import('../lib/cli-utils.ts');
+        const { deleteWorker } = await import('../lib/entities/worker.ts');
         const accountId = resolveAccountId(options.accountId);
         const apiToken = resolveApiToken(options.apiToken);
         try {
           await deleteWorker(name, { group: options.group, accountId, apiToken });
-          console.log(chalk.green(`Removed worker '${name}' from offline state.`));
+          console.log(green(`Removed worker '${name}' from offline state.`));
         } catch (error) {
           const message = error instanceof Error ? error.message : String(error);
-          console.log(chalk.red(`Failed to delete worker: ${message}`));
+          console.log(red(`Failed to delete worker: ${message}`));
           cliExit(1);
         }
         return;
@@ -279,21 +279,21 @@ export function registerWorkerCommand(program: Command): void {
         const spaceId = resolveSpaceId(options.space);
         const service = await findServiceInSpace(spaceId, name, 'app');
         if (!service) {
-          console.log(chalk.red(`Worker not found: ${name}`));
+          console.log(red(`Worker not found: ${name}`));
           cliExit(1);
           return;
         }
 
         const res = await api<void>(`/api/services/${encodeURIComponent(service.id)}`, { method: 'DELETE' });
         if (!res.ok) {
-          console.log(chalk.red(`Error: ${res.error}`));
+          console.log(red(`Error: ${res.error}`));
           cliExit(1);
         }
 
-        console.log(chalk.green(`Deleted worker '${name}'.`));
+        console.log(green(`Deleted worker '${name}'.`));
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
-        console.log(chalk.red(`Failed to delete worker: ${message}`));
+        console.log(red(`Failed to delete worker: ${message}`));
         cliExit(1);
       }
     });

@@ -1,22 +1,24 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { SessionDO } from '@/durable-objects/session';
 
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
 
+import { assertEquals, assertNotEquals, assert } from 'jsr:@std/assert';
+import { assertSpyCalls, assertSpyCallArgs } from 'jsr:@std/testing/mock';
+
 function createMockStorage() {
   const store = new Map<string, unknown>();
   let alarm: number | null = null;
 
   return {
-    get: vi.fn(async <T>(key: string): Promise<T | undefined> => store.get(key) as T | undefined),
-    put: vi.fn(async (key: string, value: unknown) => { store.set(key, value); }),
-    delete: vi.fn(async (key: string) => { store.delete(key); return true; }),
-    setAlarm: vi.fn(async (ms: number) => { alarm = ms; }),
-    deleteAlarm: vi.fn(async () => { alarm = null; }),
-    getAlarm: vi.fn(async () => alarm),
-    list: vi.fn(async () => new Map()),
+    get: async <T>(key: string): Promise<T | undefined> => store.get(key) as T | undefined,
+    put: async (key: string, value: unknown) => { store.set(key, value); },
+    delete: async (key: string) => { store.delete(key); return true; },
+    setAlarm: async (ms: number) => { alarm = ms; },
+    deleteAlarm: async () => { alarm = null; },
+    getAlarm: async () => alarm,
+    list: async () => new Map(),
     _store: store,
   };
 }
@@ -24,7 +26,7 @@ function createMockStorage() {
 function createMockState(storage = createMockStorage()) {
   return {
     storage,
-    blockConcurrencyWhile: vi.fn(async <T>(fn: () => Promise<T>): Promise<T> => fn()),
+    blockConcurrencyWhile: async <T>(fn: () => Promise<T>): Promise<T> => fn(),
   };
 }
 
@@ -77,21 +79,18 @@ function validOIDCState(overrides: Partial<{
 // Tests
 // ---------------------------------------------------------------------------
 
-describe('SessionDO', () => {
-  beforeEach(() => {
-    vi.restoreAllMocks();
-  });
 
-  describe('fetch routing', () => {
-    it('returns 404 for unknown paths', async () => {
-      const { doInstance } = createDO();
+  
+    Deno.test('SessionDO - fetch routing - returns 404 for unknown paths', async () => {
+  /* TODO: restore mocks manually */ void 0;
+  const { doInstance } = createDO();
       const req = postJSON('/unknown', {});
       const res = await doInstance.fetch(req);
-      expect(res.status).toBe(404);
-    });
-
-    it('returns 500 for internal errors', async () => {
-      const storage = createMockStorage();
+      assertEquals(res.status, 404);
+})
+    Deno.test('SessionDO - fetch routing - returns 500 for internal errors', async () => {
+  /* TODO: restore mocks manually */ void 0;
+  const storage = createMockStorage();
       const state = createMockState(storage);
       const { doInstance } = createDO(state);
 
@@ -101,27 +100,26 @@ describe('SessionDO', () => {
         body: 'not-json',
       });
       const res = await doInstance.fetch(req);
-      expect(res.status).toBe(500);
-    });
-  });
-
-  describe('/session/create', () => {
-    it('creates a new session', async () => {
-      const { doInstance, state } = createDO();
+      assertEquals(res.status, 500);
+})  
+  
+    Deno.test('SessionDO - /session/create - creates a new session', async () => {
+  /* TODO: restore mocks manually */ void 0;
+  const { doInstance, state } = createDO();
       const session = validSession();
 
       const res = await doInstance.fetch(postJSON('/session/create', { session }));
-      expect(res.status).toBe(200);
+      assertEquals(res.status, 200);
 
       const body = await jsonBody(res);
-      expect(body.success).toBe(true);
+      assertEquals(body.success, true);
 
       // Verify persist was called
-      expect(state.storage.put).toHaveBeenCalledWith('data', expect.anything());
-    });
-
-    it('returns existing:true if session already exists and not expired', async () => {
-      const { doInstance } = createDO();
+      assertSpyCallArgs(state.storage.put, 0, ['data', expect.anything()]);
+})
+    Deno.test('SessionDO - /session/create - returns existing:true if session already exists and not expired', async () => {
+  /* TODO: restore mocks manually */ void 0;
+  const { doInstance } = createDO();
       const session = validSession({ id: 'existing' });
 
       // Create first time
@@ -130,12 +128,12 @@ describe('SessionDO', () => {
       // Create again with same ID
       const res = await doInstance.fetch(postJSON('/session/create', { session }));
       const body = await jsonBody(res);
-      expect(body.success).toBe(true);
-      expect(body.existing).toBe(true);
-    });
-
-    it('overwrites expired session with same ID', async () => {
-      const { doInstance } = createDO();
+      assertEquals(body.success, true);
+      assertEquals(body.existing, true);
+})
+    Deno.test('SessionDO - /session/create - overwrites expired session with same ID', async () => {
+  /* TODO: restore mocks manually */ void 0;
+  const { doInstance } = createDO();
       const expiredSession = validSession({ id: 'expired', expires_at: Date.now() - 1000 });
 
       // Create expired session
@@ -145,193 +143,187 @@ describe('SessionDO', () => {
       const newSession = validSession({ id: 'expired' });
       const res = await doInstance.fetch(postJSON('/session/create', { session: newSession }));
       const body = await jsonBody(res);
-      expect(body.success).toBe(true);
-      expect(body.existing).toBeUndefined();
-    });
-
-    it('schedules a cleanup alarm after creation', async () => {
-      const { doInstance, state } = createDO();
+      assertEquals(body.success, true);
+      assertEquals(body.existing, undefined);
+})
+    Deno.test('SessionDO - /session/create - schedules a cleanup alarm after creation', async () => {
+  /* TODO: restore mocks manually */ void 0;
+  const { doInstance, state } = createDO();
       const session = validSession();
 
       await doInstance.fetch(postJSON('/session/create', { session }));
 
-      expect(state.storage.setAlarm).toHaveBeenCalled();
-    });
-
-    it('uses blockConcurrencyWhile for serialization', async () => {
-      const state = createMockState();
+      assert(state.storage.setAlarm.calls.length > 0);
+})
+    Deno.test('SessionDO - /session/create - uses blockConcurrencyWhile for serialization', async () => {
+  /* TODO: restore mocks manually */ void 0;
+  const state = createMockState();
       const { doInstance } = createDO(state);
 
       await doInstance.fetch(postJSON('/session/create', { session: validSession() }));
 
       // Called in constructor + session/create
-      expect(state.blockConcurrencyWhile).toHaveBeenCalledTimes(2);
-    });
-  });
-
-  describe('/session/get', () => {
-    it('returns an existing session', async () => {
-      const { doInstance } = createDO();
+      assertSpyCalls(state.blockConcurrencyWhile, 2);
+})  
+  
+    Deno.test('SessionDO - /session/get - returns an existing session', async () => {
+  /* TODO: restore mocks manually */ void 0;
+  const { doInstance } = createDO();
       const session = validSession({ id: 'get-test' });
 
       await doInstance.fetch(postJSON('/session/create', { session }));
 
       const res = await doInstance.fetch(postJSON('/session/get', { sessionId: 'get-test' }));
       const body = await jsonBody(res);
-      expect(body.session).not.toBeNull();
+      assertNotEquals(body.session, null);
       const returned = body.session as Record<string, unknown>;
-      expect(returned.id).toBe('get-test');
-      expect(returned.user_id).toBe('user-1');
-    });
-
-    it('returns null for non-existent session', async () => {
-      const { doInstance } = createDO();
+      assertEquals(returned.id, 'get-test');
+      assertEquals(returned.user_id, 'user-1');
+})
+    Deno.test('SessionDO - /session/get - returns null for non-existent session', async () => {
+  /* TODO: restore mocks manually */ void 0;
+  const { doInstance } = createDO();
       const res = await doInstance.fetch(postJSON('/session/get', { sessionId: 'nonexistent' }));
       const body = await jsonBody(res);
-      expect(body.session).toBeNull();
-    });
-
-    it('returns null and evicts expired session', async () => {
-      const { doInstance, state } = createDO();
+      assertEquals(body.session, null);
+})
+    Deno.test('SessionDO - /session/get - returns null and evicts expired session', async () => {
+  /* TODO: restore mocks manually */ void 0;
+  const { doInstance, state } = createDO();
       const expiredSession = validSession({ id: 'expired', expires_at: Date.now() - 1000 });
 
       await doInstance.fetch(postJSON('/session/create', { session: expiredSession }));
-      state.storage.put.mockClear();
+      state.storage.put;
 
       const res = await doInstance.fetch(postJSON('/session/get', { sessionId: 'expired' }));
       const body = await jsonBody(res);
-      expect(body.session).toBeNull();
+      assertEquals(body.session, null);
 
       // Should have persisted the eviction
-      expect(state.storage.put).toHaveBeenCalled();
-    });
-
-    it('does not persist when session is valid', async () => {
-      const { doInstance, state } = createDO();
+      assert(state.storage.put.calls.length > 0);
+})
+    Deno.test('SessionDO - /session/get - does not persist when session is valid', async () => {
+  /* TODO: restore mocks manually */ void 0;
+  const { doInstance, state } = createDO();
       const session = validSession({ id: 'valid' });
 
       await doInstance.fetch(postJSON('/session/create', { session }));
-      state.storage.put.mockClear();
+      state.storage.put;
 
       await doInstance.fetch(postJSON('/session/get', { sessionId: 'valid' }));
 
       // No eviction happened, so no persist on get
-      expect(state.storage.put).not.toHaveBeenCalled();
-    });
-  });
-
-  describe('/session/delete', () => {
-    it('deletes an existing session', async () => {
-      const { doInstance } = createDO();
+      assertSpyCalls(state.storage.put, 0);
+})  
+  
+    Deno.test('SessionDO - /session/delete - deletes an existing session', async () => {
+  /* TODO: restore mocks manually */ void 0;
+  const { doInstance } = createDO();
       const session = validSession({ id: 'delete-me' });
 
       await doInstance.fetch(postJSON('/session/create', { session }));
 
       const res = await doInstance.fetch(postJSON('/session/delete', { sessionId: 'delete-me' }));
       const body = await jsonBody(res);
-      expect(body.success).toBe(true);
+      assertEquals(body.success, true);
 
       // Verify it's gone
       const getRes = await doInstance.fetch(postJSON('/session/get', { sessionId: 'delete-me' }));
       const getBody = await jsonBody(getRes);
-      expect(getBody.session).toBeNull();
-    });
-
-    it('succeeds even if session does not exist', async () => {
-      const { doInstance } = createDO();
+      assertEquals(getBody.session, null);
+})
+    Deno.test('SessionDO - /session/delete - succeeds even if session does not exist', async () => {
+  /* TODO: restore mocks manually */ void 0;
+  const { doInstance } = createDO();
       const res = await doInstance.fetch(postJSON('/session/delete', { sessionId: 'nonexistent' }));
       const body = await jsonBody(res);
-      expect(body.success).toBe(true);
-    });
-  });
-
-  describe('/oidc-state/create', () => {
-    it('creates a new OIDC state', async () => {
-      const { doInstance, state } = createDO();
+      assertEquals(body.success, true);
+})  
+  
+    Deno.test('SessionDO - /oidc-state/create - creates a new OIDC state', async () => {
+  /* TODO: restore mocks manually */ void 0;
+  const { doInstance, state } = createDO();
       const oidcState = validOIDCState();
 
       const res = await doInstance.fetch(postJSON('/oidc-state/create', { oidcState }));
-      expect(res.status).toBe(200);
+      assertEquals(res.status, 200);
 
       const body = await jsonBody(res);
-      expect(body.success).toBe(true);
-      expect(state.storage.put).toHaveBeenCalled();
-    });
-
-    it('schedules cleanup alarm', async () => {
-      const { doInstance, state } = createDO();
+      assertEquals(body.success, true);
+      assert(state.storage.put.calls.length > 0);
+})
+    Deno.test('SessionDO - /oidc-state/create - schedules cleanup alarm', async () => {
+  /* TODO: restore mocks manually */ void 0;
+  const { doInstance, state } = createDO();
       const oidcState = validOIDCState();
 
       await doInstance.fetch(postJSON('/oidc-state/create', { oidcState }));
-      expect(state.storage.setAlarm).toHaveBeenCalled();
-    });
-  });
-
-  describe('/oidc-state/get', () => {
-    it('returns an existing OIDC state', async () => {
-      const { doInstance } = createDO();
+      assert(state.storage.setAlarm.calls.length > 0);
+})  
+  
+    Deno.test('SessionDO - /oidc-state/get - returns an existing OIDC state', async () => {
+  /* TODO: restore mocks manually */ void 0;
+  const { doInstance } = createDO();
       const oidcState = validOIDCState({ state: 'oidc-get' });
 
       await doInstance.fetch(postJSON('/oidc-state/create', { oidcState }));
 
       const res = await doInstance.fetch(postJSON('/oidc-state/get', { state: 'oidc-get' }));
       const body = await jsonBody(res);
-      expect(body.oidcState).not.toBeNull();
+      assertNotEquals(body.oidcState, null);
       const returned = body.oidcState as Record<string, unknown>;
-      expect(returned.state).toBe('oidc-get');
-      expect(returned.nonce).toBe('nonce-1');
-    });
-
-    it('returns null for non-existent OIDC state', async () => {
-      const { doInstance } = createDO();
+      assertEquals(returned.state, 'oidc-get');
+      assertEquals(returned.nonce, 'nonce-1');
+})
+    Deno.test('SessionDO - /oidc-state/get - returns null for non-existent OIDC state', async () => {
+  /* TODO: restore mocks manually */ void 0;
+  const { doInstance } = createDO();
       const res = await doInstance.fetch(postJSON('/oidc-state/get', { state: 'nonexistent' }));
       const body = await jsonBody(res);
-      expect(body.oidcState).toBeNull();
-    });
-
-    it('returns null and evicts expired OIDC state', async () => {
-      const { doInstance, state } = createDO();
+      assertEquals(body.oidcState, null);
+})
+    Deno.test('SessionDO - /oidc-state/get - returns null and evicts expired OIDC state', async () => {
+  /* TODO: restore mocks manually */ void 0;
+  const { doInstance, state } = createDO();
       const expiredState = validOIDCState({ state: 'expired-oidc', expires_at: Date.now() - 1000 });
 
       await doInstance.fetch(postJSON('/oidc-state/create', { oidcState: expiredState }));
-      state.storage.put.mockClear();
+      state.storage.put;
 
       const res = await doInstance.fetch(postJSON('/oidc-state/get', { state: 'expired-oidc' }));
       const body = await jsonBody(res);
-      expect(body.oidcState).toBeNull();
+      assertEquals(body.oidcState, null);
 
       // Eviction should trigger persist
-      expect(state.storage.put).toHaveBeenCalled();
-    });
-  });
-
-  describe('/oidc-state/delete', () => {
-    it('deletes an existing OIDC state', async () => {
-      const { doInstance } = createDO();
+      assert(state.storage.put.calls.length > 0);
+})  
+  
+    Deno.test('SessionDO - /oidc-state/delete - deletes an existing OIDC state', async () => {
+  /* TODO: restore mocks manually */ void 0;
+  const { doInstance } = createDO();
       const oidcState = validOIDCState({ state: 'delete-oidc' });
 
       await doInstance.fetch(postJSON('/oidc-state/create', { oidcState }));
       const res = await doInstance.fetch(postJSON('/oidc-state/delete', { state: 'delete-oidc' }));
       const body = await jsonBody(res);
-      expect(body.success).toBe(true);
+      assertEquals(body.success, true);
 
       // Verify it's gone
       const getRes = await doInstance.fetch(postJSON('/oidc-state/get', { state: 'delete-oidc' }));
       const getBody = await jsonBody(getRes);
-      expect(getBody.oidcState).toBeNull();
-    });
-
-    it('succeeds even if state does not exist', async () => {
-      const { doInstance } = createDO();
+      assertEquals(getBody.oidcState, null);
+})
+    Deno.test('SessionDO - /oidc-state/delete - succeeds even if state does not exist', async () => {
+  /* TODO: restore mocks manually */ void 0;
+  const { doInstance } = createDO();
       const res = await doInstance.fetch(postJSON('/oidc-state/delete', { state: 'nonexistent' }));
       const body = await jsonBody(res);
-      expect(body.success).toBe(true);
-    });
-  });
-
-  describe('alarm', () => {
-    it('evicts expired sessions', async () => {
-      const { doInstance, state } = createDO();
+      assertEquals(body.success, true);
+})  
+  
+    Deno.test('SessionDO - alarm - evicts expired sessions', async () => {
+  /* TODO: restore mocks manually */ void 0;
+  const { doInstance, state } = createDO();
 
       // Create expired and valid sessions
       await doInstance.fetch(postJSON('/session/create', {
@@ -341,22 +333,22 @@ describe('SessionDO', () => {
         session: validSession({ id: 'valid-sess' }),
       }));
 
-      state.storage.put.mockClear();
+      state.storage.put;
       await doInstance.alarm();
 
       // Expired should be gone, valid should remain
       const expiredRes = await doInstance.fetch(postJSON('/session/get', { sessionId: 'expired-sess' }));
-      expect((await jsonBody(expiredRes)).session).toBeNull();
+      assertEquals((await jsonBody(expiredRes)).session, null);
 
       const validRes = await doInstance.fetch(postJSON('/session/get', { sessionId: 'valid-sess' }));
-      expect((await jsonBody(validRes)).session).not.toBeNull();
+      assertNotEquals((await jsonBody(validRes)).session, null);
 
       // Should have persisted the eviction
-      expect(state.storage.put).toHaveBeenCalled();
-    });
-
-    it('evicts expired OIDC states', async () => {
-      const { doInstance, state } = createDO();
+      assert(state.storage.put.calls.length > 0);
+})
+    Deno.test('SessionDO - alarm - evicts expired OIDC states', async () => {
+  /* TODO: restore mocks manually */ void 0;
+  const { doInstance, state } = createDO();
 
       await doInstance.fetch(postJSON('/oidc-state/create', {
         oidcState: validOIDCState({ state: 'expired-oidc', expires_at: Date.now() - 1000 }),
@@ -365,33 +357,33 @@ describe('SessionDO', () => {
         oidcState: validOIDCState({ state: 'valid-oidc' }),
       }));
 
-      state.storage.put.mockClear();
+      state.storage.put;
       await doInstance.alarm();
 
       const expiredRes = await doInstance.fetch(postJSON('/oidc-state/get', { state: 'expired-oidc' }));
-      expect((await jsonBody(expiredRes)).oidcState).toBeNull();
+      assertEquals((await jsonBody(expiredRes)).oidcState, null);
 
       const validRes = await doInstance.fetch(postJSON('/oidc-state/get', { state: 'valid-oidc' }));
-      expect((await jsonBody(validRes)).oidcState).not.toBeNull();
-    });
-
-    it('does not persist when nothing is evicted', async () => {
-      const { doInstance, state } = createDO();
+      assertNotEquals((await jsonBody(validRes)).oidcState, null);
+})
+    Deno.test('SessionDO - alarm - does not persist when nothing is evicted', async () => {
+  /* TODO: restore mocks manually */ void 0;
+  const { doInstance, state } = createDO();
 
       // Create a valid session
       await doInstance.fetch(postJSON('/session/create', {
         session: validSession({ id: 'valid-only' }),
       }));
 
-      state.storage.put.mockClear();
+      state.storage.put;
       await doInstance.alarm();
 
       // No eviction, so persist should not be called from alarm
-      expect(state.storage.put).not.toHaveBeenCalled();
-    });
-
-    it('reschedules alarm based on earliest expiry', async () => {
-      const { doInstance, state } = createDO();
+      assertSpyCalls(state.storage.put, 0);
+})
+    Deno.test('SessionDO - alarm - reschedules alarm based on earliest expiry', async () => {
+  /* TODO: restore mocks manually */ void 0;
+  const { doInstance, state } = createDO();
       const soonExpiry = Date.now() + 5000;
 
       await doInstance.fetch(postJSON('/session/create', {
@@ -402,32 +394,31 @@ describe('SessionDO', () => {
       }));
 
       // Clear alarm from create
-      state.storage.getAlarm.mockResolvedValueOnce(null);
-      state.storage.setAlarm.mockClear();
+      state.storage.getAlarm = (async () => null) as any;
+      state.storage.setAlarm;
 
       await doInstance.alarm();
 
       // Alarm should be scheduled at or after the earliest expiry
-      expect(state.storage.setAlarm).toHaveBeenCalled();
-      const alarmTime = state.storage.setAlarm.mock.calls[0][0] as number;
-      expect(alarmTime).toBeGreaterThanOrEqual(soonExpiry);
-    });
-
-    it('does not reschedule alarm when no entries exist', async () => {
-      const { doInstance, state } = createDO();
-      state.storage.setAlarm.mockClear();
+      assert(state.storage.setAlarm.calls.length > 0);
+      const alarmTime = state.storage.setAlarm.calls[0][0] as number;
+      assert(alarmTime >= soonExpiry);
+})
+    Deno.test('SessionDO - alarm - does not reschedule alarm when no entries exist', async () => {
+  /* TODO: restore mocks manually */ void 0;
+  const { doInstance, state } = createDO();
+      state.storage.setAlarm;
 
       await doInstance.alarm();
 
       // No entries, getAlarm returns null (default), so no alarm scheduling
       // because earliestExpiry is Infinity
-      expect(state.storage.setAlarm).not.toHaveBeenCalled();
-    });
-  });
-
-  describe('constructor hydration', () => {
-    it('restores sessions and OIDC states from storage', async () => {
-      const storage = createMockStorage();
+      assertSpyCalls(state.storage.setAlarm, 0);
+})  
+  
+    Deno.test('SessionDO - constructor hydration - restores sessions and OIDC states from storage', async () => {
+  /* TODO: restore mocks manually */ void 0;
+  const storage = createMockStorage();
       storage._store.set('data', {
         sessions: {
           'sess-1': validSession({ id: 'sess-1' }),
@@ -442,25 +433,25 @@ describe('SessionDO', () => {
 
       // Verify session is restored
       const sessRes = await doInstance.fetch(postJSON('/session/get', { sessionId: 'sess-1' }));
-      expect((await jsonBody(sessRes)).session).not.toBeNull();
+      assertNotEquals((await jsonBody(sessRes)).session, null);
 
       // Verify OIDC state is restored
       const oidcRes = await doInstance.fetch(postJSON('/oidc-state/get', { state: 'oidc-1' }));
-      expect((await jsonBody(oidcRes)).oidcState).not.toBeNull();
-    });
-
-    it('handles missing stored data gracefully', async () => {
-      const storage = createMockStorage();
+      assertNotEquals((await jsonBody(oidcRes)).oidcState, null);
+})
+    Deno.test('SessionDO - constructor hydration - handles missing stored data gracefully', async () => {
+  /* TODO: restore mocks manually */ void 0;
+  const storage = createMockStorage();
       // No data in storage
       const state = createMockState(storage);
       const doInstance = new SessionDO(state as unknown as DurableObjectState);
 
       const res = await doInstance.fetch(postJSON('/session/get', { sessionId: 'nonexistent' }));
-      expect((await jsonBody(res)).session).toBeNull();
-    });
-
-    it('handles partial stored data (missing oidcStates)', async () => {
-      const storage = createMockStorage();
+      assertEquals((await jsonBody(res)).session, null);
+})
+    Deno.test('SessionDO - constructor hydration - handles partial stored data (missing oidcStates)', async () => {
+  /* TODO: restore mocks manually */ void 0;
+  const storage = createMockStorage();
       storage._store.set('data', {
         sessions: { 'sess-1': validSession({ id: 'sess-1' }) },
       });
@@ -469,17 +460,16 @@ describe('SessionDO', () => {
       const doInstance = new SessionDO(state as unknown as DurableObjectState);
 
       const sessRes = await doInstance.fetch(postJSON('/session/get', { sessionId: 'sess-1' }));
-      expect((await jsonBody(sessRes)).session).not.toBeNull();
+      assertNotEquals((await jsonBody(sessRes)).session, null);
 
       // OIDC states should be empty, not crash
       const oidcRes = await doInstance.fetch(postJSON('/oidc-state/get', { state: 'anything' }));
-      expect((await jsonBody(oidcRes)).oidcState).toBeNull();
-    });
-  });
-
-  describe('multiple sessions lifecycle', () => {
-    it('manages multiple sessions independently', async () => {
-      const { doInstance } = createDO();
+      assertEquals((await jsonBody(oidcRes)).oidcState, null);
+})  
+  
+    Deno.test('SessionDO - multiple sessions lifecycle - manages multiple sessions independently', async () => {
+  /* TODO: restore mocks manually */ void 0;
+  const { doInstance } = createDO();
 
       // Create multiple sessions
       await doInstance.fetch(postJSON('/session/create', {
@@ -492,8 +482,8 @@ describe('SessionDO', () => {
       // Get both
       const resA = await doInstance.fetch(postJSON('/session/get', { sessionId: 'sess-a' }));
       const resB = await doInstance.fetch(postJSON('/session/get', { sessionId: 'sess-b' }));
-      expect((await jsonBody(resA)).session).not.toBeNull();
-      expect((await jsonBody(resB)).session).not.toBeNull();
+      assertNotEquals((await jsonBody(resA)).session, null);
+      assertNotEquals((await jsonBody(resB)).session, null);
 
       // Delete one
       await doInstance.fetch(postJSON('/session/delete', { sessionId: 'sess-a' }));
@@ -501,18 +491,17 @@ describe('SessionDO', () => {
       // A is gone, B remains
       const afterA = await doInstance.fetch(postJSON('/session/get', { sessionId: 'sess-a' }));
       const afterB = await doInstance.fetch(postJSON('/session/get', { sessionId: 'sess-b' }));
-      expect((await jsonBody(afterA)).session).toBeNull();
-      expect((await jsonBody(afterB)).session).not.toBeNull();
-    });
-  });
-
-  describe('concurrency control', () => {
-    it('wraps all mutating operations in blockConcurrencyWhile', async () => {
-      const state = createMockState();
+      assertEquals((await jsonBody(afterA)).session, null);
+      assertNotEquals((await jsonBody(afterB)).session, null);
+})  
+  
+    Deno.test('SessionDO - concurrency control - wraps all mutating operations in blockConcurrencyWhile', async () => {
+  /* TODO: restore mocks manually */ void 0;
+  const state = createMockState();
       const { doInstance } = createDO(state);
 
       // constructor = 1 call
-      const initialCalls = state.blockConcurrencyWhile.mock.calls.length;
+      const initialCalls = state.blockConcurrencyWhile.calls.length;
 
       // Each operation should add one blockConcurrencyWhile call
       await doInstance.fetch(postJSON('/session/create', { session: validSession() }));
@@ -523,7 +512,5 @@ describe('SessionDO', () => {
       await doInstance.fetch(postJSON('/oidc-state/delete', { state: 'oidc-state-1' }));
 
       // 6 operations after constructor
-      expect(state.blockConcurrencyWhile.mock.calls.length).toBe(initialCalls + 6);
-    });
-  });
-});
+      assertEquals(state.blockConcurrencyWhile.calls.length, initialCalls + 6);
+})  

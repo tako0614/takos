@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { createSignal, createEffect, on } from 'solid-js';
 import { RepoDetail } from './components/RepoDetail';
 import { Icons } from '../../lib/Icons';
 import type { Repository } from '../../types';
@@ -14,35 +14,23 @@ interface RepoDetailPageProps {
   onRequireLogin: () => void;
 }
 
-export function RepoDetailPage({
-  spaceId,
-  repoId,
-  username,
-  repoName,
-  onBack,
-  isAuthenticated,
-  onRequireLogin,
-}: RepoDetailPageProps) {
-  const [repo, setRepo] = useState<Repository | null>(null);
-  const [resolvedSpaceId, setResolvedSpaceId] = useState<string | null>(spaceId || null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => {
-    void fetchRepo();
-  }, [spaceId, repoId, username, repoName]);
+export function RepoDetailPage(props: RepoDetailPageProps) {
+  const [repo, setRepo] = createSignal<Repository | null>(null);
+  const [resolvedSpaceId, setResolvedSpaceId] = createSignal<string | null>(props.spaceId || null);
+  const [loading, setLoading] = createSignal(true);
+  const [error, setError] = createSignal<string | null>(null);
 
   const fetchRepo = async () => {
     try {
       setLoading(true);
       setError(null);
 
-      if (username && repoName) {
+      if (props.username && props.repoName) {
         type ByNameRepo = Omit<Repository, 'id' | 'name' | 'description' | 'visibility' | 'default_branch' | 'stars' | 'forks' | 'created_at' | 'updated_at' | 'space_id' | 'owner_username' | 'owner_name'>;
         const res = await rpc.explore.repos['by-name'][':username'][':repoName'].$get({
           param: {
-            username,
-            repoName,
+            username: props.username,
+            repoName: props.repoName,
           },
         });
         const data = await rpcJson<{
@@ -80,9 +68,9 @@ export function RepoDetailPage({
         return;
       }
 
-      if (repoId) {
+      if (props.repoId) {
         const res = await rpc.repos[':repoId'].$get({
-          param: { repoId },
+          param: { repoId: props.repoId },
         });
         const data = await rpcJson<{
           repository: Repository;
@@ -91,7 +79,7 @@ export function RepoDetailPage({
         }>(res);
 
         setRepo(data.repository);
-        setResolvedSpaceId(data.repository.space_id || spaceId || null);
+        setResolvedSpaceId(data.repository.space_id || props.spaceId || null);
         return;
       }
 
@@ -103,36 +91,37 @@ export function RepoDetailPage({
     }
   };
 
-  if (loading) {
-    return (
-      <div className="flex flex-col items-center justify-center h-full bg-zinc-50 dark:bg-zinc-900 text-zinc-500 dark:text-zinc-400">
-        <div className="w-6 h-6 border-2 border-zinc-300 dark:border-zinc-600 border-t-zinc-900 dark:border-t-zinc-100 rounded-full animate-spin" />
-      </div>
-    );
-  }
-
-  if (error || !repo) {
-    return (
-      <div className="flex flex-col items-center justify-center h-full bg-zinc-50 dark:bg-zinc-900 text-zinc-500 dark:text-zinc-400 gap-3">
-        <Icons.AlertTriangle className="w-6 h-6" />
-        <span className="text-sm">{error || 'Repository not found'}</span>
-        <button
-          className="px-3 py-1.5 text-sm bg-zinc-100 dark:bg-zinc-800 text-zinc-700 dark:text-zinc-200 rounded-lg hover:bg-zinc-200 dark:hover:bg-zinc-700 transition-colors"
-          onClick={onBack}
-        >
-          Go Back
-        </button>
-      </div>
-    );
-  }
+  createEffect(on(
+    () => [props.spaceId, props.repoId, props.username, props.repoName],
+    () => { void fetchRepo(); },
+  ));
 
   return (
-    <RepoDetail
-      spaceId={resolvedSpaceId || ''}
-      repo={repo}
-      onBack={onBack}
-      isAuthenticated={isAuthenticated}
-      onRequireLogin={onRequireLogin}
-    />
+    <>
+      {loading() ? (
+        <div class="flex flex-col items-center justify-center h-full bg-zinc-50 dark:bg-zinc-900 text-zinc-500 dark:text-zinc-400">
+          <div class="w-6 h-6 border-2 border-zinc-300 dark:border-zinc-600 border-t-zinc-900 dark:border-t-zinc-100 rounded-full animate-spin" />
+        </div>
+      ) : error() || !repo() ? (
+        <div class="flex flex-col items-center justify-center h-full bg-zinc-50 dark:bg-zinc-900 text-zinc-500 dark:text-zinc-400 gap-3">
+          <Icons.AlertTriangle class="w-6 h-6" />
+          <span class="text-sm">{error() || 'Repository not found'}</span>
+          <button
+            class="px-3 py-1.5 text-sm bg-zinc-100 dark:bg-zinc-800 text-zinc-700 dark:text-zinc-200 rounded-lg hover:bg-zinc-200 dark:hover:bg-zinc-700 transition-colors"
+            onClick={props.onBack}
+          >
+            Go Back
+          </button>
+        </div>
+      ) : (
+        <RepoDetail
+          spaceId={resolvedSpaceId() || ''}
+          repo={repo()!}
+          onBack={props.onBack}
+          isAuthenticated={props.isAuthenticated}
+          onRequireLogin={props.onRequireLogin}
+        />
+      )}
+    </>
   );
 }

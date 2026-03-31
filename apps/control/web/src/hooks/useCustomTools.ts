@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { createSignal, createEffect, on } from 'solid-js';
 import { useToast } from '../store/toast';
 import { useI18n } from '../store/i18n';
 import { getErrorMessage } from 'takos-common/errors';
@@ -27,13 +27,13 @@ export function useCustomTools({ spaceId }: UseCustomToolsOptions) {
   const { t } = useI18n();
   const { confirm } = useConfirmDialog();
 
-  const [tools, setTools] = useState<CustomTool[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [selectedTool, setSelectedTool] = useState<CustomTool | null>(null);
+  const [tools, setTools] = createSignal<CustomTool[]>([]);
+  const [loading, setLoading] = createSignal(true);
+  const [selectedTool, setSelectedTool] = createSignal<CustomTool | null>(null);
 
   const basePath = `/api/spaces/${spaceId}/tools`;
 
-  const refresh = useCallback(async () => {
+  const refresh = async () => {
     if (!spaceId) return;
 
     setLoading(true);
@@ -47,13 +47,13 @@ export function useCustomTools({ spaceId }: UseCustomToolsOptions) {
     } finally {
       setLoading(false);
     }
-  }, [spaceId, basePath]);
+  };
 
-  useEffect(() => {
+  createEffect(on(() => spaceId, () => {
     refresh();
-  }, [refresh]);
+  }));
 
-  const getTool = useCallback(async (toolId: string): Promise<CustomTool | null> => {
+  const getTool = async (toolId: string): Promise<CustomTool | null> => {
     try {
       const res = await fetch(`${basePath}/${toolId}`);
       if (!res.ok) throw new Error('Failed to fetch tool');
@@ -63,9 +63,9 @@ export function useCustomTools({ spaceId }: UseCustomToolsOptions) {
       showToast('error', t('failedToLoadTool'));
       return null;
     }
-  }, [basePath, showToast]);
+  };
 
-  const createTool = useCallback(async (input: CreateToolInput) => {
+  const createTool = async (input: CreateToolInput) => {
     try {
       const res = await fetch(basePath, {
         method: 'POST',
@@ -92,9 +92,9 @@ export function useCustomTools({ spaceId }: UseCustomToolsOptions) {
       showToast('error', getErrorMessage(error, t('failedToCreateTool')));
       throw error;
     }
-  }, [basePath, refresh, showToast]);
+  };
 
-  const updateTool = useCallback(async (toolId: string, input: UpdateToolInput): Promise<boolean> => {
+  const updateTool = async (toolId: string, input: UpdateToolInput): Promise<boolean> => {
     try {
       const res = await fetch(`${basePath}/${toolId}`, {
         method: 'PATCH',
@@ -118,9 +118,9 @@ export function useCustomTools({ spaceId }: UseCustomToolsOptions) {
       showToast('error', getErrorMessage(error, t('failedToUpdateTool')));
       return false;
     }
-  }, [basePath, refresh, showToast]);
+  };
 
-  const deleteTool = useCallback(async (toolId: string, name: string): Promise<boolean> => {
+  const deleteTool = async (toolId: string, name: string): Promise<boolean> => {
     const confirmed = await confirm({
       title: t('deleteToolTitle'),
       message: t('deleteToolConfirm', { name }),
@@ -143,9 +143,9 @@ export function useCustomTools({ spaceId }: UseCustomToolsOptions) {
       showToast('error', t('failedToDeleteTool'));
       return false;
     }
-  }, [basePath, confirm, refresh, showToast]);
+  };
 
-  const toggleTool = useCallback(async (toolId: string, enabled: boolean): Promise<boolean> => {
+  const toggleTool = async (toolId: string, enabled: boolean): Promise<boolean> => {
     try {
       const res = await fetch(`${basePath}/${toolId}/toggle`, {
         method: 'PATCH',
@@ -160,9 +160,9 @@ export function useCustomTools({ spaceId }: UseCustomToolsOptions) {
       showToast('error', t('failedToToggleTool'));
       return false;
     }
-  }, [basePath, refresh, showToast]);
+  };
 
-  const executeTool = useCallback(async (toolName: string, input: unknown) => {
+  const executeTool = async (toolName: string, input: unknown) => {
     try {
       const res = await fetch(`${basePath}/${toolName}/execute`, {
         method: 'POST',
@@ -178,7 +178,7 @@ export function useCustomTools({ spaceId }: UseCustomToolsOptions) {
       showToast('error', getErrorMessage(error, 'Execution failed'));
       throw error;
     }
-  }, [basePath, showToast]);
+  };
 
   return {
     tools,

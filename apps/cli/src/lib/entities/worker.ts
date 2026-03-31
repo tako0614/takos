@@ -8,14 +8,14 @@
 import crypto from 'node:crypto';
 import fs from 'node:fs/promises';
 
-import type { TakosState, WorkerState } from '../state/state-types.js';
-import { readState, writeState, getStateDir } from '../state/state-file.js';
-import { deployWorkerWithWrangler } from '../group-deploy/deploy-worker.js';
-import { generateWranglerConfig, serializeWranglerToml } from '../group-deploy/wrangler-config.js';
-import { serializeContainerWranglerToml } from '../group-deploy/container.js';
-import type { ContainerWranglerConfig, WranglerConfig } from '../group-deploy/deploy-models.js';
-import { createEmptyState } from '../empty-state.js';
-import { DEFAULT_COMPATIBILITY_DATE } from '../constants.js';
+import type { TakosState, WorkerState } from '../state/state-types.ts';
+import { readState, writeState, getStateDir } from '../state/state-file.ts';
+import { deployWorkerWithWrangler } from '../group-deploy/deploy-worker.ts';
+import { generateWranglerConfig, serializeWranglerToml } from '../group-deploy/wrangler-config.ts';
+import { serializeContainerWranglerToml } from '../group-deploy/container.ts';
+import type { ContainerWranglerConfig, WranglerConfig } from '../group-deploy/deploy-models.ts';
+import { createEmptyState } from '../empty-state.ts';
+import { DEFAULT_COMPATIBILITY_DATE } from '../constants.ts';
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -65,7 +65,7 @@ export async function deployWorker(
     : name;
 
   // Build a WorkerServiceDef for wrangler config generation
-  const artifactPath = opts.artifact || 'index.js';
+  const artifactPath = opts.artifact || 'index.ts';
   const workerService = {
     type: 'worker' as const,
     build: {

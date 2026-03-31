@@ -1,5 +1,5 @@
-import type { AppManifest } from '../app-manifest.js';
-import type { TakosState } from './state-types.js';
+import type { AppManifest } from '../app-manifest.ts';
+import type { TakosState } from './state-types.ts';
 
 export type DiffAction = 'create' | 'update' | 'delete' | 'unchanged';
 

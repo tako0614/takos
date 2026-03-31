@@ -1,14 +1,13 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
 import type { ToolContext } from '@/tools/types';
 import type { D1Database } from '@cloudflare/workers-types';
 import type { Env } from '@/types';
 
-vi.mock('@/services/source/apps', () => ({
-  deployFrontendFromWorkspace: vi.fn(),
-}));
-
+// [Deno] vi.mock removed - manually stub imports from '@/services/source/apps'
 import { deployFrontendHandler, DEPLOY_FRONTEND, DEPLOY_TOOLS } from '@/tools/builtin/deploy';
 import { deployFrontendFromWorkspace } from '@/services/source/apps';
+
+import { assertEquals, assertStringIncludes } from 'jsr:@std/assert';
+import { assertSpyCallArgs } from 'jsr:@std/testing/mock';
 
 function makeContext(overrides: Partial<ToolContext> = {}): ToolContext {
   return {
@@ -19,54 +18,49 @@ function makeContext(overrides: Partial<ToolContext> = {}): ToolContext {
     capabilities: [],
     env: {} as Env,
     db: {} as D1Database,
-    setSessionId: vi.fn(),
-    getLastContainerStartFailure: vi.fn(() => undefined),
-    setLastContainerStartFailure: vi.fn(),
+    setSessionId: ((..._args: any[]) => undefined) as any,
+    getLastContainerStartFailure: () => undefined,
+    setLastContainerStartFailure: ((..._args: any[]) => undefined) as any,
     ...overrides,
   };
 }
 
-describe('deploy tools', () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-  });
 
-  describe('DEPLOY_FRONTEND definition', () => {
-    it('has the correct name and required params', () => {
-      expect(DEPLOY_FRONTEND.name).toBe('deploy_frontend');
-      expect(DEPLOY_FRONTEND.category).toBe('deploy');
-      expect(DEPLOY_FRONTEND.parameters.required).toEqual(['app_name']);
-    });
-  });
-
-  describe('DEPLOY_TOOLS', () => {
-    it('exports the deploy_frontend tool', () => {
-      expect(DEPLOY_TOOLS).toHaveLength(1);
-      expect(DEPLOY_TOOLS[0].name).toBe('deploy_frontend');
-    });
-  });
-
-  describe('deployFrontendHandler', () => {
-    it('deploys from workspace with defaults', async () => {
-      vi.mocked(deployFrontendFromWorkspace).mockResolvedValue({
+  
+    Deno.test('deploy tools - DEPLOY_FRONTEND definition - has the correct name and required params', () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+  assertEquals(DEPLOY_FRONTEND.name, 'deploy_frontend');
+      assertEquals(DEPLOY_FRONTEND.category, 'deploy');
+      assertEquals(DEPLOY_FRONTEND.parameters.required, ['app_name']);
+})  
+  
+    Deno.test('deploy tools - DEPLOY_TOOLS - exports the deploy_frontend tool', () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+  assertEquals(DEPLOY_TOOLS.length, 1);
+      assertEquals(DEPLOY_TOOLS[0].name, 'deploy_frontend');
+})  
+  
+    Deno.test('deploy tools - deployFrontendHandler - deploys from workspace with defaults', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+  deployFrontendFromWorkspace = (async () => ({
         appName: 'my-app',
         uploaded: 5,
         url: 'https://my-app.takos.dev',
-      });
+      })) as any;
 
       const result = await deployFrontendHandler(
         { app_name: 'my-app' },
         makeContext(),
       );
 
-      expect(result).toContain('Frontend deployed.');
-      expect(result).toContain('App: my-app');
-      expect(result).toContain('Files: 5');
-      expect(result).toContain('URL: https://my-app.takos.dev');
+      assertStringIncludes(result, 'Frontend deployed.');
+      assertStringIncludes(result, 'App: my-app');
+      assertStringIncludes(result, 'Files: 5');
+      assertStringIncludes(result, 'URL: https://my-app.takos.dev');
 
-      expect(deployFrontendFromWorkspace).toHaveBeenCalledWith(
+      assertSpyCallArgs(deployFrontendFromWorkspace, 0, [
         expect.anything(),
-        expect.objectContaining({
+        ({
           spaceId: 'ws-test',
           appName: 'my-app',
           distPath: 'dist',
@@ -74,33 +68,33 @@ describe('deploy tools', () => {
           description: null,
           icon: null,
         }),
-      );
-    });
-
-    it('uses caller spaceId even if not in args', async () => {
-      vi.mocked(deployFrontendFromWorkspace).mockResolvedValue({
+      ]);
+})
+    Deno.test('deploy tools - deployFrontendHandler - uses caller spaceId even if not in args', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+  deployFrontendFromWorkspace = (async () => ({
         appName: 'app',
         uploaded: 1,
         url: 'https://app.takos.dev',
-      });
+      })) as any;
 
       await deployFrontendHandler(
         { app_name: 'app' },
         makeContext({ spaceId: 'enforced-space' }),
       );
 
-      expect(deployFrontendFromWorkspace).toHaveBeenCalledWith(
+      assertSpyCallArgs(deployFrontendFromWorkspace, 0, [
         expect.anything(),
-        expect.objectContaining({ spaceId: 'enforced-space' }),
-      );
-    });
-
-    it('passes custom dist_path, clear, description, icon', async () => {
-      vi.mocked(deployFrontendFromWorkspace).mockResolvedValue({
+        ({ spaceId: 'enforced-space' }),
+      ]);
+})
+    Deno.test('deploy tools - deployFrontendHandler - passes custom dist_path, clear, description, icon', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+  deployFrontendFromWorkspace = (async () => ({
         appName: 'app',
         uploaded: 10,
         url: 'https://app.takos.dev',
-      });
+      })) as any;
 
       await deployFrontendHandler(
         {
@@ -113,33 +107,31 @@ describe('deploy tools', () => {
         makeContext(),
       );
 
-      expect(deployFrontendFromWorkspace).toHaveBeenCalledWith(
+      assertSpyCallArgs(deployFrontendFromWorkspace, 0, [
         expect.anything(),
-        expect.objectContaining({
+        ({
           distPath: 'build/out',
           clear: true,
           description: 'My desc',
           icon: '🚀',
         }),
-      );
-    });
-
-    it('trims app_name whitespace', async () => {
-      vi.mocked(deployFrontendFromWorkspace).mockResolvedValue({
+      ]);
+})
+    Deno.test('deploy tools - deployFrontendHandler - trims app_name whitespace', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+  deployFrontendFromWorkspace = (async () => ({
         appName: 'trimmed',
         uploaded: 1,
         url: 'https://trimmed.takos.dev',
-      });
+      })) as any;
 
       await deployFrontendHandler(
         { app_name: '  trimmed  ' },
         makeContext(),
       );
 
-      expect(deployFrontendFromWorkspace).toHaveBeenCalledWith(
+      assertSpyCallArgs(deployFrontendFromWorkspace, 0, [
         expect.anything(),
-        expect.objectContaining({ appName: 'trimmed' }),
-      );
-    });
-  });
-});
+        ({ appName: 'trimmed' }),
+      ]);
+})  

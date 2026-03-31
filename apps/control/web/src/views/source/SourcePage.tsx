@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { createEffect, onMount, onCleanup, createSignal } from 'solid-js';
 import { Icons } from '../../lib/Icons';
 import { useBreakpoint } from '../../hooks/useBreakpoint';
 import { useI18n } from '../../store/i18n';
@@ -27,8 +27,8 @@ interface SourcePageProps {
 export function SourcePage({ spaces, onNavigateToRepo, isAuthenticated, onRequireLogin }: SourcePageProps) {
   const { t } = useI18n();
   const { isMobile } = useBreakpoint();
-  const searchRef = useRef<HTMLInputElement>(null);
-  const [showMobileFilters, setShowMobileFilters] = useState(false);
+  let searchRef: HTMLInputElement | undefined;
+  const [showMobileFilters, setShowMobileFilters] = createSignal(false);
 
   const {
     browseMode, setBrowseMode,
@@ -55,40 +55,40 @@ export function SourcePage({ spaces, onNavigateToRepo, isAuthenticated, onRequir
   } = useSourceData({ spaces, onNavigateToRepo, isAuthenticated, onRequireLogin });
 
   // Cmd/Ctrl+K to focus search
-  useEffect(() => {
+  onMount(() => {
     const handler = (e: KeyboardEvent) => {
       if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
         e.preventDefault();
-        searchRef.current?.focus();
+        searchRef?.focus();
       }
     };
     window.addEventListener('keydown', handler);
-    return () => window.removeEventListener('keydown', handler);
-  }, []);
+    onCleanup(() => window.removeEventListener('keydown', handler));
+  });
 
-  const isSearchMode = browseMode || query.length > 0 || filter !== 'all' || category !== '' || officialOnly;
-  const hasActiveFilters = filter !== 'all' || category !== '' || officialOnly;
+  const isSearchMode = browseMode() || query().length > 0 || filter() !== 'all' || category() !== '' || officialOnly();
+  const hasActiveFilters = filter() !== 'all' || category() !== '' || officialOnly();
 
   // Restore scroll position when switching between home/search
-  useEffect(() => {
+  createEffect(() => {
     return restoreScroll(isSearchMode);
-  }, [isSearchMode, restoreScroll]);
+  });
 
-  const onContentScroll = useCallback(() => {
+  const onContentScroll = () => {
     handleContentScroll(isSearchMode);
-  }, [isSearchMode, handleContentScroll]);
+  };
 
   // Close mobile filters when leaving search mode
-  useEffect(() => {
+  createEffect(() => {
     if (!isSearchMode) {
       setShowMobileFilters(false);
     }
-  }, [isSearchMode]);
+  });
 
   // Close mobile filters on breakpoint change
-  useEffect(() => {
+  createEffect(() => {
     setShowMobileFilters(false);
-  }, [isMobile]);
+  });
 
   function exitSearch() {
     setBrowseMode(false);
@@ -96,7 +96,7 @@ export function SourcePage({ spaces, onNavigateToRepo, isAuthenticated, onRequir
     setFilter('all');
     setCategory('');
     setOfficialOnly(false);
-    searchRef.current?.blur();
+    searchRef?.blur();
   }
 
   function clearFilters() {
@@ -106,19 +106,19 @@ export function SourcePage({ spaces, onNavigateToRepo, isAuthenticated, onRequir
   }
 
   return (
-    <div className="h-full flex flex-col bg-zinc-50 dark:bg-zinc-900 overflow-hidden">
-      <div className="max-w-2xl mx-auto w-full flex flex-col flex-1 min-h-0">
+    <div class="h-full flex flex-col bg-zinc-50 dark:bg-zinc-900 overflow-hidden">
+      <div class="max-w-2xl mx-auto w-full flex flex-col flex-1 min-h-0">
 
       {/* -- Header -- */}
-      <div className="flex-shrink-0 px-4 pt-4 pb-3 md:pt-5">
+      <div class="flex-shrink-0 px-4 pt-4 pb-3 md:pt-5">
         {!isSearchMode && (
-          <div className="flex items-center justify-between mb-4">
-            <h1 className="text-xl md:text-2xl font-bold tracking-tight text-zinc-900 dark:text-zinc-50">{t('sourceTitle')}</h1>
-            <div className="flex items-center gap-2">
+          <div class="flex items-center justify-between mb-4">
+            <h1 class="text-xl md:text-2xl font-bold tracking-tight text-zinc-900 dark:text-zinc-50">{t('sourceTitle')}</h1>
+            <div class="flex items-center gap-2">
               <button
                 type="button"
                 title={t('newRepository')}
-                className="w-10 h-10 md:w-8 md:h-8 flex items-center justify-center rounded-full bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900 hover:bg-zinc-700 dark:hover:bg-zinc-300 transition-colors"
+                class="w-10 h-10 md:w-8 md:h-8 flex items-center justify-center rounded-full bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900 hover:bg-zinc-700 dark:hover:bg-zinc-300 transition-colors"
                 onClick={() => {
                   if (!isAuthenticated) {
                     onRequireLogin();
@@ -127,7 +127,7 @@ export function SourcePage({ spaces, onNavigateToRepo, isAuthenticated, onRequir
                   setShowCreateModal(true);
                 }}
               >
-                <Icons.Plus className="w-4 h-4" />
+                <Icons.Plus class="w-4 h-4" />
               </button>
             </div>
           </div>
@@ -135,13 +135,13 @@ export function SourcePage({ spaces, onNavigateToRepo, isAuthenticated, onRequir
 
         <SourceSearchBar
           searchRef={searchRef}
-          query={query}
+          query={query()}
           setQuery={setQuery}
           isSearchMode={isSearchMode}
-          searchFocused={searchFocused}
+          searchFocused={searchFocused()}
           setSearchFocused={setSearchFocused}
-          suggesting={suggesting}
-          suggestions={suggestions}
+          suggesting={suggesting()}
+          suggestions={suggestions()}
           onExitSearch={exitSearch}
           onFocusSearch={() => setBrowseMode(true)}
           onNavigateToRepo={onNavigateToRepo}
@@ -151,29 +151,29 @@ export function SourcePage({ spaces, onNavigateToRepo, isAuthenticated, onRequir
       {isSearchMode ? (
         <>
           <SourceFilterStatusBar
-            loading={loading}
-            total={total}
+            loading={loading()}
+            total={total()}
             hasActiveFilters={hasActiveFilters}
             onClearFilters={clearFilters}
           />
 
           {isMobile ? (
             <MobileFilterBar
-              filter={filter}
-              sort={sort}
+              filter={filter()}
+              sort={sort()}
               setSort={setSort}
               hasActiveFilters={hasActiveFilters}
               onShowFilters={() => setShowMobileFilters(true)}
             />
           ) : (
             <DesktopFilterBar
-              filter={filter}
+              filter={filter()}
               setFilter={setFilter}
-              category={category}
+              category={category()}
               setCategory={setCategory}
-              officialOnly={officialOnly}
+              officialOnly={officialOnly()}
               setOfficialOnly={setOfficialOnly}
-              sort={sort}
+              sort={sort()}
               setSort={setSort}
               isAuthenticated={isAuthenticated}
               onRequireLogin={onRequireLogin}
@@ -183,11 +183,11 @@ export function SourcePage({ spaces, onNavigateToRepo, isAuthenticated, onRequir
           <SourceBrowseView
             scrollContainerRef={scrollContainerRef}
             onScroll={onContentScroll}
-            items={items}
-            loading={loading}
-            hasMore={hasMore}
-            filter={filter}
-            installingId={installingId}
+            items={items()}
+            loading={loading()}
+            hasMore={hasMore()}
+            filter={filter()}
+            installingId={installingId()}
             getItemTakopack={getItemTakopack}
             onSelect={setSelectedItem}
             onInstall={install}
@@ -205,9 +205,9 @@ export function SourcePage({ spaces, onNavigateToRepo, isAuthenticated, onRequir
         <SourceHomeView
           scrollContainerRef={scrollContainerRef}
           onScroll={onContentScroll}
-          items={items}
-          loading={loading}
-          installingId={installingId}
+          items={items()}
+          loading={loading()}
+          installingId={installingId()}
           getItemTakopack={getItemTakopack}
           onSelect={setSelectedItem}
           onInstall={install}
@@ -222,24 +222,24 @@ export function SourcePage({ spaces, onNavigateToRepo, isAuthenticated, onRequir
 
       {isMobile && (
         <MobileFiltersModal
-          isOpen={showMobileFilters}
+          isOpen={showMobileFilters()}
           onClose={() => setShowMobileFilters(false)}
-          filter={filter}
+          filter={filter()}
           setFilter={setFilter}
-          category={category}
+          category={category()}
           setCategory={setCategory}
-          officialOnly={officialOnly}
+          officialOnly={officialOnly()}
           setOfficialOnly={setOfficialOnly}
           isAuthenticated={isAuthenticated}
           onRequireLogin={onRequireLogin}
         />
       )}
 
-      {selectedItem && (
+      {selectedItem() && (
         <RepoDetailPanel
-          item={selectedItem}
-          takopack={getItemTakopack(selectedItem)}
-          installingId={installingId}
+          item={selectedItem()!}
+          takopack={getItemTakopack(selectedItem()!)}
+          installingId={installingId()}
           onClose={() => setSelectedItem(null)}
           onInstall={install}
           onUninstall={uninstall}
@@ -249,7 +249,7 @@ export function SourcePage({ spaces, onNavigateToRepo, isAuthenticated, onRequir
         />
       )}
 
-      {showCreateModal && (
+      {showCreateModal() && (
         <CreateRepoModal
           onClose={() => setShowCreateModal(false)}
           onCreate={createRepo}

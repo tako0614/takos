@@ -1,4 +1,5 @@
-import type { CSSProperties } from 'react';
+import type { JSX } from 'solid-js';
+import { Show, For } from 'solid-js';
 import { Icons } from '../../lib/Icons';
 import { Avatar, Button } from '../ui';
 import type { ProfileTab, UserProfile } from '../../types/profile';
@@ -16,189 +17,185 @@ interface ProfileHeaderProps {
   muteLoading?: boolean;
 }
 
-export function ProfileHeader({
-  profile,
-  onBack,
-  onSelectTab,
-  onToggleFollow,
-  followLoading,
-  onToggleBlock,
-  onToggleMute,
-  blockLoading = false,
-  muteLoading = false,
-}: ProfileHeaderProps) {
-  const statButtonStyle: CSSProperties = {
+export function ProfileHeader(props: ProfileHeaderProps) {
+  const statButtonStyle: JSX.CSSProperties = {
     display: 'flex',
-    flexDirection: 'column',
-    alignItems: 'center',
+    'flex-direction': 'column',
+    'align-items': 'center',
     background: 'none',
     border: 'none',
     cursor: 'pointer',
-    padding: 0,
+    padding: '0',
     transition: 'var(--transition-colors)',
   };
 
-  const followLabel = profile.is_following
-    ? 'Following'
-    : profile.follow_requested
-      ? 'Requested'
-      : 'Follow';
-  const followVariant = (profile.is_following || profile.follow_requested) ? 'secondary' : 'primary';
+  const followLabel = () =>
+    props.profile.is_following
+      ? 'Following'
+      : props.profile.follow_requested
+        ? 'Requested'
+        : 'Follow';
+  const followVariant = () =>
+    (props.profile.is_following || props.profile.follow_requested) ? 'secondary' : 'primary';
+
+  const stats = () => [
+    { tab: 'repositories' as const, count: props.profile.public_repo_count, label: 'repositories' },
+    { tab: 'followers' as const, count: props.profile.followers_count, label: 'followers' },
+    { tab: 'following' as const, count: props.profile.following_count, label: 'following' },
+  ];
 
   return (
     <>
       <div
         style={{
           position: 'sticky',
-          top: 0,
-          zIndex: 10,
-          backgroundColor: 'var(--color-bg-secondary)',
-          borderBottom: '1px solid var(--color-border-primary)',
+          top: '0',
+          'z-index': 10,
+          'background-color': 'var(--color-bg-secondary)',
+          'border-bottom': '1px solid var(--color-border-primary)',
         }}
       >
-        {onBack && (
+        <Show when={props.onBack}>
           <div style={{ padding: '0.75rem 1.5rem' }}>
             <Button
               variant="ghost"
               size="sm"
-              onClick={onBack}
+              onClick={props.onBack}
               aria-label="Go back"
               leftIcon={<Icons.ArrowLeft />}
             />
           </div>
-        )}
+        </Show>
       </div>
 
       <div
         style={{
           padding: '1.5rem',
-          borderBottom: '1px solid var(--color-border-primary)',
-          backgroundColor: 'var(--color-surface-primary)',
+          'border-bottom': '1px solid var(--color-border-primary)',
+          'background-color': 'var(--color-surface-primary)',
         }}
       >
-        <div style={{ display: 'flex', alignItems: 'flex-start', gap: '1.5rem' }}>
-          <div style={{ flexShrink: 0 }}>
+        <div style={{ display: 'flex', 'align-items': 'flex-start', gap: '1.5rem' }}>
+          <div style={{ 'flex-shrink': 0 }}>
             <Avatar
-              src={profile.picture || undefined}
-              name={profile.name}
+              src={props.profile.picture || undefined}
+              name={props.profile.name}
               size="xl"
               style={{
                 width: '6rem',
                 height: '6rem',
-                fontSize: '1.75rem',
+                'font-size': '1.75rem',
                 border: '2px solid var(--color-border-primary)',
               }}
             />
           </div>
 
-          <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ flex: 1, 'min-width': '0' }}>
             <h1
               style={{
-                fontSize: '1.5rem',
-                fontWeight: 700,
+                'font-size': '1.5rem',
+                'font-weight': 700,
                 color: 'var(--color-text-primary)',
-                margin: 0,
+                margin: '0',
               }}
             >
-              {profile.name}
+              {props.profile.name}
             </h1>
-            {profile.username && (
+            <Show when={props.profile.username}>
               <span style={{ color: 'var(--color-text-secondary)' }}>
-                @{profile.username}
-                {profile.private_account && !profile.is_self && (
-                  <span style={{ marginLeft: '0.5rem', fontSize: '0.75rem', opacity: 0.8 }}>
+                @{props.profile.username}
+                <Show when={props.profile.private_account && !props.profile.is_self}>
+                  <span style={{ 'margin-left': '0.5rem', 'font-size': '0.75rem', opacity: 0.8 }}>
                     (Private)
                   </span>
-                )}
+                </Show>
               </span>
-            )}
-            {profile.bio && (
+            </Show>
+            <Show when={props.profile.bio}>
               <p
                 style={{
-                  marginTop: '0.5rem',
+                  'margin-top': '0.5rem',
                   color: 'var(--color-text-secondary)',
-                  marginBottom: 0,
+                  'margin-bottom': '0',
                 }}
               >
-                {profile.bio}
+                {props.profile.bio}
               </p>
-            )}
+            </Show>
 
             <div
               style={{
                 display: 'flex',
-                alignItems: 'center',
+                'align-items': 'center',
                 gap: '1.5rem',
-                marginTop: '1rem',
+                'margin-top': '1rem',
               }}
             >
-              {([
-                { tab: 'repositories' as const, count: profile.public_repo_count, label: 'repositories' },
-                { tab: 'followers' as const, count: profile.followers_count, label: 'followers' },
-                { tab: 'following' as const, count: profile.following_count, label: 'following' },
-              ]).map(({ tab, count, label }) => (
-                <button key={tab} style={statButtonStyle} onClick={() => onSelectTab(tab)}>
-                  <span style={{ fontSize: '1.125rem', fontWeight: 700, color: 'var(--color-text-primary)' }}>
-                    {formatNumber(count)}
-                  </span>
-                  <span style={{ fontSize: '0.75rem', color: 'var(--color-text-secondary)' }}>
-                    {label}
-                  </span>
-                </button>
-              ))}
+              <For each={stats()}>
+                {(item) => (
+                  <button style={statButtonStyle} onClick={() => props.onSelectTab(item.tab)}>
+                    <span style={{ 'font-size': '1.125rem', 'font-weight': 700, color: 'var(--color-text-primary)' }}>
+                      {formatNumber(item.count)}
+                    </span>
+                    <span style={{ 'font-size': '0.75rem', color: 'var(--color-text-secondary)' }}>
+                      {item.label}
+                    </span>
+                  </button>
+                )}
+              </For>
             </div>
           </div>
 
-          <div style={{ flexShrink: 0 }}>
-            {!profile.is_self && (
-              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                {onToggleMute && (
+          <div style={{ 'flex-shrink': 0 }}>
+            <Show when={!props.profile.is_self}>
+              <div style={{ display: 'flex', 'align-items': 'center', gap: '0.5rem' }}>
+                <Show when={props.onToggleMute}>
                   <Button
                     variant="ghost"
                     size="sm"
-                    onClick={onToggleMute}
-                    disabled={muteLoading || followLoading || blockLoading}
-                    isLoading={muteLoading}
+                    onClick={props.onToggleMute}
+                    disabled={(props.muteLoading ?? false) || props.followLoading || (props.blockLoading ?? false)}
+                    isLoading={props.muteLoading ?? false}
                   >
-                    {profile.is_muted ? 'Unmute' : 'Mute'}
+                    {props.profile.is_muted ? 'Unmute' : 'Mute'}
                   </Button>
-                )}
-                {onToggleBlock && (
+                </Show>
+                <Show when={props.onToggleBlock}>
                   <Button
-                    variant={profile.is_blocking ? 'danger' : 'ghost'}
+                    variant={props.profile.is_blocking ? 'danger' : 'ghost'}
                     size="sm"
-                    onClick={onToggleBlock}
-                    disabled={blockLoading || followLoading || muteLoading}
-                    isLoading={blockLoading}
+                    onClick={props.onToggleBlock}
+                    disabled={(props.blockLoading ?? false) || props.followLoading || (props.muteLoading ?? false)}
+                    isLoading={props.blockLoading ?? false}
                   >
-                    {profile.is_blocking ? 'Unblock' : 'Block'}
+                    {props.profile.is_blocking ? 'Unblock' : 'Block'}
                   </Button>
-                )}
+                </Show>
                 <Button
-                  variant={followVariant}
-                  onClick={onToggleFollow}
-                  disabled={followLoading || blockLoading}
-                  isLoading={followLoading}
+                  variant={followVariant()}
+                  onClick={props.onToggleFollow}
+                  disabled={props.followLoading || (props.blockLoading ?? false)}
+                  isLoading={props.followLoading}
                 >
-                  {followLabel}
+                  {followLabel()}
                 </Button>
               </div>
-            )}
+            </Show>
           </div>
         </div>
 
         <div
           style={{
             display: 'flex',
-            alignItems: 'center',
+            'align-items': 'center',
             gap: '0.5rem',
-            marginTop: '1rem',
-            fontSize: '0.75rem',
+            'margin-top': '1rem',
+            'font-size': '0.75rem',
             color: 'var(--color-text-tertiary)',
           }}
         >
           <Icons.Clock style={{ width: '1rem', height: '1rem' }} />
-          <span>Joined {formatDate(profile.created_at)}</span>
+          <span>Joined {formatDate(props.profile.created_at)}</span>
         </div>
       </div>
     </>

@@ -1,4 +1,3 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ToolContext } from '@/tools/types';
 import type { D1Database } from '@cloudflare/workers-types';
 import type { Env } from '@/types';
@@ -7,18 +6,9 @@ import type { Env } from '@/types';
 // Mocks
 // ---------------------------------------------------------------------------
 
-vi.mock('@/services/source/repos', () => ({
-  checkRepoAccess: vi.fn(),
-}));
-
-vi.mock('@/services/source/explore', () => ({
-  listCatalogItems: vi.fn(),
-}));
-
-vi.mock('@/services/source/fork', () => ({
-  forkWithWorkflows: vi.fn(),
-}));
-
+// [Deno] vi.mock removed - manually stub imports from '@/services/source/repos'
+// [Deno] vi.mock removed - manually stub imports from '@/services/source/explore'
+// [Deno] vi.mock removed - manually stub imports from '@/services/source/fork'
 import { checkRepoAccess } from '@/services/source/repos';
 import { listCatalogItems } from '@/services/source/explore';
 import { forkWithWorkflows } from '@/services/source/fork';
@@ -36,6 +26,9 @@ import {
 // Helpers
 // ---------------------------------------------------------------------------
 
+import { assertEquals, assert, assertRejects, assertStringIncludes } from 'jsr:@std/assert';
+import { assertSpyCallArgs } from 'jsr:@std/testing/mock';
+
 function makeContext(overrides: Partial<ToolContext> = {}): ToolContext {
   return {
     spaceId: 'ws-test',
@@ -47,9 +40,9 @@ function makeContext(overrides: Partial<ToolContext> = {}): ToolContext {
       GIT_OBJECTS: {},
     } as unknown as Env,
     db: {} as D1Database,
-    setSessionId: vi.fn(),
-    getLastContainerStartFailure: vi.fn(() => undefined),
-    setLastContainerStartFailure: vi.fn(),
+    setSessionId: ((..._args: any[]) => undefined) as any,
+    getLastContainerStartFailure: () => undefined,
+    setLastContainerStartFailure: ((..._args: any[]) => undefined) as any,
     ...overrides,
   };
 }
@@ -58,56 +51,47 @@ function makeContext(overrides: Partial<ToolContext> = {}): ToolContext {
 // Tool definitions
 // ---------------------------------------------------------------------------
 
-describe('workspace source tool definitions', () => {
-  it('defines two tools', () => {
-    expect(WORKSPACE_SOURCE_TOOLS).toHaveLength(2);
+
+  Deno.test('workspace source tool definitions - defines two tools', () => {
+  assertEquals(WORKSPACE_SOURCE_TOOLS.length, 2);
     const names = WORKSPACE_SOURCE_TOOLS.map((t) => t.name);
-    expect(names).toContain('store_search');
-    expect(names).toContain('repo_fork');
-  });
-
-  it('all tools have workspace category', () => {
-    for (const def of WORKSPACE_SOURCE_TOOLS) {
-      expect(def.category).toBe('workspace');
+    assertStringIncludes(names, 'store_search');
+    assertStringIncludes(names, 'repo_fork');
+})
+  Deno.test('workspace source tool definitions - all tools have workspace category', () => {
+  for (const def of WORKSPACE_SOURCE_TOOLS) {
+      assertEquals(def.category, 'workspace');
     }
-  });
-
-  it('WORKSPACE_SOURCE_HANDLERS maps all tools', () => {
-    for (const def of WORKSPACE_SOURCE_TOOLS) {
-      expect(WORKSPACE_SOURCE_HANDLERS).toHaveProperty(def.name);
+})
+  Deno.test('workspace source tool definitions - WORKSPACE_SOURCE_HANDLERS maps all tools', () => {
+  for (const def of WORKSPACE_SOURCE_TOOLS) {
+      assert(def.name in WORKSPACE_SOURCE_HANDLERS);
     }
-  });
-
-  it('store_search has no required params', () => {
-    expect(STORE_SEARCH.parameters.required).toEqual([]);
-  });
-
-  it('repo_fork requires repo_id', () => {
-    expect(REPO_FORK.parameters.required).toEqual(['repo_id']);
-  });
-
-  it('store_search has sort enum', () => {
-    expect(STORE_SEARCH.parameters.properties.sort.enum).toContain('trending');
-    expect(STORE_SEARCH.parameters.properties.sort.enum).toContain('new');
-    expect(STORE_SEARCH.parameters.properties.sort.enum).toContain('stars');
-  });
-
-  it('store_search has type enum', () => {
-    expect(STORE_SEARCH.parameters.properties.type.enum).toContain('all');
-    expect(STORE_SEARCH.parameters.properties.type.enum).toContain('repo');
-    expect(STORE_SEARCH.parameters.properties.type.enum).toContain('deployable-app');
-  });
-});
-
+})
+  Deno.test('workspace source tool definitions - store_search has no required params', () => {
+  assertEquals(STORE_SEARCH.parameters.required, []);
+})
+  Deno.test('workspace source tool definitions - repo_fork requires repo_id', () => {
+  assertEquals(REPO_FORK.parameters.required, ['repo_id']);
+})
+  Deno.test('workspace source tool definitions - store_search has sort enum', () => {
+  assertStringIncludes(STORE_SEARCH.parameters.properties.sort.enum, 'trending');
+    assertStringIncludes(STORE_SEARCH.parameters.properties.sort.enum, 'new');
+    assertStringIncludes(STORE_SEARCH.parameters.properties.sort.enum, 'stars');
+})
+  Deno.test('workspace source tool definitions - store_search has type enum', () => {
+  assertStringIncludes(STORE_SEARCH.parameters.properties.type.enum, 'all');
+    assertStringIncludes(STORE_SEARCH.parameters.properties.type.enum, 'repo');
+    assertStringIncludes(STORE_SEARCH.parameters.properties.type.enum, 'deployable-app');
+})
 // ---------------------------------------------------------------------------
 // storeSearchHandler
 // ---------------------------------------------------------------------------
 
-describe('storeSearchHandler', () => {
-  beforeEach(() => vi.clearAllMocks());
 
-  it('returns search results formatted as JSON', async () => {
-    vi.mocked(listCatalogItems).mockResolvedValue({
+  
+  Deno.test('storeSearchHandler - returns search results formatted as JSON', async () => {
+  listCatalogItems = (async () => ({
       items: [
         {
           repo: {
@@ -133,23 +117,22 @@ describe('storeSearchHandler', () => {
       ],
       total: 1,
       has_more: false,
-    } as any);
+    } as any)) as any;
 
     const result = JSON.parse(await storeSearchHandler({}, makeContext()));
 
-    expect(result.sort).toBe('trending');
-    expect(result.type).toBe('all');
-    expect(result.total).toBe(1);
-    expect(result.items[0].repo_id).toBe('r1');
-    expect(result.items[0].repo_name).toBe('cool-app');
-    expect(result.items[0].owner_username).toBe('alice');
-    expect(result.items[0].stars).toBe(42);
-    expect(result.items[0].takopack_available).toBe(true);
-    expect(result.items[0].installed_in_current_space).toBe(true);
-  });
-
-  it('passes search parameters to listCatalogItems', async () => {
-    vi.mocked(listCatalogItems).mockResolvedValue({ items: [], total: 0, has_more: false } as any);
+    assertEquals(result.sort, 'trending');
+    assertEquals(result.type, 'all');
+    assertEquals(result.total, 1);
+    assertEquals(result.items[0].repo_id, 'r1');
+    assertEquals(result.items[0].repo_name, 'cool-app');
+    assertEquals(result.items[0].owner_username, 'alice');
+    assertEquals(result.items[0].stars, 42);
+    assertEquals(result.items[0].takopack_available, true);
+    assertEquals(result.items[0].installed_in_current_space, true);
+})
+  Deno.test('storeSearchHandler - passes search parameters to listCatalogItems', async () => {
+  listCatalogItems = (async () => ({ items: [], total: 0, has_more: false } as any)) as any;
 
     await storeSearchHandler(
       {
@@ -165,9 +148,9 @@ describe('storeSearchHandler', () => {
       makeContext(),
     );
 
-    expect(listCatalogItems).toHaveBeenCalledWith(
+    assertSpyCallArgs(listCatalogItems, 0, [
       expect.anything(),
-      expect.objectContaining({
+      ({
         sort: 'stars',
         type: 'deployable-app',
         limit: 5,
@@ -177,33 +160,30 @@ describe('storeSearchHandler', () => {
         tagsRaw: 'cool,useful',
         certifiedOnly: true,
       }),
-    );
-  });
-
-  it('normalizes invalid sort to default', async () => {
-    vi.mocked(listCatalogItems).mockResolvedValue({ items: [], total: 0, has_more: false } as any);
+    ]);
+})
+  Deno.test('storeSearchHandler - normalizes invalid sort to default', async () => {
+  listCatalogItems = (async () => ({ items: [], total: 0, has_more: false } as any)) as any;
 
     await storeSearchHandler({ sort: 'invalid' }, makeContext());
 
-    expect(listCatalogItems).toHaveBeenCalledWith(
+    assertSpyCallArgs(listCatalogItems, 0, [
       expect.anything(),
-      expect.objectContaining({ sort: 'trending' }),
-    );
-  });
-
-  it('clamps limit to max 20', async () => {
-    vi.mocked(listCatalogItems).mockResolvedValue({ items: [], total: 0, has_more: false } as any);
+      ({ sort: 'trending' }),
+    ]);
+})
+  Deno.test('storeSearchHandler - clamps limit to max 20', async () => {
+  listCatalogItems = (async () => ({ items: [], total: 0, has_more: false } as any)) as any;
 
     await storeSearchHandler({ limit: 100 }, makeContext());
 
-    expect(listCatalogItems).toHaveBeenCalledWith(
+    assertSpyCallArgs(listCatalogItems, 0, [
       expect.anything(),
-      expect.objectContaining({ limit: 20 }),
-    );
-  });
-
-  it('handles installation not present', async () => {
-    vi.mocked(listCatalogItems).mockResolvedValue({
+      ({ limit: 20 }),
+    ]);
+})
+  Deno.test('storeSearchHandler - handles installation not present', async () => {
+  listCatalogItems = (async () => ({
       items: [
         {
           repo: { id: 'r1', name: 'app', owner: { username: 'bob' }, description: '', stars: 0, forks: 0, language: null, license: null },
@@ -213,93 +193,84 @@ describe('storeSearchHandler', () => {
       ],
       total: 1,
       has_more: false,
-    } as any);
+    } as any)) as any;
 
     const result = JSON.parse(await storeSearchHandler({}, makeContext()));
-    expect(result.items[0].installed_in_current_space).toBe(false);
-    expect(result.items[0].installation_bundle_deployment_id).toBeNull();
-  });
-});
-
+    assertEquals(result.items[0].installed_in_current_space, false);
+    assertEquals(result.items[0].installation_bundle_deployment_id, null);
+})
 // ---------------------------------------------------------------------------
 // repoForkHandler
 // ---------------------------------------------------------------------------
 
-describe('repoForkHandler', () => {
-  beforeEach(() => vi.clearAllMocks());
 
-  it('throws when repo_id is empty', async () => {
-    await expect(
+  
+  Deno.test('repoForkHandler - throws when repo_id is empty', async () => {
+  await await assertRejects(async () => { await 
       repoForkHandler({ repo_id: '' }, makeContext()),
-    ).rejects.toThrow('repo_id is required');
-  });
-
-  it('throws when repo_id is not provided', async () => {
-    await expect(
+    ; }, 'repo_id is required');
+})
+  Deno.test('repoForkHandler - throws when repo_id is not provided', async () => {
+  await await assertRejects(async () => { await 
       repoForkHandler({}, makeContext()),
-    ).rejects.toThrow('repo_id is required');
-  });
+    ; }, 'repo_id is required');
+})
+  Deno.test('repoForkHandler - throws when repository is not accessible', async () => {
+  checkRepoAccess = (async () => null) as any;
 
-  it('throws when repository is not accessible', async () => {
-    vi.mocked(checkRepoAccess).mockResolvedValue(null);
-
-    await expect(
+    await await assertRejects(async () => { await 
       repoForkHandler({ repo_id: 'r-inaccessible' }, makeContext()),
-    ).rejects.toThrow('not found or inaccessible');
-  });
-
-  it('forks a repository', async () => {
-    vi.mocked(checkRepoAccess).mockResolvedValue({ canRead: true } as any);
-    vi.mocked(forkWithWorkflows).mockResolvedValue({
+    ; }, 'not found or inaccessible');
+})
+  Deno.test('repoForkHandler - forks a repository', async () => {
+  checkRepoAccess = (async () => ({ canRead: true } as any)) as any;
+    forkWithWorkflows = (async () => ({
       repository: { id: 'r-fork', name: 'forked-repo' },
       forked_from: { id: 'r-original' },
-    } as any);
+    } as any)) as any;
 
     const result = JSON.parse(
       await repoForkHandler({ repo_id: 'r-original' }, makeContext()),
     );
 
-    expect(result.success).toBe(true);
-    expect(result.repository.id).toBe('r-fork');
-    expect(result.forked_from.id).toBe('r-original');
-  });
-
-  it('passes custom name to fork', async () => {
-    vi.mocked(checkRepoAccess).mockResolvedValue({ canRead: true } as any);
-    vi.mocked(forkWithWorkflows).mockResolvedValue({
+    assertEquals(result.success, true);
+    assertEquals(result.repository.id, 'r-fork');
+    assertEquals(result.forked_from.id, 'r-original');
+})
+  Deno.test('repoForkHandler - passes custom name to fork', async () => {
+  checkRepoAccess = (async () => ({ canRead: true } as any)) as any;
+    forkWithWorkflows = (async () => ({
       repository: { id: 'r-fork', name: 'my-fork' },
       forked_from: { id: 'r-original' },
-    } as any);
+    } as any)) as any;
 
     await repoForkHandler(
       { repo_id: 'r-original', name: 'my-fork' },
       makeContext(),
     );
 
-    expect(forkWithWorkflows).toHaveBeenCalledWith(
+    assertSpyCallArgs(forkWithWorkflows, 0, [
       expect.anything(),
       expect.anything(),
       'r-original',
       'ws-test',
       { name: 'my-fork' },
-    );
-  });
-
-  it('trims repo_id whitespace', async () => {
-    vi.mocked(checkRepoAccess).mockResolvedValue({ canRead: true } as any);
-    vi.mocked(forkWithWorkflows).mockResolvedValue({
+    ]);
+})
+  Deno.test('repoForkHandler - trims repo_id whitespace', async () => {
+  checkRepoAccess = (async () => ({ canRead: true } as any)) as any;
+    forkWithWorkflows = (async () => ({
       repository: { id: 'r-fork' },
       forked_from: { id: 'r-1' },
-    } as any);
+    } as any)) as any;
 
     await repoForkHandler({ repo_id: '  r-1  ' }, makeContext());
 
-    expect(checkRepoAccess).toHaveBeenCalledWith(
+    assertSpyCallArgs(checkRepoAccess, 0, [
       expect.anything(),
       'r-1',
       'user-1',
       undefined,
       { allowPublicRead: true },
-    );
-  });
-});
+    ]);
+})

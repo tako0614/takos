@@ -1,23 +1,23 @@
 import { Hono } from 'hono';
 import * as fs from 'fs/promises';
 import * as path from 'path';
-import { REPOS_BASE_DIR, WORKDIR_BASE_DIR } from '../../shared/config.js';
-import { runGitCommand } from '../../runtime/git.js';
+import { REPOS_BASE_DIR, WORKDIR_BASE_DIR } from '../../shared/config.ts';
+import { runGitCommand } from '../../runtime/git.ts';
 import {
   getRepoPath,
   verifyNoSymlinkPathComponents,
   verifyPathWithinAfterAccess,
-} from '../../runtime/paths.js';
+} from '../../runtime/paths.ts';
 import { getErrorMessage } from 'takos-common/errors';
 import {
   validateRef,
   validateTargetDir,
-} from './repo-validation.js';
-import { isBoundaryViolationError } from '../../shared/errors.js';
+} from './repo-validation.ts';
+import { isBoundaryViolationError } from '../../shared/errors.ts';
 import { badRequest, forbidden, internalError, notFound } from 'takos-common/middleware/hono';
 import { ErrorCodes } from 'takos-common/errors';
-import branchRoutes from './branches.js';
-import contentRoutes from './content.js';
+import branchRoutes from './branches.ts';
+import contentRoutes from './content.ts';
 
 const app = new Hono();
 

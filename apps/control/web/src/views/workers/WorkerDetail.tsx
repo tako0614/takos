@@ -66,7 +66,7 @@ export interface WorkerDetailProps {
 }
 
 function StatusDot({ status }: { status: Worker['status'] }) {
-  return <span className={`w-2 h-2 rounded-full ${getWorkerStatusIndicatorClass(status)}`} />;
+  return <span class={`w-2 h-2 rounded-full ${getWorkerStatusIndicatorClass(status)}`} />;
 }
 
 export function WorkerDetail({
@@ -123,57 +123,57 @@ export function WorkerDetail({
   ];
 
   return (
-    <div className="flex flex-col h-full bg-white dark:bg-zinc-900">
-      <header className="flex flex-col gap-3 px-6 py-4 border-b border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-800">
+    <div class="flex flex-col h-full bg-white dark:bg-zinc-900">
+      <header class="flex flex-col gap-3 px-6 py-4 border-b border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-800">
         <Breadcrumb items={breadcrumbItems} />
-        <div className="flex items-center gap-4">
-          <div className="flex items-center gap-3 flex-1">
-            <span className="w-10 h-10 rounded-xl bg-zinc-100 dark:bg-zinc-700 flex items-center justify-center text-zinc-700 dark:text-zinc-300"><Icons.Server className="w-5 h-5" /></span>
+        <div class="flex items-center gap-4">
+          <div class="flex items-center gap-3 flex-1">
+            <span class="w-10 h-10 rounded-xl bg-zinc-100 dark:bg-zinc-700 flex items-center justify-center text-zinc-700 dark:text-zinc-300"><Icons.Server class="w-5 h-5" /></span>
             <div>
-              <h1 className="text-lg font-semibold text-zinc-900 dark:text-zinc-100">{workerName}</h1>
+              <h1 class="text-lg font-semibold text-zinc-900 dark:text-zinc-100">{workerName}</h1>
               {workerUrl ? (
-                <a href={workerUrl} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-sm text-zinc-900 dark:text-zinc-100 hover:underline">
-                  <Icons.Globe className="w-3 h-3" />
+                <a href={workerUrl} target="_blank" rel="noopener noreferrer" class="inline-flex items-center gap-1 text-sm text-zinc-900 dark:text-zinc-100 hover:underline">
+                  <Icons.Globe class="w-3 h-3" />
                   <span>{workerHostname}</span>
-                  <Icons.ExternalLink className="w-3 h-3" />
+                  <Icons.ExternalLink class="w-3 h-3" />
                 </a>
               ) : (
-                <div className="inline-flex items-center gap-1 text-sm text-zinc-500 dark:text-zinc-400">
-                  <Icons.Globe className="w-3 h-3" />
+                <div class="inline-flex items-center gap-1 text-sm text-zinc-500 dark:text-zinc-400">
+                  <Icons.Globe class="w-3 h-3" />
                   <span>{workerHostname}</span>
                 </div>
               )}
             </div>
           </div>
-          <div className="flex items-center gap-2">
+          <div class="flex items-center gap-2">
             <StatusDot status={worker.status} />
-            <span className="text-sm text-zinc-500 dark:text-zinc-400">{worker.status}</span>
+            <span class="text-sm text-zinc-500 dark:text-zinc-400">{worker.status}</span>
           </div>
         </div>
       </header>
 
-      <div className="flex gap-1 px-6 pt-4 border-b border-zinc-200 dark:border-zinc-800">
+      <div class="flex gap-1 px-6 pt-4 border-b border-zinc-200 dark:border-zinc-800">
         <button
-          className={`px-4 py-2 text-sm font-medium rounded-t-lg transition-colors ${tab === 'overview' ? 'bg-zinc-100 dark:bg-zinc-700 text-zinc-900 dark:text-zinc-100' : 'text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-100 hover:bg-zinc-200 dark:hover:bg-zinc-700'}`}
+          class={`px-4 py-2 text-sm font-medium rounded-t-lg transition-colors ${tab === 'overview' ? 'bg-zinc-100 dark:bg-zinc-700 text-zinc-900 dark:text-zinc-100' : 'text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-100 hover:bg-zinc-200 dark:hover:bg-zinc-700'}`}
           onClick={() => onTabChange('overview')}
         >
           {t('overview')}
         </button>
         <button
-          className={`px-4 py-2 text-sm font-medium rounded-t-lg transition-colors ${tab === 'deployments' ? 'bg-zinc-100 dark:bg-zinc-700 text-zinc-900 dark:text-zinc-100' : 'text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-100 hover:bg-zinc-200 dark:hover:bg-zinc-700'}`}
+          class={`px-4 py-2 text-sm font-medium rounded-t-lg transition-colors ${tab === 'deployments' ? 'bg-zinc-100 dark:bg-zinc-700 text-zinc-900 dark:text-zinc-100' : 'text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-100 hover:bg-zinc-200 dark:hover:bg-zinc-700'}`}
           onClick={() => onTabChange('deployments')}
         >
           {t('deploymentHistory')}
         </button>
         <button
-          className={`px-4 py-2 text-sm font-medium rounded-t-lg transition-colors ${tab === 'settings' ? 'bg-zinc-100 dark:bg-zinc-700 text-zinc-900 dark:text-zinc-100' : 'text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-100 hover:bg-zinc-200 dark:hover:bg-zinc-700'}`}
+          class={`px-4 py-2 text-sm font-medium rounded-t-lg transition-colors ${tab === 'settings' ? 'bg-zinc-100 dark:bg-zinc-700 text-zinc-900 dark:text-zinc-100' : 'text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-100 hover:bg-zinc-200 dark:hover:bg-zinc-700'}`}
           onClick={() => onTabChange('settings')}
         >
           {t('settings')}
         </button>
       </div>
 
-      <div className="flex-1 overflow-auto p-6">
+      <div class="flex-1 overflow-auto p-6">
         {tab === 'overview' && (
           <WorkerOverviewTab worker={worker} />
         )}

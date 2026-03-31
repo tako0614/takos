@@ -1,44 +1,25 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { WORKFLOW_QUEUE_MESSAGE_VERSION, type WorkflowJobQueueMessage } from '@/types';
 
-const mocks = vi.hoisted(() => ({
-  createWorkflowEngine: vi.fn(),
-  getDb: vi.fn(),
-  decrypt: vi.fn(),
-  safeJsonParseOrDefault: vi.fn(),
-  callRuntimeRequest: vi.fn(),
-  getRunNotifierStub: vi.fn(),
-  buildRunNotifierEmitRequest: vi.fn(),
-  buildRunNotifierEmitPayload: vi.fn(),
-}));
+import { assert, assertRejects } from 'jsr:@std/assert';
+import { assertSpyCalls, assertSpyCallArgs } from 'jsr:@std/testing/mock';
 
-vi.mock('@/services/execution/workflow-engine', () => ({
-  createWorkflowEngine: mocks.createWorkflowEngine,
-}));
-
-vi.mock('@/db', async () => {
-  const actual = await vi.importActual<typeof import('@/db')>('@/db');
-  return { ...actual, getDb: mocks.getDb };
+const mocks = ({
+  createWorkflowEngine: ((..._args: any[]) => undefined) as any,
+  getDb: ((..._args: any[]) => undefined) as any,
+  decrypt: ((..._args: any[]) => undefined) as any,
+  safeJsonParseOrDefault: ((..._args: any[]) => undefined) as any,
+  callRuntimeRequest: ((..._args: any[]) => undefined) as any,
+  getRunNotifierStub: ((..._args: any[]) => undefined) as any,
+  buildRunNotifierEmitRequest: ((..._args: any[]) => undefined) as any,
+  buildRunNotifierEmitPayload: ((..._args: any[]) => undefined) as any,
 });
 
-vi.mock('@/utils', () => ({
-  decrypt: mocks.decrypt,
-  safeJsonParseOrDefault: mocks.safeJsonParseOrDefault,
-}));
-
-vi.mock('@/services/execution/runtime', () => ({
-  callRuntimeRequest: mocks.callRuntimeRequest,
-}));
-
-vi.mock('@/services/run-notifier-client', () => ({
-  buildRunNotifierEmitRequest: mocks.buildRunNotifierEmitRequest,
-  getRunNotifierStub: mocks.getRunNotifierStub,
-}));
-
-vi.mock('@/services/run-notifier-payload', () => ({
-  buildRunNotifierEmitPayload: mocks.buildRunNotifierEmitPayload,
-}));
-
+// [Deno] vi.mock removed - manually stub imports from '@/services/execution/workflow-engine'
+// [Deno] vi.mock removed - manually stub imports from '@/db'
+// [Deno] vi.mock removed - manually stub imports from '@/utils'
+// [Deno] vi.mock removed - manually stub imports from '@/services/execution/runtime'
+// [Deno] vi.mock removed - manually stub imports from '@/services/run-notifier-client'
+// [Deno] vi.mock removed - manually stub imports from '@/services/run-notifier-payload'
 import { handleWorkflowJob } from '@/queues/workflow-job-handler';
 import type { WorkflowQueueEnv } from '@/queues/workflow-types';
 
@@ -58,15 +39,15 @@ function createDrizzleMock(opts: {
   selectGet?: ReturnType<typeof vi.fn>;
   selectAll?: ReturnType<typeof vi.fn>;
 }) {
-  const selectGet = opts.selectGet ?? vi.fn().mockResolvedValue(null);
-  const selectAll = opts.selectAll ?? vi.fn().mockResolvedValue([]);
+  const selectGet = opts.selectGet ?? (async () => null);
+  const selectAll = opts.selectAll ?? (async () => []);
 
   const chain = () => {
     const c: Record<string, unknown> = {};
-    c.from = vi.fn().mockReturnValue(c);
-    c.where = vi.fn().mockReturnValue(c);
-    c.orderBy = vi.fn().mockReturnValue(c);
-    c.limit = vi.fn().mockReturnValue(c);
+    c.from = (() => c);
+    c.where = (() => c);
+    c.orderBy = (() => c);
+    c.limit = (() => c);
     c.get = selectGet;
     c.all = selectAll;
     return c;
@@ -74,30 +55,30 @@ function createDrizzleMock(opts: {
 
   const updateChain = () => {
     const c: Record<string, unknown> = {};
-    c.set = vi.fn().mockReturnValue(c);
-    c.where = vi.fn().mockResolvedValue({ meta: { changes: 1 } });
+    c.set = (() => c);
+    c.where = (async () => ({ meta: { changes: 1 } }));
     return c;
   };
 
   return {
-    select: vi.fn().mockImplementation(() => chain()),
-    update: vi.fn().mockImplementation(() => updateChain()),
-    insert: vi.fn().mockImplementation(() => ({
-      values: vi.fn().mockReturnValue({
-        returning: vi.fn().mockReturnValue({ get: vi.fn().mockResolvedValue({ id: 1 }) }),
-      }),
-    })),
-    delete: vi.fn().mockImplementation(() => ({ where: vi.fn().mockResolvedValue(undefined) })),
+    select: () => chain(),
+    update: () => updateChain(),
+    insert: () => ({
+      values: (() => ({
+        returning: (() => ({ get: (async () => ({ id: 1 })) })),
+      })),
+    }),
+    delete: () => ({ where: (async () => undefined) }),
   };
 }
 
 function createEngineMock(): EngineMock {
   return {
-    onJobStart: vi.fn().mockResolvedValue(undefined),
-    onJobComplete: vi.fn().mockResolvedValue(undefined),
-    updateStepStatus: vi.fn().mockResolvedValue(undefined),
-    storeJobLogs: vi.fn().mockResolvedValue(undefined),
-    cancelRun: vi.fn().mockResolvedValue(undefined),
+    onJobStart: (async () => undefined),
+    onJobComplete: (async () => undefined),
+    updateStepStatus: (async () => undefined),
+    storeJobLogs: (async () => undefined),
+    cancelRun: (async () => undefined),
   };
 }
 
@@ -127,9 +108,9 @@ function createQueueEnv(overrides: Partial<WorkflowQueueEnv> = {}): WorkflowQueu
   return {
     DB: {} as any,
     GIT_OBJECTS: {} as any,
-    WORKFLOW_QUEUE: { send: vi.fn() } as any,
+    WORKFLOW_QUEUE: { send: ((..._args: any[]) => undefined) as any } as any,
     RUN_NOTIFIER: {} as any,
-    RUNTIME_HOST: { fetch: vi.fn() },
+    RUNTIME_HOST: { fetch: ((..._args: any[]) => undefined) as any },
     ...overrides,
   } as unknown as WorkflowQueueEnv;
 }
@@ -144,166 +125,216 @@ function jsonResponse(body: unknown): Response {
   } as unknown as Response;
 }
 
-beforeEach(() => {
-  vi.clearAllMocks();
+  Deno.test('handleWorkflowJob - throws when GIT_OBJECTS is not configured', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
 
-  mocks.safeJsonParseOrDefault.mockImplementation((_value: unknown, fallback: unknown) => fallback);
-  mocks.buildRunNotifierEmitPayload.mockReturnValue({});
-  mocks.buildRunNotifierEmitRequest.mockReturnValue(
-    new Request('https://notifier.test', { method: 'POST' })
-  );
-  mocks.getRunNotifierStub.mockReturnValue({
-    fetch: vi.fn().mockResolvedValue(new Response(null, { status: 204 })),
-  });
-  mocks.decrypt.mockResolvedValue('decrypted-secret');
-});
+  mocks.safeJsonParseOrDefault = (_value: unknown, fallback: unknown) => fallback as any;
+  mocks.buildRunNotifierEmitPayload = (() => ({})) as any;
+  mocks.buildRunNotifierEmitRequest = (() => new Request('https://notifier.test', { method: 'POST' })) as any;
+  mocks.getRunNotifierStub = (() => ({
+    fetch: (async () => new Response(null, { status: 204 })),
+  })) as any;
+  mocks.decrypt = (async () => 'decrypted-secret') as any;
+  const env = createQueueEnv({ GIT_OBJECTS: undefined });
 
-describe('handleWorkflowJob', () => {
-  it('throws when GIT_OBJECTS is not configured', async () => {
-    const env = createQueueEnv({ GIT_OBJECTS: undefined });
-
-    await expect(handleWorkflowJob(createMessage(), env)).rejects.toThrow(
+    await await assertRejects(async () => { await handleWorkflowJob(createMessage(), env); }, 
       'Git storage not configured'
     );
-  });
+})
+  Deno.test('handleWorkflowJob - returns early when run or job record is missing', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
 
-  it('returns early when run or job record is missing', async () => {
-    const engine = createEngineMock();
-    mocks.createWorkflowEngine.mockReturnValue(engine);
+  mocks.safeJsonParseOrDefault = (_value: unknown, fallback: unknown) => fallback as any;
+  mocks.buildRunNotifierEmitPayload = (() => ({})) as any;
+  mocks.buildRunNotifierEmitRequest = (() => new Request('https://notifier.test', { method: 'POST' })) as any;
+  mocks.getRunNotifierStub = (() => ({
+    fetch: (async () => new Response(null, { status: 204 })),
+  })) as any;
+  mocks.decrypt = (async () => 'decrypted-secret') as any;
+  const engine = createEngineMock();
+    mocks.createWorkflowEngine = (() => engine) as any;
 
-    const selectGet = vi.fn()
-      .mockResolvedValueOnce(null)    // runRecord
-      .mockResolvedValueOnce(null);   // jobRecord
+    const selectGet = ((..._args: any[]) => undefined) as any
+       = (async () => null) as any    // runRecord
+       = (async () => null) as any;   // jobRecord
     const dbMock = createDrizzleMock({ selectGet });
-    mocks.getDb.mockReturnValue(dbMock);
+    mocks.getDb = (() => dbMock) as any;
 
     await handleWorkflowJob(createMessage(), createQueueEnv());
 
-    expect(engine.onJobStart).not.toHaveBeenCalled();
-  });
+    assertSpyCalls(engine.onJobStart, 0);
+})
+  Deno.test('handleWorkflowJob - returns early when job is already completed', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
 
-  it('returns early when job is already completed', async () => {
-    const engine = createEngineMock();
-    mocks.createWorkflowEngine.mockReturnValue(engine);
+  mocks.safeJsonParseOrDefault = (_value: unknown, fallback: unknown) => fallback as any;
+  mocks.buildRunNotifierEmitPayload = (() => ({})) as any;
+  mocks.buildRunNotifierEmitRequest = (() => new Request('https://notifier.test', { method: 'POST' })) as any;
+  mocks.getRunNotifierStub = (() => ({
+    fetch: (async () => new Response(null, { status: 204 })),
+  })) as any;
+  mocks.decrypt = (async () => 'decrypted-secret') as any;
+  const engine = createEngineMock();
+    mocks.createWorkflowEngine = (() => engine) as any;
 
-    const selectGet = vi.fn()
-      .mockResolvedValueOnce({ status: 'running' })   // runRecord
-      .mockResolvedValueOnce({ status: 'completed' }); // jobRecord
+    const selectGet = ((..._args: any[]) => undefined) as any
+       = (async () => ({ status: 'running' })) as any   // runRecord
+       = (async () => ({ status: 'completed' })) as any; // jobRecord
     const dbMock = createDrizzleMock({ selectGet });
-    mocks.getDb.mockReturnValue(dbMock);
+    mocks.getDb = (() => dbMock) as any;
 
     await handleWorkflowJob(createMessage(), createQueueEnv());
 
-    expect(engine.onJobStart).not.toHaveBeenCalled();
-  });
+    assertSpyCalls(engine.onJobStart, 0);
+})
+  Deno.test('handleWorkflowJob - cancels run when run status is cancelled', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
 
-  it('cancels run when run status is cancelled', async () => {
-    const engine = createEngineMock();
-    mocks.createWorkflowEngine.mockReturnValue(engine);
+  mocks.safeJsonParseOrDefault = (_value: unknown, fallback: unknown) => fallback as any;
+  mocks.buildRunNotifierEmitPayload = (() => ({})) as any;
+  mocks.buildRunNotifierEmitRequest = (() => new Request('https://notifier.test', { method: 'POST' })) as any;
+  mocks.getRunNotifierStub = (() => ({
+    fetch: (async () => new Response(null, { status: 204 })),
+  })) as any;
+  mocks.decrypt = (async () => 'decrypted-secret') as any;
+  const engine = createEngineMock();
+    mocks.createWorkflowEngine = (() => engine) as any;
 
-    const selectGet = vi.fn()
-      .mockResolvedValueOnce({ status: 'cancelled' })  // runRecord
-      .mockResolvedValueOnce({ status: 'queued' });     // jobRecord
+    const selectGet = ((..._args: any[]) => undefined) as any
+       = (async () => ({ status: 'cancelled' })) as any  // runRecord
+       = (async () => ({ status: 'queued' })) as any;     // jobRecord
     const dbMock = createDrizzleMock({ selectGet });
-    mocks.getDb.mockReturnValue(dbMock);
+    mocks.getDb = (() => dbMock) as any;
 
     await handleWorkflowJob(createMessage(), createQueueEnv());
 
-    expect(engine.cancelRun).toHaveBeenCalledWith('run-1');
-  });
+    assertSpyCallArgs(engine.cancelRun, 0, ['run-1']);
+})
+  Deno.test('handleWorkflowJob - marks job skipped when run is already completed', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
 
-  it('marks job skipped when run is already completed', async () => {
-    const engine = createEngineMock();
-    mocks.createWorkflowEngine.mockReturnValue(engine);
+  mocks.safeJsonParseOrDefault = (_value: unknown, fallback: unknown) => fallback as any;
+  mocks.buildRunNotifierEmitPayload = (() => ({})) as any;
+  mocks.buildRunNotifierEmitRequest = (() => new Request('https://notifier.test', { method: 'POST' })) as any;
+  mocks.getRunNotifierStub = (() => ({
+    fetch: (async () => new Response(null, { status: 204 })),
+  })) as any;
+  mocks.decrypt = (async () => 'decrypted-secret') as any;
+  const engine = createEngineMock();
+    mocks.createWorkflowEngine = (() => engine) as any;
 
-    const selectGet = vi.fn()
-      .mockResolvedValueOnce({ status: 'completed' })  // runRecord
-      .mockResolvedValueOnce({ status: 'queued' });     // jobRecord
-    const updateWhere = vi.fn().mockResolvedValue({ meta: { changes: 1 } });
+    const selectGet = ((..._args: any[]) => undefined) as any
+       = (async () => ({ status: 'completed' })) as any  // runRecord
+       = (async () => ({ status: 'queued' })) as any;     // jobRecord
+    const updateWhere = (async () => ({ meta: { changes: 1 } }));
     const dbMock = createDrizzleMock({ selectGet });
     // Override update to track calls
-    dbMock.update = vi.fn().mockImplementation(() => ({
-      set: vi.fn().mockReturnValue({
+    dbMock.update = () => ({
+      set: (() => ({
         where: updateWhere,
-      }),
-    }));
-    mocks.getDb.mockReturnValue(dbMock);
+      })),
+    });
+    mocks.getDb = (() => dbMock) as any;
 
     await handleWorkflowJob(createMessage(), createQueueEnv());
 
     // markJobSkipped should have been called (updates job and steps)
-    expect(dbMock.update).toHaveBeenCalled();
-    expect(engine.onJobStart).not.toHaveBeenCalled();
-  });
+    assert(dbMock.update.calls.length > 0);
+    assertSpyCalls(engine.onJobStart, 0);
+})
+  Deno.test('handleWorkflowJob - returns early when job claim fails (already claimed)', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
 
-  it('returns early when job claim fails (already claimed)', async () => {
-    const engine = createEngineMock();
-    mocks.createWorkflowEngine.mockReturnValue(engine);
+  mocks.safeJsonParseOrDefault = (_value: unknown, fallback: unknown) => fallback as any;
+  mocks.buildRunNotifierEmitPayload = (() => ({})) as any;
+  mocks.buildRunNotifierEmitRequest = (() => new Request('https://notifier.test', { method: 'POST' })) as any;
+  mocks.getRunNotifierStub = (() => ({
+    fetch: (async () => new Response(null, { status: 204 })),
+  })) as any;
+  mocks.decrypt = (async () => 'decrypted-secret') as any;
+  const engine = createEngineMock();
+    mocks.createWorkflowEngine = (() => engine) as any;
 
-    const selectGet = vi.fn()
-      .mockResolvedValueOnce({ status: 'running' })  // runRecord
-      .mockResolvedValueOnce({ status: 'queued' });   // jobRecord
+    const selectGet = ((..._args: any[]) => undefined) as any
+       = (async () => ({ status: 'running' })) as any  // runRecord
+       = (async () => ({ status: 'queued' })) as any;   // jobRecord
     const dbMock = createDrizzleMock({ selectGet });
     // Override update to simulate 0 changes (already claimed)
-    dbMock.update = vi.fn().mockImplementation(() => ({
-      set: vi.fn().mockReturnValue({
-        where: vi.fn().mockResolvedValue({ meta: { changes: 0 } }),
-      }),
-    }));
-    mocks.getDb.mockReturnValue(dbMock);
+    dbMock.update = () => ({
+      set: (() => ({
+        where: (async () => ({ meta: { changes: 0 } })),
+      })),
+    });
+    mocks.getDb = (() => dbMock) as any;
 
     await handleWorkflowJob(createMessage(), createQueueEnv());
 
-    expect(engine.onJobStart).not.toHaveBeenCalled();
-  });
+    assertSpyCalls(engine.onJobStart, 0);
+})
+  Deno.test('handleWorkflowJob - throws when RUNTIME_HOST is not configured', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
 
-  it('throws when RUNTIME_HOST is not configured', async () => {
-    const engine = createEngineMock();
-    mocks.createWorkflowEngine.mockReturnValue(engine);
+  mocks.safeJsonParseOrDefault = (_value: unknown, fallback: unknown) => fallback as any;
+  mocks.buildRunNotifierEmitPayload = (() => ({})) as any;
+  mocks.buildRunNotifierEmitRequest = (() => new Request('https://notifier.test', { method: 'POST' })) as any;
+  mocks.getRunNotifierStub = (() => ({
+    fetch: (async () => new Response(null, { status: 204 })),
+  })) as any;
+  mocks.decrypt = (async () => 'decrypted-secret') as any;
+  const engine = createEngineMock();
+    mocks.createWorkflowEngine = (() => engine) as any;
 
-    const selectGet = vi.fn()
-      .mockResolvedValueOnce({ status: 'running' })
-      .mockResolvedValueOnce({ status: 'queued' })
-      .mockResolvedValueOnce({ workflowPath: '.takos/ci.yml', inputs: '{}' })
-      .mockResolvedValueOnce({ accountId: 'ws-1' });
+    const selectGet = ((..._args: any[]) => undefined) as any
+       = (async () => ({ status: 'running' })) as any
+       = (async () => ({ status: 'queued' })) as any
+       = (async () => ({ workflowPath: '.takos/ci.yml', inputs: '{}' })) as any
+       = (async () => ({ accountId: 'ws-1' })) as any;
     const dbMock = createDrizzleMock({ selectGet });
-    dbMock.update = vi.fn().mockImplementation(() => ({
-      set: vi.fn().mockReturnValue({
-        where: vi.fn().mockResolvedValue({ meta: { changes: 1 } }),
-      }),
-    }));
-    mocks.getDb.mockReturnValue(dbMock);
+    dbMock.update = () => ({
+      set: (() => ({
+        where: (async () => ({ meta: { changes: 1 } })),
+      })),
+    });
+    mocks.getDb = (() => dbMock) as any;
 
     const env = createQueueEnv({ RUNTIME_HOST: undefined });
 
     await handleWorkflowJob(createMessage(), env);
 
     // Should complete with failure since RUNTIME_HOST is missing
-    expect(engine.onJobComplete).toHaveBeenCalledWith(
+    assertSpyCallArgs(engine.onJobComplete, 0, [
       'job-1',
-      expect.objectContaining({ conclusion: 'failure' })
-    );
-  });
+      ({ conclusion: 'failure' })
+    ]);
+})
+  Deno.test('handleWorkflowJob - uses jobKey as name when jobDefinition.name is not set', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
 
-  it('uses jobKey as name when jobDefinition.name is not set', async () => {
-    const engine = createEngineMock();
-    mocks.createWorkflowEngine.mockReturnValue(engine);
+  mocks.safeJsonParseOrDefault = (_value: unknown, fallback: unknown) => fallback as any;
+  mocks.buildRunNotifierEmitPayload = (() => ({})) as any;
+  mocks.buildRunNotifierEmitRequest = (() => new Request('https://notifier.test', { method: 'POST' })) as any;
+  mocks.getRunNotifierStub = (() => ({
+    fetch: (async () => new Response(null, { status: 204 })),
+  })) as any;
+  mocks.decrypt = (async () => 'decrypted-secret') as any;
+  const engine = createEngineMock();
+    mocks.createWorkflowEngine = (() => engine) as any;
 
-    const selectGet = vi.fn()
-      .mockResolvedValueOnce({ status: 'running' })
-      .mockResolvedValueOnce({ status: 'queued' })
-      .mockResolvedValueOnce({ workflowPath: '.takos/ci.yml', inputs: '{}' })
-      .mockResolvedValueOnce({ accountId: 'ws-1' });
-    const selectAll = vi.fn().mockResolvedValue([]);
+    const selectGet = ((..._args: any[]) => undefined) as any
+       = (async () => ({ status: 'running' })) as any
+       = (async () => ({ status: 'queued' })) as any
+       = (async () => ({ workflowPath: '.takos/ci.yml', inputs: '{}' })) as any
+       = (async () => ({ accountId: 'ws-1' })) as any;
+    const selectAll = (async () => []);
     const dbMock = createDrizzleMock({ selectGet, selectAll });
-    dbMock.update = vi.fn().mockImplementation(() => ({
-      set: vi.fn().mockReturnValue({
-        where: vi.fn().mockResolvedValue({ meta: { changes: 1 } }),
-      }),
-    }));
-    mocks.getDb.mockReturnValue(dbMock);
+    dbMock.update = () => ({
+      set: (() => ({
+        where: (async () => ({ meta: { changes: 1 } })),
+      })),
+    });
+    mocks.getDb = (() => dbMock) as any;
 
-    mocks.callRuntimeRequest.mockImplementation(async (_env: unknown, endpoint: string) => {
+    mocks.callRuntimeRequest = async (_env: unknown, endpoint: string) => {
       if (endpoint.endsWith('/start')) return jsonResponse({ ok: true });
       if (endpoint.includes('/step/')) {
         return jsonResponse({
@@ -312,7 +343,7 @@ describe('handleWorkflowJob', () => {
       }
       if (endpoint.endsWith('/complete')) return jsonResponse({ ok: true });
       return { ok: false, status: 404, text: async () => 'not found' } as any;
-    });
+    } as any;
 
     const msg = createMessage({
       jobDefinition: {
@@ -325,31 +356,39 @@ describe('handleWorkflowJob', () => {
     await handleWorkflowJob(msg, createQueueEnv());
 
     // jobKey 'build' is used as jobName
-    expect(engine.storeJobLogs).toHaveBeenCalledWith(
+    assertSpyCallArgs(engine.storeJobLogs, 0, [
       'job-1',
       expect.stringContaining('=== Job: build ===')
-    );
-  });
+    ]);
+})
+  Deno.test('handleWorkflowJob - merges job env with job definition env', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
 
-  it('merges job env with job definition env', async () => {
-    const engine = createEngineMock();
-    mocks.createWorkflowEngine.mockReturnValue(engine);
+  mocks.safeJsonParseOrDefault = (_value: unknown, fallback: unknown) => fallback as any;
+  mocks.buildRunNotifierEmitPayload = (() => ({})) as any;
+  mocks.buildRunNotifierEmitRequest = (() => new Request('https://notifier.test', { method: 'POST' })) as any;
+  mocks.getRunNotifierStub = (() => ({
+    fetch: (async () => new Response(null, { status: 204 })),
+  })) as any;
+  mocks.decrypt = (async () => 'decrypted-secret') as any;
+  const engine = createEngineMock();
+    mocks.createWorkflowEngine = (() => engine) as any;
 
-    const selectGet = vi.fn()
-      .mockResolvedValueOnce({ status: 'running' })
-      .mockResolvedValueOnce({ status: 'queued' })
-      .mockResolvedValueOnce({ workflowPath: '.takos/ci.yml', inputs: '{}' })
-      .mockResolvedValueOnce({ accountId: 'ws-1' });
-    const selectAll = vi.fn().mockResolvedValue([]);
+    const selectGet = ((..._args: any[]) => undefined) as any
+       = (async () => ({ status: 'running' })) as any
+       = (async () => ({ status: 'queued' })) as any
+       = (async () => ({ workflowPath: '.takos/ci.yml', inputs: '{}' })) as any
+       = (async () => ({ accountId: 'ws-1' })) as any;
+    const selectAll = (async () => []);
     const dbMock = createDrizzleMock({ selectGet, selectAll });
-    dbMock.update = vi.fn().mockImplementation(() => ({
-      set: vi.fn().mockReturnValue({
-        where: vi.fn().mockResolvedValue({ meta: { changes: 1 } }),
-      }),
-    }));
-    mocks.getDb.mockReturnValue(dbMock);
+    dbMock.update = () => ({
+      set: (() => ({
+        where: (async () => ({ meta: { changes: 1 } })),
+      })),
+    });
+    mocks.getDb = (() => dbMock) as any;
 
-    mocks.callRuntimeRequest.mockImplementation(async (_env: unknown, endpoint: string) => {
+    mocks.callRuntimeRequest = async (_env: unknown, endpoint: string) => {
       if (endpoint.endsWith('/start')) return jsonResponse({ ok: true });
       if (endpoint.includes('/step/')) {
         return jsonResponse({
@@ -358,7 +397,7 @@ describe('handleWorkflowJob', () => {
       }
       if (endpoint.endsWith('/complete')) return jsonResponse({ ok: true });
       return { ok: false, status: 404, text: async () => '' } as any;
-    });
+    } as any;
 
     const msg = createMessage({
       env: { CI: 'true', FROM_MSG: 'yes' },
@@ -374,18 +413,17 @@ describe('handleWorkflowJob', () => {
 
     // The runtime start call should have the merged env
     // jobDefinition.env overrides message.env for CI
-    expect(mocks.callRuntimeRequest).toHaveBeenCalledWith(
+    assertSpyCallArgs(mocks.callRuntimeRequest, 0, [
       expect.anything(),
       expect.stringContaining('/start'),
-      expect.objectContaining({
-        body: expect.objectContaining({
-          env: expect.objectContaining({
+      ({
+        body: ({
+          env: ({
             CI: 'false',
             FROM_MSG: 'yes',
             FROM_DEF: 'yes',
           }),
         }),
       })
-    );
-  });
-});
+    ]);
+})

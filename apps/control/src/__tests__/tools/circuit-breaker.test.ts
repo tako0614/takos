@@ -1,198 +1,186 @@
-import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { CircuitBreaker } from '@/tools/circuit-breaker';
 import type { CircuitState } from '@/tools/circuit-breaker';
 
-describe('CircuitBreaker', () => {
+
+import { assertEquals, assertNotEquals, assertStringIncludes } from 'jsr:@std/assert';
+import { FakeTime } from 'jsr:@std/testing/time';
+
   let cb: CircuitBreaker;
-
-  beforeEach(() => {
-    cb = new CircuitBreaker({ failureThreshold: 3, resetTimeout: 1000, successThreshold: 2 });
-  });
-
-  describe('initial state', () => {
-    it('starts in CLOSED state for unknown tools', () => {
-      const state = cb.getState('test_tool');
-      expect(state.state).toBe('CLOSED');
-      expect(state.failures).toBe(0);
-      expect(state.successes).toBe(0);
-      expect(state.lastFailure).toBeNull();
-      expect(state.lastSuccess).toBeNull();
-      expect(state.openedAt).toBeNull();
-    });
-
-    it('allows execution in CLOSED state', () => {
-      const result = cb.canExecute('test_tool');
-      expect(result.allowed).toBe(true);
-      expect(result.reason).toBeUndefined();
-    });
-  });
-
-  describe('recordSuccess', () => {
-    it('resets failure count on success in CLOSED state', () => {
-      cb.recordFailure('test_tool', 'err1');
+  
+    Deno.test('CircuitBreaker - initial state - starts in CLOSED state for unknown tools', () => {
+  cb = new CircuitBreaker({ failureThreshold: 3, resetTimeout: 1000, successThreshold: 2 });
+  const state = cb.getState('test_tool');
+      assertEquals(state.state, 'CLOSED');
+      assertEquals(state.failures, 0);
+      assertEquals(state.successes, 0);
+      assertEquals(state.lastFailure, null);
+      assertEquals(state.lastSuccess, null);
+      assertEquals(state.openedAt, null);
+})
+    Deno.test('CircuitBreaker - initial state - allows execution in CLOSED state', () => {
+  cb = new CircuitBreaker({ failureThreshold: 3, resetTimeout: 1000, successThreshold: 2 });
+  const result = cb.canExecute('test_tool');
+      assertEquals(result.allowed, true);
+      assertEquals(result.reason, undefined);
+})  
+  
+    Deno.test('CircuitBreaker - recordSuccess - resets failure count on success in CLOSED state', () => {
+  cb = new CircuitBreaker({ failureThreshold: 3, resetTimeout: 1000, successThreshold: 2 });
+  cb.recordFailure('test_tool', 'err1');
       cb.recordFailure('test_tool', 'err2');
-      expect(cb.getState('test_tool').failures).toBe(2);
+      assertEquals(cb.getState('test_tool').failures, 2);
 
       cb.recordSuccess('test_tool');
-      expect(cb.getState('test_tool').failures).toBe(0);
-      expect(cb.getState('test_tool').lastSuccess).not.toBeNull();
-    });
-  });
-
-  describe('recordFailure', () => {
-    it('increments failure count', () => {
-      cb.recordFailure('test_tool', 'err1');
-      expect(cb.getState('test_tool').failures).toBe(1);
+      assertEquals(cb.getState('test_tool').failures, 0);
+      assertNotEquals(cb.getState('test_tool').lastSuccess, null);
+})  
+  
+    Deno.test('CircuitBreaker - recordFailure - increments failure count', () => {
+  cb = new CircuitBreaker({ failureThreshold: 3, resetTimeout: 1000, successThreshold: 2 });
+  cb.recordFailure('test_tool', 'err1');
+      assertEquals(cb.getState('test_tool').failures, 1);
 
       cb.recordFailure('test_tool', 'err2');
-      expect(cb.getState('test_tool').failures).toBe(2);
-    });
-
-    it('opens circuit after reaching failure threshold', () => {
-      cb.recordFailure('test_tool', 'err1');
+      assertEquals(cb.getState('test_tool').failures, 2);
+})
+    Deno.test('CircuitBreaker - recordFailure - opens circuit after reaching failure threshold', () => {
+  cb = new CircuitBreaker({ failureThreshold: 3, resetTimeout: 1000, successThreshold: 2 });
+  cb.recordFailure('test_tool', 'err1');
       cb.recordFailure('test_tool', 'err2');
       cb.recordFailure('test_tool', 'err3');
 
       const state = cb.getState('test_tool');
-      expect(state.state).toBe('OPEN');
-      expect(state.openedAt).not.toBeNull();
-    });
-
-    it('blocks execution when circuit is OPEN', () => {
-      cb.recordFailure('test_tool', 'err1');
+      assertEquals(state.state, 'OPEN');
+      assertNotEquals(state.openedAt, null);
+})
+    Deno.test('CircuitBreaker - recordFailure - blocks execution when circuit is OPEN', () => {
+  cb = new CircuitBreaker({ failureThreshold: 3, resetTimeout: 1000, successThreshold: 2 });
+  cb.recordFailure('test_tool', 'err1');
       cb.recordFailure('test_tool', 'err2');
       cb.recordFailure('test_tool', 'err3');
 
       const result = cb.canExecute('test_tool');
-      expect(result.allowed).toBe(false);
-      expect(result.reason).toContain('Circuit breaker OPEN');
-      expect(result.reason).toContain('test_tool');
-    });
-  });
-
-  describe('OPEN -> HALF_OPEN transition', () => {
-    it('transitions to HALF_OPEN after reset timeout', () => {
-      cb.recordFailure('test_tool', 'err1');
+      assertEquals(result.allowed, false);
+      assertStringIncludes(result.reason, 'Circuit breaker OPEN');
+      assertStringIncludes(result.reason, 'test_tool');
+})  
+  
+    Deno.test('CircuitBreaker - OPEN -> HALF_OPEN transition - transitions to HALF_OPEN after reset timeout', () => {
+  cb = new CircuitBreaker({ failureThreshold: 3, resetTimeout: 1000, successThreshold: 2 });
+  cb.recordFailure('test_tool', 'err1');
       cb.recordFailure('test_tool', 'err2');
       cb.recordFailure('test_tool', 'err3');
 
-      expect(cb.getState('test_tool').state).toBe('OPEN');
+      assertEquals(cb.getState('test_tool').state, 'OPEN');
 
       // Simulate time passing
-      vi.useFakeTimers();
-      vi.advanceTimersByTime(1001);
+      new FakeTime();
+      fakeTime.tick(1001);
 
       const result = cb.canExecute('test_tool');
-      expect(result.allowed).toBe(true);
-      expect(cb.getState('test_tool').state).toBe('HALF_OPEN');
+      assertEquals(result.allowed, true);
+      assertEquals(cb.getState('test_tool').state, 'HALF_OPEN');
 
-      vi.useRealTimers();
-    });
-  });
-
-  describe('HALF_OPEN state', () => {
+      /* TODO: call fakeTime.restore() */ void 0;
+})  
+  
     function goToHalfOpen(toolName: string) {
       cb.recordFailure(toolName, 'err1');
       cb.recordFailure(toolName, 'err2');
       cb.recordFailure(toolName, 'err3');
 
-      vi.useFakeTimers();
-      vi.advanceTimersByTime(1001);
+      new FakeTime();
+      fakeTime.tick(1001);
       cb.canExecute(toolName); // triggers transition
     }
 
-    it('closes circuit after enough successes in HALF_OPEN', () => {
-      goToHalfOpen('test_tool');
-      expect(cb.getState('test_tool').state).toBe('HALF_OPEN');
+    Deno.test('CircuitBreaker - HALF_OPEN state - closes circuit after enough successes in HALF_OPEN', () => {
+  cb = new CircuitBreaker({ failureThreshold: 3, resetTimeout: 1000, successThreshold: 2 });
+  goToHalfOpen('test_tool');
+      assertEquals(cb.getState('test_tool').state, 'HALF_OPEN');
 
       cb.recordSuccess('test_tool');
-      expect(cb.getState('test_tool').state).toBe('HALF_OPEN');
+      assertEquals(cb.getState('test_tool').state, 'HALF_OPEN');
 
       cb.recordSuccess('test_tool');
-      expect(cb.getState('test_tool').state).toBe('CLOSED');
-      expect(cb.getState('test_tool').failures).toBe(0);
-      expect(cb.getState('test_tool').openedAt).toBeNull();
+      assertEquals(cb.getState('test_tool').state, 'CLOSED');
+      assertEquals(cb.getState('test_tool').failures, 0);
+      assertEquals(cb.getState('test_tool').openedAt, null);
 
-      vi.useRealTimers();
-    });
-
-    it('reopens circuit on failure in HALF_OPEN', () => {
-      goToHalfOpen('test_tool');
-      expect(cb.getState('test_tool').state).toBe('HALF_OPEN');
+      /* TODO: call fakeTime.restore() */ void 0;
+})
+    Deno.test('CircuitBreaker - HALF_OPEN state - reopens circuit on failure in HALF_OPEN', () => {
+  cb = new CircuitBreaker({ failureThreshold: 3, resetTimeout: 1000, successThreshold: 2 });
+  goToHalfOpen('test_tool');
+      assertEquals(cb.getState('test_tool').state, 'HALF_OPEN');
 
       cb.recordFailure('test_tool', 'err_half_open');
-      expect(cb.getState('test_tool').state).toBe('OPEN');
+      assertEquals(cb.getState('test_tool').state, 'OPEN');
 
-      vi.useRealTimers();
-    });
-  });
-
-  describe('reset', () => {
-    it('resets a specific tool circuit', () => {
-      cb.recordFailure('test_tool', 'err1');
+      /* TODO: call fakeTime.restore() */ void 0;
+})  
+  
+    Deno.test('CircuitBreaker - reset - resets a specific tool circuit', () => {
+  cb = new CircuitBreaker({ failureThreshold: 3, resetTimeout: 1000, successThreshold: 2 });
+  cb.recordFailure('test_tool', 'err1');
       cb.recordFailure('test_tool', 'err2');
-      expect(cb.getState('test_tool').failures).toBe(2);
+      assertEquals(cb.getState('test_tool').failures, 2);
 
       cb.reset('test_tool');
-      expect(cb.getState('test_tool').state).toBe('CLOSED');
-      expect(cb.getState('test_tool').failures).toBe(0);
-    });
-
-    it('resetAll clears all circuits', () => {
-      cb.recordFailure('tool_a', 'err1');
+      assertEquals(cb.getState('test_tool').state, 'CLOSED');
+      assertEquals(cb.getState('test_tool').failures, 0);
+})
+    Deno.test('CircuitBreaker - reset - resetAll clears all circuits', () => {
+  cb = new CircuitBreaker({ failureThreshold: 3, resetTimeout: 1000, successThreshold: 2 });
+  cb.recordFailure('tool_a', 'err1');
       cb.recordFailure('tool_b', 'err1');
 
       cb.resetAll();
 
       // getAllStates should be empty immediately after resetAll
-      expect(cb.getAllStates().size).toBe(0);
+      assertEquals(cb.getAllStates().size, 0);
       // getState lazily re-creates entries with default values
-      expect(cb.getState('tool_a').failures).toBe(0);
-      expect(cb.getState('tool_b').failures).toBe(0);
-    });
-  });
-
-  describe('getAllStates', () => {
-    it('returns a snapshot of all circuit states', () => {
-      cb.recordFailure('tool_a', 'err1');
+      assertEquals(cb.getState('tool_a').failures, 0);
+      assertEquals(cb.getState('tool_b').failures, 0);
+})  
+  
+    Deno.test('CircuitBreaker - getAllStates - returns a snapshot of all circuit states', () => {
+  cb = new CircuitBreaker({ failureThreshold: 3, resetTimeout: 1000, successThreshold: 2 });
+  cb.recordFailure('tool_a', 'err1');
       cb.recordSuccess('tool_b');
 
       const states = cb.getAllStates();
-      expect(states.size).toBe(2);
-      expect(states.get('tool_a')?.failures).toBe(1);
-      expect(states.get('tool_b')?.lastSuccess).not.toBeNull();
-    });
-
-    it('returns copies that do not affect original circuits', () => {
-      cb.recordFailure('tool_a', 'err1');
+      assertEquals(states.size, 2);
+      assertEquals(states.get('tool_a')?.failures, 1);
+      assertNotEquals(states.get('tool_b')?.lastSuccess, null);
+})
+    Deno.test('CircuitBreaker - getAllStates - returns copies that do not affect original circuits', () => {
+  cb = new CircuitBreaker({ failureThreshold: 3, resetTimeout: 1000, successThreshold: 2 });
+  cb.recordFailure('tool_a', 'err1');
       const states = cb.getAllStates();
       const snapshot = states.get('tool_a')!;
       snapshot.failures = 100;
 
-      expect(cb.getState('tool_a').failures).toBe(1);
-    });
-  });
-
-  describe('per-tool isolation', () => {
-    it('tracks circuits independently per tool name', () => {
-      cb.recordFailure('tool_a', 'err1');
+      assertEquals(cb.getState('tool_a').failures, 1);
+})  
+  
+    Deno.test('CircuitBreaker - per-tool isolation - tracks circuits independently per tool name', () => {
+  cb = new CircuitBreaker({ failureThreshold: 3, resetTimeout: 1000, successThreshold: 2 });
+  cb.recordFailure('tool_a', 'err1');
       cb.recordFailure('tool_a', 'err2');
       cb.recordFailure('tool_a', 'err3');
 
-      expect(cb.canExecute('tool_a').allowed).toBe(false);
-      expect(cb.canExecute('tool_b').allowed).toBe(true);
-    });
-  });
-
-  describe('default config', () => {
-    it('uses default config values when no config provided', () => {
-      const defaultCb = new CircuitBreaker();
+      assertEquals(cb.canExecute('tool_a').allowed, false);
+      assertEquals(cb.canExecute('tool_b').allowed, true);
+})  
+  
+    Deno.test('CircuitBreaker - default config - uses default config values when no config provided', () => {
+  cb = new CircuitBreaker({ failureThreshold: 3, resetTimeout: 1000, successThreshold: 2 });
+  const defaultCb = new CircuitBreaker();
       // Default threshold is 3
       defaultCb.recordFailure('t', 'e');
       defaultCb.recordFailure('t', 'e');
-      expect(defaultCb.canExecute('t').allowed).toBe(true);
+      assertEquals(defaultCb.canExecute('t').allowed, true);
       defaultCb.recordFailure('t', 'e');
-      expect(defaultCb.canExecute('t').allowed).toBe(false);
-    });
-  });
-});
+      assertEquals(defaultCb.canExecute('t').allowed, false);
+})  

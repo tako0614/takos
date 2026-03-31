@@ -1,58 +1,30 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { Hono } from 'hono';
 import type { Env, User } from '@/types';
 import { createMockEnv } from '../../../test/integration/setup';
 
-const mocks = vi.hoisted(() => ({
-  listMemories: vi.fn(),
-  bumpMemoryAccess: vi.fn(),
-  searchMemories: vi.fn(),
-  getMemoryById: vi.fn(),
-  createMemory: vi.fn(),
-  updateMemory: vi.fn(),
-  deleteMemory: vi.fn(),
-  listReminders: vi.fn(),
-  getReminderById: vi.fn(),
-  createReminder: vi.fn(),
-  updateReminder: vi.fn(),
-  deleteReminder: vi.fn(),
-  triggerReminder: vi.fn(),
-  requireSpaceAccess: vi.fn(),
-  checkWorkspaceAccess: vi.fn(),
-}));
+import { assertEquals, assert } from 'jsr:@std/assert';
 
-vi.mock('@/services/memory', () => ({
-  listMemories: mocks.listMemories,
-  bumpMemoryAccess: mocks.bumpMemoryAccess,
-  searchMemories: mocks.searchMemories,
-  getMemoryById: mocks.getMemoryById,
-  createMemory: mocks.createMemory,
-  updateMemory: mocks.updateMemory,
-  deleteMemory: mocks.deleteMemory,
-  listReminders: mocks.listReminders,
-  getReminderById: mocks.getReminderById,
-  createReminder: mocks.createReminder,
-  updateReminder: mocks.updateReminder,
-  deleteReminder: mocks.deleteReminder,
-  triggerReminder: mocks.triggerReminder,
-}));
-
-vi.mock('@/shared/utils', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('@/shared/utils')>();
-  return {
-    ...actual,
-    checkWorkspaceAccess: mocks.checkWorkspaceAccess,
-  };
+const mocks = ({
+  listMemories: ((..._args: any[]) => undefined) as any,
+  bumpMemoryAccess: ((..._args: any[]) => undefined) as any,
+  searchMemories: ((..._args: any[]) => undefined) as any,
+  getMemoryById: ((..._args: any[]) => undefined) as any,
+  createMemory: ((..._args: any[]) => undefined) as any,
+  updateMemory: ((..._args: any[]) => undefined) as any,
+  deleteMemory: ((..._args: any[]) => undefined) as any,
+  listReminders: ((..._args: any[]) => undefined) as any,
+  getReminderById: ((..._args: any[]) => undefined) as any,
+  createReminder: ((..._args: any[]) => undefined) as any,
+  updateReminder: ((..._args: any[]) => undefined) as any,
+  deleteReminder: ((..._args: any[]) => undefined) as any,
+  triggerReminder: ((..._args: any[]) => undefined) as any,
+  requireSpaceAccess: ((..._args: any[]) => undefined) as any,
+  checkWorkspaceAccess: ((..._args: any[]) => undefined) as any,
 });
 
-vi.mock('@/routes/shared/helpers', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('@/routes/shared/helpers')>();
-  return {
-    ...actual,
-    requireSpaceAccess: mocks.requireSpaceAccess,
-  };
-});
-
+// [Deno] vi.mock removed - manually stub imports from '@/services/memory'
+// [Deno] vi.mock removed - manually stub imports from '@/shared/utils'
+// [Deno] vi.mock removed - manually stub imports from '@/routes/shared/helpers'
 import memoriesRoute from '@/routes/memories';
 
 function createUser(): User {
@@ -81,22 +53,18 @@ function createApp(user: User) {
 }
 
 function mockWorkspaceAccess() {
-  mocks.requireSpaceAccess.mockResolvedValue({ workspace: { id: 'ws-1' } });
+  mocks.requireSpaceAccess = (async () => ({ workspace: { id: 'ws-1' } })) as any;
 }
 
-describe('memories routes', () => {
+
   const env = createMockEnv();
-
-  beforeEach(() => {
-    vi.clearAllMocks();
+  
+    Deno.test('memories routes - GET /api/spaces/:spaceId/memories - returns memories list', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
     mockWorkspaceAccess();
-    mocks.bumpMemoryAccess.mockResolvedValue(undefined);
-  });
-
-  describe('GET /api/spaces/:spaceId/memories', () => {
-    it('returns memories list', async () => {
-      const memories = [{ id: 'm-1', content: 'Hello', type: 'episode' }];
-      mocks.listMemories.mockResolvedValue(memories);
+    mocks.bumpMemoryAccess = (async () => undefined) as any;
+  const memories = [{ id: 'm-1', content: 'Hello', type: 'episode' }];
+      mocks.listMemories = (async () => memories) as any;
 
       const app = createApp(createUser());
       const res = await app.fetch(
@@ -105,14 +73,14 @@ describe('memories routes', () => {
         {} as ExecutionContext,
       );
 
-      expect(res.status).toBe(200);
-      await expect(res.json()).resolves.toEqual({ memories });
-    });
-
-    it('returns 404 when workspace access denied', async () => {
-      mocks.requireSpaceAccess.mockResolvedValue(
-        new Response(JSON.stringify({ error: 'Workspace not found' }), { status: 404 }),
-      );
+      assertEquals(res.status, 200);
+      await assertEquals(await res.json(), { memories });
+})
+    Deno.test('memories routes - GET /api/spaces/:spaceId/memories - returns 404 when workspace access denied', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+    mockWorkspaceAccess();
+    mocks.bumpMemoryAccess = (async () => undefined) as any;
+  mocks.requireSpaceAccess = (async () => new Response(JSON.stringify({ error: 'Workspace not found' }), { status: 404 }),) as any;
 
       const app = createApp(createUser());
       const res = await app.fetch(
@@ -121,13 +89,14 @@ describe('memories routes', () => {
         {} as ExecutionContext,
       );
 
-      expect(res.status).toBe(404);
-    });
-  });
-
-  describe('GET /api/spaces/:spaceId/memories/search', () => {
-    it('returns search results', async () => {
-      mocks.searchMemories.mockResolvedValue([{ id: 'm-1', content: 'Match' }]);
+      assertEquals(res.status, 404);
+})  
+  
+    Deno.test('memories routes - GET /api/spaces/:spaceId/memories/search - returns search results', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+    mockWorkspaceAccess();
+    mocks.bumpMemoryAccess = (async () => undefined) as any;
+  mocks.searchMemories = (async () => [{ id: 'm-1', content: 'Match' }]) as any;
 
       const app = createApp(createUser());
       const res = await app.fetch(
@@ -136,17 +105,18 @@ describe('memories routes', () => {
         {} as ExecutionContext,
       );
 
-      expect(res.status).toBe(200);
+      assertEquals(res.status, 200);
       const json = await res.json() as Record<string, unknown>;
-      expect(json).toHaveProperty('memories');
-    });
-  });
-
-  describe('GET /api/memories/:id', () => {
-    it('returns a specific memory', async () => {
-      const memory = { id: 'm-1', content: 'Hello', space_id: 'ws-1' };
-      mocks.getMemoryById.mockResolvedValue(memory);
-      mocks.checkWorkspaceAccess.mockResolvedValue(true);
+      assert('memories' in json);
+})  
+  
+    Deno.test('memories routes - GET /api/memories/:id - returns a specific memory', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+    mockWorkspaceAccess();
+    mocks.bumpMemoryAccess = (async () => undefined) as any;
+  const memory = { id: 'm-1', content: 'Hello', space_id: 'ws-1' };
+      mocks.getMemoryById = (async () => memory) as any;
+      mocks.checkWorkspaceAccess = (async () => true) as any;
 
       const app = createApp(createUser());
       const res = await app.fetch(
@@ -155,11 +125,13 @@ describe('memories routes', () => {
         {} as ExecutionContext,
       );
 
-      expect(res.status).toBe(200);
-    });
-
-    it('returns 404 when memory not found', async () => {
-      mocks.getMemoryById.mockResolvedValue(null);
+      assertEquals(res.status, 200);
+})
+    Deno.test('memories routes - GET /api/memories/:id - returns 404 when memory not found', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+    mockWorkspaceAccess();
+    mocks.bumpMemoryAccess = (async () => undefined) as any;
+  mocks.getMemoryById = (async () => null) as any;
 
       const app = createApp(createUser());
       const res = await app.fetch(
@@ -168,12 +140,14 @@ describe('memories routes', () => {
         {} as ExecutionContext,
       );
 
-      expect(res.status).toBe(404);
-    });
-
-    it('returns 403 when workspace access denied', async () => {
-      mocks.getMemoryById.mockResolvedValue({ id: 'm-1', space_id: 'ws-other' });
-      mocks.checkWorkspaceAccess.mockResolvedValue(false);
+      assertEquals(res.status, 404);
+})
+    Deno.test('memories routes - GET /api/memories/:id - returns 403 when workspace access denied', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+    mockWorkspaceAccess();
+    mocks.bumpMemoryAccess = (async () => undefined) as any;
+  mocks.getMemoryById = (async () => ({ id: 'm-1', space_id: 'ws-other' })) as any;
+      mocks.checkWorkspaceAccess = (async () => false) as any;
 
       const app = createApp(createUser());
       const res = await app.fetch(
@@ -182,14 +156,15 @@ describe('memories routes', () => {
         {} as ExecutionContext,
       );
 
-      expect(res.status).toBe(403);
-    });
-  });
-
-  describe('POST /api/spaces/:spaceId/memories', () => {
-    it('creates a memory and returns 201', async () => {
-      const created = { id: 'm-new', content: 'New memory', type: 'episode' };
-      mocks.createMemory.mockResolvedValue(created);
+      assertEquals(res.status, 403);
+})  
+  
+    Deno.test('memories routes - POST /api/spaces/:spaceId/memories - creates a memory and returns 201', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+    mockWorkspaceAccess();
+    mocks.bumpMemoryAccess = (async () => undefined) as any;
+  const created = { id: 'm-new', content: 'New memory', type: 'episode' };
+      mocks.createMemory = (async () => created) as any;
 
       const app = createApp(createUser());
       const res = await app.fetch(
@@ -205,12 +180,14 @@ describe('memories routes', () => {
         {} as ExecutionContext,
       );
 
-      expect(res.status).toBe(201);
-      expect(mocks.createMemory).toHaveBeenCalled();
-    });
-
-    it('rejects invalid type', async () => {
-      const app = createApp(createUser());
+      assertEquals(res.status, 201);
+      assert(mocks.createMemory.calls.length > 0);
+})
+    Deno.test('memories routes - POST /api/spaces/:spaceId/memories - rejects invalid type', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+    mockWorkspaceAccess();
+    mocks.bumpMemoryAccess = (async () => undefined) as any;
+  const app = createApp(createUser());
       const res = await app.fetch(
         new Request('http://localhost/api/spaces/sp-1/memories', {
           method: 'POST',
@@ -224,11 +201,13 @@ describe('memories routes', () => {
         {} as ExecutionContext,
       );
 
-      expect(res.status).toBe(422);
-    });
-
-    it('rejects empty content', async () => {
-      const app = createApp(createUser());
+      assertEquals(res.status, 422);
+})
+    Deno.test('memories routes - POST /api/spaces/:spaceId/memories - rejects empty content', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+    mockWorkspaceAccess();
+    mocks.bumpMemoryAccess = (async () => undefined) as any;
+  const app = createApp(createUser());
       const res = await app.fetch(
         new Request('http://localhost/api/spaces/sp-1/memories', {
           method: 'POST',
@@ -242,15 +221,16 @@ describe('memories routes', () => {
         {} as ExecutionContext,
       );
 
-      expect(res.status).toBe(422);
-    });
-  });
-
-  describe('PATCH /api/memories/:id', () => {
-    it('updates a memory', async () => {
-      mocks.getMemoryById.mockResolvedValue({ id: 'm-1', space_id: 'ws-1' });
-      mocks.checkWorkspaceAccess.mockResolvedValue(true);
-      mocks.updateMemory.mockResolvedValue({ id: 'm-1', content: 'Updated' });
+      assertEquals(res.status, 422);
+})  
+  
+    Deno.test('memories routes - PATCH /api/memories/:id - updates a memory', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+    mockWorkspaceAccess();
+    mocks.bumpMemoryAccess = (async () => undefined) as any;
+  mocks.getMemoryById = (async () => ({ id: 'm-1', space_id: 'ws-1' })) as any;
+      mocks.checkWorkspaceAccess = (async () => true) as any;
+      mocks.updateMemory = (async () => ({ id: 'm-1', content: 'Updated' })) as any;
 
       const app = createApp(createUser());
       const res = await app.fetch(
@@ -263,11 +243,13 @@ describe('memories routes', () => {
         {} as ExecutionContext,
       );
 
-      expect(res.status).toBe(200);
-    });
-
-    it('returns 404 when memory not found', async () => {
-      mocks.getMemoryById.mockResolvedValue(null);
+      assertEquals(res.status, 200);
+})
+    Deno.test('memories routes - PATCH /api/memories/:id - returns 404 when memory not found', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+    mockWorkspaceAccess();
+    mocks.bumpMemoryAccess = (async () => undefined) as any;
+  mocks.getMemoryById = (async () => null) as any;
 
       const app = createApp(createUser());
       const res = await app.fetch(
@@ -280,15 +262,16 @@ describe('memories routes', () => {
         {} as ExecutionContext,
       );
 
-      expect(res.status).toBe(404);
-    });
-  });
-
-  describe('DELETE /api/memories/:id', () => {
-    it('deletes a memory', async () => {
-      mocks.getMemoryById.mockResolvedValue({ id: 'm-1', space_id: 'ws-1' });
-      mocks.checkWorkspaceAccess.mockResolvedValue(true);
-      mocks.deleteMemory.mockResolvedValue(undefined);
+      assertEquals(res.status, 404);
+})  
+  
+    Deno.test('memories routes - DELETE /api/memories/:id - deletes a memory', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+    mockWorkspaceAccess();
+    mocks.bumpMemoryAccess = (async () => undefined) as any;
+  mocks.getMemoryById = (async () => ({ id: 'm-1', space_id: 'ws-1' })) as any;
+      mocks.checkWorkspaceAccess = (async () => true) as any;
+      mocks.deleteMemory = (async () => undefined) as any;
 
       const app = createApp(createUser());
       const res = await app.fetch(
@@ -297,15 +280,16 @@ describe('memories routes', () => {
         {} as ExecutionContext,
       );
 
-      expect(res.status).toBe(200);
-      await expect(res.json()).resolves.toEqual({ success: true });
-    });
-  });
-
-  describe('Reminders', () => {
-    describe('GET /api/spaces/:spaceId/reminders', () => {
-      it('returns reminders list', async () => {
-        mocks.listReminders.mockResolvedValue([{ id: 'r-1', content: 'Test' }]);
+      assertEquals(res.status, 200);
+      await assertEquals(await res.json(), { success: true });
+})  
+  
+    
+      Deno.test('memories routes - Reminders - GET /api/spaces/:spaceId/reminders - returns reminders list', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+    mockWorkspaceAccess();
+    mocks.bumpMemoryAccess = (async () => undefined) as any;
+  mocks.listReminders = (async () => [{ id: 'r-1', content: 'Test' }]) as any;
 
         const app = createApp(createUser());
         const res = await app.fetch(
@@ -314,14 +298,15 @@ describe('memories routes', () => {
           {} as ExecutionContext,
         );
 
-        expect(res.status).toBe(200);
-        await expect(res.json()).resolves.toEqual({ reminders: [{ id: 'r-1', content: 'Test' }] });
-      });
-    });
-
-    describe('GET /api/reminders/:id', () => {
-      it('returns 404 for non-existent reminder', async () => {
-        mocks.getReminderById.mockResolvedValue(null);
+        assertEquals(res.status, 200);
+        await assertEquals(await res.json(), { reminders: [{ id: 'r-1', content: 'Test' }] });
+})    
+    
+      Deno.test('memories routes - Reminders - GET /api/reminders/:id - returns 404 for non-existent reminder', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+    mockWorkspaceAccess();
+    mocks.bumpMemoryAccess = (async () => undefined) as any;
+  mocks.getReminderById = (async () => null) as any;
 
         const app = createApp(createUser());
         const res = await app.fetch(
@@ -330,12 +315,14 @@ describe('memories routes', () => {
           {} as ExecutionContext,
         );
 
-        expect(res.status).toBe(404);
-      });
-
-      it('returns 403 when workspace access denied', async () => {
-        mocks.getReminderById.mockResolvedValue({ id: 'r-1', space_id: 'ws-other' });
-        mocks.checkWorkspaceAccess.mockResolvedValue(false);
+        assertEquals(res.status, 404);
+})
+      Deno.test('memories routes - Reminders - GET /api/reminders/:id - returns 403 when workspace access denied', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+    mockWorkspaceAccess();
+    mocks.bumpMemoryAccess = (async () => undefined) as any;
+  mocks.getReminderById = (async () => ({ id: 'r-1', space_id: 'ws-other' })) as any;
+        mocks.checkWorkspaceAccess = (async () => false) as any;
 
         const app = createApp(createUser());
         const res = await app.fetch(
@@ -344,13 +331,14 @@ describe('memories routes', () => {
           {} as ExecutionContext,
         );
 
-        expect(res.status).toBe(403);
-      });
-    });
-
-    describe('POST /api/spaces/:spaceId/reminders', () => {
-      it('creates a reminder and returns 201', async () => {
-        mocks.createReminder.mockResolvedValue({ id: 'r-new', content: 'Reminder' });
+        assertEquals(res.status, 403);
+})    
+    
+      Deno.test('memories routes - Reminders - POST /api/spaces/:spaceId/reminders - creates a reminder and returns 201', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+    mockWorkspaceAccess();
+    mocks.bumpMemoryAccess = (async () => undefined) as any;
+  mocks.createReminder = (async () => ({ id: 'r-new', content: 'Reminder' })) as any;
 
         const app = createApp(createUser());
         const res = await app.fetch(
@@ -366,11 +354,13 @@ describe('memories routes', () => {
           {} as ExecutionContext,
         );
 
-        expect(res.status).toBe(201);
-      });
-
-      it('rejects invalid trigger_type', async () => {
-        const app = createApp(createUser());
+        assertEquals(res.status, 201);
+})
+      Deno.test('memories routes - Reminders - POST /api/spaces/:spaceId/reminders - rejects invalid trigger_type', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+    mockWorkspaceAccess();
+    mocks.bumpMemoryAccess = (async () => undefined) as any;
+  const app = createApp(createUser());
         const res = await app.fetch(
           new Request('http://localhost/api/spaces/sp-1/reminders', {
             method: 'POST',
@@ -384,11 +374,13 @@ describe('memories routes', () => {
           {} as ExecutionContext,
         );
 
-        expect(res.status).toBe(422);
-      });
-
-      it('rejects empty content', async () => {
-        const app = createApp(createUser());
+        assertEquals(res.status, 422);
+})
+      Deno.test('memories routes - Reminders - POST /api/spaces/:spaceId/reminders - rejects empty content', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+    mockWorkspaceAccess();
+    mocks.bumpMemoryAccess = (async () => undefined) as any;
+  const app = createApp(createUser());
         const res = await app.fetch(
           new Request('http://localhost/api/spaces/sp-1/reminders', {
             method: 'POST',
@@ -402,15 +394,16 @@ describe('memories routes', () => {
           {} as ExecutionContext,
         );
 
-        expect(res.status).toBe(422);
-      });
-    });
-
-    describe('PATCH /api/reminders/:id', () => {
-      it('updates a reminder', async () => {
-        mocks.getReminderById.mockResolvedValue({ id: 'r-1', space_id: 'ws-1' });
-        mocks.checkWorkspaceAccess.mockResolvedValue(true);
-        mocks.updateReminder.mockResolvedValue({ id: 'r-1', content: 'Updated' });
+        assertEquals(res.status, 422);
+})    
+    
+      Deno.test('memories routes - Reminders - PATCH /api/reminders/:id - updates a reminder', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+    mockWorkspaceAccess();
+    mocks.bumpMemoryAccess = (async () => undefined) as any;
+  mocks.getReminderById = (async () => ({ id: 'r-1', space_id: 'ws-1' })) as any;
+        mocks.checkWorkspaceAccess = (async () => true) as any;
+        mocks.updateReminder = (async () => ({ id: 'r-1', content: 'Updated' })) as any;
 
         const app = createApp(createUser());
         const res = await app.fetch(
@@ -423,15 +416,16 @@ describe('memories routes', () => {
           {} as ExecutionContext,
         );
 
-        expect(res.status).toBe(200);
-      });
-    });
-
-    describe('DELETE /api/reminders/:id', () => {
-      it('deletes a reminder', async () => {
-        mocks.getReminderById.mockResolvedValue({ id: 'r-1', space_id: 'ws-1' });
-        mocks.checkWorkspaceAccess.mockResolvedValue(true);
-        mocks.deleteReminder.mockResolvedValue(undefined);
+        assertEquals(res.status, 200);
+})    
+    
+      Deno.test('memories routes - Reminders - DELETE /api/reminders/:id - deletes a reminder', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+    mockWorkspaceAccess();
+    mocks.bumpMemoryAccess = (async () => undefined) as any;
+  mocks.getReminderById = (async () => ({ id: 'r-1', space_id: 'ws-1' })) as any;
+        mocks.checkWorkspaceAccess = (async () => true) as any;
+        mocks.deleteReminder = (async () => undefined) as any;
 
         const app = createApp(createUser());
         const res = await app.fetch(
@@ -440,16 +434,17 @@ describe('memories routes', () => {
           {} as ExecutionContext,
         );
 
-        expect(res.status).toBe(200);
-        await expect(res.json()).resolves.toEqual({ success: true });
-      });
-    });
-
-    describe('POST /api/reminders/:id/trigger', () => {
-      it('triggers a reminder manually', async () => {
-        mocks.getReminderById.mockResolvedValue({ id: 'r-1', space_id: 'ws-1' });
-        mocks.checkWorkspaceAccess.mockResolvedValue(true);
-        mocks.triggerReminder.mockResolvedValue({ id: 'r-1', status: 'triggered' });
+        assertEquals(res.status, 200);
+        await assertEquals(await res.json(), { success: true });
+})    
+    
+      Deno.test('memories routes - Reminders - POST /api/reminders/:id/trigger - triggers a reminder manually', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+    mockWorkspaceAccess();
+    mocks.bumpMemoryAccess = (async () => undefined) as any;
+  mocks.getReminderById = (async () => ({ id: 'r-1', space_id: 'ws-1' })) as any;
+        mocks.checkWorkspaceAccess = (async () => true) as any;
+        mocks.triggerReminder = (async () => ({ id: 'r-1', status: 'triggered' })) as any;
 
         const app = createApp(createUser());
         const res = await app.fetch(
@@ -460,8 +455,5 @@ describe('memories routes', () => {
           {} as ExecutionContext,
         );
 
-        expect(res.status).toBe(200);
-      });
-    });
-  });
-});
+        assertEquals(res.status, 200);
+})      

@@ -1,9 +1,10 @@
-import { describe, expect, it } from 'vitest';
 import { authenticateServiceRequest } from '@/routes/sessions/auth';
 
-describe('authenticateServiceRequest', () => {
-  it('accepts X-Takos-Internal requests with session headers', async () => {
-    const payload = await authenticateServiceRequest({
+
+import { assertEquals, assertObjectMatch } from 'jsr:@std/assert';
+
+  Deno.test('authenticateServiceRequest - accepts X-Takos-Internal requests with session headers', async () => {
+  const payload = await authenticateServiceRequest({
       req: {
         header(name: string): string | undefined {
           if (name === 'X-Takos-Internal') return '1';
@@ -14,15 +15,14 @@ describe('authenticateServiceRequest', () => {
       },
     } as never);
 
-    expect(payload).toMatchObject({
+    assertObjectMatch(payload, {
       session_id: 'sess_123',
       space_id: 'space_123',
       sub: 'service',
     });
-  });
-
-  it('rejects requests without X-Takos-Internal header', async () => {
-    const payload = await authenticateServiceRequest({
+})
+  Deno.test('authenticateServiceRequest - rejects requests without X-Takos-Internal header', async () => {
+  const payload = await authenticateServiceRequest({
       req: {
         header(name: string): string | undefined {
           if (name === 'Authorization') return 'Bearer some-token';
@@ -31,11 +31,10 @@ describe('authenticateServiceRequest', () => {
       },
     } as never);
 
-    expect(payload).toBeNull();
-  });
-
-  it('rejects legacy shared-secret headers', async () => {
-    const payload = await authenticateServiceRequest({
+    assertEquals(payload, null);
+})
+  Deno.test('authenticateServiceRequest - rejects legacy shared-secret headers', async () => {
+  const payload = await authenticateServiceRequest({
       req: {
         header(name: string): string | undefined {
           if (name === 'X-Service-Token') {
@@ -46,6 +45,5 @@ describe('authenticateServiceRequest', () => {
       },
     } as never);
 
-    expect(payload).toBeNull();
-  });
-});
+    assertEquals(payload, null);
+})

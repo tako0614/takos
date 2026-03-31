@@ -1,15 +1,8 @@
-import {
-  createContext,
-  useContext,
-  useState,
-  type ReactNode,
-  type HTMLAttributes,
-  type ButtonHTMLAttributes,
-  type CSSProperties,
-} from 'react';
+import { createContext, useContext, createSignal, splitProps, Show } from 'solid-js';
+import type { JSX } from 'solid-js';
 
 interface TabsContextValue {
-  activeTab: string;
+  activeTab: () => string;
   setActiveTab: (id: string) => void;
 }
 
@@ -17,100 +10,114 @@ const TabsContext = createContext<TabsContextValue | undefined>(undefined);
 
 interface TabsProps {
   defaultTab: string;
-  children: ReactNode;
+  children: JSX.Element;
   onChange?: (tabId: string) => void;
 }
 
-export function Tabs({ defaultTab, children, onChange }: TabsProps) {
-  const [activeTab, setActiveTabState] = useState(defaultTab);
+export function Tabs(props: TabsProps) {
+  const [activeTab, setActiveTabState] = createSignal(props.defaultTab);
 
   const setActiveTab = (id: string) => {
     setActiveTabState(id);
-    onChange?.(id);
+    props.onChange?.(id);
   };
 
   return (
     <TabsContext.Provider value={{ activeTab, setActiveTab }}>
-      {children}
+      {props.children}
     </TabsContext.Provider>
   );
 }
 
-export function TabList({ children, className = '', style, ...props }: HTMLAttributes<HTMLDivElement>) {
+interface TabListProps extends JSX.HTMLAttributes<HTMLDivElement> {}
+
+export function TabList(props: TabListProps) {
+  const [local, rest] = splitProps(props, ['children', 'class', 'style']);
+
   return (
     <div
-      className={className}
+      class={local.class ?? ''}
       style={{
         display: 'flex',
         gap: '0.25rem',
-        borderBottom: '1px solid var(--color-border-primary)',
-        ...style,
+        'border-bottom': '1px solid var(--color-border-primary)',
+        ...(typeof local.style === 'object' && local.style !== null ? local.style : {}),
       }}
       role="tablist"
-      {...props}
+      {...rest}
     >
-      {children}
+      {local.children}
     </div>
   );
 }
 
-interface TabProps extends ButtonHTMLAttributes<HTMLButtonElement> {
+interface TabProps extends JSX.ButtonHTMLAttributes<HTMLButtonElement> {
   id: string;
 }
 
-export function Tab({ id, children, className = '', style, ...props }: TabProps) {
+export function Tab(props: TabProps) {
+  const [local, rest] = splitProps(props, ['id', 'children', 'class', 'style']);
+
   const context = useContext(TabsContext);
   if (!context) throw new Error('Tab must be used within Tabs');
 
   const { activeTab, setActiveTab } = context;
-  const isActive = activeTab === id;
 
-  const tabStyle: CSSProperties = {
+  const tabStyle = (): JSX.CSSProperties => ({
     padding: '0.75rem 1rem',
-    fontSize: '0.875rem',
-    fontWeight: 500,
-    backgroundColor: 'transparent',
+    'font-size': '0.875rem',
+    'font-weight': 500,
+    'background-color': 'transparent',
     border: 'none',
-    borderBottom: `2px solid ${isActive ? 'var(--color-primary)' : 'transparent'}`,
-    color: isActive ? 'var(--color-text-primary)' : 'var(--color-text-secondary)',
+    'border-bottom': `2px solid ${activeTab() === local.id ? 'var(--color-primary)' : 'transparent'}`,
+    color: activeTab() === local.id ? 'var(--color-text-primary)' : 'var(--color-text-secondary)',
     cursor: 'pointer',
     transition: 'var(--transition-colors)',
-    marginBottom: '-1px',
-  };
+    'margin-bottom': '-1px',
+  });
 
   return (
     <button
       role="tab"
-      aria-selected={isActive}
-      className={className}
-      style={{ ...tabStyle, ...style }}
-      onClick={() => setActiveTab(id)}
-      {...props}
+      aria-selected={activeTab() === local.id}
+      class={local.class ?? ''}
+      style={{
+        ...tabStyle(),
+        ...(typeof local.style === 'object' && local.style !== null ? local.style : {}),
+      }}
+      onClick={() => setActiveTab(local.id)}
+      {...rest}
     >
-      {children}
+      {local.children}
     </button>
   );
 }
 
-interface TabPanelProps extends HTMLAttributes<HTMLDivElement> {
+interface TabPanelProps extends JSX.HTMLAttributes<HTMLDivElement> {
   id: string;
 }
 
-export function TabPanel({ id, children, className = '', style, ...props }: TabPanelProps) {
+export function TabPanel(props: TabPanelProps) {
+  const [local, rest] = splitProps(props, ['id', 'children', 'class', 'style']);
+
   const context = useContext(TabsContext);
   if (!context) throw new Error('TabPanel must be used within Tabs');
 
   const { activeTab } = context;
-  if (activeTab !== id) return null;
 
   return (
-    <div
-      role="tabpanel"
-      className={className}
-      style={{ padding: '1rem 0', ...style }}
-      {...props}
-    >
-      {children}
-    </div>
+    <Show when={activeTab() === local.id}>
+      <div
+        role="tabpanel"
+        class={local.class ?? ''}
+        style={{
+          padding: '1rem 0',
+          ...(typeof local.style === 'object' && local.style !== null ? local.style : {}),
+        }}
+        {...rest}
+      >
+        {local.children}
+      </div>
+    </Show>
   );
 }

@@ -9,8 +9,8 @@ import type {
   ManifestContainerDef,
   ManifestServiceDef,
   ProvisionedResource,
-} from '../deploy-models.js';
-import { deployContainerWithWrangler } from '../container.js';
+} from '../deploy-models.ts';
+import { deployContainerWithWrangler } from '../container.ts';
 
 // ── Step 2a: Standalone containers (CF Containers not referenced by any worker) ──
 

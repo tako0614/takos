@@ -1,9 +1,9 @@
 import { Command } from 'commander';
-import chalk from 'chalk';
-import { readState, getStateDir, getStateFilePath } from '../../lib/state/state-file.js';
-import { printJson } from '../../lib/cli-utils.js';
-import type { TakosState } from '../../lib/state/state-types.js';
-import { toAccessOpts } from './helpers.js';
+import { bold, dim } from '@std/fmt/colors';
+import { readState, getStateDir, getStateFilePath } from '../../lib/state/state-file.ts';
+import { printJson } from '../../lib/cli-utils.ts';
+import type { TakosState } from '../../lib/state/state-types.ts';
+import { toAccessOpts } from './helpers.ts';
 
 export function registerStateListCommand(stateCmd: Command): void {
   stateCmd
@@ -25,7 +25,7 @@ export function registerStateListCommand(stateCmd: Command): void {
       }
 
       if (!state) {
-        console.log(chalk.dim('No state found. Run `takos apply` first.'));
+        console.log(dim('No state found. Run `takos apply` first.'));
         return;
       }
 
@@ -35,7 +35,7 @@ export function registerStateListCommand(stateCmd: Command): void {
       }
 
       console.log('');
-      console.log(chalk.bold(`State: ${state.groupName || '(unknown)'}`));
+      console.log(bold(`State: ${state.groupName || '(unknown)'}`));
       console.log(`  Provider:    ${state.provider || '(unknown)'}`);
       console.log(`  Environment: ${state.env || '(unknown)'}`);
       console.log(`  Version:     ${state.version || '(unknown)'}`);
@@ -56,28 +56,28 @@ export function registerStateListCommand(stateCmd: Command): void {
       const serviceKeys = Object.keys(services);
 
       if (resourceKeys.length > 0) {
-        console.log(chalk.bold('Resources:'));
+        console.log(bold('Resources:'));
         for (const name of resourceKeys) {
           const resource = resources[name];
           const typeLabel = resource.type ? `[${resource.type}]` : '';
-          const idLabel = resource.id ? chalk.dim(` (${resource.id})`) : '';
+          const idLabel = resource.id ? dim(` (${resource.id})`) : '';
           console.log(`  resources.${name} ${typeLabel}${idLabel}`);
         }
         console.log('');
       }
 
       if (workerKeys.length > 0) {
-        console.log(chalk.bold('Workers:'));
+        console.log(bold('Workers:'));
         for (const name of workerKeys) {
           const worker = workers[name];
-          const scriptLabel = worker.scriptName ? chalk.dim(` -> ${worker.scriptName}`) : '';
+          const scriptLabel = worker.scriptName ? dim(` -> ${worker.scriptName}`) : '';
           console.log(`  workers.${name} [worker]${scriptLabel}`);
         }
         console.log('');
       }
 
       if (containerKeys.length > 0) {
-        console.log(chalk.bold('Containers:'));
+        console.log(bold('Containers:'));
         for (const name of containerKeys) {
           console.log(`  containers.${name} [container]`);
         }
@@ -85,10 +85,10 @@ export function registerStateListCommand(stateCmd: Command): void {
       }
 
       if (serviceKeys.length > 0) {
-        console.log(chalk.bold('Services:'));
+        console.log(bold('Services:'));
         for (const name of serviceKeys) {
           const service = services[name];
-          const ipLabel = service.ipv4 ? chalk.dim(` (${service.ipv4})`) : '';
+          const ipLabel = service.ipv4 ? dim(` (${service.ipv4})`) : '';
           console.log(`  services.${name} [service]${ipLabel}`);
         }
         console.log('');
@@ -96,9 +96,9 @@ export function registerStateListCommand(stateCmd: Command): void {
 
       const totalCount = resourceKeys.length + workerKeys.length + containerKeys.length + serviceKeys.length;
       if (totalCount === 0) {
-        console.log(chalk.dim('State is empty.'));
+        console.log(dim('State is empty.'));
       }
 
-      console.log(chalk.dim(`${resourceKeys.length} resource(s), ${workerKeys.length} worker(s), ${containerKeys.length} container(s), ${serviceKeys.length} service(s)`));
+      console.log(dim(`${resourceKeys.length} resource(s), ${workerKeys.length} worker(s), ${containerKeys.length} container(s), ${serviceKeys.length} service(s)`));
     });
 }

@@ -1,6 +1,7 @@
-import { describe, expect, it } from 'vitest';
 import { buildSkillTree, searchSkillsByText } from '@/services/source/skill-search';
 import type { SkillCatalogEntry } from '@/services/agent/skills';
+
+import { assertEquals, assert } from 'jsr:@std/assert';
 
 function makeSkill(overrides: Partial<SkillCatalogEntry> & { id: string; name: string }): SkillCatalogEntry {
   return {
@@ -37,94 +38,80 @@ const CUSTOM_SKILLS: SkillCatalogEntry[] = [
 
 const ALL_SKILLS = [...OFFICIAL_SKILLS, ...CUSTOM_SKILLS];
 
-describe('buildSkillTree', () => {
-  it('groups skills by category in canonical order', () => {
-    const tree = buildSkillTree(ALL_SKILLS);
 
-    expect(tree.total_skills).toBe(ALL_SKILLS.length);
+  Deno.test('buildSkillTree - groups skills by category in canonical order', () => {
+  const tree = buildSkillTree(ALL_SKILLS);
+
+    assertEquals(tree.total_skills, ALL_SKILLS.length);
 
     const categories = tree.categories.map((c) => c.category);
-    expect(categories).toEqual(['research', 'writing', 'planning', 'slides', 'software', 'custom']);
-  });
-
-  it('uses correct labels', () => {
-    const tree = buildSkillTree(ALL_SKILLS);
-    expect(tree.categories[0].label).toBe('Research');
-    expect(tree.categories[5].label).toBe('Custom');
-  });
-
-  it('omits empty categories', () => {
-    const tree = buildSkillTree(OFFICIAL_SKILLS);
+    assertEquals(categories, ['research', 'writing', 'planning', 'slides', 'software', 'custom']);
+})
+  Deno.test('buildSkillTree - uses correct labels', () => {
+  const tree = buildSkillTree(ALL_SKILLS);
+    assertEquals(tree.categories[0].label, 'Research');
+    assertEquals(tree.categories[5].label, 'Custom');
+})
+  Deno.test('buildSkillTree - omits empty categories', () => {
+  const tree = buildSkillTree(OFFICIAL_SKILLS);
     const categories = tree.categories.map((c) => c.category);
-    expect(categories).not.toContain('custom');
-    expect(tree.total_skills).toBe(5);
-  });
-
-  it('places skills with matching category under the correct node', () => {
-    const tree = buildSkillTree(ALL_SKILLS);
+    assert(!(categories).includes('custom'));
+    assertEquals(tree.total_skills, 5);
+})
+  Deno.test('buildSkillTree - places skills with matching category under the correct node', () => {
+  const tree = buildSkillTree(ALL_SKILLS);
     const customNode = tree.categories.find((c) => c.category === 'custom');
-    expect(customNode).toBeDefined();
-    expect(customNode!.skills).toHaveLength(2);
-    expect(customNode!.skills.map((s) => s.id)).toEqual(['custom-1', 'custom-2']);
-  });
+    assert(customNode !== undefined);
+    assertEquals(customNode!.skills.length, 2);
+    assertEquals(customNode!.skills.map((s) => s.id), ['custom-1', 'custom-2']);
+})
+  Deno.test('buildSkillTree - handles empty skill list', () => {
+  const tree = buildSkillTree([]);
+    assertEquals(tree.categories.length, 0);
+    assertEquals(tree.total_skills, 0);
+})
 
-  it('handles empty skill list', () => {
-    const tree = buildSkillTree([]);
-    expect(tree.categories).toHaveLength(0);
-    expect(tree.total_skills).toBe(0);
-  });
-});
-
-describe('searchSkillsByText', () => {
-  it('returns exact name match with highest score', () => {
-    const results = searchSkillsByText(ALL_SKILLS, 'Research Brief');
-    expect(results.length).toBeGreaterThanOrEqual(1);
-    expect(results[0].skill.id).toBe('research-brief');
-    expect(results[0].score).toBe(100);
-    expect(results[0].match_source).toBe('text');
-  });
-
-  it('returns partial name matches', () => {
-    const results = searchSkillsByText(ALL_SKILLS, 'Draft');
-    expect(results.some((r) => r.skill.id === 'writing-draft')).toBe(true);
+  Deno.test('searchSkillsByText - returns exact name match with highest score', () => {
+  const results = searchSkillsByText(ALL_SKILLS, 'Research Brief');
+    assert(results.length >= 1);
+    assertEquals(results[0].skill.id, 'research-brief');
+    assertEquals(results[0].score, 100);
+    assertEquals(results[0].match_source, 'text');
+})
+  Deno.test('searchSkillsByText - returns partial name matches', () => {
+  const results = searchSkillsByText(ALL_SKILLS, 'Draft');
+    assertEquals(results.some((r) => r.skill.id === 'writing-draft'), true);
     const match = results.find((r) => r.skill.id === 'writing-draft')!;
-    expect(match.score).toBe(60);
-  });
-
-  it('matches triggers', () => {
-    const results = searchSkillsByText(ALL_SKILLS, 'translate');
-    expect(results.some((r) => r.skill.id === 'custom-1')).toBe(true);
+    assertEquals(match.score, 60);
+})
+  Deno.test('searchSkillsByText - matches triggers', () => {
+  const results = searchSkillsByText(ALL_SKILLS, 'translate');
+    assertEquals(results.some((r) => r.skill.id === 'custom-1'), true);
     const match = results.find((r) => r.skill.id === 'custom-1')!;
-    expect(match.score).toBe(50);
-  });
-
-  it('matches description', () => {
-    const results = searchSkillsByText(ALL_SKILLS, 'Design slide decks');
-    expect(results.some((r) => r.skill.id === 'slides-author')).toBe(true);
-  });
-
-  it('matches category label', () => {
-    const results = searchSkillsByText(ALL_SKILLS, 'software');
-    expect(results.some((r) => r.skill.id === 'repo-app-operator')).toBe(true);
+    assertEquals(match.score, 50);
+})
+  Deno.test('searchSkillsByText - matches description', () => {
+  const results = searchSkillsByText(ALL_SKILLS, 'Design slide decks');
+    assertEquals(results.some((r) => r.skill.id === 'slides-author'), true);
+})
+  Deno.test('searchSkillsByText - matches category label', () => {
+  const results = searchSkillsByText(ALL_SKILLS, 'software');
+    assertEquals(results.some((r) => r.skill.id === 'repo-app-operator'), true);
     const match = results.find((r) => r.skill.id === 'repo-app-operator')!;
     // description contains "Software" (score 40) which is higher than category match (30)
-    expect(match.score).toBeGreaterThanOrEqual(30);
-  });
-
-  it('returns empty for non-matching query', () => {
-    const results = searchSkillsByText(ALL_SKILLS, 'zzz-no-match-xyz');
-    expect(results).toHaveLength(0);
-  });
-
-  it('respects limit option', () => {
-    const results = searchSkillsByText(ALL_SKILLS, 'analyze', { limit: 1 });
-    expect(results).toHaveLength(1);
-  });
-
-  it('sorts by score descending', () => {
-    const results = searchSkillsByText(ALL_SKILLS, 'analyze');
+    assert(match.score >= 30);
+})
+  Deno.test('searchSkillsByText - returns empty for non-matching query', () => {
+  const results = searchSkillsByText(ALL_SKILLS, 'zzz-no-match-xyz');
+    assertEquals(results.length, 0);
+})
+  Deno.test('searchSkillsByText - respects limit option', () => {
+  const results = searchSkillsByText(ALL_SKILLS, 'analyze', { limit: 1 });
+    assertEquals(results.length, 1);
+})
+  Deno.test('searchSkillsByText - sorts by score descending', () => {
+  const results = searchSkillsByText(ALL_SKILLS, 'analyze');
     for (let i = 1; i < results.length; i++) {
-      expect(results[i - 1].score).toBeGreaterThanOrEqual(results[i].score);
+      assert(results[i - 1].score >= results[i].score);
     }
-  });
-});
+})

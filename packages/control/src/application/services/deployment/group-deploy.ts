@@ -14,20 +14,20 @@ import { execFile } from 'node:child_process';
 import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
-import type { AppManifest, WorkerService } from './group-deploy-manifest.js';
+import type { AppManifest, WorkerService } from './group-deploy-manifest.ts';
 import type {
   GroupDeployOptions,
   GroupDeployResult,
   ServiceDeployResult,
   BindingResult,
   ProvisionedResource,
-} from './group-deploy-types.js';
-import { provisionResources } from './resource-provisioner.js';
+} from './group-deploy-types.ts';
+import { provisionResources } from './resource-provisioner.ts';
 import {
   generateWranglerConfig,
   serializeWranglerToml,
-} from './wrangler-config-gen.js';
-import { CloudflareApiClient } from '../cloudflare/api-client.js';
+} from './wrangler-config-gen.ts';
+import { CloudflareApiClient } from '../cloudflare/api-client.ts';
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -39,7 +39,7 @@ function execCommand(
   return new Promise((resolve) => {
     execFile(command, args, {
       cwd: options?.cwd,
-      env: { ...process.env, ...options?.env },
+      env: { ...Deno.env.toObject(), ...options?.env },
       maxBuffer: 10 * 1024 * 1024,
     }, (error, stdout, stderr) => {
       resolve({

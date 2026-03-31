@@ -8,10 +8,10 @@
  */
 
 // Re-export public API from split modules
-export type { ApiUrlValidationResult } from './config-validation.js';
-export { validateApiUrl } from './config-validation.js';
+export type { ApiUrlValidationResult } from './config-validation.ts';
+export { validateApiUrl } from './config-validation.ts';
 
-export type { TakosConfig } from './config-auth.js';
+export type { TakosConfig } from './config-auth.ts';
 export {
   isContainerMode,
   getConfig,
@@ -19,6 +19,6 @@ export {
   saveApiUrl,
   clearCredentials,
   isAuthenticated,
-} from './config-auth.js';
+} from './config-auth.ts';
 
-export { getApiRequestTimeoutMs, getLoginTimeoutMs } from './config-timeout.js';
+export { getApiRequestTimeoutMs, getLoginTimeoutMs } from './config-timeout.ts';

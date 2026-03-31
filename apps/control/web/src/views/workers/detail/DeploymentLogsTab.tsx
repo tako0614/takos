@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { createSignal, createEffect, onMount, onCleanup } from 'solid-js';
 import { useI18n } from '../../../store/i18n';
 import { useToast } from '../../../store/toast';
 import { useConfirmDialog } from '../../../store/confirm-dialog';
@@ -6,7 +6,7 @@ import { Icons } from '../../../lib/Icons';
 import { Card } from '../../../components/ui/Card';
 import { Button } from '../../../components/ui/Button';
 import { Badge } from '../../../components/ui/Badge';
-import { rpc, rpcJson } from '../../../lib/rpc';
+import { rpc, rpcJson, rpcPath } from '../../../lib/rpc';
 import { formatDateTime } from '../../../lib/format';
 import type { Worker } from '../../../types';
 
@@ -51,20 +51,20 @@ export function DeploymentLogsTab({ worker }: DeploymentLogsTabProps) {
   const { t } = useI18n();
   const { showToast } = useToast();
   const { confirm } = useConfirmDialog();
-  const [deployments, setDeployments] = useState<Deployment[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [expandedDeployment, setExpandedDeployment] = useState<string | null>(null);
-  const [loadingDetailsId, setLoadingDetailsId] = useState<string | null>(null);
-  const [rollingBackVersion, setRollingBackVersion] = useState<number | null>(null);
+  const [deployments, setDeployments] = createSignal<Deployment[]>([]);
+  const [loading, setLoading] = createSignal(true);
+  const [expandedDeployment, setExpandedDeployment] = createSignal<string | null>(null);
+  const [loadingDetailsId, setLoadingDetailsId] = createSignal<string | null>(null);
+  const [rollingBackVersion, setRollingBackVersion] = createSignal<number | null>(null);
 
-  useEffect(() => {
+  createEffect(() => {
     loadDeployments();
-  }, [worker.id]);
+  });
 
   const loadDeployments = async () => {
     try {
       setLoading(true);
-      const res = await rpc.workers[':id'].deployments.$get({
+      const res = await rpcPath(rpc, 'workers', ':id', 'deployments').$get({
         param: { id: worker.id },
       });
       const data = await rpcJson<{ deployments: Deployment[] }>(res);
@@ -79,7 +79,7 @@ export function DeploymentLogsTab({ worker }: DeploymentLogsTabProps) {
   const loadDeploymentDetails = async (deploymentId: string) => {
     try {
       setLoadingDetailsId(deploymentId);
-      const res = await rpc.workers[':id'].deployments[':deploymentId'].$get({
+      const res = await rpcPath(rpc, 'workers', ':id', 'deployments', ':deploymentId').$get({
         param: { id: worker.id, deploymentId },
       });
       const data = await rpcJson<{ events?: DeploymentEvent[] }>(res);
@@ -97,9 +97,9 @@ export function DeploymentLogsTab({ worker }: DeploymentLogsTabProps) {
   };
 
   const toggleExpanded = (deployment: Deployment) => {
-    const next = expandedDeployment === deployment.id ? null : deployment.id;
+    const next = expandedDeployment() === deployment.id ? null : deployment.id;
     setExpandedDeployment(next);
-    if (next && !deployment.events && loadingDetailsId !== deployment.id) {
+    if (next && !deployment.events && loadingDetailsId() !== deployment.id) {
       void loadDeploymentDetails(deployment.id);
     }
   };
@@ -148,7 +148,7 @@ export function DeploymentLogsTab({ worker }: DeploymentLogsTabProps) {
 
     try {
       setRollingBackVersion(version);
-      const res = await rpc.workers[':id'].deployments.rollback.$post({
+      const res = await rpcPath(rpc, 'workers', ':id', 'deployments', 'rollback').$post({
         param: { id: worker.id },
         json: { target_version: version },
       });
@@ -172,75 +172,75 @@ export function DeploymentLogsTab({ worker }: DeploymentLogsTabProps) {
     return `${Math.floor(durationMs / 60000)}m ${Math.floor((durationMs % 60000) / 1000)}s`;
   };
 
-  if (loading) {
+  if (loading()) {
     return (
-      <div className="flex items-center justify-center py-12">
-        <Icons.Loader className="w-6 h-6 animate-spin text-zinc-400" />
+      <div class="flex items-center justify-center py-12">
+        <Icons.Loader class="w-6 h-6 animate-spin text-zinc-400" />
       </div>
     );
   }
 
-  if (deployments.length === 0) {
+  if (deployments().length === 0) {
     return (
       <Card padding="lg">
-        <div className="text-center py-8">
-          <Icons.Upload className="w-12 h-12 mx-auto text-zinc-300 dark:text-zinc-600 mb-4" />
-          <p className="text-zinc-500 dark:text-zinc-400">{t('noDeployments')}</p>
+        <div class="text-center py-8">
+          <Icons.Upload class="w-12 h-12 mx-auto text-zinc-300 dark:text-zinc-600 mb-4" />
+          <p class="text-zinc-500 dark:text-zinc-400">{t('noDeployments')}</p>
         </div>
       </Card>
     );
   }
 
   return (
-    <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <h2 className="text-lg font-semibold text-zinc-900 dark:text-zinc-100">{t('deploymentHistory')}</h2>
-        <Button variant="secondary" size="sm" onClick={loadDeployments} leftIcon={<Icons.RefreshCw className="w-4 h-4" />}>
+    <div class="space-y-4">
+      <div class="flex items-center justify-between">
+        <h2 class="text-lg font-semibold text-zinc-900 dark:text-zinc-100">{t('deploymentHistory')}</h2>
+        <Button variant="secondary" size="sm" onClick={loadDeployments} leftIcon={<Icons.RefreshCw class="w-4 h-4" />}>
           {t('refresh')}
         </Button>
       </div>
 
-      <div className="space-y-3">
-        {deployments.map((deployment) => (
-          <Card key={deployment.id} padding="none" className="overflow-hidden">
+      <div class="space-y-3">
+        {deployments().map((deployment: Deployment) => (
+          <Card padding="none" class="overflow-hidden">
             <div
-              className="flex items-center gap-4 px-4 py-3 cursor-pointer hover:bg-zinc-50 dark:hover:bg-zinc-800 transition-colors"
+              class="flex items-center gap-4 px-4 py-3 cursor-pointer hover:bg-zinc-50 dark:hover:bg-zinc-800 transition-colors"
               onClick={() => toggleExpanded(deployment)}
             >
-              <div className="flex items-center gap-2">
-                {expandedDeployment === deployment.id ? (
-                  <Icons.ChevronDown className="w-4 h-4 text-zinc-400" />
+              <div class="flex items-center gap-2">
+                {expandedDeployment() === deployment.id ? (
+                  <Icons.ChevronDown class="w-4 h-4 text-zinc-400" />
                 ) : (
-                  <Icons.ChevronRight className="w-4 h-4 text-zinc-400" />
+                  <Icons.ChevronRight class="w-4 h-4 text-zinc-400" />
                 )}
                 {getStatusBadge(deployment.status)}
                 {getRoutingBadge(deployment)}
               </div>
 
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-2">
-                  <span className="text-sm font-mono text-zinc-600 dark:text-zinc-400">
+              <div class="flex-1 min-w-0">
+                <div class="flex items-center gap-2">
+                  <span class="text-sm font-mono text-zinc-600 dark:text-zinc-400">
                     v{deployment.version}
                   </span>
                   {deployment.bundle_hash && (
-                    <span className="text-xs font-mono text-zinc-500 dark:text-zinc-400">
+                    <span class="text-xs font-mono text-zinc-500 dark:text-zinc-400">
                       {deployment.bundle_hash.slice(0, 8)}
                     </span>
                   )}
                   {deployment.deployed_by && (
-                    <span className="text-xs text-zinc-500">
+                    <span class="text-xs text-zinc-500">
                       {t('deployedBy')}: {deployment.deployed_by}
                     </span>
                   )}
                   {deployment.deploy_message && (
-                    <span className="text-xs text-zinc-500 truncate">
+                    <span class="text-xs text-zinc-500 truncate">
                       {deployment.deploy_message}
                     </span>
                   )}
                 </div>
               </div>
 
-              <div className="flex items-center gap-4 text-xs text-zinc-500">
+              <div class="flex items-center gap-4 text-xs text-zinc-500">
                 {deployment.bundle_size && (
                   <span>{formatBytes(deployment.bundle_size)}</span>
                 )}
@@ -251,75 +251,75 @@ export function DeploymentLogsTab({ worker }: DeploymentLogsTabProps) {
               </div>
             </div>
 
-            {expandedDeployment === deployment.id && (
-              <div className="border-t border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800/50 px-4 py-3">
-                {loadingDetailsId === deployment.id && (
-                  <div className="mb-3 flex items-center gap-2 text-xs text-zinc-500 dark:text-zinc-400">
-                    <Icons.Loader className="w-4 h-4 animate-spin" />
+            {expandedDeployment() === deployment.id && (
+              <div class="border-t border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800/50 px-4 py-3">
+                {loadingDetailsId() === deployment.id && (
+                  <div class="mb-3 flex items-center gap-2 text-xs text-zinc-500 dark:text-zinc-400">
+                    <Icons.Loader class="w-4 h-4 animate-spin" />
                     <span>Loading deployment details...</span>
                   </div>
                 )}
                 {deployment.error_message && (
-                  <div className="mb-3 p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg">
-                    <div className="flex items-center gap-2 text-red-700 dark:text-red-400 text-sm font-medium mb-1">
-                      <Icons.AlertTriangle className="w-4 h-4" />
+                  <div class="mb-3 p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg">
+                    <div class="flex items-center gap-2 text-red-700 dark:text-red-400 text-sm font-medium mb-1">
+                      <Icons.AlertTriangle class="w-4 h-4" />
                       {t('deploymentFailed')}
                     </div>
-                    <p className="text-sm text-red-600 dark:text-red-400 font-mono">{deployment.error_message}</p>
+                    <p class="text-sm text-red-600 dark:text-red-400 font-mono">{deployment.error_message}</p>
                   </div>
                 )}
 
-                <div className="mb-3 flex items-center justify-between gap-3">
-                  <div className="flex items-center gap-2">
+                <div class="mb-3 flex items-center justify-between gap-3">
+                  <div class="flex items-center gap-2">
                     {deployment.routing_status === 'archived' && deployment.status === 'success' && (
                       <Button
                         variant="danger"
                         size="sm"
-                        isLoading={rollingBackVersion === deployment.version}
-                        disabled={rollingBackVersion !== null}
+                        isLoading={rollingBackVersion() === deployment.version}
+                        disabled={rollingBackVersion() !== null}
                         onClick={() => void rollbackToVersion(deployment.version)}
-                        leftIcon={<Icons.RefreshCw className="w-4 h-4" />}
+                        leftIcon={<Icons.RefreshCw class="w-4 h-4" />}
                       >
                         {t('rollbackToVersion', { version: deployment.version })}
                       </Button>
                     )}
                   </div>
                   {deployment.artifact_ref && (
-                    <span className="text-xs font-mono text-zinc-500 truncate">
+                    <span class="text-xs font-mono text-zinc-500 truncate">
                       {deployment.artifact_ref}
                     </span>
                   )}
                 </div>
 
-                <div className="grid grid-cols-2 gap-4 text-sm">
+                <div class="grid grid-cols-2 gap-4 text-sm">
                   <div>
-                    <span className="text-zinc-500 dark:text-zinc-400">Version:</span>
-                    <span className="ml-2 font-mono text-zinc-700 dark:text-zinc-300">v{deployment.version}</span>
+                    <span class="text-zinc-500 dark:text-zinc-400">Version:</span>
+                    <span class="ml-2 font-mono text-zinc-700 dark:text-zinc-300">v{deployment.version}</span>
                   </div>
                   {deployment.bundle_hash && (
                     <div>
-                      <span className="text-zinc-500 dark:text-zinc-400">{t('bundleHash')}:</span>
-                      <span className="ml-2 font-mono text-zinc-700 dark:text-zinc-300">{deployment.bundle_hash}</span>
+                      <span class="text-zinc-500 dark:text-zinc-400">{t('bundleHash')}:</span>
+                      <span class="ml-2 font-mono text-zinc-700 dark:text-zinc-300">{deployment.bundle_hash}</span>
                     </div>
                   )}
                   {deployment.bundle_size && (
                     <div>
-                      <span className="text-zinc-500 dark:text-zinc-400">{t('bundleSize')}:</span>
-                      <span className="ml-2 text-zinc-700 dark:text-zinc-300">{formatBytes(deployment.bundle_size)}</span>
+                      <span class="text-zinc-500 dark:text-zinc-400">{t('bundleSize')}:</span>
+                      <span class="ml-2 text-zinc-700 dark:text-zinc-300">{formatBytes(deployment.bundle_size)}</span>
                     </div>
                   )}
                 </div>
 
                 {deployment.events && deployment.events.length > 0 && (
-                  <div className="mt-4">
-                    <h4 className="text-sm font-medium text-zinc-700 dark:text-zinc-300 mb-2">{t('deploymentEvents')}</h4>
-                    <div className="space-y-2">
-                      {deployment.events.map((event) => (
-                        <div key={event.id} className="flex items-start gap-2 text-xs">
-                          <span className="text-zinc-400 font-mono whitespace-nowrap">
+                  <div class="mt-4">
+                    <h4 class="text-sm font-medium text-zinc-700 dark:text-zinc-300 mb-2">{t('deploymentEvents')}</h4>
+                    <div class="space-y-2">
+                      {deployment.events.map((event: DeploymentEvent) => (
+                        <div class="flex items-start gap-2 text-xs">
+                          <span class="text-zinc-400 font-mono whitespace-nowrap">
                             {new Date(event.created_at).toLocaleTimeString()}
                           </span>
-                          <span className="text-zinc-600 dark:text-zinc-400">{event.message}</span>
+                          <span class="text-zinc-600 dark:text-zinc-400">{event.message}</span>
                         </div>
                       ))}
                     </div>

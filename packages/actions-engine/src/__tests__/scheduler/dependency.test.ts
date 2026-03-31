@@ -1,15 +1,15 @@
-import { describe, expect, it } from 'vitest';
-
-import type { Workflow } from '../../workflow-models.js';
+import type { Workflow } from '../../workflow-models.ts';
 import {
   buildDependencyGraph,
   DependencyError,
   groupIntoPhases,
-} from '../../scheduler/dependency.js';
+} from '../../scheduler/dependency.ts';
 
-describe('dependency helpers', () => {
-  it('throws DependencyError with the same circular message shape for sorting and phase grouping', () => {
-    const workflow: Workflow = {
+
+import { assert } from 'jsr:@std/assert';
+
+  Deno.test('dependency helpers - throws DependencyError with the same circular message shape for sorting and phase grouping', () => {
+  const workflow: Workflow = {
       name: 'cycle-workflow',
       on: 'push',
       jobs: {
@@ -36,7 +36,7 @@ describe('dependency helpers', () => {
       try {
         fn();
       } catch (error) {
-        expect(error).toBeInstanceOf(DependencyError);
+        assert(error instanceof DependencyError);
         return error as DependencyError;
       }
       throw new Error('Expected DependencyError to be thrown');
@@ -44,8 +44,7 @@ describe('dependency helpers', () => {
 
     const phaseError = toDependencyError(() => groupIntoPhases(graph));
 
-    expect(phaseError.message).toMatch(
+    assert(
       /^Circular dependency detected: .+( -> .+)+$/
-    );
-  });
-});
+    .test(phaseError.message));
+})

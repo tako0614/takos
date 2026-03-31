@@ -1,20 +1,15 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { Hono } from 'hono';
 import type { Env, User } from '@/types';
 import { createMockEnv } from '../../../test/integration/setup';
 
-const mocks = vi.hoisted(() => ({
-  checkWeeklyRuntimeLimit: vi.fn(),
-}));
+import { assertEquals, assertObjectMatch } from 'jsr:@std/assert';
+import { assertSpyCalls } from 'jsr:@std/testing/mock';
 
-vi.mock('@/services/billing/billing', async () => {
-  const actual = await vi.importActual<typeof import('@/services/billing/billing')>('@/services/billing/billing');
-  return {
-    ...actual,
-    checkWeeklyRuntimeLimit: mocks.checkWeeklyRuntimeLimit,
-  };
+const mocks = ({
+  checkWeeklyRuntimeLimit: ((..._args: any[]) => undefined) as any,
 });
 
+// [Deno] vi.mock removed - manually stub imports from '@/services/billing/billing'
 import { requireWeeklyRuntimeLimitForAgent } from '@/middleware/plan-gates';
 
 type Vars = { user?: User };
@@ -45,10 +40,10 @@ function createApp(withUser = true) {
   return app;
 }
 
-describe('requireWeeklyRuntimeLimitForAgent', () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-    mocks.checkWeeklyRuntimeLimit.mockResolvedValue({
+
+  Deno.test('requireWeeklyRuntimeLimitForAgent - skips read-only methods', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+    mocks.checkWeeklyRuntimeLimit = (async () => ({
       allowed: true,
       usedSeconds: 10,
       limitSeconds: 18_000,
@@ -56,35 +51,50 @@ describe('requireWeeklyRuntimeLimitForAgent', () => {
       windowDays: 7,
       windowStart: '2026-02-20T00:00:00.000Z',
       retryAfterSeconds: 0,
-    });
-  });
-
-  it('skips read-only methods', async () => {
-    const app = createApp();
+    })) as any;
+  const app = createApp();
     const response = await app.fetch(
       new Request('https://takos.jp/api/runs', { method: 'GET' }),
       createMockEnv() as unknown as Env,
       {} as ExecutionContext,
     );
 
-    expect(response.status).toBe(200);
-    expect(mocks.checkWeeklyRuntimeLimit).not.toHaveBeenCalled();
-  });
-
-  it('passes through when no user is attached', async () => {
-    const app = createApp(false);
+    assertEquals(response.status, 200);
+    assertSpyCalls(mocks.checkWeeklyRuntimeLimit, 0);
+})
+  Deno.test('requireWeeklyRuntimeLimitForAgent - passes through when no user is attached', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+    mocks.checkWeeklyRuntimeLimit = (async () => ({
+      allowed: true,
+      usedSeconds: 10,
+      limitSeconds: 18_000,
+      remainingSeconds: 17_990,
+      windowDays: 7,
+      windowStart: '2026-02-20T00:00:00.000Z',
+      retryAfterSeconds: 0,
+    })) as any;
+  const app = createApp(false);
     const response = await app.fetch(
       new Request('https://takos.jp/api/runs', { method: 'POST' }),
       createMockEnv() as unknown as Env,
       {} as ExecutionContext,
     );
 
-    expect(response.status).toBe(201);
-    expect(mocks.checkWeeklyRuntimeLimit).not.toHaveBeenCalled();
-  });
-
-  it('returns 402 when weekly runtime is exceeded', async () => {
-    mocks.checkWeeklyRuntimeLimit.mockResolvedValueOnce({
+    assertEquals(response.status, 201);
+    assertSpyCalls(mocks.checkWeeklyRuntimeLimit, 0);
+})
+  Deno.test('requireWeeklyRuntimeLimitForAgent - returns 402 when weekly runtime is exceeded', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+    mocks.checkWeeklyRuntimeLimit = (async () => ({
+      allowed: true,
+      usedSeconds: 10,
+      limitSeconds: 18_000,
+      remainingSeconds: 17_990,
+      windowDays: 7,
+      windowStart: '2026-02-20T00:00:00.000Z',
+      retryAfterSeconds: 0,
+    })) as any;
+  mocks.checkWeeklyRuntimeLimit = (async () => ({
       allowed: false,
       usedSeconds: 18_120,
       limitSeconds: 18_000,
@@ -92,7 +102,7 @@ describe('requireWeeklyRuntimeLimitForAgent', () => {
       windowDays: 7,
       windowStart: '2026-02-20T00:00:00.000Z',
       retryAfterSeconds: 1800,
-    });
+    })) as any;
     const app = createApp();
     const response = await app.fetch(
       new Request('https://takos.jp/api/runs', { method: 'POST' }),
@@ -100,9 +110,9 @@ describe('requireWeeklyRuntimeLimitForAgent', () => {
       {} as ExecutionContext,
     );
 
-    expect(response.status).toBe(402);
-    expect(response.headers.get('Retry-After')).toBe('1800');
-    await expect(response.json()).resolves.toMatchObject({
+    assertEquals(response.status, 402);
+    assertEquals(response.headers.get('Retry-After'), '1800');
+    await assertObjectMatch(await response.json(), {
       error: 'Weekly runtime limit exceeded',
       code: 'PAYMENT_REQUIRED',
       details: {
@@ -112,5 +122,4 @@ describe('requireWeeklyRuntimeLimitForAgent', () => {
         retry_after_seconds: 1800,
       },
     });
-  });
-});
+})

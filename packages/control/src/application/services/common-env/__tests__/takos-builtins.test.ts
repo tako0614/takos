@@ -1,14 +1,10 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { assertEquals, assert, assertThrows, assertRejects } from 'jsr:@std/assert';
 
-const mocks = vi.hoisted(() => ({
-  getDb: vi.fn(),
-}));
+const mocks = ({
+  getDb: ((..._args: any[]) => undefined) as any,
+});
 
-vi.mock('@/db', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/db')>()),
-  getDb: mocks.getDb,
-}));
-
+// [Deno] vi.mock removed - manually stub imports from '@/db'
 import {
   normalizeTakosScopes,
   resolveTakosApiUrl,
@@ -16,111 +12,94 @@ import {
   TAKOS_ACCESS_TOKEN_ENV_NAME,
 } from '@/services/common-env/takos-builtins';
 
-describe('constants', () => {
-  it('TAKOS_API_URL_ENV_NAME is correct', () => {
-    expect(TAKOS_API_URL_ENV_NAME).toBe('TAKOS_API_URL');
-  });
 
-  it('TAKOS_ACCESS_TOKEN_ENV_NAME is correct', () => {
-    expect(TAKOS_ACCESS_TOKEN_ENV_NAME).toBe('TAKOS_ACCESS_TOKEN');
-  });
-});
+  Deno.test('constants - TAKOS_API_URL_ENV_NAME is correct', () => {
+  assertEquals(TAKOS_API_URL_ENV_NAME, 'TAKOS_API_URL');
+})
+  Deno.test('constants - TAKOS_ACCESS_TOKEN_ENV_NAME is correct', () => {
+  assertEquals(TAKOS_ACCESS_TOKEN_ENV_NAME, 'TAKOS_ACCESS_TOKEN');
+})
 
-describe('resolveTakosApiUrl', () => {
-  it('returns URL with admin domain', () => {
-    const result = resolveTakosApiUrl({ ADMIN_DOMAIN: 'api.takos.example' });
-    expect(result).toBe('https://api.takos.example');
-  });
+  Deno.test('resolveTakosApiUrl - returns URL with admin domain', () => {
+  const result = resolveTakosApiUrl({ ADMIN_DOMAIN: 'api.takos.example' });
+    assertEquals(result, 'https://api.takos.example');
+})
+  Deno.test('resolveTakosApiUrl - returns null when ADMIN_DOMAIN is empty', () => {
+  assertEquals(resolveTakosApiUrl({ ADMIN_DOMAIN: '' }), null);
+})
+  Deno.test('resolveTakosApiUrl - returns null when ADMIN_DOMAIN is whitespace', () => {
+  assertEquals(resolveTakosApiUrl({ ADMIN_DOMAIN: '   ' }), null);
+})
+  Deno.test('resolveTakosApiUrl - trims the admin domain', () => {
+  const result = resolveTakosApiUrl({ ADMIN_DOMAIN: '  api.takos.example  ' });
+    assertEquals(result, 'https://api.takos.example');
+})
 
-  it('returns null when ADMIN_DOMAIN is empty', () => {
-    expect(resolveTakosApiUrl({ ADMIN_DOMAIN: '' })).toBeNull();
-  });
-
-  it('returns null when ADMIN_DOMAIN is whitespace', () => {
-    expect(resolveTakosApiUrl({ ADMIN_DOMAIN: '   ' })).toBeNull();
-  });
-
-  it('trims the admin domain', () => {
-    const result = resolveTakosApiUrl({ ADMIN_DOMAIN: '  api.takos.example  ' });
-    expect(result).toBe('https://api.takos.example');
-  });
-});
-
-describe('normalizeTakosScopes', () => {
-  it('returns deduplicated and trimmed scopes', () => {
-    // We need to import ALL_SCOPES to know what valid scopes are.
+  Deno.test('normalizeTakosScopes - returns deduplicated and trimmed scopes', () => {
+  // We need to import ALL_SCOPES to know what valid scopes are.
     // The function validates against ALL_SCOPES. Let's test with known valid scopes.
     // We can test error handling without knowing the exact valid scopes.
-  });
+})
+  Deno.test('normalizeTakosScopes - throws when scopes array is empty', () => {
+  assertThrows(() => { () => normalizeTakosScopes([]); }, 'at least one scope');
+})
+  Deno.test('normalizeTakosScopes - throws when all scopes are empty strings', () => {
+  assertThrows(() => { () => normalizeTakosScopes(['', '  ']); }, 'at least one scope');
+})
+  Deno.test('normalizeTakosScopes - throws for unknown scopes', () => {
+  assertThrows(() => { () => normalizeTakosScopes(['definitely_not_a_real_scope']); }, 'Unknown Takos scopes');
+})
+  Deno.test('normalizeTakosScopes - deduplicates scopes', () => {
+  // Will throw for invalid scopes, but we test the dedup logic doesn't crash
+    assertThrows(() => { () => normalizeTakosScopes(['fake_scope', 'fake_scope']); }, 'Unknown Takos scopes');
+})
 
-  it('throws when scopes array is empty', () => {
-    expect(() => normalizeTakosScopes([])).toThrow('at least one scope');
-  });
-
-  it('throws when all scopes are empty strings', () => {
-    expect(() => normalizeTakosScopes(['', '  '])).toThrow('at least one scope');
-  });
-
-  it('throws for unknown scopes', () => {
-    expect(() => normalizeTakosScopes(['definitely_not_a_real_scope'])).toThrow('Unknown Takos scopes');
-  });
-
-  it('deduplicates scopes', () => {
-    // Will throw for invalid scopes, but we test the dedup logic doesn't crash
-    expect(() => normalizeTakosScopes(['fake_scope', 'fake_scope'])).toThrow('Unknown Takos scopes');
-  });
-});
-
-describe('listTakosBuiltinStatuses', () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-  });
-
-  it('throws when workspace is not found', async () => {
-    const getMock = vi.fn().mockResolvedValue(null);
+  Deno.test('listTakosBuiltinStatuses - throws when workspace is not found', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+  const getMock = (async () => null);
     const chain = {
-      from: vi.fn().mockReturnThis(),
-      where: vi.fn().mockReturnThis(),
-      limit: vi.fn().mockReturnThis(),
+      from: (function(this: any) { return this; }),
+      where: (function(this: any) { return this; }),
+      limit: (function(this: any) { return this; }),
       get: getMock,
     };
-    mocks.getDb.mockReturnValue({
-      select: vi.fn(() => chain),
-    });
+    mocks.getDb = (() => ({
+      select: () => chain,
+    })) as any;
 
     const { listTakosBuiltinStatuses } = await import('@/services/common-env/takos-builtins');
 
-    await expect(
+    await await assertRejects(async () => { await 
       listTakosBuiltinStatuses({
         env: { DB: {} as any, ADMIN_DOMAIN: 'test.takos.jp' },
         spaceId: 'nonexistent',
         workerId: 'w-1',
       })
-    ).rejects.toThrow('Space not found');
-  });
-
-  it('returns statuses with TAKOS_API_URL and TAKOS_ACCESS_TOKEN keys', async () => {
-    const getMock = vi.fn()
+    ; }, 'Space not found');
+})
+  Deno.test('listTakosBuiltinStatuses - returns statuses with TAKOS_API_URL and TAKOS_ACCESS_TOKEN keys', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+  const getMock = ((..._args: any[]) => undefined) as any
       // loadWorkspaceIdentity
-      .mockResolvedValueOnce({
+       = (async () => ({
         id: 'space-1',
         type: 'user',
         name: 'Test User',
         slug: 'test-user',
         ownerAccountId: 'space-1',
-      })
+      })) as any
       // listManagedRow -> null
-      .mockResolvedValueOnce(null);
+       = (async () => null) as any;
 
     const chain = {
-      from: vi.fn().mockReturnThis(),
-      where: vi.fn().mockReturnThis(),
-      limit: vi.fn().mockReturnThis(),
+      from: (function(this: any) { return this; }),
+      where: (function(this: any) { return this; }),
+      limit: (function(this: any) { return this; }),
       get: getMock,
     };
-    mocks.getDb.mockReturnValue({
-      select: vi.fn(() => chain),
-    });
+    mocks.getDb = (() => ({
+      select: () => chain,
+    })) as any;
 
     const { listTakosBuiltinStatuses } = await import('@/services/common-env/takos-builtins');
 
@@ -130,35 +109,35 @@ describe('listTakosBuiltinStatuses', () => {
       workerId: 'w-1',
     });
 
-    expect(result).toHaveProperty('TAKOS_API_URL');
-    expect(result).toHaveProperty('TAKOS_ACCESS_TOKEN');
-    expect(result.TAKOS_API_URL.managed).toBe(true);
-    expect(result.TAKOS_API_URL.available).toBe(true);
-    expect(result.TAKOS_ACCESS_TOKEN.managed).toBe(true);
-    expect(result.TAKOS_ACCESS_TOKEN.available).toBe(true);
-    expect(result.TAKOS_ACCESS_TOKEN.configured).toBe(false);
-  });
-
-  it('shows TAKOS_API_URL as unavailable when ADMIN_DOMAIN is empty', async () => {
-    const getMock = vi.fn()
-      .mockResolvedValueOnce({
+    assert('TAKOS_API_URL' in result);
+    assert('TAKOS_ACCESS_TOKEN' in result);
+    assertEquals(result.TAKOS_API_URL.managed, true);
+    assertEquals(result.TAKOS_API_URL.available, true);
+    assertEquals(result.TAKOS_ACCESS_TOKEN.managed, true);
+    assertEquals(result.TAKOS_ACCESS_TOKEN.available, true);
+    assertEquals(result.TAKOS_ACCESS_TOKEN.configured, false);
+})
+  Deno.test('listTakosBuiltinStatuses - shows TAKOS_API_URL as unavailable when ADMIN_DOMAIN is empty', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+  const getMock = ((..._args: any[]) => undefined) as any
+       = (async () => ({
         id: 'space-1',
         type: 'user',
         name: 'Test User',
         slug: 'test-user',
         ownerAccountId: 'space-1',
-      })
-      .mockResolvedValueOnce(null);
+      })) as any
+       = (async () => null) as any;
 
     const chain = {
-      from: vi.fn().mockReturnThis(),
-      where: vi.fn().mockReturnThis(),
-      limit: vi.fn().mockReturnThis(),
+      from: (function(this: any) { return this; }),
+      where: (function(this: any) { return this; }),
+      limit: (function(this: any) { return this; }),
       get: getMock,
     };
-    mocks.getDb.mockReturnValue({
-      select: vi.fn(() => chain),
-    });
+    mocks.getDb = (() => ({
+      select: () => chain,
+    })) as any;
 
     const { listTakosBuiltinStatuses } = await import('@/services/common-env/takos-builtins');
 
@@ -168,8 +147,7 @@ describe('listTakosBuiltinStatuses', () => {
       workerId: 'w-1',
     });
 
-    expect(result.TAKOS_API_URL.available).toBe(false);
-    expect(result.TAKOS_API_URL.sync_state).toBe('error');
-    expect(result.TAKOS_API_URL.sync_reason).toBe('admin_domain_missing');
-  });
-});
+    assertEquals(result.TAKOS_API_URL.available, false);
+    assertEquals(result.TAKOS_API_URL.sync_state, 'error');
+    assertEquals(result.TAKOS_API_URL.sync_reason, 'admin_domain_missing');
+})

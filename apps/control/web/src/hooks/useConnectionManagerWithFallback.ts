@@ -1,9 +1,10 @@
-import { useCallback, useRef } from 'react';
 import type { Run } from '../types';
 import { parseEventData, EVENT_DISPATCH } from './useWsMessageProcessor';
 import type { UseWsConnectionManagerOptions, UseWsConnectionManagerResult } from './useWsConnectionManager';
 import { useWsConnectionManager } from './useWsConnectionManager';
 import { useSseConnectionManager } from './useSseConnectionManager';
+
+type MutableRefObject<T> = { current: T };
 
 /**
  * WS connection timeout before falling back to SSE (ms).
@@ -34,10 +35,10 @@ type Transport = 'ws' | 'sse';
 export function useConnectionManagerWithFallback(
   options: UseWsConnectionManagerOptions,
 ): UseWsConnectionManagerResult {
-  const activeTransportRef = useRef<Transport>('ws');
-  const fallbackAttemptedRef = useRef(false);
+  let activeTransportRef: MutableRefObject<Transport> = { current: 'ws' };
+  let fallbackAttemptedRef: MutableRefObject<boolean> = { current: false };
 
-  // Both hooks are always instantiated (Rules of Hooks), but only
+  // Both hooks are always instantiated, but only
   // the active one receives startWebSocket calls.
   const wsConnection = useWsConnectionManager(options);
   const sseConnection = useSseConnectionManager(options);
@@ -47,14 +48,14 @@ export function useConnectionManagerWithFallback(
   const wsStartRef = wsConnection.startWebSocketRef;
   const sseStartRef = sseConnection.startWebSocketRef;
 
-  const rootRunIdRef = useRef<string | null>(null);
-  const startWebSocketRef = useRef<(runId: string) => void>(() => {});
+  let rootRunIdRef: MutableRefObject<string | null> = { current: null };
+  let startWebSocketRef: MutableRefObject<(runId: string) => void> = { current: () => {} };
 
-  const closeWebSocket = useCallback((): void => {
+  const closeWebSocket = (): void => {
     // Close whichever transport is active (closing both is safe).
     wsConnection.closeWebSocket();
     sseConnection.closeWebSocket();
-  }, [wsConnection.closeWebSocket, sseConnection.closeWebSocket]);
+  };
 
   // Re-assign handleWebSocketEventRef AFTER both sub-hooks have written to it.
   // This ensures the event handler uses the wrapper's closeWebSocket (which
@@ -115,12 +116,12 @@ export function useConnectionManagerWithFallback(
     }
   };
 
-  const switchToSse = useCallback((runId: string): void => {
+  const switchToSse = (runId: string): void => {
     activeTransportRef.current = 'sse';
     console.info('[Fallback] WebSocket unavailable, switching to SSE for run', runId);
     wsConnection.closeWebSocket();
     sseStartRef.current(runId);
-  }, [wsConnection.closeWebSocket, sseStartRef]);
+  };
 
   startWebSocketRef.current = (runId: string) => {
     rootRunIdRef.current = runId;
@@ -195,9 +196,9 @@ export function useConnectionManagerWithFallback(
     };
   };
 
-  const startWebSocket = useCallback((runId: string): void => {
+  const startWebSocket = (runId: string): void => {
     startWebSocketRef.current(runId);
-  }, []);
+  };
 
   return {
     // Return the wsRef from the active transport (WS manager's ref if WS,

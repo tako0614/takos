@@ -1,20 +1,15 @@
-import { describe, expect, it, vi, beforeEach } from 'vitest';
 import type { D1Database, R2Bucket } from '@cloudflare/workers-types';
 
-const mocks = vi.hoisted(() => ({
-  getDb: vi.fn(),
-  validatePathSegment: vi.fn().mockReturnValue(true),
-}));
+import { assertEquals, assertNotEquals, assertRejects } from 'jsr:@std/assert';
+import { assertSpyCalls, assertSpyCallArgs } from 'jsr:@std/testing/mock';
 
-vi.mock('@/db', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/db')>()),
-  getDb: mocks.getDb,
-}));
+const mocks = ({
+  getDb: ((..._args: any[]) => undefined) as any,
+  validatePathSegment: (() => true),
+});
 
-vi.mock('@/shared/utils/path-validation', () => ({
-  validatePathSegment: mocks.validatePathSegment,
-}));
-
+// [Deno] vi.mock removed - manually stub imports from '@/db'
+// [Deno] vi.mock removed - manually stub imports from '@/shared/utils/path-validation'
 import {
   escapeSqlLike,
   detectTextFromContent,
@@ -32,92 +27,78 @@ import {
 } from '@/services/source/space-storage';
 
 function createDrizzleMock() {
-  const getMock = vi.fn();
-  const allMock = vi.fn();
-  const runMock = vi.fn();
+  const getMock = ((..._args: any[]) => undefined) as any;
+  const allMock = ((..._args: any[]) => undefined) as any;
+  const runMock = ((..._args: any[]) => undefined) as any;
   const chain = {
-    from: vi.fn().mockReturnThis(),
-    where: vi.fn().mockReturnThis(),
-    set: vi.fn().mockReturnThis(),
-    values: vi.fn().mockReturnThis(),
-    orderBy: vi.fn().mockReturnThis(),
-    limit: vi.fn().mockReturnThis(),
+    from: (function(this: any) { return this; }),
+    where: (function(this: any) { return this; }),
+    set: (function(this: any) { return this; }),
+    values: (function(this: any) { return this; }),
+    orderBy: (function(this: any) { return this; }),
+    limit: (function(this: any) { return this; }),
     get: getMock,
     all: allMock,
     run: runMock,
   };
   return {
-    select: vi.fn(() => chain),
-    insert: vi.fn(() => chain),
-    update: vi.fn(() => chain),
-    delete: vi.fn(() => chain),
+    select: () => chain,
+    insert: () => chain,
+    update: () => chain,
+    delete: () => chain,
     _: { get: getMock, all: allMock, run: runMock },
   };
 }
 
-describe('escapeSqlLike', () => {
-  it('escapes percent sign', () => {
-    expect(escapeSqlLike('100%')).toBe('100\\%');
-  });
 
-  it('escapes underscore', () => {
-    expect(escapeSqlLike('my_file')).toBe('my\\_file');
-  });
+  Deno.test('escapeSqlLike - escapes percent sign', () => {
+  assertEquals(escapeSqlLike('100%'), '100\\%');
+})
+  Deno.test('escapeSqlLike - escapes underscore', () => {
+  assertEquals(escapeSqlLike('my_file'), 'my\\_file');
+})
+  Deno.test('escapeSqlLike - escapes backslash', () => {
+  assertEquals(escapeSqlLike('path\\to'), 'path\\\\to');
+})
+  Deno.test('escapeSqlLike - handles string with no special chars', () => {
+  assertEquals(escapeSqlLike('hello'), 'hello');
+})
 
-  it('escapes backslash', () => {
-    expect(escapeSqlLike('path\\to')).toBe('path\\\\to');
-  });
-
-  it('handles string with no special chars', () => {
-    expect(escapeSqlLike('hello')).toBe('hello');
-  });
-});
-
-describe('detectTextFromContent', () => {
-  it('returns true for text content', () => {
-    const encoder = new TextEncoder();
+  Deno.test('detectTextFromContent - returns true for text content', () => {
+  const encoder = new TextEncoder();
     const buf = encoder.encode('Hello, world!').buffer as ArrayBuffer;
-    expect(detectTextFromContent(buf)).toBe(true);
-  });
+    assertEquals(detectTextFromContent(buf), true);
+})
+  Deno.test('detectTextFromContent - returns false when null bytes present', () => {
+  const buf = new Uint8Array([72, 101, 0, 108, 111]).buffer as ArrayBuffer;
+    assertEquals(detectTextFromContent(buf), false);
+})
+  Deno.test('detectTextFromContent - returns true for empty buffer', () => {
+  const buf = new ArrayBuffer(0);
+    assertEquals(detectTextFromContent(buf), true);
+})
 
-  it('returns false when null bytes present', () => {
-    const buf = new Uint8Array([72, 101, 0, 108, 111]).buffer as ArrayBuffer;
-    expect(detectTextFromContent(buf)).toBe(false);
-  });
+  Deno.test('StorageError - has correct properties', () => {
+  const err = new StorageError('Not found', 'NOT_FOUND');
+    assertEquals(err.message, 'Not found');
+    assertEquals(err.code, 'NOT_FOUND');
+    assertEquals(err.name, 'StorageError');
+})
 
-  it('returns true for empty buffer', () => {
-    const buf = new ArrayBuffer(0);
-    expect(detectTextFromContent(buf)).toBe(true);
-  });
-});
-
-describe('StorageError', () => {
-  it('has correct properties', () => {
-    const err = new StorageError('Not found', 'NOT_FOUND');
-    expect(err.message).toBe('Not found');
-    expect(err.code).toBe('NOT_FOUND');
-    expect(err.name).toBe('StorageError');
-  });
-});
-
-describe('listStorageFiles', () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-  });
-
-  it('returns empty when parent folder not found', async () => {
-    const drizzle = createDrizzleMock();
-    drizzle._.get.mockResolvedValueOnce(undefined); // parent lookup
-    mocks.getDb.mockReturnValue(drizzle);
+  Deno.test('listStorageFiles - returns empty when parent folder not found', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+  const drizzle = createDrizzleMock();
+    drizzle._.get = (async () => undefined) as any; // parent lookup
+    mocks.getDb = (() => drizzle) as any;
 
     const result = await listStorageFiles({} as D1Database, 'ws-1', '/nonexistent');
-    expect(result.files).toEqual([]);
-    expect(result.truncated).toBe(false);
-  });
-
-  it('lists root level files', async () => {
-    const drizzle = createDrizzleMock();
-    drizzle._.all.mockResolvedValueOnce([
+    assertEquals(result.files, []);
+    assertEquals(result.truncated, false);
+})
+  Deno.test('listStorageFiles - lists root level files', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+  const drizzle = createDrizzleMock();
+    drizzle._.all = (async () => [
       {
         id: 'f1',
         accountId: 'ws-1',
@@ -133,32 +114,27 @@ describe('listStorageFiles', () => {
         createdAt: '2026-01-01T00:00:00.000Z',
         updatedAt: '2026-01-01T00:00:00.000Z',
       },
-    ]);
-    mocks.getDb.mockReturnValue(drizzle);
+    ]) as any;
+    mocks.getDb = (() => drizzle) as any;
 
     const result = await listStorageFiles({} as D1Database, 'ws-1', '/');
-    expect(result.files).toHaveLength(1);
-    expect(result.files[0].name).toBe('readme.txt');
-  });
-});
+    assertEquals(result.files.length, 1);
+    assertEquals(result.files[0].name, 'readme.txt');
+})
 
-describe('getStorageItem', () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-  });
-
-  it('returns null when not found', async () => {
-    const drizzle = createDrizzleMock();
-    drizzle._.get.mockResolvedValueOnce(undefined);
-    mocks.getDb.mockReturnValue(drizzle);
+  Deno.test('getStorageItem - returns null when not found', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+  const drizzle = createDrizzleMock();
+    drizzle._.get = (async () => undefined) as any;
+    mocks.getDb = (() => drizzle) as any;
 
     const result = await getStorageItem({} as D1Database, 'ws-1', 'f1');
-    expect(result).toBeNull();
-  });
-
-  it('returns mapped file when found', async () => {
-    const drizzle = createDrizzleMock();
-    drizzle._.get.mockResolvedValueOnce({
+    assertEquals(result, null);
+})
+  Deno.test('getStorageItem - returns mapped file when found', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+  const drizzle = createDrizzleMock();
+    drizzle._.get = (async () => ({
       id: 'f1',
       accountId: 'ws-1',
       parentId: null,
@@ -172,56 +148,44 @@ describe('getStorageItem', () => {
       uploadedByAccountId: 'user-1',
       createdAt: '2026-01-01T00:00:00.000Z',
       updatedAt: '2026-01-01T00:00:00.000Z',
-    });
-    mocks.getDb.mockReturnValue(drizzle);
+    })) as any;
+    mocks.getDb = (() => drizzle) as any;
 
     const result = await getStorageItem({} as D1Database, 'ws-1', 'f1');
-    expect(result).not.toBeNull();
-    expect(result!.id).toBe('f1');
-    expect(result!.type).toBe('file');
-    expect(result!.uploaded_by).toBe('user-1');
-  });
-});
+    assertNotEquals(result, null);
+    assertEquals(result!.id, 'f1');
+    assertEquals(result!.type, 'file');
+    assertEquals(result!.uploaded_by, 'user-1');
+})
 
-describe('createFolder', () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-  });
-
-  it('throws StorageError for invalid folder name', async () => {
-    mocks.validatePathSegment.mockReturnValueOnce(false);
+  Deno.test('createFolder - throws StorageError for invalid folder name', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+  mocks.validatePathSegment = (() => false) as any;
     const drizzle = createDrizzleMock();
-    mocks.getDb.mockReturnValue(drizzle);
+    mocks.getDb = (() => drizzle) as any;
 
-    await expect(
+    await await assertRejects(async () => { await 
       createFolder({} as D1Database, 'ws-1', 'user-1', { name: '../bad' }),
-    ).rejects.toThrow(StorageError);
-  });
-});
+    ; }, StorageError);
+})
 
-describe('deleteR2Objects', () => {
-  it('deletes objects in batches', async () => {
-    const deleteFn = vi.fn().mockResolvedValue(undefined);
+  Deno.test('deleteR2Objects - deletes objects in batches', async () => {
+  const deleteFn = (async () => undefined);
     const bucket = { delete: deleteFn } as unknown as R2Bucket;
 
     const keys = Array.from({ length: 5 }, (_, i) => `key-${i}`);
     await deleteR2Objects(bucket, keys);
 
-    expect(deleteFn).toHaveBeenCalledTimes(1);
-    expect(deleteFn).toHaveBeenCalledWith(keys);
-  });
-});
+    assertSpyCalls(deleteFn, 1);
+    assertSpyCallArgs(deleteFn, 0, [keys]);
+})
 
-describe('bulkDeleteStorageItems', () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-  });
-
-  it('returns count and failed ids', async () => {
-    const drizzle = createDrizzleMock();
+  Deno.test('bulkDeleteStorageItems - returns count and failed ids', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+  const drizzle = createDrizzleMock();
     // First item found and deleted
     drizzle._.get
-      .mockResolvedValueOnce({
+       = (async () => ({
         id: 'f1',
         accountId: 'ws-1',
         parentId: null,
@@ -235,13 +199,12 @@ describe('bulkDeleteStorageItems', () => {
         uploadedByAccountId: null,
         createdAt: '2026-01-01',
         updatedAt: '2026-01-01',
-      })
-      .mockResolvedValueOnce({ r2Key: 'key1' });
-    mocks.getDb.mockReturnValue(drizzle);
+      })) as any
+       = (async () => ({ r2Key: 'key1' })) as any;
+    mocks.getDb = (() => drizzle) as any;
 
     // Only test with one item since the mock state is complex
     const result = await bulkDeleteStorageItems({} as D1Database, 'ws-1', ['f1']);
-    expect(result.deletedCount).toBe(1);
-    expect(result.failedIds).toEqual([]);
-  });
-});
+    assertEquals(result.deletedCount, 1);
+    assertEquals(result.failedIds, []);
+})

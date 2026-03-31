@@ -1,9 +1,10 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { Hono } from 'hono';
 import type { Env } from '@/types';
 import { createMockEnv } from '../../../test/integration/setup';
 
 import { bodyLimit, generalApiBodyLimit, oauthBodyLimit, searchBodyLimit } from '@/middleware/body-size';
+
+import { assertEquals } from 'jsr:@std/assert';
 
 function createApp(middleware: ReturnType<typeof bodyLimit>) {
   const app = new Hono<{ Bindings: Env }>();
@@ -15,23 +16,20 @@ function createApp(middleware: ReturnType<typeof bodyLimit>) {
   return app;
 }
 
-describe('bodyLimit middleware', () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-  });
 
-  it('allows GET requests regardless of body size', async () => {
-    const app = createApp(bodyLimit({ maxSize: 10 }));
+  Deno.test('bodyLimit middleware - allows GET requests regardless of body size', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+  const app = createApp(bodyLimit({ maxSize: 10 }));
     const res = await app.fetch(
       new Request('http://localhost/api/data', { method: 'GET' }),
       createMockEnv() as unknown as Env,
       {} as ExecutionContext,
     );
-    expect(res.status).toBe(200);
-  });
-
-  it('allows POST requests under the limit', async () => {
-    const app = createApp(bodyLimit({ maxSize: 1024 }));
+    assertEquals(res.status, 200);
+})
+  Deno.test('bodyLimit middleware - allows POST requests under the limit', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+  const app = createApp(bodyLimit({ maxSize: 1024 }));
     const res = await app.fetch(
       new Request('http://localhost/api/data', {
         method: 'POST',
@@ -41,11 +39,11 @@ describe('bodyLimit middleware', () => {
       createMockEnv() as unknown as Env,
       {} as ExecutionContext,
     );
-    expect(res.status).toBe(200);
-  });
-
-  it('rejects POST requests over the limit with 413', async () => {
-    const app = createApp(bodyLimit({ maxSize: 10, message: 'Too big' }));
+    assertEquals(res.status, 200);
+})
+  Deno.test('bodyLimit middleware - rejects POST requests over the limit with 413', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+  const app = createApp(bodyLimit({ maxSize: 10, message: 'Too big' }));
     const largeBody = 'x'.repeat(100);
     const res = await app.fetch(
       new Request('http://localhost/api/data', {
@@ -56,15 +54,15 @@ describe('bodyLimit middleware', () => {
       createMockEnv() as unknown as Env,
       {} as ExecutionContext,
     );
-    expect(res.status).toBe(413);
+    assertEquals(res.status, 413);
     const json = await res.json() as Record<string, unknown>;
-    expect(json.error).toBe('Too big');
-    expect(json.code).toBe('PAYLOAD_TOO_LARGE');
-    expect(json.max_size).toBe(10);
-  });
-
-  it('rejects PUT requests over the limit', async () => {
-    const app = createApp(bodyLimit({ maxSize: 10 }));
+    assertEquals(json.error, 'Too big');
+    assertEquals(json.code, 'PAYLOAD_TOO_LARGE');
+    assertEquals(json.max_size, 10);
+})
+  Deno.test('bodyLimit middleware - rejects PUT requests over the limit', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+  const app = createApp(bodyLimit({ maxSize: 10 }));
     const res = await app.fetch(
       new Request('http://localhost/api/data', {
         method: 'PUT',
@@ -74,11 +72,11 @@ describe('bodyLimit middleware', () => {
       createMockEnv() as unknown as Env,
       {} as ExecutionContext,
     );
-    expect(res.status).toBe(413);
-  });
-
-  it('rejects PATCH requests over the limit', async () => {
-    const app = createApp(bodyLimit({ maxSize: 10 }));
+    assertEquals(res.status, 413);
+})
+  Deno.test('bodyLimit middleware - rejects PATCH requests over the limit', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+  const app = createApp(bodyLimit({ maxSize: 10 }));
     const res = await app.fetch(
       new Request('http://localhost/api/data', {
         method: 'PATCH',
@@ -88,11 +86,11 @@ describe('bodyLimit middleware', () => {
       createMockEnv() as unknown as Env,
       {} as ExecutionContext,
     );
-    expect(res.status).toBe(413);
-  });
-
-  it('uses default error message when none is provided', async () => {
-    const app = createApp(bodyLimit({ maxSize: 10 }));
+    assertEquals(res.status, 413);
+})
+  Deno.test('bodyLimit middleware - uses default error message when none is provided', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+  const app = createApp(bodyLimit({ maxSize: 10 }));
     const res = await app.fetch(
       new Request('http://localhost/api/data', {
         method: 'POST',
@@ -102,13 +100,13 @@ describe('bodyLimit middleware', () => {
       createMockEnv() as unknown as Env,
       {} as ExecutionContext,
     );
-    expect(res.status).toBe(413);
+    assertEquals(res.status, 413);
     const json = await res.json() as Record<string, unknown>;
-    expect(json.error).toBe('Request body too large');
-  });
-
-  it('skips enforcement when path matches skipPaths pattern', async () => {
-    const app = new Hono<{ Bindings: Env }>();
+    assertEquals(json.error, 'Request body too large');
+})
+  Deno.test('bodyLimit middleware - skips enforcement when path matches skipPaths pattern', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+  const app = new Hono<{ Bindings: Env }>();
     app.use('*', bodyLimit({
       maxSize: 10,
       skipPaths: [/\/api\/upload/],
@@ -127,13 +125,11 @@ describe('bodyLimit middleware', () => {
       createMockEnv() as unknown as Env,
       {} as ExecutionContext,
     );
-    expect(res.status).toBe(200);
-  });
-});
+    assertEquals(res.status, 200);
+})
 
-describe('pre-configured body limits', () => {
-  it('generalApiBodyLimit skips app-deployment paths', async () => {
-    const app = new Hono<{ Bindings: Env }>();
+  Deno.test('pre-configured body limits - generalApiBodyLimit skips app-deployment paths', async () => {
+  const app = new Hono<{ Bindings: Env }>();
     app.use('*', generalApiBodyLimit);
     app.post('/api/spaces/sp-1/app-deployments', async (c) => c.json({ ok: true }));
 
@@ -151,11 +147,10 @@ describe('pre-configured body limits', () => {
       {} as ExecutionContext,
     );
     // Should not be 413 because app-deployments is skipped
-    expect(res.status).toBe(200);
-  });
-
-  it('oauthBodyLimit rejects bodies over 64KB', async () => {
-    const app = new Hono<{ Bindings: Env }>();
+    assertEquals(res.status, 200);
+})
+  Deno.test('pre-configured body limits - oauthBodyLimit rejects bodies over 64KB', async () => {
+  const app = new Hono<{ Bindings: Env }>();
     app.use('*', oauthBodyLimit);
     app.post('/oauth/token', async (c) => { await c.req.text(); return c.json({ ok: true }); });
 
@@ -169,11 +164,10 @@ describe('pre-configured body limits', () => {
       createMockEnv() as unknown as Env,
       {} as ExecutionContext,
     );
-    expect(res.status).toBe(413);
-  });
-
-  it('searchBodyLimit rejects bodies over 256KB', async () => {
-    const app = new Hono<{ Bindings: Env }>();
+    assertEquals(res.status, 413);
+})
+  Deno.test('pre-configured body limits - searchBodyLimit rejects bodies over 256KB', async () => {
+  const app = new Hono<{ Bindings: Env }>();
     app.use('*', searchBodyLimit);
     app.post('/api/search', async (c) => { await c.req.text(); return c.json({ ok: true }); });
 
@@ -187,6 +181,5 @@ describe('pre-configured body limits', () => {
       createMockEnv() as unknown as Env,
       {} as ExecutionContext,
     );
-    expect(res.status).toBe(413);
-  });
-});
+    assertEquals(res.status, 413);
+})

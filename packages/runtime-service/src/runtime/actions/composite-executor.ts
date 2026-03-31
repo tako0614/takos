@@ -1,9 +1,9 @@
 import * as fs from 'fs/promises';
 import * as path from 'path';
-import { isPathWithinBase } from '../paths.js';
-import { successResult } from './process-spawner.js';
-import type { ExecutorStepResult, ActionContext } from './executor.js';
-import { appendOutput, buildCombinedResult } from './action-result-converter.js';
+import { isPathWithinBase } from '../paths.ts';
+import { successResult } from './process-spawner.ts';
+import type { ExecutorStepResult, ActionContext } from './executor.ts';
+import { appendOutput, buildCombinedResult } from './action-result-converter.ts';
 import {
   type InterpolationContext,
   type ActionOutputDefinition,
@@ -12,7 +12,7 @@ import {
   resolveEnv,
   resolveWith,
   resolveCompositeOutputs,
-} from './composite-expression.js';
+} from './composite-expression.ts';
 
 // Re-export expression utilities so existing consumers continue to work.
 export {
@@ -24,7 +24,7 @@ export {
   normalizeInputValue,
   resolveEnv,
   resolveWith,
-} from './composite-expression.js';
+} from './composite-expression.ts';
 
 // ---------------------------------------------------------------------------
 // Types

@@ -5,8 +5,8 @@
  * default category priority for unrelated nodes.
  */
 
-import type { DiffEntry } from '../state/diff.js';
-import type { AppManifest } from '../app-manifest.js';
+import type { DiffEntry } from '../state/diff.ts';
+import type { AppManifest } from '../app-manifest.ts';
 
 // ---------------------------------------------------------------------------
 // Constants

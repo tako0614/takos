@@ -1,4 +1,3 @@
-import { describe, expect, it, vi, beforeEach } from 'vitest';
 import type { D1Database } from '@cloudflare/workers-types';
 
 import { normalizeUserCode } from '@/services/oauth/device';
@@ -7,73 +6,64 @@ import { normalizeUserCode } from '@/services/oauth/device';
 // Pure function tests
 // ---------------------------------------------------------------------------
 
-describe('normalizeUserCode', () => {
-  it('uppercases and strips non-alphanumeric characters', () => {
-    expect(normalizeUserCode('abcd-efgh')).toBe('ABCDEFGH');
-    expect(normalizeUserCode('ABCD-EFGH')).toBe('ABCDEFGH');
-  });
 
-  it('handles lowercase input', () => {
-    expect(normalizeUserCode('abcdefgh')).toBe('ABCDEFGH');
-  });
+import { assertEquals, assertNotEquals, assert } from 'jsr:@std/assert';
 
-  it('strips spaces and dashes', () => {
-    expect(normalizeUserCode('AB CD EF GH')).toBe('ABCDEFGH');
-    expect(normalizeUserCode('AB-CD-EF-GH')).toBe('ABCDEFGH');
-  });
-
-  it('returns empty string for empty input', () => {
-    expect(normalizeUserCode('')).toBe('');
-  });
-
-  it('handles null-ish values gracefully', () => {
-    expect(normalizeUserCode(null as unknown as string)).toBe('');
-    expect(normalizeUserCode(undefined as unknown as string)).toBe('');
-  });
-
-  it('strips special characters', () => {
-    expect(normalizeUserCode('AB!@#$%^&*()CD')).toBe('ABCD');
-  });
-});
-
+  Deno.test('normalizeUserCode - uppercases and strips non-alphanumeric characters', () => {
+  assertEquals(normalizeUserCode('abcd-efgh'), 'ABCDEFGH');
+    assertEquals(normalizeUserCode('ABCD-EFGH'), 'ABCDEFGH');
+})
+  Deno.test('normalizeUserCode - handles lowercase input', () => {
+  assertEquals(normalizeUserCode('abcdefgh'), 'ABCDEFGH');
+})
+  Deno.test('normalizeUserCode - strips spaces and dashes', () => {
+  assertEquals(normalizeUserCode('AB CD EF GH'), 'ABCDEFGH');
+    assertEquals(normalizeUserCode('AB-CD-EF-GH'), 'ABCDEFGH');
+})
+  Deno.test('normalizeUserCode - returns empty string for empty input', () => {
+  assertEquals(normalizeUserCode(''), '');
+})
+  Deno.test('normalizeUserCode - handles null-ish values gracefully', () => {
+  assertEquals(normalizeUserCode(null as unknown as string), '');
+    assertEquals(normalizeUserCode(undefined as unknown as string), '');
+})
+  Deno.test('normalizeUserCode - strips special characters', () => {
+  assertEquals(normalizeUserCode('AB!@#$%^&*()CD'), 'ABCD');
+})
 // ---------------------------------------------------------------------------
 // DB-dependent tests
 // ---------------------------------------------------------------------------
 
 function createMockDrizzleDb() {
-  const getMock = vi.fn();
-  const allMock = vi.fn();
+  const getMock = ((..._args: any[]) => undefined) as any;
+  const allMock = ((..._args: any[]) => undefined) as any;
   const chain = {
-    from: vi.fn().mockReturnThis(),
-    where: vi.fn().mockReturnThis(),
-    set: vi.fn().mockReturnThis(),
-    values: vi.fn().mockReturnThis(),
+    from: (function(this: any) { return this; }),
+    where: (function(this: any) { return this; }),
+    set: (function(this: any) { return this; }),
+    values: (function(this: any) { return this; }),
     get: getMock,
     all: allMock,
   };
   return {
-    select: vi.fn(() => chain),
-    insert: vi.fn(() => chain),
-    update: vi.fn(() => ({
-      set: vi.fn(() => ({
-        where: vi.fn().mockResolvedValue({ meta: { changes: 1 } }),
-      })),
-    })),
+    select: () => chain,
+    insert: () => chain,
+    update: () => ({
+      set: () => ({
+        where: (async () => ({ meta: { changes: 1 } })),
+      }),
+    }),
     _: { get: getMock, all: allMock, chain },
   };
 }
 
 const db = createMockDrizzleDb();
 
-const mocks = vi.hoisted(() => ({
-  getDb: vi.fn(),
-}));
-
-vi.mock('@/db', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('@/db')>();
-  return { ...actual, getDb: mocks.getDb };
+const mocks = ({
+  getDb: ((..._args: any[]) => undefined) as any,
 });
 
+// [Deno] vi.mock removed - manually stub imports from '@/db'
 import {
   createDeviceAuthorization,
   getDeviceAuthorizationByUserCode,
@@ -85,59 +75,54 @@ import {
 } from '@/services/oauth/device';
 import { OAUTH_CONSTANTS } from '@/types/oauth';
 
-describe('createDeviceAuthorization', () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-    mocks.getDb.mockReturnValue(db);
-  });
 
-  it('returns device code, user code, and expiry info', async () => {
-    const result = await createDeviceAuthorization({} as D1Database, {
+  Deno.test('createDeviceAuthorization - returns device code, user code, and expiry info', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+    mocks.getDb = (() => db) as any;
+  const result = await createDeviceAuthorization({} as D1Database, {
       clientId: 'client-1',
       scope: 'openid profile',
     });
 
-    expect(result.deviceCode).toBeTruthy();
-    expect(result.userCode).toBeTruthy();
+    assert(result.deviceCode);
+    assert(result.userCode);
     // User code should be formatted with dashes (e.g., ABCD-EFGH)
-    expect(result.userCode).toMatch(/^[A-Z0-9]{4}-[A-Z0-9]{4}$/);
-    expect(result.expiresIn).toBe(OAUTH_CONSTANTS.DEVICE_CODE_EXPIRES_IN);
-    expect(result.interval).toBe(OAUTH_CONSTANTS.DEVICE_POLL_INTERVAL_SECONDS);
-    expect(result.id).toBeTruthy();
-  });
-
-  it('uses custom expiry and interval when provided', async () => {
-    const result = await createDeviceAuthorization({} as D1Database, {
+    assert(/^[A-Z0-9]{4}-[A-Z0-9]{4}$/.test(result.userCode));
+    assertEquals(result.expiresIn, OAUTH_CONSTANTS.DEVICE_CODE_EXPIRES_IN);
+    assertEquals(result.interval, OAUTH_CONSTANTS.DEVICE_POLL_INTERVAL_SECONDS);
+    assert(result.id);
+})
+  Deno.test('createDeviceAuthorization - uses custom expiry and interval when provided', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+    mocks.getDb = (() => db) as any;
+  const result = await createDeviceAuthorization({} as D1Database, {
       clientId: 'client-1',
       scope: 'openid',
       expiresInSeconds: 1800,
       intervalSeconds: 10,
     });
 
-    expect(result.expiresIn).toBe(1800);
-    expect(result.interval).toBe(10);
-  });
-});
+    assertEquals(result.expiresIn, 1800);
+    assertEquals(result.interval, 10);
+})
 
-describe('getDeviceAuthorizationByUserCode', () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-    mocks.getDb.mockReturnValue(db);
-  });
-
-  it('returns null for empty user code', async () => {
-    const result = await getDeviceAuthorizationByUserCode({} as D1Database, '');
-    expect(result).toBeNull();
-  });
-
-  it('returns null when not found', async () => {
-    db._.get.mockResolvedValueOnce(null);
+  Deno.test('getDeviceAuthorizationByUserCode - returns null for empty user code', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+    mocks.getDb = (() => db) as any;
+  const result = await getDeviceAuthorizationByUserCode({} as D1Database, '');
+    assertEquals(result, null);
+})
+  Deno.test('getDeviceAuthorizationByUserCode - returns null when not found', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+    mocks.getDb = (() => db) as any;
+  db._.get = (async () => null) as any;
     const result = await getDeviceAuthorizationByUserCode({} as D1Database, 'ABCD-EFGH');
-    expect(result).toBeNull();
-  });
-
-  it('returns mapped device code when found', async () => {
-    db._.get.mockResolvedValueOnce({
+    assertEquals(result, null);
+})
+  Deno.test('getDeviceAuthorizationByUserCode - returns mapped device code when found', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+    mocks.getDb = (() => db) as any;
+  db._.get = (async () => ({
       id: 'dc-1',
       deviceCodeHash: 'hash1',
       userCodeHash: 'hash2',
@@ -153,88 +138,71 @@ describe('getDeviceAuthorizationByUserCode', () => {
       expiresAt: '2026-01-01T01:00:00.000Z',
       createdAt: '2026-01-01T00:00:00.000Z',
       updatedAt: '2026-01-01T00:00:00.000Z',
-    });
+    })) as any;
 
     const result = await getDeviceAuthorizationByUserCode({} as D1Database, 'ABCDEFGH');
-    expect(result).not.toBeNull();
-    expect(result!.client_id).toBe('client-1');
-    expect(result!.status).toBe('pending');
-  });
-});
+    assertNotEquals(result, null);
+    assertEquals(result!.client_id, 'client-1');
+    assertEquals(result!.status, 'pending');
+})
 
-describe('getDeviceAuthorizationByDeviceCode', () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-    mocks.getDb.mockReturnValue(db);
-  });
-
-  it('returns null for empty device code', async () => {
-    const result = await getDeviceAuthorizationByDeviceCode({} as D1Database, '');
-    expect(result).toBeNull();
-  });
-
-  it('returns null when not found', async () => {
-    db._.get.mockResolvedValueOnce(null);
+  Deno.test('getDeviceAuthorizationByDeviceCode - returns null for empty device code', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+    mocks.getDb = (() => db) as any;
+  const result = await getDeviceAuthorizationByDeviceCode({} as D1Database, '');
+    assertEquals(result, null);
+})
+  Deno.test('getDeviceAuthorizationByDeviceCode - returns null when not found', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+    mocks.getDb = (() => db) as any;
+  db._.get = (async () => null) as any;
     const result = await getDeviceAuthorizationByDeviceCode({} as D1Database, 'some-code');
-    expect(result).toBeNull();
-  });
-});
+    assertEquals(result, null);
+})
 
-describe('approveDeviceAuthorization', () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-    mocks.getDb.mockReturnValue(db);
-  });
-
-  it('returns true when successfully approved', async () => {
-    const result = await approveDeviceAuthorization({} as D1Database, {
+  Deno.test('approveDeviceAuthorization - returns true when successfully approved', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+    mocks.getDb = (() => db) as any;
+  const result = await approveDeviceAuthorization({} as D1Database, {
       id: 'dc-1',
       userId: 'user-1',
     });
-    expect(result).toBe(true);
-  });
-});
+    assertEquals(result, true);
+})
 
-describe('denyDeviceAuthorization', () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-    mocks.getDb.mockReturnValue(db);
-  });
-
-  it('returns true when successfully denied', async () => {
-    const result = await denyDeviceAuthorization({} as D1Database, {
+  Deno.test('denyDeviceAuthorization - returns true when successfully denied', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+    mocks.getDb = (() => db) as any;
+  const result = await denyDeviceAuthorization({} as D1Database, {
       id: 'dc-1',
       userId: 'user-1',
     });
-    expect(result).toBe(true);
-  });
-});
+    assertEquals(result, true);
+})
 
-describe('pollDeviceAuthorization', () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-    mocks.getDb.mockReturnValue(db);
-  });
-
-  it('returns not_found for empty device code', async () => {
-    const result = await pollDeviceAuthorization({} as D1Database, {
+  Deno.test('pollDeviceAuthorization - returns not_found for empty device code', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+    mocks.getDb = (() => db) as any;
+  const result = await pollDeviceAuthorization({} as D1Database, {
       deviceCode: '',
       clientId: 'client-1',
     });
-    expect(result.kind).toBe('not_found');
-  });
-
-  it('returns not_found when device code not in database', async () => {
-    db._.get.mockResolvedValueOnce(null);
+    assertEquals(result.kind, 'not_found');
+})
+  Deno.test('pollDeviceAuthorization - returns not_found when device code not in database', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+    mocks.getDb = (() => db) as any;
+  db._.get = (async () => null) as any;
     const result = await pollDeviceAuthorization({} as D1Database, {
       deviceCode: 'nonexistent',
       clientId: 'client-1',
     });
-    expect(result.kind).toBe('not_found');
-  });
-
-  it('returns client_mismatch when client IDs differ', async () => {
-    db._.get.mockResolvedValueOnce({
+    assertEquals(result.kind, 'not_found');
+})
+  Deno.test('pollDeviceAuthorization - returns client_mismatch when client IDs differ', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+    mocks.getDb = (() => db) as any;
+  db._.get = (async () => ({
       id: 'dc-1',
       deviceCodeHash: 'hash',
       userCodeHash: 'hash',
@@ -250,17 +218,18 @@ describe('pollDeviceAuthorization', () => {
       expiresAt: new Date(Date.now() + 600_000).toISOString(),
       createdAt: '2026-01-01T00:00:00.000Z',
       updatedAt: '2026-01-01T00:00:00.000Z',
-    });
+    })) as any;
 
     const result = await pollDeviceAuthorization({} as D1Database, {
       deviceCode: 'some-code',
       clientId: 'different-client',
     });
-    expect(result.kind).toBe('client_mismatch');
-  });
-
-  it('returns expired when device code has expired', async () => {
-    db._.get.mockResolvedValueOnce({
+    assertEquals(result.kind, 'client_mismatch');
+})
+  Deno.test('pollDeviceAuthorization - returns expired when device code has expired', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+    mocks.getDb = (() => db) as any;
+  db._.get = (async () => ({
       id: 'dc-1',
       deviceCodeHash: 'hash',
       userCodeHash: 'hash',
@@ -276,24 +245,18 @@ describe('pollDeviceAuthorization', () => {
       expiresAt: new Date(Date.now() - 1000).toISOString(), // expired
       createdAt: '2026-01-01T00:00:00.000Z',
       updatedAt: '2026-01-01T00:00:00.000Z',
-    });
+    })) as any;
 
     const result = await pollDeviceAuthorization({} as D1Database, {
       deviceCode: 'some-code',
       clientId: 'client-1',
     });
-    expect(result.kind).toBe('expired');
-  });
-});
+    assertEquals(result.kind, 'expired');
+})
 
-describe('consumeApprovedDeviceAuthorization', () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-    mocks.getDb.mockReturnValue(db);
-  });
-
-  it('returns true when successfully consumed', async () => {
-    const result = await consumeApprovedDeviceAuthorization({} as D1Database, 'dc-1');
-    expect(result).toBe(true);
-  });
-});
+  Deno.test('consumeApprovedDeviceAuthorization - returns true when successfully consumed', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+    mocks.getDb = (() => db) as any;
+  const result = await consumeApprovedDeviceAuthorization({} as D1Database, 'dc-1');
+    assertEquals(result, true);
+})

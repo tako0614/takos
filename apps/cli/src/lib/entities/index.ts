@@ -7,17 +7,17 @@
  */
 
 // ── Resource ─────────────────────────────────────────────────────────────────
-export type { CreateResourceOpts, ResourceType, ResourceEntry } from './resource.js';
-export { createResource, listResources, deleteResource } from './resource.js';
+export type { CreateResourceOpts, ResourceType, ResourceEntry } from './resource.ts';
+export { createResource, listResources, deleteResource } from './resource.ts';
 
 // ── Worker ───────────────────────────────────────────────────────────────────
-export type { DeployWorkerOpts, WorkerEntry } from './worker.js';
-export { deployWorker, listWorkers, deleteWorker } from './worker.js';
+export type { DeployWorkerOpts, WorkerEntry } from './worker.ts';
+export { deployWorker, listWorkers, deleteWorker } from './worker.ts';
 
 // ── Container ────────────────────────────────────────────────────────────────
-export type { DeployContainerOpts, ContainerEntry } from './container.js';
-export { deployContainer, listContainers, deleteContainer } from './container.js';
+export type { DeployContainerOpts, ContainerEntry } from './container.ts';
+export { deployContainer, listContainers, deleteContainer } from './container.ts';
 
 // ── Service ──────────────────────────────────────────────────────────────────
-export type { DeployServiceOpts, ServiceEntry } from './service.js';
-export { deployService, listServices, deleteService } from './service.js';
+export type { DeployServiceOpts, ServiceEntry } from './service.ts';
+export { deployService, listServices, deleteService } from './service.ts';

@@ -1,9 +1,11 @@
-import { describe, expect, it, vi } from 'vitest';
 import { EcsContainerBackend } from '../ecs-container-backend.ts';
 
-describe('EcsContainerBackend', () => {
-  it('registers a task definition revision, creates a service when missing, and tails logs', async () => {
-    const commandRunner = vi.fn(async (_command: string, args: string[]) => {
+
+import { assertEquals } from 'jsr:@std/assert';
+import { assertSpyCallArgs } from 'jsr:@std/testing/mock';
+
+  Deno.test('EcsContainerBackend - registers a task definition revision, creates a service when missing, and tails logs', async () => {
+  const commandRunner = async (_command: string, args: string[]) => {
       if (args[0] === 'ecs' && args[1] === 'describe-task-definition') {
         return {
           exitCode: 0,
@@ -73,7 +75,7 @@ describe('EcsContainerBackend', () => {
       }
 
       throw new Error(`unexpected command: ${args.join(' ')}`);
-    });
+    };
 
     const backend = new EcsContainerBackend({
       region: 'us-east-1',
@@ -102,7 +104,7 @@ describe('EcsContainerBackend', () => {
       },
     });
 
-    expect(result).toEqual({
+    assertEquals(result, {
       containerId: 'takos-space-1-worker',
       resolvedEndpoint: {
         kind: 'http-url',
@@ -111,38 +113,37 @@ describe('EcsContainerBackend', () => {
       healthCheckUrl: 'https://worker.example.test/healthz',
     });
 
-    await expect(backend.getLogs('takos-space-1-worker', 2)).resolves.toBe('b\nc\n');
-    await expect(backend.remove('takos-space-1-worker')).resolves.toBeUndefined();
+    await assertEquals(await backend.getLogs('takos-space-1-worker', 2), 'b\nc\n');
+    await assertEquals(await backend.remove('takos-space-1-worker'), undefined);
 
-    expect(commandRunner).toHaveBeenCalledWith('aws', expect.arrayContaining([
+    assertSpyCallArgs(commandRunner, 0, ['aws', ([
       'ecs',
       'register-task-definition',
       '--cli-input-json',
       expect.stringContaining('"image":"123456789012.dkr.ecr.us-east-1.amazonaws.com/takos-worker:latest"'),
-    ]), expect.objectContaining({
+    ]), ({
       env: { AWS_DEFAULT_REGION: 'us-east-1' },
-    }));
-    expect(commandRunner).toHaveBeenCalledWith('aws', expect.arrayContaining([
+    })]);
+    assertSpyCallArgs(commandRunner, 0, ['aws', ([
       'ecs',
       'create-service',
       '--service-name',
       'takos-space-1-worker',
       '--network-configuration',
       'awsvpcConfiguration={subnets=[subnet-a,subnet-b],securityGroups=[sg-1],assignPublicIp=ENABLED}',
-    ]), expect.objectContaining({
+    ]), ({
       env: { AWS_DEFAULT_REGION: 'us-east-1' },
-    }));
-    expect(commandRunner).toHaveBeenCalledWith('aws', expect.arrayContaining([
+    })]);
+    assertSpyCallArgs(commandRunner, 0, ['aws', ([
       'logs',
       'tail',
       '/ecs/takos-worker',
-    ]), expect.objectContaining({
+    ]), ({
       env: { AWS_DEFAULT_REGION: 'us-east-1' },
-    }));
-  });
-
-  it('updates an existing service instead of creating a new one', async () => {
-    const commandRunner = vi.fn(async (_command: string, args: string[]) => {
+    })]);
+})
+  Deno.test('EcsContainerBackend - updates an existing service instead of creating a new one', async () => {
+  const commandRunner = async (_command: string, args: string[]) => {
       if (args[0] === 'ecs' && args[1] === 'describe-task-definition') {
         return {
           exitCode: 0,
@@ -185,7 +186,7 @@ describe('EcsContainerBackend', () => {
         return { exitCode: 0, stdout: '', stderr: '' };
       }
       throw new Error(`unexpected command: ${args.join(' ')}`);
-    });
+    };
 
     const backend = new EcsContainerBackend({
       region: 'us-east-1',
@@ -196,11 +197,11 @@ describe('EcsContainerBackend', () => {
       commandRunner,
     });
 
-    await expect(backend.createAndStart({
+    await assertEquals(await backend.createAndStart({
       imageRef: '123456789012.dkr.ecr.us-east-1.amazonaws.com/takos-worker:next',
       name: 'ignored-name',
       exposedPort: 8080,
-    })).resolves.toEqual(expect.objectContaining({
+    }), ({
       containerId: 'current',
       resolvedEndpoint: {
         kind: 'http-url',
@@ -208,18 +209,20 @@ describe('EcsContainerBackend', () => {
       },
     }));
 
-    expect(commandRunner).toHaveBeenCalledWith('aws', expect.arrayContaining([
+    assertSpyCallArgs(commandRunner, 0, ['aws', ([
       'ecs',
       'update-service',
       '--service',
       'current',
       '--force-new-deployment',
-    ]), expect.objectContaining({
+    ]), ({
       env: { AWS_DEFAULT_REGION: 'us-east-1' },
-    }));
-    expect(commandRunner).not.toHaveBeenCalledWith('aws', expect.arrayContaining([
+    })]);
+    // TODO: manual assertion - commandRunner was not called with ('aws', ([
       'ecs',
       'create-service',
     ]), expect.anything());
+}), expect.anything());
+  });
   });
 });

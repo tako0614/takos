@@ -1,15 +1,16 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { Hono } from 'hono';
 import type { Env, User } from '@/types';
 import { createMockEnv } from '../../../test/integration/setup';
 
-const mocks = vi.hoisted(() => ({
-  addCustomDomain: vi.fn(),
-  deleteCustomDomain: vi.fn(),
-  getCustomDomainDetails: vi.fn(),
-  listCustomDomains: vi.fn(),
-  refreshSslStatus: vi.fn(),
-  verifyCustomDomain: vi.fn(),
+import { assertEquals, assert } from 'jsr:@std/assert';
+
+const mocks = ({
+  addCustomDomain: ((..._args: any[]) => undefined) as any,
+  deleteCustomDomain: ((..._args: any[]) => undefined) as any,
+  getCustomDomainDetails: ((..._args: any[]) => undefined) as any,
+  listCustomDomains: ((..._args: any[]) => undefined) as any,
+  refreshSslStatus: ((..._args: any[]) => undefined) as any,
+  verifyCustomDomain: ((..._args: any[]) => undefined) as any,
   CustomDomainError: class extends Error {
     status: number;
     details?: unknown;
@@ -19,22 +20,10 @@ const mocks = vi.hoisted(() => ({
       this.details = details;
     }
   },
-}));
+});
 
-vi.mock('@/services/platform/custom-domains', () => ({
-  addCustomDomain: mocks.addCustomDomain,
-  CustomDomainError: mocks.CustomDomainError,
-  deleteCustomDomain: mocks.deleteCustomDomain,
-  getCustomDomainDetails: mocks.getCustomDomainDetails,
-  listCustomDomains: mocks.listCustomDomains,
-  refreshSslStatus: mocks.refreshSslStatus,
-  verifyCustomDomain: mocks.verifyCustomDomain,
-}));
-
-vi.mock('@/shared/utils/logger', () => ({
-  logError: vi.fn(),
-}));
-
+// [Deno] vi.mock removed - manually stub imports from '@/services/platform/custom-domains'
+// [Deno] vi.mock removed - manually stub imports from '@/shared/utils/logger'
 import customDomainsRoute from '@/routes/custom-domains';
 
 function createUser(): User {
@@ -62,18 +51,14 @@ function createApp(user: User) {
   return app;
 }
 
-describe('custom-domains routes', () => {
+
   const env = createMockEnv();
-
-  beforeEach(() => {
-    vi.clearAllMocks();
-  });
-
-  describe('GET /api/services/:id/custom-domains', () => {
-    it('returns list of custom domains', async () => {
-      mocks.listCustomDomains.mockResolvedValue({
+  
+    Deno.test('custom-domains routes - GET /api/services/:id/custom-domains - returns list of custom domains', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+  mocks.listCustomDomains = (async () => ({
         domains: [{ id: 'd-1', domain: 'example.com' }],
-      });
+      })) as any;
 
       const app = createApp(createUser());
       const res = await app.fetch(
@@ -82,26 +67,13 @@ describe('custom-domains routes', () => {
         {} as ExecutionContext,
       );
 
-      expect(res.status).toBe(200);
+      assertEquals(res.status, 200);
       const json = await res.json() as Record<string, unknown>;
-      expect(json).toHaveProperty('domains');
-    });
-
-    it('returns error on CustomDomainError', async () => {
-      mocks.listCustomDomains.mockRejectedValue(new mocks.CustomDomainError('Not found', 404));
-
-      const app = createApp(createUser());
-      const res = await app.fetch(
-        new Request('http://localhost/api/services/w-1/custom-domains'),
-        env as unknown as Env,
-        {} as ExecutionContext,
-      );
-
-      expect(res.status).toBe(404);
-    });
-
-    it('returns 500 on unexpected error', async () => {
-      mocks.listCustomDomains.mockRejectedValue(new Error('Unexpected'));
+      assert('domains' in json);
+})
+    Deno.test('custom-domains routes - GET /api/services/:id/custom-domains - returns error on CustomDomainError', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+  mocks.listCustomDomains = (async () => { throw new mocks.CustomDomainError('Not found', 404); }) as any;
 
       const app = createApp(createUser());
       const res = await app.fetch(
@@ -110,16 +82,28 @@ describe('custom-domains routes', () => {
         {} as ExecutionContext,
       );
 
-      expect(res.status).toBe(500);
-    });
-  });
+      assertEquals(res.status, 404);
+})
+    Deno.test('custom-domains routes - GET /api/services/:id/custom-domains - returns 500 on unexpected error', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+  mocks.listCustomDomains = (async () => { throw new Error('Unexpected'); }) as any;
 
-  describe('POST /api/services/:id/custom-domains', () => {
-    it('adds a custom domain', async () => {
-      mocks.addCustomDomain.mockResolvedValue({
+      const app = createApp(createUser());
+      const res = await app.fetch(
+        new Request('http://localhost/api/services/w-1/custom-domains'),
+        env as unknown as Env,
+        {} as ExecutionContext,
+      );
+
+      assertEquals(res.status, 500);
+})  
+  
+    Deno.test('custom-domains routes - POST /api/services/:id/custom-domains - adds a custom domain', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+  mocks.addCustomDomain = (async () => ({
         status: 201,
         body: { domain: 'new.example.com' },
-      });
+      })) as any;
 
       const app = createApp(createUser());
       const res = await app.fetch(
@@ -132,11 +116,11 @@ describe('custom-domains routes', () => {
         {} as ExecutionContext,
       );
 
-      expect(res.status).toBe(201);
-    });
-
-    it('rejects missing domain field', async () => {
-      const app = createApp(createUser());
+      assertEquals(res.status, 201);
+})
+    Deno.test('custom-domains routes - POST /api/services/:id/custom-domains - rejects missing domain field', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+  const app = createApp(createUser());
       const res = await app.fetch(
         new Request('http://localhost/api/services/w-1/custom-domains', {
           method: 'POST',
@@ -147,16 +131,15 @@ describe('custom-domains routes', () => {
         {} as ExecutionContext,
       );
 
-      expect(res.status).toBe(422);
-    });
-  });
-
-  describe('POST /api/services/:id/custom-domains/:domainId/verify', () => {
-    it('verifies a custom domain', async () => {
-      mocks.verifyCustomDomain.mockResolvedValue({
+      assertEquals(res.status, 422);
+})  
+  
+    Deno.test('custom-domains routes - POST /api/services/:id/custom-domains/:domainId/verify - verifies a custom domain', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+  mocks.verifyCustomDomain = (async () => ({
         status: 200,
         body: { verified: true },
-      });
+      })) as any;
 
       const app = createApp(createUser());
       const res = await app.fetch(
@@ -167,13 +150,12 @@ describe('custom-domains routes', () => {
         {} as ExecutionContext,
       );
 
-      expect(res.status).toBe(200);
-    });
-  });
-
-  describe('GET /api/services/:id/custom-domains/:domainId', () => {
-    it('returns domain details', async () => {
-      mocks.getCustomDomainDetails.mockResolvedValue({ id: 'd-1', domain: 'example.com' });
+      assertEquals(res.status, 200);
+})  
+  
+    Deno.test('custom-domains routes - GET /api/services/:id/custom-domains/:domainId - returns domain details', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+  mocks.getCustomDomainDetails = (async () => ({ id: 'd-1', domain: 'example.com' })) as any;
 
       const app = createApp(createUser());
       const res = await app.fetch(
@@ -182,13 +164,12 @@ describe('custom-domains routes', () => {
         {} as ExecutionContext,
       );
 
-      expect(res.status).toBe(200);
-    });
-  });
-
-  describe('DELETE /api/services/:id/custom-domains/:domainId', () => {
-    it('deletes a custom domain', async () => {
-      mocks.deleteCustomDomain.mockResolvedValue({ success: true });
+      assertEquals(res.status, 200);
+})  
+  
+    Deno.test('custom-domains routes - DELETE /api/services/:id/custom-domains/:domainId - deletes a custom domain', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+  mocks.deleteCustomDomain = (async () => ({ success: true })) as any;
 
       const app = createApp(createUser());
       const res = await app.fetch(
@@ -199,13 +180,12 @@ describe('custom-domains routes', () => {
         {} as ExecutionContext,
       );
 
-      expect(res.status).toBe(200);
-    });
-  });
-
-  describe('POST /api/services/:id/custom-domains/:domainId/refresh-ssl', () => {
-    it('refreshes SSL status', async () => {
-      mocks.refreshSslStatus.mockResolvedValue({ ssl_status: 'active' });
+      assertEquals(res.status, 200);
+})  
+  
+    Deno.test('custom-domains routes - POST /api/services/:id/custom-domains/:domainId/refresh-ssl - refreshes SSL status', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+  mocks.refreshSslStatus = (async () => ({ ssl_status: 'active' })) as any;
 
       const app = createApp(createUser());
       const res = await app.fetch(
@@ -216,7 +196,5 @@ describe('custom-domains routes', () => {
         {} as ExecutionContext,
       );
 
-      expect(res.status).toBe(200);
-    });
-  });
-});
+      assertEquals(res.status, 200);
+})  

@@ -1,37 +1,40 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { Command } from 'commander';
-import { CliCommandExit } from '../src/lib/command-exit.js';
+import { CliCommandExit } from '../src/lib/command-exit.ts';
 
-const loginMocks = vi.hoisted(() => {
-  const saveTokenMock = vi.fn();
-  const saveApiUrlMock = vi.fn();
-  const clearCredentialsMock = vi.fn();
-  const isContainerModeMock = vi.fn(() => false);
-  const validateApiUrlMock = vi.fn(() => ({ valid: true }));
-  const getConfigMock = vi.fn(() => ({ apiUrl: 'https://takos.jp' }));
-  const getLoginTimeoutMsMock = vi.fn(() => 5 * 60 * 1000);
-  const openMock = vi.fn().mockResolvedValue(undefined);
+import { assertEquals, assert, assertStringIncludes } from 'jsr:@std/assert';
+import { stub, assertSpyCalls, assertSpyCallArgs } from 'jsr:@std/testing/mock';
+import { FakeTime } from 'jsr:@std/testing/time';
+
+const loginMocks = {
+  const saveTokenMock = ((..._args: any[]) => undefined) as any;
+  const saveApiUrlMock = ((..._args: any[]) => undefined) as any;
+  const clearCredentialsMock = ((..._args: any[]) => undefined) as any;
+  const isContainerModeMock = () => false;
+  const validateApiUrlMock = () => ({ valid: true });
+  const getConfigMock = () => ({ apiUrl: 'https://takos.jp' });
+  const getLoginTimeoutMsMock = () => 5 * 60 * 1000;
+  const openMock = (async () => undefined);
 
   let requestHandler: ((req: any, res: any) => Promise<void>) | undefined;
 
   const server = {
-    on: vi.fn((event: string, handler: (...args: any[]) => void) => {
+    on: (event: string, handler: (...args: any[]) => void) => {
       if (event === 'request') {
         requestHandler = handler as (req: any, res: any) => Promise<void>;
       }
-    }),
-    listen: vi.fn((_port: number, _host: string, callback: () => void) => {
+    },
+    listen: (_port: number, _host: string, callback: () => void) => {
       callback();
-    }),
-    address: vi.fn(() => ({ address: '127.0.0.1', port: 43123 })),
-    close: vi.fn((callback: (err?: Error | null) => void) => {
+    },
+    address: () => ({ address: '127.0.0.1', port: 43123 }),
+    close: (callback: (err?: Error | null) => void) => {
       callback();
-    }),
+    },
   };
 
-  const createServerMock = vi.fn(() => {
+  const createServerMock = () => {
     return server;
-  });
+  };
 
   return {
     saveTokenMock,
@@ -49,27 +52,12 @@ const loginMocks = vi.hoisted(() => {
       requestHandler = undefined;
     },
   };
-});
+};
 
-vi.mock('../src/lib/config.js', () => ({
-  saveToken: loginMocks.saveTokenMock,
-  saveApiUrl: loginMocks.saveApiUrlMock,
-  clearCredentials: loginMocks.clearCredentialsMock,
-  isContainerMode: loginMocks.isContainerModeMock,
-  validateApiUrl: loginMocks.validateApiUrlMock,
-  getConfig: loginMocks.getConfigMock,
-  getLoginTimeoutMs: loginMocks.getLoginTimeoutMsMock,
-}));
-
-vi.mock('http', () => ({
-  createServer: loginMocks.createServerMock,
-}));
-
-vi.mock('open', () => ({
-  default: loginMocks.openMock,
-}));
-
-import { registerLoginCommand } from '../src/commands/login.js';
+// [Deno] vi.mock removed - manually stub imports from '../src/lib/config.ts'
+// [Deno] vi.mock removed - manually stub imports from 'http'
+// [Deno] vi.mock removed - manually stub imports from 'open'
+import { registerLoginCommand } from '../src/commands/login.ts';
 
 function createJsonCallbackRequest(payload: Record<string, unknown>): any {
   const body = Buffer.from(JSON.stringify(payload));
@@ -96,33 +84,26 @@ function createGetCallbackRequest(url: string): any {
   };
 }
 
-describe('login command', () => {
-  beforeEach(() => {
-    vi.useFakeTimers();
-    loginMocks.saveTokenMock.mockReset();
-    loginMocks.saveApiUrlMock.mockReset();
-    loginMocks.clearCredentialsMock.mockReset();
-    loginMocks.isContainerModeMock.mockReset();
-    loginMocks.isContainerModeMock.mockReturnValue(false);
-    loginMocks.validateApiUrlMock.mockReset();
-    loginMocks.validateApiUrlMock.mockReturnValue({ valid: true });
-    loginMocks.getConfigMock.mockReset();
-    loginMocks.getConfigMock.mockReturnValue({ apiUrl: 'https://takos.jp' });
-    loginMocks.getLoginTimeoutMsMock.mockReset();
-    loginMocks.getLoginTimeoutMsMock.mockReturnValue(5 * 60 * 1000);
-    loginMocks.openMock.mockReset();
-    loginMocks.openMock.mockResolvedValue(undefined);
-    loginMocks.createServerMock.mockClear();
+
+  Deno.test('login command - persists apiUrl after successful login with --api-url', async () => {
+  new FakeTime();
+    loginMocks.saveTokenMock;
+    loginMocks.saveApiUrlMock;
+    loginMocks.clearCredentialsMock;
+    loginMocks.isContainerModeMock;
+    loginMocks.isContainerModeMock = (() => false) as any;
+    loginMocks.validateApiUrlMock;
+    loginMocks.validateApiUrlMock = (() => ({ valid: true })) as any;
+    loginMocks.getConfigMock;
+    loginMocks.getConfigMock = (() => ({ apiUrl: 'https://takos.jp' })) as any;
+    loginMocks.getLoginTimeoutMsMock;
+    loginMocks.getLoginTimeoutMsMock = (() => 5 * 60 * 1000) as any;
+    loginMocks.openMock;
+    loginMocks.openMock = (async () => undefined) as any;
+    loginMocks.createServerMock;
     loginMocks.resetRequestHandler();
-  });
-
-  afterEach(() => {
-    vi.useRealTimers();
-    vi.restoreAllMocks();
-  });
-
-  it('persists apiUrl after successful login with --api-url', async () => {
-    const logSpy = vi.spyOn(console, 'log');
+  try {
+  const logSpy = stub(console, 'log');
 
     const program = new Command();
     registerLoginCommand(program);
@@ -136,44 +117,64 @@ describe('login command', () => {
 
     await Promise.resolve();
 
-    expect(loginMocks.serverListenMock).toHaveBeenCalledTimes(1);
-    const [boundPort, bindAddress] = loginMocks.serverListenMock.mock.calls[0] as [number, string];
-    expect(bindAddress).toBe('127.0.0.1');
-    expect(boundPort).toBe(0);
+    assertSpyCalls(loginMocks.serverListenMock, 1);
+    const [boundPort, bindAddress] = loginMocks.serverListenMock.calls[0] as [number, string];
+    assertEquals(bindAddress, '127.0.0.1');
+    assertEquals(boundPort, 0);
 
-    const authUrlLine = logSpy.mock.calls
+    const authUrlLine = logSpy.calls
       .map((args) => args.map((arg) => String(arg)).join(' '))
       .find((line) => line.includes('Auth URL:'));
-    expect(authUrlLine).toBeDefined();
+    assert(authUrlLine !== undefined);
     const authUrl = new URL(authUrlLine!.split('Auth URL: ')[1]);
     const state = authUrl.searchParams.get('state');
-    expect(state).toBeTruthy();
+    assert(state);
 
     const callbackHandler = loginMocks.getRequestHandler();
-    expect(callbackHandler).toBeDefined();
+    assert(callbackHandler !== undefined);
 
     const req = createJsonCallbackRequest({
       token: 'test-token',
       state,
     });
     const res = {
-      writeHead: vi.fn(),
-      end: vi.fn(),
+      writeHead: ((..._args: any[]) => undefined) as any,
+      end: ((..._args: any[]) => undefined) as any,
     } as any;
 
     await callbackHandler!(req, res);
-    await expect(parsePromise).resolves.toBe(program);
+    await assertEquals(await parsePromise, program);
 
-    expect(loginMocks.saveTokenMock).toHaveBeenCalledWith('test-token');
-    expect(loginMocks.saveApiUrlMock).toHaveBeenCalledWith('https://api.takos.dev');
-    expect(loginMocks.validateApiUrlMock).toHaveBeenCalledWith('https://api.takos.dev');
+    assertSpyCallArgs(loginMocks.saveTokenMock, 0, ['test-token']);
+    assertSpyCallArgs(loginMocks.saveApiUrlMock, 0, ['https://api.takos.dev']);
+    assertSpyCallArgs(loginMocks.validateApiUrlMock, 0, ['https://api.takos.dev']);
 
-    logSpy.mockRestore();
-  });
-
-  it('uses configured endpoint when --api-url is omitted', async () => {
-    const logSpy = vi.spyOn(console, 'log');
-    loginMocks.getConfigMock.mockReturnValue({ apiUrl: 'https://test.takos.jp' });
+    logSpy.restore();
+  } finally {
+  /* TODO: call fakeTime.restore() */ void 0;
+    /* TODO: restore mocks manually */ void 0;
+  }
+})
+  Deno.test('login command - uses configured endpoint when --api-url is omitted', async () => {
+  new FakeTime();
+    loginMocks.saveTokenMock;
+    loginMocks.saveApiUrlMock;
+    loginMocks.clearCredentialsMock;
+    loginMocks.isContainerModeMock;
+    loginMocks.isContainerModeMock = (() => false) as any;
+    loginMocks.validateApiUrlMock;
+    loginMocks.validateApiUrlMock = (() => ({ valid: true })) as any;
+    loginMocks.getConfigMock;
+    loginMocks.getConfigMock = (() => ({ apiUrl: 'https://takos.jp' })) as any;
+    loginMocks.getLoginTimeoutMsMock;
+    loginMocks.getLoginTimeoutMsMock = (() => 5 * 60 * 1000) as any;
+    loginMocks.openMock;
+    loginMocks.openMock = (async () => undefined) as any;
+    loginMocks.createServerMock;
+    loginMocks.resetRequestHandler();
+  try {
+  const logSpy = stub(console, 'log');
+    loginMocks.getConfigMock = (() => ({ apiUrl: 'https://test.takos.jp' })) as any;
 
     const program = new Command();
     registerLoginCommand(program);
@@ -181,37 +182,57 @@ describe('login command', () => {
 
     await Promise.resolve();
 
-    const authUrlLine = logSpy.mock.calls
+    const authUrlLine = logSpy.calls
       .map((args) => args.map((arg) => String(arg)).join(' '))
       .find((line) => line.includes('Auth URL:'));
-    expect(authUrlLine).toBeDefined();
+    assert(authUrlLine !== undefined);
     const authUrl = new URL(authUrlLine!.split('Auth URL: ')[1]);
-    expect(authUrl.origin).toBe('https://test.takos.jp');
+    assertEquals(authUrl.origin, 'https://test.takos.jp');
     const state = authUrl.searchParams.get('state');
-    expect(state).toBeTruthy();
+    assert(state);
 
     const callbackHandler = loginMocks.getRequestHandler();
-    expect(callbackHandler).toBeDefined();
+    assert(callbackHandler !== undefined);
 
     const req = createJsonCallbackRequest({
       token: 'configured-endpoint-token',
       state,
     });
     const res = {
-      writeHead: vi.fn(),
-      end: vi.fn(),
+      writeHead: ((..._args: any[]) => undefined) as any,
+      end: ((..._args: any[]) => undefined) as any,
     } as any;
 
     await callbackHandler!(req, res);
-    await expect(parsePromise).resolves.toBe(program);
-    expect(loginMocks.saveTokenMock).toHaveBeenCalledWith('configured-endpoint-token');
-    expect(loginMocks.saveApiUrlMock).not.toHaveBeenCalled();
+    await assertEquals(await parsePromise, program);
+    assertSpyCallArgs(loginMocks.saveTokenMock, 0, ['configured-endpoint-token']);
+    assertSpyCalls(loginMocks.saveApiUrlMock, 0);
 
-    logSpy.mockRestore();
-  });
-
-  it('fails closed for GET callback query token and does not persist credentials', async () => {
-    const logSpy = vi.spyOn(console, 'log');
+    logSpy.restore();
+  } finally {
+  /* TODO: call fakeTime.restore() */ void 0;
+    /* TODO: restore mocks manually */ void 0;
+  }
+})
+  Deno.test('login command - fails closed for GET callback query token and does not persist credentials', async () => {
+  new FakeTime();
+    loginMocks.saveTokenMock;
+    loginMocks.saveApiUrlMock;
+    loginMocks.clearCredentialsMock;
+    loginMocks.isContainerModeMock;
+    loginMocks.isContainerModeMock = (() => false) as any;
+    loginMocks.validateApiUrlMock;
+    loginMocks.validateApiUrlMock = (() => ({ valid: true })) as any;
+    loginMocks.getConfigMock;
+    loginMocks.getConfigMock = (() => ({ apiUrl: 'https://takos.jp' })) as any;
+    loginMocks.getLoginTimeoutMsMock;
+    loginMocks.getLoginTimeoutMsMock = (() => 5 * 60 * 1000) as any;
+    loginMocks.openMock;
+    loginMocks.openMock = (async () => undefined) as any;
+    loginMocks.createServerMock;
+    loginMocks.resetRequestHandler();
+  try {
+  const logSpy = stub(console, 'log');
 
     const program = new Command();
     registerLoginCommand(program);
@@ -220,40 +241,60 @@ describe('login command', () => {
 
     await Promise.resolve();
 
-    const authUrlLine = logSpy.mock.calls
+    const authUrlLine = logSpy.calls
       .map((args) => args.map((arg) => String(arg)).join(' '))
       .find((line) => line.includes('Auth URL:'));
-    expect(authUrlLine).toBeDefined();
+    assert(authUrlLine !== undefined);
     const authUrl = new URL(authUrlLine!.split('Auth URL: ')[1]);
     const state = authUrl.searchParams.get('state');
-    expect(state).toBeTruthy();
+    assert(state);
 
     const callbackHandler = loginMocks.getRequestHandler();
-    expect(callbackHandler).toBeDefined();
+    assert(callbackHandler !== undefined);
 
     const req = createGetCallbackRequest(`/callback?token=query-token&state=${state}`);
     const res = {
-      writeHead: vi.fn(),
-      end: vi.fn(),
+      writeHead: ((..._args: any[]) => undefined) as any,
+      end: ((..._args: any[]) => undefined) as any,
     } as any;
 
     await callbackHandler!(req, res);
-    await expect(handledParsePromise).resolves.toBeInstanceOf(CliCommandExit);
+    await assert((await handledParsePromise) instanceof CliCommandExit);
 
-    expect(res.writeHead).toHaveBeenCalledWith(400, { 'Content-Type': 'text/html' });
-    expect(String(res.end.mock.calls[0]?.[0] ?? '')).toContain('Invalid callback payload');
-    expect(loginMocks.saveTokenMock).not.toHaveBeenCalled();
+    assertSpyCallArgs(res.writeHead, 0, [400, { 'Content-Type': 'text/html' }]);
+    assertStringIncludes(String(res.end.calls[0]?.[0] ?? ''), 'Invalid callback payload');
+    assertSpyCalls(loginMocks.saveTokenMock, 0);
 
-    const authFailureLine = logSpy.mock.calls
+    const authFailureLine = logSpy.calls
       .map((args) => args.map((arg) => String(arg)).join(' '))
       .find((line) => line.includes('Authentication failed:'));
-    expect(authFailureLine).toContain('Invalid callback payload');
+    assertStringIncludes(authFailureLine, 'Invalid callback payload');
 
-    logSpy.mockRestore();
-  });
-
-  it('sanitizes callback error before rendering and logging', async () => {
-    const logSpy = vi.spyOn(console, 'log');
+    logSpy.restore();
+  } finally {
+  /* TODO: call fakeTime.restore() */ void 0;
+    /* TODO: restore mocks manually */ void 0;
+  }
+})
+  Deno.test('login command - sanitizes callback error before rendering and logging', async () => {
+  new FakeTime();
+    loginMocks.saveTokenMock;
+    loginMocks.saveApiUrlMock;
+    loginMocks.clearCredentialsMock;
+    loginMocks.isContainerModeMock;
+    loginMocks.isContainerModeMock = (() => false) as any;
+    loginMocks.validateApiUrlMock;
+    loginMocks.validateApiUrlMock = (() => ({ valid: true })) as any;
+    loginMocks.getConfigMock;
+    loginMocks.getConfigMock = (() => ({ apiUrl: 'https://takos.jp' })) as any;
+    loginMocks.getLoginTimeoutMsMock;
+    loginMocks.getLoginTimeoutMsMock = (() => 5 * 60 * 1000) as any;
+    loginMocks.openMock;
+    loginMocks.openMock = (async () => undefined) as any;
+    loginMocks.createServerMock;
+    loginMocks.resetRequestHandler();
+  try {
+  const logSpy = stub(console, 'log');
 
     const program = new Command();
     registerLoginCommand(program);
@@ -262,16 +303,16 @@ describe('login command', () => {
 
     await Promise.resolve();
 
-    const authUrlLine = logSpy.mock.calls
+    const authUrlLine = logSpy.calls
       .map((args) => args.map((arg) => String(arg)).join(' '))
       .find((line) => line.includes('Auth URL:'));
-    expect(authUrlLine).toBeDefined();
+    assert(authUrlLine !== undefined);
     const authUrl = new URL(authUrlLine!.split('Auth URL: ')[1]);
     const state = authUrl.searchParams.get('state');
-    expect(state).toBeTruthy();
+    assert(state);
 
     const callbackHandler = loginMocks.getRequestHandler();
-    expect(callbackHandler).toBeDefined();
+    assert(callbackHandler !== undefined);
 
     const maliciousError = '<img src=x onerror=alert(1)>';
     const req = createJsonCallbackRequest({
@@ -279,40 +320,63 @@ describe('login command', () => {
       error: maliciousError,
     });
     const res = {
-      writeHead: vi.fn(),
-      end: vi.fn(),
+      writeHead: ((..._args: any[]) => undefined) as any,
+      end: ((..._args: any[]) => undefined) as any,
     } as any;
 
     await callbackHandler!(req, res);
-    await expect(handledParsePromise).resolves.toBeInstanceOf(CliCommandExit);
+    await assert((await handledParsePromise) instanceof CliCommandExit);
 
-    const html = String(res.end.mock.calls[0]?.[0] ?? '');
-    expect(html).toContain('&lt;img src=x onerror=alert(1)&gt;');
-    expect(html).not.toContain(maliciousError);
+    const html = String(res.end.calls[0]?.[0] ?? '');
+    assertStringIncludes(html, '&lt;img src=x onerror=alert(1)&gt;');
+    assert(!(html).includes(maliciousError));
 
-    const authFailureLine = logSpy.mock.calls
+    const authFailureLine = logSpy.calls
       .map((args) => args.map((arg) => String(arg)).join(' '))
       .find((line) => line.includes('Authentication failed:'));
-    expect(authFailureLine).toBeDefined();
-    expect(authFailureLine).toContain('&lt;img src=x onerror=alert(1)&gt;');
-    expect(authFailureLine).not.toContain(maliciousError);
-    expect(loginMocks.saveTokenMock).not.toHaveBeenCalled();
+    assert(authFailureLine !== undefined);
+    assertStringIncludes(authFailureLine, '&lt;img src=x onerror=alert(1)&gt;');
+    assert(!(authFailureLine).includes(maliciousError));
+    assertSpyCalls(loginMocks.saveTokenMock, 0);
 
-    logSpy.mockRestore();
-  });
-
-  it('uses shared login timeout configuration', async () => {
-    loginMocks.getLoginTimeoutMsMock.mockReturnValue(123_456);
-    const setTimeoutSpy = vi.spyOn(globalThis, 'setTimeout');
+    logSpy.restore();
+  } finally {
+  /* TODO: call fakeTime.restore() */ void 0;
+    /* TODO: restore mocks manually */ void 0;
+  }
+})
+  Deno.test('login command - uses shared login timeout configuration', async () => {
+  new FakeTime();
+    loginMocks.saveTokenMock;
+    loginMocks.saveApiUrlMock;
+    loginMocks.clearCredentialsMock;
+    loginMocks.isContainerModeMock;
+    loginMocks.isContainerModeMock = (() => false) as any;
+    loginMocks.validateApiUrlMock;
+    loginMocks.validateApiUrlMock = (() => ({ valid: true })) as any;
+    loginMocks.getConfigMock;
+    loginMocks.getConfigMock = (() => ({ apiUrl: 'https://takos.jp' })) as any;
+    loginMocks.getLoginTimeoutMsMock;
+    loginMocks.getLoginTimeoutMsMock = (() => 5 * 60 * 1000) as any;
+    loginMocks.openMock;
+    loginMocks.openMock = (async () => undefined) as any;
+    loginMocks.createServerMock;
+    loginMocks.resetRequestHandler();
+  try {
+  loginMocks.getLoginTimeoutMsMock = (() => 123_456) as any;
+    const setTimeoutSpy = stub(globalThis, 'setTimeout');
 
     const program = new Command();
     registerLoginCommand(program);
     const parsePromise = program.parseAsync(['node', 'takos', 'login']);
     const handledParsePromise = parsePromise.catch((error) => error);
 
-    expect(setTimeoutSpy.mock.calls.some((call) => call[1] === 123_456)).toBe(true);
-    await vi.advanceTimersByTimeAsync(123_456);
-    await expect(handledParsePromise).resolves.toBeInstanceOf(CliCommandExit);
-    expect(loginMocks.saveTokenMock).not.toHaveBeenCalled();
-  });
-});
+    assertEquals(setTimeoutSpy.calls.some((call) => call[1] === 123_456), true);
+    await await fakeTime.tickAsync(123_456);
+    await assert((await handledParsePromise) instanceof CliCommandExit);
+    assertSpyCalls(loginMocks.saveTokenMock, 0);
+  } finally {
+  /* TODO: call fakeTime.restore() */ void 0;
+    /* TODO: restore mocks manually */ void 0;
+  }
+})

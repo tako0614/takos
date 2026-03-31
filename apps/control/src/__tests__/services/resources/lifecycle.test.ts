@@ -1,69 +1,47 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
 import type { Env } from '@/types';
 
-const mocks = vi.hoisted(() => ({
-  insertResource: vi.fn(),
-  insertFailedResource: vi.fn(),
-  createResource: vi.fn(),
-  deleteResource: vi.fn(),
-  ensurePortableManagedResource: vi.fn(),
-  deletePortableManagedResource: vi.fn(),
-  resolvePortableResourceReferenceId: vi.fn(),
-  generateId: vi.fn(),
-  now: vi.fn(),
-}));
+import { assertEquals, assertRejects } from 'jsr:@std/assert';
+import { assertSpyCalls, assertSpyCallArgs } from 'jsr:@std/testing/mock';
 
-vi.mock('@/services/resources/store', () => ({
-  insertResource: mocks.insertResource,
-  insertFailedResource: mocks.insertFailedResource,
-}));
+const mocks = ({
+  insertResource: ((..._args: any[]) => undefined) as any,
+  insertFailedResource: ((..._args: any[]) => undefined) as any,
+  createResource: ((..._args: any[]) => undefined) as any,
+  deleteResource: ((..._args: any[]) => undefined) as any,
+  ensurePortableManagedResource: ((..._args: any[]) => undefined) as any,
+  deletePortableManagedResource: ((..._args: any[]) => undefined) as any,
+  resolvePortableResourceReferenceId: ((..._args: any[]) => undefined) as any,
+  generateId: ((..._args: any[]) => undefined) as any,
+  now: ((..._args: any[]) => undefined) as any,
+});
 
-vi.mock('@/services/cloudflare/resources', () => ({
-  CloudflareResourceService: vi.fn().mockImplementation(() => ({
-    createResource: mocks.createResource,
-    deleteResource: mocks.deleteResource,
-  })),
-}));
-
-vi.mock('@/services/resources/portable-runtime', () => ({
-  ensurePortableManagedResource: mocks.ensurePortableManagedResource,
-  deletePortableManagedResource: mocks.deletePortableManagedResource,
-  resolvePortableResourceReferenceId: mocks.resolvePortableResourceReferenceId,
-}));
-
-vi.mock('@/shared/utils', async (importOriginal) => ({
-  ...(await importOriginal()),
-  generateId: mocks.generateId,
-  now: mocks.now,
-}));
-
+// [Deno] vi.mock removed - manually stub imports from '@/services/resources/store'
+// [Deno] vi.mock removed - manually stub imports from '@/services/cloudflare/resources'
+// [Deno] vi.mock removed - manually stub imports from '@/services/resources/portable-runtime'
+// [Deno] vi.mock removed - manually stub imports from '@/shared/utils'
 import {
   deleteManagedResource,
   provisionCloudflareResource,
 } from '@/services/resources/lifecycle';
 
-describe('provisionCloudflareResource', () => {
+
   const mockEnv = {
     DB: {} as any,
     CF_ACCOUNT_ID: 'test-account',
     CF_API_TOKEN: 'test-token',
   } as unknown as Env;
-
-  beforeEach(() => {
-    vi.clearAllMocks();
-    mocks.generateId.mockReturnValue('generated-id');
-    mocks.now.mockReturnValue('2026-01-01T00:00:00.000Z');
-    mocks.ensurePortableManagedResource.mockResolvedValue(undefined);
-    mocks.deletePortableManagedResource.mockResolvedValue(undefined);
-    mocks.resolvePortableResourceReferenceId.mockResolvedValue('portable-resource-ref');
-  });
-
-  it('provisions a resource and inserts it into the database', async () => {
-    mocks.createResource.mockResolvedValue({
+  Deno.test('provisionCloudflareResource - provisions a resource and inserts it into the database', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+    mocks.generateId = (() => 'generated-id') as any;
+    mocks.now = (() => '2026-01-01T00:00:00.000Z') as any;
+    mocks.ensurePortableManagedResource = (async () => undefined) as any;
+    mocks.deletePortableManagedResource = (async () => undefined) as any;
+    mocks.resolvePortableResourceReferenceId = (async () => 'portable-resource-ref') as any;
+  mocks.createResource = (async () => ({
       providerResourceId: 'cf-new-id',
       providerResourceName: 'my-db',
-    });
-    mocks.insertResource.mockResolvedValue(undefined);
+    })) as any;
+    mocks.insertResource = (async () => undefined) as any;
 
     const result = await provisionCloudflareResource(mockEnv, {
       ownerId: 'user-1',
@@ -72,13 +50,13 @@ describe('provisionCloudflareResource', () => {
       providerResourceName: 'my-db',
     });
 
-    expect(result.id).toBe('generated-id');
-    expect(result.providerResourceId).toBe('cf-new-id');
-    expect(result.providerResourceName).toBe('my-db');
-    expect(mocks.createResource).toHaveBeenCalledWith('d1', 'my-db', {});
-    expect(mocks.insertResource).toHaveBeenCalledWith(
+    assertEquals(result.id, 'generated-id');
+    assertEquals(result.providerResourceId, 'cf-new-id');
+    assertEquals(result.providerResourceName, 'my-db');
+    assertSpyCallArgs(mocks.createResource, 0, ['d1', 'my-db', {}]);
+    assertSpyCallArgs(mocks.insertResource, 0, [
       mockEnv.DB,
-      expect.objectContaining({
+      ({
         id: 'generated-id',
         owner_id: 'user-1',
         name: 'My Database',
@@ -90,15 +68,20 @@ describe('provisionCloudflareResource', () => {
         provider_resource_id: 'cf-new-id',
         provider_resource_name: 'my-db',
       })
-    );
-  });
-
-  it('uses provided id and timestamp', async () => {
-    mocks.createResource.mockResolvedValue({
+    ]);
+})
+  Deno.test('provisionCloudflareResource - uses provided id and timestamp', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+    mocks.generateId = (() => 'generated-id') as any;
+    mocks.now = (() => '2026-01-01T00:00:00.000Z') as any;
+    mocks.ensurePortableManagedResource = (async () => undefined) as any;
+    mocks.deletePortableManagedResource = (async () => undefined) as any;
+    mocks.resolvePortableResourceReferenceId = (async () => 'portable-resource-ref') as any;
+  mocks.createResource = (async () => ({
       providerResourceId: 'cf-id',
       providerResourceName: 'custom-db',
-    });
-    mocks.insertResource.mockResolvedValue(undefined);
+    })) as any;
+    mocks.insertResource = (async () => undefined) as any;
 
     const result = await provisionCloudflareResource(mockEnv, {
       id: 'custom-id',
@@ -109,23 +92,28 @@ describe('provisionCloudflareResource', () => {
       providerResourceName: 'custom-db',
     });
 
-    expect(result.id).toBe('custom-id');
-    expect(mocks.insertResource).toHaveBeenCalledWith(
+    assertEquals(result.id, 'custom-id');
+    assertSpyCallArgs(mocks.insertResource, 0, [
       expect.anything(),
-      expect.objectContaining({
+      ({
         id: 'custom-id',
         created_at: '2026-06-01T00:00:00.000Z',
         updated_at: '2026-06-01T00:00:00.000Z',
       })
-    );
-  });
-
-  it('passes vectorize options to createResource', async () => {
-    mocks.createResource.mockResolvedValue({
+    ]);
+})
+  Deno.test('provisionCloudflareResource - passes vectorize options to createResource', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+    mocks.generateId = (() => 'generated-id') as any;
+    mocks.now = (() => '2026-01-01T00:00:00.000Z') as any;
+    mocks.ensurePortableManagedResource = (async () => undefined) as any;
+    mocks.deletePortableManagedResource = (async () => undefined) as any;
+    mocks.resolvePortableResourceReferenceId = (async () => 'portable-resource-ref') as any;
+  mocks.createResource = (async () => ({
       providerResourceId: 'cf-vec-id',
       providerResourceName: 'my-vectors',
-    });
-    mocks.insertResource.mockResolvedValue(undefined);
+    })) as any;
+    mocks.insertResource = (async () => undefined) as any;
 
     await provisionCloudflareResource(mockEnv, {
       ownerId: 'user-1',
@@ -138,17 +126,22 @@ describe('provisionCloudflareResource', () => {
       },
     });
 
-    expect(mocks.createResource).toHaveBeenCalledWith('vectorize', 'my-vectors', {
+    assertSpyCallArgs(mocks.createResource, 0, ['vectorize', 'my-vectors', {
       vectorize: { dimensions: 1536, metric: 'cosine' },
-    });
-  });
-
-  it('provisions a queue resource through the Cloudflare provider', async () => {
-    mocks.createResource.mockResolvedValue({
+    }]);
+})
+  Deno.test('provisionCloudflareResource - provisions a queue resource through the Cloudflare provider', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+    mocks.generateId = (() => 'generated-id') as any;
+    mocks.now = (() => '2026-01-01T00:00:00.000Z') as any;
+    mocks.ensurePortableManagedResource = (async () => undefined) as any;
+    mocks.deletePortableManagedResource = (async () => undefined) as any;
+    mocks.resolvePortableResourceReferenceId = (async () => 'portable-resource-ref') as any;
+  mocks.createResource = (async () => ({
       providerResourceId: 'queue-id-123',
       providerResourceName: 'my-queue',
-    });
-    mocks.insertResource.mockResolvedValue(undefined);
+    })) as any;
+    mocks.insertResource = (async () => undefined) as any;
 
     const result = await provisionCloudflareResource(mockEnv, {
       ownerId: 'user-1',
@@ -157,16 +150,21 @@ describe('provisionCloudflareResource', () => {
       providerResourceName: 'my-queue',
     });
 
-    expect(result.providerResourceId).toBe('queue-id-123');
-    expect(mocks.createResource).toHaveBeenCalledWith('queue', 'my-queue', {});
-  });
-
-  it('treats analyticsEngine as a logical resource without provider provisioning', async () => {
-    mocks.createResource.mockResolvedValue({
+    assertEquals(result.providerResourceId, 'queue-id-123');
+    assertSpyCallArgs(mocks.createResource, 0, ['queue', 'my-queue', {}]);
+})
+  Deno.test('provisionCloudflareResource - treats analyticsEngine as a logical resource without provider provisioning', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+    mocks.generateId = (() => 'generated-id') as any;
+    mocks.now = (() => '2026-01-01T00:00:00.000Z') as any;
+    mocks.ensurePortableManagedResource = (async () => undefined) as any;
+    mocks.deletePortableManagedResource = (async () => undefined) as any;
+    mocks.resolvePortableResourceReferenceId = (async () => 'portable-resource-ref') as any;
+  mocks.createResource = (async () => ({
       providerResourceId: null,
       providerResourceName: 'event-dataset',
-    });
-    mocks.insertResource.mockResolvedValue(undefined);
+    })) as any;
+    mocks.insertResource = (async () => undefined) as any;
 
     const result = await provisionCloudflareResource(mockEnv, {
       ownerId: 'user-1',
@@ -175,20 +173,25 @@ describe('provisionCloudflareResource', () => {
       providerResourceName: 'event-dataset',
     });
 
-    expect(result).toEqual({
+    assertEquals(result, {
       id: 'generated-id',
       providerResourceId: null,
       providerResourceName: 'event-dataset',
     });
-    expect(mocks.createResource).toHaveBeenCalledWith('analytics_engine', 'event-dataset', {});
-  });
+    assertSpyCallArgs(mocks.createResource, 0, ['analytics_engine', 'event-dataset', {}]);
+})
+  Deno.test('provisionCloudflareResource - records failure when recordFailure is true and provider throws', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+    mocks.generateId = (() => 'generated-id') as any;
+    mocks.now = (() => '2026-01-01T00:00:00.000Z') as any;
+    mocks.ensurePortableManagedResource = (async () => undefined) as any;
+    mocks.deletePortableManagedResource = (async () => undefined) as any;
+    mocks.resolvePortableResourceReferenceId = (async () => 'portable-resource-ref') as any;
+  const error = new Error('Cloudflare API error');
+    mocks.createResource = (async () => { throw error; }) as any;
+    mocks.insertFailedResource = (async () => undefined) as any;
 
-  it('records failure when recordFailure is true and provider throws', async () => {
-    const error = new Error('Cloudflare API error');
-    mocks.createResource.mockRejectedValue(error);
-    mocks.insertFailedResource.mockResolvedValue(undefined);
-
-    await expect(
+    await await assertRejects(async () => { await 
       provisionCloudflareResource(mockEnv, {
         ownerId: 'user-1',
         name: 'Failed DB',
@@ -196,11 +199,11 @@ describe('provisionCloudflareResource', () => {
         providerResourceName: 'fail-db',
         recordFailure: true,
       })
-    ).rejects.toThrow('Cloudflare API error');
+    ; }, 'Cloudflare API error');
 
-    expect(mocks.insertFailedResource).toHaveBeenCalledWith(
+    assertSpyCallArgs(mocks.insertFailedResource, 0, [
       mockEnv.DB,
-      expect.objectContaining({
+      ({
         id: 'generated-id',
         owner_id: 'user-1',
         name: 'Failed DB',
@@ -209,34 +212,44 @@ describe('provisionCloudflareResource', () => {
         driver: 'cloudflare-d1',
         provider_name: 'cloudflare',
         provider_resource_name: 'fail-db',
-        config: expect.objectContaining({
+        config: ({
           error: 'Cloudflare API error',
         }),
       })
-    );
-  });
+    ]);
+})
+  Deno.test('provisionCloudflareResource - does not record failure when recordFailure is not set', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+    mocks.generateId = (() => 'generated-id') as any;
+    mocks.now = (() => '2026-01-01T00:00:00.000Z') as any;
+    mocks.ensurePortableManagedResource = (async () => undefined) as any;
+    mocks.deletePortableManagedResource = (async () => undefined) as any;
+    mocks.resolvePortableResourceReferenceId = (async () => 'portable-resource-ref') as any;
+  mocks.createResource = (async () => { throw new Error('API error'); }) as any;
 
-  it('does not record failure when recordFailure is not set', async () => {
-    mocks.createResource.mockRejectedValue(new Error('API error'));
-
-    await expect(
+    await await assertRejects(async () => { await 
       provisionCloudflareResource(mockEnv, {
         ownerId: 'user-1',
         name: 'Failed DB',
         type: 'sql',
         providerResourceName: 'fail-db',
       })
-    ).rejects.toThrow('API error');
+    ; }, 'API error');
 
-    expect(mocks.insertFailedResource).not.toHaveBeenCalled();
-  });
-
-  it('passes spaceId to insertResource', async () => {
-    mocks.createResource.mockResolvedValue({
+    assertSpyCalls(mocks.insertFailedResource, 0);
+})
+  Deno.test('provisionCloudflareResource - passes spaceId to insertResource', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+    mocks.generateId = (() => 'generated-id') as any;
+    mocks.now = (() => '2026-01-01T00:00:00.000Z') as any;
+    mocks.ensurePortableManagedResource = (async () => undefined) as any;
+    mocks.deletePortableManagedResource = (async () => undefined) as any;
+    mocks.resolvePortableResourceReferenceId = (async () => 'portable-resource-ref') as any;
+  mocks.createResource = (async () => ({
       providerResourceId: 'cf-id',
       providerResourceName: 'test-db',
-    });
-    mocks.insertResource.mockResolvedValue(undefined);
+    })) as any;
+    mocks.insertResource = (async () => undefined) as any;
 
     await provisionCloudflareResource(mockEnv, {
       ownerId: 'user-1',
@@ -246,20 +259,25 @@ describe('provisionCloudflareResource', () => {
       providerResourceName: 'test-db',
     });
 
-    expect(mocks.insertResource).toHaveBeenCalledWith(
+    assertSpyCallArgs(mocks.insertResource, 0, [
       expect.anything(),
-      expect.objectContaining({
+      ({
         space_id: 'space-1',
       })
-    );
-  });
-
-  it('passes config to insertResource', async () => {
-    mocks.createResource.mockResolvedValue({
+    ]);
+})
+  Deno.test('provisionCloudflareResource - passes config to insertResource', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+    mocks.generateId = (() => 'generated-id') as any;
+    mocks.now = (() => '2026-01-01T00:00:00.000Z') as any;
+    mocks.ensurePortableManagedResource = (async () => undefined) as any;
+    mocks.deletePortableManagedResource = (async () => undefined) as any;
+    mocks.resolvePortableResourceReferenceId = (async () => 'portable-resource-ref') as any;
+  mocks.createResource = (async () => ({
       providerResourceId: 'cf-id',
       providerResourceName: 'test-db',
-    });
-    mocks.insertResource.mockResolvedValue(undefined);
+    })) as any;
+    mocks.insertResource = (async () => undefined) as any;
 
     await provisionCloudflareResource(mockEnv, {
       ownerId: 'user-1',
@@ -269,18 +287,23 @@ describe('provisionCloudflareResource', () => {
       config: { region: 'us-east-1' },
     });
 
-    expect(mocks.insertResource).toHaveBeenCalledWith(
+    assertSpyCallArgs(mocks.insertResource, 0, [
       expect.anything(),
-      expect.objectContaining({
-        config: expect.objectContaining({
+      ({
+        config: ({
           region: 'us-east-1',
         }),
       })
-    );
-  });
-
-  it('records a portable sql resource without Cloudflare API calls', async () => {
-    mocks.insertResource.mockResolvedValue(undefined);
+    ]);
+})
+  Deno.test('provisionCloudflareResource - records a portable sql resource without Cloudflare API calls', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+    mocks.generateId = (() => 'generated-id') as any;
+    mocks.now = (() => '2026-01-01T00:00:00.000Z') as any;
+    mocks.ensurePortableManagedResource = (async () => undefined) as any;
+    mocks.deletePortableManagedResource = (async () => undefined) as any;
+    mocks.resolvePortableResourceReferenceId = (async () => 'portable-resource-ref') as any;
+  mocks.insertResource = (async () => undefined) as any;
 
     const result = await provisionCloudflareResource({
       DB: mockEnv.DB,
@@ -295,29 +318,34 @@ describe('provisionCloudflareResource', () => {
       persist: true,
     });
 
-    expect(mocks.createResource).not.toHaveBeenCalled();
-    expect(mocks.ensurePortableManagedResource).toHaveBeenCalledWith({
+    assertSpyCalls(mocks.createResource, 0);
+    assertSpyCallArgs(mocks.ensurePortableManagedResource, 0, [{
       id: 'generated-id',
       provider_name: 'aws',
       provider_resource_name: 'portable-db',
-    }, 'sql');
-    expect(result).toEqual({
+    }, 'sql']);
+    assertEquals(result, {
       id: 'generated-id',
       providerResourceId: 'portable-db-generated-id',
       providerResourceName: 'portable-db',
     });
-    expect(mocks.insertResource).toHaveBeenCalledWith(
+    assertSpyCallArgs(mocks.insertResource, 0, [
       mockEnv.DB,
-      expect.objectContaining({
+      ({
         provider_name: 'aws',
         provider_resource_id: 'portable-db-generated-id',
         provider_resource_name: 'portable-db',
       }),
-    );
-  });
-
-  it('supports dry-run portable resources without persistence', async () => {
-    const result = await provisionCloudflareResource({
+    ]);
+})
+  Deno.test('provisionCloudflareResource - supports dry-run portable resources without persistence', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+    mocks.generateId = (() => 'generated-id') as any;
+    mocks.now = (() => '2026-01-01T00:00:00.000Z') as any;
+    mocks.ensurePortableManagedResource = (async () => undefined) as any;
+    mocks.deletePortableManagedResource = (async () => undefined) as any;
+    mocks.resolvePortableResourceReferenceId = (async () => 'portable-resource-ref') as any;
+  const result = await provisionCloudflareResource({
       DB: mockEnv.DB,
       CF_ACCOUNT_ID: mockEnv.CF_ACCOUNT_ID,
       CF_API_TOKEN: mockEnv.CF_API_TOKEN,
@@ -330,23 +358,28 @@ describe('provisionCloudflareResource', () => {
       persist: false,
     });
 
-    expect(result).toEqual({
+    assertEquals(result, {
       id: 'generated-id',
       providerResourceId: 'dryrun-db-generated-id',
       providerResourceName: 'dryrun-db',
     });
-    expect(mocks.createResource).not.toHaveBeenCalled();
-    expect(mocks.insertResource).not.toHaveBeenCalled();
-    expect(mocks.ensurePortableManagedResource).toHaveBeenCalledWith({
+    assertSpyCalls(mocks.createResource, 0);
+    assertSpyCalls(mocks.insertResource, 0);
+    assertSpyCallArgs(mocks.ensurePortableManagedResource, 0, [{
       id: 'generated-id',
       provider_name: 'gcp',
       provider_resource_name: 'dryrun-db',
-    }, 'sql');
-  });
-
-  it('stores a portable secret reference as provider resource id', async () => {
-    mocks.insertResource.mockResolvedValue(undefined);
-    mocks.ensurePortableManagedResource.mockResolvedValue(undefined);
+    }, 'sql']);
+})
+  Deno.test('provisionCloudflareResource - stores a portable secret reference as provider resource id', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+    mocks.generateId = (() => 'generated-id') as any;
+    mocks.now = (() => '2026-01-01T00:00:00.000Z') as any;
+    mocks.ensurePortableManagedResource = (async () => undefined) as any;
+    mocks.deletePortableManagedResource = (async () => undefined) as any;
+    mocks.resolvePortableResourceReferenceId = (async () => 'portable-resource-ref') as any;
+  mocks.insertResource = (async () => undefined) as any;
+    mocks.ensurePortableManagedResource = (async () => undefined) as any;
 
     const result = await provisionCloudflareResource({
       DB: mockEnv.DB,
@@ -361,20 +394,25 @@ describe('provisionCloudflareResource', () => {
       persist: true,
     });
 
-    expect(result.providerResourceName).toBe('portable-secret');
-    expect(result.providerResourceId).toBe('portable-resource-ref');
-    expect(mocks.insertResource).toHaveBeenCalledWith(
+    assertEquals(result.providerResourceName, 'portable-secret');
+    assertEquals(result.providerResourceId, 'portable-resource-ref');
+    assertSpyCallArgs(mocks.insertResource, 0, [
       mockEnv.DB,
-      expect.objectContaining({
+      ({
         provider_name: 'local',
         provider_resource_name: 'portable-secret',
         provider_resource_id: 'portable-resource-ref',
       }),
-    );
-  });
-
-  it('does not call Cloudflare delete API for non-cloudflare provider', async () => {
-    await deleteManagedResource({
+    ]);
+})
+  Deno.test('provisionCloudflareResource - does not call Cloudflare delete API for non-cloudflare provider', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+    mocks.generateId = (() => 'generated-id') as any;
+    mocks.now = (() => '2026-01-01T00:00:00.000Z') as any;
+    mocks.ensurePortableManagedResource = (async () => undefined) as any;
+    mocks.deletePortableManagedResource = (async () => undefined) as any;
+    mocks.resolvePortableResourceReferenceId = (async () => 'portable-resource-ref') as any;
+  await deleteManagedResource({
       DB: mockEnv.DB,
       CF_ACCOUNT_ID: mockEnv.CF_ACCOUNT_ID,
       CF_API_TOKEN: mockEnv.CF_API_TOKEN,
@@ -385,11 +423,10 @@ describe('provisionCloudflareResource', () => {
       providerResourceName: 'portable-db',
     });
 
-    expect(mocks.deleteResource).not.toHaveBeenCalled();
-    expect(mocks.deletePortableManagedResource).toHaveBeenCalledWith({
+    assertSpyCalls(mocks.deleteResource, 0);
+    assertSpyCallArgs(mocks.deletePortableManagedResource, 0, [{
       id: 'remote-id',
       provider_name: 'k8s',
       provider_resource_name: 'portable-db',
-    }, 'sql');
-  });
-});
+    }, 'sql']);
+})

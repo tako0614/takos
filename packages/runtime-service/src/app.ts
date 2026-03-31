@@ -1,5 +1,4 @@
 import { Hono } from 'hono';
-import { serve } from '@hono/node-server';
 import { randomUUID } from 'node:crypto';
 import {
   PORT,
@@ -12,7 +11,7 @@ import {
   RATE_LIMIT_GIT_MAX,
   RATE_LIMIT_REPOS_MAX,
   RATE_LIMIT_CLI_PROXY_MAX,
-} from './shared/config.js';
+} from './shared/config.ts';
 import {
   createServiceTokenMiddleware,
   getServiceTokenFromHeader,
@@ -20,27 +19,27 @@ import {
   notFoundHandler,
   forbidden,
 } from 'takos-common/middleware/hono';
-import { createRateLimiter } from './middleware/rate-limit.js';
-import execRoutes from './routes/runtime/exec.js';
-import toolsRoutes from './routes/runtime/tools.js';
-import sessionExecutionRoutes from './routes/sessions/execution.js';
-import sessionFilesRoutes from './routes/sessions/files.js';
-import sessionSnapshotRoutes from './routes/sessions/snapshot.js';
-import sessionSessionsRoutes from './routes/sessions/session-routes.js';
-import repoReadRoutes from './routes/repos/read.js';
-import repoWriteRoutes from './routes/repos/write.js';
+import { createRateLimiter } from './middleware/rate-limit.ts';
+import execRoutes from './routes/runtime/exec.ts';
+import toolsRoutes from './routes/runtime/tools.ts';
+import sessionExecutionRoutes from './routes/sessions/execution.ts';
+import sessionFilesRoutes from './routes/sessions/files.ts';
+import sessionSnapshotRoutes from './routes/sessions/snapshot.ts';
+import sessionSessionsRoutes from './routes/sessions/session-routes.ts';
+import repoReadRoutes from './routes/repos/read.ts';
+import repoWriteRoutes from './routes/repos/write.ts';
 import {
   enforceSpaceScopeMiddleware,
   getSpaceIdFromBody,
   getSpaceIdFromPath,
-} from './middleware/space-scope.js';
-import gitInitRoutes from './routes/git/init.js';
-import gitHttpRoutes from './routes/git/http.js';
-import actionsRoutes from './routes/actions/index.js';
-import { jobManager } from './runtime/actions/job-manager.js';
-import cliProxyRoutes from './routes/cli/proxy.js';
-import { isR2Configured } from './storage/r2.js';
-import { sessionStore } from './routes/sessions/storage.js';
+} from './middleware/space-scope.ts';
+import gitInitRoutes from './routes/git/init.ts';
+import gitHttpRoutes from './routes/git/http.ts';
+import actionsRoutes from './routes/actions/index.ts';
+import { jobManager } from './runtime/actions/job-manager.ts';
+import cliProxyRoutes from './routes/cli/proxy.ts';
+import { isR2Configured } from './storage/r2.ts';
+import { sessionStore } from './routes/sessions/storage.ts';
 import { createLogger } from 'takos-common/logger';
 
 export type RuntimeServiceOptions = {
@@ -79,8 +78,8 @@ export function createRuntimeServiceApp(options: RuntimeServiceOptions = {}): Ho
     clockToleranceSeconds: 30,
   });
 
-  const isProduction = options.isProduction ?? process.env.NODE_ENV === 'production';
-  const isContainerEnvironment = options.isContainerEnvironment ?? !!process.env.CF_CONTAINER;
+  const isProduction = options.isProduction ?? Deno.env.get('NODE_ENV') === 'production';
+  const isContainerEnvironment = options.isContainerEnvironment ?? !!Deno.env.get('CF_CONTAINER');
   const logger = createLogger({ service: options.serviceName ?? 'takos-runtime' });
   const app = new Hono();
 
@@ -209,13 +208,14 @@ export function startRuntimeService(options: RuntimeServiceOptions = {}) {
   sessionStore.startCleanup();
   jobManager.startCleanup();
 
-  const server = serve({ fetch: app.fetch, port }, () => {
-    logger.info(`Takos runtime listening on port ${port}`);
-    logger.info(`R2 configured: ${isR2Configured()}`);
-  });
+  const abortController = new AbortController();
+
+  const server = Deno.serve({ port, signal: abortController.signal }, app.fetch);
+  logger.info(`Takos runtime listening on port ${port}`);
+  logger.info(`R2 configured: ${isR2Configured()}`);
 
   let shuttingDown = false;
-  function shutdown(signal: NodeJS.Signals): void {
+  function shutdown(signal: string): void {
     if (shuttingDown) return;
     shuttingDown = true;
 
@@ -223,23 +223,19 @@ export function startRuntimeService(options: RuntimeServiceOptions = {}) {
     sessionStore.stopCleanup();
     jobManager.stopCleanup();
 
-    server.close((err) => {
-      if (err) {
-        logger.error('Error while closing HTTP server', { signal, error: err });
-        process.exit(1);
-        return;
-      }
-      process.exit(0);
+    abortController.abort();
+    server.finished.then(() => {
+      Deno.exit(0);
     });
 
     setTimeout(() => {
       logger.error('Forced shutdown timeout reached', { signal });
-      process.exit(1);
-    }, 10_000).unref();
+      Deno.exit(1);
+    }, 10_000);
   }
 
-  process.once('SIGTERM', () => shutdown('SIGTERM'));
-  process.once('SIGINT', () => shutdown('SIGINT'));
+  Deno.addSignalListener('SIGTERM', () => shutdown('SIGTERM'));
+  Deno.addSignalListener('SIGINT', () => shutdown('SIGINT'));
 
   return { app, server };
 }

@@ -1,27 +1,25 @@
-import { describe, expect, it } from 'vitest';
-
 import {
   filterBindingsByCapabilities,
   selectAllowedCapabilities,
 } from '@/services/platform/capabilities';
 
-describe('selectAllowedCapabilities', () => {
-  it('grants non-AI tenant resource capabilities to editors', () => {
-    const allowed = selectAllowedCapabilities({
+
+import { assertEquals } from 'jsr:@std/assert';
+
+  Deno.test('selectAllowedCapabilities - grants non-AI tenant resource capabilities to editors', () => {
+  const allowed = selectAllowedCapabilities({
       role: 'editor',
       securityPosture: 'standard',
       tenantType: 'third_party',
     });
 
-    expect(allowed.has('queue.write')).toBe(true);
-    expect(allowed.has('analytics.write')).toBe(true);
-    expect(allowed.has('workflow.invoke')).toBe(true);
-  });
-});
+    assertEquals(allowed.has('queue.write'), true);
+    assertEquals(allowed.has('analytics.write'), true);
+    assertEquals(allowed.has('workflow.invoke'), true);
+})
 
-describe('filterBindingsByCapabilities', () => {
-  it('allows queue, analytics, and workflow bindings when their capabilities are granted', () => {
-    const { allowedBindings, deniedBindings } = filterBindingsByCapabilities({
+  Deno.test('filterBindingsByCapabilities - allows queue, analytics, and workflow bindings when their capabilities are granted', () => {
+  const { allowedBindings, deniedBindings } = filterBindingsByCapabilities({
       allowed: new Set(['queue.write', 'analytics.write', 'workflow.invoke']),
       bindings: [
         { type: 'queue', name: 'JOB_QUEUE', queue_name: 'jobs' },
@@ -30,21 +28,19 @@ describe('filterBindingsByCapabilities', () => {
       ],
     });
 
-    expect(allowedBindings).toHaveLength(3);
-    expect(deniedBindings).toEqual([]);
-  });
-
-  it('denies workflow bindings without workflow.invoke', () => {
-    const { allowedBindings, deniedBindings } = filterBindingsByCapabilities({
+    assertEquals(allowedBindings.length, 3);
+    assertEquals(deniedBindings, []);
+})
+  Deno.test('filterBindingsByCapabilities - denies workflow bindings without workflow.invoke', () => {
+  const { allowedBindings, deniedBindings } = filterBindingsByCapabilities({
       allowed: new Set(['queue.write', 'analytics.write']),
       bindings: [
         { type: 'workflow', name: 'PUBLISH_FLOW', workflow_name: 'publish-flow' },
       ],
     });
 
-    expect(allowedBindings).toEqual([]);
-    expect(deniedBindings).toEqual([
+    assertEquals(allowedBindings, []);
+    assertEquals(deniedBindings, [
       { type: 'workflow', name: 'PUBLISH_FLOW', workflow_name: 'publish-flow' },
     ]);
-  });
-});
+})

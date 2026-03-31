@@ -7,8 +7,8 @@ import type {
   ParsedWorkflow,
   WorkflowDiagnostic,
   WorkflowTrigger,
-} from '../workflow-models.js';
-import { normalizeNeedsInput } from '../scheduler/job.js';
+} from '../workflow-models.ts';
+import { normalizeNeedsInput } from '../scheduler/job.ts';
 
 /**
  * ワークフロー解析失敗時に投げるエラー

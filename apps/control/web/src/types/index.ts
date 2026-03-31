@@ -57,3 +57,5 @@ export type {
 } from './repository';
 
 export type { StorageFile } from './storage';
+
+export type { CustomTool, McpServerRecord } from './hub';

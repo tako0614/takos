@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { createSignal, createEffect, createMemo, onCleanup } from 'solid-js';
+import { Show } from 'solid-js';
 import { ChatView } from '../ChatView';
 import { ChatHeader } from './ChatHeader';
 import { ModelSwitcher } from './ModelSwitcher';
@@ -24,59 +25,51 @@ interface ChatPageProps {
   onNewThreadCreated?: (spaceId: string, thread: Thread) => void;
 }
 
-export function ChatPage({
-  spaces,
-  initialSpaceId,
-  initialThreadId,
-  initialRunId,
-  initialMessageId,
-  onSpaceChange,
-  onThreadChange,
-  onUpdateThread,
-  onNewThreadCreated,
-}: ChatPageProps) {
+export function ChatPage(props: ChatPageProps) {
   const { t, lang } = useI18n();
   const { showToast } = useToast();
   const { setHeaderContent } = useMobileHeader();
 
-  const [selectedSpaceId, setSelectedSpaceId] = useState<string | null>(
-    initialSpaceId || null
+  const [selectedSpaceId, setSelectedSpaceId] = createSignal<string | null>(
+    props.initialSpaceId || null
   );
 
   // Model state for WelcomeView header
-  const [selectedModel, setSelectedModel] = useState<string>(DEFAULT_MODEL_ID);
+  const [selectedModel, setSelectedModel] = createSignal<string>(DEFAULT_MODEL_ID);
 
-  const selectedSpace = useMemo(() => {
-    if (selectedSpaceId) {
-      return findSpaceByIdentifier(spaces, selectedSpaceId, t('personal'));
+  const selectedSpace = createMemo(() => {
+    const spaceId = selectedSpaceId();
+    if (spaceId) {
+      return findSpaceByIdentifier(props.spaces, spaceId, t('personal'));
     }
     return null;
-  }, [spaces, selectedSpaceId, t]);
+  });
 
-  const [selectedThread, setSelectedThread] = useState<Thread | null>(null);
-  const [pendingMessage, setPendingMessage] = useState<string | null>(null);
-  const [pendingFiles, setPendingFiles] = useState<File[] | null>(null);
-  const [showSearchModal, setShowSearchModal] = useState(false);
-  const [jumpToMessageId, setJumpToMessageId] = useState<string | null>(initialMessageId ?? null);
-  const [jumpToMessageSequence, setJumpToMessageSequence] = useState<number | null>(null);
-  const [focusRunId, setFocusRunId] = useState<string | null>(initialRunId ?? null);
+  const [selectedThread, setSelectedThread] = createSignal<Thread | null>(null);
+  const [pendingMessage, setPendingMessage] = createSignal<string | null>(null);
+  const [pendingFiles, setPendingFiles] = createSignal<File[] | null>(null);
+  const [showSearchModal, setShowSearchModal] = createSignal(false);
+  const [jumpToMessageId, setJumpToMessageId] = createSignal<string | null>(props.initialMessageId ?? null);
+  const [jumpToMessageSequence, setJumpToMessageSequence] = createSignal<number | null>(null);
+  const [focusRunId, setFocusRunId] = createSignal<string | null>(props.initialRunId ?? null);
 
-  useEffect(() => {
-    if (spaces.length > 0 && !selectedSpaceId) {
-      const ws = getPersonalSpace(spaces, t('personal')) || spaces[0];
+  createEffect(() => {
+    if (props.spaces.length > 0 && !selectedSpaceId()) {
+      const ws = getPersonalSpace(props.spaces, t('personal')) || props.spaces[0];
       const identifier = getSpaceIdentifier(ws);
       setSelectedSpaceId(identifier);
-      onSpaceChange?.(identifier);
+      props.onSpaceChange?.(identifier);
     }
-  }, [spaces, selectedSpaceId, t, onSpaceChange]);
+  });
 
-  useEffect(() => {
-    if (!selectedSpaceId) return;
+  createEffect(() => {
+    const spaceId = selectedSpaceId();
+    if (!spaceId) return;
     let cancelled = false;
     const fetchModel = async () => {
       try {
         const res = await rpc.spaces[':spaceId'].model.$get({
-          param: { spaceId: selectedSpaceId },
+          param: { spaceId },
         });
         const data = await rpcJson<{ ai_model?: string; model?: string }>(res);
         if (cancelled) return;
@@ -87,22 +80,23 @@ export function ChatPage({
       }
     };
     fetchModel();
-    return () => { cancelled = true; };
-  }, [selectedSpaceId]);
+    onCleanup(() => { cancelled = true; });
+  });
 
   // WelcomeView表示時のみモバイルヘッダーにモデル切り替えを注入（スレッドがあるときはChatViewが担当）
-  useEffect(() => {
-    if (selectedThread) return;
+  createEffect(() => {
+    if (selectedThread()) return;
     setHeaderContent(
       <ModelSwitcher
-        selectedModel={selectedModel}
+        selectedModel={selectedModel()}
         isLoading={false}
         onModelChange={async (model) => {
           setSelectedModel(model);
-          if (selectedSpaceId) {
+          const spaceId = selectedSpaceId();
+          if (spaceId) {
             try {
               const res = await rpc.spaces[':spaceId'].model.$patch({
-                param: { spaceId: selectedSpaceId },
+                param: { spaceId },
                 json: { model } as Record<string, string>,
               });
               await rpcJson(res);
@@ -113,15 +107,15 @@ export function ChatPage({
         }}
       />
     );
-    return () => setHeaderContent(null);
-  }, [selectedThread, selectedModel, selectedSpaceId, setHeaderContent]);
+    onCleanup(() => setHeaderContent(null));
+  });
 
-  useEffect(() => {
-    if (initialThreadId) {
-      // Try to find thread from a fresh fetch if needed
+  createEffect(() => {
+    const threadId = props.initialThreadId;
+    if (threadId) {
       const fetchThread = async () => {
         try {
-          const res = await rpc.threads[':id'].$get({ param: { id: initialThreadId } });
+          const res = await rpc.threads[':id'].$get({ param: { id: threadId } });
           const data = await rpcJson<{ thread: Thread }>(res);
           setSelectedThread(data.thread);
         } catch {
@@ -132,89 +126,70 @@ export function ChatPage({
     } else {
       setSelectedThread(null);
     }
-  }, [initialThreadId]);
+  });
 
-  useEffect(() => {
-    setFocusRunId(initialRunId ?? null);
-  }, [initialRunId]);
+  createEffect(() => {
+    setFocusRunId(props.initialRunId ?? null);
+  });
 
-  useEffect(() => {
-    setJumpToMessageId(initialMessageId ?? null);
-  }, [initialMessageId]);
+  createEffect(() => {
+    setJumpToMessageId(props.initialMessageId ?? null);
+  });
 
-  const openSearchResult = useCallback(async (threadId: string, messageId: string, sequence: number) => {
+  const openSearchResult = async (threadId: string, messageId: string, sequence: number) => {
     try {
       const res = await rpc.threads[':id'].$get({ param: { id: threadId } });
       const data = await rpcJson<{ thread: Thread }>(res);
       const thread = data.thread;
       setSelectedThread(thread);
-      onThreadChange?.(thread.id);
+      props.onThreadChange?.(thread.id);
       setJumpToMessageId(messageId);
       setJumpToMessageSequence(sequence);
     } catch (err) {
       showToast('error', err instanceof Error ? err.message : t('failedToLoad'));
     }
-  }, [onThreadChange, showToast, t]);
+  };
 
   // Called by WelcomeView when user sends a message
-  const handleCreateThread = useCallback(async (message: string, files?: File[]) => {
-    if (!selectedSpaceId) return;
+  const handleCreateThread = async (message: string, files?: File[]) => {
+    const spaceId = selectedSpaceId();
+    if (!spaceId) return;
     try {
       const res = await rpc.spaces[':spaceId'].threads.$post({
-        param: { spaceId: selectedSpaceId },
+        param: { spaceId },
         json: { title: message.slice(0, 60), locale: lang },
       });
       const data = await rpcJson<{ thread: Thread }>(res);
       const thread = data.thread;
-      onNewThreadCreated?.(selectedSpaceId, thread);
+      props.onNewThreadCreated?.(spaceId, thread);
       setSelectedThread(thread);
       setPendingMessage(message);
       setPendingFiles(files ?? null);
-      onThreadChange?.(thread.id);
+      props.onThreadChange?.(thread.id);
     } catch (err) {
       showToast('error', err instanceof Error ? err.message : t('failedToCreate'));
     }
-  }, [lang, selectedSpaceId, onNewThreadCreated, onThreadChange, showToast, t]);
+  };
 
   return (
-    <div className="flex flex-1 h-full bg-white dark:bg-zinc-900">
-      <main className="flex-1 flex flex-col min-w-0 h-full">
-        {selectedThread && selectedSpace ? (
-          <ChatView
-            thread={selectedThread}
-            spaceId={getSpaceIdentifier(selectedSpace)}
-            jumpToMessageId={jumpToMessageId}
-            jumpToMessageSequence={jumpToMessageSequence}
-            focusRunId={focusRunId}
-            onJumpHandled={() => {
-              setJumpToMessageId(null);
-              setJumpToMessageSequence(null);
-            }}
-            onRunFocusHandled={() => {
-              setFocusRunId(null);
-            }}
-            onOpenSearch={selectedSpaceId ? () => setShowSearchModal(true) : undefined}
-            initialMessage={pendingMessage ?? undefined}
-            initialFiles={pendingFiles ?? undefined}
-            onInitialMessageSent={() => { setPendingMessage(null); setPendingFiles(null); }}
-            onUpdateTitle={(title) => {
-              setSelectedThread((prev) => (prev ? { ...prev, title } : prev));
-              if (selectedThread) {
-                onUpdateThread?.(selectedThread.id, { title });
-              }
-            }}
-          />
-        ) : selectedSpace ? (
-          <>
+    <div class="flex flex-1 h-full bg-white dark:bg-zinc-900">
+      <main class="flex-1 flex flex-col min-w-0 h-full">
+        <Show when={selectedThread() && selectedSpace()} fallback={
+          <Show when={selectedSpace()} fallback={
+            <div class="flex-1 flex items-center justify-center text-zinc-500 dark:text-zinc-400">
+              <p>{t('selectSpaceToChat')}</p>
+            </div>
+          }>
             <ChatHeader
-              selectedModel={selectedModel}
+              selectedModel={selectedModel()}
               isLoading={false}
               onModelChange={async (model) => {
                 setSelectedModel(model);
-                if (selectedSpaceId) {
+                const spaceId = selectedSpaceId();
+                if (spaceId) {
                   try {
                     const res = await rpc.spaces[':spaceId'].model.$patch({
-                      param: { spaceId: selectedSpaceId },
+                      param: { spaceId },
                       json: { model } as Record<string, string>,
                     });
                     await rpcJson(res);
@@ -225,27 +200,49 @@ export function ChatPage({
               }}
             />
             <WelcomeView
-              space={selectedSpace}
+              space={selectedSpace()!}
               onNewChat={() => {
-                onSpaceChange?.(getSpaceIdentifier(selectedSpace));
+                props.onSpaceChange?.(getSpaceIdentifier(selectedSpace()!));
               }}
               onCreateThread={handleCreateThread}
             />
-          </>
-        ) : (
-          <div className="flex-1 flex items-center justify-center text-zinc-500 dark:text-zinc-400">
-            <p>{t('selectSpaceToChat')}</p>
-          </div>
-        )}
+          </Show>
+        }>
+          <ChatView
+            thread={selectedThread()!}
+            spaceId={getSpaceIdentifier(selectedSpace()!)}
+            jumpToMessageId={jumpToMessageId()}
+            jumpToMessageSequence={jumpToMessageSequence()}
+            focusRunId={focusRunId()}
+            onJumpHandled={() => {
+              setJumpToMessageId(null);
+              setJumpToMessageSequence(null);
+            }}
+            onRunFocusHandled={() => {
+              setFocusRunId(null);
+            }}
+            onOpenSearch={selectedSpaceId() ? () => setShowSearchModal(true) : undefined}
+            initialMessage={pendingMessage() ?? undefined}
+            initialFiles={pendingFiles() ?? undefined}
+            onInitialMessageSent={() => { setPendingMessage(null); setPendingFiles(null); }}
+            onUpdateTitle={(title) => {
+              setSelectedThread((prev) => (prev ? { ...prev, title } : prev));
+              const thread = selectedThread();
+              if (thread) {
+                props.onUpdateThread?.(thread.id, { title });
+              }
+            }}
+          />
+        </Show>
       </main>
 
-      {showSearchModal && selectedSpaceId && (
+      <Show when={showSearchModal() && selectedSpaceId()}>
         <ChatSearchModal
-          spaceId={selectedSpaceId}
+          spaceId={selectedSpaceId()!}
           onSelectResult={openSearchResult}
           onClose={() => setShowSearchModal(false)}
         />
-      )}
+      </Show>
     </div>
   );
 }

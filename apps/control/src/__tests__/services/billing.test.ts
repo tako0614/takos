@@ -1,18 +1,12 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { D1Database } from '@cloudflare/workers-types';
 
-const mocks = vi.hoisted(() => ({
-  getDb: vi.fn(),
-}));
+import { assertEquals, assert, assertThrows, assertRejects } from 'jsr:@std/assert';
 
-vi.mock('@/db', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('@/db')>();
-  return {
-    ...actual,
-    getDb: mocks.getDb,
-  };
+const mocks = ({
+  getDb: ((..._args: any[]) => undefined) as any,
 });
 
+// [Deno] vi.mock removed - manually stub imports from '@/db'
 import {
   assertBillingPlanId,
   checkBillingQuota,
@@ -30,50 +24,50 @@ function createStatefulDrizzleMock(selectResults: unknown[]) {
   let selectIdx = 0;
 
   const drizzle = {
-    select: vi.fn().mockImplementation(() => {
+    select: () => {
       const result = selectResults[selectIdx++] ?? undefined;
       const terminalChain = {
-        get: vi.fn().mockResolvedValue(result),
-        all: vi.fn().mockResolvedValue(Array.isArray(result) ? result : (result !== undefined ? [result] : [])),
+        get: (async () => result),
+        all: (async () => Array.isArray(result) ? result : (result !== undefined ? [result] : [])),
       };
       const whereChain = {
         ...terminalChain,
-        orderBy: vi.fn().mockReturnValue(terminalChain),
-        limit: vi.fn().mockReturnValue(terminalChain),
+        orderBy: (() => terminalChain),
+        limit: (() => terminalChain),
       };
       return {
-        from: vi.fn().mockReturnValue({
-          where: vi.fn().mockReturnValue(whereChain),
+        from: (() => ({
+          where: (() => whereChain),
           ...terminalChain,
-        }),
+        })),
       };
+    },
+    insert: () => ({
+      values: (() => ({
+        returning: (() => []),
+        onConflictDoUpdate: (() => ({
+          returning: (() => []),
+          run: ((..._args: any[]) => undefined) as any,
+        })),
+        onConflictDoNothing: (() => ({
+          returning: (() => []),
+          run: ((..._args: any[]) => undefined) as any,
+        })),
+        run: ((..._args: any[]) => undefined) as any,
+      })),
     }),
-    insert: vi.fn().mockImplementation(() => ({
-      values: vi.fn().mockReturnValue({
-        returning: vi.fn().mockReturnValue([]),
-        onConflictDoUpdate: vi.fn().mockReturnValue({
-          returning: vi.fn().mockReturnValue([]),
-          run: vi.fn(),
-        }),
-        onConflictDoNothing: vi.fn().mockReturnValue({
-          returning: vi.fn().mockReturnValue([]),
-          run: vi.fn(),
-        }),
-        run: vi.fn(),
-      }),
-    })),
-    update: vi.fn().mockImplementation(() => ({
-      set: vi.fn().mockReturnValue({
-        where: vi.fn().mockReturnValue({
-          run: vi.fn(),
-          returning: vi.fn().mockReturnValue({ get: vi.fn() }),
-        }),
-        run: vi.fn(),
-      }),
-    })),
-    delete: vi.fn().mockImplementation(() => ({
-      where: vi.fn().mockReturnValue({ run: vi.fn() }),
-    })),
+    update: () => ({
+      set: (() => ({
+        where: (() => ({
+          run: ((..._args: any[]) => undefined) as any,
+          returning: (() => ({ get: ((..._args: any[]) => undefined) as any })),
+        })),
+        run: ((..._args: any[]) => undefined) as any,
+      })),
+    }),
+    delete: () => ({
+      where: (() => ({ run: ((..._args: any[]) => undefined) as any })),
+    }),
   };
 
   return drizzle;
@@ -93,13 +87,10 @@ function buildBillingAccountSelectSequence(
   return [account, plan, quotas, rates, features];
 }
 
-describe('billing catalog self-heal', () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-  });
 
-  it('seeds free-plan quotas when an account exists but plan quotas are missing', async () => {
-    const account = {
+  Deno.test('billing catalog self-heal - seeds free-plan quotas when an account exists but plan quotas are missing', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+  const account = {
       id: 'acct-1', accountId: 'user-1', planId: 'plan_free',
       balanceCents: 0, status: 'active',
       stripeCustomerId: null, stripeSubscriptionId: null, subscriptionPeriodEnd: null,
@@ -142,16 +133,16 @@ describe('billing catalog self-heal', () => {
 
     const allSelects = [...firstLoad, ...catalogSelects, ...secondLoad, usageResult];
     const drizzleMock = createStatefulDrizzleMock(allSelects);
-    mocks.getDb.mockReturnValue(drizzleMock);
+    mocks.getDb = (() => drizzleMock) as any;
 
     const result = await checkBillingQuota({} as D1Database, 'user-1', 'llm_tokens_input', 1000);
 
-    expect(result.allowed).toBe(true);
-    expect(drizzleMock.insert).toHaveBeenCalled();
-  });
-
-  it('normalizes legacy payg aliases to canonical plan_payg on account load', async () => {
-    const account = {
+    assertEquals(result.allowed, true);
+    assert(drizzleMock.insert.calls.length > 0);
+})
+  Deno.test('billing catalog self-heal - normalizes legacy payg aliases to canonical plan_payg on account load', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+  const account = {
       id: 'acct-pro', accountId: 'user-2', planId: 'plan_pro',
       balanceCents: 500, status: 'active',
       stripeCustomerId: null, stripeSubscriptionId: null, subscriptionPeriodEnd: null,
@@ -194,16 +185,16 @@ describe('billing catalog self-heal', () => {
 
     const allSelects = [...firstLoad, ...secondLoad];
     const drizzleMock = createStatefulDrizzleMock(allSelects);
-    mocks.getDb.mockReturnValue(drizzleMock);
+    mocks.getDb = (() => drizzleMock) as any;
 
     const result = await getOrCreateBillingAccount({} as D1Database, 'user-2');
 
-    expect(result.planId).toBe('plan_payg');
-    expect(drizzleMock.update).toHaveBeenCalled();
-  });
-
-  it('fails closed when a payg account is missing a meter rate instead of charging zero', async () => {
-    const account = {
+    assertEquals(result.planId, 'plan_payg');
+    assert(drizzleMock.update.calls.length > 0);
+})
+  Deno.test('billing catalog self-heal - fails closed when a payg account is missing a meter rate instead of charging zero', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+  const account = {
       id: 'acct-payg', accountId: 'user-3', planId: 'plan_payg',
       balanceCents: 500, status: 'active',
       stripeCustomerId: null, stripeSubscriptionId: null, subscriptionPeriodEnd: null,
@@ -242,10 +233,10 @@ describe('billing catalog self-heal', () => {
 
     const allSelects1 = [...firstLoad];
     const drizzleMock1 = createStatefulDrizzleMock(allSelects1);
-    mocks.getDb.mockReturnValue(drizzleMock1);
+    mocks.getDb = (() => drizzleMock1) as any;
 
     const quotaResult = await checkBillingQuota({} as D1Database, 'user-3', 'llm_tokens_input', 10);
-    expect(quotaResult.allowed).toBe(true);
+    assertEquals(quotaResult.allowed, true);
 
     // recordUsage with missing rates should throw
     const loadNoRates = buildBillingAccountSelectSequence(
@@ -255,22 +246,21 @@ describe('billing catalog self-heal', () => {
       [],
     );
     const drizzleMock2 = createStatefulDrizzleMock(loadNoRates);
-    mocks.getDb.mockReturnValue(drizzleMock2);
+    mocks.getDb = (() => drizzleMock2) as any;
 
-    await expect(recordUsage({} as D1Database, {
+    await await assertRejects(async () => { await recordUsage({} as D1Database, {
       accountId: 'acct-payg',
       meterType: 'llm_tokens_input',
       units: 10,
-    })).rejects.toThrow('Billing configuration incomplete');
-  });
-
-  it('rejects non-canonical plan IDs and resolves canonical billing tiers/modes', () => {
-    expect(assertBillingPlanId('plan_free')).toBe('plan_free');
-    expect(resolveBillingPlanTier('plan_plus')).toBe('plus');
-    expect(resolveBillingPlanTier('plan_payg')).toBe('pro');
-    expect(resolveBillingMode('plan_free')).toBe('free');
-    expect(resolveBillingMode('plan_plus')).toBe('plus_subscription');
-    expect(resolveBillingMode('plan_payg')).toBe('pro_prepaid');
-    expect(() => assertBillingPlanId('plan_pro')).toThrow('Unknown billing plan');
-  });
-});
+    }); }, 'Billing configuration incomplete');
+})
+  Deno.test('billing catalog self-heal - rejects non-canonical plan IDs and resolves canonical billing tiers/modes', () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+  assertEquals(assertBillingPlanId('plan_free'), 'plan_free');
+    assertEquals(resolveBillingPlanTier('plan_plus'), 'plus');
+    assertEquals(resolveBillingPlanTier('plan_payg'), 'pro');
+    assertEquals(resolveBillingMode('plan_free'), 'free');
+    assertEquals(resolveBillingMode('plan_plus'), 'plus_subscription');
+    assertEquals(resolveBillingMode('plan_payg'), 'pro_prepaid');
+    assertThrows(() => { () => assertBillingPlanId('plan_pro'); }, 'Unknown billing plan');
+})

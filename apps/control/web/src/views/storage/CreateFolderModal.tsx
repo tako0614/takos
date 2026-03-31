@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react';
+import { createSignal } from 'solid-js';
 import { useI18n } from '../../store/i18n';
 import { useToast } from '../../store/toast';
 import { Modal } from '../../components/ui/Modal';
@@ -11,54 +11,54 @@ interface CreateFolderModalProps {
   createFolder: (name: string) => Promise<unknown>;
 }
 
-export function CreateFolderModal({ isOpen, onClose, createFolder }: CreateFolderModalProps) {
+export function CreateFolderModal(props: CreateFolderModalProps) {
   const { t } = useI18n();
   const { showToast } = useToast();
-  const [newFolderName, setNewFolderName] = useState('');
+  const [newFolderName, setNewFolderName] = createSignal('');
 
-  const handleClose = useCallback(() => {
-    onClose();
+  const handleClose = () => {
+    props.onClose();
     setNewFolderName('');
-  }, [onClose]);
+  };
 
-  const handleCreate = useCallback(async () => {
-    if (!newFolderName.trim()) return;
+  const handleCreate = async () => {
+    if (!newFolderName().trim()) return;
 
-    const result = await createFolder(newFolderName.trim());
+    const result = await props.createFolder(newFolderName().trim());
     if (result) {
-      showToast('success', t('folderCreated').replace('{name}', newFolderName));
+      showToast('success', t('folderCreated').replace('{name}', newFolderName()));
       handleClose();
     } else {
       showToast('error', t('failedToCreateFolder'));
     }
-  }, [newFolderName, createFolder, showToast, t, handleClose]);
+  };
 
   return (
     <Modal
-      isOpen={isOpen}
+      isOpen={props.isOpen}
       onClose={handleClose}
       title={t('createNewFolder')}
     >
-      <div className="space-y-4">
+      <div class="space-y-4">
         <Input
-          value={newFolderName}
-          onChange={(e) => setNewFolderName(e.target.value)}
+          value={newFolderName()}
+          onInput={(e) => setNewFolderName((e.target as HTMLInputElement).value)}
           placeholder={t('folderName')}
-          autoFocus
+          autofocus
           onKeyDown={(e) => {
-            if (e.key === 'Enter' && newFolderName.trim()) {
+            if (e.key === 'Enter' && newFolderName().trim()) {
               handleCreate();
             }
           }}
         />
-        <div className="flex justify-end gap-2">
+        <div class="flex justify-end gap-2">
           <Button variant="ghost" onClick={handleClose}>
             {t('cancel')}
           </Button>
           <Button
             variant="primary"
             onClick={handleCreate}
-            disabled={!newFolderName.trim()}
+            disabled={!newFolderName().trim()}
           >
             {t('create')}
           </Button>

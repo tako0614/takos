@@ -1,6 +1,6 @@
-import { useCallback } from 'react';
+import type { Setter } from 'solid-js';
 import type { TranslationKey } from '../store/i18n';
-import { rpc, rpcJson } from '../lib/rpc';
+import { rpc, rpcJson, rpcPath } from '../lib/rpc';
 import type { Message, Run } from '../types';
 import type { ChatAttachmentMetadata } from '../views/chat/messageMetadata';
 import { buildChatMessageMetadata } from '../views/chat/messageMetadata';
@@ -19,20 +19,20 @@ export interface UseChatMessagesOptions {
   setAttachedFiles: (files: File[]) => void;
   // From useWebSocketConnection
   isLoading: boolean;
-  rootRunIdRef: React.MutableRefObject<string | null>;
+  rootRunIdRef: { current: string | null };
   closeWebSocket: () => void;
-  currentRunIdRef: React.MutableRefObject<string | null>;
-  lastEventIdRef: React.MutableRefObject<number>;
+  currentRunIdRef: { current: string | null };
+  lastEventIdRef: { current: number };
   resetStreamingState: () => void;
   resetTimeline: () => void;
-  setIsLoading: React.Dispatch<React.SetStateAction<boolean>>;
-  setCurrentRun: React.Dispatch<React.SetStateAction<Run | null>>;
+  setIsLoading: Setter<boolean>;
+  setCurrentRun: Setter<Run | null>;
   startWebSocket: (runId: string) => void;
   syncThreadAfterSendFailure: () => Promise<void>;
   // From useMessagePolling
-  messagesCountRef: React.MutableRefObject<number>;
+  messagesCountRef: { current: number };
   abortPendingFetch: () => void;
-  setMessages: React.Dispatch<React.SetStateAction<Message[]>>;
+  setMessages: Setter<Message[]>;
   setError: (value: string | null) => void;
   // From useChatAttachments
   uploadChatAttachments: (selectedFiles: File[]) => Promise<ChatAttachmentMetadata[]>;
@@ -69,7 +69,7 @@ export function useChatMessages({
   setError,
   uploadChatAttachments,
 }: UseChatMessagesOptions): UseChatMessagesResult {
-  const sendMessage = useCallback(async () => {
+  const sendMessage = async () => {
     const trimmedInput = input.trim();
     if ((!trimmedInput && attachedFiles.length === 0) || isLoading) return;
 
@@ -100,6 +100,7 @@ export function useChatMessages({
       content: trimmedInput,
       metadata: buildChatMessageMetadata({ attachments: optimisticAttachments }),
       created_at: new Date().toISOString(),
+      sequence: 0,
     };
     setMessages((prev) => [...prev, tempUserMessage]);
 
@@ -138,14 +139,14 @@ export function useChatMessages({
         }
       }
 
-      const runRes = await rpc.threads[':threadId'].runs.$post({
+      const runRes = await rpcPath(rpc, 'threads', ':threadId', 'runs').$post({
         param: { threadId },
         json: {
           agent_type: 'default',
           model: selectedModel,
           input: { locale: lang },
         },
-      });
+      }) as Response;
       const runData = await rpcJson<{ run: Run }>(runRes);
       setCurrentRun(runData.run);
 
@@ -164,7 +165,7 @@ export function useChatMessages({
       }
       setError(err instanceof Error ? err.message : t('networkError'));
     }
-  }, [input, attachedFiles, isLoading, threadId, selectedModel, onUpdateTitle, t, lang, uploadChatAttachments, rootRunIdRef, closeWebSocket, abortPendingFetch, currentRunIdRef, lastEventIdRef, resetStreamingState, resetTimeline, setInput, setAttachedFiles, setIsLoading, setMessages, messagesCountRef, setCurrentRun, startWebSocket, syncThreadAfterSendFailure, setError]);
+  };
 
   return {
     sendMessage,

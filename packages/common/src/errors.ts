@@ -9,7 +9,7 @@
  * - details: 任意の追加情報（フィールド単位の詳細など）
  */
 
-import type { Logger } from './logger.js';
+import type { Logger } from './logger.ts';
 
 /**
  * クライアント側の取り扱いを統一する標準エラーコード

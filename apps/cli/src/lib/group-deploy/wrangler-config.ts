@@ -6,10 +6,10 @@ import type {
   ProvisionedResource,
   WranglerConfig,
   WorkerServiceDef,
-} from './deploy-models.js';
-import { toBinding } from './cloudflare-utils.js';
-import { toPascalCase } from './container.js';
-import { DEFAULT_COMPATIBILITY_DATE } from '../constants.js';
+} from './deploy-models.ts';
+import { toBinding } from './cloudflare-utils.ts';
+import { toPascalCase } from './container.ts';
+import { DEFAULT_COMPATIBILITY_DATE } from '../constants.ts';
 
 // ── Wrangler Config Generator ────────────────────────────────────────────────
 

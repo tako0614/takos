@@ -1,7 +1,7 @@
 /**
  * Group Deploy — binding result collectors.
  */
-import type { BindingResult, ManifestWorkerDef } from './deploy-models.js';
+import type { BindingResult, ManifestWorkerDef } from './deploy-models.ts';
 
 export function collectWorkerBindingResults(
   workerName: string,

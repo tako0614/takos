@@ -1,72 +1,56 @@
-import { describe, expect, it } from 'vitest';
 import { buildDurableObjectUrl, extractBearerToken } from '@/utils/common';
 
-describe('buildDurableObjectUrl', () => {
-  it('prepends internal origin to path with leading slash', () => {
-    expect(buildDurableObjectUrl('/api/v1')).toBe('https://internal.do/api/v1');
-  });
 
-  it('adds leading slash when missing', () => {
-    expect(buildDurableObjectUrl('api/v1')).toBe('https://internal.do/api/v1');
-  });
+import { assertEquals } from 'jsr:@std/assert';
 
-  it('handles root path', () => {
-    expect(buildDurableObjectUrl('/')).toBe('https://internal.do/');
-  });
+  Deno.test('buildDurableObjectUrl - prepends internal origin to path with leading slash', () => {
+  assertEquals(buildDurableObjectUrl('/api/v1'), 'https://internal.do/api/v1');
+})
+  Deno.test('buildDurableObjectUrl - adds leading slash when missing', () => {
+  assertEquals(buildDurableObjectUrl('api/v1'), 'https://internal.do/api/v1');
+})
+  Deno.test('buildDurableObjectUrl - handles root path', () => {
+  assertEquals(buildDurableObjectUrl('/'), 'https://internal.do/');
+})
+  Deno.test('buildDurableObjectUrl - handles empty string', () => {
+  assertEquals(buildDurableObjectUrl(''), 'https://internal.do/');
+})
+  Deno.test('buildDurableObjectUrl - preserves query parameters', () => {
+  assertEquals(buildDurableObjectUrl('/path?foo=bar'), 'https://internal.do/path?foo=bar');
+})
+  Deno.test('buildDurableObjectUrl - preserves double slashes in path body', () => {
+  assertEquals(buildDurableObjectUrl('/a//b'), 'https://internal.do/a//b');
+})
 
-  it('handles empty string', () => {
-    expect(buildDurableObjectUrl('')).toBe('https://internal.do/');
-  });
-
-  it('preserves query parameters', () => {
-    expect(buildDurableObjectUrl('/path?foo=bar')).toBe('https://internal.do/path?foo=bar');
-  });
-
-  it('preserves double slashes in path body', () => {
-    expect(buildDurableObjectUrl('/a//b')).toBe('https://internal.do/a//b');
-  });
-});
-
-describe('extractBearerToken', () => {
-  it('extracts token from valid Bearer header', () => {
-    expect(extractBearerToken('Bearer abc123')).toBe('abc123');
-  });
-
-  it('trims whitespace from extracted token', () => {
-    expect(extractBearerToken('Bearer   token-with-spaces   ')).toBe('token-with-spaces');
-  });
-
-  it('returns null for undefined header', () => {
-    expect(extractBearerToken(undefined)).toBeNull();
-  });
-
-  it('returns null for null header', () => {
-    expect(extractBearerToken(null)).toBeNull();
-  });
-
-  it('returns null for empty string', () => {
-    expect(extractBearerToken('')).toBeNull();
-  });
-
-  it('returns null for non-Bearer auth scheme', () => {
-    expect(extractBearerToken('Basic abc123')).toBeNull();
-  });
-
-  it('returns null for lowercase bearer', () => {
-    // The implementation checks startsWith("Bearer ") which is case-sensitive
-    expect(extractBearerToken('bearer abc123')).toBeNull();
-  });
-
-  it('returns null for "Bearer " with empty token', () => {
-    expect(extractBearerToken('Bearer ')).toBeNull();
-  });
-
-  it('returns null for "Bearer" without space', () => {
-    expect(extractBearerToken('Bearerabc123')).toBeNull();
-  });
-
-  it('handles JWT-like tokens', () => {
-    const jwt = 'eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJ0ZXN0In0.abc123';
-    expect(extractBearerToken(`Bearer ${jwt}`)).toBe(jwt);
-  });
-});
+  Deno.test('extractBearerToken - extracts token from valid Bearer header', () => {
+  assertEquals(extractBearerToken('Bearer abc123'), 'abc123');
+})
+  Deno.test('extractBearerToken - trims whitespace from extracted token', () => {
+  assertEquals(extractBearerToken('Bearer   token-with-spaces   '), 'token-with-spaces');
+})
+  Deno.test('extractBearerToken - returns null for undefined header', () => {
+  assertEquals(extractBearerToken(undefined), null);
+})
+  Deno.test('extractBearerToken - returns null for null header', () => {
+  assertEquals(extractBearerToken(null), null);
+})
+  Deno.test('extractBearerToken - returns null for empty string', () => {
+  assertEquals(extractBearerToken(''), null);
+})
+  Deno.test('extractBearerToken - returns null for non-Bearer auth scheme', () => {
+  assertEquals(extractBearerToken('Basic abc123'), null);
+})
+  Deno.test('extractBearerToken - returns null for lowercase bearer', () => {
+  // The implementation checks startsWith("Bearer ") which is case-sensitive
+    assertEquals(extractBearerToken('bearer abc123'), null);
+})
+  Deno.test('extractBearerToken - returns null for "Bearer " with empty token', () => {
+  assertEquals(extractBearerToken('Bearer '), null);
+})
+  Deno.test('extractBearerToken - returns null for "Bearer" without space', () => {
+  assertEquals(extractBearerToken('Bearerabc123'), null);
+})
+  Deno.test('extractBearerToken - handles JWT-like tokens', () => {
+  const jwt = 'eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJ0ZXN0In0.abc123';
+    assertEquals(extractBearerToken(`Bearer ${jwt}`), jwt);
+})

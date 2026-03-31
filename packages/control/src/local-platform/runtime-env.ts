@@ -25,8 +25,8 @@ export async function createRuntimeHostEnvForTests(deps: {
   return {
     RUNTIME_CONTAINER: runtimeNamespace,
     TAKOS_WEB: { fetch: (request: Request) => deps.webFetch(request) },
-    ADMIN_DOMAIN: process.env.ADMIN_DOMAIN ?? DEFAULT_LOCAL_DOMAINS.admin,
-    PROXY_BASE_URL: process.env.PROXY_BASE_URL ?? 'http://runtime-host.local',
+    ADMIN_DOMAIN: Deno.env.get('ADMIN_DOMAIN') ?? DEFAULT_LOCAL_DOMAINS.admin,
+    PROXY_BASE_URL: Deno.env.get('PROXY_BASE_URL') ?? 'http://runtime-host.local',
   };
 }
 
@@ -39,8 +39,8 @@ export async function createRuntimeHostEnv() {
   return {
     RUNTIME_CONTAINER: runtimeNamespace,
     TAKOS_WEB: createForwardingBinding(resolveServiceUrl('TAKOS_LOCAL_WEB_URL', DEFAULT_LOCAL_PORTS.web)),
-    ADMIN_DOMAIN: process.env.ADMIN_DOMAIN ?? DEFAULT_LOCAL_DOMAINS.admin,
-    PROXY_BASE_URL: process.env.PROXY_BASE_URL ?? `http://127.0.0.1:${DEFAULT_LOCAL_PORTS.runtimeHost}`,
+    ADMIN_DOMAIN: Deno.env.get('ADMIN_DOMAIN') ?? DEFAULT_LOCAL_DOMAINS.admin,
+    PROXY_BASE_URL: Deno.env.get('PROXY_BASE_URL') ?? `http://127.0.0.1:${DEFAULT_LOCAL_PORTS.runtimeHost}`,
   };
 }
 
@@ -61,9 +61,9 @@ export async function createExecutorHostEnvForTests(deps: {
     TAKOS_EGRESS: { fetch: async (request: Request) => globalThis.fetch(request) },
     ...(deps.runtimeFetch ? { RUNTIME_HOST: { fetch: async (request: Request) => deps.runtimeFetch!(request) } } : {}),
     ...(deps.browserFetch ? { BROWSER_HOST: { fetch: async (request: Request) => deps.browserFetch!(request) } } : {}),
-    CONTROL_RPC_BASE_URL: process.env.CONTROL_RPC_BASE_URL
+    CONTROL_RPC_BASE_URL: Deno.env.get('CONTROL_RPC_BASE_URL')
       ?? `http://127.0.0.1:${DEFAULT_LOCAL_PORTS.executorHost}`,
-    PROXY_BASE_URL: process.env.PROXY_BASE_URL ?? 'http://executor-host.local',
+    PROXY_BASE_URL: Deno.env.get('PROXY_BASE_URL') ?? 'http://executor-host.local',
   };
 }
 
@@ -81,9 +81,9 @@ export async function createExecutorHostEnv() {
     TAKOS_EGRESS: { fetch: async (request: Request) => globalThis.fetch(request) },
     RUNTIME_HOST: createForwardingBinding(resolveServiceUrl('TAKOS_LOCAL_RUNTIME_HOST_URL', DEFAULT_LOCAL_PORTS.runtimeHost)),
     BROWSER_HOST: createForwardingBinding(resolveServiceUrl('TAKOS_LOCAL_BROWSER_HOST_URL', DEFAULT_LOCAL_PORTS.browserHost)),
-    CONTROL_RPC_BASE_URL: process.env.CONTROL_RPC_BASE_URL
+    CONTROL_RPC_BASE_URL: Deno.env.get('CONTROL_RPC_BASE_URL')
       ?? `http://127.0.0.1:${DEFAULT_LOCAL_PORTS.executorHost}`,
-    PROXY_BASE_URL: process.env.PROXY_BASE_URL ?? `http://127.0.0.1:${DEFAULT_LOCAL_PORTS.executorHost}`,
+    PROXY_BASE_URL: Deno.env.get('PROXY_BASE_URL') ?? `http://127.0.0.1:${DEFAULT_LOCAL_PORTS.executorHost}`,
   };
 }
 

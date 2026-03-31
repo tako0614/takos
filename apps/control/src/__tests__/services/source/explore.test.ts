@@ -1,14 +1,10 @@
-import { describe, expect, it, vi, beforeEach } from 'vitest';
+import { assertEquals } from 'jsr:@std/assert';
 
-const mocks = vi.hoisted(() => ({
-  getDb: vi.fn(),
-}));
+const mocks = ({
+  getDb: ((..._args: any[]) => undefined) as any,
+});
 
-vi.mock('@/db', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/db')>()),
-  getDb: mocks.getDb,
-}));
-
+// [Deno] vi.mock removed - manually stub imports from '@/db'
 import {
   listExploreRepos,
   listTrendingRepos,
@@ -17,21 +13,21 @@ import {
 } from '@/services/source/explore';
 
 function createDrizzleMock() {
-  const getMock = vi.fn();
-  const allMock = vi.fn();
+  const getMock = ((..._args: any[]) => undefined) as any;
+  const allMock = ((..._args: any[]) => undefined) as any;
   const chain = {
-    from: vi.fn().mockReturnThis(),
-    where: vi.fn().mockReturnThis(),
-    innerJoin: vi.fn().mockReturnThis(),
-    leftJoin: vi.fn().mockReturnThis(),
-    orderBy: vi.fn().mockReturnThis(),
-    limit: vi.fn().mockReturnThis(),
-    offset: vi.fn().mockReturnThis(),
+    from: (function(this: any) { return this; }),
+    where: (function(this: any) { return this; }),
+    innerJoin: (function(this: any) { return this; }),
+    leftJoin: (function(this: any) { return this; }),
+    orderBy: (function(this: any) { return this; }),
+    limit: (function(this: any) { return this; }),
+    offset: (function(this: any) { return this; }),
     get: getMock,
     all: allMock,
   };
   return {
-    select: vi.fn(() => chain),
+    select: () => chain,
     _: { get: getMock, all: allMock },
   };
 }
@@ -54,18 +50,15 @@ const makeRepoRow = (id: string, stars: number = 5) => ({
   accountPicture: null,
 });
 
-describe('listExploreRepos', () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-  });
 
-  it('returns empty result when no repos', async () => {
-    const drizzle = createDrizzleMock();
+  Deno.test('listExploreRepos - returns empty result when no repos', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+  const drizzle = createDrizzleMock();
     drizzle._.all
-      .mockResolvedValueOnce([]) // repos query
-      .mockResolvedValueOnce([]); // stars
-    drizzle._.get.mockResolvedValueOnce({ count: 0 }); // count
-    mocks.getDb.mockReturnValue(drizzle);
+       = (async () => []) as any // repos query
+       = (async () => []) as any; // stars
+    drizzle._.get = (async () => ({ count: 0 })) as any; // count
+    mocks.getDb = (() => drizzle) as any;
 
     const result = await listExploreRepos({} as any, {
       sort: 'stars',
@@ -75,18 +68,18 @@ describe('listExploreRepos', () => {
       searchQuery: '',
     });
 
-    expect(result.repos).toHaveLength(0);
-    expect(result.total).toBe(0);
-    expect(result.has_more).toBe(false);
-  });
-
-  it('maps repos with starred status', async () => {
-    const drizzle = createDrizzleMock();
+    assertEquals(result.repos.length, 0);
+    assertEquals(result.total, 0);
+    assertEquals(result.has_more, false);
+})
+  Deno.test('listExploreRepos - maps repos with starred status', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+  const drizzle = createDrizzleMock();
     drizzle._.all
-      .mockResolvedValueOnce([makeRepoRow('r1', 10)]) // repos
-      .mockResolvedValueOnce([{ repoId: 'r1' }]); // stars for user
-    drizzle._.get.mockResolvedValueOnce({ count: 1 }); // total count
-    mocks.getDb.mockReturnValue(drizzle);
+       = (async () => [makeRepoRow('r1', 10)]) as any // repos
+       = (async () => [{ repoId: 'r1' }]) as any; // stars for user
+    drizzle._.get = (async () => ({ count: 1 })) as any; // total count
+    mocks.getDb = (() => drizzle) as any;
 
     const result = await listExploreRepos({} as any, {
       sort: 'stars',
@@ -97,17 +90,17 @@ describe('listExploreRepos', () => {
       userId: 'user-1',
     });
 
-    expect(result.repos).toHaveLength(1);
-    expect(result.repos[0].id).toBe('r1');
-    expect(result.repos[0].is_starred).toBe(true);
-    expect(result.repos[0].visibility).toBe('public');
-  });
-
-  it('computes has_more correctly', async () => {
-    const drizzle = createDrizzleMock();
-    drizzle._.all.mockResolvedValueOnce([makeRepoRow('r1')]); // repos
-    drizzle._.get.mockResolvedValueOnce({ count: 5 }); // total count
-    mocks.getDb.mockReturnValue(drizzle);
+    assertEquals(result.repos.length, 1);
+    assertEquals(result.repos[0].id, 'r1');
+    assertEquals(result.repos[0].is_starred, true);
+    assertEquals(result.repos[0].visibility, 'public');
+})
+  Deno.test('listExploreRepos - computes has_more correctly', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+  const drizzle = createDrizzleMock();
+    drizzle._.all = (async () => [makeRepoRow('r1')]) as any; // repos
+    drizzle._.get = (async () => ({ count: 5 })) as any; // total count
+    mocks.getDb = (() => drizzle) as any;
 
     const result = await listExploreRepos({} as any, {
       sort: 'stars',
@@ -117,63 +110,47 @@ describe('listExploreRepos', () => {
       searchQuery: '',
     });
 
-    expect(result.has_more).toBe(true);
-    expect(result.total).toBe(5);
-  });
-});
+    assertEquals(result.has_more, true);
+    assertEquals(result.total, 5);
+})
 
-describe('listTrendingRepos', () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-  });
-
-  it('returns trending repos ordered by stars', async () => {
-    const drizzle = createDrizzleMock();
-    drizzle._.all.mockResolvedValueOnce([makeRepoRow('r1', 50), makeRepoRow('r2', 20)]);
-    drizzle._.get.mockResolvedValueOnce({ count: 2 });
-    mocks.getDb.mockReturnValue(drizzle);
+  Deno.test('listTrendingRepos - returns trending repos ordered by stars', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+  const drizzle = createDrizzleMock();
+    drizzle._.all = (async () => [makeRepoRow('r1', 50), makeRepoRow('r2', 20)]) as any;
+    drizzle._.get = (async () => ({ count: 2 })) as any;
+    mocks.getDb = (() => drizzle) as any;
 
     const result = await listTrendingRepos({} as any, {
       limit: 10,
       offset: 0,
     });
 
-    expect(result.repos).toHaveLength(2);
-    expect(result.total).toBe(2);
-  });
-});
+    assertEquals(result.repos.length, 2);
+    assertEquals(result.total, 2);
+})
 
-describe('listNewRepos', () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-  });
-
-  it('returns newly created repos', async () => {
-    const drizzle = createDrizzleMock();
-    drizzle._.all.mockResolvedValueOnce([makeRepoRow('r1')]);
-    drizzle._.get.mockResolvedValueOnce({ count: 1 });
-    mocks.getDb.mockReturnValue(drizzle);
+  Deno.test('listNewRepos - returns newly created repos', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+  const drizzle = createDrizzleMock();
+    drizzle._.all = (async () => [makeRepoRow('r1')]) as any;
+    drizzle._.get = (async () => ({ count: 1 })) as any;
+    mocks.getDb = (() => drizzle) as any;
 
     const result = await listNewRepos({} as any, { limit: 10, offset: 0 });
 
-    expect(result.repos).toHaveLength(1);
-  });
-});
+    assertEquals(result.repos.length, 1);
+})
 
-describe('listRecentRepos', () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-  });
-
-  it('returns recently updated repos', async () => {
-    const drizzle = createDrizzleMock();
-    drizzle._.all.mockResolvedValueOnce([makeRepoRow('r1')]);
-    drizzle._.get.mockResolvedValueOnce({ count: 1 });
-    mocks.getDb.mockReturnValue(drizzle);
+  Deno.test('listRecentRepos - returns recently updated repos', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+  const drizzle = createDrizzleMock();
+    drizzle._.all = (async () => [makeRepoRow('r1')]) as any;
+    drizzle._.get = (async () => ({ count: 1 })) as any;
+    mocks.getDb = (() => drizzle) as any;
 
     const result = await listRecentRepos({} as any, { limit: 10, offset: 0 });
 
-    expect(result.repos).toHaveLength(1);
-    expect(result.repos[0].owner.username).toBe('owner');
-  });
-});
+    assertEquals(result.repos.length, 1);
+    assertEquals(result.repos[0].owner.username, 'owner');
+})

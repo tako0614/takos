@@ -1,4 +1,4 @@
-import type { DiffResult } from './diff.js';
+import type { DiffResult } from './diff.ts';
 
 const SYMBOLS: Record<string, string> = {
   create: '+',

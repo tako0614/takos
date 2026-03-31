@@ -1,148 +1,118 @@
-import { describe, expect, it } from 'vitest';
 import {
   RESERVED_USERNAMES,
   isReservedUsername,
   validateUsername,
 } from '@/utils/domain-validation';
 
-describe('RESERVED_USERNAMES', () => {
-  it('is a non-empty Set', () => {
-    expect(RESERVED_USERNAMES).toBeInstanceOf(Set);
-    expect(RESERVED_USERNAMES.size).toBeGreaterThan(0);
-  });
 
-  it('contains system accounts', () => {
-    expect(RESERVED_USERNAMES.has('admin')).toBe(true);
-    expect(RESERVED_USERNAMES.has('root')).toBe(true);
-    expect(RESERVED_USERNAMES.has('system')).toBe(true);
-  });
+import { assertEquals, assert } from 'jsr:@std/assert';
 
-  it('contains platform branding', () => {
-    expect(RESERVED_USERNAMES.has('yurucommu')).toBe(true);
-  });
+  Deno.test('RESERVED_USERNAMES - is a non-empty Set', () => {
+  assert(RESERVED_USERNAMES instanceof Set);
+    assert(RESERVED_USERNAMES.size > 0);
+})
+  Deno.test('RESERVED_USERNAMES - contains system accounts', () => {
+  assertEquals(RESERVED_USERNAMES.has('admin'), true);
+    assertEquals(RESERVED_USERNAMES.has('root'), true);
+    assertEquals(RESERVED_USERNAMES.has('system'), true);
+})
+  Deno.test('RESERVED_USERNAMES - contains platform branding', () => {
+  assertEquals(RESERVED_USERNAMES.has('yurucommu'), true);
+})
+  Deno.test('RESERVED_USERNAMES - contains route-conflicting names', () => {
+  assertEquals(RESERVED_USERNAMES.has('login'), true);
+    assertEquals(RESERVED_USERNAMES.has('settings'), true);
+    assertEquals(RESERVED_USERNAMES.has('api'), true);
+})
 
-  it('contains route-conflicting names', () => {
-    expect(RESERVED_USERNAMES.has('login')).toBe(true);
-    expect(RESERVED_USERNAMES.has('settings')).toBe(true);
-    expect(RESERVED_USERNAMES.has('api')).toBe(true);
-  });
-});
+  Deno.test('isReservedUsername - returns true for reserved name (lowercase)', () => {
+  assertEquals(isReservedUsername('admin'), true);
+})
+  Deno.test('isReservedUsername - is case-insensitive', () => {
+  assertEquals(isReservedUsername('Admin'), true);
+    assertEquals(isReservedUsername('ADMIN'), true);
+    assertEquals(isReservedUsername('AdMiN'), true);
+})
+  Deno.test('isReservedUsername - returns false for non-reserved name', () => {
+  assertEquals(isReservedUsername('johndoe'), false);
+})
+  Deno.test('isReservedUsername - returns false for empty string', () => {
+  assertEquals(isReservedUsername(''), false);
+})
 
-describe('isReservedUsername', () => {
-  it('returns true for reserved name (lowercase)', () => {
-    expect(isReservedUsername('admin')).toBe(true);
-  });
-
-  it('is case-insensitive', () => {
-    expect(isReservedUsername('Admin')).toBe(true);
-    expect(isReservedUsername('ADMIN')).toBe(true);
-    expect(isReservedUsername('AdMiN')).toBe(true);
-  });
-
-  it('returns false for non-reserved name', () => {
-    expect(isReservedUsername('johndoe')).toBe(false);
-  });
-
-  it('returns false for empty string', () => {
-    expect(isReservedUsername('')).toBe(false);
-  });
-});
-
-describe('validateUsername', () => {
-  it('returns null for a valid username', () => {
-    expect(validateUsername('johndoe')).toBeNull();
-  });
-
-  it('accepts usernames with numbers', () => {
-    expect(validateUsername('user123')).toBeNull();
-  });
-
-  it('accepts usernames with underscores', () => {
-    expect(validateUsername('john_doe')).toBeNull();
-  });
-
-  it('accepts usernames with hyphens', () => {
-    expect(validateUsername('john-doe')).toBeNull();
-  });
-
-  it('accepts minimum length (3 chars)', () => {
-    expect(validateUsername('abc')).toBeNull();
-  });
-
-  it('accepts maximum length (30 chars)', () => {
-    expect(validateUsername('a'.repeat(30))).toBeNull();
-  });
-
-  it('rejects empty string', () => {
-    expect(validateUsername('')).toBe('Username is required');
-  });
-
-  it('rejects too short (2 chars)', () => {
-    expect(validateUsername('ab')).toBe('Username must be at least 3 characters');
-  });
-
-  it('rejects too long (31 chars)', () => {
-    expect(validateUsername('a'.repeat(31))).toBe('Username must be at most 30 characters');
-  });
-
-  it('rejects invalid characters', () => {
-    expect(validateUsername('user@name')).toBe(
+  Deno.test('validateUsername - returns null for a valid username', () => {
+  assertEquals(validateUsername('johndoe'), null);
+})
+  Deno.test('validateUsername - accepts usernames with numbers', () => {
+  assertEquals(validateUsername('user123'), null);
+})
+  Deno.test('validateUsername - accepts usernames with underscores', () => {
+  assertEquals(validateUsername('john_doe'), null);
+})
+  Deno.test('validateUsername - accepts usernames with hyphens', () => {
+  assertEquals(validateUsername('john-doe'), null);
+})
+  Deno.test('validateUsername - accepts minimum length (3 chars)', () => {
+  assertEquals(validateUsername('abc'), null);
+})
+  Deno.test('validateUsername - accepts maximum length (30 chars)', () => {
+  assertEquals(validateUsername('a'.repeat(30)), null);
+})
+  Deno.test('validateUsername - rejects empty string', () => {
+  assertEquals(validateUsername(''), 'Username is required');
+})
+  Deno.test('validateUsername - rejects too short (2 chars)', () => {
+  assertEquals(validateUsername('ab'), 'Username must be at least 3 characters');
+})
+  Deno.test('validateUsername - rejects too long (31 chars)', () => {
+  assertEquals(validateUsername('a'.repeat(31)), 'Username must be at most 30 characters');
+})
+  Deno.test('validateUsername - rejects invalid characters', () => {
+  assertEquals(validateUsername('user@name'), 
       'Username can only contain letters, numbers, underscores, and hyphens'
     );
-  });
-
-  it('rejects spaces', () => {
-    expect(validateUsername('user name')).toBe(
+})
+  Deno.test('validateUsername - rejects spaces', () => {
+  assertEquals(validateUsername('user name'), 
       'Username can only contain letters, numbers, underscores, and hyphens'
     );
-  });
-
-  it('rejects dots', () => {
-    expect(validateUsername('user.name')).toBe(
+})
+  Deno.test('validateUsername - rejects dots', () => {
+  assertEquals(validateUsername('user.name'), 
       'Username can only contain letters, numbers, underscores, and hyphens'
     );
-  });
-
-  it('rejects starting with underscore', () => {
-    expect(validateUsername('_username')).toBe('Username must start with a letter or number');
-  });
-
-  it('rejects starting with hyphen', () => {
-    expect(validateUsername('-username')).toBe('Username must start with a letter or number');
-  });
-
-  it('rejects ending with underscore', () => {
-    expect(validateUsername('username_')).toBe('Username cannot end with underscore or hyphen');
-  });
-
-  it('rejects ending with hyphen', () => {
-    expect(validateUsername('username-')).toBe('Username cannot end with underscore or hyphen');
-  });
-
-  it('rejects consecutive underscores', () => {
-    expect(validateUsername('user__name')).toBe(
+})
+  Deno.test('validateUsername - rejects starting with underscore', () => {
+  assertEquals(validateUsername('_username'), 'Username must start with a letter or number');
+})
+  Deno.test('validateUsername - rejects starting with hyphen', () => {
+  assertEquals(validateUsername('-username'), 'Username must start with a letter or number');
+})
+  Deno.test('validateUsername - rejects ending with underscore', () => {
+  assertEquals(validateUsername('username_'), 'Username cannot end with underscore or hyphen');
+})
+  Deno.test('validateUsername - rejects ending with hyphen', () => {
+  assertEquals(validateUsername('username-'), 'Username cannot end with underscore or hyphen');
+})
+  Deno.test('validateUsername - rejects consecutive underscores', () => {
+  assertEquals(validateUsername('user__name'), 
       'Username cannot have consecutive underscores or hyphens'
     );
-  });
-
-  it('rejects consecutive hyphens', () => {
-    expect(validateUsername('user--name')).toBe(
+})
+  Deno.test('validateUsername - rejects consecutive hyphens', () => {
+  assertEquals(validateUsername('user--name'), 
       'Username cannot have consecutive underscores or hyphens'
     );
-  });
-
-  it('rejects mixed consecutive separators', () => {
-    expect(validateUsername('user-_name')).toBe(
+})
+  Deno.test('validateUsername - rejects mixed consecutive separators', () => {
+  assertEquals(validateUsername('user-_name'), 
       'Username cannot have consecutive underscores or hyphens'
     );
-  });
-
-  it('rejects reserved usernames', () => {
-    expect(validateUsername('admin')).toBe('This username is reserved');
-    expect(validateUsername('root')).toBe('This username is reserved');
-  });
-
-  it('rejects reserved usernames case-insensitively', () => {
-    expect(validateUsername('Admin')).toBe('This username is reserved');
-  });
-});
+})
+  Deno.test('validateUsername - rejects reserved usernames', () => {
+  assertEquals(validateUsername('admin'), 'This username is reserved');
+    assertEquals(validateUsername('root'), 'This username is reserved');
+})
+  Deno.test('validateUsername - rejects reserved usernames case-insensitively', () => {
+  assertEquals(validateUsername('Admin'), 'This username is reserved');
+})

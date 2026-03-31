@@ -1,6 +1,6 @@
-import { describe, expect, it } from 'vitest';
+import { getSpaceIdFromBody } from '../../middleware/space-scope.ts';
 
-import { getSpaceIdFromBody } from '../../middleware/space-scope.js';
+import { assertEquals } from 'jsr:@std/assert';
 
 function createContext(body: unknown): { get: (key: string) => unknown } {
   return {
@@ -11,19 +11,17 @@ function createContext(body: unknown): { get: (key: string) => unknown } {
   };
 }
 
-describe('getSpaceIdFromBody', () => {
-  it('returns spaceId from camelCase body field', () => {
-    const c = createContext({ spaceId: 'ws-camel' });
-    expect(getSpaceIdFromBody(c as any, 'spaceId')).toBe('ws-camel');
-  });
 
-  it('returns space_id from snake_case body field', () => {
-    const c = createContext({ space_id: 'ws-snake' });
-    expect(getSpaceIdFromBody(c as any, 'space_id')).toBe('ws-snake');
-  });
-
-  it('returns null for missing, empty, and non-string values', () => {
-    const invalidBodies: unknown[] = [
+  Deno.test('getSpaceIdFromBody - returns spaceId from camelCase body field', () => {
+  const c = createContext({ spaceId: 'ws-camel' });
+    assertEquals(getSpaceIdFromBody(c as any, 'spaceId'), 'ws-camel');
+})
+  Deno.test('getSpaceIdFromBody - returns space_id from snake_case body field', () => {
+  const c = createContext({ space_id: 'ws-snake' });
+    assertEquals(getSpaceIdFromBody(c as any, 'space_id'), 'ws-snake');
+})
+  Deno.test('getSpaceIdFromBody - returns null for missing, empty, and non-string values', () => {
+  const invalidBodies: unknown[] = [
       undefined,
       null,
       false,
@@ -38,8 +36,7 @@ describe('getSpaceIdFromBody', () => {
 
     for (const body of invalidBodies) {
       const c = createContext(body);
-      expect(getSpaceIdFromBody(c as any, 'spaceId')).toBeNull();
-      expect(getSpaceIdFromBody(c as any, 'space_id')).toBeNull();
+      assertEquals(getSpaceIdFromBody(c as any, 'spaceId'), null);
+      assertEquals(getSpaceIdFromBody(c as any, 'space_id'), null);
     }
-  });
-});
+})

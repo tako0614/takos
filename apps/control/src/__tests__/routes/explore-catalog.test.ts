@@ -1,29 +1,24 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { Hono } from 'hono';
 import type { Env, User } from '@/types';
 import { createMockEnv } from '../../../test/integration/setup';
 
-const mocks = vi.hoisted(() => ({
-  listExploreRepos: vi.fn(),
-  listTrendingRepos: vi.fn(),
-  listNewRepos: vi.fn(),
-  listRecentRepos: vi.fn(),
-  listCatalogItems: vi.fn(),
+import { assertEquals, assertObjectMatch } from 'jsr:@std/assert';
+import { assertSpyCalls, assertSpyCallArgs } from 'jsr:@std/testing/mock';
+
+const mocks = ({
+  listExploreRepos: ((..._args: any[]) => undefined) as any,
+  listTrendingRepos: ((..._args: any[]) => undefined) as any,
+  listNewRepos: ((..._args: any[]) => undefined) as any,
+  listRecentRepos: ((..._args: any[]) => undefined) as any,
+  listCatalogItems: ((..._args: any[]) => undefined) as any,
   cache: {
-    match: vi.fn(),
-    put: vi.fn(),
-    delete: vi.fn(),
+    match: ((..._args: any[]) => undefined) as any,
+    put: ((..._args: any[]) => undefined) as any,
+    delete: ((..._args: any[]) => undefined) as any,
   },
-}));
+});
 
-vi.mock('@/services/source/explore', () => ({
-  listExploreRepos: mocks.listExploreRepos,
-  listTrendingRepos: mocks.listTrendingRepos,
-  listNewRepos: mocks.listNewRepos,
-  listRecentRepos: mocks.listRecentRepos,
-  listCatalogItems: mocks.listCatalogItems,
-}));
-
+// [Deno] vi.mock removed - manually stub imports from '@/services/source/explore'
 import explore from '@/routes/explore';
 
 type Vars = { user?: User };
@@ -54,24 +49,21 @@ function createApp(user?: User) {
   return app;
 }
 
-describe('GET /explore/catalog', () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
+
+  Deno.test('GET /explore/catalog - returns 400 when sort is invalid', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
     (globalThis as unknown as { caches: CacheStorage }).caches = {
       default: mocks.cache as unknown as Cache,
     } as CacheStorage;
-    mocks.cache.match.mockResolvedValue(undefined);
-    mocks.cache.put.mockResolvedValue(undefined);
-    mocks.cache.delete.mockResolvedValue(true);
-    mocks.listCatalogItems.mockResolvedValue({
+    mocks.cache.match = (async () => undefined) as any;
+    mocks.cache.put = (async () => undefined) as any;
+    mocks.cache.delete = (async () => true) as any;
+    mocks.listCatalogItems = (async () => ({
       items: [],
       total: 0,
       has_more: false,
-    });
-  });
-
-  it('returns 400 when sort is invalid', async () => {
-    const app = createApp();
+    })) as any;
+  const app = createApp();
     const env = createMockEnv() as unknown as Env;
 
     const response = await app.fetch(
@@ -80,13 +72,24 @@ describe('GET /explore/catalog', () => {
       {} as ExecutionContext,
     );
 
-    expect(response.status).toBe(400);
-    await expect(response.json()).resolves.toMatchObject({ error: 'Invalid sort' });
-    expect(mocks.listCatalogItems).not.toHaveBeenCalled();
-  });
-
-  it('returns 401 when space_id is specified without auth', async () => {
-    const app = createApp();
+    assertEquals(response.status, 400);
+    await assertObjectMatch(await response.json(), { error: 'Invalid sort' });
+    assertSpyCalls(mocks.listCatalogItems, 0);
+})
+  Deno.test('GET /explore/catalog - returns 401 when space_id is specified without auth', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+    (globalThis as unknown as { caches: CacheStorage }).caches = {
+      default: mocks.cache as unknown as Cache,
+    } as CacheStorage;
+    mocks.cache.match = (async () => undefined) as any;
+    mocks.cache.put = (async () => undefined) as any;
+    mocks.cache.delete = (async () => true) as any;
+    mocks.listCatalogItems = (async () => ({
+      items: [],
+      total: 0,
+      has_more: false,
+    })) as any;
+  const app = createApp();
     const env = createMockEnv() as unknown as Env;
 
     const response = await app.fetch(
@@ -95,15 +98,26 @@ describe('GET /explore/catalog', () => {
       {} as ExecutionContext,
     );
 
-    expect(response.status).toBe(401);
-    await expect(response.json()).resolves.toMatchObject({
+    assertEquals(response.status, 401);
+    await assertObjectMatch(await response.json(), {
       error: 'Authentication required for space_id',
     });
-    expect(mocks.listCatalogItems).not.toHaveBeenCalled();
-  });
-
-  it('calls listCatalogItems with normalized query options', async () => {
-    const app = createApp(createUser('user-1', 'alice'));
+    assertSpyCalls(mocks.listCatalogItems, 0);
+})
+  Deno.test('GET /explore/catalog - calls listCatalogItems with normalized query options', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+    (globalThis as unknown as { caches: CacheStorage }).caches = {
+      default: mocks.cache as unknown as Cache,
+    } as CacheStorage;
+    mocks.cache.match = (async () => undefined) as any;
+    mocks.cache.put = (async () => undefined) as any;
+    mocks.cache.delete = (async () => true) as any;
+    mocks.listCatalogItems = (async () => ({
+      items: [],
+      total: 0,
+      has_more: false,
+    })) as any;
+  const app = createApp(createUser('user-1', 'alice'));
     const env = createMockEnv() as unknown as Env;
 
     const response = await app.fetch(
@@ -112,9 +126,9 @@ describe('GET /explore/catalog', () => {
       {} as ExecutionContext,
     );
 
-    expect(response.status).toBe(200);
-    expect(mocks.listCatalogItems).toHaveBeenCalledTimes(1);
-    expect(mocks.listCatalogItems).toHaveBeenCalledWith(env.DB, {
+    assertEquals(response.status, 200);
+    assertSpyCalls(mocks.listCatalogItems, 1);
+    assertSpyCallArgs(mocks.listCatalogItems, 0, [env.DB, {
       sort: 'downloads',
       type: 'deployable-app',
       limit: 10,
@@ -128,12 +142,11 @@ describe('GET /explore/catalog', () => {
       certifiedOnly: true,
       spaceId: undefined,
       userId: 'user-1',
-    });
+    }]);
 
-    await expect(response.json()).resolves.toEqual({
+    await assertEquals(await response.json(), {
       items: [],
       total: 0,
       has_more: false,
     });
-  });
-});
+})

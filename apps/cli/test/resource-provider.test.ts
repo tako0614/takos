@@ -1,32 +1,25 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
-
 // ── Mock cloudflare-utils before any imports ────────────────────────────────
 
-const mocks = vi.hoisted(() => ({
-  cfApi: vi.fn(),
-  execCommand: vi.fn(),
-}));
+import { assertEquals, assert, assertStringIncludes } from 'jsr:@std/assert';
+import { assertSpyCalls, assertSpyCallArgs } from 'jsr:@std/testing/mock';
 
-vi.mock('../src/lib/group-deploy/cloudflare-utils.js', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('../src/lib/group-deploy/cloudflare-utils.js')>();
-  return {
-    ...actual,
-    cfApi: mocks.cfApi,
-    execCommand: mocks.execCommand,
-  };
+const mocks = ({
+  cfApi: ((..._args: any[]) => undefined) as any,
+  execCommand: ((..._args: any[]) => undefined) as any,
 });
 
-import type { ResourceProvider, ProvisionResult } from '../src/lib/group-deploy/resource-provider.js';
-import { CloudflareProvider } from '../src/lib/group-deploy/providers/cloudflare.js';
-import { AWSProvider } from '../src/lib/group-deploy/providers/aws.js';
-import { GCPProvider } from '../src/lib/group-deploy/providers/gcp.js';
-import { K8sProvider } from '../src/lib/group-deploy/providers/kubernetes.js';
-import { DockerProvider } from '../src/lib/group-deploy/providers/docker.js';
-import { resolveProvider } from '../src/lib/group-deploy/provisioner.js';
+// [Deno] vi.mock removed - manually stub imports from '../src/lib/group-deploy/cloudflare-utils.ts'
+import type { ResourceProvider, ProvisionResult } from '../src/lib/group-deploy/resource-provider.ts';
+import { CloudflareProvider } from '../src/lib/group-deploy/providers/cloudflare.ts';
+import { AWSProvider } from '../src/lib/group-deploy/providers/aws.ts';
+import { GCPProvider } from '../src/lib/group-deploy/providers/gcp.ts';
+import { K8sProvider } from '../src/lib/group-deploy/providers/kubernetes.ts';
+import { DockerProvider } from '../src/lib/group-deploy/providers/docker.ts';
+import { resolveProvider } from '../src/lib/group-deploy/provisioner.ts';
 
 // ── ResourceProvider interface conformance ───────────────────────────────────
 
-describe('ResourceProvider interface', () => {
+
   const providers: Array<{ name: string; create: () => ResourceProvider }> = [
     {
       name: 'CloudflareProvider',
@@ -39,213 +32,255 @@ describe('ResourceProvider interface', () => {
   ];
 
   for (const { name, create } of providers) {
-    describe(name, () => {
-      it('has a name property', () => {
-        const provider = create();
-        expect(typeof provider.name).toBe('string');
-        expect(provider.name.length).toBeGreaterThan(0);
-      });
+    Deno.test(`${name} - has a name property`, () => {
+      const provider = create();
+      assertEquals(typeof provider.name, 'string');
+      assert(provider.name.length > 0);
+    });
 
-      it('implements all required methods', () => {
-        const provider = create();
-        expect(typeof provider.createDatabase).toBe('function');
-        expect(typeof provider.createObjectStorage).toBe('function');
-        expect(typeof provider.createKeyValueStore).toBe('function');
-        expect(typeof provider.createQueue).toBe('function');
-        expect(typeof provider.createVectorIndex).toBe('function');
-        expect(typeof provider.createSecret).toBe('function');
-        expect(typeof provider.skipAutoConfigured).toBe('function');
-      });
+    Deno.test(`${name} - implements all required methods`, () => {
+      const provider = create();
+      assertEquals(typeof provider.createDatabase, 'function');
+      assertEquals(typeof provider.createObjectStorage, 'function');
+      assertEquals(typeof provider.createKeyValueStore, 'function');
+      assertEquals(typeof provider.createQueue, 'function');
+      assertEquals(typeof provider.createVectorIndex, 'function');
+      assertEquals(typeof provider.createSecret, 'function');
+      assertEquals(typeof provider.skipAutoConfigured, 'function');
+    });
 
-      it('skipAutoConfigured returns a skipped result synchronously', () => {
-        const provider = create();
-        const result = provider.skipAutoConfigured('test-resource', 'durableObject');
-        expect(result.status).toBe('skipped');
-        expect(result.name).toBe('test-resource');
-        expect(result.type).toBe('durableObject');
-      });
+    Deno.test(`${name} - skipAutoConfigured returns a skipped result synchronously`, () => {
+      const provider = create();
+      const result = provider.skipAutoConfigured('test-resource', 'durableObject');
+      assertEquals(result.status, 'skipped');
+      assertEquals(result.name, 'test-resource');
+      assertEquals(result.type, 'durableObject');
     });
   }
-});
 
 // ── CloudflareProvider ───────────────────────────────────────────────────────
 
-describe('CloudflareProvider', () => {
-  let provider: CloudflareProvider;
 
-  beforeEach(() => {
-    vi.clearAllMocks();
+  let provider: CloudflareProvider;
+  Deno.test('CloudflareProvider - creates a D1 database via CF API', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
     provider = new CloudflareProvider({
       accountId: 'acct-123',
       apiToken: 'tok-abc',
       groupName: 'myapp',
       env: 'staging',
     });
-  });
-
-  it('creates a D1 database via CF API', async () => {
-    mocks.cfApi.mockResolvedValueOnce({ uuid: 'd1-uuid-001' });
+  mocks.cfApi = (async () => ({ uuid: 'd1-uuid-001' })) as any;
 
     const result = await provider.createDatabase('main-db');
 
-    expect(mocks.cfApi).toHaveBeenCalledWith('acct-123', 'tok-abc', 'POST', '/d1/database', { name: 'myapp-staging-main-db' });
-    expect(result).toEqual<ProvisionResult>({
+    assertSpyCallArgs(mocks.cfApi, 0, ['acct-123', 'tok-abc', 'POST', '/d1/database', { name: 'myapp-staging-main-db' }]);
+    assertEquals(result, {
       name: 'myapp-staging-main-db',
       type: 'd1',
       status: 'provisioned',
       id: 'd1-uuid-001',
     });
-  });
-
-  it('creates an R2 bucket via CF API', async () => {
-    mocks.cfApi.mockResolvedValueOnce({});
+})
+  Deno.test('CloudflareProvider - creates an R2 bucket via CF API', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+    provider = new CloudflareProvider({
+      accountId: 'acct-123',
+      apiToken: 'tok-abc',
+      groupName: 'myapp',
+      env: 'staging',
+    });
+  mocks.cfApi = (async () => ({})) as any;
 
     const result = await provider.createObjectStorage('assets');
 
-    expect(mocks.cfApi).toHaveBeenCalledWith('acct-123', 'tok-abc', 'POST', '/r2/buckets', { name: 'myapp-staging-assets' });
-    expect(result.status).toBe('provisioned');
-    expect(result.type).toBe('r2');
-  });
-
-  it('creates a KV namespace via CF API', async () => {
-    mocks.cfApi.mockResolvedValueOnce({ id: 'kv-id-001' });
+    assertSpyCallArgs(mocks.cfApi, 0, ['acct-123', 'tok-abc', 'POST', '/r2/buckets', { name: 'myapp-staging-assets' }]);
+    assertEquals(result.status, 'provisioned');
+    assertEquals(result.type, 'r2');
+})
+  Deno.test('CloudflareProvider - creates a KV namespace via CF API', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+    provider = new CloudflareProvider({
+      accountId: 'acct-123',
+      apiToken: 'tok-abc',
+      groupName: 'myapp',
+      env: 'staging',
+    });
+  mocks.cfApi = (async () => ({ id: 'kv-id-001' })) as any;
 
     const result = await provider.createKeyValueStore('cache');
 
-    expect(mocks.cfApi).toHaveBeenCalledWith('acct-123', 'tok-abc', 'POST', '/storage/kv/namespaces', { title: 'myapp-staging-cache' });
-    expect(result).toEqual<ProvisionResult>({
+    assertSpyCallArgs(mocks.cfApi, 0, ['acct-123', 'tok-abc', 'POST', '/storage/kv/namespaces', { title: 'myapp-staging-cache' }]);
+    assertEquals(result, {
       name: 'myapp-staging-cache',
       type: 'kv',
       status: 'provisioned',
       id: 'kv-id-001',
     });
-  });
-
-  it('creates a queue via wrangler CLI', async () => {
-    mocks.execCommand.mockResolvedValueOnce({ stdout: '', stderr: '', exitCode: 0 });
+})
+  Deno.test('CloudflareProvider - creates a queue via wrangler CLI', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+    provider = new CloudflareProvider({
+      accountId: 'acct-123',
+      apiToken: 'tok-abc',
+      groupName: 'myapp',
+      env: 'staging',
+    });
+  mocks.execCommand = (async () => ({ stdout: '', stderr: '', exitCode: 0 })) as any;
 
     const result = await provider.createQueue('task-queue');
 
-    expect(mocks.execCommand).toHaveBeenCalledWith(
+    assertSpyCallArgs(mocks.execCommand, 0, [
       'npx',
       ['wrangler', 'queues', 'create', 'myapp-staging-task-queue'],
-      expect.objectContaining({ env: expect.objectContaining({ CLOUDFLARE_ACCOUNT_ID: 'acct-123' }) }),
-    );
-    expect(result.status).toBe('provisioned');
-  });
-
-  it('reports queue as exists when wrangler exits non-zero', async () => {
-    mocks.execCommand.mockResolvedValueOnce({ stdout: '', stderr: 'already exists', exitCode: 1 });
+      ({ env: ({ CLOUDFLARE_ACCOUNT_ID: 'acct-123' }) }),
+    ]);
+    assertEquals(result.status, 'provisioned');
+})
+  Deno.test('CloudflareProvider - reports queue as exists when wrangler exits non-zero', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+    provider = new CloudflareProvider({
+      accountId: 'acct-123',
+      apiToken: 'tok-abc',
+      groupName: 'myapp',
+      env: 'staging',
+    });
+  mocks.execCommand = (async () => ({ stdout: '', stderr: 'already exists', exitCode: 1 })) as any;
 
     const result = await provider.createQueue('task-queue');
-    expect(result.status).toBe('exists');
-  });
-
-  it('creates a vectorize index via wrangler CLI', async () => {
-    mocks.execCommand.mockResolvedValueOnce({ stdout: '', stderr: '', exitCode: 0 });
+    assertEquals(result.status, 'exists');
+})
+  Deno.test('CloudflareProvider - creates a vectorize index via wrangler CLI', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+    provider = new CloudflareProvider({
+      accountId: 'acct-123',
+      apiToken: 'tok-abc',
+      groupName: 'myapp',
+      env: 'staging',
+    });
+  mocks.execCommand = (async () => ({ stdout: '', stderr: '', exitCode: 0 })) as any;
 
     const result = await provider.createVectorIndex('embeddings', { dimensions: 768, metric: 'euclidean' });
 
-    expect(mocks.execCommand).toHaveBeenCalledWith(
+    assertSpyCallArgs(mocks.execCommand, 0, [
       'npx',
       ['wrangler', 'vectorize', 'create', 'myapp-staging-embeddings', '--dimensions', '768', '--metric', 'euclidean'],
-      expect.objectContaining({ env: expect.objectContaining({ CLOUDFLARE_API_TOKEN: 'tok-abc' }) }),
-    );
-    expect(result.status).toBe('provisioned');
-  });
+      ({ env: ({ CLOUDFLARE_API_TOKEN: 'tok-abc' }) }),
+    ]);
+    assertEquals(result.status, 'provisioned');
+})
+  Deno.test('CloudflareProvider - creates a secret with a random hex value', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+    provider = new CloudflareProvider({
+      accountId: 'acct-123',
+      apiToken: 'tok-abc',
+      groupName: 'myapp',
+      env: 'staging',
+    });
+  const result = await provider.createSecret('api-key', 'API_KEY');
 
-  it('creates a secret with a random hex value', async () => {
-    const result = await provider.createSecret('api-key', 'API_KEY');
-
-    expect(result.status).toBe('provisioned');
-    expect(result.type).toBe('secretRef');
+    assertEquals(result.status, 'provisioned');
+    assertEquals(result.type, 'secretRef');
     // The id should be a 64-character hex string (32 random bytes)
-    expect(result.id).toMatch(/^[0-9a-f]{64}$/);
-  });
+    assert(/^[0-9a-f]{64}$/.test(result.id));
+})
+  Deno.test('CloudflareProvider - skipAutoConfigured returns skipped with message', () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+    provider = new CloudflareProvider({
+      accountId: 'acct-123',
+      apiToken: 'tok-abc',
+      groupName: 'myapp',
+      env: 'staging',
+    });
+  const result = provider.skipAutoConfigured('my-do', 'durableObject');
 
-  it('skipAutoConfigured returns skipped with message', () => {
-    const result = provider.skipAutoConfigured('my-do', 'durableObject');
-
-    expect(result.status).toBe('skipped');
-    expect(result.error).toContain('wrangler deploy');
-  });
-});
-
+    assertEquals(result.status, 'skipped');
+    assertStringIncludes(result.error, 'wrangler deploy');
+})
 // ── Provider resolution ──────────────────────────────────────────────────────
 
-describe('resolveProvider', () => {
-  const baseOpts = { groupName: 'app', env: 'staging' };
 
-  beforeEach(() => {
-    // Clean up env vars that influence provider detection
+  const baseOpts = { groupName: 'app', env: 'staging' };
+  Deno.test('resolveProvider - returns CloudflareProvider when accountId and apiToken are provided', () => {
+  // Clean up env vars that influence provider detection
     delete process.env.AWS_ACCESS_KEY_ID;
     delete process.env.GOOGLE_APPLICATION_CREDENTIALS;
     delete process.env.KUBECONFIG;
-  });
-
-  it('returns CloudflareProvider when accountId and apiToken are provided', () => {
-    const provider = resolveProvider({ ...baseOpts, accountId: 'acct', apiToken: 'tok' });
-    expect(provider.name).toBe('cloudflare');
-    expect(provider).toBeInstanceOf(CloudflareProvider);
-  });
-
-  it('returns AWSProvider when AWS_ACCESS_KEY_ID is set', () => {
-    process.env.AWS_ACCESS_KEY_ID = 'AKID123';
+  const provider = resolveProvider({ ...baseOpts, accountId: 'acct', apiToken: 'tok' });
+    assertEquals(provider.name, 'cloudflare');
+    assert(provider instanceof CloudflareProvider);
+})
+  Deno.test('resolveProvider - returns AWSProvider when AWS_ACCESS_KEY_ID is set', () => {
+  // Clean up env vars that influence provider detection
+    delete process.env.AWS_ACCESS_KEY_ID;
+    delete process.env.GOOGLE_APPLICATION_CREDENTIALS;
+    delete process.env.KUBECONFIG;
+  process.env.AWS_ACCESS_KEY_ID = 'AKID123';
     const provider = resolveProvider(baseOpts);
-    expect(provider.name).toBe('aws');
-    expect(provider).toBeInstanceOf(AWSProvider);
-  });
-
-  it('returns GCPProvider when GOOGLE_APPLICATION_CREDENTIALS is set', () => {
+    assertEquals(provider.name, 'aws');
+    assert(provider instanceof AWSProvider);
+})
+  Deno.test('resolveProvider - returns GCPProvider when GOOGLE_APPLICATION_CREDENTIALS is set', () => {
+  // Clean up env vars that influence provider detection
+    delete process.env.AWS_ACCESS_KEY_ID;
+    delete process.env.GOOGLE_APPLICATION_CREDENTIALS;
+    delete process.env.KUBECONFIG;
+  process.env.GOOGLE_APPLICATION_CREDENTIALS = '/path/to/creds.json';
+    const provider = resolveProvider(baseOpts);
+    assertEquals(provider.name, 'gcp');
+    assert(provider instanceof GCPProvider);
+})
+  Deno.test('resolveProvider - returns K8sProvider when KUBECONFIG is set', () => {
+  // Clean up env vars that influence provider detection
+    delete process.env.AWS_ACCESS_KEY_ID;
+    delete process.env.GOOGLE_APPLICATION_CREDENTIALS;
+    delete process.env.KUBECONFIG;
+  process.env.KUBECONFIG = '/path/to/kubeconfig';
+    const provider = resolveProvider(baseOpts);
+    assertEquals(provider.name, 'k8s');
+    assert(provider instanceof K8sProvider);
+})
+  Deno.test('resolveProvider - falls back to DockerProvider when no cloud env is detected', () => {
+  // Clean up env vars that influence provider detection
+    delete process.env.AWS_ACCESS_KEY_ID;
+    delete process.env.GOOGLE_APPLICATION_CREDENTIALS;
+    delete process.env.KUBECONFIG;
+  const provider = resolveProvider(baseOpts);
+    assertEquals(provider.name, 'docker');
+    assert(provider instanceof DockerProvider);
+})
+  Deno.test('resolveProvider - prefers Cloudflare over AWS when both are available', () => {
+  // Clean up env vars that influence provider detection
+    delete process.env.AWS_ACCESS_KEY_ID;
+    delete process.env.GOOGLE_APPLICATION_CREDENTIALS;
+    delete process.env.KUBECONFIG;
+  process.env.AWS_ACCESS_KEY_ID = 'AKID123';
+    const provider = resolveProvider({ ...baseOpts, accountId: 'acct', apiToken: 'tok' });
+    assertEquals(provider.name, 'cloudflare');
+})
+  Deno.test('resolveProvider - prefers AWS over GCP when both env vars are set', () => {
+  // Clean up env vars that influence provider detection
+    delete process.env.AWS_ACCESS_KEY_ID;
+    delete process.env.GOOGLE_APPLICATION_CREDENTIALS;
+    delete process.env.KUBECONFIG;
+  process.env.AWS_ACCESS_KEY_ID = 'AKID123';
     process.env.GOOGLE_APPLICATION_CREDENTIALS = '/path/to/creds.json';
     const provider = resolveProvider(baseOpts);
-    expect(provider.name).toBe('gcp');
-    expect(provider).toBeInstanceOf(GCPProvider);
-  });
-
-  it('returns K8sProvider when KUBECONFIG is set', () => {
-    process.env.KUBECONFIG = '/path/to/kubeconfig';
-    const provider = resolveProvider(baseOpts);
-    expect(provider.name).toBe('k8s');
-    expect(provider).toBeInstanceOf(K8sProvider);
-  });
-
-  it('falls back to DockerProvider when no cloud env is detected', () => {
-    const provider = resolveProvider(baseOpts);
-    expect(provider.name).toBe('docker');
-    expect(provider).toBeInstanceOf(DockerProvider);
-  });
-
-  it('prefers Cloudflare over AWS when both are available', () => {
-    process.env.AWS_ACCESS_KEY_ID = 'AKID123';
-    const provider = resolveProvider({ ...baseOpts, accountId: 'acct', apiToken: 'tok' });
-    expect(provider.name).toBe('cloudflare');
-  });
-
-  it('prefers AWS over GCP when both env vars are set', () => {
-    process.env.AWS_ACCESS_KEY_ID = 'AKID123';
-    process.env.GOOGLE_APPLICATION_CREDENTIALS = '/path/to/creds.json';
-    const provider = resolveProvider(baseOpts);
-    expect(provider.name).toBe('aws');
-  });
-});
-
+    assertEquals(provider.name, 'aws');
+})
 // ── provisionResources integration with provider ─────────────────────────────
 
-describe('provisionResources (with CloudflareProvider)', () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-    mocks.cfApi.mockReset();
-    mocks.execCommand.mockReset();
-  });
 
-  it('provisions mixed resource types through the provider', async () => {
-    const { provisionResources } = await import('../src/lib/group-deploy/provisioner.js');
+  Deno.test('provisionResources (with CloudflareProvider) - provisions mixed resource types through the provider', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+    mocks.cfApi;
+    mocks.execCommand;
+  const { provisionResources } = await import('../src/lib/group-deploy/provisioner.ts');
 
     mocks.cfApi
-      .mockResolvedValueOnce({ uuid: 'd1-id' })     // d1
-      .mockResolvedValueOnce({})                      // r2
-      .mockResolvedValueOnce({ id: 'kv-id' });       // kv
+       = (async () => ({ uuid: 'd1-id' })) as any     // d1
+       = (async () => ({})) as any                      // r2
+       = (async () => ({ id: 'kv-id' })) as any;       // kv
 
     const resources = {
       'main-db': { type: 'd1', binding: 'DB' },
@@ -261,42 +296,44 @@ describe('provisionResources (with CloudflareProvider)', () => {
       env: 'staging',
     });
 
-    expect(provisioned.size).toBe(4);
-    expect(results).toHaveLength(4);
+    assertEquals(provisioned.size, 4);
+    assertEquals(results.length, 4);
 
     // D1
     const d1Result = results.find(r => r.name === 'main-db');
-    expect(d1Result?.status).toBe('provisioned');
-    expect(d1Result?.id).toBe('d1-id');
+    assertEquals(d1Result?.status, 'provisioned');
+    assertEquals(d1Result?.id, 'd1-id');
 
     // R2
     const r2Result = results.find(r => r.name === 'assets');
-    expect(r2Result?.status).toBe('provisioned');
+    assertEquals(r2Result?.status, 'provisioned');
 
     // KV
     const kvResult = results.find(r => r.name === 'cache');
-    expect(kvResult?.status).toBe('provisioned');
-    expect(kvResult?.id).toBe('kv-id');
+    assertEquals(kvResult?.status, 'provisioned');
+    assertEquals(kvResult?.id, 'kv-id');
 
     // DurableObject (auto-configured)
     const doResult = results.find(r => r.name === 'my-do');
-    expect(doResult?.status).toBe('skipped');
-  });
-
-  it('canonicalizes portable-style resource aliases before provisioning', async () => {
-    const { provisionResources } = await import('../src/lib/group-deploy/provisioner.js');
+    assertEquals(doResult?.status, 'skipped');
+})
+  Deno.test('provisionResources (with CloudflareProvider) - canonicalizes portable-style resource aliases before provisioning', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+    mocks.cfApi;
+    mocks.execCommand;
+  const { provisionResources } = await import('../src/lib/group-deploy/provisioner.ts');
 
     mocks.cfApi
-      .mockResolvedValueOnce({ uuid: 'sql-id' })         // sql -> d1
-      .mockResolvedValueOnce({})                          // object_store -> r2
-      .mockResolvedValueOnce({ id: 'kv-id' })             // kv
-      .mockResolvedValueOnce({ id: 'vector-id' })         // vector_index -> vectorize
+       = (async () => ({ uuid: 'sql-id' })) as any         // sql -> d1
+       = (async () => ({})) as any                          // object_store -> r2
+       = (async () => ({ id: 'kv-id' })) as any             // kv
+       = (async () => ({ id: 'vector-id' })) as any         // vector_index -> vectorize
 
-    mocks.execCommand.mockResolvedValueOnce({
+    mocks.execCommand = (async () => ({
       stdout: '',
       stderr: '',
       exitCode: 0,
-    });
+    })) as any;
 
     const resources = {
       'main-db': { type: 'sql', binding: 'DB' },
@@ -313,18 +350,20 @@ describe('provisionResources (with CloudflareProvider)', () => {
       env: 'staging',
     });
 
-    expect(provisioned.size).toBe(5);
-    expect(results).toHaveLength(5);
+    assertEquals(provisioned.size, 5);
+    assertEquals(results.length, 5);
 
-    expect(provisioned.get('main-db')?.type).toBe('d1');
-    expect(provisioned.get('assets')?.type).toBe('r2');
-    expect(provisioned.get('embeddings')?.type).toBe('vectorize');
-    expect(results.find((result) => result.name === 'api-secret')?.type).toBe('secretRef');
-    expect(mocks.cfApi).toHaveBeenCalledTimes(3);
-  });
-
-  it('dry-run mode skips actual provisioning', async () => {
-    const { provisionResources } = await import('../src/lib/group-deploy/provisioner.js');
+    assertEquals(provisioned.get('main-db')?.type, 'd1');
+    assertEquals(provisioned.get('assets')?.type, 'r2');
+    assertEquals(provisioned.get('embeddings')?.type, 'vectorize');
+    assertEquals(results.find((result) => result.name === 'api-secret')?.type, 'secretRef');
+    assertSpyCalls(mocks.cfApi, 3);
+})
+  Deno.test('provisionResources (with CloudflareProvider) - dry-run mode skips actual provisioning', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+    mocks.cfApi;
+    mocks.execCommand;
+  const { provisionResources } = await import('../src/lib/group-deploy/provisioner.ts');
 
     const resources = {
       'main-db': { type: 'd1' },
@@ -339,17 +378,19 @@ describe('provisionResources (with CloudflareProvider)', () => {
       dryRun: true,
     });
 
-    expect(mocks.cfApi).not.toHaveBeenCalled();
-    expect(mocks.execCommand).not.toHaveBeenCalled();
-    expect(provisioned.size).toBe(2);
-    expect(results.every(r => r.status === 'provisioned')).toBe(true);
-    expect(results.every(r => r.id?.startsWith('(dry-run)'))).toBe(true);
-  });
+    assertSpyCalls(mocks.cfApi, 0);
+    assertSpyCalls(mocks.execCommand, 0);
+    assertEquals(provisioned.size, 2);
+    assertEquals(results.every(r => r.status === 'provisioned'), true);
+    assertEquals(results.every(r => r.id?.startsWith('(dry-run)')), true);
+})
+  Deno.test('provisionResources (with CloudflareProvider) - handles provider errors gracefully', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+    mocks.cfApi;
+    mocks.execCommand;
+  const { provisionResources } = await import('../src/lib/group-deploy/provisioner.ts');
 
-  it('handles provider errors gracefully', async () => {
-    const { provisionResources } = await import('../src/lib/group-deploy/provisioner.js');
-
-    mocks.cfApi.mockRejectedValueOnce(new Error('CF API 503'));
+    mocks.cfApi = (async () => { throw new Error('CF API 503'); }) as any;
 
     const resources = {
       'main-db': { type: 'd1' },
@@ -362,13 +403,15 @@ describe('provisionResources (with CloudflareProvider)', () => {
       env: 'staging',
     });
 
-    expect(results).toHaveLength(1);
-    expect(results[0].status).toBe('failed');
-    expect(results[0].error).toContain('CF API 503');
-  });
-
-  it('reports unsupported resource type as failed', async () => {
-    const { provisionResources } = await import('../src/lib/group-deploy/provisioner.js');
+    assertEquals(results.length, 1);
+    assertEquals(results[0].status, 'failed');
+    assertStringIncludes(results[0].error, 'CF API 503');
+})
+  Deno.test('provisionResources (with CloudflareProvider) - reports unsupported resource type as failed', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+    mocks.cfApi;
+    mocks.execCommand;
+  const { provisionResources } = await import('../src/lib/group-deploy/provisioner.ts');
 
     const resources = {
       mystery: { type: 'unknown-thing' },
@@ -381,46 +424,46 @@ describe('provisionResources (with CloudflareProvider)', () => {
       env: 'staging',
     });
 
-    expect(results).toHaveLength(1);
-    expect(results[0].status).toBe('failed');
-    expect(results[0].error).toContain('Unsupported resource type');
-  });
-});
-
+    assertEquals(results.length, 1);
+    assertEquals(results[0].status, 'failed');
+    assertStringIncludes(results[0].error, 'Unsupported resource type');
+})
 // ── Non-Cloudflare providers: graceful failure ───────────────────────────────
 
-describe('Non-Cloudflare providers graceful failure', () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
+
+  Deno.test('Non-Cloudflare providers graceful failure - AWSProvider handles missing aws CLI', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
     // All non-CF providers use execCommand which we can mock to simulate missing CLI
-    mocks.execCommand.mockRejectedValue(new Error('ENOENT: command not found'));
-  });
-
-  it('AWSProvider handles missing aws CLI', async () => {
-    const provider = new AWSProvider();
+    mocks.execCommand = (async () => { throw new Error('ENOENT: command not found'); }) as any;
+  const provider = new AWSProvider();
     const result = await provider.createDatabase('test-db');
-    expect(result.status).toBe('failed');
-    expect(result.error).toContain('not available');
-  });
-
-  it('GCPProvider handles missing gcloud CLI', async () => {
-    const provider = new GCPProvider({ project: 'test' });
+    assertEquals(result.status, 'failed');
+    assertStringIncludes(result.error, 'not available');
+})
+  Deno.test('Non-Cloudflare providers graceful failure - GCPProvider handles missing gcloud CLI', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+    // All non-CF providers use execCommand which we can mock to simulate missing CLI
+    mocks.execCommand = (async () => { throw new Error('ENOENT: command not found'); }) as any;
+  const provider = new GCPProvider({ project: 'test' });
     const result = await provider.createDatabase('test-db');
-    expect(result.status).toBe('failed');
-    expect(result.error).toContain('not available');
-  });
-
-  it('K8sProvider handles missing kubectl CLI', async () => {
-    const provider = new K8sProvider();
+    assertEquals(result.status, 'failed');
+    assertStringIncludes(result.error, 'not available');
+})
+  Deno.test('Non-Cloudflare providers graceful failure - K8sProvider handles missing kubectl CLI', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+    // All non-CF providers use execCommand which we can mock to simulate missing CLI
+    mocks.execCommand = (async () => { throw new Error('ENOENT: command not found'); }) as any;
+  const provider = new K8sProvider();
     const result = await provider.createDatabase('test-db');
-    expect(result.status).toBe('failed');
-    expect(result.error).toContain('not available');
-  });
-
-  it('DockerProvider handles missing docker CLI', async () => {
-    const provider = new DockerProvider();
+    assertEquals(result.status, 'failed');
+    assertStringIncludes(result.error, 'not available');
+})
+  Deno.test('Non-Cloudflare providers graceful failure - DockerProvider handles missing docker CLI', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+    // All non-CF providers use execCommand which we can mock to simulate missing CLI
+    mocks.execCommand = (async () => { throw new Error('ENOENT: command not found'); }) as any;
+  const provider = new DockerProvider();
     const result = await provider.createDatabase('test-db');
-    expect(result.status).toBe('failed');
-    expect(result.error).toContain('not available');
-  });
-});
+    assertEquals(result.status, 'failed');
+    assertStringIncludes(result.error, 'not available');
+})

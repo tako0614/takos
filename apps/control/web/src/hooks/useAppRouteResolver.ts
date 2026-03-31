@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { createEffect, onCleanup } from 'solid-js';
 import { parseRoute } from './useRouter';
 import { findSpaceByIdentifier, getSpaceIdentifier } from '../lib/spaces';
 import type { TranslationKey } from '../i18n';
@@ -31,12 +31,16 @@ export function useAppRouteResolver(options: {
     t,
   } = options;
 
-  useEffect(() => {
+  createEffect(() => {
     if (authState !== 'authenticated') return;
     if (route.view !== 'app' || !route.appId) return;
     if (hasInvalidSpaceRoute) return;
 
     let cancelled = false;
+    onCleanup(() => {
+      cancelled = true;
+    });
+
     const resolveAppRoute = async () => {
       try {
         const response = await fetch(`/api/apps/${encodeURIComponent(route.appId!)}`, {
@@ -114,8 +118,5 @@ export function useAppRouteResolver(options: {
     };
 
     void resolveAppRoute();
-    return () => {
-      cancelled = true;
-    };
-  }, [authState, hasInvalidSpaceRoute, preferredSpaceId, replace, route.appId, route.view, route.spaceId, routeSpaceId, selectedSpaceId, t, spaces]);
+  });
 }

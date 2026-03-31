@@ -1,4 +1,3 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
 import type { ToolContext } from '@/tools/types';
 import type { D1Database } from '@cloudflare/workers-types';
 import type { Env } from '@/types';
@@ -7,73 +6,16 @@ import type { Env } from '@/types';
 // Mocks
 // ---------------------------------------------------------------------------
 
-const mockInsertValues = vi.fn();
-const mockSelectAll = vi.fn();
-const mockSelectGet = vi.fn();
-const mockUpdateSet = vi.fn();
+import { assertEquals, assert, assertRejects, assertStringIncludes } from 'jsr:@std/assert';
+import { assertSpyCallArgs } from 'jsr:@std/testing/mock';
 
-vi.mock('@/db', () => {
-  const chain = {
-    from: vi.fn(() => chain),
-    where: vi.fn(() => chain),
-    orderBy: vi.fn(() => chain),
-    limit: vi.fn(() => chain),
-    get: vi.fn(() => mockSelectGet()),
-    all: vi.fn(() => mockSelectAll()),
-  };
+const mockInsertValues = ((..._args: any[]) => undefined) as any;
+const mockSelectAll = ((..._args: any[]) => undefined) as any;
+const mockSelectGet = ((..._args: any[]) => undefined) as any;
+const mockUpdateSet = ((..._args: any[]) => undefined) as any;
 
-  return {
-    getDb: () => ({
-      select: vi.fn(() => chain),
-      insert: vi.fn(() => ({
-        values: vi.fn((...args: unknown[]) => {
-          mockInsertValues(...args);
-          return { run: vi.fn() };
-        }),
-      })),
-      update: vi.fn(() => ({
-        set: vi.fn((...args: unknown[]) => {
-          mockUpdateSet(...args);
-          return { where: vi.fn() };
-        }),
-      })),
-    }),
-    memories: {
-      id: 'id',
-      accountId: 'account_id',
-      authorAccountId: 'author_account_id',
-      threadId: 'thread_id',
-      type: 'type',
-      category: 'category',
-      content: 'content',
-      summary: 'summary',
-      importance: 'importance',
-      occurredAt: 'occurred_at',
-      accessCount: 'access_count',
-      lastAccessedAt: 'last_accessed_at',
-      createdAt: 'created_at',
-      updatedAt: 'updated_at',
-    },
-    reminders: {
-      id: 'id',
-      accountId: 'account_id',
-      ownerAccountId: 'owner_account_id',
-      content: 'content',
-      context: 'context',
-      triggerType: 'trigger_type',
-      triggerValue: 'trigger_value',
-      status: 'status',
-      priority: 'priority',
-      createdAt: 'created_at',
-      updatedAt: 'updated_at',
-    },
-  };
-});
-
-vi.mock('@/utils', () => ({
-  generateId: vi.fn(() => 'generated-id'),
-}));
-
+// [Deno] vi.mock removed - manually stub imports from '@/db'
+// [Deno] vi.mock removed - manually stub imports from '@/utils'
 import {
   rememberHandler,
   recallHandler,
@@ -97,9 +39,9 @@ function makeContext(overrides: Partial<ToolContext> = {}): ToolContext {
     capabilities: [],
     env: {} as Env,
     db: {} as D1Database,
-    setSessionId: vi.fn(),
-    getLastContainerStartFailure: vi.fn(() => undefined),
-    setLastContainerStartFailure: vi.fn(),
+    setSessionId: ((..._args: any[]) => undefined) as any,
+    getLastContainerStartFailure: () => undefined,
+    setLastContainerStartFailure: ((..._args: any[]) => undefined) as any,
     ...overrides,
   };
 }
@@ -108,139 +50,134 @@ function makeContext(overrides: Partial<ToolContext> = {}): ToolContext {
 // Tests
 // ---------------------------------------------------------------------------
 
-describe('memory tools', () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-  });
 
-  describe('definitions', () => {
-    it('REMEMBER requires content and type', () => {
-      expect(REMEMBER.name).toBe('remember');
-      expect(REMEMBER.category).toBe('memory');
-      expect(REMEMBER.parameters.required).toEqual(['content', 'type']);
-    });
-
-    it('RECALL requires query', () => {
-      expect(RECALL.name).toBe('recall');
-      expect(RECALL.parameters.required).toEqual(['query']);
-    });
-
-    it('SET_REMINDER requires content, trigger_type, trigger_value', () => {
-      expect(SET_REMINDER.name).toBe('set_reminder');
-      expect(SET_REMINDER.parameters.required).toEqual(['content', 'trigger_type', 'trigger_value']);
-    });
-
-    it('MEMORY_TOOLS exports all three tools', () => {
-      expect(MEMORY_TOOLS).toHaveLength(3);
-      expect(MEMORY_TOOLS.map(t => t.name)).toEqual(['remember', 'recall', 'set_reminder']);
-    });
-  });
-
-  describe('rememberHandler', () => {
-    it('stores a memory and returns confirmation', async () => {
-      const result = await rememberHandler(
+  
+    Deno.test('memory tools - definitions - REMEMBER requires content and type', () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+  assertEquals(REMEMBER.name, 'remember');
+      assertEquals(REMEMBER.category, 'memory');
+      assertEquals(REMEMBER.parameters.required, ['content', 'type']);
+})
+    Deno.test('memory tools - definitions - RECALL requires query', () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+  assertEquals(RECALL.name, 'recall');
+      assertEquals(RECALL.parameters.required, ['query']);
+})
+    Deno.test('memory tools - definitions - SET_REMINDER requires content, trigger_type, trigger_value', () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+  assertEquals(SET_REMINDER.name, 'set_reminder');
+      assertEquals(SET_REMINDER.parameters.required, ['content', 'trigger_type', 'trigger_value']);
+})
+    Deno.test('memory tools - definitions - MEMORY_TOOLS exports all three tools', () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+  assertEquals(MEMORY_TOOLS.length, 3);
+      assertEquals(MEMORY_TOOLS.map(t => t.name), ['remember', 'recall', 'set_reminder']);
+})  
+  
+    Deno.test('memory tools - rememberHandler - stores a memory and returns confirmation', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+  const result = await rememberHandler(
         { content: 'TypeScript is preferred', type: 'semantic' },
         makeContext(),
       );
 
-      expect(result).toContain('Remembered (semantic)');
-      expect(result).toContain('TypeScript is preferred');
-      expect(mockInsertValues).toHaveBeenCalledWith(
-        expect.objectContaining({
+      assertStringIncludes(result, 'Remembered (semantic)');
+      assertStringIncludes(result, 'TypeScript is preferred');
+      assertSpyCallArgs(mockInsertValues, 0, [
+        ({
           accountId: 'ws-test',
           authorAccountId: 'user-1',
           threadId: 'thread-1',
           type: 'semantic',
           content: 'TypeScript is preferred',
         }),
-      );
-    });
-
-    it('truncates summary for long content', async () => {
-      const longContent = 'x'.repeat(200);
+      ]);
+})
+    Deno.test('memory tools - rememberHandler - truncates summary for long content', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+  const longContent = 'x'.repeat(200);
       await rememberHandler(
         { content: longContent, type: 'episode' },
         makeContext(),
       );
 
-      expect(mockInsertValues).toHaveBeenCalledWith(
-        expect.objectContaining({
+      assertSpyCallArgs(mockInsertValues, 0, [
+        ({
           summary: expect.stringContaining('...'),
         }),
-      );
-    });
-
-    it('uses default importance of 0.5', async () => {
-      await rememberHandler(
+      ]);
+})
+    Deno.test('memory tools - rememberHandler - uses default importance of 0.5', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+  await rememberHandler(
         { content: 'test', type: 'procedural' },
         makeContext(),
       );
 
-      expect(mockInsertValues).toHaveBeenCalledWith(
-        expect.objectContaining({
+      assertSpyCallArgs(mockInsertValues, 0, [
+        ({
           importance: 0.5,
         }),
-      );
-    });
-
-    it('uses custom importance when provided', async () => {
-      await rememberHandler(
+      ]);
+})
+    Deno.test('memory tools - rememberHandler - uses custom importance when provided', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+  await rememberHandler(
         { content: 'important fact', type: 'semantic', importance: 0.9 },
         makeContext(),
       );
 
-      expect(mockInsertValues).toHaveBeenCalledWith(
-        expect.objectContaining({
+      assertSpyCallArgs(mockInsertValues, 0, [
+        ({
           importance: 0.9,
         }),
-      );
-    });
-
-    it('stores category when provided', async () => {
-      await rememberHandler(
+      ]);
+})
+    Deno.test('memory tools - rememberHandler - stores category when provided', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+  await rememberHandler(
         { content: 'test', type: 'semantic', category: 'project' },
         makeContext(),
       );
 
-      expect(mockInsertValues).toHaveBeenCalledWith(
-        expect.objectContaining({ category: 'project' }),
-      );
-    });
-
-    it('rejects content exceeding max size', async () => {
-      const hugeContent = 'x'.repeat(100_001);
-      await expect(
+      assertSpyCallArgs(mockInsertValues, 0, [
+        ({ category: 'project' }),
+      ]);
+})
+    Deno.test('memory tools - rememberHandler - rejects content exceeding max size', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+  const hugeContent = 'x'.repeat(100_001);
+      await await assertRejects(async () => { await 
         rememberHandler(
           { content: hugeContent, type: 'semantic' },
           makeContext(),
         ),
-      ).rejects.toThrow('Memory content too large');
-    });
-
-    it('rejects category exceeding max size', async () => {
-      const hugeCategory = 'x'.repeat(1001);
-      await expect(
+      ; }, 'Memory content too large');
+})
+    Deno.test('memory tools - rememberHandler - rejects category exceeding max size', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+  const hugeCategory = 'x'.repeat(1001);
+      await await assertRejects(async () => { await 
         rememberHandler(
           { content: 'test', type: 'semantic', category: hugeCategory },
           makeContext(),
         ),
-      ).rejects.toThrow('Memory category too long');
-    });
-
-    it('includes session ID in result when available', async () => {
-      const result = await rememberHandler(
+      ; }, 'Memory category too long');
+})
+    Deno.test('memory tools - rememberHandler - includes session ID in result when available', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+  const result = await rememberHandler(
         { content: 'test', type: 'semantic' },
         makeContext({ sessionId: 'session-abc-123' }),
       );
 
       // source uses sessionId.slice(0, 8) => 'session-'
-      expect(result).toContain('[session: session-...]');
-    });
-  });
-
-  describe('recallHandler', () => {
-    it('returns memories matching the query', async () => {
-      mockSelectAll.mockResolvedValue([
+      assertStringIncludes(result, '[session: session-...]');
+})  
+  
+    Deno.test('memory tools - recallHandler - returns memories matching the query', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+  mockSelectAll = (async () => [
         {
           id: 'm1',
           type: 'semantic',
@@ -250,31 +187,31 @@ describe('memory tools', () => {
           occurredAt: '2024-01-01T00:00:00Z',
           accessCount: 5,
         },
-      ]);
+      ]) as any;
 
       const result = await recallHandler(
         { query: 'TypeScript' },
         makeContext(),
       );
 
-      expect(result).toContain('Found 1 memories');
-      expect(result).toContain('TypeScript is preferred');
-      expect(result).toContain('[project]');
-    });
-
-    it('returns no memories found message', async () => {
-      mockSelectAll.mockResolvedValue([]);
+      assertStringIncludes(result, 'Found 1 memories');
+      assertStringIncludes(result, 'TypeScript is preferred');
+      assertStringIncludes(result, '[project]');
+})
+    Deno.test('memory tools - recallHandler - returns no memories found message', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+  mockSelectAll = (async () => []) as any;
 
       const result = await recallHandler(
         { query: 'nonexistent' },
         makeContext(),
       );
 
-      expect(result).toContain('No memories found');
-    });
-
-    it('limits results to max 50', async () => {
-      mockSelectAll.mockResolvedValue([]);
+      assertStringIncludes(result, 'No memories found');
+})
+    Deno.test('memory tools - recallHandler - limits results to max 50', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+  mockSelectAll = (async () => []) as any;
 
       await recallHandler(
         { query: 'test', limit: 100 },
@@ -283,11 +220,11 @@ describe('memory tools', () => {
 
       // The handler should call .limit(50) even if 100 was requested
       // Since we can't easily inspect the chain calls, we test the logic indirectly
-      expect(mockSelectAll).toHaveBeenCalled();
-    });
-
-    it('updates access count for returned memories', async () => {
-      mockSelectAll.mockResolvedValue([
+      assert(mockSelectAll.calls.length > 0);
+})
+    Deno.test('memory tools - recallHandler - updates access count for returned memories', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+  mockSelectAll = (async () => [
         {
           id: 'm1',
           type: 'semantic',
@@ -297,17 +234,16 @@ describe('memory tools', () => {
           occurredAt: '2024-01-01T00:00:00Z',
           accessCount: 0,
         },
-      ]);
+      ]) as any;
 
       await recallHandler({ query: 'Test' }, makeContext());
 
-      expect(mockUpdateSet).toHaveBeenCalled();
-    });
-  });
-
-  describe('setReminderHandler', () => {
-    it('sets a time-based reminder', async () => {
-      const futureDate = new Date(Date.now() + 86400000).toISOString();
+      assert(mockUpdateSet.calls.length > 0);
+})  
+  
+    Deno.test('memory tools - setReminderHandler - sets a time-based reminder', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+  const futureDate = new Date(Date.now() + 86400000).toISOString();
 
       const result = await setReminderHandler(
         {
@@ -318,13 +254,13 @@ describe('memory tools', () => {
         makeContext(),
       );
 
-      expect(result).toContain('Reminder set (normal)');
-      expect(result).toContain('Review PR');
-      expect(result).toContain('at');
-    });
-
-    it('sets a condition-based reminder', async () => {
-      const result = await setReminderHandler(
+      assertStringIncludes(result, 'Reminder set (normal)');
+      assertStringIncludes(result, 'Review PR');
+      assertStringIncludes(result, 'at');
+})
+    Deno.test('memory tools - setReminderHandler - sets a condition-based reminder', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+  const result = await setReminderHandler(
         {
           content: 'Check tests',
           trigger_type: 'condition',
@@ -333,11 +269,11 @@ describe('memory tools', () => {
         makeContext(),
       );
 
-      expect(result).toContain('when: tests fail');
-    });
-
-    it('sets a context-based reminder', async () => {
-      const result = await setReminderHandler(
+      assertStringIncludes(result, 'when: tests fail');
+})
+    Deno.test('memory tools - setReminderHandler - sets a context-based reminder', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+  const result = await setReminderHandler(
         {
           content: 'Check deployment',
           trigger_type: 'context',
@@ -346,11 +282,11 @@ describe('memory tools', () => {
         makeContext(),
       );
 
-      expect(result).toContain('context: deployment discussion');
-    });
-
-    it('uses custom priority', async () => {
-      const result = await setReminderHandler(
+      assertStringIncludes(result, 'context: deployment discussion');
+})
+    Deno.test('memory tools - setReminderHandler - uses custom priority', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+  const result = await setReminderHandler(
         {
           content: 'Urgent task',
           trigger_type: 'context',
@@ -360,11 +296,11 @@ describe('memory tools', () => {
         makeContext(),
       );
 
-      expect(result).toContain('Reminder set (critical)');
-    });
-
-    it('rejects invalid time format', async () => {
-      await expect(
+      assertStringIncludes(result, 'Reminder set (critical)');
+})
+    Deno.test('memory tools - setReminderHandler - rejects invalid time format', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+  await await assertRejects(async () => { await 
         setReminderHandler(
           {
             content: 'Bad time',
@@ -373,12 +309,12 @@ describe('memory tools', () => {
           },
           makeContext(),
         ),
-      ).rejects.toThrow('Invalid time format');
-    });
-
-    it('rejects past trigger time', async () => {
-      const pastDate = new Date(Date.now() - 86400000).toISOString();
-      await expect(
+      ; }, 'Invalid time format');
+})
+    Deno.test('memory tools - setReminderHandler - rejects past trigger time', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+  const pastDate = new Date(Date.now() - 86400000).toISOString();
+      await await assertRejects(async () => { await 
         setReminderHandler(
           {
             content: 'Past reminder',
@@ -387,11 +323,11 @@ describe('memory tools', () => {
           },
           makeContext(),
         ),
-      ).rejects.toThrow('must be in the future');
-    });
-
-    it('includes session ID in result when available', async () => {
-      const result = await setReminderHandler(
+      ; }, 'must be in the future');
+})
+    Deno.test('memory tools - setReminderHandler - includes session ID in result when available', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+  const result = await setReminderHandler(
         {
           content: 'Test',
           trigger_type: 'context',
@@ -401,7 +337,5 @@ describe('memory tools', () => {
       );
 
       // source uses sessionId.slice(0, 8) => 'session-'
-      expect(result).toContain('[session: session-...]');
-    });
-  });
-});
+      assertStringIncludes(result, '[session: session-...]');
+})  

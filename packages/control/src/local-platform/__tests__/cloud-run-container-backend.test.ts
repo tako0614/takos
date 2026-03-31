@@ -1,10 +1,12 @@
-import { describe, expect, it, vi } from 'vitest';
 import { CloudRunContainerBackend } from '../cloud-run-container-backend.ts';
 
-describe('CloudRunContainerBackend', () => {
-  it('deploys a service, returns the service URL, reads logs, and deletes the service', async () => {
-    const commandRunner = vi.fn()
-      .mockResolvedValueOnce({
+
+import { assertEquals } from 'jsr:@std/assert';
+import { assertSpyCallArgs } from 'jsr:@std/testing/mock';
+
+  Deno.test('CloudRunContainerBackend - deploys a service, returns the service URL, reads logs, and deletes the service', async () => {
+  const commandRunner = ((..._args: any[]) => undefined) as any
+       = (async () => ({
         exitCode: 0,
         stdout: JSON.stringify({
           status: {
@@ -12,17 +14,17 @@ describe('CloudRunContainerBackend', () => {
           },
         }),
         stderr: '',
-      })
-      .mockResolvedValueOnce({
+      })) as any
+       = (async () => ({
         exitCode: 0,
         stdout: 'line-1\nline-2\n',
         stderr: '',
-      })
-      .mockResolvedValueOnce({
+      })) as any
+       = (async () => ({
         exitCode: 0,
         stdout: '',
         stderr: '',
-      });
+      })) as any;
 
     const backend = new CloudRunContainerBackend({
       projectId: 'takos-project',
@@ -43,7 +45,7 @@ describe('CloudRunContainerBackend', () => {
       },
     });
 
-    expect(result).toEqual({
+    assertEquals(result, {
       containerId: 'takos-service',
       resolvedEndpoint: {
         kind: 'http-url',
@@ -52,10 +54,10 @@ describe('CloudRunContainerBackend', () => {
       healthCheckUrl: 'https://takos-worker-uc.a.run.app/readyz',
     });
 
-    await expect(backend.getLogs('takos-service', 25)).resolves.toBe('line-1\nline-2\n');
-    await expect(backend.remove('takos-service')).resolves.toBeUndefined();
+    await assertEquals(await backend.getLogs('takos-service', 25), 'line-1\nline-2\n');
+    await assertEquals(await backend.remove('takos-service'), undefined);
 
-    expect(commandRunner).toHaveBeenNthCalledWith(1, 'gcloud', expect.arrayContaining([
+    assertSpyCallArgs(commandRunner, 0, ['gcloud', ([
       'run',
       'deploy',
       'takos-service',
@@ -70,15 +72,15 @@ describe('CloudRunContainerBackend', () => {
       '--no-allow-unauthenticated',
       '--project',
       'takos-project',
-    ]));
-    expect(commandRunner).toHaveBeenNthCalledWith(2, 'gcloud', expect.arrayContaining([
+    ])]);
+    assertSpyCallArgs(commandRunner, 1, ['gcloud', ([
       'logging',
       'read',
       'resource.type="cloud_run_revision" AND resource.labels.service_name="takos-service"',
       '--project',
       'takos-project',
-    ]));
-    expect(commandRunner).toHaveBeenNthCalledWith(3, 'gcloud', expect.arrayContaining([
+    ])]);
+    assertSpyCallArgs(commandRunner, 2, ['gcloud', ([
       'run',
       'services',
       'delete',
@@ -88,6 +90,5 @@ describe('CloudRunContainerBackend', () => {
       '--quiet',
       '--project',
       'takos-project',
-    ]));
-  });
-});
+    ])]);
+})

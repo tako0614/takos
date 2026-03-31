@@ -1,38 +1,32 @@
-import { describe, expect, it, vi, beforeEach } from 'vitest';
+import { assertEquals, assert } from 'jsr:@std/assert';
+import { assertSpyCalls } from 'jsr:@std/testing/mock';
 
 function createMockDrizzleDb() {
   const chain = {
-    values: vi.fn().mockReturnThis(),
+    values: (function(this: any) { return this; }),
   };
   return {
-    insert: vi.fn(() => chain),
+    insert: () => chain,
     _: { chain },
   };
 }
 
 const db = createMockDrizzleDb();
 
-const mocks = vi.hoisted(() => ({
-  getDb: vi.fn(),
-}));
-
-vi.mock('@/db', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('@/db')>();
-  return { ...actual, getDb: mocks.getDb };
+const mocks = ({
+  getDb: ((..._args: any[]) => undefined) as any,
 });
 
+// [Deno] vi.mock removed - manually stub imports from '@/db'
 import { logOAuthEvent } from '@/services/oauth/audit';
 import type { OAuthAuditEvent } from '@/services/oauth/audit';
 import type { D1Database } from '@cloudflare/workers-types';
 
-describe('logOAuthEvent', () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-    mocks.getDb.mockReturnValue(db);
-  });
 
-  it('inserts an audit log entry with all fields', async () => {
-    await logOAuthEvent({} as D1Database, {
+  Deno.test('logOAuthEvent - inserts an audit log entry with all fields', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+    mocks.getDb = (() => db) as any;
+  await logOAuthEvent({} as D1Database, {
       userId: 'user-1',
       clientId: 'client-1',
       eventType: 'authorize_approved',
@@ -41,38 +35,40 @@ describe('logOAuthEvent', () => {
       details: { redirect_uri: 'https://example.com/cb' },
     });
 
-    expect(db.insert).toHaveBeenCalledTimes(1);
+    assertSpyCalls(db.insert, 1);
     const insertChain = db._.chain;
-    expect(insertChain.values).toHaveBeenCalledTimes(1);
+    assertSpyCalls(insertChain.values, 1);
 
-    const values = insertChain.values.mock.calls[0]![0] as Record<string, unknown>;
-    expect(values.accountId).toBe('user-1');
-    expect(values.clientId).toBe('client-1');
-    expect(values.eventType).toBe('authorize_approved');
-    expect(values.ipAddress).toBe('127.0.0.1');
-    expect(values.userAgent).toBe('test-agent');
-    expect(JSON.parse(values.details as string)).toEqual({
+    const values = insertChain.values.calls[0]![0] as Record<string, unknown>;
+    assertEquals(values.accountId, 'user-1');
+    assertEquals(values.clientId, 'client-1');
+    assertEquals(values.eventType, 'authorize_approved');
+    assertEquals(values.ipAddress, '127.0.0.1');
+    assertEquals(values.userAgent, 'test-agent');
+    assertEquals(JSON.parse(values.details as string), {
       redirect_uri: 'https://example.com/cb',
     });
-    expect(values.id).toBeTruthy();
-    expect(values.createdAt).toBeTruthy();
-  });
-
-  it('stores null for optional fields when not provided', async () => {
-    await logOAuthEvent({} as D1Database, {
+    assert(values.id);
+    assert(values.createdAt);
+})
+  Deno.test('logOAuthEvent - stores null for optional fields when not provided', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+    mocks.getDb = (() => db) as any;
+  await logOAuthEvent({} as D1Database, {
       eventType: 'token_issued',
     });
 
-    const values = db._.chain.values.mock.calls[0]![0] as Record<string, unknown>;
-    expect(values.accountId).toBeNull();
-    expect(values.clientId).toBeNull();
-    expect(values.ipAddress).toBeNull();
-    expect(values.userAgent).toBeNull();
-    expect(values.details).toBe('{}');
-  });
-
-  it('handles all defined event types', () => {
-    // Type-level check: ensure all event types are valid strings
+    const values = db._.chain.values.calls[0]![0] as Record<string, unknown>;
+    assertEquals(values.accountId, null);
+    assertEquals(values.clientId, null);
+    assertEquals(values.ipAddress, null);
+    assertEquals(values.userAgent, null);
+    assertEquals(values.details, '{}');
+})
+  Deno.test('logOAuthEvent - handles all defined event types', () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+    mocks.getDb = (() => db) as any;
+  // Type-level check: ensure all event types are valid strings
     const allEvents: OAuthAuditEvent[] = [
       'authorize_approved',
       'authorize_denied',
@@ -92,6 +88,5 @@ describe('logOAuthEvent', () => {
       'client_updated',
       'client_deleted',
     ];
-    expect(allEvents).toHaveLength(17);
-  });
-});
+    assertEquals(allEvents.length, 17);
+})

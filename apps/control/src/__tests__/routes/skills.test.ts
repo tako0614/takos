@@ -1,18 +1,19 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { Hono } from 'hono';
 import type { Env, User } from '@/types';
 import { createMockEnv } from '../../../test/integration/setup';
 
-const mocks = vi.hoisted(() => ({
-  createSkill: vi.fn(),
-  deleteSkillByName: vi.fn(),
-  formatSkill: vi.fn((s: any) => s),
-  getSkill: vi.fn(),
-  getOfficialSkillCatalogEntry: vi.fn(),
-  getSkillByName: vi.fn(),
-  listOfficialSkillsCatalog: vi.fn(),
-  listSkillContext: vi.fn(),
-  listSkills: vi.fn(),
+import { assertEquals, assert } from 'jsr:@std/assert';
+
+const mocks = ({
+  createSkill: ((..._args: any[]) => undefined) as any,
+  deleteSkillByName: ((..._args: any[]) => undefined) as any,
+  formatSkill: (s: any) => s,
+  getSkill: ((..._args: any[]) => undefined) as any,
+  getOfficialSkillCatalogEntry: ((..._args: any[]) => undefined) as any,
+  getSkillByName: ((..._args: any[]) => undefined) as any,
+  listOfficialSkillsCatalog: ((..._args: any[]) => undefined) as any,
+  listSkillContext: ((..._args: any[]) => undefined) as any,
+  listSkills: ((..._args: any[]) => undefined) as any,
   SkillMetadataValidationError: class extends Error {
     details: unknown;
     constructor(message: string, details?: unknown) {
@@ -20,59 +21,21 @@ const mocks = vi.hoisted(() => ({
       this.details = details;
     }
   },
-  updateSkill: vi.fn(),
-  updateSkillEnabled: vi.fn(),
-  updateSkillByName: vi.fn(),
-  updateSkillEnabledByName: vi.fn(),
-  requireSpaceAccess: vi.fn(),
-  getDb: vi.fn(),
-  getSpaceOperationPolicy: vi.fn(),
-}));
-
-vi.mock('@/services/source/skills', () => ({
-  createSkill: mocks.createSkill,
-  deleteSkillByName: mocks.deleteSkillByName,
-  formatSkill: mocks.formatSkill,
-  getSkill: mocks.getSkill,
-  getOfficialSkillCatalogEntry: mocks.getOfficialSkillCatalogEntry,
-  getSkillByName: mocks.getSkillByName,
-  listOfficialSkillsCatalog: mocks.listOfficialSkillsCatalog,
-  listSkillContext: mocks.listSkillContext,
-  listSkills: mocks.listSkills,
-  SkillMetadataValidationError: mocks.SkillMetadataValidationError,
-  updateSkill: mocks.updateSkill,
-  updateSkillEnabled: mocks.updateSkillEnabled,
-  updateSkillByName: mocks.updateSkillByName,
-  updateSkillEnabledByName: mocks.updateSkillEnabledByName,
-}));
-
-vi.mock('@/routes/shared/helpers', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('@/routes/shared/helpers')>();
-  return {
-    ...actual,
-    requireSpaceAccess: mocks.requireSpaceAccess,
-  };
+  updateSkill: ((..._args: any[]) => undefined) as any,
+  updateSkillEnabled: ((..._args: any[]) => undefined) as any,
+  updateSkillByName: ((..._args: any[]) => undefined) as any,
+  updateSkillEnabledByName: ((..._args: any[]) => undefined) as any,
+  requireSpaceAccess: ((..._args: any[]) => undefined) as any,
+  getDb: ((..._args: any[]) => undefined) as any,
+  getSpaceOperationPolicy: ((..._args: any[]) => undefined) as any,
 });
 
-vi.mock('@/db', () => ({
-  getDb: mocks.getDb,
-}));
-
-vi.mock('@/tools/tool-policy', () => ({
-  getSpaceOperationPolicy: () => ({
-    allowed_roles: ['owner', 'admin', 'editor', 'viewer'],
-  }),
-}));
-
-vi.mock('drizzle-orm', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('drizzle-orm')>();
-  return { ...actual };
-});
-
-vi.mock('@/db/schema', () => ({
-  skills: { id: 'id', accountId: 'accountId', name: 'name' },
-}));
-
+// [Deno] vi.mock removed - manually stub imports from '@/services/source/skills'
+// [Deno] vi.mock removed - manually stub imports from '@/routes/shared/helpers'
+// [Deno] vi.mock removed - manually stub imports from '@/db'
+// [Deno] vi.mock removed - manually stub imports from '@/tools/tool-policy'
+// [Deno] vi.mock removed - manually stub imports from 'drizzle-orm'
+// [Deno] vi.mock removed - manually stub imports from '@/db/schema'
 import skillsRoute from '@/routes/skills';
 
 function createUser(): User {
@@ -100,18 +63,14 @@ function createApp(user: User) {
   return app;
 }
 
-describe('skills routes', () => {
+
   const env = createMockEnv();
-
-  beforeEach(() => {
-    vi.clearAllMocks();
-    mocks.requireSpaceAccess.mockResolvedValue({ workspace: { id: 'ws-1' } });
-  });
-
-  describe('GET /api/spaces/:spaceId/skills', () => {
-    it('returns skills list', async () => {
-      const skillsList = [{ id: 'sk-1', name: 'test-skill' }];
-      mocks.listSkills.mockResolvedValue(skillsList);
+  
+    Deno.test('skills routes - GET /api/spaces/:spaceId/skills - returns skills list', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+    mocks.requireSpaceAccess = (async () => ({ workspace: { id: 'ws-1' } })) as any;
+  const skillsList = [{ id: 'sk-1', name: 'test-skill' }];
+      mocks.listSkills = (async () => skillsList) as any;
 
       const app = createApp(createUser());
       const res = await app.fetch(
@@ -120,14 +79,13 @@ describe('skills routes', () => {
         {} as ExecutionContext,
       );
 
-      expect(res.status).toBe(200);
-      await expect(res.json()).resolves.toEqual({ skills: skillsList });
-    });
-
-    it('returns 404 when workspace access denied', async () => {
-      mocks.requireSpaceAccess.mockResolvedValue(
-        new Response(JSON.stringify({ error: 'Workspace not found' }), { status: 404 }),
-      );
+      assertEquals(res.status, 200);
+      await assertEquals(await res.json(), { skills: skillsList });
+})
+    Deno.test('skills routes - GET /api/spaces/:spaceId/skills - returns 404 when workspace access denied', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+    mocks.requireSpaceAccess = (async () => ({ workspace: { id: 'ws-1' } })) as any;
+  mocks.requireSpaceAccess = (async () => new Response(JSON.stringify({ error: 'Workspace not found' }), { status: 404 }),) as any;
 
       const app = createApp(createUser());
       const res = await app.fetch(
@@ -136,20 +94,20 @@ describe('skills routes', () => {
         {} as ExecutionContext,
       );
 
-      expect(res.status).toBe(404);
-    });
-  });
-
-  describe('POST /api/spaces/:spaceId/skills', () => {
-    it('creates a skill and returns 201', async () => {
-      const dbChain: any = {
-        select: vi.fn(() => dbChain),
-        from: vi.fn(() => dbChain),
-        where: vi.fn(() => dbChain),
-        get: vi.fn().mockResolvedValue(undefined), // no existing skill
+      assertEquals(res.status, 404);
+})  
+  
+    Deno.test('skills routes - POST /api/spaces/:spaceId/skills - creates a skill and returns 201', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+    mocks.requireSpaceAccess = (async () => ({ workspace: { id: 'ws-1' } })) as any;
+  const dbChain: any = {
+        select: () => dbChain,
+        from: () => dbChain,
+        where: () => dbChain,
+        get: (async () => undefined), // no existing skill
       };
-      mocks.getDb.mockReturnValue(dbChain);
-      mocks.createSkill.mockResolvedValue({ id: 'sk-new', name: 'new-skill' });
+      mocks.getDb = (() => dbChain) as any;
+      mocks.createSkill = (async () => ({ id: 'sk-new', name: 'new-skill' })) as any;
 
       const app = createApp(createUser());
       const res = await app.fetch(
@@ -165,11 +123,12 @@ describe('skills routes', () => {
         {} as ExecutionContext,
       );
 
-      expect(res.status).toBe(201);
-    });
-
-    it('rejects skill with missing name', async () => {
-      const app = createApp(createUser());
+      assertEquals(res.status, 201);
+})
+    Deno.test('skills routes - POST /api/spaces/:spaceId/skills - rejects skill with missing name', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+    mocks.requireSpaceAccess = (async () => ({ workspace: { id: 'ws-1' } })) as any;
+  const app = createApp(createUser());
       const res = await app.fetch(
         new Request('http://localhost/api/spaces/sp-1/skills', {
           method: 'POST',
@@ -182,11 +141,12 @@ describe('skills routes', () => {
         {} as ExecutionContext,
       );
 
-      expect(res.status).toBe(422);
-    });
-
-    it('rejects skill with missing instructions', async () => {
-      const app = createApp(createUser());
+      assertEquals(res.status, 422);
+})
+    Deno.test('skills routes - POST /api/spaces/:spaceId/skills - rejects skill with missing instructions', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+    mocks.requireSpaceAccess = (async () => ({ workspace: { id: 'ws-1' } })) as any;
+  const app = createApp(createUser());
       const res = await app.fetch(
         new Request('http://localhost/api/spaces/sp-1/skills', {
           method: 'POST',
@@ -199,17 +159,18 @@ describe('skills routes', () => {
         {} as ExecutionContext,
       );
 
-      expect(res.status).toBe(422);
-    });
-
-    it('returns 409 when skill name already exists', async () => {
-      const dbChain: any = {
-        select: vi.fn(() => dbChain),
-        from: vi.fn(() => dbChain),
-        where: vi.fn(() => dbChain),
-        get: vi.fn().mockResolvedValue({ id: 'sk-existing' }),
+      assertEquals(res.status, 422);
+})
+    Deno.test('skills routes - POST /api/spaces/:spaceId/skills - returns 409 when skill name already exists', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+    mocks.requireSpaceAccess = (async () => ({ workspace: { id: 'ws-1' } })) as any;
+  const dbChain: any = {
+        select: () => dbChain,
+        from: () => dbChain,
+        where: () => dbChain,
+        get: (async () => ({ id: 'sk-existing' })),
       };
-      mocks.getDb.mockReturnValue(dbChain);
+      mocks.getDb = (() => dbChain) as any;
 
       const app = createApp(createUser());
       const res = await app.fetch(
@@ -225,13 +186,13 @@ describe('skills routes', () => {
         {} as ExecutionContext,
       );
 
-      expect(res.status).toBe(409);
-    });
-  });
-
-  describe('GET /api/spaces/:spaceId/skills/:skillName', () => {
-    it('returns skill by name', async () => {
-      mocks.getSkillByName.mockResolvedValue({ id: 'sk-1', name: 'test-skill' });
+      assertEquals(res.status, 409);
+})  
+  
+    Deno.test('skills routes - GET /api/spaces/:spaceId/skills/:skillName - returns skill by name', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+    mocks.requireSpaceAccess = (async () => ({ workspace: { id: 'ws-1' } })) as any;
+  mocks.getSkillByName = (async () => ({ id: 'sk-1', name: 'test-skill' })) as any;
 
       const app = createApp(createUser());
       const res = await app.fetch(
@@ -240,13 +201,14 @@ describe('skills routes', () => {
         {} as ExecutionContext,
       );
 
-      expect(res.status).toBe(200);
+      assertEquals(res.status, 200);
       const json = await res.json() as Record<string, unknown>;
-      expect(json).toHaveProperty('skill');
-    });
-
-    it('returns 404 when skill not found', async () => {
-      mocks.getSkillByName.mockResolvedValue(null);
+      assert('skill' in json);
+})
+    Deno.test('skills routes - GET /api/spaces/:spaceId/skills/:skillName - returns 404 when skill not found', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+    mocks.requireSpaceAccess = (async () => ({ workspace: { id: 'ws-1' } })) as any;
+  mocks.getSkillByName = (async () => null) as any;
 
       const app = createApp(createUser());
       const res = await app.fetch(
@@ -255,14 +217,14 @@ describe('skills routes', () => {
         {} as ExecutionContext,
       );
 
-      expect(res.status).toBe(404);
-    });
-  });
-
-  describe('DELETE /api/spaces/:spaceId/skills/:skillName', () => {
-    it('deletes a skill', async () => {
-      mocks.getSkillByName.mockResolvedValue({ id: 'sk-1', name: 'old-skill' });
-      mocks.deleteSkillByName.mockResolvedValue(undefined);
+      assertEquals(res.status, 404);
+})  
+  
+    Deno.test('skills routes - DELETE /api/spaces/:spaceId/skills/:skillName - deletes a skill', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+    mocks.requireSpaceAccess = (async () => ({ workspace: { id: 'ws-1' } })) as any;
+  mocks.getSkillByName = (async () => ({ id: 'sk-1', name: 'old-skill' })) as any;
+      mocks.deleteSkillByName = (async () => undefined) as any;
 
       const app = createApp(createUser());
       const res = await app.fetch(
@@ -273,12 +235,13 @@ describe('skills routes', () => {
         {} as ExecutionContext,
       );
 
-      expect(res.status).toBe(200);
-      await expect(res.json()).resolves.toEqual({ success: true });
-    });
-
-    it('returns 404 when skill not found', async () => {
-      mocks.getSkillByName.mockResolvedValue(null);
+      assertEquals(res.status, 200);
+      await assertEquals(await res.json(), { success: true });
+})
+    Deno.test('skills routes - DELETE /api/spaces/:spaceId/skills/:skillName - returns 404 when skill not found', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+    mocks.requireSpaceAccess = (async () => ({ workspace: { id: 'ws-1' } })) as any;
+  mocks.getSkillByName = (async () => null) as any;
 
       const app = createApp(createUser());
       const res = await app.fetch(
@@ -289,16 +252,16 @@ describe('skills routes', () => {
         {} as ExecutionContext,
       );
 
-      expect(res.status).toBe(404);
-    });
-  });
-
-  describe('GET /api/spaces/:spaceId/skills-context', () => {
-    it('returns skill context catalog', async () => {
-      mocks.listSkillContext.mockResolvedValue({
+      assertEquals(res.status, 404);
+})  
+  
+    Deno.test('skills routes - GET /api/spaces/:spaceId/skills-context - returns skill context catalog', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+    mocks.requireSpaceAccess = (async () => ({ workspace: { id: 'ws-1' } })) as any;
+  mocks.listSkillContext = (async () => ({
         locale: 'en',
         available_skills: [{ name: 'test-skill' }],
-      });
+      })) as any;
 
       const app = createApp(createUser());
       const res = await app.fetch(
@@ -307,25 +270,25 @@ describe('skills routes', () => {
         {} as ExecutionContext,
       );
 
-      expect(res.status).toBe(200);
+      assertEquals(res.status, 200);
       const json = await res.json() as Record<string, unknown>;
-      expect(json).toHaveProperty('locale');
-      expect(json).toHaveProperty('available_skills');
-      expect(json).toHaveProperty('count', 1);
-    });
-  });
-
-  describe('PUT /api/spaces/:spaceId/skills/:skillName', () => {
-    it('updates a skill by name', async () => {
-      const dbChain: any = {
-        select: vi.fn(() => dbChain),
-        from: vi.fn(() => dbChain),
-        where: vi.fn(() => dbChain),
-        get: vi.fn().mockResolvedValue(undefined),
+      assert('locale' in json);
+      assert('available_skills' in json);
+      assert('count' in json); assertEquals((json as any)['count'], 1);
+})  
+  
+    Deno.test('skills routes - PUT /api/spaces/:spaceId/skills/:skillName - updates a skill by name', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+    mocks.requireSpaceAccess = (async () => ({ workspace: { id: 'ws-1' } })) as any;
+  const dbChain: any = {
+        select: () => dbChain,
+        from: () => dbChain,
+        where: () => dbChain,
+        get: (async () => undefined),
       };
-      mocks.getDb.mockReturnValue(dbChain);
-      mocks.getSkillByName.mockResolvedValue({ id: 'sk-1', name: 'old-skill' });
-      mocks.updateSkillByName.mockResolvedValue({ id: 'sk-1', name: 'updated-skill', instructions: 'Updated' });
+      mocks.getDb = (() => dbChain) as any;
+      mocks.getSkillByName = (async () => ({ id: 'sk-1', name: 'old-skill' })) as any;
+      mocks.updateSkillByName = (async () => ({ id: 'sk-1', name: 'updated-skill', instructions: 'Updated' })) as any;
 
       const app = createApp(createUser());
       const res = await app.fetch(
@@ -338,13 +301,14 @@ describe('skills routes', () => {
         {} as ExecutionContext,
       );
 
-      expect(res.status).toBe(200);
+      assertEquals(res.status, 200);
       const json = await res.json() as Record<string, unknown>;
-      expect(json).toHaveProperty('skill');
-    });
-
-    it('returns 404 when skill not found', async () => {
-      mocks.getSkillByName.mockResolvedValue(null);
+      assert('skill' in json);
+})
+    Deno.test('skills routes - PUT /api/spaces/:spaceId/skills/:skillName - returns 404 when skill not found', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+    mocks.requireSpaceAccess = (async () => ({ workspace: { id: 'ws-1' } })) as any;
+  mocks.getSkillByName = (async () => null) as any;
 
       const app = createApp(createUser());
       const res = await app.fetch(
@@ -357,18 +321,19 @@ describe('skills routes', () => {
         {} as ExecutionContext,
       );
 
-      expect(res.status).toBe(404);
-    });
-
-    it('returns 409 when renaming to an existing name', async () => {
-      mocks.getSkillByName.mockResolvedValue({ id: 'sk-1', name: 'old-skill' });
+      assertEquals(res.status, 404);
+})
+    Deno.test('skills routes - PUT /api/spaces/:spaceId/skills/:skillName - returns 409 when renaming to an existing name', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+    mocks.requireSpaceAccess = (async () => ({ workspace: { id: 'ws-1' } })) as any;
+  mocks.getSkillByName = (async () => ({ id: 'sk-1', name: 'old-skill' })) as any;
       const dbChain: any = {
-        select: vi.fn(() => dbChain),
-        from: vi.fn(() => dbChain),
-        where: vi.fn(() => dbChain),
-        get: vi.fn().mockResolvedValue({ id: 'sk-other' }),
+        select: () => dbChain,
+        from: () => dbChain,
+        where: () => dbChain,
+        get: (async () => ({ id: 'sk-other' })),
       };
-      mocks.getDb.mockReturnValue(dbChain);
+      mocks.getDb = (() => dbChain) as any;
 
       const app = createApp(createUser());
       const res = await app.fetch(
@@ -381,14 +346,14 @@ describe('skills routes', () => {
         {} as ExecutionContext,
       );
 
-      expect(res.status).toBe(409);
-    });
-  });
-
-  describe('PATCH /api/spaces/:spaceId/skills/:skillName', () => {
-    it('toggles skill enabled by name', async () => {
-      mocks.getSkillByName.mockResolvedValue({ id: 'sk-1', name: 'test-skill', enabled: true });
-      mocks.updateSkillEnabledByName.mockResolvedValue(undefined);
+      assertEquals(res.status, 409);
+})  
+  
+    Deno.test('skills routes - PATCH /api/spaces/:spaceId/skills/:skillName - toggles skill enabled by name', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+    mocks.requireSpaceAccess = (async () => ({ workspace: { id: 'ws-1' } })) as any;
+  mocks.getSkillByName = (async () => ({ id: 'sk-1', name: 'test-skill', enabled: true })) as any;
+      mocks.updateSkillEnabledByName = (async () => undefined) as any;
 
       const app = createApp(createUser());
       const res = await app.fetch(
@@ -401,13 +366,14 @@ describe('skills routes', () => {
         {} as ExecutionContext,
       );
 
-      expect(res.status).toBe(200);
+      assertEquals(res.status, 200);
       const json = await res.json() as Record<string, unknown>;
-      expect(json).toEqual({ success: true, enabled: false });
-    });
-
-    it('returns 404 when skill not found', async () => {
-      mocks.getSkillByName.mockResolvedValue(null);
+      assertEquals(json, { success: true, enabled: false });
+})
+    Deno.test('skills routes - PATCH /api/spaces/:spaceId/skills/:skillName - returns 404 when skill not found', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+    mocks.requireSpaceAccess = (async () => ({ workspace: { id: 'ws-1' } })) as any;
+  mocks.getSkillByName = (async () => null) as any;
 
       const app = createApp(createUser());
       const res = await app.fetch(
@@ -420,12 +386,13 @@ describe('skills routes', () => {
         {} as ExecutionContext,
       );
 
-      expect(res.status).toBe(404);
-    });
-
-    it('keeps current enabled state when body omits enabled', async () => {
-      mocks.getSkillByName.mockResolvedValue({ id: 'sk-1', name: 'test-skill', enabled: true });
-      mocks.updateSkillEnabledByName.mockResolvedValue(undefined);
+      assertEquals(res.status, 404);
+})
+    Deno.test('skills routes - PATCH /api/spaces/:spaceId/skills/:skillName - keeps current enabled state when body omits enabled', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+    mocks.requireSpaceAccess = (async () => ({ workspace: { id: 'ws-1' } })) as any;
+  mocks.getSkillByName = (async () => ({ id: 'sk-1', name: 'test-skill', enabled: true })) as any;
+      mocks.updateSkillEnabledByName = (async () => undefined) as any;
 
       const app = createApp(createUser());
       const res = await app.fetch(
@@ -438,15 +405,15 @@ describe('skills routes', () => {
         {} as ExecutionContext,
       );
 
-      expect(res.status).toBe(200);
+      assertEquals(res.status, 200);
       const json = await res.json() as Record<string, unknown>;
-      expect(json).toEqual({ success: true, enabled: true });
-    });
-  });
-
-  describe('GET /api/spaces/:spaceId/skills/id/:skillId', () => {
-    it('returns skill by id', async () => {
-      mocks.getSkill.mockResolvedValue({ id: 'sk-1', name: 'test-skill' });
+      assertEquals(json, { success: true, enabled: true });
+})  
+  
+    Deno.test('skills routes - GET /api/spaces/:spaceId/skills/id/:skillId - returns skill by id', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+    mocks.requireSpaceAccess = (async () => ({ workspace: { id: 'ws-1' } })) as any;
+  mocks.getSkill = (async () => ({ id: 'sk-1', name: 'test-skill' })) as any;
 
       const app = createApp(createUser());
       const res = await app.fetch(
@@ -455,13 +422,14 @@ describe('skills routes', () => {
         {} as ExecutionContext,
       );
 
-      expect(res.status).toBe(200);
+      assertEquals(res.status, 200);
       const json = await res.json() as Record<string, unknown>;
-      expect(json).toHaveProperty('skill');
-    });
-
-    it('returns 404 when skill id not found', async () => {
-      mocks.getSkill.mockResolvedValue(null);
+      assert('skill' in json);
+})
+    Deno.test('skills routes - GET /api/spaces/:spaceId/skills/id/:skillId - returns 404 when skill id not found', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+    mocks.requireSpaceAccess = (async () => ({ workspace: { id: 'ws-1' } })) as any;
+  mocks.getSkill = (async () => null) as any;
 
       const app = createApp(createUser());
       const res = await app.fetch(
@@ -470,21 +438,21 @@ describe('skills routes', () => {
         {} as ExecutionContext,
       );
 
-      expect(res.status).toBe(404);
-    });
-  });
-
-  describe('PUT /api/spaces/:spaceId/skills/id/:skillId', () => {
-    it('updates a skill by id', async () => {
-      mocks.getSkill.mockResolvedValue({ id: 'sk-1', name: 'old-skill' });
-      mocks.updateSkill.mockResolvedValue({ id: 'sk-1', name: 'updated-skill' });
+      assertEquals(res.status, 404);
+})  
+  
+    Deno.test('skills routes - PUT /api/spaces/:spaceId/skills/id/:skillId - updates a skill by id', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+    mocks.requireSpaceAccess = (async () => ({ workspace: { id: 'ws-1' } })) as any;
+  mocks.getSkill = (async () => ({ id: 'sk-1', name: 'old-skill' })) as any;
+      mocks.updateSkill = (async () => ({ id: 'sk-1', name: 'updated-skill' })) as any;
       const dbChain: any = {
-        select: vi.fn(() => dbChain),
-        from: vi.fn(() => dbChain),
-        where: vi.fn(() => dbChain),
-        get: vi.fn().mockResolvedValue(undefined),
+        select: () => dbChain,
+        from: () => dbChain,
+        where: () => dbChain,
+        get: (async () => undefined),
       };
-      mocks.getDb.mockReturnValue(dbChain);
+      mocks.getDb = (() => dbChain) as any;
 
       const app = createApp(createUser());
       const res = await app.fetch(
@@ -497,13 +465,14 @@ describe('skills routes', () => {
         {} as ExecutionContext,
       );
 
-      expect(res.status).toBe(200);
+      assertEquals(res.status, 200);
       const json = await res.json() as Record<string, unknown>;
-      expect(json).toHaveProperty('skill');
-    });
-
-    it('returns 404 when skill id not found', async () => {
-      mocks.getSkill.mockResolvedValue(null);
+      assert('skill' in json);
+})
+    Deno.test('skills routes - PUT /api/spaces/:spaceId/skills/id/:skillId - returns 404 when skill id not found', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+    mocks.requireSpaceAccess = (async () => ({ workspace: { id: 'ws-1' } })) as any;
+  mocks.getSkill = (async () => null) as any;
 
       const app = createApp(createUser());
       const res = await app.fetch(
@@ -516,14 +485,14 @@ describe('skills routes', () => {
         {} as ExecutionContext,
       );
 
-      expect(res.status).toBe(404);
-    });
-  });
-
-  describe('PATCH /api/spaces/:spaceId/skills/id/:skillId', () => {
-    it('toggles skill enabled by id', async () => {
-      mocks.getSkill.mockResolvedValue({ id: 'sk-1', name: 'test-skill', enabled: false });
-      mocks.updateSkillEnabled.mockResolvedValue(undefined);
+      assertEquals(res.status, 404);
+})  
+  
+    Deno.test('skills routes - PATCH /api/spaces/:spaceId/skills/id/:skillId - toggles skill enabled by id', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+    mocks.requireSpaceAccess = (async () => ({ workspace: { id: 'ws-1' } })) as any;
+  mocks.getSkill = (async () => ({ id: 'sk-1', name: 'test-skill', enabled: false })) as any;
+      mocks.updateSkillEnabled = (async () => undefined) as any;
 
       const app = createApp(createUser());
       const res = await app.fetch(
@@ -536,13 +505,14 @@ describe('skills routes', () => {
         {} as ExecutionContext,
       );
 
-      expect(res.status).toBe(200);
+      assertEquals(res.status, 200);
       const json = await res.json() as Record<string, unknown>;
-      expect(json).toEqual({ success: true, enabled: true });
-    });
-
-    it('returns 404 when skill id not found', async () => {
-      mocks.getSkill.mockResolvedValue(null);
+      assertEquals(json, { success: true, enabled: true });
+})
+    Deno.test('skills routes - PATCH /api/spaces/:spaceId/skills/id/:skillId - returns 404 when skill id not found', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+    mocks.requireSpaceAccess = (async () => ({ workspace: { id: 'ws-1' } })) as any;
+  mocks.getSkill = (async () => null) as any;
 
       const app = createApp(createUser());
       const res = await app.fetch(
@@ -555,14 +525,14 @@ describe('skills routes', () => {
         {} as ExecutionContext,
       );
 
-      expect(res.status).toBe(404);
-    });
-  });
-
-  describe('DELETE /api/spaces/:spaceId/skills/id/:skillId', () => {
-    it('deletes a skill by id', async () => {
-      mocks.getSkill.mockResolvedValue({ id: 'sk-1', name: 'old-skill' });
-      mocks.deleteSkillByName.mockResolvedValue(undefined);
+      assertEquals(res.status, 404);
+})  
+  
+    Deno.test('skills routes - DELETE /api/spaces/:spaceId/skills/id/:skillId - deletes a skill by id', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+    mocks.requireSpaceAccess = (async () => ({ workspace: { id: 'ws-1' } })) as any;
+  mocks.getSkill = (async () => ({ id: 'sk-1', name: 'old-skill' })) as any;
+      mocks.deleteSkillByName = (async () => undefined) as any;
 
       const app = createApp(createUser());
       const res = await app.fetch(
@@ -573,12 +543,13 @@ describe('skills routes', () => {
         {} as ExecutionContext,
       );
 
-      expect(res.status).toBe(200);
-      await expect(res.json()).resolves.toEqual({ success: true });
-    });
-
-    it('returns 404 when skill id not found', async () => {
-      mocks.getSkill.mockResolvedValue(null);
+      assertEquals(res.status, 200);
+      await assertEquals(await res.json(), { success: true });
+})
+    Deno.test('skills routes - DELETE /api/spaces/:spaceId/skills/id/:skillId - returns 404 when skill id not found', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+    mocks.requireSpaceAccess = (async () => ({ workspace: { id: 'ws-1' } })) as any;
+  mocks.getSkill = (async () => null) as any;
 
       const app = createApp(createUser());
       const res = await app.fetch(
@@ -589,15 +560,15 @@ describe('skills routes', () => {
         {} as ExecutionContext,
       );
 
-      expect(res.status).toBe(404);
-    });
-  });
-
-  describe('GET /api/spaces/:spaceId/official-skills', () => {
-    it('returns official skills catalog', async () => {
-      mocks.listOfficialSkillsCatalog.mockResolvedValue({
+      assertEquals(res.status, 404);
+})  
+  
+    Deno.test('skills routes - GET /api/spaces/:spaceId/official-skills - returns official skills catalog', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+    mocks.requireSpaceAccess = (async () => ({ workspace: { id: 'ws-1' } })) as any;
+  mocks.listOfficialSkillsCatalog = (async () => ({
         skills: [{ id: 'os-1', name: 'Official Skill' }],
-      });
+      })) as any;
 
       const app = createApp(createUser());
       const res = await app.fetch(
@@ -606,7 +577,5 @@ describe('skills routes', () => {
         {} as ExecutionContext,
       );
 
-      expect(res.status).toBe(200);
-    });
-  });
-});
+      assertEquals(res.status, 200);
+})  

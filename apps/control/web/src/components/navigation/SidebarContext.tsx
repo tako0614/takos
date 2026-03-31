@@ -1,4 +1,4 @@
-import { createContext, useContext } from 'react';
+import { createContext, useContext } from 'solid-js';
 import type { Thread, Space } from '../../types';
 
 export interface SidebarCallbacks {
@@ -31,7 +31,7 @@ export interface SidebarCallbacks {
   onLogout: () => void;
 }
 
-const SidebarContext = createContext<SidebarCallbacks | null>(null);
+export const SidebarContext = createContext<SidebarCallbacks>();
 
 export function useSidebarCallbacks(): SidebarCallbacks {
   const ctx = useContext(SidebarContext);
@@ -40,5 +40,3 @@ export function useSidebarCallbacks(): SidebarCallbacks {
   }
   return ctx;
 }
-
-export const SidebarProvider = SidebarContext.Provider;

@@ -1,13 +1,13 @@
 import { Hono } from 'hono';
 import * as fs from 'fs/promises';
-import { StepExecutor, type ExecutorStepResult } from '../../runtime/actions/executor.js';
-import { SANDBOX_LIMITS } from '../../shared/config.js';
-import { shouldBlockForSecretExposure, mightExposeSecrets } from '../../runtime/actions/secrets.js';
-import { pushLog } from '../../runtime/logging.js';
-import { cloneAndCheckout } from '../../runtime/git.js';
-import { resolvePathWithin } from '../../runtime/paths.js';
-import { GIT_ENDPOINT_URL } from '../../shared/config.js';
-import { collectSensitiveEnvValues } from '../../runtime/actions/secrets.js';
+import { StepExecutor, type ExecutorStepResult } from '../../runtime/actions/executor.ts';
+import { SANDBOX_LIMITS } from '../../shared/config.ts';
+import { shouldBlockForSecretExposure, mightExposeSecrets } from '../../runtime/actions/secrets.ts';
+import { pushLog } from '../../runtime/logging.ts';
+import { cloneAndCheckout } from '../../runtime/git.ts';
+import { resolvePathWithin } from '../../runtime/paths.ts';
+import { GIT_ENDPOINT_URL } from '../../shared/config.ts';
+import { collectSensitiveEnvValues } from '../../runtime/actions/secrets.ts';
 
 interface ExecuteStepRequest {
   run?: string;
@@ -23,7 +23,7 @@ interface ExecuteStepRequest {
 import {
   jobManager,
   sanitizeOutputs,
-} from '../../runtime/actions/job-manager.js';
+} from '../../runtime/actions/job-manager.ts';
 import { internalError } from 'takos-common/middleware/hono';
 
 const app = new Hono();

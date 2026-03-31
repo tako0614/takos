@@ -1,3 +1,5 @@
+import type { JSX } from 'solid-js';
+import { Show } from 'solid-js';
 import { Icons } from '../../lib/Icons';
 import { Badge } from '../ui';
 import type { ProfileTab, UserProfile } from '../../types/profile';
@@ -12,95 +14,95 @@ interface ProfileTabsProps {
 interface TabButtonProps {
   isActive: boolean;
   onClick: () => void;
-  icon: React.ReactNode;
+  icon: JSX.Element;
   label: string;
   count?: number;
 }
 
-function TabButton({ isActive, onClick, icon, label, count }: TabButtonProps) {
+function TabButton(props: TabButtonProps) {
   return (
     <button
       style={{
         display: 'flex',
-        alignItems: 'center',
+        'align-items': 'center',
         gap: '0.5rem',
         padding: '0.75rem 1rem',
-        fontSize: '0.875rem',
-        fontWeight: 500,
-        whiteSpace: 'nowrap',
+        'font-size': '0.875rem',
+        'font-weight': 500,
+        'white-space': 'nowrap',
         background: 'none',
         border: 'none',
-        borderBottom: `2px solid ${isActive ? 'var(--color-primary)' : 'transparent'}`,
-        color: isActive ? 'var(--color-text-primary)' : 'var(--color-text-secondary)',
+        'border-bottom': `2px solid ${props.isActive ? 'var(--color-primary)' : 'transparent'}`,
+        color: props.isActive ? 'var(--color-text-primary)' : 'var(--color-text-secondary)',
         cursor: 'pointer',
         transition: 'var(--transition-colors)',
-        marginBottom: '-1px',
+        'margin-bottom': '-1px',
       }}
-      onClick={onClick}
+      onClick={props.onClick}
     >
-      {icon}
-      <span>{label}</span>
-      {count !== undefined && (
-        <Badge variant="default" size="sm" style={{ marginLeft: '0.25rem' }}>
-          {count}
+      {props.icon}
+      <span>{props.label}</span>
+      <Show when={props.count !== undefined}>
+        <Badge variant="default" size="sm" style={{ 'margin-left': '0.25rem' }}>
+          {props.count}
         </Badge>
-      )}
+      </Show>
     </button>
   );
 }
 
-export function ProfileTabs({ activeTab, profile, onSelectTab, requestsCount }: ProfileTabsProps) {
+export function ProfileTabs(props: ProfileTabsProps) {
   return (
     <div
       style={{
         display: 'flex',
-        borderBottom: '1px solid var(--color-border-primary)',
-        backgroundColor: 'var(--color-surface-primary)',
-        overflowX: 'auto',
+        'border-bottom': '1px solid var(--color-border-primary)',
+        'background-color': 'var(--color-surface-primary)',
+        'overflow-x': 'auto',
       }}
     >
       <TabButton
-        isActive={activeTab === 'repositories'}
-        onClick={() => onSelectTab('repositories')}
+        isActive={props.activeTab === 'repositories'}
+        onClick={() => props.onSelectTab('repositories')}
         icon={<Icons.Folder style={{ width: '1rem', height: '1rem' }} />}
         label="Repositories"
-        count={profile.public_repo_count}
+        count={props.profile.public_repo_count}
       />
       <TabButton
-        isActive={activeTab === 'stars'}
-        onClick={() => onSelectTab('stars')}
+        isActive={props.activeTab === 'stars'}
+        onClick={() => props.onSelectTab('stars')}
         icon={<Icons.Star style={{ width: '1rem', height: '1rem' }} />}
         label="Stars"
       />
       <TabButton
-        isActive={activeTab === 'activity'}
-        onClick={() => onSelectTab('activity')}
+        isActive={props.activeTab === 'activity'}
+        onClick={() => props.onSelectTab('activity')}
         icon={<Icons.Zap style={{ width: '1rem', height: '1rem' }} />}
         label="Activity"
       />
       <TabButton
-        isActive={activeTab === 'followers'}
-        onClick={() => onSelectTab('followers')}
+        isActive={props.activeTab === 'followers'}
+        onClick={() => props.onSelectTab('followers')}
         icon={<Icons.User style={{ width: '1rem', height: '1rem' }} />}
         label="Followers"
-        count={profile.followers_count}
+        count={props.profile.followers_count}
       />
       <TabButton
-        isActive={activeTab === 'following'}
-        onClick={() => onSelectTab('following')}
+        isActive={props.activeTab === 'following'}
+        onClick={() => props.onSelectTab('following')}
         icon={<Icons.User style={{ width: '1rem', height: '1rem' }} />}
         label="Following"
-        count={profile.following_count}
+        count={props.profile.following_count}
       />
-      {profile.is_self && (
+      <Show when={props.profile.is_self}>
         <TabButton
-          isActive={activeTab === 'requests'}
-          onClick={() => onSelectTab('requests')}
+          isActive={props.activeTab === 'requests'}
+          onClick={() => props.onSelectTab('requests')}
           icon={<Icons.User style={{ width: '1rem', height: '1rem' }} />}
           label="Requests"
-          count={requestsCount}
+          count={props.requestsCount}
         />
-      )}
+      </Show>
     </div>
   );
 }

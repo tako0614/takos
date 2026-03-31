@@ -1,7 +1,7 @@
-import chalk from 'chalk';
+import { gray, green, red, yellow } from '@std/fmt/colors';
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from 'http';
 import { URL } from 'url';
-import { getLoginTimeoutMs } from '../lib/config.js';
+import { getLoginTimeoutMs } from '../lib/config.ts';
 import {
   type CallbackParams,
   type OAuthCallbackFailureCode,
@@ -10,9 +10,9 @@ import {
   sanitizeAuthMessageForHtml,
   sanitizeAuthMessageForLog,
   validateCallbackPayload,
-} from './oauth-callback-validation.js';
+} from './oauth-callback-validation.ts';
 
-export type { OAuthCallbackFailureCode } from './oauth-callback-validation.js';
+export type { OAuthCallbackFailureCode } from './oauth-callback-validation.ts';
 
 const BIND_ADDRESS = '127.0.0.1';
 
@@ -90,11 +90,11 @@ function sendSuccessPage(res: ServerResponse): void {
 }
 
 function logAuthFailure(message: string): void {
-  console.log(chalk.red(`\nAuthentication failed: ${sanitizeAuthMessageForLog(message)}`));
+  console.log(red(`\nAuthentication failed: ${sanitizeAuthMessageForLog(message)}`));
 }
 
 function logAuthSuccess(): void {
-  console.log(chalk.green('\nAuthentication successful!'));
+  console.log(green('\nAuthentication successful!'));
 }
 
 async function readRequestBody(req: IncomingMessage): Promise<string> {
@@ -209,7 +209,7 @@ function setupLoginTimeout(
     void handleFailure(server, state, onFailure, {
       code: OAUTH_CALLBACK_FAILURE_CODES.TIMEOUT,
       log: () => {
-        console.log(chalk.red('\nAuthentication timed out'));
+        console.log(red('\nAuthentication timed out'));
       },
     });
   }, getLoginTimeoutMs());
@@ -232,7 +232,7 @@ function handleServerListening(
     void handleFailure(server, state, onFailure, {
       code: OAUTH_CALLBACK_FAILURE_CODES.UNEXPECTED_BIND_ADDRESS,
       log: () => {
-        console.log(chalk.red(`\nSecurity error: Server bound to unexpected address: ${address.address}`));
+        console.log(red(`\nSecurity error: Server bound to unexpected address: ${address.address}`));
       },
     });
     return;
@@ -241,12 +241,12 @@ function handleServerListening(
   const callbackUrl = `http://${BIND_ADDRESS}:${address.port}/callback`;
   const authUrl = `${apiUrl}/auth/cli?callback=${encodeURIComponent(callbackUrl)}&state=${encodeURIComponent(oauthState)}`;
 
-  console.log(chalk.gray(`Callback URL: ${callbackUrl}`));
-  console.log(chalk.gray(`Auth URL: ${authUrl}`));
+  console.log(gray(`Callback URL: ${callbackUrl}`));
+  console.log(gray(`Auth URL: ${authUrl}`));
 
   void openAuthUrl(authUrl).catch(() => {
-    console.log(chalk.yellow(`\nCould not open browser automatically.`));
-    console.log(chalk.yellow(`Please open this URL manually:\n${authUrl}`));
+    console.log(yellow(`\nCould not open browser automatically.`));
+    console.log(yellow(`Please open this URL manually:\n${authUrl}`));
   });
 }
 
@@ -274,7 +274,7 @@ export async function runOAuthCallbackServer({
       void handleFailure(server, state, onFailure, {
         code: OAUTH_CALLBACK_FAILURE_CODES.SERVER_ERROR,
         log: () => {
-          console.log(chalk.red(`\nServer error: ${err.message}`));
+          console.log(red(`\nServer error: ${err.message}`));
         },
       });
     });

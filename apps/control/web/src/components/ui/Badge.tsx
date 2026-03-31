@@ -1,61 +1,59 @@
-import { type HTMLAttributes, type CSSProperties } from 'react';
+import { splitProps } from 'solid-js';
+import type { JSX } from 'solid-js';
 
 type BadgeVariant = 'default' | 'success' | 'warning' | 'error' | 'info';
 type BadgeSize = 'sm' | 'md';
 
-interface BadgeProps extends HTMLAttributes<HTMLSpanElement> {
+interface BadgeProps extends JSX.HTMLAttributes<HTMLSpanElement> {
   variant?: BadgeVariant;
   size?: BadgeSize;
 }
 
-const variantStyles: Record<BadgeVariant, CSSProperties> = {
+const variantStyles: Record<BadgeVariant, JSX.CSSProperties> = {
   default: {
-    backgroundColor: 'var(--color-bg-tertiary)',
+    'background-color': 'var(--color-bg-tertiary)',
     color: 'var(--color-text-primary)',
   },
   success: {
-    backgroundColor: 'var(--color-success-bg)',
+    'background-color': 'var(--color-success-bg)',
     color: 'var(--color-success)',
   },
   warning: {
-    backgroundColor: 'var(--color-warning-bg)',
+    'background-color': 'var(--color-warning-bg)',
     color: 'var(--color-warning)',
   },
   error: {
-    backgroundColor: 'var(--color-error-bg)',
+    'background-color': 'var(--color-error-bg)',
     color: 'var(--color-error)',
   },
   info: {
-    backgroundColor: 'var(--color-info-bg)',
+    'background-color': 'var(--color-info-bg)',
     color: 'var(--color-info)',
   },
 };
 
-export function Badge({
-  variant = 'default',
-  size = 'sm',
-  children,
-  className = '',
-  style,
-  ...props
-}: BadgeProps) {
-  const baseStyle: CSSProperties = {
+export function Badge(props: BadgeProps) {
+  const [local, rest] = splitProps(props, ['variant', 'size', 'children', 'class', 'style']);
+
+  const baseStyle = (): JSX.CSSProperties => ({
     display: 'inline-flex',
-    alignItems: 'center',
-    borderRadius: 'var(--radius-full)',
-    fontWeight: 500,
-    padding: size === 'sm' ? '0.125rem 0.5rem' : '0.25rem 0.75rem',
-    fontSize: size === 'sm' ? '0.75rem' : '0.875rem',
+    'align-items': 'center',
+    'border-radius': 'var(--radius-full)',
+    'font-weight': '500',
+    padding: (local.size ?? 'sm') === 'sm' ? '0.125rem 0.5rem' : '0.25rem 0.75rem',
+    'font-size': (local.size ?? 'sm') === 'sm' ? '0.75rem' : '0.875rem',
     transition: 'var(--transition-colors)',
-  };
+    ...variantStyles[local.variant ?? 'default'],
+    ...(typeof local.style === 'object' ? local.style : {}),
+  });
 
   return (
     <span
-      className={className}
-      style={{ ...baseStyle, ...variantStyles[variant], ...style }}
-      {...props}
+      class={local.class}
+      style={baseStyle()}
+      {...rest}
     >
-      {children}
+      {local.children}
     </span>
   );
 }

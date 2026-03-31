@@ -1,5 +1,5 @@
-import type { StateAccessOptions } from '../../lib/state/state-file.js';
-import type { TakosState } from '../../lib/state/state-types.js';
+import type { StateAccessOptions } from '../../lib/state/state-file.ts';
+import type { TakosState } from '../../lib/state/state-types.ts';
 
 export type StateCategory = 'resources' | 'workers' | 'containers' | 'services' | 'routes';
 

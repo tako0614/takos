@@ -1,13 +1,13 @@
 import * as fs from 'fs/promises';
 import * as path from 'path';
 import { GetObjectCommand, PutObjectCommand, ListObjectsV2Command } from '@aws-sdk/client-s3';
-import { type ActionContext } from '../executor.js';
-import { pushLog } from '../../logging.js';
-import { resolvePathWithin, isPathWithinBase } from '../../paths.js';
-import { s3Client, isR2Configured } from '../../../storage/r2.js';
-import { R2_BUCKET } from '../../../shared/config.js';
+import { type ActionContext } from '../executor.ts';
+import { pushLog } from '../../logging.ts';
+import { resolvePathWithin, isPathWithinBase } from '../../paths.ts';
+import { s3Client, isR2Configured } from '../../../storage/r2.ts';
+import { R2_BUCKET } from '../../../shared/config.ts';
 import { getErrorMessage } from 'takos-common/errors';
-import { LINE_UNSAFE_CHARS_PATTERN } from './cache-operations.js';
+import { LINE_UNSAFE_CHARS_PATTERN } from './cache-operations.ts';
 
 function toStringArray(value: string | string[]): string[] {
   return Array.isArray(value) ? value : [value];

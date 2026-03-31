@@ -1,6 +1,7 @@
-import { describe, expect, it } from 'vitest';
 import { readdirSync, readFileSync, statSync } from 'node:fs';
 import { resolve } from 'node:path';
+
+import { assertEquals } from 'jsr:@std/assert';
 
 const srcRoot = resolve(import.meta.dirname, '..');
 
@@ -38,9 +39,9 @@ function collectSourceFiles(dir: string): string[] {
   return files;
 }
 
-describe('DB runtime contract guard', () => {
-  it('does not reference removed legacy schema columns in runtime source', () => {
-    const files = collectSourceFiles(srcRoot);
+
+  Deno.test('DB runtime contract guard - does not reference removed legacy schema columns in runtime source', () => {
+  const files = collectSourceFiles(srcRoot);
     const offenders: string[] = [];
 
     for (const file of files) {
@@ -52,6 +53,5 @@ describe('DB runtime contract guard', () => {
       }
     }
 
-    expect(offenders).toEqual([]);
-  });
-});
+    assertEquals(offenders, []);
+})

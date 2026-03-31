@@ -7,8 +7,8 @@
  *
  * Requires: kubectl configured with a valid kubeconfig.
  */
-import type { ResourceProvider, ProvisionResult } from '../resource-provider.js';
-import { execCommand } from '../cloudflare-utils.js';
+import type { ResourceProvider, ProvisionResult } from '../resource-provider.ts';
+import { execCommand } from '../cloudflare-utils.ts';
 
 export class K8sProvider implements ResourceProvider {
   readonly name = 'k8s';
@@ -16,7 +16,7 @@ export class K8sProvider implements ResourceProvider {
   private readonly namespace: string;
 
   constructor(opts?: { namespace?: string }) {
-    this.namespace = opts?.namespace || process.env.K8S_NAMESPACE || 'default';
+    this.namespace = opts?.namespace || Deno.env.get('K8S_NAMESPACE') || 'default';
   }
 
   /** Apply a Kubernetes manifest provided as YAML string via stdin. */

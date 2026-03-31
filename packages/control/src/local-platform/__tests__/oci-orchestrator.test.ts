@@ -1,12 +1,13 @@
 import { mkdtemp, rm } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import {
   createDefaultOciOrchestratorBackendResolver,
   createLocalOciOrchestratorFetchForTests,
 } from '../oci-orchestrator.ts';
 import type { ContainerBackend, ContainerCreateOpts, ContainerCreateResult } from '../container-backend.ts';
+
+import { assertEquals, assert, assertStringIncludes } from 'jsr:@std/assert';
 
 function createFakeContainerBackend(): ContainerBackend {
   type FakeContainerState = {
@@ -75,37 +76,20 @@ function createObservedContainerBackend(label: string, events: string[]): Contai
   };
 }
 
-describe('oci orchestrator local service', () => {
+
   const originalEnv = {
     OCI_ORCHESTRATOR_DATA_DIR: process.env.OCI_ORCHESTRATOR_DATA_DIR,
     TAKOS_LOCAL_DATA_DIR: process.env.TAKOS_LOCAL_DATA_DIR,
     TAKOS_SKIP_OCI_HEALTH_CHECK: process.env.TAKOS_SKIP_OCI_HEALTH_CHECK,
   };
   let tempDir: string | null = null;
-
-  beforeEach(async () => {
-    tempDir = await mkdtemp(path.join(os.tmpdir(), 'takos-oci-orchestrator-'));
+  Deno.test('oci orchestrator local service - stores deployments and exposes service records and logs', async () => {
+  tempDir = await mkdtemp(path.join(os.tmpdir(), 'takos-oci-orchestrator-'));
     process.env.OCI_ORCHESTRATOR_DATA_DIR = tempDir;
     delete process.env.TAKOS_LOCAL_DATA_DIR;
     process.env.TAKOS_SKIP_OCI_HEALTH_CHECK = '1';
-  });
-
-  afterEach(async () => {
-    for (const [key, value] of Object.entries(originalEnv)) {
-      if (value === undefined) {
-        delete process.env[key];
-      } else {
-        process.env[key] = value;
-      }
-    }
-    if (tempDir) {
-      await rm(tempDir, { recursive: true, force: true });
-      tempDir = null;
-    }
-  });
-
-  it('stores deployments and exposes service records and logs', async () => {
-    const fetch = await createLocalOciOrchestratorFetchForTests({
+  try {
+  const fetch = await createLocalOciOrchestratorFetchForTests({
       backend: createFakeContainerBackend(),
     });
 
@@ -143,11 +127,11 @@ describe('oci orchestrator local service', () => {
     }));
 
     const deployBodyText = await deployResponse.text();
-    expect(deployResponse.status).toBe(200);
+    assertEquals(deployResponse.status, 200);
     const deployBody = JSON.parse(deployBodyText);
-    expect(deployBody).toEqual(expect.objectContaining({
+    assertEquals(deployBody, ({
       ok: true,
-      service: expect.objectContaining({
+      service: ({
         space_id: 'space-1',
         route_ref: 'worker',
         deployment_id: 'dep-oci-1',
@@ -162,9 +146,9 @@ describe('oci orchestrator local service', () => {
     }));
 
     const serviceResponse = await fetch(new Request('http://oci-orchestrator/services/worker?space_id=space-1'));
-    expect(serviceResponse.status).toBe(200);
-    await expect(serviceResponse.json()).resolves.toEqual(expect.objectContaining({
-      service: expect.objectContaining({
+    assertEquals(serviceResponse.status, 200);
+    await assertEquals(await serviceResponse.json(), ({
+      service: ({
         deployment_id: 'dep-oci-1',
         provider_name: 'k8s',
         image_ref: 'ghcr.io/takos/worker:latest',
@@ -172,58 +156,92 @@ describe('oci orchestrator local service', () => {
     }));
 
     const logsResponse = await fetch(new Request('http://oci-orchestrator/services/worker/logs?space_id=space-1&tail=20'));
-    expect(logsResponse.status).toBe(200);
+    assertEquals(logsResponse.status, 200);
     const logsText = await logsResponse.text();
-    expect(logsText).toContain('DEPLOY');
-    expect(logsText).toContain('dep-oci-1');
+    assertStringIncludes(logsText, 'DEPLOY');
+    assertStringIncludes(logsText, 'dep-oci-1');
 
     const removeResponse = await fetch(new Request('http://oci-orchestrator/services/worker/remove?space_id=space-1', {
       method: 'POST',
     }));
-    expect(removeResponse.status).toBe(200);
-    await expect(removeResponse.json()).resolves.toEqual(expect.objectContaining({
+    assertEquals(removeResponse.status, 200);
+    await assertEquals(await removeResponse.json(), ({
       ok: true,
-      service: expect.objectContaining({
+      service: ({
         status: 'removed',
       }),
     }));
 
     const missingResponse = await fetch(new Request('http://oci-orchestrator/services/worker?space_id=space-1'));
-    expect(missingResponse.status).toBe(200);
-    await expect(missingResponse.json()).resolves.toEqual(expect.objectContaining({
-      service: expect.objectContaining({
+    assertEquals(missingResponse.status, 200);
+    await assertEquals(await missingResponse.json(), ({
+      service: ({
         status: 'removed',
       }),
     }));
-  });
-
-  it('resolves provider-native backends from provider config', () => {
-    const resolver = createDefaultOciOrchestratorBackendResolver({
+  } finally {
+  for (const [key, value] of Object.entries(originalEnv)) {
+      if (value === undefined) {
+        delete process.env[key];
+      } else {
+        process.env[key] = value;
+      }
+    }
+    if (tempDir) {
+      await rm(tempDir, { recursive: true, force: true });
+      tempDir = null;
+    }
+  }
+})
+  Deno.test('oci orchestrator local service - resolves provider-native backends from provider config', () => {
+  tempDir = await mkdtemp(path.join(os.tmpdir(), 'takos-oci-orchestrator-'));
+    process.env.OCI_ORCHESTRATOR_DATA_DIR = tempDir;
+    delete process.env.TAKOS_LOCAL_DATA_DIR;
+    process.env.TAKOS_SKIP_OCI_HEALTH_CHECK = '1';
+  try {
+  const resolver = createDefaultOciOrchestratorBackendResolver({
       fallbackBackend: createFakeContainerBackend(),
     });
 
-    expect(resolver({
+    assertEquals(resolver({
       providerName: 'k8s',
       providerConfig: { namespace: 'takos' },
-    }).constructor.name).toBe('K8sContainerBackend');
+    }).constructor.name, 'K8sContainerBackend');
 
-    expect(resolver({
+    assertEquals(resolver({
       providerName: 'cloud-run',
       providerConfig: { projectId: 'takos-project', region: 'us-central1' },
-    }).constructor.name).toBe('CloudRunContainerBackend');
+    }).constructor.name, 'CloudRunContainerBackend');
 
-    expect(resolver({
+    assertEquals(resolver({
       providerName: 'ecs',
       providerConfig: {
         region: 'us-east-1',
         clusterArn: 'arn:aws:ecs:us-east-1:123456789012:cluster/takos',
         taskDefinitionFamily: 'takos-worker',
       },
-    }).constructor.name).toBe('EcsContainerBackend');
-  });
-
-  it('uses provider-specific backends across redeploy, logs, and remove', async () => {
-    const events: string[] = [];
+    }).constructor.name, 'EcsContainerBackend');
+  } finally {
+  for (const [key, value] of Object.entries(originalEnv)) {
+      if (value === undefined) {
+        delete process.env[key];
+      } else {
+        process.env[key] = value;
+      }
+    }
+    if (tempDir) {
+      await rm(tempDir, { recursive: true, force: true });
+      tempDir = null;
+    }
+  }
+})
+  Deno.test('oci orchestrator local service - uses provider-specific backends across redeploy, logs, and remove', async () => {
+  tempDir = await mkdtemp(path.join(os.tmpdir(), 'takos-oci-orchestrator-'));
+    process.env.OCI_ORCHESTRATOR_DATA_DIR = tempDir;
+    delete process.env.TAKOS_LOCAL_DATA_DIR;
+    process.env.TAKOS_SKIP_OCI_HEALTH_CHECK = '1';
+  try {
+  const events: string[] = [];
     const dockerBackend = createObservedContainerBackend('docker', events);
     const k8sBackend = createObservedContainerBackend('k8s', events);
     const fetch = await createLocalOciOrchestratorFetchForTests({
@@ -254,9 +272,9 @@ describe('oci orchestrator local service', () => {
         },
       }),
     }));
-    expect(firstDeploy.status).toBe(200);
-    await expect(firstDeploy.json()).resolves.toEqual(expect.objectContaining({
-      service: expect.objectContaining({
+    assertEquals(firstDeploy.status, 200);
+    await assertEquals(await firstDeploy.json(), ({
+      service: ({
         provider_name: 'k8s',
         container_id: 'k8s-0',
       }),
@@ -289,9 +307,9 @@ describe('oci orchestrator local service', () => {
         },
       }),
     }));
-    expect(secondDeploy.status).toBe(200);
-    await expect(secondDeploy.json()).resolves.toEqual(expect.objectContaining({
-      service: expect.objectContaining({
+    assertEquals(secondDeploy.status, 200);
+    await assertEquals(await secondDeploy.json(), ({
+      service: ({
         provider_name: 'oci',
         container_id: 'docker-0',
       }),
@@ -302,21 +320,21 @@ describe('oci orchestrator local service', () => {
     }));
 
     const logsResponse = await fetch(new Request('http://oci-orchestrator/services/worker/logs?space_id=space-1&tail=20'));
-    expect(logsResponse.status).toBe(200);
-    await expect(logsResponse.text()).resolves.toContain('docker:docker-0');
+    assertEquals(logsResponse.status, 200);
+    await assertStringIncludes(await logsResponse.text(), 'docker:docker-0');
 
     const removeResponse = await fetch(new Request('http://oci-orchestrator/services/worker/remove?space_id=space-1', {
       method: 'POST',
     }));
-    expect(removeResponse.status).toBe(200);
-    await expect(removeResponse.json()).resolves.toEqual(expect.objectContaining({
-      service: expect.objectContaining({
+    assertEquals(removeResponse.status, 200);
+    await assertEquals(await removeResponse.json(), ({
+      service: ({
         provider_name: 'oci',
         status: 'removed',
       }),
     }));
 
-    expect(events).toEqual(expect.arrayContaining([
+    assertEquals(events, ([
       'k8s:pull:ghcr.io/takos/worker:k8s',
       'k8s:create:takos-space-1-worker',
       'k8s:stop:k8s-0',
@@ -328,7 +346,19 @@ describe('oci orchestrator local service', () => {
       'docker:remove:docker-0',
     ]));
 
-    expect(events.indexOf('k8s:stop:k8s-0')).toBeLessThan(events.indexOf('docker:create:takos-space-1-worker'));
-    expect(events.indexOf('docker:logs:docker-0')).toBeGreaterThan(events.indexOf('docker:create:takos-space-1-worker'));
-  });
-});
+    assert(events.indexOf('k8s:stop:k8s-0') < events.indexOf('docker:create:takos-space-1-worker'));
+    assert(events.indexOf('docker:logs:docker-0') > events.indexOf('docker:create:takos-space-1-worker'));
+  } finally {
+  for (const [key, value] of Object.entries(originalEnv)) {
+      if (value === undefined) {
+        delete process.env[key];
+      } else {
+        process.env[key] = value;
+      }
+    }
+    if (tempDir) {
+      await rm(tempDir, { recursive: true, force: true });
+      tempDir = null;
+    }
+  }
+})

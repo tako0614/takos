@@ -1,20 +1,20 @@
 #!/usr/bin/env node
 
 import { Command } from 'commander';
-import chalk from 'chalk';
-import { registerLoginCommand } from './commands/login.js';
-import { registerTaskCommands } from './commands/api.js';
-import { registerEndpointCommand } from './commands/endpoint.js';
-import { registerPlanCommand } from './commands/plan.js';
-import { registerApplyCommand } from './commands/apply.js';
-import { registerStateCommand } from './commands/state/index.js';
-import { registerWorkerCommand } from './commands/worker.js';
-import { registerResourceCommand } from './commands/resource.js';
-import { registerServiceCommand } from './commands/service.js';
-import { registerGroupCommand } from './commands/group/index.js';
-import { registerRouteCommand } from './commands/route.js';
-import { isContainerMode, isAuthenticated } from './lib/config.js';
-import { cliExit, isCliCommandExit } from './lib/command-exit.js';
+import { red } from '@std/fmt/colors';
+import { registerLoginCommand } from './commands/login.ts';
+import { registerTaskCommands } from './commands/api.ts';
+import { registerEndpointCommand } from './commands/endpoint.ts';
+import { registerPlanCommand } from './commands/plan.ts';
+import { registerApplyCommand } from './commands/apply.ts';
+import { registerStateCommand } from './commands/state/index.ts';
+import { registerWorkerCommand } from './commands/worker.ts';
+import { registerResourceCommand } from './commands/resource.ts';
+import { registerServiceCommand } from './commands/service.ts';
+import { registerGroupCommand } from './commands/group/index.ts';
+import { registerRouteCommand } from './commands/route.ts';
+import { isContainerMode, isAuthenticated } from './lib/config.ts';
+import { cliExit, isCliCommandExit } from './lib/command-exit.ts';
 
 const program = new Command();
 
@@ -49,7 +49,7 @@ program.hook('preAction', (thisCommand) => {
   }
 
   if (!isAuthenticated()) {
-    console.log(chalk.red('Not authenticated. Run `takos login` first.'));
+    console.log(red('Not authenticated. Run `takos login` first.'));
     cliExit(1);
   }
 });
@@ -59,7 +59,7 @@ async function main(): Promise<void> {
     await program.parseAsync(process.argv);
   } catch (error) {
     if (isCliCommandExit(error)) {
-      process.exit(error.code);
+      Deno.exit(error.code);
     }
     throw error;
   }

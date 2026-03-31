@@ -1,4 +1,4 @@
-import chalk from 'chalk';
+import { green } from '@std/fmt/colors';
 
 export function tryParseJson(value: string): unknown {
   try {
@@ -34,7 +34,7 @@ export function parseBodyByContentType(contentType: string | null, bodyBuffer: B
 
 export function printSuccess(parsedBody: unknown, jsonOutput: boolean): void {
   if (parsedBody === null || parsedBody === undefined) {
-    console.log(chalk.green('OK'));
+    console.log(green('OK'));
     return;
   }
 

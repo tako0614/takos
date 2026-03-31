@@ -20,14 +20,14 @@ import {
 } from './runtime.ts';
 
 function resolvePort(defaultPort: number): number {
-  const parsed = Number.parseInt(process.env.PORT ?? '', 10);
+  const parsed = Number.parseInt(Deno.env.get('PORT') ?? '', 10);
   return Number.isFinite(parsed) && parsed > 0 ? parsed : defaultPort;
 }
 
 function logLocalServerStart(service: string, port: number) {
   logInfo(`${service} local runtime listening on :${port}`, {
     module: 'local_platform',
-    adapter: process.env.TAKOS_LOCAL_ADAPTER,
+    adapter: Deno.env.get('TAKOS_LOCAL_ADAPTER'),
     runtime: 'node',
   });
 }

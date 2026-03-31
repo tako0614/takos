@@ -5,13 +5,13 @@ import {
   MAX_EXEC_FILES,
   MAX_EXEC_OUTPUTS,
   MAX_EXEC_TOTAL_BYTES,
-} from '../../shared/config.js';
-import { writeAuditLog, type AuditEntry } from '../../utils/audit-log.js';
+} from '../../shared/config.ts';
+import { writeAuditLog, type AuditEntry } from '../../utils/audit-log.ts';
 import { badRequest, forbidden, internalError, notFound } from 'takos-common/middleware/hono';
 import { ErrorCodes } from 'takos-common/errors';
 import { createLogger } from 'takos-common/logger';
-import { hasSpaceScopeMismatch, SPACE_SCOPE_MISMATCH_ERROR } from '../../middleware/space-scope.js';
-import { validateRuntimeExecEnv } from '../../utils/sandbox-env.js';
+import { hasSpaceScopeMismatch, SPACE_SCOPE_MISMATCH_ERROR } from '../../middleware/space-scope.ts';
+import { validateRuntimeExecEnv } from '../../utils/sandbox-env.ts';
 
 import {
   type ExecInput,
@@ -20,7 +20,7 @@ import {
   ensureProcessCapacity,
   sanitizeErrorMessage,
   runExec,
-} from '../../runtime/exec-runner.js';
+} from '../../runtime/exec-runner.ts';
 
 const logger = createLogger({ service: 'takos-runtime' });
 

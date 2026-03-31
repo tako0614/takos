@@ -32,14 +32,14 @@ function loadEnvFile(filePath) {
 
     const key = trimmed.slice(0, equalsIndex).trim();
     const value = trimmed.slice(equalsIndex + 1);
-    if (!(key in process.env)) {
-      process.env[key] = value;
+    if (!Deno.env.get(key)) {
+      Deno.env.set(key, value);
     }
   }
 }
 
 function env(name, fallback) {
-  return process.env[name] || fallback;
+  return Deno.env.get(name) || fallback;
 }
 
 function baseUrl(port) {
@@ -100,7 +100,7 @@ async function runBrowserFlow(browserHostUrl) {
 }
 
 async function main() {
-  loadEnvFile(process.env.TAKOS_LOCAL_ENV_FILE || '.env.local');
+  loadEnvFile(Deno.env.get('TAKOS_LOCAL_ENV_FILE') || '.env.local');
 
   const controlWebUrl = env('TAKOS_LOCAL_WEB_PUBLIC_URL', baseUrl(env('TAKOS_CONTROL_WEB_PORT', defaults.controlWebPort)));
   const controlDispatchUrl = env('TAKOS_LOCAL_DISPATCH_PUBLIC_URL', baseUrl(env('TAKOS_CONTROL_DISPATCH_PORT', defaults.controlDispatchPort)));
@@ -125,5 +125,5 @@ async function main() {
 
 main().catch((error) => {
   console.error(error instanceof Error ? error.message : String(error));
-  process.exit(1);
+  Deno.exit(1);
 });

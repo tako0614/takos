@@ -1,71 +1,40 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { Hono } from 'hono';
 import type { Env } from '@/types';
 import { createMockEnv } from '../../../test/integration/setup';
 
-const mocks = vi.hoisted(() => ({
-  findStoreBySlug: vi.fn(),
-  findCanonicalRepo: vi.fn(),
-  findCanonicalRepoIncludingPrivate: vi.fn(),
-  listStoreRepositories: vi.fn(),
-  listStoresForRepo: vi.fn(),
-  findStoreRepository: vi.fn(),
-  searchStoreRepositories: vi.fn(),
-  listPushActivities: vi.fn(),
-  listPushActivitiesForRepoIds: vi.fn(),
-  hasExplicitInventory: vi.fn(),
-  listInventoryActivities: vi.fn(),
-  listInventoryItems: vi.fn(),
-  addFollower: vi.fn(),
-  removeFollower: vi.fn(),
-  listFollowers: vi.fn(),
-  countFollowers: vi.fn(),
-  checkGrant: vi.fn(),
+import { assertEquals, assertStringIncludes, assertObjectMatch } from 'jsr:@std/assert';
+
+const mocks = ({
+  findStoreBySlug: ((..._args: any[]) => undefined) as any,
+  findCanonicalRepo: ((..._args: any[]) => undefined) as any,
+  findCanonicalRepoIncludingPrivate: ((..._args: any[]) => undefined) as any,
+  listStoreRepositories: ((..._args: any[]) => undefined) as any,
+  listStoresForRepo: ((..._args: any[]) => undefined) as any,
+  findStoreRepository: ((..._args: any[]) => undefined) as any,
+  searchStoreRepositories: ((..._args: any[]) => undefined) as any,
+  listPushActivities: ((..._args: any[]) => undefined) as any,
+  listPushActivitiesForRepoIds: ((..._args: any[]) => undefined) as any,
+  hasExplicitInventory: ((..._args: any[]) => undefined) as any,
+  listInventoryActivities: ((..._args: any[]) => undefined) as any,
+  listInventoryItems: ((..._args: any[]) => undefined) as any,
+  addFollower: ((..._args: any[]) => undefined) as any,
+  removeFollower: ((..._args: any[]) => undefined) as any,
+  listFollowers: ((..._args: any[]) => undefined) as any,
+  countFollowers: ((..._args: any[]) => undefined) as any,
+  checkGrant: ((..._args: any[]) => undefined) as any,
   cache: {
-    match: vi.fn(),
-    put: vi.fn(),
-    delete: vi.fn(),
+    match: ((..._args: any[]) => undefined) as any,
+    put: ((..._args: any[]) => undefined) as any,
+    delete: ((..._args: any[]) => undefined) as any,
   },
-}));
+});
 
-vi.mock('@/routes/activitypub-store/activitypub-queries', () => ({
-  findStoreBySlug: mocks.findStoreBySlug,
-  findCanonicalRepo: mocks.findCanonicalRepo,
-  findCanonicalRepoIncludingPrivate: mocks.findCanonicalRepoIncludingPrivate,
-  listStoreRepositories: mocks.listStoreRepositories,
-  listStoresForRepo: mocks.listStoresForRepo,
-  findStoreRepository: mocks.findStoreRepository,
-  searchStoreRepositories: mocks.searchStoreRepositories,
-}));
-
-vi.mock('@/application/services/activitypub/push-activities', () => ({
-  listPushActivities: mocks.listPushActivities,
-  listPushActivitiesForRepoIds: mocks.listPushActivitiesForRepoIds,
-  DELETE_REF: '__delete__',
-}));
-
-vi.mock('@/application/services/activitypub/store-inventory', () => ({
-  hasExplicitInventory: mocks.hasExplicitInventory,
-  listInventoryActivities: mocks.listInventoryActivities,
-  listInventoryItems: mocks.listInventoryItems,
-}));
-
-vi.mock('@/application/services/activitypub/grants', () => ({
-  checkGrant: mocks.checkGrant,
-}));
-
-vi.mock('@/middleware/http-signature', () => ({
-  verifyHttpSignature: vi.fn(),
-  HttpSignatureError: class HttpSignatureError extends Error {},
-}));
-
-vi.mock('@/application/services/activitypub/followers', () => ({
-  addFollower: mocks.addFollower,
-  removeFollower: mocks.removeFollower,
-  listFollowers: mocks.listFollowers,
-  countFollowers: mocks.countFollowers,
-}));
-
+// [Deno] vi.mock removed - manually stub imports from '@/routes/activitypub-store/activitypub-queries'
+// [Deno] vi.mock removed - manually stub imports from '@/application/services/activitypub/push-activities'
+// [Deno] vi.mock removed - manually stub imports from '@/application/services/activitypub/store-inventory'
+// [Deno] vi.mock removed - manually stub imports from '@/application/services/activitypub/grants'
+// [Deno] vi.mock removed - manually stub imports from '@/middleware/http-signature'
+// [Deno] vi.mock removed - manually stub imports from '@/application/services/activitypub/followers'
 import activitypubStore from '@/routes/activitypub-store/routes';
 
 function createApp() {
@@ -104,27 +73,24 @@ const REPO_RECORD = {
   updatedAt: '2026-03-01T00:00:00.000Z',
 };
 
-describe('activitypub store routes', () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
+
+  Deno.test('activitypub store routes - resolves store actors via WebFinger', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
     // Default to auto-list mode
-    mocks.hasExplicitInventory.mockResolvedValue(false);
-    mocks.listInventoryItems.mockResolvedValue({ total: 0, items: [] });
-    mocks.listPushActivitiesForRepoIds.mockResolvedValue({ total: 0, items: [] });
-    mocks.checkGrant.mockResolvedValue(false);
-    mocks.addFollower.mockResolvedValue({ id: 'f1', targetActorUrl: '', followerActorUrl: '', createdAt: '' });
-    mocks.removeFollower.mockResolvedValue(true);
-    mocks.listFollowers.mockResolvedValue({ total: 0, items: [] });
+    mocks.hasExplicitInventory = (async () => false) as any;
+    mocks.listInventoryItems = (async () => ({ total: 0, items: [] })) as any;
+    mocks.listPushActivitiesForRepoIds = (async () => ({ total: 0, items: [] })) as any;
+    mocks.checkGrant = (async () => false) as any;
+    mocks.addFollower = (async () => ({ id: 'f1', targetActorUrl: '', followerActorUrl: '', createdAt: '' })) as any;
+    mocks.removeFollower = (async () => true) as any;
+    mocks.listFollowers = (async () => ({ total: 0, items: [] })) as any;
     (globalThis as unknown as { caches: CacheStorage }).caches = {
       default: mocks.cache as unknown as Cache,
     } as CacheStorage;
-    mocks.cache.match.mockResolvedValue(undefined);
-    mocks.cache.put.mockResolvedValue(undefined);
-    mocks.cache.delete.mockResolvedValue(true);
-  });
-
-  it('resolves store actors via WebFinger', async () => {
-    mocks.findStoreBySlug.mockResolvedValue({ ...STORE_RECORD, description: 'Catalog' });
+    mocks.cache.match = (async () => undefined) as any;
+    mocks.cache.put = (async () => undefined) as any;
+    mocks.cache.delete = (async () => true) as any;
+  mocks.findStoreBySlug = (async () => ({ ...STORE_RECORD, description: 'Catalog' })) as any;
 
     const app = createApp();
     const response = await app.fetch(
@@ -133,16 +99,30 @@ describe('activitypub store routes', () => {
       {} as ExecutionContext,
     );
 
-    expect(response.status).toBe(200);
-    expect(response.headers.get('Content-Type')).toContain('application/jrd+json');
-    await expect(response.json()).resolves.toMatchObject({
+    assertEquals(response.status, 200);
+    assertStringIncludes(response.headers.get('Content-Type'), 'application/jrd+json');
+    await assertObjectMatch(await response.json(), {
       subject: 'acct:alice@test.takos.jp',
       aliases: ['https://test.takos.jp/ap/stores/alice'],
     });
-  });
-
-  it('resolves canonical repo actors via WebFinger URL', async () => {
-    mocks.findCanonicalRepo.mockResolvedValue(REPO_RECORD);
+})
+  Deno.test('activitypub store routes - resolves canonical repo actors via WebFinger URL', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+    // Default to auto-list mode
+    mocks.hasExplicitInventory = (async () => false) as any;
+    mocks.listInventoryItems = (async () => ({ total: 0, items: [] })) as any;
+    mocks.listPushActivitiesForRepoIds = (async () => ({ total: 0, items: [] })) as any;
+    mocks.checkGrant = (async () => false) as any;
+    mocks.addFollower = (async () => ({ id: 'f1', targetActorUrl: '', followerActorUrl: '', createdAt: '' })) as any;
+    mocks.removeFollower = (async () => true) as any;
+    mocks.listFollowers = (async () => ({ total: 0, items: [] })) as any;
+    (globalThis as unknown as { caches: CacheStorage }).caches = {
+      default: mocks.cache as unknown as Cache,
+    } as CacheStorage;
+    mocks.cache.match = (async () => undefined) as any;
+    mocks.cache.put = (async () => undefined) as any;
+    mocks.cache.delete = (async () => true) as any;
+  mocks.findCanonicalRepo = (async () => REPO_RECORD) as any;
 
     const app = createApp();
     const response = await app.fetch(
@@ -151,18 +131,32 @@ describe('activitypub store routes', () => {
       {} as ExecutionContext,
     );
 
-    expect(response.status).toBe(200);
-    await expect(response.json()).resolves.toMatchObject({
+    assertEquals(response.status, 200);
+    await assertObjectMatch(await response.json(), {
       aliases: ['https://test.takos.jp/ap/repos/alice/demo'],
       links: [{ rel: 'self', type: 'application/activity+json', href: 'https://test.takos.jp/ap/repos/alice/demo' }],
     });
-  });
-
-  it('serves store actors as Service+Store with inventory', async () => {
-    mocks.findStoreBySlug.mockResolvedValue({
+})
+  Deno.test('activitypub store routes - serves store actors as Service+Store with inventory', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+    // Default to auto-list mode
+    mocks.hasExplicitInventory = (async () => false) as any;
+    mocks.listInventoryItems = (async () => ({ total: 0, items: [] })) as any;
+    mocks.listPushActivitiesForRepoIds = (async () => ({ total: 0, items: [] })) as any;
+    mocks.checkGrant = (async () => false) as any;
+    mocks.addFollower = (async () => ({ id: 'f1', targetActorUrl: '', followerActorUrl: '', createdAt: '' })) as any;
+    mocks.removeFollower = (async () => true) as any;
+    mocks.listFollowers = (async () => ({ total: 0, items: [] })) as any;
+    (globalThis as unknown as { caches: CacheStorage }).caches = {
+      default: mocks.cache as unknown as Cache,
+    } as CacheStorage;
+    mocks.cache.match = (async () => undefined) as any;
+    mocks.cache.put = (async () => undefined) as any;
+    mocks.cache.delete = (async () => true) as any;
+  mocks.findStoreBySlug = (async () => ({
       ...STORE_RECORD,
       picture: 'https://cdn.test/alice.png',
-    });
+    })) as any;
 
     const app = createApp();
     const response = await app.fetch(
@@ -171,10 +165,10 @@ describe('activitypub store routes', () => {
       {} as ExecutionContext,
     );
 
-    expect(response.status).toBe(200);
-    expect(response.headers.get('Content-Type')).toContain('application/activity+json');
+    assertEquals(response.status, 200);
+    assertStringIncludes(response.headers.get('Content-Type'), 'application/activity+json');
 
-    await expect(response.json()).resolves.toMatchObject({
+    await assertObjectMatch(await response.json(), {
       id: 'https://test.takos.jp/ap/stores/alice',
       type: ['Service', 'Store'],
       preferredUsername: 'alice',
@@ -186,10 +180,24 @@ describe('activitypub store routes', () => {
       search: 'https://test.takos.jp/ap/stores/alice/search',
       repositorySearch: 'https://test.takos.jp/ap/stores/alice/search/repositories',
     });
-  });
-
-  it('accepts Follow on store inbox and returns Accept', async () => {
-    mocks.findStoreBySlug.mockResolvedValue(STORE_RECORD);
+})
+  Deno.test('activitypub store routes - accepts Follow on store inbox and returns Accept', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+    // Default to auto-list mode
+    mocks.hasExplicitInventory = (async () => false) as any;
+    mocks.listInventoryItems = (async () => ({ total: 0, items: [] })) as any;
+    mocks.listPushActivitiesForRepoIds = (async () => ({ total: 0, items: [] })) as any;
+    mocks.checkGrant = (async () => false) as any;
+    mocks.addFollower = (async () => ({ id: 'f1', targetActorUrl: '', followerActorUrl: '', createdAt: '' })) as any;
+    mocks.removeFollower = (async () => true) as any;
+    mocks.listFollowers = (async () => ({ total: 0, items: [] })) as any;
+    (globalThis as unknown as { caches: CacheStorage }).caches = {
+      default: mocks.cache as unknown as Cache,
+    } as CacheStorage;
+    mocks.cache.match = (async () => undefined) as any;
+    mocks.cache.put = (async () => undefined) as any;
+    mocks.cache.delete = (async () => true) as any;
+  mocks.findStoreBySlug = (async () => STORE_RECORD) as any;
 
     const app = createApp();
     const response = await app.fetch(
@@ -206,8 +214,8 @@ describe('activitypub store routes', () => {
       {} as ExecutionContext,
     );
 
-    expect(response.status).toBe(200);
-    await expect(response.json()).resolves.toMatchObject({
+    assertEquals(response.status, 200);
+    await assertObjectMatch(await response.json(), {
       type: 'Accept',
       actor: 'https://test.takos.jp/ap/stores/alice',
       object: {
@@ -215,10 +223,24 @@ describe('activitypub store routes', () => {
         actor: 'https://remote.example/ap/users/bob',
       },
     });
-  });
-
-  it('rejects unsupported activity types on inbox', async () => {
-    mocks.findStoreBySlug.mockResolvedValue(STORE_RECORD);
+})
+  Deno.test('activitypub store routes - rejects unsupported activity types on inbox', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+    // Default to auto-list mode
+    mocks.hasExplicitInventory = (async () => false) as any;
+    mocks.listInventoryItems = (async () => ({ total: 0, items: [] })) as any;
+    mocks.listPushActivitiesForRepoIds = (async () => ({ total: 0, items: [] })) as any;
+    mocks.checkGrant = (async () => false) as any;
+    mocks.addFollower = (async () => ({ id: 'f1', targetActorUrl: '', followerActorUrl: '', createdAt: '' })) as any;
+    mocks.removeFollower = (async () => true) as any;
+    mocks.listFollowers = (async () => ({ total: 0, items: [] })) as any;
+    (globalThis as unknown as { caches: CacheStorage }).caches = {
+      default: mocks.cache as unknown as Cache,
+    } as CacheStorage;
+    mocks.cache.match = (async () => undefined) as any;
+    mocks.cache.put = (async () => undefined) as any;
+    mocks.cache.delete = (async () => true) as any;
+  mocks.findStoreBySlug = (async () => STORE_RECORD) as any;
 
     const app = createApp();
     const response = await app.fetch(
@@ -231,15 +253,29 @@ describe('activitypub store routes', () => {
       {} as ExecutionContext,
     );
 
-    expect(response.status).toBe(422);
-  });
-
-  it('serves inventory collection with ForgeFed Repository actors', async () => {
-    mocks.findStoreBySlug.mockResolvedValue({ ...STORE_RECORD, publicRepoCount: 1 });
-    mocks.listStoreRepositories.mockResolvedValue({
+    assertEquals(response.status, 422);
+})
+  Deno.test('activitypub store routes - serves inventory collection with ForgeFed Repository actors', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+    // Default to auto-list mode
+    mocks.hasExplicitInventory = (async () => false) as any;
+    mocks.listInventoryItems = (async () => ({ total: 0, items: [] })) as any;
+    mocks.listPushActivitiesForRepoIds = (async () => ({ total: 0, items: [] })) as any;
+    mocks.checkGrant = (async () => false) as any;
+    mocks.addFollower = (async () => ({ id: 'f1', targetActorUrl: '', followerActorUrl: '', createdAt: '' })) as any;
+    mocks.removeFollower = (async () => true) as any;
+    mocks.listFollowers = (async () => ({ total: 0, items: [] })) as any;
+    (globalThis as unknown as { caches: CacheStorage }).caches = {
+      default: mocks.cache as unknown as Cache,
+    } as CacheStorage;
+    mocks.cache.match = (async () => undefined) as any;
+    mocks.cache.put = (async () => undefined) as any;
+    mocks.cache.delete = (async () => true) as any;
+  mocks.findStoreBySlug = (async () => ({ ...STORE_RECORD, publicRepoCount: 1 })) as any;
+    mocks.listStoreRepositories = (async () => ({
       total: 1,
       items: [REPO_RECORD],
-    });
+    })) as any;
 
     const app = createApp();
     const env = createMockEnv() as unknown as Env;
@@ -249,8 +285,8 @@ describe('activitypub store routes', () => {
       env,
       {} as ExecutionContext,
     );
-    expect(summaryResponse.status).toBe(200);
-    await expect(summaryResponse.json()).resolves.toMatchObject({
+    assertEquals(summaryResponse.status, 200);
+    await assertObjectMatch(await summaryResponse.json(), {
       type: 'OrderedCollection',
       totalItems: 1,
       first: 'https://test.takos.jp/ap/stores/alice/inventory?page=1',
@@ -261,8 +297,8 @@ describe('activitypub store routes', () => {
       env,
       {} as ExecutionContext,
     );
-    expect(pageResponse.status).toBe(200);
-    await expect(pageResponse.json()).resolves.toMatchObject({
+    assertEquals(pageResponse.status, 200);
+    await assertObjectMatch(await pageResponse.json(), {
       type: 'OrderedCollectionPage',
       orderedItems: [{
         id: 'https://test.takos.jp/ap/repos/alice/demo',
@@ -275,14 +311,28 @@ describe('activitypub store routes', () => {
         stores: 'https://test.takos.jp/ap/repos/alice/demo/stores',
       }],
     });
-  });
-
-  it('search service uses plain field names', async () => {
-    mocks.findStoreBySlug.mockResolvedValue(STORE_RECORD);
-    mocks.searchStoreRepositories.mockResolvedValue({
+})
+  Deno.test('activitypub store routes - search service uses plain field names', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+    // Default to auto-list mode
+    mocks.hasExplicitInventory = (async () => false) as any;
+    mocks.listInventoryItems = (async () => ({ total: 0, items: [] })) as any;
+    mocks.listPushActivitiesForRepoIds = (async () => ({ total: 0, items: [] })) as any;
+    mocks.checkGrant = (async () => false) as any;
+    mocks.addFollower = (async () => ({ id: 'f1', targetActorUrl: '', followerActorUrl: '', createdAt: '' })) as any;
+    mocks.removeFollower = (async () => true) as any;
+    mocks.listFollowers = (async () => ({ total: 0, items: [] })) as any;
+    (globalThis as unknown as { caches: CacheStorage }).caches = {
+      default: mocks.cache as unknown as Cache,
+    } as CacheStorage;
+    mocks.cache.match = (async () => undefined) as any;
+    mocks.cache.put = (async () => undefined) as any;
+    mocks.cache.delete = (async () => true) as any;
+  mocks.findStoreBySlug = (async () => STORE_RECORD) as any;
+    mocks.searchStoreRepositories = (async () => ({
       total: 1,
       items: [REPO_RECORD],
-    });
+    })) as any;
 
     const app = createApp();
     const env = createMockEnv() as unknown as Env;
@@ -292,8 +342,8 @@ describe('activitypub store routes', () => {
       env,
       {} as ExecutionContext,
     );
-    expect(serviceResponse.status).toBe(200);
-    await expect(serviceResponse.json()).resolves.toMatchObject({
+    assertEquals(serviceResponse.status, 200);
+    await assertObjectMatch(await serviceResponse.json(), {
       id: 'https://test.takos.jp/ap/stores/alice/search',
       type: 'Service',
       repositorySearch: 'https://test.takos.jp/ap/stores/alice/search/repositories',
@@ -304,21 +354,35 @@ describe('activitypub store routes', () => {
       env,
       {} as ExecutionContext,
     );
-    expect(pageResponse.status).toBe(200);
-    await expect(pageResponse.json()).resolves.toMatchObject({
+    assertEquals(pageResponse.status, 200);
+    await assertObjectMatch(await pageResponse.json(), {
       type: 'OrderedCollectionPage',
       orderedItems: [{
         id: 'https://test.takos.jp/ap/repos/alice/demo',
         type: 'Repository',
       }],
     });
-  });
-
-  it('returns canonical repository actor at /ap/repos/:owner/:repo', async () => {
-    mocks.findCanonicalRepo.mockResolvedValue({
+})
+  Deno.test('activitypub store routes - returns canonical repository actor at /ap/repos/:owner/:repo', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+    // Default to auto-list mode
+    mocks.hasExplicitInventory = (async () => false) as any;
+    mocks.listInventoryItems = (async () => ({ total: 0, items: [] })) as any;
+    mocks.listPushActivitiesForRepoIds = (async () => ({ total: 0, items: [] })) as any;
+    mocks.checkGrant = (async () => false) as any;
+    mocks.addFollower = (async () => ({ id: 'f1', targetActorUrl: '', followerActorUrl: '', createdAt: '' })) as any;
+    mocks.removeFollower = (async () => true) as any;
+    mocks.listFollowers = (async () => ({ total: 0, items: [] })) as any;
+    (globalThis as unknown as { caches: CacheStorage }).caches = {
+      default: mocks.cache as unknown as Cache,
+    } as CacheStorage;
+    mocks.cache.match = (async () => undefined) as any;
+    mocks.cache.put = (async () => undefined) as any;
+    mocks.cache.delete = (async () => true) as any;
+  mocks.findCanonicalRepo = (async () => ({
       ...REPO_RECORD,
       updatedAt: '2026-03-02T00:00:00.000Z',
-    });
+    })) as any;
 
     const app = createApp();
     const response = await app.fetch(
@@ -327,8 +391,8 @@ describe('activitypub store routes', () => {
       {} as ExecutionContext,
     );
 
-    expect(response.status).toBe(200);
-    await expect(response.json()).resolves.toMatchObject({
+    assertEquals(response.status, 200);
+    await assertObjectMatch(await response.json(), {
       id: 'https://test.takos.jp/ap/repos/alice/demo',
       type: 'Repository',
       name: 'demo',
@@ -339,11 +403,25 @@ describe('activitypub store routes', () => {
       stores: 'https://test.takos.jp/ap/repos/alice/demo/stores',
       defaultBranchRef: 'refs/heads/main',
     });
-  });
-
-  it('returns stores collection for a canonical repo', async () => {
-    mocks.findCanonicalRepo.mockResolvedValue(REPO_RECORD);
-    mocks.listStoresForRepo.mockResolvedValue([STORE_RECORD]);
+})
+  Deno.test('activitypub store routes - returns stores collection for a canonical repo', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+    // Default to auto-list mode
+    mocks.hasExplicitInventory = (async () => false) as any;
+    mocks.listInventoryItems = (async () => ({ total: 0, items: [] })) as any;
+    mocks.listPushActivitiesForRepoIds = (async () => ({ total: 0, items: [] })) as any;
+    mocks.checkGrant = (async () => false) as any;
+    mocks.addFollower = (async () => ({ id: 'f1', targetActorUrl: '', followerActorUrl: '', createdAt: '' })) as any;
+    mocks.removeFollower = (async () => true) as any;
+    mocks.listFollowers = (async () => ({ total: 0, items: [] })) as any;
+    (globalThis as unknown as { caches: CacheStorage }).caches = {
+      default: mocks.cache as unknown as Cache,
+    } as CacheStorage;
+    mocks.cache.match = (async () => undefined) as any;
+    mocks.cache.put = (async () => undefined) as any;
+    mocks.cache.delete = (async () => true) as any;
+  mocks.findCanonicalRepo = (async () => REPO_RECORD) as any;
+    mocks.listStoresForRepo = (async () => [STORE_RECORD]) as any;
 
     const app = createApp();
     const response = await app.fetch(
@@ -352,22 +430,36 @@ describe('activitypub store routes', () => {
       {} as ExecutionContext,
     );
 
-    expect(response.status).toBe(200);
-    await expect(response.json()).resolves.toMatchObject({
+    assertEquals(response.status, 200);
+    await assertObjectMatch(await response.json(), {
       type: 'OrderedCollectionPage',
       orderedItems: ['https://test.takos.jp/ap/stores/alice'],
     });
-  });
-
-  it('builds outbox entries with ForgeFed Repository objects', async () => {
-    mocks.findStoreBySlug.mockResolvedValue({ ...STORE_RECORD, publicRepoCount: 1 });
-    mocks.listStoreRepositories.mockResolvedValue({
+})
+  Deno.test('activitypub store routes - builds outbox entries with ForgeFed Repository objects', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+    // Default to auto-list mode
+    mocks.hasExplicitInventory = (async () => false) as any;
+    mocks.listInventoryItems = (async () => ({ total: 0, items: [] })) as any;
+    mocks.listPushActivitiesForRepoIds = (async () => ({ total: 0, items: [] })) as any;
+    mocks.checkGrant = (async () => false) as any;
+    mocks.addFollower = (async () => ({ id: 'f1', targetActorUrl: '', followerActorUrl: '', createdAt: '' })) as any;
+    mocks.removeFollower = (async () => true) as any;
+    mocks.listFollowers = (async () => ({ total: 0, items: [] })) as any;
+    (globalThis as unknown as { caches: CacheStorage }).caches = {
+      default: mocks.cache as unknown as Cache,
+    } as CacheStorage;
+    mocks.cache.match = (async () => undefined) as any;
+    mocks.cache.put = (async () => undefined) as any;
+    mocks.cache.delete = (async () => true) as any;
+  mocks.findStoreBySlug = (async () => ({ ...STORE_RECORD, publicRepoCount: 1 })) as any;
+    mocks.listStoreRepositories = (async () => ({
       total: 1,
       items: [{
         ...REPO_RECORD,
         updatedAt: '2026-03-02T00:00:00.000Z',
       }],
-    });
+    })) as any;
 
     const app = createApp();
     const response = await app.fetch(
@@ -376,8 +468,8 @@ describe('activitypub store routes', () => {
       {} as ExecutionContext,
     );
 
-    expect(response.status).toBe(200);
-    await expect(response.json()).resolves.toMatchObject({
+    assertEquals(response.status, 200);
+    await assertObjectMatch(await response.json(), {
       type: 'OrderedCollectionPage',
       orderedItems: [{
         type: 'Update',
@@ -389,53 +481,109 @@ describe('activitypub store routes', () => {
         },
       }],
     });
-  });
-
-  it('redirects legacy /repositories to /inventory', async () => {
-    const app = createApp();
+})
+  Deno.test('activitypub store routes - redirects legacy /repositories to /inventory', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+    // Default to auto-list mode
+    mocks.hasExplicitInventory = (async () => false) as any;
+    mocks.listInventoryItems = (async () => ({ total: 0, items: [] })) as any;
+    mocks.listPushActivitiesForRepoIds = (async () => ({ total: 0, items: [] })) as any;
+    mocks.checkGrant = (async () => false) as any;
+    mocks.addFollower = (async () => ({ id: 'f1', targetActorUrl: '', followerActorUrl: '', createdAt: '' })) as any;
+    mocks.removeFollower = (async () => true) as any;
+    mocks.listFollowers = (async () => ({ total: 0, items: [] })) as any;
+    (globalThis as unknown as { caches: CacheStorage }).caches = {
+      default: mocks.cache as unknown as Cache,
+    } as CacheStorage;
+    mocks.cache.match = (async () => undefined) as any;
+    mocks.cache.put = (async () => undefined) as any;
+    mocks.cache.delete = (async () => true) as any;
+  const app = createApp();
     const response = await app.fetch(
       new Request('https://test.takos.jp/ap/stores/alice/repositories?page=1'),
       createMockEnv() as unknown as Env,
       {} as ExecutionContext,
     );
 
-    expect(response.status).toBe(301);
-    expect(response.headers.get('Location')).toBe(
+    assertEquals(response.status, 301);
+    assertEquals(response.headers.get('Location'), 
       'https://test.takos.jp/ap/stores/alice/inventory?page=1',
     );
-  });
-
-  it('redirects legacy /ns/takos-git to /ns/takos', async () => {
-    const app = createApp();
+})
+  Deno.test('activitypub store routes - redirects legacy /ns/takos-git to /ns/takos', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+    // Default to auto-list mode
+    mocks.hasExplicitInventory = (async () => false) as any;
+    mocks.listInventoryItems = (async () => ({ total: 0, items: [] })) as any;
+    mocks.listPushActivitiesForRepoIds = (async () => ({ total: 0, items: [] })) as any;
+    mocks.checkGrant = (async () => false) as any;
+    mocks.addFollower = (async () => ({ id: 'f1', targetActorUrl: '', followerActorUrl: '', createdAt: '' })) as any;
+    mocks.removeFollower = (async () => true) as any;
+    mocks.listFollowers = (async () => ({ total: 0, items: [] })) as any;
+    (globalThis as unknown as { caches: CacheStorage }).caches = {
+      default: mocks.cache as unknown as Cache,
+    } as CacheStorage;
+    mocks.cache.match = (async () => undefined) as any;
+    mocks.cache.put = (async () => undefined) as any;
+    mocks.cache.delete = (async () => true) as any;
+  const app = createApp();
     const response = await app.fetch(
       new Request('https://test.takos.jp/ns/takos-git'),
       createMockEnv() as unknown as Env,
       {} as ExecutionContext,
     );
 
-    expect(response.status).toBe(301);
-    expect(response.headers.get('Location')).toBe('https://test.takos.jp/ns/takos');
-  });
-
-  it('serves takos namespace context at /ns/takos', async () => {
-    const app = createApp();
+    assertEquals(response.status, 301);
+    assertEquals(response.headers.get('Location'), 'https://test.takos.jp/ns/takos');
+})
+  Deno.test('activitypub store routes - serves takos namespace context at /ns/takos', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+    // Default to auto-list mode
+    mocks.hasExplicitInventory = (async () => false) as any;
+    mocks.listInventoryItems = (async () => ({ total: 0, items: [] })) as any;
+    mocks.listPushActivitiesForRepoIds = (async () => ({ total: 0, items: [] })) as any;
+    mocks.checkGrant = (async () => false) as any;
+    mocks.addFollower = (async () => ({ id: 'f1', targetActorUrl: '', followerActorUrl: '', createdAt: '' })) as any;
+    mocks.removeFollower = (async () => true) as any;
+    mocks.listFollowers = (async () => ({ total: 0, items: [] })) as any;
+    (globalThis as unknown as { caches: CacheStorage }).caches = {
+      default: mocks.cache as unknown as Cache,
+    } as CacheStorage;
+    mocks.cache.match = (async () => undefined) as any;
+    mocks.cache.put = (async () => undefined) as any;
+    mocks.cache.delete = (async () => true) as any;
+  const app = createApp();
     const response = await app.fetch(
       new Request('https://test.takos.jp/ns/takos'),
       createMockEnv() as unknown as Env,
       {} as ExecutionContext,
     );
 
-    expect(response.status).toBe(200);
-    expect(response.headers.get('Content-Type')).toContain('application/ld+json');
+    assertEquals(response.status, 200);
+    assertStringIncludes(response.headers.get('Content-Type'), 'application/ld+json');
     const body = await response.json() as Record<string, unknown>;
     const ctx = body['@context'] as Record<string, unknown>;
-    expect(ctx.takos).toBe('https://takos.jp/ns#');
-    expect(ctx.Store).toBe('takos:Store');
-    expect(ctx.inventory).toEqual({ '@id': 'takos:inventory', '@type': '@id' });
-  });
-
-  it('includes pushUri and defaultBranchHash in repo actor', async () => {
-    mocks.findCanonicalRepo.mockResolvedValue(REPO_RECORD);
+    assertEquals(ctx.takos, 'https://takos.jp/ns#');
+    assertEquals(ctx.Store, 'takos:Store');
+    assertEquals(ctx.inventory, { '@id': 'takos:inventory', '@type': '@id' });
+})
+  Deno.test('activitypub store routes - includes pushUri and defaultBranchHash in repo actor', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+    // Default to auto-list mode
+    mocks.hasExplicitInventory = (async () => false) as any;
+    mocks.listInventoryItems = (async () => ({ total: 0, items: [] })) as any;
+    mocks.listPushActivitiesForRepoIds = (async () => ({ total: 0, items: [] })) as any;
+    mocks.checkGrant = (async () => false) as any;
+    mocks.addFollower = (async () => ({ id: 'f1', targetActorUrl: '', followerActorUrl: '', createdAt: '' })) as any;
+    mocks.removeFollower = (async () => true) as any;
+    mocks.listFollowers = (async () => ({ total: 0, items: [] })) as any;
+    (globalThis as unknown as { caches: CacheStorage }).caches = {
+      default: mocks.cache as unknown as Cache,
+    } as CacheStorage;
+    mocks.cache.match = (async () => undefined) as any;
+    mocks.cache.put = (async () => undefined) as any;
+    mocks.cache.delete = (async () => true) as any;
+  mocks.findCanonicalRepo = (async () => REPO_RECORD) as any;
 
     const app = createApp();
     const response = await app.fetch(
@@ -444,17 +592,31 @@ describe('activitypub store routes', () => {
       {} as ExecutionContext,
     );
 
-    expect(response.status).toBe(200);
-    await expect(response.json()).resolves.toMatchObject({
+    assertEquals(response.status, 200);
+    await assertObjectMatch(await response.json(), {
       pushUri: ['https://test.takos.jp/git/alice/demo.git'],
       defaultBranchHash: 'abc123def456',
     });
-  });
-
-  it('serves Add/Remove activities in store outbox (explicit mode)', async () => {
-    mocks.findStoreBySlug.mockResolvedValue({ ...STORE_RECORD, publicRepoCount: 1 });
-    mocks.hasExplicitInventory.mockResolvedValue(true);
-    mocks.listInventoryActivities.mockResolvedValue({
+})
+  Deno.test('activitypub store routes - serves Add/Remove activities in store outbox (explicit mode)', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+    // Default to auto-list mode
+    mocks.hasExplicitInventory = (async () => false) as any;
+    mocks.listInventoryItems = (async () => ({ total: 0, items: [] })) as any;
+    mocks.listPushActivitiesForRepoIds = (async () => ({ total: 0, items: [] })) as any;
+    mocks.checkGrant = (async () => false) as any;
+    mocks.addFollower = (async () => ({ id: 'f1', targetActorUrl: '', followerActorUrl: '', createdAt: '' })) as any;
+    mocks.removeFollower = (async () => true) as any;
+    mocks.listFollowers = (async () => ({ total: 0, items: [] })) as any;
+    (globalThis as unknown as { caches: CacheStorage }).caches = {
+      default: mocks.cache as unknown as Cache,
+    } as CacheStorage;
+    mocks.cache.match = (async () => undefined) as any;
+    mocks.cache.put = (async () => undefined) as any;
+    mocks.cache.delete = (async () => true) as any;
+  mocks.findStoreBySlug = (async () => ({ ...STORE_RECORD, publicRepoCount: 1 })) as any;
+    mocks.hasExplicitInventory = (async () => true) as any;
+    mocks.listInventoryActivities = (async () => ({
       total: 2,
       items: [
         {
@@ -476,7 +638,7 @@ describe('activitypub store routes', () => {
           createdAt: '2026-03-01T00:00:00.000Z',
         },
       ],
-    });
+    })) as any;
 
     const app = createApp();
     const response = await app.fetch(
@@ -485,8 +647,8 @@ describe('activitypub store routes', () => {
       {} as ExecutionContext,
     );
 
-    expect(response.status).toBe(200);
-    await expect(response.json()).resolves.toMatchObject({
+    assertEquals(response.status, 200);
+    await assertObjectMatch(await response.json(), {
       type: 'OrderedCollectionPage',
       orderedItems: [
         {
@@ -503,11 +665,25 @@ describe('activitypub store routes', () => {
         },
       ],
     });
-  });
-
-  it('serves Push activities with commit metadata in repo outbox', async () => {
-    mocks.findCanonicalRepo.mockResolvedValue(REPO_RECORD);
-    mocks.listPushActivities.mockResolvedValue({
+})
+  Deno.test('activitypub store routes - serves Push activities with commit metadata in repo outbox', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+    // Default to auto-list mode
+    mocks.hasExplicitInventory = (async () => false) as any;
+    mocks.listInventoryItems = (async () => ({ total: 0, items: [] })) as any;
+    mocks.listPushActivitiesForRepoIds = (async () => ({ total: 0, items: [] })) as any;
+    mocks.checkGrant = (async () => false) as any;
+    mocks.addFollower = (async () => ({ id: 'f1', targetActorUrl: '', followerActorUrl: '', createdAt: '' })) as any;
+    mocks.removeFollower = (async () => true) as any;
+    mocks.listFollowers = (async () => ({ total: 0, items: [] })) as any;
+    (globalThis as unknown as { caches: CacheStorage }).caches = {
+      default: mocks.cache as unknown as Cache,
+    } as CacheStorage;
+    mocks.cache.match = (async () => undefined) as any;
+    mocks.cache.put = (async () => undefined) as any;
+    mocks.cache.delete = (async () => true) as any;
+  mocks.findCanonicalRepo = (async () => REPO_RECORD) as any;
+    mocks.listPushActivities = (async () => ({
       total: 1,
       items: [{
         id: 'push-1',
@@ -528,7 +704,7 @@ describe('activitypub store routes', () => {
         }],
         createdAt: '2026-03-02T00:00:00.000Z',
       }],
-    });
+    })) as any;
 
     const app = createApp();
     const response = await app.fetch(
@@ -537,9 +713,9 @@ describe('activitypub store routes', () => {
       {} as ExecutionContext,
     );
 
-    expect(response.status).toBe(200);
+    assertEquals(response.status, 200);
     const body = await response.json() as Record<string, unknown>;
-    expect(body).toMatchObject({
+    assertObjectMatch(body, {
       type: 'OrderedCollectionPage',
       orderedItems: [{
         type: 'Push',
@@ -557,6 +733,4 @@ describe('activitypub store routes', () => {
         },
       }],
     });
-  });
-
-});
+})

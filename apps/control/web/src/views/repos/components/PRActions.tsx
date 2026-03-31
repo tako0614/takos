@@ -1,3 +1,4 @@
+import { Show } from 'solid-js';
 import type { PullRequest } from '../../../types';
 import { Icons } from '../../../lib/Icons';
 import { Button } from '../../../components/ui/Button';
@@ -21,89 +22,73 @@ interface PRActionsProps {
   onConflictResolved: () => void;
 }
 
-export function PRActions({
-  repoId,
-  pr,
-  merging,
-  closing,
-  aiReviewing,
-  showConflictResolver,
-  showReviewForm,
-  onMerge,
-  onClose,
-  onAiReview,
-  onShowConflictResolver,
-  onShowReviewForm,
-  onConflictResolved,
-}: PRActionsProps) {
+export function PRActions(props: PRActionsProps) {
   const { t } = useI18n();
 
   return (
     <Card padding="md">
-      <div className="flex items-center gap-2 text-sm mb-3">
-        {pr.is_mergeable ? (
+      <div class="flex items-center gap-2 text-sm mb-3">
+        <Show when={props.pr.is_mergeable} fallback={
           <>
-            <Icons.Check className="w-4 h-4 text-zinc-900 dark:text-zinc-100" />
-            <span className="text-zinc-700 dark:text-zinc-300">{t('prNoConflicts')}</span>
+            <Icons.AlertTriangle class="w-4 h-4 text-zinc-500" />
+            <span class="text-zinc-600 dark:text-zinc-400">{t('prHasConflicts')}</span>
           </>
-        ) : (
-          <>
-            <Icons.AlertTriangle className="w-4 h-4 text-zinc-500" />
-            <span className="text-zinc-600 dark:text-zinc-400">{t('prHasConflicts')}</span>
-          </>
-        )}
+        }>
+          <Icons.Check class="w-4 h-4 text-zinc-900 dark:text-zinc-100" />
+          <span class="text-zinc-700 dark:text-zinc-300">{t('prNoConflicts')}</span>
+        </Show>
       </div>
 
-      {showConflictResolver && !pr.is_mergeable && (
-        <div style={{ marginBottom: '0.75rem' }}>
+      <Show when={props.showConflictResolver && !props.pr.is_mergeable}>
+        <div style={{ "margin-bottom": '0.75rem' }}>
           <ConflictResolver
-            repoId={repoId}
-            prNumber={pr.number}
-            baseBranch={pr.target_branch}
-            headBranch={pr.source_branch}
-            onResolved={onConflictResolved}
-            onCancel={() => onShowConflictResolver(false)}
+            repoId={props.repoId}
+            prNumber={props.pr.number}
+            baseBranch={props.pr.target_branch}
+            headBranch={props.pr.source_branch}
+            onResolved={props.onConflictResolved}
+            onCancel={() => props.onShowConflictResolver(false)}
           />
         </div>
-      )}
+      </Show>
 
-      <div className="flex items-center gap-2">
+      <div class="flex items-center gap-2">
         <Button
           variant="primary"
-          className="flex-1"
-          onClick={pr.is_mergeable ? onMerge : () => onShowConflictResolver(true)}
-          disabled={merging || showConflictResolver}
-          isLoading={merging}
-          leftIcon={!merging ? <Icons.GitMerge /> : undefined}
+          class="flex-1"
+          onClick={props.pr.is_mergeable ? props.onMerge : () => props.onShowConflictResolver(true)}
+          disabled={props.merging || props.showConflictResolver}
+          isLoading={props.merging}
+          leftIcon={!props.merging ? <Icons.GitMerge /> : undefined}
         >
-          {merging ? t('prMerging') : pr.is_mergeable ? t('prMergePullRequest') : t('resolveConflicts')}
+          {props.merging ? t('prMerging') : props.pr.is_mergeable ? t('prMergePullRequest') : t('resolveConflicts')}
         </Button>
         <Button
           variant="secondary"
-          onClick={onAiReview}
-          disabled={aiReviewing}
-          isLoading={aiReviewing}
-          leftIcon={<Icons.Wand className="w-4 h-4" />}
+          onClick={props.onAiReview}
+          disabled={props.aiReviewing}
+          isLoading={props.aiReviewing}
+          leftIcon={<Icons.Wand class="w-4 h-4" />}
           title={t('aiReviewTitle')}
         >
           {t('aiReview')}
         </Button>
-        {!showReviewForm && (
+        <Show when={!props.showReviewForm}>
           <Button
             variant="secondary"
-            onClick={() => onShowReviewForm(true)}
-            leftIcon={<Icons.Eye className="w-4 h-4" />}
+            onClick={() => props.onShowReviewForm(true)}
+            leftIcon={<Icons.Eye class="w-4 h-4" />}
           >
             {t('prReview')}
           </Button>
-        )}
+        </Show>
         <Button
           variant="ghost"
-          onClick={onClose}
-          disabled={closing}
-          isLoading={closing}
+          onClick={props.onClose}
+          disabled={props.closing}
+          isLoading={props.closing}
         >
-          {closing ? t('prClosing') : t('prClosePullRequest')}
+          {props.closing ? t('prClosing') : t('prClosePullRequest')}
         </Button>
       </div>
     </Card>

@@ -2,7 +2,7 @@ import { existsSync, readFileSync, statSync } from "node:fs";
 import path from "node:path";
 
 function resolveRepoRoot(): string {
-  const configured = process.env.TAKOS_ECOSYSTEM_ROOT;
+  const configured = Deno.env.get('TAKOS_ECOSYSTEM_ROOT');
   const candidates = [
     configured,
     process.cwd(),
@@ -41,7 +41,7 @@ function main(): void {
     for (const error of errors) {
       console.error(`ERROR: ${error}`);
     }
-    process.exit(1);
+    Deno.exit(1);
   }
 
   const agents = readFileSync(agentsPath, "utf8");
@@ -76,7 +76,7 @@ function main(): void {
     for (const error of errors) {
       console.error(`ERROR: ${error}`);
     }
-    process.exit(1);
+    Deno.exit(1);
   }
 
   console.log("agent docs validation passed.");

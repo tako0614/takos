@@ -1,38 +1,25 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { Hono } from 'hono';
 import type { Env, User } from '@/types';
 import { createMockEnv } from '../../../test/integration/setup';
 
-const mocks = vi.hoisted(() => ({
-  listWorkspacesForUser: vi.fn(),
-  getOrCreatePersonalWorkspace: vi.fn(),
-  createWorkspaceWithDefaultRepo: vi.fn(),
-  createSpaceMember: vi.fn(),
-  deleteWorkspace: vi.fn(),
-  getUserByEmail: vi.fn(),
-  getSpaceMember: vi.fn(),
-  getWorkspaceModelSettings: vi.fn(),
-  getWorkspaceWithRepository: vi.fn(),
-  listSpaceMembers: vi.fn(),
-  updateWorkspace: vi.fn(),
-  updateWorkspaceModel: vi.fn(),
-}));
+import { assertEquals, assert } from 'jsr:@std/assert';
 
-vi.mock('@/services/identity/spaces', () => ({
-  listWorkspacesForUser: mocks.listWorkspacesForUser,
-  getOrCreatePersonalWorkspace: mocks.getOrCreatePersonalWorkspace,
-  createWorkspaceWithDefaultRepo: mocks.createWorkspaceWithDefaultRepo,
-  createSpaceMember: mocks.createSpaceMember,
-  deleteWorkspace: mocks.deleteWorkspace,
-  getUserByEmail: mocks.getUserByEmail,
-  getSpaceMember: mocks.getSpaceMember,
-  getWorkspaceModelSettings: mocks.getWorkspaceModelSettings,
-  getWorkspaceWithRepository: mocks.getWorkspaceWithRepository,
-  listSpaceMembers: mocks.listSpaceMembers,
-  updateWorkspace: mocks.updateWorkspace,
-  updateWorkspaceModel: mocks.updateWorkspaceModel,
-}));
+const mocks = ({
+  listWorkspacesForUser: ((..._args: any[]) => undefined) as any,
+  getOrCreatePersonalWorkspace: ((..._args: any[]) => undefined) as any,
+  createWorkspaceWithDefaultRepo: ((..._args: any[]) => undefined) as any,
+  createSpaceMember: ((..._args: any[]) => undefined) as any,
+  deleteWorkspace: ((..._args: any[]) => undefined) as any,
+  getUserByEmail: ((..._args: any[]) => undefined) as any,
+  getSpaceMember: ((..._args: any[]) => undefined) as any,
+  getWorkspaceModelSettings: ((..._args: any[]) => undefined) as any,
+  getWorkspaceWithRepository: ((..._args: any[]) => undefined) as any,
+  listSpaceMembers: ((..._args: any[]) => undefined) as any,
+  updateWorkspace: ((..._args: any[]) => undefined) as any,
+  updateWorkspaceModel: ((..._args: any[]) => undefined) as any,
+});
 
+// [Deno] vi.mock removed - manually stub imports from '@/services/identity/spaces'
 import spacesRoutes from '@/routes/spaces/routes';
 
 function createUser(): User {
@@ -60,10 +47,10 @@ function createApp(user: User) {
   return app;
 }
 
-describe('spaces route surface', () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-    mocks.listWorkspacesForUser.mockResolvedValue([{
+
+  Deno.test('spaces route surface - returns spaces key on /api/spaces', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+    mocks.listWorkspacesForUser = (async () => [{
       id: 'ws-1',
       kind: 'user',
       name: 'Personal',
@@ -78,18 +65,15 @@ describe('spaces route surface', () => {
         name: 'main',
         default_branch: 'main',
       },
-    }]);
-  });
-
-  it('returns spaces key on /api/spaces', async () => {
-    const response = await createApp(createUser()).fetch(
+    }]) as any;
+  const response = await createApp(createUser()).fetch(
       new Request('http://localhost/api/spaces'),
       createMockEnv() as unknown as Env,
       {} as ExecutionContext,
     );
 
-    expect(response.status).toBe(200);
-    await expect(response.json()).resolves.toEqual({
+    assertEquals(response.status, 200);
+    await assertEquals(await response.json(), {
       spaces: [{
         id: 'ws-1',
         slug: 'personal',
@@ -103,18 +87,33 @@ describe('spaces route surface', () => {
         updated_at: '2026-03-01T00:00:00.000Z',
       }],
     });
-  });
-
-  it('does not expose a legacy workspaces key', async () => {
-    const response = await createApp(createUser()).fetch(
+})
+  Deno.test('spaces route surface - does not expose a legacy workspaces key', async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+    mocks.listWorkspacesForUser = (async () => [{
+      id: 'ws-1',
+      kind: 'user',
+      name: 'Personal',
+      slug: 'personal',
+      owner_principal_id: 'user-1',
+      security_posture: 'standard',
+      created_at: '2026-03-01T00:00:00.000Z',
+      updated_at: '2026-03-01T00:00:00.000Z',
+      member_role: 'owner',
+      repository: {
+        id: 'repo-1',
+        name: 'main',
+        default_branch: 'main',
+      },
+    }]) as any;
+  const response = await createApp(createUser()).fetch(
       new Request('http://localhost/api/spaces'),
       createMockEnv() as unknown as Env,
       {} as ExecutionContext,
     );
 
-    expect(response.status).toBe(200);
+    assertEquals(response.status, 200);
     const payload = await response.json();
-    expect(payload).toHaveProperty('spaces');
-    expect(payload).not.toHaveProperty('workspaces');
-  });
-});
+    assert('spaces' in payload);
+    assert(!('workspaces' in payload));
+})
