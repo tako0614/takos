@@ -15,6 +15,7 @@ import { handleUploadPack } from '../../../application/services/git-smart/smart-
 import { handleReceivePack, handleReceivePackFromStream } from '../../../application/services/git-smart/smart-http/receive-pack';
 import { triggerPushWorkflows } from '../../../application/services/actions/actions-triggers';
 import { recordPushActivity, type CommitMeta } from '../../../application/services/activitypub/push-activities';
+import { deliverToFollowers } from '../../../application/services/activitypub/activity-delivery';
 import { getCommitLog } from '../../../application/services/git-smart/core/commit-index';
 import { getDb } from '../../../infra/db';
 import { accounts, repositories } from '../../../infra/db/schema';
@@ -346,6 +347,25 @@ smartHttpRoutes.post('/git/:owner/:repo/git-receive-pack', requireGitAuth, async
     if (updatedRefs.length > 0) {
       c.executionCtx.waitUntil((async () => {
         for (const ref of updatedRefs) {
+          // Handle tag refs — record a Tag activity
+          if (ref.refName.startsWith('refs/tags/') && ref.newSha !== ZERO_SHA) {
+            try {
+              await recordPushActivity(c.env.DB, {
+                repoId: result.repo.id,
+                accountId: result.repo.space_id,
+                ref: ref.refName,
+                beforeSha: ref.oldSha === ZERO_SHA ? null : ref.oldSha,
+                afterSha: ref.newSha,
+                pusherName: user.name || null,
+                commitCount: 0,
+                commits: [],
+              });
+            } catch (err) {
+              logError('Failed to record tag activity', err, { action: 'record_tag_activity', repoId: result.repo.id, refName: ref.refName });
+            }
+            continue;
+          }
+
           if (!ref.refName.startsWith('refs/heads/') || ref.newSha === ZERO_SHA) {
             continue;
           }
@@ -374,6 +394,55 @@ smartHttpRoutes.post('/git/:owner/:repo/git-receive-pack', requireGitAuth, async
               commitCount: commits.length,
               commits,
             });
+
+            // Deliver Push activity to repo followers
+            try {
+              const origin = new URL(c.req.url).origin;
+              const repoActorUrl = `${origin}/ap/repos/${encodeURIComponent(owner)}/${encodeURIComponent(result.repo.name)}`;
+              const pushActivity: Record<string, unknown> = {
+                '@context': [
+                  'https://www.w3.org/ns/activitystreams',
+                  'https://forgefed.org/ns',
+                ],
+                type: 'Push',
+                actor: repoActorUrl,
+                published: new Date().toISOString(),
+                to: ['https://www.w3.org/ns/activitystreams#Public'],
+                target: ref.refName,
+                object: commits.length > 0
+                  ? {
+                      type: 'OrderedCollection',
+                      totalItems: commits.length,
+                      orderedItems: commits.map((cm) => ({
+                        type: 'Commit',
+                        hash: cm.hash,
+                        message: cm.message,
+                        attributedTo: { name: cm.authorName, email: cm.authorEmail },
+                        committed: cm.committed,
+                      })),
+                    }
+                  : { type: 'OrderedCollection', totalItems: 0, orderedItems: [] },
+              };
+
+              // TODO: PLATFORM_PRIVATE_KEY env var needs to be configured for signed delivery
+              const signingKey = c.env.PLATFORM_PRIVATE_KEY || undefined;
+              const signingKeyId = signingKey ? `${repoActorUrl}#main-key` : undefined;
+
+              deliverToFollowers(c.env.DB, repoActorUrl, pushActivity, signingKey, signingKeyId)
+                .catch((err: unknown) => {
+                  logError('Failed to deliver push activity to followers', err, {
+                    action: 'deliver_push_activity',
+                    repoId: result.repo.id,
+                    refName: ref.refName,
+                  });
+                });
+            } catch (deliveryErr) {
+              logError('Failed to initiate push activity delivery', deliveryErr, {
+                action: 'deliver_push_activity',
+                repoId: result.repo.id,
+                refName: ref.refName,
+              });
+            }
           } catch (err) {
             logError('Failed to record push activity', err, { action: 'record_push_activity', repoId: result.repo.id, refName: ref.refName });
           }

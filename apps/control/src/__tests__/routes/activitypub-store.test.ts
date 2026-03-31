@@ -6,17 +6,21 @@ import { createMockEnv } from '../../../test/integration/setup';
 const mocks = vi.hoisted(() => ({
   findStoreBySlug: vi.fn(),
   findCanonicalRepo: vi.fn(),
+  findCanonicalRepoIncludingPrivate: vi.fn(),
   listStoreRepositories: vi.fn(),
   listStoresForRepo: vi.fn(),
   findStoreRepository: vi.fn(),
   searchStoreRepositories: vi.fn(),
   listPushActivities: vi.fn(),
+  listPushActivitiesForRepoIds: vi.fn(),
   hasExplicitInventory: vi.fn(),
   listInventoryActivities: vi.fn(),
+  listInventoryItems: vi.fn(),
   addFollower: vi.fn(),
   removeFollower: vi.fn(),
   listFollowers: vi.fn(),
   countFollowers: vi.fn(),
+  checkGrant: vi.fn(),
   cache: {
     match: vi.fn(),
     put: vi.fn(),
@@ -27,6 +31,7 @@ const mocks = vi.hoisted(() => ({
 vi.mock('@/routes/activitypub-store/activitypub-queries', () => ({
   findStoreBySlug: mocks.findStoreBySlug,
   findCanonicalRepo: mocks.findCanonicalRepo,
+  findCanonicalRepoIncludingPrivate: mocks.findCanonicalRepoIncludingPrivate,
   listStoreRepositories: mocks.listStoreRepositories,
   listStoresForRepo: mocks.listStoresForRepo,
   findStoreRepository: mocks.findStoreRepository,
@@ -35,11 +40,23 @@ vi.mock('@/routes/activitypub-store/activitypub-queries', () => ({
 
 vi.mock('@/application/services/activitypub/push-activities', () => ({
   listPushActivities: mocks.listPushActivities,
+  listPushActivitiesForRepoIds: mocks.listPushActivitiesForRepoIds,
+  DELETE_REF: '__delete__',
 }));
 
 vi.mock('@/application/services/activitypub/store-inventory', () => ({
   hasExplicitInventory: mocks.hasExplicitInventory,
   listInventoryActivities: mocks.listInventoryActivities,
+  listInventoryItems: mocks.listInventoryItems,
+}));
+
+vi.mock('@/application/services/activitypub/grants', () => ({
+  checkGrant: mocks.checkGrant,
+}));
+
+vi.mock('@/middleware/http-signature', () => ({
+  verifyHttpSignature: vi.fn(),
+  HttpSignatureError: class HttpSignatureError extends Error {},
 }));
 
 vi.mock('@/application/services/activitypub/followers', () => ({
@@ -92,6 +109,9 @@ describe('activitypub store routes', () => {
     vi.clearAllMocks();
     // Default to auto-list mode
     mocks.hasExplicitInventory.mockResolvedValue(false);
+    mocks.listInventoryItems.mockResolvedValue({ total: 0, items: [] });
+    mocks.listPushActivitiesForRepoIds.mockResolvedValue({ total: 0, items: [] });
+    mocks.checkGrant.mockResolvedValue(false);
     mocks.addFollower.mockResolvedValue({ id: 'f1', targetActorUrl: '', followerActorUrl: '', createdAt: '' });
     mocks.removeFollower.mockResolvedValue(true);
     mocks.listFollowers.mockResolvedValue({ total: 0, items: [] });

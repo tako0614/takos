@@ -4,6 +4,7 @@ import type { PublicRouteEnv } from '../route-auth';
 import { parsePagination } from '../../../shared/utils';
 import {
   findCanonicalRepo,
+  findCanonicalRepoIncludingPrivate,
   findStoreBySlug,
   listStoreRepositories,
   listStoresForRepo,
@@ -11,9 +12,11 @@ import {
   type StoreRecord,
   type StoreRepositoryRecord,
 } from './activitypub-queries';
-import { listPushActivities } from '../../../application/services/activitypub/push-activities';
-import { hasExplicitInventory, listInventoryActivities } from '../../../application/services/activitypub/store-inventory';
+import { listPushActivities, listPushActivitiesForRepoIds, DELETE_REF } from '../../../application/services/activitypub/push-activities';
+import { hasExplicitInventory, listInventoryActivities, listInventoryItems } from '../../../application/services/activitypub/store-inventory';
 import { addFollower, removeFollower, listFollowers } from '../../../application/services/activitypub/followers';
+import { checkGrant } from '../../../application/services/activitypub/grants';
+import { verifyHttpSignature, HttpSignatureError } from '../../middleware/http-signature';
 
 const activitypubStore = new Hono<PublicRouteEnv>();
 
@@ -135,7 +138,7 @@ function buildStoreSummary(store: StoreRecord): string {
 function buildRepoActor(
   origin: string,
   repo: StoreRepositoryRecord,
-  options?: { includeContext?: boolean },
+  options?: { includeContext?: boolean; omitPushUri?: boolean },
 ): Record<string, unknown> {
   const owner = repo.ownerSlug;
   const repoActorId = buildRepoActorId(origin, owner, repo.name);
@@ -153,11 +156,14 @@ function buildRepoActor(
     outbox: `${repoActorId}/outbox`,
     followers: `${repoActorId}/followers`,
     cloneUri: [`${origin}/git/${enc(owner)}/${enc(repo.name)}.git`],
-    pushUri: [`${origin}/git/${enc(owner)}/${enc(repo.name)}.git`],
     stores: `${repoActorId}/stores`,
     defaultBranchRef: repo.defaultBranch ? `refs/heads/${repo.defaultBranch}` : undefined,
     defaultBranchHash: repo.defaultBranchHash ?? null,
   };
+
+  if (!options?.omitPushUri) {
+    obj.pushUri = [`${origin}/git/${enc(owner)}/${enc(repo.name)}.git`];
+  }
 
   if (options?.includeContext !== false) {
     obj['@context'] = repoActorContext();
@@ -235,6 +241,41 @@ async function handleInbox(c: ActivityPubContext, targetActorUrl: string): Promi
 
   if (!actorUrl) {
     return c.json({ error: 'actor field is required' }, 400);
+  }
+
+  // --- HTTP Signature verification (gradual rollout) ---
+  // If a Signature header is present, verify it and ensure the signing actor
+  // matches the actor claim in the activity body. If no Signature header is
+  // present, log a warning and continue processing (to avoid breaking
+  // federation with instances that don't yet sign requests).
+  const signatureHeader = c.req.header('signature');
+  if (signatureHeader) {
+    try {
+      const sigResult = await verifyHttpSignature(c.req.raw);
+
+      if (!sigResult.verified) {
+        return c.json({ error: 'Invalid HTTP signature' }, 401);
+      }
+
+      // Ensure the signing key's actor matches the actor claimed in the body
+      if (sigResult.actorUrl !== actorUrl) {
+        return c.json(
+          { error: 'Signature actor does not match activity actor' },
+          403,
+        );
+      }
+    } catch (err) {
+      if (err instanceof HttpSignatureError) {
+        return c.json({ error: `Signature verification failed: ${err.message}` }, 401);
+      }
+      // Unexpected errors — log and reject
+      console.error('HTTP Signature verification error:', err);
+      return c.json({ error: 'Signature verification failed' }, 401);
+    }
+  } else {
+    console.warn(
+      `[ActivityPub] Inbox received activity without HTTP Signature from actor: ${actorUrl}`,
+    );
   }
 
   if (type === 'Follow') {
@@ -628,29 +669,85 @@ activitypubStore.get('/ap/stores/:store/outbox', withCache({
   const explicit = await hasExplicitInventory(c.env.DB, storeRecord.accountId, storeRecord.slug);
 
   if (explicit) {
-    // Real outbox: Add/Remove activities from inventory log
+    // Real outbox: Add/Remove activities from inventory log + Announce for repo pushes
     if (!page) {
-      const result = await listInventoryActivities(c.env.DB, storeRecord.accountId, storeRecord.slug, { limit: 1, offset: 0 });
-      return orderedCollectionResponse(c, collectionUrl, undefined, 1, result.total, []);
+      // Count inventory activities + announce activities from inventory repos
+      const invResult = await listInventoryActivities(c.env.DB, storeRecord.accountId, storeRecord.slug, { limit: 1, offset: 0 });
+      const activeItems = await listInventoryItems(c.env.DB, storeRecord.accountId, storeRecord.slug, { limit: 100, offset: 0 });
+      const localRepoIds = activeItems.items.map((i) => i.localRepoId).filter((id): id is string => !!id);
+      const announceResult = localRepoIds.length > 0
+        ? await listPushActivitiesForRepoIds(c.env.DB, localRepoIds, { limit: 1, offset: 0 })
+        : { total: 0 };
+      const totalItems = invResult.total + announceResult.total;
+      return orderedCollectionResponse(c, collectionUrl, undefined, 1, totalItems, []);
     }
 
-    const result = await listInventoryActivities(c.env.DB, storeRecord.accountId, storeRecord.slug, {
+    // Fetch inventory activities (Add/Remove)
+    const invResult = await listInventoryActivities(c.env.DB, storeRecord.accountId, storeRecord.slug, {
       limit,
       offset: (pageNum - 1) * limit,
     });
 
-    const activities = result.items.map((item) => ({
-      '@context': 'https://www.w3.org/ns/activitystreams',
-      id: `${actorId}/activities/${item.activityType.toLowerCase()}/${encodeURIComponent(item.createdAt)}`,
-      type: item.activityType,
-      actor: actorId,
-      published: item.createdAt,
-      to: [AS_PUBLIC],
-      object: item.repoActorUrl,
-      target: `${actorId}/inventory`,
+    const invActivities: { ts: string; activity: Record<string, unknown> }[] = invResult.items.map((item) => ({
+      ts: item.createdAt,
+      activity: {
+        '@context': 'https://www.w3.org/ns/activitystreams',
+        id: `${actorId}/activities/${item.activityType.toLowerCase()}/${encodeURIComponent(item.createdAt)}`,
+        type: item.activityType,
+        actor: actorId,
+        published: item.createdAt,
+        to: [AS_PUBLIC],
+        object: item.repoActorUrl,
+        target: `${actorId}/inventory`,
+      },
     }));
 
-    return orderedCollectionResponse(c, collectionUrl, page, pageNum, result.total, activities);
+    // Fetch Announce-wrapped push/tag activities from inventory repos
+    const activeItems = await listInventoryItems(c.env.DB, storeRecord.accountId, storeRecord.slug, { limit: 100, offset: 0 });
+    const localRepoIds = activeItems.items.map((i) => i.localRepoId).filter((id): id is string => !!id);
+
+    let announceActivities: { ts: string; activity: Record<string, unknown> }[] = [];
+    if (localRepoIds.length > 0) {
+      const pushResult = await listPushActivitiesForRepoIds(c.env.DB, localRepoIds, {
+        limit,
+        offset: (pageNum - 1) * limit,
+      });
+
+      // Build a lookup from localRepoId -> inventory item for actor URL construction
+      const repoIdToItem = new Map(activeItems.items.filter((i) => i.localRepoId).map((i) => [i.localRepoId!, i]));
+
+      announceActivities = pushResult.items
+        .filter((push) => push.ref !== DELETE_REF)
+        .map((push) => {
+          const invItem = repoIdToItem.get(push.repoId);
+          const repoActorUrl = invItem?.repoActorUrl || '';
+          return {
+            ts: push.createdAt,
+            activity: {
+              '@context': activityContext(),
+              id: `${actorId}/activities/announce/${encodeURIComponent(push.createdAt)}`,
+              type: 'Announce',
+              actor: actorId,
+              published: push.createdAt,
+              to: [AS_PUBLIC],
+              object: {
+                type: push.ref.startsWith('refs/tags/') ? 'Create' : 'Push',
+                actor: repoActorUrl,
+                published: push.createdAt,
+                target: push.ref,
+              },
+            },
+          };
+        });
+    }
+
+    // Merge and sort by timestamp (newest first), then take the page slice
+    const merged = [...invActivities, ...announceActivities]
+      .sort((a, b) => b.ts.localeCompare(a.ts))
+      .slice(0, limit);
+
+    const totalItems = invResult.total + announceActivities.length;
+    return orderedCollectionResponse(c, collectionUrl, page, pageNum, totalItems, merged.map((m) => m.activity));
   }
 
   // Auto-list fallback: generate activities from repo timestamps
@@ -681,17 +778,37 @@ activitypubStore.get('/ap/stores/:store/outbox', withCache({
 
 activitypubStore.get('/ap/repos/:owner/:repoName', withCache({
   ttl: CacheTTL.PUBLIC_CONTENT,
-  includeQueryParams: false,
+  queryParamsToInclude: ['actor'],
 }), async (c) => {
   const owner = c.req.param('owner');
   const repoName = c.req.param('repoName');
 
-  const repo = await findCanonicalRepo(c.env, owner, repoName);
-  if (!repo) {
+  // Try public repo first (existing behavior)
+  const publicRepo = await findCanonicalRepo(c.env, owner, repoName);
+  if (publicRepo) {
+    return activityJson(c, buildRepoActor(getOrigin(c), publicRepo));
+  }
+
+  // If not found as public, check if it exists as a private repo
+  const repo = await findCanonicalRepoIncludingPrivate(c.env, owner, repoName);
+  if (!repo || repo.visibility === 'public') {
+    // No repo at all, or somehow still public — 404
     return c.json({ error: 'Repository not found' }, 404);
   }
 
-  return activityJson(c, buildRepoActor(getOrigin(c), repo));
+  // Private repo exists — check for a valid grant via actor query param
+  const requestActorUrl = c.req.query('actor');
+  if (!requestActorUrl) {
+    return c.json({ error: 'Repository not found' }, 404);
+  }
+
+  const hasGrant = await checkGrant(c.env.DB, repo.id, requestActorUrl, 'visit');
+  if (!hasGrant) {
+    return c.json({ error: 'Repository not found' }, 404);
+  }
+
+  // Grant valid — return repo actor without pushUri for safety
+  return activityJson(c, buildRepoActor(getOrigin(c), repo, { omitPushUri: true }));
 });
 
 /* --- Repo inbox --------------------------------------------------- */
@@ -740,31 +857,67 @@ activitypubStore.get('/ap/repos/:owner/:repoName/outbox', withCache({
     offset: (pageNum - 1) * limit,
   });
 
-  const activities: Record<string, unknown>[] = pushResult.items.map((push) => ({
-    '@context': activityContext(),
-    id: `${repoActorId}/activities/push/${encodeURIComponent(push.createdAt)}`,
-    type: 'Push',
-    actor: repoActorId,
-    attributedTo: push.pusherActorUrl || undefined,
-    published: push.createdAt,
-    to: [AS_PUBLIC],
-    target: push.ref,
-    object: push.commits.length > 0 ? {
-      type: 'OrderedCollection',
-      totalItems: push.commits.length,
-      orderedItems: push.commits.map((c) => ({
-        type: 'Commit',
-        hash: c.hash,
-        message: c.message,
-        attributedTo: { name: c.authorName, email: c.authorEmail },
-        committed: c.committed,
-      })),
-    } : {
-      type: 'OrderedCollection',
-      totalItems: push.commitCount,
-      orderedItems: [],
-    },
-  }));
+  const activities: Record<string, unknown>[] = pushResult.items.map((push) => {
+    // Tag activity — Create + Tag object
+    if (push.ref.startsWith('refs/tags/')) {
+      const tagName = push.ref.slice('refs/tags/'.length);
+      return {
+        '@context': activityContext(),
+        id: `${repoActorId}/activities/tag/${encodeURIComponent(push.createdAt)}`,
+        type: 'Create',
+        actor: repoActorId,
+        published: push.createdAt,
+        to: [AS_PUBLIC],
+        object: {
+          type: 'Tag',
+          name: tagName,
+          ref: push.ref,
+          target: push.afterSha,
+          published: push.createdAt,
+        },
+      };
+    }
+
+    // Delete activity
+    if (push.ref === DELETE_REF) {
+      return {
+        '@context': activityContext(),
+        id: `${repoActorId}/activities/delete/${encodeURIComponent(push.createdAt)}`,
+        type: 'Delete',
+        actor: repoActorId,
+        published: push.createdAt,
+        to: [AS_PUBLIC],
+        object: repoActorId,
+      };
+    }
+
+    // Push activity (default)
+    return {
+      '@context': activityContext(),
+      id: `${repoActorId}/activities/push/${encodeURIComponent(push.createdAt)}`,
+      type: 'Push',
+      actor: repoActorId,
+      attributedTo: push.pusherActorUrl || undefined,
+      published: push.createdAt,
+      to: [AS_PUBLIC],
+      target: push.ref,
+      object: push.commits.length > 0 ? {
+        type: 'OrderedCollection',
+        totalItems: push.commits.length,
+        orderedItems: push.commits.map((cm) => ({
+          type: 'Commit',
+          hash: cm.hash,
+          message: cm.message,
+          attributedTo: { name: cm.authorName, email: cm.authorEmail },
+          committed: cm.committed,
+        })),
+      } : {
+        type: 'OrderedCollection',
+        totalItems: push.commitCount,
+        orderedItems: [],
+      },
+    };
+  });
 
   // If no push activities yet, fall back to a Create activity from repo timestamps
   if (activities.length === 0 && pageNum === 1) {

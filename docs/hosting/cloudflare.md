@@ -441,7 +441,7 @@ control plane が使う Durable Objects:
 | `RoutingDO` | ホスト名ベースルーティング |
 | `GitPushLockDO` | Git push のロック管理 |
 
-Durable Objects は Cloudflare 環境でのみ完全動作する。セルフホスト・ローカルでは未対応。
+Cloudflare backend は Durable Objects の基準 backend です。セルフホスト・ローカルなどの互換 backend では、Takos durable runtime が同じ Cloudflare-native contract を実現します。ただし orchestration や性能特性は Cloudflare backend と byte-for-byte 同一ではありません。
 
 ## Cloudflare 固有の環境変数
 

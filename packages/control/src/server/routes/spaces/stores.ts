@@ -17,9 +17,16 @@ import {
   removeFromInventory,
   listInventoryItems,
 } from '../../../application/services/activitypub/store-inventory';
+import {
+  createGrant,
+  listGrants,
+  revokeGrant,
+} from '../../../application/services/activitypub/grants';
+import { getRepositoryById } from '../../../application/services/source/repos';
 import { InternalError } from 'takos-common/errors';
 import { logError } from '../../../shared/utils/logger';
 import { parsePagination } from '../../../shared/utils';
+import { deliverToFollowers } from '../../../application/services/activitypub/activity-delivery';
 
 const storeBodySchema = z.object({
   slug: z.string().optional(),
@@ -179,15 +186,42 @@ export default new Hono<AuthenticatedRouteEnv>()
       const body = c.req.valid('json');
 
       try {
+        const storeSlug = c.req.param('storeSlug');
         const item = await addToInventory(c.env.DB, {
           accountId: access.space.id,
-          storeSlug: c.req.param('storeSlug'),
+          storeSlug,
           repoActorUrl: body.repo_actor_url,
           repoName: body.repo_name,
           repoSummary: body.repo_summary,
           repoOwnerSlug: body.repo_owner_slug,
           localRepoId: body.local_repo_id,
         });
+
+        // Deliver Add activity to store followers (fire-and-forget)
+        const origin = new URL(c.req.url).origin;
+        const storeActorUrl = `${origin}/ap/stores/${encodeURIComponent(storeSlug)}`;
+        const addActivity: Record<string, unknown> = {
+          '@context': 'https://www.w3.org/ns/activitystreams',
+          type: 'Add',
+          actor: storeActorUrl,
+          published: item.createdAt,
+          to: ['https://www.w3.org/ns/activitystreams#Public'],
+          object: item.repoActorUrl,
+          target: `${storeActorUrl}/inventory`,
+        };
+        // TODO: PLATFORM_PRIVATE_KEY env var needs to be configured for signed delivery
+        const signingKey = c.env.PLATFORM_PRIVATE_KEY || undefined;
+        const signingKeyId = signingKey ? `${storeActorUrl}#main-key` : undefined;
+        c.executionCtx.waitUntil(
+          deliverToFollowers(c.env.DB, storeActorUrl, addActivity, signingKey, signingKeyId)
+            .catch((err: unknown) => {
+              logError('Failed to deliver Add activity to followers', err, {
+                action: 'deliver_inventory_add',
+                storeSlug,
+              });
+            }),
+        );
+
         return c.json({
           item: {
             id: item.id,
@@ -214,6 +248,129 @@ export default new Hono<AuthenticatedRouteEnv>()
       throw new NotFoundError('Inventory item');
     }
 
-    await removeFromInventory(c.env.DB, access.space.id, c.req.param('storeSlug'), item.repoActorUrl);
+    const storeSlug = c.req.param('storeSlug');
+    await removeFromInventory(c.env.DB, access.space.id, storeSlug, item.repoActorUrl);
+
+    // Deliver Remove activity to store followers (fire-and-forget)
+    const origin = new URL(c.req.url).origin;
+    const storeActorUrl = `${origin}/ap/stores/${encodeURIComponent(storeSlug)}`;
+    const removeActivity: Record<string, unknown> = {
+      '@context': 'https://www.w3.org/ns/activitystreams',
+      type: 'Remove',
+      actor: storeActorUrl,
+      published: new Date().toISOString(),
+      to: ['https://www.w3.org/ns/activitystreams#Public'],
+      object: item.repoActorUrl,
+      target: `${storeActorUrl}/inventory`,
+    };
+    // TODO: PLATFORM_PRIVATE_KEY env var needs to be configured for signed delivery
+    const signingKey = c.env.PLATFORM_PRIVATE_KEY || undefined;
+    const signingKeyId = signingKey ? `${storeActorUrl}#main-key` : undefined;
+    c.executionCtx.waitUntil(
+      deliverToFollowers(c.env.DB, storeActorUrl, removeActivity, signingKey, signingKeyId)
+        .catch((err: unknown) => {
+          logError('Failed to deliver Remove activity to followers', err, {
+            action: 'deliver_inventory_remove',
+            storeSlug,
+          });
+        }),
+    );
+
+    return c.json({ success: true });
+  })
+
+  // --- Repo Grants ---
+
+  .get('/:spaceId/repos/:repoId/grants', async (c) => {
+    const user = c.get('user');
+    const access = await requireSpaceAccess(c, c.req.param('spaceId'), user.id);
+
+    const repoId = c.req.param('repoId');
+    const repo = await getRepositoryById(c.env.DB, repoId);
+    if (!repo || repo.space_id !== access.space.id) {
+      throw new NotFoundError('Repository');
+    }
+
+    try {
+      const grants = await listGrants(c.env.DB, repoId);
+      return c.json({
+        grants: grants.map((grant) => ({
+          id: grant.id,
+          repo_id: grant.repoId,
+          grantee_actor_url: grant.granteeActorUrl,
+          capability: grant.capability,
+          granted_by: grant.grantedBy,
+          expires_at: grant.expiresAt,
+          created_at: grant.createdAt,
+        })),
+      });
+    } catch (error) {
+      logError('Failed to list grants', error, { module: 'routes/spaces/stores' });
+      throw new InternalError('Failed to list grants');
+    }
+  })
+  .post('/:spaceId/repos/:repoId/grants',
+    zValidator('json', z.object({
+      grantee_actor_url: z.string().min(1),
+      capability: z.enum(['visit', 'read', 'write', 'admin']),
+    })),
+    async (c) => {
+      const user = c.get('user');
+      const access = await requireSpaceAccess(c, c.req.param('spaceId'), user.id, ['owner', 'admin']);
+
+      const repoId = c.req.param('repoId');
+      const repo = await getRepositoryById(c.env.DB, repoId);
+      if (!repo || repo.space_id !== access.space.id) {
+        throw new NotFoundError('Repository');
+      }
+
+      const body = c.req.valid('json');
+
+      try {
+        const grant = await createGrant(c.env.DB, {
+          repoId,
+          granteeActorUrl: body.grantee_actor_url,
+          capability: body.capability,
+          grantedBy: user.id,
+        });
+        return c.json({
+          grant: {
+            id: grant.id,
+            repo_id: grant.repoId,
+            grantee_actor_url: grant.granteeActorUrl,
+            capability: grant.capability,
+            granted_by: grant.grantedBy,
+            expires_at: grant.expiresAt,
+            created_at: grant.createdAt,
+          },
+        }, 201);
+      } catch (error) {
+        if (error instanceof Error) {
+          throw new BadRequestError(error.message);
+        }
+        logError('Failed to create grant', error, { module: 'routes/spaces/stores' });
+        throw new InternalError('Failed to create grant');
+      }
+    })
+  .delete('/:spaceId/repos/:repoId/grants/:grantId', async (c) => {
+    const user = c.get('user');
+    const access = await requireSpaceAccess(c, c.req.param('spaceId'), user.id, ['owner', 'admin']);
+
+    const repoId = c.req.param('repoId');
+    const repo = await getRepositoryById(c.env.DB, repoId);
+    if (!repo || repo.space_id !== access.space.id) {
+      throw new NotFoundError('Repository');
+    }
+
+    const grantId = c.req.param('grantId');
+
+    // Verify the grant belongs to this repo before revoking
+    const grants = await listGrants(c.env.DB, repoId);
+    const grant = grants.find((g) => g.id === grantId);
+    if (!grant) {
+      throw new NotFoundError('Grant');
+    }
+
+    await revokeGrant(c.env.DB, grantId);
     return c.json({ success: true });
   });
