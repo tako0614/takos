@@ -22,16 +22,21 @@ export async function resolveAndInjectTemplates(
   manifest: GroupDeployOptions['manifest'],
   options: GroupDeployOptions,
   result: GroupDeployResult,
-  ctx: { accountId: string; apiToken: string; dryRun: boolean },
+  ctx: { accountId: string; apiToken: string; dryRun: boolean; appToken?: string },
 ): Promise<void> {
-  if (!manifest.spec.env?.inject) return;
+  if (!manifest.spec.env?.inject && !ctx.appToken) return;
 
-  const { accountId, apiToken, dryRun } = ctx;
+  const { accountId, apiToken, dryRun, appToken } = ctx;
 
-  const tmplCtx = buildTemplateContext(result, manifest, options);
+  const tmplCtx = buildTemplateContext(result, manifest, options, { appToken });
   const resolvedEnv: Record<string, string> = {};
-  for (const [key, template] of Object.entries(manifest.spec.env.inject)) {
+  for (const [key, template] of Object.entries(manifest.spec.env?.inject ?? {})) {
     resolvedEnv[key] = resolveTemplateString(template, tmplCtx);
+  }
+
+  // Inject TAKOS_ACCESS_TOKEN if one was issued during apply
+  if (appToken) {
+    resolvedEnv['TAKOS_ACCESS_TOKEN'] = appToken;
   }
 
   if (!dryRun && Object.keys(resolvedEnv).length > 0) {

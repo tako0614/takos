@@ -4,7 +4,7 @@ import type { Env } from '../../../shared/types/index.ts';
 import { spaceAccess, type SpaceAccessRouteEnv } from '../route-auth.ts';
 import { getDb, groups, resources, services, deployments } from '../../../infra/db/index.ts';
 import { BadRequestError, NotFoundError } from 'takos-common/errors';
-import { getGroupState, planManifest, applyManifest } from '../../../application/services/deployment/apply-engine.ts';
+import { getGroupState, planManifest, applyManifest, type ApplyResult } from '../../../application/services/deployment/apply-engine.ts';
 import { parseAppManifestText, parseAppManifestYaml } from '../../../application/services/source/app-manifest-parser/index.ts';
 import { getUpdateType } from '../../../application/services/deployment/store-install.ts';
 import { safeJsonParseOrDefault } from '../../../shared/utils/logger.ts';
@@ -401,6 +401,29 @@ async function listGroupDeploymentsHandler(c: GroupsContext) {
 }
 
 // ---------------------------------------------------------------------------
+// Helpers: safe API response builders
+// ---------------------------------------------------------------------------
+
+/**
+ * Strips the raw access token from the ApplyResult and replaces it with
+ * a safe confirmation object. The token VALUE is never returned via the
+ * API — it gets injected directly into the worker env secrets.
+ */
+function buildSafeApplyResponse(result: ApplyResult) {
+  const { appToken, ...rest } = result;
+  return {
+    ...rest,
+    appToken: appToken
+      ? {
+          issued: true,
+          scopes: appToken.scopes,
+          expiresIn: appToken.expiresIn,
+        }
+      : undefined,
+  };
+}
+
+// ---------------------------------------------------------------------------
 // Deployment: plan / apply / updates
 // ---------------------------------------------------------------------------
 
@@ -498,7 +521,7 @@ async function applyGroupHandler(c: GroupsContext) {
     target: body.target,
     envName: body.env === undefined ? undefined : groupEnv ?? undefined,
   });
-  return c.json(result);
+  return c.json(buildSafeApplyResponse(result));
 }
 
 async function applyGroupByNameHandler(c: GroupsContext) {
@@ -546,9 +569,10 @@ async function applyGroupByNameHandler(c: GroupsContext) {
     envName: body.env === undefined ? undefined : groupEnv ?? undefined,
   });
 
+  const safeResult = buildSafeApplyResponse(result);
   return c.json({
     group: { id: finalGroup.id, name: finalGroup.name },
-    ...result,
+    ...safeResult,
   });
 }
 

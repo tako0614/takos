@@ -73,9 +73,15 @@ export interface ApplyResult {
   appToken?: AppTokenResult;
 }
 
+export interface AppTokenPlan {
+  willIssue: true;
+  scopes: string[];
+}
+
 export interface PlanResult {
   diff: DiffResult;
   translationReport: TranslationReport;
+  appTokenPlan?: AppTokenPlan;
 }
 
 export interface ApplyManifestOpts {
@@ -910,8 +916,15 @@ export async function planManifest(
   const translationContext = { ociOrchestratorUrl: env.OCI_ORCHESTRATOR_URL };
   const translationReport = buildTranslationReport(desiredState, translationContext);
   assertTranslationSupported(translationReport, translationContext);
+
+  const takosScopes = effectiveManifest.spec.takos?.scopes;
+  const appTokenPlan: AppTokenPlan | undefined = takosScopes && takosScopes.length > 0
+    ? { willIssue: true, scopes: takosScopes }
+    : undefined;
+
   return {
     diff: computeDiff(desiredState, currentState),
     translationReport,
+    ...(appTokenPlan ? { appTokenPlan } : {}),
   };
 }

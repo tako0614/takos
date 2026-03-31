@@ -93,6 +93,10 @@ export interface TemplateContext {
   services: Record<string, { ipv4?: string; port?: number }>;
   workers: Record<string, { url?: string }>;
   resources: Record<string, { id?: string }>;
+  takos: {
+    apiUrl: string;
+    accessToken?: string;
+  };
 }
 
 export interface GroupDeployOptions {
