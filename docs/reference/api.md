@@ -779,7 +779,7 @@ Idempotency-Key ヘッダーで冪等性を保証可能。
 
 ## resources
 
-リソースの CRUD・アクセス管理。public surface は Cloudflare-native で、他 provider では translation layer が `implementation` として解決します。
+リソースの CRUD・アクセス管理。public surface は Cloudflare-native で、Takos runtime がその spec を各 backend 上で実現します。Cloudflare backend では通常そのまま対応する Cloudflare resource に解決され、互換 backend では provider-backed または Takos-managed implementation に解決されます。
 
 ### 基本 CRUD
 

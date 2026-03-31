@@ -8,6 +8,7 @@ export * from './body-size';
 export * from './cache';
 export * from './content-type';
 export * from './git-auth';
+export * from './http-signature';
 export * from './oauth-auth';
 export * from './param-validation';
 export * from './plan-gates';

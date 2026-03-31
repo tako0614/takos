@@ -401,6 +401,54 @@ export async function findCanonicalRepo(
   };
 }
 
+export async function findCanonicalRepoIncludingPrivate(
+  env: Pick<Env, 'DB'>,
+  ownerSlug: string,
+  repoName: string,
+): Promise<StoreRepositoryRecord | null> {
+  const normalizedOwner = normalizeSlug(ownerSlug);
+  const normalizedRepo = normalizeRepoName(repoName);
+  if (!normalizedOwner || !normalizedRepo) {
+    return null;
+  }
+
+  const db = getDb(env.DB);
+  const row = await db.select({
+    id: repositories.id,
+    ownerId: accounts.id,
+    ownerSlug: accounts.slug,
+    ownerName: accounts.name,
+    name: repositories.name,
+    description: repositories.description,
+    visibility: repositories.visibility,
+    defaultBranch: repositories.defaultBranch,
+    defaultBranchHash: branches.commitSha,
+    stars: repositories.stars,
+    forks: repositories.forks,
+    gitEnabled: repositories.gitEnabled,
+    createdAt: repositories.createdAt,
+    updatedAt: repositories.updatedAt,
+  }).from(repositories)
+    .innerJoin(accounts, eq(repositories.accountId, accounts.id))
+    .leftJoin(branches, and(eq(branches.repoId, repositories.id), eq(branches.isDefault, true)))
+    .where(and(
+      sql`lower(${accounts.slug}) = ${normalizedOwner}`,
+      sql`lower(${repositories.name}) = ${normalizedRepo}`,
+    ))
+    .limit(1)
+    .get();
+
+  if (!row) {
+    return null;
+  }
+
+  return {
+    ...row,
+    defaultBranchHash: row.defaultBranchHash ?? null,
+    gitEnabled: !!row.gitEnabled,
+  };
+}
+
 export async function listStoresForRepo(
   env: Pick<Env, 'DB'>,
   accountId: string,

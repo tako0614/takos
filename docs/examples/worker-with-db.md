@@ -34,4 +34,4 @@ spec:
       path: /
 ```
 
-Cloudflare では通常そのまま `D1` / `R2` に解決されます。他 provider では translation layer が対応する SQL / object storage 実装に変換します。
+Cloudflare backend では通常そのまま `D1` / `R2` に解決されます。互換 backend では Takos runtime が同じ Cloudflare-native spec を SQL / object storage 相当の実装に解決します。

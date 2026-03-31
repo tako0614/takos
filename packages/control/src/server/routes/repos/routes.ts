@@ -21,6 +21,7 @@ import { and, eq, sql } from 'drizzle-orm';
 import { invalidateCacheOnMutation } from '../../middleware/cache';
 import { logError, logWarn } from '../../../shared/utils/logger';
 import { requireFound } from '../validation-utils';
+import { recordRepoDeleteActivity } from '../../../application/services/activitypub/push-activities';
 
 // Re-export shared utilities so existing sibling imports (e.g. `from './routes'`) keep working.
 export {
@@ -286,6 +287,16 @@ export default new Hono<AuthenticatedRouteEnv>()
   const repoObjectCandidates = c.env.GIT_OBJECTS
     ? await collectCleanupCandidates(c.env.DB, c.env.GIT_OBJECTS, repoId)
     : null;
+
+  // Record a Delete activity before the repo is removed
+  try {
+    await recordRepoDeleteActivity(c.env.DB, {
+      repoId,
+      accountId: repoAccess.repo.space_id,
+    });
+  } catch (err) {
+    logWarn('Failed to record repo delete activity', { action: 'deleteRepository', repoId });
+  }
 
   await db.delete(branches).where(eq(branches.repoId, repoId));
   await db.delete(repoForks).where(eq(repoForks.forkRepoId, repoId));
