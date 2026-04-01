@@ -37,7 +37,7 @@ export function RunsList(props: RunsListProps) {
       <Show when={hasRuns()}>
         <div class="divide-y divide-zinc-800">
           <For each={props.runs}>{(run) => (
-            <button
+            <button type="button"
               class={`w-full text-left px-4 py-3 hover:bg-white/5 transition-colors ${
                 props.selectedRunId === run.id ? 'bg-white/5' : ''
               }`}

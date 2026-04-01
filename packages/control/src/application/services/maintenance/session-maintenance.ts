@@ -1,6 +1,6 @@
 import type { Env } from '../../../shared/types/index.ts';
 import { getDb, sessions } from '../../../infra/db/index.ts';
-import { and, eq, lt, isNull, or, sql } from 'drizzle-orm';
+import { and, eq, lt, isNull, or, type sql as _sql } from 'drizzle-orm';
 
 export interface CleanupDeadSessionsSummary {
   markedDead: number;

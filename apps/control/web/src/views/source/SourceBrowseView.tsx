@@ -51,7 +51,7 @@ export function SourceBrowseView({
     <div ref={scrollContainerRef as HTMLDivElement | undefined} onScroll={onScroll} class="flex-1 overflow-y-auto px-3 pb-6">
       {loading && items.length === 0 && (
         <div class="grid grid-cols-1 min-[380px]:grid-cols-2 gap-3 pt-1">
-          {Array.from({ length: 6 }).map((_, i) => (
+          {Array.from({ length: 6 }).map((_, _i) => (
             // biome-ignore lint/suspicious/noArrayIndexKey: skeleton
             <div class="rounded-2xl bg-white dark:bg-zinc-800 h-44 animate-pulse" />
           ))}

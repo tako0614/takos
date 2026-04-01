@@ -1,4 +1,4 @@
-import { createEffect, onMount, onCleanup, createSignal } from 'solid-js';
+import { createEffect, createSignal } from 'solid-js';
 import type { JSX } from 'solid-js';
 import { useI18n, type TranslationKey } from '../store/i18n.ts';
 import { Icons } from '../lib/Icons.tsx';

@@ -1,4 +1,4 @@
-import { createSignal, createEffect, createMemo, onCleanup, onMount, type JSX } from 'solid-js';
+import { createSignal, createEffect, createMemo, onCleanup } from 'solid-js';
 import { Show } from 'solid-js';
 import { useI18n } from '../store/i18n.ts';
 import type { Thread } from '../types/index.ts';
@@ -95,8 +95,8 @@ export function ChatView(props: ChatViewProps) {
         onOpenSearch();
       }
     };
-    window.addEventListener('keydown', handleKeyDown);
-    onCleanup(() => { window.removeEventListener('keydown', handleKeyDown); });
+    globalThis.addEventListener('keydown', handleKeyDown);
+    onCleanup(() => { globalThis.removeEventListener('keydown', handleKeyDown); });
   });
 
   // Jump-to-message
@@ -172,7 +172,7 @@ export function ChatView(props: ChatViewProps) {
           <Icons.Search class="w-4 h-4" />
           <span class="hidden md:inline text-sm">{t('search')}</span>
           <kbd class="hidden lg:flex items-center gap-0.5 px-1 py-0.5 rounded text-[10px] font-mono bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 text-zinc-400 dark:text-zinc-500">
-            <span>{'\u2318'}</span>
+            <span>⌘</span>
             <span>K</span>
           </kbd>
         </button>

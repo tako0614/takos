@@ -201,7 +201,7 @@ export function createRuntimeServiceApp(options: RuntimeServiceOptions = {}): Ho
   return app;
 }
 
-export function startRuntimeService(options: RuntimeServiceOptions = {}) {
+export function startRuntimeService(options: RuntimeServiceOptions = {}): void {
   const logger = createLogger({ service: options.serviceName ?? 'takos-runtime' });
   const port = options.port ?? PORT;
   const app = createRuntimeServiceApp(options);

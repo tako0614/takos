@@ -115,7 +115,7 @@ export function StorageFileTable(props: StorageFileTableProps) {
                 {formatDateTime(file.updated_at)}
               </td>
               <td class="px-2 py-2" onClick={(e) => e.stopPropagation()}>
-                <button
+                <button type="button"
                   class="p-1.5 rounded-full opacity-0 group-hover:opacity-100 hover:bg-zinc-200 dark:hover:bg-zinc-700 text-zinc-400 dark:text-zinc-500 transition-all"
                   onClick={(e) => {
                     e.stopPropagation();

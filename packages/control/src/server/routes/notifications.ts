@@ -43,6 +43,18 @@ type NotificationNotifierNamespace = {
   get(id: unknown): { fetch(input: RequestInfo | URL, init?: RequestInit): Promise<Response> };
 };
 
+export const notificationsRouteDeps = {
+  getNotificationPreferences,
+  getNotificationsMutedUntil,
+  getUnreadCount,
+  listNotifications,
+  markNotificationRead,
+  setNotificationsMutedUntil,
+  updateNotificationPreferences,
+  isNotificationChannel,
+  isNotificationType,
+};
+
 const notificationsWsHandler: (c: NotificationContext) => Promise<Response> = async (c) => {
   const user = c.get('user');
 
@@ -87,14 +99,14 @@ export default new Hono<{ Bindings: Env; Variables: BaseVariables }>()
       : undefined;
     const before = validatedQuery.before || null;
 
-    const result = await listNotifications(c.env.DB, user.id, { limit, before });
+    const result = await notificationsRouteDeps.listNotifications(c.env.DB, user.id, { limit, before });
     return c.json(result);
   })
 
   // GET /api/notifications/unread-count
   .get('/notifications/unread-count', async (c) => {
     const user = c.get('user');
-    const unreadCount = await getUnreadCount(c.env.DB, user.id);
+    const unreadCount = await notificationsRouteDeps.getUnreadCount(c.env.DB, user.id);
     return c.json({ unread_count: unreadCount });
   })
 
@@ -102,14 +114,14 @@ export default new Hono<{ Bindings: Env; Variables: BaseVariables }>()
   .patch('/notifications/:id/read', async (c) => {
     const user = c.get('user');
     const id = c.req.param('id');
-    const result = await markNotificationRead(c.env.DB, user.id, id);
+    const result = await notificationsRouteDeps.markNotificationRead(c.env.DB, user.id, id);
     return c.json(result);
   })
 
   // GET /api/notifications/preferences
   .get('/notifications/preferences', async (c) => {
     const user = c.get('user');
-    const prefs = await getNotificationPreferences(c.env.DB, user.id);
+    const prefs = await notificationsRouteDeps.getNotificationPreferences(c.env.DB, user.id);
     return c.json({
       types: NOTIFICATION_TYPES,
       channels: NOTIFICATION_CHANNELS,
@@ -132,12 +144,12 @@ export default new Hono<{ Bindings: Env; Variables: BaseVariables }>()
 
     const updates: Array<{ type: NotificationType; channel: NotificationChannel; enabled: boolean }> = [];
     for (const row of body.updates) {
-      if (!isNotificationType(row.type)) throw new BadRequestError(`Invalid type: ${String(row.type)}`);
-      if (!isNotificationChannel(row.channel)) throw new BadRequestError(`Invalid channel: ${String(row.channel)}`);
+      if (!notificationsRouteDeps.isNotificationType(row.type)) throw new BadRequestError(`Invalid type: ${String(row.type)}`);
+      if (!notificationsRouteDeps.isNotificationChannel(row.channel)) throw new BadRequestError(`Invalid channel: ${String(row.channel)}`);
       updates.push({ type: row.type, channel: row.channel, enabled: row.enabled });
     }
 
-    const prefs = await updateNotificationPreferences(c.env.DB, user.id, updates);
+    const prefs = await notificationsRouteDeps.updateNotificationPreferences(c.env.DB, user.id, updates);
     return c.json({
       types: NOTIFICATION_TYPES,
       channels: NOTIFICATION_CHANNELS,
@@ -148,7 +160,7 @@ export default new Hono<{ Bindings: Env; Variables: BaseVariables }>()
   // GET /api/notifications/settings
   .get('/notifications/settings', async (c) => {
     const user = c.get('user');
-    const mutedUntil = await getNotificationsMutedUntil(c.env.DB, user.id);
+    const mutedUntil = await notificationsRouteDeps.getNotificationsMutedUntil(c.env.DB, user.id);
     return c.json({ muted_until: mutedUntil });
   })
 
@@ -164,7 +176,7 @@ export default new Hono<{ Bindings: Env; Variables: BaseVariables }>()
     const user = c.get('user');
     const body = c.req.valid('json');
 
-    const result = await setNotificationsMutedUntil(c.env.DB, user.id, body.muted_until);
+    const result = await notificationsRouteDeps.setNotificationsMutedUntil(c.env.DB, user.id, body.muted_until);
     return c.json(result);
   })
 

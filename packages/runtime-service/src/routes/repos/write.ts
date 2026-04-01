@@ -16,6 +16,14 @@ import { ErrorCodes } from 'takos-common/errors';
 
 const app = new Hono<RuntimeEnv>();
 
+function hasControlCharacters(value: string): boolean {
+  for (let i = 0; i < value.length; i++) {
+    const code = value.charCodeAt(i);
+    if (code <= 31 || code === 127) return true;
+  }
+  return false;
+}
+
 // ---------------------------------------------------------------------------
 // commit + push
 // ---------------------------------------------------------------------------
@@ -225,7 +233,7 @@ app.post('/repos/merge', async (c) => {
         if (typeof message !== 'string' || message.length > 4096) {
           return badRequest(c, 'Merge message must be a string of at most 4096 characters');
         }
-        if (/[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]/.test(message)) {
+        if (hasControlCharacters(message)) {
           return badRequest(c, 'Merge message contains invalid control characters');
         }
         mergeArgs.push('-m', message);

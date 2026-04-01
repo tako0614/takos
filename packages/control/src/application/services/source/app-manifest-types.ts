@@ -18,24 +18,24 @@ type AppResourceBase = {
 };
 
 type D1Resource = AppResourceBase & {
-  type: 'd1';
+  type: "d1";
   migrations?: string | { up: string; down: string };
 };
 
-type R2Resource = AppResourceBase & { type: 'r2' };
-type KVResource = AppResourceBase & { type: 'kv' };
-type SecretRefResource = AppResourceBase & { type: 'secretRef' };
+type R2Resource = AppResourceBase & { type: "r2" };
+type KVResource = AppResourceBase & { type: "kv" };
+type SecretRefResource = AppResourceBase & { type: "secretRef" };
 
 type VectorizeResource = AppResourceBase & {
-  type: 'vectorize';
+  type: "vectorize";
   vectorize: {
     dimensions: number;
-    metric: 'cosine' | 'euclidean' | 'dot-product';
+    metric: "cosine" | "euclidean" | "dot-product";
   };
 };
 
 type QueueResource = AppResourceBase & {
-  type: 'queue';
+  type: "queue";
   queue?: {
     maxRetries?: number;
     deadLetterQueue?: string;
@@ -44,7 +44,7 @@ type QueueResource = AppResourceBase & {
 };
 
 type AnalyticsEngineResource = AppResourceBase & {
-  type: 'analyticsEngine';
+  type: "analyticsEngine";
   analyticsEngine?: {
     dataset?: string;
   };
@@ -58,12 +58,12 @@ type WorkflowConfig = {
 };
 
 type WorkflowResource = AppResourceBase & {
-  type: 'workflow';
+  type: "workflow";
   workflow: WorkflowConfig;
 };
 
 type WorkflowRuntimeResource = AppResourceBase & {
-  type: 'workflow_runtime';
+  type: "workflow_runtime";
   workflowRuntime: WorkflowConfig;
 };
 
@@ -73,12 +73,12 @@ type DurableObjectConfig = {
 };
 
 type DurableObjectResource = AppResourceBase & {
-  type: 'durableObject';
+  type: "durableObject";
   durableObject: DurableObjectConfig;
 };
 
 type DurableNamespaceResource = AppResourceBase & {
-  type: 'durable_namespace';
+  type: "durable_namespace";
   durableNamespace: DurableObjectConfig;
 };
 
@@ -95,7 +95,7 @@ export type AppResource =
   | DurableObjectResource
   | DurableNamespaceResource;
 
-export type AppResourceType = AppResource['type'];
+export type AppResourceType = AppResource["type"];
 
 export type WorkflowArtifactBuild = {
   fromWorkflow: {
@@ -107,24 +107,24 @@ export type WorkflowArtifactBuild = {
 };
 
 export type DirectWorkerArtifact = {
-  kind: 'bundle';
+  kind: "bundle";
   deploymentId?: string;
   artifactRef?: string;
 };
 
 export type DirectImageArtifact = {
-  kind: 'image';
+  kind: "image";
   imageRef: string;
-  provider?: 'oci' | 'ecs' | 'cloud-run' | 'k8s';
+  provider?: "oci" | "ecs" | "cloud-run" | "k8s";
 };
 
 // --- Health check ---
 
 export type HealthCheck = {
-  type?: 'http' | 'tcp' | 'exec';  // default: 'http'
-  path?: string;           // http: GET パス
-  port?: number;           // tcp: ポート
-  command?: string;        // exec: コマンド
+  type?: "http" | "tcp" | "exec"; // default: 'http'
+  path?: string; // http: GET パス
+  port?: number; // tcp: ポート
+  command?: string; // exec: コマンド
   intervalSeconds?: number;
   timeoutSeconds?: number;
   unhealthyThreshold?: number;
@@ -135,7 +135,7 @@ export type HealthCheck = {
 export type LifecycleHook = {
   command: string;
   timeoutSeconds?: number;
-  sandbox?: boolean;     // true: 隔離コンテナで実行。Store インストール時は必須
+  sandbox?: boolean; // true: 隔離コンテナで実行。Store インストール時は必須
 };
 
 export type LifecycleHooks = {
@@ -146,7 +146,7 @@ export type LifecycleHooks = {
 // --- Update / rollback strategy ---
 
 export type UpdateStrategy = {
-  strategy?: 'rolling' | 'canary' | 'blue-green' | 'recreate';
+  strategy?: "rolling" | "canary" | "blue-green" | "recreate";
   canaryWeight?: number;
   healthCheck?: string;
   rollbackOnFailure?: boolean;
@@ -162,7 +162,7 @@ export type ServiceBinding = string | { name: string; version?: string };
 export type Volume = {
   name: string;
   mountPath: string;
-  size: string;  // "10Gi", "500Mi" etc
+  size: string; // "10Gi", "500Mi" etc
 };
 
 // --- Worker scaling ---
@@ -179,7 +179,7 @@ export type AppContainer = {
   dockerfile?: string;
   imageRef?: string;
   artifact?: DirectImageArtifact;
-  provider?: 'oci' | 'ecs' | 'cloud-run' | 'k8s';
+  provider?: "oci" | "ecs" | "cloud-run" | "k8s";
   port: number;
   instanceType?: string;
   maxInstances?: number;
@@ -193,7 +193,7 @@ export type AppService = {
   dockerfile?: string;
   imageRef?: string;
   artifact?: DirectImageArtifact;
-  provider?: 'oci' | 'ecs' | 'cloud-run' | 'k8s';
+  provider?: "oci" | "ecs" | "cloud-run" | "k8s";
   port: number;
   instanceType?: string;
   maxInstances?: number;
@@ -249,7 +249,7 @@ export type AppRoute = {
   name: string;
   target: string;
   path?: string;
-  methods?: string[];    // ['GET', 'POST'] etc
+  methods?: string[]; // ['GET', 'POST'] etc
   ingress?: string;
   timeoutMs?: number;
 };
@@ -258,7 +258,7 @@ export type AppMcpServer = {
   name: string;
   endpoint?: string;
   route?: string;
-  transport?: 'streamable-http';
+  transport?: "streamable-http";
   authSecretRef?: string;
 };
 
@@ -278,14 +278,14 @@ export type EnvironmentOverrides = Record<string, {
 }>;
 
 export type AppManifest = {
-  apiVersion: 'takos.dev/v1alpha1';
-  kind: 'App';
+  apiVersion: "takos.dev/v1alpha1";
+  kind: "App";
   metadata: AppMetadata;
   spec: {
     version: string;
     description?: string;
     icon?: string;
-    category?: 'app' | 'service' | 'library' | 'template' | 'social';
+    category?: "app" | "service" | "library" | "template" | "social";
     tags?: string[];
     capabilities?: string[];
     env?: AppEnvConfig;
@@ -325,8 +325,14 @@ export type AppDeploymentBuildSource = {
 };
 
 export type BundleDoc = {
-  apiVersion: 'takos.dev/v1alpha1';
-  kind: 'Package' | 'Resource' | 'Workload' | 'Endpoint' | 'Binding' | 'McpServer';
+  apiVersion: "takos.dev/v1alpha1";
+  kind:
+    | "Package"
+    | "Resource"
+    | "Workload"
+    | "Endpoint"
+    | "Binding"
+    | "McpServer";
   metadata: {
     name: string;
     labels?: Record<string, string>;
@@ -337,38 +343,41 @@ export type BundleDoc = {
 // Resource-type aliases that map portable/legacy manifest names to Cloudflare-native
 // resource types used by the current application spec.
 export type LegacyAppResourceTypeAlias =
-  | 'secret_ref'
-  | 'analytics_engine'
-  | 'workflow_binding'
-  | 'durable_object_namespace'
-  | 'secret'
-  | 'sql'
-  | 'object_store'
-  | 'vector_index'
-  | 'analytics_store'
-  | 'workflow_runtime'
-  | 'durable_namespace';
+  | "secret_ref"
+  | "analytics_engine"
+  | "workflow_binding"
+  | "durable_object_namespace"
+  | "secret"
+  | "sql"
+  | "object_store"
+  | "vector_index"
+  | "analytics_store"
+  | "workflow_runtime"
+  | "durable_namespace";
 
-export const APP_RESOURCE_TYPE_ALIASES: Record<LegacyAppResourceTypeAlias, AppResource['type']> = {
-  secret_ref: 'secretRef',
-  analytics_engine: 'analyticsEngine',
-  workflow_binding: 'workflow',
-  durable_object_namespace: 'durableObject',
-  secret: 'secretRef',
-  sql: 'd1',
-  object_store: 'r2',
-  vector_index: 'vectorize',
-  analytics_store: 'analyticsEngine',
-  workflow_runtime: 'workflow',
-  durable_namespace: 'durableObject',
+export const APP_RESOURCE_TYPE_ALIASES: Record<
+  LegacyAppResourceTypeAlias,
+  AppResource["type"]
+> = {
+  secret_ref: "secretRef",
+  analytics_engine: "analyticsEngine",
+  workflow_binding: "workflow",
+  durable_object_namespace: "durableObject",
+  secret: "secretRef",
+  sql: "d1",
+  object_store: "r2",
+  vector_index: "vectorize",
+  analytics_store: "analyticsEngine",
+  workflow_runtime: "workflow",
+  durable_namespace: "durableObject",
 };
 
 export const BUILD_SOURCE_LABELS = {
-  workflowPath: 'takos.dev/workflow-path',
-  workflowJob: 'takos.dev/workflow-job',
-  workflowArtifact: 'takos.dev/workflow-artifact',
-  artifactPath: 'takos.dev/artifact-path',
-  sourceRunId: 'takos.dev/workflow-run-id',
-  sourceJobId: 'takos.dev/workflow-job-id',
-  sourceSha: 'takos.dev/source-sha',
+  workflowPath: "takos.dev/workflow-path",
+  workflowJob: "takos.dev/workflow-job",
+  workflowArtifact: "takos.dev/workflow-artifact",
+  artifactPath: "takos.dev/artifact-path",
+  sourceRunId: "takos.dev/workflow-run-id",
+  sourceJobId: "takos.dev/workflow-job-id",
+  sourceSha: "takos.dev/source-sha",
 } as const;

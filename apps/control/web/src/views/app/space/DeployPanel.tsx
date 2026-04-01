@@ -42,15 +42,15 @@ const SECTIONS: { id: DeploySection; icon: JSX.Element; labelKey: TranslationKey
 
 export function DeployPanel({
   spaceId,
-  spaces = [],
+  spaces: _spaces = [],
   activeSection,
   onSectionChange,
   onClose,
-  user,
-  userSettings,
-  onSettingsChange,
-  onSpacesRefresh,
-  isMobile = false,
+  user: _user,
+  userSettings: _userSettings,
+  onSettingsChange: _onSettingsChange,
+  onSpacesRefresh: _onSpacesRefresh,
+  isMobile: _isMobile = false,
 }: DeployPanelProps) {
   const { t } = useI18n();
   const { showToast } = useToast();
@@ -204,7 +204,7 @@ export function DeployPanel({
                 {t('deployNav')}
               </h1>
               {onClose && (
-                <button
+                <button type="button"
                   class="p-1.5 rounded-lg hover:bg-zinc-200 dark:hover:bg-zinc-700 text-zinc-500 dark:text-zinc-400 transition-colors"
                   onClick={onClose}
                   aria-label={t('close')}
@@ -216,7 +216,7 @@ export function DeployPanel({
 
             <div class="flex gap-2 pb-6 flex-wrap">
               {SECTIONS.map((section) => (
-                <button
+                <button type="button"
 
                   onClick={() => handleSectionChange(section.id)}
                   class={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-full text-xs font-medium transition-colors ${

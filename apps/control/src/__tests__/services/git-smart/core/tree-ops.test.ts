@@ -22,7 +22,6 @@ import {
   assertEquals,
   assertNotEquals,
   assertRejects,
-  assertStringIncludes,
   assertThrows,
 } from "jsr:@std/assert";
 
@@ -148,9 +147,7 @@ Deno.test("assertValidGitPath - returns trimmed path when valid", () => {
 
 Deno.test("assertValidGitPath - throws on invalid path", () => {
   bucket = new MockR2Bucket();
-  assertThrows(() => {
-    (() => assertValidGitPath("/invalid"));
-  }, "Invalid git path");
+  assertThrows(() => assertValidGitPath("/invalid"), "Invalid git path");
 });
 
 // ===========================================================================
@@ -506,7 +503,7 @@ Deno.test("applyTreeChanges - adds a new file to existing tree", async () => {
 
   const files = await flattenTree(bucket as any, newTreeSha);
   const paths = files.map((f) => f.path).sort();
-  assertStringIncludes(paths, "new-file.txt");
+  assert(paths.includes("new-file.txt"));
   assertEquals(paths.length, 4);
 });
 

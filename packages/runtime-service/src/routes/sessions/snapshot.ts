@@ -11,7 +11,7 @@ import { isProbablyBinary } from '../../runtime/validation.ts';
 import { resolveSessionWorkDir } from './session-utils.ts';
 import { OwnerBindingError, SymlinkWriteError, isBoundaryViolationError } from '../../shared/errors.ts';
 import { forbidden, internalError } from 'takos-common/middleware/hono';
-import { Buffer } from "node:buffer";
+import type { Buffer } from "node:buffer";
 
 function handleRouteError(c: import('hono').Context<RuntimeEnv>, err: unknown, label: string, opts?: { checkSymlink?: boolean }): Response {
   if (err instanceof OwnerBindingError) return forbidden(c, err.message);
@@ -111,7 +111,7 @@ app.post('/session/snapshot', async (c) => {
       if (rootDir) excludeDirs.delete(rootDir);
     }
 
-    async function walkDir(dir: string, prefix: string = ''): Promise<void> {
+    const walkDir = async (dir: string, prefix: string = ''): Promise<void> => {
       const items = await fs.readdir(dir, { withFileTypes: true });
       for (const item of items) {
         const fullPath = path.join(dir, item.name);
@@ -184,7 +184,7 @@ app.post('/session/snapshot', async (c) => {
           // Skip unreadable files or files failing boundary checks.
         }
       }
-    }
+    };
 
     const startPrefix = snapshotPath ? snapshotPath.replace(/^\/+/, '') : '';
     await walkDir(targetDir, startPrefix);

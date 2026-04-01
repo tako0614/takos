@@ -2,11 +2,17 @@ import type { D1Database } from '../../../shared/types/bindings.ts';
 import type { Resource, ResourceCapability, ResourcePermission, ResourceType, ResourceStatus } from '../../../shared/types/index.ts';
 import type { SelectOf } from '../../../shared/types/drizzle-utils.ts';
 import { getDb, resources, resourceAccess } from '../../../infra/db/index.ts';
-import { eq, and, ne, inArray, desc, asc, count } from 'drizzle-orm';
+import { eq, and, ne, inArray, desc, asc, type count as _count } from 'drizzle-orm';
 import { toApiResource } from './format.ts';
 import { resolveAccessibleAccountIds } from '../identity/membership-resolver.ts';
 import { textDateNullable } from '../../../shared/utils/db-guards.ts';
 import { getResourceTypeQueryValues } from './capabilities.ts';
+
+export const resourceStoreDeps = {
+  getDb,
+  resolveAccessibleAccountIds,
+  now: () => new Date().toISOString(),
+};
 
 function buildAccessMap(grants: { resourceId: string; permission: string }[]): Map<string, string> {
   const map = new Map<string, string>();
@@ -53,10 +59,10 @@ function toApiResourceRow(r: {
 
 export async function listResourcesForWorkspace(
   db: D1Database,
-  userId: string,
+  _userId: string,
   spaceId: string
 ) {
-  const drizzle = getDb(db);
+  const drizzle = resourceStoreDeps.getDb(db);
 
   const ownedResources = await drizzle.select().from(resources)
     .where(and(
@@ -118,8 +124,8 @@ export async function listResourcesForWorkspace(
 }
 
 export async function listResourcesForUser(db: D1Database, userId: string) {
-  const drizzle = getDb(db);
-  const accessibleAccountIds = await resolveAccessibleAccountIds(db, userId);
+  const drizzle = resourceStoreDeps.getDb(db);
+  const accessibleAccountIds = await resourceStoreDeps.resolveAccessibleAccountIds(db, userId);
 
   const ownedResources = await drizzle.select().from(resources)
     .where(eq(resources.ownerAccountId, userId))
@@ -162,8 +168,8 @@ export async function listResourcesByType(
   userId: string,
   resourceType: ResourceType | ResourceCapability
 ) {
-  const drizzle = getDb(db);
-  const accessibleAccountIds = await resolveAccessibleAccountIds(db, userId);
+  const drizzle = resourceStoreDeps.getDb(db);
+  const accessibleAccountIds = await resourceStoreDeps.resolveAccessibleAccountIds(db, userId);
   const typeQueryValues = getResourceTypeQueryValues(resourceType);
 
   const ownedResources = await drizzle.select().from(resources)
@@ -211,7 +217,7 @@ export async function listResourcesByType(
 }
 
 export async function getResourceById(db: D1Database, resourceId: string) {
-  const drizzle = getDb(db);
+  const drizzle = resourceStoreDeps.getDb(db);
   const resource = await drizzle.select().from(resources)
     .where(eq(resources.id, resourceId))
     .get();
@@ -221,7 +227,7 @@ export async function getResourceById(db: D1Database, resourceId: string) {
 }
 
 export async function getResourceByName(db: D1Database, userId: string, resourceName: string) {
-  const drizzle = getDb(db);
+  const drizzle = resourceStoreDeps.getDb(db);
   const resource = await drizzle.select().from(resources)
     .where(and(
       eq(resources.name, resourceName),
@@ -256,7 +262,7 @@ export async function insertResource(
     updated_at: string;
   }
 ) {
-  const drizzle = getDb(db);
+  const drizzle = resourceStoreDeps.getDb(db);
   await drizzle.insert(resources).values({
     id: input.id,
     ownerAccountId: input.owner_id,
@@ -297,7 +303,7 @@ export async function insertFailedResource(
     updated_at: string;
   }
 ) {
-  const drizzle = getDb(db);
+  const drizzle = resourceStoreDeps.getDb(db);
   await drizzle.insert(resources).values({
     id: input.id,
     ownerAccountId: input.owner_id,
@@ -322,10 +328,10 @@ export async function updateResourceMetadata(
   resourceId: string,
   updates: { name?: string; config?: Record<string, unknown>; metadata?: Record<string, unknown> }
 ) {
-  const drizzle = getDb(db);
+  const drizzle = resourceStoreDeps.getDb(db);
 
   const data: Record<string, unknown> = {
-    updatedAt: new Date().toISOString(),
+    updatedAt: resourceStoreDeps.now(),
   };
 
   if (updates.name !== undefined) {
@@ -350,17 +356,17 @@ export async function updateResourceMetadata(
 }
 
 export async function markResourceDeleting(db: D1Database, resourceId: string) {
-  const drizzle = getDb(db);
+  const drizzle = resourceStoreDeps.getDb(db);
   await drizzle.update(resources)
     .set({
       status: 'deleting',
-      updatedAt: new Date().toISOString(),
+      updatedAt: resourceStoreDeps.now(),
     })
     .where(eq(resources.id, resourceId));
 }
 
 export async function deleteResource(db: D1Database, resourceId: string) {
-  const drizzle = getDb(db);
+  const drizzle = resourceStoreDeps.getDb(db);
   await drizzle.delete(resources).where(eq(resources.id, resourceId));
 }
 
@@ -369,7 +375,7 @@ export async function getAvailableResourcesForWorkspace(
   spaceId: string,
   resourceType: ResourceType
 ): Promise<Array<Resource & { access_level: 'owner' | ResourcePermission }>> {
-  const drizzle = getDb(db);
+  const drizzle = resourceStoreDeps.getDb(db);
 
   const ownedResources = await drizzle.select().from(resources)
     .where(and(

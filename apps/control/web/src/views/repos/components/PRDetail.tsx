@@ -152,7 +152,7 @@ export function PRDetail(props: PRDetailProps) {
       <PRHeader pr={props.pr} diffsCount={diffs().length} totalAdditions={totalChanges().additions} totalDeletions={totalChanges().deletions} onBack={props.onBack} />
 
       <div class="flex border-b" style={{ "border-color": 'var(--color-border-primary)', "background-color": 'var(--color-surface-primary)' }}>
-        <button
+        <button type="button"
           class={`flex items-center gap-2 px-4 py-3 text-sm font-medium transition-colors border-b-2 ${activeTab() === 'conversation' ? 'text-zinc-900 dark:text-zinc-100 border-zinc-900 dark:border-zinc-100' : 'text-zinc-500 dark:text-zinc-400 border-transparent hover:text-zinc-900 dark:hover:text-zinc-100'}`}
           onClick={() => setActiveTab('conversation')}
         >
@@ -160,7 +160,7 @@ export function PRDetail(props: PRDetailProps) {
           <span>{t('conversationTab')}</span>
           <span class="ml-1 px-1.5 py-0.5 rounded-full bg-zinc-100 dark:bg-zinc-800 text-xs border border-zinc-200 dark:border-zinc-700">{comments().length}</span>
         </button>
-        <button
+        <button type="button"
           class={`flex items-center gap-2 px-4 py-3 text-sm font-medium transition-colors border-b-2 ${activeTab() === 'files' ? 'text-zinc-900 dark:text-zinc-100 border-zinc-900 dark:border-zinc-100' : 'text-zinc-500 dark:text-zinc-400 border-transparent hover:text-zinc-900 dark:hover:text-zinc-100'}`}
           onClick={() => setActiveTab('files')}
         >

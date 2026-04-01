@@ -3,7 +3,7 @@ import * as path from 'node:path';
 import { spawn } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { GetObjectCommand } from '@aws-sdk/client-s3';
-import { type ActionContext } from '../executor.ts';
+import type { ActionContext } from '../executor.ts';
 import { pushLog } from '../../logging.ts';
 import { s3Client, isR2Configured } from '../../../storage/r2.ts';
 import { R2_BUCKET } from '../../../shared/config.ts';

@@ -53,7 +53,7 @@ export function MemoryPage({ spaceId, onBack }: MemoryPageProps) {
   return (
     <div class="flex flex-col h-full bg-white dark:bg-zinc-900">
       <header class="flex items-center gap-4 px-6 py-4 border-b border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800">
-        <button
+        <button type="button"
           class="p-2 rounded-lg text-zinc-500 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100 hover:bg-zinc-200 dark:hover:bg-zinc-700 transition-colors"
           onClick={onBack}
         >
@@ -64,7 +64,7 @@ export function MemoryPage({ spaceId, onBack }: MemoryPageProps) {
           <span>Memory</span>
         </h1>
         <div class="ml-auto">
-          <button
+          <button type="button"
             class="inline-flex items-center justify-center gap-2 px-4 py-2 rounded-lg font-medium text-sm bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900 hover:bg-zinc-700 dark:hover:bg-zinc-300 transition-colors cursor-pointer"
             onClick={() => showReminders() ? setShowCreateReminder(true) : setShowCreateMemory(true)}
           >

@@ -141,9 +141,9 @@ export const handleLogoutAtom = atom(
 // ---------------------------------------------------------------------------
 
 export function redirectToLogin(returnTo?: string): void {
-  const url = new URL('/auth/login', window.location.origin);
+  const url = new URL('/auth/login', globalThis.location.origin);
   if (returnTo) {
     url.searchParams.set('return_to', returnTo);
   }
-  window.location.href = url.toString();
+  globalThis.location.href = url.toString();
 }

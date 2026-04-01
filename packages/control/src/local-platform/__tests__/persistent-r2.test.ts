@@ -80,9 +80,13 @@ Deno.test("createPersistentR2Bucket multipart upload - aborts multipart uploads 
       upload.uploadId,
     );
 
-    await assertRejects(async () => {
-      await resumed.uploadPart(1, "discard me");
-    }, /not active/i);
+    await assertRejects(
+      async () => {
+        await resumed.uploadPart(1, "discard me");
+      },
+      Error,
+      "not active",
+    );
     await assertEquals(await reloadedBucket.head("docs/aborted.txt"), null);
   } finally {
     await Promise.all(tempDirs.splice(0).map((dir) => removeLocalDataDir(dir)));

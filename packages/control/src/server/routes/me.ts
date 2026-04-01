@@ -1,5 +1,5 @@
 import { Hono } from 'hono';
-import type { Env, User } from '../../shared/types/index.ts';
+import type { Env, User as _User } from '../../shared/types/index.ts';
 import { safeJsonParseOrDefault, generateId, base64UrlEncode } from '../../shared/utils/index.ts';
 import { validateUsername } from '../../shared/utils/domain-validation.ts';
 import { getDb } from '../../infra/db/index.ts';
@@ -22,6 +22,24 @@ import {
 import { toUserResponse } from '../../application/services/identity/response-formatters.ts';
 import { getOrCreatePersonalWorkspace } from '../../application/services/identity/spaces.ts';
 import { computeSHA256 } from '../../shared/utils/hash.ts';
+
+export const meRouteDeps = {
+  getDb,
+  validateUsername,
+  ensureUserSettings,
+  updateUserSettings,
+  formatUserSettingsResponse,
+  toUserResponse,
+  getOrCreatePersonalWorkspace,
+  getUserConsentsWithClients,
+  revokeConsent,
+  getClientsByOwner,
+  createClient,
+  updateClient,
+  deleteClient,
+  logOAuthEvent,
+  parseJsonStringArray,
+};
 
 // ── PAT token helpers ──────────────────────────────────────────────────────
 function generateRandomBytes(length: number): Uint8Array {
@@ -60,12 +78,15 @@ export default new Hono<{ Bindings: Env; Variables: BaseVariables }>()
   })
   .get('/', async (c) => {
     const user = c.get('user');
-    return c.json(toUserResponse(user));
+    return c.json(meRouteDeps.toUserResponse(user));
   })
 
   .get('/personal-space', async (c) => {
     const user = c.get('user');
-    const personalSpace = await getOrCreatePersonalWorkspace(c.env, user.id);
+    const personalSpace = await meRouteDeps.getOrCreatePersonalWorkspace(
+      c.env,
+      user.id,
+    );
 
     if (!personalSpace) {
       throw new NotFoundError('Personal space');
@@ -78,8 +99,8 @@ export default new Hono<{ Bindings: Env; Variables: BaseVariables }>()
   .get('/settings', async (c) => {
     const user = c.get('user');
 
-    const settings = await ensureUserSettings(c.env.DB, user.id);
-    return c.json(formatUserSettingsResponse(settings));
+    const settings = await meRouteDeps.ensureUserSettings(c.env.DB, user.id);
+    return c.json(meRouteDeps.formatUserSettingsResponse(settings));
   })
 
   // Update user settings
@@ -111,11 +132,11 @@ export default new Hono<{ Bindings: Env; Variables: BaseVariables }>()
       }
     }
 
-    const settings = await updateUserSettings(c.env.DB, user.id, {
+    const settings = await meRouteDeps.updateUserSettings(c.env.DB, user.id, {
       ...body,
       activity_visibility: activityVisibility,
     });
-    return c.json(formatUserSettingsResponse(settings));
+    return c.json(meRouteDeps.formatUserSettingsResponse(settings));
   })
 
   // Update username
@@ -128,7 +149,7 @@ export default new Hono<{ Bindings: Env; Variables: BaseVariables }>()
     }
 
     const normalizedUsername = body.username.trim().replace(/^@+/, '').toLowerCase();
-    const usernameError = validateUsername(normalizedUsername);
+    const usernameError = meRouteDeps.validateUsername(normalizedUsername);
     if (usernameError) {
       throw new BadRequestError(usernameError);
     }
@@ -137,7 +158,7 @@ export default new Hono<{ Bindings: Env; Variables: BaseVariables }>()
       return c.json({ success: true, username: normalizedUsername });
     }
 
-    const db = getDb(c.env.DB);
+    const db = meRouteDeps.getDb(c.env.DB);
     const existingUser = await db.select({ id: accounts.id })
       .from(accounts)
       .where(and(eq(accounts.slug, normalizedUsername), ne(accounts.id, user.id)))
@@ -157,7 +178,7 @@ export default new Hono<{ Bindings: Env; Variables: BaseVariables }>()
 
   .get('/oauth/consents', async (c) => {
     const user = c.get('user');
-    const consents = await getUserConsentsWithClients(c.env.DB, user.id);
+    const consents = await meRouteDeps.getUserConsentsWithClients(c.env.DB, user.id);
 
     return c.json({
       consents: consents.map(consent => ({
@@ -165,7 +186,7 @@ export default new Hono<{ Bindings: Env; Variables: BaseVariables }>()
         client_name: consent.client_name,
         client_logo: consent.client_logo,
         client_uri: consent.client_uri,
-        scopes: parseJsonStringArray(consent.scopes),
+        scopes: meRouteDeps.parseJsonStringArray(consent.scopes),
         granted_at: consent.granted_at,
         updated_at: consent.updated_at,
       })),
@@ -175,7 +196,7 @@ export default new Hono<{ Bindings: Env; Variables: BaseVariables }>()
   .delete('/oauth/consents/:clientId', async (c) => {
     const user = c.get('user');
     const clientId = c.req.param('clientId');
-    const db = getDb(c.env.DB);
+    const db = meRouteDeps.getDb(c.env.DB);
 
     await db.update(oauthTokens).set({
       revoked: true,
@@ -183,14 +204,14 @@ export default new Hono<{ Bindings: Env; Variables: BaseVariables }>()
       revokedReason: 'user_revoked',
     }).where(and(eq(oauthTokens.accountId, user.id), eq(oauthTokens.clientId, clientId)));
 
-    const success = await revokeConsent(c.env.DB, user.id, clientId);
+    const success = await meRouteDeps.revokeConsent(c.env.DB, user.id, clientId);
 
     if (!success) {
       throw new NotFoundError('Consent');
     }
 
     try {
-      await logOAuthEvent(c.env.DB, {
+      await meRouteDeps.logOAuthEvent(c.env.DB, {
         userId: user.id,
         clientId,
         eventType: 'consent_revoked',
@@ -207,7 +228,7 @@ export default new Hono<{ Bindings: Env; Variables: BaseVariables }>()
     const user = c.get('user');
     const { limit, offset } = parsePagination(c.req.query(), { limit: 50, maxLimit: 100 });
     const clientId = c.req.query('client_id') || null;
-    const db = getDb(c.env.DB);
+    const db = meRouteDeps.getDb(c.env.DB);
 
     const conditions = [eq(oauthAuditLogs.accountId, user.id)];
     if (clientId) {
@@ -235,7 +256,7 @@ export default new Hono<{ Bindings: Env; Variables: BaseVariables }>()
 
   .get('/oauth/clients', async (c) => {
     const user = c.get('user');
-    const clients = await getClientsByOwner(c.env.DB, user.id);
+    const clients = await meRouteDeps.getClientsByOwner(c.env.DB, user.id);
 
     return c.json({
       clients: clients.map(client => ({
@@ -244,8 +265,8 @@ export default new Hono<{ Bindings: Env; Variables: BaseVariables }>()
         description: client.description,
         logo_uri: client.logo_uri,
         client_uri: client.client_uri,
-        redirect_uris: parseJsonStringArray(client.redirect_uris),
-        allowed_scopes: parseJsonStringArray(client.allowed_scopes),
+        redirect_uris: meRouteDeps.parseJsonStringArray(client.redirect_uris),
+        allowed_scopes: meRouteDeps.parseJsonStringArray(client.allowed_scopes),
         client_type: client.client_type,
         status: client.status,
         created_at: client.created_at,
@@ -270,7 +291,7 @@ export default new Hono<{ Bindings: Env; Variables: BaseVariables }>()
     }
 
     try {
-      const response = await createClient(c.env.DB, body, user.id);
+      const response = await meRouteDeps.createClient(c.env.DB, body, user.id);
       return c.json(response, 201);
     } catch (err) {
       throw new BadRequestError(err instanceof Error ? err.message : 'Failed to create client');
@@ -286,14 +307,14 @@ export default new Hono<{ Bindings: Env; Variables: BaseVariables }>()
       throw new BadRequestError('Invalid JSON body');
     }
 
-    const clients = await getClientsByOwner(c.env.DB, user.id);
+    const clients = await meRouteDeps.getClientsByOwner(c.env.DB, user.id);
     const ownedClient = clients.find(cl => cl.client_id === clientId);
     if (!ownedClient) {
       throw new NotFoundError('Client');
     }
 
     try {
-      const updated = await updateClient(c.env.DB, clientId, body);
+      const updated = await meRouteDeps.updateClient(c.env.DB, clientId, body);
       if (!updated) {
         throw new NotFoundError('Client');
       }
@@ -304,8 +325,8 @@ export default new Hono<{ Bindings: Env; Variables: BaseVariables }>()
         description: updated.description,
         logo_uri: updated.logo_uri,
         client_uri: updated.client_uri,
-        redirect_uris: parseJsonStringArray(updated.redirect_uris),
-        allowed_scopes: parseJsonStringArray(updated.allowed_scopes),
+        redirect_uris: meRouteDeps.parseJsonStringArray(updated.redirect_uris),
+        allowed_scopes: meRouteDeps.parseJsonStringArray(updated.allowed_scopes),
         status: updated.status,
       });
     } catch (err) {
@@ -317,13 +338,13 @@ export default new Hono<{ Bindings: Env; Variables: BaseVariables }>()
     const user = c.get('user');
     const clientId = c.req.param('clientId');
 
-    const clients = await getClientsByOwner(c.env.DB, user.id);
+    const clients = await meRouteDeps.getClientsByOwner(c.env.DB, user.id);
     const ownedClient = clients.find(cl => cl.client_id === clientId);
     if (!ownedClient) {
       throw new NotFoundError('Client');
     }
 
-    const success = await deleteClient(c.env.DB, clientId);
+    const success = await meRouteDeps.deleteClient(c.env.DB, clientId);
     if (!success) {
       throw new InternalError('Failed to delete client');
     }
@@ -333,7 +354,7 @@ export default new Hono<{ Bindings: Env; Variables: BaseVariables }>()
 
   .get('/personal-access-tokens', async (c) => {
     const user = c.get('user');
-    const db = getDb(c.env.DB);
+    const db = meRouteDeps.getDb(c.env.DB);
     const rows = await db.select({
       id: personalAccessTokens.id,
       name: personalAccessTokens.name,
@@ -385,7 +406,7 @@ export default new Hono<{ Bindings: Env; Variables: BaseVariables }>()
       }
     }
 
-    const db = getDb(c.env.DB);
+    const db = meRouteDeps.getDb(c.env.DB);
     await db.insert(personalAccessTokens).values({
       id,
       accountId: user.id,
@@ -404,7 +425,7 @@ export default new Hono<{ Bindings: Env; Variables: BaseVariables }>()
     const user = c.get('user');
     const tokenId = c.req.param('id');
 
-    const db = getDb(c.env.DB);
+    const db = meRouteDeps.getDb(c.env.DB);
     const token = await db.select().from(personalAccessTokens).where(
       and(eq(personalAccessTokens.id, tokenId), eq(personalAccessTokens.accountId, user.id))
     ).get();

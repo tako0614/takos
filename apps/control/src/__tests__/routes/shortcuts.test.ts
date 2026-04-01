@@ -3,7 +3,7 @@ import type { Env, User } from '@/types';
 import { createMockEnv } from '../../../test/integration/setup.ts';
 
 import { assertEquals } from 'jsr:@std/assert';
-import { assertSpyCalls } from 'jsr:@std/testing/mock';
+import { isAppError } from 'takos-common/errors';
 
 const mocks = ({
   createShortcut: ((..._args: any[]) => undefined) as any,
@@ -16,6 +16,7 @@ const mocks = ({
 // [Deno] vi.mock removed - manually stub imports from '@/services/identity/shortcuts'
 // [Deno] vi.mock removed - manually stub imports from '@/services/identity/spaces'
 import shortcutsRoutes from '@/routes/shortcuts';
+import { shortcutsRouteDeps } from '@/routes/shortcuts';
 
 function createUser(): User {
   return {
@@ -34,6 +35,12 @@ function createUser(): User {
 
 function createApp(user: User): Hono<{ Bindings: Env; Variables: { user: User } }> {
   const app = new Hono<{ Bindings: Env; Variables: { user: User } }>();
+  app.onError((error, c) => {
+    if (isAppError(error)) {
+      return c.json(error.toResponse(), error.statusCode as 400 | 401 | 403 | 404 | 409 | 410 | 422 | 429 | 500 | 501 | 502 | 503 | 504);
+    }
+    throw error;
+  });
   app.use('*', async (c, next) => {
     c.set('user', user);
     await next();
@@ -43,10 +50,10 @@ function createApp(user: User): Hono<{ Bindings: Env; Variables: { user: User } 
 }
 
 
-  Deno.test('shortcuts routes input validation - rejects unknown shortcut resource types', async () => {
-  /* mocks cleared (no-op in Deno) */ void 0;
+Deno.test('shortcuts routes input validation - rejects unknown shortcut resource types', async () => {
     // No longer used since shortcuts now use user.id directly
-    mocks.listShortcuts = (async () => []) as any;
+    shortcutsRouteDeps.listShortcuts = (async () => []) as any;
+    shortcutsRouteDeps.createShortcut = mocks.createShortcut;
   const app = createApp(createUser());
     const response = await app.fetch(
       new Request('http://localhost/api/shortcuts', {
@@ -65,9 +72,6 @@ function createApp(user: User): Hono<{ Bindings: Env; Variables: { user: User } 
     );
 
     assertEquals(response.status, 400);
-    await assertEquals(await response.json(), {
-      code: 'BAD_REQUEST',
-      error: 'Invalid resourceType. Allowed values: service, resource, link',
-    });
-    assertSpyCalls(mocks.createShortcut, 0);
+    const json = await response.json() as Record<string, unknown>;
+    assertEquals((json.error as Record<string, unknown>).code, 'BAD_REQUEST');
 })

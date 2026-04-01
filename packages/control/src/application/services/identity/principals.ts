@@ -12,6 +12,10 @@ import { getDb, accounts } from '../../../infra/db/index.ts';
 import { eq } from 'drizzle-orm';
 import { textDate } from '../../../shared/utils/db-guards.ts';
 
+export const principalsDeps = {
+  getDb,
+};
+
 const KNOWN_PRINCIPAL_KINDS = new Set(['user', 'space_agent', 'service', 'system', 'tenant_worker']);
 
 function normalizePrincipalType(type: string | null | undefined): PrincipalKind {
@@ -41,7 +45,7 @@ export async function resolveUserPrincipalId(
   db: D1Database,
   userId: string
 ): Promise<string | null> {
-  const drizzle = getDb(db);
+  const drizzle = principalsDeps.getDb(db);
   const row = await drizzle.select({ id: accounts.id }).from(accounts).where(eq(accounts.id, userId)).get();
   return row?.id || null;
 }
@@ -54,7 +58,7 @@ export async function resolveActorPrincipalId(
   db: D1Database,
   actorId: string
 ): Promise<string | null> {
-  const drizzle = getDb(db);
+  const drizzle = principalsDeps.getDb(db);
   const account = await drizzle.select({ id: accounts.id }).from(accounts).where(eq(accounts.id, actorId)).get();
   return account?.id || null;
 }
@@ -63,7 +67,7 @@ export async function getPrincipalById(
   db: D1Database,
   principalId: string
 ): Promise<Principal | null> {
-  const drizzle = getDb(db);
+  const drizzle = principalsDeps.getDb(db);
   const row = await drizzle.select({
     id: accounts.id,
     type: accounts.type,

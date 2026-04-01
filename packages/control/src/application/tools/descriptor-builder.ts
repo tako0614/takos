@@ -132,8 +132,13 @@ const MAX_MCP_NAME_LENGTH = 100;
 
 /** Sanitize untrusted MCP metadata to prevent prompt injection. */
 function sanitizeMcpString(s: string, maxLen: number): string {
-  // Strip control chars, trim, truncate
-  return s.replace(/[\x00-\x1f]/g, '').trim().slice(0, maxLen);
+  let sanitized = '';
+  for (let i = 0; i < s.length; i++) {
+    const code = s.charCodeAt(i);
+    if (code >= 0x00 && code <= 0x1f) continue;
+    sanitized += s[i];
+  }
+  return sanitized.trim().slice(0, maxLen);
 }
 
 /** Build a descriptor for MCP-sourced tools. */

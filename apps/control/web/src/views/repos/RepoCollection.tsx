@@ -35,7 +35,7 @@ function ReposMainContent(props: {
         <div class="flex flex-col items-center justify-center h-full text-zinc-500 dark:text-zinc-400">
           <Icons.GitBranch class="w-12 h-12 mb-3" />
           <p class="mb-4">No repositories yet</p>
-          <button
+          <button type="button"
             class="flex items-center gap-2 px-4 py-2 bg-zinc-900 text-white rounded-lg hover:bg-zinc-700 transition-colors"
             onClick={props.onOpenCreate}
           >

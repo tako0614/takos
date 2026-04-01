@@ -1,4 +1,4 @@
-import { createEffect, onMount, onCleanup, createMemo, createSignal } from 'solid-js';
+import { createEffect, createMemo, createSignal } from 'solid-js';
 import { useI18n } from '../../store/i18n.ts';
 import { useToast } from '../../store/toast.ts';
 import { useRouter } from '../../hooks/useRouter.ts';
@@ -322,7 +322,7 @@ export function WorkTab({ spaceId }: { spaceId: string }) {
             <div class="h-10 w-24 bg-zinc-200/50 dark:bg-zinc-700/50 rounded-lg animate-pulse" />
           </div>
           <div class="flex gap-2">
-            {[1, 2, 3, 4].map((i) => (
+            {[1, 2, 3, 4].map((_i) => (
               <div class="h-8 w-20 bg-zinc-200/50 dark:bg-zinc-700/50 rounded-lg animate-pulse" />
             ))}
           </div>

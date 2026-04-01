@@ -14,7 +14,7 @@ export function zValidator<T extends z.ZodTypeAny, Target extends keyof Validati
   target: Target,
   schema: T,
 ) {
-  return validator(target, (value, c) => {
+  return validator(target, (value, _c) => {
     const result = schema.safeParse(value);
     if (!result.success) {
       throw new ValidationError('Validation error');

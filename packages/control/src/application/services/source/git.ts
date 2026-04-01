@@ -1,8 +1,8 @@
-import type { D1Database, R2Bucket } from '../../../shared/types/bindings.ts';
-import { generateId } from '../../../shared/utils/index.ts';
-import { getDb, files, gitCommits, gitFileChanges } from '../../../infra/db/index.ts';
-import { eq, and, ne, desc } from 'drizzle-orm';
-import { textDate } from '../../../shared/utils/db-guards.ts';
+import type { D1Database, R2Bucket } from "../../../shared/types/bindings.ts";
+import { files, gitCommits, gitFileChanges } from "../../../infra/db/index.ts";
+import { and, desc, eq, ne } from "drizzle-orm";
+import { textDate } from "../../../shared/utils/db-guards.ts";
+import { sourceServiceDeps } from "./deps.ts";
 
 // Types
 export interface GitCommit {
@@ -24,7 +24,7 @@ export interface GitFileChange {
   commit_id: string;
   file_id: string;
   path: string;
-  change_type: 'added' | 'modified' | 'deleted' | 'renamed';
+  change_type: "added" | "modified" | "deleted" | "renamed";
   old_path: string | null;
   old_hash: string | null;
   new_hash: string | null;
@@ -34,7 +34,7 @@ export interface GitFileChange {
 
 export interface FileDiff {
   path: string;
-  changeType: 'added' | 'modified' | 'deleted' | 'renamed';
+  changeType: "added" | "modified" | "deleted" | "renamed";
   oldContent?: string;
   newContent?: string;
   hunks: DiffHunk[];
@@ -49,7 +49,7 @@ export interface DiffHunk {
 }
 
 export interface DiffLine {
-  type: 'context' | 'add' | 'delete';
+  type: "context" | "add" | "delete";
   content: string;
   oldLineNumber?: number;
   newLineNumber?: number;
@@ -69,9 +69,9 @@ export class GitService {
     message: string,
     authorId: string,
     authorName: string,
-    paths?: string[] // Optional: specific paths to commit
+    paths?: string[], // Optional: specific paths to commit
   ): Promise<GitCommit> {
-    const db = getDb(this.d1);
+    const db = sourceServiceDeps.getDb(this.d1);
     const timestamp = new Date().toISOString();
 
     const parentCommit = await db
@@ -85,15 +85,15 @@ export class GitService {
     const allFiles = await db
       .select()
       .from(files)
-      .where(and(eq(files.accountId, spaceId), ne(files.origin, 'system')))
+      .where(and(eq(files.accountId, spaceId), ne(files.origin, "system")))
       .all();
 
     const filteredFiles = paths
-      ? allFiles.filter(f => paths.some(p => f.path.startsWith(p)))
+      ? allFiles.filter((f) => paths.some((p) => f.path.startsWith(p)))
       : allFiles;
 
     const treeHash = await this.calculateTreeHash(filteredFiles);
-    const commitId = generateId();
+    const commitId = sourceServiceDeps.generateId();
 
     await db.insert(gitCommits).values({
       id: commitId,
@@ -115,34 +115,34 @@ export class GitService {
     for (const file of filteredFiles) {
       const previousChange = parentCommit
         ? await db
-            .select({ newHash: gitFileChanges.newHash })
-            .from(gitFileChanges)
-            .where(
-              and(
-                eq(gitFileChanges.commitId, parentCommit.id),
-                eq(gitFileChanges.path, file.path),
-              ),
-            )
-            .get() ?? null
+          .select({ newHash: gitFileChanges.newHash })
+          .from(gitFileChanges)
+          .where(
+            and(
+              eq(gitFileChanges.commitId, parentCommit.id),
+              eq(gitFileChanges.path, file.path),
+            ),
+          )
+          .get() ?? null
         : null;
 
       const changeType = previousChange
-        ? (file.sha256 !== previousChange.newHash ? 'modified' : null)
-        : 'added';
+        ? (file.sha256 !== previousChange.newHash ? "modified" : null)
+        : "added";
 
       if (changeType) {
         const { insertions, deletions } = await this.calculateDiffStats(
           spaceId,
           file.id,
           previousChange?.newHash ?? null,
-          file.sha256
+          file.sha256,
         );
 
         totalInsertions += insertions;
         totalDeletions += deletions;
 
         await db.insert(gitFileChanges).values({
-          id: generateId(),
+          id: sourceServiceDeps.generateId(),
           commitId,
           fileId: file.id,
           path: file.path,
@@ -163,22 +163,24 @@ export class GitService {
         .where(
           and(
             eq(gitFileChanges.commitId, parentCommit.id),
-            ne(gitFileChanges.changeType, 'deleted'),
+            ne(gitFileChanges.changeType, "deleted"),
           ),
         )
         .all();
 
-      const currentPaths = new Set(filteredFiles.map(f => f.path));
+      const currentPaths = new Set(filteredFiles.map((f) => f.path));
 
-      const deletedFiles = parentFiles.filter(pf => !currentPaths.has(pf.path));
+      const deletedFiles = parentFiles.filter((pf) =>
+        !currentPaths.has(pf.path)
+      );
       if (deletedFiles.length > 0) {
         await db.insert(gitFileChanges).values(
           deletedFiles.map((pf) => ({
-            id: generateId(),
+            id: sourceServiceDeps.generateId(),
             commitId,
             fileId: null,
             path: pf.path,
-            changeType: 'deleted' as const,
+            changeType: "deleted" as const,
             oldPath: pf.path,
             oldHash: pf.newHash,
             newHash: null,
@@ -216,9 +218,9 @@ export class GitService {
       limit?: number;
       offset?: number;
       path?: string;
-    } = {}
+    } = {},
   ): Promise<GitCommit[]> {
-    const db = getDb(this.d1);
+    const db = sourceServiceDeps.getDb(this.d1);
     const { limit = 50, offset = 0, path } = options;
 
     if (path) {
@@ -228,7 +230,7 @@ export class GitService {
         .from(gitFileChanges)
         .where(eq(gitFileChanges.path, path))
         .all();
-      const commitIds = [...new Set(matchingChanges.map(c => c.commitId))];
+      const commitIds = [...new Set(matchingChanges.map((c) => c.commitId))];
 
       if (commitIds.length === 0) return [];
 
@@ -240,8 +242,10 @@ export class GitService {
         .all();
 
       const commitIdSet = new Set(commitIds);
-      const filtered = allCommits.filter(c => commitIdSet.has(c.id));
-      return filtered.slice(offset, offset + limit).map(c => this.toGitCommit(c));
+      const filtered = allCommits.filter((c) => commitIdSet.has(c.id));
+      return filtered.slice(offset, offset + limit).map((c) =>
+        this.toGitCommit(c)
+      );
     }
 
     const commits = await db
@@ -253,11 +257,11 @@ export class GitService {
       .offset(offset)
       .all();
 
-    return commits.map(c => this.toGitCommit(c));
+    return commits.map((c) => this.toGitCommit(c));
   }
 
   async getCommit(commitId: string): Promise<GitCommit | null> {
-    const db = getDb(this.d1);
+    const db = sourceServiceDeps.getDb(this.d1);
     const commit = await db
       .select()
       .from(gitCommits)
@@ -267,21 +271,21 @@ export class GitService {
   }
 
   async getCommitChanges(commitId: string): Promise<GitFileChange[]> {
-    const db = getDb(this.d1);
+    const db = sourceServiceDeps.getDb(this.d1);
     const changes = await db
       .select()
       .from(gitFileChanges)
       .where(eq(gitFileChanges.commitId, commitId))
       .all();
-    return changes.map(c => this.toGitFileChange(c));
+    return changes.map((c) => this.toGitFileChange(c));
   }
 
   async diff(
     spaceId: string,
     _fromCommitId: string | null,
-    toCommitId: string
+    toCommitId: string,
   ): Promise<FileDiff[]> {
-    const db = getDb(this.d1);
+    const db = sourceServiceDeps.getDb(this.d1);
     const diffs: FileDiff[] = [];
     const changes = await this.getCommitChanges(toCommitId);
 
@@ -292,7 +296,7 @@ export class GitService {
         hunks: [],
       };
 
-      if (change.change_type !== 'deleted' && change.new_hash) {
+      if (change.change_type !== "deleted" && change.new_hash) {
         const file = await db
           .select({ id: files.id })
           .from(files)
@@ -308,7 +312,7 @@ export class GitService {
         }
       }
 
-      if (change.change_type !== 'added' && change.old_hash) {
+      if (change.change_type !== "added" && change.old_hash) {
         const snapshotKey = `git/${spaceId}/snapshots/${change.old_hash}`;
         const obj = await this.storage.get(snapshotKey);
         if (obj) {
@@ -317,7 +321,10 @@ export class GitService {
       }
 
       if (diff.oldContent || diff.newContent) {
-        diff.hunks = this.generateDiffHunks(diff.oldContent || '', diff.newContent || '');
+        diff.hunks = this.generateDiffHunks(
+          diff.oldContent || "",
+          diff.newContent || "",
+        );
       }
 
       diffs.push(diff);
@@ -329,29 +336,37 @@ export class GitService {
   async restore(
     spaceId: string,
     commitId: string,
-    path: string
+    path: string,
   ): Promise<{ success: boolean; message: string }> {
-    const db = getDb(this.d1);
+    const db = sourceServiceDeps.getDb(this.d1);
 
     const change = await db
       .select()
       .from(gitFileChanges)
-      .where(and(eq(gitFileChanges.commitId, commitId), eq(gitFileChanges.path, path)))
+      .where(
+        and(
+          eq(gitFileChanges.commitId, commitId),
+          eq(gitFileChanges.path, path),
+        ),
+      )
       .get();
 
     if (!change) {
-      return { success: false, message: 'File not found in commit' };
+      return { success: false, message: "File not found in commit" };
     }
 
-    if (change.changeType === 'deleted') {
-      return { success: false, message: 'Cannot restore deleted file from this commit' };
+    if (change.changeType === "deleted") {
+      return {
+        success: false,
+        message: "Cannot restore deleted file from this commit",
+      };
     }
 
     const snapshotKey = `git/${spaceId}/snapshots/${change.newHash}`;
     const snapshot = await this.storage.get(snapshotKey);
 
     if (!snapshot) {
-      return { success: false, message: 'Snapshot not found' };
+      return { success: false, message: "Snapshot not found" };
     }
 
     const file = await db
@@ -361,7 +376,7 @@ export class GitService {
       .get();
 
     if (!file) {
-      return { success: false, message: 'Current file not found' };
+      return { success: false, message: "Current file not found" };
     }
 
     const r2Key = `spaces/${spaceId}/files/${file.id}`;
@@ -375,7 +390,7 @@ export class GitService {
       })
       .where(eq(files.id, file.id));
 
-    return { success: true, message: 'File restored successfully' };
+    return { success: true, message: "File restored successfully" };
   }
 
   private toGitCommit(commit: {
@@ -421,9 +436,9 @@ export class GitService {
     return {
       id: change.id,
       commit_id: change.commitId,
-      file_id: change.fileId || '',
+      file_id: change.fileId || "",
       path: change.path,
-      change_type: change.changeType as GitFileChange['change_type'],
+      change_type: change.changeType as GitFileChange["change_type"],
       old_path: change.oldPath,
       old_hash: change.oldHash,
       new_hash: change.newHash,
@@ -432,27 +447,35 @@ export class GitService {
     };
   }
 
-  private async calculateTreeHash(fileRows: { path: string; sha256: string | null }[]): Promise<string> {
+  private async calculateTreeHash(
+    fileRows: { path: string; sha256: string | null }[],
+  ): Promise<string> {
     const hashes = fileRows
       .sort((a, b) => a.path.localeCompare(b.path))
-      .map(f => `${f.path}:${f.sha256 || 'null'}`)
-      .join('\n');
+      .map((f) => `${f.path}:${f.sha256 || "null"}`)
+      .join("\n");
 
     const encoder = new TextEncoder();
     const data = encoder.encode(hashes);
-    const hashBuffer = await crypto.subtle.digest('SHA-256', data.slice().buffer as ArrayBuffer);
+    const hashBuffer = await crypto.subtle.digest(
+      "SHA-256",
+      data.slice().buffer as ArrayBuffer,
+    );
     const hashArray = Array.from(new Uint8Array(hashBuffer));
-    return hashArray.map(b => b.toString(16).padStart(2, '0')).join('').slice(0, 40);
+    return hashArray.map((b) => b.toString(16).padStart(2, "0")).join("").slice(
+      0,
+      40,
+    );
   }
 
   private async calculateDiffStats(
     spaceId: string,
     fileId: string,
     oldHash: string | null,
-    newHash: string | null
+    newHash: string | null,
   ): Promise<{ insertions: number; deletions: number }> {
-    let oldContent = '';
-    let newContent = '';
+    let oldContent = "";
+    let newContent = "";
 
     if (oldHash) {
       const snapshotKey = `git/${spaceId}/snapshots/${oldHash}`;
@@ -476,8 +499,8 @@ export class GitService {
       }
     }
 
-    const oldLines = oldContent.split('\n');
-    const newLines = newContent.split('\n');
+    const oldLines = oldContent.split("\n");
+    const newLines = newContent.split("\n");
 
     const insertions = Math.max(0, newLines.length - oldLines.length);
     const deletions = Math.max(0, oldLines.length - newLines.length);
@@ -485,9 +508,12 @@ export class GitService {
     return { insertions, deletions };
   }
 
-  private generateDiffHunks(oldContent: string, newContent: string): DiffHunk[] {
-    const oldLines = oldContent.split('\n');
-    const newLines = newContent.split('\n');
+  private generateDiffHunks(
+    oldContent: string,
+    newContent: string,
+  ): DiffHunk[] {
+    const oldLines = oldContent.split("\n");
+    const newLines = newContent.split("\n");
 
     const hunks: DiffHunk[] = [];
     const lines: DiffLine[] = [];
@@ -501,21 +527,21 @@ export class GitService {
 
       if (oldIdx >= oldLines.length) {
         lines.push({
-          type: 'add',
+          type: "add",
           content: newLine,
           newLineNumber: newIdx + 1,
         });
         newIdx++;
       } else if (newIdx >= newLines.length) {
         lines.push({
-          type: 'delete',
+          type: "delete",
           content: oldLine,
           oldLineNumber: oldIdx + 1,
         });
         oldIdx++;
       } else if (oldLine === newLine) {
         lines.push({
-          type: 'context',
+          type: "context",
           content: oldLine,
           oldLineNumber: oldIdx + 1,
           newLineNumber: newIdx + 1,
@@ -524,12 +550,12 @@ export class GitService {
         newIdx++;
       } else {
         lines.push({
-          type: 'delete',
+          type: "delete",
           content: oldLine,
           oldLineNumber: oldIdx + 1,
         });
         lines.push({
-          type: 'add',
+          type: "add",
           content: newLine,
           newLineNumber: newIdx + 1,
         });

@@ -1,4 +1,4 @@
-import { createSignal, createEffect, onMount, onCleanup } from 'solid-js';
+import { createSignal, createEffect } from 'solid-js';
 import { Icons } from '../../lib/Icons.tsx';
 import { useI18n } from '../../store/i18n.ts';
 import { useCustomTools } from '../../hooks/useCustomTools.ts';
@@ -15,9 +15,9 @@ interface CustomToolsSectionProps {
 }
 
 export function CustomToolsSection({
-  spaces,
+  spaces: _spaces,
   selectedSpaceId,
-  setSelectedSpaceId,
+  setSelectedSpaceId: _setSelectedSpaceId,
 }: CustomToolsSectionProps) {
   const { t } = useI18n();
   const spaceId = selectedSpaceId || '';
@@ -117,7 +117,7 @@ export function CustomToolsSection({
         ) : (
           <div class="space-y-4">
             <div class="flex justify-end">
-              <button
+              <button type="button"
                 class="inline-flex items-center gap-2 px-4 py-2 bg-zinc-900 dark:bg-zinc-100 hover:bg-zinc-800 dark:hover:bg-zinc-200 text-white dark:text-zinc-900 rounded-xl text-sm font-medium transition-colors"
                 onClick={() => setShowCreateModal(true)}
               >

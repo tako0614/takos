@@ -1,4 +1,4 @@
-import { eq, and, sql } from 'drizzle-orm';
+import { eq, and } from 'drizzle-orm';
 import type { Env } from '../../../shared/types/index.ts';
 import { generateId } from '../../../shared/utils/index.ts';
 import type { D1TransactionManager } from '../../../shared/utils/db-transaction.ts';
@@ -8,7 +8,6 @@ import {
   listServiceLinks,
   listSpaceCommonEnvNames,
   type LinkSource,
-  type ServiceLinkRow,
   type SyncState,
 } from './repository.ts';
 import {

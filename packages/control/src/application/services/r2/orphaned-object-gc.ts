@@ -29,6 +29,12 @@ export interface R2OrphanedObjectGcSummary {
 const STATE_KEY = 'ops/job-state/r2-orphaned-object-gc.json';
 const AUDIT_PREFIX = 'ops/r2-orphaned-object-gc';
 
+export const r2OrphanedObjectGcDeps = {
+  getDb,
+  readJson,
+  writeJson,
+};
+
 function stableIsoNoMillis(date: Date): string {
   return date.toISOString().replace(/\.\d{3}Z$/, 'Z');
 }
@@ -134,10 +140,13 @@ export async function runR2OrphanedObjectGcBatch(
   const startedAt = stableIsoNoMillis(new Date());
   const cutoffMs = Date.now() - minAgeMinutes * 60_000;
 
-  const prior = await readJson<CursorState>(offload, STATE_KEY);
+  const prior = await r2OrphanedObjectGcDeps.readJson<CursorState>(
+    offload,
+    STATE_KEY,
+  );
   const cursors = prior?.version === 1 && prior.cursors ? { ...prior.cursors } : {};
 
-  const db = getDb(env.DB);
+  const db = r2OrphanedObjectGcDeps.getDb(env.DB);
 
   const summary: R2OrphanedObjectGcSummary = {
     skipped: false,

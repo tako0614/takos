@@ -1,5 +1,5 @@
 import type { D1Database } from '../../../shared/types/bindings.ts';
-import { getDb, shortcuts as shortcutsTable, services as servicesTable, resources as resourcesTable } from '../../../infra/db/index.ts';
+import { getDb as realGetDb, shortcuts as shortcutsTable, services as servicesTable, resources as resourcesTable } from '../../../infra/db/index.ts';
 import { eq, and, asc, inArray } from 'drizzle-orm';
 import { textDate } from '../../../shared/utils/db-guards.ts';
 
@@ -43,21 +43,32 @@ export function generateShortcutId(): string {
   return Array.from(bytes).map(b => b.toString(36)).join('');
 }
 
+export const shortcutDeps = {
+  getDb: realGetDb,
+  generateShortcutId,
+};
+
 export function isShortcutResourceType(value: string): value is ShortcutResourceType {
   return ALLOWED_SHORTCUT_RESOURCE_TYPES.includes(value as ShortcutResourceType);
 }
 
 function toApiShortcut(s: {
-  id: string;
-  userAccountId: string;
-  accountId: string;
-  resourceType: string;
-  resourceId: string;
-  name: string;
-  icon: string | null;
-  position: number;
-  createdAt: string | Date;
-  updatedAt: string | Date;
+  id?: string;
+  userAccountId?: string;
+  user_account_id?: string;
+  accountId?: string;
+  account_id?: string;
+  resourceType?: string;
+  resource_type?: string;
+  resourceId?: string;
+  resource_id?: string;
+  name?: string;
+  icon?: string | null;
+  position?: number;
+  createdAt?: string | Date;
+  created_at?: string | Date;
+  updatedAt?: string | Date;
+  updated_at?: string | Date;
 }, extra?: {
   serviceHostname?: string | null;
   serviceStatus?: string | null;
@@ -65,16 +76,16 @@ function toApiShortcut(s: {
   resourceTypeName?: string | null;
 }): ShortcutResponse {
   return {
-    id: s.id,
-    user_id: s.userAccountId,
-    space_id: s.accountId,
-    resource_type: s.resourceType,
-    resource_id: s.resourceId,
-    name: s.name,
-    icon: s.icon,
-    position: s.position,
-    created_at: textDate(s.createdAt),
-    updated_at: textDate(s.updatedAt),
+    id: s.id ?? '',
+    user_id: s.userAccountId ?? s.user_account_id ?? '',
+    space_id: s.accountId ?? s.account_id ?? '',
+    resource_type: s.resourceType ?? s.resource_type ?? '',
+    resource_id: s.resourceId ?? s.resource_id ?? '',
+    name: s.name ?? '',
+    icon: s.icon ?? null,
+    position: s.position ?? 0,
+    created_at: textDate(s.createdAt ?? s.created_at ?? ''),
+    updated_at: textDate(s.updatedAt ?? s.updated_at ?? ''),
     service_hostname: extra?.serviceHostname,
     service_status: extra?.serviceStatus,
     resource_name: extra?.resourceName,
@@ -83,7 +94,7 @@ function toApiShortcut(s: {
 }
 
 export async function listShortcuts(db: D1Database, userId: string, spaceId: string): Promise<ShortcutResponse[]> {
-  const drizzle = getDb(db);
+  const drizzle = shortcutDeps.getDb(db);
 
   const rows = await drizzle.select().from(shortcutsTable).where(and(eq(shortcutsTable.userAccountId, userId), eq(shortcutsTable.accountId, spaceId))).orderBy(asc(shortcutsTable.position), asc(shortcutsTable.createdAt)).all();
 
@@ -152,11 +163,11 @@ export async function createShortcut(
     throw new Error(`Invalid shortcut resource type: ${input.resourceType}`);
   }
 
-  const drizzle = getDb(db);
-  const id = generateShortcutId();
+  const drizzle = shortcutDeps.getDb(db);
+  const id = shortcutDeps.generateShortcutId();
   const timestamp = new Date().toISOString();
 
-  const shortcut = await drizzle.insert(shortcutsTable).values({
+  await drizzle.insert(shortcutsTable).values({
     id,
     userAccountId: userId,
     accountId: spaceId,
@@ -168,8 +179,12 @@ export async function createShortcut(
     createdAt: timestamp,
     updatedAt: timestamp,
   }).returning().get();
+  const created = await drizzle.select().from(shortcutsTable).where(eq(shortcutsTable.id, id)).get();
+  if (!created) {
+    throw new Error('Failed to create shortcut');
+  }
 
-  return toApiShortcut(shortcut);
+  return toApiShortcut(created);
 }
 
 export async function updateShortcut(
@@ -179,7 +194,7 @@ export async function updateShortcut(
   id: string,
   updates: ShortcutUpdateInput
 ): Promise<boolean> {
-  const drizzle = getDb(db);
+  const drizzle = shortcutDeps.getDb(db);
 
   const data: {
     name?: string;
@@ -210,7 +225,7 @@ export async function updateShortcut(
 }
 
 export async function deleteShortcut(db: D1Database, userId: string, spaceId: string, id: string): Promise<void> {
-  const drizzle = getDb(db);
+  const drizzle = shortcutDeps.getDb(db);
 
   await drizzle.delete(shortcutsTable).where(and(eq(shortcutsTable.id, id), eq(shortcutsTable.userAccountId, userId), eq(shortcutsTable.accountId, spaceId)));
 }

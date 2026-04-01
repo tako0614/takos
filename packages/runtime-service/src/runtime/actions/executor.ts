@@ -49,6 +49,14 @@ export interface ActionContext {
 const ACTION_SCRIPT_PATH_PATTERN = /^[A-Za-z0-9._/-]+$/;
 type NodeActionPhase = 'pre' | 'main' | 'post';
 
+function hasControlCharacters(value: string): boolean {
+  for (let i = 0; i < value.length; i++) {
+    const code = value.charCodeAt(i);
+    if (code <= 31 || code === 127) return true;
+  }
+  return false;
+}
+
 // ---------------------------------------------------------------------------
 // StepExecutor
 // ---------------------------------------------------------------------------
@@ -295,7 +303,7 @@ export class StepExecutor {
   private async executeActionFromPath(
     actionDir: string,
     inputs: Record<string, unknown>,
-    context: ActionContext,
+    _context: ActionContext,
     timeout: number,
     actionRef?: ActionRefInfo
   ): Promise<ExecutorStepResult> {
@@ -449,8 +457,7 @@ export class StepExecutor {
   private static readonly SCRIPT_PATH_VALIDATORS: Array<[(p: string) => boolean, string]> = [
     [(p) => typeof p !== 'string' || p.length === 0, 'path is required'],
     [(p) => p.trim() !== p, 'path must not include leading/trailing whitespace'],
-    // eslint-disable-next-line no-control-regex
-    [(p) => /[\x00-\x1f\x7f]/.test(p), 'path contains control characters'],
+    [(p) => hasControlCharacters(p), 'path contains control characters'],
     [(p) => /["'`]/.test(p), 'path contains disallowed quote characters'],
     [(p) => p.includes('\\'), 'path must use "/" separators'],
     [(p) => path.isAbsolute(p) || /^[A-Za-z]:/.test(p), 'path must be relative'],

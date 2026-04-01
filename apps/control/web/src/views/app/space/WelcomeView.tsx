@@ -1,4 +1,4 @@
-import { createEffect, onMount, onCleanup, createMemo, createSignal } from 'solid-js';
+import { onCleanup, createMemo, createSignal } from 'solid-js';
 import { useI18n, type TranslationKey } from '../../../store/i18n.ts';
 import { Icons } from '../../../lib/Icons.tsx';
 import { useFileAttachment } from '../../../hooks/useFileAttachment.ts';

@@ -137,7 +137,7 @@ import { assertEquals, assertThrows } from 'jsr:@std/assert';
     assertEquals(result.auditDetails.mode, 'http-url');
 })
   Deno.test('deployment routing - rejects canary routing for http-url targets', () => {
-  assertThrows(() => { () => buildRoutingTarget({
+  assertThrows(() => buildRoutingTarget({
       deploymentId: 'dep-oci',
       deploymentVersion: 2,
       deployArtifactRef: 'artifact-oci',
@@ -162,5 +162,5 @@ import { assertEquals, assertThrows } from 'jsr:@std/assert';
         }),
         routingStatus: 'active',
       },
-    }, ['tenant.example.test']); }, 'http-url deployment targets do not support canary routing');
+    }, ['tenant.example.test']), Error, 'http-url deployment targets do not support canary routing');
 })

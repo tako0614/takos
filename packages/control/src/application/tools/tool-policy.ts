@@ -1,5 +1,4 @@
 import type { SpaceRole } from '../../shared/types/index.ts';
-import type { ToolDefinition } from './tool-definitions.ts';
 import type {
   SensitiveReadPolicy,
   ToolClass,

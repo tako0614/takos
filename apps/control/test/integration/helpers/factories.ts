@@ -24,7 +24,7 @@ import type {
   Service,
   ServiceStatus,
   ServiceType,
-  Session,
+  Session as _Session,
   Space,
   SpaceMembership,
   SpaceRole,
@@ -495,8 +495,10 @@ export function createResource(options: ResourceFactoryOptions = {}): Resource {
     name: options.name || `test-resource-${idCounter}`,
     type: options.type || "d1",
     status: options.status || "active",
-    cf_id: options.cf_id !== undefined ? options.cf_id : null,
-    cf_name: options.cf_name !== undefined ? options.cf_name : null,
+    provider_resource_id: options.cf_id !== undefined ? options.cf_id : null,
+    provider_resource_name: options.cf_name !== undefined
+      ? options.cf_name
+      : null,
     config: options.config || "{}",
     metadata: options.metadata || "{}",
     size_bytes: options.size_bytes || 0,

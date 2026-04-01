@@ -25,7 +25,7 @@ export function SettingsModal({
           <h3 class="text-lg font-semibold text-zinc-900 dark:text-zinc-100">
             {t('accountSettings')}
           </h3>
-          <button
+          <button type="button"
             class="p-2 text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-800 rounded-lg transition-colors"
             onClick={onClose}
           >

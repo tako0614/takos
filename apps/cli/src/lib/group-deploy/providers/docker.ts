@@ -10,63 +10,99 @@
  *
  * Requires: docker CLI available.
  */
-import type { ResourceProvider, ProvisionResult } from '../resource-provider.ts';
-import { isAlreadyExistsError } from '../resource-provider.ts';
-import { execCommand } from '../cloudflare-utils.ts';
+import type {
+  ProvisionResult,
+  ResourceProvider,
+} from "../resource-provider.ts";
+import { isAlreadyExistsError } from "../resource-provider.ts";
+import { execCommand } from "../cloudflare-utils.ts";
 
 const DOCKER_ALREADY_EXISTS_PATTERNS = [
-  'already exists',
-  'duplicate key',
+  "already exists",
+  "duplicate key",
 ];
 
 export class DockerProvider implements ResourceProvider {
-  readonly name = 'docker';
+  readonly name = "docker";
 
   private readonly composeProject: string;
 
   constructor(opts?: { composeProject?: string }) {
-    this.composeProject = opts?.composeProject || Deno.env.get('COMPOSE_PROJECT_NAME') || 'takos';
+    this.composeProject = opts?.composeProject ||
+      Deno.env.get("COMPOSE_PROJECT_NAME") || "takos";
   }
 
   /** Run a docker exec command against a running container. */
   private async dockerExec(
     service: string,
     command: string[],
-    resourceName: string,
-    type: string,
+    _resourceName: string,
+    _type: string,
   ): Promise<{ ok: boolean; stdout: string; error?: string }> {
     try {
       const { stdout, stderr, exitCode } = await execCommand(
-        'docker', ['compose', '-p', this.composeProject, 'exec', '-T', service, ...command],
+        "docker",
+        [
+          "compose",
+          "-p",
+          this.composeProject,
+          "exec",
+          "-T",
+          service,
+          ...command,
+        ],
       );
       if (exitCode !== 0) {
-        if (isAlreadyExistsError(DOCKER_ALREADY_EXISTS_PATTERNS, stderr, stdout)) {
-          return { ok: true, stdout, error: 'already exists' };
+        if (String(exitCode) === "ENOENT") {
+          return {
+            ok: false,
+            stdout,
+            error: `docker CLI not available: ${stderr || "command not found"}`,
+          };
         }
-        return { ok: false, stdout, error: stderr || `docker exec exited with code ${exitCode}` };
+        if (
+          isAlreadyExistsError(DOCKER_ALREADY_EXISTS_PATTERNS, stderr, stdout)
+        ) {
+          return { ok: true, stdout, error: "already exists" };
+        }
+        return {
+          ok: false,
+          stdout,
+          error: stderr || `docker exec exited with code ${exitCode}`,
+        };
       }
       return { ok: true, stdout };
     } catch (error) {
-      return { ok: false, stdout: '', error: `docker CLI not available: ${error instanceof Error ? error.message : String(error)}` };
+      return {
+        ok: false,
+        stdout: "",
+        error: `docker CLI not available: ${
+          error instanceof Error ? error.message : String(error)
+        }`,
+      };
     }
   }
 
   // ── PostgreSQL database ──────────────────────────────────────────────────
 
-  async createDatabase(name: string, _opts?: { migrations?: string }): Promise<ProvisionResult> {
-    const dbName = name.replace(/-/g, '_').replace(/[^a-zA-Z0-9_]/g, '');
+  async createDatabase(
+    name: string,
+    _opts?: { migrations?: string },
+  ): Promise<ProvisionResult> {
+    const dbName = name.replace(/-/g, "_").replace(/[^a-zA-Z0-9_]/g, "");
     const result = await this.dockerExec(
-      'postgres',
-      ['psql', '-U', 'postgres', '-c', `CREATE DATABASE "${dbName}";`],
-      name, 'database',
+      "postgres",
+      ["psql", "-U", "postgres", "-c", `CREATE DATABASE "${dbName}";`],
+      name,
+      "database",
     );
     if (!result.ok) {
-      return { name, type: 'database', status: 'failed', error: result.error };
+      return { name, type: "database", status: "failed", error: result.error };
     }
-    if (result.error === 'already exists') {
-      return { name, type: 'database', status: 'exists', id: dbName };
+    if (result.error === "already exists") {
+      return { name, type: "database", status: "exists", id: dbName };
     }
-    return { name, type: 'database', status: 'provisioned', id: dbName };
+    return { name, type: "database", status: "provisioned", id: dbName };
   }
 
   // ── MinIO bucket ─────────────────────────────────────────────────────────
@@ -74,18 +110,29 @@ export class DockerProvider implements ResourceProvider {
   async createObjectStorage(name: string): Promise<ProvisionResult> {
     const bucketName = name;
     const result = await this.dockerExec(
-      'minio',
-      ['mc', 'mb', `local/${bucketName}`, '--ignore-existing'],
-      name, 'object-storage',
+      "minio",
+      ["mc", "mb", `local/${bucketName}`, "--ignore-existing"],
+      name,
+      "object-storage",
     );
     if (!result.ok) {
       // Fallback: try using the MinIO client directly if mc alias isn't set up
-      return { name, type: 'object-storage', status: 'failed', error: result.error };
+      return {
+        name,
+        type: "object-storage",
+        status: "failed",
+        error: result.error,
+      };
     }
-    if (result.error === 'already exists') {
-      return { name, type: 'object-storage', status: 'exists', id: bucketName };
+    if (result.error === "already exists") {
+      return { name, type: "object-storage", status: "exists", id: bucketName };
     }
-    return { name, type: 'object-storage', status: 'provisioned', id: bucketName };
+    return {
+      name,
+      type: "object-storage",
+      status: "provisioned",
+      id: bucketName,
+    };
   }
 
   // ── Redis key-value ──────────────────────────────────────────────────────
@@ -94,50 +141,68 @@ export class DockerProvider implements ResourceProvider {
     // Redis doesn't need explicit "database" creation; selecting a DB index
     // or using key prefixes is sufficient. We verify connectivity instead.
     const result = await this.dockerExec(
-      'redis',
-      ['redis-cli', 'ping'],
-      name, 'kv',
+      "redis",
+      ["redis-cli", "ping"],
+      name,
+      "kv",
     );
     if (!result.ok) {
-      return { name, type: 'kv', status: 'failed', error: result.error };
+      return { name, type: "kv", status: "failed", error: result.error };
     }
-    return { name, type: 'kv', status: 'provisioned', id: name };
+    return { name, type: "kv", status: "provisioned", id: name };
   }
 
   // ── Redis-based queue ────────────────────────────────────────────────────
 
-  async createQueue(name: string, _opts?: { maxRetries?: number; deadLetterQueue?: string }): Promise<ProvisionResult> {
+  async createQueue(
+    name: string,
+    _opts?: { maxRetries?: number; deadLetterQueue?: string },
+  ): Promise<ProvisionResult> {
     // Queue backed by Redis -- verify the Redis service is reachable
     const result = await this.dockerExec(
-      'redis',
-      ['redis-cli', 'ping'],
-      name, 'queue',
+      "redis",
+      ["redis-cli", "ping"],
+      name,
+      "queue",
     );
     if (!result.ok) {
-      return { name, type: 'queue', status: 'failed', error: result.error };
+      return { name, type: "queue", status: "failed", error: result.error };
     }
-    return { name, type: 'queue', status: 'provisioned', id: name };
+    return { name, type: "queue", status: "provisioned", id: name };
   }
 
   // ── Vector index -- not supported in Docker mode ─────────────────────────
 
-  async createVectorIndex(name: string, _opts: { dimensions: number; metric: string }): Promise<ProvisionResult> {
-    return { name, type: 'vectorize', status: 'skipped', error: 'Vector index provisioning is not supported on Docker provider' };
+  async createVectorIndex(
+    name: string,
+    _opts: { dimensions: number; metric: string },
+  ): Promise<ProvisionResult> {
+    return {
+      name,
+      type: "vectorize",
+      status: "skipped",
+      error: "Vector index provisioning is not supported on Docker provider",
+    };
   }
 
   // ── Secret (local .env style) ────────────────────────────────────────────
 
   async createSecret(name: string, _binding: string): Promise<ProvisionResult> {
-    const { randomBytes } = await import('node:crypto');
-    const secretValue = randomBytes(32).toString('hex');
+    const { randomBytes } = await import("node:crypto");
+    const secretValue = randomBytes(32).toString("hex");
     // In Docker/local mode, secrets are generated but stored in-memory only.
     // The caller should persist them to a .env file or secrets manager.
-    return { name, type: 'secretRef', status: 'provisioned', id: secretValue };
+    return { name, type: "secretRef", status: "provisioned", id: secretValue };
   }
 
   // ── Auto-configured ──────────────────────────────────────────────────────
 
   skipAutoConfigured(name: string, type: string): ProvisionResult {
-    return { name, type, status: 'skipped', error: `${type} is auto-configured at deploy time` };
+    return {
+      name,
+      type,
+      status: "skipped",
+      error: `${type} is auto-configured at deploy time`,
+    };
   }
 }

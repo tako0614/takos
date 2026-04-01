@@ -18,7 +18,6 @@ import {
 } from "jsr:@std/assert";
 
 function makeContext(overrides: Partial<ToolContext> = {}): ToolContext {
-  const mockFetch = ((..._args: any[]) => undefined) as any;
   return {
     spaceId: "ws-test",
     threadId: "thread-1",
@@ -26,7 +25,10 @@ function makeContext(overrides: Partial<ToolContext> = {}): ToolContext {
     userId: "user-1",
     capabilities: ["egress.http"],
     env: {
-      TAKOS_EGRESS: { fetch: mockFetch },
+      TAKOS_EGRESS: {
+        fetch: (...args: Parameters<typeof mockEgressFetch>) =>
+          mockEgressFetch(...args),
+      },
     } as unknown as Env,
     db: {} as D1Database,
     setSessionId: ((..._args: any[]) => undefined) as any,
@@ -36,12 +38,12 @@ function makeContext(overrides: Partial<ToolContext> = {}): ToolContext {
   };
 }
 
-function getEgressMock(ctx: ToolContext): any {
-  return (ctx.env as unknown as { TAKOS_EGRESS: { fetch: any } }).TAKOS_EGRESS
-    .fetch;
-}
+let mockEgressFetch: (
+  input: RequestInfo | URL,
+  init?: RequestInit,
+) => Promise<Response> = async () => mockOkResponse("OK", "text/plain");
 
-function makeReadableStream(text: string): ReadableStream<Uint8Array> {
+function _makeReadableStream(text: string): ReadableStream<Uint8Array> {
   const encoded = new TextEncoder().encode(text);
   return new ReadableStream({
     start(controller) {
@@ -348,8 +350,7 @@ Deno.test("web tools - webFetchHandler - fetches and returns JSON content", asyn
       ),
     );
   const ctx = makeContext();
-  let egressMock = getEgressMock(ctx);
-  egressMock =
+  mockEgressFetch =
     (async () => mockOkResponse('{"key": "value"}', "application/json")) as any;
 
   (globalThis as any).fetch = () =>
@@ -392,8 +393,8 @@ Deno.test("web tools - webFetchHandler - fetches and returns plain text content"
       ),
     );
   const ctx = makeContext();
-  let egressMock = getEgressMock(ctx);
-  egressMock = (async () => mockOkResponse("Hello world", "text/plain")) as any;
+  mockEgressFetch =
+    (async () => mockOkResponse("Hello world", "text/plain")) as any;
 
   (globalThis as any).fetch = () =>
     Promise.resolve(
@@ -440,11 +441,10 @@ Deno.test("web tools - webFetchHandler - extracts links from HTML", async () => 
           <a href="#anchor">Anchor</a>
           <a href="javascript:void(0)">JS</a>
         </body></html>
-      `;
+  `;
 
   const ctx = makeContext();
-  let egressMock = getEgressMock(ctx);
-  egressMock = (async () => mockOkResponse(html, "text/html")) as any;
+  mockEgressFetch = (async () => mockOkResponse(html, "text/html")) as any;
 
   (globalThis as any).fetch = () =>
     Promise.resolve(
@@ -489,8 +489,7 @@ Deno.test("web tools - webFetchHandler - handles redirect responses", async () =
       ),
     );
   const ctx = makeContext();
-  let egressMock = getEgressMock(ctx);
-  egressMock = (async () =>
+  mockEgressFetch = (async () =>
     new Response(null, {
       status: 302,
       headers: { location: "https://example.com/new-page" },
@@ -536,8 +535,7 @@ Deno.test("web tools - webFetchHandler - rejects when content-length exceeds lim
       ),
     );
   const ctx = makeContext();
-  let egressMock = getEgressMock(ctx);
-  egressMock = (async () =>
+  mockEgressFetch = (async () =>
     new Response("", {
       status: 200,
       headers: {
@@ -582,8 +580,7 @@ Deno.test("web tools - webFetchHandler - throws on non-ok HTTP responses with de
       ),
     );
   const ctx = makeContext();
-  let egressMock = getEgressMock(ctx);
-  egressMock = (async () =>
+  mockEgressFetch = (async () =>
     new Response("Not Found", {
       status: 404,
       statusText: "Not Found",
@@ -658,11 +655,10 @@ Deno.test("web tools - webFetchHandler - extracts main content from HTML with <m
             <footer>Footer info</footer>
           </body>
         </html>
-      `;
+  `;
 
   const ctx = makeContext();
-  let egressMock = getEgressMock(ctx);
-  egressMock = (async () => mockOkResponse(html, "text/html")) as any;
+  mockEgressFetch = (async () => mockOkResponse(html, "text/html")) as any;
 
   (globalThis as any).fetch = () =>
     Promise.resolve(
@@ -711,11 +707,10 @@ Deno.test("web tools - webFetchHandler - extracts main content from HTML with <a
             <article><h2>Article Title</h2><p>Article body text here.</p></article>
           </body>
         </html>
-      `;
+  `;
 
   const ctx = makeContext();
-  let egressMock = getEgressMock(ctx);
-  egressMock = (async () => mockOkResponse(html, "text/html")) as any;
+  mockEgressFetch = (async () => mockOkResponse(html, "text/html")) as any;
 
   (globalThis as any).fetch = () =>
     Promise.resolve(
@@ -762,11 +757,10 @@ Deno.test("web tools - webFetchHandler - falls back to body when no main/article
             <div><p>Just some body content here.</p></div>
           </body>
         </html>
-      `;
+  `;
 
   const ctx = makeContext();
-  let egressMock = getEgressMock(ctx);
-  egressMock = (async () => mockOkResponse(html, "text/html")) as any;
+  mockEgressFetch = (async () => mockOkResponse(html, "text/html")) as any;
 
   (globalThis as any).fetch = () =>
     Promise.resolve(
@@ -815,11 +809,10 @@ Deno.test('web tools - webFetchHandler - extracts all text from HTML via extract
             <p>Paragraph text.</p>
           </body>
         </html>
-      `;
+  `;
 
   const ctx = makeContext();
-  let egressMock = getEgressMock(ctx);
-  egressMock = (async () => mockOkResponse(html, "text/html")) as any;
+  mockEgressFetch = (async () => mockOkResponse(html, "text/html")) as any;
 
   (globalThis as any).fetch = () =>
     Promise.resolve(
@@ -868,11 +861,10 @@ Deno.test("web tools - webFetchHandler - decodes HTML entities in extracted text
           <p>Tom &amp; Jerry &lt;3 each other. &quot;Hello&quot; said he&#39;s friend.</p>
           <p>Price:&nbsp;$10</p>
         </body></html>
-      `;
+  `;
 
   const ctx = makeContext();
-  let egressMock = getEgressMock(ctx);
-  egressMock = (async () => mockOkResponse(html, "text/html")) as any;
+  mockEgressFetch = (async () => mockOkResponse(html, "text/html")) as any;
 
   (globalThis as any).fetch = () =>
     Promise.resolve(
@@ -1024,8 +1016,7 @@ Deno.test("web tools - webFetchHandler - follows CNAME chain to resolve final IP
   };
 
   const ctx = makeContext();
-  let egressMock = getEgressMock(ctx);
-  egressMock =
+  mockEgressFetch =
     (async () =>
       mockOkResponse("<html><body>OK</body></html>", "text/html")) as any;
 
@@ -1127,7 +1118,7 @@ Deno.test("web tools - webFetchHandler - throws when streaming body exceeds size
       ),
     );
   const ctx = makeContext();
-  let egressMock = getEgressMock(ctx);
+  mockEgressFetch = async () => response;
 
   // Create a response that streams more than MAX_RESPONSE_SIZE (25MB)
   // We create chunks that add up to > 25MB
@@ -1150,8 +1141,6 @@ Deno.test("web tools - webFetchHandler - throws when streaming body exceeds size
     status: 200,
     headers: { "content-type": "text/html" },
   });
-
-  egressMock = (async () => response) as any;
 
   (globalThis as any).fetch = () =>
     Promise.resolve(

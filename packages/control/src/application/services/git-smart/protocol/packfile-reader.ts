@@ -129,7 +129,7 @@ export async function readPackfileAsync(
   if (sig !== 'PACK') throw new Error('Invalid packfile signature');
   offset += 4;
 
-  const version = readUint32BE(data, offset);
+  const _version = readUint32BE(data, offset);
   offset += 4;
 
   const numObjects = readUint32BE(data, offset);
@@ -288,7 +288,7 @@ function inflateSyncWithConsumed(
   const outputChunks: Uint8Array[] = [];
   let totalOutput = 0;
 
-  const inflater = new Inflate((chunk: Uint8Array, final: boolean) => {
+  const inflater = new Inflate((chunk: Uint8Array, _final: boolean) => {
     outputChunks.push(chunk);
     totalOutput += chunk.length;
   });
@@ -337,7 +337,7 @@ function inflateSyncWithConsumed(
 function findCompressedEnd(
   data: Uint8Array,
   startOffset: number,
-  expectedOutput: Uint8Array,
+  _expectedOutput: Uint8Array,
   expectedSize: number,
 ): number {
   const maxLen = data.length - startOffset;

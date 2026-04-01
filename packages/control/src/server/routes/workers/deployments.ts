@@ -45,6 +45,14 @@ type ApiDeploymentSummary = {
   resolved_endpoint?: { kind: string; base_url: string } | null;
 };
 
+export const workersDeploymentsRouteDeps = {
+  getServiceForUser,
+  getServiceForUserWithRole,
+  createDeploymentService: (env: AuthenticatedRouteEnv['Bindings']) => new DeploymentService(env),
+  upsertGroupDesiredWorkload,
+  parseDeploymentTargetConfig,
+};
+
 const providerSchema = z.object({
   name: z.enum(['workers-dispatch', 'runtime-host', 'oci', 'ecs', 'cloud-run', 'k8s']),
 }).strict();
@@ -96,7 +104,7 @@ const workersDeployments = new Hono<AuthenticatedRouteEnv>()
   const user = c.get('user');
   const workerId = c.req.param('id');
 
-  const worker = await getServiceForUserWithRole(c.env.DB, workerId, user.id, ['owner', 'admin', 'editor']);
+  const worker = await workersDeploymentsRouteDeps.getServiceForUserWithRole(c.env.DB, workerId, user.id, ['owner', 'admin', 'editor']);
   if (!worker) {
     throw new NotFoundError('Service');
   }
@@ -142,7 +150,7 @@ const workersDeployments = new Hono<AuthenticatedRouteEnv>()
     : undefined;
   const idempotencyKey = c.req.header('Idempotency-Key')?.trim() || undefined;
 
-  const deploymentService = new DeploymentService(c.env);
+  const deploymentService = workersDeploymentsRouteDeps.createDeploymentService(c.env);
   const deployment = await deploymentService.createDeployment({
     serviceId,
     spaceId: worker.space_id,
@@ -159,7 +167,7 @@ const workersDeployments = new Hono<AuthenticatedRouteEnv>()
 
   if (worker.group_id) {
     if (worker.service_type === 'app') {
-      await upsertGroupDesiredWorkload(c.env, {
+      await workersDeploymentsRouteDeps.upsertGroupDesiredWorkload(c.env, {
         groupId: worker.group_id,
         category: 'worker',
         name: worker.slug ?? worker.id,
@@ -190,7 +198,7 @@ const workersDeployments = new Hono<AuthenticatedRouteEnv>()
               }
             : {}),
         };
-        await upsertGroupDesiredWorkload(c.env, {
+        await workersDeploymentsRouteDeps.upsertGroupDesiredWorkload(c.env, {
           groupId: worker.group_id,
           category: 'service',
           name: worker.slug ?? worker.id,
@@ -232,7 +240,7 @@ const workersDeployments = new Hono<AuthenticatedRouteEnv>()
         deploy_state: deployment.deploy_state,
         artifact_kind: deployment.artifact_kind,
         provider: { name: deployment.provider_name },
-        target: parseDeploymentTargetConfig(deployment),
+        target: workersDeploymentsRouteDeps.parseDeploymentTargetConfig(deployment),
         routing_status: deployment.routing_status,
         routing_weight: deployment.routing_weight,
         created_at: deployment.created_at,
@@ -245,12 +253,12 @@ const workersDeployments = new Hono<AuthenticatedRouteEnv>()
   const workerId = c.req.param('id');
   const { limit } = parsePagination(c.req.query(), { limit: 20, maxLimit: 50 });
 
-  const worker = await getServiceForUser(c.env.DB, workerId, user.id);
+  const worker = await workersDeploymentsRouteDeps.getServiceForUser(c.env.DB, workerId, user.id);
   if (!worker) {
     throw new NotFoundError('Service');
   }
 
-  const deploymentService = new DeploymentService(c.env);
+  const deploymentService = workersDeploymentsRouteDeps.createDeploymentService(c.env);
   const deployments = await deploymentService.getDeploymentHistory(workerId, limit);
 
   const summaries: ApiDeploymentSummary[] = deployments.map((d) => {
@@ -266,7 +274,7 @@ const workersDeployments = new Hono<AuthenticatedRouteEnv>()
       bundle_hash: d.bundle_hash,
       bundle_size: d.bundle_size,
       provider: { name: d.provider_name },
-      target: parseDeploymentTargetConfig(d),
+      target: workersDeploymentsRouteDeps.parseDeploymentTargetConfig(d),
       deployed_by: d.deployed_by,
       deploy_message: d.deploy_message,
       created_at: d.created_at,
@@ -290,7 +298,7 @@ const workersDeployments = new Hono<AuthenticatedRouteEnv>()
   const user = c.get('user');
   const workerId = c.req.param('id');
 
-  const worker = await getServiceForUserWithRole(c.env.DB, workerId, user.id, ['owner', 'admin', 'editor']);
+  const worker = await workersDeploymentsRouteDeps.getServiceForUserWithRole(c.env.DB, workerId, user.id, ['owner', 'admin', 'editor']);
   if (!worker) {
     throw new NotFoundError('Service');
   }
@@ -300,7 +308,7 @@ const workersDeployments = new Hono<AuthenticatedRouteEnv>()
     ? Math.floor(body.target_version)
     : undefined;
 
-  const deploymentService = new DeploymentService(c.env);
+  const deploymentService = workersDeploymentsRouteDeps.createDeploymentService(c.env);
 
   const deployment = await deploymentService.rollback({ serviceId: worker.id, userId: user.id, targetVersion });
   return c.json({
@@ -310,7 +318,7 @@ const workersDeployments = new Hono<AuthenticatedRouteEnv>()
       version: deployment.version,
       artifact_kind: deployment.artifact_kind,
       provider: { name: deployment.provider_name },
-      target: parseDeploymentTargetConfig(deployment),
+      target: workersDeploymentsRouteDeps.parseDeploymentTargetConfig(deployment),
       routing_status: deployment.routing_status,
       routing_weight: deployment.routing_weight,
     },
@@ -322,12 +330,12 @@ const workersDeployments = new Hono<AuthenticatedRouteEnv>()
   const workerId = c.req.param('id');
   const deploymentId = c.req.param('deploymentId');
 
-  const worker = await getServiceForUser(c.env.DB, workerId, user.id);
+  const worker = await workersDeploymentsRouteDeps.getServiceForUser(c.env.DB, workerId, user.id);
   if (!worker) {
     throw new NotFoundError('Service');
   }
 
-  const deploymentService = new DeploymentService(c.env);
+  const deploymentService = workersDeploymentsRouteDeps.createDeploymentService(c.env);
   const deployment = await deploymentService.getDeploymentById(deploymentId);
   if (!deployment || deployment.service_id !== workerId) {
     throw new NotFoundError('Deployment');
@@ -370,7 +378,7 @@ const workersDeployments = new Hono<AuthenticatedRouteEnv>()
     deployment: {
       ...deployment,
       provider: { name: deployment.provider_name },
-      target: parseDeploymentTargetConfig(deployment),
+      target: workersDeploymentsRouteDeps.parseDeploymentTargetConfig(deployment),
       error_message: deployment.step_error,
       env_vars_masked: maskedEnvVars,
       bindings: sanitizedBindings,

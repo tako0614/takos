@@ -22,7 +22,7 @@ import {
   assertStringIncludes,
   assertThrows,
 } from "jsr:@std/assert";
-import { assertSpyCalls } from "jsr:@std/testing/mock";
+import { assertSpyCalls, spy } from "jsr:@std/testing/mock";
 
 Deno.test("resolveWfpConfig - returns config when all values are present", () => {
   const config = resolveWfpConfig({
@@ -85,9 +85,7 @@ Deno.test("createWfpConfig - returns config for valid env", () => {
   assertEquals(config.accountId, "acc");
 });
 Deno.test("createWfpConfig - throws when config cannot be resolved", () => {
-  assertThrows(() => {
-    (() => createWfpConfig({} as never));
-  }, "not configured");
+  assertThrows(() => createWfpConfig({} as never), "not configured");
 });
 // ---------------------------------------------------------------------------
 // sanitizeErrorMessage
@@ -209,7 +207,7 @@ const config: WFPConfig = {
 
 Deno.test("WfpClient - sends Authorization header and parses successful JSON response", async () => {
   try {
-    const fetchMock = async () =>
+    const fetchMock = spy(async () =>
       new Response(
         JSON.stringify({
           success: true,
@@ -218,7 +216,8 @@ Deno.test("WfpClient - sends Authorization header and parses successful JSON res
           messages: [],
         }),
         { status: 200 },
-      );
+      )
+    );
     (globalThis as any).fetch = fetchMock;
 
     const client = new WfpClient(config);
@@ -227,16 +226,20 @@ Deno.test("WfpClient - sends Authorization header and parses successful JSON res
     assertEquals(response.result.data, "ok");
     assertSpyCalls(fetchMock, 1);
 
-    const [url, init] = fetchMock.calls[0];
+    const [url, init] = (fetchMock.calls[0] as any).args as [
+      string,
+      RequestInit,
+    ];
+    const headers = init.headers as Record<string, string>;
     assertEquals(url, `${CF_API_BASE}/test/path`);
-    assertEquals(init.headers.Authorization, "Bearer test-token");
+    assertEquals(headers.Authorization, "Bearer test-token");
   } finally {
     /* TODO: restore stubbed globals manually */ void 0;
   }
 });
 Deno.test("WfpClient - throws classified error on non-ok response", async () => {
   try {
-    const fetchMock = async () =>
+    const fetchMock = spy(async () =>
       new Response(
         JSON.stringify({
           success: false,
@@ -245,13 +248,14 @@ Deno.test("WfpClient - throws classified error on non-ok response", async () => 
           result: null,
         }),
         { status: 404 },
-      );
+      )
+    );
     (globalThis as any).fetch = fetchMock;
 
     const client = new WfpClient(config);
     try {
       await client.fetch("/missing");
-      expect.unreachable();
+      throw new Error("unreachable");
     } catch (err) {
       const cfErr = err as CloudflareAPIError;
       assertEquals(cfErr.statusCode, 404);
@@ -263,7 +267,7 @@ Deno.test("WfpClient - throws classified error on non-ok response", async () => 
 });
 Deno.test("WfpClient - throws classified error when success is false in response body", async () => {
   try {
-    const fetchMock = async () =>
+    const fetchMock = spy(async () =>
       new Response(
         JSON.stringify({
           success: false,
@@ -272,7 +276,8 @@ Deno.test("WfpClient - throws classified error when success is false in response
           result: null,
         }),
         { status: 200 },
-      );
+      )
+    );
     (globalThis as any).fetch = fetchMock;
 
     const client = new WfpClient(config);
@@ -285,11 +290,11 @@ Deno.test("WfpClient - throws classified error when success is false in response
 });
 Deno.test("WfpClient - throws timeout error on AbortError", async () => {
   try {
-    const fetchMock = () => {
+    const fetchMock = spy(() => {
       const err = new Error("Aborted");
       err.name = "AbortError";
       return Promise.reject(err);
-    };
+    });
     (globalThis as any).fetch = fetchMock;
 
     const client = new WfpClient(config);
@@ -302,7 +307,7 @@ Deno.test("WfpClient - throws timeout error on AbortError", async () => {
 });
 Deno.test("WfpClient - merges custom headers with auth header", async () => {
   try {
-    const fetchMock = async () =>
+    const fetchMock = spy(async () =>
       new Response(
         JSON.stringify({
           success: true,
@@ -311,15 +316,17 @@ Deno.test("WfpClient - merges custom headers with auth header", async () => {
           messages: [],
         }),
         { status: 200 },
-      );
+      )
+    );
     (globalThis as any).fetch = fetchMock;
 
     const client = new WfpClient(config);
     await client.fetch("/test", { headers: { "X-Custom": "value" } });
 
-    const init = fetchMock.calls[0][1];
-    assertEquals(init.headers.Authorization, "Bearer test-token");
-    assertEquals(init.headers["X-Custom"], "value");
+    const init = (fetchMock.calls[0] as any).args[1] as RequestInit;
+    const headers = init.headers as Record<string, string>;
+    assertEquals(headers.Authorization, "Bearer test-token");
+    assertEquals(headers["X-Custom"], "value");
   } finally {
     /* TODO: restore stubbed globals manually */ void 0;
   }

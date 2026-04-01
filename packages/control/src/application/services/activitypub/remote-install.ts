@@ -11,7 +11,6 @@ import {
   apFetch,
   searchRemoteRepositories,
   extractTkgField,
-  RemoteStoreError,
   type RemoteRepository,
 } from './remote-store-client.ts';
 import { getRegistryEntry, type StoreRegistryEntry } from './store-registry.ts';

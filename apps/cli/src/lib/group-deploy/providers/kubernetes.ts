@@ -7,40 +7,73 @@
  *
  * Requires: kubectl configured with a valid kubeconfig.
  */
-import type { ResourceProvider, ProvisionResult } from '../resource-provider.ts';
-import { execCommand } from '../cloudflare-utils.ts';
+import type {
+  ProvisionResult,
+  ResourceProvider,
+} from "../resource-provider.ts";
+import { execCommand } from "../cloudflare-utils.ts";
 import { Buffer } from "node:buffer";
 
 export class K8sProvider implements ResourceProvider {
-  readonly name = 'k8s';
+  readonly name = "k8s";
 
   private readonly namespace: string;
 
   constructor(opts?: { namespace?: string }) {
-    this.namespace = opts?.namespace || Deno.env.get('K8S_NAMESPACE') || 'default';
+    this.namespace = opts?.namespace || Deno.env.get("K8S_NAMESPACE") ||
+      "default";
   }
 
   /** Apply a Kubernetes manifest provided as YAML string via stdin. */
-  private async kubectlApply(yaml: string, resourceName: string, type: string): Promise<{ ok: boolean; stdout: string; error?: string }> {
+  private async kubectlApply(
+    yaml: string,
+    _resourceName: string,
+    _type: string,
+  ): Promise<{ ok: boolean; stdout: string; error?: string }> {
     try {
       const { stdout, stderr, exitCode } = await execCommand(
-        'kubectl', ['apply', '-f', '-', '-n', this.namespace],
+        "kubectl",
+        ["apply", "-f", "-", "-n", this.namespace],
         { stdin: yaml },
       );
       if (exitCode !== 0) {
-        return { ok: false, stdout, error: stderr || `kubectl exited with code ${exitCode}` };
+        if (String(exitCode) === "ENOENT") {
+          return {
+            ok: false,
+            stdout,
+            error: `kubectl not available: ${stderr || "command not found"}`,
+          };
+        }
+        return {
+          ok: false,
+          stdout,
+          error: stderr || `kubectl exited with code ${exitCode}`,
+        };
       }
       // kubectl apply reports "unchanged" when resource already exists
-      const isUnchanged = stdout.includes('unchanged');
-      return { ok: true, stdout, error: isUnchanged ? 'already exists' : undefined };
+      const isUnchanged = stdout.includes("unchanged");
+      return {
+        ok: true,
+        stdout,
+        error: isUnchanged ? "already exists" : undefined,
+      };
     } catch (error) {
-      return { ok: false, stdout: '', error: `kubectl not available: ${error instanceof Error ? error.message : String(error)}` };
+      return {
+        ok: false,
+        stdout: "",
+        error: `kubectl not available: ${
+          error instanceof Error ? error.message : String(error)
+        }`,
+      };
     }
   }
 
   // ── PostgreSQL StatefulSet ───────────────────────────────────────────────
 
-  async createDatabase(name: string, _opts?: { migrations?: string }): Promise<ProvisionResult> {
+  async createDatabase(
+    name: string,
+    _opts?: { migrations?: string },
+  ): Promise<ProvisionResult> {
     const yaml = `
 apiVersion: apps/v1
 kind: StatefulSet
@@ -100,14 +133,24 @@ spec:
       targetPort: 5432
 `.trim();
 
-    const result = await this.kubectlApply(yaml, name, 'database');
+    const result = await this.kubectlApply(yaml, name, "database");
     if (!result.ok) {
-      return { name, type: 'database', status: 'failed', error: result.error };
+      return { name, type: "database", status: "failed", error: result.error };
     }
-    if (result.error === 'already exists') {
-      return { name, type: 'database', status: 'exists', id: `${this.namespace}/${name}` };
+    if (result.error === "already exists") {
+      return {
+        name,
+        type: "database",
+        status: "exists",
+        id: `${this.namespace}/${name}`,
+      };
     }
-    return { name, type: 'database', status: 'provisioned', id: `${this.namespace}/${name}` };
+    return {
+      name,
+      type: "database",
+      status: "provisioned",
+      id: `${this.namespace}/${name}`,
+    };
   }
 
   // ── MinIO Deployment (S3-compatible object storage) ──────────────────────
@@ -161,14 +204,29 @@ spec:
       targetPort: 9001
 `.trim();
 
-    const result = await this.kubectlApply(yaml, name, 'object-storage');
+    const result = await this.kubectlApply(yaml, name, "object-storage");
     if (!result.ok) {
-      return { name, type: 'object-storage', status: 'failed', error: result.error };
+      return {
+        name,
+        type: "object-storage",
+        status: "failed",
+        error: result.error,
+      };
     }
-    if (result.error === 'already exists') {
-      return { name, type: 'object-storage', status: 'exists', id: `${this.namespace}/${name}` };
+    if (result.error === "already exists") {
+      return {
+        name,
+        type: "object-storage",
+        status: "exists",
+        id: `${this.namespace}/${name}`,
+      };
     }
-    return { name, type: 'object-storage', status: 'provisioned', id: `${this.namespace}/${name}` };
+    return {
+      name,
+      type: "object-storage",
+      status: "provisioned",
+      id: `${this.namespace}/${name}`,
+    };
   }
 
   // ── Redis Deployment (key-value store) ───────────────────────────────────
@@ -210,19 +268,32 @@ spec:
       targetPort: 6379
 `.trim();
 
-    const result = await this.kubectlApply(yaml, name, 'kv');
+    const result = await this.kubectlApply(yaml, name, "kv");
     if (!result.ok) {
-      return { name, type: 'kv', status: 'failed', error: result.error };
+      return { name, type: "kv", status: "failed", error: result.error };
     }
-    if (result.error === 'already exists') {
-      return { name, type: 'kv', status: 'exists', id: `${this.namespace}/${name}` };
+    if (result.error === "already exists") {
+      return {
+        name,
+        type: "kv",
+        status: "exists",
+        id: `${this.namespace}/${name}`,
+      };
     }
-    return { name, type: 'kv', status: 'provisioned', id: `${this.namespace}/${name}` };
+    return {
+      name,
+      type: "kv",
+      status: "provisioned",
+      id: `${this.namespace}/${name}`,
+    };
   }
 
   // ── Queue (Redis-based or RabbitMQ) ──────────────────────────────────────
 
-  async createQueue(name: string, _opts?: { maxRetries?: number; deadLetterQueue?: string }): Promise<ProvisionResult> {
+  async createQueue(
+    name: string,
+    _opts?: { maxRetries?: number; deadLetterQueue?: string },
+  ): Promise<ProvisionResult> {
     const yaml = `
 apiVersion: apps/v1
 kind: Deployment
@@ -259,29 +330,47 @@ spec:
       targetPort: 6379
 `.trim();
 
-    const result = await this.kubectlApply(yaml, name, 'queue');
+    const result = await this.kubectlApply(yaml, name, "queue");
     if (!result.ok) {
-      return { name, type: 'queue', status: 'failed', error: result.error };
+      return { name, type: "queue", status: "failed", error: result.error };
     }
-    if (result.error === 'already exists') {
-      return { name, type: 'queue', status: 'exists', id: `${this.namespace}/${name}` };
+    if (result.error === "already exists") {
+      return {
+        name,
+        type: "queue",
+        status: "exists",
+        id: `${this.namespace}/${name}`,
+      };
     }
-    return { name, type: 'queue', status: 'provisioned', id: `${this.namespace}/${name}` };
+    return {
+      name,
+      type: "queue",
+      status: "provisioned",
+      id: `${this.namespace}/${name}`,
+    };
   }
 
   // ── Vector index -- not natively supported ──────────────────────────────
 
-  async createVectorIndex(name: string, _opts: { dimensions: number; metric: string }): Promise<ProvisionResult> {
-    return { name, type: 'vectorize', status: 'skipped', error: 'Vector index provisioning is not supported on K8s provider' };
+  async createVectorIndex(
+    name: string,
+    _opts: { dimensions: number; metric: string },
+  ): Promise<ProvisionResult> {
+    return {
+      name,
+      type: "vectorize",
+      status: "skipped",
+      error: "Vector index provisioning is not supported on K8s provider",
+    };
   }
 
   // ── Kubernetes Secret ────────────────────────────────────────────────────
 
   async createSecret(name: string, _binding: string): Promise<ProvisionResult> {
-    const { randomBytes } = await import('node:crypto');
-    const secretValue = randomBytes(32).toString('hex');
+    const { randomBytes } = await import("node:crypto");
+    const secretValue = randomBytes(32).toString("hex");
     // Base64-encode for K8s Secret
-    const b64Value = Buffer.from(secretValue).toString('base64');
+    const b64Value = Buffer.from(secretValue).toString("base64");
 
     const yaml = `
 apiVersion: v1
@@ -293,19 +382,24 @@ data:
   value: ${b64Value}
 `.trim();
 
-    const result = await this.kubectlApply(yaml, name, 'secret');
+    const result = await this.kubectlApply(yaml, name, "secret");
     if (!result.ok) {
-      return { name, type: 'secretRef', status: 'failed', error: result.error };
+      return { name, type: "secretRef", status: "failed", error: result.error };
     }
-    if (result.error === 'already exists') {
-      return { name, type: 'secretRef', status: 'exists', id: '(existing)' };
+    if (result.error === "already exists") {
+      return { name, type: "secretRef", status: "exists", id: "(existing)" };
     }
-    return { name, type: 'secretRef', status: 'provisioned', id: secretValue };
+    return { name, type: "secretRef", status: "provisioned", id: secretValue };
   }
 
   // ── Auto-configured ──────────────────────────────────────────────────────
 
   skipAutoConfigured(name: string, type: string): ProvisionResult {
-    return { name, type, status: 'skipped', error: `${type} is auto-configured at deploy time` };
+    return {
+      name,
+      type,
+      status: "skipped",
+      error: `${type} is auto-configured at deploy time`,
+    };
   }
 }

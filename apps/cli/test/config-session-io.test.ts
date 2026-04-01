@@ -1,9 +1,8 @@
 import {
-  chmodSync,
   mkdirSync,
   mkdtempSync,
   rmSync,
-  symlinkSync,
+  statSync,
   writeFileSync,
 } from "node:fs";
 import { join } from "node:path";
@@ -507,7 +506,6 @@ if (platform() !== "win32") {
 
       setSecurePermissions(filePath);
 
-      const { statSync } = require("fs");
       const mode = statSync(filePath).mode & 0o777;
       assertEquals(mode, 0o600);
     } finally {

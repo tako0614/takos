@@ -5,7 +5,7 @@ import { generateId } from '../../../shared/utils/index.ts';
 import type { D1TransactionManager } from '../../../shared/utils/db-transaction.ts';
 import { normalizeEnvName, uniqueEnvNames } from './crypto.ts';
 import { writeCommonEnvAuditLog, type CommonEnvAuditActor } from './audit.ts';
-import { listServiceLinks, type ServiceLinkRow, type SyncState } from './repository.ts';
+import { listServiceLinks, type SyncState } from './repository.ts';
 import type { CommonEnvOrchestrator } from './orchestrator.ts';
 import type { CommonEnvReconcileTrigger } from './reconcile-jobs.ts';
 import { getChanges } from './link-state.ts';

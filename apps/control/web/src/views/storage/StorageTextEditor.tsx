@@ -30,8 +30,6 @@ export function StorageTextEditor(props: {
   const { content, encoding, loading, error, saving, loadContent, saveContent } = useFileContent(props.spaceId);
   const [editedContent, setEditedContent] = createSignal<string | null>(null);
   const [isDirty, setIsDirty] = createSignal(false);
-  let editorRef: unknown = null;
-
   createEffect(() => {
     loadContent(props.file.id);
   });
@@ -67,12 +65,12 @@ export function StorageTextEditor(props: {
         handleSave();
       }
     };
-    window.addEventListener('keydown', handler);
-    onCleanup(() => window.removeEventListener('keydown', handler));
+    globalThis.addEventListener('keydown', handler);
+    onCleanup(() => globalThis.removeEventListener('keydown', handler));
   });
 
   const language = () => detectLanguage(props.file.name);
-  const prefersDark = typeof window !== 'undefined' && window.matchMedia?.('(prefers-color-scheme: dark)').matches;
+  const prefersDark = typeof globalThis !== 'undefined' && globalThis.matchMedia?.('(prefers-color-scheme: dark)').matches;
 
   const extraButtons = () => isDirty() ? (
     <Button
@@ -128,7 +126,6 @@ export function StorageTextEditor(props: {
                 theme={prefersDark ? 'vs-dark' : 'vs'}
                 value={editedContent()!}
                 onChange={handleEditorChange}
-                onMount={(editor: unknown) => { editorRef = editor; }}
                 options={{
                   minimap: { enabled: false },
                   fontSize: 13,

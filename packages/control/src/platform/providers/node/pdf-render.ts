@@ -5,7 +5,7 @@
  *   2. PUPPETEER_EXECUTABLE_PATH -- local Chromium binary
  */
 
-import { Buffer } from "node:buffer";
+import type { Buffer } from "node:buffer";
 
 export type NodePdfRenderConfig = {
   /** WebSocket endpoint for a remote Chrome instance (e.g. ws://127.0.0.1:9222/...). */

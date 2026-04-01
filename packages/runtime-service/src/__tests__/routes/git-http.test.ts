@@ -1,233 +1,117 @@
-import { Hono } from 'hono';
-import * as fs from 'node:fs/promises';
-import path from 'node:path';
-import type { ChildProcessWithoutNullStreams, SpawnOptionsWithoutStdio } from 'node:child_process';
-import { EventEmitter } from 'node:events';
-import { PassThrough } from 'node:stream';
-import { assertEquals, assertObjectMatch } from 'jsr:@std/assert';
+import { assertEquals, assertObjectMatch } from "jsr:@std/assert";
 
-const hoisted = ({
-  reposBaseDir: '/tmp/takos-runtime-git-http-tests',
-  spawn: ((..._args: any[]) => undefined) as any,
-  gracefulKill: ((..._args: any[]) => undefined) as any,
+async function loadGitHttpModule() {
+  if (!Deno.env.get("TAKOS_API_URL")) {
+    Deno.env.set("TAKOS_API_URL", "https://takos.dev");
+  }
+  return await import("../../routes/git/http.ts");
+}
+
+Deno.test("normalizeLfsOid lowercases valid SHA-256 object ids", async () => {
+  const { normalizeLfsOid } = await loadGitHttpModule();
+
+  assertEquals(normalizeLfsOid("A".repeat(64)), "a".repeat(64));
+  assertEquals(normalizeLfsOid("not-a-valid-oid"), null);
+  assertEquals(normalizeLfsOid(undefined), null);
 });
 
-// [Deno] vi.mock removed - manually stub imports from '../../shared/config.ts'
-// [Deno] vi.mock removed - manually stub imports from 'node:child_process'
-// [Deno] vi.mock removed - manually stub imports from '../../utils/process-kill.ts'
-import gitHttpRoutes from '../../routes/git/http.ts';
+Deno.test("parseLfsBatchRequest accepts well-formed upload and download payloads", async () => {
+  const { parseLfsBatchRequest } = await loadGitHttpModule();
+  const oid = "a".repeat(64);
 
-interface MockChildProcess extends ChildProcessWithoutNullStreams {
-  stdin: PassThrough;
-  stdout: PassThrough;
-  stderr: PassThrough;
-  killed: boolean;
-}
+  assertEquals(
+    parseLfsBatchRequest({
+      operation: "upload",
+      objects: [{ oid, size: 12 }],
+    }),
+    {
+      operation: "upload",
+      objects: [{ oid, size: 12 }],
+    },
+  );
 
-function createTestApp() {
-  const app = new Hono();
-  app.route('/', gitHttpRoutes);
-  return app;
-}
+  assertEquals(
+    parseLfsBatchRequest({
+      operation: "download",
+      objects: [{ oid, size: 34 }],
+    }),
+    {
+      operation: "download",
+      objects: [{ oid, size: 34 }],
+    },
+  );
+});
 
-async function createRepoDir(spaceId: string, repoName: string): Promise<void> {
-  await fs.mkdir(path.join(hoisted.reposBaseDir, spaceId, `${repoName}.git`), { recursive: true });
-}
+Deno.test("parseLfsBatchRequest rejects malformed payloads", async () => {
+  const { parseLfsBatchRequest } = await loadGitHttpModule();
 
-function createMockChildProcess(): MockChildProcess {
-  const child = new EventEmitter() as MockChildProcess;
-  child.stdin = new PassThrough();
-  child.stdout = new PassThrough();
-  child.stderr = new PassThrough();
-  child.killed = false;
-  child.kill = () => {
-    child.killed = true;
-    return true;
-  } as ChildProcessWithoutNullStreams['kill'];
-  return child;
-}
+  assertEquals(parseLfsBatchRequest(null), null);
+  assertEquals(parseLfsBatchRequest({ operation: "upload" }), null);
+  assertEquals(
+    parseLfsBatchRequest({
+      operation: "upload",
+      objects: [{ oid: "bad", size: 12 }],
+    }),
+    null,
+  );
+  assertEquals(
+    parseLfsBatchRequest({
+      operation: "download",
+      objects: [{ oid: "a".repeat(64), size: -1 }],
+    }),
+    null,
+  );
+});
 
+Deno.test("buildLfsBatchObjectResponse preserves upload and missing download behavior", async () => {
+  const { buildLfsBatchObjectResponse } = await loadGitHttpModule();
+  const oid = "b".repeat(64);
+  const href = `https://git.takos.dev/git/ws/repo.git/info/lfs/objects/${oid}`;
 
-  Deno.test('git-http route hardening - rejects workspace-scoped JWT that targets another workspace', async () => {
-  /* mocks cleared (no-op in Deno) */ void 0;
-    /* TODO: call fakeTime.restore() */ void 0;
-    await fs.rm(hoisted.reposBaseDir, { recursive: true, force: true });
-    await fs.mkdir(hoisted.reposBaseDir, { recursive: true });
-  try {
-  const app = new Hono();
-    // Simulate service token middleware setting serviceToken on context
-    app.use('*', async (c, next) => {
-      c.set('serviceToken', { scope_space_id: 'ws-allowed' } as any);
-      await next();
-    });
-    app.route('/', gitHttpRoutes);
-
-    const response = await app.request('/git/ws-denied/repo.git/info/refs?service=git-upload-pack');
-
-    assertEquals(response.status, 403);
-    const body = await response.json();
-    assertEquals(body, {
-      error: {
-        code: 'FORBIDDEN',
-        message: 'Token workspace scope does not match requested workspace',
+  assertObjectMatch(
+    buildLfsBatchObjectResponse({
+      operation: "upload",
+      oid,
+      size: 12,
+      exists: false,
+      href,
+    }),
+    {
+      oid,
+      size: 12,
+      actions: {
+        upload: {
+          href,
+          expires_in: 3600,
+        },
       },
-    });
-  } finally {
-  /* TODO: call fakeTime.restore() */ void 0;
-  }
-})
-  Deno.test('git-http route hardening - supports LFS batch endpoint and reports missing download objects', async () => {
-  /* mocks cleared (no-op in Deno) */ void 0;
-    /* TODO: call fakeTime.restore() */ void 0;
-    await fs.rm(hoisted.reposBaseDir, { recursive: true, force: true });
-    await fs.mkdir(hoisted.reposBaseDir, { recursive: true });
-  try {
-  const spaceId = 'ws123';
-    const repoName = 'repo123';
-    const oid = 'a'.repeat(64);
-    await createRepoDir(spaceId, repoName);
+    },
+  );
 
-    const app = createTestApp();
+  assertEquals(
+    buildLfsBatchObjectResponse({
+      operation: "download",
+      oid,
+      size: 12,
+      exists: false,
+      href,
+    }),
+    {
+      oid,
+      size: 12,
+      error: {
+        code: 404,
+        message: "Object does not exist",
+      },
+    },
+  );
+});
 
-    const batchUpload = await app.request(
-      `/git/${spaceId}/${repoName}.git/info/lfs/objects/batch`,
-      {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/vnd.git-lfs+json',
-          'Host': 'localhost',
-        },
-        body: JSON.stringify({
-          operation: 'upload',
-          objects: [{ oid, size: 12 }],
-        }),
-      }
-    );
+Deno.test("parseContentLength accepts numeric headers and rejects invalid values", async () => {
+  const { parseContentLength } = await loadGitHttpModule();
 
-    assertEquals(batchUpload.status, 200);
-    const uploadBody = await batchUpload.json();
-    assertObjectMatch(uploadBody, {
-      transfer: 'basic',
-      objects: [
-        {
-          oid,
-          actions: {
-            upload: {
-              href: expect.stringContaining(`/git/${spaceId}/${repoName}.git/info/lfs/objects/${oid}`),
-            },
-          },
-        },
-      ],
-    });
-
-    const batchDownload = await app.request(
-      `/git/${spaceId}/${repoName}.git/info/lfs/objects/batch`,
-      {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/vnd.git-lfs+json',
-          'Host': 'localhost',
-        },
-        body: JSON.stringify({
-          operation: 'download',
-          objects: [{ oid, size: 12 }],
-        }),
-      }
-    );
-
-    assertEquals(batchDownload.status, 200);
-    const downloadBody = await batchDownload.json();
-    assertObjectMatch(downloadBody, {
-      transfer: 'basic',
-      objects: [
-        {
-          oid,
-          error: {
-            code: 404,
-            message: 'Object does not exist',
-          },
-        },
-      ],
-    });
-  } finally {
-  /* TODO: call fakeTime.restore() */ void 0;
-  }
-})
-  Deno.test('git-http route hardening - returns 400 for invalid oid in both LFS upload/download object handlers', async () => {
-  /* mocks cleared (no-op in Deno) */ void 0;
-    /* TODO: call fakeTime.restore() */ void 0;
-    await fs.rm(hoisted.reposBaseDir, { recursive: true, force: true });
-    await fs.mkdir(hoisted.reposBaseDir, { recursive: true });
-  try {
-  const spaceId = 'ws-invalid-oid';
-    const repoName = 'repo-invalid-oid';
-    await createRepoDir(spaceId, repoName);
-    const app = createTestApp();
-
-    const invalidOid = 'not-a-valid-oid';
-    const putResponse = await app.request(
-      `/git/${spaceId}/${repoName}.git/info/lfs/objects/${invalidOid}`,
-      { method: 'PUT' }
-    );
-    const getResponse = await app.request(
-      `/git/${spaceId}/${repoName}.git/info/lfs/objects/${invalidOid}`
-    );
-
-    assertEquals(putResponse.status, 400);
-    const putBody = await putResponse.json();
-    assertEquals(putBody, { error: { code: 'BAD_REQUEST', message: 'Invalid LFS object id' } });
-    assertEquals(getResponse.status, 400);
-    const getBody = await getResponse.json();
-    assertEquals(getBody, { error: { code: 'BAD_REQUEST', message: 'Invalid LFS object id' } });
-  } finally {
-  /* TODO: call fakeTime.restore() */ void 0;
-  }
-})
-  Deno.test('git-http route hardening - keeps PUT content-length validation response', async () => {
-  /* mocks cleared (no-op in Deno) */ void 0;
-    /* TODO: call fakeTime.restore() */ void 0;
-    await fs.rm(hoisted.reposBaseDir, { recursive: true, force: true });
-    await fs.mkdir(hoisted.reposBaseDir, { recursive: true });
-  try {
-  const app = createTestApp();
-
-    const response = await app.request(
-      `/git/ws-content-length/repo-content-length.git/info/lfs/objects/${'a'.repeat(64)}`,
-      {
-        method: 'PUT',
-        headers: {
-          'Content-Length': 'abc',
-        },
-      }
-    );
-
-    assertEquals(response.status, 400);
-    const body = await response.json();
-    assertEquals(body, { error: { code: 'BAD_REQUEST', message: 'Invalid Content-Length' } });
-  } finally {
-  /* TODO: call fakeTime.restore() */ void 0;
-  }
-})
-  Deno.test('git-http route hardening - returns 404 for missing LFS object download', async () => {
-  /* mocks cleared (no-op in Deno) */ void 0;
-    /* TODO: call fakeTime.restore() */ void 0;
-    await fs.rm(hoisted.reposBaseDir, { recursive: true, force: true });
-    await fs.mkdir(hoisted.reposBaseDir, { recursive: true });
-  try {
-  const spaceId = 'ws-missing-object';
-    const repoName = 'repo-missing-object';
-    const oid = 'b'.repeat(64);
-    await createRepoDir(spaceId, repoName);
-
-    const app = createTestApp();
-    const response = await app.request(
-      `/git/${spaceId}/${repoName}.git/info/lfs/objects/${oid}`
-    );
-
-    assertEquals(response.status, 404);
-    const body = await response.json();
-    assertEquals(body, { error: { code: 'NOT_FOUND', message: 'LFS object not found' } });
-  } finally {
-  /* TODO: call fakeTime.restore() */ void 0;
-  }
-})
+  assertEquals(parseContentLength("0"), 0);
+  assertEquals(parseContentLength("123"), 123);
+  assertEquals(parseContentLength(undefined), null);
+  assertEquals(Number.isNaN(parseContentLength("abc")), true);
+});

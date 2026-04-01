@@ -1,16 +1,17 @@
-import { getDb } from '../../../infra/db/index.ts';
+import type { getDb } from '../../../infra/db/index.ts';
 import { repoReleases, repoReleaseAssets, accounts } from '../../../infra/db/schema.ts';
 import { eq, asc } from 'drizzle-orm';
 import { MAX_RELEASE_ASSET_FILENAME_LENGTH } from '../../../shared/config/limits.ts';
 
 export function sanitizeReleaseAssetFilename(fileName: string): string {
-  const normalized = fileName
-    .normalize('NFKC')
-    // eslint-disable-next-line no-control-regex
-    .replace(/[\u0000-\u001F\u007F]/g, '')
-    .replace(/\\/g, '/');
-
-  const basename = normalized.split('/').pop() || '';
+  const normalized = fileName.normalize('NFKC');
+  let stripped = '';
+  for (let i = 0; i < normalized.length; i++) {
+    const code = normalized.charCodeAt(i);
+    if (code === 0 || code < 0x20 || code === 0x7f) continue;
+    stripped += normalized[i];
+  }
+  const basename = stripped.replace(/\\/g, '/').split('/').pop() || '';
   const withoutTraversal = basename.replace(/\.\.+/g, '.');
   const collapsed = withoutTraversal.replace(/\s+/g, ' ').trim();
   const safe = collapsed

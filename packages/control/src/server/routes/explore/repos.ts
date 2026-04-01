@@ -9,7 +9,7 @@ import {
 import { withCache, CacheTTL, CacheTags } from '../../middleware/cache.ts';
 import { getDb } from '../../../infra/db/index.ts';
 import { accounts, repositories, repoStars } from '../../../infra/db/schema.ts';
-import { eq, and, desc } from 'drizzle-orm';
+import { eq, and } from 'drizzle-orm';
 import { checkRepoAccess } from '../../../application/services/source/repos.ts';
 import { parsePagination } from '../../../shared/utils/index.ts';
 import { NotFoundError } from 'takos-common/errors';

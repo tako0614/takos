@@ -1,5 +1,5 @@
 import type { ToolContext, ToolResult, ToolCall, ToolDefinition } from './tool-definitions.ts';
-import { ToolResolver } from './resolver.ts';
+import type { ToolResolver } from './resolver.ts';
 import { CircuitBreaker, type CircuitStats } from './circuit-breaker.ts';
 import type { ToolObserver } from '../services/memory-graph/graph-models.ts';
 import { checkIdempotency, completeOperation } from './idempotency.ts';

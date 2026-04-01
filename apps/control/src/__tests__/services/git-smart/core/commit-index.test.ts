@@ -1,183 +1,271 @@
-import type { GitCommit, GitSignature } from '@/services/git-smart/types';
+import type { D1Database, R2Bucket } from "@cloudflare/workers-types";
 
-// All mocks must be hoisted to survive /* mocks cleared (no-op in Deno) */ void 0 in the global setup
-import { assertEquals } from 'jsr:@std/assert';
+import { assertEquals } from "jsr:@std/assert";
 
-const {
-  mockGetCommitData,
-  mockDbGet,
-  mockDbWhere,
-  mockDbFrom,
-  mockDbSelect,
-  mockGetDb,
-} = ({
-  mockGetCommitData: ((..._args: any[]) => undefined) as any,
-  mockDbGet: ((..._args: any[]) => undefined) as any,
-  mockDbWhere: ((..._args: any[]) => undefined) as any,
-  mockDbFrom: ((..._args: any[]) => undefined) as any,
-  mockDbSelect: ((..._args: any[]) => undefined) as any,
-  mockGetDb: ((..._args: any[]) => undefined) as any,
+import {
+  findMergeBase,
+  isAncestor,
+} from "@/application/services/git-smart/core/commit-index.ts";
+import { putCommit } from "@/application/services/git-smart/core/object-store.ts";
+
+const REPO_ID = "test-repo";
+const ZERO_TREE = "0000000000000000000000000000000000000000";
+const UNKNOWN_SHA = "ffffffffffffffffffffffffffffffffffffffff";
+
+type StoredValue = Uint8Array;
+
+class FakeD1PreparedStatement {
+  bind(..._values: unknown[]): FakeD1PreparedStatement {
+    return this;
+  }
+
+  async first<T = unknown>(): Promise<T | null> {
+    return null;
+  }
+
+  async all<T = unknown>(): Promise<
+    { results: T[]; success: boolean; meta: Record<string, unknown> }
+  > {
+    return { results: [], success: true, meta: {} };
+  }
+
+  async run(): Promise<
+    {
+      success: boolean;
+      meta: { changes: number; last_row_id: number; duration: number };
+    }
+  > {
+    return { success: true, meta: { changes: 0, last_row_id: 0, duration: 0 } };
+  }
+
+  async raw<T = unknown[]>(): Promise<T[]> {
+    return [];
+  }
+}
+
+class FakeD1Database {
+  prepare(_query: string): FakeD1PreparedStatement {
+    return new FakeD1PreparedStatement();
+  }
+
+  exec(_query: string): Promise<{ count: number; duration: number }> {
+    return Promise.resolve({ count: 0, duration: 0 });
+  }
+
+  batch<T>(statements: FakeD1PreparedStatement[]): Promise<T[]> {
+    return Promise.all(
+      statements.map((statement) => statement.run()),
+    ) as Promise<
+      T[]
+    >;
+  }
+
+  withSession() {
+    return {
+      prepare: (query: string) => this.prepare(query),
+      batch: <T>(statements: FakeD1PreparedStatement[]) =>
+        this.batch<T>(statements),
+      getBookmark: () => null,
+    };
+  }
+
+  dump(): Promise<ArrayBuffer> {
+    return Promise.resolve(new ArrayBuffer(0));
+  }
+}
+
+class FakeR2ObjectBody {
+  constructor(private readonly bytes: Uint8Array) {}
+
+  async arrayBuffer(): Promise<ArrayBuffer> {
+    return this.bytes.slice().buffer as ArrayBuffer;
+  }
+}
+
+class FakeR2Bucket {
+  #objects = new Map<string, StoredValue>();
+
+  async put(
+    key: string,
+    value: ReadableStream | ArrayBuffer | ArrayBufferView | string,
+  ): Promise<void> {
+    if (typeof value === "string") {
+      this.#objects.set(key, new TextEncoder().encode(value));
+      return;
+    }
+    if (value instanceof ArrayBuffer) {
+      this.#objects.set(key, new Uint8Array(value));
+      return;
+    }
+    if (ArrayBuffer.isView(value)) {
+      this.#objects.set(
+        key,
+        new Uint8Array(value.buffer, value.byteOffset, value.byteLength),
+      );
+      return;
+    }
+    const reader = value.getReader();
+    const chunks: Uint8Array[] = [];
+    while (true) {
+      const { done, value: chunk } = await reader.read();
+      if (done) break;
+      chunks.push(chunk);
+    }
+    const total = chunks.reduce((sum, chunk) => sum + chunk.length, 0);
+    const merged = new Uint8Array(total);
+    let offset = 0;
+    for (const chunk of chunks) {
+      merged.set(chunk, offset);
+      offset += chunk.length;
+    }
+    this.#objects.set(key, merged);
+  }
+
+  async get(key: string): Promise<FakeR2ObjectBody | null> {
+    const value = this.#objects.get(key);
+    return value ? new FakeR2ObjectBody(value) : null;
+  }
+
+  async head(key: string): Promise<Record<string, never> | null> {
+    return this.#objects.has(key) ? {} : null;
+  }
+}
+
+function makeSignature(timestamp: number) {
+  return {
+    name: "Test User",
+    email: "test@example.com",
+    timestamp,
+    tzOffset: "+0000",
+  };
+}
+
+async function createCommitGraph() {
+  const bucket = new FakeR2Bucket();
+  const db = new FakeD1Database() as unknown as D1Database;
+
+  const A = await putCommit(bucket as unknown as R2Bucket, {
+    tree: ZERO_TREE,
+    parents: [],
+    author: makeSignature(1),
+    committer: makeSignature(1),
+    message: "A",
+  });
+  const E = await putCommit(bucket as unknown as R2Bucket, {
+    tree: ZERO_TREE,
+    parents: [],
+    author: makeSignature(2),
+    committer: makeSignature(2),
+    message: "E",
+  });
+  const B = await putCommit(bucket as unknown as R2Bucket, {
+    tree: ZERO_TREE,
+    parents: [A],
+    author: makeSignature(3),
+    committer: makeSignature(3),
+    message: "B",
+  });
+  const C = await putCommit(bucket as unknown as R2Bucket, {
+    tree: ZERO_TREE,
+    parents: [B, E],
+    author: makeSignature(4),
+    committer: makeSignature(4),
+    message: "C",
+  });
+  const D = await putCommit(bucket as unknown as R2Bucket, {
+    tree: ZERO_TREE,
+    parents: [C],
+    author: makeSignature(5),
+    committer: makeSignature(5),
+    message: "D",
+  });
+  const isolated = await putCommit(bucket as unknown as R2Bucket, {
+    tree: ZERO_TREE,
+    parents: [],
+    author: makeSignature(6),
+    committer: makeSignature(6),
+    message: "isolated",
+  });
+
+  return {
+    db,
+    bucket: bucket as unknown as R2Bucket,
+    A,
+    B,
+    C,
+    D,
+    E,
+    isolated,
+  };
+}
+
+Deno.test("isAncestor returns true when SHAs are the same", async () => {
+  const graph = await createCommitGraph();
+
+  assertEquals(
+    await isAncestor(graph.db, graph.bucket, REPO_ID, graph.A, graph.A),
+    true,
+  );
 });
 
-// [Deno] vi.mock removed - manually stub imports from '@/services/git-smart/core/object-store'
+Deno.test("isAncestor returns true for direct and transitive ancestors", async () => {
+  const graph = await createCommitGraph();
 
-// [Deno] vi.mock removed - manually stub imports from '@/db'
+  assertEquals(
+    await isAncestor(graph.db, graph.bucket, REPO_ID, graph.A, graph.B),
+    true,
+  );
+  assertEquals(
+    await isAncestor(graph.db, graph.bucket, REPO_ID, graph.A, graph.D),
+    true,
+  );
+  assertEquals(
+    await isAncestor(graph.db, graph.bucket, REPO_ID, graph.E, graph.D),
+    true,
+  );
+});
 
-import { isAncestor, findMergeBase } from '@/services/git-smart/core/commit-index';
+Deno.test("isAncestor returns false when the ancestor is missing or unrelated", async () => {
+  const graph = await createCommitGraph();
 
-// Test DAG:
-//   A <- B <- C (merge: parents [B, E])  <- D
-//   E <------/
-//
-// A is root (no parents)
-// B's parent is A
-// C's parents are [B, E] (merge commit)
-// D's parent is C
-// E is root (no parents)
+  assertEquals(
+    await isAncestor(graph.db, graph.bucket, REPO_ID, graph.D, graph.A),
+    false,
+  );
+  assertEquals(
+    await isAncestor(graph.db, graph.bucket, REPO_ID, UNKNOWN_SHA, graph.D),
+    false,
+  );
+});
 
-const SHA_A = 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa';
-const SHA_B = 'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb';
-const SHA_C = 'cccccccccccccccccccccccccccccccccccccccc';
-const SHA_D = 'dddddddddddddddddddddddddddddddddddddddd';
-const SHA_E = 'eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee';
-const SHA_UNKNOWN = 'ffffffffffffffffffffffffffffffffffffffff';
+Deno.test("findMergeBase finds the nearest shared ancestor", async () => {
+  const graph = await createCommitGraph();
 
-const REPO_ID = 'test-repo';
+  assertEquals(
+    await findMergeBase(graph.db, graph.bucket, REPO_ID, graph.B, graph.D),
+    graph.B,
+  );
+  assertEquals(
+    await findMergeBase(graph.db, graph.bucket, REPO_ID, graph.D, graph.E),
+    graph.E,
+  );
+  assertEquals(
+    await findMergeBase(graph.db, graph.bucket, REPO_ID, graph.A, graph.B),
+    graph.A,
+  );
+});
 
-function makeSig(ts: number): GitSignature {
-  return {
-    name: 'Test User',
-    email: 'test@example.com',
-    timestamp: ts,
-    tzOffset: '+0000',
-  };
-}
+Deno.test("findMergeBase returns null when histories are disconnected", async () => {
+  const graph = await createCommitGraph();
 
-function makeCommit(sha: string, parents: string[]): GitCommit {
-  return {
-    sha,
-    tree: '0000000000000000000000000000000000000000',
-    parents,
-    author: makeSig(1000000),
-    committer: makeSig(1000000),
-    message: `commit ${sha.slice(0, 8)}`,
-  };
-}
-
-const commitMap = new Map<string, GitCommit>([
-  [SHA_A, makeCommit(SHA_A, [])],
-  [SHA_B, makeCommit(SHA_B, [SHA_A])],
-  [SHA_C, makeCommit(SHA_C, [SHA_B, SHA_E])],
-  [SHA_D, makeCommit(SHA_D, [SHA_C])],
-  [SHA_E, makeCommit(SHA_E, [])],
-]);
-
-const mockDb = {} as any;
-const mockBucket = {} as any;
-
-/** Re-establish the Drizzle mock chain so getCommitFromIndex returns null */
-function setupDbChain() {
-  mockDbGet = (async () => null) as any;
-  mockDbWhere = (() => ({ get: mockDbGet })) as any;
-  mockDbFrom = (() => ({ where: mockDbWhere })) as any;
-  mockDbSelect = (() => ({ from: mockDbFrom })) as any;
-  mockGetDb = (() => ({ select: mockDbSelect })) as any;
-}
-
-
-  Deno.test('isAncestor - returns true when SHAs are the same', async () => {
-  setupDbChain();
-  mockGetCommitData = async (_bucket: any, sha: string) => {
-    return commitMap.get(sha) ?? null;
-  } as any;
-  assertEquals(await isAncestor(mockDb, mockBucket, REPO_ID, SHA_A, SHA_A), true);
-})
-
-  Deno.test('isAncestor - returns true for direct parent', async () => {
-  setupDbChain();
-  mockGetCommitData = async (_bucket: any, sha: string) => {
-    return commitMap.get(sha) ?? null;
-  } as any;
-  assertEquals(await isAncestor(mockDb, mockBucket, REPO_ID, SHA_A, SHA_B), true);
-})
-
-  Deno.test('isAncestor - returns true for grandparent', async () => {
-  setupDbChain();
-  mockGetCommitData = async (_bucket: any, sha: string) => {
-    return commitMap.get(sha) ?? null;
-  } as any;
-  assertEquals(await isAncestor(mockDb, mockBucket, REPO_ID, SHA_A, SHA_D), true);
-})
-
-  Deno.test('isAncestor - returns true for ancestor via merge parent', async () => {
-  setupDbChain();
-  mockGetCommitData = async (_bucket: any, sha: string) => {
-    return commitMap.get(sha) ?? null;
-  } as any;
-  assertEquals(await isAncestor(mockDb, mockBucket, REPO_ID, SHA_E, SHA_D), true);
-})
-
-  Deno.test('isAncestor - returns false when not an ancestor', async () => {
-  setupDbChain();
-  mockGetCommitData = async (_bucket: any, sha: string) => {
-    return commitMap.get(sha) ?? null;
-  } as any;
-  assertEquals(await isAncestor(mockDb, mockBucket, REPO_ID, SHA_D, SHA_A), false);
-})
-
-  Deno.test('isAncestor - returns false for unknown SHA', async () => {
-  setupDbChain();
-  mockGetCommitData = async (_bucket: any, sha: string) => {
-    return commitMap.get(sha) ?? null;
-  } as any;
-  assertEquals(await isAncestor(mockDb, mockBucket, REPO_ID, SHA_UNKNOWN, SHA_D), false);
-})
-
-
-
-  Deno.test('findMergeBase - finds common ancestor in linear chain', async () => {
-  setupDbChain();
-  mockGetCommitData = async (_bucket: any, sha: string) => {
-    return commitMap.get(sha) ?? null;
-  } as any;
-  const base = await findMergeBase(mockDb, mockBucket, REPO_ID, SHA_B, SHA_D);
-    assertEquals(base, SHA_B);
-})
-
-  Deno.test('findMergeBase - finds merge base of diverged branches', async () => {
-  setupDbChain();
-  mockGetCommitData = async (_bucket: any, sha: string) => {
-    return commitMap.get(sha) ?? null;
-  } as any;
-  // ancestors of D: {D, C, B, A, E}
-    // Walking from E: E is in ancestors of D -> return E
-    const base = await findMergeBase(mockDb, mockBucket, REPO_ID, SHA_D, SHA_E);
-    assertEquals(base, SHA_E);
-})
-
-  Deno.test('findMergeBase - finds merge base when both share a common root', async () => {
-  setupDbChain();
-  mockGetCommitData = async (_bucket: any, sha: string) => {
-    return commitMap.get(sha) ?? null;
-  } as any;
-  // ancestors of A: {A}
-    // Walking from B: B not in {A}, then A is in {A} -> return A
-    const base = await findMergeBase(mockDb, mockBucket, REPO_ID, SHA_A, SHA_B);
-    assertEquals(base, SHA_A);
-})
-
-  Deno.test('findMergeBase - returns null when no common ancestor exists', async () => {
-  setupDbChain();
-  mockGetCommitData = async (_bucket: any, sha: string) => {
-    return commitMap.get(sha) ?? null;
-  } as any;
-  const SHA_ISOLATED = '1111111111111111111111111111111111111111';
-    mockGetCommitData = async (_bucket: any, sha: string) => {
-      if (sha === SHA_ISOLATED) return makeCommit(SHA_ISOLATED, []);
-      return commitMap.get(sha) ?? null;
-    } as any;
-
-    const base = await findMergeBase(mockDb, mockBucket, REPO_ID, SHA_A, SHA_ISOLATED);
-    assertEquals(base, null);
-})
-
+  assertEquals(
+    await findMergeBase(
+      graph.db,
+      graph.bucket,
+      REPO_ID,
+      graph.A,
+      graph.isolated,
+    ),
+    null,
+  );
+});

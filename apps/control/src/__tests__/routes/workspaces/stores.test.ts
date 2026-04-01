@@ -2,8 +2,8 @@ import { Hono } from 'hono';
 import type { Env, User } from '@/types';
 import { createMockEnv } from '../../../../test/integration/setup.ts';
 
-import { assertEquals } from 'jsr:@std/assert';
-import { assertSpyCallArgs } from 'jsr:@std/testing/mock';
+import { assert, assertEquals } from 'jsr:@std/assert';
+import { assertSpyCalls, spy } from 'jsr:@std/testing/mock';
 
 const mocks = ({
   requireSpaceAccess: ((..._args: any[]) => undefined) as any,
@@ -16,6 +16,7 @@ const mocks = ({
 // [Deno] vi.mock removed - manually stub imports from '@/routes/shared/helpers'
 // [Deno] vi.mock removed - manually stub imports from '@/services/activitypub/stores'
 import workspaceStoresRoutes from '@/routes/spaces/stores';
+import { spacesStoresRouteDeps } from '@/routes/spaces/stores';
 
 function createUser(): User {
   return {
@@ -46,8 +47,8 @@ function createApp(user: User): Hono<{ Bindings: Env; Variables: { user: User } 
   Deno.test('workspace activitypub stores routes - lists default and custom stores for a workspace', async () => {
   /* mocks cleared (no-op in Deno) */ void 0;
     mocks.requireSpaceAccess = (async () => ({
-      workspace: { id: 'ws-1' },
-      member: { role: 'owner' },
+      space: { id: 'ws-1' },
+      membership: { role: 'owner' },
     })) as any;
   mocks.listActivityPubStoresForWorkspace = (async () => [
       {
@@ -73,6 +74,8 @@ function createApp(user: User): Hono<{ Bindings: Env; Variables: { user: User } 
         updatedAt: '2026-03-02T00:00:00.000Z',
       },
     ]) as any;
+  spacesStoresRouteDeps.requireSpaceAccess = mocks.requireSpaceAccess;
+  spacesStoresRouteDeps.listActivityPubStoresForWorkspace = mocks.listActivityPubStoresForWorkspace;
 
     const app = createApp(createUser());
     const response = await app.fetch(
@@ -108,10 +111,10 @@ function createApp(user: User): Hono<{ Bindings: Env; Variables: { user: User } 
   Deno.test('workspace activitypub stores routes - creates a custom store for a workspace', async () => {
   /* mocks cleared (no-op in Deno) */ void 0;
     mocks.requireSpaceAccess = (async () => ({
-      workspace: { id: 'ws-1' },
-      member: { role: 'owner' },
+      space: { id: 'ws-1' },
+      membership: { role: 'owner' },
     })) as any;
-  mocks.createActivityPubStore = (async () => ({
+  mocks.createActivityPubStore = spy(async () => ({
       accountId: 'ws-1',
       accountSlug: 'alice',
       slug: 'oss',
@@ -122,6 +125,8 @@ function createApp(user: User): Hono<{ Bindings: Env; Variables: { user: User } 
       createdAt: '2026-03-02T00:00:00.000Z',
       updatedAt: '2026-03-02T00:00:00.000Z',
     })) as any;
+  spacesStoresRouteDeps.requireSpaceAccess = mocks.requireSpaceAccess;
+  spacesStoresRouteDeps.createActivityPubStore = mocks.createActivityPubStore;
 
     const app = createApp(createUser());
     const response = await app.fetch(
@@ -139,7 +144,9 @@ function createApp(user: User): Hono<{ Bindings: Env; Variables: { user: User } 
     );
 
     assertEquals(response.status, 201);
-    assertSpyCallArgs(mocks.createActivityPubStore, 0, [expect.anything(), 'ws-1', {
+    assertSpyCalls(mocks.createActivityPubStore, 1);
+    assert(mocks.createActivityPubStore.calls[0].args[0] != null);
+    assertEquals(mocks.createActivityPubStore.calls[0].args.slice(1), ['ws-1', {
       slug: 'oss',
       name: 'OSS Catalog',
       summary: 'Open source picks',
@@ -149,10 +156,10 @@ function createApp(user: User): Hono<{ Bindings: Env; Variables: { user: User } 
   Deno.test('workspace activitypub stores routes - updates a custom store for a workspace', async () => {
   /* mocks cleared (no-op in Deno) */ void 0;
     mocks.requireSpaceAccess = (async () => ({
-      workspace: { id: 'ws-1' },
-      member: { role: 'owner' },
+      space: { id: 'ws-1' },
+      membership: { role: 'owner' },
     })) as any;
-  mocks.updateActivityPubStore = (async () => ({
+  mocks.updateActivityPubStore = spy(async () => ({
       accountId: 'ws-1',
       accountSlug: 'alice',
       slug: 'oss',
@@ -163,6 +170,8 @@ function createApp(user: User): Hono<{ Bindings: Env; Variables: { user: User } 
       createdAt: '2026-03-02T00:00:00.000Z',
       updatedAt: '2026-03-03T00:00:00.000Z',
     })) as any;
+  spacesStoresRouteDeps.requireSpaceAccess = mocks.requireSpaceAccess;
+  spacesStoresRouteDeps.updateActivityPubStore = mocks.updateActivityPubStore;
 
     const app = createApp(createUser());
     const response = await app.fetch(
@@ -178,7 +187,9 @@ function createApp(user: User): Hono<{ Bindings: Env; Variables: { user: User } 
     );
 
     assertEquals(response.status, 200);
-    assertSpyCallArgs(mocks.updateActivityPubStore, 0, [expect.anything(), 'ws-1', 'oss', {
+    assertSpyCalls(mocks.updateActivityPubStore, 1);
+    assert(mocks.updateActivityPubStore.calls[0].args[0] != null);
+    assertEquals(mocks.updateActivityPubStore.calls[0].args.slice(1), ['ws-1', 'oss', {
       name: undefined,
       summary: 'Updated summary',
       iconUrl: undefined,
@@ -187,10 +198,12 @@ function createApp(user: User): Hono<{ Bindings: Env; Variables: { user: User } 
   Deno.test('workspace activitypub stores routes - deletes a custom store for a workspace', async () => {
   /* mocks cleared (no-op in Deno) */ void 0;
     mocks.requireSpaceAccess = (async () => ({
-      workspace: { id: 'ws-1' },
-      member: { role: 'owner' },
+      space: { id: 'ws-1' },
+      membership: { role: 'owner' },
     })) as any;
-  mocks.deleteActivityPubStore = (async () => true) as any;
+  mocks.deleteActivityPubStore = spy(async () => true) as any;
+  spacesStoresRouteDeps.requireSpaceAccess = mocks.requireSpaceAccess;
+  spacesStoresRouteDeps.deleteActivityPubStore = mocks.deleteActivityPubStore;
 
     const app = createApp(createUser());
     const response = await app.fetch(
@@ -203,5 +216,7 @@ function createApp(user: User): Hono<{ Bindings: Env; Variables: { user: User } 
 
     assertEquals(response.status, 200);
     await assertEquals(await response.json(), { success: true });
-    assertSpyCallArgs(mocks.deleteActivityPubStore, 0, [expect.anything(), 'ws-1', 'oss']);
+    assertSpyCalls(mocks.deleteActivityPubStore, 1);
+    assert(mocks.deleteActivityPubStore.calls[0].args[0] != null);
+    assertEquals(mocks.deleteActivityPubStore.calls[0].args.slice(1), ['ws-1', 'oss']);
 })

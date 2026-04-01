@@ -1,4 +1,4 @@
-import { Command } from 'commander';
+import type { Command } from 'commander';
 import { blue, bold, green, red, yellow } from '@std/fmt/colors';
 import { randomBytes } from 'node:crypto';
 

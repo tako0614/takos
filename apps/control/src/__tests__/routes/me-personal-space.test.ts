@@ -3,13 +3,9 @@ import type { Env, User } from '@/types';
 import { createMockEnv } from '../../../test/integration/setup.ts';
 
 import { assertEquals } from 'jsr:@std/assert';
+import { installAppErrorHandler } from './test-support.ts';
 
-const mocks = ({
-  getOrCreatePersonalWorkspace: ((..._args: any[]) => undefined) as any,
-});
-
-// [Deno] vi.mock removed - manually stub imports from '@/services/identity/spaces'
-import meRoutes from '@/routes/me';
+import meRoutes, { meRouteDeps } from '@/routes/me';
 
 type TestEnv = {
   Bindings: Env;
@@ -35,6 +31,7 @@ function createUser(): User {
 
 function createApp(user: User) {
   const app = new Hono<TestEnv>();
+  installAppErrorHandler(app);
   app.use('*', async (c, next) => {
     c.set('user', user);
     await next();
@@ -43,10 +40,11 @@ function createApp(user: User) {
   return app;
 }
 
-
-  Deno.test('me personal-space route - returns the canonical space payload', async () => {
+Deno.test('me personal-space route - returns the canonical space payload', async () => {
   /* mocks cleared (no-op in Deno) */ void 0;
-  mocks.getOrCreatePersonalWorkspace = (async () => ({
+  const originalGetOrCreatePersonalWorkspace =
+    meRouteDeps.getOrCreatePersonalWorkspace;
+  meRouteDeps.getOrCreatePersonalWorkspace = (async () => ({
       id: 'user-1',
       kind: 'user',
       name: 'User One',
@@ -55,7 +53,7 @@ function createApp(user: User) {
       created_at: '2026-03-01T00:00:00.000Z',
       updated_at: '2026-03-01T00:00:00.000Z',
     })) as any;
-
+  try {
     const response = await createApp(createUser()).fetch(
       new Request('http://localhost/api/me/personal-space'),
       createMockEnv() as unknown as Env,
@@ -74,4 +72,7 @@ function createApp(user: User) {
         updated_at: '2026-03-01T00:00:00.000Z',
       },
     });
-})
+  } finally {
+    meRouteDeps.getOrCreatePersonalWorkspace = originalGetOrCreatePersonalWorkspace;
+  }
+});

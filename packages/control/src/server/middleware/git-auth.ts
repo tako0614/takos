@@ -7,10 +7,19 @@
  * Returns 401 with WWW-Authenticate header if no/invalid auth.
  */
 
-import type { Context, MiddlewareHandler } from 'hono';
-import type { Env, User } from '../../shared/types/index.ts';
-import { getCachedUser, isValidUserId } from '../../application/services/identity/user-cache.ts';
-import { validateTakosPersonalAccessToken } from '../../application/services/identity/takos-access-tokens.ts';
+import type { Context, MiddlewareHandler } from "hono";
+import type { Env, User } from "../../shared/types/index.ts";
+import {
+  getCachedUser,
+  isValidUserId,
+} from "../../application/services/identity/user-cache.ts";
+import { validateTakosPersonalAccessToken } from "../../application/services/identity/takos-access-tokens.ts";
+
+export const gitAuthDeps = {
+  getCachedUser,
+  isValidUserId,
+  validateTakosPersonalAccessToken,
+};
 
 type GitAuthVariables = {
   user?: User;
@@ -19,19 +28,19 @@ type GitAuthVariables = {
 type GitAuthContext = Context<{ Bindings: Env; Variables: GitAuthVariables }>;
 
 function unauthorizedResponse(): Response {
-  return new Response('Authentication required\n', {
+  return new Response("Authentication required\n", {
     status: 401,
     headers: {
-      'WWW-Authenticate': 'Basic realm="takos"',
-      'Content-Type': 'text/plain',
+      "WWW-Authenticate": 'Basic realm="takos"',
+      "Content-Type": "text/plain",
     },
   });
 }
 
 function forbiddenResponse(): Response {
-  return new Response('Access denied\n', {
+  return new Response("Access denied\n", {
     status: 403,
-    headers: { 'Content-Type': 'text/plain' },
+    headers: { "Content-Type": "text/plain" },
   });
 }
 
@@ -40,15 +49,17 @@ function forbiddenResponse(): Response {
  * Format: Authorization: Basic base64(username:password)
  * The password field contains the PAT.
  */
-function extractPatFromBasicAuth(authHeader: string | undefined): string | null {
-  if (!authHeader?.startsWith('Basic ')) return null;
+function extractPatFromBasicAuth(
+  authHeader: string | undefined,
+): string | null {
+  if (!authHeader?.startsWith("Basic ")) return null;
 
   try {
     const decoded = atob(authHeader.slice(6));
-    const colonIdx = decoded.indexOf(':');
+    const colonIdx = decoded.indexOf(":");
     if (colonIdx === -1) return null;
     const password = decoded.slice(colonIdx + 1);
-    return password.startsWith('tak_pat_') ? password : null;
+    return password.startsWith("tak_pat_") ? password : null;
   } catch (_err) {
     // Malformed base64 in Authorization header -- treat as unauthenticated
     return null;
@@ -59,17 +70,22 @@ async function validatePat(
   c: GitAuthContext,
   token: string,
 ): Promise<User | null> {
-  const validated = await validateTakosPersonalAccessToken(c.env.DB, token);
-  if (!validated || !isValidUserId(validated.userId)) return null;
-  return getCachedUser(c, validated.userId);
+  const validated = await gitAuthDeps.validateTakosPersonalAccessToken(
+    c.env.DB,
+    token,
+  );
+  if (!validated || !gitAuthDeps.isValidUserId(validated.userId)) return null;
+  return gitAuthDeps.getCachedUser(c, validated.userId);
 }
 
 /**
  * Git auth middleware — requires Basic auth with PAT.
  * Sets c.get('user') on success.
  */
-export const requireGitAuth: MiddlewareHandler<{ Bindings: Env; Variables: GitAuthVariables }> = async (c, next): Promise<Response | void> => {
-  const authHeader = c.req.header('Authorization');
+export const requireGitAuth: MiddlewareHandler<
+  { Bindings: Env; Variables: GitAuthVariables }
+> = async (c, next): Promise<Response | void> => {
+  const authHeader = c.req.header("Authorization");
   const pat = extractPatFromBasicAuth(authHeader);
 
   if (!pat) {
@@ -81,21 +97,23 @@ export const requireGitAuth: MiddlewareHandler<{ Bindings: Env; Variables: GitAu
     return forbiddenResponse();
   }
 
-  c.set('user', user);
+  c.set("user", user);
   await next();
 };
 
 /**
  * Optional git auth — sets user if valid auth present, allows anonymous for public repos.
  */
-export const optionalGitAuth: MiddlewareHandler<{ Bindings: Env; Variables: GitAuthVariables }> = async (c, next) => {
-  const authHeader = c.req.header('Authorization');
+export const optionalGitAuth: MiddlewareHandler<
+  { Bindings: Env; Variables: GitAuthVariables }
+> = async (c, next) => {
+  const authHeader = c.req.header("Authorization");
   const pat = extractPatFromBasicAuth(authHeader);
 
   if (pat) {
     const user = await validatePat(c as GitAuthContext, pat);
     if (user) {
-      c.set('user', user);
+      c.set("user", user);
     }
   }
 

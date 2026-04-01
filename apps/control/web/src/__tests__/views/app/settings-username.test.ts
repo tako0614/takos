@@ -35,5 +35,6 @@ import { assertEquals } from 'jsr:@std/assert';
         'old-handle',
         'new-handle',
       ),
-    , { view: 'profile', username: 'someone-else' });
+      { view: 'profile', username: 'someone-else' },
+    );
 })

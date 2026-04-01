@@ -1,6 +1,6 @@
 import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import path from "node:path";
-import YAML from "yaml";
+import { parseAppManifestYaml } from "../packages/control/src/application/services/source/app-manifest.ts";
 
 type ValidationResult = {
   errors: string[];
@@ -94,8 +94,12 @@ const REQUIRED_PAGE_SNIPPETS: Record<string, string[]> = {
 const FORBIDDEN_PAGE_SNIPPETS: Record<string, RegExp[]> = {
   "reference/cli-auth.md": [/credentials\.json/],
   "deploy/index.md": [/\/api\/workers\/:id\/deployments/],
-  "apps/workers.md": [/API 上の `\/api\/workers` は内部的に service を操作します。/],
-  "platform/threads-and-runs.md": [/`retrieval_index`\s*\|\s*検索インデックス用テキスト/],
+  "apps/workers.md": [
+    /API 上の `\/api\/workers` は内部的に service を操作します。/,
+  ],
+  "platform/threads-and-runs.md": [
+    /`retrieval_index`\s*\|\s*検索インデックス用テキスト/,
+  ],
 };
 
 const SKIP_SCAN_DIRS = new Set([
@@ -113,8 +117,14 @@ const SKIP_SCAN_DIRS = new Set([
   "artifacts",
 ]);
 
-const CURRENT_CLI_TOP_LEVEL = ["login", "whoami", "logout", "deploy", "endpoint"];
-const REQUIRED_ROOT_SCRIPTS = ["build:all", "test:all", "docs:dev", "dev:takos", "local:up", "local:smoke"];
+const REQUIRED_ROOT_SCRIPTS = [
+  "build:all",
+  "test:all",
+  "docs:dev",
+  "dev:takos",
+  "local:up",
+  "local:smoke",
+];
 const REQUIRED_CONTROL_SCRIPTS = [
   "dev:local:web",
   "dev:local:dispatch",
@@ -185,7 +195,7 @@ function isDirectory(targetPath: string): boolean {
 }
 
 function resolveTakosRepoRoot(): string {
-  const configured = Deno.env.get('TAKOS_REPO_DIR');
+  const configured = Deno.env.get("TAKOS_REPO_DIR");
   const candidates = [
     configured,
     path.resolve(process.cwd(), ".."),
@@ -194,14 +204,23 @@ function resolveTakosRepoRoot(): string {
 
   for (const candidate of candidates) {
     if (
-      isFile(path.join(candidate, "package.json")) &&
-      isFile(path.join(candidate, "pnpm-workspace.yaml"))
+      (
+        isFile(path.join(candidate, "package.json")) &&
+        isFile(path.join(candidate, "pnpm-workspace.yaml"))
+      ) ||
+      (
+        isFile(path.join(candidate, "deno.json")) &&
+        isDirectory(path.join(candidate, "docs")) &&
+        isDirectory(path.join(candidate, "apps"))
+      )
     ) {
       return candidate;
     }
   }
 
-  throw new Error("Takos repo root not found. Run from takos/ or set TAKOS_REPO_DIR.");
+  throw new Error(
+    "Takos repo root not found. Run from takos/ or set TAKOS_REPO_DIR.",
+  );
 }
 
 function resolveDocsDir(repoRoot: string): string {
@@ -235,7 +254,11 @@ function stripFencedCodeBlocks(content: string): string {
   return content.replace(/```[\s\S]*?```/g, "");
 }
 
-function resolveDocsLinkPath(docsDir: string, file: string, linkPath: string): string | null {
+function resolveDocsLinkPath(
+  docsDir: string,
+  file: string,
+  linkPath: string,
+): string | null {
   const base = linkPath.startsWith("/")
     ? path.join(docsDir, linkPath.slice(1))
     : path.resolve(path.dirname(file), linkPath);
@@ -267,7 +290,10 @@ function sortedUnique(values: Iterable<string>): string[] {
   return [...new Set(values)].sort((a, b) => a.localeCompare(b));
 }
 
-function setDiff(expected: string[], actual: string[]): { missing: string[]; extra: string[] } {
+function setDiff(
+  expected: string[],
+  actual: string[],
+): { missing: string[]; extra: string[] } {
   const expectedSet = new Set(expected);
   const actualSet = new Set(actual);
   return {
@@ -276,241 +302,66 @@ function setDiff(expected: string[], actual: string[]): { missing: string[]; ext
   };
 }
 
-function asRecord(value: unknown, field: string): Record<string, unknown> {
-  if (!value || typeof value !== "object" || Array.isArray(value)) {
-    throw new Error(`${field} must be an object`);
-  }
-  return value as Record<string, unknown>;
+function extractFullManifestCodeBlocks(content: string): string[] {
+  const blocks = Array.from(content.matchAll(/```(?:ya?ml)\n([\s\S]*?)```/g))
+    .map((match) => match[1]?.trim() ?? "")
+    .filter(Boolean);
+  return blocks.filter((block) =>
+    block.includes("apiVersion: takos.dev/v1alpha1") &&
+    block.includes("kind: App")
+  );
 }
 
-function asRequiredString(value: unknown, field: string): string {
-  const normalized = String(value ?? "").trim();
-  if (!normalized) {
-    throw new Error(`${field} is required`);
-  }
-  return normalized;
-}
-
-function asStringArray(value: unknown, field: string): string[] {
-  if (!Array.isArray(value)) {
-    throw new Error(`${field} must be an array`);
-  }
-  return value.map((entry, index) => asRequiredString(entry, `${field}[${index}]`));
-}
-
-function validateCurrentManifestYaml(raw: string): void {
-  const parsed = YAML.parse(raw);
-  const record = asRecord(parsed, "manifest");
-  if (asRequiredString(record.apiVersion, "apiVersion") !== "takos.dev/v1alpha1") {
-    throw new Error("apiVersion must be takos.dev/v1alpha1");
-  }
-  if (asRequiredString(record.kind, "kind") !== "App") {
-    throw new Error("kind must be App");
-  }
-
-  const metadata = asRecord(record.metadata, "metadata");
-  asRequiredString(metadata.name, "metadata.name");
-
-  const spec = asRecord(record.spec, "spec");
-  asRequiredString(spec.version, "spec.version");
-
-  const services = asRecord(spec.services, "spec.services");
-  const serviceNames = Object.keys(services);
-  if (serviceNames.length === 0) {
-    throw new Error("spec.services must contain at least one service");
-  }
-
-  for (const [serviceName, serviceValue] of Object.entries(services)) {
-    const service = asRecord(serviceValue, `spec.services.${serviceName}`);
-    if (asRequiredString(service.type, `spec.services.${serviceName}.type`) !== "worker") {
-      throw new Error(`spec.services.${serviceName}.type must be worker`);
-    }
-
-    const build = asRecord(service.build, `spec.services.${serviceName}.build`);
-    const fromWorkflow = asRecord(
-      build.fromWorkflow,
-      `spec.services.${serviceName}.build.fromWorkflow`,
-    );
-    const workflowPath = asRequiredString(
-      fromWorkflow.path,
-      `spec.services.${serviceName}.build.fromWorkflow.path`,
-    );
-    if (!workflowPath.startsWith(".takos/workflows/")) {
-      throw new Error(
-        `spec.services.${serviceName}.build.fromWorkflow.path must be under .takos/workflows/`,
-      );
-    }
-    asRequiredString(fromWorkflow.job, `spec.services.${serviceName}.build.fromWorkflow.job`);
-    asRequiredString(fromWorkflow.artifact, `spec.services.${serviceName}.build.fromWorkflow.artifact`);
-    asRequiredString(
-      fromWorkflow.artifactPath,
-      `spec.services.${serviceName}.build.fromWorkflow.artifactPath`,
-    );
-  }
-
-  const resources = spec.resources ? asRecord(spec.resources, "spec.resources") : {};
-  const resourceEntries = Object.entries(resources).map(([resourceName, resourceValue]) => [
-    resourceName,
-    asRecord(resourceValue, `spec.resources.${resourceName}`),
-  ] as const);
-  const resourceMap = new Map(resourceEntries);
-  const allowedTypes = new Set([
-    "d1",
-    "r2",
-    "kv",
-    "secretRef",
-    "vectorize",
-    "queue",
-    "analyticsEngine",
-    "workflow",
-    "durableObject",
-  ]);
-
-  for (const [resourceName, resource] of resourceEntries) {
-    const type = asRequiredString(resource.type, `spec.resources.${resourceName}.type`);
-    if (!allowedTypes.has(type)) {
-      throw new Error(`unsupported resource type: ${type}`);
-    }
-    if (type === "queue") {
-      const queue = resource.queue ? asRecord(resource.queue, `spec.resources.${resourceName}.queue`) : {};
-      const deadLetterQueue = queue.deadLetterQueue == null
-        ? ""
-        : asRequiredString(queue.deadLetterQueue, `spec.resources.${resourceName}.queue.deadLetterQueue`);
-      if (deadLetterQueue) {
-        const target = resourceMap.get(deadLetterQueue);
-        if (!target || target.type !== "queue") {
-          throw new Error(
-            `spec.resources.${resourceName}.queue.deadLetterQueue must reference a queue resource`,
-          );
-        }
-      }
-    }
-    if (type === "workflow") {
-      const workflow = asRecord(resource.workflow, `spec.resources.${resourceName}.workflow`);
-      const workflowService = asRequiredString(
-        workflow.service,
-        `spec.resources.${resourceName}.workflow.service`,
-      );
-      if (!services[workflowService]) {
-        throw new Error(
-          `spec.resources.${resourceName}.workflow.service references unknown service: ${workflowService}`,
+function validateManifestExamples(
+  docsDir: string,
+  result: ValidationResult,
+): void {
+  for (const file of walkFiles(docsDir)) {
+    if (!file.endsWith(".md")) continue;
+    const relativePath = path.relative(docsDir, file);
+    const content = readFileSync(file, "utf8");
+    const manifests = extractFullManifestCodeBlocks(content);
+    for (const [index, manifest] of manifests.entries()) {
+      try {
+        parseAppManifestYaml(manifest);
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        result.errors.push(
+          `[docs] invalid manifest example in ${relativePath}#${
+            index + 1
+          }: ${message}`,
         );
       }
-      asRequiredString(workflow.export, `spec.resources.${resourceName}.workflow.export`);
-    }
-  }
-
-  const bindingTypeMap: Array<[keyof Record<string, unknown>, string]> = [
-    ["d1", "d1"],
-    ["r2", "r2"],
-    ["kv", "kv"],
-    ["vectorize", "vectorize"],
-    ["queues", "queue"],
-    ["analytics", "analyticsEngine"],
-    ["workflows", "workflow"],
-    ["durableObjects", "durableObject"],
-  ];
-  for (const [serviceName, serviceValue] of Object.entries(services)) {
-    const service = asRecord(serviceValue, `spec.services.${serviceName}`);
-    const bindings = service.bindings ? asRecord(service.bindings, `spec.services.${serviceName}.bindings`) : {};
-    for (const [bindingKey, expectedType] of bindingTypeMap) {
-      if (bindings[bindingKey] == null) continue;
-      for (const resourceName of asStringArray(bindings[bindingKey], `spec.services.${serviceName}.bindings.${bindingKey}`)) {
-        const target = resourceMap.get(resourceName);
-        if (!target || target.type !== expectedType) {
-          throw new Error(
-            `spec.services.${serviceName}.bindings.${bindingKey} references unknown ${expectedType} resource: ${resourceName}`,
-          );
-        }
-      }
-    }
-
-    const triggers = service.triggers ? asRecord(service.triggers, `spec.services.${serviceName}.triggers`) : {};
-    if (triggers.queues != null) {
-      for (const trigger of triggers.queues as unknown[]) {
-        const triggerRecord = asRecord(trigger, `spec.services.${serviceName}.triggers.queues[]`);
-        const queueName = asRequiredString(triggerRecord.queue, `spec.services.${serviceName}.triggers.queues[].queue`);
-        const queueResource = resourceMap.get(queueName);
-        if (!queueResource || queueResource.type !== "queue") {
-          throw new Error(
-            `spec.services.${serviceName}.triggers.queues references unknown queue resource: ${queueName}`,
-          );
-        }
-        asRequiredString(triggerRecord.export, `spec.services.${serviceName}.triggers.queues[].export`);
-      }
-    }
-  }
-
-  if (spec.routes != null) {
-    if (!Array.isArray(spec.routes)) {
-      throw new Error("spec.routes must be an array");
-    }
-    for (const [index, routeEntry] of spec.routes.entries()) {
-      const route = asRecord(routeEntry, `spec.routes[${index}]`);
-      const routeService = asRequiredString(route.service, `spec.routes[${index}].service`);
-      if (!services[routeService]) {
-        throw new Error(`spec.routes[${index}].service references unknown service: ${routeService}`);
-      }
-      if (route.ingress != null) {
-        const ingress = asRequiredString(route.ingress, `spec.routes[${index}].ingress`);
-        if (!services[ingress]) {
-          throw new Error(`spec.routes[${index}].ingress references unknown service: ${ingress}`);
-        }
-      }
-    }
-  }
-
-  if (spec.mcpServers != null) {
-    if (!Array.isArray(spec.mcpServers)) {
-      throw new Error("spec.mcpServers must be an array");
-    }
-    for (const [index, serverEntry] of spec.mcpServers.entries()) {
-      const server = asRecord(serverEntry, `spec.mcpServers[${index}]`);
-      asRequiredString(server.name, `spec.mcpServers[${index}].name`);
-      const endpoint = String(server.endpoint ?? "").trim();
-      const route = String(server.route ?? "").trim();
-      if (!endpoint && !route) {
-        throw new Error(`spec.mcpServers[${index}].endpoint or route is required`);
-      }
-    }
-  }
-
-  if (spec.fileHandlers != null) {
-    if (!Array.isArray(spec.fileHandlers)) {
-      throw new Error("spec.fileHandlers must be an array");
-    }
-    for (const [index, handlerEntry] of spec.fileHandlers.entries()) {
-      const handler = asRecord(handlerEntry, `spec.fileHandlers[${index}]`);
-      asRequiredString(handler.name, `spec.fileHandlers[${index}].name`);
-      asRequiredString(handler.openPath, `spec.fileHandlers[${index}].openPath`);
     }
   }
 }
 
-function extractCliDomains(repoRoot: string): string[] {
-  const cliPath = path.join(repoRoot, "apps", "cli", "src", "commands", "api.ts");
-  const source = readFileSync(cliPath, "utf8");
-  const listStart = source.indexOf("const TASK_DOMAIN_DEFINITIONS");
-  const listEnd = source.indexOf("const MERGED_DOMAIN_REDIRECTS");
-  const domainBlock =
-    listStart >= 0 && listEnd > listStart
-      ? source.slice(listStart, listEnd)
-      : source;
-  const matches = domainBlock.matchAll(/\{\s*name:\s*'([^']+)'/g);
-  return sortedUnique([...matches].map((match) => match[1] ?? ""));
-}
-
-function extractApiFamilies(repoRoot: string, result: ValidationResult): string[] {
-  const apiPath = path.join(repoRoot, "packages", "control", "src", "server", "routes", "api.ts");
+function extractApiFamilies(
+  repoRoot: string,
+  result: ValidationResult,
+): string[] {
+  const apiPath = path.join(
+    repoRoot,
+    "packages",
+    "control",
+    "src",
+    "server",
+    "routes",
+    "api.ts",
+  );
   const source = readFileSync(apiPath, "utf8");
-  const routeMatches = source.matchAll(/apiRouter\.route\([^,]+,\s*([A-Za-z0-9_]+)(?:\(\))?\)/g);
+  const routeMatches = source.matchAll(
+    /apiRouter\.route\([^,]+,\s*([A-Za-z0-9_]+)(?:\(\))?\)/g,
+  );
   const families = new Set<string>();
 
   for (const match of routeMatches) {
     const identifier = match[1] ?? "";
     const family = API_ROUTE_IDENTIFIER_TO_FAMILY[identifier];
     if (!family) {
-      result.warnings.push(`[docs] unmapped API route identifier in api.ts: ${identifier}`);
+      result.warnings.push(
+        `[docs] unmapped API route identifier in api.ts: ${identifier}`,
+      );
       continue;
     }
     families.add(family);
@@ -523,7 +374,10 @@ function extractApiFamilies(repoRoot: string, result: ValidationResult): string[
   return sortedUnique(families);
 }
 
-function validateRequiredSiteFiles(docsDir: string, result: ValidationResult): void {
+function validateRequiredSiteFiles(
+  docsDir: string,
+  result: ValidationResult,
+): void {
   for (const file of REQUIRED_SITE_FILES) {
     const full = path.join(docsDir, file);
     if (!existsSync(full)) {
@@ -532,7 +386,10 @@ function validateRequiredSiteFiles(docsDir: string, result: ValidationResult): v
   }
 }
 
-function validateDocsInternalLinks(docsDir: string, result: ValidationResult): void {
+function validateDocsInternalLinks(
+  docsDir: string,
+  result: ValidationResult,
+): void {
   const files = walkFiles(docsDir).filter((file) => file.endsWith(".md"));
 
   for (const file of files) {
@@ -575,14 +432,20 @@ function validateDocsInternalLinks(docsDir: string, result: ValidationResult): v
       const resolved = resolveDocsLinkPath(docsDir, file, linkPath);
       if (!resolved) {
         result.warnings.push(
-          `[docs] broken link target in ${path.relative(docsDir, file)}: ${linkPath}`,
+          `[docs] broken link target in ${
+            path.relative(docsDir, file)
+          }: ${linkPath}`,
         );
       }
     }
   }
 }
 
-function validateDocsScriptRefs(repoRoot: string, docsDir: string, result: ValidationResult): void {
+function validateDocsScriptRefs(
+  repoRoot: string,
+  docsDir: string,
+  result: ValidationResult,
+): void {
   const files = walkFiles(docsDir).filter((file) => file.endsWith(".md"));
   const refPattern =
     /\b(?:apps|packages|scripts)\/[A-Za-z0-9_./-]+\.(?:ts|tsx|js|mjs|cjs|sh|bash|py|sql)\b/g;
@@ -594,14 +457,19 @@ function validateDocsScriptRefs(repoRoot: string, docsDir: string, result: Valid
       const full = path.resolve(repoRoot, ref);
       if (!existsSync(full)) {
         result.warnings.push(
-          `[docs] script or source reference not found: ${ref} (referenced by ${path.relative(docsDir, file)})`,
+          `[docs] script or source reference not found: ${ref} (referenced by ${
+            path.relative(docsDir, file)
+          })`,
         );
       }
     }
   }
 }
 
-function validateSelfContainedDocs(docsDir: string, result: ValidationResult): void {
+function validateSelfContainedDocs(
+  docsDir: string,
+  result: ValidationResult,
+): void {
   const files = walkFiles(docsDir).filter((file) => file.endsWith(".md"));
   const forbiddenLinkPattern =
     /\[[^\]]*?\]\((?:\/)?(?:README\.md|CONTRIBUTING\.md|AGENTS\.md|CLAUDE\.md)(?:#[^)]+)?\)/g;
@@ -632,11 +500,18 @@ function validateSelfContainedDocs(docsDir: string, result: ValidationResult): v
   }
 }
 
-function validateRepoDocsPolicy(_repoRoot: string, _result: ValidationResult): void {
+function validateRepoDocsPolicy(
+  _repoRoot: string,
+  _result: ValidationResult,
+): void {
   // docs/ now lives at the repository root — no policy violation to check.
 }
 
-function validateManifestDocs(repoRoot: string, docsDir: string, result: ValidationResult): void {
+function validateManifestDocs(
+  _repoRoot: string,
+  docsDir: string,
+  result: ValidationResult,
+): void {
   const manifestDoc = path.join(docsDir, "apps", "manifest.md");
   if (!isFile(manifestDoc)) {
     result.errors.push("[docs] apps/manifest.md is missing");
@@ -644,9 +519,13 @@ function validateManifestDocs(repoRoot: string, docsDir: string, result: Validat
   }
 
   const manifestContent = readFileSync(manifestDoc, "utf8");
-  for (const requiredSnippet of ["kind: App", "build:", "fromWorkflow", "spec:"]) {
+  for (
+    const requiredSnippet of ["kind: App", "build:", "fromWorkflow", "spec:"]
+  ) {
     if (!manifestContent.includes(requiredSnippet)) {
-      result.errors.push(`[docs] apps/manifest.md must mention current contract snippet: ${requiredSnippet}`);
+      result.errors.push(
+        `[docs] apps/manifest.md must mention current contract snippet: ${requiredSnippet}`,
+      );
     }
   }
 
@@ -655,13 +534,19 @@ function validateManifestDocs(repoRoot: string, docsDir: string, result: Validat
     const specContent = readFileSync(manifestSpecDoc, "utf8");
     for (const requiredSnippet of ["apiVersion", "kind", "metadata", "spec"]) {
       if (!specContent.includes(requiredSnippet)) {
-        result.errors.push(`[docs] reference/manifest-spec.md must mention field: ${requiredSnippet}`);
+        result.errors.push(
+          `[docs] reference/manifest-spec.md must mention field: ${requiredSnippet}`,
+        );
       }
     }
   }
 }
 
-function validateCliDocs(repoRoot: string, docsDir: string, result: ValidationResult): void {
+function validateCliDocs(
+  _repoRoot: string,
+  docsDir: string,
+  result: ValidationResult,
+): void {
   const cliDoc = path.join(docsDir, "reference", "cli.md");
   if (!isFile(cliDoc)) {
     result.errors.push("[docs] reference/cli.md is missing");
@@ -679,13 +564,23 @@ function validateCliDocs(repoRoot: string, docsDir: string, result: ValidationRe
   ];
   for (const snippet of requiredSnippets) {
     if (!content.includes(snippet)) {
-      result.errors.push(`[docs] CLI commands doc is missing current snippet: ${snippet}`);
+      result.errors.push(
+        `[docs] CLI commands doc is missing current snippet: ${snippet}`,
+      );
     }
   }
 
-  for (const legacyHeading of ["## build / publish / promote", "## mcp", "## personal-access-token"]) {
+  for (
+    const legacyHeading of [
+      "## build / publish / promote",
+      "## mcp",
+      "## personal-access-token",
+    ]
+  ) {
     if (content.includes(legacyHeading)) {
-      result.errors.push(`[docs] stale CLI heading detected in CLI doc: ${legacyHeading}`);
+      result.errors.push(
+        `[docs] stale CLI heading detected in CLI doc: ${legacyHeading}`,
+      );
     }
   }
 
@@ -694,13 +589,18 @@ function validateCliDocs(repoRoot: string, docsDir: string, result: ValidationRe
     const authContent = readFileSync(cliAuthDoc, "utf8");
     for (const snippet of ["takos login", "task-oriented"]) {
       if (!authContent.includes(snippet)) {
-        result.errors.push(`[docs] CLI auth doc is missing current snippet: ${snippet}`);
+        result.errors.push(
+          `[docs] CLI auth doc is missing current snippet: ${snippet}`,
+        );
       }
     }
   }
 }
 
-function validatePlatformMatrixDoc(docsDir: string, result: ValidationResult): void {
+function validatePlatformMatrixDoc(
+  docsDir: string,
+  result: ValidationResult,
+): void {
   const matrixDoc = path.join(docsDir, "platform", "compatibility.md");
   if (!isFile(matrixDoc)) {
     result.errors.push("[docs] platform/compatibility.md is missing");
@@ -708,20 +608,25 @@ function validatePlatformMatrixDoc(docsDir: string, result: ValidationResult): v
   }
   const content = readFileSync(matrixDoc, "utf8");
 
-  for (const snippet of [
-    ".env.local.example",
-    "apps/control/.env.example",
-    "apps/control/.env.self-host.example",
-    "apps/control/SECRETS.md",
-    "apps/control/wrangler*.toml",
-    "deploy/helm/takos/",
-  ]) {
+  for (
+    const snippet of [
+      ".env.local.example",
+      "apps/control/.env.example",
+      "apps/control/.env.self-host.example",
+      "apps/control/SECRETS.md",
+      "apps/control/wrangler*.toml",
+      "deploy/helm/takos/",
+    ]
+  ) {
     if (!content.includes(snippet)) {
-      result.errors.push(`[docs] platform matrix is missing tracked template snippet: ${snippet}`);
+      result.errors.push(
+        `[docs] platform matrix is missing tracked template snippet: ${snippet}`,
+      );
     }
   }
 
-  const selfHostTemplateCount = (content.match(/apps\/control\/\.env\.self-host\.example/g) ?? []).length;
+  const selfHostTemplateCount =
+    (content.match(/apps\/control\/\.env\.self-host\.example/g) ?? []).length;
   if (selfHostTemplateCount !== 1) {
     result.errors.push(
       `[docs] platform matrix must mention apps/control/.env.self-host.example exactly once (found ${selfHostTemplateCount})`,
@@ -729,31 +634,45 @@ function validatePlatformMatrixDoc(docsDir: string, result: ValidationResult): v
   }
 
   if (content.includes("secret 管理コマンド")) {
-    result.errors.push("[docs] platform matrix must reference a tracked file, not a vague secret command entry");
+    result.errors.push(
+      "[docs] platform matrix must reference a tracked file, not a vague secret command entry",
+    );
   }
 }
 
-function validateApiDocs(repoRoot: string, docsDir: string, result: ValidationResult): void {
+function validateApiDocs(
+  repoRoot: string,
+  docsDir: string,
+  result: ValidationResult,
+): void {
   const apiDoc = path.join(docsDir, "reference", "api.md");
   const actualFamilies = extractApiFamilies(repoRoot, result);
-  const markerFamilies = sortedUnique(parseMarkerList(readDocsMarker(apiDoc, "api-families")));
+  const markerFamilies = sortedUnique(
+    parseMarkerList(readDocsMarker(apiDoc, "api-families")),
+  );
   const diff = setDiff(actualFamilies, markerFamilies);
   if (diff.missing.length > 0 || diff.extra.length > 0) {
     result.errors.push(
-      `[docs] API family coverage mismatch. missing=${diff.missing.join("|") || "-"} extra=${diff.extra.join("|") || "-"}`,
+      `[docs] API family coverage mismatch. missing=${
+        diff.missing.join("|") || "-"
+      } extra=${diff.extra.join("|") || "-"}`,
     );
   }
 
   const content = readFileSync(apiDoc, "utf8");
-  for (const snippet of [
-    "/api/spaces/:spaceId/app-deployments",
-    "/api/runs/:id/sse",
-    "/api/notifications/sse",
-    "/api/spaces/:spaceId/common-env",
-    "/api/services/:id/custom-domains",
-  ]) {
+  for (
+    const snippet of [
+      "/api/spaces/:spaceId/app-deployments",
+      "/api/runs/:id/sse",
+      "/api/notifications/sse",
+      "/api/spaces/:spaceId/common-env",
+      "/api/services/:id/custom-domains",
+    ]
+  ) {
     if (!content.includes(snippet)) {
-      result.errors.push(`[docs] API reference is missing current path snippet: ${snippet}`);
+      result.errors.push(
+        `[docs] API reference is missing current path snippet: ${snippet}`,
+      );
     }
   }
 }
@@ -811,7 +730,8 @@ const ENDPOINT_SKIP_SUFFIXES = [
 const ENDPOINT_RE = /\.(get|post|put|patch|delete)\s*\(\s*['"](\/[^'"]*)['"]/gi;
 
 /** Matches documented endpoints in markdown table rows */
-const DOC_ENDPOINT_RE = /^\|\s*(GET|POST|PUT|PATCH|DELETE)\s*\|\s*`(\/api\/[^`]+)`/gm;
+const DOC_ENDPOINT_RE =
+  /^\|\s*(GET|POST|PUT|PATCH|DELETE)\s*\|\s*`(\/api\/[^`]+)`/gm;
 
 /**
  * Paths starting with these prefixes are root-mounted and should not have an
@@ -861,10 +781,11 @@ function extractSourceApiEndpoints(repoRoot: string): Set<string> {
 
       // If the path looks like a root-scoped route (e.g. shortcut group
       // routes in shortcuts.ts that start with /spaces/), skip the mount prefix.
-      const full =
-        mount && ABSOLUTE_PATH_SIGNALS.some((h) => routePath.startsWith(h))
-          ? `/api${routePath}`
-          : `/api${mount}${routePath}`;
+      const full = mount && ABSOLUTE_PATH_SIGNALS.some((h) =>
+          routePath.startsWith(h)
+        )
+        ? `/api${routePath}`
+        : `/api${mount}${routePath}`;
       endpoints.add(`${method} ${full}`);
 
       // /workspaces/:id is an alias for /spaces/:id — add both
@@ -878,7 +799,10 @@ function extractSourceApiEndpoints(repoRoot: string): Set<string> {
 }
 
 function extractDocApiEndpoints(docsDir: string): Set<string> {
-  const content = readFileSync(path.join(docsDir, "reference", "api.md"), "utf8");
+  const content = readFileSync(
+    path.join(docsDir, "reference", "api.md"),
+    "utf8",
+  );
   const endpoints = new Set<string>();
   DOC_ENDPOINT_RE.lastIndex = 0;
   let m: RegExpExecArray | null;
@@ -944,58 +868,106 @@ function validateApiEndpointCoverage(
 
   if (undocumented.length > 0) {
     result.errors.push(
-      `[docs] ${undocumented.length} undocumented API endpoint(s):\n${undocumented.map((e) => `  + ${e}`).join("\n")}`,
+      `[docs] ${undocumented.length} undocumented API endpoint(s):\n${
+        undocumented.map((e) => `  + ${e}`).join("\n")
+      }`,
     );
   }
   if (stale.length > 0) {
     result.warnings.push(
-      `[docs] ${stale.length} possibly stale documented endpoint(s):\n${stale.map((e) => `  - ${e}`).join("\n")}`,
+      `[docs] ${stale.length} possibly stale documented endpoint(s):\n${
+        stale.map((e) => `  - ${e}`).join("\n")
+      }`,
     );
   }
 }
 
-function validateSupplementalDocs(repoRoot: string, result: ValidationResult): void {
+function validateSupplementalDocs(
+  repoRoot: string,
+  result: ValidationResult,
+): void {
   const readmePath = path.join(repoRoot, "README.md");
   const controlDir = path.join(repoRoot, "apps", "control");
-  const controlPackagePath = path.join(controlDir, "package.json");
+  const rootConfigPath = isFile(path.join(repoRoot, "deno.json"))
+    ? path.join(repoRoot, "deno.json")
+    : path.join(repoRoot, "package.json");
+  const controlConfigPath = isFile(path.join(controlDir, "deno.json"))
+    ? path.join(controlDir, "deno.json")
+    : path.join(controlDir, "package.json");
   const envExamplePath = path.join(controlDir, ".env.example");
   const selfHostEnvPath = path.join(controlDir, ".env.self-host.example");
   const secretsPath = path.join(controlDir, "SECRETS.md");
-  const rootPackage = readJsonFile<{ scripts?: Record<string, string> }>(path.join(repoRoot, "package.json"));
-  const controlPackage = readJsonFile<{ scripts?: Record<string, string> }>(controlPackagePath);
+  const rootPackage = readJsonFile<{
+    scripts?: Record<string, string>;
+    tasks?: Record<string, string>;
+  }>(
+    rootConfigPath,
+  );
+  const controlPackage = readJsonFile<{
+    scripts?: Record<string, string>;
+    tasks?: Record<string, string>;
+  }>(
+    controlConfigPath,
+  );
+  const rootCommands = rootPackage.tasks ?? rootPackage.scripts ?? {};
+  const controlCommands = controlPackage.tasks ?? controlPackage.scripts ?? {};
   const readme = readFileSync(readmePath, "utf8");
-  const selfHostContent = readFileSync(selfHostEnvPath, "utf8");
-  const envExampleContent = readFileSync(envExamplePath, "utf8");
+  const selfHostContent = isFile(selfHostEnvPath)
+    ? readFileSync(selfHostEnvPath, "utf8")
+    : "";
+  const envExampleContent = isFile(envExamplePath)
+    ? readFileSync(envExamplePath, "utf8")
+    : "";
   const secretsContent = readFileSync(secretsPath, "utf8");
 
   for (const scriptName of REQUIRED_ROOT_SCRIPTS) {
-    if (!rootPackage.scripts?.[scriptName]) {
-      result.errors.push(`[docs] root package is missing required script referenced by docs: ${scriptName}`);
+    if (!rootCommands[scriptName]) {
+      result.errors.push(
+        `[docs] root package is missing required script referenced by docs: ${scriptName}`,
+      );
     }
     if (!readme.includes(scriptName)) {
-      result.errors.push(`[docs] README.md must mention current root script: ${scriptName}`);
+      result.errors.push(
+        `[docs] README.md must mention current root script: ${scriptName}`,
+      );
     }
   }
 
   for (const scriptName of REQUIRED_CONTROL_SCRIPTS) {
-    if (!controlPackage.scripts?.[scriptName]) {
-      result.errors.push(`[docs] apps/control package is missing required local-platform script: ${scriptName}`);
+    if (!controlCommands[scriptName]) {
+      result.errors.push(
+        `[docs] apps/control package is missing required local-platform script: ${scriptName}`,
+      );
     }
-    if (!selfHostContent.includes(scriptName)) {
-      result.errors.push(`[docs] .env.self-host.example must mention current control script: ${scriptName}`);
+    if (selfHostContent && !selfHostContent.includes(scriptName)) {
+      result.errors.push(
+        `[docs] .env.self-host.example must mention current control script: ${scriptName}`,
+      );
     }
   }
 
   if (selfHostContent.includes("dev:self-host")) {
-    result.errors.push("[docs] .env.self-host.example must not reference removed dev:self-host scripts");
+    result.errors.push(
+      "[docs] .env.self-host.example must not reference removed dev:self-host scripts",
+    );
   }
   if (/TAKOS_SELF_HOST_/.test(selfHostContent)) {
-    result.errors.push("[docs] .env.self-host.example must use current TAKOS_LOCAL_* env contract");
+    result.errors.push(
+      "[docs] .env.self-host.example must use current TAKOS_LOCAL_* env contract",
+    );
   }
 
-  for (const requiredSnippet of ["CONTROL_RPC_BASE_URL", "PROXY_BASE_URL", "WFP_DISPATCH_NAMESPACE"]) {
-    if (!envExampleContent.includes(requiredSnippet)) {
-      result.errors.push(`[docs] .env.example must mention current deploy variable: ${requiredSnippet}`);
+  for (
+    const requiredSnippet of [
+      "CONTROL_RPC_BASE_URL",
+      "PROXY_BASE_URL",
+      "WFP_DISPATCH_NAMESPACE",
+    ]
+  ) {
+    if (envExampleContent && !envExampleContent.includes(requiredSnippet)) {
+      result.errors.push(
+        `[docs] .env.example must mention current deploy variable: ${requiredSnippet}`,
+      );
     }
   }
 
@@ -1005,17 +977,25 @@ function validateSupplementalDocs(repoRoot: string, result: ValidationResult): v
   ]);
   for (const configName of REQUIRED_WRANGLER_CONFIGS) {
     if (!wranglerRefs.has(configName)) {
-      result.errors.push(`[docs] supplemental docs must reference current wrangler template: ${configName}`);
+      result.errors.push(
+        `[docs] supplemental docs must reference current wrangler template: ${configName}`,
+      );
     }
   }
   for (const configName of wranglerRefs) {
     if (!isFile(path.join(controlDir, configName))) {
-      result.errors.push(`[docs] referenced wrangler config does not exist: apps/control/${configName}`);
+      result.errors.push(
+        `[docs] referenced wrangler config does not exist: apps/control/${configName}`,
+      );
     }
   }
 }
 
-function validateCurrentTruthFiles(repoRoot: string, docsDir: string, result: ValidationResult): void {
+function validateCurrentTruthFiles(
+  _repoRoot: string,
+  docsDir: string,
+  result: ValidationResult,
+): void {
   const manifestPath = path.join(docsDir, "apps", "manifest.md");
   const storePath = path.join(docsDir, "platform", "store.md");
   const oauthPath = path.join(docsDir, "apps", "oauth.md");
@@ -1047,33 +1027,46 @@ function validateCurrentTruthFiles(repoRoot: string, docsDir: string, result: Va
   for (const [label, content, forbiddenPatterns] of filesToCheck) {
     for (const pattern of forbiddenPatterns) {
       if (pattern.test(content)) {
-        result.errors.push(`[docs] stale contract pattern found in ${label}: ${pattern}`);
+        result.errors.push(
+          `[docs] stale contract pattern found in ${label}: ${pattern}`,
+        );
       }
     }
   }
 }
 
-function validatePrimaryDocsStructure(docsDir: string, result: ValidationResult): void {
-  for (const [relativePath, snippets] of Object.entries(REQUIRED_PAGE_SNIPPETS)) {
+function validatePrimaryDocsStructure(
+  docsDir: string,
+  result: ValidationResult,
+): void {
+  for (
+    const [relativePath, snippets] of Object.entries(REQUIRED_PAGE_SNIPPETS)
+  ) {
     const targetPath = path.join(docsDir, relativePath);
     if (!isFile(targetPath)) continue;
     const content = readFileSync(targetPath, "utf8");
 
     for (const snippet of snippets) {
       if (!content.includes(snippet)) {
-        result.errors.push(`[docs] ${relativePath} must include section/snippet: ${snippet}`);
+        result.errors.push(
+          `[docs] ${relativePath} must include section/snippet: ${snippet}`,
+        );
       }
     }
   }
 
-  for (const [relativePath, patterns] of Object.entries(FORBIDDEN_PAGE_SNIPPETS)) {
+  for (
+    const [relativePath, patterns] of Object.entries(FORBIDDEN_PAGE_SNIPPETS)
+  ) {
     const targetPath = path.join(docsDir, relativePath);
     if (!isFile(targetPath)) continue;
     const content = readFileSync(targetPath, "utf8");
 
     for (const pattern of patterns) {
       if (pattern.test(content)) {
-        result.errors.push(`[docs] stale snippet found in ${relativePath}: ${pattern}`);
+        result.errors.push(
+          `[docs] stale snippet found in ${relativePath}: ${pattern}`,
+        );
       }
     }
   }
@@ -1097,6 +1090,7 @@ function main(): void {
   validateSupplementalDocs(repoRoot, result);
   validateCurrentTruthFiles(repoRoot, docsDir, result);
   validatePrimaryDocsStructure(docsDir, result);
+  validateManifestExamples(docsDir, result);
 
   for (const warning of result.warnings) {
     console.warn(warning);
@@ -1111,7 +1105,9 @@ function main(): void {
   }
 
   console.log(
-    `[docs] ok: validated ${path.relative(repoRoot, docsDir)} (${result.warnings.length} warnings)`,
+    `[docs] ok: validated ${
+      path.relative(repoRoot, docsDir)
+    } (${result.warnings.length} warnings)`,
   );
 }
 

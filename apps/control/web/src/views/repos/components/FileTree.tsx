@@ -165,7 +165,7 @@ export function FileTree(props: FileTreeProps) {
         <div class="flex flex-col items-center justify-center gap-4 py-12 text-zinc-500 dark:text-zinc-400">
           <Icons.AlertTriangle class="w-12 h-12 text-zinc-700 dark:text-zinc-300" />
           <span>{error()}</span>
-          <button
+          <button type="button"
             class="px-4 py-2 bg-zinc-100 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-lg text-zinc-900 dark:text-zinc-100 hover:bg-zinc-200 dark:hover:bg-zinc-700 transition-colors"
             onClick={fetchFiles}
           >
@@ -185,7 +185,7 @@ export function FileTree(props: FileTreeProps) {
                     <Show when={index() > 0}>
                       <span class="text-zinc-500 dark:text-zinc-400">/</span>
                     </Show>
-                    <button
+                    <button type="button"
                       class={`px-1.5 py-0.5 rounded text-sm hover:bg-zinc-200 dark:hover:bg-zinc-700 transition-colors ${
                         index() === breadcrumbs.length - 1
                           ? 'text-zinc-900 dark:text-zinc-100 font-medium'

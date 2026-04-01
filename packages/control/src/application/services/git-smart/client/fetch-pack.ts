@@ -14,7 +14,7 @@ import { encodePktLine, flushPkt, parsePktLines, pktLineText } from '../protocol
 import { concatBytes } from '../core/sha1.ts';
 import { logWarn } from '../../../../shared/utils/logger.ts';
 
-const TEXT_ENCODER = new TextEncoder();
+const _TEXT_ENCODER = new TextEncoder();
 
 /** Maximum packfile size we accept (100 MB). */
 const MAX_FETCH_PACKFILE_BYTES = 100 * 1024 * 1024;

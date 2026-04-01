@@ -71,11 +71,11 @@ export function WorkersTab({
               </div>
             </div>
             {workerUrl && (
-              <button
+              <button type="button"
                 class="absolute top-3 right-3 p-2 rounded-lg opacity-0 group-hover:opacity-100 hover:bg-zinc-100 dark:hover:bg-zinc-800 text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300 transition-all"
                 onClick={(e) => {
                   e.stopPropagation();
-                  window.open(workerUrl, '_blank', 'noopener,noreferrer');
+                  globalThis.open(workerUrl, '_blank', 'noopener,noreferrer');
                 }}
                 title={t('open')}
               >

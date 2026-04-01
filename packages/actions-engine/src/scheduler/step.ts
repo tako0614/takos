@@ -25,7 +25,6 @@ import {
 } from '../parser/expression.ts';
 import {
   parseOutputs,
-  iterateNormalizedLines,
   parsePathFile,
 } from './step-output-parser.ts';
 

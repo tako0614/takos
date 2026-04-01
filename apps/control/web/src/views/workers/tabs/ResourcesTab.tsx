@@ -39,7 +39,7 @@ export function ResourcesTab({
         </div>
         <div class="text-center">
           <p class="text-sm font-medium text-zinc-600 dark:text-zinc-400">{t('noResources')}</p>
-          <button
+          <button type="button"
             class="mt-3 inline-flex items-center gap-2 px-4 py-2 bg-zinc-900 dark:bg-zinc-100 hover:bg-zinc-800 dark:hover:bg-zinc-200 text-white dark:text-zinc-900 rounded-xl text-sm font-medium transition-colors"
             onClick={onCreateResource}
           >

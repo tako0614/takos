@@ -3,7 +3,7 @@ import { z } from 'zod';
 import type { Env } from '../../shared/types/index.ts';
 
 import { validateUsername } from '../../shared/utils/domain-validation.ts';
-import { type BaseVariables } from './route-auth.ts';
+import type { BaseVariables } from './route-auth.ts';
 import { BadRequestError, ConflictError } from 'takos-common/errors';
 import { zValidator } from './zod-validator.ts';
 import { getDb } from '../../infra/db/index.ts';
@@ -21,6 +21,11 @@ const completeSetupSchema = z.object({
 const checkUsernameSchema = z.object({
   username: z.string(),
 });
+
+export const setupRouteDeps = {
+  getDb,
+  validateUsername,
+};
 
 export default new Hono<{ Bindings: Env; Variables: BaseVariables }>()
   /**
@@ -55,13 +60,13 @@ export default new Hono<{ Bindings: Env; Variables: BaseVariables }>()
     const { username } = body;
 
     // Validate username
-    const usernameError = validateUsername(username);
+    const usernameError = setupRouteDeps.validateUsername(username);
     if (usernameError) {
       throw new BadRequestError(usernameError);
     }
 
     // Check if username is already taken
-    const db = getDb(c.env.DB);
+    const db = setupRouteDeps.getDb(c.env.DB);
     const existingAccount = await db.select({ id: accounts.id }).from(accounts).where(
       and(eq(accounts.slug, username.toLowerCase()), ne(accounts.id, user.id))
     ).get();
@@ -93,13 +98,13 @@ export default new Hono<{ Bindings: Env; Variables: BaseVariables }>()
     const { username } = body;
 
     // Validate username format
-    const usernameError = validateUsername(username);
+    const usernameError = setupRouteDeps.validateUsername(username);
     if (usernameError) {
       return c.json({ available: false, error: usernameError });
     }
 
     // Check if username is already taken
-    const existing = await getDb(c.env.DB).select({ id: accounts.id }).from(accounts).where(
+    const existing = await setupRouteDeps.getDb(c.env.DB).select({ id: accounts.id }).from(accounts).where(
       eq(accounts.slug, username.toLowerCase())
     ).get();
 

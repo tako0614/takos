@@ -61,7 +61,7 @@ export function ReposPanel(props: ReposPanelProps) {
                   class="w-full pl-9 pr-3 h-9 text-sm bg-white dark:bg-zinc-800 border-none rounded-xl shadow-sm focus:outline-none focus:ring-2 focus:ring-zinc-400/20 dark:focus:ring-zinc-600/30 text-zinc-900 dark:text-zinc-100 placeholder-zinc-400 transition-all"
                 />
               </div>
-              <button
+              <button type="button"
                 class="flex items-center gap-1.5 px-3 h-9 text-sm font-medium text-white bg-zinc-900 dark:bg-zinc-100 dark:text-zinc-900 rounded-xl hover:bg-zinc-700 dark:hover:bg-zinc-200 transition-colors shrink-0"
                 onClick={() => setShowCreateModal(true)}
               >

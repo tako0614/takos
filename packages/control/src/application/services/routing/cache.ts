@@ -14,7 +14,7 @@ import type {
   RoutingTarget,
 } from './routing-models.ts';
 import type { PlatformExecutionContext } from '../../../shared/types/bindings.ts';
-import { logWarn } from '../../../shared/utils/logger.ts';
+import type { logWarn as _logWarn } from '../../../shared/utils/logger.ts';
 
 export const ROUTING_LOG_PREFIX = '[Routing]';
 

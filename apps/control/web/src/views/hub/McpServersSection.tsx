@@ -102,7 +102,7 @@ export function McpServersSection({
             const result = await createExternalServer(input);
             showToast('success', result.message);
             if (result.auth_url) {
-              window.open(result.auth_url, '_blank', 'noopener,noreferrer');
+              globalThis.open(result.auth_url, '_blank', 'noopener,noreferrer');
             }
             setShowCreateModal(false);
           }}

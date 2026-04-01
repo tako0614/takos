@@ -1,7 +1,23 @@
-// eslint-disable-next-line no-control-regex
-const CONTROL_CHAR_PATTERN = /[\u0000-\u001F\u007F]/;
-// eslint-disable-next-line no-control-regex
-const CONTROL_CHAR_PATTERN_GLOBAL = /[\u0000-\u001F\u007F]/g;
+function hasControlChars(value: string): boolean {
+  for (let i = 0; i < value.length; i += 1) {
+    const code = value.charCodeAt(i);
+    if (code <= 0x1f || code === 0x7f) {
+      return true;
+    }
+  }
+  return false;
+}
+
+function stripControlChars(value: string): string {
+  let result = "";
+  for (let i = 0; i < value.length; i += 1) {
+    const code = value.charCodeAt(i);
+    if (code > 0x1f && code !== 0x7f) {
+      result += value[i];
+    }
+  }
+  return result;
+}
 const CALLBACK_MESSAGE_MAX_LENGTH = 512;
 const INVALID_CALLBACK_PAYLOAD_MESSAGE = 'Invalid callback payload';
 const GENERIC_AUTH_FAILURE_MESSAGE = 'Authentication failed';
@@ -65,7 +81,7 @@ export function escapeHtml(value: string): string {
 }
 
 export function normalizeAuthMessage(message: string): string {
-  const normalized = message.replace(CONTROL_CHAR_PATTERN_GLOBAL, '').trim();
+  const normalized = stripControlChars(message).trim();
   if (!normalized) {
     return GENERIC_AUTH_FAILURE_MESSAGE;
   }
@@ -99,7 +115,7 @@ function normalizeCallbackField(value: unknown): NormalizedCallbackField {
     return { value: null, valid: false };
   }
 
-  if (CONTROL_CHAR_PATTERN.test(value)) {
+  if (hasControlChars(value)) {
     return { value: null, valid: false };
   }
 

@@ -227,7 +227,7 @@ export function RepoDetail(props: RepoDetailProps) {
         <div class="px-4 py-3">
           <div class="flex items-center justify-between">
             <div class="flex items-center gap-2 text-base">
-              <button onClick={props.onBack} class="text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300 transition-colors">
+              <button type="button" onClick={props.onBack} class="text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300 transition-colors">
                 <Icons.ChevronLeft class="w-5 h-5" />
               </button>
               <Show when={ownerName()}>
@@ -245,7 +245,7 @@ export function RepoDetail(props: RepoDetailProps) {
             </div>
 
             <div class="flex items-center gap-3 text-sm text-zinc-500 dark:text-zinc-400">
-              <button
+              <button type="button"
                 class={`flex items-center gap-1 hover:text-zinc-900 dark:hover:text-zinc-100 transition-colors ${
                   star().starred ? 'text-amber-500' : ''
                 }`}
@@ -254,7 +254,7 @@ export function RepoDetail(props: RepoDetailProps) {
                 <Icons.Sparkles class="w-3.5 h-3.5" />
                 <span>{star().count}</span>
               </button>
-              <button
+              <button type="button"
                 class="flex items-center gap-1 hover:text-zinc-900 dark:hover:text-zinc-100 transition-colors"
                 onClick={() => {
                   if (!isAuthenticated()) { props.onRequireLogin?.(); return; }
@@ -275,7 +275,7 @@ export function RepoDetail(props: RepoDetailProps) {
             <div class="mt-1 flex items-center gap-1 text-xs text-zinc-400 dark:text-zinc-500">
               <Icons.GitMerge class="w-3 h-3" />
               <span>{t('forkedFrom')}</span>
-              <button
+              <button type="button"
                 class="text-blue-500 dark:text-blue-400 hover:underline"
                 onClick={() => showToast('info', `Upstream: ${props.repo.forked_from?.owner_username || 'unknown'}/${props.repo.forked_from?.name}`)}
               >
@@ -287,7 +287,7 @@ export function RepoDetail(props: RepoDetailProps) {
 
         <div class="flex items-center gap-0 px-4 -mb-px overflow-x-auto scrollbar-none">
           <For each={tabs}>{(tab) => (
-            <button
+            <button type="button"
               class={`flex items-center gap-1.5 px-3 py-2 text-xs border-b-2 transition-colors whitespace-nowrap ${
                 activeTab() === tab.id
                   ? 'border-orange-500 text-zinc-900 dark:text-zinc-100 font-medium'
@@ -315,7 +315,7 @@ export function RepoDetail(props: RepoDetailProps) {
 
           <div class="flex items-center gap-2">
             <Show when={isAuthenticated()}>
-              <button
+              <button type="button"
                 class="p-1 text-zinc-400 hover:text-red-500 transition-colors disabled:opacity-50"
                 onClick={handleDelete}
                 disabled={deleting()}

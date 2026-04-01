@@ -63,8 +63,8 @@ export function ConfirmDialog(props: ConfirmDialogProps) {
       onClose={props.onCancel}
       size="sm"
       showCloseButton={false}
-      closeOnOverlayClick={true}
-      closeOnEscape={true}
+      closeOnOverlayClick
+      closeOnEscape
     >
       <div style={contentStyle}>
         <div style={iconStyle()}>

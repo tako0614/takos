@@ -11,7 +11,7 @@
  */
 
 import {
-  BaseMessage,
+  type BaseMessage,
   HumanMessage,
   AIMessage,
   SystemMessage,
@@ -43,7 +43,7 @@ export { D1CheckpointSaver } from './graph-checkpointer.ts';
 
 // Import what we need for the functions that remain in this file
 import { extractMessageText, throwIfAborted, type LangGraphEvent } from './graph-tools.ts';
-import { createLangGraphAgent, type AgentStateType } from './agent-graph.ts';
+import type { createLangGraphAgent, AgentStateType } from './agent-graph.ts';
 import type { DbMessageOutput } from './message-utils.ts';
 
 // ── Runner ──────────────────────────────────────────────────────────────

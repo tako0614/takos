@@ -40,7 +40,7 @@ export function createRateLimiter<E extends Env = Env>(options: RateLimitOptions
 
   const keyFn = options.keyFn || defaultKeyFn;
 
-  return async (c: Context<E>, next: Next): Promise<Response | void> => {
+  const middleware = async (c: Context<E>, next: Next): Promise<Response | void> => {
     const key = keyFn(c);
     const now = Date.now();
     let entry = store.get(key);
@@ -86,4 +86,12 @@ export function createRateLimiter<E extends Env = Env>(options: RateLimitOptions
 
     await next();
   };
+
+  Object.assign(middleware, {
+    dispose() {
+      clearInterval(cleanupTimer);
+    },
+  });
+
+  return middleware;
 }

@@ -1,7 +1,7 @@
 import * as fs from 'node:fs/promises';
 import * as path from 'node:path';
 import { GetObjectCommand, PutObjectCommand, ListObjectsV2Command } from '@aws-sdk/client-s3';
-import { type ActionContext } from '../executor.ts';
+import type { ActionContext } from '../executor.ts';
 import { pushLog } from '../../logging.ts';
 import { resolvePathWithin, isPathWithinBase } from '../../paths.ts';
 import { s3Client, isR2Configured } from '../../../storage/r2.ts';

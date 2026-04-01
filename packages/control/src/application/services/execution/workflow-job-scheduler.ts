@@ -2,19 +2,50 @@
  * Workflow Engine – job scheduling, dependency evaluation, and status updates
  */
 
-import type { Workflow } from 'takos-actions-engine';
-import type { Conclusion } from 'takos-actions-engine';
-import { parseWorkflow } from 'takos-actions-engine';
+import type { Workflow } from "takos-actions-engine";
+import type { Conclusion } from "takos-actions-engine";
+import { parseWorkflow } from "takos-actions-engine";
 
-import * as gitStore from '../git-smart/index.ts';
-import { getDb, workflowRuns, workflowJobs, workflowSteps } from '../../../infra/db/index.ts';
-import { eq, and, ne, or, count } from 'drizzle-orm';
-import { buildWorkflowDispatchEnv } from '../actions/index.ts';
-import type { WorkflowJobDefinition, WorkflowJobQueueMessage } from '../../../shared/types/index.ts';
-import type { D1Database, Queue } from '../../../shared/types/bindings.ts';
-import type { WorkflowBucket, WorkflowJobResult, DependencyState } from './workflow-engine-types.ts';
-import { toWorkflowJobDefinition, normalizeNeeds } from './workflow-engine-converters.ts';
-import { finalizeRunIfComplete, enqueueJob, getSecretIds } from './workflow-run-lifecycle.ts';
+import * as gitStore from "../git-smart/index.ts";
+import {
+  getDb,
+  workflowJobs,
+  workflowRuns,
+  workflowSteps,
+} from "../../../infra/db/index.ts";
+import { and, count, eq, ne, or } from "drizzle-orm";
+import { buildWorkflowDispatchEnv } from "../actions/index.ts";
+import type {
+  WorkflowJobDefinition,
+  WorkflowJobQueueMessage,
+} from "../../../shared/types/index.ts";
+import type { D1Database, Queue } from "../../../shared/types/bindings.ts";
+import type {
+  DependencyState,
+  WorkflowBucket,
+  WorkflowJobResult,
+} from "./workflow-engine-types.ts";
+import {
+  normalizeNeeds,
+  toWorkflowJobDefinition,
+} from "./workflow-engine-converters.ts";
+import {
+  enqueueJob,
+  finalizeRunIfComplete,
+  getSecretIds,
+} from "./workflow-run-lifecycle.ts";
+
+export const workflowJobSchedulerDeps = {
+  getDb,
+  parseWorkflow,
+  resolveRef: gitStore.resolveRef,
+  getCommitData: gitStore.getCommitData,
+  getBlobAtPath: gitStore.getBlobAtPath,
+  buildWorkflowDispatchEnv,
+  finalizeRunIfComplete,
+  enqueueJob,
+  getSecretIds,
+};
 
 // ---------------------------------------------------------------------------
 // onJobComplete
@@ -27,11 +58,11 @@ export async function onJobComplete(
   jobId: string,
   result: WorkflowJobResult,
 ): Promise<void> {
-  const drizzle = getDb(db);
+  const drizzle = workflowJobSchedulerDeps.getDb(db);
 
   await drizzle.update(workflowJobs)
     .set({
-      status: 'completed',
+      status: "completed",
       conclusion: result.conclusion,
       startedAt: result.startedAt,
       completedAt: result.completedAt,
@@ -39,19 +70,26 @@ export async function onJobComplete(
     .where(eq(workflowJobs.id, jobId))
     .run();
 
-  await Promise.all(result.stepResults.map((stepResult) =>
-    drizzle.update(workflowSteps)
-      .set({
-        status: stepResult.status,
-        conclusion: stepResult.conclusion,
-        exitCode: stepResult.exitCode ?? null,
-        errorMessage: stepResult.error ?? null,
-        startedAt: stepResult.startedAt ?? null,
-        completedAt: stepResult.completedAt ?? null,
-      })
-      .where(and(eq(workflowSteps.jobId, jobId), eq(workflowSteps.number, stepResult.stepNumber)))
-      .run()
-  ));
+  await Promise.all(
+    result.stepResults.map((stepResult) =>
+      drizzle.update(workflowSteps)
+        .set({
+          status: stepResult.status,
+          conclusion: stepResult.conclusion,
+          exitCode: stepResult.exitCode ?? null,
+          errorMessage: stepResult.error ?? null,
+          startedAt: stepResult.startedAt ?? null,
+          completedAt: stepResult.completedAt ?? null,
+        })
+        .where(
+          and(
+            eq(workflowSteps.jobId, jobId),
+            eq(workflowSteps.number, stepResult.stepNumber),
+          ),
+        )
+        .run()
+    ),
+  );
 
   const job = await drizzle.select()
     .from(workflowJobs)
@@ -65,12 +103,14 @@ export async function onJobComplete(
 
   const pendingJobsResult = await drizzle.select({ count: count() })
     .from(workflowJobs)
-    .where(and(eq(workflowJobs.runId, runId), ne(workflowJobs.status, 'completed')))
+    .where(
+      and(eq(workflowJobs.runId, runId), ne(workflowJobs.status, "completed")),
+    )
     .get();
   const pendingJobsCount = pendingJobsResult?.count ?? 0;
 
   if (pendingJobsCount === 0) {
-    await finalizeRunIfComplete(db, runId);
+    await workflowJobSchedulerDeps.finalizeRunIfComplete(db, runId);
   } else {
     await scheduleDependentJobs(db, bucket, queue, runId, completedJobKey);
   }
@@ -87,7 +127,7 @@ export async function scheduleDependentJobs(
   runId: string,
   completedJobKey: string,
 ): Promise<void> {
-  const drizzle = getDb(db);
+  const drizzle = workflowJobSchedulerDeps.getDb(db);
 
   const run = await drizzle.select()
     .from(workflowRuns)
@@ -96,7 +136,14 @@ export async function scheduleDependentJobs(
 
   if (!run || !queue) return;
 
-  const workflow = await loadWorkflowFromGit(db, bucket, run.repoId, run.workflowPath, run.sha, run.ref);
+  const workflow = await loadWorkflowFromGit(
+    db,
+    bucket,
+    run.repoId,
+    run.workflowPath,
+    run.sha,
+    run.ref,
+  );
   if (!workflow) return;
 
   for (const [jobKey, jobDef] of Object.entries(workflow.jobs)) {
@@ -120,27 +167,32 @@ export async function scheduleDependentJobs(
     }
 
     if (jobRecord) {
-      const secretIds = await getSecretIds(db, run.repoId);
-      const dispatchRef = run.ref?.replace('refs/heads/', '') || run.ref || 'main';
-      const queuedJobDefinition: WorkflowJobDefinition = toWorkflowJobDefinition(jobDef);
-      const dispatchEnv = buildWorkflowDispatchEnv({
+      const secretIds = await workflowJobSchedulerDeps.getSecretIds(
+        db,
+        run.repoId,
+      );
+      const dispatchRef = run.ref?.replace("refs/heads/", "") || run.ref ||
+        "main";
+      const queuedJobDefinition: WorkflowJobDefinition =
+        toWorkflowJobDefinition(jobDef);
+      const dispatchEnv = workflowJobSchedulerDeps.buildWorkflowDispatchEnv({
         workflow,
         workflowPath: run.workflowPath,
         repoId: run.repoId,
         runId,
         ref: dispatchRef,
-        sha: run.sha || '',
+        sha: run.sha || "",
         jobKey,
         jobId: jobRecord.id,
         jobDefinition: jobDef,
       });
 
-      await enqueueJob(queue, {
+      await workflowJobSchedulerDeps.enqueueJob(queue, {
         runId,
         jobId: jobRecord.id,
         repoId: run.repoId,
         ref: dispatchRef,
-        sha: run.sha || '',
+        sha: run.sha || "",
         jobKey,
         jobDefinition: queuedJobDefinition,
         env: dispatchEnv,
@@ -149,7 +201,7 @@ export async function scheduleDependentJobs(
     }
   }
 
-  await finalizeRunIfComplete(db, runId);
+  await workflowJobSchedulerDeps.finalizeRunIfComplete(db, runId);
 }
 
 // ---------------------------------------------------------------------------
@@ -164,10 +216,13 @@ export async function evaluateDependencies(
   runId: string,
   needs: string[],
 ): Promise<DependencyState> {
-  const drizzle = getDb(db);
+  const drizzle = workflowJobSchedulerDeps.getDb(db);
 
   for (const dep of needs) {
-    const depJob = await drizzle.select({ status: workflowJobs.status, conclusion: workflowJobs.conclusion })
+    const depJob = await drizzle.select({
+      status: workflowJobs.status,
+      conclusion: workflowJobs.conclusion,
+    })
       .from(workflowJobs)
       .where(
         and(
@@ -176,15 +231,15 @@ export async function evaluateDependencies(
             eq(workflowJobs.jobKey, dep),
             eq(workflowJobs.name, dep),
           ),
-        )
+        ),
       )
       .get();
 
-    if (!depJob || depJob.status !== 'completed') {
+    if (!depJob || depJob.status !== "completed") {
       return { allCompleted: false, allSuccessful: false };
     }
 
-    if (depJob.conclusion !== 'success') {
+    if (depJob.conclusion !== "success") {
       return { allCompleted: true, allSuccessful: false };
     }
   }
@@ -202,12 +257,12 @@ export async function onJobStart(
   runnerId?: string,
   runnerName?: string,
 ): Promise<void> {
-  const drizzle = getDb(db);
+  const drizzle = workflowJobSchedulerDeps.getDb(db);
   const timestamp = new Date().toISOString();
 
   await drizzle.update(workflowJobs)
     .set({
-      status: 'in_progress',
+      status: "in_progress",
       startedAt: timestamp,
       runnerId: runnerId ?? null,
       runnerName: runnerName ?? null,
@@ -222,8 +277,10 @@ export async function onJobStart(
 
   if (job) {
     await drizzle.update(workflowRuns)
-      .set({ status: 'in_progress', startedAt: timestamp })
-      .where(and(eq(workflowRuns.id, job.runId), eq(workflowRuns.status, 'queued')))
+      .set({ status: "in_progress", startedAt: timestamp })
+      .where(
+        and(eq(workflowRuns.id, job.runId), eq(workflowRuns.status, "queued")),
+      )
       .run();
   }
 }
@@ -236,15 +293,17 @@ export async function updateStepStatus(
   db: D1Database,
   jobId: string,
   stepNumber: number,
-  status: 'in_progress' | 'completed' | 'skipped',
+  status: "in_progress" | "completed" | "skipped",
   conclusion?: Conclusion,
   exitCode?: number,
   error?: string,
 ): Promise<void> {
-  const drizzle = getDb(db);
+  const drizzle = workflowJobSchedulerDeps.getDb(db);
   const timestamp = new Date().toISOString();
-  const startedAt = status === 'in_progress' ? timestamp : undefined;
-  const completedAt = status === 'completed' || status === 'skipped' ? timestamp : undefined;
+  const startedAt = status === "in_progress" ? timestamp : undefined;
+  const completedAt = status === "completed" || status === "skipped"
+    ? timestamp
+    : undefined;
 
   await drizzle.update(workflowSteps)
     .set({
@@ -255,7 +314,9 @@ export async function updateStepStatus(
       startedAt,
       completedAt,
     })
-    .where(and(eq(workflowSteps.jobId, jobId), eq(workflowSteps.number, stepNumber)))
+    .where(
+      and(eq(workflowSteps.jobId, jobId), eq(workflowSteps.number, stepNumber)),
+    )
     .run();
 }
 
@@ -277,19 +338,30 @@ async function loadWorkflowFromGit(
 ): Promise<Workflow | null> {
   let commitSha = runSha;
   if (!commitSha) {
-    const resolvedRef = ref?.replace('refs/heads/', '') || 'main';
-    commitSha = await gitStore.resolveRef(db, repoId, resolvedRef);
+    const resolvedRef = ref?.replace("refs/heads/", "") || "main";
+    commitSha = await workflowJobSchedulerDeps.resolveRef(
+      db,
+      repoId,
+      resolvedRef,
+    );
     if (!commitSha) return null;
   }
 
-  const commit = await gitStore.getCommitData(bucket, commitSha);
+  const commit = await workflowJobSchedulerDeps.getCommitData(
+    bucket,
+    commitSha,
+  );
   if (!commit) return null;
 
-  const blob = await gitStore.getBlobAtPath(bucket, commit.tree, workflowPath);
+  const blob = await workflowJobSchedulerDeps.getBlobAtPath(
+    bucket,
+    commit.tree,
+    workflowPath,
+  );
   if (!blob) return null;
 
   const content = new TextDecoder().decode(blob);
-  const { workflow } = parseWorkflow(content);
+  const { workflow } = workflowJobSchedulerDeps.parseWorkflow(content);
   return workflow;
 }
 
@@ -302,7 +374,7 @@ async function findJobRecordByKey(
   jobKey: string,
   jobName?: string,
 ): Promise<{ id: string } | null> {
-  const drizzle = getDb(db);
+  const drizzle = workflowJobSchedulerDeps.getDb(db);
   return await drizzle.select({ id: workflowJobs.id })
     .from(workflowJobs)
     .where(
@@ -312,7 +384,7 @@ async function findJobRecordByKey(
           eq(workflowJobs.jobKey, jobKey),
           eq(workflowJobs.name, jobName || jobKey),
         ),
-      )
+      ),
     )
     .get() ?? null;
 }
@@ -321,13 +393,13 @@ async function findJobRecordByKey(
  * Mark a job and all its steps as skipped.
  */
 async function skipJobAndSteps(db: D1Database, jobId: string): Promise<void> {
-  const drizzle = getDb(db);
+  const drizzle = workflowJobSchedulerDeps.getDb(db);
   const ts = new Date().toISOString();
 
   await drizzle.update(workflowJobs)
     .set({
-      status: 'completed',
-      conclusion: 'skipped',
+      status: "completed",
+      conclusion: "skipped",
       completedAt: ts,
     })
     .where(eq(workflowJobs.id, jobId))
@@ -335,8 +407,8 @@ async function skipJobAndSteps(db: D1Database, jobId: string): Promise<void> {
 
   await drizzle.update(workflowSteps)
     .set({
-      status: 'skipped',
-      conclusion: 'skipped',
+      status: "skipped",
+      conclusion: "skipped",
       completedAt: ts,
     })
     .where(eq(workflowSteps.jobId, jobId))

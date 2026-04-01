@@ -12,6 +12,18 @@
     "ws": "npm:ws@^8.19.0",
     "yaml": "npm:yaml@^2.8.2"
   },
+  "lint": {
+    "rules": {
+      "exclude": [
+        "no-explicit-any",
+        "no-import-prefix",
+        "no-process-global",
+        "no-unversioned-import",
+        "no-unsafe-finally",
+        "require-await"
+      ]
+    }
+  },
   "tasks": {
     "dev": "deno run --allow-all --watch src/index.ts",
     "start": "deno run --allow-all src/index.ts",

@@ -4,9 +4,9 @@
  * Utilities for testing Hono API routes.
  */
 
-import { Hono } from 'hono';
-import type { Env as TakosEnv } from '@/shared/types/index.ts';
-import { createMockEnv } from '../setup.ts';
+import { Hono } from "hono";
+import type { Env as TakosEnv } from "@/types";
+import { createMockEnv } from "../setup.ts";
 
 // ============================================================================
 // Types
@@ -32,7 +32,7 @@ export interface ApiTestContext {
   request: (options: TestRequestOptions) => Promise<TestResponse>;
   authenticatedRequest: (
     options: TestRequestOptions,
-    userId?: string
+    userId?: string,
   ) => Promise<TestResponse>;
 }
 
@@ -45,12 +45,14 @@ export interface ApiTestContext {
  */
 export function createApiTestContext(
   app: Hono<{ Bindings: TakosEnv }>,
-  envOverrides: Partial<Record<string, unknown>> = {}
+  envOverrides: Partial<Record<string, unknown>> = {},
 ): ApiTestContext {
   const env = createMockEnv(envOverrides);
 
-  async function makeRequest(options: TestRequestOptions): Promise<TestResponse> {
-    const url = new URL(options.path, 'http://localhost');
+  async function makeRequest(
+    options: TestRequestOptions,
+  ): Promise<TestResponse> {
+    const url = new URL(options.path, "http://localhost");
 
     // Add query parameters
     if (options.query) {
@@ -61,7 +63,7 @@ export function createApiTestContext(
 
     // Build request headers
     const headers: Record<string, string> = {
-      'Content-Type': 'application/json',
+      "Content-Type": "application/json",
       ...options.headers,
     };
 
@@ -73,7 +75,7 @@ export function createApiTestContext(
 
     // Create request
     const request = new Request(url.toString(), {
-      method: options.method || 'GET',
+      method: options.method || "GET",
       headers,
       body,
     });
@@ -100,14 +102,14 @@ export function createApiTestContext(
 
   async function makeAuthenticatedRequest(
     options: TestRequestOptions,
-    userId: string = 'test-user-id'
+    userId: string = "test-user-id",
   ): Promise<TestResponse> {
     // Create a mock JWT token or session cookie
     // In real tests, you might want to create actual tokens
     const headers = {
       ...options.headers,
       // Mock authentication header
-      'X-Test-User-Id': userId,
+      "X-Test-User-Id": userId,
     };
 
     return makeRequest({ ...options, headers });
@@ -130,7 +132,9 @@ export function createApiTestContext(
 export function assertSuccess(response: TestResponse): void {
   if (response.status < 200 || response.status >= 300) {
     throw new Error(
-      `Expected success status, got ${response.status}: ${JSON.stringify(response.body)}`
+      `Expected success status, got ${response.status}: ${
+        JSON.stringify(response.body)
+      }`,
     );
   }
 }
@@ -138,10 +142,15 @@ export function assertSuccess(response: TestResponse): void {
 /**
  * Assert that a response is a specific status code
  */
-export function assertStatus(response: TestResponse, expectedStatus: number): void {
+export function assertStatus(
+  response: TestResponse,
+  expectedStatus: number,
+): void {
   if (response.status !== expectedStatus) {
     throw new Error(
-      `Expected status ${expectedStatus}, got ${response.status}: ${JSON.stringify(response.body)}`
+      `Expected status ${expectedStatus}, got ${response.status}: ${
+        JSON.stringify(response.body)
+      }`,
     );
   }
 }
@@ -151,10 +160,14 @@ export function assertStatus(response: TestResponse, expectedStatus: number): vo
  */
 export function assertBodyShape<T>(
   response: TestResponse,
-  validator: (body: unknown) => body is T
+  validator: (body: unknown) => body is T,
 ): asserts response is TestResponse & { body: T } {
   if (!validator(response.body)) {
-    throw new Error(`Response body does not match expected shape: ${JSON.stringify(response.body)}`);
+    throw new Error(
+      `Response body does not match expected shape: ${
+        JSON.stringify(response.body)
+      }`,
+    );
   }
 }
 
@@ -164,24 +177,24 @@ export function assertBodyShape<T>(
 export function assertError(
   response: TestResponse,
   expectedStatus: number,
-  expectedMessage?: string | RegExp
+  expectedMessage?: string | RegExp,
 ): void {
   assertStatus(response, expectedStatus);
 
   if (expectedMessage) {
     const body = response.body as { error?: string; message?: string };
-    const errorMessage = body.error || body.message || '';
+    const errorMessage = body.error || body.message || "";
 
-    if (typeof expectedMessage === 'string') {
+    if (typeof expectedMessage === "string") {
       if (!errorMessage.includes(expectedMessage)) {
         throw new Error(
-          `Expected error message to include "${expectedMessage}", got "${errorMessage}"`
+          `Expected error message to include "${expectedMessage}", got "${errorMessage}"`,
         );
       }
     } else {
       if (!expectedMessage.test(errorMessage)) {
         throw new Error(
-          `Expected error message to match ${expectedMessage}, got "${errorMessage}"`
+          `Expected error message to match ${expectedMessage}, got "${errorMessage}"`,
         );
       }
     }
@@ -193,7 +206,7 @@ export function assertError(
 // ============================================================================
 
 export class RequestBuilder {
-  private method: string = 'GET';
+  private method: string = "GET";
   private path: string;
   private headers: Record<string, string> = {};
   private query: Record<string, string> = {};
@@ -206,12 +219,12 @@ export class RequestBuilder {
   }
 
   get(): this {
-    this.method = 'GET';
+    this.method = "GET";
     return this;
   }
 
   post(data?: unknown): this {
-    this.method = 'POST';
+    this.method = "POST";
     if (data !== undefined) {
       this.body = data;
     }
@@ -219,7 +232,7 @@ export class RequestBuilder {
   }
 
   put(data?: unknown): this {
-    this.method = 'PUT';
+    this.method = "PUT";
     if (data !== undefined) {
       this.body = data;
     }
@@ -227,7 +240,7 @@ export class RequestBuilder {
   }
 
   patch(data?: unknown): this {
-    this.method = 'PATCH';
+    this.method = "PATCH";
     if (data !== undefined) {
       this.body = data;
     }
@@ -235,7 +248,7 @@ export class RequestBuilder {
   }
 
   delete(): this {
-    this.method = 'DELETE';
+    this.method = "DELETE";
     return this;
   }
 
@@ -273,7 +286,7 @@ export class RequestBuilder {
         query: this.query,
         body: this.body,
       },
-      userId
+      userId,
     );
   }
 }
@@ -293,14 +306,14 @@ export function request(context: ApiTestContext, path: string): RequestBuilder {
  * Helper to set up mock database data
  */
 export async function seedDatabase(
-  env: ReturnType<typeof createMockEnv>,
-  data: {
+  _env: ReturnType<typeof createMockEnv>,
+  _data: {
     users?: Array<Record<string, unknown>>;
     workspaces?: Array<Record<string, unknown>>;
     threads?: Array<Record<string, unknown>>;
     messages?: Array<Record<string, unknown>>;
     runs?: Array<Record<string, unknown>>;
-  }
+  },
 ): Promise<void> {
   // Since we're using mock D1, this is a no-op by default
   // In a real test with miniflare, you would insert data here
@@ -311,9 +324,9 @@ export async function seedDatabase(
  * Helper to verify database state
  */
 export async function verifyDatabaseState(
-  env: ReturnType<typeof createMockEnv>,
-  table: string,
-  expectedCount: number
+  _env: ReturnType<typeof createMockEnv>,
+  _table: string,
+  _expectedCount: number,
 ): Promise<void> {
   // Since we're using mock D1, this is a no-op by default
   // In integration tests, you would query the database here

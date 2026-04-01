@@ -1,7 +1,7 @@
 /**
  * `takos group delete` subcommand.
  */
-import { Command } from 'commander';
+import type { Command } from 'commander';
 import { bold, dim, green, red } from '@std/fmt/colors';
 import { readState, getStateDir, deleteStateFile } from '../../lib/state/state-file.ts';
 import { cliExit } from '../../lib/command-exit.ts';

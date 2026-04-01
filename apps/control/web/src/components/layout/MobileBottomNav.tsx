@@ -33,6 +33,7 @@ export function MobileBottomNav(props: MobileBottomNavProps) {
       <div class="flex items-center justify-around h-[var(--nav-height-mobile)] px-1">
         <Show when={props.onOpenMenu}>
           <button
+            type="button"
             class="flex flex-col items-center justify-center gap-1 flex-1 h-full min-w-[44px] min-h-[44px] text-zinc-400 dark:text-zinc-500 hover:text-zinc-600 dark:hover:text-zinc-300 transition-colors"
             onClick={props.onOpenMenu}
             aria-label={menuAriaLabel}
@@ -48,6 +49,7 @@ export function MobileBottomNav(props: MobileBottomNavProps) {
           const isActive = () => props.activeItem === item.id;
           return (
             <button
+              type="button"
               class={`flex flex-col items-center justify-center gap-1 flex-1 h-full min-w-[44px] min-h-[44px] transition-colors ${
                 isActive()
                   ? 'text-zinc-900 dark:text-zinc-100'

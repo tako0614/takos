@@ -16,6 +16,14 @@ import { logError } from '../../../shared/utils/logger.ts';
 import { textDate } from '../../../shared/utils/db-guards.ts';
 import type { R2Bucket, R2Object, R2ObjectBody } from '../../../shared/types/bindings.ts';
 
+export const r2RouteDeps = {
+  getDb,
+  getPortableObjectStore,
+  isPortableResourceProvider,
+  createOptionalCloudflareWfpProvider,
+  checkResourceAccess,
+};
+
 function toResource(data: {
   id: string;
   ownerAccountId: string;
@@ -92,7 +100,7 @@ const resourcesR2 = new Hono<AuthenticatedRouteEnv>()
   async (c) => {
   const user = c.get('user');
   const resourceId = c.req.param('id');
-  const db = getDb(c.env.DB);
+  const db = r2RouteDeps.getDb(c.env.DB);
 
   const resourceData = await db.select().from(resources).where(
     and(eq(resources.id, resourceId), eq(resources.type, 'r2'))
@@ -104,7 +112,7 @@ const resourcesR2 = new Hono<AuthenticatedRouteEnv>()
 
   const resource = toResource(resourceData);
 
-  const hasAccess = resource.owner_id === user.id || await checkResourceAccess(c.env.DB, resourceId, user.id);
+  const hasAccess = resource.owner_id === user.id || await r2RouteDeps.checkResourceAccess(c.env.DB, resourceId, user.id);
   if (!hasAccess) {
     throw new AuthorizationError();
   }
@@ -113,9 +121,9 @@ const resourcesR2 = new Hono<AuthenticatedRouteEnv>()
   const cursor = c.req.query('cursor') || undefined;
   const { limit } = parsePagination(c.req.query(), { limit: 100, maxLimit: 1000 });
 
-  if (isPortableResourceProvider(resource.provider_name)) {
+  if (r2RouteDeps.isPortableResourceProvider(resource.provider_name)) {
     try {
-      const bucket = getPortableObjectStore(resource);
+      const bucket = r2RouteDeps.getPortableObjectStore(resource);
       const result = await bucket.list({
         prefix,
         cursor,
@@ -137,7 +145,7 @@ const resourcesR2 = new Hono<AuthenticatedRouteEnv>()
   }
 
   try {
-    const wfp = createOptionalCloudflareWfpProvider(c.env);
+    const wfp = r2RouteDeps.createOptionalCloudflareWfpProvider(c.env);
     if (!wfp) {
       throw new InternalError('Cloudflare WFP not configured');
     }
@@ -167,7 +175,7 @@ const resourcesR2 = new Hono<AuthenticatedRouteEnv>()
   async (c) => {
   const user = c.get('user');
   const resourceId = c.req.param('id');
-  const db = getDb(c.env.DB);
+  const db = r2RouteDeps.getDb(c.env.DB);
 
   const resourceData = await db.select().from(resources).where(
     and(eq(resources.id, resourceId), eq(resources.type, 'r2'))
@@ -179,7 +187,7 @@ const resourcesR2 = new Hono<AuthenticatedRouteEnv>()
 
   const resource = toResource(resourceData);
 
-  const hasAccess = resource.owner_id === user.id || await checkResourceAccess(c.env.DB, resourceId, user.id);
+  const hasAccess = resource.owner_id === user.id || await r2RouteDeps.checkResourceAccess(c.env.DB, resourceId, user.id);
   if (!hasAccess) {
     throw new AuthorizationError();
   }
@@ -188,9 +196,9 @@ const resourcesR2 = new Hono<AuthenticatedRouteEnv>()
   const cursor = c.req.query('cursor') || undefined;
   const { limit } = parsePagination(c.req.query(), { limit: 100, maxLimit: 1000 });
 
-  if (isPortableResourceProvider(resource.provider_name)) {
+  if (r2RouteDeps.isPortableResourceProvider(resource.provider_name)) {
     try {
-      const bucket = getPortableObjectStore(resource);
+      const bucket = r2RouteDeps.getPortableObjectStore(resource);
       const result = await bucket.list({
         prefix,
         cursor,
@@ -212,7 +220,7 @@ const resourcesR2 = new Hono<AuthenticatedRouteEnv>()
   }
 
   try {
-    const wfp = createOptionalCloudflareWfpProvider(c.env);
+    const wfp = r2RouteDeps.createOptionalCloudflareWfpProvider(c.env);
     if (!wfp) {
       throw new InternalError('Cloudflare WFP not configured');
     }
@@ -236,7 +244,7 @@ const resourcesR2 = new Hono<AuthenticatedRouteEnv>()
 .get('/:id/r2/stats', async (c) => {
   const user = c.get('user');
   const resourceId = c.req.param('id');
-  const db = getDb(c.env.DB);
+  const db = r2RouteDeps.getDb(c.env.DB);
 
   const resourceData = await db.select().from(resources).where(
     and(eq(resources.id, resourceId), eq(resources.type, 'r2'))
@@ -248,14 +256,14 @@ const resourcesR2 = new Hono<AuthenticatedRouteEnv>()
 
   const resource = toResource(resourceData);
 
-  const hasAccess = resource.owner_id === user.id || await checkResourceAccess(c.env.DB, resourceId, user.id);
+  const hasAccess = resource.owner_id === user.id || await r2RouteDeps.checkResourceAccess(c.env.DB, resourceId, user.id);
   if (!hasAccess) {
     throw new AuthorizationError();
   }
 
-  if (isPortableResourceProvider(resource.provider_name)) {
+  if (r2RouteDeps.isPortableResourceProvider(resource.provider_name)) {
     try {
-      const bucket = getPortableObjectStore(resource);
+      const bucket = r2RouteDeps.getPortableObjectStore(resource);
       const objects = await listAllObjects(bucket);
       const size_bytes = objects.reduce((sum, object) => sum + Number((object.size as number | undefined) ?? 0), 0);
       return c.json({
@@ -275,7 +283,7 @@ const resourcesR2 = new Hono<AuthenticatedRouteEnv>()
   }
 
   try {
-    const wfp = createOptionalCloudflareWfpProvider(c.env);
+    const wfp = r2RouteDeps.createOptionalCloudflareWfpProvider(c.env);
     if (!wfp) {
       throw new InternalError('Cloudflare WFP not configured');
     }
@@ -291,7 +299,7 @@ const resourcesR2 = new Hono<AuthenticatedRouteEnv>()
 .get('/:id/objects-stats', async (c) => {
   const user = c.get('user');
   const resourceId = c.req.param('id');
-  const db = getDb(c.env.DB);
+  const db = r2RouteDeps.getDb(c.env.DB);
 
   const resourceData = await db.select().from(resources).where(
     and(eq(resources.id, resourceId), eq(resources.type, 'r2'))
@@ -303,14 +311,14 @@ const resourcesR2 = new Hono<AuthenticatedRouteEnv>()
 
   const resource = toResource(resourceData);
 
-  const hasAccess = resource.owner_id === user.id || await checkResourceAccess(c.env.DB, resourceId, user.id);
+  const hasAccess = resource.owner_id === user.id || await r2RouteDeps.checkResourceAccess(c.env.DB, resourceId, user.id);
   if (!hasAccess) {
     throw new AuthorizationError();
   }
 
-  if (isPortableResourceProvider(resource.provider_name)) {
+  if (r2RouteDeps.isPortableResourceProvider(resource.provider_name)) {
     try {
-      const bucket = getPortableObjectStore(resource);
+      const bucket = r2RouteDeps.getPortableObjectStore(resource);
       const objects = await listAllObjects(bucket);
       const size_bytes = objects.reduce((sum, object) => sum + Number((object.size as number | undefined) ?? 0), 0);
       return c.json({
@@ -330,7 +338,7 @@ const resourcesR2 = new Hono<AuthenticatedRouteEnv>()
   }
 
   try {
-    const wfp = createOptionalCloudflareWfpProvider(c.env);
+    const wfp = r2RouteDeps.createOptionalCloudflareWfpProvider(c.env);
     if (!wfp) {
       throw new InternalError('Cloudflare WFP not configured');
     }
@@ -347,7 +355,7 @@ const resourcesR2 = new Hono<AuthenticatedRouteEnv>()
   const user = c.get('user');
   const resourceId = c.req.param('id');
   const key = decodeURIComponent(c.req.param('key'));
-  const db = getDb(c.env.DB);
+  const db = r2RouteDeps.getDb(c.env.DB);
 
   const resourceData = await db.select().from(resources).where(
     and(eq(resources.id, resourceId), eq(resources.type, 'r2'))
@@ -358,14 +366,14 @@ const resourcesR2 = new Hono<AuthenticatedRouteEnv>()
   }
 
   const resource = toResource(resourceData);
-  const hasAccess = resource.owner_id === user.id || await checkResourceAccess(c.env.DB, resourceId, user.id);
+  const hasAccess = resource.owner_id === user.id || await r2RouteDeps.checkResourceAccess(c.env.DB, resourceId, user.id);
   if (!hasAccess) {
     throw new AuthorizationError();
   }
 
-  if (isPortableResourceProvider(resource.provider_name)) {
+  if (r2RouteDeps.isPortableResourceProvider(resource.provider_name)) {
     try {
-      const bucket = getPortableObjectStore(resource);
+      const bucket = r2RouteDeps.getPortableObjectStore(resource);
       const object = await bucket.get(key);
       if (!object) {
         throw new NotFoundError('Object');
@@ -388,7 +396,7 @@ const resourcesR2 = new Hono<AuthenticatedRouteEnv>()
   }
 
   try {
-    const wfp = createOptionalCloudflareWfpProvider(c.env);
+    const wfp = r2RouteDeps.createOptionalCloudflareWfpProvider(c.env);
     if (!wfp) {
       throw new InternalError('Cloudflare WFP not configured');
     }
@@ -418,7 +426,7 @@ const resourcesR2 = new Hono<AuthenticatedRouteEnv>()
     const user = c.get('user');
     const resourceId = c.req.param('id');
     const key = decodeURIComponent(c.req.param('key'));
-    const db = getDb(c.env.DB);
+    const db = r2RouteDeps.getDb(c.env.DB);
     const body = c.req.valid('json');
 
     const resourceData = await db.select().from(resources).where(
@@ -430,14 +438,14 @@ const resourcesR2 = new Hono<AuthenticatedRouteEnv>()
     }
 
     const resource = toResource(resourceData);
-    const hasAccess = resource.owner_id === user.id || await checkResourceAccess(c.env.DB, resourceId, user.id, ['write', 'admin']);
+    const hasAccess = resource.owner_id === user.id || await r2RouteDeps.checkResourceAccess(c.env.DB, resourceId, user.id, ['write', 'admin']);
     if (!hasAccess) {
       throw new AuthorizationError();
     }
 
-    if (isPortableResourceProvider(resource.provider_name)) {
+    if (r2RouteDeps.isPortableResourceProvider(resource.provider_name)) {
       try {
-        const bucket = getPortableObjectStore(resource);
+        const bucket = r2RouteDeps.getPortableObjectStore(resource);
         await bucket.put(key, body.value, {
           ...(body.content_type ? { httpMetadata: { contentType: body.content_type } } : {}),
         });
@@ -453,7 +461,7 @@ const resourcesR2 = new Hono<AuthenticatedRouteEnv>()
     }
 
     try {
-      const wfp = createOptionalCloudflareWfpProvider(c.env);
+      const wfp = r2RouteDeps.createOptionalCloudflareWfpProvider(c.env);
       if (!wfp) {
         throw new InternalError('Cloudflare WFP not configured');
       }
@@ -471,7 +479,7 @@ const resourcesR2 = new Hono<AuthenticatedRouteEnv>()
   const user = c.get('user');
   const resourceId = c.req.param('id');
   const key = decodeURIComponent(c.req.param('key'));
-  const db = getDb(c.env.DB);
+  const db = r2RouteDeps.getDb(c.env.DB);
 
   const resourceData = await db.select().from(resources).where(
     and(eq(resources.id, resourceId), eq(resources.type, 'r2'))
@@ -483,7 +491,7 @@ const resourcesR2 = new Hono<AuthenticatedRouteEnv>()
 
   const resource = toResource(resourceData);
 
-  const hasAccess = resource.owner_id === user.id || await checkResourceAccess(c.env.DB, resourceId, user.id, ['write', 'admin']);
+  const hasAccess = resource.owner_id === user.id || await r2RouteDeps.checkResourceAccess(c.env.DB, resourceId, user.id, ['write', 'admin']);
   if (!hasAccess) {
     throw new AuthorizationError();
   }
@@ -492,9 +500,9 @@ const resourcesR2 = new Hono<AuthenticatedRouteEnv>()
     throw new BadRequestError( 'R2 bucket not provisioned');
   }
 
-  if (isPortableResourceProvider(resource.provider_name)) {
+  if (r2RouteDeps.isPortableResourceProvider(resource.provider_name)) {
     try {
-      const bucket = getPortableObjectStore(resource);
+      const bucket = r2RouteDeps.getPortableObjectStore(resource);
       await bucket.delete(key);
       return c.json({ success: true });
     } catch (err) {
@@ -504,7 +512,7 @@ const resourcesR2 = new Hono<AuthenticatedRouteEnv>()
   }
 
   try {
-    const wfp = createOptionalCloudflareWfpProvider(c.env);
+    const wfp = r2RouteDeps.createOptionalCloudflareWfpProvider(c.env);
     if (!wfp) {
       throw new InternalError('Cloudflare WFP not configured');
     }
@@ -520,7 +528,7 @@ const resourcesR2 = new Hono<AuthenticatedRouteEnv>()
   const user = c.get('user');
   const resourceId = c.req.param('id');
   const key = decodeURIComponent(c.req.param('key'));
-  const db = getDb(c.env.DB);
+  const db = r2RouteDeps.getDb(c.env.DB);
 
   const resourceData = await db.select().from(resources).where(
     and(eq(resources.id, resourceId), eq(resources.type, 'r2'))
@@ -532,14 +540,14 @@ const resourcesR2 = new Hono<AuthenticatedRouteEnv>()
 
   const resource = toResource(resourceData);
 
-  const hasAccess = resource.owner_id === user.id || await checkResourceAccess(c.env.DB, resourceId, user.id, ['write', 'admin']);
+  const hasAccess = resource.owner_id === user.id || await r2RouteDeps.checkResourceAccess(c.env.DB, resourceId, user.id, ['write', 'admin']);
   if (!hasAccess) {
     throw new AuthorizationError();
   }
 
-  if (isPortableResourceProvider(resource.provider_name)) {
+  if (r2RouteDeps.isPortableResourceProvider(resource.provider_name)) {
     try {
-      const bucket = getPortableObjectStore(resource);
+      const bucket = r2RouteDeps.getPortableObjectStore(resource);
       await bucket.delete(key);
       return c.json({ success: true });
     } catch (err) {
@@ -553,7 +561,7 @@ const resourcesR2 = new Hono<AuthenticatedRouteEnv>()
   }
 
   try {
-    const wfp = createOptionalCloudflareWfpProvider(c.env);
+    const wfp = r2RouteDeps.createOptionalCloudflareWfpProvider(c.env);
     if (!wfp) {
       throw new InternalError('Cloudflare WFP not configured');
     }

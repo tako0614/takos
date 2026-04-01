@@ -1,6 +1,6 @@
 import { Hono } from 'hono';
 import { z } from 'zod';
-import type { Env, MessageRole } from '../../../shared/types/index.ts';
+import type { Env } from '../../../shared/types/index.ts';
 import type { BaseVariables } from '../route-auth.ts';
 import { parsePagination } from '../../../shared/utils/index.ts';
 import { BadRequestError, NotFoundError, InternalError } from 'takos-common/errors';

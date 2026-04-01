@@ -1,7 +1,7 @@
 import type { User } from '../../../shared/types/index.ts';
 
 import * as gitStore from '../../../application/services/git-smart/index.ts';
-import { type Database } from '../../../infra/db/index.ts';
+import type { Database } from '../../../infra/db/index.ts';
 import { eq, and } from 'drizzle-orm';
 import { pullRequests, branches } from '../../../infra/db/schema.ts';
 import type { AuthenticatedRouteEnv } from '../route-auth.ts';

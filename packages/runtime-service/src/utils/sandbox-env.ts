@@ -51,6 +51,10 @@ export const BLOCKED_ENV: Set<string> = new Set([
 const VALID_ENV_VAR_NAME_PATTERN = /^[A-Za-z_][A-Za-z0-9_]*$/;
 const MAX_EXEC_ENV_VAR_VALUE_LENGTH = 10 * 1024 * 1024;
 
+function hasControlCharacters(value: string): boolean {
+  return value.includes('\0') || value.includes('\r') || value.includes('\n');
+}
+
 export type RuntimeExecEnvValidationResult =
   | { ok: true; env: Record<string, string> }
   | { ok: false; error: string };
@@ -80,8 +84,7 @@ export function validateRuntimeExecEnv(
     if (value.length > MAX_EXEC_ENV_VAR_VALUE_LENGTH) {
       return { ok: false, error: `Environment variable value too long: ${key}` };
     }
-    // eslint-disable-next-line no-control-regex
-    if (/[\x00\r\n]/.test(value)) {
+    if (hasControlCharacters(value)) {
       return { ok: false, error: `Environment variable contains invalid characters: ${key}` };
     }
     filteredEnv[key] = value;

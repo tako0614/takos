@@ -28,87 +28,98 @@
  *   - executor-proxy-config.ts — proxy config / token generation
  */
 
+import type {
+  DurableObjectState,
+  ExportedHandler,
+} from "@cloudflare/workers-types";
+
 import {
-  HostContainerInternals,
+  type HostContainerInternals,
   HostContainerRuntime,
-} from './container-runtime.ts';
-import { recordRunUsageBatch } from '../../application/services/billing/billing.ts';
-import { validateExecutorHostEnv, createEnvGuard } from '../../shared/utils/validate-env.ts';
+} from "./container-runtime.ts";
+import { recordRunUsageBatch } from "../../application/services/billing/billing.ts";
 import {
+  createEnvGuard,
+  validateExecutorHostEnv,
+} from "../../shared/utils/validate-env.ts";
+import {
+  type AgentExecutorControlConfig,
+  type AgentExecutorDispatchPayload,
   dispatchAgentExecutorStart,
   forwardAgentExecutorDispatch,
   resolveAgentExecutorServiceId,
-  type AgentExecutorDispatchPayload,
-  type AgentExecutorControlConfig,
-} from './executor-dispatch.ts';
+} from "./executor-dispatch.ts";
 import {
   buildAgentExecutorContainerEnvVars,
   buildAgentExecutorProxyConfig,
-} from './executor-proxy-config.ts';
+} from "./executor-proxy-config.ts";
 
-import { constantTimeEqual } from '../../shared/utils/hash.ts';
-import { logError } from '../../shared/utils/logger.ts';
-import { jsonResponse, errorJsonResponse } from '../../shared/utils/http-response.ts';
+import { constantTimeEqual } from "../../shared/utils/hash.ts";
+import { logError } from "../../shared/utils/logger.ts";
+import {
+  errorJsonResponse,
+  jsonResponse,
+} from "../../shared/utils/http-response.ts";
 
 // Sub-module imports — utilities, auth, run state, control RPC, proxy handlers
 import {
-  ok,
   err,
-  unauthorized,
-  recordProxyUsage,
+  forwardToControlPlane,
   getProxyUsageSnapshot,
   isControlRpcPath,
-  forwardToControlPlane,
-  resolveContainerNamespace,
+  ok,
   parseExecutorTier,
-} from './executor-utils.ts';
+  recordProxyUsage,
+  resolveContainerNamespace,
+  unauthorized,
+} from "./executor-utils.ts";
 import type {
   AgentExecutorEnv,
-  ProxyTokenInfo,
   Env,
-} from './executor-utils.ts';
+  ProxyTokenInfo,
+} from "./executor-utils.ts";
 import {
+  claimsMatchRequestBody,
   getRequiredProxyCapability,
   validateProxyResourceAccess,
-  claimsMatchRequestBody,
-} from './executor-auth.ts';
+} from "./executor-auth.ts";
 import {
-  handleHeartbeat,
-  handleRunStatus,
-  handleRunRecord,
-  handleRunBootstrap,
-  handleRunFail,
-  handleRunReset,
-  handleRunContext,
-  handleNoLlmComplete,
   handleCurrentSession,
+  handleHeartbeat,
   handleIsCancelled,
-} from './executor-run-state.ts';
+  handleNoLlmComplete,
+  handleRunBootstrap,
+  handleRunContext,
+  handleRunFail,
+  handleRunRecord,
+  handleRunReset,
+  handleRunStatus,
+} from "./executor-run-state.ts";
 import {
+  handleAddMessage,
   handleConversationHistory,
-  handleSkillCatalog,
-  handleSkillRuntimeContext,
-  handleSkillPlan,
   handleMemoryActivation,
   handleMemoryFinalize,
-  handleAddMessage,
-  handleUpdateRunStatus,
-  handleToolCatalog,
-  handleToolExecute,
-  handleToolCleanup,
   handleRunEvent,
-} from './executor-control-rpc.ts';
+  handleSkillCatalog,
+  handleSkillPlan,
+  handleSkillRuntimeContext,
+  handleToolCatalog,
+  handleToolCleanup,
+  handleToolExecute,
+  handleUpdateRunStatus,
+} from "./executor-control-rpc.ts";
 import {
-  handleDbProxy,
-  handleR2Proxy,
-  handleNotifierProxy,
-  handleVectorizeProxy,
   handleAiProxy,
-  handleEgressProxy,
-  handleRuntimeProxy,
   handleBrowserProxy,
+  handleDbProxy,
+  handleEgressProxy,
+  handleNotifierProxy,
   handleQueueProxy,
-} from './executor-proxy-handlers.ts';
+  handleR2Proxy,
+  handleRuntimeProxy,
+  handleVectorizeProxy,
+} from "./executor-proxy-handlers.ts";
 
 // ---------------------------------------------------------------------------
 // Re-exports — maintain backward compatibility for all external importers
@@ -130,11 +141,14 @@ export { getRequiredProxyCapability, validateProxyResourceAccess };
 // dispatch payload (defaults to tier 1).
 // ---------------------------------------------------------------------------
 
-function createExecutorContainerClass(tier: import('./executor-utils.ts').ExecutorTier, sleepAfterOverride?: string) {
+function createExecutorContainerClass(
+  tier: import("./executor-utils.ts").ExecutorTier,
+  sleepAfterOverride?: string,
+) {
   return class extends HostContainerRuntime<Env> {
     defaultPort = 8080;
-    sleepAfter = sleepAfterOverride ?? '5m';
-    pingEndpoint = 'container/health';
+    sleepAfter = sleepAfterOverride ?? "5m";
+    pingEndpoint = "container/health";
 
     private cachedTokens: Map<string, ProxyTokenInfo> | null = null;
 
@@ -146,38 +160,55 @@ function createExecutorContainerClass(tier: import('./executor-utils.ts').Execut
       };
     }
 
-    async dispatchStart(body: AgentExecutorDispatchPayload): Promise<import('./executor-dispatch.ts').AgentExecutorDispatchResult> {
+    async dispatchStart(
+      body: AgentExecutorDispatchPayload,
+    ): Promise<import("./executor-dispatch.ts").AgentExecutorDispatchResult> {
       const serviceId = resolveAgentExecutorServiceId(body);
       if (!serviceId) {
         return {
           ok: false,
           status: 400,
-          body: JSON.stringify({ error: 'Missing serviceId or workerId' }),
+          body: JSON.stringify({ error: "Missing serviceId or workerId" }),
         };
       }
-      const controlConfig: AgentExecutorControlConfig = buildAgentExecutorProxyConfig(this.env, {
-        runId: body.runId,
-        serviceId,
-      });
+      const controlConfig: AgentExecutorControlConfig =
+        buildAgentExecutorProxyConfig(this.env, {
+          runId: body.runId,
+          serviceId,
+        });
       const tokenMap: Record<string, ProxyTokenInfo> = {
-        [controlConfig.controlRpcToken]: { runId: body.runId, serviceId, capability: 'control' },
+        [controlConfig.controlRpcToken]: {
+          runId: body.runId,
+          serviceId,
+          capability: "control",
+        },
       };
-      await this.ctx.storage.put('proxyTokens', tokenMap);
+      await this.ctx.storage.put("proxyTokens", tokenMap);
       this.cachedTokens = new Map(Object.entries(tokenMap));
 
-      return await dispatchAgentExecutorStart({
-        startAndWaitForPorts: this.startAndWaitForPorts.bind(this),
-        fetch: async (request: Request) => {
-          this.renewActivityTimeout();
-          const tcpPort = (this as unknown as HostContainerInternals).container.getTcpPort(8080);
-          return await tcpPort.fetch(request.url.replace('https:', 'http:'), request);
+      return await dispatchAgentExecutorStart(
+        {
+          startAndWaitForPorts: this.startAndWaitForPorts.bind(this),
+          fetch: async (request: Request) => {
+            this.renewActivityTimeout();
+            const tcpPort = (this as unknown as HostContainerInternals)
+              .container.getTcpPort(8080);
+            return await tcpPort.fetch(
+              request.url.replace("https:", "http:"),
+              request,
+            );
+          },
         },
-      }, body, controlConfig);
+        body,
+        controlConfig,
+      );
     }
 
     async verifyProxyToken(token: string): Promise<ProxyTokenInfo | null> {
       if (!this.cachedTokens) {
-        const stored = await this.ctx.storage.get<Record<string, ProxyTokenInfo>>('proxyTokens');
+        const stored = await this.ctx.storage.get<
+          Record<string, ProxyTokenInfo>
+        >("proxyTokens");
         if (!stored) return null;
         this.cachedTokens = new Map(Object.entries(stored));
       }
@@ -190,17 +221,17 @@ function createExecutorContainerClass(tier: import('./executor-utils.ts').Execut
 }
 
 /** Tier 1 — lite instances, always-on, low concurrency */
-export const ExecutorContainerTier1 = createExecutorContainerClass(1, '10m');
+export const ExecutorContainerTier1 = createExecutorContainerClass(1, "10m");
 /** Tier 2 — basic instances, scale-out */
-export const ExecutorContainerTier2 = createExecutorContainerClass(2, '5m');
+export const ExecutorContainerTier2 = createExecutorContainerClass(2, "5m");
 /** Tier 3 — large instances, max memory */
-export const ExecutorContainerTier3 = createExecutorContainerClass(3, '3m');
+export const ExecutorContainerTier3 = createExecutorContainerClass(3, "3m");
 
 /** @deprecated Use ExecutorContainerTier1 for new deployments */
 export class TakosAgentExecutorContainer extends HostContainerRuntime<Env> {
   defaultPort = 8080;
-  sleepAfter = '5m';
-  pingEndpoint = 'container/health';
+  sleepAfter = "5m";
+  pingEndpoint = "container/health";
 
   private cachedTokens: Map<string, ProxyTokenInfo> | null = null;
 
@@ -209,39 +240,56 @@ export class TakosAgentExecutorContainer extends HostContainerRuntime<Env> {
     this.envVars = buildAgentExecutorContainerEnvVars(env);
   }
 
-  async dispatchStart(body: AgentExecutorDispatchPayload): Promise<import('./executor-dispatch.ts').AgentExecutorDispatchResult> {
+  async dispatchStart(
+    body: AgentExecutorDispatchPayload,
+  ): Promise<import("./executor-dispatch.ts").AgentExecutorDispatchResult> {
     const serviceId = resolveAgentExecutorServiceId(body);
     if (!serviceId) {
       return {
         ok: false,
         status: 400,
-        body: JSON.stringify({ error: 'Missing serviceId or workerId' }),
+        body: JSON.stringify({ error: "Missing serviceId or workerId" }),
       };
     }
-    const controlConfig: AgentExecutorControlConfig = buildAgentExecutorProxyConfig(this.env, {
-      runId: body.runId,
-      serviceId,
-    });
+    const controlConfig: AgentExecutorControlConfig =
+      buildAgentExecutorProxyConfig(this.env, {
+        runId: body.runId,
+        serviceId,
+      });
     const tokenMap: Record<string, ProxyTokenInfo> = {
-      [controlConfig.controlRpcToken]: { runId: body.runId, serviceId, capability: 'control' },
+      [controlConfig.controlRpcToken]: {
+        runId: body.runId,
+        serviceId,
+        capability: "control",
+      },
     };
-    await this.ctx.storage.put('proxyTokens', tokenMap);
+    await this.ctx.storage.put("proxyTokens", tokenMap);
     this.cachedTokens = new Map(Object.entries(tokenMap));
 
-    return await dispatchAgentExecutorStart({
-      startAndWaitForPorts: this.startAndWaitForPorts.bind(this),
-      fetch: async (request: Request) => {
-        this.renewActivityTimeout();
-        const tcpPort = (this as unknown as HostContainerInternals).container.getTcpPort(8080);
-        return await tcpPort.fetch(request.url.replace('https:', 'http:'), request);
+    return await dispatchAgentExecutorStart(
+      {
+        startAndWaitForPorts: this.startAndWaitForPorts.bind(this),
+        fetch: async (request: Request) => {
+          this.renewActivityTimeout();
+          const tcpPort = (this as unknown as HostContainerInternals).container
+            .getTcpPort(8080);
+          return await tcpPort.fetch(
+            request.url.replace("https:", "http:"),
+            request,
+          );
+        },
       },
-    }, body, controlConfig);
+      body,
+      controlConfig,
+    );
   }
 
   /** RPC method: called by the worker fetch handler to verify proxy tokens. */
   async verifyProxyToken(token: string): Promise<ProxyTokenInfo | null> {
     if (!this.cachedTokens) {
-      const stored = await this.ctx.storage.get<Record<string, ProxyTokenInfo>>('proxyTokens');
+      const stored = await this.ctx.storage.get<Record<string, ProxyTokenInfo>>(
+        "proxyTokens",
+      );
       if (!stored) return null;
       this.cachedTokens = new Map(Object.entries(stored));
     }
@@ -264,34 +312,37 @@ export default {
     // Validate environment on first request (cached).
     const envError = envGuard(env as unknown as Record<string, unknown>);
     if (envError) {
-      return errorJsonResponse('Configuration Error', 503, {
-        message: 'Executor host is misconfigured. Please contact administrator.',
+      return errorJsonResponse("Configuration Error", 503, {
+        message:
+          "Executor host is misconfigured. Please contact administrator.",
       });
     }
 
     const url = new URL(request.url);
     const path = url.pathname;
 
-    if (path === '/health' && request.method === 'GET') {
-      return jsonResponse({ status: 'ok', service: 'takos-executor-host' });
+    if (path === "/health" && request.method === "GET") {
+      return jsonResponse({ status: "ok", service: "takos-executor-host" });
     }
 
-    if (path === '/internal/proxy-usage' && request.method === 'GET') {
+    if (path === "/internal/proxy-usage" && request.method === "GET") {
       return jsonResponse({
-        status: 'ok',
-        service: 'takos-executor-host',
+        status: "ok",
+        service: "takos-executor-host",
         counts: getProxyUsageSnapshot(),
       });
     }
 
     // /dispatch — called by takos-runner via service binding (same CF account).
     // Service binding provides implicit authentication; no JWT required.
-    if (path === '/dispatch' && request.method === 'POST') {
-      const body = await request.json() as AgentExecutorDispatchPayload & { tier?: unknown };
+    if (path === "/dispatch" && request.method === "POST") {
+      const body = await request.json() as AgentExecutorDispatchPayload & {
+        tier?: unknown;
+      };
       const { runId } = body;
 
       if (!runId) {
-        return errorJsonResponse('Missing runId', 400);
+        return errorJsonResponse("Missing runId", 400);
       }
 
       const tier = parseExecutorTier(body.tier);
@@ -303,11 +354,15 @@ export default {
     }
 
     // /proxy/* and /rpc/control/* — called by executor/container with per-run tokens
-    if (path.startsWith('/proxy/') || path.startsWith('/rpc/control/')) {
-      const runId = request.headers.get('X-Takos-Run-Id');
-      const authHeader = request.headers.get('Authorization');
-      const token = authHeader?.startsWith('Bearer ') ? authHeader.slice(7).trim() || null : null;
-      const tier = parseExecutorTier(request.headers.get('X-Takos-Executor-Tier'));
+    if (path.startsWith("/proxy/") || path.startsWith("/rpc/control/")) {
+      const runId = request.headers.get("X-Takos-Run-Id");
+      const authHeader = request.headers.get("Authorization");
+      const token = authHeader?.startsWith("Bearer ")
+        ? authHeader.slice(7).trim() || null
+        : null;
+      const tier = parseExecutorTier(
+        request.headers.get("X-Takos-Executor-Tier"),
+      );
       if (!runId || !token) {
         return unauthorized();
       }
@@ -328,20 +383,22 @@ export default {
         proxy_capabilities: [tokenInfo.capability],
       };
 
-      if (request.method !== 'POST' && request.method !== 'GET') {
-        return err('Method not allowed', 405);
+      if (request.method !== "POST" && request.method !== "GET") {
+        return err("Method not allowed", 405);
       }
 
       // Binary R2 PUT: Content-Type is application/octet-stream, metadata in headers
-      const isBinaryR2Put = request.method === 'POST'
-        && (request.headers.get('Content-Type') || '').startsWith('application/octet-stream')
-        && (path === '/proxy/offload/put' || path === '/proxy/git-objects/put');
+      const isBinaryR2Put = request.method === "POST" &&
+        (request.headers.get("Content-Type") || "").startsWith(
+          "application/octet-stream",
+        ) &&
+        (path === "/proxy/offload/put" || path === "/proxy/git-objects/put");
 
       const body = isBinaryR2Put
         ? {} as Record<string, unknown> // body is raw binary, not JSON
-        : request.method === 'POST'
-          ? await request.json() as Record<string, unknown>
-          : Object.fromEntries(url.searchParams.entries());
+        : request.method === "POST"
+        ? await request.json() as Record<string, unknown>
+        : Object.fromEntries(url.searchParams.entries());
       if (!claimsMatchRequestBody(claims, body)) {
         return unauthorized();
       }
@@ -365,161 +422,185 @@ export default {
       }
 
       // DB proxy endpoints
-      if (path.startsWith('/proxy/db/')) {
+      if (path.startsWith("/proxy/db/")) {
         return handleDbProxy(path, body, env);
       }
 
       // R2 offload endpoints
-      if (path.startsWith('/proxy/offload/')) {
-        return handleR2Proxy(path, '/proxy/offload', body, env.TAKOS_OFFLOAD, isBinaryR2Put ? request : undefined);
+      if (path.startsWith("/proxy/offload/")) {
+        return handleR2Proxy(
+          path,
+          "/proxy/offload",
+          body,
+          env.TAKOS_OFFLOAD,
+          isBinaryR2Put ? request : undefined,
+        );
       }
 
       // R2 git-objects endpoints
-      if (path.startsWith('/proxy/git-objects/')) {
-        if (!env.GIT_OBJECTS) return err('GIT_OBJECTS R2 bucket not configured', 503);
-        return handleR2Proxy(path, '/proxy/git-objects', body, env.GIT_OBJECTS, isBinaryR2Put ? request : undefined);
+      if (path.startsWith("/proxy/git-objects/")) {
+        if (!env.GIT_OBJECTS) {
+          return err("GIT_OBJECTS R2 bucket not configured", 503);
+        }
+        return handleR2Proxy(
+          path,
+          "/proxy/git-objects",
+          body,
+          env.GIT_OBJECTS,
+          isBinaryR2Put ? request : undefined,
+        );
       }
 
       // DO endpoints (RunNotifier + generic)
-      if (path === '/proxy/do/fetch') {
+      if (path === "/proxy/do/fetch") {
         return handleNotifierProxy(path, body, env);
       }
 
       // Vectorize endpoints
-      if (path.startsWith('/proxy/vectorize/')) {
+      if (path.startsWith("/proxy/vectorize/")) {
         return handleVectorizeProxy(path, body, env);
       }
 
       // AI endpoints
-      if (path.startsWith('/proxy/ai/')) {
+      if (path.startsWith("/proxy/ai/")) {
         return handleAiProxy(path, body, env);
       }
 
       // Egress proxy
-      if (path === '/proxy/egress/fetch') {
+      if (path === "/proxy/egress/fetch") {
         return handleEgressProxy(body, env);
       }
 
       // Runtime proxy (for RUNTIME_HOST calls from tools)
-      if (path === '/proxy/runtime/fetch') {
+      if (path === "/proxy/runtime/fetch") {
         return handleRuntimeProxy(body, env);
       }
 
       // Browser proxy (for BROWSER_HOST calls from tools)
-      if (path === '/proxy/browser/fetch') {
+      if (path === "/proxy/browser/fetch") {
         return handleBrowserProxy(body, env);
       }
 
       // Queue proxy
-      if (path.startsWith('/proxy/queue/')) {
+      if (path.startsWith("/proxy/queue/")) {
         return handleQueueProxy(path, body, env);
       }
 
       // Heartbeat
-      if (path === '/proxy/heartbeat' || path === '/rpc/control/heartbeat') {
+      if (path === "/proxy/heartbeat" || path === "/rpc/control/heartbeat") {
         return handleHeartbeat(body, env);
       }
 
-      if (path === '/proxy/run/status' || path === '/rpc/control/run-status') {
+      if (path === "/proxy/run/status" || path === "/rpc/control/run-status") {
         return handleRunStatus(body, env);
       }
 
-      if (path === '/rpc/control/run-record') {
+      if (path === "/rpc/control/run-record") {
         return handleRunRecord(body, env);
       }
 
-      if (path === '/rpc/control/run-bootstrap') {
+      if (path === "/rpc/control/run-bootstrap") {
         return handleRunBootstrap(body, env);
       }
 
-      if (path === '/proxy/run/fail' || path === '/rpc/control/run-fail') {
+      if (path === "/proxy/run/fail" || path === "/rpc/control/run-fail") {
         return handleRunFail(body, env);
       }
 
       // Run reset (on failure)
-      if (path === '/proxy/run/reset' || path === '/rpc/control/run-reset') {
+      if (path === "/proxy/run/reset" || path === "/rpc/control/run-reset") {
         return handleRunReset(body, env);
       }
 
-      if (path === '/rpc/control/run-context') {
+      if (path === "/rpc/control/run-context") {
         return handleRunContext(body, env);
       }
 
-      if (path === '/rpc/control/no-llm-complete') {
+      if (path === "/rpc/control/no-llm-complete") {
         return handleNoLlmComplete(body, env);
       }
 
-      if (path === '/rpc/control/conversation-history') {
+      if (path === "/rpc/control/conversation-history") {
         return handleConversationHistory(body, env);
       }
 
-      if (path === '/rpc/control/skill-runtime-context') {
+      if (path === "/rpc/control/skill-runtime-context") {
         return handleSkillRuntimeContext(body, env);
       }
 
-      if (path === '/rpc/control/skill-catalog') {
+      if (path === "/rpc/control/skill-catalog") {
         return handleSkillCatalog(body, env);
       }
 
-      if (path === '/rpc/control/skill-plan') {
+      if (path === "/rpc/control/skill-plan") {
         return handleSkillPlan(body, env);
       }
 
-      if (path === '/rpc/control/memory-activation') {
+      if (path === "/rpc/control/memory-activation") {
         return handleMemoryActivation(body, env);
       }
 
-      if (path === '/rpc/control/memory-finalize') {
+      if (path === "/rpc/control/memory-finalize") {
         return handleMemoryFinalize(body, env);
       }
 
-      if (path === '/rpc/control/add-message') {
+      if (path === "/rpc/control/add-message") {
         return handleAddMessage(body, env);
       }
 
-      if (path === '/rpc/control/update-run-status') {
+      if (path === "/rpc/control/update-run-status") {
         return handleUpdateRunStatus(body, env);
       }
 
-      if (path === '/rpc/control/current-session') {
+      if (path === "/rpc/control/current-session") {
         return handleCurrentSession(body, env);
       }
 
-      if (path === '/rpc/control/is-cancelled') {
+      if (path === "/rpc/control/is-cancelled") {
         return handleIsCancelled(body, env);
       }
 
-      if (path === '/rpc/control/tool-catalog') {
+      if (path === "/rpc/control/tool-catalog") {
         return handleToolCatalog(body, env);
       }
 
-      if (path === '/rpc/control/tool-execute') {
+      if (path === "/rpc/control/tool-execute") {
         return handleToolExecute(body, env);
       }
 
-      if (path === '/rpc/control/tool-cleanup') {
+      if (path === "/rpc/control/tool-cleanup") {
         return handleToolCleanup(body);
       }
 
-      if (path === '/rpc/control/run-event') {
+      if (path === "/rpc/control/run-event") {
         return handleRunEvent(body, env);
       }
 
       // Billing — record run usage after completion
-      if (path === '/proxy/billing/run-usage' || path === '/rpc/control/billing-run-usage') {
+      if (
+        path === "/proxy/billing/run-usage" ||
+        path === "/rpc/control/billing-run-usage"
+      ) {
         const { runId: billingRunId } = body as { runId: string };
-        if (!billingRunId) return err('Missing runId', 400);
+        if (!billingRunId) return err("Missing runId", 400);
         try {
-          await recordRunUsageBatch(env as unknown as Parameters<typeof recordRunUsageBatch>[0], billingRunId);
+          await recordRunUsageBatch(
+            env as unknown as Parameters<typeof recordRunUsageBatch>[0],
+            billingRunId,
+          );
           return ok({ recorded: true });
         } catch (billingErr) {
-          logError(`Billing recording failed for run ${billingRunId}`, billingErr, { module: 'executor-host' });
-          return ok({ recorded: false, error: 'billing_failed' });
+          logError(
+            `Billing recording failed for run ${billingRunId}`,
+            billingErr,
+            { module: "executor-host" },
+          );
+          return ok({ recorded: false, error: "billing_failed" });
         }
       }
 
       // API keys — container fetches keys on demand instead of receiving them in the dispatch payload
-      if (path === '/proxy/api-keys' || path === '/rpc/control/api-keys') {
+      if (path === "/proxy/api-keys" || path === "/rpc/control/api-keys") {
         return ok({
           openai: env.OPENAI_API_KEY ?? null,
           anthropic: env.ANTHROPIC_API_KEY ?? null,
@@ -530,6 +611,6 @@ export default {
       return err(`Unknown proxy path: ${path}`, 404);
     }
 
-    return new Response('takos-executor-host', { status: 200 });
+    return new Response("takos-executor-host", { status: 200 });
   },
 } satisfies ExportedHandler<Env>;

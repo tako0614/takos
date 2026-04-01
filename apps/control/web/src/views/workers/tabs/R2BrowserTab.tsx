@@ -1,4 +1,4 @@
-import { createSignal, createEffect, onMount, onCleanup, For } from 'solid-js';
+import { createSignal, createEffect, For } from 'solid-js';
 import type { JSX } from 'solid-js';
 import { useI18n } from '../../../store/i18n.ts';
 import { useToast } from '../../../store/toast.ts';
@@ -203,7 +203,7 @@ export function R2BrowserTab({ resource }: R2BrowserTabProps) {
         query: { key },
       }) as Response;
       const { url } = await rpcJson<{ url: string }>(res);
-      window.open(url, '_blank', 'noopener,noreferrer');
+      globalThis.open(url, '_blank', 'noopener,noreferrer');
     } catch {
       showToast('error', t('failedToLoad'));
     }
@@ -230,7 +230,7 @@ export function R2BrowserTab({ resource }: R2BrowserTabProps) {
       )}
       <div class="flex items-center justify-between gap-4 p-4 bg-zinc-50 dark:bg-zinc-800 rounded-xl border border-zinc-200 dark:border-zinc-700">
         <div class="flex items-center gap-2 flex-1 min-w-0 overflow-x-auto">
-          <button
+          <button type="button"
             onClick={navigateToRoot}
             class="flex items-center gap-2 text-sm text-zinc-900 dark:text-zinc-100 hover:text-blue-600 dark:hover:text-blue-400 transition-colors flex-shrink-0"
           >
@@ -240,7 +240,7 @@ export function R2BrowserTab({ resource }: R2BrowserTabProps) {
           <For each={breadcrumbParts()}>{(part, index) => (
               <>
                 <Icons.ChevronRight class="w-4 h-4 text-zinc-400 flex-shrink-0" />
-                <button
+                <button type="button"
                   onClick={() => fetchObjects(breadcrumbParts().slice(0, index() + 1).join('/') + '/', true)}
                   class="text-sm text-zinc-600 dark:text-zinc-400 hover:text-blue-600 dark:hover:text-blue-400 transition-colors truncate"
                 >
@@ -351,14 +351,14 @@ export function R2BrowserTab({ resource }: R2BrowserTabProps) {
                     <td class="px-4 py-3 text-zinc-500 dark:text-zinc-400">{formatDateTime(obj.uploaded)}</td>
                     <td class="px-4 py-3">
                       <div class="flex items-center justify-end gap-1">
-                        <button
+                        <button type="button"
                           onClick={() => handleDownload(obj.key)}
                           class="p-2 rounded-lg hover:bg-zinc-200 dark:hover:bg-zinc-600 transition-colors text-zinc-500 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100"
                           title={t('download')}
                         >
                           <Icons.Download class="w-4 h-4" />
                         </button>
-                        <button
+                        <button type="button"
                           onClick={(e) => {
                             e.stopPropagation();
                             handleDelete(obj.key);

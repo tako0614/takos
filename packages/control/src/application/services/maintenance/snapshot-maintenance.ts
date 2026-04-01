@@ -1,6 +1,6 @@
 import type { Env } from '../../../shared/types/index.ts';
 import { getDb, sessions, blobs, snapshots } from '../../../infra/db/index.ts';
-import { and, eq, inArray, lte, lt, asc } from 'drizzle-orm';
+import { and, type eq as _eq, inArray, lte, lt, asc } from 'drizzle-orm';
 import { SnapshotManager } from '../sync/snapshot.ts';
 
 export interface SnapshotGcSpaceResult {

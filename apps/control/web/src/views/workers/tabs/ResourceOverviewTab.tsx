@@ -115,7 +115,7 @@ function ConnectionInfoDisplay({
               <code class="flex-1 text-sm text-zinc-900 dark:text-zinc-100 font-mono bg-zinc-100 dark:bg-zinc-700 px-3 py-2 rounded-lg truncate">
                 {value}
               </code>
-              <button
+              <button type="button"
                 onClick={() => handleCopy(key, value)}
                 class="p-2 rounded-lg hover:bg-zinc-100 dark:hover:bg-zinc-700 transition-colors text-zinc-500 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100"
                 aria-label={`Copy ${key.replace(/_/g, ' ')} to clipboard`}
@@ -204,7 +204,7 @@ function AccessTokensList({
                   )}
                 </div>
               </div>
-              <button
+              <button type="button"
                 onClick={() => onDelete(token.id)}
                 disabled={deletingTokenId === token.id}
                 class="p-2 rounded-lg hover:bg-red-100 dark:hover:bg-red-900/30 transition-colors text-zinc-400 hover:text-red-600 dark:hover:text-red-400 disabled:opacity-50"
@@ -291,7 +291,7 @@ function CreateTokenModal({
               <code id="new-token-value" class="flex-1 text-sm text-zinc-900 dark:text-zinc-100 font-mono bg-zinc-100 dark:bg-zinc-700 px-3 py-2 rounded-lg break-all">
                 {newToken()}
               </code>
-              <button
+              <button type="button"
                 onClick={handleCopyToken}
                 class="p-2 rounded-lg hover:bg-zinc-100 dark:hover:bg-zinc-700 transition-colors text-zinc-500 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100"
                 aria-label="Copy token to clipboard"

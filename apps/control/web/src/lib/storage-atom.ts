@@ -21,7 +21,12 @@ export function createPersistedSignal<T>(key: string, defaultValue: T): Signal<T
  * The atom reads/writes localStorage directly (vanilla, no React).
  */
 export function atomWithStorageVanilla<T>(key: string, initialValue: T) {
-  const stored = typeof window !== 'undefined' ? localStorage.getItem(key) : null;
+  const storage = globalThis.localStorage;
+  if (!storage) {
+    return atom<T>(initialValue);
+  }
+
+  const stored = storage.getItem(key);
   const parsed: T = stored !== null ? (JSON.parse(stored) as T) : initialValue;
 
   const baseAtom = atom<T>(parsed);
@@ -30,9 +35,7 @@ export function atomWithStorageVanilla<T>(key: string, initialValue: T) {
     (get) => get(baseAtom),
     (_get, set, newValue: T) => {
       set(baseAtom, newValue);
-      if (typeof window !== 'undefined') {
-        localStorage.setItem(key, JSON.stringify(newValue));
-      }
+      storage.setItem(key, JSON.stringify(newValue));
     },
   );
 

@@ -32,7 +32,7 @@ export function D1ExplorerTab({ resource }: D1ExplorerTabProps) {
         )}
         <div class="space-y-1" role="listbox" aria-label="Table list">
           {d1Tables().map((table: string) => (
-            <button
+            <button type="button"
 
               role="option"
               aria-selected={d1SelectedTable() === table}
@@ -58,7 +58,7 @@ export function D1ExplorerTab({ resource }: D1ExplorerTabProps) {
             onInput={(e) => onD1QueryChange(e.target.value)}
             placeholder="SELECT * FROM users LIMIT 10"
           />
-          <button
+          <button type="button"
             class="mt-3 inline-flex items-center gap-2 px-4 py-2 bg-zinc-900 dark:bg-zinc-100 hover:bg-zinc-800 dark:hover:bg-zinc-200 text-white dark:text-zinc-900 rounded-lg text-sm font-medium transition-colors disabled:opacity-50"
             onClick={executeD1Query}
             disabled={d1Loading() || !d1Query().trim()}
@@ -81,7 +81,7 @@ export function D1ExplorerTab({ resource }: D1ExplorerTabProps) {
                   </tr>
                 </thead>
                 <tbody class="divide-y divide-zinc-200 dark:divide-zinc-700">
-                  {d1TableData()!.rows.map((row: Record<string, unknown>, i: number) => (
+                  {d1TableData()!.rows.map((row: Record<string, unknown>, _i: number) => (
                     <tr class="hover:bg-zinc-100 dark:hover:bg-zinc-700">
                       {d1TableData()!.columns.map((col: string) => (
                         <td class="px-3 py-2 text-zinc-900 dark:text-zinc-100">{String(row[col] ?? '')}</td>

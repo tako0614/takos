@@ -5,17 +5,28 @@
  * and managed server reconciliation.
  */
 
-import type { D1Database } from '../../../../shared/types/bindings.ts';
-import type { InsertOf, SelectOf } from '../../../../shared/types/drizzle-utils.ts';
-import { getDb, mcpServers } from '../../../../infra/db/index.ts';
-import { eq, and } from 'drizzle-orm';
-import { generateId } from '../../../../shared/utils/index.ts';
-import type { Env } from '../../../../shared/types/index.ts';
-import type { McpServerRecord, McpIssuerEnv, RegisterExternalMcpServerResult } from './mcp-models.ts';
-import { getInternalMcpIssuer, mapMcpServerRow } from './mcp-models.ts';
-import { assertAllowedMcpEndpointUrl, getMcpEndpointUrlOptions } from './validation.ts';
-import { saltFor, encryptToken } from './crypto.ts';
-import { discoverOAuthMetadata, createMcpOAuthPending } from './oauth.ts';
+import type { D1Database } from "../../../../shared/types/bindings.ts";
+import type {
+  InsertOf,
+  SelectOf,
+} from "../../../../shared/types/drizzle-utils.ts";
+import { mcpServers } from "../../../../infra/db/index.ts";
+import { and, eq } from "drizzle-orm";
+import { generateId } from "../../../../shared/utils/index.ts";
+import type { Env } from "../../../../shared/types/index.ts";
+import type {
+  McpIssuerEnv,
+  McpServerRecord,
+  RegisterExternalMcpServerResult,
+} from "./mcp-models.ts";
+import { getInternalMcpIssuer, mapMcpServerRow } from "./mcp-models.ts";
+import {
+  assertAllowedMcpEndpointUrl,
+  getMcpEndpointUrlOptions,
+} from "./validation.ts";
+import { encryptToken, saltFor } from "./crypto.ts";
+import { createMcpOAuthPending, discoverOAuthMetadata } from "./oauth.ts";
+import { mcpServiceDeps } from "./oauth.ts";
 
 // ---------------------------------------------------------------------------
 // Managed server upsert & reconciliation
@@ -28,7 +39,7 @@ export async function upsertManagedMcpServer(
     spaceId: string;
     name: string;
     url: string;
-    sourceType: 'worker' | 'bundle_deployment';
+    sourceType: "worker" | "bundle_deployment";
     serviceId?: string | null;
     workerId?: string | null;
     bundleDeploymentId?: string | null;
@@ -36,16 +47,16 @@ export async function upsertManagedMcpServer(
     authToken?: string;
   },
 ): Promise<McpServerRecord> {
-  const db = getDb(dbBinding);
+  const db = mcpServiceDeps.getDb(dbBinding);
   const nowIso = new Date().toISOString();
   const serviceId = params.serviceId ?? params.workerId ?? null;
 
   let existing: { id: string } | undefined;
-  if (params.sourceType === 'worker' && serviceId) {
+  if (params.sourceType === "worker" && serviceId) {
     existing = await db.select({ id: mcpServers.id }).from(mcpServers)
       .where(and(
         eq(mcpServers.accountId, params.spaceId),
-        eq(mcpServers.sourceType, 'worker'),
+        eq(mcpServers.sourceType, "worker"),
         eq(mcpServers.serviceId, serviceId),
       ))
       .get();
@@ -56,7 +67,9 @@ export async function upsertManagedMcpServer(
       eq(mcpServers.sourceType, params.sourceType),
     ];
     if (params.bundleDeploymentId) {
-      conditions.push(eq(mcpServers.bundleDeploymentId, params.bundleDeploymentId));
+      conditions.push(
+        eq(mcpServers.bundleDeploymentId, params.bundleDeploymentId),
+      );
     }
     existing = await db.select({ id: mcpServers.id }).from(mcpServers)
       .where(and(...conditions))
@@ -64,7 +77,7 @@ export async function upsertManagedMcpServer(
   }
 
   const serverId = existing?.id ?? generateId(16);
-  const authMode = params.authToken ? 'bearer_token' : 'takos_oidc';
+  const authMode = params.authToken ? "bearer_token" : "takos_oidc";
 
   // Encrypt the Bearer token if provided
   let encryptedAccessToken: string | null = null;
@@ -72,7 +85,7 @@ export async function upsertManagedMcpServer(
     encryptedAccessToken = await encryptToken(
       params.authToken,
       env.ENCRYPTION_KEY,
-      saltFor(serverId, 'access'),
+      saltFor(serverId, "access"),
     );
   }
 
@@ -81,13 +94,15 @@ export async function upsertManagedMcpServer(
     accountId: params.spaceId,
     name: params.name,
     url: params.url,
-    transport: 'streamable-http',
+    transport: "streamable-http",
     sourceType: params.sourceType,
     authMode,
     serviceId,
     bundleDeploymentId: params.bundleDeploymentId ?? null,
     oauthAccessToken: encryptedAccessToken,
-    oauthIssuerUrl: authMode === 'takos_oidc' ? getInternalMcpIssuer(env) : null,
+    oauthIssuerUrl: authMode === "takos_oidc"
+      ? getInternalMcpIssuer(env)
+      : null,
     enabled: true,
     createdAt: nowIso,
     updatedAt: nowIso,
@@ -96,7 +111,7 @@ export async function upsertManagedMcpServer(
     set: {
       name: params.name,
       url: params.url,
-      transport: 'streamable-http',
+      transport: "streamable-http",
       sourceType: params.sourceType,
       authMode,
       serviceId,
@@ -105,13 +120,17 @@ export async function upsertManagedMcpServer(
       oauthRefreshToken: null,
       oauthTokenExpiresAt: null,
       oauthScope: null,
-      oauthIssuerUrl: authMode === 'takos_oidc' ? getInternalMcpIssuer(env) : null,
+      oauthIssuerUrl: authMode === "takos_oidc"
+        ? getInternalMcpIssuer(env)
+        : null,
       enabled: true,
       updatedAt: nowIso,
     },
   });
 
-  const row = await db.select().from(mcpServers).where(eq(mcpServers.id, serverId)).get();
+  const row = await db.select().from(mcpServers).where(
+    eq(mcpServers.id, serverId),
+  ).get();
   return mapMcpServerRow(row!);
 }
 
@@ -127,16 +146,16 @@ export async function reconcileManagedWorkerMcpServer(
     enabled: boolean;
   },
 ): Promise<void> {
-  const db = getDb(dbBinding);
+  const db = mcpServiceDeps.getDb(dbBinding);
   const serviceId = params.serviceId ?? params.workerId;
   if (!serviceId) {
-    throw new Error('Managed MCP reconciliation requires a service identifier');
+    throw new Error("Managed MCP reconciliation requires a service identifier");
   }
   if (!params.enabled || !params.name || !params.url) {
     await db.delete(mcpServers)
       .where(and(
         eq(mcpServers.accountId, params.spaceId),
-        eq(mcpServers.sourceType, 'worker'),
+        eq(mcpServers.sourceType, "worker"),
         eq(mcpServers.serviceId, serviceId),
       ));
     return;
@@ -144,7 +163,7 @@ export async function reconcileManagedWorkerMcpServer(
 
   await upsertManagedMcpServer(dbBinding, env, {
     spaceId: params.spaceId,
-    sourceType: 'worker',
+    sourceType: "worker",
     serviceId,
     name: params.name,
     url: params.url,
@@ -156,11 +175,11 @@ export async function deleteManagedMcpServersByBundleDeployment(
   spaceId: string,
   bundleDeploymentId: string,
 ): Promise<void> {
-  const db = getDb(dbBinding);
+  const db = mcpServiceDeps.getDb(dbBinding);
   await db.delete(mcpServers)
     .where(and(
       eq(mcpServers.accountId, spaceId),
-      eq(mcpServers.sourceType, 'bundle_deployment'),
+      eq(mcpServers.sourceType, "bundle_deployment"),
       eq(mcpServers.bundleDeploymentId, bundleDeploymentId),
     ));
 }
@@ -180,34 +199,42 @@ export async function registerExternalMcpServer(
   },
 ): Promise<RegisterExternalMcpServerResult> {
   const urlOptions = getMcpEndpointUrlOptions(env);
-  assertAllowedMcpEndpointUrl(params.url, urlOptions, 'MCP server');
+  assertAllowedMcpEndpointUrl(params.url, urlOptions, "MCP server");
 
   if (!params.name || !/^[a-zA-Z][a-zA-Z0-9_-]{0,63}$/.test(params.name)) {
     throw new Error(
-      'name must start with a letter and contain only letters, digits, underscores, or hyphens (max 64 chars)',
+      "name must start with a letter and contain only letters, digits, underscores, or hyphens (max 64 chars)",
     );
   }
 
-  const db = getDb(dbBinding);
+  const db = mcpServiceDeps.getDb(dbBinding);
   const existing = await db.select({
     id: mcpServers.id,
     oauthAccessToken: mcpServers.oauthAccessToken,
   }).from(mcpServers)
-    .where(and(eq(mcpServers.accountId, params.spaceId), eq(mcpServers.name, params.name)))
+    .where(
+      and(
+        eq(mcpServers.accountId, params.spaceId),
+        eq(mcpServers.name, params.name),
+      ),
+    )
     .get();
 
   if (existing && existing.oauthAccessToken) {
     return {
-      status: 'already_registered',
+      status: "already_registered",
       name: params.name,
       url: params.url,
-      message: `MCP server "${params.name}" is already registered with an active OAuth token.`,
+      message:
+        `MCP server "${params.name}" is already registered with an active OAuth token.`,
     };
   }
 
   try {
     const meta = await discoverOAuthMetadata(params.url, urlOptions);
-    const redirectUri = `https://${env.ADMIN_DOMAIN || env.TENANT_BASE_DOMAIN || 'localhost'}/api/mcp/oauth/callback`;
+    const redirectUri = `https://${
+      env.ADMIN_DOMAIN || env.TENANT_BASE_DOMAIN || "localhost"
+    }/api/mcp/oauth/callback`;
     const { authUrl } = await createMcpOAuthPending(dbBinding, env, {
       spaceId: params.spaceId,
       serverName: params.name,
@@ -220,7 +247,7 @@ export async function registerExternalMcpServer(
     });
 
     return {
-      status: 'pending_oauth',
+      status: "pending_oauth",
       name: params.name,
       url: params.url,
       authUrl,
@@ -235,9 +262,9 @@ export async function registerExternalMcpServer(
       accountId: params.spaceId,
       name: params.name,
       url: params.url,
-      transport: 'streamable-http',
-      sourceType: 'external',
-      authMode: 'oauth_pkce',
+      transport: "streamable-http",
+      sourceType: "external",
+      authMode: "oauth_pkce",
       enabled: true,
       createdAt: nowIso,
       updatedAt: nowIso,
@@ -245,19 +272,22 @@ export async function registerExternalMcpServer(
       target: mcpServers.id,
       set: {
         url: params.url,
-        transport: 'streamable-http',
-        sourceType: 'external',
-        authMode: 'oauth_pkce',
+        transport: "streamable-http",
+        sourceType: "external",
+        authMode: "oauth_pkce",
         enabled: true,
         updatedAt: nowIso,
       },
     });
 
     return {
-      status: 'registered',
+      status: "registered",
       name: params.name,
       url: params.url,
-      message: `MCP server "${params.name}" registered without OAuth metadata (${String(err)}).`,
+      message:
+        `MCP server "${params.name}" registered without OAuth metadata (${
+          String(err)
+        }).`,
     };
   }
 }
@@ -271,7 +301,7 @@ export async function getMcpServerWithTokens(
   spaceId: string,
   serverId: string,
 ): Promise<SelectOf<typeof mcpServers> | null> {
-  const db = getDb(dbBinding);
+  const db = mcpServiceDeps.getDb(dbBinding);
   const row = await db.select().from(mcpServers)
     .where(and(eq(mcpServers.id, serverId), eq(mcpServers.accountId, spaceId)))
     .get();
@@ -282,7 +312,7 @@ export async function listMcpServers(
   dbBinding: D1Database,
   spaceId: string,
 ): Promise<McpServerRecord[]> {
-  const db = getDb(dbBinding);
+  const db = mcpServiceDeps.getDb(dbBinding);
   const rows = await db.select().from(mcpServers)
     .where(eq(mcpServers.accountId, spaceId))
     .orderBy(mcpServers.createdAt)
@@ -295,7 +325,7 @@ export async function deleteMcpServer(
   spaceId: string,
   serverId: string,
 ): Promise<boolean> {
-  const db = getDb(dbBinding);
+  const db = mcpServiceDeps.getDb(dbBinding);
   const existing = await db.select({
     id: mcpServers.id,
     sourceType: mcpServers.sourceType,
@@ -303,8 +333,10 @@ export async function deleteMcpServer(
     .where(and(eq(mcpServers.id, serverId), eq(mcpServers.accountId, spaceId)))
     .get();
   if (!existing) return false;
-  if (existing.sourceType !== 'external') {
-    throw new Error('Managed MCP servers must be removed from their source (worker or bundle deployment)');
+  if (existing.sourceType !== "external") {
+    throw new Error(
+      "Managed MCP servers must be removed from their source (worker or bundle deployment)",
+    );
   }
   await db.delete(mcpServers).where(eq(mcpServers.id, serverId));
   return true;
@@ -316,7 +348,7 @@ export async function updateMcpServer(
   serverId: string,
   patch: { enabled?: boolean; name?: string },
 ): Promise<McpServerRecord | null> {
-  const db = getDb(dbBinding);
+  const db = mcpServiceDeps.getDb(dbBinding);
   const existing = await db.select({
     id: mcpServers.id,
     sourceType: mcpServers.sourceType,
@@ -324,8 +356,10 @@ export async function updateMcpServer(
     .where(and(eq(mcpServers.id, serverId), eq(mcpServers.accountId, spaceId)))
     .get();
   if (!existing) return null;
-  if (existing.sourceType !== 'external' && patch.name !== undefined) {
-    throw new Error('Managed MCP server names are controlled by their source declaration');
+  if (existing.sourceType !== "external" && patch.name !== undefined) {
+    throw new Error(
+      "Managed MCP server names are controlled by their source declaration",
+    );
   }
 
   const updateData: Partial<InsertOf<typeof mcpServers>> = {
@@ -338,6 +372,8 @@ export async function updateMcpServer(
     .set(updateData)
     .where(eq(mcpServers.id, serverId));
 
-  const updated = await db.select().from(mcpServers).where(eq(mcpServers.id, serverId)).get();
+  const updated = await db.select().from(mcpServers).where(
+    eq(mcpServers.id, serverId),
+  ).get();
   return updated ? mapMcpServerRow(updated) : null;
 }

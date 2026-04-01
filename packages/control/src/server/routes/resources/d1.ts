@@ -16,6 +16,14 @@ import { getResourceTypeQueryValues } from '../../../application/services/resour
 import { textDate } from '../../../shared/utils/db-guards.ts';
 import { resolvePostgresUrl } from '../../../node-platform/resolvers/env-utils.ts';
 
+export const d1RouteDeps = {
+  getDb,
+  getPortableSqlDatabase,
+  isPortableResourceProvider,
+  createOptionalCloudflareWfpProvider,
+  checkResourceAccess,
+};
+
 type D1ResourceData = {
   id: string;
   ownerAccountId: string;
@@ -102,7 +110,7 @@ async function loadD1ResourceWithAccess(
   userId: string,
   requiredPermissions?: ResourcePermission[]
 ): Promise<Resource> {
-  const db = getDb(c.env.DB);
+  const db = d1RouteDeps.getDb(c.env.DB);
   const resourceData = await db.select().from(resources).where(
     and(eq(resources.id, resourceId), inArray(resources.type, getResourceTypeQueryValues('sql')))
   ).get();
@@ -113,7 +121,7 @@ async function loadD1ResourceWithAccess(
 
   const resource = toSnakeCaseResource(resourceData);
   const hasAccess = resource.owner_id === userId ||
-    await checkResourceAccess(c.env.DB, resourceId, userId, requiredPermissions);
+    await d1RouteDeps.checkResourceAccess(c.env.DB, resourceId, userId, requiredPermissions);
 
   if (!hasAccess) {
     throw new AuthorizationError();
@@ -123,7 +131,7 @@ async function loadD1ResourceWithAccess(
 }
 
 async function listPortableTables(resource: Resource) {
-  const db = await getPortableSqlDatabase(resource);
+  const db = await d1RouteDeps.getPortableSqlDatabase(resource);
   const usePortablePostgres =
     !!resolvePostgresUrl()
     && !!resource.provider_name
@@ -195,7 +203,7 @@ async function listTablesHandler(c: Context<AuthenticatedRouteEnv>) {
   }
   const resource = await loadD1ResourceWithAccess(c, resourceId, user.id);
 
-  if (isPortableResourceProvider(resource.provider_name)) {
+  if (d1RouteDeps.isPortableResourceProvider(resource.provider_name)) {
     try {
       const tables = await listPortableTables(resource);
       return c.json({ tables });
@@ -212,7 +220,7 @@ async function listTablesHandler(c: Context<AuthenticatedRouteEnv>) {
   }
 
   try {
-    const wfp = createOptionalCloudflareWfpProvider(c.env);
+    const wfp = d1RouteDeps.createOptionalCloudflareWfpProvider(c.env);
     if (!wfp) {
       throw new InternalError('Cloudflare WFP not configured');
     }
@@ -261,9 +269,9 @@ async function tableDetailsHandler(c: Context<AuthenticatedRouteEnv>) {
     throw new BadRequestError('Invalid table name');
   }
 
-  if (isPortableResourceProvider(resource.provider_name)) {
+  if (d1RouteDeps.isPortableResourceProvider(resource.provider_name)) {
     try {
-      const db = await getPortableSqlDatabase(resource);
+      const db = await d1RouteDeps.getPortableSqlDatabase(resource);
       const usePortablePostgres =
         !!resolvePostgresUrl()
         && !!resource.provider_name
@@ -323,7 +331,7 @@ async function tableDetailsHandler(c: Context<AuthenticatedRouteEnv>) {
   }
 
   try {
-    const wfp = createOptionalCloudflareWfpProvider(c.env);
+    const wfp = d1RouteDeps.createOptionalCloudflareWfpProvider(c.env);
     if (!wfp) {
       throw new InternalError('Cloudflare WFP not configured');
     }
@@ -370,9 +378,9 @@ async function queryHandler(c: Context<AuthenticatedRouteEnv>) {
   const requiredPermissions: ResourcePermission[] | undefined = isReadOnly ? undefined : ['write', 'admin'];
   const resource = await loadD1ResourceWithAccess(c, resourceId, user.id, requiredPermissions);
 
-  if (isPortableResourceProvider(resource.provider_name)) {
+  if (d1RouteDeps.isPortableResourceProvider(resource.provider_name)) {
     try {
-      const db = await getPortableSqlDatabase(resource);
+      const db = await d1RouteDeps.getPortableSqlDatabase(resource);
       const statement = db.prepare(body.sql);
       const result = isReadOnly
         ? await statement.all<Record<string, unknown>>()
@@ -391,7 +399,7 @@ async function queryHandler(c: Context<AuthenticatedRouteEnv>) {
   }
 
   try {
-    const wfp = createOptionalCloudflareWfpProvider(c.env);
+    const wfp = d1RouteDeps.createOptionalCloudflareWfpProvider(c.env);
     if (!wfp) {
       throw new InternalError('Cloudflare WFP not configured');
     }
@@ -413,9 +421,9 @@ async function exportHandler(c: Context<AuthenticatedRouteEnv>) {
   const body = await parseJsonBody<{ tables?: string[] }>(c);
   const resource = await loadD1ResourceWithAccess(c, resourceId, user.id, ['read']);
 
-  if (isPortableResourceProvider(resource.provider_name)) {
+  if (d1RouteDeps.isPortableResourceProvider(resource.provider_name)) {
     try {
-      const db = await getPortableSqlDatabase(resource);
+      const db = await d1RouteDeps.getPortableSqlDatabase(resource);
       const tableRows = body?.tables && body.tables.length > 0
         ? body.tables
         : (await listPortableTables(resource)).map((table: { name: string }) => table.name);
@@ -444,7 +452,7 @@ async function exportHandler(c: Context<AuthenticatedRouteEnv>) {
   }
 
   try {
-    const wfp = createOptionalCloudflareWfpProvider(c.env);
+    const wfp = d1RouteDeps.createOptionalCloudflareWfpProvider(c.env);
     if (!wfp) {
       throw new InternalError('Cloudflare WFP not configured');
     }

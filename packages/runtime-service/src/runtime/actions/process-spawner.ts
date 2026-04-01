@@ -1,4 +1,5 @@
-import { spawn, type ChildProcess } from 'node:child_process';
+import { spawn } from 'node:child_process';
+import type { ChildProcess } from 'node:child_process';
 import * as fs from 'node:fs/promises';
 import * as path from 'node:path';
 import { randomUUID } from 'node:crypto';
@@ -10,7 +11,7 @@ import { gracefulKill } from '../../utils/process-kill.ts';
 
 const logger = createLogger({ service: 'process-spawner' });
 import type { ExecutorStepResult } from './executor.ts';
-import { Buffer } from "node:buffer";
+import type { Buffer } from "node:buffer";
 
 // ---------------------------------------------------------------------------
 // Types

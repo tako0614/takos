@@ -129,7 +129,7 @@ export function PRList(props: PRListProps) {
           <div class="flex flex-col h-full" style={{ "background-color": 'var(--color-bg-secondary)' }}>
             <div class="flex items-center justify-between px-6 py-4 border-b" style={{ "border-color": 'var(--color-border-primary)', "background-color": 'var(--color-surface-primary)' }}>
               <div class="flex items-center gap-2">
-                <button
+                <button type="button"
                   class={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm transition-colors ${
                     statusFilter() === 'open'
                       ? 'bg-zinc-900 text-white'
@@ -140,7 +140,7 @@ export function PRList(props: PRListProps) {
                   <Icons.GitMerge class="w-4 h-4" />
                   <span>{statusCounts().open} {t('prStatusOpen')}</span>
                 </button>
-                <button
+                <button type="button"
                   class={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm transition-colors ${
                     statusFilter() === 'merged'
                       ? 'bg-zinc-700 text-white'
@@ -151,7 +151,7 @@ export function PRList(props: PRListProps) {
                   <Icons.Check class="w-4 h-4" />
                   <span>{statusCounts().merged} {t('prStatusMerged')}</span>
                 </button>
-                <button
+                <button type="button"
                   class={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm transition-colors ${
                     statusFilter() === 'closed'
                       ? 'bg-zinc-400 text-white'

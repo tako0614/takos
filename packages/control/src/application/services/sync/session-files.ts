@@ -5,12 +5,16 @@
  * Files are tracked in session_files table until merged.
  */
 
-import type { D1Database, R2Bucket } from '../../../shared/types/bindings.ts';
-import { generateId } from '../../../shared/utils/index.ts';
-import { computeSHA256 } from '../../../shared/utils/hash.ts';
-import { getDb, sessionFiles, files } from '../../../infra/db/index.ts';
-import { eq, and, ne, asc } from 'drizzle-orm';
-import { textDateNullable } from '../../../shared/utils/db-guards.ts';
+import type { D1Database, R2Bucket } from "../../../shared/types/bindings.ts";
+import { generateId as realGenerateId } from "../../../shared/utils/index.ts";
+import { computeSHA256 as realComputeSHA256 } from "../../../shared/utils/hash.ts";
+import {
+  files,
+  getDb as realGetDb,
+  sessionFiles,
+} from "../../../infra/db/index.ts";
+import { and, asc, eq, ne } from "drizzle-orm";
+import { textDateNullable } from "../../../shared/utils/db-guards.ts";
 
 export interface SessionFile {
   id: string;
@@ -18,7 +22,7 @@ export interface SessionFile {
   path: string;
   hash: string;
   size: number;
-  operation: 'create' | 'update' | 'delete';
+  operation: "create" | "update" | "delete";
   created_at: string;
 }
 
@@ -28,6 +32,23 @@ export interface FileContent {
   hash: string;
   size: number;
 }
+
+export interface SessionFilesDeps {
+  getDb: (db: Parameters<typeof realGetDb>[0]) => ReturnType<typeof realGetDb>;
+  computeSHA256: typeof realComputeSHA256;
+  generateId: typeof realGenerateId;
+}
+
+export const sessionFilesDeps: SessionFilesDeps = {
+  getDb: (db) => {
+    if (db && typeof (db as { select?: unknown }).select === "function") {
+      return db as ReturnType<typeof realGetDb>;
+    }
+    return realGetDb(db);
+  },
+  computeSHA256: realComputeSHA256,
+  generateId: realGenerateId,
+};
 
 function getSpaceR2Key(spaceId: string, fileId: string): string {
   return `spaces/${spaceId}/files/${fileId}`;
@@ -42,12 +63,13 @@ export class SessionFilesManager {
     private db: D1Database,
     private storage: R2Bucket | undefined,
     private spaceId: string,
-    private sessionId: string
+    private sessionId: string,
+    private deps: SessionFilesDeps = sessionFilesDeps,
   ) {}
 
   /** Read a file - checks session_files first, then falls back to workspace. */
   async readFile(path: string): Promise<FileContent | null> {
-    const drizzle = getDb(this.db);
+    const drizzle = this.deps.getDb(this.db);
 
     const sessionFile = await drizzle.select()
       .from(sessionFiles)
@@ -55,12 +77,12 @@ export class SessionFilesManager {
         and(
           eq(sessionFiles.sessionId, this.sessionId),
           eq(sessionFiles.path, path),
-        )
+        ),
       )
       .get();
 
     if (sessionFile) {
-      if (sessionFile.operation === 'delete') {
+      if (sessionFile.operation === "delete") {
         return null;
       }
 
@@ -90,7 +112,7 @@ export class SessionFilesManager {
         and(
           eq(files.accountId, this.spaceId),
           eq(files.path, path),
-        )
+        ),
       )
       .get();
 
@@ -106,7 +128,7 @@ export class SessionFilesManager {
         return {
           path,
           content,
-          hash: spaceFile.sha256 || '',
+          hash: spaceFile.sha256 || "",
           size: spaceFile.size,
         };
       }
@@ -116,21 +138,26 @@ export class SessionFilesManager {
   }
 
   /** Write a file - stores in session_files (assumes UTF-8 encoding). */
-  async writeFile(path: string, content: string): Promise<{ hash: string; size: number }> {
-    const drizzle = getDb(this.db);
+  async writeFile(
+    path: string,
+    content: string,
+  ): Promise<{ hash: string; size: number }> {
+    const drizzle = this.deps.getDb(this.db);
 
-    const hash = await computeSHA256(content);
+    const hash = await this.deps.computeSHA256(content);
     const size = new TextEncoder().encode(content).length;
-    const id = generateId();
+    const id = this.deps.generateId();
     const now = new Date().toISOString();
 
-    const existingSession = await drizzle.select({ operation: sessionFiles.operation })
+    const existingSession = await drizzle.select({
+      operation: sessionFiles.operation,
+    })
       .from(sessionFiles)
       .where(
         and(
           eq(sessionFiles.sessionId, this.sessionId),
           eq(sessionFiles.path, path),
-        )
+        ),
       )
       .get();
 
@@ -140,15 +167,15 @@ export class SessionFilesManager {
         and(
           eq(files.accountId, this.spaceId),
           eq(files.path, path),
-        )
+        ),
       )
       .get();
 
-    let operation: 'create' | 'update';
+    let operation: "create" | "update";
     if (existingSession) {
-      operation = existingSession.operation === 'delete' ? 'create' : 'update';
+      operation = existingSession.operation === "delete" ? "create" : "update";
     } else {
-      operation = existingWorkspace ? 'update' : 'create';
+      operation = existingWorkspace ? "update" : "create";
     }
 
     if (this.storage) {
@@ -157,8 +184,8 @@ export class SessionFilesManager {
       if (!existing) {
         await this.storage.put(blobKey, content, {
           customMetadata: {
-            'workspace-id': this.spaceId,
-            'session-id': this.sessionId,
+            "workspace-id": this.spaceId,
+            "session-id": this.sessionId,
           },
         });
       }
@@ -170,7 +197,7 @@ export class SessionFilesManager {
         and(
           eq(sessionFiles.sessionId, this.sessionId),
           eq(sessionFiles.path, path),
-        )
+        ),
       )
       .get();
     if (existingFile) {
@@ -184,7 +211,7 @@ export class SessionFilesManager {
           and(
             eq(sessionFiles.sessionId, this.sessionId),
             eq(sessionFiles.path, path),
-          )
+          ),
         )
         .run();
     } else {
@@ -211,7 +238,7 @@ export class SessionFilesManager {
             and(
               eq(sessionFiles.sessionId, this.sessionId),
               eq(sessionFiles.path, path),
-            )
+            ),
           )
           .run();
       }
@@ -222,8 +249,8 @@ export class SessionFilesManager {
 
   /** Delete a file - records deletion in session_files. */
   async deleteFile(path: string): Promise<boolean> {
-    const drizzle = getDb(this.db);
-    const id = generateId();
+    const drizzle = this.deps.getDb(this.db);
+    const id = this.deps.generateId();
     const now = new Date().toISOString();
 
     const file = await this.readFile(path);
@@ -237,21 +264,21 @@ export class SessionFilesManager {
         and(
           eq(sessionFiles.sessionId, this.sessionId),
           eq(sessionFiles.path, path),
-        )
+        ),
       )
       .get();
     if (existingDelFile) {
       await drizzle.update(sessionFiles)
         .set({
-          hash: '',
+          hash: "",
           size: 0,
-          operation: 'delete',
+          operation: "delete",
         })
         .where(
           and(
             eq(sessionFiles.sessionId, this.sessionId),
             eq(sessionFiles.path, path),
-          )
+          ),
         )
         .run();
     } else {
@@ -261,24 +288,24 @@ export class SessionFilesManager {
             id: id,
             sessionId: this.sessionId,
             path: path,
-            hash: '',
+            hash: "",
             size: 0,
-            operation: 'delete',
+            operation: "delete",
             createdAt: now,
           })
           .run();
       } catch {
         await drizzle.update(sessionFiles)
           .set({
-            hash: '',
+            hash: "",
             size: 0,
-            operation: 'delete',
+            operation: "delete",
           })
           .where(
             and(
               eq(sessionFiles.sessionId, this.sessionId),
               eq(sessionFiles.path, path),
-            )
+            ),
           )
           .run();
       }
@@ -288,12 +315,14 @@ export class SessionFilesManager {
   }
 
   /** List files - combines workspace files with session modifications. */
-  async listFiles(directory?: string): Promise<Array<{ path: string; size: number }>> {
-    const drizzle = getDb(this.db);
+  async listFiles(
+    directory?: string,
+  ): Promise<Array<{ path: string; size: number }>> {
+    const drizzle = this.deps.getDb(this.db);
 
     const whereConditions = [
       eq(files.accountId, this.spaceId),
-      ne(files.origin, 'system'),
+      ne(files.origin, "system"),
     ];
 
     const spaceFiles = await drizzle.select({
@@ -306,7 +335,7 @@ export class SessionFilesManager {
 
     const filesMap = new Map<string, number>();
     for (const f of spaceFiles) {
-      if (directory && !f.path.startsWith(directory + '/')) continue;
+      if (directory && !f.path.startsWith(directory + "/")) continue;
       filesMap.set(f.path, f.size);
     }
 
@@ -320,22 +349,25 @@ export class SessionFilesManager {
       .all();
 
     for (const sf of sessionFileRows) {
-      if (directory && !sf.path.startsWith(directory + '/')) {
+      if (directory && !sf.path.startsWith(directory + "/")) {
         continue;
       }
-      if (sf.operation === 'delete') {
+      if (sf.operation === "delete") {
         filesMap.delete(sf.path);
       } else {
         filesMap.set(sf.path, sf.size);
       }
     }
 
-    return Array.from(filesMap.entries()).map(([path, size]) => ({ path, size }));
+    return Array.from(filesMap.entries()).map(([path, size]) => ({
+      path,
+      size,
+    }));
   }
 
   /** Get all session file changes. */
   async getChanges(): Promise<SessionFile[]> {
-    const drizzle = getDb(this.db);
+    const drizzle = this.deps.getDb(this.db);
 
     const results = await drizzle.select()
       .from(sessionFiles)
@@ -343,19 +375,21 @@ export class SessionFilesManager {
       .orderBy(asc(sessionFiles.createdAt))
       .all();
 
-    return results.map(sf => ({
+    return results.map((sf) => ({
       id: sf.id,
       session_id: sf.sessionId,
       path: sf.path,
       hash: sf.hash,
       size: sf.size,
-      operation: sf.operation as 'create' | 'update' | 'delete',
+      operation: sf.operation as "create" | "update" | "delete",
       created_at: textDateNullable(sf.createdAt) ?? new Date().toISOString(),
     }));
   }
 
   /** Get all files for runtime execution. */
-  async getAllFilesForRuntime(): Promise<Array<{ path: string; content: string }>> {
+  async getAllFilesForRuntime(): Promise<
+    Array<{ path: string; content: string }>
+  > {
     const files = await this.listFiles();
     const result: Array<{ path: string; content: string }> = [];
 

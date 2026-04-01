@@ -18,6 +18,16 @@ import { accountStorageFiles } from '../../../infra/db/schema.ts';
 import { BadRequestError, NotFoundError, InternalError } from 'takos-common/errors';
 import { requireOAuthScope, handleStorageError, INLINE_SAFE_MIME_PREFIXES } from './storage-operations.ts';
 
+export const storageDownloadsRouteDeps = {
+  requireSpaceAccess,
+  getStorageItem,
+  getStorageItemByPath,
+  readFileContent,
+  writeFileContent,
+  escapeSqlLike,
+  getDb,
+};
+
 const app = new Hono<AuthenticatedRouteEnv>()
   // --- Content read endpoint ---
   .get('/:spaceId/storage/:fileId/content',
@@ -27,14 +37,14 @@ const app = new Hono<AuthenticatedRouteEnv>()
     const spaceId = c.req.param('spaceId');
     const fileId = c.req.param('fileId');
 
-    const access = await requireSpaceAccess(c, spaceId, user.id);
+    const access = await storageDownloadsRouteDeps.requireSpaceAccess(c, spaceId, user.id);
 
     if (!c.env.GIT_OBJECTS) {
       throw new InternalError('Storage not configured');
     }
 
     try {
-      const result = await readFileContent(c.env.DB, c.env.GIT_OBJECTS, access.space.id, fileId);
+      const result = await storageDownloadsRouteDeps.readFileContent(c.env.DB, c.env.GIT_OBJECTS, access.space.id, fileId);
       return c.json({
         content: result.content,
         file: result.file,
@@ -56,7 +66,7 @@ const app = new Hono<AuthenticatedRouteEnv>()
     const spaceId = c.req.param('spaceId');
     const fileId = c.req.param('fileId');
 
-    const access = await requireSpaceAccess(
+    const access = await storageDownloadsRouteDeps.requireSpaceAccess(
       c,
       spaceId,
       user.id,
@@ -71,7 +81,7 @@ const app = new Hono<AuthenticatedRouteEnv>()
     const body = c.req.valid('json');
 
     try {
-      const file = await writeFileContent(
+      const file = await storageDownloadsRouteDeps.writeFileContent(
         c.env.DB,
         c.env.GIT_OBJECTS,
         access.space.id,
@@ -93,13 +103,13 @@ const app = new Hono<AuthenticatedRouteEnv>()
     const spaceId = c.req.param('spaceId');
     const fileId = c.req.param('fileId');
 
-    const access = await requireSpaceAccess(c, spaceId, user.id);
+    const access = await storageDownloadsRouteDeps.requireSpaceAccess(c, spaceId, user.id);
 
     if (!c.env.GIT_OBJECTS) {
       throw new InternalError('Storage not configured');
     }
 
-    const db = getDb(c.env.DB);
+    const db = storageDownloadsRouteDeps.getDb(c.env.DB);
     const fileRecord = await db.select({
       id: accountStorageFiles.id,
       name: accountStorageFiles.name,
@@ -153,9 +163,9 @@ const app = new Hono<AuthenticatedRouteEnv>()
       throw new BadRequestError('file_id is required');
     }
 
-    const access = await requireSpaceAccess(c, spaceId, user.id);
+    const access = await storageDownloadsRouteDeps.requireSpaceAccess(c, spaceId, user.id);
 
-    const file = await getStorageItem(c.env.DB, access.space.id, fileId);
+    const file = await storageDownloadsRouteDeps.getStorageItem(c.env.DB, access.space.id, fileId);
     if (!file) {
       throw new NotFoundError('File');
     }
@@ -182,20 +192,20 @@ const app = new Hono<AuthenticatedRouteEnv>()
     const spaceId = c.req.param('spaceId');
     const path = c.req.valid('query').path || '/';
 
-    const access = await requireSpaceAccess(c, spaceId, user.id);
+    const access = await storageDownloadsRouteDeps.requireSpaceAccess(c, spaceId, user.id);
 
     if (!c.env.GIT_OBJECTS) {
       throw new InternalError('Storage not configured');
     }
 
     if (path !== '/' && path.trim() !== '') {
-      const folder = await getStorageItemByPath(c.env.DB, access.space.id, path);
+      const folder = await storageDownloadsRouteDeps.getStorageItemByPath(c.env.DB, access.space.id, path);
       if (!folder || folder.type !== 'folder') {
         throw new NotFoundError('Folder');
       }
     }
 
-    const db = getDb(c.env.DB);
+    const db = storageDownloadsRouteDeps.getDb(c.env.DB);
     const normalizedPath = path.startsWith('/') ? path.replace(/\/+$/, '') || '/' : `/${path.replace(/\/+$/, '')}`;
     const prefix = normalizedPath === '/' ? '/' : `${normalizedPath}/`;
     const escapedPrefix = escapeSqlLike(prefix);

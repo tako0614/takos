@@ -1,4 +1,4 @@
-import { createEffect, onMount, onCleanup, createSignal } from 'solid-js';
+import { onMount, createSignal } from 'solid-js';
 import { useI18n } from '../../store/i18n.ts';
 import { Button } from '../../components/ui/Button.tsx';
 import { ConsentLayout, ConsentLogo } from './ConsentLayout.tsx';
@@ -10,7 +10,7 @@ function safeRedirect(url: string): void {
   try {
     const parsed = new URL(url);
     if (parsed.protocol === 'https:' || parsed.protocol === 'http:') {
-      window.location.href = url;
+      globalThis.location.href = url;
       return;
     }
   } catch { /* invalid URL */ }
@@ -47,7 +47,7 @@ export function OAuthConsentView() {
   const [submitting, setSubmitting] = createSignal(false);
 
   onMount(() => {
-    const search = window.location.search;
+    const search = globalThis.location.search;
     fetch(`/api/oauth/authorize/context${search}`, { credentials: 'include' })
       .then(async (res) => {
         const data = await res.json() as ContextResponse;
@@ -59,7 +59,7 @@ export function OAuthConsentView() {
 
         if (data.status === 'unauthenticated') {
           const returnTo = `/oauth/authorize${search}`;
-          window.location.href = `/auth/login?return_to=${encodeURIComponent(returnTo)}`;
+          globalThis.location.href = `/auth/login?return_to=${encodeURIComponent(returnTo)}`;
           return;
         }
 

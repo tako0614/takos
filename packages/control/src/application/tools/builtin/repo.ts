@@ -41,7 +41,7 @@ export const REPO_SWITCH: ToolDefinition = {
   },
 };
 
-export const repoListHandler: ToolHandler = async (args, context) => {
+export const repoListHandler: ToolHandler = async (_args, context) => {
   const sessionId = requireContainerSession(context, 'listing mounted repositories');
   const db = getDb(context.db);
 
@@ -68,7 +68,7 @@ export const repoListHandler: ToolHandler = async (args, context) => {
   return lines.join('\n');
 };
 
-export const repoStatusHandler: ToolHandler = async (args, context) => {
+export const repoStatusHandler: ToolHandler = async (_args, context) => {
   const sessionId = requireContainerSession(context, 'checking mounted repositories');
   const db = getDb(context.db);
 

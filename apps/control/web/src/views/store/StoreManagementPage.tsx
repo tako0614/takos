@@ -1,12 +1,9 @@
 import { createSignal } from 'solid-js';
-import { useI18n } from '../../store/i18n.ts';
 import {
   useStoreManagement,
   useStoreInventory,
   useStoreRegistry,
   type StoreItem,
-  type InventoryItem,
-  type RegistryEntry,
 } from '../../hooks/useStoreManagement.ts';
 
 interface StoreManagementPageProps {
@@ -14,8 +11,7 @@ interface StoreManagementPageProps {
 }
 
 export function StoreManagementPage({ spaceId }: StoreManagementPageProps) {
-  const { t } = useI18n();
-  const { stores, loading, error, createStore, deleteStore, fetchStores } = useStoreManagement(spaceId);
+  const { stores, loading, error, createStore, deleteStore } = useStoreManagement(spaceId);
   const [selectedStore, setSelectedStore] = createSignal<string | null>(null);
   const [activeTab, setActiveTab] = createSignal<'inventory' | 'registry'>('inventory');
 
@@ -66,7 +62,7 @@ export function StoreManagementPage({ spaceId }: StoreManagementPageProps) {
                 placeholder="New store slug..."
                 class="flex-1 min-w-0 px-2 py-1.5 text-sm rounded border border-zinc-300 dark:border-zinc-600 bg-white dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100"
               />
-              <button
+              <button type="button"
                 onClick={handleCreateStore}
                 disabled={creating() || !newSlug().trim()}
                 class="px-3 py-1.5 text-sm font-medium rounded bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50"
@@ -97,7 +93,7 @@ export function StoreManagementPage({ spaceId }: StoreManagementPageProps) {
           {selectedStore() ? (
             <>
               <div class="border-b border-zinc-200 dark:border-zinc-700 px-6 flex gap-4">
-                <button
+                <button type="button"
                   onClick={() => setActiveTab('inventory')}
                   class={`py-3 text-sm font-medium border-b-2 ${
                     activeTab() === 'inventory'
@@ -107,7 +103,7 @@ export function StoreManagementPage({ spaceId }: StoreManagementPageProps) {
                 >
                   Inventory
                 </button>
-                <button
+                <button type="button"
                   onClick={() => setActiveTab('registry')}
                   class={`py-3 text-sm font-medium border-b-2 ${
                     activeTab() === 'registry'
@@ -163,7 +159,7 @@ function StoreListItem({
         )}
       </div>
       {!store.is_default && (
-        <button
+        <button type="button"
           onClick={(e) => { e.stopPropagation(); onDelete(); }}
           class="opacity-0 group-hover:opacity-100 text-xs text-red-500 hover:text-red-700 px-1"
         >
@@ -207,7 +203,7 @@ function InventoryPanel({ spaceId, storeSlug }: { spaceId: string; storeSlug: st
             placeholder="https://instance.example/ap/repos/owner/repo"
             class="flex-1 px-3 py-2 text-sm rounded border border-zinc-300 dark:border-zinc-600 bg-white dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100"
           />
-          <button
+          <button type="button"
             onClick={handleAdd}
             disabled={adding() || !newUrl().trim()}
             class="px-4 py-2 text-sm font-medium rounded bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50"
@@ -244,7 +240,7 @@ function InventoryPanel({ spaceId, storeSlug }: { spaceId: string; storeSlug: st
                   </div>
                   <div class="text-xs text-zinc-400 truncate">{item.repo_actor_url}</div>
                 </div>
-                <button
+                <button type="button"
                   onClick={() => removeItem(item.id)}
                   class="text-xs text-red-500 hover:text-red-700 px-2 py-1"
                 >
@@ -292,7 +288,7 @@ function RegistryPanel({ spaceId }: { spaceId: string }) {
             placeholder="store@remote-instance.example"
             class="flex-1 px-3 py-2 text-sm rounded border border-zinc-300 dark:border-zinc-600 bg-white dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100"
           />
-          <button
+          <button type="button"
             onClick={handleAdd}
             disabled={adding() || !identifier().trim()}
             class="px-4 py-2 text-sm font-medium rounded bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50"
@@ -331,7 +327,7 @@ function RegistryPanel({ spaceId }: { spaceId: string }) {
                     {entry.subscription_enabled && <span class="ml-2 text-blue-500">Subscribed</span>}
                   </div>
                 </div>
-                <button
+                <button type="button"
                   onClick={() => removeEntry(entry.id)}
                   class="text-xs text-red-500 hover:text-red-700 px-2 py-1"
                 >

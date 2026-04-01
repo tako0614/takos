@@ -363,28 +363,28 @@ export function buildPath(state: RouteState): string {
 }
 
 export function useRouter() {
-  const [route, setRouteState] = createSignal<RouteState>(parseRoute(window.location.pathname, window.location.search));
+  const [route, setRouteState] = createSignal<RouteState>(parseRoute(globalThis.location.pathname, globalThis.location.search));
 
   onMount(() => {
     const handlePopState = () => {
-      setRouteState(parseRoute(window.location.pathname, window.location.search));
+      setRouteState(parseRoute(globalThis.location.pathname, globalThis.location.search));
     };
-    window.addEventListener('popstate', handlePopState);
-    onCleanup(() => window.removeEventListener('popstate', handlePopState));
+    globalThis.addEventListener('popstate', handlePopState);
+    onCleanup(() => globalThis.removeEventListener('popstate', handlePopState));
   });
 
   const navigate = (newState: Partial<RouteState>) => {
     const merged = { ...route(), ...newState };
     const path = buildPath(merged);
-    if (window.location.pathname !== path) {
-      window.history.pushState(null, '', path);
+    if (globalThis.location.pathname !== path) {
+      globalThis.history.pushState(null, '', path);
     }
     setRouteState(merged);
   };
 
   const replace = (newState: RouteState) => {
     const path = buildPath(newState);
-    window.history.replaceState(null, '', path);
+    globalThis.history.replaceState(null, '', path);
     setRouteState(newState);
   };
 

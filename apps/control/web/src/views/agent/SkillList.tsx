@@ -14,7 +14,7 @@ function renderTriggers(triggersToRender: string[]) {
 
   return (
     <div style={{ display: 'flex', "flex-wrap": 'wrap', gap: '0.5rem', "margin-top": '0.75rem' }}>
-      {triggersToRender.map((trigger, i) => (
+      {triggersToRender.map((trigger, _i) => (
         <Badge variant="default">
           {trigger}
         </Badge>

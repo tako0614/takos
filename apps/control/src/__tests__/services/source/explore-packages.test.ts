@@ -1,10 +1,4 @@
-import type { D1Database } from '@cloudflare/workers-types';
-
 import { assertEquals } from 'jsr:@std/assert';
-
-const mocks = ({
-  getDb: ((..._args: any[]) => undefined) as any,
-});
 
 // [Deno] vi.mock removed - manually stub imports from '@/db'
 import { getTakopackRatingStats, getTakopackRatingSummary } from '@/services/source/explore-packages';

@@ -1,11 +1,16 @@
-import type { D1Database } from '../../../shared/types/bindings.ts';
-import type { SpaceRole } from '../../../shared/types/index.ts';
-import { generateId } from '../../../shared/utils/index.ts';
-import { accountMemberships, accounts, getDb, services } from '../../../infra/db/index.ts';
-import { eq, and, desc, sql, or, inArray } from 'drizzle-orm';
-import { resolveActorPrincipalId } from '../identity/principals.ts';
-import { resolveAccessibleAccountIds } from '../identity/membership-resolver.ts';
-import { textDate } from '../../../shared/utils/db-guards.ts';
+import type { D1Database } from "../../../shared/types/bindings.ts";
+import type { SpaceRole } from "../../../shared/types/index.ts";
+import { generateId as realGenerateId } from "../../../shared/utils/index.ts";
+import {
+  accountMemberships,
+  accounts,
+  getDb as realGetDb,
+  services,
+} from "../../../infra/db/index.ts";
+import { and, desc, eq, inArray, or, sql } from "drizzle-orm";
+import { resolveActorPrincipalId as realResolveActorPrincipalId } from "../identity/principals.ts";
+import { resolveAccessibleAccountIds as realResolveAccessibleAccountIds } from "../identity/membership-resolver.ts";
+import { textDate } from "../../../shared/utils/db-guards.ts";
 
 const MAX_SERVICES = 100;
 
@@ -17,12 +22,19 @@ export const WORKSPACE_WORKER_LIMITS = {
   maxWorkers: MAX_SERVICES,
 };
 
+export const workerServiceDeps = {
+  getDb: realGetDb,
+  generateId: realGenerateId,
+  resolveActorPrincipalId: realResolveActorPrincipalId,
+  resolveAccessibleAccountIds: realResolveAccessibleAccountIds,
+};
+
 export interface ServiceRow {
   id: string;
   space_id: string;
   group_id?: string | null;
-  service_type: 'app' | 'service';
-  status: 'pending' | 'building' | 'deployed' | 'failed' | 'stopped';
+  service_type: "app" | "service";
+  status: "pending" | "building" | "deployed" | "failed" | "stopped";
   config: string | null;
   hostname: string | null;
   service_name: string | null;
@@ -45,7 +57,10 @@ export type ServiceRouteRecord = {
   slug: string | null;
 };
 
-export type ServiceRouteSummary = Pick<ServiceRouteRecord, 'id' | 'accountId' | 'hostname' | 'routeRef' | 'slug'>;
+export type ServiceRouteSummary = Pick<
+  ServiceRouteRecord,
+  "id" | "accountId" | "hostname" | "routeRef" | "slug"
+>;
 
 export type ServiceRouteCleanupRecord = ServiceRouteSummary & {
   config: string | null;
@@ -54,8 +69,8 @@ export type ServiceRouteCleanupRecord = ServiceRouteSummary & {
 export function slugifyServiceName(name: string): string {
   return name
     .toLowerCase()
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/^-|-$/g, '')
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-|-$/g, "")
     .slice(0, 32);
 }
 
@@ -78,8 +93,8 @@ function toApiService(row: {
     id: row.id,
     space_id: row.accountId,
     group_id: row.groupId ?? null,
-    service_type: row.workerType as 'app' | 'service',
-    status: row.status as ServiceRow['status'],
+    service_type: row.workerType as "app" | "service",
+    status: row.status as ServiceRow["status"],
     config: row.config,
     hostname: row.hostname,
     service_name: row.routeRef,
@@ -89,7 +104,9 @@ function toApiService(row: {
   };
 }
 
-function normalizeServiceRouteRecord(row: ServiceRouteRecord): ServiceRouteRecord {
+function normalizeServiceRouteRecord(
+  row: ServiceRouteRecord,
+): ServiceRouteRecord {
   return {
     id: row.id,
     accountId: row.accountId,
@@ -101,18 +118,29 @@ function normalizeServiceRouteRecord(row: ServiceRouteRecord): ServiceRouteRecor
   };
 }
 
-export async function countServicesInSpace(d1: D1Database, spaceId: string): Promise<number> {
-  const db = getDb(d1);
-  const result = await db.select({ count: sql<number>`count(*)` }).from(services).where(eq(services.accountId, spaceId)).get();
+export async function countServicesInSpace(
+  d1: D1Database,
+  spaceId: string,
+): Promise<number> {
+  const db = workerServiceDeps.getDb(d1);
+  const result = await db.select({ count: sql<number>`count(*)` }).from(
+    services,
+  ).where(eq(services.accountId, spaceId)).get();
   return result?.count ?? 0;
 }
 
 export async function listServicesForUser(d1: D1Database, userId: string) {
-  const principalId = await resolveActorPrincipalId(d1, userId);
+  const principalId = await workerServiceDeps.resolveActorPrincipalId(
+    d1,
+    userId,
+  );
   if (!principalId) return [];
 
-  const db = getDb(d1);
-  const allAccountIds = await resolveAccessibleAccountIds(d1, principalId);
+  const db = workerServiceDeps.getDb(d1);
+  const allAccountIds = await workerServiceDeps.resolveAccessibleAccountIds(
+    d1,
+    principalId,
+  );
   // Exclude the user's own account — only workspace memberships matter here
   const accountIds = allAccountIds.filter((id) => id !== principalId);
   if (accountIds.length === 0) return [];
@@ -128,14 +156,28 @@ export async function listServicesForUser(d1: D1Database, userId: string) {
     slug: services.slug,
     createdAt: services.createdAt,
     updatedAt: services.updatedAt,
-  }).from(services).where(sql`${services.accountId} IN (${sql.join(accountIds.map((id) => sql`${id}`), sql`, `)})`).orderBy(desc(services.updatedAt)).all();
-  const accountRows = await db.select({ id: accounts.id, name: accounts.name }).from(accounts).where(sql`${accounts.id} IN (${sql.join(accountIds.map((id) => sql`${id}`), sql`, `)})`).all();
-  const accountNameMap = new Map(accountRows.map((account) => [account.id, account.name]));
-  return serviceRows.map((service) => ({ ...toApiService(service), workspace_name: accountNameMap.get(service.accountId) ?? '' }));
+  }).from(services).where(
+    sql`${services.accountId} IN (${
+      sql.join(accountIds.map((id) => sql`${id}`), sql`, `)
+    })`,
+  ).orderBy(desc(services.updatedAt)).all();
+  const accountRows = await db.select({ id: accounts.id, name: accounts.name })
+    .from(accounts).where(
+      sql`${accounts.id} IN (${
+        sql.join(accountIds.map((id) => sql`${id}`), sql`, `)
+      })`,
+    ).all();
+  const accountNameMap = new Map(
+    accountRows.map((account) => [account.id, account.name]),
+  );
+  return serviceRows.map((service) => ({
+    ...toApiService(service),
+    workspace_name: accountNameMap.get(service.accountId) ?? "",
+  }));
 }
 
 export async function listServicesForSpace(d1: D1Database, spaceId: string) {
-  const db = getDb(d1);
+  const db = workerServiceDeps.getDb(d1);
   const serviceRows = await db.select({
     id: services.id,
     accountId: services.accountId,
@@ -148,12 +190,14 @@ export async function listServicesForSpace(d1: D1Database, spaceId: string) {
     slug: services.slug,
     createdAt: services.createdAt,
     updatedAt: services.updatedAt,
-  }).from(services).where(eq(services.accountId, spaceId)).orderBy(desc(services.updatedAt)).all();
+  }).from(services).where(eq(services.accountId, spaceId)).orderBy(
+    desc(services.updatedAt),
+  ).all();
   return serviceRows.map((service) => toApiService(service));
 }
 
 export async function getServiceById(d1: D1Database, serviceId: string) {
-  const db = getDb(d1);
+  const db = workerServiceDeps.getDb(d1);
   const service = await db.select({
     id: services.id,
     accountId: services.accountId,
@@ -171,8 +215,11 @@ export async function getServiceById(d1: D1Database, serviceId: string) {
   return toApiService(service);
 }
 
-export async function getServiceRouteRecord(d1: D1Database, serviceId: string): Promise<ServiceRouteRecord | null> {
-  const db = getDb(d1);
+export async function getServiceRouteRecord(
+  d1: D1Database,
+  serviceId: string,
+): Promise<ServiceRouteRecord | null> {
+  const db = workerServiceDeps.getDb(d1);
   const service = await db.select({
     id: services.id,
     accountId: services.accountId,
@@ -206,7 +253,7 @@ export async function resolveServiceReferenceRecord(
   const ref = reference.trim();
   if (!ref) return null;
 
-  const db = getDb(d1);
+  const db = workerServiceDeps.getDb(d1);
   const service = await db.select({
     id: services.id,
     accountId: services.accountId,
@@ -243,7 +290,7 @@ export async function listServiceRouteRecordsByIds(
   serviceIds: string[],
 ): Promise<ServiceRouteRecord[]> {
   if (serviceIds.length === 0) return [];
-  const db = getDb(d1);
+  const db = workerServiceDeps.getDb(d1);
   const rows = await db.select({
     id: services.id,
     accountId: services.accountId,
@@ -263,7 +310,7 @@ export async function getServiceRouteSummary(
   serviceId: string,
   spaceId?: string,
 ): Promise<ServiceRouteSummary | null> {
-  const db = getDb(d1);
+  const db = workerServiceDeps.getDb(d1);
   const conditions = [eq(services.id, serviceId)];
   if (spaceId) {
     conditions.push(eq(services.accountId, spaceId));
@@ -310,7 +357,7 @@ export async function listSpaceServiceRouteCleanupRecords(
   d1: D1Database,
   spaceId: string,
 ): Promise<ServiceRouteCleanupRecord[]> {
-  const db = getDb(d1);
+  const db = workerServiceDeps.getDb(d1);
   return db.select({
     id: services.id,
     accountId: services.accountId,
@@ -330,11 +377,18 @@ export async function listServiceRouteCleanupRecordsForSpace(
   return listSpaceServiceRouteCleanupRecords(d1, spaceId);
 }
 
-export async function getServiceForUser(d1: D1Database, serviceId: string, userId: string) {
-  const principalId = await resolveActorPrincipalId(d1, userId);
+export async function getServiceForUser(
+  d1: D1Database,
+  serviceId: string,
+  userId: string,
+) {
+  const principalId = await workerServiceDeps.resolveActorPrincipalId(
+    d1,
+    userId,
+  );
   if (!principalId) return null;
 
-  const db = getDb(d1);
+  const db = workerServiceDeps.getDb(d1);
   const service = await db.select({
     id: services.id,
     accountId: services.accountId,
@@ -349,18 +403,35 @@ export async function getServiceForUser(d1: D1Database, serviceId: string, userI
   }).from(services).where(eq(services.id, serviceId)).get();
   if (!service) return null;
 
-  const membership = await db.select({ accountId: accountMemberships.accountId }).from(accountMemberships).where(and(eq(accountMemberships.accountId, service.accountId), eq(accountMemberships.memberId, principalId))).get();
+  const membership = await db.select({
+    accountId: accountMemberships.accountId,
+  }).from(accountMemberships).where(
+    and(
+      eq(accountMemberships.accountId, service.accountId),
+      eq(accountMemberships.memberId, principalId),
+    ),
+  ).get();
   if (!membership) return null;
 
-  const account = await db.select({ name: accounts.name }).from(accounts).where(eq(accounts.id, service.accountId)).get();
-  return { ...toApiService(service), workspace_name: account?.name ?? '' };
+  const account = await db.select({ name: accounts.name }).from(accounts).where(
+    eq(accounts.id, service.accountId),
+  ).get();
+  return { ...toApiService(service), workspace_name: account?.name ?? "" };
 }
 
-export async function getServiceForUserWithRole(d1: D1Database, serviceId: string, userId: string, roles?: SpaceRole[]) {
-  const principalId = await resolveActorPrincipalId(d1, userId);
+export async function getServiceForUserWithRole(
+  d1: D1Database,
+  serviceId: string,
+  userId: string,
+  roles?: SpaceRole[],
+) {
+  const principalId = await workerServiceDeps.resolveActorPrincipalId(
+    d1,
+    userId,
+  );
   if (!principalId) return null;
 
-  const db = getDb(d1);
+  const db = workerServiceDeps.getDb(d1);
   const service = await db.select({
     id: services.id,
     accountId: services.accountId,
@@ -375,16 +446,38 @@ export async function getServiceForUserWithRole(d1: D1Database, serviceId: strin
   }).from(services).where(eq(services.id, serviceId)).get();
   if (!service) return null;
 
-  const membership = await db.select({ role: accountMemberships.role }).from(accountMemberships).where(and(eq(accountMemberships.accountId, service.accountId), eq(accountMemberships.memberId, principalId))).get();
+  const membership = await db.select({ role: accountMemberships.role }).from(
+    accountMemberships,
+  ).where(
+    and(
+      eq(accountMemberships.accountId, service.accountId),
+      eq(accountMemberships.memberId, principalId),
+    ),
+  ).get();
   if (!membership) return null;
-  if (roles && roles.length > 0 && !roles.includes(membership.role as SpaceRole)) return null;
+  if (
+    roles && roles.length > 0 && !roles.includes(membership.role as SpaceRole)
+  ) return null;
 
-  return { ...toApiService(service), member_role: membership.role as SpaceRole };
+  return {
+    ...toApiService(service),
+    member_role: membership.role as SpaceRole,
+  };
 }
 
-export async function createService(d1: D1Database, input: { spaceId: string; groupId?: string | null; workerType: 'app' | 'service'; slug?: string; config?: string | null; platformDomain: string; }) {
-  const db = getDb(d1);
-  const id = generateId();
+export async function createService(
+  d1: D1Database,
+  input: {
+    spaceId: string;
+    groupId?: string | null;
+    workerType: "app" | "service";
+    slug?: string;
+    config?: string | null;
+    platformDomain: string;
+  },
+) {
+  const db = workerServiceDeps.getDb(d1);
+  const id = workerServiceDeps.generateId();
   const timestamp = new Date().toISOString();
   const slug = slugifyServiceName(input.slug ?? id);
   const hostname = `${slug}.${input.platformDomain}`;
@@ -395,7 +488,7 @@ export async function createService(d1: D1Database, input: { spaceId: string; gr
     accountId: input.spaceId,
     groupId: input.groupId ?? null,
     serviceType: input.workerType,
-    status: 'pending',
+    status: "pending",
     config: input.config || null,
     hostname,
     routeRef: serviceSlotName,
@@ -431,6 +524,6 @@ export async function createService(d1: D1Database, input: { spaceId: string; gr
 }
 
 export async function deleteService(d1: D1Database, serviceId: string) {
-  const db = getDb(d1);
+  const db = workerServiceDeps.getDb(d1);
   await db.delete(services).where(eq(services.id, serviceId));
 }

@@ -1,5 +1,4 @@
-import { onMount } from 'solid-js';
-import type { JSX } from 'solid-js';
+import { onMount, type JSX } from 'solid-js';
 import { LoadingScreen } from './components/common/LoadingScreen.tsx';
 import { ToastRenderer } from './components/common/Toast.tsx';
 import { ConfirmDialogRenderer } from './components/common/ConfirmDialog.tsx';
@@ -38,8 +37,6 @@ function AppContent() {
     fetchUser,
     fetchSpaces,
     handleLogin,
-    handleLogout: authLogout,
-    redirectToLogin,
   } = useAuth();
 
   const setShowCreateSpace = useSetAtom(showCreateSpaceAtom);
@@ -187,7 +184,7 @@ function AppWithProviders() {
 
   // Initialize auth state on mount (replaces AuthProvider)
   onMount(() => {
-    fetchUser();
+    void fetchUser();
   });
 
   return <AppContent />;

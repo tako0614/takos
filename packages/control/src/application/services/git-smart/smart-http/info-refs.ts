@@ -9,7 +9,6 @@ import { listAllRefs, getDefaultBranch } from '../core/refs.ts';
 import {
   encodePktLine,
   flushPkt,
-  buildPktLineResponse,
 } from '../protocol/pkt-line.ts';
 import { concatBytes } from '../core/sha1.ts';
 import {

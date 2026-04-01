@@ -15,7 +15,7 @@ import type {
 } from './explore-package-types.ts';
 import { queryReleasesWithRepo, loadAssetsForReleases, buildPackagesFromRows } from './explore-search.ts';
 import { SORT_ALIASES, filterPackages, sortPackages } from './explore-package-filters.ts';
-import { getTakopackRatingStats, getTakopackRatingSummary, fetchPublishStatuses } from './explore-stats.ts';
+import { getTakopackRatingStats, type getTakopackRatingSummary as _getTakopackRatingSummary, fetchPublishStatuses } from './explore-stats.ts';
 import { textDateNullable } from '../../../shared/utils/db-guards.ts';
 
 // ---------------------------------------------------------------------------

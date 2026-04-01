@@ -106,7 +106,7 @@ export function RepoDetailPage(props: RepoDetailPageProps) {
         <div class="flex flex-col items-center justify-center h-full bg-zinc-50 dark:bg-zinc-900 text-zinc-500 dark:text-zinc-400 gap-3">
           <Icons.AlertTriangle class="w-6 h-6" />
           <span class="text-sm">{error() || 'Repository not found'}</span>
-          <button
+          <button type="button"
             class="px-3 py-1.5 text-sm bg-zinc-100 dark:bg-zinc-800 text-zinc-700 dark:text-zinc-200 rounded-lg hover:bg-zinc-200 dark:hover:bg-zinc-700 transition-colors"
             onClick={props.onBack}
           >

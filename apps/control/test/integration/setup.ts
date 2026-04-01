@@ -24,7 +24,7 @@ export class MockD1Database {
     return new MockD1PreparedStatement(query, this);
   }
 
-  exec(query: string): Promise<{ count: number; duration: number }> {
+  exec(_query: string): Promise<{ count: number; duration: number }> {
     return Promise.resolve({ count: 1, duration: 0 });
   }
 
@@ -63,7 +63,7 @@ export class MockD1PreparedStatement {
     return this;
   }
 
-  async first<T = unknown>(column?: string): Promise<T | null> {
+  async first<T = unknown>(_column?: string): Promise<T | null> {
     return null as T | null;
   }
 
@@ -242,7 +242,7 @@ export class MockKVNamespace {
 
   async get(
     key: string,
-    options?: { type?: "text" | "json" | "arrayBuffer" | "stream" },
+    _options?: { type?: "text" | "json" | "arrayBuffer" | "stream" },
   ): Promise<string | null> {
     const item = this.store.get(key);
     if (!item) return null;
@@ -372,7 +372,7 @@ export class MockDurableObjectId {
 export class MockDurableObjectStub {
   constructor(private id: MockDurableObjectId) {}
 
-  async fetch(request: Request): Promise<Response> {
+  async fetch(_request: Request): Promise<Response> {
     return new Response(JSON.stringify({ success: true }), {
       headers: { "Content-Type": "application/json" },
     });
@@ -405,7 +405,7 @@ export class MockVectorizeIndex {
   }
 
   async query(
-    vector: number[],
+    _vector: number[],
     options?: {
       topK?: number;
       filter?: Record<string, unknown>;

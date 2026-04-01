@@ -101,7 +101,7 @@ export function CommitList(props: CommitListProps) {
         <div class="flex flex-col items-center justify-center gap-4 py-12 text-zinc-500">
           <Icons.AlertTriangle class="w-12 h-12 text-zinc-700" />
           <span>{error()}</span>
-          <button
+          <button type="button"
             class="px-4 py-2 bg-zinc-100 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-lg text-zinc-900 dark:text-zinc-100 hover:bg-zinc-200 dark:hover:bg-zinc-700 transition-colors"
             onClick={() => fetchCommits(1)}
           >
@@ -153,7 +153,7 @@ export function CommitList(props: CommitListProps) {
                               {commit.message.split('\n')[0]}
                             </span>
                             <Show when={commit.message.includes('\n')}>
-                              <button
+                              <button type="button"
                                 class="px-1.5 py-0.5 text-xs text-zinc-500 dark:text-zinc-400 bg-zinc-100 dark:bg-zinc-800 rounded hover:bg-zinc-200 dark:hover:bg-zinc-700 transition-colors"
                                 aria-label={t('showFullCommitMessage')}
                               >
@@ -167,7 +167,7 @@ export function CommitList(props: CommitListProps) {
                           </div>
                         </div>
                         <div class="flex items-center gap-2 flex-shrink-0">
-                          <button
+                          <button type="button"
                             class="flex items-center gap-1.5 px-2 py-1 bg-zinc-100 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded text-xs font-mono text-zinc-500 dark:text-zinc-400 hover:bg-zinc-200 dark:hover:bg-zinc-700 hover:text-zinc-900 dark:hover:text-zinc-100 transition-colors"
                             onClick={() => copyCommitSha(commit.sha)}
                             aria-label={`Copy commit SHA ${commit.sha.slice(0, 7)}`}
@@ -191,7 +191,7 @@ export function CommitList(props: CommitListProps) {
 
               <Show when={hasMore()}>
                 <div class="flex justify-center py-4">
-                  <button
+                  <button type="button"
                     class="flex items-center gap-2 px-6 py-2.5 bg-zinc-100 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-lg text-zinc-900 dark:text-zinc-100 hover:bg-zinc-200 dark:hover:bg-zinc-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                     onClick={loadMore}
                     disabled={loading()}

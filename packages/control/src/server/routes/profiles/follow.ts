@@ -2,7 +2,7 @@ import { Hono } from 'hono';
 import { z } from 'zod';
 import { generateId, parsePagination, paginatedResponse } from '../../../shared/utils/index.ts';
 import { createNotification } from '../../../application/services/notifications/service.ts';
-import { type OptionalAuthRouteEnv } from '../route-auth.ts';
+import type { OptionalAuthRouteEnv } from '../route-auth.ts';
 import { zValidator } from '../zod-validator.ts';
 import { NotFoundError, AuthenticationError, AuthorizationError, BadRequestError } from 'takos-common/errors';
 import { getUserByUsername, getUserPrivacySettings, getUserStats, isMutedBy } from './profile-queries.ts';
@@ -10,7 +10,7 @@ import { getDb } from '../../../infra/db/index.ts';
 import { accountFollows, accountFollowRequests, accounts } from '../../../infra/db/schema.ts';
 import { eq, and, desc, count, inArray } from 'drizzle-orm';
 import { getBlockFlags, fetchFollowList, sendFollowNotificationIfNotMuted } from './block-follow-utils.ts';
-import type { FollowUserResponse, FollowRequestResponse } from './dto.ts';
+import type { FollowRequestResponse } from './dto.ts';
 import { textDate } from '../../../shared/utils/db-guards.ts';
 
 const followListQuerySchema = z.object({

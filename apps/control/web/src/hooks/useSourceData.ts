@@ -1,6 +1,6 @@
 import { createEffect, on } from 'solid-js';
 import type { Space } from '../types/index.ts';
-import { useSourceFiltering, type SourceFilter, type SourceSort } from './useSourceFiltering.ts';
+import { useSourceFiltering } from './useSourceFiltering.ts';
 import { useSourcePagination } from './useSourcePagination.ts';
 import { useSourceFetch } from './useSourceFetch.ts';
 

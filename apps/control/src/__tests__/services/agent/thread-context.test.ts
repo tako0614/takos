@@ -1,12 +1,5 @@
 import { assertEquals, assertNotEquals, assert, assertStringIncludes } from 'jsr:@std/assert';
 
-const mocks = ({
-  getDb: ((..._args: any[]) => undefined) as any,
-  LLMClient: ((..._args: any[]) => undefined) as any,
-  getProviderFromModel: ((..._args: any[]) => undefined) as any,
-  logWarn: ((..._args: any[]) => undefined) as any,
-});
-
 // [Deno] vi.mock removed - manually stub imports from '@/db'
 // [Deno] vi.mock removed - manually stub imports from 'drizzle-orm'
 // [Deno] vi.mock removed - manually stub imports from '@/services/agent/llm'

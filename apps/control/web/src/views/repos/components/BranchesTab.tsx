@@ -203,7 +203,7 @@ export function BranchesTab(props: BranchesTabProps) {
 
                   <div class="flex items-center gap-2 flex-shrink-0">
                     <Show when={!branch.is_default}>
-                      <button
+                      <button type="button"
                         class="w-8 h-8 flex items-center justify-center rounded-lg text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-100 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors disabled:opacity-50"
                         onClick={() => handleSetDefault(branch.name)}
                         disabled={actionLoading() === branch.name}
@@ -217,7 +217,7 @@ export function BranchesTab(props: BranchesTabProps) {
                       </button>
                     </Show>
                     <Show when={!branch.is_default && !branch.is_protected}>
-                      <button
+                      <button type="button"
                         class="w-8 h-8 flex items-center justify-center rounded-lg text-zinc-500 hover:text-red-600 dark:hover:text-red-400 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors disabled:opacity-50"
                         onClick={() => handleDelete(branch.name)}
                         disabled={actionLoading() === branch.name}

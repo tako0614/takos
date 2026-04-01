@@ -85,7 +85,7 @@ function ParameterList({ parameters, onRemove, onAdd }: ParameterListProps) {
                   </p>
                 )}
               </div>
-              <button
+              <button type="button"
                 class="p-1 rounded hover:bg-zinc-200 dark:hover:bg-zinc-700 text-zinc-400 hover:text-red-500"
                 onClick={() => onRemove(index)}
               >

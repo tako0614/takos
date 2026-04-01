@@ -160,10 +160,10 @@ export function ConflictResolver(props: ConflictResolverProps) {
               </p>
             </div>
             <div style={{ display: 'flex', gap: '0.5rem' }}>
-              <button onClick={props.onCancel} style={{ padding: '0.5rem 1rem', "border-radius": '6px', border: '1px solid var(--color-border)', background: 'transparent', cursor: 'pointer', "font-size": '0.875rem' }}>
+              <button type="button" onClick={props.onCancel} style={{ padding: '0.5rem 1rem', "border-radius": '6px', border: '1px solid var(--color-border)', background: 'transparent', cursor: 'pointer', "font-size": '0.875rem' }}>
                 {t('cancel')}
               </button>
-              <button
+              <button type="button"
                 onClick={handleSubmit}
                 disabled={!allResolved() || submitting()}
                 style={{
@@ -220,7 +220,7 @@ export function ConflictResolver(props: ConflictResolverProps) {
                   </div>
 
                   <div style={{ display: 'flex', gap: '0.5rem' }}>
-                    <button
+                    <button type="button"
                       onClick={() => selectVersion(conflict().path, 'ours')}
                       style={{
                         flex: 1, padding: '0.375rem', "border-radius": '4px', "font-size": '0.75rem', cursor: 'pointer',
@@ -230,7 +230,7 @@ export function ConflictResolver(props: ConflictResolverProps) {
                     >
                       {t('acceptOurs', { branch: props.baseBranch })}
                     </button>
-                    <button
+                    <button type="button"
                       onClick={() => selectVersion(conflict().path, 'theirs')}
                       style={{
                         flex: 1, padding: '0.375rem', "border-radius": '4px', "font-size": '0.75rem', cursor: 'pointer',
@@ -241,7 +241,7 @@ export function ConflictResolver(props: ConflictResolverProps) {
                       {t('acceptTheirs', { branch: props.headBranch })}
                     </button>
                     <Show when={conflict().type === 'delete-modify'}>
-                      <button
+                      <button type="button"
                         onClick={() => selectVersion(conflict().path, 'delete')}
                         style={{
                           padding: '0.375rem 0.75rem', "border-radius": '4px', "font-size": '0.75rem', cursor: 'pointer',
@@ -288,7 +288,7 @@ export function ConflictResolver(props: ConflictResolverProps) {
                   <div style={{ display: 'flex', "flex-direction": 'column' }}>
                     <div style={{ "font-size": '0.6875rem', "font-weight": 600, padding: '0.25rem 0.5rem', background: 'var(--color-bg-tertiary)', "border-radius": '4px 4px 0 0', display: 'flex', "justify-content": 'space-between', "align-items": 'center' }}>
                       <span>{t('resolvedContent')}</span>
-                      <button
+                      <button type="button"
                         onClick={() => setManualContent(conflict().path, editContent())}
                         style={{ "font-size": '0.6875rem', padding: '0.125rem 0.5rem', "border-radius": '3px', border: '1px solid var(--color-border)', background: 'transparent', cursor: 'pointer' }}
                       >

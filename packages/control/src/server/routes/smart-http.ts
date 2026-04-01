@@ -39,6 +39,24 @@ type RepoPushLockNamespace = {
   get(id: unknown): DurableObjectStubBinding;
 };
 
+export const smartHttpRouteDeps = {
+  requireGitAuth,
+  optionalGitAuth,
+  handleInfoRefs,
+  handleUploadPack,
+  handleReceivePack,
+  handleReceivePackFromStream,
+  triggerPushWorkflows,
+  getDb,
+  checkSpaceAccess,
+};
+
+const optionalGitAuthMiddleware = async (c: Parameters<typeof optionalGitAuth>[0], next: Parameters<typeof optionalGitAuth>[1]) =>
+  smartHttpRouteDeps.optionalGitAuth(c, next);
+
+const requireGitAuthMiddleware = async (c: Parameters<typeof requireGitAuth>[0], next: Parameters<typeof requireGitAuth>[1]) =>
+  smartHttpRouteDeps.requireGitAuth(c, next);
+
 /**
  * Resolve :owner (username or workspace slug) + :repo to a repository.
  *
@@ -50,7 +68,7 @@ async function resolveRepo(
   owner: string,
   repoName: string,
 ): Promise<{ repo: Repository; spaceId: string } | null> {
-  const drizzle = getDb(db);
+  const drizzle = smartHttpRouteDeps.getDb(db);
 
   const account = await drizzle
     .select({ id: accounts.id, type: accounts.type })
@@ -197,7 +215,7 @@ async function releaseRepoPushLock(env: Env, repoId: string, lock: { token: stri
 // --- info/refs (ref discovery) ---
 // For upload-pack (clone/fetch): allow anonymous access to public repos
 // For receive-pack (push): always require auth
-smartHttpRoutes.get('/git/:owner/:repo/info/refs', optionalGitAuth, async (c) => {
+smartHttpRoutes.get('/git/:owner/:repo/info/refs', optionalGitAuthMiddleware, async (c) => {
   const service = c.req.query('service');
   if (service !== 'git-upload-pack' && service !== 'git-receive-pack') {
     return c.text('Invalid service\n', 403);
@@ -222,7 +240,7 @@ smartHttpRoutes.get('/git/:owner/:repo/info/refs', optionalGitAuth, async (c) =>
         headers: { 'WWW-Authenticate': 'Basic realm="takos"', 'Content-Type': 'text/plain' },
       });
     }
-    const access = await checkSpaceAccess(c.env.DB, result.spaceId, user.id, ['owner', 'admin', 'editor']);
+    const access = await smartHttpRouteDeps.checkSpaceAccess(c.env.DB, result.spaceId, user.id, ['owner', 'admin', 'editor']);
     if (!access) {
       return c.text('Permission denied\n', 403);
     }
@@ -235,20 +253,20 @@ smartHttpRoutes.get('/git/:owner/:repo/info/refs', optionalGitAuth, async (c) =>
           headers: { 'WWW-Authenticate': 'Basic realm="takos"', 'Content-Type': 'text/plain' },
         });
       }
-      const access = await checkSpaceAccess(c.env.DB, result.spaceId, user.id);
+      const access = await smartHttpRouteDeps.checkSpaceAccess(c.env.DB, result.spaceId, user.id);
       if (!access) {
         return c.text('Permission denied\n', 403);
       }
     }
   }
 
-  const bucket = getGitBucket(c.env);
-  const data = await handleInfoRefs(c.env.DB, result.repo.id, service);
+  const _bucket = getGitBucket(c.env);
+  const data = await smartHttpRouteDeps.handleInfoRefs(c.env.DB, result.repo.id, service);
   return gitResponse(data, `application/x-${service}-advertisement`);
 });
 
 // --- git-upload-pack (clone/fetch) ---
-smartHttpRoutes.post('/git/:owner/:repo/git-upload-pack', optionalGitAuth, async (c) => {
+smartHttpRoutes.post('/git/:owner/:repo/git-upload-pack', optionalGitAuthMiddleware, async (c) => {
   const owner = c.req.param('owner');
   const repo = c.req.param('repo');
   const result = await resolveRepo(c.env.DB, owner, repo);
@@ -267,7 +285,7 @@ smartHttpRoutes.post('/git/:owner/:repo/git-upload-pack', optionalGitAuth, async
         headers: { 'WWW-Authenticate': 'Basic realm="takos"', 'Content-Type': 'text/plain' },
       });
     }
-    const access = await checkSpaceAccess(c.env.DB, result.spaceId, user.id);
+    const access = await smartHttpRouteDeps.checkSpaceAccess(c.env.DB, result.spaceId, user.id);
     if (!access) {
       return c.text('Permission denied\n', 403);
     }
@@ -280,13 +298,13 @@ smartHttpRoutes.post('/git/:owner/:repo/git-upload-pack', optionalGitAuth, async
   } catch (err) {
     return c.text(`${err instanceof Error ? err.message : 'Request body too large'}\n`, 413);
   }
-  const data = await handleUploadPack(c.env.DB, bucket, result.repo.id, body);
+  const data = await smartHttpRouteDeps.handleUploadPack(c.env.DB, bucket, result.repo.id, body);
 
   return gitResponse(data, 'application/x-git-upload-pack-result');
 });
 
 // --- git-receive-pack (push) ---
-smartHttpRoutes.post('/git/:owner/:repo/git-receive-pack', requireGitAuth, async (c) => {
+smartHttpRoutes.post('/git/:owner/:repo/git-receive-pack', requireGitAuthMiddleware, async (c) => {
   const owner = c.req.param('owner');
   const repo = c.req.param('repo');
   const result = await resolveRepo(c.env.DB, owner, repo);
@@ -301,7 +319,7 @@ smartHttpRoutes.post('/git/:owner/:repo/git-receive-pack', requireGitAuth, async
   }
 
   // Write access check
-  const access = await checkSpaceAccess(c.env.DB, result.spaceId, user.id, ['owner', 'admin', 'editor']);
+  const access = await smartHttpRouteDeps.checkSpaceAccess(c.env.DB, result.spaceId, user.id, ['owner', 'admin', 'editor']);
   if (!access) {
     return c.text('Permission denied\n', 403);
   }
@@ -329,9 +347,9 @@ smartHttpRoutes.post('/git/:owner/:repo/git-receive-pack', requireGitAuth, async
     let receivePack: { response: Uint8Array; updatedRefs: { oldSha: string; newSha: string; refName: string }[] };
     try {
       if (stream) {
-        receivePack = await handleReceivePackFromStream(c.env.DB, bucket, result.repo.id, stream, MAX_GIT_REQUEST_BODY_BYTES);
+        receivePack = await smartHttpRouteDeps.handleReceivePackFromStream(c.env.DB, bucket, result.repo.id, stream, MAX_GIT_REQUEST_BODY_BYTES);
       } else {
-        receivePack = await handleReceivePack(c.env.DB, bucket, result.repo.id, new Uint8Array());
+        receivePack = await smartHttpRouteDeps.handleReceivePack(c.env.DB, bucket, result.repo.id, new Uint8Array());
       }
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'Request body too large';
@@ -350,7 +368,7 @@ smartHttpRoutes.post('/git/:owner/:repo/git-receive-pack', requireGitAuth, async
           }
 
           try {
-            await triggerPushWorkflows({
+            await smartHttpRouteDeps.triggerPushWorkflows({
               db: c.env.DB,
               bucket,
               queue: c.env.WORKFLOW_QUEUE,

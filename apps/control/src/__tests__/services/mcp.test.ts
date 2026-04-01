@@ -12,7 +12,7 @@ import {
   assertRejects,
   assertStringIncludes,
 } from "jsr:@std/assert";
-import { assertSpyCalls } from "jsr:@std/testing/mock";
+import { assertSpyCalls, spy } from "jsr:@std/testing/mock";
 
 const mocks = {
   getDb: ((..._args: any[]) => undefined) as any,
@@ -67,22 +67,22 @@ function createDrizzleMock(options: {
 
   return {
     select: () => ({ from: () => selectFrom }),
-    insert: () => ({
+    insert: spy(() => ({
       values: () => ({
         returning: () => ({ get: async () => ({}) }),
         run: runFn,
       }),
-    }),
-    update: () => ({
+    })),
+    update: spy(() => ({
       set: () => ({
         where: () => ({ run: runFn }),
         run: runFn,
       }),
-    }),
-    delete: () => ({
+    })),
+    delete: spy(() => ({
       where: () => ({ run: runFn }),
       run: runFn,
-    }),
+    })),
   };
 }
 
@@ -90,7 +90,11 @@ function createDrizzleMock(options: {
 // discoverOAuthMetadata
 // ---------------------------------------------------------------------------
 
-import { discoverOAuthMetadata } from "@/services/platform/mcp";
+import { discoverOAuthMetadata, mcpServiceDeps } from "@/services/platform/mcp";
+
+function syncMcpDeps() {
+  mcpServiceDeps.getDb = mocks.getDb;
+}
 
 Deno.test("discoverOAuthMetadata - returns parsed metadata on 200 response", async () => {
   const meta = {
@@ -99,7 +103,7 @@ Deno.test("discoverOAuthMetadata - returns parsed metadata on 200 response", asy
     token_endpoint: "https://auth.example.com/token",
   };
 
-  global.fetch = async () => ({
+  globalThis.fetch = async () => ({
     ok: true,
     json: () => Promise.resolve(meta),
   } as unknown as Response);
@@ -110,7 +114,7 @@ Deno.test("discoverOAuthMetadata - returns parsed metadata on 200 response", asy
   assertEquals(result.token_endpoint, "https://auth.example.com/token");
 });
 Deno.test("discoverOAuthMetadata - throws when server returns non-200", async () => {
-  global.fetch = async () => ({
+  globalThis.fetch = async () => ({
     ok: false,
     status: 404,
     statusText: "Not Found",
@@ -121,7 +125,7 @@ Deno.test("discoverOAuthMetadata - throws when server returns non-200", async ()
   }, "OAuth metadata discovery failed");
 });
 Deno.test("discoverOAuthMetadata - throws when required fields are missing", async () => {
-  global.fetch = async () => ({
+  globalThis.fetch = async () => ({
     ok: true,
     json: () => Promise.resolve({ issuer: "https://auth.example.com" }),
   } as unknown as Response);
@@ -139,6 +143,7 @@ import { createMcpOAuthPending } from "@/services/platform/mcp";
 Deno.test("createMcpOAuthPending - creates a pending record and returns an auth URL", async () => {
   const drizzleMock = createDrizzleMock();
   mocks.getDb = (() => drizzleMock) as any;
+  syncMcpDeps();
   const db = makeDb();
   const env = makeEnv();
 
@@ -183,6 +188,7 @@ import { consumeMcpOAuthPending } from "@/services/platform/mcp";
 Deno.test("consumeMcpOAuthPending - returns null when state is not found", async () => {
   const drizzleMock = createDrizzleMock({ selectGet: undefined });
   mocks.getDb = (() => drizzleMock) as any;
+  syncMcpDeps();
 
   const result = await consumeMcpOAuthPending(
     makeDb(),
@@ -207,6 +213,7 @@ Deno.test("consumeMcpOAuthPending - returns null and deletes expired record", as
     },
   });
   mocks.getDb = (() => drizzleMock) as any;
+  syncMcpDeps();
 
   const result = await consumeMcpOAuthPending(makeDb(), makeEnv(), "st");
   assertEquals(result, null);
@@ -215,6 +222,7 @@ Deno.test("consumeMcpOAuthPending - returns null and deletes expired record", as
 Deno.test("consumeMcpOAuthPending - returns null when record does not exist", async () => {
   const drizzleMock = createDrizzleMock({ selectGet: undefined });
   mocks.getDb = (() => drizzleMock) as any;
+  syncMcpDeps();
 
   const result = await consumeMcpOAuthPending(
     makeDb(),
@@ -253,6 +261,7 @@ Deno.test("listMcpServers - returns mapped server records", async () => {
   };
   const drizzleMock = createDrizzleMock({ selectAll: [serverRow] });
   mocks.getDb = (() => drizzleMock) as any;
+  syncMcpDeps();
 
   const servers = await listMcpServers(makeDb(), "ws1");
 
@@ -265,6 +274,7 @@ Deno.test("listMcpServers - returns mapped server records", async () => {
 Deno.test("deleteMcpServer - returns false when server not found", async () => {
   const drizzleMock = createDrizzleMock({ selectGet: undefined });
   mocks.getDb = (() => drizzleMock) as any;
+  syncMcpDeps();
 
   const result = await deleteMcpServer(makeDb(), "ws1", "nonexistent");
   assertEquals(result, false);
@@ -274,15 +284,17 @@ Deno.test("deleteMcpServer - deletes and returns true when found", async () => {
     selectGet: { id: "s1", sourceType: "external" },
   });
   mocks.getDb = (() => drizzleMock) as any;
+  syncMcpDeps();
 
   const result = await deleteMcpServer(makeDb(), "ws1", "s1");
   assertEquals(result, true);
-  assert(drizzleMock.delete.calls.length > 0);
+  assertSpyCalls(drizzleMock.delete, 1);
 });
 
 Deno.test("updateMcpServer - returns null when server not found", async () => {
   const drizzleMock = createDrizzleMock({ selectGet: undefined });
   mocks.getDb = (() => drizzleMock) as any;
+  syncMcpDeps();
 
   const result = await updateMcpServer(makeDb(), "ws1", "nonexistent", {
     enabled: false,
@@ -340,6 +352,7 @@ Deno.test("updateMcpServer - updates enabled flag", async () => {
     }),
   };
   mocks.getDb = (() => drizzleMock) as any;
+  syncMcpDeps();
 
   const result = await updateMcpServer(makeDb(), "ws1", "s1", {
     enabled: false,

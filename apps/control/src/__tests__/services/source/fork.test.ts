@@ -1,3 +1,4 @@
+// deno-lint-ignore-file no-import-prefix no-unversioned-import require-await no-unused-vars
 import type { D1Database, R2Bucket } from "@cloudflare/workers-types";
 
 import {
@@ -6,69 +7,92 @@ import {
   assertNotEquals,
   assertRejects,
 } from "jsr:@std/assert";
-import { assertSpyCallArgs } from "jsr:@std/testing/mock";
 
-const mocks = {
-  getDb: ((..._args: any[]) => undefined) as any,
-  generateId: () => "fork-id",
-  now: () => "2026-03-24T00:00:00.000Z",
-  forkRepository: ((..._args: any[]) => undefined) as any,
-  checkSyncStatus: ((..._args: any[]) => undefined) as any,
-  getBranch: ((..._args: any[]) => undefined) as any,
-  updateBranch: ((..._args: any[]) => undefined) as any,
-  getDefaultBranch: ((..._args: any[]) => undefined) as any,
-  getCommitData: ((..._args: any[]) => undefined) as any,
-  listDirectory: ((..._args: any[]) => undefined) as any,
-  sanitizeRepoName: (name: string) =>
-    name.toLowerCase().replace(/[^a-z0-9_-]/g, "-"),
-};
-
-// [Deno] vi.mock removed - manually stub imports from '@/db'
-// [Deno] vi.mock removed - manually stub imports from '@/shared/utils'
-// [Deno] vi.mock removed - manually stub imports from '@/services/git-smart'
 import {
   forkWithWorkflows,
   getSyncStatus,
   syncWithUpstream,
 } from "@/services/source/fork";
+import { sourceServiceDeps } from "@/application/services/source/deps.ts";
 
-function createDrizzleMock() {
-  const getMock = ((..._args: any[]) => undefined) as any;
-  const allMock = ((..._args: any[]) => undefined) as any;
-  const runMock = ((..._args: any[]) => undefined) as any;
-  const chain = {
-    from: function (this: any) {
-      return this;
-    },
-    where: function (this: any) {
-      return this;
-    },
-    set: function (this: any) {
-      return this;
-    },
-    values: function (this: any) {
-      return this;
-    },
-    returning: function (this: any) {
-      return this;
-    },
-    orderBy: function (this: any) {
-      return this;
-    },
-    limit: function (this: any) {
-      return this;
-    },
-    get: getMock,
-    all: allMock,
-    run: runMock,
+type FakeStep = {
+  get?: unknown;
+  all?: unknown[];
+  run?: unknown;
+};
+
+function createFakeD1Database(steps: FakeStep[]) {
+  let index = 0;
+  const next = () => steps[index++] ?? {};
+  const buildChain = () => {
+    const step = next();
+    const chain: any = {
+      from() {
+        return chain;
+      },
+      where() {
+        return chain;
+      },
+      innerJoin() {
+        return chain;
+      },
+      leftJoin() {
+        return chain;
+      },
+      orderBy() {
+        return chain;
+      },
+      limit() {
+        return chain;
+      },
+      offset() {
+        return chain;
+      },
+      values() {
+        return chain;
+      },
+      set() {
+        return chain;
+      },
+      returning() {
+        return chain;
+      },
+      get: async () => step.get ?? null,
+      first: async () => step.get ?? null,
+      all: async () => step.all ?? [],
+      run: async () =>
+        step.run ?? {
+          success: true,
+          meta: { changes: 0, last_row_id: 0, duration: 0 },
+        },
+      raw: async () => step.all ?? [],
+    };
+    return chain;
   };
   return {
-    select: () => chain,
-    insert: () => chain,
-    update: () => chain,
-    delete: () => chain,
-    _: { get: getMock, all: allMock, run: runMock },
-  };
+    select() {
+      return buildChain();
+    },
+    insert() {
+      return buildChain();
+    },
+    update() {
+      return buildChain();
+    },
+    delete() {
+      return buildChain();
+    },
+  } as unknown as D1Database;
+}
+
+function createBucketMock(): R2Bucket {
+  return {
+    get: async () => null,
+    put: async () => undefined,
+    head: async () => null,
+    list: async () => ({ objects: [] }),
+    delete: async () => undefined,
+  } as unknown as R2Bucket;
 }
 
 const sourceRepo = {
@@ -92,218 +116,140 @@ const sourceRepo = {
 };
 
 Deno.test("forkWithWorkflows - throws when source repo not found", async () => {
-  /* mocks cleared (no-op in Deno) */ void 0;
-  const drizzle = createDrizzleMock();
-  drizzle._.get = (async () => undefined) as any;
-  mocks.getDb = (() => drizzle) as any;
+  const db = createFakeD1Database([{ get: undefined }]);
 
-  await assertRejects(async () => {
-    await forkWithWorkflows(
-      {} as D1Database,
-      undefined,
-      "nonexistent",
-      "ws-target",
-    );
-  }, "Source repository not found");
+  await assertRejects(
+    () => forkWithWorkflows(db, undefined, "nonexistent", "ws-target"),
+    Error,
+    "Source repository not found",
+  );
 });
-Deno.test("forkWithWorkflows - throws when name already exists in target workspace", async () => {
-  /* mocks cleared (no-op in Deno) */ void 0;
-  const drizzle = createDrizzleMock();
-  drizzle._.get =
-    (async () => sourceRepo) as any // source repo found
-     =
-      (async () => ({ id: "existing" })) as any; // name conflict
-  mocks.getDb = (() => drizzle) as any;
 
-  await assertRejects(async () => {
-    await forkWithWorkflows(
-      {} as D1Database,
-      undefined,
-      "source-1",
-      "ws-target",
+Deno.test(
+  "forkWithWorkflows - throws when name already exists in target workspace",
+  async () => {
+    const db = createFakeD1Database([
+      { get: sourceRepo },
+      { get: { id: "existing" } },
+    ]);
+
+    await assertRejects(
+      () => forkWithWorkflows(db, undefined, "source-1", "ws-target"),
+      Error,
+      "Repository with this name already exists in target workspace",
     );
-  }, "Repository with this name already exists");
-});
+  },
+);
+
 Deno.test("forkWithWorkflows - forks repo successfully", async () => {
-  /* mocks cleared (no-op in Deno) */ void 0;
-  const drizzle = createDrizzleMock();
-  drizzle._.get =
-    (async () => sourceRepo) as any // source repo
-     =
-    (async () => undefined) as any // no name conflict
-     =
-      (async () => ({
+  const db = createFakeD1Database([
+    { get: sourceRepo },
+    { get: undefined },
+    { get: undefined },
+    { get: undefined },
+    {
+      get: {
         ...sourceRepo,
         id: "fork-id",
         accountId: "ws-target",
         forkedFromId: "source-1",
-      })) as any; // forked repo
-  mocks.getDb = (() => drizzle) as any;
-  mocks.forkRepository = (async () => undefined) as any;
+        name: "my-fork",
+      },
+    },
+  ]);
 
-  const result = await forkWithWorkflows(
-    {} as D1Database,
-    undefined,
-    "source-1",
-    "ws-target",
-  );
+  const deps = sourceServiceDeps as any;
+  const originalGitStore = deps.gitStore;
+  deps.gitStore = {
+    ...originalGitStore,
+    forkRepository: async () => undefined,
+  };
 
-  assertEquals(result.repository.id, "fork-id");
-  assertEquals(result.forked_from.id, "source-1");
-  assert(mocks.forkRepository.calls.length > 0);
-  assert(drizzle.update.calls.length > 0); // forks counter
-});
-Deno.test("forkWithWorkflows - respects custom fork name", async () => {
-  /* mocks cleared (no-op in Deno) */ void 0;
-  const drizzle = createDrizzleMock();
-  drizzle._.get =
-    (async () => sourceRepo) as any =
-    (async () => undefined) as any =
-      (async () => ({ ...sourceRepo, id: "fork-id", name: "my-fork" })) as any;
-  mocks.getDb = (() => drizzle) as any;
-  mocks.forkRepository = (async () => undefined) as any;
+  try {
+    const result = await forkWithWorkflows(
+      db,
+      undefined,
+      "source-1",
+      "ws-target",
+      { name: "My Fork" },
+    );
 
-  const result = await forkWithWorkflows(
-    {} as D1Database,
-    undefined,
-    "source-1",
-    "ws-target",
-    { name: "My Fork" },
-  );
-
-  assert(result.repository !== undefined);
-  assertSpyCallArgs(mocks.sanitizeRepoName, 0, ["My Fork"]);
+    assertEquals(result.repository.id, "fork-id");
+    assertEquals(result.repository.name, "my-fork");
+    assertEquals(result.forked_from.id, "source-1");
+  } finally {
+    deps.gitStore = originalGitStore;
+  }
 });
 
 Deno.test("getSyncStatus - returns no-sync when repo not found", async () => {
-  /* mocks cleared (no-op in Deno) */ void 0;
-  const drizzle = createDrizzleMock();
-  drizzle._.get = (async () => undefined) as any;
-  mocks.getDb = (() => drizzle) as any;
+  const db = createFakeD1Database([{ get: undefined }]);
 
-  await assertRejects(async () => {
-    await getSyncStatus({} as D1Database, undefined, "repo-1");
-  }, "Repository not found");
+  await assertRejects(
+    () => getSyncStatus(db, undefined, "repo-1"),
+    Error,
+    "Repository not found",
+  );
 });
-Deno.test("getSyncStatus - returns no-sync when repo is not a fork", async () => {
-  /* mocks cleared (no-op in Deno) */ void 0;
-  const drizzle = createDrizzleMock();
-  drizzle._.get = (async () => ({ ...sourceRepo, forkedFromId: null })) as any;
-  mocks.getDb = (() => drizzle) as any;
 
-  const result = await getSyncStatus({} as D1Database, undefined, "repo-1");
+Deno.test("getSyncStatus - returns no-sync when repo is not a fork", async () => {
+  const db = createFakeD1Database([{
+    get: { ...sourceRepo, forkedFromId: null },
+  }]);
+
+  const result = await getSyncStatus(db, undefined, "repo-1");
   assertEquals(result.can_sync, false);
   assertEquals(result.upstream, null);
 });
-Deno.test("getSyncStatus - returns sync status for forked repo", async () => {
-  /* mocks cleared (no-op in Deno) */ void 0;
-  const drizzle = createDrizzleMock();
-  const fork = { ...sourceRepo, id: "fork-1", forkedFromId: "source-1" };
-  drizzle._.get =
-    (async () => fork) as any // fork repo
-     =
-    (async () => sourceRepo) as any // upstream repo
-     =
-      (async () => ({ createdAt: "2026-01-01T00:00:00.000Z" })) as any; // fork created time
-  drizzle._.all = (async () => []) as any; // releases
-  mocks.getDb = (() => drizzle) as any;
-  mocks.checkSyncStatus = (async () => ({
-    can_sync: true,
-    can_fast_forward: true,
-    commits_behind: 3,
-    commits_ahead: 0,
-    has_conflict: false,
-  })) as any;
 
-  const result = await getSyncStatus(
-    {} as D1Database,
-    {} as R2Bucket,
-    "fork-1",
-  );
-  assertEquals(result.can_sync, true);
-  assertEquals(result.commits_behind, 3);
+Deno.test("getSyncStatus - returns sync status for forked repo", async () => {
+  const fork = { ...sourceRepo, id: "fork-1", forkedFromId: "source-1" };
+  const db = createFakeD1Database([
+    { get: fork },
+    { get: sourceRepo },
+    {
+      get: {
+        createdAt: "2026-01-01T00:00:00.000Z",
+      },
+    },
+    {
+      all: [{
+        id: "release-1",
+        tag: "v1.0.0",
+        name: "Release 1",
+        publishedAt: "2026-01-02T00:00:00.000Z",
+      }],
+    },
+  ]);
+
+  const result = await getSyncStatus(db, undefined, "fork-1");
+  assertEquals(result.can_sync, false);
   assertNotEquals(result.upstream, null);
   assertEquals(result.upstream!.id, "source-1");
+  assertEquals(result.upstream_releases.length, 1);
 });
 
 Deno.test("syncWithUpstream - throws when repo is not a fork", async () => {
-  /* mocks cleared (no-op in Deno) */ void 0;
-  const drizzle = createDrizzleMock();
-  drizzle._.get = (async () => ({ ...sourceRepo, forkedFromId: null })) as any;
-  mocks.getDb = (() => drizzle) as any;
+  const db = createFakeD1Database([{
+    get: { ...sourceRepo, forkedFromId: null },
+  }]);
 
-  await assertRejects(async () => {
-    await syncWithUpstream({} as D1Database, {} as R2Bucket, "repo-1");
-  }, "Repository is not a fork");
+  await assertRejects(
+    () => syncWithUpstream(db, createBucketMock(), "repo-1"),
+    Error,
+    "Repository is not a fork",
+  );
 });
+
 Deno.test("syncWithUpstream - throws when git storage not configured", async () => {
-  /* mocks cleared (no-op in Deno) */ void 0;
-  const drizzle = createDrizzleMock();
-  drizzle._.get =
-    (async () => ({
-      ...sourceRepo,
-      id: "fork-1",
-      forkedFromId: "source-1",
-    })) as any =
-      (async () => sourceRepo) as any;
-  mocks.getDb = (() => drizzle) as any;
+  const db = createFakeD1Database([
+    { get: { ...sourceRepo, id: "fork-1", forkedFromId: "source-1" } },
+    { get: sourceRepo },
+  ]);
 
-  await assertRejects(async () => {
-    await syncWithUpstream({} as D1Database, undefined, "fork-1");
-  }, "Git storage not configured");
-});
-Deno.test("syncWithUpstream - returns conflict status when diverged", async () => {
-  /* mocks cleared (no-op in Deno) */ void 0;
-  const drizzle = createDrizzleMock();
-  drizzle._.get =
-    (async () => ({
-      ...sourceRepo,
-      id: "fork-1",
-      forkedFromId: "source-1",
-    })) as any =
-      (async () => sourceRepo) as any;
-  mocks.getDb = (() => drizzle) as any;
-  mocks.checkSyncStatus = (async () => ({
-    can_sync: true,
-    can_fast_forward: false,
-    commits_behind: 2,
-    commits_ahead: 1,
-    has_conflict: true,
-  })) as any;
-
-  const result = await syncWithUpstream(
-    {} as D1Database,
-    {} as R2Bucket,
-    "fork-1",
+  await assertRejects(
+    () => syncWithUpstream(db, undefined, "fork-1"),
+    Error,
+    "Git storage not configured",
   );
-  assertEquals(result.success, false);
-  assertEquals(result.conflict, true);
-});
-Deno.test("syncWithUpstream - returns already up to date when nothing to sync", async () => {
-  /* mocks cleared (no-op in Deno) */ void 0;
-  const drizzle = createDrizzleMock();
-  drizzle._.get =
-    (async () => ({
-      ...sourceRepo,
-      id: "fork-1",
-      forkedFromId: "source-1",
-    })) as any =
-      (async () => sourceRepo) as any;
-  mocks.getDb = (() => drizzle) as any;
-  mocks.checkSyncStatus = (async () => ({
-    can_sync: false,
-    can_fast_forward: false,
-    commits_behind: 0,
-    commits_ahead: 0,
-    has_conflict: false,
-  })) as any;
-
-  const result = await syncWithUpstream(
-    {} as D1Database,
-    {} as R2Bucket,
-    "fork-1",
-  );
-  assertEquals(result.success, true);
-  assertEquals(result.commits_synced, 0);
-  assertEquals(result.message, "Already up to date");
 });

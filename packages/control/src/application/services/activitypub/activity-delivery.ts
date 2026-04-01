@@ -158,7 +158,7 @@ export async function signAndDeliver(
         keyId,
       );
       headers['Signature'] = signatureHeader;
-    } catch (err) {
+    } catch (_err) {
       logWarn('Failed to sign delivery request, sending unsigned', {
         action: 'activity_delivery_sign',
         inboxUrl,

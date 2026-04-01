@@ -206,7 +206,7 @@ export async function loadMcpTools(
 async function createLoadClient(
   db: D1Database,
   env: Env,
-  spaceId: string,
+  _spaceId: string,
   drizzle: Database,
   server: McpServerLoadRecord,
 ): Promise<McpClient> {

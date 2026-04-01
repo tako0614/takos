@@ -7,7 +7,7 @@ import type { Conclusion } from 'takos-actions-engine';
 import type { WorkflowJobQueueMessage } from '../../../shared/types/index.ts';
 import type { SelectOf } from '../../../shared/types/drizzle-utils.ts';
 import type { workflowRuns } from '../../../infra/db/index.ts';
-import * as gitStore from '../git-smart/index.ts';
+import type * as gitStore from '../git-smart/index.ts';
 
 export type WorkflowBucket = Parameters<typeof gitStore.getCommitData>[0] & Parameters<typeof gitStore.getBlobAtPath>[0];
 

@@ -15,7 +15,7 @@
  *   takos state refresh                   -- Verify live resources where possible and remove confirmed orphans
  *   takos state sync                      -- Synchronise local and remote state
  */
-import { Command } from 'commander';
+import type { Command } from 'commander';
 import { registerStateListCommand } from './list.ts';
 import { registerStateShowCommand } from './show.ts';
 import { registerStateImportCommand } from './import.ts';

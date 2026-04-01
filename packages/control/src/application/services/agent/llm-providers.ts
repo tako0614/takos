@@ -5,7 +5,7 @@
 
 import type { AgentMessage, AgentTool, ToolCall } from './agent-models.ts';
 import { logError } from '../../../shared/utils/logger.ts';
-import { DEFAULT_MODEL_ID, getModelProvider, type ModelProvider } from './model-catalog.ts';
+import { type DEFAULT_MODEL_ID as _DEFAULT_MODEL_ID, getModelProvider, type ModelProvider } from './model-catalog.ts';
 export { DEFAULT_MODEL_ID } from './model-catalog.ts';
 export type { ModelProvider } from './model-catalog.ts';
 

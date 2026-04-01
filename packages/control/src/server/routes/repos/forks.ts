@@ -38,7 +38,7 @@ export default new Hono<AuthenticatedRouteEnv>()
   }
 
   if (sourceRepoData.visibility === 'private') {
-    const access = await requireSpaceAccess(
+    const _access = await requireSpaceAccess(
       c,
       sourceRepoData.accountId,
       user.id,

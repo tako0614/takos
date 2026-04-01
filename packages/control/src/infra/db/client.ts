@@ -11,6 +11,22 @@ import * as schema from './schema.ts';
 
 export type Database = ReturnType<typeof drizzle<typeof schema>>;
 
+declare global {
+  // Optional test seam. When set, getDb returns this database instead of
+  // constructing a Drizzle client for the provided binding.
+  // Tests use it to keep recent refactors compatible with existing fake DBs.
+  var __takosDbMock: Database | undefined;
+}
+
+function isDrizzleLikeDb(value: unknown): value is Database {
+  return typeof value === 'object' &&
+    value !== null &&
+    'select' in value &&
+    'insert' in value &&
+    'update' in value &&
+    'delete' in value;
+}
+
 // Cache Drizzle client per D1Database binding. Each Cloudflare Workers request
 // receives a fresh D1Database object, so WeakMap naturally scopes the client
 // to a single request lifetime without cross-request contamination. Within
@@ -18,7 +34,14 @@ export type Database = ReturnType<typeof drizzle<typeof schema>>;
 // construction (hundreds of calls per request).
 const clientCache = new WeakMap<D1Database, Database>();
 
-export function getDb(db: D1Database): Database {
+export function getDb(db: D1Database | Database): Database {
+  if (globalThis.__takosDbMock) {
+    return globalThis.__takosDbMock;
+  }
+  if (isDrizzleLikeDb(db)) {
+    return db;
+  }
+
   const cached = clientCache.get(db);
   if (cached) return cached;
 

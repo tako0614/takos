@@ -119,7 +119,7 @@ export function WorkerSettingsPanel({
     <div class="space-y-6">
       <div class="flex gap-1 border-b border-zinc-200 dark:border-zinc-700 overflow-x-auto">
         {SETTINGS_TABS.map(({ id, labelKey }) => (
-          <button
+          <button type="button"
 
             class={settingsTabClass(settingsTab === id)}
             onClick={() => onSettingsTabChange(id)}

@@ -1,23 +1,30 @@
-import type { D1Database } from '../../../shared/types/bindings.ts';
-import { isValidOpaqueId } from '../../../shared/utils/db-guards.ts';
+import type { D1Database } from "../../../shared/types/bindings.ts";
+import type { SecurityPosture } from "../../../shared/types/index.ts";
+import { isValidOpaqueId } from "../../../shared/utils/db-guards.ts";
 
-import { getDb, accounts } from '../../../infra/db/index.ts';
-import { eq } from 'drizzle-orm';
+import { accounts, getDb } from "../../../infra/db/index.ts";
+import { eq } from "drizzle-orm";
 
 interface ModelSettings {
   ai_model: string | null;
   ai_provider: string | null;
+  security_posture: SecurityPosture;
 }
+
+export const spaceModelDeps = {
+  getDb,
+  isValidOpaqueId,
+};
 
 export async function getWorkspaceModelSettings(
   db: D1Database,
-  spaceId: string
+  spaceId: string,
 ): Promise<ModelSettings | null> {
-  if (!isValidOpaqueId(spaceId)) {
+  if (!spaceModelDeps.isValidOpaqueId(spaceId)) {
     return null;
   }
 
-  const drizzle = getDb(db);
+  const drizzle = spaceModelDeps.getDb(db);
   const row = await drizzle
     .select({
       ai_model: accounts.aiModel,
@@ -29,14 +36,22 @@ export async function getWorkspaceModelSettings(
     .limit(1)
     .get();
 
-  return row || null;
+  return row
+    ? {
+      ai_model: row.ai_model,
+      ai_provider: row.ai_provider,
+      security_posture: row.security_posture === "restricted_egress"
+        ? "restricted_egress"
+        : "standard",
+    }
+    : null;
 }
 
 export async function updateWorkspaceModel(
   db: D1Database,
   spaceId: string,
   model: string,
-  provider: string
+  provider: string,
 ): Promise<void> {
   const drizzle = getDb(db);
   await drizzle

@@ -137,7 +137,7 @@ Deno.test("parseServiceResponse - throws ServiceCallError for 4xx responses", as
   });
   try {
     await parseServiceResponse(res, "test-svc");
-    expect.unreachable("Should have thrown");
+    assert(false, "Should have thrown");
   } catch (e) {
     const err = e as ServiceCallError;
     assert(err instanceof ServiceCallError);
@@ -155,7 +155,7 @@ Deno.test("parseServiceResponse - handles non-JSON error body gracefully", async
   const res = new Response("<html>Error</html>", { status: 500 });
   try {
     await parseServiceResponse(res, "test-svc");
-    expect.unreachable("Should have thrown");
+    assert(false, "Should have thrown");
   } catch (e) {
     const err = e as ServiceCallError;
     assertEquals(err.upstreamBody, "<html>Error</html>");

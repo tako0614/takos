@@ -201,8 +201,10 @@ Deno.test("browserGotoHandler - navigates to url and returns result", async () =
       status: 200,
     });
 
+  const ctx = makeContext();
+  setBrowserSessionId(ctx, "session-1");
   const result = JSON.parse(
-    await browserGotoHandler({ url: "https://example.com" }, makeContext()),
+    await browserGotoHandler({ url: "https://example.com" }, ctx),
   );
 
   assertEquals(result.url, "https://example.com");
@@ -275,9 +277,11 @@ Deno.test("browserActionHandler - performs click action successfully", async () 
   mockBrowserHostFetch = async () =>
     makeJsonResponse({ ok: true, message: "Clicked element" });
 
+  const ctx = makeContext();
+  setBrowserSessionId(ctx, "session-1");
   const result = await browserActionHandler(
     { action: "click", selector: "#btn" },
-    makeContext(),
+    ctx,
   );
   assertEquals(result, "Clicked element");
 });
@@ -285,9 +289,11 @@ Deno.test("browserActionHandler - performs scroll action with defaults", async (
   mockBrowserHostFetch = async () =>
     makeJsonResponse({ ok: true, message: "Scrolled down" });
 
+  const ctx = makeContext();
+  setBrowserSessionId(ctx, "session-1");
   const result = await browserActionHandler(
     { action: "scroll" },
-    makeContext(),
+    ctx,
   );
   assertEquals(result, "Scrolled down");
 });
@@ -318,7 +324,9 @@ Deno.test("browserScreenshotHandler - returns base64-encoded screenshot data", a
   const fakeBytes = new Uint8Array([137, 80, 78, 71]); // PNG magic bytes
   mockBrowserHostFetch = async () => new Response(fakeBytes, { status: 200 });
 
-  const result = JSON.parse(await browserScreenshotHandler({}, makeContext()));
+  const ctx = makeContext();
+  setBrowserSessionId(ctx, "session-1");
+  const result = JSON.parse(await browserScreenshotHandler({}, ctx));
 
   assertEquals(result.format, "png");
   assertEquals(result.encoding, "base64");
@@ -345,9 +353,11 @@ Deno.test("browserExtractHandler - extracts data using a selector", async () => 
   mockBrowserHostFetch = async () =>
     makeJsonResponse({ data: ["result1", "result2"] });
 
+  const ctx = makeContext();
+  setBrowserSessionId(ctx, "session-1");
   const result = await browserExtractHandler(
     { selector: ".result__body" },
-    makeContext(),
+    ctx,
   );
 
   const parsed = JSON.parse(result);
@@ -357,9 +367,11 @@ Deno.test("browserExtractHandler - truncates very large outputs", async () => {
   const largeData = "x".repeat(60000);
   mockBrowserHostFetch = async () => makeJsonResponse({ data: largeData });
 
+  const ctx = makeContext();
+  setBrowserSessionId(ctx, "session-1");
   const result = await browserExtractHandler(
     { evaluate: "document.body.textContent" },
-    makeContext(),
+    ctx,
   );
 
   // Source truncates to 50000 chars and appends '\n\n... (truncated)' (17 chars)
@@ -385,7 +397,9 @@ Deno.test("browserHtmlHandler - returns page html", async () => {
       url: "https://example.com",
     });
 
-  const result = JSON.parse(await browserHtmlHandler({}, makeContext()));
+  const ctx = makeContext();
+  setBrowserSessionId(ctx, "session-1");
+  const result = JSON.parse(await browserHtmlHandler({}, ctx));
 
   assertEquals(result.url, "https://example.com");
   assertStringIncludes(result.html, "<html>");
@@ -396,7 +410,9 @@ Deno.test("browserHtmlHandler - truncates html exceeding max length", async () =
   mockBrowserHostFetch = async () =>
     makeJsonResponse({ html: largeHtml, url: "https://example.com" });
 
-  const result = JSON.parse(await browserHtmlHandler({}, makeContext()));
+  const ctx = makeContext();
+  setBrowserSessionId(ctx, "session-1");
+  const result = JSON.parse(await browserHtmlHandler({}, ctx));
 
   assertEquals(result.truncated, true);
   assertEquals(result.html.length, 100000);

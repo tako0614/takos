@@ -1,5 +1,5 @@
 import { logError, logWarn } from '../../shared/utils/logger.ts';
-import { NotifierBase, type EmitResult, jsonResponse, type RingBufferEvent } from './notifier-base.ts';
+import { NotifierBase, type EmitResult, type jsonResponse as _jsonResponse, type RingBufferEvent } from './notifier-base.ts';
 
 /** User-scoped notification streaming (WebSocket + ring buffer replay). */
 export class NotificationNotifierDO extends NotifierBase {

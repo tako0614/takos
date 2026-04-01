@@ -1,32 +1,41 @@
-import type { Context, MiddlewareHandler } from 'hono';
-import type { Env, User, SpaceRole } from '../../shared/types/index.ts';
-import type { SpaceAccess } from '../../application/services/identity/space-access.ts';
-import { checkSpaceAccess } from '../../application/services/identity/space-access.ts';
-import { AppError, ErrorCodes, NotFoundError, InternalError, AuthenticationError, BadRequestError as BadRequestErr } from 'takos-common/errors';
+import type { Context, MiddlewareHandler } from "hono";
+import type { Env, SpaceRole, User } from "../../shared/types/index.ts";
+import type { SpaceAccess } from "../../application/services/identity/space-access.ts";
+import { checkSpaceAccess } from "../../application/services/identity/space-access.ts";
+import {
+  AppError,
+  AuthenticationError,
+  BadRequestError as BadRequestErr,
+  ErrorCodes,
+  InternalError,
+} from "takos-common/errors";
 
 // Re-export Error classes and types from takos-common/errors (canonical location)
 export {
-  ErrorCodes,
-  type ErrorCode,
   AppError,
-  BadRequestError,
   AuthenticationError,
   AuthorizationError,
-  NotFoundError,
+  BadRequestError,
   ConflictError,
-  ValidationError,
-  RateLimitError,
-  InternalError,
-  ServiceUnavailableError,
-  isAppError,
-  normalizeError,
-  logError,
-  type ValidationErrorDetail,
+  type ErrorCode,
+  ErrorCodes,
   type ErrorResponse,
-} from 'takos-common/errors';
+  InternalError,
+  isAppError,
+  logError,
+  normalizeError,
+  NotFoundError,
+  RateLimitError,
+  ServiceUnavailableError,
+  ValidationError,
+  type ValidationErrorDetail,
+} from "takos-common/errors";
 
 // Re-export non-deprecated helpers from error-response
-export { oauth2Error, type OAuth2ErrorResponse } from '../../shared/utils/error-response.ts';
+export {
+  oauth2Error,
+  type OAuth2ErrorResponse,
+} from "../../shared/utils/error-response.ts";
 
 /**
  * Base Variables type that all authenticated routes must have.
@@ -59,10 +68,11 @@ export type PublicRouteEnv = {
  * TVariables must include at least the BaseVariables (user: User).
  * This ensures helper functions can safely access c.get('user').
  */
-export type AppContext<TVariables extends BaseVariables = BaseVariables> = Context<{
-  Bindings: Env;
-  Variables: TVariables;
-}>;
+export type AppContext<TVariables extends BaseVariables = BaseVariables> =
+  Context<{
+    Bindings: Env;
+    Variables: TVariables;
+  }>;
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type AnyCtx = Context<any>;
@@ -71,9 +81,9 @@ export async function requireSpaceAccess(
   c: AnyCtx,
   spaceId: string,
   userId: string,
-  roles?: Array<'owner' | 'admin' | 'editor' | 'viewer'>,
-  message = 'Space not found',
-  status = 404
+  roles?: Array<"owner" | "admin" | "editor" | "viewer">,
+  message = "Space not found",
+  status = 404,
 ) {
   const access = await checkSpaceAccess(c.env.DB, spaceId, userId, roles);
   if (!access) {
@@ -82,8 +92,12 @@ export async function requireSpaceAccess(
   return access;
 }
 
+export const routeAuthDeps = {
+  requireSpaceAccess,
+};
+
 export function getRequestedSpaceIdentifier(c: AnyCtx): string | null {
-  const value = c.req.header('X-Takos-Space-Id');
+  const value = c.req.header("X-Takos-Space-Id");
   if (!value) return null;
   const trimmed = value.trim();
   return trimmed.length > 0 ? trimmed : null;
@@ -91,7 +105,7 @@ export function getRequestedSpaceIdentifier(c: AnyCtx): string | null {
 
 export function requireTenantSource(
   c: AnyCtx,
-  message = 'Storage not configured',
+  message = "Storage not configured",
 ) {
   if (!c.env.TENANT_SOURCE) {
     throw new InternalError(message);
@@ -100,10 +114,13 @@ export function requireTenantSource(
 }
 
 export async function parseJsonBody<T>(c: AnyCtx, fallback: T): Promise<T>;
-export async function parseJsonBody<T>(c: AnyCtx, fallback?: T | null): Promise<T | null>;
 export async function parseJsonBody<T>(
   c: AnyCtx,
-  fallback: T | null = null
+  fallback?: T | null,
+): Promise<T | null>;
+export async function parseJsonBody<T>(
+  c: AnyCtx,
+  fallback: T | null = null,
 ): Promise<T | null> {
   try {
     const raw = await c.req.text();
@@ -155,11 +172,11 @@ export type { SpaceAccess };
  */
 function resolveSpaceIdentifier(c: AnyCtx): string | null {
   // URL path params
-  const paramSpaceId = c.req.param('spaceId') || c.req.param('workspaceId');
+  const paramSpaceId = c.req.param("spaceId") || c.req.param("workspaceId");
   if (paramSpaceId) return paramSpaceId;
 
   // Query params
-  const querySpaceId = c.req.query('spaceId') || c.req.query('space_id');
+  const querySpaceId = c.req.query("spaceId") || c.req.query("space_id");
   if (querySpaceId) return querySpaceId;
 
   return null;
@@ -206,17 +223,17 @@ export function spaceAccess(
     : (options ?? {});
 
   return async (c, next) => {
-    const user = c.get('user');
+    const user = c.get("user");
     if (!user) {
       throw new AuthenticationError();
     }
 
     const spaceIdentifier = resolveSpaceIdentifier(c);
     if (!spaceIdentifier) {
-      throw new BadRequestErr('spaceId is required');
+      throw new BadRequestErr("spaceId is required");
     }
 
-    const access = await requireSpaceAccess(
+    const access = await routeAuthDeps.requireSpaceAccess(
       c,
       spaceIdentifier,
       user.id,
@@ -225,8 +242,8 @@ export function spaceAccess(
       opts.status,
     );
 
-    c.set('spaceId', access.space.id);
-    c.set('access', access);
+    c.set("spaceId", access.space.id);
+    c.set("access", access);
 
     await next();
   };

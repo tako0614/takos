@@ -62,8 +62,8 @@ export function SourcePage({ spaces, onNavigateToRepo, isAuthenticated, onRequir
         searchRef?.focus();
       }
     };
-    window.addEventListener('keydown', handler);
-    onCleanup(() => window.removeEventListener('keydown', handler));
+    globalThis.addEventListener('keydown', handler);
+    onCleanup(() => globalThis.removeEventListener('keydown', handler));
   });
 
   const isSearchMode = browseMode() || query().length > 0 || filter() !== 'all' || category() !== '' || officialOnly();

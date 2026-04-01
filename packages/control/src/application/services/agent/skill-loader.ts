@@ -61,7 +61,7 @@ type SkillAvailabilityInput = {
 async function loadEquippedSkillsWithAvailability(
   db: SqlDatabaseBinding,
   spaceId: string,
-  config: AgentConfig,
+  _config: AgentConfig,
   skillContext: SkillResolutionContext,
   input: SkillAvailabilityInput,
 ): Promise<SkillLoadResult> {

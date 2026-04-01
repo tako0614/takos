@@ -4,7 +4,7 @@ import { useI18n } from '../../../store/i18n.ts';
 import { Modal, ModalFooter } from '../../../components/ui/Modal.tsx';
 import { Button } from '../../../components/ui/Button.tsx';
 import { Input } from '../../../components/ui/Input.tsx';
-import type { Repository, Space } from '../../../types/index.ts';
+import type { Repository } from '../../../types/index.ts';
 import { rpc, rpcJson } from '../../../lib/rpc.ts';
 import { useToast } from '../../../store/toast.ts';
 import { Icons } from '../../../lib/Icons.tsx';
@@ -135,7 +135,7 @@ export function ForkModal(props: ForkModalProps) {
 
   return (
     <Modal
-      isOpen={true}
+      isOpen
       onClose={props.onClose}
       size="sm"
       title={t('forkRepository')}

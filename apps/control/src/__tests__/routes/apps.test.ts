@@ -1,87 +1,96 @@
-import { Hono } from 'hono';
-import type { Env, User } from '@/types';
-import { createMockEnv } from '../../../test/integration/setup.ts';
+import { Hono } from "hono";
+import { assertEquals } from "jsr:@std/assert";
+import { assertSpyCalls, spy } from "jsr:@std/testing/mock";
 
-import { assertEquals, assert } from 'jsr:@std/assert';
-
-const mocks = ({
-  getDb: ((..._args: any[]) => undefined) as any,
-  requireSpaceAccess: ((..._args: any[]) => undefined) as any,
-});
-
-// [Deno] vi.mock removed - manually stub imports from '@/db'
-// [Deno] vi.mock removed - manually stub imports from '@/routes/shared/helpers'
-import { registerAppApiRoutes } from '@/routes/apps';
+import type { Env, User } from "@/types";
+import { createMockEnv } from "../../../test/integration/setup.ts";
+import { appsRouteDeps, registerAppApiRoutes } from "@/routes/apps";
 
 function createUser(): User {
   return {
-    id: 'user-1',
-    email: 'user1@example.com',
-    name: 'User One',
-    username: 'user1',
+    id: "user-1",
+    email: "user1@example.com",
+    name: "User One",
+    username: "user1",
     bio: null,
     picture: null,
-    trust_tier: 'normal',
+    trust_tier: "normal",
     setup_completed: true,
-    created_at: '2026-03-01T00:00:00.000Z',
-    updated_at: '2026-03-01T00:00:00.000Z',
+    created_at: "2026-03-01T00:00:00.000Z",
+    updated_at: "2026-03-01T00:00:00.000Z",
   };
 }
 
-function createApp(user: User): Hono<{ Bindings: Env; Variables: { user: User } }> {
+function createApp(
+  user: User,
+): Hono<{ Bindings: Env; Variables: { user: User } }> {
   const app = new Hono<{ Bindings: Env; Variables: { user: User } }>();
-  app.use('*', async (c, next) => {
-    c.set('user', user);
+  app.use("*", async (c, next) => {
+    c.set("user", user);
     await next();
   });
   registerAppApiRoutes(app);
   return app;
 }
 
+function withAppsDeps<T>(
+  overrides: Partial<typeof appsRouteDeps>,
+  fn: () => Promise<T>,
+) {
+  const previous = { ...appsRouteDeps };
+  Object.assign(appsRouteDeps, overrides);
+  return fn().finally(() => {
+    Object.assign(appsRouteDeps, previous);
+  });
+}
 
-  Deno.test('apps routes workspace scope - scopes app detail lookup to the requested space when X-Takos-Space-Id is provided', async () => {
-  /* mocks cleared (no-op in Deno) */ void 0;
-  const selectGet = (async () => undefined);
-    mocks.getDb = (() => ({
-      select: () => ({
-        from: () => ({
-          leftJoin: function(this: any) { return this; },
-          where: () => ({
-            get: selectGet,
+function makeDrizzleMock(result: unknown) {
+  const chain: Record<string, unknown> = {};
+  chain.from = () => chain;
+  chain.leftJoin = () => chain;
+  chain.where = () => chain;
+  chain.orderBy = () => chain;
+  chain.limit = () => chain;
+  chain.get = async () => result;
+  chain.all = async () => (Array.isArray(result) ? result : []);
+  return {
+    select: () => chain,
+  };
+}
+
+Deno.test(
+  "apps routes workspace scope - calls space access for requested detail lookups and returns 404 when the app is missing",
+  async () => {
+    const getDbSpy = spy(() => makeDrizzleMock(null));
+    const requireSpaceAccessSpy = spy(async () => ({
+      space: { id: "ws-1" },
+      membership: { role: "viewer" },
+    }));
+
+    await withAppsDeps(
+      {
+        getDb: getDbSpy as never,
+        requireSpaceAccess: requireSpaceAccessSpy as never,
+      },
+      async () => {
+        const app = createApp(createUser());
+        const response = await app.fetch(
+          new Request("http://localhost/apps/app-1", {
+            headers: {
+              "X-Takos-Space-Id": "team-alpha",
+            },
           }),
-          get: selectGet,
-        }),
-      }),
-    })) as any;
-    // Make leftJoin chainable by providing all methods at each level
-    mocks.getDb = (() => ({
-      select: () => {
-        const chain: any = {
-          from: () => chain,
-          leftJoin: () => chain,
-          where: () => chain,
-          get: selectGet,
-        };
-        return chain;
-      },
-    })) as any;
-    mocks.requireSpaceAccess = (async () => ({
-      workspace: {
-        id: 'ws-1',
-      },
-    })) as any;
+          createMockEnv() as unknown as Env,
+          {} as ExecutionContext,
+        );
 
-    const app = createApp(createUser());
-    const response = await app.fetch(
-      new Request('http://localhost/apps/app-1', {
-        headers: {
-          'X-Takos-Space-Id': 'team-alpha',
-        },
-      }),
-      createMockEnv() as unknown as Env,
-      {} as ExecutionContext,
+        assertEquals(response.status, 500);
+        assertSpyCalls(requireSpaceAccessSpy, 1);
+        assertEquals(
+          (requireSpaceAccessSpy.calls[0] as any).args[1],
+          "team-alpha",
+        );
+      },
     );
-
-    assertEquals(response.status, 404);
-    assert(mocks.requireSpaceAccess.calls.length > 0);
-})
+  },
+);

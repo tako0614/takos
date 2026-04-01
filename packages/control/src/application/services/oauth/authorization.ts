@@ -53,6 +53,10 @@ export interface AuthorizationValidationResult {
   redirectUri?: string;
 }
 
+export const authorizationDeps = {
+  revokeTokensByAuthorizationCode,
+};
+
 function invalidResult(
   error: string,
   errorDescription: string,
@@ -200,7 +204,7 @@ export async function exchangeAuthorizationCode(
 
   // Replay attack detection: revoke all tokens if code was already used
   if (apiAuthCode.used) {
-    await revokeTokensByAuthorizationCode(dbBinding, apiAuthCode.id);
+    await authorizationDeps.revokeTokensByAuthorizationCode(dbBinding, apiAuthCode.id);
     return invalidGrant('Authorization code already used');
   }
 
@@ -241,7 +245,7 @@ export async function exchangeAuthorizationCode(
     );
 
   if ((updateResult.meta.changes ?? 0) === 0) {
-    await revokeTokensByAuthorizationCode(dbBinding, apiAuthCode.id);
+    await authorizationDeps.revokeTokensByAuthorizationCode(dbBinding, apiAuthCode.id);
     return invalidGrant('Authorization code already used');
   }
 

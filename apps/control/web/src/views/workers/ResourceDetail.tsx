@@ -66,7 +66,7 @@ export function ResourceDetail({
       </header>
 
       <nav class="flex gap-1 px-6 pt-4 border-b border-zinc-200 dark:border-zinc-700" role="tablist" aria-label="Resource sections">
-        <button
+        <button type="button"
           role="tab"
           aria-selected={tab === 'overview'}
           aria-controls="tabpanel-overview"
@@ -76,7 +76,7 @@ export function ResourceDetail({
           {t('overview')}
         </button>
         {resource.type === 'd1' && (
-          <button
+          <button type="button"
             role="tab"
             aria-selected={tab === 'explorer'}
             aria-controls="tabpanel-explorer"
@@ -87,7 +87,7 @@ export function ResourceDetail({
           </button>
         )}
         {resource.type === 'r2' && (
-          <button
+          <button type="button"
             role="tab"
             aria-selected={tab === 'browser'}
             aria-controls="tabpanel-browser"
@@ -97,7 +97,7 @@ export function ResourceDetail({
             {t('browser')}
           </button>
         )}
-        <button
+        <button type="button"
           role="tab"
           aria-selected={tab === 'bindings'}
           aria-controls="tabpanel-bindings"
@@ -106,7 +106,7 @@ export function ResourceDetail({
         >
           {t('bindings')}
         </button>
-        <button
+        <button type="button"
           role="tab"
           aria-selected={tab === 'settings'}
           aria-controls="tabpanel-settings"

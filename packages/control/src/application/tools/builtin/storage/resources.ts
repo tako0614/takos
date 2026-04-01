@@ -1,72 +1,74 @@
-import type { ToolDefinition, ToolHandler } from '../../tool-definitions.ts';
-import { createCloudflareApiClient } from '../../../services/cloudflare/api-client.ts';
-import { createOptionalCloudflareWfpProvider } from '../../../../platform/providers/cloudflare/wfp.ts';
-import { generateId } from '../../../../shared/utils/index.ts';
-import { getDb, resources } from '../../../../infra/db/index.ts';
+import type { ToolDefinition, ToolHandler } from "../../tool-definitions.ts";
+import { createCloudflareApiClient } from "../../../../platform/providers/cloudflare/api-client.ts";
+import { createOptionalCloudflareWfpProvider } from "../../../../platform/providers/cloudflare/wfp.ts";
+import { generateId } from "../../../../shared/utils/index.ts";
+import { getDb, resources } from "../../../../infra/db/index.ts";
 
 export const CREATE_D1: ToolDefinition = {
-  name: 'create_d1',
-  description: 'Create a new D1 database',
-  category: 'storage',
+  name: "create_d1",
+  description: "Create a new D1 database",
+  category: "storage",
   parameters: {
-    type: 'object',
+    type: "object",
     properties: {
       name: {
-        type: 'string',
-        description: 'Database name (lowercase, alphanumeric, hyphens)',
+        type: "string",
+        description: "Database name (lowercase, alphanumeric, hyphens)",
       },
       schema: {
-        type: 'string',
-        description: 'SQL schema to run after creation (optional)',
+        type: "string",
+        description: "SQL schema to run after creation (optional)",
       },
     },
-    required: ['name'],
+    required: ["name"],
   },
 };
 
 export const CREATE_KV: ToolDefinition = {
-  name: 'create_kv',
-  description: 'Create a new KV namespace',
-  category: 'storage',
+  name: "create_kv",
+  description: "Create a new KV namespace",
+  category: "storage",
   parameters: {
-    type: 'object',
+    type: "object",
     properties: {
       title: {
-        type: 'string',
-        description: 'Namespace title',
+        type: "string",
+        description: "Namespace title",
       },
     },
-    required: ['title'],
+    required: ["title"],
   },
 };
 
 export const CREATE_R2: ToolDefinition = {
-  name: 'create_r2',
-  description: 'Create a new R2 bucket',
-  category: 'storage',
+  name: "create_r2",
+  description: "Create a new R2 bucket",
+  category: "storage",
   parameters: {
-    type: 'object',
+    type: "object",
     properties: {
       name: {
-        type: 'string',
-        description: 'Bucket name (lowercase, alphanumeric, hyphens)',
+        type: "string",
+        description: "Bucket name (lowercase, alphanumeric, hyphens)",
       },
     },
-    required: ['name'],
+    required: ["name"],
   },
 };
 
 export const LIST_RESOURCES: ToolDefinition = {
-  name: 'list_resources',
-  description: 'List all D1 databases, KV namespaces, and R2 buckets in the account',
-  category: 'storage',
+  name: "list_resources",
+  description:
+    "List all D1 databases, KV namespaces, and R2 buckets in the account",
+  category: "storage",
   parameters: {
-    type: 'object',
+    type: "object",
     properties: {
       type: {
-        type: 'string',
-        description: 'Resource type to list (optional, lists all if not specified)',
-        enum: ['d1', 'kv', 'r2'],
+        type: "string",
+        description:
+          "Resource type to list (optional, lists all if not specified)",
+        enum: ["d1", "kv", "r2"],
       },
     },
   },
@@ -79,11 +81,13 @@ export const createD1Handler: ToolHandler = async (args, context) => {
   const { env, userId, spaceId } = context;
   const wfp = createOptionalCloudflareWfpProvider(env);
   if (!wfp) {
-    throw new Error('Cloudflare WFP is not configured');
+    throw new Error("Cloudflare WFP is not configured");
   }
 
   if (!/^[a-z0-9][a-z0-9-]*[a-z0-9]$/.test(name) || name.length < 3) {
-    throw new Error('Invalid database name. Must be 3+ chars, lowercase alphanumeric with hyphens.');
+    throw new Error(
+      "Invalid database name. Must be 3+ chars, lowercase alphanumeric with hyphens.",
+    );
   }
 
   const providerResourceName = `takos-d1-${generateId()}`;
@@ -96,14 +100,14 @@ export const createD1Handler: ToolHandler = async (args, context) => {
     ownerAccountId: userId,
     accountId: spaceId,
     name: name,
-    type: 'd1',
-    semanticType: 'sql',
-    driver: 'cloudflare-d1',
-    providerName: 'cloudflare',
-    status: 'active',
+    type: "d1",
+    semanticType: "sql",
+    driver: "cloudflare-d1",
+    providerName: "cloudflare",
+    status: "active",
     providerResourceId: databaseId,
     providerResourceName,
-    config: '{}',
+    config: "{}",
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString(),
   });
@@ -117,13 +121,14 @@ export const createD1Handler: ToolHandler = async (args, context) => {
       await wfp.d1.runD1SQL(databaseId, schema);
       output += `\nSchema applied successfully.`;
     } catch (error) {
-      const errorMsg = error instanceof Error ? error.message : 'Unknown error';
+      const errorMsg = error instanceof Error ? error.message : "Unknown error";
       output += `\nWarning: Schema failed to apply: ${errorMsg}`;
     }
   }
 
   output += `\n\nDatabase ID: ${databaseId}`;
-  output += `\nUse with CLI: takos api post /api/spaces/<spaceId>/resources --body '{"type":"d1","name":"<name>"}'`;
+  output +=
+    `\nUse with CLI: takos api post /api/spaces/<spaceId>/resources --body '{"type":"d1","name":"<name>"}'`;
 
   return output;
 };
@@ -134,7 +139,7 @@ export const createKVHandler: ToolHandler = async (args, context) => {
   const { env, userId, spaceId } = context;
   const wfp = createOptionalCloudflareWfpProvider(env);
   if (!wfp) {
-    throw new Error('Cloudflare WFP is not configured');
+    throw new Error("Cloudflare WFP is not configured");
   }
 
   const providerResourceName = `takos-kv-${generateId()}`;
@@ -147,14 +152,14 @@ export const createKVHandler: ToolHandler = async (args, context) => {
     ownerAccountId: userId,
     accountId: spaceId,
     name: title,
-    type: 'kv',
-    semanticType: 'kv',
-    driver: 'cloudflare-kv',
-    providerName: 'cloudflare',
-    status: 'active',
+    type: "kv",
+    semanticType: "kv",
+    driver: "cloudflare-kv",
+    providerName: "cloudflare",
+    status: "active",
     providerResourceId: namespaceId,
     providerResourceName,
-    config: '{}',
+    config: "{}",
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString(),
   });
@@ -162,7 +167,8 @@ export const createKVHandler: ToolHandler = async (args, context) => {
   let output = `KV Namespace created!\n`;
   output += `Title: ${title}\n`;
   output += `ID: ${namespaceId}`;
-  output += `\nUse with CLI: takos api post /api/spaces/<spaceId>/resources --body '{"type":"kv","name":"<name>"}'`;
+  output +=
+    `\nUse with CLI: takos api post /api/spaces/<spaceId>/resources --body '{"type":"kv","name":"<name>"}'`;
 
   return output;
 };
@@ -173,11 +179,13 @@ export const createR2Handler: ToolHandler = async (args, context) => {
   const { env, userId, spaceId } = context;
   const wfp = createOptionalCloudflareWfpProvider(env);
   if (!wfp) {
-    throw new Error('Cloudflare WFP is not configured');
+    throw new Error("Cloudflare WFP is not configured");
   }
 
   if (!/^[a-z0-9][a-z0-9-]*[a-z0-9]$/.test(name) || name.length < 3) {
-    throw new Error('Invalid bucket name. Must be 3+ chars, lowercase alphanumeric with hyphens.');
+    throw new Error(
+      "Invalid bucket name. Must be 3+ chars, lowercase alphanumeric with hyphens.",
+    );
   }
 
   const providerResourceName = `takos-r2-${generateId()}`;
@@ -190,21 +198,22 @@ export const createR2Handler: ToolHandler = async (args, context) => {
     ownerAccountId: userId,
     accountId: spaceId,
     name: name,
-    type: 'r2',
-    semanticType: 'object_store',
-    driver: 'cloudflare-r2',
-    providerName: 'cloudflare',
-    status: 'active',
+    type: "r2",
+    semanticType: "object_store",
+    driver: "cloudflare-r2",
+    providerName: "cloudflare",
+    status: "active",
     providerResourceId: providerResourceName,
     providerResourceName,
-    config: '{}',
+    config: "{}",
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString(),
   });
 
   let output = `R2 Bucket created!\n`;
   output += `Name: ${name}`;
-  output += `\nUse with CLI: takos api post /api/spaces/<spaceId>/resources --body '{"type":"r2","name":"<name>"}'`;
+  output +=
+    `\nUse with CLI: takos api post /api/spaces/<spaceId>/resources --body '{"type":"r2","name":"<name>"}'`;
 
   return output;
 };
@@ -215,19 +224,21 @@ export const listResourcesHandler: ToolHandler = async (args, context) => {
   const { env } = context;
 
   if (!env.CF_ACCOUNT_ID || !env.CF_API_TOKEN) {
-    throw new Error('Cloudflare credentials not configured');
+    throw new Error("Cloudflare credentials not configured");
   }
 
   const cfClient = createCloudflareApiClient(env);
   if (!cfClient) {
-    throw new Error('Cloudflare credentials not configured');
+    throw new Error("Cloudflare credentials not configured");
   }
 
-  let output = '';
+  let output = "";
 
-  if (!resourceType || resourceType === 'd1') {
-    const d1Data = await cfClient.accountGet<Array<{ uuid: string; name: string; created_at: string }>>(
-      '/d1/database'
+  if (!resourceType || resourceType === "d1") {
+    const d1Data = await cfClient.accountGet<
+      Array<{ uuid: string; name: string; created_at: string }>
+    >(
+      "/d1/database",
     );
 
     output += `D1 Databases:\n`;
@@ -241,12 +252,14 @@ export const listResourcesHandler: ToolHandler = async (args, context) => {
     } else {
       output += `  (none)\n`;
     }
-    output += '\n';
+    output += "\n";
   }
 
-  if (!resourceType || resourceType === 'kv') {
-    const kvData = await cfClient.accountGet<Array<{ id: string; title: string }>>(
-      '/storage/kv/namespaces'
+  if (!resourceType || resourceType === "kv") {
+    const kvData = await cfClient.accountGet<
+      Array<{ id: string; title: string }>
+    >(
+      "/storage/kv/namespaces",
     );
 
     output += `KV Namespaces:\n`;
@@ -260,11 +273,13 @@ export const listResourcesHandler: ToolHandler = async (args, context) => {
     } else {
       output += `  (none)\n`;
     }
-    output += '\n';
+    output += "\n";
   }
 
-  if (!resourceType || resourceType === 'r2') {
-    const r2Data = await cfClient.accountGet<Array<{ name: string }>>('/r2/buckets');
+  if (!resourceType || resourceType === "r2") {
+    const r2Data = await cfClient.accountGet<Array<{ name: string }>>(
+      "/r2/buckets",
+    );
 
     output += `R2 Buckets:\n`;
     if (r2Data && r2Data.length > 0) {

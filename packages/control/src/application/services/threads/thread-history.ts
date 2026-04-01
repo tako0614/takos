@@ -55,6 +55,12 @@ type HistoryRunSnapshot = {
   run: Run;
 };
 
+export const threadHistoryDeps = {
+  getDb,
+  listThreadMessages,
+  logError,
+};
+
 function toHistoryRunSnapshot(row: SelectOf<typeof runs>): HistoryRunSnapshot {
   const rootThreadId = row.rootThreadId ?? row.threadId;
   const rootRunId = row.rootRunId ?? row.id;
@@ -215,7 +221,7 @@ async function getPendingSessionDiff(
     }
 
     try {
-      const db = getDb(env.DB);
+      const db = threadHistoryDeps.getDb(env.DB);
       const session = await db.select({ id: sessions.id, status: sessions.status, repoId: sessions.repoId }).from(sessions).where(eq(sessions.id, sessionId)).get();
 
       if (session && session.status !== 'discarded') {
@@ -226,7 +232,7 @@ async function getPendingSessionDiff(
         };
       }
     } catch (err) {
-      logError('Failed to get session info for thread history', err, { module: 'services/threads/threads/thread-history', extra: ['session_id:', sessionId] });
+      threadHistoryDeps.logError('Failed to get session info for thread history', err, { module: 'services/threads/threads/thread-history', extra: ['session_id:', sessionId] });
     }
   }
 
@@ -234,7 +240,7 @@ async function getPendingSessionDiff(
 }
 
 async function getThreadHistoryTaskContext(env: Env, threadId: string): Promise<ThreadHistoryTaskContext | null> {
-  const db = getDb(env.DB);
+  const db = threadHistoryDeps.getDb(env.DB);
   const taskRows = await db.select({
     id: agentTasks.id,
     title: agentTasks.title,
@@ -279,9 +285,9 @@ export async function getThreadHistory(
   const includeMessages = options.includeMessages !== false;
   const rootRunId = options.rootRunId?.trim() || null;
   const { messages, total } = includeMessages
-    ? await listThreadMessages(env, env.DB, threadId, options.limit, options.offset)
+    ? await threadHistoryDeps.listThreadMessages(env, env.DB, threadId, options.limit, options.offset)
     : { messages: [], total: 0 };
-  const db = getDb(env.DB);
+  const db = threadHistoryDeps.getDb(env.DB);
 
   const threadRunRows = await db.select().from(runs)
     .where(eq(runs.threadId, threadId))

@@ -4,7 +4,7 @@ import type { IndexJobQueueMessage } from '../../shared/types/index.ts';
 import { INDEX_QUEUE_MESSAGE_VERSION } from '../../shared/types/index.ts';
 import type { D1Database } from '../../shared/types/bindings.ts';
 import type { IndexerEnv as Env } from '../../shared/types/index.ts';
-import { getDb, accounts, indexJobs, dlqEntries } from '../../infra/db/index.ts';
+import { getDb, accounts, type indexJobs as _indexJobs, dlqEntries } from '../../infra/db/index.ts';
 import { eq } from 'drizzle-orm';
 import { createEmbeddingsService } from '../../application/services/execution/embeddings.ts';
 import { createInfoUnitIndexer } from '../../application/services/source/info-units.ts';
@@ -15,7 +15,12 @@ import { logError, logInfo, logWarn } from '../../shared/utils/logger.ts';
 
 const TAG = '[INDEX_QUEUE]';
 
-export async function handleVectorize(env: Env, jobId: string, spaceId: string, targetId?: string): Promise<void> {
+export async function handleVectorize(
+  env: Env,
+  jobId: string,
+  spaceId: string,
+  _targetId?: string,
+): Promise<void> {
   const embeddingsService = createEmbeddingsService(env);
   if (!embeddingsService) {
     logWarn(`${TAG} Embeddings service not available for job ${jobId}`, { module: 'indexer' });

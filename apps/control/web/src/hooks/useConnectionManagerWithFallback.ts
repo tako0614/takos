@@ -35,8 +35,8 @@ type Transport = 'ws' | 'sse';
 export function useConnectionManagerWithFallback(
   options: UseWsConnectionManagerOptions,
 ): UseWsConnectionManagerResult {
-  let activeTransportRef: MutableRefObject<Transport> = { current: 'ws' };
-  let fallbackAttemptedRef: MutableRefObject<boolean> = { current: false };
+  const activeTransportRef: MutableRefObject<Transport> = { current: 'ws' };
+  const fallbackAttemptedRef: MutableRefObject<boolean> = { current: false };
 
   // Both hooks are always instantiated, but only
   // the active one receives startWebSocket calls.
@@ -48,8 +48,8 @@ export function useConnectionManagerWithFallback(
   const wsStartRef = wsConnection.startWebSocketRef;
   const sseStartRef = sseConnection.startWebSocketRef;
 
-  let rootRunIdRef: MutableRefObject<string | null> = { current: null };
-  let startWebSocketRef: MutableRefObject<(runId: string) => void> = { current: () => {} };
+  const rootRunIdRef: MutableRefObject<string | null> = { current: null };
+  const startWebSocketRef: MutableRefObject<(runId: string) => void> = { current: () => {} };
 
   const closeWebSocket = (): void => {
     // Close whichever transport is active (closing both is safe).

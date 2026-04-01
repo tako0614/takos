@@ -2,7 +2,6 @@
  * Tests for the d1-raw module: executeD1RawStatement.
  */
 import {
-  type D1RawOptions,
   executeD1RawStatement,
 } from "@/container-hosts/d1-raw";
 
@@ -11,20 +10,20 @@ import {
 // ---------------------------------------------------------------------------
 
 import { assertEquals, assertRejects } from "jsr:@std/assert";
-import { assertSpyCallArgs } from "jsr:@std/testing/mock";
+import { assertSpyCallArgs, spy } from "jsr:@std/testing/mock";
 
 function makeMockStatement(options: {
   rawResult?: unknown[];
   rawColumnResult?: unknown[];
 } = {}): any {
   const mock = {
-    raw: async (opts?: { columnNames?: boolean }) => {
+    raw: spy(async (opts?: { columnNames?: boolean }) => {
       if (opts?.columnNames) {
         return options.rawColumnResult ??
           [["col1", "col2"], [1, "a"], [2, "b"]];
       }
       return options.rawResult ?? [[1, "a"], [2, "b"]];
-    },
+    }),
   };
   return mock;
 }
@@ -43,13 +42,13 @@ Deno.test("executeD1RawStatement - calls raw() without options when columnNames 
 Deno.test("executeD1RawStatement - calls raw() without options when rawOptions is undefined", async () => {
   const stmt = makeMockStatement();
 
-  const result = await executeD1RawStatement(stmt, undefined);
+  await executeD1RawStatement(stmt, undefined);
   assertSpyCallArgs(stmt.raw, 0, []);
 });
 Deno.test("executeD1RawStatement - calls raw() without options when columnNames is false", async () => {
   const stmt = makeMockStatement();
 
-  const result = await executeD1RawStatement(stmt, { columnNames: false });
+  await executeD1RawStatement(stmt, { columnNames: false });
   assertSpyCallArgs(stmt.raw, 0, []);
 });
 Deno.test("executeD1RawStatement - calls raw({ columnNames: true }) when columnNames is true", async () => {

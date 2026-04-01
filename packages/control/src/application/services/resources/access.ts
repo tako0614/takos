@@ -1,24 +1,30 @@
-import type { D1Database } from '../../../shared/types/bindings.ts';
-import type { ResourcePermission } from '../../../shared/types/index.ts';
-import { getDb, resourceAccess } from '../../../infra/db/index.ts';
-import { eq, and, inArray } from 'drizzle-orm';
-import { generateId } from '../../../shared/utils/index.ts';
-import { toApiResourceAccess } from './format.ts';
-import { getResourceById } from './store.ts';
-import { resolveAccessibleAccountIds } from '../identity/membership-resolver.ts';
-import { textDate } from '../../../shared/utils/db-guards.ts';
+import type { D1Database } from "../../../shared/types/bindings.ts";
+import type { ResourcePermission } from "../../../shared/types/index.ts";
+import { getDb as realGetDb, resourceAccess } from "../../../infra/db/index.ts";
+import { and, eq, inArray } from "drizzle-orm";
+import { generateId } from "../../../shared/utils/index.ts";
+import { toApiResourceAccess } from "./format.ts";
+import { getResourceById as realGetResourceById } from "./store.ts";
+import { resolveAccessibleAccountIds as realResolveAccessibleAccountIds } from "../identity/membership-resolver.ts";
+import { textDate } from "../../../shared/utils/db-guards.ts";
 
-const RESOURCE_PERMISSIONS: readonly string[] = ['read', 'write', 'admin'];
+const RESOURCE_PERMISSIONS: readonly string[] = ["read", "write", "admin"];
+
+export const resourceAccessDeps = {
+  getDb: realGetDb,
+  getResourceById: realGetResourceById,
+  resolveAccessibleAccountIds: realResolveAccessibleAccountIds,
+};
 
 function isResourcePermission(value: string): value is ResourcePermission {
   return RESOURCE_PERMISSIONS.includes(value);
 }
 
 export async function listResourceAccess(db: D1Database, resourceId: string) {
-  const drizzle = getDb(db);
+  const drizzle = resourceAccessDeps.getDb(db);
 
   // We need account name, so join with accounts
-  const { accounts } = await import('../../../infra/db/index.ts');
+  const { accounts } = await import("../../../infra/db/index.ts");
   const accessGrants = await drizzle.select({
     id: resourceAccess.id,
     resourceId: resourceAccess.resourceId,
@@ -48,9 +54,14 @@ export async function listResourceAccess(db: D1Database, resourceId: string) {
 
 export async function upsertResourceAccess(
   db: D1Database,
-  input: { resource_id: string; space_id: string; permission: ResourcePermission; granted_by: string }
+  input: {
+    resource_id: string;
+    space_id: string;
+    permission: ResourcePermission;
+    granted_by: string;
+  },
 ) {
-  const drizzle = getDb(db);
+  const drizzle = resourceAccessDeps.getDb(db);
   const id = generateId();
   const timestamp = new Date().toISOString();
 
@@ -76,7 +87,7 @@ export async function upsertResourceAccess(
       },
     };
   } catch (err) {
-    if (String(err).includes('UNIQUE constraint')) {
+    if (String(err).includes("UNIQUE constraint")) {
       await drizzle.update(resourceAccess)
         .set({ permission: input.permission })
         .where(and(
@@ -93,8 +104,12 @@ export async function upsertResourceAccess(
   }
 }
 
-export async function deleteResourceAccess(db: D1Database, resourceId: string, spaceId: string) {
-  const drizzle = getDb(db);
+export async function deleteResourceAccess(
+  db: D1Database,
+  resourceId: string,
+  spaceId: string,
+) {
+  const drizzle = resourceAccessDeps.getDb(db);
   await drizzle.delete(resourceAccess)
     .where(and(
       eq(resourceAccess.resourceId, resourceId),
@@ -106,12 +121,16 @@ export async function checkResourceAccess(
   db: D1Database,
   resourceId: string,
   userId: string,
-  requiredPermissions?: ResourcePermission[]
+  requiredPermissions?: ResourcePermission[],
 ): Promise<boolean> {
-  const drizzle = getDb(db);
+  const drizzle = resourceAccessDeps.getDb(db);
 
   // Find accounts the user is a member of
-  const accountIds = await resolveAccessibleAccountIds(db, userId, { activeOnly: true });
+  const accountIds = await resourceAccessDeps.resolveAccessibleAccountIds(
+    db,
+    userId,
+    { activeOnly: true },
+  );
 
   const access = await drizzle.select({ permission: resourceAccess.permission })
     .from(resourceAccess)
@@ -134,22 +153,28 @@ export async function canAccessResource(
   db: D1Database,
   resourceId: string,
   userId: string,
-  requiredPermissions?: ResourcePermission[]
-): Promise<{ canAccess: boolean; isOwner: boolean; permission?: ResourcePermission }> {
-  const resource = await getResourceById(db, resourceId);
+  requiredPermissions?: ResourcePermission[],
+): Promise<
+  { canAccess: boolean; isOwner: boolean; permission?: ResourcePermission }
+> {
+  const resource = await resourceAccessDeps.getResourceById(db, resourceId);
 
   if (!resource) {
     return { canAccess: false, isOwner: false };
   }
 
   if (resource.owner_id === userId) {
-    return { canAccess: true, isOwner: true, permission: 'admin' };
+    return { canAccess: true, isOwner: true, permission: "admin" };
   }
 
-  const drizzle = getDb(db);
+  const drizzle = resourceAccessDeps.getDb(db);
 
   // Find accounts the user is a member of
-  const accountIds = await resolveAccessibleAccountIds(db, userId, { activeOnly: true });
+  const accountIds = await resourceAccessDeps.resolveAccessibleAccountIds(
+    db,
+    userId,
+    { activeOnly: true },
+  );
 
   const access = await drizzle.select({ permission: resourceAccess.permission })
     .from(resourceAccess)

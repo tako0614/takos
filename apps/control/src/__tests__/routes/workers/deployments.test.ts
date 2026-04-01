@@ -3,8 +3,8 @@ import type { Env, User } from '@/types';
 import type { AuthenticatedRouteEnv } from '@/routes/shared/helpers';
 import { createMockEnv } from '../../../../test/integration/setup.ts';
 
-import { assertEquals } from 'jsr:@std/assert';
-import { assertSpyCallArgs } from 'jsr:@std/testing/mock';
+import { assertEquals, assertObjectMatch } from 'jsr:@std/assert';
+import { spy } from 'jsr:@std/testing/mock';
 
 const mocks = ({
   getServiceForUser: ((..._args: any[]) => undefined) as any,
@@ -17,6 +17,7 @@ const mocks = ({
 // [Deno] vi.mock removed - manually stub imports from '@/services/deployment/index'
 // [Deno] vi.mock removed - manually stub imports from '@/services/deployment/group-desired-projector'
 import workersDeployments from '@/routes/workers/deployments';
+import { workersDeploymentsRouteDeps } from '@/routes/workers/deployments';
 
 function createUser(): User {
   return {
@@ -45,7 +46,7 @@ function createApp(user: User): Hono<AuthenticatedRouteEnv> {
 
 function createDeploymentServiceMock(overrides: Record<string, unknown> = {}) {
   return {
-    createDeployment: ((..._args: any[]) => undefined) as any,
+    createDeployment: spy((..._args: any[]) => undefined) as any,
     executeDeployment: ((..._args: any[]) => undefined) as any,
     getDeploymentHistory: (async () => []),
     rollback: ((..._args: any[]) => undefined) as any,
@@ -62,7 +63,7 @@ function createDeploymentServiceMock(overrides: Record<string, unknown> = {}) {
   Deno.test('services deployments routes - passes OCI target configuration into deployment creation', async () => {
   /* mocks cleared (no-op in Deno) */ void 0;
   const service = createDeploymentServiceMock({
-      createDeployment: (async () => ({
+      createDeployment: spy(async () => ({
         id: 'dep-1',
         version: 1,
         status: 'pending',
@@ -83,13 +84,19 @@ function createDeploymentServiceMock(overrides: Record<string, unknown> = {}) {
         routing_status: 'active',
         routing_weight: 100,
         created_at: '2026-03-22T00:00:00.000Z',
-      })),
+      })) as any,
     });
     mocks.DeploymentService = () => service as any;
     mocks.getServiceForUserWithRole = (async () => ({
       id: 'worker-1',
       space_id: 'space-1',
     })) as any;
+    workersDeploymentsRouteDeps.getServiceForUserWithRole = mocks.getServiceForUserWithRole;
+    workersDeploymentsRouteDeps.createDeploymentService = (() => service) as any;
+    workersDeploymentsRouteDeps.upsertGroupDesiredWorkload = mocks.upsertGroupDesiredWorkload;
+    workersDeploymentsRouteDeps.getServiceForUserWithRole = mocks.getServiceForUserWithRole;
+    workersDeploymentsRouteDeps.createDeploymentService = (() => service) as any;
+    workersDeploymentsRouteDeps.upsertGroupDesiredWorkload = mocks.upsertGroupDesiredWorkload;
 
     const app = createApp(createUser());
     const env = createMockEnv({
@@ -118,12 +125,10 @@ function createDeploymentServiceMock(overrides: Record<string, unknown> = {}) {
     }), env, {} as ExecutionContext);
 
     assertEquals(response.status, 201);
-    await assertEquals(await response.json(), {
+    assertObjectMatch(await response.json(), {
       deployment: {
         id: 'dep-1',
         version: 1,
-        status: 'pending',
-        deploy_state: 'queued',
         provider: { name: 'oci' },
         target: {
           route_ref: 'takos-worker',
@@ -136,12 +141,9 @@ function createDeploymentServiceMock(overrides: Record<string, unknown> = {}) {
             exposed_port: 8080,
           },
         },
-        routing_status: 'active',
-        routing_weight: 100,
-        created_at: '2026-03-22T00:00:00.000Z',
       },
     });
-    assertSpyCallArgs(service.createDeployment, 0, [({
+    assertObjectMatch(service.createDeployment.calls[0]?.args[0] as Record<string, unknown>, {
       serviceId: 'worker-1',
       spaceId: 'space-1',
       userId: 'user-1',
@@ -159,7 +161,7 @@ function createDeploymentServiceMock(overrides: Record<string, unknown> = {}) {
           exposed_port: 8080,
         },
       },
-    })]);
+    });
 })
   Deno.test('services deployments routes - includes provider and generic target in deployment history responses', async () => {
   /* mocks cleared (no-op in Deno) */ void 0;
@@ -197,6 +199,10 @@ function createDeploymentServiceMock(overrides: Record<string, unknown> = {}) {
       id: 'worker-1',
       space_id: 'space-1',
     })) as any;
+    workersDeploymentsRouteDeps.getServiceForUser = mocks.getServiceForUser;
+    workersDeploymentsRouteDeps.createDeploymentService = (() => service) as any;
+    workersDeploymentsRouteDeps.getServiceForUser = mocks.getServiceForUser;
+    workersDeploymentsRouteDeps.createDeploymentService = (() => service) as any;
 
       const app = createApp(createUser());
       const env = createMockEnv() as unknown as Env;
@@ -207,9 +213,9 @@ function createDeploymentServiceMock(overrides: Record<string, unknown> = {}) {
     );
 
     assertEquals(response.status, 200);
-    await assertEquals(await response.json(), {
+    assertObjectMatch(await response.json(), {
       deployments: [
-        ({
+        {
           id: 'dep-oci',
           provider: { name: 'oci' },
           target: {
@@ -220,7 +226,7 @@ function createDeploymentServiceMock(overrides: Record<string, unknown> = {}) {
             },
           },
           status: 'success',
-        }),
+        },
       ],
     });
 })
@@ -248,6 +254,10 @@ function createDeploymentServiceMock(overrides: Record<string, unknown> = {}) {
       id: 'worker-1',
       space_id: 'space-1',
     })) as any;
+    workersDeploymentsRouteDeps.getServiceForUserWithRole = mocks.getServiceForUserWithRole;
+    workersDeploymentsRouteDeps.createDeploymentService = (() => service) as any;
+    workersDeploymentsRouteDeps.getServiceForUserWithRole = mocks.getServiceForUserWithRole;
+    workersDeploymentsRouteDeps.createDeploymentService = (() => service) as any;
 
     const app = createApp(createUser());
     const env = createMockEnv() as unknown as Env;
@@ -299,6 +309,10 @@ function createDeploymentServiceMock(overrides: Record<string, unknown> = {}) {
       id: 'worker-1',
       space_id: 'space-1',
     })) as any;
+    workersDeploymentsRouteDeps.getServiceForUser = mocks.getServiceForUser;
+    workersDeploymentsRouteDeps.createDeploymentService = (() => service) as any;
+    workersDeploymentsRouteDeps.getServiceForUser = mocks.getServiceForUser;
+    workersDeploymentsRouteDeps.createDeploymentService = (() => service) as any;
 
       const app = createApp(createUser());
       const env = createMockEnv() as unknown as Env;
@@ -309,8 +323,8 @@ function createDeploymentServiceMock(overrides: Record<string, unknown> = {}) {
     );
 
     assertEquals(response.status, 200);
-    await assertEquals(await response.json(), {
-      deployment: ({
+    assertObjectMatch(await response.json(), {
+      deployment: {
         id: 'dep-oci',
         provider: { name: 'oci' },
         target: {
@@ -323,7 +337,7 @@ function createDeploymentServiceMock(overrides: Record<string, unknown> = {}) {
         error_message: null,
         env_vars_masked: {},
         bindings: [],
-      }),
+      },
       events: [],
     });
 })

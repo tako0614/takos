@@ -1,18 +1,7 @@
 import { ALLOWED_COMMANDS_SET, COMMAND_BLOCKLIST_PATTERNS } from '../shared/config.ts';
 import { createLogger } from 'takos-common/logger';
-import { Buffer } from "node:buffer";
+import type { Buffer } from "node:buffer";
 
-/**
- * Matches all C0 control characters (0x00-0x1F) plus DEL (0x7F).
- * Used for security-sensitive inputs (git paths, author names, emails)
- * where any control character is potentially dangerous.
- *
- * This is intentionally broader than LINE_UNSAFE_CHARS_PATTERN in
- * actions/builtin/constants.ts, which only rejects null/CR/LF for
- * line-oriented key/name formats.
- */
-// eslint-disable-next-line no-control-regex
-const ALL_CONTROL_CHARS_PATTERN = /[\x00-\x1f\x7f]/;
 const STRICT_SESSION_ID_PATTERN = /^[A-Za-z0-9](?:[A-Za-z0-9]|[-_](?![-_])){14,126}[A-Za-z0-9]$/;
 const VALID_GIT_REF_PATTERN = /^[A-Za-z0-9_./@^~:-]+$/;
 const VALID_GIT_PATH_PATTERN = /^[A-Za-z0-9_.@/-]+$/;
@@ -30,15 +19,33 @@ function requireMaxLength(value: string, maxLength: number, label: string): void
   }
 }
 
+function hasControlCharacters(value: string): boolean {
+  for (let i = 0; i < value.length; i++) {
+    const code = value.charCodeAt(i);
+    if (code <= 31 || code === 127) return true;
+  }
+  return false;
+}
+
+function hasCommandControlCharacters(value: string): boolean {
+  for (let i = 0; i < value.length; i++) {
+    const code = value.charCodeAt(i);
+    if (code <= 8 || (code >= 11 && code <= 12) || (code >= 14 && code <= 31) || code === 127) {
+      return true;
+    }
+  }
+  return false;
+}
+
 function rejectControlChars(value: string, label: string): void {
-  if (ALL_CONTROL_CHARS_PATTERN.test(value)) {
+  if (hasControlCharacters(value)) {
     throw new Error(`${label} contains invalid characters`);
   }
 }
 
 export function validateCommandLine(commandLine: string): void {
   const trimmed = commandLine.trim();
-  if (trimmed.length === 0 || /\0/.test(trimmed)) {
+  if (trimmed.length === 0 || trimmed.includes('\0')) {
     throw new Error('Invalid command');
   }
   for (const pattern of COMMAND_BLOCKLIST_PATTERNS) {
@@ -79,8 +86,7 @@ export function getWorkerResourceLimits(maxMemory?: number): { maxOldGenerationS
 export function validateGitRef(ref: string): void {
   requireNonEmptyString(ref, 'Git ref');
   requireMaxLength(ref, 256, 'Git ref');
-  // eslint-disable-next-line no-control-regex
-  if (/\x00/.test(ref)) {
+  if (ref.includes('\0')) {
     throw new Error('Git ref contains invalid characters');
   }
   if (ref.startsWith('.') || ref.endsWith('.') || ref.includes('..') || ref.includes('@{')) {
@@ -105,8 +111,7 @@ export function validateGitRef(ref: string): void {
   if (/\s/.test(ref)) {
     throw new Error('Git ref must not contain whitespace');
   }
-  // eslint-disable-next-line no-control-regex
-  if (/[\x00-\x1f\x7f]/.test(ref)) {
+  if (hasControlCharacters(ref)) {
     throw new Error('Git ref contains control characters');
   }
   if (!VALID_GIT_REF_PATTERN.test(ref)) {
@@ -183,8 +188,7 @@ export function validateGitName(name: string): string | null {
   }
 
   // Reject null bytes, control characters, path traversal, and URL-encoded traversal
-  // eslint-disable-next-line no-control-regex
-  if (/[\x00-\x1f\x7f]/.test(name)) return null;
+  if (hasControlCharacters(name)) return null;
   if (name.includes('..') || name.includes('/') || name.includes('\\')) return null;
   if (/%2e|%2f|%5c/i.test(name)) return null;
   if (/__|--/.test(name)) return null;
@@ -256,8 +260,7 @@ export function validateCommand(command: string): string | null {
     return 'Command is too long';
   }
 
-  // eslint-disable-next-line no-control-regex
-  if (/[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]/.test(command)) {
+  if (hasCommandControlCharacters(command)) {
     return 'Command contains invalid control characters';
   }
 

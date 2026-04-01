@@ -6,7 +6,6 @@ import {
   assertNotEquals,
   assertRejects,
 } from "jsr:@std/assert";
-import { assertSpyCallArgs } from "jsr:@std/testing/mock";
 
 const mocks = {
   getDb: ((..._args: any[]) => undefined) as any,
@@ -30,7 +29,15 @@ import {
   markThreadShareAccessed,
   revokeThreadShare,
   verifyThreadShareAccess,
+  threadShareDeps,
 } from "@/services/threads/thread-shares";
+
+threadShareDeps.getDb = ((db) => mocks.getDb(db)) as typeof threadShareDeps.getDb;
+threadShareDeps.hashPassword = ((...args) => mocks.hashPassword(...args)) as typeof threadShareDeps.hashPassword;
+threadShareDeps.verifyPassword = ((...args) => mocks.verifyPassword(...args)) as typeof threadShareDeps.verifyPassword;
+threadShareDeps.base64UrlEncode = ((...args) => mocks.base64UrlEncode(...args)) as typeof threadShareDeps.base64UrlEncode;
+threadShareDeps.now = (() => mocks.now()) as typeof threadShareDeps.now;
+threadShareDeps.randomUUID = (() => mocks.randomUUID()) as typeof threadShareDeps.randomUUID;
 
 type DbRow = Record<string, unknown>;
 
@@ -163,7 +170,11 @@ Deno.test("createThreadShare - creates a password-protected share", async () => 
   mocks.now = (() => "2026-03-01T00:00:00.000Z") as any;
   mocks.base64UrlEncode = (() => "generated-token-abc") as any;
   mocks.randomUUID = (() => "generated-uuid-1") as any;
-  mocks.hashPassword = (async () => "hashed-pw") as any;
+  const hashInputs: string[] = [];
+  mocks.hashPassword = (async (password: string) => {
+    hashInputs.push(password);
+    return "hashed-pw";
+  }) as any;
   const shareRow = makeShareRow({
     id: "generated-uuid-1",
     mode: "password",
@@ -184,7 +195,7 @@ Deno.test("createThreadShare - creates a password-protected share", async () => 
 
   assertEquals(result.share.mode, "password");
   assertEquals(result.passwordRequired, true);
-  assertSpyCallArgs(mocks.hashPassword, 0, ["mypassword123"]);
+  assertEquals(hashInputs, ["mypassword123"]);
 });
 Deno.test("createThreadShare - throws when password mode has short password", async () => {
   Object.defineProperty(globalThis, "crypto", {
@@ -556,12 +567,25 @@ Deno.test("markThreadShareAccessed - updates lastAccessedAt on the share", async
   });
   /* mocks cleared (no-op in Deno) */ void 0;
   mocks.now = (() => "2026-03-05T00:00:00.000Z") as any;
-  const drizzle = buildDrizzleMock();
+  let updateCalls = 0;
+  const drizzle = {
+    select: () => buildDrizzleMock().select(),
+    update: () => {
+      updateCalls++;
+      return {
+        set: () => ({
+          where: () => ({
+            run: async () => undefined,
+          }),
+        }),
+      };
+    },
+  };
   mocks.getDb = (() => drizzle) as any;
 
   await markThreadShareAccessed({} as D1Database, "share-1");
 
-  assert(drizzle.update.calls.length > 0);
+  assertEquals(updateCalls, 1);
 });
 
 Deno.test("verifyThreadShareAccess - returns share data for valid public share", async () => {

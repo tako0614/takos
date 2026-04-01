@@ -4,8 +4,15 @@ import type { ChatAttachmentMetadata } from '../views/chat/messageMetadata.ts';
 function sanitizeAttachmentFileName(name: string): string {
   const trimmed = name.trim();
   const fallback = 'attachment';
-  // eslint-disable-next-line no-control-regex
-  const sanitized = (trimmed || fallback).replace(/[\\/:*?"<>|\u0000-\u001f]/g, '-');
+  let sanitized = '';
+  for (const char of trimmed || fallback) {
+    const code = char.charCodeAt(0);
+    if (code < 0x20 || '\\/:*?"<>|'.includes(char)) {
+      sanitized += '-';
+      continue;
+    }
+    sanitized += char;
+  }
   return sanitized || fallback;
 }
 

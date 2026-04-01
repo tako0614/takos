@@ -41,7 +41,7 @@ export class SecretsSanitizer {
       const escaped = secret.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
       try {
         this.secretPatterns.push(new RegExp(escaped, 'g'));
-      } catch (err) {
+      } catch {
         // Regex construction failed — fall back to string replacement
         this.longSecrets.add(secret);
       }

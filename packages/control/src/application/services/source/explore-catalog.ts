@@ -1,43 +1,54 @@
-import type { Env } from '../../../shared/types/index.ts';
-import { getDb, repositories, repoReleases, repoReleaseAssets, bundleDeployments } from '../../../infra/db/index.ts';
-import { eq, and, desc, asc, inArray } from 'drizzle-orm';
-import { toReleaseAssets } from './repo-release-assets.ts';
+import type { Env } from "../../../shared/types/index.ts";
+import {
+  bundleDeployments,
+  repoReleaseAssets,
+  repoReleases,
+  repositories,
+} from "../../../infra/db/index.ts";
+import { and, asc, desc, eq, inArray } from "drizzle-orm";
+import { toReleaseAssets } from "./repo-release-assets.ts";
 import type {
-  CatalogSort,
-  CatalogType,
   CatalogItemResponse,
   CatalogResult,
+  CatalogSort,
+  CatalogType,
   ParsedTakopackRelease,
-} from './explore-types.ts';
+} from "./explore-types.ts";
 import {
   buildBaseConditions,
-  queryReposWithAccount,
-  getStarredRepoIds,
-  resolveAccountOwner,
-  parseCatalogTags,
   computeTrendingScore,
-} from './source-exploration.ts';
-import { OFFICIAL_PACKAGES, type OfficialPackage } from './official-packages.ts';
+  getStarredRepoIds,
+  parseCatalogTags,
+  queryReposWithAccount,
+  resolveAccountOwner,
+} from "./source-exploration.ts";
+import {
+  OFFICIAL_PACKAGES,
+  type OfficialPackage,
+} from "./official-packages.ts";
+import { sourceServiceDeps } from "./deps.ts";
 
-function officialPackageToCatalogItem(pkg: OfficialPackage): CatalogItemResponse {
+function officialPackageToCatalogItem(
+  pkg: OfficialPackage,
+): CatalogItemResponse {
   return {
     repo: {
       id: pkg.id,
       name: pkg.name,
       description: pkg.description,
-      visibility: 'public',
-      default_branch: 'main',
+      visibility: "public",
+      default_branch: "main",
       stars: 0,
       forks: 0,
       category: pkg.category,
-      language: 'TypeScript',
+      language: "TypeScript",
       license: null,
       is_starred: false,
       created_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),
-      workspace: { id: 'official', name: 'Takos' },
+      workspace: { id: "official", name: "Takos" },
       owner: {
-        id: 'official',
+        id: "official",
         name: pkg.owner.name,
         username: pkg.owner.username,
         avatar_url: null,
@@ -58,7 +69,7 @@ function officialPackageToCatalogItem(pkg: OfficialPackage): CatalogItemResponse
       downloads: 0,
       rating_avg: null,
       rating_count: 0,
-      publish_status: 'approved',
+      publish_status: "approved",
       certified: true,
       published_at: null,
     },
@@ -87,7 +98,7 @@ function filterOfficialPackages(options: {
       packages = packages.filter((pkg) =>
         pkg.name.toLowerCase().includes(query) ||
         pkg.description.toLowerCase().includes(query) ||
-        pkg.tags.some((tag) => tag.toLowerCase().includes(query)),
+        pkg.tags.some((tag) => tag.toLowerCase().includes(query))
       );
     }
   }
@@ -100,14 +111,16 @@ function filterOfficialPackages(options: {
   const parsedTags = parseCatalogTags(options.tagsRaw);
   if (!parsedTags.invalid && parsedTags.tags.length > 0) {
     return items.filter((item) => {
-      const packageTags = item.takopack.tags.map((tag) => tag.trim().toLowerCase()).filter(Boolean);
+      const packageTags = item.takopack.tags.map((tag) =>
+        tag.trim().toLowerCase()
+      ).filter(Boolean);
       return parsedTags.tags.every((tag) => packageTags.includes(tag));
     });
   }
 
   // type=repo means non-deployable, official packages are always deployable
   // type=deployable-app keeps them, type=all keeps them
-  if (options.type === 'repo') {
+  if (options.type === "repo") {
     return [];
   }
 
@@ -115,7 +128,7 @@ function filterOfficialPackages(options: {
 }
 
 export async function listCatalogItems(
-  dbBinding: Env['DB'],
+  dbBinding: Env["DB"],
   options: {
     sort: CatalogSort;
     limit: number;
@@ -130,9 +143,9 @@ export async function listCatalogItems(
     certifiedOnly?: boolean;
     spaceId?: string;
     userId?: string;
-  }
+  },
 ): Promise<CatalogResult> {
-  const db = getDb(dbBinding);
+  const db = sourceServiceDeps.getDb(dbBinding);
 
   const parsedTags = parseCatalogTags(options.tagsRaw);
   if (parsedTags.invalid) {
@@ -140,7 +153,7 @@ export async function listCatalogItems(
   }
 
   // Official-only: return only hardcoded official packages
-  if (options.type === 'official') {
+  if (options.type === "official") {
     const officialItems = filterOfficialPackages({
       searchQuery: options.searchQuery,
       category: options.category,
@@ -148,7 +161,10 @@ export async function listCatalogItems(
       tagsRaw: options.tagsRaw,
       certifiedOnly: options.certifiedOnly,
     });
-    const pagedItems = officialItems.slice(options.offset, options.offset + options.limit);
+    const pagedItems = officialItems.slice(
+      options.offset,
+      options.offset + options.limit,
+    );
     return {
       items: pagedItems,
       total: officialItems.length,
@@ -161,7 +177,7 @@ export async function listCatalogItems(
     language: options.language,
     license: options.license,
     since: options.since,
-    sinceField: 'updatedAt',
+    sinceField: "updatedAt",
     searchQuery: options.searchQuery?.trim() || undefined,
   });
 
@@ -174,14 +190,17 @@ export async function listCatalogItems(
     // Even with no DB repos, official packages should still appear
     const officialOnly = options.offset === 0
       ? filterOfficialPackages({
-          searchQuery: options.searchQuery,
-          category: options.category,
-          type: options.type,
-          tagsRaw: options.tagsRaw,
-          certifiedOnly: options.certifiedOnly,
-        })
+        searchQuery: options.searchQuery,
+        category: options.category,
+        type: options.type,
+        tagsRaw: options.tagsRaw,
+        certifiedOnly: options.certifiedOnly,
+      })
       : [];
-    const pagedOfficial = officialOnly.slice(options.offset, options.offset + options.limit);
+    const pagedOfficial = officialOnly.slice(
+      options.offset,
+      options.offset + options.limit,
+    );
     return {
       items: pagedOfficial,
       total: officialOnly.length,
@@ -190,7 +209,11 @@ export async function listCatalogItems(
   }
 
   const repoIds = repos.map((repo) => repo.id);
-  const starredRepoIds = await getStarredRepoIds(dbBinding, options.userId, repoIds);
+  const starredRepoIds = await getStarredRepoIds(
+    dbBinding,
+    options.userId,
+    repoIds,
+  );
 
   const releases = await db.select({
     id: repoReleases.id,
@@ -211,12 +234,12 @@ export async function listCatalogItems(
     .all();
 
   // Fetch assets for these releases
-  const releaseIds = releases.map(r => r.id);
+  const releaseIds = releases.map((r) => r.id);
   const allAssets = releaseIds.length > 0
     ? await db.select().from(repoReleaseAssets)
-        .where(inArray(repoReleaseAssets.releaseId, releaseIds))
-        .orderBy(asc(repoReleaseAssets.createdAt))
-        .all()
+      .where(inArray(repoReleaseAssets.releaseId, releaseIds))
+      .orderBy(asc(repoReleaseAssets.createdAt))
+      .all()
     : [];
 
   const assetsByRelease = new Map<string, typeof allAssets>();
@@ -231,7 +254,9 @@ export async function listCatalogItems(
     if (latestTakopackByRepoId.has(release.repoId)) continue;
     const releaseAssetRows = assetsByRelease.get(release.id) || [];
     const assets = toReleaseAssets(releaseAssetRows);
-    const takopackAssets = assets.filter((asset) => asset.bundle_format === 'takopack');
+    const takopackAssets = assets.filter((asset) =>
+      asset.bundle_format === "takopack"
+    );
     if (takopackAssets.length === 0) continue;
 
     const primaryAsset = takopackAssets[0];
@@ -242,15 +267,19 @@ export async function listCatalogItems(
     latestTakopackByRepoId.set(release.repoId, {
       releaseId: release.id,
       repoId: release.repoId,
-      appId: primaryAsset.bundle_meta?.app_id || primaryAsset.bundle_meta?.name || release.repoName,
+      appId: primaryAsset.bundle_meta?.app_id ||
+        primaryAsset.bundle_meta?.name || release.repoName,
       releaseTag: release.tag,
       publishedAt: release.publishedAt ?? null,
       version: primaryAsset.bundle_meta?.version || release.tag,
-      description: primaryAsset.bundle_meta?.description || release.description || null,
+      description: primaryAsset.bundle_meta?.description ||
+        release.description || null,
       icon: primaryAsset.bundle_meta?.icon || null,
       category: primaryAsset.bundle_meta?.category || null,
       tags: Array.isArray(primaryAsset.bundle_meta?.tags)
-        ? primaryAsset.bundle_meta?.tags.filter((tag): tag is string => typeof tag === 'string')
+        ? primaryAsset.bundle_meta?.tags.filter((tag): tag is string =>
+          typeof tag === "string"
+        )
         : [],
       assetId: primaryAsset.id,
       downloadCount: primaryAsset.download_count || 0,
@@ -258,9 +287,15 @@ export async function listCatalogItems(
     });
   }
 
-  const reviewMap = new Map<string, { ratingAvg: number | null; ratingCount: number }>();
+  const reviewMap = new Map<
+    string,
+    { ratingAvg: number | null; ratingCount: number }
+  >();
 
-  const publishStatusMap = new Map<string, 'none' | 'pending' | 'approved' | 'rejected'>();
+  const publishStatusMap = new Map<
+    string,
+    "none" | "pending" | "approved" | "rejected"
+  >();
 
   const installationMap = new Map<string, {
     id: string;
@@ -276,7 +311,7 @@ export async function listCatalogItems(
     }).from(bundleDeployments)
       .where(and(
         eq(bundleDeployments.accountId, options.spaceId),
-        eq(bundleDeployments.sourceType, 'git'),
+        eq(bundleDeployments.sourceType, "git"),
         inArray(bundleDeployments.sourceRepoId, repoIds),
       ))
       .orderBy(desc(bundleDeployments.deployedAt))
@@ -287,7 +322,7 @@ export async function listCatalogItems(
         installationMap.set(install.sourceRepoId, {
           id: install.id,
           version: install.version,
-          deployedAt: install.deployedAt || '',
+          deployedAt: install.deployedAt || "",
         });
       }
     }
@@ -297,8 +332,10 @@ export async function listCatalogItems(
     const takopackRelease = latestTakopackByRepoId.get(repo.id);
     const review = reviewMap.get(repo.id);
     const publishStatus = takopackRelease
-      ? (publishStatusMap.get(`${takopackRelease.releaseId}:${takopackRelease.assetId}`) || 'none')
-      : 'none';
+      ? (publishStatusMap.get(
+        `${takopackRelease.releaseId}:${takopackRelease.assetId}`,
+      ) || "none")
+      : "none";
     const installation = options.spaceId
       ? installationMap.get(repo.id)
       : undefined;
@@ -308,7 +345,7 @@ export async function listCatalogItems(
         id: repo.id,
         name: repo.name,
         description: repo.description,
-        visibility: 'public',
+        visibility: "public",
         default_branch: repo.defaultBranch,
         stars: repo.stars,
         forks: repo.forks,
@@ -316,8 +353,8 @@ export async function listCatalogItems(
         language: repo.primaryLanguage || null,
         license: repo.license || null,
         is_starred: starredRepoIds.has(repo.id),
-        created_at: repo.createdAt || '',
-        updated_at: repo.updatedAt || '',
+        created_at: repo.createdAt || "",
+        updated_at: repo.updatedAt || "",
         workspace: {
           id: repo.account.id,
           name: repo.account.name,
@@ -340,7 +377,7 @@ export async function listCatalogItems(
         rating_avg: review?.ratingAvg ?? null,
         rating_count: review?.ratingCount ?? 0,
         publish_status: publishStatus,
-        certified: publishStatus === 'approved',
+        certified: publishStatus === "approved",
         published_at: takopackRelease?.publishedAt || null,
       },
     };
@@ -357,14 +394,16 @@ export async function listCatalogItems(
     return item;
   });
 
-  if (options.type === 'deployable-app') {
+  if (options.type === "deployable-app") {
     items = items.filter((item) => item.takopack.available);
   }
 
   if (parsedTags.tags.length > 0) {
     items = items.filter((item) => {
       if (!item.takopack.available) return false;
-      const packageTags = item.takopack.tags.map((tag) => tag.trim().toLowerCase()).filter(Boolean);
+      const packageTags = item.takopack.tags.map((tag) =>
+        tag.trim().toLowerCase()
+      ).filter(Boolean);
       return parsedTags.tags.every((tag) => packageTags.includes(tag));
     });
   }
@@ -375,27 +414,29 @@ export async function listCatalogItems(
 
   const sort = options.sort;
   items.sort((left, right) => {
-    if (sort === 'downloads') {
+    if (sort === "downloads") {
       const byDownloads = right.takopack.downloads - left.takopack.downloads;
       if (byDownloads !== 0) return byDownloads;
       return right.repo.stars - left.repo.stars;
     }
 
-    if (sort === 'new') {
-      const leftMs = Date.parse(left.takopack.published_at || left.repo.created_at) || 0;
-      const rightMs = Date.parse(right.takopack.published_at || right.repo.created_at) || 0;
+    if (sort === "new") {
+      const leftMs =
+        Date.parse(left.takopack.published_at || left.repo.created_at) || 0;
+      const rightMs =
+        Date.parse(right.takopack.published_at || right.repo.created_at) || 0;
       if (rightMs !== leftMs) return rightMs - leftMs;
       return right.repo.stars - left.repo.stars;
     }
 
-    if (sort === 'updated') {
+    if (sort === "updated") {
       const leftMs = Date.parse(left.repo.updated_at) || 0;
       const rightMs = Date.parse(right.repo.updated_at) || 0;
       if (rightMs !== leftMs) return rightMs - leftMs;
       return right.repo.stars - left.repo.stars;
     }
 
-    if (sort === 'trending') {
+    if (sort === "trending") {
       const leftScore = computeTrendingScore({
         stars: left.repo.stars,
         downloads: left.takopack.downloads,
@@ -420,23 +461,28 @@ export async function listCatalogItems(
   // Merge official packages on the first page
   const officialItems = options.offset === 0
     ? filterOfficialPackages({
-        searchQuery: options.searchQuery,
-        category: options.category,
-        type: options.type,
-        tagsRaw: options.tagsRaw,
-        certifiedOnly: options.certifiedOnly,
-      })
+      searchQuery: options.searchQuery,
+      category: options.category,
+      type: options.type,
+      tagsRaw: options.tagsRaw,
+      certifiedOnly: options.certifiedOnly,
+    })
     : [];
 
   // Deduplicate: remove DB items whose repo name matches an official package id
   const officialIds = new Set(officialItems.map((item) => item.repo.id));
-  const deduplicatedItems = items.filter((item) => !officialIds.has(item.repo.id));
+  const deduplicatedItems = items.filter((item) =>
+    !officialIds.has(item.repo.id)
+  );
 
   // Prepend official packages before DB results
   const merged = [...officialItems, ...deduplicatedItems];
 
   const total = merged.length;
-  const pagedItems = merged.slice(options.offset, options.offset + options.limit);
+  const pagedItems = merged.slice(
+    options.offset,
+    options.offset + options.limit,
+  );
 
   return {
     items: pagedItems,

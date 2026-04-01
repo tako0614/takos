@@ -1,4 +1,4 @@
-import { createEffect, onMount, onCleanup, createSignal } from 'solid-js';
+import { createEffect, onCleanup, createSignal } from 'solid-js';
 import { useI18n } from '../../store/i18n.ts';
 import { useToast } from '../../store/toast.ts';
 import { rpc, rpcJson } from '../../lib/rpc.ts';
@@ -20,7 +20,7 @@ export function SettingsBilling({ user }: { user: User | null }) {
   const [billingInvoices, setBillingInvoices] = createSignal<BillingInvoice[]>([]);
   const [billingLoading, setBillingLoading] = createSignal(true);
   const [billingError, setBillingError] = createSignal<string | null>(null);
-  const [billingReloadNonce, setBillingReloadNonce] = createSignal(0);
+  const [_billingReloadNonce, setBillingReloadNonce] = createSignal(0);
   const [billingAction, setBillingAction] = createSignal<string | null>(null);
   const [invoiceLoading, setInvoiceLoading] = createSignal(false);
   const [invoiceError, setInvoiceError] = createSignal<string | null>(null);
@@ -120,7 +120,7 @@ export function SettingsBilling({ user }: { user: User | null }) {
     try {
       const res = await rpc.billing.subscribe.$post();
       const data = await rpcJson<{ url: string }>(res);
-      window.location.assign(data.url);
+      globalThis.location.assign(data.url);
     } catch (err) {
       showToast('error', err instanceof Error ? err.message : t('billingSubscribeFailed'));
       setBillingAction(null);
@@ -132,7 +132,7 @@ export function SettingsBilling({ user }: { user: User | null }) {
     try {
       const res = await rpc.billing.portal.$post();
       const data = await rpcJson<{ url: string }>(res);
-      window.location.assign(data.url);
+      globalThis.location.assign(data.url);
     } catch (err) {
       showToast('error', err instanceof Error ? err.message : t('billingPortalFailed'));
       setBillingAction(null);
@@ -146,7 +146,7 @@ export function SettingsBilling({ user }: { user: User | null }) {
         json: { pack_id: packId },
       });
       const data = await rpcJson<{ url: string }>(res);
-      window.location.assign(data.url);
+      globalThis.location.assign(data.url);
     } catch (err) {
       showToast('error', err instanceof Error ? err.message : t('billingTopupFailed'));
       setBillingAction(null);
@@ -169,7 +169,7 @@ export function SettingsBilling({ user }: { user: User | null }) {
   };
 
   const handleDownloadInvoice = (invoiceId: string) => {
-    window.open(`/api/billing/invoices/${invoiceId}/pdf`, '_blank', 'noopener,noreferrer');
+    globalThis.open(`/api/billing/invoices/${invoiceId}/pdf`, '_blank', 'noopener,noreferrer');
   };
 
   // Hide billing section entirely when billing is disabled

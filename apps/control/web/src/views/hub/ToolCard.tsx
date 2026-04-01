@@ -36,7 +36,7 @@ export function ToolCard({ tool, onToggle, onEdit, onExecute, onDelete }: ToolCa
       </div>
 
       <div class="flex items-center gap-2">
-        <button
+        <button type="button"
           onClick={onToggle}
           class="p-2 rounded-lg bg-transparent border-none cursor-pointer transition-colors hover:bg-zinc-100 dark:hover:bg-zinc-800"
           title={tool.enabled ? t('disable') : t('enable')}

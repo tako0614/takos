@@ -1,12 +1,16 @@
-import type { Context, MiddlewareHandler } from 'hono';
-import type { Env, User } from '../../shared/types/index.ts';
+import type { Context, MiddlewareHandler } from "hono";
+import type { Env, User } from "../../shared/types/index.ts";
 import {
+  type BillingCheckResult,
   checkBillingQuota,
   type MeterType,
-  type BillingCheckResult,
-} from '../../application/services/billing/billing.ts';
-import { ServiceUnavailableError, PaymentRequiredError } from 'takos-common/errors';
-import { logError } from '../../shared/utils/logger.ts';
+} from "../../application/services/billing/billing.ts";
+import { PaymentRequiredError } from "takos-common/errors";
+import { logError } from "../../shared/utils/logger.ts";
+
+export const billingMiddlewareDeps = {
+  checkBillingQuota,
+};
 
 export type BillingVariables = {
   user?: User;
@@ -20,36 +24,47 @@ type BillingEnv = { Bindings: Env; Variables: BillingVariables };
 export function billingGate(
   meterType: MeterType,
   estimateUnits?: number | ((c: Context<BillingEnv>) => number),
-  options?: { shadow?: boolean }
+  options?: { shadow?: boolean },
 ): MiddlewareHandler<BillingEnv> {
   return async (c, next) => {
     // Read-only requests are free on all plans
     const method = c.req.method.toUpperCase();
-    if (method === 'GET' || method === 'HEAD') {
+    if (method === "GET" || method === "HEAD") {
       return next();
     }
 
-    const user = c.get('user');
+    const user = c.get("user");
     if (!user) {
       // requireAuth will reject unauthenticated access downstream
       return next();
     }
 
-    const units = typeof estimateUnits === 'function'
+    const units = typeof estimateUnits === "function"
       ? estimateUnits(c)
       : (estimateUnits ?? 1);
 
     let result: BillingCheckResult;
     try {
-      result = await checkBillingQuota(c.env.DB, user.id, meterType, units);
+      result = await billingMiddlewareDeps.checkBillingQuota(
+        c.env.DB,
+        user.id,
+        meterType,
+        units,
+      );
     } catch (err) {
-      logError('Failed to check billing quota', err, { module: 'billinggate' });
-      throw new ServiceUnavailableError('Billing unavailable');
+      logError("Failed to check billing quota", err, { module: "billinggate" });
+      return c.json(
+        {
+          error: "Billing unavailable",
+          code: "SERVICE_UNAVAILABLE",
+        },
+        503,
+      );
     }
-    c.set('billingCheck', result);
+    c.set("billingCheck", result);
 
     if (!result.allowed && !options?.shadow) {
-      throw new PaymentRequiredError('Billing quota exceeded', {
+      throw new PaymentRequiredError("Billing quota exceeded", {
         reason: result.reason,
         plan: result.planName,
         balance_cents: result.balanceCents,

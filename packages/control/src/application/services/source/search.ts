@@ -1,12 +1,16 @@
-import type { D1Database, R2Bucket } from '../../../shared/types/bindings.ts';
-import type { Env, SpaceFile, FileKind, FileOrigin } from '../../../shared/types/index.ts';
-import { createEmbeddingsService, isEmbeddingsAvailable } from '../execution/embeddings.ts';
-import { getDb, files } from '../../../infra/db/index.ts';
-import { eq, and, ne, like, desc, sql } from 'drizzle-orm';
-import { logError, logWarn } from '../../../shared/utils/logger.ts';
-import { textDate } from '../../../shared/utils/db-guards.ts';
+import type { D1Database, R2Bucket } from "../../../shared/types/bindings.ts";
+import type {
+  Env,
+  FileKind,
+  FileOrigin,
+  SpaceFile,
+} from "../../../shared/types/index.ts";
+import { files } from "../../../infra/db/index.ts";
+import { and, desc, eq, like, ne, sql } from "drizzle-orm";
+import { textDate } from "../../../shared/utils/db-guards.ts";
+import { sourceServiceDeps } from "./deps.ts";
 
-export type SearchType = 'filename' | 'content' | 'semantic' | 'all';
+export type SearchType = "filename" | "content" | "semantic" | "all";
 
 export interface SearchRequestBody {
   query: string;
@@ -22,7 +26,7 @@ export interface ContentMatch {
 }
 
 export interface CodeSearchResult {
-  type: 'file' | 'content' | 'semantic';
+  type: "file" | "content" | "semantic";
   file: SpaceFile;
   matches?: ContentMatch[];
   score?: number;
@@ -72,20 +76,24 @@ export async function searchWorkspace(params: {
   searchType?: SearchType;
   fileTypes?: string[];
   limit?: number;
-}): Promise<{ results: CodeSearchResult[]; total: number; semanticAvailable: boolean }> {
+}): Promise<
+  { results: CodeSearchResult[]; total: number; semanticAvailable: boolean }
+> {
   const { env, spaceId, query, fileTypes } = params;
-  const searchType = params.searchType || 'all';
+  const searchType = params.searchType || "all";
   const limit = Math.min(params.limit || 20, 100);
   const results: CodeSearchResult[] = [];
-  const semanticAvailable = isEmbeddingsAvailable(env);
-  const db = getDb(env.DB);
+  const semanticAvailable = sourceServiceDeps.isEmbeddingsAvailable(env);
+  const db = sourceServiceDeps.getDb(env.DB);
 
-  if ((searchType === 'semantic' || searchType === 'all') && semanticAvailable) {
-    const embeddingsService = createEmbeddingsService(env);
+  if (
+    (searchType === "semantic" || searchType === "all") && semanticAvailable
+  ) {
+    const embeddingsService = sourceServiceDeps.createEmbeddingsService(env);
     if (embeddingsService) {
       try {
         const semanticResults = await embeddingsService.search(spaceId, query, {
-          limit: searchType === 'semantic' ? limit : Math.floor(limit / 2),
+          limit: searchType === "semantic" ? limit : Math.floor(limit / 2),
           fileTypes,
           minScore: 0.5,
         });
@@ -93,18 +101,22 @@ export async function searchWorkspace(params: {
         const semanticResultsTyped = semanticResults as SemanticResultRow[];
 
         if (semanticResultsTyped.length > 0) {
-          const fileIds = semanticResultsTyped.map(sr => sr.fileId);
+          const fileIds = semanticResultsTyped.map((sr) => sr.fileId);
           const fileRows = await db.select().from(files)
-            .where(sql`${files.id} IN (${sql.join(fileIds.map(id => sql`${id}`), sql`, `)})`)
+            .where(
+              sql`${files.id} IN (${
+                sql.join(fileIds.map((id) => sql`${id}`), sql`, `)
+              })`,
+            )
             .all();
 
-          const fileMap = new Map(fileRows.map(f => [f.id, f]));
+          const fileMap = new Map(fileRows.map((f) => [f.id, f]));
 
           for (const sr of semanticResultsTyped) {
             const file = fileMap.get(sr.fileId);
             if (file) {
               results.push({
-                type: 'semantic',
+                type: "semantic",
                 file: toSpaceFile(file),
                 score: sr.score * 100,
                 semanticContent: sr.content,
@@ -113,18 +125,35 @@ export async function searchWorkspace(params: {
           }
         }
       } catch (err) {
-        logError('Semantic search failed', err, { module: 'services/source/search' });
+        sourceServiceDeps.logError("Semantic search failed", err, {
+          module: "services/source/search",
+        });
       }
     }
   }
 
-  if (searchType === 'filename' || searchType === 'all') {
-    const filenameResults = await searchFilenames(env.DB, spaceId, query, fileTypes, limit);
+  if (searchType === "filename" || searchType === "all") {
+    const filenameResults = await searchFilenames(
+      env.DB,
+      spaceId,
+      query,
+      fileTypes,
+      limit,
+    );
     results.push(...filenameResults);
   }
 
-  if (searchType === 'content' || (searchType === 'all' && results.length < limit)) {
-    const contentResults = await searchContent(env.DB, env.TENANT_SOURCE, spaceId, query, fileTypes, limit - results.length);
+  if (
+    searchType === "content" || (searchType === "all" && results.length < limit)
+  ) {
+    const contentResults = await searchContent(
+      env.DB,
+      env.TENANT_SOURCE,
+      spaceId,
+      query,
+      fileTypes,
+      limit - results.length,
+    );
     results.push(...contentResults);
   }
 
@@ -135,47 +164,89 @@ export async function searchWorkspace(params: {
   });
 
   const seen = new Set<string>();
-  const deduped = results.filter(r => {
+  const deduped = results.filter((r) => {
     if (seen.has(r.file.id)) return false;
     seen.add(r.file.id);
     return true;
   });
 
-  return { results: deduped.slice(0, limit), total: deduped.length, semanticAvailable };
+  return {
+    results: deduped.slice(0, limit),
+    total: deduped.length,
+    semanticAvailable,
+  };
 }
 
-export async function quickSearchPaths(d1: D1Database, spaceId: string, query: string): Promise<string[]> {
-  const db = getDb(d1);
+export async function quickSearchPaths(
+  d1: D1Database,
+  spaceId: string,
+  query: string,
+): Promise<string[]> {
+  const db = sourceServiceDeps.getDb(d1);
   const fileRows = await db.select({ path: files.path }).from(files)
-    .where(and(eq(files.accountId, spaceId), ne(files.origin, 'system'), like(files.path, `%${query}%`)))
+    .where(
+      and(
+        eq(files.accountId, spaceId),
+        ne(files.origin, "system"),
+        like(files.path, `%${query}%`),
+      ),
+    )
     .orderBy(desc(files.updatedAt))
     .limit(10)
     .all();
-  return fileRows.map(f => f.path);
+  return fileRows.map((f) => f.path);
 }
 
-export async function searchFilenames(d1: D1Database, spaceId: string, query: string, fileTypes?: string[], limit: number = 20): Promise<CodeSearchResult[]> {
-  const db = getDb(d1);
-  const conditions = [eq(files.accountId, spaceId), ne(files.origin, 'system'), like(files.path, `%${query}%`)];
+export async function searchFilenames(
+  d1: D1Database,
+  spaceId: string,
+  query: string,
+  fileTypes?: string[],
+  limit: number = 20,
+): Promise<CodeSearchResult[]> {
+  const db = sourceServiceDeps.getDb(d1);
+  const conditions = [
+    eq(files.accountId, spaceId),
+    ne(files.origin, "system"),
+    like(files.path, `%${query}%`),
+  ];
 
   if (fileTypes && fileTypes.length > 0) {
-    conditions.push(sql`(${sql.join(fileTypes.map(t => like(files.path, `%.${t}`)), sql` OR `)})`);
+    conditions.push(
+      sql`(${
+        sql.join(fileTypes.map((t) => like(files.path, `%.${t}`)), sql` OR `)
+      })`,
+    );
   }
 
-  const fileRows = await db.select().from(files).where(and(...conditions)).orderBy(desc(files.updatedAt)).limit(limit).all();
+  const fileRows = await db.select().from(files).where(and(...conditions))
+    .orderBy(desc(files.updatedAt)).limit(limit).all();
 
-  return fileRows.map(file => ({
-    type: 'file' as const,
+  return fileRows.map((file) => ({
+    type: "file" as const,
     file: toSpaceFile(file),
     score: calculateFilenameScore(file.path, query),
   }));
 }
 
-export async function searchContent(d1: D1Database, storage: R2Bucket | undefined, spaceId: string, query: string, fileTypes?: string[], limit: number = 20): Promise<CodeSearchResult[]> {
+export async function searchContent(
+  d1: D1Database,
+  storage: R2Bucket | undefined,
+  spaceId: string,
+  query: string,
+  fileTypes?: string[],
+  limit: number = 20,
+): Promise<CodeSearchResult[]> {
   if (!storage) return [];
-  const db = getDb(d1);
+  const db = sourceServiceDeps.getDb(d1);
   const fileRows = await db.select().from(files)
-    .where(and(eq(files.accountId, spaceId), ne(files.origin, 'system'), sql`${files.kind} IN ('source', 'config', 'doc')`))
+    .where(
+      and(
+        eq(files.accountId, spaceId),
+        ne(files.origin, "system"),
+        sql`${files.kind} IN ('source', 'config', 'doc')`,
+      ),
+    )
     .orderBy(desc(files.updatedAt))
     .limit(100)
     .all();
@@ -187,7 +258,7 @@ export async function searchContent(d1: D1Database, storage: R2Bucket | undefine
     if (results.length >= limit) break;
     if (file.size > 1024 * 1024) continue;
     if (fileTypes && fileTypes.length > 0) {
-      const ext = file.path.split('.').pop()?.toLowerCase();
+      const ext = file.path.split(".").pop()?.toLowerCase();
       if (!ext || !fileTypes.includes(ext)) continue;
     }
     try {
@@ -197,11 +268,19 @@ export async function searchContent(d1: D1Database, storage: R2Bucket | undefine
       const content = await object.text();
       const matches = findContentMatches(content, queryLower);
       if (matches.length > 0) {
-        results.push({ type: 'content', file: toSpaceFile(file), matches: matches.slice(0, 5), score: matches.length * 10 + calculateFilenameScore(file.path, query) });
+        results.push({
+          type: "content",
+          file: toSpaceFile(file),
+          matches: matches.slice(0, 5),
+          score: matches.length * 10 + calculateFilenameScore(file.path, query),
+        });
       }
     } catch (err) {
-      if (err instanceof Error && !err.message.includes('not found')) {
-        logWarn(`Error reading file ${file.path}`, { module: 'search', detail: err.message });
+      if (err instanceof Error && !err.message.includes("not found")) {
+        sourceServiceDeps.logWarn(`Error reading file ${file.path}`, {
+          module: "search",
+          detail: err.message,
+        });
       }
       continue;
     }
@@ -211,7 +290,7 @@ export async function searchContent(d1: D1Database, storage: R2Bucket | undefine
 }
 
 function calculateFilenameScore(path: string, query: string): number {
-  const filename = path.split('/').pop() || path;
+  const filename = path.split("/").pop() || path;
   const queryLower = query.toLowerCase();
   const filenameLower = filename.toLowerCase();
   const pathLower = path.toLowerCase();
@@ -220,12 +299,12 @@ function calculateFilenameScore(path: string, query: string): number {
   else if (filenameLower.startsWith(queryLower)) score += 80;
   else if (filenameLower.includes(queryLower)) score += 60;
   else if (pathLower.includes(queryLower)) score += 40;
-  score += Math.max(0, 20 - path.split('/').length * 2);
+  score += Math.max(0, 20 - path.split("/").length * 2);
   return score;
 }
 
 function findContentMatches(content: string, query: string): ContentMatch[] {
-  const lines = content.split('\n');
+  const lines = content.split("\n");
   const matches: ContentMatch[] = [];
   const queryLower = query.toLowerCase();
   for (let i = 0; i < lines.length; i++) {
@@ -240,7 +319,11 @@ function findContentMatches(content: string, query: string): ContentMatch[] {
       startIdx = idx + 1;
     }
     if (highlights.length > 0) {
-      matches.push({ line: i + 1, content: line.slice(0, 200), highlight: highlights });
+      matches.push({
+        line: i + 1,
+        content: line.slice(0, 200),
+        highlight: highlights,
+      });
     }
   }
   return matches;

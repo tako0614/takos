@@ -5,11 +5,19 @@
  * Works with Google OAuth as the sole auth provider.
  */
 
-import type { D1Database } from '../../../shared/types/bindings.ts';
-import { getDb, authSessions, oauthStates } from '../../../infra/db/index.ts';
-import { eq, and, gt, lt, desc, notInArray, sql } from 'drizzle-orm';
-import { logInfo } from '../../../shared/utils/logger.ts';
-import { bytesToHex } from '../../../shared/utils/encoding-utils.ts';
+import type { D1Database } from "../../../shared/types/bindings.ts";
+import { authSessions, getDb, oauthStates } from "../../../infra/db/index.ts";
+import {
+  and,
+  desc,
+  eq,
+  gt,
+  type lt as _lt,
+  notInArray,
+  type sql as _sql,
+} from "drizzle-orm";
+import { logInfo } from "../../../shared/utils/logger.ts";
+import { bytesToHex } from "../../../shared/utils/encoding-utils.ts";
 
 // ---------------------------------------------------------------------------
 // Internal helpers (not exported)
@@ -22,7 +30,7 @@ function offsetISO(offsetMs: number): string {
 
 /** Allowed table/column pairs for expired-row cleanup. */
 const CLEANUP_ALLOWLIST: ReadonlyMap<string, ReadonlySet<string>> = new Map([
-  ['oauth_states', new Set(['expires_at'])],
+  ["oauth_states", new Set(["expires_at"])],
 ]);
 
 /** Delete rows older than `now()` from a table's datetime column. */
@@ -33,33 +41,37 @@ async function cleanupExpiredRows(
 ): Promise<void> {
   const allowedColumns = CLEANUP_ALLOWLIST.get(table);
   if (!allowedColumns || !allowedColumns.has(column)) {
-    throw new Error(`cleanupExpiredRows: disallowed table/column "${table}"/"${column}"`);
+    throw new Error(
+      `cleanupExpiredRows: disallowed table/column "${table}"/"${column}"`,
+    );
   }
   // Dynamic table/column name -- must stay as raw SQL
-  await db.prepare(`DELETE FROM ${table} WHERE ${column} < ?`).bind(new Date().toISOString()).run();
+  await db.prepare(`DELETE FROM ${table} WHERE ${column} < ?`).bind(
+    new Date().toISOString(),
+  ).run();
 }
 
 // ---------------------------------------------------------------------------
 // Constants
 // ---------------------------------------------------------------------------
 
-const DEFAULT_REDIRECT_DOMAINS = ['localhost', '127.0.0.1'] as const;
+const DEFAULT_REDIRECT_DOMAINS = ["localhost", "127.0.0.1"] as const;
 const OAUTH_STATE_HEX_PATTERN = /^[a-f0-9]{64}$/;
 const REDIRECT_DOMAIN_SPLIT_PATTERN = /[\s,]+/;
 export const PASSWORD_PBKDF2_ITERATIONS = 100000;
 
 function normalizeRedirectDomain(domain: string): string | null {
-  const normalized = domain.trim().toLowerCase().replace(/^\.+/, '');
+  const normalized = domain.trim().toLowerCase().replace(/^\.+/, "");
   if (!normalized) {
     return null;
   }
 
   if (
-    normalized.includes('://') ||
-    normalized.includes('/') ||
-    normalized.includes(':') ||
-    normalized.includes('?') ||
-    normalized.includes('#')
+    normalized.includes("://") ||
+    normalized.includes("/") ||
+    normalized.includes(":") ||
+    normalized.includes("?") ||
+    normalized.includes("#")
   ) {
     return null;
   }
@@ -67,7 +79,9 @@ function normalizeRedirectDomain(domain: string): string | null {
   return normalized;
 }
 
-function parseConfiguredRedirectDomains(configuredDomains?: string | null): string[] {
+function parseConfiguredRedirectDomains(
+  configuredDomains?: string | null,
+): string[] {
   if (!configuredDomains) {
     return [];
   }
@@ -82,7 +96,7 @@ function parseConfiguredRedirectDomains(configuredDomains?: string | null): stri
 
 function resolveAllowedRedirectDomains(
   configuredDomains?: string | null,
-  fallbackDomains: readonly string[] = DEFAULT_REDIRECT_DOMAINS
+  fallbackDomains: readonly string[] = DEFAULT_REDIRECT_DOMAINS,
 ): string[] {
   const parsedFallbackDomains = fallbackDomains
     .map((domain) => normalizeRedirectDomain(domain))
@@ -120,28 +134,31 @@ function timingSafeEqual(a: string, b: string): boolean {
 export function isValidRedirectUri(
   uri: string,
   configuredAllowedDomains?: string | null,
-  fallbackDomains: readonly string[] = DEFAULT_REDIRECT_DOMAINS
+  fallbackDomains: readonly string[] = DEFAULT_REDIRECT_DOMAINS,
 ): boolean {
   try {
     const url = new URL(uri);
     const hostname = url.hostname.toLowerCase();
-    const allowedDomains = resolveAllowedRedirectDomains(configuredAllowedDomains, fallbackDomains);
+    const allowedDomains = resolveAllowedRedirectDomains(
+      configuredAllowedDomains,
+      fallbackDomains,
+    );
 
     if (allowedDomains.length === 0) {
       return false;
     }
 
     for (const domain of allowedDomains) {
-      const isLocalhost = domain === 'localhost' || domain === '127.0.0.1';
+      const isLocalhost = domain === "localhost" || domain === "127.0.0.1";
       if (isLocalhost) {
         if (hostname !== domain) {
           continue;
         }
-        return url.protocol === 'http:' || url.protocol === 'https:';
+        return url.protocol === "http:" || url.protocol === "https:";
       }
 
-      if (hostname === domain || hostname.endsWith('.' + domain)) {
-        return url.protocol === 'https:';
+      if (hostname === domain || hostname.endsWith("." + domain)) {
+        return url.protocol === "https:";
       }
     }
     return false;
@@ -170,7 +187,7 @@ export function isValidOAuthState(state: string): boolean {
 export function isValidAvatarUrl(url: string): boolean {
   try {
     const parsed = new URL(url);
-    return parsed.protocol === 'https:';
+    return parsed.protocol === "https:";
   } catch {
     return false;
   }
@@ -185,11 +202,22 @@ export function isValidAvatarUrl(url: string): boolean {
 export async function hashPassword(password: string): Promise<string> {
   const data = new TextEncoder().encode(password);
   const salt = crypto.getRandomValues(new Uint8Array(16));
-  const keyMaterial = await crypto.subtle.importKey('raw', data, 'PBKDF2', false, ['deriveBits']);
+  const keyMaterial = await crypto.subtle.importKey(
+    "raw",
+    data,
+    "PBKDF2",
+    false,
+    ["deriveBits"],
+  );
   const bits = await crypto.subtle.deriveBits(
-    { name: 'PBKDF2', salt, iterations: PASSWORD_PBKDF2_ITERATIONS, hash: 'SHA-256' },
+    {
+      name: "PBKDF2",
+      salt,
+      iterations: PASSWORD_PBKDF2_ITERATIONS,
+      hash: "SHA-256",
+    },
     keyMaterial,
-    256
+    256,
   );
   return `${bytesToHex(salt)}:${bytesToHex(new Uint8Array(bits))}`;
 }
@@ -199,19 +227,33 @@ export async function hashPassword(password: string): Promise<string> {
  *
  * Used by thread-shares for share password verification.
  */
-export async function verifyPassword(password: string, stored: string): Promise<boolean> {
-  const [saltHex, hashHex] = stored.split(':');
+export async function verifyPassword(
+  password: string,
+  stored: string,
+): Promise<boolean> {
+  const [saltHex, hashHex] = stored.split(":");
   if (!saltHex || !hashHex) return false;
 
   const hexPairs = saltHex.match(/.{2}/g);
   if (!hexPairs) return false;
   const salt = new Uint8Array(hexPairs.map((byte) => parseInt(byte, 16)));
   const data = new TextEncoder().encode(password);
-  const keyMaterial = await crypto.subtle.importKey('raw', data, 'PBKDF2', false, ['deriveBits']);
+  const keyMaterial = await crypto.subtle.importKey(
+    "raw",
+    data,
+    "PBKDF2",
+    false,
+    ["deriveBits"],
+  );
   const bits = await crypto.subtle.deriveBits(
-    { name: 'PBKDF2', salt, iterations: PASSWORD_PBKDF2_ITERATIONS, hash: 'SHA-256' },
+    {
+      name: "PBKDF2",
+      salt,
+      iterations: PASSWORD_PBKDF2_ITERATIONS,
+      hash: "SHA-256",
+    },
     keyMaterial,
-    256
+    256,
   );
 
   return timingSafeEqual(bytesToHex(new Uint8Array(bits)), hashHex);
@@ -221,7 +263,10 @@ export async function verifyPassword(password: string, stored: string): Promise<
  * Hash a token using SHA-256
  */
 export async function hashToken(token: string): Promise<string> {
-  const hashBuffer = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(token));
+  const hashBuffer = await crypto.subtle.digest(
+    "SHA-256",
+    new TextEncoder().encode(token),
+  );
   return bytesToHex(new Uint8Array(hashBuffer));
 }
 
@@ -239,7 +284,7 @@ export async function createAuthSession(
   d1: D1Database,
   userId: string,
   userAgent?: string,
-  ipAddress?: string
+  ipAddress?: string,
 ): Promise<{ token: string; expiresAt: string }> {
   const token = generateSessionToken();
   const tokenHash = await hashToken(token);
@@ -265,7 +310,7 @@ export async function createAuthSession(
  */
 export async function validateAuthSession(
   d1: D1Database,
-  token: string
+  token: string,
 ): Promise<{ valid: boolean; userId?: string; expiresAt?: string }> {
   const tokenHash = await hashToken(token);
   const db = getDb(d1);
@@ -295,7 +340,10 @@ export async function validateAuthSession(
 /**
  * Delete a D1-based auth session
  */
-export async function deleteAuthSession(d1: D1Database, token: string): Promise<void> {
+export async function deleteAuthSession(
+  d1: D1Database,
+  token: string,
+): Promise<void> {
   const tokenHash = await hashToken(token);
   const db = getDb(d1);
   await db.delete(authSessions)
@@ -308,7 +356,7 @@ export async function deleteAuthSession(d1: D1Database, token: string): Promise<
 export async function cleanupUserSessions(
   d1: D1Database,
   userId: string,
-  keepCount: number = 5
+  keepCount: number = 5,
 ): Promise<void> {
   const db = getDb(d1);
   const sessions = await db.select({ id: authSessions.id })
@@ -318,7 +366,7 @@ export async function cleanupUserSessions(
     .limit(keepCount)
     .all();
 
-  const keepIds = sessions.map(s => s.id);
+  const keepIds = sessions.map((s) => s.id);
   if (keepIds.length > 0) {
     await db.delete(authSessions)
       .where(and(
@@ -335,7 +383,7 @@ export async function storeOAuthState(
   d1: D1Database,
   redirectUri: string,
   returnTo?: string,
-  cliCallback?: string
+  cliCallback?: string,
 ): Promise<string> {
   const state = generateOAuthState();
   const stateId = generateId();
@@ -351,7 +399,7 @@ export async function storeOAuthState(
     expiresAt,
   });
 
-  await cleanupExpiredRows(d1, 'oauth_states', 'expires_at');
+  await cleanupExpiredRows(d1, "oauth_states", "expires_at");
 
   return state;
 }
@@ -365,7 +413,7 @@ type ConsumedOAuthState = {
 
 async function consumeOAuthState(
   d1: D1Database,
-  state: string
+  state: string,
 ): Promise<ConsumedOAuthState | null> {
   const row = await d1.prepare(`
     DELETE FROM oauth_states
@@ -395,8 +443,15 @@ async function consumeOAuthState(
  */
 export async function validateOAuthState(
   db: D1Database,
-  state: string
-): Promise<{ valid: boolean; redirectUri?: string; returnTo?: string; cliCallback?: string }> {
+  state: string,
+): Promise<
+  {
+    valid: boolean;
+    redirectUri?: string;
+    returnTo?: string;
+    cliCallback?: string;
+  }
+> {
   if (!isValidOAuthState(state)) {
     return { valid: false };
   }
@@ -425,7 +480,7 @@ export async function validateOAuthState(
  */
 export async function auditLog(
   event: string,
-  details: Record<string, unknown>
+  details: Record<string, unknown>,
 ): Promise<void> {
-  logInfo(`${event}`, { module: 'audit', detail: JSON.stringify(details) });
+  logInfo(`${event}`, { module: "audit", detail: JSON.stringify(details) });
 }

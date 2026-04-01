@@ -18,9 +18,21 @@
     "lib": ["deno.window", "dom", "dom.iterable"],
     "types": ["node"]
   },
+  "lint": {
+    "rules": {
+      "exclude": [
+        "no-explicit-any",
+        "no-import-prefix",
+        "no-process-global",
+        "no-unversioned-import",
+        "no-unsafe-finally",
+        "require-await"
+      ]
+    }
+  },
   "tasks": {
     "build:all": "echo 'No tsc build needed — Deno runs .ts directly'",
-    "test:all": "deno test --allow-all --parallel",
+    "test:all": "deno test --allow-all --ignore=packages/actions-engine/dist",
     "lint": "deno lint",
     "fmt": "deno fmt",
     "fmt:check": "deno fmt --check",

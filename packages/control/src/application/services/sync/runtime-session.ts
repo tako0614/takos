@@ -10,18 +10,30 @@
  * 3. Session End: Get snapshot from runtime and commit to the Git store
  */
 
-import type { D1Database, R2Bucket } from '../../../shared/types/bindings.ts';
-import type { Env } from '../../../shared/types/index.ts';
-import { getDb, sessions } from '../../../infra/db/index.ts';
-import { and, eq } from 'drizzle-orm';
-import { callRuntimeRequest } from '../execution/runtime-request-handler.ts';
-import { logError } from '../../../shared/utils/logger.ts';
-import { extractResponseError, buildRepoFiles, syncSnapshotToRepo } from './git-sync.ts';
-import type { SessionFileEntry, SyncResult, SessionSnapshot } from './git-sync-types.ts';
+import type { D1Database, R2Bucket } from "../../../shared/types/bindings.ts";
+import type { Env } from "../../../shared/types/index.ts";
+import { getDb as realGetDb, sessions } from "../../../infra/db/index.ts";
+import { and, eq } from "drizzle-orm";
+import { callRuntimeRequest as realCallRuntimeRequest } from "../execution/runtime-request-handler.ts";
+import { logError as realLogError } from "../../../shared/utils/logger.ts";
+import {
+  buildRepoFiles as realBuildRepoFiles,
+  extractResponseError as realExtractResponseError,
+  syncSnapshotToRepo as realSyncSnapshotToRepo,
+} from "./git-sync.ts";
+import type {
+  SessionFileEntry,
+  SessionSnapshot,
+  SyncResult,
+} from "./git-sync-types.ts";
 
 // Re-export types that were originally exported from this file
-export type { SyncResult, SessionSnapshot, SessionFileEntry } from './git-sync-types.ts';
-export type { SessionRepoMount } from './git-sync-types.ts';
+export type {
+  SessionFileEntry,
+  SessionSnapshot,
+  SyncResult,
+} from "./git-sync-types.ts";
+export type { SessionRepoMount } from "./git-sync-types.ts";
 
 export interface SessionInitResult {
   success: boolean;
@@ -55,7 +67,33 @@ export interface GitPushResult {
   error?: string;
 }
 
-export type RuntimeSessionManagerEnv = Pick<Env, 'DB' | 'RUNTIME_HOST' | 'GIT_OBJECTS' | 'TENANT_SOURCE'>;
+export type RuntimeSessionManagerEnv = Pick<
+  Env,
+  "DB" | "RUNTIME_HOST" | "GIT_OBJECTS" | "TENANT_SOURCE"
+>;
+
+export interface RuntimeSessionDeps {
+  getDb: (db: Parameters<typeof realGetDb>[0]) => ReturnType<typeof realGetDb>;
+  callRuntimeRequest: typeof realCallRuntimeRequest;
+  logError: typeof realLogError;
+  extractResponseError: typeof realExtractResponseError;
+  buildRepoFiles: typeof realBuildRepoFiles;
+  syncSnapshotToRepo: typeof realSyncSnapshotToRepo;
+}
+
+export const runtimeSessionDeps: RuntimeSessionDeps = {
+  getDb: (db) => {
+    if (db && typeof (db as { select?: unknown }).select === "function") {
+      return db as ReturnType<typeof realGetDb>;
+    }
+    return realGetDb(db);
+  },
+  callRuntimeRequest: realCallRuntimeRequest,
+  logError: realLogError,
+  extractResponseError: realExtractResponseError,
+  buildRepoFiles: realBuildRepoFiles,
+  syncSnapshotToRepo: realSyncSnapshotToRepo,
+};
 
 interface SessionRepoMountInternal {
   repoId: string;
@@ -76,7 +114,8 @@ export class RuntimeSessionManager {
     private db: D1Database,
     private storage: R2Bucket | undefined,
     private spaceId: string,
-    private sessionId: string
+    private sessionId: string,
+    private deps: RuntimeSessionDeps = runtimeSessionDeps,
   ) {}
 
   /** Set repository info for Git-based sessions. */
@@ -86,15 +125,18 @@ export class RuntimeSessionManager {
     this.repoName = repoName;
     this.repositories = [{
       repoId,
-      repoName: repoName || '',
+      repoName: repoName || "",
       branch,
-      mountPath: '',
+      mountPath: "",
     }];
     this.primaryRepoId = repoId;
   }
 
   /** Set multiple repositories for a session (multi-repo mounts). */
-  setRepositories(repos: SessionRepoMountInternal[], primaryRepoId?: string): void {
+  setRepositories(
+    repos: SessionRepoMountInternal[],
+    primaryRepoId?: string,
+  ): void {
     this.repositories = repos;
     this.primaryRepoId = primaryRepoId || repos[0]?.repoId;
     if (this.primaryRepoId) {
@@ -115,13 +157,17 @@ export class RuntimeSessionManager {
   private callRuntime(
     endpoint: string,
     options: {
-      method?: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE';
+      method?: "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
       body?: Record<string, unknown>;
       timeoutMs?: number;
-    } = {}
+    } = {},
   ): Promise<Response> {
-    const { method = 'POST', body, timeoutMs = 60000 } = options;
-    return callRuntimeRequest(this.env, endpoint, { method, body, timeoutMs });
+    const { method = "POST", body, timeoutMs = 60000 } = options;
+    return this.deps.callRuntimeRequest(this.env, endpoint, {
+      method,
+      body,
+      timeoutMs,
+    });
   }
 
   /**
@@ -130,9 +176,11 @@ export class RuntimeSessionManager {
    *
    * @param options.skipDbLock - Skip DB-based lock for ephemeral sessions (e.g., build sessions).
    */
-  async initSession(options?: { skipDbLock?: boolean }): Promise<SessionInitResult> {
+  async initSession(
+    options?: { skipDbLock?: boolean },
+  ): Promise<SessionInitResult> {
     const skipDbLock = options?.skipDbLock ?? false;
-    const drizzle = getDb(this.db);
+    const drizzle = this.deps.getDb(this.db);
 
     if (!skipDbLock) {
       const session = await drizzle.select({ status: sessions.status })
@@ -141,55 +189,57 @@ export class RuntimeSessionManager {
           and(
             eq(sessions.id, this.sessionId),
             eq(sessions.accountId, this.spaceId),
-          )
+          ),
         )
         .get();
 
       if (!session) {
-        throw new Error('Session not found');
+        throw new Error("Session not found");
       }
 
-      if (session.status !== 'initializing') {
-        if (session.status === 'running') {
-          throw new Error('Session is already initialized');
+      if (session.status !== "initializing") {
+        if (session.status === "running") {
+          throw new Error("Session is already initialized");
         }
-        throw new Error(`Cannot initialize session in '${session.status}' state`);
+        throw new Error(
+          `Cannot initialize session in '${session.status}' state`,
+        );
       }
     }
 
     try {
       if (!this.repoId && this.repositories.length === 0) {
-        throw new Error('repo_id is required. All sessions now use Git-based file management.');
+        throw new Error(
+          "repo_id is required. All sessions now use Git-based file management.",
+        );
       }
 
-      const repos = this.repositories.length > 0
-        ? this.repositories
-        : [{
-            repoId: this.repoId!,
-            repoName: this.repoName || '',
-            branch: this.branch,
-            mountPath: '',
-          }];
+      const repos = this.repositories.length > 0 ? this.repositories : [{
+        repoId: this.repoId!,
+        repoName: this.repoName || "",
+        branch: this.branch,
+        mountPath: "",
+      }];
 
       const result = await this._doInitSessionFromRepos(repos);
 
       if (!skipDbLock) {
         const updateResult = await drizzle.update(sessions)
           .set({
-            status: 'running',
+            status: "running",
             updatedAt: new Date().toISOString(),
           })
           .where(
             and(
               eq(sessions.id, this.sessionId),
               eq(sessions.accountId, this.spaceId),
-              eq(sessions.status, 'initializing'),
-            )
+              eq(sessions.status, "initializing"),
+            ),
           )
           .run();
 
         if ((updateResult.meta.changes ?? 0) === 0) {
-          throw new Error('Session status was modified by another process');
+          throw new Error("Session status was modified by another process");
         }
       }
 
@@ -198,15 +248,15 @@ export class RuntimeSessionManager {
       if (!skipDbLock) {
         await drizzle.update(sessions)
           .set({
-            status: 'failed',
+            status: "failed",
             updatedAt: new Date().toISOString(),
           })
           .where(
             and(
               eq(sessions.id, this.sessionId),
               eq(sessions.accountId, this.spaceId),
-              eq(sessions.status, 'initializing'),
-            )
+              eq(sessions.status, "initializing"),
+            ),
           )
           .run();
       }
@@ -216,24 +266,29 @@ export class RuntimeSessionManager {
   }
 
   /** Initialize session by fetching files from the Git store for multiple repositories. */
-  private async _doInitSessionFromRepos(repos: SessionRepoMountInternal[]): Promise<SessionInitResult> {
-    const bucket = this.storage || this.env.GIT_OBJECTS || this.env.TENANT_SOURCE;
+  private async _doInitSessionFromRepos(
+    repos: SessionRepoMountInternal[],
+  ): Promise<SessionInitResult> {
+    const bucket = this.storage || this.env.GIT_OBJECTS ||
+      this.env.TENANT_SOURCE;
     if (!bucket) {
-      throw new Error('R2 storage bucket not configured (need GIT_OBJECTS or TENANT_SOURCE)');
+      throw new Error(
+        "R2 storage bucket not configured (need GIT_OBJECTS or TENANT_SOURCE)",
+      );
     }
 
     const files: SessionFileEntry[] = [];
     let primaryBranch: string | undefined;
 
     for (const repo of repos) {
-      const repoFiles = await buildRepoFiles(this.db, bucket, repo);
+      const repoFiles = await this.deps.buildRepoFiles(this.db, bucket, repo);
       files.push(...repoFiles);
       if (!primaryBranch && repo.repoId === this.primaryRepoId) {
         primaryBranch = repo.branch;
       }
     }
 
-    const initResponse = await this.callRuntime('/session/init', {
+    const initResponse = await this.callRuntime("/session/init", {
       body: {
         session_id: this.sessionId,
         space_id: this.spaceId,
@@ -243,7 +298,10 @@ export class RuntimeSessionManager {
     });
 
     if (!initResponse.ok) {
-      const errorDetail = await extractResponseError(initResponse, 'init failed');
+      const errorDetail = await this.deps.extractResponseError(
+        initResponse,
+        "init failed",
+      );
       throw new Error(`Failed to init runtime session: ${errorDetail}`);
     }
 
@@ -268,9 +326,9 @@ export class RuntimeSessionManager {
   async cloneRepository(
     repoName: string,
     branch: string,
-    targetDir: string
+    targetDir: string,
   ): Promise<GitCloneResult> {
-    const response = await this.callRuntime('/repos/clone', {
+    const response = await this.callRuntime("/repos/clone", {
       body: {
         spaceId: this.spaceId,
         repoName,
@@ -286,7 +344,7 @@ export class RuntimeSessionManager {
         success: false,
         targetDir,
         branch,
-        error: result.error || 'Failed to clone repository',
+        error: result.error || "Failed to clone repository",
       };
     }
 
@@ -297,9 +355,9 @@ export class RuntimeSessionManager {
   async commitChanges(
     workDir: string,
     message: string,
-    author?: { name: string; email: string }
+    author?: { name: string; email: string },
   ): Promise<GitCommitResult> {
-    const response = await this.callRuntime('/repos/commit', {
+    const response = await this.callRuntime("/repos/commit", {
       body: {
         workDir,
         message,
@@ -313,7 +371,7 @@ export class RuntimeSessionManager {
       return {
         success: false,
         committed: false,
-        error: result.error || 'Failed to commit changes',
+        error: result.error || "Failed to commit changes",
       };
     }
 
@@ -322,7 +380,7 @@ export class RuntimeSessionManager {
 
   /** Push changes to the remote repository. */
   async pushChanges(workDir: string, branch?: string): Promise<GitPushResult> {
-    const response = await this.callRuntime('/repos/push', {
+    const response = await this.callRuntime("/repos/push", {
       body: {
         workDir,
         branch,
@@ -334,8 +392,8 @@ export class RuntimeSessionManager {
     if (!response.ok) {
       return {
         success: false,
-        branch: branch || 'unknown',
-        error: result.error || 'Failed to push changes',
+        branch: branch || "unknown",
+        error: result.error || "Failed to push changes",
       };
     }
 
@@ -344,7 +402,7 @@ export class RuntimeSessionManager {
 
   /** Get the session's work directory path from runtime. */
   async getWorkDir(): Promise<string | null> {
-    const response = await this.callRuntime('/session/file/list', {
+    const response = await this.callRuntime("/session/file/list", {
       body: {
         session_id: this.sessionId,
         space_id: this.spaceId,
@@ -359,8 +417,10 @@ export class RuntimeSessionManager {
   }
 
   /** Get a session snapshot from runtime. */
-  async getSnapshot(options?: { path?: string; includeBinary?: boolean }): Promise<SessionSnapshot> {
-    const response = await this.callRuntime('/session/snapshot', {
+  async getSnapshot(
+    options?: { path?: string; includeBinary?: boolean },
+  ): Promise<SessionSnapshot> {
+    const response = await this.callRuntime("/session/snapshot", {
       body: {
         session_id: this.sessionId,
         space_id: this.spaceId,
@@ -371,7 +431,10 @@ export class RuntimeSessionManager {
     });
 
     if (!response.ok) {
-      const errorDetail = await extractResponseError(response, 'snapshot failed');
+      const errorDetail = await this.deps.extractResponseError(
+        response,
+        "snapshot failed",
+      );
       throw new Error(errorDetail);
     }
 
@@ -388,32 +451,34 @@ export class RuntimeSessionManager {
       pathPrefix?: string;
       message: string;
       author?: { name: string; email: string };
-    }
+    },
   ): Promise<SyncResult> {
-    const bucket = this.storage || this.env.GIT_OBJECTS || this.env.TENANT_SOURCE;
+    const bucket = this.storage || this.env.GIT_OBJECTS ||
+      this.env.TENANT_SOURCE;
     if (!bucket) {
       return {
         success: false,
         committed: false,
         pushed: false,
-        error: 'R2 storage bucket not configured (need GIT_OBJECTS or TENANT_SOURCE)',
+        error:
+          "R2 storage bucket not configured (need GIT_OBJECTS or TENANT_SOURCE)",
       };
     }
 
-    return syncSnapshotToRepo(this.db, bucket, snapshot, options);
+    return this.deps.syncSnapshotToRepo(this.db, bucket, snapshot, options);
   }
 
   /** Sync session changes back to the Git store. */
   async syncToGit(
-    message: string = 'Session changes',
-    author?: { name: string; email: string }
+    message: string = "Session changes",
+    author?: { name: string; email: string },
   ): Promise<SyncResult> {
     if (!this.repoId) {
       return {
         success: false,
         committed: false,
         pushed: false,
-        error: 'Repository ID not set',
+        error: "Repository ID not set",
       };
     }
 
@@ -422,7 +487,7 @@ export class RuntimeSessionManager {
       repoId: this.repoId,
       repoName: this.repoName,
       branch: this.branch,
-      pathPrefix: '',
+      pathPrefix: "",
       message,
       author,
     });
@@ -431,14 +496,16 @@ export class RuntimeSessionManager {
   /** Destroy runtime session (called when session is discarded or after merge). */
   async destroySession(): Promise<void> {
     try {
-      await this.callRuntime('/session/destroy', {
+      await this.callRuntime("/session/destroy", {
         body: {
           session_id: this.sessionId,
           space_id: this.spaceId,
         },
       });
     } catch (err) {
-      logError('Failed to destroy runtime session', err, { module: 'services/sync/runtime-session' });
+      this.deps.logError("Failed to destroy runtime session", err, {
+        module: "services/sync/runtime-session",
+      });
     }
   }
 }

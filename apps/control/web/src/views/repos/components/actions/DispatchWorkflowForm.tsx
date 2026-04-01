@@ -50,7 +50,7 @@ export function DispatchWorkflowForm(props: DispatchWorkflowFormProps) {
         />
       </div>
       <div class="flex justify-end">
-        <button
+        <button type="button"
           class="flex items-center gap-2 px-4 py-2 rounded-lg bg-zinc-900 dark:bg-zinc-700 text-white hover:bg-zinc-700 dark:hover:bg-zinc-600 transition-colors disabled:opacity-60"
           onClick={props.onDispatch}
           disabled={props.dispatching}

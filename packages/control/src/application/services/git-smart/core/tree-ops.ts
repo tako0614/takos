@@ -4,27 +4,36 @@
  * Adapted from git-store/tree.ts for native git tree format.
  */
 
-import type { R2Bucket } from '../../../../shared/types/bindings.ts';
-import type { TreeEntry } from '../git-objects.ts';
-import { FILE_MODES } from '../git-objects.ts';
-import { putTree, putBlob, getTreeEntries, getBlob } from './object-store.ts';
+import type { R2Bucket } from "../../../../shared/types/bindings.ts";
+import type { TreeEntry } from "../git-objects.ts";
+import { FILE_MODES } from "../git-objects.ts";
+import { getBlob, getTreeEntries, putBlob, putTree } from "./object-store.ts";
 
 const DEFAULT_MAX_FLATTEN_DEPTH = 50;
 const DEFAULT_MAX_FLATTEN_ENTRIES = 100000;
 const MAX_GIT_PATH_LENGTH = 4096;
-// eslint-disable-next-line no-control-regex
-const CONTROL_CHAR_PATTERN = /[\x00-\x1F\x7F]/;
+function hasControlChars(value: string): boolean {
+  for (let i = 0; i < value.length; i++) {
+    const code = value.charCodeAt(i);
+    if ((code >= 0x00 && code <= 0x1f) || code === 0x7f) return true;
+  }
+  return false;
+}
 
 function isValidGitPathSegment(segment: string): boolean {
-  return !(!segment || segment === '.' || segment === '..' || segment.includes('\0') || CONTROL_CHAR_PATTERN.test(segment));
+  return !(!segment || segment === "." || segment === ".." ||
+    segment.includes("\0") || hasControlChars(segment));
 }
 
 export function isValidGitPath(path: string): boolean {
-  if (typeof path !== 'string') return false;
+  if (typeof path !== "string") return false;
   if (path.length === 0 || path.length > MAX_GIT_PATH_LENGTH) return false;
-  if (path.includes('\0') || CONTROL_CHAR_PATTERN.test(path)) return false;
-  if (path.startsWith('/') || path.endsWith('/') || path.includes('\\') || path.includes('//')) return false;
-  const segments = path.split('/');
+  if (path.includes("\0") || hasControlChars(path)) return false;
+  if (
+    path.startsWith("/") || path.endsWith("/") || path.includes("\\") ||
+    path.includes("//")
+  ) return false;
+  const segments = path.split("/");
   return segments.length > 0 && segments.every(isValidGitPathSegment);
 }
 
@@ -34,12 +43,16 @@ export function assertValidGitPath(path: string): string {
   return normalized;
 }
 
-export async function createTree(bucket: R2Bucket, entries: TreeEntry[]): Promise<string> {
+export async function createTree(
+  bucket: R2Bucket,
+  entries: TreeEntry[],
+): Promise<string> {
   return putTree(bucket, entries);
 }
 
 export async function getTree(
-  bucket: R2Bucket, sha: string,
+  bucket: R2Bucket,
+  sha: string,
 ): Promise<{ sha: string; entries: TreeEntry[] } | null> {
   const entries = await getTreeEntries(bucket, sha);
   if (!entries) return null;
@@ -47,14 +60,21 @@ export async function getTree(
 }
 
 export async function getEntryAtPath(
-  bucket: R2Bucket, rootTreeSha: string, path: string,
-): Promise<(TreeEntry & { type: 'blob' | 'tree' }) | null> {
-  const normalizedPath = path.replace(/^\/+|\/+$/g, '');
+  bucket: R2Bucket,
+  rootTreeSha: string,
+  path: string,
+): Promise<(TreeEntry & { type: "blob" | "tree" }) | null> {
+  const normalizedPath = path.replace(/^\/+|\/+$/g, "");
   if (!normalizedPath) {
-    return { mode: FILE_MODES.DIRECTORY, name: '', sha: rootTreeSha, type: 'tree' } as TreeEntry & { type: 'blob' | 'tree' };
+    return {
+      mode: FILE_MODES.DIRECTORY,
+      name: "",
+      sha: rootTreeSha,
+      type: "tree",
+    } as TreeEntry & { type: "blob" | "tree" };
   }
 
-  const parts = normalizedPath.split('/');
+  const parts = normalizedPath.split("/");
   let currentTreeSha = rootTreeSha;
 
   for (let i = 0; i < parts.length; i++) {
@@ -64,11 +84,11 @@ export async function getEntryAtPath(
     const entries = await getTreeEntries(bucket, currentTreeSha);
     if (!entries) return null;
 
-    const entry = entries.find(e => e.name === part);
+    const entry = entries.find((e) => e.name === part);
     if (!entry) return null;
 
-    const isDir = entry.mode === '040000' || entry.mode === '40000';
-    const entryType: 'blob' | 'tree' = isDir ? 'tree' : 'blob';
+    const isDir = entry.mode === "040000" || entry.mode === "40000";
+    const entryType: "blob" | "tree" = isDir ? "tree" : "blob";
 
     if (isLast) return { ...entry, type: entryType };
     if (!isDir) return null;
@@ -80,18 +100,24 @@ export async function getEntryAtPath(
 }
 
 export async function listDirectory(
-  bucket: R2Bucket, rootTreeSha: string, path = '',
+  bucket: R2Bucket,
+  rootTreeSha: string,
+  path = "",
 ): Promise<TreeEntry[] | null> {
   const entry = await getEntryAtPath(bucket, rootTreeSha, path);
-  if (!entry || entry.type !== 'tree') return null;
+  if (!entry || entry.type !== "tree") return null;
   return getTreeEntries(bucket, entry.sha);
 }
 
 export async function getBlobAtPath(
-  bucket: R2Bucket, rootTreeSha: string, path: string,
+  bucket: R2Bucket,
+  rootTreeSha: string,
+  path: string,
 ): Promise<Uint8Array | null> {
   const entry = await getEntryAtPath(bucket, rootTreeSha, path);
-  if (!entry || entry.type !== 'blob' || entry.mode === FILE_MODES.SYMLINK) return null;
+  if (!entry || entry.type !== "blob" || entry.mode === FILE_MODES.SYMLINK) {
+    return null;
+  }
   return getBlob(bucket, entry.sha);
 }
 
@@ -107,7 +133,7 @@ export async function buildTreeFromPaths(
 
   for (const file of files) {
     const validPath = assertValidGitPath(file.path);
-    const parts = validPath.split('/');
+    const parts = validPath.split("/");
     let current = root;
 
     for (let i = 0; i < parts.length - 1; i++) {
@@ -116,7 +142,9 @@ export async function buildTreeFromPaths(
         current.entries.set(part, { entries: new Map() });
       }
       const next = current.entries.get(part);
-      if (!next || !('entries' in next)) throw new Error(`Path conflict at ${parts.slice(0, i + 1).join('/')}`);
+      if (!next || !("entries" in next)) {
+        throw new Error(`Path conflict at ${parts.slice(0, i + 1).join("/")}`);
+      }
       current = next;
     }
 
@@ -132,7 +160,7 @@ export async function buildTreeFromPaths(
     const entries: TreeEntry[] = [];
 
     for (const [name, child] of node.entries) {
-      if ('entries' in child && child.entries instanceof Map) {
+      if ("entries" in child && child.entries instanceof Map) {
         const subtreeSha = await createTreeFromNode(child as TreeNode);
         entries.push({ mode: FILE_MODES.DIRECTORY, name, sha: subtreeSha });
       } else {
@@ -151,20 +179,26 @@ export async function applyTreeChanges(
   baseTreeSha: string,
   changes: Array<{
     path: string;
-    operation: 'add' | 'modify' | 'delete';
+    operation: "add" | "modify" | "delete";
     sha?: string;
     mode?: string;
   }>,
 ): Promise<string> {
   const files = await flattenTree(bucket, baseTreeSha);
-  const fileMap = new Map(files.map(f => [f.path, f]));
+  const fileMap = new Map(files.map((f) => [f.path, f]));
 
   for (const change of changes) {
-    if (change.operation === 'delete') {
+    if (change.operation === "delete") {
       fileMap.delete(change.path);
     } else {
-      if (!change.sha) throw new Error(`SHA required for ${change.operation} operation`);
-      fileMap.set(change.path, { path: change.path, sha: change.sha, mode: change.mode || FILE_MODES.REGULAR_FILE });
+      if (!change.sha) {
+        throw new Error(`SHA required for ${change.operation} operation`);
+      }
+      fileMap.set(change.path, {
+        path: change.path,
+        sha: change.sha,
+        mode: change.mode || FILE_MODES.REGULAR_FILE,
+      });
     }
   }
 
@@ -174,7 +208,7 @@ export async function applyTreeChanges(
 export async function flattenTree(
   bucket: R2Bucket,
   treeSha: string,
-  basePath = '',
+  basePath = "",
   options?: { maxDepth?: number; maxEntries?: number; skipSymlinks?: boolean },
 ): Promise<Array<{ path: string; sha: string; mode: string }>> {
   const maxDepth = options?.maxDepth ?? DEFAULT_MAX_FLATTEN_DEPTH;
@@ -185,8 +219,14 @@ export async function flattenTree(
   const counters = { entries: 0 };
   const visited = new Set<string>();
 
-  async function walk(currentTreeSha: string, currentBasePath: string, depth: number): Promise<void> {
-    if (depth > maxDepth) throw new Error(`Tree flatten depth limit exceeded (max ${maxDepth})`);
+  async function walk(
+    currentTreeSha: string,
+    currentBasePath: string,
+    depth: number,
+  ): Promise<void> {
+    if (depth > maxDepth) {
+      throw new Error(`Tree flatten depth limit exceeded (max ${maxDepth})`);
+    }
     if (visited.has(currentTreeSha)) return; // Prevent circular reference loops
     visited.add(currentTreeSha);
 
@@ -195,17 +235,25 @@ export async function flattenTree(
 
     for (const entry of entries) {
       counters.entries++;
-      if (counters.entries > maxEntries) throw new Error(`Tree flatten entry limit exceeded (max ${maxEntries})`);
+      if (counters.entries > maxEntries) {
+        throw new Error(
+          `Tree flatten entry limit exceeded (max ${maxEntries})`,
+        );
+      }
 
-      const fullPath = currentBasePath ? `${currentBasePath}/${entry.name}` : entry.name;
-      const isDir = entry.mode === '040000' || entry.mode === '40000';
+      const fullPath = currentBasePath
+        ? `${currentBasePath}/${entry.name}`
+        : entry.name;
+      const isDir = entry.mode === "040000" || entry.mode === "40000";
 
       if (isDir) {
         await walk(entry.sha, fullPath, depth + 1);
       } else {
         if (entry.mode === FILE_MODES.SYMLINK) {
           if (skipSymlinks) continue;
-          throw new Error(`Symlink blob entries are not supported: ${fullPath}`);
+          throw new Error(
+            `Symlink blob entries are not supported: ${fullPath}`,
+          );
         }
         files.push({ path: fullPath, sha: entry.sha, mode: entry.mode });
       }
@@ -221,8 +269,14 @@ export async function createEmptyTree(bucket: R2Bucket): Promise<string> {
 }
 
 export async function createSingleFileTree(
-  bucket: R2Bucket, fileName: string, content: Uint8Array,
+  bucket: R2Bucket,
+  fileName: string,
+  content: Uint8Array,
 ): Promise<string> {
   const blobSha = await putBlob(bucket, content);
-  return createTree(bucket, [{ mode: FILE_MODES.REGULAR_FILE, name: fileName, sha: blobSha }]);
+  return createTree(bucket, [{
+    mode: FILE_MODES.REGULAR_FILE,
+    name: fileName,
+    sha: blobSha,
+  }]);
 }

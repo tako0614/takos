@@ -1,7 +1,7 @@
 
 import { Icons } from '../../lib/Icons.tsx';
 import { useI18n } from '../../store/i18n.ts';
-import type { SourceItem, CatalogSuggestionUser, CatalogSuggestionRepo } from '../../hooks/useSourceData.ts';
+import type { CatalogSuggestionUser, CatalogSuggestionRepo } from '../../hooks/useSourceData.ts';
 
 export type SuggestionUser = CatalogSuggestionUser;
 export type SuggestionRepo = CatalogSuggestionRepo;

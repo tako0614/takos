@@ -67,13 +67,18 @@ async function buildSharedThreadPayload(env: Env, threadId: string, token: strin
   };
 }
 
+export const publicShareRouteDeps = {
+  verifyThreadShareAccess,
+  buildSharedThreadPayload,
+};
+
 export default new Hono<{ Bindings: Env; Variables: Variables }>()
   // GET /api/public/thread-shares/:token
   // Returns 401 with requires_password when share is password-protected.
   .get('/thread-shares/:token', async (c) => {
     const token = c.req.param('token');
 
-    const access = await verifyThreadShareAccess({ db: c.env.DB, token, password: null });
+    const access = await publicShareRouteDeps.verifyThreadShareAccess({ db: c.env.DB, token, password: null });
     if ('error' in access) {
       if (access.error === 'password_required') {
         throw new AuthenticationError('Password required');
@@ -81,7 +86,7 @@ export default new Hono<{ Bindings: Env; Variables: Variables }>()
       throw new NotFoundError();
     }
 
-    const payload = await buildSharedThreadPayload(c.env, access.threadId, token);
+    const payload = await publicShareRouteDeps.buildSharedThreadPayload(c.env, access.threadId, token);
     if (!payload) {
       throw new NotFoundError();
     }
@@ -116,7 +121,7 @@ export default new Hono<{ Bindings: Env; Variables: Variables }>()
     }
     sharePasswordRateLimiter.hit(rateLimitKey);
 
-    const access = await verifyThreadShareAccess({ db: c.env.DB, token, password: body.password || null });
+    const access = await publicShareRouteDeps.verifyThreadShareAccess({ db: c.env.DB, token, password: body.password || null });
     if ('error' in access) {
       if (access.error === 'password_required') {
         throw new AuthenticationError('Password required');
@@ -127,7 +132,7 @@ export default new Hono<{ Bindings: Env; Variables: Variables }>()
       throw new NotFoundError();
     }
 
-    const payload = await buildSharedThreadPayload(c.env, access.threadId, token);
+    const payload = await publicShareRouteDeps.buildSharedThreadPayload(c.env, access.threadId, token);
     if (!payload) {
       throw new NotFoundError();
     }

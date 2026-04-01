@@ -14,6 +14,15 @@ import {
 import { BadRequestError, NotFoundError, InternalError } from 'takos-common/errors';
 import { requireOAuthScope, handleStorageError } from './storage-operations.ts';
 
+export const storageUploadsRouteDeps = {
+  requireSpaceAccess,
+  getStorageItem,
+  createFileRecord,
+  confirmUpload,
+  createFileWithContent,
+  uploadPendingFileContent,
+};
+
 const app = new Hono<AuthenticatedRouteEnv>()
   // --- Create file with content ---
   .post('/:spaceId/storage/files',
@@ -27,7 +36,7 @@ const app = new Hono<AuthenticatedRouteEnv>()
     const user = c.get('user');
     const spaceId = c.req.param('spaceId');
 
-    const access = await requireSpaceAccess(
+    const access = await storageUploadsRouteDeps.requireSpaceAccess(
       c,
       spaceId,
       user.id,
@@ -42,7 +51,7 @@ const app = new Hono<AuthenticatedRouteEnv>()
     const body = c.req.valid('json');
 
     try {
-      const file = await createFileWithContent(
+      const file = await storageUploadsRouteDeps.createFileWithContent(
         c.env.DB,
         c.env.GIT_OBJECTS,
         access.space.id,
@@ -69,7 +78,7 @@ const app = new Hono<AuthenticatedRouteEnv>()
     const user = c.get('user');
     const spaceId = c.req.param('spaceId');
 
-    const access = await requireSpaceAccess(
+    const access = await storageUploadsRouteDeps.requireSpaceAccess(
       c,
       spaceId,
       user.id,
@@ -94,7 +103,7 @@ const app = new Hono<AuthenticatedRouteEnv>()
     }
 
     try {
-      const { file, r2Key } = await createFileRecord(c.env.DB, access.space.id, user.id, {
+      const { file, r2Key } = await storageUploadsRouteDeps.createFileRecord(c.env.DB, access.space.id, user.id, {
         name: body.name,
         parentPath: body.parent_path,
         size: body.size,
@@ -122,7 +131,7 @@ const app = new Hono<AuthenticatedRouteEnv>()
     const spaceId = c.req.param('spaceId');
     const fileId = c.req.param('fileId');
 
-    const access = await requireSpaceAccess(
+    const access = await storageUploadsRouteDeps.requireSpaceAccess(
       c,
       spaceId,
       user.id,
@@ -135,11 +144,11 @@ const app = new Hono<AuthenticatedRouteEnv>()
     }
 
     try {
-      const fileRecord = await getStorageItem(c.env.DB, access.space.id, fileId);
+      const fileRecord = await storageUploadsRouteDeps.getStorageItem(c.env.DB, access.space.id, fileId);
       const declaredSize = fileRecord?.size ?? 0;
 
       const body = await c.req.arrayBuffer();
-      await uploadPendingFileContent(
+      await storageUploadsRouteDeps.uploadPendingFileContent(
         c.env.DB,
         c.env.GIT_OBJECTS,
         access.space.id,
@@ -164,7 +173,7 @@ const app = new Hono<AuthenticatedRouteEnv>()
     const user = c.get('user');
     const spaceId = c.req.param('spaceId');
 
-    const access = await requireSpaceAccess(
+    const access = await storageUploadsRouteDeps.requireSpaceAccess(
       c,
       spaceId,
       user.id,
@@ -182,7 +191,7 @@ const app = new Hono<AuthenticatedRouteEnv>()
     }
 
     try {
-      const file = await confirmUpload(c.env.DB, c.env.GIT_OBJECTS, access.space.id, body.file_id, body.sha256);
+      const file = await storageUploadsRouteDeps.confirmUpload(c.env.DB, c.env.GIT_OBJECTS, access.space.id, body.file_id, body.sha256);
       if (!file) {
         throw new NotFoundError('File');
       }

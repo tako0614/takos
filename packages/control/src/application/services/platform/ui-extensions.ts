@@ -4,11 +4,15 @@
  * bundle deployment による UI 拡張の管理
  */
 
-import { getDb, uiExtensions } from '../../../infra/db/index.ts';
-import { eq, and, isNotNull, asc, count as drizzleCount } from 'drizzle-orm';
-import type { D1Database } from '../../../shared/types/bindings.ts';
-import type { R2Bucket } from '../../../shared/types/bindings.ts';
-import { textDate } from '../../../shared/utils/db-guards.ts';
+import { getDb as realGetDb, uiExtensions } from "../../../infra/db/index.ts";
+import { and, asc, count as drizzleCount, eq, isNotNull } from "drizzle-orm";
+import type { D1Database } from "../../../shared/types/bindings.ts";
+import type { R2Bucket } from "../../../shared/types/bindings.ts";
+import { textDate } from "../../../shared/utils/db-guards.ts";
+
+export const uiExtensionDeps = {
+  getDb: realGetDb,
+};
 
 export interface UIExtension {
   id: string;
@@ -31,12 +35,14 @@ export interface UIExtensionWithBundle extends UIExtension {
   bundleUrl?: string;
 }
 
-function parseSidebarJson(json: string): UIExtension['sidebar'] | undefined {
+function parseSidebarJson(json: string): UIExtension["sidebar"] | undefined {
   try {
     const parsed = JSON.parse(json);
-    if (typeof parsed !== 'object' || parsed === null) return undefined;
-    if (typeof parsed.label !== 'string' || typeof parsed.icon !== 'string') return undefined;
-    return parsed as UIExtension['sidebar'];
+    if (typeof parsed !== "object" || parsed === null) return undefined;
+    if (typeof parsed.label !== "string" || typeof parsed.icon !== "string") {
+      return undefined;
+    }
+    return parsed as UIExtension["sidebar"];
   } catch {
     return undefined;
   }
@@ -88,13 +94,17 @@ function mapUIExtensionPersistenceRow(ext: {
  */
 export async function listUIExtensions(
   db: D1Database,
-  spaceId: string
+  spaceId: string,
 ): Promise<UIExtension[]> {
-  const drizzle = getDb(db);
+  const drizzle = uiExtensionDeps.getDb(db);
 
-  const extensions = await drizzle.select().from(uiExtensions).where(eq(uiExtensions.accountId, spaceId)).orderBy(asc(uiExtensions.path)).all();
+  const extensions = await drizzle.select().from(uiExtensions).where(
+    eq(uiExtensions.accountId, spaceId),
+  ).orderBy(asc(uiExtensions.path)).all();
 
-  return extensions.map((ext) => mapUIExtension(mapUIExtensionPersistenceRow(ext)));
+  return extensions.map((ext) =>
+    mapUIExtension(mapUIExtensionPersistenceRow(ext))
+  );
 }
 
 /**
@@ -103,11 +113,13 @@ export async function listUIExtensions(
 export async function getUIExtensionByPath(
   db: D1Database,
   spaceId: string,
-  path: string
+  path: string,
 ): Promise<UIExtension | null> {
-  const drizzle = getDb(db);
+  const drizzle = uiExtensionDeps.getDb(db);
 
-  const ext = await drizzle.select().from(uiExtensions).where(and(eq(uiExtensions.accountId, spaceId), eq(uiExtensions.path, path))).get();
+  const ext = await drizzle.select().from(uiExtensions).where(
+    and(eq(uiExtensions.accountId, spaceId), eq(uiExtensions.path, path)),
+  ).get();
 
   if (!ext) return null;
   return mapUIExtension(mapUIExtensionPersistenceRow(ext));
@@ -120,7 +132,7 @@ export async function getUIExtensionBundle(
   db: D1Database,
   storage: R2Bucket,
   spaceId: string,
-  path: string
+  path: string,
 ): Promise<{ content: ArrayBuffer; contentType: string } | null> {
   const ext = await getUIExtensionByPath(db, spaceId, path);
 
@@ -132,7 +144,7 @@ export async function getUIExtensionBundle(
 
   return {
     content: await object.arrayBuffer(),
-    contentType: object.httpMetadata?.contentType || 'application/javascript',
+    contentType: object.httpMetadata?.contentType || "application/javascript",
   };
 }
 
@@ -141,15 +153,30 @@ export async function getUIExtensionBundle(
  */
 export async function getUISidebarItems(
   db: D1Database,
-  spaceId: string
-): Promise<Array<{ label: string; icon: string; path?: string; url?: string; extensionId: string }>> {
-  const drizzle = getDb(db);
+  spaceId: string,
+): Promise<
+  Array<
+    {
+      label: string;
+      icon: string;
+      path?: string;
+      url?: string;
+      extensionId: string;
+    }
+  >
+> {
+  const drizzle = uiExtensionDeps.getDb(db);
 
-  const extensions = await drizzle.select().from(uiExtensions).where(and(eq(uiExtensions.accountId, spaceId), isNotNull(uiExtensions.sidebarJson))).all();
+  const extensions = await drizzle.select().from(uiExtensions).where(
+    and(
+      eq(uiExtensions.accountId, spaceId),
+      isNotNull(uiExtensions.sidebarJson),
+    ),
+  ).all();
 
   return extensions
-    .filter(ext => ext.sidebarJson)
-    .map(ext => {
+    .filter((ext) => ext.sidebarJson)
+    .map((ext) => {
       const sidebar = parseSidebarJson(ext.sidebarJson!);
       if (!sidebar) return null;
       return {
@@ -166,11 +193,14 @@ export async function getUISidebarItems(
 export async function isUIExtensionPath(
   db: D1Database,
   spaceId: string,
-  path: string
+  path: string,
 ): Promise<boolean> {
-  const drizzle = getDb(db);
+  const drizzle = uiExtensionDeps.getDb(db);
 
-  const result = await drizzle.select({ count: drizzleCount() }).from(uiExtensions).where(and(eq(uiExtensions.accountId, spaceId), eq(uiExtensions.path, path))).get();
+  const result = await drizzle.select({ count: drizzleCount() }).from(
+    uiExtensions,
+  ).where(and(eq(uiExtensions.accountId, spaceId), eq(uiExtensions.path, path)))
+    .get();
 
   return (result?.count ?? 0) > 0;
 }
@@ -180,11 +210,13 @@ export async function isUIExtensionPath(
  */
 export async function getUIExtensionPaths(
   db: D1Database,
-  spaceId: string
+  spaceId: string,
 ): Promise<string[]> {
-  const drizzle = getDb(db);
+  const drizzle = uiExtensionDeps.getDb(db);
 
-  const extensions = await drizzle.select({ path: uiExtensions.path }).from(uiExtensions).where(eq(uiExtensions.accountId, spaceId)).all();
+  const extensions = await drizzle.select({ path: uiExtensions.path }).from(
+    uiExtensions,
+  ).where(eq(uiExtensions.accountId, spaceId)).all();
 
-  return extensions.map(ext => ext.path);
+  return extensions.map((ext) => ext.path);
 }

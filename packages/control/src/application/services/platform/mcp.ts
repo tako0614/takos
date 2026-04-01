@@ -14,38 +14,39 @@
 
 // Types & constants
 export type {
-  OAuthMetadata,
-  McpOAuthPendingParams,
-  McpOAuthCompletionParams,
-  McpServerRecord,
-  RegisterExternalMcpServerResult,
   McpEndpointUrlOptions,
-} from './mcp/mcp-models.ts';
+  McpOAuthCompletionParams,
+  McpOAuthPendingParams,
+  McpServerRecord,
+  OAuthMetadata,
+  RegisterExternalMcpServerResult,
+} from "./mcp/mcp-models.ts";
 
 // Validation
 export {
-  getMcpEndpointUrlOptions,
   assertAllowedMcpEndpointUrl,
-} from './mcp/validation.ts';
+  getMcpEndpointUrlOptions,
+} from "./mcp/validation.ts";
 
 // OAuth flow
 export {
-  discoverOAuthMetadata,
-  createMcpOAuthPending,
-  consumeMcpOAuthPending,
   completeMcpOAuthFlow,
-  refreshMcpToken,
+  consumeMcpOAuthPending,
+  createMcpOAuthPending,
   decryptAccessToken,
-} from './mcp/oauth.ts';
+  discoverOAuthMetadata,
+  mcpServiceDeps,
+  refreshMcpToken,
+} from "./mcp/oauth.ts";
 
 // CRUD & managed servers
 export {
-  registerExternalMcpServer,
-  upsertManagedMcpServer,
-  reconcileManagedWorkerMcpServer,
   deleteManagedMcpServersByBundleDeployment,
+  deleteMcpServer,
   getMcpServerWithTokens,
   listMcpServers,
-  deleteMcpServer,
+  reconcileManagedWorkerMcpServer,
+  registerExternalMcpServer,
   updateMcpServer,
-} from './mcp/crud.ts';
+  upsertManagedMcpServer,
+} from "./mcp/crud.ts";

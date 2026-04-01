@@ -8,6 +8,10 @@ import {
 import { PaymentRequiredError } from 'takos-common/errors';
 import { logError } from '../../shared/utils/logger.ts';
 
+export const planGateDeps = {
+  checkWeeklyRuntimeLimit,
+};
+
 type PlanGateVariables = {
   user?: User;
 };
@@ -43,10 +47,15 @@ export function requireWeeklyRuntimeLimitForAgent(options?: {
 
     let check;
     try {
-      check = await checkWeeklyRuntimeLimit(c.env.DB, user.id, estimateSeconds, {
-        windowDays,
-        limitSeconds,
-      });
+      check = await planGateDeps.checkWeeklyRuntimeLimit(
+        c.env.DB,
+        user.id,
+        estimateSeconds,
+        {
+          windowDays,
+          limitSeconds,
+        },
+      );
     } catch (err) {
       logError('Failed to check weekly runtime limit', err, { module: 'plangate' });
       // Allow request through on check failure to avoid blocking users

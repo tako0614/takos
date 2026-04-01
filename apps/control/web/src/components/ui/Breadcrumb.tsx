@@ -38,8 +38,8 @@ export function Breadcrumb(props: BreadcrumbProps) {
     };
 
     checkWidth();
-    window.addEventListener('resize', checkWidth);
-    onCleanup(() => window.removeEventListener('resize', checkWidth));
+    globalThis.addEventListener('resize', checkWidth);
+    onCleanup(() => globalThis.removeEventListener('resize', checkWidth));
   });
 
   const separatorElement = () =>
@@ -87,6 +87,7 @@ export function Breadcrumb(props: BreadcrumbProps) {
     if (item.onClick) {
       return (
         <button
+          type="button"
           class="hover:underline transition-colors bg-transparent border-none p-0 cursor-pointer"
           onClick={item.onClick}
         >
@@ -136,6 +137,7 @@ export function Breadcrumb(props: BreadcrumbProps) {
 
           <div class="relative" ref={dropdownRef}>
             <button
+              type="button"
               class="flex items-center justify-center w-6 h-6 rounded bg-zinc-100 dark:bg-zinc-800 hover:bg-zinc-200 dark:hover:bg-zinc-700 text-zinc-500 dark:text-zinc-400 transition-colors"
               onClick={() => setShowDropdown(!showDropdown())}
               aria-label="Show more items"
@@ -148,10 +150,11 @@ export function Breadcrumb(props: BreadcrumbProps) {
                 <For each={props.items.slice(1, -1)}>
                   {(item) => (
                     <button
+                      type="button"
                       class="w-full px-3 py-2 text-left text-sm text-zinc-700 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-700 transition-colors"
                       onClick={() => {
                         if (item.onClick) item.onClick();
-                        else if (item.href) window.location.href = item.href;
+                        else if (item.href) globalThis.location.href = item.href;
                         setShowDropdown(false);
                       }}
                     >

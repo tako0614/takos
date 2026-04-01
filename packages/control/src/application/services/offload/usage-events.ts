@@ -12,6 +12,11 @@ export type PersistedUsageEvent = {
 export const USAGE_EVENT_SEGMENT_SIZE = 200;
 const USAGE_PREFIX_SUFFIX = '/usage/';
 
+export const usageEventsDeps = {
+  gzipCompressString,
+  gzipDecompressToString,
+};
+
 export function usageSegmentKey(runId: string, segmentIndex: number): string {
   return `runs/${runId}/usage/${String(segmentIndex).padStart(6, '0')}.jsonl.gz`;
 }
@@ -24,7 +29,7 @@ export async function writeUsageEventSegmentToR2(
 ): Promise<void> {
   if (!events.length) return;
   const jsonl = events.map((e) => JSON.stringify(e)).join('\n') + '\n';
-  const gz = await gzipCompressString(jsonl);
+  const gz = await usageEventsDeps.gzipCompressString(jsonl);
   const key = usageSegmentKey(runId, segmentIndex);
   await bucket.put(key, gz, {
     httpMetadata: {
@@ -59,7 +64,7 @@ async function listUsageSegments(bucket: R2Bucket, runId: string): Promise<strin
 
 async function readSegmentObject(obj: R2ObjectBody): Promise<PersistedUsageEvent[]> {
   const ab = await obj.arrayBuffer();
-  const jsonl = await gzipDecompressToString(ab, { maxDecompressedBytes: 50 * 1024 * 1024 });
+  const jsonl = await usageEventsDeps.gzipDecompressToString(ab, { maxDecompressedBytes: 50 * 1024 * 1024 });
   const lines = jsonl.split('\n').filter(Boolean);
   const out: PersistedUsageEvent[] = [];
   for (const line of lines) {

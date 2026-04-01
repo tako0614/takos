@@ -1,7 +1,12 @@
 import type { D1Database } from '../../../shared/types/bindings.ts';
-import { getDb, commits, repoReleases, pullRequests, repositories, accounts, serviceDeployments } from '../../../infra/db/index.ts';
+import { getDb as realGetDb, commits, repoReleases, pullRequests, repositories, accounts, serviceDeployments } from '../../../infra/db/index.ts';
 import { eq, and, lt, desc } from 'drizzle-orm';
-import { listServiceRouteRecordsByIds } from '../platform/workers.ts';
+import { listServiceRouteRecordsByIds as realListServiceRouteRecordsByIds } from '../platform/workers.ts';
+
+export const profileActivityDeps = {
+  getDb: realGetDb,
+  listServiceRouteRecordsByIds: realListServiceRouteRecordsByIds,
+};
 
 function resolveRepoOwnerUsername(account: {
   id: string;
@@ -44,7 +49,7 @@ export async function fetchProfileActivity(
   dbBinding: D1Database,
   params: FetchActivityParams,
 ): Promise<FetchActivityResult> {
-  const db = getDb(dbBinding);
+  const db = profileActivityDeps.getDb(dbBinding);
   const { profileUserId, profileUserEmail, limit, before } = params;
 
   const perType = limit + 1;
@@ -85,77 +90,75 @@ export async function fetchProfileActivity(
     deploymentConditions.push(lt(serviceDeployments.createdAt, before));
   }
 
-  const [commitRows, releaseRows, prRows, deploymentRows] = await Promise.all([
-    db.select({
-      id: commits.id,
-      sha: commits.sha,
-      message: commits.message,
-      commitDate: commits.commitDate,
-      repoName: repositories.name,
-      accountId: accounts.id,
-      accountSlug: accounts.slug,
-    })
-      .from(commits)
-      .innerJoin(repositories, eq(commits.repoId, repositories.id))
-      .innerJoin(accounts, eq(repositories.accountId, accounts.id))
-      .where(and(...commitConditions))
-      .orderBy(desc(commits.commitDate))
-      .limit(perType)
-      .all(),
+  const commitRows = await db.select({
+    id: commits.id,
+    sha: commits.sha,
+    message: commits.message,
+    commitDate: commits.commitDate,
+    repoName: repositories.name,
+    accountId: accounts.id,
+    accountSlug: accounts.slug,
+  })
+    .from(commits)
+    .innerJoin(repositories, eq(commits.repoId, repositories.id))
+    .innerJoin(accounts, eq(repositories.accountId, accounts.id))
+    .where(and(...commitConditions))
+    .orderBy(desc(commits.commitDate))
+    .limit(perType)
+    .all();
 
-    db.select({
-      id: repoReleases.id,
-      tag: repoReleases.tag,
-      name: repoReleases.name,
-      publishedAt: repoReleases.publishedAt,
-      createdAt: repoReleases.createdAt,
-      repoName: repositories.name,
-      accountId: accounts.id,
-      accountSlug: accounts.slug,
-    })
-      .from(repoReleases)
-      .innerJoin(repositories, eq(repoReleases.repoId, repositories.id))
-      .innerJoin(accounts, eq(repositories.accountId, accounts.id))
-      .where(and(...releaseConditions))
-      .orderBy(desc(repoReleases.createdAt))
-      .limit(perType)
-      .all(),
+  const releaseRows = await db.select({
+    id: repoReleases.id,
+    tag: repoReleases.tag,
+    name: repoReleases.name,
+    publishedAt: repoReleases.publishedAt,
+    createdAt: repoReleases.createdAt,
+    repoName: repositories.name,
+    accountId: accounts.id,
+    accountSlug: accounts.slug,
+  })
+    .from(repoReleases)
+    .innerJoin(repositories, eq(repoReleases.repoId, repositories.id))
+    .innerJoin(accounts, eq(repositories.accountId, accounts.id))
+    .where(and(...releaseConditions))
+    .orderBy(desc(repoReleases.createdAt))
+    .limit(perType)
+    .all();
 
-    db.select({
-      id: pullRequests.id,
-      number: pullRequests.number,
-      title: pullRequests.title,
-      status: pullRequests.status,
-      createdAt: pullRequests.createdAt,
-      repoName: repositories.name,
-      accountId: accounts.id,
-      accountSlug: accounts.slug,
-    })
-      .from(pullRequests)
-      .innerJoin(repositories, eq(pullRequests.repoId, repositories.id))
-      .innerJoin(accounts, eq(repositories.accountId, accounts.id))
-      .where(and(...prConditions))
-      .orderBy(desc(pullRequests.createdAt))
-      .limit(perType)
-      .all(),
+  const prRows = await db.select({
+    id: pullRequests.id,
+    number: pullRequests.number,
+    title: pullRequests.title,
+    status: pullRequests.status,
+    createdAt: pullRequests.createdAt,
+    repoName: repositories.name,
+    accountId: accounts.id,
+    accountSlug: accounts.slug,
+  })
+    .from(pullRequests)
+    .innerJoin(repositories, eq(pullRequests.repoId, repositories.id))
+    .innerJoin(accounts, eq(repositories.accountId, accounts.id))
+    .where(and(...prConditions))
+    .orderBy(desc(pullRequests.createdAt))
+    .limit(perType)
+    .all();
 
-    db.select({
-      id: serviceDeployments.id,
-      status: serviceDeployments.status,
-      version: serviceDeployments.version,
-      completedAt: serviceDeployments.completedAt,
-      createdAt: serviceDeployments.createdAt,
-      serviceId: serviceDeployments.serviceId,
-    })
-      .from(serviceDeployments)
-      .where(and(...deploymentConditions))
-      .orderBy(desc(serviceDeployments.createdAt))
-      .limit(perType)
-      .all(),
-  ]);
+  const deploymentRows = await db.select({
+    id: serviceDeployments.id,
+    status: serviceDeployments.status,
+    version: serviceDeployments.version,
+    completedAt: serviceDeployments.completedAt,
+    createdAt: serviceDeployments.createdAt,
+    serviceId: serviceDeployments.serviceId,
+  })
+    .from(serviceDeployments)
+    .where(and(...deploymentConditions))
+    .orderBy(desc(serviceDeployments.createdAt))
+    .limit(perType)
+    .all();
 
   const serviceRouteMap = new Map(
-    (await listServiceRouteRecordsByIds(
+    (await profileActivityDeps.listServiceRouteRecordsByIds(
       dbBinding,
       [...new Set(deploymentRows.map((row) => row.serviceId).filter(Boolean))],
     )).map((service) => [service.id, service]),

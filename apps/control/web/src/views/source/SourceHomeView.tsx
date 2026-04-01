@@ -1,7 +1,7 @@
 
 import { Icons } from '../../lib/Icons.tsx';
 import { useI18n } from '../../store/i18n.ts';
-import type { SourceItem, SourceItemTakopack, SourceSort } from '../../hooks/useSourceData.ts';
+import type { SourceItem, SourceItemTakopack } from '../../hooks/useSourceData.ts';
 
 /* ── AppTile: Compact tile for horizontal scroll sections ── */
 
@@ -158,11 +158,11 @@ export function SourceHomeView({
     <div ref={scrollContainerRef as HTMLDivElement | undefined} onScroll={onScroll} class="flex-1 overflow-y-auto pt-2 pb-8">
       {loading && items.length === 0 ? (
         <div class="space-y-8 px-4">
-          {[0, 1].map((i) => (
+          {[0, 1].map((_i) => (
             <div>
               <div class="w-20 h-3.5 rounded-full bg-zinc-200 dark:bg-zinc-800 animate-pulse mb-3" />
               <div class="flex gap-3.5">
-                {[0, 1, 2, 3].map((j) => (
+                {[0, 1, 2, 3].map((_j) => (
                   <div class="flex-shrink-0 w-28">
                     <div class="w-full aspect-square rounded-2xl bg-zinc-200 dark:bg-zinc-800 animate-pulse mb-2" />
                     <div class="w-3/4 h-2.5 rounded bg-zinc-200 dark:bg-zinc-800 animate-pulse mb-1" />

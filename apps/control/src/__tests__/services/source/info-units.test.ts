@@ -1,143 +1,193 @@
-import type { D1Database } from '@cloudflare/workers-types';
+// deno-lint-ignore-file no-import-prefix no-unversioned-import require-await no-explicit-any
+import type { D1Database } from "@cloudflare/workers-types";
 
-import { assertEquals, assert } from 'jsr:@std/assert';
-import { assertSpyCalls } from 'jsr:@std/testing/mock';
+import { assert, assertEquals } from "jsr:@std/assert";
 
-const mocks = ({
-  getDb: ((..._args: any[]) => undefined) as any,
-  generateId: (() => 'info-unit-1'),
-  now: (() => '2026-03-24T00:00:00.000Z'),
-  getRunEventsAfterFromR2: ((..._args: any[]) => undefined) as any,
-});
+import {
+  createInfoUnitIndexer,
+  InfoUnitIndexer,
+} from "@/services/source/info-units";
 
-// [Deno] vi.mock removed - manually stub imports from '@/db'
-// [Deno] vi.mock removed - manually stub imports from '@/shared/utils'
-// [Deno] vi.mock removed - manually stub imports from '@/services/offload/run-events'
-import { InfoUnitIndexer, createInfoUnitIndexer } from '@/services/source/info-units';
+type FakeStep = {
+  get?: unknown;
+  all?: unknown[];
+  run?: unknown;
+};
 
-function createDrizzleMock() {
-  const getMock = ((..._args: any[]) => undefined) as any;
-  const allMock = ((..._args: any[]) => undefined) as any;
-  const runMock = ((..._args: any[]) => undefined) as any;
-  const chain = {
-    from: (function(this: any) { return this; }),
-    where: (function(this: any) { return this; }),
-    set: (function(this: any) { return this; }),
-    values: (function(this: any) { return this; }),
-    returning: (function(this: any) { return this; }),
-    orderBy: (function(this: any) { return this; }),
-    limit: (function(this: any) { return this; }),
-    leftJoin: (function(this: any) { return this; }),
-    get: getMock,
-    all: allMock,
-    run: runMock,
+type PrepareCall = {
+  sql: string;
+  args: unknown[];
+};
+
+function createFakeD1Database(steps: FakeStep[]) {
+  const prepareCalls: PrepareCall[] = [];
+  let index = 0;
+  const next = () => steps[index++] ?? {};
+  const buildChain = (sql: string) => {
+    const step = next();
+    const chain: any = {
+      from() {
+        return chain;
+      },
+      where() {
+        return chain;
+      },
+      innerJoin() {
+        return chain;
+      },
+      leftJoin() {
+        return chain;
+      },
+      orderBy() {
+        return chain;
+      },
+      limit() {
+        return chain;
+      },
+      offset() {
+        return chain;
+      },
+      values() {
+        return chain;
+      },
+      set() {
+        return chain;
+      },
+      returning() {
+        return chain;
+      },
+      get: async () => step.get ?? null,
+      first: async () => step.get ?? null,
+      all: async () => step.all ?? [],
+      run: async () =>
+        step.run ?? {
+          success: true,
+          meta: { changes: 0, last_row_id: 0, duration: 0 },
+        },
+      raw: async () => step.all ?? [],
+    };
+    prepareCalls.push({ sql, args: [] });
+    return chain;
   };
-  return {
-    select: () => chain,
-    insert: () => chain,
-    update: () => chain,
-    delete: () => chain,
-    _: { get: getMock, all: allMock, run: runMock },
-  };
+  const db = {
+    select() {
+      return buildChain("select");
+    },
+    insert() {
+      return buildChain("insert");
+    },
+    update() {
+      return buildChain("update");
+    },
+    delete() {
+      return buildChain("delete");
+    },
+  } as unknown as D1Database;
+
+  return { db, prepareCalls };
 }
 
-
-  Deno.test('createInfoUnitIndexer - returns null when DB is not provided', () => {
+Deno.test("createInfoUnitIndexer - returns null when DB is not provided", () => {
   const result = createInfoUnitIndexer({ DB: null } as any);
-    assertEquals(result, null);
-})
-  Deno.test('createInfoUnitIndexer - returns indexer when DB is provided', () => {
+  assertEquals(result, null);
+});
+
+Deno.test("createInfoUnitIndexer - returns indexer when DB is provided", () => {
   const result = createInfoUnitIndexer({ DB: {} } as any);
-    assert(result instanceof InfoUnitIndexer);
-})
+  assert(result instanceof InfoUnitIndexer);
+});
 
-  Deno.test('InfoUnitIndexer.indexRun - does nothing when run not found', async () => {
-  /* mocks cleared (no-op in Deno) */ void 0;
-  const drizzle = createDrizzleMock();
-    drizzle._.get = (async () => undefined) as any; // run not found
-    mocks.getDb = (() => drizzle) as any;
+Deno.test("InfoUnitIndexer.indexRun - does nothing when run not found", async () => {
+  const { db, prepareCalls } = createFakeD1Database([{ get: undefined }]);
+  const indexer = new InfoUnitIndexer({ DB: db } as any);
 
-    const indexer = new InfoUnitIndexer({ DB: {} as D1Database } as any);
-    await indexer.indexRun('ws-1', 'run-nonexistent');
+  await indexer.indexRun("ws-1", "run-nonexistent");
 
-    assertSpyCalls(drizzle.insert, 0);
-})
-  Deno.test('InfoUnitIndexer.indexRun - does nothing when run belongs to different space', async () => {
-  /* mocks cleared (no-op in Deno) */ void 0;
-  const drizzle = createDrizzleMock();
-    drizzle._.get = (async () => ({
-      id: 'run-1',
-      accountId: 'ws-other',
-      threadId: null,
-      sessionId: null,
-      status: 'completed',
-      startedAt: null,
-      completedAt: null,
-    })) as any;
-    mocks.getDb = (() => drizzle) as any;
+  assertEquals(prepareCalls.length, 1);
+});
 
-    const indexer = new InfoUnitIndexer({ DB: {} as D1Database } as any);
-    await indexer.indexRun('ws-1', 'run-1');
-
-    assertSpyCalls(drizzle.insert, 0);
-})
-  Deno.test('InfoUnitIndexer.indexRun - skips when info unit already exists', async () => {
-  /* mocks cleared (no-op in Deno) */ void 0;
-  const drizzle = createDrizzleMock();
-    drizzle._.get
-       = (async () => ({
-        id: 'run-1',
-        accountId: 'ws-1',
-        threadId: 't1',
-        sessionId: 's1',
-        status: 'completed',
-        startedAt: '2026-01-01T00:00:00.000Z',
-        completedAt: '2026-01-01T01:00:00.000Z',
-      })) as any // run found
-       = (async () => ({ id: 'existing-unit' })) as any; // already indexed
-    mocks.getDb = (() => drizzle) as any;
-
-    const indexer = new InfoUnitIndexer({ DB: {} as D1Database } as any);
-    await indexer.indexRun('ws-1', 'run-1');
-
-    // insert for info_units should not happen (only select calls)
-    // The existing check means we skip indexing
-    const insertCalls = drizzle.insert.calls;
-    const infoUnitInserts = insertCalls.filter((call: any[]) => call.length > 0);
-    // If already indexed, no new inserts should happen for info_units
-    assertSpyCalls(drizzle._.get, 2);
-})
-  Deno.test('InfoUnitIndexer.indexRun - indexes run events from D1 when no offload bucket', async () => {
-  /* mocks cleared (no-op in Deno) */ void 0;
-  const drizzle = createDrizzleMock();
-    drizzle._.get
-       = (async () => ({
-        id: 'run-1',
-        accountId: 'ws-1',
-        threadId: 't1',
+Deno.test("InfoUnitIndexer.indexRun - does nothing when run belongs to different space", async () => {
+  const { db, prepareCalls } = createFakeD1Database([
+    {
+      get: {
+        id: "run-1",
+        accountId: "ws-other",
+        threadId: null,
         sessionId: null,
-        status: 'completed',
-        startedAt: '2026-01-01T00:00:00.000Z',
-        completedAt: '2026-01-01T01:00:00.000Z',
-      })) as any // run found
-       = (async () => undefined) as any // no existing info unit
-       = (async () => undefined) as any // ensureNode (info_unit) - check existing
-       = (async () => undefined) as any; // ensureNode (thread) - check existing
-    drizzle._.all
-       = (async () => [
-        {
-          id: 1,
-          type: 'message',
-          data: JSON.stringify({ content: 'Hello' }),
-          createdAt: '2026-01-01T00:10:00.000Z',
+        status: "completed",
+        startedAt: null,
+        completedAt: null,
+      },
+    },
+  ]);
+  const indexer = new InfoUnitIndexer({ DB: db } as any);
+
+  await indexer.indexRun("ws-1", "run-1");
+
+  assertEquals(prepareCalls.length, 1);
+});
+
+Deno.test("InfoUnitIndexer.indexRun - skips when info unit already exists", async () => {
+  const { db, prepareCalls } = createFakeD1Database([
+    {
+      get: {
+        id: "run-1",
+        accountId: "ws-1",
+        threadId: "t1",
+        sessionId: "s1",
+        status: "completed",
+        startedAt: "2026-01-01T00:00:00.000Z",
+        completedAt: "2026-01-01T01:00:00.000Z",
+      },
+    },
+    { get: { id: "existing-unit" } },
+  ]);
+  const indexer = new InfoUnitIndexer({ DB: db } as any);
+
+  await indexer.indexRun("ws-1", "run-1");
+
+  assertEquals(prepareCalls.length, 2);
+  assertEquals(
+    prepareCalls.some((call) => call.sql.toLowerCase().includes("insert")),
+    false,
+  );
+});
+
+Deno.test(
+  "InfoUnitIndexer.indexRun - indexes run events from D1 when no offload bucket",
+  async () => {
+    const { db, prepareCalls } = createFakeD1Database([
+      {
+        get: {
+          id: "run-1",
+          accountId: "ws-1",
+          threadId: "t1",
+          sessionId: null,
+          status: "completed",
+          startedAt: "2026-01-01T00:00:00.000Z",
+          completedAt: "2026-01-01T01:00:00.000Z",
         },
-      ]) as any // run events
-       = (async () => []) as any; // sessionRepos (empty since no sessionId)
-    mocks.getDb = (() => drizzle) as any;
+      },
+      { get: undefined },
+      {
+        all: [{
+          id: 1,
+          type: "message",
+          data: JSON.stringify({ content: "Hello" }),
+          createdAt: "2026-01-01T00:10:00.000Z",
+        }],
+      },
+      { all: [] },
+      { get: undefined },
+      { get: undefined },
+    ]);
+    const indexer = new InfoUnitIndexer({ DB: db } as any);
 
-    const indexer = new InfoUnitIndexer({ DB: {} as D1Database } as any);
-    await indexer.indexRun('ws-1', 'run-1');
+    await indexer.indexRun("ws-1", "run-1");
 
-    // Should have inserted info_unit + nodes + edges
-    assert(drizzle.insert.calls.length > 0);
-})
+    assertEquals(
+      prepareCalls.some((call) => call.sql.toLowerCase().includes("insert")),
+      true,
+    );
+  },
+);

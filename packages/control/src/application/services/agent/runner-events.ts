@@ -5,7 +5,7 @@
  * DB persistence, and Durable Object relay.
  */
 
-import type { RunStatus, Env } from '../../../shared/types/index.ts';
+import type { RunStatus as _RunStatus, Env } from '../../../shared/types/index.ts';
 import type { AgentEvent } from './agent-models.ts';
 import type { EventEmissionError } from './runner-utils.ts';
 import { getDb, runEvents } from '../../../infra/db/index.ts';
@@ -50,7 +50,7 @@ export async function emitEventImpl(
   env: Env,
   db: SqlDatabaseBinding,
   runId: string,
-  spaceId: string,
+  _spaceId: string,
   getCurrentSessionId: () => Promise<string | null>,
   type: AgentEvent['type'],
   data: Record<string, unknown>,

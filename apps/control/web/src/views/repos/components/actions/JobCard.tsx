@@ -34,7 +34,7 @@ export function JobCard(props: JobCardProps) {
           >
             {props.job.status}
           </span>
-          <button
+          <button type="button"
             class="flex items-center gap-1.5 px-2 py-1 text-xs border border-zinc-200 dark:border-zinc-700 rounded-lg text-zinc-800 dark:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-800"
             onClick={() => props.onLoadLogs(props.job.id)}
             disabled={props.loadingJobId === props.job.id}
@@ -61,7 +61,7 @@ export function JobCard(props: JobCardProps) {
               {logState().text}
             </pre>
             <Show when={logState().hasMore}>
-              <button
+              <button type="button"
                 class="text-xs text-zinc-700 dark:text-zinc-300 hover:text-zinc-600 dark:hover:text-zinc-400"
                 onClick={() => props.onLoadMore(props.job.id)}
                 disabled={props.loadingJobId === props.job.id}

@@ -142,7 +142,7 @@ Deno.test("plan/apply provider option - passes provider in the plan API payload"
 
 Deno.test("plan/apply provider option - passes provider in both plan and apply API payloads", async () => {
   let callIndex = 0;
-  const fetchStub = stub(globalThis, "fetch", async (_input, init) => {
+  const fetchStub = stub(globalThis, "fetch", async (_input, _init) => {
     callIndex += 1;
 
     if (callIndex === 1) {
@@ -152,7 +152,11 @@ Deno.test("plan/apply provider option - passes provider in both plan and apply A
           diff: {
             ...noChangeDiff,
             hasChanges: true,
-            entries: [{ name: "x", category: "resource", action: "create" }],
+            entries: [{
+              name: "gateway",
+              category: "worker",
+              action: "create",
+            }],
           },
           translationReport,
         }),
@@ -168,8 +172,8 @@ Deno.test("plan/apply provider option - passes provider in both plan and apply A
         id: "g-1",
         groupId: "g-1",
         applied: [{
-          name: "x",
-          category: "resource",
+          name: "gateway",
+          category: "worker",
           action: "create",
           status: "success",
         }],
@@ -177,7 +181,7 @@ Deno.test("plan/apply provider option - passes provider in both plan and apply A
         diff: {
           ...noChangeDiff,
           hasChanges: true,
-          entries: [{ name: "x", category: "resource", action: "create" }],
+          entries: [{ name: "gateway", category: "worker", action: "create" }],
         },
         translationReport,
         group: { id: "group-1", name: "sample-app" },

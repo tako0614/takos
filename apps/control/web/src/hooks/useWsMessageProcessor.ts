@@ -92,9 +92,9 @@ export interface UseWsMessageProcessorResult {
 
 export function useWsMessageProcessor({
   t,
-  isMountedRef,
+  isMountedRef: _isMountedRef,
   fetchMessages,
-  setError,
+  setError: _setError,
   fetchSessionDiff,
 }: UseWsMessageProcessorOptions): UseWsMessageProcessorResult {
   const [currentRun, setCurrentRun] = createSignal<Run | null>(null);
@@ -106,13 +106,13 @@ export function useWsMessageProcessor({
   const [historyFocus, setHistoryFocus] = createSignal<ThreadHistoryFocus | null>(null);
   const [taskContext, setTaskContext] = createSignal<ThreadHistoryTaskContext | null>(null);
 
-  let runEventCursorRef: MutableRefObject<Map<string, number>> = { current: new Map() };
-  let runMetaRef: MutableRefObject<ChatRunMetaMap> = { current: {} };
+  const runEventCursorRef: MutableRefObject<Map<string, number>> = { current: new Map() };
+  const runMetaRef: MutableRefObject<ChatRunMetaMap> = { current: {} };
 
-  let handleRunCompletedRef: MutableRefObject<(run?: Partial<Run>, sessionId?: string | null) => Promise<void>> = {
+  const handleRunCompletedRef: MutableRefObject<(run?: Partial<Run>, sessionId?: string | null) => Promise<void>> = {
     current: async () => {},
   };
-  let handleWebSocketEventRef: MutableRefObject<(
+  const handleWebSocketEventRef: MutableRefObject<(
     eventType: string,
     data: unknown,
     eventId?: number,

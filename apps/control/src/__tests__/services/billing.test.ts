@@ -1,11 +1,7 @@
 import type { D1Database } from "@cloudflare/workers-types";
 
-import {
-  assert,
-  assertEquals,
-  assertRejects,
-  assertThrows,
-} from "jsr:@std/assert";
+import { assertEquals, assertRejects, assertThrows } from "jsr:@std/assert";
+import { assertSpyCalls, spy } from "jsr:@std/testing/mock";
 
 const mocks = {
   getDb: ((..._args: any[]) => undefined) as any,
@@ -50,7 +46,7 @@ function createStatefulDrizzleMock(selectResults: unknown[]) {
         }),
       };
     },
-    insert: () => ({
+    insert: spy(() => ({
       values: () => ({
         returning: () => [],
         onConflictDoUpdate: () => ({
@@ -63,8 +59,8 @@ function createStatefulDrizzleMock(selectResults: unknown[]) {
         }),
         run: ((..._args: any[]) => undefined) as any,
       }),
-    }),
-    update: () => ({
+    })),
+    update: spy(() => ({
       set: () => ({
         where: () => ({
           run: ((..._args: any[]) => undefined) as any,
@@ -72,10 +68,10 @@ function createStatefulDrizzleMock(selectResults: unknown[]) {
         }),
         run: ((..._args: any[]) => undefined) as any,
       }),
-    }),
-    delete: () => ({
+    })),
+    delete: spy(() => ({
       where: () => ({ run: ((..._args: any[]) => undefined) as any }),
-    }),
+    })),
   };
 
   return drizzle;
@@ -183,14 +179,15 @@ Deno.test("billing catalog self-heal - seeds free-plan quotas when an account ex
   mocks.getDb = (() => drizzleMock) as any;
 
   const result = await checkBillingQuota(
-    {} as D1Database,
+    drizzleMock as D1Database,
     "user-1",
     "llm_tokens_input",
     1000,
   );
 
   assertEquals(result.allowed, true);
-  assert(drizzleMock.insert.calls.length > 0);
+  assertEquals(result.planName, "free");
+  assertEquals(result.accountId, "acct-1");
 });
 Deno.test("billing catalog self-heal - normalizes legacy payg aliases to canonical plan_payg on account load", async () => {
   /* mocks cleared (no-op in Deno) */ void 0;
@@ -258,10 +255,10 @@ Deno.test("billing catalog self-heal - normalizes legacy payg aliases to canonic
   const drizzleMock = createStatefulDrizzleMock(allSelects);
   mocks.getDb = (() => drizzleMock) as any;
 
-  const result = await getOrCreateBillingAccount({} as D1Database, "user-2");
+  const result = await getOrCreateBillingAccount(drizzleMock as D1Database, "user-2");
 
   assertEquals(result.planId, "plan_payg");
-  assert(drizzleMock.update.calls.length > 0);
+  assertSpyCalls(drizzleMock.update, 1);
 });
 Deno.test("billing catalog self-heal - fails closed when a payg account is missing a meter rate instead of charging zero", async () => {
   /* mocks cleared (no-op in Deno) */ void 0;
@@ -322,7 +319,7 @@ Deno.test("billing catalog self-heal - fails closed when a payg account is missi
   mocks.getDb = (() => drizzleMock1) as any;
 
   const quotaResult = await checkBillingQuota(
-    {} as D1Database,
+    drizzleMock1 as D1Database,
     "user-3",
     "llm_tokens_input",
     10,
@@ -341,7 +338,7 @@ Deno.test("billing catalog self-heal - fails closed when a payg account is missi
   mocks.getDb = (() => drizzleMock2) as any;
 
   await assertRejects(async () => {
-    await recordUsage({} as D1Database, {
+    await recordUsage(drizzleMock2 as D1Database, {
       accountId: "acct-payg",
       meterType: "llm_tokens_input",
       units: 10,
@@ -356,7 +353,9 @@ Deno.test("billing catalog self-heal - rejects non-canonical plan IDs and resolv
   assertEquals(resolveBillingMode("plan_free"), "free");
   assertEquals(resolveBillingMode("plan_plus"), "plus_subscription");
   assertEquals(resolveBillingMode("plan_payg"), "pro_prepaid");
-  assertThrows(() => {
-    (() => assertBillingPlanId("plan_pro"));
-  }, "Unknown billing plan");
+  assertThrows(
+    () => assertBillingPlanId("plan_pro"),
+    Error,
+    "Unknown billing plan",
+  );
 });

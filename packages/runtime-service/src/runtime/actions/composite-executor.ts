@@ -2,7 +2,7 @@ import * as fs from 'node:fs/promises';
 import * as path from 'node:path';
 import { isPathWithinBase } from '../paths.ts';
 import { successResult } from './process-spawner.ts';
-import type { ExecutorStepResult, ActionContext } from './executor.ts';
+import type { ExecutorStepResult } from './executor.ts';
 import { appendOutput, buildCombinedResult } from './action-result-converter.ts';
 import {
   type InterpolationContext,

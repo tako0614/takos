@@ -13,38 +13,44 @@
  * - workflow-session.ts -- runtime session management
  */
 
-import type { AgentMessage } from './agent-models.ts';
-import { LLMClient } from './llm.ts';
-import { generateId } from '../../../shared/utils/index.ts';
-import { logError } from '../../../shared/utils/logger.ts';
+import type { AgentMessage } from "./agent-models.ts";
+import { LLMClient } from "./llm.ts";
+import { generateId } from "../../../shared/utils/index.ts";
+import { logError } from "../../../shared/utils/logger.ts";
 
 // Re-export all public types so existing imports keep working
 export type {
-  TaskStep,
+  ReviewIssue,
+  ReviewResult,
   TaskPlan,
+  TaskStep,
   WorkflowContext,
   WorkflowResult,
-  ReviewResult,
-  ReviewIssue,
-} from './workflow-types.ts';
+} from "./workflow-types.ts";
 
 import type {
-  TaskStep,
   TaskPlan,
+  TaskStep,
   WorkflowContext,
   WorkflowResult,
-} from './workflow-types.ts';
-import {
-  VALID_PLAN_TYPES,
-  TASK_ANALYSIS_PROMPT,
-} from './workflow-types.ts';
+} from "./workflow-types.ts";
+import { TASK_ANALYSIS_PROMPT, VALID_PLAN_TYPES } from "./workflow-types.ts";
 // Re-export submodule functions so existing call-sites keep working
-export { executeReview } from './workflow-review.ts';
-export { startWorkflowSession, commitWorkflowSession } from './workflow-session.ts';
+export { executeReview } from "./workflow-review.ts";
+export {
+  commitWorkflowSession,
+  startWorkflowSession,
+} from "./workflow-session.ts";
 
 // Import submodule functions used by orchestration logic
-import { executeReview } from './workflow-review.ts';
-import { createPullRequest, mergePullRequest } from './workflow-pr.ts';
+import { executeReview } from "./workflow-review.ts";
+import { createPullRequest, mergePullRequest } from "./workflow-pr.ts";
+
+export const workflowDeps = {
+  LLMClient,
+  generateId,
+  logError,
+};
 
 // ── Task analysis ───────────────────────────────────────────────────────
 
@@ -56,28 +62,35 @@ export async function analyzeTask(
     tools: string[];
     apiKey: string;
     model?: string;
-  }
+  },
 ): Promise<TaskPlan> {
-  const llm = new LLMClient({ apiKey: context.apiKey, ...(context.model ? { model: context.model } : undefined) });
+  const llm = new workflowDeps.LLMClient({
+    apiKey: context.apiKey,
+    ...(context.model ? { model: context.model } : undefined),
+  });
 
   const prompt = TASK_ANALYSIS_PROMPT
-    .replace('{tools}', context.tools.join(', '))
-    .replace('{task}', task);
+    .replace("{tools}", context.tools.join(", "))
+    .replace("{task}", task);
 
   const messages: AgentMessage[] = [
-    { role: 'system', content: 'You are a task analyzer. Return only valid JSON.' },
-    { role: 'user', content: prompt },
+    {
+      role: "system",
+      content: "You are a task analyzer. Return only valid JSON.",
+    },
+    { role: "user", content: prompt },
   ];
 
   try {
     const response = await llm.chat(messages);
-    const jsonBody = response.content.trim().startsWith('{')
+    const jsonBody = response.content.trim().startsWith("{")
       ? response.content.trim()
-      : response.content.trim().replace(/```json?\n?/g, '').replace(/```/g, '').trim();
+      : response.content.trim().replace(/```json?\n?/g, "").replace(/```/g, "")
+        .trim();
     const plan = JSON.parse(jsonBody) as TaskPlan;
 
     if (!VALID_PLAN_TYPES.has(plan.type)) {
-      plan.type = 'conversation';
+      plan.type = "conversation";
     }
 
     plan.tools = plan.tools || [];
@@ -85,15 +98,17 @@ export async function analyzeTask(
     plan.needsRuntime = plan.needsRuntime ?? false;
     plan.usePR = plan.usePR ?? false;
     plan.needsReview = plan.needsReview ?? false;
-    plan.reviewType = plan.reviewType || 'self';
+    plan.reviewType = plan.reviewType || "self";
 
     return plan;
   } catch (error) {
-    logError('Task analysis failed', error, { module: 'services/agent/workflow' });
+    workflowDeps.logError("Task analysis failed", error, {
+      module: "services/agent/workflow",
+    });
     return {
-      type: 'conversation',
+      type: "conversation",
       tools: [],
-      reasoning: 'Analysis failed, defaulting to conversation',
+      reasoning: "Analysis failed, defaulting to conversation",
     };
   }
 }
@@ -103,46 +118,46 @@ export async function analyzeTask(
 export async function executeCodeChangeWorkflow(
   task: string,
   plan: TaskPlan,
-  context: WorkflowContext
+  context: WorkflowContext,
 ): Promise<WorkflowResult> {
   const steps: TaskStep[] = [];
 
   try {
     let branchName: string | undefined;
     if (plan.usePR && plan.repoId) {
-      branchName = `ai/${generateId(8)}-${Date.now()}`;
+      branchName = `ai/${workflowDeps.generateId(8)}-${Date.now()}`;
 
       steps.push({
-        id: generateId(),
-        type: 'code_change',
+        id: workflowDeps.generateId(),
+        type: "code_change",
         description: `Create branch: ${branchName}`,
-        status: 'completed',
+        status: "completed",
         result: branchName,
       });
     }
 
     steps.push({
-      id: generateId(),
-      type: 'code_change',
-      description: 'Execute code changes',
-      status: 'pending',
+      id: workflowDeps.generateId(),
+      type: "code_change",
+      description: "Execute code changes",
+      status: "pending",
     });
 
     const commitStep: TaskStep = {
-      id: generateId(),
-      type: 'commit',
-      description: plan.commitMessage || 'AI-generated changes',
-      status: 'pending',
+      id: workflowDeps.generateId(),
+      type: "commit",
+      description: plan.commitMessage || "AI-generated changes",
+      status: "pending",
     };
     steps.push(commitStep);
 
     let prId: string | undefined;
     if (plan.usePR && plan.repoId) {
       const prStep: TaskStep = {
-        id: generateId(),
-        type: 'pr_create',
+        id: workflowDeps.generateId(),
+        type: "pr_create",
         description: `Create PR for ${branchName}`,
-        status: 'pending',
+        status: "pending",
       };
       steps.push(prStep);
 
@@ -151,62 +166,61 @@ export async function executeCodeChangeWorkflow(
         title: plan.commitMessage || task.substring(0, 100),
         description: `AI-generated changes for: ${task}`,
         headBranch: branchName!,
-        baseBranch: 'main',
+        baseBranch: "main",
       });
 
-      prStep.status = 'completed';
+      prStep.status = "completed";
       prStep.result = prId;
     }
 
-    let reviewResult: WorkflowResult['reviewResult'];
+    let reviewResult: WorkflowResult["reviewResult"];
     if (plan.needsReview && prId) {
       const reviewStep: TaskStep = {
-        id: generateId(),
-        type: 'review',
+        id: workflowDeps.generateId(),
+        type: "review",
         description: `Review PR (${plan.reviewType})`,
-        status: 'running',
+        status: "running",
       };
       steps.push(reviewStep);
 
       reviewResult = await executeReview(
         context,
         prId,
-        plan.reviewType || 'self'
+        plan.reviewType || "self",
       );
 
-      reviewStep.status = 'completed';
+      reviewStep.status = "completed";
       reviewStep.result = reviewResult.status;
     }
 
-    if (prId && (!plan.needsReview || reviewResult?.status === 'approved')) {
+    if (prId && (!plan.needsReview || reviewResult?.status === "approved")) {
       const mergeStep: TaskStep = {
-        id: generateId(),
-        type: 'pr_merge',
-        description: 'Merge PR',
-        status: 'pending',
+        id: workflowDeps.generateId(),
+        type: "pr_merge",
+        description: "Merge PR",
+        status: "pending",
       };
       steps.push(mergeStep);
 
       await mergePullRequest(context, prId);
-      mergeStep.status = 'completed';
+      mergeStep.status = "completed";
     }
 
     return {
       success: true,
       message: plan.usePR
         ? `Changes committed via PR ${prId}`
-        : 'Changes committed directly',
+        : "Changes committed directly",
       prId,
       reviewResult,
       steps,
     };
-
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : String(error);
 
     for (const step of steps) {
-      if (step.status === 'pending' || step.status === 'running') {
-        step.status = 'failed';
+      if (step.status === "pending" || step.status === "running") {
+        step.status = "failed";
         step.error = errorMessage;
       }
     }
@@ -223,7 +237,11 @@ export async function executeCodeChangeWorkflow(
 
 export async function orchestrateWorkflow(
   task: string,
-  context: WorkflowContext & { apiKey: string; tools: string[]; model?: string }
+  context: WorkflowContext & {
+    apiKey: string;
+    tools: string[];
+    model?: string;
+  },
 ): Promise<WorkflowResult> {
   const plan = await analyzeTask(task, {
     spaceId: context.spaceId,
@@ -234,26 +252,26 @@ export async function orchestrateWorkflow(
   });
 
   switch (plan.type) {
-    case 'conversation':
+    case "conversation":
       return {
         success: true,
-        message: 'Task handled as conversation',
+        message: "Task handled as conversation",
       };
 
-    case 'tool_only':
+    case "tool_only":
       return {
         success: true,
-        message: 'Task requires tool execution',
-        steps: (plan.tools || []).map(tool => ({
-          id: generateId(),
-          type: 'tool_call' as const,
+        message: "Task requires tool execution",
+        steps: (plan.tools || []).map((tool) => ({
+          id: workflowDeps.generateId(),
+          type: "tool_call" as const,
           description: `Execute tool: ${tool}`,
-          status: 'pending' as const,
+          status: "pending" as const,
         })),
       };
 
-    case 'code_change':
-    case 'composite':
+    case "code_change":
+    case "composite":
       return await executeCodeChangeWorkflow(task, plan, context);
 
     default:

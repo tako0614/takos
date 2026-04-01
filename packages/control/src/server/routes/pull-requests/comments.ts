@@ -1,7 +1,7 @@
 import { Hono } from 'hono';
 import { z } from 'zod';
 import { generateId } from '../../../shared/utils/index.ts';
-import { type AuthenticatedRouteEnv } from '../route-auth.ts';
+import type { AuthenticatedRouteEnv } from '../route-auth.ts';
 import { BadRequestError } from 'takos-common/errors';
 import { zValidator } from '../zod-validator.ts';
 import { checkRepoAccess } from '../../../application/services/source/repos.ts';

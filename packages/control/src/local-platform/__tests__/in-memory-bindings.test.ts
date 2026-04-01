@@ -53,11 +53,17 @@ Deno.test("createInMemoryR2Bucket multipart upload - aborts multipart uploads an
   const part = await upload.uploadPart(1, "discard me");
   await upload.abort();
 
-  assertThrows(() => {
-    (() => bucket.resumeMultipartUpload("docs/aborted.txt", upload.uploadId));
-  }, /not active/i);
-  await assertRejects(async () => {
-    await upload.complete([part]);
-  }, /not active/i);
+  assertThrows(
+    () => bucket.resumeMultipartUpload("docs/aborted.txt", upload.uploadId),
+    Error,
+    "not active",
+  );
+  await assertRejects(
+    async () => {
+      await upload.complete([part]);
+    },
+    Error,
+    "not active",
+  );
   await assertEquals(await bucket.head("docs/aborted.txt"), null);
 });

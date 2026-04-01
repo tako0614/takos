@@ -1,4 +1,4 @@
-import { Command } from 'commander';
+import type { Command } from 'commander';
 import { green, red } from '@std/fmt/colors';
 import { readState, writeState, getStateDir } from '../../lib/state/state-file.ts';
 import { cliExit } from '../../lib/command-exit.ts';

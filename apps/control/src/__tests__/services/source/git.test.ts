@@ -1,3 +1,4 @@
+// deno-lint-ignore-file no-import-prefix no-unversioned-import require-await
 import type { D1Database, R2Bucket } from "@cloudflare/workers-types";
 
 import {
@@ -8,65 +9,89 @@ import {
   assertStringIncludes,
 } from "jsr:@std/assert";
 
-const mocks = {
-  getDb: ((..._args: any[]) => undefined) as any,
-  generateId: () => "commit-new",
-  now: () => "2026-03-24T00:00:00.000Z",
-};
-
-// [Deno] vi.mock removed - manually stub imports from '@/db'
-// [Deno] vi.mock removed - manually stub imports from '@/shared/utils'
 import { GitService } from "@/services/source/git";
 
-function createDrizzleMock() {
-  const getMock = ((..._args: any[]) => undefined) as any;
-  const allMock = ((..._args: any[]) => undefined) as any;
-  const runMock = ((..._args: any[]) => undefined) as any;
-  const chain = {
-    from: function (this: any) {
-      return this;
-    },
-    where: function (this: any) {
-      return this;
-    },
-    set: function (this: any) {
-      return this;
-    },
-    values: function (this: any) {
-      return this;
-    },
-    returning: function (this: any) {
-      return this;
-    },
-    orderBy: function (this: any) {
-      return this;
-    },
-    limit: function (this: any) {
-      return this;
-    },
-    offset: function (this: any) {
-      return this;
-    },
-    get: getMock,
-    all: allMock,
-    run: runMock,
+type FakeStep = {
+  get?: unknown;
+  all?: unknown[];
+  run?: unknown;
+};
+
+function createFakeD1Database(steps: FakeStep[]) {
+  let index = 0;
+  const next = () => steps[index++] ?? {};
+  const buildChain = () => {
+    const step = next();
+    const chain: any = {
+      from() {
+        return chain;
+      },
+      where() {
+        return chain;
+      },
+      innerJoin() {
+        return chain;
+      },
+      leftJoin() {
+        return chain;
+      },
+      orderBy() {
+        return chain;
+      },
+      limit() {
+        return chain;
+      },
+      offset() {
+        return chain;
+      },
+      values() {
+        return chain;
+      },
+      set() {
+        return chain;
+      },
+      returning() {
+        return chain;
+      },
+      get: async () => step.get ?? null,
+      first: async () => step.get ?? null,
+      all: async () => step.all ?? [],
+      run: async () =>
+        step.run ?? {
+          success: true,
+          meta: { changes: 0, last_row_id: 0, duration: 0 },
+        },
+      raw: async () => step.all ?? [],
+    };
+    return chain;
   };
   return {
-    select: () => chain,
-    insert: () => chain,
-    update: () => chain,
-    delete: () => chain,
-    _: { get: getMock, all: allMock, run: runMock, chain },
-  };
+    select() {
+      return buildChain();
+    },
+    insert() {
+      return buildChain();
+    },
+    update() {
+      return buildChain();
+    },
+    delete() {
+      return buildChain();
+    },
+  } as unknown as D1Database;
 }
 
-function createBucketMock() {
+function createBucketMock(value?: string | null) {
   return {
-    get: ((..._args: any[]) => undefined) as any,
-    put: ((..._args: any[]) => undefined) as any,
-    head: ((..._args: any[]) => undefined) as any,
-    list: ((..._args: any[]) => undefined) as any,
-    delete: ((..._args: any[]) => undefined) as any,
+    get: async () =>
+      value === null ? null : value === undefined ? null : ({
+        text: async () => value,
+        arrayBuffer: async () => new TextEncoder().encode(value).buffer,
+      } as unknown),
+    put: async () => undefined,
+    head: async () => null,
+    list: async () => ({ objects: [] }),
+    delete: async () => undefined,
   } as unknown as R2Bucket;
 }
 
@@ -76,37 +101,35 @@ Deno.test("GitService construction - creates a GitService instance", () => {
 });
 
 Deno.test("GitService.log - returns empty array when no commits", async () => {
-  /* mocks cleared (no-op in Deno) */ void 0;
-  const drizzle = createDrizzleMock();
-  drizzle._.all = (async () => []) as any;
-  mocks.getDb = (() => drizzle) as any;
-
-  const service = new GitService({} as D1Database, createBucketMock());
+  const service = new GitService(
+    createFakeD1Database([{ all: [] }]),
+    createBucketMock(),
+  );
   const result = await service.log("ws-1");
-
   assertEquals(result, []);
 });
-Deno.test("GitService.log - returns commits in mapped format", async () => {
-  /* mocks cleared (no-op in Deno) */ void 0;
-  const drizzle = createDrizzleMock();
-  drizzle._.all = (async () => [
-    {
-      id: "c1",
-      accountId: "ws-1",
-      message: "init",
-      authorAccountId: "user-1",
-      authorName: "User",
-      parentId: null,
-      filesChanged: 1,
-      insertions: 10,
-      deletions: 0,
-      treeHash: "abc123",
-      createdAt: "2026-01-01T00:00:00.000Z",
-    },
-  ]) as any;
-  mocks.getDb = (() => drizzle) as any;
 
-  const service = new GitService({} as D1Database, createBucketMock());
+Deno.test("GitService.log - returns commits in mapped format", async () => {
+  const service = new GitService(
+    createFakeD1Database([
+      {
+        all: [{
+          id: "c1",
+          accountId: "ws-1",
+          message: "init",
+          authorAccountId: "user-1",
+          authorName: "User",
+          parentId: null,
+          filesChanged: 1,
+          insertions: 10,
+          deletions: 0,
+          treeHash: "abc123",
+          createdAt: "2026-01-01T00:00:00.000Z",
+        }],
+      },
+    ]),
+    createBucketMock(),
+  );
   const result = await service.log("ws-1");
 
   assertEquals(result.length, 1);
@@ -119,15 +142,13 @@ Deno.test("GitService.log - returns commits in mapped format", async () => {
     files_changed: 1,
   });
 });
+
 Deno.test("GitService.log - filters by path when provided", async () => {
-  /* mocks cleared (no-op in Deno) */ void 0;
-  const drizzle = createDrizzleMock();
-  // gitFileChanges query for path match
-  drizzle._.all =
-    (async () => [{ commitId: "c1" }]) as any // matching changes
-     =
-      (async () => [
-        {
+  const service = new GitService(
+    createFakeD1Database([
+      { all: [{ commitId: "c1" }] },
+      {
+        all: [{
           id: "c1",
           accountId: "ws-1",
           message: "edit file",
@@ -139,58 +160,58 @@ Deno.test("GitService.log - filters by path when provided", async () => {
           deletions: 0,
           treeHash: "abc",
           createdAt: "2026-01-01T00:00:00.000Z",
-        },
-      ]) as any;
-  mocks.getDb = (() => drizzle) as any;
-
-  const service = new GitService({} as D1Database, createBucketMock());
+        }],
+      },
+    ]),
+    createBucketMock(),
+  );
   const result = await service.log("ws-1", { path: "src/main.ts" });
 
   assertEquals(result.length, 1);
   assertEquals(result[0].id, "c1");
 });
-Deno.test("GitService.log - returns empty when path filter has no matching commits", async () => {
-  /* mocks cleared (no-op in Deno) */ void 0;
-  const drizzle = createDrizzleMock();
-  drizzle._.all = (async () => []) as any; // no matching changes
-  mocks.getDb = (() => drizzle) as any;
 
-  const service = new GitService({} as D1Database, createBucketMock());
+Deno.test("GitService.log - returns empty when path filter has no matching commits", async () => {
+  const service = new GitService(
+    createFakeD1Database([{ all: [] }]),
+    createBucketMock(),
+  );
   const result = await service.log("ws-1", { path: "nonexistent.ts" });
 
   assertEquals(result, []);
 });
 
 Deno.test("GitService.getCommit - returns null when commit not found", async () => {
-  /* mocks cleared (no-op in Deno) */ void 0;
-  const drizzle = createDrizzleMock();
-  drizzle._.get = (async () => undefined) as any;
-  mocks.getDb = (() => drizzle) as any;
-
-  const service = new GitService({} as D1Database, createBucketMock());
+  const service = new GitService(
+    createFakeD1Database([{ get: null }]),
+    createBucketMock(),
+  );
   const result = await service.getCommit("nonexistent");
 
   assertEquals(result, null);
 });
-Deno.test("GitService.getCommit - returns commit when found", async () => {
-  /* mocks cleared (no-op in Deno) */ void 0;
-  const drizzle = createDrizzleMock();
-  drizzle._.get = (async () => ({
-    id: "c1",
-    accountId: "ws-1",
-    message: "init",
-    authorAccountId: "user-1",
-    authorName: "User",
-    parentId: null,
-    filesChanged: 0,
-    insertions: 0,
-    deletions: 0,
-    treeHash: "abc",
-    createdAt: "2026-01-01T00:00:00.000Z",
-  })) as any;
-  mocks.getDb = (() => drizzle) as any;
 
-  const service = new GitService({} as D1Database, createBucketMock());
+Deno.test("GitService.getCommit - returns commit when found", async () => {
+  const service = new GitService(
+    createFakeD1Database([
+      {
+        get: {
+          id: "c1",
+          accountId: "ws-1",
+          message: "init",
+          authorAccountId: "user-1",
+          authorName: "User",
+          parentId: null,
+          filesChanged: 0,
+          insertions: 0,
+          deletions: 0,
+          treeHash: "abc",
+          createdAt: "2026-01-01T00:00:00.000Z",
+        },
+      },
+    ]),
+    createBucketMock(),
+  );
   const result = await service.getCommit("c1");
 
   assertNotEquals(result, null);
@@ -198,36 +219,35 @@ Deno.test("GitService.getCommit - returns commit when found", async () => {
 });
 
 Deno.test("GitService.getCommitChanges - returns empty when no changes", async () => {
-  /* mocks cleared (no-op in Deno) */ void 0;
-  const drizzle = createDrizzleMock();
-  drizzle._.all = (async () => []) as any;
-  mocks.getDb = (() => drizzle) as any;
-
-  const service = new GitService({} as D1Database, createBucketMock());
+  const service = new GitService(
+    createFakeD1Database([{ all: [] }]),
+    createBucketMock(),
+  );
   const result = await service.getCommitChanges("c1");
 
   assertEquals(result, []);
 });
-Deno.test("GitService.getCommitChanges - maps change rows correctly", async () => {
-  /* mocks cleared (no-op in Deno) */ void 0;
-  const drizzle = createDrizzleMock();
-  drizzle._.all = (async () => [
-    {
-      id: "ch-1",
-      commitId: "c1",
-      fileId: "f1",
-      path: "src/main.ts",
-      changeType: "added",
-      oldPath: null,
-      oldHash: null,
-      newHash: "hash1",
-      insertions: 10,
-      deletions: 0,
-    },
-  ]) as any;
-  mocks.getDb = (() => drizzle) as any;
 
-  const service = new GitService({} as D1Database, createBucketMock());
+Deno.test("GitService.getCommitChanges - maps change rows correctly", async () => {
+  const service = new GitService(
+    createFakeD1Database([
+      {
+        all: [{
+          id: "ch-1",
+          commitId: "c1",
+          fileId: "f1",
+          path: "src/main.ts",
+          changeType: "added",
+          oldPath: null,
+          oldHash: null,
+          newHash: "hash1",
+          insertions: 10,
+          deletions: 0,
+        }],
+      },
+    ]),
+    createBucketMock(),
+  );
   const result = await service.getCommitChanges("c1");
 
   assertEquals(result.length, 1);
@@ -240,40 +260,34 @@ Deno.test("GitService.getCommitChanges - maps change rows correctly", async () =
 });
 
 Deno.test("GitService.restore - returns failure when change not found", async () => {
-  /* mocks cleared (no-op in Deno) */ void 0;
-  const drizzle = createDrizzleMock();
-  drizzle._.get = (async () => undefined) as any;
-  mocks.getDb = (() => drizzle) as any;
-
-  const service = new GitService({} as D1Database, createBucketMock());
+  const service = new GitService(
+    createFakeD1Database([{ get: null }]),
+    createBucketMock(),
+  );
   const result = await service.restore("ws-1", "c1", "missing.ts");
 
   assertEquals(result.success, false);
   assertEquals(result.message, "File not found in commit");
 });
-Deno.test("GitService.restore - returns failure for deleted files", async () => {
-  /* mocks cleared (no-op in Deno) */ void 0;
-  const drizzle = createDrizzleMock();
-  drizzle._.get = (async () => ({ changeType: "deleted" })) as any;
-  mocks.getDb = (() => drizzle) as any;
 
-  const service = new GitService({} as D1Database, createBucketMock());
+Deno.test("GitService.restore - returns failure for deleted files", async () => {
+  const service = new GitService(
+    createFakeD1Database([{ get: { changeType: "deleted" } }]),
+    createBucketMock(),
+  );
   const result = await service.restore("ws-1", "c1", "deleted.ts");
 
   assertEquals(result.success, false);
   assertStringIncludes(result.message, "Cannot restore deleted file");
 });
+
 Deno.test("GitService.restore - returns failure when snapshot not found", async () => {
-  /* mocks cleared (no-op in Deno) */ void 0;
-  const drizzle = createDrizzleMock();
-  drizzle._.get =
-    (async () => ({ changeType: "modified", newHash: "hash1" })) as any;
-  mocks.getDb = (() => drizzle) as any;
-
-  const bucket = createBucketMock();
-  (bucket.get as any) = (async () => null) as any;
-
-  const service = new GitService({} as D1Database, bucket);
+  const service = new GitService(
+    createFakeD1Database([{
+      get: { changeType: "modified", newHash: "hash1" },
+    }]),
+    createBucketMock(null),
+  );
   const result = await service.restore("ws-1", "c1", "src/main.ts");
 
   assertEquals(result.success, false);

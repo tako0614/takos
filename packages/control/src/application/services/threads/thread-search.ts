@@ -5,6 +5,12 @@ import type { Env, ThreadStatus } from '../../../shared/types/index.ts';
 import { logWarn } from '../../../shared/utils/logger.ts';
 import { EMBEDDING_MODEL } from '../../../shared/config/limits.ts';
 
+export const threadSearchDeps = {
+  getDb,
+  queryRelevantThreadMessages,
+  logWarn,
+};
+
 function buildSnippet(
   content: string,
   query: string,
@@ -38,7 +44,7 @@ export async function searchSpaceThreads(options: {
   offset: number;
 }) {
   const { env, spaceId, query, type, limit, offset } = options;
-  const db = getDb(env.DB);
+  const db = threadSearchDeps.getDb(env.DB);
   const results: Array<{
     kind: 'keyword' | 'semantic';
     score?: number;
@@ -116,7 +122,7 @@ export async function searchSpaceThreads(options: {
         }
       }
     } catch (err) {
-      logWarn('semantic search failed', { module: 'threads.search', error: err instanceof Error ? err.message : String(err) });
+      threadSearchDeps.logWarn('semantic search failed', { module: 'threads.search', error: err instanceof Error ? err.message : String(err) });
     }
   }
 
@@ -208,7 +214,7 @@ export async function searchThreadMessages(options: {
   offset: number;
 }) {
   const { env, spaceId, threadId, query, type, limit, offset } = options;
-  const db = getDb(env.DB);
+  const db = threadSearchDeps.getDb(env.DB);
   const results: Array<{
     kind: 'keyword' | 'semantic';
     score?: number;
@@ -220,7 +226,7 @@ export async function searchThreadMessages(options: {
 
   if ((type === 'semantic' || type === 'all') && semanticAvailable) {
     try {
-      const semantic = await queryRelevantThreadMessages({
+      const semantic = await threadSearchDeps.queryRelevantThreadMessages({
         env,
         spaceId,
         threadId,
@@ -244,7 +250,7 @@ export async function searchThreadMessages(options: {
         });
       }
     } catch (err) {
-      logWarn('semantic search failed', { module: 'threads.messages.search', error: err instanceof Error ? err.message : String(err) });
+      threadSearchDeps.logWarn('semantic search failed', { module: 'threads.messages.search', error: err instanceof Error ? err.message : String(err) });
     }
   }
 

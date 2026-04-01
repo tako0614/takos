@@ -9,7 +9,6 @@ import {
 
 import { assertEquals } from 'jsr:@std/assert';
 
-const enc = new TextEncoder();
 const dec = new TextDecoder();
 
 

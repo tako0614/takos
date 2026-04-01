@@ -1,5 +1,5 @@
 import { green } from '@std/fmt/colors';
-import { Buffer } from "node:buffer";
+import type { Buffer } from "node:buffer";
 
 export function tryParseJson(value: string): unknown {
   try {

@@ -5,14 +5,6 @@ import type {
 } from '../types/bindings.ts';
 import { logError } from './logger.ts';
 
-const VALID_IDENTIFIER_PATTERN = /^[a-zA-Z_][a-zA-Z0-9_]*$/;
-
-function validateColumnName(column: string): void {
-  if (!VALID_IDENTIFIER_PATTERN.test(column)) {
-    throw new Error(`Invalid column name: '${column}'. Column names must be alphanumeric with underscores.`);
-  }
-}
-
 function toError(error: unknown): Error {
   return error instanceof Error ? error : new Error(String(error));
 }
@@ -24,11 +16,11 @@ export interface BatchResult {
 }
 
 export async function batchExecute(
-  db: SqlDatabaseBinding,
+  _db: SqlDatabaseBinding,
   statements: SqlPreparedStatementBinding[]
 ): Promise<BatchResult> {
   try {
-    const results = await db.batch(statements);
+    const results = await _db.batch(statements);
     return { success: true, results };
   } catch (error) {
     return { success: false, results: [], error: toError(error) };
@@ -59,7 +51,7 @@ export interface CompensationResult<TResult> {
  * Each step's compensate statement is run in reverse order if a later step fails.
  */
 export async function executeWithCompensation(
-  db: SqlDatabaseBinding,
+  _db: SqlDatabaseBinding,
   steps: TransactionStep[]
 ): Promise<CompensationResult<SqlResultBinding>> {
   const results: SqlResultBinding[] = [];

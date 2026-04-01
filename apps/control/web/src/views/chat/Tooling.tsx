@@ -4,19 +4,6 @@ import { useI18n } from '../../store/i18n.ts';
 import { Icons } from '../../lib/Icons.tsx';
 import type { ToolExecution } from '../../types/index.ts';
 
-function getToolInfo(name: string) {
-  const normalized = name.toLowerCase();
-  if (normalized.includes('web_search') || normalized.includes('search')) return { icon: <Icons.Globe />, accent: 'text-blue-500' };
-  if (normalized.includes('web_fetch') || normalized.includes('browse')) return { icon: <Icons.Globe />, accent: 'text-cyan-500' };
-  if (normalized.includes('file_read') || normalized.includes('read')) return { icon: <Icons.File />, accent: 'text-emerald-500' };
-  if (normalized.includes('file_write') || normalized.includes('write')) return { icon: <Icons.File />, accent: 'text-amber-500' };
-  if (normalized.includes('file_list') || normalized.includes('list')) return { icon: <Icons.Folder />, accent: 'text-indigo-500' };
-  if (normalized.includes('runtime_exec') || normalized.includes('exec')) return { icon: <Icons.Code />, accent: 'text-violet-500' };
-  if (normalized.includes('deploy')) return { icon: <Icons.Upload />, accent: 'text-orange-500' };
-  if (normalized.includes('memory') || normalized.includes('remember') || normalized.includes('recall')) return { icon: <Icons.HardDrive />, accent: 'text-pink-500' };
-  return { icon: <Icons.Settings />, accent: 'text-zinc-500' };
-}
-
 function formatToolName(name: string): string {
   return name
     .replace(/^(file_|web_|runtime_|deploy_|memory_)/, '')
@@ -56,9 +43,9 @@ export function PersistedToolCalls(props: { toolExecutions: ToolExecution[] }) {
     <Show when={props.toolExecutions && props.toolExecutions.length > 0}>
       <div class="mb-3">
         <button
+          type="button"
           class="flex items-center gap-2 text-left hover:bg-zinc-50 dark:hover:bg-zinc-800/50 rounded-lg px-2 py-1 -ml-2 transition-colors"
           onClick={() => setIsExpanded((prev) => !prev)}
-          type="button"
         >
           <Icons.Settings class="w-3.5 h-3.5 text-zinc-400 dark:text-zinc-500" />
           <span class="text-sm text-zinc-500 dark:text-zinc-400">
@@ -74,7 +61,6 @@ export function PersistedToolCalls(props: { toolExecutions: ToolExecution[] }) {
         <Show when={isExpanded()}>
           <div class="mt-1 ml-1 pl-4 border-l-2 border-zinc-200 dark:border-zinc-700 space-y-0.5">
             <For each={props.toolExecutions}>{(te, index) => {
-              const info = getToolInfo(te.name);
               const hasDetails = () => Object.keys(te.arguments || {}).length > 0 || !!te.result || !!te.error;
               return (
                 <div>

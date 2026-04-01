@@ -17,7 +17,7 @@ import {
   assertRejects,
   assertStringIncludes,
 } from "jsr:@std/assert";
-import { assertSpyCalls } from "jsr:@std/testing/mock";
+import { assertSpyCalls, spy } from "jsr:@std/testing/mock";
 
 Deno.test("createWfpService - returns WFPService when env is configured", () => {
   const svc = createWfpService({
@@ -59,7 +59,7 @@ function mockSuccessResponse<T>(result: T) {
 
 Deno.test("WFPService - createWorker - sends PUT request with FormData containing worker script and metadata", async () => {
   try {
-    const fetchMock = async () => mockSuccessResponse({});
+    const fetchMock = spy(async () => mockSuccessResponse({}));
     (globalThis as any).fetch = fetchMock;
 
     const svc = new WFPService(config);
@@ -72,7 +72,10 @@ Deno.test("WFPService - createWorker - sends PUT request with FormData containin
     });
 
     assertSpyCalls(fetchMock, 1);
-    const [url, init] = fetchMock.calls[0];
+    const [url, init] = (fetchMock.calls[0] as any).args as [
+      string,
+      RequestInit,
+    ];
     assertStringIncludes(url, "/scripts/my-worker");
     assertEquals(init.method, "PUT");
   } finally {
@@ -81,7 +84,7 @@ Deno.test("WFPService - createWorker - sends PUT request with FormData containin
 });
 Deno.test("WFPService - createWorker - serializes vectorize bindings into worker metadata", async () => {
   try {
-    const fetchMock = async () => mockSuccessResponse({});
+    const fetchMock = spy(async () => mockSuccessResponse({}));
     (globalThis as any).fetch = fetchMock;
 
     const svc = new WFPService(config);
@@ -97,7 +100,10 @@ Deno.test("WFPService - createWorker - serializes vectorize bindings into worker
       ],
     });
 
-    const [, init] = fetchMock.calls[0];
+    const [, init] = (fetchMock.calls[0] as any).args as [
+      string,
+      RequestInit,
+    ];
     const metadataBlob = (init.body as FormData).get("metadata") as Blob;
     const metadata = JSON.parse(await metadataBlob.text());
     assert(
@@ -115,7 +121,7 @@ Deno.test("WFPService - createWorker - serializes vectorize bindings into worker
 });
 Deno.test("WFPService - createWorker - serializes queue and analytics bindings into worker metadata", async () => {
   try {
-    const fetchMock = async () => mockSuccessResponse({});
+    const fetchMock = spy(async () => mockSuccessResponse({}));
     (globalThis as any).fetch = fetchMock;
 
     const svc = new WFPService(config);
@@ -128,7 +134,10 @@ Deno.test("WFPService - createWorker - serializes queue and analytics bindings i
       ],
     });
 
-    const [, init] = fetchMock.calls[0];
+    const [, init] = (fetchMock.calls[0] as any).args as [
+      string,
+      RequestInit,
+    ];
     const metadataBlob = (init.body as FormData).get("metadata") as Blob;
     const metadata = JSON.parse(await metadataBlob.text());
     assertEquals(metadata.bindings, [
@@ -141,7 +150,7 @@ Deno.test("WFPService - createWorker - serializes queue and analytics bindings i
 });
 Deno.test("WFPService - createWorker - serializes workflow bindings into worker metadata", async () => {
   try {
-    const fetchMock = async () => mockSuccessResponse({});
+    const fetchMock = spy(async () => mockSuccessResponse({}));
     (globalThis as any).fetch = fetchMock;
 
     const svc = new WFPService(config);
@@ -158,7 +167,10 @@ Deno.test("WFPService - createWorker - serializes workflow bindings into worker 
       ],
     });
 
-    const [, init] = fetchMock.calls[0];
+    const [, init] = (fetchMock.calls[0] as any).args as [
+      string,
+      RequestInit,
+    ];
     const metadataBlob = (init.body as FormData).get("metadata") as Blob;
     const metadata = JSON.parse(await metadataBlob.text());
     assert(
@@ -178,13 +190,16 @@ Deno.test("WFPService - createWorker - serializes workflow bindings into worker 
 
 Deno.test("WFPService - deleteWorker - sends DELETE request for the worker", async () => {
   try {
-    const fetchMock = async () => mockSuccessResponse(null);
+    const fetchMock = spy(async () => mockSuccessResponse(null));
     (globalThis as any).fetch = fetchMock;
 
     const svc = new WFPService(config);
     await svc.workers.deleteWorker("worker-to-delete");
 
-    const [url, init] = fetchMock.calls[0];
+    const [url, init] = (fetchMock.calls[0] as any).args as [
+      string,
+      RequestInit,
+    ];
     assertStringIncludes(url, "/scripts/worker-to-delete");
     assertEquals(init.method, "DELETE");
   } finally {
@@ -194,13 +209,16 @@ Deno.test("WFPService - deleteWorker - sends DELETE request for the worker", asy
 
 Deno.test("WFPService - deleteQueue - sends DELETE request for the queue", async () => {
   try {
-    const fetchMock = async () => mockSuccessResponse(null);
+    const fetchMock = spy(async () => mockSuccessResponse(null));
     (globalThis as any).fetch = fetchMock;
 
     const svc = new WFPService(config);
     await svc.queues.deleteQueue("queue-id-123");
 
-    const [url, init] = fetchMock.calls[0];
+    const [url, init] = (fetchMock.calls[0] as any).args as [
+      string,
+      RequestInit,
+    ];
     assertStringIncludes(url, "/queues/queue-id-123");
     assertEquals(init.method, "DELETE");
   } finally {
@@ -210,8 +228,9 @@ Deno.test("WFPService - deleteQueue - sends DELETE request for the queue", async
 
 Deno.test("WFPService - getWorker - returns result from GET request", async () => {
   try {
-    const fetchMock = async () =>
-      mockSuccessResponse({ id: "worker-1", script: "test" });
+    const fetchMock = spy(async () =>
+      mockSuccessResponse({ id: "worker-1", script: "test" })
+    );
     (globalThis as any).fetch = fetchMock;
 
     const svc = new WFPService(config);
@@ -224,7 +243,7 @@ Deno.test("WFPService - getWorker - returns result from GET request", async () =
 
 Deno.test("WFPService - workerExists - returns true when worker exists", async () => {
   try {
-    const fetchMock = async () => mockSuccessResponse({});
+    const fetchMock = spy(async () => mockSuccessResponse({}));
     (globalThis as any).fetch = fetchMock;
 
     const svc = new WFPService(config);
@@ -236,7 +255,7 @@ Deno.test("WFPService - workerExists - returns true when worker exists", async (
 });
 Deno.test("WFPService - workerExists - returns false when worker returns 404", async () => {
   try {
-    const fetchMock = async () =>
+    const fetchMock = spy(async () =>
       new Response(
         JSON.stringify({
           success: false,
@@ -245,7 +264,8 @@ Deno.test("WFPService - workerExists - returns false when worker returns 404", a
           result: null,
         }),
         { status: 404 },
-      );
+      )
+    );
     (globalThis as any).fetch = fetchMock;
 
     const svc = new WFPService(config);
@@ -266,7 +286,7 @@ Deno.test("WFPService - listWorkers - returns workers array from API", async () 
         modified_on: "2025-01-01",
       },
     ];
-    const fetchMock = async () => mockSuccessResponse(workers);
+    const fetchMock = spy(async () => mockSuccessResponse(workers));
     (globalThis as any).fetch = fetchMock;
 
     const svc = new WFPService(config);
@@ -280,7 +300,9 @@ Deno.test("WFPService - listWorkers - returns workers array from API", async () 
 
 Deno.test("WFPService - createD1Database - returns the uuid from API response", async () => {
   try {
-    const fetchMock = async () => mockSuccessResponse({ uuid: "db-uuid-123" });
+    const fetchMock = spy(async () =>
+      mockSuccessResponse({ uuid: "db-uuid-123" })
+    );
     (globalThis as any).fetch = fetchMock;
 
     const svc = new WFPService(config);
@@ -292,7 +314,7 @@ Deno.test("WFPService - createD1Database - returns the uuid from API response", 
 });
 Deno.test("WFPService - createD1Database - throws when no uuid returned", async () => {
   try {
-    const fetchMock = async () => mockSuccessResponse({});
+    const fetchMock = spy(async () => mockSuccessResponse({}));
     (globalThis as any).fetch = fetchMock;
 
     const svc = new WFPService(config);
@@ -306,13 +328,16 @@ Deno.test("WFPService - createD1Database - throws when no uuid returned", async 
 
 Deno.test("WFPService - createR2Bucket - sends POST request to create bucket", async () => {
   try {
-    const fetchMock = async () => mockSuccessResponse(null);
+    const fetchMock = spy(async () => mockSuccessResponse(null));
     (globalThis as any).fetch = fetchMock;
 
     const svc = new WFPService(config);
     await svc.r2.createR2Bucket("my-bucket");
 
-    const [url, init] = fetchMock.calls[0];
+    const [url, init] = (fetchMock.calls[0] as any).args as [
+      string,
+      RequestInit,
+    ];
     assertStringIncludes(url, "/r2/buckets");
     assertEquals(init.method, "POST");
   } finally {
@@ -322,8 +347,9 @@ Deno.test("WFPService - createR2Bucket - sends POST request to create bucket", a
 
 Deno.test("WFPService - createQueue - returns the queue metadata from API response", async () => {
   try {
-    const fetchMock = async () =>
-      mockSuccessResponse({ queue_id: "queue-id-123", queue_name: "my-queue" });
+    const fetchMock = spy(async () =>
+      mockSuccessResponse({ queue_id: "queue-id-123", queue_name: "my-queue" })
+    );
     (globalThis as any).fetch = fetchMock;
 
     const svc = new WFPService(config);
@@ -336,13 +362,17 @@ Deno.test("WFPService - createQueue - returns the queue metadata from API respon
 });
 Deno.test("WFPService - createQueue - throws when no queue id returned", async () => {
   try {
-    const fetchMock = async () => mockSuccessResponse({});
+    const fetchMock = spy(async () => mockSuccessResponse({}));
     (globalThis as any).fetch = fetchMock;
 
     const svc = new WFPService(config);
-    await assertRejects(async () => {
-      await svc.queues.createQueue("my-queue");
-    }, /no ID returned from API/i);
+    await assertRejects(
+      async () => {
+        await svc.queues.createQueue("my-queue");
+      },
+      Error,
+      "no ID returned from API",
+    );
   } finally {
     /* TODO: restore stubbed globals manually */ void 0;
   }
@@ -350,7 +380,7 @@ Deno.test("WFPService - createQueue - throws when no queue id returned", async (
 
 Deno.test("WFPService - createKVNamespace - returns the id from API response", async () => {
   try {
-    const fetchMock = async () => mockSuccessResponse({ id: "kv-ns-id" });
+    const fetchMock = spy(async () => mockSuccessResponse({ id: "kv-ns-id" }));
     (globalThis as any).fetch = fetchMock;
 
     const svc = new WFPService(config);
@@ -362,7 +392,7 @@ Deno.test("WFPService - createKVNamespace - returns the id from API response", a
 });
 Deno.test("WFPService - createKVNamespace - throws when no id returned", async () => {
   try {
-    const fetchMock = async () => mockSuccessResponse({});
+    const fetchMock = spy(async () => mockSuccessResponse({}));
     (globalThis as any).fetch = fetchMock;
 
     const svc = new WFPService(config);
@@ -376,7 +406,9 @@ Deno.test("WFPService - createKVNamespace - throws when no id returned", async (
 
 Deno.test("WFPService - createVectorizeIndex - returns the index name", async () => {
   try {
-    const fetchMock = async () => mockSuccessResponse({ name: "my-index" });
+    const fetchMock = spy(async () =>
+      mockSuccessResponse({ name: "my-index" })
+    );
     (globalThis as any).fetch = fetchMock;
 
     const svc = new WFPService(config);
@@ -392,8 +424,9 @@ Deno.test("WFPService - createVectorizeIndex - returns the index name", async ()
 
 Deno.test("WFPService - runD1SQL - returns query results", async () => {
   try {
-    const fetchMock = async () =>
-      mockSuccessResponse([{ results: [{ count: 42 }] }]);
+    const fetchMock = spy(async () =>
+      mockSuccessResponse([{ results: [{ count: 42 }] }])
+    );
     (globalThis as any).fetch = fetchMock;
 
     const svc = new WFPService(config);
@@ -409,10 +442,11 @@ Deno.test("WFPService - runD1SQL - returns query results", async () => {
 
 Deno.test("WFPService - listD1Tables - extracts table names from D1 query result", async () => {
   try {
-    const fetchMock = async () =>
+    const fetchMock = spy(async () =>
       mockSuccessResponse([{
         results: [{ name: "users" }, { name: "posts" }],
-      }]);
+      }])
+    );
     (globalThis as any).fetch = fetchMock;
 
     const svc = new WFPService(config);
@@ -425,7 +459,7 @@ Deno.test("WFPService - listD1Tables - extracts table names from D1 query result
 
 Deno.test("WFPService - updateWorkerSettings - sends PATCH request with settings", async () => {
   try {
-    const fetchMock = async () => mockSuccessResponse(null);
+    const fetchMock = spy(async () => mockSuccessResponse(null));
     (globalThis as any).fetch = fetchMock;
 
     const svc = new WFPService(config);
@@ -434,7 +468,10 @@ Deno.test("WFPService - updateWorkerSettings - sends PATCH request with settings
       bindings: [{ type: "plain_text", name: "ENV", text: "prod" }],
     });
 
-    const [url, init] = fetchMock.calls[0];
+    const [url, init] = (fetchMock.calls[0] as any).args as [
+      string,
+      RequestInit,
+    ];
     assertStringIncludes(url, "/scripts/w1/settings");
     assertEquals(init.method, "PATCH");
   } finally {
@@ -444,7 +481,7 @@ Deno.test("WFPService - updateWorkerSettings - sends PATCH request with settings
 
 Deno.test("WFPService - uploadToR2 - sends PUT request to R2 endpoint", async () => {
   try {
-    const fetchMock = async () => new Response("ok", { status: 200 });
+    const fetchMock = spy(async () => new Response("ok", { status: 200 }));
     (globalThis as any).fetch = fetchMock;
 
     const svc = new WFPService(config);
@@ -452,17 +489,21 @@ Deno.test("WFPService - uploadToR2 - sends PUT request to R2 endpoint", async ()
       contentType: "text/plain",
     });
 
-    const [url, init] = fetchMock.calls[0];
+    const [url, init] = (fetchMock.calls[0] as any).args as [
+      string,
+      RequestInit,
+    ];
+    const headers = init.headers as Record<string, string>;
     assertStringIncludes(url, "/r2/buckets/my-bucket/objects/");
     assertEquals(init.method, "PUT");
-    assertEquals(init.headers["Content-Type"], "text/plain");
+    assertEquals(headers["Content-Type"], "text/plain");
   } finally {
     /* TODO: restore stubbed globals manually */ void 0;
   }
 });
 Deno.test("WFPService - uploadToR2 - throws on non-ok response", async () => {
   try {
-    const fetchMock = async () => new Response("error", { status: 500 });
+    const fetchMock = spy(async () => new Response("error", { status: 500 }));
     (globalThis as any).fetch = fetchMock;
 
     const svc = new WFPService(config);
@@ -476,17 +517,21 @@ Deno.test("WFPService - uploadToR2 - throws on non-ok response", async () => {
 
 Deno.test("WFPService - getR2Object - reads object bytes from the R2 object endpoint", async () => {
   try {
-    const fetchMock = async () =>
+    const fetchMock = spy(async () =>
       new Response("hello", {
         status: 200,
         headers: { "Content-Type": "text/plain" },
-      });
+      })
+    );
     (globalThis as any).fetch = fetchMock;
 
     const svc = new WFPService(config);
     const result = await svc.r2.getR2Object("my-bucket", "path/to/file.txt");
 
-    const [url, init] = fetchMock.calls[0];
+    const [url, init] = (fetchMock.calls[0] as any).args as [
+      string,
+      RequestInit,
+    ];
     assertStringIncludes(url, "/r2/buckets/my-bucket/objects/");
     assertEquals(init.method, "GET");
     assertEquals(result?.contentType, "text/plain");
@@ -497,7 +542,7 @@ Deno.test("WFPService - getR2Object - reads object bytes from the R2 object endp
 });
 Deno.test("WFPService - getR2Object - returns null when the object does not exist", async () => {
   try {
-    const fetchMock = async () => new Response("missing", { status: 404 });
+    const fetchMock = spy(async () => new Response("missing", { status: 404 }));
     (globalThis as any).fetch = fetchMock;
 
     const svc = new WFPService(config);
@@ -519,7 +564,7 @@ Deno.test("WFPService - deployWorkerWithBindings - throws when neither bundleUrl
 });
 Deno.test("WFPService - deployWorkerWithBindings - uses bundleScript directly when provided", async () => {
   try {
-    const fetchMock = async () => mockSuccessResponse({});
+    const fetchMock = spy(async () => mockSuccessResponse({}));
     (globalThis as any).fetch = fetchMock;
 
     const svc = new WFPService(config);

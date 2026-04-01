@@ -244,7 +244,6 @@ smartHttpRoutes.get('/git/:owner/:repo/info/refs', optionalGitAuth, async (c) =>
     }
   }
 
-  const bucket = getGitBucket(c.env);
   const data = await handleInfoRefs(c.env.DB, result.repo.id, service);
   return gitResponse(data, `application/x-${service}-advertisement`);
 });

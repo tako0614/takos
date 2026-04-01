@@ -127,8 +127,12 @@ export function detectPromptInjection(content: string, spaceId?: string): Inject
 export function sanitizeSkillContent(content: string, maxLength: number, fieldName: string, spaceId?: string): string {
   if (!content || typeof content !== 'string') return '';
 
-  // eslint-disable-next-line no-control-regex
-  let sanitized = content.replace(/[\0\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, '');
+  let sanitized = '';
+  for (let i = 0; i < content.length; i++) {
+    const code = content.charCodeAt(i);
+    if ((code >= 0x00 && code <= 0x1f) || code === 0x7f) continue;
+    sanitized += content[i];
+  }
   const injection = detectPromptInjection(sanitized, spaceId);
   if (injection.detected) {
     logWarn(`Potential prompt injection detected in skill ${fieldName}. ` +

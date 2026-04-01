@@ -17,7 +17,7 @@ import { getDb } from '../../../infra/db/index.ts';
 import { accounts, accountMemberships } from '../../../infra/db/schema.ts';
 import { eq, and } from 'drizzle-orm';
 import { logWarn } from '../../../shared/utils/logger.ts';
-import { AuthorizationError, NotFoundError, ConflictError, InternalError } from 'takos-common/errors';
+import { AuthorizationError, ConflictError, InternalError } from 'takos-common/errors';
 import { requireFound } from '../validation-utils.ts';
 
 interface MemberWithOwnership {

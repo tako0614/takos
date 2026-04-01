@@ -1,7 +1,6 @@
 import {
   listSkillTemplates,
   hasSkillTemplate,
-  type SkillTemplateDefinition,
 } from '@/services/agent/skill-templates';
 
 

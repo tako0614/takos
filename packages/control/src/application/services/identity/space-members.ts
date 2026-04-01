@@ -1,9 +1,17 @@
-import type { D1Database } from '../../../shared/types/bindings.ts';
-import type { User, SpaceMembership, SpaceRole } from '../../../shared/types/index.ts';
-import { generateId } from '../../../shared/utils/index.ts';
-import { resolveActorPrincipalId } from './principals.ts';
-import { getDb, accounts, accountMemberships } from '../../../infra/db/index.ts';
-import { eq, and } from 'drizzle-orm';
+import type { D1Database } from "../../../shared/types/bindings.ts";
+import type {
+  SpaceMembership,
+  SpaceRole,
+  User,
+} from "../../../shared/types/index.ts";
+import { generateId } from "../../../shared/utils/index.ts";
+import { resolveActorPrincipalId } from "./principals.ts";
+import {
+  accountMemberships,
+  accounts,
+  getDb,
+} from "../../../infra/db/index.ts";
+import { and, eq } from "drizzle-orm";
 
 interface MemberListItem {
   username: string;
@@ -14,7 +22,14 @@ interface MemberListItem {
   created_at: string;
 }
 
-async function resolveMembershipPrincipalId(db: D1Database, actorId: string): Promise<string> {
+export const spaceMemberDeps = {
+  getDb,
+};
+
+async function resolveMembershipPrincipalId(
+  db: D1Database,
+  actorId: string,
+): Promise<string> {
   const principalId = await resolveActorPrincipalId(db, actorId);
   if (!principalId) {
     throw new Error(`Principal not found for actor ${actorId}`);
@@ -24,7 +39,7 @@ async function resolveMembershipPrincipalId(db: D1Database, actorId: string): Pr
 
 export async function listSpaceMembers(
   db: D1Database,
-  spaceId: string
+  spaceId: string,
 ): Promise<MemberListItem[]> {
   const drizzle = getDb(db);
 
@@ -43,8 +58,8 @@ export async function listSpaceMembers(
     .where(
       and(
         eq(accountMemberships.accountId, spaceId),
-        eq(accounts.type, 'user')
-      )
+        eq(accounts.type, "user"),
+      ),
     )
     .orderBy(accountMemberships.createdAt);
 
@@ -52,7 +67,7 @@ export async function listSpaceMembers(
 
   return rows.map((r) => ({
     username: r.username,
-    email: r.email ?? '',
+    email: r.email ?? "",
     name: r.name,
     picture: r.picture,
     role: r.role,
@@ -60,12 +75,15 @@ export async function listSpaceMembers(
   }));
 }
 
-export async function getUserByEmail(db: D1Database, email: string): Promise<User | null> {
-  const drizzle = getDb(db);
+export async function getUserByEmail(
+  db: D1Database,
+  email: string,
+): Promise<User | null> {
+  const drizzle = spaceMemberDeps.getDb(db);
   const row = await drizzle
     .select()
     .from(accounts)
-    .where(and(eq(accounts.email, email), eq(accounts.type, 'user')))
+    .where(and(eq(accounts.email, email), eq(accounts.type, "user")))
     .limit(1)
     .get();
 
@@ -74,10 +92,10 @@ export async function getUserByEmail(db: D1Database, email: string): Promise<Use
   const user: User = {
     id: row.id,
     principal_id: row.id,
-    email: row.email ?? '',
+    email: row.email ?? "",
     name: row.name,
     username: row.slug,
-    principal_kind: 'user',
+    principal_kind: "user",
     bio: row.bio,
     picture: row.picture,
     trust_tier: row.trustTier,
@@ -91,7 +109,7 @@ export async function getUserByEmail(db: D1Database, email: string): Promise<Use
 export async function getSpaceMember(
   db: D1Database,
   spaceId: string,
-  actorId: string
+  actorId: string,
 ): Promise<SpaceMembership | null> {
   const principalId = await resolveMembershipPrincipalId(db, actorId);
   const drizzle = getDb(db);
@@ -101,8 +119,8 @@ export async function getSpaceMember(
     .where(
       and(
         eq(accountMemberships.accountId, spaceId),
-        eq(accountMemberships.memberId, principalId)
-      )
+        eq(accountMemberships.memberId, principalId),
+      ),
     )
     .limit(1)
     .get();
@@ -122,7 +140,7 @@ export async function createSpaceMember(
   db: D1Database,
   spaceId: string,
   actorId: string,
-  role: SpaceRole
+  role: SpaceRole,
 ): Promise<{ role: SpaceRole; created_at: string }> {
   const timestamp = new Date().toISOString();
   const principalId = await resolveMembershipPrincipalId(db, actorId);
@@ -132,7 +150,7 @@ export async function createSpaceMember(
     accountId: spaceId,
     memberId: principalId,
     role,
-    status: 'active',
+    status: "active",
     updatedAt: timestamp,
     createdAt: timestamp,
   });
@@ -144,7 +162,7 @@ export async function updateSpaceMemberRole(
   db: D1Database,
   spaceId: string,
   actorId: string,
-  role: SpaceRole
+  role: SpaceRole,
 ): Promise<void> {
   const principalId = await resolveMembershipPrincipalId(db, actorId);
   const drizzle = getDb(db);
@@ -154,15 +172,15 @@ export async function updateSpaceMemberRole(
     .where(
       and(
         eq(accountMemberships.accountId, spaceId),
-        eq(accountMemberships.memberId, principalId)
-      )
+        eq(accountMemberships.memberId, principalId),
+      ),
     );
 }
 
 export async function deleteSpaceMember(
   db: D1Database,
   spaceId: string,
-  actorId: string
+  actorId: string,
 ): Promise<void> {
   const principalId = await resolveMembershipPrincipalId(db, actorId);
   const drizzle = getDb(db);
@@ -171,7 +189,7 @@ export async function deleteSpaceMember(
     .where(
       and(
         eq(accountMemberships.accountId, spaceId),
-        eq(accountMemberships.memberId, principalId)
-      )
+        eq(accountMemberships.memberId, principalId),
+      ),
     );
 }

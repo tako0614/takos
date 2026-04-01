@@ -153,19 +153,19 @@ export function WorkerDetail({
       </header>
 
       <div class="flex gap-1 px-6 pt-4 border-b border-zinc-200 dark:border-zinc-800">
-        <button
+        <button type="button"
           class={`px-4 py-2 text-sm font-medium rounded-t-lg transition-colors ${tab === 'overview' ? 'bg-zinc-100 dark:bg-zinc-700 text-zinc-900 dark:text-zinc-100' : 'text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-100 hover:bg-zinc-200 dark:hover:bg-zinc-700'}`}
           onClick={() => onTabChange('overview')}
         >
           {t('overview')}
         </button>
-        <button
+        <button type="button"
           class={`px-4 py-2 text-sm font-medium rounded-t-lg transition-colors ${tab === 'deployments' ? 'bg-zinc-100 dark:bg-zinc-700 text-zinc-900 dark:text-zinc-100' : 'text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-100 hover:bg-zinc-200 dark:hover:bg-zinc-700'}`}
           onClick={() => onTabChange('deployments')}
         >
           {t('deploymentHistory')}
         </button>
-        <button
+        <button type="button"
           class={`px-4 py-2 text-sm font-medium rounded-t-lg transition-colors ${tab === 'settings' ? 'bg-zinc-100 dark:bg-zinc-700 text-zinc-900 dark:text-zinc-100' : 'text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-100 hover:bg-zinc-200 dark:hover:bg-zinc-700'}`}
           onClick={() => onTabChange('settings')}
         >

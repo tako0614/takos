@@ -6,7 +6,6 @@
  * versions are equal, updatedAt is used as the tiebreaker.
  */
 
-import type { TakosState } from './state-types.ts';
 import { readStateFromFile, writeStateToFile } from './state-file.ts';
 import { hasApiEndpoint, readGroupStateFromApi, writeGroupStateToApi } from './api-client.ts';
 

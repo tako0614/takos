@@ -1,7 +1,7 @@
 import * as fs from 'node:fs/promises';
 import { createLogger } from 'takos-common/logger';
 import { pushLog } from '../logging.ts';
-import { type SecretsSanitizer } from './secrets.ts';
+import type { SecretsSanitizer } from './secrets.ts';
 import { SANDBOX_LIMITS } from '../../shared/config.ts';
 
 const logger = createLogger({ service: 'takos-runtime', defaultFields: { module: 'actions' } });

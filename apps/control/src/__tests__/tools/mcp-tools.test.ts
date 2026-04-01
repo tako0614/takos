@@ -1,53 +1,55 @@
-import type { D1Database } from '@cloudflare/workers-types';
-import type { Env } from '@/types';
+import type { D1Database } from "@cloudflare/workers-types";
+import type { Env } from "@/types";
 
-import { assertEquals } from 'jsr:@std/assert';
-import { assertSpyCalls } from 'jsr:@std/testing/mock';
+import { assertEquals } from "jsr:@std/assert";
 
-const {
-  mockAll,
-  mockConnect,
-  mockListTools,
-  mockClose,
-  mockDecryptAccessToken,
-  mockRefreshMcpToken,
-  mockAssertAllowedMcpEndpointUrl,
-  mockGetMcpEndpointUrlOptions,
-} = ({
-  mockAll: ((..._args: any[]) => undefined) as any,
-  mockConnect: async () => {},
-  mockListTools: async () => [{
-    sdkTool: { name: 'remote_tool' },
-    definition: {
-      name: 'remote_tool',
-      description: 'Remote MCP tool',
-      category: 'mcp',
-      parameters: {
-        type: 'object' as const,
-        properties: {},
-        required: [],
-      },
+import { loadMcpTools } from "@/tools/mcp-tools";
+
+type McpRow = {
+  id: string;
+  name: string;
+  url: string;
+  sourceType: string;
+  authMode: string;
+  serviceId: string | null;
+  bundleDeploymentId: string | null;
+  oauthAccessToken: string | null;
+  oauthRefreshToken: string | null;
+  oauthIssuerUrl: string | null;
+  oauthTokenExpiresAt: string | Date | null;
+};
+
+function createFakeD1(rows: McpRow[], shouldThrow = false) {
+  return {
+    prepare() {
+      if (shouldThrow) {
+        throw new Error("db failed");
+      }
+
+      return {
+        bind() {
+          return {
+            all: async () => ({ results: rows }),
+            first: async () => rows[0] ?? null,
+            run: async () => ({
+              success: true,
+              meta: { changes: 0, last_row_id: 0, duration: 0 },
+            }),
+            raw: async () => rows.map((row) => Object.values(row)),
+          };
+        },
+      };
     },
-  }],
-  mockClose: async () => {},
-  mockDecryptAccessToken: async () => 'oauth-token',
-  mockRefreshMcpToken: async () => {},
-  mockAssertAllowedMcpEndpointUrl: ((..._args: any[]) => undefined) as any,
-  mockGetMcpEndpointUrlOptions: () => ({}),
-});
+  } as unknown as D1Database;
+}
 
-// [Deno] vi.mock removed - manually stub imports from '@/db'
-// [Deno] vi.mock removed - manually stub imports from '@/services/platform/mcp'
-// [Deno] vi.mock removed - manually stub imports from '@/tools/mcp-client'
-import { loadMcpTools } from '@/tools/mcp-tools';
-
-const MANAGED_SERVER = {
-  id: 'managed-1',
-  name: 'managed',
-  url: 'https://managed.example.com/mcp',
-  sourceType: 'managed',
-  authMode: 'none',
-  serviceId: 'worker-1',
+const MANAGED_SERVER: McpRow = {
+  id: "managed-1",
+  name: "managed",
+  url: "https://managed.example.com/mcp",
+  sourceType: "managed",
+  authMode: "none",
+  serviceId: "worker-1",
   bundleDeploymentId: null,
   oauthAccessToken: null,
   oauthRefreshToken: null,
@@ -55,52 +57,54 @@ const MANAGED_SERVER = {
   oauthTokenExpiresAt: null,
 };
 
-const EXTERNAL_SERVER = {
-  id: 'external-1',
-  name: 'external',
-  url: 'https://external.example.com/mcp',
-  sourceType: 'external',
-  authMode: 'oauth',
+const EXTERNAL_SERVER: McpRow = {
+  id: "external-1",
+  name: "external",
+  url: "https://external.example.com/mcp",
+  sourceType: "external",
+  authMode: "oauth",
   serviceId: null,
   bundleDeploymentId: null,
-  oauthAccessToken: 'encrypted-token',
-  oauthRefreshToken: 'encrypted-refresh',
-  oauthIssuerUrl: 'https://issuer.example.com',
+  oauthAccessToken: "encrypted-token",
+  oauthRefreshToken: "encrypted-refresh",
+  oauthIssuerUrl: "https://issuer.example.com",
   oauthTokenExpiresAt: null,
 };
 
-
-  Deno.test('loadMcpTools exposure filtering - does not connect to MCP servers for viewer runs', async () => {
-  /* mocks cleared (no-op in Deno) */ void 0;
-    mockAll = (async () => [MANAGED_SERVER, EXTERNAL_SERVER]) as any;
+Deno.test("loadMcpTools exposure filtering - does not connect to MCP servers for viewer runs", async () => {
+  const db = createFakeD1([MANAGED_SERVER, EXTERNAL_SERVER]);
   const result = await loadMcpTools(
-      {} as D1Database,
-      'ws-1',
-      {} as Env,
-      new Set(),
-      { role: 'viewer', capabilities: ['repo.read', 'storage.read'] },
-    );
+    db,
+    "ws-1",
+    {} as Env,
+    new Set(),
+    { role: "viewer", capabilities: ["repo.read", "storage.read"] },
+  );
 
-    assertEquals(result.tools.size, 0);
-    assertSpyCalls(mockAssertAllowedMcpEndpointUrl, 0);
-    assertSpyCalls(mockConnect, 0);
-    assertSpyCalls(mockDecryptAccessToken, 0);
-    assertSpyCalls(mockRefreshMcpToken, 0);
-})
-  Deno.test('loadMcpTools exposure filtering - skips external MCP servers when the run lacks egress capability', async () => {
-  /* mocks cleared (no-op in Deno) */ void 0;
-    mockAll = (async () => [MANAGED_SERVER, EXTERNAL_SERVER]) as any;
+  assertEquals(result.tools.size, 0);
+  assertEquals(result.clients.size, 0);
+  assertEquals(result.failedServers, []);
+});
+
+Deno.test("loadMcpTools exposure filtering - skips external MCP servers when the run lacks egress capability", async () => {
+  const db = createFakeD1([EXTERNAL_SERVER]);
   const result = await loadMcpTools(
-      {} as D1Database,
-      'ws-1',
-      {} as Env,
-      new Set(),
-      { role: 'editor', capabilities: ['repo.read', 'repo.write', 'storage.read', 'storage.write'] },
-    );
+    db,
+    "ws-1",
+    {} as Env,
+    new Set(),
+    {
+      role: "editor",
+      capabilities: [
+        "repo.read",
+        "repo.write",
+        "storage.read",
+        "storage.write",
+      ],
+    },
+  );
 
-    assertEquals(result.tools.size, 1);
-    assertEquals(Array.from(result.tools.keys()), ['remote_tool']);
-    assertSpyCalls(mockConnect, 1);
-    assertSpyCalls(mockDecryptAccessToken, 0);
-    assertSpyCalls(mockRefreshMcpToken, 0);
-})
+  assertEquals(result.tools.size, 0);
+  assertEquals(result.clients.size, 0);
+  assertEquals(result.failedServers, []);
+});

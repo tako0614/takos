@@ -1,28 +1,34 @@
-import path from 'node:path';
-import { mkdir, writeFile } from 'node:fs/promises';
-import type { WorkerEnv } from '../runtime/worker/env.ts';
-import { createWorkerRuntime } from '../runtime/worker/index.ts';
-import { createNodeWebEnv } from '../node-platform/env-builder.ts';
+import path from "node:path";
+import { mkdir, writeFile } from "node:fs/promises";
+import type { WorkerEnv } from "../runtime/worker/env.ts";
+import { createWorkerRuntime } from "../runtime/worker/index.ts";
+import { createNodeWebEnv } from "../node-platform/env-builder.ts";
 import {
   buildLocalMessageBatch,
+  type ConsumableQueue,
   isConsumableQueue,
   LOCAL_DLQ_QUEUE_NAMES,
   LOCAL_QUEUE_RETRY_LIMITS,
-  type ConsumableQueue,
+  type LocalQueueName,
   type LocalQueueRecord,
-} from './queue-runtime.ts';
-import { logDebug, logError, logInfo } from '../shared/utils/logger.ts';
-import { buildNodeWorkerPlatform } from '../platform/adapters/node.ts';
-import type { PlatformScheduledEvent } from '../shared/types/bindings.ts';
-import { isDirectEntrypoint, logEntrypointError } from './direct-entrypoint.ts';
+} from "./queue-runtime.ts";
+import { logDebug, logError, logInfo } from "../shared/utils/logger.ts";
+import { buildNodeWorkerPlatform } from "../platform/adapters/node.ts";
+import type { PlatformScheduledEvent } from "../shared/types/bindings.ts";
+import { isDirectEntrypoint, logEntrypointError } from "./direct-entrypoint.ts";
 
 const DEFAULT_POLL_INTERVAL_MS = 250;
 const DEFAULT_SCHEDULED_INTERVAL_MS = 60_000;
 const DEFAULT_HEARTBEAT_TTL_MS = 120_000;
 const workerHandler = createWorkerRuntime(buildNodeWorkerPlatform);
 
+export const localWorkerDeps = {
+  queue: workerHandler.queue.bind(workerHandler),
+  scheduled: workerHandler.scheduled.bind(workerHandler),
+};
+
 function resolveDuration(envVarName: string, fallback: number): number {
-  const parsed = Number.parseInt(Deno.env.get(envVarName) ?? '', 10);
+  const parsed = Number.parseInt(Deno.env.get(envVarName) ?? "", 10);
   return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
 }
 
@@ -31,34 +37,48 @@ function sleep(ms: number): Promise<void> {
 }
 
 function resolveHeartbeatFile(): string | null {
-  const explicit = Deno.env.get('TAKOS_LOCAL_WORKER_HEARTBEAT_FILE')?.trim();
+  const explicit = Deno.env.get("TAKOS_LOCAL_WORKER_HEARTBEAT_FILE")?.trim();
   if (explicit) return path.resolve(explicit);
-  const dataDir = Deno.env.get('TAKOS_LOCAL_DATA_DIR')?.trim();
+  const dataDir = Deno.env.get("TAKOS_LOCAL_DATA_DIR")?.trim();
   if (!dataDir) return null;
-  return path.resolve(dataDir, 'worker-heartbeat.json');
+  return path.resolve(dataDir, "worker-heartbeat.json");
 }
 
 export function resolveWorkerHeartbeatTtlMs(): number {
-  return resolveDuration('TAKOS_LOCAL_WORKER_HEARTBEAT_TTL_MS', DEFAULT_HEARTBEAT_TTL_MS);
+  return resolveDuration(
+    "TAKOS_LOCAL_WORKER_HEARTBEAT_TTL_MS",
+    DEFAULT_HEARTBEAT_TTL_MS,
+  );
 }
 
-async function updateHeartbeat(status: 'starting' | 'idle' | 'worked' | 'error', details?: Record<string, unknown>): Promise<void> {
+async function updateHeartbeat(
+  status: "starting" | "idle" | "worked" | "error",
+  details?: Record<string, unknown>,
+): Promise<void> {
   const heartbeatFile = resolveHeartbeatFile();
   if (!heartbeatFile) return;
   await mkdir(path.dirname(heartbeatFile), { recursive: true });
-  await writeFile(heartbeatFile, JSON.stringify({
-    updatedAt: new Date().toISOString(),
-    pid: process.pid,
-    status,
-    ...details,
-  }));
+  await writeFile(
+    heartbeatFile,
+    JSON.stringify({
+      updatedAt: new Date().toISOString(),
+      pid: process.pid,
+      status,
+      ...details,
+    }),
+  );
 }
 
-function createForwardingBinding(baseUrl: string): { fetch(request: Request): Promise<Response> } {
+function createForwardingBinding(
+  baseUrl: string,
+): { fetch(request: Request): Promise<Response> } {
   return {
     async fetch(request: Request): Promise<Response> {
       const incoming = new URL(request.url);
-      const target = new URL(incoming.pathname.replace(/^\//, ''), baseUrl.endsWith('/') ? baseUrl : `${baseUrl}/`);
+      const target = new URL(
+        incoming.pathname.replace(/^\//, ""),
+        baseUrl.endsWith("/") ? baseUrl : `${baseUrl}/`,
+      );
       target.search = incoming.search;
       return globalThis.fetch(new Request(target, request));
     },
@@ -68,24 +88,29 @@ function createForwardingBinding(baseUrl: string): { fetch(request: Request): Pr
 function createScheduledEvent(scheduledTime: number): PlatformScheduledEvent {
   return {
     scheduledTime,
-    cron: '* * * * *',
+    cron: "* * * * *",
     noRetry() {},
   } as PlatformScheduledEvent;
 }
 
-function requireConsumableQueue<T>(queue: unknown, label: string): ConsumableQueue<T> {
+function requireConsumableQueue<T>(
+  queue: unknown,
+  label: string,
+): ConsumableQueue<T> {
   if (!isConsumableQueue(queue)) {
-    throw new Error(`${label} is not a consumable queue implementation (missing queueName or receive())`);
+    throw new Error(
+      `${label} is not a consumable queue implementation (missing queueName or receive())`,
+    );
   }
   return queue as ConsumableQueue<T>;
 }
 
 function getWorkerQueues(env: WorkerEnv): Array<ConsumableQueue<unknown>> {
   return [
-    requireConsumableQueue(env.RUN_QUEUE, 'RUN_QUEUE'),
-    requireConsumableQueue(env.INDEX_QUEUE, 'INDEX_QUEUE'),
-    requireConsumableQueue(env.WORKFLOW_QUEUE, 'WORKFLOW_QUEUE'),
-    requireConsumableQueue(env.DEPLOY_QUEUE, 'DEPLOY_QUEUE'),
+    requireConsumableQueue(env.RUN_QUEUE, "RUN_QUEUE"),
+    requireConsumableQueue(env.INDEX_QUEUE, "INDEX_QUEUE"),
+    requireConsumableQueue(env.WORKFLOW_QUEUE, "WORKFLOW_QUEUE"),
+    requireConsumableQueue(env.DEPLOY_QUEUE, "DEPLOY_QUEUE"),
   ];
 }
 
@@ -105,25 +130,27 @@ async function dispatchRecord(
     },
   });
 
-  await workerHandler.queue(batch, env);
+  await localWorkerDeps.queue(batch, env);
 
   if (!retried) return acked;
 
   const nextAttempts = Math.max(1, record.attempts ?? 1) + 1;
-  const retryLimit = LOCAL_QUEUE_RETRY_LIMITS[queue.queueName];
+  const queueName = queue.queueName as LocalQueueName;
+  const retryLimit = LOCAL_QUEUE_RETRY_LIMITS[queueName];
 
   if (nextAttempts > retryLimit) {
-    const dlqBatch = buildLocalMessageBatch(LOCAL_DLQ_QUEUE_NAMES[queue.queueName], {
+    const dlqBatch = buildLocalMessageBatch(LOCAL_DLQ_QUEUE_NAMES[queueName], {
       ...record,
       attempts: nextAttempts,
     });
-    await workerHandler.queue(dlqBatch, env);
+    await localWorkerDeps.queue(dlqBatch, env);
     return true;
   }
 
-  await (queue as { sendBatch(messages: Iterable<unknown>): Promise<void> }).sendBatch([
-    { ...record, attempts: nextAttempts },
-  ]);
+  await (queue as { sendBatch(messages: Iterable<unknown>): Promise<void> })
+    .sendBatch([
+      { ...record, attempts: nextAttempts },
+    ]);
   return true;
 }
 
@@ -142,24 +169,34 @@ export async function runLocalWorkerIteration(
 
 export async function createLocalWorkerEnv(): Promise<WorkerEnv> {
   const baseEnv = await createNodeWebEnv();
-  const executorHostUrl = Deno.env.get('TAKOS_LOCAL_EXECUTOR_HOST_URL');
-  const runtimeHostUrl = Deno.env.get('TAKOS_LOCAL_RUNTIME_HOST_URL');
+  const executorHostUrl = Deno.env.get("TAKOS_LOCAL_EXECUTOR_HOST_URL");
+  const runtimeHostUrl = Deno.env.get("TAKOS_LOCAL_RUNTIME_HOST_URL");
   return {
     ...baseEnv,
-    ...(executorHostUrl ? { EXECUTOR_HOST: createForwardingBinding(executorHostUrl) } : {}),
-    ...(runtimeHostUrl ? { RUNTIME_HOST: createForwardingBinding(runtimeHostUrl) } : {}),
+    ...(executorHostUrl
+      ? { EXECUTOR_HOST: createForwardingBinding(executorHostUrl) }
+      : {}),
+    ...(runtimeHostUrl
+      ? { RUNTIME_HOST: createForwardingBinding(runtimeHostUrl) }
+      : {}),
   };
 }
 
 export async function startLocalWorkerLoop(): Promise<void> {
   const env = await createLocalWorkerEnv();
-  const pollIntervalMs = resolveDuration('TAKOS_LOCAL_WORKER_POLL_INTERVAL_MS', DEFAULT_POLL_INTERVAL_MS);
-  const scheduledIntervalMs = resolveDuration('TAKOS_LOCAL_WORKER_SCHEDULED_INTERVAL_MS', DEFAULT_SCHEDULED_INTERVAL_MS);
+  const pollIntervalMs = resolveDuration(
+    "TAKOS_LOCAL_WORKER_POLL_INTERVAL_MS",
+    DEFAULT_POLL_INTERVAL_MS,
+  );
+  const scheduledIntervalMs = resolveDuration(
+    "TAKOS_LOCAL_WORKER_SCHEDULED_INTERVAL_MS",
+    DEFAULT_SCHEDULED_INTERVAL_MS,
+  );
   let nextScheduledAt = Date.now() + scheduledIntervalMs;
-  await updateHeartbeat('starting', { pollIntervalMs, scheduledIntervalMs });
+  await updateHeartbeat("starting", { pollIntervalMs, scheduledIntervalMs });
 
-  logInfo('takos-worker local loop started', {
-    module: 'local_worker',
+  logInfo("takos-worker local loop started", {
+    module: "local_worker",
     pollIntervalMs,
     scheduledIntervalMs,
   });
@@ -169,18 +206,25 @@ export async function startLocalWorkerLoop(): Promise<void> {
       const worked = await runLocalWorkerIteration(env);
       const now = Date.now();
       if (now >= nextScheduledAt) {
-        await workerHandler.scheduled(createScheduledEvent(now), env);
+        await localWorkerDeps.scheduled(createScheduledEvent(now), env);
         nextScheduledAt = now + scheduledIntervalMs;
       }
-      await updateHeartbeat(worked ? 'worked' : 'idle', { nextScheduledAt });
+      await updateHeartbeat(worked ? "worked" : "idle", { nextScheduledAt });
       if (!worked) {
         await sleep(pollIntervalMs);
       }
     } catch (error) {
-      logError('local worker iteration failed', error, { module: 'local_worker' });
-      await updateHeartbeat('error', {
+      logError("local worker iteration failed", error, {
+        module: "local_worker",
+      });
+      await updateHeartbeat("error", {
         error: error instanceof Error ? error.message : String(error),
-      }).catch((e) => { logDebug('heartbeat update failed', { module: 'local_worker', error: e instanceof Error ? e.message : String(e) }); });
+      }).catch((e) => {
+        logDebug("heartbeat update failed", {
+          module: "local_worker",
+          error: e instanceof Error ? e.message : String(e),
+        });
+      });
       await sleep(pollIntervalMs);
     }
   }

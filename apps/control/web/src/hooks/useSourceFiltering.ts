@@ -1,4 +1,4 @@
-import { createSignal, createEffect, createMemo, on, onCleanup } from 'solid-js';
+import { createSignal, createEffect, createMemo, onCleanup } from 'solid-js';
 import type { Accessor, Setter } from 'solid-js';
 import { useI18n } from '../store/i18n.ts';
 import { rpc, rpcJson } from '../lib/rpc.ts';
@@ -47,9 +47,10 @@ const ALLOWED_FILTERS: SourceFilter[] = ['all', 'mine', 'starred'];
 const ALLOWED_SORTS: SourceSort[] = ['trending', 'new', 'stars', 'updated'];
 
 function readPersistedSourceState(): Partial<PersistedSourceState> {
-  if (typeof window === 'undefined') return {};
+  const storage = globalThis.sessionStorage;
+  if (!storage) return {};
   try {
-    const raw = window.sessionStorage.getItem(SOURCE_STATE_KEY);
+    const raw = storage.getItem(SOURCE_STATE_KEY);
     if (!raw) return {};
     const parsed = JSON.parse(raw) as Partial<PersistedSourceState>;
     return {
@@ -70,9 +71,10 @@ function readPersistedSourceState(): Partial<PersistedSourceState> {
 }
 
 function writePersistedSourceState(state: PersistedSourceState) {
-  if (typeof window === 'undefined') return;
+  const storage = globalThis.sessionStorage;
+  if (!storage) return;
   try {
-    window.sessionStorage.setItem(SOURCE_STATE_KEY, JSON.stringify(state));
+    storage.setItem(SOURCE_STATE_KEY, JSON.stringify(state));
   } catch {
     // noop
   }

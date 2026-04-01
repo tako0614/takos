@@ -1,4 +1,4 @@
-import { JobScheduler, type JobSchedulerEvent } from '../../scheduler/job.ts';
+import { JobScheduler } from '../../scheduler/job.ts';
 import { createBaseContext } from '../../context.ts';
 import type { Workflow } from '../../workflow-models.ts';
 

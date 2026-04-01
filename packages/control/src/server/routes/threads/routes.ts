@@ -1,6 +1,6 @@
 import { Hono } from 'hono';
 import { z } from 'zod';
-import type { Env, ThreadStatus, MessageRole } from '../../../shared/types/index.ts';
+import type { Env, ThreadStatus } from '../../../shared/types/index.ts';
 import { requireSpaceAccess, type BaseVariables } from '../route-auth.ts';
 import { parsePagination } from '../../../shared/utils/index.ts';
 import { BadRequestError, NotFoundError, InternalError } from 'takos-common/errors';
@@ -100,7 +100,7 @@ export default new Hono<{ Bindings: Env; Variables: BaseVariables }>()
   const user = c.get('user');
   const threadId = c.req.param('id');
 
-  const access = requireFound(await checkThreadAccess(c.env.DB, threadId, user.id), 'Thread');
+  const _access = requireFound(await checkThreadAccess(c.env.DB, threadId, user.id), 'Thread');
 
   return c.json({
     thread: access.thread,
@@ -120,7 +120,7 @@ export default new Hono<{ Bindings: Env; Variables: BaseVariables }>()
   const threadId = c.req.param('id');
   const body = c.req.valid('json') as { mode?: ThreadShareMode; password?: string; expires_at?: string; expires_in_days?: number };
 
-  const access = requireFound(await checkThreadAccess(c.env.DB, threadId, user.id, ['owner', 'admin', 'editor']), 'Thread');
+  const _access = requireFound(await checkThreadAccess(c.env.DB, threadId, user.id, ['owner', 'admin', 'editor']), 'Thread');
 
   const mode: ThreadShareMode = body.mode === 'password' ? 'password' : 'public';
 
@@ -165,7 +165,7 @@ export default new Hono<{ Bindings: Env; Variables: BaseVariables }>()
   const user = c.get('user');
   const threadId = c.req.param('id');
 
-  const access = requireFound(await checkThreadAccess(c.env.DB, threadId, user.id), 'Thread');
+  const _access = requireFound(await checkThreadAccess(c.env.DB, threadId, user.id), 'Thread');
 
   const shares = await listThreadShares(c.env.DB, threadId);
   const origin = new URL(c.req.url).origin;
@@ -186,7 +186,7 @@ export default new Hono<{ Bindings: Env; Variables: BaseVariables }>()
   const threadId = c.req.param('id');
   const shareId = c.req.param('shareId');
 
-  const access = requireFound(await checkThreadAccess(c.env.DB, threadId, user.id, ['owner', 'admin', 'editor']), 'Thread');
+  const _access = requireFound(await checkThreadAccess(c.env.DB, threadId, user.id, ['owner', 'admin', 'editor']), 'Thread');
 
   const ok = await revokeThreadShare({ db: c.env.DB, threadId, shareId });
   if (!ok) {
@@ -208,7 +208,7 @@ export default new Hono<{ Bindings: Env; Variables: BaseVariables }>()
   const threadId = c.req.param('id');
   const body = c.req.valid('json');
 
-  const access = requireFound(await checkThreadAccess(c.env.DB, threadId, user.id, ['owner', 'admin', 'editor']), 'Thread');
+  const _access = requireFound(await checkThreadAccess(c.env.DB, threadId, user.id, ['owner', 'admin', 'editor']), 'Thread');
 
   const updates: { title?: string | null; locale?: 'ja' | 'en' | null; status?: ThreadStatus; context_window?: number } = {};
 
@@ -241,7 +241,7 @@ export default new Hono<{ Bindings: Env; Variables: BaseVariables }>()
   const user = c.get('user');
   const threadId = c.req.param('id');
 
-  const access = requireFound(await checkThreadAccess(c.env.DB, threadId, user.id, ['owner', 'admin']), 'Thread');
+  const _access = requireFound(await checkThreadAccess(c.env.DB, threadId, user.id, ['owner', 'admin']), 'Thread');
 
   await deleteThread(c.env, c.env.DB, threadId);
 
@@ -252,7 +252,7 @@ export default new Hono<{ Bindings: Env; Variables: BaseVariables }>()
   const user = c.get('user');
   const threadId = c.req.param('id');
 
-  const access = requireFound(await checkThreadAccess(c.env.DB, threadId, user.id, ['owner', 'admin', 'editor']), 'Thread');
+  const _access = requireFound(await checkThreadAccess(c.env.DB, threadId, user.id, ['owner', 'admin', 'editor']), 'Thread');
 
   await updateThreadStatus(c.env.DB, threadId, 'archived');
 
@@ -263,7 +263,7 @@ export default new Hono<{ Bindings: Env; Variables: BaseVariables }>()
   const user = c.get('user');
   const threadId = c.req.param('id');
 
-  const access = requireFound(await checkThreadAccess(c.env.DB, threadId, user.id, ['owner', 'admin', 'editor']), 'Thread');
+  const _access = requireFound(await checkThreadAccess(c.env.DB, threadId, user.id, ['owner', 'admin', 'editor']), 'Thread');
 
   await updateThreadStatus(c.env.DB, threadId, 'active');
 
@@ -277,7 +277,7 @@ export default new Hono<{ Bindings: Env; Variables: BaseVariables }>()
   const threadId = c.req.param('id');
   const { limit, offset } = parsePagination(c.req.valid('query'), { limit: 100, maxLimit: 200 });
 
-  const access = requireFound(await checkThreadAccess(c.env.DB, threadId, user.id), 'Thread');
+  const _access = requireFound(await checkThreadAccess(c.env.DB, threadId, user.id), 'Thread');
 
   return c.json(await getThreadTimeline(c.env, threadId, limit, offset));
 })
@@ -300,7 +300,7 @@ export default new Hono<{ Bindings: Env; Variables: BaseVariables }>()
   const { limit, offset } = parsePagination(paginationRaw, { limit: 100, maxLimit: 200 });
   const includeMessages = includeMessagesParam !== '0';
 
-  const access = requireFound(await checkThreadAccess(c.env.DB, threadId, user.id), 'Thread');
+  const _access = requireFound(await checkThreadAccess(c.env.DB, threadId, user.id), 'Thread');
 
   return c.json(await getThreadHistory(c.env, threadId, {
     limit,

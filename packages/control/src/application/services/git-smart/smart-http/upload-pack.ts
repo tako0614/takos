@@ -23,7 +23,6 @@ export async function handleUploadPack(
 
   const wants: string[] = [];
   const haves = new Set<string>();
-  let done = false;
 
   for (const line of lines) {
     if (line.type !== 'data' || !line.data) continue;
@@ -37,7 +36,7 @@ export async function handleUploadPack(
       const sha = text.split(' ')[1];
       if (sha && sha.length === 40) haves.add(sha);
     } else if (text === 'done') {
-      done = true;
+      break;
     }
   }
 

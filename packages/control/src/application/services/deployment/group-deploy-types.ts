@@ -2,7 +2,7 @@
  * Type definitions for group deploy — deploying an entire app.yml manifest
  * as a unit directly to Cloudflare, bypassing the store install flow.
  */
-import type { AppManifest } from './group-deploy-manifest.ts';
+import type { AppManifest } from "./group-deploy-manifest.ts";
 
 // ── Options ──────────────────────────────────────────────────────────────────
 
@@ -21,19 +21,23 @@ export interface GroupDeployOptions {
   apiToken: string;
   /** dry-run: show plan without deploying */
   dryRun?: boolean;
-  /** Compatibility date for workers (defaults to 2025-01-01) */
+  /** Compatibility date for workers (defaults to 2026-04-01) */
   compatibilityDate?: string;
 }
 
 // ── Results ──────────────────────────────────────────────────────────────────
 
-export type ServiceDeployStatus = 'deployed' | 'failed' | 'skipped';
-export type ResourceProvisionStatus = 'provisioned' | 'exists' | 'failed' | 'skipped';
-export type BindingStatus = 'bound' | 'failed';
+export type ServiceDeployStatus = "deployed" | "failed" | "skipped";
+export type ResourceProvisionStatus =
+  | "provisioned"
+  | "exists"
+  | "failed"
+  | "skipped";
+export type BindingStatus = "bound" | "failed";
 
 export interface ServiceDeployResult {
   name: string;
-  type: 'worker' | 'container' | 'service' | 'http';
+  type: "worker" | "container" | "service" | "http";
   status: ServiceDeployStatus;
   scriptName?: string;
   url?: string;
@@ -123,6 +127,5 @@ export interface WranglerConfig {
   kv_namespaces?: WranglerKVBinding[];
   services?: WranglerServiceBinding[];
   queues_producers?: WranglerQueueProducer[];
-  vectorize_indexes?: WranglerVectorizeIndex[];
-  dispatch_namespace?: string;
+  vectorize?: WranglerVectorizeIndex[];
 }

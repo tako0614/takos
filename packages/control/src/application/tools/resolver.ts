@@ -1,11 +1,20 @@
-import type { D1Database } from '../../shared/types/bindings.ts';
-import type { ToolDefinition, RegisteredTool, ToolCategory } from './tool-definitions.ts';
-import type { Env } from '../../shared/types/index.ts';
-import type { SpaceRole } from '../../shared/types/index.ts';
-import { BUILTIN_TOOLS, isBuiltinTool, getBuiltinTool, getBuiltinHandler } from './builtin/index.ts';
-import { McpClient } from './mcp-client.ts';
-import { loadMcpTools } from './mcp-tools.ts';
-import { logWarn } from '../../shared/utils/logger.ts';
+import type { D1Database } from "../../shared/types/bindings.ts";
+import type {
+  RegisteredTool,
+  ToolCategory,
+  ToolDefinition,
+} from "./tool-definitions.ts";
+import type { Env } from "../../shared/types/index.ts";
+import type { SpaceRole } from "../../shared/types/index.ts";
+import {
+  BUILTIN_TOOLS,
+  getBuiltinHandler,
+  getBuiltinTool,
+  isBuiltinTool,
+} from "./builtin/index.ts";
+import type { McpClient } from "./mcp-client.ts";
+import { loadMcpTools } from "./mcp-tools.ts";
+import { logWarn } from "../../shared/utils/logger.ts";
 
 export interface ToolResolverOptions {
   disabledBuiltinTools?: string[];
@@ -21,13 +30,13 @@ export class ToolResolver {
   private initialized = false;
   private disabledBuiltinTools: Set<string>;
   private _mcpFailedServers: string[] = [];
-  private mcpExposureContext?: ToolResolverOptions['mcpExposureContext'];
+  private mcpExposureContext?: ToolResolverOptions["mcpExposureContext"];
 
   constructor(
     private db: D1Database,
     private spaceId: string,
     private env?: Env,
-    options?: ToolResolverOptions
+    options?: ToolResolverOptions,
   ) {
     this.disabledBuiltinTools = new Set(options?.disabledBuiltinTools || []);
     this.mcpExposureContext = options?.mcpExposureContext;
@@ -41,7 +50,7 @@ export class ToolResolver {
     if (this.initialized) return;
 
     if (this.env) {
-      const existingNames = new Set<string>(BUILTIN_TOOLS.map(t => t.name));
+      const existingNames = new Set<string>(BUILTIN_TOOLS.map((t) => t.name));
 
       const mcpResult = await loadMcpTools(
         this.db,
@@ -63,8 +72,10 @@ export class ToolResolver {
   }
 
   getAvailableTools(): ToolDefinition[] {
-    const tools: ToolDefinition[] = BUILTIN_TOOLS.filter((tool) => this.isBuiltinToolEnabled(tool.name));
-    const addedNames = new Set(tools.map(t => t.name));
+    const tools: ToolDefinition[] = BUILTIN_TOOLS.filter((tool) =>
+      this.isBuiltinToolEnabled(tool.name)
+    );
+    const addedNames = new Set(tools.map((t) => t.name));
 
     for (const [name, tool] of this.mcpTools) {
       if (!addedNames.has(name)) {
@@ -77,8 +88,10 @@ export class ToolResolver {
   }
 
   resolve(name: string): RegisteredTool | undefined {
-    if (!name || typeof name !== 'string') {
-      logWarn(`Invalid tool name format: ${name}`, { module: 'tools/resolver' });
+    if (!name || typeof name !== "string") {
+      logWarn(`Invalid tool name format: ${name}`, {
+        module: "tools/resolver",
+      });
       return undefined;
     }
 
@@ -99,7 +112,8 @@ export class ToolResolver {
   }
 
   exists(name: string): boolean {
-    return (isBuiltinTool(name) && this.isBuiltinToolEnabled(name)) || this.mcpTools.has(name);
+    return (isBuiltinTool(name) && this.isBuiltinToolEnabled(name)) ||
+      this.mcpTools.has(name);
   }
 
   isBuiltin(name: string): boolean {
@@ -108,8 +122,10 @@ export class ToolResolver {
 
   getToolNamesByCategory(category: ToolCategory): string[] {
     return BUILTIN_TOOLS
-      .filter(t => t.category === category && this.isBuiltinToolEnabled(t.name))
-      .map(t => t.name);
+      .filter((t) =>
+        t.category === category && this.isBuiltinToolEnabled(t.name)
+      )
+      .map((t) => t.name);
   }
 }
 
@@ -117,7 +133,7 @@ export async function createToolResolver(
   db: D1Database,
   spaceId: string,
   env?: Env,
-  options?: ToolResolverOptions
+  options?: ToolResolverOptions,
 ): Promise<ToolResolver> {
   const resolver = new ToolResolver(db, spaceId, env, options);
   await resolver.init();

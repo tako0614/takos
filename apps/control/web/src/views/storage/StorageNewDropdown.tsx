@@ -23,7 +23,7 @@ export function StorageNewDropdown(props: StorageNewDropdownProps) {
 
   return (
     <div class="relative" ref={ref}>
-      <button
+      <button type="button"
         onClick={() => setOpen(!open())}
         class="flex items-center gap-2 h-10 pl-4 pr-5 rounded-2xl bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 shadow-sm hover:shadow-md transition-shadow text-sm font-medium text-zinc-700 dark:text-zinc-200"
       >
@@ -32,7 +32,7 @@ export function StorageNewDropdown(props: StorageNewDropdownProps) {
       </button>
       <Show when={open()}>
         <div class="absolute top-full left-0 mt-1 w-48 rounded-xl bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 shadow-lg py-1 z-30">
-          <button
+          <button type="button"
             class="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-zinc-700 dark:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-700 transition-colors"
             onClick={() => { setOpen(false); props.onNewFolder(); }}
           >
@@ -40,7 +40,7 @@ export function StorageNewDropdown(props: StorageNewDropdownProps) {
             {t('newFolder')}
           </button>
           <div class="h-px bg-zinc-200 dark:bg-zinc-700 my-1" />
-          <button
+          <button type="button"
             class="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-zinc-700 dark:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-700 transition-colors"
             onClick={() => { setOpen(false); props.onUpload(); }}
           >

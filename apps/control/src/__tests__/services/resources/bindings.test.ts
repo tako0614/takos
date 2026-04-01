@@ -1,7 +1,7 @@
 import type { D1Database } from '@cloudflare/workers-types';
 
 import { assertEquals } from 'jsr:@std/assert';
-import { assertSpyCallArgs } from 'jsr:@std/testing/mock';
+import { assertSpyCallArgs, spy } from 'jsr:@std/testing/mock';
 
 const mocks = ({
   getDb: ((..._args: any[]) => undefined) as any,
@@ -12,7 +12,49 @@ const mocks = ({
 // [Deno] vi.mock removed - manually stub imports from '@/db'
 // [Deno] vi.mock removed - manually stub imports from '@/services/resources/store'
 // [Deno] vi.mock removed - manually stub imports from '@/services/resources/portable-runtime'
-import { buildBindingFromResource } from '@/services/resources/bindings';
+import {
+  buildBindingFromResource,
+  resourceBindingDeps,
+} from '@/services/resources/bindings';
+
+let resourceBindingsGetDb = resourceBindingDeps.getDb;
+let resourceBindingsGetResourceById = resourceBindingDeps.getResourceById;
+let resourceBindingsGetPortableSecretValue =
+  resourceBindingDeps.getPortableSecretValue;
+
+Object.defineProperties(mocks, {
+  getDb: {
+    configurable: true,
+    get: () => resourceBindingsGetDb,
+    set: (value) => {
+      resourceBindingsGetDb = value;
+      resourceBindingDeps.getDb =
+        value as typeof resourceBindingDeps.getDb;
+    },
+  },
+  getResourceById: {
+    configurable: true,
+    get: () => resourceBindingsGetResourceById,
+    set: (value) => {
+      resourceBindingsGetResourceById = value;
+      resourceBindingDeps.getResourceById =
+        value as typeof resourceBindingDeps.getResourceById;
+    },
+  },
+  getPortableSecretValue: {
+    configurable: true,
+    get: () => resourceBindingsGetPortableSecretValue,
+    set: (value) => {
+      resourceBindingsGetPortableSecretValue = value;
+      resourceBindingDeps.getPortableSecretValue =
+        value as typeof resourceBindingDeps.getPortableSecretValue;
+    },
+  },
+});
+
+mocks.getDb = resourceBindingDeps.getDb as any;
+mocks.getResourceById = resourceBindingDeps.getResourceById as any;
+mocks.getPortableSecretValue = resourceBindingDeps.getPortableSecretValue as any;
 
 
   Deno.test('buildBindingFromResource - returns null when resource not found', async () => {
@@ -195,7 +237,7 @@ import { buildBindingFromResource } from '@/services/resources/bindings';
 })
   Deno.test('buildBindingFromResource - resolves provider-backed Secret binding values on demand', async () => {
   /* mocks cleared (no-op in Deno) */ void 0;
-    mocks.getPortableSecretValue = (async () => 'portable-secret-value') as any;
+    mocks.getPortableSecretValue = spy(async () => 'portable-secret-value') as any;
   mocks.getResourceById = (async () => ({
       id: 'res-1',
       type: 'secretRef',

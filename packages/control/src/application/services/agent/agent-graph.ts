@@ -15,18 +15,18 @@ import {
 import { ChatOpenAI } from '@langchain/openai';
 import { ServiceUnavailableError } from 'takos-common/errors';
 import {
-  BaseMessage,
-  AIMessage,
+  type BaseMessage,
+  type AIMessage,
   SystemMessage,
   ToolMessage,
 } from '@langchain/core/messages';
-import type { ToolDefinition } from '../../tools/tool-definitions.ts';
-import type { ToolExecutorLike } from '../../tools/executor.ts';
+import type { ToolDefinition as _ToolDefinition } from '../../tools/tool-definitions.ts';
+import type { ToolExecutorLike as _ToolExecutorLike } from '../../tools/executor.ts';
 import { DEFAULT_MODEL_ID } from './model-catalog.ts';
 import { estimateTokens } from './prompt-budget.ts';
 import { withTimeout } from '../../../shared/utils/with-timeout.ts';
 import { logWarn } from '../../../shared/utils/logger.ts';
-import type { SqlDatabaseBinding } from '../../../shared/types/bindings.ts';
+import type { SqlDatabaseBinding as _SqlDatabaseBinding } from '../../../shared/types/bindings.ts';
 import { D1CheckpointSaver } from './graph-checkpointer.ts';
 import {
   extractMessageText,

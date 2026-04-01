@@ -217,7 +217,7 @@ export function MembersCard({
                         <option value="member">{getRoleLabel('member', t)}</option>
                         <option value="admin">{getRoleLabel('admin', t)}</option>
                       </select>
-                      <button
+                      <button type="button"
                         class="p-1.5 text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-700 rounded-lg transition-colors"
                         onClick={() => onRemove(member)}
                         title={t('remove') || 'Remove'}
@@ -312,7 +312,7 @@ export function CreateSpaceModal({
           <h3 class="text-lg font-semibold text-zinc-900 dark:text-zinc-100">
             {t('createSpace') || 'Create Space'}
           </h3>
-          <button
+          <button type="button"
             class="p-2 text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-800 rounded-lg transition-colors"
             onClick={handleClose}
           >

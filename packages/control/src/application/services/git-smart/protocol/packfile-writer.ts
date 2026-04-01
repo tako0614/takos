@@ -9,10 +9,14 @@
  * Phase 1: No delta compression (undeltified objects only).
  */
 
-import type { R2Bucket } from '../../../../shared/types/bindings.ts';
-import { sha1Bytes, concatBytes, hexFromBuffer } from '../core/sha1.ts';
-import { getObject } from '../core/object-store.ts';
-import type { GitObjectType } from '../git-objects.ts';
+import type { R2Bucket } from "../../../../shared/types/bindings.ts";
+import {
+  concatBytes,
+  type hexFromBuffer as _hexFromBuffer,
+  sha1Bytes,
+} from "../core/sha1.ts";
+import { getObject } from "../core/object-store.ts";
+import type { GitObjectType } from "../git-objects.ts";
 
 const PACK_SIGNATURE = new Uint8Array([0x50, 0x41, 0x43, 0x4B]); // "PACK"
 const PACK_VERSION = 2;
@@ -59,7 +63,7 @@ function encodeObjectHeader(typeNum: number, size: number): Uint8Array {
 }
 
 async function deflateData(data: Uint8Array): Promise<Uint8Array> {
-  const cs = new CompressionStream('deflate');
+  const cs = new CompressionStream("deflate");
   const writer = cs.writable.getWriter();
   writer.write(data.slice().buffer as ArrayBuffer);
   writer.close();
