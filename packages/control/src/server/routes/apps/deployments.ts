@@ -45,7 +45,7 @@ const routes = new Hono<SpaceAccessRouteEnv>()
     "/spaces/:spaceId/app-deployments",
     spaceAccess({ roles: APP_DEPLOYMENT_DEPLOY_ROLES }),
     zValidator("json", createAppDeploymentSchema),
-    async (c) => {
+    async (_c) => {
       try {
         c.req.valid("json");
         throwRemovedAppDeployments();
@@ -57,7 +57,7 @@ const routes = new Hono<SpaceAccessRouteEnv>()
   .get(
     "/spaces/:spaceId/app-deployments",
     spaceAccess({ roles: APP_DEPLOYMENT_LIST_ROLES }),
-    async (c) => {
+    async (_c) => {
       try {
         throwRemovedAppDeployments();
       } catch (error) {
