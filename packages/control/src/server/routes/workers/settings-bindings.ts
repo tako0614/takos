@@ -11,14 +11,21 @@ import { ServiceDesiredStateService } from '../../../application/services/platfo
 import { logError } from '../../../shared/utils/logger.ts';
 import { NotFoundError, InternalError } from 'takos-common/errors';
 
+export const workersSettingsBindingsRouteDeps = {
+  getServiceForUser,
+  getServiceForUserWithRole,
+  getDb,
+  createDesiredStateService: (env: AuthenticatedRouteEnv['Bindings']) => new ServiceDesiredStateService(env),
+};
+
 const settingsBindings = new Hono<AuthenticatedRouteEnv>()
 
 .get('/:id/bindings', async (c) => {
   const user = c.get('user');
   const workerId = c.req.param('id');
-  const db = getDb(c.env.DB);
+  const db = workersSettingsBindingsRouteDeps.getDb(c.env.DB);
 
-  const worker = await getServiceForUser(c.env.DB, workerId, user.id);
+  const worker = await workersSettingsBindingsRouteDeps.getServiceForUser(c.env.DB, workerId, user.id);
 
   if (!worker) {
     throw new NotFoundError('Service');
@@ -53,7 +60,7 @@ const settingsBindings = new Hono<AuthenticatedRouteEnv>()
       provider_resource_name: r.providerResourceName,
     }));
 
-    const desiredState = new ServiceDesiredStateService(c.env);
+    const desiredState = workersSettingsBindingsRouteDeps.createDesiredStateService(c.env);
     const bindings = await desiredState.listResourceBindings(worker.id);
 
     return c.json({
@@ -80,7 +87,7 @@ const settingsBindings = new Hono<AuthenticatedRouteEnv>()
   const user = c.get('user');
   const workerId = c.req.param('id');
 
-  const worker = await getServiceForUserWithRole(c.env.DB, workerId, user.id, ['owner', 'admin', 'editor']);
+  const worker = await workersSettingsBindingsRouteDeps.getServiceForUserWithRole(c.env.DB, workerId, user.id, ['owner', 'admin', 'editor']);
 
   if (!worker) {
     throw new NotFoundError('Service');
@@ -92,7 +99,7 @@ const settingsBindings = new Hono<AuthenticatedRouteEnv>()
     throw new BadRequestError( 'bindings array is required');
   }
 
-  const db = getDb(c.env.DB);
+  const db = workersSettingsBindingsRouteDeps.getDb(c.env.DB);
 
   try {
     // Get accessible resource IDs via resourceAccess
@@ -162,7 +169,7 @@ const settingsBindings = new Hono<AuthenticatedRouteEnv>()
       });
     }
 
-    const desiredState = new ServiceDesiredStateService(c.env);
+    const desiredState = workersSettingsBindingsRouteDeps.createDesiredStateService(c.env);
     await desiredState.replaceResourceBindings({
       workerId: worker.id,
       bindings: nextBindings as Parameters<typeof desiredState.replaceResourceBindings>[0]['bindings'],

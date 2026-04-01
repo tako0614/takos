@@ -45,6 +45,7 @@ export function ThreadList(props: ThreadListProps) {
           <Icons.MessageSquare class="w-4 h-4 shrink-0 opacity-70" />
           <span class="flex-1 truncate">{thread.title}</span>
           <button
+            type="button"
             class={ACTION_BTN}
             onClick={(e) => {
               e.stopPropagation();
@@ -60,6 +61,7 @@ export function ThreadList(props: ThreadListProps) {
             </Show>
           </button>
           <button
+            type="button"
             class={ACTION_BTN}
             onClick={(e) => {
               e.stopPropagation();

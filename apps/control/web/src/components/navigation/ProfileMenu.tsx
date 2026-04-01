@@ -43,6 +43,7 @@ export function ProfileMenu(props: ProfileMenuProps) {
   return (
     <div class="relative unified-profile-menu">
       <button
+        type="button"
         class={ROW_DEFAULT}
         onClick={(e) => {
           e.stopPropagation();
@@ -99,6 +100,7 @@ export function ProfileMenu(props: ProfileMenuProps) {
             </Show>
           </div>
           <button
+            type="button"
             class={PROFILE_MENU_BTN}
             role="menuitem"
             onClick={() => {
@@ -110,6 +112,7 @@ export function ProfileMenu(props: ProfileMenuProps) {
             <span>{t('accountSettings')}</span>
           </button>
           <button
+            type="button"
             class={PROFILE_MENU_BTN}
             role="menuitem"
             onClick={() => {

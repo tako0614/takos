@@ -9,9 +9,10 @@ export type SourceViewUiState = {
 };
 
 function readSourceViewUiState(): Partial<SourceViewUiState> {
-  if (typeof window === 'undefined') return {};
+  const storage = globalThis.sessionStorage;
+  if (!storage) return {};
   try {
-    const raw = window.sessionStorage.getItem(SOURCE_VIEW_UI_STATE_KEY);
+    const raw = storage.getItem(SOURCE_VIEW_UI_STATE_KEY);
     if (!raw) return {};
     const parsed = JSON.parse(raw) as Partial<SourceViewUiState> & { scrollTop?: number };
     const legacyScrollTop = typeof parsed.scrollTop === 'number' && Number.isFinite(parsed.scrollTop)
@@ -32,9 +33,10 @@ function readSourceViewUiState(): Partial<SourceViewUiState> {
 }
 
 function writeSourceViewUiState(nextState: SourceViewUiState) {
-  if (typeof window === 'undefined') return;
+  const storage = globalThis.sessionStorage;
+  if (!storage) return;
   try {
-    window.sessionStorage.setItem(SOURCE_VIEW_UI_STATE_KEY, JSON.stringify(nextState));
+    storage.setItem(SOURCE_VIEW_UI_STATE_KEY, JSON.stringify(nextState));
   } catch {
     // noop
   }
@@ -65,12 +67,12 @@ export function useSourceViewUiState() {
     const targetScrollTop = isSearchMode
       ? stateRef.searchScrollTop
       : stateRef.homeScrollTop;
-    const rafId = window.requestAnimationFrame(() => {
+    const rafId = globalThis.requestAnimationFrame(() => {
       if (scrollContainerRef) {
         scrollContainerRef.scrollTop = targetScrollTop;
       }
     });
-    return () => window.cancelAnimationFrame(rafId);
+    return () => globalThis.cancelAnimationFrame(rafId);
   };
 
   const handleContentScroll = (isSearchMode: boolean) => {

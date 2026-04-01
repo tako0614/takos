@@ -29,7 +29,7 @@ export function StorageViewerShell(props: {
       {/* Header */}
       <div class="flex-shrink-0 px-4 py-3 border-b border-zinc-200 dark:border-zinc-700 flex items-center justify-between gap-3">
         <div class="flex items-center gap-3 min-w-0">
-          <button
+          <button type="button"
             onClick={props.onClose}
             class="p-1.5 rounded-lg hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors"
             title={props.t('back')}
@@ -77,7 +77,7 @@ export function StorageViewerShell(props: {
             <Button
               variant="ghost"
               size="sm"
-              onClick={() => window.open(props.downloadUrl!, '_blank', 'noopener,noreferrer')}
+              onClick={() => globalThis.open(props.downloadUrl!, '_blank', 'noopener,noreferrer')}
               leftIcon={<Icons.Download class="w-4 h-4" />}
             >
               {props.t('download')}

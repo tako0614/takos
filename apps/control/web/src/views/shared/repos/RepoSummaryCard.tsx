@@ -54,7 +54,7 @@ export function RepoSummaryCard({
       )}
       <div class="flex items-center justify-between mt-4">
         <div class="flex items-center gap-4">
-          <button
+          <button type="button"
             class={`flex items-center gap-1 text-xs transition-colors ${
               is_starred ? 'text-zinc-900 dark:text-zinc-100' : 'text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-100'
             }`}

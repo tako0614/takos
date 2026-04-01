@@ -43,7 +43,7 @@ export function GeneralTab({
             <span class="text-sm text-zinc-500 dark:text-zinc-400">.{platformDomain}</span>
           )}
         </div>
-        <button
+        <button type="button"
           class="inline-flex items-center gap-2 px-4 py-2 bg-zinc-900 dark:bg-zinc-100 hover:bg-zinc-700 dark:hover:bg-zinc-300 text-white dark:text-zinc-900 rounded-lg text-sm font-medium transition-colors disabled:opacity-50"
           onClick={onSaveSlug}
           disabled={savingSlug || !editSlug.trim() || editSlug === (worker.slug ?? '')}

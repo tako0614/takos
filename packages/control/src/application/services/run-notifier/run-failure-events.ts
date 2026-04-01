@@ -1,11 +1,15 @@
-import type { Env } from '../../../shared/types/index.ts';
-import { getDb, runEvents } from '../../../infra/db/index.ts';
+import type { Env } from "../../../shared/types/index.ts";
+import { getDb, runEvents } from "../../../infra/db/index.ts";
 import {
   buildRunFailedPayload,
   type RunTerminalPayload,
-} from './run-events-contract.ts';
-import { buildRunNotifierEmitRequest, getRunNotifierStub } from './client.ts';
-import { buildRunNotifierEmitPayload } from './run-notifier-payload.ts';
+} from "./run-events-contract.ts";
+import { buildRunNotifierEmitRequest, getRunNotifierStub } from "./client.ts";
+import { buildRunNotifierEmitPayload } from "./run-notifier-payload.ts";
+
+export const runFailureEventDeps = {
+  getDb,
+};
 
 export interface PersistedRunFailedEvent {
   payload: RunTerminalPayload;
@@ -20,7 +24,7 @@ export interface PersistRunFailedEventOptions {
 }
 
 export async function persistRunFailedEvent(
-  env: Pick<Env, 'DB' | 'TAKOS_OFFLOAD'>,
+  env: Pick<Env, "DB" | "TAKOS_OFFLOAD">,
   runId: string,
   options: PersistRunFailedEventOptions,
 ): Promise<PersistedRunFailedEvent> {
@@ -35,28 +39,30 @@ export async function persistRunFailedEvent(
 
   const eventId = env.TAKOS_OFFLOAD
     ? null
-    : (await getDb(env.DB).insert(runEvents).values({
-        runId,
-        type: 'run.failed',
-        data: JSON.stringify(payload),
-        createdAt: options.createdAt,
-      }).returning({ id: runEvents.id }).get()).id;
+    : (await runFailureEventDeps.getDb(env.DB).insert(runEvents).values({
+      runId,
+      type: "run.failed",
+      data: JSON.stringify(payload),
+      createdAt: options.createdAt,
+    }).returning({ id: runEvents.id }).get()).id;
 
   return { payload, eventId };
 }
 
 export async function notifyRunFailedEvent(
-  env: Pick<Env, 'RUN_NOTIFIER'>,
+  env: Pick<Env, "RUN_NOTIFIER">,
   runId: string,
   event: PersistedRunFailedEvent,
 ): Promise<void> {
   const notifierStub = getRunNotifierStub(env, runId);
   const payload = buildRunNotifierEmitPayload(
     runId,
-    'run.failed',
+    "run.failed",
     event.payload,
     event.eventId,
   );
   const request = buildRunNotifierEmitRequest(payload);
-  await notifierStub.fetch(request as unknown as Parameters<typeof notifierStub.fetch>[0]);
+  await notifierStub.fetch(
+    request as unknown as Parameters<typeof notifierStub.fetch>[0],
+  );
 }

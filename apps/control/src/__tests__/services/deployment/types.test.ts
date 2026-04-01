@@ -4,11 +4,9 @@ import type {
   RoutingStatus,
   DeploymentProviderName,
   Deployment,
-  DeploymentEvent,
   CreateDeploymentInput,
   RollbackInput,
   DeploymentTarget,
-  DeploymentTargetEndpoint,
   DeploymentTargetArtifact,
 } from '@/services/deployment/types';
 

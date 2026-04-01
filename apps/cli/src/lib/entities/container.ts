@@ -5,7 +5,7 @@
  * interact with the existing group-deploy container deployment logic
  * and update local state.
  */
-import type { TakosState, ContainerState } from '../state/state-types.ts';
+import type { ContainerState } from '../state/state-types.ts';
 import { readState, writeState, getStateDir } from '../state/state-file.ts';
 import { deployContainerWithWrangler } from '../group-deploy/container.ts';
 import type { ContainerServiceDef, GroupDeployOptions } from '../group-deploy/deploy-models.ts';

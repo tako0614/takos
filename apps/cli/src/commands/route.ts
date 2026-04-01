@@ -7,7 +7,7 @@
  *   takos route list --group <name>     -- List routes in a group
  *   takos route show <name> --group <name>  -- Show details for a specific route
  */
-import { Command } from 'commander';
+import type { Command } from 'commander';
 import { bold, dim, red } from '@std/fmt/colors';
 import { readState, getStateDir } from '../lib/state/state-file.ts';
 import { cliExit } from '../lib/command-exit.ts';

@@ -79,7 +79,7 @@ export function UpstreamSyncWidget(props: UpstreamSyncWidgetProps) {
         <div class="flex items-center gap-2 px-3 py-2 bg-red-50 dark:bg-red-900/20 rounded-lg border border-red-200 dark:border-red-800">
           <Icons.AlertTriangle class="w-4 h-4 text-red-500" />
           <span class="text-sm text-red-600 dark:text-red-400">{error() || t('syncStatusError')}</span>
-          <button
+          <button type="button"
             onClick={fetchSyncStatus}
             class="ml-auto text-sm text-red-600 dark:text-red-400 hover:underline"
           >
@@ -106,7 +106,7 @@ export function UpstreamSyncWidget(props: UpstreamSyncWidgetProps) {
                     {t('upstreamSync')}
                   </span>
                 </div>
-                <button
+                <button type="button"
                   onClick={fetchSyncStatus}
                   disabled={loading() || syncing()}
                   class="p-1 text-zinc-500 dark:text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"

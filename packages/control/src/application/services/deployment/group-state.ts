@@ -2,7 +2,6 @@ import type {
   AppContainer,
   AppManifest,
   AppResource,
-  AppRoute,
   AppService,
   AppWorker,
 } from '../source/app-manifest-types.ts';

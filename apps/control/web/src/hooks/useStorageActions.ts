@@ -77,7 +77,7 @@ export function useStorageActions({
   const handleDownload = async (file: StorageFile) => {
     const url = await getDownloadUrl(file.id);
     if (url) {
-      window.open(url, '_blank', 'noopener,noreferrer');
+      globalThis.open(url, '_blank', 'noopener,noreferrer');
     } else {
       showToast('error', t('failedToGetDownloadUrl'));
     }

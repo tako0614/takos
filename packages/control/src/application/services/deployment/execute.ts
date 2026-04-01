@@ -26,7 +26,6 @@ import {
 } from './store.ts';
 import { executeDeploymentStep, updateDeploymentState } from './state.ts';
 import { reconcileManagedWorkerMcpServer } from '../platform/mcp.ts';
-import type { RoutingTarget } from '../routing/routing-models.ts';
 import {
   applyRoutingDbUpdates,
   applyRoutingToHostnames,

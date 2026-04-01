@@ -3,8 +3,6 @@ import { z } from 'zod';
 import type {
   Env,
   ReminderStatus,
-  ReminderTriggerType,
-  ReminderPriority,
 } from '../../../shared/types/index.ts';
 import { checkSpaceAccess } from '../../../application/services/identity/space-access.ts';
 import { requireSpaceAccess, type BaseVariables } from '../route-auth.ts';

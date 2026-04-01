@@ -20,7 +20,7 @@ import { logError } from '../../../shared/utils/logger.ts';
 export async function executeReview(
   context: WorkflowContext,
   prId: string,
-  reviewType: 'self' | 'separate_ai'
+  _reviewType: 'self' | 'separate_ai'
 ): Promise<ReviewResult> {
   const { env } = context;
   const apiKey = env.OPENAI_API_KEY;

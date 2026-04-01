@@ -1,101 +1,120 @@
-import { MockDurableObjectNamespace } from '../../../../test/integration/setup.ts';
-import type { Env } from '@/types';
+import type { Env } from "@/types";
 
-import { emitRunUsageEvent } from '@/services/offload/usage-client';
+import { emitRunUsageEvent } from "@/services/offload/usage-client";
 
+import { assertEquals, assertStringIncludes } from "jsr:@std/assert";
 
-import { assertEquals, assertStringIncludes } from 'jsr:@std/assert';
-import { stub, assertSpyCalls, assertSpyCallArgs } from 'jsr:@std/testing/mock';
+function createNotifierMock(fakeId: { toString: () => string }) {
+  const idFromName = ((name: string) => {
+    idFromName.calls.push([name]);
+    return fakeId;
+  }) as any;
+  idFromName.calls = [] as unknown[][];
+  const get = ((id: unknown) => {
+    get.calls.push([id]);
+    return { fetch };
+  }) as any;
+  get.calls = [] as unknown[][];
+  const requests: Request[] = [];
+  const fetch = async (request: Request) => {
+    requests.push(request);
+    return new Response("ok");
+  };
+  return { idFromName, get, requests };
+}
 
-  Deno.test('emitRunUsageEvent - is a no-op when TAKOS_OFFLOAD is not configured', async () => {
+Deno.test("emitRunUsageEvent - is a no-op when TAKOS_OFFLOAD is not configured", async () => {
   /* mocks cleared (no-op in Deno) */ void 0;
   const env = { TAKOS_OFFLOAD: undefined } as unknown as Env;
-    // Should not throw
-    await emitRunUsageEvent(env, { runId: 'r1', meterType: 'llm_tokens_input', units: 10 });
-})
-  Deno.test('emitRunUsageEvent - is a no-op when RUN_NOTIFIER namespace is not configured', async () => {
+  // Should not throw
+  await emitRunUsageEvent(env, {
+    runId: "r1",
+    meterType: "llm_tokens_input",
+    units: 10,
+  });
+});
+Deno.test("emitRunUsageEvent - is a no-op when RUN_NOTIFIER namespace is not configured", async () => {
   /* mocks cleared (no-op in Deno) */ void 0;
   const env = {
-      TAKOS_OFFLOAD: {} as unknown,
-      RUN_NOTIFIER: undefined,
-    } as unknown as Env;
+    TAKOS_OFFLOAD: {} as unknown,
+    RUN_NOTIFIER: undefined,
+  } as unknown as Env;
 
-    await emitRunUsageEvent(env, { runId: 'r1', meterType: 'llm_tokens_input', units: 10 });
-})
-  Deno.test('emitRunUsageEvent - is a no-op when runId is empty', async () => {
+  await emitRunUsageEvent(env, {
+    runId: "r1",
+    meterType: "llm_tokens_input",
+    units: 10,
+  });
+});
+Deno.test("emitRunUsageEvent - is a no-op when runId is empty", async () => {
   /* mocks cleared (no-op in Deno) */ void 0;
-  const ns = new MockDurableObjectNamespace();
-    const fetchSpy = stub(ns.getByName('any'), 'fetch');
+  const ns = createNotifierMock({ toString: () => "fake-id" });
 
-    const env = {
-      TAKOS_OFFLOAD: {} as unknown,
-      RUN_NOTIFIER: ns,
-    } as unknown as Env;
+  const env = {
+    TAKOS_OFFLOAD: {} as unknown,
+    RUN_NOTIFIER: ns,
+  } as unknown as Env;
 
-    await emitRunUsageEvent(env, { runId: '', meterType: 'exec_seconds', units: 5 });
-    assertSpyCalls(fetchSpy, 0);
-})
-  Deno.test('emitRunUsageEvent - sends a POST /usage request to the durable object stub', async () => {
+  await emitRunUsageEvent(env, {
+    runId: "",
+    meterType: "exec_seconds",
+    units: 5,
+  });
+  assertEquals(ns.requests.length, 0);
+});
+Deno.test("emitRunUsageEvent - sends a POST /usage request to the durable object stub", async () => {
   /* mocks cleared (no-op in Deno) */ void 0;
-  const stubFetch = (async () => new Response('ok'));
-    const fakeId = { toString: () => 'fake-id' };
-    const ns = {
-      idFromName: (() => fakeId),
-      get: (() => ({ fetch: stubFetch })),
-    };
+  const fakeId = { toString: () => "fake-id" };
+  const ns = createNotifierMock(fakeId);
 
-    const env = {
-      TAKOS_OFFLOAD: {} as unknown,
-      RUN_NOTIFIER: ns,
-    } as unknown as Env;
+  const env = {
+    TAKOS_OFFLOAD: {} as unknown,
+    RUN_NOTIFIER: ns,
+  } as unknown as Env;
 
-    await emitRunUsageEvent(env, {
-      runId: 'run-123',
-      meterType: 'llm_tokens_input',
-      units: 1000,
-      referenceType: 'completion',
-      metadata: { model: 'gpt-4' },
-    });
+  await emitRunUsageEvent(env, {
+    runId: "run-123",
+    meterType: "llm_tokens_input",
+    units: 1000,
+    referenceType: "completion",
+    metadata: { model: "gpt-4" },
+  });
 
-    assertSpyCallArgs(ns.idFromName, 0, ['run-123']);
-    assertSpyCallArgs(ns.get, 0, [fakeId]);
-    assertSpyCalls(stubFetch, 1);
+  assertEquals(ns.idFromName.calls[0], ["run-123"]);
+  assertEquals(ns.get.calls[0], [fakeId]);
+  assertEquals(ns.requests.length, 1);
 
-    const req = stubFetch.calls[0][0] as Request;
-    assertEquals(req.method, 'POST');
-    assertStringIncludes(req.url, '/usage');
-    assertEquals(req.headers.get('Content-Type'), 'application/json');
-    assertEquals(req.headers.get('X-Takos-Internal'), '1');
+  const req = ns.requests[0];
+  assertEquals(req.method, "POST");
+  assertStringIncludes(req.url, "/usage");
+  assertEquals(req.headers.get("Content-Type"), "application/json");
+  assertEquals(req.headers.get("X-Takos-Internal"), "1");
 
-    const body = await req.json() as Record<string, unknown>;
-    assertEquals(body.runId, 'run-123');
-    assertEquals(body.meter_type, 'llm_tokens_input');
-    assertEquals(body.units, 1000);
-    assertEquals(body.reference_type, 'completion');
-    assertEquals(body.metadata, { model: 'gpt-4' });
-})
-  Deno.test('emitRunUsageEvent - sends optional fields as undefined when not provided', async () => {
+  const body = await req.json() as Record<string, unknown>;
+  assertEquals(body.runId, "run-123");
+  assertEquals(body.meter_type, "llm_tokens_input");
+  assertEquals(body.units, 1000);
+  assertEquals(body.reference_type, "completion");
+  assertEquals(body.metadata, { model: "gpt-4" });
+});
+Deno.test("emitRunUsageEvent - sends optional fields as undefined when not provided", async () => {
   /* mocks cleared (no-op in Deno) */ void 0;
-  const stubFetch = (async () => new Response('ok'));
-    const fakeId = { toString: () => 'id' };
-    const ns = {
-      idFromName: (() => fakeId),
-      get: (() => ({ fetch: stubFetch })),
-    };
+  const fakeId = { toString: () => "id" };
+  const ns = createNotifierMock(fakeId);
 
-    const env = {
-      TAKOS_OFFLOAD: {} as unknown,
-      RUN_NOTIFIER: ns,
-    } as unknown as Env;
+  const env = {
+    TAKOS_OFFLOAD: {} as unknown,
+    RUN_NOTIFIER: ns,
+  } as unknown as Env;
 
-    await emitRunUsageEvent(env, {
-      runId: 'run-456',
-      meterType: 'exec_seconds',
-      units: 30,
-    });
+  await emitRunUsageEvent(env, {
+    runId: "run-456",
+    meterType: "exec_seconds",
+    units: 30,
+  });
 
-    const req = stubFetch.calls[0][0] as Request;
-    const body = await req.json() as Record<string, unknown>;
-    assertEquals(body.reference_type, undefined);
-    assertEquals(body.metadata, undefined);
-})
+  const req = ns.requests[0];
+  const body = await req.json() as Record<string, unknown>;
+  assertEquals(body.reference_type, undefined);
+  assertEquals(body.metadata, undefined);
+});

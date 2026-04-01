@@ -1,6 +1,6 @@
 import type { D1Database } from '../../../shared/types/bindings.ts';
 import type { SelectOf } from '../../../shared/types/drizzle-utils.ts';
-import { eq, and, sql } from 'drizzle-orm';
+import { eq, and, type sql as _sql } from 'drizzle-orm';
 import type { Env } from '../../../shared/types/index.ts';
 import { ALL_SCOPES } from '../../../shared/types/oauth.ts';
 import { generateId } from '../../../shared/utils/index.ts';
@@ -8,7 +8,7 @@ import { decrypt, encrypt, type EncryptedData } from '../../../shared/utils/cryp
 import { getCommonEnvSecret, normalizeEnvName } from './crypto.ts';
 import type { SyncState } from './repository.ts';
 import { issueTakosAccessToken } from '../identity/takos-access-tokens.ts';
-import { getDb, accounts, accountMemberships, serviceManagedTakosTokens } from '../../../infra/db/index.ts';
+import { getDb, accounts, type accountMemberships as _accountMemberships, serviceManagedTakosTokens } from '../../../infra/db/index.ts';
 
 export const TAKOS_API_URL_ENV_NAME = 'TAKOS_API_URL';
 export const TAKOS_ACCESS_TOKEN_ENV_NAME = 'TAKOS_ACCESS_TOKEN';

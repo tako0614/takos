@@ -8,7 +8,7 @@
 import crypto from 'node:crypto';
 import fs from 'node:fs/promises';
 
-import type { TakosState, WorkerState } from '../state/state-types.ts';
+import type { WorkerState } from '../state/state-types.ts';
 import { readState, writeState, getStateDir } from '../state/state-file.ts';
 import { deployWorkerWithWrangler } from '../group-deploy/deploy-worker.ts';
 import { generateWranglerConfig, serializeWranglerToml } from '../group-deploy/wrangler-config.ts';

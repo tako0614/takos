@@ -1,8 +1,18 @@
-import type { D1Database } from '../../../shared/types/bindings.ts';
-import { getDb, workflowRuns, workflowJobs, workflowSteps, accounts } from '../../../infra/db/index.ts';
-import { eq, and, desc, asc } from 'drizzle-orm';
-import { safeJsonParseOrDefault } from '../../../shared/utils/index.ts';
-import { textDateNullable } from '../../../shared/utils/db-guards.ts';
+import type { D1Database } from "../../../shared/types/bindings.ts";
+import {
+  accounts,
+  getDb,
+  workflowJobs,
+  workflowRuns,
+  workflowSteps,
+} from "../../../infra/db/index.ts";
+import { and, asc, desc, eq } from "drizzle-orm";
+import { safeJsonParseOrDefault } from "../../../shared/utils/index.ts";
+import { textDateNullable } from "../../../shared/utils/db-guards.ts";
+
+export const workflowRunReadModelDeps = {
+  getDb,
+};
 
 type ListWorkflowRunsOptions = {
   repoId: string;
@@ -14,8 +24,11 @@ type ListWorkflowRunsOptions = {
   offset: number;
 };
 
-export async function listWorkflowRuns(db: D1Database, options: ListWorkflowRunsOptions) {
-  const drizzle = getDb(db);
+export async function listWorkflowRuns(
+  db: D1Database,
+  options: ListWorkflowRunsOptions,
+) {
+  const drizzle = workflowRunReadModelDeps.getDb(db);
 
   const conditions = [eq(workflowRuns.repoId, options.repoId)];
   if (options.workflow) {
@@ -78,18 +91,22 @@ export async function listWorkflowRuns(db: D1Database, options: ListWorkflowRuns
       created_at: textDateNullable(run.createdAt),
       actor: run.actorId
         ? {
-            id: run.actorId,
-            name: run.actorName,
-            avatar_url: run.actorPicture,
-          }
+          id: run.actorId,
+          name: run.actorName,
+          avatar_url: run.actorPicture,
+        }
         : null,
     })),
     has_more: hasMore,
   };
 }
 
-export async function getWorkflowRunDetail(db: D1Database, repoId: string, runId: string) {
-  const drizzle = getDb(db);
+export async function getWorkflowRunDetail(
+  db: D1Database,
+  repoId: string,
+  runId: string,
+) {
+  const drizzle = workflowRunReadModelDeps.getDb(db);
   const runData = await drizzle.select({
     id: workflowRuns.id,
     workflowPath: workflowRuns.workflowPath,
@@ -165,18 +182,22 @@ export async function getWorkflowRunDetail(db: D1Database, repoId: string, runId
       created_at: textDateNullable(runData.createdAt),
       actor: runData.actorAccountId
         ? {
-            id: runData.actorAccountId,
-            name: runData.actorName,
-            avatar_url: runData.actorPicture,
-          }
+          id: runData.actorAccountId,
+          name: runData.actorName,
+          avatar_url: runData.actorPicture,
+        }
         : null,
       jobs,
     },
   };
 }
 
-export async function getWorkflowRunJobs(db: D1Database, repoId: string, runId: string) {
-  const drizzle = getDb(db);
+export async function getWorkflowRunJobs(
+  db: D1Database,
+  repoId: string,
+  runId: string,
+) {
+  const drizzle = workflowRunReadModelDeps.getDb(db);
   const run = await drizzle.select({ id: workflowRuns.id })
     .from(workflowRuns)
     .where(and(eq(workflowRuns.id, runId), eq(workflowRuns.repoId, repoId)))

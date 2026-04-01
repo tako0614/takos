@@ -62,6 +62,7 @@ async function withEnv<T>(vars: EnvMap, fn: () => Promise<T> | T): Promise<T> {
 async function withTempPath<T>(
   scripts: Record<string, string>,
   fn: () => Promise<T> | T,
+  options: { inheritCurrentPath?: boolean } = {},
 ): Promise<T> {
   const dir = createTempDir();
   try {
@@ -70,9 +71,9 @@ async function withTempPath<T>(
     }
 
     const currentPath = Deno.env.get("PATH");
-    const nextPath = currentPath
-      ? `${dir}${PATH_SEPARATOR}${currentPath}`
-      : dir;
+    const nextPath = options.inheritCurrentPath === false || !currentPath
+      ? dir
+      : `${dir}${PATH_SEPARATOR}${currentPath}`;
     return await withEnv({ PATH: nextPath }, fn);
   } finally {
     removeTempDir(dir);
@@ -630,7 +631,7 @@ Deno.test("Non-Cloudflare providers graceful failure - AWSProvider handles missi
     const result = await provider.createDatabase("test-db");
     assertEquals(result.status, "failed");
     assertStringIncludes(result.error ?? "", "not available");
-  });
+  }, { inheritCurrentPath: false });
 });
 
 Deno.test("Non-Cloudflare providers graceful failure - GCPProvider handles missing gcloud CLI", async () => {
@@ -639,7 +640,7 @@ Deno.test("Non-Cloudflare providers graceful failure - GCPProvider handles missi
     const result = await provider.createDatabase("test-db");
     assertEquals(result.status, "failed");
     assertStringIncludes(result.error ?? "", "not available");
-  });
+  }, { inheritCurrentPath: false });
 });
 
 Deno.test("Non-Cloudflare providers graceful failure - K8sProvider handles missing kubectl CLI", async () => {
@@ -648,7 +649,7 @@ Deno.test("Non-Cloudflare providers graceful failure - K8sProvider handles missi
     const result = await provider.createDatabase("test-db");
     assertEquals(result.status, "failed");
     assertStringIncludes(result.error ?? "", "not available");
-  });
+  }, { inheritCurrentPath: false });
 });
 
 Deno.test("Non-Cloudflare providers graceful failure - DockerProvider handles missing docker CLI", async () => {
@@ -657,5 +658,5 @@ Deno.test("Non-Cloudflare providers graceful failure - DockerProvider handles mi
     const result = await provider.createDatabase("test-db");
     assertEquals(result.status, "failed");
     assertStringIncludes(result.error ?? "", "not available");
-  });
+  }, { inheritCurrentPath: false });
 });

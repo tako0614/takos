@@ -1,32 +1,37 @@
-import type { Env } from '../../../shared/types/index.ts';
-import { getDb, repositories, accounts, repoStars } from '../../../infra/db/index.ts';
-import { eq, and, desc, asc, gte, like, inArray, count } from 'drizzle-orm';
-import type { SQL, SQLWrapper } from 'drizzle-orm';
+import type { Env } from "../../../shared/types/index.ts";
+import { accounts, repositories, repoStars } from "../../../infra/db/index.ts";
+import { and, count, eq, gte, inArray, like } from "drizzle-orm";
+import type { SQL, SQLWrapper } from "drizzle-orm";
 import type {
   ExploreRepoResponse,
   ExploreReposResult,
-  RepositoryWithAccount,
   ParsedCatalogTags,
-} from './explore-types.ts';
+  RepositoryWithAccount,
+} from "./explore-types.ts";
+import { sourceServiceDeps } from "./deps.ts";
 
 // Whitelist of allowed ORDER BY columns to prevent SQL injection
 export const ALLOWED_ORDER_BY_COLUMNS = {
-  'updated': 'updatedAt',
-  'created': 'createdAt',
-  'forks': 'forks',
-  'stars': 'stars',
+  "updated": "updatedAt",
+  "created": "createdAt",
+  "forks": "forks",
+  "stars": "stars",
 } as const;
 
-export function resolveOrderByColumn(sort: string): keyof typeof ALLOWED_ORDER_BY_COLUMNS | 'stars' {
-  return (sort in ALLOWED_ORDER_BY_COLUMNS ? sort : 'stars') as keyof typeof ALLOWED_ORDER_BY_COLUMNS;
+export function resolveOrderByColumn(
+  sort: string,
+): keyof typeof ALLOWED_ORDER_BY_COLUMNS | "stars" {
+  return (sort in ALLOWED_ORDER_BY_COLUMNS
+    ? sort
+    : "stars") as keyof typeof ALLOWED_ORDER_BY_COLUMNS;
 }
 
-export function resolveOrderDirection(order: string): 'asc' | 'desc' {
+export function resolveOrderDirection(order: string): "asc" | "desc" {
   const direction = order.toLowerCase();
-  return direction === 'asc' ? 'asc' : 'desc';
+  return direction === "asc" ? "asc" : "desc";
 }
 
-export function resolveAccountOwner(account: RepositoryWithAccount['account']) {
+export function resolveAccountOwner(account: RepositoryWithAccount["account"]) {
   return {
     id: account.id,
     name: account.name,
@@ -38,7 +43,7 @@ export function resolveAccountOwner(account: RepositoryWithAccount['account']) {
 export function parseCatalogTags(raw: string | undefined): ParsedCatalogTags {
   if (!raw) return { tags: [], invalid: false };
   const tags = raw
-    .split(',')
+    .split(",")
     .map((value) => value.trim().toLowerCase())
     .filter(Boolean)
     .slice(0, 10);
@@ -56,20 +61,24 @@ export function computeTrendingScore(options: {
   updatedAtMs: number;
 }): number {
   const nowMs = Date.now();
-  const ageDays = Math.max(0, (nowMs - options.updatedAtMs) / (1000 * 60 * 60 * 24));
-  return (Math.log10(options.downloads + 1) + Math.log10(options.stars + 1)) / (ageDays + 2);
+  const ageDays = Math.max(
+    0,
+    (nowMs - options.updatedAtMs) / (1000 * 60 * 60 * 24),
+  );
+  return (Math.log10(options.downloads + 1) + Math.log10(options.stars + 1)) /
+    (ageDays + 2);
 }
 
 export async function getStarredRepoIds(
-  dbBinding: Env['DB'],
+  dbBinding: Env["DB"],
   userId: string | undefined,
-  repoIds: string[]
+  repoIds: string[],
 ) {
   if (!userId || repoIds.length === 0) {
     return new Set<string>();
   }
 
-  const db = getDb(dbBinding);
+  const db = sourceServiceDeps.getDb(dbBinding);
 
   const stars = await db.select({ repoId: repoStars.repoId }).from(repoStars)
     .where(and(
@@ -78,45 +87,46 @@ export async function getStarredRepoIds(
     ))
     .all();
 
-  return new Set(stars.map(s => s.repoId));
+  return new Set(stars.map((s) => s.repoId));
 }
 
 export function mapExploreRepos(
   repos: RepositoryWithAccount[],
-  starredIds: Set<string>
+  starredIds: Set<string>,
 ): ExploreRepoResponse[] {
   return repos.map((repo) => {
     const owner = resolveAccountOwner(repo.account);
     return ({
-    id: repo.id,
-    name: repo.name,
-    description: repo.description,
-    visibility: 'public',
-    default_branch: repo.defaultBranch,
-    stars: repo.stars,
-    forks: repo.forks,
-    workspace: {
-      id: repo.account.id,
-      name: repo.account.name,
-    },
-    owner,
-    is_starred: starredIds.has(repo.id),
-    created_at: repo.createdAt || '',
-    updated_at: repo.updatedAt || '',
-  })});
+      id: repo.id,
+      name: repo.name,
+      description: repo.description,
+      visibility: "public",
+      default_branch: repo.defaultBranch,
+      stars: repo.stars,
+      forks: repo.forks,
+      workspace: {
+        id: repo.account.id,
+        name: repo.account.name,
+      },
+      owner,
+      is_starred: starredIds.has(repo.id),
+      created_at: repo.createdAt || "",
+      updated_at: repo.updatedAt || "",
+    });
+  });
 }
 
 export async function buildExploreResult(
-  dbBinding: Env['DB'],
+  dbBinding: Env["DB"],
   repos: RepositoryWithAccount[],
   total: number,
   offset: number,
-  userId?: string
+  userId?: string,
 ): Promise<ExploreReposResult> {
   const starredIds = await getStarredRepoIds(
     dbBinding,
     userId,
-    repos.map(repo => repo.id)
+    repos.map((repo) => repo.id),
   );
   const mappedRepos = mapExploreRepos(repos, starredIds);
 
@@ -129,15 +139,15 @@ export async function buildExploreResult(
 
 // Helper to query repos with joined account info
 export async function queryReposWithAccount(
-  dbBinding: Env['DB'],
+  dbBinding: Env["DB"],
   options: {
     conditions: (SQLWrapper | undefined)[];
     orderBy: SQL[];
     limit?: number;
     offset?: number;
-  }
+  },
 ): Promise<RepositoryWithAccount[]> {
-  const db = getDb(dbBinding);
+  const db = sourceServiceDeps.getDb(dbBinding);
   const rows = await db.select({
     id: repositories.id,
     name: repositories.name,
@@ -163,7 +173,7 @@ export async function queryReposWithAccount(
     .offset(options.offset ?? 0)
     .all();
 
-  return rows.map(r => ({
+  return rows.map((r) => ({
     id: r.id,
     name: r.name,
     description: r.description,
@@ -185,10 +195,10 @@ export async function queryReposWithAccount(
 }
 
 export async function countRepos(
-  dbBinding: Env['DB'],
-  conditions: (SQLWrapper | undefined)[]
+  dbBinding: Env["DB"],
+  conditions: (SQLWrapper | undefined)[],
 ): Promise<number> {
-  const db = getDb(dbBinding);
+  const db = sourceServiceDeps.getDb(dbBinding);
   const result = await db.select({ count: count() })
     .from(repositories)
     .where(and(...conditions))
@@ -201,15 +211,23 @@ export function buildBaseConditions(options: {
   language?: string;
   license?: string;
   since?: string;
-  sinceField?: 'createdAt' | 'updatedAt';
+  sinceField?: "createdAt" | "updatedAt";
   searchQuery?: string;
 }): SQL[] {
-  const conditions: SQL[] = [eq(repositories.visibility, 'public')];
-  if (options.category) conditions.push(eq(repositories.officialCategory, options.category));
-  if (options.language) conditions.push(eq(repositories.primaryLanguage, options.language));
-  if (options.license) conditions.push(eq(repositories.license, options.license));
+  const conditions: SQL[] = [eq(repositories.visibility, "public")];
+  if (options.category) {
+    conditions.push(eq(repositories.officialCategory, options.category));
+  }
+  if (options.language) {
+    conditions.push(eq(repositories.primaryLanguage, options.language));
+  }
+  if (options.license) {
+    conditions.push(eq(repositories.license, options.license));
+  }
   if (options.since) {
-    const field = options.sinceField === 'createdAt' ? repositories.createdAt : repositories.updatedAt;
+    const field = options.sinceField === "createdAt"
+      ? repositories.createdAt
+      : repositories.updatedAt;
     conditions.push(gte(field, options.since));
   }
   if (options.searchQuery) {

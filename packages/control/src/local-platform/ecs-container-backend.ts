@@ -28,22 +28,6 @@ function parseArnTerminalName(raw: string | undefined): string | undefined {
   return slash && slash.length > 0 ? slash : undefined;
 }
 
-function readStringArray(value: unknown): string[] {
-  if (Array.isArray(value)) {
-    return value.flatMap((entry) => {
-      const text = readString(entry);
-      return text ? [text] : [];
-    });
-  }
-  if (typeof value === 'string') {
-    return value
-      .split(',')
-      .map((entry) => entry.trim())
-      .filter((entry) => entry.length > 0);
-  }
-  return [];
-}
-
 function readObjectRecord(value: unknown): Record<string, unknown> | undefined {
   return value && typeof value === 'object' && !Array.isArray(value)
     ? value as Record<string, unknown>

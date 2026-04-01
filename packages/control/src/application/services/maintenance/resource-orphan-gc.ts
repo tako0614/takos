@@ -5,6 +5,11 @@ import { and, eq, isNotNull, lt } from 'drizzle-orm';
 import { deleteManagedResource } from '../resources/lifecycle.ts';
 import { logError } from '../../../shared/utils/logger.ts';
 
+export const resourceOrphanGcDeps = {
+  getDb,
+  deleteManagedResource,
+};
+
 export interface ResourceOrphanGcSummary {
   deleted: number;
   failed: number;
@@ -25,7 +30,7 @@ export async function gcOrphanedResources(
   const gracePeriodMs = gracePeriodDays * 24 * 60 * 60 * 1000;
   const cutoffTime = new Date(Date.now() - gracePeriodMs).toISOString();
 
-  const db = getDb(env.DB);
+  const db = resourceOrphanGcDeps.getDb(env.DB);
 
   const orphaned = await db.select({
     id: resources.id,
@@ -45,7 +50,7 @@ export async function gcOrphanedResources(
 
   for (const resource of orphaned) {
     try {
-      await deleteManagedResource(env, {
+      await resourceOrphanGcDeps.deleteManagedResource(env, {
         type: resource.type,
         providerName: resource.providerName,
         providerResourceId: resource.providerResourceId,

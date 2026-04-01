@@ -1,5 +1,5 @@
-import type { Env, DbEnv } from '../../../shared/types/index.ts';
-import { parseServiceResponse, ServiceCallError } from '../../../shared/utils/service-client.ts';
+import type { DbEnv } from '../../../shared/types/index.ts';
+import { parseServiceResponse } from '../../../shared/utils/service-client.ts';
 import { getOrCreateBillingAccount, recordUsage } from '../billing/billing.ts';
 import { withTimeout } from '../../../shared/utils/with-timeout.ts';
 import { logWarn, logError } from '../../../shared/utils/logger.ts';

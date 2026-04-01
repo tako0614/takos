@@ -8,8 +8,13 @@ export function toSafeHref(href: string | null | undefined): string | null {
   if (!trimmed) return null;
 
   // Strip control characters and whitespace to prevent obfuscated schemes.
-  // eslint-disable-next-line no-control-regex
-  const compact = trimmed.replace(/[\u0000-\u0020\u007f]+/g, '').toLowerCase();
+  let compact = '';
+  for (let i = 0; i < trimmed.length; i += 1) {
+    const code = trimmed.charCodeAt(i);
+    if (code <= 0x20 || code === 0x7f) continue;
+    compact += trimmed[i];
+  }
+  compact = compact.toLowerCase();
 
   for (const scheme of BLOCKED_SCHEMES) {
     if (compact.startsWith(`${scheme}:`)) {

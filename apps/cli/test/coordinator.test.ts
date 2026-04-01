@@ -1,7 +1,7 @@
 import { computeDiff } from "../src/lib/state/diff.ts";
 import type { TakosState } from "../src/lib/state/state-types.ts";
 import type { AppManifest } from "../src/lib/app-manifest.ts";
-import type { DiffEntry, DiffResult } from "../src/lib/state/diff.ts";
+import type { DiffResult } from "../src/lib/state/diff.ts";
 
 // ── Test helpers ────────────────────────────────────────────────────────────
 

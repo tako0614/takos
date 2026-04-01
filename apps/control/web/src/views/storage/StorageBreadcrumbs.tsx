@@ -1,4 +1,4 @@
-import { For, Show } from 'solid-js';
+import { For } from 'solid-js';
 import { useI18n } from '../../store/i18n.ts';
 import { Icons } from '../../lib/Icons.tsx';
 
@@ -13,7 +13,7 @@ export function StorageBreadcrumbs(props: StorageBreadcrumbsProps) {
 
   return (
     <div class="flex-shrink-0 flex items-center gap-1 px-5 pb-2 overflow-x-auto">
-      <button
+      <button type="button"
         onClick={() => props.onNavigate('/')}
         class={
           'flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm transition-colors '
@@ -30,7 +30,7 @@ export function StorageBreadcrumbs(props: StorageBreadcrumbsProps) {
         return (
           <>
             <Icons.ChevronRight class="w-4 h-4 text-zinc-400 flex-shrink-0" />
-            <button
+            <button type="button"
               onClick={() => props.onNavigate('/' + breadcrumbParts().slice(0, index() + 1).join('/'))}
               class={
                 'px-3 py-1.5 rounded-lg text-sm truncate max-w-[200px] transition-colors '

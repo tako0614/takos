@@ -168,13 +168,6 @@ export async function deployWorker(
     });
   }
 
-  const config: WorkerConfig = {
-    scriptName,
-    deployedAt: now,
-    codeHash,
-    ...(opts.specFingerprint ? { specFingerprint: opts.specFingerprint } : {}),
-    ...(opts.dispatchNamespace ? { dispatchNamespace: opts.dispatchNamespace } : {}),
-  };
   const record = await upsertGroupManagedService(env, {
     groupId,
     spaceId: opts.spaceId,

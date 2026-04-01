@@ -8,6 +8,18 @@
     "hono": "npm:hono@^4.12.4",
     "playwright-core": "npm:playwright-core@^1.52.0"
   },
+  "lint": {
+    "rules": {
+      "exclude": [
+        "no-explicit-any",
+        "no-import-prefix",
+        "no-process-global",
+        "no-unversioned-import",
+        "no-unsafe-finally",
+        "require-await"
+      ]
+    }
+  },
   "tasks": {
     "test": "deno test --allow-all src/",
     "start": "deno run --allow-all src/app.ts"

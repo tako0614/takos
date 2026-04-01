@@ -9,7 +9,7 @@ export function asRecord(value: unknown): Record<string, unknown> {
   return value as Record<string, unknown>;
 }
 
-export function asString(value: unknown, field: string): string | undefined {
+export function asString(value: unknown, _field: string): string | undefined {
   const normalized = String(value ?? '').trim();
   if (!normalized) {
     return undefined;

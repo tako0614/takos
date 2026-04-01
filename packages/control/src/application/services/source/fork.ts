@@ -1,13 +1,11 @@
-import type { D1Database, R2Bucket } from '../../../shared/types/bindings.ts';
-import type { Repository } from '../../../shared/types/index.ts';
-import { generateId, sanitizeRepoName } from '../../../shared/utils/index.ts';
-import * as gitStore from '../git-smart/index.ts';
-import { toApiRepositoryFromDb } from './repos.ts';
-import { getDb, repositories, repoReleases } from '../../../infra/db/index.ts';
-import { eq, and, desc } from 'drizzle-orm';
-import { sql } from 'drizzle-orm';
-import { logError } from '../../../shared/utils/logger.ts';
-import { textDateNullable } from '../../../shared/utils/db-guards.ts';
+import type { D1Database, R2Bucket } from "../../../shared/types/bindings.ts";
+import type { Repository } from "../../../shared/types/index.ts";
+import { toApiRepositoryFromDb } from "./repos.ts";
+import { repoReleases, repositories } from "../../../infra/db/index.ts";
+import { and, desc, eq } from "drizzle-orm";
+import { sql } from "drizzle-orm";
+import { textDateNullable } from "../../../shared/utils/db-guards.ts";
+import { sourceServiceDeps } from "./deps.ts";
 
 export interface ForkOptions {
   name?: string;
@@ -50,7 +48,7 @@ export interface UpstreamRelease {
 }
 
 export interface SyncOptions {
-  strategy: 'merge' | 'rebase';
+  strategy: "merge" | "rebase";
   target_ref?: string;
 }
 
@@ -72,25 +70,38 @@ export async function forkWithWorkflows(
   bucket: R2Bucket | undefined,
   sourceRepoId: string,
   targetWorkspaceId: string,
-  options: ForkOptions = {}
+  options: ForkOptions = {},
 ): Promise<ForkResult> {
-  const drizzle = getDb(db);
+  const drizzle = sourceServiceDeps.getDb(db);
 
-  const sourceRepo = await drizzle.select().from(repositories).where(eq(repositories.id, sourceRepoId)).get();
+  const sourceRepo = await drizzle.select().from(repositories).where(
+    eq(repositories.id, sourceRepoId),
+  ).get();
 
   if (!sourceRepo) {
-    throw new Error('Source repository not found');
+    throw new Error("Source repository not found");
   }
 
-  const forkName = sanitizeRepoName(options.name || sourceRepo.name);
+  const forkName = sourceServiceDeps.sanitizeRepoName(
+    options.name || sourceRepo.name,
+  );
 
-  const existing = await drizzle.select({ id: repositories.id }).from(repositories).where(and(eq(repositories.accountId, targetWorkspaceId), eq(repositories.name, forkName))).get();
+  const existing = await drizzle.select({ id: repositories.id }).from(
+    repositories,
+  ).where(
+    and(
+      eq(repositories.accountId, targetWorkspaceId),
+      eq(repositories.name, forkName),
+    ),
+  ).get();
 
   if (existing) {
-    throw new Error('Repository with this name already exists in target workspace');
+    throw new Error(
+      "Repository with this name already exists in target workspace",
+    );
   }
 
-  const forkId = generateId();
+  const forkId = sourceServiceDeps.generateId();
   const timestamp = new Date().toISOString();
 
   await drizzle.insert(repositories).values({
@@ -98,7 +109,7 @@ export async function forkWithWorkflows(
     accountId: targetWorkspaceId,
     name: forkName,
     description: sourceRepo.description,
-    visibility: 'private',
+    visibility: "private",
     defaultBranch: sourceRepo.defaultBranch,
     forkedFromId: sourceRepo.id,
     stars: 0,
@@ -108,9 +119,11 @@ export async function forkWithWorkflows(
     updatedAt: timestamp,
   });
 
-  await gitStore.forkRepository(db, sourceRepo.id, forkId);
+  await sourceServiceDeps.gitStore.forkRepository(db, sourceRepo.id, forkId);
 
-  await drizzle.update(repositories).set({ forks: sql`${repositories.forks} + 1` }).where(eq(repositories.id, sourceRepo.id));
+  await drizzle.update(repositories).set({
+    forks: sql`${repositories.forks} + 1`,
+  }).where(eq(repositories.id, sourceRepo.id));
 
   let workflowsCopied = 0;
 
@@ -118,10 +131,12 @@ export async function forkWithWorkflows(
     workflowsCopied = await copyWorkflows(db, bucket, sourceRepoId, forkId);
   }
 
-  const forkedRepo = await drizzle.select().from(repositories).where(eq(repositories.id, forkId)).get();
+  const forkedRepo = await drizzle.select().from(repositories).where(
+    eq(repositories.id, forkId),
+  ).get();
 
   if (!forkedRepo) {
-    throw new Error('Failed to retrieve forked repository');
+    throw new Error("Failed to retrieve forked repository");
   }
 
   return {
@@ -142,14 +157,16 @@ export async function forkWithWorkflows(
 export async function getSyncStatus(
   db: D1Database,
   bucket: R2Bucket | undefined,
-  repoId: string
+  repoId: string,
 ): Promise<SyncStatus> {
-  const drizzle = getDb(db);
+  const drizzle = sourceServiceDeps.getDb(db);
 
-  const repo = await drizzle.select().from(repositories).where(eq(repositories.id, repoId)).get();
+  const repo = await drizzle.select().from(repositories).where(
+    eq(repositories.id, repoId),
+  ).get();
 
   if (!repo) {
-    throw new Error('Repository not found');
+    throw new Error("Repository not found");
   }
 
   const noSyncResult: SyncStatus = {
@@ -166,7 +183,9 @@ export async function getSyncStatus(
     return noSyncResult;
   }
 
-  const upstream = await drizzle.select().from(repositories).where(eq(repositories.id, repo.forkedFromId)).get();
+  const upstream = await drizzle.select().from(repositories).where(
+    eq(repositories.id, repo.forkedFromId),
+  ).get();
 
   if (!upstream) {
     return noSyncResult;
@@ -181,8 +200,13 @@ export async function getSyncStatus(
   };
 
   if (bucket) {
-    const branchName = repo.defaultBranch || 'main';
-    syncStatus = await gitStore.checkSyncStatus(db, bucket, repoId, branchName);
+    const branchName = repo.defaultBranch || "main";
+    syncStatus = await sourceServiceDeps.gitStore.checkSyncStatus(
+      db,
+      bucket,
+      repoId,
+      branchName,
+    );
   }
 
   const upstreamReleases = await getUpstreamReleases(db, upstream.id, repoId);
@@ -210,40 +234,50 @@ export async function syncWithUpstream(
   db: D1Database,
   bucket: R2Bucket | undefined,
   repoId: string,
-  options: SyncOptions = { strategy: 'merge' }
+  options: SyncOptions = { strategy: "merge" },
 ): Promise<SyncResult> {
-  const drizzle = getDb(db);
+  const drizzle = sourceServiceDeps.getDb(db);
 
-  const repo = await drizzle.select().from(repositories).where(eq(repositories.id, repoId)).get();
+  const repo = await drizzle.select().from(repositories).where(
+    eq(repositories.id, repoId),
+  ).get();
 
   if (!repo) {
-    throw new Error('Repository not found');
+    throw new Error("Repository not found");
   }
 
   if (!repo.forkedFromId) {
-    throw new Error('Repository is not a fork');
+    throw new Error("Repository is not a fork");
   }
 
-  const upstream = await drizzle.select().from(repositories).where(eq(repositories.id, repo.forkedFromId)).get();
+  const upstream = await drizzle.select().from(repositories).where(
+    eq(repositories.id, repo.forkedFromId),
+  ).get();
 
   if (!upstream) {
-    throw new Error('Upstream repository not found');
+    throw new Error("Upstream repository not found");
   }
 
   if (!bucket) {
-    throw new Error('Git storage not configured');
+    throw new Error("Git storage not configured");
   }
 
-  const branchName = options.target_ref || repo.defaultBranch || 'main';
+  const branchName = options.target_ref || repo.defaultBranch || "main";
 
-  const status = await gitStore.checkSyncStatus(db, bucket, repoId, branchName);
+  const status = await sourceServiceDeps.gitStore.checkSyncStatus(
+    db,
+    bucket,
+    repoId,
+    branchName,
+  );
 
   if (status.has_conflict) {
     return {
       success: false,
       commits_synced: 0,
       conflict: true,
-      message: 'Cannot fast-forward. Fork has diverged from upstream. Manual merge required.',
+      message:
+        "Cannot fast-forward. Fork has diverged from upstream. Manual merge required.",
     };
   }
 
@@ -251,31 +285,39 @@ export async function syncWithUpstream(
     return {
       success: true,
       commits_synced: 0,
-      message: 'Already up to date',
+      message: "Already up to date",
     };
   }
 
-  const upstreamBranch = await gitStore.getBranch(db, upstream.id, branchName);
+  const upstreamBranch = await sourceServiceDeps.gitStore.getBranch(
+    db,
+    upstream.id,
+    branchName,
+  );
   if (!upstreamBranch) {
-    throw new Error('Upstream branch not found');
+    throw new Error("Upstream branch not found");
   }
 
-  const forkBranch = await gitStore.getBranch(db, repoId, branchName);
+  const forkBranch = await sourceServiceDeps.gitStore.getBranch(
+    db,
+    repoId,
+    branchName,
+  );
   const oldSha = forkBranch?.commit_sha || null;
 
-  const updateResult = await gitStore.updateBranch(
+  const updateResult = await sourceServiceDeps.gitStore.updateBranch(
     db,
     repoId,
     branchName,
     oldSha,
-    upstreamBranch.commit_sha
+    upstreamBranch.commit_sha,
   );
 
   if (!updateResult.success) {
     return {
       success: false,
       commits_synced: 0,
-      message: 'Failed to update branch',
+      message: "Failed to update branch",
     };
   }
 
@@ -294,27 +336,39 @@ async function copyWorkflows(
   db: D1Database,
   bucket: R2Bucket,
   sourceRepoId: string,
-  targetRepoId: string
+  _targetRepoId: string,
 ): Promise<number> {
-  const sourceDefaultBranch = await gitStore.getDefaultBranch(db, sourceRepoId);
+  const sourceDefaultBranch = await sourceServiceDeps.gitStore.getDefaultBranch(
+    db,
+    sourceRepoId,
+  );
   if (!sourceDefaultBranch) {
     return 0;
   }
 
   try {
-    const commit = await gitStore.getCommitData(bucket, sourceDefaultBranch.commit_sha);
+    const commit = await sourceServiceDeps.gitStore.getCommitData(
+      bucket,
+      sourceDefaultBranch.commit_sha,
+    );
     if (!commit) {
       return 0;
     }
 
-    const workflowEntries = await gitStore.listDirectory(bucket, commit.tree, '.takos/workflows');
+    const workflowEntries = await sourceServiceDeps.gitStore.listDirectory(
+      bucket,
+      commit.tree,
+      ".takos/workflows",
+    );
     if (!workflowEntries) {
       return 0;
     }
 
-    return workflowEntries.filter((entry) => entry.mode !== '040000').length;
+    return workflowEntries.filter((entry) => entry.mode !== "040000").length;
   } catch (err) {
-    logError('Failed to copy workflows', err, { module: 'services/source/fork' });
+    sourceServiceDeps.logError("Failed to copy workflows", err, {
+      module: "services/source/fork",
+    });
     return 0;
   }
 }
@@ -325,22 +379,26 @@ async function copyWorkflows(
 async function getUpstreamReleases(
   db: D1Database,
   upstreamId: string,
-  forkId: string
+  forkId: string,
 ): Promise<UpstreamRelease[]> {
-  const drizzle = getDb(db);
+  const drizzle = sourceServiceDeps.getDb(db);
 
-  const fork = await drizzle.select({ createdAt: repositories.createdAt }).from(repositories).where(eq(repositories.id, forkId)).get();
+  const fork = await drizzle.select({ createdAt: repositories.createdAt }).from(
+    repositories,
+  ).where(eq(repositories.id, forkId)).get();
 
-  const forkCreatedAt = fork?.createdAt || '1970-01-01T00:00:00Z';
+  const forkCreatedAt = fork?.createdAt || "1970-01-01T00:00:00Z";
 
   const releases = await drizzle.select({
     id: repoReleases.id,
     tag: repoReleases.tag,
     name: repoReleases.name,
     publishedAt: repoReleases.publishedAt,
-  }).from(repoReleases).where(and(eq(repoReleases.repoId, upstreamId), eq(repoReleases.isDraft, false))).orderBy(desc(repoReleases.publishedAt)).limit(5).all();
+  }).from(repoReleases).where(
+    and(eq(repoReleases.repoId, upstreamId), eq(repoReleases.isDraft, false)),
+  ).orderBy(desc(repoReleases.publishedAt)).limit(5).all();
 
-  return releases.map(r => ({
+  return releases.map((r) => ({
     id: r.id,
     tag: r.tag,
     name: r.name,

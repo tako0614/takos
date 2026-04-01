@@ -7,7 +7,6 @@ import { useConfirmDialog } from '../../../store/confirm-dialog.ts';
 import { useI18n } from '../../../store/i18n.ts';
 import { Button } from '../../../components/ui/Button.tsx';
 import { Badge } from '../../../components/ui/Badge.tsx';
-import { Card } from '../../../components/ui/Card.tsx';
 import { Modal, ModalFooter } from '../../../components/ui/Modal.tsx';
 import { Input } from '../../../components/ui/Input.tsx';
 import { Textarea } from '../../../components/ui/Textarea.tsx';
@@ -280,14 +279,14 @@ export function ReleaseList(props: ReleaseListProps) {
                   </div>
 
                   <div class="flex items-center gap-2 flex-shrink-0">
-                    <button
+                    <button type="button"
                       class="w-8 h-8 flex items-center justify-center rounded-lg text-zinc-500 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors"
                       onClick={() => openEditModal(release)}
                       title={t('edit')}
                     >
                       <Icons.Edit class="w-4 h-4" />
                     </button>
-                    <button
+                    <button type="button"
                       class="w-8 h-8 flex items-center justify-center rounded-lg text-zinc-500 dark:text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors"
                       onClick={() => handleDelete(release)}
                       title={t('delete')}

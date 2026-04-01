@@ -1,4 +1,4 @@
-import type { Env, DbEnv, AiEnv } from '../../../shared/types/index.ts';
+import type { Env as _Env, DbEnv, AiEnv } from '../../../shared/types/index.ts';
 
 type ThreadContextEnv = DbEnv & AiEnv;
 import { getDb, accounts, threads, messages } from '../../../infra/db/index.ts';

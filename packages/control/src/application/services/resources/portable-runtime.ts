@@ -1061,7 +1061,6 @@ export async function deletePortableManagedResource(
           await removePath(markerFilePath(markerKindForCapability(capability), resource));
           return;
       }
-      return;
   }
 }
 

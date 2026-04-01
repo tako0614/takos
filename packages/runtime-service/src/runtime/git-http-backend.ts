@@ -1,4 +1,4 @@
-import { spawn, type ChildProcess } from 'node:child_process';
+import { spawn } from 'node:child_process';
 import { filterSafeEnv } from '../utils/sandbox-env.ts';
 import { createLogger } from 'takos-common/logger';
 import { gracefulKill } from '../utils/process-kill.ts';

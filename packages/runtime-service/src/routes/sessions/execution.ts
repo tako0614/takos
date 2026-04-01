@@ -25,8 +25,6 @@ import {
 import { forbidden, badRequest, internalError } from 'takos-common/middleware/hono';
 import { OwnerBindingError, isBoundaryViolationError } from '../../shared/errors.ts';
 import { hasSpaceScopeMismatch, SPACE_SCOPE_MISMATCH_ERROR } from '../../middleware/space-scope.ts';
-
-import type { Context } from 'hono';
 import { Buffer } from "node:buffer";
 
 const app = new Hono<RuntimeEnv>();

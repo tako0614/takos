@@ -1,16 +1,24 @@
 import { Hono, type MiddlewareHandler } from "hono";
+import process from "node:process";
 
 import { assertEquals } from "jsr:@std/assert";
 import { assertSpyCalls, spy } from "jsr:@std/testing/mock";
 
 import type { Env } from "@/types";
-import { type ApiVariables, createApiRouter } from "@/server/routes/api.ts";
-import { createMockEnv } from "../../../test/integration/setup.ts";
+import type { ApiVariables } from "@/server/routes/api.ts";
 
 type ApiRouteEnv = {
   Bindings: Env;
   Variables: ApiVariables;
 };
+
+function createRouteEnv(): Env {
+  return {
+    PLATFORM: {
+      services: {},
+    },
+  } as unknown as Env;
+}
 
 function createAuthSpies() {
   const requireAuth = spy(
@@ -33,9 +41,25 @@ function createAuthSpies() {
   };
 }
 
-function createApp() {
+async function createApp() {
   const auth = createAuthSpies();
   const app = new Hono<ApiRouteEnv>();
+  const originalGetReport = process.report?.getReport;
+  if (process.report) {
+    process.report.getReport = () =>
+      ({ header: { glibcVersionRuntime: "2.31" } }) as unknown as ReturnType<
+        NonNullable<typeof process.report>["getReport"]
+      >;
+  }
+  const { createApiRouter } = await (async () => {
+    try {
+      return await import("@/server/routes/api.ts");
+    } finally {
+      if (process.report && originalGetReport) {
+        process.report.getReport = originalGetReport;
+      }
+    }
+  })();
   app.route(
     "/api",
     createApiRouter({
@@ -47,11 +71,11 @@ function createApp() {
 }
 
 Deno.test("api router requires auth for /api/git/* routes", async () => {
-  const { app, requireAuthSpy } = createApp();
+  const { app, requireAuthSpy } = await createApp();
 
   const response = await app.fetch(
     new Request("http://localhost/api/git/repos/repo-1/refs"),
-    createMockEnv() as unknown as Env,
+    createRouteEnv(),
     {} as ExecutionContext,
   );
 
@@ -61,11 +85,11 @@ Deno.test("api router requires auth for /api/git/* routes", async () => {
 });
 
 Deno.test("api router does not mount legacy /api/svcs/* routes", async () => {
-  const { app, requireAuthSpy } = createApp();
+  const { app, requireAuthSpy } = await createApp();
 
   const response = await app.fetch(
     new Request("http://localhost/api/svcs/repos/repo-1/refs"),
-    createMockEnv() as unknown as Env,
+    createRouteEnv(),
     {} as ExecutionContext,
   );
 
@@ -74,18 +98,18 @@ Deno.test("api router does not mount legacy /api/svcs/* routes", async () => {
 });
 
 Deno.test("api router keeps MCP OAuth callback public while protecting MCP servers", async () => {
-  const { app, requireAuthSpy } = createApp();
+  const { app, requireAuthSpy } = await createApp();
 
   const callbackResponse = await app.fetch(
     new Request("http://localhost/api/mcp/oauth/callback"),
-    createMockEnv() as unknown as Env,
+    createRouteEnv(),
     {} as ExecutionContext,
   );
   assertEquals(callbackResponse.status, 400);
 
   const serversResponse = await app.fetch(
     new Request("http://localhost/api/mcp/servers?spaceId=ws-1"),
-    createMockEnv() as unknown as Env,
+    createRouteEnv(),
     {} as ExecutionContext,
   );
 
@@ -94,7 +118,7 @@ Deno.test("api router keeps MCP OAuth callback public while protecting MCP serve
 });
 
 Deno.test("api router does not expose internal OAuth proxy routes publicly", async () => {
-  const { app, requireAuthSpy } = createApp();
+  const { app, requireAuthSpy } = await createApp();
 
   const response = await app.fetch(
     new Request("https://internal/api/internal/oauth/token-exchange", {
@@ -102,7 +126,7 @@ Deno.test("api router does not expose internal OAuth proxy routes publicly", asy
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({}),
     }),
-    createMockEnv() as unknown as Env,
+    createRouteEnv(),
     {} as ExecutionContext,
   );
 

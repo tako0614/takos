@@ -1,5 +1,4 @@
 import { createSignal, onMount, onCleanup, For, Show } from 'solid-js';
-import type { JSX } from 'solid-js';
 import { Icons } from '../../lib/Icons.tsx';
 import type { Toast } from '../../types/index.ts';
 import { useToast } from '../../store/toast.ts';
@@ -18,13 +17,13 @@ const iconClasses: Record<Toast['type'], string> = {
 
 export function ToastContainer(props: { toasts: Toast[]; onDismiss: (id: string) => void }) {
   const [isMobile, setIsMobile] = createSignal(
-    typeof window !== 'undefined' ? window.innerWidth < 768 : false
+    typeof globalThis.innerWidth === 'number' ? globalThis.innerWidth < 768 : false
   );
 
   onMount(() => {
-    const checkMobile = () => setIsMobile(window.innerWidth < 768);
-    window.addEventListener('resize', checkMobile);
-    onCleanup(() => window.removeEventListener('resize', checkMobile));
+    const checkMobile = () => setIsMobile(globalThis.innerWidth < 768);
+    globalThis.addEventListener('resize', checkMobile);
+    onCleanup(() => globalThis.removeEventListener('resize', checkMobile));
   });
 
   return (
@@ -55,6 +54,7 @@ export function ToastContainer(props: { toasts: Toast[]; onDismiss: (id: string)
             </span>
             <span class="text-sm text-[var(--color-text-primary)]">{toast.message}</span>
             <button
+              type="button"
               class="shrink-0 p-1 rounded-[var(--radius-sm)] text-[var(--color-text-tertiary)] bg-transparent border-none cursor-pointer flex items-center justify-center transition-colors hover:text-[var(--color-text-primary)] hover:bg-[var(--color-surface-secondary)]"
               onClick={() => props.onDismiss(toast.id)}
             >

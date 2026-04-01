@@ -143,7 +143,6 @@ export async function deployService(
 
   let imageHash = opts.imageHash ?? '';
   let ipv4: string | undefined;
-  let resolvedBaseUrl: string | undefined;
 
   if (!imageHash) {
     const result = await deployServiceImage(env, name, {
@@ -154,17 +153,7 @@ export async function deployService(
     ipv4 = result.ipv4;
   }
 
-  resolvedBaseUrl = ipv4 && opts.port ? `http://${ipv4}:${opts.port}` : undefined;
-
-  const config: ServiceConfig = {
-    deployedAt: now,
-    imageHash,
-    ...(opts.imageRef ? { imageRef: opts.imageRef } : {}),
-    ...(opts.port ? { port: opts.port } : {}),
-    ...(ipv4 ? { ipv4 } : {}),
-    ...(resolvedBaseUrl ? { resolvedBaseUrl } : {}),
-    ...(opts.specFingerprint ? { specFingerprint: opts.specFingerprint } : {}),
-  };
+  const resolvedBaseUrl = ipv4 && opts.port ? `http://${ipv4}:${opts.port}` : undefined;
   await upsertGroupManagedService(env, {
     groupId,
     spaceId: opts.spaceId,

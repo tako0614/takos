@@ -32,7 +32,7 @@ function SearchRepoList(props: {
         </div>
         <Show when={props.hasMore && props.onLoadMore}>
           <div class="flex justify-center mt-6">
-            <button
+            <button type="button"
               class="flex items-center gap-2 px-5 py-2 rounded-lg bg-zinc-100 dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100 hover:bg-zinc-200 dark:hover:bg-zinc-700 transition-colors"
               onClick={props.onLoadMore}
             >

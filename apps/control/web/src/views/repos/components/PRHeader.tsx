@@ -1,4 +1,3 @@
-import { Show } from 'solid-js';
 import { Icons } from '../../../lib/Icons.tsx';
 import type { PullRequest } from '../../../types/index.ts';
 import { useI18n } from '../../../store/i18n.ts';
@@ -48,7 +47,7 @@ export function PRHeader(props: PRHeaderProps) {
     <>
       <div class="border-b px-6 py-4" style={{ "border-color": 'var(--color-border-primary)', "background-color": 'var(--color-surface-primary)' }}>
         <div class="flex items-center gap-4">
-          <button
+          <button type="button"
             class="p-2 rounded-lg text-zinc-500 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors"
             onClick={props.onBack}
           >

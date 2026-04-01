@@ -45,7 +45,7 @@ export function MemoryList({
   return (
     <div class="flex-1 overflow-y-auto p-6">
       <div class="flex gap-2 mb-6 border-b border-zinc-200 dark:border-zinc-700">
-        <button
+        <button type="button"
           class={`flex items-center gap-2 px-4 py-3 text-sm font-medium transition-colors border-b-2 -mb-px ${
             !showReminders
               ? 'text-zinc-900 dark:text-zinc-100 border-zinc-900 dark:border-zinc-100'
@@ -56,7 +56,7 @@ export function MemoryList({
           <Icons.HardDrive />
           <span>{t('memories')} ({memories.length})</span>
         </button>
-        <button
+        <button type="button"
           class={`flex items-center gap-2 px-4 py-3 text-sm font-medium transition-colors border-b-2 -mb-px ${
             showReminders
               ? 'text-zinc-900 dark:text-zinc-100 border-zinc-900 dark:border-zinc-100'
@@ -89,7 +89,7 @@ export function MemoryList({
             </div>
             <div class="flex flex-wrap gap-2">
               {(['all', 'episode', 'semantic', 'procedural'] as const).map(filter => (
-                <button
+                <button type="button"
 
                   class={`px-3 py-1.5 rounded-full text-sm font-medium transition-colors ${
                     activeFilter() === filter
@@ -132,7 +132,7 @@ export function MemoryList({
                     <span class="text-xs text-zinc-500 dark:text-zinc-400">
                       {new Date(memory.created_at).toLocaleDateString()}
                     </span>
-                    <button
+                    <button type="button"
                       class="p-1.5 rounded text-zinc-500 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100 hover:bg-zinc-200 dark:hover:bg-zinc-700 transition-colors"
                       onClick={() => onDeleteMemory(memory.id)}
                       title={t('deleteMemory')}
@@ -185,7 +185,7 @@ export function MemoryList({
                     <span class="text-xs text-zinc-500 dark:text-zinc-400">
                       {new Date(reminder.created_at).toLocaleDateString()}
                     </span>
-                    <button
+                    <button type="button"
                       class="p-1.5 rounded text-zinc-500 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100 hover:bg-zinc-200 dark:hover:bg-zinc-700 transition-colors"
                       onClick={() => onDeleteReminder(reminder.id)}
                       title={t('delete')}

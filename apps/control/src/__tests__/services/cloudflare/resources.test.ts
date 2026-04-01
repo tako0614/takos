@@ -1,316 +1,360 @@
-import { CloudflareResourceService } from '@/platform/providers/cloudflare/resources.ts';
+import { CloudflareResourceService } from "@/platform/providers/cloudflare/resources.ts";
 
+import { assert, assertEquals, assertStringIncludes } from "jsr:@std/assert";
+import { assertSpyCalls, spy } from "jsr:@std/testing/mock";
 
-import { assertEquals, assert, assertStringIncludes } from 'jsr:@std/assert';
-import { assertSpyCalls } from 'jsr:@std/testing/mock';
+const env = {
+  CF_ACCOUNT_ID: "acc-1",
+  CF_API_TOKEN: "tok-1",
+  WFP_DISPATCH_NAMESPACE: "ns-1",
+};
 
-  const env = {
-    CF_ACCOUNT_ID: 'acc-1',
-    CF_API_TOKEN: 'tok-1',
-    WFP_DISPATCH_NAMESPACE: 'ns-1',
-  };
-
-  function mockSuccessResponse<T>(result: T) {
-    return new Response(JSON.stringify({
+function mockSuccessResponse<T>(result: T) {
+  return new Response(
+    JSON.stringify({
       success: true,
       result,
       errors: [],
       messages: [],
-    }), { status: 200 });
-  }
+    }),
+    { status: 200 },
+  );
+}
 
-  
-    Deno.test('CloudflareResourceService - createResource - creates a D1 database and returns provider resource ids', async () => {
+Deno.test("CloudflareResourceService - createResource - creates a D1 database and returns provider resource ids", async () => {
   try {
-  const fetchMock = (async () => mockSuccessResponse({ uuid: 'db-uuid-123' }),);
-      (globalThis as any).fetch = fetchMock;
+    const fetchMock = spy(async (..._args: any[]) =>
+      mockSuccessResponse({ uuid: "db-uuid-123" })
+    );
+    (globalThis as any).fetch = fetchMock;
 
-      const svc = new CloudflareResourceService(env);
-      const result = await svc.createResource('d1', 'my-database');
+    const svc = new CloudflareResourceService(env);
+    const result = await svc.createResource("d1", "my-database");
 
-      assertEquals(result.providerResourceId, 'db-uuid-123');
-      assertEquals(result.providerResourceName, 'my-database');
+    assertEquals(result.providerResourceId, "db-uuid-123");
+    assertEquals(result.providerResourceName, "my-database");
   } finally {
-  /* TODO: restore stubbed globals manually */ void 0;
+    /* TODO: restore stubbed globals manually */ void 0;
   }
-})
-    Deno.test('CloudflareResourceService - createResource - creates an R2 bucket and returns name as provider resource id', async () => {
+});
+Deno.test("CloudflareResourceService - createResource - creates an R2 bucket and returns name as provider resource id", async () => {
   try {
-  const fetchMock = (async () => mockSuccessResponse(null));
-      (globalThis as any).fetch = fetchMock;
+    const fetchMock = spy(async (..._args: any[]) => mockSuccessResponse(null));
+    (globalThis as any).fetch = fetchMock;
 
-      const svc = new CloudflareResourceService(env);
-      const result = await svc.createResource('r2', 'my-bucket');
+    const svc = new CloudflareResourceService(env);
+    const result = await svc.createResource("r2", "my-bucket");
 
-      assertEquals(result.providerResourceId, 'my-bucket');
-      assertEquals(result.providerResourceName, 'my-bucket');
+    assertEquals(result.providerResourceId, "my-bucket");
+    assertEquals(result.providerResourceName, "my-bucket");
   } finally {
-  /* TODO: restore stubbed globals manually */ void 0;
+    /* TODO: restore stubbed globals manually */ void 0;
   }
-})
-    Deno.test('CloudflareResourceService - createResource - creates a KV namespace and returns id', async () => {
+});
+Deno.test("CloudflareResourceService - createResource - creates a KV namespace and returns id", async () => {
   try {
-  const fetchMock = (async () => mockSuccessResponse({ id: 'kv-id-456' }),);
-      (globalThis as any).fetch = fetchMock;
+    const fetchMock = spy(async (..._args: any[]) =>
+      mockSuccessResponse({ id: "kv-id-456" })
+    );
+    (globalThis as any).fetch = fetchMock;
 
-      const svc = new CloudflareResourceService(env);
-      const result = await svc.createResource('kv', 'my-kv');
+    const svc = new CloudflareResourceService(env);
+    const result = await svc.createResource("kv", "my-kv");
 
-      assertEquals(result.providerResourceId, 'kv-id-456');
-      assertEquals(result.providerResourceName, 'my-kv');
+    assertEquals(result.providerResourceId, "kv-id-456");
+    assertEquals(result.providerResourceName, "my-kv");
   } finally {
-  /* TODO: restore stubbed globals manually */ void 0;
+    /* TODO: restore stubbed globals manually */ void 0;
   }
-})
-    Deno.test('CloudflareResourceService - createResource - creates a Vectorize index with default options', async () => {
+});
+Deno.test("CloudflareResourceService - createResource - creates a Vectorize index with default options", async () => {
   try {
-  const fetchMock = (async () => mockSuccessResponse({ name: 'my-index' }),);
-      (globalThis as any).fetch = fetchMock;
+    const fetchMock = spy(async (..._args: any[]) =>
+      mockSuccessResponse({ name: "my-index" })
+    );
+    (globalThis as any).fetch = fetchMock;
 
-      const svc = new CloudflareResourceService(env);
-      const result = await svc.createResource('vectorize', 'my-index');
+    const svc = new CloudflareResourceService(env);
+    const result = await svc.createResource("vectorize", "my-index");
 
-      assertEquals(result.providerResourceId, 'my-index');
-      assertEquals(result.providerResourceName, 'my-index');
+    assertEquals(result.providerResourceId, "my-index");
+    assertEquals(result.providerResourceName, "my-index");
   } finally {
-  /* TODO: restore stubbed globals manually */ void 0;
+    /* TODO: restore stubbed globals manually */ void 0;
   }
-})
-    Deno.test('CloudflareResourceService - createResource - creates a Vectorize index with custom options', async () => {
+});
+Deno.test("CloudflareResourceService - createResource - creates a Vectorize index with custom options", async () => {
   try {
-  const fetchMock = (async () => mockSuccessResponse({ name: 'custom-index' }),);
-      (globalThis as any).fetch = fetchMock;
+    const fetchMock = spy(async (..._args: any[]) =>
+      mockSuccessResponse({ name: "custom-index" })
+    );
+    (globalThis as any).fetch = fetchMock;
 
-      const svc = new CloudflareResourceService(env);
-      const result = await svc.createResource('vectorize', 'custom-index', {
-        vectorize: { dimensions: 768, metric: 'euclidean' },
-      });
+    const svc = new CloudflareResourceService(env);
+    const result = await svc.createResource("vectorize", "custom-index", {
+      vectorize: { dimensions: 768, metric: "euclidean" },
+    });
 
-      assertEquals(result.providerResourceId, 'custom-index');
+    assertEquals(result.providerResourceId, "custom-index");
 
-      // Verify the body sent to the API contains the custom options
-      const body = JSON.parse(fetchMock.calls[0][1].body as string);
-      // The body may be wrapped, just check that the API was called
-      assert(fetchMock.calls.length > 0);
+    // Verify the body sent to the API contains the custom options
+    const body = JSON.parse(
+      (fetchMock.calls[0].args[1] as RequestInit).body as string,
+    );
+    // The body may be wrapped, just check that the API was called
+    assert(fetchMock.calls.length > 0);
+    assert(body !== undefined);
   } finally {
-  /* TODO: restore stubbed globals manually */ void 0;
+    /* TODO: restore stubbed globals manually */ void 0;
   }
-})
-    Deno.test('CloudflareResourceService - createResource - creates a queue and returns the queue id', async () => {
+});
+Deno.test("CloudflareResourceService - createResource - creates a queue and returns the queue id", async () => {
   try {
-  const fetchMock = (async () => mockSuccessResponse({ queue_id: 'queue-id-123', queue_name: 'my-queue' }),);
-      (globalThis as any).fetch = fetchMock;
+    const fetchMock = spy(async (..._args: any[]) =>
+      mockSuccessResponse({ queue_id: "queue-id-123", queue_name: "my-queue" })
+    );
+    (globalThis as any).fetch = fetchMock;
 
-      const svc = new CloudflareResourceService(env);
-      const result = await svc.createResource('queue', 'my-queue', {
-        queue: { deliveryDelaySeconds: 10 },
-      });
+    const svc = new CloudflareResourceService(env);
+    const result = await svc.createResource("queue", "my-queue", {
+      queue: { deliveryDelaySeconds: 10 },
+    });
 
-      assertEquals(result.providerResourceId, 'queue-id-123');
-      assertEquals(result.providerResourceName, 'my-queue');
-      assertStringIncludes(fetchMock.calls[0][0], '/queues');
-      assertEquals(JSON.parse(fetchMock.calls[0][1].body as string), {
-        queue_name: 'my-queue',
+    assertEquals(result.providerResourceId, "queue-id-123");
+    assertEquals(result.providerResourceName, "my-queue");
+    assertStringIncludes(fetchMock.calls[0].args[0] as string, "/queues");
+    assertEquals(
+      JSON.parse((fetchMock.calls[0].args[1] as RequestInit).body as string),
+      {
+        queue_name: "my-queue",
         settings: {
           delivery_delay: 10,
         },
-      });
+      },
+    );
   } finally {
-  /* TODO: restore stubbed globals manually */ void 0;
+    /* TODO: restore stubbed globals manually */ void 0;
   }
-})
-    Deno.test('CloudflareResourceService - createResource - treats analytics_engine as a logical resource with no provider create call', async () => {
+});
+Deno.test("CloudflareResourceService - createResource - treats analytics_engine as a logical resource with no provider create call", async () => {
   try {
-  const fetchMock = ((..._args: any[]) => undefined) as any;
-      (globalThis as any).fetch = fetchMock;
+    const fetchMock = spy(async (..._args: any[]) => mockSuccessResponse(null));
+    (globalThis as any).fetch = fetchMock;
 
-      const svc = new CloudflareResourceService(env);
-      const result = await svc.createResource('analytics_engine', 'event-dataset');
+    const svc = new CloudflareResourceService(env);
+    const result = await svc.createResource(
+      "analytics_engine",
+      "event-dataset",
+    );
 
-      assertEquals(result, { providerResourceId: null, providerResourceName: 'event-dataset' });
-      assertSpyCalls(fetchMock, 0);
+    assertEquals(result, {
+      providerResourceId: null,
+      providerResourceName: "event-dataset",
+    });
+    assertSpyCalls(fetchMock, 0);
   } finally {
-  /* TODO: restore stubbed globals manually */ void 0;
+    /* TODO: restore stubbed globals manually */ void 0;
   }
-})
-    Deno.test('CloudflareResourceService - createResource - treats workflow as a logical resource with no provider create call', async () => {
+});
+Deno.test("CloudflareResourceService - createResource - treats workflow as a logical resource with no provider create call", async () => {
   try {
-  const fetchMock = ((..._args: any[]) => undefined) as any;
-      (globalThis as any).fetch = fetchMock;
+    const fetchMock = spy(async (..._args: any[]) => mockSuccessResponse(null));
+    (globalThis as any).fetch = fetchMock;
 
-      const svc = new CloudflareResourceService(env);
-      const result = await svc.createResource('workflow', 'onboarding-flow');
+    const svc = new CloudflareResourceService(env);
+    const result = await svc.createResource("workflow", "onboarding-flow");
 
-      assertEquals(result, { providerResourceId: null, providerResourceName: 'onboarding-flow' });
-      assertSpyCalls(fetchMock, 0);
+    assertEquals(result, {
+      providerResourceId: null,
+      providerResourceName: "onboarding-flow",
+    });
+    assertSpyCalls(fetchMock, 0);
   } finally {
-  /* TODO: restore stubbed globals manually */ void 0;
+    /* TODO: restore stubbed globals manually */ void 0;
   }
-})  
-  
-    Deno.test('CloudflareResourceService - deleteResource - deletes a D1 database by provider resource id', async () => {
+});
+
+Deno.test("CloudflareResourceService - deleteResource - deletes a D1 database by provider resource id", async () => {
   try {
-  const fetchMock = (async () => mockSuccessResponse(null));
-      (globalThis as any).fetch = fetchMock;
+    const fetchMock = spy(async (..._args: any[]) => mockSuccessResponse(null));
+    (globalThis as any).fetch = fetchMock;
 
-      const svc = new CloudflareResourceService(env);
-      await svc.deleteResource({ type: 'd1', providerResourceId: 'db-uuid-123' });
+    const svc = new CloudflareResourceService(env);
+    await svc.deleteResource({ type: "d1", providerResourceId: "db-uuid-123" });
 
-      const url = fetchMock.calls[0][0] as string;
-      assertStringIncludes(url, '/d1/database/db-uuid-123');
+    const url = fetchMock.calls[0].args[0] as string;
+    assertStringIncludes(url, "/d1/database/db-uuid-123");
   } finally {
-  /* TODO: restore stubbed globals manually */ void 0;
+    /* TODO: restore stubbed globals manually */ void 0;
   }
-})
-    Deno.test('CloudflareResourceService - deleteResource - deletes an R2 bucket by provider resource name', async () => {
+});
+Deno.test("CloudflareResourceService - deleteResource - deletes an R2 bucket by provider resource name", async () => {
   try {
-  const fetchMock = (async () => mockSuccessResponse(null));
-      (globalThis as any).fetch = fetchMock;
+    const fetchMock = spy(async (..._args: any[]) => mockSuccessResponse(null));
+    (globalThis as any).fetch = fetchMock;
 
-      const svc = new CloudflareResourceService(env);
-      await svc.deleteResource({ type: 'r2', providerResourceName: 'my-bucket' });
+    const svc = new CloudflareResourceService(env);
+    await svc.deleteResource({ type: "r2", providerResourceName: "my-bucket" });
 
-      const url = fetchMock.calls[0][0] as string;
-      assertStringIncludes(url, '/r2/buckets/my-bucket');
+    const url = fetchMock.calls[0].args[0] as string;
+    assertStringIncludes(url, "/r2/buckets/my-bucket");
   } finally {
-  /* TODO: restore stubbed globals manually */ void 0;
+    /* TODO: restore stubbed globals manually */ void 0;
   }
-})
-    Deno.test('CloudflareResourceService - deleteResource - deletes a queue by provider resource id', async () => {
+});
+Deno.test("CloudflareResourceService - deleteResource - deletes a queue by provider resource id", async () => {
   try {
-  const fetchMock = (async () => mockSuccessResponse(null));
-      (globalThis as any).fetch = fetchMock;
+    const fetchMock = spy(async (..._args: any[]) => mockSuccessResponse(null));
+    (globalThis as any).fetch = fetchMock;
 
-      const svc = new CloudflareResourceService(env);
-      await svc.deleteResource({ type: 'queue', providerResourceId: 'queue-id-123' });
+    const svc = new CloudflareResourceService(env);
+    await svc.deleteResource({
+      type: "queue",
+      providerResourceId: "queue-id-123",
+    });
 
-      const url = fetchMock.calls[0][0] as string;
-      assertStringIncludes(url, '/queues/queue-id-123');
+    const url = fetchMock.calls[0].args[0] as string;
+    assertStringIncludes(url, "/queues/queue-id-123");
   } finally {
-  /* TODO: restore stubbed globals manually */ void 0;
+    /* TODO: restore stubbed globals manually */ void 0;
   }
-})
-    Deno.test('CloudflareResourceService - deleteResource - deletes a KV namespace by provider resource id', async () => {
+});
+Deno.test("CloudflareResourceService - deleteResource - deletes a KV namespace by provider resource id", async () => {
   try {
-  const fetchMock = (async () => mockSuccessResponse(null));
-      (globalThis as any).fetch = fetchMock;
+    const fetchMock = spy(async (..._args: any[]) => mockSuccessResponse(null));
+    (globalThis as any).fetch = fetchMock;
 
-      const svc = new CloudflareResourceService(env);
-      await svc.deleteResource({ type: 'kv', providerResourceId: 'kv-id-456' });
+    const svc = new CloudflareResourceService(env);
+    await svc.deleteResource({ type: "kv", providerResourceId: "kv-id-456" });
 
-      const url = fetchMock.calls[0][0] as string;
-      assertStringIncludes(url, '/storage/kv/namespaces/kv-id-456');
+    const url = fetchMock.calls[0].args[0] as string;
+    assertStringIncludes(url, "/storage/kv/namespaces/kv-id-456");
   } finally {
-  /* TODO: restore stubbed globals manually */ void 0;
+    /* TODO: restore stubbed globals manually */ void 0;
   }
-})
-    Deno.test('CloudflareResourceService - deleteResource - deletes a Vectorize index by provider resource name', async () => {
+});
+Deno.test("CloudflareResourceService - deleteResource - deletes a Vectorize index by provider resource name", async () => {
   try {
-  const fetchMock = (async () => mockSuccessResponse(null));
-      (globalThis as any).fetch = fetchMock;
+    const fetchMock = spy(async (..._args: any[]) => mockSuccessResponse(null));
+    (globalThis as any).fetch = fetchMock;
 
-      const svc = new CloudflareResourceService(env);
-      await svc.deleteResource({ type: 'vectorize', providerResourceName: 'my-index' });
+    const svc = new CloudflareResourceService(env);
+    await svc.deleteResource({
+      type: "vectorize",
+      providerResourceName: "my-index",
+    });
 
-      const url = fetchMock.calls[0][0] as string;
-      assertStringIncludes(url, '/vectorize/v2/indexes/my-index');
+    const url = fetchMock.calls[0].args[0] as string;
+    assertStringIncludes(url, "/vectorize/v2/indexes/my-index");
   } finally {
-  /* TODO: restore stubbed globals manually */ void 0;
+    /* TODO: restore stubbed globals manually */ void 0;
   }
-})
-    Deno.test('CloudflareResourceService - deleteResource - is a no-op for analytics_engine resources', async () => {
+});
+Deno.test("CloudflareResourceService - deleteResource - is a no-op for analytics_engine resources", async () => {
   try {
-  const fetchMock = ((..._args: any[]) => undefined) as any;
-      (globalThis as any).fetch = fetchMock;
+    const fetchMock = spy(async (..._args: any[]) => mockSuccessResponse(null));
+    (globalThis as any).fetch = fetchMock;
 
-      const svc = new CloudflareResourceService(env);
-      await svc.deleteResource({ type: 'analytics_engine', providerResourceName: 'event-dataset' });
-      assertSpyCalls(fetchMock, 0);
+    const svc = new CloudflareResourceService(env);
+    await svc.deleteResource({
+      type: "analytics_engine",
+      providerResourceName: "event-dataset",
+    });
+    assertSpyCalls(fetchMock, 0);
   } finally {
-  /* TODO: restore stubbed globals manually */ void 0;
+    /* TODO: restore stubbed globals manually */ void 0;
   }
-})
-    Deno.test('CloudflareResourceService - deleteResource - is a no-op for workflow resources', async () => {
+});
+Deno.test("CloudflareResourceService - deleteResource - is a no-op for workflow resources", async () => {
   try {
-  const fetchMock = ((..._args: any[]) => undefined) as any;
-      (globalThis as any).fetch = fetchMock;
+    const fetchMock = spy(async (..._args: any[]) => mockSuccessResponse(null));
+    (globalThis as any).fetch = fetchMock;
 
-      const svc = new CloudflareResourceService(env);
-      await svc.deleteResource({ type: 'workflow', providerResourceName: 'onboarding-flow' });
-      assertSpyCalls(fetchMock, 0);
+    const svc = new CloudflareResourceService(env);
+    await svc.deleteResource({
+      type: "workflow",
+      providerResourceName: "onboarding-flow",
+    });
+    assertSpyCalls(fetchMock, 0);
   } finally {
-  /* TODO: restore stubbed globals manually */ void 0;
+    /* TODO: restore stubbed globals manually */ void 0;
   }
-})
-    Deno.test('CloudflareResourceService - deleteResource - deletes a worker by provider resource name', async () => {
+});
+Deno.test("CloudflareResourceService - deleteResource - deletes a worker by provider resource name", async () => {
   try {
-  const fetchMock = (async () => mockSuccessResponse(null));
-      (globalThis as any).fetch = fetchMock;
+    const fetchMock = spy(async (..._args: any[]) => mockSuccessResponse(null));
+    (globalThis as any).fetch = fetchMock;
 
-      const svc = new CloudflareResourceService(env);
-      await svc.deleteResource({ type: 'worker', providerResourceName: 'worker-to-delete' });
+    const svc = new CloudflareResourceService(env);
+    await svc.deleteResource({
+      type: "worker",
+      providerResourceName: "worker-to-delete",
+    });
 
-      const url = fetchMock.calls[0][0] as string;
-      assertStringIncludes(url, '/scripts/worker-to-delete');
+    const url = fetchMock.calls[0].args[0] as string;
+    assertStringIncludes(url, "/scripts/worker-to-delete");
   } finally {
-  /* TODO: restore stubbed globals manually */ void 0;
+    /* TODO: restore stubbed globals manually */ void 0;
   }
-})
-    Deno.test('CloudflareResourceService - deleteResource - is a no-op for D1 when provider resource id is not provided', async () => {
+});
+Deno.test("CloudflareResourceService - deleteResource - is a no-op for D1 when provider resource id is not provided", async () => {
   try {
-  const fetchMock = ((..._args: any[]) => undefined) as any;
-      (globalThis as any).fetch = fetchMock;
+    const fetchMock = spy(async (..._args: any[]) => mockSuccessResponse(null));
+    (globalThis as any).fetch = fetchMock;
 
-      const svc = new CloudflareResourceService(env);
-      await svc.deleteResource({ type: 'd1', providerResourceId: null });
-      assertSpyCalls(fetchMock, 0);
+    const svc = new CloudflareResourceService(env);
+    await svc.deleteResource({ type: "d1", providerResourceId: null });
+    assertSpyCalls(fetchMock, 0);
   } finally {
-  /* TODO: restore stubbed globals manually */ void 0;
+    /* TODO: restore stubbed globals manually */ void 0;
   }
-})
-    Deno.test('CloudflareResourceService - deleteResource - is a no-op for R2 when provider resource name is not provided', async () => {
+});
+Deno.test("CloudflareResourceService - deleteResource - is a no-op for R2 when provider resource name is not provided", async () => {
   try {
-  const fetchMock = ((..._args: any[]) => undefined) as any;
-      (globalThis as any).fetch = fetchMock;
+    const fetchMock = spy(async (..._args: any[]) => mockSuccessResponse(null));
+    (globalThis as any).fetch = fetchMock;
 
-      const svc = new CloudflareResourceService(env);
-      await svc.deleteResource({ type: 'r2', providerResourceName: null });
-      assertSpyCalls(fetchMock, 0);
+    const svc = new CloudflareResourceService(env);
+    await svc.deleteResource({ type: "r2", providerResourceName: null });
+    assertSpyCalls(fetchMock, 0);
   } finally {
-  /* TODO: restore stubbed globals manually */ void 0;
+    /* TODO: restore stubbed globals manually */ void 0;
   }
-})
-    Deno.test('CloudflareResourceService - deleteResource - is a no-op for unknown resource type', async () => {
+});
+Deno.test("CloudflareResourceService - deleteResource - is a no-op for unknown resource type", async () => {
   try {
-  const fetchMock = ((..._args: any[]) => undefined) as any;
-      (globalThis as any).fetch = fetchMock;
+    const fetchMock = spy(async (..._args: any[]) => mockSuccessResponse(null));
+    (globalThis as any).fetch = fetchMock;
 
-      const svc = new CloudflareResourceService(env);
-      await svc.deleteResource({ type: 'unknown_type', providerResourceName: 'x' });
-      assertSpyCalls(fetchMock, 0);
+    const svc = new CloudflareResourceService(env);
+    await svc.deleteResource({
+      type: "unknown_type",
+      providerResourceName: "x",
+    });
+    assertSpyCalls(fetchMock, 0);
   } finally {
-  /* TODO: restore stubbed globals manually */ void 0;
+    /* TODO: restore stubbed globals manually */ void 0;
   }
-})
-    Deno.test('CloudflareResourceService - deleteResource - handles whitespace in type parameter', async () => {
+});
+Deno.test("CloudflareResourceService - deleteResource - handles whitespace in type parameter", async () => {
   try {
-  const fetchMock = ((..._args: any[]) => undefined) as any;
-      (globalThis as any).fetch = fetchMock;
+    const fetchMock = spy(async (..._args: any[]) => mockSuccessResponse(null));
+    (globalThis as any).fetch = fetchMock;
 
-      const svc = new CloudflareResourceService(env);
-      await svc.deleteResource({ type: '  ', providerResourceName: 'x' });
-      assertSpyCalls(fetchMock, 0);
+    const svc = new CloudflareResourceService(env);
+    await svc.deleteResource({ type: "  ", providerResourceName: "x" });
+    assertSpyCalls(fetchMock, 0);
   } finally {
-  /* TODO: restore stubbed globals manually */ void 0;
+    /* TODO: restore stubbed globals manually */ void 0;
   }
-})  
-  
-    Deno.test('CloudflareResourceService - wfp property - exposes the WFP service for direct access', () => {
+});
+
+Deno.test("CloudflareResourceService - wfp property - exposes the WFP service for direct access", () => {
   try {
-  const svc = new CloudflareResourceService(env);
-      assert(svc.wfp !== undefined);
-      assert(svc.wfp.d1 !== undefined);
+    const svc = new CloudflareResourceService(env);
+    assert(svc.wfp !== undefined);
+    assert(svc.wfp.d1 !== undefined);
   } finally {
-  /* TODO: restore stubbed globals manually */ void 0;
+    /* TODO: restore stubbed globals manually */ void 0;
   }
-})  
+});

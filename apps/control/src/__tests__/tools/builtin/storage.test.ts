@@ -12,15 +12,10 @@ import {
   assertRejects,
   assertStringIncludes,
 } from "jsr:@std/assert";
-import { assertSpyCallArgs } from "jsr:@std/testing/mock";
-
-const mockSelectGet = ((..._args: any[]) => undefined) as any;
-const mockSelectAll = ((..._args: any[]) => undefined) as any;
 
 // [Deno] vi.mock removed - manually stub imports from '@/db'
 // [Deno] vi.mock removed - manually stub imports from '@/tools/builtin/storage/validators'
 // [Deno] vi.mock removed - manually stub imports from '@/services/platform/infra'
-const mockCreateWfp = ((..._args: any[]) => undefined) as any;
 // [Deno] vi.mock removed - manually stub imports from '@/platform/providers/cloudflare/wfp'
 // [Deno] vi.mock removed - manually stub imports from '@/platform/providers/cloudflare/api-client'
 // [Deno] vi.mock removed - manually stub imports from '@/shared/utils/hash'
@@ -40,8 +35,6 @@ import {
   kvGetHandler,
   kvListHandler,
   kvPutHandler,
-  R2_DELETE,
-  R2_DOWNLOAD,
   R2_INFO,
   R2_LIST,
   R2_UPLOAD,
@@ -115,11 +108,11 @@ function makeContext(overrides: Partial<ToolContext> = {}): ToolContext {
 Deno.test("STORAGE_TOOLS and STORAGE_HANDLERS - exports combined tool list", () => {
   assert(STORAGE_TOOLS.length >= 11);
   const names = STORAGE_TOOLS.map((t) => t.name);
-  assertStringIncludes(names, "kv_get");
-  assertStringIncludes(names, "d1_query");
-  assertStringIncludes(names, "r2_upload");
-  assertStringIncludes(names, "create_d1");
-  assertStringIncludes(names, "list_resources");
+  assert(names.includes("kv_get"));
+  assert(names.includes("d1_query"));
+  assert(names.includes("r2_upload"));
+  assert(names.includes("create_d1"));
+  assert(names.includes("list_resources"));
 });
 Deno.test("STORAGE_TOOLS and STORAGE_HANDLERS - STORAGE_HANDLERS has handler for every tool", () => {
   for (const def of STORAGE_TOOLS) {
@@ -169,17 +162,23 @@ Deno.test("kvGetHandler - throws when namespace is not found", async () => {
 });
 
 Deno.test("kvPutHandler - stores a value", async () => {
-  mockKV.put = (async () => undefined) as any;
+  let receivedArgs: unknown[] | undefined;
+  mockKV.put = (async (...args: unknown[]) => {
+    receivedArgs = args;
+  }) as any;
 
   const result = await kvPutHandler(
     { namespace: "HOSTNAME_ROUTING", key: "k", value: "v" },
     makeContext(),
   );
   assertEquals(result, "Stored: k");
-  assertSpyCallArgs(mockKV.put, 0, ["k", "v", {}]);
+  assertEquals(receivedArgs, ["k", "v", {}]);
 });
 Deno.test("kvPutHandler - passes TTL option", async () => {
-  mockKV.put = (async () => undefined) as any;
+  let receivedArgs: unknown[] | undefined;
+  mockKV.put = (async (...args: unknown[]) => {
+    receivedArgs = args;
+  }) as any;
 
   await kvPutHandler(
     {
@@ -190,7 +189,7 @@ Deno.test("kvPutHandler - passes TTL option", async () => {
     },
     makeContext(),
   );
-  assertSpyCallArgs(mockKV.put, 0, ["k", "v", { expirationTtl: 3600 }]);
+  assertEquals(receivedArgs, ["k", "v", { expirationTtl: 3600 }]);
 });
 Deno.test("kvPutHandler - rejects invalid TTL", async () => {
   await assertRejects(async () => {
@@ -410,38 +409,43 @@ Deno.test("d1DescribeHandler - throws when table does not exist", async () => {
 });
 Deno.test("d1DescribeHandler - describes table with columns and indexes", async () => {
   mockStmt.first = (async () => ({ name: "users" } as never)) as any;
-  mockStmt.all =
-    (async () => ({
-      results: [
-        {
-          cid: 0,
-          name: "id",
-          type: "INTEGER",
-          notnull: 1,
-          dflt_value: null,
-          pk: 1,
-        },
-        {
-          cid: 1,
-          name: "name",
-          type: "TEXT",
-          notnull: 0,
-          dflt_value: "'unnamed'",
-          pk: 0,
-        },
-      ],
-    } as never)) as any =
-      (async () => ({
+  let allCallCount = 0;
+  mockStmt.all = (async () => {
+    allCallCount++;
+    if (allCallCount === 1) {
+      return {
         results: [
           {
-            seq: 0,
-            name: "idx_users_name",
-            unique: 1,
-            origin: "c",
-            partial: 0,
+            cid: 0,
+            name: "id",
+            type: "INTEGER",
+            notnull: 1,
+            dflt_value: null,
+            pk: 1,
+          },
+          {
+            cid: 1,
+            name: "name",
+            type: "TEXT",
+            notnull: 0,
+            dflt_value: "'unnamed'",
+            pk: 0,
           },
         ],
-      } as never)) as any;
+      } as never;
+    }
+    return {
+      results: [
+        {
+          seq: 0,
+          name: "idx_users_name",
+          unique: 1,
+          origin: "c",
+          partial: 0,
+        },
+      ],
+    } as never;
+  }) as any;
 
   const result = await d1DescribeHandler({ table: "users" }, makeContext());
 

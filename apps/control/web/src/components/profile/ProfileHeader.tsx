@@ -133,7 +133,11 @@ export function ProfileHeader(props: ProfileHeaderProps) {
             >
               <For each={stats()}>
                 {(item) => (
-                  <button style={statButtonStyle} onClick={() => props.onSelectTab(item.tab)}>
+                  <button
+                    type="button"
+                    style={statButtonStyle}
+                    onClick={() => props.onSelectTab(item.tab)}
+                  >
                     <span style={{ 'font-size': '1.125rem', 'font-weight': 700, color: 'var(--color-text-primary)' }}>
                       {formatNumber(item.count)}
                     </span>

@@ -1,4 +1,4 @@
-import { Command } from 'commander';
+import type { Command } from 'commander';
 import { red, yellow } from '@std/fmt/colors';
 import { cliExit } from '../lib/command-exit.ts';
 import { executeApiRequest } from './api-request.ts';

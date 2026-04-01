@@ -3,7 +3,7 @@ import { DeploymentService } from '../../../services/deployment/index.ts';
 import { getDb, services } from '../../../../infra/db/index.ts';
 import { eq, and } from 'drizzle-orm';
 import type { WorkerBinding } from '../../../../platform/providers/cloudflare/wfp.ts';
-import { safeJsonParseOrDefault } from '../../../../shared/utils/index.ts';
+import type { safeJsonParseOrDefault as _safeJsonParseOrDefault } from '../../../../shared/utils/index.ts';
 import { logWarn } from '../../../../shared/utils/logger.ts';
 
 export const DEPLOYMENT_HISTORY: ToolDefinition = {

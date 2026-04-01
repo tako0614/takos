@@ -101,6 +101,14 @@ const PATTERN_RULES: PatternRule[] = [
   },
 ];
 
+export const memoryExtractorDeps = {
+  LLMClient,
+  getDb,
+  generateId,
+  chatAndParseJsonArray,
+  logError,
+};
+
 function matchPatternRule(content: string, rule: PatternRule): ExtractedMemory | null {
   for (const pattern of rule.patterns) {
     if (!pattern.test(content)) continue;
@@ -146,16 +154,16 @@ export class MemoryExtractor {
   constructor(dbBinding: D1Database, apiKey?: string) {
     this.dbBinding = dbBinding;
     if (apiKey) {
-      this.llmClient = new LLMClient({ apiKey });
+      this.llmClient = new memoryExtractorDeps.LLMClient({ apiKey });
     }
   }
 
   async extractFromThread(
-    spaceId: string,
+    _spaceId: string,
     threadId: string,
-    userId: string
+    _userId: string
   ): Promise<ExtractedMemory[]> {
-    const db = getDb(this.dbBinding);
+    const db = memoryExtractorDeps.getDb(this.dbBinding);
 
     const messagesResult = await db.select({
       role: messagesTable.role,
@@ -186,7 +194,7 @@ export class MemoryExtractor {
       try {
         return await this.extractWithLLM(msgList);
       } catch (error) {
-        logError('LLM extraction failed, falling back to pattern matching', error, { module: 'services/memory/extractor' });
+        memoryExtractorDeps.logError('LLM extraction failed, falling back to pattern matching', error, { module: 'services/memory/extractor' });
       }
     }
 
@@ -225,7 +233,7 @@ Format:
   ...
 ]`;
 
-    const parsed = await chatAndParseJsonArray<ExtractedMemory>(
+    const parsed = await memoryExtractorDeps.chatAndParseJsonArray<ExtractedMemory>(
       this.llmClient!,
       'You are a memory extraction assistant. Output only valid JSON.',
       userPrompt,
@@ -265,12 +273,12 @@ Format:
     userId: string,
     extractedMemories: ExtractedMemory[]
   ): Promise<number> {
-    const db = getDb(this.dbBinding);
+    const db = memoryExtractorDeps.getDb(this.dbBinding);
     const timestamp = new Date().toISOString();
     let saved = 0;
 
     for (const memory of extractedMemories) {
-      const id = generateId();
+      const id = memoryExtractorDeps.generateId();
 
       try {
         await db.insert(memories).values({
@@ -291,7 +299,7 @@ Format:
 
         saved++;
       } catch (error) {
-        logError('Failed to save memory', error, { module: 'services/memory/extractor' });
+        memoryExtractorDeps.logError('Failed to save memory', error, { module: 'services/memory/extractor' });
       }
     }
 

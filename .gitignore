@@ -21,9 +21,11 @@ coverage/
 # Tooling / runtime state
 .wrangler/
 .takos-local/
+.takos/state*.json
 apps/control/.takos-local/
 apps/control/.takos-self-host/
 apps/control/.takos-server/
+apps/cli/.takos/state*.json
 
 # Env files (keep examples)
 .env

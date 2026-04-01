@@ -346,6 +346,22 @@ export async function ensureSqliteDeploymentsTableShape(client: Client): Promise
     `);
   }
 
+  const columns = await getSqliteTableColumns(client, 'deployments');
+  const alterStatements: string[] = [];
+
+  const hasServiceId = columns.has('service_id');
+  const hasWorkerId = columns.has('worker_id');
+
+  if (hasWorkerId && !hasServiceId) {
+    alterStatements.push(`ALTER TABLE "deployments" RENAME COLUMN "worker_id" TO "service_id";`);
+  } else if (!hasServiceId) {
+    alterStatements.push(`ALTER TABLE "deployments" ADD COLUMN "service_id" TEXT;`);
+  }
+
+  for (const statement of alterStatements) {
+    await client.execute(statement);
+  }
+
   await client.execute(`CREATE UNIQUE INDEX IF NOT EXISTS "idx_deployments_service_version" ON "deployments"("service_id", "version");`);
   await client.execute(`CREATE INDEX IF NOT EXISTS "idx_deployments_service_routing_status" ON "deployments"("service_id", "routing_status");`);
   await client.execute(`CREATE INDEX IF NOT EXISTS "idx_deployments_service_id" ON "deployments"("service_id");`);

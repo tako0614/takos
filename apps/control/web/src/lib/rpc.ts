@@ -62,10 +62,8 @@ export async function rpcJson<T>(response: Response): Promise<T> {
       plan?: string;
     };
     if (response.status === 401) {
-      if (typeof window !== 'undefined') {
-        const returnTo = `${window.location.pathname}${window.location.search}`;
-        window.location.href = `/auth/login?return_to=${encodeURIComponent(returnTo)}`;
-      }
+      const returnTo = `${globalThis.location.pathname}${globalThis.location.search}`;
+      globalThis.location.href = `/auth/login?return_to=${encodeURIComponent(returnTo)}`;
       throw new Error(data.error || 'Authentication required');
     }
     if (response.status === 402 && data.code === 'BILLING_QUOTA_EXCEEDED') {

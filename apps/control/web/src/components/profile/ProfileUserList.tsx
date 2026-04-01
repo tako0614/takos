@@ -51,6 +51,7 @@ export function ProfileUserList(props: ProfileUserListProps) {
                 </div>
               </div>
               <button
+                type="button"
                 class={`flex-shrink-0 px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
                   user.is_following
                     ? 'bg-zinc-100 dark:bg-zinc-700 text-zinc-900 dark:text-zinc-100 hover:bg-zinc-200 dark:hover:bg-zinc-600'

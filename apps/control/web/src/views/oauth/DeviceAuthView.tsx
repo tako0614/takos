@@ -1,4 +1,4 @@
-import { createEffect, onMount, onCleanup, createSignal } from 'solid-js';
+import { createEffect, createSignal } from 'solid-js';
 import { useI18n } from '../../store/i18n.ts';
 import { Button } from '../../components/ui/Button.tsx';
 import { ConsentLayout, ConsentLogo } from './ConsentLayout.tsx';
@@ -40,9 +40,9 @@ export function DeviceAuthView() {
       const data = await res.json() as DeviceContextResponse;
 
       if (data.status === 'unauthenticated') {
-        const search = window.location.search;
+        const search = globalThis.location.search;
         const returnTo = `/oauth/device${search}`;
-        window.location.href = `/auth/login?return_to=${encodeURIComponent(returnTo)}`;
+        globalThis.location.href = `/auth/login?return_to=${encodeURIComponent(returnTo)}`;
         return;
       }
 
@@ -55,7 +55,7 @@ export function DeviceAuthView() {
   };
 
   createEffect(() => {
-    const params = new URLSearchParams(window.location.search);
+    const params = new URLSearchParams(globalThis.location.search);
     const userCode = params.get('user_code') || undefined;
     if (userCode) setCodeInput(userCode);
     fetchContext(userCode);
@@ -67,7 +67,7 @@ export function DeviceAuthView() {
     if (!trimmed) return;
     // Update URL and fetch context
     const newUrl = `/oauth/device?user_code=${encodeURIComponent(trimmed)}`;
-    window.history.replaceState(null, '', newUrl);
+    globalThis.history.replaceState(null, '', newUrl);
     fetchContext(trimmed);
   };
 

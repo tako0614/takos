@@ -10,6 +10,11 @@ export interface PersistedRunEvent {
 
 export const RUN_EVENT_SEGMENT_SIZE = 100;
 
+export const runEventsDeps = {
+  gzipCompressString,
+  gzipDecompressToString,
+};
+
 function pad6(n: number): string {
   return String(n).padStart(6, '0');
 }
@@ -31,7 +36,7 @@ export async function writeRunEventSegmentToR2(
 ): Promise<void> {
   const key = buildRunEventSegmentKey(runId, segmentIndex);
   const jsonl = events.map((e) => JSON.stringify(e)).join('\n') + '\n';
-  const compressed = await gzipCompressString(jsonl);
+  const compressed = await runEventsDeps.gzipCompressString(jsonl);
   await bucket.put(key, compressed, {
     httpMetadata: {
       contentType: 'application/x-ndjson; charset=utf-8',
@@ -80,7 +85,7 @@ export async function readRunEventSegmentFromR2(
   const obj = await bucket.get(key);
   if (!obj) return null;
   const compressed = await obj.arrayBuffer();
-  const jsonl = await gzipDecompressToString(compressed, { maxDecompressedBytes: 200 * 1024 * 1024 });
+  const jsonl = await runEventsDeps.gzipDecompressToString(compressed, { maxDecompressedBytes: 200 * 1024 * 1024 });
 
   const events: PersistedRunEvent[] = [];
   for (const line of jsonl.split('\n')) {

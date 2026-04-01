@@ -11,7 +11,7 @@
  *   takos container list [--json]
  *   takos container delete <name>
  */
-import { Command } from 'commander';
+import type { Command } from 'commander';
 import { bold, cyan, dim, green, red } from '@std/fmt/colors';
 import { cliExit } from '../lib/command-exit.ts';
 import { api } from '../lib/api.ts';

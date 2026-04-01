@@ -10,11 +10,14 @@
 
 name = "takos-worker"
 main = "src/worker.ts"
-compatibility_date = "2025-01-01"
+compatibility_date = "2026-04-01"
 compatibility_flags = ["nodejs_compat", "global_fetch_strictly_public", "no_handle_cross_request_promise_resolution"]
 
 [observability]
 enabled = true
+
+[observability.logs]
+head_sampling_rate = 0.1
 
 [triggers]
 crons = ["1-59/2 * * * *"]

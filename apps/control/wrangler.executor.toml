@@ -7,11 +7,14 @@
 
 name = "takos-executor-host"
 main = "src/executor-host.ts"
-compatibility_date = "2025-01-01"
+compatibility_date = "2026-04-01"
 compatibility_flags = ["nodejs_compat", "no_handle_cross_request_promise_resolution"]
 
 [observability]
 enabled = true
+
+[observability.logs]
+head_sampling_rate = 0.1
 
 # Tier 1 — lite: lightweight always-on instances (1/16 vCPU, 256 MiB)
 [[durable_objects.bindings]]

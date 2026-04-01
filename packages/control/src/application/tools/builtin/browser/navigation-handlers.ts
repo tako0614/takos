@@ -118,7 +118,7 @@ export const browserGotoHandler: ToolHandler = async (args, context) => {
 /*  browser_close                                                      */
 /* ------------------------------------------------------------------ */
 
-export const browserCloseHandler: ToolHandler = async (args, context) => {
+export const browserCloseHandler: ToolHandler = async (_args, context) => {
   const sessionId = getBrowserSessionId(context);
   if (!sessionId) {
     return 'No active browser session to close.';

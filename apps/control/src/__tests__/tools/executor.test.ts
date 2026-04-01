@@ -1,18 +1,21 @@
-import type { D1Database } from '@cloudflare/workers-types';
-import type { Env } from '@/types';
-import { ToolExecutor } from '@/tools/executor';
-import type { ToolContext, ToolDefinition } from '@/tools/types';
+import type { D1Database } from "@cloudflare/workers-types";
+import type { Env } from "@/types";
+import { ToolExecutor } from "@/tools/executor";
+import type { ToolContext, ToolDefinition } from "@/tools/types";
 
-import { assertEquals, assertStringIncludes } from 'jsr:@std/assert';
-import { assertSpyCalls } from 'jsr:@std/testing/mock';
+import { assert, assertEquals, assertStringIncludes } from "jsr:@std/assert";
+import { assertSpyCalls, spy } from "jsr:@std/testing/mock";
 
-function createTool(name: string, overrides: Partial<ToolDefinition> = {}): ToolDefinition {
+function createTool(
+  name: string,
+  overrides: Partial<ToolDefinition> = {},
+): ToolDefinition {
   return {
     name,
     description: `${name} description`,
-    category: 'agent',
+    category: "agent",
     parameters: {
-      type: 'object',
+      type: "object",
       properties: {},
       required: [],
     },
@@ -22,12 +25,12 @@ function createTool(name: string, overrides: Partial<ToolDefinition> = {}): Tool
 
 function createContext(overrides: Partial<ToolContext> = {}): ToolContext {
   return {
-    spaceId: 'ws-1',
-    threadId: 'thread-1',
-    runId: 'run-1',
-    userId: 'user-1',
-    role: 'editor',
-    capabilities: ['repo.read'],
+    spaceId: "ws-1",
+    threadId: "thread-1",
+    runId: "run-1",
+    userId: "user-1",
+    role: "editor",
+    capabilities: ["repo.read"],
     env: {} as Env,
     db: {} as D1Database,
     setSessionId: ((..._args: any[]) => undefined) as any,
@@ -37,17 +40,22 @@ function createContext(overrides: Partial<ToolContext> = {}): ToolContext {
   };
 }
 
-function createExecutor(tools: ToolDefinition[], contextOverrides: Partial<ToolContext> = {}) {
+function createExecutor(
+  tools: ToolDefinition[],
+  contextOverrides: Partial<ToolContext> = {},
+) {
   const registry = new Map(tools.map((tool) => [tool.name, {
     definition: tool,
     builtin: false,
-    handler: async () => 'ok',
+    handler: async () => "ok",
   }]));
 
   const resolver = {
     getAvailableTools: () => tools,
     resolve: (name: string) => registry.get(name),
-    get mcpFailedServers() { return []; },
+    get mcpFailedServers() {
+      return [];
+    },
   };
 
   const sessionState = {
@@ -62,75 +70,83 @@ function createExecutor(tools: ToolDefinition[], contextOverrides: Partial<ToolC
   );
 }
 
-
-  Deno.test('ToolExecutor visibility filtering - hides capability-gated and dynamic MCP tools that are not executable in this run', () => {
+Deno.test("ToolExecutor visibility filtering - hides capability-gated and dynamic MCP tools that are not executable in this run", () => {
   const executor = createExecutor([
-      createTool('web_search'),
-      createTool('managed__tool', { required_roles: ['owner', 'admin', 'editor'] }),
-      createTool('external__tool', {
-        required_roles: ['owner', 'admin', 'editor'],
-        required_capabilities: ['egress.http'],
-      }),
-    ]);
+    createTool("web_search"),
+    createTool("managed__tool", {
+      required_roles: ["owner", "admin", "editor"],
+    }),
+    createTool("external__tool", {
+      required_roles: ["owner", "admin", "editor"],
+      required_capabilities: ["egress.http"],
+    }),
+  ]);
 
-    assertEquals(executor.getAvailableTools().map((tool) => tool.name), [
-      'web_search',
-      'managed__tool',
-    ]);
-})
-  Deno.test('ToolExecutor visibility filtering - hides editor-only dynamic tools from viewers', () => {
+  assertEquals(executor.getAvailableTools().map((tool) => tool.name), [
+    "web_search",
+    "managed__tool",
+  ]);
+});
+Deno.test("ToolExecutor visibility filtering - hides editor-only dynamic tools from viewers", () => {
   const executor = createExecutor([
-      createTool('managed__tool', { required_roles: ['owner', 'admin', 'editor'] }),
-    ], {
-      role: 'viewer',
-      capabilities: ['repo.read', 'storage.read'],
-    });
+    createTool("managed__tool", {
+      required_roles: ["owner", "admin", "editor"],
+    }),
+  ], {
+    role: "viewer",
+    capabilities: ["repo.read", "storage.read"],
+  });
 
-    assertEquals(executor.getAvailableTools(), []);
-})
-  Deno.test('ToolExecutor visibility filtering - propagates run-level abort signals into tool handlers', async () => {
+  assertEquals(executor.getAvailableTools(), []);
+});
+Deno.test("ToolExecutor visibility filtering - propagates run-level abort signals into tool handlers", async () => {
   const controller = new AbortController();
-    controller.abort(new Error('run aborted'));
+  controller.abort(new Error("run aborted"));
 
-    const tool = createTool('managed__tool');
-    const handler = async (_args, ctx) => {
+  const tool = createTool("managed__tool");
+  const handler = spy(
+    async (_args: Record<string, unknown>, ctx: ToolContext) => {
       if (ctx.abortSignal?.aborted) {
         throw (ctx.abortSignal.reason instanceof Error
           ? ctx.abortSignal.reason
           : new Error(String(ctx.abortSignal.reason)));
       }
-      return 'ok';
-    };
+      return "ok";
+    },
+  );
 
-    const registry = new Map([[tool.name, {
-      definition: tool,
-      builtin: false,
-      handler,
-    }]]);
+  const registry = new Map([[tool.name, {
+    definition: tool,
+    builtin: false,
+    handler,
+  }]]);
 
-    const resolver = {
-      getAvailableTools: () => [tool],
-      resolve: (name: string) => registry.get(name),
-      get mcpFailedServers() { return []; },
-    };
+  const resolver = {
+    getAvailableTools: () => [tool],
+    resolve: (name: string) => registry.get(name),
+    get mcpFailedServers() {
+      return [];
+    },
+  };
 
-    const sessionState = {
-      beginExecution: () => undefined,
-      endExecution: () => {},
-    };
+  const sessionState = {
+    beginExecution: () => undefined,
+    endExecution: () => {},
+  };
 
-    const executor = new ToolExecutor(
-      resolver as never,
-      createContext({ abortSignal: controller.signal }),
-      sessionState as never,
-    );
+  const executor = new ToolExecutor(
+    resolver as never,
+    createContext({ abortSignal: controller.signal }),
+    sessionState as never,
+  );
 
-    const result = await executor.execute({
-      id: 'call-1',
-      name: tool.name,
-      arguments: {},
-    });
+  const result = await executor.execute({
+    id: "call-1",
+    name: tool.name,
+    arguments: {},
+  });
 
-    assertSpyCalls(handler, 1);
-    assertStringIncludes(result.error, 'run aborted');
-})
+  assertSpyCalls(handler, 1);
+  assert(result.error);
+  assertStringIncludes(result.error, "run aborted");
+});

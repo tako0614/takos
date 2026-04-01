@@ -64,11 +64,11 @@ export function useAppRouteResolver(options: {
         if (/^https?:\/\//.test(appUrl)) {
           try {
             const parsed = new URL(appUrl);
-            if (parsed.origin !== window.location.origin) {
+            if (parsed.origin !== globalThis.location.origin) {
               console.error('Blocked redirect to external origin:', parsed.origin);
               return;
             }
-            window.location.assign(appUrl);
+            globalThis.location.assign(appUrl);
           } catch {
             console.error('Blocked redirect to invalid URL:', appUrl);
           }

@@ -22,6 +22,7 @@ interface TabButtonProps {
 function TabButton(props: TabButtonProps) {
   return (
     <button
+      type="button"
       style={{
         display: 'flex',
         'align-items': 'center',

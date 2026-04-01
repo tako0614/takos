@@ -9,7 +9,6 @@
 
 import { Hono } from 'hono';
 import { z } from 'zod';
-import type { Env } from '../../../shared/types/index.ts';
 import {
   consumeMcpOAuthPending, completeMcpOAuthFlow, registerExternalMcpServer,
   listMcpServers, deleteMcpServer, updateMcpServer, getMcpServerWithTokens,

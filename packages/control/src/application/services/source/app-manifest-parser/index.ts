@@ -1,21 +1,44 @@
-import YAML from 'yaml';
-import type { AppManifest, AppMetadata } from '../app-manifest-types.ts';
-import { asRecord, asString, asRequiredString, asStringArray, asStringMap } from '../app-manifest-utils.ts';
-import { parseResources, validateResourceBindings } from '../app-manifest-validation.ts';
-import { validateTemplateReferences } from '../app-manifest-template.ts';
+import YAML from "yaml";
+import type { AppManifest, AppMetadata } from "../app-manifest-types.ts";
+import {
+  asRecord,
+  asRequiredString,
+  asString,
+  asStringArray,
+} from "../app-manifest-utils.ts";
+import {
+  parseResources,
+  validateResourceBindings,
+} from "../app-manifest-validation.ts";
+import { validateTemplateReferences } from "../app-manifest-template.ts";
 
-import { validateSemver, parseLifecycle, parseUpdateStrategy, validateDependsOn } from './parse-common.ts';
-import { parseContainers } from './parse-containers.ts';
-import { parseWorkers, buildSyntheticServicesFromWorkers } from './parse-workers.ts';
-import { parseServices, parseMcpServers, parseFileHandlers } from './parse-services.ts';
-import { parseRoutes } from './parse-routes.ts';
-import { parseEnvConfig } from './parse-env.ts';
-import { parseOverrides } from './parse-overrides.ts';
+import {
+  parseLifecycle,
+  parseUpdateStrategy,
+  validateDependsOn,
+  validateSemver,
+} from "./parse-common.ts";
+import { parseContainers } from "./parse-containers.ts";
+import {
+  buildSyntheticServicesFromWorkers,
+  parseWorkers,
+} from "./parse-workers.ts";
+import {
+  parseFileHandlers,
+  parseMcpServers,
+  parseServices,
+} from "./parse-services.ts";
+import { parseRoutes } from "./parse-routes.ts";
+import { parseEnvConfig } from "./parse-env.ts";
+import { parseOverrides } from "./parse-overrides.ts";
 
 function validateMcpServers(
-  mcpServers: NonNullable<AppManifest['spec']['mcpServers']> | undefined,
-  routes: NonNullable<AppManifest['spec']['routes']> | undefined,
-  resources: Record<string, NonNullable<AppManifest['spec']['resources']>[string]>,
+  mcpServers: NonNullable<AppManifest["spec"]["mcpServers"]> | undefined,
+  routes: NonNullable<AppManifest["spec"]["routes"]> | undefined,
+  resources: Record<
+    string,
+    NonNullable<AppManifest["spec"]["resources"]>[string]
+  >,
 ): void {
   if (!mcpServers || mcpServers.length === 0) return;
 
@@ -23,13 +46,22 @@ function validateMcpServers(
 
   for (const server of mcpServers) {
     if (server.endpoint && server.route) {
-      throw new Error(`spec.mcpServers.${server.name} must not specify both endpoint and route`);
+      throw new Error(
+        `spec.mcpServers.${server.name} must not specify both endpoint and route`,
+      );
     }
     if (server.route && !routeNames.has(server.route)) {
-      throw new Error(`spec.mcpServers.${server.name}.route references unknown route: ${server.route}`);
+      throw new Error(
+        `spec.mcpServers.${server.name}.route references unknown route: ${server.route}`,
+      );
     }
-    if (server.authSecretRef && resources[server.authSecretRef]?.type !== 'secretRef') {
-      throw new Error(`spec.mcpServers.${server.name}.authSecretRef must reference a secretRef resource: ${server.authSecretRef}`);
+    if (
+      server.authSecretRef &&
+      resources[server.authSecretRef]?.type !== "secretRef"
+    ) {
+      throw new Error(
+        `spec.mcpServers.${server.name}.authSecretRef must reference a secretRef resource: ${server.authSecretRef}`,
+      );
     }
   }
 }
@@ -38,29 +70,32 @@ export function parseAppManifestYaml(raw: string): AppManifest {
   const parsed = YAML.parse(raw);
   const record = asRecord(parsed);
 
-  const apiVersion = asRequiredString(record.apiVersion, 'apiVersion');
-  const kind = asRequiredString(record.kind, 'kind');
-  if (apiVersion !== 'takos.dev/v1alpha1') {
-    throw new Error('apiVersion must be takos.dev/v1alpha1');
+  const apiVersion = asRequiredString(record.apiVersion, "apiVersion");
+  const kind = asRequiredString(record.kind, "kind");
+  if (apiVersion !== "takos.dev/v1alpha1") {
+    throw new Error("apiVersion must be takos.dev/v1alpha1");
   }
-  if (kind !== 'App') {
-    throw new Error('kind must be App');
+  if (kind !== "App") {
+    throw new Error("kind must be App");
   }
 
   const metadataRecord = asRecord(record.metadata);
   const specRecord = asRecord(record.spec);
-  const metadataAppId = asString(metadataRecord.appId, 'metadata.appId');
+  const metadataAppId = asString(metadataRecord.appId, "metadata.appId");
   const metadata: AppMetadata = {
-    name: asRequiredString(metadataRecord.name, 'metadata.name'),
+    name: asRequiredString(metadataRecord.name, "metadata.name"),
     ...(metadataAppId ? { appId: metadataAppId } : {}),
   };
 
   // --- shared optional fields ---
-  const specDescription = asString(specRecord.description, 'spec.description');
-  const specIcon = asString(specRecord.icon, 'spec.icon');
-  const specCategory = asString(specRecord.category, 'spec.category');
-  const specTags = asStringArray(specRecord.tags, 'spec.tags');
-  const specCapabilities = asStringArray(specRecord.capabilities, 'spec.capabilities');
+  const specDescription = asString(specRecord.description, "spec.description");
+  const specIcon = asString(specRecord.icon, "spec.icon");
+  const specCategory = asString(specRecord.category, "spec.category");
+  const specTags = asStringArray(specRecord.tags, "spec.tags");
+  const specCapabilities = asStringArray(
+    specRecord.capabilities,
+    "spec.capabilities",
+  );
   const mcpServers = parseMcpServers(specRecord);
   const fileHandlers = parseFileHandlers(specRecord);
 
@@ -80,17 +115,32 @@ export function parseAppManifestYaml(raw: string): AppManifest {
     ...Object.keys(workers),
   ]);
   for (const [name, container] of Object.entries(containers)) {
-    validateDependsOn(container.dependsOn, `spec.containers.${name}`, allComponentNames);
+    validateDependsOn(
+      container.dependsOn,
+      `spec.containers.${name}`,
+      allComponentNames,
+    );
   }
   for (const [name, service] of Object.entries(services)) {
-    validateDependsOn(service.dependsOn, `spec.services.${name}`, allComponentNames);
+    validateDependsOn(
+      service.dependsOn,
+      `spec.services.${name}`,
+      allComponentNames,
+    );
   }
   for (const [name, worker] of Object.entries(workers)) {
-    validateDependsOn(worker.dependsOn, `spec.workers.${name}`, allComponentNames);
+    validateDependsOn(
+      worker.dependsOn,
+      `spec.workers.${name}`,
+      allComponentNames,
+    );
   }
 
-  // Resources — pass a synthesised services map for validation
-  const syntheticServices = buildSyntheticServicesFromWorkers(workers);
+  // Resources — validate against all bindable workloads
+  const syntheticServices = buildSyntheticServicesFromWorkers(
+    workers,
+    services,
+  );
   const resources = parseResources(specRecord, syntheticServices);
   validateResourceBindings(syntheticServices, resources);
   validateMcpServers(mcpServers, routes, resources);
@@ -105,23 +155,30 @@ export function parseAppManifestYaml(raw: string): AppManifest {
       resources,
     });
     if (templateErrors.length > 0) {
-      throw new Error(`env.inject template errors: ${templateErrors.join('; ')}`);
+      throw new Error(
+        `env.inject template errors: ${templateErrors.join("; ")}`,
+      );
     }
   }
 
   // Validate version is valid semver
-  const version = asRequiredString(specRecord.version, 'spec.version');
+  const version = asRequiredString(specRecord.version, "spec.version");
   validateSemver(version);
 
   // Parse takos config with optional minVersion
-  let takosConfig: AppManifest['spec']['takos'] | undefined;
+  let takosConfig: AppManifest["spec"]["takos"] | undefined;
   if (specRecord.takos) {
     const takosRecord = asRecord(specRecord.takos);
-    const minVersion = asString(takosRecord.minVersion, 'spec.takos.minVersion');
+    const minVersion = asString(
+      takosRecord.minVersion,
+      "spec.takos.minVersion",
+    );
     if (minVersion) {
       validateSemver(minVersion);
     }
-    const baseTakos = asRecord(specRecord.takos) as unknown as NonNullable<AppManifest['spec']['takos']>;
+    const baseTakos = asRecord(specRecord.takos) as unknown as NonNullable<
+      AppManifest["spec"]["takos"]
+    >;
     takosConfig = {
       ...baseTakos,
       ...(minVersion ? { minVersion } : {}),
@@ -129,23 +186,27 @@ export function parseAppManifestYaml(raw: string): AppManifest {
   }
 
   return {
-    apiVersion: 'takos.dev/v1alpha1',
-    kind: 'App',
+    apiVersion: "takos.dev/v1alpha1",
+    kind: "App",
     metadata,
     spec: {
       version,
       ...(specDescription ? { description: specDescription } : {}),
       ...(specIcon ? { icon: specIcon } : {}),
-      ...(specCategory ? { category: specCategory as AppManifest['spec']['category'] } : {}),
+      ...(specCategory
+        ? { category: specCategory as AppManifest["spec"]["category"] }
+        : {}),
       ...(specTags ? { tags: specTags } : {}),
       ...(specCapabilities ? { capabilities: specCapabilities } : {}),
       ...(envConfig ? { env: envConfig } : {}),
-      ...(specRecord.oauth ? { oauth: asRecord(specRecord.oauth) as AppManifest['spec']['oauth'] } : {}),
+      ...(specRecord.oauth
+        ? { oauth: asRecord(specRecord.oauth) as AppManifest["spec"]["oauth"] }
+        : {}),
       ...(takosConfig ? { takos: takosConfig } : {}),
       ...(Object.keys(resources).length > 0 ? { resources } : {}),
       ...(Object.keys(containers).length > 0 ? { containers } : {}),
       ...(Object.keys(services).length > 0 ? { services } : {}),
-      workers,
+      ...(Object.keys(workers).length > 0 ? { workers } : {}),
       ...(routes && routes.length > 0 ? { routes } : {}),
       ...(lifecycle ? { lifecycle } : {}),
       ...(update ? { update } : {}),
@@ -159,7 +220,7 @@ export function parseAppManifestYaml(raw: string): AppManifest {
 export const parseAppManifestText = parseAppManifestYaml;
 
 // Re-export sub-module functions for any consumers that import them directly
-export { parseContainers } from './parse-containers.ts';
-export { parseServices } from './parse-services.ts';
-export { parseWorkers } from './parse-workers.ts';
-export { parseEnvConfig } from './parse-env.ts';
+export { parseContainers } from "./parse-containers.ts";
+export { parseServices } from "./parse-services.ts";
+export { parseWorkers } from "./parse-workers.ts";
+export { parseEnvConfig } from "./parse-env.ts";

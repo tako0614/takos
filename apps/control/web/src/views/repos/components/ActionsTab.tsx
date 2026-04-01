@@ -199,14 +199,14 @@ export function ActionsTab(props: ActionsTabProps) {
           <h3 class="text-lg font-semibold">{t('actionsTitle')}</h3>
         </div>
         <div class="flex items-center gap-2">
-          <button
+          <button type="button"
             class="flex items-center gap-2 px-3 py-1.5 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-zinc-100 dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100 hover:bg-zinc-200 dark:hover:bg-zinc-700 transition-colors"
             onClick={() => setDispatchOpen((prev) => !prev)}
           >
             <Icons.Play class="w-4 h-4" />
             <span>{t('runWorkflow')}</span>
           </button>
-          <button
+          <button type="button"
             class="flex items-center gap-2 px-3 py-1.5 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-zinc-100 dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100 hover:bg-zinc-200 dark:hover:bg-zinc-700 transition-colors"
             onClick={fetchRuns}
           >

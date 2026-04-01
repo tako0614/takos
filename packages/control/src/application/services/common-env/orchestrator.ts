@@ -5,7 +5,7 @@ import {
   type CommonEnvReconcileTrigger,
 } from './reconcile-jobs.ts';
 import { listServiceIdsLinkedToEnvKey } from './repository.ts';
-import { CommonEnvReconciler } from './reconciler.ts';
+import type { CommonEnvReconciler } from './reconciler.ts';
 import { logError } from '../../../shared/utils/logger.ts';
 
 export class CommonEnvOrchestrator {

@@ -35,8 +35,10 @@ export function isR2Configured(): boolean {
  */
 function isPathSafe(filePath: string): boolean {
   if (filePath.length === 0) return false;
-  // eslint-disable-next-line no-control-regex
-  if (/[\x00-\x1f\x7f]/.test(filePath)) return false;
+  for (let i = 0; i < filePath.length; i++) {
+    const code = filePath.charCodeAt(i);
+    if (code <= 31 || code === 127) return false;
+  }
   // Check traversal in raw form
   if (filePath.includes('..')) return false;
   // Decode percent-encoding and check again

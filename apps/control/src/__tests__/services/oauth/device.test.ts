@@ -35,15 +35,28 @@ import { assertEquals, assertNotEquals, assert } from 'jsr:@std/assert';
 // ---------------------------------------------------------------------------
 
 function createMockDrizzleDb() {
-  const getMock = ((..._args: any[]) => undefined) as any;
-  const allMock = ((..._args: any[]) => undefined) as any;
-  const chain = {
+  const chain: any = {
     from: (function(this: any) { return this; }),
     where: (function(this: any) { return this; }),
     set: (function(this: any) { return this; }),
     values: (function(this: any) { return this; }),
-    get: getMock,
-    all: allMock,
+    get: (async (..._args: any[]) => undefined) as any,
+    all: (async (..._args: any[]) => undefined) as any,
+  };
+  const control = {
+    get get() {
+      return chain.get;
+    },
+    set get(value: any) {
+      chain.get = value;
+    },
+    get all() {
+      return chain.all;
+    },
+    set all(value: any) {
+      chain.all = value;
+    },
+    chain,
   };
   return {
     select: () => chain,
@@ -53,11 +66,12 @@ function createMockDrizzleDb() {
         where: (async () => ({ meta: { changes: 1 } })),
       }),
     }),
-    _: { get: getMock, all: allMock, chain },
+    _: control,
   };
 }
 
 const db = createMockDrizzleDb();
+(globalThis as typeof globalThis & { __takosDbMock?: unknown }).__takosDbMock = db as never;
 
 const mocks = ({
   getDb: ((..._args: any[]) => undefined) as any,

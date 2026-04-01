@@ -1,6 +1,5 @@
 import { Hono, type Context } from 'hono';
 import { z } from 'zod';
-import type { Env } from '../../../shared/types/index.ts';
 import { spaceAccess, type SpaceAccessRouteEnv } from '../route-auth.ts';
 import {
   createSkill,

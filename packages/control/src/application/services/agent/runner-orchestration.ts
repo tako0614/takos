@@ -21,7 +21,7 @@ import type { RunTerminalPayload } from '../run-notifier/index.ts';
 import type { RunLifecycleDeps } from './run-lifecycle.ts';
 
 import { safeJsonParseOrDefault, generateId } from '../../../shared/utils/index.ts';
-import { AppError, AuthenticationError, InternalError } from 'takos-common/errors';
+import { type AppError as _AppError, AuthenticationError, InternalError } from 'takos-common/errors';
 import { logError, logWarn } from '../../../shared/utils/logger.ts';
 import { RunCancelledError } from './run-lifecycle.ts';
 import { runLangGraphRunner } from './graph-runner.ts';

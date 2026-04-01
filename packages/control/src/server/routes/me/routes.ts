@@ -1,5 +1,5 @@
 import { Hono } from 'hono';
-import type { Env, User } from '../../../shared/types/index.ts';
+import type { Env } from '../../../shared/types/index.ts';
 import { safeJsonParseOrDefault, generateId, base64UrlEncode } from '../../../shared/utils/index.ts';
 import { validateUsername } from '../../../shared/utils/domain-validation.ts';
 import { getDb } from '../../../infra/db/index.ts';

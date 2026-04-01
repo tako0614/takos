@@ -183,7 +183,7 @@ export class EmbeddingsService {
       returnMetadata: 'all',
     });
 
-    const fileIds = [...new Set(searchResult.matches
+    const _fileIds = [...new Set(searchResult.matches
       .map((m: { metadata?: Record<string, unknown> }) => {
         const metadata = (m.metadata || {}) as Record<string, unknown>;
         return typeof metadata.fileId === 'string' ? metadata.fileId : null;

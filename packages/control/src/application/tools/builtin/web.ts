@@ -265,14 +265,14 @@ export const webFetchHandler: ToolHandler = async (args, context) => {
     return 'Browser rendering via web_fetch is no longer supported. Use browser_open + browser_goto + browser_extract for JS-heavy pages instead.';
   }
 
-  const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
-
-  let response: Response;
   const egress = (context.env as typeof context.env & { TAKOS_EGRESS?: EgressBinding }).TAKOS_EGRESS;
   if (!egress) {
     throw new Error('Egress proxy not configured');
   }
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
+
+  let response: Response;
   try {
     const egressHeaders: Record<string, string> = {
       'User-Agent': 'Mozilla/5.0 (compatible; TakosBot/1.0)',

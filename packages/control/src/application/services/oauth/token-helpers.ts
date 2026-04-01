@@ -1,6 +1,6 @@
 import type { SelectOf } from '../../../shared/types/drizzle-utils.ts';
 import type { OAuthToken, OAuthTokenType } from '../../../shared/types/oauth.ts';
-import { oauthTokens } from '../../../infra/db/index.ts';
+import type { oauthTokens } from '../../../infra/db/index.ts';
 import { textDate, textDateNullable } from '../../../shared/utils/db-guards.ts';
 
 export type OAuthTokenRow = SelectOf<typeof oauthTokens>;

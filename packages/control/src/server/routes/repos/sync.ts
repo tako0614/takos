@@ -86,7 +86,10 @@ const repoSync = new Hono<AuthenticatedRouteEnv>()
       : null;
 
     let targetBranches: string[] = [];
-    let upstreamBranchMap: Map<string, Awaited<ReturnType<typeof gitStore.getBranch>> & {}>;
+    let upstreamBranchMap: Map<
+      string,
+      NonNullable<Awaited<ReturnType<typeof gitStore.getBranch>>>
+    >;
     if (requestedBranches !== null) {
       // Batch-fetch all requested branches from upstream in one query
       upstreamBranchMap = await gitStore.getBranchesByNames(c.env.DB, upstream.id, requestedBranches);
@@ -202,7 +205,7 @@ const repoSync = new Hono<AuthenticatedRouteEnv>()
 
   const repo = toApiRepositoryFromDb(repoData);
 
-  const access = await requireSpaceAccess(
+  const _access = await requireSpaceAccess(
     c,
     repo.space_id,
     user.id,

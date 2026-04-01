@@ -280,7 +280,21 @@ function withAvailability<T extends {
 })
 
   Deno.test('official skill catalog surface - returns summary data from the list surface and reserves instructions for describe', async () => {
-  const catalog = await listOfficialSkillsCatalog({} as D1Database, 'ws-1', { preferredLocale: 'en' });
+  const catalogDb = {
+    select: () => ({
+      from: () => ({
+        where: () => ({
+          orderBy: () => ({
+            all: async () => [],
+          }),
+        }),
+      }),
+    }),
+    insert: () => catalogDb,
+    update: () => catalogDb,
+    delete: () => catalogDb,
+  } as unknown as D1Database;
+  const catalog = await listOfficialSkillsCatalog(catalogDb, 'ws-1', { preferredLocale: 'en' });
     assertEquals(catalog.locale, 'en');
     assert(!('instructions' in catalog.skills[0]));
     assert(catalog.skills[0]?.execution_contract?.preferred_tools.length > 0);

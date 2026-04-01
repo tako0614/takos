@@ -1,15 +1,19 @@
 import { MAX_LOG_LINES } from '../shared/config.ts';
-import { SecretsSanitizer } from './actions/secrets.ts';
+import type { SecretsSanitizer } from './actions/secrets.ts';
 
 const MAX_LOG_LINE_LENGTH = 10_000;
+
+export const loggingDeps = {
+  maxLogLines: MAX_LOG_LINES,
+};
 
 export function pushLog(
   logs: string[],
   message: string,
   sanitizer?: SecretsSanitizer
 ): void {
-  if (logs.length >= MAX_LOG_LINES) {
-    if (logs.length === MAX_LOG_LINES) {
+  if (logs.length >= loggingDeps.maxLogLines) {
+    if (logs.length === loggingDeps.maxLogLines) {
       logs.push('...log truncated');
     }
     return;
@@ -23,4 +27,3 @@ export function pushLog(
 
   logs.push(sanitizedMessage);
 }
-

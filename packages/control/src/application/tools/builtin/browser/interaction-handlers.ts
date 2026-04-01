@@ -127,7 +127,7 @@ export const browserExtractHandler: ToolHandler = async (args, context) => {
 
 const MAX_HTML_LENGTH = 100000; // 100KB
 
-export const browserHtmlHandler: ToolHandler = async (args, context) => {
+export const browserHtmlHandler: ToolHandler = async (_args, context) => {
   const sessionId = requireBrowserSessionId(context);
 
   const response = await browserHostFetch(
@@ -161,7 +161,7 @@ export const browserHtmlHandler: ToolHandler = async (args, context) => {
 /*  browser_screenshot                                                 */
 /* ------------------------------------------------------------------ */
 
-export const browserScreenshotHandler: ToolHandler = async (args, context) => {
+export const browserScreenshotHandler: ToolHandler = async (_args, context) => {
   const sessionId = requireBrowserSessionId(context);
 
   const response = await browserHostFetch(

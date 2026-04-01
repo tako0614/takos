@@ -10,7 +10,10 @@ import {
 const mocks = {
   getDb: ((..._args: any[]) => undefined) as any,
   queryRelevantThreadMessages: ((..._args: any[]) => undefined) as any,
-  logWarn: ((..._args: any[]) => undefined) as any,
+  logWarnCalls: [] as unknown[][],
+  logWarn: (...args: unknown[]) => {
+    mocks.logWarnCalls.push(args);
+  },
 };
 
 // [Deno] vi.mock removed - manually stub imports from '@/db'
@@ -19,7 +22,14 @@ const mocks = {
 import {
   searchSpaceThreads,
   searchThreadMessages,
+  threadSearchDeps,
 } from "@/services/threads/thread-search";
+
+threadSearchDeps.getDb = ((db) => mocks.getDb(db)) as typeof threadSearchDeps.getDb;
+threadSearchDeps.queryRelevantThreadMessages = ((
+  ...args: Parameters<typeof threadSearchDeps.queryRelevantThreadMessages>
+) => mocks.queryRelevantThreadMessages(...args)) as typeof threadSearchDeps.queryRelevantThreadMessages;
+threadSearchDeps.logWarn = ((...args) => mocks.logWarn(...args)) as typeof threadSearchDeps.logWarn;
 
 function makeEnv(options: { ai?: boolean; vectorize?: boolean } = {}): Env {
   const env: Partial<Env> = {
@@ -218,7 +228,7 @@ Deno.test("searchSpaceThreads - handles semantic search failure gracefully", asy
   });
 
   assertEquals(result.results.length, 0);
-  assert(mocks.logWarn.calls.length > 0);
+  assert(mocks.logWarnCalls.length > 0);
 });
 Deno.test("searchSpaceThreads - skips deleted threads from semantic results", async () => {
   /* mocks cleared (no-op in Deno) */ void 0;
@@ -408,7 +418,7 @@ Deno.test("searchThreadMessages - handles semantic search failure gracefully", a
   });
 
   assertEquals(result.results.length, 0);
-  assert(mocks.logWarn.calls.length > 0);
+  assert(mocks.logWarnCalls.length > 0);
 });
 Deno.test("searchThreadMessages - uses semantic search results with scores", async () => {
   /* mocks cleared (no-op in Deno) */ void 0;

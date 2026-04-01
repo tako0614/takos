@@ -18,6 +18,7 @@ export function MobileHeader(props: MobileHeaderProps) {
     >
       <div class="flex items-center w-full h-12 px-2 gap-1">
         <button
+          type="button"
           class="flex items-center justify-center w-9 h-9 rounded-lg text-zinc-600 dark:text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors shrink-0"
           onClick={props.onOpenMenu}
           aria-label={props.menuAriaLabel}

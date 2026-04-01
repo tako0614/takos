@@ -1,4 +1,4 @@
-import { createEffect, onMount, onCleanup, createSignal } from 'solid-js';
+import { createEffect, onCleanup, createSignal } from 'solid-js';
 import { useI18n } from '../../store/i18n.ts';
 import { useToast } from '../../store/toast.ts';
 import { rpc, rpcJson } from '../../lib/rpc.ts';
@@ -69,7 +69,7 @@ export function SettingsAccount({ user }: { user: User | null }) {
     }
 
     let cancelled = false;
-    const timer = window.setTimeout(async () => {
+    const timer = globalThis.setTimeout(async () => {
       setCheckingUsername(true);
       try {
         const res = await rpc.setup['check-username'].$post({
@@ -95,7 +95,7 @@ export function SettingsAccount({ user }: { user: User | null }) {
 
     onCleanup(() => {
       cancelled = true;
-      window.clearTimeout(timer);
+      globalThis.clearTimeout(timer);
     });
   });
 

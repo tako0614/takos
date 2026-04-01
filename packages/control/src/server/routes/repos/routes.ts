@@ -4,11 +4,10 @@ import { z } from 'zod';
 import {
   requireSpaceAccess,
 } from '../route-auth.ts';
-import { AppError, ErrorCodes, BadRequestError, ConflictError, InternalError, NotFoundError, ValidationError } from 'takos-common/errors';
+import { AppError, ErrorCodes, BadRequestError, ConflictError, InternalError, ValidationError } from 'takos-common/errors';
 import type { AuthenticatedRouteEnv } from '../route-auth.ts';
 import { zValidator } from '../zod-validator.ts';
 import * as gitStore from '../../../application/services/git-smart/index.ts';
-import { collectReachableObjectShas } from '../../../application/services/git-smart/index.ts';
 import {
   checkRepoAccess,
   createRepository,
@@ -230,7 +229,7 @@ export default new Hono<AuthenticatedRouteEnv>()
   const repoId = c.req.param('repoId');
   const body = c.req.valid('json');
 
-  const repoAccess = requireFound(await checkRepoAccess(c.env, repoId, user.id, ['owner', 'admin']), 'Repository');
+  const _repoAccess = requireFound(await checkRepoAccess(c.env, repoId, user.id, ['owner', 'admin']), 'Repository');
 
   const db = getDb(c.env.DB);
   const data: Record<string, string | number> = {};
@@ -294,7 +293,7 @@ export default new Hono<AuthenticatedRouteEnv>()
       repoId,
       accountId: repoAccess.repo.space_id,
     });
-  } catch (err) {
+  } catch (_err) {
     logWarn('Failed to record repo delete activity', { action: 'deleteRepository', repoId });
   }
 
@@ -314,7 +313,7 @@ export default new Hono<AuthenticatedRouteEnv>()
     c.executionCtx.waitUntil((async () => {
       try {
         await deleteR2Prefix(c.env.GIT_OBJECTS!, `release-assets/${repoId}/`);
-      } catch (error) {
+      } catch (_error) {
         logWarn('Failed to cleanup release assets', { action: 'deleteRepository', repoId });
       }
 
@@ -330,7 +329,7 @@ export default new Hono<AuthenticatedRouteEnv>()
           repoId,
           repoObjectCandidates
         );
-      } catch (error) {
+      } catch (_error) {
         logWarn('Failed to cleanup repo git objects', { action: 'deleteRepository', repoId });
       }
     })());

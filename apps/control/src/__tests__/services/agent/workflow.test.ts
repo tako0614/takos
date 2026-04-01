@@ -30,7 +30,17 @@ import {
   orchestrateWorkflow,
   type TaskPlan,
   type WorkflowContext,
+  workflowDeps,
 } from "@/services/agent/workflow";
+
+function setMockLLMClient(
+  chat: (...args: any[]) => Promise<{ content: string; usage: unknown }>,
+) {
+  workflowDeps.LLMClient = class {
+    constructor(_options: unknown) {}
+    chat = chat;
+  } as any;
+}
 
 Deno.test("analyzeTask - parses a valid task analysis response", async () => {
   /* mocks cleared (no-op in Deno) */ void 0;
@@ -48,7 +58,7 @@ Deno.test("analyzeTask - parses a valid task analysis response", async () => {
     }),
     usage: { inputTokens: 10, outputTokens: 20 },
   });
-  mocks.LLMClient = () => ({ chat: mockChat }) as any;
+  setMockLLMClient(mockChat);
 
   const plan = await analyzeTask("Fix the login bug", {
     spaceId: "ws-1",
@@ -68,7 +78,7 @@ Deno.test("analyzeTask - defaults to conversation on parse failure", async () =>
     content: "This is not valid JSON",
     usage: { inputTokens: 10, outputTokens: 20 },
   });
-  mocks.LLMClient = () => ({ chat: mockChat }) as any;
+  setMockLLMClient(mockChat);
 
   const plan = await analyzeTask("Do something", {
     spaceId: "ws-1",
@@ -78,7 +88,7 @@ Deno.test("analyzeTask - defaults to conversation on parse failure", async () =>
   });
 
   assertEquals(plan.type, "conversation");
-  assertStringIncludes(plan.reasoning, "failed");
+  assertStringIncludes(plan.reasoning ?? "", "failed");
 });
 Deno.test("analyzeTask - normalizes invalid plan type to conversation", async () => {
   /* mocks cleared (no-op in Deno) */ void 0;
@@ -86,7 +96,7 @@ Deno.test("analyzeTask - normalizes invalid plan type to conversation", async ()
     content: JSON.stringify({ type: "invalid_type" }),
     usage: { inputTokens: 10, outputTokens: 20 },
   });
-  mocks.LLMClient = () => ({ chat: mockChat }) as any;
+  setMockLLMClient(mockChat);
 
   const plan = await analyzeTask("Something", {
     spaceId: "ws-1",
@@ -103,7 +113,7 @@ Deno.test("analyzeTask - handles markdown-wrapped JSON response", async () => {
     content: '```json\n{"type":"tool_only","tools":["web_search"]}\n```',
     usage: { inputTokens: 10, outputTokens: 20 },
   });
-  mocks.LLMClient = () => ({ chat: mockChat }) as any;
+  setMockLLMClient(mockChat);
 
   const plan = await analyzeTask("Search for something", {
     spaceId: "ws-1",
@@ -120,7 +130,7 @@ Deno.test("analyzeTask - defaults optional fields when not provided in response"
     content: JSON.stringify({ type: "conversation" }),
     usage: { inputTokens: 10, outputTokens: 20 },
   });
-  mocks.LLMClient = () => ({ chat: mockChat }) as any;
+  setMockLLMClient(mockChat);
 
   const plan = await analyzeTask("Chat with me", {
     spaceId: "ws-1",
@@ -252,7 +262,7 @@ Deno.test("orchestrateWorkflow - returns conversation result for conversation pl
     content: JSON.stringify({ type: "conversation" }),
     usage: { inputTokens: 10, outputTokens: 20 },
   });
-  mocks.LLMClient = () => ({ chat: mockChat }) as any;
+  setMockLLMClient(mockChat);
 
   const result = await orchestrateWorkflow("Tell me a joke", {
     env: {} as any,
@@ -270,6 +280,7 @@ Deno.test("orchestrateWorkflow - returns conversation result for conversation pl
 Deno.test("orchestrateWorkflow - returns tool steps for tool_only plan type", async () => {
   /* mocks cleared (no-op in Deno) */ void 0;
   mocks.generateId = (() => "step-id") as any;
+  workflowDeps.generateId = mocks.generateId as any;
   const mockChat = async () => ({
     content: JSON.stringify({
       type: "tool_only",
@@ -277,7 +288,7 @@ Deno.test("orchestrateWorkflow - returns tool steps for tool_only plan type", as
     }),
     usage: { inputTokens: 10, outputTokens: 20 },
   });
-  mocks.LLMClient = () => ({ chat: mockChat }) as any;
+  setMockLLMClient(mockChat);
 
   const result = await orchestrateWorkflow("Search and read", {
     env: {} as any,

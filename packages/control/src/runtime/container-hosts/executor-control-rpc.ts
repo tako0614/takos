@@ -7,8 +7,8 @@
  */
 
 import { getDb } from '../../infra/db/index.ts';
-import { runs, runEvents } from '../../infra/db/schema.ts';
-import { eq, and } from 'drizzle-orm';
+import { type runs as _runs, runEvents } from '../../infra/db/schema.ts';
+import type { eq as _eq, and as _and } from 'drizzle-orm';
 import { logError, logWarn } from '../../shared/utils/logger.ts';
 import { persistMessage } from '../../application/services/agent/message-persistence.ts';
 import type { AgentMessage } from '../../application/services/agent/agent-models.ts';

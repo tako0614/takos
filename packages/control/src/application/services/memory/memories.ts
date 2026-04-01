@@ -6,20 +6,44 @@ import type {
   ReminderPriority,
   ReminderStatus,
   ReminderTriggerType,
-} from '../../../shared/types/index.ts';
-import { generateId } from '../../../shared/utils/index.ts';
-import { getDb, memories, reminders } from '../../../infra/db/index.ts';
-import { eq, and, or, like, desc, asc, sql, inArray } from 'drizzle-orm';
-import { textDate } from '../../../shared/utils/db-guards.ts';
+} from "../../../shared/types/index.ts";
+import { generateId } from "../../../shared/utils/index.ts";
+import { getDb, memories, reminders } from "../../../infra/db/index.ts";
+import { and, type asc as _asc, desc, eq, inArray, like, or, sql } from "drizzle-orm";
+import { textDate } from "../../../shared/utils/db-guards.ts";
 
-export const MEMORY_TYPES: readonly string[] = ['episode', 'semantic', 'procedural'];
-const REMINDER_TRIGGER_TYPES: readonly string[] = ['time', 'condition', 'context'];
-const REMINDER_STATUSES: readonly string[] = ['pending', 'triggered', 'completed', 'dismissed'];
-const REMINDER_PRIORITIES: readonly string[] = ['low', 'normal', 'high', 'critical'];
+export const MEMORY_TYPES: readonly string[] = [
+  "episode",
+  "semantic",
+  "procedural",
+];
+const REMINDER_TRIGGER_TYPES: readonly string[] = [
+  "time",
+  "condition",
+  "context",
+];
+const REMINDER_STATUSES: readonly string[] = [
+  "pending",
+  "triggered",
+  "completed",
+  "dismissed",
+];
+const REMINDER_PRIORITIES: readonly string[] = [
+  "low",
+  "normal",
+  "high",
+  "critical",
+];
+
+export const memoryServiceDeps = {
+  getDb,
+  generateId,
+  now: () => new Date().toISOString(),
+};
 
 function toOptionalIsoString(value: string | Date | null): string | null {
   if (!value) return null;
-  return typeof value === 'string' ? value : value.toISOString();
+  return typeof value === "string" ? value : value.toISOString();
 }
 
 function isMemoryType(value: string): value is MemoryType {
@@ -61,7 +85,7 @@ function toMemoryApi(m: {
     space_id: m.accountId,
     user_id: m.authorAccountId,
     thread_id: m.threadId,
-    type: isMemoryType(m.type) ? m.type : 'semantic',
+    type: isMemoryType(m.type) ? m.type : "semantic",
     category: m.category,
     content: m.content,
     summary: m.summary,
@@ -90,8 +114,8 @@ function toReminderApi(r: {
   createdAt: string | Date;
   updatedAt: string | Date;
 }): Reminder {
-  const reminderStatus = r.status ?? 'pending';
-  const reminderPriority = r.priority ?? 'normal';
+  const reminderStatus = r.status ?? "pending";
+  const reminderPriority = r.priority ?? "normal";
 
   return {
     id: r.id,
@@ -99,27 +123,29 @@ function toReminderApi(r: {
     user_id: r.ownerAccountId,
     content: r.content,
     context: r.context,
-    trigger_type: isReminderTriggerType(r.triggerType) ? r.triggerType : 'time',
+    trigger_type: isReminderTriggerType(r.triggerType) ? r.triggerType : "time",
     trigger_value: r.triggerValue,
-    status: isReminderStatus(reminderStatus) ? reminderStatus : 'pending',
+    status: isReminderStatus(reminderStatus) ? reminderStatus : "pending",
     triggered_at: toOptionalIsoString(r.triggeredAt),
-    priority: isReminderPriority(reminderPriority) ? reminderPriority : 'normal',
+    priority: isReminderPriority(reminderPriority)
+      ? reminderPriority
+      : "normal",
     created_at: textDate(r.createdAt),
     updated_at: textDate(r.updatedAt),
   };
 }
 
 export async function listMemories(
-  dbBinding: Env['DB'],
+  dbBinding: Env["DB"],
   spaceId: string,
   options: {
     type?: MemoryType;
     category?: string;
     limit?: number;
     offset?: number;
-  }
+  },
 ): Promise<Memory[]> {
-  const db = getDb(dbBinding);
+  const db = memoryServiceDeps.getDb(dbBinding);
 
   const conditions = [eq(memories.accountId, spaceId)];
   if (options.type) {
@@ -140,13 +166,13 @@ export async function listMemories(
 }
 
 export async function bumpMemoryAccess(
-  dbBinding: Env['DB'],
+  dbBinding: Env["DB"],
   memoryIds: string[],
-  timestamp: string = new Date().toISOString()
+  timestamp: string = new Date().toISOString(),
 ) {
   if (memoryIds.length === 0) return;
 
-  const db = getDb(dbBinding);
+  const db = memoryServiceDeps.getDb(dbBinding);
   await db.update(memories)
     .set({
       accessCount: sql`${memories.accessCount} + 1`,
@@ -157,13 +183,13 @@ export async function bumpMemoryAccess(
 }
 
 export async function searchMemories(
-  dbBinding: Env['DB'],
+  dbBinding: Env["DB"],
   spaceId: string,
   query: string,
   type?: MemoryType,
-  limit: number = 20
+  limit: number = 20,
 ): Promise<Memory[]> {
-  const db = getDb(dbBinding);
+  const db = memoryServiceDeps.getDb(dbBinding);
 
   const conditions = [
     eq(memories.accountId, spaceId),
@@ -186,8 +212,11 @@ export async function searchMemories(
   return result.map(toMemoryApi);
 }
 
-export async function getMemoryById(dbBinding: Env['DB'], memoryId: string): Promise<Memory | null> {
-  const db = getDb(dbBinding);
+export async function getMemoryById(
+  dbBinding: Env["DB"],
+  memoryId: string,
+): Promise<Memory | null> {
+  const db = memoryServiceDeps.getDb(dbBinding);
 
   const memory = await db.select().from(memories)
     .where(eq(memories.id, memoryId))
@@ -199,7 +228,7 @@ export async function getMemoryById(dbBinding: Env['DB'], memoryId: string): Pro
 }
 
 export async function createMemory(
-  dbBinding: Env['DB'],
+  dbBinding: Env["DB"],
   input: {
     spaceId: string;
     userId: string;
@@ -212,11 +241,11 @@ export async function createMemory(
     tags?: string[] | null;
     occurredAt?: string | null;
     expiresAt?: string | null;
-  }
+  },
 ): Promise<Memory | null> {
-  const db = getDb(dbBinding);
-  const timestamp = new Date().toISOString();
-  const id = generateId();
+  const db = memoryServiceDeps.getDb(dbBinding);
+  const timestamp = memoryServiceDeps.now();
+  const id = memoryServiceDeps.generateId();
 
   await db.insert(memories).values({
     id,
@@ -239,7 +268,7 @@ export async function createMemory(
 }
 
 export async function updateMemory(
-  dbBinding: Env['DB'],
+  dbBinding: Env["DB"],
   memoryId: string,
   updates: {
     content?: string;
@@ -248,17 +277,19 @@ export async function updateMemory(
     category?: string;
     tags?: string[] | null;
     expiresAt?: string | null;
-  }
+  },
 ): Promise<Memory | null> {
-  const db = getDb(dbBinding);
-  const timestamp = new Date().toISOString();
+  const db = memoryServiceDeps.getDb(dbBinding);
+  const timestamp = memoryServiceDeps.now();
 
   const data: Record<string, unknown> = { updatedAt: timestamp };
   if (updates.content !== undefined) data.content = updates.content;
   if (updates.summary !== undefined) data.summary = updates.summary;
   if (updates.importance !== undefined) data.importance = updates.importance;
   if (updates.category !== undefined) data.category = updates.category;
-  if (updates.tags !== undefined) data.tags = updates.tags ? JSON.stringify(updates.tags) : null;
+  if (updates.tags !== undefined) {
+    data.tags = updates.tags ? JSON.stringify(updates.tags) : null;
+  }
   if (updates.expiresAt !== undefined) data.expiresAt = updates.expiresAt;
 
   await db.update(memories)
@@ -268,18 +299,18 @@ export async function updateMemory(
   return getMemoryById(dbBinding, memoryId);
 }
 
-export async function deleteMemory(dbBinding: Env['DB'], memoryId: string) {
-  const db = getDb(dbBinding);
+export async function deleteMemory(dbBinding: Env["DB"], memoryId: string) {
+  const db = memoryServiceDeps.getDb(dbBinding);
 
   await db.delete(memories).where(eq(memories.id, memoryId));
 }
 
 export async function listReminders(
-  dbBinding: Env['DB'],
+  dbBinding: Env["DB"],
   spaceId: string,
-  options: { status?: ReminderStatus; limit?: number }
+  options: { status?: ReminderStatus; limit?: number },
 ): Promise<Reminder[]> {
-  const db = getDb(dbBinding);
+  const db = memoryServiceDeps.getDb(dbBinding);
 
   const conditions = [eq(reminders.accountId, spaceId)];
   if (options.status) {
@@ -295,8 +326,11 @@ export async function listReminders(
   return result.map(toReminderApi);
 }
 
-export async function getReminderById(dbBinding: Env['DB'], reminderId: string): Promise<Reminder | null> {
-  const db = getDb(dbBinding);
+export async function getReminderById(
+  dbBinding: Env["DB"],
+  reminderId: string,
+): Promise<Reminder | null> {
+  const db = memoryServiceDeps.getDb(dbBinding);
 
   const reminder = await db.select().from(reminders)
     .where(eq(reminders.id, reminderId))
@@ -308,7 +342,7 @@ export async function getReminderById(dbBinding: Env['DB'], reminderId: string):
 }
 
 export async function createReminder(
-  dbBinding: Env['DB'],
+  dbBinding: Env["DB"],
   input: {
     spaceId: string;
     userId: string;
@@ -317,11 +351,11 @@ export async function createReminder(
     triggerType: ReminderTriggerType;
     triggerValue?: string | null;
     priority?: ReminderPriority;
-  }
+  },
 ): Promise<Reminder | null> {
-  const db = getDb(dbBinding);
-  const timestamp = new Date().toISOString();
-  const id = generateId();
+  const db = memoryServiceDeps.getDb(dbBinding);
+  const timestamp = memoryServiceDeps.now();
+  const id = memoryServiceDeps.generateId();
 
   await db.insert(reminders).values({
     id,
@@ -331,8 +365,8 @@ export async function createReminder(
     context: input.context || null,
     triggerType: input.triggerType,
     triggerValue: input.triggerValue || null,
-    status: 'pending',
-    priority: input.priority || 'normal',
+    status: "pending",
+    priority: input.priority || "normal",
     createdAt: timestamp,
     updatedAt: timestamp,
   });
@@ -341,7 +375,7 @@ export async function createReminder(
 }
 
 export async function updateReminder(
-  dbBinding: Env['DB'],
+  dbBinding: Env["DB"],
   reminderId: string,
   updates: {
     content?: string;
@@ -349,18 +383,20 @@ export async function updateReminder(
     triggerValue?: string;
     status?: ReminderStatus;
     priority?: ReminderPriority;
-  }
+  },
 ): Promise<Reminder | null> {
-  const db = getDb(dbBinding);
-  const timestamp = new Date().toISOString();
+  const db = memoryServiceDeps.getDb(dbBinding);
+  const timestamp = memoryServiceDeps.now();
 
   const data: Record<string, unknown> = { updatedAt: timestamp };
   if (updates.content !== undefined) data.content = updates.content;
   if (updates.context !== undefined) data.context = updates.context;
-  if (updates.triggerValue !== undefined) data.triggerValue = updates.triggerValue;
+  if (updates.triggerValue !== undefined) {
+    data.triggerValue = updates.triggerValue;
+  }
   if (updates.status !== undefined) {
     data.status = updates.status;
-    if (updates.status === 'triggered') data.triggeredAt = timestamp;
+    if (updates.status === "triggered") data.triggeredAt = timestamp;
   }
   if (updates.priority !== undefined) data.priority = updates.priority;
 
@@ -371,19 +407,22 @@ export async function updateReminder(
   return getReminderById(dbBinding, reminderId);
 }
 
-export async function deleteReminder(dbBinding: Env['DB'], reminderId: string) {
-  const db = getDb(dbBinding);
+export async function deleteReminder(dbBinding: Env["DB"], reminderId: string) {
+  const db = memoryServiceDeps.getDb(dbBinding);
 
   await db.delete(reminders).where(eq(reminders.id, reminderId));
 }
 
-export async function triggerReminder(dbBinding: Env['DB'], reminderId: string): Promise<Reminder | null> {
-  const db = getDb(dbBinding);
-  const timestamp = new Date().toISOString();
+export async function triggerReminder(
+  dbBinding: Env["DB"],
+  reminderId: string,
+): Promise<Reminder | null> {
+  const db = memoryServiceDeps.getDb(dbBinding);
+  const timestamp = memoryServiceDeps.now();
 
   await db.update(reminders)
     .set({
-      status: 'triggered',
+      status: "triggered",
       triggeredAt: timestamp,
       updatedAt: timestamp,
     })

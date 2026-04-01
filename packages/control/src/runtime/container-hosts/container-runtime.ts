@@ -1,3 +1,5 @@
+import process from "node:process";
+
 export type HostContainerTcpPortFetcher = {
   fetch(url: string, request: Request): Promise<Response>;
 };
@@ -35,13 +37,12 @@ export class LocalHostContainerRuntime<Env = unknown> {
   async destroy(): Promise<void> {}
 }
 
-const isNodeLikeRuntime =
-  typeof process !== 'undefined'
-  && Boolean(process.versions?.node);
+const isNodeLikeRuntime = typeof process !== "undefined" &&
+  Boolean(process.versions?.node);
 
 const runtimeModule = isNodeLikeRuntime
   ? null
-  : await import('@cloudflare/containers');
+  : await import("@cloudflare/containers");
 
 export const HostContainerRuntime = (
   runtimeModule?.Container ?? LocalHostContainerRuntime

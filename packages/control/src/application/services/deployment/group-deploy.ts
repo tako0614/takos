@@ -10,24 +10,23 @@
  * Usage:
  *   const result = await deployGroup({ manifest, env: 'staging', ... });
  */
-import { execFile } from 'node:child_process';
-import fs from 'node:fs/promises';
-import os from 'node:os';
-import path from 'node:path';
-import type { AppManifest, WorkerService } from './group-deploy-manifest.ts';
+import { execFile } from "node:child_process";
+import fs from "node:fs/promises";
+import os from "node:os";
+import path from "node:path";
+import type { WorkerService } from "./group-deploy-manifest.ts";
 import type {
+  BindingResult,
   GroupDeployOptions,
   GroupDeployResult,
   ServiceDeployResult,
-  BindingResult,
-  ProvisionedResource,
-} from './group-deploy-types.ts';
-import { provisionResources } from './resource-provisioner.ts';
+} from "./group-deploy-types.ts";
+import { provisionResources } from "./resource-provisioner.ts";
 import {
   generateWranglerConfig,
   serializeWranglerToml,
-} from './wrangler-config-gen.ts';
-import { CloudflareApiClient } from '../cloudflare/api-client.ts';
+} from "./wrangler-config-gen.ts";
+import { CloudflareApiClient } from "../cloudflare/api-client.ts";
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -43,9 +42,12 @@ function execCommand(
       maxBuffer: 10 * 1024 * 1024,
     }, (error, stdout, stderr) => {
       resolve({
-        stdout: String(stdout || ''),
-        stderr: String(stderr || ''),
-        exitCode: error ? ((error as NodeJS.ErrnoException & { code?: number }).code as unknown as number) || 1 : 0,
+        stdout: String(stdout || ""),
+        stderr: String(stderr || ""),
+        exitCode: error
+          ? ((error as NodeJS.ErrnoException & { code?: number })
+            .code as unknown as number) || 1
+          : 0,
       });
     });
   });
@@ -62,16 +64,22 @@ async function deployWorkerWithWrangler(
   },
 ): Promise<{ success: boolean; error?: string }> {
   // Write temporary wrangler.toml
-  const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), 'takos-group-deploy-'));
-  const tomlPath = path.join(tmpDir, 'wrangler.toml');
+  const tmpDir = await fs.mkdtemp(
+    path.join(os.tmpdir(), "takos-group-deploy-"),
+  );
+  const tomlPath = path.join(tmpDir, "wrangler.toml");
   // Create a minimal entry point in case artifactPath is relative
-  const entryPath = path.join(tmpDir, 'index.js');
+  const entryPath = path.join(tmpDir, "index.js");
 
   try {
-    await fs.writeFile(tomlPath, tomlContent, 'utf8');
+    await fs.writeFile(tomlPath, tomlContent, "utf8");
     // Placeholder entry — the real bundle comes from the artifact path in the manifest.
     // For group-deploy we expect the artifact to be available at the main path.
-    await fs.writeFile(entryPath, 'export default { fetch() { return new Response("ok"); } };', 'utf8');
+    await fs.writeFile(
+      entryPath,
+      'export default { fetch() { return new Response("ok"); } };',
+      "utf8",
+    );
 
     if (options.dryRun) {
       return { success: true };
@@ -84,15 +92,25 @@ async function deployWorkerWithWrangler(
 
     // Deploy the worker
     const deployResult = await execCommand(
-      'npx',
-      ['wrangler', 'deploy', '--config', tomlPath],
+      "npx",
+      [
+        "wrangler",
+        "deploy",
+        "--config",
+        tomlPath,
+        ...(options.namespace
+          ? ["--dispatch-namespace", options.namespace]
+          : []),
+      ],
       { cwd: tmpDir, env: wranglerEnv },
     );
 
     if (deployResult.exitCode !== 0) {
       return {
         success: false,
-        error: `wrangler deploy failed: ${deployResult.stderr || deployResult.stdout}`,
+        error: `wrangler deploy failed: ${
+          deployResult.stderr || deployResult.stdout
+        }`,
       };
     }
 
@@ -100,8 +118,8 @@ async function deployWorkerWithWrangler(
     if (options.secrets && options.secrets.size > 0) {
       for (const [secretName, secretValue] of options.secrets) {
         const secretResult = await execCommand(
-          'npx',
-          ['wrangler', 'secret', 'put', secretName, '--config', tomlPath],
+          "npx",
+          ["wrangler", "secret", "put", secretName, "--config", tomlPath],
           {
             cwd: tmpDir,
             env: {
@@ -114,7 +132,9 @@ async function deployWorkerWithWrangler(
         if (secretResult.exitCode !== 0) {
           return {
             success: false,
-            error: `Failed to set secret ${secretName}: ${secretResult.stderr || secretResult.stdout}`,
+            error: `Failed to set secret ${secretName}: ${
+              secretResult.stderr || secretResult.stdout
+            }`,
           };
         }
       }
@@ -123,7 +143,9 @@ async function deployWorkerWithWrangler(
     return { success: true };
   } finally {
     // Cleanup temp directory
-    await fs.rm(tmpDir, { recursive: true, force: true }).catch(() => { /* cleanup: best-effort temp dir removal */ });
+    await fs.rm(tmpDir, { recursive: true, force: true }).catch(
+      () => {/* cleanup: best-effort temp dir removal */},
+    );
   }
 }
 
@@ -131,13 +153,13 @@ async function deployWorkerWithWrangler(
 
 function buildDryRunServiceResult(
   serviceName: string,
-  service: WorkerService,
+  _service: WorkerService,
   scriptName: string,
 ): ServiceDeployResult {
   return {
     name: serviceName,
-    type: 'worker',
-    status: 'deployed',
+    type: "worker",
+    status: "deployed",
     scriptName,
   };
 }
@@ -156,7 +178,9 @@ function buildDryRunServiceResult(
  * Errors in individual services do not abort the entire deployment —
  * all services are attempted and the result reports each status.
  */
-export async function deployGroup(options: GroupDeployOptions): Promise<GroupDeployResult> {
+export async function deployGroup(
+  options: GroupDeployOptions,
+): Promise<GroupDeployResult> {
   const {
     manifest,
     env,
@@ -198,7 +222,9 @@ export async function deployGroup(options: GroupDeployOptions): Promise<GroupDep
 
   // ── Step 2: Deploy each service ──────────────────────────────────────────
 
-  for (const [workerName, worker] of Object.entries(manifest.spec.workers)) {
+  for (
+    const [workerName, worker] of Object.entries(manifest.spec.workers ?? {})
+  ) {
     // Worker service
     const wranglerConfig = generateWranglerConfig(worker, workerName, {
       groupName,
@@ -209,7 +235,9 @@ export async function deployGroup(options: GroupDeployOptions): Promise<GroupDep
     });
 
     if (dryRun) {
-      result.services.push(buildDryRunServiceResult(workerName, worker, wranglerConfig.name));
+      result.services.push(
+        buildDryRunServiceResult(workerName, worker, wranglerConfig.name),
+      );
 
       // Report bindings that would be created
       if (worker.bindings?.d1) {
@@ -217,8 +245,8 @@ export async function deployGroup(options: GroupDeployOptions): Promise<GroupDep
           result.bindings.push({
             from: workerName,
             to: resourceName,
-            type: 'd1',
-            status: 'bound',
+            type: "d1",
+            status: "bound",
           });
         }
       }
@@ -227,8 +255,8 @@ export async function deployGroup(options: GroupDeployOptions): Promise<GroupDep
           result.bindings.push({
             from: workerName,
             to: resourceName,
-            type: 'r2',
-            status: 'bound',
+            type: "r2",
+            status: "bound",
           });
         }
       }
@@ -237,8 +265,8 @@ export async function deployGroup(options: GroupDeployOptions): Promise<GroupDep
           result.bindings.push({
             from: workerName,
             to: resourceName,
-            type: 'kv',
-            status: 'bound',
+            type: "kv",
+            status: "bound",
           });
         }
       }
@@ -247,8 +275,8 @@ export async function deployGroup(options: GroupDeployOptions): Promise<GroupDep
           result.bindings.push({
             from: workerName,
             to: targetService,
-            type: 'service',
-            status: 'bound',
+            type: "service",
+            status: "bound",
           });
         }
       }
@@ -257,8 +285,8 @@ export async function deployGroup(options: GroupDeployOptions): Promise<GroupDep
 
     // Collect secrets for this service
     const serviceSecrets = new Map<string, string>();
-    for (const [resourceName, resource] of provisioned) {
-      if (resource.type === 'secretRef') {
+    for (const [_resourceName, resource] of provisioned) {
+      if (resource.type === "secretRef") {
         // Check if this service references this secret via its bindings
         // For secretRef, the resource ID holds the generated value
         serviceSecrets.set(resource.binding, resource.id);
@@ -282,32 +310,40 @@ export async function deployGroup(options: GroupDeployOptions): Promise<GroupDep
       if (deployResult.success) {
         result.services.push({
           name: workerName,
-          type: 'worker',
-          status: 'deployed',
+          type: "worker",
+          status: "deployed",
           scriptName: wranglerConfig.name,
         });
 
         // Record bindings as successful
-        const bindingResults = collectBindingResults(workerName, worker, 'bound');
+        const bindingResults = collectBindingResults(
+          workerName,
+          worker,
+          "bound",
+        );
         result.bindings.push(...bindingResults);
       } else {
         result.services.push({
           name: workerName,
-          type: 'worker',
-          status: 'failed',
+          type: "worker",
+          status: "failed",
           scriptName: wranglerConfig.name,
           error: deployResult.error,
         });
 
-        const bindingResults = collectBindingResults(workerName, worker, 'failed');
+        const bindingResults = collectBindingResults(
+          workerName,
+          worker,
+          "failed",
+        );
         result.bindings.push(...bindingResults);
       }
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       result.services.push({
         name: workerName,
-        type: 'worker',
-        status: 'failed',
+        type: "worker",
+        status: "failed",
         scriptName: wranglerConfig.name,
         error: message,
       });
@@ -320,28 +356,33 @@ export async function deployGroup(options: GroupDeployOptions): Promise<GroupDep
 function collectBindingResults(
   serviceName: string,
   service: WorkerService,
-  status: 'bound' | 'failed',
+  status: "bound" | "failed",
 ): BindingResult[] {
   const results: BindingResult[] = [];
 
   if (service.bindings?.d1) {
     for (const resourceName of service.bindings.d1) {
-      results.push({ from: serviceName, to: resourceName, type: 'd1', status });
+      results.push({ from: serviceName, to: resourceName, type: "d1", status });
     }
   }
   if (service.bindings?.r2) {
     for (const resourceName of service.bindings.r2) {
-      results.push({ from: serviceName, to: resourceName, type: 'r2', status });
+      results.push({ from: serviceName, to: resourceName, type: "r2", status });
     }
   }
   if (service.bindings?.kv) {
     for (const resourceName of service.bindings.kv) {
-      results.push({ from: serviceName, to: resourceName, type: 'kv', status });
+      results.push({ from: serviceName, to: resourceName, type: "kv", status });
     }
   }
   if (service.bindings?.services) {
     for (const targetService of service.bindings.services) {
-      results.push({ from: serviceName, to: targetService, type: 'service', status });
+      results.push({
+        from: serviceName,
+        to: targetService,
+        type: "service",
+        status,
+      });
     }
   }
 

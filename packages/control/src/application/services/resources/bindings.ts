@@ -6,6 +6,12 @@ import { getResourceById } from './store.ts';
 import { textDate } from '../../../shared/utils/db-guards.ts';
 import { getPortableSecretValue } from './portable-runtime.ts';
 
+export const resourceBindingDeps = {
+  getDb,
+  getResourceById,
+  getPortableSecretValue,
+};
+
 function sanitizePortableName(name: string): string {
   const sanitized = name.replace(/[^a-zA-Z0-9._-]/g, '-').replace(/-+/g, '-').replace(/^-|-$/g, '');
   return sanitized || 'resource';
@@ -16,7 +22,7 @@ function derivePortableQueueSubscriptionName(name: string): string {
 }
 
 export async function listServiceBindings(db: D1Database, resourceId: string) {
-  const drizzle = getDb(db);
+  const drizzle = resourceBindingDeps.getDb(db);
 
   const bindingsResult = await drizzle.select({
     id: serviceBindings.id,
@@ -52,7 +58,7 @@ export async function listServiceBindings(db: D1Database, resourceId: string) {
 }
 
 export async function countServiceBindings(db: D1Database, resourceId: string) {
-  const drizzle = getDb(db);
+  const drizzle = resourceBindingDeps.getDb(db);
   const { count } = await import('drizzle-orm');
   const result = await drizzle.select({ count: count() }).from(serviceBindings)
     .where(eq(serviceBindings.resourceId, resourceId))
@@ -72,7 +78,7 @@ export async function createServiceBinding(
     created_at: string;
   }
 ) {
-  const drizzle = getDb(db);
+  const drizzle = resourceBindingDeps.getDb(db);
   await drizzle.insert(serviceBindings).values({
     id: input.id,
     serviceId: input.service_id,
@@ -85,7 +91,7 @@ export async function createServiceBinding(
 }
 
 export async function deleteServiceBinding(db: D1Database, resourceId: string, serviceId: string) {
-  const drizzle = getDb(db);
+  const drizzle = resourceBindingDeps.getDb(db);
   await drizzle.delete(serviceBindings)
     .where(and(
       eq(serviceBindings.resourceId, resourceId),
@@ -120,7 +126,7 @@ export async function buildBindingFromResource(
   provider_name?: string;
   text?: string;
 } | null> {
-  const resource = await getResourceById(db, resourceId);
+  const resource = await resourceBindingDeps.getResourceById(db, resourceId);
 
   if (!resource || resource.status !== 'active') {
     return null;
@@ -202,7 +208,7 @@ export async function buildBindingFromResource(
         type: 'secret_text',
         name: bindingName,
         text: resource.provider_name && resource.provider_name !== 'cloudflare'
-          ? await getPortableSecretValue({
+          ? await resourceBindingDeps.getPortableSecretValue({
               id: resource.id,
               provider_name: resource.provider_name,
               provider_resource_id: resource.provider_resource_id,

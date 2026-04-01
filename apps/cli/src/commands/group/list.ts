@@ -1,7 +1,7 @@
 /**
  * `takos group list` subcommand.
  */
-import { Command } from 'commander';
+import type { Command } from 'commander';
 import { bold, dim } from '@std/fmt/colors';
 import {
   getStateDir,

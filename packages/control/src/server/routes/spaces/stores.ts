@@ -35,13 +35,28 @@ const storeBodySchema = z.object({
   icon_url: z.string().optional(),
 });
 
+export const spacesStoresRouteDeps = {
+  requireSpaceAccess,
+  listActivityPubStoresForWorkspace,
+  createActivityPubStore,
+  updateActivityPubStore,
+  deleteActivityPubStore,
+  addToInventory,
+  removeFromInventory,
+  listInventoryItems,
+  createGrant,
+  listGrants,
+  revokeGrant,
+  deliverToFollowers,
+};
+
 export default new Hono<AuthenticatedRouteEnv>()
   .get('/:spaceId/stores', async (c) => {
     const user = c.get('user');
-    const access = await requireSpaceAccess(c, c.req.param('spaceId'), user.id);
+    const access = await spacesStoresRouteDeps.requireSpaceAccess(c, c.req.param('spaceId'), user.id);
 
     try {
-      const stores = await listActivityPubStoresForWorkspace(c.env.DB, access.space.id);
+      const stores = await spacesStoresRouteDeps.listActivityPubStoresForWorkspace(c.env.DB, access.space.id);
       return c.json({
         stores: stores.map((store) => ({
           slug: store.slug,
@@ -62,7 +77,7 @@ export default new Hono<AuthenticatedRouteEnv>()
     zValidator('json', storeBodySchema),
     async (c) => {
       const user = c.get('user');
-      const access = await requireSpaceAccess(c, c.req.param('spaceId'), user.id, ['owner', 'admin']);
+      const access = await spacesStoresRouteDeps.requireSpaceAccess(c, c.req.param('spaceId'), user.id, ['owner', 'admin']);
 
       const body = c.req.valid('json');
       if (!body.slug?.trim()) {
@@ -70,7 +85,7 @@ export default new Hono<AuthenticatedRouteEnv>()
       }
 
       try {
-        const store = await createActivityPubStore(c.env.DB, access.space.id, {
+        const store = await spacesStoresRouteDeps.createActivityPubStore(c.env.DB, access.space.id, {
           slug: body.slug,
           name: body.name,
           summary: body.summary,
@@ -99,12 +114,12 @@ export default new Hono<AuthenticatedRouteEnv>()
     zValidator('json', storeBodySchema),
     async (c) => {
       const user = c.get('user');
-      const access = await requireSpaceAccess(c, c.req.param('spaceId'), user.id, ['owner', 'admin']);
+      const access = await spacesStoresRouteDeps.requireSpaceAccess(c, c.req.param('spaceId'), user.id, ['owner', 'admin']);
 
       const body = c.req.valid('json');
 
       try {
-        const store = await updateActivityPubStore(c.env.DB, access.space.id, c.req.param('storeSlug'), {
+        const store = await spacesStoresRouteDeps.updateActivityPubStore(c.env.DB, access.space.id, c.req.param('storeSlug'), {
           name: body.name,
           summary: body.summary,
           iconUrl: body.icon_url,
@@ -134,10 +149,10 @@ export default new Hono<AuthenticatedRouteEnv>()
     })
   .delete('/:spaceId/stores/:storeSlug', async (c) => {
     const user = c.get('user');
-    const access = await requireSpaceAccess(c, c.req.param('spaceId'), user.id, ['owner', 'admin']);
+    const access = await spacesStoresRouteDeps.requireSpaceAccess(c, c.req.param('spaceId'), user.id, ['owner', 'admin']);
 
     try {
-      const deleted = await deleteActivityPubStore(c.env.DB, access.space.id, c.req.param('storeSlug'));
+      const deleted = await spacesStoresRouteDeps.deleteActivityPubStore(c.env.DB, access.space.id, c.req.param('storeSlug'));
       if (!deleted) {
         throw new NotFoundError( 'Store');
       }
@@ -155,10 +170,10 @@ export default new Hono<AuthenticatedRouteEnv>()
 
   .get('/:spaceId/stores/:storeSlug/inventory', async (c) => {
     const user = c.get('user');
-    const access = await requireSpaceAccess(c, c.req.param('spaceId'), user.id);
+    const access = await spacesStoresRouteDeps.requireSpaceAccess(c, c.req.param('spaceId'), user.id);
     const { limit, offset } = parsePagination(c.req.query());
 
-    const result = await listInventoryItems(c.env.DB, access.space.id, c.req.param('storeSlug'), { limit, offset });
+    const result = await spacesStoresRouteDeps.listInventoryItems(c.env.DB, access.space.id, c.req.param('storeSlug'), { limit, offset });
     return c.json({
       total: result.total,
       items: result.items.map((item) => ({
@@ -182,12 +197,12 @@ export default new Hono<AuthenticatedRouteEnv>()
     })),
     async (c) => {
       const user = c.get('user');
-      const access = await requireSpaceAccess(c, c.req.param('spaceId'), user.id, ['owner', 'admin']);
+      const access = await spacesStoresRouteDeps.requireSpaceAccess(c, c.req.param('spaceId'), user.id, ['owner', 'admin']);
       const body = c.req.valid('json');
 
       try {
         const storeSlug = c.req.param('storeSlug');
-        const item = await addToInventory(c.env.DB, {
+        const item = await spacesStoresRouteDeps.addToInventory(c.env.DB, {
           accountId: access.space.id,
           storeSlug,
           repoActorUrl: body.repo_actor_url,
@@ -213,7 +228,7 @@ export default new Hono<AuthenticatedRouteEnv>()
         const signingKey = c.env.PLATFORM_PRIVATE_KEY || undefined;
         const signingKeyId = signingKey ? `${storeActorUrl}#main-key` : undefined;
         c.executionCtx.waitUntil(
-          deliverToFollowers(c.env.DB, storeActorUrl, addActivity, signingKey, signingKeyId)
+          spacesStoresRouteDeps.deliverToFollowers(c.env.DB, storeActorUrl, addActivity, signingKey, signingKeyId)
             .catch((err: unknown) => {
               logError('Failed to deliver Add activity to followers', err, {
                 action: 'deliver_inventory_add',
@@ -239,17 +254,17 @@ export default new Hono<AuthenticatedRouteEnv>()
     })
   .delete('/:spaceId/stores/:storeSlug/inventory/:itemId', async (c) => {
     const user = c.get('user');
-    const access = await requireSpaceAccess(c, c.req.param('spaceId'), user.id, ['owner', 'admin']);
+    const access = await spacesStoresRouteDeps.requireSpaceAccess(c, c.req.param('spaceId'), user.id, ['owner', 'admin']);
 
     // Get the item to find the repoActorUrl
-    const result = await listInventoryItems(c.env.DB, access.space.id, c.req.param('storeSlug'), { limit: 1000, offset: 0 });
+    const result = await spacesStoresRouteDeps.listInventoryItems(c.env.DB, access.space.id, c.req.param('storeSlug'), { limit: 1000, offset: 0 });
     const item = result.items.find((i) => i.id === c.req.param('itemId'));
     if (!item) {
       throw new NotFoundError('Inventory item');
     }
 
     const storeSlug = c.req.param('storeSlug');
-    await removeFromInventory(c.env.DB, access.space.id, storeSlug, item.repoActorUrl);
+    await spacesStoresRouteDeps.removeFromInventory(c.env.DB, access.space.id, storeSlug, item.repoActorUrl);
 
     // Deliver Remove activity to store followers (fire-and-forget)
     const origin = new URL(c.req.url).origin;
@@ -267,7 +282,7 @@ export default new Hono<AuthenticatedRouteEnv>()
     const signingKey = c.env.PLATFORM_PRIVATE_KEY || undefined;
     const signingKeyId = signingKey ? `${storeActorUrl}#main-key` : undefined;
     c.executionCtx.waitUntil(
-      deliverToFollowers(c.env.DB, storeActorUrl, removeActivity, signingKey, signingKeyId)
+      spacesStoresRouteDeps.deliverToFollowers(c.env.DB, storeActorUrl, removeActivity, signingKey, signingKeyId)
         .catch((err: unknown) => {
           logError('Failed to deliver Remove activity to followers', err, {
             action: 'deliver_inventory_remove',
@@ -283,7 +298,7 @@ export default new Hono<AuthenticatedRouteEnv>()
 
   .get('/:spaceId/repos/:repoId/grants', async (c) => {
     const user = c.get('user');
-    const access = await requireSpaceAccess(c, c.req.param('spaceId'), user.id);
+    const access = await spacesStoresRouteDeps.requireSpaceAccess(c, c.req.param('spaceId'), user.id);
 
     const repoId = c.req.param('repoId');
     const repo = await getRepositoryById(c.env.DB, repoId);
@@ -292,7 +307,7 @@ export default new Hono<AuthenticatedRouteEnv>()
     }
 
     try {
-      const grants = await listGrants(c.env.DB, repoId);
+      const grants = await spacesStoresRouteDeps.listGrants(c.env.DB, repoId);
       return c.json({
         grants: grants.map((grant) => ({
           id: grant.id,
@@ -316,10 +331,10 @@ export default new Hono<AuthenticatedRouteEnv>()
     })),
     async (c) => {
       const user = c.get('user');
-      const access = await requireSpaceAccess(c, c.req.param('spaceId'), user.id, ['owner', 'admin']);
+      const access = await spacesStoresRouteDeps.requireSpaceAccess(c, c.req.param('spaceId'), user.id, ['owner', 'admin']);
 
       const repoId = c.req.param('repoId');
-      const repo = await getRepositoryById(c.env.DB, repoId);
+    const repo = await getRepositoryById(c.env.DB, repoId);
       if (!repo || repo.space_id !== access.space.id) {
         throw new NotFoundError('Repository');
       }
@@ -327,7 +342,7 @@ export default new Hono<AuthenticatedRouteEnv>()
       const body = c.req.valid('json');
 
       try {
-        const grant = await createGrant(c.env.DB, {
+        const grant = await spacesStoresRouteDeps.createGrant(c.env.DB, {
           repoId,
           granteeActorUrl: body.grantee_actor_url,
           capability: body.capability,
@@ -354,7 +369,7 @@ export default new Hono<AuthenticatedRouteEnv>()
     })
   .delete('/:spaceId/repos/:repoId/grants/:grantId', async (c) => {
     const user = c.get('user');
-    const access = await requireSpaceAccess(c, c.req.param('spaceId'), user.id, ['owner', 'admin']);
+    const access = await spacesStoresRouteDeps.requireSpaceAccess(c, c.req.param('spaceId'), user.id, ['owner', 'admin']);
 
     const repoId = c.req.param('repoId');
     const repo = await getRepositoryById(c.env.DB, repoId);
@@ -365,12 +380,12 @@ export default new Hono<AuthenticatedRouteEnv>()
     const grantId = c.req.param('grantId');
 
     // Verify the grant belongs to this repo before revoking
-    const grants = await listGrants(c.env.DB, repoId);
+    const grants = await spacesStoresRouteDeps.listGrants(c.env.DB, repoId);
     const grant = grants.find((g) => g.id === grantId);
     if (!grant) {
       throw new NotFoundError('Grant');
     }
 
-    await revokeGrant(c.env.DB, grantId);
+    await spacesStoresRouteDeps.revokeGrant(c.env.DB, grantId);
     return c.json({ success: true });
   });

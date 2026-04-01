@@ -88,14 +88,14 @@ export function DomainsTab({
                       </div>
                       <div class="flex items-center gap-2">
                         {domain.status === 'pending' && (
-                          <button
+                          <button type="button"
                             class="px-3 py-1.5 bg-zinc-900 dark:bg-zinc-100 hover:bg-zinc-700 dark:hover:bg-zinc-300 text-white dark:text-zinc-900 rounded-lg text-xs font-medium transition-colors"
                             onClick={() => onVerifyWorkerDomain(domain.id)}
                           >
                             {t('verifyDomain')}
                           </button>
                         )}
-                        <button
+                        <button type="button"
                           class="p-1.5 text-zinc-500 hover:text-zinc-900 hover:bg-zinc-100 rounded-lg transition-colors"
                           onClick={() => onDeleteWorkerDomain(domain.id)}
                         >
@@ -132,7 +132,7 @@ export function DomainsTab({
                     <code class="text-zinc-700 font-mono">{verificationInfo.target}</code>
                   </div>
                 </div>
-                <button
+                <button type="button"
                   class="mt-2 text-xs text-zinc-500 hover:text-zinc-900"
                   onClick={onCloseVerificationInfo}
                 >
@@ -149,7 +149,7 @@ export function DomainsTab({
                 onInput={(e) => onNewWorkerDomainChange(e.target.value.toLowerCase())}
                 placeholder="example.com"
               />
-              <button
+              <button type="button"
                 class="px-4 py-1.5 bg-zinc-900 dark:bg-zinc-100 hover:bg-zinc-700 dark:hover:bg-zinc-300 text-white dark:text-zinc-900 rounded-lg text-sm font-medium transition-colors disabled:opacity-50"
                 onClick={onAddWorkerDomain}
                 disabled={addingWorkerDomain || !newWorkerDomain.trim()}

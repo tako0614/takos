@@ -1,13 +1,15 @@
-import type { D1Database, R2Bucket } from '../../../shared/types/bindings.ts';
-import type { Env, Repository, RepositoryVisibility, SpaceRole } from '../../../shared/types/index.ts';
-import type { SelectOf } from '../../../shared/types/drizzle-utils.ts';
-import { checkSpaceAccess } from '../identity/space-access.ts';
-import { getDb, accounts, repositories } from '../../../infra/db/index.ts';
-import { and, desc, eq } from 'drizzle-orm';
-import { isValidOpaqueId } from '../../../shared/utils/db-guards.ts';
-import { generateId, sanitizeRepoName } from '../../../shared/utils/index.ts';
-import * as gitStore from '../git-smart/index.ts';
-import { logError } from '../../../shared/utils/logger.ts';
+import type { D1Database, R2Bucket } from "../../../shared/types/bindings.ts";
+import type {
+  Env,
+  Repository,
+  RepositoryVisibility,
+  SpaceRole,
+} from "../../../shared/types/index.ts";
+import type { SelectOf } from "../../../shared/types/drizzle-utils.ts";
+import { accounts, repositories } from "../../../infra/db/index.ts";
+import { and, desc, eq } from "drizzle-orm";
+import { isValidOpaqueId } from "../../../shared/utils/db-guards.ts";
+import { sourceServiceDeps } from "./deps.ts";
 
 export interface RepoAccess {
   repo: Repository;
@@ -23,7 +25,7 @@ export interface CreateRepositoryInput {
   spaceId: string;
   name: string;
   description?: string | null;
-  visibility?: RepositoryVisibility | 'internal';
+  visibility?: RepositoryVisibility | "internal";
   actorAccountId?: string;
 }
 
@@ -31,22 +33,23 @@ export class RepositoryCreationError extends Error {
   constructor(
     message: string,
     public readonly code:
-      | 'INVALID_NAME'
-      | 'SPACE_NOT_FOUND'
-      | 'REPOSITORY_EXISTS'
-      | 'GIT_STORAGE_NOT_CONFIGURED'
-      | 'INIT_FAILED',
+      | "INVALID_NAME"
+      | "SPACE_NOT_FOUND"
+      | "REPOSITORY_EXISTS"
+      | "GIT_STORAGE_NOT_CONFIGURED"
+      | "INIT_FAILED",
   ) {
     super(message);
-    this.name = 'RepositoryCreationError';
+    this.name = "RepositoryCreationError";
   }
 }
 
 function toRepositoryVisibility(value: string): RepositoryVisibility {
-  return value === 'public' ? 'public' : 'private';
+  return value === "public" ? "public" : "private";
 }
 
 type RepositoryRow = SelectOf<typeof repositories>;
+type SourceDrizzleDb = ReturnType<typeof sourceServiceDeps.getDb>;
 
 export function toApiRepositoryFromDb(row: RepositoryRow): Repository {
   const repository = {
@@ -81,40 +84,57 @@ export async function checkRepoAccess(
 ): Promise<RepoAccess | null> {
   if (!isValidOpaqueId(repoId)) return null;
 
-  const normalizedUserId = typeof userId === 'string' && isValidOpaqueId(userId)
+  const normalizedUserId = typeof userId === "string" && isValidOpaqueId(userId)
     ? userId
     : null;
 
-  const drizzle = getDb(env.DB);
-  const row = await drizzle.select().from(repositories).where(eq(repositories.id, repoId)).get();
+  const drizzle = sourceServiceDeps.getDb(env.DB);
+  const row = await drizzle.select().from(repositories).where(
+    eq(repositories.id, repoId),
+  ).get();
   const repo = row ? toApiRepositoryFromDb(row) : null;
 
   if (!repo) return null;
 
   if (normalizedUserId) {
-    const access = await checkSpaceAccess(env.DB, repo.space_id, normalizedUserId, requiredRoles);
+    const access = await sourceServiceDeps.checkSpaceAccess(
+      env.DB,
+      repo.space_id,
+      normalizedUserId,
+      requiredRoles,
+    );
     if (access) {
       return { repo, spaceId: repo.space_id, role: access.membership.role };
     }
   }
 
-  if (options.allowPublicRead && !requiredRoles && repo.visibility === 'public') {
-    return { repo, spaceId: repo.space_id, role: 'viewer' };
+  if (
+    options.allowPublicRead && !requiredRoles && repo.visibility === "public"
+  ) {
+    return { repo, spaceId: repo.space_id, role: "viewer" };
   }
 
   return null;
 }
 
-export async function getRepositoryById(db: D1Database, repoId: string): Promise<Repository | null> {
+export async function getRepositoryById(
+  db: D1Database,
+  repoId: string,
+): Promise<Repository | null> {
   if (!isValidOpaqueId(repoId)) return null;
 
-  const drizzle = getDb(db);
-  const row = await drizzle.select().from(repositories).where(eq(repositories.id, repoId)).get();
+  const drizzle = sourceServiceDeps.getDb(db);
+  const row = await drizzle.select().from(repositories).where(
+    eq(repositories.id, repoId),
+  ).get();
   return row ? toApiRepositoryFromDb(row) : null;
 }
 
-export async function listRepositoriesBySpace(db: D1Database, spaceId: string): Promise<Repository[]> {
-  const drizzle = getDb(db);
+export async function listRepositoriesBySpace(
+  db: D1Database,
+  spaceId: string,
+): Promise<Repository[]> {
+  const drizzle = sourceServiceDeps.getDb(db);
   const rows = await drizzle.select().from(repositories)
     .where(eq(repositories.accountId, spaceId))
     .orderBy(desc(repositories.updatedAt))
@@ -123,13 +143,13 @@ export async function listRepositoriesBySpace(db: D1Database, spaceId: string): 
 }
 
 async function resolveRepositoryInitActor(
-  db: ReturnType<typeof getDb>,
+  db: SourceDrizzleDb,
   actorAccountId?: string,
 ): Promise<{ name: string; email: string }> {
   if (!actorAccountId) {
     return {
-      name: 'Takos Agent',
-      email: 'agent@users.takos.local',
+      name: "Takos Agent",
+      email: "agent@users.takos.local",
     };
   }
 
@@ -141,15 +161,15 @@ async function resolveRepositoryInitActor(
 
   if (!actor) {
     return {
-      name: 'Takos Agent',
-      email: 'agent@users.takos.local',
+      name: "Takos Agent",
+      email: "agent@users.takos.local",
     };
   }
 
   const fallbackLocalPart = actor.slug?.trim() || actorAccountId;
 
   return {
-    name: actor.name || 'Takos Agent',
+    name: actor.name || "Takos Agent",
     email: actor.email || `${fallbackLocalPart}@users.takos.local`,
   };
 }
@@ -159,11 +179,14 @@ export async function createRepository(
   bucket: R2Bucket | undefined,
   input: CreateRepositoryInput,
 ): Promise<Repository> {
-  const db = getDb(dbBinding);
-  const name = sanitizeRepoName(input.name);
+  const db = sourceServiceDeps.getDb(dbBinding);
+  const name = sourceServiceDeps.sanitizeRepoName(input.name);
 
   if (!name) {
-    throw new RepositoryCreationError('Invalid repository name', 'INVALID_NAME');
+    throw new RepositoryCreationError(
+      "Invalid repository name",
+      "INVALID_NAME",
+    );
   }
 
   const workspace = await db.select({ id: accounts.id })
@@ -172,7 +195,7 @@ export async function createRepository(
     .get();
 
   if (!workspace) {
-    throw new RepositoryCreationError('Workspace not found', 'SPACE_NOT_FOUND');
+    throw new RepositoryCreationError("Workspace not found", "SPACE_NOT_FOUND");
   }
 
   const existing = await db.select({ id: repositories.id })
@@ -184,14 +207,20 @@ export async function createRepository(
     .get();
 
   if (existing) {
-    throw new RepositoryCreationError('Repository with this name already exists', 'REPOSITORY_EXISTS');
+    throw new RepositoryCreationError(
+      "Repository with this name already exists",
+      "REPOSITORY_EXISTS",
+    );
   }
 
   if (!bucket) {
-    throw new RepositoryCreationError('Git storage not configured', 'GIT_STORAGE_NOT_CONFIGURED');
+    throw new RepositoryCreationError(
+      "Git storage not configured",
+      "GIT_STORAGE_NOT_CONFIGURED",
+    );
   }
 
-  const id = generateId();
+  const id = sourceServiceDeps.generateId();
   const timestamp = new Date().toISOString();
   const actor = await resolveRepositoryInitActor(db, input.actorAccountId);
 
@@ -200,8 +229,8 @@ export async function createRepository(
     accountId: input.spaceId,
     name,
     description: input.description || null,
-    visibility: input.visibility || 'private',
-    defaultBranch: 'main',
+    visibility: input.visibility || "private",
+    defaultBranch: "main",
     stars: 0,
     forks: 0,
     gitEnabled: true,
@@ -210,21 +239,37 @@ export async function createRepository(
   });
 
   try {
-    await gitStore.initRepository(dbBinding, bucket, id, 'main', {
-      name: actor.name,
-      email: actor.email,
-      timestamp: Math.floor(new Date(timestamp).getTime() / 1000),
-      tzOffset: '+0000',
-    });
+    await sourceServiceDeps.gitStore.initRepository(
+      dbBinding,
+      bucket,
+      id,
+      "main",
+      {
+        name: actor.name,
+        email: actor.email,
+        timestamp: Math.floor(new Date(timestamp).getTime() / 1000),
+        tzOffset: "+0000",
+      },
+    );
   } catch (error) {
     await db.delete(repositories).where(eq(repositories.id, id));
-    logError('Failed to initialize repository', error, { module: 'services/source/repos' });
-    throw new RepositoryCreationError('Failed to initialize repository', 'INIT_FAILED');
+    sourceServiceDeps.logError("Failed to initialize repository", error, {
+      module: "services/source/repos",
+    });
+    throw new RepositoryCreationError(
+      "Failed to initialize repository",
+      "INIT_FAILED",
+    );
   }
 
-  const row = await db.select().from(repositories).where(eq(repositories.id, id)).get();
+  const row = await db.select().from(repositories).where(
+    eq(repositories.id, id),
+  ).get();
   if (!row) {
-    throw new RepositoryCreationError('Failed to create repository', 'INIT_FAILED');
+    throw new RepositoryCreationError(
+      "Failed to create repository",
+      "INIT_FAILED",
+    );
   }
 
   return toApiRepositoryFromDb(row);

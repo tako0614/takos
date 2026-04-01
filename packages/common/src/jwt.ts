@@ -52,15 +52,6 @@ export interface VerifyServiceTokenResult {
   error?: string;
 }
 
-// Base64URL のエンコード/デコード用ユーティリティ
-function base64UrlEncode(data: Buffer | string): string {
-  const buffer = typeof data === 'string' ? Buffer.from(data) : data;
-  return buffer.toString('base64')
-    .replace(/\+/g, '-')
-    .replace(/\//g, '_')
-    .replace(/=+$/, '');
-}
-
 function base64UrlDecode(str: string): Buffer {
   // パディングを戻す
   let padded = str.replace(/-/g, '+').replace(/_/g, '/');
@@ -71,14 +62,6 @@ function base64UrlDecode(str: string): Buffer {
     throw new Error('Invalid base64url encoding');
   }
   return buf;
-}
-
-/**
- * ユニークな JWT ID（jti）を生成する
- */
-function generateJTI(): string {
-  const bytes = crypto.randomBytes(16);
-  return base64UrlEncode(bytes);
 }
 
 /**

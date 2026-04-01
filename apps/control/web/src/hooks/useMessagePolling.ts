@@ -28,8 +28,8 @@ export function useMessagePolling({
 }: UseMessagePollingOptions): UseMessagePollingResult {
   const [messages, setMessages] = createSignal<Message[]>([]);
   const [error, setError] = createSignal<string | null>(null);
-  let messagesCountRef = { current: 0 as number };
-  let isMountedRef = { current: true as boolean };
+  const messagesCountRef = { current: 0 as number };
+  const isMountedRef = { current: true as boolean };
   let messagePollingRef: ReturnType<typeof setInterval> | null = null;
   let messageFetchAbortRef: AbortController | null = null;
   let messageFetchSeqRef = 0;

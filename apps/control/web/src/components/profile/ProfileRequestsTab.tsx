@@ -58,6 +58,7 @@ export function ProfileRequestsTab(props: {
 
               <div class="flex items-center gap-2 flex-shrink-0">
                 <button
+                  type="button"
                   class="px-3 py-1.5 rounded-lg text-sm font-medium bg-zinc-100 dark:bg-zinc-700 text-zinc-900 dark:text-zinc-100 hover:bg-zinc-200 dark:hover:bg-zinc-600 transition-colors disabled:opacity-50"
                   onClick={() => props.onReject(req.id)}
                   disabled={props.actionLoadingId === req.id}
@@ -65,6 +66,7 @@ export function ProfileRequestsTab(props: {
                   {t('reject')}
                 </button>
                 <button
+                  type="button"
                   class="px-3 py-1.5 rounded-lg text-sm font-medium bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900 hover:bg-zinc-700 dark:hover:bg-zinc-300 transition-colors disabled:opacity-50"
                   onClick={() => props.onAccept(req.id)}
                   disabled={props.actionLoadingId === req.id}

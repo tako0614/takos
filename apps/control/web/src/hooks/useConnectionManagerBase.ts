@@ -258,10 +258,10 @@ export function useConnectionManagerBase(
     handleWebSocketEventRef,
   } = processor;
 
-  let wsRef: MutableRefObject<WebSocket | null> = { current: null };
-  let rootRunIdRef: MutableRefObject<string | null> = { current: null };
-  let reconnectAttemptsRef: MutableRefObject<number> = { current: 0 };
-  let startWebSocketRef: MutableRefObject<(runId: string) => void> = { current: () => {} };
+  const wsRef: MutableRefObject<WebSocket | null> = { current: null };
+  const rootRunIdRef: MutableRefObject<string | null> = { current: null };
+  const reconnectAttemptsRef: MutableRefObject<number> = { current: 0 };
+  const startWebSocketRef: MutableRefObject<(runId: string) => void> = { current: () => {} };
 
   const closeWebSocket = (): void => {
     stopMessagePolling();

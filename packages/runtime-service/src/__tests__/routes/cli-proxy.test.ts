@@ -1,5 +1,4 @@
 import { createTestApp, testRequest } from '../setup.ts';
-import { sessionStore } from '../../routes/sessions/storage.ts';
 
 import { assertEquals } from 'jsr:@std/assert';
 import { assertSpyCalls, stub } from 'jsr:@std/testing/mock';
@@ -18,6 +17,16 @@ Deno.test('cli-proxy route - forwards query parameters via PROXY_BASE_URL while 
   Deno.env.set('TAKOS_API_URL', 'https://takos.example.test');
   Deno.env.set('PROXY_BASE_URL', 'https://runtime-host.example.test');
 
+  const heartbeatFetchStub = stub(
+    globalThis,
+    'fetch',
+    (async () =>
+      new Response('', {
+        status: 204,
+      })) as typeof globalThis.fetch,
+  );
+  const { sessionStore } = await import('../../routes/sessions/storage.ts');
+
   const sessionId = 'a12345678901234b';
   await sessionStore.getSessionDir(
     sessionId,
@@ -26,10 +35,12 @@ Deno.test('cli-proxy route - forwards query parameters via PROXY_BASE_URL while 
     'random-proxy-token-abc',
   );
 
+  heartbeatFetchStub.restore();
+
   const fetchSpy = stub(
     globalThis,
     'fetch',
-    (async (...args: Parameters<typeof globalThis.fetch>) => {
+    (async (..._args: Parameters<typeof globalThis.fetch>) => {
       return new Response(JSON.stringify({ ok: true }), {
         status: 200,
         headers: { 'Content-Type': 'application/json' },

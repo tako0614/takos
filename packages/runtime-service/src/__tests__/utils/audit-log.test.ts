@@ -1,158 +1,210 @@
-// Mock fs/promises and logger before importing the module under test.
-// Each test uses /* modules reset (no-op in Deno) */ void 0 + dynamic import to get fresh module state
-// (the module caches `dirEnsured` at module scope).
+import * as fs from "node:fs/promises";
+import path from "node:path";
 
-import { assertEquals, assert, assertStringIncludes } from 'jsr:@std/assert';
-import { assertSpyCalls } from 'jsr:@std/testing/mock';
+import { assert, assertEquals, assertStringIncludes } from "@std/assert";
 
-const mockAppendFile = ((..._args: any[]) => undefined) as any;
-const mockMkdir = ((..._args: any[]) => undefined) as any;
-const mockStat = ((..._args: any[]) => undefined) as any;
-const mockRename = ((..._args: any[]) => undefined) as any;
-const mockUnlink = ((..._args: any[]) => undefined) as any;
+type AuditLogModule = typeof import("../../utils/audit-log.ts");
 
-// [Deno] vi.mock removed - manually stub imports from 'node:fs/promises'
-// [Deno] vi.mock removed - manually stub imports from 'takos-common/logger'
-async function freshWriteAuditLog() {
-  /* modules reset (no-op in Deno) */ void 0;
-  const mod = await import('../../utils/audit-log.ts');
+async function freshWriteAuditLog(): Promise<AuditLogModule["writeAuditLog"]> {
+  const url = new URL("../../utils/audit-log.ts", import.meta.url);
+  url.searchParams.set("test", crypto.randomUUID());
+  const mod = await import(url.href);
   return mod.writeAuditLog;
 }
 
-  Deno.test('writeAuditLog - writes audit entry as JSONL', async () => {
-  /* mocks cleared (no-op in Deno) */ void 0;
-  mockMkdir = (async () => undefined) as any;
-  mockStat = (async () => { throw new Error('ENOENT'); }) as any;
-  mockAppendFile = (async () => undefined) as any;
-  const writeAuditLog = await freshWriteAuditLog();
+async function withAuditLogDir<T>(
+  auditLogDir: string,
+  fn: (writeAuditLog: AuditLogModule["writeAuditLog"]) => Promise<T>,
+): Promise<T> {
+  const original = Deno.env.get("TAKOS_AUDIT_LOG_DIR");
+  Deno.env.set("TAKOS_AUDIT_LOG_DIR", auditLogDir);
 
-    await writeAuditLog({
-      timestamp: '2024-01-01T00:00:00Z',
-      event: 'exec',
-      spaceId: 'ws1',
-      command: 'echo hello',
-      status: 'completed',
-    });
-
-    assertSpyCalls(mockAppendFile, 1);
-    const writtenLine = mockAppendFile.calls[0][1] as string;
-    assertEquals(writtenLine.endsWith('\n'), true);
-    const parsed = JSON.parse(writtenLine.trim());
-    assertEquals(parsed.event, 'exec');
-    assertEquals(parsed.spaceId, 'ws1');
-    assertEquals(parsed.command, 'echo hello');
-})
-  Deno.test('writeAuditLog - redacts credentials in URLs', async () => {
-  /* mocks cleared (no-op in Deno) */ void 0;
-  mockMkdir = (async () => undefined) as any;
-  mockStat = (async () => { throw new Error('ENOENT'); }) as any;
-  mockAppendFile = (async () => undefined) as any;
-  const writeAuditLog = await freshWriteAuditLog();
-
-    await writeAuditLog({
-      timestamp: '2024-01-01T00:00:00Z',
-      event: 'exec',
-      spaceId: 'ws1',
-      command: 'git clone https://user:password@github.com/repo.git',
-      status: 'started',
-    });
-
-    const writtenLine = mockAppendFile.calls[0][1] as string;
-    const parsed = JSON.parse(writtenLine.trim());
-    assert(!(parsed.command).includes('password'));
-    assertStringIncludes(parsed.command, '***@');
-})
-  Deno.test('writeAuditLog - redacts Authorization header values', async () => {
-  /* mocks cleared (no-op in Deno) */ void 0;
-  mockMkdir = (async () => undefined) as any;
-  mockStat = (async () => { throw new Error('ENOENT'); }) as any;
-  mockAppendFile = (async () => undefined) as any;
-  const writeAuditLog = await freshWriteAuditLog();
-
-    await writeAuditLog({
-      timestamp: '2024-01-01T00:00:00Z',
-      event: 'exec',
-      spaceId: 'ws1',
-      command: 'curl -H "Authorization: Bearer my-secret-token" https://api.com',
-      status: 'started',
-    });
-
-    const writtenLine = mockAppendFile.calls[0][1] as string;
-    const parsed = JSON.parse(writtenLine.trim());
-    assert(!(parsed.command).includes('my-secret-token'));
-    assertStringIncludes(parsed.command, 'Authorization: ***');
-})
-  Deno.test('writeAuditLog - redacts SECRET_KEY=value patterns', async () => {
-  /* mocks cleared (no-op in Deno) */ void 0;
-  mockMkdir = (async () => undefined) as any;
-  mockStat = (async () => { throw new Error('ENOENT'); }) as any;
-  mockAppendFile = (async () => undefined) as any;
-  const writeAuditLog = await freshWriteAuditLog();
-
-    await writeAuditLog({
-      timestamp: '2024-01-01T00:00:00Z',
-      event: 'exec',
-      spaceId: 'ws1',
-      command: 'SECRET_KEY=mysecret npm start',
-      status: 'started',
-    });
-
-    const writtenLine = mockAppendFile.calls[0][1] as string;
-    const parsed = JSON.parse(writtenLine.trim());
-    assert(!(parsed.command).includes('mysecret'));
-    assertStringIncludes(parsed.command, 'SECRET_KEY=***');
-})
-  Deno.test('writeAuditLog - redacts commands array', async () => {
-  /* mocks cleared (no-op in Deno) */ void 0;
-  mockMkdir = (async () => undefined) as any;
-  mockStat = (async () => { throw new Error('ENOENT'); }) as any;
-  mockAppendFile = (async () => undefined) as any;
-  const writeAuditLog = await freshWriteAuditLog();
-
-    await writeAuditLog({
-      timestamp: '2024-01-01T00:00:00Z',
-      event: 'exec',
-      spaceId: 'ws1',
-      commands: [
-        'curl -H "Authorization: Bearer token1"',
-        'echo TOKEN=secret123',
-      ],
-      status: 'started',
-    });
-
-    const writtenLine = mockAppendFile.calls[0][1] as string;
-    const parsed = JSON.parse(writtenLine.trim());
-    assert(!(parsed.commands[0]).includes('token1'));
-    assertStringIncludes(parsed.commands[1], 'TOKEN=***');
-})
-  Deno.test('writeAuditLog - does not throw on write failure', async () => {
-  /* mocks cleared (no-op in Deno) */ void 0;
-  mockMkdir = (async () => undefined) as any;
-  mockStat = (async () => { throw new Error('ENOENT'); }) as any;
-  mockAppendFile = (async () => undefined) as any;
-  mockAppendFile = (async () => { throw new Error('write failed'); }) as any;
+  try {
     const writeAuditLog = await freshWriteAuditLog();
+    return await fn(writeAuditLog);
+  } finally {
+    if (original === undefined) {
+      Deno.env.delete("TAKOS_AUDIT_LOG_DIR");
+    } else {
+      Deno.env.set("TAKOS_AUDIT_LOG_DIR", original);
+    }
+  }
+}
 
-    await await writeAuditLog({
-      timestamp: '2024-01-01T00:00:00Z',
-      event: 'exec',
-      spaceId: 'ws1',
-      status: 'started',
+async function createTempAuditDir(): Promise<string> {
+  return await Deno.makeTempDir();
+}
+
+Deno.test("writeAuditLog - writes audit entry as JSONL", async () => {
+  const auditLogDir = await createTempAuditDir();
+
+  try {
+    await withAuditLogDir(auditLogDir, async (writeAuditLog) => {
+      await writeAuditLog({
+        timestamp: "2024-01-01T00:00:00Z",
+        event: "exec",
+        spaceId: "ws1",
+        command: "echo hello",
+        status: "completed",
+      });
+
+      const filePath = path.join(auditLogDir, "execution-audit.jsonl");
+      const writtenLine = await fs.readFile(filePath, "utf8");
+      assertEquals(writtenLine.endsWith("\n"), true);
+
+      const parsed = JSON.parse(
+        writtenLine.trim(),
+      ) as { event?: string; spaceId?: string; command?: string };
+      assertEquals(parsed.event, "exec");
+      assertEquals(parsed.spaceId, "ws1");
+      assertEquals(parsed.command, "echo hello");
     });
-})
-  Deno.test('writeAuditLog - ensures directory is created on first call', async () => {
-  /* mocks cleared (no-op in Deno) */ void 0;
-  mockMkdir = (async () => undefined) as any;
-  mockStat = (async () => { throw new Error('ENOENT'); }) as any;
-  mockAppendFile = (async () => undefined) as any;
-  const writeAuditLog = await freshWriteAuditLog();
+  } finally {
+    await fs.rm(auditLogDir, { recursive: true, force: true });
+  }
+});
 
-    await writeAuditLog({
-      timestamp: '2024-01-01T00:00:00Z',
-      event: 'exec',
-      spaceId: 'ws1',
-      status: 'started',
+Deno.test("writeAuditLog - redacts credentials in URLs", async () => {
+  const auditLogDir = await createTempAuditDir();
+
+  try {
+    await withAuditLogDir(auditLogDir, async (writeAuditLog) => {
+      await writeAuditLog({
+        timestamp: "2024-01-01T00:00:00Z",
+        event: "exec",
+        spaceId: "ws1",
+        command: "git clone https://user:password@github.com/repo.git",
+        status: "started",
+      });
+
+      const filePath = path.join(auditLogDir, "execution-audit.jsonl");
+      const parsed = JSON.parse(await fs.readFile(filePath, "utf8")) as {
+        command?: string;
+      };
+      assert(!(parsed.command ?? "").includes("password"));
+      assertStringIncludes(parsed.command ?? "", "***@");
     });
+  } finally {
+    await fs.rm(auditLogDir, { recursive: true, force: true });
+  }
+});
 
-    assert(mockMkdir.calls.length > 0);
-})
+Deno.test("writeAuditLog - redacts Authorization header values", async () => {
+  const auditLogDir = await createTempAuditDir();
+
+  try {
+    await withAuditLogDir(auditLogDir, async (writeAuditLog) => {
+      await writeAuditLog({
+        timestamp: "2024-01-01T00:00:00Z",
+        event: "exec",
+        spaceId: "ws1",
+        command:
+          'curl -H "Authorization: Bearer my-secret-token" https://api.com',
+        status: "started",
+      });
+
+      const filePath = path.join(auditLogDir, "execution-audit.jsonl");
+      const parsed = JSON.parse(await fs.readFile(filePath, "utf8")) as {
+        command?: string;
+      };
+      assert(!(parsed.command ?? "").includes("my-secret-token"));
+      assertStringIncludes(parsed.command ?? "", "Authorization: ***");
+    });
+  } finally {
+    await fs.rm(auditLogDir, { recursive: true, force: true });
+  }
+});
+
+Deno.test("writeAuditLog - redacts SECRET_KEY=value patterns", async () => {
+  const auditLogDir = await createTempAuditDir();
+
+  try {
+    await withAuditLogDir(auditLogDir, async (writeAuditLog) => {
+      await writeAuditLog({
+        timestamp: "2024-01-01T00:00:00Z",
+        event: "exec",
+        spaceId: "ws1",
+        command: "SECRET_KEY=mysecret npm start",
+        status: "started",
+      });
+
+      const filePath = path.join(auditLogDir, "execution-audit.jsonl");
+      const parsed = JSON.parse(await fs.readFile(filePath, "utf8")) as {
+        command?: string;
+      };
+      assert(!(parsed.command ?? "").includes("mysecret"));
+      assertStringIncludes(parsed.command ?? "", "SECRET_KEY=***");
+    });
+  } finally {
+    await fs.rm(auditLogDir, { recursive: true, force: true });
+  }
+});
+
+Deno.test("writeAuditLog - redacts commands array", async () => {
+  const auditLogDir = await createTempAuditDir();
+
+  try {
+    await withAuditLogDir(auditLogDir, async (writeAuditLog) => {
+      await writeAuditLog({
+        timestamp: "2024-01-01T00:00:00Z",
+        event: "exec",
+        spaceId: "ws1",
+        commands: [
+          'curl -H "Authorization: Bearer token1"',
+          "echo TOKEN=secret123",
+        ],
+        status: "started",
+      });
+
+      const filePath = path.join(auditLogDir, "execution-audit.jsonl");
+      const parsed = JSON.parse(await fs.readFile(filePath, "utf8")) as {
+        commands?: string[];
+      };
+      assert(!(parsed.commands?.[0] ?? "").includes("token1"));
+      assertStringIncludes(parsed.commands?.[1] ?? "", "TOKEN=***");
+    });
+  } finally {
+    await fs.rm(auditLogDir, { recursive: true, force: true });
+  }
+});
+
+Deno.test("writeAuditLog - does not throw on write failure", async () => {
+  const tempRoot = await createTempAuditDir();
+  const auditLogDir = path.join(tempRoot, "audit-log-file");
+  await fs.writeFile(auditLogDir, "not a directory");
+
+  try {
+    await withAuditLogDir(auditLogDir, async (writeAuditLog) => {
+      await writeAuditLog({
+        timestamp: "2024-01-01T00:00:00Z",
+        event: "exec",
+        spaceId: "ws1",
+        status: "started",
+      });
+    });
+  } finally {
+    await fs.rm(tempRoot, { recursive: true, force: true });
+  }
+});
+
+Deno.test("writeAuditLog - ensures directory is created on first call", async () => {
+  const auditLogDir = await createTempAuditDir();
+
+  try {
+    await withAuditLogDir(auditLogDir, async (writeAuditLog) => {
+      await writeAuditLog({
+        timestamp: "2024-01-01T00:00:00Z",
+        event: "exec",
+        spaceId: "ws1",
+        status: "started",
+      });
+
+      const filePath = path.join(auditLogDir, "execution-audit.jsonl");
+      const stat = await fs.stat(path.dirname(filePath));
+      assert(stat.isDirectory());
+      assertEquals((await fs.readFile(filePath, "utf8")).length > 0, true);
+    });
+  } finally {
+    await fs.rm(auditLogDir, { recursive: true, force: true });
+  }
+});

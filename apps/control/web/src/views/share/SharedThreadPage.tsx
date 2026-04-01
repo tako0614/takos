@@ -1,4 +1,4 @@
-import { createEffect, onMount, onCleanup, createMemo, createSignal } from 'solid-js';
+import { createEffect, createMemo, createSignal } from 'solid-js';
 import { rpc } from '../../lib/rpc.ts';
 import { Icons } from '../../lib/Icons.tsx';
 import { useI18n } from '../../store/i18n.ts';
@@ -240,10 +240,9 @@ export function SharedThreadPage({ token }: { token: string }) {
             {t('noMessages') || 'No messages.'}
           </div>
         ) : (
-          mappedMessages().map((m) => <MessageBubble message={m} />)
+          mappedMessages().map((m) => <MessageBubble key={m.id} message={m} />)
         )}
       </div>
     </div>
   );
 }
-

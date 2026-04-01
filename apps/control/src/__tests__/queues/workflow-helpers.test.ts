@@ -1,7 +1,6 @@
 import type { D1Database } from "@cloudflare/workers-types";
 
 import {
-  assert,
   assertEquals,
   assertRejects,
   assertStringIncludes,
@@ -54,7 +53,7 @@ function createFakeD1(queries: FakeQuery[] = []) {
   return { db, prepareCalls };
 }
 
-function createEnv(
+function _createEnv(
   overrides: Partial<WorkflowQueueEnv> = {},
 ): WorkflowQueueEnv {
   const fetch = spy(async (_request: Request) =>

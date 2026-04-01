@@ -12,6 +12,12 @@ function escapeHtml(value: string): string {
 import { logError } from '../../../shared/utils/logger.ts';
 import { errorJsonResponse } from '../../../shared/utils/http-response.ts';
 
+export const threadExportDeps = {
+  getDb,
+  logError,
+  errorJsonResponse,
+};
+
 function buildSafeTitle(value: string | null | undefined): string {
   return (value || 'thread')
     .replace(/[^a-zA-Z0-9_-]+/g, '-')
@@ -29,7 +35,7 @@ export async function exportThread(
     format: string;
   },
 ): Promise<Response | null> {
-  const db = getDb(params.db);
+  const db = threadExportDeps.getDb(params.db);
   const thread = await db.select({ id: threads.id, title: threads.title, status: threads.status, createdAt: threads.createdAt, updatedAt: threads.updatedAt }).from(threads).where(eq(threads.id, params.threadId)).get();
   if (!thread || thread.status === 'deleted') {
     return null;
@@ -129,12 +135,12 @@ export async function exportThread(
       headers.set('Cache-Control', 'no-store');
       return new Response(pdf, { status: 200, headers });
     } catch (err) {
-      logError('PDF export failed', err, { module: 'services/threads/threads/thread-export' });
+      threadExportDeps.logError('PDF export failed', err, { module: 'services/threads/threads/thread-export' });
       const message = err instanceof Error ? err.message : String(err);
       const status = message.includes('not supported') ? 501 : 500;
-      return errorJsonResponse('Failed to generate PDF', status);
+      return threadExportDeps.errorJsonResponse('Failed to generate PDF', status);
     }
   }
 
-  return errorJsonResponse('Invalid format. Supported: markdown, json, pdf', 400);
+  return threadExportDeps.errorJsonResponse('Invalid format. Supported: markdown, json, pdf', 400);
 }

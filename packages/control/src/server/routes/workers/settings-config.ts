@@ -13,20 +13,26 @@ const workerManagedMcpServerSchema = z.object({
   path: z.string().min(1).regex(/^\/[A-Za-z0-9._~!$&'()*+,;=:@/-]*$/),
 }).optional();
 
+export const workersSettingsConfigRouteDeps = {
+  getServiceForUser,
+  getServiceForUserWithRole,
+  createDesiredStateService: (env: AuthenticatedRouteEnv['Bindings']) => new ServiceDesiredStateService(env),
+};
+
 const settingsConfig = new Hono<AuthenticatedRouteEnv>()
 
 .get('/:id/settings', async (c) => {
   const user = c.get('user');
   const workerId = c.req.param('id');
 
-  const worker = await getServiceForUser(c.env.DB, workerId, user.id);
+  const worker = await workersSettingsConfigRouteDeps.getServiceForUser(c.env.DB, workerId, user.id);
 
   if (!worker) {
     throw new NotFoundError('Service');
   }
 
   try {
-    const desiredState = new ServiceDesiredStateService(c.env);
+    const desiredState = workersSettingsConfigRouteDeps.createDesiredStateService(c.env);
     const settings = await desiredState.getRuntimeConfig(worker.space_id, worker.id);
 
     return c.json({
@@ -58,14 +64,14 @@ const settingsConfig = new Hono<AuthenticatedRouteEnv>()
   const workerId = c.req.param('id');
   const body = c.req.valid('json');
 
-  const worker = await getServiceForUserWithRole(c.env.DB, workerId, user.id, ['owner', 'admin', 'editor']);
+  const worker = await workersSettingsConfigRouteDeps.getServiceForUserWithRole(c.env.DB, workerId, user.id, ['owner', 'admin', 'editor']);
 
   if (!worker) {
     throw new NotFoundError('Service');
   }
 
   try {
-    const desiredState = new ServiceDesiredStateService(c.env);
+    const desiredState = workersSettingsConfigRouteDeps.createDesiredStateService(c.env);
     const settings = await desiredState.saveRuntimeConfig({
       spaceId: worker.space_id,
       workerId: worker.id,

@@ -41,7 +41,11 @@ function validateNavigationUrl(url: string): void {
   }
 }
 
-export function createBrowserServiceApp(options: BrowserServiceOptions = {}) {
+export function createBrowserServiceApp(options: BrowserServiceOptions = {}): {
+  app: Hono;
+  browser: BrowserManager;
+  logger: ReturnType<typeof createLogger>;
+} {
   const logger = createLogger({ service: options.serviceName ?? 'browserd' });
   const browser = new BrowserManager();
   const app = new Hono();
@@ -143,7 +147,12 @@ export function createBrowserServiceApp(options: BrowserServiceOptions = {}) {
   return { app, browser, logger };
 }
 
-export function startBrowserService(options: BrowserServiceOptions = {}) {
+export function startBrowserService(options: BrowserServiceOptions = {}): {
+  app: Hono;
+  browser: BrowserManager;
+  server: ReturnType<typeof Deno.serve>;
+  logger: ReturnType<typeof createLogger>;
+} {
   const port = options.port ?? parseIntEnv('PORT', 8080, { min: 1, max: 65535 });
   const shutdownGraceMs = options.shutdownGraceMs ?? parseIntEnv('SHUTDOWN_GRACE_MS', 15000, { min: 0 });
   const { app, browser, logger } = createBrowserServiceApp(options);

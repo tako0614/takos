@@ -1,4 +1,4 @@
-import { Command } from 'commander';
+import type { Command } from 'commander';
 import { bold, dim } from '@std/fmt/colors';
 import { readState, getStateDir, getStateFilePath } from '../../lib/state/state-file.ts';
 import { printJson } from '../../lib/cli-utils.ts';

@@ -9,10 +9,11 @@ const STORAGE_KEY = 'takos-lang';
 
 /** Detect the initial language from localStorage or browser settings. */
 function detectInitialLanguage(): Language {
-  if (typeof window === 'undefined') return 'en';
-  const stored = localStorage.getItem(STORAGE_KEY);
+  const storage = globalThis.localStorage;
+  if (!storage) return 'en';
+  const stored = storage.getItem(STORAGE_KEY);
   if (stored === 'ja' || stored === 'en') return stored;
-  const browserLang = navigator.language.toLowerCase();
+  const browserLang = globalThis.navigator.language.toLowerCase();
   return browserLang.startsWith('ja') ? 'ja' : 'en';
 }
 

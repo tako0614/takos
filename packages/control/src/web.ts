@@ -29,7 +29,7 @@ import { staticAssetsMiddleware } from './server/middleware/static-assets.ts';
 import { isInvalidArrayBufferError } from './shared/utils/db-guards.ts';
 import { validateWebEnv, createEnvGuard } from './shared/utils/validate-env.ts';
 import { logError, logInfo, logWarn } from './shared/utils/logger.ts';
-import { AppError, RateLimitError, isAppError } from 'takos-common/errors';
+import { RateLimitError, isAppError } from 'takos-common/errors';
 import { PRODUCTION_DOMAIN } from './shared/constants/app.ts';
 import { buildWorkersWebPlatform } from './platform/adapters/workers.ts';
 import type { ControlPlatform } from './platform/platform-config.ts';

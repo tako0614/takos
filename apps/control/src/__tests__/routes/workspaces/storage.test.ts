@@ -3,7 +3,7 @@ import type { Env, User } from '@/types';
 import { createMockEnv, MockR2Bucket } from '../../../../test/integration/setup.ts';
 
 import { assertEquals, assertObjectMatch } from 'jsr:@std/assert';
-import { assertSpyCallArgs } from 'jsr:@std/testing/mock';
+import { spy } from 'jsr:@std/testing/mock';
 
 const mocks = ({
   requireSpaceAccess: ((..._args: any[]) => undefined) as any,
@@ -15,6 +15,8 @@ const mocks = ({
 // [Deno] vi.mock removed - manually stub imports from '@/routes/shared/helpers'
 // [Deno] vi.mock removed - manually stub imports from '@/services/source/space-storage'
 import storageRoutes from '@/routes/spaces/storage';
+import { storageUploadsRouteDeps } from '@/routes/spaces/storage-uploads.ts';
+import { storageDownloadsRouteDeps } from '@/routes/spaces/storage-downloads.ts';
 
 function createUser(): User {
   return {
@@ -33,6 +35,16 @@ function createUser(): User {
 
 function createApp(user: User): Hono<{ Bindings: Env; Variables: { user: User } }> {
   const app = new Hono<{ Bindings: Env; Variables: { user: User } }>();
+  storageUploadsRouteDeps.requireSpaceAccess = mocks.requireSpaceAccess;
+  storageUploadsRouteDeps.createFileRecord = mocks.createFileRecord;
+  storageUploadsRouteDeps.uploadPendingFileContent = mocks.uploadPendingFileContent;
+  storageUploadsRouteDeps.getStorageItem = mocks.getStorageItem;
+  storageDownloadsRouteDeps.requireSpaceAccess = mocks.requireSpaceAccess;
+  storageDownloadsRouteDeps.getStorageItem = mocks.getStorageItem;
+  storageDownloadsRouteDeps.getStorageItemByPath = (async () => null) as any;
+  storageDownloadsRouteDeps.readFileContent = mocks.getStorageItem;
+  storageDownloadsRouteDeps.writeFileContent = mocks.createFileRecord;
+  storageDownloadsRouteDeps.getDb = ((db: unknown) => db) as any;
   app.use('*', async (c, next) => {
     c.set('user', user);
     await next();
@@ -44,7 +56,7 @@ function createApp(user: User): Hono<{ Bindings: Env; Variables: { user: User } 
 
   Deno.test('workspace storage upload transport - always returns a same-origin upload URL for worker-relayed uploads', async () => {
   /* mocks cleared (no-op in Deno) */ void 0;
-    mocks.requireSpaceAccess = (async () => ({ workspace: { id: 'ws-1' } })) as any;
+    mocks.requireSpaceAccess = (async () => ({ space: { id: 'ws-1' } })) as any;
     mocks.createFileRecord = (async () => ({
       file: { id: 'file-1' },
       r2Key: 'ws-storage/ws-1/file-1',
@@ -63,7 +75,7 @@ function createApp(user: User): Hono<{ Bindings: Env; Variables: { user: User } 
       created_at: '2026-03-01T00:00:00.000Z',
       updated_at: '2026-03-01T00:00:00.000Z',
     })) as any;
-    mocks.uploadPendingFileContent = (async () => ({
+    mocks.uploadPendingFileContent = spy(async () => ({
       id: 'file-1',
     })) as any;
   const app = createApp(createUser());
@@ -97,7 +109,7 @@ function createApp(user: User): Hono<{ Bindings: Env; Variables: { user: User } 
 })
   Deno.test('workspace storage upload transport - accepts same-origin upload PUT requests through the worker fallback route', async () => {
   /* mocks cleared (no-op in Deno) */ void 0;
-    mocks.requireSpaceAccess = (async () => ({ workspace: { id: 'ws-1' } })) as any;
+    mocks.requireSpaceAccess = (async () => ({ space: { id: 'ws-1' } })) as any;
     mocks.createFileRecord = (async () => ({
       file: { id: 'file-1' },
       r2Key: 'ws-storage/ws-1/file-1',
@@ -116,7 +128,7 @@ function createApp(user: User): Hono<{ Bindings: Env; Variables: { user: User } 
       created_at: '2026-03-01T00:00:00.000Z',
       updated_at: '2026-03-01T00:00:00.000Z',
     })) as any;
-    mocks.uploadPendingFileContent = (async () => ({
+    mocks.uploadPendingFileContent = spy(async () => ({
       id: 'file-1',
     })) as any;
   const app = createApp(createUser());
@@ -137,19 +149,17 @@ function createApp(user: User): Hono<{ Bindings: Env; Variables: { user: User } 
     );
 
     assertEquals(response.status, 204);
-    assertSpyCallArgs(mocks.uploadPendingFileContent, 0, [
-      env.DB,
-      env.GIT_OBJECTS,
-      'ws-1',
-      'file-1',
-      /* expect.any(ArrayBuffer) */ {} as any,
-      5, // declared size from file record
-      'text/plain',
-    ]);
+    assertEquals(mocks.uploadPendingFileContent.calls[0]?.args[0], env.DB);
+    assertEquals(mocks.uploadPendingFileContent.calls[0]?.args[1], env.GIT_OBJECTS);
+    assertEquals(mocks.uploadPendingFileContent.calls[0]?.args[2], 'ws-1');
+    assertEquals(mocks.uploadPendingFileContent.calls[0]?.args[3], 'file-1');
+    assertEquals((mocks.uploadPendingFileContent.calls[0]?.args[4] as ArrayBuffer).byteLength, 5);
+    assertEquals(mocks.uploadPendingFileContent.calls[0]?.args[5], 5); // declared size from file record
+    assertEquals(mocks.uploadPendingFileContent.calls[0]?.args[6], 'text/plain');
 })
   Deno.test('workspace storage upload transport - returns a same-origin download URL for worker-relayed downloads', async () => {
   /* mocks cleared (no-op in Deno) */ void 0;
-    mocks.requireSpaceAccess = (async () => ({ workspace: { id: 'ws-1' } })) as any;
+    mocks.requireSpaceAccess = (async () => ({ space: { id: 'ws-1' } })) as any;
     mocks.createFileRecord = (async () => ({
       file: { id: 'file-1' },
       r2Key: 'ws-storage/ws-1/file-1',
@@ -168,9 +178,11 @@ function createApp(user: User): Hono<{ Bindings: Env; Variables: { user: User } 
       created_at: '2026-03-01T00:00:00.000Z',
       updated_at: '2026-03-01T00:00:00.000Z',
     })) as any;
-    mocks.uploadPendingFileContent = (async () => ({
+    mocks.uploadPendingFileContent = spy(async () => ({
       id: 'file-1',
     })) as any;
+    storageDownloadsRouteDeps.requireSpaceAccess = mocks.requireSpaceAccess;
+    storageDownloadsRouteDeps.getStorageItem = mocks.getStorageItem;
   const app = createApp(createUser());
     const env = createMockEnv({
       GIT_OBJECTS: new MockR2Bucket(),

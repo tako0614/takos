@@ -11,26 +11,28 @@
  * wrangler-direct types, GroupDeployOptions) are defined locally below.
  */
 
+type GroupDeployServiceBinding = string | { name: string; version?: string };
+
 // ── Re-exports from canonical source ────────────────────────────────────────
 
 export type {
-  ServiceDeployStatus,
-  ResourceProvisionStatus,
-  BindingStatus,
-  ServiceDeployResult,
-  ResourceProvisionResult,
   BindingResult,
+  BindingStatus,
   GroupDeployResult,
   ProvisionedResource,
+  ResourceProvisionResult,
+  ResourceProvisionStatus,
+  ServiceDeployResult,
+  ServiceDeployStatus,
   WranglerConfig,
   WranglerD1Binding,
-  WranglerR2Binding,
   WranglerKVBinding,
-  WranglerServiceBinding,
   WranglerQueueProducer,
-  WranglerVectorizeIndex,
+  WranglerR2Binding,
+  WranglerServiceBinding,
   WranglerVars,
-} from 'takos-control/deployment/group-deploy-types';
+  WranglerVectorizeIndex,
+} from "takos-control/deployment/group-deploy-types";
 
 // ── CLI-specific types ──────────────────────────────────────────────────────
 
@@ -63,9 +65,12 @@ export interface ManifestWorkerDef {
     d1?: string[];
     r2?: string[];
     kv?: string[];
-    services?: string[];
+    services?: GroupDeployServiceBinding[];
     queues?: string[];
     vectorize?: string[];
+    analyticsEngine?: string[];
+    workflow?: string[];
+    durableObjects?: string[];
   };
   containers?: string[];
 }
@@ -85,6 +90,17 @@ export interface ManifestServiceDef {
   maxInstances?: number;
   ipv4?: boolean;
   env?: Record<string, string>;
+  bindings?: {
+    d1?: string[];
+    r2?: string[];
+    kv?: string[];
+    services?: GroupDeployServiceBinding[];
+    queues?: string[];
+    vectorize?: string[];
+    analyticsEngine?: string[];
+    workflow?: string[];
+    durableObjects?: string[];
+  };
 }
 
 export interface TemplateContext {
@@ -107,7 +123,16 @@ export interface GroupDeployOptions {
     spec: {
       version: string;
       resources?: Record<string, {
-        type: 'd1' | 'r2' | 'kv' | 'secretRef' | 'queue' | 'vectorize' | 'analyticsEngine' | 'workflow' | 'durableObject';
+        type:
+          | "d1"
+          | "r2"
+          | "kv"
+          | "secretRef"
+          | "queue"
+          | "vectorize"
+          | "analyticsEngine"
+          | "workflow"
+          | "durableObject";
         binding?: string;
         generate?: boolean;
         vectorize?: { dimensions: number; metric: string };
@@ -147,7 +172,7 @@ export interface WranglerDirectDeployResult {
   configPath: string;
   env: string;
   namespace?: string;
-  status: 'deployed' | 'failed' | 'dry-run';
+  status: "deployed" | "failed" | "dry-run";
   error?: string;
 }
 
@@ -157,23 +182,47 @@ export interface ContainerWranglerConfig {
   compatibility_date: string;
   compatibility_flags: string[];
   durable_objects: { bindings: Array<{ name: string; class_name: string }> };
-  containers: Array<{ class_name: string; image: string; image_build_context: string; instance_type: string; max_instances: number }>;
+  containers: Array<
+    {
+      class_name: string;
+      image: string;
+      image_build_context: string;
+      instance_type: string;
+      max_instances: number;
+    }
+  >;
   migrations: Array<{ tag: string; new_classes: string[] }>;
-  dispatch_namespace?: string;
 }
 
 /** Container service definition - used by container.ts */
 export interface ContainerServiceDef {
-  type: 'container';
+  type: "container";
   container: ContainerSpec;
   env?: Record<string, string>;
 }
 
 /** Worker service definition - used by wrangler-config.ts */
 export interface WorkerServiceDef {
-  type: 'worker';
-  build?: { fromWorkflow: { path: string; job: string; artifact: string; artifactPath: string } };
+  type: "worker";
+  build?: {
+    fromWorkflow: {
+      path: string;
+      job: string;
+      artifact: string;
+      artifactPath: string;
+    };
+  };
   env?: Record<string, string>;
-  bindings?: { d1?: string[]; r2?: string[]; kv?: string[]; services?: string[]; queues?: string[]; vectorize?: string[] };
+  bindings?: {
+    d1?: string[];
+    r2?: string[];
+    kv?: string[];
+    services?: GroupDeployServiceBinding[];
+    queues?: string[];
+    vectorize?: string[];
+    analyticsEngine?: string[];
+    workflow?: string[];
+    durableObjects?: string[];
+  };
   containers?: WorkerContainerSpec[];
 }

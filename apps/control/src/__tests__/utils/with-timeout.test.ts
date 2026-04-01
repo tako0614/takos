@@ -13,7 +13,7 @@ Deno.test("withTimeout - resolves when promise completes before timeout", async 
   assertEquals(result, "ok");
 });
 Deno.test("withTimeout - rejects with timeout error when promise is too slow", async () => {
-  new FakeTime();
+  const fakeTime = new FakeTime();
   const slow = new Promise<string>((resolve) => {
     setTimeout(() => resolve("late"), 5000);
   });
@@ -24,7 +24,7 @@ Deno.test("withTimeout - rejects with timeout error when promise is too slow", a
   await assertRejects(async () => {
     await promise;
   }, "Operation timed out");
-  /* TODO: call fakeTime.restore() */ void 0;
+  fakeTime.restore();
 });
 Deno.test("withTimeout - propagates the original error if promise rejects before timeout", async () => {
   const failing = Promise.reject(new Error("original error"));
@@ -48,7 +48,7 @@ Deno.test("withTimeout - accepts a factory function and passes abort signal", as
   assert(receivedSignal instanceof AbortSignal);
 });
 Deno.test("withTimeout - aborts the signal on timeout", async () => {
-  new FakeTime();
+  const fakeTime = new FakeTime();
   let receivedSignal: AbortSignal | undefined;
 
   const promise = withTimeout(
@@ -67,7 +67,7 @@ Deno.test("withTimeout - aborts the signal on timeout", async () => {
     await promise;
   }, "Timed out");
   assertEquals(receivedSignal?.aborted, true);
-  /* TODO: call fakeTime.restore() */ void 0;
+  fakeTime.restore();
 });
 Deno.test("withTimeout - aborts the signal when factory function throws", async () => {
   let receivedSignal: AbortSignal | undefined;
@@ -86,13 +86,19 @@ Deno.test("withTimeout - aborts the signal when factory function throws", async 
   assertEquals(receivedSignal?.aborted, true);
 });
 Deno.test("withTimeout - clears timeout after successful resolution", async () => {
-  const clearSpy = stub(globalThis, "clearTimeout");
+  const originalClearTimeout = globalThis.clearTimeout;
+  const clearSpy = stub(
+    globalThis,
+    "clearTimeout",
+    ((...args: Parameters<typeof clearTimeout>) =>
+      originalClearTimeout(...args)) as typeof clearTimeout,
+  );
   await withTimeout(Promise.resolve("ok"), 5000, "Timed out");
   assert(clearSpy.calls.length > 0);
   clearSpy.restore();
 });
 Deno.test("withTimeout - handles zero timeout", async () => {
-  new FakeTime();
+  const fakeTime = new FakeTime();
   const promise = withTimeout(
     new Promise<string>((resolve) => {
       setTimeout(() => resolve("late"), 100);
@@ -104,5 +110,5 @@ Deno.test("withTimeout - handles zero timeout", async () => {
   await assertRejects(async () => {
     await promise;
   }, "Zero timeout");
-  /* TODO: call fakeTime.restore() */ void 0;
+  fakeTime.restore();
 });

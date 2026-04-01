@@ -4,7 +4,6 @@ import { ErrorBoundary } from '../components/ui/ErrorBoundary.tsx';
 import { UserProfilePage } from './profile/UserProfilePage.tsx';
 import { LoadingScreen } from '../components/common/LoadingScreen.tsx';
 import { AuthenticatedLayout } from '../components/layout/AuthenticatedLayout.tsx';
-import { SetupPage } from './SetupPage.tsx';
 import { MemoryPage } from './MemoryPage.tsx';
 import { StoragePage } from './storage/StoragePage.tsx';
 import { SettingsView } from './app/SettingsView.tsx';
@@ -46,7 +45,6 @@ export function AuthenticatedRoutes() {
     user,
     userSettings,
     setUserSettings,
-    fetchUser,
     fetchSpaces,
     spaces,
     spacesLoaded,
@@ -65,7 +63,6 @@ export function AuthenticatedRoutes() {
     routeSpaceId,
     selectedSpaceId,
     waitingForSpaceResolution,
-    threadsBySpace,
     setThreadsBySpace,
     handleNewThreadCreated,
   } = useNavigation();
@@ -75,7 +72,7 @@ export function AuthenticatedRoutes() {
 
   const ensureCanonicalRoute = (nextRoute: RouteState): boolean => {
     const canonicalPath = buildPath(nextRoute);
-    if (`${window.location.pathname}${window.location.search}` === canonicalPath) {
+    if (`${globalThis.location.pathname}${globalThis.location.search}` === canonicalPath) {
       return false;
     }
     replace(nextRoute);

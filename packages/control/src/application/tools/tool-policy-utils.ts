@@ -91,7 +91,6 @@ export function filterAgentAllowedToolNames(toolNames: readonly string[]): strin
 
 export function validateBuiltinToolPolicies(tools: readonly ToolDefinition[]): string[] {
   const errors: string[] = [];
-  const toolNames = new Set(tools.map((tool) => tool.name));
 
   for (const tool of tools) {
     const metadata = getToolPolicyMetadata(tool);

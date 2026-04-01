@@ -34,6 +34,7 @@ export function Button(props: ButtonProps) {
 
   return (
     <button
+      type="button"
       class={`${baseClasses} ${variantClasses[local.variant ?? 'primary']} ${sizeClasses[local.size ?? 'md']} ${local.disabled || local.isLoading ? 'opacity-50 cursor-not-allowed' : ''} ${local.class ?? ''}`}
       disabled={local.disabled || local.isLoading}
       {...rest}

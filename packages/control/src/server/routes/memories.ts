@@ -4,8 +4,8 @@ import type {
   Env,
   MemoryType,
   ReminderStatus,
-  ReminderTriggerType,
-  ReminderPriority,
+  ReminderTriggerType as _ReminderTriggerType,
+  ReminderPriority as _ReminderPriority,
 } from '../../shared/types/index.ts';
 import { checkSpaceAccess } from '../../application/services/identity/space-access.ts';
 import { requireSpaceAccess, type BaseVariables } from './route-auth.ts';
@@ -28,6 +28,24 @@ import {
   triggerReminder,
 } from '../../application/services/memory/index.ts';
 
+export const memoriesRouteDeps = {
+  requireSpaceAccess,
+  checkSpaceAccess,
+  listMemories,
+  bumpMemoryAccess,
+  searchMemories,
+  getMemoryById,
+  createMemory,
+  updateMemory,
+  deleteMemory,
+  listReminders,
+  getReminderById,
+  createReminder,
+  updateReminder,
+  deleteReminder,
+  triggerReminder,
+};
+
 // ==================== Memories ====================
 
 export default new Hono<{ Bindings: Env; Variables: BaseVariables }>()
@@ -44,21 +62,21 @@ export default new Hono<{ Bindings: Env; Variables: BaseVariables }>()
     const user = c.get('user');
     const spaceId = c.req.param('spaceId');
 
-    const access = await requireSpaceAccess(c, spaceId, user.id);
+    const access = await memoriesRouteDeps.requireSpaceAccess(c, spaceId, user.id);
 
     const validatedQuery = c.req.valid('query');
     const type = validatedQuery.type as MemoryType | undefined;
     const category = validatedQuery.category;
     const { limit, offset } = parsePagination(validatedQuery, { limit: 50, maxLimit: 100 });
 
-    const memoryList = await listMemories(c.env.DB, access.space.id, {
+    const memoryList = await memoriesRouteDeps.listMemories(c.env.DB, access.space.id, {
       type,
       category,
       limit,
       offset,
     });
 
-    await bumpMemoryAccess(
+    await memoriesRouteDeps.bumpMemoryAccess(
       c.env.DB,
       memoryList.map(memory => memory.id)
     );
@@ -77,14 +95,14 @@ export default new Hono<{ Bindings: Env; Variables: BaseVariables }>()
     const user = c.get('user');
     const spaceId = c.req.param('spaceId');
 
-    const access = await requireSpaceAccess(c, spaceId, user.id);
+    const access = await memoriesRouteDeps.requireSpaceAccess(c, spaceId, user.id);
 
     const validatedQuery = c.req.valid('query');
     const query = (validatedQuery.q || '').trim();
     const type = validatedQuery.type as MemoryType | undefined;
     const { limit } = parsePagination(validatedQuery, { maxLimit: 100 });
 
-    const memoriesResult = await searchMemories(
+    const memoriesResult = await memoriesRouteDeps.searchMemories(
       c.env.DB,
       access.space.id,
       query,
@@ -100,17 +118,17 @@ export default new Hono<{ Bindings: Env; Variables: BaseVariables }>()
     const user = c.get('user');
     const memoryId = c.req.param('id');
 
-    const memory = await getMemoryById(c.env.DB, memoryId);
+    const memory = await memoriesRouteDeps.getMemoryById(c.env.DB, memoryId);
     if (!memory) {
       throw new NotFoundError('Memory');
     }
 
-    const access = await checkSpaceAccess(c.env.DB, memory.space_id, user.id);
+    const access = await memoriesRouteDeps.checkSpaceAccess(c.env.DB, memory.space_id, user.id);
     if (!access) {
       throw new AuthorizationError();
     }
 
-    await bumpMemoryAccess(c.env.DB, [memoryId]);
+    await memoriesRouteDeps.bumpMemoryAccess(c.env.DB, [memoryId]);
 
     return c.json(memory);
   })
@@ -133,11 +151,11 @@ export default new Hono<{ Bindings: Env; Variables: BaseVariables }>()
     const user = c.get('user');
     const spaceId = c.req.param('spaceId');
 
-    const access = await requireSpaceAccess(c, spaceId, user.id);
+    const access = await memoriesRouteDeps.requireSpaceAccess(c, spaceId, user.id);
 
     const body = c.req.valid('json');
 
-    const memory = await createMemory(c.env.DB, {
+    const memory = await memoriesRouteDeps.createMemory(c.env.DB, {
       spaceId: access.space.id,
       userId: user.id,
       threadId: body.thread_id || null,
@@ -168,19 +186,19 @@ export default new Hono<{ Bindings: Env; Variables: BaseVariables }>()
     const user = c.get('user');
     const memoryId = c.req.param('id');
 
-    const memory = await getMemoryById(c.env.DB, memoryId);
+    const memory = await memoriesRouteDeps.getMemoryById(c.env.DB, memoryId);
     if (!memory) {
       throw new NotFoundError('Memory');
     }
 
-    const access = await checkSpaceAccess(c.env.DB, memory.space_id, user.id, ['owner', 'admin', 'editor']);
+    const access = await memoriesRouteDeps.checkSpaceAccess(c.env.DB, memory.space_id, user.id, ['owner', 'admin', 'editor']);
     if (!access) {
       throw new AuthorizationError();
     }
 
     const body = c.req.valid('json');
 
-    const updated = await updateMemory(c.env.DB, memoryId, {
+    const updated = await memoriesRouteDeps.updateMemory(c.env.DB, memoryId, {
       content: body.content,
       summary: body.summary,
       importance: body.importance,
@@ -197,17 +215,17 @@ export default new Hono<{ Bindings: Env; Variables: BaseVariables }>()
     const user = c.get('user');
     const memoryId = c.req.param('id');
 
-    const memory = await getMemoryById(c.env.DB, memoryId);
+    const memory = await memoriesRouteDeps.getMemoryById(c.env.DB, memoryId);
     if (!memory) {
       throw new NotFoundError('Memory');
     }
 
-    const access = await checkSpaceAccess(c.env.DB, memory.space_id, user.id, ['owner', 'admin', 'editor']);
+    const access = await memoriesRouteDeps.checkSpaceAccess(c.env.DB, memory.space_id, user.id, ['owner', 'admin', 'editor']);
     if (!access) {
       throw new AuthorizationError();
     }
 
-    await deleteMemory(c.env.DB, memoryId);
+    await memoriesRouteDeps.deleteMemory(c.env.DB, memoryId);
 
     return c.json({ success: true });
   })
@@ -224,13 +242,13 @@ export default new Hono<{ Bindings: Env; Variables: BaseVariables }>()
     const user = c.get('user');
     const spaceId = c.req.param('spaceId');
 
-    const access = await requireSpaceAccess(c, spaceId, user.id);
+    const access = await memoriesRouteDeps.requireSpaceAccess(c, spaceId, user.id);
 
     const validatedQuery = c.req.valid('query');
     const status = validatedQuery.status as ReminderStatus | undefined;
     const { limit } = parsePagination(validatedQuery, { limit: 50, maxLimit: 100 });
 
-    const reminders = await listReminders(c.env.DB, access.space.id, {
+    const reminders = await memoriesRouteDeps.listReminders(c.env.DB, access.space.id, {
       status,
       limit,
     });
@@ -243,12 +261,12 @@ export default new Hono<{ Bindings: Env; Variables: BaseVariables }>()
     const user = c.get('user');
     const reminderId = c.req.param('id');
 
-    const reminder = await getReminderById(c.env.DB, reminderId);
+    const reminder = await memoriesRouteDeps.getReminderById(c.env.DB, reminderId);
     if (!reminder) {
       throw new NotFoundError('Reminder');
     }
 
-    const access = await checkSpaceAccess(c.env.DB, reminder.space_id, user.id);
+    const access = await memoriesRouteDeps.checkSpaceAccess(c.env.DB, reminder.space_id, user.id);
     if (!access) {
       throw new AuthorizationError();
     }
@@ -269,11 +287,11 @@ export default new Hono<{ Bindings: Env; Variables: BaseVariables }>()
     const user = c.get('user');
     const spaceId = c.req.param('spaceId');
 
-    const access = await requireSpaceAccess(c, spaceId, user.id);
+    const access = await memoriesRouteDeps.requireSpaceAccess(c, spaceId, user.id);
 
     const body = c.req.valid('json');
 
-    const reminder = await createReminder(c.env.DB, {
+    const reminder = await memoriesRouteDeps.createReminder(c.env.DB, {
       spaceId: access.space.id,
       userId: user.id,
       content: body.content,
@@ -302,19 +320,19 @@ export default new Hono<{ Bindings: Env; Variables: BaseVariables }>()
     const user = c.get('user');
     const reminderId = c.req.param('id');
 
-    const reminder = await getReminderById(c.env.DB, reminderId);
+    const reminder = await memoriesRouteDeps.getReminderById(c.env.DB, reminderId);
     if (!reminder) {
       throw new NotFoundError('Reminder');
     }
 
-    const access = await checkSpaceAccess(c.env.DB, reminder.space_id, user.id, ['owner', 'admin', 'editor']);
+    const access = await memoriesRouteDeps.checkSpaceAccess(c.env.DB, reminder.space_id, user.id, ['owner', 'admin', 'editor']);
     if (!access) {
       throw new AuthorizationError();
     }
 
     const body = c.req.valid('json');
 
-    const updated = await updateReminder(c.env.DB, reminderId, {
+    const updated = await memoriesRouteDeps.updateReminder(c.env.DB, reminderId, {
       content: body.content,
       context: body.context,
       triggerValue: body.trigger_value,
@@ -330,17 +348,17 @@ export default new Hono<{ Bindings: Env; Variables: BaseVariables }>()
     const user = c.get('user');
     const reminderId = c.req.param('id');
 
-    const reminder = await getReminderById(c.env.DB, reminderId);
+    const reminder = await memoriesRouteDeps.getReminderById(c.env.DB, reminderId);
     if (!reminder) {
       throw new NotFoundError('Reminder');
     }
 
-    const access = await checkSpaceAccess(c.env.DB, reminder.space_id, user.id, ['owner', 'admin', 'editor']);
+    const access = await memoriesRouteDeps.checkSpaceAccess(c.env.DB, reminder.space_id, user.id, ['owner', 'admin', 'editor']);
     if (!access) {
       throw new AuthorizationError();
     }
 
-    await deleteReminder(c.env.DB, reminderId);
+    await memoriesRouteDeps.deleteReminder(c.env.DB, reminderId);
 
     return c.json({ success: true });
   })
@@ -350,17 +368,17 @@ export default new Hono<{ Bindings: Env; Variables: BaseVariables }>()
     const user = c.get('user');
     const reminderId = c.req.param('id');
 
-    const reminder = await getReminderById(c.env.DB, reminderId);
+    const reminder = await memoriesRouteDeps.getReminderById(c.env.DB, reminderId);
     if (!reminder) {
       throw new NotFoundError('Reminder');
     }
 
-    const access = await checkSpaceAccess(c.env.DB, reminder.space_id, user.id, ['owner', 'admin', 'editor']);
+    const access = await memoriesRouteDeps.checkSpaceAccess(c.env.DB, reminder.space_id, user.id, ['owner', 'admin', 'editor']);
     if (!access) {
       throw new AuthorizationError();
     }
 
-    const updated = await triggerReminder(c.env.DB, reminderId);
+    const updated = await memoriesRouteDeps.triggerReminder(c.env.DB, reminderId);
 
     return c.json(updated);
   });

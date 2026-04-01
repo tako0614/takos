@@ -85,7 +85,7 @@ export function MessageBubble(props: MessageBubbleProps) {
 
           <Show when={parsed().attachments.length > 0}>
             <div class="mb-3 flex flex-wrap gap-2">
-              <For each={parsed().attachments}>{(attachment, index) => (
+              <For each={parsed().attachments}>{(attachment, _index) => (
                 <Show when={isImage(attachment) && props.spaceId && attachment.file_id} fallback={
                   <div
                     class="inline-flex max-w-full items-center gap-2 rounded-xl border border-zinc-200 bg-zinc-50 px-3 py-2 text-sm text-zinc-700 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-300"
@@ -142,7 +142,7 @@ export function MessageBubble(props: MessageBubbleProps) {
             <div class="bg-zinc-200 dark:bg-zinc-700 rounded-2xl px-4 py-2 max-w-[80%]">
               <Show when={parsed().attachments.length > 0}>
                 <div class="mb-2 flex flex-wrap gap-2">
-                  <For each={parsed().attachments}>{(attachment, index) => (
+                  <For each={parsed().attachments}>{(attachment, _index) => (
                     <Show when={isImage(attachment) && props.spaceId && attachment.file_id} fallback={
                       <AttachmentChip attachment={attachment} />
                     }>

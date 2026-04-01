@@ -1,7 +1,7 @@
 import { Hono } from 'hono';
 import { z } from 'zod';
 import type { Env } from '../../../shared/types/index.ts';
-import { type BaseVariables } from '../route-auth.ts';
+import type { BaseVariables } from '../route-auth.ts';
 import { BadRequestError, NotFoundError } from 'takos-common/errors';
 import { logError } from '../../../shared/utils/logger.ts';
 import { zValidator } from '../zod-validator.ts';

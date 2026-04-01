@@ -19,7 +19,7 @@ import type { WfpContext, WorkerBinding } from './wfp-contracts.ts';
  * Deploy a worker with bindings from a bundle URL or pre-built script.
  */
 export async function deployWorkerWithBindings(
-  ctx: WfpContext,
+  _ctx: WfpContext,
   createWorkerFn: (options: {
     workerName: string;
     workerScript: string;

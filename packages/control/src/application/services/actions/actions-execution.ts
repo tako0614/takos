@@ -5,12 +5,11 @@ import { getDb, workflowSecrets, workflowJobs, workflowSteps } from '../../../in
 import { eq } from 'drizzle-orm';
 import {
   WORKFLOW_QUEUE_MESSAGE_VERSION,
-  type WorkflowJobDefinition,
   type WorkflowJobQueueMessage,
 } from '../../../shared/types/index.ts';
 import { buildWorkflowDispatchEnv } from './actions-env.ts';
 import { logWarn } from '../../../shared/utils/logger.ts';
-import { normalizeWorkflowShell, toWorkflowJobDefinition } from '../execution/workflow-engine-converters.ts';
+import { toWorkflowJobDefinition } from '../execution/workflow-engine-converters.ts';
 
 export async function getWorkflowSecretIds(
   db: D1Database,

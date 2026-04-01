@@ -8,15 +8,6 @@ import {
 } from './paths.ts';
 import { SymlinkNotAllowedError, SymlinkWriteError } from '../shared/errors.ts';
 
-class SpaceFileTooLargeError extends Error {
-  code = 'FILE_TOO_LARGE' as const;
-
-  constructor(public readonly filePath: string, public readonly maxBytes: number) {
-    super(`File exceeds size limit (${maxBytes} bytes): ${filePath}`);
-    this.name = 'SpaceFileTooLargeError';
-  }
-}
-
 function isSymlinkOpenError(err: unknown): boolean {
   return (err as NodeJS.ErrnoException).code === 'ELOOP';
 }
@@ -79,4 +70,3 @@ export async function writeFileWithinSpace(
     await handle.close();
   }
 }
-

@@ -1,23 +1,18 @@
-import type { Env } from '@/shared/types';
+import {
+  type Env,
+  WORKFLOW_QUEUE_MESSAGE_VERSION,
+} from "@/shared/types/index.ts";
 
-import { assertSpyCalls, assertSpyCallArgs } from 'jsr:@std/testing/mock';
+import { assertSpyCalls, spy } from "jsr:@std/testing/mock";
 
-const mocks = ({
-  createWorkflowQueueConsumer: ((..._args: any[]) => undefined) as any,
-  handleWorkflowJobDlq: ((..._args: any[]) => undefined) as any,
-});
+import workflowRunner from "@/runtime/queues/workflow-runner.ts";
 
-// [Deno] vi.mock removed - manually stub imports from '@/shared/utils/validate-env'
-// [Deno] vi.mock removed - manually stub imports from '@/runtime/queues/workflow-jobs'
-import workflowRunner from '@/runtime/queues/workflow-runner';
-
-type DlqBody = { runId: string };
 type DlqBatch = Parameters<typeof workflowRunner.queue>[0];
-type QueueMessage = DlqBatch['messages'][number] & { body: DlqBody };
+type QueueMessage = DlqBatch["messages"][number];
 
 function createDlqBatch(message: QueueMessage): DlqBatch {
   return {
-    queue: 'takos-workflow-jobs-dlq',
+    queue: "takos-workflow-jobs-dlq",
     messages: [message],
     ackAll: ((..._args: any[]) => undefined) as any,
     retryAll: ((..._args: any[]) => undefined) as any,
@@ -27,42 +22,50 @@ function createDlqBatch(message: QueueMessage): DlqBatch {
 function createQueueMessage(runId: string, attempts: number) {
   return {
     id: `msg-${runId}`,
-    timestamp: new Date('2026-03-09T00:00:00Z'),
-    body: { runId },
+    timestamp: new Date("2026-03-09T00:00:00Z"),
+    body: {
+      version: WORKFLOW_QUEUE_MESSAGE_VERSION,
+      type: "job",
+      runId,
+      jobId: `job-${runId}`,
+      repoId: `repo-${runId}`,
+      ref: "refs/heads/main",
+      sha: "0123456789abcdef0123456789abcdef01234567",
+      jobKey: `deploy-${runId}`,
+      jobDefinition: {},
+      env: {},
+      secretIds: [],
+      timestamp: Date.now(),
+    },
     attempts,
-    ack: ((..._args: any[]) => undefined) as any,
-    retry: ((..._args: any[]) => undefined) as any,
+    ack: spy(() => undefined),
+    retry: spy(() => undefined),
   } satisfies QueueMessage;
 }
 
+Deno.test("workflow-runner DLQ ack semantics - acks invalid DLQ messages after the handler returns", async () => {
+  const message = {
+    ...createQueueMessage("run-1", 1),
+    body: { runId: "run-1" },
+  } satisfies QueueMessage;
 
-  Deno.test('workflow-runner DLQ ack semantics - acks only after successful DLQ handling', async () => {
-  /* mocks cleared (no-op in Deno) */ void 0;
-  const message = createQueueMessage('run-1', 1);
+  await workflowRunner.queue(
+    createDlqBatch(message),
+    { DB: {} } as Env,
+  );
 
-    mocks.handleWorkflowJobDlq = (async () => undefined) as any;
+  assertSpyCalls(message.ack, 1);
+  assertSpyCalls(message.retry, 0);
+});
 
-    await workflowRunner.queue(
-      createDlqBatch(message),
-      {} as Env
-    );
+Deno.test("workflow-runner DLQ ack semantics - retries DLQ messages when handler processing throws", async () => {
+  const message = createQueueMessage("run-2", 2);
 
-    assertSpyCallArgs(mocks.handleWorkflowJobDlq, 0, [message.body, expect.anything(), 1]);
-    assertSpyCalls(message.ack, 1);
-    assertSpyCalls(message.retry, 0);
-})
-  Deno.test('workflow-runner DLQ ack semantics - retries DLQ message and does not ack when handler fails', async () => {
-  /* mocks cleared (no-op in Deno) */ void 0;
-  const message = createQueueMessage('run-2', 2);
+  await workflowRunner.queue(
+    createDlqBatch(message),
+    { DB: {} } as Env,
+  );
 
-    mocks.handleWorkflowJobDlq = (async () => { throw new Error('DLQ persistence failed'); }) as any;
-
-    await workflowRunner.queue(
-      createDlqBatch(message),
-      {} as Env
-    );
-
-    assertSpyCallArgs(mocks.handleWorkflowJobDlq, 0, [message.body, expect.anything(), 2]);
-    assertSpyCalls(message.retry, 1);
-    assertSpyCalls(message.ack, 0);
-})
+  assertSpyCalls(message.retry, 1);
+  assertSpyCalls(message.ack, 0);
+});

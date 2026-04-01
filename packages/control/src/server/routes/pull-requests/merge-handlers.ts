@@ -1,12 +1,11 @@
-import { Hono, type Context } from 'hono';
+import { Hono } from 'hono';
 import { z } from 'zod';
 import { parseJsonBody, type AuthenticatedRouteEnv } from '../route-auth.ts';
 import { zValidator } from '../zod-validator.ts';
-import { checkRepoAccess, type RepoAccess } from '../../../application/services/source/repos.ts';
+import { checkRepoAccess } from '../../../application/services/source/repos.ts';
 import {
   scheduleActionsAutoTrigger,
   triggerPushWorkflows,
-  type PullRequestWorkflowEvent,
 } from '../../../application/services/actions/index.ts';
 import {
   resolveConflictsAndMerge,

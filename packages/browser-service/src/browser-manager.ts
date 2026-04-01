@@ -3,7 +3,7 @@
  * タブ管理を行いながら Playwright の永続コンテキスト（Chromium）を管理します。
  */
 
-import { Buffer } from 'node:buffer';
+import type { Buffer } from 'node:buffer';
 import { chromium, type BrowserContext, type Page } from 'playwright-core';
 import { createLogger } from 'takos-common/logger';
 

@@ -23,7 +23,7 @@ export function FileViewerToolbar(props: FileViewerToolbarProps) {
   return (
     <div class="flex items-center justify-between gap-4 px-4 py-3 border-b border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800">
       <div class="flex items-center gap-3 min-w-0">
-        <button
+        <button type="button"
           class="flex items-center justify-center w-8 h-8 rounded-lg text-zinc-500 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100 hover:bg-zinc-200 dark:hover:bg-zinc-700 transition-colors flex-shrink-0"
           onClick={props.onBack}
           aria-label={t('goBack')}
@@ -39,7 +39,7 @@ export function FileViewerToolbar(props: FileViewerToolbarProps) {
       <div class="flex items-center gap-3 flex-shrink-0">
         <span class="text-sm text-zinc-500 dark:text-zinc-400">{formatFileSize(props.fileSize)}</span>
         <Show when={props.canShowTextTools}>
-          <button
+          <button type="button"
             class={`flex items-center gap-1.5 px-3 py-1.5 border rounded-lg text-sm transition-colors ${
               props.blameEnabled
                 ? 'bg-zinc-900 text-white border-zinc-900 hover:bg-zinc-800'
@@ -53,7 +53,7 @@ export function FileViewerToolbar(props: FileViewerToolbarProps) {
             <span>{props.blameLoading ? t('blameLoading') : t('blame')}</span>
           </button>
 
-          <button
+          <button type="button"
             class="flex items-center gap-1.5 px-3 py-1.5 bg-zinc-100 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-lg text-sm text-zinc-900 dark:text-zinc-100 hover:bg-zinc-200 dark:hover:bg-zinc-700 transition-colors"
             onClick={props.onOpenHistory}
             title={t('fileHistory')}
@@ -63,7 +63,7 @@ export function FileViewerToolbar(props: FileViewerToolbarProps) {
           </button>
         </Show>
         <Show when={props.canShowTextTools}>
-          <button
+          <button type="button"
             class="flex items-center gap-1.5 px-3 py-1.5 bg-zinc-100 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-lg text-sm text-zinc-900 dark:text-zinc-100 hover:bg-zinc-200 dark:hover:bg-zinc-700 transition-colors"
             onClick={props.onCopy}
           >
@@ -71,7 +71,7 @@ export function FileViewerToolbar(props: FileViewerToolbarProps) {
             <span>{props.copied ? t('copied') : t('copy')}</span>
           </button>
         </Show>
-        <button
+        <button type="button"
           class="flex items-center gap-1.5 px-3 py-1.5 bg-zinc-100 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-lg text-sm text-zinc-900 dark:text-zinc-100 hover:bg-zinc-200 dark:hover:bg-zinc-700 transition-colors"
           onClick={props.onDownload}
         >

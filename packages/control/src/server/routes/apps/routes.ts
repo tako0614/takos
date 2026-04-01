@@ -1,4 +1,4 @@
-import { Hono } from 'hono';
+import type { Hono } from 'hono';
 import type { Env, User } from '../../../shared/types/index.ts';
 import { generateId } from '../../../shared/utils/index.ts';
 import {
@@ -105,8 +105,7 @@ export function registerAppApiRoutes<V extends Variables>(api: Hono<{ Bindings: 
     );
     const principalId = resolvePrincipalId(user);
 
-    const { asc: ascOrder, isNotNull } = await import('drizzle-orm');
-    const { leftJoin } = { leftJoin: true }; // marker for readability
+    const { asc: ascOrder } = await import('drizzle-orm');
 
     // Get custom apps from database - find apps where user is a member of the workspace
     const targetAccountId = spaceScope ? spaceScope.spaceId : principalId;

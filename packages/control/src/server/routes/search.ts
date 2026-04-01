@@ -1,5 +1,5 @@
 import { Hono, type Context } from 'hono';
-import type { Env } from '../../shared/types/index.ts';
+import type { Env as _Env } from '../../shared/types/index.ts';
 import { parseJsonBody, spaceAccess, type SpaceAccessRouteEnv } from './route-auth.ts';
 import { BadRequestError } from 'takos-common/errors';
 import {
@@ -14,6 +14,12 @@ import { logError } from '../../shared/utils/logger.ts';
 type SearchContext = Context<SpaceAccessRouteEnv>;
 const search = new Hono<SpaceAccessRouteEnv>();
 
+export const searchRouteDeps = {
+  searchWorkspace,
+  quickSearchPaths,
+  computeSHA256,
+};
+
 function getDefaultCache(): Cache | null {
   const cacheStorage = (globalThis as typeof globalThis & { caches?: CacheStorage }).caches;
   if (!cacheStorage || !('default' in cacheStorage)) return null;
@@ -27,7 +33,7 @@ function normalizeFileTypesForCache(fileTypes?: string[]): string[] {
 
 async function createSearchCacheKey(c: SearchContext, payload: unknown): Promise<Request> {
   const url = new URL(c.req.url);
-  const hash = await computeSHA256(JSON.stringify(payload));
+  const hash = await searchRouteDeps.computeSHA256(JSON.stringify(payload));
   return new Request(`${url.origin}/__cache/search/${hash}`, { method: 'GET' });
 }
 
@@ -102,7 +108,7 @@ search.post('/spaces/:spaceId/search', spaceAccess(), async (c) => {
     scope: 'workspace', spaceId: space.id, userId: user.id, query: body.query,
     type: body.type || null, fileTypes: normalizeFileTypesForCache(body.file_types), limit: body.limit || null,
   }, async () => {
-    const result = await searchWorkspace({ env: c.env, spaceId: space.id, query: body.query, searchType: body.type, fileTypes: body.file_types, limit: body.limit });
+    const result = await searchRouteDeps.searchWorkspace({ env: c.env, spaceId: space.id, query: body.query, searchType: body.type, fileTypes: body.file_types, limit: body.limit });
     return { query: body.query, results: result.results, total: result.total, semantic_available: result.semanticAvailable };
   });
 });
@@ -114,7 +120,7 @@ search.get('/spaces/:spaceId/search/quick', spaceAccess(), async (c) => {
   if (!query || query.length < 2) return c.json({ results: [] });
 
   return resolveCachedSearchResponse(c, { scope: 'quick', spaceId: space.id, userId: user.id, query }, async () => {
-    const results = await quickSearchPaths(c.env.DB, space.id, query);
+    const results = await searchRouteDeps.quickSearchPaths(c.env.DB, space.id, query);
     return { results };
   });
 });

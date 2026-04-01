@@ -67,7 +67,7 @@ export function splitSqlStatements(sql: string): string[] {
     current += char;
     if (char === ';' && !inSingleQuote && !inDoubleQuote) {
       const trimmed = current.trim();
-      if (!trimmed) {
+      if (!trimmed || /^;+$/u.test(trimmed)) {
         current = '';
         continue;
       }
@@ -81,14 +81,16 @@ export function splitSqlStatements(sql: string): string[] {
           inTrigger = false;
         }
       } else {
-        statements.push(trimmed);
+        statements.push(trimmed.replace(/;+$/u, ''));
         current = '';
       }
     }
   }
 
   const trailing = current.trim();
-  if (trailing) statements.push(trailing.endsWith(';') ? trailing : `${trailing};`);
+  if (trailing && !/^;+$/u.test(trailing)) {
+    statements.push(trailing.replace(/;+$/u, ''));
+  }
   return statements;
 }
 

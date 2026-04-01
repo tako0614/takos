@@ -32,7 +32,7 @@ export function RepoDetailBranches(props: RepoDetailBranchesProps) {
   return (
     <div class="flex items-center gap-3">
       <div class="relative" ref={branchDropdownRef}>
-        <button
+        <button type="button"
           class="flex items-center gap-2 px-3 py-1.5 text-sm rounded-md border border-zinc-300 dark:border-zinc-600 bg-zinc-100 dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100 hover:bg-zinc-200 dark:hover:bg-zinc-700 transition-colors"
           onClick={() => setBranchDropdownOpen(!branchDropdownOpen())}
         >
@@ -47,7 +47,7 @@ export function RepoDetailBranches(props: RepoDetailBranchesProps) {
             </div>
             <div class="max-h-64 overflow-y-auto">
               <For each={props.branches}>{(branch) => (
-                <button
+                <button type="button"
                   class={`flex items-center justify-between w-full px-3 py-2 text-sm text-left transition-colors ${
                     branch.name === props.currentBranch
                       ? 'bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400'

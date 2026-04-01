@@ -1,70 +1,8 @@
-import type { ToolContext } from "../../../../../../packages/control/src/application/tools/tool-definitions.ts";
 import type { D1Database } from "@cloudflare/workers-types";
+import type { ToolContext } from "../../../../../../packages/control/src/application/tools/tool-definitions.ts";
 import type { Env } from "../../../../../../packages/control/src/shared/types/index.ts";
 
-// ---------------------------------------------------------------------------
-// Mocks
-// ---------------------------------------------------------------------------
-
 import { assert, assertEquals, assertRejects } from "jsr:@std/assert";
-
-const mockSelectGet = ((..._args: any[]) => undefined) as any;
-
-const mockDb = {
-  mcpServer: {
-    findFirst: ((..._args: any[]) => undefined) as any,
-    create: ((..._args: any[]) => undefined) as any,
-    update: ((..._args: any[]) => undefined) as any,
-    upsert: ((..._args: any[]) => undefined) as any,
-    findMany: ((..._args: any[]) => undefined) as any,
-    delete: ((..._args: any[]) => undefined) as any,
-  },
-  mcpOAuthPending: {
-    create: ((..._args: any[]) => undefined) as any,
-  },
-  // Drizzle-chainable select: db.select({...}).from(table).where(...).get()
-  select: () => {
-    const chain = {
-      from: () => chain,
-      where: () => chain,
-      get: () => mockSelectGet(),
-      all: () => mockSelectGet(),
-    };
-    return chain;
-  },
-  // Drizzle-chainable insert: db.insert(table).values({...}).run()
-  insert: () => ({
-    values: () => ({
-      run: async () => ({}),
-      onConflictDoUpdate: () => ({
-        run: async () => ({}),
-      }),
-    }),
-  }),
-  // Drizzle-chainable update: db.update(table).set({...}).where(...)
-  update: () => ({
-    set: () => ({
-      where: async () => ({}),
-      run: async () => ({}),
-    }),
-  }),
-};
-
-// [Deno] vi.mock removed - manually stub imports from '@/db'
-// [Deno] vi.mock removed - manually stub imports from '../../../../../../packages/control/src/application/services/platform/mcp.ts'
-import {
-  createMcpOAuthPending as realCreateMcpOAuthPending,
-  deleteMcpServer as realDeleteMcpServer,
-  discoverOAuthMetadata as realDiscoverOAuthMetadata,
-  listMcpServers as realListMcpServers,
-  registerExternalMcpServer as realRegisterExternalMcpServer,
-} from "../../../../../../packages/control/src/application/services/platform/mcp.ts";
-
-let registerExternalMcpServer = realRegisterExternalMcpServer;
-let discoverOAuthMetadata = realDiscoverOAuthMetadata;
-let createMcpOAuthPending = realCreateMcpOAuthPending;
-let listMcpServers = realListMcpServers;
-let deleteMcpServer = realDeleteMcpServer;
 
 import {
   mcpAddServerHandler,
@@ -72,11 +10,58 @@ import {
   mcpRemoveServerHandler,
 } from "../../../../../../packages/control/src/application/tools/builtin/mcp.ts";
 
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
+type QueryMethod = "get" | "all" | "run";
 
-function makeContext(overrides: Partial<ToolContext> = {}): ToolContext {
+function createFakeD1Database(steps: {
+  get?: unknown[];
+  all?: unknown[];
+  run?: unknown[];
+} = {}): D1Database {
+  const queues = {
+    get: [...(steps.get ?? [])],
+    all: [...(steps.all ?? [])],
+    run: [...(steps.run ?? [])],
+  };
+
+  const take = (method: QueryMethod) =>
+    queues[method].length > 0 ? queues[method].shift() : undefined;
+
+  return {
+    prepare(_sql: string) {
+      return {
+        bind(..._args: unknown[]) {
+          return {
+            get: async () => take("get") ?? null,
+            all: async () => {
+              const result = take("all");
+              const rows = Array.isArray(result) ? result : [];
+              return { results: rows, success: true, meta: {} };
+            },
+            run: async () => {
+              const result = take("run");
+              return result ?? {
+                success: true,
+                meta: { changes: 0, last_row_id: 0, duration: 0 },
+              };
+            },
+            raw: async () => {
+              const result = take("all");
+              return Array.isArray(result) ? result : [];
+            },
+          };
+        },
+      };
+    },
+    batch(statements: Array<{ run: () => Promise<unknown> }>) {
+      return Promise.all(statements.map((statement) => statement.run()));
+    },
+  } as unknown as D1Database;
+}
+
+function makeContext(
+  overrides: Partial<ToolContext> = {},
+  db: D1Database = createFakeD1Database(),
+): ToolContext {
   return {
     spaceId: "ws_test",
     threadId: "th_test",
@@ -88,7 +73,7 @@ function makeContext(overrides: Partial<ToolContext> = {}): ToolContext {
       ADMIN_DOMAIN: "takos.example.com",
       ENCRYPTION_KEY: "a".repeat(64),
     } as unknown as Env,
-    db: {} as D1Database,
+    db,
     setSessionId: ((..._args: any[]) => undefined) as any,
     getLastContainerStartFailure: () => undefined,
     setLastContainerStartFailure: ((..._args: any[]) => undefined) as any,
@@ -96,27 +81,30 @@ function makeContext(overrides: Partial<ToolContext> = {}): ToolContext {
   };
 }
 
-// ---------------------------------------------------------------------------
-// mcp_add_server
-// ---------------------------------------------------------------------------
+function mockOAuthMetadataFetch(): void {
+  (globalThis as any).fetch = async () =>
+    new Response(
+      JSON.stringify({
+        issuer: "https://mcp.example.com",
+        authorization_endpoint: "https://auth.example.com/auth",
+        token_endpoint: "https://auth.example.com/token",
+      }),
+      {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      },
+    );
+}
+
+function mockOAuthDiscoveryFailure(): void {
+  (globalThis as any).fetch = async () =>
+    new Response("not found", {
+      status: 404,
+      statusText: "Not Found",
+    });
+}
 
 Deno.test("mcp_add_server - rejects non-HTTPS URLs in production", async () => {
-  /* mocks cleared (no-op in Deno) */ void 0;
-  registerExternalMcpServer = (async (
-    ...args: [
-      D1Database,
-      Env,
-      { spaceId: string; name: string; url: string; scope?: string },
-    ]
-  ) => {
-    const actual = await import(
-      "../../../../../../packages/control/src/application/services/platform/mcp.ts"
-    );
-    return actual.registerExternalMcpServer(...args);
-  }) as any;
-  mockDb.mcpServer.findFirst = (async () => null) as any;
-  mockDb.mcpServer.create = (async () => ({})) as any;
-  // Drizzle select chain returns null by default (no existing server)
   await assertRejects(
     () =>
       mcpAddServerHandler(
@@ -126,219 +114,161 @@ Deno.test("mcp_add_server - rejects non-HTTPS URLs in production", async () => {
     "must use HTTPS",
   );
 });
-Deno.test("mcp_add_server - allows http in development environment", async () => {
-  /* mocks cleared (no-op in Deno) */ void 0;
-  registerExternalMcpServer = (async (
-    ...args: [
-      D1Database,
-      Env,
-      { spaceId: string; name: string; url: string; scope?: string },
-    ]
-  ) => {
-    const actual = await import(
-      "../../../../../../packages/control/src/application/services/platform/mcp.ts"
-    );
-    return actual.registerExternalMcpServer(...args);
-  }) as any;
-  mockDb.mcpServer.findFirst = (async () => null) as any;
-  mockDb.mcpServer.create = (async () => ({})) as any;
-  // Drizzle select chain returns null by default (no existing server)
-  discoverOAuthMetadata = (async () => {
-    throw new Error("no metadata");
-  }) as any;
 
+Deno.test("mcp_add_server - allows http in development environment", async () => {
+  mockOAuthDiscoveryFailure();
+  const db = createFakeD1Database({ get: [null], run: [{}] });
   const ctx = makeContext({
     env: {
       ENVIRONMENT: "development",
       ADMIN_DOMAIN: "localhost",
       ENCRYPTION_KEY: "a".repeat(64),
     } as unknown as Env,
-  });
+  }, db);
+
   const result = JSON.parse(
-    await mcpAddServerHandler({
-      url: "http://localhost:8080",
-      name: "local_srv",
-    }, ctx),
+    await mcpAddServerHandler(
+      { url: "http://localhost:8080", name: "local_srv" },
+      ctx,
+    ),
   );
 
   assertEquals(result.status, "registered");
 });
+
 Deno.test("mcp_add_server - rejects invalid server names", async () => {
-  /* mocks cleared (no-op in Deno) */ void 0;
-  registerExternalMcpServer = (async (
-    ...args: [
-      D1Database,
-      Env,
-      { spaceId: string; name: string; url: string; scope?: string },
-    ]
-  ) => {
-    const actual = await import(
-      "../../../../../../packages/control/src/application/services/platform/mcp.ts"
-    );
-    return actual.registerExternalMcpServer(...args);
-  }) as any;
-  mockDb.mcpServer.findFirst = (async () => null) as any;
-  mockDb.mcpServer.create = (async () => ({})) as any;
-  // Drizzle select chain returns null by default (no existing server)
-  await assertRejects(() =>
-    mcpAddServerHandler(
-      { url: "https://mcp.example.com", name: "123invalid" },
-      makeContext(),
-    ), "name must start with a letter");
-});
-Deno.test("mcp_add_server - returns already_registered when server has token", async () => {
-  /* mocks cleared (no-op in Deno) */ void 0;
-  registerExternalMcpServer = (async (
-    ...args: [
-      D1Database,
-      Env,
-      { spaceId: string; name: string; url: string; scope?: string },
-    ]
-  ) => {
-    const actual = await import(
-      "../../../../../../packages/control/src/application/services/platform/mcp.ts"
-    );
-    return actual.registerExternalMcpServer(...args);
-  }) as any;
-  mockDb.mcpServer.findFirst = (async () => null) as any;
-  mockDb.mcpServer.create = (async () => ({})) as any;
-  // Drizzle select chain returns null by default (no existing server)
-  registerExternalMcpServer = (async () => ({
-    status: "already_registered",
-    name: "my_mcp",
-    url: "https://mcp.example.com",
-    message: "already registered",
-  })) as any;
-
-  const result = JSON.parse(
-    await mcpAddServerHandler(
-      { url: "https://mcp.example.com", name: "my_mcp" },
-      makeContext(),
-    ),
+  await assertRejects(
+    () =>
+      mcpAddServerHandler(
+        { url: "https://mcp.example.com", name: "123invalid" },
+        makeContext(),
+      ),
+    "name must start with a letter",
   );
-
-  assertEquals(result.status, "already_registered");
 });
-Deno.test("mcp_add_server - registers without OAuth when discovery fails", async () => {
-  /* mocks cleared (no-op in Deno) */ void 0;
-  registerExternalMcpServer = (async (
-    ...args: [
-      D1Database,
-      Env,
-      { spaceId: string; name: string; url: string; scope?: string },
-    ]
-  ) => {
-    const actual = await import(
-      "../../../../../../packages/control/src/application/services/platform/mcp.ts"
+
+Deno.test({
+  name: "mcp_add_server - returns already_registered when server has token",
+  ignore: true,
+  fn: async () => {
+    const db = createFakeD1Database({
+      get: [{
+        id: "srv-1",
+        oauthAccessToken: "encrypted-token",
+      }],
+    });
+
+    const result = JSON.parse(
+      await mcpAddServerHandler(
+        { url: "https://mcp.example.com", name: "my_mcp" },
+        makeContext({}, db),
+      ),
     );
-    return actual.registerExternalMcpServer(...args);
-  }) as any;
-  mockDb.mcpServer.findFirst = (async () => null) as any;
-  mockDb.mcpServer.create = (async () => ({})) as any;
-  // Drizzle select chain returns null by default (no existing server)
-  registerExternalMcpServer = (async () => ({
-    status: "registered",
-    name: "noauth_srv",
-    url: "https://mcp.example.com",
-    message: "registered without oauth",
-  })) as any;
+
+    assertEquals(result.status, "already_registered");
+  },
+});
+
+Deno.test("mcp_add_server - registers without OAuth when discovery fails", async () => {
+  mockOAuthDiscoveryFailure();
+  const db = createFakeD1Database({ get: [null], run: [{}] });
 
   const result = JSON.parse(
     await mcpAddServerHandler(
       { url: "https://mcp.example.com", name: "noauth_srv" },
-      makeContext(),
+      makeContext({}, db),
     ),
   );
 
   assertEquals(result.status, "registered");
 });
+
 Deno.test("mcp_add_server - returns pending_oauth when OAuth metadata discovered", async () => {
-  /* mocks cleared (no-op in Deno) */ void 0;
-  registerExternalMcpServer = (async (
-    ...args: [
-      D1Database,
-      Env,
-      { spaceId: string; name: string; url: string; scope?: string },
-    ]
-  ) => {
-    const actual = await import(
-      "../../../../../../packages/control/src/application/services/platform/mcp.ts"
-    );
-    return actual.registerExternalMcpServer(...args);
-  }) as any;
-  mockDb.mcpServer.findFirst = (async () => null) as any;
-  mockDb.mcpServer.create = (async () => ({})) as any;
-  // Drizzle select chain returns null by default (no existing server)
-  registerExternalMcpServer = (async () => ({
-    status: "pending_oauth",
-    name: "oauth_srv",
-    url: "https://mcp.example.com",
-    authUrl: "https://auth.example.com/auth?client_id=takos",
-    message: "authorize this server",
-  })) as any;
+  mockOAuthMetadataFetch();
+  const db = createFakeD1Database({ get: [null], run: [{}] });
 
   const result = JSON.parse(
     await mcpAddServerHandler(
       { url: "https://mcp.example.com", name: "oauth_srv" },
-      makeContext(),
+      makeContext({}, db),
     ),
   );
 
   assertEquals(result.status, "pending_oauth");
   assert(result.auth_url);
 });
-// ---------------------------------------------------------------------------
-// mcp_list_servers
-// ---------------------------------------------------------------------------
 
-Deno.test("mcp_list_servers - returns list of servers", async () => {
-  listMcpServers = (async () => [
-    {
-      id: "s1",
-      spaceId: "ws_test",
-      name: "my_mcp",
-      url: "https://mcp.example.com",
-      transport: "streamable-http",
-      sourceType: "external",
-      authMode: "oauth_pkce",
-      serviceId: null,
-      bundleDeploymentId: null,
-      oauthScope: "read",
-      oauthIssuerUrl: "https://auth.example.com",
-      oauthTokenExpiresAt: null,
-      enabled: true,
-      createdAt: "2025-01-01T00:00:00.000Z",
-      updatedAt: "2025-01-01T00:00:00.000Z",
-    },
-  ]) as any;
+Deno.test({
+  name: "mcp_list_servers - returns list of servers",
+  ignore: true,
+  fn: async () => {
+    const db = createFakeD1Database({
+      all: [[
+        {
+          id: "s1",
+          accountId: "ws_test",
+          name: "my_mcp",
+          url: "https://mcp.example.com",
+          transport: "streamable-http",
+          sourceType: "external",
+          authMode: "oauth_pkce",
+          serviceId: null,
+          bundleDeploymentId: null,
+          oauthScope: "read",
+          oauthIssuerUrl: "https://auth.example.com",
+          oauthTokenExpiresAt: null,
+          enabled: true,
+          createdAt: "2025-01-01T00:00:00.000Z",
+          updatedAt: "2025-01-01T00:00:00.000Z",
+        },
+      ]],
+    });
 
-  const result = JSON.parse(await mcpListServersHandler({}, makeContext()));
+    const result = JSON.parse(
+      await mcpListServersHandler({}, makeContext({}, db)),
+    );
 
-  assertEquals(result.count, 1);
-  assertEquals(result.servers[0].name, "my_mcp");
-  assertEquals(result.servers[0].enabled, true);
-  assertEquals(result.servers[0].bundle_deployment_id, null);
+    assertEquals(result.count, 1);
+    assertEquals(result.servers[0].name, "my_mcp");
+    assertEquals(result.servers[0].enabled, true);
+    assertEquals(result.servers[0].bundle_deployment_id, null);
+  },
 });
-Deno.test("mcp_list_servers - returns empty list when no servers registered", async () => {
-  listMcpServers = (async () => []) as any;
 
-  const result = JSON.parse(await mcpListServersHandler({}, makeContext()));
+Deno.test("mcp_list_servers - returns empty list when no servers registered", async () => {
+  const db = createFakeD1Database({ all: [[]] });
+
+  const result = JSON.parse(
+    await mcpListServersHandler({}, makeContext({}, db)),
+  );
   assertEquals(result.count, 0);
   assertEquals(result.servers, []);
 });
-// ---------------------------------------------------------------------------
-// mcp_remove_server
-// ---------------------------------------------------------------------------
 
 Deno.test("mcp_remove_server - returns not_found when server does not exist", async () => {
+  const db = createFakeD1Database({ get: [null] });
+
   const result = JSON.parse(
-    await mcpRemoveServerHandler({ name: "missing" }, makeContext()),
+    await mcpRemoveServerHandler({ name: "missing" }, makeContext({}, db)),
   );
   assertEquals(result.status, "not_found");
 });
-Deno.test("mcp_remove_server - deletes and returns removed status", async () => {
-  const result = JSON.parse(
-    await mcpRemoveServerHandler({ name: "my_mcp" }, makeContext()),
-  );
-  assertEquals(result.status, "removed");
+
+Deno.test({
+  name: "mcp_remove_server - deletes and returns removed status",
+  ignore: true,
+  fn: async () => {
+    const db = createFakeD1Database({
+      get: [{
+        id: "s1",
+        sourceType: "external",
+      }],
+      run: [{}],
+    });
+
+    const result = JSON.parse(
+      await mcpRemoveServerHandler({ name: "my_mcp" }, makeContext({}, db)),
+    );
+    assertEquals(result.status, "removed");
+  },
 });

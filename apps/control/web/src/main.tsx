@@ -24,7 +24,7 @@ function ThemeSync() {
   });
 
   createEffect(() => {
-    const mq = window.matchMedia('(prefers-color-scheme: dark)');
+    const mq = globalThis.matchMedia('(prefers-color-scheme: dark)');
     const handler = (e: MediaQueryListEvent) => {
       setSystemTheme(e.matches ? 'dark' : 'light');
     };

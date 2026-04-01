@@ -1,4 +1,4 @@
-import { Command } from 'commander';
+import type { Command } from 'commander';
 import { cyan, dim, green, yellow } from '@std/fmt/colors';
 import { getStateDir } from '../../lib/state/state-file.ts';
 import { syncState } from '../../lib/state/sync.ts';

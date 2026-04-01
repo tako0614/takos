@@ -19,6 +19,19 @@ import { fileHandlers, fileHandlerMatchers } from '../../../infra/db/schema.ts';
 import { BadRequestError, NotFoundError } from 'takos-common/errors';
 import { requireOAuthScope, handleStorageError, storageBulkLimiter, MAX_BULK_OPERATION_ITEMS } from './storage-operations.ts';
 
+export const storageManagementRouteDeps = {
+  requireSpaceAccess,
+  listStorageFiles,
+  getStorageItem,
+  createFolder,
+  deleteStorageItem,
+  renameStorageItem,
+  moveStorageItem,
+  bulkDeleteStorageItems,
+  deleteR2Objects,
+  getDb,
+};
+
 const app = new Hono<AuthenticatedRouteEnv>()
   .use('/:spaceId/storage/bulk-delete', storageBulkLimiter.middleware())
   .use('/:spaceId/storage/bulk-move', storageBulkLimiter.middleware())
@@ -30,9 +43,9 @@ const app = new Hono<AuthenticatedRouteEnv>()
     const user = c.get('user');
     const spaceId = c.req.param('spaceId');
 
-    const access = await requireSpaceAccess(c, spaceId, user.id);
+    const access = await storageManagementRouteDeps.requireSpaceAccess(c, spaceId, user.id);
 
-    const db = getDb(c.env.DB);
+    const db = storageManagementRouteDeps.getDb(c.env.DB);
     const handlers = await db.select()
       .from(fileHandlers)
       .where(eq(fileHandlers.accountId, access.space.id))
@@ -76,9 +89,9 @@ const app = new Hono<AuthenticatedRouteEnv>()
     const { path: queryPath } = c.req.valid('query');
     const path = queryPath || '/';
 
-    const access = await requireSpaceAccess(c, spaceId, user.id);
+    const access = await storageManagementRouteDeps.requireSpaceAccess(c, spaceId, user.id);
 
-    const result = await listStorageFiles(c.env.DB, access.space.id, path);
+    const result = await storageManagementRouteDeps.listStorageFiles(c.env.DB, access.space.id, path);
 
     return c.json({ files: result.files, path, truncated: result.truncated });
   })
@@ -90,7 +103,7 @@ const app = new Hono<AuthenticatedRouteEnv>()
     const user = c.get('user');
     const spaceId = c.req.param('spaceId');
 
-    const access = await requireSpaceAccess(
+    const access = await storageManagementRouteDeps.requireSpaceAccess(
       c,
       spaceId,
       user.id,
@@ -104,7 +117,7 @@ const app = new Hono<AuthenticatedRouteEnv>()
     }
 
     try {
-      const folder = await createFolder(c.env.DB, access.space.id, user.id, {
+      const folder = await storageManagementRouteDeps.createFolder(c.env.DB, access.space.id, user.id, {
         name: body.name,
         parentPath: body.parent_path,
       });
@@ -121,9 +134,9 @@ const app = new Hono<AuthenticatedRouteEnv>()
     const spaceId = c.req.param('spaceId');
     const fileId = c.req.param('fileId');
 
-    const access = await requireSpaceAccess(c, spaceId, user.id);
+    const access = await storageManagementRouteDeps.requireSpaceAccess(c, spaceId, user.id);
 
-    const file = await getStorageItem(c.env.DB, access.space.id, fileId);
+    const file = await storageManagementRouteDeps.getStorageItem(c.env.DB, access.space.id, fileId);
     if (!file) {
       throw new NotFoundError('File or folder');
     }
@@ -138,7 +151,7 @@ const app = new Hono<AuthenticatedRouteEnv>()
     const spaceId = c.req.param('spaceId');
     const fileId = c.req.param('fileId');
 
-    const access = await requireSpaceAccess(
+    const access = await storageManagementRouteDeps.requireSpaceAccess(
       c,
       spaceId,
       user.id,
@@ -147,11 +160,11 @@ const app = new Hono<AuthenticatedRouteEnv>()
     );
 
     try {
-      const r2KeysToDelete = await deleteStorageItem(c.env.DB, access.space.id, fileId);
+      const r2KeysToDelete = await storageManagementRouteDeps.deleteStorageItem(c.env.DB, access.space.id, fileId);
 
       if (r2KeysToDelete.length > 0 && c.env.GIT_OBJECTS) {
         try {
-          await deleteR2Objects(c.env.GIT_OBJECTS, r2KeysToDelete);
+          await storageManagementRouteDeps.deleteR2Objects(c.env.GIT_OBJECTS, r2KeysToDelete);
         } catch {
           // R2 deletion failure is non-fatal; DB records are already removed
         }
@@ -171,7 +184,7 @@ const app = new Hono<AuthenticatedRouteEnv>()
     const spaceId = c.req.param('spaceId');
     const fileId = c.req.param('fileId');
 
-    const access = await requireSpaceAccess(
+    const access = await storageManagementRouteDeps.requireSpaceAccess(
       c,
       spaceId,
       user.id,
@@ -192,18 +205,18 @@ const app = new Hono<AuthenticatedRouteEnv>()
         // Move + rename: do move first, then rename in sequence
         // If rename fails after move, the move is still applied (partial update)
         // but this is preferable to silent data loss
-        file = await moveStorageItem(c.env.DB, access.space.id, fileId, {
+        file = await storageManagementRouteDeps.moveStorageItem(c.env.DB, access.space.id, fileId, {
           parentPath: body.parent_path,
         });
-        file = await renameStorageItem(c.env.DB, access.space.id, fileId, {
+        file = await storageManagementRouteDeps.renameStorageItem(c.env.DB, access.space.id, fileId, {
           name: body.name,
         });
       } else if (body.parent_path !== undefined) {
-        file = await moveStorageItem(c.env.DB, access.space.id, fileId, {
+        file = await storageManagementRouteDeps.moveStorageItem(c.env.DB, access.space.id, fileId, {
           parentPath: body.parent_path,
         });
       } else if (body.name) {
-        file = await renameStorageItem(c.env.DB, access.space.id, fileId, {
+        file = await storageManagementRouteDeps.renameStorageItem(c.env.DB, access.space.id, fileId, {
           name: body.name,
         });
       }
@@ -221,7 +234,7 @@ const app = new Hono<AuthenticatedRouteEnv>()
     const user = c.get('user');
     const spaceId = c.req.param('spaceId');
 
-    const access = await requireSpaceAccess(
+    const access = await storageManagementRouteDeps.requireSpaceAccess(
       c,
       spaceId,
       user.id,
@@ -238,11 +251,11 @@ const app = new Hono<AuthenticatedRouteEnv>()
     }
 
     try {
-      const bulkDeleteResult = await bulkDeleteStorageItems(c.env.DB, access.space.id, body.file_ids);
+      const bulkDeleteResult = await storageManagementRouteDeps.bulkDeleteStorageItems(c.env.DB, access.space.id, body.file_ids);
 
       if (bulkDeleteResult.r2Keys.length > 0 && c.env.GIT_OBJECTS) {
         try {
-          await deleteR2Objects(c.env.GIT_OBJECTS, bulkDeleteResult.r2Keys);
+          await storageManagementRouteDeps.deleteR2Objects(c.env.GIT_OBJECTS, bulkDeleteResult.r2Keys);
         } catch {
           // R2 deletion failure is non-fatal
         }
@@ -266,7 +279,7 @@ const app = new Hono<AuthenticatedRouteEnv>()
     const user = c.get('user');
     const spaceId = c.req.param('spaceId');
 
-    const access = await requireSpaceAccess(
+    const access = await storageManagementRouteDeps.requireSpaceAccess(
       c,
       spaceId,
       user.id,
@@ -290,7 +303,7 @@ const app = new Hono<AuthenticatedRouteEnv>()
 
     for (const fileId of body.file_ids) {
       try {
-        const file = await moveStorageItem(c.env.DB, access.space.id, fileId, { parentPath: body.parent_path });
+        const file = await storageManagementRouteDeps.moveStorageItem(c.env.DB, access.space.id, fileId, { parentPath: body.parent_path });
         moved.push(file);
       } catch (err) {
         errors.push({ file_id: fileId, error: err instanceof Error ? err.message : 'Failed to move' });
@@ -312,7 +325,7 @@ const app = new Hono<AuthenticatedRouteEnv>()
     const user = c.get('user');
     const spaceId = c.req.param('spaceId');
 
-    const access = await requireSpaceAccess(
+    const access = await storageManagementRouteDeps.requireSpaceAccess(
       c,
       spaceId,
       user.id,
@@ -336,7 +349,7 @@ const app = new Hono<AuthenticatedRouteEnv>()
         continue;
       }
       try {
-        const file = await renameStorageItem(c.env.DB, access.space.id, item.file_id, { name: item.name });
+        const file = await storageManagementRouteDeps.renameStorageItem(c.env.DB, access.space.id, item.file_id, { name: item.name });
         renamed.push(file);
       } catch (err) {
         errors.push({ file_id: item.file_id, error: err instanceof Error ? err.message : 'Failed to rename' });

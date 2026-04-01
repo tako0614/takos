@@ -315,7 +315,6 @@ function validateGitParams(
 }
 
 function sendGitResult(
-  c: Context<RuntimeEnv>,
   result: { status: number; headers: Record<string, string>; body: Buffer }
 ): Response {
   const headers = new Headers();
@@ -423,7 +422,9 @@ app.put('/git/:spaceId/:repoName.git/info/lfs/objects/:oid', async (c) => {
       if (!rawBody) {
         return badRequest(c, 'Missing request body');
       }
-      const nodeStream = Readable.fromWeb(rawBody as import('stream/web').ReadableStream);
+      const nodeStream = Readable.fromWeb(
+        rawBody as Parameters<typeof Readable.fromWeb>[0],
+      );
 
       await pipeline(nodeStream, sizeLimiter, fs.createWriteStream(tempPath, { flags: 'wx' }));
       await fsPromises.rename(tempPath, objectPath);
@@ -513,7 +514,7 @@ app.get('/git/:spaceId/:repoName.git/info/refs', async (c) => {
     if (typeof gitPathResult === 'object' && 'error' in gitPathResult) return gitPathResult.error;
     const gitPath = gitPathResult as string;
 
-    return sendGitResult(c, await runGitHttpBackend({
+    return sendGitResult(await runGitHttpBackend({
       projectRoot: REPOS_BASE_DIR,
       gitPath,
       service,
@@ -536,7 +537,6 @@ function createPackHandler(service: 'git-upload-pack' | 'git-receive-pack') {
       const rawBody = Buffer.from(await c.req.arrayBuffer());
 
       return sendGitResult(
-        c,
         await runGitHttpBackend({
           projectRoot: REPOS_BASE_DIR,
           gitPath,

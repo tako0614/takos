@@ -14,7 +14,6 @@ import {
 
 export type { ServiceTokenPayloadWithClaims };
 import {
-  AppError,
   AuthenticationError,
   ErrorCodes,
   InternalError,
@@ -23,6 +22,7 @@ import {
   NotFoundError,
   RateLimitError,
   ServiceUnavailableError,
+  type AppError,
   type ErrorCode,
   type ErrorResponse,
 } from '../errors.ts';
@@ -107,7 +107,9 @@ function isJwtFormat(token: string): boolean {
  * app.use('*', createServiceTokenMiddleware({ jwtPublicKey: '...' }));
  * ```
  */
-export function createServiceTokenMiddleware(config: ServiceTokenConfig) {
+export function createServiceTokenMiddleware(
+  config: ServiceTokenConfig,
+): (c: Context, next: Next) => Promise<Response | void> {
   const {
     jwtPublicKey,
     expectedIssuer,
@@ -194,7 +196,7 @@ export interface ErrorHandlerOptions {
  * ```
  */
 export function createErrorHandler(
-  options: ErrorHandlerOptions = {}
+  options: ErrorHandlerOptions = {},
 ): ErrorHandler {
   const { includeStack = false, logger = logError, transformError } = options;
 
@@ -245,7 +247,7 @@ export function createErrorHandler(
  * app.notFound(notFoundHandler);
  * ```
  */
-export function notFoundHandler(c: Context) {
+export function notFoundHandler(c: Context): Response {
   const error = new NotFoundError('Route');
   return c.json(error.toResponse(), 404);
 }
@@ -275,7 +277,7 @@ export function badRequest(
   c: Context,
   message = 'Bad request',
   details?: unknown
-) {
+): Response {
   return c.json(buildErrorBody(message, ErrorCodes.BAD_REQUEST, details), 400);
 }
 
@@ -286,14 +288,18 @@ export function notFound(
   c: Context,
   message = 'Not found',
   details?: unknown
-) {
+): Response {
   return c.json(buildErrorBody(message, ErrorCodes.NOT_FOUND, details), 404);
 }
 
 /**
  * 403 アクセス禁止
  */
-export function forbidden(c: Context, message = 'Access denied', details?: unknown) {
+export function forbidden(
+  c: Context,
+  message = 'Access denied',
+  details?: unknown,
+): Response {
   return c.json(buildErrorBody(message, ErrorCodes.FORBIDDEN, details), 403);
 }
 
@@ -304,6 +310,6 @@ export function internalError(
   c: Context,
   message = 'Internal server error',
   details?: unknown
-) {
+): Response {
   return c.json(buildErrorBody(message, ErrorCodes.INTERNAL_ERROR, details), 500);
 }

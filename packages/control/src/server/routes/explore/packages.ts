@@ -1,242 +1,327 @@
-import { Hono } from 'hono';
-import type { Env, User } from '../../../shared/types/index.ts';
+import { Hono } from "hono";
+import type { Env, User } from "../../../shared/types/index.ts";
 import {
   listCatalogItems,
-} from '../../../application/services/source/explore.ts';
+} from "../../../application/services/source/explore.ts";
 import {
+  getTakopackRatingSummary,
   searchPackages,
   suggestPackages,
-  getTakopackRatingSummary,
-} from '../../../application/services/source/explore-packages.ts';
-import { withCache, CacheTTL, CacheTags } from '../../middleware/cache.ts';
-import { checkSpaceAccess } from '../../../application/services/identity/space-access.ts';
-import { getDb } from '../../../infra/db/index.ts';
-import { repositories, repoReleases, repoReleaseAssets } from '../../../infra/db/schema.ts';
-import { eq, and, desc, asc, inArray } from 'drizzle-orm';
-import { toReleaseAssets } from '../../../application/services/source/repo-release-assets.ts';
-import { parsePagination } from '../../../shared/utils/index.ts';
-import { BadRequestError, AuthenticationError, AuthorizationError, NotFoundError, GoneError } from 'takos-common/errors';
+} from "../../../application/services/source/explore-packages.ts";
+import { CacheTags, CacheTTL, withCache } from "../../middleware/cache.ts";
+import { checkSpaceAccess } from "../../../application/services/identity/space-access.ts";
+import { getDb } from "../../../infra/db/index.ts";
+import {
+  repoReleaseAssets,
+  repoReleases,
+  repositories,
+} from "../../../infra/db/schema.ts";
+import { and, asc, desc, eq, inArray } from "drizzle-orm";
+import { toReleaseAssets } from "../../../application/services/source/repo-release-assets.ts";
+import { parsePagination } from "../../../shared/utils/index.ts";
+import {
+  AuthenticationError,
+  AuthorizationError,
+  BadRequestError,
+  GoneError,
+  NotFoundError,
+} from "takos-common/errors";
 import {
   buildCatalogSuggestions,
   EXPLORE_CATEGORIES,
   findRepoByUsernameAndName,
   normalizeSimpleFilter,
   parseExploreFilters,
-  validateExploreFilters,
   type ReleaseAsset,
-} from './explore-filters.ts';
+  validateExploreFilters,
+} from "./explore-filters.ts";
 
 type Variables = {
   user?: User;
 };
 
+export const exploreRouteDeps = {
+  listCatalogItems,
+};
+
 export default new Hono<{ Bindings: Env; Variables: Variables }>()
-  .get('/catalog', withCache({
-    ttl: CacheTTL.PUBLIC_LISTING,
-    cacheTag: CacheTags.EXPLORE,
-    queryParamsToInclude: [
-      'q',
-      'sort',
-      'type',
-      'category',
-      'language',
-      'license',
-      'since',
-      'tags',
-      'certified_only',
-      'space_id',
-      'limit',
-      'offset',
-    ],
-  }), async (c) => {
-    const user = c.get('user');
-    const filters = parseExploreFilters(c);
-    validateExploreFilters(c, filters);
+  .get(
+    "/catalog",
+    withCache({
+      ttl: CacheTTL.PUBLIC_LISTING,
+      cacheTag: CacheTags.EXPLORE,
+      queryParamsToInclude: [
+        "q",
+        "sort",
+        "type",
+        "category",
+        "language",
+        "license",
+        "since",
+        "tags",
+        "certified_only",
+        "space_id",
+        "limit",
+        "offset",
+      ],
+    }),
+    async (c) => {
+      const user = c.get("user");
+      const filters = parseExploreFilters(c);
+      validateExploreFilters(c, filters);
 
-    const sortRaw = (c.req.query('sort') || 'trending').trim().toLowerCase();
-    const sort = (
-      sortRaw === 'trending' ||
-      sortRaw === 'new' ||
-      sortRaw === 'stars' ||
-      sortRaw === 'updated' ||
-      sortRaw === 'downloads'
-    ) ? sortRaw : null;
-    if (!sort) {
-      throw new BadRequestError('Invalid sort');
-    }
-
-    const typeRaw = (c.req.query('type') || 'all').trim().toLowerCase();
-    const normalizedCatalogType = typeRaw === 'deployable-app' ? 'deployable-app' : typeRaw;
-    const catalogType = (
-      normalizedCatalogType === 'all'
-      || normalizedCatalogType === 'repo'
-      || normalizedCatalogType === 'deployable-app'
-      || normalizedCatalogType === 'official'
-    )
-      ? normalizedCatalogType
-      : null;
-    if (!catalogType) {
-      throw new BadRequestError('Invalid type');
-    }
-
-    const spaceIdRaw = c.req.query('space_id')?.trim();
-    let resolvedSpaceId: string | undefined;
-    if (spaceIdRaw) {
-      if (!user) {
-        throw new AuthenticationError('Authentication required for space_id');
+      const sortRaw = (c.req.query("sort") || "trending").trim().toLowerCase();
+      const sort = (
+          sortRaw === "trending" ||
+          sortRaw === "new" ||
+          sortRaw === "stars" ||
+          sortRaw === "updated" ||
+          sortRaw === "downloads"
+        )
+        ? sortRaw
+        : null;
+      if (!sort) {
+        throw new BadRequestError("Invalid sort");
       }
-      const access = await checkSpaceAccess(c.env.DB, spaceIdRaw, user.id);
-      if (!access) {
-        throw new AuthorizationError('Workspace access denied');
+
+      const typeRaw = (c.req.query("type") || "all").trim().toLowerCase();
+      const normalizedCatalogType = typeRaw === "deployable-app"
+        ? "deployable-app"
+        : typeRaw;
+      const catalogType = (
+          normalizedCatalogType === "all" ||
+          normalizedCatalogType === "repo" ||
+          normalizedCatalogType === "deployable-app" ||
+          normalizedCatalogType === "official"
+        )
+        ? normalizedCatalogType
+        : null;
+      if (!catalogType) {
+        throw new BadRequestError("Invalid type");
       }
-      resolvedSpaceId = access.space.id;
-    }
 
-    const tagsRaw = c.req.query('tags');
-    const tags = (tagsRaw || '')
-      .split(',')
-      .map((value) => value.trim().toLowerCase())
-      .filter(Boolean)
-      .slice(0, 10);
-    for (const tag of tags) {
-      if (tag.length > 64 || !/^[a-z0-9][a-z0-9_-]*$/.test(tag)) {
-        throw new BadRequestError('Invalid tags (expected comma-separated tag slugs)');
+      const spaceIdRaw = c.req.query("space_id")?.trim();
+      let resolvedSpaceId: string | undefined;
+      if (spaceIdRaw) {
+        if (!user) {
+          throw new AuthenticationError("Authentication required for space_id");
+        }
+        const access = await checkSpaceAccess(c.env.DB, spaceIdRaw, user.id);
+        if (!access) {
+          throw new AuthorizationError("Workspace access denied");
+        }
+        resolvedSpaceId = access.space.id;
       }
-    }
 
-    const result = await listCatalogItems(c.env.DB, {
-      sort,
-      type: catalogType,
-      ...parsePagination(c.req.query(), { limit: 20, maxLimit: 50 }),
-      searchQuery: c.req.query('q')?.trim() || '',
-      ...filters,
-      tagsRaw,
-      certifiedOnly: c.req.query('certified_only') === 'true',
-      spaceId: resolvedSpaceId,
-      userId: user?.id,
-    });
+      const tagsRaw = c.req.query("tags");
+      const tags = (tagsRaw || "")
+        .split(",")
+        .map((value) => value.trim().toLowerCase())
+        .filter(Boolean)
+        .slice(0, 10);
+      for (const tag of tags) {
+        if (tag.length > 64 || !/^[a-z0-9][a-z0-9_-]*$/.test(tag)) {
+          throw new BadRequestError(
+            "Invalid tags (expected comma-separated tag slugs)",
+          );
+        }
+      }
 
-    return c.json(result);
-  })
-  .get('/suggest', withCache({
-    ttl: CacheTTL.PUBLIC_LISTING,
-    cacheTag: CacheTags.EXPLORE,
-    queryParamsToInclude: ['q', 'limit'],
-  }), async (c) => {
-    const db = getDb(c.env.DB);
-    const q = c.req.query('q')?.trim() || '';
-    const { limit } = parsePagination(c.req.query(), { limit: 8, maxLimit: 20 });
+      const result = await exploreRouteDeps.listCatalogItems(c.env.DB, {
+        sort,
+        type: catalogType,
+        ...parsePagination(c.req.query(), { limit: 20, maxLimit: 50 }),
+        searchQuery: c.req.query("q")?.trim() || "",
+        ...filters,
+        tagsRaw,
+        certifiedOnly: c.req.query("certified_only") === "true",
+        spaceId: resolvedSpaceId,
+        userId: user?.id,
+      });
 
-    if (!q) {
-      return c.json({ users: [], repos: [] });
-    }
+      return c.json(result);
+    },
+  )
+  .get(
+    "/suggest",
+    withCache({
+      ttl: CacheTTL.PUBLIC_LISTING,
+      cacheTag: CacheTags.EXPLORE,
+      queryParamsToInclude: ["q", "limit"],
+    }),
+    async (c) => {
+      const db = getDb(c.env.DB);
+      const q = c.req.query("q")?.trim() || "";
+      const { limit } = parsePagination(c.req.query(), {
+        limit: 8,
+        maxLimit: 20,
+      });
 
-    const suggestions = await buildCatalogSuggestions(db, q, limit);
-    return c.json(suggestions);
-  })
-  .get('/catalog/suggest', withCache({
-    ttl: CacheTTL.PUBLIC_LISTING,
-    cacheTag: CacheTags.EXPLORE,
-    queryParamsToInclude: ['q', 'limit'],
-  }), async (c) => {
-    const db = getDb(c.env.DB);
-    const q = c.req.query('q')?.trim() || '';
-    const { limit } = parsePagination(c.req.query(), { limit: 8, maxLimit: 20 });
+      if (!q) {
+        return c.json({ users: [], repos: [] });
+      }
 
-    if (!q) {
-      return c.json({ users: [], repos: [] });
-    }
+      const suggestions = await buildCatalogSuggestions(db, q, limit);
+      return c.json(suggestions);
+    },
+  )
+  .get(
+    "/catalog/suggest",
+    withCache({
+      ttl: CacheTTL.PUBLIC_LISTING,
+      cacheTag: CacheTags.EXPLORE,
+      queryParamsToInclude: ["q", "limit"],
+    }),
+    async (c) => {
+      const db = getDb(c.env.DB);
+      const q = c.req.query("q")?.trim() || "";
+      const { limit } = parsePagination(c.req.query(), {
+        limit: 8,
+        maxLimit: 20,
+      });
 
-    const suggestions = await buildCatalogSuggestions(db, q, limit);
-    return c.json(suggestions);
-  })
+      if (!q) {
+        return c.json({ users: [], repos: [] });
+      }
+
+      const suggestions = await buildCatalogSuggestions(db, q, limit);
+      return c.json(suggestions);
+    },
+  )
   // Package Registry API
-  .get('/packages', withCache({
-    ttl: CacheTTL.PUBLIC_LISTING,
-    cacheTag: CacheTags.EXPLORE,
-    queryParamsToInclude: ['q', 'category', 'tags', 'certified_only', 'sort', 'limit', 'offset'],
-  }), async (c) => {
-    const sortParamRaw = (c.req.query('sort') || 'popular').trim().toLowerCase();
-    const category = normalizeSimpleFilter(c.req.query('category'), { maxLen: 32, pattern: /^[a-z0-9_-]+$/ });
-    const tagsRaw = c.req.query('tags');
+  .get(
+    "/packages",
+    withCache({
+      ttl: CacheTTL.PUBLIC_LISTING,
+      cacheTag: CacheTags.EXPLORE,
+      queryParamsToInclude: [
+        "q",
+        "category",
+        "tags",
+        "certified_only",
+        "sort",
+        "limit",
+        "offset",
+      ],
+    }),
+    async (c) => {
+      const sortParamRaw = (c.req.query("sort") || "popular").trim()
+        .toLowerCase();
+      const category = normalizeSimpleFilter(c.req.query("category"), {
+        maxLen: 32,
+        pattern: /^[a-z0-9_-]+$/,
+      });
+      const tagsRaw = c.req.query("tags");
 
-    if (category && !(EXPLORE_CATEGORIES as ReadonlyArray<string>).includes(category)) {
-      throw new BadRequestError('Invalid category');
-    }
-
-    const tags = (tagsRaw || '')
-      .split(',')
-      .map(s => s.trim().toLowerCase())
-      .filter(Boolean)
-      .slice(0, 10);
-    for (const t of tags) {
-      if (t.length > 64 || !/^[a-z0-9][a-z0-9_-]*$/.test(t)) {
-        throw new BadRequestError('Invalid tags (expected comma-separated tag slugs)');
+      if (
+        category &&
+        !(EXPLORE_CATEGORIES as ReadonlyArray<string>).includes(category)
+      ) {
+        throw new BadRequestError("Invalid category");
       }
-    }
 
-    const result = await searchPackages(c.env.DB, {
-      searchQuery: c.req.query('q')?.trim() || '',
-      sortParamRaw,
-      ...parsePagination(c.req.query()),
-      category,
-      tags,
-      certifiedOnly: c.req.query('certified_only') === 'true',
-    });
-
-    return c.json(result);
-  })
-  .get('/packages/suggest', withCache({
-    ttl: CacheTTL.PUBLIC_LISTING,
-    cacheTag: CacheTags.EXPLORE,
-    queryParamsToInclude: ['q', 'category', 'tags', 'limit'],
-  }), async (c) => {
-    const q = c.req.query('q')?.trim() || '';
-    const { limit } = parsePagination(c.req.query(), { limit: 10, maxLimit: 20 });
-    const category = normalizeSimpleFilter(c.req.query('category'), { maxLen: 32, pattern: /^[a-z0-9_-]+$/ });
-    const tagsRaw = c.req.query('tags');
-
-    if (!q) {
-      return c.json({ packages: [] });
-    }
-
-    if (category && !(EXPLORE_CATEGORIES as ReadonlyArray<string>).includes(category)) {
-      throw new BadRequestError('Invalid category');
-    }
-
-    const tags = (tagsRaw || '')
-      .split(',')
-      .map(s => s.trim().toLowerCase())
-      .filter(Boolean)
-      .slice(0, 10);
-    for (const t of tags) {
-      if (t.length > 64 || !/^[a-z0-9][a-z0-9_-]*$/.test(t)) {
-        throw new BadRequestError('Invalid tags (expected comma-separated tag slugs)');
+      const tags = (tagsRaw || "")
+        .split(",")
+        .map((s) => s.trim().toLowerCase())
+        .filter(Boolean)
+        .slice(0, 10);
+      for (const t of tags) {
+        if (t.length > 64 || !/^[a-z0-9][a-z0-9_-]*$/.test(t)) {
+          throw new BadRequestError(
+            "Invalid tags (expected comma-separated tag slugs)",
+          );
+        }
       }
-    }
 
-    const packages = await suggestPackages(c.env.DB, { query: q, limit, category, tags });
-    return c.json({ packages });
-  })
-  .get('/packages/:username/:repoName/latest', async (c) => {
-    const username = c.req.param('username');
-    const repoName = c.req.param('repoName');
+      const result = await searchPackages(c.env.DB, {
+        searchQuery: c.req.query("q")?.trim() || "",
+        sortParamRaw,
+        ...parsePagination(c.req.query()),
+        category,
+        tags,
+        certifiedOnly: c.req.query("certified_only") === "true",
+      });
+
+      return c.json(result);
+    },
+  )
+  .get(
+    "/packages/suggest",
+    withCache({
+      ttl: CacheTTL.PUBLIC_LISTING,
+      cacheTag: CacheTags.EXPLORE,
+      queryParamsToInclude: ["q", "category", "tags", "limit"],
+    }),
+    async (c) => {
+      const q = c.req.query("q")?.trim() || "";
+      const { limit } = parsePagination(c.req.query(), {
+        limit: 10,
+        maxLimit: 20,
+      });
+      const category = normalizeSimpleFilter(c.req.query("category"), {
+        maxLen: 32,
+        pattern: /^[a-z0-9_-]+$/,
+      });
+      const tagsRaw = c.req.query("tags");
+
+      if (!q) {
+        return c.json({ packages: [] });
+      }
+
+      if (
+        category &&
+        !(EXPLORE_CATEGORIES as ReadonlyArray<string>).includes(category)
+      ) {
+        throw new BadRequestError("Invalid category");
+      }
+
+      const tags = (tagsRaw || "")
+        .split(",")
+        .map((s) => s.trim().toLowerCase())
+        .filter(Boolean)
+        .slice(0, 10);
+      for (const t of tags) {
+        if (t.length > 64 || !/^[a-z0-9][a-z0-9_-]*$/.test(t)) {
+          throw new BadRequestError(
+            "Invalid tags (expected comma-separated tag slugs)",
+          );
+        }
+      }
+
+      const packages = await suggestPackages(c.env.DB, {
+        query: q,
+        limit,
+        category,
+        tags,
+      });
+      return c.json({ packages });
+    },
+  )
+  .get("/packages/:username/:repoName/latest", async (c) => {
+    const username = c.req.param("username");
+    const repoName = c.req.param("repoName");
     const db = getDb(c.env.DB);
 
     const repo = await findRepoByUsernameAndName(db, username, repoName);
 
-    if (!repo || repo.visibility !== 'public') {
-      throw new NotFoundError('Repository');
+    if (!repo || repo.visibility !== "public") {
+      throw new NotFoundError("Repository");
     }
 
     const releaseRows = await db.select().from(repoReleases).where(
-      and(eq(repoReleases.repoId, repo.id), eq(repoReleases.isDraft, false), eq(repoReleases.isPrerelease, false))
+      and(
+        eq(repoReleases.repoId, repo.id),
+        eq(repoReleases.isDraft, false),
+        eq(repoReleases.isPrerelease, false),
+      ),
     ).orderBy(desc(repoReleases.publishedAt)).limit(10).all();
 
     // Load assets for each release
-    const releaseIds = releaseRows.map(r => r.id);
+    const releaseIds = releaseRows.map((r) => r.id);
     const allAssets = releaseIds.length > 0
-      ? await db.select().from(repoReleaseAssets).where(inArray(repoReleaseAssets.releaseId, releaseIds)).orderBy(asc(repoReleaseAssets.createdAt)).all()
+      ? await db.select().from(repoReleaseAssets).where(
+        inArray(repoReleaseAssets.releaseId, releaseIds),
+      ).orderBy(asc(repoReleaseAssets.createdAt)).all()
       : [];
     const assetsByRelease = new Map<string, typeof allAssets>();
     for (const asset of allAssets) {
@@ -244,7 +329,7 @@ export default new Hono<{ Bindings: Env; Variables: Variables }>()
       list.push(asset);
       assetsByRelease.set(asset.releaseId, list);
     }
-    const releases = releaseRows.map(r => ({
+    const releases = releaseRows.map((r) => ({
       ...r,
       repoReleaseAssets: assetsByRelease.get(r.id) ?? [],
     }));
@@ -256,7 +341,7 @@ export default new Hono<{ Bindings: Env; Variables: Variables }>()
 
     for (const release of releases) {
       const assets = toReleaseAssets(release.repoReleaseAssets);
-      const takopackAsset = assets.find((a) => a.bundle_format === 'takopack');
+      const takopackAsset = assets.find((a) => a.bundle_format === "takopack");
       if (takopackAsset) {
         latestPackage = { release, asset: takopackAsset };
         break;
@@ -264,7 +349,7 @@ export default new Hono<{ Bindings: Env; Variables: Variables }>()
     }
 
     if (!latestPackage) {
-      throw new NotFoundError('Takopack release');
+      throw new NotFoundError("Takopack release");
     }
 
     const rating = await getTakopackRatingSummary(db, repo.id);
@@ -272,9 +357,12 @@ export default new Hono<{ Bindings: Env; Variables: Variables }>()
     return c.json({
       package: {
         name: repo.name,
-        app_id: latestPackage.asset.bundle_meta?.app_id || latestPackage.asset.bundle_meta?.name || repo.name,
-        version: latestPackage.asset.bundle_meta?.version || latestPackage.release.tag,
-        description: latestPackage.asset.bundle_meta?.description || latestPackage.release.description,
+        app_id: latestPackage.asset.bundle_meta?.app_id ||
+          latestPackage.asset.bundle_meta?.name || repo.name,
+        version: latestPackage.asset.bundle_meta?.version ||
+          latestPackage.release.tag,
+        description: latestPackage.asset.bundle_meta?.description ||
+          latestPackage.release.description,
         icon: latestPackage.asset.bundle_meta?.icon,
         repository: {
           id: repo.id,
@@ -305,24 +393,26 @@ export default new Hono<{ Bindings: Env; Variables: Variables }>()
       },
     });
   })
-  .get('/packages/:username/:repoName/versions', async (c) => {
-    const username = c.req.param('username');
-    const repoName = c.req.param('repoName');
+  .get("/packages/:username/:repoName/versions", async (c) => {
+    const username = c.req.param("username");
+    const repoName = c.req.param("repoName");
     const db = getDb(c.env.DB);
 
     const repo = await findRepoByUsernameAndName(db, username, repoName);
 
-    if (!repo || repo.visibility !== 'public') {
-      throw new NotFoundError('Repository');
+    if (!repo || repo.visibility !== "public") {
+      throw new NotFoundError("Repository");
     }
 
     const releaseRows = await db.select().from(repoReleases).where(
-      and(eq(repoReleases.repoId, repo.id), eq(repoReleases.isDraft, false))
+      and(eq(repoReleases.repoId, repo.id), eq(repoReleases.isDraft, false)),
     ).orderBy(desc(repoReleases.publishedAt)).all();
 
-    const releaseIds = releaseRows.map(r => r.id);
+    const releaseIds = releaseRows.map((r) => r.id);
     const allAssets = releaseIds.length > 0
-      ? await db.select().from(repoReleaseAssets).where(inArray(repoReleaseAssets.releaseId, releaseIds)).orderBy(asc(repoReleaseAssets.createdAt)).all()
+      ? await db.select().from(repoReleaseAssets).where(
+        inArray(repoReleaseAssets.releaseId, releaseIds),
+      ).orderBy(asc(repoReleaseAssets.createdAt)).all()
       : [];
     const assetsByRelease = new Map<string, typeof allAssets>();
     for (const asset of allAssets) {
@@ -330,20 +420,23 @@ export default new Hono<{ Bindings: Env; Variables: Variables }>()
       list.push(asset);
       assetsByRelease.set(asset.releaseId, list);
     }
-    const releases = releaseRows.map(r => ({
+    const releases = releaseRows.map((r) => ({
       ...r,
       repoReleaseAssets: assetsByRelease.get(r.id) ?? [],
     }));
 
     const versions = releases
-      .map(release => {
+      .map((release) => {
         const assets = toReleaseAssets(release.repoReleaseAssets);
-        const takopackAsset = assets.find((a) => a.bundle_format === 'takopack');
+        const takopackAsset = assets.find((a) =>
+          a.bundle_format === "takopack"
+        );
         if (!takopackAsset) return null;
 
         return {
           tag: release.tag,
-          app_id: takopackAsset.bundle_meta?.app_id || takopackAsset.bundle_meta?.name || repo.name,
+          app_id: takopackAsset.bundle_meta?.app_id ||
+            takopackAsset.bundle_meta?.name || repo.name,
           version: takopackAsset.bundle_meta?.version || release.tag,
           is_prerelease: release.isPrerelease,
           asset_id: takopackAsset.id,
@@ -357,33 +450,43 @@ export default new Hono<{ Bindings: Env; Variables: Variables }>()
     return c.json({ versions });
   })
   // Takopack Reviews API
-  .get('/packages/by-repo/:repoId/reviews', withCache({
-    ttl: CacheTTL.PUBLIC_CONTENT,
-    cacheTag: CacheTags.EXPLORE,
-    queryParamsToInclude: ['limit', 'offset'],
-  }), async (c) => {
-    const user = c.get('user');
-    const repoId = c.req.param('repoId');
-    const { limit, offset } = parsePagination(c.req.query(), { limit: 20, maxLimit: 50 });
-    const db = getDb(c.env.DB);
+  .get(
+    "/packages/by-repo/:repoId/reviews",
+    withCache({
+      ttl: CacheTTL.PUBLIC_CONTENT,
+      cacheTag: CacheTags.EXPLORE,
+      queryParamsToInclude: ["limit", "offset"],
+    }),
+    async (c) => {
+      const _user = c.get("user");
+      const repoId = c.req.param("repoId");
+      const { limit: _limit, offset: _offset } = parsePagination(c.req.query(), {
+        limit: 20,
+        maxLimit: 50,
+      });
+      const db = getDb(c.env.DB);
 
-    const repo = await db.select({ id: repositories.id, name: repositories.name }).from(repositories).where(
-      and(eq(repositories.id, repoId), eq(repositories.visibility, 'public'))
-    ).get();
-    if (!repo) {
-      throw new NotFoundError('Repository');
-    }
+      const repo = await db.select({
+        id: repositories.id,
+        name: repositories.name,
+      }).from(repositories).where(
+        and(eq(repositories.id, repoId), eq(repositories.visibility, "public")),
+      ).get();
+      if (!repo) {
+        throw new NotFoundError("Repository");
+      }
 
-    const rating = await getTakopackRatingSummary(db, repoId);
+      const rating = await getTakopackRatingSummary(db, repoId);
 
-    return c.json({
-      repo: { id: repo.id, name: repo.name },
-      rating,
-      reviews: [],
-      viewer_review: null,
-      has_more: false,
-    });
-  })
-  .post('/packages/by-repo/:repoId/reviews', async (c) => {
-    throw new GoneError('Bundle reviews are no longer supported');
+      return c.json({
+        repo: { id: repo.id, name: repo.name },
+        rating,
+        reviews: [],
+        viewer_review: null,
+        has_more: false,
+      });
+    },
+  )
+  .post("/packages/by-repo/:repoId/reviews", async (_c) => {
+    throw new GoneError("Bundle reviews are no longer supported");
   });

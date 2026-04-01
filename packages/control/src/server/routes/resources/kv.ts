@@ -15,6 +15,14 @@ import { logError } from '../../../shared/utils/logger.ts';
 import { getResourceTypeQueryValues } from '../../../application/services/resources/capabilities.ts';
 import { textDate } from '../../../shared/utils/db-guards.ts';
 
+export const kvRouteDeps = {
+  getDb,
+  getPortableKvStore,
+  isPortableResourceProvider,
+  createOptionalCloudflareWfpProvider,
+  checkResourceAccess,
+};
+
 function toResource(data: {
   id: string;
   ownerAccountId: string;
@@ -54,7 +62,7 @@ async function loadKvResource(
   resourceId: string,
   requiredPermissions?: Array<'read' | 'write' | 'admin'>,
 ) {
-  const db = getDb(c.env.DB);
+  const db = kvRouteDeps.getDb(c.env.DB);
   const resourceData = await db.select().from(resources).where(
     and(eq(resources.id, resourceId), inArray(resources.type, getResourceTypeQueryValues('kv'))),
   ).get();
@@ -66,7 +74,7 @@ async function loadKvResource(
   const resource = toResource(resourceData);
   const user = c.get('user');
   const hasAccess = resource.owner_id === user.id
-    || await checkResourceAccess(c.env.DB, resourceId, user.id, requiredPermissions);
+    || await kvRouteDeps.checkResourceAccess(c.env.DB, resourceId, user.id, requiredPermissions);
   if (!hasAccess) {
     throw new AuthorizationError();
   }
@@ -90,9 +98,9 @@ const resourcesKv = new Hono<AuthenticatedRouteEnv>()
     const resource = await loadKvResource(c, c.req.param('id'));
     const { limit } = parsePagination(c.req.query(), { limit: 100, maxLimit: 1000 });
 
-    if (isPortableResourceProvider(resource.provider_name)) {
+    if (kvRouteDeps.isPortableResourceProvider(resource.provider_name)) {
       try {
-        const kv = getPortableKvStore(resource);
+        const kv = kvRouteDeps.getPortableKvStore(resource);
         const result = await kv.list({
           prefix: c.req.query('prefix') || undefined,
           cursor: c.req.query('cursor') || undefined,
@@ -109,7 +117,7 @@ const resourcesKv = new Hono<AuthenticatedRouteEnv>()
     }
 
     try {
-      const wfp = createOptionalCloudflareWfpProvider(c.env);
+      const wfp = kvRouteDeps.createOptionalCloudflareWfpProvider(c.env);
       if (!wfp) {
         throw new InternalError('Cloudflare WFP not configured');
       }
@@ -129,9 +137,9 @@ const resourcesKv = new Hono<AuthenticatedRouteEnv>()
   const resource = await loadKvResource(c, c.req.param('id'));
   const key = decodeURIComponent(c.req.param('key'));
 
-  if (isPortableResourceProvider(resource.provider_name)) {
+  if (kvRouteDeps.isPortableResourceProvider(resource.provider_name)) {
     try {
-      const kv = getPortableKvStore(resource);
+      const kv = kvRouteDeps.getPortableKvStore(resource);
       const value = await kv.getWithMetadata(key, 'text');
       return c.json({ key, value: value.value, content_type: null, metadata: value.metadata });
     } catch (err) {
@@ -141,7 +149,7 @@ const resourcesKv = new Hono<AuthenticatedRouteEnv>()
   }
 
   try {
-    const wfp = createOptionalCloudflareWfpProvider(c.env);
+    const wfp = kvRouteDeps.createOptionalCloudflareWfpProvider(c.env);
     if (!wfp) {
       throw new InternalError('Cloudflare WFP not configured');
     }
@@ -162,9 +170,9 @@ const resourcesKv = new Hono<AuthenticatedRouteEnv>()
     const key = decodeURIComponent(c.req.param('key'));
     const body = c.req.valid('json') as { value: string };
 
-    if (isPortableResourceProvider(resource.provider_name)) {
+    if (kvRouteDeps.isPortableResourceProvider(resource.provider_name)) {
       try {
-        const kv = getPortableKvStore(resource);
+        const kv = kvRouteDeps.getPortableKvStore(resource);
         await kv.put(key, body.value);
         return c.json({ success: true });
       } catch (err) {
@@ -174,7 +182,7 @@ const resourcesKv = new Hono<AuthenticatedRouteEnv>()
     }
 
     try {
-      const wfp = createOptionalCloudflareWfpProvider(c.env);
+      const wfp = kvRouteDeps.createOptionalCloudflareWfpProvider(c.env);
       if (!wfp) {
         throw new InternalError('Cloudflare WFP not configured');
       }
@@ -190,9 +198,9 @@ const resourcesKv = new Hono<AuthenticatedRouteEnv>()
   const resource = await loadKvResource(c, c.req.param('id'), ['write', 'admin']);
   const key = decodeURIComponent(c.req.param('key'));
 
-  if (isPortableResourceProvider(resource.provider_name)) {
+  if (kvRouteDeps.isPortableResourceProvider(resource.provider_name)) {
     try {
-      const kv = getPortableKvStore(resource);
+      const kv = kvRouteDeps.getPortableKvStore(resource);
       await kv.delete(key);
       return c.json({ success: true });
     } catch (err) {
@@ -202,7 +210,7 @@ const resourcesKv = new Hono<AuthenticatedRouteEnv>()
   }
 
   try {
-    const wfp = createOptionalCloudflareWfpProvider(c.env);
+    const wfp = kvRouteDeps.createOptionalCloudflareWfpProvider(c.env);
     if (!wfp) {
       throw new InternalError('Cloudflare WFP not configured');
     }

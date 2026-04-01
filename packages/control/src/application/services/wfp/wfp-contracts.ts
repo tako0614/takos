@@ -10,7 +10,7 @@
  * the per-domain method modules.  They are NOT part of the public API.
  */
 
-import type { CFAPIResponse, CloudflareAPIError, WFPConfig } from './client.ts';
+import type { CFAPIResponse, CloudflareAPIError as _CloudflareAPIError, WFPConfig } from './client.ts';
 
 // ---------------------------------------------------------------------------
 // Binding types (public – re-exported from service.ts / index.ts)

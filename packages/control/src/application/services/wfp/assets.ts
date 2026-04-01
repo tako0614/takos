@@ -14,6 +14,10 @@ import { bytesToHex, bytesToBase64 } from '../../../shared/utils/encoding-utils.
 
 const ASSET_UPLOAD_TIMEOUT_MS = 60_000;
 
+export const assetUploadDeps = {
+  digestSha256: async (data: BufferSource): Promise<ArrayBuffer> => crypto.subtle.digest('SHA-256', data),
+};
+
 /** Manifest entry for static assets upload */
 export interface AssetManifestEntry {
   hash: string;
@@ -151,7 +155,7 @@ export async function uploadAllAssets(
   const fileMap: Record<string, { path: string; content: ArrayBuffer; contentType: string }> = {};
 
   for (const file of files) {
-    const hashBuffer = await crypto.subtle.digest('SHA-256', file.content);
+    const hashBuffer = await assetUploadDeps.digestSha256(file.content);
     const fullHash = bytesToHex(new Uint8Array(hashBuffer));
     // Use first 32 hex characters as required by Cloudflare
     const hash = fullHash.slice(0, 32);

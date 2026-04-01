@@ -20,21 +20,21 @@ export function StorageBulkActions(props: StorageBulkActionsProps) {
           {t('selectedCount').replace('{count}', String(props.selectedCount))}
         </span>
         <div class="w-px h-5 bg-zinc-700 dark:bg-zinc-300" />
-        <button
+        <button type="button"
           class="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm hover:bg-zinc-800 dark:hover:bg-zinc-200 transition-colors"
           onClick={props.onMove}
         >
           <Icons.FolderOpen class="w-4 h-4" />
           {t('move') || 'Move'}
         </button>
-        <button
+        <button type="button"
           class="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm hover:bg-zinc-800 dark:hover:bg-zinc-200 transition-colors"
           onClick={props.onRename}
         >
           <Icons.Edit class="w-4 h-4" />
           {t('rename')}
         </button>
-        <button
+        <button type="button"
           class="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm text-red-400 dark:text-red-500 hover:bg-zinc-800 dark:hover:bg-zinc-200 transition-colors"
           onClick={props.onDelete}
         >
@@ -42,7 +42,7 @@ export function StorageBulkActions(props: StorageBulkActionsProps) {
           {t('delete')}
         </button>
         <div class="w-px h-5 bg-zinc-700 dark:bg-zinc-300" />
-        <button
+        <button type="button"
           class="p-1.5 rounded-lg hover:bg-zinc-800 dark:hover:bg-zinc-200 transition-colors"
           onClick={props.onClear}
           title={t('clear')}

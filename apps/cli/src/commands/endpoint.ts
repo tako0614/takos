@@ -1,4 +1,4 @@
-import { Command } from 'commander';
+import type { Command } from 'commander';
 import { green, red } from '@std/fmt/colors';
 import { cliExit } from '../lib/command-exit.ts';
 import { getConfig, isContainerMode, saveApiUrl } from '../lib/config.ts';

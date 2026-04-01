@@ -29,6 +29,7 @@ export function ProfileErrorState(props: ProfileErrorStateProps) {
         <span class="mt-3 text-lg">{props.message}</span>
         <Show when={props.onBack}>
           <button
+            type="button"
             class="mt-4 px-4 py-2 rounded-lg bg-zinc-100 dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100 hover:bg-zinc-200 dark:hover:bg-zinc-700 transition-colors"
             onClick={props.onBack}
           >

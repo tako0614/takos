@@ -8,7 +8,16 @@
  * Keep this in sync with the CLI's AppManifest type.
  */
 
-export type AppResourceType = 'd1' | 'r2' | 'kv' | 'secretRef' | 'queue' | 'vectorize' | 'analyticsEngine' | 'workflow' | 'durableObject';
+export type AppResourceType =
+  | "d1"
+  | "r2"
+  | "kv"
+  | "secretRef"
+  | "queue"
+  | "vectorize"
+  | "analyticsEngine"
+  | "workflow"
+  | "durableObject";
 
 interface AppResourceBase {
   binding?: string;
@@ -17,29 +26,41 @@ interface AppResourceBase {
 }
 
 interface D1Resource extends AppResourceBase {
-  type: 'd1';
+  type: "d1";
   migrations?: string | { up: string; down: string };
 }
 
-interface R2Resource extends AppResourceBase { type: 'r2'; }
-interface KVResource extends AppResourceBase { type: 'kv'; }
-interface SecretRefResource extends AppResourceBase { type: 'secretRef'; }
+interface R2Resource extends AppResourceBase {
+  type: "r2";
+}
+interface KVResource extends AppResourceBase {
+  type: "kv";
+}
+interface SecretRefResource extends AppResourceBase {
+  type: "secretRef";
+}
 
 interface VectorizeResource extends AppResourceBase {
-  type: 'vectorize';
+  type: "vectorize";
   /** For vectorize: index configuration */
   vectorize: { dimensions: number; metric: string };
 }
 
 interface QueueResource extends AppResourceBase {
-  type: 'queue';
+  type: "queue";
   /** For queue: queue configuration */
   queue?: { maxRetries?: number; deadLetterQueue?: string };
 }
 
-interface AnalyticsEngineResource extends AppResourceBase { type: 'analyticsEngine'; }
-interface WorkflowResource extends AppResourceBase { type: 'workflow'; }
-interface DurableObjectResource extends AppResourceBase { type: 'durableObject'; }
+interface AnalyticsEngineResource extends AppResourceBase {
+  type: "analyticsEngine";
+}
+interface WorkflowResource extends AppResourceBase {
+  type: "workflow";
+}
+interface DurableObjectResource extends AppResourceBase {
+  type: "durableObject";
+}
 
 export type AppResource =
   | D1Resource
@@ -62,7 +83,7 @@ export interface WorkerServiceBuild {
 }
 
 export interface WorkerService {
-  type: 'worker';
+  type: "worker";
   build: WorkerServiceBuild;
   env?: Record<string, string>;
   bindings?: {
@@ -84,8 +105,8 @@ export interface AppRoute {
 }
 
 export interface AppManifest {
-  apiVersion: 'takos.dev/v1alpha1';
-  kind: 'App';
+  apiVersion: "takos.dev/v1alpha1";
+  kind: "App";
   metadata: {
     name: string;
     appId?: string;
@@ -101,7 +122,7 @@ export interface AppManifest {
       required?: string[];
     };
     resources?: Record<string, AppResource>;
-    workers: Record<string, WorkerService>;
+    workers?: Record<string, WorkerService>;
     routes?: AppRoute[];
   };
 }

@@ -29,7 +29,7 @@ export type UseSseConnectionManagerResult = ConnectionManagerResult;
 export function useSseConnectionManager(
   options: UseSseConnectionManagerOptions,
 ): UseSseConnectionManagerResult {
-  let eventSourceRef: MutableRefObject<EventSource | null> = { current: null };
+  const eventSourceRef: MutableRefObject<EventSource | null> = { current: null };
 
   const cleanupTransport = (): void => {
     if (eventSourceRef.current) {

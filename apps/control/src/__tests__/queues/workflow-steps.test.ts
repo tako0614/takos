@@ -2,7 +2,6 @@ import { assert, assertEquals } from "jsr:@std/assert";
 
 import { executeStep } from "@/queues/workflow-steps";
 import type { StepExecutionContext } from "@/queues/workflow-types";
-import type { Step } from "takos-actions-engine";
 
 type FetchCall = {
   request: Request;

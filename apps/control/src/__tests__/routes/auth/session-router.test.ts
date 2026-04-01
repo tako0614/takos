@@ -1,7 +1,7 @@
 import { assertEquals, assertStringIncludes } from "jsr:@std/assert";
 
 import type { Env } from "@/types";
-import { authSessionRouter } from "../../../../../packages/control/src/server/routes/auth/session.ts";
+import { authSessionRouter } from "../../../../../../packages/control/src/server/routes/auth/session.ts";
 
 function createEnv(
   overrides: {
@@ -29,7 +29,7 @@ function createEnv(
 
 Deno.test("auth session callback returns 400 when OAuth provider returns an error", async () => {
   const response = await authSessionRouter.fetch(
-    new Request("https://test.takos.jp/auth/callback?error=access_denied"),
+    new Request("https://test.takos.jp/callback?error=access_denied"),
     createEnv(),
     {} as ExecutionContext,
   );
@@ -40,7 +40,7 @@ Deno.test("auth session callback returns 400 when OAuth provider returns an erro
 
 Deno.test("auth session callback returns 400 when code is missing", async () => {
   const response = await authSessionRouter.fetch(
-    new Request("https://test.takos.jp/auth/callback?state=oauth-state"),
+    new Request("https://test.takos.jp/callback?state=oauth-state"),
     createEnv(),
     {} as ExecutionContext,
   );
@@ -51,7 +51,7 @@ Deno.test("auth session callback returns 400 when code is missing", async () => 
 
 Deno.test("auth session login returns 500 when Google OAuth is not configured", async () => {
   const response = await authSessionRouter.fetch(
-    new Request("https://test.takos.jp/auth/login"),
+    new Request("https://test.takos.jp/login"),
     createEnv(),
     {} as ExecutionContext,
   );

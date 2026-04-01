@@ -18,7 +18,7 @@ export function StorageEmptyState(props: {
       <Show when={props.downloadUrl}>
         <Button
           variant="primary"
-          onClick={() => window.open(props.downloadUrl!, '_blank', 'noopener,noreferrer')}
+          onClick={() => globalThis.open(props.downloadUrl!, '_blank', 'noopener,noreferrer')}
           leftIcon={<Icons.Download class="w-4 h-4" />}
         >
           {props.t('download')}

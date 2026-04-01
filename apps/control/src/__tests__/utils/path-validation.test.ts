@@ -27,24 +27,24 @@ import { assertEquals, assertThrows } from 'jsr:@std/assert';
 })
   Deno.test('validatePath - throws on path traversal (..)', () => {
   // The ".." is detected after NFC normalization and rejected
-    assertThrows(() => { () => validatePath('src/../lib/file.ts'); }, 'path traversal');
+    assertThrows(() => validatePath('src/../lib/file.ts'), Error, 'path traversal');
 })
   Deno.test('validatePath - throws on double-encoded characters', () => {
-  assertThrows(() => { () => validatePath('src/%252e%252e/etc'); }, 'double-encoded');
+  assertThrows(() => validatePath('src/%252e%252e/etc'), Error, 'double-encoded');
 })
   Deno.test('validatePath - throws on encoded null bytes', () => {
-  assertThrows(() => { () => validatePath('src/%00/file'); }, 'null bytes');
+  assertThrows(() => validatePath('src/%00/file'), Error, 'null bytes');
 })
   Deno.test('validatePath - throws on raw null bytes', () => {
-  assertThrows(() => { () => validatePath('src/\0file'); }, 'null bytes');
+  assertThrows(() => validatePath('src/\0file'), Error, 'null bytes');
 })
   Deno.test('validatePath - throws on confusable Unicode dots', () => {
   // U+2024 = one dot leader
-    assertThrows(() => { () => validatePath('src/\u2024\u2024/etc'); }, 'confusable Unicode');
+    assertThrows(() => validatePath('src/\u2024\u2024/etc'), Error, 'confusable Unicode');
 })
   Deno.test('validatePath - throws on confusable Unicode slashes', () => {
   // U+FF0F = fullwidth solidus
-    assertThrows(() => { () => validatePath('src\uFF0Fetc'); }, 'confusable Unicode');
+    assertThrows(() => validatePath('src\uFF0Fetc'), Error, 'confusable Unicode');
 })
   Deno.test('validatePath - converts fullwidth ASCII characters', () => {
   // U+FF41 = fullwidth 'a'
@@ -53,26 +53,26 @@ import { assertEquals, assertThrows } from 'jsr:@std/assert';
 })
   Deno.test('validatePath - throws on fullwidth dot characters (confusable)', () => {
   // U+FF0E = fullwidth full stop, caught by confusable pattern before conversion
-    assertThrows(() => { () => validatePath('\uFF0E\uFF0E/secret'); }, 'confusable Unicode');
+    assertThrows(() => validatePath('\uFF0E\uFF0E/secret'), Error, 'confusable Unicode');
 })
   Deno.test('validatePath - strips zero-width characters', () => {
   const result = validatePath('src/\u200bfile.ts');
     assertEquals(result, 'src/file.ts');
 })
   Deno.test('validatePath - throws on system paths (/proc/)', () => {
-  assertThrows(() => { () => validatePath('something/proc/self'); }, 'system paths');
+  assertThrows(() => validatePath('something/proc/self'), Error, 'system paths');
 })
   Deno.test('validatePath - throws on /etc/passwd', () => {
-  assertThrows(() => { () => validatePath('something/etc/passwd'); }, 'system paths');
+  assertThrows(() => validatePath('something/etc/passwd'), Error, 'system paths');
 })
   Deno.test('validatePath - throws on /etc/shadow', () => {
-  assertThrows(() => { () => validatePath('something/etc/shadow'); }, 'system paths');
+  assertThrows(() => validatePath('something/etc/shadow'), Error, 'system paths');
 })
   Deno.test('validatePath - throws on dangerous path patterns (/tmp/)', () => {
-  assertThrows(() => { () => validatePath('something/tmp/exploit'); }, 'potentially dangerous');
+  assertThrows(() => validatePath('something/tmp/exploit'), Error, 'potentially dangerous');
 })
   Deno.test('validatePath - throws on /home/ pattern', () => {
-  assertThrows(() => { () => validatePath('something/home/user'); }, 'potentially dangerous');
+  assertThrows(() => validatePath('something/home/user'), Error, 'potentially dangerous');
 })
   Deno.test('validatePath - passes through non-hex percent sequences without decoding', () => {
   // %ZZ does not match the hex pattern /%[0-9a-f]{2}/i, so it's not decoded
@@ -85,7 +85,7 @@ import { assertEquals, assertThrows } from 'jsr:@std/assert';
 })
   Deno.test('validatePath - throws on deeply nested traversal', () => {
   // The ".." patterns are detected before stripping
-    assertThrows(() => { () => validatePath('a/b/../../c'); }, 'path traversal');
+    assertThrows(() => validatePath('a/b/../../c'), Error, 'path traversal');
 })
   Deno.test('validatePath - strips Windows drive letter (C:) making the path relative', () => {
   // C: prefix is removed by the normalization, leaving "file.txt"

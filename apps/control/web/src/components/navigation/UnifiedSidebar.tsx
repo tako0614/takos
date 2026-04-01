@@ -79,6 +79,7 @@ export function UnifiedSidebar(props: UnifiedSidebarProps) {
             {/* Header: back button + space name */}
             <div class="px-4 py-4">
               <button
+                type="button"
                 class="flex items-center gap-2 text-zinc-600 dark:text-zinc-300 hover:text-zinc-900 dark:hover:text-zinc-100 transition-colors text-sm font-medium"
                 onClick={callbacks.onExitSpace}
               >
@@ -90,6 +91,7 @@ export function UnifiedSidebar(props: UnifiedSidebarProps) {
             {/* Primary: Chat */}
             <div class="px-3 pb-2">
               <button
+                type="button"
                 class={isChatActive() ? PRIMARY_ROW_ACTIVE : PRIMARY_ROW_DEFAULT}
                 onClick={callbacks.onNavigateSpaceChat}
               >
@@ -101,6 +103,7 @@ export function UnifiedSidebar(props: UnifiedSidebarProps) {
             {/* Nav items */}
             <div class="px-3 space-y-0.5">
               <button
+                type="button"
                 class={isStorageActive() ? ROW_ACTIVE : ROW_DEFAULT}
                 onClick={callbacks.onNavigateSpaceStorage}
               >
@@ -108,6 +111,7 @@ export function UnifiedSidebar(props: UnifiedSidebarProps) {
                 <span>{t('storage')}</span>
               </button>
               <button
+                type="button"
                 class={isDeployActive() ? ROW_ACTIVE : ROW_DEFAULT}
                 onClick={callbacks.onNavigateSpaceDeploy}
               >
@@ -115,6 +119,7 @@ export function UnifiedSidebar(props: UnifiedSidebarProps) {
                 <span>{t('deployNav')}</span>
               </button>
               <button
+                type="button"
                 class={isReposActive() ? ROW_ACTIVE : ROW_DEFAULT}
                 onClick={callbacks.onNavigateSpaceRepos}
               >
@@ -122,6 +127,7 @@ export function UnifiedSidebar(props: UnifiedSidebarProps) {
                 <span>{t('repos')}</span>
               </button>
               <button
+                type="button"
                 class={isAppsActive() ? ROW_ACTIVE : ROW_DEFAULT}
                 onClick={callbacks.onNavigateSpaceApps}
               >
@@ -134,6 +140,7 @@ export function UnifiedSidebar(props: UnifiedSidebarProps) {
             <div class="mt-6 px-4 mb-2 flex items-center justify-between">
               <span class={SECTION_LABEL}>{t('threads')}</span>
               <button
+                type="button"
                 onClick={callbacks.onNavigateSpaceChat}
                 class="text-zinc-500 hover:text-zinc-300 transition-colors"
                 aria-label={t('newChat')}
@@ -151,6 +158,7 @@ export function UnifiedSidebar(props: UnifiedSidebarProps) {
             {/* Bottom: Space Settings + profile */}
             <div class="border-t border-zinc-100 dark:border-zinc-800 p-3 space-y-0.5">
               <button
+                type="button"
                 class={isWsSettingsActive() ? ROW_ACTIVE : ROW_DEFAULT}
                 onClick={callbacks.onNavigateSpaceSettings}
               >
@@ -178,6 +186,7 @@ export function UnifiedSidebar(props: UnifiedSidebarProps) {
 
         <div class="px-3 pb-2 space-y-1">
           <button
+            type="button"
             class={isAppsActive() ? PRIMARY_ROW_ACTIVE : PRIMARY_ROW_DEFAULT}
             onClick={callbacks.onNavigateApps}
           >
@@ -185,6 +194,7 @@ export function UnifiedSidebar(props: UnifiedSidebarProps) {
             <span>{t('apps')}</span>
           </button>
           <button
+            type="button"
             class={isNewChatActive() ? ROW_ACTIVE : ROW_DEFAULT}
             onClick={callbacks.onNewChat}
           >
@@ -195,6 +205,7 @@ export function UnifiedSidebar(props: UnifiedSidebarProps) {
 
         <div class="px-3 space-y-0.5">
           <button
+            type="button"
             class={ROW_DEFAULT}
             onClick={callbacks.onOpenSearch}
           >
@@ -202,6 +213,7 @@ export function UnifiedSidebar(props: UnifiedSidebarProps) {
             <span>{t('search')}</span>
           </button>
           <button
+            type="button"
             class={isStorageActive() ? ROW_ACTIVE : ROW_DEFAULT}
             onClick={callbacks.onNavigateStorage}
           >
@@ -209,6 +221,7 @@ export function UnifiedSidebar(props: UnifiedSidebarProps) {
             <span>{t('storage')}</span>
           </button>
           <button
+            type="button"
             class={isStoreActive() ? ROW_ACTIVE : ROW_DEFAULT}
             onClick={callbacks.onNavigateStore}
           >
@@ -219,7 +232,12 @@ export function UnifiedSidebar(props: UnifiedSidebarProps) {
 
         <div class="mt-6 px-4 mb-2 flex items-center justify-between">
           <span class={SECTION_LABEL}>{t('projects')}</span>
-          <button onClick={callbacks.onCreateSpace} class="text-zinc-500 hover:text-zinc-300 transition-colors" aria-label={t('createSpace')}>
+          <button
+            type="button"
+            onClick={callbacks.onCreateSpace}
+            class="text-zinc-500 hover:text-zinc-300 transition-colors"
+            aria-label={t('createSpace')}
+          >
             <Icons.Plus class="w-4 h-4" />
           </button>
         </div>
@@ -238,6 +256,7 @@ export function UnifiedSidebar(props: UnifiedSidebarProps) {
                 <div class="space-y-1">
                   <div class="group relative">
                     <button
+                      type="button"
                       class={active() ? ROW_ACTIVE : ROW_DEFAULT}
                       onClick={() => callbacks.onEnterSpace(ws)}
                     >
@@ -245,6 +264,7 @@ export function UnifiedSidebar(props: UnifiedSidebarProps) {
                       <span class="flex-1 truncate text-left">{ws.name}</span>
                     </button>
                     <button
+                      type="button"
                       class="absolute right-8 top-1/2 -translate-y-1/2 opacity-0 group-hover:opacity-100 w-5 h-5 flex items-center justify-center rounded text-zinc-500 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100 hover:bg-zinc-200 dark:hover:bg-zinc-600 transition-all"
                       onClick={(e) => {
                         e.stopPropagation();
@@ -257,6 +277,7 @@ export function UnifiedSidebar(props: UnifiedSidebarProps) {
                       <Icons.ChevronDown class={`w-3 h-3 transition-transform ${isExpanded() ? 'rotate-180' : ''}`} />
                     </button>
                     <button
+                      type="button"
                       class="absolute right-2 top-1/2 -translate-y-1/2 opacity-0 group-hover:opacity-100 w-5 h-5 flex items-center justify-center rounded text-zinc-500 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100 hover:bg-zinc-200 dark:hover:bg-zinc-600 transition-all"
                       onClick={(e) => {
                         e.stopPropagation();
@@ -277,6 +298,7 @@ export function UnifiedSidebar(props: UnifiedSidebarProps) {
                       }>
                         <For each={spaceThreads()}>{(thread) => (
                           <button
+                            type="button"
                             class={
                               props.selectedThreadId === thread.id
                                 ? 'w-full flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs bg-zinc-100 dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100'
@@ -309,6 +331,7 @@ export function UnifiedSidebar(props: UnifiedSidebarProps) {
 
         <div class="border-t border-zinc-100 dark:border-zinc-800 p-3 space-y-0.5">
           <button
+            type="button"
             class={isDeployActive() ? ROW_ACTIVE : ROW_DEFAULT}
             onClick={callbacks.onNavigateDeploy}
           >
@@ -316,13 +339,14 @@ export function UnifiedSidebar(props: UnifiedSidebarProps) {
             <span>{t('deployNav')}</span>
           </button>
           <button
+            type="button"
             class={isReposActive() ? ROW_ACTIVE : ROW_DEFAULT}
             onClick={callbacks.onNavigateRepos}
           >
             <Icons.GitBranch class="w-4 h-4 shrink-0" />
             <span>{t('repos')}</span>
           </button>
-          <button class={ROW_DEFAULT} onClick={callbacks.onOpenAgentModal}>
+          <button type="button" class={ROW_DEFAULT} onClick={callbacks.onOpenAgentModal}>
             <Icons.Sparkles class="w-4 h-4 shrink-0" />
             <span>{t('agentSettings')}</span>
           </button>

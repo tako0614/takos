@@ -10,6 +10,13 @@ import { resolveRef } from './refs.ts';
 import { getCommit, getCommitLog } from './commit-index.ts';
 import { getTree } from './tree-ops.ts';
 
+export const readableCommitDeps = {
+  resolveRef,
+  getCommit,
+  getCommitLog,
+  getTree,
+};
+
 export type ResolveReadableCommitFailureReason = 'ref_not_found' | 'commit_not_found' | 'tree_not_found';
 
 export type ResolveReadableCommitResult =
@@ -33,23 +40,23 @@ export async function resolveReadableCommitFromRef(
   ref: string,
   options?: { fallbackLimit?: number },
 ): Promise<ResolveReadableCommitResult> {
-  const refCommitSha = await resolveRef(db, repoId, ref);
+  const refCommitSha = await readableCommitDeps.resolveRef(db, repoId, ref);
   if (!refCommitSha) return { ok: false, reason: 'ref_not_found' };
 
-  const primary = await getCommit(db, bucket, repoId, refCommitSha);
+  const primary = await readableCommitDeps.getCommit(db, bucket, repoId, refCommitSha);
   if (primary) {
-    const primaryTree = await getTree(bucket, primary.tree);
+    const primaryTree = await readableCommitDeps.getTree(bucket, primary.tree);
     if (primaryTree) {
       return { ok: true, refCommitSha, resolvedCommitSha: primary.sha, degraded: false, commit: primary };
     }
   }
 
   const fallbackLimit = Math.max(1, options?.fallbackLimit ?? 50);
-  const history = await getCommitLog(db, bucket, repoId, refCommitSha, fallbackLimit);
+  const history = await readableCommitDeps.getCommitLog(db, bucket, repoId, refCommitSha, fallbackLimit);
 
   for (const candidate of history) {
     if (candidate.sha === primary?.sha) continue;
-    const tree = await getTree(bucket, candidate.tree);
+    const tree = await readableCommitDeps.getTree(bucket, candidate.tree);
     if (!tree) continue;
     return { ok: true, refCommitSha, resolvedCommitSha: candidate.sha, degraded: true, commit: candidate };
   }

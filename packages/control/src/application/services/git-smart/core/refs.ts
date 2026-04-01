@@ -7,7 +7,7 @@
 import type { D1Database } from '../../../../shared/types/bindings.ts';
 import type { SelectOf } from '../../../../shared/types/drizzle-utils.ts';
 import type { GitBranch, GitTag, RefUpdateResult } from '../git-objects.ts';
-import { SHA1_PATTERN } from '../git-objects.ts';
+import type { SHA1_PATTERN as _SHA1_PATTERN } from '../git-objects.ts';
 import { getDb, branches, tags } from '../../../../infra/db/index.ts';
 import { eq, and, desc, asc, inArray } from 'drizzle-orm';
 import { generateId } from '../../../../shared/utils/index.ts';

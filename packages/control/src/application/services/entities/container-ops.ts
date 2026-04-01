@@ -151,14 +151,6 @@ export async function deployContainer(
     imageHash = result.imageHash;
   }
 
-  const config: ContainerConfig = {
-    deployedAt: now,
-    imageHash,
-    ...(opts.imageRef ? { imageRef: opts.imageRef } : {}),
-    ...(opts.port ? { port: opts.port } : {}),
-    ...(resolvedBaseUrl ? { resolvedBaseUrl } : {}),
-    ...(opts.specFingerprint ? { specFingerprint: opts.specFingerprint } : {}),
-  };
   await upsertGroupManagedService(env, {
     groupId,
     spaceId: opts.spaceId,

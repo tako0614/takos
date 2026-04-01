@@ -67,7 +67,7 @@ export function RepoBrowseCard(props: RepoBrowseCardProps) {
         <p class="text-sm text-zinc-500 dark:text-zinc-400 mb-3 line-clamp-2">{props.repo.description}</p>
       </Show>
       <div class="flex items-center gap-3 text-xs text-zinc-500 dark:text-zinc-400">
-        <button
+        <button type="button"
           class={`flex items-center gap-1 px-1.5 py-0.5 rounded transition-colors ${
             props.repo.is_starred ? 'text-zinc-900 dark:text-zinc-100' : 'hover:text-zinc-900 dark:hover:text-zinc-100'
           }`}

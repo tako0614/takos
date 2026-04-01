@@ -108,7 +108,7 @@ export function ServerCard({
 
         <div class="flex items-center gap-2">
           {/* Expand toggle */}
-          <button
+          <button type="button"
             onClick={handleToggleExpand}
             class="p-2 rounded-lg bg-transparent border-none cursor-pointer transition-colors hover:bg-zinc-100 dark:hover:bg-zinc-800 text-zinc-400 dark:text-zinc-500"
             title={t('mcpServerTools')}
@@ -118,7 +118,7 @@ export function ServerCard({
               : <Icons.ChevronRight class="w-4 h-4" />}
           </button>
 
-          <button
+          <button type="button"
             onClick={onToggle}
             class="p-2 rounded-lg bg-transparent border-none cursor-pointer transition-colors hover:bg-zinc-100 dark:hover:bg-zinc-800"
             title={server.enabled ? t('disable') : t('enable')}
@@ -142,7 +142,7 @@ export function ServerCard({
         <div class="border-t border-zinc-100 dark:border-zinc-800 px-4 py-3">
           <div class="flex items-center justify-between mb-2">
             <span class="text-xs font-medium text-zinc-500 dark:text-zinc-400">{t('mcpServerTools')}</span>
-            <button
+            <button type="button"
               onClick={handleRefreshTools}
               disabled={toolsLoading()}
               class="p-1 rounded-lg hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors text-zinc-400 dark:text-zinc-500 disabled:opacity-50"
@@ -159,7 +159,7 @@ export function ServerCard({
           {toolsError() && (
             <div class="flex items-center gap-2">
               <p class="text-xs text-red-500">{toolsError()}</p>
-              <button
+              <button type="button"
                 onClick={handleRefreshTools}
                 class="text-xs text-blue-500 hover:underline"
               >

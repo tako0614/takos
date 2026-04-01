@@ -42,7 +42,7 @@ export function StorageFileViewer(props: StorageFileViewerProps) {
     }
     if (h.type === 'app') {
       const url = `${h.handler.open_url}?file_id=${encodeURIComponent(props.file.id)}&space_id=${encodeURIComponent(props.file.space_id)}`;
-      window.open(url, '_blank', 'noopener,noreferrer');
+      globalThis.open(url, '_blank', 'noopener,noreferrer');
     } else {
       setActiveHandler(h);
     }
@@ -55,7 +55,7 @@ export function StorageFileViewer(props: StorageFileViewerProps) {
     setShowHandlerMenu(false);
   };
 
-  // If active handler is an app handler, it was already opened in a new window.
+  // If active handler is an app handler, it was already opened in a new globalThis.
   // Show builtin viewer or picker.
 
   return (

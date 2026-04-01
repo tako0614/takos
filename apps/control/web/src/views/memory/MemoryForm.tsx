@@ -32,7 +32,7 @@ export function MemoryCreateForm({
       <div class="bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 rounded-xl w-full max-w-lg mx-4 shadow-xl" onClick={e => e.stopPropagation()}>
         <div class="flex items-center justify-between px-6 py-4 border-b border-zinc-200 dark:border-zinc-700">
           <h3 id="memory-page-create-modal-title" class="text-lg font-semibold text-zinc-900 dark:text-zinc-100">{t('createMemory')}</h3>
-          <button
+          <button type="button"
             class="min-w-[44px] min-h-[44px] flex items-center justify-center rounded-lg text-zinc-500 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100 hover:bg-zinc-200 dark:hover:bg-zinc-700 transition-colors"
             onClick={onClose}
             aria-label="Close"
@@ -119,7 +119,7 @@ export function ReminderCreateForm({
       <div class="bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 rounded-xl w-full max-w-lg mx-4 shadow-xl" onClick={e => e.stopPropagation()}>
         <div class="flex items-center justify-between px-6 py-4 border-b border-zinc-200 dark:border-zinc-700">
           <h3 id="memory-page-reminder-modal-title" class="text-lg font-semibold text-zinc-900 dark:text-zinc-100">{t('createReminder')}</h3>
-          <button
+          <button type="button"
             class="min-w-[44px] min-h-[44px] flex items-center justify-center rounded-lg text-zinc-500 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100 hover:bg-zinc-200 dark:hover:bg-zinc-700 transition-colors"
             onClick={onClose}
             aria-label="Close"

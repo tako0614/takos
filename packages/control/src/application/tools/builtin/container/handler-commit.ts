@@ -1,7 +1,7 @@
 import type { ToolHandler } from '../../tool-definitions.ts';
 import { RuntimeSessionManager } from '../../../services/sync/index.ts';
 import { getDb, sessions, sessionRepos, repositories, accounts } from '../../../../infra/db/index.ts';
-import { eq, and, asc } from 'drizzle-orm';
+import { eq, type and as _and, asc } from 'drizzle-orm';
 import {
   callSessionApi,
   checkSessionHealth,

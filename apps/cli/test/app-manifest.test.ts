@@ -1,32 +1,46 @@
-import fs from 'node:fs/promises';
-import os from 'node:os';
-import path from 'node:path';
-import { assert, assertEquals, assertObjectMatch, assertRejects } from 'jsr:@std/assert';
-import { loadAppManifest, validateAppManifest } from '../src/lib/app-manifest.ts';
+import fs from "node:fs/promises";
+import os from "node:os";
+import path from "node:path";
+import {
+  assert,
+  assertEquals,
+  assertObjectMatch,
+  assertRejects,
+} from "jsr:@std/assert";
+import {
+  loadAppManifest,
+  validateAppManifest,
+} from "../src/lib/app-manifest.ts";
 
 const tempDirs: string[] = [];
 
 async function createTempRepo(files: Record<string, string>) {
-  const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'takos-app-manifest-'));
+  const dir = await fs.mkdtemp(path.join(os.tmpdir(), "takos-app-manifest-"));
   tempDirs.push(dir);
 
-  await Promise.all(Object.entries(files).map(async ([relativePath, content]) => {
-    const fullPath = path.join(dir, relativePath);
-    await fs.mkdir(path.dirname(fullPath), { recursive: true });
-    await fs.writeFile(fullPath, content, 'utf8');
-  }));
+  await Promise.all(
+    Object.entries(files).map(async ([relativePath, content]) => {
+      const fullPath = path.join(dir, relativePath);
+      await fs.mkdir(path.dirname(fullPath), { recursive: true });
+      await fs.writeFile(fullPath, content, "utf8");
+    }),
+  );
 
   return dir;
 }
 
 async function cleanupTempRepos() {
-  await Promise.all(tempDirs.splice(0).map((dir) => fs.rm(dir, { recursive: true, force: true })));
+  await Promise.all(
+    tempDirs.splice(0).map((dir) =>
+      fs.rm(dir, { recursive: true, force: true })
+    ),
+  );
 }
 
-Deno.test('app manifest - loads workers manifest', async () => {
+Deno.test("app manifest - loads workers manifest", async () => {
   try {
     const repoDir = await createTempRepo({
-      '.takos/app.yml': `
+      ".takos/app.yml": `
 apiVersion: takos.dev/v1alpha1
 kind: App
 metadata:
@@ -62,7 +76,9 @@ spec:
 `,
     });
 
-    const manifest = await loadAppManifest(path.join(repoDir, '.takos/app.yml'));
+    const manifest = await loadAppManifest(
+      path.join(repoDir, ".takos/app.yml"),
+    );
     const workers = manifest.spec.workers;
     const routes = manifest.spec.routes;
     const mcpServers = manifest.spec.mcpServers;
@@ -71,13 +87,13 @@ spec:
     assert(routes);
     assert(mcpServers);
 
-    assertEquals(manifest.metadata.name, 'sample-app');
+    assertEquals(manifest.metadata.name, "sample-app");
     assert(workers.gateway);
     assertEquals(workers.gateway.build?.fromWorkflow, {
-      path: '.takos/workflows/build.yml',
-      job: 'build-gateway',
-      artifact: 'gateway-dist',
-      artifactPath: 'dist/gateway.mjs',
+      path: ".takos/workflows/build.yml",
+      job: "build-gateway",
+      artifact: "gateway-dist",
+      artifactPath: "dist/gateway.mjs",
     });
     assertEquals(routes.length, 1);
     assertEquals(mcpServers.length, 1);
@@ -86,10 +102,10 @@ spec:
   }
 });
 
-Deno.test('app manifest - preserves the extended manifest surface', async () => {
+Deno.test("app manifest - preserves the extended manifest surface", async () => {
   try {
     const repoDir = await createTempRepo({
-      '.takos/app.yml': `
+      ".takos/app.yml": `
 apiVersion: takos.dev/v1alpha1
 kind: App
 metadata:
@@ -188,8 +204,8 @@ spec:
         d1: [main-db]
         vectorize: [searchIndex]
         queues: [jobQueue]
-        analytics: [analytics]
-        workflows: [workflowDispatch]
+        analyticsEngine: [analytics]
+        workflow: [workflowDispatch]
         durableObjects: [browserSessions]
         services:
           - browserApi
@@ -239,18 +255,20 @@ spec:
           env:
             API_BASE: https://staging.example.com
 `,
-      '.takos/workflows/build.yml': `
+      ".takos/workflows/build.yml": `
 jobs:
   build-api:
     runs-on: ubuntu-latest
     steps:
       - run: echo build
 `,
-      '.takos/migrations/main-db/up': 'create table test(id text);',
-      '.takos/migrations/main-db/down': 'drop table test;',
+      ".takos/migrations/main-db/up": "create table test(id text);",
+      ".takos/migrations/main-db/down": "drop table test;",
     });
 
-    const manifest = await loadAppManifest(path.join(repoDir, '.takos/app.yml'));
+    const manifest = await loadAppManifest(
+      path.join(repoDir, ".takos/app.yml"),
+    );
     const containers = manifest.spec.containers;
     const services = manifest.spec.services;
     const workers = manifest.spec.workers;
@@ -268,78 +286,84 @@ jobs:
     assert(overrides);
 
     assertObjectMatch(containers.browser, {
-      dockerfile: 'packages/browser/Dockerfile',
+      dockerfile: "packages/browser/Dockerfile",
       port: 8080,
-      instanceType: 'standard-2',
+      instanceType: "standard-2",
       maxInstances: 3,
-      env: { CHROME_FLAGS: '--headless=new' },
-      volumes: [{ name: 'browser-cache', mountPath: '/cache', size: '1Gi' }],
+      env: { CHROME_FLAGS: "--headless=new" },
+      volumes: [{ name: "browser-cache", mountPath: "/cache", size: "1Gi" }],
     });
     assertObjectMatch(services.browserApi, {
-      dockerfile: 'services/browser-api/Dockerfile',
+      dockerfile: "services/browser-api/Dockerfile",
       port: 3000,
       ipv4: true,
-      env: { API_BASE: 'https://example.com' },
-      healthCheck: { type: 'http', path: '/health' },
-      bindings: { services: [{ name: 'api', version: '^1.0.0' }] },
-      triggers: { schedules: [{ cron: '*/5 * * * *', export: 'sync' }] },
+      env: { API_BASE: "https://example.com" },
+      healthCheck: { type: "http", path: "/health" },
+      bindings: { services: [{ name: "api", version: "^1.0.0" }] },
+      triggers: { schedules: [{ cron: "*/5 * * * *", export: "sync" }] },
     });
     assertObjectMatch(workers.api, {
-      containers: ['browser'],
-      env: { API_MODE: 'production' },
+      containers: ["browser"],
+      env: { API_MODE: "production" },
       bindings: {
-        d1: ['main-db'],
-        vectorize: ['searchIndex'],
-        queues: ['jobQueue'],
-        analytics: ['analytics'],
-        workflows: ['workflowDispatch'],
-        durableObjects: ['browserSessions'],
-        services: ['browserApi'],
+        d1: ["main-db"],
+        vectorize: ["searchIndex"],
+        queues: ["jobQueue"],
+        analyticsEngine: ["analytics"],
+        workflow: ["workflowDispatch"],
+        durableObjects: ["browserSessions"],
+        services: ["browserApi"],
       },
       triggers: {
-        schedules: [{ cron: '0 * * * *', export: 'cron' }],
-        queues: [{ queue: 'jobQueue', export: 'handleJob' }],
+        schedules: [{ cron: "0 * * * *", export: "cron" }],
+        queues: [{ queue: "jobQueue", export: "handleJob" }],
       },
-      healthCheck: { type: 'tcp', port: 8080 },
+      healthCheck: { type: "tcp", port: 8080 },
       scaling: { minInstances: 1, maxConcurrency: 10 },
-      dependsOn: ['browserApi'],
+      dependsOn: ["browserApi"],
     });
     assertEquals(routes, [
-      { name: 'api', target: 'api', path: '/api', ingress: 'api', methods: ['GET', 'POST'] },
-      { name: 'browser', target: 'browser', path: '/browser' },
-      { name: 'browserApi', target: 'browserApi', path: '/browser-api' },
+      {
+        name: "api",
+        target: "api",
+        path: "/api",
+        ingress: "api",
+        methods: ["GET", "POST"],
+      },
+      { name: "browser", target: "browser", path: "/browser" },
+      { name: "browserApi", target: "browserApi", path: "/browser-api" },
     ]);
     assertEquals(env, {
-      required: ['API_KEY'],
+      required: ["API_KEY"],
       inject: {
-        API_URL: '{{routes.api.url}}',
-        BROWSER_PORT: '{{containers.browser.port}}',
-        SEARCH_INDEX_ID: '{{resources.searchIndex.id}}',
+        API_URL: "{{routes.api.url}}",
+        BROWSER_PORT: "{{containers.browser.port}}",
+        SEARCH_INDEX_ID: "{{resources.searchIndex.id}}",
       },
     });
     assertEquals(mcpServers, [
       {
-        name: 'browser-mcp',
-        route: 'browserApi',
-        authSecretRef: 'oauthSecret',
-        transport: 'streamable-http',
+        name: "browser-mcp",
+        route: "browserApi",
+        authSecretRef: "oauthSecret",
+        transport: "streamable-http",
       },
     ]);
     assertEquals(overrides, {
       staging: {
         containers: {
           browser: {
-            env: { CHROME_FLAGS: '--disable-dev-shm-usage' },
+            env: { CHROME_FLAGS: "--disable-dev-shm-usage" },
           },
         },
         workers: {
           api: {
-            env: { API_MODE: 'staging' },
+            env: { API_MODE: "staging" },
           },
         },
         services: {
           browserApi: {
-            env: { API_BASE: 'https://staging.example.com' },
+            env: { API_BASE: "https://staging.example.com" },
           },
         },
       },
@@ -349,10 +373,10 @@ jobs:
   }
 });
 
-Deno.test('app manifest - rejects workers without fromWorkflow build source', async () => {
+Deno.test("app manifest - rejects workers without fromWorkflow build source", async () => {
   try {
     const repoDir = await createTempRepo({
-      '.takos/app.yml': `
+      ".takos/app.yml": `
 apiVersion: takos.dev/v1alpha1
 kind: App
 metadata:
@@ -366,19 +390,19 @@ spec:
     });
 
     await assertRejects(
-      () => loadAppManifest(path.join(repoDir, '.takos/app.yml')),
+      () => loadAppManifest(path.join(repoDir, ".takos/app.yml")),
       Error,
-      'build.fromWorkflow or artifact.kind=bundle',
+      "build.fromWorkflow or artifact.kind=bundle",
     );
   } finally {
     await cleanupTempRepos();
   }
 });
 
-Deno.test('app manifest - rejects missing workflow files during validation', async () => {
+Deno.test("app manifest - rejects missing workflow files during validation", async () => {
   try {
     const repoDir = await createTempRepo({
-      '.takos/app.yml': `
+      ".takos/app.yml": `
 apiVersion: takos.dev/v1alpha1
 kind: App
 metadata:
@@ -399,17 +423,17 @@ spec:
     await assertRejects(
       () => validateAppManifest(repoDir),
       Error,
-      'Workflow file not found',
+      "Workflow file not found",
     );
   } finally {
     await cleanupTempRepos();
   }
 });
 
-Deno.test('app manifest - rejects missing workflow jobs during validation', async () => {
+Deno.test("app manifest - rejects missing workflow jobs during validation", async () => {
   try {
     const repoDir = await createTempRepo({
-      '.takos/app.yml': `
+      ".takos/app.yml": `
 apiVersion: takos.dev/v1alpha1
 kind: App
 metadata:
@@ -425,7 +449,7 @@ spec:
           artifact: gateway-dist
           artifactPath: dist/gateway.mjs
 `,
-      '.takos/workflows/build.yml': `
+      ".takos/workflows/build.yml": `
 jobs:
   lint:
     runs-on: ubuntu-latest
@@ -437,17 +461,17 @@ jobs:
     await assertRejects(
       () => validateAppManifest(repoDir),
       Error,
-      'Workflow job not found',
+      "Workflow job not found",
     );
   } finally {
     await cleanupTempRepos();
   }
 });
 
-Deno.test('app manifest - rejects deploy producer jobs that use needs', async () => {
+Deno.test("app manifest - rejects deploy producer jobs that use needs", async () => {
   try {
     const repoDir = await createTempRepo({
-      '.takos/app.yml': `
+      ".takos/app.yml": `
 apiVersion: takos.dev/v1alpha1
 kind: App
 metadata:
@@ -463,7 +487,7 @@ spec:
           artifact: gateway-dist
           artifactPath: dist/gateway.mjs
 `,
-      '.takos/workflows/build.yml': `
+      ".takos/workflows/build.yml": `
 jobs:
   setup:
     runs-on: ubuntu-latest
@@ -480,31 +504,93 @@ jobs:
     await assertRejects(
       () => validateAppManifest(repoDir),
       Error,
-      'must not use needs',
+      "must not use needs",
     );
   } finally {
     await cleanupTempRepos();
   }
 });
 
-Deno.test('app manifest - requires at least one worker', async () => {
+Deno.test("app manifest - allows service-only manifests", async () => {
   try {
     const repoDir = await createTempRepo({
-      '.takos/app.yml': `
+      ".takos/app.yml": `
 apiVersion: takos.dev/v1alpha1
 kind: App
 metadata:
-  name: no-workers
+  name: service-only
 spec:
   version: 1.0.0
+  services:
+    api:
+      imageRef: ghcr.io/takos/api:latest
+      port: 8080
 `,
     });
 
-    await assertRejects(
-      () => loadAppManifest(path.join(repoDir, '.takos/app.yml')),
-      Error,
-      'spec.workers must contain at least one worker',
+    const manifest = await loadAppManifest(
+      path.join(repoDir, ".takos/app.yml"),
     );
+    assertEquals(manifest.spec.workers, undefined);
+    assertObjectMatch(manifest.spec.services ?? {}, {
+      api: {
+        imageRef: "ghcr.io/takos/api:latest",
+        port: 8080,
+      },
+    });
+  } finally {
+    await cleanupTempRepos();
+  }
+});
+
+Deno.test("app manifest - preserves canonical and legacy binding aliases", async () => {
+  try {
+    const repoDir = await createTempRepo({
+      ".takos/app.yml": `
+apiVersion: takos.dev/v1alpha1
+kind: App
+metadata:
+  name: alias-app
+spec:
+  version: 1.0.0
+  resources:
+    events:
+      type: analyticsEngine
+    deploy-flow:
+      type: workflow
+      workflow:
+        service: api
+        export: run
+  workers:
+    api:
+      build:
+        fromWorkflow:
+          path: .takos/workflows/build.yml
+          job: build-api
+          artifact: api-dist
+          artifactPath: dist/api.mjs
+      bindings:
+        analytics: [events]
+        workflows: [deploy-flow]
+`,
+      ".takos/workflows/build.yml": `
+jobs:
+  build-api:
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo build
+`,
+    });
+
+    const manifest = await loadAppManifest(
+      path.join(repoDir, ".takos/app.yml"),
+    );
+    assertObjectMatch(manifest.spec.workers?.api ?? {}, {
+      bindings: {
+        analyticsEngine: ["events"],
+        workflow: ["deploy-flow"],
+      },
+    });
   } finally {
     await cleanupTempRepos();
   }

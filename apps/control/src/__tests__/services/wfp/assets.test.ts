@@ -1,5 +1,6 @@
 import {
   type AssetUploadFile,
+  assetUploadDeps,
   createAssetsUploadSession,
   uploadAllAssets,
   uploadAssets,
@@ -19,11 +20,11 @@ import {
   assertRejects,
   assertStringIncludes,
 } from "jsr:@std/assert";
-import { assertSpyCalls } from "jsr:@std/testing/mock";
+import { assertSpyCalls, spy } from "jsr:@std/testing/mock";
 
 Deno.test("createAssetsUploadSession - returns jwt and flattened uploadNeeded from buckets", async () => {
   const mockClient = {
-    fetch: async () => ({
+    fetch: spy(async () => ({
       result: {
         jwt: "session-jwt-token",
         buckets: [["hash1", "hash2"], ["hash3"]],
@@ -31,7 +32,7 @@ Deno.test("createAssetsUploadSession - returns jwt and flattened uploadNeeded fr
       success: true,
       errors: [],
       messages: [],
-    } satisfies CFAPIResponse<{ jwt: string; buckets: string[][] }>),
+    } satisfies CFAPIResponse<{ jwt: string; buckets: string[][] }>)),
   } as unknown as WfpClient;
 
   const config: WFPConfig = {
@@ -54,12 +55,12 @@ Deno.test("createAssetsUploadSession - returns jwt and flattened uploadNeeded fr
 });
 Deno.test("createAssetsUploadSession - returns empty uploadNeeded when buckets is absent", async () => {
   const mockClient = {
-    fetch: async () => ({
+    fetch: spy(async () => ({
       result: { jwt: "token" },
       success: true,
       errors: [],
       messages: [],
-    }),
+    })),
   } as unknown as WfpClient;
 
   const config: WFPConfig = {
@@ -71,12 +72,12 @@ Deno.test("createAssetsUploadSession - returns empty uploadNeeded when buckets i
   assertEquals(result.uploadNeeded, []);
 });
 Deno.test("createAssetsUploadSession - calls the correct API path", async () => {
-  const mockFetch = async () => ({
+  const mockFetch = spy(async () => ({
     result: { jwt: "x" },
     success: true,
     errors: [],
     messages: [],
-  });
+  }));
   const mockClient = { fetch: mockFetch } as unknown as WfpClient;
   const config: WFPConfig = {
     accountId: "acc-1",
@@ -87,7 +88,7 @@ Deno.test("createAssetsUploadSession - calls the correct API path", async () => 
   await createAssetsUploadSession(mockClient, config, "my-worker", {});
 
   assertSpyCalls(mockFetch, 1);
-  const path = mockFetch.calls[0][0] as string;
+  const path = (mockFetch.calls[0] as any).args[0] as string;
   assertStringIncludes(path, "/accounts/acc-1/");
   assertStringIncludes(path, "/scripts/my-worker/assets-upload-session");
 });
@@ -97,7 +98,7 @@ Deno.test("createAssetsUploadSession - calls the correct API path", async () => 
 
 Deno.test("uploadAssets - posts FormData to the upload endpoint and returns completion JWT", async () => {
   try {
-    const fetchMock = async () =>
+    const fetchMock = spy(async () =>
       new Response(
         JSON.stringify({
           success: true,
@@ -106,7 +107,8 @@ Deno.test("uploadAssets - posts FormData to the upload endpoint and returns comp
           messages: [],
         }),
         { status: 200 },
-      );
+      )
+    );
     (globalThis as any).fetch = fetchMock;
 
     const config: WFPConfig = {
@@ -122,18 +124,23 @@ Deno.test("uploadAssets - posts FormData to the upload endpoint and returns comp
     assertEquals(jwt, "completion-jwt");
 
     assertSpyCalls(fetchMock, 1);
-    const [url, init] = fetchMock.calls[0];
+    const [url, init] = (fetchMock.calls[0] as any).args as [
+      string,
+      RequestInit,
+    ];
+    const headers = init.headers as Record<string, string>;
     assertStringIncludes(url, "/accounts/acc-1/workers/assets/upload");
     assertEquals(init.method, "POST");
-    assertEquals(init.headers.Authorization, "Bearer session-jwt");
+    assertEquals(headers.Authorization, "Bearer session-jwt");
   } finally {
     /* TODO: restore stubbed globals manually */ void 0;
   }
 });
 Deno.test("uploadAssets - throws on non-ok response", async () => {
   try {
-    const fetchMock = async () =>
-      new Response("Internal Server Error", { status: 500 });
+    const fetchMock = spy(async () =>
+      new Response("Internal Server Error", { status: 500 })
+    );
     (globalThis as any).fetch = fetchMock;
 
     const config: WFPConfig = {
@@ -150,10 +157,11 @@ Deno.test("uploadAssets - throws on non-ok response", async () => {
 });
 Deno.test("uploadAssets - throws when response is ok but missing completion JWT", async () => {
   try {
-    const fetchMock = async () =>
+    const fetchMock = spy(async () =>
       new Response(JSON.stringify({ success: false, result: {} }), {
         status: 200,
-      });
+      })
+    );
     (globalThis as any).fetch = fetchMock;
 
     const config: WFPConfig = {
@@ -170,11 +178,11 @@ Deno.test("uploadAssets - throws when response is ok but missing completion JWT"
 });
 Deno.test("uploadAssets - throws timeout error on abort", async () => {
   try {
-    const fetchMock = () => {
+    const fetchMock = spy(() => {
       const err = new Error("Aborted");
       err.name = "AbortError";
       return Promise.reject(err);
-    };
+    });
     (globalThis as any).fetch = fetchMock;
 
     const config: WFPConfig = {
@@ -196,12 +204,12 @@ Deno.test("uploadAssets - throws timeout error on abort", async () => {
 Deno.test("uploadAllAssets - returns session JWT directly when all assets are cached", async () => {
   try {
     const mockClient = {
-      fetch: async () => ({
+      fetch: spy(async () => ({
         result: { jwt: "cached-jwt", buckets: [] },
         success: true,
         errors: [],
         messages: [],
-      }),
+      })),
     } as unknown as WfpClient;
 
     const config: WFPConfig = {
@@ -221,12 +229,11 @@ Deno.test("uploadAllAssets - returns session JWT directly when all assets are ca
   }
 });
 Deno.test("uploadAllAssets - uploads needed files and returns completion JWT", async () => {
+  const originalDigest = assetUploadDeps.digestSha256;
   try {
     // We need to mock crypto.subtle.digest for hash computation
     const mockDigest = async () => new ArrayBuffer(32);
-    (globalThis as any).crypto = {
-      subtle: { digest: mockDigest },
-    };
+    assetUploadDeps.digestSha256 = mockDigest as typeof assetUploadDeps.digestSha256;
 
     // Client returns one hash that needs uploading
     const mockClient = {
@@ -242,7 +249,7 @@ Deno.test("uploadAllAssets - uploads needed files and returns completion JWT", a
     } as unknown as WfpClient;
 
     // Mock global fetch for the upload call
-    const fetchMock = async () =>
+    const fetchMock = spy(async () =>
       new Response(
         JSON.stringify({
           success: true,
@@ -251,7 +258,8 @@ Deno.test("uploadAllAssets - uploads needed files and returns completion JWT", a
           messages: [],
         }),
         { status: 200 },
-      );
+      )
+    );
     (globalThis as any).fetch = fetchMock;
 
     const config: WFPConfig = {
@@ -267,6 +275,6 @@ Deno.test("uploadAllAssets - uploads needed files and returns completion JWT", a
 
     assertEquals(jwt, "completion-jwt");
   } finally {
-    /* TODO: restore stubbed globals manually */ void 0;
+    assetUploadDeps.digestSha256 = originalDigest;
   }
 });

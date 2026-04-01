@@ -4,12 +4,9 @@ import { createMockEnv } from '../../../test/integration/setup.ts';
 
 import { assertEquals, assertNotEquals } from 'jsr:@std/assert';
 
-const mocks = ({
-  lastSetData: null as Record<string, unknown> | null,
-});
-
 // [Deno] vi.mock removed - manually stub imports from '@/db'
 import setupRoutes from '@/routes/setup';
+import { setupRouteDeps } from '@/routes/setup';
 
 type TestEnv = {
   Bindings: Env;
@@ -17,8 +14,6 @@ type TestEnv = {
     user: User;
   };
 };
-
-class TestDb {}
 
 function createUser(): User {
   return {
@@ -36,6 +31,27 @@ function createUser(): User {
   };
 }
 
+function createSetupDb() {
+  let lastSetData: Record<string, unknown> | null = null;
+  const chain: any = {
+    from: () => chain,
+    where: () => chain,
+    get: async () => null,
+    set: (data: Record<string, unknown>) => {
+      lastSetData = data;
+      return {
+        where: async () => undefined,
+      };
+    },
+  };
+  const db = {
+    select: () => chain,
+    update: () => ({ set: chain.set }),
+    _getLastSetData: () => lastSetData,
+  };
+  return db;
+}
+
 function createApp(user: User) {
   const app = new Hono<TestEnv>();
   app.use('*', async (c, next) => {
@@ -47,9 +63,10 @@ function createApp(user: User) {
 }
 
 
-  Deno.test('setup route - completes setup with username only (no password)', async () => {
+Deno.test('setup route - completes setup with username only (no password)', async () => {
   /* mocks cleared (no-op in Deno) */ void 0;
-  const db = new TestDb();
+  const db = createSetupDb();
+  setupRouteDeps.getDb = (() => db) as any;
     const app = createApp(createUser());
 
     const response = await app.fetch(
@@ -70,8 +87,8 @@ function createApp(user: User) {
       username: 'userone',
     });
 
-    assertNotEquals(mocks.lastSetData, null);
-    const setData = mocks.lastSetData as Record<string, unknown>;
+    assertNotEquals(db._getLastSetData(), null);
+    const setData = db._getLastSetData() as Record<string, unknown>;
 
     assertEquals(setData.slug, 'userone');
     assertEquals(setData.setupCompleted, true);

@@ -5,22 +5,19 @@ import {
   type TransactionStep,
 } from "@/utils/db-transaction";
 
-import {
-  assert,
-  assertEquals,
-  assertRejects,
-  assertStringIncludes,
-} from "jsr:@std/assert";
+import { assert, assertEquals, assertRejects } from "jsr:@std/assert";
+import { assertSpyCalls, spy } from "jsr:@std/testing/mock";
 
 function createMockStatement(result?: unknown, shouldThrow = false) {
+  const run = spy(async () => {
+    if (shouldThrow) {
+      throw new Error("Statement failed");
+    }
+    return result ??
+      { success: true, meta: { changes: 1, last_row_id: 1, duration: 0 } };
+  });
   return {
-    run: shouldThrow
-      ? (async () => {
-        throw new Error("Statement failed");
-      })
-      : (async () =>
-        result ??
-          { success: true, meta: { changes: 1, last_row_id: 1, duration: 0 } }),
+    run,
   };
 }
 
@@ -114,8 +111,8 @@ Deno.test("executeWithCompensation - runs compensation actions in reverse on fai
   assertEquals(result.failedStep, 2);
   assertEquals(result.error!.message, "Statement failed");
   // Both compensations should have been called (in reverse order)
-  assert(compensate2.run.calls.length > 0);
-  assert(compensate1.run.calls.length > 0);
+  assertSpyCalls(compensate2.run, 1);
+  assertSpyCalls(compensate1.run, 1);
 });
 Deno.test("executeWithCompensation - reports compensation errors without suppressing main error", async () => {
   const failingCompensation = {
@@ -138,8 +135,8 @@ Deno.test("executeWithCompensation - reports compensation errors without suppres
 
   const result = await executeWithCompensation({} as any, steps);
   assertEquals(result.success, false);
-  assertEquals(result.compensationErrors.length, 1);
-  assertEquals(result.compensationErrors![0].message, "compensation failed");
+  assertEquals(result.compensationErrors?.length, 1);
+  assertEquals(result.compensationErrors?.[0].message, "compensation failed");
 });
 Deno.test("executeWithCompensation - does not run compensation for steps without compensate handler", async () => {
   const steps: TransactionStep[] = [
@@ -183,8 +180,8 @@ Deno.test("D1TransactionManager - wraps callback in BEGIN IMMEDIATE / COMMIT", a
   const result = await txn.runInTransaction(async () => "hello");
 
   assertEquals(result, "hello");
-  assertStringIncludes(db._executed, "BEGIN IMMEDIATE");
-  assertStringIncludes(db._executed, "COMMIT");
+  assert(db._executed.some((stmt) => stmt.includes("BEGIN IMMEDIATE")));
+  assert(db._executed.some((stmt) => stmt.includes("COMMIT")));
 });
 Deno.test("D1TransactionManager - rolls back on callback error", async () => {
   const db = createMockDb();
@@ -196,8 +193,8 @@ Deno.test("D1TransactionManager - rolls back on callback error", async () => {
     });
   }, "callback failed");
 
-  assertStringIncludes(db._executed, "BEGIN IMMEDIATE");
-  assertStringIncludes(db._executed, "ROLLBACK");
+  assert(db._executed.some((stmt) => stmt.includes("BEGIN IMMEDIATE")));
+  assert(db._executed.some((stmt) => stmt.includes("ROLLBACK")));
   assert(!db._executed.includes("COMMIT"));
 });
 Deno.test("D1TransactionManager - uses savepoints for nested transactions", async () => {
@@ -209,13 +206,13 @@ Deno.test("D1TransactionManager - uses savepoints for nested transactions", asyn
     return "outer";
   });
 
-  assertStringIncludes(db._executed, "BEGIN IMMEDIATE");
+  assert(db._executed.some((stmt) => stmt.includes("BEGIN IMMEDIATE")));
   assertEquals(db._executed.some((s) => s.startsWith("SAVEPOINT")), true);
   assertEquals(
     db._executed.some((s) => s.startsWith("RELEASE SAVEPOINT")),
     true,
   );
-  assertStringIncludes(db._executed, "COMMIT");
+  assert(db._executed.some((stmt) => stmt.includes("COMMIT")));
 });
 Deno.test("D1TransactionManager - rolls back savepoint on inner failure without aborting outer", async () => {
   const db = createMockDb();
@@ -233,7 +230,7 @@ Deno.test("D1TransactionManager - rolls back savepoint on inner failure without 
   });
 
   assertEquals(result, "outer ok");
-  assertStringIncludes(db._executed, "COMMIT");
+  assert(db._executed.some((stmt) => stmt.includes("COMMIT")));
   assertEquals(
     db._executed.some((s) => s.startsWith("ROLLBACK TO SAVEPOINT")),
     true,

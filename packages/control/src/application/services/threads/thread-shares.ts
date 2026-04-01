@@ -20,6 +20,15 @@ export type ThreadShareRecord = {
   created_at: string;
 };
 
+export const threadShareDeps = {
+  getDb,
+  base64UrlEncode,
+  hashPassword,
+  verifyPassword,
+  now: () => new Date().toISOString(),
+  randomUUID: () => crypto.randomUUID(),
+};
+
 function toRecord(row: SelectOf<typeof threadShares>): ThreadShareRecord {
   return {
     id: row.id,
@@ -38,7 +47,7 @@ function toRecord(row: SelectOf<typeof threadShares>): ThreadShareRecord {
 export function generateThreadShareToken(): string {
   // 24 random bytes -> 32-char base64url (no padding)
   const bytes = crypto.getRandomValues(new Uint8Array(24));
-  return base64UrlEncode(bytes);
+  return threadShareDeps.base64UrlEncode(bytes);
 }
 
 export async function createThreadShare(params: {
@@ -53,7 +62,7 @@ export async function createThreadShare(params: {
   const { db: d1, threadId, spaceId, createdBy } = params;
   const mode = params.mode;
   const token = generateThreadShareToken();
-  const id = crypto.randomUUID();
+  const id = threadShareDeps.randomUUID();
 
   let passwordHash: string | null = null;
   if (mode === 'password') {
@@ -61,7 +70,7 @@ export async function createThreadShare(params: {
     if (pw.length < 8) {
       throw new Error('Password is required (min 8 characters)');
     }
-    passwordHash = await hashPassword(pw);
+    passwordHash = await threadShareDeps.hashPassword(pw);
   }
 
   let expiresAt: string | null = null;
@@ -70,14 +79,14 @@ export async function createThreadShare(params: {
     if (Number.isNaN(d.getTime())) {
       throw new Error('Invalid expires_at');
     }
-    if (d.getTime() <= Date.now()) {
+    if (d.getTime() <= Date.parse(threadShareDeps.now())) {
       throw new Error('expires_at must be in the future');
     }
     expiresAt = d.toISOString();
   }
 
-  const createdAt = new Date().toISOString();
-  const db = getDb(d1);
+  const createdAt = threadShareDeps.now();
+  const db = threadShareDeps.getDb(d1);
 
   await db.insert(threadShares).values({
     id,
@@ -109,7 +118,7 @@ export async function createThreadShare(params: {
 }
 
 export async function listThreadShares(d1: D1Database, threadId: string): Promise<ThreadShareRecord[]> {
-  const db = getDb(d1);
+  const db = threadShareDeps.getDb(d1);
   const rows = await db.select()
     .from(threadShares)
     .where(eq(threadShares.threadId, threadId))
@@ -125,8 +134,8 @@ export async function revokeThreadShare(params: {
   shareId: string;
 }): Promise<boolean> {
   const { db: d1, threadId, shareId } = params;
-  const revokedAt = new Date().toISOString();
-  const db = getDb(d1);
+  const revokedAt = threadShareDeps.now();
+  const db = threadShareDeps.getDb(d1);
 
   const result = await db.update(threadShares)
     .set({ revokedAt })
@@ -141,7 +150,7 @@ export async function revokeThreadShare(params: {
 }
 
 export async function getThreadShareByToken(d1: D1Database, token: string): Promise<(ThreadShareRecord & { password_hash: string | null }) | null> {
-  const db = getDb(d1);
+  const db = threadShareDeps.getDb(d1);
   const row = await db.select()
     .from(threadShares)
     .where(eq(threadShares.token, token))
@@ -151,7 +160,7 @@ export async function getThreadShareByToken(d1: D1Database, token: string): Prom
   if (row.revokedAt) return null;
   if (row.expiresAt) {
     const t = Date.parse(row.expiresAt);
-    if (Number.isFinite(t) && t <= Date.now()) {
+    if (Number.isFinite(t) && t <= Date.parse(threadShareDeps.now())) {
       return null;
     }
   }
@@ -163,9 +172,9 @@ export async function getThreadShareByToken(d1: D1Database, token: string): Prom
 }
 
 export async function markThreadShareAccessed(d1: D1Database, shareId: string): Promise<void> {
-  const db = getDb(d1);
+  const db = threadShareDeps.getDb(d1);
   await db.update(threadShares)
-    .set({ lastAccessedAt: new Date().toISOString() })
+    .set({ lastAccessedAt: threadShareDeps.now() })
     .where(eq(threadShares.id, shareId));
 }
 
@@ -186,7 +195,7 @@ export async function verifyThreadShareAccess(params: {
     if (!share.password_hash) {
       return { error: 'forbidden' };
     }
-    const ok = await verifyPassword(pw, share.password_hash);
+    const ok = await threadShareDeps.verifyPassword(pw, share.password_hash);
     if (!ok) return { error: 'forbidden' };
   }
 

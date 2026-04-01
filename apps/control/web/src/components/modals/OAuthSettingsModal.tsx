@@ -53,7 +53,7 @@ export function OAuthSettingsModal(props: OAuthSettingsModalProps) {
   );
 
   return (
-    <Modal isOpen={true} onClose={props.onClose} title={t('oauthSettings')} size="xl">
+    <Modal isOpen onClose={props.onClose} title={t('oauthSettings')} size="xl">
       <Tabs defaultTab="authorized" onChange={() => setLoading(true)}>
         <TabList>
           <Tab id="authorized">

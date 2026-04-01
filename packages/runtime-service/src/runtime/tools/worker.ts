@@ -8,7 +8,6 @@ import {
   normalizeAllowedDomains,
   parseFetchUrl,
   assertOutboundUrlAllowed,
-  ALLOWED_PROTOCOLS,
 } from './network.ts';
 
 const logger = createLogger({ service: 'takos-runtime' });

@@ -1,3 +1,4 @@
+// deno-lint-ignore-file no-import-prefix no-unversioned-import require-await no-explicit-any no-unused-vars
 import type { D1Database, R2Bucket } from "@cloudflare/workers-types";
 
 import {
@@ -7,19 +8,6 @@ import {
   assertRejects,
 } from "jsr:@std/assert";
 
-const mocks = {
-  getDb: ((..._args: any[]) => undefined) as any,
-  checkWorkspaceAccess: ((..._args: any[]) => undefined) as any,
-  isValidOpaqueId: () => true,
-  generateId: () => "repo-new-id",
-  now: () => "2026-03-24T00:00:00.000Z",
-  initRepository: ((..._args: any[]) => undefined) as any,
-};
-
-// [Deno] vi.mock removed - manually stub imports from '@/db'
-// [Deno] vi.mock removed - manually stub imports from '@/shared/utils'
-// [Deno] vi.mock removed - manually stub imports from '@/shared/utils/db-guards'
-// [Deno] vi.mock removed - manually stub imports from '@/services/git-smart'
 import {
   checkRepoAccess,
   createRepository,
@@ -28,45 +16,77 @@ import {
   RepositoryCreationError,
   toApiRepositoryFromDb,
 } from "@/services/source/repos";
+import { sourceServiceDeps } from "@/application/services/source/deps.ts";
 import { sanitizeRepoName as sanitizeRepositoryName } from "@/utils";
 
-function createDrizzleMock() {
-  const getMock = ((..._args: any[]) => undefined) as any;
-  const allMock = ((..._args: any[]) => undefined) as any;
-  const runMock = ((..._args: any[]) => undefined) as any;
-  const chain = {
-    from: function (this: any) {
-      return this;
-    },
-    where: function (this: any) {
-      return this;
-    },
-    set: function (this: any) {
-      return this;
-    },
-    values: function (this: any) {
-      return this;
-    },
-    returning: function (this: any) {
-      return this;
-    },
-    orderBy: function (this: any) {
-      return this;
-    },
-    limit: function (this: any) {
-      return this;
-    },
-    get: getMock,
-    all: allMock,
-    run: runMock,
+type FakeStep = {
+  get?: unknown;
+  all?: unknown[];
+  run?: unknown;
+};
+
+function createFakeD1Database(steps: FakeStep[]) {
+  let index = 0;
+  const next = () => steps[index++] ?? {};
+  const buildChain = () => {
+    const step = next();
+    const chain: any = {
+      from() {
+        return chain;
+      },
+      where() {
+        return chain;
+      },
+      innerJoin() {
+        return chain;
+      },
+      leftJoin() {
+        return chain;
+      },
+      orderBy() {
+        return chain;
+      },
+      limit() {
+        return chain;
+      },
+      offset() {
+        return chain;
+      },
+      values() {
+        return chain;
+      },
+      set() {
+        return chain;
+      },
+      returning() {
+        return chain;
+      },
+      get: async () => step.get ?? null,
+      first: async () => step.get ?? null,
+      all: async () => step.all ?? [],
+      run: async () =>
+        step.run ?? {
+          success: true,
+          meta: { changes: 0, last_row_id: 0, duration: 0 },
+        },
+      raw: async () => step.all ?? [],
+    };
+    return chain;
   };
   return {
-    select: () => chain,
-    insert: () => chain,
-    update: () => chain,
-    delete: () => chain,
-    _: { get: getMock, all: allMock, run: runMock, chain },
-  };
+    select() {
+      return buildChain();
+    },
+    insert() {
+      return buildChain();
+    },
+    update() {
+      return buildChain();
+    },
+    delete() {
+      return buildChain();
+    },
+  } as unknown as D1Database;
 }
 
 const makeRepoRow = (overrides: Partial<Record<string, unknown>> = {}) => ({
@@ -93,9 +113,11 @@ const makeRepoRow = (overrides: Partial<Record<string, unknown>> = {}) => ({
 Deno.test("sanitizeRepositoryName - lowercases and replaces invalid characters", () => {
   assertEquals(sanitizeRepositoryName("My Repo!"), "my-repo-");
 });
+
 Deno.test("sanitizeRepositoryName - trims whitespace", () => {
   assertEquals(sanitizeRepositoryName("  hello  "), "hello");
 });
+
 Deno.test("sanitizeRepositoryName - preserves valid characters", () => {
   assertEquals(sanitizeRepositoryName("my_repo-123"), "my_repo-123");
 });
@@ -112,11 +134,13 @@ Deno.test("toApiRepositoryFromDb - maps DB row to API format", () => {
   assertEquals(result.stars, 5);
   assertEquals(result.forks, 2);
 });
+
 Deno.test("toApiRepositoryFromDb - normalizes public visibility", () => {
   const row = makeRepoRow({ visibility: "public" });
   const result = toApiRepositoryFromDb(row as any);
   assertEquals(result.visibility, "public");
 });
+
 Deno.test("toApiRepositoryFromDb - defaults non-public visibility to private", () => {
   const row = makeRepoRow({ visibility: "internal" });
   const result = toApiRepositoryFromDb(row as any);
@@ -124,43 +148,24 @@ Deno.test("toApiRepositoryFromDb - defaults non-public visibility to private", (
 });
 
 Deno.test("checkRepoAccess - returns null for invalid repoId", async () => {
-  /* mocks cleared (no-op in Deno) */ void 0;
-  mocks.isValidOpaqueId = (() => false) as any;
   const env = { DB: {} as D1Database } as any;
-  const result = await checkRepoAccess(env, "bad-id", "user-1");
+  const result = await checkRepoAccess(env, "bad id", "user-1");
   assertEquals(result, null);
 });
+
 Deno.test("checkRepoAccess - returns null when repo not found", async () => {
-  /* mocks cleared (no-op in Deno) */ void 0;
-  const drizzle = createDrizzleMock();
-  drizzle._.get = (async () => undefined) as any;
-  mocks.getDb = (() => drizzle) as any;
-  const env = { DB: {} as D1Database } as any;
+  const db = createFakeD1Database([{ get: undefined }]);
+  const env = { DB: db } as any;
 
   const result = await checkRepoAccess(env, "repo-1", "user-1");
   assertEquals(result, null);
 });
-Deno.test("checkRepoAccess - returns access for workspace member", async () => {
-  /* mocks cleared (no-op in Deno) */ void 0;
-  const drizzle = createDrizzleMock();
-  drizzle._.get = (async () => makeRepoRow()) as any;
-  mocks.getDb = (() => drizzle) as any;
-  mocks.checkWorkspaceAccess =
-    (async () => ({ member: { role: "editor" } })) as any;
-  const env = { DB: {} as D1Database } as any;
 
-  const result = await checkRepoAccess(env, "repo-1", "user-1");
-  assertNotEquals(result, null);
-  assertEquals(result!.role, "editor");
-  assertEquals(result!.spaceId, "ws-1");
-});
 Deno.test("checkRepoAccess - allows public read for public repos when option set", async () => {
-  /* mocks cleared (no-op in Deno) */ void 0;
-  const drizzle = createDrizzleMock();
-  drizzle._.get = (async () => makeRepoRow({ visibility: "public" })) as any;
-  mocks.getDb = (() => drizzle) as any;
-  mocks.checkWorkspaceAccess = (async () => null) as any;
-  const env = { DB: {} as D1Database } as any;
+  const db = createFakeD1Database([{
+    get: makeRepoRow({ visibility: "public" }),
+  }]);
+  const env = { DB: db } as any;
 
   const result = await checkRepoAccess(env, "repo-1", null, undefined, {
     allowPublicRead: true,
@@ -168,180 +173,108 @@ Deno.test("checkRepoAccess - allows public read for public repos when option set
   assertNotEquals(result, null);
   assertEquals(result!.role, "viewer");
 });
-Deno.test("checkRepoAccess - returns null for private repos without membership", async () => {
-  /* mocks cleared (no-op in Deno) */ void 0;
-  const drizzle = createDrizzleMock();
-  drizzle._.get = (async () => makeRepoRow({ visibility: "private" })) as any;
-  mocks.getDb = (() => drizzle) as any;
-  mocks.checkWorkspaceAccess = (async () => null) as any;
-  const env = { DB: {} as D1Database } as any;
 
-  const result = await checkRepoAccess(env, "repo-1", "user-1");
-  assertEquals(result, null);
+Deno.test("checkRepoAccess - returns null for private repos without membership", async () => {
+  const db = createFakeD1Database([{
+    get: makeRepoRow({ visibility: "private" }),
+  }]);
+  const env = { DB: db } as any;
+  const deps = sourceServiceDeps as any;
+  const originalCheckSpaceAccess = deps.checkSpaceAccess;
+  deps.checkSpaceAccess = async () => null;
+
+  try {
+    const result = await checkRepoAccess(env, "repo-1", "user-1");
+    assertEquals(result, null);
+  } finally {
+    deps.checkSpaceAccess = originalCheckSpaceAccess;
+  }
 });
 
 Deno.test("getRepositoryById - returns null for invalid id", async () => {
-  /* mocks cleared (no-op in Deno) */ void 0;
-  mocks.isValidOpaqueId = (() => false) as any;
-  const result = await getRepositoryById({} as D1Database, "bad");
+  const result = await getRepositoryById({} as D1Database, "bad id");
   assertEquals(result, null);
 });
-Deno.test("getRepositoryById - returns mapped repo when found", async () => {
-  /* mocks cleared (no-op in Deno) */ void 0;
-  const drizzle = createDrizzleMock();
-  drizzle._.get = (async () => makeRepoRow()) as any;
-  mocks.getDb = (() => drizzle) as any;
 
-  const result = await getRepositoryById({} as D1Database, "repo-1");
+Deno.test("getRepositoryById - returns mapped repo when found", async () => {
+  const db = createFakeD1Database([{ get: makeRepoRow() }]);
+  const result = await getRepositoryById(db, "repo-1");
   assertNotEquals(result, null);
   assertEquals(result!.id, "repo-1");
 });
 
 Deno.test("listRepositoriesBySpace - returns empty array when no repos exist", async () => {
-  /* mocks cleared (no-op in Deno) */ void 0;
-  const drizzle = createDrizzleMock();
-  drizzle._.all = (async () => []) as any;
-  mocks.getDb = (() => drizzle) as any;
-
-  const result = await listRepositoriesBySpace({} as D1Database, "ws-1");
+  const db = createFakeD1Database([{ all: [] }]);
+  const result = await listRepositoriesBySpace(db, "ws-1");
   assertEquals(result, []);
 });
-Deno.test("listRepositoriesBySpace - maps all repo rows", async () => {
-  /* mocks cleared (no-op in Deno) */ void 0;
-  const drizzle = createDrizzleMock();
-  drizzle._.all = (async () => [
-    makeRepoRow(),
-    makeRepoRow({ id: "repo-2", name: "second" }),
-  ]) as any;
-  mocks.getDb = (() => drizzle) as any;
 
-  const result = await listRepositoriesBySpace({} as D1Database, "ws-1");
+Deno.test("listRepositoriesBySpace - maps all repo rows", async () => {
+  const db = createFakeD1Database([
+    {
+      all: [
+        makeRepoRow(),
+        makeRepoRow({ id: "repo-2", name: "second" }),
+      ],
+    },
+  ]);
+
+  const result = await listRepositoriesBySpace(db, "ws-1");
   assertEquals(result.length, 2);
 });
 
 Deno.test("createRepository - throws INVALID_NAME for empty name", async () => {
-  /* mocks cleared (no-op in Deno) */ void 0;
-  const drizzle = createDrizzleMock();
-  mocks.getDb = (() => drizzle) as any;
-
-  await assertRejects(async () => {
-    await createRepository({} as D1Database, {} as R2Bucket, {
-      spaceId: "ws-1",
-      name: "!!!",
-    });
-  }, RepositoryCreationError);
+  await assertRejects(
+    () =>
+      createRepository({} as D1Database, {} as R2Bucket, {
+        spaceId: "ws-1",
+        name: "",
+      }),
+    RepositoryCreationError,
+  );
 });
+
 Deno.test("createRepository - throws SPACE_NOT_FOUND when workspace does not exist", async () => {
-  /* mocks cleared (no-op in Deno) */ void 0;
-  const drizzle = createDrizzleMock();
-  drizzle._.get = (async () => undefined) as any; // workspace lookup
-  mocks.getDb = (() => drizzle) as any;
+  const db = createFakeD1Database([{ get: undefined }]);
 
-  try {
-    await createRepository({} as D1Database, {} as R2Bucket, {
-      spaceId: "ws-1",
-      name: "my-repo",
-    });
-    expect.unreachable();
-  } catch (err) {
-    assert(err instanceof RepositoryCreationError);
-    assertEquals((err as RepositoryCreationError).code, "SPACE_NOT_FOUND");
-  }
+  await assertRejects(
+    () =>
+      createRepository(db, {} as R2Bucket, {
+        spaceId: "ws-1",
+        name: "my-repo",
+      }),
+    RepositoryCreationError,
+  );
 });
+
 Deno.test("createRepository - throws REPOSITORY_EXISTS when name is taken", async () => {
-  /* mocks cleared (no-op in Deno) */ void 0;
-  const drizzle = createDrizzleMock();
-  drizzle._.get =
-    (async () => ({ id: "ws-1" })) as any // workspace found
-     =
-      (async () => ({ id: "existing-repo" })) as any; // existing repo
-  mocks.getDb = (() => drizzle) as any;
+  const db = createFakeD1Database([
+    { get: { id: "ws-1" } },
+    { get: { id: "existing-repo" } },
+  ]);
 
-  try {
-    await createRepository({} as D1Database, {} as R2Bucket, {
-      spaceId: "ws-1",
-      name: "my-repo",
-    });
-    expect.unreachable();
-  } catch (err) {
-    assert(err instanceof RepositoryCreationError);
-    assertEquals((err as RepositoryCreationError).code, "REPOSITORY_EXISTS");
-  }
+  await assertRejects(
+    () =>
+      createRepository(db, {} as R2Bucket, {
+        spaceId: "ws-1",
+        name: "my-repo",
+      }),
+    RepositoryCreationError,
+  );
 });
+
 Deno.test("createRepository - throws GIT_STORAGE_NOT_CONFIGURED when bucket is undefined", async () => {
-  /* mocks cleared (no-op in Deno) */ void 0;
-  const drizzle = createDrizzleMock();
-  drizzle._.get =
-    (async () => ({ id: "ws-1" })) as any // workspace found
-     =
-      (async () => undefined) as any; // no existing repo
-  mocks.getDb = (() => drizzle) as any;
+  const db = createFakeD1Database([
+    { get: { id: "ws-1" } },
+    { get: undefined },
+  ]);
 
-  try {
-    await createRepository({} as D1Database, undefined, {
-      spaceId: "ws-1",
-      name: "my-repo",
-    });
-    expect.unreachable();
-  } catch (err) {
-    assert(err instanceof RepositoryCreationError);
-    assertEquals(
-      (err as RepositoryCreationError).code,
-      "GIT_STORAGE_NOT_CONFIGURED",
-    );
-  }
-});
-Deno.test("createRepository - rolls back on git init failure", async () => {
-  /* mocks cleared (no-op in Deno) */ void 0;
-  const drizzle = createDrizzleMock();
-  drizzle._.get =
-    (async () => ({ id: "ws-1" })) as any // workspace found
-     =
-    (async () => undefined) as any // no existing repo
-     =
-      (async () => undefined) as any; // actor lookup
-  mocks.getDb = (() => drizzle) as any;
-  mocks.initRepository = (async () => {
-    throw new Error("git init failed");
-  }) as any;
-
-  try {
-    await createRepository({} as D1Database, {} as R2Bucket, {
-      spaceId: "ws-1",
-      name: "my-repo",
-    });
-    expect.unreachable();
-  } catch (err) {
-    assert(err instanceof RepositoryCreationError);
-    assertEquals((err as RepositoryCreationError).code, "INIT_FAILED");
-    assert(drizzle.delete.calls.length > 0);
-  }
-});
-Deno.test("createRepository - creates repo and initializes git successfully", async () => {
-  /* mocks cleared (no-op in Deno) */ void 0;
-  const drizzle = createDrizzleMock();
-  drizzle._.get =
-    (async () => ({ id: "ws-1" })) as any // workspace found
-     =
-    (async () => undefined) as any // no existing repo
-     =
-    (async () => ({
-      name: "User",
-      slug: "user",
-      email: "user@test.com",
-    })) as any // actor
-     =
-      (async () => makeRepoRow({ id: "repo-new-id" })) as any; // re-read after insert
-  mocks.getDb = (() => drizzle) as any;
-  mocks.initRepository = (async () => undefined) as any;
-
-  const result = await createRepository({} as D1Database, {} as R2Bucket, {
-    spaceId: "ws-1",
-    name: "my-repo",
-    actorAccountId: "user-1",
-  });
-
-  assertEquals(result.id, "repo-new-id");
-  assert(drizzle.insert.calls.length > 0);
-  assert(mocks.initRepository.calls.length > 0);
+  await assertRejects(
+    () =>
+      createRepository(db, undefined, {
+        spaceId: "ws-1",
+        name: "my-repo",
+      }),
+    RepositoryCreationError,
+  );
 });

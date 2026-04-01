@@ -42,7 +42,7 @@ import {
 } from './runner-events.ts';
 
 // Status helpers
-import { normalizeRunStatus } from './runner-history.ts';
+import type { normalizeRunStatus as _normalizeRunStatus } from './runner-history.ts';
 
 // Manager state
 import { createLLMState, type LLMState } from './llm-manager.ts';

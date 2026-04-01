@@ -217,7 +217,7 @@ export function OAuthClientTab(props: OAuthClientTabProps) {
                     </div>
                   )}
                 </For>
-                <button class="bg-transparent border-none p-0 text-sm text-[var(--color-text-primary)] cursor-pointer text-left" onClick={() => setFormRedirectUris(prev => [...prev, ''])}>
+                <button type="button" class="bg-transparent border-none p-0 text-sm text-[var(--color-text-primary)] cursor-pointer text-left" onClick={() => setFormRedirectUris(prev => [...prev, ''])}>
                   + {t('addRedirectUri')}
                 </button>
               </div>
@@ -227,7 +227,7 @@ export function OAuthClientTab(props: OAuthClientTabProps) {
               <div class="grid grid-cols-2 gap-2">
                 <For each={['confidential', 'public'] as const}>
                   {(type) => (
-                    <button class="p-3 rounded-lg text-left cursor-pointer transition-colors" style={{ border: `1px solid ${formClientType() === type ? 'var(--color-text-primary)' : 'var(--color-border-primary)'}`, 'background-color': formClientType() === type ? 'var(--color-surface-secondary)' : 'var(--color-surface-primary)' }} onClick={() => setFormClientType(type)}>
+                    <button type="button" class="p-3 rounded-lg text-left cursor-pointer transition-colors" style={{ border: `1px solid ${formClientType() === type ? 'var(--color-text-primary)' : 'var(--color-border-primary)'}`, 'background-color': formClientType() === type ? 'var(--color-surface-secondary)' : 'var(--color-surface-primary)' }} onClick={() => setFormClientType(type)}>
                       <div class="font-medium text-[var(--color-text-primary)]">{t(type === 'confidential' ? 'oauthClientTypeConfidential' : 'oauthClientTypePublic')}</div>
                       <div class="text-xs text-[var(--color-text-tertiary)] mt-1">{t(type === 'confidential' ? 'oauthClientTypeConfidentialDesc' : 'oauthClientTypePublicDesc')}</div>
                     </button>

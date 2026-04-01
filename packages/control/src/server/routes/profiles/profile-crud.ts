@@ -2,7 +2,7 @@ import { Hono } from 'hono';
 import { z } from 'zod';
 import { parsePagination, paginatedResponse } from '../../../shared/utils/index.ts';
 import { fetchProfileActivity } from '../../../application/services/identity/profile-activity.ts';
-import { type OptionalAuthRouteEnv } from '../route-auth.ts';
+import type { OptionalAuthRouteEnv } from '../route-auth.ts';
 import { zValidator } from '../zod-validator.ts';
 import { NotFoundError, AuthorizationError, BadRequestError } from 'takos-common/errors';
 import { batchStarCheck, getUserByUsername, getUserPrivacySettings, getUserStats, isFollowing } from './profile-queries.ts';

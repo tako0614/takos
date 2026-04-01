@@ -4,7 +4,7 @@ import type { InsertOf, SelectOf } from '../../../shared/types/drizzle-utils.ts'
 import { generateId } from '../../../shared/utils/index.ts';
 import { checkSpaceAccess } from '../identity/space-access.ts';
 import { getDb, threads, messages, runs } from '../../../infra/db/index.ts';
-import { eq, and, ne, desc, asc, count, max, sql } from 'drizzle-orm';
+import { eq, and, ne, desc, asc, count, max, type sql as _sql } from 'drizzle-orm';
 import { isValidOpaqueId } from '../../../shared/utils/db-guards.ts';
 import { makeMessagePreview, readMessageFromR2, shouldOffloadMessage, writeMessageToR2 } from '../offload/messages.ts';
 import { logWarn } from '../../../shared/utils/logger.ts';
@@ -13,6 +13,18 @@ export interface ThreadAccess {
   thread: Thread;
   role: SpaceRole;
 }
+
+export const threadServiceDeps = {
+  getDb,
+  checkSpaceAccess,
+  generateId,
+  isValidOpaqueId,
+  readMessageFromR2,
+  shouldOffloadMessage,
+  writeMessageToR2,
+  makeMessagePreview,
+  logWarn,
+};
 
 type MessageRow = {
   id: string;
@@ -101,7 +113,7 @@ export async function checkThreadAccess(
     return null;
   }
 
-  const db = getDb(dbBinding);
+  const db = threadServiceDeps.getDb(dbBinding);
   const row = await db.select().from(threads).where(eq(threads.id, threadId)).get();
 
   if (!row) {
@@ -110,7 +122,7 @@ export async function checkThreadAccess(
 
   const thread = toThread(row);
 
-  const access = await checkSpaceAccess(dbBinding, thread.space_id, userId, requiredRole);
+  const access = await threadServiceDeps.checkSpaceAccess(dbBinding, thread.space_id, userId, requiredRole);
   if (!access) {
     return null;
   }
@@ -123,7 +135,7 @@ export async function listThreads(
   spaceId: string,
   options: { status?: ThreadStatus }
 ): Promise<Thread[]> {
-  const db = getDb(dbBinding);
+  const db = threadServiceDeps.getDb(dbBinding);
 
   const conditions = [eq(threads.accountId, spaceId)];
 
@@ -146,8 +158,8 @@ export async function createThread(
   spaceId: string,
   input: { title?: string; locale?: 'ja' | 'en' | null }
 ): Promise<Thread | null> {
-  const db = getDb(dbBinding);
-  const id = generateId();
+  const db = threadServiceDeps.getDb(dbBinding);
+  const id = threadServiceDeps.generateId();
   const timestamp = new Date().toISOString();
   const title = input.title || null;
 
@@ -173,7 +185,7 @@ export async function updateThread(
     return null;
   }
 
-  const db = getDb(dbBinding);
+  const db = threadServiceDeps.getDb(dbBinding);
   const timestamp = new Date().toISOString();
 
   const data: Partial<InsertOf<typeof threads>> = { updatedAt: timestamp };
@@ -208,7 +220,7 @@ export async function updateThreadStatus(
   threadId: string,
   status: ThreadStatus
 ): Promise<void> {
-  const db = getDb(dbBinding);
+  const db = threadServiceDeps.getDb(dbBinding);
   const timestamp = new Date().toISOString();
 
   await db.update(threads)
@@ -221,7 +233,7 @@ export async function deleteThread(
   dbBinding: D1Database,
   threadId: string
 ): Promise<void> {
-  const db = getDb(dbBinding);
+  const db = threadServiceDeps.getDb(dbBinding);
   const timestamp = new Date().toISOString();
 
   await db.update(threads)
@@ -240,7 +252,7 @@ export async function listThreadMessages(
     return { messages: [], total: 0, runs: [] };
   }
 
-  const db = getDb(dbBinding);
+  const db = threadServiceDeps.getDb(dbBinding);
 
   // D1 does not support concurrent queries in a single request -- run sequentially
   const rows = await db.select({
@@ -283,7 +295,7 @@ export async function listThreadMessages(
     for (let i = 0; i < candidates.length; i += concurrency) {
       const batch = candidates.slice(i, i + concurrency);
       await Promise.all(batch.map(async ({ idx, key }) => {
-        const persisted = await readMessageFromR2(bucket, key);
+      const persisted = await threadServiceDeps.readMessageFromR2(bucket, key);
         if (!persisted) return;
         if (persisted.id !== rows[idx].id) return;
         if (persisted.thread_id !== threadId) return;
@@ -317,14 +329,14 @@ export async function createMessage(
     metadata?: Record<string, unknown>;
   }
 ): Promise<Message | null> {
-  const db = getDb(dbBinding);
+  const db = threadServiceDeps.getDb(dbBinding);
 
   const agg = await db.select({ maxSeq: max(messages.sequence) }).from(messages)
     .where(eq(messages.threadId, thread.id))
     .get();
 
   const sequence = (agg?.maxSeq ?? -1) + 1;
-  const id = generateId();
+  const id = threadServiceDeps.generateId();
   const timestamp = new Date().toISOString();
   const toolCallsStr = input.tool_calls ? JSON.stringify(input.tool_calls) : null;
   const metadataStr = JSON.stringify(input.metadata || {});
@@ -334,9 +346,9 @@ export async function createMessage(
   let toolCallsForD1: string | null = toolCallsStr;
 
   const offloadBucket = env.TAKOS_OFFLOAD;
-  if (offloadBucket && shouldOffloadMessage({ role: input.role, content: input.content })) {
+  if (offloadBucket && threadServiceDeps.shouldOffloadMessage({ role: input.role, content: input.content })) {
     try {
-      const { key } = await writeMessageToR2(offloadBucket, thread.id, id, {
+      const { key } = await threadServiceDeps.writeMessageToR2(offloadBucket, thread.id, id, {
         id,
         thread_id: thread.id,
         role: input.role,
@@ -352,7 +364,7 @@ export async function createMessage(
       // Keep D1 small; hydrate from R2 on read.
       toolCallsForD1 = null;
     } catch (err) {
-      logWarn(`Failed to persist message ${id} to R2, storing inline`, { module: 'message_offload', detail: err });
+      threadServiceDeps.logWarn(`Failed to persist message ${id} to R2, storing inline`, { module: 'message_offload', detail: err });
     }
   }
 
@@ -375,11 +387,11 @@ export async function createMessage(
 
   // Update thread's updatedAt (non-critical, don't let failure block message creation)
   try {
-    await db.update(threads)
-      .set({ updatedAt: timestamp })
-      .where(eq(threads.id, thread.id));
-  } catch (err) {
-    logWarn('Failed to update thread updatedAt', { module: 'services/threads/thread-service', detail: err });
+      await db.update(threads)
+        .set({ updatedAt: timestamp })
+        .where(eq(threads.id, thread.id));
+    } catch (err) {
+      threadServiceDeps.logWarn('Failed to update thread updatedAt', { module: 'services/threads/thread-service', detail: err });
   }
 
   // Auto-set title from first user message
@@ -390,7 +402,7 @@ export async function createMessage(
         .set({ title: autoTitle, updatedAt: timestamp })
         .where(eq(threads.id, thread.id));
     } catch (err) {
-      logWarn('Failed to auto-set thread title', { module: 'services/threads/thread-service', detail: err });
+      threadServiceDeps.logWarn('Failed to auto-set thread title', { module: 'services/threads/thread-service', detail: err });
     }
   }
 

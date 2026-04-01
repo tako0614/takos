@@ -12,7 +12,7 @@
  *   takos group show <name>       -- Show all entities in a group
  *   takos group delete <name>     -- Delete all entities and state for a group
  */
-import { Command } from 'commander';
+import type { Command } from 'commander';
 import { registerGroupListCommand } from './list.ts';
 import { registerGroupShowCommand } from './show.ts';
 import { registerGroupDeleteCommand } from './delete.ts';

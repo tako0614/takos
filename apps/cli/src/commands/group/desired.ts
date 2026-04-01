@@ -1,5 +1,5 @@
 import { readFile } from 'node:fs/promises';
-import { Command } from 'commander';
+import type { Command } from 'commander';
 import { bold, green, red } from '@std/fmt/colors';
 import { api } from '../../lib/api.ts';
 import { cliExit } from '../../lib/command-exit.ts';

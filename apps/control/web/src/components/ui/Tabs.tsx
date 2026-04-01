@@ -78,6 +78,7 @@ export function Tab(props: TabProps) {
 
   return (
     <button
+      type="button"
       role="tab"
       aria-selected={activeTab() === local.id}
       class={local.class ?? ''}

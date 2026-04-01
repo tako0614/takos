@@ -16,7 +16,7 @@ import type {
 } from '../views/chat/chat-types.ts';
 import { isRunInRootTree } from '../views/chat/timeline.ts';
 import { useWsSessionDiff, type SessionDiffState, type PendingSessionDiffSummary } from './useWsSessionDiff.ts';
-import { useWsMessageProcessor, ACTIVE_RUN_STATUSES, TERMINAL_RUN_STATUSES } from './useWsMessageProcessor.ts';
+import { useWsMessageProcessor, TERMINAL_RUN_STATUSES } from './useWsMessageProcessor.ts';
 import { useConnectionManagerWithFallback } from './useConnectionManagerWithFallback.ts';
 
 export type { SessionDiffState } from './useWsSessionDiff.ts';
@@ -92,8 +92,8 @@ export function useWebSocketConnection({
   });
 
   // Stable refs for cross-hook communication
-  let currentRunIdRef: MutableRefObject<string | null> = { current: null };
-  let lastEventIdRef: MutableRefObject<number> = { current: 0 };
+  const currentRunIdRef: MutableRefObject<string | null> = { current: null };
+  const lastEventIdRef: MutableRefObject<number> = { current: 0 };
 
   // --- Connection manager sub-hook (WS with SSE fallback) ---
   const connection = useConnectionManagerWithFallback({
@@ -143,7 +143,7 @@ export function useWebSocketConnection({
   };
 
   // --- Sync run tree ---
-  let syncRunTreeRef: MutableRefObject<(() => Promise<void>) | null> = { current: null };
+  const syncRunTreeRef: MutableRefObject<(() => Promise<void>) | null> = { current: null };
 
   syncRunTreeRef.current = async () => {
     const rootRunId = connection.rootRunIdRef.current || currentRunIdRef.current;

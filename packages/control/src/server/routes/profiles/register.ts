@@ -1,4 +1,4 @@
-import { Hono, type MiddlewareHandler } from 'hono';
+import type { Hono, MiddlewareHandler } from 'hono';
 import type { Env, User } from '../../../shared/types/index.ts';
 import profiles from './index.ts';
 

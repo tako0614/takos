@@ -1,4 +1,4 @@
-import type { D1Database, R2Bucket, DurableObjectNamespace, Queue } from '../../shared/types/bindings.ts';
+import type { D1Database as _D1Database, R2Bucket, DurableObjectNamespace, Queue } from '../../shared/types/bindings.ts';
 import type { Conclusion } from 'takos-actions-engine';
 import type { WorkflowStepResult } from '../../application/services/execution/workflow-engine.ts';
 import type { DbEnv, WorkflowJobQueueMessage, WorkflowShell } from '../../shared/types/index.ts';

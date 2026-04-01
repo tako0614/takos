@@ -1,6 +1,6 @@
 import { Hono } from 'hono';
 import { z } from 'zod';
-import type { Env } from '../../shared/types/index.ts';
+import type { Env as _Env } from '../../shared/types/index.ts';
 import { spaceAccess, type SpaceAccessRouteEnv } from './route-auth.ts';
 import { NotFoundError, InternalError, GoneError, isAppError } from 'takos-common/errors';
 import { AppDeploymentService, APP_DEPLOYMENTS_REMOVED_MESSAGE } from '../../application/services/platform/app-deployments.ts';
@@ -47,23 +47,23 @@ const routes = new Hono<SpaceAccessRouteEnv>()
     try { const body = c.req.valid('json'); const service = new AppDeploymentService(c.env); const result = await service.rollback(space.id, user.id, appDeploymentId, { approveOauthAutoEnv: body.approve_oauth_auto_env === true }); return c.json({ success: true, data: result }); }
     catch (error) { handleRouteError(error, 'rollback app deployment'); }
   })
-  .get('/spaces/:spaceId/app-deployments/:appDeploymentId/rollout', spaceAccess({ roles: APP_DEPLOYMENT_GET_ROLES }), async (c) => {
+  .get('/spaces/:spaceId/app-deployments/:appDeploymentId/rollout', spaceAccess({ roles: APP_DEPLOYMENT_GET_ROLES }), async (_c) => {
     try { throwRemovedAppDeployments(); }
     catch (error) { handleRouteError(error, 'get rollout state'); }
   })
-  .post('/spaces/:spaceId/app-deployments/:appDeploymentId/rollout/pause', spaceAccess({ roles: APP_DEPLOYMENT_DEPLOY_ROLES }), async (c) => {
+  .post('/spaces/:spaceId/app-deployments/:appDeploymentId/rollout/pause', spaceAccess({ roles: APP_DEPLOYMENT_DEPLOY_ROLES }), async (_c) => {
     try { throwRemovedAppDeployments(); }
     catch (error) { handleRouteError(error, 'pause rollout'); }
   })
-  .post('/spaces/:spaceId/app-deployments/:appDeploymentId/rollout/resume', spaceAccess({ roles: APP_DEPLOYMENT_DEPLOY_ROLES }), async (c) => {
+  .post('/spaces/:spaceId/app-deployments/:appDeploymentId/rollout/resume', spaceAccess({ roles: APP_DEPLOYMENT_DEPLOY_ROLES }), async (_c) => {
     try { throwRemovedAppDeployments(); }
     catch (error) { handleRouteError(error, 'resume rollout'); }
   })
-  .post('/spaces/:spaceId/app-deployments/:appDeploymentId/rollout/abort', spaceAccess({ roles: APP_DEPLOYMENT_DEPLOY_ROLES }), async (c) => {
+  .post('/spaces/:spaceId/app-deployments/:appDeploymentId/rollout/abort', spaceAccess({ roles: APP_DEPLOYMENT_DEPLOY_ROLES }), async (_c) => {
     try { throwRemovedAppDeployments(); }
     catch (error) { handleRouteError(error, 'abort rollout'); }
   })
-  .post('/spaces/:spaceId/app-deployments/:appDeploymentId/rollout/promote', spaceAccess({ roles: APP_DEPLOYMENT_DEPLOY_ROLES }), async (c) => {
+  .post('/spaces/:spaceId/app-deployments/:appDeploymentId/rollout/promote', spaceAccess({ roles: APP_DEPLOYMENT_DEPLOY_ROLES }), async (_c) => {
     try { throwRemovedAppDeployments(); }
     catch (error) { handleRouteError(error, 'promote rollout'); }
   })

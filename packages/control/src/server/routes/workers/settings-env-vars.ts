@@ -11,20 +11,29 @@ import { ServiceDesiredStateService } from '../../../application/services/platfo
 import { logError } from '../../../shared/utils/logger.ts';
 import { NotFoundError, InternalError } from 'takos-common/errors';
 
+export const workersSettingsEnvVarsRouteDeps = {
+  getServiceForUser,
+  getServiceForUserWithRole,
+  createDesiredStateService: (env: AuthenticatedRouteEnv['Bindings']) => new ServiceDesiredStateService(env),
+  createCommonEnvDeps,
+  markRequiredKeysLocallyOverriddenForService,
+  buildCommonEnvActor,
+};
+
 const settingsEnvVars = new Hono<AuthenticatedRouteEnv>()
 
 .get('/:id/env', async (c) => {
   const user = c.get('user');
   const workerId = c.req.param('id');
 
-  const worker = await getServiceForUser(c.env.DB, workerId, user.id);
+  const worker = await workersSettingsEnvVarsRouteDeps.getServiceForUser(c.env.DB, workerId, user.id);
 
   if (!worker) {
     throw new NotFoundError('Service');
   }
 
   try {
-    const desiredState = new ServiceDesiredStateService(c.env);
+    const desiredState = workersSettingsEnvVarsRouteDeps.createDesiredStateService(c.env);
     const envVars = await desiredState.listLocalEnvVarSummaries(worker.space_id, worker.id);
 
     return c.json({
@@ -54,14 +63,14 @@ const settingsEnvVars = new Hono<AuthenticatedRouteEnv>()
     throw new BadRequestError( 'variables array is required');
   }
 
-  const worker = await getServiceForUserWithRole(c.env.DB, workerId, user.id, ['owner', 'admin', 'editor']);
+  const worker = await workersSettingsEnvVarsRouteDeps.getServiceForUserWithRole(c.env.DB, workerId, user.id, ['owner', 'admin', 'editor']);
 
   if (!worker) {
     throw new NotFoundError('Service');
   }
 
   try {
-    const desiredState = new ServiceDesiredStateService(c.env);
+    const desiredState = workersSettingsEnvVarsRouteDeps.createDesiredStateService(c.env);
     const normalizedVariables = body.variables.map((v) => ({
       name: normalizeCommonEnvName(v.name) ?? v.name,
       value: v.value,
@@ -73,12 +82,12 @@ const settingsEnvVars = new Hono<AuthenticatedRouteEnv>()
       variables: normalizedVariables,
     });
 
-    const deps = createCommonEnvDeps(c.env);
-    const actor = await buildCommonEnvActor(c, user.id);
+    const deps = workersSettingsEnvVarsRouteDeps.createCommonEnvDeps(c.env);
+    const actor = await workersSettingsEnvVarsRouteDeps.buildCommonEnvActor(c, user.id);
     const linkedKeyCandidates = normalizedVariables
       .map((v) => normalizeCommonEnvName(v.name))
       .filter((name): name is string => Boolean(name));
-    await markRequiredKeysLocallyOverriddenForService(deps.manualLink, {
+    await workersSettingsEnvVarsRouteDeps.markRequiredKeysLocallyOverriddenForService(deps.manualLink, {
       spaceId: worker.space_id,
       serviceId: worker.id,
       keys: linkedKeyCandidates,

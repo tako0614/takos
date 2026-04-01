@@ -9,15 +9,32 @@
  * 6. Return report-status response
  */
 
-import type { D1Database, R2Bucket } from '../../../../shared/types/bindings.ts';
-import { parsePktLines, pktLineText, encodePktLine, encodeSideBandData, flushPkt } from '../protocol/pkt-line.ts';
-import { readPackfileAsync } from '../protocol/packfile-reader.ts';
-import { indexCommit, getCommit, isAncestor } from '../core/commit-index.ts';
-import { updateBranch, createBranch, deleteBranch, createTag, deleteTag, getBranch, isValidRefName } from '../core/refs.ts';
-import { concatBytes } from '../core/sha1.ts';
-import { Buffer } from "node:buffer";
+import type {
+  D1Database,
+  R2Bucket,
+} from "../../../../shared/types/bindings.ts";
+import {
+  encodePktLine,
+  encodeSideBandData,
+  flushPkt,
+  type parsePktLines as _parsePktLines,
+  type pktLineText as _pktLineText,
+} from "../protocol/pkt-line.ts";
+import { readPackfileAsync } from "../protocol/packfile-reader.ts";
+import { getCommit, indexCommit, isAncestor } from "../core/commit-index.ts";
+import {
+  createBranch,
+  createTag,
+  deleteBranch,
+  deleteTag,
+  getBranch,
+  isValidRefName,
+  updateBranch,
+} from "../core/refs.ts";
+import { concatBytes } from "../core/sha1.ts";
+import type { Buffer as _Buffer } from "node:buffer";
 
-const ZERO_SHA = '0000000000000000000000000000000000000000';
+const ZERO_SHA = "0000000000000000000000000000000000000000";
 const MAX_REFS_UPDATED_PER_PUSH = 50;
 const MAX_OBJECTS_PER_PUSH = 200000;
 const MAX_PUSH_PACKFILE_BYTES = 90 * 1024 * 1024;
@@ -44,7 +61,10 @@ export async function handleReceivePackFromStream(
   stream: ReadableStream<Uint8Array>,
   maxBodyBytes: number = MAX_PUSH_PACKFILE_BYTES,
 ): Promise<{ response: Uint8Array; updatedRefs: RefCommand[] }> {
-  const { commands, packfileData } = await readReceivePackStream(stream, maxBodyBytes);
+  const { commands, packfileData } = await readReceivePackStream(
+    stream,
+    maxBodyBytes,
+  );
   return processReceivePack(db, bucket, repoId, commands, packfileData);
 }
 
@@ -75,17 +95,20 @@ export async function processReceivePack(
 ): Promise<{ response: Uint8Array; updatedRefs: RefCommand[] }> {
   if (commands.length > MAX_REFS_UPDATED_PER_PUSH) {
     return {
-      response: buildReportStatus('too many ref updates', commands.map((c) => ({
-        refName: c.refName,
-        status: 'ng ref-update limit exceeded',
-      }))),
+      response: buildReportStatus(
+        "too many ref updates",
+        commands.map((c) => ({
+          refName: c.refName,
+          status: "ng ref-update limit exceeded",
+        })),
+      ),
       updatedRefs: [],
     };
   }
 
   if (commands.length === 0) {
     return {
-      response: buildReportStatus('ok', []),
+      response: buildReportStatus("ok", []),
       updatedRefs: [],
     };
   }
@@ -94,10 +117,13 @@ export async function processReceivePack(
   if (packfileData && packfileData.length > 0) {
     if (packfileData.length > MAX_PUSH_PACKFILE_BYTES) {
       return {
-        response: buildReportStatus('packfile too large', commands.map((c) => ({
-          refName: c.refName,
-          status: 'ng packfile-size limit exceeded',
-        }))),
+        response: buildReportStatus(
+          "packfile too large",
+          commands.map((c) => ({
+            refName: c.refName,
+            status: "ng packfile-size limit exceeded",
+          })),
+        ),
         updatedRefs: [],
       };
     }
@@ -106,10 +132,13 @@ export async function processReceivePack(
       const objectCount = readPackObjectCount(packfileData);
       if (objectCount > MAX_OBJECTS_PER_PUSH) {
         return {
-          response: buildReportStatus('too many objects', commands.map((c) => ({
-            refName: c.refName,
-            status: 'ng object-count limit exceeded',
-          }))),
+          response: buildReportStatus(
+            "too many objects",
+            commands.map((c) => ({
+              refName: c.refName,
+              status: "ng object-count limit exceeded",
+            })),
+          ),
           updatedRefs: [],
         };
       }
@@ -122,12 +151,15 @@ export async function processReceivePack(
         maxDeltaChainDepth: MAX_DELTA_CHAIN_DEPTH,
       });
     } catch (err) {
-      const errorMsg = err instanceof Error ? err.message : 'Unknown error';
+      const errorMsg = err instanceof Error ? err.message : "Unknown error";
       return {
-        response: buildReportStatus(errorMsg, commands.map(c => ({
-          refName: c.refName,
-          status: 'ng unpack failed',
-        }))),
+        response: buildReportStatus(
+          errorMsg,
+          commands.map((c) => ({
+            refName: c.refName,
+            status: "ng unpack failed",
+          })),
+        ),
         updatedRefs: [],
       };
     }
@@ -153,17 +185,17 @@ export async function processReceivePack(
     try {
       const result = await applyRefCommand(db, bucket, repoId, cmd);
       results.push({ refName: cmd.refName, status: result });
-      if (result === 'ok') {
+      if (result === "ok") {
         updatedRefs.push(cmd);
       }
     } catch (err) {
-      const errorMsg = err instanceof Error ? err.message : 'Unknown error';
+      const errorMsg = err instanceof Error ? err.message : "Unknown error";
       results.push({ refName: cmd.refName, status: `ng ${errorMsg}` });
     }
   }
 
   return {
-    response: buildReportStatus('ok', results),
+    response: buildReportStatus("ok", results),
     updatedRefs,
   };
 }
@@ -171,19 +203,19 @@ export async function processReceivePack(
 /** @internal */
 export function readPackObjectCount(packfileData: Uint8Array): number {
   if (packfileData.length < 12) {
-    throw new Error('Incomplete pack header');
+    throw new Error("Incomplete pack header");
   }
 
   const signature = new TextDecoder().decode(packfileData.subarray(0, 4));
-  if (signature !== 'PACK') {
-    throw new Error('Invalid packfile signature');
+  if (signature !== "PACK") {
+    throw new Error("Invalid packfile signature");
   }
 
   return (
-    (packfileData[8] << 24)
-    | (packfileData[9] << 16)
-    | (packfileData[10] << 8)
-    | packfileData[11]
+    (packfileData[8] << 24) |
+    (packfileData[9] << 16) |
+    (packfileData[10] << 8) |
+    packfileData[11]
   ) >>> 0;
 }
 
@@ -209,28 +241,28 @@ export function parseReceivePackBody(body: Uint8Array): {
 
     if (length < 4 || offset + length > body.length) break;
 
-    const lineData = new TextDecoder().decode(body.subarray(offset + 4, offset + length));
+    const lineData = new TextDecoder().decode(
+      body.subarray(offset + 4, offset + length),
+    );
     offset += length;
 
     // Parse: "<old-sha> <new-sha> <refname>[\0capabilities]"
-    const line = lineData.replace(/\n$/, '');
-    const nullIdx = line.indexOf('\0');
+    const line = lineData.replace(/\n$/, "");
+    const nullIdx = line.indexOf("\0");
     const refLine = nullIdx !== -1 ? line.substring(0, nullIdx) : line;
 
-    const parts = refLine.split(' ');
+    const parts = refLine.split(" ");
     if (parts.length >= 3) {
       commands.push({
         oldSha: parts[0],
         newSha: parts[1],
-        refName: parts.slice(2).join(' '),
+        refName: parts.slice(2).join(" "),
       });
     }
   }
 
   // Remaining data is the packfile
-  const packfileData = offset < body.length
-    ? body.subarray(offset)
-    : null;
+  const packfileData = offset < body.length ? body.subarray(offset) : null;
 
   return { commands, packfileData };
 }
@@ -244,60 +276,60 @@ export async function applyRefCommand(
 ): Promise<string> {
   const { oldSha, newSha, refName } = cmd;
 
-  if (refName.startsWith('refs/heads/')) {
-    const branchName = refName.slice('refs/heads/'.length);
+  if (refName.startsWith("refs/heads/")) {
+    const branchName = refName.slice("refs/heads/".length);
 
     // Validate ref name
     if (!isValidRefName(branchName)) {
-      return 'ng invalid ref name';
+      return "ng invalid ref name";
     }
 
     if (newSha === ZERO_SHA) {
       // Delete branch — deleteBranch already checks is_protected
       const result = await deleteBranch(db, repoId, branchName);
-      return result.success ? 'ok' : `ng ${result.error}`;
+      return result.success ? "ok" : `ng ${result.error}`;
     }
 
     if (oldSha === ZERO_SHA) {
       // Create branch
       const result = await createBranch(db, repoId, branchName, newSha);
-      return result.success ? 'ok' : `ng ${result.error}`;
+      return result.success ? "ok" : `ng ${result.error}`;
     }
 
     // Update branch — check protected branch and fast-forward
     const branch = await getBranch(db, repoId, branchName);
     if (branch?.is_protected) {
-      return 'ng protected branch';
+      return "ng protected branch";
     }
 
     // Fast-forward check: oldSha must be ancestor of newSha
     const isFastForward = await isAncestor(db, bucket, repoId, oldSha, newSha);
     if (!isFastForward) {
-      return 'ng non-fast-forward update rejected';
+      return "ng non-fast-forward update rejected";
     }
 
     const result = await updateBranch(db, repoId, branchName, oldSha, newSha);
-    return result.success ? 'ok' : `ng ${result.error}`;
+    return result.success ? "ok" : `ng ${result.error}`;
   }
 
-  if (refName.startsWith('refs/tags/')) {
-    const tagName = refName.slice('refs/tags/'.length);
+  if (refName.startsWith("refs/tags/")) {
+    const tagName = refName.slice("refs/tags/".length);
 
     // Validate ref name
     if (!isValidRefName(tagName)) {
-      return 'ng invalid ref name';
+      return "ng invalid ref name";
     }
 
     if (newSha === ZERO_SHA) {
       const result = await deleteTag(db, repoId, tagName);
-      return result.success ? 'ok' : `ng ${result.error}`;
+      return result.success ? "ok" : `ng ${result.error}`;
     }
 
     const result = await createTag(db, repoId, tagName, newSha);
-    return result.success ? 'ok' : `ng ${result.error}`;
+    return result.success ? "ok" : `ng ${result.error}`;
   }
 
-  return 'ng unsupported ref type';
+  return "ng unsupported ref type";
 }
 
 /**
@@ -363,11 +395,16 @@ export async function readReceivePackStream(
 
       totalBytes += value.byteLength;
       if (totalBytes > maxBytes) {
-        throw new Error(`Push body size ${totalBytes} exceeds limit of ${maxBytes}`);
+        throw new Error(
+          `Push body size ${totalBytes} exceeds limit of ${maxBytes}`,
+        );
       }
 
       // Append chunk to buffer
-      buffer = concatBytes(buffer, new Uint8Array(value.buffer, value.byteOffset, value.byteLength));
+      buffer = concatBytes(
+        buffer,
+        new Uint8Array(value.buffer, value.byteOffset, value.byteLength),
+      );
 
       // Try to parse pkt-line commands from accumulated buffer
       if (!commandsParsed) {
@@ -432,20 +469,22 @@ export function tryParsePktLineCommands(
 
     if (offset + length > buffer.length) return null; // Need more data
 
-    const lineData = decoder.decode(buffer.subarray(offset + 4, offset + length));
+    const lineData = decoder.decode(
+      buffer.subarray(offset + 4, offset + length),
+    );
     offset += length;
 
     // Parse: "<old-sha> <new-sha> <refname>[\0capabilities]"
-    const line = lineData.replace(/\n$/, '');
-    const nullIdx = line.indexOf('\0');
+    const line = lineData.replace(/\n$/, "");
+    const nullIdx = line.indexOf("\0");
     const refLine = nullIdx !== -1 ? line.substring(0, nullIdx) : line;
 
-    const parts = refLine.split(' ');
+    const parts = refLine.split(" ");
     if (parts.length >= 3) {
       commands.push({
         oldSha: parts[0],
         newSha: parts[1],
-        refName: parts.slice(2).join(' '),
+        refName: parts.slice(2).join(" "),
       });
     }
   }
@@ -464,7 +503,7 @@ export function buildReportStatus(
   statusParts.push(encodePktLine(`unpack ${unpackStatus}\n`));
 
   for (const ref of refResults) {
-    if (ref.status === 'ok') {
+    if (ref.status === "ok") {
       statusParts.push(encodePktLine(`ok ${ref.refName}\n`));
     } else {
       statusParts.push(encodePktLine(`ng ${ref.refName} ${ref.status}\n`));
@@ -478,7 +517,10 @@ export function buildReportStatus(
   const CHUNK_SIZE = 65515;
   const parts: Uint8Array[] = [];
   for (let i = 0; i < statusData.length; i += CHUNK_SIZE) {
-    const chunk = statusData.subarray(i, Math.min(i + CHUNK_SIZE, statusData.length));
+    const chunk = statusData.subarray(
+      i,
+      Math.min(i + CHUNK_SIZE, statusData.length),
+    );
     parts.push(encodeSideBandData(1, chunk));
   }
   parts.push(flushPkt());

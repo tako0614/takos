@@ -13,7 +13,7 @@ import { checkSpaceAccess } from '../../../application/services/identity/space-a
 import { toSessionSnakeCase } from './session-mappers.ts';
 import type { SessionContext } from './session-mappers.ts';
 import { logError, logWarn } from '../../../shared/utils/logger.ts';
-import { BadRequestError, AuthorizationError, NotFoundError, InternalError } from 'takos-common/errors';
+import { BadRequestError, AuthorizationError, type NotFoundError as _NotFoundError, InternalError } from 'takos-common/errors';
 import { requireParam, requireFound } from '../validation-utils.ts';
 import {
   getPlatformConfig,
@@ -151,7 +151,7 @@ export async function stopSession(
   );
 
   const session = toSessionSnakeCase(sessionRow);
-  const access = await requireSpaceAccess(
+  const _access = await requireSpaceAccess(
     c,
     session.space_id,
     user.id,
@@ -262,7 +262,7 @@ export async function resumeSession(c: SessionContext): Promise<Response> {
     'Session',
   );
 
-  const access = await requireSpaceAccess(
+  const _access = await requireSpaceAccess(
     c,
     sessionRow.accountId,
     user.id,

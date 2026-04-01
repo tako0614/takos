@@ -1,4 +1,4 @@
-import { createSignal, createEffect, onMount, onCleanup } from 'solid-js';
+import { createSignal, createEffect, onCleanup } from 'solid-js';
 import { Icons } from '../lib/Icons.tsx';
 import { useI18n } from '../store/i18n.ts';
 import { rpc, rpcJson } from '../lib/rpc.ts';

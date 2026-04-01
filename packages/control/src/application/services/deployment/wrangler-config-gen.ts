@@ -6,17 +6,17 @@
  * serialized to TOML for wrangler deploy, or used directly with the
  * Cloudflare API.
  */
-import type { WorkerService } from './group-deploy-manifest.ts';
+import type { WorkerService } from "./group-deploy-manifest.ts";
 import type {
   ProvisionedResource,
   WranglerConfig,
   WranglerD1Binding,
-  WranglerR2Binding,
   WranglerKVBinding,
-  WranglerServiceBinding,
   WranglerQueueProducer,
+  WranglerR2Binding,
+  WranglerServiceBinding,
   WranglerVectorizeIndex,
-} from './group-deploy-types.ts';
+} from "./group-deploy-types.ts";
 
 export interface GenerateWranglerConfigOptions {
   groupName: string;
@@ -44,7 +44,7 @@ export function generateWranglerConfig(
   const config: WranglerConfig = {
     name: scriptName,
     main: service.build.fromWorkflow.artifactPath,
-    compatibility_date: options.compatibilityDate || '2025-01-01',
+    compatibility_date: options.compatibilityDate || "2026-04-01",
   };
 
   // Env vars
@@ -54,82 +54,98 @@ export function generateWranglerConfig(
 
   // D1 bindings
   if (service.bindings?.d1 && service.bindings.d1.length > 0) {
-    config.d1_databases = service.bindings.d1.map((resourceName): WranglerD1Binding => {
-      const provisioned = options.resources.get(resourceName);
-      if (!provisioned?.id) {
-        throw new Error(`Resource '${resourceName}' not provisioned: missing database_id`);
-      }
-      return {
-        binding: provisioned.binding || resourceName.toUpperCase().replace(/-/g, '_'),
-        database_name: provisioned.name || resourceName,
-        database_id: provisioned.id,
-      };
-    });
+    config.d1_databases = service.bindings.d1.map(
+      (resourceName): WranglerD1Binding => {
+        const provisioned = options.resources.get(resourceName);
+        if (!provisioned?.id) {
+          throw new Error(
+            `Resource '${resourceName}' not provisioned: missing database_id`,
+          );
+        }
+        return {
+          binding: provisioned.binding ||
+            resourceName.toUpperCase().replace(/-/g, "_"),
+          database_name: provisioned.name || resourceName,
+          database_id: provisioned.id,
+        };
+      },
+    );
   }
 
   // R2 bindings
   if (service.bindings?.r2 && service.bindings.r2.length > 0) {
-    config.r2_buckets = service.bindings.r2.map((resourceName): WranglerR2Binding => {
-      const provisioned = options.resources.get(resourceName);
-      return {
-        binding: provisioned?.binding || resourceName.toUpperCase().replace(/-/g, '_'),
-        bucket_name: provisioned?.name || resourceName,
-      };
-    });
+    config.r2_buckets = service.bindings.r2.map(
+      (resourceName): WranglerR2Binding => {
+        const provisioned = options.resources.get(resourceName);
+        return {
+          binding: provisioned?.binding ||
+            resourceName.toUpperCase().replace(/-/g, "_"),
+          bucket_name: provisioned?.name || resourceName,
+        };
+      },
+    );
   }
 
   // KV bindings
   if (service.bindings?.kv && service.bindings.kv.length > 0) {
-    config.kv_namespaces = service.bindings.kv.map((resourceName): WranglerKVBinding => {
-      const provisioned = options.resources.get(resourceName);
-      if (!provisioned?.id) {
-        throw new Error(`Resource '${resourceName}' not provisioned: missing KV namespace id`);
-      }
-      return {
-        binding: provisioned.binding || resourceName.toUpperCase().replace(/-/g, '_'),
-        id: provisioned.id,
-      };
-    });
+    config.kv_namespaces = service.bindings.kv.map(
+      (resourceName): WranglerKVBinding => {
+        const provisioned = options.resources.get(resourceName);
+        if (!provisioned?.id) {
+          throw new Error(
+            `Resource '${resourceName}' not provisioned: missing KV namespace id`,
+          );
+        }
+        return {
+          binding: provisioned.binding ||
+            resourceName.toUpperCase().replace(/-/g, "_"),
+          id: provisioned.id,
+        };
+      },
+    );
   }
 
   // Service bindings (inter-service references within the group)
   if (service.bindings?.services && service.bindings.services.length > 0) {
-    config.services = service.bindings.services.map((targetServiceName): WranglerServiceBinding => {
-      const targetScriptName = options.namespace
-        ? `${options.groupName}-${targetServiceName}`
-        : targetServiceName;
-      return {
-        binding: targetServiceName.toUpperCase().replace(/-/g, '_'),
-        service: targetScriptName,
-      };
-    });
+    config.services = service.bindings.services.map(
+      (targetServiceName): WranglerServiceBinding => {
+        const targetScriptName = options.namespace
+          ? `${options.groupName}-${targetServiceName}`
+          : targetServiceName;
+        return {
+          binding: targetServiceName.toUpperCase().replace(/-/g, "_"),
+          service: targetScriptName,
+        };
+      },
+    );
   }
 
   // Queue bindings
   if (service.bindings?.queues && service.bindings.queues.length > 0) {
-    config.queues_producers = service.bindings.queues.map((resourceName): WranglerQueueProducer => {
-      const provisioned = options.resources.get(resourceName);
-      return {
-        queue: provisioned?.name || resourceName,
-        binding: provisioned?.binding || resourceName.toUpperCase().replace(/-/g, '_'),
-      };
-    });
+    config.queues_producers = service.bindings.queues.map(
+      (resourceName): WranglerQueueProducer => {
+        const provisioned = options.resources.get(resourceName);
+        return {
+          queue: provisioned?.name || resourceName,
+          binding: provisioned?.binding ||
+            resourceName.toUpperCase().replace(/-/g, "_"),
+        };
+      },
+    );
   }
 
   // Vectorize bindings
   if (service.bindings?.vectorize && service.bindings.vectorize.length > 0) {
-    config.vectorize_indexes = service.bindings.vectorize.map((resourceName): WranglerVectorizeIndex => {
-      const provisioned = options.resources.get(resourceName);
-      return {
-        index_name: provisioned?.name || resourceName,
-        binding: provisioned?.binding || resourceName.toUpperCase().replace(/-/g, '_'),
-      };
-    });
-  }
-
-  // Dispatch namespace
-  if (options.namespace) {
-    config.dispatch_namespace = options.namespace;
+    config.vectorize = service.bindings.vectorize.map(
+      (resourceName): WranglerVectorizeIndex => {
+        const provisioned = options.resources.get(resourceName);
+        return {
+          index_name: provisioned?.name || resourceName,
+          binding: provisioned?.binding ||
+            resourceName.toUpperCase().replace(/-/g, "_"),
+        };
+      },
+    );
   }
 
   return config;
@@ -146,19 +162,21 @@ export function serializeWranglerToml(config: WranglerConfig): string {
 
   lines.push(`name = ${JSON.stringify(config.name)}`);
   lines.push(`main = ${JSON.stringify(config.main)}`);
-  lines.push(`compatibility_date = ${JSON.stringify(config.compatibility_date)}`);
+  lines.push(
+    `compatibility_date = ${JSON.stringify(config.compatibility_date)}`,
+  );
 
   if (config.compatibility_flags && config.compatibility_flags.length > 0) {
-    lines.push(`compatibility_flags = [${config.compatibility_flags.map(f => JSON.stringify(f)).join(', ')}]`);
-  }
-
-  if (config.dispatch_namespace) {
-    lines.push(`dispatch_namespace = ${JSON.stringify(config.dispatch_namespace)}`);
+    lines.push(
+      `compatibility_flags = [${
+        config.compatibility_flags.map((f) => JSON.stringify(f)).join(", ")
+      }]`,
+    );
   }
 
   if (config.vars && Object.keys(config.vars).length > 0) {
-    lines.push('');
-    lines.push('[vars]');
+    lines.push("");
+    lines.push("[vars]");
     for (const [key, value] of Object.entries(config.vars)) {
       lines.push(`${key} = ${JSON.stringify(value)}`);
     }
@@ -166,8 +184,8 @@ export function serializeWranglerToml(config: WranglerConfig): string {
 
   if (config.d1_databases) {
     for (const db of config.d1_databases) {
-      lines.push('');
-      lines.push('[[d1_databases]]');
+      lines.push("");
+      lines.push("[[d1_databases]]");
       lines.push(`binding = ${JSON.stringify(db.binding)}`);
       lines.push(`database_name = ${JSON.stringify(db.database_name)}`);
       lines.push(`database_id = ${JSON.stringify(db.database_id)}`);
@@ -176,8 +194,8 @@ export function serializeWranglerToml(config: WranglerConfig): string {
 
   if (config.r2_buckets) {
     for (const bucket of config.r2_buckets) {
-      lines.push('');
-      lines.push('[[r2_buckets]]');
+      lines.push("");
+      lines.push("[[r2_buckets]]");
       lines.push(`binding = ${JSON.stringify(bucket.binding)}`);
       lines.push(`bucket_name = ${JSON.stringify(bucket.bucket_name)}`);
     }
@@ -185,8 +203,8 @@ export function serializeWranglerToml(config: WranglerConfig): string {
 
   if (config.kv_namespaces) {
     for (const kv of config.kv_namespaces) {
-      lines.push('');
-      lines.push('[[kv_namespaces]]');
+      lines.push("");
+      lines.push("[[kv_namespaces]]");
       lines.push(`binding = ${JSON.stringify(kv.binding)}`);
       lines.push(`id = ${JSON.stringify(kv.id)}`);
     }
@@ -194,8 +212,8 @@ export function serializeWranglerToml(config: WranglerConfig): string {
 
   if (config.services) {
     for (const svc of config.services) {
-      lines.push('');
-      lines.push('[[services]]');
+      lines.push("");
+      lines.push("[[services]]");
       lines.push(`binding = ${JSON.stringify(svc.binding)}`);
       lines.push(`service = ${JSON.stringify(svc.service)}`);
     }
@@ -203,22 +221,22 @@ export function serializeWranglerToml(config: WranglerConfig): string {
 
   if (config.queues_producers) {
     for (const qp of config.queues_producers) {
-      lines.push('');
-      lines.push('[[queues.producers]]');
+      lines.push("");
+      lines.push("[[queues.producers]]");
       lines.push(`queue = ${JSON.stringify(qp.queue)}`);
       lines.push(`binding = ${JSON.stringify(qp.binding)}`);
     }
   }
 
-  if (config.vectorize_indexes) {
-    for (const vi of config.vectorize_indexes) {
-      lines.push('');
-      lines.push('[[vectorize.indexes]]');
+  if (config.vectorize) {
+    for (const vi of config.vectorize) {
+      lines.push("");
+      lines.push("[[vectorize]]");
       lines.push(`index_name = ${JSON.stringify(vi.index_name)}`);
       lines.push(`binding = ${JSON.stringify(vi.binding)}`);
     }
   }
 
-  lines.push('');
-  return lines.join('\n');
+  lines.push("");
+  return lines.join("\n");
 }

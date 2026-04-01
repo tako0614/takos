@@ -34,6 +34,13 @@ const DECAY_CONFIG = {
   maxMemoriesPerSpace: 10_000,
 };
 
+export const memoryConsolidatorDeps = {
+  LLMClient,
+  getDb,
+  chatAndParseJsonArray,
+  logError,
+};
+
 function getNgrams(text: string, n: number = 3): Set<string> {
   const words = text.toLowerCase().split(/\s+/);
   const ngrams = new Set<string>();
@@ -56,7 +63,7 @@ export class MemoryConsolidator {
   constructor(dbBinding: D1Database, apiKey?: string) {
     this.dbBinding = dbBinding;
     if (apiKey) {
-      this.llmClient = new LLMClient({ apiKey });
+      this.llmClient = new memoryConsolidatorDeps.LLMClient({ apiKey });
     }
   }
 
@@ -65,7 +72,7 @@ export class MemoryConsolidator {
    * Uses atomic SQL (julianday) to prevent read-modify-write races.
    */
   async applyDecay(spaceId: string): Promise<{ updated: number; deleted: number }> {
-    const db = getDb(this.dbBinding);
+    const db = memoryConsolidatorDeps.getDb(this.dbBinding);
     const nowDate = new Date();
     const nowIso = nowDate.toISOString();
     const cutoffDate = new Date(nowDate);
@@ -105,7 +112,7 @@ export class MemoryConsolidator {
       return this.mergeSimilarSimple(spaceId);
     }
 
-    const db = getDb(this.dbBinding);
+    const db = memoryConsolidatorDeps.getDb(this.dbBinding);
 
     const memoriesResult = await db.select({
       id: memories.id,
@@ -163,7 +170,7 @@ Return JSON with groups of indices that should be merged and a merged content:
 
 Only group genuinely similar/duplicate memories. Return empty array if no merges needed.`;
 
-      const groups = await chatAndParseJsonArray<MergeGroup>(
+      const groups = await memoryConsolidatorDeps.chatAndParseJsonArray<MergeGroup>(
         this.llmClient,
         'You are a memory consolidation assistant. Output only valid JSON.',
         userPrompt,
@@ -200,7 +207,7 @@ Only group genuinely similar/duplicate memories. Return empty array if no merges
   }
 
   private async mergeSimilarSimple(spaceId: string): Promise<{ merged: number }> {
-    const db = getDb(this.dbBinding);
+    const db = memoryConsolidatorDeps.getDb(this.dbBinding);
 
     const memoriesResult = await db.select({
       id: memories.id,
@@ -262,7 +269,7 @@ Only group genuinely similar/duplicate memories. Return empty array if no merges
       return { summarized: 0 };
     }
 
-    const db = getDb(this.dbBinding);
+    const db = memoryConsolidatorDeps.getDb(this.dbBinding);
     const thirtyDaysAgo = new Date();
     thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
 
@@ -311,7 +318,7 @@ Only group genuinely similar/duplicate memories. Return empty array if no merges
           summarized++;
         }
       } catch (error) {
-        logError('Summarization failed', error, { module: 'services/memory/consolidation' });
+        memoryConsolidatorDeps.logError('Summarization failed', error, { module: 'services/memory/consolidation' });
       }
     }
 
@@ -319,7 +326,7 @@ Only group genuinely similar/duplicate memories. Return empty array if no merges
   }
 
   async enforceLimit(spaceId: string): Promise<{ deleted: number }> {
-    const db = getDb(this.dbBinding);
+    const db = memoryConsolidatorDeps.getDb(this.dbBinding);
 
     const countResult = await db.select({ count: count() }).from(memories)
       .where(eq(memories.accountId, spaceId))

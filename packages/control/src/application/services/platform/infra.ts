@@ -1,9 +1,28 @@
-import { getDb, infraEndpointRoutes } from '../../../infra/db/index.ts';
-import { infraEndpoints, serviceRuntimes } from '../../../infra/db/schema-platform-infra.ts';
-import type { Env } from '../../../shared/types/index.ts';
-import { generateId, safeJsonParseOrDefault } from '../../../shared/utils/index.ts';
-import type { HttpRoute, RoutingTarget, StoredHttpEndpoint } from '../routing/routing-models.ts';
-import { eq, and, sql } from 'drizzle-orm';
+import {
+  getDb as realGetDb,
+  infraEndpointRoutes,
+} from "../../../infra/db/index.ts";
+import {
+  infraEndpoints,
+  serviceRuntimes,
+} from "../../../infra/db/schema-platform-infra.ts";
+import type { Env } from "../../../shared/types/index.ts";
+import {
+  generateId,
+  safeJsonParseOrDefault,
+} from "../../../shared/utils/index.ts";
+import type {
+  HttpRoute,
+  RoutingTarget,
+  StoredHttpEndpoint,
+} from "../routing/routing-models.ts";
+import { and, eq, sql } from "drizzle-orm";
+
+export const infraServiceDeps = {
+  getDb: realGetDb,
+  generateId,
+  now: () => new Date().toISOString(),
+};
 
 export class InfraService {
   constructor(private env: Env) {}
@@ -15,14 +34,19 @@ export class InfraService {
     runtime: string;
     cloudflareServiceRef?: string;
   }): Promise<string> {
-    const db = getDb(this.env.DB);
+    const db = infraServiceDeps.getDb(this.env.DB);
     const existing = await db
       .select({ id: serviceRuntimes.id })
       .from(serviceRuntimes)
-      .where(and(eq(serviceRuntimes.accountId, params.spaceId), eq(serviceRuntimes.name, params.name)))
+      .where(
+        and(
+          eq(serviceRuntimes.accountId, params.spaceId),
+          eq(serviceRuntimes.name, params.name),
+        ),
+      )
       .get();
 
-    const ts = new Date().toISOString();
+    const ts = infraServiceDeps.now();
     if (existing) {
       await db
         .update(serviceRuntimes)
@@ -36,7 +60,7 @@ export class InfraService {
       return existing.id;
     }
 
-    const id = generateId();
+    const id = infraServiceDeps.generateId();
     await db.insert(serviceRuntimes).values({
       id,
       accountId: params.spaceId,
@@ -75,14 +99,19 @@ export class InfraService {
     routes: HttpRoute[];
     timeoutMs?: number;
   }): Promise<string> {
-    const db = getDb(this.env.DB);
+    const db = infraServiceDeps.getDb(this.env.DB);
     const existing = await db
       .select({ id: infraEndpoints.id })
       .from(infraEndpoints)
-      .where(and(eq(infraEndpoints.accountId, params.spaceId), eq(infraEndpoints.name, params.name)))
+      .where(
+        and(
+          eq(infraEndpoints.accountId, params.spaceId),
+          eq(infraEndpoints.name, params.name),
+        ),
+      )
       .get();
 
-    const ts = new Date().toISOString();
+    const ts = infraServiceDeps.now();
     if (existing) {
       await db
         .update(infraEndpoints)
@@ -113,7 +142,7 @@ export class InfraService {
       return existing.id;
     }
 
-    const id = generateId();
+    const id = infraServiceDeps.generateId();
     await db.insert(infraEndpoints).values({
       id,
       accountId: params.spaceId,
@@ -163,12 +192,20 @@ export class InfraService {
    * Build an http-endpoint-set RoutingTarget from InfraEndpoint records.
    * Current contract only exposes cloudflare.worker targets to routing.
    */
-  async buildRoutingTarget(spaceId: string, bundleDeploymentId: string): Promise<RoutingTarget | null> {
-    const db = getDb(this.env.DB);
+  async buildRoutingTarget(
+    spaceId: string,
+    bundleDeploymentId: string,
+  ): Promise<RoutingTarget | null> {
+    const db = infraServiceDeps.getDb(this.env.DB);
     const endpoints = await db
       .select()
       .from(infraEndpoints)
-      .where(and(eq(infraEndpoints.accountId, spaceId), eq(infraEndpoints.bundleDeploymentId, bundleDeploymentId)))
+      .where(
+        and(
+          eq(infraEndpoints.accountId, spaceId),
+          eq(infraEndpoints.bundleDeploymentId, bundleDeploymentId),
+        ),
+      )
       .all();
 
     if (endpoints.length === 0) return null;
@@ -178,7 +215,11 @@ export class InfraService {
     const allRoutes = await db
       .select()
       .from(infraEndpointRoutes)
-      .where(sql`${infraEndpointRoutes.endpointId} IN (${sql.join(endpointIds.map(id => sql`${id}`), sql`, `)})`)
+      .where(
+        sql`${infraEndpointRoutes.endpointId} IN (${
+          sql.join(endpointIds.map((id) => sql`${id}`), sql`, `)
+        })`,
+      )
       .orderBy(infraEndpointRoutes.position)
       .all();
 
@@ -192,55 +233,87 @@ export class InfraService {
     const runtimeRows = await db
       .select()
       .from(serviceRuntimes)
-      .where(and(eq(serviceRuntimes.accountId, spaceId), eq(serviceRuntimes.bundleDeploymentId, bundleDeploymentId)))
+      .where(
+        and(
+          eq(serviceRuntimes.accountId, spaceId),
+          eq(serviceRuntimes.bundleDeploymentId, bundleDeploymentId),
+        ),
+      )
       .all();
 
-    const serviceRuntimeByName = new Map(runtimeRows.map((runtime) => [runtime.name, runtime]));
+    const serviceRuntimeByName = new Map(
+      runtimeRows.map((runtime) => [runtime.name, runtime]),
+    );
 
     const storedEndpoints: StoredHttpEndpoint[] = [];
     for (const ep of endpoints) {
       const epRoutes = (routesByEndpoint.get(ep.id) ?? []).map((route) => ({
         pathPrefix: route.pathPrefix ?? undefined,
-        methods: route.methodsJson ? safeJsonParseOrDefault<string[]>(route.methodsJson, []) : undefined,
+        methods: route.methodsJson
+          ? safeJsonParseOrDefault<string[]>(route.methodsJson, [])
+          : undefined,
       }));
       const serviceRuntime = serviceRuntimeByName.get(ep.targetServiceRef);
-      const cloudflareServiceRef = serviceRuntime?.cloudflareServiceRef || ep.targetServiceRef;
-      const runtime = serviceRuntime?.runtime || 'cloudflare.worker';
+      const cloudflareServiceRef = serviceRuntime?.cloudflareServiceRef ||
+        ep.targetServiceRef;
+      const runtime = serviceRuntime?.runtime || "cloudflare.worker";
 
-      if (runtime !== 'cloudflare.worker') continue;
+      if (runtime !== "cloudflare.worker") continue;
 
       storedEndpoints.push({
         name: ep.name,
         routes: epRoutes,
-        target: { kind: 'service-ref', ref: cloudflareServiceRef },
-        ...(ep.timeoutMs !== null && ep.timeoutMs !== undefined ? { timeoutMs: ep.timeoutMs } : {}),
+        target: { kind: "service-ref", ref: cloudflareServiceRef },
+        ...(ep.timeoutMs !== null && ep.timeoutMs !== undefined
+          ? { timeoutMs: ep.timeoutMs }
+          : {}),
       });
     }
 
     if (storedEndpoints.length === 0) return null;
 
-    return { type: 'http-endpoint-set', endpoints: storedEndpoints };
+    return { type: "http-endpoint-set", endpoints: storedEndpoints };
   }
 
-  async deleteByBundleDeployment(spaceId: string, bundleDeploymentId: string): Promise<void> {
-    const db = getDb(this.env.DB);
+  async deleteByBundleDeployment(
+    spaceId: string,
+    bundleDeploymentId: string,
+  ): Promise<void> {
+    const db = infraServiceDeps.getDb(this.env.DB);
 
     // Delete endpoint routes for matching endpoints first
     const endpointsToDelete = await db
       .select({ id: infraEndpoints.id })
       .from(infraEndpoints)
-      .where(and(eq(infraEndpoints.accountId, spaceId), eq(infraEndpoints.bundleDeploymentId, bundleDeploymentId)))
+      .where(
+        and(
+          eq(infraEndpoints.accountId, spaceId),
+          eq(infraEndpoints.bundleDeploymentId, bundleDeploymentId),
+        ),
+      )
       .all();
 
     for (const ep of endpointsToDelete) {
-      await db.delete(infraEndpointRoutes).where(eq(infraEndpointRoutes.endpointId, ep.id));
+      await db.delete(infraEndpointRoutes).where(
+        eq(infraEndpointRoutes.endpointId, ep.id),
+      );
     }
 
     await db
       .delete(infraEndpoints)
-      .where(and(eq(infraEndpoints.accountId, spaceId), eq(infraEndpoints.bundleDeploymentId, bundleDeploymentId)));
+      .where(
+        and(
+          eq(infraEndpoints.accountId, spaceId),
+          eq(infraEndpoints.bundleDeploymentId, bundleDeploymentId),
+        ),
+      );
     await db
       .delete(serviceRuntimes)
-      .where(and(eq(serviceRuntimes.accountId, spaceId), eq(serviceRuntimes.bundleDeploymentId, bundleDeploymentId)));
+      .where(
+        and(
+          eq(serviceRuntimes.accountId, spaceId),
+          eq(serviceRuntimes.bundleDeploymentId, bundleDeploymentId),
+        ),
+      );
   }
 }

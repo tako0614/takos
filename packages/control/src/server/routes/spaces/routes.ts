@@ -35,14 +35,25 @@ function normalizeProviderInput(provider?: string | null): ModelProvider | null 
   return VALID_PROVIDERS.includes(normalized) ? normalized : null;
 }
 
+export const spacesRouteDeps = {
+  listWorkspacesForUser,
+  getOrCreatePersonalWorkspace,
+  createWorkspaceWithDefaultRepo,
+  getWorkspaceWithRepository,
+  getWorkspaceModelSettings,
+  updateWorkspace,
+  updateWorkspaceModel,
+  deleteWorkspace,
+};
+
 export default new Hono<AuthenticatedRouteEnv>()
   .get('/', async (c) => {
     const user = c.get('user');
 
-    let workspaces = await listWorkspacesForUser(c.env, user.id);
+    let workspaces = await spacesRouteDeps.listWorkspacesForUser(c.env, user.id);
 
     if (!workspaces.some((workspace) => workspace.kind === 'user')) {
-      const personalWorkspace = await getOrCreatePersonalWorkspace(c.env, user.id);
+      const personalWorkspace = await spacesRouteDeps.getOrCreatePersonalWorkspace(c.env, user.id);
       if (personalWorkspace) {
         workspaces = [personalWorkspace, ...workspaces.filter((workspace) => workspace.id !== personalWorkspace.id)];
       }
@@ -61,7 +72,7 @@ export default new Hono<AuthenticatedRouteEnv>()
     }
 
     try {
-      const { workspace, repository } = await createWorkspaceWithDefaultRepo(
+      const { workspace, repository } = await spacesRouteDeps.createWorkspaceWithDefaultRepo(
         c.env,
         user.id,
         body.name.trim(),
@@ -76,13 +87,13 @@ export default new Hono<AuthenticatedRouteEnv>()
   })
   .get('/me', async (c) => {
     const user = c.get('user');
-    if (!await getOrCreatePersonalWorkspace(c.env, user.id)) {
+    if (!await spacesRouteDeps.getOrCreatePersonalWorkspace(c.env, user.id)) {
       throw new NotFoundError('Personal space');
     }
 
     const access = await requireSpaceAccess(c, 'me', user.id);
 
-    const { workspace, repository } = await getWorkspaceWithRepository(c.env, access.space);
+    const { workspace, repository } = await spacesRouteDeps.getWorkspaceWithRepository(c.env, access.space);
 
     return c.json({
       space: toWorkspaceResponse(workspace),
@@ -93,7 +104,7 @@ export default new Hono<AuthenticatedRouteEnv>()
   .get('/:spaceId', spaceAccess(), async (c) => {
     const { space, membership } = c.get('access');
 
-    const { workspace, repository } = await getWorkspaceWithRepository(
+    const { workspace, repository } = await spacesRouteDeps.getWorkspaceWithRepository(
       c.env,
       space
     );
@@ -270,7 +281,7 @@ export default new Hono<AuthenticatedRouteEnv>()
       throw new BadRequestError('No valid updates provided');
     }
 
-    const workspace = await updateWorkspace(c.env.DB, space.id, updates);
+    const workspace = await spacesRouteDeps.updateWorkspace(c.env.DB, space.id, updates);
     if (!workspace) {
       throw new BadRequestError('No valid updates provided');
     }
@@ -280,7 +291,7 @@ export default new Hono<AuthenticatedRouteEnv>()
   .get('/:spaceId/model', spaceAccess(), async (c) => {
     const { space } = c.get('access');
 
-    const workspace = await getWorkspaceModelSettings(c.env.DB, space.id);
+    const workspace = await spacesRouteDeps.getWorkspaceModelSettings(c.env.DB, space.id);
 
     const model = normalizeModelId(workspace?.ai_model) || DEFAULT_MODEL_ID;
     const inferredProvider = getModelProvider(model);
@@ -324,7 +335,7 @@ export default new Hono<AuthenticatedRouteEnv>()
       throw new BadRequestError('Provider does not match model');
     }
 
-    await updateWorkspaceModel(c.env.DB, space.id, model, provider);
+    await spacesRouteDeps.updateWorkspaceModel(c.env.DB, space.id, model, provider);
 
     return c.json({
       ai_model: model,
@@ -337,7 +348,7 @@ export default new Hono<AuthenticatedRouteEnv>()
   .delete('/:spaceId', spaceAccess({ roles: ['owner'], message: 'Space not found or insufficient permissions' }), async (c) => {
     const { space } = c.get('access');
 
-    await deleteWorkspace(c.env.DB, space.id);
+    await spacesRouteDeps.deleteWorkspace(c.env.DB, space.id);
 
     return c.json({ success: true });
   })

@@ -1,9 +1,9 @@
-import { createSignal, createEffect, onMount, onCleanup } from 'solid-js';
+import { createSignal, createEffect } from 'solid-js';
 import { useI18n } from '../../store/i18n.ts';
 import { useToast } from '../../store/toast.ts';
 import { rpc, rpcJson } from '../../lib/rpc.ts';
 import { Icons } from '../../lib/Icons.tsx';
-import { MODEL_OPTIONS, type ModelSelectOption } from '../../lib/modelCatalog.ts';
+import { MODEL_OPTIONS } from '../../lib/modelCatalog.ts';
 
 export function ModelTab({ spaceId }: { spaceId: string }) {
   const { t } = useI18n();
@@ -76,7 +76,7 @@ export function ModelTab({ spaceId }: { spaceId: string }) {
         <h4 class="text-sm font-medium text-zinc-900 dark:text-zinc-100 mb-3">{t('modelProvider')}</h4>
         <div class="grid grid-cols-3 gap-3">
           {MODEL_OPTIONS.map((opt) => (
-            <button
+            <button type="button"
 
               class={`flex flex-col items-start gap-1 p-4 rounded-lg border transition-colors text-left ${
                 selectedModel() === opt.id
@@ -98,7 +98,7 @@ export function ModelTab({ spaceId }: { spaceId: string }) {
         )}
       </div>
 
-      <button
+      <button type="button"
         class="w-full py-3 bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900 rounded-lg hover:bg-zinc-700 dark:hover:bg-zinc-300 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
         onClick={handleSave}
         disabled={saving()}

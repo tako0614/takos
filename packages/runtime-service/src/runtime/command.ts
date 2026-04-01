@@ -1,9 +1,9 @@
-import { spawn, type ChildProcess } from 'node:child_process';
-import { Readable } from 'node:stream';
+import { spawn } from 'node:child_process';
+import type { Readable } from 'node:stream';
 import { pushLog } from './logging.ts';
 import { filterSafeEnv } from '../utils/sandbox-env.ts';
 import { gracefulKill } from '../utils/process-kill.ts';
-import { Buffer } from "node:buffer";
+import type { Buffer } from "node:buffer";
 
 const DEFAULT_COMMAND_TIMEOUT_MS = 60 * 60 * 1000;
 const MAX_COMMAND_TIMEOUT_MS = 24 * 60 * 60 * 1000;

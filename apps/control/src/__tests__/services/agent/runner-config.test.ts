@@ -7,10 +7,11 @@ import {
   DEFAULT_ITERATION_TIMEOUT,
   DEFAULT_TOTAL_TIMEOUT,
 } from '@/services/agent/runner-config';
+import { BUILTIN_TOOLS } from '@/tools/builtin';
 import type { Env } from '@/types';
 
 
-import { assertEquals, assert } from 'jsr:@std/assert';
+import { assertEquals, assert, assertStringIncludes } from 'jsr:@std/assert';
 
   Deno.test('getTimeoutConfig - returns default timeouts when no env is provided', () => {
   const config = getTimeoutConfig();
@@ -72,22 +73,23 @@ import { assertEquals, assert } from 'jsr:@std/assert';
   Deno.test('getAgentConfig - returns config for default agent type', () => {
   const config = getAgentConfig('default');
     assertEquals(config.type, 'default');
-    assertEquals(config.systemPrompt, 'Default system prompt');
-    assertEquals(config.tools.length, 2);
-    assertEquals(config.tools[0].name, 'file_read');
+    assertStringIncludes(config.systemPrompt, "You are Takos's universal agent.");
+    assertStringIncludes(config.systemPrompt, '## Typical Use Cases');
+    assertStringIncludes(config.systemPrompt, '## Response Guidelines');
+    assertEquals(config.tools.map((tool) => tool.name), BUILTIN_TOOLS.map((tool) => tool.name));
     assertEquals(config.maxIterations, 10000);
     assertEquals(config.temperature, 0.5);
 })
   Deno.test('getAgentConfig - returns specialized prompt for known agent types', () => {
   const implementer = getAgentConfig('implementer');
-    assertEquals(implementer.systemPrompt, 'Implementer prompt');
+    assertStringIncludes(implementer.systemPrompt, '## Implementation Mode');
 
     const reviewer = getAgentConfig('reviewer');
-    assertEquals(reviewer.systemPrompt, 'Reviewer prompt');
+    assertStringIncludes(reviewer.systemPrompt, '## Review Mode');
 })
   Deno.test('getAgentConfig - falls back to default prompt for unknown agent types', () => {
   const config = getAgentConfig('unknown-type');
-    assertEquals(config.systemPrompt, 'Default system prompt');
+    assertStringIncludes(config.systemPrompt, "You are Takos's universal agent.");
 })
   Deno.test('getAgentConfig - parses MAX_AGENT_ITERATIONS from env', () => {
   const config = getAgentConfig('default', {
@@ -95,7 +97,7 @@ import { assertEquals, assert } from 'jsr:@std/assert';
     } as unknown as Env);
     assertEquals(config.maxIterations, 500);
 })
-  Deno.test('getAgentConfig - parses AGENT_TEMPERATURE from env and clamps to [0,1]', () => {
+  Deno.test('getAgentConfig - parses AGENT_TEMPERATURE from env and falls back to default when out of range', () => {
   const config1 = getAgentConfig('default', {
       AGENT_TEMPERATURE: '0.8',
     } as unknown as Env);
@@ -104,12 +106,12 @@ import { assertEquals, assert } from 'jsr:@std/assert';
     const config2 = getAgentConfig('default', {
       AGENT_TEMPERATURE: '1.5',
     } as unknown as Env);
-    assertEquals(config2.temperature, 1);
+    assertEquals(config2.temperature, 0.5);
 
     const config3 = getAgentConfig('default', {
       AGENT_TEMPERATURE: '-0.5',
     } as unknown as Env);
-    assertEquals(config3.temperature, 0);
+    assertEquals(config3.temperature, 0.5);
 })
   Deno.test('getAgentConfig - ignores invalid AGENT_TEMPERATURE', () => {
   const config = getAgentConfig('default', {
