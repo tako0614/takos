@@ -1,4 +1,4 @@
-import type { Command } from 'commander';
+import { Command } from 'commander';
 import { red, yellow } from '@std/fmt/colors';
 import { cliExit } from '../lib/command-exit.ts';
 import { executeApiRequest } from './api-request.ts';
@@ -30,7 +30,7 @@ interface TaskDomainDefinition {
 //   memory, reminder  → context   (both basePath /api; semantically related context data)
 //   skill, tool       → capability (both basePath /api; agent capability endpoints)
 //   oauth             → auth      (basePath widened to /api to cover /api/auth/* and /api/me/oauth/*)
-//   search, install   → discover  (both basePath /api; workspace discovery operations)
+//   search            → discover  (workspace discovery operations)
 //
 const TASK_DOMAIN_DEFINITIONS: TaskDomainDefinition[] = [
   { name: 'me', description: 'Tasks for /api/me', basePath: '/api/me' },
@@ -52,7 +52,7 @@ const TASK_DOMAIN_DEFINITIONS: TaskDomainDefinition[] = [
   { name: 'notification', description: 'Tasks for /api/notifications', basePath: '/api/notifications' },
   { name: 'public-share', description: 'Tasks for /api/public/thread-shares', basePath: '/api/public/thread-shares' },
   { name: 'auth', description: 'Tasks for /api/auth/* and /api/me/oauth/*', basePath: '/api' },
-  { name: 'discover', description: 'Tasks for search and install (/api/spaces/*/search, /api/spaces/*/install*)', basePath: '/api' },
+  { name: 'discover', description: 'Tasks for discovery/search endpoints under /api', basePath: '/api' },
 ];
 
 // Mapping from removed domain names to their replacement and example usage.
@@ -65,7 +65,6 @@ const MERGED_DOMAIN_REDIRECTS: Record<string, { replacement: string; example: st
   tool:     { replacement: 'capability', example: 'takos capability list /spaces/SPACE_ID/tools' },
   oauth:    { replacement: 'auth',       example: 'takos auth list /me/oauth/connections' },
   search:   { replacement: 'discover',   example: 'takos discover list /spaces/SPACE_ID/search' },
-  install:  { replacement: 'discover',   example: 'takos discover create /spaces/SPACE_ID/install' },
 };
 
 const REMOVED_HTTP_STYLE_SUBCOMMANDS = [

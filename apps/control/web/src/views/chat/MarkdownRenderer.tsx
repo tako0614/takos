@@ -1,8 +1,24 @@
-import { createMemo, type JSX } from 'solid-js';
-import { Icons } from '../../lib/Icons.tsx';
-import { useI18n } from '../../store/i18n.ts';
-import { toSafeHref } from '../../lib/safeHref.ts';
-import { useCopyToClipboard } from '../../hooks/useCopyToClipboard.ts';
+import { createMemo, type JSX } from "solid-js";
+import { Icons } from "../../lib/Icons.tsx";
+import { useI18n } from "../../store/i18n.ts";
+import { toSafeHref } from "../../lib/safeHref.ts";
+import { useCopyToClipboard } from "../../hooks/useCopyToClipboard.ts";
+
+function isInternalHref(href: string): boolean {
+  try {
+    const url = new URL(href, globalThis.location.href);
+    return url.origin === globalThis.location.origin;
+  } catch {
+    return false;
+  }
+}
+
+function navigateToInternalHref(href: string) {
+  const url = new URL(href, globalThis.location.href);
+  const next = `${url.pathname}${url.search}${url.hash}`;
+  globalThis.history.pushState(null, "", next);
+  globalThis.dispatchEvent(new PopStateEvent("popstate"));
+}
 
 function CodeBlock(props: { code: string; language: string }) {
   const { t } = useI18n();
@@ -42,7 +58,11 @@ function parseInlineMarkdown(text: string): (JSX.Element | string)[] {
   while (remaining.length > 0) {
     const boldMatch = remaining.match(/^\*\*([^*]+)\*\*/);
     if (boldMatch) {
-      result.push(<strong class="font-semibold text-zinc-900 dark:text-zinc-100">{boldMatch[1]}</strong>);
+      result.push(
+        <strong class="font-semibold text-zinc-900 dark:text-zinc-100">
+          {boldMatch[1]}
+        </strong>,
+      );
       remaining = remaining.slice(boldMatch[0].length);
       continue;
     }
@@ -56,7 +76,11 @@ function parseInlineMarkdown(text: string): (JSX.Element | string)[] {
 
     const codeMatch = remaining.match(/^`([^`]+)`/);
     if (codeMatch) {
-      result.push(<code class="px-1.5 py-0.5 rounded-md bg-zinc-100 dark:bg-zinc-800 font-mono text-sm text-zinc-900 dark:text-zinc-100">{codeMatch[1]}</code>);
+      result.push(
+        <code class="px-1.5 py-0.5 rounded-md bg-zinc-100 dark:bg-zinc-800 font-mono text-sm text-zinc-900 dark:text-zinc-100">
+          {codeMatch[1]}
+        </code>,
+      );
       remaining = remaining.slice(codeMatch[0].length);
       continue;
     }
@@ -65,10 +89,22 @@ function parseInlineMarkdown(text: string): (JSX.Element | string)[] {
     if (linkMatch) {
       const safeHref = toSafeHref(linkMatch[2]);
       if (safeHref) {
+        const internal = isInternalHref(safeHref);
         result.push(
-          <a href={safeHref} target="_blank" rel="noopener noreferrer" class="text-zinc-900 dark:text-zinc-100 underline hover:no-underline">
+          <a
+            href={safeHref}
+            target={internal ? undefined : "_blank"}
+            rel={internal ? undefined : "noopener noreferrer"}
+            class="text-zinc-900 dark:text-zinc-100 underline hover:no-underline"
+            onClick={internal
+              ? (event) => {
+                event.preventDefault();
+                navigateToInternalHref(safeHref);
+              }
+              : undefined}
+          >
             {linkMatch[1]}
-          </a>
+          </a>,
         );
       } else {
         result.push(linkMatch[1]);
@@ -82,14 +118,14 @@ function parseInlineMarkdown(text: string): (JSX.Element | string)[] {
   }
 
   const merged: (JSX.Element | string)[] = [];
-  let currentStr = '';
+  let currentStr = "";
   for (const node of result) {
-    if (typeof node === 'string') {
+    if (typeof node === "string") {
       currentStr += node;
     } else {
       if (currentStr) {
         merged.push(currentStr);
-        currentStr = '';
+        currentStr = "";
       }
       merged.push(node);
     }
@@ -103,23 +139,23 @@ function parseInlineMarkdown(text: string): (JSX.Element | string)[] {
 
 export function MarkdownRenderer(props: { content: string }) {
   const renderContent = createMemo(() => {
-    const lines = props.content.split('\n');
+    const lines = props.content.split("\n");
     const elements: JSX.Element[] = [];
     let codeBlock: string[] = [];
     let inCodeBlock = false;
-    let codeLang = '';
+    let codeLang = "";
     let listItems: JSX.Element[] = [];
-    let listType: 'ul' | 'ol' | null = null;
+    let listType: "ul" | "ol" | null = null;
 
     const flushList = () => {
       if (listItems.length > 0 && listType) {
-        if (listType === 'ul') {
+        if (listType === "ul") {
           elements.push(
-            <ul class="list-disc pl-6 mb-4 space-y-1">{listItems}</ul>
+            <ul class="list-disc pl-6 mb-4 space-y-1">{listItems}</ul>,
           );
         } else {
           elements.push(
-            <ol class="list-decimal pl-6 mb-4 space-y-1">{listItems}</ol>
+            <ol class="list-decimal pl-6 mb-4 space-y-1">{listItems}</ol>,
           );
         }
         listItems = [];
@@ -129,17 +165,17 @@ export function MarkdownRenderer(props: { content: string }) {
 
     lines.forEach((line, _i) => {
       // Code block
-      if (line.startsWith('```')) {
+      if (line.startsWith("```")) {
         flushList();
         if (inCodeBlock) {
-          const code = codeBlock.join('\n');
+          const code = codeBlock.join("\n");
           const lang = codeLang;
           elements.push(
-            <CodeBlock code={code} language={lang} />
+            <CodeBlock code={code} language={lang} />,
           );
           codeBlock = [];
           inCodeBlock = false;
-          codeLang = '';
+          codeLang = "";
         } else {
           inCodeBlock = true;
           codeLang = line.slice(3).trim();
@@ -153,52 +189,76 @@ export function MarkdownRenderer(props: { content: string }) {
       }
 
       // Headers
-      if (line.startsWith('#### ')) {
+      if (line.startsWith("#### ")) {
         flushList();
-        elements.push(<h4 class="text-base font-semibold text-zinc-900 dark:text-zinc-100 mt-4 mb-2">{parseInlineMarkdown(line.slice(5))}</h4>);
+        elements.push(
+          <h4 class="text-base font-semibold text-zinc-900 dark:text-zinc-100 mt-4 mb-2">
+            {parseInlineMarkdown(line.slice(5))}
+          </h4>,
+        );
         return;
       }
-      if (line.startsWith('### ')) {
+      if (line.startsWith("### ")) {
         flushList();
-        elements.push(<h3 class="text-lg font-semibold text-zinc-900 dark:text-zinc-100 mt-5 mb-2">{parseInlineMarkdown(line.slice(4))}</h3>);
+        elements.push(
+          <h3 class="text-lg font-semibold text-zinc-900 dark:text-zinc-100 mt-5 mb-2">
+            {parseInlineMarkdown(line.slice(4))}
+          </h3>,
+        );
         return;
       }
-      if (line.startsWith('## ')) {
+      if (line.startsWith("## ")) {
         flushList();
-        elements.push(<h2 class="text-xl font-semibold text-zinc-900 dark:text-zinc-100 mt-6 mb-3">{parseInlineMarkdown(line.slice(3))}</h2>);
+        elements.push(
+          <h2 class="text-xl font-semibold text-zinc-900 dark:text-zinc-100 mt-6 mb-3">
+            {parseInlineMarkdown(line.slice(3))}
+          </h2>,
+        );
         return;
       }
-      if (line.startsWith('# ')) {
+      if (line.startsWith("# ")) {
         flushList();
-        elements.push(<h1 class="text-2xl font-bold text-zinc-900 dark:text-zinc-100 mt-6 mb-3">{parseInlineMarkdown(line.slice(2))}</h1>);
+        elements.push(
+          <h1 class="text-2xl font-bold text-zinc-900 dark:text-zinc-100 mt-6 mb-3">
+            {parseInlineMarkdown(line.slice(2))}
+          </h1>,
+        );
         return;
       }
 
       // Unordered list
       if (line.match(/^[-*]\s/)) {
-        if (listType !== 'ul') {
+        if (listType !== "ul") {
           flushList();
-          listType = 'ul';
+          listType = "ul";
         }
-        listItems.push(<li class="text-zinc-900 dark:text-zinc-100">{parseInlineMarkdown(line.slice(2))}</li>);
+        listItems.push(
+          <li class="text-zinc-900 dark:text-zinc-100">
+            {parseInlineMarkdown(line.slice(2))}
+          </li>,
+        );
         return;
       }
 
       // Ordered list
       const olMatch = line.match(/^(\d+)\.\s(.*)$/);
       if (olMatch) {
-        if (listType !== 'ol') {
+        if (listType !== "ol") {
           flushList();
-          listType = 'ol';
+          listType = "ol";
         }
-        listItems.push(<li class="text-zinc-900 dark:text-zinc-100">{parseInlineMarkdown(olMatch[2])}</li>);
+        listItems.push(
+          <li class="text-zinc-900 dark:text-zinc-100">
+            {parseInlineMarkdown(olMatch[2])}
+          </li>,
+        );
         return;
       }
 
       flushList();
 
       // Empty line
-      if (line.trim() === '') {
+      if (line.trim() === "") {
         elements.push(<div class="h-4" />);
         return;
       }
@@ -207,7 +267,7 @@ export function MarkdownRenderer(props: { content: string }) {
       elements.push(
         <p class="mb-4 text-zinc-900 dark:text-zinc-100">
           {parseInlineMarkdown(line)}
-        </p>
+        </p>,
       );
     });
 

@@ -46,6 +46,7 @@
     "npm:vite-plugin-solid@^2.11.11": "2.11.11_solid-js@1.9.12_vite@6.4.1__yaml@2.8.3_yaml@2.8.3",
     "npm:vite@*": "6.4.1_yaml@2.8.3",
     "npm:vite@^6.4.1": "6.4.1_yaml@2.8.3",
+    "npm:vitepress@*": "1.6.4_@algolia+client-search@5.50.0_search-insights@2.17.3",
     "npm:vitepress@1": "1.6.4_@algolia+client-search@5.50.0_search-insights@2.17.3",
     "npm:vue@^3.5.0": "3.5.31",
     "npm:wrangler@^4.61.0": "4.79.0_@cloudflare+workers-types@4.20260331.1",

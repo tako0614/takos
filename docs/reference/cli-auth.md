@@ -18,7 +18,7 @@ HTTP verb をそのまま露出するのではなく、domain ごとの task を
 ## implementation note
 
 CLI の deploy surface は [Deploy System](/deploy/) の public contract に従います。
-`takos deploy` は CLI に残っている contract ですが、このリポジトリの current implementation では end-to-end availability がありません。実運用の current surface は `takos apply` です。
+CLI は source 解決や provider logic を持たない thin client とし、deploy/install/apply の business logic は control plane に置きます。
 
 ## 認証
 
@@ -96,6 +96,7 @@ Takos CLI では、単純な HTTP verb 直叩きではなく `domain + task` を
 takos workspace list
 takos repo create --body '{"name":"my-repo"}'
 takos deploy --space SPACE_ID --repo REPO_ID --ref main
+takos install takos/takos-agent --space SPACE_ID
 takos run follow RUN_ID --transport ws
 ```
 
@@ -116,7 +117,7 @@ stream 対応 domain は追加で `watch` と `follow` を持ちます。
 
 ## deploy CLI
 
-`takos deploy` は repo-local `.takos/app.yml` を前提に、`/api/spaces/:spaceId/app-deployments` を呼び出す contract です。現行実装ではこの経路は未接続です。
+`takos deploy` は repo/ref source、`takos install` は package release source を使って `/api/spaces/:spaceId/app-deployments` を呼び出します。
 
 ```bash
 takos deploy --space SPACE_ID --repo REPO_ID --ref main
@@ -124,6 +125,7 @@ takos plan
 takos deploy status --space SPACE_ID
 takos deploy status APP_DEPLOYMENT_ID --space SPACE_ID
 takos deploy rollback APP_DEPLOYMENT_ID --space SPACE_ID
+takos install OWNER/REPO --space SPACE_ID --version v1.0.0
 ```
 
 | flag | required | 役割 |
@@ -132,11 +134,9 @@ takos deploy rollback APP_DEPLOYMENT_ID --space SPACE_ID
 | `--ref` | no | branch / tag / commit |
 | `--ref-type` | no | `branch` / `tag` / `commit` |
 | `--space` | no | target workspace ID |
-| `--approve-oauth-auto-env` | no | OAuth auto env 差分の承認 |
-| `--approve-source-change` | no | source provenance 差分の承認 |
 | `--json` | no | JSON 出力 |
 
-`takos plan` は manifest validation と現在状態との差分確認を行います。
+`takos plan` は manifest validation と現在状態との差分確認を行います。preview は non-mutating で、group が未作成でも DB row は作りません。
 
 ## removed legacy surface
 

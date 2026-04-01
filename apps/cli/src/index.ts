@@ -7,12 +7,9 @@ import { registerTaskCommands } from './commands/api.ts';
 import { registerEndpointCommand } from './commands/endpoint.ts';
 import { registerPlanCommand } from './commands/plan.ts';
 import { registerApplyCommand } from './commands/apply.ts';
-import { registerStateCommand } from './commands/state/index.ts';
-import { registerWorkerCommand } from './commands/worker.ts';
-import { registerResourceCommand } from './commands/resource.ts';
-import { registerServiceCommand } from './commands/service.ts';
+import { registerDeployCommand } from './commands/deploy.ts';
+import { registerInstallCommand } from './commands/install.ts';
 import { registerGroupCommand } from './commands/group/index.ts';
-import { registerRouteCommand } from './commands/route.ts';
 import { isContainerMode, isAuthenticated } from './lib/config.ts';
 import { cliExit, isCliCommandExit } from './lib/command-exit.ts';
 
@@ -26,12 +23,9 @@ program
 registerLoginCommand(program);
 registerPlanCommand(program);
 registerApplyCommand(program);
-registerStateCommand(program);
-registerWorkerCommand(program);
-registerResourceCommand(program);
-registerServiceCommand(program);
+registerDeployCommand(program);
+registerInstallCommand(program);
 registerGroupCommand(program);
-registerRouteCommand(program);
 registerEndpointCommand(program);
 registerTaskCommands(program);
 
@@ -40,7 +34,7 @@ program.hook('preAction', (thisCommand) => {
     ? process.argv[2].trim().toLowerCase()
     : thisCommand.name().toLowerCase();
 
-  if (['login', 'logout', 'help', 'endpoint', 'plan', 'apply', 'state', 'worker', 'resource', 'service', 'group', 'route'].includes(commandName)) {
+  if (['login', 'logout', 'help', 'endpoint', 'plan', 'apply', 'deploy', 'install', 'group'].includes(commandName)) {
     return;
   }
 

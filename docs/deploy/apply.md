@@ -1,6 +1,6 @@
 # apply
 
-`takos apply` は `.takos/app.yml` を読み取り、Cloudflare-native spec を group desired state として反映する正面入口です。runtime model は Takos runtime で、Cloudflare backend と互換 backend のどちらにも同じ spec を流します。
+`takos apply` は `.takos/app.yml` を読み取り、ローカル source を control plane に渡して group desired state として反映する正面入口です。runtime model は Takos runtime で、Cloudflare backend と互換 backend のどちらにも同じ spec を流します。
 
 ## 基本
 
@@ -16,24 +16,21 @@ takos apply --env staging
 | `--manifest <path>` | manifest path。既定は `.takos/app.yml` |
 | `--auto-approve` | 確認プロンプトを省略 |
 | `--target <key...>` | 一部だけ反映。例: `workers.web`, `resources.primary-db` |
-| `--namespace <name>` | Dispatch namespace |
 | `--group <name>` | 対象 group 名 |
-| `--provider <provider>` | `cloudflare|local|aws|gcp|k8s`。`/groups/plan` と `/groups/apply` の対象 group に適用 |
+| `--provider <provider>` | `cloudflare|local|aws|gcp|k8s`。preview/apply の評価条件に使う |
 | `--space <id>` | 対象 workspace ID |
-| `--offline` | API を使わず local state で apply |
 
-## 何をするか
+## plan と apply の境界
 
 1. `.takos/app.yml` か `--manifest` で指定した manifest を読み込む
-2. desired app manifest を group desired として保存し、内部 canonical state に compile する
-3. resources / services / routes の差分を計算する
-4. provider translation report を出し、未接続 path は fail-fast で止める
+2. `takos plan` で non-mutating な preview を取り、差分と translation report を確認する
+3. `takos apply` で desired app manifest を group desired として保存し、内部 canonical state に compile する
+4. resources / services / routes の差分を計算する
 5. group の desired / observed snapshot を更新する
 
-## provider / env の更新
-
-`takos apply` / `takos plan` が既存 group 名を指定した場合、`--provider` と `--env` は
-当該 group を更新します（作成済み group への再指定で provider/env を切り替え可能）。
+- `takos plan` は DB を更新しません。group が未作成でも preview だけ返します。
+- `takos apply` は group が未作成なら初回 apply 時に作成します。
+- `--provider` と `--env` は preview の評価条件であり、実際の group metadata 更新は apply 時にだけ起きます。
 
 ## translation report
 
@@ -51,4 +48,4 @@ takos apply --env staging
 takos apply --env production --target workers.web --target resources.primary-db
 ```
 
-`takos worker deploy` と `takos service deploy` は単体ワークロード向け、`takos apply` は manifest 全体向けです。
+`takos apply` は local working tree を起点にした thin client です。repo/ref や Store package からの deploy は [Store 経由デプロイ](/deploy/store-deploy) を参照してください。

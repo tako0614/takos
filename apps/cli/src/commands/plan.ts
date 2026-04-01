@@ -1,30 +1,25 @@
-/**
- * CLI command: `takos plan`
- *
- * Compute and display the diff between the desired state (app.yml)
- * and the current state.
- *
- * Default (online): POST manifest to the API and display the returned diff.
- * --offline: Compute diff locally using the file-based state backend.
- *
- * Usage:
- *   takos plan
- *   takos plan --manifest .takos/app.yml --env staging
- *   takos plan --offline
- */
-import type { Command } from 'commander';
-import { bold, dim, green, red, yellow } from '@std/fmt/colors';
-import { loadAppManifest, resolveAppManifestPath } from '../lib/app-manifest.ts';
-import { cliExit } from '../lib/command-exit.ts';
-import { api } from '../lib/api.ts';
-import { resolveSpaceId } from '../lib/cli-utils.ts';
-import { formatPlan } from '../lib/state/plan.ts';
-import type { DiffResult } from '../lib/state/diff.ts';
-import type { TakosState } from '../lib/state/state-types.ts';
-import { printTranslationReport, type TranslationReport } from '../lib/translation-report.ts';
+import type { Command } from "commander";
+import { bold, dim, green, red, yellow } from "@std/fmt/colors";
+import {
+  loadAppManifest,
+  resolveAppManifestPath,
+} from "../lib/app-manifest.ts";
+import { api } from "../lib/api.ts";
+import { resolveSpaceId } from "../lib/cli-utils.ts";
+import { cliExit } from "../lib/command-exit.ts";
+import {
+  type GroupProviderName,
+  parseGroupProvider,
+} from "../lib/group-provider.ts";
+import { formatPlan } from "../lib/state/plan.ts";
+import type { DiffResult } from "../lib/state/diff.ts";
+import {
+  printTranslationReport,
+  type TranslationReport,
+} from "../lib/translation-report.ts";
 
 type PlanByNameResponse = {
-  group: { id: string; name: string };
+  group: { id: string | null; name: string; exists: boolean };
   diff: DiffResult;
   translationReport: TranslationReport;
 };
@@ -35,76 +30,32 @@ type PlanCommandOptions = {
   provider?: string;
   group?: string;
   space?: string;
-  offline?: boolean;
 };
-
-const VALID_GROUP_PROVIDERS = ['cloudflare', 'local', 'aws', 'gcp', 'k8s'] as const;
-
-type GroupProviderName = (typeof VALID_GROUP_PROVIDERS)[number];
-
-function parseGroupProvider(raw?: string): GroupProviderName | undefined {
-  if (!raw) return undefined;
-  const normalized = raw.trim().toLowerCase();
-  if (!normalized) return undefined;
-  if ((VALID_GROUP_PROVIDERS as readonly string[]).includes(normalized)) {
-    return normalized as GroupProviderName;
-  }
-  throw new Error(`Invalid provider: ${raw}`);
-}
-
-/** Offline fallback: compute diff locally (original logic). */
-async function handlePlanOffline(manifest: Awaited<ReturnType<typeof loadAppManifest>>, manifestPath: string, options: PlanCommandOptions): Promise<void> {
-  const { readState, getStateDir } = await import('../lib/state/state-file.ts');
-  const { computeDiff } = await import('../lib/state/diff.ts');
-
-  const group = options.group || manifest.metadata.name;
-  let currentState: TakosState | null = null;
-  try {
-    currentState = await readState(getStateDir(process.cwd()), group, { offline: true });
-  } catch {
-    // No state yet -- treat as fresh deployment
-  }
-
-  const diff = computeDiff(manifest, currentState);
-
-  console.log('');
-  console.log(bold(`Plan: ${manifest.metadata.name}`));
-  console.log(`  Environment: ${options.env}`);
-  console.log(`  Manifest:    ${manifestPath}`);
-  console.log(`  Mode:        offline`);
-  console.log('');
-
-  const planOutput = formatPlan(diff);
-  console.log(planOutput);
-
-  const totalChanges = diff.entries.filter(d => d.action !== 'unchanged').length;
-  if (totalChanges === 0) {
-    console.log(green('No changes. Infrastructure is up-to-date.'));
-  } else {
-    console.log(yellow(`Plan: ${totalChanges} change(s) detected.`));
-    console.log(dim('Run `takos apply` to apply these changes.'));
-  }
-}
 
 export function registerPlanCommand(program: Command): void {
   program
-    .command('plan')
-    .description('Show execution plan: diff between app.yml and current state')
-    .option('--manifest <path>', 'Path to app manifest', '.takos/app.yml')
-    .option('--env <env>', 'Target environment', 'staging')
-    .option('--provider <provider>', 'Deployment target provider (cloudflare|local|aws|gcp|k8s)')
-    .option('--group <name>', 'Target group name (defaults to metadata.name)')
-    .option('--space <id>', 'Target workspace ID')
-    .option('--offline', 'Force file-based state (skip API)')
+    .command("plan")
+    .description("Show execution plan: diff between app.yml and current state")
+    .option("--manifest <path>", "Path to app manifest", ".takos/app.yml")
+    .option("--env <env>", "Target environment", "staging")
+    .option(
+      "--provider <provider>",
+      "Deployment target provider (cloudflare|local|aws|gcp|k8s)",
+    )
+    .option("--group <name>", "Target group name (defaults to metadata.name)")
+    .option("--space <id>", "Target workspace ID")
     .action(async (options: PlanCommandOptions) => {
-      // Step 1: Load manifest
       let manifestPath: string;
       try {
-        manifestPath = options.manifest && options.manifest !== '.takos/app.yml'
+        manifestPath = options.manifest && options.manifest !== ".takos/app.yml"
           ? options.manifest
           : await resolveAppManifestPath(process.cwd());
       } catch {
-        console.log(red('No .takos/app.yml found. Specify --manifest or run from a project root.'));
+        console.log(
+          red(
+            "No .takos/app.yml found. Specify --manifest or run from a project root.",
+          ),
+        );
         cliExit(1);
       }
 
@@ -121,57 +72,55 @@ export function registerPlanCommand(program: Command): void {
       try {
         provider = parseGroupProvider(options.provider);
       } catch (error) {
-        console.log(red(error instanceof Error ? error.message : 'Invalid provider'));
+        console.log(
+          red(error instanceof Error ? error.message : "Invalid provider"),
+        );
         cliExit(1);
       }
 
-      // Offline mode: delegate to local diff computation
-      if (options.offline) {
-        return handlePlanOffline(manifest, manifestPath, options);
-      }
-
-      // Online mode: POST manifest to API
-      const spaceId = resolveSpaceId(options.space);
       const group = options.group || manifest.metadata.name;
-
-      const res = await api<PlanByNameResponse>(`/api/spaces/${spaceId}/groups/plan`, {
-        method: 'POST',
-        body: {
-          group_name: group,
-          env: options.env,
-          ...(provider ? { provider } : {}),
-          manifest,
+      const response = await api<PlanByNameResponse>(
+        `/api/spaces/${resolveSpaceId(options.space)}/groups/plan`,
+        {
+          method: "POST",
+          body: {
+            group_name: group,
+            env: options.env,
+            ...(provider ? { provider } : {}),
+            manifest,
+          },
         },
-      });
+      );
 
-      if (!res.ok) {
-        console.log(red(`Error: ${res.error}`));
+      if (!response.ok) {
+        console.log(red(`Error: ${response.error}`));
         cliExit(1);
       }
 
-      const diff = res.data.diff;
-      const translationReport = res.data.translationReport;
-
-      console.log('');
+      console.log("");
       console.log(bold(`Plan: ${manifest.metadata.name}`));
       console.log(`  Environment: ${options.env}`);
       console.log(`  Manifest:    ${manifestPath}`);
-      console.log('');
+      console.log(`  Group:       ${response.data.group.name}`);
+      console.log(
+        `  Exists:      ${response.data.group.exists ? "yes" : "no (preview)"}`,
+      );
+      console.log("");
 
-      printTranslationReport(translationReport);
+      printTranslationReport(response.data.translationReport);
+      console.log(formatPlan(response.data.diff));
 
-      const planOutput = formatPlan(diff);
-      console.log(planOutput);
-
-      const totalChanges = diff.entries.filter(d => d.action !== 'unchanged').length;
+      const totalChanges = response.data.diff.entries.filter((entry) =>
+        entry.action !== "unchanged"
+      ).length;
       if (totalChanges === 0) {
-        console.log(green('No changes. Infrastructure is up-to-date.'));
+        console.log(green("No changes. Infrastructure is up-to-date."));
       } else {
         console.log(yellow(`Plan: ${totalChanges} change(s) detected.`));
-        console.log(dim('Run `takos apply` to apply these changes.'));
+        console.log(dim("Run `takos apply` to apply these changes."));
       }
 
-      if (!translationReport.supported) {
+      if (!response.data.translationReport.supported) {
         cliExit(1);
       }
     });
