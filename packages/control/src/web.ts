@@ -131,7 +131,12 @@ app.use('*', async (c, next): Promise<Response | void> => {
   if (!isDev) {
     // Require HTTPS in production - reject if X-Forwarded-Proto exists and is not https
     if (proto && proto !== 'https') {
-      return c.json({ error: 'HTTPS required' }, 403);
+      return c.json({
+        error: {
+          code: 'FORBIDDEN',
+          message: 'HTTPS required',
+        },
+      }, 403);
     }
   }
 
@@ -225,7 +230,12 @@ app.route('/internal/executor-rpc', createExecutorProxyRouter());
 app.post('/internal/scheduled', async (c) => {
   const hostname = new URL(c.req.url).hostname;
   if (!isSelfHostLoopback(hostname) && !isSelfHostInternalHostname(hostname)) {
-    return c.json({ error: 'forbidden' }, 403);
+    return c.json({
+      error: {
+        code: 'FORBIDDEN',
+        message: 'forbidden',
+      },
+    }, 403);
   }
 
   const cron = c.req.query('cron') ?? '*/15 * * * *';
@@ -296,7 +306,12 @@ app.notFound(async (c) => {
     || path.startsWith('/ns/')
     || path.startsWith('/.well-known/')
   ) {
-    return c.json({ error: 'Not Found' }, 404);
+    return c.json({
+      error: {
+        code: 'NOT_FOUND',
+        message: 'Not Found',
+      },
+    }, 404);
   }
 
   // For non-API routes, serve index.html (SPA fallback)
@@ -317,7 +332,12 @@ app.notFound(async (c) => {
     }
   }
 
-  return c.json({ error: 'Not Found' }, 404);
+  return c.json({
+    error: {
+      code: 'NOT_FOUND',
+      message: 'Not Found',
+    },
+  }, 404);
 });
 
 // S14: Error handler - never expose stack traces or sensitive error details in production
@@ -325,9 +345,10 @@ app.onError((err, c) => {
   if (isInvalidArrayBufferError(err)) {
     logWarn(`Rejected malformed lookup payload on ${c.req.method} ${c.req.path}`, { module: 'db_guard' });
     return c.json({
-      error: 'Bad Request',
-      code: 'BAD_REQUEST',
-      message: 'Malformed lookup parameter',
+      error: {
+        code: 'BAD_REQUEST',
+        message: 'Malformed lookup parameter',
+      },
     }, 400);
   }
 
@@ -359,9 +380,13 @@ app.onError((err, c) => {
 
   // In production, only return generic error with correlation ID
   return c.json({
-    error: 'Internal Server Error',
-    error_id: errorId,
-    message: 'An unexpected error occurred. Please try again later.',
+    error: {
+      code: 'INTERNAL_ERROR',
+      message: 'An unexpected error occurred. Please try again later.',
+      details: {
+        error_id: errorId,
+      },
+    },
   }, 500);
 });
 
@@ -390,8 +415,10 @@ export function createWebWorker(
     const url = new URL(request.url);
     if (envValidationError && url.pathname !== '/health') {
       return new Response(JSON.stringify({
-        error: 'Configuration Error',
-        message: 'Server is misconfigured. Please contact administrator.',
+        error: {
+          code: 'SERVICE_UNAVAILABLE',
+          message: 'Server is misconfigured. Please contact administrator.',
+        },
       }), {
         status: 503,
         headers: { 'Content-Type': 'application/json' },

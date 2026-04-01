@@ -15,7 +15,7 @@ import {
 } from './remote-store-client.ts';
 import { getRegistryEntry, type StoreRegistryEntry } from './store-registry.ts';
 
-export interface RemoteInstallInput {
+export interface RemoteStoreRepositoryImportInput {
   /** Store registry entry ID */
   registryEntryId: string;
   /** Owner slug on the remote store */
@@ -26,7 +26,7 @@ export interface RemoteInstallInput {
   localName?: string;
 }
 
-export interface RemoteInstallResult {
+export interface RemoteStoreRepositoryImportResult {
   repositoryId: string;
   name: string;
   cloneUrl: string;
@@ -41,11 +41,11 @@ export interface RemoteInstallResult {
  * The actual git data is fetched lazily on first access via the remote's
  * git smart HTTP endpoint (cloneUri).
  */
-export async function installFromRemoteStore(
+export async function importRepositoryFromRemoteStore(
   dbBinding: D1Database,
   accountId: string,
-  input: RemoteInstallInput,
-): Promise<RemoteInstallResult> {
+  input: RemoteStoreRepositoryImportInput,
+): Promise<RemoteStoreRepositoryImportResult> {
   // 1. Look up registry entry
   const entry = await getRegistryEntry(dbBinding, accountId, input.registryEntryId);
   if (!entry) {
@@ -114,6 +114,8 @@ export async function installFromRemoteStore(
     remoteBrowseUrl: remoteRepo.browseUrl || null,
   };
 }
+
+export const installFromRemoteStore = importRepositoryFromRemoteStore;
 
 /**
  * Find a specific repository on a remote store by owner/name.

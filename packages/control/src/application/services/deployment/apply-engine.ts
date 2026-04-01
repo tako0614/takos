@@ -72,6 +72,14 @@ export interface ApplyResult {
   appToken?: AppTokenResult;
 }
 
+export interface SafeApplyResult extends Omit<ApplyResult, "appToken"> {
+  appToken?: {
+    issued: true;
+    scopes: string[];
+    expiresIn: number;
+  };
+}
+
 export interface AppTokenPlan {
   willIssue: true;
   scopes: string[];
@@ -130,13 +138,13 @@ export const applyEngineDeps = {
 };
 
 type ApplyWorkerArtifact = {
-  kind: "worker-bundle";
+  kind: "worker_bundle";
   bundleContent: string;
   deployMessage?: string;
 };
 
 type ApplyContainerArtifact = {
-  kind: "container-image";
+  kind: "container_image";
   imageRef: string;
   provider?: "oci" | "ecs" | "cloud-run" | "k8s";
   deployMessage?: string;
@@ -301,10 +309,11 @@ function parseApplyArtifact(input: unknown): ApplyArtifactInput | null {
   if (!input || typeof input !== "object" || Array.isArray(input)) return null;
   const parsed = input as Record<string, unknown>;
   if (
-    parsed.kind === "worker-bundle" && typeof parsed.bundleContent === "string"
+    (parsed.kind === "worker_bundle" || parsed.kind === "worker-bundle") &&
+    typeof parsed.bundleContent === "string"
   ) {
     return {
-      kind: "worker-bundle",
+      kind: "worker_bundle",
       bundleContent: parsed.bundleContent,
       ...(typeof parsed.deployMessage === "string"
         ? { deployMessage: parsed.deployMessage }
@@ -312,11 +321,13 @@ function parseApplyArtifact(input: unknown): ApplyArtifactInput | null {
     };
   }
   if (
-    parsed.kind === "container-image" && typeof parsed.imageRef === "string" &&
+    (parsed.kind === "container_image" ||
+      parsed.kind === "container-image") &&
+    typeof parsed.imageRef === "string" &&
     parsed.imageRef.trim().length > 0
   ) {
     return {
-      kind: "container-image",
+      kind: "container_image",
       imageRef: parsed.imageRef,
       ...(parsed.provider === "oci" || parsed.provider === "ecs" ||
           parsed.provider === "cloud-run" || parsed.provider === "k8s"
@@ -341,7 +352,7 @@ function resolveContainerImageArtifact(
       | undefined;
   if (directImageArtifact?.kind === "image") {
     return {
-      kind: "container-image",
+      kind: "container_image",
       imageRef: directImageArtifact.imageRef,
       ...(directImageArtifact.provider
         ? { provider: directImageArtifact.provider }
@@ -355,7 +366,7 @@ function resolveContainerImageArtifact(
     spec.imageRef.trim().length > 0
   ) {
     return {
-      kind: "container-image",
+      kind: "container_image",
       imageRef: spec.imageRef,
       ...("provider" in spec &&
           (spec.provider === "oci" || spec.provider === "ecs" ||
@@ -375,7 +386,7 @@ function assertApplyImageArtifact(
   artifact: ApplyArtifactInput | null,
 ): asserts artifact is ApplyContainerArtifact {
   if (
-    artifact?.kind === "container-image" && artifact.imageRef.trim().length > 0
+    artifact?.kind === "container_image" && artifact.imageRef.trim().length > 0
   ) {
     return;
   }
@@ -406,7 +417,7 @@ async function resolveArtifactFromDesiredManifest(
         );
       }
       return {
-        kind: "worker-bundle",
+        kind: "worker_bundle",
         bundleContent: await applyEngineDeps.getBundleContent(env, deployment),
         deployMessage: `takos apply ${workload.name}`,
       };
@@ -447,7 +458,7 @@ function resolveWorkloadDeploymentProvider(
   if (category === "worker") {
     return provider === "cloudflare" ? "workers-dispatch" : "runtime-host";
   }
-  if (artifact?.kind === "container-image" && artifact.provider) {
+  if (artifact?.kind === "container_image" && artifact.provider) {
     return artifact.provider;
   }
   if (provider === "aws") return "ecs";
@@ -484,7 +495,7 @@ function buildManagedDeploymentTarget(
       spec.artifact.kind === "image"
     ? spec.artifact
     : undefined;
-  const imageRef = artifact?.kind === "container-image"
+  const imageRef = artifact?.kind === "container_image"
     ? artifact.imageRef
     : (directImageArtifact && typeof directImageArtifact.imageRef === "string"
       ? directImageArtifact.imageRef
@@ -611,7 +622,7 @@ async function deployManagedWorkload(
     artifactKind: input.category === "worker"
       ? "worker-bundle"
       : "container-image",
-    bundleContent: input.artifact?.kind === "worker-bundle"
+    bundleContent: input.artifact?.kind === "worker_bundle"
       ? input.artifact.bundleContent
       : undefined,
     deployMessage: input.artifact?.deployMessage ?? `takos apply ${input.name}`,
@@ -640,7 +651,7 @@ async function deployManagedWorkload(
       spec.artifact.kind === "image"
     ? spec.artifact
     : undefined;
-  const imageRef = input.artifact?.kind === "container-image"
+  const imageRef = input.artifact?.kind === "container_image"
     ? input.artifact.imageRef
     : (directImageArtifact && typeof directImageArtifact.imageRef === "string"
       ? directImageArtifact.imageRef
@@ -812,7 +823,7 @@ async function executeEntry(
         }
         const artifact = parseApplyArtifact(opts.artifacts?.[entry.name]) ??
           await resolveArtifactFromDesiredManifest(env, workload);
-        if (!artifact || artifact.kind !== "worker-bundle") {
+        if (!artifact || artifact.kind !== "worker_bundle") {
           throw new Error(
             `Worker "${entry.name}" requires a worker-bundle artifact during apply`,
           );
@@ -967,7 +978,7 @@ export async function applyManifest(
     throw new Error(`Group "${groupId}" not found`);
   }
 
-  const effectiveManifest = manifest ?? loadDesiredManifest(group);
+  const effectiveManifest = manifest ?? (group ? loadDesiredManifest(group) : null);
   if (!effectiveManifest) {
     throw new Error(`Group "${groupId}" does not have a desired manifest`);
   }
@@ -1086,28 +1097,50 @@ export async function applyManifest(
   return result;
 }
 
+export function buildSafeApplyResult(result: ApplyResult): SafeApplyResult {
+  const { appToken, ...rest } = result;
+  return {
+    ...rest,
+    ...(appToken
+      ? {
+        appToken: {
+          issued: true,
+          scopes: appToken.scopes,
+          expiresIn: appToken.expiresIn,
+        },
+      }
+      : {}),
+  };
+}
+
 export async function planManifest(
   env: Env,
-  groupId: string,
+  groupId: string | null,
   manifest?: AppManifest,
-  opts: { envName?: string } = {},
+  opts: {
+    groupName?: string;
+    providerName?: string;
+    envName?: string;
+  } = {},
 ): Promise<PlanResult> {
-  const group = await getGroupRecord(env, groupId);
-  if (!group) {
+  const group = groupId ? await getGroupRecord(env, groupId) : null;
+  if (groupId && !group) {
     throw new Error(`Group "${groupId}" not found`);
   }
 
   const effectiveManifest = manifest ?? loadDesiredManifest(group);
   if (!effectiveManifest) {
-    throw new Error(`Group "${groupId}" does not have a desired manifest`);
+    throw new Error(groupId
+      ? `Group "${groupId}" does not have a desired manifest`
+      : "manifest is required");
   }
 
   const desiredState = compileGroupDesiredState(effectiveManifest, {
-    groupName: group.name,
-    provider: group.provider ?? "cloudflare",
-    envName: opts.envName ?? group.env ?? "default",
+    groupName: opts.groupName ?? group?.name ?? effectiveManifest.metadata.name,
+    provider: opts.providerName ?? group?.provider ?? "cloudflare",
+    envName: opts.envName ?? group?.env ?? "default",
   });
-  const currentState = await getGroupState(env, groupId);
+  const currentState = groupId ? await getGroupState(env, groupId) : null;
   const translationContext = { ociOrchestratorUrl: env.OCI_ORCHESTRATOR_URL };
   const translationReport = buildTranslationReport(
     desiredState,
