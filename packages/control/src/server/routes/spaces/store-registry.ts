@@ -5,7 +5,7 @@ import {
   type AuthenticatedRouteEnv,
 } from '../route-auth.ts';
 import { parsePagination } from '../../../shared/utils/index.ts';
-import { BadRequestError, NotFoundError } from 'takos-common/errors';
+import { BadRequestError, GoneError, NotFoundError } from 'takos-common/errors';
 import { zValidator } from '../zod-validator.ts';
 import {
   addRemoteStore,
@@ -21,7 +21,7 @@ import {
   searchRemoteRepositories,
   RemoteStoreError,
 } from '../../../application/services/activitypub/remote-store-client.ts';
-import { installFromRemoteStore } from '../../../application/services/activitypub/remote-install.ts';
+import { importRepositoryFromRemoteStore } from '../../../application/services/activitypub/remote-install.ts';
 import {
   getStoreUpdates,
   markUpdatesSeen,
@@ -298,9 +298,9 @@ export default new Hono<AuthenticatedRouteEnv>()
     }
   })
 
-  // --- Install from remote store ---
+  // --- Import repository from remote store ---
 
-  .post('/:spaceId/store-registry/:entryId/install',
+  .post('/:spaceId/store-registry/:entryId/import-repository',
     zValidator('json', installSchema),
     async (c) => {
       const user = c.get('user');
@@ -309,7 +309,7 @@ export default new Hono<AuthenticatedRouteEnv>()
       const body = c.req.valid('json');
 
       try {
-        const result = await installFromRemoteStore(c.env.DB, access.space.id, {
+        const result = await importRepositoryFromRemoteStore(c.env.DB, access.space.id, {
           registryEntryId: c.req.param('entryId'),
           remoteOwner: body.remote_owner,
           remoteRepoName: body.remote_repo_name,
@@ -326,10 +326,16 @@ export default new Hono<AuthenticatedRouteEnv>()
           },
         }, 201);
       } catch (error) {
-        logError('Failed to install from remote store', error, { module: 'routes/store-registry' });
-        throw new BadRequestError( safeErrorMessage(error, 'Failed to install from remote store'));
+        logError('Failed to import repository from remote store', error, { module: 'routes/store-registry' });
+        throw new BadRequestError( safeErrorMessage(error, 'Failed to import repository from remote store'));
       }
     })
+
+  .post('/:spaceId/store-registry/:entryId/install', async () => {
+    throw new GoneError(
+      'Remote store install was renamed. Use /api/spaces/:spaceId/store-registry/:entryId/import-repository.',
+    );
+  })
 
   // --- Subscription updates ---
 

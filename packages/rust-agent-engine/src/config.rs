@@ -229,11 +229,11 @@ pub struct RuntimeConfig {
 impl Default for RuntimeConfig {
     fn default() -> Self {
         Self {
-            max_graph_steps: 32,
-            max_tool_rounds: 4,
-            node_timeout_ms: 5_000,
-            tool_timeout_ms: 8_000,
-            distillation_timeout_ms: 8_000,
+            max_graph_steps: 64,
+            max_tool_rounds: 8,
+            node_timeout_ms: 10_000,
+            tool_timeout_ms: 30_000,
+            distillation_timeout_ms: 15_000,
             maintenance_batch_size: 32,
         }
     }
@@ -300,11 +300,11 @@ mod tests {
             timeline_search = true
 
             [runtime]
-            max_graph_steps = 32
-            max_tool_rounds = 4
-            node_timeout_ms = 5000
-            tool_timeout_ms = 8000
-            distillation_timeout_ms = 8000
+            max_graph_steps = 64
+            max_tool_rounds = 8
+            node_timeout_ms = 10000
+            tool_timeout_ms = 30000
+            distillation_timeout_ms = 15000
             maintenance_batch_size = 32
             "#,
         );

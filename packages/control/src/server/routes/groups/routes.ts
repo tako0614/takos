@@ -12,7 +12,7 @@ import {
 import { BadRequestError, NotFoundError } from "takos-common/errors";
 import {
   applyManifest,
-  type ApplyResult,
+  buildSafeApplyResult,
   getGroupState,
   planManifest,
 } from "../../../application/services/deployment/apply-engine.ts";
@@ -451,46 +451,16 @@ async function listGroupDeploymentsHandler(c: GroupsContext) {
 }
 
 // ---------------------------------------------------------------------------
-// Helpers: safe API response builders
-// ---------------------------------------------------------------------------
-
-/**
- * Strips the raw access token from the ApplyResult and replaces it with
- * a safe confirmation object. The token VALUE is never returned via the
- * API — it gets injected directly into the worker env secrets.
- */
-function buildSafeApplyResponse(result: ApplyResult) {
-  const { appToken, ...rest } = result;
-  return {
-    ...rest,
-    appToken: appToken
-      ? {
-        issued: true,
-        scopes: appToken.scopes,
-        expiresIn: appToken.expiresIn,
-      }
-      : undefined,
-  };
-}
-
-// ---------------------------------------------------------------------------
 // Deployment: plan / apply / updates
 // ---------------------------------------------------------------------------
 
 async function planGroupHandler(c: GroupsContext) {
-  let group = await requireGroupInSpace(c);
+  const group = await requireGroupInSpace(c);
   const body = await c.req.json();
   const providerName = body.provider === undefined
     ? undefined
     : parseGroupProvider(body.provider);
   const groupEnv = body.env === undefined ? undefined : parseGroupEnv(body.env);
-
-  if (body.provider !== undefined || body.env !== undefined) {
-    group = await updateGroupMetadata(c.env, group.id, {
-      provider: body.provider === undefined ? undefined : providerName,
-      envName: body.env === undefined ? undefined : groupEnv,
-    });
-  }
 
   let manifest = body.manifest;
   if (typeof manifest === "string") {
@@ -498,6 +468,8 @@ async function planGroupHandler(c: GroupsContext) {
   }
 
   const result = await groupsRouteDeps.planManifest(c.env, group.id, manifest, {
+    groupName: group.name,
+    providerName: providerName ?? group.provider ?? undefined,
     envName: body.env === undefined ? undefined : groupEnv ?? undefined,
   });
   return c.json(result);
@@ -528,34 +500,23 @@ async function planGroupByNameHandler(c: GroupsContext) {
       `Group "${groupName}" does not exist and no manifest was provided`,
     );
   }
-  if (group && (body.provider !== undefined || body.env !== undefined)) {
-    group = await updateGroupMetadata(c.env, group.id, {
-      provider: body.provider === undefined ? undefined : providerName,
-      envName: body.env === undefined ? undefined : groupEnv,
-    });
-  }
-
-  const finalGroup = group ?? await createGroupByName(c.env, {
-    spaceId: space.id,
-    groupName,
-    provider: body.provider === undefined ? undefined : providerName,
-    envName: body.env === undefined ? undefined : groupEnv,
-    appVersion: typeof manifest?.spec?.version === "string"
-      ? manifest.spec.version
-      : null,
-    manifest,
-  });
 
   const result = await groupsRouteDeps.planManifest(
     c.env,
-    finalGroup.id,
+    group?.id ?? null,
     manifest,
     {
+      groupName,
+      providerName: providerName ?? group?.provider ?? undefined,
       envName: body.env === undefined ? undefined : groupEnv ?? undefined,
     },
   );
   return c.json({
-    group: { id: finalGroup.id, name: finalGroup.name },
+    group: {
+      id: group?.id ?? null,
+      name: groupName,
+      exists: !!group,
+    },
     ...result,
   });
 }
@@ -590,7 +551,7 @@ async function applyGroupHandler(c: GroupsContext) {
       envName: body.env === undefined ? undefined : groupEnv ?? undefined,
     },
   );
-  return c.json(buildSafeApplyResponse(result));
+  return c.json(buildSafeApplyResult(result));
 }
 
 async function applyGroupByNameHandler(c: GroupsContext) {
@@ -648,7 +609,7 @@ async function applyGroupByNameHandler(c: GroupsContext) {
     },
   );
 
-  const safeResult = buildSafeApplyResponse(result);
+  const safeResult = buildSafeApplyResult(result);
   return c.json({
     group: { id: finalGroup.id, name: finalGroup.name },
     ...safeResult,

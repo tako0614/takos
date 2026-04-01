@@ -149,6 +149,9 @@ export {
 export {
   groups,
 } from './schema-groups.ts';
+export {
+  appDeployments,
+} from './schema-app-deployments.ts';
 
 // Workers
 export {

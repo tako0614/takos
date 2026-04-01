@@ -38,10 +38,13 @@ const resourcesBase = new Hono<AuthenticatedRouteEnv>();
 
 resourcesBase.onError((err, c) => {
   if (err instanceof AppError) {
-    return c.json({ error: err.message }, err.statusCode as ContentfulStatusCode);
+    return c.json(err.toResponse(), err.statusCode as ContentfulStatusCode);
   }
   logError('Unhandled resources route error', err, { module: 'routes/resources/base' });
-  return c.json({ error: err instanceof Error ? err.message : 'Internal server error' }, 500);
+  return c.json(
+    new InternalError('Internal server error').toResponse(),
+    500,
+  );
 });
 
 function inferResourceProvider(env: AuthenticatedRouteEnv['Bindings']): 'cloudflare' | 'local' {

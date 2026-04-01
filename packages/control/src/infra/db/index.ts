@@ -149,6 +149,7 @@ export {
 
 // Groups
 export {
+  appDeployments,
   groups,
 } from './schema.ts';
 
