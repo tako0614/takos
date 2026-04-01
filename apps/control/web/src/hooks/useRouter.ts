@@ -1,85 +1,110 @@
-import { createSignal, onMount, onCleanup } from 'solid-js';
-import { DeploySection, RouteState, View, isDeploySection } from '../types/index.ts';
+import { createSignal, onCleanup, onMount } from "solid-js";
+import {
+  DeploySection,
+  isDeploySection,
+  RouteState,
+  View,
+} from "../types/index.ts";
 
-function parseDeploySection(section: string | undefined): DeploySection | undefined {
+function parseDeploySection(
+  section: string | undefined,
+): DeploySection | undefined {
   return isDeploySection(section) ? section : undefined;
 }
 
 const SIMPLE_TOP_LEVEL_VIEWS = {
-  memory: 'memory',
+  memory: "memory",
 } as const satisfies Partial<Record<string, View>>;
 
 function parseLegalAndShareRoute(parts: string[]): RouteState | undefined {
-  if (parts[0] === 'terms') return { view: 'legal', legalPage: 'terms' };
-  if (parts[0] === 'privacy') return { view: 'legal', legalPage: 'privacy' };
-  if (parts[0] === 'legal' && parts[1] === 'tokushoho') return { view: 'legal', legalPage: 'tokushoho' };
-  if (parts[0] === 'share' && parts[1]) return { view: 'share', shareToken: parts[1] };
+  if (parts[0] === "terms") return { view: "legal", legalPage: "terms" };
+  if (parts[0] === "privacy") return { view: "legal", legalPage: "privacy" };
+  if (parts[0] === "legal" && parts[1] === "tokushoho") {
+    return { view: "legal", legalPage: "tokushoho" };
+  }
+  if (parts[0] === "share" && parts[1]) {
+    return { view: "share", shareToken: parts[1] };
+  }
   return undefined;
 }
 
 function parseStoreRoute(parts: string[]): RouteState {
-  const tab = parts[1] === 'installed' ? 'installed' : 'discover';
-  return { view: 'store', storeTab: tab };
+  const tab = parts[1] === "installed" ? "installed" : "discover";
+  return { view: "store", storeTab: tab };
 }
 
 function parseAppsRoute(parts: string[]): RouteState {
-  if (!parts[1]) return { view: 'apps' };
-  return { view: 'apps', spaceId: parts[1] };
+  if (!parts[1]) return { view: "apps" };
+  return { view: "apps", spaceId: parts[1] };
 }
 
 function parseChatRoute(parts: string[]): RouteState {
-  if (parts[1] && parts[2]) return { view: 'chat', spaceId: parts[1], threadId: parts[2] };
-  if (parts[1]) return { view: 'chat', spaceId: parts[1] };
-  return { view: 'chat' };
+  if (parts[1] && parts[2]) {
+    return { view: "chat", spaceId: parts[1], threadId: parts[2] };
+  }
+  if (parts[1]) return { view: "chat", spaceId: parts[1] };
+  return { view: "chat" };
 }
 
 function parseDeployRoute(parts: string[]): RouteState {
-  if (parts[1] === 'w') {
+  if (parts[1] === "w") {
     if (parts[2]) {
       return {
-        view: 'deploy',
+        view: "deploy",
         spaceId: parts[2],
-        deploySection: parseDeploySection(parts[3]) || 'workers',
+        deploySection: parseDeploySection(parts[3]) || "workers",
       };
     }
-    return { view: 'deploy', deploySection: 'workers' };
+    return { view: "deploy", deploySection: "workers" };
   }
 
   const maybeSection = parseDeploySection(parts[1]);
   if (maybeSection) {
-    return { view: 'deploy', deploySection: maybeSection };
+    return { view: "deploy", deploySection: maybeSection };
   }
 
   const spaceId = parts[1];
   if (spaceId) {
     return {
-      view: 'deploy',
+      view: "deploy",
       spaceId,
-      deploySection: parseDeploySection(parts[2]) || 'workers',
+      deploySection: parseDeploySection(parts[2]) || "workers",
     };
   }
 
-  return { view: 'deploy', deploySection: 'workers' };
+  return { view: "deploy", deploySection: "workers" };
 }
 
 function parseSourceAliasRoute(parts: string[]): RouteState {
-  if (parts[1] === 'installed') {
-    return { view: 'store', storeTab: 'installed' };
+  if (parts[1] === "installed") {
+    return { view: "store", storeTab: "installed" };
   }
-  return { view: 'store', storeTab: 'discover' };
+  return { view: "store", storeTab: "discover" };
 }
 
 function parseReposRoute(parts: string[]): RouteState {
   if (parts.length >= 2) {
-    return { view: 'repos', spaceId: parts[1] };
+    return { view: "repos", spaceId: parts[1] };
   }
-  return { view: 'repos' };
+  return { view: "repos" };
 }
 
 function parseStorageRoute(parts: string[]): RouteState {
-  if (!parts[1]) return { view: 'storage' };
-  const storagePath = parts.length > 2 ? `/${parts.slice(2).join('/')}` : '/';
-  return { view: 'storage', spaceId: parts[1], storagePath };
+  if (!parts[1]) return { view: "storage" };
+  const storagePath = parts.length > 2 ? `/${parts.slice(2).join("/")}` : "/";
+  return { view: "storage", spaceId: parts[1], storagePath };
+}
+
+function parsePositiveInt(value: string | null): number | undefined {
+  if (!value) return undefined;
+  const parsed = Number.parseInt(value, 10);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : undefined;
+}
+
+function getParentPath(path: string): string {
+  const parts = path.split("/").filter(Boolean);
+  if (parts.length <= 1) return "/";
+  return `/${parts.slice(0, -1).join("/")}`;
 }
 
 function parseAppRoute(parts: string[]): RouteState | undefined {
@@ -87,41 +112,41 @@ function parseAppRoute(parts: string[]): RouteState | undefined {
   if (!appSegment) return undefined;
 
   switch (appSegment) {
-    case 'workers':
-      return { view: 'deploy', deploySection: 'workers' };
-    case 'resources':
-      return { view: 'deploy', deploySection: 'resources' };
-    case 'repos':
-      return { view: 'repos' };
-    case 'store':
-      return { view: 'store', storeTab: 'discover' };
+    case "workers":
+      return { view: "deploy", deploySection: "workers" };
+    case "resources":
+      return { view: "deploy", deploySection: "resources" };
+    case "repos":
+      return { view: "repos" };
+    case "store":
+      return { view: "store", storeTab: "discover" };
     default:
-      return { view: 'app', appId: appSegment };
+      return { view: "app", appId: appSegment };
   }
 }
 
 function parseSpaceAliasRoute(parts: string[]): RouteState | undefined {
-  if (parts[0] !== 'w' || !parts[1]) return undefined;
+  if (parts[0] !== "w" || !parts[1]) return undefined;
 
   const spaceId = parts[1];
 
-  if (parts[2] === 'repos') {
+  if (parts[2] === "repos") {
     if (parts[3]) {
-      return { view: 'repo', spaceId, spaceSlug: spaceId, repoId: parts[3] };
+      return { view: "repo", spaceId, spaceSlug: spaceId, repoId: parts[3] };
     }
-    return { view: 'repos', spaceId, spaceSlug: spaceId };
+    return { view: "repos", spaceId, spaceSlug: spaceId };
   }
 
-  if (parts[2] === 'files') {
-    const storagePath = parts.length > 3 ? `/${parts.slice(3).join('/')}` : '/';
-    return { view: 'storage', spaceId, spaceSlug: spaceId, storagePath };
+  if (parts[2] === "files") {
+    const storagePath = parts.length > 3 ? `/${parts.slice(3).join("/")}` : "/";
+    return { view: "storage", spaceId, spaceSlug: spaceId, storagePath };
   }
 
-  if (parts[2] === 't' && parts[3]) {
-    return { view: 'chat', spaceId, spaceSlug: spaceId, threadId: parts[3] };
+  if (parts[2] === "t" && parts[3]) {
+    return { view: "chat", spaceId, spaceSlug: spaceId, threadId: parts[3] };
   }
 
-  return { view: 'chat', spaceId, spaceSlug: spaceId };
+  return { view: "chat", spaceId, spaceSlug: spaceId };
 }
 
 type TopLevelRouteParser = (parts: string[]) => RouteState | undefined;
@@ -135,12 +160,12 @@ const TOP_LEVEL_ROUTE_PARSERS: Partial<Record<string, TopLevelRouteParser>> = {
   deploy: parseDeployRoute,
   repos: parseReposRoute,
   storage: parseStorageRoute,
-  'space-settings': (parts) => ({ view: 'space-settings', spaceId: parts[1] }),
-  settings: () => ({ view: 'settings' }),
-  resources: () => ({ view: 'deploy', deploySection: 'resources' }),
-  workers: () => ({ view: 'deploy', deploySection: 'workers' }),
-  deployments: () => ({ view: 'deploy', deploySection: 'workers' }),
-  services: () => ({ view: 'deploy', deploySection: 'workers' }),
+  "space-settings": (parts) => ({ view: "space-settings", spaceId: parts[1] }),
+  settings: () => ({ view: "settings" }),
+  resources: () => ({ view: "deploy", deploySection: "resources" }),
+  workers: () => ({ view: "deploy", deploySection: "workers" }),
+  deployments: () => ({ view: "deploy", deploySection: "workers" }),
+  services: () => ({ view: "deploy", deploySection: "workers" }),
   app: parseAppRoute,
   w: parseSpaceAliasRoute,
 };
@@ -153,39 +178,83 @@ function parseTopLevelRoute(parts: string[]): RouteState | undefined {
   return parser(parts);
 }
 
-function applyChatSearchParams(route: RouteState, search: string): RouteState {
-  if (route.view !== 'chat' || !search) {
+function applyRouteSearchParams(route: RouteState, search: string): RouteState {
+  if (!search) {
     return route;
   }
 
   const params = new URLSearchParams(search);
-  const runId = params.get('run') || undefined;
-  const messageId = params.get('message') || undefined;
 
-  if (!runId && !messageId) {
-    return route;
+  if (route.view === "chat") {
+    const runId = params.get("run") || undefined;
+    const messageId = params.get("message") || undefined;
+
+    if (!runId && !messageId) {
+      return route;
+    }
+
+    return {
+      ...route,
+      runId,
+      messageId,
+    };
   }
 
-  return {
-    ...route,
-    runId,
-    messageId,
-  };
+  if (route.view === "repo") {
+    const filePath = params.get("path") || undefined;
+    const fileLine = parsePositiveInt(params.get("line"));
+    const ref = params.get("ref") || undefined;
+
+    if (!filePath && !fileLine && !ref) {
+      return route;
+    }
+
+    return {
+      ...route,
+      filePath,
+      fileLine,
+      ref,
+    };
+  }
+
+  if (route.view === "storage") {
+    const explicitFilePath = params.get("file") || undefined;
+    const shouldOpenCurrentPath = params.get("open") === "1";
+    const filePath = explicitFilePath ||
+      (shouldOpenCurrentPath && route.storagePath && route.storagePath !== "/"
+        ? route.storagePath
+        : undefined);
+
+    if (!filePath) {
+      return route;
+    }
+
+    return {
+      ...route,
+      storagePath: getParentPath(filePath),
+      filePath,
+    };
+  }
+
+  return route;
 }
 
-function parseOAuthRoute(parts: string[], search: string): RouteState | undefined {
-  if (parts[0] !== 'oauth') return undefined;
-  if (parts[1] === 'authorize') {
-    return { view: 'oauth-authorize', oauthQuery: search };
+function parseOAuthRoute(
+  parts: string[],
+  search: string,
+): RouteState | undefined {
+  if (parts[0] !== "oauth") return undefined;
+  if (parts[1] === "authorize") {
+    return { view: "oauth-authorize", oauthQuery: search };
   }
-  if (parts[1] === 'device') {
-    return { view: 'oauth-device', oauthQuery: search };
+  if (parts[1] === "device") {
+    return { view: "oauth-device", oauthQuery: search };
   }
   return undefined;
 }
 
-export function parseRoute(pathname: string, search = ''): RouteState {
-  const parts = pathname.split('/').filter(Boolean);
+export function parseRoute(pathname: string, search = ""): RouteState {
+  const parts = pathname.split("/").filter(Boolean);
 
   const oauthRoute = parseOAuthRoute(parts, search);
   if (oauthRoute) {
@@ -197,61 +266,72 @@ export function parseRoute(pathname: string, search = ''): RouteState {
     return legalOrShareRoute;
   }
 
-  const simpleTopLevelView = SIMPLE_TOP_LEVEL_VIEWS[parts[0] as keyof typeof SIMPLE_TOP_LEVEL_VIEWS];
+  const simpleTopLevelView =
+    SIMPLE_TOP_LEVEL_VIEWS[parts[0] as keyof typeof SIMPLE_TOP_LEVEL_VIEWS];
   if (simpleTopLevelView) {
-    return applyChatSearchParams({ view: simpleTopLevelView }, search);
+    return applyRouteSearchParams({ view: simpleTopLevelView }, search);
   }
 
   const topLevelRoute = parseTopLevelRoute(parts);
   if (topLevelRoute) {
-    return applyChatSearchParams(topLevelRoute, search);
+    return applyRouteSearchParams(topLevelRoute, search);
   }
 
-  if (parts[0]?.startsWith('@')) {
-    return applyChatSearchParams({ view: 'profile', username: parts[0].slice(1) }, search);
+  if (parts[0]?.startsWith("@")) {
+    return applyRouteSearchParams({
+      view: "profile",
+      username: parts[0].slice(1),
+    }, search);
   }
 
-  if (parts[0] && parts[1] && !parts[0].startsWith('@') && /^[a-zA-Z0-9_-]+$/.test(parts[0]) && /^[a-zA-Z0-9_-]+$/.test(parts[1])) {
-    return applyChatSearchParams({ view: 'repo', username: parts[0], repoName: parts[1] }, search);
+  if (
+    parts[0] && parts[1] && !parts[0].startsWith("@") &&
+    /^[a-zA-Z0-9_-]+$/.test(parts[0]) && /^[a-zA-Z0-9_-]+$/.test(parts[1])
+  ) {
+    return applyRouteSearchParams({
+      view: "repo",
+      username: parts[0],
+      repoName: parts[1],
+    }, search);
   }
 
-  return applyChatSearchParams({ view: 'home' }, search);
+  return applyRouteSearchParams({ view: "home" }, search);
 }
 
 const STATIC_VIEW_TO_PATH: Partial<Record<View, string>> = {
-  memory: '/memory',
-  settings: '/settings',
+  memory: "/memory",
+  settings: "/settings",
 };
 
 const LEGAL_PAGE_TO_PATH = new Map<string, string>([
-  ['privacy', '/privacy'],
-  ['tokushoho', '/legal/tokushoho'],
+  ["privacy", "/privacy"],
+  ["tokushoho", "/legal/tokushoho"],
 ]);
 
 function buildLegalPath(state: RouteState): string {
-  return LEGAL_PAGE_TO_PATH.get(state.legalPage ?? '') ?? '/terms';
+  return LEGAL_PAGE_TO_PATH.get(state.legalPage ?? "") ?? "/terms";
 }
 
 function buildSharePath(state: RouteState): string {
-  return state.shareToken ? `/share/${state.shareToken}` : '/';
+  return state.shareToken ? `/share/${state.shareToken}` : "/";
 }
 
 function buildStorePath(state: RouteState): string {
-  if (state.storeTab && state.storeTab !== 'discover') {
+  if (state.storeTab && state.storeTab !== "discover") {
     return `/store/${state.storeTab}`;
   }
-  return '/store';
+  return "/store";
 }
 
 function buildChatPath(state: RouteState): string {
   const params = new URLSearchParams();
   if (state.runId) {
-    params.set('run', state.runId);
+    params.set("run", state.runId);
   }
   if (state.messageId) {
-    params.set('message', state.messageId);
+    params.set("message", state.messageId);
   }
-  const suffix = params.toString() ? `?${params.toString()}` : '';
+  const suffix = params.toString() ? `?${params.toString()}` : "";
   if (state.spaceId && state.threadId) {
     return `/chat/${state.spaceId}/${state.threadId}${suffix}`;
   }
@@ -263,45 +343,77 @@ function buildChatPath(state: RouteState): string {
 
 function buildDeployPath(state: RouteState): string {
   if (state.spaceId) {
-    if (state.deploySection && state.deploySection !== 'workers') {
+    if (state.deploySection && state.deploySection !== "workers") {
       return `/deploy/w/${state.spaceId}/${state.deploySection}`;
     }
     return `/deploy/w/${state.spaceId}`;
   }
-  if (state.deploySection && state.deploySection !== 'workers') {
+  if (state.deploySection && state.deploySection !== "workers") {
     return `/deploy/${state.deploySection}`;
   }
-  return '/deploy';
+  return "/deploy";
 }
 
 function buildReposPath(state: RouteState): string {
   if (state.spaceId) {
     return `/repos/${state.spaceId}`;
   }
-  return '/repos';
+  return "/repos";
 }
 
 function buildAppsPath(state: RouteState): string {
   if (state.spaceId) {
     return `/apps/${state.spaceId}`;
   }
-  return '/apps';
+  return "/apps";
 }
 
 function buildStoragePath(state: RouteState): string {
-  if (state.spaceId) {
-    if (state.storagePath && state.storagePath !== '/') {
-      return `/storage/${state.spaceId}${state.storagePath}`;
-    }
-    return `/storage/${state.spaceId}`;
+  const params = new URLSearchParams();
+  const effectivePath = state.filePath || state.storagePath;
+  if (state.filePath) {
+    params.set("open", "1");
   }
-  return '/storage';
+
+  if (state.spaceId) {
+    const basePath = effectivePath && effectivePath !== "/"
+      ? `/storage/${state.spaceId}${effectivePath}`
+      : `/storage/${state.spaceId}`;
+    const query = params.toString();
+    if (query) {
+      return `${basePath}?${query}`;
+    }
+    return basePath;
+  }
+  return "/storage";
 }
 
 function buildRepoPath(state: RouteState): string | undefined {
-  if (state.username && state.repoName) return `/${state.username}/${state.repoName}`;
-  if (state.spaceId && state.repoId) return `/w/${state.spaceId}/repos/${state.repoId}`;
-  return undefined;
+  let basePath: string | undefined;
+  if (state.username && state.repoName) {
+    basePath = `/${state.username}/${state.repoName}`;
+  } else if (state.spaceId && state.repoId) {
+    basePath = `/w/${state.spaceId}/repos/${state.repoId}`;
+  }
+
+  if (!basePath) return undefined;
+
+  const params = new URLSearchParams();
+  if (state.ref) {
+    params.set("ref", state.ref);
+  }
+  if (state.filePath) {
+    params.set("path", state.filePath);
+  }
+  if (
+    typeof state.fileLine === "number" && Number.isFinite(state.fileLine) &&
+    state.fileLine > 0
+  ) {
+    params.set("line", String(state.fileLine));
+  }
+
+  const query = params.toString();
+  return query ? `${basePath}?${query}` : basePath;
 }
 
 function buildAppPath(state: RouteState): string | undefined {
@@ -319,16 +431,22 @@ function buildProfilePath(state: RouteState): string | undefined {
 }
 
 function buildOAuthAuthorizePath(state: RouteState): string {
-  return state.oauthQuery ? `/oauth/authorize${state.oauthQuery}` : '/oauth/authorize';
+  return state.oauthQuery
+    ? `/oauth/authorize${state.oauthQuery}`
+    : "/oauth/authorize";
 }
 
 function buildOAuthDevicePath(state: RouteState): string {
-  return state.oauthQuery ? `/oauth/device${state.oauthQuery}` : '/oauth/device';
+  return state.oauthQuery
+    ? `/oauth/device${state.oauthQuery}`
+    : "/oauth/device";
 }
 
-const DYNAMIC_VIEW_TO_PATH: Partial<Record<View, (state: RouteState) => string | undefined>> = {
-  'oauth-authorize': buildOAuthAuthorizePath,
-  'oauth-device': buildOAuthDevicePath,
+const DYNAMIC_VIEW_TO_PATH: Partial<
+  Record<View, (state: RouteState) => string | undefined>
+> = {
+  "oauth-authorize": buildOAuthAuthorizePath,
+  "oauth-device": buildOAuthDevicePath,
   legal: buildLegalPath,
   share: buildSharePath,
   store: buildStorePath,
@@ -337,7 +455,8 @@ const DYNAMIC_VIEW_TO_PATH: Partial<Record<View, (state: RouteState) => string |
   repos: buildReposPath,
   apps: buildAppsPath,
   storage: buildStoragePath,
-  'space-settings': (state) => state.spaceId ? `/space-settings/${state.spaceId}` : '/space-settings',
+  "space-settings": (state) =>
+    state.spaceId ? `/space-settings/${state.spaceId}` : "/space-settings",
   repo: buildRepoPath,
   app: buildAppPath,
   profile: buildProfilePath,
@@ -346,12 +465,14 @@ const DYNAMIC_VIEW_TO_PATH: Partial<Record<View, (state: RouteState) => string |
 export function buildPath(state: RouteState): string {
   const view = state.view;
 
-  const staticPath = STATIC_VIEW_TO_PATH[view as keyof typeof STATIC_VIEW_TO_PATH];
+  const staticPath =
+    STATIC_VIEW_TO_PATH[view as keyof typeof STATIC_VIEW_TO_PATH];
   if (staticPath !== undefined) {
     return staticPath;
   }
 
-  const dynamicBuilder = DYNAMIC_VIEW_TO_PATH[view as keyof typeof DYNAMIC_VIEW_TO_PATH];
+  const dynamicBuilder =
+    DYNAMIC_VIEW_TO_PATH[view as keyof typeof DYNAMIC_VIEW_TO_PATH];
   if (dynamicBuilder) {
     const dynamicPath = dynamicBuilder(state);
     if (dynamicPath !== undefined) {
@@ -359,34 +480,44 @@ export function buildPath(state: RouteState): string {
     }
   }
 
-  return '/';
+  return "/";
 }
 
 export function useRouter() {
-  const [route, setRouteState] = createSignal<RouteState>(parseRoute(globalThis.location.pathname, globalThis.location.search));
+  const [route, setRouteState] = createSignal<RouteState>(
+    parseRoute(globalThis.location.pathname, globalThis.location.search),
+  );
 
   onMount(() => {
     const handlePopState = () => {
-      setRouteState(parseRoute(globalThis.location.pathname, globalThis.location.search));
+      setRouteState(
+        parseRoute(globalThis.location.pathname, globalThis.location.search),
+      );
     };
-    globalThis.addEventListener('popstate', handlePopState);
-    onCleanup(() => globalThis.removeEventListener('popstate', handlePopState));
+    globalThis.addEventListener("popstate", handlePopState);
+    onCleanup(() => globalThis.removeEventListener("popstate", handlePopState));
   });
 
   const navigate = (newState: Partial<RouteState>) => {
     const merged = { ...route(), ...newState };
     const path = buildPath(merged);
     if (globalThis.location.pathname !== path) {
-      globalThis.history.pushState(null, '', path);
+      globalThis.history.pushState(null, "", path);
     }
     setRouteState(merged);
   };
 
   const replace = (newState: RouteState) => {
     const path = buildPath(newState);
-    globalThis.history.replaceState(null, '', path);
+    globalThis.history.replaceState(null, "", path);
     setRouteState(newState);
   };
 
-  return { get route() { return route(); }, navigate, replace };
+  return {
+    get route() {
+      return route();
+    },
+    navigate,
+    replace,
+  };
 }

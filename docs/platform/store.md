@@ -1,6 +1,6 @@
 # Store
 
-アプリの公開とインストールの仕組み。
+アプリの公開、package install、remote repository import の仕組み。
 
 ## 公開の仕組み
 
@@ -63,6 +63,14 @@ interface SeedRepository {
 | 名前 | カテゴリ | プリチェック |
 |---|---|---|
 | Takos Agent | tool | yes |
+
+## Store の 3 つの経路
+
+- package catalog: public な package release を検索する
+- package install: Store package を app deployment として導入する
+- remote repository import: ActivityPub remote store からリポジトリ参照を取り込む
+
+`install` という語は package install にだけ使います。remote store からの取り込みは `import repository` と呼びます。
 
 ## Store API
 

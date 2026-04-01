@@ -4,9 +4,21 @@
 
 import { getApiRequestTimeoutMs, getConfig } from './config.ts';
 
-interface ApiError {
-  error: string;
+interface ApiErrorShape {
+  code?: string;
+  message?: string;
+  details?: unknown;
+}
+
+interface ApiErrorEnvelope {
+  error?: string | ApiErrorShape;
   details?: string;
+  message?: string;
+}
+
+function asApiErrorEnvelope(value: unknown): ApiErrorEnvelope | null {
+  if (!value || typeof value !== "object") return null;
+  return value as ApiErrorEnvelope;
 }
 
 type ApiResponse<T> =
@@ -98,6 +110,31 @@ function sanitizeErrorMessage(error: unknown): string {
   return sanitized.trim() || DEFAULT_ERROR;
 }
 
+function extractErrorMessage(
+  payload: ApiErrorEnvelope | null,
+  fallback: string,
+): string {
+  if (!payload) return fallback;
+  if (typeof payload.error === "string" && payload.error.trim()) {
+    return payload.error.trim();
+  }
+  if (
+    payload.error &&
+    typeof payload.error === "object" &&
+    typeof payload.error.message === "string" &&
+    payload.error.message.trim()
+  ) {
+    return payload.error.message.trim();
+  }
+  if (typeof payload.message === "string" && payload.message.trim()) {
+    return payload.message.trim();
+  }
+  if (typeof payload.details === "string" && payload.details.trim()) {
+    return payload.details.trim();
+  }
+  return fallback;
+}
+
 // Make API request
 export async function api<T>(
   path: string,
@@ -136,8 +173,15 @@ export async function api<T>(
     }, timeoutMs);
 
     if (!response.ok) {
-      const errorData = await response.json().catch(() => ({ error: response.statusText })) as ApiError;
-      return { ok: false, error: errorData.error || `HTTP ${response.status}` };
+      const errorData = asApiErrorEnvelope(
+        await response.json().catch(() =>
+          ({ error: response.statusText }) as ApiErrorEnvelope
+        ),
+      );
+      return {
+        ok: false,
+        error: extractErrorMessage(errorData, `HTTP ${response.status}`),
+      };
     }
 
     // 204/205 and empty 2xx bodies are valid for endpoints that return no content.

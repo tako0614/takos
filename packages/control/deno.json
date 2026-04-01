@@ -42,6 +42,7 @@
     "./runtime/container-hosts/runtime-host": "./src/runtime/container-hosts/runtime-host.ts",
     "./runtime/container-hosts/executor-run-state": "./src/runtime/container-hosts/executor-run-state.ts",
     "./server/routes": "./src/server/routes/index.ts",
+    "./rpc-types": "./src/server/routes/rpc-types.ts",
     "./server/middleware": "./src/server/middleware/index.ts",
     "./shared/utils": "./src/shared/utils/index.ts",
     "./shared/types": "./src/shared/types/index.ts",

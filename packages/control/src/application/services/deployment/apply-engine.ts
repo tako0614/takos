@@ -1128,7 +1128,7 @@ export async function planManifest(
     throw new Error(`Group "${groupId}" not found`);
   }
 
-  const effectiveManifest = manifest ?? loadDesiredManifest(group);
+  const effectiveManifest = manifest ?? (group ? loadDesiredManifest(group) : null);
   if (!effectiveManifest) {
     throw new Error(groupId
       ? `Group "${groupId}" does not have a desired manifest`

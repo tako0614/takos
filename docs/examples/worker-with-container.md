@@ -4,7 +4,7 @@
 
 takos-agent と同じアーキテクチャです。ブラウザ自動化やヘビーな処理など、Docker が必要な場合に使います。
 
-この例は現行の `takos apply` で読める構成に合わせています。Store 経由の `takos deploy` / app-deployments はまだ end-to-end ではありません。
+この例は現行の `takos apply` で読める構成に合わせています。同じ manifest は repo/ref source の `takos deploy` や Store package install でも使えます。
 
 ## app.yml
 

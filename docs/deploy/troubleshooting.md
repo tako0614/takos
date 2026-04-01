@@ -47,13 +47,12 @@ takos apply --env staging --target workers.api    # NG（存在しない）
 
 ### `Error: Failed to create D1 database`
 
-- Cloudflare API トークンに D1 の権限があるか確認してください
+- Takos 側の deploy 権限を持つアカウントで `takos login` しているか確認してください
 - アカウントの D1 クォータに空きがあるか確認してください
-- `--account-id` が正しいか確認してください
 
 ### `Error: Failed to create R2 bucket`
 
-- Cloudflare API トークンに R2 の権限があるか確認してください
+- Takos 側の deploy 権限を持つアカウントで `takos login` しているか確認してください
 - R2 のバケット名制約（英小文字、ハイフン、63 文字以内）に従っているか確認してください
 
 ## デプロイ失敗
@@ -80,14 +79,9 @@ takos apply --env staging --target workers.web
 ### `Error: Authentication failed`
 
 ```bash
-# 環境変数を確認
-echo $CLOUDFLARE_ACCOUNT_ID
-echo $CLOUDFLARE_API_TOKEN
-
-# または明示的に指定
-takos apply --env staging \
-  --account-id YOUR_ACCOUNT_ID \
-  --api-token YOUR_API_TOKEN
+takos whoami
+takos login
+takos endpoint show
 ```
 
 ## テンプレート変数のエラー
@@ -126,7 +120,7 @@ takos plan
 
 1. Cloudflare ダッシュボードで Worker やリソースの状態を確認
 2. `takos plan` で manifest の解釈結果と差分を確認
-3. 生成された wrangler.toml を手動で `wrangler deploy` してエラーを切り分け
+3. `takos deploy status --space SPACE_ID` で control plane 側の deployment 状態を確認
 
 ## 次のステップ
 

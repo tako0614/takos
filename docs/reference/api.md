@@ -594,7 +594,7 @@ workspace/space の CRUD・モデル設定・エクスポート。
 
 ## spaces.store-registry
 
-リモートストアレジストリの管理・インストール。
+リモートストアレジストリの管理と remote repository import。
 
 | method | path | description |
 | --- | --- | --- |
@@ -605,7 +605,7 @@ workspace/space の CRUD・モデル設定・エクスポート。
 | POST | `/api/spaces/:spaceId/store-registry/:entryId/refresh` | メタデータ更新 *(owner/admin)* |
 | GET | `/api/spaces/:spaceId/store-registry/:entryId/repositories` | リモートリポジトリ一覧 |
 | GET | `/api/spaces/:spaceId/store-registry/:entryId/repositories/search` | リモートリポジトリ検索 |
-| POST | `/api/spaces/:spaceId/store-registry/:entryId/install` | リモートストアからインストール *(owner/admin)* |
+| POST | `/api/spaces/:spaceId/store-registry/:entryId/import-repository` | リモートストアから repository を import *(owner/admin)* |
 | GET | `/api/spaces/:spaceId/store-registry/updates` | サブスクリプション更新確認 |
 | POST | `/api/spaces/:spaceId/store-registry/updates/mark-seen` | 更新を既読にする |
 | POST | `/api/spaces/:spaceId/store-registry/:entryId/poll` | 手動ポーリング *(owner/admin)* |
@@ -1400,11 +1400,7 @@ curl -N \
 
 ## app-deployments
 
-リポジトリベースのアプリデプロイ管理。
-
-::: warning current implementation
-現行の control-plane 実装では `AppDeploymentService` は legacy surface です。実運用では `takos apply` または first-class `worker` / `service` / `resource` コマンドを使ってください。
-:::
+repo/ref または package release を source にしたアプリデプロイ管理。
 
 | method | path | description |
 | --- | --- | --- |
@@ -1425,9 +1421,15 @@ curl -N \
 
 ```json
 {
-  "repo_id": "repo_abc123",
-  "ref": "main",
-  "ref_type": "branch"
+  "group_name": "my-app",
+  "env": "staging",
+  "provider": "cloudflare",
+  "source": {
+    "kind": "repo_ref",
+    "repo_id": "repo_abc123",
+    "ref": "main",
+    "ref_type": "branch"
+  }
 }
 ```
 
@@ -1435,18 +1437,29 @@ curl -N \
 
 ```json
 {
-  "success": true,
-  "data": {
-    "app_deployment_id": "adep_xyz789",
-    "app_id": "app_def456",
-    "name": "my-app",
-    "version": "1.0.0",
+  "app_deployment": {
+    "id": "adep_xyz789",
+    "group": {
+      "id": "grp_123",
+      "name": "my-app"
+    },
+    "status": "applied",
+    "manifest_version": "1.0.0",
+    "hostnames": ["my-app.example.com"],
+    "rollback_of_app_deployment_id": null,
     "source": {
+      "kind": "repo_ref",
       "repo_id": "repo_abc123",
       "ref": "main",
       "ref_type": "branch",
       "commit_sha": "abc123def456"
-    }
+    },
+    "created_at": "2026-03-28T00:00:00.000Z",
+    "updated_at": "2026-03-28T00:00:00.000Z"
+  },
+  "apply_result": {
+    "applied": [],
+    "skipped": []
   }
 }
 ```
@@ -1490,6 +1503,8 @@ curl -N \
 | POST | `/api/spaces/:spaceId/groups/:groupId/plan` | マニフェストプラン *(owner/admin/editor)* |
 | POST | `/api/spaces/:spaceId/groups/:groupId/apply` | マニフェスト適用 *(owner/admin/editor)* |
 | GET | `/api/spaces/:spaceId/groups/:groupId/updates` | 更新チェック |
+
+`POST /api/spaces/:spaceId/groups/plan` と `POST /api/spaces/:spaceId/groups/apply` は `group_name` 指定にも対応します。`plan` は non-mutating preview、`apply` は必要なら group を作成して反映します。
 
 ---
 
@@ -1640,7 +1655,7 @@ curl -X POST \
 curl -X POST \
   -H "Authorization: Bearer tak_pat_..." \
   -H "Content-Type: application/json" \
-  -d '{"repo_id":"repo_123","ref":"main","ref_type":"branch"}' \
+  -d '{"source":{"kind":"repo_ref","repo_id":"repo_123","ref":"main","ref_type":"branch"}}' \
   https://your-takos.example/api/spaces/ws_123/app-deployments
 ```
 
@@ -1724,8 +1739,7 @@ curl -X POST \
 
 ## implementation note
 
-deploy family は current public surface ですが、today の implementation gap は [Deploy System](/deploy/) に従って読みます。
-このリファレンスは全エンドポイントを網羅していますが、end-to-end availability の保証は各 family の implementation note を優先してください。
+deploy family は current public surface です。`rollout` 系 endpoint のように互換のため URL だけ残るものは、各 family の implementation note を優先してください。
 
 ## 次に読むページ
 

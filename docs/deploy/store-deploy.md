@@ -1,12 +1,13 @@
 # Store 経由デプロイ
 
-> このページでわかること: `takos deploy` / app-deployments の設計上の contract。
+> このページでわかること: `takos deploy` / `takos install` / `app-deployments` の current contract。
 
-`takos deploy` は CLI 上に残っているものの、このリポジトリの current implementation では control plane 側の app-deployments パスに end-to-end で接続されていません。Store に公開する app deploy は、今は「今後の surface」として読むのが正確です。
+Takos では app deployment を source kind で 2 つに分けます。
 
-::: warning current status
-`takos deploy` と `/api/spaces/:spaceId/app-deployments` は docs と route 定義はありますが、現行コードでは service 実装が未接続です。実運用では `takos apply` を使ってください。
-:::
+- `takos deploy`: repo/ref を source にデプロイする
+- `takos install`: Store package release を source にデプロイする
+
+どちらも control plane 上では `/api/spaces/:spaceId/app-deployments` を使い、結果は `group` に反映されます。
 
 ## 基本的な使い方
 
@@ -14,17 +15,20 @@
 takos deploy --space SPACE_ID --repo REPO_ID --ref main
 ```
 
+```bash
+takos install takos/takos-agent --space SPACE_ID --version v1.0.0
+```
+
 ## apply との違い
 
-| 観点 | `takos deploy` | `takos apply` |
+| 観点 | `takos deploy` / `takos install` | `takos apply` |
 | --- | --- | --- |
-| 状態 | current では未接続 | current |
-| 用途 | Store 経由の将来 surface | ローカルから直接デプロイ |
-| 対象 | repo/ref に紐づく artifact | `.takos/app.yml` のグループ定義 |
-| 認証 | Takos の認証 | Cloudflare API トークン |
-| 主な利用場面 | 将来の CI/CD surface | 開発・検証環境 |
-| ロールバック | 将来の contract | 以前のコードで再 apply |
-| rollout | 将来の contract | なし |
+| source | repo/ref または package release | local working tree |
+| 解決場所 | control plane | CLI が manifest / artifact を読んで upload |
+| 用途 | CI/CD, Store install, remote source deploy | 開発中の app を直接 apply |
+| group 作成 | apply 時に必要なら作成 | apply 時に必要なら作成 |
+| ロールバック | `app-deployments.rollback` | 以前のコードで再 apply |
+| rollout control | v1 では未提供 (`410 Gone`) | なし |
 
 ## デプロイ前の検証
 
@@ -34,11 +38,7 @@ takos deploy --space SPACE_ID --repo REPO_ID --ref main
 takos plan
 ```
 
-以下の項目が検証されます。
-
-- `.takos/app.yml` が `kind: App` であること
-- `build.fromWorkflow.path` が `.takos/workflows/` 配下であること
-- service / resource / route の参照が整合していること
+`takos plan` は non-mutating preview です。group が未作成でも DB row は作りません。
 
 ## デプロイ状態の確認
 
@@ -52,85 +52,88 @@ takos deploy status APP_DEPLOYMENT_ID --space SPACE_ID
 
 ## Rollout 制御
 
-将来の Store 経由デプロイでは、段階的公開（rollout）を制御できます。
-
-- UI からも trigger 可能
-- CI/CD パイプラインに組み込める
-- 一時停止、再開、中止、即時完了を API で操作
+`rollout` 系 endpoint は互換 surface として URL だけ残っていますが、current v1 では `410 Gone` を返します。現時点の rollback は「前の成功 deployment source を使って再 deploy する」方式です。
 
 ## API
 
-`takos deploy` が内部で使う予定の API です。UI 連携や CI/CD から直接叩く contract としては残っていますが、current implementation では未接続です。
+`takos deploy` / `takos install` が内部で使う API です。UI 連携や CI/CD からも直接利用できます。
 
 ```text
 POST   /api/spaces/:spaceId/app-deployments
 GET    /api/spaces/:spaceId/app-deployments
 GET    /api/spaces/:spaceId/app-deployments/:appDeploymentId
 POST   /api/spaces/:spaceId/app-deployments/:appDeploymentId/rollback
-GET    /api/spaces/:spaceId/app-deployments/:appDeploymentId/rollout
-POST   /api/spaces/:spaceId/app-deployments/:appDeploymentId/rollout/{pause|resume|abort|promote}
 DELETE /api/spaces/:spaceId/app-deployments/:appDeploymentId
 ```
 
 ## API リクエスト・レスポンス例
 
-### デプロイの作成
+### repo/ref デプロイ
 
 ```bash
 curl -X POST https://takos.example.com/api/spaces/{spaceId}/app-deployments \
   -H "Authorization: Bearer $TOKEN" \
   -H "Content-Type: application/json" \
-  -d '{"repo_id": "repo_abc123", "ref": "main"}'
+  -d '{
+    "group_name": "my-app",
+    "env": "staging",
+    "source": {
+      "kind": "repo_ref",
+      "repo_id": "repo_abc123",
+      "ref": "main",
+      "ref_type": "branch"
+    }
+  }'
 ```
 
 レスポンス:
 
 ```json
 {
-  "id": "deploy_xxx",
-  "status": "pending",
-  "created_at": "2026-03-28T00:00:00.000Z"
+  "app_deployment": {
+    "id": "deploy_xxx",
+    "group": { "id": "grp_xxx", "name": "my-app" },
+    "source": {
+      "kind": "repo_ref",
+      "repo_id": "repo_abc123",
+      "ref": "main",
+      "ref_type": "branch",
+      "commit_sha": "abc123def456"
+    },
+    "status": "applied",
+    "manifest_version": "1.0.0",
+    "hostnames": ["my-app.example.com"],
+    "rollback_of_app_deployment_id": null,
+    "created_at": "2026-03-28T00:00:00.000Z",
+    "updated_at": "2026-03-28T00:00:00.000Z"
+  },
+  "apply_result": {
+    "applied": [],
+    "skipped": []
+  }
 }
 ```
 
-### デプロイ一覧の取得
+### Store package install
 
 ```bash
-curl https://takos.example.com/api/spaces/{spaceId}/app-deployments \
-  -H "Authorization: Bearer $TOKEN"
-```
-
-### 特定デプロイの詳細
-
-```bash
-curl https://takos.example.com/api/spaces/{spaceId}/app-deployments/{appDeploymentId} \
-  -H "Authorization: Bearer $TOKEN"
+curl -X POST https://takos.example.com/api/spaces/{spaceId}/app-deployments \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "source": {
+      "kind": "package_release",
+      "owner": "takos",
+      "repo_name": "takos-agent",
+      "version": "v1.0.0"
+    }
+  }'
 ```
 
 ### ロールバック
 
 ```bash
 curl -X POST https://takos.example.com/api/spaces/{spaceId}/app-deployments/{appDeploymentId}/rollback \
-  -H "Authorization: Bearer $TOKEN"
-```
-
-### Rollout 制御
-
-```bash
-# 一時停止
-curl -X POST https://takos.example.com/api/spaces/{spaceId}/app-deployments/{appDeploymentId}/rollout/pause \
-  -H "Authorization: Bearer $TOKEN"
-
-# 再開
-curl -X POST https://takos.example.com/api/spaces/{spaceId}/app-deployments/{appDeploymentId}/rollout/resume \
-  -H "Authorization: Bearer $TOKEN"
-
-# 中止
-curl -X POST https://takos.example.com/api/spaces/{spaceId}/app-deployments/{appDeploymentId}/rollout/abort \
-  -H "Authorization: Bearer $TOKEN"
-
-# 即時完了（全トラフィックを新バージョンに切り替え）
-curl -X POST https://takos.example.com/api/spaces/{spaceId}/app-deployments/{appDeploymentId}/rollout/promote \
   -H "Authorization: Bearer $TOKEN"
 ```
 

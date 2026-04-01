@@ -400,7 +400,7 @@ Space にリモートの Store を登録・管理する API。すべて認証が
 | `/api/spaces/:spaceId/store-registry/:entryId/refresh` | POST | メタデータ再取得 |
 | `/api/spaces/:spaceId/store-registry/:entryId/repositories` | GET | リモートリポジトリ閲覧 |
 | `/api/spaces/:spaceId/store-registry/:entryId/repositories/search` | GET | リモートリポジトリ検索 |
-| `/api/spaces/:spaceId/store-registry/:entryId/install` | POST | リポジトリインストール |
+| `/api/spaces/:spaceId/store-registry/:entryId/import-repository` | POST | リポジトリ参照の import |
 | `/api/spaces/:spaceId/store-registry/:entryId/poll` | POST | 手動ポーリング |
 | `/api/spaces/:spaceId/store-registry/updates` | GET | サブスクリプション更新一覧 |
 | `/api/spaces/:spaceId/store-registry/updates/mark-seen` | POST | 既読マーク |

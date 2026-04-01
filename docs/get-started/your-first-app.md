@@ -95,13 +95,12 @@ npm install && npm run build
 ## 6. デプロイ
 
 ```bash
-takos apply --env staging \
-  --account-id $CLOUDFLARE_ACCOUNT_ID \
-  --api-token $CLOUDFLARE_API_TOKEN
+takos login
+takos apply --env staging
 ```
 
-::: tip 環境変数で指定する場合
-`CLOUDFLARE_ACCOUNT_ID` と `CLOUDFLARE_API_TOKEN` を環境変数にセットしておけば、フラグは省略できる。
+::: tip
+CLI は Takos の認証情報を使います。`takos login` 後は `--account-id` や `--api-token` を渡す必要はありません。
 :::
 
 デプロイ成功すると URL が表示される。ブラウザで開いて "Hello from Takos!" が出れば成功。
