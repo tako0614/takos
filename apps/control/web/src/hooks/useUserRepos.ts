@@ -1,6 +1,6 @@
-import { createSignal, createEffect, on } from 'solid-js';
-import type { ProfileRepo } from '../types/profile.ts';
-import { rpc, rpcJson } from '../lib/rpc.ts';
+import { type Accessor, createEffect, createSignal, on } from "solid-js";
+import type { ProfileRepo } from "../types/profile.ts";
+import { rpc, rpcJson } from "../lib/rpc.ts";
 
 interface ReposResponse {
   repos: ProfileRepo[];
@@ -9,7 +9,7 @@ interface ReposResponse {
 
 const ITEMS_PER_PAGE = 20;
 
-export function useUserRepos(username: string) {
+export function useUserRepos(username: Accessor<string>) {
   const [repos, setRepos] = createSignal<ProfileRepo[]>([]);
   const [offset, setOffset] = createSignal(0);
   const [hasMore, setHasMore] = createSignal(true);
@@ -17,17 +17,20 @@ export function useUserRepos(username: string) {
   const [error, setError] = createSignal<string | null>(null);
 
   const fetch_ = async (reset = false) => {
+    const currentUsername = username();
+    if (!currentUsername) return;
     if (!reset && !hasMore()) return;
 
     setLoading(true);
     setError(null);
     try {
       const currentOffset = reset ? 0 : offset();
-      const res = await rpc.users[':username'].repos.$get({
-        param: { username },
+      const res = await rpc.users[":username"].repos.$get({
+        param: { username: currentUsername },
         query: { limit: String(ITEMS_PER_PAGE), offset: String(currentOffset) },
       });
       const data = await rpcJson<ReposResponse>(res);
+      if (currentUsername !== username()) return;
       if (reset) {
         setRepos(data.repos);
         setOffset(ITEMS_PER_PAGE);
@@ -37,7 +40,9 @@ export function useUserRepos(username: string) {
       }
       setHasMore(data.has_more);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to load repositories');
+      setError(
+        err instanceof Error ? err.message : "Failed to load repositories",
+      );
     } finally {
       setLoading(false);
     }
@@ -52,7 +57,7 @@ export function useUserRepos(username: string) {
 
   // Reset when username changes
   createEffect(on(
-    () => username,
+    username,
     () => {
       reset();
     },

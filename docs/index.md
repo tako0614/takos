@@ -3,42 +3,42 @@ layout: home
 
 hero:
   name: Takos
-  text: アプリを宣言的にデプロイ
-  tagline: app.yml を書くだけで Worker、Container、データベースをまとめてデプロイ
+  text: AIエージェントによるサービスとソフトウェアの民主化基盤
+  tagline: AIエージェント時代の infra kernel と workspace shell を定義する Takos の公式 docs
   actions:
     - theme: brand
       text: はじめる
       link: /get-started/
     - theme: alt
-      text: app.yml を書く
-      link: /apps/manifest
+      text: Takos の全体像
+      link: /overview/
     - theme: alt
-      text: GitHub
-      link: https://github.com/tako0614/takos
+      text: アプリ構成を見る
+      link: /apps/
 
 features:
+  - icon: 🧭
+    title: Takos 全体像
+    details: "infra kernel、workspace shell、installable apps の境界から Takos を理解する"
+    link: /overview/
   - icon: 🚀
-    title: 宣言的デプロイ
-    details: app.yml にアプリの構成を書くだけ。リソース作成、binding 接続、ドメイン設定を自動化
-    link: /apps/manifest
-  - icon: 📦
-    title: Workers + Containers
-    details: CF Workers と Docker Container を1つのマニフェストで管理。CF Containers で自動スケール
-    link: /apps/containers
-  - icon: 🔌
-    title: MCP Server
-    details: MCP server をワンライン宣言で自動公開。認証トークンも自動生成
-    link: /apps/mcp
-  - icon: 🏪
-    title: App Store
-    details: アプリを Store に公開してワンクリックインストール。公式パッケージも自動表示
-    link: /platform/store
+    title: はじめる
+    details: "CLI ログインから最初の app 作成、`.takos/` ディレクトリ構成、最初の deploy まで順に追う"
+    link: /get-started/
+  - icon: 🧩
+    title: アプリ構成
+    details: "アプリマニフェスト、Workers、Containers、Routes、環境変数、MCP、OAuth の public surface をまとめて確認する"
+    link: /apps/
   - icon: 🌐
-    title: マルチテナント
-    details: dispatch namespace でテナントごとに Worker を分離。apply で一括管理
-    link: /deploy/namespaces
-  - icon: 🔧
-    title: テンプレート変数
-    details: デプロイ後のURL・IPを環境変数に自動注入。サービス間の接続を宣言的に
-    link: /apps/environment
+    title: デプロイと配布
+    details: "`takos plan` / `takos apply` / `takos deploy` / `takos install` の違いと使い分けを整理する"
+    link: /deploy/
+  - icon: 🏪
+    title: プラットフォーム
+    details: "kernel、workspace shell、課金、federation と installable apps の関係を確認する"
+    link: /platform/
+  - icon: 📚
+    title: リファレンス
+    details: "CLI、API、アプリマニフェスト、用語集を参照する"
+    link: /reference/
 ---

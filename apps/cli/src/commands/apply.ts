@@ -4,26 +4,28 @@ import process from "node:process";
 import type { Command } from "commander";
 import { bold, cyan, dim, green, red, yellow } from "@std/fmt/colors";
 import {
+  type AppManifest,
   loadAppManifest,
   resolveAppManifestPath,
-  type AppManifest,
 } from "../lib/app-manifest.ts";
 import { api } from "../lib/api.ts";
-import { printApplyResult } from "../lib/apply/result-formatter.ts";
-import { confirmPrompt, resolveSpaceId } from "../lib/cli-utils.ts";
-import { cliExit } from "../lib/command-exit.ts";
 import {
-  type GroupProviderName,
-  parseGroupProvider,
-} from "../lib/group-provider.ts";
-import type { DiffEntry, DiffResult } from "../lib/state/diff.ts";
+  exitIfApplyExecutionFailed,
+  printApplyExecutionResult,
+} from "../lib/apply/cli-output.ts";
+import {
+  confirmPrompt,
+  resolveGroupProviderOption,
+  resolveSpaceId,
+} from "../lib/cli-utils.ts";
+import { cliExit } from "../lib/command-exit.ts";
+import { inferApplySourceProjection } from "../lib/git-provenance.ts";
+import type { DiffResult } from "../lib/state/diff.ts";
 import { formatPlan } from "../lib/state/plan.ts";
 import {
   printTranslationReport,
   type TranslationReport,
 } from "../lib/translation-report.ts";
-
-type PrintableApplyResult = Parameters<typeof printApplyResult>[0];
 
 type ApplyArtifactInput =
   | { kind: "worker_bundle"; bundleContent: string; deployMessage?: string }
@@ -206,19 +208,12 @@ export function registerApplyCommand(program: Command): void {
         cliExit(1);
       }
 
-      let provider: GroupProviderName | undefined;
-      try {
-        provider = parseGroupProvider(options.provider);
-      } catch (error) {
-        console.log(
-          red(error instanceof Error ? error.message : "Invalid provider"),
-        );
-        cliExit(1);
-      }
+      const provider = resolveGroupProviderOption(options.provider);
 
       const group = options.group || manifest.metadata.name;
       const spaceId = resolveSpaceId(options.space);
       const targets = options.target || [];
+      const source = await inferApplySourceProjection(manifestPath);
 
       const planResponse = await api<PlanByNameResponse>(
         `/api/spaces/${spaceId}/groups/plan`,
@@ -229,6 +224,7 @@ export function registerApplyCommand(program: Command): void {
             env: options.env,
             ...(provider ? { provider } : {}),
             manifest,
+            source,
           },
         },
       );
@@ -281,9 +277,15 @@ export function registerApplyCommand(program: Command): void {
 
       let artifacts: Record<string, ApplyArtifactInput> = {};
       try {
-        artifacts = await collectApplyArtifacts(manifest, manifestPath, targets);
+        artifacts = await collectApplyArtifacts(
+          manifest,
+          manifestPath,
+          targets,
+        );
       } catch (error) {
-        console.log(red(error instanceof Error ? error.message : String(error)));
+        console.log(
+          red(error instanceof Error ? error.message : String(error)),
+        );
         cliExit(1);
       }
 
@@ -300,6 +302,7 @@ export function registerApplyCommand(program: Command): void {
             env: options.env,
             ...(provider ? { provider } : {}),
             manifest,
+            source,
             artifacts,
             target: targets.length > 0 ? targets : undefined,
           },
@@ -312,22 +315,16 @@ export function registerApplyCommand(program: Command): void {
         cliExit(1);
       }
 
-      printTranslationReport(applyResponse.data.translationReport);
-      const printableResult: PrintableApplyResult = {
-        applied: applyResponse.data.applied,
-        skipped: applyResponse.data.skipped,
-      };
-      printApplyResult(
-        printableResult,
+      printApplyExecutionResult(
+        {
+          applied: applyResponse.data.applied,
+          skipped: applyResponse.data.skipped,
+          diff: applyResponse.data.diff,
+          translationReport: applyResponse.data.translationReport,
+        },
         options.env,
         applyResponse.data.group?.name || group,
       );
-
-      const hasFailures = applyResponse.data.applied.some((entry) =>
-        entry.status === "failed"
-      );
-      if (hasFailures) {
-        cliExit(1);
-      }
+      exitIfApplyExecutionFailed({ applied: applyResponse.data.applied });
     });
 }

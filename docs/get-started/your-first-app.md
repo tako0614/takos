@@ -1,6 +1,7 @@
 # はじめてのアプリ
 
-シンプルな Worker アプリを作って staging にデプロイする。所要時間 10 分。
+シンプルな Worker アプリを作って staging にデプロイし、Takos
+の基本的な流れを一通り触る。所要時間 10 分。
 
 ## 前提
 
@@ -20,7 +21,10 @@ npm init -y
 ```typescript
 // src/index.ts
 export default {
-  async fetch(request: Request, env: Record<string, unknown>): Promise<Response> {
+  async fetch(
+    request: Request,
+    env: Record<string, unknown>,
+  ): Promise<Response> {
     return new Response("Hello from Takos!", {
       headers: { "content-type": "text/plain" },
     });
@@ -28,7 +32,7 @@ export default {
 };
 ```
 
-## 3. .takos/app.yml を書く
+## 3. Takos のアプリ定義を書く
 
 ```bash
 mkdir -p .takos/workflows
@@ -99,16 +103,19 @@ takos login
 takos apply --env staging
 ```
 
-::: tip
-CLI は Takos の認証情報を使います。`takos login` 後は `--account-id` や `--api-token` を渡す必要はありません。
-:::
+::: tip CLI は Takos の認証情報を使います。`takos login` 後は `--account-id` や
+`--api-token` を渡す必要はありません。 :::
 
-デプロイ成功すると URL が表示される。ブラウザで開いて "Hello from Takos!" が出れば成功。
+デプロイ成功すると URL が表示される。ブラウザで開いて "Hello from Takos!"
+が出れば成功。
 
 manifest の整合性だけ先に確認したい場合: `takos plan`
 
 ## 次のステップ
 
-- [プロジェクト構成](/get-started/project-structure) -- `.takos/` ディレクトリの全体像
+- [Takos 全体像](/overview/) -- platform の基本単位を確認する
+- [プロジェクト構成](/get-started/project-structure) -- `.takos/`
+  ディレクトリの全体像
 - [Worker + Database](/examples/worker-with-db) -- D1 を追加する
-- [Worker + Container](/examples/worker-with-container) -- Docker コンテナを組み合わせる
+- [Worker + Container](/examples/worker-with-container) -- Docker
+  コンテナを組み合わせる

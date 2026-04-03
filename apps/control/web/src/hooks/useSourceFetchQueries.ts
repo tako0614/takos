@@ -7,7 +7,7 @@ import type {
 import { PAGE_SIZE } from './useSourcePagination.ts';
 
 export interface UseSourceFetchQueriesOptions {
-  isAuthenticated: boolean;
+  isAuthenticated: Accessor<boolean>;
   effectiveSpaceId: Accessor<string | null>;
   debouncedQuery: Accessor<string>;
   sort: Accessor<string>;
@@ -47,7 +47,7 @@ export function useSourceFetchQueries({
   let installationsInFlight: Promise<Map<string, SourceItemInstallation>> | null = null;
 
   const fetchInstallationsImpl = async (): Promise<Map<string, SourceItemInstallation>> => {
-    if (!isAuthenticated || !effectiveSpaceId()) return new Map();
+    if (!isAuthenticated() || !effectiveSpaceId()) return new Map();
     try {
       const response = await fetch(`/api/spaces/${effectiveSpaceId()}/app-deployments`);
       if (!response.ok) throw new Error('Failed to fetch app deployments');
@@ -217,7 +217,7 @@ export function useSourceFetchQueries({
   // Fetch my repos (mine filter)
   const fetchMine = async (requestId = refs.requestSeqRef) => {
     if (requestId !== refs.requestSeqRef) return;
-    if (!isAuthenticated) {
+    if (!isAuthenticated()) {
       setItems([]);
       setSelectedItem(null);
       setHasMore(false);
@@ -311,7 +311,7 @@ export function useSourceFetchQueries({
   // Fetch starred repos (starred filter)
   const fetchStarred = async (offset = 0, append = false, requestId = refs.requestSeqRef) => {
     if (requestId !== refs.requestSeqRef) return;
-    if (!isAuthenticated) {
+    if (!isAuthenticated()) {
       if (!append) {
         setItems([]);
         setSelectedItem(null);

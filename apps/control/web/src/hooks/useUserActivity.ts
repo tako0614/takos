@@ -1,6 +1,6 @@
-import { createSignal, createEffect, on } from 'solid-js';
-import type { ActivityEvent } from '../types/profile.ts';
-import { rpc, rpcJson } from '../lib/rpc.ts';
+import { type Accessor, createEffect, createSignal, on } from "solid-js";
+import type { ActivityEvent } from "../types/profile.ts";
+import { rpc, rpcJson } from "../lib/rpc.ts";
 
 interface ActivityResponse {
   events: ActivityEvent[];
@@ -9,13 +9,15 @@ interface ActivityResponse {
 
 const ITEMS_PER_PAGE = 20;
 
-export function useUserActivity(username: string) {
+export function useUserActivity(username: Accessor<string>) {
   const [events, setEvents] = createSignal<ActivityEvent[]>([]);
   const [hasMore, setHasMore] = createSignal(true);
   const [loading, setLoading] = createSignal(false);
   const [error, setError] = createSignal<string | null>(null);
 
   const fetch_ = async (reset = false) => {
+    const currentUsername = username();
+    if (!currentUsername) return;
     if (!reset && !hasMore()) return;
 
     setLoading(true);
@@ -23,9 +25,11 @@ export function useUserActivity(username: string) {
     try {
       const before = reset
         ? null
-        : (events().length > 0 ? events()[events().length - 1].created_at : null);
-      const res = await rpc.users[':username'].activity.$get({
-        param: { username },
+        : (events().length > 0
+          ? events()[events().length - 1].created_at
+          : null);
+      const res = await rpc.users[":username"].activity.$get({
+        param: { username: currentUsername },
         query: {
           limit: String(ITEMS_PER_PAGE),
           ...(before ? { before } : {}),
@@ -34,12 +38,13 @@ export function useUserActivity(username: string) {
 
       if (!res.ok) {
         const data = await res.json().catch(() => ({})) as { error?: string };
-        setError(data.error || 'Failed to load activity');
+        setError(data.error || "Failed to load activity");
         setHasMore(false);
         return;
       }
 
       const data = await rpcJson<ActivityResponse>(res);
+      if (currentUsername !== username()) return;
       if (reset) {
         setEvents(data.events || []);
       } else {
@@ -47,7 +52,7 @@ export function useUserActivity(username: string) {
       }
       setHasMore(!!data.has_more);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to load activity');
+      setError(err instanceof Error ? err.message : "Failed to load activity");
     } finally {
       setLoading(false);
     }
@@ -61,7 +66,7 @@ export function useUserActivity(username: string) {
 
   // Reset when username changes
   createEffect(on(
-    () => username,
+    username,
     () => {
       reset();
     },

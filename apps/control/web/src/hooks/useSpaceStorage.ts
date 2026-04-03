@@ -1,5 +1,6 @@
-import { createSignal } from 'solid-js';
+import { createSignal, type Accessor } from 'solid-js';
 import type { StorageFile } from '../types/index.ts';
+import type { RpcResponse } from '../lib/rpc.ts';
 import { rpc, rpcJson } from '../lib/rpc.ts';
 import { getErrorMessage } from 'takos-common/errors';
 
@@ -19,10 +20,10 @@ interface UseSpaceStorageReturn {
   bulkMoveItems: (fileIds: string[], parentPath: string) => Promise<boolean>;
   bulkRenameItems: (renames: Array<{ file_id: string; name: string }>) => Promise<boolean>;
   getDownloadUrl: (fileId: string) => Promise<string | null>;
-  downloadFolderZip: (path: string) => Promise<Response | null>;
+  downloadFolderZip: (path: string) => Promise<RpcResponse | null>;
 }
 
-export function useSpaceStorage(spaceId: string): UseSpaceStorageReturn {
+export function useSpaceStorage(spaceId: Accessor<string | undefined>): UseSpaceStorageReturn {
   const [files, setFiles] = createSignal<StorageFile[]>([]);
   const [currentPath, setCurrentPath] = createSignal('/');
   const [loading, setLoading] = createSignal(false);
@@ -32,7 +33,8 @@ export function useSpaceStorage(spaceId: string): UseSpaceStorageReturn {
   let loadVersion = 0;
 
   const loadFiles = async (path = '/') => {
-    if (!spaceId) return;
+    const currentSpaceId = spaceId();
+    if (!currentSpaceId) return;
 
     const version = ++loadVersion;
     setLoading(true);
@@ -40,12 +42,13 @@ export function useSpaceStorage(spaceId: string): UseSpaceStorageReturn {
 
     try {
       const res = await rpc.spaces[':spaceId'].storage.$get({
-        param: { spaceId: spaceId },
+        param: { spaceId: currentSpaceId },
         query: { path },
       });
 
       // Discard result if a newer loadFiles was called while this was in flight
       if (version !== loadVersion) return;
+      if (spaceId() !== currentSpaceId) return;
 
       if (!res.ok) {
         const data = await rpcJson<{ error: string }>(res);
@@ -58,24 +61,26 @@ export function useSpaceStorage(spaceId: string): UseSpaceStorageReturn {
       setTruncated(data.truncated ?? false);
     } catch (err) {
       if (version !== loadVersion) return;
+      if (spaceId() !== currentSpaceId) return;
       setError(getErrorMessage(err, 'Failed to load files'));
       setFiles([]);
       setCurrentPath(path);
       setTruncated(false);
     } finally {
-      if (version === loadVersion) {
+      if (version === loadVersion && spaceId() === currentSpaceId) {
         setLoading(false);
       }
     }
   };
 
   const createFolder = async (name: string): Promise<StorageFile | null> => {
-    if (!spaceId) return null;
+    const currentSpaceId = spaceId();
+    if (!currentSpaceId) return null;
     setError(null);
 
     try {
       const res = await rpc.spaces[':spaceId'].storage.folders.$post({
-        param: { spaceId: spaceId },
+        param: { spaceId: currentSpaceId },
         json: { name, parent_path: currentPath() },
       });
 
@@ -94,12 +99,13 @@ export function useSpaceStorage(spaceId: string): UseSpaceStorageReturn {
   };
 
   const uploadFile = async (file: File): Promise<StorageFile | null> => {
-    if (!spaceId) return null;
+    const currentSpaceId = spaceId();
+    if (!currentSpaceId) return null;
     setError(null);
 
     try {
       const urlRes = await rpc.spaces[':spaceId'].storage['upload-url'].$post({
-        param: { spaceId: spaceId },
+        param: { spaceId: currentSpaceId },
         json: {
           name: file.name,
           parent_path: currentPath(),
@@ -133,7 +139,7 @@ export function useSpaceStorage(spaceId: string): UseSpaceStorageReturn {
       }
 
       const confirmRes = await rpc.spaces[':spaceId'].storage['confirm-upload'].$post({
-        param: { spaceId: spaceId },
+        param: { spaceId: currentSpaceId },
         json: { file_id: urlData.file_id },
       });
 
@@ -152,12 +158,13 @@ export function useSpaceStorage(spaceId: string): UseSpaceStorageReturn {
   };
 
   const deleteItem = async (fileId: string): Promise<boolean> => {
-    if (!spaceId) return false;
+    const currentSpaceId = spaceId();
+    if (!currentSpaceId) return false;
     setError(null);
 
     try {
       const res = await rpc.spaces[':spaceId'].storage[':fileId'].$delete({
-        param: { spaceId: spaceId, fileId },
+        param: { spaceId: currentSpaceId, fileId },
       });
 
       if (!res.ok) {
@@ -174,12 +181,13 @@ export function useSpaceStorage(spaceId: string): UseSpaceStorageReturn {
   };
 
   const deleteItems = async (fileIds: string[]): Promise<boolean> => {
-    if (!spaceId || fileIds.length === 0) return false;
+    const currentSpaceId = spaceId();
+    if (!currentSpaceId || fileIds.length === 0) return false;
     setError(null);
 
     try {
       const res = await rpc.spaces[':spaceId'].storage['bulk-delete'].$post({
-        param: { spaceId: spaceId },
+        param: { spaceId: currentSpaceId },
         json: { file_ids: fileIds },
       });
 
@@ -197,12 +205,13 @@ export function useSpaceStorage(spaceId: string): UseSpaceStorageReturn {
   };
 
   const renameItem = async (fileId: string, name: string): Promise<StorageFile | null> => {
-    if (!spaceId) return null;
+    const currentSpaceId = spaceId();
+    if (!currentSpaceId) return null;
     setError(null);
 
     try {
       const res = await rpc.spaces[':spaceId'].storage[':fileId'].$patch({
-        param: { spaceId: spaceId, fileId },
+        param: { spaceId: currentSpaceId, fileId },
         json: { name },
       });
 
@@ -221,12 +230,13 @@ export function useSpaceStorage(spaceId: string): UseSpaceStorageReturn {
   };
 
   const moveItem = async (fileId: string, parentPath: string): Promise<StorageFile | null> => {
-    if (!spaceId) return null;
+    const currentSpaceId = spaceId();
+    if (!currentSpaceId) return null;
     setError(null);
 
     try {
       const res = await rpc.spaces[':spaceId'].storage[':fileId'].$patch({
-        param: { spaceId: spaceId, fileId },
+        param: { spaceId: currentSpaceId, fileId },
         json: { parent_path: parentPath },
       });
 
@@ -245,12 +255,13 @@ export function useSpaceStorage(spaceId: string): UseSpaceStorageReturn {
   };
 
   const bulkMoveItems = async (fileIds: string[], parentPath: string): Promise<boolean> => {
-    if (!spaceId || fileIds.length === 0) return false;
+    const currentSpaceId = spaceId();
+    if (!currentSpaceId || fileIds.length === 0) return false;
     setError(null);
 
     try {
       const res = await rpc.spaces[':spaceId'].storage['bulk-move'].$post({
-        param: { spaceId: spaceId },
+        param: { spaceId: currentSpaceId },
         json: { file_ids: fileIds, parent_path: parentPath },
       });
 
@@ -268,12 +279,13 @@ export function useSpaceStorage(spaceId: string): UseSpaceStorageReturn {
   };
 
   const bulkRenameItems = async (renames: Array<{ file_id: string; name: string }>): Promise<boolean> => {
-    if (!spaceId || renames.length === 0) return false;
+    const currentSpaceId = spaceId();
+    if (!currentSpaceId || renames.length === 0) return false;
     setError(null);
 
     try {
       const res = await rpc.spaces[':spaceId'].storage['bulk-rename'].$post({
-        param: { spaceId: spaceId },
+        param: { spaceId: currentSpaceId },
         json: { renames },
       });
 
@@ -291,11 +303,12 @@ export function useSpaceStorage(spaceId: string): UseSpaceStorageReturn {
   };
 
   const getDownloadUrl = async (fileId: string): Promise<string | null> => {
-    if (!spaceId) return null;
+    const currentSpaceId = spaceId();
+    if (!currentSpaceId) return null;
 
     try {
       const res = await rpc.spaces[':spaceId'].storage['download-url'].$get({
-        param: { spaceId: spaceId },
+        param: { spaceId: currentSpaceId },
         query: { file_id: fileId },
       });
 
@@ -312,12 +325,13 @@ export function useSpaceStorage(spaceId: string): UseSpaceStorageReturn {
     }
   };
 
-  const downloadFolderZip = async (path: string): Promise<Response | null> => {
-    if (!spaceId) return null;
+  const downloadFolderZip = async (path: string): Promise<RpcResponse | null> => {
+    const currentSpaceId = spaceId();
+    if (!currentSpaceId) return null;
 
     try {
       const res = await rpc.spaces[':spaceId'].storage['download-zip'].$get({
-        param: { spaceId: spaceId },
+        param: { spaceId: currentSpaceId },
         query: { path },
       });
 

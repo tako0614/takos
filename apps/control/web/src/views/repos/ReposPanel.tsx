@@ -34,7 +34,7 @@ export function ReposPanel(props: ReposPanelProps) {
     setShowCreateModal,
     handleCreateRepo,
     handleStar,
-  } = useReposData({ selectedSpaceId: props.spaceId, initialTab: 'repos' });
+  } = useReposData({ selectedSpaceId: () => props.spaceId, initialTab: 'repos' });
 
   const handleSelectRepo = (repo: { owner?: { username?: string | null } | null; name: string }) => {
     if (repo?.owner?.username && repo.name) {

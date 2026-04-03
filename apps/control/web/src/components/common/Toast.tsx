@@ -3,7 +3,7 @@ import { Icons } from '../../lib/Icons.tsx';
 import type { Toast } from '../../types/index.ts';
 import { useToast } from '../../store/toast.ts';
 
-/** Renders the global toast list. No provider needed -- reads Jotai atoms directly. */
+/** Renders the global toast list from the shared Solid store. */
 export function ToastRenderer() {
   const { toasts, dismissToast } = useToast();
   return <ToastContainer toasts={toasts} onDismiss={dismissToast} />;

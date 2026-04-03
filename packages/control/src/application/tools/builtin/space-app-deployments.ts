@@ -23,24 +23,22 @@ export const APP_DEPLOYMENT_GET: ToolDefinition = {
 
 export const APP_DEPLOYMENT_DEPLOY_FROM_REPO: ToolDefinition = {
   name: 'app_deployment_deploy_from_repo',
-  description: 'Deploy an app from a repository ref using .takos/app.yml.',
+  description: 'Deploy an app from a public HTTPS git repository URL using .takos/app.yml.',
   category: 'workspace',
   parameters: {
     type: 'object',
     properties: {
-      repo_id: { type: 'string', description: 'Repository ID' },
+      repository_url: { type: 'string', description: 'Canonical HTTPS git repository URL' },
       ref: { type: 'string', description: 'Branch, tag, or commit ref' },
       ref_type: { type: 'string', enum: ['branch', 'tag', 'commit'], description: 'Ref type' },
-      approve_oauth_auto_env: { type: 'boolean', description: 'Approve OAuth auto env changes' },
-      approve_source_change: { type: 'boolean', description: 'Approve source change' },
     },
-    required: ['repo_id', 'ref'],
+    required: ['repository_url'],
   },
 };
 
 export const APP_DEPLOYMENT_REMOVE: ToolDefinition = {
   name: 'app_deployment_remove',
-  description: 'Remove an app deployment and its managed resources.',
+  description: 'Remove an app deployment history record.',
   category: 'workspace',
   parameters: {
     type: 'object',
@@ -59,7 +57,6 @@ export const APP_DEPLOYMENT_ROLLBACK: ToolDefinition = {
     type: 'object',
     properties: {
       app_deployment_id: { type: 'string', description: 'App deployment ID' },
-      approve_oauth_auto_env: { type: 'boolean', description: 'Approve OAuth auto env changes' },
     },
     required: ['app_deployment_id'],
   },
@@ -82,21 +79,21 @@ export const appDeploymentGetHandler: ToolHandler = async (args, context) => {
 };
 
 export const appDeploymentDeployFromRepoHandler: ToolHandler = async (args, context) => {
-  const repoId = String(args.repo_id || '').trim();
+  const repositoryUrl = String(args.repository_url || '').trim();
   const ref = String(args.ref || '').trim();
   const refType = String(args.ref_type || 'branch').trim().toLowerCase();
-  if (!repoId) throw new Error('repo_id is required');
-  if (!ref) throw new Error('ref is required');
+  if (!repositoryUrl) throw new Error('repository_url is required');
   if (refType !== 'branch' && refType !== 'tag' && refType !== 'commit') {
     throw new Error('ref_type must be one of: branch, tag, commit');
   }
   const service = new AppDeploymentService(context.env);
-  const result = await service.deployFromRepoRef(context.spaceId, context.userId, {
-    repoId,
-    ref,
-    refType,
-    approveOauthAutoEnv: args.approve_oauth_auto_env === true,
-    approveSourceChange: args.approve_source_change === true,
+  const result = await service.deploy(context.spaceId, context.userId, {
+    source: {
+      kind: "git_ref",
+      repositoryUrl,
+      ...(ref ? { ref } : {}),
+      ...(ref ? { refType: refType as "branch" | "tag" | "commit" } : {}),
+    },
   });
   return JSON.stringify({ success: true, data: result }, null, 2);
 };
@@ -113,9 +110,7 @@ export const appDeploymentRollbackHandler: ToolHandler = async (args, context) =
   const id = String(args.app_deployment_id || '').trim();
   if (!id) throw new Error('app_deployment_id is required');
   const service = new AppDeploymentService(context.env);
-  const result = await service.rollback(context.spaceId, context.userId, id, {
-    approveOauthAutoEnv: args.approve_oauth_auto_env === true,
-  });
+  const result = await service.rollback(context.spaceId, context.userId, id);
   return JSON.stringify({ success: true, data: result }, null, 2);
 };
 

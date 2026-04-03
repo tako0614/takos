@@ -1,21 +1,40 @@
 import { type Context, Hono } from "hono";
-import { and, eq, inArray, ne } from "drizzle-orm";
+import { and, eq, inArray, isNull, ne } from "drizzle-orm";
 import type { Env } from "../../../shared/types/index.ts";
 import { spaceAccess, type SpaceAccessRouteEnv } from "../route-auth.ts";
 import {
+  appTokens,
   deployments,
   getDb,
   groups,
   resources,
   services,
 } from "../../../infra/db/index.ts";
-import { BadRequestError, NotFoundError } from "takos-common/errors";
+import {
+  BadRequestError,
+  ConflictError,
+  NotFoundError,
+} from "takos-common/errors";
 import {
   applyManifest,
+  type ApplyManifestOpts,
   buildSafeApplyResult,
   getGroupState,
   planManifest,
 } from "../../../application/services/deployment/apply-engine.ts";
+import {
+  createGroupByName,
+  findGroupByName,
+  type GroupProviderName,
+  type GroupRow,
+  type GroupSourceProjectionInput,
+  updateGroupMetadata,
+  updateGroupSourceProjection,
+} from "../../../application/services/groups/records.ts";
+import {
+  normalizeRepositoryUrl,
+  type RepoRefType,
+} from "../../../application/services/platform/app-deployment-source.ts";
 import {
   parseAppManifestText,
   parseAppManifestYaml,
@@ -25,8 +44,17 @@ import { safeJsonParseOrDefault } from "../../../shared/utils/logger.ts";
 import type { AppManifest } from "../../../application/services/source/app-manifest-types.ts";
 
 type GroupsContext = Context<SpaceAccessRouteEnv>;
-type GroupRow = typeof groups.$inferSelect;
-type GroupProviderName = "cloudflare" | "local" | "aws" | "gcp" | "k8s";
+type GroupRouteBody = Record<string, unknown>;
+type GroupMetadataOverrides = {
+  providerProvided: boolean;
+  provider: GroupProviderName | null;
+  envProvided: boolean;
+  envName: string | null;
+};
+type ParsedGroupDeployRequest = GroupMetadataOverrides & {
+  manifest: AppManifest | undefined;
+  source: GroupSourceProjectionInput | null;
+};
 const GROUP_PROVIDER_VALUES = [
   "cloudflare",
   "local",
@@ -42,6 +70,10 @@ export const groupsRouteDeps = {
   applyManifest,
   parseAppManifestYaml,
 };
+
+function groupRecordDeps() {
+  return { getDb: groupsRouteDeps.getDb };
+}
 
 function parseGroupProvider(raw: unknown): GroupProviderName | null {
   if (raw === undefined) return null;
@@ -72,6 +104,26 @@ function parseGroupEnv(raw: unknown): string | null {
   return normalized;
 }
 
+function requireNonEmptyString(raw: unknown, field: string): string {
+  if (typeof raw !== "string" || raw.trim().length === 0) {
+    throw new BadRequestError(`${field} is required`);
+  }
+  return raw.trim();
+}
+
+function normalizeGroupSourceRepositoryUrl(raw: string): string {
+  try {
+    return normalizeRepositoryUrl(raw);
+  } catch (error) {
+    if (error instanceof BadRequestError) {
+      throw new BadRequestError(
+        error.message.replace(/^repository_url\b/, "source.repository_url"),
+      );
+    }
+    throw error;
+  }
+}
+
 // ---------------------------------------------------------------------------
 // Param helpers
 // ---------------------------------------------------------------------------
@@ -80,6 +132,10 @@ function getGroupIdParam(c: GroupsContext): string {
   const groupId = c.req.param("groupId");
   if (!groupId) throw new BadRequestError("groupId param is required");
   return groupId;
+}
+
+function hasOwn(body: GroupRouteBody, key: string): boolean {
+  return Object.prototype.hasOwnProperty.call(body, key);
 }
 
 function parseJsonField<T>(value: string | null): T | null {
@@ -94,6 +150,12 @@ function toApiGroup(group: {
   appVersion: string | null;
   provider: string | null;
   env: string | null;
+  sourceKind: string | null;
+  sourceRepositoryUrl: string | null;
+  sourceRef: string | null;
+  sourceRefType: string | null;
+  sourceCommitSha: string | null;
+  currentAppDeploymentId: string | null;
   desiredSpecJson: string | null;
   providerStateJson: string | null;
   reconcileStatus: string;
@@ -123,18 +185,136 @@ function parseDesiredManifestInput(raw: unknown): AppManifest {
   }
 }
 
+function parseRequestManifest(raw: unknown): AppManifest | undefined {
+  if (raw === undefined) return undefined;
+  if (typeof raw === "string") {
+    return groupsRouteDeps.parseAppManifestYaml(raw);
+  }
+  return raw as AppManifest;
+}
+
+function parseGroupMetadataOverrides(
+  body: GroupRouteBody,
+): GroupMetadataOverrides {
+  const providerProvided = hasOwn(body, "provider");
+  const envProvided = hasOwn(body, "env");
+  return {
+    providerProvided,
+    provider: providerProvided ? parseGroupProvider(body.provider) : null,
+    envProvided,
+    envName: envProvided ? parseGroupEnv(body.env) : null,
+  };
+}
+
+function parseGroupDeployRequest(
+  body: GroupRouteBody,
+): ParsedGroupDeployRequest {
+  return {
+    ...parseGroupMetadataOverrides(body),
+    manifest: parseRequestManifest(body.manifest),
+    source: parseGroupSourceProjection(body.source),
+  };
+}
+
+function resolveGroupName(
+  raw: unknown,
+  manifest?: AppManifest,
+): string {
+  if (typeof raw === "string" && raw.trim().length > 0) {
+    return raw.trim();
+  }
+  if (
+    typeof manifest?.metadata?.name === "string" &&
+    manifest.metadata.name.trim().length > 0
+  ) {
+    return manifest.metadata.name.trim();
+  }
+  throw new BadRequestError("group_name is required");
+}
+
+function parseRepoRefType(raw: unknown): RepoRefType | null {
+  if (raw === undefined || raw === null) return null;
+  if (raw !== "branch" && raw !== "tag" && raw !== "commit") {
+    throw new BadRequestError("source.ref_type must be branch, tag, or commit");
+  }
+  return raw;
+}
+
+function parseGroupSourceProjection(
+  raw: unknown,
+): GroupSourceProjectionInput | null {
+  if (raw === undefined || raw === null) return null;
+  if (typeof raw !== "object") {
+    throw new BadRequestError("source must be an object");
+  }
+
+  const source = raw as Record<string, unknown>;
+  const kind = typeof source.kind === "string" ? source.kind.trim() : "";
+  if (kind === "local_upload") {
+    return { kind: "local_upload" };
+  }
+  if (kind === "git_ref") {
+    const repositoryUrl = typeof source.repository_url === "string"
+      ? normalizeGroupSourceRepositoryUrl(source.repository_url)
+      : "";
+    if (!repositoryUrl) {
+      throw new BadRequestError("source.repository_url is required");
+    }
+    return {
+      kind: "git_ref",
+      repositoryUrl,
+      ref: typeof source.ref === "string" && source.ref.trim().length > 0
+        ? source.ref.trim()
+        : null,
+      refType: parseRepoRefType(source.ref_type),
+      commitSha: typeof source.commit_sha === "string" &&
+          source.commit_sha.trim().length > 0
+        ? source.commit_sha.trim()
+        : null,
+    };
+  }
+
+  throw new BadRequestError("source.kind must be git_ref or local_upload");
+}
+
+function buildUninstallManifest(group: GroupRow): AppManifest {
+  return {
+    apiVersion: "takos.dev/v1alpha1",
+    kind: "App",
+    metadata: {
+      name: group.name,
+    },
+    spec: {
+      version: group.appVersion || "0.0.0",
+    },
+  };
+}
+
 async function assertGroupNameAvailable(
   env: Env,
   spaceId: string,
   groupName: string,
   excludeGroupId?: string,
 ): Promise<void> {
-  const existing = await findGroupByName(env, spaceId, groupName);
+  const existing = await findGroupByName(
+    env,
+    spaceId,
+    groupName,
+    groupRecordDeps(),
+  );
   if (existing && existing.id !== excludeGroupId) {
     throw new BadRequestError(
       `Group "${groupName}" already exists in this workspace`,
     );
   }
+}
+
+async function findGroupInSpaceByName(
+  env: Env,
+  spaceId: string,
+  groupName: string,
+): Promise<GroupRow | null> {
+  return findGroupByName(env, spaceId, groupName, groupRecordDeps());
 }
 
 async function requireGroupInSpace(c: GroupsContext) {
@@ -150,109 +330,177 @@ async function requireGroupInSpace(c: GroupsContext) {
   return group;
 }
 
-async function findGroupByName(
+async function requireGroupByNameInSpace(
   env: Env,
   spaceId: string,
   groupName: string,
-): Promise<GroupRow | null> {
-  const db = groupsRouteDeps.getDb(env.DB);
-  return db.select()
-    .from(groups)
-    .where(and(eq(groups.spaceId, spaceId), eq(groups.name, groupName)))
-    .get() as Promise<GroupRow | null>;
+): Promise<GroupRow> {
+  const group = await findGroupInSpaceByName(env, spaceId, groupName);
+  if (!group) throw new NotFoundError("Group");
+  return group;
 }
 
-async function findGroupById(
+async function applyGroupMetadataOverrides(
+  env: Env,
+  group: GroupRow,
+  overrides: GroupMetadataOverrides,
+): Promise<GroupRow> {
+  if (!overrides.providerProvided && !overrides.envProvided) {
+    return group;
+  }
+  return updateGroupMetadata(
+    env,
+    group.id,
+    {
+      provider: overrides.providerProvided ? overrides.provider : undefined,
+      envName: overrides.envProvided ? overrides.envName : undefined,
+    },
+    groupRecordDeps(),
+  );
+}
+
+async function updatePersistedGroupMetadata(
+  c: GroupsContext,
+  group: GroupRow,
+  body: GroupRouteBody,
+): Promise<GroupRow> {
+  const { space } = c.get("access");
+  const nextName = typeof body.name === "string" && body.name.trim().length > 0
+    ? body.name.trim()
+    : group.name;
+  await assertGroupNameAvailable(c.env, space.id, nextName, group.id);
+
+  const db = groupsRouteDeps.getDb(c.env.DB);
+  await db.update(groups)
+    .set({
+      name: nextName,
+      provider: hasOwn(body, "provider")
+        ? parseGroupProvider(body.provider)
+        : group.provider,
+      env: hasOwn(body, "env") ? parseGroupEnv(body.env) : group.env,
+      appVersion: typeof body.appVersion === "string"
+        ? body.appVersion
+        : group.appVersion,
+      updatedAt: new Date().toISOString(),
+    })
+    .where(eq(groups.id, group.id))
+    .run();
+
+  return await requireGroupInSpace(c);
+}
+
+function assertManifestProvidedForMissingGroup(
+  group: GroupRow | null,
+  groupName: string,
+  manifest?: AppManifest,
+): void {
+  if (!group && !manifest) {
+    throw new BadRequestError(
+      `Group "${groupName}" does not exist and no manifest was provided`,
+    );
+  }
+}
+
+function hasFailedApplyEntries(
+  result: ReturnType<typeof buildSafeApplyResult>,
+): boolean {
+  return result.applied.some((entry) => entry.status === "failed");
+}
+
+async function syncGroupSourceProjection(
   env: Env,
   groupId: string,
-): Promise<GroupRow | null> {
-  const db = groupsRouteDeps.getDb(env.DB);
-  return db.select()
-    .from(groups)
-    .where(eq(groups.id, groupId))
-    .get() as Promise<GroupRow | null>;
+  source: GroupSourceProjectionInput | null,
+  result: ReturnType<typeof buildSafeApplyResult>,
+): Promise<void> {
+  if (!source || hasFailedApplyEntries(result)) {
+    return;
+  }
+  await updateGroupSourceProjection(env, groupId, source, groupRecordDeps());
 }
 
-async function updateGroupMetadata(
+async function resolveNamedManifestGroup(
+  c: GroupsContext,
+  body: GroupRouteBody,
+  manifest?: AppManifest,
+): Promise<{ groupName: string; group: GroupRow | null }> {
+  const { space } = c.get("access");
+  const groupName = resolveGroupName(body.group_name, manifest);
+  const group = await findGroupInSpaceByName(c.env, space.id, groupName);
+  assertManifestProvidedForMissingGroup(group, groupName, manifest);
+  return { groupName, group };
+}
+
+function buildPlanOptions(
+  groupName: string,
+  currentProvider: string | null | undefined,
+  overrides: GroupMetadataOverrides,
+) {
+  return {
+    groupName,
+    providerName: overrides.provider ?? currentProvider ?? undefined,
+    envName: overrides.envProvided ? overrides.envName ?? undefined : undefined,
+  };
+}
+
+function countObservedInventory(
+  observed:
+    | {
+      resources?: Record<string, unknown>;
+      workloads?: Record<string, unknown>;
+      routes?: Record<string, unknown>;
+    }
+    | null
+    | undefined,
+): number {
+  return Object.keys(observed?.resources ?? {}).length +
+    Object.keys(observed?.workloads ?? {}).length +
+    Object.keys(observed?.routes ?? {}).length;
+}
+
+async function applyManifestForGroup(
+  env: Env,
+  group: Pick<GroupRow, "id" | "name">,
+  manifest: AppManifest | undefined,
+  input: {
+    artifacts?: ApplyManifestOpts["artifacts"];
+    target?: ApplyManifestOpts["target"];
+    groupName?: string;
+    envName?: string;
+    source?: GroupSourceProjectionInput | null;
+  },
+) {
+  const result = await groupsRouteDeps.applyManifest(
+    env,
+    group.id,
+    manifest,
+    {
+      artifacts: input.artifacts,
+      target: input.target,
+      groupName: input.groupName,
+      envName: input.envName,
+    },
+  );
+  const safeResult = buildSafeApplyResult(result);
+  await syncGroupSourceProjection(
+    env,
+    group.id,
+    input.source ?? null,
+    safeResult,
+  );
+  return safeResult;
+}
+
+async function revokeGroupTokensAndDelete(
   env: Env,
   groupId: string,
-  updates: {
-    provider?: GroupProviderName | null;
-    envName?: string | null;
-  },
-): Promise<GroupRow> {
+): Promise<void> {
   const db = groupsRouteDeps.getDb(env.DB);
-  const now = new Date().toISOString();
-  const row: {
-    updatedAt: string;
-    provider?: string | null;
-    env?: string | null;
-  } = {
-    updatedAt: now,
-  };
-  if (Object.prototype.hasOwnProperty.call(updates, "provider")) {
-    row.provider = updates.provider ?? null;
-  }
-  if (Object.prototype.hasOwnProperty.call(updates, "envName")) {
-    row.env = updates.envName ?? null;
-  }
-
-  await db.update(groups).set(row).where(eq(groups.id, groupId)).run();
-  const updated = await findGroupById(env, groupId);
-  if (!updated) {
-    throw new BadRequestError(`Group "${groupId}" not found`);
-  }
-  return updated;
-}
-
-async function createGroupByName(
-  env: Env,
-  input: {
-    spaceId: string;
-    groupName: string;
-    provider?: GroupProviderName | null;
-    envName?: string | null;
-    appVersion?: string | null;
-    manifest?: unknown;
-  },
-): Promise<GroupRow> {
-  const db = groupsRouteDeps.getDb(env.DB);
-  const id = crypto.randomUUID();
-  const now = new Date().toISOString();
-  const row = {
-    id,
-    spaceId: input.spaceId,
-    name: input.groupName,
-    appVersion: input.appVersion ?? null,
-    provider: input.provider ?? null,
-    env: input.envName ?? null,
-    desiredSpecJson: input.manifest ? JSON.stringify(input.manifest) : null,
-    providerStateJson: "{}",
-    reconcileStatus: "idle",
-    lastAppliedAt: null,
-    createdAt: now,
-    updatedAt: now,
-  };
-  await db.insert(groups).values(row);
-  return row;
-}
-
-async function _ensureGroupByName(
-  env: Env,
-  input: {
-    spaceId: string;
-    groupName: string;
-    provider?: GroupProviderName | null;
-    envName?: string | null;
-    appVersion?: string | null;
-    manifest?: unknown;
-  },
-): Promise<GroupRow> {
-  const existing = await findGroupByName(env, input.spaceId, input.groupName);
-  if (existing) {
-    return existing;
-  }
-  return createGroupByName(env, input);
+  await db.update(appTokens)
+    .set({ revokedAt: new Date().toISOString() })
+    .where(and(eq(appTokens.groupId, groupId), isNull(appTokens.revokedAt)))
+    .run();
+  await db.delete(groups).where(eq(groups.id, groupId));
 }
 
 // ---------------------------------------------------------------------------
@@ -270,31 +518,17 @@ async function listGroupsHandler(c: GroupsContext) {
 
 async function createGroupHandler(c: GroupsContext) {
   const { space } = c.get("access");
-  const db = groupsRouteDeps.getDb(c.env.DB);
-  const body = await c.req.json();
-  const provider = body.provider === undefined
-    ? null
-    : parseGroupProvider(body.provider);
-  const envName = body.env === undefined ? null : parseGroupEnv(body.env);
-  const id = crypto.randomUUID();
-  const now = new Date().toISOString();
-  await db.insert(groups).values({
-    id,
+  const body = await c.req.json<GroupRouteBody>();
+  const overrides = parseGroupMetadataOverrides(body);
+  const group = await createGroupByName(c.env, {
     spaceId: space.id,
-    name: body.name,
-    appVersion: body.appVersion ?? null,
-    provider,
-    env: envName,
-    desiredSpecJson: body.desiredSpecJson
-      ? JSON.stringify(body.desiredSpecJson)
-      : null,
-    providerStateJson: "{}",
-    reconcileStatus: "idle",
-    lastAppliedAt: null,
-    createdAt: now,
-    updatedAt: now,
-  });
-  return c.json({ id, name: body.name }, 201);
+    groupName: requireNonEmptyString(body.name, "name"),
+    provider: overrides.providerProvided ? overrides.provider : null,
+    envName: overrides.envProvided ? overrides.envName : null,
+    appVersion: typeof body.appVersion === "string" ? body.appVersion : null,
+    manifest: body.desiredSpecJson ?? null,
+  }, groupRecordDeps());
+  return c.json({ id: group.id, name: group.name }, 201);
 }
 
 async function getGroupHandler(c: GroupsContext) {
@@ -315,35 +549,9 @@ async function getGroupHandler(c: GroupsContext) {
 }
 
 async function patchGroupMetadataHandler(c: GroupsContext) {
-  const { space } = c.get("access");
   const group = await requireGroupInSpace(c);
-  const body = await c.req.json();
-
-  const nextName = typeof body.name === "string" && body.name.trim().length > 0
-    ? body.name.trim()
-    : group.name;
-  await assertGroupNameAvailable(c.env, space.id, nextName, group.id);
-
-  const db = groupsRouteDeps.getDb(c.env.DB);
-  const now = new Date().toISOString();
-  const provider = body.provider === undefined
-    ? undefined
-    : parseGroupProvider(body.provider);
-  const envName = body.env === undefined ? undefined : parseGroupEnv(body.env);
-  await db.update(groups)
-    .set({
-      name: nextName,
-      provider: body.provider === undefined ? group.provider : provider,
-      env: body.env === undefined ? group.env : envName,
-      appVersion: typeof body.appVersion === "string"
-        ? body.appVersion
-        : group.appVersion,
-      updatedAt: now,
-    })
-    .where(eq(groups.id, group.id))
-    .run();
-
-  const updated = await requireGroupInSpace(c);
+  const body = await c.req.json<GroupRouteBody>();
+  const updated = await updatePersistedGroupMetadata(c, group, body);
   return c.json({ group: toApiGroup(updated) });
 }
 
@@ -393,7 +601,7 @@ async function deleteGroupHandler(c: GroupsContext) {
     );
   }
 
-  await db.delete(groups).where(eq(groups.id, group.id));
+  await revokeGroupTokensAndDelete(c.env, group.id);
   return c.json({ deleted: true });
 }
 
@@ -456,60 +664,32 @@ async function listGroupDeploymentsHandler(c: GroupsContext) {
 
 async function planGroupHandler(c: GroupsContext) {
   const group = await requireGroupInSpace(c);
-  const body = await c.req.json();
-  const providerName = body.provider === undefined
-    ? undefined
-    : parseGroupProvider(body.provider);
-  const groupEnv = body.env === undefined ? undefined : parseGroupEnv(body.env);
+  const body = await c.req.json<GroupRouteBody>();
+  const input = parseGroupDeployRequest(body);
 
-  let manifest = body.manifest;
-  if (typeof manifest === "string") {
-    manifest = groupsRouteDeps.parseAppManifestYaml(manifest);
-  }
-
-  const result = await groupsRouteDeps.planManifest(c.env, group.id, manifest, {
-    groupName: group.name,
-    providerName: providerName ?? group.provider ?? undefined,
-    envName: body.env === undefined ? undefined : groupEnv ?? undefined,
-  });
+  const result = await groupsRouteDeps.planManifest(
+    c.env,
+    group.id,
+    input.manifest,
+    buildPlanOptions(group.name, group.provider, input),
+  );
   return c.json(result);
 }
 
 async function planGroupByNameHandler(c: GroupsContext) {
-  const { space } = c.get("access");
-  const body = await c.req.json();
-  const providerName = parseGroupProvider(body.provider);
-  const groupEnv = parseGroupEnv(body.env);
-
-  let manifest = body.manifest;
-  if (typeof manifest === "string") {
-    manifest = groupsRouteDeps.parseAppManifestYaml(manifest);
-  }
-
-  const groupName =
-    typeof body.group_name === "string" && body.group_name.trim().length > 0
-      ? body.group_name.trim()
-      : manifest?.metadata?.name;
-  if (!groupName) {
-    throw new BadRequestError("group_name is required");
-  }
-
-  let group = await findGroupByName(c.env, space.id, groupName);
-  if (!group && !manifest) {
-    throw new BadRequestError(
-      `Group "${groupName}" does not exist and no manifest was provided`,
-    );
-  }
+  const body = await c.req.json<GroupRouteBody>();
+  const input = parseGroupDeployRequest(body);
+  const { groupName, group } = await resolveNamedManifestGroup(
+    c,
+    body,
+    input.manifest,
+  );
 
   const result = await groupsRouteDeps.planManifest(
     c.env,
     group?.id ?? null,
-    manifest,
-    {
-      groupName,
-      providerName: providerName ?? group?.provider ?? undefined,
-      envName: body.env === undefined ? undefined : groupEnv ?? undefined,
-    },
+    input.manifest,
+    buildPlanOptions(groupName, group?.provider, input),
   );
   return c.json({
     group: {
@@ -523,96 +703,103 @@ async function planGroupByNameHandler(c: GroupsContext) {
 
 async function applyGroupHandler(c: GroupsContext) {
   let group = await requireGroupInSpace(c);
-  const body = await c.req.json();
-  const providerName = body.provider === undefined
-    ? undefined
-    : parseGroupProvider(body.provider);
-  const groupEnv = body.env === undefined ? undefined : parseGroupEnv(body.env);
+  const body = await c.req.json<GroupRouteBody>();
+  const input = parseGroupDeployRequest(body);
+  group = await applyGroupMetadataOverrides(c.env, group, input);
 
-  if (body.provider !== undefined || body.env !== undefined) {
-    group = await updateGroupMetadata(c.env, group.id, {
-      provider: body.provider === undefined ? undefined : providerName,
-      envName: body.env === undefined ? undefined : groupEnv,
-    });
-  }
-
-  let manifest = body.manifest;
-  if (typeof manifest === "string") {
-    manifest = groupsRouteDeps.parseAppManifestYaml(manifest);
-  }
-
-  const result = await groupsRouteDeps.applyManifest(
+  const safeResult = await applyManifestForGroup(
     c.env,
-    group.id,
-    manifest,
+    group,
+    input.manifest,
     {
-      artifacts: body.artifacts,
-      target: body.target,
-      envName: body.env === undefined ? undefined : groupEnv ?? undefined,
+      artifacts: body.artifacts as ApplyManifestOpts["artifacts"],
+      target: body.target as ApplyManifestOpts["target"],
+      envName: input.envProvided ? input.envName ?? undefined : undefined,
+      source: input.source,
     },
   );
-  return c.json(buildSafeApplyResult(result));
+  return c.json(safeResult);
 }
 
 async function applyGroupByNameHandler(c: GroupsContext) {
   const { space } = c.get("access");
-  const body = await c.req.json();
-  const providerName = parseGroupProvider(body.provider);
-  const groupEnv = parseGroupEnv(body.env);
-
-  let manifest = body.manifest;
-  if (typeof manifest === "string") {
-    manifest = groupsRouteDeps.parseAppManifestYaml(manifest);
-  }
-
-  const groupName =
-    typeof body.group_name === "string" && body.group_name.trim().length > 0
-      ? body.group_name.trim()
-      : manifest?.metadata?.name;
-  if (!groupName) {
-    throw new BadRequestError("group_name is required");
-  }
-
-  let group = await findGroupByName(c.env, space.id, groupName);
-  if (!group && !manifest) {
-    throw new BadRequestError(
-      `Group "${groupName}" does not exist and no manifest was provided`,
-    );
-  }
-  if (group && (body.provider !== undefined || body.env !== undefined)) {
-    group = await updateGroupMetadata(c.env, group.id, {
-      provider: body.provider === undefined ? undefined : providerName,
-      envName: body.env === undefined ? undefined : groupEnv,
-    });
+  const body = await c.req.json<GroupRouteBody>();
+  const input = parseGroupDeployRequest(body);
+  const { groupName, group: existingGroup } = await resolveNamedManifestGroup(
+    c,
+    body,
+    input.manifest,
+  );
+  let group = existingGroup;
+  if (group) {
+    group = await applyGroupMetadataOverrides(c.env, group, input);
   }
 
   const finalGroup = group ?? await createGroupByName(c.env, {
     spaceId: space.id,
     groupName,
-    provider: body.provider === undefined ? undefined : providerName,
-    envName: body.env === undefined ? undefined : groupEnv,
-    appVersion: typeof manifest?.spec?.version === "string"
-      ? manifest.spec.version
+    provider: input.providerProvided ? input.provider : undefined,
+    envName: input.envProvided ? input.envName : undefined,
+    appVersion: typeof input.manifest?.spec?.version === "string"
+      ? input.manifest.spec.version
       : null,
-    manifest,
-  });
+    manifest: input.manifest,
+  }, groupRecordDeps());
 
-  const result = await groupsRouteDeps.applyManifest(
+  const safeResult = await applyManifestForGroup(
     c.env,
-    finalGroup.id,
-    manifest,
+    finalGroup,
+    input.manifest,
     {
-      artifacts: body.artifacts,
-      target: body.target,
+      artifacts: body.artifacts as ApplyManifestOpts["artifacts"],
+      target: body.target as ApplyManifestOpts["target"],
       groupName: finalGroup.name,
-      envName: body.env === undefined ? undefined : groupEnv ?? undefined,
+      envName: input.envProvided ? input.envName ?? undefined : undefined,
+      source: input.source,
     },
   );
-
-  const safeResult = buildSafeApplyResult(result);
   return c.json({
     group: { id: finalGroup.id, name: finalGroup.name },
     ...safeResult,
+  });
+}
+
+async function uninstallGroupByNameHandler(c: GroupsContext) {
+  const { space } = c.get("access");
+  const body = await c.req.json<GroupRouteBody>();
+  const groupName = resolveGroupName(body.group_name);
+  const group = await requireGroupByNameInSpace(c.env, space.id, groupName);
+
+  const safeResult = await applyManifestForGroup(
+    c.env,
+    group,
+    buildUninstallManifest(group),
+    {
+      groupName: group.name,
+      envName: group.env ?? undefined,
+    },
+  );
+  if (hasFailedApplyEntries(safeResult)) {
+    throw new ConflictError(
+      "Uninstall failed. Managed resources were not fully removed.",
+    );
+  }
+
+  const observed = await groupsRouteDeps.getGroupState(c.env, group.id);
+  const inventoryCount = countObservedInventory(observed);
+  if (inventoryCount > 0) {
+    throw new ConflictError(
+      "Uninstall did not fully drain group-managed inventory",
+    );
+  }
+
+  await revokeGroupTokensAndDelete(c.env, group.id);
+
+  return c.json({
+    group: { id: group.id, name: group.name },
+    apply_result: safeResult,
+    uninstalled: true,
+    deleted_group: true,
   });
 }
 
@@ -660,6 +847,11 @@ groupsRouter
     "/spaces/:spaceId/groups/apply",
     spaceAccess({ roles: ["owner", "admin", "editor"] }),
     applyGroupByNameHandler,
+  )
+  .post(
+    "/spaces/:spaceId/groups/uninstall",
+    spaceAccess({ roles: ["owner", "admin", "editor"] }),
+    uninstallGroupByNameHandler,
   )
   .get("/spaces/:spaceId/groups/:groupId", spaceAccess(), getGroupHandler)
   .patch(

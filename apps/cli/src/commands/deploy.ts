@@ -1,20 +1,18 @@
-import { Command } from "commander";
-import { bold, dim, green, red } from "@std/fmt/colors";
+import type { Command } from "commander";
+import { bold, dim, red } from "@std/fmt/colors";
 import { api } from "../lib/api.ts";
-import { printApplyResult } from "../lib/apply/result-formatter.ts";
-import { printJson, resolveSpaceId } from "../lib/cli-utils.ts";
+import {
+  exitIfApplyExecutionFailed,
+  printApplyExecutionResult,
+} from "../lib/apply/cli-output.ts";
+import {
+  printJson,
+  resolveGroupProviderOption,
+  resolveSpaceId,
+} from "../lib/cli-utils.ts";
 import { cliExit } from "../lib/command-exit.ts";
-import {
-  type GroupProviderName,
-  parseGroupProvider,
-} from "../lib/group-provider.ts";
 import type { DiffResult } from "../lib/state/diff.ts";
-import {
-  printTranslationReport,
-  type TranslationReport,
-} from "../lib/translation-report.ts";
-
-type PrintableApplyResult = Parameters<typeof printApplyResult>[0];
+import type { TranslationReport } from "../lib/translation-report.ts";
 
 type AppDeploymentRecord = {
   id: string;
@@ -54,7 +52,6 @@ type AppDeploymentGetResponse = {
 
 type DeployCommandOptions = {
   space?: string;
-  repo?: string;
   ref?: string;
   refType?: "branch" | "tag" | "commit";
   group?: string;
@@ -86,20 +83,15 @@ function printDeploymentSummary(
 }
 
 async function runCreateDeployment(
+  repositoryUrl: string | undefined,
   options: DeployCommandOptions,
 ): Promise<void> {
-  if (!options.repo?.trim()) {
-    console.log(red("--repo is required."));
+  if (!repositoryUrl?.trim()) {
+    console.log(red("repositoryUrl is required."));
     cliExit(1);
   }
 
-  let provider: GroupProviderName | undefined;
-  try {
-    provider = parseGroupProvider(options.provider);
-  } catch (error) {
-    console.log(red(error instanceof Error ? error.message : "Invalid provider"));
-    cliExit(1);
-  }
+  const provider = resolveGroupProviderOption(options.provider);
 
   const response = await api<AppDeploymentMutationResponse>(
     `/api/spaces/${resolveSpaceId(options.space)}/app-deployments`,
@@ -110,8 +102,8 @@ async function runCreateDeployment(
         env: options.env || "staging",
         ...(provider ? { provider } : {}),
         source: {
-          kind: "repo_ref",
-          repo_id: options.repo.trim(),
+          kind: "git_ref",
+          repository_url: repositoryUrl.trim(),
           ...(options.ref ? { ref: options.ref } : {}),
           ...(options.refType ? { ref_type: options.refType } : {}),
         },
@@ -130,33 +122,23 @@ async function runCreateDeployment(
     return;
   }
 
-  printTranslationReport(response.data.apply_result.translationReport);
-  const printableResult: PrintableApplyResult = {
-    applied: response.data.apply_result.applied,
-    skipped: response.data.apply_result.skipped,
-  };
-  printApplyResult(
-    printableResult,
+  printApplyExecutionResult(
+    response.data.apply_result,
     options.env || "staging",
     response.data.app_deployment.group.name,
   );
   printDeploymentSummary(response.data.app_deployment);
-
-  if (
-    response.data.apply_result.applied.some((entry) => entry.status === "failed")
-  ) {
-    cliExit(1);
-  }
+  exitIfApplyExecutionFailed(response.data.apply_result);
 }
 
 export function registerDeployCommand(program: Command): void {
   const deploy = program
     .command("deploy")
-    .description("Deploy an app from a repository ref");
+    .description("Deploy an app from a repository URL");
 
   deploy
+    .argument("[repositoryUrl]", "Canonical HTTPS git repository URL")
     .option("--space <id>", "Target workspace ID")
-    .requiredOption("--repo <id>", "Repository ID")
     .option("--ref <ref>", "Branch, tag, or commit ref")
     .option("--ref-type <type>", "Source ref type (branch|tag|commit)")
     .option("--group <name>", "Target group name")
@@ -178,7 +160,9 @@ export function registerDeployCommand(program: Command): void {
       options: { space?: string; json?: boolean },
     ) => {
       const path = appDeploymentId
-        ? `/api/spaces/${resolveSpaceId(options.space)}/app-deployments/${appDeploymentId}`
+        ? `/api/spaces/${
+          resolveSpaceId(options.space)
+        }/app-deployments/${appDeploymentId}`
         : `/api/spaces/${resolveSpaceId(options.space)}/app-deployments`;
       const response = appDeploymentId
         ? await api<AppDeploymentGetResponse>(path)
@@ -195,11 +179,14 @@ export function registerDeployCommand(program: Command): void {
       }
 
       if (appDeploymentId) {
-        printDeploymentSummary((response.data as AppDeploymentGetResponse).app_deployment);
+        printDeploymentSummary(
+          (response.data as AppDeploymentGetResponse).app_deployment,
+        );
         return;
       }
 
-      const deployments = (response.data as AppDeploymentListResponse).app_deployments;
+      const deployments =
+        (response.data as AppDeploymentListResponse).app_deployments;
       if (deployments.length === 0) {
         console.log(dim("No app deployments."));
         return;
@@ -220,7 +207,9 @@ export function registerDeployCommand(program: Command): void {
       options: { space?: string; json?: boolean },
     ) => {
       const response = await api<AppDeploymentMutationResponse>(
-        `/api/spaces/${resolveSpaceId(options.space)}/app-deployments/${appDeploymentId}/rollback`,
+        `/api/spaces/${
+          resolveSpaceId(options.space)
+        }/app-deployments/${appDeploymentId}/rollback`,
         {
           method: "POST",
           body: {},
@@ -238,13 +227,8 @@ export function registerDeployCommand(program: Command): void {
         return;
       }
 
-      printTranslationReport(response.data.apply_result.translationReport);
-      const printableResult: PrintableApplyResult = {
-        applied: response.data.apply_result.applied,
-        skipped: response.data.apply_result.skipped,
-      };
-      printApplyResult(
-        printableResult,
+      printApplyExecutionResult(
+        response.data.apply_result,
         "rollback",
         response.data.app_deployment.group.name,
         { title: "Rollback" },
@@ -252,13 +236,6 @@ export function registerDeployCommand(program: Command): void {
       printDeploymentSummary(response.data.app_deployment, {
         label: "Rollback deployment",
       });
-
-      if (
-        response.data.apply_result.applied.some((entry) =>
-          entry.status === "failed"
-        )
-      ) {
-        cliExit(1);
-      }
+      exitIfApplyExecutionFailed(response.data.apply_result);
     });
 }

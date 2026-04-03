@@ -1,11 +1,12 @@
-import { createEffect, onCleanup } from 'solid-js';
-import { render } from 'solid-js/web';
-import { useAtomValue, useSetAtom } from 'solid-jotai';
-import App from './App.tsx';
-import { resolvedThemeAtom, systemThemeAtom } from './store/theme.ts';
-import './styles.css';
+import { createEffect, onCleanup } from "solid-js";
+import { render } from "solid-js/web";
+import { Router } from "@solidjs/router";
+import App from "./App.tsx";
+import { AppRoutes } from "./app-routes.tsx";
+import { useTheme } from "./store/theme.ts";
+import "./styles.css";
 
-if (import.meta.env.PROD && import.meta.env.MODE !== 'staging-debug') {
+if (import.meta.env.PROD && import.meta.env.MODE !== "staging-debug") {
   const noop = () => {};
   console.debug = noop;
   console.log = noop;
@@ -16,26 +17,25 @@ if (import.meta.env.PROD && import.meta.env.MODE !== 'staging-debug') {
 
 /** Syncs the resolved theme to `data-theme` on `<html>` and listens for OS color-scheme changes. */
 function ThemeSync() {
-  const resolved = useAtomValue(resolvedThemeAtom);
-  const setSystemTheme = useSetAtom(systemThemeAtom);
+  const theme = useTheme();
 
   createEffect(() => {
-    document.documentElement.setAttribute('data-theme', resolved());
+    document.documentElement.setAttribute("data-theme", theme.resolvedTheme);
   });
 
   createEffect(() => {
-    const mq = globalThis.matchMedia('(prefers-color-scheme: dark)');
+    const mq = globalThis.matchMedia("(prefers-color-scheme: dark)");
     const handler = (e: MediaQueryListEvent) => {
-      setSystemTheme(e.matches ? 'dark' : 'light');
+      theme.setSystemTheme(e.matches ? "dark" : "light");
     };
-    mq.addEventListener('change', handler);
-    onCleanup(() => mq.removeEventListener('change', handler));
+    mq.addEventListener("change", handler);
+    onCleanup(() => mq.removeEventListener("change", handler));
   });
 
   return null;
 }
 
-const rootElement = document.getElementById('root');
+const rootElement = document.getElementById("root");
 
 if (!rootElement) {
   throw new Error("Root element '#root' not found");
@@ -44,6 +44,8 @@ if (!rootElement) {
 render(() => (
   <>
     <ThemeSync />
-    <App />
+    <Router explicitLinks root={App}>
+      <AppRoutes />
+    </Router>
   </>
 ), rootElement);

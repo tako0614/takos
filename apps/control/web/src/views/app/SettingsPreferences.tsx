@@ -6,10 +6,7 @@ import { Button } from '../../components/ui/index.ts';
 import type { UserSettings } from '../../types/index.ts';
 import { Section, Toggle } from './SettingsShared.tsx';
 
-export function SettingsPreferences({
-  userSettings,
-  onSettingsChange,
-}: {
+export function SettingsPreferences(props: {
   userSettings: UserSettings;
   onSettingsChange?: (settings: UserSettings) => void;
 }) {
@@ -22,7 +19,7 @@ export function SettingsPreferences({
     try {
       const res = await rpc.me.settings.$patch({ json: patch });
       const settings = await rpcJson<UserSettings>(res);
-      onSettingsChange?.(settings);
+      props.onSettingsChange?.(settings);
     } catch (err) {
       console.error('Failed to update settings:', err);
     } finally {
@@ -42,7 +39,7 @@ export function SettingsPreferences({
           <div class="flex items-center gap-3">
             {saving() && <Icons.Loader class="h-4 w-4 animate-spin text-zinc-400" />}
             <Toggle
-              checked={userSettings.auto_update_enabled}
+              checked={props.userSettings.auto_update_enabled}
               onChange={(v) => updateSetting({ auto_update_enabled: v })}
               disabled={saving()}
             />
@@ -60,7 +57,7 @@ export function SettingsPreferences({
               </div>
             </div>
             <Toggle
-              checked={userSettings.private_account}
+              checked={props.userSettings.private_account}
               onChange={(v) => updateSetting({ private_account: v })}
               disabled={saving()}
             />
@@ -73,8 +70,7 @@ export function SettingsPreferences({
             <div class="flex flex-wrap gap-2">
               {(['public', 'followers', 'private'] as const).map((v) => (
                 <Button
-
-                  variant={userSettings.activity_visibility === v ? 'primary' : 'secondary'}
+                  variant={props.userSettings.activity_visibility === v ? 'primary' : 'secondary'}
                   size="sm"
                   onClick={() => updateSetting({ activity_visibility: v })}
                   disabled={saving()}

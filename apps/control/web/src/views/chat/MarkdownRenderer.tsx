@@ -271,7 +271,7 @@ export function MarkdownRenderer(props: { content: string }) {
       );
     });
 
-    flushList(lines.length);
+    flushList();
     return elements;
   });
 

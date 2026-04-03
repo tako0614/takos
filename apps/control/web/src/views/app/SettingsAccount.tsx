@@ -1,41 +1,47 @@
-import { createEffect, onCleanup, createSignal } from 'solid-js';
-import { useI18n } from '../../store/i18n.ts';
-import { useToast } from '../../store/toast.ts';
-import { rpc, rpcJson } from '../../lib/rpc.ts';
-import { Icons } from '../../lib/Icons.tsx';
-import { Button, Input } from '../../components/ui/index.ts';
-import { useAuth } from '../../hooks/useAuth.ts';
-import { useNavigation } from '../../store/navigation.ts';
-import type { User } from '../../types/index.ts';
-import { normalizeUsernameInput, syncRouteWithUsernameChange } from './settings-username.ts';
+import { createEffect, createSignal, onCleanup } from "solid-js";
+import { useI18n } from "../../store/i18n.ts";
+import { useToast } from "../../store/toast.ts";
+import { rpc, rpcJson } from "../../lib/rpc.ts";
+import { Icons } from "../../lib/Icons.tsx";
+import { Button, Input } from "../../components/ui/index.ts";
+import { useAuth } from "../../hooks/useAuth.tsx";
+import { useNavigation } from "../../store/navigation.ts";
+import type { User } from "../../types/index.ts";
+import {
+  normalizeUsernameInput,
+  syncRouteWithUsernameChange,
+} from "./settings-username.ts";
 
-export function SettingsAccount({ user }: { user: User | null }) {
+export function SettingsAccount(props: { user: User | null }) {
   const { t } = useI18n();
   const { showToast } = useToast();
-  const { fetchUser } = useAuth();
-  const { route, replace } = useNavigation();
+  const auth = useAuth();
+  const navigation = useNavigation();
 
   const [editingUsername, setEditingUsername] = createSignal(false);
-  const [usernameDraft, setUsernameDraft] = createSignal(user?.username ?? '');
+  const [usernameDraft, setUsernameDraft] = createSignal(props.user?.username ?? "");
   const [usernameError, setUsernameError] = createSignal<string | null>(null);
-  const [usernameAvailable, setUsernameAvailable] = createSignal<boolean | null>(null);
+  const [usernameAvailable, setUsernameAvailable] = createSignal<
+    boolean | null
+  >(null);
   const [checkingUsername, setCheckingUsername] = createSignal(false);
   const [savingUsername, setSavingUsername] = createSignal(false);
 
-  const currentUsername = user?.username ?? '';
+  const currentUsername = () => props.user?.username ?? "";
   const normalizedDraft = () => normalizeUsernameInput(usernameDraft());
 
-  const canSaveUsername = () => Boolean(user)
-    && normalizedDraft().length >= 3
-    && normalizedDraft() !== currentUsername
-    && !checkingUsername()
-    && !savingUsername()
-    && usernameAvailable() !== false
-    && !usernameError();
+  const canSaveUsername = () =>
+    Boolean(props.user) &&
+    normalizedDraft().length >= 3 &&
+    normalizedDraft() !== currentUsername() &&
+    !checkingUsername() &&
+    !savingUsername() &&
+    usernameAvailable() !== false &&
+    !usernameError();
 
   createEffect(() => {
     if (!editingUsername()) {
-      setUsernameDraft(currentUsername);
+      setUsernameDraft(currentUsername());
       setUsernameError(null);
       setUsernameAvailable(null);
       setCheckingUsername(false);
@@ -57,11 +63,11 @@ export function SettingsAccount({ user }: { user: User | null }) {
     if (normalizedDraft().length < 3) {
       setCheckingUsername(false);
       setUsernameAvailable(null);
-      setUsernameError(t('usernameTooShort'));
+      setUsernameError(t("usernameTooShort"));
       return;
     }
 
-    if (normalizedDraft() === currentUsername) {
+    if (normalizedDraft() === currentUsername()) {
       setCheckingUsername(false);
       setUsernameAvailable(true);
       setUsernameError(null);
@@ -72,7 +78,7 @@ export function SettingsAccount({ user }: { user: User | null }) {
     const timer = globalThis.setTimeout(async () => {
       setCheckingUsername(true);
       try {
-        const res = await rpc.setup['check-username'].$post({
+        const res = await rpc.setup["check-username"].$post({
           json: { username: normalizedDraft() },
         });
         const data = await rpcJson<{ available: boolean; error?: string }>(res);
@@ -84,7 +90,7 @@ export function SettingsAccount({ user }: { user: User | null }) {
       } catch {
         if (!cancelled) {
           setUsernameAvailable(null);
-          setUsernameError(t('failedToCheckUsername'));
+          setUsernameError(t("failedToCheckUsername"));
         }
       } finally {
         if (!cancelled) {
@@ -104,7 +110,7 @@ export function SettingsAccount({ user }: { user: User | null }) {
   };
 
   const handleUsernameSave = async () => {
-    if (!user || !canSaveUsername()) {
+    if (!props.user || !canSaveUsername()) {
       return;
     }
 
@@ -114,23 +120,28 @@ export function SettingsAccount({ user }: { user: User | null }) {
         json: { username: normalizedDraft() },
       });
       const data = await rpcJson<{ success: boolean; username: string }>(res);
-      const nextRoute = syncRouteWithUsernameChange(route, currentUsername, data.username);
+      const currentRoute = navigation.route;
+      const nextRoute = syncRouteWithUsernameChange(
+        currentRoute,
+        currentUsername(),
+        data.username,
+      );
 
-      if (nextRoute !== route) {
-        replace(nextRoute);
+      if (nextRoute !== currentRoute) {
+        navigation.replace(nextRoute);
       }
 
-      await fetchUser();
+      await auth.fetchUser();
       setEditingUsername(false);
       setUsernameDraft(data.username);
       setUsernameAvailable(true);
       setUsernameError(null);
-      showToast('success', t('saved'));
+      showToast("success", t("saved"));
     } catch (err) {
-      const message = err instanceof Error ? err.message : t('failedToSave');
+      const message = err instanceof Error ? err.message : t("failedToSave");
       setUsernameError(message);
       setUsernameAvailable(false);
-      showToast('error', message);
+      showToast("error", message);
     } finally {
       setSavingUsername(false);
     }
@@ -142,9 +153,11 @@ export function SettingsAccount({ user }: { user: User | null }) {
         <div class="space-y-3 rounded-2xl border border-zinc-200 p-4 dark:border-zinc-800">
           <div class="flex items-start justify-between gap-4">
             <div>
-              <div class="text-zinc-500 dark:text-zinc-400">{t('username')}</div>
+              <div class="text-zinc-500 dark:text-zinc-400">
+                {t("username")}
+              </div>
               <div class="mt-1 font-medium text-zinc-900 dark:text-zinc-100">
-                {currentUsername ? `@${currentUsername}` : '-'}
+                {currentUsername() ? `@${currentUsername()}` : "-"}
               </div>
             </div>
             {!editingUsername() && (
@@ -152,9 +165,9 @@ export function SettingsAccount({ user }: { user: User | null }) {
                 variant="secondary"
                 size="sm"
                 onClick={() => setEditingUsername(true)}
-                disabled={!user}
+                disabled={!props.user}
               >
-                {t('edit')}
+                {t("edit")}
               </Button>
             )}
           </div>
@@ -169,21 +182,21 @@ export function SettingsAccount({ user }: { user: User | null }) {
             >
               <Input
                 value={usernameDraft()}
-                onChange={(event) => setUsernameDraft(normalizeUsernameInput(event.target.value))}
-                placeholder={t('usernamePlaceholder')}
+                onChange={(event) =>
+                  setUsernameDraft(normalizeUsernameInput(event.target.value))}
+                placeholder={t("usernamePlaceholder")}
                 autofocus
                 maxLength={30}
                 error={usernameError() || undefined}
                 leftIcon={<span class="text-sm font-medium">@</span>}
-                rightIcon={
-                  checkingUsername()
-                    ? <Icons.Loader class="h-4 w-4 animate-spin" />
-                    : usernameAvailable() === true && normalizedDraft() !== currentUsername
-                      ? <Icons.Check class="h-4 w-4" />
-                      : usernameAvailable() === false
-                        ? <Icons.X class="h-4 w-4" />
-                        : null
-                }
+                rightIcon={checkingUsername()
+                  ? <Icons.Loader class="h-4 w-4 animate-spin" />
+                  : usernameAvailable() === true &&
+                      normalizedDraft() !== currentUsername()
+                  ? <Icons.Check class="h-4 w-4" />
+                  : usernameAvailable() === false
+                  ? <Icons.X class="h-4 w-4" />
+                  : null}
               />
               <div class="flex justify-end gap-2">
                 <Button
@@ -193,7 +206,7 @@ export function SettingsAccount({ user }: { user: User | null }) {
                   onClick={handleUsernameEditCancel}
                   disabled={savingUsername()}
                 >
-                  {t('cancel')}
+                  {t("cancel")}
                 </Button>
                 <Button
                   type="submit"
@@ -201,19 +214,23 @@ export function SettingsAccount({ user }: { user: User | null }) {
                   isLoading={savingUsername()}
                   disabled={!canSaveUsername()}
                 >
-                  {t('save')}
+                  {t("save")}
                 </Button>
               </div>
             </form>
           )}
         </div>
         <div class="flex items-center justify-between">
-          <span class="text-zinc-500 dark:text-zinc-400">{t('name')}</span>
-          <span class="font-medium text-zinc-900 dark:text-zinc-100">{user?.name || '-'}</span>
+          <span class="text-zinc-500 dark:text-zinc-400">{t("name")}</span>
+          <span class="font-medium text-zinc-900 dark:text-zinc-100">
+            {props.user?.name || "-"}
+          </span>
         </div>
         <div class="flex items-center justify-between">
-          <span class="text-zinc-500 dark:text-zinc-400">{t('email')}</span>
-          <span class="font-medium text-zinc-900 dark:text-zinc-100">{user?.email || '-'}</span>
+          <span class="text-zinc-500 dark:text-zinc-400">{t("email")}</span>
+          <span class="font-medium text-zinc-900 dark:text-zinc-100">
+            {props.user?.email || "-"}
+          </span>
         </div>
       </div>
     </div>

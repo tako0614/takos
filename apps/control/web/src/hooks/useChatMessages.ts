@@ -1,24 +1,24 @@
-import type { Setter } from 'solid-js';
-import type { TranslationKey } from '../store/i18n.ts';
-import { rpc, rpcJson, rpcPath } from '../lib/rpc.ts';
-import type { Message, Run } from '../types/index.ts';
-import type { ChatAttachmentMetadata } from '../views/chat/messageMetadata.ts';
-import { buildChatMessageMetadata } from '../views/chat/messageMetadata.ts';
-import { buildChatAttachmentPath } from './useChatAttachments.ts';
+import type { Accessor, Setter } from "solid-js";
+import type { TranslationKey } from "../store/i18n.ts";
+import { rpc, rpcJson, rpcPath } from "../lib/rpc.ts";
+import type { Message, Run } from "../types/index.ts";
+import type { ChatAttachmentMetadata } from "../views/chat/messageMetadata.ts";
+import { buildChatMessageMetadata } from "../views/chat/messageMetadata.ts";
+import { buildChatAttachmentPath } from "./useChatAttachments.ts";
 
 export interface UseChatMessagesOptions {
-  threadId: string;
+  threadId: Accessor<string>;
   lang: string;
   t: (key: TranslationKey, params?: Record<string, string | number>) => string;
-  input: string;
+  input: Accessor<string>;
   setInput: (value: string) => void;
-  selectedModel: string;
+  selectedModel: Accessor<string>;
   onUpdateTitle: (title: string) => void;
   // From useFileAttachment
-  attachedFiles: File[];
+  attachedFiles: Accessor<File[]>;
   setAttachedFiles: (files: File[]) => void;
   // From useWebSocketConnection
-  isLoading: boolean;
+  isLoading: Accessor<boolean>;
   rootRunIdRef: { current: string | null };
   closeWebSocket: () => void;
   currentRunIdRef: { current: string | null };
@@ -35,7 +35,9 @@ export interface UseChatMessagesOptions {
   setMessages: Setter<Message[]>;
   setError: (value: string | null) => void;
   // From useChatAttachments
-  uploadChatAttachments: (selectedFiles: File[]) => Promise<ChatAttachmentMetadata[]>;
+  uploadChatAttachments: (
+    selectedFiles: File[],
+  ) => Promise<ChatAttachmentMetadata[]>;
 }
 
 export interface UseChatMessagesResult {
@@ -70,15 +72,24 @@ export function useChatMessages({
   uploadChatAttachments,
 }: UseChatMessagesOptions): UseChatMessagesResult {
   const sendMessage = async () => {
-    const trimmedInput = input.trim();
-    if ((!trimmedInput && attachedFiles.length === 0) || isLoading) return;
+    const currentThreadId = threadId();
+    const currentInput = input();
+    const currentAttachedFiles = attachedFiles();
+    const currentSelectedModel = selectedModel();
+    const isCurrentThread = () => threadId() === currentThreadId;
+    const trimmedInput = currentInput.trim();
+    if ((!trimmedInput && currentAttachedFiles.length === 0) || isLoading()) {
+      return;
+    }
 
     const isFirstMessageInThread = messagesCountRef.current === 0;
-    const draftInput = input;
-    const draftFiles = attachedFiles;
-    const optimisticAttachments: ChatAttachmentMetadata[] = draftFiles.map((file) => ({
+    const draftInput = currentInput;
+    const draftFiles = currentAttachedFiles;
+    const optimisticAttachments: ChatAttachmentMetadata[] = draftFiles.map((
+      file,
+    ) => ({
       name: file.name,
-      path: buildChatAttachmentPath(threadId, file.name),
+      path: buildChatAttachmentPath(currentThreadId, file.name),
       mime_type: file.type || null,
       size: file.size,
     }));
@@ -89,16 +100,18 @@ export function useChatMessages({
     lastEventIdRef.current = 0;
     resetStreamingState();
     resetTimeline();
-    setInput('');
+    setInput("");
     setAttachedFiles([]);
     setIsLoading(true);
 
     const tempUserMessage: Message = {
       id: `temp-${Date.now()}`,
-      thread_id: threadId,
-      role: 'user',
+      thread_id: currentThreadId,
+      role: "user",
       content: trimmedInput,
-      metadata: buildChatMessageMetadata({ attachments: optimisticAttachments }),
+      metadata: buildChatMessageMetadata({
+        attachments: optimisticAttachments,
+      }),
       created_at: new Date().toISOString(),
       sequence: 0,
     };
@@ -107,10 +120,10 @@ export function useChatMessages({
     let userMessagePersisted = false;
     try {
       const uploadedAttachments = await uploadChatAttachments(draftFiles);
-      const msgRes = await rpc.threads[':id'].messages.$post({
-        param: { id: threadId },
+      const msgRes = await rpc.threads[":id"].messages.$post({
+        param: { id: currentThreadId },
         json: {
-          role: 'user',
+          role: "user",
           content: trimmedInput,
           metadata: uploadedAttachments.length > 0
             ? { attachments: uploadedAttachments }
@@ -122,36 +135,50 @@ export function useChatMessages({
       }
       const msgData = await rpcJson<{ message: Message }>(msgRes);
 
-      setMessages((prev) => prev.map((m) => (m.id === tempUserMessage.id ? msgData.message : m)));
+      if (isCurrentThread()) {
+        setMessages((prev) =>
+          prev.map((m) => (m.id === tempUserMessage.id ? msgData.message : m))
+        );
+      }
 
       if (isFirstMessageInThread) {
         try {
-          const titleSource = trimmedInput || uploadedAttachments[0]?.name || '';
-          const title = titleSource.slice(0, 50) + (titleSource.length > 50 ? '...' : '');
-          const titleRes = await rpc.threads[':id'].$patch({
-            param: { id: threadId },
+          const titleSource = trimmedInput || uploadedAttachments[0]?.name ||
+            "";
+          const title = titleSource.slice(0, 50) +
+            (titleSource.length > 50 ? "..." : "");
+          const titleRes = await rpc.threads[":id"].$patch({
+            param: { id: currentThreadId },
             json: { title },
           });
           await rpcJson(titleRes);
-          onUpdateTitle(title);
+          if (isCurrentThread()) {
+            onUpdateTitle(title);
+          }
         } catch {
           // Title update is best-effort; ignore failures
         }
       }
 
-      const runRes = await rpcPath(rpc, 'threads', ':threadId', 'runs').$post({
-        param: { threadId },
+      const runRes = await rpcPath(rpc, "threads", ":threadId", "runs").$post({
+        param: { threadId: currentThreadId },
         json: {
-          agent_type: 'default',
-          model: selectedModel,
+          agent_type: "default",
+          model: currentSelectedModel,
           input: { locale: lang },
         },
-      }) as Response;
+      });
       const runData = await rpcJson<{ run: Run }>(runRes);
-      setCurrentRun(runData.run);
+      if (!isCurrentThread()) {
+        return;
+      }
 
+      setCurrentRun(runData.run);
       startWebSocket(runData.run.id);
     } catch (err) {
+      if (!isCurrentThread()) {
+        return;
+      }
       setIsLoading(false);
       setCurrentRun(null);
       resetStreamingState();
@@ -163,7 +190,7 @@ export function useChatMessages({
         setMessages((prev) => prev.filter((m) => m.id !== tempUserMessage.id));
         await syncThreadAfterSendFailure();
       }
-      setError(err instanceof Error ? err.message : t('networkError'));
+      setError(err instanceof Error ? err.message : t("networkError"));
     }
   };
 

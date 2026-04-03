@@ -10,17 +10,24 @@
  * accessible by agents through the standard Takos APIs.
  */
 
-import type { D1Database, R2Bucket } from '../../../shared/types/bindings.ts';
-import { fetchRemoteRefs, type RemoteRef } from '../git-smart/client/fetch-refs.ts';
-import { fetchPackFromRemote } from '../git-smart/client/fetch-pack.ts';
-import { readPackfileAsync } from '../git-smart/protocol/packfile-reader.ts';
-import { indexCommit, getCommit } from '../git-smart/core/commit-index.ts';
-import { createBranch, createTag } from '../git-smart/core/refs.ts';
-import { getDb, repositories, repoRemotes } from '../../../infra/db/index.ts';
-import { eq, and } from 'drizzle-orm';
-import { generateId } from '../../../shared/utils/index.ts';
-import { logInfo, logError } from '../../../shared/utils/logger.ts';
-import { inferRepoName, normalizeGitUrl, sanitizeImportName } from './external-import-utils.ts';
+import type { D1Database, R2Bucket } from "../../../shared/types/bindings.ts";
+import {
+  fetchRemoteRefs,
+  type RemoteRef,
+} from "../git-smart/client/fetch-refs.ts";
+import { fetchPackFromRemote } from "../git-smart/client/fetch-pack.ts";
+import { readPackfileAsync } from "../git-smart/protocol/packfile-reader.ts";
+import { getCommit, indexCommit } from "../git-smart/core/commit-index.ts";
+import { createBranch, createTag } from "../git-smart/core/refs.ts";
+import { getDb, repoRemotes, repositories } from "../../../infra/db/index.ts";
+import { and, eq } from "drizzle-orm";
+import { generateId } from "../../../shared/utils/index.ts";
+import { logError, logInfo } from "../../../shared/utils/logger.ts";
+import {
+  inferRepoName,
+  normalizeGitUrl,
+  sanitizeImportName,
+} from "./external-import-utils.ts";
 
 // ── Types ───────────────────────────────────────────────────────────
 
@@ -30,7 +37,7 @@ export interface ImportExternalRepoInput {
   name?: string;
   authHeader?: string | null;
   description?: string;
-  visibility?: 'public' | 'private';
+  visibility?: "public" | "private";
 }
 
 export interface ImportExternalRepoResult {
@@ -55,7 +62,7 @@ const MAX_IMPORT_PACKFILE_BYTES = 100 * 1024 * 1024; // 100 MB
 const MAX_IMPORT_OBJECTS = 500_000;
 const MAX_IMPORT_INFLATED_TOTAL = 1024 * 1024 * 1024; // 1 GB
 const MAX_IMPORT_OBJECT_INFLATED = 256 * 1024 * 1024; // 256 MB
-const MAX_IMPORT_DELTA_RESULT = 64 * 1024 * 1024;     // 64 MB
+const MAX_IMPORT_DELTA_RESULT = 64 * 1024 * 1024; // 64 MB
 const MAX_IMPORT_DELTA_CHAIN_DEPTH = 50;
 const MAX_COMMIT_INDEX_DEPTH = 500;
 
@@ -80,7 +87,7 @@ export async function importExternalRepository(
   const localName = sanitizeImportName(input.name || inferRepoName(input.url));
 
   if (!localName) {
-    throw new Error('Could not determine a valid repository name from the URL');
+    throw new Error("Could not determine a valid repository name from the URL");
   }
 
   // Check for duplicate name in this workspace
@@ -94,23 +101,31 @@ export async function importExternalRepository(
     .get();
 
   if (existing) {
-    throw new Error(`Repository "${localName}" already exists in this workspace`);
+    throw new Error(
+      `Repository "${localName}" already exists in this workspace`,
+    );
   }
 
-  logInfo(`Starting import from ${gitUrl} as "${localName}"`, { module: 'external-import' });
+  logInfo(`Starting import from ${gitUrl} as "${localName}"`, {
+    module: "external-import",
+  });
 
   // Step 1: Fetch remote refs
-  const { refs, headTarget } = await fetchRemoteRefs(gitUrl, input.authHeader ?? null);
+  const {
+    refs,
+    headTarget,
+    capabilities,
+  } = await fetchRemoteRefs(gitUrl, input.authHeader ?? null);
 
   if (refs.length === 0) {
-    throw new Error('Remote repository has no refs (empty repository)');
+    throw new Error("Remote repository has no refs (empty repository)");
   }
 
-  const branchRefs = refs.filter((r) => r.name.startsWith('refs/heads/'));
-  const tagRefs = refs.filter((r) => r.name.startsWith('refs/tags/'));
+  const branchRefs = refs.filter((r) => r.name.startsWith("refs/heads/"));
+  const tagRefs = refs.filter((r) => r.name.startsWith("refs/tags/"));
 
   if (branchRefs.length === 0) {
-    throw new Error('Remote repository has no branches');
+    throw new Error("Remote repository has no branches");
   }
 
   // Determine default branch
@@ -119,19 +134,27 @@ export async function importExternalRepository(
   // Step 2: Fetch all objects
   const wantShas = deduplicateWants(refs);
 
-  logInfo(`Fetching ${wantShas.length} refs (${branchRefs.length} branches, ${tagRefs.length} tags)`, {
-    module: 'external-import',
-  });
+  logInfo(
+    `Fetching ${wantShas.length} refs (${branchRefs.length} branches, ${tagRefs.length} tags)`,
+    {
+      module: "external-import",
+    },
+  );
 
   const packfile = await fetchPackFromRemote(
     gitUrl,
     input.authHeader ?? null,
     wantShas,
     [], // haves = empty for initial import
-    { maxPackfileBytes: MAX_IMPORT_PACKFILE_BYTES },
+    {
+      maxPackfileBytes: MAX_IMPORT_PACKFILE_BYTES,
+      advertisedCapabilities: capabilities,
+    },
   );
 
-  logInfo(`Received packfile: ${packfile.length} bytes`, { module: 'external-import' });
+  logInfo(`Received packfile: ${packfile.length} bytes`, {
+    module: "external-import",
+  });
 
   // Step 3: Unpack objects into R2
   const storedShas = await readPackfileAsync(packfile, bucket, {
@@ -142,7 +165,9 @@ export async function importExternalRepository(
     maxDeltaChainDepth: MAX_IMPORT_DELTA_CHAIN_DEPTH,
   });
 
-  logInfo(`Unpacked ${storedShas.length} objects into R2`, { module: 'external-import' });
+  logInfo(`Unpacked ${storedShas.length} objects into R2`, {
+    module: "external-import",
+  });
 
   // Step 4: Create repository record
   const repoId = generateId();
@@ -153,7 +178,7 @@ export async function importExternalRepository(
     accountId: input.accountId,
     name: localName,
     description: input.description || `Imported from ${gitUrl}`,
-    visibility: input.visibility || 'private',
+    visibility: input.visibility || "private",
     defaultBranch,
     remoteCloneUrl: gitUrl,
     gitEnabled: true,
@@ -168,13 +193,13 @@ export async function importExternalRepository(
 
   try {
     for (const ref of branchRefs) {
-      const branchName = ref.name.replace('refs/heads/', '');
+      const branchName = ref.name.replace("refs/heads/", "");
       const isDefault = branchName === defaultBranch;
       await createBranch(dbBinding, repoId, branchName, ref.sha, isDefault);
     }
 
     for (const ref of tagRefs) {
-      const tagName = ref.name.replace('refs/tags/', '');
+      const tagName = ref.name.replace("refs/tags/", "");
       await createTag(dbBinding, repoId, tagName, ref.sha);
     }
 
@@ -183,7 +208,11 @@ export async function importExternalRepository(
     for (const ref of branchRefs) {
       if (indexedShas.has(ref.sha)) continue;
       commitCount += await indexCommitsFromSha(
-        dbBinding, bucket, repoId, ref.sha, indexedShas,
+        dbBinding,
+        bucket,
+        repoId,
+        ref.sha,
+        indexedShas,
       );
     }
 
@@ -192,24 +221,32 @@ export async function importExternalRepository(
     await db.insert(repoRemotes).values({
       id: remoteId,
       repoId,
-      name: 'origin',
-      upstreamRepoId: '', // empty for external remotes
+      name: "origin",
+      upstreamRepoId: "", // empty for external remotes
       url: gitUrl,
       lastFetchedAt: timestamp,
       createdAt: timestamp,
     });
   } catch (err) {
     // Clean up on failure
-    logError('Import failed during indexing, cleaning up', err, { module: 'external-import' });
-    await db.delete(repositories).where(eq(repositories.id, repoId)).catch((cleanupErr) => {
-      logError('Failed to clean up repository after import failure (non-critical)', cleanupErr, { module: 'external-import' });
+    logError("Import failed during indexing, cleaning up", err, {
+      module: "external-import",
     });
+    await db.delete(repositories).where(eq(repositories.id, repoId)).catch(
+      (cleanupErr) => {
+        logError(
+          "Failed to clean up repository after import failure (non-critical)",
+          cleanupErr,
+          { module: "external-import" },
+        );
+      },
+    );
     throw err;
   }
 
   logInfo(
     `Import complete: ${localName} — ${branchRefs.length} branches, ${tagRefs.length} tags, ${commitCount} commits`,
-    { module: 'external-import' },
+    { module: "external-import" },
   );
 
   return {
@@ -245,37 +282,44 @@ export async function fetchRemoteUpdates(
     .get();
 
   if (!repo?.remoteCloneUrl) {
-    throw new Error('Repository does not have a remote clone URL');
+    throw new Error("Repository does not have a remote clone URL");
   }
 
   // Get stored auth from remote entry (if any)
   const remote = await db.select({
     id: repoRemotes.id,
   }).from(repoRemotes)
-    .where(and(eq(repoRemotes.repoId, repoId), eq(repoRemotes.name, 'origin')))
+    .where(and(eq(repoRemotes.repoId, repoId), eq(repoRemotes.name, "origin")))
     .get();
 
   const gitUrl = repo.remoteCloneUrl;
 
   // Fetch remote refs
-  const { refs: remoteRefs } = await fetchRemoteRefs(gitUrl, null);
+  const { refs: remoteRefs, capabilities } = await fetchRemoteRefs(
+    gitUrl,
+    null,
+  );
 
   // Get local branch SHAs for have negotiation
-  const localBranches = await import('../git-smart/core/refs.ts').then(
+  const localBranches = await import("../git-smart/core/refs.ts").then(
     (m) => m.listBranches(dbBinding, repoId),
   );
 
   const haveShas = localBranches.map((b) => b.commit_sha);
-  const remoteBranches = remoteRefs.filter((r) => r.name.startsWith('refs/heads/'));
-  const remoteTags = remoteRefs.filter((r) => r.name.startsWith('refs/tags/'));
+  const remoteBranches = remoteRefs.filter((r) =>
+    r.name.startsWith("refs/heads/")
+  );
+  const remoteTags = remoteRefs.filter((r) => r.name.startsWith("refs/tags/"));
 
   // Determine what's new
-  const localBranchMap = new Map(localBranches.map((b) => [b.name, b.commit_sha]));
+  const localBranchMap = new Map(
+    localBranches.map((b) => [b.name, b.commit_sha]),
+  );
   const wantShas: string[] = [];
   const updatedBranches: string[] = [];
 
   for (const ref of remoteBranches) {
-    const branchName = ref.name.replace('refs/heads/', '');
+    const branchName = ref.name.replace("refs/heads/", "");
     const localSha = localBranchMap.get(branchName);
     if (localSha !== ref.sha) {
       wantShas.push(ref.sha);
@@ -284,14 +328,14 @@ export async function fetchRemoteUpdates(
   }
 
   // Check for new tags
-  const localTags = await import('../git-smart/core/refs.ts').then(
+  const localTags = await import("../git-smart/core/refs.ts").then(
     (m) => m.listTags(dbBinding, repoId),
   );
   const localTagMap = new Map(localTags.map((t) => [t.name, t.commit_sha]));
   const newTags: string[] = [];
 
   for (const ref of remoteTags) {
-    const tagName = ref.name.replace('refs/tags/', '');
+    const tagName = ref.name.replace("refs/tags/", "");
     if (!localTagMap.has(tagName)) {
       wantShas.push(ref.sha);
       newTags.push(tagName);
@@ -310,9 +354,16 @@ export async function fetchRemoteUpdates(
 
   // Fetch delta packfile
   const uniqueWants = Array.from(new Set(wantShas));
-  const packfile = await fetchPackFromRemote(gitUrl, null, uniqueWants, haveShas, {
-    maxPackfileBytes: MAX_IMPORT_PACKFILE_BYTES,
-  });
+  const packfile = await fetchPackFromRemote(
+    gitUrl,
+    null,
+    uniqueWants,
+    haveShas,
+    {
+      maxPackfileBytes: MAX_IMPORT_PACKFILE_BYTES,
+      advertisedCapabilities: capabilities,
+    },
+  );
 
   // Unpack
   await readPackfileAsync(packfile, bucket, {
@@ -324,9 +375,11 @@ export async function fetchRemoteUpdates(
   });
 
   // Update branches
-  const { updateBranch, createBranch: createBr } = await import('../git-smart/core/refs.ts');
+  const { updateBranch, createBranch: createBr } = await import(
+    "../git-smart/core/refs.ts"
+  );
   for (const ref of remoteBranches) {
-    const branchName = ref.name.replace('refs/heads/', '');
+    const branchName = ref.name.replace("refs/heads/", "");
     if (localBranchMap.has(branchName)) {
       const oldSha = localBranchMap.get(branchName)!;
       await updateBranch(dbBinding, repoId, branchName, oldSha, ref.sha);
@@ -337,9 +390,9 @@ export async function fetchRemoteUpdates(
   }
 
   // Create new tags
-  const { createTag: createTg } = await import('../git-smart/core/refs.ts');
+  const { createTag: createTg } = await import("../git-smart/core/refs.ts");
   for (const ref of remoteTags) {
-    const tagName = ref.name.replace('refs/tags/', '');
+    const tagName = ref.name.replace("refs/tags/", "");
     if (!localTagMap.has(tagName)) {
       await createTg(dbBinding, repoId, tagName, ref.sha);
     }
@@ -349,7 +402,13 @@ export async function fetchRemoteUpdates(
   let newCommits = 0;
   const indexedShas = new Set<string>();
   for (const sha of uniqueWants) {
-    newCommits += await indexCommitsFromSha(dbBinding, bucket, repoId, sha, indexedShas);
+    newCommits += await indexCommitsFromSha(
+      dbBinding,
+      bucket,
+      repoId,
+      sha,
+      indexedShas,
+    );
   }
 
   // Update last_fetched_at
@@ -364,18 +423,21 @@ export async function fetchRemoteUpdates(
 
 // ── Helpers ─────────────────────────────────────────────────────────
 
-function resolveDefaultBranch(branchRefs: RemoteRef[], headTarget: string | null): string {
+function resolveDefaultBranch(
+  branchRefs: RemoteRef[],
+  headTarget: string | null,
+): string {
   if (headTarget) {
-    const branchName = headTarget.replace('refs/heads/', '');
+    const branchName = headTarget.replace("refs/heads/", "");
     if (branchRefs.some((r) => r.name === headTarget)) {
       return branchName;
     }
   }
 
   // Fallback: prefer main > master > first branch
-  const names = branchRefs.map((r) => r.name.replace('refs/heads/', ''));
-  if (names.includes('main')) return 'main';
-  if (names.includes('master')) return 'master';
+  const names = branchRefs.map((r) => r.name.replace("refs/heads/", ""));
+  if (names.includes("main")) return "main";
+  if (names.includes("master")) return "master";
   return names[0];
 }
 
@@ -385,9 +447,9 @@ function deduplicateWants(refs: RemoteRef[]): string[] {
 
   for (const ref of refs) {
     // Skip HEAD (it points to the same SHA as the default branch)
-    if (ref.name === 'HEAD') continue;
+    if (ref.name === "HEAD") continue;
     // Skip peeled tag refs (e.g., refs/tags/v1.0^{})
-    if (ref.name.includes('^{}')) continue;
+    if (ref.name.includes("^{}")) continue;
 
     if (!seen.has(ref.sha)) {
       seen.add(ref.sha);

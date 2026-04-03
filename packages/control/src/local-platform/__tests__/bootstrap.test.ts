@@ -108,6 +108,49 @@ function localBootstrapTest(
   });
 }
 
+type LocalBootstrapEnvContext = {
+  tempDataDir: string;
+};
+
+function restoreOriginalBootstrapEnv(): void {
+  for (const [key, value] of Object.entries(originalEnv)) {
+    if (value === undefined) {
+      Deno.env.delete(key);
+    } else {
+      Deno.env.set(key, value);
+    }
+  }
+}
+
+async function withLocalBootstrapEnv(
+  fn: (context: LocalBootstrapEnvContext) => Promise<void>,
+): Promise<void> {
+  Deno.env.set("ADMIN_DOMAIN", "admin.local");
+  Deno.env.set("TENANT_BASE_DOMAIN", "tenant.local");
+  Deno.env.delete("TAKOS_LOCAL_ROUTING_JSON");
+  Deno.env.delete("TAKOS_LOCAL_DISPATCH_TARGETS_JSON");
+  Deno.env.delete("TAKOS_LOCAL_RUNTIME_URL");
+  Deno.env.delete("TAKOS_LOCAL_EXECUTOR_URL");
+  Deno.env.delete("TAKOS_LOCAL_BROWSER_URL");
+  tempDataDir = await mkdtemp(path.join(os.tmpdir(), "takos-local-test-"));
+  Deno.env.set("TAKOS_LOCAL_DATA_DIR", tempDataDir);
+  Deno.env.delete("AWS_REGION");
+  await clearNodePlatformDataForTests();
+  await resetNodePlatformStateForTests();
+  prepareQueueMocks();
+
+  try {
+    await fn({ tempDataDir });
+  } finally {
+    restoreOriginalBootstrapEnv();
+    await resetNodePlatformStateForTests();
+    if (tempDataDir) {
+      await rm(tempDataDir, { recursive: true, force: true });
+      tempDataDir = null;
+    }
+  }
+}
+
 // [Deno] vi.mock removed - manually stub imports from 'miniflare'// [Deno] vi.mock removed - manually stub imports from '../../adapters/sqs-queue.ts'
 async function runMiniflareDispatchSmoke(): Promise<
   { status: number; body: unknown }
@@ -259,188 +302,64 @@ let tempDataDir: string | null = null;
 localBootstrapTest(
   "local bootstrap - serves takos-web health without Cloudflare bindings",
   async () => {
-    Deno.env.set("ADMIN_DOMAIN", "admin.local");
-    Deno.env.set("TENANT_BASE_DOMAIN", "tenant.local");
-    Deno.env.delete("TAKOS_LOCAL_ROUTING_JSON");
-    Deno.env.delete("TAKOS_LOCAL_DISPATCH_TARGETS_JSON");
-    Deno.env.delete("TAKOS_LOCAL_RUNTIME_URL");
-    Deno.env.delete("TAKOS_LOCAL_EXECUTOR_URL");
-    Deno.env.delete("TAKOS_LOCAL_BROWSER_URL");
-    tempDataDir = await mkdtemp(path.join(os.tmpdir(), "takos-local-test-"));
-    Deno.env.set("TAKOS_LOCAL_DATA_DIR", tempDataDir);
-    Deno.env.delete("AWS_REGION");
-    await clearNodePlatformDataForTests();
-    await resetNodePlatformStateForTests();
-    prepareQueueMocks();
-    try {
+    await withLocalBootstrapEnv(async ({ tempDataDir }) => {
+      void tempDataDir;
       const fetch = await createLocalWebFetchForTests();
 
       const response = await fetch(new Request("http://admin.local/health"));
 
       assertEquals(response.status, 200);
       await assertEquals(await response.json(), { status: "ok" });
-    } finally {
-      /* TODO: call fakeTime.restore() */ void 0;
-      for (const [key, value] of Object.entries(originalEnv)) {
-        if (value === undefined) {
-          Deno.env.delete(key);
-        } else {
-          Deno.env.set(key, value);
-        }
-      }
-      /* TODO: restore mocks manually */ void 0;
-      /* TODO: restore stubbed globals manually */ void 0;
-      await resetNodePlatformStateForTests();
-      if (tempDataDir) {
-        await rm(tempDataDir, { recursive: true, force: true });
-        tempDataDir = null;
-      }
-    }
+    });
   },
 );
 localBootstrapTest(
   "local bootstrap - does not synthesize fake Cloudflare credentials in local mode",
   async () => {
-    Deno.env.set("ADMIN_DOMAIN", "admin.local");
-    Deno.env.set("TENANT_BASE_DOMAIN", "tenant.local");
-    Deno.env.delete("TAKOS_LOCAL_ROUTING_JSON");
-    Deno.env.delete("TAKOS_LOCAL_DISPATCH_TARGETS_JSON");
-    Deno.env.delete("TAKOS_LOCAL_RUNTIME_URL");
-    Deno.env.delete("TAKOS_LOCAL_EXECUTOR_URL");
-    Deno.env.delete("TAKOS_LOCAL_BROWSER_URL");
-    tempDataDir = await mkdtemp(path.join(os.tmpdir(), "takos-local-test-"));
-    Deno.env.set("TAKOS_LOCAL_DATA_DIR", tempDataDir);
-    Deno.env.delete("AWS_REGION");
-    await clearNodePlatformDataForTests();
-    await resetNodePlatformStateForTests();
-    prepareQueueMocks();
-    try {
+    await withLocalBootstrapEnv(async ({ tempDataDir }) => {
+      void tempDataDir;
       const env = await createNodeWebEnv();
 
       assertEquals(env.CF_ACCOUNT_ID, undefined);
       assertEquals(env.CF_API_TOKEN, undefined);
       assertEquals(env.WFP_DISPATCH_NAMESPACE, undefined);
       assertEquals(env.CF_ZONE_ID, undefined);
-    } finally {
-      /* TODO: call fakeTime.restore() */ void 0;
-      for (const [key, value] of Object.entries(originalEnv)) {
-        if (value === undefined) {
-          Deno.env.delete(key);
-        } else {
-          Deno.env.set(key, value);
-        }
-      }
-      /* TODO: restore mocks manually */ void 0;
-      /* TODO: restore stubbed globals manually */ void 0;
-      await resetNodePlatformStateForTests();
-      if (tempDataDir) {
-        await rm(tempDataDir, { recursive: true, force: true });
-        tempDataDir = null;
-      }
-    }
+    });
   },
 );
 localBootstrapTest(
   "local bootstrap - allows loopback health checks in local mode",
   async () => {
-    Deno.env.set("ADMIN_DOMAIN", "admin.local");
-    Deno.env.set("TENANT_BASE_DOMAIN", "tenant.local");
-    Deno.env.delete("TAKOS_LOCAL_ROUTING_JSON");
-    Deno.env.delete("TAKOS_LOCAL_DISPATCH_TARGETS_JSON");
-    Deno.env.delete("TAKOS_LOCAL_RUNTIME_URL");
-    Deno.env.delete("TAKOS_LOCAL_EXECUTOR_URL");
-    Deno.env.delete("TAKOS_LOCAL_BROWSER_URL");
-    tempDataDir = await mkdtemp(path.join(os.tmpdir(), "takos-local-test-"));
-    Deno.env.set("TAKOS_LOCAL_DATA_DIR", tempDataDir);
-    Deno.env.delete("AWS_REGION");
-    await clearNodePlatformDataForTests();
-    await resetNodePlatformStateForTests();
-    prepareQueueMocks();
-    try {
+    await withLocalBootstrapEnv(async ({ tempDataDir }) => {
+      void tempDataDir;
       const fetch = await createLocalWebFetchForTests();
 
       const response = await fetch(new Request("http://127.0.0.1/health"));
 
       assertEquals(response.status, 200);
       await assertEquals(await response.json(), { status: "ok" });
-    } finally {
-      /* TODO: call fakeTime.restore() */ void 0;
-      for (const [key, value] of Object.entries(originalEnv)) {
-        if (value === undefined) {
-          Deno.env.delete(key);
-        } else {
-          Deno.env.set(key, value);
-        }
-      }
-      /* TODO: restore mocks manually */ void 0;
-      /* TODO: restore stubbed globals manually */ void 0;
-      await resetNodePlatformStateForTests();
-      if (tempDataDir) {
-        await rm(tempDataDir, { recursive: true, force: true });
-        tempDataDir = null;
-      }
-    }
+    });
   },
 );
 localBootstrapTest(
   "local bootstrap - allows compose-internal health checks in local mode",
   async () => {
-    Deno.env.set("ADMIN_DOMAIN", "admin.local");
-    Deno.env.set("TENANT_BASE_DOMAIN", "tenant.local");
-    Deno.env.delete("TAKOS_LOCAL_ROUTING_JSON");
-    Deno.env.delete("TAKOS_LOCAL_DISPATCH_TARGETS_JSON");
-    Deno.env.delete("TAKOS_LOCAL_RUNTIME_URL");
-    Deno.env.delete("TAKOS_LOCAL_EXECUTOR_URL");
-    Deno.env.delete("TAKOS_LOCAL_BROWSER_URL");
-    tempDataDir = await mkdtemp(path.join(os.tmpdir(), "takos-local-test-"));
-    Deno.env.set("TAKOS_LOCAL_DATA_DIR", tempDataDir);
-    Deno.env.delete("AWS_REGION");
-    await clearNodePlatformDataForTests();
-    await resetNodePlatformStateForTests();
-    prepareQueueMocks();
-    try {
+    await withLocalBootstrapEnv(async ({ tempDataDir }) => {
+      void tempDataDir;
       const fetch = await createLocalWebFetchForTests();
 
       const response = await fetch(new Request("http://control-web/health"));
 
       assertEquals(response.status, 200);
       await assertEquals(await response.json(), { status: "ok" });
-    } finally {
-      /* TODO: call fakeTime.restore() */ void 0;
-      for (const [key, value] of Object.entries(originalEnv)) {
-        if (value === undefined) {
-          Deno.env.delete(key);
-        } else {
-          Deno.env.set(key, value);
-        }
-      }
-      /* TODO: restore mocks manually */ void 0;
-      /* TODO: restore stubbed globals manually */ void 0;
-      await resetNodePlatformStateForTests();
-      if (tempDataDir) {
-        await rm(tempDataDir, { recursive: true, force: true });
-        tempDataDir = null;
-      }
-    }
+    });
   },
 );
 localBootstrapTest(
   "local bootstrap - returns 503 when dispatch routing resolves to an unconfigured worker target",
   async () => {
-    Deno.env.set("ADMIN_DOMAIN", "admin.local");
-    Deno.env.set("TENANT_BASE_DOMAIN", "tenant.local");
-    Deno.env.delete("TAKOS_LOCAL_ROUTING_JSON");
-    Deno.env.delete("TAKOS_LOCAL_DISPATCH_TARGETS_JSON");
-    Deno.env.delete("TAKOS_LOCAL_RUNTIME_URL");
-    Deno.env.delete("TAKOS_LOCAL_EXECUTOR_URL");
-    Deno.env.delete("TAKOS_LOCAL_BROWSER_URL");
-    tempDataDir = await mkdtemp(path.join(os.tmpdir(), "takos-local-test-"));
-    Deno.env.set("TAKOS_LOCAL_DATA_DIR", tempDataDir);
-    Deno.env.delete("AWS_REGION");
-    await clearNodePlatformDataForTests();
-    await resetNodePlatformStateForTests();
-    prepareQueueMocks();
-    try {
+    await withLocalBootstrapEnv(async ({ tempDataDir }) => {
+      void tempDataDir;
       Deno.env.set(
         "TAKOS_LOCAL_ROUTING_JSON",
         JSON.stringify({
@@ -463,42 +382,14 @@ localBootstrapTest(
         error: "Tenant worker not found",
         message: "The tenant worker may be provisioning or has been deleted",
       });
-    } finally {
-      /* TODO: call fakeTime.restore() */ void 0;
-      for (const [key, value] of Object.entries(originalEnv)) {
-        if (value === undefined) {
-          Deno.env.delete(key);
-        } else {
-          Deno.env.set(key, value);
-        }
-      }
-      /* TODO: restore mocks manually */ void 0;
-      /* TODO: restore stubbed globals manually */ void 0;
-      await resetNodePlatformStateForTests();
-      if (tempDataDir) {
-        await rm(tempDataDir, { recursive: true, force: true });
-        tempDataDir = null;
-      }
-    }
+    });
   },
 );
 localBootstrapTest(
   "local bootstrap - serves dispatch health in local mode",
   async () => {
-    Deno.env.set("ADMIN_DOMAIN", "admin.local");
-    Deno.env.set("TENANT_BASE_DOMAIN", "tenant.local");
-    Deno.env.delete("TAKOS_LOCAL_ROUTING_JSON");
-    Deno.env.delete("TAKOS_LOCAL_DISPATCH_TARGETS_JSON");
-    Deno.env.delete("TAKOS_LOCAL_RUNTIME_URL");
-    Deno.env.delete("TAKOS_LOCAL_EXECUTOR_URL");
-    Deno.env.delete("TAKOS_LOCAL_BROWSER_URL");
-    tempDataDir = await mkdtemp(path.join(os.tmpdir(), "takos-local-test-"));
-    Deno.env.set("TAKOS_LOCAL_DATA_DIR", tempDataDir);
-    Deno.env.delete("AWS_REGION");
-    await clearNodePlatformDataForTests();
-    await resetNodePlatformStateForTests();
-    prepareQueueMocks();
-    try {
+    await withLocalBootstrapEnv(async ({ tempDataDir }) => {
+      void tempDataDir;
       const fetch = await createLocalDispatchFetchForTests();
 
       const response = await fetch(new Request("http://dispatch.local/health"));
@@ -508,42 +399,14 @@ localBootstrapTest(
         status: "ok",
         service: "takos-dispatch",
       });
-    } finally {
-      /* TODO: call fakeTime.restore() */ void 0;
-      for (const [key, value] of Object.entries(originalEnv)) {
-        if (value === undefined) {
-          Deno.env.delete(key);
-        } else {
-          Deno.env.set(key, value);
-        }
-      }
-      /* TODO: restore mocks manually */ void 0;
-      /* TODO: restore stubbed globals manually */ void 0;
-      await resetNodePlatformStateForTests();
-      if (tempDataDir) {
-        await rm(tempDataDir, { recursive: true, force: true });
-        tempDataDir = null;
-      }
-    }
+    });
   },
 );
 localBootstrapTest(
   "local bootstrap - rejects tenant worker URL overrides in local dispatch config",
   async () => {
-    Deno.env.set("ADMIN_DOMAIN", "admin.local");
-    Deno.env.set("TENANT_BASE_DOMAIN", "tenant.local");
-    Deno.env.delete("TAKOS_LOCAL_ROUTING_JSON");
-    Deno.env.delete("TAKOS_LOCAL_DISPATCH_TARGETS_JSON");
-    Deno.env.delete("TAKOS_LOCAL_RUNTIME_URL");
-    Deno.env.delete("TAKOS_LOCAL_EXECUTOR_URL");
-    Deno.env.delete("TAKOS_LOCAL_BROWSER_URL");
-    tempDataDir = await mkdtemp(path.join(os.tmpdir(), "takos-local-test-"));
-    Deno.env.set("TAKOS_LOCAL_DATA_DIR", tempDataDir);
-    Deno.env.delete("AWS_REGION");
-    await clearNodePlatformDataForTests();
-    await resetNodePlatformStateForTests();
-    prepareQueueMocks();
-    try {
+    await withLocalBootstrapEnv(async ({ tempDataDir }) => {
+      void tempDataDir;
       Deno.env.set(
         "TAKOS_LOCAL_DISPATCH_TARGETS_JSON",
         JSON.stringify({
@@ -558,42 +421,14 @@ localBootstrapTest(
         (error as Error).message,
         "TAKOS_LOCAL_DISPATCH_TARGETS_JSON may only override infra service targets",
       );
-    } finally {
-      /* TODO: call fakeTime.restore() */ void 0;
-      for (const [key, value] of Object.entries(originalEnv)) {
-        if (value === undefined) {
-          Deno.env.delete(key);
-        } else {
-          Deno.env.set(key, value);
-        }
-      }
-      /* TODO: restore mocks manually */ void 0;
-      /* TODO: restore stubbed globals manually */ void 0;
-      await resetNodePlatformStateForTests();
-      if (tempDataDir) {
-        await rm(tempDataDir, { recursive: true, force: true });
-        tempDataDir = null;
-      }
-    }
+    });
   },
 );
 localBootstrapTest(
   "local bootstrap - forwards dispatch traffic to http-endpoint-set URL targets",
   async () => {
-    Deno.env.set("ADMIN_DOMAIN", "admin.local");
-    Deno.env.set("TENANT_BASE_DOMAIN", "tenant.local");
-    Deno.env.delete("TAKOS_LOCAL_ROUTING_JSON");
-    Deno.env.delete("TAKOS_LOCAL_DISPATCH_TARGETS_JSON");
-    Deno.env.delete("TAKOS_LOCAL_RUNTIME_URL");
-    Deno.env.delete("TAKOS_LOCAL_EXECUTOR_URL");
-    Deno.env.delete("TAKOS_LOCAL_BROWSER_URL");
-    tempDataDir = await mkdtemp(path.join(os.tmpdir(), "takos-local-test-"));
-    Deno.env.set("TAKOS_LOCAL_DATA_DIR", tempDataDir);
-    Deno.env.delete("AWS_REGION");
-    await clearNodePlatformDataForTests();
-    await resetNodePlatformStateForTests();
-    prepareQueueMocks();
-    try {
+    await withLocalBootstrapEnv(async ({ tempDataDir }) => {
+      void tempDataDir;
       Deno.env.set(
         "TAKOS_LOCAL_ROUTING_JSON",
         JSON.stringify({
@@ -636,42 +471,14 @@ localBootstrapTest(
       } finally {
         upstreamFetch.restore();
       }
-    } finally {
-      /* TODO: call fakeTime.restore() */ void 0;
-      for (const [key, value] of Object.entries(originalEnv)) {
-        if (value === undefined) {
-          Deno.env.delete(key);
-        } else {
-          Deno.env.set(key, value);
-        }
-      }
-      /* TODO: restore mocks manually */ void 0;
-      /* TODO: restore stubbed globals manually */ void 0;
-      await resetNodePlatformStateForTests();
-      if (tempDataDir) {
-        await rm(tempDataDir, { recursive: true, force: true });
-        tempDataDir = null;
-      }
-    }
+    });
   },
 );
 localBootstrapTest(
   "local bootstrap - dispatches to a locally materialized tenant worker via Miniflare when no URL target is configured",
   async () => {
-    Deno.env.set("ADMIN_DOMAIN", "admin.local");
-    Deno.env.set("TENANT_BASE_DOMAIN", "tenant.local");
-    Deno.env.delete("TAKOS_LOCAL_ROUTING_JSON");
-    Deno.env.delete("TAKOS_LOCAL_DISPATCH_TARGETS_JSON");
-    Deno.env.delete("TAKOS_LOCAL_RUNTIME_URL");
-    Deno.env.delete("TAKOS_LOCAL_EXECUTOR_URL");
-    Deno.env.delete("TAKOS_LOCAL_BROWSER_URL");
-    tempDataDir = await mkdtemp(path.join(os.tmpdir(), "takos-local-test-"));
-    Deno.env.set("TAKOS_LOCAL_DATA_DIR", tempDataDir);
-    Deno.env.delete("AWS_REGION");
-    await clearNodePlatformDataForTests();
-    await resetNodePlatformStateForTests();
-    prepareQueueMocks();
-    try {
+    await withLocalBootstrapEnv(async ({ tempDataDir }) => {
+      void tempDataDir;
       const response = await runMiniflareDispatchSmoke();
 
       assertEquals(response.status, 200);
@@ -680,42 +487,14 @@ localBootstrapTest(
         worker: "worker-demo-v1",
         path: "/api/demo",
       });
-    } finally {
-      /* TODO: call fakeTime.restore() */ void 0;
-      for (const [key, value] of Object.entries(originalEnv)) {
-        if (value === undefined) {
-          Deno.env.delete(key);
-        } else {
-          Deno.env.set(key, value);
-        }
-      }
-      /* TODO: restore mocks manually */ void 0;
-      /* TODO: restore stubbed globals manually */ void 0;
-      await resetNodePlatformStateForTests();
-      if (tempDataDir) {
-        await rm(tempDataDir, { recursive: true, force: true });
-        tempDataDir = null;
-      }
-    }
+    });
   },
 );
 localBootstrapTest(
   "local bootstrap - materializes tenant workers by default when no URL target is configured",
   async () => {
-    Deno.env.set("ADMIN_DOMAIN", "admin.local");
-    Deno.env.set("TENANT_BASE_DOMAIN", "tenant.local");
-    Deno.env.delete("TAKOS_LOCAL_ROUTING_JSON");
-    Deno.env.delete("TAKOS_LOCAL_DISPATCH_TARGETS_JSON");
-    Deno.env.delete("TAKOS_LOCAL_RUNTIME_URL");
-    Deno.env.delete("TAKOS_LOCAL_EXECUTOR_URL");
-    Deno.env.delete("TAKOS_LOCAL_BROWSER_URL");
-    tempDataDir = await mkdtemp(path.join(os.tmpdir(), "takos-local-test-"));
-    Deno.env.set("TAKOS_LOCAL_DATA_DIR", tempDataDir);
-    Deno.env.delete("AWS_REGION");
-    await clearNodePlatformDataForTests();
-    await resetNodePlatformStateForTests();
-    prepareQueueMocks();
-    try {
+    await withLocalBootstrapEnv(async ({ tempDataDir }) => {
+      void tempDataDir;
       Deno.env.set(
         "TAKOS_LOCAL_ROUTING_JSON",
         JSON.stringify({
@@ -784,42 +563,14 @@ localBootstrapTest(
         worker: "worker-demo-v1",
         path: "/api/demo",
       });
-    } finally {
-      /* TODO: call fakeTime.restore() */ void 0;
-      for (const [key, value] of Object.entries(originalEnv)) {
-        if (value === undefined) {
-          Deno.env.delete(key);
-        } else {
-          Deno.env.set(key, value);
-        }
-      }
-      /* TODO: restore mocks manually */ void 0;
-      /* TODO: restore stubbed globals manually */ void 0;
-      await resetNodePlatformStateForTests();
-      if (tempDataDir) {
-        await rm(tempDataDir, { recursive: true, force: true });
-        tempDataDir = null;
-      }
-    }
+    });
   },
 );
 localBootstrapTest(
   "local bootstrap - dispatches scheduled events through the canonical local tenant runtime registry",
   async () => {
-    Deno.env.set("ADMIN_DOMAIN", "admin.local");
-    Deno.env.set("TENANT_BASE_DOMAIN", "tenant.local");
-    Deno.env.delete("TAKOS_LOCAL_ROUTING_JSON");
-    Deno.env.delete("TAKOS_LOCAL_DISPATCH_TARGETS_JSON");
-    Deno.env.delete("TAKOS_LOCAL_RUNTIME_URL");
-    Deno.env.delete("TAKOS_LOCAL_EXECUTOR_URL");
-    Deno.env.delete("TAKOS_LOCAL_BROWSER_URL");
-    tempDataDir = await mkdtemp(path.join(os.tmpdir(), "takos-local-test-"));
-    Deno.env.set("TAKOS_LOCAL_DATA_DIR", tempDataDir);
-    Deno.env.delete("AWS_REGION");
-    await clearNodePlatformDataForTests();
-    await resetNodePlatformStateForTests();
-    prepareQueueMocks();
-    try {
+    await withLocalBootstrapEnv(async ({ tempDataDir }) => {
+      void tempDataDir;
       const env = await createNodeWebEnv();
       await seedTenantWorkerBundle({
         env,
@@ -872,42 +623,14 @@ localBootstrapTest(
       } finally {
         await registry.dispose();
       }
-    } finally {
-      /* TODO: call fakeTime.restore() */ void 0;
-      for (const [key, value] of Object.entries(originalEnv)) {
-        if (value === undefined) {
-          Deno.env.delete(key);
-        } else {
-          Deno.env.set(key, value);
-        }
-      }
-      /* TODO: restore mocks manually */ void 0;
-      /* TODO: restore stubbed globals manually */ void 0;
-      await resetNodePlatformStateForTests();
-      if (tempDataDir) {
-        await rm(tempDataDir, { recursive: true, force: true });
-        tempDataDir = null;
-      }
-    }
+    });
   },
 );
 localBootstrapTest(
   "local bootstrap - dispatches queue events through the canonical local tenant runtime registry",
   async () => {
-    Deno.env.set("ADMIN_DOMAIN", "admin.local");
-    Deno.env.set("TENANT_BASE_DOMAIN", "tenant.local");
-    Deno.env.delete("TAKOS_LOCAL_ROUTING_JSON");
-    Deno.env.delete("TAKOS_LOCAL_DISPATCH_TARGETS_JSON");
-    Deno.env.delete("TAKOS_LOCAL_RUNTIME_URL");
-    Deno.env.delete("TAKOS_LOCAL_EXECUTOR_URL");
-    Deno.env.delete("TAKOS_LOCAL_BROWSER_URL");
-    tempDataDir = await mkdtemp(path.join(os.tmpdir(), "takos-local-test-"));
-    Deno.env.set("TAKOS_LOCAL_DATA_DIR", tempDataDir);
-    Deno.env.delete("AWS_REGION");
-    await clearNodePlatformDataForTests();
-    await resetNodePlatformStateForTests();
-    prepareQueueMocks();
-    try {
+    await withLocalBootstrapEnv(async ({ tempDataDir }) => {
+      void tempDataDir;
       const env = await createNodeWebEnv();
       await seedTenantWorkerBundle({
         env,
@@ -974,42 +697,14 @@ localBootstrapTest(
       } finally {
         await registry.dispose();
       }
-    } finally {
-      /* TODO: call fakeTime.restore() */ void 0;
-      for (const [key, value] of Object.entries(originalEnv)) {
-        if (value === undefined) {
-          Deno.env.delete(key);
-        } else {
-          Deno.env.set(key, value);
-        }
-      }
-      /* TODO: restore mocks manually */ void 0;
-      /* TODO: restore stubbed globals manually */ void 0;
-      await resetNodePlatformStateForTests();
-      if (tempDataDir) {
-        await rm(tempDataDir, { recursive: true, force: true });
-        tempDataDir = null;
-      }
-    }
+    });
   },
 );
 localBootstrapTest(
   "local bootstrap - dispatches scheduled events against the selected deployment when stable route refs share a service name",
   async () => {
-    Deno.env.set("ADMIN_DOMAIN", "admin.local");
-    Deno.env.set("TENANT_BASE_DOMAIN", "tenant.local");
-    Deno.env.delete("TAKOS_LOCAL_ROUTING_JSON");
-    Deno.env.delete("TAKOS_LOCAL_DISPATCH_TARGETS_JSON");
-    Deno.env.delete("TAKOS_LOCAL_RUNTIME_URL");
-    Deno.env.delete("TAKOS_LOCAL_EXECUTOR_URL");
-    Deno.env.delete("TAKOS_LOCAL_BROWSER_URL");
-    tempDataDir = await mkdtemp(path.join(os.tmpdir(), "takos-local-test-"));
-    Deno.env.set("TAKOS_LOCAL_DATA_DIR", tempDataDir);
-    Deno.env.delete("AWS_REGION");
-    await clearNodePlatformDataForTests();
-    await resetNodePlatformStateForTests();
-    prepareQueueMocks();
-    try {
+    await withLocalBootstrapEnv(async ({ tempDataDir }) => {
+      void tempDataDir;
       const env = await createNodeWebEnv();
       await seedTenantWorkerBundle({
         env,
@@ -1099,42 +794,14 @@ localBootstrapTest(
       } finally {
         await registry.dispose();
       }
-    } finally {
-      /* TODO: call fakeTime.restore() */ void 0;
-      for (const [key, value] of Object.entries(originalEnv)) {
-        if (value === undefined) {
-          Deno.env.delete(key);
-        } else {
-          Deno.env.set(key, value);
-        }
-      }
-      /* TODO: restore mocks manually */ void 0;
-      /* TODO: restore stubbed globals manually */ void 0;
-      await resetNodePlatformStateForTests();
-      if (tempDataDir) {
-        await rm(tempDataDir, { recursive: true, force: true });
-        tempDataDir = null;
-      }
-    }
+    });
   },
 );
 localBootstrapTest(
   "local bootstrap - dispatches queue events against the selected deployment when stable route refs share a service name",
   async () => {
-    Deno.env.set("ADMIN_DOMAIN", "admin.local");
-    Deno.env.set("TENANT_BASE_DOMAIN", "tenant.local");
-    Deno.env.delete("TAKOS_LOCAL_ROUTING_JSON");
-    Deno.env.delete("TAKOS_LOCAL_DISPATCH_TARGETS_JSON");
-    Deno.env.delete("TAKOS_LOCAL_RUNTIME_URL");
-    Deno.env.delete("TAKOS_LOCAL_EXECUTOR_URL");
-    Deno.env.delete("TAKOS_LOCAL_BROWSER_URL");
-    tempDataDir = await mkdtemp(path.join(os.tmpdir(), "takos-local-test-"));
-    Deno.env.set("TAKOS_LOCAL_DATA_DIR", tempDataDir);
-    Deno.env.delete("AWS_REGION");
-    await clearNodePlatformDataForTests();
-    await resetNodePlatformStateForTests();
-    prepareQueueMocks();
-    try {
+    await withLocalBootstrapEnv(async ({ tempDataDir }) => {
+      void tempDataDir;
       const env = await createNodeWebEnv();
       await seedTenantWorkerBundle({
         env,
@@ -1229,42 +896,14 @@ localBootstrapTest(
       } finally {
         await registry.dispose();
       }
-    } finally {
-      /* TODO: call fakeTime.restore() */ void 0;
-      for (const [key, value] of Object.entries(originalEnv)) {
-        if (value === undefined) {
-          Deno.env.delete(key);
-        } else {
-          Deno.env.set(key, value);
-        }
-      }
-      /* TODO: restore mocks manually */ void 0;
-      /* TODO: restore stubbed globals manually */ void 0;
-      await resetNodePlatformStateForTests();
-      if (tempDataDir) {
-        await rm(tempDataDir, { recursive: true, force: true });
-        tempDataDir = null;
-      }
-    }
+    });
   },
 );
 localBootstrapTest(
   "local bootstrap - creates a workflow instance when local tenant workflow invocation is requested",
   async () => {
-    Deno.env.set("ADMIN_DOMAIN", "admin.local");
-    Deno.env.set("TENANT_BASE_DOMAIN", "tenant.local");
-    Deno.env.delete("TAKOS_LOCAL_ROUTING_JSON");
-    Deno.env.delete("TAKOS_LOCAL_DISPATCH_TARGETS_JSON");
-    Deno.env.delete("TAKOS_LOCAL_RUNTIME_URL");
-    Deno.env.delete("TAKOS_LOCAL_EXECUTOR_URL");
-    Deno.env.delete("TAKOS_LOCAL_BROWSER_URL");
-    tempDataDir = await mkdtemp(path.join(os.tmpdir(), "takos-local-test-"));
-    Deno.env.set("TAKOS_LOCAL_DATA_DIR", tempDataDir);
-    Deno.env.delete("AWS_REGION");
-    await clearNodePlatformDataForTests();
-    await resetNodePlatformStateForTests();
-    prepareQueueMocks();
-    try {
+    await withLocalBootstrapEnv(async ({ tempDataDir }) => {
+      void tempDataDir;
       const env = await createNodeWebEnv();
       await seedTenantWorkerBundle({
         env,
@@ -1301,42 +940,14 @@ localBootstrapTest(
       } finally {
         await registry.dispose();
       }
-    } finally {
-      /* TODO: call fakeTime.restore() */ void 0;
-      for (const [key, value] of Object.entries(originalEnv)) {
-        if (value === undefined) {
-          Deno.env.delete(key);
-        } else {
-          Deno.env.set(key, value);
-        }
-      }
-      /* TODO: restore mocks manually */ void 0;
-      /* TODO: restore stubbed globals manually */ void 0;
-      await resetNodePlatformStateForTests();
-      if (tempDataDir) {
-        await rm(tempDataDir, { recursive: true, force: true });
-        tempDataDir = null;
-      }
-    }
+    });
   },
 );
 localBootstrapTest(
   "local bootstrap - rejects deployment ids that do not belong to the requested tenant worker",
   async () => {
-    Deno.env.set("ADMIN_DOMAIN", "admin.local");
-    Deno.env.set("TENANT_BASE_DOMAIN", "tenant.local");
-    Deno.env.delete("TAKOS_LOCAL_ROUTING_JSON");
-    Deno.env.delete("TAKOS_LOCAL_DISPATCH_TARGETS_JSON");
-    Deno.env.delete("TAKOS_LOCAL_RUNTIME_URL");
-    Deno.env.delete("TAKOS_LOCAL_EXECUTOR_URL");
-    Deno.env.delete("TAKOS_LOCAL_BROWSER_URL");
-    tempDataDir = await mkdtemp(path.join(os.tmpdir(), "takos-local-test-"));
-    Deno.env.set("TAKOS_LOCAL_DATA_DIR", tempDataDir);
-    Deno.env.delete("AWS_REGION");
-    await clearNodePlatformDataForTests();
-    await resetNodePlatformStateForTests();
-    prepareQueueMocks();
-    try {
+    await withLocalBootstrapEnv(async ({ tempDataDir }) => {
+      void tempDataDir;
       const env = await createNodeWebEnv();
       await seedTenantWorkerBundle({
         env,
@@ -1376,42 +987,14 @@ localBootstrapTest(
       } finally {
         await registry.dispose();
       }
-    } finally {
-      /* TODO: call fakeTime.restore() */ void 0;
-      for (const [key, value] of Object.entries(originalEnv)) {
-        if (value === undefined) {
-          Deno.env.delete(key);
-        } else {
-          Deno.env.set(key, value);
-        }
-      }
-      /* TODO: restore mocks manually */ void 0;
-      /* TODO: restore stubbed globals manually */ void 0;
-      await resetNodePlatformStateForTests();
-      if (tempDataDir) {
-        await rm(tempDataDir, { recursive: true, force: true });
-        tempDataDir = null;
-      }
-    }
+    });
   },
 );
 localBootstrapTest(
   "local bootstrap - materializes local tenant queue producer bindings",
   async () => {
-    Deno.env.set("ADMIN_DOMAIN", "admin.local");
-    Deno.env.set("TENANT_BASE_DOMAIN", "tenant.local");
-    Deno.env.delete("TAKOS_LOCAL_ROUTING_JSON");
-    Deno.env.delete("TAKOS_LOCAL_DISPATCH_TARGETS_JSON");
-    Deno.env.delete("TAKOS_LOCAL_RUNTIME_URL");
-    Deno.env.delete("TAKOS_LOCAL_EXECUTOR_URL");
-    Deno.env.delete("TAKOS_LOCAL_BROWSER_URL");
-    tempDataDir = await mkdtemp(path.join(os.tmpdir(), "takos-local-test-"));
-    Deno.env.set("TAKOS_LOCAL_DATA_DIR", tempDataDir);
-    Deno.env.delete("AWS_REGION");
-    await clearNodePlatformDataForTests();
-    await resetNodePlatformStateForTests();
-    prepareQueueMocks();
-    try {
+    await withLocalBootstrapEnv(async ({ tempDataDir }) => {
+      void tempDataDir;
       const env = await createNodeWebEnv();
       await seedTenantWorkerBundle({
         env,
@@ -1451,42 +1034,14 @@ localBootstrapTest(
       } finally {
         await registry.dispose();
       }
-    } finally {
-      /* TODO: call fakeTime.restore() */ void 0;
-      for (const [key, value] of Object.entries(originalEnv)) {
-        if (value === undefined) {
-          Deno.env.delete(key);
-        } else {
-          Deno.env.set(key, value);
-        }
-      }
-      /* TODO: restore mocks manually */ void 0;
-      /* TODO: restore stubbed globals manually */ void 0;
-      await resetNodePlatformStateForTests();
-      if (tempDataDir) {
-        await rm(tempDataDir, { recursive: true, force: true });
-        tempDataDir = null;
-      }
-    }
+    });
   },
 );
 localBootstrapTest(
   "local bootstrap - materializes provider-backed tenant queue producer bindings",
   async () => {
-    Deno.env.set("ADMIN_DOMAIN", "admin.local");
-    Deno.env.set("TENANT_BASE_DOMAIN", "tenant.local");
-    Deno.env.delete("TAKOS_LOCAL_ROUTING_JSON");
-    Deno.env.delete("TAKOS_LOCAL_DISPATCH_TARGETS_JSON");
-    Deno.env.delete("TAKOS_LOCAL_RUNTIME_URL");
-    Deno.env.delete("TAKOS_LOCAL_EXECUTOR_URL");
-    Deno.env.delete("TAKOS_LOCAL_BROWSER_URL");
-    tempDataDir = await mkdtemp(path.join(os.tmpdir(), "takos-local-test-"));
-    Deno.env.set("TAKOS_LOCAL_DATA_DIR", tempDataDir);
-    Deno.env.delete("AWS_REGION");
-    await clearNodePlatformDataForTests();
-    await resetNodePlatformStateForTests();
-    prepareQueueMocks();
-    try {
+    await withLocalBootstrapEnv(async ({ tempDataDir }) => {
+      void tempDataDir;
       const env = await createNodeWebEnv();
       await seedTenantWorkerBundle({
         env,
@@ -1529,42 +1084,14 @@ localBootstrapTest(
       } finally {
         await registry.dispose();
       }
-    } finally {
-      /* TODO: call fakeTime.restore() */ void 0;
-      for (const [key, value] of Object.entries(originalEnv)) {
-        if (value === undefined) {
-          Deno.env.delete(key);
-        } else {
-          Deno.env.set(key, value);
-        }
-      }
-      /* TODO: restore mocks manually */ void 0;
-      /* TODO: restore stubbed globals manually */ void 0;
-      await resetNodePlatformStateForTests();
-      if (tempDataDir) {
-        await rm(tempDataDir, { recursive: true, force: true });
-        tempDataDir = null;
-      }
-    }
+    });
   },
 );
 localBootstrapTest(
   "local bootstrap - materializes local tenant durable object bindings",
   async () => {
-    Deno.env.set("ADMIN_DOMAIN", "admin.local");
-    Deno.env.set("TENANT_BASE_DOMAIN", "tenant.local");
-    Deno.env.delete("TAKOS_LOCAL_ROUTING_JSON");
-    Deno.env.delete("TAKOS_LOCAL_DISPATCH_TARGETS_JSON");
-    Deno.env.delete("TAKOS_LOCAL_RUNTIME_URL");
-    Deno.env.delete("TAKOS_LOCAL_EXECUTOR_URL");
-    Deno.env.delete("TAKOS_LOCAL_BROWSER_URL");
-    tempDataDir = await mkdtemp(path.join(os.tmpdir(), "takos-local-test-"));
-    Deno.env.set("TAKOS_LOCAL_DATA_DIR", tempDataDir);
-    Deno.env.delete("AWS_REGION");
-    await clearNodePlatformDataForTests();
-    await resetNodePlatformStateForTests();
-    prepareQueueMocks();
-    try {
+    await withLocalBootstrapEnv(async ({ tempDataDir }) => {
+      void tempDataDir;
       const env = await createNodeWebEnv();
       await seedTenantWorkerBundle({
         env,
@@ -1610,42 +1137,14 @@ localBootstrapTest(
       } finally {
         await registry.dispose();
       }
-    } finally {
-      /* TODO: call fakeTime.restore() */ void 0;
-      for (const [key, value] of Object.entries(originalEnv)) {
-        if (value === undefined) {
-          Deno.env.delete(key);
-        } else {
-          Deno.env.set(key, value);
-        }
-      }
-      /* TODO: restore mocks manually */ void 0;
-      /* TODO: restore stubbed globals manually */ void 0;
-      await resetNodePlatformStateForTests();
-      if (tempDataDir) {
-        await rm(tempDataDir, { recursive: true, force: true });
-        tempDataDir = null;
-      }
-    }
+    });
   },
 );
 localBootstrapTest(
   "local bootstrap - materializes local tenant analytics engine bindings",
   async () => {
-    Deno.env.set("ADMIN_DOMAIN", "admin.local");
-    Deno.env.set("TENANT_BASE_DOMAIN", "tenant.local");
-    Deno.env.delete("TAKOS_LOCAL_ROUTING_JSON");
-    Deno.env.delete("TAKOS_LOCAL_DISPATCH_TARGETS_JSON");
-    Deno.env.delete("TAKOS_LOCAL_RUNTIME_URL");
-    Deno.env.delete("TAKOS_LOCAL_EXECUTOR_URL");
-    Deno.env.delete("TAKOS_LOCAL_BROWSER_URL");
-    tempDataDir = await mkdtemp(path.join(os.tmpdir(), "takos-local-test-"));
-    Deno.env.set("TAKOS_LOCAL_DATA_DIR", tempDataDir);
-    Deno.env.delete("AWS_REGION");
-    await clearNodePlatformDataForTests();
-    await resetNodePlatformStateForTests();
-    prepareQueueMocks();
-    try {
+    await withLocalBootstrapEnv(async ({ tempDataDir }) => {
+      void tempDataDir;
       const env = await createNodeWebEnv();
       await seedTenantWorkerBundle({
         env,
@@ -1689,42 +1188,14 @@ localBootstrapTest(
       } finally {
         await registry.dispose();
       }
-    } finally {
-      /* TODO: call fakeTime.restore() */ void 0;
-      for (const [key, value] of Object.entries(originalEnv)) {
-        if (value === undefined) {
-          Deno.env.delete(key);
-        } else {
-          Deno.env.set(key, value);
-        }
-      }
-      /* TODO: restore mocks manually */ void 0;
-      /* TODO: restore stubbed globals manually */ void 0;
-      await resetNodePlatformStateForTests();
-      if (tempDataDir) {
-        await rm(tempDataDir, { recursive: true, force: true });
-        tempDataDir = null;
-      }
-    }
+    });
   },
 );
 localBootstrapTest(
   "local bootstrap - materializes local tenant workflow bindings",
   async () => {
-    Deno.env.set("ADMIN_DOMAIN", "admin.local");
-    Deno.env.set("TENANT_BASE_DOMAIN", "tenant.local");
-    Deno.env.delete("TAKOS_LOCAL_ROUTING_JSON");
-    Deno.env.delete("TAKOS_LOCAL_DISPATCH_TARGETS_JSON");
-    Deno.env.delete("TAKOS_LOCAL_RUNTIME_URL");
-    Deno.env.delete("TAKOS_LOCAL_EXECUTOR_URL");
-    Deno.env.delete("TAKOS_LOCAL_BROWSER_URL");
-    tempDataDir = await mkdtemp(path.join(os.tmpdir(), "takos-local-test-"));
-    Deno.env.set("TAKOS_LOCAL_DATA_DIR", tempDataDir);
-    Deno.env.delete("AWS_REGION");
-    await clearNodePlatformDataForTests();
-    await resetNodePlatformStateForTests();
-    prepareQueueMocks();
-    try {
+    await withLocalBootstrapEnv(async ({ tempDataDir }) => {
+      void tempDataDir;
       const env = await createNodeWebEnv();
       await seedTenantWorkerBundle({
         env,
@@ -1771,42 +1242,14 @@ localBootstrapTest(
       } finally {
         await registry.dispose();
       }
-    } finally {
-      /* TODO: call fakeTime.restore() */ void 0;
-      for (const [key, value] of Object.entries(originalEnv)) {
-        if (value === undefined) {
-          Deno.env.delete(key);
-        } else {
-          Deno.env.set(key, value);
-        }
-      }
-      /* TODO: restore mocks manually */ void 0;
-      /* TODO: restore stubbed globals manually */ void 0;
-      await resetNodePlatformStateForTests();
-      if (tempDataDir) {
-        await rm(tempDataDir, { recursive: true, force: true });
-        tempDataDir = null;
-      }
-    }
+    });
   },
 );
 localBootstrapTest(
   "local bootstrap - materializes canary worker bundles when routing selects a canary route ref",
   async () => {
-    Deno.env.set("ADMIN_DOMAIN", "admin.local");
-    Deno.env.set("TENANT_BASE_DOMAIN", "tenant.local");
-    Deno.env.delete("TAKOS_LOCAL_ROUTING_JSON");
-    Deno.env.delete("TAKOS_LOCAL_DISPATCH_TARGETS_JSON");
-    Deno.env.delete("TAKOS_LOCAL_RUNTIME_URL");
-    Deno.env.delete("TAKOS_LOCAL_EXECUTOR_URL");
-    Deno.env.delete("TAKOS_LOCAL_BROWSER_URL");
-    tempDataDir = await mkdtemp(path.join(os.tmpdir(), "takos-local-test-"));
-    Deno.env.set("TAKOS_LOCAL_DATA_DIR", tempDataDir);
-    Deno.env.delete("AWS_REGION");
-    await clearNodePlatformDataForTests();
-    await resetNodePlatformStateForTests();
-    prepareQueueMocks();
-    try {
+    await withLocalBootstrapEnv(async ({ tempDataDir }) => {
+      void tempDataDir;
       Deno.env.set(
         "TAKOS_LOCAL_ROUTING_JSON",
         JSON.stringify({
@@ -1903,42 +1346,14 @@ localBootstrapTest(
       } finally {
         randomStub.restore();
       }
-    } finally {
-      /* TODO: call fakeTime.restore() */ void 0;
-      for (const [key, value] of Object.entries(originalEnv)) {
-        if (value === undefined) {
-          Deno.env.delete(key);
-        } else {
-          Deno.env.set(key, value);
-        }
-      }
-      /* TODO: restore mocks manually */ void 0;
-      /* TODO: restore stubbed globals manually */ void 0;
-      await resetNodePlatformStateForTests();
-      if (tempDataDir) {
-        await rm(tempDataDir, { recursive: true, force: true });
-        tempDataDir = null;
-      }
-    }
+    });
   },
 );
 localBootstrapTest(
   "local bootstrap - materializes canary worker bundles when weighted targets share a stable service route ref",
   async () => {
-    Deno.env.set("ADMIN_DOMAIN", "admin.local");
-    Deno.env.set("TENANT_BASE_DOMAIN", "tenant.local");
-    Deno.env.delete("TAKOS_LOCAL_ROUTING_JSON");
-    Deno.env.delete("TAKOS_LOCAL_DISPATCH_TARGETS_JSON");
-    Deno.env.delete("TAKOS_LOCAL_RUNTIME_URL");
-    Deno.env.delete("TAKOS_LOCAL_EXECUTOR_URL");
-    Deno.env.delete("TAKOS_LOCAL_BROWSER_URL");
-    tempDataDir = await mkdtemp(path.join(os.tmpdir(), "takos-local-test-"));
-    Deno.env.set("TAKOS_LOCAL_DATA_DIR", tempDataDir);
-    Deno.env.delete("AWS_REGION");
-    await clearNodePlatformDataForTests();
-    await resetNodePlatformStateForTests();
-    prepareQueueMocks();
-    try {
+    await withLocalBootstrapEnv(async ({ tempDataDir }) => {
+      void tempDataDir;
       Deno.env.set(
         "TAKOS_LOCAL_ROUTING_JSON",
         JSON.stringify({
@@ -2051,42 +1466,14 @@ localBootstrapTest(
       } finally {
         randomStub.restore();
       }
-    } finally {
-      /* TODO: call fakeTime.restore() */ void 0;
-      for (const [key, value] of Object.entries(originalEnv)) {
-        if (value === undefined) {
-          Deno.env.delete(key);
-        } else {
-          Deno.env.set(key, value);
-        }
-      }
-      /* TODO: restore mocks manually */ void 0;
-      /* TODO: restore stubbed globals manually */ void 0;
-      await resetNodePlatformStateForTests();
-      if (tempDataDir) {
-        await rm(tempDataDir, { recursive: true, force: true });
-        tempDataDir = null;
-      }
-    }
+    });
   },
 );
 localBootstrapTest(
   "local bootstrap - re-resolves stable service route refs when the active deployment pointer changes",
   async () => {
-    Deno.env.set("ADMIN_DOMAIN", "admin.local");
-    Deno.env.set("TENANT_BASE_DOMAIN", "tenant.local");
-    Deno.env.delete("TAKOS_LOCAL_ROUTING_JSON");
-    Deno.env.delete("TAKOS_LOCAL_DISPATCH_TARGETS_JSON");
-    Deno.env.delete("TAKOS_LOCAL_RUNTIME_URL");
-    Deno.env.delete("TAKOS_LOCAL_EXECUTOR_URL");
-    Deno.env.delete("TAKOS_LOCAL_BROWSER_URL");
-    tempDataDir = await mkdtemp(path.join(os.tmpdir(), "takos-local-test-"));
-    Deno.env.set("TAKOS_LOCAL_DATA_DIR", tempDataDir);
-    Deno.env.delete("AWS_REGION");
-    await clearNodePlatformDataForTests();
-    await resetNodePlatformStateForTests();
-    prepareQueueMocks();
-    try {
+    await withLocalBootstrapEnv(async ({ tempDataDir }) => {
+      void tempDataDir;
       Deno.env.set(
         "TAKOS_LOCAL_ROUTING_JSON",
         JSON.stringify({
@@ -2192,42 +1579,14 @@ localBootstrapTest(
       await assertEquals(await secondResponse.json(), {
         worker: "worker-demo-v2",
       });
-    } finally {
-      /* TODO: call fakeTime.restore() */ void 0;
-      for (const [key, value] of Object.entries(originalEnv)) {
-        if (value === undefined) {
-          Deno.env.delete(key);
-        } else {
-          Deno.env.set(key, value);
-        }
-      }
-      /* TODO: restore mocks manually */ void 0;
-      /* TODO: restore stubbed globals manually */ void 0;
-      await resetNodePlatformStateForTests();
-      if (tempDataDir) {
-        await rm(tempDataDir, { recursive: true, force: true });
-        tempDataDir = null;
-      }
-    }
+    });
   },
 );
 localBootstrapTest(
   "local bootstrap - serves runtime-host in local mode",
   async () => {
-    Deno.env.set("ADMIN_DOMAIN", "admin.local");
-    Deno.env.set("TENANT_BASE_DOMAIN", "tenant.local");
-    Deno.env.delete("TAKOS_LOCAL_ROUTING_JSON");
-    Deno.env.delete("TAKOS_LOCAL_DISPATCH_TARGETS_JSON");
-    Deno.env.delete("TAKOS_LOCAL_RUNTIME_URL");
-    Deno.env.delete("TAKOS_LOCAL_EXECUTOR_URL");
-    Deno.env.delete("TAKOS_LOCAL_BROWSER_URL");
-    tempDataDir = await mkdtemp(path.join(os.tmpdir(), "takos-local-test-"));
-    Deno.env.set("TAKOS_LOCAL_DATA_DIR", tempDataDir);
-    Deno.env.delete("AWS_REGION");
-    await clearNodePlatformDataForTests();
-    await resetNodePlatformStateForTests();
-    prepareQueueMocks();
-    try {
+    await withLocalBootstrapEnv(async ({ tempDataDir }) => {
+      void tempDataDir;
       const fetch = await createLocalRuntimeHostFetchForTests();
 
       const response = await fetch(
@@ -2236,42 +1595,14 @@ localBootstrapTest(
 
       assertEquals(response.status, 200);
       await assertEquals(await response.text(), "ok");
-    } finally {
-      /* TODO: call fakeTime.restore() */ void 0;
-      for (const [key, value] of Object.entries(originalEnv)) {
-        if (value === undefined) {
-          Deno.env.delete(key);
-        } else {
-          Deno.env.set(key, value);
-        }
-      }
-      /* TODO: restore mocks manually */ void 0;
-      /* TODO: restore stubbed globals manually */ void 0;
-      await resetNodePlatformStateForTests();
-      if (tempDataDir) {
-        await rm(tempDataDir, { recursive: true, force: true });
-        tempDataDir = null;
-      }
-    }
+    });
   },
 );
 localBootstrapTest(
   "local bootstrap - serves runtime-host health in local mode",
   async () => {
-    Deno.env.set("ADMIN_DOMAIN", "admin.local");
-    Deno.env.set("TENANT_BASE_DOMAIN", "tenant.local");
-    Deno.env.delete("TAKOS_LOCAL_ROUTING_JSON");
-    Deno.env.delete("TAKOS_LOCAL_DISPATCH_TARGETS_JSON");
-    Deno.env.delete("TAKOS_LOCAL_RUNTIME_URL");
-    Deno.env.delete("TAKOS_LOCAL_EXECUTOR_URL");
-    Deno.env.delete("TAKOS_LOCAL_BROWSER_URL");
-    tempDataDir = await mkdtemp(path.join(os.tmpdir(), "takos-local-test-"));
-    Deno.env.set("TAKOS_LOCAL_DATA_DIR", tempDataDir);
-    Deno.env.delete("AWS_REGION");
-    await clearNodePlatformDataForTests();
-    await resetNodePlatformStateForTests();
-    prepareQueueMocks();
-    try {
+    await withLocalBootstrapEnv(async ({ tempDataDir }) => {
+      void tempDataDir;
       const fetch = await createLocalRuntimeHostFetchForTests();
 
       const response = await fetch(new Request("http://runtime-host/health"));
@@ -2281,42 +1612,14 @@ localBootstrapTest(
         status: "ok",
         service: "takos-runtime-host",
       });
-    } finally {
-      /* TODO: call fakeTime.restore() */ void 0;
-      for (const [key, value] of Object.entries(originalEnv)) {
-        if (value === undefined) {
-          Deno.env.delete(key);
-        } else {
-          Deno.env.set(key, value);
-        }
-      }
-      /* TODO: restore mocks manually */ void 0;
-      /* TODO: restore stubbed globals manually */ void 0;
-      await resetNodePlatformStateForTests();
-      if (tempDataDir) {
-        await rm(tempDataDir, { recursive: true, force: true });
-        tempDataDir = null;
-      }
-    }
+    });
   },
 );
 localBootstrapTest(
   "local bootstrap - forwards runtime-host traffic to a configured runtime service",
   async () => {
-    Deno.env.set("ADMIN_DOMAIN", "admin.local");
-    Deno.env.set("TENANT_BASE_DOMAIN", "tenant.local");
-    Deno.env.delete("TAKOS_LOCAL_ROUTING_JSON");
-    Deno.env.delete("TAKOS_LOCAL_DISPATCH_TARGETS_JSON");
-    Deno.env.delete("TAKOS_LOCAL_RUNTIME_URL");
-    Deno.env.delete("TAKOS_LOCAL_EXECUTOR_URL");
-    Deno.env.delete("TAKOS_LOCAL_BROWSER_URL");
-    tempDataDir = await mkdtemp(path.join(os.tmpdir(), "takos-local-test-"));
-    Deno.env.set("TAKOS_LOCAL_DATA_DIR", tempDataDir);
-    Deno.env.delete("AWS_REGION");
-    await clearNodePlatformDataForTests();
-    await resetNodePlatformStateForTests();
-    prepareQueueMocks();
-    try {
+    await withLocalBootstrapEnv(async ({ tempDataDir }) => {
+      void tempDataDir;
       Deno.env.set("TAKOS_LOCAL_RUNTIME_URL", "http://runtime.internal/base/");
 
       const upstreamFetch = stubGlobalFetch((request) => {
@@ -2336,84 +1639,28 @@ localBootstrapTest(
       } finally {
         upstreamFetch.restore();
       }
-    } finally {
-      /* TODO: call fakeTime.restore() */ void 0;
-      for (const [key, value] of Object.entries(originalEnv)) {
-        if (value === undefined) {
-          Deno.env.delete(key);
-        } else {
-          Deno.env.set(key, value);
-        }
-      }
-      /* TODO: restore mocks manually */ void 0;
-      /* TODO: restore stubbed globals manually */ void 0;
-      await resetNodePlatformStateForTests();
-      if (tempDataDir) {
-        await rm(tempDataDir, { recursive: true, force: true });
-        tempDataDir = null;
-      }
-    }
+    });
   },
 );
 localBootstrapTest(
   "local bootstrap - serves executor-host in local mode",
   async () => {
-    Deno.env.set("ADMIN_DOMAIN", "admin.local");
-    Deno.env.set("TENANT_BASE_DOMAIN", "tenant.local");
-    Deno.env.delete("TAKOS_LOCAL_ROUTING_JSON");
-    Deno.env.delete("TAKOS_LOCAL_DISPATCH_TARGETS_JSON");
-    Deno.env.delete("TAKOS_LOCAL_RUNTIME_URL");
-    Deno.env.delete("TAKOS_LOCAL_EXECUTOR_URL");
-    Deno.env.delete("TAKOS_LOCAL_BROWSER_URL");
-    tempDataDir = await mkdtemp(path.join(os.tmpdir(), "takos-local-test-"));
-    Deno.env.set("TAKOS_LOCAL_DATA_DIR", tempDataDir);
-    Deno.env.delete("AWS_REGION");
-    await clearNodePlatformDataForTests();
-    await resetNodePlatformStateForTests();
-    prepareQueueMocks();
-    try {
+    await withLocalBootstrapEnv(async ({ tempDataDir }) => {
+      void tempDataDir;
       const fetch = await createLocalExecutorHostFetchForTests();
 
       const response = await fetch(new Request("http://executor-host/"));
 
       assertEquals(response.status, 200);
       await assertEquals(await response.text(), "takos-executor-host");
-    } finally {
-      /* TODO: call fakeTime.restore() */ void 0;
-      for (const [key, value] of Object.entries(originalEnv)) {
-        if (value === undefined) {
-          Deno.env.delete(key);
-        } else {
-          Deno.env.set(key, value);
-        }
-      }
-      /* TODO: restore mocks manually */ void 0;
-      /* TODO: restore stubbed globals manually */ void 0;
-      await resetNodePlatformStateForTests();
-      if (tempDataDir) {
-        await rm(tempDataDir, { recursive: true, force: true });
-        tempDataDir = null;
-      }
-    }
+    });
   },
 );
 localBootstrapTest(
   "local bootstrap - serves executor-host health in local mode",
   async () => {
-    Deno.env.set("ADMIN_DOMAIN", "admin.local");
-    Deno.env.set("TENANT_BASE_DOMAIN", "tenant.local");
-    Deno.env.delete("TAKOS_LOCAL_ROUTING_JSON");
-    Deno.env.delete("TAKOS_LOCAL_DISPATCH_TARGETS_JSON");
-    Deno.env.delete("TAKOS_LOCAL_RUNTIME_URL");
-    Deno.env.delete("TAKOS_LOCAL_EXECUTOR_URL");
-    Deno.env.delete("TAKOS_LOCAL_BROWSER_URL");
-    tempDataDir = await mkdtemp(path.join(os.tmpdir(), "takos-local-test-"));
-    Deno.env.set("TAKOS_LOCAL_DATA_DIR", tempDataDir);
-    Deno.env.delete("AWS_REGION");
-    await clearNodePlatformDataForTests();
-    await resetNodePlatformStateForTests();
-    prepareQueueMocks();
-    try {
+    await withLocalBootstrapEnv(async ({ tempDataDir }) => {
+      void tempDataDir;
       const fetch = await createLocalExecutorHostFetchForTests();
 
       const response = await fetch(new Request("http://executor-host/health"));
@@ -2423,42 +1670,14 @@ localBootstrapTest(
         status: "ok",
         service: "takos-executor-host",
       });
-    } finally {
-      /* TODO: call fakeTime.restore() */ void 0;
-      for (const [key, value] of Object.entries(originalEnv)) {
-        if (value === undefined) {
-          Deno.env.delete(key);
-        } else {
-          Deno.env.set(key, value);
-        }
-      }
-      /* TODO: restore mocks manually */ void 0;
-      /* TODO: restore stubbed globals manually */ void 0;
-      await resetNodePlatformStateForTests();
-      if (tempDataDir) {
-        await rm(tempDataDir, { recursive: true, force: true });
-        tempDataDir = null;
-      }
-    }
+    });
   },
 );
 localBootstrapTest(
   "local bootstrap - forwards executor dispatch to a configured executor service with canonical control RPC fields",
   async () => {
-    Deno.env.set("ADMIN_DOMAIN", "admin.local");
-    Deno.env.set("TENANT_BASE_DOMAIN", "tenant.local");
-    Deno.env.delete("TAKOS_LOCAL_ROUTING_JSON");
-    Deno.env.delete("TAKOS_LOCAL_DISPATCH_TARGETS_JSON");
-    Deno.env.delete("TAKOS_LOCAL_RUNTIME_URL");
-    Deno.env.delete("TAKOS_LOCAL_EXECUTOR_URL");
-    Deno.env.delete("TAKOS_LOCAL_BROWSER_URL");
-    tempDataDir = await mkdtemp(path.join(os.tmpdir(), "takos-local-test-"));
-    Deno.env.set("TAKOS_LOCAL_DATA_DIR", tempDataDir);
-    Deno.env.delete("AWS_REGION");
-    await clearNodePlatformDataForTests();
-    await resetNodePlatformStateForTests();
-    prepareQueueMocks();
-    try {
+    await withLocalBootstrapEnv(async ({ tempDataDir }) => {
+      void tempDataDir;
       Deno.env.set(
         "TAKOS_LOCAL_EXECUTOR_URL",
         "http://executor.internal/base/",
@@ -2496,42 +1715,14 @@ localBootstrapTest(
       } finally {
         upstreamFetch.restore();
       }
-    } finally {
-      /* TODO: call fakeTime.restore() */ void 0;
-      for (const [key, value] of Object.entries(originalEnv)) {
-        if (value === undefined) {
-          Deno.env.delete(key);
-        } else {
-          Deno.env.set(key, value);
-        }
-      }
-      /* TODO: restore mocks manually */ void 0;
-      /* TODO: restore stubbed globals manually */ void 0;
-      await resetNodePlatformStateForTests();
-      if (tempDataDir) {
-        await rm(tempDataDir, { recursive: true, force: true });
-        tempDataDir = null;
-      }
-    }
+    });
   },
 );
 localBootstrapTest(
   "local bootstrap - serves browser-host in local mode",
   async () => {
-    Deno.env.set("ADMIN_DOMAIN", "admin.local");
-    Deno.env.set("TENANT_BASE_DOMAIN", "tenant.local");
-    Deno.env.delete("TAKOS_LOCAL_ROUTING_JSON");
-    Deno.env.delete("TAKOS_LOCAL_DISPATCH_TARGETS_JSON");
-    Deno.env.delete("TAKOS_LOCAL_RUNTIME_URL");
-    Deno.env.delete("TAKOS_LOCAL_EXECUTOR_URL");
-    Deno.env.delete("TAKOS_LOCAL_BROWSER_URL");
-    tempDataDir = await mkdtemp(path.join(os.tmpdir(), "takos-local-test-"));
-    Deno.env.set("TAKOS_LOCAL_DATA_DIR", tempDataDir);
-    Deno.env.delete("AWS_REGION");
-    await clearNodePlatformDataForTests();
-    await resetNodePlatformStateForTests();
-    prepareQueueMocks();
-    try {
+    await withLocalBootstrapEnv(async ({ tempDataDir }) => {
+      void tempDataDir;
       const fetch = await createLocalBrowserHostFetchForTests();
 
       const response = await fetch(
@@ -2550,42 +1741,14 @@ localBootstrapTest(
       const body = await response.json() as { ok: boolean; proxyToken: string };
       assertEquals(body.ok, true);
       assertEquals(typeof body.proxyToken, "string");
-    } finally {
-      /* TODO: call fakeTime.restore() */ void 0;
-      for (const [key, value] of Object.entries(originalEnv)) {
-        if (value === undefined) {
-          Deno.env.delete(key);
-        } else {
-          Deno.env.set(key, value);
-        }
-      }
-      /* TODO: restore mocks manually */ void 0;
-      /* TODO: restore stubbed globals manually */ void 0;
-      await resetNodePlatformStateForTests();
-      if (tempDataDir) {
-        await rm(tempDataDir, { recursive: true, force: true });
-        tempDataDir = null;
-      }
-    }
+    });
   },
 );
 localBootstrapTest(
   "local bootstrap - serves browser-host health in local mode",
   async () => {
-    Deno.env.set("ADMIN_DOMAIN", "admin.local");
-    Deno.env.set("TENANT_BASE_DOMAIN", "tenant.local");
-    Deno.env.delete("TAKOS_LOCAL_ROUTING_JSON");
-    Deno.env.delete("TAKOS_LOCAL_DISPATCH_TARGETS_JSON");
-    Deno.env.delete("TAKOS_LOCAL_RUNTIME_URL");
-    Deno.env.delete("TAKOS_LOCAL_EXECUTOR_URL");
-    Deno.env.delete("TAKOS_LOCAL_BROWSER_URL");
-    tempDataDir = await mkdtemp(path.join(os.tmpdir(), "takos-local-test-"));
-    Deno.env.set("TAKOS_LOCAL_DATA_DIR", tempDataDir);
-    Deno.env.delete("AWS_REGION");
-    await clearNodePlatformDataForTests();
-    await resetNodePlatformStateForTests();
-    prepareQueueMocks();
-    try {
+    await withLocalBootstrapEnv(async ({ tempDataDir }) => {
+      void tempDataDir;
       const fetch = await createLocalBrowserHostFetchForTests();
 
       const response = await fetch(new Request("http://browser-host/health"));
@@ -2595,42 +1758,14 @@ localBootstrapTest(
         status: "ok",
         service: "takos-browser-host",
       });
-    } finally {
-      /* TODO: call fakeTime.restore() */ void 0;
-      for (const [key, value] of Object.entries(originalEnv)) {
-        if (value === undefined) {
-          Deno.env.delete(key);
-        } else {
-          Deno.env.set(key, value);
-        }
-      }
-      /* TODO: restore mocks manually */ void 0;
-      /* TODO: restore stubbed globals manually */ void 0;
-      await resetNodePlatformStateForTests();
-      if (tempDataDir) {
-        await rm(tempDataDir, { recursive: true, force: true });
-        tempDataDir = null;
-      }
-    }
+    });
   },
 );
 localBootstrapTest(
   "local bootstrap - forwards browser bootstrap to a configured browser service",
   async () => {
-    Deno.env.set("ADMIN_DOMAIN", "admin.local");
-    Deno.env.set("TENANT_BASE_DOMAIN", "tenant.local");
-    Deno.env.delete("TAKOS_LOCAL_ROUTING_JSON");
-    Deno.env.delete("TAKOS_LOCAL_DISPATCH_TARGETS_JSON");
-    Deno.env.delete("TAKOS_LOCAL_RUNTIME_URL");
-    Deno.env.delete("TAKOS_LOCAL_EXECUTOR_URL");
-    Deno.env.delete("TAKOS_LOCAL_BROWSER_URL");
-    tempDataDir = await mkdtemp(path.join(os.tmpdir(), "takos-local-test-"));
-    Deno.env.set("TAKOS_LOCAL_DATA_DIR", tempDataDir);
-    Deno.env.delete("AWS_REGION");
-    await clearNodePlatformDataForTests();
-    await resetNodePlatformStateForTests();
-    prepareQueueMocks();
-    try {
+    await withLocalBootstrapEnv(async ({ tempDataDir }) => {
+      void tempDataDir;
       Deno.env.set("TAKOS_LOCAL_BROWSER_URL", "http://browser.internal/base/");
 
       const upstreamFetch = stubGlobalFetch(async (request) => {
@@ -2672,42 +1807,14 @@ localBootstrapTest(
       } finally {
         upstreamFetch.restore();
       }
-    } finally {
-      /* TODO: call fakeTime.restore() */ void 0;
-      for (const [key, value] of Object.entries(originalEnv)) {
-        if (value === undefined) {
-          Deno.env.delete(key);
-        } else {
-          Deno.env.set(key, value);
-        }
-      }
-      /* TODO: restore mocks manually */ void 0;
-      /* TODO: restore stubbed globals manually */ void 0;
-      await resetNodePlatformStateForTests();
-      if (tempDataDir) {
-        await rm(tempDataDir, { recursive: true, force: true });
-        tempDataDir = null;
-      }
-    }
+    });
   },
 );
 localBootstrapTest(
   "local bootstrap - persists sqlite, kv, and r2 state across adapter resets when a data dir is configured",
   async () => {
-    Deno.env.set("ADMIN_DOMAIN", "admin.local");
-    Deno.env.set("TENANT_BASE_DOMAIN", "tenant.local");
-    Deno.env.delete("TAKOS_LOCAL_ROUTING_JSON");
-    Deno.env.delete("TAKOS_LOCAL_DISPATCH_TARGETS_JSON");
-    Deno.env.delete("TAKOS_LOCAL_RUNTIME_URL");
-    Deno.env.delete("TAKOS_LOCAL_EXECUTOR_URL");
-    Deno.env.delete("TAKOS_LOCAL_BROWSER_URL");
-    tempDataDir = await mkdtemp(path.join(os.tmpdir(), "takos-local-test-"));
-    Deno.env.set("TAKOS_LOCAL_DATA_DIR", tempDataDir);
-    Deno.env.delete("AWS_REGION");
-    await clearNodePlatformDataForTests();
-    await resetNodePlatformStateForTests();
-    prepareQueueMocks();
-    try {
+    await withLocalBootstrapEnv(async ({ tempDataDir }) => {
+      void tempDataDir;
       const env = await createNodeWebEnv();
       await env.DB.exec(
         "CREATE TABLE IF NOT EXISTS local_check (id INTEGER PRIMARY KEY, value TEXT NOT NULL);",
@@ -2753,22 +1860,6 @@ localBootstrapTest(
       assertEquals(queueSnapshot.messages.length, 1);
       assertObjectMatch(queueSnapshot.messages[0].body, { runId: "run-1" });
       assertEquals(reloadedQueueSnapshot.messages.length, 1);
-    } finally {
-      /* TODO: call fakeTime.restore() */ void 0;
-      for (const [key, value] of Object.entries(originalEnv)) {
-        if (value === undefined) {
-          Deno.env.delete(key);
-        } else {
-          Deno.env.set(key, value);
-        }
-      }
-      /* TODO: restore mocks manually */ void 0;
-      /* TODO: restore stubbed globals manually */ void 0;
-      await resetNodePlatformStateForTests();
-      if (tempDataDir) {
-        await rm(tempDataDir, { recursive: true, force: true });
-        tempDataDir = null;
-      }
-    }
+    });
   },
 );

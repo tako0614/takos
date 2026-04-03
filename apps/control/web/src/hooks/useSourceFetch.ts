@@ -9,7 +9,7 @@ import { useSourceFetchQueries } from './useSourceFetchQueries.ts';
 import { useSourceFetchActions } from './useSourceFetchActions.ts';
 
 export interface UseSourceFetchOptions {
-  isAuthenticated: boolean;
+  isAuthenticated: Accessor<boolean>;
   effectiveSpaceId: Accessor<string | null>;
   debouncedQuery: Accessor<string>;
   sort: Accessor<string>;

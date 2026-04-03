@@ -1,8 +1,10 @@
-import { createSignal } from 'solid-js';
+import { createEffect, createSignal } from 'solid-js';
 import {
   useStoreManagement,
   useStoreInventory,
   useStoreRegistry,
+  type InventoryItem,
+  type RegistryEntry,
   type StoreItem,
 } from '../../hooks/useStoreManagement.ts';
 
@@ -10,13 +12,27 @@ interface StoreManagementPageProps {
   spaceId: string;
 }
 
-export function StoreManagementPage({ spaceId }: StoreManagementPageProps) {
-  const { stores, loading, error, createStore, deleteStore } = useStoreManagement(spaceId);
+export function StoreManagementPage(props: StoreManagementPageProps) {
+  const { stores, loading, error, createStore, deleteStore } = useStoreManagement(() => props.spaceId);
   const [selectedStore, setSelectedStore] = createSignal<string | null>(null);
   const [activeTab, setActiveTab] = createSignal<'inventory' | 'registry'>('inventory');
 
   const [newSlug, setNewSlug] = createSignal('');
   const [creating, setCreating] = createSignal(false);
+
+  createEffect(() => {
+    props.spaceId;
+    setSelectedStore(null);
+    setActiveTab('inventory');
+    setNewSlug('');
+  });
+
+  createEffect(() => {
+    const currentStore = selectedStore();
+    if (currentStore && !stores().some((store) => store.slug === currentStore)) {
+      setSelectedStore(null);
+    }
+  });
 
   const handleCreateStore = async () => {
     if (!newSlug().trim()) return;
@@ -116,10 +132,13 @@ export function StoreManagementPage({ spaceId }: StoreManagementPageProps) {
               </div>
               <div class="flex-1 overflow-y-auto">
                 {activeTab() === 'inventory' && (
-                  <InventoryPanel spaceId={spaceId} storeSlug={selectedStore()!} />
+                  <InventoryPanel
+                    spaceId={() => props.spaceId}
+                    storeSlug={() => selectedStore()!}
+                  />
                 )}
                 {activeTab() === 'registry' && (
-                  <RegistryPanel spaceId={spaceId} />
+                  <RegistryPanel spaceId={() => props.spaceId} />
                 )}
               </div>
             </>
@@ -134,12 +153,7 @@ export function StoreManagementPage({ spaceId }: StoreManagementPageProps) {
   );
 }
 
-function StoreListItem({
-  store,
-  selected,
-  onSelect,
-  onDelete,
-}: {
+function StoreListItem(props: {
   store: StoreItem;
   selected: boolean;
   onSelect: () => void;
@@ -147,20 +161,20 @@ function StoreListItem({
 }) {
   return (
     <div
-      onClick={onSelect}
+      onClick={props.onSelect}
       class={`px-3 py-2.5 cursor-pointer border-b border-zinc-100 dark:border-zinc-800 flex items-center justify-between group ${
-        selected ? 'bg-blue-50 dark:bg-blue-900/20' : 'hover:bg-zinc-50 dark:hover:bg-zinc-800/50'
+        props.selected ? 'bg-blue-50 dark:bg-blue-900/20' : 'hover:bg-zinc-50 dark:hover:bg-zinc-800/50'
       }`}
     >
       <div class="min-w-0">
-        <div class="text-sm font-medium text-zinc-900 dark:text-zinc-100 truncate">{store.name || store.slug}</div>
-        {store.is_default && (
+        <div class="text-sm font-medium text-zinc-900 dark:text-zinc-100 truncate">{props.store.name || props.store.slug}</div>
+        {props.store.is_default && (
           <span class="text-xs text-zinc-400">default</span>
         )}
       </div>
-      {!store.is_default && (
+      {!props.store.is_default && (
         <button type="button"
-          onClick={(e) => { e.stopPropagation(); onDelete(); }}
+          onClick={(e) => { e.stopPropagation(); props.onDelete(); }}
           class="opacity-0 group-hover:opacity-100 text-xs text-red-500 hover:text-red-700 px-1"
         >
           Delete
@@ -170,8 +184,11 @@ function StoreListItem({
   );
 }
 
-function InventoryPanel({ spaceId, storeSlug }: { spaceId: string; storeSlug: string }) {
-  const { items, total, loading, error, addItem, removeItem } = useStoreInventory(spaceId, storeSlug);
+function InventoryPanel(props: { spaceId: () => string; storeSlug: () => string }) {
+  const { items, total, loading, error, addItem, removeItem } = useStoreInventory(
+    props.spaceId,
+    props.storeSlug,
+  );
   const [newUrl, setNewUrl] = createSignal('');
   const [adding, setAdding] = createSignal(false);
 
@@ -255,8 +272,10 @@ function InventoryPanel({ spaceId, storeSlug }: { spaceId: string; storeSlug: st
   );
 }
 
-function RegistryPanel({ spaceId }: { spaceId: string }) {
-  const { entries, loading, error, addRemoteStore, removeEntry } = useStoreRegistry(spaceId);
+function RegistryPanel(props: { spaceId: () => string }) {
+  const { entries, loading, error, addRemoteStore, removeEntry } = useStoreRegistry(
+    props.spaceId,
+  );
   const [identifier, setIdentifier] = createSignal('');
   const [adding, setAdding] = createSignal(false);
 

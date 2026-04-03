@@ -177,7 +177,9 @@ export function handleTransportClose(
 
   (async () => {
     try {
-      const res = await rpcPath(rpc, 'runs', ':id').$get({ param: { id: savedRunId } }) as Response;
+      const res = await rpcPath(rpc, 'runs', ':id').$get({
+        param: { id: savedRunId },
+      });
       const data = await rpcJson<{ run: Run }>(res);
       const status = data.run?.status;
 

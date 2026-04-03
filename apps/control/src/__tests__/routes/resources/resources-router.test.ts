@@ -45,7 +45,10 @@ Deno.test("resources type route rejects invalid resource types", async () => {
 
   assertEquals(response.status, 400);
   assertEquals(await response.json(), {
-    error: "Invalid resource type",
+    error: {
+      code: "BAD_REQUEST",
+      message: "Invalid resource type",
+    },
   });
 });
 
@@ -63,7 +66,10 @@ Deno.test("resource creation rejects blank names", async () => {
 
   assertEquals(response.status, 400);
   assertEquals(await response.json(), {
-    error: "name is required",
+    error: {
+      code: "BAD_REQUEST",
+      message: "name is required",
+    },
   });
 });
 
@@ -85,7 +91,10 @@ Deno.test("resource creation rejects invalid providers", async () => {
 
   assertEquals(response.status, 400);
   assertEquals(await response.json(), {
-    error: "Invalid provider: invalid-provider",
+    error: {
+      code: "BAD_REQUEST",
+      message: "Invalid provider: invalid-provider",
+    },
   });
 });
 
@@ -106,6 +115,9 @@ Deno.test("resource creation rejects invalid resource types", async () => {
 
   assertEquals(response.status, 400);
   assertEquals(await response.json(), {
-    error: "Invalid resource type",
+    error: {
+      code: "BAD_REQUEST",
+      message: "Invalid resource type",
+    },
   });
 });

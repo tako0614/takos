@@ -5,12 +5,12 @@ import {
   resolveAppManifestPath,
 } from "../lib/app-manifest.ts";
 import { api } from "../lib/api.ts";
-import { resolveSpaceId } from "../lib/cli-utils.ts";
-import { cliExit } from "../lib/command-exit.ts";
 import {
-  type GroupProviderName,
-  parseGroupProvider,
-} from "../lib/group-provider.ts";
+  resolveGroupProviderOption,
+  resolveSpaceId,
+} from "../lib/cli-utils.ts";
+import { cliExit } from "../lib/command-exit.ts";
+import { inferApplySourceProjection } from "../lib/git-provenance.ts";
 import { formatPlan } from "../lib/state/plan.ts";
 import type { DiffResult } from "../lib/state/diff.ts";
 import {
@@ -68,17 +68,10 @@ export function registerPlanCommand(program: Command): void {
         cliExit(1);
       }
 
-      let provider: GroupProviderName | undefined;
-      try {
-        provider = parseGroupProvider(options.provider);
-      } catch (error) {
-        console.log(
-          red(error instanceof Error ? error.message : "Invalid provider"),
-        );
-        cliExit(1);
-      }
+      const provider = resolveGroupProviderOption(options.provider);
 
       const group = options.group || manifest.metadata.name;
+      const source = await inferApplySourceProjection(manifestPath);
       const response = await api<PlanByNameResponse>(
         `/api/spaces/${resolveSpaceId(options.space)}/groups/plan`,
         {
@@ -88,6 +81,7 @@ export function registerPlanCommand(program: Command): void {
             env: options.env,
             ...(provider ? { provider } : {}),
             manifest,
+            source,
           },
         },
       );

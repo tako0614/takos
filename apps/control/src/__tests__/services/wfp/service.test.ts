@@ -45,6 +45,8 @@ const config: WFPConfig = {
   dispatchNamespace: "test-ns",
 };
 
+let currentFetchRestore: (() => void) | undefined;
+
 function mockSuccessResponse<T>(result: T) {
   return new Response(
     JSON.stringify({
@@ -57,10 +59,31 @@ function mockSuccessResponse<T>(result: T) {
   );
 }
 
+function installFetchMock(fetchMock: typeof fetch): () => void {
+  const originalFetch = globalThis.fetch;
+  (globalThis as { fetch?: typeof fetch }).fetch = fetchMock;
+  const restore = () => {
+    if (originalFetch) {
+      globalThis.fetch = originalFetch;
+    } else {
+      delete (globalThis as { fetch?: typeof fetch }).fetch;
+    }
+  };
+  currentFetchRestore = restore;
+  return restore;
+}
+
+function restoreFetchMock(): void {
+  const restore = currentFetchRestore;
+  currentFetchRestore = undefined;
+  restore?.();
+}
+
 Deno.test("WFPService - createWorker - sends PUT request with FormData containing worker script and metadata", async () => {
   try {
     const fetchMock = spy(async () => mockSuccessResponse({}));
-    (globalThis as any).fetch = fetchMock;
+    const restoreFetch = installFetchMock(fetchMock as unknown as typeof fetch);
+    void restoreFetch;
 
     const svc = new WFPService(config);
     await svc.workers.createWorker({
@@ -79,13 +102,14 @@ Deno.test("WFPService - createWorker - sends PUT request with FormData containin
     assertStringIncludes(url, "/scripts/my-worker");
     assertEquals(init.method, "PUT");
   } finally {
-    /* TODO: restore stubbed globals manually */ void 0;
+    restoreFetchMock();
   }
 });
 Deno.test("WFPService - createWorker - serializes vectorize bindings into worker metadata", async () => {
   try {
     const fetchMock = spy(async () => mockSuccessResponse({}));
-    (globalThis as any).fetch = fetchMock;
+    const restoreFetch = installFetchMock(fetchMock as unknown as typeof fetch);
+    void restoreFetch;
 
     const svc = new WFPService(config);
     await svc.workers.createWorker({
@@ -116,13 +140,14 @@ Deno.test("WFPService - createWorker - serializes vectorize bindings into worker
       ),
     );
   } finally {
-    /* TODO: restore stubbed globals manually */ void 0;
+    restoreFetchMock();
   }
 });
 Deno.test("WFPService - createWorker - serializes queue and analytics bindings into worker metadata", async () => {
   try {
     const fetchMock = spy(async () => mockSuccessResponse({}));
-    (globalThis as any).fetch = fetchMock;
+    const restoreFetch = installFetchMock(fetchMock as unknown as typeof fetch);
+    void restoreFetch;
 
     const svc = new WFPService(config);
     await svc.workers.createWorker({
@@ -145,13 +170,14 @@ Deno.test("WFPService - createWorker - serializes queue and analytics bindings i
       { type: "analytics_engine", name: "EVENTS", dataset: "events" },
     ]);
   } finally {
-    /* TODO: restore stubbed globals manually */ void 0;
+    restoreFetchMock();
   }
 });
 Deno.test("WFPService - createWorker - serializes workflow bindings into worker metadata", async () => {
   try {
     const fetchMock = spy(async () => mockSuccessResponse({}));
-    (globalThis as any).fetch = fetchMock;
+    const restoreFetch = installFetchMock(fetchMock as unknown as typeof fetch);
+    void restoreFetch;
 
     const svc = new WFPService(config);
     await svc.workers.createWorker({
@@ -184,14 +210,15 @@ Deno.test("WFPService - createWorker - serializes workflow bindings into worker 
       ),
     );
   } finally {
-    /* TODO: restore stubbed globals manually */ void 0;
+    restoreFetchMock();
   }
 });
 
 Deno.test("WFPService - deleteWorker - sends DELETE request for the worker", async () => {
   try {
     const fetchMock = spy(async () => mockSuccessResponse(null));
-    (globalThis as any).fetch = fetchMock;
+    const restoreFetch = installFetchMock(fetchMock as unknown as typeof fetch);
+    void restoreFetch;
 
     const svc = new WFPService(config);
     await svc.workers.deleteWorker("worker-to-delete");
@@ -203,14 +230,15 @@ Deno.test("WFPService - deleteWorker - sends DELETE request for the worker", asy
     assertStringIncludes(url, "/scripts/worker-to-delete");
     assertEquals(init.method, "DELETE");
   } finally {
-    /* TODO: restore stubbed globals manually */ void 0;
+    restoreFetchMock();
   }
 });
 
 Deno.test("WFPService - deleteQueue - sends DELETE request for the queue", async () => {
   try {
     const fetchMock = spy(async () => mockSuccessResponse(null));
-    (globalThis as any).fetch = fetchMock;
+    const restoreFetch = installFetchMock(fetchMock as unknown as typeof fetch);
+    void restoreFetch;
 
     const svc = new WFPService(config);
     await svc.queues.deleteQueue("queue-id-123");
@@ -222,7 +250,7 @@ Deno.test("WFPService - deleteQueue - sends DELETE request for the queue", async
     assertStringIncludes(url, "/queues/queue-id-123");
     assertEquals(init.method, "DELETE");
   } finally {
-    /* TODO: restore stubbed globals manually */ void 0;
+    restoreFetchMock();
   }
 });
 
@@ -231,26 +259,28 @@ Deno.test("WFPService - getWorker - returns result from GET request", async () =
     const fetchMock = spy(async () =>
       mockSuccessResponse({ id: "worker-1", script: "test" })
     );
-    (globalThis as any).fetch = fetchMock;
+    const restoreFetch = installFetchMock(fetchMock as unknown as typeof fetch);
+    void restoreFetch;
 
     const svc = new WFPService(config);
     const result = await svc.workers.getWorker("worker-1");
     assertEquals(result, { id: "worker-1", script: "test" });
   } finally {
-    /* TODO: restore stubbed globals manually */ void 0;
+    restoreFetchMock();
   }
 });
 
 Deno.test("WFPService - workerExists - returns true when worker exists", async () => {
   try {
     const fetchMock = spy(async () => mockSuccessResponse({}));
-    (globalThis as any).fetch = fetchMock;
+    const restoreFetch = installFetchMock(fetchMock as unknown as typeof fetch);
+    void restoreFetch;
 
     const svc = new WFPService(config);
     const exists = await svc.workers.workerExists("existing-worker");
     assertEquals(exists, true);
   } finally {
-    /* TODO: restore stubbed globals manually */ void 0;
+    restoreFetchMock();
   }
 });
 Deno.test("WFPService - workerExists - returns false when worker returns 404", async () => {
@@ -266,13 +296,14 @@ Deno.test("WFPService - workerExists - returns false when worker returns 404", a
         { status: 404 },
       )
     );
-    (globalThis as any).fetch = fetchMock;
+    const restoreFetch = installFetchMock(fetchMock as unknown as typeof fetch);
+    void restoreFetch;
 
     const svc = new WFPService(config);
     const exists = await svc.workers.workerExists("missing-worker");
     assertEquals(exists, false);
   } finally {
-    /* TODO: restore stubbed globals manually */ void 0;
+    restoreFetchMock();
   }
 });
 
@@ -287,14 +318,15 @@ Deno.test("WFPService - listWorkers - returns workers array from API", async () 
       },
     ];
     const fetchMock = spy(async () => mockSuccessResponse(workers));
-    (globalThis as any).fetch = fetchMock;
+    const restoreFetch = installFetchMock(fetchMock as unknown as typeof fetch);
+    void restoreFetch;
 
     const svc = new WFPService(config);
     const result = await svc.workers.listWorkers();
     assertEquals(result.length, 1);
     assertEquals(result[0].id, "w1");
   } finally {
-    /* TODO: restore stubbed globals manually */ void 0;
+    restoreFetchMock();
   }
 });
 
@@ -303,33 +335,36 @@ Deno.test("WFPService - createD1Database - returns the uuid from API response", 
     const fetchMock = spy(async () =>
       mockSuccessResponse({ uuid: "db-uuid-123" })
     );
-    (globalThis as any).fetch = fetchMock;
+    const restoreFetch = installFetchMock(fetchMock as unknown as typeof fetch);
+    void restoreFetch;
 
     const svc = new WFPService(config);
     const uuid = await svc.d1.createD1Database("my-db");
     assertEquals(uuid, "db-uuid-123");
   } finally {
-    /* TODO: restore stubbed globals manually */ void 0;
+    restoreFetchMock();
   }
 });
 Deno.test("WFPService - createD1Database - throws when no uuid returned", async () => {
   try {
     const fetchMock = spy(async () => mockSuccessResponse({}));
-    (globalThis as any).fetch = fetchMock;
+    const restoreFetch = installFetchMock(fetchMock as unknown as typeof fetch);
+    void restoreFetch;
 
     const svc = new WFPService(config);
     await assertRejects(async () => {
       await svc.d1.createD1Database("my-db");
     }, "no UUID");
   } finally {
-    /* TODO: restore stubbed globals manually */ void 0;
+    restoreFetchMock();
   }
 });
 
 Deno.test("WFPService - createR2Bucket - sends POST request to create bucket", async () => {
   try {
     const fetchMock = spy(async () => mockSuccessResponse(null));
-    (globalThis as any).fetch = fetchMock;
+    const restoreFetch = installFetchMock(fetchMock as unknown as typeof fetch);
+    void restoreFetch;
 
     const svc = new WFPService(config);
     await svc.r2.createR2Bucket("my-bucket");
@@ -341,7 +376,7 @@ Deno.test("WFPService - createR2Bucket - sends POST request to create bucket", a
     assertStringIncludes(url, "/r2/buckets");
     assertEquals(init.method, "POST");
   } finally {
-    /* TODO: restore stubbed globals manually */ void 0;
+    restoreFetchMock();
   }
 });
 
@@ -350,20 +385,22 @@ Deno.test("WFPService - createQueue - returns the queue metadata from API respon
     const fetchMock = spy(async () =>
       mockSuccessResponse({ queue_id: "queue-id-123", queue_name: "my-queue" })
     );
-    (globalThis as any).fetch = fetchMock;
+    const restoreFetch = installFetchMock(fetchMock as unknown as typeof fetch);
+    void restoreFetch;
 
     const svc = new WFPService(config);
     const queue = await svc.queues.createQueue("my-queue");
     assertEquals(queue.id, "queue-id-123");
     assertEquals(queue.name, "my-queue");
   } finally {
-    /* TODO: restore stubbed globals manually */ void 0;
+    restoreFetchMock();
   }
 });
 Deno.test("WFPService - createQueue - throws when no queue id returned", async () => {
   try {
     const fetchMock = spy(async () => mockSuccessResponse({}));
-    (globalThis as any).fetch = fetchMock;
+    const restoreFetch = installFetchMock(fetchMock as unknown as typeof fetch);
+    void restoreFetch;
 
     const svc = new WFPService(config);
     await assertRejects(
@@ -374,33 +411,35 @@ Deno.test("WFPService - createQueue - throws when no queue id returned", async (
       "no ID returned from API",
     );
   } finally {
-    /* TODO: restore stubbed globals manually */ void 0;
+    restoreFetchMock();
   }
 });
 
 Deno.test("WFPService - createKVNamespace - returns the id from API response", async () => {
   try {
     const fetchMock = spy(async () => mockSuccessResponse({ id: "kv-ns-id" }));
-    (globalThis as any).fetch = fetchMock;
+    const restoreFetch = installFetchMock(fetchMock as unknown as typeof fetch);
+    void restoreFetch;
 
     const svc = new WFPService(config);
     const id = await svc.kv.createKVNamespace("my-kv");
     assertEquals(id, "kv-ns-id");
   } finally {
-    /* TODO: restore stubbed globals manually */ void 0;
+    restoreFetchMock();
   }
 });
 Deno.test("WFPService - createKVNamespace - throws when no id returned", async () => {
   try {
     const fetchMock = spy(async () => mockSuccessResponse({}));
-    (globalThis as any).fetch = fetchMock;
+    const restoreFetch = installFetchMock(fetchMock as unknown as typeof fetch);
+    void restoreFetch;
 
     const svc = new WFPService(config);
     await assertRejects(async () => {
       await svc.kv.createKVNamespace("kv");
     }, "no ID");
   } finally {
-    /* TODO: restore stubbed globals manually */ void 0;
+    restoreFetchMock();
   }
 });
 
@@ -409,7 +448,8 @@ Deno.test("WFPService - createVectorizeIndex - returns the index name", async ()
     const fetchMock = spy(async () =>
       mockSuccessResponse({ name: "my-index" })
     );
-    (globalThis as any).fetch = fetchMock;
+    const restoreFetch = installFetchMock(fetchMock as unknown as typeof fetch);
+    void restoreFetch;
 
     const svc = new WFPService(config);
     const name = await svc.vectorize.createVectorizeIndex("my-index", {
@@ -418,7 +458,7 @@ Deno.test("WFPService - createVectorizeIndex - returns the index name", async ()
     });
     assertEquals(name, "my-index");
   } finally {
-    /* TODO: restore stubbed globals manually */ void 0;
+    restoreFetchMock();
   }
 });
 
@@ -427,7 +467,8 @@ Deno.test("WFPService - runD1SQL - returns query results", async () => {
     const fetchMock = spy(async () =>
       mockSuccessResponse([{ results: [{ count: 42 }] }])
     );
-    (globalThis as any).fetch = fetchMock;
+    const restoreFetch = installFetchMock(fetchMock as unknown as typeof fetch);
+    void restoreFetch;
 
     const svc = new WFPService(config);
     const result = await svc.d1.runD1SQL(
@@ -436,7 +477,7 @@ Deno.test("WFPService - runD1SQL - returns query results", async () => {
     );
     assertEquals(result, [{ results: [{ count: 42 }] }]);
   } finally {
-    /* TODO: restore stubbed globals manually */ void 0;
+    restoreFetchMock();
   }
 });
 
@@ -447,20 +488,22 @@ Deno.test("WFPService - listD1Tables - extracts table names from D1 query result
         results: [{ name: "users" }, { name: "posts" }],
       }])
     );
-    (globalThis as any).fetch = fetchMock;
+    const restoreFetch = installFetchMock(fetchMock as unknown as typeof fetch);
+    void restoreFetch;
 
     const svc = new WFPService(config);
     const tables = await svc.d1.listD1Tables("db-id");
     assertEquals(tables, [{ name: "users" }, { name: "posts" }]);
   } finally {
-    /* TODO: restore stubbed globals manually */ void 0;
+    restoreFetchMock();
   }
 });
 
 Deno.test("WFPService - updateWorkerSettings - sends PATCH request with settings", async () => {
   try {
     const fetchMock = spy(async () => mockSuccessResponse(null));
-    (globalThis as any).fetch = fetchMock;
+    const restoreFetch = installFetchMock(fetchMock as unknown as typeof fetch);
+    void restoreFetch;
 
     const svc = new WFPService(config);
     await svc.workers.updateWorkerSettings({
@@ -475,14 +518,15 @@ Deno.test("WFPService - updateWorkerSettings - sends PATCH request with settings
     assertStringIncludes(url, "/scripts/w1/settings");
     assertEquals(init.method, "PATCH");
   } finally {
-    /* TODO: restore stubbed globals manually */ void 0;
+    restoreFetchMock();
   }
 });
 
 Deno.test("WFPService - uploadToR2 - sends PUT request to R2 endpoint", async () => {
   try {
     const fetchMock = spy(async () => new Response("ok", { status: 200 }));
-    (globalThis as any).fetch = fetchMock;
+    const restoreFetch = installFetchMock(fetchMock as unknown as typeof fetch);
+    void restoreFetch;
 
     const svc = new WFPService(config);
     await svc.r2.uploadToR2("my-bucket", "path/to/file.txt", "file content", {
@@ -498,20 +542,21 @@ Deno.test("WFPService - uploadToR2 - sends PUT request to R2 endpoint", async ()
     assertEquals(init.method, "PUT");
     assertEquals(headers["Content-Type"], "text/plain");
   } finally {
-    /* TODO: restore stubbed globals manually */ void 0;
+    restoreFetchMock();
   }
 });
 Deno.test("WFPService - uploadToR2 - throws on non-ok response", async () => {
   try {
     const fetchMock = spy(async () => new Response("error", { status: 500 }));
-    (globalThis as any).fetch = fetchMock;
+    const restoreFetch = installFetchMock(fetchMock as unknown as typeof fetch);
+    void restoreFetch;
 
     const svc = new WFPService(config);
     await assertRejects(async () => {
       await svc.r2.uploadToR2("bucket", "key", "body");
     }, "Failed to upload");
   } finally {
-    /* TODO: restore stubbed globals manually */ void 0;
+    restoreFetchMock();
   }
 });
 
@@ -523,7 +568,8 @@ Deno.test("WFPService - getR2Object - reads object bytes from the R2 object endp
         headers: { "Content-Type": "text/plain" },
       })
     );
-    (globalThis as any).fetch = fetchMock;
+    const restoreFetch = installFetchMock(fetchMock as unknown as typeof fetch);
+    void restoreFetch;
 
     const svc = new WFPService(config);
     const result = await svc.r2.getR2Object("my-bucket", "path/to/file.txt");
@@ -537,35 +583,33 @@ Deno.test("WFPService - getR2Object - reads object bytes from the R2 object endp
     assertEquals(result?.contentType, "text/plain");
     assertEquals(new TextDecoder().decode(result?.body), "hello");
   } finally {
-    /* TODO: restore stubbed globals manually */ void 0;
+    restoreFetchMock();
   }
 });
 Deno.test("WFPService - getR2Object - returns null when the object does not exist", async () => {
   try {
     const fetchMock = spy(async () => new Response("missing", { status: 404 }));
-    (globalThis as any).fetch = fetchMock;
+    const restoreFetch = installFetchMock(fetchMock as unknown as typeof fetch);
+    void restoreFetch;
 
     const svc = new WFPService(config);
     await assertEquals(await svc.r2.getR2Object("bucket", "missing.txt"), null);
   } finally {
-    /* TODO: restore stubbed globals manually */ void 0;
+    restoreFetchMock();
   }
 });
 
 Deno.test("WFPService - deployWorkerWithBindings - throws when neither bundleUrl nor bundleScript provided", async () => {
-  try {
-    const svc = new WFPService(config);
-    await assertRejects(async () => {
-      await svc.deployWorkerWithBindings("w1", { bindings: [] });
-    }, "Either bundleUrl or bundleScript is required");
-  } finally {
-    /* TODO: restore stubbed globals manually */ void 0;
-  }
+  const svc = new WFPService(config);
+  await assertRejects(async () => {
+    await svc.deployWorkerWithBindings("w1", { bindings: [] });
+  }, "Either bundleUrl or bundleScript is required");
 });
 Deno.test("WFPService - deployWorkerWithBindings - uses bundleScript directly when provided", async () => {
   try {
     const fetchMock = spy(async () => mockSuccessResponse({}));
-    (globalThis as any).fetch = fetchMock;
+    const restoreFetch = installFetchMock(fetchMock as unknown as typeof fetch);
+    void restoreFetch;
 
     const svc = new WFPService(config);
     await svc.deployWorkerWithBindings("w1", {
@@ -575,7 +619,7 @@ Deno.test("WFPService - deployWorkerWithBindings - uses bundleScript directly wh
 
     assertSpyCalls(fetchMock, 1);
   } finally {
-    /* TODO: restore stubbed globals manually */ void 0;
+    restoreFetchMock();
   }
 });
 // ---------------------------------------------------------------------------

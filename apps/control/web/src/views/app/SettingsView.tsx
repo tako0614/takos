@@ -8,13 +8,7 @@ import { SettingsPreferences } from './SettingsPreferences.tsx';
 import { SettingsOAuth } from './SettingsOAuth.tsx';
 import { SettingsBilling } from './SettingsBilling.tsx';
 
-export function SettingsView({
-  user,
-  userSettings,
-  onSettingsChange,
-  onBack,
-  embedded = false,
-}: {
+export function SettingsView(props: {
   user: User | null;
   userSettings: UserSettings | null;
   onSettingsChange?: (settings: UserSettings) => void;
@@ -25,9 +19,9 @@ export function SettingsView({
 
   return (
     <div class="flex h-full flex-col overflow-hidden bg-zinc-50 dark:bg-zinc-900">
-      {!embedded && (
+      {!props.embedded && (
         <header class="flex items-center gap-3 border-b border-zinc-200 bg-white px-4 py-3 dark:border-zinc-800 dark:bg-zinc-900">
-          <Button variant="ghost" size="sm" onClick={onBack}>
+          <Button variant="ghost" size="sm" onClick={props.onBack}>
             <Icons.ArrowLeft class="h-4 w-4" />
           </Button>
           <h1 class="text-lg font-semibold text-zinc-900 dark:text-zinc-50">
@@ -38,16 +32,16 @@ export function SettingsView({
 
       <main class="flex-1 overflow-y-auto">
         <div class="mx-auto w-full max-w-2xl space-y-3 px-4 pb-10 pt-6">
-          <SettingsAccount user={user} />
+          <SettingsAccount user={props.user} />
           <SettingsLanguage />
-          {userSettings && (
+          {props.userSettings && (
             <SettingsPreferences
-              userSettings={userSettings}
-              onSettingsChange={onSettingsChange}
+              userSettings={props.userSettings}
+              onSettingsChange={props.onSettingsChange}
             />
           )}
           <SettingsOAuth />
-          <SettingsBilling user={user} />
+          <SettingsBilling user={props.user} />
         </div>
       </main>
     </div>

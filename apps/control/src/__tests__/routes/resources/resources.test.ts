@@ -54,7 +54,10 @@ Deno.test("resources routes return 500 when the database binding is unavailable"
 
   assertEquals(response.status, 500);
   assertEquals(await response.json(), {
-    error: "Database binding unavailable",
+    error: {
+      code: "INTERNAL_ERROR",
+      message: "Database binding unavailable",
+    },
   });
 });
 
@@ -69,6 +72,9 @@ Deno.test("resources routes reject unknown resource types before querying storag
 
   assertEquals(response.status, 400);
   assertEquals(await response.json(), {
-    error: "Invalid resource type",
+    error: {
+      code: "BAD_REQUEST",
+      message: "Invalid resource type",
+    },
   });
 });

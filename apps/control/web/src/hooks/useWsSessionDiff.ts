@@ -88,7 +88,7 @@ export function useWsSessionDiff({
     try {
       const res = await rpcPath(rpc, 'runs', ':id', 'cancel').$post({
         param: { id: runToCancel.id },
-      }) as Response;
+      });
       await rpcJson(res);
     } catch {
       setError(t('networkError'));

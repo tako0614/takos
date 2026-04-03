@@ -169,6 +169,29 @@ export async function getDeploymentById(
   return toApiDeployment(deployment);
 }
 
+export async function findDeploymentByArtifactRef(
+  db: SqlDatabaseBinding,
+  artifactRef: string,
+): Promise<Deployment | null> {
+  const normalized = String(artifactRef || "").trim();
+  if (!normalized) return null;
+
+  const drizzle = deploymentStoreDeps.getDb(db);
+  const deployment = await drizzle.select()
+    .from(deployments)
+    .where(
+      and(
+        eq(deployments.artifactRef, normalized),
+        isNotNull(deployments.bundleR2Key),
+        inArray(deployments.status, ["success", "rolled_back"]),
+      ),
+    )
+    .orderBy(desc(deployments.createdAt))
+    .get();
+  if (!deployment) return null;
+  return toApiDeployment(deployment);
+}
+
 export async function getDeploymentByIdempotencyKey(
   db: SqlDatabaseBinding,
   serviceId: string,

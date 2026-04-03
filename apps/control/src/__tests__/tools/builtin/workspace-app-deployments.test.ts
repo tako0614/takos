@@ -1,10 +1,13 @@
 import type { D1Database } from "@cloudflare/workers-types";
-
 import { assert, assertEquals, assertRejects } from "jsr:@std/assert";
-
+import { assertSpyCallArgs, assertSpyCalls, stub } from "jsr:@std/testing/mock";
 import type { Env } from "@/types";
 import type { ToolContext } from "@/tools/types";
-import { APP_DEPLOYMENTS_REMOVED_MESSAGE } from "@/services/platform/app-deployments";
+import {
+  type AppDeploymentMutationResult,
+  type AppDeploymentRecord,
+  AppDeploymentService,
+} from "@/services/platform/app-deployments";
 import {
   APP_DEPLOYMENT_DEPLOY_FROM_REPO,
   APP_DEPLOYMENT_GET,
@@ -19,6 +22,65 @@ import {
   WORKSPACE_APP_DEPLOYMENT_HANDLERS,
   WORKSPACE_APP_DEPLOYMENT_TOOLS,
 } from "@/tools/builtin/space-app-deployments";
+
+const sampleDeployment: AppDeploymentRecord = {
+  id: "appdep-1",
+  group: { id: "group-1", name: "demo-group" },
+  source: {
+    kind: "git_ref",
+    repository_url: "https://github.com/acme/demo.git",
+    ref: "main",
+    ref_type: "branch",
+    commit_sha: "sha-1",
+    resolved_repo_id: null,
+  },
+  snapshot: {
+    state: "available",
+    rollback_ready: true,
+    format: "takopack-v1",
+  },
+  status: "applied",
+  manifest_version: "1.0.0",
+  hostnames: ["demo.example.com"],
+  rollback_of_app_deployment_id: null,
+  created_at: "2026-04-01T00:00:00.000Z",
+  updated_at: "2026-04-01T00:00:00.000Z",
+};
+
+const sampleMutation: AppDeploymentMutationResult = {
+  appDeployment: sampleDeployment,
+  applyResult: {
+    groupId: "group-1",
+    applied: [
+      {
+        name: "gateway",
+        category: "worker",
+        action: "create",
+        status: "success" as const,
+      },
+    ],
+    skipped: [],
+    diff: {
+      hasChanges: true,
+      entries: [{ name: "gateway", category: "worker", action: "create" }],
+      summary: {
+        create: 1,
+        update: 0,
+        delete: 0,
+        unchanged: 0,
+      },
+    },
+    translationReport: {
+      provider: "cloudflare",
+      supported: true,
+      requirements: [],
+      resources: [],
+      workloads: [],
+      routes: [],
+      unsupported: [],
+    },
+  },
+};
 
 function makeContext(overrides: Partial<ToolContext> = {}): ToolContext {
   return {
@@ -54,8 +116,7 @@ Deno.test("workspace app deployment tool definitions stay stable", () => {
   assertEquals(APP_DEPLOYMENT_LIST.parameters.required, undefined);
   assertEquals(APP_DEPLOYMENT_GET.parameters.required, ["app_deployment_id"]);
   assertEquals(APP_DEPLOYMENT_DEPLOY_FROM_REPO.parameters.required, [
-    "repo_id",
-    "ref",
+    "repository_url",
   ]);
   assertEquals(APP_DEPLOYMENT_REMOVE.parameters.required, [
     "app_deployment_id",
@@ -65,58 +126,99 @@ Deno.test("workspace app deployment tool definitions stay stable", () => {
   ]);
 });
 
-Deno.test("app deployment handlers - surface removed API contract for valid calls", async () => {
-  await assertRejects(
-    async () => {
-      await appDeploymentListHandler({}, makeContext());
-    },
-    Error,
-    APP_DEPLOYMENTS_REMOVED_MESSAGE,
+Deno.test("app deployment handlers - call current service methods", async () => {
+  const listStub = stub(
+    AppDeploymentService.prototype,
+    "list",
+    async () => [sampleDeployment],
+  );
+  const getStub = stub(
+    AppDeploymentService.prototype,
+    "get",
+    async () => sampleDeployment,
+  );
+  const deployStub = stub(
+    AppDeploymentService.prototype,
+    "deploy",
+    async () => sampleMutation,
+  );
+  const removeStub = stub(
+    AppDeploymentService.prototype,
+    "remove",
+    async () => undefined,
+  );
+  const rollbackStub = stub(
+    AppDeploymentService.prototype,
+    "rollback",
+    async () => sampleMutation,
   );
 
-  await assertRejects(
-    async () => {
+  try {
+    const listResult = JSON.parse(
+      await appDeploymentListHandler({}, makeContext()),
+    );
+    assertEquals(listResult.app_deployments[0].id, "appdep-1");
+
+    const getResult = JSON.parse(
       await appDeploymentGetHandler(
-        { app_deployment_id: "ad-1" },
+        { app_deployment_id: "appdep-1" },
         makeContext(),
-      );
-    },
-    Error,
-    APP_DEPLOYMENTS_REMOVED_MESSAGE,
-  );
+      ),
+    );
+    assertEquals(getResult.app_deployment.id, "appdep-1");
 
-  await assertRejects(
-    async () => {
+    const deployResult = JSON.parse(
       await appDeploymentDeployFromRepoHandler(
-        { repo_id: "r-1", ref: "main", ref_type: "branch" },
+        {
+          repository_url: "https://github.com/acme/demo.git",
+          ref: "v1.2.3",
+          ref_type: "tag",
+        },
         makeContext(),
-      );
-    },
-    Error,
-    APP_DEPLOYMENTS_REMOVED_MESSAGE,
-  );
+      ),
+    );
+    assertEquals(deployResult.success, true);
+    assertEquals(deployResult.data.appDeployment.id, "appdep-1");
 
-  await assertRejects(
-    async () => {
+    const removeResult = JSON.parse(
       await appDeploymentRemoveHandler(
-        { app_deployment_id: "ad-1" },
+        { app_deployment_id: "appdep-1" },
         makeContext(),
-      );
-    },
-    Error,
-    APP_DEPLOYMENTS_REMOVED_MESSAGE,
-  );
+      ),
+    );
+    assertEquals(removeResult.success, true);
 
-  await assertRejects(
-    async () => {
+    const rollbackResult = JSON.parse(
       await appDeploymentRollbackHandler(
-        { app_deployment_id: "ad-1" },
+        { app_deployment_id: "appdep-1" },
         makeContext(),
-      );
-    },
-    Error,
-    APP_DEPLOYMENTS_REMOVED_MESSAGE,
-  );
+      ),
+    );
+    assertEquals(rollbackResult.success, true);
+
+    assertSpyCalls(listStub, 1);
+    assertSpyCallArgs(getStub, 0, ["ws-test", "appdep-1"]);
+    assertSpyCallArgs(deployStub, 0, [
+      "ws-test",
+      "user-1",
+      {
+        source: {
+          kind: "git_ref",
+          repositoryUrl: "https://github.com/acme/demo.git",
+          ref: "v1.2.3",
+          refType: "tag",
+        },
+      },
+    ]);
+    assertSpyCallArgs(removeStub, 0, ["ws-test", "appdep-1"]);
+    assertSpyCallArgs(rollbackStub, 0, ["ws-test", "user-1", "appdep-1"]);
+  } finally {
+    listStub.restore();
+    getStub.restore();
+    deployStub.restore();
+    removeStub.restore();
+    rollbackStub.restore();
+  }
 });
 
 Deno.test("appDeploymentGetHandler - validates app_deployment_id before service access", async () => {
@@ -129,33 +231,25 @@ Deno.test("appDeploymentGetHandler - validates app_deployment_id before service 
   );
 });
 
-Deno.test("appDeploymentDeployFromRepoHandler - validates required repo arguments", async () => {
+Deno.test("appDeploymentDeployFromRepoHandler - validates repository_url and ref_type", async () => {
   await assertRejects(
     async () => {
       await appDeploymentDeployFromRepoHandler(
-        { repo_id: "", ref: "main" },
+        { repository_url: "" },
         makeContext(),
       );
     },
     Error,
-    "repo_id is required",
+    "repository_url is required",
   );
 
   await assertRejects(
     async () => {
       await appDeploymentDeployFromRepoHandler(
-        { repo_id: "r-1", ref: "" },
-        makeContext(),
-      );
-    },
-    Error,
-    "ref is required",
-  );
-
-  await assertRejects(
-    async () => {
-      await appDeploymentDeployFromRepoHandler(
-        { repo_id: "r-1", ref: "v1.0", ref_type: "invalid" },
+        {
+          repository_url: "https://github.com/acme/demo.git",
+          ref_type: "invalid",
+        },
         makeContext(),
       );
     },

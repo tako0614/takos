@@ -14,7 +14,8 @@ const enableLastUpdated = canReadGitTimestamps();
 export default defineConfig({
   lang: "ja",
   title: "Takos Docs",
-  description: "Takos の独自仕様、概念、アーキテクチャをまとめた product/spec docs",
+  description:
+    "AIエージェントによるサービスとソフトウェアの民主化基盤 Takos の全体像、アプリ構成、デプロイ、プラットフォーム仕様をまとめた公式 docs",
   cleanUrls: true,
   lastUpdated: enableLastUpdated,
   themeConfig: {
@@ -23,8 +24,9 @@ export default defineConfig({
       provider: "local",
     },
     nav: [
+      { text: "概要", link: "/overview/" },
       { text: "はじめる", link: "/get-started/" },
-      { text: "アプリ開発", link: "/apps/" },
+      { text: "アプリ構成", link: "/apps/" },
       { text: "デプロイ", link: "/deploy/" },
       { text: "プラットフォーム", link: "/platform/" },
       { text: "リファレンス", link: "/reference/" },
@@ -32,17 +34,24 @@ export default defineConfig({
     ],
     sidebar: [
       {
-        text: "はじめる",
+        text: "概要",
         items: [
-          { text: "Takos とは", link: "/get-started/" },
-          { text: "はじめてのアプリ", link: "/get-started/your-first-app" },
-          { text: "プロジェクト構成", link: "/get-started/project-structure" },
+          { text: "Takos 全体像", link: "/overview/" },
         ],
       },
       {
-        text: "アプリ仕様",
+        text: "はじめる",
         items: [
-          { text: "app.yml", link: "/apps/manifest" },
+          { text: "スタートガイド", link: "/get-started/" },
+          { text: "はじめてのアプリ", link: "/get-started/your-first-app" },
+          { text: "プロジェクト構成", link: "/get-started/project-structure" },
+          { text: "ローカル開発", link: "/get-started/local-development" },
+        ],
+      },
+      {
+        text: "アプリ構成",
+        items: [
+          { text: "アプリマニフェスト", link: "/apps/manifest" },
           { text: "Containers", link: "/apps/containers" },
           { text: "Workers", link: "/apps/workers" },
           { text: "Routes", link: "/apps/routes" },
@@ -57,7 +66,7 @@ export default defineConfig({
         items: [
           { text: "概要", link: "/deploy/" },
           { text: "deploy-group", link: "/deploy/deploy-group" },
-          { text: "Store 経由", link: "/deploy/store-deploy" },
+          { text: "Repository / Catalog", link: "/deploy/store-deploy" },
           { text: "Namespace", link: "/deploy/namespaces" },
           { text: "ロールバック", link: "/deploy/rollback" },
           { text: "トラブルシューティング", link: "/deploy/troubleshooting" },
@@ -79,6 +88,7 @@ export default defineConfig({
         text: "アーキテクチャ",
         items: [
           { text: "概要", link: "/architecture/" },
+          { text: "Kernel / Shell / Apps", link: "/architecture/kernel-shell" },
           { text: "Control Plane", link: "/architecture/control-plane" },
           { text: "Agent Runtime", link: "/architecture/agent-runtime" },
           { text: "Tenant Runtime", link: "/architecture/tenant-runtime" },
@@ -88,6 +98,7 @@ export default defineConfig({
       {
         text: "プラットフォーム",
         items: [
+          { text: "Workspace / Space", link: "/platform/spaces" },
           { text: "Store", link: "/platform/store" },
           { text: "課金", link: "/platform/billing" },
           { text: "ActivityPub", link: "/platform/activitypub" },
@@ -100,6 +111,7 @@ export default defineConfig({
           { text: "CLI 認証", link: "/reference/cli-auth" },
           { text: "API", link: "/reference/api" },
           { text: "Manifest Spec", link: "/reference/manifest-spec" },
+          { text: "用語集", link: "/reference/glossary" },
         ],
       },
       {
@@ -107,7 +119,10 @@ export default defineConfig({
         items: [
           { text: "シンプルな Worker", link: "/examples/simple-worker" },
           { text: "Worker + DB", link: "/examples/worker-with-db" },
-          { text: "Worker + Container", link: "/examples/worker-with-container" },
+          {
+            text: "Worker + Container",
+            link: "/examples/worker-with-container",
+          },
           { text: "MCP Server", link: "/examples/mcp-server" },
           { text: "マルチサービス構成", link: "/examples/multi-service" },
         ],
@@ -123,8 +138,8 @@ export default defineConfig({
     },
     lastUpdated: enableLastUpdated
       ? {
-          text: "最終更新",
-        }
+        text: "最終更新",
+      }
       : false,
     returnToTopLabel: "トップへ戻る",
     sidebarMenuLabel: "メニュー",

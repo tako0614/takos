@@ -1,6 +1,6 @@
-import { createSignal, createEffect, on } from 'solid-js';
-import type { StarredRepo } from '../types/profile.ts';
-import { rpc, rpcJson } from '../lib/rpc.ts';
+import { type Accessor, createEffect, createSignal, on } from "solid-js";
+import type { StarredRepo } from "../types/profile.ts";
+import { rpc, rpcJson } from "../lib/rpc.ts";
 
 interface StarsResponse {
   repos: StarredRepo[];
@@ -9,7 +9,7 @@ interface StarsResponse {
 
 const ITEMS_PER_PAGE = 20;
 
-export function useUserStars(username: string) {
+export function useUserStars(username: Accessor<string>) {
   const [starredRepos, setStarredRepos] = createSignal<StarredRepo[]>([]);
   const [offset, setOffset] = createSignal(0);
   const [hasMore, setHasMore] = createSignal(true);
@@ -17,17 +17,20 @@ export function useUserStars(username: string) {
   const [error, setError] = createSignal<string | null>(null);
 
   const fetch_ = async (reset = false) => {
+    const currentUsername = username();
+    if (!currentUsername) return;
     if (!reset && !hasMore()) return;
 
     setLoading(true);
     setError(null);
     try {
       const currentOffset = reset ? 0 : offset();
-      const res = await rpc.users[':username'].stars.$get({
-        param: { username },
+      const res = await rpc.users[":username"].stars.$get({
+        param: { username: currentUsername },
         query: { limit: String(ITEMS_PER_PAGE), offset: String(currentOffset) },
       });
       const data = await rpcJson<StarsResponse>(res);
+      if (currentUsername !== username()) return;
       if (reset) {
         setStarredRepos(data.repos);
         setOffset(ITEMS_PER_PAGE);
@@ -37,7 +40,9 @@ export function useUserStars(username: string) {
       }
       setHasMore(data.has_more);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to load starred repos');
+      setError(
+        err instanceof Error ? err.message : "Failed to load starred repos",
+      );
     } finally {
       setLoading(false);
     }
@@ -52,7 +57,7 @@ export function useUserStars(username: string) {
 
   // Reset when username changes
   createEffect(on(
-    () => username,
+    username,
     () => {
       reset();
     },

@@ -10,7 +10,7 @@ interface MobileHeaderProps {
 }
 
 export function MobileHeader(props: MobileHeaderProps) {
-  const { headerContent } = useMobileHeader();
+  const mobileHeader = useMobileHeader();
 
   return (
     <div class="fixed top-0 left-0 right-0 z-30 bg-white/95 dark:bg-zinc-900/95 backdrop-blur supports-[backdrop-filter]:bg-white/80 supports-[backdrop-filter]:dark:bg-zinc-900/80 border-b border-zinc-200 dark:border-zinc-800 flex items-end"
@@ -28,9 +28,9 @@ export function MobileHeader(props: MobileHeaderProps) {
         >
           <Icons.Menu class="w-5 h-5" />
         </button>
-        <Show when={headerContent}>
+        <Show when={mobileHeader.headerContent()}>
           <div class="flex items-center min-w-0">
-            {headerContent}
+            {mobileHeader.headerContent()}
           </div>
         </Show>
       </div>

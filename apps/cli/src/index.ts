@@ -9,6 +9,7 @@ import { registerPlanCommand } from './commands/plan.ts';
 import { registerApplyCommand } from './commands/apply.ts';
 import { registerDeployCommand } from './commands/deploy.ts';
 import { registerInstallCommand } from './commands/install.ts';
+import { registerUninstallCommand } from './commands/uninstall.ts';
 import { registerGroupCommand } from './commands/group/index.ts';
 import { isContainerMode, isAuthenticated } from './lib/config.ts';
 import { cliExit, isCliCommandExit } from './lib/command-exit.ts';
@@ -25,6 +26,7 @@ registerPlanCommand(program);
 registerApplyCommand(program);
 registerDeployCommand(program);
 registerInstallCommand(program);
+registerUninstallCommand(program);
 registerGroupCommand(program);
 registerEndpointCommand(program);
 registerTaskCommands(program);
@@ -34,7 +36,7 @@ program.hook('preAction', (thisCommand) => {
     ? process.argv[2].trim().toLowerCase()
     : thisCommand.name().toLowerCase();
 
-  if (['login', 'logout', 'help', 'endpoint', 'plan', 'apply', 'deploy', 'install', 'group'].includes(commandName)) {
+  if (['login', 'logout', 'help', 'endpoint', 'plan', 'apply', 'deploy', 'install', 'uninstall', 'group'].includes(commandName)) {
     return;
   }
 

@@ -1,11 +1,11 @@
-import { createSignal, createEffect } from 'solid-js';
-import type { Setter } from 'solid-js';
-import type { TranslationKey } from '../store/i18n.ts';
-import { rpcJson } from '../lib/rpc.ts';
-import type { Message } from '../types/index.ts';
+import { type Accessor, createEffect, createSignal } from "solid-js";
+import type { Setter } from "solid-js";
+import type { TranslationKey } from "../store/i18n.ts";
+import { rpcJson } from "../lib/rpc.ts";
+import type { Message } from "../types/index.ts";
 
 export interface UseMessagePollingOptions {
-  threadId: string;
+  threadId: Accessor<string>;
   t: (key: TranslationKey, params?: Record<string, string | number>) => string;
 }
 
@@ -47,27 +47,36 @@ export function useMessagePolling({
   });
 
   const fetchMessages = async (showError = false): Promise<void> => {
+    const currentThreadId = threadId();
     messageFetchAbortRef?.abort();
     const controller = new AbortController();
     messageFetchAbortRef = controller;
     const requestSeq = ++messageFetchSeqRef;
 
     try {
-      const res = await fetch(`/api/threads/${encodeURIComponent(threadId)}/messages`, {
-        headers: { Accept: 'application/json' },
-        signal: controller.signal,
-      });
+      const res = await fetch(
+        `/api/threads/${encodeURIComponent(currentThreadId)}/messages`,
+        {
+          headers: { Accept: "application/json" },
+          signal: controller.signal,
+        },
+      );
       const data = await rpcJson<{ messages: Message[] }>(res);
 
       if (controller.signal.aborted) return;
       if (!isMountedRef.current) return;
       if (requestSeq !== messageFetchSeqRef) return;
+      if (threadId() !== currentThreadId) return;
       setMessages(data.messages);
       if (errorRef) setError(null);
     } catch (err) {
-      if ((err as Error).name === 'AbortError') return;
+      if ((err as Error).name === "AbortError") return;
+      if (threadId() !== currentThreadId) return;
       if (showError) {
-        setError(t('failedToLoadMessages' as TranslationKey) || 'Failed to load messages');
+        setError(
+          t("failedToLoadMessages" as TranslationKey) ||
+            "Failed to load messages",
+        );
       }
     } finally {
       if (messageFetchAbortRef === controller) {
@@ -85,7 +94,9 @@ export function useMessagePolling({
 
   // No-op: message polling is disabled in favour of WebSocket events +
   // explicit fetchMessages() calls (run completed, verify run status, etc.).
-  const startMessagePolling = (_currentRunIdRef: { current: string | null }): void => {
+  const startMessagePolling = (
+    _currentRunIdRef: { current: string | null },
+  ): void => {
     stopMessagePolling();
   };
 
@@ -95,7 +106,9 @@ export function useMessagePolling({
   };
 
   return {
-    get messages() { return messages(); },
+    get messages() {
+      return messages();
+    },
     setMessages,
     messagesCountRef,
     isMountedRef,
@@ -103,7 +116,9 @@ export function useMessagePolling({
     startMessagePolling,
     stopMessagePolling,
     abortPendingFetch,
-    get error() { return error(); },
+    get error() {
+      return error();
+    },
     setError,
   };
 }

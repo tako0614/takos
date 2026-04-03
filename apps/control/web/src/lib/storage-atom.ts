@@ -1,43 +1,21 @@
-import { atom } from 'jotai/vanilla';
 import { makePersisted } from '@solid-primitives/storage';
-import { createSignal } from 'solid-js';
+import { createRoot, createSignal } from 'solid-js';
 import type { Signal } from 'solid-js';
 
 /**
- * Creates a Solid signal persisted to localStorage, suitable for use
- * alongside jotai atoms. This replaces jotai/utils' atomWithStorage
- * which depends on React internals.
- *
- * Usage: const [value, setValue] = createPersistedSignal('key', defaultValue);
+ * Creates a Solid signal persisted to localStorage.
+ * The signal lives for the lifetime of the app.
  */
-export function createPersistedSignal<T>(key: string, defaultValue: T): Signal<T> {
-  const [value, setValue] = createSignal<T>(defaultValue);
-  const persisted = makePersisted([value, setValue] as Signal<T>, { name: key });
-  return [persisted[0], persisted[1]] as Signal<T>;
-}
-
-/**
- * Creates a jotai atom backed by localStorage.
- * The atom reads/writes localStorage directly (vanilla, no React).
- */
-export function atomWithStorageVanilla<T>(key: string, initialValue: T) {
-  const storage = globalThis.localStorage;
-  if (!storage) {
-    return atom<T>(initialValue);
-  }
-
-  const stored = storage.getItem(key);
-  const parsed: T = stored !== null ? (JSON.parse(stored) as T) : initialValue;
-
-  const baseAtom = atom<T>(parsed);
-
-  const persistedAtom = atom(
-    (get) => get(baseAtom),
-    (_get, set, newValue: T) => {
-      set(baseAtom, newValue);
-      storage.setItem(key, JSON.stringify(newValue));
-    },
-  );
-
-  return persistedAtom;
+export function createPersistedSignal<T>(
+  key: string,
+  defaultValue: T,
+): Signal<T> {
+  return createRoot(() => {
+    const [value, setValue] = createSignal<T>(defaultValue);
+    const [persistedValue, persistedSetValue] = makePersisted(
+      [value, setValue],
+      { name: key },
+    );
+    return [persistedValue, persistedSetValue];
+  });
 }

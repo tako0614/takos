@@ -27,6 +27,7 @@ const mocks = {
   reconcileGroupRouting: ((..._args: any[]) => undefined) as any,
   groupUpdateRun: ((..._args: any[]) => undefined) as any,
   getDeploymentById: ((..._args: any[]) => undefined) as any,
+  findDeploymentByArtifactRef: ((..._args: any[]) => undefined) as any,
   getBundleContent: ((..._args: any[]) => undefined) as any,
 };
 
@@ -42,10 +43,10 @@ const mocks = {
 // [Deno] vi.mock removed - manually stub imports from '@/services/deployment/artifact-io'
 // [Deno] vi.mock removed - manually stub imports from '@/services/deployment/group-routing'
 import {
+  applyEngineDeps,
   applyManifest,
   getGroupState,
   planManifest,
-  applyEngineDeps,
 } from "@/services/deployment/apply-engine";
 
 function createFakeDb() {
@@ -81,31 +82,42 @@ function createFakeDb() {
 
 function installApplyEngineDeps() {
   applyEngineDeps.getDb = () => createFakeDb() as never;
-  applyEngineDeps.listResources = (...args: Parameters<typeof mocks.listResources>) =>
-    mocks.listResources(...args);
-  applyEngineDeps.createResource = (...args: Parameters<typeof mocks.createResource>) =>
-    mocks.createResource(...args);
+  applyEngineDeps.listResources = (
+    ...args: Parameters<typeof mocks.listResources>
+  ) => mocks.listResources(...args);
+  applyEngineDeps.createResource = (
+    ...args: Parameters<typeof mocks.createResource>
+  ) => mocks.createResource(...args);
   applyEngineDeps.updateManagedResource = (
     ...args: Parameters<typeof mocks.updateManagedResource>
   ) => mocks.updateManagedResource(...args);
-  applyEngineDeps.deleteResource = (...args: Parameters<typeof mocks.createResource>) =>
-    mocks.createResource(...args);
-  applyEngineDeps.deleteWorker = (...args: Parameters<typeof mocks.createResource>) =>
-    mocks.createResource(...args);
-  applyEngineDeps.deleteContainer = (...args: Parameters<typeof mocks.createResource>) =>
-    mocks.createResource(...args);
-  applyEngineDeps.deleteService = (...args: Parameters<typeof mocks.createResource>) =>
-    mocks.createResource(...args);
+  applyEngineDeps.deleteResource = (
+    ...args: Parameters<typeof mocks.createResource>
+  ) => mocks.createResource(...args);
+  applyEngineDeps.deleteWorker = (
+    ...args: Parameters<typeof mocks.createResource>
+  ) => mocks.createResource(...args);
+  applyEngineDeps.deleteContainer = (
+    ...args: Parameters<typeof mocks.createResource>
+  ) => mocks.createResource(...args);
+  applyEngineDeps.deleteService = (
+    ...args: Parameters<typeof mocks.createResource>
+  ) => mocks.createResource(...args);
   applyEngineDeps.listGroupManagedServices = (
     ...args: Parameters<typeof mocks.listGroupManagedServices>
   ) => mocks.listGroupManagedServices(...args);
   applyEngineDeps.upsertGroupManagedService = (
     ...args: Parameters<typeof mocks.upsertGroupManagedService>
   ) => mocks.upsertGroupManagedService(...args);
-  applyEngineDeps.getDeploymentById = (...args: Parameters<typeof mocks.getDeploymentById>) =>
-    mocks.getDeploymentById(...args);
-  applyEngineDeps.getBundleContent = (...args: Parameters<typeof mocks.getBundleContent>) =>
-    mocks.getBundleContent(...args);
+  applyEngineDeps.getDeploymentById = (
+    ...args: Parameters<typeof mocks.getDeploymentById>
+  ) => mocks.getDeploymentById(...args);
+  applyEngineDeps.findDeploymentByArtifactRef = (
+    ...args: Parameters<typeof mocks.findDeploymentByArtifactRef>
+  ) => mocks.findDeploymentByArtifactRef(...args);
+  applyEngineDeps.getBundleContent = (
+    ...args: Parameters<typeof mocks.getBundleContent>
+  ) => mocks.getBundleContent(...args);
   applyEngineDeps.syncGroupManagedDesiredState = (
     ...args: Parameters<typeof mocks.syncGroupManagedDesiredState>
   ) => mocks.syncGroupManagedDesiredState(...args);
@@ -245,7 +257,9 @@ Deno.test("group apply engine - plans against canonical group resources/services
       runtimeProfile: "workers",
       status: "native",
       requirements: ["CF_ACCOUNT_ID", "CF_API_TOKEN", "WFP_DISPATCH_NAMESPACE"],
-      notes: ["Takos runtime realizes worker workloads directly on the Cloudflare backend."],
+      notes: [
+        "Takos runtime realizes worker workloads directly on the Cloudflare backend.",
+      ],
     },
   ]);
 });
@@ -523,6 +537,98 @@ Deno.test("group apply engine - resolves worker bundle artifacts from desired ma
     "export default",
   );
 });
+
+Deno.test("group apply engine - resolves worker artifactRef references through deployment lookup", async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+  mocks.reconcileGroupRouting = createRecordedMock(async () => ({
+    routes: {},
+    failedRoutes: [],
+  })) as any;
+  mocks.groupUpdateRun = createRecordedMock(async () => undefined) as any;
+  mocks.createResource = createRecordedMock(async () => undefined) as any;
+  mocks.updateManagedResource = createRecordedMock(async () =>
+    undefined
+  ) as any;
+  const manifest = {
+    ...makeManifest(),
+    spec: {
+      ...makeManifest().spec,
+      workers: {
+        api: {
+          artifact: {
+            kind: "bundle",
+            artifactRef: "worker-api-v8",
+          },
+        },
+      },
+    },
+  };
+
+  mocks.groupGet = createRecordedMock(async () => ({
+    id: "group-1",
+    spaceId: "ws-1",
+    name: "demo-app",
+    provider: "cloudflare",
+    env: "production",
+    appVersion: "1.0.0",
+    desiredSpecJson: JSON.stringify(manifest),
+    providerStateJson: "{}",
+    reconcileStatus: "ready",
+    lastAppliedAt: "2026-03-29T00:00:00.000Z",
+    createdAt: "2026-03-29T00:00:00.000Z",
+    updatedAt: "2026-03-29T00:00:00.000Z",
+  })) as any;
+  mocks.listResources = createRecordedMock(async () => []) as any;
+  mocks.listGroupManagedServices = createRecordedMock(async () => []) as any;
+  mocks.upsertGroupManagedService = createRecordedMock(async () => ({
+    row: {
+      id: "svc-api",
+      routeRef: "grp-api",
+      updatedAt: "2026-03-29T00:00:00.000Z",
+    },
+    config: {},
+  })) as any;
+  mocks.findDeploymentByArtifactRef = createRecordedMock(async () => ({
+    id: "dep-source",
+    bundle_r2_key: "deployments/svc-api/8/bundle.js",
+    bundle_hash: null,
+    bundle_size: null,
+  })) as any;
+  mocks.getBundleContent = createRecordedMock(async () =>
+    'export default { fetch() { return new Response("ok"); } };'
+  ) as any;
+  mocks.createDeployment = createRecordedMock(async () => ({
+    id: "dep-3",
+    version: 3,
+    status: "pending",
+    deploy_state: "pending",
+    artifact_kind: "worker-bundle",
+    routing_status: "active",
+    routing_weight: 100,
+    created_at: "2026-03-29T00:00:00.000Z",
+  })) as any;
+  mocks.executeDeployment = createRecordedMock(async () => ({
+    provider_state_json: "{}",
+    completed_at: "2026-03-29T00:00:00.000Z",
+    bundle_hash: "sha256-456",
+  })) as any;
+
+  await applyManifest(
+    { DB: {} as never, WORKER_BUNDLES: {} as never } as never,
+    "group-1",
+    manifest as never,
+  );
+
+  assertEquals(
+    mocks.findDeploymentByArtifactRef.calls[0].args[1],
+    "worker-api-v8",
+  );
+  assertStringIncludes(
+    mocks.createDeployment.calls[0].args[0].bundleContent as string,
+    "export default",
+  );
+});
+
 Deno.test("group apply engine - passes canonical resource specs into resource creation", async () => {
   /* mocks cleared (no-op in Deno) */ void 0;
   mocks.reconcileGroupRouting =

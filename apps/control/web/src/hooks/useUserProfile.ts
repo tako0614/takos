@@ -1,12 +1,17 @@
-import { createSignal, createEffect, on, onMount } from 'solid-js';
-import type { FollowUser, ProfileRepo, ProfileTab, UserProfile } from '../types/profile.ts';
-import { rpc, rpcJson } from '../lib/rpc.ts';
-import { useUserRepos } from './useUserRepos.ts';
-import { useUserStars } from './useUserStars.ts';
-import { useUserFollowers } from './useUserFollowers.ts';
-import { useUserFollowing } from './useUserFollowing.ts';
-import { useUserActivity } from './useUserActivity.ts';
-import { useUserFollowRequests } from './useUserFollowRequests.ts';
+import { type Accessor, createEffect, createSignal, on } from "solid-js";
+import type {
+  FollowUser,
+  ProfileRepo,
+  ProfileTab,
+  UserProfile,
+} from "../types/profile.ts";
+import { rpc, rpcJson } from "../lib/rpc.ts";
+import { useUserRepos } from "./useUserRepos.ts";
+import { useUserStars } from "./useUserStars.ts";
+import { useUserFollowers } from "./useUserFollowers.ts";
+import { useUserFollowing } from "./useUserFollowing.ts";
+import { useUserActivity } from "./useUserActivity.ts";
+import { useUserFollowRequests } from "./useUserFollowRequests.ts";
 
 // API Response types kept here for profile-level actions
 interface UserProfileResponse {
@@ -30,23 +35,25 @@ interface BlockMuteResponse {
   muted?: boolean;
 }
 
-export function useUserProfile(username: string) {
+export function useUserProfile(username: Accessor<string>) {
   const [profile, setProfile] = createSignal<UserProfile | null>(null);
-  const [activeTab, setActiveTab] = createSignal<ProfileTab>('repositories');
+  const [activeTab, setActiveTab] = createSignal<ProfileTab>("repositories");
   const [loading, setLoading] = createSignal(true);
   const [error, setError] = createSignal<string | null>(null);
   const [followLoading, setFollowLoading] = createSignal(false);
   const [starringRepo, setStarringRepo] = createSignal<string | null>(null);
   const [blockLoading, setBlockLoading] = createSignal(false);
   const [muteLoading, setMuteLoading] = createSignal(false);
+  let profileRequestVersion = 0;
+  const currentUsername = () => username();
 
   // Compose sub-hooks
-  const reposHook = useUserRepos(username);
-  const starsHook = useUserStars(username);
-  const followersHook = useUserFollowers(username);
-  const followingHook = useUserFollowing(username);
-  const activityHook = useUserActivity(username);
-  const followRequestsHook = useUserFollowRequests(username, (count) => {
+  const reposHook = useUserRepos(currentUsername);
+  const starsHook = useUserStars(currentUsername);
+  const followersHook = useUserFollowers(currentUsername);
+  const followingHook = useUserFollowing(currentUsername);
+  const activityHook = useUserActivity(currentUsername);
+  const followRequestsHook = useUserFollowRequests(currentUsername, (count) => {
     setProfile((prev) => (prev ? { ...prev, followers_count: count } : null));
   });
 
@@ -60,75 +67,108 @@ export function useUserProfile(username: string) {
     followRequestsHook.loading();
 
   const fetchProfile = async () => {
+    const requestedUsername = currentUsername();
+    if (!requestedUsername) {
+      setProfile(null);
+      setLoading(false);
+      return;
+    }
+    const requestVersion = ++profileRequestVersion;
     setLoading(true);
     setError(null);
     try {
-      const res = await rpc.users[':username'].$get({
-        param: { username },
+      const res = await rpc.users[":username"].$get({
+        param: { username: requestedUsername },
       });
       if (!res.ok) {
         if (res.status === 404) {
-          throw new Error('User not found');
+          throw new Error("User not found");
         }
-        throw new Error('Failed to load profile');
+        throw new Error("Failed to load profile");
       }
       const data = await rpcJson<UserProfileResponse>(res);
+      if (
+        requestVersion !== profileRequestVersion ||
+        requestedUsername !== currentUsername()
+      ) return;
       setProfile(data.user);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Unknown error');
+      if (
+        requestVersion !== profileRequestVersion ||
+        requestedUsername !== currentUsername()
+      ) return;
+      setError(err instanceof Error ? err.message : "Unknown error");
     } finally {
-      setLoading(false);
+      if (
+        requestVersion === profileRequestVersion &&
+        requestedUsername === currentUsername()
+      ) {
+        setLoading(false);
+      }
     }
   };
 
-  // Reset active tab when username changes
   createEffect(on(
-    () => username,
+    currentUsername,
     () => {
-      setActiveTab('repositories');
+      ++profileRequestVersion;
+      setProfile(null);
+      setError(null);
+      setActiveTab("repositories");
+      setFollowLoading(false);
+      setStarringRepo(null);
+      setBlockLoading(false);
+      setMuteLoading(false);
+      void fetchProfile();
     },
   ));
 
-  onMount(() => {
-    fetchProfile();
-  });
-
-  // Fetch tab data on tab switch
   createEffect(() => {
+    const current = currentUsername();
+    if (!current) return;
     const tab = activeTab();
     switch (tab) {
-      case 'repositories':
+      case "repositories":
         if (reposHook.repos().length === 0) reposHook.fetch(true);
         break;
-      case 'stars':
+      case "stars":
         if (starsHook.starredRepos().length === 0) starsHook.fetch(true);
         break;
-      case 'activity':
-        if (activityHook.events().length === 0 && !activityHook.error()) activityHook.fetch(true);
+      case "activity":
+        if (activityHook.events().length === 0 && !activityHook.error()) {
+          activityHook.fetch(true);
+        }
         break;
-      case 'followers':
+      case "followers":
         if (followersHook.followers().length === 0) followersHook.fetch(true);
         break;
-      case 'following':
+      case "following":
         if (followingHook.following().length === 0) followingHook.fetch(true);
         break;
-      case 'requests':
-        if (followRequestsHook.requests().length === 0) followRequestsHook.fetch(true);
+      case "requests":
+        if (followRequestsHook.requests().length === 0) {
+          followRequestsHook.fetch(true);
+        }
         break;
     }
   });
 
   const toggleFollow = async () => {
     const p = profile();
-    if (!p || followLoading()) return;
+    const current = currentUsername();
+    if (!p || followLoading() || !current) return;
 
     setFollowLoading(true);
     try {
       let res;
       if (p.is_following || p.follow_requested) {
-        res = await rpc.users[':username'].follow.$delete({ param: { username } });
+        res = await rpc.users[":username"].follow.$delete({
+          param: { username: current },
+        });
       } else {
-        res = await rpc.users[':username'].follow.$post({ param: { username } });
+        res = await rpc.users[":username"].follow.$post({
+          param: { username: current },
+        });
       }
 
       if (res.ok) {
@@ -136,16 +176,16 @@ export function useUserProfile(username: string) {
         setProfile((prev) =>
           prev
             ? {
-                ...prev,
-                is_following: data.following,
-                follow_requested: !!data.requested,
-                followers_count: data.followers_count,
-              }
+              ...prev,
+              is_following: data.following,
+              follow_requested: !!data.requested,
+              followers_count: data.followers_count,
+            }
             : null
         );
       }
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to toggle follow');
+      setError(err instanceof Error ? err.message : "Failed to toggle follow");
     } finally {
       setFollowLoading(false);
     }
@@ -158,22 +198,33 @@ export function useUserProfile(username: string) {
     try {
       let res;
       if (repo.is_starred) {
-        res = await rpc.repos[':repoId'].star.$delete({ param: { repoId: repo.id } });
+        res = await rpc.repos[":repoId"].star.$delete({
+          param: { repoId: repo.id },
+        });
       } else {
-        res = await rpc.repos[':repoId'].star.$post({ param: { repoId: repo.id } });
+        res = await rpc.repos[":repoId"].star.$post({
+          param: { repoId: repo.id },
+        });
       }
 
       if (res.ok) {
         const updateRepo = (r: ProfileRepo) =>
           r.id === repo.id
-            ? { ...r, is_starred: !r.is_starred, stars: r.stars + (r.is_starred ? -1 : 1) }
+            ? {
+              ...r,
+              is_starred: !r.is_starred,
+              stars: r.stars + (r.is_starred ? -1 : 1),
+            }
             : r;
 
         reposHook.updateRepo(updateRepo);
-        starsHook.updateRepo((r) => ({ ...updateRepo(r), starred_at: r.starred_at }));
+        starsHook.updateRepo((r) => ({
+          ...updateRepo(r),
+          starred_at: r.starred_at,
+        }));
       }
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to toggle star');
+      setError(err instanceof Error ? err.message : "Failed to toggle star");
     } finally {
       setStarringRepo(null);
     }
@@ -183,33 +234,46 @@ export function useUserProfile(username: string) {
     try {
       let res;
       if (user.is_following) {
-        res = await rpc.users[':username'].follow.$delete({ param: { username: user.username } });
+        res = await rpc.users[":username"].follow.$delete({
+          param: { username: user.username },
+        });
       } else {
-        res = await rpc.users[':username'].follow.$post({ param: { username: user.username } });
+        res = await rpc.users[":username"].follow.$post({
+          param: { username: user.username },
+        });
       }
 
       if (res.ok) {
         const data = await rpcJson<ToggleUserFollowResponse>(res);
         const updater = (u: FollowUser) =>
-          u.username === user.username ? { ...u, is_following: data.following } : u;
+          u.username === user.username
+            ? { ...u, is_following: data.following }
+            : u;
 
         followersHook.updateUser(updater);
         followingHook.updateUser(updater);
       }
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to toggle user follow');
+      setError(
+        err instanceof Error ? err.message : "Failed to toggle user follow",
+      );
     }
   };
 
   const toggleBlock = async () => {
     const p = profile();
-    if (!p || p.is_self || blockLoading()) return;
+    const current = currentUsername();
+    if (!p || p.is_self || blockLoading() || !current) return;
 
     setBlockLoading(true);
     try {
       const res = p.is_blocking
-        ? await rpc.users[':username'].block.$delete({ param: { username } })
-        : await rpc.users[':username'].block.$post({ param: { username } });
+        ? await rpc.users[":username"].block.$delete({
+          param: { username: current },
+        })
+        : await rpc.users[":username"].block.$post({
+          param: { username: current },
+        });
 
       if (res.ok) {
         const data = await rpcJson<BlockMuteResponse>(res);
@@ -217,16 +281,16 @@ export function useUserProfile(username: string) {
         setProfile((prev) =>
           prev
             ? {
-                ...prev,
-                is_blocking: blocked,
-                is_following: blocked ? false : prev.is_following,
-                follow_requested: blocked ? false : prev.follow_requested,
-              }
+              ...prev,
+              is_blocking: blocked,
+              is_following: blocked ? false : prev.is_following,
+              follow_requested: blocked ? false : prev.follow_requested,
+            }
             : null
         );
       }
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to toggle block');
+      setError(err instanceof Error ? err.message : "Failed to toggle block");
     } finally {
       setBlockLoading(false);
     }
@@ -234,13 +298,18 @@ export function useUserProfile(username: string) {
 
   const toggleMute = async () => {
     const p = profile();
-    if (!p || p.is_self || muteLoading()) return;
+    const current = currentUsername();
+    if (!p || p.is_self || muteLoading() || !current) return;
 
     setMuteLoading(true);
     try {
       const res = p.is_muted
-        ? await rpc.users[':username'].mute.$delete({ param: { username } })
-        : await rpc.users[':username'].mute.$post({ param: { username } });
+        ? await rpc.users[":username"].mute.$delete({
+          param: { username: current },
+        })
+        : await rpc.users[":username"].mute.$post({
+          param: { username: current },
+        });
 
       if (res.ok) {
         const data = await rpcJson<BlockMuteResponse>(res);
@@ -248,7 +317,7 @@ export function useUserProfile(username: string) {
         setProfile((prev) => (prev ? { ...prev, is_muted: muted } : null));
       }
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to toggle mute');
+      setError(err instanceof Error ? err.message : "Failed to toggle mute");
     } finally {
       setMuteLoading(false);
     }
@@ -256,22 +325,22 @@ export function useUserProfile(username: string) {
 
   const loadMore = () => {
     switch (activeTab()) {
-      case 'repositories':
+      case "repositories":
         reposHook.fetch(false);
         break;
-      case 'stars':
+      case "stars":
         starsHook.fetch(false);
         break;
-      case 'activity':
+      case "activity":
         activityHook.fetch(false);
         break;
-      case 'followers':
+      case "followers":
         followersHook.fetch(false);
         break;
-      case 'following':
+      case "following":
         followingHook.fetch(false);
         break;
-      case 'requests':
+      case "requests":
         followRequestsHook.fetch(false);
         break;
     }

@@ -86,8 +86,8 @@ export function ConfirmDialog(props: ConfirmDialogProps) {
 }
 
 /**
- * Global confirm-dialog renderer driven by Jotai atoms.
- * Mount this once near the app root (replaces the old ConfirmDialogProvider).
+ * Global confirm-dialog renderer driven by Solid signals.
+ * Mount this once near the app root.
  */
 export function ConfirmDialogRenderer() {
   const state = useConfirmDialogState();

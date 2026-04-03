@@ -1,6 +1,6 @@
-import { createSignal, createEffect, on } from 'solid-js';
-import type { FollowRequest } from '../types/profile.ts';
-import { rpc, rpcJson } from '../lib/rpc.ts';
+import { type Accessor, createEffect, createSignal, on } from "solid-js";
+import type { FollowRequest } from "../types/profile.ts";
+import { rpc, rpcJson } from "../lib/rpc.ts";
 
 interface FollowRequestsResponse {
   requests: FollowRequest[];
@@ -16,25 +16,29 @@ interface FollowRequestAcceptResponse {
 const ITEMS_PER_PAGE = 20;
 
 export function useUserFollowRequests(
-  username: string,
-  onFollowersCountUpdate?: (count: number) => void
+  username: Accessor<string>,
+  onFollowersCountUpdate?: (count: number) => void,
 ) {
   const [requests, setRequests] = createSignal<FollowRequest[]>([]);
   const [offset, setOffset] = createSignal(0);
   const [hasMore, setHasMore] = createSignal(true);
   const [loading, setLoading] = createSignal(false);
   const [error, setError] = createSignal<string | null>(null);
-  const [actionLoadingId, setActionLoadingId] = createSignal<string | null>(null);
+  const [actionLoadingId, setActionLoadingId] = createSignal<string | null>(
+    null,
+  );
 
   const fetch_ = async (reset = false) => {
+    const currentUsername = username();
+    if (!currentUsername) return;
     if (!reset && !hasMore()) return;
 
     setLoading(true);
     setError(null);
     try {
       const currentOffset = reset ? 0 : offset();
-      const res = await rpc.users[':username']['follow-requests'].$get({
-        param: { username },
+      const res = await rpc.users[":username"]["follow-requests"].$get({
+        param: { username: currentUsername },
         query: { limit: String(ITEMS_PER_PAGE), offset: String(currentOffset) },
       });
 
@@ -45,6 +49,7 @@ export function useUserFollowRequests(
       }
 
       const data = await rpcJson<FollowRequestsResponse>(res);
+      if (currentUsername !== username()) return;
       if (reset) {
         setRequests(data.requests || []);
         setOffset(ITEMS_PER_PAGE);
@@ -54,47 +59,57 @@ export function useUserFollowRequests(
       }
       setHasMore(!!data.has_more);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to load follow requests');
+      setError(
+        err instanceof Error ? err.message : "Failed to load follow requests",
+      );
     } finally {
       setLoading(false);
     }
   };
 
   const accept = async (requestId: string) => {
-    if (actionLoadingId()) return;
+    const currentUsername = username();
+    if (!currentUsername || actionLoadingId()) return;
     setActionLoadingId(requestId);
     try {
-      const res = await rpc.users[':username']['follow-requests'][':id'].accept.$post({
-        param: { username, id: requestId },
-      });
+      const res = await rpc.users[":username"]["follow-requests"][":id"].accept
+        .$post({
+          param: { username: currentUsername, id: requestId },
+        });
       if (res.ok) {
         const data = await rpcJson<FollowRequestAcceptResponse>(res);
         setRequests((prev) => prev.filter((r) => r.id !== requestId));
         const followersCount = data.followers_count;
-        if (typeof followersCount === 'number' && onFollowersCountUpdate) {
+        if (typeof followersCount === "number" && onFollowersCountUpdate) {
           onFollowersCountUpdate(followersCount);
         }
       }
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to accept follow request');
+      setError(
+        err instanceof Error ? err.message : "Failed to accept follow request",
+      );
     } finally {
       setActionLoadingId(null);
     }
   };
 
   const reject = async (requestId: string) => {
-    if (actionLoadingId()) return;
+    const currentUsername = username();
+    if (!currentUsername || actionLoadingId()) return;
     setActionLoadingId(requestId);
     try {
-      const res = await rpc.users[':username']['follow-requests'][':id'].reject.$post({
-        param: { username, id: requestId },
-      });
+      const res = await rpc.users[":username"]["follow-requests"][":id"].reject
+        .$post({
+          param: { username: currentUsername, id: requestId },
+        });
       if (res.ok) {
         await rpcJson(res);
         setRequests((prev) => prev.filter((r) => r.id !== requestId));
       }
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to reject follow request');
+      setError(
+        err instanceof Error ? err.message : "Failed to reject follow request",
+      );
     } finally {
       setActionLoadingId(null);
     }
@@ -110,7 +125,7 @@ export function useUserFollowRequests(
 
   // Reset when username changes
   createEffect(on(
-    () => username,
+    username,
     () => {
       reset();
     },

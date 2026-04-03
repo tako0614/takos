@@ -1,15 +1,7 @@
 import { Hono } from "hono";
 import { z } from "zod";
-import {
-  GoneError,
-  InternalError,
-  NotFoundError,
-  isAppError,
-} from "takos-common/errors";
-import {
-  APP_DEPLOYMENTS_REMOVED_MESSAGE,
-  AppDeploymentService,
-} from "../../application/services/platform/app-deployments.ts";
+import { InternalError, isAppError, NotFoundError } from "takos-common/errors";
+import { AppDeploymentService } from "../../application/services/platform/app-deployments.ts";
 import { getSpaceOperationPolicy } from "../../application/tools/tool-policy.ts";
 import { logError } from "../../shared/utils/logger.ts";
 import { spaceAccess, type SpaceAccessRouteEnv } from "./route-auth.ts";
@@ -21,39 +13,21 @@ function handleRouteError(error: unknown, context: string): never {
   throw new InternalError(`Failed to ${context}`);
 }
 
-function throwRemovedAppDeploymentRollout(): never {
-  throw new GoneError(APP_DEPLOYMENTS_REMOVED_MESSAGE);
-}
-
-const repoRefSourceSchema = z.object({
-  kind: z.literal("repo_ref"),
-  repo_id: z.string().min(1),
+const gitRefSourceSchema = z.object({
+  kind: z.literal("git_ref"),
+  repository_url: z.string().url(),
   ref: z.string().min(1).optional(),
   ref_type: z.enum(["branch", "tag", "commit"]).optional(),
-});
-
-const packageReleaseSourceSchema = z.object({
-  kind: z.literal("package_release"),
-  owner: z.string().min(1),
-  repo_name: z.string().min(1),
-  version: z.string().min(1).optional(),
 });
 
 const createAppDeploymentSchema = z.object({
   group_name: z.string().min(1).optional(),
   env: z.string().min(1).optional(),
   provider: z.enum(["cloudflare", "local", "aws", "gcp", "k8s"]).optional(),
-  source: z.discriminatedUnion("kind", [
-    repoRefSourceSchema,
-    packageReleaseSourceSchema,
-  ]),
-  approve_oauth_auto_env: z.boolean().optional(),
-  approve_source_change: z.boolean().optional(),
+  source: gitRefSourceSchema,
 });
 
-const rollbackSchema = z.object({
-  approve_oauth_auto_env: z.boolean().optional(),
-});
+const rollbackSchema = z.object({});
 
 const APP_DEPLOYMENT_LIST_ROLES =
   getSpaceOperationPolicy("app_deployment.list").allowed_roles;
@@ -81,21 +55,12 @@ const routes = new Hono<SpaceAccessRouteEnv>()
           groupName: body.group_name,
           providerName: body.provider,
           envName: body.env,
-          approveOauthAutoEnv: body.approve_oauth_auto_env === true,
-          approveSourceChange: body.approve_source_change === true,
-          source: body.source.kind === "repo_ref"
-            ? {
-              kind: "repo_ref",
-              repoId: body.source.repo_id,
-              ref: body.source.ref,
-              refType: body.source.ref_type,
-            }
-            : {
-              kind: "package_release",
-              owner: body.source.owner,
-              repoName: body.source.repo_name,
-              version: body.source.version,
-            },
+          source: {
+            kind: "git_ref",
+            repositoryUrl: body.source.repository_url,
+            ref: body.source.ref,
+            refType: body.source.ref_type,
+          },
         });
         return c.json({
           app_deployment: result.appDeployment,
@@ -144,12 +109,10 @@ const routes = new Hono<SpaceAccessRouteEnv>()
       const { space } = c.get("access");
       const user = c.get("user");
       try {
-        const body = c.req.valid("json");
         const result = await new AppDeploymentService(c.env).rollback(
           space.id,
           user.id,
           c.req.param("appDeploymentId"),
-          { approveOauthAutoEnv: body.approve_oauth_auto_env === true },
         );
         return c.json({
           app_deployment: result.appDeployment,
@@ -157,61 +120,6 @@ const routes = new Hono<SpaceAccessRouteEnv>()
         });
       } catch (error) {
         handleRouteError(error, "rollback app deployment");
-      }
-    },
-  )
-  .get(
-    "/spaces/:spaceId/app-deployments/:appDeploymentId/rollout",
-    spaceAccess({ roles: APP_DEPLOYMENT_GET_ROLES }),
-    async () => {
-      try {
-        throwRemovedAppDeploymentRollout();
-      } catch (error) {
-        handleRouteError(error, "get rollout state");
-      }
-    },
-  )
-  .post(
-    "/spaces/:spaceId/app-deployments/:appDeploymentId/rollout/pause",
-    spaceAccess({ roles: APP_DEPLOYMENT_DEPLOY_ROLES }),
-    async () => {
-      try {
-        throwRemovedAppDeploymentRollout();
-      } catch (error) {
-        handleRouteError(error, "pause rollout");
-      }
-    },
-  )
-  .post(
-    "/spaces/:spaceId/app-deployments/:appDeploymentId/rollout/resume",
-    spaceAccess({ roles: APP_DEPLOYMENT_DEPLOY_ROLES }),
-    async () => {
-      try {
-        throwRemovedAppDeploymentRollout();
-      } catch (error) {
-        handleRouteError(error, "resume rollout");
-      }
-    },
-  )
-  .post(
-    "/spaces/:spaceId/app-deployments/:appDeploymentId/rollout/abort",
-    spaceAccess({ roles: APP_DEPLOYMENT_DEPLOY_ROLES }),
-    async () => {
-      try {
-        throwRemovedAppDeploymentRollout();
-      } catch (error) {
-        handleRouteError(error, "abort rollout");
-      }
-    },
-  )
-  .post(
-    "/spaces/:spaceId/app-deployments/:appDeploymentId/rollout/promote",
-    spaceAccess({ roles: APP_DEPLOYMENT_DEPLOY_ROLES }),
-    async () => {
-      try {
-        throwRemovedAppDeploymentRollout();
-      } catch (error) {
-        handleRouteError(error, "promote rollout");
       }
     },
   )

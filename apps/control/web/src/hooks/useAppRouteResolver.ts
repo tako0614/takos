@@ -1,122 +1,151 @@
-import { createEffect, onCleanup } from 'solid-js';
-import { parseRoute } from './useRouter.ts';
-import { findSpaceByIdentifier, getSpaceIdentifier } from '../lib/spaces.ts';
-import type { TranslationKey } from '../i18n.ts';
-import type { RouteState, View, Space } from '../types/index.ts';
+import { createMemo, createResource } from "solid-js";
+import type { Accessor } from "solid-js";
+import { parseRoute } from "./router-state.ts";
+import { resolveAppUrl } from "./app-route-resolution.ts";
+import { findSpaceByIdentifier, getSpaceIdentifier } from "../lib/spaces.ts";
+import type { RouteState, Space, View } from "../types/index.ts";
 
-/**
- * Resolves /app/:appId routes by looking up the app and redirecting
- * to the appropriate view (external URL, internal route, or fallback).
- */
+export interface AppRouteResolution {
+  targetRoute: RouteState | null;
+  externalHref: string | null;
+}
+
 export function useAppRouteResolver(options: {
-  authState: string;
-  route: RouteState;
-  hasInvalidSpaceRoute: boolean;
-  routeSpaceId: string | undefined;
-  selectedSpaceId: string | null;
-  preferredSpaceId: string | undefined;
-  spaces: Space[];
-  replace: (state: RouteState) => void;
-  t: (key: TranslationKey) => string;
+  authState: Accessor<string>;
+  route: Accessor<RouteState>;
+  hasInvalidSpaceRoute: Accessor<boolean>;
+  routeSpaceId: Accessor<string | undefined>;
+  selectedSpaceId: Accessor<string | null>;
+  preferredSpaceId: Accessor<string | undefined>;
+  spaces: Accessor<Space[]>;
+  personalLabel: Accessor<string>;
 }) {
-  const {
-    authState,
-    route,
-    hasInvalidSpaceRoute,
-    routeSpaceId,
-    selectedSpaceId,
-    preferredSpaceId,
-    spaces,
-    replace,
-    t,
-  } = options;
+  const source = createMemo(() => {
+    const authState = options.authState();
+    const route = options.route();
+    const hasInvalidSpaceRoute = options.hasInvalidSpaceRoute();
 
-  createEffect(() => {
-    if (authState !== 'authenticated') return;
-    if (route.view !== 'app' || !route.appId) return;
-    if (hasInvalidSpaceRoute) return;
+    if (authState !== "authenticated") return null;
+    if (route.view !== "app" || !route.appId) return null;
+    if (hasInvalidSpaceRoute) return null;
 
-    let cancelled = false;
-    onCleanup(() => {
-      cancelled = true;
-    });
-
-    const resolveAppRoute = async () => {
-      try {
-        const response = await fetch(`/api/apps/${encodeURIComponent(route.appId!)}`, {
-          headers: {
-            Accept: 'application/json',
-            ...(route.spaceId ? { 'X-Takos-Space-Id': route.spaceId } : {}),
-          },
-        });
-        if (!response.ok) {
-          throw new Error('App lookup failed');
-        }
-        const data = await response.json() as {
-          app?: {
-            url?: string | null;
-            space_id?: string | null;
-          };
-        };
-        if (cancelled) return;
-
-        const appUrl = typeof data.app?.url === 'string' ? data.app.url : '';
-        if (/^https?:\/\//.test(appUrl)) {
-          try {
-            const parsed = new URL(appUrl);
-            if (parsed.origin !== globalThis.location.origin) {
-              console.error('Blocked redirect to external origin:', parsed.origin);
-              return;
-            }
-            globalThis.location.assign(appUrl);
-          } catch {
-            console.error('Blocked redirect to invalid URL:', appUrl);
-          }
-          return;
-        }
-
-        if (appUrl.startsWith('/')) {
-          const parsedRoute = parseRoute(appUrl);
-          const contextSpaceId =
-            routeSpaceId
-            ?? selectedSpaceId
-            ?? preferredSpaceId;
-          const spaceScopedViews = new Set<View>([
-            'chat',
-            'repos',
-            'storage',
-            'deploy',
-            'apps',
-            'space-settings',
-          ]);
-          if (!parsedRoute.spaceId && contextSpaceId && spaceScopedViews.has(parsedRoute.view)) {
-            parsedRoute.spaceId = contextSpaceId;
-          }
-          replace(parsedRoute);
-          return;
-        }
-
-        const spaceId = data.app?.space_id ?? undefined;
-        if (spaceId) {
-          const space = findSpaceByIdentifier(spaces, spaceId, t('personal'));
-          const targetSpaceId = space ? getSpaceIdentifier(space) : spaceId;
-          replace({ view: 'deploy', spaceId: targetSpaceId, deploySection: 'workers' });
-          return;
-        }
-      } catch {
-        // Fall through to space apps when route cannot be resolved.
-      }
-
-      if (!cancelled) {
-        const fallbackSpaceId =
-          routeSpaceId
-          ?? route.spaceId
-          ?? selectedSpaceId
-          ?? preferredSpaceId;
-        replace({ view: 'apps', spaceId: fallbackSpaceId ?? undefined });
-      }
+    return {
+      appId: route.appId,
+      requestSpaceId: route.spaceId,
+      routeSpaceId: options.routeSpaceId(),
+      selectedSpaceId: options.selectedSpaceId(),
+      preferredSpaceId: options.preferredSpaceId(),
+      spaces: options.spaces(),
+      personalLabel: options.personalLabel(),
     };
-
-    void resolveAppRoute();
   });
+
+  const [resolution] = createResource(source, async (current) => {
+    if (!current) {
+      return null;
+    }
+
+    const fallbackSpaceId = current.routeSpaceId ??
+      current.requestSpaceId ??
+      current.selectedSpaceId ??
+      current.preferredSpaceId;
+
+    try {
+      const response = await fetch(
+        `/api/apps/${encodeURIComponent(current.appId)}`,
+        {
+          headers: {
+            Accept: "application/json",
+            ...(current.requestSpaceId
+              ? { "X-Takos-Space-Id": current.requestSpaceId }
+              : {}),
+          },
+        },
+      );
+      if (!response.ok) {
+        throw new Error("App lookup failed");
+      }
+      const data = await response.json() as {
+        app?: {
+          url?: string | null;
+          space_id?: string | null;
+        };
+      };
+
+      const appUrl = typeof data.app?.url === "string" ? data.app.url : "";
+      const resolvedAppUrl = resolveAppUrl(
+        appUrl,
+        globalThis.location.origin,
+      );
+      if (resolvedAppUrl.kind === "redirect") {
+        return {
+          targetRoute: null,
+          externalHref: resolvedAppUrl.href,
+        } satisfies AppRouteResolution;
+      }
+      if (resolvedAppUrl.kind === "route") {
+        const parsedRoute = parseRoute(
+          resolvedAppUrl.path,
+          resolvedAppUrl.search,
+        );
+        const contextSpaceId = current.routeSpaceId ??
+          current.selectedSpaceId ??
+          current.preferredSpaceId;
+        const spaceScopedViews = new Set<View>([
+          "chat",
+          "repos",
+          "storage",
+          "deploy",
+          "apps",
+          "space-settings",
+        ]);
+        if (
+          !parsedRoute.spaceId && contextSpaceId &&
+          spaceScopedViews.has(parsedRoute.view)
+        ) {
+          parsedRoute.spaceId = contextSpaceId;
+        }
+        return {
+          targetRoute: parsedRoute,
+          externalHref: null,
+        } satisfies AppRouteResolution;
+      }
+      if (/^https?:\/\//i.test(appUrl)) {
+        console.error("Blocked redirect to external or invalid URL:", appUrl);
+      }
+
+      const spaceId = data.app?.space_id ?? undefined;
+      if (spaceId) {
+        const space = findSpaceByIdentifier(
+          current.spaces,
+          spaceId,
+          current.personalLabel,
+        );
+        const targetSpaceId = space ? getSpaceIdentifier(space) : spaceId;
+        return {
+          targetRoute: {
+            view: "deploy",
+            spaceId: targetSpaceId,
+            deploySection: "workers",
+          },
+          externalHref: null,
+        } satisfies AppRouteResolution;
+      }
+    } catch {
+      // Fall through to the default apps route when route lookup fails.
+    }
+
+    return {
+      targetRoute: {
+        view: "apps",
+        spaceId: fallbackSpaceId ?? undefined,
+      },
+      externalHref: null,
+    } satisfies AppRouteResolution;
+  });
+
+  return {
+    resolution: createMemo(() => source() ? resolution() : null),
+    resolving: createMemo(() => Boolean(source()) && resolution.loading),
+  };
 }

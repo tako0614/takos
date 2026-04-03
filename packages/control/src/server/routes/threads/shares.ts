@@ -1,113 +1,139 @@
-import { Hono } from 'hono';
-import { z } from 'zod';
-import type { Env } from '../../../shared/types/index.ts';
-import type { BaseVariables } from '../route-auth.ts';
-import { BadRequestError, NotFoundError } from 'takos-common/errors';
-import { logError } from '../../../shared/utils/logger.ts';
-import { zValidator } from '../zod-validator.ts';
-import { checkThreadAccess } from '../../../application/services/threads/thread-service.ts';
+import { Hono, type Hono as HonoType } from "hono";
+import { z } from "zod";
+import { BadRequestError, NotFoundError } from "takos-common/errors";
+import type { Env } from "../../../shared/types/index.ts";
+import type { BaseVariables } from "../route-auth.ts";
+import type { ThreadShareMode } from "../../../application/services/threads/thread-shares.ts";
+import { logError } from "../../../shared/utils/logger.ts";
+import { zValidator } from "../zod-validator.ts";
+import { threadSharesRouteDeps } from "./deps.ts";
 import {
-  createThreadShare,
-  listThreadShares,
-  revokeThreadShare,
-  type ThreadShareMode,
-} from '../../../application/services/threads/thread-shares.ts';
+  requireThreadAccess,
+  resolveThreadShareInput,
+  withThreadShareLinks,
+} from "./helpers.ts";
 
-export default new Hono<{ Bindings: Env; Variables: BaseVariables }>()
+type ThreadsRouter = HonoType<{ Bindings: Env; Variables: BaseVariables }>;
 
-.post('/threads/:id/share',
-  zValidator('json', z.object({
-    mode: z.string().optional(),
-    password: z.string().optional(),
-    expires_at: z.string().optional(),
-    expires_in_days: z.number().optional(),
-  })),
-  async (c) => {
-  const user = c.get('user');
-  const threadId = c.req.param('id');
-  const body = c.req.valid('json') as { mode?: ThreadShareMode; password?: string; expires_at?: string; expires_in_days?: number };
+const createThreadShareSchema = z.object({
+  mode: z.string().optional(),
+  password: z.string().optional(),
+  expires_at: z.string().optional(),
+  expires_in_days: z.number().optional(),
+});
 
-  const access = await checkThreadAccess(c.env.DB, threadId, user.id, ['owner', 'admin', 'editor']);
-  if (!access) {
-    throw new NotFoundError('Thread');
-  }
+export function registerThreadShareRoutes(app: ThreadsRouter) {
+  app.post(
+    "/threads/:id/share",
+    zValidator("json", createThreadShareSchema),
+    async (c) => {
+      const user = c.get("user");
+      const threadId = c.req.param("id");
+      const body = c.req.valid("json") as {
+        mode?: ThreadShareMode;
+        password?: string;
+        expires_at?: string;
+        expires_in_days?: number;
+      };
+      const access = requireThreadAccess(
+        await threadSharesRouteDeps.checkThreadAccess(
+          c.env.DB,
+          threadId,
+          user.id,
+          [
+            "owner",
+            "admin",
+            "editor",
+          ],
+        ),
+      );
+      const shareInput = resolveThreadShareInput(body);
 
-  const mode: ThreadShareMode = body.mode === 'password' ? 'password' : 'public';
+      try {
+        const created = await threadSharesRouteDeps.createThreadShare({
+          db: c.env.DB,
+          threadId,
+          spaceId: access.thread.space_id,
+          createdBy: user.id,
+          ...shareInput,
+        });
 
-  let expiresAt: string | null = null;
-  if (body.expires_at) {
-    expiresAt = body.expires_at;
-  } else if (typeof body.expires_in_days === 'number') {
-    const days = body.expires_in_days;
-    if (!Number.isFinite(days) || days <= 0 || days > 365) {
-      throw new BadRequestError('expires_in_days must be between 1 and 365');
-    }
-    expiresAt = new Date(Date.now() + days * 24 * 60 * 60 * 1000).toISOString();
-  }
+        const sharePath = `/share/${created.share.token}`;
+        const origin = new URL(c.req.url).origin;
 
-  try {
-    const created = await createThreadShare({
-      db: c.env.DB,
+        return c.json({
+          share: created.share,
+          share_path: sharePath,
+          share_url: origin + sharePath,
+          password_required: created.passwordRequired,
+        }, 201);
+      } catch (err) {
+        logError("Failed to create share", err, {
+          module: "routes/thread-shares",
+        });
+        const message = err instanceof Error
+          ? err.message
+          : "Failed to create share";
+        throw new BadRequestError(message);
+      }
+    },
+  );
+
+  app.get("/threads/:id/shares", async (c) => {
+    const user = c.get("user");
+    const threadId = c.req.param("id");
+    requireThreadAccess(
+      await threadSharesRouteDeps.checkThreadAccess(
+        c.env.DB,
+        threadId,
+        user.id,
+      ),
+    );
+
+    const shares = await threadSharesRouteDeps.listThreadShares(
+      c.env.DB,
       threadId,
-      spaceId: access.thread.space_id,
-      createdBy: user.id,
-      mode,
-      password: body.password || null,
-      expiresAt,
-    });
-
-    const sharePath = `/share/${created.share.token}`;
-    const origin = new URL(c.req.url).origin;
-
+    );
     return c.json({
-      share: created.share,
-      share_path: sharePath,
-      share_url: origin + sharePath,
-      password_required: created.passwordRequired,
-    }, 201);
-  } catch (err) {
-    logError('Failed to create share', err, { module: 'routes/thread-shares' });
-    throw new BadRequestError('Failed to create share');
-  }
-})
-
-.get('/threads/:id/shares', async (c) => {
-  const user = c.get('user');
-  const threadId = c.req.param('id');
-
-  const access = await checkThreadAccess(c.env.DB, threadId, user.id);
-  if (!access) {
-    throw new NotFoundError('Thread');
-  }
-
-  const shares = await listThreadShares(c.env.DB, threadId);
-  const origin = new URL(c.req.url).origin;
-  const withLinks = shares.map((s) => {
-    const sharePath = `/share/${s.token}`;
-    return {
-      ...s,
-      share_path: sharePath,
-      share_url: origin + sharePath,
-    };
+      shares: withThreadShareLinks(new URL(c.req.url).origin, shares),
+    });
   });
 
-  return c.json({ shares: withLinks });
-})
+  app.post("/threads/:id/shares/:shareId/revoke", async (c) => {
+    const user = c.get("user");
+    const threadId = c.req.param("id");
+    const shareId = c.req.param("shareId");
+    requireThreadAccess(
+      await threadSharesRouteDeps.checkThreadAccess(
+        c.env.DB,
+        threadId,
+        user.id,
+        [
+          "owner",
+          "admin",
+          "editor",
+        ],
+      ),
+    );
 
-.post('/threads/:id/shares/:shareId/revoke', async (c) => {
-  const user = c.get('user');
-  const threadId = c.req.param('id');
-  const shareId = c.req.param('shareId');
+    const ok = await threadSharesRouteDeps.revokeThreadShare({
+      db: c.env.DB,
+      threadId,
+      shareId,
+    });
+    if (!ok) {
+      throw new NotFoundError("Share");
+    }
 
-  const access = await checkThreadAccess(c.env.DB, threadId, user.id, ['owner', 'admin', 'editor']);
-  if (!access) {
-    throw new NotFoundError('Thread');
-  }
+    return c.json({ success: true });
+  });
+}
 
-  const ok = await revokeThreadShare({ db: c.env.DB, threadId, shareId });
-  if (!ok) {
-    throw new NotFoundError('Share');
-  }
+const threadSharesRoutes = new Hono<
+  { Bindings: Env; Variables: BaseVariables }
+>();
+registerThreadShareRoutes(threadSharesRoutes);
 
-  return c.json({ success: true });
-});
+export { threadSharesRouteDeps } from "./deps.ts";
+
+export default threadSharesRoutes;

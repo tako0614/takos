@@ -1,8 +1,8 @@
-import { hc } from 'hono/client';
-import type { ClientResponse } from 'hono/client';
-import type { ApiRoutes } from 'takos-control/rpc-types';
+import { hc } from "hono/client";
+import type { ClientResponse } from "hono/client";
+import type { ApiRoutes } from "takos-control/rpc-types";
 
-export const rpc = hc<ApiRoutes>('/api');
+export const rpc = hc<ApiRoutes>("/api");
 
 // ---------------------------------------------------------------------------
 // rpcPath – type-safe traversal of the Hono RPC proxy for routes that lack
@@ -17,11 +17,21 @@ export const rpc = hc<ApiRoutes>('/api');
 
 /** Shape of a terminal Hono RPC node that exposes HTTP-method helpers. */
 interface RpcEndpoint {
-  $get: (args: { param: Record<string, string>; query?: Record<string, string> }) => Promise<ClientResponse<unknown>>;
-  $post: (args: { param: Record<string, string>; json?: Record<string, unknown> }) => Promise<ClientResponse<unknown>>;
-  $put: (args: { param: Record<string, string>; json?: Record<string, unknown> }) => Promise<ClientResponse<unknown>>;
-  $patch: (args: { param: Record<string, string>; json?: Record<string, unknown> }) => Promise<ClientResponse<unknown>>;
-  $delete: (args: { param: Record<string, string> }) => Promise<ClientResponse<unknown>>;
+  $get: (
+    args: { param: Record<string, string>; query?: Record<string, string> },
+  ) => Promise<ClientResponse<unknown>>;
+  $post: (
+    args: { param: Record<string, string>; json?: Record<string, unknown> },
+  ) => Promise<ClientResponse<unknown>>;
+  $put: (
+    args: { param: Record<string, string>; json?: Record<string, unknown> },
+  ) => Promise<ClientResponse<unknown>>;
+  $patch: (
+    args: { param: Record<string, string>; json?: Record<string, unknown> },
+  ) => Promise<ClientResponse<unknown>>;
+  $delete: (
+    args: { param: Record<string, string> },
+  ) => Promise<ClientResponse<unknown>>;
 }
 
 /**
@@ -41,37 +51,50 @@ export function rpcPath(base: unknown, ...segments: string[]): RpcEndpoint {
   return current as RpcEndpoint;
 }
 
-
 export class BillingQuotaError extends Error {
-  code = 'BILLING_QUOTA_EXCEEDED' as const;
+  code = "BILLING_QUOTA_EXCEEDED" as const;
   reason: string;
   plan: string;
   constructor(data: { reason?: string; plan?: string }) {
-    super(data.reason || 'Billing quota exceeded');
-    this.reason = data.reason || 'Billing quota exceeded';
-    this.plan = data.plan || '';
+    super(data.reason || "Billing quota exceeded");
+    this.reason = data.reason || "Billing quota exceeded";
+    this.plan = data.plan || "";
   }
 }
 
-export async function rpcJson<T>(response: Response): Promise<T> {
+export interface JsonResponseLike {
+  ok: boolean;
+  status: number;
+  json(): Promise<unknown>;
+}
+
+export type RpcResponse = ClientResponse<unknown>;
+
+export async function rpcJson<T>(response: JsonResponseLike): Promise<T> {
   if (!response.ok) {
-    const data = await response.json().catch((e) => { console.warn('Failed to parse error response JSON:', e); return {}; }) as {
+    const data = await response.json().catch((e) => {
+      console.warn("Failed to parse error response JSON:", e);
+      return {};
+    }) as {
       error?: string;
       code?: string;
       reason?: string;
       plan?: string;
     };
     if (response.status === 401) {
-      const returnTo = `${globalThis.location.pathname}${globalThis.location.search}`;
-      globalThis.location.href = `/auth/login?return_to=${encodeURIComponent(returnTo)}`;
-      throw new Error(data.error || 'Authentication required');
+      const returnTo =
+        `${globalThis.location.pathname}${globalThis.location.search}`;
+      globalThis.location.href = `/auth/login?return_to=${
+        encodeURIComponent(returnTo)
+      }`;
+      throw new Error(data.error || "Authentication required");
     }
-    if (response.status === 402 && data.code === 'BILLING_QUOTA_EXCEEDED') {
+    if (response.status === 402 && data.code === "BILLING_QUOTA_EXCEEDED") {
       throw new BillingQuotaError(data);
     }
-    throw new Error(data.error || 'Request failed');
+    throw new Error(data.error || "Request failed");
   }
-  return response.json();
+  return await response.json() as T;
 }
 
 // ---------------------------------------------------------------------------
@@ -81,33 +104,43 @@ export async function rpcJson<T>(response: Response): Promise<T> {
 // ---------------------------------------------------------------------------
 
 /** GET /repos/:repoId/tree/:ref */
-export function repoTree(repoId: string, ref: string, query?: Record<string, string>) {
-  return rpcPath(rpc, 'repos', ':repoId', 'tree', ':ref').$get({
+export function repoTree(
+  repoId: string,
+  ref: string,
+  query?: Record<string, string>,
+): Promise<RpcResponse> {
+  return rpcPath(rpc, "repos", ":repoId", "tree", ":ref").$get({
     param: { repoId, ref },
     query: query ?? {},
-  }) as Promise<Response>;
+  });
 }
 
 /** GET /repos/:repoId/blob/:ref */
-export function repoBlob(repoId: string, ref: string, query?: Record<string, string>) {
-  return rpcPath(rpc, 'repos', ':repoId', 'blob', ':ref').$get({
+export function repoBlob(
+  repoId: string,
+  ref: string,
+  query?: Record<string, string>,
+): Promise<RpcResponse> {
+  return rpcPath(rpc, "repos", ":repoId", "blob", ":ref").$get({
     param: { repoId, ref },
     query: query ?? {},
-  }) as Promise<Response>;
+  });
 }
 
 /** GET /sessions/:sessionId/diff */
-export function sessionDiff(sessionId: string) {
-  return rpcPath(rpc, 'sessions', ':sessionId', 'diff').$get({
+export function sessionDiff(sessionId: string): Promise<RpcResponse> {
+  return rpcPath(rpc, "sessions", ":sessionId", "diff").$get({
     param: { sessionId },
-  }) as Promise<Response>;
+  });
 }
 
 /** POST /sessions/:sessionId/merge */
-export function sessionMerge(sessionId: string, json: Record<string, unknown>) {
-  return rpcPath(rpc, 'sessions', ':sessionId', 'merge').$post({
+export function sessionMerge(
+  sessionId: string,
+  json: Record<string, unknown>,
+): Promise<RpcResponse> {
+  return rpcPath(rpc, "sessions", ":sessionId", "merge").$post({
     param: { sessionId },
     json,
-  }) as Promise<Response>;
+  });
 }
-
