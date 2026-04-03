@@ -23,7 +23,7 @@ function makeEmptyTakopack(): SourceItemTakopack {
 }
 
 export interface UseSourceFetchActionsOptions {
-  isAuthenticated: boolean;
+  isAuthenticated: Accessor<boolean>;
   effectiveSpaceId: Accessor<string | null>;
   filter: Accessor<string>;
   onNavigateToRepo: (username: string, repoName: string) => void;
@@ -61,7 +61,7 @@ export function useSourceFetchActions({
   const { showToast } = useToast();
 
   const install = async (item: SourceItem) => {
-    if (!isAuthenticated) {
+    if (!isAuthenticated()) {
       onRequireLogin();
       return;
     }
@@ -104,7 +104,7 @@ export function useSourceFetchActions({
   };
 
   const uninstall = async (item: SourceItem) => {
-    if (!isAuthenticated) {
+    if (!isAuthenticated()) {
       onRequireLogin();
       return;
     }
@@ -126,7 +126,7 @@ export function useSourceFetchActions({
   };
 
   const rollback = async (item: SourceItem) => {
-    if (!isAuthenticated) {
+    if (!isAuthenticated()) {
       onRequireLogin();
       return;
     }
@@ -144,7 +144,7 @@ export function useSourceFetchActions({
   };
 
   const toggleStar = async (item: SourceItem) => {
-    if (!isAuthenticated) {
+    if (!isAuthenticated()) {
       onRequireLogin();
       return;
     }
@@ -179,7 +179,7 @@ export function useSourceFetchActions({
   };
 
   const createRepo = async (name: string, description: string, visibility: 'public' | 'private'): Promise<boolean> => {
-    if (!isAuthenticated) {
+    if (!isAuthenticated()) {
       onRequireLogin();
       return false;
     }

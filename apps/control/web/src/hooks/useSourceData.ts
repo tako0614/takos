@@ -1,11 +1,14 @@
-import { createEffect, on } from 'solid-js';
-import type { Space } from '../types/index.ts';
-import { useSourceFiltering } from './useSourceFiltering.ts';
-import { useSourcePagination } from './useSourcePagination.ts';
-import { useSourceFetch } from './useSourceFetch.ts';
+import { createEffect, on } from "solid-js";
+import type { Space } from "../types/index.ts";
+import { useSourceFiltering } from "./useSourceFiltering.ts";
+import { useSourcePagination } from "./useSourcePagination.ts";
+import { useSourceFetch } from "./useSourceFetch.ts";
 
-export type { SourceFilter, SourceSort } from './useSourceFiltering.ts';
-export type { CatalogSuggestionUser, CatalogSuggestionRepo } from './useSourceFiltering.ts';
+export type { SourceFilter, SourceSort } from "./useSourceFiltering.ts";
+export type {
+  CatalogSuggestionRepo,
+  CatalogSuggestionUser,
+} from "./useSourceFiltering.ts";
 
 export interface SourceItemTakopack {
   available: boolean;
@@ -30,7 +33,7 @@ export interface SourceItem {
   id: string;
   name: string;
   description: string | null;
-  visibility: 'public' | 'private';
+  visibility: "public" | "private";
   default_branch?: string | null;
   updated_at: string;
   stars: number;
@@ -53,13 +56,16 @@ export interface SourceItem {
 }
 
 interface UseSourceDataOptions {
-  spaces: Space[];
+  spaces: () => Space[];
   onNavigateToRepo: (username: string, repoName: string) => void;
-  isAuthenticated: boolean;
+  isAuthenticated: () => boolean;
   onRequireLogin: () => void;
 }
 
-export function useSourceData({ spaces, onNavigateToRepo, isAuthenticated, onRequireLogin }: UseSourceDataOptions) {
+export function useSourceData(
+  { spaces, onNavigateToRepo, isAuthenticated, onRequireLogin }:
+    UseSourceDataOptions,
+) {
   // --- Filtering sub-hook ---
   const filtering = useSourceFiltering({ spaces, isAuthenticated });
 
@@ -81,7 +87,15 @@ export function useSourceData({ spaces, onNavigateToRepo, isAuthenticated, onReq
 
   // Refetch whenever filter/sort/category/officialOnly/query/space changes
   createEffect(on(
-    () => [filtering.filter(), filtering.sort(), filtering.category(), filtering.officialOnly(), filtering.debouncedQuery(), filtering.effectiveSpaceId(), isAuthenticated],
+    () => [
+      filtering.filter(),
+      filtering.sort(),
+      filtering.category(),
+      filtering.officialOnly(),
+      filtering.debouncedQuery(),
+      filtering.effectiveSpaceId(),
+      isAuthenticated(),
+    ],
     () => {
       fetching.appendInFlightRef = false;
       const requestId = fetching.requestSeqRef + 1;
@@ -89,9 +103,9 @@ export function useSourceData({ spaces, onNavigateToRepo, isAuthenticated, onReq
       fetching.setItems([]);
       fetching.setSelectedItem(null);
       pagination.resetOffset();
-      if (filtering.filter() === 'all') {
+      if (filtering.filter() === "all") {
         void fetching.fetchAll(0, false, requestId);
-      } else if (filtering.filter() === 'mine') {
+      } else if (filtering.filter() === "mine") {
         void fetching.fetchMine(requestId);
       } else {
         void fetching.fetchStarred(0, false, requestId);
@@ -111,7 +125,11 @@ export function useSourceData({ spaces, onNavigateToRepo, isAuthenticated, onReq
     );
   };
 
-  const createRepo = async (name: string, description: string, visibility: 'public' | 'private') => {
+  const createRepo = async (
+    name: string,
+    description: string,
+    visibility: "public" | "private",
+  ) => {
     const success = await fetching.createRepo(name, description, visibility);
     if (success) {
       pagination.setShowCreateModal(false);
@@ -132,7 +150,6 @@ export function useSourceData({ spaces, onNavigateToRepo, isAuthenticated, onReq
 
     selectedSpaceId: filtering.effectiveSpaceId,
     setSelectedSpaceId: filtering.setSelectedSpaceId,
-    spaces,
 
     items: fetching.items,
     loading: fetching.loading,

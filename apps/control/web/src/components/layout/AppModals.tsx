@@ -1,64 +1,55 @@
-import { Show } from 'solid-js';
-import { useAtomValue, useSetAtom } from 'solid-jotai';
-import { CreateSpaceModal } from '../../views/shared/spaces/CreateSpaceModal.tsx';
-import { ChatSearchModal } from '../../views/chat/ChatSearchModal.tsx';
-import { AgentModal } from '../../views/AgentModal.tsx';
-import { showCreateSpaceAtom, showAgentModalAtom, showSearchAtom } from '../../store/modal.ts';
-import { useNavigation } from '../../store/navigation.ts';
-import { useAuth } from '../../hooks/useAuth.ts';
+import { createMemo, Show } from "solid-js";
+import { CreateSpaceModal } from "../../views/shared/spaces/CreateSpaceModal.tsx";
+import { ChatSearchModal } from "../../views/chat/ChatSearchModal.tsx";
+import { AgentModal } from "../../views/AgentModal.tsx";
+import { useModals } from "../../store/modal.tsx";
+import { useNavigation } from "../../store/navigation.ts";
+import { useAuth } from "../../hooks/useAuth.tsx";
+import { buildChatSearchNavigationState } from "./app-modal-state.ts";
 
 interface AppModalsProps {
   onCreateSpace: (name: string, description: string) => Promise<void>;
 }
 
 export function AppModals(props: AppModalsProps) {
-  const showCreateSpace = useAtomValue(showCreateSpaceAtom);
-  const setShowCreateSpace = useSetAtom(showCreateSpaceAtom);
-  const showAgentModal = useAtomValue(showAgentModalAtom);
-  const setShowAgentModal = useSetAtom(showAgentModalAtom);
-  const showSearch = useAtomValue(showSearchAtom);
-  const setShowSearch = useSetAtom(showSearchAtom);
-
-  const {
-    navigate,
-    selectedSpaceId,
-    preferredSpaceId,
-  } = useNavigation();
-
-  const { spaces } = useAuth();
-  const resolvedSpaceId = () => selectedSpaceId ?? preferredSpaceId;
+  const modal = useModals();
+  const navigation = useNavigation();
+  const auth = useAuth();
+  const resolvedSpaceId = createMemo(() =>
+    navigation.selectedSpaceId ?? navigation.preferredSpaceId
+  );
 
   return (
     <>
-      <Show when={showCreateSpace}>
+      <Show when={modal.showCreateSpace}>
         <CreateSpaceModal
-          onClose={() => setShowCreateSpace(false)}
+          onClose={() => modal.setShowCreateSpace(false)}
           onCreate={props.onCreateSpace}
         />
       </Show>
 
-      <Show when={showSearch() && resolvedSpaceId()}>
+      <Show when={modal.showSearch && resolvedSpaceId()}>
         <ChatSearchModal
           spaceId={resolvedSpaceId()!}
-          onSelectResult={(threadId) => {
-            setShowSearch(false);
-            navigate({
-              view: 'chat',
-              spaceId: selectedSpaceId ?? preferredSpaceId ?? undefined,
-              threadId,
-              runId: undefined,
-              messageId: undefined,
-            });
+          onSelectResult={(threadId, messageId) => {
+            modal.setShowSearch(false);
+            navigation.navigate(
+              buildChatSearchNavigationState(
+                resolvedSpaceId() ?? undefined,
+                threadId,
+                messageId,
+              ),
+            );
           }}
-          onClose={() => setShowSearch(false)}
+          onClose={() => modal.setShowSearch(false)}
         />
       </Show>
 
-      <Show when={showAgentModal() && selectedSpaceId}>
+      <Show when={modal.showAgentModal && navigation.selectedSpaceId}>
         <AgentModal
-          spaceId={selectedSpaceId!}
-          spaces={spaces}
-          onClose={() => setShowAgentModal(false)}
+          spaceId={navigation.selectedSpaceId!}
+          spaces={auth.spaces}
+          onClose={() => modal.setShowAgentModal(false)}
         />
       </Show>
     </>

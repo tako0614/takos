@@ -1,7 +1,7 @@
 # CLI / Auth model
 
-Takos CLI は task-oriented です。
-HTTP verb をそのまま露出するのではなく、domain ごとの task を前面に出します。
+Takos CLI は task-oriented です。HTTP verb をそのまま露出するのではなく、domain
+ごとの task を前面に出します。
 
 ## このページで依存してよい範囲
 
@@ -17,8 +17,9 @@ HTTP verb をそのまま露出するのではなく、domain ごとの task を
 
 ## implementation note
 
-CLI の deploy surface は [Deploy System](/deploy/) の public contract に従います。
-CLI は source 解決や provider logic を持たない thin client とし、deploy/install/apply の business logic は control plane に置きます。
+CLI の deploy surface は [Deploy System](/deploy/) の public contract
+に従います。CLI は source 解決や provider logic を持たない thin client
+とし、deploy/install/apply の business logic は control plane に置きます。
 
 ## 認証
 
@@ -37,9 +38,9 @@ takos whoami
 takos logout
 ```
 
-::: tip Device Flow との違い
-[OAuth 仕様](/apps/oauth) で文書化されている Device Authorization Grant はサードパーティアプリ向けです。`takos login` はブラウザコールバック方式を使い、Device Flow は使いません。
-:::
+::: tip Device Flow との違い [OAuth 仕様](/apps/oauth) で文書化されている Device
+Authorization Grant はサードパーティアプリ向けです。`takos login`
+はブラウザコールバック方式を使い、 Device Flow は使いません。 :::
 
 ## 認証情報の解決順序
 
@@ -51,24 +52,26 @@ CLI は次の順序で認証情報を解決します。
 
 ### 環境変数モード
 
-| 環境変数 | 用途 |
-| --- | --- |
-| `TAKOS_SESSION_ID` | セッション ID による認証 |
-| `TAKOS_TOKEN` | bearer token による認証 |
+| 環境変数             | 用途                        |
+| -------------------- | --------------------------- |
+| `TAKOS_SESSION_ID`   | セッション ID による認証    |
+| `TAKOS_TOKEN`        | bearer token による認証     |
 | `TAKOS_WORKSPACE_ID` | デフォルト workspace の指定 |
-| `TAKOS_API_URL` | API endpoint の上書き |
+| `TAKOS_API_URL`      | API endpoint の上書き       |
 
 `TAKOS_SESSION_ID` がある場合は `TAKOS_TOKEN` より優先されます。
 
 ### session file mode
 
-`.takos-session` は session workdir のための file-based mode です。
-CLI は現在地から親方向へ探索し、見つかった場合はその session / workspace / api_url を使います。
+`.takos-session` は session workdir のための file-based mode です。CLI
+は現在地から親方向へ探索し、見つかった場合はその session / workspace / api_url
+を使います。
 
 ### local config mode
 
-環境変数と `.takos-session` が無い場合、CLI は `~/.takos/config.json` を参照します。
-`takos login` や `takos endpoint use` が更新するのもこのローカル設定です。
+環境変数と `.takos-session` が無い場合、CLI は `~/.takos/config.json`
+を参照します。`takos login` や `takos endpoint use`
+が更新するのもこのローカル設定です。
 
 ## endpoint 切り替え
 
@@ -82,11 +85,11 @@ takos endpoint use https://custom.example.com
 takos endpoint show
 ```
 
-| preset | URL |
-| --- | --- |
-| `prod` / `production` | `https://takos.jp` |
-| `staging` / `test` | `https://test.takos.jp` |
-| `local` | `http://localhost:8787` |
+| preset                | URL                     |
+| --------------------- | ----------------------- |
+| `prod` / `production` | `https://takos.jp`      |
+| `staging` / `test`    | `https://test.takos.jp` |
+| `local`               | `http://localhost:8787` |
 
 ## task-oriented CLI
 
@@ -95,48 +98,55 @@ Takos CLI では、単純な HTTP verb 直叩きではなく `domain + task` を
 ```bash
 takos workspace list
 takos repo create --body '{"name":"my-repo"}'
-takos deploy --space SPACE_ID --repo REPO_ID --ref main
+takos deploy https://github.com/acme/my-app.git --space SPACE_ID --ref main
 takos install takos/takos-agent --space SPACE_ID
 takos run follow RUN_ID --transport ws
 ```
 
 ### 共通 task verb
 
-| verb | HTTP method | 役割 |
-| --- | --- | --- |
-| `list` | GET | 一覧取得 |
-| `view` | GET | 詳細取得 |
-| `create` | POST | 作成 |
-| `replace` | PUT | 全置換 |
-| `update` | PATCH | 部分更新 |
-| `remove` | DELETE | 削除 |
-| `probe` | HEAD | 存在確認 |
-| `describe` | OPTIONS | 利用可能な操作の確認 |
+| verb       | HTTP method | 役割                 |
+| ---------- | ----------- | -------------------- |
+| `list`     | GET         | 一覧取得             |
+| `view`     | GET         | 詳細取得             |
+| `create`   | POST        | 作成                 |
+| `replace`  | PUT         | 全置換               |
+| `update`   | PATCH       | 部分更新             |
+| `remove`   | DELETE      | 削除                 |
+| `probe`    | HEAD        | 存在確認             |
+| `describe` | OPTIONS     | 利用可能な操作の確認 |
 
 stream 対応 domain は追加で `watch` と `follow` を持ちます。
 
 ## deploy CLI
 
-`takos deploy` は repo/ref source、`takos install` は package release source を使って `/api/spaces/:spaceId/app-deployments` を呼び出します。
+`takos deploy` は repository URL source、`takos install` は catalog metadata
+で解決した `repository_url + tag` を使って
+`/api/spaces/:spaceId/app-deployments` を呼び出します。
+
+rollback は保存済み snapshot を既存 group に再適用する操作です。group row が
+既に削除されている場合は失敗し、deleted group を再生成しません。
 
 ```bash
-takos deploy --space SPACE_ID --repo REPO_ID --ref main
+takos deploy https://github.com/acme/my-app.git --space SPACE_ID --ref main
 takos plan
 takos deploy status --space SPACE_ID
 takos deploy status APP_DEPLOYMENT_ID --space SPACE_ID
 takos deploy rollback APP_DEPLOYMENT_ID --space SPACE_ID
 takos install OWNER/REPO --space SPACE_ID --version v1.0.0
+takos uninstall GROUP_NAME --space SPACE_ID
 ```
 
-| flag | required | 役割 |
-| --- | --- | --- |
-| `--repo` | yes | repo ID |
-| `--ref` | no | branch / tag / commit |
-| `--ref-type` | no | `branch` / `tag` / `commit` |
-| `--space` | no | target workspace ID |
-| `--json` | no | JSON 出力 |
+| flag                       | required | 役割                               |
+| -------------------------- | -------- | ---------------------------------- |
+| positional `repositoryUrl` | yes      | canonical HTTPS git repository URL |
+| `--ref`                    | no       | branch / tag / commit              |
+| `--ref-type`               | no       | `branch` / `tag` / `commit`        |
+| `--space`                  | no       | target workspace ID                |
+| `--json`                   | no       | JSON 出力                          |
 
-`takos plan` は manifest validation と現在状態との差分確認を行います。preview は non-mutating で、group が未作成でも DB row は作りません。
+`takos plan` は manifest validation と現在状態との差分確認を行います。preview は
+non-mutating で、group が未作成でも DB row は作りません。
 
 ## removed legacy surface
 

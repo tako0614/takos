@@ -1,5 +1,5 @@
 import { assertEquals } from "jsr:@std/assert";
-import { buildPath, parseRoute } from "../../hooks/useRouter.ts";
+import { buildPath, parseRoute } from "../../hooks/router-state.ts";
 
 Deno.test("parseRoute - parses repo file references from query params", () => {
   assertEquals(
@@ -50,5 +50,16 @@ Deno.test("buildPath - builds storage file reference links", () => {
       filePath: "/docs/README.md",
     }),
     "/storage/ws-1/docs/README.md?open=1",
+  );
+});
+
+Deno.test("buildPath - builds storage folder routes", () => {
+  assertEquals(
+    buildPath({
+      view: "storage",
+      spaceId: "ws-1",
+      storagePath: "/docs",
+    }),
+    "/storage/ws-1/docs",
   );
 });

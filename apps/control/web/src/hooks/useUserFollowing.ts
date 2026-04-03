@@ -1,6 +1,6 @@
-import { createSignal, createEffect, on } from 'solid-js';
-import type { FollowUser } from '../types/profile.ts';
-import { rpc, rpcJson } from '../lib/rpc.ts';
+import { type Accessor, createEffect, createSignal, on } from "solid-js";
+import type { FollowUser } from "../types/profile.ts";
+import { rpc, rpcJson } from "../lib/rpc.ts";
 
 interface FollowingResponse {
   following: FollowUser[];
@@ -9,24 +9,26 @@ interface FollowingResponse {
 
 const ITEMS_PER_PAGE = 20;
 
-export function useUserFollowing(username: string) {
+export function useUserFollowing(username: Accessor<string>) {
   const [following, setFollowing] = createSignal<FollowUser[]>([]);
   const [offset, setOffset] = createSignal(0);
   const [hasMore, setHasMore] = createSignal(true);
   const [loading, setLoading] = createSignal(false);
   const [error, setError] = createSignal<string | null>(null);
-  const [sort, setSort] = createSignal<'created' | 'username'>('created');
-  const [order, setOrder] = createSignal<'desc' | 'asc'>('desc');
+  const [sort, setSort] = createSignal<"created" | "username">("created");
+  const [order, setOrder] = createSignal<"desc" | "asc">("desc");
 
   const fetch_ = async (reset = false) => {
+    const currentUsername = username();
+    if (!currentUsername) return;
     if (!reset && !hasMore()) return;
 
     setLoading(true);
     setError(null);
     try {
       const currentOffset = reset ? 0 : offset();
-      const res = await rpc.users[':username'].following.$get({
-        param: { username },
+      const res = await rpc.users[":username"].following.$get({
+        param: { username: currentUsername },
         query: {
           limit: String(ITEMS_PER_PAGE),
           offset: String(currentOffset),
@@ -35,6 +37,7 @@ export function useUserFollowing(username: string) {
         },
       });
       const data = await rpcJson<FollowingResponse>(res);
+      if (currentUsername !== username()) return;
       if (reset) {
         setFollowing(data.following);
         setOffset(ITEMS_PER_PAGE);
@@ -44,7 +47,7 @@ export function useUserFollowing(username: string) {
       }
       setHasMore(data.has_more);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to load following');
+      setError(err instanceof Error ? err.message : "Failed to load following");
     } finally {
       setLoading(false);
     }
@@ -59,7 +62,7 @@ export function useUserFollowing(username: string) {
 
   // Reset when username changes
   createEffect(on(
-    () => username,
+    username,
     () => {
       reset();
     },
@@ -75,9 +78,9 @@ export function useUserFollowing(username: string) {
     },
   ));
 
-  const setSortKey = (newSort: 'created' | 'username') => {
+  const setSortKey = (newSort: "created" | "username") => {
     setSort(newSort);
-    setOrder(newSort === 'username' ? 'asc' : 'desc');
+    setOrder(newSort === "username" ? "asc" : "desc");
   };
 
   const updateUser = (updater: (user: FollowUser) => FollowUser) => {

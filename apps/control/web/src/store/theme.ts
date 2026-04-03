@@ -1,5 +1,5 @@
-import { atom } from 'jotai/vanilla';
-import { atomWithStorageVanilla } from '../lib/storage-atom.ts';
+import { createSignal } from 'solid-js';
+import { createPersistedSignal } from '../lib/storage-atom.ts';
 
 export type Theme = 'light' | 'dark' | 'system';
 export type ResolvedTheme = 'light' | 'dark';
@@ -13,15 +13,31 @@ function getSystemTheme(): ResolvedTheme {
   return 'light';
 }
 
-/** User preference: 'light' | 'dark' | 'system'. Persisted to localStorage. */
-export const themePreferenceAtom = atomWithStorageVanilla<Theme>(STORAGE_KEY, 'system');
+const [themePreference, setThemePreference] = createPersistedSignal<Theme>(
+  STORAGE_KEY,
+  'system',
+);
+const [systemTheme, setSystemTheme] = createSignal<ResolvedTheme>(
+  getSystemTheme(),
+);
 
-/** Writable atom tracking the current OS-level color-scheme. Updated by ThemeSync. */
-export const systemThemeAtom = atom<ResolvedTheme>(getSystemTheme());
+const resolvedTheme = (): ResolvedTheme => {
+  const preference = themePreference();
+  return preference === 'system' ? systemTheme() : preference;
+};
 
-/** Derived read-only atom: the effective light/dark value after resolving 'system'. */
-export const resolvedThemeAtom = atom<ResolvedTheme>((get) => {
-  const pref = get(themePreferenceAtom);
-  if (pref !== 'system') return pref;
-  return get(systemThemeAtom);
-});
+export function useTheme() {
+  return {
+    get themePreference() {
+      return themePreference();
+    },
+    setThemePreference,
+    get systemTheme() {
+      return systemTheme();
+    },
+    setSystemTheme,
+    get resolvedTheme() {
+      return resolvedTheme();
+    },
+  };
+}

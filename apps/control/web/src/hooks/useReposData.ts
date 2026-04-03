@@ -1,9 +1,9 @@
-import { createSignal, createEffect, on, onCleanup } from 'solid-js';
+import { createSignal, createEffect, on, onCleanup, type Accessor } from 'solid-js';
 import type { ExploreSort, SearchOrder, SearchSort, SourceRepo, SourceTab } from '../types/repos.ts';
 import { rpc, rpcJson } from '../lib/rpc.ts';
 
 interface UseReposDataOptions {
-  selectedSpaceId?: string;
+  selectedSpaceId?: Accessor<string | undefined>;
   initialTab: SourceTab;
 }
 
@@ -44,22 +44,25 @@ export function useReposData({ selectedSpaceId, initialTab }: UseReposDataOption
   const [showCreateModal, setShowCreateModal] = createSignal(false);
 
   const fetchMyRepos = async () => {
-    if (!selectedSpaceId) return;
+    const currentSpaceId = selectedSpaceId?.();
+    if (!currentSpaceId) return;
     const requestId = ++myReposRequestSeq;
     try {
       setMyReposLoading(true);
       setMyReposError(null);
       const res = await rpc.spaces[':spaceId'].repos.$get({
-        param: { spaceId: selectedSpaceId },
+        param: { spaceId: currentSpaceId },
       });
       const data = await rpcJson<{ repositories?: SourceRepo[] }>(res);
       if (requestId !== myReposRequestSeq) return;
+      if (selectedSpaceId?.() !== currentSpaceId) return;
       setMyRepos(data.repositories || []);
     } catch (err) {
       if (requestId !== myReposRequestSeq) return;
+      if (selectedSpaceId?.() !== currentSpaceId) return;
       setMyReposError(err instanceof Error ? err.message : 'Unknown error');
     } finally {
-      if (requestId === myReposRequestSeq) {
+      if (requestId === myReposRequestSeq && selectedSpaceId?.() === currentSpaceId) {
         setMyReposLoading(false);
       }
     }
@@ -163,10 +166,18 @@ export function useReposData({ selectedSpaceId, initialTab }: UseReposDataOption
 
   // Fetch my repos when selectedSpaceId or activeTab changes
   createEffect(on(
-    () => [selectedSpaceId, activeTab()],
+    () => [selectedSpaceId?.(), activeTab()],
     () => {
-      if (selectedSpaceId && activeTab() === 'repos') {
+      const currentSpaceId = selectedSpaceId?.();
+      if (currentSpaceId && activeTab() === 'repos') {
         void fetchMyRepos();
+        return;
+      }
+
+      if (!currentSpaceId) {
+        setMyRepos([]);
+        setMyReposLoading(false);
+        setMyReposError(null);
       }
     },
   ));
@@ -219,10 +230,11 @@ export function useReposData({ selectedSpaceId, initialTab }: UseReposDataOption
     description: string,
     visibility: 'public' | 'private',
   ) => {
-    if (!selectedSpaceId) return;
+    const currentSpaceId = selectedSpaceId?.();
+    if (!currentSpaceId) return;
     try {
       const res = await rpc.spaces[':spaceId'].repos.$post({
-        param: { spaceId: selectedSpaceId },
+        param: { spaceId: currentSpaceId },
         json: { name, description, visibility },
       });
       await rpcJson(res);

@@ -1,49 +1,64 @@
-import { createSignal } from 'solid-js';
-import { Icons } from '../lib/Icons.tsx';
-import { useI18n } from '../store/i18n.ts';
-import { useMemoryData } from '../hooks/useMemoryData.ts';
-import { MemoryList } from './memory/MemoryList.tsx';
-import { MemoryCreateForm, ReminderCreateForm } from './memory/MemoryForm.tsx';
-import type { Reminder } from '../types/index.ts';
+import { createSignal } from "solid-js";
+import { Icons } from "../lib/Icons.tsx";
+import { useI18n } from "../store/i18n.ts";
+import { useMemoryData } from "../hooks/useMemoryData.ts";
+import { MemoryList } from "./memory/MemoryList.tsx";
+import { MemoryCreateForm, ReminderCreateForm } from "./memory/MemoryForm.tsx";
+import type { Reminder } from "../types/index.ts";
 
 export interface MemoryPageProps {
   spaceId: string;
   onBack: () => void;
 }
 
-const getPriorityClasses = (pri: Reminder['priority']) => {
+const getPriorityClasses = (pri: Reminder["priority"]) => {
   switch (pri) {
-    case 'high': return 'border-l-4 border-l-danger';
-    case 'normal': return 'border-l-4 border-l-accent';
-    case 'low': return 'border-l-4 border-l-text-zinc-500';
-    default: return 'border-l-4 border-l-accent';
+    case "high":
+      return "border-l-4 border-l-danger";
+    case "normal":
+      return "border-l-4 border-l-accent";
+    case "low":
+      return "border-l-4 border-l-text-zinc-500";
+    default:
+      return "border-l-4 border-l-accent";
   }
 };
 
-export function MemoryPage({ spaceId, onBack }: MemoryPageProps) {
+export function MemoryPage(props: MemoryPageProps) {
   const { t } = useI18n();
   const [showReminders, setShowReminders] = createSignal(false);
   const [showCreateMemory, setShowCreateMemory] = createSignal(false);
   const [showCreateReminder, setShowCreateReminder] = createSignal(false);
 
   const {
-    memories, reminders, loading,
-    deleteMemory, deleteReminder,
-    memoryForm, setMemoryForm,
-    reminderForm, setReminderForm,
+    memories,
+    reminders,
+    loading,
+    deleteMemory,
+    deleteReminder,
+    memoryForm,
+    setMemoryForm,
+    reminderForm,
+    setReminderForm,
     handleCreateMemory: baseCreateMemory,
     handleCreateReminder: baseCreateReminder,
-    getTypeIcon, getTypeLabel, getTriggerIcon,
-  } = useMemoryData(spaceId);
+    getTypeIcon,
+    getTypeLabel,
+    getTriggerIcon,
+  } = useMemoryData(() => props.spaceId);
 
-  const handleCreateMemory = async (e: Event & { currentTarget: HTMLFormElement }) => {
+  const handleCreateMemory = async (
+    e: Event & { currentTarget: HTMLFormElement },
+  ) => {
     await baseCreateMemory(e);
     if (memoryForm().content.trim()) {
       setShowCreateMemory(false);
     }
   };
 
-  const handleCreateReminder = async (e: Event & { currentTarget: HTMLFormElement }) => {
+  const handleCreateReminder = async (
+    e: Event & { currentTarget: HTMLFormElement },
+  ) => {
     await baseCreateReminder(e);
     if (reminderForm().content.trim() && reminderForm().triggerValue.trim()) {
       setShowCreateReminder(false);
@@ -53,9 +68,10 @@ export function MemoryPage({ spaceId, onBack }: MemoryPageProps) {
   return (
     <div class="flex flex-col h-full bg-white dark:bg-zinc-900">
       <header class="flex items-center gap-4 px-6 py-4 border-b border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800">
-        <button type="button"
+        <button
+          type="button"
           class="p-2 rounded-lg text-zinc-500 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100 hover:bg-zinc-200 dark:hover:bg-zinc-700 transition-colors"
-          onClick={onBack}
+          onClick={props.onBack}
         >
           <Icons.ArrowLeft />
         </button>
@@ -64,12 +80,18 @@ export function MemoryPage({ spaceId, onBack }: MemoryPageProps) {
           <span>Memory</span>
         </h1>
         <div class="ml-auto">
-          <button type="button"
+          <button
+            type="button"
             class="inline-flex items-center justify-center gap-2 px-4 py-2 rounded-lg font-medium text-sm bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900 hover:bg-zinc-700 dark:hover:bg-zinc-300 transition-colors cursor-pointer"
-            onClick={() => showReminders() ? setShowCreateReminder(true) : setShowCreateMemory(true)}
+            onClick={() =>
+              showReminders()
+                ? setShowCreateReminder(true)
+                : setShowCreateMemory(true)}
           >
             <Icons.Plus />
-            <span>{showReminders() ? t('createReminder') : t('createMemory')}</span>
+            <span>
+              {showReminders() ? t("createReminder") : t("createMemory")}
+            </span>
           </button>
         </div>
       </header>

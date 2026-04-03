@@ -132,6 +132,7 @@ Deno.test("plan/apply provider option - passes provider in the plan API payload"
     assertEquals(planBody.manifest.metadata.name, "sample-app");
     assertEquals(planBody.manifest.metadata.appId, "dev.takos.sample-app");
     assertEquals(typeof planBody.manifest.spec.workers.gateway, "object");
+    assertEquals(planBody.source.kind, "local_upload");
   } finally {
     fetchStub.restore();
     Deno.env.delete("TAKOS_TOKEN");
@@ -229,6 +230,7 @@ Deno.test("plan/apply provider option - passes provider in both plan and apply A
     assertEquals(planBody.manifest.kind, "App");
     assertEquals(planBody.manifest.metadata.name, "sample-app");
     assertEquals(planBody.manifest.metadata.appId, "dev.takos.sample-app");
+    assertEquals(planBody.source.kind, "local_upload");
 
     const applyRequest = fetchStub.calls[1];
     assertEquals(
@@ -245,7 +247,8 @@ Deno.test("plan/apply provider option - passes provider in both plan and apply A
     assertEquals(applyBody.manifest.kind, "App");
     assertEquals(applyBody.manifest.metadata.name, "sample-app");
     assertEquals(applyBody.manifest.metadata.appId, "dev.takos.sample-app");
-    assertEquals(applyBody.artifacts.gateway.kind, "worker-bundle");
+    assertEquals(applyBody.source.kind, "local_upload");
+    assertEquals(applyBody.artifacts.gateway.kind, "worker_bundle");
     assertEquals(
       applyBody.artifacts.gateway.bundleContent,
       'export default { async fetch() { return new Response("ok"); } };',

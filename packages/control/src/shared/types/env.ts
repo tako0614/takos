@@ -6,14 +6,14 @@ import type {
   QueueBinding,
   SqlDatabaseBinding,
   VectorIndexBinding,
-} from './bindings.ts';
+} from "./bindings.ts";
 import type {
-  RunQueueMessage,
-  IndexJobQueueMessage,
-  WorkflowJobQueueMessage,
   DeploymentQueueMessage,
-} from './queue-messages.ts';
-import type { RoutingStore } from './routing.ts';
+  IndexJobQueueMessage,
+  RunQueueMessage,
+  WorkflowJobQueueMessage,
+} from "./queue-messages.ts";
+import type { RoutingStore } from "./routing.ts";
 
 // ---------------------------------------------------------------------------
 // Env fragments — each groups related bindings by concern.
@@ -51,6 +51,13 @@ export interface AgentConfigEnv {
   AGENT_TOTAL_TIMEOUT?: string;
   TOOL_EXECUTION_TIMEOUT?: string;
   LANGGRAPH_TIMEOUT?: string;
+  APP_DEPLOY_REMOTE_MAX_PACKFILE_BYTES?: string;
+  APP_DEPLOY_REMOTE_MAX_OBJECTS?: string;
+  APP_DEPLOY_REMOTE_MAX_INFLATED_TOTAL_BYTES?: string;
+  APP_DEPLOY_REMOTE_MAX_OBJECT_INFLATED_BYTES?: string;
+  APP_DEPLOY_REMOTE_MAX_DELTA_RESULT_BYTES?: string;
+  APP_DEPLOY_REMOTE_MAX_DELTA_CHAIN_DEPTH?: string;
+  APP_DEPLOY_REMOTE_MAX_ARCHIVE_BYTES?: string;
   /** JSON object mapping model IDs to context window sizes, e.g. {"gpt-5.4":200} */
   MODEL_CONTEXT_WINDOWS?: string;
 }
@@ -93,9 +100,8 @@ export type IndexerEnv = DbEnv & {
 // so all existing code continues to type-check without changes.
 // ---------------------------------------------------------------------------
 
-export interface Env extends
-  DbEnv, StorageEnv, AiEnv,
-  AgentConfigEnv, ContainerHostEnv {
+export interface Env
+  extends DbEnv, StorageEnv, AiEnv, AgentConfigEnv, ContainerHostEnv {
   // Internal service config
   SERVICE_INTERNAL_JWT_ISSUER?: string;
   // DO bindings
@@ -152,6 +158,19 @@ export interface Env extends
   K8S_NAMESPACE?: string;
   K8S_DEPLOYMENT_NAME?: string;
   K8S_IMAGE_REGISTRY?: string;
+  TAKOS_APP_DEPLOY_REMOTE_PACKFILE_MAX_BYTES?: string;
+  TAKOS_APP_DEPLOY_REMOTE_OBJECTS_MAX?: string;
+  TAKOS_APP_DEPLOY_REMOTE_INFLATED_TOTAL_MAX_BYTES?: string;
+  TAKOS_APP_DEPLOY_REMOTE_OBJECT_MAX_BYTES?: string;
+  TAKOS_APP_DEPLOY_REMOTE_DELTA_RESULT_MAX_BYTES?: string;
+  TAKOS_APP_DEPLOY_REMOTE_DELTA_CHAIN_MAX_DEPTH?: string;
+  TAKOS_APP_DEPLOY_REMOTE_BLOB_PACKFILE_MAX_BYTES?: string;
+  TAKOS_APP_DEPLOY_REMOTE_BLOB_OBJECTS_MAX?: string;
+  TAKOS_APP_DEPLOY_REMOTE_BLOB_INFLATED_TOTAL_MAX_BYTES?: string;
+  TAKOS_APP_DEPLOY_REMOTE_BLOB_OBJECT_MAX_BYTES?: string;
+  TAKOS_APP_DEPLOY_REMOTE_BLOB_DELTA_RESULT_MAX_BYTES?: string;
+  TAKOS_APP_DEPLOY_REMOTE_BLOB_DELTA_CHAIN_MAX_DEPTH?: string;
+  TAKOS_APP_DEPLOY_REMOTE_ARCHIVE_MAX_BYTES?: string;
   HOSTNAME_ROUTING: KvStoreBinding;
   ROLLOUT_HEALTH_KV?: KvStoreBinding;
   ROUTING_STORE?: RoutingStore;

@@ -1,18 +1,22 @@
-# Store 経由デプロイ
+# Repository / Catalog デプロイ
 
-> このページでわかること: `takos deploy` / `takos install` / `app-deployments` の current contract。
+> このページでわかること: `takos deploy` / `takos install` / `app-deployments`
+> の current contract。
 
-Takos では app deployment を source kind で 2 つに分けます。
+Takos では app deployment の canonical source を `repository_url + ref/ref_type`
+に統一しています。
 
-- `takos deploy`: repo/ref を source にデプロイする
-- `takos install`: Store package release を source にデプロイする
+- `takos deploy`: canonical HTTPS git repository URL を source にデプロイする
+- `takos install`: catalog metadata から `repository_url + release tag`
+  を解決して、そのまま deploy する
 
-どちらも control plane 上では `/api/spaces/:spaceId/app-deployments` を使い、結果は `group` に反映されます。
+どちらも control plane 上では `/api/spaces/:spaceId/app-deployments`
+を使い、結果は `group` に反映されます。
 
 ## 基本的な使い方
 
 ```bash
-takos deploy --space SPACE_ID --repo REPO_ID --ref main
+takos deploy https://github.com/acme/my-app.git --space SPACE_ID --ref main
 ```
 
 ```bash
@@ -21,14 +25,15 @@ takos install takos/takos-agent --space SPACE_ID --version v1.0.0
 
 ## apply との違い
 
-| 観点 | `takos deploy` / `takos install` | `takos apply` |
-| --- | --- | --- |
-| source | repo/ref または package release | local working tree |
-| 解決場所 | control plane | CLI が manifest / artifact を読んで upload |
-| 用途 | CI/CD, Store install, remote source deploy | 開発中の app を直接 apply |
-| group 作成 | apply 時に必要なら作成 | apply 時に必要なら作成 |
-| ロールバック | `app-deployments.rollback` | 以前のコードで再 apply |
-| rollout control | v1 では未提供 (`410 Gone`) | なし |
+| 観点            | `takos deploy` / `takos install`                   | `takos apply`                                            |
+| --------------- | -------------------------------------------------- | -------------------------------------------------------- |
+| source          | repository URL + ref                               | local working tree                                       |
+| 解決場所        | control plane                                      | CLI が manifest / artifact を読んで upload               |
+| 用途            | CI/CD, catalog install alias, remote source deploy | 開発中の app を直接 apply                                |
+| group 作成      | apply 時に必要なら作成                             | apply 時に必要なら作成                                   |
+| ロールバック    | immutable deployment snapshot を再適用             | 以前のローカル state で再 apply                          |
+| deployment 履歴 | app deployment record と snapshot を残す           | source projection は更新するが deployment 履歴は作らない |
+| rollout control | current public surface には含まれない              | なし                                                     |
 
 ## デプロイ前の検証
 
@@ -38,7 +43,8 @@ takos install takos/takos-agent --space SPACE_ID --version v1.0.0
 takos plan
 ```
 
-`takos plan` は non-mutating preview です。group が未作成でも DB row は作りません。
+`takos plan` は non-mutating preview です。group が未作成でも DB row
+は作りません。
 
 ## デプロイ状態の確認
 
@@ -50,13 +56,34 @@ takos deploy status --space SPACE_ID
 takos deploy status APP_DEPLOYMENT_ID --space SPACE_ID
 ```
 
-## Rollout 制御
+## イメージ参照の制約
 
-`rollout` 系 endpoint は互換 surface として URL だけ残っていますが、current v1 では `410 Gone` を返します。現時点の rollback は「前の成功 deployment source を使って再 deploy する」方式です。
+`services` / `containers` を deploy するときの `imageRef` は digest pin
+(`@sha256:...`) 必須です。mutable tag (`:latest` など) は immutable rollback
+を壊すので受け付けません。
+
+## public repo の取得
+
+public HTTPS repo の deploy は、通常は git smart protocol で source
+を解決します。まず bounded/configurable な full pack を試し、pack size / object
+count / inflated size のような content-size・pack-limit 系の失敗だけを blobless
+partial fetch の対象にします。任意の fetch error で次段へ fall through
+するわけではありません。remote が `filter` と `allow-reachable-sha1-in-want` を
+advertise している場合だけ blobless partial fetch に進みます。GitHub / GitLab の
+public repo では、それでも解決できないときだけ archive download を host-specific
+な 最後の fallback として使います。
+
+上限は `TAKOS_APP_DEPLOY_REMOTE_*` 環境変数で調整できます。代表例は
+`TAKOS_APP_DEPLOY_REMOTE_PACKFILE_MAX_BYTES`,
+`TAKOS_APP_DEPLOY_REMOTE_OBJECTS_MAX`,
+`TAKOS_APP_DEPLOY_REMOTE_BLOB_PACKFILE_MAX_BYTES`,
+`TAKOS_APP_DEPLOY_REMOTE_BLOB_OBJECTS_MAX`,
+`TAKOS_APP_DEPLOY_REMOTE_ARCHIVE_MAX_BYTES` です。
 
 ## API
 
-`takos deploy` / `takos install` が内部で使う API です。UI 連携や CI/CD からも直接利用できます。
+`takos deploy` / `takos install` が内部で使う API です。UI 連携や CI/CD
+からも直接利用できます。
 
 ```text
 POST   /api/spaces/:spaceId/app-deployments
@@ -68,7 +95,7 @@ DELETE /api/spaces/:spaceId/app-deployments/:appDeploymentId
 
 ## API リクエスト・レスポンス例
 
-### repo/ref デプロイ
+### repository URL デプロイ
 
 ```bash
 curl -X POST https://takos.example.com/api/spaces/{spaceId}/app-deployments \
@@ -78,8 +105,8 @@ curl -X POST https://takos.example.com/api/spaces/{spaceId}/app-deployments \
     "group_name": "my-app",
     "env": "staging",
     "source": {
-      "kind": "repo_ref",
-      "repo_id": "repo_abc123",
+      "kind": "git_ref",
+      "repository_url": "https://github.com/acme/my-app.git",
       "ref": "main",
       "ref_type": "branch"
     }
@@ -94,11 +121,17 @@ curl -X POST https://takos.example.com/api/spaces/{spaceId}/app-deployments \
     "id": "deploy_xxx",
     "group": { "id": "grp_xxx", "name": "my-app" },
     "source": {
-      "kind": "repo_ref",
-      "repo_id": "repo_abc123",
+      "kind": "git_ref",
+      "repository_url": "https://github.com/acme/my-app.git",
       "ref": "main",
       "ref_type": "branch",
-      "commit_sha": "abc123def456"
+      "commit_sha": "abc123def456",
+      "resolved_repo_id": null
+    },
+    "snapshot": {
+      "state": "available",
+      "rollback_ready": true,
+      "format": "takopack-v1"
     },
     "status": "applied",
     "manifest_version": "1.0.0",
@@ -114,21 +147,13 @@ curl -X POST https://takos.example.com/api/spaces/{spaceId}/app-deployments \
 }
 ```
 
-### Store package install
+### Catalog package install
 
-```bash
-curl -X POST https://takos.example.com/api/spaces/{spaceId}/app-deployments \
-  -H "Authorization: Bearer $TOKEN" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "source": {
-      "kind": "package_release",
-      "owner": "takos",
-      "repo_name": "takos-agent",
-      "version": "v1.0.0"
-    }
-  }'
-```
+`takos install OWNER/REPO --version ...` は catalog metadata から
+`repository_url` と release tag を解決し、上と同じ `git_ref` request
+を作ります。target workspace に Store app が install
+されている必要はありません。 `package_release` は current write contract
+では使いません。
 
 ### ロールバック
 
@@ -137,12 +162,22 @@ curl -X POST https://takos.example.com/api/spaces/{spaceId}/app-deployments/{app
   -H "Authorization: Bearer $TOKEN"
 ```
 
+rollback は snapshot に保存された source / artifact / provider / env
+を再適用します。現在の group metadata より snapshot 側の execution context
+を優先します。対象 deployment の group row が既に削除されている場合は rollback
+できません。
+
 ### デプロイの削除
 
 ```bash
 curl -X DELETE https://takos.example.com/api/spaces/{spaceId}/app-deployments/{appDeploymentId} \
   -H "Authorization: Bearer $TOKEN"
 ```
+
+`DELETE /app-deployments/:id` は deployment history record の削除です。稼働中
+app の uninstall は `takos uninstall GROUP_NAME` または
+`POST /api/spaces/:spaceId/groups/uninstall` を使います。uninstall は group
+を削除する terminal 操作で、rollback で group を再生成することはできません。
 
 ## 次のステップ
 

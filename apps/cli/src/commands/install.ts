@@ -1,20 +1,18 @@
-import { Command } from "commander";
+import type { Command } from "commander";
 import { bold, red } from "@std/fmt/colors";
 import { api } from "../lib/api.ts";
-import { printApplyResult } from "../lib/apply/result-formatter.ts";
-import { printJson, resolveSpaceId } from "../lib/cli-utils.ts";
+import {
+  exitIfApplyExecutionFailed,
+  printApplyExecutionResult,
+} from "../lib/apply/cli-output.ts";
+import {
+  printJson,
+  resolveGroupProviderOption,
+  resolveSpaceId,
+} from "../lib/cli-utils.ts";
 import { cliExit } from "../lib/command-exit.ts";
-import {
-  type GroupProviderName,
-  parseGroupProvider,
-} from "../lib/group-provider.ts";
 import type { DiffResult } from "../lib/state/diff.ts";
-import {
-  printTranslationReport,
-  type TranslationReport,
-} from "../lib/translation-report.ts";
-
-type PrintableApplyResult = Parameters<typeof printApplyResult>[0];
+import type { TranslationReport } from "../lib/translation-report.ts";
 
 type AppDeploymentMutationResponse = {
   app_deployment: {
@@ -39,6 +37,24 @@ type AppDeploymentMutationResponse = {
   };
 };
 
+type LatestPackageResponse = {
+  package: {
+    version: string;
+    repository_url: string;
+    release: {
+      tag: string;
+    };
+  };
+};
+
+type PackageVersionsResponse = {
+  versions: Array<{
+    tag: string;
+    version: string;
+    repository_url: string;
+  }>;
+};
+
 type InstallCommandOptions = {
   version?: string;
   group?: string;
@@ -49,11 +65,55 @@ type InstallCommandOptions = {
 };
 
 function parseOwnerRepo(input: string): { owner: string; repoName: string } {
-  const [owner, repoName, ...rest] = input.split("/").map((value) => value.trim());
+  const [owner, repoName, ...rest] = input.split("/").map((value) =>
+    value.trim()
+  );
   if (!owner || !repoName || rest.length > 0) {
     throw new Error("Package must be in OWNER/REPO format");
   }
   return { owner, repoName };
+}
+
+async function resolvePackageDeploySource(
+  owner: string,
+  repoName: string,
+  requestedVersion?: string,
+): Promise<{ repositoryUrl: string; tag: string; version: string }> {
+  if (!requestedVersion) {
+    const latest = await api<LatestPackageResponse>(
+      `/api/explore/packages/${encodeURIComponent(owner)}/${
+        encodeURIComponent(repoName)
+      }/latest`,
+    );
+    if (!latest.ok) {
+      throw new Error(latest.error);
+    }
+    return {
+      repositoryUrl: latest.data.package.repository_url,
+      tag: latest.data.package.release.tag,
+      version: latest.data.package.version,
+    };
+  }
+
+  const versions = await api<PackageVersionsResponse>(
+    `/api/explore/packages/${encodeURIComponent(owner)}/${
+      encodeURIComponent(repoName)
+    }/versions`,
+  );
+  if (!versions.ok) {
+    throw new Error(versions.error);
+  }
+  const match = versions.data.versions.find((entry) =>
+    entry.version === requestedVersion || entry.tag === requestedVersion
+  );
+  if (!match) {
+    throw new Error(`Package version not found: ${requestedVersion}`);
+  }
+  return {
+    repositoryUrl: match.repository_url,
+    tag: match.tag,
+    version: match.version,
+  };
 }
 
 export function registerInstallCommand(program: Command): void {
@@ -71,13 +131,33 @@ export function registerInstallCommand(program: Command): void {
     .option("--json", "Machine-readable output")
     .action(async (packageRef: string, options: InstallCommandOptions) => {
       let ownerRepo: { owner: string; repoName: string };
-      let provider: GroupProviderName | undefined;
 
       try {
         ownerRepo = parseOwnerRepo(packageRef);
-        provider = parseGroupProvider(options.provider);
       } catch (error) {
-        console.log(red(error instanceof Error ? error.message : String(error)));
+        console.log(
+          red(error instanceof Error ? error.message : String(error)),
+        );
+        cliExit(1);
+      }
+
+      const provider = resolveGroupProviderOption(options.provider);
+
+      let resolvedSource: {
+        repositoryUrl: string;
+        tag: string;
+        version: string;
+      };
+      try {
+        resolvedSource = await resolvePackageDeploySource(
+          ownerRepo.owner,
+          ownerRepo.repoName,
+          options.version,
+        );
+      } catch (error) {
+        console.log(
+          red(error instanceof Error ? error.message : String(error)),
+        );
         cliExit(1);
       }
 
@@ -90,10 +170,10 @@ export function registerInstallCommand(program: Command): void {
             env: options.env || "staging",
             ...(provider ? { provider } : {}),
             source: {
-              kind: "package_release",
-              owner: ownerRepo.owner,
-              repo_name: ownerRepo.repoName,
-              ...(options.version ? { version: options.version } : {}),
+              kind: "git_ref",
+              repository_url: resolvedSource.repositoryUrl,
+              ref: resolvedSource.tag,
+              ref_type: "tag",
             },
           },
           timeout: 120_000,
@@ -110,13 +190,8 @@ export function registerInstallCommand(program: Command): void {
         return;
       }
 
-      printTranslationReport(response.data.apply_result.translationReport);
-      const printableResult: PrintableApplyResult = {
-        applied: response.data.apply_result.applied,
-        skipped: response.data.apply_result.skipped,
-      };
-      printApplyResult(
-        printableResult,
+      printApplyExecutionResult(
+        response.data.apply_result,
         options.env || "staging",
         response.data.app_deployment.group.name,
         { title: "Install" },
@@ -128,7 +203,10 @@ export function registerInstallCommand(program: Command): void {
       console.log(`  Group:     ${response.data.app_deployment.group.name}`);
       console.log(`  Status:    ${response.data.app_deployment.status}`);
       console.log(
-        `  Version:   ${response.data.app_deployment.manifest_version || "-"}`,
+        `  Version:   ${
+          resolvedSource.version ||
+          response.data.app_deployment.manifest_version || "-"
+        }`,
       );
       if (response.data.app_deployment.hostnames.length > 0) {
         console.log(
@@ -136,10 +214,6 @@ export function registerInstallCommand(program: Command): void {
         );
       }
 
-      if (
-        response.data.apply_result.applied.some((entry) => entry.status === "failed")
-      ) {
-        cliExit(1);
-      }
+      exitIfApplyExecutionFailed(response.data.apply_result);
     });
 }

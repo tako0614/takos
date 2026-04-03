@@ -1,279 +1,33 @@
-import {
-  WFPService,
-  type WorkerBinding,
-} from "../../../platform/providers/cloudflare/wfp.ts";
+import { WFPService } from "../../../platform/providers/cloudflare/wfp.ts";
 import { logWarn } from "../../../shared/utils/logger.ts";
+import { normalizeDeployRuntime } from "./provider-contracts.ts";
 import type {
-  ArtifactKind,
-  Deployment,
-  DeploymentProviderName,
-  DeploymentProviderRef,
-  DeploymentTarget,
-  DeploymentTargetArtifact,
-  DeploymentTargetEndpoint,
-} from "./models.ts";
+  DeploymentProvider,
+  PersistedDeploymentContract,
+} from "./provider-contracts.ts";
+import type {
+  DeploymentProviderFactoryConfig,
+  OciDeploymentOrchestratorConfig,
+  OrchestratedDeploymentProviderConfig,
+} from "./provider-registry.ts";
+import { resolveDeploymentProviderFactory } from "./provider-registry.ts";
+import {
+  parseDeploymentTargetConfig,
+  targetContainsContainerImage,
+} from "./provider-targets.ts";
 
-export type DeploymentProviderDeployResult = {
-  resolvedEndpoint?: { kind: "http-url"; base_url: string };
-  logsRef?: string;
-};
-
-export type DeploymentProviderRuntimeInput = {
-  profile: "workers" | "container-service";
-  bindings?: WorkerBinding[];
-  config?: {
-    compatibility_date?: string;
-    compatibility_flags?: string[];
-    limits?: { cpu_ms?: number; subrequests?: number };
-  };
-};
-
-export type DeploymentProviderDeployInput = {
-  deployment: Deployment;
-  artifactRef: string;
-  bundleContent?: string;
-  wasmContent: ArrayBuffer | null;
-  runtime: DeploymentProviderRuntimeInput;
-};
-
-export type DeploymentProvider = {
-  name: DeploymentProviderName;
-  deploy(
-    input: DeploymentProviderDeployInput,
-  ): Promise<DeploymentProviderDeployResult | void>;
-  assertRollbackTarget(artifactRef: string): Promise<void>;
-  cleanupDeploymentArtifact?(artifactRef: string): Promise<void>;
-};
-
-export type WfpDeploymentProviderEnv = {
-  CF_ACCOUNT_ID?: string;
-  CF_API_TOKEN?: string;
-  WFP_DISPATCH_NAMESPACE?: string;
-};
-
-type OciDeploymentOrchestratorConfig = {
-  orchestratorUrl?: string;
-  orchestratorToken?: string;
-  fetchImpl?: typeof fetch;
-};
-
-type DeploymentProviderRegistryEntry = {
-  name: DeploymentProviderName;
-  config?: Record<string, unknown>;
-};
-
-type DeploymentProviderFactoryConfig = OciDeploymentOrchestratorConfig & {
-  cloudflareEnv?: WfpDeploymentProviderEnv;
-  awsRegion?: string;
-  awsEcsClusterArn?: string;
-  awsEcsTaskDefinitionFamily?: string;
-  awsEcsServiceArn?: string;
-  awsEcsServiceName?: string;
-  awsEcsContainerName?: string;
-  awsEcsSubnetIds?: string;
-  awsEcsSecurityGroupIds?: string;
-  awsEcsAssignPublicIp?: string;
-  awsEcsLaunchType?: string;
-  awsEcsDesiredCount?: string;
-  awsEcsBaseUrl?: string;
-  awsEcsHealthUrl?: string;
-  awsEcrRepositoryUri?: string;
-  gcpProjectId?: string;
-  gcpRegion?: string;
-  gcpCloudRunServiceId?: string;
-  gcpCloudRunServiceAccount?: string;
-  gcpCloudRunIngress?: string;
-  gcpCloudRunAllowUnauthenticated?: string;
-  gcpCloudRunBaseUrl?: string;
-  gcpCloudRunDeleteOnRemove?: string;
-  gcpArtifactRegistryRepo?: string;
-  k8sNamespace?: string;
-  k8sDeploymentName?: string;
-  k8sImageRegistry?: string;
-  providerRegistry?: {
-    get(
-      name: DeploymentProviderName,
-    ): DeploymentProviderRegistryEntry | undefined;
-  };
-};
-
-type PersistedDeploymentContract = Pick<
-  Deployment,
-  "provider_name" | "target_json"
->;
-type OrchestratedDeploymentProviderName = "oci" | "ecs" | "cloud-run" | "k8s";
-
-type OrchestratedDeploymentProviderConfig = OciDeploymentOrchestratorConfig & {
-  providerName: OrchestratedDeploymentProviderName;
-  providerConfig?: Record<string, unknown>;
-};
-
-function normalizeDeployRuntime(input: DeploymentProviderDeployInput): {
-  profile: "workers" | "container-service";
-  bindings: WorkerBinding[];
-  compatibilityDate: string;
-  compatibilityFlags: string[];
-  limits?: { cpu_ms?: number; subrequests?: number };
-} {
-  const runtime = input.runtime;
-  return {
-    profile: runtime.profile,
-    bindings: runtime.bindings ?? [],
-    compatibilityDate: runtime.config?.compatibility_date ?? "2024-01-01",
-    compatibilityFlags: runtime.config?.compatibility_flags ?? [],
-    limits: runtime.config?.limits,
-  };
-}
-
-function safeJsonParse<T>(raw: string, fallback: T): T {
-  try {
-    return JSON.parse(raw) as T;
-  } catch {
-    return fallback;
-  }
-}
-
-function compactRecord<T extends Record<string, unknown>>(
-  value: T,
-): T | undefined {
-  const filtered = Object.entries(value).filter(([, entry]) => {
-    if (entry == null) return false;
-    if (typeof entry === "string") return entry.trim().length > 0;
-    return true;
-  });
-  if (filtered.length === 0) {
-    return undefined;
-  }
-  return Object.fromEntries(filtered) as T;
-}
-
-function normalizeTargetEndpoint(
-  raw: Record<string, unknown>,
-): DeploymentTargetEndpoint | undefined {
-  const endpoint = raw.endpoint;
-  if (endpoint && typeof endpoint === "object") {
-    const parsed = endpoint as Record<string, unknown>;
-    if (
-      parsed.kind === "service-ref" && typeof parsed.ref === "string" &&
-      parsed.ref.length > 0
-    ) {
-      return {
-        kind: "service-ref",
-        ref: parsed.ref,
-      };
-    }
-    if (
-      parsed.kind === "http-url" && typeof parsed.base_url === "string" &&
-      parsed.base_url.length > 0
-    ) {
-      return {
-        kind: "http-url",
-        base_url: parsed.base_url,
-      };
-    }
-  }
-  return undefined;
-}
-
-function normalizeTargetArtifact(
-  raw: Record<string, unknown>,
-): DeploymentTargetArtifact | undefined {
-  const artifact = raw.artifact;
-  if (artifact && typeof artifact === "object") {
-    const parsed = artifact as Record<string, unknown>;
-    const normalized: DeploymentTargetArtifact = {};
-    if (parsed.kind === "worker-bundle" || parsed.kind === "container-image") {
-      normalized.kind = parsed.kind as ArtifactKind;
-    }
-    if (typeof parsed.image_ref === "string" && parsed.image_ref.length > 0) {
-      normalized.image_ref = parsed.image_ref;
-    }
-    if (
-      typeof parsed.exposed_port === "number" &&
-      Number.isFinite(parsed.exposed_port)
-    ) {
-      normalized.exposed_port = parsed.exposed_port;
-    }
-    if (
-      typeof parsed.health_path === "string" && parsed.health_path.length > 0
-    ) {
-      normalized.health_path = parsed.health_path;
-    }
-    return Object.keys(normalized).length > 0 ? normalized : undefined;
-  }
-
-  return undefined;
-}
-
-function targetContainsContainerImage(target: DeploymentTarget): boolean {
-  return target.artifact?.kind === "container-image" &&
-    typeof target.artifact.image_ref === "string" &&
-    target.artifact.image_ref.trim().length > 0;
-}
-
-function normalizeDeploymentTarget(
-  raw: Record<string, unknown>,
-): DeploymentTarget {
-  const endpoint = normalizeTargetEndpoint(raw);
-  const routeRef = typeof raw.route_ref === "string" && raw.route_ref.length > 0
-    ? raw.route_ref
-    : endpoint?.kind === "service-ref"
-    ? endpoint.ref
-    : undefined;
-  const artifact = normalizeTargetArtifact(raw);
-
-  return {
-    ...(routeRef ? { route_ref: routeRef } : {}),
-    ...(endpoint ? { endpoint } : {}),
-    ...(artifact ? { artifact } : {}),
-  };
-}
-
-export function parseDeploymentTargetConfig(
-  deployment: PersistedDeploymentContract,
-): DeploymentTarget {
-  const parsed = safeJsonParse<Record<string, unknown>>(
-    deployment.target_json,
-    {},
-  );
-  return normalizeDeploymentTarget(parsed);
-}
-
-export function serializeDeploymentTarget(options?: {
-  provider?: DeploymentProviderRef;
-  target?: DeploymentTarget;
-}): {
-  providerName: Deployment["provider_name"];
-  targetJson: string;
-  providerStateJson: string;
-} {
-  const target = options?.target;
-  // Build a plain object that preserves all artifact fields (kind, health_path, etc.)
-  const raw: Record<string, unknown> = {};
-  if (target?.route_ref) raw.route_ref = target.route_ref;
-  if (target?.endpoint) raw.endpoint = target.endpoint;
-  if (target?.artifact) {
-    const artifactRaw: Record<string, unknown> = {};
-    if (target.artifact.kind) artifactRaw.kind = target.artifact.kind;
-    if (target.artifact.image_ref) {
-      artifactRaw.image_ref = target.artifact.image_ref;
-    }
-    if (target.artifact.exposed_port != null) {
-      artifactRaw.exposed_port = target.artifact.exposed_port;
-    }
-    if (target.artifact.health_path) {
-      artifactRaw.health_path = target.artifact.health_path;
-    }
-    if (Object.keys(artifactRaw).length > 0) raw.artifact = artifactRaw;
-  }
-
-  const normalized = normalizeDeploymentTarget(raw);
-  return {
-    providerName: options?.provider?.name ?? "workers-dispatch",
-    targetJson: JSON.stringify(normalized),
-    providerStateJson: "{}",
-  };
-}
+export type {
+  DeploymentProvider,
+  DeploymentProviderDeployInput,
+  DeploymentProviderDeployResult,
+  DeploymentProviderRuntimeInput,
+  PersistedDeploymentContract,
+  WfpDeploymentProviderEnv,
+} from "./provider-contracts.ts";
+export {
+  parseDeploymentTargetConfig,
+  serializeDeploymentTarget,
+} from "./provider-targets.ts";
 
 export function createWorkersDispatchDeploymentProvider(
   wfp: WFPService,
@@ -359,137 +113,6 @@ export function createOciDeploymentProvider(
     orchestratorToken: config?.orchestratorToken,
     fetchImpl: config?.fetchImpl,
   });
-}
-
-function readRegistryString(
-  entry: DeploymentProviderRegistryEntry | undefined,
-  key: string,
-): string | undefined {
-  const value = entry?.config?.[key];
-  return typeof value === "string" && value.trim().length > 0
-    ? value.trim()
-    : undefined;
-}
-
-function readConfigString(value: unknown): string | undefined {
-  return typeof value === "string" && value.trim().length > 0
-    ? value.trim()
-    : undefined;
-}
-
-function readConfigBoolean(value: unknown): boolean | undefined {
-  if (typeof value === "boolean") {
-    return value;
-  }
-  if (typeof value === "string") {
-    const normalized = value.trim().toLowerCase();
-    if (normalized === "true" || normalized === "1" || normalized === "yes") {
-      return true;
-    }
-    if (normalized === "false" || normalized === "0" || normalized === "no") {
-      return false;
-    }
-  }
-  return undefined;
-}
-
-function readConfigNumber(value: unknown): number | undefined {
-  if (typeof value === "number" && Number.isFinite(value)) {
-    return value;
-  }
-  if (typeof value === "string") {
-    const parsed = Number.parseInt(value.trim(), 10);
-    return Number.isFinite(parsed) ? parsed : undefined;
-  }
-  return undefined;
-}
-
-function readConfigStringList(value: unknown): string[] | undefined {
-  if (Array.isArray(value)) {
-    const entries = value
-      .filter((entry): entry is string => typeof entry === "string")
-      .map((entry) => entry.trim())
-      .filter((entry) => entry.length > 0);
-    return entries.length > 0 ? entries : undefined;
-  }
-  if (typeof value === "string") {
-    const entries = value
-      .split(",")
-      .map((entry) => entry.trim())
-      .filter((entry) => entry.length > 0);
-    return entries.length > 0 ? entries : undefined;
-  }
-  return undefined;
-}
-
-function resolveRegistryProviderConfig(
-  entry: DeploymentProviderRegistryEntry | undefined,
-): Record<string, unknown> | undefined {
-  if (
-    !entry?.config || typeof entry.config !== "object" ||
-    Array.isArray(entry.config)
-  ) {
-    return undefined;
-  }
-
-  const providerConfig = Object.fromEntries(
-    Object.entries(entry.config)
-      .filter(([key]) =>
-        key !== "orchestratorUrl" && key !== "orchestratorToken"
-      ),
-  );
-
-  return Object.keys(providerConfig).length > 0 ? providerConfig : undefined;
-}
-
-function resolveEnvProviderConfig(
-  providerName: OrchestratedDeploymentProviderName,
-  config: DeploymentProviderFactoryConfig,
-): Record<string, unknown> | undefined {
-  switch (providerName) {
-    case "ecs":
-      return compactRecord({
-        region: readConfigString(config.awsRegion),
-        clusterArn: readConfigString(config.awsEcsClusterArn),
-        taskDefinitionFamily: readConfigString(
-          config.awsEcsTaskDefinitionFamily,
-        ),
-        serviceArn: readConfigString(config.awsEcsServiceArn),
-        serviceName: readConfigString(config.awsEcsServiceName),
-        containerName: readConfigString(config.awsEcsContainerName),
-        subnetIds: readConfigStringList(config.awsEcsSubnetIds),
-        securityGroupIds: readConfigStringList(config.awsEcsSecurityGroupIds),
-        assignPublicIp: readConfigBoolean(config.awsEcsAssignPublicIp),
-        launchType: readConfigString(config.awsEcsLaunchType),
-        desiredCount: readConfigNumber(config.awsEcsDesiredCount),
-        baseUrl: readConfigString(config.awsEcsBaseUrl),
-        healthUrl: readConfigString(config.awsEcsHealthUrl),
-        ecrRepositoryUri: readConfigString(config.awsEcrRepositoryUri),
-      });
-    case "cloud-run":
-      return compactRecord({
-        projectId: readConfigString(config.gcpProjectId),
-        region: readConfigString(config.gcpRegion),
-        serviceId: readConfigString(config.gcpCloudRunServiceId),
-        serviceAccount: readConfigString(config.gcpCloudRunServiceAccount),
-        ingress: readConfigString(config.gcpCloudRunIngress),
-        allowUnauthenticated: readConfigBoolean(
-          config.gcpCloudRunAllowUnauthenticated,
-        ),
-        baseUrl: readConfigString(config.gcpCloudRunBaseUrl),
-        deleteOnRemove: readConfigBoolean(config.gcpCloudRunDeleteOnRemove),
-        artifactRegistryRepo: readConfigString(config.gcpArtifactRegistryRepo),
-      });
-    case "k8s":
-      return compactRecord({
-        namespace: readConfigString(config.k8sNamespace),
-        deploymentName: readConfigString(config.k8sDeploymentName),
-        imageRegistry: readConfigString(config.k8sImageRegistry),
-      });
-    case "oci":
-    default:
-      return undefined;
-  }
 }
 
 function createOrchestratedDeploymentProvider(
@@ -641,64 +264,20 @@ export function createDeploymentProvider(
   config: DeploymentProviderFactoryConfig = {},
 ): DeploymentProvider {
   const deploymentTarget = parseDeploymentTargetConfig(deployment);
-  const hasImageRef = targetContainsContainerImage(deploymentTarget);
-  const registryEntry = config.providerRegistry?.get(deployment.provider_name);
-  const registryOrchestratorUrl = readRegistryString(
-    registryEntry,
-    "orchestratorUrl",
+  const factory = resolveDeploymentProviderFactory(
+    deployment.provider_name,
+    targetContainsContainerImage(deploymentTarget),
+    config,
   );
-  const registryOrchestratorToken = readRegistryString(
-    registryEntry,
-    "orchestratorToken",
-  );
-  const registryProviderConfig = resolveRegistryProviderConfig(registryEntry);
 
-  switch (deployment.provider_name) {
-    case "ecs":
-    case "cloud-run":
-    case "k8s":
-    case "oci":
-      if (
-        hasImageRef &&
-        !((registryOrchestratorUrl ?? config.orchestratorUrl)?.trim())
-      ) {
-        throw new Error("OCI deployment target requires OCI_ORCHESTRATOR_URL");
-      }
-      return createOrchestratedDeploymentProvider(deployment, {
-        providerName: deployment.provider_name,
-        providerConfig: registryProviderConfig ??
-          resolveEnvProviderConfig(deployment.provider_name, config),
-        orchestratorUrl: registryOrchestratorUrl ?? config.orchestratorUrl,
-        orchestratorToken: registryOrchestratorToken ??
-          config.orchestratorToken,
-        fetchImpl: config.fetchImpl,
-      });
-
-    case "workers-dispatch": {
-      const wfpEnv = config.cloudflareEnv;
-      const accountId = wfpEnv?.CF_ACCOUNT_ID;
-      const apiToken = wfpEnv?.CF_API_TOKEN;
-      const dispatchNamespace = wfpEnv?.WFP_DISPATCH_NAMESPACE;
-
-      if (!accountId || !apiToken || !dispatchNamespace) {
-        throw new Error("workers-dispatch deployment requires WFP environment");
-      }
-
+  switch (factory.kind) {
+    case "orchestrated":
+      return createOrchestratedDeploymentProvider(deployment, factory.config);
+    case "workers-dispatch":
       return createWorkersDispatchDeploymentProvider(
-        new WFPService({
-          CF_ACCOUNT_ID: accountId,
-          CF_API_TOKEN: apiToken,
-          WFP_DISPATCH_NAMESPACE: dispatchNamespace,
-        }),
+        new WFPService(factory.cloudflareEnv),
       );
-    }
-
     case "runtime-host":
       return createRuntimeHostDeploymentProvider();
-
-    default:
-      throw new Error(
-        `Unknown deployment provider: ${deployment.provider_name}`,
-      );
   }
 }

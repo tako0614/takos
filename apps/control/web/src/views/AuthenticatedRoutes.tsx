@@ -1,4 +1,4 @@
-import { createSignal } from "solid-js";
+import { createMemo, createSignal } from "solid-js";
 import type { JSX } from "solid-js";
 import { ErrorBoundary } from "../components/ui/ErrorBoundary.tsx";
 import { UserProfilePage } from "./profile/UserProfilePage.tsx";
@@ -6,6 +6,7 @@ import { LoadingScreen } from "../components/common/LoadingScreen.tsx";
 import { AuthenticatedLayout } from "../components/layout/AuthenticatedLayout.tsx";
 import { MemoryPage } from "./MemoryPage.tsx";
 import { StoragePage } from "./storage/StoragePage.tsx";
+import { buildStorageNavigationState } from "./storage/storage-page-state.ts";
 import { SettingsView } from "./app/SettingsView.tsx";
 import { DeployPanel } from "./app/space/DeployPanel.tsx";
 import { SpaceSettingsPage } from "./hub/SpaceSettingsPage.tsx";
@@ -16,10 +17,10 @@ import { ChatPage } from "./chat/ChatPage.tsx";
 import { AppsPage } from "./apps/AppsPage.tsx";
 import { RepoDetailPage } from "./repos/RepoDetailPage.tsx";
 import { findSpaceByIdentifier, getSpaceIdentifier } from "../lib/spaces.ts";
-import { buildPath } from "../hooks/useRouter.ts";
+import { buildPath } from "../hooks/router-state.ts";
 import { useBreakpoint } from "../hooks/useBreakpoint.ts";
 import { useI18n } from "../store/i18n.ts";
-import { useAuth } from "../hooks/useAuth.ts";
+import { useAuth } from "../hooks/useAuth.tsx";
 import { useNavigation } from "../store/navigation.ts";
 import type {
   DeploySection,
@@ -52,39 +53,18 @@ function SurfaceMessage(
 }
 
 export function AuthenticatedRoutes() {
-  const { t } = useI18n();
-  const { isMobile } = useBreakpoint();
-  const {
-    user,
-    userSettings,
-    setUserSettings,
-    fetchSpaces,
-    spaces,
-    spacesLoaded,
-    handleLogin,
-  } = useAuth();
-
-  const {
-    route,
-    navigate,
-    replace,
-    navigateToChat,
-    replaceToChat,
-    navigateToPreferredChat,
-    preferredSpace,
-    preferredSpaceId,
-    routeSpaceId,
-    selectedSpaceId,
-    waitingForSpaceResolution,
-    setThreadsBySpace,
-    handleNewThreadCreated,
-  } = useNavigation();
+  const i18n = useI18n();
+  const breakpoint = useBreakpoint();
+  const auth = useAuth();
+  const navigation = useNavigation();
 
   const [deploySection, setDeploySection] = createSignal<DeploySection>(
     "workers",
   );
-  const hasInvalidSpaceRoute = Boolean(route.spaceId) && !routeSpaceId &&
-    spacesLoaded;
+  const hasInvalidSpaceRoute = createMemo(() =>
+    Boolean(navigation.route.spaceId) && !navigation.routeSpaceId &&
+    auth.spacesLoaded
+  );
 
   const ensureCanonicalRoute = (nextRoute: RouteState): boolean => {
     const canonicalPath = buildPath(nextRoute);
@@ -94,20 +74,21 @@ export function AuthenticatedRoutes() {
     ) {
       return false;
     }
-    replace(nextRoute);
+    navigation.replace(nextRoute);
     return true;
   };
 
   const renderSpaceRouteError = () => (
     <SurfaceMessage
-      title={t("spaceNotFound")}
-      description={t("spaceNotFoundDesc")}
+      title={i18n.t("spaceNotFound")}
+      description={i18n.t("spaceNotFoundDesc")}
     />
   );
 
   const renderStoreView = () => {
-    if (route.storeTab === "installed") {
-      const storeSpaceId = routeSpaceId ?? preferredSpaceId;
+    if (navigation.route.storeTab === "installed") {
+      const storeSpaceId = navigation.routeSpaceId ??
+        navigation.preferredSpaceId;
       if (!storeSpaceId) return <LoadingScreen />;
       return (
         <AuthenticatedLayout>
@@ -122,11 +103,11 @@ export function AuthenticatedRoutes() {
       <AuthenticatedLayout>
         <ErrorBoundary>
           <SourcePage
-            spaces={spaces}
+            spaces={auth.spaces}
             onNavigateToRepo={(username, repoName) =>
-              navigate({ view: "repo", username, repoName })}
+              navigation.navigate({ view: "repo", username, repoName })}
             isAuthenticated
-            onRequireLogin={handleLogin}
+            onRequireLogin={auth.handleLogin}
           />
         </ErrorBoundary>
       </AuthenticatedLayout>
@@ -134,11 +115,11 @@ export function AuthenticatedRoutes() {
   };
 
   const renderReposView = () => {
-    if (waitingForSpaceResolution) return <LoadingScreen />;
-    if (hasInvalidSpaceRoute) return renderSpaceRouteError();
-    const wsId = routeSpaceId ?? preferredSpaceId;
+    if (navigation.waitingForSpaceResolution) return <LoadingScreen />;
+    if (hasInvalidSpaceRoute()) return renderSpaceRouteError();
+    const wsId = navigation.routeSpaceId ?? navigation.preferredSpaceId;
 
-    if (!wsId && !spacesLoaded) return <LoadingScreen />;
+    if (!wsId && !auth.spacesLoaded) return <LoadingScreen />;
     if (!wsId) return <LoadingScreen />;
 
     if (ensureCanonicalRoute({ view: "repos", spaceId: wsId })) {
@@ -151,7 +132,7 @@ export function AuthenticatedRoutes() {
           <ReposPanel
             spaceId={wsId}
             onNavigateToRepo={(username, repoName) =>
-              navigate({ view: "repo", username, repoName })}
+              navigation.navigate({ view: "repo", username, repoName })}
           />
         </ErrorBoundary>
       </AuthenticatedLayout>
@@ -159,12 +140,13 @@ export function AuthenticatedRoutes() {
   };
 
   const renderChatView = () => {
-    if (waitingForSpaceResolution) return <LoadingScreen />;
-    if (hasInvalidSpaceRoute) return renderSpaceRouteError();
+    const route = navigation.route;
+    if (navigation.waitingForSpaceResolution) return <LoadingScreen />;
+    if (hasInvalidSpaceRoute()) return renderSpaceRouteError();
     if (
-      routeSpaceId && ensureCanonicalRoute({
+      navigation.routeSpaceId && ensureCanonicalRoute({
         view: "chat",
-        spaceId: routeSpaceId,
+        spaceId: navigation.routeSpaceId,
         threadId: route.threadId,
         runId: route.runId,
         messageId: route.messageId,
@@ -176,21 +158,21 @@ export function AuthenticatedRoutes() {
       <AuthenticatedLayout>
         <ErrorBoundary>
           <ChatPage
-            spaces={spaces}
-            initialSpaceId={routeSpaceId}
+            spaces={auth.spaces}
+            initialSpaceId={navigation.routeSpaceId}
             initialThreadId={route.threadId}
             initialRunId={route.runId}
             initialMessageId={route.messageId}
             onSpaceChange={(spaceId) => {
-              navigateToChat(spaceId);
+              navigation.navigateToChat(spaceId);
             }}
             onThreadChange={(threadId) => {
-              if (routeSpaceId) {
-                navigateToChat(routeSpaceId, threadId);
+              if (navigation.routeSpaceId) {
+                navigation.navigateToChat(navigation.routeSpaceId, threadId);
               }
             }}
             onUpdateThread={(threadId, updates) => {
-              setThreadsBySpace((prev) => {
+              navigation.setThreadsBySpace((prev) => {
                 const next: Record<string, Thread[]> = {};
                 for (const key of Object.keys(prev)) {
                   next[key] = prev[key].map((th) =>
@@ -200,7 +182,7 @@ export function AuthenticatedRoutes() {
                 return next;
               });
             }}
-            onNewThreadCreated={handleNewThreadCreated}
+            onNewThreadCreated={navigation.handleNewThreadCreated}
           />
         </ErrorBoundary>
       </AuthenticatedLayout>
@@ -208,14 +190,16 @@ export function AuthenticatedRoutes() {
   };
 
   const renderDeployView = () => {
-    if (waitingForSpaceResolution) return <LoadingScreen />;
-    if (hasInvalidSpaceRoute) return renderSpaceRouteError();
-    const currentDeploySection = route.deploySection ||
+    if (navigation.waitingForSpaceResolution) return <LoadingScreen />;
+    if (hasInvalidSpaceRoute()) return renderSpaceRouteError();
+    const currentDeploySection = navigation.route.deploySection ||
       deploySection() ||
       "workers";
-    const deploySpaceId = routeSpaceId ?? selectedSpaceId ?? preferredSpaceId;
+    const deploySpaceId = navigation.routeSpaceId ??
+      navigation.selectedSpaceId ??
+      navigation.preferredSpaceId;
 
-    if (!deploySpaceId && !spacesLoaded) {
+    if (!deploySpaceId && !auth.spacesLoaded) {
       return <LoadingScreen />;
     }
 
@@ -236,21 +220,21 @@ export function AuthenticatedRoutes() {
             ? (
               <DeployPanel
                 spaceId={deploySpaceId}
-                spaces={spaces}
+                spaces={auth.spaces}
                 activeSection={currentDeploySection}
                 onSectionChange={(section) => {
                   setDeploySection(section);
-                  navigate({
+                  navigation.navigate({
                     view: "deploy",
                     spaceId: deploySpaceId,
                     deploySection: section,
                   });
                 }}
-                user={user}
-                userSettings={userSettings}
-                onSettingsChange={setUserSettings}
-                onSpacesRefresh={fetchSpaces}
-                isMobile={isMobile}
+                user={auth.user}
+                userSettings={auth.userSettings}
+                onSettingsChange={auth.setUserSettings}
+                onSpacesRefresh={auth.fetchSpaces}
+                isMobile={breakpoint.isMobile}
               />
             )
             : (
@@ -264,14 +248,19 @@ export function AuthenticatedRoutes() {
   };
 
   const renderRepoView = () => {
-    if (hasInvalidSpaceRoute) return renderSpaceRouteError();
-    const backSpace = routeSpaceId
-      ? findSpaceByIdentifier(spaces, routeSpaceId, t("personal"))
-      : preferredSpace;
+    const route = navigation.route;
+    if (hasInvalidSpaceRoute()) return renderSpaceRouteError();
+    const backSpace = navigation.routeSpaceId
+      ? findSpaceByIdentifier(
+        auth.spaces,
+        navigation.routeSpaceId,
+        i18n.t("personal"),
+      )
+      : navigation.preferredSpace;
     const backSpaceId = backSpace ? getSpaceIdentifier(backSpace) : undefined;
 
     if ((!route.username || !route.repoName) && !route.repoId) {
-      replaceToChat();
+      navigation.replaceToChat();
       return <LoadingScreen />;
     }
 
@@ -287,10 +276,10 @@ export function AuthenticatedRoutes() {
             initialFileLine={route.fileLine}
             initialRef={route.ref}
             onBack={() => {
-              navigateToChat(backSpaceId);
+              navigation.navigateToChat(backSpaceId);
             }}
             isAuthenticated
-            onRequireLogin={handleLogin}
+            onRequireLogin={auth.handleLogin}
           />
         </ErrorBoundary>
       </AuthenticatedLayout>
@@ -298,24 +287,26 @@ export function AuthenticatedRoutes() {
   };
 
   const renderMemoryView = () => {
-    if (!preferredSpace) {
+    if (!navigation.preferredSpace) {
       return <LoadingScreen />;
     }
 
     return (
       <MemoryPage
-        spaceId={getSpaceIdentifier(preferredSpace)}
-        onBack={navigateToPreferredChat}
+        spaceId={getSpaceIdentifier(navigation.preferredSpace)}
+        onBack={navigation.navigateToPreferredChat}
       />
     );
   };
 
   const renderStorageView = () => {
-    if (waitingForSpaceResolution) return <LoadingScreen />;
-    if (hasInvalidSpaceRoute) return renderSpaceRouteError();
-    const storageSpaceId = routeSpaceId ?? preferredSpaceId;
+    const route = navigation.route;
+    if (navigation.waitingForSpaceResolution) return <LoadingScreen />;
+    if (hasInvalidSpaceRoute()) return renderSpaceRouteError();
+    const storageSpaceId = navigation.routeSpaceId ??
+      navigation.preferredSpaceId;
 
-    if (!storageSpaceId && !spacesLoaded) {
+    if (!storageSpaceId && !auth.spacesLoaded) {
       return <LoadingScreen />;
     }
     if (!storageSpaceId) {
@@ -327,6 +318,8 @@ export function AuthenticatedRoutes() {
         view: "storage",
         spaceId: storageSpaceId,
         storagePath: route.storagePath,
+        filePath: route.filePath,
+        fileLine: route.fileLine,
       })
     ) {
       return <LoadingScreen />;
@@ -337,15 +330,14 @@ export function AuthenticatedRoutes() {
         <ErrorBoundary>
           <StoragePage
             spaceId={storageSpaceId}
-            spaces={spaces}
+            spaces={auth.spaces}
             initialPath={route.storagePath || "/"}
             initialFilePath={route.filePath}
             onPathChange={(path) =>
-              navigate({
-                view: "storage",
-                spaceId: storageSpaceId,
-                storagePath: path,
-              })}
+              navigation.navigate(buildStorageNavigationState(
+                storageSpaceId,
+                path,
+              ))}
           />
         </ErrorBoundary>
       </AuthenticatedLayout>
@@ -353,11 +345,11 @@ export function AuthenticatedRoutes() {
   };
 
   const renderAppsView = () => {
-    if (waitingForSpaceResolution) return <LoadingScreen />;
-    if (hasInvalidSpaceRoute) return renderSpaceRouteError();
-    const appsSpaceId = routeSpaceId ?? preferredSpaceId;
+    if (navigation.waitingForSpaceResolution) return <LoadingScreen />;
+    if (hasInvalidSpaceRoute()) return renderSpaceRouteError();
+    const appsSpaceId = navigation.routeSpaceId ?? navigation.preferredSpaceId;
     if (!appsSpaceId) {
-      if (!spacesLoaded) {
+      if (!auth.spacesLoaded) {
         return <LoadingScreen />;
       }
       return (
@@ -378,7 +370,7 @@ export function AuthenticatedRoutes() {
         <ErrorBoundary>
           <AppsPage
             onNavigateToStore={() =>
-              navigate({ view: "store", storeTab: "discover" })}
+              navigation.navigate({ view: "store", storeTab: "discover" })}
           />
         </ErrorBoundary>
       </AuthenticatedLayout>
@@ -386,9 +378,9 @@ export function AuthenticatedRoutes() {
   };
 
   const renderSpaceSettingsView = () => {
-    if (waitingForSpaceResolution) return <LoadingScreen />;
-    if (hasInvalidSpaceRoute) return renderSpaceRouteError();
-    const wsId = routeSpaceId ?? selectedSpaceId ?? null;
+    if (navigation.waitingForSpaceResolution) return <LoadingScreen />;
+    if (hasInvalidSpaceRoute()) return renderSpaceRouteError();
+    const wsId = navigation.routeSpaceId ?? navigation.selectedSpaceId ?? null;
     if (
       ensureCanonicalRoute({
         view: "space-settings",
@@ -401,10 +393,10 @@ export function AuthenticatedRoutes() {
       <AuthenticatedLayout>
         <ErrorBoundary>
           <SpaceSettingsPage
-            spaces={spaces}
+            spaces={auth.spaces}
             initialSpaceId={wsId}
-            onSpaceDeleted={() => fetchSpaces(user)}
-            onSpaceUpdated={() => fetchSpaces(user)}
+            onSpaceDeleted={() => auth.fetchSpaces(auth.user)}
+            onSpaceUpdated={() => auth.fetchSpaces(auth.user)}
           />
         </ErrorBoundary>
       </AuthenticatedLayout>
@@ -415,41 +407,44 @@ export function AuthenticatedRoutes() {
     <AuthenticatedLayout>
       <ErrorBoundary>
         <SettingsView
-          user={user}
-          userSettings={userSettings}
-          onSettingsChange={setUserSettings}
-          onBack={() => navigateToPreferredChat()}
+          user={auth.user}
+          userSettings={auth.userSettings}
+          onSettingsChange={auth.setUserSettings}
+          onBack={() => navigation.navigateToPreferredChat()}
         />
       </ErrorBoundary>
     </AuthenticatedLayout>
   );
 
   const renderLegacyAppView = () => {
-    if (hasInvalidSpaceRoute) return renderSpaceRouteError();
-    if (!route.appId) {
-      replace({ view: "apps", spaceId: preferredSpaceId });
+    if (hasInvalidSpaceRoute()) return renderSpaceRouteError();
+    if (!navigation.route.appId) {
+      navigation.replace({
+        view: "apps",
+        spaceId: navigation.preferredSpaceId,
+      });
     }
     return <LoadingScreen />;
   };
 
   const renderHomeRedirectView = () => {
-    replace({ view: "apps", spaceId: preferredSpaceId });
+    navigation.replace({ view: "apps", spaceId: navigation.preferredSpaceId });
     return <LoadingScreen />;
   };
 
   const renderProfileView = (): JSX.Element | undefined => {
-    if (!route.username) {
+    if (!navigation.route.username) {
       return undefined;
     }
 
     return (
       <UserProfilePage
-        username={route.username}
-        onBack={navigateToPreferredChat}
+        username={navigation.route.username}
+        onBack={navigation.navigateToPreferredChat}
         onNavigateToProfile={(username) =>
-          navigate({ view: "profile", username })}
+          navigation.navigate({ view: "profile", username })}
         onNavigateToRepo={(username, repoName) => {
-          navigate({ view: "repo", username, repoName });
+          navigation.navigate({ view: "repo", username, repoName });
         }}
       />
     );
@@ -476,14 +471,19 @@ export function AuthenticatedRoutes() {
     settings: renderSettingsView,
   };
 
-  const renderer = authenticatedViewRenderers[route.view as AuthenticatedView];
-  if (renderer) {
-    const rendered = renderer();
-    if (rendered !== undefined) {
-      return <>{rendered}</>;
+  const content = createMemo<JSX.Element>(() => {
+    const renderer =
+      authenticatedViewRenderers[navigation.route.view as AuthenticatedView];
+    if (renderer) {
+      const rendered = renderer();
+      if (rendered !== undefined) {
+        return <>{rendered}</>;
+      }
     }
-  }
 
-  replace({ view: "apps", spaceId: preferredSpaceId });
-  return <LoadingScreen />;
+    navigation.replace({ view: "apps", spaceId: navigation.preferredSpaceId });
+    return <LoadingScreen />;
+  });
+
+  return content();
 }

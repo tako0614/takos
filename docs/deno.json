@@ -2,6 +2,7 @@
   "version": "1.0.0",
   "imports": {
     "vitepress": "npm:vitepress@^1.0.0",
+    "@vueuse/core": "npm:@vueuse/core@^12.4.0",
     "vue": "npm:vue@^3.5.0",
     "vue/server-renderer": "npm:vue@^3.5.0/server-renderer"
   },

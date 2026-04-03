@@ -1,14 +1,17 @@
-# Takos
+# はじめる
 
 > このページでわかること: Takos が何をするプラットフォームで、どう始めるか。
 
-Takos は、アプリを宣言的にデプロイ・実行するプラットフォームです。
+Takos は、AIエージェントによるサービスとソフトウェアの民主化基盤です。AI app と
+worker ベースの service を、同じ control plane で管理・配備・実行できます。
 
-`.takos/app.yml` にアプリの構成を書くだけで、Worker / Container / データベース / ストレージをまとめてデプロイできます。ビルド手順を CLI に教える必要はありません。「何をデプロイするか」を書けば、Takos が面倒を見てくれます。
+アプリを構成するときは `.takos/app.yml` と `.takos/workflows/`
+を使いますが、Takos Docs は manifest だけの説明書ではありません。この章では、CLI
+のセットアップから最初の deploy まで、Takos を使い始める流れを揃えます。
 
 ## 3 分で始める
 
-### 1. CLI をイン���トール
+### 1. CLI をインストール
 
 ```bash
 deno install -gA jsr:@takos/cli
@@ -27,9 +30,9 @@ takos login
 takos whoami
 ```
 
-### 3. app.yml を書く
+### 3. アプリ定義を書く
 
-プロジェクトのルートに `.takos/app.yml` を作ります。
+プロジェクトのルートに、Takos の app manifest `.takos/app.yml` を作ります。
 
 ```yaml
 apiVersion: takos.dev/v1alpha1
@@ -56,12 +59,17 @@ spec:
 takos apply --env staging
 ```
 
-ステージング環境にデプロイされます。URL がターミナルに表示されるので、ブラウザで開いてみましょう。
+ステージング環境にデプロイされます。URL
+がターミナルに表示されるので、ブラウザで開いてみましょう。
 
 ## 次のステップ
 
-- [はじめてのアプリ](/get-started/your-first-app) --- 実際にアプリを作ってデプロイするチュートリアル
-- [プロジェクト構成](/get-started/project-structure) --- `.takos/` ディレクトリの中身を理解する
+- [Takos 全体像](/overview/) --- Workspace / Repo / Worker / Run
+  などの基本単位から理解する
+- [はじめてのアプリ](/get-started/your-first-app) ---
+  実際にアプリを作ってデプロイするチュートリアル
+- [プロジェクト構成](/get-started/project-structure) --- `.takos/`
+  ディレクトリの中身を理解する
 - [ローカル開発](/get-started/local-development) --- ローカル環境をセットアップ
-- [アプリ開発](/apps/) --- app.yml の詳細ガイド
+- [アプリ構成](/apps/) --- アプリマニフェストと周辺 public surface のガイド
 - [サンプル集](/examples/) --- コピペで始められるサンプル

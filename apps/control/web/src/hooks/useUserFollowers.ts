@@ -1,6 +1,6 @@
-import { createSignal, createEffect, on } from 'solid-js';
-import type { FollowUser } from '../types/profile.ts';
-import { rpc, rpcJson } from '../lib/rpc.ts';
+import { type Accessor, createEffect, createSignal, on } from "solid-js";
+import type { FollowUser } from "../types/profile.ts";
+import { rpc, rpcJson } from "../lib/rpc.ts";
 
 interface FollowersResponse {
   followers: FollowUser[];
@@ -9,24 +9,26 @@ interface FollowersResponse {
 
 const ITEMS_PER_PAGE = 20;
 
-export function useUserFollowers(username: string) {
+export function useUserFollowers(username: Accessor<string>) {
   const [followers, setFollowers] = createSignal<FollowUser[]>([]);
   const [offset, setOffset] = createSignal(0);
   const [hasMore, setHasMore] = createSignal(true);
   const [loading, setLoading] = createSignal(false);
   const [error, setError] = createSignal<string | null>(null);
-  const [sort, setSort] = createSignal<'created' | 'username'>('created');
-  const [order, setOrder] = createSignal<'desc' | 'asc'>('desc');
+  const [sort, setSort] = createSignal<"created" | "username">("created");
+  const [order, setOrder] = createSignal<"desc" | "asc">("desc");
 
   const fetch_ = async (reset = false) => {
+    const currentUsername = username();
+    if (!currentUsername) return;
     if (!reset && !hasMore()) return;
 
     setLoading(true);
     setError(null);
     try {
       const currentOffset = reset ? 0 : offset();
-      const res = await rpc.users[':username'].followers.$get({
-        param: { username },
+      const res = await rpc.users[":username"].followers.$get({
+        param: { username: currentUsername },
         query: {
           limit: String(ITEMS_PER_PAGE),
           offset: String(currentOffset),
@@ -35,6 +37,7 @@ export function useUserFollowers(username: string) {
         },
       });
       const data = await rpcJson<FollowersResponse>(res);
+      if (currentUsername !== username()) return;
       if (reset) {
         setFollowers(data.followers);
         setOffset(ITEMS_PER_PAGE);
@@ -44,7 +47,7 @@ export function useUserFollowers(username: string) {
       }
       setHasMore(data.has_more);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to load followers');
+      setError(err instanceof Error ? err.message : "Failed to load followers");
     } finally {
       setLoading(false);
     }
@@ -59,7 +62,7 @@ export function useUserFollowers(username: string) {
 
   // Reset when username changes
   createEffect(on(
-    () => username,
+    username,
     () => {
       reset();
     },
@@ -75,9 +78,9 @@ export function useUserFollowers(username: string) {
     },
   ));
 
-  const setSortKey = (newSort: 'created' | 'username') => {
+  const setSortKey = (newSort: "created" | "username") => {
     setSort(newSort);
-    setOrder(newSort === 'username' ? 'asc' : 'desc');
+    setOrder(newSort === "username" ? "asc" : "desc");
   };
 
   const updateUser = (updater: (user: FollowUser) => FollowUser) => {

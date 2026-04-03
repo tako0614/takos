@@ -1,5 +1,6 @@
 import { createSignal } from 'solid-js';
 import type { Setter } from 'solid-js';
+import type { RpcResponse } from '../lib/rpc.ts';
 import { useI18n } from '../store/i18n.ts';
 import { useToast } from '../store/toast.ts';
 import { useConfirmDialog } from '../store/confirm-dialog.ts';
@@ -7,7 +8,7 @@ import type { StorageFile } from '../types/index.ts';
 
 interface UseStorageActionsParams {
   getDownloadUrl: (fileId: string) => Promise<string | null>;
-  downloadFolderZip: (path: string) => Promise<Response | null>;
+  downloadFolderZip: (path: string) => Promise<RpcResponse | null>;
   deleteItem: (id: string) => Promise<boolean>;
   renameItem: (id: string, name: string) => Promise<unknown>;
   currentPath: () => string;

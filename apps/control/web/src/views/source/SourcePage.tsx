@@ -1,21 +1,21 @@
-import { createEffect, onMount, onCleanup, createSignal } from 'solid-js';
-import { Icons } from '../../lib/Icons.tsx';
-import { useBreakpoint } from '../../hooks/useBreakpoint.ts';
-import { useI18n } from '../../store/i18n.ts';
-import { CreateRepoModal } from '../shared/repos/CreateRepoModal.tsx';
-import type { Space } from '../../types/index.ts';
-import { RepoDetailPanel } from './components/RepoDetailPanel.tsx';
-import { useSourceData } from '../../hooks/useSourceData.ts';
-import { useSourceViewUiState } from '../../hooks/useSourceViewUiState.ts';
-import { SourceSearchBar } from './SourceSearchBar.tsx';
+import { createEffect, createSignal, onCleanup, onMount } from "solid-js";
+import { Icons } from "../../lib/Icons.tsx";
+import { useBreakpoint } from "../../hooks/useBreakpoint.ts";
+import { useI18n } from "../../store/i18n.ts";
+import { CreateRepoModal } from "../shared/repos/CreateRepoModal.tsx";
+import type { Space } from "../../types/index.ts";
+import { RepoDetailPanel } from "./components/RepoDetailPanel.tsx";
+import { useSourceData } from "../../hooks/useSourceData.ts";
+import { useSourceViewUiState } from "../../hooks/useSourceViewUiState.ts";
+import { SourceSearchBar } from "./SourceSearchBar.tsx";
 import {
-  SourceFilterStatusBar,
   DesktopFilterBar,
   MobileFilterBar,
   MobileFiltersModal,
-} from './SourceFilters.tsx';
-import { SourceBrowseView } from './SourceBrowseView.tsx';
-import { SourceHomeView } from './SourceHomeView.tsx';
+  SourceFilterStatusBar,
+} from "./SourceFilters.tsx";
+import { SourceBrowseView } from "./SourceBrowseView.tsx";
+import { SourceHomeView } from "./SourceHomeView.tsx";
 
 interface SourcePageProps {
   spaces: Space[];
@@ -24,50 +24,76 @@ interface SourcePageProps {
   onRequireLogin: () => void;
 }
 
-export function SourcePage({ spaces, onNavigateToRepo, isAuthenticated, onRequireLogin }: SourcePageProps) {
+export function SourcePage(props: SourcePageProps) {
   const { t } = useI18n();
-  const { isMobile } = useBreakpoint();
+  const breakpoint = useBreakpoint();
   let searchRef: HTMLInputElement | undefined;
   const [showMobileFilters, setShowMobileFilters] = createSignal(false);
 
   const {
-    browseMode, setBrowseMode,
+    browseMode,
+    setBrowseMode,
     scrollContainerRef,
     restoreScroll,
     handleContentScroll,
   } = useSourceViewUiState();
 
   const {
-    filter, setFilter,
-    sort, setSort,
-    category, setCategory,
-    officialOnly, setOfficialOnly,
-    query, setQuery,
-    items, loading, hasMore, total,
-    selectedItem, setSelectedItem,
+    filter,
+    setFilter,
+    sort,
+    setSort,
+    category,
+    setCategory,
+    officialOnly,
+    setOfficialOnly,
+    query,
+    setQuery,
+    items,
+    loading,
+    hasMore,
+    total,
+    selectedItem,
+    setSelectedItem,
     installingId,
-    searchFocused, setSearchFocused,
-    suggestions, suggesting,
-    showCreateModal, setShowCreateModal,
+    searchFocused,
+    setSearchFocused,
+    suggestions,
+    suggesting,
+    showCreateModal,
+    setShowCreateModal,
     loadMore,
-    install, uninstall, rollback, toggleStar, createRepo, openRepo,
+    install,
+    uninstall,
+    rollback,
+    toggleStar,
+    createRepo,
+    openRepo,
     getItemTakopack,
-  } = useSourceData({ spaces, onNavigateToRepo, isAuthenticated, onRequireLogin });
+  } = useSourceData({
+    spaces: () => props.spaces,
+    onNavigateToRepo: (username, repoName) =>
+      props.onNavigateToRepo(username, repoName),
+    isAuthenticated: () => props.isAuthenticated,
+    onRequireLogin: () => props.onRequireLogin(),
+  });
 
   // Cmd/Ctrl+K to focus search
   onMount(() => {
     const handler = (e: KeyboardEvent) => {
-      if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
+      if ((e.metaKey || e.ctrlKey) && e.key === "k") {
         e.preventDefault();
         searchRef?.focus();
       }
     };
-    globalThis.addEventListener('keydown', handler);
-    onCleanup(() => globalThis.removeEventListener('keydown', handler));
+    globalThis.addEventListener("keydown", handler);
+    onCleanup(() => globalThis.removeEventListener("keydown", handler));
   });
 
-  const isSearchMode = browseMode() || query().length > 0 || filter() !== 'all' || category() !== '' || officialOnly();
-  const hasActiveFilters = filter() !== 'all' || category() !== '' || officialOnly();
+  const isSearchMode = browseMode() || query().length > 0 ||
+    filter() !== "all" || category() !== "" || officialOnly();
+  const hasActiveFilters = filter() !== "all" || category() !== "" ||
+    officialOnly();
 
   // Restore scroll position when switching between home/search
   createEffect(() => {
@@ -87,140 +113,154 @@ export function SourcePage({ spaces, onNavigateToRepo, isAuthenticated, onRequir
 
   // Close mobile filters on breakpoint change
   createEffect(() => {
+    void breakpoint.isMobile;
     setShowMobileFilters(false);
   });
 
   function exitSearch() {
     setBrowseMode(false);
-    setQuery('');
-    setFilter('all');
-    setCategory('');
+    setQuery("");
+    setFilter("all");
+    setCategory("");
     setOfficialOnly(false);
     searchRef?.blur();
   }
 
   function clearFilters() {
-    setFilter('all');
-    setCategory('');
+    setFilter("all");
+    setCategory("");
     setOfficialOnly(false);
   }
 
   return (
     <div class="h-full flex flex-col bg-zinc-50 dark:bg-zinc-900 overflow-hidden">
       <div class="max-w-2xl mx-auto w-full flex flex-col flex-1 min-h-0">
-
-      {/* -- Header -- */}
-      <div class="flex-shrink-0 px-4 pt-4 pb-3 md:pt-5">
-        {!isSearchMode && (
-          <div class="flex items-center justify-between mb-4">
-            <h1 class="text-xl md:text-2xl font-bold tracking-tight text-zinc-900 dark:text-zinc-50">{t('sourceTitle')}</h1>
-            <div class="flex items-center gap-2">
-              <button
-                type="button"
-                title={t('newRepository')}
-                class="w-10 h-10 md:w-8 md:h-8 flex items-center justify-center rounded-full bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900 hover:bg-zinc-700 dark:hover:bg-zinc-300 transition-colors"
-                onClick={() => {
-                  if (!isAuthenticated) {
-                    onRequireLogin();
-                    return;
-                  }
-                  setShowCreateModal(true);
-                }}
-              >
-                <Icons.Plus class="w-4 h-4" />
-              </button>
+        {/* -- Header -- */}
+        <div class="flex-shrink-0 px-4 pt-4 pb-3 md:pt-5">
+          {!isSearchMode && (
+            <div class="flex items-center justify-between mb-4">
+              <h1 class="text-xl md:text-2xl font-bold tracking-tight text-zinc-900 dark:text-zinc-50">
+                {t("sourceTitle")}
+              </h1>
+              <div class="flex items-center gap-2">
+                <button
+                  type="button"
+                  title={t("newRepository")}
+                  class="w-10 h-10 md:w-8 md:h-8 flex items-center justify-center rounded-full bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900 hover:bg-zinc-700 dark:hover:bg-zinc-300 transition-colors"
+                  onClick={() => {
+                    if (!props.isAuthenticated) {
+                      props.onRequireLogin();
+                      return;
+                    }
+                    setShowCreateModal(true);
+                  }}
+                >
+                  <Icons.Plus class="w-4 h-4" />
+                </button>
+              </div>
             </div>
-          </div>
-        )}
-
-        <SourceSearchBar
-          searchRef={searchRef}
-          query={query()}
-          setQuery={setQuery}
-          isSearchMode={isSearchMode}
-          searchFocused={searchFocused()}
-          setSearchFocused={setSearchFocused}
-          suggesting={suggesting()}
-          suggestions={suggestions()}
-          onExitSearch={exitSearch}
-          onFocusSearch={() => setBrowseMode(true)}
-          onNavigateToRepo={onNavigateToRepo}
-        />
-      </div>
-
-      {isSearchMode ? (
-        <>
-          <SourceFilterStatusBar
-            loading={loading()}
-            total={total()}
-            hasActiveFilters={hasActiveFilters}
-            onClearFilters={clearFilters}
-          />
-
-          {isMobile ? (
-            <MobileFilterBar
-              filter={filter()}
-              sort={sort()}
-              setSort={setSort}
-              hasActiveFilters={hasActiveFilters}
-              onShowFilters={() => setShowMobileFilters(true)}
-            />
-          ) : (
-            <DesktopFilterBar
-              filter={filter()}
-              setFilter={setFilter}
-              category={category()}
-              setCategory={setCategory}
-              officialOnly={officialOnly()}
-              setOfficialOnly={setOfficialOnly}
-              sort={sort()}
-              setSort={setSort}
-              isAuthenticated={isAuthenticated}
-              onRequireLogin={onRequireLogin}
-            />
           )}
 
-          <SourceBrowseView
-            scrollContainerRef={scrollContainerRef}
-            onScroll={onContentScroll}
-            items={items()}
-            loading={loading()}
-            hasMore={hasMore()}
-            filter={filter()}
-            installingId={installingId()}
-            getItemTakopack={getItemTakopack}
-            onSelect={setSelectedItem}
-            onInstall={install}
-            onStar={toggleStar}
-            onOpenRepo={openRepo}
-            onRollback={rollback}
-            onUninstall={uninstall}
-            loadMore={loadMore}
-            isAuthenticated={isAuthenticated}
-            onRequireLogin={onRequireLogin}
-            onCreateRepo={() => setShowCreateModal(true)}
+          <SourceSearchBar
+            searchRef={searchRef}
+            query={query()}
+            setQuery={setQuery}
+            isSearchMode={isSearchMode}
+            searchFocused={searchFocused()}
+            setSearchFocused={setSearchFocused}
+            suggesting={suggesting()}
+            suggestions={suggestions()}
+            onExitSearch={exitSearch}
+            onFocusSearch={() => setBrowseMode(true)}
+            onNavigateToRepo={props.onNavigateToRepo}
           />
-        </>
-      ) : (
-        <SourceHomeView
-          scrollContainerRef={scrollContainerRef}
-          onScroll={onContentScroll}
-          items={items()}
-          loading={loading()}
-          installingId={installingId()}
-          getItemTakopack={getItemTakopack}
-          onSelect={setSelectedItem}
-          onInstall={install}
-          onOpenRepo={openRepo}
-          onSeeAllTrending={() => { setBrowseMode(true); setSort('trending'); }}
-          onSeeAllOfficial={() => { setBrowseMode(true); setOfficialOnly(true); }}
-          onSeeAllMine={() => { setBrowseMode(true); setFilter('mine'); }}
-        />
-      )}
+        </div>
 
+        {isSearchMode
+          ? (
+            <>
+              <SourceFilterStatusBar
+                loading={loading()}
+                total={total()}
+                hasActiveFilters={hasActiveFilters}
+                onClearFilters={clearFilters}
+              />
+
+              {breakpoint.isMobile
+                ? (
+                  <MobileFilterBar
+                    filter={filter()}
+                    sort={sort()}
+                    setSort={setSort}
+                    hasActiveFilters={hasActiveFilters}
+                    onShowFilters={() => setShowMobileFilters(true)}
+                  />
+                )
+                : (
+                  <DesktopFilterBar
+                    filter={filter()}
+                    setFilter={setFilter}
+                    category={category()}
+                    setCategory={setCategory}
+                    officialOnly={officialOnly()}
+                    setOfficialOnly={setOfficialOnly}
+                    sort={sort()}
+                    setSort={setSort}
+                    isAuthenticated={props.isAuthenticated}
+                    onRequireLogin={props.onRequireLogin}
+                  />
+                )}
+
+              <SourceBrowseView
+                scrollContainerRef={scrollContainerRef}
+                onScroll={onContentScroll}
+                items={items()}
+                loading={loading()}
+                hasMore={hasMore()}
+                filter={filter()}
+                installingId={installingId()}
+                getItemTakopack={getItemTakopack}
+                onSelect={setSelectedItem}
+                onInstall={install}
+                onStar={toggleStar}
+                onOpenRepo={openRepo}
+                onRollback={rollback}
+                onUninstall={uninstall}
+                loadMore={loadMore}
+                isAuthenticated={props.isAuthenticated}
+                onRequireLogin={props.onRequireLogin}
+                onCreateRepo={() => setShowCreateModal(true)}
+              />
+            </>
+          )
+          : (
+            <SourceHomeView
+              scrollContainerRef={scrollContainerRef}
+              onScroll={onContentScroll}
+              items={items()}
+              loading={loading()}
+              installingId={installingId()}
+              getItemTakopack={getItemTakopack}
+              onSelect={setSelectedItem}
+              onInstall={install}
+              onOpenRepo={openRepo}
+              onSeeAllTrending={() => {
+                setBrowseMode(true);
+                setSort("trending");
+              }}
+              onSeeAllOfficial={() => {
+                setBrowseMode(true);
+                setOfficialOnly(true);
+              }}
+              onSeeAllMine={() => {
+                setBrowseMode(true);
+                setFilter("mine");
+              }}
+            />
+          )}
       </div>
 
-      {isMobile && (
+      {breakpoint.isMobile && (
         <MobileFiltersModal
           isOpen={showMobileFilters()}
           onClose={() => setShowMobileFilters(false)}
@@ -230,8 +270,8 @@ export function SourcePage({ spaces, onNavigateToRepo, isAuthenticated, onRequir
           setCategory={setCategory}
           officialOnly={officialOnly()}
           setOfficialOnly={setOfficialOnly}
-          isAuthenticated={isAuthenticated}
-          onRequireLogin={onRequireLogin}
+          isAuthenticated={props.isAuthenticated}
+          onRequireLogin={props.onRequireLogin}
         />
       )}
 

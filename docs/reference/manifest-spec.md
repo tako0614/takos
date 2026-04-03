@@ -5,6 +5,10 @@
 Cloudflare-native の syntax が正本です。Takos runtime はこの spec を Cloudflare
 backend と互換 backend の両方で実現します。
 
+workspace shell integration、canonical URL、shell launch URL、launch metadata
+はこの spec には含めません。`.takos/app.yml` は deploy/runtime contract
+だけを扱います。
+
 ## トップレベル
 
 | field           | required | type   | 説明                     |
@@ -44,19 +48,19 @@ backend と互換 backend の両方で実現します。
 
 ## `services.<name>`
 
-| field         | required | 説明                                              |
-| ------------- | -------- | ------------------------------------------------- |
-| `dockerfile`  | no       | local/offline build 用 Dockerfile path            |
-| `imageRef`    | no       | online `takos apply` が使う deploy 済み image ref |
-| `artifact`    | no       | `kind: image` の direct image artifact            |
-| `provider`    | no       | `oci`, `ecs`, `cloud-run`, `k8s`                  |
-| `port`        | yes      | listen port                                       |
-| `bindings`    | no       | workers と同じ binding syntax                     |
-| `triggers`    | no       | 現在は `schedules` のみ                           |
-| `env`         | no       | service env                                       |
-| `healthCheck` | no       | ヘルスチェック                                    |
-| `volumes`     | no       | volume mount                                      |
-| `dependsOn`   | no       | 他 workload への依存                              |
+| field         | required | 説明                                                                 |
+| ------------- | -------- | -------------------------------------------------------------------- |
+| `dockerfile`  | no       | local/offline build 用 Dockerfile path                               |
+| `imageRef`    | no       | online `takos apply` / `takos deploy` が使う digest-pinned image ref |
+| `artifact`    | no       | `kind: image` の direct image artifact                               |
+| `provider`    | no       | `oci`, `ecs`, `cloud-run`, `k8s`                                     |
+| `port`        | yes      | listen port                                                          |
+| `bindings`    | no       | workers と同じ binding syntax                                        |
+| `triggers`    | no       | 現在は `schedules` のみ                                              |
+| `env`         | no       | service env                                                          |
+| `healthCheck` | no       | ヘルスチェック                                                       |
+| `volumes`     | no       | volume mount                                                         |
+| `dependsOn`   | no       | 他 workload への依存                                                 |
 
 ## `workers.<name>.bindings` / `services.<name>.bindings`
 
@@ -106,11 +110,11 @@ backend と互換 backend の両方で実現します。
 名を参照します。
 
 `services.<name>` は `dockerfile` / `imageRef` / `artifact.kind=image`
-のいずれかが必要です。`takos apply` は full deployment pipeline
+のいずれかが必要です。`takos apply` / `takos deploy` は full deployment pipeline
 を通るため、`workers` は `build.fromWorkflow.artifactPath` から bundle
 を解決し、`services` / `containers` は `imageRef` か `artifact.kind=image`
-を使います。`dockerfile` だけでは online apply の deploy source
-としては不十分です。
+を使います。`imageRef` は digest pin (`@sha256:...`) 必須です。`dockerfile`
+だけでは online apply / deploy の deploy source としては不十分です。
 
 ## routes[]
 

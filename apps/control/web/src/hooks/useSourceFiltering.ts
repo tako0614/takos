@@ -1,12 +1,12 @@
-import { createSignal, createEffect, createMemo, onCleanup } from 'solid-js';
-import type { Accessor, Setter } from 'solid-js';
-import { useI18n } from '../store/i18n.ts';
-import { rpc, rpcJson } from '../lib/rpc.ts';
-import { getPersonalSpace, getSpaceIdentifier } from '../lib/spaces.ts';
-import type { Space } from '../types/index.ts';
+import { createEffect, createMemo, createSignal, onCleanup } from "solid-js";
+import type { Accessor, Setter } from "solid-js";
+import { useI18n } from "../store/i18n.ts";
+import { rpc, rpcJson } from "../lib/rpc.ts";
+import { getPersonalSpace, getSpaceIdentifier } from "../lib/spaces.ts";
+import type { Space } from "../types/index.ts";
 
-export type SourceFilter = 'all' | 'mine' | 'starred';
-export type SourceSort = 'trending' | 'new' | 'stars' | 'updated';
+export type SourceFilter = "all" | "mine" | "starred";
+export type SourceSort = "trending" | "new" | "stars" | "updated";
 
 export interface CatalogSuggestionUser {
   username: string;
@@ -32,7 +32,7 @@ interface CatalogSuggestions {
   repos: CatalogSuggestionRepo[];
 }
 
-const SOURCE_STATE_KEY = 'takos.source.state.v1';
+const SOURCE_STATE_KEY = "takos.source.state.v1";
 
 type PersistedSourceState = {
   filter: SourceFilter;
@@ -43,8 +43,8 @@ type PersistedSourceState = {
   selectedSpaceId: string | null;
 };
 
-const ALLOWED_FILTERS: SourceFilter[] = ['all', 'mine', 'starred'];
-const ALLOWED_SORTS: SourceSort[] = ['trending', 'new', 'stars', 'updated'];
+const ALLOWED_FILTERS: SourceFilter[] = ["all", "mine", "starred"];
+const ALLOWED_SORTS: SourceSort[] = ["trending", "new", "stars", "updated"];
 
 function readPersistedSourceState(): Partial<PersistedSourceState> {
   const storage = globalThis.sessionStorage;
@@ -54,16 +54,24 @@ function readPersistedSourceState(): Partial<PersistedSourceState> {
     if (!raw) return {};
     const parsed = JSON.parse(raw) as Partial<PersistedSourceState>;
     return {
-      filter: ALLOWED_FILTERS.includes(parsed.filter as SourceFilter) ? parsed.filter : undefined,
-      sort: ALLOWED_SORTS.includes(parsed.sort as SourceSort) ? parsed.sort : undefined,
-      category: typeof parsed.category === 'string' ? parsed.category : undefined,
-      officialOnly: typeof parsed.officialOnly === 'boolean' ? parsed.officialOnly : undefined,
-      query: typeof parsed.query === 'string' ? parsed.query : undefined,
-      selectedSpaceId: typeof parsed.selectedSpaceId === 'string'
+      filter: ALLOWED_FILTERS.includes(parsed.filter as SourceFilter)
+        ? parsed.filter
+        : undefined,
+      sort: ALLOWED_SORTS.includes(parsed.sort as SourceSort)
+        ? parsed.sort
+        : undefined,
+      category: typeof parsed.category === "string"
+        ? parsed.category
+        : undefined,
+      officialOnly: typeof parsed.officialOnly === "boolean"
+        ? parsed.officialOnly
+        : undefined,
+      query: typeof parsed.query === "string" ? parsed.query : undefined,
+      selectedSpaceId: typeof parsed.selectedSpaceId === "string"
         ? parsed.selectedSpaceId
         : parsed.selectedSpaceId === null
-          ? null
-          : undefined,
+        ? null
+        : undefined,
     };
   } catch {
     return {};
@@ -81,8 +89,8 @@ function writePersistedSourceState(state: PersistedSourceState) {
 }
 
 export interface UseSourceFilteringOptions {
-  spaces: Space[];
-  isAuthenticated: boolean;
+  spaces: Accessor<Space[]>;
+  isAuthenticated: Accessor<boolean>;
 }
 
 export interface UseSourceFilteringResult {
@@ -113,11 +121,17 @@ export function useSourceFiltering({
   const { t } = useI18n();
   const persistedState = readPersistedSourceState();
 
-  const [filter, setFilter] = createSignal<SourceFilter>(persistedState.filter ?? 'all');
-  const [sort, setSort] = createSignal<SourceSort>(persistedState.sort ?? 'trending');
-  const [category, setCategory] = createSignal(persistedState.category ?? '');
-  const [officialOnly, setOfficialOnly] = createSignal(persistedState.officialOnly ?? false);
-  const [query, setQuery] = createSignal(persistedState.query ?? '');
+  const [filter, setFilter] = createSignal<SourceFilter>(
+    persistedState.filter ?? "all",
+  );
+  const [sort, setSort] = createSignal<SourceSort>(
+    persistedState.sort ?? "trending",
+  );
+  const [category, setCategory] = createSignal(persistedState.category ?? "");
+  const [officialOnly, setOfficialOnly] = createSignal(
+    persistedState.officialOnly ?? false,
+  );
+  const [query, setQuery] = createSignal(persistedState.query ?? "");
   const [debouncedQuery, setDebouncedQuery] = createSignal(query());
 
   createEffect(() => {
@@ -130,38 +144,44 @@ export function useSourceFiltering({
     persistedState.selectedSpaceId ?? null,
   );
   const spaceIds = createMemo(
-    () => new Set(spaces.map((space) => getSpaceIdentifier(space))),
+    () => new Set(spaces().map((space) => getSpaceIdentifier(space))),
   );
   const effectiveSpaceId = createMemo(() => {
-    return isAuthenticated
-      && selectedSpaceId()
-      && spaceIds().has(selectedSpaceId()!)
+    return isAuthenticated() &&
+        selectedSpaceId() &&
+        spaceIds().has(selectedSpaceId()!)
       ? selectedSpaceId()
       : null;
   });
 
   const [searchFocused, setSearchFocused] = createSignal(false);
-  const [suggestions, setSuggestions] = createSignal<CatalogSuggestions>({ users: [], repos: [] });
+  const [suggestions, setSuggestions] = createSignal<CatalogSuggestions>({
+    users: [],
+    repos: [],
+  });
   const [suggesting, setSuggesting] = createSignal(false);
   let suggestionRequestSeq = 0;
 
   // Initialize space and validate persisted space selection against current auth/spaces.
   createEffect(() => {
-    if (!isAuthenticated) {
+    if (!isAuthenticated()) {
       if (selectedSpaceId() !== null) {
         setSelectedSpaceId(null);
       }
       return;
     }
-    if (spaces.length === 0) return;
+    const currentSpaces = spaces();
+    if (currentSpaces.length === 0) return;
 
     if (selectedSpaceId() && spaceIds().has(selectedSpaceId()!)) {
       return;
     }
 
-    const personal = getPersonalSpace(spaces, t('personal'));
+    const personal = getPersonalSpace(currentSpaces, t("personal"));
     setSelectedSpaceId(
-      personal ? getSpaceIdentifier(personal) : getSpaceIdentifier(spaces[0]),
+      personal
+        ? getSpaceIdentifier(personal)
+        : getSpaceIdentifier(currentSpaces[0]),
     );
   });
 
@@ -191,7 +211,9 @@ export function useSourceFiltering({
     const timer = setTimeout(async () => {
       try {
         setSuggesting(true);
-        const response = await rpc.explore.catalog.suggest.$get({ query: { q, limit: '6' } });
+        const response = await rpc.explore.catalog.suggest.$get({
+          query: { q, limit: "6" },
+        });
         const data = await rpcJson<CatalogSuggestions>(response);
         if (currentRequestId !== suggestionRequestSeq) return;
         setSuggestions({ users: data.users || [], repos: data.repos || [] });

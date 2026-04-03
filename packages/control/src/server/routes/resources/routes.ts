@@ -1,15 +1,21 @@
-import { Hono } from 'hono';
-import type { ContentfulStatusCode } from 'hono/utils/http-status';
-import { z } from 'zod';
-import type { ResourceCapability, ResourceType } from '../../../shared/types/index.ts';
-import { generateId } from '../../../shared/utils/index.ts';
-import { VECTORIZE_DEFAULT_DIMENSIONS } from '../../../shared/config/limits.ts';
-import { requireSpaceAccess, type AuthenticatedRouteEnv } from '../route-auth.ts';
-import { AppError, BadRequestError } from 'takos-common/errors';
-import { zValidator } from '../zod-validator.ts';
+import { type Context, Hono } from "hono";
+import type { ContentfulStatusCode } from "hono/utils/http-status";
+import { z } from "zod";
+import type {
+  ResourceCapability,
+  ResourceType,
+} from "../../../shared/types/index.ts";
+import { generateId } from "../../../shared/utils/index.ts";
+import {
+  type AuthenticatedRouteEnv,
+  requireSpaceAccess,
+} from "../route-auth.ts";
+import { AppError, BadRequestError } from "takos-common/errors";
+import { zValidator } from "../zod-validator.ts";
 import {
   checkResourceAccess,
   countResourceBindings,
+  deleteManagedResource,
   deleteResource,
   getResourceById,
   getResourceByName,
@@ -20,729 +26,721 @@ import {
   listResourcesForWorkspace,
   markResourceDeleting,
   provisionManagedResource,
-  deleteManagedResource,
   updateResourceMetadata,
-} from '../../../application/services/resources/index.ts';
-import { getDb } from '../../../infra/db/index.ts';
-import { accountMemberships, resourceAccess, resources, accounts, groups } from '../../../infra/db/schema.ts';
-import { eq, and } from 'drizzle-orm';
-import { resolveActorPrincipalId } from '../../../application/services/identity/principals.ts';
-import { logError } from '../../../shared/utils/logger.ts';
-import { NotFoundError, AuthorizationError, InternalError } from 'takos-common/errors';
-import { getPlatformServices } from '../../../platform/accessors.ts';
-import { getStoredResourceImplementation, toPublicResourceType, toResourceCapability } from '../../../application/services/resources/capabilities.ts';
-import { removeGroupDesiredResource, upsertGroupDesiredResource } from '../../../application/services/deployment/group-desired-projector.ts';
-import { safeJsonParseOrDefault } from '../../../shared/utils/index.ts';
+} from "../../../application/services/resources/index.ts";
+import { getDb } from "../../../infra/db/index.ts";
+import {
+  accountMemberships,
+  accounts,
+  groups,
+  resourceAccess,
+  resources,
+} from "../../../infra/db/schema.ts";
+import { and, eq } from "drizzle-orm";
+import { resolveActorPrincipalId } from "../../../application/services/identity/principals.ts";
+import { logError } from "../../../shared/utils/logger.ts";
+import {
+  AuthorizationError,
+  InternalError,
+  NotFoundError,
+} from "takos-common/errors";
+import { getPlatformServices } from "../../../platform/accessors.ts";
+import {
+  getStoredResourceImplementation,
+  toPublicResourceType,
+  toResourceCapability,
+} from "../../../application/services/resources/capabilities.ts";
+import {
+  removeGroupDesiredResource,
+  upsertGroupDesiredResource,
+} from "../../../application/services/deployment/group-desired-projector.ts";
+import { safeJsonParseOrDefault } from "../../../shared/utils/index.ts";
+import {
+  buildProjectedResourceSpec,
+  buildProvisioningRequest,
+  inferResourceProvider,
+  normalizeResourceProvider,
+  resolveRequestedProviderResourceName,
+} from "./route-helpers.ts";
 
 const resourcesBase = new Hono<AuthenticatedRouteEnv>();
+type ResourcesContext = Context<AuthenticatedRouteEnv>;
+type ResourceRecord = NonNullable<Awaited<ReturnType<typeof getResourceById>>>;
+type NamedResourceRecord = NonNullable<
+  Awaited<ReturnType<typeof getResourceByName>>
+>;
+
+function requireDbBinding(c: ResourcesContext) {
+  const dbBinding = getPlatformServices(c).sql?.binding;
+  if (!dbBinding) {
+    throw new InternalError("Database binding unavailable");
+  }
+  return dbBinding;
+}
+
+function parseStoredResourceConfig(
+  config: unknown,
+): Record<string, unknown> {
+  if (typeof config === "string") {
+    return safeJsonParseOrDefault<Record<string, unknown>>(config, {});
+  }
+  return config && typeof config === "object" && !Array.isArray(config)
+    ? config as Record<string, unknown>
+    : {};
+}
+
+function toStoredResourceConfig(
+  config: unknown,
+): string | Record<string, unknown> | undefined {
+  if (typeof config === "string") {
+    return config;
+  }
+  if (config && typeof config === "object" && !Array.isArray(config)) {
+    return config as Record<string, unknown>;
+  }
+  return undefined;
+}
+
+async function requireOwnedResource(
+  dbBinding: ReturnType<typeof requireDbBinding>,
+  userId: string,
+  resourceId: string,
+  errorMessage = "Only the owner can operate on this resource",
+): Promise<ResourceRecord> {
+  const resource = await getResourceById(dbBinding, resourceId);
+  if (!resource) {
+    throw new NotFoundError("Resource");
+  }
+  if (resource.owner_id !== userId) {
+    throw new AuthorizationError(errorMessage);
+  }
+  return resource;
+}
+
+async function requireAccessibleResource(
+  dbBinding: ReturnType<typeof requireDbBinding>,
+  userId: string,
+  resourceId: string,
+): Promise<ResourceRecord> {
+  const resource = await getResourceById(dbBinding, resourceId);
+  if (!resource) {
+    throw new NotFoundError("Resource");
+  }
+  const hasAccess = resource.owner_id === userId ||
+    await checkResourceAccess(dbBinding, resourceId, userId);
+  if (!hasAccess) {
+    throw new NotFoundError("Resource");
+  }
+  return resource;
+}
+
+async function requireOwnedNamedResource(
+  dbBinding: ReturnType<typeof requireDbBinding>,
+  userId: string,
+  resourceName: string,
+): Promise<NamedResourceRecord> {
+  const resource = await getResourceByName(dbBinding, userId, resourceName);
+  if (!resource) {
+    throw new NotFoundError("Resource");
+  }
+  return resource;
+}
+
+async function validateGroupForWorkspace(
+  dbBinding: ReturnType<typeof requireDbBinding>,
+  groupId: string,
+  spaceId: string,
+  errorMessage: string,
+): Promise<string> {
+  const db = getDb(dbBinding);
+  const group = await db.select({
+    id: groups.id,
+    spaceId: groups.spaceId,
+  })
+    .from(groups)
+    .where(eq(groups.id, groupId))
+    .get();
+  if (!group || group.spaceId !== spaceId) {
+    throw new BadRequestError(errorMessage);
+  }
+  return group.id;
+}
+
+async function upsertProjectedGroupResourceFromRecord(
+  env: AuthenticatedRouteEnv["Bindings"],
+  groupId: string,
+  name: string,
+  type: ResourceType,
+  config: unknown,
+): Promise<void> {
+  await upsertGroupDesiredResource(env, {
+    groupId,
+    name,
+    resource: buildProjectedResourceSpec(
+      name,
+      { type, config: parseStoredResourceConfig(config) },
+    ) as never,
+  });
+}
+
+async function removeProjectedGroupResourceIfPresent(
+  env: AuthenticatedRouteEnv["Bindings"],
+  groupId: string | null | undefined,
+  name: string,
+): Promise<void> {
+  if (!groupId) return;
+  await removeGroupDesiredResource(env, { groupId, name });
+}
+
+async function reconcileProjectedGroupResourceUpdate(
+  env: AuthenticatedRouteEnv["Bindings"],
+  resource: ResourceRecord,
+  updates: {
+    name?: string;
+    config?: Record<string, unknown>;
+  },
+): Promise<void> {
+  if (!resource.group_id) return;
+
+  const nextName = updates.name?.trim() || resource.name;
+  const nextConfig = updates.config ??
+    parseStoredResourceConfig(resource.config);
+
+  if (nextName !== resource.name) {
+    await removeProjectedGroupResourceIfPresent(
+      env,
+      resource.group_id,
+      resource.name,
+    );
+  }
+
+  await upsertProjectedGroupResourceFromRecord(
+    env,
+    resource.group_id,
+    nextName,
+    resource.type as ResourceType,
+    nextConfig,
+  );
+}
+
+async function moveProjectedGroupResource(
+  env: AuthenticatedRouteEnv["Bindings"],
+  resource: ResourceRecord,
+  nextGroupId: string | null,
+): Promise<void> {
+  if (nextGroupId) {
+    await upsertProjectedGroupResourceFromRecord(
+      env,
+      nextGroupId,
+      resource.name,
+      resource.type as ResourceType,
+      resource.config,
+    );
+    return;
+  }
+  await removeProjectedGroupResourceIfPresent(
+    env,
+    resource.group_id,
+    resource.name,
+  );
+}
+
+async function deleteManagedResourceSafely(
+  env: AuthenticatedRouteEnv["Bindings"],
+  resource: {
+    type: string;
+    config: unknown;
+    provider_name?: string | null;
+    provider_resource_id?: string | null;
+    provider_resource_name?: string | null;
+  },
+): Promise<void> {
+  try {
+    await deleteManagedResource(env, {
+      type: getStoredResourceImplementation(
+        resource.type,
+        toStoredResourceConfig(resource.config),
+      ) ??
+        resource.type,
+      providerName: resource.provider_name ?? undefined,
+      providerResourceId: resource.provider_resource_id ?? null,
+      providerResourceName: resource.provider_resource_name ?? null,
+    });
+  } catch (err) {
+    logError("Failed to delete managed resource", err, {
+      module: "routes/resources/base",
+    });
+  }
+}
+
+async function deleteOwnedResourceRecord(
+  env: AuthenticatedRouteEnv["Bindings"],
+  dbBinding: ReturnType<typeof requireDbBinding>,
+  resourceId: string,
+  resource: {
+    group_id?: string | null;
+    name: string;
+    type: string;
+    config: unknown;
+    provider_name?: string | null;
+    provider_resource_id?: string | null;
+    provider_resource_name?: string | null;
+  },
+): Promise<number | null> {
+  await removeProjectedGroupResourceIfPresent(
+    env,
+    resource.group_id,
+    resource.name,
+  );
+
+  const bindingsCount = await countResourceBindings(dbBinding, resourceId);
+  if (bindingsCount && bindingsCount.count > 0) {
+    return bindingsCount.count;
+  }
+
+  await markResourceDeleting(dbBinding, resourceId);
+  await deleteManagedResourceSafely(env, resource);
+  await deleteResource(dbBinding, resourceId);
+  return null;
+}
 
 resourcesBase.onError((err, c) => {
   if (err instanceof AppError) {
     return c.json(err.toResponse(), err.statusCode as ContentfulStatusCode);
   }
-  logError('Unhandled resources route error', err, { module: 'routes/resources/base' });
+  logError("Unhandled resources route error", err, {
+    module: "routes/resources/base",
+  });
   return c.json(
-    new InternalError('Internal server error').toResponse(),
+    new InternalError("Internal server error").toResponse(),
     500,
   );
 });
 
-function inferResourceProvider(env: AuthenticatedRouteEnv['Bindings']): 'cloudflare' | 'local' {
-  return env.CF_ACCOUNT_ID && env.CF_API_TOKEN ? 'cloudflare' : 'local';
-}
-
-const RESOURCE_PROVIDER_VALUES = ['cloudflare', 'local', 'aws', 'gcp', 'k8s'] as const;
-type ResourceProviderName = (typeof RESOURCE_PROVIDER_VALUES)[number];
-
-function normalizeResourceProvider(provider: unknown): ResourceProviderName | undefined {
-  if (provider === undefined || provider === null) {
-    return undefined;
-  }
-
-  const providerName = typeof provider === 'string'
-    ? provider.trim().toLowerCase()
-    : '';
-
-  return RESOURCE_PROVIDER_VALUES.includes(providerName as ResourceProviderName)
-    ? (providerName as ResourceProviderName)
-    : undefined;
-}
-
-function buildProjectedResourceSpec(
-  name: string,
-  body: {
-    type: ResourceType;
-    config?: Record<string, unknown>;
-  },
-) {
-  const config = body.config ?? {};
-  const canonicalType = toPublicResourceType(body.type, config) ?? body.type;
-  const workflowConfig = config.workflow && typeof config.workflow === 'object'
-    ? config.workflow as Record<string, unknown>
-    : {};
-  const durableConfig = config.durableObject && typeof config.durableObject === 'object'
-    ? config.durableObject as Record<string, unknown>
-    : {};
-  const binding = typeof config.binding === 'string' && config.binding.trim().length > 0
-    ? config.binding.trim()
-    : name.toUpperCase().replace(/-/g, '_');
-  switch (canonicalType) {
-    case 'd1':
-      return {
-        type: 'd1' as const,
-        binding,
-      };
-    case 'r2':
-      return {
-        type: 'r2' as const,
-        binding,
-      };
-    case 'kv':
-      return {
-        type: 'kv' as const,
-        binding,
-      };
-    case 'queue':
-      return {
-        type: 'queue' as const,
-        binding,
-        ...(config.queue && typeof config.queue === 'object' ? { queue: config.queue as Record<string, unknown> } : {}),
-      };
-    case 'vectorize':
-      return {
-        type: 'vectorize' as const,
-        binding,
-        ...(config.vectorize && typeof config.vectorize === 'object' ? { vectorize: config.vectorize as { dimensions: number; metric: 'cosine' | 'euclidean' | 'dot-product' } } : {}),
-      };
-    case 'analyticsEngine':
-      return {
-        type: 'analyticsEngine' as const,
-        binding,
-        ...(config.analyticsEngine && typeof config.analyticsEngine === 'object' ? { analyticsEngine: config.analyticsEngine as { dataset?: string } } : {}),
-      };
-    case 'workflow':
-      return {
-        type: 'workflow' as const,
-        binding,
-        workflow: {
-          service: String(config.service ?? workflowConfig.service ?? ''),
-          export: String(config.export ?? workflowConfig.export ?? ''),
-        },
-      };
-    case 'durableObject':
-      return {
-        type: 'durableObject' as const,
-        binding,
-        durableObject: {
-          className: String(config.className ?? durableConfig.className ?? ''),
-          ...(typeof config.scriptName === 'string'
-            ? { scriptName: config.scriptName }
-            : (typeof durableConfig.scriptName === 'string' ? { scriptName: durableConfig.scriptName } : {})),
-        },
-      };
-    case 'secretRef':
-      return {
-        type: 'secretRef' as const,
-        binding,
-      };
-    default:
-      return {
-        type: canonicalType as ResourceType,
-        binding,
-      };
-  }
-}
-
-function asObject(value: unknown): Record<string, unknown> | undefined {
-  return value && typeof value === 'object' && !Array.isArray(value)
-    ? value as Record<string, unknown>
-    : undefined;
-}
-
-function resolveRequestedProviderResourceName(
-  type: string,
-  fallbackName: string,
-  config?: Record<string, unknown>,
-): string {
-  const capability = toResourceCapability(type);
-  if (capability === 'analytics_store') {
-    const analyticsConfig = asObject(config?.analyticsEngine) ?? asObject(config?.analyticsStore);
-    const dataset = typeof analyticsConfig?.dataset === 'string'
-      ? analyticsConfig.dataset.trim()
-      : '';
-    if (dataset) return dataset;
-  }
-  return fallbackName;
-}
-
-function buildProvisioningRequest(
-  capability: ResourceCapability,
-  config?: Record<string, unknown>,
-): Record<string, unknown> {
-  const out: Record<string, unknown> = {};
-  const queueConfig = asObject(config?.queue);
-  const vectorConfig = asObject(config?.vectorize) ?? asObject(config?.vectorIndex);
-  const analyticsConfig = asObject(config?.analyticsEngine) ?? asObject(config?.analyticsStore);
-  const workflowConfig = asObject(config?.workflow) ?? asObject(config?.workflowRuntime);
-  const durableConfig = asObject(config?.durableObject) ?? asObject(config?.durableNamespace);
-
-  if (capability === 'vector_index') {
-    out.vectorIndex = {
-      dimensions: typeof vectorConfig?.dimensions === 'number'
-        ? vectorConfig.dimensions
-        : VECTORIZE_DEFAULT_DIMENSIONS,
-      metric: typeof vectorConfig?.metric === 'string'
-        ? vectorConfig.metric
-        : 'cosine',
-    };
-  }
-
-  if (capability === 'queue' && typeof queueConfig?.deliveryDelaySeconds === 'number') {
-    out.queue = { deliveryDelaySeconds: queueConfig.deliveryDelaySeconds };
-  }
-
-  if (capability === 'analytics_store' && typeof analyticsConfig?.dataset === 'string' && analyticsConfig.dataset.trim()) {
-    out.analyticsStore = { dataset: analyticsConfig.dataset.trim() };
-  }
-
-  if (
-    capability === 'workflow_runtime'
-    && typeof workflowConfig?.service === 'string'
-    && typeof workflowConfig?.export === 'string'
-  ) {
-    out.workflowRuntime = {
-      service: workflowConfig.service,
-      export: workflowConfig.export,
-      ...(typeof workflowConfig.timeoutMs === 'number' ? { timeoutMs: workflowConfig.timeoutMs } : {}),
-      ...(typeof workflowConfig.maxRetries === 'number' ? { maxRetries: workflowConfig.maxRetries } : {}),
-    };
-  }
-
-  if (capability === 'durable_namespace' && typeof durableConfig?.className === 'string') {
-    out.durableNamespace = {
-      className: durableConfig.className,
-      ...(typeof durableConfig.scriptName === 'string' ? { scriptName: durableConfig.scriptName } : {}),
-    };
-  }
-
-  return out;
-}
-
 resourcesBase
+  .get("/", async (c) => {
+    const dbBinding = requireDbBinding(c);
+    const user = c.get("user");
+    const spaceId = c.req.query("space_id");
 
-.get('/', async (c) => {
-  const dbBinding = getPlatformServices(c).sql?.binding;
-  const user = c.get('user');
-  const spaceId = c.req.query('space_id');
-  if (!dbBinding) {
-    throw new InternalError('Database binding unavailable');
-  }
+    if (spaceId) {
+      const access = await requireSpaceAccess(
+        c,
+        spaceId,
+        user.id,
+        ["owner", "admin", "editor", "viewer"],
+        "Workspace not found or access denied",
+        404,
+      );
 
-  if (spaceId) {
-    const access = await requireSpaceAccess(
-      c,
-      spaceId,
-      user.id,
-      ['owner', 'admin', 'editor', 'viewer'],
-      'Workspace not found or access denied',
-      404
-    );
+      const resourceList = await listResourcesForWorkspace(
+        dbBinding,
+        user.id,
+        access.space.id,
+      );
 
-    const resourceList = await listResourcesForWorkspace(dbBinding, user.id, access.space.id);
+      return c.json({ resources: resourceList });
+    }
 
-    return c.json({ resources: resourceList });
-  }
+    const { owned, shared } = await listResourcesForUser(dbBinding, user.id);
 
-  const { owned, shared } = await listResourcesForUser(dbBinding, user.id);
+    return c.json({ owned, shared });
+  })
+  .get("/shared/:spaceId", async (c) => {
+    const dbBinding = requireDbBinding(c);
+    const user = c.get("user");
+    const spaceId = c.req.param("spaceId");
+    const db = getDb(dbBinding);
+    const principalId = await resolveActorPrincipalId(dbBinding, user.id);
+    if (!principalId) {
+      throw new InternalError("User principal not found");
+    }
 
-  return c.json({ owned, shared });
-})
-
-.get('/shared/:spaceId', async (c) => {
-  const dbBinding = getPlatformServices(c).sql?.binding;
-  const user = c.get('user');
-  const spaceId = c.req.param('spaceId');
-  if (!dbBinding) {
-    throw new InternalError('Database binding unavailable');
-  }
-  const db = getDb(dbBinding);
-  const principalId = await resolveActorPrincipalId(dbBinding, user.id);
-  if (!principalId) {
-    throw new InternalError('User principal not found');
-  }
-
-  const isMember = await db.select({ id: accountMemberships.id }).from(accountMemberships).where(
-    and(eq(accountMemberships.accountId, spaceId), eq(accountMemberships.memberId, principalId))
-  ).get();
-
-  if (!isMember) {
-    throw new NotFoundError('Workspace');
-  }
-
-  // Get resource access entries for this space
-  const accessList = await db.select().from(resourceAccess).where(
-    eq(resourceAccess.accountId, spaceId)
-  ).all();
-
-  // Load resources and owner info for each access entry
-  const sharedResources: Array<{
-    name: string;
-    type: string;
-    capability?: string;
-    implementation?: string | null;
-    status: string;
-    provider_resource_id: string | null;
-    provider_resource_name: string | null;
-    access_level: string;
-    owner_name: string;
-    owner_email: string | null;
-  }> = [];
-
-  for (const a of accessList) {
-    const resource = await db.select().from(resources).where(eq(resources.id, a.resourceId)).get();
-    if (!resource || resource.status === 'deleted' || resource.accountId === spaceId) continue;
-
-    const owner = await db.select({ name: accounts.name, email: accounts.email }).from(accounts).where(
-      eq(accounts.id, resource.ownerAccountId)
+    const isMember = await db.select({ id: accountMemberships.id }).from(
+      accountMemberships,
+    ).where(
+      and(
+        eq(accountMemberships.accountId, spaceId),
+        eq(accountMemberships.memberId, principalId),
+      ),
     ).get();
 
-    sharedResources.push({
-      name: resource.name,
-      type: toPublicResourceType(resource.type, resource.config) ?? resource.type,
-      ...(resource.semanticType ? { capability: resource.semanticType } : {}),
-      ...(getStoredResourceImplementation(resource.type, resource.config) ? { implementation: getStoredResourceImplementation(resource.type, resource.config) } : {}),
-      status: resource.status,
-      provider_resource_id: resource.providerResourceId,
-      provider_resource_name: resource.providerResourceName,
-      access_level: a.permission,
-      owner_name: owner?.name ?? '',
-      owner_email: owner?.email ?? null,
-    });
-  }
+    if (!isMember) {
+      throw new NotFoundError("Workspace");
+    }
 
-  return c.json({ shared_resources: sharedResources });
-})
+    // Get resource access entries for this space
+    const accessList = await db.select().from(resourceAccess).where(
+      eq(resourceAccess.accountId, spaceId),
+    ).all();
 
-.get('/type/:type', async (c) => {
-  const dbBinding = getPlatformServices(c).sql?.binding;
-  const user = c.get('user');
-  const requestedType = c.req.param('type');
-  if (!dbBinding) {
-    throw new InternalError('Database binding unavailable');
-  }
+    // Load resources and owner info for each access entry
+    const sharedResources: Array<{
+      name: string;
+      type: string;
+      capability?: string;
+      implementation?: string | null;
+      status: string;
+      provider_resource_id: string | null;
+      provider_resource_name: string | null;
+      access_level: string;
+      owner_name: string;
+      owner_email: string | null;
+    }> = [];
 
-  const resourceType = toResourceCapability(requestedType);
-  if (!resourceType) {
-    throw new BadRequestError( 'Invalid resource type');
-  }
+    for (const a of accessList) {
+      const resource = await db.select().from(resources).where(
+        eq(resources.id, a.resourceId),
+      ).get();
+      if (
+        !resource || resource.status === "deleted" ||
+        resource.accountId === spaceId
+      ) continue;
 
-  const resourceList = await listResourcesByType(dbBinding, user.id, resourceType as ResourceCapability);
+      const owner = await db.select({
+        name: accounts.name,
+        email: accounts.email,
+      }).from(accounts).where(
+        eq(accounts.id, resource.ownerAccountId),
+      ).get();
 
-  return c.json({ resources: resourceList });
-})
+      sharedResources.push({
+        name: resource.name,
+        type: toPublicResourceType(resource.type, resource.config) ??
+          resource.type,
+        ...(resource.semanticType ? { capability: resource.semanticType } : {}),
+        ...(getStoredResourceImplementation(resource.type, resource.config)
+          ? {
+            implementation: getStoredResourceImplementation(
+              resource.type,
+              resource.config,
+            ),
+          }
+          : {}),
+        status: resource.status,
+        provider_resource_id: resource.providerResourceId,
+        provider_resource_name: resource.providerResourceName,
+        access_level: a.permission,
+        owner_name: owner?.name ?? "",
+        owner_email: owner?.email ?? null,
+      });
+    }
 
-.get('/:id', async (c) => {
-  const dbBinding = getPlatformServices(c).sql?.binding;
-  const user = c.get('user');
-  const resourceId = c.req.param('id');
-  if (!dbBinding) {
-    throw new InternalError('Database binding unavailable');
-  }
+    return c.json({ shared_resources: sharedResources });
+  })
+  .get("/type/:type", async (c) => {
+    const dbBinding = requireDbBinding(c);
+    const user = c.get("user");
+    const requestedType = c.req.param("type");
 
-  const resource = await getResourceById(dbBinding, resourceId);
+    const resourceType = toResourceCapability(requestedType);
+    if (!resourceType) {
+      throw new BadRequestError("Invalid resource type");
+    }
 
-  if (!resource) {
-    throw new NotFoundError('Resource');
-  }
-
-  const hasAccess = resource.owner_id === user.id || await checkResourceAccess(dbBinding, resourceId, user.id);
-  if (!hasAccess) {
-    throw new NotFoundError('Resource');
-  }
-
-  const access = await listResourceAccess(dbBinding, resourceId);
-  const resourceBindings = await listResourceBindings(dbBinding, resourceId);
-
-  return c.json({
-    resource,
-    access,
-    bindings: resourceBindings,
-    is_owner: resource.owner_id === user.id,
-  });
-})
-
-.post('/',
-  zValidator('json', z.object({
-    name: z.string(),
-    type: z.string(),
-    config: z.record(z.unknown()).optional(),
-    provider: z.string().optional(),
-    space_id: z.string().optional(),
-    group_id: z.string().optional(),
-  })),
-  async (c) => {
-  const dbBinding = getPlatformServices(c).sql?.binding;
-  const user = c.get('user');
-  const body = c.req.valid('json') as {
-    name: string;
-    type: ResourceType;
-    config?: Record<string, unknown>;
-    provider?: string;
-    space_id?: string;
-    group_id?: string;
-  };
-  if (!dbBinding) {
-    throw new InternalError('Database binding unavailable');
-  }
-
-  if (!body.name?.trim()) {
-    throw new BadRequestError( 'name is required');
-  }
-
-  const providerName = normalizeResourceProvider(body.provider) ?? inferResourceProvider(c.env);
-  if (body.provider && !normalizeResourceProvider(body.provider)) {
-    throw new BadRequestError(`Invalid provider: ${body.provider}`);
-  }
-
-  const resourceCapability = toResourceCapability(body.type);
-  if (!resourceCapability) {
-    throw new BadRequestError( 'Invalid resource type');
-  }
-
-  let spaceId = body.space_id?.trim() || '';
-
-  if (spaceId) {
-    const access = await requireSpaceAccess(
-      c,
-      spaceId,
+    const resourceList = await listResourcesByType(
+      dbBinding,
       user.id,
-      ['owner', 'admin', 'editor'],
-      'Workspace not found or insufficient permissions',
-      403
+      resourceType as ResourceCapability,
     );
 
-    spaceId = access.space.id;
-  } else {
-    // Default to user's own account
-    spaceId = user.id;
-  }
-
-  let groupId: string | null = null;
-  if (body.group_id?.trim()) {
-    const db = getDb(dbBinding);
-    const group = await db.select({ id: groups.id, spaceId: groups.spaceId })
-      .from(groups)
-      .where(eq(groups.id, body.group_id.trim()))
-      .get();
-    if (!group || group.spaceId !== spaceId) {
-      throw new BadRequestError('group_id must belong to the selected workspace');
-    }
-    groupId = group.id;
-  }
-
-  const id = generateId();
-  const timestamp = new Date().toISOString();
-  const name = body.name.trim();
-  const providerResourceName = resolveRequestedProviderResourceName(
-    body.type,
-    `takos-${body.type}-${id}`,
-    body.config,
-  );
-
-  try {
-    await provisionManagedResource(c.env, {
-      id,
-      timestamp,
-      ownerId: user.id,
-      spaceId,
-      groupId,
-      name,
-      type: resourceCapability,
-      publicType: body.type,
-      semanticType: resourceCapability,
-      providerName,
-      providerResourceName,
-      config: body.config || {},
-      recordFailure: true,
-      ...buildProvisioningRequest(resourceCapability, body.config),
-    });
-    if (groupId) {
-      await upsertGroupDesiredResource(c.env, {
-        groupId,
-        name,
-        resource: buildProjectedResourceSpec(name, body) as never,
-      });
-    }
-    return c.json({ resource: await getResourceById(dbBinding, id) }, 201);
-  } catch (err) {
-    logError('Resource creation failed', err, { module: 'routes/resources/base' });
-
-    return c.json({
-      error: 'Failed to provision resource',
-      resource_id: id,
-    }, 500);
-  }
-})
-
-.patch('/:id',
-  zValidator('json', z.object({
-    name: z.string().optional(),
-    config: z.record(z.unknown()).optional(),
-    metadata: z.record(z.unknown()).optional(),
-  })),
-  async (c) => {
-  const dbBinding = getPlatformServices(c).sql?.binding;
-  const user = c.get('user');
-  const resourceId = c.req.param('id');
-  const body = c.req.valid('json');
-  if (!dbBinding) {
-    throw new InternalError('Database binding unavailable');
-  }
-
-  const resource = await getResourceById(dbBinding, resourceId);
-
-  if (!resource) {
-    throw new NotFoundError('Resource');
-  }
-
-  if (resource.owner_id !== user.id) {
-    throw new AuthorizationError('Only the owner can update this resource');
-  }
-
-  if (body.name?.trim()) {
-    body.name = body.name.trim();
-  }
-
-  const updated = await updateResourceMetadata(dbBinding, resourceId, {
-    name: body.name,
-    config: body.config,
-    metadata: body.metadata,
-  });
-
-  if (!updated) {
-    throw new BadRequestError( 'No valid updates provided');
-  }
-
-  if (resource.group_id) {
-    const nextName = typeof updated.name === 'string' && updated.name.trim().length > 0
-      ? updated.name.trim()
-      : resource.name;
-    const nextConfig = body.config
-      ?? (typeof updated.config === 'string'
-        ? safeJsonParseOrDefault<Record<string, unknown>>(updated.config, {})
-        : (typeof resource.config === 'string'
-          ? safeJsonParseOrDefault<Record<string, unknown>>(resource.config, {})
-          : {}));
-
-    if (nextName !== resource.name) {
-      await removeGroupDesiredResource(c.env, {
-        groupId: resource.group_id,
-        name: resource.name,
-      });
-    }
-
-    await upsertGroupDesiredResource(c.env, {
-      groupId: resource.group_id,
-      name: nextName,
-      resource: buildProjectedResourceSpec(nextName, {
-        type: resource.type as ResourceType,
-        config: nextConfig,
-      }) as never,
-    });
-  }
-
-  return c.json({ resource: updated });
-})
-
-.patch('/:id/group',
-  zValidator('json', z.object({
-    group_id: z.string().nullable().optional(),
-  })),
-  async (c) => {
-    const dbBinding = getPlatformServices(c).sql?.binding;
-    const user = c.get('user');
-    const resourceId = c.req.param('id');
-    const body = c.req.valid('json') as { group_id?: string | null };
-    if (!dbBinding) {
-      throw new InternalError('Database binding unavailable');
-    }
-
-    const resource = await getResourceById(dbBinding, resourceId);
-    if (!resource) {
-      throw new NotFoundError('Resource');
-    }
-    if (resource.owner_id !== user.id) {
-      throw new AuthorizationError('Only the owner can move this resource');
-    }
-
-    const nextGroupId = body.group_id?.trim() || null;
-    if (nextGroupId) {
-      const db = getDb(dbBinding);
-      const group = await db.select({ id: groups.id, spaceId: groups.spaceId })
-        .from(groups)
-        .where(eq(groups.id, nextGroupId))
-        .get();
-      if (!group || group.spaceId !== resource.space_id) {
-        throw new BadRequestError('group_id must belong to the same workspace as the resource');
-      }
-    }
-
-    await getDb(dbBinding).update(resources)
-      .set({
-        groupId: nextGroupId,
-        updatedAt: new Date().toISOString(),
-      })
-      .where(eq(resources.id, resourceId))
-      .run();
-
-    if (nextGroupId) {
-      await upsertGroupDesiredResource(c.env, {
-        groupId: nextGroupId,
-        name: resource.name,
-        resource: buildProjectedResourceSpec(resource.name, {
-          type: resource.type as ResourceType,
-          config: typeof resource.config === 'string'
-            ? safeJsonParseOrDefault<Record<string, unknown>>(resource.config, {})
-            : {},
-        }) as never,
-      });
-    } else if (resource.group_id) {
-      await removeGroupDesiredResource(c.env, {
-        groupId: resource.group_id,
-        name: resource.name,
-      });
-    }
-
-    return c.json({ resource: await getResourceById(dbBinding, resourceId) });
+    return c.json({ resources: resourceList });
   })
+  .get("/:id", async (c) => {
+    const dbBinding = requireDbBinding(c);
+    const user = c.get("user");
+    const resourceId = c.req.param("id");
+    const resource = await requireAccessibleResource(
+      dbBinding,
+      user.id,
+      resourceId,
+    );
 
-.delete('/:id', async (c) => {
-  const dbBinding = getPlatformServices(c).sql?.binding;
-  const user = c.get('user');
-  const resourceId = c.req.param('id');
-  if (!dbBinding) {
-    throw new InternalError('Database binding unavailable');
-  }
+    const access = await listResourceAccess(dbBinding, resourceId);
+    const resourceBindings = await listResourceBindings(dbBinding, resourceId);
 
-  const resource = await getResourceById(dbBinding, resourceId);
-
-  if (!resource) {
-    throw new NotFoundError('Resource');
-  }
-
-  if (resource.owner_id !== user.id) {
-    throw new AuthorizationError('Only the owner can delete this resource');
-  }
-
-  if (resource.group_id) {
-    await removeGroupDesiredResource(c.env, {
-      groupId: resource.group_id,
-      name: resource.name,
-    });
-  }
-
-  const bindingsCount = await countResourceBindings(dbBinding, resourceId);
-
-  if (bindingsCount && bindingsCount.count > 0) {
     return c.json({
-      error: 'Resource is in use by workers',
-      binding_count: bindingsCount.count,
-    }, 409);
-  }
-
-  await markResourceDeleting(dbBinding, resourceId);
-
-  try {
-    await deleteManagedResource(c.env, {
-      type: getStoredResourceImplementation(resource.type, resource.config) ?? resource.type,
-      providerName: resource.provider_name ?? undefined,
-      providerResourceId: resource.provider_resource_id,
-      providerResourceName: resource.provider_resource_name,
+      resource,
+      access,
+      bindings: resourceBindings,
+      is_owner: resource.owner_id === user.id,
     });
-  } catch (err) {
-    logError('Failed to delete managed resource', err, { module: 'routes/resources/base' });
-  }
+  })
+  .post(
+    "/",
+    zValidator(
+      "json",
+      z.object({
+        name: z.string(),
+        type: z.string(),
+        config: z.record(z.unknown()).optional(),
+        provider: z.string().optional(),
+        space_id: z.string().optional(),
+        group_id: z.string().optional(),
+      }),
+    ),
+    async (c) => {
+      const dbBinding = requireDbBinding(c);
+      const user = c.get("user");
+      const body = c.req.valid("json") as {
+        name: string;
+        type: ResourceType;
+        config?: Record<string, unknown>;
+        provider?: string;
+        space_id?: string;
+        group_id?: string;
+      };
+      if (!body.name?.trim()) {
+        throw new BadRequestError("name is required");
+      }
 
-  await deleteResource(dbBinding, resourceId);
+      const providerName = normalizeResourceProvider(body.provider) ??
+        inferResourceProvider(c.env);
+      if (body.provider && !normalizeResourceProvider(body.provider)) {
+        throw new BadRequestError(`Invalid provider: ${body.provider}`);
+      }
 
-  return c.json({ success: true });
-})
+      const resourceCapability = toResourceCapability(body.type);
+      if (!resourceCapability) {
+        throw new BadRequestError("Invalid resource type");
+      }
 
-.get('/by-name/:name', async (c) => {
-  const dbBinding = getPlatformServices(c).sql?.binding;
-  const user = c.get('user');
-  const resourceName = decodeURIComponent(c.req.param('name'));
-  if (!dbBinding) {
-    throw new InternalError('Database binding unavailable');
-  }
+      let spaceId = body.space_id?.trim() || "";
 
-  const resource = await getResourceByName(dbBinding, user.id, resourceName);
+      if (spaceId) {
+        const access = await requireSpaceAccess(
+          c,
+          spaceId,
+          user.id,
+          ["owner", "admin", "editor"],
+          "Workspace not found or insufficient permissions",
+          403,
+        );
 
-  if (!resource) {
-    throw new NotFoundError('Resource');
-  }
+        spaceId = access.space.id;
+      } else {
+        // Default to user's own account
+        spaceId = user.id;
+      }
 
-  const { _internal_id, ...apiResource } = resource;
-  const access = await listResourceAccess(dbBinding, _internal_id);
-  const resourceBindings = await listResourceBindings(dbBinding, _internal_id);
+      let groupId: string | null = null;
+      if (body.group_id?.trim()) {
+        groupId = await validateGroupForWorkspace(
+          dbBinding,
+          body.group_id.trim(),
+          spaceId,
+          "group_id must belong to the selected workspace",
+        );
+      }
 
-  return c.json({
-    resource: apiResource,
-    access,
-    bindings: resourceBindings,
-    is_owner: true,
+      const id = generateId();
+      const timestamp = new Date().toISOString();
+      const name = body.name.trim();
+      const providerResourceName = resolveRequestedProviderResourceName(
+        body.type,
+        `takos-${body.type}-${id}`,
+        body.config,
+      );
+
+      try {
+        await provisionManagedResource(c.env, {
+          id,
+          timestamp,
+          ownerId: user.id,
+          spaceId,
+          groupId,
+          name,
+          type: resourceCapability,
+          publicType: body.type,
+          semanticType: resourceCapability,
+          providerName,
+          providerResourceName,
+          config: body.config || {},
+          recordFailure: true,
+          ...buildProvisioningRequest(resourceCapability, body.config),
+        });
+        if (groupId) {
+          await upsertProjectedGroupResourceFromRecord(
+            c.env,
+            groupId,
+            name,
+            body.type,
+            body.config,
+          );
+        }
+        return c.json({ resource: await getResourceById(dbBinding, id) }, 201);
+      } catch (err) {
+        logError("Resource creation failed", err, {
+          module: "routes/resources/base",
+        });
+
+        return c.json({
+          error: "Failed to provision resource",
+          resource_id: id,
+        }, 500);
+      }
+    },
+  )
+  .patch(
+    "/:id",
+    zValidator(
+      "json",
+      z.object({
+        name: z.string().optional(),
+        config: z.record(z.unknown()).optional(),
+        metadata: z.record(z.unknown()).optional(),
+      }),
+    ),
+    async (c) => {
+      const dbBinding = requireDbBinding(c);
+      const user = c.get("user");
+      const resourceId = c.req.param("id");
+      const body = c.req.valid("json");
+      const resource = await requireOwnedResource(
+        dbBinding,
+        user.id,
+        resourceId,
+        "Only the owner can update this resource",
+      );
+
+      if (body.name?.trim()) {
+        body.name = body.name.trim();
+      }
+
+      const updated = await updateResourceMetadata(dbBinding, resourceId, {
+        name: body.name,
+        config: body.config,
+        metadata: body.metadata,
+      });
+
+      if (!updated) {
+        throw new BadRequestError("No valid updates provided");
+      }
+
+      await reconcileProjectedGroupResourceUpdate(c.env, resource, {
+        name: body.name,
+        config: body.config,
+      });
+
+      return c.json({ resource: updated });
+    },
+  )
+  .patch(
+    "/:id/group",
+    zValidator(
+      "json",
+      z.object({
+        group_id: z.string().nullable().optional(),
+      }),
+    ),
+    async (c) => {
+      const dbBinding = requireDbBinding(c);
+      const user = c.get("user");
+      const resourceId = c.req.param("id");
+      const body = c.req.valid("json") as { group_id?: string | null };
+      const resource = await requireOwnedResource(
+        dbBinding,
+        user.id,
+        resourceId,
+        "Only the owner can move this resource",
+      );
+
+      const nextGroupId = body.group_id?.trim() || null;
+      if (nextGroupId) {
+        await validateGroupForWorkspace(
+          dbBinding,
+          nextGroupId,
+          resource.space_id ?? resource.owner_id,
+          "group_id must belong to the same workspace as the resource",
+        );
+      }
+
+      await getDb(dbBinding).update(resources)
+        .set({
+          groupId: nextGroupId,
+          updatedAt: new Date().toISOString(),
+        })
+        .where(eq(resources.id, resourceId))
+        .run();
+
+      await moveProjectedGroupResource(c.env, resource, nextGroupId);
+
+      return c.json({ resource: await getResourceById(dbBinding, resourceId) });
+    },
+  )
+  .delete("/:id", async (c) => {
+    const dbBinding = requireDbBinding(c);
+    const user = c.get("user");
+    const resourceId = c.req.param("id");
+    const resource = await requireOwnedResource(
+      dbBinding,
+      user.id,
+      resourceId,
+      "Only the owner can delete this resource",
+    );
+    const bindingCount = await deleteOwnedResourceRecord(
+      c.env,
+      dbBinding,
+      resourceId,
+      resource,
+    );
+    if (bindingCount !== null) {
+      return c.json({
+        error: "Resource is in use by workers",
+        binding_count: bindingCount,
+      }, 409);
+    }
+
+    return c.json({ success: true });
+  })
+  .get("/by-name/:name", async (c) => {
+    const dbBinding = requireDbBinding(c);
+    const user = c.get("user");
+    const resourceName = decodeURIComponent(c.req.param("name"));
+    const resource = await requireOwnedNamedResource(
+      dbBinding,
+      user.id,
+      resourceName,
+    );
+
+    const { _internal_id, ...apiResource } = resource;
+    const access = await listResourceAccess(dbBinding, _internal_id);
+    const resourceBindings = await listResourceBindings(
+      dbBinding,
+      _internal_id,
+    );
+
+    return c.json({
+      resource: apiResource,
+      access,
+      bindings: resourceBindings,
+      is_owner: true,
+    });
+  })
+  // Delete resource by name
+  .delete("/by-name/:name", async (c) => {
+    const dbBinding = requireDbBinding(c);
+    const user = c.get("user");
+    const resourceName = decodeURIComponent(c.req.param("name"));
+    const resource = await requireOwnedNamedResource(
+      dbBinding,
+      user.id,
+      resourceName,
+    );
+    const bindingCount = await deleteOwnedResourceRecord(
+      c.env,
+      dbBinding,
+      resource._internal_id,
+      resource,
+    );
+    if (bindingCount !== null) {
+      return c.json({
+        error: "Resource is in use by workers",
+        binding_count: bindingCount,
+      }, 409);
+    }
+
+    return c.json({ success: true });
   });
-})
-
-// Delete resource by name
-.delete('/by-name/:name', async (c) => {
-  const dbBinding = getPlatformServices(c).sql?.binding;
-  const user = c.get('user');
-  const resourceName = decodeURIComponent(c.req.param('name'));
-  if (!dbBinding) {
-    throw new InternalError('Database binding unavailable');
-  }
-
-  const resource = await getResourceByName(dbBinding, user.id, resourceName);
-
-  if (!resource) {
-    throw new NotFoundError('Resource');
-  }
-
-  const { _internal_id: resourceId } = resource;
-
-  if (resource.group_id) {
-    await removeGroupDesiredResource(c.env, {
-      groupId: resource.group_id,
-      name: resource.name,
-    });
-  }
-
-  const bindingsCount = await countResourceBindings(dbBinding, resourceId);
-
-  if (bindingsCount && bindingsCount.count > 0) {
-    return c.json({
-      error: 'Resource is in use by workers',
-      binding_count: bindingsCount.count,
-    }, 409);
-  }
-
-  await markResourceDeleting(dbBinding, resourceId);
-
-  try {
-    await deleteManagedResource(c.env, {
-      type: getStoredResourceImplementation(resource.type, resource.config) ?? resource.type,
-      providerName: resource.provider_name ?? undefined,
-      providerResourceId: resource.provider_resource_id,
-      providerResourceName: resource.provider_resource_name,
-    });
-  } catch (err) {
-    logError('Failed to delete managed resource', err, { module: 'routes/resources/base' });
-  }
-
-  await deleteResource(dbBinding, resourceId);
-
-  return c.json({ success: true });
-});
 
 export default resourcesBase;

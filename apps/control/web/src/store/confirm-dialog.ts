@@ -1,5 +1,4 @@
-import { atom } from 'jotai/vanilla';
-import { useSetAtom, useAtomValue } from 'solid-jotai';
+import { createSignal } from 'solid-js';
 
 export interface ConfirmDialogOptions {
   title: string;
@@ -26,19 +25,14 @@ const initialState: ConfirmDialogState = {
   resolve: null,
 };
 
-export const confirmDialogAtom = atom<ConfirmDialogState>(initialState);
+const [confirmDialogState, setConfirmDialogState] = createSignal(
+  initialState,
+);
 
-/**
- * Hook that returns a `confirm(options)` function identical to the old
- * ConfirmDialogProvider interface.  Works anywhere inside the Jotai Provider
- * (or with the default store) -- no React context wrapper needed.
- */
 export function useConfirmDialog() {
-  const setState = useSetAtom(confirmDialogAtom);
-
   const confirm = (options: ConfirmDialogOptions): Promise<boolean> =>
     new Promise<boolean>((resolve) => {
-      setState({
+      setConfirmDialogState({
         isOpen: true,
         ...options,
         resolve,
@@ -48,24 +42,20 @@ export function useConfirmDialog() {
   return { confirm };
 }
 
-/** Read-side hook consumed by the dialog renderer component. */
 export function useConfirmDialogState() {
-  return useAtomValue(confirmDialogAtom);
+  return confirmDialogState;
 }
 
-/** Write-side hook consumed by the dialog renderer component. */
 export function useConfirmDialogActions() {
-  const setState = useSetAtom(confirmDialogAtom);
-
   const handleConfirm = () => {
-    setState((prev) => {
+    setConfirmDialogState((prev) => {
       prev.resolve?.(true);
       return { ...initialState };
     });
   };
 
   const handleCancel = () => {
-    setState((prev) => {
+    setConfirmDialogState((prev) => {
       prev.resolve?.(false);
       return { ...initialState };
     });

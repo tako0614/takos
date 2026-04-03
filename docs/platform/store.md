@@ -1,78 +1,110 @@
 # Store
 
-アプリの公開、package install、remote repository import の仕組み。
+::: tip Status Store は Takos kernel の一部ではなく、Takos 上で動く first-party
+installable app です。Takos shell は Store に依存せず、最小の install /
+uninstall / launch 機能を持ちます。 :::
+
+アプリの公開、package install、remote repository import を扱う product surface。
+
+## Store の位置づけ
+
+Store は「catalog と discovery を提供する app」です。kernel
+側の責務ではありません。
+
+- Store app は catalog / recommendation / discovery UX を持つ
+- kernel は install / deploy / capability / resource の共通基盤を持つ
+- workspace は Store app を preinstall できるが、uninstall / replace もできる
+- first-party app と third-party app に API 上の特権差は作らない
+
+Takos UI から Store を開くときは shell launch URL を使えますが、canonical URL の
+owner は Store app 自身です。詳しくは
+[Kernel / Workspace Shell / Apps](/architecture/kernel-shell)
+を参照してください。
 
 ## 公開の仕組み
 
-public リポジトリに `.takos/app.yml` があり、Release を作成すると Store に表示されます。
+public リポジトリに `.takos/app.yml` があり、Release を作成すると Store
+に表示されます。
 
-Release に含まれる `takopack` 形式のアセットが Store カタログに掲載される対象です。アセットには `app_id`、`version`、`description`、`icon` などのメタデータが埋め込まれます。
+Release に含まれる `takopack` 形式のアセットが Store
+カタログに掲載される対象です。アセットには
+`app_id`、`version`、`description`、`icon` などのメタデータが埋め込まれます。
 
 ## Official Packages と Seed Repositories
 
+これは current implementation の bootstrap / curation 方法です。Store app
+contract の必須要件ではありません。
+
 Takos には Store カタログとは別に、2 つのコード定義リストがあります。
 
-| | Official Packages | Seed Repositories |
-|---|---|---|
-| 定義場所 | `official-packages.ts`（コード） | `seed-repositories.ts`（コード） |
-| 表示タイミング | Store カタログに常時表示 | ワークスペース作成時のポップアップのみ |
-| 目的 | ファーストパーティアプリの推奨 | 初回セットアップの推奨リポジトリ |
-| DB 依存 | なし（コードで定義） | なし（コードで定義） |
-| バッジ | `certified: true` で公式バッジ付き | なし |
-| プリチェック | `recommended: true` で上位表示 | `checked: true` でプリチェック |
+|                | Official Packages                  | Seed Repositories                      |
+| -------------- | ---------------------------------- | -------------------------------------- |
+| 定義場所       | `official-packages.ts`（コード）   | `seed-repositories.ts`（コード）       |
+| 表示タイミング | Store カタログに常時表示           | ワークスペース作成時のポップアップのみ |
+| 目的           | ファーストパーティアプリの推奨     | 初回セットアップの推奨リポジトリ       |
+| DB 依存        | なし（コードで定義）               | なし（コードで定義）                   |
+| バッジ         | `certified: true` で公式バッジ付き | なし                                   |
+| プリチェック   | `recommended: true` で上位表示     | `checked: true` でプリチェック         |
 
 ### Official Packages の型定義
 
 ```typescript
 interface OfficialPackage {
-  id: string;           // "official/takos-agent"
-  name: string;         // "Takos Agent"
-  description: string;  // 短い説明
-  category: 'app' | 'service' | 'library' | 'template' | 'tool';
-  url: string;          // Git clone URL
+  id: string; // "official/takos-agent"
+  name: string; // "Takos Agent"
+  description: string; // 短い説明
+  category: "app" | "service" | "library" | "template" | "tool";
+  url: string; // Git clone URL
   owner: {
     name: string;
     username: string;
   };
-  tags: string[];       // 検索・フィルタ用タグ
+  tags: string[]; // 検索・フィルタ用タグ
   recommended: boolean; // true で上位表示
-  priority: number;     // 数値が大きいほど先に表示
+  priority: number; // 数値が大きいほど先に表示
 }
 ```
 
 現在登録されている Official Package:
 
-| ID | 名前 | カテゴリ | 説明 |
-|---|---|---|---|
-| `official/takos-agent` | Takos Agent | tool | Browser automation and agent executor |
+| ID                     | 名前        | カテゴリ | 説明                                  |
+| ---------------------- | ----------- | -------- | ------------------------------------- |
+| `official/takos-agent` | Takos Agent | tool     | Browser automation and agent executor |
 
 ### Seed Repositories の型定義
 
 ```typescript
 interface SeedRepository {
-  url: string;        // Git clone URL (HTTPS)
-  name: string;       // 表示名
-  description: string;// 短い説明
-  category: string;   // UI でのグルーピング用
-  checked: boolean;   // true でポップアップ上でプリチェック
+  url: string; // Git clone URL (HTTPS)
+  name: string; // 表示名
+  description: string; // 短い説明
+  category: string; // UI でのグルーピング用
+  checked: boolean; // true でポップアップ上でプリチェック
 }
 ```
 
 現在登録されている Seed Repository:
 
-| 名前 | カテゴリ | プリチェック |
-|---|---|---|
-| Takos Agent | tool | yes |
+| 名前        | カテゴリ | プリチェック |
+| ----------- | -------- | ------------ |
+| Takos Agent | tool     | yes          |
 
 ## Store の 3 つの経路
 
 - package catalog: public な package release を検索する
 - package install: Store package を app deployment として導入する
-- remote repository import: ActivityPub remote store からリポジトリ参照を取り込む
+- remote repository import: ActivityPub remote store
+  からリポジトリ参照を取り込む
 
-`install` という語は package install にだけ使います。remote store からの取り込みは `import repository` と呼びます。
+`install` という語は package install にだけ使います。remote store
+からの取り込みは `import repository` と呼びます。
 
 ## Store API
+
+以下の `/api/explore/*` や `/api/seed-repositories` は current implementation の
+public surface です。Store app の product contract は「kernel と shell
+の上に乗る installable app」であることであり、これらの route 形状そのものを不変
+contract とみなすわけではありません。
 
 ### カタログ取得
 
@@ -82,16 +114,16 @@ GET /api/explore/catalog?sort=trending&limit=20
 
 クエリパラメータ:
 
-| パラメータ | 説明 | 例 |
-|---|---|---|
-| `q` | フリーテキスト検索 | `browser` |
-| `sort` | ソート順 (`trending`, `new`, `stars`, `updated`, `downloads`) | `trending` |
-| `type` | タイプフィルタ (`all`, `repo`, `deployable-app`, `official`) | `all` |
-| `category` | カテゴリフィルタ | `tool` |
-| `tags` | カンマ区切りのタグフィルタ | `browser,automation` |
-| `certified_only` | 公式パッケージのみ | `true` |
-| `limit` | 取得件数（最大 50、デフォルト 20） | `20` |
-| `offset` | ページネーション用オフセット | `0` |
+| パラメータ       | 説明                                                          | 例                   |
+| ---------------- | ------------------------------------------------------------- | -------------------- |
+| `q`              | フリーテキスト検索                                            | `browser`            |
+| `sort`           | ソート順 (`trending`, `new`, `stars`, `updated`, `downloads`) | `trending`           |
+| `type`           | タイプフィルタ (`all`, `repo`, `deployable-app`, `official`)  | `all`                |
+| `category`       | カテゴリフィルタ                                              | `tool`               |
+| `tags`           | カンマ区切りのタグフィルタ                                    | `browser,automation` |
+| `certified_only` | 公式パッケージのみ                                            | `true`               |
+| `limit`          | 取得件数（最大 50、デフォルト 20）                            | `20`                 |
+| `offset`         | ページネーション用オフセット                                  | `0`                  |
 
 ```bash
 # 公式パッケージだけ取得
@@ -184,7 +216,10 @@ GET /api/seed-repositories
 
 これだけで自動的に Store カタログに表示されます。
 
-Official Package として登録したい場合は `official-packages.ts` にエントリを追加してください。Seed Repository として新規ワークスペース作成時に表示したい場合は `seed-repositories.ts` に追加します。
+Official Package として登録したい場合は `official-packages.ts`
+にエントリを追加してください。Seed Repository
+として新規ワークスペース作成時に表示したい場合は `seed-repositories.ts`
+に追加します。
 
 ## ecosystem で自動化されるもの
 
@@ -204,7 +239,8 @@ spec:
       transport: streamable-http
 ```
 
-deploy 後に control plane が MCP endpoint を登録し、agent 側が server をロードする。詳細は [MCP Server](/apps/mcp) を参照。
+deploy 後に control plane が MCP endpoint を登録し、agent 側が server
+をロードする。詳細は [MCP Server](/apps/mcp) を参照。
 
 ## file handler 統合
 
@@ -217,10 +253,11 @@ spec:
       openPath: /files/:id
 ```
 
-space storage と app UI が loose coupling のまま連携できる。詳細は [File Handlers](/apps/file-handlers) を参照。
+space storage と app UI が loose coupling のまま連携できる。詳細は
+[File Handlers](/apps/file-handlers) を参照。
 
 ## 次に読むページ
 
 - [app.yml の書き方](/apps/manifest)
 - [マニフェストリファレンス](/reference/manifest-spec)
-- [Store 経由デプロイ](/deploy/store-deploy)
+- [Repository / Catalog デプロイ](/deploy/store-deploy)

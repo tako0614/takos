@@ -367,17 +367,15 @@
     "@libsql/client": "npm:@libsql/client@^0.17.0",
     "@modelcontextprotocol/sdk": "npm:@modelcontextprotocol/sdk@^1.0.0",
     "@solid-primitives/storage": "npm:@solid-primitives/storage@^4.3.4",
+    "@solidjs/router": "npm:@solidjs/router@^0.16.1",
     "drizzle-kit": "npm:drizzle-kit@^0.31.9",
     "drizzle-orm": "npm:drizzle-orm@^0.45.1",
     "fflate": "npm:fflate@^0.8.2",
     "hono": "npm:hono@^4.12.4",
     "jose": "npm:jose@^5.9.0",
-    "jotai": "npm:jotai@^2.18.1",
-    "jotai/vanilla": "npm:jotai@^2.18.1/vanilla",
     "monaco-editor": "npm:monaco-editor@^0.55.1",
     "pg": "npm:pg@^8.20.0",
     "redis": "npm:redis@^5.11.0",
-    "solid-jotai": "npm:solid-jotai@^0.3.1",
     "solid-js": "npm:solid-js@^1.9.12",
     "solid-js/web": "npm:solid-js@^1.9.12/web",
     "tailwindcss": "npm:tailwindcss@^4.1.18",
@@ -386,6 +384,13 @@
     "wrangler": "npm:wrangler@^4.61.0",
     "yaml": "npm:yaml@^2.8.2",
     "zod": "npm:zod@^3.25.32"
+  },
+  "compilerOptions": {
+    "strict": true,
+    "lib": ["deno.window", "dom", "dom.iterable"],
+    "types": ["node", "vite/client"],
+    "jsx": "react-jsx",
+    "jsxImportSource": "solid-js"
   },
   "lint": {
     "rules": {
@@ -410,8 +415,8 @@
     "dev:local:worker": "deno run --allow-all ../../packages/control/local-platform/src/worker.ts",
     "dev:local:run-smoke": "deno run --allow-all ../../packages/control/local-platform/src/run-smoke.ts",
     "dev:local:run-smoke-proxyless": "deno run --allow-all ../../packages/control/local-platform/src/run-smoke-proxyless.ts",
-    "dev:frontend": "deno run --node-modules-dir=auto -A npm:vite --config web/vite.config.ts",
-    "build": "deno run --node-modules-dir=auto -A npm:vite build --config web/vite.config.ts",
+    "dev:frontend": "./node_modules/.bin/vite --config web/vite.config.ts",
+    "build": "./node_modules/.bin/vite build --config web/vite.config.ts",
     "deploy:service": "deno run --allow-all scripts/deploy.mjs",
     "db:generate": "deno run -A npm:drizzle-kit generate",
     "db:push": "deno run -A npm:drizzle-kit push",

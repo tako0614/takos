@@ -1,4 +1,4 @@
-import { createEffect, createSignal, Show } from "solid-js";
+import { createEffect, createSignal, onCleanup, Show } from "solid-js";
 import { useI18n } from "../../store/i18n.ts";
 import { useSpaceStorage } from "../../hooks/useSpaceStorage.ts";
 import { Icons } from "../../lib/Icons.tsx";
@@ -17,6 +17,12 @@ import { CreateFolderModal } from "./CreateFolderModal.tsx";
 import { BulkMoveModal } from "./BulkMoveModal.tsx";
 import { BulkRenameModal } from "./BulkRenameModal.tsx";
 import { StorageFileViewer } from "./StorageFileViewer.tsx";
+import {
+  getParentPath,
+  loadStorageFileHandlers,
+  resolveStorageInitialPath,
+  shouldEmitStoragePathChange,
+} from "./storage-page-state.ts";
 
 interface StoragePageProps {
   spaceId: string;
@@ -24,12 +30,6 @@ interface StoragePageProps {
   initialPath?: string;
   initialFilePath?: string;
   onPathChange?: (path: string) => void;
-}
-
-function getParentPath(path: string): string {
-  const parts = path.split("/").filter(Boolean);
-  if (parts.length <= 1) return "/";
-  return `/${parts.slice(0, -1).join("/")}`;
 }
 
 export function StoragePage(props: StoragePageProps) {
@@ -50,7 +50,7 @@ export function StoragePage(props: StoragePageProps) {
     bulkRenameItems,
     getDownloadUrl,
     downloadFolderZip,
-  } = useSpaceStorage(props.spaceId);
+  } = useSpaceStorage(() => props.spaceId);
 
   const [selectedFiles, setSelectedFiles] = createSignal<Set<string>>(
     new Set(),
@@ -98,32 +98,60 @@ export function StoragePage(props: StoragePageProps) {
     bulkRenameItems,
   });
 
+  const getRequestedPath = () =>
+    resolveStorageInitialPath(props.initialPath, props.initialFilePath);
+
+  const [initialPathReady, setInitialPathReady] = createSignal(false);
+  let fileHandlersRequestVersion = 0;
+
   createEffect(() => {
     const _spaceId = props.spaceId;
-    const _initialPath = props.initialPath;
-    const _initialFilePath = props.initialFilePath;
-    loadFiles(
-      _initialFilePath
-        ? getParentPath(_initialFilePath)
-        : (_initialPath ?? "/"),
-    );
+    const requestedPath = getRequestedPath();
+    let cancelled = false;
+    setInitialPathReady(false);
+    setSelectedFiles(new Set<string>());
+    setContextMenu(null);
+    setFileHandlers([]);
+    actions.handleCloseViewer();
+    void loadFiles(requestedPath).finally(() => {
+      if (!cancelled) {
+        setInitialPathReady(true);
+      }
+    });
+    onCleanup(() => {
+      cancelled = true;
+    });
   });
 
   createEffect(() => {
     const spaceId = props.spaceId;
     if (!spaceId) return;
-    fetch(`/api/spaces/${encodeURIComponent(spaceId)}/storage/file-handlers`)
-      .then((res) => res.ok ? res.json() : null)
-      .then((data: { handlers: FileHandler[] } | null) => {
-        if (data?.handlers) setFileHandlers(data.handlers);
-      })
-      .catch(
-        () => {/* non-critical: file handlers are optional UI enhancement */},
-      );
+    const requestVersion = ++fileHandlersRequestVersion;
+    let cancelled = false;
+    onCleanup(() => {
+      cancelled = true;
+    });
+    void loadStorageFileHandlers(
+      spaceId,
+      () => !cancelled && requestVersion === fileHandlersRequestVersion,
+    ).then((handlers) => {
+      if (handlers) setFileHandlers(handlers);
+    });
   });
 
   createEffect(() => {
-    if (props.onPathChange && currentPath() !== (props.initialPath ?? "/")) {
+    if (
+      !props.onPathChange ||
+      !shouldEmitStoragePathChange(
+        currentPath(),
+        props.initialPath,
+        props.initialFilePath,
+        initialPathReady(),
+      )
+    ) {
+      return;
+    }
+    if (currentPath() !== getRequestedPath()) {
       props.onPathChange(currentPath());
     }
   });
@@ -249,7 +277,7 @@ export function StoragePage(props: StoragePageProps) {
           </Show>
 
           <Show
-            when={!(loading() && files().length === 0)}
+            when={initialPathReady() && !(loading() && files().length === 0)}
             fallback={
               <div class="flex items-center justify-center h-full">
                 <Icons.Loader class="w-8 h-8 animate-spin text-zinc-400" />

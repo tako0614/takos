@@ -1,17 +1,17 @@
-import { createSignal, onMount, onCleanup } from 'solid-js';
+import { createSignal, onCleanup, onMount } from "solid-js";
 
 const BP_MD = 768;
 const BP_LG = 1024;
 const RESIZE_DEBOUNCE_MS = 150;
 
-interface BreakpointState {
+export interface BreakpointState {
   isMobile: boolean;
   isTablet: boolean;
   isDesktop: boolean;
   width: number;
 }
 
-function calcBreakpointState(width: number): BreakpointState {
+export function calcBreakpointState(width: number): BreakpointState {
   return {
     isMobile: width < BP_MD,
     isTablet: width >= BP_MD && width < BP_LG,
@@ -20,49 +20,77 @@ function calcBreakpointState(width: number): BreakpointState {
   };
 }
 
-export function useBreakpoint(): BreakpointState {
-  const hasBrowserWindow = typeof globalThis.matchMedia === 'function';
-  const [state, setState] = createSignal<BreakpointState>(
-    !hasBrowserWindow
-      ? { isMobile: false, isTablet: false, isDesktop: true, width: 1024 }
-      : calcBreakpointState(globalThis.innerWidth),
+const hasBrowserWindow = typeof globalThis.innerWidth === "number" &&
+  typeof globalThis.addEventListener === "function" &&
+  typeof globalThis.removeEventListener === "function";
+
+const getCurrentState = () =>
+  calcBreakpointState(
+    typeof globalThis.innerWidth === "number" ? globalThis.innerWidth : 1024,
   );
 
-  let debounceTimerRef: ReturnType<typeof setTimeout> | null = null;
+const [sharedState, setSharedState] = createSignal<BreakpointState>(
+  !hasBrowserWindow
+    ? { isMobile: false, isTablet: false, isDesktop: true, width: 1024 }
+    : getCurrentState(),
+);
 
-  const handleChange = () => {
-    setState(calcBreakpointState(globalThis.innerWidth));
-  };
+let subscriberCount = 0;
+let listening = false;
+let debounceTimerRef: ReturnType<typeof setTimeout> | null = null;
 
-  const handleResizeDebounced = () => {
-    if (debounceTimerRef) {
-      clearTimeout(debounceTimerRef);
-    }
-    debounceTimerRef = setTimeout(() => {
-      setState(calcBreakpointState(globalThis.innerWidth));
-      debounceTimerRef = null;
-    }, RESIZE_DEBOUNCE_MS);
-  };
+const handleResizeDebounced = () => {
+  if (debounceTimerRef) {
+    clearTimeout(debounceTimerRef);
+  }
+  debounceTimerRef = setTimeout(() => {
+    setSharedState(getCurrentState());
+    debounceTimerRef = null;
+  }, RESIZE_DEBOUNCE_MS);
+};
 
+function startListening() {
+  if (!hasBrowserWindow || listening) return;
+  globalThis.addEventListener("resize", handleResizeDebounced);
+  setSharedState(getCurrentState());
+  listening = true;
+}
+
+function stopListening() {
+  if (!listening) return;
+  globalThis.removeEventListener("resize", handleResizeDebounced);
+  if (debounceTimerRef) {
+    clearTimeout(debounceTimerRef);
+    debounceTimerRef = null;
+  }
+  listening = false;
+}
+
+export function useBreakpoint(): BreakpointState {
   onMount(() => {
-    if (!hasBrowserWindow) return;
-
-    const mdQuery = globalThis.matchMedia(`(min-width: ${BP_MD}px)`);
-    const lgQuery = globalThis.matchMedia(`(min-width: ${BP_LG}px)`);
-
-    mdQuery.addEventListener('change', handleChange);
-    lgQuery.addEventListener('change', handleChange);
-    globalThis.addEventListener('resize', handleResizeDebounced);
+    subscriberCount += 1;
+    startListening();
 
     onCleanup(() => {
-      mdQuery.removeEventListener('change', handleChange);
-      lgQuery.removeEventListener('change', handleChange);
-      globalThis.removeEventListener('resize', handleResizeDebounced);
-      if (debounceTimerRef) {
-        clearTimeout(debounceTimerRef);
+      subscriberCount = Math.max(0, subscriberCount - 1);
+      if (subscriberCount === 0) {
+        stopListening();
       }
     });
   });
 
-  return state();
+  return {
+    get isMobile() {
+      return sharedState().isMobile;
+    },
+    get isTablet() {
+      return sharedState().isTablet;
+    },
+    get isDesktop() {
+      return sharedState().isDesktop;
+    },
+    get width() {
+      return sharedState().width;
+    },
+  };
 }

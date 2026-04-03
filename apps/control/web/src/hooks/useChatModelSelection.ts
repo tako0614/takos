@@ -1,16 +1,20 @@
-import { createSignal, onMount } from 'solid-js';
-import { rpc, rpcJson } from '../lib/rpc.ts';
-import { DEFAULT_MODEL_ID, FALLBACK_MODELS, type ModelSelectOption } from '../lib/modelCatalog.ts';
-import type { ModelOption } from '../views/agent/work/task-work-types.ts';
+import { type Accessor, createEffect, createSignal, onCleanup } from "solid-js";
+import { rpc, rpcJson } from "../lib/rpc.ts";
+import {
+  DEFAULT_MODEL_ID,
+  FALLBACK_MODELS,
+  type ModelSelectOption,
+} from "../lib/modelCatalog.ts";
+import type { ModelOption } from "../views/agent/work/task-work-types.ts";
 
 export interface UseChatModelSelectionOptions {
-  spaceId: string;
-  initialModel?: string;
+  spaceId: Accessor<string>;
+  initialModel?: Accessor<string | undefined>;
 }
 
 export interface UseChatModelSelectionResult {
-  availableModels: ModelSelectOption[];
-  selectedModel: string;
+  availableModels: Accessor<ModelSelectOption[]>;
+  selectedModel: Accessor<string>;
   setSelectedModel: (model: string) => void;
   fetchSpaceModels: () => Promise<void>;
 }
@@ -19,14 +23,21 @@ export function useChatModelSelection({
   spaceId,
   initialModel,
 }: UseChatModelSelectionOptions): UseChatModelSelectionResult {
-  const [selectedModel, setSelectedModel] = createSignal<string>(initialModel ?? DEFAULT_MODEL_ID);
-  const [availableModels, setAvailableModels] = createSignal<ModelSelectOption[]>([...FALLBACK_MODELS]);
+  const [selectedModel, setSelectedModel] = createSignal<string>(
+    initialModel?.() ?? DEFAULT_MODEL_ID,
+  );
+  const [availableModels, setAvailableModels] = createSignal<
+    ModelSelectOption[]
+  >([...FALLBACK_MODELS]);
 
-  const fetchSpaceModels = async () => {
-    if (!spaceId) return;
+  const loadSpaceModels = async (
+    currentSpaceId: string,
+    seedModel?: string,
+    isCancelled?: () => boolean,
+  ): Promise<void> => {
     try {
-      const res = await rpc.spaces[':spaceId'].model.$get({
-        param: { spaceId },
+      const res = await rpc.spaces[":spaceId"].model.$get({
+        param: { spaceId: currentSpaceId },
       });
       const data = await rpcJson<{
         ai_model?: string;
@@ -40,11 +51,11 @@ export function useChatModelSelection({
         };
       }>(res);
 
-      const provider = data.ai_provider || data.provider || 'openai';
+      const provider = data.ai_provider || data.provider || "openai";
       let raw: ModelOption[] | undefined;
-      if (provider === 'anthropic') {
+      if (provider === "anthropic") {
         raw = data.available_models?.anthropic;
-      } else if (provider === 'google') {
+      } else if (provider === "google") {
         raw = data.available_models?.google;
       } else {
         raw = data.available_models?.openai;
@@ -52,7 +63,7 @@ export function useChatModelSelection({
 
       const models = (raw || [])
         .map((entry) => {
-          if (typeof entry === 'string') {
+          if (typeof entry === "string") {
             return { id: entry, label: entry };
           }
           return {
@@ -64,32 +75,52 @@ export function useChatModelSelection({
         .filter((entry) => entry.id);
 
       const resolvedModels = models.length > 0 ? models : [...FALLBACK_MODELS];
+      if (isCancelled?.()) return;
       setAvailableModels(resolvedModels);
 
       const resolvedIds = resolvedModels.map((model) => model.id);
-      if (initialModel && resolvedIds.includes(initialModel)) {
-        setSelectedModel(initialModel);
+      if (seedModel && resolvedIds.includes(seedModel)) {
+        if (isCancelled?.()) return;
+        setSelectedModel(seedModel);
       } else {
         const desiredModel = data.ai_model || data.model;
         if (desiredModel && resolvedIds.includes(desiredModel)) {
+          if (isCancelled?.()) return;
           setSelectedModel(desiredModel);
         } else {
-          setSelectedModel((prev) => (resolvedIds.includes(prev) ? prev : resolvedModels[0].id));
+          if (isCancelled?.()) return;
+          setSelectedModel((
+            prev,
+          ) => (resolvedIds.includes(prev) ? prev : resolvedModels[0].id));
         }
       }
     } catch (err) {
-      console.error('Failed to fetch space models:', err);
+      if (isCancelled?.()) return;
+      console.error("Failed to fetch space models:", err);
       setAvailableModels([...FALLBACK_MODELS]);
     }
   };
 
-  onMount(() => {
-    fetchSpaceModels();
+  const fetchSpaceModels = async () => {
+    const currentSpaceId = spaceId();
+    if (!currentSpaceId) return;
+    await loadSpaceModels(currentSpaceId, initialModel?.());
+  };
+
+  createEffect(() => {
+    const currentSpaceId = spaceId();
+    const currentSeedModel = initialModel?.();
+    if (!currentSpaceId) return;
+    let cancelled = false;
+    void loadSpaceModels(currentSpaceId, currentSeedModel, () => cancelled);
+    onCleanup(() => {
+      cancelled = true;
+    });
   });
 
   return {
-    get availableModels() { return availableModels(); },
-    get selectedModel() { return selectedModel(); },
+    availableModels,
+    selectedModel,
     setSelectedModel,
     fetchSpaceModels,
   };

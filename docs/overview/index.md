@@ -1,7 +1,11 @@
-# Takos overview
+# Takos 全体像
 
-Takos は、AI を含む app と worker ベースの service を、同じ control plane で管理・配備・実行するための platform です。
-この overview は、細部の仕様より前に「Takos をどの単位で理解すればよいか」を揃える入口です。
+Takos は、AI エージェント時代のサービスとソフトウェアを動かすための infra kernel
+と workspace shell です。プロダクト UI は Takos 本体に埋め込むのではなく、Takos
+上で動く installable app として扱います。
+
+このページは、`.takos/app.yml` や CLI の詳細に入る前に、「Takos
+をどの単位で理解すればよいか」を揃える入口です。
 
 ## このページで依存してよい範囲
 
@@ -18,10 +22,10 @@ Takos は、AI を含む app と worker ベースの service を、同じ contro
 ## Takos が扱う基本単位
 
 - Workspace / Space: 所有と隔離
-- Repo: source と workflow artifact の起点
-- Worker: public surface での deployable unit
+- App: workspace に接続される installable product surface
+- Worker / Service: deployable workload
 - Resource / Binding: backing capability と接続
-- Thread / Run / Artifact: AI 実行の履歴と結果
+- Canonical URL: app が所有する正本 URL
 
 ## public と internal の読み分け
 
@@ -31,22 +35,29 @@ Takos Docs では、次の 3 層を分けて読みます。
 2. implementation note
 3. internal model
 
-採用判断に使うのは `specs/` と `reference/` です。
-`architecture/` は、Takos が内側でどう動いているかを理解するための章です。
+採用判断に使うのは `apps/` と `reference/` です。`architecture/` は、Takos
+が内側でどう動いているかを理解するための章です。
 
 ## 代表的なユースケース
 
-### app を配備したい人
+### アプリを配備したい人
 
 - `.takos/app.yml` を書く
 - workflow artifact を用意する
 - 開発中は `takos plan` / `takos apply` を使う
-- repo/ref や Store package からは `takos deploy` / `takos install` を使う
+- canonical repository URL や catalog package からは `takos deploy` /
+  `takos install` を使う
+
+### workspace を運用したい人
+
+- shell から workspace / resources / deploys / installed apps を見る
+- canonical URL と shell launch URL の違いを理解する
+- default apps を preinstall しつつ、必要なら uninstall / replace する
 
 ### operator
 
 - space / repo / resource / route の関係を把握する
-- rollout / rollback / provider 差分を確認する
+- rollback / provider 差分 / source provenance を確認する
 
 ### internal 実装者
 
@@ -54,13 +65,13 @@ Takos Docs では、次の 3 層を分けて読みます。
 
 ## 最初に読むページ
 
-- はじめる は [Get Started](/get-started/)
-- manifest と deploy は [アプリ開発](/apps/) と [デプロイ](/deploy/)
+- Takos の product boundary は [アーキテクチャ](/architecture/) と
+  [Kernel / Workspace Shell / Apps](/architecture/kernel-shell)
+- app の deploy/runtime contract は [アプリ構成](/apps/) と [デプロイ](/deploy/)
 - CLI / API は [リファレンス](/reference/)
-- internal 構成は [アーキテクチャ](/architecture/)
 
 ## 次に読むページ
 
 - [はじめる](/get-started/)
-- [アプリ開発](/apps/)
+- [アプリ構成](/apps/)
 - [デプロイ](/deploy/)

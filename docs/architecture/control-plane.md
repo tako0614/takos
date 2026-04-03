@@ -10,7 +10,7 @@ Takos control plane は次を担当します。
 
 - browser/CLI からの `/api/*` request
 - auth / OAuth / billing / setup
-- app deployment と rollout
+- app deployment と worker/service deployment history
 - repo / resource / skill / notification / session の管理
 - runtime-host / executor-host / browser-host との連携
 
@@ -167,7 +167,7 @@ Takos は queue と DO ベースの notifier を併用します。
 current implementation は「単一の `tracks` テーブル」に依存しません。代わりに次の単位で状態を持ちます。
 
 - app deployment state
-- rollout state
+- group source projection / snapshot rollback state
 - service / worker deployment state
 - resource / binding / common env reconcile state
 - DO-local session / proxy token state

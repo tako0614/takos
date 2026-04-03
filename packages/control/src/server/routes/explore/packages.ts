@@ -44,6 +44,14 @@ export const exploreRouteDeps = {
   listCatalogItems,
 };
 
+function buildRepositoryUrl(env: Env, ownerUsername: string, repoName: string): string {
+  const adminDomain = String(env.ADMIN_DOMAIN || "").trim();
+  const base = /^https?:\/\//i.test(adminDomain)
+    ? adminDomain.replace(/\/+$/, "")
+    : `https://${adminDomain.replace(/\/+$/, "")}`;
+  return `${base}/git/${encodeURIComponent(ownerUsername)}/${encodeURIComponent(repoName)}.git`;
+}
+
 export default new Hono<{ Bindings: Env; Variables: Variables }>()
   .get(
     "/catalog",
@@ -361,6 +369,7 @@ export default new Hono<{ Bindings: Env; Variables: Variables }>()
           latestPackage.asset.bundle_meta?.name || repo.name,
         version: latestPackage.asset.bundle_meta?.version ||
           latestPackage.release.tag,
+        repository_url: buildRepositoryUrl(c.env, repo.owner_username, repo.name),
         description: latestPackage.asset.bundle_meta?.description ||
           latestPackage.release.description,
         icon: latestPackage.asset.bundle_meta?.icon,
@@ -438,6 +447,7 @@ export default new Hono<{ Bindings: Env; Variables: Variables }>()
           app_id: takopackAsset.bundle_meta?.app_id ||
             takopackAsset.bundle_meta?.name || repo.name,
           version: takopackAsset.bundle_meta?.version || release.tag,
+          repository_url: buildRepositoryUrl(c.env, repo.owner_username, repo.name),
           is_prerelease: release.isPrerelease,
           asset_id: takopackAsset.id,
           size: takopackAsset.size,

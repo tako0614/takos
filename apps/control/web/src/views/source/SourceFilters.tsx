@@ -1,28 +1,28 @@
-import { createSignal } from 'solid-js';
-import { Icons } from '../../lib/Icons.tsx';
-import { useI18n } from '../../store/i18n.ts';
-import { Modal } from '../../components/ui/Modal.tsx';
-import type { SourceFilter, SourceSort } from '../../hooks/useSourceData.ts';
+import { createSignal } from "solid-js";
+import { Icons } from "../../lib/Icons.tsx";
+import { useI18n } from "../../store/i18n.ts";
+import { Modal } from "../../components/ui/Modal.tsx";
+import type { SourceFilter, SourceSort } from "../../hooks/useSourceData.ts";
 
 const FILTER_CHIPS: Array<{ value: SourceFilter; labelKey: string }> = [
-  { value: 'all', labelKey: 'sourceFilterAll' },
-  { value: 'mine', labelKey: 'sourceFilterMine' },
-  { value: 'starred', labelKey: 'sourceFilterStarred' },
+  { value: "all", labelKey: "sourceFilterAll" },
+  { value: "mine", labelKey: "sourceFilterMine" },
+  { value: "starred", labelKey: "sourceFilterStarred" },
 ];
 
 const CATEGORY_CHIPS = [
-  { value: 'app', labelKey: 'categoryApps' },
-  { value: 'service', labelKey: 'categoryServices' },
-  { value: 'library', labelKey: 'categoryLibraries' },
-  { value: 'template', labelKey: 'categoryTemplates' },
-  { value: 'social', labelKey: 'categorySocial' },
+  { value: "app", labelKey: "categoryApps" },
+  { value: "service", labelKey: "categoryServices" },
+  { value: "library", labelKey: "categoryLibraries" },
+  { value: "template", labelKey: "categoryTemplates" },
+  { value: "social", labelKey: "categorySocial" },
 ];
 
 const SORT_OPTIONS: Array<{ value: SourceSort; labelKey: string }> = [
-  { value: 'trending', labelKey: 'sortTrending' },
-  { value: 'new', labelKey: 'sortNew' },
-  { value: 'stars', labelKey: 'sortStars' },
-  { value: 'updated', labelKey: 'sortUpdated' },
+  { value: "trending", labelKey: "sortTrending" },
+  { value: "new", labelKey: "sortNew" },
+  { value: "stars", labelKey: "sortStars" },
+  { value: "updated", labelKey: "sortUpdated" },
 ];
 
 /* ── Status bar (result count + clear filters) ── */
@@ -34,19 +34,23 @@ interface SourceFilterStatusBarProps {
   onClearFilters: () => void;
 }
 
-export function SourceFilterStatusBar({ loading, total, hasActiveFilters, onClearFilters }: SourceFilterStatusBarProps) {
+export function SourceFilterStatusBar(props: SourceFilterStatusBarProps) {
   const { t } = useI18n();
 
   return (
     <div class="flex-shrink-0 px-4 pb-2 text-xs text-zinc-500 dark:text-zinc-400 flex items-center justify-between">
-      <span>{loading ? t('searchingEllipsis') : t('resultsCount', { count: String(total) })}</span>
-      {hasActiveFilters && (
+      <span>
+        {props.loading
+          ? t("searchingEllipsis")
+          : t("resultsCount", { count: String(props.total) })}
+      </span>
+      {props.hasActiveFilters && (
         <button
           type="button"
           class="text-xs font-medium text-zinc-600 dark:text-zinc-300 hover:text-zinc-900 dark:hover:text-zinc-100 transition-colors"
-          onClick={onClearFilters}
+          onClick={props.onClearFilters}
         >
-          {t('clearFilters')}
+          {t("clearFilters")}
         </button>
       )}
     </div>
@@ -55,47 +59,51 @@ export function SourceFilterStatusBar({ loading, total, hasActiveFilters, onClea
 
 /* ── Sort dropdown (shared between mobile & desktop) ── */
 
-function SortDropdown({
-  sort,
-  setSort,
-  sortOpen,
-  setSortOpen,
-  align = 'left',
-  buttonClassName,
-}: {
+function SortDropdown(props: {
   sort: SourceSort;
   setSort: (v: SourceSort) => void;
   sortOpen: boolean;
   setSortOpen: (v: boolean) => void;
-  align?: 'left' | 'right';
+  align?: "left" | "right";
   buttonClassName?: string;
 }) {
   const { t } = useI18n();
-  const currentSortOpt = SORT_OPTIONS.find((o) => o.value === sort) ?? SORT_OPTIONS[0];
+  const currentSortOpt = SORT_OPTIONS.find((o) => o.value === props.sort) ??
+    SORT_OPTIONS[0];
 
   return (
     <div class="relative flex-shrink-0">
       <button
         type="button"
-        onClick={() => setSortOpen(!sortOpen)}
-        class={buttonClassName ?? "flex items-center gap-1 px-3 py-1.5 rounded-full bg-white dark:bg-zinc-900 text-xs font-medium text-zinc-600 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors"}
+        onClick={() => props.setSortOpen(!props.sortOpen)}
+        class={props.buttonClassName ??
+          "flex items-center gap-1 px-3 py-1.5 rounded-full bg-white dark:bg-zinc-900 text-xs font-medium text-zinc-600 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors"}
       >
         {t(currentSortOpt.labelKey as never)}
         <Icons.ChevronDown class="w-3 h-3" />
       </button>
-      {sortOpen && (
+      {props.sortOpen && (
         <>
-          <div class="fixed inset-0 z-10" onClick={() => setSortOpen(false)} />
-          <div class={`absolute ${align === 'right' ? 'right-0' : 'left-0'} top-full mt-1 z-20 bg-white dark:bg-zinc-900 rounded-xl shadow-lg border border-zinc-100 dark:border-zinc-800 overflow-hidden min-w-[120px]`}>
+          <div
+            class="fixed inset-0 z-10"
+            onClick={() => props.setSortOpen(false)}
+          />
+          <div
+            class={`absolute ${
+              props.align === "right" ? "right-0" : "left-0"
+            } top-full mt-1 z-20 bg-white dark:bg-zinc-900 rounded-xl shadow-lg border border-zinc-100 dark:border-zinc-800 overflow-hidden min-w-[120px]`}
+          >
             {SORT_OPTIONS.map((opt) => (
               <button
-
                 type="button"
-                onClick={() => { setSort(opt.value); setSortOpen(false); }}
+                onClick={() => {
+                  props.setSort(opt.value);
+                  props.setSortOpen(false);
+                }}
                 class={`w-full text-left px-4 py-2.5 text-xs transition-colors ${
-                  sort === opt.value
-                    ? 'text-zinc-900 dark:text-zinc-100 font-semibold'
-                    : 'text-zinc-600 dark:text-zinc-300 hover:bg-zinc-50 dark:hover:bg-zinc-800'
+                  props.sort === opt.value
+                    ? "text-zinc-900 dark:text-zinc-100 font-semibold"
+                    : "text-zinc-600 dark:text-zinc-300 hover:bg-zinc-50 dark:hover:bg-zinc-800"
                 }`}
               >
                 {t(opt.labelKey as never)}
@@ -123,13 +131,7 @@ interface DesktopFilterBarProps {
   onRequireLogin: () => void;
 }
 
-export function DesktopFilterBar({
-  filter, setFilter,
-  category, setCategory,
-  officialOnly, setOfficialOnly,
-  sort, setSort,
-  isAuthenticated, onRequireLogin,
-}: DesktopFilterBarProps) {
+export function DesktopFilterBar(props: DesktopFilterBarProps) {
   const { t } = useI18n();
   const [sortOpen, setSortOpen] = createSignal(false);
 
@@ -137,19 +139,21 @@ export function DesktopFilterBar({
     <div class="flex-shrink-0 flex items-center gap-1.5 px-4 pb-3 overflow-x-auto scrollbar-none">
       {FILTER_CHIPS.map((chip) => (
         <button
-
           type="button"
           onClick={() => {
-            if (!isAuthenticated && (chip.value === 'mine' || chip.value === 'starred')) {
-              onRequireLogin();
+            if (
+              !props.isAuthenticated &&
+              (chip.value === "mine" || chip.value === "starred")
+            ) {
+              props.onRequireLogin();
               return;
             }
-            setFilter(chip.value);
+            props.setFilter(chip.value);
           }}
           class={`flex-shrink-0 px-3.5 py-1.5 rounded-full text-xs font-medium transition-colors ${
-            filter === chip.value
-              ? 'bg-zinc-900 dark:bg-zinc-50 text-white dark:text-zinc-900'
-              : 'bg-white dark:bg-zinc-900 text-zinc-600 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-800'
+            props.filter === chip.value
+              ? "bg-zinc-900 dark:bg-zinc-50 text-white dark:text-zinc-900"
+              : "bg-white dark:bg-zinc-900 text-zinc-600 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-800"
           }`}
         >
           {t(chip.labelKey as never)}
@@ -160,38 +164,38 @@ export function DesktopFilterBar({
 
       {CATEGORY_CHIPS.map((chip) => (
         <button
-
           type="button"
-          onClick={() => setCategory(category === chip.value ? '' : chip.value)}
+          onClick={() =>
+            props.setCategory(props.category === chip.value ? "" : chip.value)}
           class={`flex-shrink-0 px-3.5 py-1.5 rounded-full text-xs font-medium transition-colors ${
-            category === chip.value
-              ? 'bg-zinc-900 dark:bg-zinc-50 text-white dark:text-zinc-900'
-              : 'bg-white dark:bg-zinc-900 text-zinc-600 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-800'
+            props.category === chip.value
+              ? "bg-zinc-900 dark:bg-zinc-50 text-white dark:text-zinc-900"
+              : "bg-white dark:bg-zinc-900 text-zinc-600 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-800"
           }`}
         >
           {t(chip.labelKey as never)}
         </button>
       ))}
 
-      {filter !== 'mine' && (
+      {props.filter !== "mine" && (
         <button
           type="button"
-          onClick={() => setOfficialOnly((v) => !v)}
+          onClick={() => props.setOfficialOnly((v) => !v)}
           class={`flex-shrink-0 flex items-center gap-1 px-3.5 py-1.5 rounded-full text-xs font-medium transition-colors ${
-            officialOnly
-              ? 'bg-blue-600 text-white'
-              : 'bg-white dark:bg-zinc-900 text-zinc-600 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-800'
+            props.officialOnly
+              ? "bg-blue-600 text-white"
+              : "bg-white dark:bg-zinc-900 text-zinc-600 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-800"
           }`}
         >
           <Icons.Check class="w-3 h-3" />
-          {t('officialLabel')}
+          {t("officialLabel")}
         </button>
       )}
 
-      {filter !== 'mine' && (
+      {props.filter !== "mine" && (
         <SortDropdown
-          sort={sort}
-          setSort={setSort}
+          sort={props.sort}
+          setSort={props.setSort}
           sortOpen={sortOpen()}
           setSortOpen={setSortOpen}
           align="right"
@@ -212,10 +216,7 @@ interface MobileFilterBarProps {
   onShowFilters: () => void;
 }
 
-export function MobileFilterBar({
-  filter, sort, setSort,
-  hasActiveFilters, onShowFilters,
-}: MobileFilterBarProps) {
+export function MobileFilterBar(props: MobileFilterBarProps) {
   const { t } = useI18n();
   const [sortOpen, setSortOpen] = createSignal(false);
 
@@ -224,18 +225,18 @@ export function MobileFilterBar({
       <button
         type="button"
         class={`min-h-[44px] px-3.5 rounded-xl text-xs font-medium border transition-colors ${
-          hasActiveFilters
-            ? 'bg-zinc-900 text-white border-zinc-900 dark:bg-zinc-100 dark:text-zinc-900 dark:border-zinc-100'
-            : 'bg-white dark:bg-zinc-900 text-zinc-600 dark:text-zinc-300 border-zinc-200 dark:border-zinc-700'
+          props.hasActiveFilters
+            ? "bg-zinc-900 text-white border-zinc-900 dark:bg-zinc-100 dark:text-zinc-900 dark:border-zinc-100"
+            : "bg-white dark:bg-zinc-900 text-zinc-600 dark:text-zinc-300 border-zinc-200 dark:border-zinc-700"
         }`}
-        onClick={onShowFilters}
+        onClick={props.onShowFilters}
       >
-        {t('filtersTitle')}
+        {t("filtersTitle")}
       </button>
-      {filter !== 'mine' && (
+      {props.filter !== "mine" && (
         <SortDropdown
-          sort={sort}
-          setSort={setSort}
+          sort={props.sort}
+          setSort={props.setSort}
           sortOpen={sortOpen()}
           setSortOpen={setSortOpen}
           align="left"
@@ -261,43 +262,39 @@ interface MobileFiltersModalProps {
   onRequireLogin: () => void;
 }
 
-export function MobileFiltersModal({
-  isOpen, onClose,
-  filter, setFilter,
-  category, setCategory,
-  officialOnly, setOfficialOnly,
-  isAuthenticated, onRequireLogin,
-}: MobileFiltersModalProps) {
+export function MobileFiltersModal(props: MobileFiltersModalProps) {
   const { t } = useI18n();
 
   return (
     <Modal
-      isOpen={isOpen}
-      onClose={onClose}
-      title={t('filtersTitle')}
+      isOpen={props.isOpen}
+      onClose={props.onClose}
+      title={t("filtersTitle")}
       size="lg"
     >
       <div class="space-y-5">
         <div>
           <p class="text-xs font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400 mb-2">
-            {t('categoryType')}
+            {t("categoryType")}
           </p>
           <div class="grid grid-cols-3 gap-2">
             {FILTER_CHIPS.map((chip) => (
               <button
-
                 type="button"
                 onClick={() => {
-                  if (!isAuthenticated && (chip.value === 'mine' || chip.value === 'starred')) {
-                    onRequireLogin();
+                  if (
+                    !props.isAuthenticated &&
+                    (chip.value === "mine" || chip.value === "starred")
+                  ) {
+                    props.onRequireLogin();
                     return;
                   }
-                  setFilter(chip.value);
+                  props.setFilter(chip.value);
                 }}
                 class={`min-h-[44px] rounded-xl text-xs font-medium transition-colors ${
-                  filter === chip.value
-                    ? 'bg-zinc-900 text-white dark:bg-zinc-100 dark:text-zinc-900'
-                    : 'bg-zinc-100 text-zinc-700 dark:bg-zinc-800 dark:text-zinc-300'
+                  props.filter === chip.value
+                    ? "bg-zinc-900 text-white dark:bg-zinc-100 dark:text-zinc-900"
+                    : "bg-zinc-100 text-zinc-700 dark:bg-zinc-800 dark:text-zinc-300"
                 }`}
               >
                 {t(chip.labelKey as never)}
@@ -308,18 +305,20 @@ export function MobileFiltersModal({
 
         <div>
           <p class="text-xs font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400 mb-2">
-            {t('categoryLabel')}
+            {t("categoryLabel")}
           </p>
           <div class="flex flex-wrap gap-2">
             {CATEGORY_CHIPS.map((chip) => (
               <button
-
                 type="button"
-                onClick={() => setCategory(category === chip.value ? '' : chip.value)}
+                onClick={() =>
+                  props.setCategory(
+                    props.category === chip.value ? "" : chip.value,
+                  )}
                 class={`min-h-[44px] px-3.5 rounded-xl text-xs font-medium transition-colors ${
-                  category === chip.value
-                    ? 'bg-zinc-900 text-white dark:bg-zinc-100 dark:text-zinc-900'
-                    : 'bg-zinc-100 text-zinc-700 dark:bg-zinc-800 dark:text-zinc-300'
+                  props.category === chip.value
+                    ? "bg-zinc-900 text-white dark:bg-zinc-100 dark:text-zinc-900"
+                    : "bg-zinc-100 text-zinc-700 dark:bg-zinc-800 dark:text-zinc-300"
                 }`}
               >
                 {t(chip.labelKey as never)}
@@ -328,17 +327,17 @@ export function MobileFiltersModal({
           </div>
         </div>
 
-        {filter !== 'mine' && (
+        {props.filter !== "mine" && (
           <button
             type="button"
-            onClick={() => setOfficialOnly((v) => !v)}
+            onClick={() => props.setOfficialOnly((v) => !v)}
             class={`w-full min-h-[44px] rounded-xl text-sm font-medium transition-colors ${
-              officialOnly
-                ? 'bg-blue-600 text-white'
-                : 'bg-zinc-100 text-zinc-700 dark:bg-zinc-800 dark:text-zinc-300'
+              props.officialOnly
+                ? "bg-blue-600 text-white"
+                : "bg-zinc-100 text-zinc-700 dark:bg-zinc-800 dark:text-zinc-300"
             }`}
           >
-            {t('officialOnly')}
+            {t("officialOnly")}
           </button>
         )}
 
@@ -346,12 +345,12 @@ export function MobileFiltersModal({
           type="button"
           class="w-full min-h-[44px] rounded-xl border border-zinc-200 dark:border-zinc-700 text-sm text-zinc-700 dark:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors"
           onClick={() => {
-            setFilter('all');
-            setCategory('');
-            setOfficialOnly(false);
+            props.setFilter("all");
+            props.setCategory("");
+            props.setOfficialOnly(false);
           }}
         >
-          {t('resetFilters')}
+          {t("resetFilters")}
         </button>
       </div>
     </Modal>

@@ -267,7 +267,7 @@ export function useWsMessageProcessor({
     try {
       const res = await rpcPath(rpc, 'runs', ':id').$get({
         param: { id: runId },
-      }) as Response;
+      });
       const data = await rpcJson<{ run: Run }>(res);
       const status = data.run?.status;
       if (data.run) {

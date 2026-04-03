@@ -2,9 +2,11 @@
 
 > このページでわかること: Worker と Docker コンテナを組み合わせる方法。
 
-takos-agent と同じアーキテクチャです。ブラウザ自動化やヘビーな処理など、Docker が必要な場合に使います。
+takos-agent と同じアーキテクチャです。ブラウザ自動化やヘビーな処理など、Docker
+が必要な場合に使います。
 
-この例は現行の `takos apply` で読める構成に合わせています。同じ manifest は repo/ref source の `takos deploy` や Store package install でも使えます。
+この例は現行の `takos apply` で読める構成に合わせています。同じ manifest は
+repo/ref source の `takos deploy` や catalog package install でも使えます。
 
 ## app.yml
 
@@ -112,24 +114,27 @@ export default {
 
 ## ポイント
 
-- `containers` でコンテナを定義し、`workers` の `containers` フィールドで紐づけます
+- `containers` でコンテナを定義し、`workers` の `containers`
+  フィールドで紐づけます
 - コンテナは CF Containers (Durable Object) として実行されます
 - Worker がルーティングを担当し、コンテナがヘビーな処理を担当します
-- `instanceType` でコンテナのスペックを指定できます（`basic`, `standard-2` など）
+- `instanceType` でコンテナのスペックを指定できます（`basic`, `standard-2`
+  など）
 - `maxInstances` で最大インスタンス数を制御します
 
 ## containers, services, workers の使い分け
 
-| | containers | services | workers |
-| --- | --- | --- | --- |
-| 実行モデル | CF Containers (Durable Object) | 常設コンテナ (VPS) | CF Workers (V8 isolate) |
-| 用途 | Docker が必要な処理 (Worker に紐づく) | 独立稼働する Docker コンテナ | ルーティング、軽量処理 |
-| ビルド | Dockerfile | Dockerfile | workflow artifact |
-| IPv4 割当 | 不可 | `ipv4: true` で可能 | 不可 |
+|            | containers                            | services                     | workers                 |
+| ---------- | ------------------------------------- | ---------------------------- | ----------------------- |
+| 実行モデル | CF Containers (Durable Object)        | 常設コンテナ (VPS)           | CF Workers (V8 isolate) |
+| 用途       | Docker が必要な処理 (Worker に紐づく) | 独立稼働する Docker コンテナ | ルーティング、軽量処理  |
+| ビルド     | Dockerfile                            | Dockerfile                   | workflow artifact       |
+| IPv4 割当  | 不可                                  | `ipv4: true` で可能          | 不可                    |
 
 ## 常設サービス
 
-Worker に紐づけず、コンテナ単体で独立稼働させる場合は `services` セクションを使います。`ipv4: true` を指定すると専用 IPv4 が割り当てられます。
+Worker に紐づけず、コンテナ単体で独立稼働させる場合は `services`
+セクションを使います。`ipv4: true` を指定すると専用 IPv4 が割り当てられます。
 
 ```yaml
 services:

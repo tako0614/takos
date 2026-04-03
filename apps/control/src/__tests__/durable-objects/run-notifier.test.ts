@@ -14,76 +14,24 @@ import { RunNotifierDO } from "@/durable-objects/run-notifier";
 // ---------------------------------------------------------------------------
 
 import { assert, assertEquals } from "jsr:@std/assert";
-import { assertSpyCalls, spy } from "jsr:@std/testing/mock";
-import { FakeTime } from "jsr:@std/testing/time";
-
-function createMockStorage() {
-  const store = new Map<string, unknown>();
-  let alarm: number | null = null;
-
-  return {
-    get: async <T>(key: string): Promise<T | undefined> =>
-      store.get(key) as T | undefined,
-    put: spy(async (key: string, value: unknown) => {
-      store.set(key, value);
-    }),
-    delete: spy(async (key: string) => {
-      store.delete(key);
-      return true;
-    }),
-    setAlarm: spy(async (ms: number) => {
-      alarm = ms;
-    }),
-    deleteAlarm: spy(async () => {
-      alarm = null;
-    }),
-    getAlarm: async () => alarm,
-    list: async () => new Map(),
-    _store: store,
-  };
-}
-
-function createMockState(storage = createMockStorage()): any {
-  return {
-    storage,
-    blockConcurrencyWhile: async <T>(fn: () => Promise<T>): Promise<T> => fn(),
-    acceptWebSocket: ((..._args: any[]) => undefined) as any,
-    getWebSockets: () => [],
-    getTags: () => [],
-  };
-}
-
-function createMockEnv() {
-  return {
-    DB: {} as unknown,
-    TAKOS_OFFLOAD: undefined,
-  };
-}
-
-class MockWebSocket {
-  sent: string[] = [];
-  closed = false;
-  closeCode?: number;
-  closeReason?: string;
-  connectionId?: string;
-  lastActivity?: number;
-
-  send(data: string) {
-    if (this.closed) throw new Error("WebSocket closed");
-    this.sent.push(data);
-  }
-
-  close(code?: number, reason?: string) {
-    this.closed = true;
-    this.closeCode = code;
-    this.closeReason = reason;
-  }
-}
+import { assertSpyCalls } from "jsr:@std/testing/mock";
+import {
+  createMockEnv,
+  createMockState,
+  createMockStorage,
+  getRequest,
+  internalHeaders,
+  jsonBody,
+  type MockState,
+  MockWebSocket,
+  postJSON,
+  withFakeTime,
+} from "./test-helpers.ts";
 
 function createDO(
   opts: {
     env?: Record<string, unknown>;
-    state?: ReturnType<typeof createMockState>;
+    state?: MockState;
   } = {},
 ) {
   const state = opts.state ?? createMockState();
@@ -95,48 +43,11 @@ function createDO(
   return { doInstance, state };
 }
 
-function internalHeaders(
-  extra: Record<string, string> = {},
-): Record<string, string> {
-  return {
-    "X-Takos-Internal": "1",
-    "Content-Type": "application/json",
-    ...extra,
-  };
-}
-
-function postJSON(
-  path: string,
-  body: unknown,
-  headers: Record<string, string> = internalHeaders(),
-): Request {
-  return new Request(`https://do.internal${path}`, {
-    method: "POST",
-    headers,
-    body: JSON.stringify(body),
-  });
-}
-
-function getRequest(
-  path: string,
-  headers: Record<string, string> = internalHeaders(),
-): Request {
-  return new Request(`https://do.internal${path}`, {
-    method: "GET",
-    headers,
-  });
-}
-
-async function jsonBody(response: Response): Promise<Record<string, unknown>> {
-  return response.json() as Promise<Record<string, unknown>>;
-}
-
 // ---------------------------------------------------------------------------
 // Tests
 // ---------------------------------------------------------------------------
 
 Deno.test("RunNotifierDO - fetch routing - returns 401 for non-internal, non-auth requests", async () => {
-  /* TODO: restore mocks manually */ void 0;
   const { doInstance } = createDO();
   const req = new Request("https://do.internal/emit", {
     method: "POST",
@@ -147,7 +58,6 @@ Deno.test("RunNotifierDO - fetch routing - returns 401 for non-internal, non-aut
   assertEquals(res.status, 401);
 });
 Deno.test("RunNotifierDO - fetch routing - allows requests with X-WS-Auth-Validated header", async () => {
-  /* TODO: restore mocks manually */ void 0;
   const { doInstance } = createDO();
   const req = new Request("https://do.internal/state", {
     method: "GET",
@@ -157,14 +67,12 @@ Deno.test("RunNotifierDO - fetch routing - allows requests with X-WS-Auth-Valida
   assertEquals(res.status, 200);
 });
 Deno.test("RunNotifierDO - fetch routing - returns 404 for unknown paths", async () => {
-  /* TODO: restore mocks manually */ void 0;
   const { doInstance } = createDO();
   const res = await doInstance.fetch(getRequest("/unknown"));
   assertEquals(res.status, 404);
 });
 
 Deno.test("RunNotifierDO - /emit - emits an event and returns success", async () => {
-  /* TODO: restore mocks manually */ void 0;
   const { doInstance } = createDO();
   const res = await doInstance.fetch(postJSON("/emit", {
     type: "message",
@@ -178,7 +86,6 @@ Deno.test("RunNotifierDO - /emit - emits an event and returns success", async ()
   assertEquals(body.clients, 0);
 });
 Deno.test("RunNotifierDO - /emit - sets runId from first emit", async () => {
-  /* TODO: restore mocks manually */ void 0;
   const { doInstance } = createDO();
   await doInstance.fetch(postJSON("/emit", {
     type: "start",
@@ -191,7 +98,6 @@ Deno.test("RunNotifierDO - /emit - sets runId from first emit", async () => {
   assertEquals(body.runId, "run-123");
 });
 Deno.test("RunNotifierDO - /emit - does not overwrite existing runId", async () => {
-  /* TODO: restore mocks manually */ void 0;
   const { doInstance } = createDO();
   await doInstance.fetch(postJSON("/emit", {
     type: "start",
@@ -209,7 +115,6 @@ Deno.test("RunNotifierDO - /emit - does not overwrite existing runId", async () 
   assertEquals(body.runId, "run-first");
 });
 Deno.test("RunNotifierDO - /emit - validates runId format", async () => {
-  /* TODO: restore mocks manually */ void 0;
   const { doInstance } = createDO();
   const res = await doInstance.fetch(postJSON("/emit", {
     type: "test",
@@ -221,7 +126,6 @@ Deno.test("RunNotifierDO - /emit - validates runId format", async () => {
   assertEquals(body.error, "Invalid runId");
 });
 Deno.test("RunNotifierDO - /emit - validates runId length", async () => {
-  /* TODO: restore mocks manually */ void 0;
   const { doInstance } = createDO();
   const res = await doInstance.fetch(postJSON("/emit", {
     type: "test",
@@ -231,7 +135,6 @@ Deno.test("RunNotifierDO - /emit - validates runId length", async () => {
   assertEquals(res.status, 400);
 });
 Deno.test("RunNotifierDO - /emit - rejects empty type", async () => {
-  /* TODO: restore mocks manually */ void 0;
   const { doInstance } = createDO();
   const res = await doInstance.fetch(postJSON("/emit", {
     type: "",
@@ -242,7 +145,6 @@ Deno.test("RunNotifierDO - /emit - rejects empty type", async () => {
   assertEquals(body.error, "Invalid type");
 });
 Deno.test("RunNotifierDO - /emit - rejects type longer than 256 chars", async () => {
-  /* TODO: restore mocks manually */ void 0;
   const { doInstance } = createDO();
   const res = await doInstance.fetch(postJSON("/emit", {
     type: "x".repeat(257),
@@ -251,7 +153,6 @@ Deno.test("RunNotifierDO - /emit - rejects type longer than 256 chars", async ()
   assertEquals(res.status, 400);
 });
 Deno.test("RunNotifierDO - /emit - rejects data larger than 1MB", async () => {
-  /* TODO: restore mocks manually */ void 0;
   const { doInstance } = createDO();
   const res = await doInstance.fetch(postJSON("/emit", {
     type: "big",
@@ -262,7 +163,6 @@ Deno.test("RunNotifierDO - /emit - rejects data larger than 1MB", async () => {
   assertEquals(body.error, "Data too large");
 });
 Deno.test("RunNotifierDO - /emit - assigns sequential event IDs", async () => {
-  /* TODO: restore mocks manually */ void 0;
   const { doInstance } = createDO();
 
   const r1 = await jsonBody(
@@ -280,7 +180,6 @@ Deno.test("RunNotifierDO - /emit - assigns sequential event IDs", async () => {
   assertEquals(r3.eventId, 3);
 });
 Deno.test("RunNotifierDO - /emit - accepts preferred event_id", async () => {
-  /* TODO: restore mocks manually */ void 0;
   const { doInstance } = createDO();
   const r1 = await jsonBody(
     await doInstance.fetch(postJSON("/emit", {
@@ -292,7 +191,6 @@ Deno.test("RunNotifierDO - /emit - accepts preferred event_id", async () => {
   assertEquals(r1.eventId, 50);
 });
 Deno.test("RunNotifierDO - /emit - broadcasts to connected WebSocket clients", async () => {
-  /* TODO: restore mocks manually */ void 0;
   const { doInstance } = createDO();
 
   const ws = new MockWebSocket();
@@ -314,7 +212,6 @@ Deno.test("RunNotifierDO - /emit - broadcasts to connected WebSocket clients", a
   assert(msg.created_at !== undefined);
 });
 Deno.test("RunNotifierDO - /emit - removes failed connections during broadcast", async () => {
-  /* TODO: restore mocks manually */ void 0;
   const { doInstance } = createDO();
 
   const ws = new MockWebSocket();
@@ -334,7 +231,6 @@ Deno.test("RunNotifierDO - /emit - removes failed connections during broadcast",
   assertEquals(connections.has("conn-fail"), false);
 });
 Deno.test("RunNotifierDO - /emit - persists state after emit", async () => {
-  /* TODO: restore mocks manually */ void 0;
   const state = createMockState();
   const { doInstance } = createDO({ state });
 
@@ -349,7 +245,6 @@ Deno.test("RunNotifierDO - /emit - persists state after emit", async () => {
   assertEquals(Array.isArray(persisted.eventBuffer), true);
 });
 Deno.test("RunNotifierDO - /emit - returns 400 for invalid JSON body", async () => {
-  /* TODO: restore mocks manually */ void 0;
   const { doInstance } = createDO();
   const req = new Request("https://do.internal/emit", {
     method: "POST",
@@ -361,7 +256,6 @@ Deno.test("RunNotifierDO - /emit - returns 400 for invalid JSON body", async () 
 });
 
 Deno.test("RunNotifierDO - /usage - records usage events", async () => {
-  /* TODO: restore mocks manually */ void 0;
   const { doInstance } = createDO();
   const res = await doInstance.fetch(postJSON("/usage", {
     runId: "run-1",
@@ -373,7 +267,6 @@ Deno.test("RunNotifierDO - /usage - records usage events", async () => {
   assertEquals(body.success, true);
 });
 Deno.test("RunNotifierDO - /usage - rejects missing meter_type", async () => {
-  /* TODO: restore mocks manually */ void 0;
   const { doInstance } = createDO();
   const res = await doInstance.fetch(postJSON("/usage", {
     units: 100,
@@ -383,7 +276,6 @@ Deno.test("RunNotifierDO - /usage - rejects missing meter_type", async () => {
   assertEquals(body.error, "meter_type is required");
 });
 Deno.test("RunNotifierDO - /usage - rejects non-positive units", async () => {
-  /* TODO: restore mocks manually */ void 0;
   const { doInstance } = createDO();
   const res = await doInstance.fetch(postJSON("/usage", {
     meter_type: "tokens",
@@ -394,7 +286,6 @@ Deno.test("RunNotifierDO - /usage - rejects non-positive units", async () => {
   assertEquals(body.error, "units must be positive");
 });
 Deno.test("RunNotifierDO - /usage - rejects negative units", async () => {
-  /* TODO: restore mocks manually */ void 0;
   const { doInstance } = createDO();
   const res = await doInstance.fetch(postJSON("/usage", {
     meter_type: "tokens",
@@ -404,7 +295,6 @@ Deno.test("RunNotifierDO - /usage - rejects negative units", async () => {
   assertEquals(body.success, false);
 });
 Deno.test("RunNotifierDO - /usage - rejects NaN units", async () => {
-  /* TODO: restore mocks manually */ void 0;
   const { doInstance } = createDO();
   const res = await doInstance.fetch(postJSON("/usage", {
     meter_type: "tokens",
@@ -414,7 +304,6 @@ Deno.test("RunNotifierDO - /usage - rejects NaN units", async () => {
   assertEquals(body.success, false);
 });
 Deno.test("RunNotifierDO - /usage - sets runId from usage if not already set", async () => {
-  /* TODO: restore mocks manually */ void 0;
   const { doInstance } = createDO();
   await doInstance.fetch(postJSON("/usage", {
     runId: "run-from-usage",
@@ -427,7 +316,6 @@ Deno.test("RunNotifierDO - /usage - sets runId from usage if not already set", a
   assertEquals(body.runId, "run-from-usage");
 });
 Deno.test("RunNotifierDO - /usage - includes reference_type and metadata", async () => {
-  /* TODO: restore mocks manually */ void 0;
   const state = createMockState();
   const { doInstance } = createDO({ state });
 
@@ -451,7 +339,6 @@ Deno.test("RunNotifierDO - /usage - includes reference_type and metadata", async
   );
 });
 Deno.test("RunNotifierDO - /usage - returns 400 for invalid JSON body", async () => {
-  /* TODO: restore mocks manually */ void 0;
   const { doInstance } = createDO();
   const req = new Request("https://do.internal/usage", {
     method: "POST",
@@ -463,7 +350,6 @@ Deno.test("RunNotifierDO - /usage - returns 400 for invalid JSON body", async ()
 });
 
 Deno.test("RunNotifierDO - /events - returns events after a given ID", async () => {
-  /* TODO: restore mocks manually */ void 0;
   const { doInstance } = createDO();
 
   await doInstance.fetch(postJSON("/emit", { type: "a", data: 1 }));
@@ -478,7 +364,6 @@ Deno.test("RunNotifierDO - /events - returns events after a given ID", async () 
   assertEquals(events[1].type, "c");
 });
 Deno.test("RunNotifierDO - /events - includes event_id and created_at in event data", async () => {
-  /* TODO: restore mocks manually */ void 0;
   const { doInstance } = createDO();
   await doInstance.fetch(postJSON("/emit", { type: "test", data: null }));
 
@@ -490,7 +375,6 @@ Deno.test("RunNotifierDO - /events - includes event_id and created_at in event d
 });
 
 Deno.test("RunNotifierDO - /state - returns current DO state", async () => {
-  /* TODO: restore mocks manually */ void 0;
   const { doInstance } = createDO();
 
   const res = await doInstance.fetch(getRequest("/state"));
@@ -502,7 +386,6 @@ Deno.test("RunNotifierDO - /state - returns current DO state", async () => {
 });
 
 Deno.test("RunNotifierDO - WebSocket handling - rejects WebSocket connections without auth validation", async () => {
-  /* TODO: restore mocks manually */ void 0;
   const { doInstance } = createDO();
   const req = new Request("https://do.internal/ws", {
     headers: { Upgrade: "websocket" },
@@ -511,7 +394,6 @@ Deno.test("RunNotifierDO - WebSocket handling - rejects WebSocket connections wi
   assertEquals(res.status, 401);
 });
 Deno.test("RunNotifierDO - WebSocket handling - rejects when MAX_CONNECTIONS is reached", async () => {
-  /* TODO: restore mocks manually */ void 0;
   const { doInstance } = createDO();
 
   // Fill to MAX_CONNECTIONS (10_000)
@@ -530,7 +412,6 @@ Deno.test("RunNotifierDO - WebSocket handling - rejects when MAX_CONNECTIONS is 
 });
 
 Deno.test("RunNotifierDO - webSocketMessage - responds to ping with pong", async () => {
-  /* TODO: restore mocks manually */ void 0;
   const { doInstance } = createDO();
   const ws = new MockWebSocket();
   ws.connectionId = "conn-1";
@@ -539,7 +420,6 @@ Deno.test("RunNotifierDO - webSocketMessage - responds to ping with pong", async
   assert(ws.sent.some((message) => message.includes("pong")));
 });
 Deno.test("RunNotifierDO - webSocketMessage - updates lastActivity on message", async () => {
-  /* TODO: restore mocks manually */ void 0;
   const { doInstance } = createDO();
   const ws = new MockWebSocket();
   ws.connectionId = "conn-1";
@@ -550,7 +430,6 @@ Deno.test("RunNotifierDO - webSocketMessage - updates lastActivity on message", 
   assert(ws.lastActivity >= before);
 });
 Deno.test("RunNotifierDO - webSocketMessage - handles subscribe message with matching runId", async () => {
-  /* TODO: restore mocks manually */ void 0;
   const { doInstance } = createDO();
   (doInstance as unknown as { runId: string }).runId = "run-abc";
 
@@ -567,7 +446,6 @@ Deno.test("RunNotifierDO - webSocketMessage - handles subscribe message with mat
   assertEquals(response.data.runId, "run-abc");
 });
 Deno.test("RunNotifierDO - webSocketMessage - sends error for mismatched runId", async () => {
-  /* TODO: restore mocks manually */ void 0;
   const { doInstance } = createDO();
   (doInstance as unknown as { runId: string }).runId = "run-abc";
 
@@ -584,7 +462,6 @@ Deno.test("RunNotifierDO - webSocketMessage - sends error for mismatched runId",
   assertEquals(response.data.message, "runId mismatch");
 });
 Deno.test("RunNotifierDO - webSocketMessage - ignores binary messages", async () => {
-  /* TODO: restore mocks manually */ void 0;
   const { doInstance } = createDO();
   const ws = new MockWebSocket();
   ws.connectionId = "conn-1";
@@ -598,7 +475,6 @@ Deno.test("RunNotifierDO - webSocketMessage - ignores binary messages", async ()
   assertEquals(ws.sent.length, 0);
 });
 Deno.test("RunNotifierDO - webSocketMessage - ignores malformed JSON messages", async () => {
-  /* TODO: restore mocks manually */ void 0;
   const { doInstance } = createDO();
   const ws = new MockWebSocket();
   ws.connectionId = "conn-1";
@@ -612,7 +488,6 @@ Deno.test("RunNotifierDO - webSocketMessage - ignores malformed JSON messages", 
 });
 
 Deno.test("RunNotifierDO - webSocketClose - removes connection from map", async () => {
-  /* TODO: restore mocks manually */ void 0;
   const { doInstance } = createDO();
   const connections =
     (doInstance as unknown as { connections: Map<string, unknown> })
@@ -627,7 +502,6 @@ Deno.test("RunNotifierDO - webSocketClose - removes connection from map", async 
 });
 
 Deno.test("RunNotifierDO - webSocketError - removes connection on error", async () => {
-  /* TODO: restore mocks manually */ void 0;
   const { doInstance } = createDO();
   const connections =
     (doInstance as unknown as { connections: Map<string, unknown> })
@@ -645,7 +519,6 @@ Deno.test("RunNotifierDO - webSocketError - removes connection on error", async 
 });
 
 Deno.test("RunNotifierDO - alarm - broadcasts heartbeat and reschedules when connections exist", async () => {
-  /* TODO: restore mocks manually */ void 0;
   const state = createMockState();
   const { doInstance } = createDO({ state });
 
@@ -663,7 +536,6 @@ Deno.test("RunNotifierDO - alarm - broadcasts heartbeat and reschedules when con
   assert(state.storage.setAlarm.calls.length > 0);
 });
 Deno.test("RunNotifierDO - alarm - does not reschedule when no connections exist", async () => {
-  /* TODO: restore mocks manually */ void 0;
   const state = createMockState();
   const { doInstance } = createDO({ state });
 
@@ -673,7 +545,6 @@ Deno.test("RunNotifierDO - alarm - does not reschedule when no connections exist
   assertSpyCalls(state.storage.setAlarm, 0);
 });
 Deno.test("RunNotifierDO - alarm - cleans up stale connections", async () => {
-  /* TODO: restore mocks manually */ void 0;
   const state = createMockState();
   const { doInstance } = createDO({ state });
 
@@ -692,9 +563,7 @@ Deno.test("RunNotifierDO - alarm - cleans up stale connections", async () => {
 });
 
 Deno.test("RunNotifierDO - constructor hydration - restores state from storage", async () => {
-  /* TODO: restore mocks manually */ void 0;
-  const fakeTime = new FakeTime();
-  try {
+  await withFakeTime(async (fakeTime) => {
     const storage = createMockStorage();
     storage._store.set("bufferState", {
       eventBuffer: [{
@@ -721,14 +590,10 @@ Deno.test("RunNotifierDO - constructor hydration - restores state from storage",
     assertEquals(body.runId, "run-restored");
     assertEquals(body.lastEventId, 10);
     assertEquals(body.eventCount, 1);
-  } finally {
-    fakeTime.restore();
-  }
+  });
 });
 Deno.test("RunNotifierDO - constructor hydration - rebuilds connections from hibernated WebSockets", async () => {
-  /* TODO: restore mocks manually */ void 0;
-  const fakeTime = new FakeTime();
-  try {
+  await withFakeTime(async (fakeTime) => {
     const storage = createMockStorage();
     const state = createMockState(storage);
 
@@ -748,14 +613,10 @@ Deno.test("RunNotifierDO - constructor hydration - rebuilds connections from hib
       (doInstance as unknown as { connections: Map<string, unknown> })
         .connections;
     assertEquals(connections.has("conn-hibernated"), true);
-  } finally {
-    fakeTime.restore();
-  }
+  });
 });
 Deno.test("RunNotifierDO - constructor hydration - handles storage load failure gracefully", async () => {
-  /* TODO: restore mocks manually */ void 0;
-  const fakeTime = new FakeTime();
-  try {
+  await withFakeTime(async (fakeTime) => {
     const storage = createMockStorage();
     storage.get = (async () => {
       throw new Error("boom");
@@ -774,13 +635,10 @@ Deno.test("RunNotifierDO - constructor hydration - handles storage load failure 
     const res = await doInstance.fetch(getRequest("/state"));
     const body = await jsonBody(res);
     assertEquals(body.eventCount, 0);
-  } finally {
-    fakeTime.restore();
-  }
+  });
 });
 
 Deno.test("RunNotifierDO - segment buffer cap enforcement - enforces max segment buffer size", () => {
-  /* TODO: restore mocks manually */ void 0;
   const { doInstance } = createDO();
   const enforcer = (doInstance as unknown as {
     enforceSegmentBufferCap: <T>(buffer: T[], label: string) => T[];
@@ -793,7 +651,6 @@ Deno.test("RunNotifierDO - segment buffer cap enforcement - enforces max segment
   assertEquals(result[0], { id: 1 });
 });
 Deno.test("RunNotifierDO - segment buffer cap enforcement - leaves buffer alone when within cap", () => {
-  /* TODO: restore mocks manually */ void 0;
   const { doInstance } = createDO();
   const enforcer = (doInstance as unknown as {
     enforceSegmentBufferCap: <T>(buffer: T[], label: string) => T[];
@@ -805,7 +662,6 @@ Deno.test("RunNotifierDO - segment buffer cap enforcement - leaves buffer alone 
 });
 
 Deno.test("RunNotifierDO - stringifyPersistedData - returns string values unchanged", () => {
-  /* TODO: restore mocks manually */ void 0;
   const { doInstance } = createDO();
   const stringify = (doInstance as unknown as {
     stringifyPersistedData: (value: unknown) => string;
@@ -814,7 +670,6 @@ Deno.test("RunNotifierDO - stringifyPersistedData - returns string values unchan
   assertEquals(stringify("already a string"), "already a string");
 });
 Deno.test("RunNotifierDO - stringifyPersistedData - JSON stringifies objects", () => {
-  /* TODO: restore mocks manually */ void 0;
   const { doInstance } = createDO();
   const stringify = (doInstance as unknown as {
     stringifyPersistedData: (value: unknown) => string;
@@ -823,7 +678,6 @@ Deno.test("RunNotifierDO - stringifyPersistedData - JSON stringifies objects", (
   assertEquals(stringify({ a: 1 }), '{"a":1}');
 });
 Deno.test("RunNotifierDO - stringifyPersistedData - handles circular references gracefully", () => {
-  /* TODO: restore mocks manually */ void 0;
   const { doInstance } = createDO();
   const stringify = (doInstance as unknown as {
     stringifyPersistedData: (value: unknown) => string;

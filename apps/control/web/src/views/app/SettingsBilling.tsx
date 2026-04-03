@@ -12,7 +12,7 @@ import {
 } from './settings-billing.ts';
 import { Section } from './SettingsShared.tsx';
 
-export function SettingsBilling({ user }: { user: User | null }) {
+export function SettingsBilling(props: { user: User | null }) {
   const { t, lang } = useI18n();
   const { showToast } = useToast();
 
@@ -20,7 +20,7 @@ export function SettingsBilling({ user }: { user: User | null }) {
   const [billingInvoices, setBillingInvoices] = createSignal<BillingInvoice[]>([]);
   const [billingLoading, setBillingLoading] = createSignal(true);
   const [billingError, setBillingError] = createSignal<string | null>(null);
-  const [_billingReloadNonce, setBillingReloadNonce] = createSignal(0);
+  const [billingReloadNonce, setBillingReloadNonce] = createSignal(0);
   const [billingAction, setBillingAction] = createSignal<string | null>(null);
   const [invoiceLoading, setInvoiceLoading] = createSignal(false);
   const [invoiceError, setInvoiceError] = createSignal<string | null>(null);
@@ -41,7 +41,9 @@ export function SettingsBilling({ user }: { user: User | null }) {
   };
 
   createEffect(() => {
-    if (!user) {
+    billingReloadNonce();
+
+    if (!props.user) {
       setBillingSummary(null);
       setBillingInvoices([]);
       setBillingLoading(false);

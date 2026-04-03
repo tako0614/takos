@@ -1,175 +1,162 @@
-import { useAtomValue, useSetAtom } from 'solid-jotai';
-import { createEffect } from 'solid-js';
-import { getSpaceIdentifier } from '../lib/spaces.ts';
+import { createEffect, createMemo } from 'solid-js';
+import {
+  findSpaceByIdentifier,
+  getPersonalSpace,
+  getSpaceIdentifier,
+} from '../lib/spaces.ts';
 import { rpc, rpcJson } from '../lib/rpc.ts';
 import { useBreakpoint } from '../hooks/useBreakpoint.ts';
+import { useRouter } from '../hooks/useRouter.ts';
+import { useAuth } from '../hooks/useAuth.tsx';
 import { useI18n } from './i18n.ts';
 import { useToast } from './toast.ts';
 import { useConfirmDialog } from './confirm-dialog.ts';
-import { spacesAtom } from './auth.ts';
-import { useRouter } from '../hooks/useRouter.ts';
-import type { Thread, Space } from '../types/index.ts';
+import type { Space, Thread } from '../types/index.ts';
 import {
-  routeAtom,
-  navigateFnAtom,
-  replaceFnAtom,
-  sidebarSpaceAtom,
-  showMobileNavDrawerAtom,
+  fetchAllThreads as fetchAllThreadsAction,
   mobileNavDrawerId,
-  threadsBySpaceAtom,
-  allThreadsAtom,
-  personalLabelAtom,
-  preferredSpaceAtom,
-  preferredSpaceIdAtom,
-  routeSpaceIdAtom,
-  selectedSpaceIdAtom,
-  waitingForSpaceResolutionAtom,
-  fetchAllThreadsAtom,
+  useNavigationState,
 } from './navigation-atoms.ts';
 
-// ---------------------------------------------------------------------------
-// Compatibility hook: useNavigation()
-// ---------------------------------------------------------------------------
-
-/**
- * Syncs useRouter and useBreakpoint state into atoms, and sets up effects.
- * Must be called once near the root of the tree (replaces NavigationProvider).
- */
-export function useNavigationSync() {
+export function useNavigationEffects() {
+  const auth = useAuth();
   const router = useRouter();
-  const { isMobile } = useBreakpoint();
-  const i18n = useI18n();
-  const spaces = useAtomValue(spacesAtom);
-  const setRoute = useSetAtom(routeAtom);
-  const setNavigateFn = useSetAtom(navigateFnAtom);
-  const setReplaceFn = useSetAtom(replaceFnAtom);
-  const setPersonalLabel = useSetAtom(personalLabelAtom);
-  const setShowMobileNavDrawer = useSetAtom(showMobileNavDrawerAtom);
-  const dispatchFetchAllThreads = useSetAtom(fetchAllThreadsAtom);
-  const setThreadsBySpace = useSetAtom(threadsBySpaceAtom);
-
-  // Sync route into atom
-  createEffect(() => {
-    setRoute(router.route);
-  });
-
-  // Sync router functions into atoms
-  createEffect(() => {
-    setNavigateFn(() => router.navigate);
-  });
+  const breakpoint = useBreakpoint();
+  const navigationState = useNavigationState();
 
   createEffect(() => {
-    setReplaceFn(() => router.replace);
-  });
-
-  // Sync translation label
-  createEffect(() => {
-    setPersonalLabel(i18n.t('personal'));
-  });
-
-  // Sync threads when spaces change
-  createEffect(() => {
-    const currentSpaces = spaces();
+    const currentSpaces = auth.spaces;
     if (currentSpaces.length === 0) {
-      setThreadsBySpace((prev) => (Object.keys(prev).length === 0 ? prev : {}));
+      navigationState.setThreadsBySpace((prev) =>
+        Object.keys(prev).length === 0 ? prev : {}
+      );
       return;
     }
-    void dispatchFetchAllThreads(currentSpaces);
+    void fetchAllThreadsAction(currentSpaces);
   });
 
-  // Close mobile drawer when switching to desktop
   createEffect(() => {
-    if (!isMobile) {
-      setShowMobileNavDrawer(false);
+    if (!breakpoint.isMobile) {
+      navigationState.setShowMobileNavDrawer(false);
     }
   });
 
-  // Close mobile drawer on route change
   createEffect(() => {
-    if (!isMobile) return;
-    // Access route to track it reactively
+    if (!breakpoint.isMobile) return;
     void router.route;
-    setShowMobileNavDrawer(false);
+    navigationState.setShowMobileNavDrawer(false);
   });
 }
 
-/**
- * Drop-in replacement for the old useNavigation() context hook.
- * Returns the same interface so consumers don't need to change their usage.
- */
 export function useNavigation() {
+  const auth = useAuth();
+  const router = useRouter();
   const i18n = useI18n();
-  const { isMobile } = useBreakpoint();
+  const breakpoint = useBreakpoint();
   const toast = useToast();
   const { confirm } = useConfirmDialog();
+  const navigationState = useNavigationState();
 
-  const route = useAtomValue(routeAtom);
-  const navigateFn = useAtomValue(navigateFnAtom);
-  const replaceFn = useAtomValue(replaceFnAtom);
+  const personalLabel = createMemo(() => i18n.t('personal'));
+  const preferredSpace = createMemo(() =>
+    getPersonalSpace(auth.spaces, personalLabel()) || auth.spaces[0] ||
+    undefined
+  );
+  const preferredSpaceId = createMemo(() => {
+    const space = preferredSpace();
+    return space ? getSpaceIdentifier(space) : undefined;
+  });
+  const routeSpaceId = createMemo(() => {
+    const route = router.route;
+    if (!route.spaceId) return undefined;
+    const space = findSpaceByIdentifier(
+      auth.spaces,
+      route.spaceId,
+      personalLabel(),
+    );
+    return space ? getSpaceIdentifier(space) : undefined;
+  });
+  const selectedSpaceId = createMemo(() => {
+    const route = router.route;
+    return route.spaceId
+      ? routeSpaceId() ?? null
+      : preferredSpaceId() ?? null;
+  });
+  const waitingForSpaceResolution = createMemo(() => {
+    const route = router.route;
+    return Boolean(route.spaceId) && !routeSpaceId() && !auth.spacesLoaded;
+  });
 
-  const sidebarSpace = useAtomValue(sidebarSpaceAtom);
-  const setSidebarSpace = useSetAtom(sidebarSpaceAtom);
-
-  const showMobileNavDrawer = useAtomValue(showMobileNavDrawerAtom);
-  const setShowMobileNavDrawer = useSetAtom(showMobileNavDrawerAtom);
-
-  const threadsBySpace = useAtomValue(threadsBySpaceAtom);
-  const setThreadsBySpace = useSetAtom(threadsBySpaceAtom);
-  const allThreads = useAtomValue(allThreadsAtom);
-
-  const preferredSpace = useAtomValue(preferredSpaceAtom);
-  const preferredSpaceId = useAtomValue(preferredSpaceIdAtom);
-  const routeSpaceId = useAtomValue(routeSpaceIdAtom);
-  const selectedSpaceId = useAtomValue(selectedSpaceIdAtom);
-  const waitingForSpaceResolution = useAtomValue(waitingForSpaceResolutionAtom);
-
-  const dispatchFetchAllThreads = useSetAtom(fetchAllThreadsAtom);
-
-  // Navigation helpers
   const navigateToChat = (spaceId?: string, threadId?: string) => {
     if (spaceId && threadId) {
-      navigateFn()({ view: 'chat', spaceId, threadId, runId: undefined, messageId: undefined });
+      router.navigate({
+        view: 'chat',
+        spaceId,
+        threadId,
+        runId: undefined,
+        messageId: undefined,
+      });
       return;
     }
     if (spaceId) {
-      navigateFn()({ view: 'chat', spaceId, threadId: undefined, runId: undefined, messageId: undefined });
+      router.navigate({
+        view: 'chat',
+        spaceId,
+        threadId: undefined,
+        runId: undefined,
+        messageId: undefined,
+      });
       return;
     }
-    navigateFn()({ view: 'chat', threadId: undefined, runId: undefined, messageId: undefined });
+    router.navigate({
+      view: 'chat',
+      threadId: undefined,
+      runId: undefined,
+      messageId: undefined,
+    });
   };
 
   const replaceToChat = (spaceId?: string) => {
     if (spaceId) {
-      replaceFn()({ view: 'chat', spaceId, runId: undefined, messageId: undefined });
+      router.replace({
+        view: 'chat',
+        spaceId,
+        runId: undefined,
+        messageId: undefined,
+      });
       return;
     }
-    replaceFn()({ view: 'chat', runId: undefined, messageId: undefined });
+    router.replace({ view: 'chat', runId: undefined, messageId: undefined });
   };
 
   const navigateToPreferredChat = () => {
     navigateToChat(preferredSpaceId());
   };
 
-  // Sidebar space handlers
-  const handleEnterSpace = (ws: Space) => {
-    setSidebarSpace(ws);
-    navigateFn()({ view: 'chat', spaceId: getSpaceIdentifier(ws), threadId: undefined, runId: undefined, messageId: undefined });
+  const handleEnterSpace = (space: Space) => {
+    navigationState.setSidebarSpace(space);
+    router.navigate({
+      view: 'chat',
+      spaceId: getSpaceIdentifier(space),
+      threadId: undefined,
+      runId: undefined,
+      messageId: undefined,
+    });
   };
 
   const handleExitSpace = () => {
-    setSidebarSpace(null);
-    replaceFn()({ view: 'apps', spaceId: preferredSpaceId() });
+    navigationState.setSidebarSpace(null);
+    router.replace({ view: 'apps', spaceId: preferredSpaceId() });
   };
 
-  // Thread fetching
   const fetchAllThreads = async (wsList?: Space[]) => {
-    await dispatchFetchAllThreads(wsList);
+    await fetchAllThreadsAction(wsList ?? auth.spaces);
   };
 
-  // Thread CRUD
   const handleNewThread = () => {
-    if (!preferredSpaceId()) return;
-    navigateToChat(preferredSpaceId());
+    const spaceId = preferredSpaceId();
+    if (!spaceId) return;
+    navigateToChat(spaceId);
   };
 
   const handleDeleteThread = async (threadId: string) => {
@@ -184,14 +171,14 @@ export function useNavigation() {
     try {
       const res = await rpc.threads[':id'].$delete({ param: { id: threadId } });
       await rpcJson(res);
-      setThreadsBySpace((prev) => {
+      navigationState.setThreadsBySpace((prev) => {
         const next: Record<string, Thread[]> = {};
         for (const key of Object.keys(prev)) {
-          next[key] = prev[key].filter((th) => th.id !== threadId);
+          next[key] = prev[key].filter((thread) => thread.id !== threadId);
         }
         return next;
       });
-      if (route().threadId === threadId) {
+      if (router.route.threadId === threadId) {
         navigateToChat(selectedSpaceId() ?? undefined);
       }
       toast.showToast('success', i18n.t('deleted'));
@@ -205,55 +192,79 @@ export function useNavigation() {
       const endpoint = thread.status === 'archived' ? 'unarchive' : 'archive';
       const res = await (endpoint === 'archive'
         ? rpc.threads[':id'].archive.$post({ param: { id: thread.id } })
-        : rpc.threads[':id'].unarchive.$post({ param: { id: thread.id } })
-      );
+        : rpc.threads[':id'].unarchive.$post({ param: { id: thread.id } }));
       await rpcJson(res);
       await fetchAllThreads();
-      toast.showToast('success', endpoint === 'archive' ? (i18n.t('routingStatus_archived') || 'Archived') : (i18n.t('routingStatus_active') || 'Active'));
-    } catch (err) {
-      toast.showToast('error', err instanceof Error ? err.message : i18n.t('failedToSave'));
+      toast.showToast(
+        'success',
+        endpoint === 'archive'
+          ? (i18n.t('routingStatus_archived') || 'Archived')
+          : (i18n.t('routingStatus_active') || 'Active'),
+      );
+    } catch (error) {
+      toast.showToast(
+        'error',
+        error instanceof Error ? error.message : i18n.t('failedToSave'),
+      );
     }
   };
 
   const handleNewThreadCreated = (spaceId: string, thread: Thread) => {
-    setThreadsBySpace((prev) => ({
+    navigationState.setThreadsBySpace((prev) => ({
       ...prev,
       [spaceId]: [thread, ...(prev[spaceId] ?? [])],
     }));
   };
 
   const handleSelectThread = (thread: Thread) => {
-    for (const [spId, spThreads] of Object.entries(threadsBySpace())) {
-      if (spThreads.some((t) => t.id === thread.id)) {
-        navigateToChat(spId, thread.id);
+    for (
+      const [spaceId, spaceThreads] of Object.entries(
+        navigationState.threadsBySpace(),
+      )
+    ) {
+      if (spaceThreads.some((candidate) => candidate.id === thread.id)) {
+        navigateToChat(spaceId, thread.id);
         return;
       }
     }
     navigateToChat(selectedSpaceId() ?? undefined, thread.id);
   };
 
-  // Sidebar action wrapper
   const runSidebarAction = (action: () => void | Promise<void>) => {
-    if (isMobile) {
-      setShowMobileNavDrawer(false);
+    if (breakpoint.isMobile) {
+      navigationState.setShowMobileNavDrawer(false);
     }
     void action();
   };
 
   return {
-    get route() { return route(); },
-    get navigate() { return navigateFn(); },
-    get replace() { return replaceFn(); },
-    get sidebarSpace() { return sidebarSpace(); },
-    setSidebarSpace,
+    get route() {
+      return router.route;
+    },
+    get navigate() {
+      return router.navigate;
+    },
+    get replace() {
+      return router.replace;
+    },
+    get sidebarSpace() {
+      return navigationState.sidebarSpace();
+    },
+    setSidebarSpace: navigationState.setSidebarSpace,
     handleEnterSpace,
     handleExitSpace,
-    get showMobileNavDrawer() { return showMobileNavDrawer(); },
-    setShowMobileNavDrawer,
+    get showMobileNavDrawer() {
+      return navigationState.showMobileNavDrawer();
+    },
+    setShowMobileNavDrawer: navigationState.setShowMobileNavDrawer,
     mobileNavDrawerId,
-    get threadsBySpace() { return threadsBySpace(); },
-    setThreadsBySpace,
-    get allThreads() { return allThreads(); },
+    get threadsBySpace() {
+      return navigationState.threadsBySpace();
+    },
+    setThreadsBySpace: navigationState.setThreadsBySpace,
+    get allThreads() {
+      return navigationState.allThreads();
+    },
     fetchAllThreads,
     handleNewThread,
     handleDeleteThread,
@@ -263,11 +274,21 @@ export function useNavigation() {
     navigateToChat,
     replaceToChat,
     navigateToPreferredChat,
-    get preferredSpace() { return preferredSpace(); },
-    get preferredSpaceId() { return preferredSpaceId(); },
-    get routeSpaceId() { return routeSpaceId(); },
-    get selectedSpaceId() { return selectedSpaceId(); },
-    get waitingForSpaceResolution() { return waitingForSpaceResolution(); },
+    get preferredSpace() {
+      return preferredSpace();
+    },
+    get preferredSpaceId() {
+      return preferredSpaceId();
+    },
+    get routeSpaceId() {
+      return routeSpaceId();
+    },
+    get selectedSpaceId() {
+      return selectedSpaceId();
+    },
+    get waitingForSpaceResolution() {
+      return waitingForSpaceResolution();
+    },
     runSidebarAction,
   };
 }

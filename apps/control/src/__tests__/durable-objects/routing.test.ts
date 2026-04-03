@@ -6,66 +6,18 @@ import type { RoutingTarget } from "@/services/routing/types";
 // ---------------------------------------------------------------------------
 
 import { assert, assertEquals, assertNotEquals } from "jsr:@std/assert";
-import { spy } from "jsr:@std/testing/mock";
+import {
+  createMockState,
+  createMockStorage,
+  jsonBody,
+  type MockState,
+  postJSON,
+} from "./test-helpers.ts";
 
-function createMockStorage() {
-  const store = new Map<string, unknown>();
-  let alarm: number | null = null;
-
-  return {
-    get: async <T>(key: string): Promise<T | undefined> =>
-      store.get(key) as T | undefined,
-    put: async (key: string, value: unknown) => {
-      store.set(key, value);
-    },
-    delete: spy(async (key: string) => {
-      store.delete(key);
-      return true;
-    }),
-    setAlarm: async (ms: number) => {
-      alarm = ms;
-    },
-    deleteAlarm: spy(async () => {
-      alarm = null;
-    }),
-    getAlarm: async () => alarm,
-    list: async (_opts?: { prefix?: string; limit?: number }) => {
-      const result = new Map<string, unknown>();
-      for (const [key, value] of store) {
-        if (_opts?.prefix && !key.startsWith(_opts.prefix)) continue;
-        result.set(key, value);
-        if (_opts?.limit && result.size >= _opts.limit) break;
-      }
-      return result;
-    },
-    _store: store,
-    _getAlarm: () => alarm,
-  };
-}
-
-function createMockState(storage = createMockStorage()) {
-  return {
-    storage,
-    blockConcurrencyWhile: async <T>(fn: () => Promise<T>): Promise<T> => fn(),
-  };
-}
-
-function createDO(stateOverrides?: ReturnType<typeof createMockState>) {
+function createDO(stateOverrides?: MockState) {
   const state = stateOverrides ?? createMockState();
   const doInstance = new RoutingDO(state as unknown as DurableObjectState);
   return { doInstance, state };
-}
-
-function postJSON(path: string, body: unknown): Request {
-  return new Request(`https://do.internal${path}`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(body),
-  });
-}
-
-async function jsonBody(response: Response): Promise<Record<string, unknown>> {
-  return response.json() as Promise<Record<string, unknown>>;
 }
 
 const validTarget: RoutingTarget = {
@@ -87,13 +39,11 @@ const validHttpTarget: RoutingTarget = {
 // ---------------------------------------------------------------------------
 
 Deno.test("RoutingDO - fetch routing - returns 404 for unknown paths", async () => {
-  /* TODO: restore mocks manually */ void 0;
   const { doInstance } = createDO();
   const res = await doInstance.fetch(postJSON("/unknown", {}));
   assertEquals(res.status, 404);
 });
 Deno.test("RoutingDO - fetch routing - returns 500 for server errors", async () => {
-  /* TODO: restore mocks manually */ void 0;
   const storage = createMockStorage();
   // Force the get to throw inside handleGet
   storage.get = (async () => {
@@ -109,7 +59,6 @@ Deno.test("RoutingDO - fetch routing - returns 500 for server errors", async () 
 });
 
 Deno.test("RoutingDO - /routing/get - returns null for non-existent hostname", async () => {
-  /* TODO: restore mocks manually */ void 0;
   const { doInstance } = createDO();
   const res = await doInstance.fetch(
     postJSON("/routing/get", { hostname: "test.example.com" }),
@@ -120,7 +69,6 @@ Deno.test("RoutingDO - /routing/get - returns null for non-existent hostname", a
   assertEquals(body.record, null);
 });
 Deno.test("RoutingDO - /routing/get - returns a stored routing record", async () => {
-  /* TODO: restore mocks manually */ void 0;
   const { doInstance } = createDO();
 
   // Put a record first
@@ -140,7 +88,6 @@ Deno.test("RoutingDO - /routing/get - returns a stored routing record", async ()
   assertEquals(record.version, 1);
 });
 Deno.test("RoutingDO - /routing/get - normalizes hostname to lowercase", async () => {
-  /* TODO: restore mocks manually */ void 0;
   const { doInstance } = createDO();
 
   await doInstance.fetch(postJSON("/routing/put", {
@@ -155,7 +102,6 @@ Deno.test("RoutingDO - /routing/get - normalizes hostname to lowercase", async (
   assertNotEquals(body.record, null);
 });
 Deno.test("RoutingDO - /routing/get - returns null for invalid hostname", async () => {
-  /* TODO: restore mocks manually */ void 0;
   const { doInstance } = createDO();
   const res = await doInstance.fetch(
     postJSON("/routing/get", { hostname: "" }),
@@ -164,7 +110,6 @@ Deno.test("RoutingDO - /routing/get - returns null for invalid hostname", async 
   assertEquals(body.record, null);
 });
 Deno.test("RoutingDO - /routing/get - cleans up expired tombstones on get", async () => {
-  /* TODO: restore mocks manually */ void 0;
   const storage = createMockStorage();
   const state = createMockState(storage);
   const { doInstance } = createDO(state);
@@ -189,7 +134,6 @@ Deno.test("RoutingDO - /routing/get - cleans up expired tombstones on get", asyn
   assertEquals(body.record, null);
 });
 Deno.test("RoutingDO - /routing/get - returns record with active tombstone", async () => {
-  /* TODO: restore mocks manually */ void 0;
   const storage = createMockStorage();
   const state = createMockState(storage);
   const { doInstance } = createDO(state);
@@ -211,7 +155,6 @@ Deno.test("RoutingDO - /routing/get - returns record with active tombstone", asy
 });
 
 Deno.test("RoutingDO - /routing/put - creates a new routing record", async () => {
-  /* TODO: restore mocks manually */ void 0;
   const { doInstance } = createDO();
   const res = await doInstance.fetch(postJSON("/routing/put", {
     hostname: "new.example.com",
@@ -226,7 +169,6 @@ Deno.test("RoutingDO - /routing/put - creates a new routing record", async () =>
   assertEquals(record.target, validTarget);
 });
 Deno.test("RoutingDO - /routing/put - increments version on update", async () => {
-  /* TODO: restore mocks manually */ void 0;
   const { doInstance } = createDO();
 
   await doInstance.fetch(postJSON("/routing/put", {
@@ -243,7 +185,6 @@ Deno.test("RoutingDO - /routing/put - increments version on update", async () =>
   assertEquals(record.version, 2);
 });
 Deno.test("RoutingDO - /routing/put - returns 400 for invalid hostname", async () => {
-  /* TODO: restore mocks manually */ void 0;
   const { doInstance } = createDO();
   const res = await doInstance.fetch(postJSON("/routing/put", {
     hostname: "",
@@ -252,7 +193,6 @@ Deno.test("RoutingDO - /routing/put - returns 400 for invalid hostname", async (
   assertEquals(res.status, 400);
 });
 Deno.test("RoutingDO - /routing/put - returns 400 for invalid target", async () => {
-  /* TODO: restore mocks manually */ void 0;
   const { doInstance } = createDO();
   const res = await doInstance.fetch(postJSON("/routing/put", {
     hostname: "test.com",
@@ -261,7 +201,6 @@ Deno.test("RoutingDO - /routing/put - returns 400 for invalid target", async () 
   assertEquals(res.status, 400);
 });
 Deno.test("RoutingDO - /routing/put - returns 400 for deployments target with empty routeRef", async () => {
-  /* TODO: restore mocks manually */ void 0;
   const { doInstance } = createDO();
   const res = await doInstance.fetch(postJSON("/routing/put", {
     hostname: "test.com",
@@ -273,7 +212,6 @@ Deno.test("RoutingDO - /routing/put - returns 400 for deployments target with em
   assertEquals(res.status, 400);
 });
 Deno.test("RoutingDO - /routing/put - returns 400 for deployments target with no deployments", async () => {
-  /* TODO: restore mocks manually */ void 0;
   const { doInstance } = createDO();
   const res = await doInstance.fetch(postJSON("/routing/put", {
     hostname: "test.com",
@@ -282,7 +220,6 @@ Deno.test("RoutingDO - /routing/put - returns 400 for deployments target with no
   assertEquals(res.status, 400);
 });
 Deno.test("RoutingDO - /routing/put - accepts http-endpoint-set target", async () => {
-  /* TODO: restore mocks manually */ void 0;
   const { doInstance } = createDO();
   const res = await doInstance.fetch(postJSON("/routing/put", {
     hostname: "http-target.com",
@@ -294,7 +231,6 @@ Deno.test("RoutingDO - /routing/put - accepts http-endpoint-set target", async (
   assertEquals((record.target as RoutingTarget).type, "http-endpoint-set");
 });
 Deno.test("RoutingDO - /routing/put - uses provided updatedAt if valid", async () => {
-  /* TODO: restore mocks manually */ void 0;
   const { doInstance } = createDO();
   const customTime = 1700000000000;
   const res = await doInstance.fetch(postJSON("/routing/put", {
@@ -307,7 +243,6 @@ Deno.test("RoutingDO - /routing/put - uses provided updatedAt if valid", async (
   assertEquals(record.updatedAt, customTime);
 });
 Deno.test("RoutingDO - /routing/put - clears previous tombstone index on update", async () => {
-  /* TODO: restore mocks manually */ void 0;
   const storage = createMockStorage();
   const state = createMockState(storage);
   const { doInstance } = createDO(state);
@@ -332,7 +267,6 @@ Deno.test("RoutingDO - /routing/put - clears previous tombstone index on update"
 });
 
 Deno.test("RoutingDO - /routing/delete - creates a tombstone for an existing record", async () => {
-  /* TODO: restore mocks manually */ void 0;
   const { doInstance } = createDO();
 
   await doInstance.fetch(postJSON("/routing/put", {
@@ -352,7 +286,6 @@ Deno.test("RoutingDO - /routing/delete - creates a tombstone for an existing rec
   assertEquals(record.version, 2);
 });
 Deno.test("RoutingDO - /routing/delete - creates tombstone even when no previous record exists", async () => {
-  /* TODO: restore mocks manually */ void 0;
   const { doInstance } = createDO();
   const res = await doInstance.fetch(postJSON("/routing/delete", {
     hostname: "no-previous.com",
@@ -366,7 +299,6 @@ Deno.test("RoutingDO - /routing/delete - creates tombstone even when no previous
   assertEquals(typeof record.tombstoneUntil, "number");
 });
 Deno.test("RoutingDO - /routing/delete - returns 400 for invalid hostname", async () => {
-  /* TODO: restore mocks manually */ void 0;
   const { doInstance } = createDO();
   const res = await doInstance.fetch(
     postJSON("/routing/delete", { hostname: "" }),
@@ -374,7 +306,6 @@ Deno.test("RoutingDO - /routing/delete - returns 400 for invalid hostname", asyn
   assertEquals(res.status, 400);
 });
 Deno.test("RoutingDO - /routing/delete - clamps tombstoneTtlMs to minimum of 1s", async () => {
-  /* TODO: restore mocks manually */ void 0;
   const { doInstance } = createDO();
   const now = Date.now();
   const res = await doInstance.fetch(postJSON("/routing/delete", {
@@ -387,7 +318,6 @@ Deno.test("RoutingDO - /routing/delete - clamps tombstoneTtlMs to minimum of 1s"
   assert(record.tombstoneUntil as number >= now + 1000);
 });
 Deno.test("RoutingDO - /routing/delete - clamps tombstoneTtlMs to maximum of 30 minutes", async () => {
-  /* TODO: restore mocks manually */ void 0;
   const { doInstance } = createDO();
   const now = Date.now();
   const thirtyMinMs = 30 * 60 * 1000;
@@ -400,7 +330,6 @@ Deno.test("RoutingDO - /routing/delete - clamps tombstoneTtlMs to maximum of 30 
   assert(record.tombstoneUntil as number <= now + thirtyMinMs + 100);
 });
 Deno.test("RoutingDO - /routing/delete - defaults tombstoneTtlMs to 2 minutes when not specified", async () => {
-  /* TODO: restore mocks manually */ void 0;
   const { doInstance } = createDO();
   const now = Date.now();
   const res = await doInstance.fetch(postJSON("/routing/delete", {
@@ -414,7 +343,6 @@ Deno.test("RoutingDO - /routing/delete - defaults tombstoneTtlMs to 2 minutes wh
 });
 
 Deno.test("RoutingDO - hostname normalization - trims whitespace", async () => {
-  /* TODO: restore mocks manually */ void 0;
   const { doInstance } = createDO();
   const res = await doInstance.fetch(postJSON("/routing/put", {
     hostname: "  test.com  ",
@@ -425,7 +353,6 @@ Deno.test("RoutingDO - hostname normalization - trims whitespace", async () => {
   assertEquals(record.hostname, "test.com");
 });
 Deno.test("RoutingDO - hostname normalization - converts to lowercase", async () => {
-  /* TODO: restore mocks manually */ void 0;
   const { doInstance } = createDO();
   const res = await doInstance.fetch(postJSON("/routing/put", {
     hostname: "TEST.EXAMPLE.COM",
@@ -436,7 +363,6 @@ Deno.test("RoutingDO - hostname normalization - converts to lowercase", async ()
   assertEquals(record.hostname, "test.example.com");
 });
 Deno.test("RoutingDO - hostname normalization - rejects hostname longer than 253 characters", async () => {
-  /* TODO: restore mocks manually */ void 0;
   const { doInstance } = createDO();
   const longHostname = "a".repeat(64) + "." + "b".repeat(64) + "." +
     "c".repeat(64) + "." + "d".repeat(64);
@@ -447,7 +373,6 @@ Deno.test("RoutingDO - hostname normalization - rejects hostname longer than 253
   assertEquals(res.status, 400);
 });
 Deno.test("RoutingDO - hostname normalization - rejects label longer than 63 characters", async () => {
-  /* TODO: restore mocks manually */ void 0;
   const { doInstance } = createDO();
   const res = await doInstance.fetch(postJSON("/routing/put", {
     hostname: "a".repeat(64) + ".com",
@@ -456,7 +381,6 @@ Deno.test("RoutingDO - hostname normalization - rejects label longer than 63 cha
   assertEquals(res.status, 400);
 });
 Deno.test("RoutingDO - hostname normalization - rejects hostname with leading hyphen in label", async () => {
-  /* TODO: restore mocks manually */ void 0;
   const { doInstance } = createDO();
   const res = await doInstance.fetch(postJSON("/routing/put", {
     hostname: "-invalid.com",
@@ -465,7 +389,6 @@ Deno.test("RoutingDO - hostname normalization - rejects hostname with leading hy
   assertEquals(res.status, 400);
 });
 Deno.test("RoutingDO - hostname normalization - rejects hostname with trailing hyphen in label", async () => {
-  /* TODO: restore mocks manually */ void 0;
   const { doInstance } = createDO();
   const res = await doInstance.fetch(postJSON("/routing/put", {
     hostname: "invalid-.com",
@@ -474,7 +397,6 @@ Deno.test("RoutingDO - hostname normalization - rejects hostname with trailing h
   assertEquals(res.status, 400);
 });
 Deno.test("RoutingDO - hostname normalization - rejects hostname with invalid characters", async () => {
-  /* TODO: restore mocks manually */ void 0;
   const { doInstance } = createDO();
   const res = await doInstance.fetch(postJSON("/routing/put", {
     hostname: "inv@lid.com",
@@ -483,7 +405,6 @@ Deno.test("RoutingDO - hostname normalization - rejects hostname with invalid ch
   assertEquals(res.status, 400);
 });
 Deno.test("RoutingDO - hostname normalization - allows hyphens in the middle of labels", async () => {
-  /* TODO: restore mocks manually */ void 0;
   const { doInstance } = createDO();
   const res = await doInstance.fetch(postJSON("/routing/put", {
     hostname: "my-app.test-site.com",
@@ -492,7 +413,6 @@ Deno.test("RoutingDO - hostname normalization - allows hyphens in the middle of 
   assertEquals(res.status, 200);
 });
 Deno.test("RoutingDO - hostname normalization - allows numeric labels", async () => {
-  /* TODO: restore mocks manually */ void 0;
   const { doInstance } = createDO();
   const res = await doInstance.fetch(postJSON("/routing/put", {
     hostname: "123.456.com",
@@ -501,7 +421,6 @@ Deno.test("RoutingDO - hostname normalization - allows numeric labels", async ()
   assertEquals(res.status, 200);
 });
 Deno.test("RoutingDO - hostname normalization - rejects empty label (double dots)", async () => {
-  /* TODO: restore mocks manually */ void 0;
   const { doInstance } = createDO();
   const res = await doInstance.fetch(postJSON("/routing/put", {
     hostname: "test..com",
@@ -511,7 +430,6 @@ Deno.test("RoutingDO - hostname normalization - rejects empty label (double dots
 });
 
 Deno.test("RoutingDO - alarm (tombstone cleanup) - cleans up expired tombstones via alarm", async () => {
-  /* TODO: restore mocks manually */ void 0;
   const storage = createMockStorage();
   const state = createMockState(storage);
   const { doInstance } = createDO(state);
@@ -535,7 +453,6 @@ Deno.test("RoutingDO - alarm (tombstone cleanup) - cleans up expired tombstones 
   assertEquals(storage._store.has(`t:${hex}:${hostname}`), false);
 });
 Deno.test("RoutingDO - alarm (tombstone cleanup) - does not clean up future tombstones", async () => {
-  /* TODO: restore mocks manually */ void 0;
   const storage = createMockStorage();
   const state = createMockState(storage);
   const { doInstance } = createDO(state);
@@ -557,7 +474,6 @@ Deno.test("RoutingDO - alarm (tombstone cleanup) - does not clean up future tomb
 });
 
 Deno.test("RoutingDO - scheduleNextCleanupAlarm - deletes alarm when no tombstones exist", async () => {
-  /* TODO: restore mocks manually */ void 0;
   const storage = createMockStorage();
   const state = createMockState(storage);
   const { doInstance } = createDO(state);
@@ -575,7 +491,6 @@ Deno.test("RoutingDO - scheduleNextCleanupAlarm - deletes alarm when no tombston
 });
 
 Deno.test("RoutingDO - end-to-end lifecycle - put -> get -> delete -> get (tombstone) -> alarm -> get (gone)", async () => {
-  /* TODO: restore mocks manually */ void 0;
   const storage = createMockStorage();
   const state = createMockState(storage);
   const { doInstance } = createDO(state);

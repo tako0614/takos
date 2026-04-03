@@ -1,6 +1,14 @@
-# .takos/app.yml
+# アプリマニフェスト (`.takos/app.yml`)
 
-`.takos/app.yml` は Takos の宣言的なアプリ定義で、group desired state を author する主要な source です。public spec は Cloudflare-native の syntax を使い、Takos runtime が Cloudflare backend または互換 backend 上で同じ spec を実現します。`takos apply` は manifest を group に反映し、group 省略時は `metadata.name` を使って自動作成します。
+`.takos/app.yml` は Takos でアプリ構成を宣言する主要な source です。public spec
+は Cloudflare-native の syntax を使い、Takos runtime が Cloudflare backend
+または互換 backend 上で同じ spec を実現します。`takos apply` は manifest を
+group に反映し、group 省略時は `metadata.name` を使って自動作成します。
+
+workspace shell integration、canonical URL、shell launch URL は `.takos/app.yml`
+の責務ではありません。これらは
+[Kernel / Workspace Shell / Apps](/architecture/kernel-shell) で定義する別
+contract です。
 
 ## 最小例
 
@@ -100,23 +108,24 @@ spec:
 - `routes`: workload への公開ルート
 - `mcpServers`: MCP 公開設定
 
-custom domain / hostname routing はこの manifest の canonical desired state には含めず、routing / observed surface として別 API で扱います。
+custom domain / hostname routing はこの manifest の canonical desired state
+には含めず、routing / observed surface として別 API で扱います。
 
 ## resources
 
 public spec で使う `type` は Cloudflare-native resource kind です。
 
-| type | 用途 | 追加フィールド |
-| --- | --- | --- |
-| `d1` | SQL データベース contract | `migrations` |
-| `r2` | オブジェクトストレージ contract | - |
-| `kv` | Key-Value ストア | - |
-| `queue` | キュー | `queue.maxRetries`, `queue.deadLetterQueue`, `queue.deliveryDelaySeconds` |
-| `vectorize` | ベクトルインデックス contract | `vectorize.dimensions`, `vectorize.metric` |
-| `analyticsEngine` | Analytics ストア contract | `analyticsEngine.dataset` |
-| `secretRef` | シークレット | `generate` |
-| `workflow` | ワークフロー runtime contract | `workflow.service`, `workflow.export`, `workflow.timeoutMs`, `workflow.maxRetries` |
-| `durableObject` | Durable Object namespace contract | `durableObject.className`, `durableObject.scriptName` |
+| type              | 用途                              | 追加フィールド                                                                     |
+| ----------------- | --------------------------------- | ---------------------------------------------------------------------------------- |
+| `d1`              | SQL データベース contract         | `migrations`                                                                       |
+| `r2`              | オブジェクトストレージ contract   | -                                                                                  |
+| `kv`              | Key-Value ストア                  | -                                                                                  |
+| `queue`           | キュー                            | `queue.maxRetries`, `queue.deadLetterQueue`, `queue.deliveryDelaySeconds`          |
+| `vectorize`       | ベクトルインデックス contract     | `vectorize.dimensions`, `vectorize.metric`                                         |
+| `analyticsEngine` | Analytics ストア contract         | `analyticsEngine.dataset`                                                          |
+| `secretRef`       | シークレット                      | `generate`                                                                         |
+| `workflow`        | ワークフロー runtime contract     | `workflow.service`, `workflow.export`, `workflow.timeoutMs`, `workflow.maxRetries` |
+| `durableObject`   | Durable Object namespace contract | `durableObject.className`, `durableObject.scriptName`                              |
 
 ```yaml
 resources:
@@ -132,25 +141,29 @@ resources:
     generate: true
 ```
 
-`class` と `backing` は public spec では使いません。Cloudflare backend では通常そのまま D1/R2/KV/Vectorize/Workflows/DO に解決され、他 backend では Takos runtime が provider-backed または Takos-managed な実装に解決します。
+`class` と `backing` は public spec では使いません。Cloudflare backend
+では通常そのまま D1/R2/KV/Vectorize/Workflows/DO に解決され、他 backend では
+Takos runtime が provider-backed または Takos-managed な実装に解決します。
 
-`workflow` は manifest でも service settings API / builtin tool でも設定できます。dynamic binding でも `workflow.service` と `workflow.export` の metadata が必要です。
+`workflow` は manifest でも service settings API / builtin tool
+でも設定できます。dynamic binding でも `workflow.service` と `workflow.export`
+の metadata が必要です。
 
 ## bindings
 
 workload bindings も Cloudflare-native です。
 
-| key | 参照する resource |
-| --- | --- |
-| `d1` | `type: d1` |
-| `r2` | `type: r2` |
-| `kv` | `type: kv` |
-| `queues` | `type: queue` |
-| `vectorize` | `type: vectorize` |
-| `analyticsEngine` | `type: analyticsEngine` |
-| `workflow` | `type: workflow` |
-| `durableObjects` | `type: durableObject` |
-| `services` | 他 workload への service binding |
+| key               | 参照する resource                |
+| ----------------- | -------------------------------- |
+| `d1`              | `type: d1`                       |
+| `r2`              | `type: r2`                       |
+| `kv`              | `type: kv`                       |
+| `queues`          | `type: queue`                    |
+| `vectorize`       | `type: vectorize`                |
+| `analyticsEngine` | `type: analyticsEngine`          |
+| `workflow`        | `type: workflow`                 |
+| `durableObjects`  | `type: durableObject`            |
+| `services`        | 他 workload への service binding |
 
 ## デプロイ
 
