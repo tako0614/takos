@@ -5,52 +5,38 @@
 takos-agent と同じアーキテクチャです。ブラウザ自動化やヘビーな処理など、Docker
 が必要な場合に使います。
 
-この例は現行の `takos apply` で読める構成に合わせています。同じ manifest は
-repo/ref source の `takos deploy` や catalog package install でも使えます。
+この例は現行の `takos deploy`（ローカル manifest）で読める構成に合わせています。
+同じ manifest は repo/ref source の `takos deploy URL` や catalog package install
+でも使えます。
 
 ## app.yml
 
 ```yaml
-apiVersion: takos.dev/v1alpha1
-kind: App
-metadata:
-  name: browser-service
-spec:
-  version: 1.0.0
-  description: Browser automation service
-  category: service
-  tags:
-    - browser
-    - automation
+name: browser-service
 
-  containers:
-    browser:
-      dockerfile: Dockerfile
-      port: 8080
-      instanceType: standard-2
-      maxInstances: 10
+compute:
+  browser-host:
+    build:
+      fromWorkflow:
+        path: .takos/workflows/deploy.yml
+        job: build-host
+        artifact: browser-host
+        artifactPath: dist/host.js
+    containers:
+      browser:
+        image: ghcr.io/example/browser-service@sha256:0123456789abcdef
+        port: 8080
+        instanceType: standard-2
+        maxInstances: 10
 
-  workers:
-    browser-host:
-      containers: [browser]
-      build:
-        fromWorkflow:
-          path: .takos/workflows/deploy.yml
-          job: build-host
-          artifact: browser-host
-          artifactPath: dist/host.js
+routes:
+  - path: /api
+    target: browser-host
+  - path: /gui
+    target: browser-host
 
-  routes:
-    - name: api
-      target: browser-host
-      path: /api
-    - name: gui
-      target: browser-host
-      path: /gui
-
-  env:
-    required:
-      - API_SECRET
+env:
+  API_SECRET: ""
 ```
 
 ## ワークフロー
@@ -114,35 +100,21 @@ export default {
 
 ## ポイント
 
-- `containers` でコンテナを定義し、`workers` の `containers`
-  フィールドで紐づけます
-- コンテナは CF Containers (Durable Object) として実行されます
+- `compute.<name>.containers` でコンテナを Worker 内に定義します
+- コンテナは worker-attached container workload として実行されます
 - Worker がルーティングを担当し、コンテナがヘビーな処理を担当します
 - `instanceType` でコンテナのスペックを指定できます（`basic`, `standard-2`
   など）
 - `maxInstances` で最大インスタンス数を制御します
 
-## containers, services, workers の使い分け
+## compute の 3 形態
 
-|            | containers                            | services                     | workers                 |
-| ---------- | ------------------------------------- | ---------------------------- | ----------------------- |
-| 実行モデル | CF Containers (Durable Object)        | 常設コンテナ (VPS)           | CF Workers (V8 isolate) |
-| 用途       | Docker が必要な処理 (Worker に紐づく) | 独立稼働する Docker コンテナ | ルーティング、軽量処理  |
-| ビルド     | Dockerfile                            | Dockerfile                   | workflow artifact       |
-| IPv4 割当  | 不可                                  | `ipv4: true` で可能          | 不可                    |
-
-## 常設サービス
-
-Worker に紐づけず、コンテナ単体で独立稼働させる場合は `services`
-セクションを使います。`ipv4: true` を指定すると専用 IPv4 が割り当てられます。
-
-```yaml
-services:
-  my-api:
-    dockerfile: Dockerfile
-    port: 3000
-    ipv4: true
-```
+|            | Worker                     | Service                      | Worker + Attached Container  |
+| ---------- | -------------------------- | ---------------------------- | ---------------------------- |
+| 判定条件   | `build` あり               | `image` あり（`build` なし） | `build` + `containers` あり  |
+| 実行モデル | serverless, request-driven | always-on container          | worker に container が紐づく |
+| 用途       | ルーティング、軽量処理     | 独立稼働する Docker コンテナ | Docker が必要な処理          |
+| deploy source | workflow artifact       | digest-pinned `image`        | workflow artifact + `image`  |
 
 ## 次のステップ
 

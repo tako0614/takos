@@ -1,175 +1,453 @@
 # Control Plane
 
-::: tip Status
-このページは current implementation の構成を説明します。ここでいう control plane は Takos の web/API worker、dispatch、background worker、container host 群をまとめたものです。
+::: tip Internal implementation
+このページは control plane の internal 実装を説明する。
+public contract ではない。実装は変更される可能性がある。
+public contract は [manifest spec](/reference/manifest-spec) と
+[API reference](/reference/api) を参照。
 :::
+
+Control plane は [Kernel](./kernel.md) の実装面。API, deploy pipeline, DB,
+routing management を担う。
 
 ## 役割
 
-Takos control plane は次を担当します。
-
-- browser/CLI からの `/api/*` request
+- browser / CLI からの `/api/*` request
 - auth / OAuth / billing / setup
-- app deployment と worker/service deployment history
-- repo / resource / skill / notification / session の管理
-- runtime-host / executor-host / browser-host との連携
+- group deploy / reconcile / rollback
+- publication env injection
+- resource / binding 管理
+- routing management
 
 ## 実行コンポーネント
 
 ```text
 browser / CLI
-  -> takos (web/API worker)
-     -> app services / DB / queues / R2 / DO
-     -> takos-dispatch
-     -> takos-worker (egress / background)
-     -> takos-runtime-host
-        -> takos-executor-host
-        -> takos-browser-host
+  → takos (main worker)
+     → takos-dispatch (tenant routing)
+     → takos-worker (background jobs)
+     → takos-runtime-host (container hosting)
 ```
-
-main worker (`takos`) は `takos-dispatch`、`takos-worker`、`takos-runtime-host` に直接の service binding を持ちます。`takos-executor-host` と `takos-browser-host` は main worker から直接接続せず、runtime-host や worker を経由して到達します。
 
 ### `takos`
 
-`wrangler.toml` で定義される main worker です。役割:
+main worker。`{KERNEL_DOMAIN}` で serve。
 
-- SPA + `/api/*`
-- session / PAT / OAuth
+- chat SPA + `/api/*`
+- auth / OAuth / session / JWKS (`/auth/*`)
+- `/settings`
 - setup
-- billing webhook 以外の billing UI API
+- billing
 - route registration と control-plane cron
+- publication env injection（deploy 時に全 group の publish を解決し env に
+  inject）
 
 ### `takos-dispatch`
 
-tenant hostname routing を受け持つ dispatch worker です。WFP dispatch namespace と Routing DO を使って tenant request を正しい runtime へ渡します。
+tenant routing を受け持つ dispatch worker。 hostname で kernel or group
+に振り分ける。
+
+- `{KERNEL_DOMAIN}` → kernel（`/api/*`, `/auth/*`, `/settings`）
+- `{space-slug}-{group-slug}.{TENANT_BASE_DOMAIN}` → group の worker（auto
+  hostname）
+- `{custom-slug}.{TENANT_BASE_DOMAIN}` → group の worker（custom slug）
+- custom domain → group の worker
 
 ### `takos-worker`
 
-background worker です。役割:
+background worker。
 
-- run queue
-- index queue
-- workflow queue
 - deployment queue
+- workflow queue
+- index queue
 - egress proxy
 - background cron / recovery
 
-### container host 群
+### `takos-runtime-host`
 
-| worker | role |
-| --- | --- |
-| `takos-runtime-host` | runtime container の host |
-| `takos-executor-host` | agent executor container の host |
-| `takos-browser-host` | browser automation container の host |
+generic container host。group が container workload を持つ場合、 runtime-host が
+container のライフサイクルを管理する。
 
-host worker は request の入口であると同時に、container から control plane へ戻る proxy contract の境界でもあります。
-
-`takos-executor-host` 自体は control plane コンポーネントであり、agent loop の正本ではありません。current canonical 方針では、agent の思考・memory・skill selection は executor container (`rust-agent`) 側を正本にし、host worker は control RPC と tool proxy の境界だけを持ちます。詳しくは [Agent Runtime](./agent-runtime.md) を参照してください。
-
-## takos-agent の分離
-
-takos-agent は元々 takos control plane の一部（`takos-control-hosts` パッケージ）として browser-host と executor-host を提供していましたが、独立リポジトリに分離されました。
-
-### 分離前
-
-- `wrangler.browser-host.toml` / `wrangler.executor.toml` が takos 側に存在
-- `BROWSER_HOST` / `EXECUTOR_HOST` service binding で直結
-- デプロイは takos の deploy スクリプトから実行
-
-### 分離後
-
-- takos-agent は独立した `.takos/app.yml` を持つ
-- takos との service binding は optional（`BROWSER_HOST?`, `EXECUTOR_HOST?`）
-- デプロイは `takos apply` または Store からのインストール
-- seed-repositories + official-packages で推奨表示
-
-## Container Host アーキテクチャ
-
-CF Containers は Durable Object として動作します。app.yml で worker に `containers` を紐づけると、apply が以下を自動生成します。
-
-1. Durable Object ホストクラス（`@cloudflare/containers` の `Container` を extends）
-2. wrangler.toml の `[[containers]]` セクション
-3. `[[durable_objects.bindings]]` セクション
-4. `[[migrations]]` セクション
+worker-attached container workload は current runtime では namespace binding
+経由で worker から参照される。Cloudflare backend でも image-backed `services` /
+`containers` 自体は OCI deployment adapter で解決される。
 
 ## Dispatch Namespace
 
-テナントアプリは dispatch namespace 内にデプロイされます。`--namespace` オプションで worker を namespace 配下に配置し、worker 名は `{groupName}-{workerName}` に変更されます。
+tenant worker は Cloudflare backend では dispatch namespace
+を使って論理分離される。 これは operator / backend 側の deployment detail
+であり、current public CLI の `takos deploy` / `takos install` には
+`--namespace` option は露出していない。
 
 ## API surface
 
-current API router は route family 単位で次をまとめます。
+### Kernel API
 
-- public/optional auth: explore, profiles, public share, MCP callback
-- authenticated console APIs: me, spaces, repos, resources, threads, runs, skills, sessions, notifications
-- operator APIs: services, custom domains, app deployments, billing
-- session-auth SPA APIs: OAuth consent
+kernel 自身が提供する API。
 
-詳しくは [API リファレンス](/reference/api) を参照してください。
+- auth / session / PAT / OAuth
+- space management (members, settings)
+- group management (install, deploy, rollback, uninstall)
+- resource management
+- publication env injection（deploy 時）
+- billing / metering
+- notifications
+
+### Group-provided API
+
+group が自身の routes で提供する API。kernel の責務ではない。
+
+例:
+
+- MCP tools (takos-computer)
+- Document editing (takos-docs)
+- Spreadsheet operations (takos-excel)
 
 ## 永続化の構成
 
-control plane の state は D1 schema group に分かれています。
+### Kernel schema
 
-| schema group | responsibility |
-| --- | --- |
-| Accounts | account, membership, profile, follow/block/mute |
-| Auth | auth session, PAT, service token |
-| Billing | billing account, plan, usage event, usage rollup, transaction |
-| Repos | repository, commit/blob/tree, releases, PR, workflow sync |
-| Agents | thread, message, run, artifact, memory, skill, agent task |
-| Services | service, binding, common env links |
-| OAuth | client, consent, token, auth code, MCP OAuth state |
-| Platform | resource, session, notification, shortcut, infra endpoint |
-| Workflows | workflow run, job, step, secret, artifact |
-| Workers | app, deployment, custom domain, runtime setting, managed token |
+kernel が所有する DB schema。Agent, Git, Storage, Store は kernel
+の機能であり、kernel DB で管理する。
 
-この構成は old docs の `app_environments` / `tracks` / `space_plans` 中心モデルとは異なります。現在の docs では schema group と責務のほうを正本として扱います。
+| schema group | responsibility                                |
+| ------------ | --------------------------------------------- |
+| Spaces       | space, membership, profile                    |
+| Auth         | session, PAT, service token                   |
+| Billing      | billing account, plan, usage                  |
+| Repos        | repository, commit, branch, blob, PR          |
+| Agents       | thread, message, run, skill, memory, artifact |
+| Storage      | file metadata, storage files                  |
+| Store        | registry, inventory, catalog                  |
+| Services     | service, binding, common env                  |
+| OAuth        | client, consent, token                        |
+| Platform     | resource, session, notification               |
+| Workflows    | run, job, step, artifact                      |
+| Workers      | group, deployment, publication, custom domain |
+
+## Deploy pipeline
+
+外部 group（computer, docs, excel, slide, user apps）の deploy に適用される。
+kernel の機能（agent, git, storage, store）は kernel に統合済みであり、deploy
+pipeline の対象外。
+
+```text
+1. Parse manifest (.takos/app.yml)
+2. Resolve publish → env injection 準備
+3. Generate desired state
+4. Diff against current state
+5. Apply（topological order, depends に従う）
+6. Inject env（storage bindings + publication env vars）
+7. Update routing（hostname → compute endpoint）
+```
+
+### Deploy atomicity
+
+deploy は以下の単位で failure boundary を持つ:
+
+1. migration 失敗 → deploy 全体が fail。worker は起動しない
+2. worker deploy 失敗 → routing は更新されない。前の deployment が serve 続行
+3. routing update 失敗 → retry する。worker は deploy 済みだが到達不能（一時的）
+
+routing は Service の health check 成功後に更新する。 Service が unhealthy なら
+routing は切り替わらない。 Worker は manifest で health check を宣言しないが、
+kernel が deploy 時に `GET /` で readiness を確認する（詳細は
+[Worker readiness](#worker-readiness)）。
+
+### Publication lifecycle
+
+publication は group の deploy と連動する:
+
+- group deploy 時: manifest の `publish` を deploy DB に登録 → space
+  内のすべての group の env に inject（scoping や dependency declaration なし）
+- group 削除時: deploy DB から除去 → 次回 deploy 時に env から消える
+- group unhealthy 時: publication は残るが、利用側は graceful degradation で対処
+
+publication に TTL はない。group が存在する限り publication も存在する。
+publication の必須 field は `type` と `path` の 2 つ。すべての publication が
+URL を持つ。 kernel features (Agent / Chat, Git, Storage, Store, Auth) は kernel
+API として直接提供されるため、publication の対象外。
+
+## Routing layer
+
+routing は hostname → deployment/endpoint の解決を担う独立した層。 hostname
+により kernel or group に振り分ける。
+
+- `{KERNEL_DOMAIN}` → kernel
+- auto hostname / custom slug / custom domain → group の worker
+
+### データモデル
+
+```
+RoutingRecord
+  hostname: string           → group の hostname (例: my-storage.app.example.com)
+  target: RoutingTarget      → ルーティング先
+  version: number            → 楽観的排他制御
+  updatedAt: number
+  tombstoneUntil?: number    → 削除猶予
+```
+
+RoutingTarget は 2 種類:
+
+```
+Type 1: "deployments"（worker workload）
+  deployments:
+    - routeRef: string       → dispatch namespace 内の worker 参照
+    - weight: number         → traffic 配分（canary: 1-99%）
+    - deploymentId: string
+    - status: active | canary | rollback
+
+Type 2: "http-endpoint-set"（service / container workload）
+  endpoints:
+    - name: string
+    - routes: [{path, methods}]
+    - target: {kind: service-ref | http-url, ref/baseUrl}
+    - timeoutMs?: number
+```
+
+### Hostname の種類
+
+| 種類          | 形式                                             | 管理                              |
+| ------------- | ------------------------------------------------ | --------------------------------- |
+| Auto hostname | `{space-slug}-{group-slug}.{TENANT_BASE_DOMAIN}` | deploy 時に自動生成               |
+| Custom slug   | `{custom-slug}.{TENANT_BASE_DOMAIN}`             | ユーザーが設定（globally unique） |
+| Custom domain | `any.domain.com`                                 | ユーザーが追加、DNS 検証 + SSL    |
+| Kernel        | `{KERNEL_DOMAIN}`                                | 固定ロジック                      |
+
+auto hostname / custom slug / custom domain の 3 つはすべて同じ
+RoutingTarget（同じ group worker）を指す。
+
+kernel は RoutingRecord ではなく dispatch の固定ロジックで routing される。
+group は RoutingRecord の hostname で routing される。
+
+### Deploy 時の routing 更新
+
+group deploy 時に kernel は:
+
+1. manifest の routes から desired endpoint set を compile する
+2. group の hostname に対して RoutingRecord を upsert する
+3. canary deploy の場合は weight を設定する（active + canary の 2 target）
+
+### Canary deploy
+
+```
+hostname → deployments:
+  - routeRef: current-worker, weight: 90, status: active
+  - routeRef: new-worker, weight: 10, status: canary
+```
+
+dispatch は weight に基づいてランダムに振り分ける。 canary を promote すると
+weight が 100:0 に切り替わる。
+
+### Canary 状態遷移
+
+```
+           deploy
+idle ──────────→ active (100%) + canary (weight%)
+                    │
+            promote │
+                    ↓
+           active (100%, new worker)
+                    │
+          rollback  │
+                    ↓
+           active (100%, old worker) + rollback target archived
+```
+
+- `promote`: canary の weight を 100 に、old active を archived に
+- `rollback`: canary を archived に、old active の weight を 100 に戻す
+- canary deploy 中に新たな deploy は blocked
+
+### Health monitoring
+
+kernel は deploy 後も group の Service / Attached container の health を
+定期的にチェックする。manifest の `healthCheck` field を使用するのは **Service /
+Attached container のみ**。
+
+- health check path: `GET /health`（default）or manifest で指定
+- check 間隔: 30 秒
+- unhealthy 判定: 3 回連続失敗
+
+Worker は request-driven のため manifest で health check を宣言しない。
+
+### Worker readiness
+
+Worker は healthCheck を持たないが、deploy 時に kernel が readiness を確認する:
+
+1. Worker を deploy
+2. kernel が readiness path を Worker に送信（default: `GET /`）
+3. 200/2xx/3xx を受け取れば ready
+4. 5xx または timeout (10s) なら deploy fail
+
+readiness path は manifest で指定可能（default: `GET /`）。root path が
+200 を返せない Worker（例: MCP-only endpoint）は `compute.<name>.readiness`
+フィールドで override する。
+
+routing 切り替えはこの readiness 確認の後に行う。
+
+canary deploy 中は canary target の health を優先的にチェックする。 unhealthy
+になった canary は自動的に rollback される。
+
+promote 後に active target が unhealthy になった場合、 kernel は
+`group.unhealthy` event を発行するが自動 rollback はしない。
+
+### Multi-tier cache
+
+routing 解決は 3 層キャッシュで高速化する。
+
+```
+L1: isolate-local Map (TTL 10s, max 2048 entries)
+ ↓ miss
+L2: KV namespace (TTL 90s)
+ ↓ miss
+L3: Durable Object (strong consistency, hostname でシャード)
+```
+
+write は DO → KV → L1 の順で伝播する。 読み取りは L1 → KV → DO の順で fallback
+する。
+
+L1 は TTL ベースで更新される（最大 10 秒の staleness を許容）。 deploy 直後は L1
+が古い target を返す可能性がある。 critical な routing 変更（rollback 等）では
+L1 TTL を待つか、 dispatch の再起動で L1 を flush する。
+
+L1 は LRU eviction で管理する。max entries を超えた場合は最も古い entry
+を破棄する。 大規模環境（多数の hostname）では L1 hit rate が下がるが、L2 (KV)
+が fallback するため latency は許容範囲内。
+
+### Group routes
+
+manifest の `routes` field は group routes として compile される。
+
+```yaml
+routes:
+  - target: main
+    path: /api
+    methods: [GET, POST]
+    timeoutMs: 30000
+```
+
+1 つの group hostname に対して複数の route を設定可能。 dispatch は path +
+method で最長一致を選択する。
+
+### Dispatch の routing 境界
+
+dispatch は group レベルだけでなく、group 内の worker レベルまで routing する。
+
+1. hostname から group を特定
+2. group の RoutingRecord を取得
+3. RoutingTarget の種類で分岐:
+   - "deployments": weight-based で deployment を選択 → routeRef で worker
+     に到達
+   - "http-endpoint-set": path + method で endpoint を選択 → service-ref or
+     http-url に到達
+
+group 内に複数 worker がある場合、dispatch が path で適切な worker を選ぶ。
+group の worker は自分宛の request だけを受け取る。
+
+## Bootstrap 順序
+
+space の初回起動時の順序:
+
+1. kernel が起動する（auth, routing が ready）
+2. kernel が space template を読み、default groups (computer, docs, excel,
+   slide) を deploy する
+3. deploy 時に kernel が space 内のすべての publication を解決し、すべての group
+   の env に inject する（scoping や dependency declaration なし）
+4. 各 group が起動し、`/auth/` で認証を検証できる状態になる
+
+group は kernel が ready になるまで起動を待つ。 kernel の readiness は
+`/auth/.well-known/jwks.json` の応答で判定する。
+
+group が他 group の publication を参照する場合、その group がまだ deploy
+されていないと 対応する env 変数が存在しない。group はこれを graceful
+に扱う必要がある （エラーではなく、機能が利用不可の状態として表示する）。
+
+default groups 間の publication 依存は保証しない。 bootstrap 直後は他 group の
+publication env がまだ inject されていない場合がある。 各 group は graceful
+degradation で対処する（env が未設定でも起動する）。
+
+## Group deletion
+
+group 削除時に kernel は以下を順に実行する:
+
+1. routing を削除（RoutingRecord を tombstone）
+2. publications を削除（deploy DB から除去）
+3. `group.deleted` event を発行
+4. worker を停止
+5. storage bindings を解除（sql, object-store, key-value 等）
+6. group record を削除
+
+storage の実データ（sql のデータ、object-store のファイル）は即座に削除されず、
+retention period 後に garbage collect される。
 
 ## Request flow
 
-### browser / CLI -> API
+### kernel API
 
 ```text
 client
-  -> takos
-  -> auth middleware
-  -> route family
-  -> application service
-  -> D1 / R2 / queues / service bindings
+  → {KERNEL_DOMAIN}/api/* or /auth/* or /settings
+  → takos-dispatch
+  → hostname = {KERNEL_DOMAIN} → kernel を特定
+  → takos (main worker)
+  → auth middleware
+  → route family (management API, auth, settings)
 ```
 
-### tenant / agent runtime
+### group hostname → group runtime
 
 ```text
-client or agent
-  -> takos / takos-dispatch
-  -> runtime-host / executor-host / browser-host
-  -> container
-  -> proxy back to takos or takos-worker when needed
+client
+  → {space-slug}-{group-slug}.{TENANT_BASE_DOMAIN}/* (auto hostname)
+  → takos-dispatch
+  → hostname で group を特定（auto / custom slug / custom domain いずれも同じ）
+  → group の worker → group logic
 ```
-
-この構成により、runtime の compute と control-plane の stateful API を分離しています。
 
 ## Queue と stream
 
-Takos は queue と DO ベースの notifier を併用します。
+queue と DO ベースの notifier を併用する。
 
-- queue: run, index, workflow, deployment
-- DO stream: run notifier, notification notifier
-- DO infra: session, routing, git push lock
-- container DO: runtime, executor, browser
+- queue: deployment, workflow, index
+- DO stream: notification notifier
+- DO infra: session, routing
+- container DO: runtime host
 
-`/api/runs/:id/sse` と `/api/notifications/sse` は current public stream surface です。
+## DB migration
 
-## Locking / state management
+group の sql schema 変更は group 自身が管理する。
 
-current implementation は「単一の `tracks` テーブル」に依存しません。代わりに次の単位で状態を持ちます。
+### Migration の実行
 
-- app deployment state
-- group source projection / snapshot rollback state
-- service / worker deployment state
-- resource / binding / common env reconcile state
-- DO-local session / proxy token state
+manifest の `storage.db.migrations` に migration ファイルの path を指定する。
 
-operator が見るべき詳細は [Resource Governance](/platform/resource-governance) を参照してください。
+```yaml
+storage:
+  db:
+    type: sql
+    migrations: .takos/migrations/
+```
+
+kernel は deploy 時に migration を実行する。 migration は deploy の一部として
+atomic に行われる。
+
+### Rollback と migration
+
+deployment snapshot には migration 状態が含まれる。 rollback 時、kernel は
+forward-only migration のみサポートする。 schema
+を巻き戻す必要がある場合は、新しい migration として書く。
+
+migration が失敗した場合、deploy 全体が fail する。 group の worker
+は起動しない。
+
+### Atomicity
+
+deploy の atomicity は group 単位。
+
+- migration + worker deploy + routing update が 1 つの group deploy として
+  atomic
+- migration 成功 → worker deploy 失敗 の場合、migration は rollback
+  されない（forward-only）
+- 代わりに deploy 全体が fail 状態になり、前の deployment snapshot が serve
+  され続ける
+- 別の group の deploy には影響しない（group 間の deploy は独立）

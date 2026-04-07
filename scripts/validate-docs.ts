@@ -690,6 +690,7 @@ const ENDPOINT_FILE_MOUNT: Record<string, string> = {
   "oauth-consent-api.ts": "/oauth",
   "mcp.ts": "/mcp",
   "public-share.ts": "/public",
+  "billing/webhook.ts": "/billing/webhook",
   "runs/sse.ts": "/runs",
   "notifications-sse.ts": "/notifications",
 };
@@ -715,6 +716,25 @@ const ENDPOINT_SKIP_FILES = new Set([
   "rpc-types.ts",
   "smart-http.ts",
   "well-known.ts",
+]);
+
+const ENDPOINT_DUPLICATE_ROUTE_FILES = new Set([
+  "agent-tasks/routes.ts",
+  "apps/routes.ts",
+  "browser-sessions/routes.ts",
+  "custom-domains/routes.ts",
+  "git/routes.ts",
+  "groups/routes.ts",
+  "mcp/routes.ts",
+  "me/routes.ts",
+  "memories/routes.ts",
+  "notifications/routes.ts",
+  "notifications/sse.ts",
+  "public-share/routes.ts",
+  "search/routes.ts",
+  "shortcuts/routes.ts",
+  "skills/routes.ts",
+  "threads/routes.ts",
 ]);
 
 const ENDPOINT_SKIP_SUFFIXES = [
@@ -752,6 +772,7 @@ function resolveEndpointMount(relPath: string): string {
 
 function shouldSkipEndpointFile(relPath: string): boolean {
   const norm = relPath.replace(/\\/g, "/");
+  if (ENDPOINT_DUPLICATE_ROUTE_FILES.has(norm)) return true;
   const parts = norm.split("/");
   const fileName = parts[parts.length - 1] ?? "";
   if (ENDPOINT_SKIP_DIRS.has(parts[0] ?? "")) return true;

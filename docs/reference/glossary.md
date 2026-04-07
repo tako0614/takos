@@ -30,23 +30,20 @@ contract とは限らない。
 
 ### Kernel
 
-Takos の共通基盤。identity、space、capability、deploy、resource、metering
-を扱う。
+Takos の基盤。Agent/Chat, Git, Storage, Store, Auth, Deploy, Routing, Resources, Billing を統合した単一サービス。`{KERNEL_DOMAIN}` で serve。
 
-### Workspace Shell
+### Deploy Dashboard
 
-workspace と infrastructure を見るための最小 UI。 app の launch は行うが、app
-自体の canonical UI を所有しない。
+kernel が /settings で提供する space 管理 UI。
 
-### Workspace / Space
+### Space
 
-所有・隔離の最上位単位。 public surface では `workspace`、internal model では
-`space` が主に使われる。
+所有・隔離の最上位単位（テナント）。session context で切り替え。
 
 ### Installed App
 
-workspace に接続された app。 first-party / third-party を問わず同じ app contract
-に従う。
+space に deploy された group の user-facing な呼び方。
+first-party / third-party を問わず同じ manifest contract に従う。
 
 ### Repo
 
@@ -54,29 +51,55 @@ source と workflow artifact の起点。 deploy の source provenance を決め
 
 ### Worker
 
-public surface での deployable unit。manifest では `spec.workers.*` が current
-contract で、内部管理 API family の正本は `/api/services`。
+public surface での deployable unit。manifest では `compute.<name>` に `build`
+を持つエントリが Worker と判定される。内部管理 API family の正本は `/api/services`。
 
 ### Service
 
-internal model での実行単位。 public manifest では worker service
-がその入口になる。
+常設コンテナ workload。manifest では `compute.<name>` に `image` を持つ
+（`build` を持たない）エントリが自動的に Service と判定される。digest pin された
+`image` ベースの long-running HTTP service。
 
 ### Resource
 
-service が利用する backing capability。 D1, R2, KV, Queue などを manifest
-で宣言する。
+compute が利用する backing capability。 sql, object-store, key-value, queue,
+vector-index, secret, analytics-engine, workflow, durable-object などを
+manifest の `storage` で宣言する。
 
 ### Binding
 
-service に resource や他 service を渡す名前付き接続。
+compute に resource を渡す名前付き接続。storage 側の `bind:` で env 名を指定すると、
+manifest 内の全 compute の env に自動注入される。
 
 ## Deploy
 
 ### App Manifest (`.takos/app.yml`)
 
-`kind: App` の single-document YAML。 service / resource / route / OAuth / MCP /
+flat manifest の single-document YAML。 compute / storage / routes / publish / OAuth / MCP /
 file handler を宣言する current contract。
+
+### Primitive
+
+deploy system の foundation layer。compute (worker / service / attached) /
+storage / route / publish の 4 種類があり、それぞれ独立した 1st-class エンティ
+ティで、個別の lifecycle を持つ。CLI / API で個別操作できる。
+
+### Group
+
+primitive 群を束ねる **上位 bundling layer**。複数の primitive を 1 つの単位
+として扱い、bulk lifecycle (snapshot / rollback / uninstall) と desired state
+management を提供する optional な仕組み。manifest deploy は group を作る bulk
+wrapper にすぎず、primitive は group に所属することも standalone で存在する
+こともできる。kernel features (agent, git, storage, store) は group ではない。
+user-facing には「app」と呼ぶ。
+
+### App
+
+group の user-facing な呼び方。独立した概念としては存在しない。
+
+### Publication
+
+group が manifest で宣言する公開情報。必須 field は `type` と `path` の 2 つ（すべての publication は URL を持つ）。deploy 時に kernel が space 内のすべての group の env に inject する（scoping や dependency declaration なし）。kernel features (Agent / Chat, Git, Storage, Store, Auth) は publication ではなく kernel API として直接提供。
 
 ### App Deployment
 
@@ -134,27 +157,26 @@ OAuth / managed token が要求・付与する権限の粒度。
 
 ### Store
 
-default distribution に含まれる first-party catalog app。 package discovery /
-recommendation / federation UX を提供するが、kernel 自体ではない。
+kernel が提供する app の検索・配布・ActivityPub federation 機能。kernel の一部であり、group ではない。
 
 ### Canonical URL
 
 app 自身が所有する正本 URL。 bookmark、share、reload、direct access はこの URL
 を使う。
 
-### Shell Launch URL
+### Launch URL
 
-Takos UI から app を開くための workspace-scoped URL。 shell はここから app を
-iframe で開くか redirect するかを決める。
+deploy dashboard から app を開くための URL。
 
 ### MCP (Model Context Protocol)
 
 repo や app がツール surface を公開するための主要 protocol。 manifest の
-`spec.mcpServers` で宣言する。
+`publish` に `type: McpServer` として宣言する。
 
 ### File Handler
 
-storage/file 系 UI から app を開く contract。
+storage/file 系 UI から app を開く contract。manifest の
+`publish` に `type: FileHandler` として宣言する。
 
 ## 実行基盤
 

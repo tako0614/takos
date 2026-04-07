@@ -18,27 +18,20 @@ my-app/
 ## app.yml
 
 ```yaml
-apiVersion: takos.dev/v1alpha1
-kind: App
-metadata:
-  name: simple-worker
-spec:
-  version: 0.1.0
-  description: A simple worker app
+name: simple-worker
 
-  workers:
-    web:
-      build:
-        fromWorkflow:
-          path: .takos/workflows/deploy.yml
-          job: bundle
-          artifact: web
-          artifactPath: dist/worker
+compute:
+  web:
+    build:
+      fromWorkflow:
+        path: .takos/workflows/deploy.yml
+        job: bundle
+        artifact: web
+        artifactPath: dist/worker
 
-  routes:
-    - name: app
-      target: web
-      path: /
+routes:
+  - path: /
+    target: web
 ```
 
 ## ワークフロー
@@ -84,17 +77,17 @@ export default {
 ## デプロイ
 
 ```bash
-takos apply --env staging
+takos deploy --env staging
 ```
 
 ## ポイント
 
-- `metadata.name` がリソース名のプレフィックスになります。短くてわかりやすい名前にしましょう
+- `name` がリソース名のプレフィックスになります。短くてわかりやすい名前にしましょう
 - `routes` の `path: /` で Worker をルートパスに公開しています。ドメインはシステムが自動付与します
 - Worker のコードは Cloudflare Workers の標準的な `fetch` ハンドラです
 
 ## 次のステップ
 
-- データベースを追加したい → [Worker + D1 データベース](/examples/worker-with-db)
+- データベースを追加したい → [Worker + SQL データベース](/examples/worker-with-db)
 - Docker コンテナを使いたい → [Worker + Container](/examples/worker-with-container)
 - MCP Server を公開したい → [MCP Server](/examples/mcp-server)

@@ -1,93 +1,88 @@
-# Containers
+# Attached Container
 
-Docker コンテナを定義して CF Containers として実行する。ブラウザ自動化や ML
-推論など Docker が必要な処理向け。
+Worker に紐づく container workload を `compute.<name>.containers` 内で定義する。
+ブラウザ自動化、heavy computation、external binary を必要とする host process など、
+Worker から呼び出したい image-backed workload 向け。
+
+Attached Container はトップレベルの compute エントリではなく、Worker の `containers`
+map 内に定義する。
 
 ## 基本
 
 ```yaml
-containers:
-  browser:
-    dockerfile: packages/browser-service/Dockerfile
-    imageRef: ghcr.io/example/browser-service:2026-03-30
-    provider: oci
-    port: 8080
-    instanceType: standard-2
-    maxInstances: 25
-```
-
-## Worker に紐づける
-
-```yaml
-containers:
-  browser:
-    dockerfile: Dockerfile
-    port: 8080
-    instanceType: standard-2
-    maxInstances: 25
-
-workers:
-  browser-host:
-    containers: [browser]
+compute:
+  web:
     build:
       fromWorkflow:
         path: .takos/workflows/deploy.yml
         job: build-host
-        artifact: browser-host
+        artifact: host
         artifactPath: dist/host.js
+    containers:
+      browser:
+        image: ghcr.io/org/browser@sha256:def456
+        port: 8080
 ```
-
-Worker のコードからは `env.BROWSER_CONTAINER` で Durable Object
-にアクセスできる。
 
 ## コンテナ環境変数
 
 コンテナ固有の環境変数を `env` で設定できる。
 
 ```yaml
-containers:
-  browser:
-    dockerfile: Dockerfile
-    port: 8080
-    env:
-      NODE_ENV: production
-      LOG_LEVEL: info
+compute:
+  web:
+    build:
+      fromWorkflow:
+        path: .takos/workflows/deploy.yml
+        job: build-host
+        artifact: host
+        artifactPath: dist/host.js
+    containers:
+      browser:
+        image: ghcr.io/org/browser@sha256:def456
+        port: 8080
+        env:
+          NODE_ENV: production
+          LOG_LEVEL: info
 ```
 
-アプリ全体の環境変数は `spec.env` で設定する。詳しくは
+アプリ全体の環境変数はトップレベル `env` で設定する。詳しくは
 [環境変数](/apps/environment) を参照。
 
 ## フィールド
 
-| field          | required | 説明                                                                    |
-| -------------- | -------- | ----------------------------------------------------------------------- |
-| `dockerfile`   | yes      | Dockerfile パス                                                         |
-| `imageRef`     | no       | `takos apply` / `takos deploy` が使う digest-pinned container image ref |
-| `provider`     | no       | `oci`, `ecs`, `cloud-run`, `k8s`                                        |
-| `port`         | yes      | コンテナのリッスンポート                                                |
-| `instanceType` | no       | インスタンスタイプ (`basic`, `standard-2` など)                         |
-| `maxInstances` | no       | 最大インスタンス数                                                      |
-| `env`          | no       | コンテナ環境変数                                                        |
+Worker の `containers` map 内で定義する各 container のフィールド。
 
-## containers vs services
+| field | required | type | 説明 |
+| --- | --- | --- | --- |
+| `image` | **yes** | string | digest-pinned container image (`@sha256:...`) |
+| `port` | no | number | コンテナのリッスンポート |
+| `instanceType` | no | string | インスタンスタイプ |
+| `maxInstances` | no | number | 最大インスタンス数 |
+| `env` | no | object | コンテナ環境変数 |
+| `volumes` | no | object | volume mount |
 
-`containers` は CF Containers (Worker に紐づく Durable Object)
-専用。常設の独立稼働コンテナには `services` セクションを使う。
+## deploy source の制約
 
-`takos apply` / `takos deploy` で online deploy する場合は digest pin された
-`imageRef` (`@sha256:...`) が必要。`dockerfile` は source
-定義として残るが、deploy path 自体は image ref を使う。
+`takos deploy` / `takos install` で online deploy する場合は
+digest pin された `image` が必要。`image` は `@sha256:...` を含む必要がある。
 
-|             | containers                         | services                    |
-| ----------- | ---------------------------------- | --------------------------- |
-| 用途        | CF Containers (Worker に紐づく)    | 常設コンテナ (VPS/独立稼働) |
-| IPv4 割当   | 不可                               | `ipv4: true` で可能         |
-| Worker 連携 | `workers.<name>.containers` で参照 | routes の target で参照     |
+## Attached Container vs Service vs Worker
 
-詳しくは [Services](/apps/manifest) を参照。
+| 形態 | 定義場所 | 動作 | route target | 典型用途 |
+| --- | --- | --- | --- | --- |
+| Worker | `compute.<name>` (with `build`) | serverless、request-driven | yes | ルーティング、軽量処理 |
+| Service | `compute.<name>` (with `image`) | always-on container | yes | API サーバー、常設バックエンド |
+| Attached Container | `compute.<name>.containers.<name>` | worker に紐づく container | **no** | browser / executor / host process |
+
+attached container は **routes の `target` にできない**。`routes` は親 worker / service を
+対象に書き、そこから attached container を呼び出す。
+
+Worker コードからは attached container binding を通じて参照する。current
+runtime では DurableObjectNamespace-compatible な handle として利用できる。
 
 ## 次のステップ
 
-- [Services](/apps/manifest) --- 常設コンテナの定義方法
+- [Services](/apps/services) --- always-on container workload (Service)
 - [Workers](/apps/workers) --- Worker の定義方法
-- [Routes](/apps/routes) --- コンテナを公開する方法
+- [Routes](/apps/routes) --- workload を公開する方法

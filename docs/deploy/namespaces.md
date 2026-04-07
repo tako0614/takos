@@ -1,72 +1,62 @@
 # Dispatch Namespace
 
-> このページでわかること: dispatch namespace
-> を使ったマルチテナントデプロイの仕組み。
+> このページでわかること: Cloudflare backend が使う dispatch namespace
+> の位置づけと、group との関係。
 
-`--namespace` を指定すると、Worker は Cloudflare の dispatch namespace
-内にデプロイされます。テナントごとに Worker を論理分離する場合に使います。
+dispatch namespace は Cloudflare backend で tenant worker を論理分離するための
+backend detail。Takos の current public spec では manifest に書く対象ではなく、
+operator が Cloudflare 側で準備する実行基盤の一部として扱う。
 
-## 基本的な使い方
+## 何に使うか
 
-```bash
-takos apply --env staging --namespace takos-staging-tenants
-```
+Cloudflare backend では worker workload が dispatch namespace 配下に載る。
+これにより、tenant worker を control plane や他 tenant から論理分離できる。
 
-## namespace あり / なしの違い
+## current public CLI との関係
 
-<div v-pre>
+current public CLI の `takos deploy` / `takos install`
+には `--namespace` option はない。
 
-| 項目                     | namespace なし | namespace あり                    |
-| ------------------------ | -------------- | --------------------------------- |
-| Worker 名                | `{workerName}` | `{groupName}-{workerName}`        |
-| service binding の参照先 | `{targetName}` | `{groupName}-{targetName}`        |
-| wrangler.toml            | 通常           | `dispatch_namespace` field が追加 |
+- app 開発者は `.takos/app.yml` と `--group` を意識する
+- operator は Cloudflare 側で dispatch namespace を作成し、
+  control-plane 環境変数に接続する
 
-</div>
+Cloudflare 用の実運用では `WFP_DISPATCH_NAMESPACE`
+などの operator 設定が namespace 解決を担う。
 
-## マルチテナントの構成例
+## group との関係
 
-テナントごとに同じアプリを namespace 内にデプロイする場合:
+group は public な deploy 単位、dispatch namespace は backend 側の worker
+隔離単位。
 
-```bash
-# テナント A
-takos apply --env production \
-  --namespace production-tenants \
-  --group tenant-a
+- group: desired state / observed state / inventory を束ねる
+- dispatch namespace: Cloudflare backend 上の worker 配置先
 
-# テナント B
-takos apply --env production \
-  --namespace production-tenants \
-  --group tenant-b
-```
+group 名は deploy identity に使われるが、namespace 指定自体は public CLI
+surface ではない。
 
-`--group` でグループ名を指定すると、Worker
-名のプレフィックスが変わります。これにより、同じ namespace 内で複数テナントの
-Worker を共存させられます。
+## operator の準備
 
-## target 指定との組み合わせ
-
-namespace は全体 apply にも部分 apply にも使えます。
+Cloudflare backend では namespace 自体を先に作る。
 
 ```bash
-takos apply \
-  --env staging \
-  --namespace takos-staging-tenants \
-  --target workers.web
+wrangler dispatch-namespace create takos-staging-tenants
+wrangler dispatch-namespace create takos-production-tenants
 ```
+
+その後、operator 設定から Takos control plane に接続する。
 
 ## 注意点
 
-- namespace 内の Worker は、namespace 外から直接アクセスできません。dispatcher
-  Worker 経由でアクセスします
-- namespace の作成自体は Cloudflare ダッシュボードまたは API
-  で事前に行う必要があります
-- namespace を使う場合、service binding の参照先も namespace
-  内の名前に変わります
+- namespace の作成は Cloudflare ダッシュボードまたは API で事前に行う
+- namespace は backend detail なので、manifest の portability
+  を壊さないよう app spec には露出しない
+- local / self-host / AWS / GCP / k8s では Cloudflare dispatch namespace
+  をそのまま再現しない
 
 ## 次のステップ
 
-- [apply](/deploy/apply) --- `takos apply` の詳細
+- [deploy](/deploy/deploy) --- `takos deploy` の詳細
 - [Repository / Catalog デプロイ](/deploy/store-deploy) --- repository / catalog
   経由のデプロイ
-- [トラブルシューティング](/deploy/troubleshooting) --- よくあるエラーと対処
+- [Cloudflare](/hosting/cloudflare) --- operator 向け Cloudflare 設定

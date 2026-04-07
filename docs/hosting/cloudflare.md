@@ -1,9 +1,11 @@
 # Cloudflare
 
-Takos を Cloudflare Workers にホストする方法。このページは **takos オペレーター**向け。Cloudflare backend は Takos runtime の基準 backend で、Cloudflare-native public spec の参照実装です。
+このページは **Takos kernel を Cloudflare Workers にホストする方法**を説明します。takos オペレーター向けです。Cloudflare backend は Takos runtime の基準 backend で、Cloudflare-native public spec の参照実装です。
+
+Takos 上で app を deploy する方法は [Deploy](/deploy/) を参照してください。
 
 ::: info アプリ開発者へ
-アプリ開発者向けの current surface は Cloudflare-native spec を書く `takos apply` です。Cloudflare backend はその spec を直接実現する基準 backend で、他環境でも同じ spec を使います。
+アプリ開発者向けの current surface は Cloudflare-native spec を書く `takos deploy` です。Cloudflare backend はその spec を直接実現する基準 backend で、他環境でも同じ spec を使います。
 :::
 
 ## 必要なもの
@@ -50,7 +52,7 @@ takos whoami
 
 ## リソースの手動作成
 
-`apply` は manifest に書かれたリソースを自動作成するけど、control plane 本体のリソースは事前に手動で作成する必要がある。
+`takos deploy` は manifest に書かれたリソースを自動作成するけど、control plane 本体のリソースは事前に手動で作成する必要がある。
 
 ### D1 Database
 
@@ -306,127 +308,38 @@ staging 用の secrets は `--env staging` を付けて設定:
 wrangler secret put GOOGLE_CLIENT_SECRET --env staging
 ```
 
-## デプロイ
+## Takos kernel のデプロイ
+
+Takos kernel 本体を Cloudflare に deploy する:
 
 ```bash
-takos apply --env staging
+deno task deploy --env staging
 ```
 
-production にデプロイする場合:
+production:
 
 ```bash
-takos apply --env production
+deno task deploy --env production
 ```
 
-デプロイの詳細は [apply](/deploy/apply) を参照。
-
-## Workers
-
-Takos アプリの中核。V8 isolate 上で動く軽量な HTTP ハンドラ。
-
-- `.takos/app.yml` の `workers` セクションで定義
-- `apply` が wrangler.toml を自動生成してデプロイ
-- リソース binding は manifest から自動注入
-
-詳しくは [Workers](/apps/workers) を参照。
-
-## CF Containers
-
-Docker コンテナを Cloudflare 上で実行する仕組み。Worker の Durable Object として動作する。
-
-```yaml
-containers:
-  browser:
-    dockerfile: packages/browser-service/Dockerfile
-    port: 8080
-    instanceType: standard-2
-    maxInstances: 25
-
-workers:
-  browser-host:
-    containers: [browser]
-    build:
-      fromWorkflow:
-        path: .takos/workflows/deploy.yml
-        job: build-browser-host
-        artifact: browser-host
-        artifactPath: dist/browser-host.js
-```
-
-`apply` が以下を自動生成する:
-
-1. Durable Object ホストクラス（`@cloudflare/containers` の `Container` を extends）
-2. wrangler.toml の `[[containers]]` セクション
-3. `[[durable_objects.bindings]]` セクション
-4. `[[migrations]]` セクション
-
-### CF Containers の制限事項
-
-| 制約 | 詳細 |
-| --- | --- |
-| 利用可能リージョン | Cloudflare が自動選択（ユーザーは指定不可） |
-| instanceType | `basic`、`standard-2` などが利用可能 |
-| 最大インスタンス数 | `maxInstances` で制限可能（プランによる上限あり） |
-| IPv4 | `services` セクション（常設コンテナ）で `ipv4: true` を使用可能。CF Containers では不可 |
-| コンテナサイズ | Cloudflare のイメージサイズ上限に準拠 |
-| Cloudflare provider では canary 不可 | container-image deploy では canary strategy が使えない |
-| Worker bindings 非対応 | container runtime には Workers bindings が inject されない |
-
-詳しくは [Containers](/apps/containers) を参照。
-
-## D1 / R2 / KV
-
-`resources` セクションで宣言すると、`apply` が自動で作成・binding する。
-
-```yaml
-resources:
-  primary-db:
-    type: d1
-    binding: DB
-    migrations:
-      up: .takos/migrations/primary-db/up
-      down: .takos/migrations/primary-db/down
-  assets:
-    type: r2
-    binding: ASSETS
-  cache:
-    type: kv
-    binding: CACHE
-```
-
-<div v-pre>
-
-デプロイ後のリソース命名規則:
-
-| リソース | 命名規則 |
-| --- | --- |
-| D1 | `{groupName}-{env}-{resourceName}` |
-| R2 | `{groupName}-{env}-{resourceName}` |
-| KV | `{groupName}-{env}-{resourceName}` |
-
-</div>
-
-既存リソースがある場合は再利用される。
+::: info アプリの deploy とは別です
+ここでの deploy は Takos kernel 自体の deploy です。Takos 上で動く app の
+deploy は `takos deploy` を使い、[Deploy](/deploy/) を参照してください。
+:::
 
 ## Dispatch Namespace
 
-テナントごとに Worker を論理分離するための仕組み。
+テナントごとに worker を論理分離するための Cloudflare 側の仕組み。Takos kernel
+をホストする際に operator が事前に作成する必要があります。
 
-```bash
-takos apply --env production --namespace production-tenants --group tenant-a
-```
-
-- `--namespace` で dispatch namespace にデプロイ
-- `--group` で Worker 名のプレフィックスを変更
-- namespace 内の Worker は dispatcher Worker 経由でアクセス
-
-namespace の作成は事前に行う必要がある:
+namespace の作成:
 
 ```bash
 wrangler dispatch-namespace create my-namespace
 ```
 
-詳しくは [Dispatch Namespace](/deploy/namespaces) を参照。
+app 開発者は namespace を意識する必要はありません（manifest / group で記述し、
+kernel が内部で dispatch namespace に materialize します）。
 
 ## Durable Objects
 
@@ -467,13 +380,13 @@ control plane を Cloudflare にデプロイする場合に使う主要な環境
 
 ## Cloudflare 固有の機能
 
-Cloudflare 環境でのみ利用できる機能。これらは他の環境（AWS / GCP / セルフホスト）では使えないか、代替メカニズムが使われる。
+Cloudflare backend で `native` に解決される機能。他環境では `compatible` な実装に解決される。
 
 ### Durable Objects
 
-control plane のステート管理に使われる。他環境では代替メカニズム（PostgreSQL ベースなど）が使われる。
+control plane のステート管理に使われる。Cloudflare では `native`、他環境では `compatible` な PostgreSQL / Redis ベース実装で解決される。
 
-| DO クラス | 用途 | 他環境での代替 |
+| DO クラス | 用途 | 他環境での `compatible` 実装 |
 | --- | --- | --- |
 | `SessionDO` | ユーザーセッション管理 | PostgreSQL / Redis |
 | `RunNotifierDO` | Run イベントのリアルタイム通知 | ポーリングベース |
@@ -482,17 +395,19 @@ control plane のステート管理に使われる。他環境では代替メカ
 | `RoutingDO` | ホスト名ベースルーティング | PostgreSQL + キャッシュ |
 | `GitPushLockDO` | Git push のロック管理 | PostgreSQL advisory lock |
 
-### CF Containers
+### Container workloads
 
-Docker コンテナを Cloudflare 上で Durable Object として実行する仕組み。他環境では ECS / Cloud Run / k8s Pod / Docker で代替する。
+image-backed `services` / `containers` は Cloudflare backend でも current
+実装では OCI deployment adapter を通る。他環境では `compatible` な ECS / Cloud Run / k8s /
+Docker などの provider-aware adapter で解決する。
 
 ### Dispatch Namespace
 
-テナント Worker を論理分離するための仕組み。他環境ではテナント Worker は直接 runtime-host に dispatch される。
+テナント Worker を論理分離する Cloudflare の仕組み。他環境では `compatible` な Takos runtime-host に直接 dispatch される。
 
 ### Analytics Engine
 
-構造化ログ・メトリクスの書き込み。他環境では write path が contract-first（書き込み API は同じだけどバックエンドは未実装）。
+構造化ログ・メトリクスの書き込みを `native` に解決する。他環境では `compatible` な Takos analytics runtime で同じ write API を実現する。
 
 ### Browser Rendering
 
@@ -508,18 +423,18 @@ CF Workflows ベースのワークフロー実行。他環境では Takos-manage
 
 ## マルチクラウド対応
 
-takos オペレーターが takos をどのクラウドにホストするかはインストール時の設定で決まる。アプリ開発者は app.yml を書いて `apply` するだけで、デプロイ先を意識する必要はない:
+takos オペレーターが takos をどのクラウドにホストするかはインストール時の設定で決まる。アプリ開発者は app.yml を書いて `takos deploy` するだけで、デプロイ先を意識する必要はない:
 
 ```bash
 # アプリ開発者のコマンド（どの環境でも同じ）
-takos apply --env production
+takos deploy --env production
 ```
 
 takos 自体を別のクラウドに移行したい場合は、オペレーターがそのクラウド用のインフラを構築して takos の設定を変更する。詳しくは [環境ごとの差異](/hosting/differences) を参照。
 
 ## 次に読むページ
 
-- [apply](/deploy/apply) --- `takos apply` の詳細
+- [deploy](/deploy/deploy) --- `takos deploy` の詳細
 - [環境ごとの差異](/hosting/differences) --- 全環境の比較
 - [AWS](/hosting/aws) --- AWS にデプロイする場合
 - [GCP](/hosting/gcp) --- GCP にデプロイする場合

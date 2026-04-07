@@ -10,10 +10,10 @@ my-app/
 │   ├── app.yml              ← アプリの構成定義
 │   ├── workflows/
 │   │   └── deploy.yml       ← ビルド・デプロイのワークフロー
-│   └── migrations/          ← DB マイグレーション（D1 を使う場合）
+│   └── migrations/          ← DB マイグレーション（sql storage を使う場合）
 │       └── primary-db/
-│           ├── up/
-│           └── down/
+│           ├── 0001_create_users.sql
+│           └── 0002_add_email_index.sql
 ├── src/
 │   └── index.ts
 ├── package.json
@@ -25,33 +25,26 @@ my-app/
 ### アプリマニフェスト (`.takos/app.yml`)
 
 Takos
-で「何をデプロイするか」を宣言するファイル。Workers、Container、リソース、ルート、環境変数を定義する。
+で「何をデプロイするか」を宣言するファイル。compute、storage、routes、publish、環境変数を定義する。
 
-このフェーズでは `.takos/app.yml` はあくまで deploy/runtime contract
-です。workspace shell integration、canonical URL、shell launch URL
-の方針はここには入れません。
+`.takos/app.yml` は deploy/runtime contract です。
 
 ```yaml
-apiVersion: takos.dev/v1alpha1
-kind: App
-metadata:
-  name: my-app
-spec:
-  version: 0.1.0
-  workers:
-    web:
-      build:
-        fromWorkflow:
-          path: .takos/workflows/deploy.yml
-          job: bundle
-          artifact: web
-          artifactPath: dist/worker
+name: my-app
+
+compute:
+  web:
+    build:
+      fromWorkflow:
+        path: .takos/workflows/deploy.yml
+        job: bundle
+        artifact: web
+        artifactPath: dist/worker
 ```
 
 詳しくは [アプリマニフェスト](/apps/manifest) を参照。フィールド一覧は
-[マニフェストリファレンス](/reference/manifest-spec)。Takos 本体と installable
-apps の境界は [Kernel / Workspace Shell / Apps](/architecture/kernel-shell)
-を参照。
+[マニフェストリファレンス](/reference/manifest-spec)。kernel と app の境界は
+[Kernel](/architecture/kernel) を参照。
 
 ### `.takos/workflows/deploy.yml`
 
@@ -60,15 +53,18 @@ apps の境界は [Kernel / Workspace Shell / Apps](/architecture/kernel-shell)
 
 ### `.takos/migrations/`
 
-D1 を使う場合のマイグレーションファイル。ディレクトリ名が `app.yml` の resource
-名に対応する。
+`sql` storage 用のマイグレーションファイル。ディレクトリ名が `app.yml` の
+storage 名に対応する。各 storage ディレクトリ直下に `.sql`
+ファイルをファイル名順で配置する （forward-only。`up/` `down/`
+のサブディレクトリは存在せず、rollback による schema
+巻き戻しはサポートしない。schema を戻したい場合は新しい migration として書く）。
 
 ## 制約
 
 - `app.yml` は `.takos/` 直下に配置
 - `workflows/` は `.takos/workflows/`
   配下に配置（それ以外はバリデーションエラー）
-- `kind` は `App` 固定
+- `name` はトップレベルに記述（flat manifest）
 
 ## 次のステップ
 

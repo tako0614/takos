@@ -65,6 +65,7 @@ export default defineConfig({
         text: "デプロイ",
         items: [
           { text: "概要", link: "/deploy/" },
+          { text: "deploy", link: "/deploy/deploy" },
           { text: "deploy-group", link: "/deploy/deploy-group" },
           { text: "Repository / Catalog", link: "/deploy/store-deploy" },
           { text: "Namespace", link: "/deploy/namespaces" },
@@ -88,9 +89,10 @@ export default defineConfig({
         text: "アーキテクチャ",
         items: [
           { text: "概要", link: "/architecture/" },
-          { text: "Kernel / Shell / Apps", link: "/architecture/kernel-shell" },
+          { text: "Kernel", link: "/architecture/kernel" },
+          { text: "Deploy System", link: "/architecture/deploy-system" },
+          { text: "App Publications", link: "/architecture/app-publications" },
           { text: "Control Plane", link: "/architecture/control-plane" },
-          { text: "Agent Runtime", link: "/architecture/agent-runtime" },
           { text: "Tenant Runtime", link: "/architecture/tenant-runtime" },
           { text: "互換性と制限", link: "/architecture/compatibility" },
         ],
@@ -98,10 +100,17 @@ export default defineConfig({
       {
         text: "プラットフォーム",
         items: [
-          { text: "Workspace / Space", link: "/platform/spaces" },
+          { text: "Space", link: "/platform/spaces" },
+          { text: "Git", link: "/platform/takos-git" },
+          { text: "Storage", link: "/platform/takos-storage" },
           { text: "Store", link: "/platform/store" },
           { text: "課金", link: "/platform/billing" },
           { text: "ActivityPub", link: "/platform/activitypub" },
+          { text: "Default Groups", link: "/platform/default-apps" },
+          { text: "takos-computer", link: "/platform/takos-computer" },
+          { text: "takos-docs", link: "/platform/takos-docs" },
+          { text: "takos-excel", link: "/platform/takos-excel" },
+          { text: "takos-slide", link: "/platform/takos-slide" },
         ],
       },
       {

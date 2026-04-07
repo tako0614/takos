@@ -8,7 +8,7 @@ Takos の public spec は Cloudflare-native です。runtime model は Takos run
 
 | surface | status | primary config | notes |
 | --- | --- | --- | --- |
-| Cloudflare Workers + CF Containers | `stable` | tracked Cloudflare templates | current primary deploy surface |
+| Cloudflare Workers + container adapter | `stable` | tracked Cloudflare templates | current primary deploy surface |
 | Local Docker Compose | `stable` | `.env.local.example`, `compose.local.yml` | 開発・smoke 用 |
 | Local-platform manual process | `supported` | self-host env template + `dev:local:*` scripts | compose を使わない manual 起動 |
 | Helm / Kubernetes | `supported` | Helm chart | self-host packaging |

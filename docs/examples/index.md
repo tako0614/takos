@@ -33,7 +33,7 @@ Worker と Docker
 コンテナを組み合わせる構成です。ブラウザ自動化やヘビーな処理に。
 
 - Worker 1 つ + Container 1 つ
-- CF Containers で Docker を実行
+- worker-attached container workload を実行
 - takos-agent と同じアーキテクチャ
 
 ---
@@ -53,12 +53,37 @@ MCP (Model Context Protocol) Server を公開する構成です。AI
 サーバーとバックグラウンドワーカーをキューで連携。
 
 - Worker 2 つ + Container 2 つ
-- D1 / R2 / queue / analyticsEngine
+- sql / object-store / queue / analytics-engine
 - MCP Server + テンプレート変数
+
+---
+
+## Default Group 構成
+
+Takos の default group として preinstall される 4 つの group の manifest 例。
+（Agent / Chat, Git, Storage, Store は kernel features であり group ではない。）
+
+### [takos-computer](/platform/takos-computer)
+
+ブラウザ自動化 / サンドボックス。UiSurface + McpServer を publish。
+
+### [takos-docs](/platform/takos-docs)
+
+リッチテキストエディタ。UiSurface + McpServer を publish。
+
+### [takos-excel](/platform/takos-excel)
+
+スプレッドシート。UiSurface + McpServer を publish。
+
+### [takos-slide](/platform/takos-slide)
+
+プレゼンテーション。UiSurface + McpServer を publish。
+
+---
 
 ## 次のステップ
 
 - [はじめてのアプリ](/get-started/your-first-app) ---
   ステップバイステップのチュートリアル
 - [アプリ構成](/apps/) --- アプリマニフェストと周辺 public surface のガイド
-- [apply の詳細](/deploy/apply) --- `takos apply` のオプション
+- [deploy の詳細](/deploy/deploy) --- `takos deploy` のオプション
