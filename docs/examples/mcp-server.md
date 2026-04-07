@@ -18,59 +18,54 @@ my-tools/
 ## app.yml
 
 ```yaml
-apiVersion: takos.dev/v1alpha1
-kind: App
-metadata:
-  name: my-tools
-spec:
-  version: 0.1.0
-  capabilities: [mcp]
+name: my-tools
 
-  workers:
-    web:
-      build:
-        fromWorkflow:
-          path: .takos/workflows/deploy.yml
-          job: bundle
-          artifact: web
-          artifactPath: dist/worker
+compute:
+  web:
+    build:
+      fromWorkflow:
+        path: .takos/workflows/deploy.yml
+        job: bundle
+        artifact: web
+        artifactPath: dist/worker
+    readiness: /mcp
 
-  routes:
-    - name: mcp-endpoint
-      target: web
-      path: /mcp
+storage:
+  mcp-auth-secret:
+    type: secret
+    bind: MCP_AUTH_TOKEN
+    generate: true
 
-  resources:
-    mcp-auth-secret:
-      type: secret
-      binding: MCP_AUTH_TOKEN
-      generate: true
+routes:
+  - path: /mcp
+    target: web
 
-  mcpServers:
-    - name: my-tools
-      route: mcp-endpoint
-      transport: streamable-http
-      authSecretRef: mcp-auth-secret
+publish:
+  - type: McpServer
+    name: my-tools
+    path: /mcp
+    transport: streamable-http
+    authSecretRef: mcp-auth-secret
 ```
+
+この Worker は `/mcp` でしか応答しないため、`compute.web.readiness: /mcp` で
+deploy 時の readiness probe path を明示します。default は `GET /` ですが、
+root path が存在しないこの例では override が必要です。
 
 ### manifest フィールド解説
 
 | フィールド | 説明 |
 | --- | --- |
-| `capabilities: [mcp]` | MCP Server として登録されることを宣言。deploy 後に control plane が MCP endpoint を自動登録する |
-| `workers.web` | MCP リクエストを処理する Worker。`build.fromWorkflow` でビルド成果物を参照する |
-| `routes[].name` | ルート名。`mcpServers[].route` から参照される |
+| `compute.web` | MCP リクエストを処理する Worker。`build.fromWorkflow` でビルド成果物を参照する |
+| `compute.web.readiness` | deploy 時の readiness probe path。default は `GET /`。MCP-only Worker のように root を持たない場合は `/mcp` 等を指定する |
 | `routes[].target` | ルーティング先の Worker 名 |
 | `routes[].path` | MCP endpoint のパス |
-| `resources.mcp-auth-secret` | 認証トークン用のシークレット。`generate: true` で apply 時に自動生成される |
-| `mcpServers[].name` | MCP Server 名。agent が server をロードするときの識別子 |
-| `mcpServers[].route` | `spec.routes[].name` を参照。`endpoint` と排他 |
-| `mcpServers[].transport` | トランスポート方式。現在は `streamable-http` のみ |
-| `mcpServers[].authSecretRef` | 認証に使う `secret` resource の名前。省略可 |
-
-::: info route と endpoint
-`route` は app 内の Worker にルーティングする場合に使います。外部の MCP Server URL を直接指定する場合は `endpoint` を使います。両方を同時に指定することはできません。
-:::
+| `storage.mcp-auth-secret` | 認証トークン用のシークレット。`generate: true` で apply 時に自動生成される |
+| `publish[].type` | publication の種類。MCP Server の場合は `McpServer` |
+| `publish[].name` | MCP Server 名。agent が server をロードするときの識別子 |
+| `publish[].path` | MCP endpoint のパス |
+| `publish[].transport` | トランスポート方式。現在は `streamable-http` のみ |
+| `publish[].authSecretRef` | 認証に使う `secret` resource の名前。省略可 |
 
 ## ワークフロー
 
@@ -300,7 +295,7 @@ const result = await response.json();
 
 ## 認証の仕組み
 
-`authSecretRef` を指定すると、deploy 時にシークレットが自動生成され、Worker の環境変数にバインドされます。
+`publish` で `authSecretRef` を指定すると、deploy 時にシークレットが自動生成され、Worker の環境変数にバインドされます。
 
 | 設定 | 動作 |
 | --- | --- |
@@ -315,28 +310,27 @@ const result = await response.json();
 ## デプロイ
 
 ```bash
-# manifest を検証
-takos plan
+# manifest を検証（dry-run preview）
+takos deploy --plan
 
 # staging にデプロイ
-takos apply --env staging
+takos deploy --env staging
 
 # production にデプロイ
-takos apply --env production
+takos deploy --env production
 ```
 
 deploy 後、control plane が MCP endpoint を登録し、agent 側が server をロードできるようになります。
 
 ## ポイント
 
-- `capabilities: [mcp]` は MCP 登録のトリガーです。省略すると MCP endpoint として認識されません
 - `transport` は現在 `streamable-http` のみ対応しています
 - MCP Server は JSON-RPC 2.0 プロトコルに従います
-- `route` と `endpoint` は排他です。app 内の Worker を使う場合は `route`、外部 URL を直接指定する場合は `endpoint` を使います
+- `publish` の `path` は app 内のパスを指定します
 
 ## 関連ページ
 
-- [MCP Server 仕様](/apps/mcp) --- app.yml の `mcpServers` フィールドの詳細
+- [MCP Server 仕様](/apps/mcp) --- app.yml の `publish` (`type: McpServer`) の詳細
 - [Worker だけのシンプルなアプリ](/examples/simple-worker) --- Worker の基本構成
 - [Worker + Container](/examples/worker-with-container) --- コンテナとの組み合わせ
 - [app.yml](/apps/manifest) --- manifest の全体像

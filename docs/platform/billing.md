@@ -219,20 +219,30 @@ WEEKLY_RUNTIME_LIMIT_SECONDS = 5 * 60 * 60; // 18,000
 - **80% 到達**: レスポンスヘッダーに `X-Quota-Warning: approaching`
 - **上限到達**: 書き込み系 API が `402 Payment Required` で拒否
 - **読み取りは継続可能**: GET / HEAD はクォータ超過時も利用できる
-- **リセット**: メーターごとに日次または月次で自動リセット
+- **リセット**: 全メーター月次で自動リセット (詳細は下記)
 
 ## クォータリセットのタイミング
 
-使用量ロールアップは月次で集計されます。`period_start` は毎月 1 日（UTC）です。
+**全メーターは月次でリセットされます。** メーターごとの個別 reset cycle はありません。
+
+使用量ロールアップは `period_start` を基準にした月次集計で、`period_start` は毎月 1 日 00:00 (UTC) です。
 
 ```text
-period_start: "2026-03-01"  → 3月分の使用量
-period_start: "2026-04-01"  → 4月分の使用量
+period_start: "2026-03-01"  → 3月分 (2026-03-01 00:00 UTC ～ 2026-04-01 00:00 UTC)
+period_start: "2026-04-01"  → 4月分 (2026-04-01 00:00 UTC ～ 2026-05-01 00:00 UTC)
 ```
 
-月が変わると新しいロールアップ行が作成され、カウントは 0 からスタートします。
+毎月 1 日 (UTC) に新しいロールアップ行が作成され、すべてのメーター (`llm_tokens_input` / `llm_tokens_output` / `embedding_count` / `vector_search_count` / `exec_seconds` / `browser_seconds` / `web_search_count` / `wfp_requests` / `queue_messages`) のカウントが 0 からスタートします。
 
-Plus プランのサブスクリプション更新日は `subscription_period_end` で確認できます。Stripe の `invoice.paid` Webhook で更新されます。
+::: info `r2_storage_gb_month` の扱い
+`r2_storage_gb_month` だけはストレージ滞在量に対する平均値メーターであり、毎月の集計でリセットされる counter ではなく、その月のストレージ占有量から算出されます。それ以外のメーターはすべて 0 リセットの monthly counter です。
+:::
+
+::: info ランタイム制限は別枠
+`exec_seconds` の月次クォータとは別に、[ランタイム制限](#ランタイム制限) として 7 日ローリングウィンドウ 18,000 秒の独立した上限が適用されます。これは月次リセットとは別のスライディングウィンドウで管理されます。
+:::
+
+Plus プランのサブスクリプション更新日は `subscription_period_end` で確認できます。Stripe の `invoice.paid` Webhook で更新されます。サブスクリプション更新日と meter reset 日は異なる場合があります (meter reset は常に UTC の月初)。
 
 ## プラン変更のフロー
 

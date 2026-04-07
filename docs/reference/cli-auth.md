@@ -11,7 +11,7 @@ Takos CLI は task-oriented です。HTTP verb をそのまま露出するので
 
 ## このページで依存してはいけない範囲
 
-- `takos api ...` のような legacy command
+- `takos api ...` や `takos apply` のような legacy command
 - HTTP verb style subcommand を current CLI とみなすこと
 - OAuth Device Flow を CLI login の正本だと解釈すること
 
@@ -19,7 +19,7 @@ Takos CLI は task-oriented です。HTTP verb をそのまま露出するので
 
 CLI の deploy surface は [Deploy System](/deploy/) の public contract
 に従います。CLI は source 解決や provider logic を持たない thin client
-とし、deploy/install/apply の business logic は control plane に置きます。
+とし、deploy/install/rollback の business logic は control plane に置きます。
 
 ## 認証
 
@@ -38,9 +38,9 @@ takos whoami
 takos logout
 ```
 
-::: tip Device Flow との違い [OAuth 仕様](/apps/oauth) で文書化されている Device
-Authorization Grant はサードパーティアプリ向けです。`takos login`
-はブラウザコールバック方式を使い、 Device Flow は使いません。 :::
+::: tip Device Flow との違い
+[OAuth の Device Authorization Grant](/apps/oauth#device-authorization-grant-device-flow) はサードパーティアプリが CLI / IoT クライアント向けに用意するフローです。`takos login` 自体はブラウザコールバック方式を使い、Device Flow は使いません。
+:::
 
 ## 認証情報の解決順序
 
@@ -56,7 +56,7 @@ CLI は次の順序で認証情報を解決します。
 | -------------------- | --------------------------- |
 | `TAKOS_SESSION_ID`   | セッション ID による認証    |
 | `TAKOS_TOKEN`        | bearer token による認証     |
-| `TAKOS_WORKSPACE_ID` | デフォルト workspace の指定 |
+| `TAKOS_WORKSPACE_ID` | デフォルト space の指定（env var 名は互換維持） |
 | `TAKOS_API_URL`      | API endpoint の上書き       |
 
 `TAKOS_SESSION_ID` がある場合は `TAKOS_TOKEN` より優先されます。
@@ -64,7 +64,7 @@ CLI は次の順序で認証情報を解決します。
 ### session file mode
 
 `.takos-session` は session workdir のための file-based mode です。CLI
-は現在地から親方向へ探索し、見つかった場合はその session / workspace / api_url
+は現在地から親方向へ探索し、見つかった場合はその session / space / api_url
 を使います。
 
 ### local config mode
@@ -94,12 +94,18 @@ takos endpoint show
 ## task-oriented CLI
 
 Takos CLI では、単純な HTTP verb 直叩きではなく `domain + task` を使います。
+deploy system は **primitive (Layer 1) と group (Layer 2) の二層モデル** で、
+CLI もそれに沿って primitive 個別操作 (`takos service`, `takos resource`) と
+group bulk operation (`takos deploy`, `takos rollback`) の両方を 1st-class で
+サポートします。
 
 ```bash
-takos workspace list
+takos space list
 takos repo create --body '{"name":"my-repo"}'
-takos deploy https://github.com/acme/my-app.git --space SPACE_ID --ref main
-takos install takos/takos-agent --space SPACE_ID
+takos service list                                                   # Layer 1: primitive
+takos resource create --body '{"name":"my-db","type":"sql"}'         # Layer 1: primitive
+takos deploy https://github.com/acme/my-app.git --space SPACE_ID     # Layer 2: group bulk
+takos install takos/takos-agent --space SPACE_ID                     # Layer 2: group bulk
 takos run follow RUN_ID --transport ws
 ```
 
@@ -120,38 +126,48 @@ stream 対応 domain は追加で `watch` と `follow` を持ちます。
 
 ## deploy CLI
 
-`takos deploy` は repository URL source、`takos install` は catalog metadata
-で解決した `repository_url + tag` を使って
-`/api/spaces/:spaceId/app-deployments` を呼び出します。
+`takos deploy` は Takos の唯一の deploy entrypoint です。positional argument を
+省略するとローカルの `.takos/app.yml` を source にし、repository URL を渡すと
+その repo を source にします。`takos install owner/repo@TAG` は
+`takos deploy https://github.com/owner/repo.git --ref TAG` の sugar で、
+catalog (Store) が owner/repo + version を repo URL に解決して同じ pipeline
+を呼び出します。CLI は repo を clone せず、control plane が repo を fetch
+して manifest を parse します（thin client）。
 
-rollback は保存済み snapshot を既存 group に再適用する操作です。group row が
-既に削除されている場合は失敗し、deleted group を再生成しません。
+`takos rollback GROUP_NAME` は保存済み snapshot を既存 group に再適用する操作
+です。group row が既に削除されている場合は失敗し、deleted group を再生成しません。
 
 ```bash
-takos deploy https://github.com/acme/my-app.git --space SPACE_ID --ref main
-takos plan
+takos deploy                                                    # local manifest
+takos deploy --env staging                                      # local manifest with env
+takos deploy https://github.com/acme/my-app.git --ref main      # repo URL
+takos deploy --plan                                             # dry-run preview
 takos deploy status --space SPACE_ID
 takos deploy status APP_DEPLOYMENT_ID --space SPACE_ID
-takos deploy rollback APP_DEPLOYMENT_ID --space SPACE_ID
+takos rollback GROUP_NAME --space SPACE_ID
 takos install OWNER/REPO --space SPACE_ID --version v1.0.0
 takos uninstall GROUP_NAME --space SPACE_ID
 ```
 
-| flag                       | required | 役割                               |
-| -------------------------- | -------- | ---------------------------------- |
-| positional `repositoryUrl` | yes      | canonical HTTPS git repository URL |
-| `--ref`                    | no       | branch / tag / commit              |
-| `--ref-type`               | no       | `branch` / `tag` / `commit`        |
-| `--space`                  | no       | target workspace ID                |
-| `--json`                   | no       | JSON 出力                          |
+| flag                       | required | 役割                                                  |
+| -------------------------- | -------- | ----------------------------------------------------- |
+| positional `repositoryUrl` | no       | canonical HTTPS git repository URL（省略時は local manifest） |
+| `--ref`                    | no       | branch / tag / commit（repo URL 指定時）              |
+| `--ref-type`               | no       | `branch` / `tag` / `commit`（repo URL 指定時）        |
+| `--manifest`               | no       | local manifest path（既定は `.takos/app.yml`）        |
+| `--env`                    | no       | target env                                            |
+| `--space`                  | no       | target space ID                                       |
+| `--json`                   | no       | JSON 出力                                             |
 
-`takos plan` は manifest validation と現在状態との差分確認を行います。preview は
-non-mutating で、group が未作成でも DB row は作りません。
+`takos deploy --plan` は manifest validation と現在状態との差分確認を行います。preview は
+non-mutating で、group が未作成でも DB row は作りません。standalone の
+`takos plan` コマンドはありません。
 
 ## removed legacy surface
 
 Takos CLI は次を current surface に含めません。
 
+- `takos apply`（`takos deploy` に統合）
 - `takos api ...`
 - 直接的な HTTP verb style subcommands
 - `takos build`

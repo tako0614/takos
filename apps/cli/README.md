@@ -50,8 +50,9 @@ takos run list /THREAD_ID
 takos plan
 takos apply --env staging
 takos apply --env production --target workers.web
-takos worker attach web --group demo-app
-takos resource attach main-db --group demo-app
+takos deploy https://github.com/acme/my-app.git --space SPACE_ID --ref main
+takos install takos/takos-agent --space SPACE_ID --version v1.0.0
+takos group show demo-app
 ```
 
 Common task verbs:
@@ -131,14 +132,21 @@ The following are removed intentionally:
 
 ## App Deploy Contract
 
-`takos deploy` is removed in the current implementation.
+Current deploy surface:
 
-- Source of truth: `.takos/app.yml`
-- Active flow: `takos apply` for manifest-driven deploys
-- Default group name for `takos apply`: `metadata.name`
-- Direct workloads/resources stay standalone unless you pass `--group` or run `attach`
+- `takos plan` / `takos apply` for local manifest-driven deploys
+- `takos deploy` for repository URL source
+- `takos install` for catalog metadata resolved to repository URL + tag
+- `/api/spaces/:spaceId/app-deployments` for repo / catalog deployment history
+- `/api/spaces/:spaceId/groups/*` for desired state, plan, apply, uninstall
+
+Important boundaries:
+
+- Source of truth for manifest-driven deploys is `.takos/app.yml`
+- Default group name for `takos apply` is `metadata.name`
+- `takos apply` updates group desired state but does not create repo-based app deployment history
+- `takos deploy` / `takos install` create immutable app deployment records and support rollback
 - Validation: `takos plan` validates local manifest/workflow references and shows the current diff
-- Removed surface: `/api/spaces/:spaceId/app-deployments` remains unavailable and returns `410 Gone`
 
 ## Container Mode
 

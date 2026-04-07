@@ -35,36 +35,60 @@ takos whoami
 プロジェクトのルートに、Takos の app manifest `.takos/app.yml` を作ります。
 
 ```yaml
-apiVersion: takos.dev/v1alpha1
-kind: App
-metadata:
-  name: my-app
-spec:
-  version: 0.1.0
-  workers:
-    web:
-      build:
-        fromWorkflow:
-          path: .takos/workflows/deploy.yml
-          job: bundle
-          artifact: web
-          artifactPath: dist/worker
+# .takos/app.yml
+name: my-app
+
+compute:
+  web:
+    build:
+      fromWorkflow:
+        path: .takos/workflows/deploy.yml
+        job: bundle
+        artifact: web
+        artifactPath: dist/worker
+
+routes:
+  - target: web
+    path: /
 ```
 
-これだけで Worker が 1 つデプロイされます。ドメインはシステムが自動付与します。
+`routes` で `/` を `web` compute に紐づけることで、ドメイン直下が公開されます。
+ドメインはシステムが自動付与します。
 
-### 4. デプロイ
+### 4. ビルドワークフローを書く
+
+manifest の `build.fromWorkflow.path` で参照する workflow を作ります。
+
+```yaml
+# .takos/workflows/deploy.yml
+name: deploy
+jobs:
+  bundle:
+    steps:
+      - name: Install dependencies
+        run: npm install
+      - name: Build
+        run: npm run build
+    artifacts:
+      web:
+        path: dist/worker
+```
+
+このワークフローが build artifact を生成し、Takos がそれを Worker として deploy します。
+
+### 5. デプロイ
 
 ```bash
-takos apply --env staging
+takos deploy --env staging
 ```
 
 ステージング環境にデプロイされます。URL
 がターミナルに表示されるので、ブラウザで開いてみましょう。
+`routes` で宣言した `/` がそのまま開きます。
 
 ## 次のステップ
 
-- [Takos 全体像](/overview/) --- Workspace / Repo / Worker / Run
+- [Takos 全体像](/overview/) --- Space / Repo / Worker / Run
   などの基本単位から理解する
 - [はじめてのアプリ](/get-started/your-first-app) ---
   実際にアプリを作ってデプロイするチュートリアル

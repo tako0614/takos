@@ -9,16 +9,16 @@ Node.js 20+ / pnpm 9+ / Docker (current stable) / Docker Compose V2
 ## セットアップ
 
 ```bash
-corepack pnpm install
+deno task build:all
 cp .env.local.example .env.local
 ```
 
 ## 起動・停止
 
 ```bash
-corepack pnpm local:up        # 起動（foreground）
-corepack pnpm local:logs       # ログ確認
-corepack pnpm local:down       # 停止
+deno task local:up             # 起動（foreground）
+deno task local:logs           # ログ確認
+deno task local:down           # 停止
 ```
 
 バックグラウンドで起動したい場合:
@@ -29,8 +29,8 @@ docker compose --env-file .env.local -f compose.local.yml up --build -d
 ## スモークテスト
 
 ```bash
-corepack pnpm local:smoke              # 全体の疎通確認
-corepack pnpm local:proxyless-smoke    # CF 固有 path の逆流チェック
+deno task local:smoke                  # 全体の疎通確認
+deno task local:proxyless-smoke        # CF 固有 path の逆流チェック
 ```
 
 ## 主要サービス
@@ -48,9 +48,9 @@ corepack pnpm local:proxyless-smoke    # CF 固有 path の逆流チェック
 ## 個別起動
 
 ```bash
-corepack pnpm -C apps/control dev:local:web
-corepack pnpm -C apps/control dev:local:dispatch
-corepack pnpm -C apps/control dev:local:worker
+deno task --cwd apps/control dev:local:web
+deno task --cwd apps/control dev:local:dispatch
+deno task --cwd apps/control dev:local:worker
 ```
 
 compose を使わない場合は `apps/control/.env.self-host.example` を参考に。

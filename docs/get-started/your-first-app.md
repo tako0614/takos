@@ -40,24 +40,20 @@ mkdir -p .takos/workflows
 
 ```yaml
 # .takos/app.yml
-apiVersion: takos.dev/v1alpha1
-kind: App
-metadata:
-  name: my-first-app
-spec:
-  version: 0.1.0
-  workers:
-    web:
-      build:
-        fromWorkflow:
-          path: .takos/workflows/deploy.yml
-          job: bundle
-          artifact: web
-          artifactPath: dist/worker
-  routes:
-    - name: app
-      target: web
-      path: /
+name: my-first-app
+
+compute:
+  web:
+    build:
+      fromWorkflow:
+        path: .takos/workflows/deploy.yml
+        job: bundle
+        artifact: web
+        artifactPath: dist/worker
+
+routes:
+  - target: web
+    path: /
 ```
 
 ## 4. ワークフローを書く
@@ -100,7 +96,7 @@ npm install && npm run build
 
 ```bash
 takos login
-takos apply --env staging
+takos deploy --env staging
 ```
 
 ::: tip CLI は Takos の認証情報を使います。`takos login` 後は `--account-id` や
@@ -109,7 +105,12 @@ takos apply --env staging
 デプロイ成功すると URL が表示される。ブラウザで開いて "Hello from Takos!"
 が出れば成功。
 
-manifest の整合性だけ先に確認したい場合: `takos plan`
+manifest の整合性だけ先に確認したい場合: `takos deploy --plan`
+
+::: tip flat manifest
+`app.yml` は flat 構造です。`apiVersion` / `kind` / `metadata` / `spec`
+のラッパーは不要で、`name` をトップレベルに書きます。
+:::
 
 ## 次のステップ
 

@@ -1,30 +1,34 @@
 # Kubernetes
 
-Takos を Kubernetes クラスタにホストする方法。このページは **takos オペレーター**向け。
+このページは **Takos kernel を Kubernetes クラスタにホストする方法**を説明します。takos オペレーター向けです。
+
+Takos 上で app を deploy する方法は [Deploy](/deploy/) を参照してください。
 
 ::: info アプリ開発者へ
-このページは takos オペレーター向けです。public spec は Cloudflare-native のままで、k8s では Takos runtime が provider-backed resource と Takos-managed runtime を組み合わせて同じ `takos apply` surface を解決します。
+public spec は Cloudflare-native のままで、k8s では Takos runtime が provider-backed resource と Takos-managed runtime を組み合わせて同じ `takos deploy` surface を解決します。アプリ開発者はホスト環境を意識する必要はありません。
 :::
 
 ::: info オペレーター向け
 k8s provider 自体は使えます。差分は packaging と backing service の組み立て方にあり、Cloudflare backend のような単一 managed surface ではありません。
 :::
 
-## リソースマッピング
+## バッキングリソースの対応
 
-| app.yml | k8s リソース | 備考 |
+Takos kernel が k8s 上で抽象 resource type をどう materialize するかの対応表です。これは kernel 内部の実装詳細であり、public spec では変わりません。
+
+| abstract type | k8s 上の実体 | 備考 |
 | --- | --- | --- |
-| `d1` | PostgreSQL (StatefulSet or 外部) | Operator or Cloud-managed 推奨 |
-| `r2` | MinIO (StatefulSet) or S3 互換 | S3 互換ならどれでも OK |
-| `kv` | Takos KV runtime | 必要なら外部 KV を前段に置ける |
+| `sql` | PostgreSQL (StatefulSet or 外部) | Operator or Cloud-managed 推奨 |
+| `object-store` | MinIO (StatefulSet) or S3 互換 | S3 互換ならどれでも OK |
+| `key-value` | Takos KV runtime | 必要なら外部 KV を前段に置ける |
 | `queue` | Redis-backed queue | `redis-queue`、`REDIS_URL` 必須 |
-| `vectorize` | PostgreSQL + pgvector | pgvector Operator or 手動セットアップ |
-| `analyticsEngine` | Takos analytics runtime | OTEL collector 連携可 |
+| `vector-index` | PostgreSQL + pgvector | pgvector Operator or 手動セットアップ |
+| `analytics-engine` | Takos analytics runtime | OTEL collector 連携可 |
 | `workflow` | Takos workflow runtime | queue runner 前提 |
-| `durableObject` | Takos durable runtime | persistent durable namespace |
-| `secretRef` | Kubernetes Secret | API または in-cluster service account で解決 |
-| `workers` | Pod (Node.js) | local-platform adapter で実行 |
-| `services` | Pod (Docker) | 標準の k8s Deployment |
+| `durable-object` | Takos durable runtime | persistent durable namespace |
+| `secret` | Kubernetes Secret | API または in-cluster service account で解決 |
+| Worker compute | Pod (Node.js) | local-platform adapter で実行 |
+| Service compute | Pod (Docker) | 標準の k8s Deployment |
 
 ## 必要なもの
 
@@ -280,7 +284,7 @@ kubectl apply -f takos-deployment.yaml
 アプリ開発者がアプリをデプロイするときは、環境を問わず同じコマンド:
 
 ```bash
-takos apply --env production
+takos deploy --env production
 ```
 
 ## バッキングサービスの選択

@@ -1,4 +1,4 @@
-# Workspace / Space
+# Space
 
 Takos の最上位の隔離単位。member、repo、worker、resource、thread、files をまとめて管理する。
 

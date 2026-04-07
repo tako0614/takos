@@ -1,186 +1,510 @@
 # アプリマニフェスト (`.takos/app.yml`)
 
-`.takos/app.yml` は Takos でアプリ構成を宣言する主要な source です。public spec
-は Cloudflare-native の syntax を使い、Takos runtime が Cloudflare backend
-または互換 backend 上で同じ spec を実現します。`takos apply` は manifest を
-group に反映し、group 省略時は `metadata.name` を使って自動作成します。
+`.takos/app.yml` は Takos でアプリ構成を宣言する主要な source です。
+`takos deploy` は manifest を group に反映し、group 省略時は `name`
+を使って自動作成します。
 
-workspace shell integration、canonical URL、shell launch URL は `.takos/app.yml`
-の責務ではありません。これらは
-[Kernel / Workspace Shell / Apps](/architecture/kernel-shell) で定義する別
-contract です。
+app の deploy/runtime contract は `.takos/app.yml` で定義する。 Takos の product
+boundary は [Kernel](/architecture/kernel) を参照。
 
 ## 最小例
 
 ```yaml
-apiVersion: takos.dev/v1alpha1
-kind: App
-metadata:
-  name: my-app
-spec:
-  version: 0.1.0
-  workers:
-    web:
-      build:
-        fromWorkflow:
-          path: .takos/workflows/deploy.yml
-          job: bundle
-          artifact: web
-          artifactPath: dist/worker
+name: my-app
+version: 0.1.0
+
+compute:
+  web:
+    build:
+      fromWorkflow:
+        path: .takos/workflows/deploy.yml
+        job: bundle
+        artifact: web
+        artifactPath: dist/worker
 ```
 
 ## Worker + Database
 
 ```yaml
-apiVersion: takos.dev/v1alpha1
-kind: App
-metadata:
-  name: notes-app
-spec:
-  version: 0.1.0
-  workers:
-    web:
-      build:
-        fromWorkflow:
-          path: .takos/workflows/deploy.yml
-          job: bundle
-          artifact: web
-          artifactPath: dist/worker
-      bindings:
-        d1: [primary-db]
-        r2: [assets]
-  resources:
-    primary-db:
-      type: d1
-      binding: DB
-      migrations:
-        up: .takos/migrations/primary-db/up
-        down: .takos/migrations/primary-db/down
-    assets:
-      type: r2
-      binding: ASSETS
-  routes:
-    - name: app
-      target: web
-      path: /
+name: notes-app
+version: 0.1.0
+
+compute:
+  web:
+    build:
+      fromWorkflow:
+        path: .takos/workflows/deploy.yml
+        job: bundle
+        artifact: web
+        artifactPath: dist/worker
+
+storage:
+  primary-db:
+    type: sql
+    bind: DB
+    migrations: .takos/migrations/primary-db
+  assets:
+    type: object-store
+    bind: ASSETS
+
+routes:
+  - target: web
+    path: /
 ```
 
-## Worker + MCP Server
+## Service
 
 ```yaml
-apiVersion: takos.dev/v1alpha1
-kind: App
-metadata:
-  name: notes-assistant
-spec:
-  version: 0.3.0
-  capabilities: [mcp]
-  workers:
-    web:
-      build:
-        fromWorkflow:
-          path: .takos/workflows/deploy.yml
-          job: bundle
-          artifact: web
-          artifactPath: dist/worker
-  routes:
-    - name: mcp-endpoint
-      target: web
-      path: /mcp
-  resources:
-    mcp-auth-secret:
-      type: secretRef
-      binding: MCP_AUTH_TOKEN
-      generate: true
-  mcpServers:
-    - name: notes
-      route: mcp-endpoint
-      transport: streamable-http
-      authSecretRef: mcp-auth-secret
+name: my-service
+version: 0.2.0
+
+compute:
+  api:
+    image: ghcr.io/org/api@sha256:abc123...
+    port: 8080
+
+routes:
+  - target: api
+    path: /api
+```
+
+## Attached container
+
+Worker の `containers:` で attached container を宣言する。container は worker
+側に紐づく。
+
+```yaml
+name: my-app
+version: 0.3.0
+
+compute:
+  web:
+    build:
+      fromWorkflow:
+        path: .takos/workflows/deploy.yml
+        job: bundle
+        artifact: web
+        artifactPath: dist/worker
+    containers:
+      sandbox:
+        image: ghcr.io/org/sandbox@sha256:def456...
+        port: 3000
+```
+
+## Worker + MCP Server (publish)
+
+```yaml
+name: notes-assistant
+version: 0.3.0
+
+compute:
+  web:
+    build:
+      fromWorkflow:
+        path: .takos/workflows/deploy.yml
+        job: bundle
+        artifact: web
+        artifactPath: dist/worker
+
+routes:
+  - target: web
+    path: /mcp
+
+storage:
+  mcp-auth-secret:
+    type: secret
+    bind: MCP_AUTH_TOKEN
+    generate: true
+
+publish:
+  - type: McpServer
+    name: notes
+    path: /mcp
+    transport: streamable-http
+    authSecretRef: mcp-auth-secret
 ```
 
 ## 構成の考え方
 
-- `workers`: Workers runtime で動くワークロード
-- `services`: 常設コンテナ系ワークロード
-- `containers`: Worker に紐づく CF Containers
-- `resources`: Cloudflare-native resource 定義
+- `compute`: worker / container workload の定義
+- `storage`: storage resource の定義
 - `routes`: workload への公開ルート
-- `mcpServers`: MCP 公開設定
+- `publish`: 外部 interface の公開情報
 
 custom domain / hostname routing はこの manifest の canonical desired state
 には含めず、routing / observed surface として別 API で扱います。
 
-## resources
+## compute
 
-public spec で使う `type` は Cloudflare-native resource kind です。
+`compute` は workload の定義を格納する。3 種類の workload がある。
 
-| type              | 用途                              | 追加フィールド                                                                     |
-| ----------------- | --------------------------------- | ---------------------------------------------------------------------------------- |
-| `d1`              | SQL データベース contract         | `migrations`                                                                       |
-| `r2`              | オブジェクトストレージ contract   | -                                                                                  |
-| `kv`              | Key-Value ストア                  | -                                                                                  |
-| `queue`           | キュー                            | `queue.maxRetries`, `queue.deadLetterQueue`, `queue.deliveryDelaySeconds`          |
-| `vectorize`       | ベクトルインデックス contract     | `vectorize.dimensions`, `vectorize.metric`                                         |
-| `analyticsEngine` | Analytics ストア contract         | `analyticsEngine.dataset`                                                          |
-| `secretRef`       | シークレット                      | `generate`                                                                         |
-| `workflow`        | ワークフロー runtime contract     | `workflow.service`, `workflow.export`, `workflow.timeoutMs`, `workflow.maxRetries` |
-| `durableObject`   | Durable Object namespace contract | `durableObject.className`, `durableObject.scriptName`                              |
+### worker
+
+Workers runtime で動くワークロード。`build` field を持つ。
 
 ```yaml
-resources:
+compute:
+  web:
+    build:
+      fromWorkflow:
+        path: .takos/workflows/deploy.yml
+        job: bundle
+        artifact: web
+        artifactPath: dist/worker
+```
+
+### Service
+
+standalone Service workload。`image` と `port` を持つ。
+
+```yaml
+compute:
+  api:
+    image: ghcr.io/org/api@sha256:abc123...
+    port: 8080
+```
+
+### attached container
+
+worker に紐づく container workload。親 worker の `containers:` に定義する。
+
+```yaml
+compute:
+  web:
+    build: ...
+    containers:
+      sandbox:
+        image: ghcr.io/org/sandbox@sha256:def456...
+        port: 3000
+```
+
+### depends
+
+compute ごとに、起動・bind 順序の依存を `depends` で宣言する。 配列には **同一
+group 内の compute 名 と storage 名の両方**を指定できる。
+
+```yaml
+compute:
+  api:
+    build: ...
+    depends: [db] # storage 名
+  worker:
+    build: ...
+    depends: [db, cache, api] # storage 名 + compute 名
+```
+
+`depends` はトップレベルには存在しない。必ず `compute.<name>.depends`
+で宣言する。 deploy pipeline は依存を topological order で適用する。
+
+### healthCheck
+
+`healthCheck` は **Service / Attached container のみ** で利用できる。 Worker は
+request-driven のため manifest で health check を宣言しない （kernel が deploy
+時に simple HTTP probe で readiness を判定する）。
+
+```yaml
+compute:
+  inference: # Service
+    image: ghcr.io/my-org/ml-model@sha256:abc123
+    port: 3000
+    healthCheck:
+      path: /health
+      interval: 30
+      timeout: 5
+      unhealthyThreshold: 3
+
+  web: # Worker + Attached container
+    build: ...
+    containers:
+      sandbox:
+        image: ghcr.io/org/sandbox@sha256:def456
+        port: 3000
+        healthCheck:
+          path: /health
+```
+
+| field                | required | default | 説明                              |
+| -------------------- | -------- | ------- | --------------------------------- |
+| `path`               | no       | /health | HTTP GET を送る path              |
+| `interval`           | no       | 30      | チェック間隔（秒）                |
+| `timeout`            | no       | 5       | レスポンス待ちタイムアウト（秒）  |
+| `unhealthyThreshold` | no       | 3       | 連続失敗で unhealthy とみなす回数 |
+
+### scaling
+
+compute の scaling を設定する。
+
+```yaml
+compute:
+  api:
+    image: ghcr.io/my-org/api@sha256:abc123
+    port: 8080
+    scaling:
+      minInstances: 1
+      maxInstances: 10
+```
+
+| field          | required | default            | 説明             |
+| -------------- | -------- | ------------------ | ---------------- |
+| `minInstances` | no       | 0                  | 最小インスタンス |
+| `maxInstances` | no       | provider dependent | 最大インスタンス |
+
+### triggers
+
+compute に対して cron schedule や queue consumer を設定する。
+
+```yaml
+compute:
+  batch:
+    build: ...
+    triggers:
+      schedules:
+        - cron: "0 * * * *"
+      queues:
+        - storage: jobs
+          batchSize: 10
+          maxRetries: 3
+```
+
+## storage
+
+storage は resource 定義を格納する。`bind:` で env 名を指定すると全 compute
+に自動 bind される。
+
+| type               | 用途                    | 追加フィールド                                 |
+| ------------------ | ----------------------- | ---------------------------------------------- |
+| `sql`              | SQL データベース        | `migrations`（directory path）                 |
+| `object-store`     | オブジェクトストレージ  | -                                              |
+| `key-value`        | Key-Value ストア        | -                                              |
+| `queue`            | キュー                  | `queue.maxRetries`, `queue.deadLetterQueue`    |
+| `vector-index`     | ベクトルインデックス    | `vectorIndex.dimensions`, `vectorIndex.metric` |
+| `secret`           | シークレット            | `generate`                                     |
+| `analytics-engine` | Analytics dataset       | -                                              |
+| `workflow`         | Workflow binding        | -                                              |
+| `durable-object`   | DurableObject namespace | -                                              |
+
+```yaml
+storage:
   primary-db:
-    type: d1
-    binding: DB
+    type: sql
+    bind: DB
+    migrations: .takos/migrations/primary-db
   uploads:
-    type: r2
-    binding: UPLOADS
+    type: object-store
+    bind: UPLOADS
+  cache:
+    type: key-value
+    bind: CACHE
+  jobs:
+    type: queue
+    bind: JOBS
+    queue:
+      maxRetries: 3
+      deadLetterQueue: jobs-dlq
+  jobs-dlq:
+    type: queue
+    bind: JOBS_DLQ
+  embeddings:
+    type: vector-index
+    bind: EMBEDDINGS
+    vectorIndex:
+      dimensions: 1536
+      metric: cosine # cosine | euclidean | dot-product
   app-secret:
-    type: secretRef
-    binding: APP_SECRET
+    type: secret
+    bind: APP_SECRET
     generate: true
 ```
 
-`class` と `backing` は public spec では使いません。Cloudflare backend
-では通常そのまま D1/R2/KV/Vectorize/Workflows/DO に解決され、他 backend では
-Takos runtime が provider-backed または Takos-managed な実装に解決します。
+### migration
 
-`workflow` は manifest でも service settings API / builtin tool
-でも設定できます。dynamic binding でも `workflow.service` と `workflow.export`
-の metadata が必要です。
+SQL storage の migration は forward-only。directory path を指定し、`.sql`
+ファイルをファイル名順で適用する。
+
+```yaml
+storage:
+  db:
+    type: sql
+    bind: DB
+    migrations: .takos/migrations/db
+```
+
+```
+.takos/migrations/db/
+  0001_create_users.sql
+  0002_add_email_index.sql
+```
 
 ## bindings
 
-workload bindings も Cloudflare-native です。
+全 storage は全 compute に自動 bind される。storage 側の `bind:` で env
+名を指定する。 `bind:` を指定した場合は指定した名前がそのまま env
+変数名として使われる（自動正規化なし）。 `bind:` を省略した場合は kernel が
+storage 名を normalize する（ハイフン→アンダースコア、大文字化）。 例:
+`jobs-dlq` → `JOBS_DLQ`, `app-secret` → `APP_SECRET`。
 
-| key               | 参照する resource                |
-| ----------------- | -------------------------------- |
-| `d1`              | `type: d1`                       |
-| `r2`              | `type: r2`                       |
-| `kv`              | `type: kv`                       |
-| `queues`          | `type: queue`                    |
-| `vectorize`       | `type: vectorize`                |
-| `analyticsEngine` | `type: analyticsEngine`          |
-| `workflow`        | `type: workflow`                 |
-| `durableObjects`  | `type: durableObject`            |
-| `services`        | 他 workload への service binding |
+```yaml
+storage:
+  primary-db:
+    type: sql
+    bind: DB # 明示指定: env.DB
+  uploads:
+    type: object-store
+    bind: UPLOADS # 明示指定: env.UPLOADS
+  jobs-dlq:
+    type: queue # bind 省略: storage 名 jobs-dlq → env.JOBS_DLQ
+  app-secret:
+    type: secret # bind 省略: storage 名 app-secret → env.APP_SECRET
+    generate: true
+```
+
+compute 側に bindings を書く必要はない。全 storage が全 compute の env に inject
+される。
+
+## routes
+
+workload への公開ルートを定義する。
+
+```yaml
+routes:
+  - target: web
+    path: /
+  - target: api
+    path: /api
+    methods: [GET, POST]
+    timeoutMs: 30000
+```
+
+| field       | required | 説明                |
+| ----------- | -------- | ------------------- |
+| `target`    | yes      | compute workload 名 |
+| `path`      | yes      | 公開 path           |
+| `timeoutMs` | no       | route timeout       |
+| `methods`   | no       | 許可 HTTP method    |
+
+## publish
+
+外部に公開する interface を宣言する。`type` と `path` が必須。 すべての
+publication は URL を持つため `path` が必須。残りのフィールドは `type`
+に依存する。 詳しくは [App Publications](/architecture/app-publications)
+を参照。
+
+```yaml
+publish:
+  - type: McpServer
+    path: /mcp
+    name: browser
+  - type: UiSurface
+    path: /
+    title: Files
+    icon: folder
+```
+
+| field           | required | 説明                                    |
+| --------------- | -------- | --------------------------------------- |
+| `type`          | yes      | publication の種類 (open string)        |
+| `path`          | yes      | group root からの相対 URL path          |
+| `name`          | no       | publication の識別名                    |
+| `transport`     | no       | transport 方式（例: `streamable-http`） |
+| `authSecretRef` | no       | 認証用 secret の storage 名             |
+| (any)           | no       | `type` に依存する追加 field             |
+
+deploy 時に kernel は space 内のすべての publication をすべての group の env に
+inject する （dependency declaration や scoping なし）。
 
 ## デプロイ
 
-manifest の反映は `takos apply` を使います。
+manifest の反映は `takos deploy` を使います。
 
 ```bash
-takos apply --env staging
+takos deploy --env staging
 ```
 
 manifest からの online deploy source は次で解決されます。
 
-- `workers.*`: `build.fromWorkflow.artifactPath`
-- `services.*`: `imageRef`
-- `containers.*`: `imageRef`
+- worker: `build.fromWorkflow.artifactPath`
+- container: `image` (digest pin `@sha256:...` 必須)
+
+## Full example
+
+```yaml
+name: notes-app
+version: 1.0.0
+
+compute:
+  web:
+    build:
+      fromWorkflow:
+        path: .takos/workflows/deploy.yml
+        job: bundle
+        artifact: web
+        artifactPath: dist/worker
+    depends: [primary-db]
+    containers:
+      sandbox:
+        image: ghcr.io/org/sandbox@sha256:abc123...
+        port: 3000
+        healthCheck:
+          path: /health
+          interval: 30
+          timeout: 5
+          unhealthyThreshold: 3
+    triggers:
+      schedules:
+        - cron: "0 */6 * * *"
+      queues:
+        - storage: jobs
+          batchSize: 10
+          maxRetries: 3
+
+storage:
+  primary-db:
+    type: sql
+    bind: DB
+    migrations: .takos/migrations/primary-db
+  assets:
+    type: object-store
+    bind: ASSETS
+  cache:
+    type: key-value
+    bind: CACHE
+  jobs:
+    type: queue
+    bind: JOBS
+    queue:
+      maxRetries: 3
+      deadLetterQueue: jobs-dlq
+  jobs-dlq:
+    type: queue
+    bind: JOBS_DLQ
+  embeddings:
+    type: vector-index
+    bind: EMBEDDINGS
+    vectorIndex:
+      dimensions: 1536
+      metric: cosine
+  app-secret:
+    type: secret
+    bind: APP_SECRET
+    generate: true
+
+routes:
+  - target: web
+    path: /
+  - target: web
+    path: /mcp
+
+publish:
+  - type: McpServer
+    path: /mcp
+    name: notes
+  - type: UiSurface
+    path: /
+    title: Notes
+    icon: edit
+```
 
 ## 関連ページ
 
 - [Manifest Reference](/reference/manifest-spec)
-- [Workers](/apps/workers)
-- [MCP Server](/apps/mcp)
+- [App Publications](/architecture/app-publications)

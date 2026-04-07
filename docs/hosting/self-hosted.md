@@ -1,6 +1,21 @@
 # セルフホスト
 
-Takos をセルフホスト環境で実行する方法。
+このページは **Takos kernel をセルフホスト環境で実行する方法**を説明します。takos オペレーター向けです。
+
+Takos 上で app を deploy する方法は [Deploy](/deploy/) を参照してください。
+
+::: danger このページのサンプルはローカル開発向けデフォルトを含みます
+このページに掲載されている `compose.local.yml`、`.env.local.example`、`takos-dev-secret` などはすべて **ローカル開発を前提としたデフォルト** です。本番環境にそのまま流用しないでください。本番運用では下記のすべてを満たす必要があります:
+
+- `.env.local` ではなく `.env.production` を作成し、独自の値で全項目を埋める
+- `S3_SECRET_ACCESS_KEY` / `MINIO_ROOT_PASSWORD` / `JWT_PUBLIC_KEY` / `ENCRYPTION_KEY` / `PLATFORM_PRIVATE_KEY` などの secret を **絶対に `takos-dev-secret` のままにしない**。32 byte 以上のランダム値を生成して差し替える
+- `compose.local.yml` ではなく本番向けの compose ファイル (`compose.production.yml`) または Kubernetes manifest / Helm chart (`deploy/helm`) を使う
+- backing services (PostgreSQL / Redis / オブジェクトストレージ) はホスト上の単独 container ではなく managed service もしくは production-grade な構成に置き換える
+- 公開ドメインは `*.localhost` ではなく実ドメインに変更し、TLS 終端 / リバースプロキシを前段に置く
+- platform secret (`PLATFORM_PRIVATE_KEY` / `PLATFORM_PUBLIC_KEY` / `JWT_PUBLIC_KEY`) は鍵ローテーション計画と一緒に管理する
+
+詳細な production checklist は [Kubernetes](/hosting/kubernetes) と各 cloud-specific ページを参照してください。
+:::
 
 ## 必要なもの
 
@@ -13,9 +28,26 @@ Takos をセルフホスト環境で実行する方法。
 
 ### 1. 環境変数を準備
 
+ローカル開発・動作確認用:
+
 ```bash
 cp .env.local.example .env.local
 ```
+
+本番運用の場合は `.env.local` ではなく `.env.production` を作成し、`SECRET_KEY` / `ENCRYPTION_KEY` / `S3_SECRET_ACCESS_KEY` / `MINIO_ROOT_PASSWORD` / `PLATFORM_PRIVATE_KEY` などのすべての secret を `takos-dev-secret` のようなプレースホルダから差し替えてください:
+
+```bash
+cp .env.local.example .env.production
+# .env.production を編集し、secret 系をすべて本番用の値に置き換える
+```
+
+`.env.production` で起動する場合は compose を直接呼び出してください:
+
+```bash
+docker compose --env-file .env.production -f compose.production.yml up -d
+```
+
+`compose.production.yml` を用意していない場合は、`compose.local.yml` をベースに backing services を managed service に差し替えた production override を作成する必要があります。
 
 ### 2. 環境変数の全リスト
 
@@ -28,8 +60,8 @@ cp .env.local.example .env.local
 | `TAKOS_CONTROL_WEB_PORT` | `8787` | Control Web の公開ポート |
 | `TAKOS_CONTROL_DISPATCH_PORT` | `8788` | Dispatch の公開ポート |
 | `TAKOS_RUNTIME_HOST_PORT` | `8789` | Runtime Host のポート |
-| `TAKOS_EXECUTOR_HOST_PORT` | `8790` | Executor Host のポート |
-| `TAKOS_BROWSER_HOST_PORT` | `8791` | Browser Host のポート |
+| `TAKOS_EXECUTOR_HOST_PORT` | `8790` | Executor Host のポート（agent app） |
+| `TAKOS_BROWSER_HOST_PORT` | `8791` | Browser Host のポート（agent app） |
 | `TAKOS_RUNTIME_PORT` | `8081` | Runtime コンテナのポート |
 | `TAKOS_EXECUTOR_PORT` | `8082` | Executor コンテナのポート |
 | `TAKOS_BROWSER_PORT` | `8083` | Browser コンテナのポート |
@@ -114,7 +146,7 @@ cp apps/control/.env.self-host.example apps/control/.env
 ### Docker Compose
 
 ```bash
-pnpm local:up
+deno task local:up
 ```
 
 バックグラウンドで起動する場合:
@@ -183,21 +215,21 @@ services:
 
 #### Control Web
 
-- **コマンド**: `pnpm local:web`
+- **コマンド**: `deno task --cwd apps/control dev:local:web`
 - **ポート**: `TAKOS_CONTROL_WEB_PORT`（デフォルト `8787`）
 - **役割**: Web UI + API サーバー。Cloudflare の Worker に相当するメインサービス
 - **依存**: `minio-init` 完了後に起動
 
 #### Control Dispatch
 
-- **コマンド**: `pnpm local:dispatch`
+- **コマンド**: `deno task --cwd apps/control dev:local:dispatch`
 - **ポート**: `TAKOS_CONTROL_DISPATCH_PORT`（デフォルト `8788`）
 - **役割**: テナントへのリクエストルーティング。Cloudflare Dispatch Namespace の代替
 - **依存**: `control-web` が healthy になってから起動
 
 #### Control Worker
 
-- **コマンド**: `pnpm local:worker`
+- **コマンド**: `deno task --cwd apps/control dev:local:worker`
 - **ポート**: なし（バックグラウンドジョブ処理）
 - **役割**: Run 実行、Queue 処理、Scheduled ジョブなどのバックグラウンド処理
 - **依存**: `control-web` + `runtime-host` + `executor-host` + `oci-orchestrator`
@@ -207,7 +239,7 @@ services:
 
 #### Runtime Host
 
-- **コマンド**: `pnpm local:runtime-host`
+- **コマンド**: `deno task --cwd apps/control dev:local:runtime-host`
 - **ポート**: `TAKOS_RUNTIME_HOST_PORT`（デフォルト `8789`）
 - **役割**: テナント Worker を materialize して実行する host プロセス
 
@@ -219,7 +251,9 @@ services:
 
 #### Executor Host
 
-- **コマンド**: `pnpm local:executor-host`
+> **Note**: executor-host は kernel コンポーネントではなく、agent app 側のサービスです。デフォルトセットアップでは kernel と一緒にデプロイされます。
+
+- **コマンド**: `deno task --cwd apps/control dev:local:executor-host`
 - **ポート**: `TAKOS_EXECUTOR_HOST_PORT`（デフォルト `8790`）
 - **役割**: エージェント実行の host プロセス
 
@@ -231,13 +265,15 @@ services:
 - **構成**: `packages/rust-agent-engine` を core とし、`apps/rust-agent` が Takos control RPC / remote tools / skill prompt bridge を提供
 - **データ**: `takos-rust-agent-data` volume に object memory を保持
 
-このコンテナが Rust の正本です。Takos は platform 全体を Rust にするのではなく、agent container の inside loop を Rust に固定します。remote tool の実体、run queue、workspace state、custom skill persistence は control plane に残します。詳しくは [Agent Runtime](/architecture/agent-runtime) を参照。
+このコンテナが Rust の正本です。Takos は platform 全体を Rust にするのではなく、agent container の inside loop を Rust に固定します。remote tool の実体と space state は control plane に残し、run queue は agent app 側の責務です。custom skill persistence は control plane に残します。詳しくは agent-engine リポジトリの docs を参照。
 
 ### Browser サービス
 
+> **Note**: browser-host は kernel コンポーネントではなく、agent app 側のサービスです。デフォルトセットアップでは kernel と一緒にデプロイされます。
+
 #### Browser Host
 
-- **コマンド**: `pnpm local:browser-host`
+- **コマンド**: `deno task --cwd apps/control dev:local:browser-host`
 - **ポート**: `TAKOS_BROWSER_HOST_PORT`（デフォルト `8791`）
 - **役割**: ブラウザ自動化の host プロセス
 
@@ -249,9 +285,9 @@ services:
 
 ### OCI Orchestrator
 
-- **コマンド**: `pnpm local:oci-orchestrator`
+- **コマンド**: `deno task --cwd apps/control dev:local:oci-orchestrator`
 - **ポート**: `TAKOS_OCI_ORCHESTRATOR_PORT`（デフォルト `9002`）
-- **役割**: provider-aware な container runtime。CF Containers のローカル代替で、既定では Docker を使い、`k8s` / `cloud-run` / `ecs` provider は native backend を使う
+- **役割**: provider-aware な container runtime。worker-attached / standalone container workload の互換実行面で、既定では Docker を使い、`k8s` / `cloud-run` / `ecs` provider は native backend を使う
 - **特殊設定**: Docker fallback を使う場合は `/var/run/docker.sock` をマウントしてホストの Docker を操作
 - **ネットワーク**: `default` + `takos-containers`（コンテナ間通信用）
 
@@ -319,26 +355,26 @@ PGVECTOR_ENABLED=true
 ## 初回マイグレーション
 
 ```bash
-pnpm db:migrate:local
+deno task --cwd apps/control db:migrate:local
 ```
 
 ## 停止
 
 ```bash
-pnpm local:down
+deno task local:down
 ```
 
 ## ログ確認
 
 ```bash
-pnpm local:logs
+deno task local:logs
 ```
 
 ## スモークテスト
 
 ```bash
-pnpm local:smoke              # 全体の疎通確認
-pnpm local:proxyless-smoke    # CF 固有 path の逆流チェック
+deno task local:smoke              # 全体の疎通確認
+deno task local:proxyless-smoke    # CF 固有 path の逆流チェック
 ```
 
 ## Kubernetes

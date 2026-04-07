@@ -1,6 +1,9 @@
 # Thread / Run / Artifact
 
-Takos の AI 実行モデル。Thread で対話コンテキストを管理し、Run で実行する。
+Agent / Chat は kernel に統合された機能。Thread/Run は kernel が提供する execution model。
+Thread で対話コンテキストを管理し、Run で実行する。
+
+> Agent / Chat は kernel feature であり、常に利用可能です。Thread / Run は kernel が提供する execution model contract です。
 
 ## Thread
 

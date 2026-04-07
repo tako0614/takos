@@ -1,67 +1,55 @@
 # プラットフォーム
 
-Takos platform は infra kernel と workspace shell
-をまとめた層です。アプリの実行基盤を提供しつつ、workspace
+Takos platform は infra kernel
+の層です。app の実行基盤を提供しつつ、space
 の所有・権限・deploy・resource・metering を管理します。
 
-`Store`、`Repos`、`Chat` のようなプロダクト UI は platform
-そのものではなく、Takos 上で動く installable app です。
+`Agent / Chat`、`Git`、`Storage`、`Store`、`Auth` は kernel に常設される機能。
+uninstall 不可。group ではない。第三者 app は group として deploy される。
 
 ## プラットフォームと app / runtime の違い
 
-| レイヤー             | 担当                                                     | 例                                        |
-| -------------------- | -------------------------------------------------------- | ----------------------------------------- |
-| **App Spec**         | 何を deploy するかを宣言する                             | `.takos/app.yml`                          |
-| **Runtime**          | 宣言を backend に反映して動かす                          | Cloudflare Workers, CF Containers, D1, R2 |
-| **Kernel**           | identity, spaces, capability, deploy, resource, metering | control plane の管理面                    |
-| **Workspace Shell**  | workspace/infrastructure UI と app launcher              | installed apps, resources, deploys        |
-| **Installable Apps** | workspace に接続される product UX                        | Store, Repos, Chat, third-party apps      |
+| レイヤー | 担当 | 例 |
+| --- | --- | --- |
+| **App Spec** | 何を deploy するかを宣言する | `.takos/app.yml` |
+| **Runtime** | 宣言を backend に反映して動かす | Cloudflare Workers, container adapter, D1, R2 |
+| **Kernel features** | 常設機能（uninstall 不可） | Agent / Chat, Git, Storage, Store, Auth |
+| **Kernel** | identity, space, deploy, resource, metering | control plane の管理面 |
+| **Apps (groups)** | space に接続される product UX | takos-computer, takos-docs, takos-excel, takos-slide, third-party apps |
 
-`.takos/app.yml` は app の deploy/runtime contract です。workspace shell や app
-launcher の契約は、現時点では manifest ではなく shell と app registry
-側で扱います。詳しくは
-[Kernel / Workspace Shell / Apps](/architecture/kernel-shell)
-を参照してください。
+`.takos/app.yml` は app の deploy/runtime contract です。詳しくは
+[Kernel](/architecture/kernel) を参照してください。
 
 ## 主要コンセプト
 
-### Workspace / Space
+### Space
 
-Space は Takos
-の最上位の隔離単位です。member、repo、worker、resource、file、installed app
-をまとめて管理します。
+Space は Takos の最上位の隔離単位です。
 
-- **個人用 (`user`)**: ユーザー作成時に自動生成
-- **チーム用 (`team`)**: 複数メンバーで共同利用
+- 1 space = 1 tenant
+- domain: `{KERNEL_DOMAIN}`（custom domain も可）
+- member、repo、worker、resource、file、installed app をまとめて管理
 - ロールベースのアクセス制御 (owner / admin / editor / viewer)
 - principal として user / service / agent が操作可能
 
 ### Kernel
 
-Kernel は workspace を安全に動かすための共通基盤です。
+Kernel は app を安全に動かすための共通基盤です。
 
 - auth / principal / capability grant
 - app install / deploy / rollback
 - resource broker
+- publication index
 - metering / billing / audit
 
-### Workspace Shell
+### Apps (groups)
 
-Shell は Takos の最小 UI です。workspace の状態を見て app を起動します。
+Takos 上に deploy される外部ワークロード。kernel features (Agent / Chat, Git,
+Storage, Store, Auth) は app ではなく kernel に統合されている。
 
-- workspace 切り替え
-- resources / deploys / members / settings
-- installed apps の一覧
-- app の install / uninstall / launch
-
-### Installable Apps
-
-Takos 上で動くプロダクト UI です。
-
-- first-party / third-party を問わず同格
-- workspace template で preinstall できる
-- canonical URL は app 自身が所有する
-- shell は app を iframe または redirect で開く
+- first-party (default groups) / third-party を問わず同格
+- space template で preinstall できる（default groups のみ）
+- app 間の連携は [App Publications](/architecture/app-publications) で宣言する
 
 ### 課金
 
@@ -78,38 +66,41 @@ ActivityPub と ForgeFed をベースとした、インスタンス間の reposi
 連携です。
 
 - git データは各インスタンスに分散したまま、メタデータのみを共有
-- Store app は federation を利用する catalog UI の 1 つになれる
+- kernel の Store features は federation を利用する catalog UI の 1 つになれる
 - WebFinger による発見、Follow による購読
 - リモート catalog から repository 参照を import して利用可能
 
 ## レイヤー関係
 
 ```text
-installable apps (Store / Repos / Chat / third-party)
-  ↑ launch / embed
-workspace shell
-  ↑ manage
-kernel (identity / spaces / deploy / resources / metering)
+apps / groups (takos-computer / takos-docs / takos-excel / takos-slide / third-party)
+  ↑ publications
+kernel features (Agent / Chat, Git, Storage, Store, Auth) ← kernel に常設、uninstall 不可
+  ↑
+kernel (identity / space / deploy / resources / metering)
   ↑ reconcile
-runtime (Workers / Containers / D1 / R2 / ...)
+runtime (Workers / container workloads / D1 / R2 / ...)
   ↑ declared by
 .takos/app.yml
 ```
 
-## Default apps と bootstrap
+## Default groups と bootstrap
 
-Takos は workspace template により default apps を preinstall できます。これは
-app を特権化するためではなく、workspace の初期 UX を揃えるためです。
+Takos は space template により default groups (takos-computer / takos-docs /
+takos-excel / takos-slide) を preinstall します。これは group を特権化するため
+ではなく、space の初期 UX を揃えるためです。
 
-- shell は minimal な install / uninstall / launch UI を持つ
-- `Store` は richer な discovery / recommendation を提供できる
-- `Store` がなくても shell は bootstrap できる
+- deploy dashboard は kernel feature として常設され、minimal な install /
+  uninstall / launch UI を提供する
+- kernel の Store features は richer な discovery / recommendation を提供する
+- Store は kernel features の一部であり常に利用可能
 
 ## 各ページへのリンク
 
-| ページ                                | 説明                                                              |
-| ------------------------------------- | ----------------------------------------------------------------- |
-| [Workspace / Space](/platform/spaces) | マルチテナントの隔離単位                                          |
-| [Store](/platform/store)              | first-party installable Store app の役割と current implementation |
-| [課金](/platform/billing)             | プラン・使用量・決済                                              |
-| [ActivityPub](/platform/activitypub)  | 連合プロトコル対応                                                |
+| ページ | 説明 |
+| --- | --- |
+| [Space](/platform/spaces) | マルチテナントの隔離単位 |
+| [Store](/platform/store) | kernel feature としての Store の役割と current implementation |
+| [課金](/platform/billing) | プラン・使用量・決済 |
+| [ActivityPub](/platform/activitypub) | 連合プロトコル対応 |
+| [Default Apps](/platform/default-apps) | takos-computer, takos-docs, takos-excel, takos-slide |

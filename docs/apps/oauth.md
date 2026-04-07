@@ -1,19 +1,18 @@
 # OAuth
 
-app.yml に `spec.oauth` を書くと、OAuth client が自動登録される。deploy 時に control plane が client credentials を発行し、Worker / Container に環境変数として注入します。
+app.yml に `oauth` を書くと、OAuth client が自動登録される。deploy 時に control plane が client credentials を発行し、Worker / Container に環境変数として注入します。
 
 ## 基本設定
 
 ```yaml
-spec:
-  oauth:
-    clientName: My App
-    redirectUris:
-      - https://example.com/callback
-    scopes:
-      - threads:read
-      - runs:write
-    autoEnv: true
+oauth:
+  clientName: My App
+  redirectUris:
+    - https://example.com/callback
+  scopes:
+    - threads:read
+    - runs:write
+  autoEnv: true
 ```
 
 `autoEnv: true` にすると、以下の環境変数が Worker / Container に自動注入される。
@@ -24,12 +23,21 @@ spec:
 | `OAUTH_CLIENT_SECRET` | 登録された OAuth client secret |
 
 ::: tip autoEnv を使わない場合
-`autoEnv: false` にすると環境変数の自動注入を無効にできます。client credentials は control plane 内に保存されるので、API 経由で取得して独自に管理することも可能です。
+`autoEnv: false` にすると環境変数の自動注入を無効にできます。client credentials は control plane 内に保存されるので、admin UI から取得して独自に secret として管理してください。`autoEnv: false` の場合は CI / runtime 側で `OAUTH_CLIENT_ID` / `OAUTH_CLIENT_SECRET` を手動で設定する必要があります。
 :::
 
 ## 認可フロー
 
-Takos の OAuth は Authorization Code Flow をサポートしています。
+Takos の OAuth は次の 2 種類のフローをサポートしています。
+
+- **Authorization Code Flow** --- ブラウザ経由でユーザーが認可するアプリ向け
+- **Device Authorization Grant (Device Flow)** --- ブラウザを直接操作できないクライアント (CLI / TV / IoT など) 向け
+
+::: info CLI login との違い
+`takos login` 自体はブラウザコールバック方式で実装されており、ここで説明する Device Flow を使いません。Device Flow は `app.yml` で OAuth client を登録した **サードパーティアプリ** が、自身の CLI / IoT クライアントから takos に対してユーザー認可を取得するためのフローです。詳細は [CLI / Auth model](/reference/cli-auth#認証) を参照してください。
+:::
+
+### Authorization Code Flow
 
 ```text
 1. ユーザーが認可画面にアクセス
@@ -47,6 +55,53 @@ Takos の OAuth は Authorization Code Flow をサポートしています。
 5. アクセストークンを取得
    { access_token: "...", token_type: "bearer", expires_in: 3600, refresh_token: "..." }
 ```
+
+### Device Authorization Grant (Device Flow)
+
+ブラウザを直接呼び出せないクライアント (CLI / TV / IoT 端末など) のためのフローです。RFC 8628 に準拠しています。
+
+```text
+1. クライアントが device code を要求
+   POST /oauth/device/code
+   { client_id: "...", scope: "threads:read runs:write" }
+
+   レスポンス:
+   {
+     "device_code": "...",
+     "user_code": "ABCD-EFGH",
+     "verification_uri": "https://takos.example.com/oauth/device",
+     "verification_uri_complete": "https://takos.example.com/oauth/device?user_code=ABCD-EFGH",
+     "expires_in": 600,
+     "interval": 5
+   }
+
+2. クライアントがユーザーに verification_uri と user_code を提示
+   "https://takos.example.com/oauth/device を開いて ABCD-EFGH を入力してください"
+
+3. ユーザーが別端末のブラウザで verification_uri を開いて user_code を入力し認可
+
+4. クライアントが interval 秒ごとに /oauth/token をポーリング
+   POST /oauth/token
+   {
+     grant_type: "urn:ietf:params:oauth:grant-type:device_code",
+     device_code: "...",
+     client_id: "..."
+   }
+
+   ユーザーが未認可の間は { "error": "authorization_pending" } が返る
+
+5. ユーザーが認可するとアクセストークンが返る
+   { access_token: "...", token_type: "bearer", expires_in: 3600, refresh_token: "..." }
+```
+
+ポーリング時に返り得るエラーコード:
+
+| エラー                  | 意味                                                                |
+| ----------------------- | ------------------------------------------------------------------- |
+| `authorization_pending` | ユーザーがまだ認可していない。`interval` 秒待って再ポーリング       |
+| `slow_down`             | ポーリングが速すぎる。`interval` を 5 秒延長して再ポーリング        |
+| `expired_token`         | `device_code` が `expires_in` を超過。新しい device code を取得する |
+| `access_denied`         | ユーザーが認可を拒否                                                |
 
 ## スコープ設定
 
@@ -127,16 +182,15 @@ refresh token は 1 回限り有効です。リフレッシュ時に新しい re
 OAuth client に追加のメタデータを設定できる。ロゴ画像や利用規約・プライバシーポリシーの URL など。
 
 ```yaml
-spec:
-  oauth:
-    clientName: My App
-    redirectUris: [https://example.com/callback]
-    scopes: [threads:read]
-    autoEnv: true
-    metadata:
-      logoUri: https://example.com/logo.png
-      tosUri: https://example.com/terms
-      policyUri: https://example.com/privacy
+oauth:
+  clientName: My App
+  redirectUris: [https://example.com/callback]
+  scopes: [threads:read]
+  autoEnv: true
+  metadata:
+    logoUri: https://example.com/logo.png
+    tosUri: https://example.com/terms
+    policyUri: https://example.com/privacy
 ```
 
 | field | 説明 |
@@ -174,41 +228,35 @@ if (error) {
 ## 完全な設定例
 
 ```yaml
-apiVersion: takos.dev/v1alpha1
-kind: App
-metadata:
-  name: my-oauth-app
-spec:
-  version: 1.0.0
+name: my-oauth-app
 
-  oauth:
-    clientName: My OAuth App
-    redirectUris:
-      - https://my-app.example.com/callback
-      - http://localhost:3000/callback   # ローカル開発用
-    scopes:
-      - threads:read
-      - threads:write
-      - runs:read
-    autoEnv: true
-    metadata:
-      logoUri: https://my-app.example.com/logo.png
-      tosUri: https://my-app.example.com/terms
-      policyUri: https://my-app.example.com/privacy
+oauth:
+  clientName: My OAuth App
+  redirectUris:
+    - https://my-app.example.com/callback
+    - http://localhost:3000/callback   # ローカル開発用
+  scopes:
+    - threads:read
+    - threads:write
+    - runs:read
+  autoEnv: true
+  metadata:
+    logoUri: https://my-app.example.com/logo.png
+    tosUri: https://my-app.example.com/terms
+    policyUri: https://my-app.example.com/privacy
 
-  workers:
-    web:
-      build:
-        fromWorkflow:
-          path: .takos/workflows/deploy.yml
-          job: bundle
-          artifact: web
-          artifactPath: dist/worker
+compute:
+  web:
+    build:
+      fromWorkflow:
+        path: .takos/workflows/deploy.yml
+        job: bundle
+        artifact: web
+        artifactPath: dist/worker
 
-  routes:
-    - name: app
-      target: web
-      path: /
+routes:
+  - target: web
+    path: /
 ```
 
 ::: tip ローカル開発

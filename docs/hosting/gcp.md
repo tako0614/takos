@@ -3,26 +3,26 @@
 Takos を Google Cloud Platform にホストする方法。このページは **takos オペレーター**向け。Cloud Run 上で Takos runtime の互換 backend を動かす。
 
 ::: info アプリ開発者へ
-このページは takos オペレーター向けです。public spec は Cloudflare-native のままで、GCP では Takos runtime が provider-backed resource と Takos-managed runtime を組み合わせて同じ `takos apply` surface を解決します。
+このページは takos オペレーター向けです。public spec は Cloudflare-native のままで、GCP では Takos runtime が provider-backed resource と Takos-managed runtime を組み合わせて同じ `takos deploy` surface を解決します。
 :::
 
 ## リソースマッピング
 
-app.yml のリソース宣言が GCP サービスに自動マッピングされる:
+`.takos/app.yml` の `storage` / `compute` 宣言が GCP サービスに自動マッピングされる:
 
 | app.yml | GCP サービス | アダプタ |
 | --- | --- | --- |
-| `d1` | PostgreSQL (Cloud SQL) | PostgreSQL adapter |
-| `r2` | Cloud Storage (GCS) | `gcs-object-store` |
-| `kv` | Firestore | `firestore-kv-store` |
-| `queue` | Pub/Sub | `pubsub-queue` |
-| `vectorize` | PostgreSQL + pgvector (Cloud SQL) | `pgvector-store` |
-| `analyticsEngine` | Takos analytics runtime | `analytics-engine-binding` |
-| `workflow` | Takos workflow runtime | `workflow-binding` |
-| `durableObject` | Takos durable runtime | `persistent-durable-objects` |
-| `secretRef` | Secret Manager | `gcp-secret-manager` |
-| `workers` | Cloud Run (Node.js) | Node.js platform adapter |
-| `services` | Cloud Run | OCI deployment provider (`cloud-run`) |
+| `storage.<name>.type: sql` | PostgreSQL (Cloud SQL) | PostgreSQL adapter |
+| `storage.<name>.type: object-store` | Cloud Storage (GCS) | `gcs-object-store` |
+| `storage.<name>.type: key-value` | Firestore | `firestore-kv-store` |
+| `storage.<name>.type: queue` | Pub/Sub | `pubsub-queue` |
+| `storage.<name>.type: vector-index` | PostgreSQL + pgvector (Cloud SQL) | `pgvector-store` |
+| `storage.<name>.type: analytics-engine` | Takos analytics runtime | `analytics-engine-binding` |
+| `storage.<name>.type: workflow` | Takos workflow runtime | `workflow-binding` |
+| `storage.<name>.type: durable-object` | Takos durable runtime | `persistent-durable-objects` |
+| `storage.<name>.type: secret` | Secret Manager | `gcp-secret-manager` |
+| `compute.<name>` (Worker = `build` あり) | Cloud Run (Node.js) | Node.js platform adapter |
+| `compute.<name>` (Service = `image` あり, `build` なし) | Cloud Run | OCI deployment provider (`cloud-run`) |
 
 ## 必要なもの
 
@@ -73,8 +73,8 @@ export FIRESTORE_COLLECTION_NAME="takos-kv"
 export GCP_PUBSUB_RUN_TOPIC="takos-runs"
 
 # tenant queue / secret resources
-# queue は provider_resource_name を Pub/Sub topic 名として作成し、subscription は自動生成する
-# secretRef は provider_resource_name を Secret Manager secret 名として作成・解決する
+# queue (storage.<name>.type: queue) は provider_resource_name を Pub/Sub topic 名として作成し、subscription は自動生成する
+# secret (storage.<name>.type: secret) は provider_resource_name を Secret Manager secret 名として作成・解決する
 
 # pgvector（セマンティック検索を使う場合）
 export PGVECTOR_ENABLED="true"
@@ -165,7 +165,7 @@ gcloud run deploy takos-control-web \
 アプリ開発者がアプリをデプロイするときは、環境を問わず同じコマンド:
 
 ```bash
-takos apply --env production
+takos deploy --env production
 ```
 
 ## Cloudflare backend との差分
@@ -175,7 +175,7 @@ takos apply --env production
 | Durable Objects | Takos durable runtime |
 | Analytics Engine | Takos analytics runtime |
 | Dispatch Namespace | runtime-host dispatch path |
-| CF Containers | Cloud Run サービス |
+| Container workloads | Cloud Run サービス |
 | Browser Rendering | browser-service コンテナ（Cloud Run） |
 
 ## 次に読むページ

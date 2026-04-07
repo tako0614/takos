@@ -1,25 +1,7 @@
 # Store
 
-::: tip Status Store は Takos kernel の一部ではなく、Takos 上で動く first-party
-installable app です。Takos shell は Store に依存せず、最小の install /
-uninstall / launch 機能を持ちます。 :::
-
-アプリの公開、package install、remote repository import を扱う product surface。
-
-## Store の位置づけ
-
-Store は「catalog と discovery を提供する app」です。kernel
-側の責務ではありません。
-
-- Store app は catalog / recommendation / discovery UX を持つ
-- kernel は install / deploy / capability / resource の共通基盤を持つ
-- workspace は Store app を preinstall できるが、uninstall / replace もできる
-- first-party app と third-party app に API 上の特権差は作らない
-
-Takos UI から Store を開くときは shell launch URL を使えますが、canonical URL の
-owner は Store app 自身です。詳しくは
-[Kernel / Workspace Shell / Apps](/architecture/kernel-shell)
-を参照してください。
+Store は Takos kernel に統合されたカタログ / マーケットプレイス機能です。
+パッケージの公開、install、remote repository import を扱います。
 
 ## 公開の仕組み
 
@@ -102,8 +84,8 @@ interface SeedRepository {
 ## Store API
 
 以下の `/api/explore/*` や `/api/seed-repositories` は current implementation の
-public surface です。Store app の product contract は「kernel と shell
-の上に乗る installable app」であることであり、これらの route 形状そのものを不変
+public surface です。Store app の product contract は「kernel
+の上に乗る app」であることであり、これらの route 形状そのものを不変
 contract とみなすわけではありません。
 
 ### カタログ取得
@@ -227,34 +209,37 @@ manifest と deploy を通じて、以下が自動的に関連づけられます
 
 - app identity / service / route / hostname
 - resource binding / OAuth client
-- MCP server registration / file handler matcher
+- publication registration (MCP server, file handler, etc.)
 
 ## MCP 統合
 
+manifest の `publish` で `type: McpServer` を宣言する。
+
 ```yaml
-spec:
-  mcpServers:
-    - name: notes
-      route: /mcp
-      transport: streamable-http
+publish:
+  - type: McpServer
+    path: /mcp
 ```
 
 deploy 後に control plane が MCP endpoint を登録し、agent 側が server
 をロードする。詳細は [MCP Server](/apps/mcp) を参照。
+publication の仕組みについては [App Publications](/architecture/app-publications) を参照。
 
 ## file handler 統合
 
+manifest の `publish` で `type: FileHandler` を宣言する。
+
 ```yaml
-spec:
-  fileHandlers:
-    - name: markdown
-      mimeTypes: [text/markdown]
-      extensions: [.md]
-      openPath: /files/:id
+publish:
+  - type: FileHandler
+    mimeTypes: [text/markdown]
+    extensions: [.md]
+    path: /files/:id
 ```
 
 space storage と app UI が loose coupling のまま連携できる。詳細は
 [File Handlers](/apps/file-handlers) を参照。
+publication の仕組みについては [App Publications](/architecture/app-publications) を参照。
 
 ## 次に読むページ
 
