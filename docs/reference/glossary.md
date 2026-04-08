@@ -132,7 +132,14 @@ thread 上の 1 回の実行。 stream surface を持つ。
 
 ### Artifact
 
-run の結果物。 コード、設定、文書、レポートなどを含む。
+run の結果物。コード、設定、文書、レポートなどを含む。2 つの保存形式を持つ:
+
+- **inline**: `content` field に文字列として保存 (テキスト系の小サイズ artifact
+  向け)
+- **file-backed**: `file_id` field に space storage の file ID を参照 (binary
+  や大サイズ向け)
+
+両 field は排他ではないが、通常は片方のみ使用される。
 
 ## 認証
 

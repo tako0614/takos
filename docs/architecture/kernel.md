@@ -173,11 +173,13 @@ scope enforcement は受信側 group の責務。
 
 ## App token
 
-kernel は deploy 時に group ごとの JWT (RS256) を発行する。
-
-group が `scopes` を宣言すると token が発行され、env に `TAKOS_APP_TOKEN` として inject される。
+group が manifest top-level `scopes` を宣言すると、kernel は deploy 時に
+RS256 で署名された JWT を発行し、env に `TAKOS_APP_TOKEN` として inject する。
+`scopes` が空 (or 未宣言) の場合、token は発行されない。
 
 claims: `sub: group:{name}`, `scope`, `space_id`, `iss: takos-kernel`, `aud: takos-app`
+
+有効期間: **24 時間** (deploy ごとに自動更新)。
 
 ## Dashboard
 

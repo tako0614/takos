@@ -81,34 +81,36 @@ export async function handleInbox(
   }
 
   const signatureHeader = c.req.header("signature");
-  if (signatureHeader) {
-    try {
-      const sigResult = await deps.verifyHttpSignature(c.req.raw);
-
-      if (!sigResult.verified) {
-        return c.json({ error: "Invalid HTTP signature" }, 401);
-      }
-
-      if (sigResult.actorUrl !== actorUrl) {
-        return c.json(
-          { error: "Signature actor does not match activity actor" },
-          403,
-        );
-      }
-    } catch (err) {
-      if (err instanceof HttpSignatureError) {
-        return c.json({
-          error: `Signature verification failed: ${err.message}`,
-        }, 401);
-      }
-
-      console.error("HTTP Signature verification error:", err);
-      return c.json({ error: "Signature verification failed" }, 401);
-    }
-  } else {
-    console.warn(
-      `[ActivityPub] Inbox received activity without HTTP Signature from actor: ${actorUrl}`,
+  if (!signatureHeader) {
+    // Strict mode: per docs/platform/activitypub.md, inbound activities MUST
+    // be signed. Reject any activity without an HTTP Signature header.
+    return c.json(
+      { error: "HTTP Signature header is required for inbox delivery" },
+      401,
     );
+  }
+  try {
+    const sigResult = await deps.verifyHttpSignature(c.req.raw);
+
+    if (!sigResult.verified) {
+      return c.json({ error: "Invalid HTTP signature" }, 401);
+    }
+
+    if (sigResult.actorUrl !== actorUrl) {
+      return c.json(
+        { error: "Signature actor does not match activity actor" },
+        403,
+      );
+    }
+  } catch (err) {
+    if (err instanceof HttpSignatureError) {
+      return c.json({
+        error: `Signature verification failed: ${err.message}`,
+      }, 401);
+    }
+
+    console.error("HTTP Signature verification error:", err);
+    return c.json({ error: "Signature verification failed" }, 401);
   }
 
   if (type === "Follow") {

@@ -387,13 +387,24 @@ Store は発見の手段であり、git データの取得先ではない。
 
 ## セキュリティ要件
 
-1. 受信 activity の actor なりすましを検証しなければならない
+1. 受信 activity の actor なりすましを検証しなければならない (HTTP Signature 必須、署名なし or 検証失敗で 401)
 2. push は capability と Git 認証の両方を検証すべきである
 3. public GET を許可する場合でも rate limit を設けるべきである
 4. private repo のメタデータを Store が参照する場合、`visit` Grant
    の範囲を最小化すべきである
 5. リモート Store fetch 時にプライベート IP / IPv6 / 内部 TLD をブロックする
    (SSRF 保護)
+
+### HTTP Signature
+
+inbound activity の verification は **strict mode**:
+
+- algorithm: **RSA-SHA256 (RFC 8017)**、Cavage draft (`draft-cavage-http-signatures-12`) compatible
+- headers: `(request-target) host date digest`
+- keyId format: `{actor-url}#main-key`
+- signature header **必須**。欠落 or 検証失敗で 401 reject。
+
+outbound delivery は `PLATFORM_PRIVATE_KEY` env が設定されている場合に署名付きで delivery、未設定時は warning ログを残して unsigned で best-effort 配信。
 
 ---
 
