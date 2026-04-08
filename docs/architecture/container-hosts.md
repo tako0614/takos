@@ -49,15 +49,32 @@ deprecated: `TakosAgentExecutorContainer` は legacy 単一 class で、新規 d
 
 ## 認証
 
-`X-Takos-Internal` header に2 つの異なる semantics があり、context により分かれる:
+`takos-web` worker の内部 call に使われる header は **2 つの別名** に分離
+されている (Round 11 MEDIUM #11 fix)。混同しないこと:
 
-1. **edge auth middleware** (`server/middleware/auth.ts`) — sentinel `"1"` を
-   見るだけで internal call として bypass する legacy path
-2. **executor proxy API** (`runtime/executor-proxy-api.ts`) — `EXECUTOR_PROXY_SECRET`
-   との constant-time 比較
+1. **`X-Takos-Internal-Marker: "1"`** — edge auth middleware
+   (`server/middleware/auth.ts` + `server/routes/sessions/auth.ts`) が読む
+   sentinel。`takos-runtime-host` worker が `/forward/cli-proxy/*` /
+   `/forward/heartbeat/*` を `env.TAKOS_WEB.fetch(...)` で kernel に渡す際に
+   付ける。kernel 側では「このリクエストは service binding 経由で
+   runtime-host 内から来た」と認識し、`X-Takos-Session-Id` / `X-Takos-Space-Id`
+   header で container session を解決する。値 `"1"` は単なる in/out flag で
+   secret ではない
+2. **`X-Takos-Internal: <secret>`** — executor proxy API
+   (`runtime/executor-proxy-api.ts`) の shared secret。`EXECUTOR_PROXY_SECRET`
+   env var と constant-time 比較される。`takos-executor-host` worker が
+   `TAKOS_CONTROL` service binding 経由で kernel の
+   `/internal/executor-rpc/*` を呼ぶ際に付ける
 
-container は (2) を使用し、kernel の `/internal/executor-rpc/*` 全体に
-shared secret middleware が掛かる。
+両 header は **同じ worker (`takos-web`) に到達する別経路** の認証に使う。
+legacy では両方が `X-Takos-Internal` という同じ名前だったため、sentinel
+値 `"1"` を secret に取り違えた場合に auth bypass 攻撃が成立する余地が
+あった。現在は (1) を rename することで攻撃面を分離してある。
+
+container は自身の control RPC (runtime-service 内) では (2) の secret を
+知らず、runtime-host を介した forward は (1) の marker を使う。container →
+executor-host → kernel の dispatch path では executor-host の
+`forwardToControlPlane` が (2) の secret を自前で付与する。
 
 container 自身が control RPC を呼ぶ際の auth は **proxy token** (16 byte
 hex) で、`dispatchStart` 時に `executor-proxy-config.ts buildAgentExecutorProxyConfig`
@@ -120,6 +137,33 @@ retry safety が必要な caller は idempotency key 側 (run id + sequence 等)
 用いて自前で重複検出する必要があります。
 :::
 
+### Reserved bindings family
+
+`takos-executor-host` には `/proxy/db/*`, `/proxy/offload/*`,
+`/proxy/git-objects/*`, `/proxy/do/*`, `/proxy/vectorize/*`, `/proxy/ai/*`,
+`/proxy/egress/*`, `/proxy/runtime/*`, `/proxy/browser/*`, `/proxy/queue/*`
+の handler 群が実装されており、handler 自身は完全に動作する。ただし **現在
+これらの endpoint に到達する dispatch path は存在しない**:
+
+- 各 handler は `getRequiredProxyCapability()` (`executor-auth.ts`) で
+  `bindings` capability を要求する
+- しかし `createExecutorContainerClass.dispatchStart` (`executor-host.ts`)
+  で発行される proxy token は `capability: 'control'` のみ
+- したがって runtime 環境で `/proxy/{db,offload,...}/*` を呼ぶと必ず 401 で
+  reject される
+
+この設計は **reserved extension surface** として意図的に残してある。将来
+「container が kernel の binding に直接アクセスできる実行モード」を追加
+するときに、token 発行時に `capability: 'bindings'` を付与する dispatch
+path を足せば即座に有効化できる構造になっている。削除する場合は kernel
+全体の proxy infrastructure の大幅リファクタが必要になるため、現状維持
+(dead-but-reserved) としている (Round 11 audit — Container Hosts
+finding #2)。
+
+実装 location: `packages/control/src/runtime/container-hosts/executor-host.ts`
+の block comment (`// Reserved bindings family`) と
+`packages/control/src/runtime/container-hosts/executor-proxy-handlers.ts`。
+
 ## エラー envelope
 
 container host endpoint は **internal RPC** であり、public API common envelope
@@ -149,6 +193,29 @@ api.md の error code table は適用されない。edge facing endpoint
 `createSession` は URL scheme を `http://` / `https://` のみ許可
 (file:// / javascript: / data: は reject)、viewport は
 `width 320-3840 × height 240-2160` に clamp する。
+:::
+
+::: tip Per-space concurrent session cap (Round 11 MEDIUM #12)
+1 つの space が同時に持てる browser session 数は
+**`MAX_BROWSER_SESSIONS_PER_SPACE = 5`**
+(`packages/control/src/runtime/container-hosts/browser-session-host.ts`)
+に固定されている。`createSession` は container を起動する前に per-space
+counter Durable Object (`space-counter:<spaceId>` という名前の DO
+instance) で slot を reserve し、超過なら
+`Error('BROWSER_SESSION_CAP: Too many concurrent browser sessions ...')`
+を throw する。
+
+counter DO は `BrowserSessionContainer` と同じ class を再利用するが、
+`startAndWaitForPorts` を呼ばないため **container は起動しない**。
+storage のみの軽量 instance として動く。
+
+edge route (`server/routes/browser-sessions/routes.ts` の
+`POST /api/spaces/:spaceId/browser-sessions`) が host の 429 flat error
+を受け取ると、public common envelope
+`{ error: { code: 'RATE_LIMITED', message } }` に変換して 429 で返す。
+container bootstrap が失敗した場合は slot を best-effort で release
+するので、failed 作成による capacity leak は起きない。`destroySession`
+でも slot は release される。
 :::
 
 ## デプロイ

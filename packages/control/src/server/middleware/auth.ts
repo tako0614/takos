@@ -41,8 +41,12 @@ async function validateContainerAuth(c: AuthContext): Promise<User | null> {
     return null;
   }
 
-  // Internal requests from service binding (runtime-host /forward/* proxy)
-  const isInternal = c.req.header('X-Takos-Internal') === '1';
+  // Internal requests from service binding (runtime-host /forward/* proxy).
+  // Accepts `X-Takos-Internal-Marker: "1"` from the host. The legacy
+  // `X-Takos-Internal: "1"` sentinel was renamed to avoid colliding with the
+  // unrelated `X-Takos-Internal` shared-secret header consumed by
+  // `runtime/executor-proxy-api.ts` (Round 11 MEDIUM #11).
+  const isInternal = c.req.header('X-Takos-Internal-Marker') === '1';
   if (isInternal) {
     const spaceId = c.req.header('X-Takos-Space-Id');
 

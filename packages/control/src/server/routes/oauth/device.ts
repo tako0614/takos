@@ -242,6 +242,10 @@ oauthDevice.get('/device', async (c) => {
   // CSRF double-submit cookie — mirrors the authorize flow's __Host-csrf pattern
   const csrfToken = crypto.randomUUID();
   c.header('Set-Cookie', `__Host-csrf=${csrfToken}; Path=/; Secure; HttpOnly; SameSite=Strict; Max-Age=600`);
+  // Round 11 Security Headers #7 — mirrors oauth/authorize.ts: the device
+  // consent page carries the `user_code` parameter and must not leak it via
+  // the Referer header when the user follows a link on the rendered page.
+  c.header('Referrer-Policy', 'no-referrer');
 
   return c.html(deviceConsentPage({
     clientName: escapedClientName,

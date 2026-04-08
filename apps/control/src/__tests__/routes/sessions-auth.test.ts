@@ -2,11 +2,11 @@ import { authenticateServiceRequest } from "@/routes/sessions/auth";
 
 import { assert, assertEquals, assertObjectMatch } from "jsr:@std/assert";
 
-Deno.test("authenticateServiceRequest - accepts X-Takos-Internal requests with session headers", async () => {
+Deno.test("authenticateServiceRequest - accepts X-Takos-Internal-Marker requests with session headers", async () => {
   const payload = await authenticateServiceRequest({
     req: {
       header(name: string): string | undefined {
-        if (name === "X-Takos-Internal") return "1";
+        if (name === "X-Takos-Internal-Marker") return "1";
         if (name === "X-Takos-Session-Id") return "sess_123";
         if (name === "X-Takos-Space-Id") return "space_123";
         return undefined;
@@ -21,11 +21,27 @@ Deno.test("authenticateServiceRequest - accepts X-Takos-Internal requests with s
     sub: "service",
   });
 });
-Deno.test("authenticateServiceRequest - rejects requests without X-Takos-Internal header", async () => {
+Deno.test("authenticateServiceRequest - rejects requests without X-Takos-Internal-Marker header", async () => {
   const payload = await authenticateServiceRequest({
     req: {
       header(name: string): string | undefined {
         if (name === "Authorization") return "Bearer some-token";
+        return undefined;
+      },
+    },
+  } as never);
+
+  assertEquals(payload, null);
+});
+Deno.test("authenticateServiceRequest - rejects legacy X-Takos-Internal sentinel", async () => {
+  // The renamed sentinel prevents the legacy header from colliding with the
+  // executor-proxy secret semantic on the same name.
+  const payload = await authenticateServiceRequest({
+    req: {
+      header(name: string): string | undefined {
+        if (name === "X-Takos-Internal") return "1";
+        if (name === "X-Takos-Session-Id") return "sess_123";
+        if (name === "X-Takos-Space-Id") return "space_123";
         return undefined;
       },
     },

@@ -547,7 +547,8 @@ Deno.test("runtime-host worker fetch error paths - proxies heartbeat with correc
     "https://takos-web/api/sessions/my-session-id/heartbeat",
   );
   assertEquals(proxiedRequest.method, "POST");
-  assertEquals(proxiedRequest.headers.get("X-Takos-Internal"), "1");
+  assertEquals(proxiedRequest.headers.get("X-Takos-Internal-Marker"), "1");
+  assertEquals(proxiedRequest.headers.get("X-Takos-Internal"), null);
   assertEquals(
     proxiedRequest.headers.get("X-Takos-Session-Id"),
     "my-session-id",

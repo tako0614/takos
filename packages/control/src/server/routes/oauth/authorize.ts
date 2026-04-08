@@ -174,6 +174,12 @@ oauthAuthorize.get('/authorize', async (c) => {
 
   const csrfToken = crypto.randomUUID();
   c.header('Set-Cookie', `__Host-csrf=${csrfToken}; Path=/; Secure; HttpOnly; SameSite=Strict; Max-Age=600`);
+  // Round 11 Security Headers #7 — prevent leaking the OAuth authorization
+  // request (which carries the `state` parameter) to arbitrary third-party
+  // referers linked from the consent page. The global default is
+  // `strict-origin-when-cross-origin`, which would still leak the origin +
+  // path; `no-referrer` is the strongest safe default for OAuth surfaces.
+  c.header('Referrer-Policy', 'no-referrer');
 
   return c.html(consentPage({
     clientName: escapedClientName,
