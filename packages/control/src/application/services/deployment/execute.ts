@@ -53,6 +53,12 @@ import {
   getWasmContent,
   decryptBindings,
 } from './artifact-io.ts';
+import {
+  buildProbeUrl,
+  DEFAULT_READINESS_PATH,
+  describeReadinessFailure,
+  probeWorkerReadiness,
+} from './readiness-probe.ts';
 
 /**
  * Execute a deployment through all pipeline steps (deploy_worker, update_routing, finalize).
@@ -174,6 +180,66 @@ export async function executeDeploymentPipeline(
         }
       });
       completedStepNames.push('deploy_worker');
+    }
+
+    // -----------------------------------------------------------------------
+    // Worker readiness probe
+    //
+    // spec (`docs/apps/manifest.md` / `docs/apps/workers.md` /
+    // `docs/architecture/control-plane.md` の "Worker readiness"):
+    //   - kernel が deploy 時に Worker に対して GET <readiness path> を probe する
+    //   - default path は `/`、manifest の `compute.<name>.readiness` で override 可
+    //   - **HTTP 200 OK のみ** を ready とみなす
+    //   - 201/204/3xx (redirect)/4xx/5xx は fail
+    //   - timeout は hard-coded で 10 秒
+    //   - 失敗したら deploy fail-fast (worker は起動扱いされず、routing は更新されない)
+    //
+    // Service / Container は manifest の `healthCheck` field を使うため、ここでは
+    // skip する。Worker (`isContainerDeploy === false`) のみで実行する。
+    // -----------------------------------------------------------------------
+    if (
+      !isContainerDeploy &&
+      !completedStepNames.includes('probe_readiness')
+    ) {
+      await executeDeploymentStep(
+        env.DB,
+        deploymentId,
+        'deploying_worker',
+        'probe_readiness',
+        async () => {
+          const deploymentTarget = parseDeploymentTargetConfig(deployment);
+          const readinessPath = deploymentTarget.readiness?.path ??
+            DEFAULT_READINESS_PATH;
+
+          // Probe URL の base を resolve する。
+          // - workers-dispatch / runtime-host: services.hostname (例: my-app.takos.app)
+          // - container providers: ここでは到達しない (isContainerDeploy guard 済み)
+          if (!workerHostname) {
+            // hostname 未割り当ての worker (まだ routing が無い空 deploy など) は
+            // probe を skip する。kernel-managed worker (api / dispatch / docs) で
+            // hostname が常に存在するケースでは到達しない。
+            return;
+          }
+
+          const baseUrl = workerHostname.startsWith('http://') ||
+              workerHostname.startsWith('https://')
+            ? workerHostname
+            : `https://${workerHostname}`;
+          const probeUrl = buildProbeUrl(baseUrl, readinessPath);
+
+          const outcome = await probeWorkerReadiness({
+            baseUrl,
+            path: readinessPath,
+          });
+
+          if (!outcome.ok) {
+            // fail-fast: throw して executeDeploymentStep の catch に rollback を委ねる。
+            // 上位 catch は rollbackDeploymentSteps を呼び、routing は更新されない。
+            throw new InternalError(describeReadinessFailure(probeUrl, outcome));
+          }
+        },
+      );
+      completedStepNames.push('probe_readiness');
     }
 
     if (!completedStepNames.includes('update_routing')) {

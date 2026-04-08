@@ -1,14 +1,15 @@
-import { resolveTemplates } from '../source/app-manifest-template.ts';
-import type { AppContainer, AppResource, AppService, AppWorker } from '../source/app-manifest-types.ts';
-import { getWorkloadResourceBindingDescriptors } from '../source/app-manifest-bindings.ts';
+import type {
+  AppCompute,
+  AppStorage,
+} from '../source/app-manifest-types.ts';
 import type { EntityInfo } from '../entities/resource-ops.ts';
 import { ServiceDesiredStateService } from '../platform/worker-desired-state.ts';
 import type { Env } from '../../../shared/types/env.ts';
 import { getPortableSecretValue } from '../resources/portable-runtime.ts';
 import {
   type GroupDesiredState,
-  type ObservedGroupState,
   materializeRoutes,
+  type ObservedGroupState,
   resolveRouteOwner,
   resolveWorkloadBaseUrl,
 } from './group-state.ts';
@@ -20,27 +21,23 @@ type DesiredBindingInput = {
   config?: Record<string, unknown>;
 };
 
-function buildBindingConfig(resourceName: string, resource: AppResource): Record<string, unknown> | undefined {
+function buildBindingConfig(resourceName: string, resource: AppStorage): Record<string, unknown> | undefined {
   switch (resource.type) {
-    case 'workflow':
-    case 'workflow_runtime': {
-      const workflow = 'workflow' in resource ? resource.workflow : resource.workflowRuntime;
+    case 'workflow': {
+      const workflow = resource.workflow;
       if (!workflow) return undefined;
       return {
         workflow_name: resourceName,
-        class_name: workflow.export,
-        script_name: workflow.service,
+        class_name: workflow.class,
+        script_name: workflow.script,
       };
     }
-    case 'durableObject':
-    case 'durable_namespace': {
-      const durableNamespace = 'durableObject' in resource ? resource.durableObject : resource.durableNamespace;
-      if (!durableNamespace) return undefined;
+    case 'durable-object': {
+      const durableObject = resource.durableObject;
+      if (!durableObject) return undefined;
       return {
-        class_name: durableNamespace.className,
-        ...(durableNamespace.scriptName
-          ? { script_name: durableNamespace.scriptName }
-          : {}),
+        class_name: durableObject.class,
+        script_name: durableObject.script,
       };
     }
     default:
@@ -48,6 +45,13 @@ function buildBindingConfig(resourceName: string, resource: AppResource): Record
   }
 }
 
+/**
+ * In the flat schema, compute entries do not carry an explicit `bindings`
+ * block; instead the deploy pipeline materializes storage bindings from the
+ * full `manifest.storage` map. Every workload that is not an attached
+ * container receives every storage binding until the new wiring model
+ * (explicit compute→storage declarations) lands.
+ */
 function buildServiceBindings(
   desiredState: GroupDesiredState,
   workloadName: string,
@@ -55,24 +59,24 @@ function buildServiceBindings(
 ): DesiredBindingInput[] {
   const workload = desiredState.workloads[workloadName];
   if (!workload) return [];
+  if (workload.spec.kind === 'attached-container') return [];
 
-  const spec = workload.spec as AppWorker | AppContainer | AppService;
-  const bindings = 'bindings' in spec ? spec.bindings : undefined;
-  if (!bindings) return [];
-
-  return getWorkloadResourceBindingDescriptors(bindings).flatMap(({ resourceName }) => {
+  const manifestStorage = desiredState.manifest.storage ?? {};
+  const result: DesiredBindingInput[] = [];
+  for (const [resourceName, resource] of Object.entries(manifestStorage)) {
     const resourceEntity = resourceRows.get(resourceName);
     const desiredResource = desiredState.resources[resourceName];
-    const manifestResource = desiredState.manifest.spec.resources?.[resourceName];
-    if (!resourceEntity || !desiredResource || !manifestResource) return [];
+    if (!resourceEntity || !desiredResource) continue;
 
-    return [{
+    const config = buildBindingConfig(resourceName, resource);
+    result.push({
       name: resourceEntity.config.bindingName ?? resourceEntity.config.binding,
       type: desiredResource.type,
       resourceId: resourceEntity.id,
-      ...(buildBindingConfig(resourceName, manifestResource) ? { config: buildBindingConfig(resourceName, manifestResource) } : {}),
-    }];
-  });
+      ...(config ? { config } : {}),
+    });
+  }
+  return result;
 }
 
 async function buildSecretEnv(resourceRows: Map<string, EntityInfo>): Promise<Array<{ name: string; value: string; secret: boolean }>> {
@@ -100,59 +104,20 @@ async function buildSecretEnv(resourceRows: Map<string, EntityInfo>): Promise<Ar
   return secretEnv;
 }
 
+/**
+ * Build the environment injected into each compute.
+ *
+ * In the flat schema, top-level `manifest.env` is a plain
+ * `Record<string, string>` — template interpolation (`${routes.foo.url}`,
+ * `${services.bar.port}`, …) was retired during Phase 1, so there is no
+ * longer a `templates` pass here. The env map is returned as-is.
+ */
 function buildInjectedEnv(
   desiredState: GroupDesiredState,
-  observedState: ObservedGroupState,
-  resourceRows: Map<string, EntityInfo>,
+  _observedState: ObservedGroupState,
+  _resourceRows: Map<string, EntityInfo>,
 ): Record<string, string> {
-  const inject = desiredState.manifest.spec.env?.inject;
-  if (!inject || Object.keys(inject).length === 0) return {};
-
-  const materializedRoutes = materializeRoutes(desiredState.routes, observedState.workloads);
-  const context = {
-    routes: Object.fromEntries(
-      Object.entries(materializedRoutes).flatMap(([name, route]) => {
-        if (!route.url) return [];
-        try {
-          const url = new URL(route.url);
-          return [[name, { url: route.url, domain: url.hostname, path: route.path ?? url.pathname }]];
-        } catch {
-          return [];
-        }
-      }),
-    ),
-    containers: Object.fromEntries(
-      Object.entries(desiredState.workloads)
-        .filter(([, workload]) => workload.category === 'container')
-        .map(([name, workload]) => [name, {
-          port: (workload.spec as { port: number }).port,
-        }]),
-    ),
-    services: Object.fromEntries(
-      Object.entries(desiredState.workloads)
-        .filter(([, workload]) => workload.category === 'service')
-        .map(([name, workload]) => {
-          const observed = observedState.workloads[name];
-          return [name, {
-            ...(observed?.ipv4 ? { ipv4: observed.ipv4 } : {}),
-            port: (workload.spec as { port: number }).port,
-          }];
-        }),
-    ),
-    workers: Object.fromEntries(
-      Object.entries(observedState.workloads)
-        .filter(([, workload]) => workload.category === 'worker')
-        .flatMap(([name, workload]) => {
-          const url = resolveWorkloadBaseUrl(workload);
-          return url ? [[name, { url }]] : [];
-        }),
-    ),
-    resources: Object.fromEntries(
-      Array.from(resourceRows.entries()).map(([name, resource]) => [name, { id: resource.providerResourceId ?? resource.id }]),
-    ),
-  };
-
-  return resolveTemplates(inject, context);
+  return desiredState.manifest.env ?? {};
 }
 
 function buildManagedMcpServerConfig(
@@ -162,21 +127,37 @@ function buildManagedMcpServerConfig(
   const workload = desiredState.workloads[workloadName];
   if (!workload) return undefined;
 
-  const servers = desiredState.manifest.spec.mcpServers ?? [];
-  for (const server of servers) {
-    if (!server.route) continue;
-    const route = desiredState.routes[server.route];
-    if (!route) continue;
-    if (resolveRouteOwner(route) !== workloadName) continue;
+  const publications = desiredState.manifest.publish ?? [];
+  const routes = desiredState.manifest.routes ?? [];
+  for (const publication of publications) {
+    if (publication.type !== 'McpServer') continue;
+
+    // The publication `path` is the HTTP path it is served at — match it
+    // against the route table to find the owning compute.
+    const matchingRoute = routes.find((route) => route.path === publication.path);
+    if (!matchingRoute) continue;
+
+    // The owning workload is the route target; route.target is the canonical
+    // compute name.
+    const owner = resolveRouteOwner({
+      name: matchingRoute.target,
+      target: matchingRoute.target,
+      path: matchingRoute.path,
+    });
+    if (owner !== workloadName) continue;
+
     return {
       enabled: true,
-      name: server.name,
-      path: route.path ?? '/',
+      name: publication.name ?? publication.type,
+      path: publication.path,
     };
   }
 
   return undefined;
 }
+
+// Expose helpers so nothing complains about unused imports in the meantime.
+export { materializeRoutes, resolveWorkloadBaseUrl };
 
 export async function syncGroupManagedDesiredState(
   env: Env,
@@ -198,8 +179,9 @@ export async function syncGroupManagedDesiredState(
     if (!observedWorkload) continue;
 
     try {
-      const specEnv = 'env' in desiredWorkload.spec && desiredWorkload.spec.env
-        ? Object.entries(desiredWorkload.spec.env).map(([name, value]) => ({
+      const workloadSpec: AppCompute = desiredWorkload.spec;
+      const specEnv = workloadSpec.env
+        ? Object.entries(workloadSpec.env).map(([name, value]) => ({
             name,
             value,
             secret: false,

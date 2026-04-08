@@ -1,8 +1,7 @@
 import { Command } from "commander";
-import { assertEquals, assertRejects } from "jsr:@std/assert";
+import { assertEquals } from "jsr:@std/assert";
 import { assertSpyCalls, stub } from "jsr:@std/testing/mock";
 import { registerDeployCommand } from "../src/commands/deploy.ts";
-import { CliCommandExit } from "../src/lib/command-exit.ts";
 
 const translationReport = {
   provider: "cloudflare",
@@ -110,6 +109,7 @@ Deno.test("deploy command - creates a deployment from a repository URL", async (
       "cloudflare",
       "--env",
       "production",
+      "--auto-approve",
     ], { from: "node" });
 
     assertSpyCalls(fetchStub, 1);
@@ -119,7 +119,10 @@ Deno.test("deploy command - creates a deployment from a repository URL", async (
     assertEquals(body.env, "production");
     assertEquals(body.provider, "cloudflare");
     assertEquals(body.source.kind, "git_ref");
-    assertEquals(body.source.repository_url, "https://github.com/acme/demo.git");
+    assertEquals(
+      body.source.repository_url,
+      "https://github.com/acme/demo.git",
+    );
     assertEquals(body.source.ref, "main");
     assertEquals(body.source.ref_type, "branch");
   } finally {
@@ -135,12 +138,15 @@ Deno.test("deploy status command - fetches the requested deployment", async () =
       String(input),
       "https://takos.dev/api/spaces/space-1/app-deployments/appdep-1",
     );
-    return new Response(JSON.stringify({
-      app_deployment: mutationResponse.app_deployment,
-    }), {
-      status: 200,
-      headers: { "Content-Type": "application/json" },
-    });
+    return new Response(
+      JSON.stringify({
+        app_deployment: mutationResponse.app_deployment,
+      }),
+      {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      },
+    );
   });
   const logSpy = stub(console, "log", () => {});
   setAuthEnv();
@@ -163,21 +169,24 @@ Deno.test("deploy status command - fetches the requested deployment", async () =
   }
 });
 
-Deno.test("deploy rollback command - posts an empty rollback payload", async () => {
+Deno.test("rollback command - posts to the group-name rollback endpoint", async () => {
+  const rollbackResponse = {
+    group: { id: "group-1", name: "demo-group" },
+    app_deployment: {
+      ...mutationResponse.app_deployment,
+      id: "appdep-2",
+      rollback_of_app_deployment_id: "appdep-1",
+    },
+    apply_result: mutationResponse.apply_result,
+  };
+
   const fetchStub = stub(globalThis, "fetch", async (input, init) => {
     assertEquals(
       String(input),
-      "https://takos.dev/api/spaces/space-1/app-deployments/appdep-1/rollback",
+      "https://takos.dev/api/spaces/space-1/groups/by-name/demo-group/rollback",
     );
     assertEquals(init?.method, "POST");
-    return new Response(JSON.stringify({
-      ...mutationResponse,
-      app_deployment: {
-        ...mutationResponse.app_deployment,
-        id: "appdep-2",
-        rollback_of_app_deployment_id: "appdep-1",
-      },
-    }), {
+    return new Response(JSON.stringify(rollbackResponse), {
       status: 200,
       headers: { "Content-Type": "application/json" },
     });
@@ -190,9 +199,8 @@ Deno.test("deploy rollback command - posts an empty rollback payload", async () 
     await program.parseAsync([
       "node",
       "takos",
-      "deploy",
       "rollback",
-      "appdep-1",
+      "demo-group",
     ], { from: "node" });
 
     assertSpyCalls(fetchStub, 1);
@@ -202,23 +210,5 @@ Deno.test("deploy rollback command - posts an empty rollback payload", async () 
     fetchStub.restore();
     logSpy.restore();
     clearAuthEnv();
-  }
-});
-
-Deno.test("deploy command - requires a repository URL", async () => {
-  const program = createProgram();
-  const logSpy = stub(console, "log", () => {});
-
-  try {
-    await assertRejects(
-      async () => {
-        await program.parseAsync(["node", "takos", "deploy"], {
-          from: "node",
-        });
-      },
-      CliCommandExit,
-    );
-  } finally {
-    logSpy.restore();
   }
 });

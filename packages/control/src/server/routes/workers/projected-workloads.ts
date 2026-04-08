@@ -31,16 +31,14 @@ function parseServiceConfig(config: string | null): Record<string, unknown> {
   }
 }
 
-function buildProjectedWorkerSpec(input: {
+function buildProjectedWorkerSpec(_input: {
   deploymentId?: string | null;
   artifactRef?: string | null;
 }): AppWorker {
+  // Flat schema does not carry per-worker artifact pointers on the manifest;
+  // the deploy pipeline resolves the active deployment for the worker by name.
   return {
-    artifact: {
-      kind: "bundle",
-      ...(input.deploymentId ? { deploymentId: input.deploymentId } : {}),
-      ...(input.artifactRef ? { artifactRef: input.artifactRef } : {}),
-    },
+    kind: "worker",
   };
 }
 
@@ -50,13 +48,6 @@ function buildProjectedServiceSpec(
 ): AppService {
   const imageRef = deploymentTarget?.artifact?.image_ref ??
     (typeof config.imageRef === "string" ? config.imageRef : undefined);
-  const provider = deploymentTarget?.artifact?.kind === "container-image" &&
-      deploymentTarget?.artifact?.image_ref
-    ? undefined
-    : (config.provider === "oci" || config.provider === "ecs" ||
-        config.provider === "cloud-run" || config.provider === "k8s"
-      ? config.provider
-      : undefined);
   const port = typeof deploymentTarget?.artifact?.exposed_port === "number"
     ? deploymentTarget.artifact.exposed_port
     : (typeof config.port === "number" ? config.port : 80);
@@ -65,19 +56,10 @@ function buildProjectedServiceSpec(
     : (typeof config.healthPath === "string" ? config.healthPath : undefined);
 
   return {
+    kind: "service",
     port,
-    ...(config.ipv4 === true ? { ipv4: true } : {}),
-    ...(provider ? { provider } : {}),
-    ...(imageRef
-      ? {
-        artifact: {
-          kind: "image",
-          imageRef,
-          ...(provider ? { provider } : {}),
-        },
-      }
-      : {}),
-    ...(healthPath ? { healthCheck: { path: healthPath, type: "http" } } : {}),
+    ...(imageRef ? { image: imageRef } : {}),
+    ...(healthPath ? { healthCheck: { path: healthPath } } : {}),
   };
 }
 

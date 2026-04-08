@@ -11,38 +11,36 @@ Deno.test("group routing reconciler - publishes hostname routing from canonical 
 
   const desired = compileGroupDesiredState(
     {
-      apiVersion: "takos.dev/v1alpha1",
-      kind: "App",
-      metadata: { name: "demo-app" },
-      spec: {
-        version: "1.0.0",
-        workers: {
-          edge: {
-            build: {
-              fromWorkflow: {
-                path: ".github/workflows/deploy.yml",
-                job: "build",
-                artifact: "edge",
-                artifactPath: "dist/edge.js",
-              },
+      name: "demo-app",
+      version: "1.0.0",
+      compute: {
+        edge: {
+          kind: "worker",
+          build: {
+            fromWorkflow: {
+              path: ".takos/workflows/deploy.yml",
+              job: "build",
+              artifact: "edge",
+              artifactPath: "dist/edge.js",
             },
           },
         },
-        services: {
-          api: {
-            dockerfile: "Dockerfile",
-            port: 8080,
-          },
+        api: {
+          kind: "service",
+          image: "ghcr.io/example/api:latest",
+          port: 8080,
         },
-        routes: [
-          {
-            name: "api",
-            ingress: "edge",
-            target: "api",
-            path: "/api",
-          },
-        ],
       },
+      storage: {},
+      routes: [
+        {
+          target: "api",
+          path: "/api",
+        },
+      ],
+      publish: [],
+      env: {},
+      scopes: [],
     },
     {
       groupName: "demo-app",
@@ -97,13 +95,15 @@ Deno.test("group routing reconciler - publishes hostname routing from canonical 
     "2026-03-29T12:00:00.000Z",
   );
 
+  // Flat schema removed `ingress` from routes — the route owner is always
+  // `route.target`, so the hostname put is the api workload's own hostname.
   assertEquals(putCalls.length, 1);
   assertObjectMatch(putCalls[0], {
-    hostname: "edge.example.test",
+    hostname: "api.example.test",
   });
   assertEquals(deleteCalls, [{ hostname: "old.example.test" }]);
   assertEquals(result.failedRoutes, []);
-  assertObjectMatch(result.routes.api, {
+  assertObjectMatch(result.routes["api:/api"], {
     target: "api",
     url: "http://10.0.0.12:8080/api",
   });

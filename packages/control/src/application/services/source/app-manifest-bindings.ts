@@ -1,156 +1,95 @@
-import type {
-  AppResourceType,
-  AppWorkloadBindings,
-  ServiceBinding,
-} from "./app-manifest-types.ts";
-import {
-  asRecord,
-  asRequiredString,
-  asStringArray,
-} from "./app-manifest-utils.ts";
+// ============================================================
+// app-manifest-bindings.ts
+// ============================================================
+//
+// Historical helper that parsed explicit per-workload `bindings` blocks
+// from the Kubernetes-envelope manifest schema. In the flat-schema world
+// (Phase 1) the envelope was retired and storage-to-compute wiring is
+// derived from the top-level `storage` map — there is no per-workload
+// bindings record to parse anymore.
+//
+// This module still exports a trivial stub so older deploy pipeline code
+// can continue to import it. Any caller that still needs binding
+// introspection should migrate to reading `manifest.storage` directly.
+// ============================================================
 
-type ResourceBindingKey =
-  | "resources"
-  | "d1"
-  | "r2"
-  | "kv"
-  | "queues"
-  | "vectorize"
-  | "analyticsEngine"
-  | "workflow"
-  | "durableObjects";
+import type { AppStorage, StorageType } from "./app-manifest-types.ts";
 
-type ResourceBindingDescriptor = {
-  key: ResourceBindingKey;
-  aliases: string[];
-  resourceType?: AppResourceType;
-};
+/**
+ * Legacy stub type kept so the deploy pipeline can refer to "bindings"
+ * without pulling in Cloudflare-specific type names. In the flat schema
+ * there are no per-workload binding records, so this shape intentionally
+ * has no fields — callers should use `manifest.storage` instead.
+ */
+export type AppWorkloadBindings = Record<string, never>;
 
-const RESOURCE_BINDINGS: ResourceBindingDescriptor[] = [
-  { key: "resources", aliases: ["resources"] },
-  { key: "d1", aliases: ["d1", "sql"], resourceType: "d1" },
-  { key: "r2", aliases: ["r2", "objectStores"], resourceType: "r2" },
-  { key: "kv", aliases: ["kv"], resourceType: "kv" },
-  { key: "queues", aliases: ["queues"], resourceType: "queue" },
-  {
-    key: "vectorize",
-    aliases: ["vectorize", "vectorIndexes"],
-    resourceType: "vectorize",
-  },
-  {
-    key: "analyticsEngine",
-    aliases: ["analyticsEngine", "analyticsStores", "analytics"],
-    resourceType: "analyticsEngine",
-  },
-  {
-    key: "workflow",
-    aliases: ["workflow", "workflowRuntimes", "workflows"],
-    resourceType: "workflow",
-  },
-  {
-    key: "durableObjects",
-    aliases: ["durableObjects", "durableNamespaces"],
-    resourceType: "durableObject",
-  },
-];
+/**
+ * Legacy stub type kept so older parsers can reference `ServiceBinding`.
+ * In the flat schema inter-service wiring is implicit (compute entries
+ * reference each other by name), so the only thing a caller can read from
+ * here is the canonical name string.
+ */
+export type ServiceBinding = string | { name: string; version?: string };
 
-function dedupeStrings(values: string[]): string[] {
-  return Array.from(new Set(values));
-}
+/**
+ * Legacy alias retained for callers that still reference
+ * `AppResourceType`. Maps directly to the canonical flat-schema
+ * storage type.
+ */
+export type AppResourceType = StorageType;
 
+/**
+ * Legacy parser stub. The envelope schema exposed an explicit
+ * `{ services: [...] }` array on each workload; the flat schema retired
+ * this in favor of implicit compute-to-compute references. Callers
+ * should not invoke this anymore; the stub returns `undefined`.
+ */
 export function parseServiceBindingList(
-  raw: unknown,
-  prefix: string,
+  _raw: unknown,
+  _prefix: string,
 ): ServiceBinding[] | undefined {
-  if (raw == null) return undefined;
-  if (!Array.isArray(raw)) {
-    throw new Error(`${prefix} must be an array`);
-  }
-  return raw.map((entry, index) => {
-    if (typeof entry === "string") return entry;
-    const obj = asRecord(entry);
-    return {
-      name: asRequiredString(obj.name, `${prefix}[${index}].name`),
-      ...(obj.version ? { version: String(obj.version) } : {}),
-    };
-  });
+  return undefined;
 }
 
+/**
+ * Legacy parser stub. See `parseServiceBindingList`.
+ */
 export function parseWorkloadBindings(
-  raw: unknown,
-  prefix: string,
+  _raw: unknown,
+  _prefix: string,
 ): AppWorkloadBindings | undefined {
-  const bindingsRecord = asRecord(raw);
-  const parsed: AppWorkloadBindings = {};
-
-  for (const descriptor of RESOURCE_BINDINGS) {
-    const merged = dedupeStrings(
-      descriptor.aliases.flatMap((alias) =>
-        asStringArray(bindingsRecord[alias], `${prefix}.${alias}`) ?? []
-      ),
-    );
-    if (merged.length === 0) continue;
-    parsed[descriptor.key] = merged;
-  }
-
-  const services = parseServiceBindingList(
-    bindingsRecord.services,
-    `${prefix}.services`,
-  );
-  if (services) {
-    parsed.services = services;
-  }
-
-  return Object.keys(parsed).length > 0 ? parsed : undefined;
+  return undefined;
 }
 
+/**
+ * Legacy descriptor helper. In the flat schema every storage entry is
+ * implicitly bound to every compute workload (until the explicit
+ * `compute.storage[]` wiring lands in Phase 3), so the "bindings" for a
+ * workload are just the full storage map. Returns an empty list when no
+ * bindings object is supplied so legacy callers short-circuit.
+ */
 export function getWorkloadResourceBindingDescriptors(
-  bindings?: AppWorkloadBindings,
+  _bindings?: AppWorkloadBindings,
 ): Array<
   {
     resourceName: string;
-    key: ResourceBindingKey;
+    key: string;
     resourceType?: AppResourceType;
   }
 > {
-  if (!bindings) return [];
-
-  const descriptors: Array<
-    {
-      resourceName: string;
-      key: ResourceBindingKey;
-      resourceType?: AppResourceType;
-    }
-  > = [];
-  for (const descriptor of RESOURCE_BINDINGS) {
-    const merged = dedupeStrings(
-      descriptor.aliases.flatMap((alias) => {
-        const values = bindings[alias as keyof AppWorkloadBindings];
-        if (!Array.isArray(values)) return [];
-        return values.map((v: string | { name: string }) =>
-          typeof v === "string" ? v : v.name
-        );
-      }),
-    );
-    for (const resourceName of merged) {
-      descriptors.push({
-        resourceName,
-        key: descriptor.key,
-        ...(descriptor.resourceType
-          ? { resourceType: descriptor.resourceType }
-          : {}),
-      });
-    }
-  }
-
-  return descriptors;
+  return [];
 }
 
+/**
+ * Legacy helper that returned the named services a workload depends on.
+ * The flat schema tracks this via the `compute.<name>.depends` field —
+ * callers should use that instead. This stub returns an empty list.
+ */
 export function getWorkloadServiceBindingTargets(
-  bindings?: AppWorkloadBindings,
+  _bindings?: AppWorkloadBindings,
 ): string[] {
-  if (!bindings?.services) return [];
-  return bindings.services.map((
-    entry,
-  ) => (typeof entry === "string" ? entry : entry.name));
+  return [];
 }
+
+// Re-export so callers still resolve `AppStorage` through this module.
+export type { AppStorage };

@@ -5,11 +5,16 @@ import { deleteHostnameRouting, resolveHostnameRouting, upsertHostnameRouting } 
 import type { RoutingBindings, RoutingTarget } from '../routing/routing-models.ts';
 import { parseDeploymentTargetConfig } from './provider.ts';
 import {
+  getDeploymentById,
   getDeploymentRoutingServiceRecord,
   type DeploymentRoutingServiceRecord,
+  logDeploymentEvent,
   updateServiceDeploymentPointers,
 } from './store.ts';
-import type { DeploymentTarget } from './models.ts';
+import type { Deployment, DeploymentEnv, DeploymentTarget } from './models.ts';
+import { safeJsonParseOrDefault } from '../../../shared/utils/index.ts';
+import { logWarn } from '../../../shared/utils/logger.ts';
+import { BadRequestError, ConflictError, NotFoundError } from 'takos-common/errors';
 
 type DeploymentRoutingEnv = DbEnv & RoutingBindings;
 
@@ -308,4 +313,273 @@ export async function applyRoutingToHostnames(
 
 export async function fetchServiceWithDomains(env: DeploymentRoutingEnv, serviceId: string): Promise<DeploymentRoutingServiceRecord | null> {
   return getDeploymentRoutingServiceRecord(env.DB, serviceId);
+}
+
+export interface CanaryDeploymentInput {
+  serviceId: string;
+  deploymentId: string;
+  userId: string;
+}
+
+export interface PromoteCanaryResult {
+  deploymentId: string;
+}
+
+export interface AbortCanaryResult {
+  deploymentId: string;
+  rolledBackTo: string;
+}
+
+/**
+ * Resolve the deployment target for a deployment, injecting the resolved
+ * container endpoint when the artifact is a container image.
+ */
+function resolveDeploymentTargetForRouting(deployment: Deployment): DeploymentTarget {
+  const baseTarget = parseDeploymentTargetConfig(deployment);
+  if (deployment.artifact_kind !== 'container-image') {
+    return baseTarget;
+  }
+  const providerState = safeJsonParseOrDefault<Record<string, unknown>>(
+    deployment.provider_state_json,
+    {},
+  );
+  const resolvedEp = providerState.resolved_endpoint as { base_url?: string } | undefined;
+  if (resolvedEp?.base_url) {
+    return {
+      ...baseTarget,
+      endpoint: { kind: 'http-url', base_url: resolvedEp.base_url },
+    };
+  }
+  return baseTarget;
+}
+
+/**
+ * Promote a canary deployment to 100% active routing.
+ *
+ * Validates that the target deployment is currently in `canary` state, then
+ * shifts routing fully to it, archives previous active/canary deployments,
+ * and updates service pointers so the canary becomes the new active.
+ */
+export async function promoteCanaryDeployment(
+  env: DeploymentEnv,
+  input: CanaryDeploymentInput,
+): Promise<PromoteCanaryResult> {
+  const canary = await getDeploymentById(env.DB, input.deploymentId);
+  if (!canary || canary.service_id !== input.serviceId) {
+    throw new NotFoundError('Deployment');
+  }
+  if (canary.routing_status !== 'canary') {
+    throw new ConflictError('Deployment is not in canary state');
+  }
+  if (!canary.artifact_ref) {
+    throw new BadRequestError('Canary deployment has no artifact_ref; cannot promote via routing pointer');
+  }
+
+  const serviceRouteRecord = await fetchServiceWithDomains(env, input.serviceId);
+  if (!serviceRouteRecord) {
+    throw new NotFoundError('Service');
+  }
+
+  const hostnameList = collectHostnames(serviceRouteRecord);
+  const routingRollbackSnapshot = hostnameList.length > 0
+    ? await snapshotRouting(env, hostnameList)
+    : [];
+
+  const deploymentTarget = resolveDeploymentTargetForRouting(canary);
+
+  const routingCtx = {
+    deploymentId: canary.id,
+    deploymentVersion: canary.version,
+    deployArtifactRef: canary.artifact_ref,
+    deploymentTarget,
+    serviceRouteRecord,
+    desiredRoutingStatus: 'active',
+    desiredRoutingWeight: 100,
+    activeDeployment: null,
+  };
+
+  const { target, auditDetails } = buildRoutingTarget(routingCtx, hostnameList);
+
+  if (hostnameList.length > 0) {
+    await applyRoutingToHostnames(env, hostnameList, target);
+  }
+
+  const nowIso = new Date().toISOString();
+  try {
+    await applyRoutingDbUpdates(env, routingCtx, nowIso);
+  } catch (dbErr) {
+    if (routingRollbackSnapshot.length > 0) {
+      await restoreRoutingSnapshot(env, routingRollbackSnapshot).catch((e) => {
+        logWarn('Failed to restore routing snapshot during canary promote (non-critical)', {
+          module: 'routing',
+          error: e instanceof Error ? e.message : String(e),
+        });
+      });
+    }
+    throw dbErr;
+  }
+
+  await logDeploymentEvent(
+    env.DB,
+    canary.id,
+    'canary_promoted',
+    null,
+    'Promoted canary deployment to 100% active routing',
+    {
+      actorAccountId: input.userId,
+      details: {
+        ...auditDetails,
+        previous_active_deployment_id: serviceRouteRecord.activeDeploymentId,
+      },
+    },
+  );
+
+  return { deploymentId: canary.id };
+}
+
+/**
+ * Abort a canary deployment, restoring the previously active deployment to
+ * 100% routing weight and marking the canary as rolled back.
+ */
+export async function abortCanaryDeployment(
+  env: DeploymentEnv,
+  input: CanaryDeploymentInput,
+): Promise<AbortCanaryResult> {
+  const canary = await getDeploymentById(env.DB, input.deploymentId);
+  if (!canary || canary.service_id !== input.serviceId) {
+    throw new NotFoundError('Deployment');
+  }
+  if (canary.routing_status !== 'canary') {
+    throw new ConflictError('Deployment is not in canary state');
+  }
+
+  const serviceRouteRecord = await fetchServiceWithDomains(env, input.serviceId);
+  if (!serviceRouteRecord) {
+    throw new NotFoundError('Service');
+  }
+
+  const previousActiveId = serviceRouteRecord.activeDeploymentId;
+  if (!previousActiveId) {
+    throw new ConflictError('No previously active deployment to roll back to');
+  }
+
+  const previousActive = await getDeploymentById(env.DB, previousActiveId);
+  if (!previousActive || previousActive.service_id !== input.serviceId) {
+    throw new ConflictError('Previously active deployment is missing or invalid');
+  }
+  if (!previousActive.artifact_ref) {
+    throw new BadRequestError('Previously active deployment has no artifact_ref; cannot restore routing');
+  }
+
+  const hostnameList = collectHostnames(serviceRouteRecord);
+  const routingRollbackSnapshot = hostnameList.length > 0
+    ? await snapshotRouting(env, hostnameList)
+    : [];
+
+  const restoreTarget = resolveDeploymentTargetForRouting(previousActive);
+
+  const routingCtx = {
+    deploymentId: previousActive.id,
+    deploymentVersion: previousActive.version,
+    deployArtifactRef: previousActive.artifact_ref,
+    deploymentTarget: restoreTarget,
+    serviceRouteRecord,
+    desiredRoutingStatus: 'active',
+    desiredRoutingWeight: 100,
+    activeDeployment: null,
+  };
+
+  const { target, auditDetails } = buildRoutingTarget(routingCtx, hostnameList);
+
+  if (hostnameList.length > 0) {
+    await applyRoutingToHostnames(env, hostnameList, target);
+  }
+
+  const nowIso = new Date().toISOString();
+  const db = getDb(env.DB);
+
+  try {
+    // Restore the previously active deployment to active/100%.
+    await db.update(deployments)
+      .set({
+        routingStatus: 'active',
+        routingWeight: 100,
+        updatedAt: nowIso,
+      })
+      .where(eq(deployments.id, previousActive.id))
+      .run();
+
+    // Archive any other active/rollback/canary entries for this service besides
+    // the restored active and the canary that we are aborting (which we mark
+    // as rolled_back below).
+    await db.update(deployments)
+      .set({
+        routingStatus: 'archived',
+        routingWeight: 0,
+        updatedAt: nowIso,
+      })
+      .where(
+        and(
+          eq(serviceDeployments.serviceId, serviceRouteRecord.id),
+          inArray(deployments.routingStatus, ['active', 'rollback', 'canary']),
+          ne(deployments.id, previousActive.id),
+          ne(deployments.id, canary.id),
+        ),
+      )
+      .run();
+
+    // Mark the canary as rolled back. routing_status='rollback' makes the
+    // operational state visible; status='rolled_back' tracks the lifecycle.
+    await db.update(deployments)
+      .set({
+        routingStatus: 'rollback',
+        routingWeight: 0,
+        status: 'rolled_back',
+        rolledBackAt: nowIso,
+        rolledBackBy: input.userId,
+        updatedAt: nowIso,
+      })
+      .where(eq(deployments.id, canary.id))
+      .run();
+
+    // services.activeDeploymentId / fallbackDeploymentId remain unchanged
+    // across the abort: canary routing never moved the active pointer, so the
+    // restored deployment is already the recorded active. Only refresh
+    // status / updatedAt so the lifecycle reflects the abort.
+    await db.update(services)
+      .set({
+        status: 'deployed',
+        updatedAt: nowIso,
+      })
+      .where(eq(services.id, serviceRouteRecord.id))
+      .run();
+  } catch (dbErr) {
+    if (routingRollbackSnapshot.length > 0) {
+      await restoreRoutingSnapshot(env, routingRollbackSnapshot).catch((e) => {
+        logWarn('Failed to restore routing snapshot during canary abort (non-critical)', {
+          module: 'routing',
+          error: e instanceof Error ? e.message : String(e),
+        });
+      });
+    }
+    throw dbErr;
+  }
+
+  await logDeploymentEvent(
+    env.DB,
+    canary.id,
+    'canary_aborted',
+    null,
+    'Aborted canary deployment and restored previous active routing',
+    {
+      actorAccountId: input.userId,
+      details: {
+        ...auditDetails,
+        rolled_back_to_deployment_id: previousActive.id,
+        rolled_back_to_version: previousActive.version,
+      },
+    },
+  );
+
+  return { deploymentId: canary.id, rolledBackTo: previousActive.id };
 }

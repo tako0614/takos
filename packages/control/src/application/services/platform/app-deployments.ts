@@ -42,6 +42,7 @@ import {
 import {
   collectGroupHostnames,
   createAppDeploymentRecord,
+  createAppDeploymentRecordForManifest,
   deriveSourceInputFromRow,
   ensureTargetGroup,
   hasApplyFailures,
@@ -70,13 +71,13 @@ type CreateAppDeploymentInput = {
 };
 
 function resolveDefaultGroupName(manifest: AppManifest): string {
-  return manifest.metadata.name;
+  return manifest.name;
 }
 
 function fallbackGroupName(row: AppDeploymentRow): string {
   return row.groupNameSnapshot ||
     safeJsonParseOrDefault<AppManifest | null>(row.manifestJson, null)
-      ?.metadata?.name ||
+      ?.name ||
     row.groupId;
 }
 
@@ -379,6 +380,15 @@ export class AppDeploymentService {
     userId: string,
     input: CreateAppDeploymentInput,
   ): Promise<AppDeploymentMutationResult> {
+    if (input.source.kind === "manifest") {
+      return await this.deployFromManifest(spaceId, userId, {
+        manifest: input.source.manifest,
+        artifacts: input.source.artifacts ?? [],
+        groupName: input.groupName,
+        providerName: input.providerName,
+        envName: input.envName,
+      });
+    }
     const resolved = await this.resolveGitSource(spaceId, userId, input.source);
     return await this.deployResolved(spaceId, userId, {
       target: resolved.target,
@@ -390,6 +400,65 @@ export class AppDeploymentService {
       providerName: input.providerName,
       envName: input.envName,
     });
+  }
+
+  async deployFromManifest(
+    spaceId: string,
+    userId: string,
+    input: {
+      manifest: AppManifest;
+      artifacts?: Array<Record<string, unknown>>;
+      groupName?: string;
+      providerName?: GroupProviderName;
+      envName?: string;
+      rollbackOfAppDeploymentId?: string | null;
+    },
+  ): Promise<AppDeploymentMutationResult> {
+    const groupName = input.groupName || resolveDefaultGroupName(input.manifest);
+    const group = await this.ensureTargetGroup(
+      spaceId,
+      groupName,
+      input.manifest,
+      {
+        providerName: input.providerName,
+        envName: input.envName,
+      },
+    );
+    const envName = input.envName ?? group.env ?? null;
+    const applyResult = buildSafeApplyResult(
+      await applyManifest(
+        this.env,
+        group.id,
+        input.manifest,
+        {
+          groupName: group.name,
+          envName: envName ?? undefined,
+        },
+      ),
+    );
+    const state = await getGroupState(this.env, group.id);
+    const hostnames = collectGroupHostnames(state);
+    const deploymentId = generateId();
+    const appDeployment = await createAppDeploymentRecordForManifest(this.env, {
+      deploymentId,
+      group,
+      manifest: input.manifest,
+      artifacts: input.artifacts ?? [],
+      hostnames,
+      applyResult,
+      createdByAccountId: userId,
+      rollbackOfAppDeploymentId: input.rollbackOfAppDeploymentId,
+    });
+    if (!hasApplyFailures(applyResult)) {
+      await updateGroupSourceProjection(this.env, group.id, {
+        kind: "local_upload",
+        currentAppDeploymentId: appDeployment.id,
+      });
+    }
+    return {
+      appDeployment,
+      applyResult,
+    };
   }
 
   async deployFromRepoRef(

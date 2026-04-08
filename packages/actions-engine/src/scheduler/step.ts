@@ -28,8 +28,6 @@ import {
   defaultShellExecutor,
   resolvePlatformDefaultShell,
   type ShellExecutor,
-  type ShellExecutorOptions,
-  type ShellExecutorResult,
 } from "./step-shell-executor.ts";
 
 /**

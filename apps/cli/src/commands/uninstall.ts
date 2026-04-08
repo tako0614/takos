@@ -7,7 +7,7 @@ import {
 } from "../lib/apply/cli-output.ts";
 import { printJson, resolveSpaceId } from "../lib/cli-utils.ts";
 import { cliExit } from "../lib/command-exit.ts";
-import type { DiffResult } from "../lib/state/diff.ts";
+import type { DiffResult } from "../lib/apply/types.ts";
 import type { TranslationReport } from "../lib/translation-report.ts";
 
 type UninstallResponse = {

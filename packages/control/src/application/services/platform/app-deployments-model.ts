@@ -15,7 +15,15 @@ export type GitRefDeploymentSource = {
   refType?: RepoRefType;
 };
 
-export type AppDeploymentSourceInput = GitRefDeploymentSource;
+export type ManifestDeploymentSource = {
+  kind: "manifest";
+  manifest: AppManifest;
+  artifacts?: Array<Record<string, unknown>>;
+};
+
+export type AppDeploymentSourceInput =
+  | GitRefDeploymentSource
+  | ManifestDeploymentSource;
 
 export type ResolvedGitTarget = {
   repositoryUrl: string;

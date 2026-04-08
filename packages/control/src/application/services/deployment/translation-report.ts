@@ -4,19 +4,18 @@ import {
   toResourceCapability,
 } from '../resources/capabilities.ts';
 import { describePortableResourceResolution } from '../resources/portable-runtime.ts';
+import type { AppCompute } from '../source/app-manifest-types.ts';
 import type { GroupDesiredState, GroupWorkloadCategory } from './group-state.ts';
 
 export type GroupProviderTarget = 'cloudflare' | 'local' | 'aws' | 'gcp' | 'k8s';
 type WorkloadProvider = 'oci' | 'ecs' | 'cloud-run' | 'k8s';
-type WorkloadProviderSpec = {
-  imageRef?: unknown;
-  artifact?: {
-    kind?: unknown;
-    imageRef?: unknown;
-    provider?: unknown;
-  };
-  provider?: unknown;
-};
+/**
+ * Subset of the flat `AppCompute` type accessed by the translation
+ * reporter. The only field we read is `image`; the previous envelope
+ * shape exposed an `artifact` / `provider` block which the flat schema
+ * retired.
+ */
+type WorkloadProviderSpec = Partial<Pick<AppCompute, 'image'>>;
 export type TranslationStatus = 'native' | 'portable' | 'unsupported';
 export type TranslationResolutionMode = 'cloudflare-native' | 'provider-backed' | 'takos-runtime' | 'unsupported';
 
@@ -91,35 +90,17 @@ function uniqueRequirements(entries: Array<{ requirements: string[] }>): string[
   return Array.from(new Set(entries.flatMap((entry) => entry.requirements))).sort();
 }
 
-function isWorkloadProvider(value: unknown): value is WorkloadProvider {
-  return value === 'oci' || value === 'ecs' || value === 'cloud-run' || value === 'k8s';
-}
-
 function trimString(value: unknown): string | undefined {
   return typeof value === 'string' && value.trim().length > 0 ? value.trim() : undefined;
 }
 
 function getContainerImageRef(spec: WorkloadProviderSpec): string | undefined {
-  const artifactImageRef = trimString(spec.artifact?.imageRef);
-  if (artifactImageRef) {
-    return artifactImageRef;
-  }
-  return trimString(spec.imageRef);
+  return trimString(spec.image);
 }
 
-function getContainerProvider(spec: WorkloadProviderSpec, fallback: WorkloadProvider): WorkloadProvider {
-  if (spec.artifact?.kind === 'image') {
-    const artifactProvider = trimString(spec.artifact.provider);
-    if (artifactProvider && isWorkloadProvider(artifactProvider)) {
-      return artifactProvider;
-    }
-  }
-
-  const declaredProvider = trimString(spec.provider);
-  if (declaredProvider && isWorkloadProvider(declaredProvider)) {
-    return declaredProvider;
-  }
-
+function getContainerProvider(_spec: WorkloadProviderSpec, fallback: WorkloadProvider): WorkloadProvider {
+  // The flat schema no longer carries an explicit per-workload provider
+  // override on the compute entry — fall back to the group-level default.
   return fallback;
 }
 

@@ -1,226 +1,226 @@
+// ============================================================
+// app-manifest-parser/index.ts
+// ============================================================
+//
+// Flat-schema manifest parser entry point (Phase 1).
+//
+// Reads a YAML string, parses the top-level flat schema, and
+// returns an `AppManifest`. The old envelope schema
+// (`apiVersion/kind/metadata/spec`) is explicitly rejected.
+//
+// Top-level fields:
+//   - name       (required)
+//   - version    (optional — semver if present)
+//   - compute    (required shape)
+//   - storage    (optional)
+//   - routes     (optional)
+//   - publish    (optional)
+//   - env        (optional — flat Record<string, string>)
+//   - scopes     (optional)
+//   - oauth      (optional)
+//   - overrides  (optional)
+//
+// This file owns orchestration only — individual sections are
+// implemented in parse-compute.ts, parse-storage.ts, parse-publish.ts,
+// and parse-routes.ts.
+// ============================================================
+
 import YAML from "yaml";
-import type { AppManifest, AppMetadata } from "../app-manifest-types.ts";
+import type {
+  AppManifest,
+  AppManifestOverride,
+  AppOAuthConfig,
+} from "../app-manifest-types.ts";
 import {
   asRecord,
   asRequiredString,
   asString,
   asStringArray,
+  asStringMap,
 } from "../app-manifest-utils.ts";
-import {
-  parseResources,
-  validateResourceBindings,
-} from "../app-manifest-validation.ts";
-import { validateTemplateReferences } from "../app-manifest-template.ts";
-
-import {
-  parseLifecycle,
-  parseUpdateStrategy,
-  validateDependsOn,
-  validateSemver,
-} from "./parse-common.ts";
-import { parseContainers } from "./parse-containers.ts";
-import {
-  buildSyntheticServicesFromWorkers,
-  parseWorkers,
-} from "./parse-workers.ts";
-import {
-  parseFileHandlers,
-  parseMcpServers,
-  parseServices,
-} from "./parse-services.ts";
+import { validateSemver } from "./parse-common.ts";
+import { parseCompute } from "./parse-compute.ts";
+import { parseStorage } from "./parse-storage.ts";
+import { parsePublish } from "./parse-publish.ts";
 import { parseRoutes } from "./parse-routes.ts";
-import { parseEnvConfig } from "./parse-env.ts";
-import { parseOverrides } from "./parse-overrides.ts";
 
-function validateMcpServers(
-  mcpServers: NonNullable<AppManifest["spec"]["mcpServers"]> | undefined,
-  routes: NonNullable<AppManifest["spec"]["routes"]> | undefined,
-  resources: Record<
-    string,
-    NonNullable<AppManifest["spec"]["resources"]>[string]
-  >,
-): void {
-  if (!mcpServers || mcpServers.length === 0) return;
+const ENVELOPE_FIELDS = ["apiVersion", "kind", "metadata", "spec"] as const;
 
-  const routeNames = new Set((routes || []).map((route) => route.name));
-
-  for (const server of mcpServers) {
-    if (server.endpoint && server.route) {
+function rejectEnvelope(record: Record<string, unknown>): void {
+  for (const field of ENVELOPE_FIELDS) {
+    if (record[field] !== undefined) {
       throw new Error(
-        `spec.mcpServers.${server.name} must not specify both endpoint and route`,
-      );
-    }
-    if (server.route && !routeNames.has(server.route)) {
-      throw new Error(
-        `spec.mcpServers.${server.name}.route references unknown route: ${server.route}`,
-      );
-    }
-    if (
-      server.authSecretRef &&
-      resources[server.authSecretRef]?.type !== "secretRef"
-    ) {
-      throw new Error(
-        `spec.mcpServers.${server.name}.authSecretRef must reference a secretRef resource: ${server.authSecretRef}`,
+        "Kubernetes-style manifest envelope is no longer supported. Use flat top-level schema.",
       );
     }
   }
+}
+
+function parseOAuth(raw: unknown): AppOAuthConfig | undefined {
+  if (raw == null) return undefined;
+  const record = asRecord(raw);
+  const clientName = asString(record.clientName, "oauth.clientName");
+  const redirectUris = asStringArray(
+    record.redirectUris,
+    "oauth.redirectUris",
+  );
+  const scopes = asStringArray(record.scopes, "oauth.scopes");
+  const autoEnv = record.autoEnv === true ? true : undefined;
+  const metadataRaw = record.metadata != null
+    ? asRecord(record.metadata)
+    : undefined;
+  const metadata = metadataRaw
+    ? {
+      ...((): Record<string, string> => {
+        const logoUri = asString(metadataRaw.logoUri, "oauth.metadata.logoUri");
+        const tosUri = asString(metadataRaw.tosUri, "oauth.metadata.tosUri");
+        const policyUri = asString(
+          metadataRaw.policyUri,
+          "oauth.metadata.policyUri",
+        );
+        return {
+          ...(logoUri ? { logoUri } : {}),
+          ...(tosUri ? { tosUri } : {}),
+          ...(policyUri ? { policyUri } : {}),
+        };
+      })(),
+    }
+    : undefined;
+  const result: AppOAuthConfig = {
+    ...(clientName ? { clientName } : {}),
+    ...(redirectUris ? { redirectUris } : {}),
+    ...(scopes ? { scopes } : {}),
+    ...(autoEnv ? { autoEnv } : {}),
+    ...(metadata && Object.keys(metadata).length > 0 ? { metadata } : {}),
+  };
+  return Object.keys(result).length > 0 ? result : undefined;
+}
+
+function parseOverrides(
+  raw: unknown,
+): Record<string, AppManifestOverride> | undefined {
+  if (raw == null) return undefined;
+  const record = asRecord(raw);
+  const result: Record<string, AppManifestOverride> = {};
+  for (const [envName, envOverrides] of Object.entries(record)) {
+    const envRecord = asRecord(envOverrides);
+    const entry: AppManifestOverride = {};
+    if (envRecord.compute != null) {
+      entry.compute = parseCompute({ compute: envRecord.compute });
+    }
+    if (envRecord.storage != null) {
+      entry.storage = parseStorage({ storage: envRecord.storage });
+    }
+    if (envRecord.routes != null) {
+      // Routes in overrides are validated against the merged compute
+      // at apply time — the override parser cannot resolve compute
+      // references in isolation, so we accept a thin shape here.
+      entry.routes = parseRoutes(
+        { routes: envRecord.routes },
+        // Pass an empty compute map; `target` ref validation is deferred
+        // to apply-time merge. Phase 2 hooks this up.
+        {},
+      );
+    }
+    if (envRecord.publish != null) {
+      entry.publish = parsePublish({ publish: envRecord.publish });
+    }
+    if (envRecord.env != null) {
+      const envMap = asStringMap(envRecord.env, `overrides.${envName}.env`);
+      if (envMap) entry.env = envMap;
+    }
+    if (envRecord.scopes != null) {
+      const scopes = asStringArray(
+        envRecord.scopes,
+        `overrides.${envName}.scopes`,
+      );
+      if (scopes) entry.scopes = scopes;
+    }
+    if (envRecord.oauth != null) {
+      const oauth = parseOAuth(envRecord.oauth);
+      if (oauth) entry.oauth = oauth;
+    }
+    if (Object.keys(entry).length > 0) {
+      result[envName] = entry;
+    }
+  }
+  return Object.keys(result).length > 0 ? result : undefined;
 }
 
 export function parseAppManifestYaml(raw: string): AppManifest {
   const parsed = YAML.parse(raw);
   const record = asRecord(parsed);
 
-  const apiVersion = asRequiredString(record.apiVersion, "apiVersion");
-  const kind = asRequiredString(record.kind, "kind");
-  if (apiVersion !== "takos.dev/v1alpha1") {
-    throw new Error("apiVersion must be takos.dev/v1alpha1");
-  }
-  if (kind !== "App") {
-    throw new Error("kind must be App");
-  }
+  rejectEnvelope(record);
 
-  const metadataRecord = asRecord(record.metadata);
-  const specRecord = asRecord(record.spec);
-  const metadataAppId = asString(metadataRecord.appId, "metadata.appId");
-  const metadata: AppMetadata = {
-    name: asRequiredString(metadataRecord.name, "metadata.name"),
-    ...(metadataAppId ? { appId: metadataAppId } : {}),
-  };
-
-  // --- shared optional fields ---
-  const specDescription = asString(specRecord.description, "spec.description");
-  const specIcon = asString(specRecord.icon, "spec.icon");
-  const specCategory = asString(specRecord.category, "spec.category");
-  const specTags = asStringArray(specRecord.tags, "spec.tags");
-  const specCapabilities = asStringArray(
-    specRecord.capabilities,
-    "spec.capabilities",
-  );
-  const mcpServers = parseMcpServers(specRecord);
-  const fileHandlers = parseFileHandlers(specRecord);
-
-  const containers = parseContainers(specRecord);
-  const services = parseServices(specRecord);
-  const workers = parseWorkers(specRecord, containers);
-  const envConfig = parseEnvConfig(specRecord);
-  const routes = parseRoutes(specRecord, workers, containers, services);
-  const lifecycle = parseLifecycle(specRecord);
-  const update = parseUpdateStrategy(specRecord);
-  const overrides = parseOverrides(specRecord);
-
-  // Validate dependsOn references across all component types
-  const allComponentNames = new Set([
-    ...Object.keys(containers),
-    ...Object.keys(services),
-    ...Object.keys(workers),
-  ]);
-  for (const [name, container] of Object.entries(containers)) {
-    validateDependsOn(
-      container.dependsOn,
-      `spec.containers.${name}`,
-      allComponentNames,
-    );
-  }
-  for (const [name, service] of Object.entries(services)) {
-    validateDependsOn(
-      service.dependsOn,
-      `spec.services.${name}`,
-      allComponentNames,
-    );
-  }
-  for (const [name, worker] of Object.entries(workers)) {
-    validateDependsOn(
-      worker.dependsOn,
-      `spec.workers.${name}`,
-      allComponentNames,
-    );
+  // --- Top-level scalars ---
+  const name = asRequiredString(record.name, "name");
+  const version = asString(record.version, "version");
+  if (version) {
+    validateSemver(version);
   }
 
-  // Resources — validate against all bindable workloads
-  const syntheticServices = buildSyntheticServicesFromWorkers(
-    workers,
-    services,
-  );
-  const resources = parseResources(specRecord, syntheticServices);
-  validateResourceBindings(syntheticServices, resources);
-  validateMcpServers(mcpServers, routes, resources);
+  // --- Major sections ---
+  const compute = parseCompute(record);
+  const storage = parseStorage(record);
+  const routes = parseRoutes(record, compute);
+  const publish = parsePublish(record);
 
-  // Validate env.inject template references
-  if (envConfig?.inject) {
-    const templateErrors = validateTemplateReferences(envConfig.inject, {
-      containers,
-      services,
-      workers,
-      routes: routes || [],
-      resources,
-    });
-    if (templateErrors.length > 0) {
-      throw new Error(
-        `env.inject template errors: ${templateErrors.join("; ")}`,
-      );
+  // --- Env (flat Record<string, string>) ---
+  const env = asStringMap(record.env, "env") ?? {};
+
+  // --- Scopes ---
+  const scopes = asStringArray(record.scopes, "scopes") ?? [];
+
+  // --- OAuth ---
+  const oauth = parseOAuth(record.oauth);
+
+  // --- Overrides ---
+  const overrides = parseOverrides(record.overrides);
+
+  // --- depends cross-ref validation ---
+  const computeNames = new Set(Object.keys(compute));
+  for (const [name, entry] of Object.entries(compute)) {
+    if (!entry.depends) continue;
+    for (const dep of entry.depends) {
+      if (!computeNames.has(dep)) {
+        throw new Error(
+          `compute.${name}.depends references unknown compute: ${dep}`,
+        );
+      }
     }
   }
 
-  // Validate version is valid semver
-  const version = asRequiredString(specRecord.version, "spec.version");
-  validateSemver(version);
-
-  // Parse takos config with optional minVersion
-  let takosConfig: AppManifest["spec"]["takos"] | undefined;
-  if (specRecord.takos) {
-    const takosRecord = asRecord(specRecord.takos);
-    const minVersion = asString(
-      takosRecord.minVersion,
-      "spec.takos.minVersion",
-    );
-    if (minVersion) {
-      validateSemver(minVersion);
+  // --- queue trigger → storage cross-ref validation ---
+  for (const [computeName, entry] of Object.entries(compute)) {
+    const queueTriggers = entry.triggers?.queues ?? [];
+    for (const trigger of queueTriggers) {
+      if (storage[trigger.storage]?.type !== "queue") {
+        throw new Error(
+          `compute.${computeName}.triggers.queues references unknown queue storage: ${trigger.storage}`,
+        );
+      }
     }
-    const baseTakos = asRecord(specRecord.takos) as unknown as NonNullable<
-      AppManifest["spec"]["takos"]
-    >;
-    takosConfig = {
-      ...baseTakos,
-      ...(minVersion ? { minVersion } : {}),
-    };
   }
 
   return {
-    apiVersion: "takos.dev/v1alpha1",
-    kind: "App",
-    metadata,
-    spec: {
-      version,
-      ...(specDescription ? { description: specDescription } : {}),
-      ...(specIcon ? { icon: specIcon } : {}),
-      ...(specCategory
-        ? { category: specCategory as AppManifest["spec"]["category"] }
-        : {}),
-      ...(specTags ? { tags: specTags } : {}),
-      ...(specCapabilities ? { capabilities: specCapabilities } : {}),
-      ...(envConfig ? { env: envConfig } : {}),
-      ...(specRecord.oauth
-        ? { oauth: asRecord(specRecord.oauth) as AppManifest["spec"]["oauth"] }
-        : {}),
-      ...(takosConfig ? { takos: takosConfig } : {}),
-      ...(Object.keys(resources).length > 0 ? { resources } : {}),
-      ...(Object.keys(containers).length > 0 ? { containers } : {}),
-      ...(Object.keys(services).length > 0 ? { services } : {}),
-      ...(Object.keys(workers).length > 0 ? { workers } : {}),
-      ...(routes && routes.length > 0 ? { routes } : {}),
-      ...(lifecycle ? { lifecycle } : {}),
-      ...(update ? { update } : {}),
-      ...(mcpServers ? { mcpServers } : {}),
-      ...(fileHandlers ? { fileHandlers } : {}),
-      ...(overrides ? { overrides } : {}),
-    },
+    name,
+    ...(version ? { version } : {}),
+    compute,
+    storage,
+    routes,
+    publish,
+    env,
+    scopes,
+    ...(oauth ? { oauth } : {}),
+    ...(overrides ? { overrides } : {}),
   };
 }
 
 export const parseAppManifestText = parseAppManifestYaml;
 
-// Re-export sub-module functions for any consumers that import them directly
-export { parseContainers } from "./parse-containers.ts";
-export { parseServices } from "./parse-services.ts";
-export { parseWorkers } from "./parse-workers.ts";
-export { parseEnvConfig } from "./parse-env.ts";
+// Re-export parsers for any consumers that import them directly
+export { parseCompute } from "./parse-compute.ts";
+export { parseStorage } from "./parse-storage.ts";
+export { parsePublish } from "./parse-publish.ts";
+export { parseRoutes } from "./parse-routes.ts";

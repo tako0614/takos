@@ -1,4 +1,5 @@
 import fs from "node:fs/promises";
+import type { Command } from "commander";
 import { bold, dim, green } from "@std/fmt/colors";
 import type { ResourceType } from "../lib/entities/resource.ts";
 import {
@@ -11,6 +12,7 @@ import {
   printJson,
   printJsonOrLog,
   requestApiOrThrow,
+  withCommandError,
 } from "./resource-helpers.ts";
 import {
   ensureGroupInSpace,
@@ -457,4 +459,93 @@ export async function detachResourceFromGroup(
   const resource = await requireResource(spaceId, name);
   await setResourceGroup(resource.id, null);
   console.log(green(`Detached resource '${name}' from its group.`));
+}
+
+// ── Secret resources (storage.<name>.type: secret) ──────────────────────────
+
+export type SecretReadResponse = {
+  id: string;
+  name: string;
+  value: string;
+};
+
+export type SecretRotateResponse = {
+  id: string;
+  name: string;
+  rotated_at: string;
+  value: string;
+};
+
+export type ResourceSecretCommandOptions = ResourceJsonCommandOptions;
+
+export async function getResourceSecret(
+  name: string,
+  options: ResourceSecretCommandOptions,
+): Promise<void> {
+  await withResolvedResource(name, options, async ({ resource }) => {
+    const data = await requestResourceByIdApi<SecretReadResponse>(
+      resource.id,
+      "/secret-value",
+    );
+    if (options.json) {
+      printJson(data);
+      return;
+    }
+    // Default: emit only the secret value on stdout so the result is easy to
+    // pipe into other commands (e.g. `takos resource get-secret X | pbcopy`).
+    process.stdout.write(`${data.value}\n`);
+  });
+}
+
+export async function rotateResourceSecret(
+  name: string,
+  options: ResourceSecretCommandOptions,
+): Promise<void> {
+  await withResolvedResource(name, options, async ({ resource }) => {
+    const data = await requestResourceByIdApi<SecretRotateResponse>(
+      resource.id,
+      "/rotate-secret",
+      { method: "POST" },
+    );
+    if (options.json) {
+      printJson(data);
+      return;
+    }
+    process.stdout.write(`${data.value}\n`);
+    console.log(dim(`  rotated at ${data.rotated_at}`));
+  });
+}
+
+export function registerResourceSecretCommands(resourceCmd: Command): void {
+  resourceCmd
+    .command("get-secret <name>")
+    .description(
+      "Read the value of a secret-typed resource (storage.<name>.type: secret)",
+    )
+    .option("--space <id>", "Target workspace ID")
+    .option("--json", "Machine-readable JSON output")
+    .action(
+      withCommandError(
+        "Failed to read secret",
+        async (name: string, options: ResourceSecretCommandOptions) => {
+          await getResourceSecret(name, options);
+        },
+      ),
+    );
+
+  resourceCmd
+    .command("rotate-secret <name>")
+    .description(
+      "Rotate the value of a secret-typed resource and return the new value",
+    )
+    .option("--space <id>", "Target workspace ID")
+    .option("--json", "Machine-readable JSON output")
+    .action(
+      withCommandError(
+        "Failed to rotate secret",
+        async (name: string, options: ResourceSecretCommandOptions) => {
+          await rotateResourceSecret(name, options);
+        },
+      ),
+    );
 }

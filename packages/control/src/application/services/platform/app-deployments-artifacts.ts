@@ -2,20 +2,18 @@ import { and, desc, eq } from "drizzle-orm";
 import { getDb, workflowJobs, workflowRuns } from "../../../infra/db/index.ts";
 import { BadRequestError, NotFoundError } from "takos-common/errors";
 import type { Env } from "../../../shared/types/index.ts";
-import { getBundleContent } from "../deployment/artifact-io.ts";
 import { isDigestPinnedImageRef } from "../deployment/image-ref.ts";
 import {
-  findDeploymentByArtifactRef,
-  getDeploymentById,
-} from "../deployment/store.ts";
-import {
-  type AppContainer,
+  type AppCompute,
   type AppDeploymentBuildSource,
   type AppManifest,
-  type AppService,
   parseAndValidateWorkflowYaml,
   validateDeployProducerJob,
 } from "../source/app-manifest.ts";
+
+// Narrowed aliases so the existing helper signatures still read naturally.
+type AppContainer = AppCompute & { kind: "attached-container" };
+type AppService = AppCompute & { kind: "service" };
 import { resolveWorkflowArtifactFileForJob } from "./workflow-artifacts.ts";
 import * as gitStore from "../git-smart/index.ts";
 import {
@@ -58,9 +56,10 @@ function resolveContainerImageArtifact(
   workloadCategory: "container" | "service",
   spec: AppContainer | AppService,
 ): ApplyContainerArtifact | null {
-  const imageRef = spec.artifact?.kind === "image"
-    ? spec.artifact.imageRef
-    : spec.imageRef;
+  // Flat schema: the image ref for a service / attached container lives
+  // in `compute.image`. The previous envelope-level `artifact` field was
+  // retired in Phase 1.
+  const imageRef = typeof spec.image === "string" ? spec.image : undefined;
   if (!imageRef) return null;
   if (!isDigestPinnedImageRef(imageRef)) {
     throw new BadRequestError(
@@ -72,11 +71,6 @@ function resolveContainerImageArtifact(
   return {
     kind: "container_image",
     imageRef,
-    ...(spec.artifact?.kind === "image" && spec.artifact.provider
-      ? { provider: spec.artifact.provider }
-      : spec.provider
-      ? { provider: spec.provider }
-      : {}),
     deployMessage: `takos deploy ${name}`,
   };
 }
@@ -199,11 +193,17 @@ export async function resolveBuildArtifacts(
   const buildSources: AppDeploymentBuildSource[] = [];
   const artifacts: Record<string, SnapshotApplyArtifact> = {};
 
-  for (
-    const [workerName, worker] of Object.entries(manifest.spec.workers || {})
-  ) {
+  const workerEntries = Object.entries(manifest.compute ?? {}).filter(
+    ([, compute]) => compute.kind === "worker",
+  );
+  for (const [workerName, worker] of workerEntries) {
     if (worker.build?.fromWorkflow) {
       const build = worker.build.fromWorkflow;
+      if (!build.artifactPath) {
+        throw new BadRequestError(
+          `compute.${workerName}.build.fromWorkflow.artifactPath is required for app deployments`,
+        );
+      }
       const artifactPath = normalizeRepoPath(build.artifactPath);
       const workflowContent = await readRepoTextFileAtTarget(
         env,
@@ -323,7 +323,7 @@ export async function resolveBuildArtifacts(
         runId: foundRun.id,
         jobId: foundRun.jobId,
         artifactName: build.artifact,
-        artifactPath: build.artifactPath,
+        artifactPath,
       });
       const artifactObject = await bucket.get(artifactFile.r2Key) ||
         await env.TENANT_SOURCE?.get(artifactFile.r2Key) ||
@@ -344,95 +344,45 @@ export async function resolveBuildArtifacts(
       continue;
     }
 
-    if (worker.artifact?.kind === "bundle" && worker.artifact.deploymentId) {
-      const deployment = await getDeploymentById(
-        env.DB,
-        worker.artifact.deploymentId,
+    // In the flat schema there are no envelope-level `artifact.kind=bundle`
+    // shortcuts — workers always build from workflow artifacts. When no
+    // build workflow is declared and the artifact path cannot be resolved,
+    // the deploy pipeline falls through to the CLI upload path.
+  }
+
+  // Attached containers (nested under workers) and top-level services.
+  for (const [name, compute] of Object.entries(manifest.compute ?? {})) {
+    if (compute.kind === "service") {
+      const artifact = resolveContainerImageArtifact(
+        name,
+        "service",
+        compute as AppService,
       );
-      if (!deployment) {
-        throw new NotFoundError(
-          `Referenced deployment "${worker.artifact.deploymentId}" for worker "${workerName}" was not found`,
-        );
-      }
-      const bundleContent = await getBundleContent(env, deployment);
-      const snapshotArtifactPath = `artifacts/workers/${workerName}.js`;
-      artifacts[workerName] = {
-        kind: "worker_bundle",
-        bundleContent,
-        deployMessage: `takos deploy ${workerName}`,
-      };
-      packageFiles.set(snapshotArtifactPath, bundleContent);
+      if (artifact) artifacts[name] = artifact;
       continue;
     }
+    if (compute.kind === "worker" && compute.containers) {
+      for (const [childName, child] of Object.entries(compute.containers)) {
+        const artifact = resolveContainerImageArtifact(
+          childName,
+          "container",
+          child as AppContainer,
+        );
+        if (artifact) artifacts[childName] = artifact;
+      }
+    }
+  }
 
-    if (worker.artifact?.kind === "bundle" && worker.artifact.artifactRef) {
-      const deployment = await findDeploymentByArtifactRef(
-        env.DB,
-        worker.artifact.artifactRef,
+  for (const resource of Object.values(manifest.storage ?? {})) {
+    if (resource.type !== "sql" || !resource.migrations) continue;
+    if (!looksLikeInlineSql(resource.migrations)) {
+      await addRepoSqlPathToPackage(
+        env,
+        target,
+        resource.migrations,
+        packageFiles,
       );
-      if (!deployment) {
-        throw new NotFoundError(
-          `Referenced artifact "${worker.artifact.artifactRef}" for worker "${workerName}" was not found`,
-        );
-      }
-      const bundleContent = await getBundleContent(env, deployment);
-      const snapshotArtifactPath = `artifacts/workers/${workerName}.js`;
-      artifacts[workerName] = {
-        kind: "worker_bundle",
-        bundleContent,
-        deployMessage: `takos deploy ${workerName}`,
-      };
-      packageFiles.set(snapshotArtifactPath, bundleContent);
     }
-  }
-
-  for (
-    const [name, container] of Object.entries(manifest.spec.containers || {})
-  ) {
-    const artifact = resolveContainerImageArtifact(
-      name,
-      "container",
-      container,
-    );
-    if (artifact) {
-      artifacts[name] = artifact;
-    }
-  }
-  for (
-    const [name, service] of Object.entries(manifest.spec.services || {})
-  ) {
-    const artifact = resolveContainerImageArtifact(name, "service", service);
-    if (artifact) {
-      artifacts[name] = artifact;
-    }
-  }
-
-  for (const resource of Object.values(manifest.spec.resources || {})) {
-    if (resource.type !== "d1" || !resource.migrations) continue;
-    if (typeof resource.migrations === "string") {
-      if (!looksLikeInlineSql(resource.migrations)) {
-        await addRepoSqlPathToPackage(
-          env,
-          target,
-          resource.migrations,
-          packageFiles,
-        );
-      }
-      continue;
-    }
-
-    await addRepoSqlPathToPackage(
-      env,
-      target,
-      resource.migrations.up,
-      packageFiles,
-    );
-    await addRepoSqlPathToPackage(
-      env,
-      target,
-      resource.migrations.down,
-      packageFiles,
-    );
   }
 
   return { buildSources, packageFiles, artifacts };

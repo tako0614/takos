@@ -119,10 +119,18 @@ export function createCliTestEnv(): CliTestEnvHandle {
 export async function withCliTestEnv(
   run: (ctx: CliTestContext) => Promise<void> | void,
 ): Promise<void> {
+  // Disable terminal colors so tests can compare against plain strings.
+  const previousNoColor = Deno.env.get("NO_COLOR");
+  Deno.env.set("NO_COLOR", "1");
   const env = createCliTestEnv();
   try {
     await run(env);
   } finally {
     env.dispose();
+    if (previousNoColor === undefined) {
+      Deno.env.delete("NO_COLOR");
+    } else {
+      Deno.env.set("NO_COLOR", previousNoColor);
+    }
   }
 }

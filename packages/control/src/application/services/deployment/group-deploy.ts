@@ -1,20 +1,21 @@
 /**
  * Group Deploy Orchestrator.
  *
- * Deploys an entire app.yml manifest as a group — provisions resources,
- * deploys worker services via wrangler, and wires up service bindings.
+ * Deploys an entire app.yml manifest as a group — provisions storage,
+ * deploys worker compute via wrangler, and wires up every storage binding.
  *
  * This bypasses the Takos store install flow and deploys directly to
  * Cloudflare infrastructure using the Cloudflare API and wrangler CLI.
  *
- * Usage:
- *   const result = await deployGroup({ manifest, env: 'staging', ... });
+ * Phase 2: rewritten against the flat-schema `AppManifest`. Worker
+ * selection is now `compute.filter(kind=worker)` and bindings are
+ * materialized from the top-level `storage` map.
  */
 import { execFile } from "node:child_process";
 import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
-import type { WorkerService } from "./group-deploy-manifest.ts";
+import type { AppCompute } from "../source/app-manifest-types.ts";
 import type {
   BindingResult,
   GroupDeployOptions,
@@ -63,18 +64,14 @@ async function deployWorkerWithWrangler(
     dryRun?: boolean;
   },
 ): Promise<{ success: boolean; error?: string }> {
-  // Write temporary wrangler.toml
   const tmpDir = await fs.mkdtemp(
     path.join(os.tmpdir(), "takos-group-deploy-"),
   );
   const tomlPath = path.join(tmpDir, "wrangler.toml");
-  // Create a minimal entry point in case artifactPath is relative
   const entryPath = path.join(tmpDir, "index.js");
 
   try {
     await fs.writeFile(tomlPath, tomlContent, "utf8");
-    // Placeholder entry — the real bundle comes from the artifact path in the manifest.
-    // For group-deploy we expect the artifact to be available at the main path.
     await fs.writeFile(
       entryPath,
       'export default { fetch() { return new Response("ok"); } };',
@@ -90,7 +87,6 @@ async function deployWorkerWithWrangler(
       CLOUDFLARE_API_TOKEN: options.apiToken,
     };
 
-    // Deploy the worker
     const deployResult = await execCommand(
       "npx",
       [
@@ -114,7 +110,6 @@ async function deployWorkerWithWrangler(
       };
     }
 
-    // Set secrets if any
     if (options.secrets && options.secrets.size > 0) {
       for (const [secretName, secretValue] of options.secrets) {
         const secretResult = await execCommand(
@@ -124,7 +119,6 @@ async function deployWorkerWithWrangler(
             cwd: tmpDir,
             env: {
               ...wranglerEnv,
-              // wrangler reads stdin for secret value; use echo pipe workaround
               WRANGLER_SECRET_VALUE: secretValue,
             },
           },
@@ -142,7 +136,6 @@ async function deployWorkerWithWrangler(
 
     return { success: true };
   } finally {
-    // Cleanup temp directory
     await fs.rm(tmpDir, { recursive: true, force: true }).catch(
       () => {/* cleanup: best-effort temp dir removal */},
     );
@@ -153,7 +146,7 @@ async function deployWorkerWithWrangler(
 
 function buildDryRunServiceResult(
   serviceName: string,
-  _service: WorkerService,
+  _worker: AppCompute,
   scriptName: string,
 ): ServiceDeployResult {
   return {
@@ -170,13 +163,13 @@ function buildDryRunServiceResult(
  * Deploy an app manifest as a group.
  *
  * Steps:
- * 1. Provision resources (D1, R2, KV, secrets)
- * 2. Deploy each worker service via wrangler
- * 3. Wire up service bindings
+ * 1. Provision storage (sql / object-store / key-value / secret)
+ * 2. Deploy each worker compute via wrangler
+ * 3. Wire up every storage binding as part of the wrangler config
  * 4. Report results
  *
- * Errors in individual services do not abort the entire deployment —
- * all services are attempted and the result reports each status.
+ * Errors in individual workers do not abort the entire deployment —
+ * every worker is attempted and the result reports each status.
  */
 export async function deployGroup(
   options: GroupDeployOptions,
@@ -191,7 +184,7 @@ export async function deployGroup(
     compatibilityDate,
   } = options;
 
-  const groupName = options.groupName || manifest.metadata.name;
+  const groupName = options.groupName || manifest.name;
 
   const result: GroupDeployResult = {
     groupName,
@@ -203,7 +196,7 @@ export async function deployGroup(
     bindings: [],
   };
 
-  // ── Step 1: Provision resources ──────────────────────────────────────────
+  // ── Step 1: Provision storage ─────────────────────────────────────────────
 
   let client: CloudflareApiClient | null = null;
   if (!dryRun) {
@@ -211,21 +204,30 @@ export async function deployGroup(
   }
 
   const { provisioned, results: resourceResults } = await provisionResources(
-    manifest.spec.resources || {},
+    manifest.storage ?? {},
     { accountId, apiToken, groupName, env, dryRun },
     client,
   );
   result.resources = resourceResults;
 
-  // Collect secrets for each service (secretRef resources referenced by bindings)
-  const secretsByService = new Map<string, Map<string, string>>();
+  // Collect secrets so every deployed worker gets them applied.
+  const sharedSecrets = new Map<string, string>();
+  for (const provisionedResource of provisioned.values()) {
+    if (provisionedResource.type === "secret" && provisionedResource.id) {
+      sharedSecrets.set(
+        provisionedResource.binding,
+        provisionedResource.id,
+      );
+    }
+  }
 
-  // ── Step 2: Deploy each service ──────────────────────────────────────────
+  // ── Step 2: Deploy each worker ────────────────────────────────────────────
 
-  for (
-    const [workerName, worker] of Object.entries(manifest.spec.workers ?? {})
-  ) {
-    // Worker service
+  const workerEntries = Object.entries(manifest.compute ?? {}).filter(
+    ([, compute]) => compute.kind === "worker",
+  );
+
+  for (const [workerName, worker] of workerEntries) {
     const wranglerConfig = generateWranglerConfig(worker, workerName, {
       groupName,
       env,
@@ -238,62 +240,15 @@ export async function deployGroup(
       result.services.push(
         buildDryRunServiceResult(workerName, worker, wranglerConfig.name),
       );
-
-      // Report bindings that would be created
-      if (worker.bindings?.d1) {
-        for (const resourceName of worker.bindings.d1) {
-          result.bindings.push({
-            from: workerName,
-            to: resourceName,
-            type: "d1",
-            status: "bound",
-          });
-        }
-      }
-      if (worker.bindings?.r2) {
-        for (const resourceName of worker.bindings.r2) {
-          result.bindings.push({
-            from: workerName,
-            to: resourceName,
-            type: "r2",
-            status: "bound",
-          });
-        }
-      }
-      if (worker.bindings?.kv) {
-        for (const resourceName of worker.bindings.kv) {
-          result.bindings.push({
-            from: workerName,
-            to: resourceName,
-            type: "kv",
-            status: "bound",
-          });
-        }
-      }
-      if (worker.bindings?.services) {
-        for (const targetService of worker.bindings.services) {
-          result.bindings.push({
-            from: workerName,
-            to: targetService,
-            type: "service",
-            status: "bound",
-          });
-        }
+      for (const [resourceName, resource] of provisioned) {
+        result.bindings.push({
+          from: workerName,
+          to: resourceName,
+          type: resource.type,
+          status: "bound",
+        });
       }
       continue;
-    }
-
-    // Collect secrets for this service
-    const serviceSecrets = new Map<string, string>();
-    for (const [_resourceName, resource] of provisioned) {
-      if (resource.type === "secretRef") {
-        // Check if this service references this secret via its bindings
-        // For secretRef, the resource ID holds the generated value
-        serviceSecrets.set(resource.binding, resource.id);
-      }
-    }
-    if (serviceSecrets.size > 0) {
-      secretsByService.set(workerName, serviceSecrets);
     }
 
     const toml = serializeWranglerToml(wranglerConfig);
@@ -303,7 +258,7 @@ export async function deployGroup(
         accountId,
         apiToken,
         namespace,
-        secrets: serviceSecrets,
+        secrets: sharedSecrets,
         dryRun: false,
       });
 
@@ -314,14 +269,9 @@ export async function deployGroup(
           status: "deployed",
           scriptName: wranglerConfig.name,
         });
-
-        // Record bindings as successful
-        const bindingResults = collectBindingResults(
-          workerName,
-          worker,
-          "bound",
+        result.bindings.push(
+          ...collectBindingResults(workerName, provisioned, "bound"),
         );
-        result.bindings.push(...bindingResults);
       } else {
         result.services.push({
           name: workerName,
@@ -330,13 +280,9 @@ export async function deployGroup(
           scriptName: wranglerConfig.name,
           error: deployResult.error,
         });
-
-        const bindingResults = collectBindingResults(
-          workerName,
-          worker,
-          "failed",
+        result.bindings.push(
+          ...collectBindingResults(workerName, provisioned, "failed"),
         );
-        result.bindings.push(...bindingResults);
       }
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
@@ -354,37 +300,18 @@ export async function deployGroup(
 }
 
 function collectBindingResults(
-  serviceName: string,
-  service: WorkerService,
+  workerName: string,
+  provisioned: Map<string, import("./group-deploy-types.ts").ProvisionedResource>,
   status: "bound" | "failed",
 ): BindingResult[] {
   const results: BindingResult[] = [];
-
-  if (service.bindings?.d1) {
-    for (const resourceName of service.bindings.d1) {
-      results.push({ from: serviceName, to: resourceName, type: "d1", status });
-    }
+  for (const [resourceName, resource] of provisioned) {
+    results.push({
+      from: workerName,
+      to: resourceName,
+      type: resource.type,
+      status,
+    });
   }
-  if (service.bindings?.r2) {
-    for (const resourceName of service.bindings.r2) {
-      results.push({ from: serviceName, to: resourceName, type: "r2", status });
-    }
-  }
-  if (service.bindings?.kv) {
-    for (const resourceName of service.bindings.kv) {
-      results.push({ from: serviceName, to: resourceName, type: "kv", status });
-    }
-  }
-  if (service.bindings?.services) {
-    for (const targetService of service.bindings.services) {
-      results.push({
-        from: serviceName,
-        to: targetService,
-        type: "service",
-        status,
-      });
-    }
-  }
-
   return results;
 }

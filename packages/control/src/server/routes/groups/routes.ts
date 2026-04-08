@@ -1,8 +1,9 @@
 import { type Context, Hono } from "hono";
-import { and, eq, inArray, isNull, ne } from "drizzle-orm";
+import { and, desc, eq, inArray, isNull, lt, ne } from "drizzle-orm";
 import type { Env } from "../../../shared/types/index.ts";
 import { spaceAccess, type SpaceAccessRouteEnv } from "../route-auth.ts";
 import {
+  appDeployments,
   appTokens,
   deployments,
   getDb,
@@ -42,6 +43,7 @@ import {
 import { getUpdateType } from "../../../application/services/deployment/store-install.ts";
 import { safeJsonParseOrDefault } from "../../../shared/utils/logger.ts";
 import type { AppManifest } from "../../../application/services/source/app-manifest-types.ts";
+import { AppDeploymentService } from "../../../application/services/platform/app-deployments.ts";
 
 type GroupsContext = Context<SpaceAccessRouteEnv>;
 type GroupRouteBody = Record<string, unknown>;
@@ -223,11 +225,8 @@ function resolveGroupName(
   if (typeof raw === "string" && raw.trim().length > 0) {
     return raw.trim();
   }
-  if (
-    typeof manifest?.metadata?.name === "string" &&
-    manifest.metadata.name.trim().length > 0
-  ) {
-    return manifest.metadata.name.trim();
+  if (typeof manifest?.name === "string" && manifest.name.trim().length > 0) {
+    return manifest.name.trim();
   }
   throw new BadRequestError("group_name is required");
 }
@@ -279,14 +278,14 @@ function parseGroupSourceProjection(
 
 function buildUninstallManifest(group: GroupRow): AppManifest {
   return {
-    apiVersion: "takos.dev/v1alpha1",
-    kind: "App",
-    metadata: {
-      name: group.name,
-    },
-    spec: {
-      version: group.appVersion || "0.0.0",
-    },
+    name: group.name,
+    ...(group.appVersion ? { version: group.appVersion } : {}),
+    compute: {},
+    storage: {},
+    routes: [],
+    publish: [],
+    env: {},
+    scopes: [],
   };
 }
 
@@ -570,7 +569,7 @@ async function putGroupDesiredHandler(c: GroupsContext) {
   const now = new Date().toISOString();
   await db.update(groups)
     .set({
-      appVersion: desired.spec.version ?? null,
+      appVersion: desired.version ?? null,
       desiredSpecJson: JSON.stringify(desired),
       updatedAt: now,
     })
@@ -740,8 +739,8 @@ async function applyGroupByNameHandler(c: GroupsContext) {
     groupName,
     provider: input.providerProvided ? input.provider : undefined,
     envName: input.envProvided ? input.envName : undefined,
-    appVersion: typeof input.manifest?.spec?.version === "string"
-      ? input.manifest.spec.version
+    appVersion: typeof input.manifest?.version === "string"
+      ? input.manifest.version
       : null,
     manifest: input.manifest,
   }, groupRecordDeps());
@@ -824,6 +823,59 @@ async function updatesGroupHandler(c: GroupsContext) {
   });
 }
 
+async function rollbackGroupHandler(c: GroupsContext) {
+  const { space } = c.get("access");
+  const user = c.get("user");
+  if (!user) {
+    throw new BadRequestError("Authentication required");
+  }
+  const group = await requireGroupInSpace(c);
+  if (!group.currentAppDeploymentId) {
+    throw new ConflictError(
+      "Group has no current app deployment to roll back",
+    );
+  }
+  const currentDeploymentId = group.currentAppDeploymentId;
+
+  // Resolve the prior successful deployment so the response can advertise the
+  // version we are rolling back TO. This mirrors the workers rollback shape
+  // (`rolled_back_to` is the previous successful deployment, not the current).
+  const db = groupsRouteDeps.getDb(c.env.DB);
+  const currentRow = await db.select().from(appDeployments).where(and(
+    eq(appDeployments.id, currentDeploymentId),
+    eq(appDeployments.spaceId, space.id),
+    ne(appDeployments.status, "deleted"),
+  )).get();
+  if (!currentRow) {
+    throw new NotFoundError("App deployment");
+  }
+  const previousRow = await db.select().from(appDeployments).where(and(
+    eq(appDeployments.spaceId, space.id),
+    eq(appDeployments.groupId, currentRow.groupId),
+    eq(appDeployments.status, "applied"),
+    ne(appDeployments.id, currentRow.id),
+    lt(appDeployments.createdAt, currentRow.createdAt),
+  )).orderBy(desc(appDeployments.createdAt)).get();
+  if (!previousRow) {
+    throw new ConflictError(
+      "No previous successful deployment to roll back to",
+    );
+  }
+
+  const result = await new AppDeploymentService(c.env).rollback(
+    space.id,
+    user.id,
+    currentDeploymentId,
+  );
+  return c.json({
+    group_id: group.id,
+    deployment_id: result.appDeployment.id,
+    rolled_back_to: previousRow.id,
+    app_deployment: result.appDeployment,
+    apply_result: result.applyResult,
+  });
+}
+
 // ---------------------------------------------------------------------------
 // Router
 // ---------------------------------------------------------------------------
@@ -900,6 +952,11 @@ groupsRouter
     "/spaces/:spaceId/groups/:groupId/apply",
     spaceAccess({ roles: ["owner", "admin", "editor"] }),
     applyGroupHandler,
+  )
+  .post(
+    "/spaces/:spaceId/groups/:groupId/rollback",
+    spaceAccess({ roles: ["owner", "admin", "editor"] }),
+    rollbackGroupHandler,
   )
   .get(
     "/spaces/:spaceId/groups/:groupId/updates",

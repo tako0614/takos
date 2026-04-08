@@ -69,7 +69,7 @@ Deno.test("GitPushLockDO releases a matching lock", async () => {
 
   assertEquals(response.status, 200);
   assertEquals(body, { ok: true, released: true });
-  assertEquals(storage.delete.calls.map((call) => call.args[0]), ["lock"]);
+  assertEquals(storage.delete.calls.map((call: { args: unknown[] }) => call.args[0]), ["lock"]);
   assertEquals(storage.deleteAlarm.calls.length, 1);
 });
 
@@ -103,7 +103,7 @@ Deno.test("GitPushLockDO alarm clears expired locks", async () => {
 
   await instance.alarm();
 
-  assertEquals(storage.delete.calls.map((call) => call.args[0]), ["lock"]);
+  assertEquals(storage.delete.calls.map((call: { args: unknown[] }) => call.args[0]), ["lock"]);
 });
 
 Deno.test("GitPushLockDO alarm reschedules active locks", async () => {
@@ -114,7 +114,7 @@ Deno.test("GitPushLockDO alarm reschedules active locks", async () => {
   await instance.alarm();
 
   assertEquals(storage.delete.calls.length, 0);
-  assertEquals(storage.setAlarm.calls.map((call) => call.args[0]), [
+  assertEquals(storage.setAlarm.calls.map((call: { args: unknown[] }) => call.args[0]), [
     futureExpiry,
   ]);
   assert(storage._getAlarm() === futureExpiry);

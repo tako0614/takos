@@ -3,33 +3,32 @@ import {
   buildTranslationReport,
 } from "@/services/deployment/translation-report";
 import type { GroupDesiredState } from "@/services/deployment/group-state";
+import type { AppManifest } from "@/application/services/source/app-manifest-types.ts";
 
 import { assert, assertEquals, assertThrows } from "jsr:@std/assert";
+
+function baseManifest(): AppManifest {
+  return {
+    name: "demo",
+    version: "1.0.0",
+    compute: {},
+    storage: {},
+    routes: [],
+    publish: [],
+    env: {},
+    scopes: [],
+  };
+}
 
 function makeDesiredState(
   provider: string,
   options?: {
-    webImageRef?: string;
-    webProvider?: "oci" | "ecs" | "cloud-run" | "k8s";
+    webImage?: string;
   },
 ): GroupDesiredState {
-  const normalizedProvider = options?.webProvider;
-  const hasImageRef = typeof options?.webImageRef === "string" &&
-    options.webImageRef.trim().length > 0;
-
-  const webSpec = hasImageRef
-    ? {
-      ...(normalizedProvider
-        ? {
-          provider: normalizedProvider,
-          artifact: { kind: "image", imageRef: options.webImageRef! },
-        }
-        : { imageRef: options.webImageRef! }),
-      imageRef: options.webImageRef,
-      port: 8080,
-      provider: normalizedProvider,
-    }
-    : {};
+  const webSpec = options?.webImage
+    ? { kind: "service" as const, image: options.webImage, port: 8080 }
+    : { kind: "service" as const };
 
   return {
     apiVersion: "takos.dev/v1alpha1",
@@ -38,31 +37,20 @@ function makeDesiredState(
     version: "1.0.0",
     provider,
     env: "production",
-    manifest: {
-      apiVersion: "takos.dev/v1alpha1",
-      kind: "AppManifest",
-      metadata: { name: "demo" },
-      spec: { version: "1.0.0" },
-    } as never,
+    manifest: baseManifest(),
     resources: {
       db: {
         name: "db",
-        type: "d1",
-        spec: { type: "d1" } as never,
+        type: "sql",
+        spec: { type: "sql" },
         specFingerprint: "db",
-      },
-      bucket: {
-        name: "bucket",
-        type: "r2",
-        spec: { type: "r2" } as never,
-        specFingerprint: "bucket",
       },
     },
     workloads: {
       api: {
         name: "api",
         category: "worker",
-        spec: {} as never,
+        spec: { kind: "worker" },
         specFingerprint: "api",
         dependsOn: [],
         routeNames: ["api-route"],
@@ -70,7 +58,7 @@ function makeDesiredState(
       web: {
         name: "web",
         category: "service",
-        spec: webSpec as never,
+        spec: webSpec,
         specFingerprint: "web",
         dependsOn: [],
         routeNames: [],
@@ -91,24 +79,10 @@ Deno.test("buildTranslationReport - maps cloudflare resources and workloads to n
   assertEquals(report.resources, [
     {
       name: "db",
-      publicType: "d1",
+      publicType: "sql",
       semanticType: "sql",
       implementation: "d1",
       driver: "cloudflare-d1",
-      provider: "cloudflare-native",
-      status: "native",
-      resolutionMode: "cloudflare-native",
-      requirements: ["CF_ACCOUNT_ID", "CF_API_TOKEN"],
-      notes: [
-        "Takos runtime realizes this Cloudflare-native resource directly on the Cloudflare backend.",
-      ],
-    },
-    {
-      name: "bucket",
-      publicType: "r2",
-      semanticType: "object_store",
-      implementation: "r2",
-      driver: "cloudflare-r2",
       provider: "cloudflare-native",
       status: "native",
       resolutionMode: "cloudflare-native",
@@ -166,7 +140,7 @@ Deno.test("buildTranslationReport - maps non-cloudflare resources and workloads 
   assertEquals(report.resources, [
     {
       name: "db",
-      publicType: "d1",
+      publicType: "sql",
       semanticType: "sql",
       implementation: "d1",
       driver: "takos-sql",
@@ -174,20 +148,6 @@ Deno.test("buildTranslationReport - maps non-cloudflare resources and workloads 
       status: "portable",
       resolutionMode: "provider-backed",
       requirements: ["POSTGRES_URL or DATABASE_URL"],
-      notes: [
-        "Takos runtime on aws realizes this Cloudflare-native resource through a provider-backed adapter.",
-      ],
-    },
-    {
-      name: "bucket",
-      publicType: "r2",
-      semanticType: "object_store",
-      implementation: "r2",
-      driver: "takos-object-store",
-      provider: "aws-backing-service",
-      status: "portable",
-      resolutionMode: "provider-backed",
-      requirements: [],
       notes: [
         "Takos runtime on aws realizes this Cloudflare-native resource through a provider-backed adapter.",
       ],
@@ -241,32 +201,23 @@ Deno.test("buildTranslationReport - marks portable resources as provider-backed 
   desiredState.resources.jobs = {
     name: "jobs",
     type: "queue",
-    spec: { type: "queue" } as never,
+    spec: { type: "queue" },
     specFingerprint: "jobs",
-  };
-  desiredState.resources.events = {
-    name: "events",
-    type: "analyticsEngine",
-    spec: { type: "analyticsEngine" } as never,
-    specFingerprint: "events",
   };
   desiredState.resources.flow = {
     name: "flow",
     type: "workflow",
-    spec: { type: "workflow" } as never,
+    spec: {
+      type: "workflow",
+      workflow: { class: "Main", script: "api" },
+    },
     specFingerprint: "flow",
   };
-  desiredState.resources.counter = {
-    name: "counter",
-    type: "durableObject",
-    spec: { type: "durableObject" } as never,
-    specFingerprint: "counter",
-  };
-  desiredState.resources.secret = {
-    name: "secret",
-    type: "secretRef",
-    spec: { type: "secretRef" } as never,
-    specFingerprint: "secret",
+  desiredState.resources.creds = {
+    name: "creds",
+    type: "secret",
+    spec: { type: "secret" },
+    specFingerprint: "creds",
   };
 
   const report = buildTranslationReport(desiredState);
@@ -274,7 +225,7 @@ Deno.test("buildTranslationReport - marks portable resources as provider-backed 
   assertEquals(report.resources, [
     {
       name: "db",
-      publicType: "d1",
+      publicType: "sql",
       semanticType: "sql",
       implementation: "d1",
       driver: "takos-sql",
@@ -282,20 +233,6 @@ Deno.test("buildTranslationReport - marks portable resources as provider-backed 
       status: "portable",
       resolutionMode: "provider-backed",
       requirements: ["POSTGRES_URL or DATABASE_URL"],
-      notes: [
-        "Takos runtime on aws realizes this Cloudflare-native resource through a provider-backed adapter.",
-      ],
-    },
-    {
-      name: "bucket",
-      publicType: "r2",
-      semanticType: "object_store",
-      implementation: "r2",
-      driver: "takos-object-store",
-      provider: "aws-backing-service",
-      status: "portable",
-      resolutionMode: "provider-backed",
-      requirements: [],
       notes: [
         "Takos runtime on aws realizes this Cloudflare-native resource through a provider-backed adapter.",
       ],
@@ -315,20 +252,6 @@ Deno.test("buildTranslationReport - marks portable resources as provider-backed 
       ],
     },
     {
-      name: "events",
-      publicType: "analyticsEngine",
-      semanticType: "analytics_store",
-      implementation: "analytics_engine",
-      driver: "takos-analytics-store",
-      provider: "takos-runtime",
-      status: "portable",
-      resolutionMode: "takos-runtime",
-      requirements: [],
-      notes: [
-        "Takos runtime on aws realizes this Cloudflare-native resource through the compatibility runtime.",
-      ],
-    },
-    {
       name: "flow",
       publicType: "workflow",
       semanticType: "workflow_runtime",
@@ -343,22 +266,8 @@ Deno.test("buildTranslationReport - marks portable resources as provider-backed 
       ],
     },
     {
-      name: "counter",
-      publicType: "durableObject",
-      semanticType: "durable_namespace",
-      implementation: "durable_object_namespace",
-      driver: "takos-durable-runtime",
-      provider: "takos-runtime",
-      status: "portable",
-      resolutionMode: "takos-runtime",
-      requirements: [],
-      notes: [
-        "Takos runtime on aws realizes this Cloudflare-native resource through the compatibility runtime.",
-      ],
-    },
-    {
-      name: "secret",
-      publicType: "secretRef",
+      name: "creds",
+      publicType: "secret",
       semanticType: "secret",
       implementation: "secret_ref",
       driver: "takos-secret",
@@ -375,8 +284,7 @@ Deno.test("buildTranslationReport - marks portable resources as provider-backed 
 
 Deno.test("buildTranslationReport - uses workload-level image provider when specified", () => {
   const report = buildTranslationReport(makeDesiredState("cloudflare", {
-    webImageRef: "ghcr.io/example/web:latest",
-    webProvider: "k8s",
+    webImage: "ghcr.io/example/web:latest",
   }));
 
   assertEquals(report.workloads, [
@@ -395,7 +303,7 @@ Deno.test("buildTranslationReport - uses workload-level image provider when spec
     {
       name: "web",
       category: "service",
-      provider: "k8s",
+      provider: "oci",
       runtime: "container-service",
       runtimeProfile: "container-service",
       status: "portable",
@@ -411,8 +319,7 @@ Deno.test("buildTranslationReport - uses workload-level image provider when spec
 
 Deno.test("buildTranslationReport - requires OCI orchestrator URL before assertion when image workloads exist", () => {
   const report = buildTranslationReport(makeDesiredState("cloudflare", {
-    webImageRef: "ghcr.io/example/web:latest",
-    webProvider: "oci",
+    webImage: "ghcr.io/example/web:latest",
   }));
 
   assertEquals(report.supported, false);

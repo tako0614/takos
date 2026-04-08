@@ -14,8 +14,9 @@ import {
 } from '../../../application/services/activitypub/stores.ts';
 import {
   addToInventory,
-  removeFromInventory,
+  findInventoryItemById,
   listInventoryItems,
+  removeFromInventory,
 } from '../../../application/services/activitypub/store-inventory.ts';
 import {
   createGrant,
@@ -44,6 +45,7 @@ export const spacesStoresRouteDeps = {
   addToInventory,
   removeFromInventory,
   listInventoryItems,
+  findInventoryItemById,
   createGrant,
   listGrants,
   revokeGrant,
@@ -178,6 +180,10 @@ export default new Hono<AuthenticatedRouteEnv>()
       total: result.total,
       items: result.items.map((item) => ({
         id: item.id,
+        // Canonical surface field names (per docs/reference/api.md).
+        canonical_repo_url: item.repoActorUrl,
+        label: item.repoName,
+        // Legacy aliases kept for backward compatibility.
         repo_actor_url: item.repoActorUrl,
         repo_name: item.repoName,
         repo_summary: item.repoSummary,
@@ -189,12 +195,21 @@ export default new Hono<AuthenticatedRouteEnv>()
   })
   .post('/:spaceId/stores/:storeSlug/inventory',
     zValidator('json', z.object({
-      repo_actor_url: z.string().min(1),
+      // Canonical surface field (per docs/reference/api.md): the canonical repo URL.
+      canonical_repo_url: z.string().min(1).optional(),
+      // Legacy alias kept for backward compatibility with existing clients.
+      repo_actor_url: z.string().min(1).optional(),
+      // Canonical surface field: short human-readable label for the entry.
+      label: z.string().optional(),
+      // Legacy aliases kept for backward compatibility.
       repo_name: z.string().optional(),
       repo_summary: z.string().optional(),
       repo_owner_slug: z.string().optional(),
       local_repo_id: z.string().optional(),
-    })),
+    }).refine(
+      (v) => !!(v.canonical_repo_url ?? v.repo_actor_url),
+      { message: 'canonical_repo_url is required', path: ['canonical_repo_url'] },
+    )),
     async (c) => {
       const user = c.get('user');
       const access = await spacesStoresRouteDeps.requireSpaceAccess(c, c.req.param('spaceId'), user.id, ['owner', 'admin']);
@@ -202,11 +217,13 @@ export default new Hono<AuthenticatedRouteEnv>()
 
       try {
         const storeSlug = c.req.param('storeSlug');
+        const canonicalRepoUrl = (body.canonical_repo_url ?? body.repo_actor_url) as string;
+        const labelOrName = body.label ?? body.repo_name;
         const item = await spacesStoresRouteDeps.addToInventory(c.env.DB, {
           accountId: access.space.id,
           storeSlug,
-          repoActorUrl: body.repo_actor_url,
-          repoName: body.repo_name,
+          repoActorUrl: canonicalRepoUrl,
+          repoName: labelOrName,
           repoSummary: body.repo_summary,
           repoOwnerSlug: body.repo_owner_slug,
           localRepoId: body.local_repo_id,
@@ -240,9 +257,13 @@ export default new Hono<AuthenticatedRouteEnv>()
         return c.json({
           item: {
             id: item.id,
+            // Canonical surface field names (per docs/reference/api.md).
+            canonical_repo_url: item.repoActorUrl,
+            label: item.repoName,
+            created_at: item.createdAt,
+            // Legacy aliases kept for backward compatibility.
             repo_actor_url: item.repoActorUrl,
             repo_name: item.repoName,
-            created_at: item.createdAt,
           },
         }, 201);
       } catch (error) {
@@ -256,14 +277,21 @@ export default new Hono<AuthenticatedRouteEnv>()
     const user = c.get('user');
     const access = await spacesStoresRouteDeps.requireSpaceAccess(c, c.req.param('spaceId'), user.id, ['owner', 'admin']);
 
-    // Get the item to find the repoActorUrl
-    const result = await spacesStoresRouteDeps.listInventoryItems(c.env.DB, access.space.id, c.req.param('storeSlug'), { limit: 1000, offset: 0 });
-    const item = result.items.find((i) => i.id === c.req.param('itemId'));
+    const storeSlug = c.req.param('storeSlug');
+    const itemId = c.req.param('itemId');
+
+    // Resolve the entry by id (scoped to this space + store) so we can build
+    // the federated Remove activity with the canonical repo URL.
+    const item = await spacesStoresRouteDeps.findInventoryItemById(
+      c.env.DB,
+      access.space.id,
+      storeSlug,
+      itemId,
+    );
     if (!item) {
       throw new NotFoundError('Inventory item');
     }
 
-    const storeSlug = c.req.param('storeSlug');
     await spacesStoresRouteDeps.removeFromInventory(c.env.DB, access.space.id, storeSlug, item.repoActorUrl);
 
     // Deliver Remove activity to store followers (fire-and-forget)
@@ -291,7 +319,9 @@ export default new Hono<AuthenticatedRouteEnv>()
         }),
     );
 
-    return c.json({ success: true });
+    // `deleted` is the canonical surface field per task spec; `success` is
+    // kept for backward compatibility with existing clients.
+    return c.json({ deleted: true, success: true });
   })
 
   // --- Repo Grants ---

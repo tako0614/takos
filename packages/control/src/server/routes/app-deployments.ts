@@ -1,7 +1,13 @@
 import { Hono } from "hono";
 import { z } from "zod";
-import { InternalError, isAppError, NotFoundError } from "takos-common/errors";
+import {
+  BadRequestError,
+  InternalError,
+  isAppError,
+  NotFoundError,
+} from "takos-common/errors";
 import { AppDeploymentService } from "../../application/services/platform/app-deployments.ts";
+import { parseAppManifestYaml } from "../../application/services/source/app-manifest-parser/index.ts";
 import { getSpaceOperationPolicy } from "../../application/tools/tool-policy.ts";
 import { logError } from "../../shared/utils/logger.ts";
 import { spaceAccess, type SpaceAccessRouteEnv } from "./route-auth.ts";
@@ -20,11 +26,22 @@ const gitRefSourceSchema = z.object({
   ref_type: z.enum(["branch", "tag", "commit"]).optional(),
 });
 
+const manifestSourceSchema = z.object({
+  kind: z.literal("manifest"),
+  manifest: z.record(z.string(), z.unknown()),
+  artifacts: z.array(z.record(z.string(), z.unknown())).optional(),
+});
+
+const sourceSchema = z.discriminatedUnion("kind", [
+  gitRefSourceSchema,
+  manifestSourceSchema,
+]);
+
 const createAppDeploymentSchema = z.object({
   group_name: z.string().min(1).optional(),
   env: z.string().min(1).optional(),
   provider: z.enum(["cloudflare", "local", "aws", "gcp", "k8s"]).optional(),
-  source: gitRefSourceSchema,
+  source: sourceSchema,
 });
 
 const rollbackSchema = z.object({});
@@ -51,6 +68,37 @@ const routes = new Hono<SpaceAccessRouteEnv>()
       try {
         const body = c.req.valid("json");
         const service = new AppDeploymentService(c.env);
+        if (body.source.kind === "manifest") {
+          let manifest;
+          try {
+            // Re-run the canonical YAML/flat-schema parser so the incoming
+            // object receives the same validation as repo-sourced manifests.
+            manifest = parseAppManifestYaml(
+              JSON.stringify(body.source.manifest),
+            );
+          } catch (parseError) {
+            throw new BadRequestError(
+              parseError instanceof Error
+                ? parseError.message
+                : "Invalid app manifest",
+            );
+          }
+          const result = await service.deployFromManifest(
+            space.id,
+            user.id,
+            {
+              manifest,
+              artifacts: body.source.artifacts,
+              groupName: body.group_name,
+              providerName: body.provider,
+              envName: body.env,
+            },
+          );
+          return c.json({
+            app_deployment: result.appDeployment,
+            apply_result: result.applyResult,
+          }, 201);
+        }
         const result = await service.deploy(space.id, user.id, {
           groupName: body.group_name,
           providerName: body.provider,

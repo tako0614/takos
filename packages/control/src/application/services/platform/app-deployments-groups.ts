@@ -22,7 +22,7 @@ export function parseProviderName(
 }
 
 export function resolveDefaultGroupName(manifest: AppManifest): string {
-  return manifest.metadata.name;
+  return manifest.name;
 }
 
 export async function ensureAppDeploymentTargetGroup(
@@ -42,7 +42,7 @@ export async function ensureAppDeploymentTargetGroup(
       groupName,
       provider: options.providerName ?? null,
       envName: options.envName ?? null,
-      appVersion: manifest.spec.version ?? null,
+      appVersion: manifest.version ?? null,
       manifest,
     });
   }

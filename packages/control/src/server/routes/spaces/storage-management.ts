@@ -14,7 +14,7 @@ import {
 } from '../../../application/services/source/space-storage.ts';
 import type { StorageFileResponse } from '../../../application/services/source/space-storage.ts';
 import { getDb } from '../../../infra/db/index.ts';
-import { eq } from 'drizzle-orm';
+import { asc, eq } from 'drizzle-orm';
 import { fileHandlers, fileHandlerMatchers } from '../../../infra/db/schema.ts';
 import { BadRequestError, NotFoundError } from 'takos-common/errors';
 import { requireOAuthScope, handleStorageError, storageBulkLimiter, MAX_BULK_OPERATION_ITEMS } from './storage-operations.ts';
@@ -39,9 +39,18 @@ const app = new Hono<AuthenticatedRouteEnv>()
   // --- File handlers endpoint ---
   .get('/:spaceId/storage/file-handlers',
     requireOAuthScope('files:read'),
+    zValidator('query', z.object({
+      mime: z.string().optional(),
+      ext: z.string().optional(),
+    })),
     async (c) => {
     const user = c.get('user');
     const spaceId = c.req.param('spaceId');
+    const { mime, ext } = c.req.valid('query');
+
+    // ext を normalize (`.md` も `md` も受ける)
+    const normalizedExt = ext ? (ext.startsWith('.') ? ext.toLowerCase() : `.${ext.toLowerCase()}`) : undefined;
+    const normalizedMime = mime?.toLowerCase();
 
     const access = await storageManagementRouteDeps.requireSpaceAccess(c, spaceId, user.id);
 
@@ -49,14 +58,15 @@ const app = new Hono<AuthenticatedRouteEnv>()
     const handlers = await db.select()
       .from(fileHandlers)
       .where(eq(fileHandlers.accountId, access.space.id))
+      .orderBy(asc(fileHandlers.createdAt), asc(fileHandlers.id))
       .all();
 
     const handlerIds = handlers.map(h => h.id);
     const matcherRows = handlerIds.length > 0
-      ? await Promise.all(handlerIds.map(id =>
+      ? (await Promise.all(handlerIds.map(id =>
           db.select().from(fileHandlerMatchers)
             .where(eq(fileHandlerMatchers.fileHandlerId, id)).all()
-        )).then(results => results.flat())
+        ))).flat()
       : [];
 
     const matchersByHandlerId = new Map<string, typeof matcherRows>();
@@ -66,17 +76,63 @@ const app = new Hono<AuthenticatedRouteEnv>()
       matchersByHandlerId.set(m.fileHandlerId, list);
     }
 
+    // project + filter + rank
+    const projected = handlers.map((h, idx) => {
+      const matchers = matchersByHandlerId.get(h.id) || [];
+      const mimeTypes = matchers.filter((m) => m.kind === 'mime').map((m) => m.value.toLowerCase());
+      const extensions = matchers.filter((m) => m.kind === 'extension').map((m) => m.value.toLowerCase());
+      return {
+        idx,
+        id: h.id,
+        name: h.name,
+        mimeTypes,
+        extensions,
+        open_url: `https://${h.serviceHostname}${h.openPath}`,
+      };
+    });
+
+    // filter: mime と ext のいずれかが指定されたら、そのいずれかにマッチするものを残す
+    const filtered = projected.filter((p) => {
+      const matchesMime = normalizedMime ? p.mimeTypes.includes(normalizedMime) : false;
+      const matchesExt = normalizedExt ? p.extensions.includes(normalizedExt) : false;
+      if (normalizedMime && normalizedExt) {
+        return matchesMime || matchesExt;
+      } else if (normalizedMime) {
+        return matchesMime;
+      } else if (normalizedExt) {
+        return matchesExt;
+      }
+      return true;
+    });
+
+    // rank: 0 = 完全一致 (両方マッチ), 1 = mime 一致, 2 = ext 一致, 3 = filter 無し
+    const ranked = filtered.map((p) => {
+      let rank = 3;
+      if (normalizedMime && normalizedExt) {
+        const mimeOk = p.mimeTypes.includes(normalizedMime);
+        const extOk = p.extensions.includes(normalizedExt);
+        if (mimeOk && extOk) rank = 0;
+        else if (mimeOk) rank = 1;
+        else if (extOk) rank = 2;
+      } else if (normalizedMime) {
+        rank = 1;
+      } else if (normalizedExt) {
+        rank = 2;
+      }
+      return { ...p, rank };
+    });
+
+    // sort: rank ASC, idx ASC (declaration order tie-break)
+    ranked.sort((a, b) => a.rank - b.rank || a.idx - b.idx);
+
     return c.json({
-      handlers: handlers.map(h => {
-        const matchers = matchersByHandlerId.get(h.id) || [];
-        return {
-          id: h.id,
-          name: h.name,
-          mime_types: matchers.filter((m) => m.kind === 'mime').map((m) => m.value),
-          extensions: matchers.filter((m) => m.kind === 'extension').map((m) => m.value),
-          open_url: `https://${h.serviceHostname}${h.openPath}`,
-        };
-      }),
+      handlers: ranked.map((p) => ({
+        id: p.id,
+        name: p.name,
+        mime_types: p.mimeTypes,
+        extensions: p.extensions,
+        open_url: p.open_url,
+      })),
     });
   })
   // --- List storage ---

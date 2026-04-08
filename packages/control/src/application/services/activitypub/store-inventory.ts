@@ -75,6 +75,32 @@ export async function addToInventory(
   return record;
 }
 
+/**
+ * Look up a single active inventory entry by id, scoped to the owning space
+ * (accountId) and store slug. Returns null when no matching active entry
+ * exists. Used by the write API DELETE handler so it does not have to scan
+ * the full inventory list.
+ */
+export async function findInventoryItemById(
+  dbBinding: D1Database,
+  accountId: string,
+  storeSlug: string,
+  itemId: string,
+): Promise<InventoryEntry | null> {
+  const db = getDb(dbBinding);
+  const row = await db.select()
+    .from(storeInventoryItems)
+    .where(and(
+      eq(storeInventoryItems.id, itemId),
+      eq(storeInventoryItems.accountId, accountId),
+      eq(storeInventoryItems.storeSlug, storeSlug),
+      eq(storeInventoryItems.isActive, true),
+    ))
+    .limit(1)
+    .get();
+  return row ? toEntry(row) : null;
+}
+
 export async function removeFromInventory(
   dbBinding: D1Database,
   accountId: string,

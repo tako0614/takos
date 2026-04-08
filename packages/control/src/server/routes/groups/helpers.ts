@@ -245,25 +245,22 @@ export function resolveGroupName(
   if (typeof raw === "string" && raw.trim().length > 0) {
     return raw.trim();
   }
-  if (
-    typeof manifest?.metadata?.name === "string" &&
-    manifest.metadata.name.trim().length > 0
-  ) {
-    return manifest.metadata.name.trim();
+  if (typeof manifest?.name === "string" && manifest.name.trim().length > 0) {
+    return manifest.name.trim();
   }
   throw new BadRequestError("group_name is required");
 }
 
 export function buildUninstallManifest(group: GroupRow): AppManifest {
   return {
-    apiVersion: "takos.dev/v1alpha1",
-    kind: "App",
-    metadata: {
-      name: group.name,
-    },
-    spec: {
-      version: group.appVersion || "0.0.0",
-    },
+    name: group.name,
+    ...(group.appVersion ? { version: group.appVersion } : {}),
+    compute: {},
+    storage: {},
+    routes: [],
+    publish: [],
+    env: {},
+    scopes: [],
   };
 }
 
@@ -573,8 +570,8 @@ export async function createOrReuseGroupForApply(
     groupName,
     provider: input.providerProvided ? input.provider : undefined,
     envName: input.envProvided ? input.envName : undefined,
-    appVersion: typeof input.manifest?.spec?.version === "string"
-      ? input.manifest.spec.version
+    appVersion: typeof input.manifest?.version === "string"
+      ? input.manifest.version
       : null,
     manifest: input.manifest,
   }, groupRecordDeps());

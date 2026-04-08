@@ -78,9 +78,7 @@ export function createMockState(storage = createMockStorage()): MockState {
     getWebSockets: () => [],
     getTags: () => [],
   };
-  return {
-    ...state,
-  };
+  return state;
 }
 
 export class MockWebSocket {

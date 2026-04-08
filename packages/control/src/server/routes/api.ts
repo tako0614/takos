@@ -42,8 +42,10 @@ import appDeployments from './app-deployments.ts';
 import oauthConsentApi from './oauth-consent-api.ts';
 import browserSessions from './browser-sessions.ts';
 import groupsRouter from './groups.ts';
+import publications from './publications/routes.ts';
 import { createRunSseRouter } from './runs/sse.ts';
 import { createNotificationSseRouter } from './notifications-sse.ts';
+import { createEventsRouter } from './events/routes.ts';
 import { requireAnyAuth } from '../middleware/oauth-auth.ts';
 // Local type to mirror app Variables
 export type ApiVariables = BillingVariables & {
@@ -268,6 +270,8 @@ export function createApiRouter({
   apiRouter.use('/resources/*', requireAuth);
   apiRouter.use('/apps', requireAuth);
   apiRouter.use('/apps/*', requireAuth);
+  apiRouter.use('/publications', requireAuth);
+  apiRouter.use('/publications/*', requireAuth);
   apiRouter.use('/sessions', requireAuth);
   apiRouter.use('/sessions/*', requireAuth);
   apiRouter.use('/repos', optionalAuth);
@@ -362,10 +366,12 @@ export function createApiRouter({
   apiRouter.route('/', agentTasks); // Agent task routes
   apiRouter.route('/', notifications); // Notifications routes at /api/notifications
   apiRouter.route('/notifications', createNotificationSseRouter()); // SSE route at /api/notifications/sse (Node.js WebSocket alternative)
+  apiRouter.route('/events', createEventsRouter()); // SSE route at /api/events for space lifecycle events (auth handled internally)
   apiRouter.route('/', pullRequests); // Pull request routes for code review
   apiRouter.route('/', appDeployments); // App deployment routes at /api/spaces/:id/app-deployments
   apiRouter.route('/', browserSessions); // Browser session routes at /api/browser-sessions/:id
   apiRouter.route('/', groupsRouter); // Group management routes at /api/spaces/:id/groups
+  apiRouter.route('/publications', publications); // Publications discovery API at /api/publications
   // ================================================================
   // 7. Billing routes (webhook is public; management is authenticated)
   // ================================================================

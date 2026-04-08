@@ -1,11 +1,12 @@
 import type { Env } from "../../../shared/types/env.ts";
-import type {
-  AppContainer,
-  AppService,
-  AppWorker,
-} from "../source/app-manifest-types.ts";
+import type { AppCompute } from "../source/app-manifest-types.ts";
 import type { GroupDesiredState } from "./group-state.ts";
 import { isDigestPinnedImageRef } from "./image-ref.ts";
+
+// Narrowed aliases for the three compute kinds.
+type AppWorker = AppCompute & { kind: "worker" };
+type AppService = AppCompute & { kind: "service" };
+type AppContainer = AppCompute & { kind: "attached-container" };
 
 export type ApplyWorkerArtifact = {
   kind: "worker_bundle";
@@ -21,18 +22,6 @@ export type ApplyContainerArtifact = {
 };
 
 export type ApplyArtifactInput = ApplyWorkerArtifact | ApplyContainerArtifact;
-
-type WorkerDirectArtifact = {
-  kind: "bundle";
-  deploymentId?: string;
-  artifactRef?: string;
-};
-
-type ImageDirectArtifact = {
-  kind: "image";
-  imageRef: string;
-  provider?: "oci" | "ecs" | "cloud-run" | "k8s";
-};
 
 export type ApplyEngineArtifactDeps = {
   getDeploymentById: (db: Env["DB"], deploymentId: string) => Promise<unknown>;
@@ -84,12 +73,10 @@ function resolveContainerImageArtifact(
   workloadCategory: "container" | "service",
   spec: AppContainer | AppService,
 ): ApplyContainerArtifact | null {
-  const directImageArtifact =
-    ("artifact" in spec ? spec.artifact : undefined) as
-      | ImageDirectArtifact
-      | undefined;
-  if (directImageArtifact?.kind === "image") {
-    if (!isDigestPinnedImageRef(directImageArtifact.imageRef)) {
+  // Flat schema: `compute.image` is the only image ref source for a
+  // service / attached container. No envelope-level `artifact` field.
+  if (typeof spec.image === "string" && spec.image.trim().length > 0) {
+    if (!isDigestPinnedImageRef(spec.image)) {
       throw new Error(
         `${
           workloadCategory === "container" ? "Container" : "Service"
@@ -98,37 +85,10 @@ function resolveContainerImageArtifact(
     }
     return {
       kind: "container_image",
-      imageRef: directImageArtifact.imageRef,
-      ...(directImageArtifact.provider
-        ? { provider: directImageArtifact.provider }
-        : {}),
+      imageRef: spec.image,
       deployMessage: `takos apply ${workloadName}`,
     };
   }
-
-  if (
-    "imageRef" in spec && typeof spec.imageRef === "string" &&
-    spec.imageRef.trim().length > 0
-  ) {
-    if (!isDigestPinnedImageRef(spec.imageRef)) {
-      throw new Error(
-        `${
-          workloadCategory === "container" ? "Container" : "Service"
-        } "${workloadName}" requires a digest-pinned imageRef (@sha256:...) for online apply`,
-      );
-    }
-    return {
-      kind: "container_image",
-      imageRef: spec.imageRef,
-      ...("provider" in spec &&
-          (spec.provider === "oci" || spec.provider === "ecs" ||
-            spec.provider === "cloud-run" || spec.provider === "k8s")
-        ? { provider: spec.provider }
-        : {}),
-      deployMessage: `takos apply ${workloadName}`,
-    };
-  }
-
   return null;
 }
 
@@ -161,47 +121,16 @@ export async function resolveArtifactForApply(
 }
 
 export async function resolveArtifactFromDesiredManifest(
-  deps: ApplyEngineArtifactDeps,
-  env: Env,
+  _deps: ApplyEngineArtifactDeps,
+  _env: Env,
   workload: GroupDesiredState["workloads"][string],
 ): Promise<ApplyArtifactInput | null> {
   const spec = workload.spec as AppWorker | AppContainer | AppService;
   if (workload.category === "worker") {
-    const directArtifact = ("artifact" in spec ? spec.artifact : undefined) as
-      | WorkerDirectArtifact
-      | undefined;
-    if (directArtifact?.kind === "bundle" && directArtifact.deploymentId) {
-      const deployment = await deps.getDeploymentById(
-        env.DB,
-        directArtifact.deploymentId,
-      );
-      if (!deployment) {
-        throw new Error(
-          `Referenced deployment "${directArtifact.deploymentId}" for worker "${workload.name}" was not found`,
-        );
-      }
-      return {
-        kind: "worker_bundle",
-        bundleContent: await deps.getBundleContent(env, deployment),
-        deployMessage: `takos apply ${workload.name}`,
-      };
-    }
-    if (directArtifact?.kind === "bundle" && directArtifact.artifactRef) {
-      const deployment = await deps.findDeploymentByArtifactRef(
-        env.DB,
-        directArtifact.artifactRef,
-      );
-      if (!deployment) {
-        throw new Error(
-          `Referenced artifact "${directArtifact.artifactRef}" for worker "${workload.name}" was not found`,
-        );
-      }
-      return {
-        kind: "worker_bundle",
-        bundleContent: await deps.getBundleContent(env, deployment),
-        deployMessage: `takos apply ${workload.name}`,
-      };
-    }
+    // In the flat schema, worker bundle artifacts are resolved by the
+    // caller via the CI artifact registry, not via an embedded `artifact`
+    // field. When no directArtifactInput is supplied at apply time there is
+    // no fallback source for the bundle content.
     return null;
   }
 
