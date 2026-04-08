@@ -27,8 +27,14 @@ export interface PullRequestTriggerConfig extends BranchFilter {
 
 /**
  * プルリクエストイベント種別
+ *
+ * GitHub Actions 互換: https://docs.github.com/en/actions/using-workflows/events-that-trigger-workflows#pull_request
  */
 export type PullRequestEventType =
+  | 'assigned'
+  | 'unassigned'
+  | 'labeled'
+  | 'unlabeled'
   | 'opened'
   | 'edited'
   | 'closed'
@@ -41,7 +47,56 @@ export type PullRequestEventType =
   | 'review_requested'
   | 'review_request_removed'
   | 'auto_merge_enabled'
-  | 'auto_merge_disabled';
+  | 'auto_merge_disabled'
+  | 'milestoned'
+  | 'demilestoned'
+  | 'enqueued'
+  | 'dequeued';
+
+/**
+ * issues イベント種別
+ *
+ * GitHub Actions 互換: https://docs.github.com/en/actions/using-workflows/events-that-trigger-workflows#issues
+ */
+export type IssuesEventType =
+  | 'opened'
+  | 'edited'
+  | 'deleted'
+  | 'transferred'
+  | 'pinned'
+  | 'unpinned'
+  | 'closed'
+  | 'reopened'
+  | 'assigned'
+  | 'unassigned'
+  | 'labeled'
+  | 'unlabeled'
+  | 'locked'
+  | 'unlocked'
+  | 'milestoned'
+  | 'demilestoned';
+
+/**
+ * issue_comment イベント種別
+ */
+export type IssueCommentEventType = 'created' | 'edited' | 'deleted';
+
+/**
+ * release イベント種別
+ */
+export type ReleaseEventType =
+  | 'published'
+  | 'unpublished'
+  | 'created'
+  | 'edited'
+  | 'deleted'
+  | 'prereleased'
+  | 'released';
+
+/**
+ * watch イベント種別
+ */
+export type WatchEventType = 'started';
 
 /**
  * workflow_dispatch 入力定義
@@ -122,15 +177,15 @@ export interface WorkflowTrigger {
   schedule?: ScheduleTriggerConfig[];
   repository_dispatch?: RepositoryDispatchConfig | null;
   // イベント: issue
-  issues?: { types?: string[] } | null;
-  issue_comment?: { types?: string[] } | null;
+  issues?: { types?: IssuesEventType[] } | null;
+  issue_comment?: { types?: IssueCommentEventType[] } | null;
   // イベント: release
-  release?: { types?: string[] } | null;
+  release?: { types?: ReleaseEventType[] } | null;
   // その他の汎用イベント
   create?: null;
   delete?: null;
   fork?: null;
-  watch?: { types?: string[] } | null;
+  watch?: { types?: WatchEventType[] } | null;
 }
 
 // =============================================================================
@@ -279,6 +334,12 @@ export interface Job {
 export interface Workflow {
   /** ワークフロー表示名 */
   name?: string;
+  /**
+   * 実行名テンプレート。GitHub Actions 互換の `run-name` フィールド。
+   * 式補間をサポートするが、現状 runtime はテンプレート文字列として
+   * そのまま保持するのみで、`${{ ... }}` の interpolation は将来実装。
+   */
+  'run-name'?: string;
   /** トリガーイベント */
   on: WorkflowTrigger | string | string[];
   /** グローバル環境変数 */
@@ -338,6 +399,14 @@ export interface StepResult {
   completedAt?: Date;
   /** 失敗時のエラーメッセージ */
   error?: string;
+  /**
+   * `$GITHUB_STEP_SUMMARY` に書き込まれた markdown。
+   * 未書き込み or 空 の場合は `undefined`。
+   *
+   * 現状 UI 配線は未実装で、storage/artifact への永続化も future work。
+   * runtime 側で capture しておき、将来 step summary card として render する。
+   */
+  summary?: string;
 }
 
 /**

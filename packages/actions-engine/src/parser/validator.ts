@@ -28,13 +28,86 @@ const branchFilterSchema = z.object({
 const pushTriggerSchema = branchFilterSchema.nullable();
 
 /**
+ * pull_request イベント種別の enum
+ * GitHub Actions 互換。
+ */
+const pullRequestEventTypeEnum = z.enum([
+  'assigned',
+  'unassigned',
+  'labeled',
+  'unlabeled',
+  'opened',
+  'edited',
+  'closed',
+  'reopened',
+  'synchronize',
+  'converted_to_draft',
+  'ready_for_review',
+  'locked',
+  'unlocked',
+  'review_requested',
+  'review_request_removed',
+  'auto_merge_enabled',
+  'auto_merge_disabled',
+  'milestoned',
+  'demilestoned',
+  'enqueued',
+  'dequeued',
+]);
+
+/**
  * pull_request トリガーのスキーマ
  */
 const pullRequestTriggerSchema = branchFilterSchema
   .extend({
-    types: z.array(z.string()).optional(),
+    types: z.array(pullRequestEventTypeEnum).optional(),
   })
   .nullable();
+
+/**
+ * issues イベント種別の enum
+ */
+const issuesEventTypeEnum = z.enum([
+  'opened',
+  'edited',
+  'deleted',
+  'transferred',
+  'pinned',
+  'unpinned',
+  'closed',
+  'reopened',
+  'assigned',
+  'unassigned',
+  'labeled',
+  'unlabeled',
+  'locked',
+  'unlocked',
+  'milestoned',
+  'demilestoned',
+]);
+
+/**
+ * issue_comment イベント種別の enum
+ */
+const issueCommentEventTypeEnum = z.enum(['created', 'edited', 'deleted']);
+
+/**
+ * release イベント種別の enum
+ */
+const releaseEventTypeEnum = z.enum([
+  'published',
+  'unpublished',
+  'created',
+  'edited',
+  'deleted',
+  'prereleased',
+  'released',
+]);
+
+/**
+ * watch イベント種別の enum
+ */
+const watchEventTypeEnum = z.enum(['started']);
 
 /**
  * workflow_dispatch 入力のスキーマ
@@ -102,6 +175,9 @@ const workflowCallSchema = z
 
 /**
  * ワークフロートリガーのスキーマ
+ *
+ * `repository_dispatch.types` は workflow 側で自由に定義する活動名なので
+ * `z.string()` を受け入れる (GH Actions も enum を強制しない)。
  */
 const workflowTriggerSchema = z.object({
   push: pushTriggerSchema.optional(),
@@ -118,19 +194,19 @@ const workflowTriggerSchema = z.object({
     .optional(),
   issues: z
     .object({
-      types: z.array(z.string()).optional(),
+      types: z.array(issuesEventTypeEnum).optional(),
     })
     .nullable()
     .optional(),
   issue_comment: z
     .object({
-      types: z.array(z.string()).optional(),
+      types: z.array(issueCommentEventTypeEnum).optional(),
     })
     .nullable()
     .optional(),
   release: z
     .object({
-      types: z.array(z.string()).optional(),
+      types: z.array(releaseEventTypeEnum).optional(),
     })
     .nullable()
     .optional(),
@@ -139,7 +215,7 @@ const workflowTriggerSchema = z.object({
   fork: z.null().optional(),
   watch: z
     .object({
-      types: z.array(z.string()).optional(),
+      types: z.array(watchEventTypeEnum).optional(),
     })
     .nullable()
     .optional(),
@@ -296,6 +372,7 @@ const jobSchema = z.object({
  */
 const workflowSchema = z.object({
   name: z.string().optional(),
+  'run-name': z.string().optional(),
   on: z.union([
     workflowTriggerSchema,
     z.string(),
@@ -325,6 +402,42 @@ export interface ValidationResult {
 }
 
 /**
+ * ZodIssue の union error を再帰的に展開して詳細 issue を収集する。
+ *
+ * z.union は最上位の invalid_union issue で path を失いがちなので、
+ * nested unionErrors から最も具体的な branch error を選んで返す。
+ */
+function flattenZodIssues(issues: readonly z.ZodIssue[]): z.ZodIssue[] {
+  const flat: z.ZodIssue[] = [];
+  for (const issue of issues) {
+    if (issue.code === 'invalid_union') {
+      // invalid_type で 'expected' と実際の型が大きく違う branch はスキップし、
+      // より深い path を報告する branch を優先する
+      const branches = issue.unionErrors ?? [];
+      // 最も深い path を持つ branch を選ぶ (= 実際に drill down できた validator)
+      let best: z.ZodIssue[] | undefined;
+      let bestDepth = -1;
+      for (const branch of branches) {
+        for (const inner of branch.issues) {
+          if (inner.path.length > bestDepth) {
+            bestDepth = inner.path.length;
+            best = branch.issues;
+          }
+        }
+      }
+      if (best) {
+        flat.push(...flattenZodIssues(best));
+      } else {
+        flat.push(issue);
+      }
+    } else {
+      flat.push(issue);
+    }
+  }
+  return flat;
+}
+
+/**
  * Zod の issue をワークフロー診断に変換して収集
  */
 function collectSchemaDiagnostics(
@@ -338,7 +451,7 @@ function collectSchemaDiagnostics(
     return;
   }
 
-  for (const issue of result.error.issues) {
+  for (const issue of flattenZodIssues(result.error.issues)) {
     diagnostics.push({
       severity: 'error',
       message: issue.message,

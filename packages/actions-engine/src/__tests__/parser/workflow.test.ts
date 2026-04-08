@@ -127,6 +127,117 @@ Deno.test("workflow parser - roundtrips workflow objects through stringifyWorkfl
   assertEquals(parsed.workflow.jobs.build.steps[0]?.run, "echo build");
   assertEquals(parsed.workflow.on, { push: null });
 });
+Deno.test("workflow parser - normalizes single object schedule into array form", () => {
+  const yaml = [
+    "on:",
+    "  schedule:",
+    "    cron: '0 0 * * *'",
+    "jobs:",
+    "  build:",
+    "    runs-on: ubuntu-latest",
+    "    steps:",
+    "      - run: echo build",
+  ].join("\n");
+
+  const parsed = parseWorkflow(yaml);
+
+  const on = parsed.workflow.on as { schedule?: Array<{ cron: string }> };
+  assertEquals(on.schedule, [{ cron: "0 0 * * *" }]);
+
+  // validator も array 形式を受理する
+  const result = validateWorkflow(parsed.workflow);
+  assertEquals(result.valid, true);
+});
+Deno.test("workflow parser - passes through top-level run-name field", () => {
+  const yaml = [
+    "name: sample",
+    "run-name: Deploy by @${{ github.actor }}",
+    "on: push",
+    "jobs:",
+    "  build:",
+    "    runs-on: ubuntu-latest",
+    "    steps:",
+    "      - run: echo build",
+  ].join("\n");
+
+  const parsed = parseWorkflow(yaml);
+
+  assertEquals(parsed.workflow["run-name"], "Deploy by @${{ github.actor }}");
+
+  // validator も run-name を受理する
+  const result = validateWorkflow(parsed.workflow);
+  assertEquals(result.valid, true);
+});
+Deno.test("workflow validation - rejects unknown pull_request event types", () => {
+  const workflow: Workflow = {
+    on: {
+      pull_request: {
+        types: ["opened", "not_a_real_event" as unknown as never],
+      },
+    },
+    jobs: {
+      build: {
+        "runs-on": "ubuntu-latest",
+        steps: [{ run: "echo build" }],
+      },
+    },
+  };
+
+  const result = validateWorkflow(workflow);
+
+  assertEquals(result.valid, false);
+  assert(
+    result.diagnostics.some((item: any) =>
+      item.severity === "error" &&
+      typeof item.message === "string" &&
+      item.message.includes("Invalid enum value") &&
+      item.message.includes("not_a_real_event") &&
+      typeof item.path === "string" &&
+      item.path === "on.pull_request.types.1"
+    ),
+    `Expected enum validation error at on.pull_request.types.1, got ${JSON.stringify(result.diagnostics)}`,
+  );
+});
+Deno.test("workflow validation - accepts all GitHub Actions pull_request types including assigned, labeled, milestoned, enqueued", () => {
+  const workflow: Workflow = {
+    on: {
+      pull_request: {
+        types: [
+          "assigned",
+          "unassigned",
+          "labeled",
+          "unlabeled",
+          "opened",
+          "edited",
+          "closed",
+          "reopened",
+          "synchronize",
+          "converted_to_draft",
+          "ready_for_review",
+          "locked",
+          "unlocked",
+          "review_requested",
+          "review_request_removed",
+          "auto_merge_enabled",
+          "auto_merge_disabled",
+          "milestoned",
+          "demilestoned",
+          "enqueued",
+          "dequeued",
+        ],
+      },
+    },
+    jobs: {
+      build: {
+        "runs-on": "ubuntu-latest",
+        steps: [{ run: "echo build" }],
+      },
+    },
+  };
+
+  const result = validateWorkflow(workflow);
+  assertEquals(result.valid, true);
+});
 Deno.test("workflow parser - parses workflow files from disk", async () => {
   const tempDir = await mkdtemp(join(tmpdir(), "actions-engine-workflow-"));
   const filePath = join(tempDir, "workflow.yml");
