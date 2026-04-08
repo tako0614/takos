@@ -14,7 +14,19 @@ export type WorkflowQueueEnv = DbEnv & {
   RUN_NOTIFIER: DurableObjectNamespace;
   WORKFLOW_QUEUE?: Queue<WorkflowJobQueueMessage>;
   ENCRYPTION_KEY?: string;
-  /** When truthy, workflow steps are executed in parallel where dependencies allow. */
+  /**
+   * Opt-in: when truthy, workflow steps within a job are executed in parallel
+   * via `parallel-steps.ts` based on a dependency graph built from
+   * `steps.<id>` references in `if:` conditions and `with:` interpolations.
+   *
+   * Sequential mode (default) uses `state.stepOutputs` inline so each later
+   * step can reference the previous one's output. Parallel mode runs
+   * independent steps concurrently and only waits for steps it directly
+   * depends on. This changes semantics around `if: ${{ steps.X.outputs.Y }}`
+   * before X has run, and around `continue-on-error` propagation. Off until
+   * the runner contract is documented enough for workflow authors to opt in
+   * confidently.
+   */
   PARALLEL_WORKFLOW_STEPS?: string;
 };
 

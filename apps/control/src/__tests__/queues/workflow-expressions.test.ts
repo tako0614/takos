@@ -13,9 +13,14 @@ import { assertEquals } from 'jsr:@std/assert';
   assertEquals(evaluateCondition('always()', {}), true);
       assertEquals(evaluateCondition('always()', { job: { status: 'failure' } }), true);
 })
-    Deno.test('evaluateCondition - built-in functions - cancelled() always returns false', () => {
+    Deno.test('evaluateCondition - built-in functions - cancelled() reflects job.status', () => {
+  // No job context → not cancelled.
   assertEquals(evaluateCondition('cancelled()', {}), false);
-      assertEquals(evaluateCondition('cancelled()', { job: { status: 'cancelled' } }), false);
+      // Cancelled job → cancelled() returns true so finalize/cleanup steps run.
+      assertEquals(evaluateCondition('cancelled()', { job: { status: 'cancelled' } }), true);
+      // Other terminal statuses → cancelled() returns false.
+      assertEquals(evaluateCondition('cancelled()', { job: { status: 'failure' } }), false);
+      assertEquals(evaluateCondition('cancelled()', { job: { status: 'success' } }), false);
 })
     Deno.test('evaluateCondition - built-in functions - failure() returns true when job status is failure', () => {
   assertEquals(evaluateCondition('failure()', { job: { status: 'failure' } }), true);

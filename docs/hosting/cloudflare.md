@@ -440,6 +440,27 @@ Puppeteer binding による Workers 内ブラウザ操作。他環境では brow
 
 CF Workflows ベースのワークフロー実行。他環境では Takos-managed runner で代替する。
 
+### Security headers
+
+control plane worker (`packages/control/src/web.ts`) は以下の security header を全 response に付与します:
+
+| header | 値 | 備考 |
+| --- | --- | --- |
+| `Strict-Transport-Security` | `max-age=31536000; includeSubDomains; preload` | `ENVIRONMENT=development` 時はスキップ |
+| `Content-Security-Policy` | `default-src 'self'; script-src 'self' …; ...` | HTML response のみ。route 個別の nonce CSP は上書き可能 |
+| `X-Content-Type-Options` | `nosniff` | 全 response |
+| `X-Frame-Options` | `DENY` | 全 response (admin console は埋め込み禁止) |
+| `Referrer-Policy` | `strict-origin-when-cross-origin` | 全 response |
+| `Permissions-Policy` | `camera=(), microphone=(), geolocation=(), payment=(), …` | 全 response |
+| `Cross-Origin-Opener-Policy` | `same-origin` | OAuth popup の `window.opener` 経由攻撃を防止 |
+| `Cross-Origin-Resource-Policy` | `same-site` | 全 response |
+
+静的アセット (`/`, `/static/*`) は assets binding 経由で配信されるため、`server/middleware/static-assets.ts` が独自に header を再付与します (assets binding response の header は immutable)。
+
+::: warning Edge での HSTS
+Cloudflare 以外の deploy 環境 (k8s / AWS / 自前 nginx 等) で edge 側にも HSTS preload 対応が無い場合、ユーザー初回アクセスが HTTP のままになると downgrade 攻撃のリスクがあります。edge 側でも HSTS を duplicate して設定することを推奨します。
+:::
+
 ## マルチクラウド対応
 
 takos オペレーターが takos をどのクラウドにホストするかはインストール時の設定で決まる。アプリ開発者は app.yml を書いて `takos deploy` するだけで、デプロイ先を意識する必要はない:
