@@ -30,10 +30,10 @@ compute:
         maxInstances: 10
 
 routes:
-  - path: /api
-    target: browser-host
-  - path: /gui
-    target: browser-host
+  - target: browser-host
+    path: /api
+  - target: browser-host
+    path: /gui
 
 env:
   API_SECRET: ""

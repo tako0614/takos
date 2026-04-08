@@ -1,11 +1,9 @@
 # Deploy System
 
-::: tip Internal implementation
-このページは deploy system の internal 実装を説明する。
-public contract ではない。実装は変更される可能性がある。
-public contract は [manifest spec](/reference/manifest-spec) と
-[API reference](/reference/api) を参照。
-:::
+::: tip Internal implementation このページは deploy system の internal
+実装を説明する。 public contract ではない。実装は変更される可能性がある。 public
+contract は [manifest spec](/reference/manifest-spec) と
+[API reference](/reference/api) を参照。 :::
 
 Takos のデプロイシステムは **二層モデル**:
 
@@ -371,41 +369,47 @@ takos group list          # group inventory
 takos group show NAME
 ```
 
-### primitive 個別操作 (task-oriented CLI)
+### primitive 個別操作
 
-primitive は task-oriented CLI (`<domain> <verb>`) で個別に作成・更新・削除する。
-group に所属させない場合、それぞれが独立した lifecycle unit になる。
+primitive は個別に作成・更新・削除できる。group に所属させない場合、それぞれが
+独立した lifecycle unit になる。compute (worker / service) / route (custom
+domain) の個別 CRUD は `/api/services/*` HTTP API 経由で行う。storage primitive
+の CRUD / binding / data plane / secret 操作は `takos resource`
+サブコマンドが提供する。
 
 ```bash
-# compute (worker / service)
-takos service list
-takos service view svc_abc123
-takos service create --body '{"name":"my-api","space_id":"ws_xxx"}'
-takos service remove svc_abc123
-
-# storage (resource)
+# storage (resource) の管理
 takos resource list
 takos resource create --body '{"name":"my-db","type":"sql","space_id":"ws_xxx"}'
 takos resource view res_xxx
-
-# route (custom domain など)
-takos service custom-domain list svc_abc123
-takos service custom-domain create svc_abc123 --body '{"domain":"api.example.com"}'
+takos resource attach my-db --group my-app      # group 所属
+takos resource detach my-db                      # group 解除
 
 # binding (storage を compute に紐付け)
 takos resource bind res_xxx --service svc_abc123
+
+# data plane / secret 操作
+takos resource sql <subcommand>       # SQL data plane (tables / query / export)
+takos resource object <subcommand>    # object-store data plane
+takos resource kv <subcommand>        # KV data plane
+takos resource get-secret app-secret
+takos resource rotate-secret app-secret
+
+# compute / route は HTTP API を直接呼び出す
+curl -X POST /api/services ...
+curl -X POST /api/services/:id/custom-domains ...
 ```
 
-task-oriented CLI の詳細は [CLI リファレンス](/reference/cli) を参照。
+CLI の詳細は [CLI リファレンス](/reference/cli) を参照。
 
 既存 standalone primitive を後から group に所属させたい場合は
 `PATCH /api/services/:id/group` / `PATCH /api/resources/:id/group` を呼ぶ。
 
 ## Primitive と group の関係
 
-primitive (compute / storage / route / publish) は **1st-class エンティティ** で、
-それぞれ独立した lifecycle を持つ。group はその上にある **bundling layer** で、
-複数の primitive を束ねて bulk lifecycle (snapshot, rollback, uninstall) と
+primitive (compute / storage / route / publish) は **1st-class エンティティ**
+で、 それぞれ独立した lifecycle を持つ。group はその上にある **bundling layer**
+で、 複数の primitive を束ねて bulk lifecycle (snapshot, rollback, uninstall) と
 desired state management を提供する optional な仕組み。
 
 - primitive は group に所属することも、standalone で存在することもできる
@@ -525,7 +529,7 @@ Takos deploy system (二層モデル):
     - publish
 
   CLI surface:
-    - primitive 個別: takos worker / resource / route / bind / publication
+    - primitive 個別: takos resource (+ /api/services/* HTTP API for compute/route)
     - group bulk:    takos deploy / install / rollback / uninstall
 ```
 

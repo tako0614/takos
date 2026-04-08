@@ -134,9 +134,60 @@ publish:
 custom domain / hostname routing はこの manifest の canonical desired state
 には含めず、routing / observed surface として別 API で扱います。
 
+## トップレベルフィールド一覧
+
+| field | 必須 | 用途 |
+| --- | --- | --- |
+| `name` | yes | group 名 (slug) |
+| `version` | no | display 用 version (Git tag と一致させる慣習) |
+| `compute` | no | worker / service / attached-container の宣言 |
+| `storage` | no | sql / object-store / key-value / queue / vector-index / secret / analytics-engine / workflow / durable-object |
+| `routes` | no | path → compute mapping |
+| `publish` | no | 外部 interface (McpServer / FileHandler / UiSurface 等) |
+| `env` | no | top-level 環境変数 (key-value) |
+| `scopes` | no | app token に含める scope のリスト (group → kernel API の権限) |
+| `oauth` | no | OAuth client 設定 (third-party user に request する scope は `oauth.scopes`) |
+| `overrides` | no | 環境別 partial override |
+
+`scopes` (top-level) と `oauth.scopes` は別物:
+
+- **top-level `scopes`**: この group が発行する **app token** に含まれる scope。group → kernel API の権限を制限する。
+- **`oauth.scopes`**: この group が **OAuth client** として third-party user に request する scope。end-user の consent flow で表示される。
+
+両者は同じ vocabulary (`files:read` / `threads:write` 等) を使うが、役割は別。
+
+## overrides
+
+`overrides` を使うと環境ごとに manifest の一部を上書きできます。
+
+```yaml
+overrides:
+  production:
+    compute:
+      web:
+        scaling:
+          minInstances: 2
+          maxInstances: 10
+    env:
+      LOG_LEVEL: warn
+  staging:
+    env:
+      LOG_LEVEL: debug
+```
+
+`takos deploy --env production` で deploy すると、base manifest に `overrides.production` が deep merge されます。
+
 ## compute
 
-`compute` は workload の定義を格納する。3 種類の workload がある。
+`compute` は workload の定義を格納する。3 種類の workload があり、parser が field の組み合わせから `kind` を **自動判定** する:
+
+| 判定条件 | 結果 `kind` |
+|---|---|
+| `build` あり | `worker` |
+| `image` のみ (`build` なし) | `service` |
+| 親 worker の `containers:` 内エントリ | `attached-container` |
+
+`build` と `image` を両方指定すると parse error。
 
 ### worker
 

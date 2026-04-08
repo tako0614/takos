@@ -51,6 +51,14 @@ kernel 等がドキュメント操作を行いたい場合:
 takos-docs は manifest で `files:read` / `files:write` スコープを宣言し、
 app token 経由で kernel の Storage API を呼び出してファイルの読み書きを行う。
 
+## Scopes
+
+| scope | 用途 |
+| --- | --- |
+| `files:read` | kernel Storage からドキュメントファイル読み取り |
+| `files:write` | kernel Storage へドキュメントファイル書き込み |
+| `mcp:invoke` | 他 group の MCP server を呼ぶ (group 間連携) |
+
 ## 所有する data
 
 takos-docs 自体は永続データを持たない。

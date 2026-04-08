@@ -27,15 +27,16 @@ storage:
     generate: true
 
 routes:
-  - path: /mcp
-    target: main
+  - target: main
+    path: /mcp
 
 publish:
   - type: McpServer
     path: /mcp
+    authSecretRef: MCP_AUTH_TOKEN
 ```
 
-認証トークンは `type: secret` resource で生成し、workload 側で検証する。
+認証トークンは `type: secret` resource で生成し、workload 側で検証する。`authSecretRef` は client 向け discovery metadata で、対応する env 変数名 (`MCP_AUTH_TOKEN`) を宣言する。
 
 ## Transport
 

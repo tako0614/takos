@@ -41,21 +41,22 @@ takos deploy --env staging --target compute.web    # OK
 takos deploy --env staging --target compute.api    # NG（存在しない）
 ```
 
-## リソース作成失敗
+## ストレージ作成失敗
 
-### `Error: Failed to create D1 database`
-
-- Takos 側の deploy 権限を持つアカウントで `takos login` しているか確認してください
-- アカウントの D1 クォータに空きがあるか確認してください
-
-### `Error: Failed to create R2 bucket`
+### `Error: Failed to create sql storage`
 
 - Takos 側の deploy 権限を持つアカウントで `takos login` しているか確認してください
-- R2 のバケット名制約（英小文字、ハイフン、63 文字以内）に従っているか確認してください
+- 利用 plan の sql storage クォータに空きがあるか確認してください
+- backend 固有のクォータ / 名前制約は [Hosting / Cloudflare](/hosting/cloudflare) などの provider docs を参照してください
+
+### `Error: Failed to create object-store storage`
+
+- Takos 側の deploy 権限を持つアカウントで `takos login` しているか確認してください
+- ストレージ名の正規化規則に従っているか確認してください
 
 ## デプロイ失敗
 
-### `Error: wrangler deploy failed`
+### `Error: Worker deploy failed`
 
 1. まず plan を確認しましょう:
 
@@ -70,9 +71,9 @@ takos deploy --env staging --target compute.web
 ```
 
 3. よくある原因:
-   - binding の参照先リソースが存在しない
+   - storage bind の参照先リソースが存在しない
    - Worker のコードにシンタックスエラーがある
-   - compatibility date が古すぎる
+   - readiness probe (`GET /` または `compute.<name>.readiness`) が 200 を返さない
 
 ### `Error: Authentication failed`
 
@@ -99,9 +100,10 @@ takos deploy --plan
 
 ## それでも解決しない場合
 
-1. Cloudflare ダッシュボードで Worker やリソースの状態を確認
-2. `takos deploy --plan` で manifest の解釈結果と差分を確認
-3. `takos deploy status --space SPACE_ID` で control plane 側の deployment 状態を確認
+1. `takos deploy --plan` で manifest の解釈結果と差分を確認
+2. `takos deploy status --space SPACE_ID` で control plane 側の deployment 状態を確認
+3. `takos group show GROUP_NAME` で group inventory を確認
+4. provider 固有の問題は [Hosting / Cloudflare](/hosting/cloudflare) などの provider docs を参照
 
 ## 次のステップ
 

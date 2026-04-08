@@ -101,8 +101,6 @@ export default defineConfig({
         text: "プラットフォーム",
         items: [
           { text: "Space", link: "/platform/spaces" },
-          { text: "Git", link: "/platform/takos-git" },
-          { text: "Storage", link: "/platform/takos-storage" },
           { text: "Store", link: "/platform/store" },
           { text: "課金", link: "/platform/billing" },
           { text: "ActivityPub", link: "/platform/activitypub" },

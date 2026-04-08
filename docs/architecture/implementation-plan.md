@@ -2,13 +2,12 @@
 
 ## 現状
 
-apps/control (monolith) に全機能が統合済み。
-Agent, Git, Storage, Store, Auth, Dashboard, Deploy, Routing — 全て kernel の一部として動作している。
+apps/control (monolith) に全機能が統合済み。 Agent, Git, Storage, Store, Auth,
+Dashboard, Deploy, Routing — 全て kernel の一部として動作している。
 
 ## 目標
 
-kernel はそのまま維持。
-外部 group を deploy できる基盤を構築する。
+kernel はそのまま維持。 外部 group を deploy できる基盤を構築する。
 
 ## Phase
 
@@ -22,7 +21,7 @@ kernel はそのまま維持。
 ### Phase 1: Default group の deploy
 
 - takos-computer, takos-docs, takos-excel, takos-slide を deploy
-- 各 group が独自 hostname + D1/R2 で動作確認
+- 各 group が独自 hostname + sql/object-store storage で動作確認
 - kernel の sidebar から UiSurface を iframe で表示
 
 ### Phase 2: Store 連携
@@ -36,4 +35,5 @@ kernel はそのまま維持。
 - Agent / Chat: kernel に統合済み。変更なし
 - Git: kernel に統合済み。変更なし
 - Storage: kernel に統合済み。変更なし
-- Store: kernel に統合済み。変更なし（group deploy の catalog 機能を追加するのみ）
+- Store: kernel に統合済み。変更なし（group deploy の catalog
+  機能を追加するのみ）

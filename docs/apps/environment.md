@@ -5,10 +5,11 @@
 ## 優先順位
 
 env の解決順 (低 → 高):
-1. storage bind による自動 inject
+1. storage bind による自動 inject + `CONTAINER_<NAME>` (attached container)
 2. publication env injection (`TAKOS_*_*_URL`)
-3. top-level env
-4. `compute.<name>.env`
+3. `oauth.autoEnv` による自動 inject (`OAUTH_CLIENT_ID` / `OAUTH_CLIENT_SECRET`)
+4. top-level env
+5. `compute.<name>.env`
 
 高優先度が低優先度を override する。
 key 衝突時は高優先度の値が使われる。

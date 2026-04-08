@@ -30,8 +30,8 @@ compute:
         artifactPath: dist/worker
 
 routes:
-  - path: /
-    target: web
+  - target: web
+    path: /
 ```
 
 ## ワークフロー
