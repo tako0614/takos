@@ -1,5 +1,4 @@
 import { getDb } from "../../../infra/db/index.ts";
-import type { D1Database } from "../../../shared/types/bindings.ts";
 import { isValidOpaqueId } from "../../../shared/utils/db-guards.ts";
 import type {
   Repository,

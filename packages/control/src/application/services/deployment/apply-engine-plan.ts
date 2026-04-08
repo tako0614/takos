@@ -64,7 +64,7 @@ export async function buildManifestPlan<TGroup extends ApplyEnginePlanGroup>(
 
   const desiredState = deps.compileGroupDesiredState(effectiveManifest, {
     groupName: input.opts?.groupName ?? input.group?.name ??
-      effectiveManifest.metadata.name,
+      effectiveManifest.name,
     provider: input.opts?.providerName ?? input.group?.provider ??
       "cloudflare",
     envName: input.opts?.envName ?? input.group?.env ?? "default",

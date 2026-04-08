@@ -38,87 +38,75 @@ Deno.test("group managed desired state sync - syncs env, bindings, and MCP runti
   try {
     const desired = compileGroupDesiredState(
       {
-        apiVersion: "takos.dev/v1alpha1",
-        kind: "App",
-        metadata: { name: "demo-app" },
-        spec: {
-          version: "1.0.0",
-          env: {
-            inject: {
-              API_URL: "{{routes.api.url}}",
-            },
-          },
-          resources: {
-            db: { type: "d1", binding: "DB" },
-            auth: { type: "secretRef", binding: "AUTH_TOKEN", generate: true },
-            jobs: { type: "queue", binding: "JOBS" },
-            idx: {
-              type: "vectorize",
-              binding: "INDEX",
-              vectorize: { dimensions: 1536, metric: "cosine" },
-            },
-            events: {
-              type: "analyticsEngine",
-              binding: "EVENTS",
-              analyticsEngine: { dataset: "tenant-events" },
-            },
-            flow: {
-              type: "workflow_runtime",
-              binding: "FLOW",
-              workflowRuntime: { service: "api", export: "MainWorkflow" },
-            },
-            counter: {
-              type: "durable_namespace",
-              binding: "COUNTER",
-              durableNamespace: {
-                className: "Counter",
-                scriptName: "edge-worker",
-              },
-            },
-          },
-          workers: {
-            edge: {
-              build: {
-                fromWorkflow: {
-                  path: ".takos/workflows/deploy.yml",
-                  job: "build",
-                  artifact: "edge",
-                  artifactPath: "dist/edge.js",
-                },
-              },
-              env: {
-                WORKER_MODE: "edge",
-              },
-              bindings: {
-                d1: ["db"],
-                queues: ["jobs"],
-                vectorize: ["idx"],
-                analyticsEngine: ["events"],
-                workflow: ["flow"],
-                durableObjects: ["counter"],
-              },
-            },
-          },
-          services: {
-            api: {
-              dockerfile: "Dockerfile",
-              port: 8080,
-              env: {
-                API_MODE: "service",
-              },
-              bindings: {
-                d1: ["db"],
-              },
-            },
-          },
-          routes: [
-            { name: "api", ingress: "edge", target: "api", path: "/api" },
-            { name: "mcp", ingress: "edge", target: "api", path: "/mcp" },
-          ],
-          mcpServers: [
-            { name: "tools", route: "mcp", transport: "streamable-http" },
-          ],
+        name: "demo-app",
+        version: "1.0.0",
+        env: {
+          API_URL: "https://api.example.test",
         },
+        storage: {
+          db: { type: "sql", bind: "DB" },
+          auth: { type: "secret", bind: "AUTH_TOKEN", generate: true },
+          jobs: { type: "queue", bind: "JOBS" },
+          idx: {
+            type: "vector-index",
+            bind: "INDEX",
+            vectorIndex: { dimensions: 1536, metric: "cosine" },
+          },
+          events: {
+            type: "analytics-engine",
+            bind: "EVENTS",
+          },
+          flow: {
+            type: "workflow",
+            bind: "FLOW",
+            workflow: { class: "MainWorkflow", script: "edge" },
+          },
+          counter: {
+            type: "durable-object",
+            bind: "COUNTER",
+            durableObject: {
+              class: "Counter",
+              script: "edge",
+            },
+          },
+        },
+        compute: {
+          edge: {
+            kind: "worker",
+            build: {
+              fromWorkflow: {
+                path: ".takos/workflows/deploy.yml",
+                job: "build",
+                artifact: "edge",
+                artifactPath: "dist/edge.js",
+              },
+            },
+            env: {
+              WORKER_MODE: "edge",
+            },
+          },
+          api: {
+            kind: "service",
+            image: "ghcr.io/example/api:latest",
+            port: 8080,
+            env: {
+              API_MODE: "service",
+            },
+          },
+        },
+        routes: [
+          { target: "edge", path: "/api" },
+          { target: "edge", path: "/mcp" },
+        ],
+        publish: [
+          {
+            type: "McpServer",
+            name: "tools",
+            path: "/mcp",
+            transport: "streamable-http",
+          },
+        ],
+        scopes: [],
       },
       {
         groupName: "demo-app",
@@ -172,8 +160,8 @@ Deno.test("group managed desired state sync - syncs env, bindings, and MCP runti
             providerResourceId: "d1-id",
             providerResourceName: "demo-db",
             config: {
-              type: "d1",
-              manifestType: "d1",
+              type: "sql",
+              manifestType: "sql",
               resourceClass: "sql",
               backing: "d1",
               binding: "DB",
@@ -193,8 +181,8 @@ Deno.test("group managed desired state sync - syncs env, bindings, and MCP runti
             providerResourceId: "secret-value",
             providerResourceName: "demo-auth",
             config: {
-              type: "secretRef",
-              manifestType: "secretRef",
+              type: "secret",
+              manifestType: "secret",
               resourceClass: "secret",
               backing: "secret_ref",
               binding: "AUTH_TOKEN",
@@ -235,8 +223,8 @@ Deno.test("group managed desired state sync - syncs env, bindings, and MCP runti
             providerResourceId: "idx-id",
             providerResourceName: "tenant-idx",
             config: {
-              type: "vectorize",
-              manifestType: "vectorize",
+              type: "vector-index",
+              manifestType: "vector-index",
               resourceClass: "vector_index",
               backing: "vectorize",
               binding: "INDEX",
@@ -256,8 +244,8 @@ Deno.test("group managed desired state sync - syncs env, bindings, and MCP runti
             providerResourceId: "events-id",
             providerResourceName: "tenant-events",
             config: {
-              type: "analyticsEngine",
-              manifestType: "analyticsEngine",
+              type: "analytics-engine",
+              manifestType: "analytics-engine",
               resourceClass: "analytics_store",
               backing: "analytics_engine",
               binding: "EVENTS",
@@ -277,8 +265,8 @@ Deno.test("group managed desired state sync - syncs env, bindings, and MCP runti
             providerResourceId: "flow-id",
             providerResourceName: "flow",
             config: {
-              type: "workflow_runtime",
-              manifestType: "workflow_runtime",
+              type: "workflow",
+              manifestType: "workflow",
               resourceClass: "workflow_runtime",
               backing: "workflow_binding",
               binding: "FLOW",
@@ -298,8 +286,8 @@ Deno.test("group managed desired state sync - syncs env, bindings, and MCP runti
             providerResourceId: "counter-id",
             providerResourceName: "counter",
             config: {
-              type: "durable_namespace",
-              manifestType: "durable_namespace",
+              type: "durable-object",
+              manifestType: "durable-object",
               resourceClass: "durable_namespace",
               backing: "durable_object_namespace",
               binding: "COUNTER",
@@ -327,7 +315,7 @@ Deno.test("group managed desired state sync - syncs env, bindings, and MCP runti
     spaceId: "ws-1",
     serviceId: "svc-edge",
     variables: [
-      { name: "API_URL", value: "http://10.0.0.2:8080/api", secret: false },
+      { name: "API_URL", value: "https://api.example.test", secret: false },
       { name: "AUTH_TOKEN", value: "secret-value", secret: true },
       { name: "WORKER_MODE", value: "edge", secret: false },
     ],
@@ -336,7 +324,7 @@ Deno.test("group managed desired state sync - syncs env, bindings, and MCP runti
     spaceId: "ws-1",
     serviceId: "svc-api",
     variables: [
-      { name: "API_URL", value: "http://10.0.0.2:8080/api", secret: false },
+      { name: "API_URL", value: "https://api.example.test", secret: false },
       { name: "AUTH_TOKEN", value: "secret-value", secret: true },
       { name: "API_MODE", value: "service", secret: false },
     ],
@@ -345,34 +333,60 @@ Deno.test("group managed desired state sync - syncs env, bindings, and MCP runti
   assertEquals(replaceResourceBindingsCalls[0], {
     serviceId: "svc-edge",
     bindings: [
-      { name: "DB", type: "d1", resourceId: "res-db" },
+      { name: "DB", type: "sql", resourceId: "res-db" },
+      { name: "AUTH_TOKEN", type: "secret", resourceId: "res-auth" },
       { name: "JOBS", type: "queue", resourceId: "res-jobs" },
-      { name: "INDEX", type: "vectorize", resourceId: "res-idx" },
-      { name: "EVENTS", type: "analyticsEngine", resourceId: "res-events" },
+      { name: "INDEX", type: "vector-index", resourceId: "res-idx" },
+      { name: "EVENTS", type: "analytics-engine", resourceId: "res-events" },
       {
         name: "FLOW",
-        type: "workflow_runtime",
+        type: "workflow",
         resourceId: "res-flow",
         config: {
           workflow_name: "flow",
           class_name: "MainWorkflow",
-          script_name: "api",
+          script_name: "edge",
         },
       },
       {
         name: "COUNTER",
-        type: "durable_namespace",
+        type: "durable-object",
         resourceId: "res-counter",
         config: {
           class_name: "Counter",
-          script_name: "edge-worker",
+          script_name: "edge",
         },
       },
     ],
   });
   assertEquals(replaceResourceBindingsCalls[1], {
     serviceId: "svc-api",
-    bindings: [{ name: "DB", type: "d1", resourceId: "res-db" }],
+    bindings: [
+      { name: "DB", type: "sql", resourceId: "res-db" },
+      { name: "AUTH_TOKEN", type: "secret", resourceId: "res-auth" },
+      { name: "JOBS", type: "queue", resourceId: "res-jobs" },
+      { name: "INDEX", type: "vector-index", resourceId: "res-idx" },
+      { name: "EVENTS", type: "analytics-engine", resourceId: "res-events" },
+      {
+        name: "FLOW",
+        type: "workflow",
+        resourceId: "res-flow",
+        config: {
+          workflow_name: "flow",
+          class_name: "MainWorkflow",
+          script_name: "edge",
+        },
+      },
+      {
+        name: "COUNTER",
+        type: "durable-object",
+        resourceId: "res-counter",
+        config: {
+          class_name: "Counter",
+          script_name: "edge",
+        },
+      },
+    ],
   });
 
   assertEquals(saveRuntimeConfigCalls[0], {

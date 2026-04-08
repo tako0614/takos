@@ -5,6 +5,7 @@ import type {
   DeploymentTarget,
   DeploymentTargetArtifact,
   DeploymentTargetEndpoint,
+  DeploymentTargetReadiness,
 } from "./models.ts";
 import type { PersistedDeploymentContract } from "./provider-contracts.ts";
 
@@ -74,6 +75,23 @@ function normalizeTargetArtifact(
   return undefined;
 }
 
+/**
+ * Normalize the readiness probe field stored in `target_json` (Track G).
+ * Only `path` is recognized; non-string / empty values are dropped.
+ */
+function normalizeTargetReadiness(
+  raw: Record<string, unknown>,
+): DeploymentTargetReadiness | undefined {
+  const readiness = raw.readiness;
+  if (readiness && typeof readiness === "object") {
+    const parsed = readiness as Record<string, unknown>;
+    if (typeof parsed.path === "string" && parsed.path.length > 0) {
+      return { path: parsed.path };
+    }
+  }
+  return undefined;
+}
+
 function normalizeDeploymentTarget(
   raw: Record<string, unknown>,
 ): DeploymentTarget {
@@ -84,11 +102,13 @@ function normalizeDeploymentTarget(
     ? endpoint.ref
     : undefined;
   const artifact = normalizeTargetArtifact(raw);
+  const readiness = normalizeTargetReadiness(raw);
 
   return {
     ...(routeRef ? { route_ref: routeRef } : {}),
     ...(endpoint ? { endpoint } : {}),
     ...(artifact ? { artifact } : {}),
+    ...(readiness ? { readiness } : {}),
   };
 }
 
@@ -135,6 +155,13 @@ export function serializeDeploymentTarget(options?: {
       artifactRaw.health_path = target.artifact.health_path;
     }
     if (Object.keys(artifactRaw).length > 0) raw.artifact = artifactRaw;
+  }
+  // Worker readiness probe path (Track G).
+  if (
+    target?.readiness && typeof target.readiness.path === "string" &&
+    target.readiness.path.length > 0
+  ) {
+    raw.readiness = { path: target.readiness.path };
   }
 
   const normalized = normalizeDeploymentTarget(raw);

@@ -1,317 +1,233 @@
-export type AppMetadata = {
-  name: string;
-  appId?: string;
-};
+// ============================================================
+// AppManifest — flat canonical schema (Phase 1)
+// ============================================================
+//
+// This file is the single source of truth for the Takos app manifest
+// internal type. The envelope-style `apiVersion/kind/metadata/spec`
+// structure has been retired in favor of a flat top-level shape that
+// mirrors the docs canonical spec (`docs/apps/manifest.md`).
+//
+// Phase 1 scope:
+//   - Rewrite AppManifest, AppCompute, AppStorage, AppPublication, etc.
+//   - Keep legacy type aliases (AppWorker/AppService/AppContainer/AppResource/
+//     AppMcpServer/AppFileHandler) so that the existing deploy pipeline
+//     code keeps parsing until Phase 2 rewrites it.
+//
+// Do NOT add new code that depends on the envelope shape.
+// ============================================================
 
-// --- Resource limits ---
+// --- Build configuration ---
 
-export type ResourceLimits = {
-  maxSizeMb?: number;
-  maxRows?: number;
-  maxKeys?: number;
-};
-
-type AppResourceBase = {
-  binding?: string;
-  generate?: boolean;
-  limits?: ResourceLimits;
-};
-
-type D1Resource = AppResourceBase & {
-  type: "d1";
-  migrations?: string | { up: string; down: string };
-};
-
-type R2Resource = AppResourceBase & { type: "r2" };
-type KVResource = AppResourceBase & { type: "kv" };
-type SecretRefResource = AppResourceBase & { type: "secretRef" };
-
-type VectorizeResource = AppResourceBase & {
-  type: "vectorize";
-  vectorize: {
-    dimensions: number;
-    metric: "cosine" | "euclidean" | "dot-product";
-  };
-};
-
-type QueueResource = AppResourceBase & {
-  type: "queue";
-  queue?: {
-    maxRetries?: number;
-    deadLetterQueue?: string;
-    deliveryDelaySeconds?: number;
-  };
-};
-
-type AnalyticsEngineResource = AppResourceBase & {
-  type: "analyticsEngine";
-  analyticsEngine?: {
-    dataset?: string;
-  };
-};
-
-type WorkflowConfig = {
-  service: string;
-  export: string;
-  timeoutMs?: number;
-  maxRetries?: number;
-};
-
-type WorkflowResource = AppResourceBase & {
-  type: "workflow";
-  workflow: WorkflowConfig;
-};
-
-type WorkflowRuntimeResource = AppResourceBase & {
-  type: "workflow_runtime";
-  workflowRuntime: WorkflowConfig;
-};
-
-type DurableObjectConfig = {
-  className: string;
-  scriptName?: string;
-};
-
-type DurableObjectResource = AppResourceBase & {
-  type: "durableObject";
-  durableObject: DurableObjectConfig;
-};
-
-type DurableNamespaceResource = AppResourceBase & {
-  type: "durable_namespace";
-  durableNamespace: DurableObjectConfig;
-};
-
-export type AppResource =
-  | D1Resource
-  | R2Resource
-  | KVResource
-  | SecretRefResource
-  | VectorizeResource
-  | QueueResource
-  | AnalyticsEngineResource
-  | WorkflowResource
-  | WorkflowRuntimeResource
-  | DurableObjectResource
-  | DurableNamespaceResource;
-
-export type AppResourceType = AppResource["type"];
-
-export type WorkflowArtifactBuild = {
+export type BuildConfig = {
   fromWorkflow: {
     path: string;
     job: string;
     artifact: string;
-    artifactPath: string;
+    artifactPath?: string;
   };
 };
 
-export type DirectWorkerArtifact = {
-  kind: "bundle";
-  deploymentId?: string;
-  artifactRef?: string;
+// --- Volume mount (compute-local) ---
+
+export type VolumeMount = {
+  source: string;
+  target: string;
+  persistent?: boolean;
 };
 
-export type DirectImageArtifact = {
-  kind: "image";
-  imageRef: string;
-  provider?: "oci" | "ecs" | "cloud-run" | "k8s";
-};
-
-// --- Health check ---
+// --- Health check (service / attached container) ---
 
 export type HealthCheck = {
-  type?: "http" | "tcp" | "exec"; // default: 'http'
-  path?: string; // http: GET パス
-  port?: number; // tcp: ポート
-  command?: string; // exec: コマンド
-  intervalSeconds?: number;
-  timeoutSeconds?: number;
+  path?: string;
+  interval?: number; // seconds
+  timeout?: number; // seconds
   unhealthyThreshold?: number;
 };
 
-// --- Lifecycle hooks ---
+// --- Triggers (worker-only) ---
 
-export type LifecycleHook = {
-  command: string;
-  timeoutSeconds?: number;
-  sandbox?: boolean; // true: 隔離コンテナで実行。Store インストール時は必須
+export type ScheduleTrigger = {
+  cron: string;
 };
 
-export type LifecycleHooks = {
-  preApply?: LifecycleHook;
-  postApply?: LifecycleHook;
+export type QueueTrigger = {
+  storage: string; // canonical field name (not `queue`)
+  batchSize?: number;
+  maxRetries?: number;
 };
 
-// --- Update / rollback strategy ---
-
-export type UpdateStrategy = {
-  strategy?: "rolling" | "canary" | "blue-green" | "recreate";
-  canaryWeight?: number;
-  healthCheck?: string;
-  rollbackOnFailure?: boolean;
-  timeoutSeconds?: number;
+export type AppTriggers = {
+  schedules?: ScheduleTrigger[];
+  queues?: QueueTrigger[];
 };
 
-// --- Service binding (dependency version constraint) ---
+// --- Compute (worker / service / attached-container) ---
 
-export type ServiceBinding = string | { name: string; version?: string };
+export type ComputeKind = "worker" | "service" | "attached-container";
 
-// --- Volume ---
-
-export type Volume = {
-  name: string;
-  mountPath: string;
-  size: string; // "10Gi", "500Mi" etc
-};
-
-// --- Worker scaling ---
-
-export type WorkerScaling = {
-  minInstances?: number;
-  maxConcurrency?: number;
-};
-
-// --- Container & Worker types ---
-
-/** Container definition (CF Containers — worker に紐づけて使う) */
-export type AppContainer = {
-  dockerfile?: string;
-  imageRef?: string;
-  artifact?: DirectImageArtifact;
-  provider?: "oci" | "ecs" | "cloud-run" | "k8s";
-  port: number;
-  instanceType?: string;
-  maxInstances?: number;
+export type AppCompute = {
+  kind: ComputeKind; // auto-detected by parser
+  build?: BuildConfig;
+  image?: string;
+  port?: number;
   env?: Record<string, string>;
-  volumes?: Volume[];
-  dependsOn?: string[];
-};
-
-/** Service definition (常設コンテナ — VPS/独立稼働) */
-export type AppService = {
-  dockerfile?: string;
-  imageRef?: string;
-  artifact?: DirectImageArtifact;
-  provider?: "oci" | "ecs" | "cloud-run" | "k8s";
-  port: number;
-  instanceType?: string;
-  maxInstances?: number;
-  ipv4?: boolean;
-  env?: Record<string, string>;
-  healthCheck?: HealthCheck;
-  bindings?: AppWorkloadBindings;
-  triggers?: {
-    schedules?: Array<{ cron: string; export: string }>;
+  readiness?: string;
+  scaling?: {
+    minInstances?: number;
+    maxInstances?: number;
   };
-  volumes?: Volume[];
-  dependsOn?: string[];
+  instanceType?: string;
+  volumes?: Record<string, VolumeMount>;
+  containers?: Record<string, AppCompute>; // attached containers (only when kind='worker')
+  depends?: string[];
+  triggers?: AppTriggers;
+  healthCheck?: HealthCheck; // service / attached only
+  dockerfile?: string; // local provider only
+  /**
+   * Legacy alias for `scaling.maxInstances`. Transitional — Phase 2 removes.
+   */
+  maxInstances?: number;
 };
 
-export type AppWorkloadBindings = {
-  resources?: string[];
-  d1?: string[];
-  r2?: string[];
-  kv?: string[];
-  queues?: string[];
-  vectorize?: string[];
-  analyticsEngine?: string[];
-  workflow?: string[];
-  durableObjects?: string[];
-  services?: ServiceBinding[];
-};
+// --- Storage (kernel-managed stateful resources) ---
 
-/** Worker definition (CF Workers) */
-export type AppWorker = {
-  containers?: string[]; // references to keys in spec.containers
-  build?: WorkflowArtifactBuild;
-  artifact?: DirectWorkerArtifact;
-  env?: Record<string, string>;
-  bindings?: AppWorkloadBindings;
-  triggers?: {
-    schedules?: Array<{ cron: string; export: string }>;
-    queues?: Array<{ queue: string; export: string }>;
+export type StorageType =
+  | "sql"
+  | "object-store"
+  | "key-value"
+  | "queue"
+  | "vector-index"
+  | "secret"
+  | "analytics-engine"
+  | "workflow"
+  | "durable-object";
+
+export type AppStorage = {
+  type: StorageType;
+  bind?: string;
+  // type-specific
+  /** sql only */
+  migrations?: string;
+  /** queue only */
+  queue?: {
+    maxRetries?: number;
+    deadLetterQueue?: string;
   };
-  healthCheck?: HealthCheck;
-  scaling?: WorkerScaling;
-  dependsOn?: string[];
+  /** vector-index only */
+  vectorIndex?: {
+    dimensions?: number;
+    metric?: "cosine" | "euclidean" | "dot-product";
+  };
+  /** secret only */
+  generate?: boolean;
+  /** workflow only */
+  workflow?: {
+    class: string;
+    script: string;
+  };
+  /** durable-object only */
+  durableObject?: {
+    class: string;
+    script: string;
+  };
 };
 
-/** Env configuration with template injection support */
-export type AppEnvConfig = {
-  required?: string[];
-  inject?: Record<string, string>; // template values: "{{routes.api.url}}"
-};
-
-// --- Route types ---
+// --- Routes ---
 
 export type AppRoute = {
-  name: string;
-  target: string;
-  path?: string;
-  methods?: string[]; // ['GET', 'POST'] etc
-  ingress?: string;
+  target: string; // compute name (required)
+  path: string; // required, must start with '/'
+  methods?: string[];
   timeoutMs?: number;
 };
 
-export type AppMcpServer = {
-  name: string;
-  endpoint?: string;
-  route?: string;
-  transport?: "streamable-http";
+// --- Publications (MCP servers, file handlers, UI surfaces, etc.) ---
+
+export type AppPublication = {
+  type: string; // open string — kernel validates known types
+  path: string; // always required
+  name?: string; // required when same group + same type has multiple
+  title?: string;
+  // type-specific fields (kernel validates known types)
+  /** McpServer */
+  transport?: string;
+  /** McpServer — env var name */
   authSecretRef?: string;
+  /** FileHandler */
+  mimeTypes?: string[];
+  /** FileHandler */
+  extensions?: string[];
+  /** UiSurface */
+  icon?: string;
 };
 
-export type AppFileHandler = {
-  name: string;
-  mimeTypes?: string[];
-  extensions?: string[];
-  openPath: string;
+// --- OAuth configuration ---
+
+export type AppOAuthConfig = {
+  clientName?: string;
+  redirectUris?: string[];
+  scopes?: string[];
+  autoEnv?: boolean;
+  metadata?: {
+    logoUri?: string;
+    tosUri?: string;
+    policyUri?: string;
+  };
 };
 
 // --- Environment overrides ---
 
-export type EnvironmentOverrides = Record<string, {
-  containers?: Record<string, Partial<AppContainer>>;
-  workers?: Record<string, Partial<AppWorker>>;
-  services?: Record<string, Partial<AppService>>;
-}>;
+export type AppManifestOverride = Partial<
+  Pick<
+    AppManifest,
+    "compute" | "storage" | "routes" | "publish" | "env" | "scopes" | "oauth"
+  >
+>;
+
+// --- Root manifest ---
 
 export type AppManifest = {
-  apiVersion: "takos.dev/v1alpha1";
-  kind: "App";
-  metadata: AppMetadata;
-  spec: {
-    version: string;
-    description?: string;
-    icon?: string;
-    category?: "app" | "service" | "library" | "template" | "social";
-    tags?: string[];
-    capabilities?: string[];
-    env?: AppEnvConfig;
-    oauth?: {
-      clientName: string;
-      redirectUris: string[];
-      scopes: string[];
-      autoEnv?: boolean;
-      metadata?: { logoUri?: string; tosUri?: string; policyUri?: string };
-    };
-    takos?: {
-      scopes: string[];
-      minVersion?: string;
-    };
-    resources?: Record<string, AppResource>;
-    containers?: Record<string, AppContainer>;
-    services?: Record<string, AppService>;
-    workers?: Record<string, AppWorker>;
-    routes?: AppRoute[];
-    lifecycle?: LifecycleHooks;
-    update?: UpdateStrategy;
-    mcpServers?: AppMcpServer[];
-    fileHandlers?: AppFileHandler[];
-    overrides?: EnvironmentOverrides;
-  };
+  name: string;
+  version?: string;
+  compute: Record<string, AppCompute>;
+  storage: Record<string, AppStorage>;
+  routes: AppRoute[];
+  publish: AppPublication[];
+  env: Record<string, string>;
+  scopes: string[];
+  oauth?: AppOAuthConfig;
+  overrides?: Record<string, AppManifestOverride>;
 };
+
+// ============================================================
+// Legacy type aliases (transitional — Phase 2 removes)
+// ============================================================
+//
+// These aliases let the existing deploy pipeline code keep compiling
+// until Phase 2 refactors those callers. Do NOT use in new code.
+// ============================================================
+
+/** @deprecated Use `AppCompute` (kind: 'worker'). */
+export type AppWorker = AppCompute & { kind: "worker" };
+
+/** @deprecated Use `AppCompute` (kind: 'service'). */
+export type AppService = AppCompute & { kind: "service" };
+
+/** @deprecated Use `AppCompute` (kind: 'attached-container'). */
+export type AppContainer = AppCompute & { kind: "attached-container" };
+
+/** @deprecated Use `AppStorage`. */
+export type AppResource = AppStorage;
+
+/** @deprecated Use `AppPublication` (type: 'McpServer'). */
+export type AppMcpServer = AppPublication & { type: "McpServer" };
+
+/** @deprecated Use `AppPublication` (type: 'FileHandler'). */
+export type AppFileHandler = AppPublication & { type: "FileHandler" };
+
+// ============================================================
+// Supporting types kept for deploy pipeline compatibility
+// ============================================================
 
 export type AppDeploymentBuildSource = {
   service_name: string;
@@ -338,38 +254,6 @@ export type BundleDoc = {
     labels?: Record<string, string>;
   };
   spec: Record<string, unknown>;
-};
-
-// Resource-type aliases that map portable/legacy manifest names to Cloudflare-native
-// resource types used by the current application spec.
-export type LegacyAppResourceTypeAlias =
-  | "secret_ref"
-  | "analytics_engine"
-  | "workflow_binding"
-  | "durable_object_namespace"
-  | "secret"
-  | "sql"
-  | "object_store"
-  | "vector_index"
-  | "analytics_store"
-  | "workflow_runtime"
-  | "durable_namespace";
-
-export const APP_RESOURCE_TYPE_ALIASES: Record<
-  LegacyAppResourceTypeAlias,
-  AppResource["type"]
-> = {
-  secret_ref: "secretRef",
-  analytics_engine: "analyticsEngine",
-  workflow_binding: "workflow",
-  durable_object_namespace: "durableObject",
-  secret: "secretRef",
-  sql: "d1",
-  object_store: "r2",
-  vector_index: "vectorize",
-  analytics_store: "analyticsEngine",
-  workflow_runtime: "workflow",
-  durable_namespace: "durableObject",
 };
 
 export const BUILD_SOURCE_LABELS = {

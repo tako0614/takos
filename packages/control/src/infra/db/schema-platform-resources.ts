@@ -53,6 +53,13 @@ export const resources = sqliteTable('resources', {
   lastUsedAt: text('last_used_at'),
   manifestKey: text('manifest_key'),
   orphanedAt: text('orphaned_at'),
+  // Secret rotation grace period: when a secret-typed resource is rotated,
+  // the previous value is retained here for 24h so in-flight consumers can
+  // continue to verify against the old value while they reload. After the
+  // expiry timestamp these columns are lazy-cleared on the next read or
+  // rotate operation.
+  previousSecretValue: text('previous_secret_value'),
+  previousSecretExpiresAt: text('previous_secret_expires_at'),
   ...timestamps,
 }, (table) => ({
   idxType: index('idx_resources_type').on(table.type),

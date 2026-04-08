@@ -1,8 +1,9 @@
-import type {
-  AppContainer,
-  AppService,
-  AppWorker,
-} from "../source/app-manifest-types.ts";
+import type { AppCompute } from "../source/app-manifest-types.ts";
+
+// Legacy alias names used by this module to label compute entries.
+type AppWorker = AppCompute & { kind: "worker" };
+type AppService = AppCompute & { kind: "service" };
+type AppContainer = AppCompute & { kind: "attached-container" };
 import type { Env } from "../../../shared/types/env.ts";
 import {
   type ApplyArtifactInput,
@@ -106,6 +107,14 @@ function buildManagedDeploymentTarget(
   spec: AppWorker | AppContainer | AppService,
 ) {
   if (category === "worker") {
+    // Worker readiness probe path: kernel が deploy 時に GET <path> を probe する。
+    // 200 OK 以外は fail (timeout 10s, hard-coded)。default は `/`。
+    // docs: docs/apps/workers.md "Worker readiness"
+    const workerSpec = spec as AppWorker;
+    const readinessPath = typeof workerSpec.readiness === "string" &&
+        workerSpec.readiness.length > 0
+      ? workerSpec.readiness
+      : "/";
     return {
       route_ref: managed.row.routeRef ?? undefined,
       endpoint: managed.row.routeRef
@@ -117,26 +126,17 @@ function buildManagedDeploymentTarget(
       artifact: {
         kind: "worker-bundle" as const,
       },
+      readiness: { path: readinessPath },
     };
   }
 
-  const directImageArtifact = "artifact" in spec &&
-      spec.artifact &&
-      typeof spec.artifact === "object" &&
-      "kind" in spec.artifact &&
-      spec.artifact.kind === "image"
-    ? spec.artifact
-    : undefined;
+  // In the flat schema, the image ref for a service / attached container
+  // lives in `compute.image`. The apply-time artifact override still wins
+  // when supplied via the CLI.
   const imageRef = artifact?.kind === "container_image"
     ? artifact.imageRef
-    : (directImageArtifact && typeof directImageArtifact.imageRef === "string"
-      ? directImageArtifact.imageRef
-      : ("imageRef" in spec && typeof spec.imageRef === "string"
-        ? spec.imageRef
-        : undefined));
-  const port = "port" in spec && typeof spec.port === "number"
-    ? spec.port
-    : undefined;
+    : (typeof spec.image === "string" ? spec.image : undefined);
+  const port = typeof spec.port === "number" ? spec.port : undefined;
 
   return {
     ...(managed.row.routeRef ? { route_ref: managed.row.routeRef } : {}),
@@ -189,22 +189,8 @@ async function upsertManagedWorkload(
 ): Promise<ManagedServiceRecord> {
   const spec = input.workload.spec as AppWorker | AppContainer | AppService;
   const shape = resolveManagedServiceShape(input.category);
-  const directImageArtifact = "artifact" in spec &&
-      spec.artifact &&
-      typeof spec.artifact === "object" &&
-      "kind" in spec.artifact &&
-      spec.artifact.kind === "image"
-    ? spec.artifact
-    : undefined;
-  const imageRef =
-    directImageArtifact && typeof directImageArtifact.imageRef === "string"
-      ? directImageArtifact.imageRef
-      : ("imageRef" in spec && typeof spec.imageRef === "string"
-        ? spec.imageRef
-        : undefined);
-  const port = "port" in spec && typeof spec.port === "number"
-    ? spec.port
-    : undefined;
+  const imageRef = typeof spec.image === "string" ? spec.image : undefined;
+  const port = typeof spec.port === "number" ? spec.port : undefined;
 
   return deps.upsertGroupManagedService(env, {
     groupId: input.groupId,
@@ -280,23 +266,10 @@ async function deployManagedWorkload(
       : undefined;
   const spec = input.workload.spec as AppWorker | AppContainer | AppService;
   const shape = resolveManagedServiceShape(input.category);
-  const directImageArtifact = "artifact" in spec &&
-      spec.artifact &&
-      typeof spec.artifact === "object" &&
-      "kind" in spec.artifact &&
-      spec.artifact.kind === "image"
-    ? spec.artifact
-    : undefined;
   const imageRef = input.artifact?.kind === "container_image"
     ? input.artifact.imageRef
-    : (directImageArtifact && typeof directImageArtifact.imageRef === "string"
-      ? directImageArtifact.imageRef
-      : ("imageRef" in spec && typeof spec.imageRef === "string"
-        ? spec.imageRef
-        : undefined));
-  const port = "port" in spec && typeof spec.port === "number"
-    ? spec.port
-    : undefined;
+    : (typeof spec.image === "string" ? spec.image : undefined);
+  const port = typeof spec.port === "number" ? spec.port : undefined;
 
   await deps.upsertGroupManagedService(env, {
     groupId: input.groupId,

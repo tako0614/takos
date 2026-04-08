@@ -133,9 +133,93 @@ export default new Hono<SpaceAccessRouteEnv>()
     const targetUserId = targetUser.id;
     const body = c.req.valid('json') as { role: SpaceRole };
     if (!body.role) throw new BadRequestError('Role is required');
-    if (body.role === 'owner') throw new BadRequestError('Cannot set owner role');
 
     const targetMember = requireFound(await findMemberWithOwnership(c.env.DB, access.space.id, targetUserId), 'Member');
+
+    // Ownership transfer path: promoting an existing member to `owner` triggers
+    // a transfer of `accounts.ownerAccountId`, which billing services already
+    // resolve dynamically (see runtime-request-handler / capabilities). No
+    // separate billing migration is required because billing accounts are keyed
+    // by `accounts.id` of the resolved owner.
+    if (body.role === 'owner') {
+      if (access.membership.role !== 'owner') {
+        throw new AuthorizationError('Only the current owner can transfer ownership');
+      }
+      if (targetMember.spaceOwnerPrincipalId === targetUserId) {
+        throw new BadRequestError('User is already the space owner');
+      }
+
+      let transferResult:
+        | { username: string; name: string; picture: string | null; role: string; created_at: string | unknown }
+        | TransactionError;
+      try {
+        const currentSpace = await db.select({ ownerAccountId: accounts.ownerAccountId, type: accounts.type })
+          .from(accounts)
+          .where(eq(accounts.id, access.space.id))
+          .limit(1)
+          .get();
+        if (!currentSpace) throw new Error('MEMBER_NOT_FOUND');
+        const previousOwnerId = currentSpace.ownerAccountId;
+        if (!previousOwnerId) throw new Error('CANNOT_TRANSFER_OWNERSHIP');
+        if (previousOwnerId === targetUserId) throw new Error('CANNOT_TRANSFER_OWNERSHIP');
+
+        const currentMember = await findMemberWithOwnership(c.env.DB, access.space.id, targetUserId);
+        if (!currentMember) throw new Error('MEMBER_NOT_FOUND');
+
+        const timestamp = new Date().toISOString();
+
+        // 1. Promote the new member to owner role.
+        await db.update(accountMemberships)
+          .set({ role: 'owner', updatedAt: timestamp })
+          .where(and(
+            eq(accountMemberships.accountId, access.space.id),
+            eq(accountMemberships.memberId, targetUserId),
+          ));
+
+        // 2. Demote the previous owner's membership row (if any) to admin so
+        //    they retain elevated access without owner privileges.
+        const previousOwnerMembership = await db.select({ id: accountMemberships.id })
+          .from(accountMemberships)
+          .where(and(
+            eq(accountMemberships.accountId, access.space.id),
+            eq(accountMemberships.memberId, previousOwnerId),
+          ))
+          .limit(1)
+          .get();
+        if (previousOwnerMembership) {
+          await db.update(accountMemberships)
+            .set({ role: 'admin', updatedAt: timestamp })
+            .where(and(
+              eq(accountMemberships.accountId, access.space.id),
+              eq(accountMemberships.memberId, previousOwnerId),
+            ));
+        }
+
+        // 3. Flip `accounts.ownerAccountId`. Billing attribution follows
+        //    automatically because every billing lookup resolves the owner
+        //    via this column (see services/execution + services/platform).
+        await db.update(accounts)
+          .set({ ownerAccountId: targetUserId, updatedAt: timestamp })
+          .where(eq(accounts.id, access.space.id));
+
+        const memberUser = await db.select({ slug: accounts.slug, name: accounts.name, picture: accounts.picture })
+          .from(accounts)
+          .where(eq(accounts.id, targetUserId))
+          .limit(1)
+          .get();
+        transferResult = {
+          username: memberUser?.slug || '',
+          name: memberUser?.name || '',
+          picture: memberUser?.picture || null,
+          role: 'owner',
+          created_at: currentMember.createdAt,
+        };
+      } catch (err: unknown) {
+        transferResult = handleMemberTransactionError(err, 'Failed to transfer space ownership');
+      }
+      if ('error' in transferResult) throw transferResult;
+      return c.json({ member: transferResult });
+    }
 
     const modifyCheck = validateMemberModification(access.membership.role as SpaceRole, targetMember, 'modify');
     if (modifyCheck) throw modifyCheck;

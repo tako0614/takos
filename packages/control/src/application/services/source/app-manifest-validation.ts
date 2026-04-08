@@ -1,91 +1,34 @@
+// ============================================================
+// app-manifest-validation.ts
+// ============================================================
+//
+// Shared validators for the flat-schema manifest parser (Phase 1).
+//
+// Phase 1 scope:
+//   - Keep workflow YAML helpers used by deploy pipeline
+//   - Keep primitive validators that new parsers reuse:
+//       validateReadinessPath
+//       validateVectorIndexMetric
+//       validateInstanceType
+//       validateServiceScaling
+//       validateWorkflowScriptIsWorker
+//
+// `parseResources` and `validateResourceBindings` were removed
+// when `storage` replaced Cloudflare-style `resources`. Phase 2
+// refactors deploy pipeline callers accordingly.
+// ============================================================
+
 import {
   parseWorkflow,
   validateWorkflow,
   type Workflow,
 } from "takos-actions-engine";
-import { VECTORIZE_DEFAULT_DIMENSIONS } from "../../../shared/config/limits.ts";
-import type {
-  AppResource,
-  AppService,
-  AppWorker,
-  AppWorkloadBindings,
-  ResourceLimits,
-} from "./app-manifest-types.ts";
-import { toPublicResourceType } from "../resources/capabilities.ts";
-import {
-  asOptionalInteger,
-  asRecord,
-  asRequiredString,
-  asString,
-  filterWorkflowErrors,
-  normalizeRepoPath,
-} from "./app-manifest-utils.ts";
+import type { AppCompute, AppStorage } from "./app-manifest-types.ts";
+import { asOptionalInteger, filterWorkflowErrors } from "./app-manifest-utils.ts";
 
-type ValidatableWorker = {
-  kind: "worker";
-  bindings?: AppWorkloadBindings;
-  triggers?: AppWorker["triggers"];
-};
-
-type ValidatableNonWorker = {
-  kind: "service" | "container";
-  bindings?: AppWorkloadBindings;
-  triggers?: AppService["triggers"];
-};
-
-type LegacyValidatableWorkload = {
-  type: "worker" | "container";
-  bindings?: AppWorkloadBindings;
-  triggers?: AppWorker["triggers"] | AppService["triggers"];
-};
-
-type ValidatableWorkload =
-  | ValidatableWorker
-  | ValidatableNonWorker
-  | LegacyValidatableWorkload;
-
-function getWorkloadKind(
-  workload: ValidatableWorkload,
-): "worker" | "service" | "container" {
-  if ("kind" in workload) return workload.kind;
-  return workload.type === "container" ? "container" : "worker";
-}
-
-const SUPPORTED_PUBLIC_RESOURCE_TYPES = [
-  "d1",
-  "r2",
-  "kv",
-  "secretRef",
-  "vectorize",
-  "queue",
-  "analyticsEngine",
-  "workflow",
-  "durableObject",
-];
-
-function resolveCanonicalResourceType(
-  type: string,
-): AppResource["type"] | null {
-  const publicType = toPublicResourceType(type);
-  if (!publicType) return null;
-  if (!SUPPORTED_PUBLIC_RESOURCE_TYPES.includes(publicType)) {
-    return null;
-  }
-  return publicType as AppResource["type"];
-}
-
-function getResourceSection(
-  resource: Record<string, unknown>,
-  names: readonly string[],
-): Record<string, unknown> {
-  for (const name of names) {
-    const section = resource[name];
-    if (section && typeof section === "object") {
-      return asRecord(section);
-    }
-  }
-  return {};
-}
+// ============================================================
+// Workflow YAML helpers
+// ============================================================
 
 export function parseAndValidateWorkflowYaml(
   raw: string,
@@ -140,339 +83,207 @@ export function validateDeployProducerJob(
   }
 }
 
-export function parseResources(
-  specRecord: Record<string, unknown>,
-  workloads: Record<string, ValidatableWorkload>,
-): Record<string, AppResource> {
-  const resourcesRecord = asRecord(specRecord.resources);
-  const resources: Record<string, AppResource> = {};
-  for (const [resourceName, resourceValue] of Object.entries(resourcesRecord)) {
-    const resource = asRecord(resourceValue);
-    const rawType = asRequiredString(
-      resource.type,
-      `spec.resources.${resourceName}.type`,
+// ============================================================
+// Readiness path validator (compute.<name>.readiness)
+// ============================================================
+
+/**
+ * Validate a worker readiness probe path.
+ *
+ * - undefined → undefined (caller may apply default `/`)
+ * - must be a string
+ * - must start with `/`
+ * - absolute URLs (`http://`, `https://`, `//`) are rejected
+ * - paths containing `..` segments are rejected
+ */
+export function validateReadinessPath(
+  value: unknown,
+  field = "readiness",
+): string | undefined {
+  if (value == null) return undefined;
+  if (typeof value !== "string") {
+    throw new Error(`${field} must be a string`);
+  }
+  const trimmed = value.trim();
+  if (!trimmed) return undefined;
+  if (
+    trimmed.startsWith("http://") ||
+    trimmed.startsWith("https://") ||
+    trimmed.startsWith("//")
+  ) {
+    throw new Error(
+      `${field} must be a relative path (got absolute URL: ${trimmed})`,
     );
-    const type = resolveCanonicalResourceType(rawType);
-    if (!type) {
-      throw new Error(
-        `spec.resources.${resourceName}.type must be d1/r2/kv/secretRef/vectorize/queue/analyticsEngine/workflow/durableObject (or aliases: secret_ref, analytics_engine, workflow_binding, durable_object_namespace, sql, object_store, vector_index, analytics_store, workflow_runtime, durable_namespace, secret)`,
-      );
-    }
-    resources[resourceName] = {
-      type,
-      ...((() => {
-        const v = asString(
-          resource.binding,
-          `spec.resources.${resourceName}.binding`,
-        );
-        return v ? { binding: v } : {};
-      })()),
-      ...(resource.generate === true ? { generate: true } : {}),
-      ...(resource.migrations
-        ? {
-          migrations: typeof resource.migrations === "string"
-            ? normalizeRepoPath(
-              asRequiredString(
-                resource.migrations,
-                `spec.resources.${resourceName}.migrations`,
-              ),
-            )
-            : {
-              up: normalizeRepoPath(
-                asRequiredString(
-                  asRecord(resource.migrations).up,
-                  `spec.resources.${resourceName}.migrations.up`,
-                ),
-              ),
-              down: normalizeRepoPath(
-                asRequiredString(
-                  asRecord(resource.migrations).down,
-                  `spec.resources.${resourceName}.migrations.down`,
-                ),
-              ),
-            },
-        }
-        : {}),
-      ...(type === "vectorize"
-        ? {
-          vectorize: {
-            dimensions: Number(
-              asRecord(resource.vectorize).dimensions ??
-                VECTORIZE_DEFAULT_DIMENSIONS,
-            ),
-            metric: (() => {
-              const metric = String(
-                asRecord(resource.vectorize).metric ?? "cosine",
-              ).trim();
-              if (!["cosine", "euclidean", "dot-product"].includes(metric)) {
-                throw new Error(
-                  `spec.resources.${resourceName}.vectorize.metric must be cosine/euclidean/dot-product`,
-                );
-              }
-              return metric as "cosine" | "euclidean" | "dot-product";
-            })(),
-          },
-        }
-        : {}),
-      ...(type === "queue"
-        ? {
-          queue: {
-            ...(asOptionalInteger(
-                asRecord(resource.queue).maxRetries,
-                `spec.resources.${resourceName}.queue.maxRetries`,
-                { min: 0 },
-              ) != null
-              ? {
-                maxRetries: asOptionalInteger(
-                  asRecord(resource.queue).maxRetries,
-                  `spec.resources.${resourceName}.queue.maxRetries`,
-                  { min: 0 },
-                ),
-              }
-              : {}),
-            ...(asString(
-                asRecord(resource.queue).deadLetterQueue,
-                `spec.resources.${resourceName}.queue.deadLetterQueue`,
-              )
-              ? {
-                deadLetterQueue: asString(
-                  asRecord(resource.queue).deadLetterQueue,
-                  `spec.resources.${resourceName}.queue.deadLetterQueue`,
-                ),
-              }
-              : {}),
-            ...(asOptionalInteger(
-                asRecord(resource.queue).deliveryDelaySeconds,
-                `spec.resources.${resourceName}.queue.deliveryDelaySeconds`,
-                { min: 0 },
-              ) != null
-              ? {
-                deliveryDelaySeconds: asOptionalInteger(
-                  asRecord(resource.queue).deliveryDelaySeconds,
-                  `spec.resources.${resourceName}.queue.deliveryDelaySeconds`,
-                  { min: 0 },
-                ),
-              }
-              : {}),
-          },
-        }
-        : {}),
-      ...(type === "analyticsEngine"
-        ? {
-          analyticsEngine: {
-            ...(asString(
-                getResourceSection(resource, [
-                  "analyticsEngine",
-                  "analyticsStore",
-                ]).dataset,
-                `spec.resources.${resourceName}.analyticsEngine.dataset`,
-              )
-              ? {
-                dataset: asString(
-                  getResourceSection(resource, [
-                    "analyticsEngine",
-                    "analyticsStore",
-                  ]).dataset,
-                  `spec.resources.${resourceName}.analyticsEngine.dataset`,
-                ),
-              }
-              : {}),
-          },
-        }
-        : {}),
-      ...(type === "workflow"
-        ? {
-          workflow: {
-            service: asRequiredString(
-              getResourceSection(resource, ["workflow", "workflowRuntime"])
-                .service,
-              `spec.resources.${resourceName}.workflow.service`,
-            ),
-            export: asRequiredString(
-              getResourceSection(resource, ["workflow", "workflowRuntime"])
-                .export,
-              `spec.resources.${resourceName}.workflow.export`,
-            ),
-            ...(asOptionalInteger(
-                getResourceSection(resource, ["workflow", "workflowRuntime"])
-                  .timeoutMs,
-                `spec.resources.${resourceName}.workflow.timeoutMs`,
-                { min: 1 },
-              ) != null
-              ? {
-                timeoutMs: asOptionalInteger(
-                  getResourceSection(resource, ["workflow", "workflowRuntime"])
-                    .timeoutMs,
-                  `spec.resources.${resourceName}.workflow.timeoutMs`,
-                  { min: 1 },
-                ),
-              }
-              : {}),
-            ...(asOptionalInteger(
-                getResourceSection(resource, ["workflow", "workflowRuntime"])
-                  .maxRetries,
-                `spec.resources.${resourceName}.workflow.maxRetries`,
-                { min: 0 },
-              ) != null
-              ? {
-                maxRetries: asOptionalInteger(
-                  getResourceSection(resource, ["workflow", "workflowRuntime"])
-                    .maxRetries,
-                  `spec.resources.${resourceName}.workflow.maxRetries`,
-                  { min: 0 },
-                ),
-              }
-              : {}),
-          },
-        }
-        : {}),
-      ...(type === "durableObject"
-        ? {
-          durableObject: {
-            className: asRequiredString(
-              getResourceSection(resource, [
-                "durableObject",
-                "durableNamespace",
-              ]).className,
-              `spec.resources.${resourceName}.durableObject.className`,
-            ),
-            ...(asString(
-                getResourceSection(resource, [
-                  "durableObject",
-                  "durableNamespace",
-                ]).scriptName,
-                `spec.resources.${resourceName}.durableObject.scriptName`,
-              )
-              ? {
-                scriptName: asString(
-                  getResourceSection(resource, [
-                    "durableObject",
-                    "durableNamespace",
-                  ]).scriptName,
-                  `spec.resources.${resourceName}.durableObject.scriptName`,
-                ),
-              }
-              : {}),
-          },
-        }
-        : {}),
-      ...(((): { limits?: ResourceLimits } => {
-        if (!resource.limits) return {};
-        const limitsRecord = asRecord(resource.limits);
-        const limits: ResourceLimits = {
-          ...(limitsRecord.maxSizeMb != null
-            ? { maxSizeMb: Number(limitsRecord.maxSizeMb) }
-            : {}),
-          ...(limitsRecord.maxRows != null
-            ? { maxRows: Number(limitsRecord.maxRows) }
-            : {}),
-          ...(limitsRecord.maxKeys != null
-            ? { maxKeys: Number(limitsRecord.maxKeys) }
-            : {}),
-        };
-        return Object.keys(limits).length > 0 ? { limits } : {};
-      })()),
-    } as AppResource;
   }
-
-  for (const [resourceName, resource] of Object.entries(resources)) {
-    if (resource.type === "queue" && resource.queue?.deadLetterQueue) {
-      const deadLetterQueue = resources[resource.queue.deadLetterQueue];
-      if (!deadLetterQueue || deadLetterQueue.type !== "queue") {
-        throw new Error(
-          `spec.resources.${resourceName}.queue.deadLetterQueue must reference a queue resource`,
-        );
-      }
-    }
-    if (
-      resource.type === "workflow" && resource.workflow &&
-      !workloads[resource.workflow.service]
-    ) {
-      throw new Error(
-        `spec.resources.${resourceName}.workflow.service references unknown workload: ${resource.workflow.service}`,
-      );
-    }
+  if (!trimmed.startsWith("/")) {
+    throw new Error(`${field} must start with '/' (got: ${trimmed})`);
   }
-
-  return resources;
+  const segments = trimmed.split("/");
+  if (segments.includes("..")) {
+    throw new Error(
+      `${field} must not contain '..' segments (got: ${trimmed})`,
+    );
+  }
+  return trimmed;
 }
 
-export function validateResourceBindings(
-  workloads: Record<string, ValidatableWorkload>,
-  resources: Record<string, AppResource>,
-): void {
-  for (const [workloadName, workload] of Object.entries(workloads)) {
-    const workloadKind = getWorkloadKind(workload);
-    if (workloadKind === "container") continue;
-    const bindingLists = workload.bindings || {};
-    const bindingPath = workloadKind === "service"
-      ? `spec.services.${workloadName}.bindings`
-      : `spec.workers.${workloadName}.bindings`;
-    for (const resourceName of bindingLists.d1 || []) {
-      if (resources[resourceName]?.type !== "d1") {
-        throw new Error(
-          `${bindingPath}.d1 references unknown d1 resource: ${resourceName}`,
-        );
-      }
+// ============================================================
+// Workflow storage → compute cross-ref validator
+// ============================================================
+
+/**
+ * Validate that every `workflow` storage entry references a worker
+ * via its `script` field. Attached containers / services are rejected
+ * because workflow scripts must run as Workers.
+ *
+ * Returns an array of error messages (empty when valid). The caller
+ * decides whether to throw or aggregate.
+ */
+export function validateWorkflowScriptIsWorker(
+  storage: Record<string, AppStorage>,
+  compute: Record<string, AppCompute>,
+): string[] {
+  const errors: string[] = [];
+  for (const [storageName, entry] of Object.entries(storage)) {
+    if (entry.type !== "workflow") continue;
+    const scriptRef = entry.workflow?.script;
+    if (!scriptRef) continue;
+    const target = compute[scriptRef];
+    if (!target) {
+      errors.push(
+        `storage.${storageName}.workflow.script references unknown compute: ${scriptRef}`,
+      );
+      continue;
     }
-    for (const resourceName of bindingLists.r2 || []) {
-      if (resources[resourceName]?.type !== "r2") {
-        throw new Error(
-          `${bindingPath}.r2 references unknown r2 resource: ${resourceName}`,
-        );
-      }
-    }
-    for (const resourceName of bindingLists.kv || []) {
-      if (resources[resourceName]?.type !== "kv") {
-        throw new Error(
-          `${bindingPath}.kv references unknown kv resource: ${resourceName}`,
-        );
-      }
-    }
-    for (const resourceName of bindingLists.vectorize || []) {
-      if (resources[resourceName]?.type !== "vectorize") {
-        throw new Error(
-          `${bindingPath}.vectorize references unknown vectorize resource: ${resourceName}`,
-        );
-      }
-    }
-    for (const resourceName of bindingLists.queues || []) {
-      if (resources[resourceName]?.type !== "queue") {
-        throw new Error(
-          `${bindingPath}.queues references unknown queue resource: ${resourceName}`,
-        );
-      }
-    }
-    for (const resourceName of bindingLists.analyticsEngine || []) {
-      if (resources[resourceName]?.type !== "analyticsEngine") {
-        throw new Error(
-          `${bindingPath}.analyticsEngine references unknown analyticsEngine resource: ${resourceName}`,
-        );
-      }
-    }
-    for (const resourceName of bindingLists.workflow || []) {
-      if (resources[resourceName]?.type !== "workflow") {
-        throw new Error(
-          `${bindingPath}.workflow references unknown workflow resource: ${resourceName}`,
-        );
-      }
-    }
-    for (const resourceName of bindingLists.durableObjects || []) {
-      if (resources[resourceName]?.type !== "durableObject") {
-        throw new Error(
-          `${bindingPath}.durableObjects references unknown durableObject resource: ${resourceName}`,
-        );
-      }
-    }
-    if (workloadKind !== "worker") continue;
-    const queueTriggers =
-      (workload.triggers as AppWorker["triggers"] | undefined)?.queues || [];
-    for (const trigger of queueTriggers) {
-      if (resources[trigger.queue]?.type !== "queue") {
-        throw new Error(
-          `spec.workers.${workloadName}.triggers.queues references unknown queue resource: ${trigger.queue}`,
-        );
-      }
+    if (target.kind !== "worker") {
+      errors.push(
+        `storage.${storageName}.workflow.script must reference a worker (got ${target.kind}: ${scriptRef})`,
+      );
     }
   }
+  return errors;
+}
+
+// ============================================================
+// Vectorize metric validator
+// ============================================================
+
+/**
+ * Validate vectorize index metric.
+ *
+ * - undefined → default `'cosine'`
+ * - allowed values: `cosine` | `euclidean` | `dot-product`
+ */
+export function validateVectorIndexMetric(
+  value: unknown,
+  field = "vectorIndex.metric",
+): "cosine" | "euclidean" | "dot-product" {
+  if (value == null) return "cosine";
+  const metric = String(value).trim();
+  if (!metric) return "cosine";
+  if (
+    metric !== "cosine" &&
+    metric !== "euclidean" &&
+    metric !== "dot-product"
+  ) {
+    throw new Error(
+      `${field} must be one of cosine/euclidean/dot-product (got: ${metric})`,
+    );
+  }
+  return metric;
+}
+
+// ============================================================
+// Instance type validator
+// ============================================================
+
+const INSTANCE_TYPE_BY_PROVIDER: Record<string, readonly string[]> = {
+  cloudflare: ["basic", "standard", "standard-2", "standard-4"],
+  aws: ["t3.small", "t3.medium", "t3.large"],
+  gcp: ["cpu-1", "cpu-2", "cpu-4"],
+};
+
+/**
+ * Validate instance type string.
+ *
+ * - undefined → undefined
+ * - must be a string
+ * - if provider is known (cloudflare/aws/gcp) the value must be in the
+ *   provider-specific enum.
+ * - k8s / local providers skip enum check (any string allowed).
+ * - unknown providers fall back to a string-only check.
+ */
+export function validateInstanceType(
+  value: unknown,
+  provider?: string,
+  field = "instanceType",
+): string | undefined {
+  if (value == null) return undefined;
+  if (typeof value !== "string") {
+    throw new Error(`${field} must be a string`);
+  }
+  const trimmed = value.trim();
+  if (!trimmed) return undefined;
+  if (provider && provider !== "k8s" && provider !== "local") {
+    const allowed = INSTANCE_TYPE_BY_PROVIDER[provider];
+    if (allowed && !allowed.includes(trimmed)) {
+      throw new Error(
+        `${field} must be one of ${
+          allowed.join("/")
+        } for provider '${provider}' (got: ${trimmed})`,
+      );
+    }
+  }
+  return trimmed;
+}
+
+// ============================================================
+// Service / attached-container scaling validator
+// ============================================================
+
+type ScalingShape = {
+  minInstances?: number;
+  maxInstances?: number;
+};
+
+/**
+ * Validate service / attached compute scaling config.
+ *
+ * - undefined → undefined
+ * - must be an object
+ * - `minInstances` (optional, integer >= 0)
+ * - `maxInstances` (optional, integer >= 1)
+ * - `minInstances > maxInstances` is rejected
+ */
+export function validateServiceScaling(
+  value: unknown,
+  field = "scaling",
+): ScalingShape | undefined {
+  if (value == null) return undefined;
+  if (typeof value !== "object" || Array.isArray(value)) {
+    throw new Error(`${field} must be an object`);
+  }
+  const record = value as Record<string, unknown>;
+  const minInstances = asOptionalInteger(
+    record.minInstances,
+    `${field}.minInstances`,
+    { min: 0 },
+  );
+  const maxInstances = asOptionalInteger(
+    record.maxInstances,
+    `${field}.maxInstances`,
+    { min: 1 },
+  );
+  if (
+    minInstances != null && maxInstances != null && minInstances > maxInstances
+  ) {
+    throw new Error(
+      `${field}.minInstances (${minInstances}) must be <= ${field}.maxInstances (${maxInstances})`,
+    );
+  }
+  const result: ScalingShape = {
+    ...(minInstances != null ? { minInstances } : {}),
+    ...(maxInstances != null ? { maxInstances } : {}),
+  };
+  return Object.keys(result).length > 0 ? result : undefined;
 }

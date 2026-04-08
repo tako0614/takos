@@ -1,9 +1,5 @@
 import type { ArtifactKind } from './models.ts';
-import {
-  type AppResource,
-  APP_RESOURCE_TYPE_ALIASES,
-  type LegacyAppResourceTypeAlias,
-} from '../source/app-manifest-types.ts';
+import type { AppStorage, StorageType } from '../source/app-manifest-types.ts';
 
 export type CanonicalResourceClass =
   | 'sql'
@@ -42,7 +38,8 @@ export type ManifestWorkloadKind = 'worker' | 'container' | 'service';
 export type ServiceExecutionProfile = 'workers' | 'oci-service';
 
 export interface CanonicalResourceDescriptor {
-  manifestType: AppResource['type'];
+  /** Canonical flat storage type. */
+  manifestType: StorageType;
   resourceClass: CanonicalResourceClass;
   backing: CanonicalResourceBacking;
   bindingType: CanonicalBindingContract;
@@ -54,33 +51,39 @@ export interface CanonicalWorkloadDescriptor {
   artifactKind: ArtifactKind;
 }
 
-const RESOURCE_DESCRIPTORS: Record<AppResource['type'], CanonicalResourceDescriptor> = {
-  d1: {
-    manifestType: 'd1',
+/**
+ * Map the provider-neutral flat storage type to the canonical resource
+ * descriptor. Previous versions of this table keyed on legacy Cloudflare
+ * names (d1 / r2 / kv / ...). The flat schema uses provider-neutral names
+ * (sql / object-store / key-value / ...), so this table mirrors those.
+ */
+const RESOURCE_DESCRIPTORS: Record<StorageType, CanonicalResourceDescriptor> = {
+  sql: {
+    manifestType: 'sql',
     resourceClass: 'sql',
     backing: 'd1',
     bindingType: 'sql',
   },
-  r2: {
-    manifestType: 'r2',
+  'object-store': {
+    manifestType: 'object-store',
     resourceClass: 'object_store',
     backing: 'r2',
     bindingType: 'object_store',
   },
-  kv: {
-    manifestType: 'kv',
+  'key-value': {
+    manifestType: 'key-value',
     resourceClass: 'kv',
     backing: 'kv_namespace',
     bindingType: 'kv',
   },
-  secretRef: {
-    manifestType: 'secretRef',
+  secret: {
+    manifestType: 'secret',
     resourceClass: 'secret',
     backing: 'secret_ref',
     bindingType: 'secret_text',
   },
-  vectorize: {
-    manifestType: 'vectorize',
+  'vector-index': {
+    manifestType: 'vector-index',
     resourceClass: 'vector_index',
     backing: 'vectorize',
     bindingType: 'vector_index',
@@ -91,8 +94,8 @@ const RESOURCE_DESCRIPTORS: Record<AppResource['type'], CanonicalResourceDescrip
     backing: 'queue',
     bindingType: 'queue',
   },
-  analyticsEngine: {
-    manifestType: 'analyticsEngine',
+  'analytics-engine': {
+    manifestType: 'analytics-engine',
     resourceClass: 'analytics_store',
     backing: 'analytics_engine',
     bindingType: 'analytics_store',
@@ -103,24 +106,39 @@ const RESOURCE_DESCRIPTORS: Record<AppResource['type'], CanonicalResourceDescrip
     backing: 'workflow_binding',
     bindingType: 'workflow_runtime',
   },
-  durableObject: {
-    manifestType: 'durableObject',
+  'durable-object': {
+    manifestType: 'durable-object',
     resourceClass: 'durable_namespace',
     backing: 'durable_object_namespace',
     bindingType: 'durable_namespace',
   },
-  workflow_runtime: {
-    manifestType: 'workflow_runtime',
-    resourceClass: 'workflow_runtime',
-    backing: 'workflow_binding',
-    bindingType: 'workflow_runtime',
-  },
-  durable_namespace: {
-    manifestType: 'durable_namespace',
-    resourceClass: 'durable_namespace',
-    backing: 'durable_object_namespace',
-    bindingType: 'durable_namespace',
-  },
+};
+
+/**
+ * Map from legacy Cloudflare resource type names to the new flat storage
+ * type names. Kept so that older manifests persisted in the DB continue to
+ * round-trip through this module without a schema migration.
+ */
+const LEGACY_ALIAS_TO_STORAGE_TYPE: Record<string, StorageType> = {
+  d1: 'sql',
+  r2: 'object-store',
+  kv: 'key-value',
+  secretRef: 'secret',
+  vectorize: 'vector-index',
+  analyticsEngine: 'analytics-engine',
+  durableObject: 'durable-object',
+  durable_namespace: 'durable-object',
+  workflow_runtime: 'workflow',
+  // Identity-map the canonical names so callers can query by either form.
+  sql: 'sql',
+  'object-store': 'object-store',
+  'key-value': 'key-value',
+  secret: 'secret',
+  'vector-index': 'vector-index',
+  queue: 'queue',
+  'analytics-engine': 'analytics-engine',
+  workflow: 'workflow',
+  'durable-object': 'durable-object',
 };
 
 const WORKLOAD_DESCRIPTORS: Record<ManifestWorkloadKind, CanonicalWorkloadDescriptor> = {
@@ -141,27 +159,20 @@ const WORKLOAD_DESCRIPTORS: Record<ManifestWorkloadKind, CanonicalWorkloadDescri
   },
 };
 
-export function getCanonicalResourceDescriptor(resource: AppResource): CanonicalResourceDescriptor {
+export function getCanonicalResourceDescriptor(resource: AppStorage): CanonicalResourceDescriptor {
   const descriptor = RESOURCE_DESCRIPTORS[resource.type] ?? inferCanonicalResourceDescriptor(resource.type);
   if (!descriptor) {
     throw new Error(`Unsupported resource type: ${resource.type}`);
   }
-  return {
-    manifestType: resource.type,
-    resourceClass: descriptor.resourceClass,
-    backing: descriptor.backing,
-    bindingType: descriptor.bindingType,
-  };
+  return descriptor;
 }
 
 export function inferCanonicalResourceDescriptor(
   manifestType: string,
 ): CanonicalResourceDescriptor | null {
-  const normalizedType = (APP_RESOURCE_TYPE_ALIASES[manifestType as LegacyAppResourceTypeAlias] ?? manifestType) as AppResource['type'];
-  if (!(normalizedType in RESOURCE_DESCRIPTORS)) {
-    return null;
-  }
-  return RESOURCE_DESCRIPTORS[normalizedType];
+  const normalizedType = LEGACY_ALIAS_TO_STORAGE_TYPE[manifestType];
+  if (!normalizedType) return null;
+  return RESOURCE_DESCRIPTORS[normalizedType] ?? null;
 }
 
 export function getCanonicalWorkloadDescriptor(sourceKind: ManifestWorkloadKind): CanonicalWorkloadDescriptor {

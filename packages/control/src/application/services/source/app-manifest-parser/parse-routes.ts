@@ -1,56 +1,91 @@
-import type {
-  AppContainer,
-  AppService,
-  AppWorker,
-  AppRoute,
-} from '../app-manifest-types.ts';
-import { asRecord, asString, asRequiredString, asStringArray } from '../app-manifest-utils.ts';
+// ============================================================
+// parse-routes.ts
+// ============================================================
+//
+// Flat-schema route parser (Phase 1).
+//
+// Walks the top-level `routes[]` array and builds `AppRoute[]`.
+// The old envelope schema had `name` and `ingress` fields — both
+// are rejected in the flat schema.
+//
+// Route shape:
+//   - target  (required) — compute name
+//   - path    (required) — must start with '/'
+//   - methods (optional) — HTTP methods to match
+//   - timeoutMs (optional)
+// ============================================================
 
-// ============================================================
-// Routes parser
-// ============================================================
+import type { AppCompute, AppRoute } from "../app-manifest-types.ts";
+import {
+  asRecord,
+  asRequiredString,
+  asStringArray,
+} from "../app-manifest-utils.ts";
+
+const VALID_HTTP_METHODS = [
+  "GET",
+  "POST",
+  "PUT",
+  "PATCH",
+  "DELETE",
+  "HEAD",
+  "OPTIONS",
+];
 
 export function parseRoutes(
-  specRecord: Record<string, unknown>,
-  workers: Record<string, AppWorker>,
-  containers: Record<string, AppContainer>,
-  services: Record<string, AppService> = {},
-): AppRoute[] | undefined {
-  const routesRaw = specRecord.routes;
-  if (routesRaw == null) return undefined;
-  if (!Array.isArray(routesRaw)) throw new Error('spec.routes must be an array');
-  return routesRaw.map((entry, index) => {
+  topLevel: Record<string, unknown>,
+  compute: Record<string, AppCompute>,
+): AppRoute[] {
+  if (topLevel.routes == null) return [];
+  if (!Array.isArray(topLevel.routes)) {
+    throw new Error("routes must be an array");
+  }
+
+  return topLevel.routes.map((entry, index) => {
     const route = asRecord(entry);
-    const target = asRequiredString(route.target, `spec.routes[${index}].target`);
-    const name = asRequiredString(route.name, `spec.routes[${index}].name`);
-    const ingress = asString(route.ingress, `spec.routes[${index}].ingress`);
+    const prefix = `routes[${index}]`;
 
-    if (!workers[target] && !containers[target] && !services[target]) {
-      throw new Error(`spec.routes[${index}].target references unknown worker, container, or service: ${target}`);
+    if (route.name != null) {
+      throw new Error(
+        `${prefix}.name is not supported in the flat manifest schema`,
+      );
     }
-    if (ingress && !workers[ingress]) {
-      throw new Error(`spec.routes[${index}].ingress must reference a worker`);
+    if (route.ingress != null) {
+      throw new Error(
+        `${prefix}.ingress is not supported in the flat manifest schema`,
+      );
     }
 
-    const routePath = asString(route.path, `spec.routes[${index}].path`);
+    const target = asRequiredString(route.target, `${prefix}.target`);
+    if (!compute[target]) {
+      throw new Error(
+        `${prefix}.target references unknown compute: ${target}`,
+      );
+    }
 
-    // Parse route method constraints
-    const methods = asStringArray(route.methods, `spec.routes[${index}].methods`);
+    const path = asRequiredString(route.path, `${prefix}.path`);
+    if (!path.startsWith("/")) {
+      throw new Error(`${prefix}.path must start with '/' (got: ${path})`);
+    }
+
+    const methods = asStringArray(route.methods, `${prefix}.methods`);
     if (methods) {
       for (const method of methods) {
-        if (!['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'HEAD', 'OPTIONS'].includes(method.toUpperCase())) {
-          throw new Error(`spec.routes[${index}].methods contains invalid method: ${method}`);
+        if (!VALID_HTTP_METHODS.includes(method.toUpperCase())) {
+          throw new Error(
+            `${prefix}.methods contains invalid method: ${method}`,
+          );
         }
       }
     }
 
     return {
-      name,
       target,
-      ...(routePath ? { path: routePath } : {}),
+      path,
       ...(methods ? { methods } : {}),
-      ...(ingress ? { ingress } : {}),
-      ...(route.timeoutMs != null ? { timeoutMs: Number(route.timeoutMs) } : {}),
+      ...(route.timeoutMs != null
+        ? { timeoutMs: Number(route.timeoutMs) }
+        : {}),
     };
   });
 }

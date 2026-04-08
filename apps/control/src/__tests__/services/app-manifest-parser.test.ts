@@ -11,38 +11,32 @@ import {
 
 Deno.test("parseAppManifestYaml parses a minimal service + worker manifest", () => {
   const manifest = parseAppManifestYaml(`
-apiVersion: takos.dev/v1alpha1
-kind: App
-metadata:
-  name: service-app
-spec:
-  version: 1.0.0
-  services:
-    my-api:
-      dockerfile: Dockerfile
-      port: 3000
-      ipv4: true
-  workers:
-    web:
-      build:
-        fromWorkflow:
-          path: .takos/workflows/build.yml
-          job: build
-          artifact: dist
-          artifactPath: dist/worker.js
+name: service-app
+version: 1.0.0
+compute:
+  my-api:
+    image: ghcr.io/takos/api:latest
+    port: 3000
+  web:
+    build:
+      fromWorkflow:
+        path: .takos/workflows/build.yml
+        job: build
+        artifact: dist
+        artifactPath: dist/worker.js
 `);
 
-  assert(manifest.spec.services);
-  assert(manifest.spec.workers);
-  assertEquals(manifest.spec.services["my-api"]?.port, 3000);
-  assertEquals(manifest.spec.services["my-api"]?.ipv4, true);
+  assert(manifest.compute);
+  assertEquals(manifest.compute["my-api"]?.kind, "service");
+  assertEquals(manifest.compute["my-api"]?.port, 3000);
+  assertEquals(manifest.compute.web?.kind, "worker");
   assertEquals(
-    manifest.spec.workers.web?.build?.fromWorkflow.path,
+    manifest.compute.web?.build?.fromWorkflow.path,
     ".takos/workflows/build.yml",
   );
 });
 
-Deno.test("parseAppManifestYaml rejects unsupported local worker build fields", () => {
+Deno.test("parseAppManifestYaml rejects envelope-shaped manifests", () => {
   assertThrows(
     () =>
       parseAppManifestYaml(`
@@ -57,52 +51,41 @@ spec:
       entry: src/index.ts
 `),
     Error,
-    "local build fields are not supported",
+    "Kubernetes-style manifest envelope is no longer supported",
   );
 });
 
-Deno.test("parseAppManifestYaml rejects invalid update strategies", () => {
+Deno.test("parseAppManifestYaml rejects invalid semver versions", () => {
   assertThrows(
     () =>
       parseAppManifestYaml(`
-apiVersion: takos.dev/v1alpha1
-kind: App
-metadata:
-  name: invalid-update
-spec:
-  version: 1.0.0
-  workers:
-    web:
-      build:
-        fromWorkflow:
-          path: .takos/workflows/build.yml
-          job: build
-          artifact: dist
-          artifactPath: dist/worker.js
-  update:
-    strategy: yolo
+name: invalid-version
+version: not-a-version
+compute:
+  web:
+    build:
+      fromWorkflow:
+        path: .takos/workflows/build.yml
+        job: build
+        artifact: dist
+        artifactPath: dist/worker.js
 `),
     Error,
-    "spec.update.strategy must be",
   );
 });
 
 Deno.test("appManifestToBundleDocs emits docs for parsed manifests", () => {
   const manifest = parseAppManifestYaml(`
-apiVersion: takos.dev/v1alpha1
-kind: App
-metadata:
-  name: docs-app
-spec:
-  version: 1.0.0
-  workers:
-    web:
-      build:
-        fromWorkflow:
-          path: .takos/workflows/build.yml
-          job: build
-          artifact: dist
-          artifactPath: dist/worker.js
+name: docs-app
+version: 1.0.0
+compute:
+  web:
+    build:
+      fromWorkflow:
+        path: .takos/workflows/build.yml
+        job: build
+        artifact: dist
+        artifactPath: dist/worker.js
 `);
 
   const docs = appManifestToBundleDocs(

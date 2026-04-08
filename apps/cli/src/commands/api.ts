@@ -1,4 +1,4 @@
-import { Command } from 'commander';
+import type { Command } from 'commander';
 import { red, yellow } from '@std/fmt/colors';
 import { cliExit } from '../lib/command-exit.ts';
 import { executeApiRequest } from './api-request.ts';
@@ -44,7 +44,10 @@ const TASK_DOMAIN_DEFINITIONS: TaskDomainDefinition[] = [
   { name: 'repo', description: 'Tasks for /api/repos (includes pulls, actions)', basePath: '/api/repos', watchEnabled: true, actionsFollow: true },
   { name: 'worker', description: 'Tasks for /api/workers', basePath: '/api/workers' },
   { name: 'app', description: 'Tasks for /api/apps', basePath: '/api/apps' },
-  { name: 'resource', description: 'Tasks for /api/resources', basePath: '/api/resources' },
+  // Note: `resource` is intentionally omitted here. The resource command tree
+  // is registered separately by registerResourceCommands (commands/resource-index.ts)
+  // because its subcommand names (create/list/show/delete/bind/...) collide with
+  // the generic task-domain CRUD subcommands.
   { name: 'git', description: 'Tasks for /api/git', basePath: '/api/git' },
   { name: 'capability', aliases: ['cap'], description: 'Tasks for skills and tools (/api/spaces/*/skills, /api/spaces/*/tools, /api/skills)', basePath: '/api' },
   { name: 'context', aliases: ['ctx'], description: 'Tasks for memory and reminder endpoints under /api/*', basePath: '/api' },

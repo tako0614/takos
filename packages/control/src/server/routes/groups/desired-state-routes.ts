@@ -31,7 +31,7 @@ async function putGroupDesiredHandler(c: GroupsContext) {
   const now = new Date().toISOString();
   await db.update(groups)
     .set({
-      appVersion: desired.spec.version ?? null,
+      appVersion: desired.version ?? null,
       desiredSpecJson: JSON.stringify(desired),
       updatedAt: now,
     })

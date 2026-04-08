@@ -5,47 +5,47 @@ import {
 import { computeDiff } from "@/services/deployment/diff";
 import type { AppManifest } from "@/application/services/source/app-manifest-types.ts";
 
-import { assertEquals, assertObjectMatch, assertThrows } from "jsr:@std/assert";
+import { assertEquals, assertObjectMatch } from "jsr:@std/assert";
 
 function makeManifest(): AppManifest {
   return {
-    apiVersion: "takos.dev/v1alpha1",
-    kind: "App",
-    metadata: { name: "demo-app" },
-    spec: {
-      version: "1.0.0",
-      resources: {
-        db: { type: "d1", binding: "DB" },
-      },
-      workers: {
-        api: {
-          build: {
-            fromWorkflow: {
-              path: ".github/workflows/deploy.yml",
-              job: "build",
-              artifact: "worker",
-              artifactPath: "dist/worker.js",
-            },
+    name: "demo-app",
+    version: "1.0.0",
+    storage: {
+      db: { type: "sql", bind: "DB" },
+    },
+    compute: {
+      api: {
+        kind: "worker",
+        build: {
+          fromWorkflow: {
+            path: ".takos/workflows/deploy.yml",
+            job: "build",
+            artifact: "worker",
+            artifactPath: "dist/worker.js",
           },
-          env: { MODE: "base" },
         },
+        env: { MODE: "base" },
       },
-      services: {
-        web: {
-          dockerfile: "Dockerfile",
-          port: 8080,
-        },
+      web: {
+        kind: "service",
+        image: "ghcr.io/example/web:latest",
+        port: 8080,
       },
-      routes: [
-        { name: "api-route", target: "api", path: "/api" },
-        { name: "web-route", target: "web", path: "/" },
-      ],
-      overrides: {
-        production: {
-          workers: {
-            api: {
-              env: { MODE: "prod" },
-            },
+    },
+    routes: [
+      { target: "api", path: "/api" },
+      { target: "web", path: "/" },
+    ],
+    publish: [],
+    env: {},
+    scopes: [],
+    overrides: {
+      production: {
+        compute: {
+          api: {
+            kind: "worker",
+            env: { MODE: "prod" },
           },
         },
       },
@@ -62,34 +62,44 @@ Deno.test("group desired state compiler - compiles a manifest into canonical wor
 
   assertEquals(compiled.groupName, "demo-prod");
   assertEquals(compiled.env, "production");
-  assertObjectMatch(compiled.resources.db, { type: "d1", binding: "DB" });
+  assertObjectMatch(compiled.resources.db, { type: "sql", binding: "DB" });
   assertEquals(compiled.workloads.api.category, "worker");
-  assertEquals(compiled.workloads.api.routeNames, ["api-route"]);
+  assertEquals(compiled.workloads.api.routeNames, ["api:/api"]);
   assertEquals(
     (compiled.workloads.api.spec as { env?: Record<string, string> }).env?.MODE,
     "prod",
   );
-  assertObjectMatch(compiled.routes["web-route"], { target: "web", path: "/" });
+  assertObjectMatch(compiled.routes["web:/"], { target: "web", path: "/" });
 });
-Deno.test("group desired state compiler - rejects duplicated component names across workload categories", () => {
-  const manifest = {
+
+Deno.test("group desired state compiler - surfaces attached containers as their own workload entries", () => {
+  const manifest: AppManifest = {
     ...makeManifest(),
-    spec: {
-      ...makeManifest().spec,
-      containers: {
-        api: {
-          dockerfile: "Dockerfile.container",
-          port: 9000,
+    compute: {
+      ...makeManifest().compute,
+      api: {
+        kind: "worker",
+        build: {
+          fromWorkflow: {
+            path: ".takos/workflows/deploy.yml",
+            job: "build",
+            artifact: "worker",
+            artifactPath: "dist/worker.js",
+          },
+        },
+        containers: {
+          sidecar: {
+            kind: "attached-container",
+            image: "ghcr.io/example/sidecar:latest",
+          },
         },
       },
     },
   };
 
-  assertThrows(
-    () => compileGroupDesiredState(manifest as never),
-    Error,
-    "Component names must be unique",
-  );
+  const compiled = compileGroupDesiredState(manifest);
+  assertEquals(compiled.workloads.sidecar.category, "container");
+  assertEquals(compiled.workloads.api.category, "worker");
 });
 
 Deno.test("group diff - detects resource, workload, and route updates from canonical state", () => {
@@ -130,7 +140,7 @@ Deno.test("group diff - detects resource, workload, and route updates from canon
     resources: {
       db: {
         name: "db",
-        type: "d1",
+        type: "sql",
         resourceId: "db-1",
         binding: "OLD_DB",
         status: "active",
@@ -161,8 +171,8 @@ Deno.test("group diff - detects resource, workload, and route updates from canon
     },
     routes: {
       ...currentRoutes,
-      "web-route": {
-        ...currentRoutes["web-route"],
+      "web:/": {
+        ...currentRoutes["web:/"],
         path: "/stale",
       },
     },
@@ -180,7 +190,7 @@ Deno.test("group diff - detects resource, workload, and route updates from canon
     [
       { name: "db", category: "resource", action: "update" },
       { name: "api", category: "worker", action: "update" },
-      { name: "web-route", category: "route", action: "update" },
+      { name: "web:/", category: "route", action: "update" },
     ],
   );
 });

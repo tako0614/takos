@@ -62,6 +62,10 @@ import {
   normalizeResourceProvider,
   resolveRequestedProviderResourceName,
 } from "./route-helpers.ts";
+import {
+  deletePortableManagedResource,
+  getPortableSecretValue,
+} from "./portable-runtime.ts";
 
 const resourcesBase = new Hono<AuthenticatedRouteEnv>();
 type ResourcesContext = Context<AuthenticatedRouteEnv>;
@@ -302,6 +306,205 @@ async function deleteOwnedResourceRecord(
   await deleteManagedResourceSafely(env, resource);
   await deleteResource(dbBinding, resourceId);
   return null;
+}
+
+// ── Secret resources (storage.<name>.type: secret) ──────────────────────────
+
+const SECRET_ROTATION_GRACE_PERIOD_MS = 24 * 60 * 60 * 1000;
+
+function isSecretResource(resource: ResourceRecord): boolean {
+  const capability = toResourceCapability(resource.type, resource.config);
+  return capability === "secret";
+}
+
+function generateSecretTokenHex(bytes = 32): string {
+  const buf = new Uint8Array(bytes);
+  crypto.getRandomValues(buf);
+  return Array.from(buf)
+    .map((b) => b.toString(16).padStart(2, "0"))
+    .join("");
+}
+
+interface SecretRotationState {
+  previousValue: string | null;
+  previousExpiresAt: string | null;
+}
+
+/**
+ * Fetch the raw rotation-grace state for a resource. The public Resource API
+ * type intentionally does not expose the previous secret material, so we
+ * query the underlying row directly when needed.
+ */
+async function getSecretRotationState(
+  dbBinding: ReturnType<typeof requireDbBinding>,
+  resourceId: string,
+): Promise<SecretRotationState> {
+  const row = await getDb(dbBinding).select({
+    previousSecretValue: resources.previousSecretValue,
+    previousSecretExpiresAt: resources.previousSecretExpiresAt,
+  }).from(resources).where(eq(resources.id, resourceId)).get();
+  return {
+    previousValue: row?.previousSecretValue ?? null,
+    previousExpiresAt: row?.previousSecretExpiresAt ?? null,
+  };
+}
+
+/**
+ * Lazy-clear the previous secret value if its grace period has elapsed.
+ * Returns the post-clear state so callers can inspect or surface the value.
+ */
+async function clearExpiredPreviousSecret(
+  dbBinding: ReturnType<typeof requireDbBinding>,
+  resourceId: string,
+  state: SecretRotationState,
+  now: Date = new Date(),
+): Promise<SecretRotationState> {
+  if (!state.previousExpiresAt) return state;
+  const expiresAt = Date.parse(state.previousExpiresAt);
+  if (Number.isNaN(expiresAt) || expiresAt > now.getTime()) return state;
+
+  await getDb(dbBinding).update(resources)
+    .set({
+      previousSecretValue: null,
+      previousSecretExpiresAt: null,
+    })
+    .where(eq(resources.id, resourceId))
+    .run();
+  return { previousValue: null, previousExpiresAt: null };
+}
+
+/**
+ * Verify a presented secret value against both the current value and the
+ * (still in-grace) previous value. Exposed so future authentication paths
+ * can perform dual-value verification without re-reading the schema.
+ */
+export async function verifyResourceSecretValue(
+  dbBinding: ReturnType<typeof requireDbBinding>,
+  resource: ResourceRecord,
+  presented: string,
+): Promise<boolean> {
+  if (!presented) return false;
+  const current = await readResourceSecretValue(dbBinding, resource);
+  if (current && presented === current) return true;
+
+  const initial = await getSecretRotationState(dbBinding, resource.id);
+  const state = await clearExpiredPreviousSecret(dbBinding, resource.id, initial);
+  return state.previousValue !== null && presented === state.previousValue;
+}
+
+async function readResourceSecretValue(
+  dbBinding: ReturnType<typeof requireDbBinding>,
+  resource: ResourceRecord,
+): Promise<string> {
+  // Lazy-clear any expired previous secret value while we are touching this
+  // row. This keeps the grace-period state from lingering past 24h even if
+  // no rotate call comes through.
+  const initial = await getSecretRotationState(dbBinding, resource.id);
+  await clearExpiredPreviousSecret(dbBinding, resource.id, initial);
+
+  const providerName = resource.provider_name;
+  if (providerName && providerName !== "cloudflare") {
+    return await getPortableSecretValue({
+      id: resource.id,
+      provider_name: providerName,
+      provider_resource_id: resource.provider_resource_id,
+      provider_resource_name: resource.provider_resource_name,
+      ...(resource.config ? { config: resource.config } : {}),
+    });
+  }
+  return resource.provider_resource_id ?? "";
+}
+
+interface SecretRotationResult {
+  value: string;
+  rotatedAt: string;
+  previousValueExpiresAt: string;
+}
+
+async function rotateResourceSecretValue(
+  dbBinding: ReturnType<typeof requireDbBinding>,
+  resource: ResourceRecord,
+): Promise<SecretRotationResult> {
+  const rotatedAt = new Date().toISOString();
+  const previousValueExpiresAt = new Date(
+    Date.parse(rotatedAt) + SECRET_ROTATION_GRACE_PERIOD_MS,
+  ).toISOString();
+  const newValue = generateSecretTokenHex();
+  const providerName = resource.provider_name;
+
+  // 24h grace period: capture the current value before mutating, then store
+  // it as `previous_secret_value` with an expiry of `now + 24h`. Any read or
+  // rotate operation after the expiry will lazy-clear these columns. Future
+  // verification paths should use `verifyResourceSecretValue` to check both
+  // the current and grace-period value.
+  if (providerName && providerName !== "cloudflare") {
+    // For portable providers we must capture the existing value BEFORE the
+    // delete-and-regenerate cycle, otherwise the old material is lost.
+    let oldValue = "";
+    try {
+      oldValue = await getPortableSecretValue({
+        id: resource.id,
+        provider_name: providerName,
+        provider_resource_id: resource.provider_resource_id,
+        provider_resource_name: resource.provider_resource_name,
+        ...(resource.config ? { config: resource.config } : {}),
+      });
+    } catch (_err) {
+      // If the previous value is unavailable for some reason (e.g. the
+      // marker file was hand-deleted), proceed with rotation but skip the
+      // grace-period record — we cannot retain a value we never had.
+      oldValue = "";
+    }
+
+    // Delete + lazy-regenerate via the existing portable secret store path.
+    await deletePortableManagedResource(
+      {
+        id: resource.id,
+        provider_name: providerName,
+        provider_resource_id: resource.provider_resource_id,
+        provider_resource_name: resource.provider_resource_name,
+        ...(resource.config ? { config: resource.config } : {}),
+      },
+      "secret",
+    );
+    const regenerated = await getPortableSecretValue({
+      id: resource.id,
+      provider_name: providerName,
+      provider_resource_id: resource.provider_resource_id,
+      provider_resource_name: resource.provider_resource_name,
+      ...(resource.config ? { config: resource.config } : {}),
+    });
+    await getDb(dbBinding).update(resources)
+      .set({
+        updatedAt: rotatedAt,
+        previousSecretValue: oldValue || null,
+        previousSecretExpiresAt: oldValue ? previousValueExpiresAt : null,
+      })
+      .where(eq(resources.id, resource.id))
+      .run();
+    return {
+      value: regenerated,
+      rotatedAt,
+      previousValueExpiresAt,
+    };
+  }
+
+  // Cloudflare provider: the secret value lives in provider_resource_id.
+  const oldValue = resource.provider_resource_id ?? "";
+  await getDb(dbBinding).update(resources)
+    .set({
+      providerResourceId: newValue,
+      updatedAt: rotatedAt,
+      previousSecretValue: oldValue || null,
+      previousSecretExpiresAt: oldValue ? previousValueExpiresAt : null,
+    })
+    .where(eq(resources.id, resource.id))
+    .run();
+  return {
+    value: newValue,
+    rotatedAt,
+    previousValueExpiresAt,
+  };
 }
 
 resourcesBase.onError((err, c) => {
@@ -741,6 +944,75 @@ resourcesBase
     }
 
     return c.json({ success: true });
+  })
+  // Read the value of a secret-typed resource. Restricted to the resource
+  // owner (admin/owner role on the workspace).
+  .get("/:id/secret-value", async (c) => {
+    const dbBinding = requireDbBinding(c);
+    const user = c.get("user");
+    const resourceId = c.req.param("id");
+    const resource = await requireOwnedResource(
+      dbBinding,
+      user.id,
+      resourceId,
+      "Only the owner can read this secret",
+    );
+
+    if (!isSecretResource(resource)) {
+      throw new BadRequestError(
+        "Resource is not a secret-typed resource",
+      );
+    }
+
+    const value = await readResourceSecretValue(dbBinding, resource);
+    // Surface the in-grace previous value (if any) so callers can perform
+    // dual-value verification while consumers are reloading after a recent
+    // rotation. Reads also lazy-clear expired previous values inside
+    // `readResourceSecretValue`, so the state we fetch here is always fresh.
+    const rotationState = await getSecretRotationState(dbBinding, resource.id);
+    return c.json({
+      id: resource.id,
+      name: resource.name,
+      value,
+      ...(rotationState.previousValue
+        ? {
+          previous_value: rotationState.previousValue,
+          previous_value_expires_at: rotationState.previousExpiresAt,
+        }
+        : {}),
+    });
+  })
+  // Rotate the value of a secret-typed resource. Restricted to the resource
+  // owner (admin/owner role on the workspace).
+  .post("/:id/rotate-secret", async (c) => {
+    const dbBinding = requireDbBinding(c);
+    const user = c.get("user");
+    const resourceId = c.req.param("id");
+    const resource = await requireOwnedResource(
+      dbBinding,
+      user.id,
+      resourceId,
+      "Only the owner can rotate this secret",
+    );
+
+    if (!isSecretResource(resource)) {
+      throw new BadRequestError(
+        "Resource is not a secret-typed resource",
+      );
+    }
+
+    const { value, rotatedAt, previousValueExpiresAt } =
+      await rotateResourceSecretValue(
+        dbBinding,
+        resource,
+      );
+    return c.json({
+      id: resource.id,
+      name: resource.name,
+      rotated_at: rotatedAt,
+      value,
+      previous_value_expires_at: previousValueExpiresAt,
+    });
   });
 
 export default resourcesBase;

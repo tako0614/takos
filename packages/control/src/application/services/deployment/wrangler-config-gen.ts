@@ -2,11 +2,18 @@
  * Wrangler Config Generator for group deploy.
  *
  * Generates wrangler.toml-equivalent configuration objects from an app.yml
- * worker service definition plus provisioned resources. The output can be
+ * worker compute entry plus provisioned resources. The output can be
  * serialized to TOML for wrangler deploy, or used directly with the
  * Cloudflare API.
+ *
+ * Phase 2: rewritten against the flat-schema `AppCompute` type. In the flat
+ * schema, workers no longer carry explicit `bindings` arrays — the deploy
+ * pipeline materializes every declared `storage` entry as a binding on the
+ * worker. `generateWranglerConfig` therefore takes the full
+ * `provisioned` map and emits a binding per entry keyed by its canonical
+ * storage type.
  */
-import type { WorkerService } from "./group-deploy-manifest.ts";
+import type { AppCompute } from "../source/app-manifest-types.ts";
 import type {
   ProvisionedResource,
   WranglerConfig,
@@ -26,14 +33,18 @@ export interface GenerateWranglerConfigOptions {
   compatibilityDate?: string;
 }
 
+function defaultBindingName(resourceName: string): string {
+  return resourceName.toUpperCase().replace(/-/g, "_");
+}
+
 /**
- * Build a wrangler config object for a single worker service.
+ * Build a wrangler config object for a single worker compute entry.
  *
  * The script name is scoped to the group when deploying inside a dispatch
  * namespace, or left plain when deploying account-level.
  */
 export function generateWranglerConfig(
-  service: WorkerService,
+  compute: AppCompute,
   serviceName: string,
   options: GenerateWranglerConfigOptions,
 ): WranglerConfig {
@@ -41,121 +52,98 @@ export function generateWranglerConfig(
     ? `${options.groupName}-${serviceName}`
     : serviceName;
 
+  const main = compute.build?.fromWorkflow.artifactPath ?? "dist/worker.js";
+
   const config: WranglerConfig = {
     name: scriptName,
-    main: service.build.fromWorkflow.artifactPath,
+    main,
     compatibility_date: options.compatibilityDate || "2026-04-01",
   };
 
-  // Env vars
-  if (service.env && Object.keys(service.env).length > 0) {
-    config.vars = { ...service.env };
+  if (compute.env && Object.keys(compute.env).length > 0) {
+    config.vars = { ...compute.env };
   }
 
-  // D1 bindings
-  if (service.bindings?.d1 && service.bindings.d1.length > 0) {
-    config.d1_databases = service.bindings.d1.map(
-      (resourceName): WranglerD1Binding => {
-        const provisioned = options.resources.get(resourceName);
-        if (!provisioned?.id) {
+  const d1Bindings: WranglerD1Binding[] = [];
+  const r2Bindings: WranglerR2Binding[] = [];
+  const kvBindings: WranglerKVBinding[] = [];
+  const queueProducers: WranglerQueueProducer[] = [];
+  const vectorizeBindings: WranglerVectorizeIndex[] = [];
+  // Service binding wiring is managed separately by the kernel in the flat
+  // schema; generateWranglerConfig does not emit service bindings anymore.
+  const serviceBindings: WranglerServiceBinding[] = [];
+
+  for (const [resourceName, provisioned] of options.resources.entries()) {
+    const binding = provisioned.binding || defaultBindingName(resourceName);
+    switch (provisioned.type) {
+      case "sql":
+      case "d1": {
+        if (!provisioned.id) {
           throw new Error(
             `Resource '${resourceName}' not provisioned: missing database_id`,
           );
         }
-        return {
-          binding: provisioned.binding ||
-            resourceName.toUpperCase().replace(/-/g, "_"),
+        d1Bindings.push({
+          binding,
           database_name: provisioned.name || resourceName,
           database_id: provisioned.id,
-        };
-      },
-    );
-  }
-
-  // R2 bindings
-  if (service.bindings?.r2 && service.bindings.r2.length > 0) {
-    config.r2_buckets = service.bindings.r2.map(
-      (resourceName): WranglerR2Binding => {
-        const provisioned = options.resources.get(resourceName);
-        return {
-          binding: provisioned?.binding ||
-            resourceName.toUpperCase().replace(/-/g, "_"),
-          bucket_name: provisioned?.name || resourceName,
-        };
-      },
-    );
-  }
-
-  // KV bindings
-  if (service.bindings?.kv && service.bindings.kv.length > 0) {
-    config.kv_namespaces = service.bindings.kv.map(
-      (resourceName): WranglerKVBinding => {
-        const provisioned = options.resources.get(resourceName);
-        if (!provisioned?.id) {
+        });
+        break;
+      }
+      case "object-store":
+      case "r2": {
+        r2Bindings.push({
+          binding,
+          bucket_name: provisioned.name || resourceName,
+        });
+        break;
+      }
+      case "key-value":
+      case "kv": {
+        if (!provisioned.id) {
           throw new Error(
             `Resource '${resourceName}' not provisioned: missing KV namespace id`,
           );
         }
-        return {
-          binding: provisioned.binding ||
-            resourceName.toUpperCase().replace(/-/g, "_"),
-          id: provisioned.id,
-        };
-      },
-    );
+        kvBindings.push({ binding, id: provisioned.id });
+        break;
+      }
+      case "queue": {
+        queueProducers.push({
+          queue: provisioned.name || resourceName,
+          binding,
+        });
+        break;
+      }
+      case "vector-index":
+      case "vectorize": {
+        vectorizeBindings.push({
+          index_name: provisioned.name || resourceName,
+          binding,
+        });
+        break;
+      }
+      default:
+        // Analytics / workflow / durable-object / secret are handled outside
+        // the wrangler TOML (analytics engine is implicit, workflow and
+        // durable-object are wired via the deploy pipeline, secrets go via
+        // `wrangler secret put`).
+        break;
+    }
   }
 
-  // Service bindings (inter-service references within the group)
-  if (service.bindings?.services && service.bindings.services.length > 0) {
-    config.services = service.bindings.services.map(
-      (targetServiceName): WranglerServiceBinding => {
-        const targetScriptName = options.namespace
-          ? `${options.groupName}-${targetServiceName}`
-          : targetServiceName;
-        return {
-          binding: targetServiceName.toUpperCase().replace(/-/g, "_"),
-          service: targetScriptName,
-        };
-      },
-    );
-  }
-
-  // Queue bindings
-  if (service.bindings?.queues && service.bindings.queues.length > 0) {
-    config.queues_producers = service.bindings.queues.map(
-      (resourceName): WranglerQueueProducer => {
-        const provisioned = options.resources.get(resourceName);
-        return {
-          queue: provisioned?.name || resourceName,
-          binding: provisioned?.binding ||
-            resourceName.toUpperCase().replace(/-/g, "_"),
-        };
-      },
-    );
-  }
-
-  // Vectorize bindings
-  if (service.bindings?.vectorize && service.bindings.vectorize.length > 0) {
-    config.vectorize = service.bindings.vectorize.map(
-      (resourceName): WranglerVectorizeIndex => {
-        const provisioned = options.resources.get(resourceName);
-        return {
-          index_name: provisioned?.name || resourceName,
-          binding: provisioned?.binding ||
-            resourceName.toUpperCase().replace(/-/g, "_"),
-        };
-      },
-    );
-  }
+  if (d1Bindings.length > 0) config.d1_databases = d1Bindings;
+  if (r2Bindings.length > 0) config.r2_buckets = r2Bindings;
+  if (kvBindings.length > 0) config.kv_namespaces = kvBindings;
+  if (queueProducers.length > 0) config.queues_producers = queueProducers;
+  if (vectorizeBindings.length > 0) config.vectorize = vectorizeBindings;
+  if (serviceBindings.length > 0) config.services = serviceBindings;
 
   return config;
 }
 
 /**
  * Serialize a WranglerConfig to TOML string for writing to wrangler.toml.
- *
- * Uses a simple manual serializer since we only need a flat config
- * with array-of-table sections for bindings.
  */
 export function serializeWranglerToml(config: WranglerConfig): string {
   const lines: string[] = [];

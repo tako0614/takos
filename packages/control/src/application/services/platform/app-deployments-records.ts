@@ -83,7 +83,7 @@ function parseManifestVersion(manifestJson: string): string | null {
     manifestJson,
     null,
   );
-  return manifest?.spec?.version ?? null;
+  return manifest?.version ?? null;
 }
 
 export async function toAppDeploymentRecord(
@@ -202,6 +202,63 @@ export async function createAppDeploymentRecord(
   );
 }
 
+export async function createAppDeploymentRecordForManifest(
+  env: Env,
+  input: {
+    deploymentId: string;
+    group: GroupRow;
+    manifest: AppManifest;
+    artifacts: Array<Record<string, unknown>>;
+    hostnames: string[];
+    applyResult: SafeApplyResult;
+    createdByAccountId: string | null;
+    rollbackOfAppDeploymentId?: string | null;
+  },
+): Promise<AppDeploymentRecord> {
+  const db = getDb(env.DB);
+  const now = new Date().toISOString();
+  const row = {
+    id: input.deploymentId,
+    spaceId: input.group.spaceId,
+    groupId: input.group.id,
+    groupNameSnapshot: input.group.name,
+    createdByAccountId: input.createdByAccountId,
+    sourceKind: "manifest",
+    sourceRepositoryUrl: null,
+    sourceResolvedRepoId: null,
+    sourceRepoId: null,
+    sourceOwner: null,
+    sourceRepoName: null,
+    sourceVersion: null,
+    sourceRef: null,
+    sourceRefType: null,
+    sourceCommitSha: null,
+    sourceReleaseId: null,
+    sourceTag: null,
+    status: hasApplyFailures(input.applyResult) ? "failed" : "applied",
+    manifestJson: JSON.stringify(input.manifest),
+    // Persist any caller-supplied build provenance under the existing
+    // build_sources_json column so the rollback / audit pipeline can read it.
+    buildSourcesJson: JSON.stringify(input.artifacts),
+    hostnamesJson: JSON.stringify(input.hostnames),
+    snapshotR2Key: null,
+    snapshotSha256: null,
+    snapshotSizeBytes: null,
+    snapshotFormat: null,
+    resultJson: JSON.stringify(input.applyResult),
+    rollbackOfAppDeploymentId: input.rollbackOfAppDeploymentId ?? null,
+    createdAt: now,
+    updatedAt: now,
+  } satisfies typeof appDeployments.$inferInsert;
+  await db.insert(appDeployments).values(row);
+  return await toAppDeploymentRecord(
+    env,
+    row as AppDeploymentRow,
+    input.group.name,
+    true,
+  );
+}
+
 export async function ensureTargetGroup(
   env: Env,
   spaceId: string,
@@ -219,7 +276,7 @@ export async function ensureTargetGroup(
       groupName,
       provider: options.providerName ?? null,
       envName: options.envName ?? null,
-      appVersion: manifest.spec.version ?? null,
+      appVersion: manifest.version ?? null,
       manifest,
     });
   }

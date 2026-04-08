@@ -1,10 +1,13 @@
 import { getDb } from "../../../infra/db/client.ts";
 import type {
-  AppContainer,
+  AppCompute,
   AppManifest,
-  AppService,
-  AppWorker,
 } from "../source/app-manifest-types.ts";
+
+// Narrowed aliases for the three compute kinds.
+type AppWorker = AppCompute & { kind: "worker" };
+type AppService = AppCompute & { kind: "service" };
+type AppContainer = AppCompute & { kind: "attached-container" };
 import {
   compileGroupDesiredState,
   type GroupDesiredState,

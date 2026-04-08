@@ -15,6 +15,7 @@ import type { TranslationReport } from "./translation-report.ts";
 import type { Env } from "../../../shared/types/env.ts";
 import { type AppTokenResult, AppTokenService } from "./app-token-service.ts";
 import { buildManifestPlan } from "./apply-engine-plan.ts";
+import { assertDeployValid } from "./deploy-validation.ts";
 import {
   applyEngineDeps,
   type GroupRow,
@@ -246,6 +247,11 @@ export async function applyManifest(
     getCurrentState: (targetGroupId) => getGroupState(env, targetGroupId),
   });
 
+  // Cross-resource deploy-time validation gate. Runs immediately before any
+  // DB write or provider apply so the deploy fails fast with a clear error
+  // and the caller never sees a partially-applied state.
+  assertDeployValid(plan.effectiveManifest);
+
   let entries = plan.diff.entries;
   if (opts.target && opts.target.length > 0) {
     const targetSet = new Set(opts.target);
@@ -328,13 +334,13 @@ export async function applyManifest(
     hasFailures ? "degraded" : "ready",
   );
 
-  const takosScopes = plan.effectiveManifest.spec.takos?.scopes;
+  const takosScopes = plan.effectiveManifest.scopes;
   if (takosScopes && takosScopes.length > 0) {
     try {
       result.appToken = await AppTokenService.issueToken(env, {
         groupId,
         spaceId: group.spaceId,
-        appName: plan.effectiveManifest.metadata.name,
+        appName: plan.effectiveManifest.name,
         scopes: takosScopes,
       });
     } catch {
@@ -387,7 +393,7 @@ export async function planManifest(
     getCurrentState: (targetGroupId) => getGroupState(env, targetGroupId),
   });
 
-  const takosScopes = plan.effectiveManifest.spec.takos?.scopes;
+  const takosScopes = plan.effectiveManifest.scopes;
   const appTokenPlan: AppTokenPlan | undefined =
     takosScopes && takosScopes.length > 0
       ? { willIssue: true, scopes: takosScopes }

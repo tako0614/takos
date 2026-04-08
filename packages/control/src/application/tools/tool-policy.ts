@@ -28,10 +28,6 @@ export interface ToolPolicyMetadata {
   sensitive_read_policy?: SensitiveReadPolicy;
 }
 
-const ALL_SPACE_ROLES: SpaceRole[] = ['owner', 'admin', 'editor', 'viewer'];
-const EDITOR_PLUS_ROLES: SpaceRole[] = ['owner', 'admin', 'editor'];
-const ADMIN_ROLES: SpaceRole[] = ['owner', 'admin'];
-
 export const AGENT_DISABLED_BUILTIN_TOOLS = [
   'kv_get',
   'kv_put',

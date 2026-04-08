@@ -241,6 +241,7 @@ export const OAUTH_SCOPES: Record<string, OAuthScope> = {
   'agents:execute': { name: 'agents:execute', description: 'Execute agents', category: 'resource' },
   'repos:read': { name: 'repos:read', description: 'Read repositories', category: 'resource' },
   'repos:write': { name: 'repos:write', description: 'Write repositories', category: 'resource' },
+  'events:subscribe': { name: 'events:subscribe', description: 'Subscribe to space lifecycle events', category: 'resource' },
 };
 
 export const ALL_SCOPES = Object.keys(OAUTH_SCOPES);

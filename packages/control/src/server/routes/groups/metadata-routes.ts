@@ -4,7 +4,6 @@ import type { Env } from "../../../shared/types/index.ts";
 import type { GroupsContext, GroupRouteBody } from "./helpers.ts";
 import {
   assertGroupDeletable,
-  assertGroupNameAvailable,
   listActiveGroupResources,
   listGroupDeployments,
   listGroupServices,

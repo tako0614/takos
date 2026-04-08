@@ -48,6 +48,8 @@ import {
   getGroupState,
   planManifest,
 } from "@/services/deployment/apply-engine";
+import { stableFingerprint } from "@/services/deployment/group-state";
+import type { AppManifest } from "@/application/services/source/app-manifest-types.ts";
 
 function createFakeDb() {
   return {
@@ -137,29 +139,30 @@ function installApplyEngineDeps() {
 
 installApplyEngineDeps();
 
-function makeManifest() {
+function makeManifest(): AppManifest {
   return {
-    apiVersion: "takos.dev/v1alpha1",
-    kind: "App",
-    metadata: { name: "demo-app" },
-    spec: {
-      version: "1.0.0",
-      workers: {
-        api: {
-          build: {
-            fromWorkflow: {
-              path: ".github/workflows/deploy.yml",
-              job: "build",
-              artifact: "worker",
-              artifactPath: "dist/worker.js",
-            },
+    name: "demo-app",
+    version: "1.0.0",
+    compute: {
+      api: {
+        kind: "worker",
+        build: {
+          fromWorkflow: {
+            path: ".takos/workflows/deploy.yml",
+            job: "build",
+            artifact: "worker",
+            artifactPath: "dist/worker.js",
           },
         },
       },
-      routes: [
-        { name: "api-route", target: "api", path: "/api" },
-      ],
     },
+    storage: {},
+    routes: [
+      { target: "api", path: "/api" },
+    ],
+    publish: [],
+    env: {},
+    scopes: [],
   };
 }
 
@@ -218,16 +221,7 @@ Deno.test("group apply engine - plans against canonical group resources/services
         sourceKind: "worker",
         executionProfile: "workers",
         artifactKind: "worker-bundle",
-        specFingerprint: JSON.stringify({
-          build: {
-            fromWorkflow: {
-              artifact: "worker",
-              artifactPath: "dist/worker.js",
-              job: "build",
-              path: ".github/workflows/deploy.yml",
-            },
-          },
-        }),
+        specFingerprint: stableFingerprint(makeManifest().compute.api),
         deployedAt: "2026-03-29T00:00:00.000Z",
       },
     },
@@ -236,7 +230,7 @@ Deno.test("group apply engine - plans against canonical group resources/services
   const result = await planManifest(
     { DB: {} as never } as never,
     "group-1",
-    makeManifest() as never,
+    makeManifest(),
   );
 
   assertEquals(result.diff.hasChanges, false);
@@ -263,6 +257,7 @@ Deno.test("group apply engine - plans against canonical group resources/services
     },
   ]);
 });
+
 Deno.test("group apply engine - derives observed routes from desiredSpecJson instead of stored observedStateJson", async () => {
   /* mocks cleared (no-op in Deno) */ void 0;
   mocks.reconcileGroupRouting = createRecordedMock(async () => ({
@@ -316,19 +311,20 @@ Deno.test("group apply engine - derives observed routes from desiredSpecJson ins
         sourceKind: "worker",
         executionProfile: "workers",
         artifactKind: "worker-bundle",
-        specFingerprint: JSON.stringify(makeManifest().spec.workers.api),
+        specFingerprint: stableFingerprint(makeManifest().compute.api),
       },
     },
   ]) as any;
 
   const state = await getGroupState({ DB: {} as never } as never, "group-1");
 
-  assertObjectMatch(state!.routes["api-route"], {
+  assertObjectMatch(state!.routes["api:/api"], {
     path: "/api",
     url: "https://grp-group-1-production-worker-api.example.test/api",
   });
-  assertStringIncludes(state!.routes["api-route"]!.url ?? "", "/api");
+  assertStringIncludes(state!.routes["api:/api"]!.url ?? "", "/api");
 });
+
 Deno.test("group apply engine - applies worker workloads through deployment service and routing reconcile", async () => {
   /* mocks cleared (no-op in Deno) */ void 0;
   mocks.reconcileGroupRouting = createRecordedMock(async () => ({
@@ -380,7 +376,8 @@ Deno.test("group apply engine - applies worker workloads through deployment serv
         managedBy: "group",
         manifestName: "api",
         componentKind: "worker",
-        specFingerprint: JSON.stringify(manifest.spec.workers?.api),
+        // Intentionally stale so the diff flags the worker as needing update.
+        specFingerprint: "stale-worker-fingerprint",
       },
     },
   ]) as any;
@@ -407,7 +404,7 @@ Deno.test("group apply engine - applies worker workloads through deployment serv
       managedBy: "group",
       manifestName: "api",
       componentKind: "worker",
-      specFingerprint: JSON.stringify(manifest.spec.workers?.api),
+      specFingerprint: stableFingerprint(manifest.compute.api),
     },
   })) as any;
   mocks.createDeployment = createRecordedMock(async () => ({
@@ -423,7 +420,7 @@ Deno.test("group apply engine - applies worker workloads through deployment serv
   const result = await applyManifest(
     { DB: {} as never } as never,
     "group-1",
-    manifest as never,
+    manifest,
     {
       artifacts: {
         api: {
@@ -449,185 +446,6 @@ Deno.test("group apply engine - applies worker workloads through deployment serv
   assertEquals(result.applied[0].category, "worker");
   assertEquals(result.applied[0].status, "success");
 });
-Deno.test("group apply engine - resolves worker bundle artifacts from desired manifest direct-artifact references", async () => {
-  /* mocks cleared (no-op in Deno) */ void 0;
-  mocks.reconcileGroupRouting = createRecordedMock(async () => ({
-    routes: {},
-    failedRoutes: [],
-  })) as any;
-  mocks.groupUpdateRun = createRecordedMock(async () => undefined) as any;
-  mocks.createResource = createRecordedMock(async () => undefined) as any;
-  mocks.updateManagedResource = createRecordedMock(async () =>
-    undefined
-  ) as any;
-  const manifest = {
-    ...makeManifest(),
-    spec: {
-      ...makeManifest().spec,
-      workers: {
-        api: {
-          artifact: {
-            kind: "bundle",
-            deploymentId: "dep-source",
-            artifactRef: "worker-api-v7",
-          },
-        },
-      },
-    },
-  };
-
-  mocks.groupGet = createRecordedMock(async () => ({
-    id: "group-1",
-    spaceId: "ws-1",
-    name: "demo-app",
-    provider: "cloudflare",
-    env: "production",
-    appVersion: "1.0.0",
-    desiredSpecJson: JSON.stringify(manifest),
-    providerStateJson: "{}",
-    reconcileStatus: "ready",
-    lastAppliedAt: "2026-03-29T00:00:00.000Z",
-    createdAt: "2026-03-29T00:00:00.000Z",
-    updatedAt: "2026-03-29T00:00:00.000Z",
-  })) as any;
-  mocks.listResources = createRecordedMock(async () => []) as any;
-  mocks.listGroupManagedServices = createRecordedMock(async () => []) as any;
-  mocks.upsertGroupManagedService = createRecordedMock(async () => ({
-    row: {
-      id: "svc-api",
-      routeRef: "grp-api",
-      updatedAt: "2026-03-29T00:00:00.000Z",
-    },
-    config: {},
-  })) as any;
-  mocks.getDeploymentById = createRecordedMock(async () => ({
-    id: "dep-source",
-    bundle_r2_key: "deployments/svc-api/7/bundle.js",
-    bundle_hash: null,
-    bundle_size: null,
-  })) as any;
-  mocks.getBundleContent = createRecordedMock(async () =>
-    'export default { fetch() { return new Response("ok"); } };'
-  ) as any;
-  mocks.createDeployment = createRecordedMock(async () => ({
-    id: "dep-2",
-    version: 2,
-    status: "pending",
-    deploy_state: "pending",
-    artifact_kind: "worker-bundle",
-    routing_status: "active",
-    routing_weight: 100,
-    created_at: "2026-03-29T00:00:00.000Z",
-  })) as any;
-  mocks.executeDeployment = createRecordedMock(async () => ({
-    provider_state_json: "{}",
-    completed_at: "2026-03-29T00:00:00.000Z",
-    bundle_hash: "sha256-123",
-  })) as any;
-
-  await applyManifest(
-    { DB: {} as never, WORKER_BUNDLES: {} as never } as never,
-    "group-1",
-  );
-
-  assertEquals(mocks.getDeploymentById.calls[0].args[1], "dep-source");
-  assert(mocks.getBundleContent.calls.length > 0);
-  assertStringIncludes(
-    mocks.createDeployment.calls[0].args[0].bundleContent as string,
-    "export default",
-  );
-});
-
-Deno.test("group apply engine - resolves worker artifactRef references through deployment lookup", async () => {
-  /* mocks cleared (no-op in Deno) */ void 0;
-  mocks.reconcileGroupRouting = createRecordedMock(async () => ({
-    routes: {},
-    failedRoutes: [],
-  })) as any;
-  mocks.groupUpdateRun = createRecordedMock(async () => undefined) as any;
-  mocks.createResource = createRecordedMock(async () => undefined) as any;
-  mocks.updateManagedResource = createRecordedMock(async () =>
-    undefined
-  ) as any;
-  const manifest = {
-    ...makeManifest(),
-    spec: {
-      ...makeManifest().spec,
-      workers: {
-        api: {
-          artifact: {
-            kind: "bundle",
-            artifactRef: "worker-api-v8",
-          },
-        },
-      },
-    },
-  };
-
-  mocks.groupGet = createRecordedMock(async () => ({
-    id: "group-1",
-    spaceId: "ws-1",
-    name: "demo-app",
-    provider: "cloudflare",
-    env: "production",
-    appVersion: "1.0.0",
-    desiredSpecJson: JSON.stringify(manifest),
-    providerStateJson: "{}",
-    reconcileStatus: "ready",
-    lastAppliedAt: "2026-03-29T00:00:00.000Z",
-    createdAt: "2026-03-29T00:00:00.000Z",
-    updatedAt: "2026-03-29T00:00:00.000Z",
-  })) as any;
-  mocks.listResources = createRecordedMock(async () => []) as any;
-  mocks.listGroupManagedServices = createRecordedMock(async () => []) as any;
-  mocks.upsertGroupManagedService = createRecordedMock(async () => ({
-    row: {
-      id: "svc-api",
-      routeRef: "grp-api",
-      updatedAt: "2026-03-29T00:00:00.000Z",
-    },
-    config: {},
-  })) as any;
-  mocks.findDeploymentByArtifactRef = createRecordedMock(async () => ({
-    id: "dep-source",
-    bundle_r2_key: "deployments/svc-api/8/bundle.js",
-    bundle_hash: null,
-    bundle_size: null,
-  })) as any;
-  mocks.getBundleContent = createRecordedMock(async () =>
-    'export default { fetch() { return new Response("ok"); } };'
-  ) as any;
-  mocks.createDeployment = createRecordedMock(async () => ({
-    id: "dep-3",
-    version: 3,
-    status: "pending",
-    deploy_state: "pending",
-    artifact_kind: "worker-bundle",
-    routing_status: "active",
-    routing_weight: 100,
-    created_at: "2026-03-29T00:00:00.000Z",
-  })) as any;
-  mocks.executeDeployment = createRecordedMock(async () => ({
-    provider_state_json: "{}",
-    completed_at: "2026-03-29T00:00:00.000Z",
-    bundle_hash: "sha256-456",
-  })) as any;
-
-  await applyManifest(
-    { DB: {} as never, WORKER_BUNDLES: {} as never } as never,
-    "group-1",
-    manifest as never,
-  );
-
-  assertEquals(
-    mocks.findDeploymentByArtifactRef.calls[0].args[1],
-    "worker-api-v8",
-  );
-  assertStringIncludes(
-    mocks.createDeployment.calls[0].args[0].bundleContent as string,
-    "export default",
-  );
-});
 
 Deno.test("group apply engine - passes canonical resource specs into resource creation", async () => {
   /* mocks cleared (no-op in Deno) */ void 0;
@@ -636,22 +454,32 @@ Deno.test("group apply engine - passes canonical resource specs into resource cr
   mocks.groupUpdateRun = (async () => undefined) as any;
   mocks.createResource = createRecordedMock(async () => undefined) as any;
   mocks.updateManagedResource = (async () => undefined) as any;
-  const manifest = {
-    apiVersion: "takos.dev/v1alpha1",
-    kind: "App",
-    metadata: { name: "demo-app" },
-    spec: {
-      version: "1.0.0",
-      resources: {
-        events: {
-          type: "analyticsEngine",
-          binding: "EVENTS",
-          analyticsEngine: {
-            dataset: "tenant-events",
+  const manifest: AppManifest = {
+    name: "demo-app",
+    version: "1.0.0",
+    compute: {
+      api: {
+        kind: "worker",
+        build: {
+          fromWorkflow: {
+            path: ".takos/workflows/deploy.yml",
+            job: "build",
+            artifact: "worker",
+            artifactPath: "dist/worker.js",
           },
         },
       },
     },
+    storage: {
+      events: {
+        type: "queue",
+        bind: "EVENTS",
+      },
+    },
+    routes: [],
+    publish: [],
+    env: {},
+    scopes: [],
   };
 
   mocks.groupGet = (async () => ({
@@ -674,7 +502,7 @@ Deno.test("group apply engine - passes canonical resource specs into resource cr
   await applyManifest(
     { DB: {} as never } as never,
     "group-1",
-    manifest as never,
+    manifest,
   );
 
   const createResourceArgs = mocks.createResource.calls[0].args;
@@ -682,7 +510,7 @@ Deno.test("group apply engine - passes canonical resource specs into resource cr
   assertEquals(createResourceArgs[1], "group-1");
   assertEquals(createResourceArgs[2], "events");
   assertObjectMatch(createResourceArgs[3] as Record<string, unknown>, {
-    type: "analyticsEngine",
-    spec: manifest.spec.resources.events,
+    type: "queue",
+    spec: manifest.storage.events,
   });
 });

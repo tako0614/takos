@@ -1,42 +1,48 @@
-// Re-export types
+// Re-export types from the flat-schema source of truth.
 export type {
-  AppManifest,
+  AppCompute,
   AppContainer,
-  AppService,
-  AppWorker,
-  AppEnvConfig,
-  AppRoute,
   AppDeploymentBuildSource,
+  AppFileHandler,
+  AppManifest,
+  AppManifestOverride,
+  AppMcpServer,
+  AppOAuthConfig,
+  AppPublication,
+  AppResource,
+  AppRoute,
+  AppService,
+  AppStorage,
+  AppTriggers,
+  AppWorker,
+  BuildConfig,
   BundleDoc,
+  ComputeKind,
   HealthCheck,
-  LifecycleHook,
-  LifecycleHooks,
-  UpdateStrategy,
-  ServiceBinding,
-  EnvironmentOverrides,
-  Volume,
-  WorkerScaling,
-  ResourceLimits,
-} from './app-manifest-types.ts';
+  QueueTrigger,
+  ScheduleTrigger,
+  StorageType,
+  VolumeMount,
+} from "./app-manifest-types.ts";
 
 // Re-export parsing
 export {
-  parseAppManifestYaml,
   parseAppManifestText,
-} from './app-manifest-parser/index.ts';
+  parseAppManifestYaml,
+} from "./app-manifest-parser/index.ts";
 
 // Re-export template engine
 export {
   resolveTemplates,
-  validateTemplateReferences,
   type TemplateContext,
-} from './app-manifest-template.ts';
+  validateTemplateReferences,
+} from "./app-manifest-template.ts";
 
 // Re-export validation
 export {
   parseAndValidateWorkflowYaml,
   validateDeployProducerJob,
-} from './app-manifest-validation.ts';
+} from "./app-manifest-validation.ts";
 
 // Re-export bundle generation and packaging
 export {
@@ -45,4 +51,4 @@ export {
   buildParsedPackageFromDocs,
   extractBuildSourcesFromManifestJson,
   selectAppManifestPathFromRepo,
-} from './app-manifest-bundle.ts';
+} from "./app-manifest-bundle.ts";

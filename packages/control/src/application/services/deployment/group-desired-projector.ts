@@ -2,11 +2,9 @@ import { eq } from 'drizzle-orm';
 import { getDb } from '../../../infra/db/client.ts';
 import { groups } from '../../../infra/db/schema-groups.ts';
 import type {
-  AppContainer,
+  AppCompute,
   AppManifest,
-  AppResource,
-  AppService,
-  AppWorker,
+  AppStorage,
 } from '../source/app-manifest-types.ts';
 import type { Env } from '../../../shared/types/env.ts';
 import { safeJsonParseOrDefault } from '../../../shared/utils/logger.ts';
@@ -20,16 +18,27 @@ type GroupRow = {
   desiredSpecJson: string | null;
 };
 
+function categoryToKind(category: WorkloadCategory): AppCompute['kind'] {
+  switch (category) {
+    case 'worker':
+      return 'worker';
+    case 'service':
+      return 'service';
+    case 'container':
+      return 'attached-container';
+  }
+}
+
 function createEmptyManifest(group: GroupRow): AppManifest {
   return {
-    apiVersion: 'takos.dev/v1alpha1',
-    kind: 'App',
-    metadata: {
-      name: group.name,
-    },
-    spec: {
-      version: group.appVersion ?? '0.0.0',
-    },
+    name: group.name,
+    ...(group.appVersion ? { version: group.appVersion } : {}),
+    compute: {},
+    storage: {},
+    routes: [],
+    publish: [],
+    env: {},
+    scopes: [],
   };
 }
 
@@ -53,7 +62,7 @@ async function saveManifest(env: Env, groupId: string, manifest: AppManifest): P
   const db = getDb(env.DB);
   await db.update(groups)
     .set({
-      appVersion: manifest.spec.version ?? null,
+      appVersion: manifest.version ?? null,
       desiredSpecJson: JSON.stringify(manifest),
       updatedAt: new Date().toISOString(),
     })
@@ -61,31 +70,51 @@ async function saveManifest(env: Env, groupId: string, manifest: AppManifest): P
     .run();
 }
 
+/**
+ * Load the desired manifest for a group, apply a mutator callback that
+ * mutates it in place, and persist the result.
+ *
+ * The mutator is responsible for adjusting the flat manifest fields
+ * (`compute`, `storage`, `publish`, etc.).
+ */
 async function mutateGroupManifest(
   env: Env,
   groupId: string,
   mutator: (manifest: AppManifest) => void,
 ): Promise<AppManifest> {
   const group = await loadGroup(env, groupId);
-  const manifest = safeJsonParseOrDefault<AppManifest | null>(group.desiredSpecJson, null) ?? createEmptyManifest(group);
+  const parsed = safeJsonParseOrDefault<AppManifest | null>(group.desiredSpecJson, null);
+  const manifest = parsed ?? createEmptyManifest(group);
+  // Backfill required fields in case the persisted blob was created before
+  // the flat-schema cutover.
+  manifest.compute ??= {};
+  manifest.storage ??= {};
+  manifest.routes ??= [];
+  manifest.publish ??= [];
+  manifest.env ??= {};
+  manifest.scopes ??= [];
   mutator(manifest);
   await saveManifest(env, groupId, manifest);
   return manifest;
 }
+
+// ---------------------------------------------------------------------------
+// Storage (resource) projections
+// ---------------------------------------------------------------------------
 
 export async function upsertGroupDesiredResource(
   env: Env,
   input: {
     groupId: string;
     name: string;
-    resource: AppResource;
+    resource: AppStorage;
   },
 ): Promise<AppManifest> {
   return mutateGroupManifest(env, input.groupId, (manifest) => {
-    manifest.spec.resources = {
-      ...(manifest.spec.resources ?? {}),
+    manifest.storage = {
+      ...manifest.storage,
       [input.name]: {
-        ...(manifest.spec.resources?.[input.name] ?? {}),
+        ...(manifest.storage[input.name] ?? {}),
         ...input.resource,
       },
     };
@@ -100,11 +129,8 @@ export async function removeGroupDesiredResource(
   },
 ): Promise<AppManifest> {
   return mutateGroupManifest(env, input.groupId, (manifest) => {
-    if (!manifest.spec.resources?.[input.name]) return;
-    delete manifest.spec.resources[input.name];
-    if (Object.keys(manifest.spec.resources).length === 0) {
-      delete manifest.spec.resources;
-    }
+    if (!manifest.storage[input.name]) return;
+    delete manifest.storage[input.name];
   });
 }
 
@@ -117,70 +143,44 @@ export async function renameGroupDesiredResource(
   },
 ): Promise<AppManifest> {
   return mutateGroupManifest(env, input.groupId, (manifest) => {
-    if (!manifest.spec.resources?.[input.fromName] || input.fromName === input.toName) return;
-    manifest.spec.resources = {
-      ...manifest.spec.resources,
-      [input.toName]: manifest.spec.resources[input.fromName],
+    if (!manifest.storage[input.fromName] || input.fromName === input.toName) return;
+    manifest.storage = {
+      ...manifest.storage,
+      [input.toName]: manifest.storage[input.fromName],
     };
-    delete manifest.spec.resources[input.fromName];
+    delete manifest.storage[input.fromName];
   });
 }
+
+// ---------------------------------------------------------------------------
+// Workload (compute) projections
+// ---------------------------------------------------------------------------
 
 function upsertWorkloadRecord(
   manifest: AppManifest,
   category: WorkloadCategory,
   name: string,
-  workload: AppWorker | AppContainer | AppService,
+  workload: AppCompute,
 ): void {
-  if (category === 'worker') {
-    manifest.spec.workers = {
-      ...(manifest.spec.workers ?? {}),
-      [name]: {
-        ...(manifest.spec.workers?.[name] ?? {}),
-        ...(workload as AppWorker),
-      },
-    };
-    return;
-  }
-  if (category === 'container') {
-    manifest.spec.containers = {
-      ...(manifest.spec.containers ?? {}),
-      [name]: {
-        ...(manifest.spec.containers?.[name] ?? {}),
-        ...(workload as AppContainer),
-      },
-    };
-    return;
-  }
-  manifest.spec.services = {
-    ...(manifest.spec.services ?? {}),
+  const kind = categoryToKind(category);
+  const existing = manifest.compute[name];
+  manifest.compute = {
+    ...manifest.compute,
     [name]: {
-      ...(manifest.spec.services?.[name] ?? {}),
-      ...(workload as AppService),
+      ...(existing ?? {}),
+      ...workload,
+      kind,
     },
   };
 }
 
 function removeWorkloadRecord(
   manifest: AppManifest,
-  category: WorkloadCategory,
+  _category: WorkloadCategory,
   name: string,
 ): void {
-  if (category === 'worker') {
-    if (!manifest.spec.workers?.[name]) return;
-    delete manifest.spec.workers[name];
-    if (Object.keys(manifest.spec.workers).length === 0) delete manifest.spec.workers;
-    return;
-  }
-  if (category === 'container') {
-    if (!manifest.spec.containers?.[name]) return;
-    delete manifest.spec.containers[name];
-    if (Object.keys(manifest.spec.containers).length === 0) delete manifest.spec.containers;
-    return;
-  }
-  if (!manifest.spec.services?.[name]) return;
-  delete manifest.spec.services[name];
-  if (Object.keys(manifest.spec.services).length === 0) delete manifest.spec.services;
+  if (!manifest.compute[name]) return;
+  delete manifest.compute[name];
 }
 
 export async function upsertGroupDesiredWorkload(
@@ -189,7 +189,7 @@ export async function upsertGroupDesiredWorkload(
     groupId: string;
     category: WorkloadCategory;
     name: string;
-    workload: AppWorker | AppContainer | AppService;
+    workload: AppCompute;
   },
 ): Promise<AppManifest> {
   return mutateGroupManifest(env, input.groupId, (manifest) => {
@@ -221,32 +221,11 @@ export async function renameGroupDesiredWorkload(
 ): Promise<AppManifest> {
   return mutateGroupManifest(env, input.groupId, (manifest) => {
     if (input.fromName === input.toName) return;
-
-    if (input.category === 'worker') {
-      if (!manifest.spec.workers?.[input.fromName]) return;
-      manifest.spec.workers = {
-        ...manifest.spec.workers,
-        [input.toName]: manifest.spec.workers[input.fromName],
-      };
-      delete manifest.spec.workers[input.fromName];
-      return;
-    }
-
-    if (input.category === 'container') {
-      if (!manifest.spec.containers?.[input.fromName]) return;
-      manifest.spec.containers = {
-        ...manifest.spec.containers,
-        [input.toName]: manifest.spec.containers[input.fromName],
-      };
-      delete manifest.spec.containers[input.fromName];
-      return;
-    }
-
-    if (!manifest.spec.services?.[input.fromName]) return;
-    manifest.spec.services = {
-      ...manifest.spec.services,
-      [input.toName]: manifest.spec.services[input.fromName],
+    if (!manifest.compute[input.fromName]) return;
+    manifest.compute = {
+      ...manifest.compute,
+      [input.toName]: manifest.compute[input.fromName],
     };
-    delete manifest.spec.services[input.fromName];
+    delete manifest.compute[input.fromName];
   });
 }

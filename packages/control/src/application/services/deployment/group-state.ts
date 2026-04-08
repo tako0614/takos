@@ -1,25 +1,24 @@
 import type {
-  AppContainer,
+  AppCompute,
   AppManifest,
-  AppResource,
-  AppService,
-  AppWorker,
+  AppManifestOverride,
+  AppStorage,
 } from '../source/app-manifest-types.ts';
 
 export type GroupWorkloadCategory = 'worker' | 'container' | 'service';
 
 export interface DesiredResourceState {
   name: string;
-  type: AppResource['type'];
+  type: AppStorage['type'];
   binding?: string;
-  spec: AppResource;
+  spec: AppStorage;
   specFingerprint: string;
 }
 
 export interface DesiredWorkloadState {
   name: string;
   category: GroupWorkloadCategory;
-  spec: AppWorker | AppContainer | AppService;
+  spec: AppCompute;
   specFingerprint: string;
   dependsOn: string[];
   routeNames: string[];
@@ -145,15 +144,57 @@ function deepMerge(
   return result;
 }
 
+/**
+ * Apply env-specific overrides from `manifest.overrides[envName]` to the
+ * flat manifest shape. Only the whitelisted fields (compute / storage /
+ * routes / publish / env / scopes / oauth) are merged — everything else on
+ * the override record is ignored.
+ */
 export function applyManifestOverrides(manifest: AppManifest, envName: string): AppManifest {
-  const specAny = manifest.spec as Record<string, unknown>;
-  const overrides = specAny.overrides as Record<string, Record<string, unknown>> | undefined;
+  const overrides = manifest.overrides?.[envName];
+  if (!overrides) return { ...manifest, overrides: undefined };
 
-  if (!overrides?.[envName]) return manifest;
+  const merged: AppManifest = { ...manifest };
+  if (overrides.compute) {
+    merged.compute = deepMerge(
+      manifest.compute as Record<string, unknown>,
+      overrides.compute as Record<string, unknown>,
+    ) as Record<string, AppCompute>;
+  }
+  if (overrides.storage) {
+    merged.storage = deepMerge(
+      manifest.storage as Record<string, unknown>,
+      overrides.storage as Record<string, unknown>,
+    ) as Record<string, AppStorage>;
+  }
+  if (overrides.routes) {
+    merged.routes = overrides.routes;
+  }
+  if (overrides.publish) {
+    merged.publish = overrides.publish;
+  }
+  if (overrides.env) {
+    merged.env = { ...manifest.env, ...overrides.env };
+  }
+  if (overrides.scopes) {
+    merged.scopes = overrides.scopes;
+  }
+  if (overrides.oauth) {
+    merged.oauth = overrides.oauth;
+  }
+  merged.overrides = undefined;
+  return merged;
+}
 
-  const mergedSpec = deepMerge(specAny, overrides[envName]) as AppManifest['spec'];
-  delete (mergedSpec as Record<string, unknown>).overrides;
-  return { ...manifest, spec: mergedSpec };
+function workloadCategoryFromKind(kind: AppCompute['kind']): GroupWorkloadCategory {
+  switch (kind) {
+    case 'worker':
+      return 'worker';
+    case 'service':
+      return 'service';
+    case 'attached-container':
+      return 'container';
+  }
 }
 
 export function compileGroupDesiredState(
@@ -166,50 +207,42 @@ export function compileGroupDesiredState(
 ): GroupDesiredState {
   const envName = opts.envName ?? 'default';
   const resolvedManifest = applyManifestOverrides(manifest, envName);
-  const resources = resolvedManifest.spec.resources ?? {};
-  const workers = resolvedManifest.spec.workers ?? {};
-  const containers = resolvedManifest.spec.containers ?? {};
-  const services = resolvedManifest.spec.services ?? {};
-  const routeList = resolvedManifest.spec.routes ?? [];
+  const storage = resolvedManifest.storage ?? {};
+  const compute = resolvedManifest.compute ?? {};
+  const routeList = resolvedManifest.routes ?? [];
 
-  const workloadNames = [
-    ...Object.keys(workers),
-    ...Object.keys(containers),
-    ...Object.keys(services),
-  ];
-  const duplicates = workloadNames.filter((name, index) => workloadNames.indexOf(name) !== index);
-  if (duplicates.length > 0) {
-    throw new Error(`Component names must be unique across workers/containers/services: ${Array.from(new Set(duplicates)).join(', ')}`);
-  }
-
+  // In the flat schema all top-level compute entries are unique by name.
+  // Attached containers are nested under `worker.containers.<name>` and
+  // share a flat namespace with the parent — kernel validation is in
+  // parse-compute.ts; we just surface them here under the same desired
+  // workloads map for scheduling purposes.
   const routes = Object.fromEntries(
-    routeList.map((route) => [
-      route.name,
+    routeList.map((route, index) => [
+      route.target ? `${route.target}:${route.path ?? index}` : `route-${index}`,
       {
-        name: route.name,
+        name: route.target ? `${route.target}:${route.path ?? index}` : `route-${index}`,
         target: route.target,
         ...(route.path ? { path: route.path } : {}),
         ...(route.methods ? { methods: route.methods } : {}),
-        ...(route.ingress ? { ingress: route.ingress } : {}),
         ...(route.timeoutMs ? { timeoutMs: route.timeoutMs } : {}),
       } satisfies DesiredRouteState,
     ]),
   );
 
   const routeNamesByTarget = new Map<string, string[]>();
-  for (const route of routeList) {
+  for (const [routeName, route] of Object.entries(routes)) {
     const current = routeNamesByTarget.get(route.target) ?? [];
-    current.push(route.name);
+    current.push(routeName);
     routeNamesByTarget.set(route.target, current);
   }
 
   const desiredResources = Object.fromEntries(
-    Object.entries(resources).map(([name, resource]) => [
+    Object.entries(storage).map(([name, resource]) => [
       name,
       {
         name,
         type: resource.type,
-        ...(resource.binding ? { binding: resource.binding } : {}),
+        ...(resource.bind ? { binding: resource.bind } : {}),
         spec: resource,
         specFingerprint: stableFingerprint(resource),
       } satisfies DesiredResourceState,
@@ -218,44 +251,37 @@ export function compileGroupDesiredState(
 
   const desiredWorkloads: Record<string, DesiredWorkloadState> = {};
 
-  for (const [name, worker] of Object.entries(workers)) {
+  for (const [name, entry] of Object.entries(compute)) {
     desiredWorkloads[name] = {
       name,
-      category: 'worker',
-      spec: worker,
-      specFingerprint: stableFingerprint(worker),
-      dependsOn: worker.dependsOn ?? [],
+      category: workloadCategoryFromKind(entry.kind),
+      spec: entry,
+      specFingerprint: stableFingerprint(entry),
+      dependsOn: entry.depends ?? [],
       routeNames: routeNamesByTarget.get(name) ?? [],
     };
-  }
 
-  for (const [name, container] of Object.entries(containers)) {
-    desiredWorkloads[name] = {
-      name,
-      category: 'container',
-      spec: container,
-      specFingerprint: stableFingerprint(container),
-      dependsOn: container.dependsOn ?? [],
-      routeNames: routeNamesByTarget.get(name) ?? [],
-    };
-  }
-
-  for (const [name, service] of Object.entries(services)) {
-    desiredWorkloads[name] = {
-      name,
-      category: 'service',
-      spec: service,
-      specFingerprint: stableFingerprint(service),
-      dependsOn: service.dependsOn ?? [],
-      routeNames: routeNamesByTarget.get(name) ?? [],
-    };
+    // Surface attached containers as their own workload entries so the
+    // deploy pipeline can treat them as independent reconciliation units.
+    if (entry.kind === 'worker' && entry.containers) {
+      for (const [childName, childEntry] of Object.entries(entry.containers)) {
+        desiredWorkloads[childName] = {
+          name: childName,
+          category: workloadCategoryFromKind(childEntry.kind),
+          spec: childEntry,
+          specFingerprint: stableFingerprint(childEntry),
+          dependsOn: childEntry.depends ?? [],
+          routeNames: routeNamesByTarget.get(childName) ?? [],
+        };
+      }
+    }
   }
 
   return {
     apiVersion: 'takos.dev/v1alpha1',
     kind: 'GroupDesiredState',
-    groupName: opts.groupName ?? manifest.metadata.name,
-    version: resolvedManifest.spec.version,
+    groupName: opts.groupName ?? manifest.name,
+    version: resolvedManifest.version ?? '0.0.0',
     provider: opts.provider ?? 'cloudflare',
     env: envName,
     manifest: resolvedManifest,
@@ -316,3 +342,7 @@ export function materializeRoutes(
     Object.entries(desiredRoutes).map(([name, route]) => [name, materializeRoute(route, workloads, updatedAt)]),
   );
 }
+
+// Silence unused-type warning: `AppManifestOverride` re-exported for callers
+// that still need the override shape.
+export type { AppManifestOverride };

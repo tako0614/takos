@@ -15,6 +15,10 @@ import { logWarn } from '../../../shared/utils/logger.ts';
 import { NotFoundError } from 'takos-common/errors';
 import { MAX_BUNDLE_SIZE_BYTES } from '../../../shared/config/limits.ts';
 import { upsertGroupDesiredWorkload } from '../../../application/services/deployment/group-desired-projector.ts';
+import {
+  abortCanaryDeployment,
+  promoteCanaryDeployment,
+} from '../../../application/services/deployment/routing.ts';
 import type { AppService } from '../../../application/services/source/app-manifest-types.ts';
 
 type ApiDeploymentEvent = {
@@ -51,6 +55,8 @@ export const workersDeploymentsRouteDeps = {
   createDeploymentService: (env: AuthenticatedRouteEnv['Bindings']) => new DeploymentService(env),
   upsertGroupDesiredWorkload,
   parseDeploymentTargetConfig,
+  promoteCanaryDeployment,
+  abortCanaryDeployment,
 };
 
 const providerSchema = z.object({
@@ -172,11 +178,7 @@ const workersDeployments = new Hono<AuthenticatedRouteEnv>()
         category: 'worker',
         name: worker.slug ?? worker.id,
         workload: {
-          artifact: {
-            kind: 'bundle',
-            deploymentId: deployment.id,
-            ...(deployment.artifact_ref ? { artifactRef: deployment.artifact_ref } : {}),
-          },
+          kind: 'worker',
         },
       });
     } else {
@@ -184,19 +186,10 @@ const workersDeployments = new Hono<AuthenticatedRouteEnv>()
       const artifact = target.artifact;
       if (typeof artifact?.exposed_port === 'number') {
         const workload: AppService = {
+          kind: 'service',
           port: artifact.exposed_port,
-          ...(artifact.health_path ? { healthCheck: { type: 'http', path: artifact.health_path } } : {}),
-          ...(artifact.image_ref
-            ? {
-                artifact: {
-                  kind: 'image',
-                  imageRef: artifact.image_ref,
-                  ...(body.provider?.name && body.provider.name !== 'runtime-host' && body.provider.name !== 'workers-dispatch'
-                    ? { provider: body.provider.name }
-                    : {}),
-                },
-              }
-            : {}),
+          ...(artifact.image_ref ? { image: artifact.image_ref } : {}),
+          ...(artifact.health_path ? { healthCheck: { path: artifact.health_path } } : {}),
         };
         await workersDeploymentsRouteDeps.upsertGroupDesiredWorkload(c.env, {
           groupId: worker.group_id,
@@ -385,6 +378,62 @@ const workersDeployments = new Hono<AuthenticatedRouteEnv>()
       ...(resolvedEndpoint ? { resolved_endpoint: resolvedEndpoint } : {}),
     },
     events: apiEvents,
+  });
+})
+
+.post('/:id/deployments/:deploymentId/promote', async (c) => {
+  const user = c.get('user');
+  const serviceId = c.req.param('id');
+  const deploymentId = c.req.param('deploymentId');
+
+  const worker = await workersDeploymentsRouteDeps.getServiceForUserWithRole(
+    c.env.DB,
+    serviceId,
+    user.id,
+    ['owner', 'admin', 'editor'],
+  );
+  if (!worker) {
+    throw new NotFoundError('Service');
+  }
+
+  const result = await workersDeploymentsRouteDeps.promoteCanaryDeployment(c.env, {
+    serviceId: worker.id,
+    deploymentId,
+    userId: user.id,
+  });
+
+  return c.json({
+    deployment_id: result.deploymentId,
+    status: 'promoted',
+    weight: 100,
+  });
+})
+
+.post('/:id/deployments/:deploymentId/abort', async (c) => {
+  const user = c.get('user');
+  const serviceId = c.req.param('id');
+  const deploymentId = c.req.param('deploymentId');
+
+  const worker = await workersDeploymentsRouteDeps.getServiceForUserWithRole(
+    c.env.DB,
+    serviceId,
+    user.id,
+    ['owner', 'admin', 'editor'],
+  );
+  if (!worker) {
+    throw new NotFoundError('Service');
+  }
+
+  const result = await workersDeploymentsRouteDeps.abortCanaryDeployment(c.env, {
+    serviceId: worker.id,
+    deploymentId,
+    userId: user.id,
+  });
+
+  return c.json({
+    deployment_id: result.deploymentId,
+    status: 'aborted',
+    rolled_back_to: result.rolledBackTo,
   });
 });
 

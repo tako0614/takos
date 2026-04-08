@@ -1,87 +1,78 @@
-import { parseResources } from "../app-manifest-validation.ts";
+import { parseStorage } from "../app-manifest-parser/index.ts";
 
 import { assertEquals, assertThrows } from "jsr:@std/assert";
 
-Deno.test("parseResources - normalizes portable resource aliases to canonical types", () => {
-  const resources = parseResources({
-    resources: {
+Deno.test("parseStorage - parses canonical flat storage types", () => {
+  const storage = parseStorage({
+    storage: {
       mainDb: {
         type: "sql",
-        binding: "DB",
+        bind: "DB",
       },
-      storage: {
-        type: "object_store",
-        binding: "STORAGE",
+      assets: {
+        type: "object-store",
+        bind: "ASSETS",
       },
       vectors: {
-        type: "vector_index",
-        vectorize: {
+        type: "vector-index",
+        vectorIndex: {
           dimensions: 768,
           metric: "euclidean",
         },
       },
-      secret: {
+      apikey: {
         type: "secret",
-        binding: "SECRET",
+        bind: "API_KEY",
       },
       analytics: {
-        type: "analytics_store",
-        binding: "ANALYTICS",
+        type: "analytics-engine",
+        bind: "ANALYTICS",
       },
     },
-  } as unknown as Record<string, unknown>, {
-    worker: {
-      type: "worker",
-      bindings: {},
-    },
-  });
+  } as unknown as Record<string, unknown>);
 
-  assertEquals(resources.mainDb.type, "d1");
-  assertEquals(resources.storage.type, "r2");
-  assertEquals(resources.vectors.type, "vectorize");
-  assertEquals(resources.secret.type, "secretRef");
-  assertEquals(resources.analytics.type, "analyticsEngine");
+  assertEquals(storage.mainDb.type, "sql");
+  assertEquals(storage.assets.type, "object-store");
+  assertEquals(storage.vectors.type, "vector-index");
+  assertEquals(storage.apikey.type, "secret");
+  assertEquals(storage.analytics.type, "analytics-engine");
 });
-Deno.test("parseResources - normalizes runtime resource aliases to canonical types", () => {
-  const resources = parseResources({
-    resources: {
-      workflows: {
-        type: "workflow_runtime",
+
+Deno.test("parseStorage - parses workflow and durable-object storage", () => {
+  const storage = parseStorage({
+    storage: {
+      jobs: {
+        type: "workflow",
         workflow: {
-          service: "api",
-          export: "handle",
+          class: "JobRunner",
+          script: "api",
         },
       },
-      namespaces: {
-        type: "durable_namespace",
-        durableNamespace: {
-          className: "Durable",
+      rooms: {
+        type: "durable-object",
+        durableObject: {
+          class: "Room",
+          script: "api",
         },
       },
     },
-  } as unknown as Record<string, unknown>, {
-    api: {
-      type: "worker",
-      bindings: {
-        d1: ["mainDb"],
-      },
-    },
-  });
+  } as unknown as Record<string, unknown>);
 
-  assertEquals(resources.workflows.type, "workflow");
-  assertEquals(resources.namespaces.type, "durableObject");
+  assertEquals(storage.jobs.type, "workflow");
+  assertEquals(storage.rooms.type, "durable-object");
 });
-Deno.test("parseResources - throws for unsupported aliases", () => {
+
+Deno.test("parseStorage - throws for unsupported type", () => {
   assertThrows(
     () =>
-      parseResources({
-        resources: {
+      parseStorage({
+        storage: {
           bad: {
             type: "sql-engine",
           },
         },
-      } as unknown as Record<string, unknown>, {}),
+      } as unknown as Record<string, unknown>),
     Error,
-    "spec.resources.bad.type",
+    "storage.bad.type",
   );
 });

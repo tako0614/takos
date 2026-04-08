@@ -1,4 +1,4 @@
-import type { DiffResult } from "../state/diff.ts";
+import type { ApplyEntryResult, DiffResult } from "./types.ts";
 import {
   printTranslationReport,
   type TranslationReport,
@@ -8,13 +8,7 @@ import { printApplyResult } from "./result-formatter.ts";
 
 type PrintableApplyResult = Parameters<typeof printApplyResult>[0];
 
-export type ApplyExecutionEntry = {
-  name: string;
-  category: string;
-  action: string;
-  status: "success" | "failed";
-  error?: string;
-};
+export type ApplyExecutionEntry = ApplyEntryResult;
 
 export type ApplyExecutionResult = {
   applied: ApplyExecutionEntry[];

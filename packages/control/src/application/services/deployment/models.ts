@@ -83,10 +83,24 @@ export type DeploymentTargetArtifact = {
   health_path?: string;
 };
 
+/**
+ * Worker readiness probe 設定 (Track G — Worker readiness probe 200-OK-only).
+ *
+ * kernel が deploy 時に Worker に対して `GET <path>` を送り、HTTP 200 OK のみ
+ * を ready とみなす (201/204/3xx redirect/4xx/5xx/timeout は fail)。timeout は
+ * hard-coded で 10 秒。失敗時は routing が更新されず deploy は fail-fast する。
+ *
+ * docs: `docs/apps/workers.md` の "Worker readiness" を参照。
+ */
+export type DeploymentTargetReadiness = {
+  path: string;
+};
+
 export type DeploymentTarget = {
   route_ref?: string;
   endpoint?: DeploymentTargetEndpoint;
   artifact?: DeploymentTargetArtifact;
+  readiness?: DeploymentTargetReadiness;
 };
 
 export interface Deployment {

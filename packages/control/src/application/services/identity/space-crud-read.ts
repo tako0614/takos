@@ -1,4 +1,4 @@
-import { and, desc, eq, or } from "drizzle-orm";
+import { desc, eq, or } from "drizzle-orm";
 import {
   accountMemberships,
   accounts,
