@@ -138,11 +138,72 @@ async function importPublicKey(pem: string): Promise<CryptoKey> {
 /*  Remote key fetching                                                */
 /* ------------------------------------------------------------------ */
 
+// ---------------------------------------------------------------------------
+// Actor public-key cache
+// ---------------------------------------------------------------------------
+//
+// Without this cache, every signed inbound request triggers an `apFetch` to
+// the sender's actor URL — including replayed signatures that hit the same
+// actor, which makes a forged signature flood trivially fan out to N upstream
+// fetches against remote servers (Round 11 audit ActivityPub finding #6).
+//
+// In CF Workers the cache is per-worker-instance memory, so it doesn't survive
+// cold-starts and is not shared across regions; this is acceptable for hot-
+// actor amortization. For stronger durability across instances, consider
+// promoting this to the routing KV.
+//
+// TTL is 24 hours to match Mastodon's actor cache window. Entries are bounded
+// by `ACTOR_CACHE_MAX_ENTRIES` so a malicious flood of distinct keyIds cannot
+// blow memory; oldest entries are evicted in insertion order via the Map.
+
+const ACTOR_CACHE_TTL_MS = 24 * 60 * 60 * 1_000;
+const ACTOR_CACHE_MAX_ENTRIES = 512;
+
+type ActorCacheEntry = {
+  actorUrl: string;
+  publicKeyPem: string;
+  expiresAt: number;
+};
+
+const actorKeyCache = new Map<string, ActorCacheEntry>();
+
+function getCachedActorKey(keyId: string): ActorCacheEntry | null {
+  const cached = actorKeyCache.get(keyId);
+  if (!cached) return null;
+  if (cached.expiresAt < Date.now()) {
+    actorKeyCache.delete(keyId);
+    return null;
+  }
+  return cached;
+}
+
+function setCachedActorKey(keyId: string, entry: Omit<ActorCacheEntry, 'expiresAt'>): void {
+  if (actorKeyCache.size >= ACTOR_CACHE_MAX_ENTRIES) {
+    // Drop the oldest entry (insertion order via Map iterator).
+    const oldestKey = actorKeyCache.keys().next().value;
+    if (oldestKey !== undefined) {
+      actorKeyCache.delete(oldestKey);
+    }
+  }
+  actorKeyCache.set(keyId, { ...entry, expiresAt: Date.now() + ACTOR_CACHE_TTL_MS });
+}
+
+/** Test helper — clear the cache between unit tests so they start clean. */
+export function _resetActorKeyCacheForTests(): void {
+  actorKeyCache.clear();
+}
+
 /**
  * Fetch the public key PEM from a remote actor's ActivityPub document.
- * Uses `apFetch` which has built-in SSRF protection.
+ * Uses `apFetch` which has built-in SSRF protection. Results are cached for
+ * 24 h per `keyId`; cache misses fall through to the network.
  */
 async function fetchActorPublicKey(keyId: string): Promise<{ actorUrl: string; publicKeyPem: string }> {
+  const cached = getCachedActorKey(keyId);
+  if (cached) {
+    return { actorUrl: cached.actorUrl, publicKeyPem: cached.publicKeyPem };
+  }
+
   // keyId is typically "https://remote.example/ap/stores/alice#main-key"
   // The actor URL is everything before the fragment
   const hashIndex = keyId.indexOf('#');
@@ -165,6 +226,7 @@ async function fetchActorPublicKey(keyId: string): Promise<{ actorUrl: string; p
     throw new HttpSignatureError(`Key ID mismatch: signature references ${keyId} but actor has ${publicKey.id}`);
   }
 
+  setCachedActorKey(keyId, { actorUrl, publicKeyPem: publicKey.publicKeyPem });
   return { actorUrl, publicKeyPem: publicKey.publicKeyPem };
 }
 

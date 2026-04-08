@@ -317,10 +317,12 @@ Deno.test("activitypub store routes - accepts Follow on store inbox and returns 
       method: "POST",
       headers: {
         "Content-Type": "application/activity+json",
+        date: new Date().toUTCString(),
         signature: "test-signature",
         "x-test-signature-actor": "https://remote.example/ap/users/bob",
       },
       body: JSON.stringify({
+        id: `https://remote.example/activities/${crypto.randomUUID()}`,
         type: "Follow",
         actor: "https://remote.example/ap/users/bob",
         object: "https://test.takos.jp/ap/stores/alice",
@@ -370,10 +372,12 @@ Deno.test("activitypub store routes - rejects unsupported activity types on inbo
       method: "POST",
       headers: {
         "Content-Type": "application/activity+json",
+        date: new Date().toUTCString(),
         signature: "test-signature",
         "x-test-signature-actor": "https://remote.example/ap/users/bob",
       },
       body: JSON.stringify({
+        id: `https://remote.example/activities/${crypto.randomUUID()}`,
         type: "Like",
         actor: "https://remote.example/ap/users/bob",
       }),
