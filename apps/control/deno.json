@@ -26,6 +26,7 @@
     "@/db/schema-agents": "../../packages/control/src/infra/db/schema-agents.ts",
     "@/db/schema-auth": "../../packages/control/src/infra/db/schema-auth.ts",
     "@/db/schema-billing": "../../packages/control/src/infra/db/schema-billing.ts",
+    "@/db/schema-memory-graph": "../../packages/control/src/infra/db/schema-memory-graph.ts",
     "@/db/schema-oauth": "../../packages/control/src/infra/db/schema-oauth.ts",
     "@/db/schema-platform": "../../packages/control/src/infra/db/schema-platform.ts",
     "@/db/schema-repos": "../../packages/control/src/infra/db/schema-repos.ts",

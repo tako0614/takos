@@ -24,6 +24,14 @@ export {
   serviceTokens,
 } from './schema-auth.ts';
 
+// Memory graph
+export {
+  memoryClaimEdges,
+  memoryClaims,
+  memoryEvidence,
+  memoryPaths,
+} from './schema-memory-graph.ts';
+
 // Billing
 export {
   billingAccounts,

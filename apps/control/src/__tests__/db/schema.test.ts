@@ -57,6 +57,14 @@ import {
   toolOperations,
 } from "@/db/schema-agents";
 
+// ---- schema-memory-graph ----
+import {
+  memoryClaimEdges,
+  memoryClaims,
+  memoryEvidence,
+  memoryPaths,
+} from "@/db/schema-memory-graph";
+
 // ---- schema-repos ----
 import {
   blobs,
@@ -1253,6 +1261,10 @@ const expectedNames: [Parameters<typeof getTableName>[0], string][] = [
   [stripeWebhookEvents, "stripe_webhook_events"],
   [usageEvents, "usage_events"],
   [usageRollups, "usage_rollups"],
+  [memoryClaims, "memory_claims"],
+  [memoryEvidence, "memory_evidence"],
+  [memoryClaimEdges, "memory_claim_edges"],
+  [memoryPaths, "memory_paths"],
   [agentTasks, "agent_tasks"],
   [artifacts, "artifacts"],
   [infoUnits, "info_units"],

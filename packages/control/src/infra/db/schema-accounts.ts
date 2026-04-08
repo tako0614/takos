@@ -150,6 +150,22 @@ export const accountStorageFiles = sqliteTable('account_storage_files', {
 }));
 
 // 12. Account
+//
+// NOTE: The baseline migration `0001_baseline.sql` also creates two zombie
+// columns and three zombie indexes that are *not* declared here:
+//   - `google_sub TEXT` + `accounts_google_sub_key` UNIQUE +
+//     `accounts_google_sub_idx`
+//   - `takos_auth_id TEXT` + `accounts_takos_auth_id_idx`
+// These were superseded by the `auth_identities` table (added later in the
+// same baseline) but never dropped. They are still present at the D1 level
+// and the local-platform sqlite-rewrite layer
+// (`local-platform/d1-sql-rewrite.ts`) explicitly filters out the index
+// creates. New code should use `authIdentities` for OAuth provider linking.
+//
+// `security_posture` also has a CHECK constraint
+// (`CHECK (security_posture IN ('standard', 'restricted_egress'))`) declared
+// in migration 0004 but not representable in drizzle. Application-level
+// validation must enforce the same constraint when writing.
 export const accounts = sqliteTable('accounts', {
   id: text('id').primaryKey(),
   type: text('type').notNull(),
@@ -159,7 +175,7 @@ export const accounts = sqliteTable('accounts', {
   description: text('description'),
   picture: text('picture'),
   bio: text('bio'),
-  email: text('email'),
+  email: text('email').unique(),
   trustTier: text('trust_tier').notNull().default('new'),
   setupCompleted: integer('setup_completed', { mode: 'boolean' }).notNull().default(false),
   defaultRepositoryId: text('default_repository_id'),
