@@ -1,13 +1,19 @@
 import type { Context } from "hono";
 import { parsePagination } from "../../../shared/utils/index.ts";
 import type { PublicRouteEnv } from "../route-auth.ts";
-import { HttpSignatureError } from "../../middleware/http-signature.ts";
+import {
+  evictActorKeyByActorUrl,
+  HttpSignatureError,
+} from "../../middleware/http-signature.ts";
 import type {
   StoreRecord,
   StoreRepositoryRecord,
 } from "./activitypub-queries.ts";
 import type { ActivityPubStoreDeps } from "./deps.ts";
-import { buildAcceptActivity } from "./activity-builders.ts";
+import {
+  buildAcceptActivity,
+  buildRejectActivity,
+} from "./activity-builders.ts";
 import {
   activityJson,
   orderedCollectionResponse,
@@ -101,14 +107,71 @@ export function _resetInboxDedupForTests(): void {
   inboxDedup.clear();
 }
 
+/**
+ * Optional context describing the inbox target for finer-grained decisions.
+ *
+ * `private` + `repoId` switches on the Follow-rejection path for private
+ * repositories (Round 11 audit ActivityPub finding #9): Followers without a
+ * `visit` grant get an AP `Reject` activity instead of a silent
+ * `addFollower`.
+ */
+export interface InboxTargetContext {
+  repoId?: string;
+  isPrivateRepo?: boolean;
+}
+
+/** Actor object types that we treat as cache-worthy for `Update` eviction. */
+const ACTOR_OBJECT_TYPES = new Set([
+  "Person",
+  "Service",
+  "Repository",
+  "Store",
+  "Organization",
+  "Application",
+  "Group",
+]);
+
+function extractActorObjectUrl(
+  body: Record<string, unknown>,
+): string | null {
+  const obj = body.object;
+  if (!obj || typeof obj !== "object") return null;
+  const record = obj as Record<string, unknown>;
+  const type = record.type;
+  const typeSet = Array.isArray(type)
+    ? type.filter((t): t is string => typeof t === "string")
+    : typeof type === "string"
+    ? [type]
+    : [];
+  if (!typeSet.some((t) => ACTOR_OBJECT_TYPES.has(t))) return null;
+  const id = typeof record.id === "string" ? record.id : null;
+  return id;
+}
+
 export async function handleInbox(
   c: ActivityPubContext,
   targetActorUrl: string,
   deps: ActivityPubStoreDeps,
+  targetContext?: InboxTargetContext,
 ): Promise<Response> {
+  // Read the body as bytes BEFORE parsing so we can:
+  //   (a) pass it to `verifyHttpSignature` for Digest header verification
+  //       (Round 11 audit finding #7), and
+  //   (b) still parse the same bytes as JSON for activity dispatch.
+  // Hono's `c.req.raw` body is a one-shot stream; once consumed we cannot
+  // re-read it, so we must buffer up front.
+  let bodyBytes: Uint8Array;
+  try {
+    const buf = await c.req.raw.arrayBuffer();
+    bodyBytes = new Uint8Array(buf);
+  } catch {
+    return c.json({ error: "Failed to read request body" }, 400);
+  }
+
   let body: Record<string, unknown>;
   try {
-    body = await c.req.json() as Record<string, unknown>;
+    const text = new TextDecoder().decode(bodyBytes);
+    body = JSON.parse(text) as Record<string, unknown>;
   } catch {
     return c.json({ error: "Invalid JSON body" }, 400);
   }
@@ -145,7 +208,7 @@ export async function handleInbox(
     );
   }
   try {
-    const sigResult = await deps.verifyHttpSignature(c.req.raw);
+    const sigResult = await deps.verifyHttpSignature(c.req.raw, bodyBytes);
 
     if (!sigResult.verified) {
       return c.json({ error: "Invalid HTTP signature" }, 401);
@@ -159,9 +222,15 @@ export async function handleInbox(
     }
   } catch (err) {
     if (err instanceof HttpSignatureError) {
+      // Digest header mismatch is a 400 (client presented a malformed body),
+      // not a 401 (auth failure). The error message carries "Digest header"
+      // for that class of failure.
+      const status = err.message.toLowerCase().includes("digest header")
+        ? 400
+        : 401;
       return c.json({
         error: `Signature verification failed: ${err.message}`,
-      }, 401);
+      }, status);
     }
 
     console.error("HTTP Signature verification error:", err);
@@ -181,6 +250,22 @@ export async function handleInbox(
   }
 
   if (type === "Follow") {
+    // Private-repo protection (Round 11 audit finding #9): if the target is
+    // a private repo actor, the follower needs a `visit` grant before we'll
+    // accept the subscription. Store actors (no `repoId` in context) always
+    // accept.
+    if (targetContext?.isPrivateRepo && targetContext.repoId) {
+      const hasVisitGrant = await deps.checkGrant(
+        c.env.DB,
+        targetContext.repoId,
+        actorUrl,
+        "visit",
+      );
+      if (!hasVisitGrant) {
+        return activityJson(c, buildRejectActivity(targetActorUrl, body));
+      }
+    }
+
     await deps.addFollower(c.env.DB, targetActorUrl, actorUrl);
     return activityJson(c, buildAcceptActivity(targetActorUrl, body));
   }
@@ -191,6 +276,27 @@ export async function handleInbox(
       await deps.removeFollower(c.env.DB, targetActorUrl, actorUrl);
       return activityJson(c, buildAcceptActivity(targetActorUrl, body));
     }
+  }
+
+  // `Update` of a remote actor: bust our 24h actor-key cache so the next
+  // signed delivery from that actor re-fetches the document (Round 11 audit
+  // finding #17). We don't otherwise persist actor state server-side, so
+  // evict-and-ack is the complete response.
+  if (type === "Update") {
+    const actorObjectId = extractActorObjectUrl(body);
+    if (actorObjectId) {
+      evictActorKeyByActorUrl(actorObjectId);
+    }
+    return c.json({ ok: true });
+  }
+
+  // `Like` / `Announce` (and similar informational types) are acknowledged
+  // but not persisted. Prior to Round 11 audit finding #17 we returned 422
+  // which made legitimate relays retry forever; 202 Accepted signals "got
+  // it, nothing to do". Anything genuinely unsupported still falls through
+  // to the 422 below.
+  if (type === "Like" || type === "Announce") {
+    return c.json({ ok: true }, 202);
   }
 
   return c.json({ error: "Unsupported activity type" }, 422);

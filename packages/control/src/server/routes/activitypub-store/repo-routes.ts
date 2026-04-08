@@ -91,14 +91,17 @@ async function handleRepoOutboxRoute(
   const page = c.req.query("page");
   const { limit } = parsePagination(c.req.query());
 
-  if (!page) {
-    return orderedCollectionResponse(c, collectionUrl, undefined, 1, 0, []);
-  }
-
-  const pageNum = parsePageNumber(page);
+  // Round 11 audit finding #11/#12: both the root OrderedCollection and
+  // paged responses previously reported `totalItems: 0` on the root and
+  // `pushResult.total || activities.length` on the page. For a busy repo
+  // that undercounted, and for an empty repo the synthetic Create fallback
+  // was miscounted. Derive the canonical count from a single paginated
+  // fetch and reuse it for both shapes, upshifting by 1 when we fall back
+  // to a synthetic Create activity so the single item is reflected.
+  const pageNum = page ? parsePageNumber(page) : 1;
   const pushResult = await deps.listPushActivities(c.env.DB, repo.id, {
-    limit,
-    offset: (pageNum - 1) * limit,
+    limit: page ? limit : 1,
+    offset: page ? (pageNum - 1) * limit : 0,
   });
 
   const activities = pushResult.items.map((push) => {
@@ -113,8 +116,24 @@ async function handleRepoOutboxRoute(
     return buildRepoPushActivity(repoActorId, push);
   });
 
-  if (activities.length === 0 && pageNum === 1) {
+  const usedFallback = pushResult.total === 0 && pageNum === 1;
+  if (page && activities.length === 0 && pageNum === 1 && usedFallback) {
     activities.push(buildRepoOutboxFallbackActivity(origin, repo));
+  }
+
+  // `totalItems` = real push count, or 1 for the synthetic Create in the
+  // zero-push case. Both the root collection and the page report this.
+  const totalItems = pushResult.total > 0 ? pushResult.total : 1;
+
+  if (!page) {
+    return orderedCollectionResponse(
+      c,
+      collectionUrl,
+      undefined,
+      1,
+      totalItems,
+      [],
+    );
   }
 
   return orderedCollectionResponse(
@@ -122,7 +141,7 @@ async function handleRepoOutboxRoute(
     collectionUrl,
     page,
     pageNum,
-    pushResult.total || activities.length,
+    totalItems,
     activities,
   );
 }
@@ -142,8 +161,19 @@ export function registerRepoRoutes(
 
   activitypubStore.post(
     "/ap/repos/:owner/:repoName/inbox",
-    withCanonicalRepo(deps, (c, repo) =>
-      handleInbox(
+    async (c) => {
+      // Round 11 audit finding #9: to reject Follows on private repos we
+      // need to look up the repo *including* private visibility, so we
+      // cannot reuse `withCanonicalRepo` which only returns public rows.
+      const repo = await deps.findCanonicalRepoIncludingPrivate(
+        c.env,
+        c.req.param("owner") ?? "",
+        c.req.param("repoName") ?? "",
+      );
+      if (!repo) {
+        return c.json({ error: "Repository not found" }, 404);
+      }
+      return handleInbox(
         c,
         buildRepoActorId(
           getOriginFromUrl(c.req.url),
@@ -151,7 +181,12 @@ export function registerRepoRoutes(
           repo.name,
         ),
         deps,
-      )),
+        {
+          repoId: repo.id,
+          isPrivateRepo: repo.visibility !== "public",
+        },
+      );
+    },
   );
 
   activitypubStore.get(

@@ -194,6 +194,25 @@ export function _resetActorKeyCacheForTests(): void {
 }
 
 /**
+ * Evict cached public keys for a specific actor URL.
+ *
+ * Called by the inbox handler when it receives an `Update` activity for a
+ * remote actor, so that subsequent signed deliveries from that actor are
+ * verified against the fresh key rather than the stale 24h-TTL cache copy
+ * (Round 11 audit ActivityPub finding #17).
+ *
+ * Walks the entire cache because multiple `keyId`s can resolve to the same
+ * actor URL (e.g. `#main-key` vs `#secondary-key`).
+ */
+export function evictActorKeyByActorUrl(actorUrl: string): void {
+  for (const [keyId, entry] of actorKeyCache) {
+    if (entry.actorUrl === actorUrl) {
+      actorKeyCache.delete(keyId);
+    }
+  }
+}
+
+/**
  * Fetch the public key PEM from a remote actor's ActivityPub document.
  * Uses `apFetch` which has built-in SSRF protection. Results are cached for
  * 24 h per `keyId`; cache misses fall through to the network.
@@ -265,12 +284,24 @@ export class HttpSignatureError extends Error {
  * 2. Fetch the actor's public key from the `keyId` URL (via `apFetch`)
  * 3. Reconstruct the signing string from the specified headers
  * 4. Verify the RSA-SHA256 signature using Web Crypto API
+ * 5. If a `Digest` header is present, recompute SHA-256 over `body` and
+ *    compare with the header value so a forged / replayed signature over a
+ *    mutated body is rejected (Round 11 audit ActivityPub finding #7).
  *
- * @param request - The incoming Request object
+ * @param request - The incoming Request object. Because Hono consumes the
+ *                  body before handing it off, callers MUST pass `body`
+ *                  separately — we do NOT read `request.body` here.
+ * @param body    - Raw request body bytes. Required if the request carries a
+ *                  `Digest` header (i.e. any signed POST in ActivityPub); may
+ *                  be omitted only for GET-style flows that don't have one.
  * @returns Verification result with keyId and derived actorUrl
- * @throws {HttpSignatureError} if the signature header is malformed or verification fails structurally
+ * @throws {HttpSignatureError} if the signature header is malformed,
+ *         verification fails structurally, or the digest does not match.
  */
-export async function verifyHttpSignature(request: Request): Promise<HttpSignatureResult> {
+export async function verifyHttpSignature(
+  request: Request,
+  body?: Uint8Array,
+): Promise<HttpSignatureResult> {
   const signatureHeader = request.headers.get('signature');
   if (!signatureHeader) {
     throw new HttpSignatureError('No Signature header present');
@@ -314,9 +345,88 @@ export async function verifyHttpSignature(request: Request): Promise<HttpSignatu
     signingStringBytes,
   );
 
+  if (!verified) {
+    return {
+      verified,
+      keyId: parsed.keyId,
+      actorUrl,
+    };
+  }
+
+  // 9. Digest binding check.
+  //
+  // The signing string for an ActivityPub POST includes the `digest` header
+  // value, but that only proves the sender _attested_ to that digest — it
+  // does NOT prove the body received matches. Without re-hashing the body
+  // an attacker could swap the body after capturing a valid signed delivery
+  // (digest header still matches the signing string, body does not match
+  // the digest). Re-hash and compare on every request that carries a
+  // `Digest` header. Missing Digest is accepted (not yet mandatory per our
+  // docs/platform/activitypub.md).
+  const digestHeader = request.headers.get('digest');
+  if (digestHeader) {
+    if (!body) {
+      throw new HttpSignatureError(
+        'Digest header present but body was not provided to the verifier',
+      );
+    }
+    await verifyDigestHeader(digestHeader, body);
+  }
+
   return {
     verified,
     keyId: parsed.keyId,
     actorUrl,
   };
+}
+
+/**
+ * Parse a `Digest: SHA-256=<base64>` header and confirm that recomputing
+ * SHA-256 over the body yields the same base64 value.
+ *
+ * Only SHA-256 is accepted — other algorithms listed in RFC 3230 are not
+ * used in practice in ActivityPub and would require more code paths. A
+ * malformed header or mismatched digest is a hard failure.
+ */
+async function verifyDigestHeader(
+  digestHeader: string,
+  body: Uint8Array,
+): Promise<void> {
+  // Digest header MAY list multiple algorithms separated by comma, e.g.
+  //   SHA-256=xyz, SHA-512=abc
+  // We only check SHA-256. If none of the entries is SHA-256, reject.
+  const entries = digestHeader.split(',').map((e) => e.trim());
+  const sha256Entry = entries.find((e) => /^sha-256=/i.test(e));
+  if (!sha256Entry) {
+    throw new HttpSignatureError(
+      'Digest header does not contain a SHA-256 value',
+    );
+  }
+
+  const expectedB64 = sha256Entry.slice('sha-256='.length);
+  if (!expectedB64) {
+    throw new HttpSignatureError('Digest header SHA-256 value is empty');
+  }
+
+  // Copy into a fresh ArrayBuffer so the type system is happy with
+  // `SharedArrayBuffer | ArrayBuffer` unions on `body.buffer`.
+  const ab = new ArrayBuffer(body.byteLength);
+  new Uint8Array(ab).set(body);
+  const actualHash = await crypto.subtle.digest('SHA-256', ab);
+  const actualB64 = arrayBufferToBase64(actualHash);
+
+  if (actualB64 !== expectedB64) {
+    throw new HttpSignatureError(
+      'Digest header does not match SHA-256 of body',
+    );
+  }
+}
+
+function arrayBufferToBase64(buffer: ArrayBuffer): string {
+  const bytes = new Uint8Array(buffer);
+  let binary = '';
+  for (let i = 0; i < bytes.byteLength; i++) {
+    binary += String.fromCharCode(bytes[i]);
+  }
+  return btoa(binary);
 }

@@ -19,6 +19,35 @@ export function buildAcceptActivity(
   };
 }
 
+/**
+ * Build a `Reject` activity mirroring the shape of `Accept`.
+ *
+ * Used to turn down a `Follow` on a private repository when the follower
+ * lacks a `visit` grant (Round 11 audit ActivityPub finding #9). The Reject
+ * is delivered as the synchronous inbox response so the follower gets an
+ * immediate, signed-envelope-compatible signal rather than a silent 200.
+ *
+ * The shape mirrors `buildAcceptActivity` but with `type: 'Reject'`, plus
+ * an `id`, `to`, and `published` so relay receivers can address the reply
+ * back to the originating actor without post-processing.
+ */
+export function buildRejectActivity(
+  actor: string,
+  object: Record<string, unknown>,
+): Record<string, unknown> {
+  const published = new Date().toISOString();
+  const to = typeof object.actor === "string" ? [object.actor] : undefined;
+  return {
+    "@context": ACTIVITYSTREAMS_CONTEXT,
+    id: `${actor}/activities/reject/${encodeURIComponent(published)}`,
+    type: "Reject",
+    actor,
+    ...(to ? { to } : {}),
+    published,
+    object,
+  };
+}
+
 export function buildInventoryLogActivity(
   actorId: string,
   item: { activityType: string; createdAt: string; repoActorUrl: string },

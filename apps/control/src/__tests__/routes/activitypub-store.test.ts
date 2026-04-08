@@ -101,12 +101,16 @@ function applyActivitypubStoreMocks() {
       mocks.listFollowers(...args),
     checkGrant: (...args: Parameters<typeof mocks.checkGrant>) =>
       mocks.checkGrant(...args),
-    verifyHttpSignature: async (request: Request) => {
+    verifyHttpSignature: async (request: Request, _body?: Uint8Array) => {
       // Test mock: extract actor from a header so each test can wire up
-      // signature verification without re-parsing the request body.
+      // signature verification without re-parsing the request body. If the
+      // test supplies `x-test-signature-verified: false`, pretend the
+      // signature failed so error branches can be exercised.
       const actorUrl = request.headers.get("x-test-signature-actor") ?? "";
+      const verified =
+        request.headers.get("x-test-signature-verified") !== "false";
       return {
-        verified: true,
+        verified,
         actorUrl,
         keyId: "",
       } as any;
@@ -367,6 +371,9 @@ Deno.test("activitypub store routes - rejects unsupported activity types on inbo
   mocks.findStoreBySlug = (async () => STORE_RECORD) as any;
 
   const app = createApp();
+  // `Create` at the top level is not a type the store inbox can act on
+  // (Like / Announce / Update are ack-acknowledged, Follow / Undo are
+  // persisted). Everything else still falls through to 422.
   const response = await app.fetch(
     new Request("https://test.takos.jp/ap/stores/alice/inbox", {
       method: "POST",
@@ -378,7 +385,7 @@ Deno.test("activitypub store routes - rejects unsupported activity types on inbo
       },
       body: JSON.stringify({
         id: `https://remote.example/activities/${crypto.randomUUID()}`,
-        type: "Like",
+        type: "Block",
         actor: "https://remote.example/ap/users/bob",
       }),
     }),
@@ -874,6 +881,34 @@ Deno.test("activitypub store routes - serves Add/Remove activities in store outb
     ],
   });
 });
+/**
+ * Helper: reset mocks to safe defaults for the inbox / outbox tests that
+ * follow. Closely mirrors the inline stub block each existing test uses,
+ * but consolidated so new tests can opt in with one call.
+ */
+function resetInboxMocks(): void {
+  mocks.hasExplicitInventory = (async () => false) as any;
+  mocks.listInventoryItems = (async () => ({ total: 0, items: [] })) as any;
+  mocks.listPushActivitiesForRepoIds =
+    (async () => ({ total: 0, items: [] })) as any;
+  mocks.listPushActivities = (async () => ({ total: 0, items: [] })) as any;
+  mocks.checkGrant = (async () => false) as any;
+  mocks.addFollower = (async () => ({
+    id: "f1",
+    targetActorUrl: "",
+    followerActorUrl: "",
+    createdAt: "",
+  })) as any;
+  mocks.removeFollower = (async () => true) as any;
+  mocks.listFollowers = (async () => ({ total: 0, items: [] })) as any;
+  (globalThis as unknown as { caches: CacheStorage }).caches = {
+    default: mocks.cache as unknown as Cache,
+  } as CacheStorage;
+  mocks.cache.match = (async () => undefined) as any;
+  mocks.cache.put = (async () => undefined) as any;
+  mocks.cache.delete = (async () => true) as any;
+}
+
 Deno.test("activitypub store routes - serves Push activities with commit metadata in repo outbox", async () => {
   /* mocks cleared (no-op in Deno) */ void 0;
   // Default to auto-list mode
@@ -947,4 +982,373 @@ Deno.test("activitypub store routes - serves Push activities with commit metadat
       },
     }],
   });
+});
+
+// ---------------------------------------------------------------------------
+// Round 11 ActivityPub findings — Digest, Reject, outbox totals, Update evict
+// ---------------------------------------------------------------------------
+
+import {
+  _resetActorKeyCacheForTests,
+  evictActorKeyByActorUrl,
+  HttpSignatureError,
+  verifyHttpSignature,
+} from "@/middleware/http-signature";
+import { buildRejectActivity } from "../../../../../packages/control/src/server/routes/activitypub-store/activity-builders.ts";
+
+Deno.test("http-signature - rejects request when Digest header does not match body", async () => {
+  _resetActorKeyCacheForTests();
+  const { publicKey, privateKey } = await crypto.subtle.generateKey(
+    {
+      name: "RSASSA-PKCS1-v1_5",
+      modulusLength: 2048,
+      publicExponent: new Uint8Array([0x01, 0x00, 0x01]),
+      hash: "SHA-256",
+    },
+    true,
+    ["sign", "verify"],
+  );
+  const spki = new Uint8Array(await crypto.subtle.exportKey("spki", publicKey));
+  let binary = "";
+  for (const b of spki) binary += String.fromCharCode(b);
+  const pem = `-----BEGIN PUBLIC KEY-----\n${
+    btoa(binary).match(/.{1,64}/g)!.join("\n")
+  }\n-----END PUBLIC KEY-----\n`;
+
+  // Use a non-blocked domain (`.example` is in the SSRF blocklist). The
+  // host never actually receives traffic because we stub `globalThis.fetch`
+  // below.
+  const actorUrl = "https://digest-test.remote.takos.jp/ap/users/alice";
+  const keyId = `${actorUrl}#main-key`;
+
+  // `apFetch` internally calls global `fetch`. Monkey-patch the global so
+  // the verifier's actor-document lookup resolves to our in-memory PEM
+  // without any network I/O.
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = (async (
+    input: Request | URL | string,
+    _init?: RequestInit,
+  ) => {
+    const url = typeof input === "string"
+      ? input
+      : input instanceof URL
+      ? input.toString()
+      : input.url;
+    if (url === actorUrl) {
+      return new Response(
+        JSON.stringify({
+          id: actorUrl,
+          publicKey: { id: keyId, owner: actorUrl, publicKeyPem: pem },
+        }),
+        {
+          status: 200,
+          headers: { "Content-Type": "application/activity+json" },
+        },
+      );
+    }
+    throw new Error(`unexpected fetch ${url}`);
+  }) as typeof fetch;
+
+  try {
+    const body = new TextEncoder().encode(JSON.stringify({ hello: "world" }));
+    const bodyAb = new ArrayBuffer(body.byteLength);
+    new Uint8Array(bodyAb).set(body);
+    const bodyHash = await crypto.subtle.digest("SHA-256", bodyAb);
+    let digestBin = "";
+    for (const b of new Uint8Array(bodyHash)) {
+      digestBin += String.fromCharCode(b);
+    }
+    const digestB64 = btoa(digestBin);
+    const digestHeader = `SHA-256=${digestB64}`;
+
+    const date = new Date().toUTCString();
+    const host = "digest-test.remote.takos.jp";
+    const path = "/inbox";
+    const signingString = [
+      `(request-target): post ${path}`,
+      `host: ${host}`,
+      `date: ${date}`,
+      `digest: ${digestHeader}`,
+    ].join("\n");
+
+    const sig = new Uint8Array(
+      await crypto.subtle.sign(
+        "RSASSA-PKCS1-v1_5",
+        privateKey,
+        new TextEncoder().encode(signingString),
+      ),
+    );
+    let sigBin = "";
+    for (const b of sig) sigBin += String.fromCharCode(b);
+    const sigB64 = btoa(sigBin);
+    const signatureHeader = [
+      `keyId="${keyId}"`,
+      `algorithm="rsa-sha256"`,
+      `headers="(request-target) host date digest"`,
+      `signature="${sigB64}"`,
+    ].join(",");
+
+    const goodRequest = new Request(`https://${host}${path}`, {
+      method: "POST",
+      headers: {
+        host,
+        date,
+        digest: digestHeader,
+        signature: signatureHeader,
+      },
+      body,
+    });
+
+    const goodResult = await verifyHttpSignature(goodRequest, body);
+    assertEquals(goodResult.verified, true);
+    assertEquals(goodResult.actorUrl, actorUrl);
+
+    const evilBody = new TextEncoder().encode(
+      JSON.stringify({ hello: "evil" }),
+    );
+    const evilRequest = new Request(`https://${host}${path}`, {
+      method: "POST",
+      headers: {
+        host,
+        date,
+        digest: digestHeader,
+        signature: signatureHeader,
+      },
+      body: evilBody,
+    });
+
+    let thrown: unknown = null;
+    try {
+      await verifyHttpSignature(evilRequest, evilBody);
+    } catch (err) {
+      thrown = err;
+    }
+    assertEquals(thrown instanceof HttpSignatureError, true);
+    assertStringIncludes(
+      (thrown as Error).message,
+      "Digest header does not match",
+    );
+  } finally {
+    globalThis.fetch = originalFetch;
+    _resetActorKeyCacheForTests();
+  }
+});
+
+Deno.test("activitypub store routes - returns Reject on Follow to private repo without visit grant", async () => {
+  resetInboxMocks();
+  mocks.findCanonicalRepoIncludingPrivate = (async () => ({
+    ...REPO_RECORD,
+    visibility: "private",
+  })) as any;
+  mocks.checkGrant = (async () => false) as any;
+  let followerAdded = false;
+  mocks.addFollower = (async () => {
+    followerAdded = true;
+    return {
+      id: "f1",
+      targetActorUrl: "",
+      followerActorUrl: "",
+      createdAt: "",
+    };
+  }) as any;
+
+  const app = createApp();
+  const response = await app.fetch(
+    new Request("https://test.takos.jp/ap/repos/alice/demo/inbox", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/activity+json",
+        date: new Date().toUTCString(),
+        signature: "test-signature",
+        "x-test-signature-actor": "https://remote.example/ap/users/bob",
+      },
+      body: JSON.stringify({
+        id: `https://remote.example/activities/${crypto.randomUUID()}`,
+        type: "Follow",
+        actor: "https://remote.example/ap/users/bob",
+        object: "https://test.takos.jp/ap/repos/alice/demo",
+      }),
+    }),
+    createMockEnv() as unknown as Env,
+    {} as ExecutionContext,
+  );
+
+  assertEquals(response.status, 200);
+  const payload = await response.json() as Record<string, unknown>;
+  assertEquals(payload.type, "Reject");
+  assertEquals(payload.actor, "https://test.takos.jp/ap/repos/alice/demo");
+  assertEquals(followerAdded, false);
+});
+
+Deno.test("activitypub store routes - accepts Follow on private repo when visit grant exists", async () => {
+  resetInboxMocks();
+  mocks.findCanonicalRepoIncludingPrivate = (async () => ({
+    ...REPO_RECORD,
+    visibility: "private",
+  })) as any;
+  mocks.checkGrant = (async () => true) as any;
+  let followerAdded = false;
+  mocks.addFollower = (async () => {
+    followerAdded = true;
+    return {
+      id: "f1",
+      targetActorUrl: "",
+      followerActorUrl: "",
+      createdAt: "",
+    };
+  }) as any;
+
+  const app = createApp();
+  const response = await app.fetch(
+    new Request("https://test.takos.jp/ap/repos/alice/demo/inbox", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/activity+json",
+        date: new Date().toUTCString(),
+        signature: "test-signature",
+        "x-test-signature-actor": "https://remote.example/ap/users/bob",
+      },
+      body: JSON.stringify({
+        id: `https://remote.example/activities/${crypto.randomUUID()}`,
+        type: "Follow",
+        actor: "https://remote.example/ap/users/bob",
+        object: "https://test.takos.jp/ap/repos/alice/demo",
+      }),
+    }),
+    createMockEnv() as unknown as Env,
+    {} as ExecutionContext,
+  );
+
+  assertEquals(response.status, 200);
+  const payload = await response.json() as Record<string, unknown>;
+  assertEquals(payload.type, "Accept");
+  assertEquals(followerAdded, true);
+});
+
+Deno.test("activitypub store routes - repo outbox root reports real push totalItems", async () => {
+  resetInboxMocks();
+  mocks.findCanonicalRepo = (async () => REPO_RECORD) as any;
+  mocks.listPushActivities = (async () => ({ total: 42, items: [] })) as any;
+
+  const app = createApp();
+  const response = await app.fetch(
+    new Request("https://test.takos.jp/ap/repos/alice/demo/outbox"),
+    createMockEnv() as unknown as Env,
+    {} as ExecutionContext,
+  );
+
+  assertEquals(response.status, 200);
+  const payload = await response.json() as Record<string, unknown>;
+  assertEquals(payload.type, "OrderedCollection");
+  assertEquals(payload.totalItems, 42);
+});
+
+Deno.test("activitypub store routes - repo outbox reports totalItems 1 for synthetic Create fallback", async () => {
+  resetInboxMocks();
+  mocks.findCanonicalRepo = (async () => REPO_RECORD) as any;
+  mocks.listPushActivities = (async () => ({ total: 0, items: [] })) as any;
+
+  const app = createApp();
+
+  const root = await app.fetch(
+    new Request("https://test.takos.jp/ap/repos/alice/demo/outbox"),
+    createMockEnv() as unknown as Env,
+    {} as ExecutionContext,
+  );
+  assertEquals(root.status, 200);
+  const rootPayload = await root.json() as Record<string, unknown>;
+  assertEquals(rootPayload.totalItems, 1);
+
+  const pageResponse = await app.fetch(
+    new Request("https://test.takos.jp/ap/repos/alice/demo/outbox?page=1"),
+    createMockEnv() as unknown as Env,
+    {} as ExecutionContext,
+  );
+  assertEquals(pageResponse.status, 200);
+  const pagePayload = await pageResponse.json() as Record<string, unknown>;
+  assertEquals(pagePayload.totalItems, 1);
+  const items = pagePayload.orderedItems as Array<Record<string, unknown>>;
+  assertEquals(items.length, 1);
+  assertEquals(items[0].type, "Create");
+});
+
+Deno.test("activitypub store routes - Update of remote actor evicts key cache and returns 200", async () => {
+  resetInboxMocks();
+  mocks.findStoreBySlug = (async () => STORE_RECORD) as any;
+
+  const app = createApp();
+  const response = await app.fetch(
+    new Request("https://test.takos.jp/ap/stores/alice/inbox", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/activity+json",
+        date: new Date().toUTCString(),
+        signature: "test-signature",
+        "x-test-signature-actor": "https://remote.example/ap/users/bob",
+      },
+      body: JSON.stringify({
+        id: `https://remote.example/activities/${crypto.randomUUID()}`,
+        type: "Update",
+        actor: "https://remote.example/ap/users/bob",
+        object: {
+          id: "https://remote.example/ap/users/bob",
+          type: "Person",
+          name: "Bob Updated",
+        },
+      }),
+    }),
+    createMockEnv() as unknown as Env,
+    {} as ExecutionContext,
+  );
+
+  assertEquals(response.status, 200);
+  // `evictActorKeyByActorUrl` on an empty cache must be a no-op so repeat
+  // Update deliveries stay cheap.
+  evictActorKeyByActorUrl("https://remote.example/ap/users/bob");
+});
+
+Deno.test("activitypub store routes - Like on inbox is acknowledged with 202", async () => {
+  resetInboxMocks();
+  mocks.findStoreBySlug = (async () => STORE_RECORD) as any;
+
+  const app = createApp();
+  const response = await app.fetch(
+    new Request("https://test.takos.jp/ap/stores/alice/inbox", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/activity+json",
+        date: new Date().toUTCString(),
+        signature: "test-signature",
+        "x-test-signature-actor": "https://remote.example/ap/users/bob",
+      },
+      body: JSON.stringify({
+        id: `https://remote.example/activities/${crypto.randomUUID()}`,
+        type: "Like",
+        actor: "https://remote.example/ap/users/bob",
+      }),
+    }),
+    createMockEnv() as unknown as Env,
+    {} as ExecutionContext,
+  );
+
+  assertEquals(response.status, 202);
+});
+
+Deno.test("buildRejectActivity - builds shape compatible with Mastodon Follow rejection", () => {
+  const reject = buildRejectActivity(
+    "https://test.takos.jp/ap/repos/alice/demo",
+    {
+      type: "Follow",
+      actor: "https://remote.example/ap/users/bob",
+    },
+  );
+
+  assertEquals(reject.type, "Reject");
+  assertEquals(reject.actor, "https://test.takos.jp/ap/repos/alice/demo");
+  assertEquals(
+    (reject.to as string[]).includes("https://remote.example/ap/users/bob"),
+    true,
+  );
+  assertEquals(typeof reject.id, "string");
+  assertEquals(typeof reject.published, "string");
 });
