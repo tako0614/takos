@@ -25,6 +25,7 @@ import { runCustomDomainReverification, reconcileStuckDomains, cleanupDeadSessio
 import { runR2OrphanedObjectGcBatch } from './application/services/r2/orphaned-object-gc.ts';
 import { runCommonEnvScheduledMaintenance } from './application/services/common-env/index.ts';
 import { runWorkflowArtifactGcBatch } from './application/services/execution/workflow-storage.ts';
+import { tickDeliveryQueue } from './application/services/activitypub/delivery-queue.ts';
 import { requireAuth, optionalAuth } from './server/middleware/auth.ts';
 import { staticAssetsMiddleware } from './server/middleware/static-assets.ts';
 import { isInvalidArrayBufferError } from './shared/utils/db-guards.ts';
@@ -314,6 +315,15 @@ app.post('/internal/scheduled', async (c) => {
       await runR2OrphanedObjectGcBatch(env, {
         dryRun: false, minAgeMinutes: 24 * 60, listLimit: 200, maxDeletes: 200,
       });
+      // Round 11: drain due ActivityPub delivery retries.
+      try {
+        await tickDeliveryQueue({ db: env.DB, env, batch: 50 });
+      } catch (error) {
+        errors.push({
+          job: 'ap-delivery-queue-tick',
+          error: error instanceof Error ? error.message : String(error),
+        });
+      }
     }
     await runCommonEnvScheduledMaintenance({ env, cron, errors });
   } catch (error) {
@@ -590,6 +600,33 @@ export function createWebWorker(
       } catch (error) {
         errors.push({
           job: 'workflow-artifact-gc',
+          error: error instanceof Error ? error.message : String(error),
+        });
+      }
+
+      // Round 11 (ActivityPub delivery queue): drain pending retries on the
+      // hourly cron tick. The queue persists per-(activity, inbox) entries
+      // that failed their first delivery so failed fan-outs are retried
+      // on an exponential backoff ladder rather than silently dropped.
+      try {
+        const apSummary = await tickDeliveryQueue({
+          db: bindings.DB,
+          env: bindings,
+          batch: 50,
+        });
+        if (apSummary.scanned > 0) {
+          logInfo('ap delivery queue tick completed', {
+            module: 'cron',
+            cron,
+            scanned: String(apSummary.scanned),
+            delivered: String(apSummary.delivered),
+            requeued: String(apSummary.requeued),
+            dlq: String(apSummary.dlq),
+          });
+        }
+      } catch (error) {
+        errors.push({
+          job: 'ap-delivery-queue-tick',
           error: error instanceof Error ? error.message : String(error),
         });
       }
