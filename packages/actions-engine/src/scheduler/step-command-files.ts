@@ -11,6 +11,12 @@ export interface StepCommandFiles {
   env: string;
   output: string;
   path: string;
+  /**
+   * `GITHUB_STEP_SUMMARY` として step の shell に公開される markdown summary
+   * file の path. 現状、書き込まれた内容は runtime で capture されるだけで、
+   * UI 側には未配線 (docs placeholder)。
+   */
+  stepSummary: string;
 }
 
 export function resolveRunnerTemp(
@@ -38,7 +44,28 @@ export async function createStepCommandFiles(
     env: join(directory, "github-env"),
     output: join(directory, "github-output"),
     path: join(directory, "github-path"),
+    stepSummary: join(directory, "github-step-summary"),
   };
+}
+
+/**
+ * `$GITHUB_STEP_SUMMARY` に書き込まれた markdown を読み取る。
+ *
+ * 読み取り結果は共通の `MAX_COMMAND_FILE_BYTES` を超えると読み捨てられ、
+ * 呼び出し側には空文字を返す (step 失敗扱いにはしない)。
+ *
+ * 現状 UI 配線は未実装で、値は {@link StepResult.summary} に保持するのみ。
+ * 将来 runtime で snapshot して artifact に含める予定。
+ */
+export async function parseStepCommandFileSummary(
+  summaryPath: string,
+): Promise<string> {
+  try {
+    return await readStepCommandFile(summaryPath);
+  } catch {
+    // step summary の読み取りは best-effort で step 失敗を汚染しない
+    return "";
+  }
 }
 
 export async function parseStepCommandFileOutputs(

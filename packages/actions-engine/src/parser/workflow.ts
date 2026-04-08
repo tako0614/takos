@@ -24,6 +24,27 @@ export class WorkflowParseError extends Error {
 }
 
 /**
+ * `schedule` を常に配列形式へ標準化する。
+ *
+ * YAML は単一オブジェクトでの書き方 (`schedule: { cron: '0 0 * * *' }`) と
+ * 配列での書き方 (`schedule: [{ cron: '0 0 * * *' }]`) の両方を許容するため、
+ * 下流の validator / scheduler が扱いやすい配列形式に揃える。
+ */
+function normalizeSchedule(value: unknown): unknown {
+  if (value === undefined || value === null) {
+    return value;
+  }
+  if (Array.isArray(value)) {
+    return value;
+  }
+  // 単一オブジェクトなら配列に包む
+  if (typeof value === 'object') {
+    return [value];
+  }
+  return value;
+}
+
+/**
  * 様々な形式のトリガー表現を標準形に変換する
  */
 function normalizeTrigger(on: unknown): WorkflowTrigger {
@@ -45,7 +66,11 @@ function normalizeTrigger(on: unknown): WorkflowTrigger {
 
   // オブジェクト形式: on: { push: { branches: [...] } }
   if (typeof on === 'object' && on !== null) {
-    return on as WorkflowTrigger;
+    const trigger = { ...(on as Record<string, unknown>) };
+    if ('schedule' in trigger) {
+      trigger.schedule = normalizeSchedule(trigger.schedule);
+    }
+    return trigger as WorkflowTrigger;
   }
 
   return {};
@@ -88,6 +113,8 @@ function normalizeWorkflow(raw: unknown): Workflow {
 
   return {
     name: typeof obj.name === 'string' ? obj.name : undefined,
+    'run-name':
+      typeof obj['run-name'] === 'string' ? (obj['run-name'] as string) : undefined,
     on,
     env:
       typeof obj.env === 'object' && obj.env !== null

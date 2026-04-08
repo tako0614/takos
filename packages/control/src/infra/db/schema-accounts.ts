@@ -166,6 +166,21 @@ export const accountStorageFiles = sqliteTable('account_storage_files', {
 // (`CHECK (security_posture IN ('standard', 'restricted_egress'))`) declared
 // in migration 0004 but not representable in drizzle. Application-level
 // validation must enforce the same constraint when writing.
+//
+// NOTE: `ai_model` default value drift. The baseline migration
+// (`apps/control/db/migrations/0001_baseline.sql:153`) declares the column
+// with `DEFAULT 'gpt-5-mini'`, but this drizzle schema uses
+// `'gpt-5.4-nano'`. The drizzle default is the intended current value; SQLite
+// does not support `ALTER TABLE ... ALTER COLUMN ... SET DEFAULT`, so we
+// cannot backfill the DB-level default without a table rebuild. Implications:
+//   - Rows inserted through drizzle (`db.insert(accounts)` without a value)
+//     get `'gpt-5.4-nano'`.
+//   - Rows inserted via raw SQL that omits the column fall back to the
+//     DB-level default of `'gpt-5-mini'`.
+//   - Legacy accounts created under the old default keep whatever value they
+//     had at insert time; no migration rewrites their `ai_model`.
+// Callers should treat the field as user-configurable and not rely on the
+// DB-level default. Audited in Round 11 DB finding #7 (LOW).
 export const accounts = sqliteTable('accounts', {
   id: text('id').primaryKey(),
   type: text('type').notNull(),

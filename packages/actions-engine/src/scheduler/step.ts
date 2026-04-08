@@ -22,6 +22,7 @@ import {
   applyStepCommandFileEnvironmentUpdates,
   createStepCommandFiles,
   parseStepCommandFileOutputs,
+  parseStepCommandFileSummary,
   removeStepCommandFilesDirectory,
   resolveRunnerTemp,
 } from "./step-command-files.ts";
@@ -274,6 +275,9 @@ export class StepRunner {
       GITHUB_ENV: commandFiles.env,
       GITHUB_OUTPUT: commandFiles.output,
       GITHUB_PATH: commandFiles.path,
+      // GITHUB_STEP_SUMMARY は markdown summary 書き込み先。現状 capture のみで
+      // UI 配線は未実装 (docs/reference/actions の "Unsupported" 項目参照)。
+      GITHUB_STEP_SUMMARY: commandFiles.stepSummary,
     };
 
     // ${{ secrets.X }} 経由で解決された機密値を集める
@@ -311,6 +315,14 @@ export class StepRunner {
         commandFiles,
         shellEnv,
       );
+
+      // GITHUB_STEP_SUMMARY を capture (UI 配線は未実装、現状 best-effort)
+      const rawSummary = await parseStepCommandFileSummary(
+        commandFiles.stepSummary,
+      );
+      if (rawSummary.length > 0) {
+        result.summary = maskSecretsInText(rawSummary, secretValues);
+      }
 
       // 終了コードで結果を確定
       result.conclusion = shellResult.exitCode === 0 ? "success" : "failure";

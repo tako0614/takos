@@ -403,6 +403,9 @@ inbound activity の verification は **strict mode**:
 - headers: `(request-target) host date digest`
 - keyId format: `{actor-url}#main-key`
 - signature header **必須**。欠落 or 検証失敗で 401 reject。
+- `Digest` header が存在する場合は SHA-256(body) を再計算して照合する。
+  mismatch は 400 Bad Request。signing string に digest が含まれていても body
+  すり替えは別問題で、rehash が本当の binding を作る。
 
 #### Replay 保護
 
@@ -411,12 +414,54 @@ Cavage §2.1.2 と Mastodon の慣行に合わせて、inbox は以下の replay
 1. **`Date` header skew check** — `Date` が無い、parse できない、現在時刻 ±5 分を超える場合は 401 reject
 2. **Activity id dedup** — verification 後に `body.id` を bounded な in-memory set に記録 (worker instance ごと、最大 2,048 件、TTL 20 分)。同じ activity id の再 delivery は 200 を返して再処理しない (`{ duplicate: true }`)
 3. **Actor public-key cache** — `keyId` で fetch した actor document は **24 時間** in-memory にキャッシュ (worker instance ごと、最大 512 entries)。同じ remote actor からの burst で N 回 `apFetch` が走るのを防ぐ
+4. **`Update` cache eviction** — remote actor の `Update` を inbox で受信したとき、
+   object.id に対応する cache entry を `evictActorKeyByActorUrl` で明示的に
+   破棄する。これが無いと key rotation 後 24 時間 stale key で verify して
+   しまう。
 
 cache はすべて process-local なので CF Worker の cold start で flush される。クロスインスタンス共有が必要なら routing KV / D1 に promote すること。
+
+#### 受信 activity dispatch
+
+| type                                                    | 動作                                                             |
+| ------------------------------------------------------- | ---------------------------------------------------------------- |
+| `Follow` (public repo / store)                          | `addFollower` → `Accept` を返す                                  |
+| `Follow` (private repo, follower に `visit` grant あり) | `addFollower` → `Accept` を返す                                  |
+| `Follow` (private repo, follower に `visit` grant なし) | `addFollower` せず **`Reject`** activity を 200 で返す           |
+| `Undo` + `Follow`                                       | `removeFollower` → `Accept`                                      |
+| `Update` (actor object)                                 | `evictActorKeyByActorUrl` して 200 を返す                        |
+| `Like` / `Announce`                                     | 202 Accepted (acknowledge のみ、永続化しない)                    |
+| その他                                                  | 422 Unsupported                                                  |
 
 #### 配信側
 
 outbound delivery は `PLATFORM_PRIVATE_KEY` env が設定されている場合に署名付きで delivery、未設定時は warning ログを残して unsigned で best-effort 配信。`Repository` actor (`buildRepoActor`) も自身の `publicKey` を公開するため、他サーバーから signed delivery を受け取って verify できる。
+
+#### Key rotation runbook
+
+現状、`PLATFORM_PRIVATE_KEY` env は **全 actor 共通の single key** として使われる (per-actor key は未実装)。keyId は `{actor-url}#main-key` 固定。rotation
+は以下の流れで行うことを想定している:
+
+1. 新しい RSA-2048 key pair を生成
+2. operator が `PLATFORM_PRIVATE_KEY_NEXT` env var に新 private key を set
+3. kernel は古い key / 新しい key の両方を publish (`#main-key` と `#main-key-v2`) し、24h の grace period で重複運用する
+4. 24h 経過後、operator が `PLATFORM_PRIVATE_KEY` を新 key に swap し、`PLATFORM_PRIVATE_KEY_NEXT` を削除する
+
+::: danger Dual-key flow is NOT implemented
+上記の手順は **将来の設計目標** であり、現状 kernel は `PLATFORM_PRIVATE_KEY`
+env を 1 本しか読み込まない。rotation をするには:
+
+1. operator が `PLATFORM_PRIVATE_KEY` 自体を新 key に swap する (hard cut-over)
+2. kernel / runtime を再起動する
+3. **その瞬間から署名付きで in-flight の delivery / verification は全て壊れる**
+   - old key で署名済みだが未配送の delivery は remote verifier に reject される
+   - old keyId を `keyId` header に持つ受信 activity は 401 で reject される
+
+のいずれかしかない。key rotation による破壊を最小化するなら、rotation は traffic の少ない時間帯に実施し、delivery queue を drain してから swap すること。
+
+dual-key flow の実装は multi-day refactor (actor document の `publicKey` 配列対応、
+`keyId` → private key の lookup table 化、delivery signer の key selection 実装) が必要で、Round 11 audit の ActivityPub finding #10 として backlog に積まれている。
+:::
 
 ::: warning Delivery retry
 現状、`deliverToFollowers` は **one-shot `Promise.allSettled`** で、失敗時の **retry / backoff / DLQ は未実装**。配送先が一時的に down している場合 activity は失われる。kernel の cron / queue ベースの delivery queue が必要 (Round 11 audit ActivityPub finding #4)。
