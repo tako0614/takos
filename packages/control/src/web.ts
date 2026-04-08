@@ -200,10 +200,45 @@ app.use('*', async (c, next) => {
 
   // S28: Additional security headers for all responses
   headers.set('X-Content-Type-Options', 'nosniff');
-  headers.set('X-Frame-Options', 'SAMEORIGIN');
-  headers.set('X-XSS-Protection', '1; mode=block');
+  // The admin console is never meant to be embedded — DENY > SAMEORIGIN.
+  headers.set('X-Frame-Options', 'DENY');
+  // X-XSS-Protection is deprecated; modern browsers ignore it. Removed per
+  // OWASP guidance (the legacy XSS auditor itself introduced bugs).
   headers.set('Referrer-Policy', 'strict-origin-when-cross-origin');
-  headers.set('Permissions-Policy', 'camera=(), microphone=(), geolocation=()');
+  headers.set(
+    'Permissions-Policy',
+    [
+      'camera=()',
+      'microphone=()',
+      'geolocation=()',
+      'payment=()',
+      'usb=()',
+      'bluetooth=()',
+      'magnetometer=()',
+      'gyroscope=()',
+      'accelerometer=()',
+      'xr-spatial-tracking=()',
+      'display-capture=()',
+      'browsing-topics=()',
+      'interest-cohort=()',
+    ].join(', '),
+  );
+  // Cross-origin isolation. COOP=same-origin protects against malicious
+  // window.opener references from OAuth popups; CORP=same-site limits
+  // cross-origin embedding of admin-served resources.
+  headers.set('Cross-Origin-Opener-Policy', 'same-origin');
+  headers.set('Cross-Origin-Resource-Policy', 'same-site');
+
+  // HSTS: only set in production (env-controlled). Operators on edges
+  // without TLS termination (local dev) shouldn't get this header.
+  // 1 year max-age + includeSubDomains + preload is the OWASP-recommended
+  // baseline for credential-bearing admin consoles.
+  if (c.env.ENVIRONMENT !== 'development') {
+    headers.set(
+      'Strict-Transport-Security',
+      'max-age=31536000; includeSubDomains; preload',
+    );
+  }
 });
 
 // Static assets middleware (for admin domain only)
