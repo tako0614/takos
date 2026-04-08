@@ -150,6 +150,31 @@ function matchesPushTrigger(workflow: Workflow, branch: string, changedFiles: st
   return matchesBranchAndPathFilters(config, branch, changedFiles);
 }
 
+// ---------------------------------------------------------------------------
+// Scheduled (cron) workflow trigger — DEFERRED
+// ---------------------------------------------------------------------------
+//
+// GitHub Actions YAML `on: schedule: - cron: '...'` is accepted by
+// `takos-actions-engine`'s parser (see `packages/actions-engine/src/parser/workflow.ts`
+// `normalizeSchedule()`) but there is currently NO kernel-side scan loop that
+// walks the `workflows` table, evaluates cron expressions against the current
+// tick, and calls `dispatchWorkflowRun()`. Scheduled workflows therefore
+// silently never fire.
+//
+// Round 11 (Workflow #5): a full implementation requires (a) a dependency-free
+// cron parser that covers the `*/N`, `M H * * *`, and `0 * * * *` forms at
+// minimum, (b) a `last_scheduled_at` column on the `workflows` table (or a
+// dedicated `scheduled_workflow_runs` tracking table) to avoid double-firing
+// when cron resolution > tick interval, (c) hourly cron hook wiring in
+// `packages/control/src/web.ts` that invokes a new `triggerScheduledWorkflows()`
+// helper defined here. This was intentionally deferred from Round 11 because
+// the three sub-tasks collectively exceed the round's budget and none of them
+// can be safely stubbed in isolation.
+//
+// See `docs/reference/api.md#trigger-compatibility` for the user-visible
+// documentation of this gap.
+// TODO(round-12, workflow#5): implement `triggerScheduledWorkflows()` plus
+// hourly cron wiring in `web.ts`.
 export async function triggerPushWorkflows(config: TriggerPushWorkflowsConfig, event: TriggerPushWorkflowsEvent): Promise<PushWorkflowTriggerResult> {
   const result: PushWorkflowTriggerResult = { triggeredRunIds: [], workflowPaths: [] };
   if (!config.bucket || !config.queue) return result;

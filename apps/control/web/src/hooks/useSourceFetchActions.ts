@@ -102,8 +102,8 @@ export function useSourceFetchActions({
       const updateItem = (i: SourceItem) => (i.id === item.id ? { ...i, installation } : i);
       setItems((prev) => prev.map(updateItem));
       setSelectedItem((prev) => (prev?.id === item.id ? updateItem(prev) : prev));
-    } catch {
-      showToast('error', t('installFailed'));
+    } catch (err) {
+      showToast('error', err instanceof Error && err.message ? err.message : t('installFailed'));
     } finally {
       setInstallingId(null);
     }
@@ -116,18 +116,20 @@ export function useSourceFetchActions({
     }
     if (!effectiveSpaceId() || !item.installation?.app_deployment_id) return;
     try {
-      const res = await fetch(
+      // Use rpcJson so we pick up 401 auto-redirect, OAuth/envelope error
+      // message parsing, and consistent error shapes.
+      const response = await fetch(
         `/api/spaces/${effectiveSpaceId()}/app-deployments/${item.installation.app_deployment_id}`,
         { method: 'DELETE' },
       );
-      if (!res.ok) throw new Error('Failed to uninstall');
+      await rpcJson(response);
       showToast('success', t('uninstalledItem', { name: item.name }));
       const updateItem = (i: SourceItem) =>
         i.id === item.id ? { ...i, installation: undefined } : i;
       setItems((prev) => prev.map(updateItem));
       setSelectedItem((prev) => (prev?.id === item.id ? { ...prev, installation: undefined } : prev));
-    } catch {
-      showToast('error', t('uninstallFailed'));
+    } catch (err) {
+      showToast('error', err instanceof Error && err.message ? err.message : t('uninstallFailed'));
     }
   };
 
@@ -138,14 +140,16 @@ export function useSourceFetchActions({
     }
     if (!effectiveSpaceId() || !item.installation?.app_deployment_id) return;
     try {
-      const res = await fetch(
+      // Use rpcJson so we pick up 401 auto-redirect, OAuth/envelope error
+      // message parsing, and consistent error shapes.
+      const response = await fetch(
         `/api/spaces/${effectiveSpaceId()}/app-deployments/${item.installation.app_deployment_id}/rollback`,
         { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' },
       );
-      if (!res.ok) throw new Error('Rollback failed');
+      await rpcJson(response);
       showToast('success', t('rolledBackItem', { name: item.name }));
-    } catch {
-      showToast('error', t('rollbackFailed'));
+    } catch (err) {
+      showToast('error', err instanceof Error && err.message ? err.message : t('rollbackFailed'));
     }
   };
 

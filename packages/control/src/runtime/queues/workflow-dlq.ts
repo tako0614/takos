@@ -1,6 +1,6 @@
 import { createWorkflowEngine } from '../../application/services/execution/workflow-engine.ts';
-import { getDb, workflowRuns, workflowJobs } from '../../infra/db/index.ts';
-import { eq, and, notInArray } from 'drizzle-orm';
+import { getDb, workflowRuns, workflowJobs, workflowSteps } from '../../infra/db/index.ts';
+import { eq, and, ne, inArray, notInArray } from 'drizzle-orm';
 import { isValidWorkflowJobQueueMessage } from '../../shared/types/index.ts';
 import { logError, logWarn } from '../../shared/utils/logger.ts';
 import type { WorkflowQueueEnv, WorkflowEngineBucket } from './workflow-types.ts';
@@ -53,6 +53,53 @@ export async function handleWorkflowJobDlq(
   logError(`CRITICAL: ${JSON.stringify(dlqEntry)}`, undefined, { module: 'workflow_dlq' });
 
   await markJobFailed(env.DB, jobId, timestamp);
+
+  // Round 11 finding #12: cancel sibling jobs and their pending steps when
+  // a job enters the DLQ. Without this, sibling jobs that were queued but
+  // never started keep their `queued` / `in_progress` rows forever — the
+  // run is marked `failure` below, but the UI still shows "running" jobs.
+  //
+  // The fan-out order matters:
+  //   1. sibling jobs (queued | in_progress) -> cancelled
+  //   2. pending/in-progress steps belonging to *any* job of the run
+  //      whose owning job is now cancelled -> cancelled
+  //   3. workflow run -> failure
+  //
+  // Note: we explicitly exclude the DLQ'd job itself (`ne(workflowJobs.id, jobId)`)
+  // because `markJobFailed()` already set its status to `completed` / `failure`
+  // above; rewriting it to `cancelled` would lose the failure classification.
+  try {
+    await db.update(workflowJobs).set({
+      status: 'cancelled',
+      conclusion: 'cancelled',
+      completedAt: timestamp,
+    }).where(and(
+      eq(workflowJobs.runId, runId),
+      ne(workflowJobs.id, jobId),
+      inArray(workflowJobs.status, ['queued', 'in_progress']),
+    ));
+  } catch (cancelErr) {
+    logError(`Failed to cancel sibling jobs for DLQ'd run ${runId}`, cancelErr, { module: 'workflow_dlq' });
+  }
+
+  try {
+    const siblingJobIds = await db.select({ id: workflowJobs.id })
+      .from(workflowJobs)
+      .where(and(eq(workflowJobs.runId, runId), ne(workflowJobs.id, jobId)))
+      .all();
+    if (siblingJobIds.length > 0) {
+      await db.update(workflowSteps).set({
+        status: 'cancelled',
+        conclusion: 'cancelled',
+        completedAt: timestamp,
+      }).where(and(
+        inArray(workflowSteps.jobId, siblingJobIds.map((row) => row.id)),
+        inArray(workflowSteps.status, ['pending', 'in_progress']),
+      ));
+    }
+  } catch (cancelStepsErr) {
+    logError(`Failed to cancel sibling steps for DLQ'd run ${runId}`, cancelStepsErr, { module: 'workflow_dlq' });
+  }
 
   // Also mark the parent workflow run as failed if it is still in progress
   try {
