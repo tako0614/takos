@@ -18,7 +18,6 @@ export interface BillingTopupPack {
 }
 
 export interface BillingSummary {
-  billing_enabled?: boolean;
   plan: {
     id: string;
     name: string;
@@ -31,8 +30,10 @@ export interface BillingSummary {
   runtime_limit_7d_seconds: number;
   balance_cents: number;
   status: string;
-  stripe_customer_id: string | null;
-  stripe_subscription_id: string | null;
+  // Backend exposes only presence flags, never the raw Stripe IDs.
+  // (packages/control/src/server/routes/billing/account-routes.ts)
+  has_stripe_customer: boolean;
+  has_subscription: boolean;
   subscription_period_end: string | null;
 }
 

@@ -29,8 +29,9 @@ export function useSpaceWorkers(spaceId: string | null) {
       const res = spaceId
         ? await fetch(`/api/workers/space/${encodeURIComponent(spaceId)}`)
         : await rpcPath(rpc, 'workers').$get({ param: {} }) as Response;
-      const data = await rpcJson<{ workers: Worker[] }>(res);
-      setCfWorkers(data.workers || []);
+      // Backend returns `{ services }` (see packages/control/src/server/routes/workers/routes.ts).
+      const data = await rpcJson<{ services: Worker[] }>(res);
+      setCfWorkers(data.services || []);
     } catch {
       setCfWorkers([]);
     } finally {

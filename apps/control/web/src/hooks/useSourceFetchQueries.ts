@@ -51,23 +51,26 @@ export function useSourceFetchQueries({
     try {
       const response = await fetch(`/api/spaces/${effectiveSpaceId()}/app-deployments`);
       if (!response.ok) throw new Error('Failed to fetch app deployments');
+      // Backend returns `{ app_deployments }` with `source.resolved_repo_id`
+      // (see packages/control/src/server/routes/app-deployments.ts and
+      // application/services/platform/app-deployments-model.ts).
       const data = await rpcJson<{
-        data: Array<{
+        app_deployments: Array<{
           id: string;
-          version: string;
-          deployed_at: string;
-          source?: { repo_id?: string | null } | null;
+          manifest_version: string | null;
+          created_at: string;
+          source?: { resolved_repo_id?: string | null } | null;
         }>;
       }>(response);
       const map = new Map<string, SourceItemInstallation>();
-      for (const pkg of data.data || []) {
-        const repoId = pkg.source?.repo_id || null;
+      for (const pkg of data.app_deployments || []) {
+        const repoId = pkg.source?.resolved_repo_id || null;
         if (repoId) {
           map.set(repoId, {
             installed: true,
             app_deployment_id: pkg.id,
-            installed_version: pkg.version,
-            deployed_at: pkg.deployed_at,
+            installed_version: pkg.manifest_version,
+            deployed_at: pkg.created_at,
           });
         }
       }

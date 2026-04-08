@@ -100,6 +100,7 @@ import {
   handleConversationHistory,
   handleMemoryActivation,
   handleMemoryFinalize,
+  handleRunConfig,
   handleRunEvent,
   handleSkillCatalog,
   handleSkillPlan,
@@ -514,6 +515,10 @@ export default {
 
       if (path === "/rpc/control/run-context") {
         return handleRunContext(body, env);
+      }
+
+      if (path === "/rpc/control/run-config") {
+        return handleRunConfig(body, env);
       }
 
       if (path === "/rpc/control/no-llm-complete") {

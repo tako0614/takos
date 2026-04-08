@@ -60,6 +60,7 @@ export function getRequiredProxyCapability(path: string): ProxyCapability | null
     || path === '/rpc/control/api-keys'
     || path === '/rpc/control/billing-run-usage'
     || path === '/rpc/control/run-context'
+    || path === '/rpc/control/run-config'
     || path === '/rpc/control/no-llm-complete'
     || path === '/rpc/control/conversation-history'
     || path === '/rpc/control/skill-runtime-context'

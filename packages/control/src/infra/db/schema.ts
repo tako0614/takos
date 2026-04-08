@@ -32,6 +32,7 @@ export {
   billingPlanRates,
   billingPlans,
   billingTransactions,
+  stripeWebhookEvents,
   usageEvents,
   usageRollups,
 } from './schema-billing.ts';

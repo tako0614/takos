@@ -66,15 +66,9 @@ export function SettingsBilling(props: { user: User | null }) {
           return;
         }
 
-        if (nextBilling.billing_enabled === false) {
-          setBillingSummary(null);
-          setBillingLoading(false);
-          return;
-        }
-
         setBillingSummary(nextBilling);
 
-        if (!nextBilling.stripe_customer_id) {
+        if (!nextBilling.has_stripe_customer) {
           setBillingInvoices([]);
           setInvoiceLoading(false);
           return;
@@ -361,30 +355,30 @@ export function SettingsBilling(props: { user: User | null }) {
               </p>
             </div>
 
-            {!bs.stripe_customer_id && (
+            {!bs.has_stripe_customer && (
               <div class="text-sm text-zinc-500 dark:text-zinc-400">
                 {t('billingNoCustomer')}
               </div>
             )}
 
-            {bs.stripe_customer_id && invoiceLoading() && (
+            {bs.has_stripe_customer && invoiceLoading() && (
               <div class="flex items-center gap-3 text-sm text-zinc-500 dark:text-zinc-400">
                 <Icons.Loader class="h-4 w-4 animate-spin" />
                 <span>{t('loading')}</span>
               </div>
             )}
 
-            {bs.stripe_customer_id && !invoiceLoading() && invoiceError() && (
+            {bs.has_stripe_customer && !invoiceLoading() && invoiceError() && (
               <div class="text-sm text-amber-700 dark:text-amber-300">{invoiceError()}</div>
             )}
 
-            {bs.stripe_customer_id && !invoiceLoading() && !invoiceError() && billingInvoices().length === 0 && (
+            {bs.has_stripe_customer && !invoiceLoading() && !invoiceError() && billingInvoices().length === 0 && (
               <div class="text-sm text-zinc-500 dark:text-zinc-400">
                 {t('billingNoInvoices')}
               </div>
             )}
 
-            {bs.stripe_customer_id && !invoiceLoading() && billingInvoices().length > 0 && (
+            {bs.has_stripe_customer && !invoiceLoading() && billingInvoices().length > 0 && (
               <div class="space-y-3">
                 {billingInvoices().map((invoice: BillingInvoice) => (
                   <div

@@ -100,6 +100,26 @@ export const usageEvents = sqliteTable('usage_events', {
   idxAccount: index('idx_usage_events_account_id').on(table.accountId),
 }));
 
+// 100. StripeWebhookEvent — idempotency dedup of Stripe webhook deliveries.
+//
+// Stripe retries failed webhook deliveries for up to 3 days, and may also
+// re-send identical events during replay. Without dedup, retried events would
+// double-credit balances and double-flip plan transitions. The webhook handler
+// inserts the event id BEFORE dispatch and returns 200 on duplicate.
+export const stripeWebhookEvents = sqliteTable('stripe_webhook_events', {
+  // Stripe event id (`evt_*`); also the primary key.
+  id: text('id').primaryKey(),
+  type: text('type').notNull(),
+  // First-seen timestamp (ISO 8601 UTC).
+  receivedAt: text('received_at').notNull(),
+  // Outcome of the dispatch — 'processed', 'skipped', or 'failed'.
+  status: text('status').notNull(),
+  errorMessage: text('error_message'),
+}, (table) => ({
+  idxType: index('idx_stripe_webhook_events_type').on(table.type),
+  idxReceivedAt: index('idx_stripe_webhook_events_received_at').on(table.receivedAt),
+}));
+
 // 99. UsageRollup
 export const usageRollups = sqliteTable('usage_rollups', {
   id: text('id').primaryKey(),

@@ -154,9 +154,12 @@ export async function verifyWebhookSignature(opts: {
   payload: string;
   signature: string;
   secret: string;
-  tolerance?: number; // seconds, default 60
+  // Tolerance window in seconds. Default matches Stripe's official SDK (300s).
+  // Stricter values cause intermittent failures under load due to clock skew
+  // + network queue latency, which then trigger retry storms.
+  tolerance?: number;
 }): Promise<{ event: StripeWebhookEvent }> {
-  const tolerance = opts.tolerance ?? 60;
+  const tolerance = opts.tolerance ?? 300;
 
   // Parse the Stripe-Signature header
   const parts = opts.signature.split(',');
@@ -237,6 +240,8 @@ export interface StripeSubscription {
   id: string;
   customer: string;
   status: string;
+  current_period_end?: number | null;
+  cancel_at_period_end?: boolean;
 }
 
 /** Stripe invoice line item period. */
@@ -272,6 +277,8 @@ export interface StripeWebhookCheckoutSession {
 export interface StripeEventObjectMap {
   'checkout.session.completed': StripeWebhookCheckoutSession;
   'invoice.paid': StripeWebhookInvoice;
+  'invoice.payment_failed': StripeWebhookInvoice;
+  'customer.subscription.updated': StripeSubscription;
   'customer.subscription.deleted': StripeSubscription;
 }
 

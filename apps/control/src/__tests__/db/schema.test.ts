@@ -34,6 +34,7 @@ import {
   billingPlanRates,
   billingPlans,
   billingTransactions,
+  stripeWebhookEvents,
   usageEvents,
   usageRollups,
 } from "@/db/schema-billing";
@@ -1249,6 +1250,7 @@ const expectedNames: [Parameters<typeof getTableName>[0], string][] = [
   [billingPlanRates, "billing_plan_rates"],
   [billingPlans, "billing_plans"],
   [billingTransactions, "billing_transactions"],
+  [stripeWebhookEvents, "stripe_webhook_events"],
   [usageEvents, "usage_events"],
   [usageRollups, "usage_rollups"],
   [agentTasks, "agent_tasks"],
