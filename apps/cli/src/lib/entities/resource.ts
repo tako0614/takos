@@ -89,7 +89,10 @@ export async function createResource(name: string, opts: CreateResourceOpts): Pr
       result = await provider.createQueue(resourceName);
       break;
     case 'vectorize':
-      result = await provider.createVectorIndex(resourceName, { dimensions: 1536, metric: 'cosine' });
+      // 768 matches Cloudflare's `@cf/baai/bge-base-en-v1.5` (the default
+      // embedding model in the kernel). Override per resource if a different
+      // model is in use.
+      result = await provider.createVectorIndex(resourceName, { dimensions: 768, metric: 'cosine' });
       break;
     case 'secretRef':
       result = await provider.createSecret(resourceName, opts.binding || name);
