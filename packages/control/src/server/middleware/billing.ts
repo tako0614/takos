@@ -53,10 +53,15 @@ export function billingGate(
       );
     } catch (err) {
       logError("Failed to check billing quota", err, { module: "billinggate" });
+      // Match the documented common error envelope
+      // (docs/reference/api.md "エラーレスポンスの共通形式"):
+      //   { error: { code, message } }
       return c.json(
         {
-          error: "Billing unavailable",
-          code: "SERVICE_UNAVAILABLE",
+          error: {
+            code: "SERVICE_UNAVAILABLE",
+            message: "Billing unavailable",
+          },
         },
         503,
       );

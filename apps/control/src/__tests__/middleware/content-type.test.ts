@@ -87,9 +87,10 @@ Deno.test("validateContentType middleware - rejects POST with unsupported Conten
     {} as ExecutionContext,
   );
   assertEquals(res.status, 415);
-  const json = await res.json() as Record<string, unknown>;
-  assertEquals(json.code, "UNSUPPORTED_CONTENT_TYPE");
-  assertStringIncludes(String(json.error), "text/plain");
+  const json = await res.json() as { error: { code: string; message: string } };
+  // Common error envelope: { error: { code, message } }
+  assertEquals(json.error.code, "UNSUPPORTED_CONTENT_TYPE");
+  assertStringIncludes(json.error.message, "text/plain");
 });
 Deno.test("validateContentType middleware - rejects POST with missing Content-Type when body is present", async () => {
   /* mocks cleared (no-op in Deno) */ void 0;
@@ -108,8 +109,9 @@ Deno.test("validateContentType middleware - rejects POST with missing Content-Ty
     {} as ExecutionContext,
   );
   assertEquals(res.status, 415);
-  const json = await res.json() as Record<string, unknown>;
-  assertEquals(json.code, "MISSING_CONTENT_TYPE");
+  const json = await res.json() as { error: { code: string; message: string } };
+  // Common error envelope: { error: { code, message } }
+  assertEquals(json.error.code, "MISSING_CONTENT_TYPE");
 });
 Deno.test("validateContentType middleware - allows POST with empty body and no Content-Type by default", async () => {
   /* mocks cleared (no-op in Deno) */ void 0;

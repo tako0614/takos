@@ -1,6 +1,13 @@
 import type { Context, MiddlewareHandler, Next } from 'hono';
 import { computeSHA256 } from '../../shared/utils/hash.ts';
 import { logError, logWarn } from '../../shared/utils/logger.ts';
+import { SESSION_COOKIE_NAME } from '../../application/services/identity/session.ts';
+
+// Detect the canonical session cookie by name. Avoid substring matching to
+// prevent accidental false positives if the cookie is renamed.
+const SESSION_COOKIE_PRESENT = new RegExp(
+  `(?:^|;\\s*)${SESSION_COOKIE_NAME.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}=`,
+);
 
 declare global {
   interface CacheStorage {
@@ -86,10 +93,12 @@ export function withCache(config: CacheConfig): MiddlewareHandler {
       return;
     }
 
-    // Skip caching for authenticated requests
+    // Skip caching for authenticated requests. Use the canonical cookie name
+    // parser instead of substring matching to avoid serving stale cached
+    // responses to logged-in users when the cookie name is renamed.
     const authHeader = c.req.header('Authorization');
     const cookie = c.req.header('Cookie');
-    if (authHeader || (cookie && cookie.includes('session='))) {
+    if (authHeader || (cookie && SESSION_COOKIE_PRESENT.test(cookie))) {
       await next();
       return;
     }

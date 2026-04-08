@@ -55,9 +55,10 @@ function createApp(middleware: ReturnType<typeof bodyLimit>) {
       {} as ExecutionContext,
     );
     assertEquals(res.status, 413);
-    const json = await res.json() as Record<string, unknown>;
-    assertEquals(json.error, 'Too big');
-    assertEquals(json.code, 'PAYLOAD_TOO_LARGE');
+    const json = await res.json() as { error: { code: string; message: string }; max_size: number };
+    // Common error envelope: { error: { code, message } }
+    assertEquals(json.error.code, 'PAYLOAD_TOO_LARGE');
+    assertEquals(json.error.message, 'Too big');
     assertEquals(json.max_size, 10);
 })
   Deno.test('bodyLimit middleware - rejects PUT requests over the limit', async () => {
@@ -101,8 +102,9 @@ function createApp(middleware: ReturnType<typeof bodyLimit>) {
       {} as ExecutionContext,
     );
     assertEquals(res.status, 413);
-    const json = await res.json() as Record<string, unknown>;
-    assertEquals(json.error, 'Request body too large');
+    const json = await res.json() as { error: { code: string; message: string } };
+    assertEquals(json.error.code, 'PAYLOAD_TOO_LARGE');
+    assertEquals(json.error.message, 'Request body too large');
 })
   Deno.test('bodyLimit middleware - skips enforcement when path matches skipPaths pattern', async () => {
   /* mocks cleared (no-op in Deno) */ void 0;

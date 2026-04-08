@@ -43,6 +43,9 @@ const REQUIRED_KEYS = {
     'TENANT_BASE_DOMAIN',
     'PLATFORM_PRIVATE_KEY',
     'PLATFORM_PUBLIC_KEY',
+    // Required at runtime by common-env crypto helpers (`getCommonEnvSecret`
+    // throws if unset). Fail fast at boot rather than deferring to first use.
+    'ENCRYPTION_KEY',
   ],
   'takos-runner': ['DB', 'RUN_QUEUE', 'RUN_NOTIFIER'],
   'takos-workflow-runner': ['DB'],

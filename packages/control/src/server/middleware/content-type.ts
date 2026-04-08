@@ -28,9 +28,12 @@ export function validateContentType(options: ContentTypeOptions = {}): Middlewar
     }
 
     if (!contentType) {
+      // Common error envelope: { error: { code, message } }
       return c.json({
-        error: 'Missing Content-Type header',
-        code: 'MISSING_CONTENT_TYPE'
+        error: {
+          code: 'MISSING_CONTENT_TYPE',
+          message: 'Missing Content-Type header',
+        },
       }, 415);
     }
 
@@ -46,10 +49,13 @@ export function validateContentType(options: ContentTypeOptions = {}): Middlewar
     });
 
     if (!isAllowed) {
+      // Common error envelope: { error: { code, message } }
       return c.json({
-        error: `Unsupported Content-Type: ${baseContentType}`,
-        code: 'UNSUPPORTED_CONTENT_TYPE',
-        allowed: allowedTypes
+        error: {
+          code: 'UNSUPPORTED_CONTENT_TYPE',
+          message: `Unsupported Content-Type: ${baseContentType}`,
+        },
+        allowed: allowedTypes,
       }, 415);
     }
 

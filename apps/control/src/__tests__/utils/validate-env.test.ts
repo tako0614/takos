@@ -26,6 +26,7 @@ const fullEnv: Record<string, unknown> = {
   TENANT_BASE_DOMAIN: "test.com",
   PLATFORM_PRIVATE_KEY: "key",
   PLATFORM_PUBLIC_KEY: "key",
+  ENCRYPTION_KEY: "encryption-key",
 };
 
 function expectError(value: string | null): string {

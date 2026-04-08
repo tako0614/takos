@@ -124,11 +124,18 @@ Deno.test("InMemoryRateLimiter#middleware - returns 429 with Retry-After header 
   assert(limited !== undefined);
   assertEquals(limited.status, 429);
   const limitedBody = limited.body as unknown as {
-    error: string;
-    retryAfter: number;
+    error: {
+      code: string;
+      message: string;
+      details?: { retryAfter?: number };
+    };
   };
-  assert(limitedBody.error !== undefined);
-  assert(limitedBody.retryAfter > 0);
+  // Common error envelope: { error: { code, message, details } }
+  assertEquals(limitedBody.error.code, "RATE_LIMITED");
+  assert(typeof limitedBody.error.message === "string");
+  assert(limitedBody.error.message.length > 0);
+  assert(limitedBody.error.details !== undefined);
+  assert((limitedBody.error.details?.retryAfter ?? 0) > 0);
   assert(c._resHeaders["Retry-After"] !== undefined);
   assert(Number(c._resHeaders["Retry-After"]) > 0);
 });

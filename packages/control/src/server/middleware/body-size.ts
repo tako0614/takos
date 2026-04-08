@@ -15,13 +15,18 @@ export function bodyLimit(options: BodySizeLimitOptions): MiddlewareHandler {
   const honoMiddleware = honoBodyLimit({
     maxSize,
     onError: (c) => {
+      // Match the documented common error envelope
+      // (docs/reference/api.md "エラーレスポンスの共通形式"):
+      //   { error: { code, message } }
       return c.json(
         {
-          error: message || 'Request body too large',
-          code: 'PAYLOAD_TOO_LARGE',
+          error: {
+            code: 'PAYLOAD_TOO_LARGE',
+            message: message || 'Request body too large',
+          },
           max_size: maxSize,
         },
-        413
+        413,
       );
     },
   });
