@@ -31,7 +31,6 @@ export interface StorageEnv {
   TENANT_SOURCE?: ObjectStoreBinding;
   WORKER_BUNDLES?: ObjectStoreBinding;
   TENANT_BUILDS?: ObjectStoreBinding;
-  UI_BUNDLES?: ObjectStoreBinding;
 }
 
 export interface AiEnv {
@@ -62,12 +61,22 @@ export interface AgentConfigEnv {
   MODEL_CONTEXT_WINDOWS?: string;
 }
 
-export type FetchBinding = { fetch(request: Request): Promise<Response> };
+export type FetchBinding = {
+  fetch(input: RequestInfo | URL, init?: RequestInit): Promise<Response>;
+};
 
 export interface ContainerHostEnv {
   RUNTIME_HOST?: FetchBinding;
   EXECUTOR_HOST?: FetchBinding;
   BROWSER_HOST?: FetchBinding;
+  /**
+   * Egress proxy used by the web tool (`application/tools/builtin/web.ts`) and
+   * the executor host (`runtime/container-hosts/executor-host.ts` /
+   * `executor-utils.ts`). Bound to the `takos-worker` service in production via
+   * `apps/control/wrangler.toml [[services]] binding = "TAKOS_EGRESS"`.
+   * Optional because local-platform tests substitute a passthrough fetch.
+   */
+  TAKOS_EGRESS?: FetchBinding;
 }
 
 // ---------------------------------------------------------------------------

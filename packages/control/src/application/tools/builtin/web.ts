@@ -94,9 +94,6 @@ interface DohResponse {
   Answer?: DohAnswer[];
 }
 
-interface EgressBinding {
-  fetch(input: RequestInfo | URL, init?: RequestInit): Promise<Response>;
-}
 
 async function dohResolve(hostname: string, type: 'A' | 'AAAA' | 'CNAME'): Promise<DohAnswer[]> {
   const controller = new AbortController();
@@ -265,7 +262,7 @@ export const webFetchHandler: ToolHandler = async (args, context) => {
     return 'Browser rendering via web_fetch is no longer supported. Use browser_open + browser_goto + browser_extract for JS-heavy pages instead.';
   }
 
-  const egress = (context.env as typeof context.env & { TAKOS_EGRESS?: EgressBinding }).TAKOS_EGRESS;
+  const egress = context.env.TAKOS_EGRESS;
   if (!egress) {
     throw new Error('Egress proxy not configured');
   }

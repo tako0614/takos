@@ -47,6 +47,13 @@ migrations_dir = "db/migrations"
 binding = "HOSTNAME_ROUTING"
 id = "replace-with-kv-namespace-id"
 
+# KV for rollout health check (optional — enables canary error-rate gating).
+# When unbound, advanceStage() skips health checks and proceeds unconditionally.
+# See packages/control/src/application/services/platform/rollout.ts:117-129
+[[kv_namespaces]]
+binding = "ROLLOUT_HEALTH_KV"
+id = "replace-with-rollout-health-kv-namespace-id"
+
 # Durable Objects
 [[durable_objects.bindings]]
 name = "SESSION_DO"
@@ -168,10 +175,6 @@ binding = "BROWSER"
 
 # Internal service bindings
 [[services]]
-binding = "TAKOS_DISPATCH"
-service = "takos-dispatch"
-
-[[services]]
 binding = "TAKOS_EGRESS"
 service = "takos-worker"
 
@@ -201,6 +204,10 @@ migrations_dir = "db/migrations"
 [[env.staging.kv_namespaces]]
 binding = "HOSTNAME_ROUTING"
 id = "replace-with-staging-kv-namespace-id"
+
+[[env.staging.kv_namespaces]]
+binding = "ROLLOUT_HEALTH_KV"
+id = "replace-with-staging-rollout-health-kv-namespace-id"
 
 [[env.staging.durable_objects.bindings]]
 name = "SESSION_DO"
@@ -271,10 +278,6 @@ binding = "AI"
 
 [env.staging.browser]
 binding = "BROWSER"
-
-[[env.staging.services]]
-binding = "TAKOS_DISPATCH"
-service = "takos-dispatch-staging"
 
 [[env.staging.services]]
 binding = "TAKOS_EGRESS"

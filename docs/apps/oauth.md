@@ -173,8 +173,11 @@ const response = await fetch("https://takos.example.com/oauth/token", {
 const { access_token, refresh_token, expires_in } = await response.json();
 ```
 
-::: tip
-refresh token は 1 回限り有効です。リフレッシュ時に新しい refresh token が返されるので、必ず保存してください。
+::: warning Refresh token rotation
+refresh token は **one-time use**。grace period はありません。
+リフレッシュに成功した瞬間、旧 refresh token は即座に invalidated されます。
+client は **新しい refresh token を必ず先に保存してから** 旧 token を破棄してください。
+保存前にプロセスがクラッシュすると recovery 手段は **再ログインのみ** になります。
 :::
 
 ## metadata

@@ -127,7 +127,6 @@ export type PlatformObjects = {
   tenantSource?: ObjectStoreBinding;
   workerBundles?: ObjectStoreBinding;
   tenantBuilds?: ObjectStoreBinding;
-  uiBundles?: ObjectStoreBinding;
 };
 
 export type PlatformServices = {

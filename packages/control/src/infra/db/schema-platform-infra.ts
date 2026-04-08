@@ -84,9 +84,11 @@ const serviceRuntimesTable = sqliteTable('service_runtimes', {
   createdAt: text('created_at').notNull(),
   updatedAt: text('updated_at').notNull(),
 }, (table) => ({
-  uniqAccountName: uniqueIndex('idx_service_runtimes_account_name').on(table.accountId, table.name),
-  idxBundleDeployment: index('idx_service_runtimes_bundle_deployment_id').on(table.bundleDeploymentId),
-  idxAccount: index('idx_service_runtimes_account_id').on(table.accountId),
+  // Index names match the migration 0030_service_runtimes_table.sql to avoid
+  // drizzle-kit emitting spurious rename migrations.
+  uniqAccountName: uniqueIndex('service_runtimes_account_id_name_key').on(table.accountId, table.name),
+  idxBundleDeployment: index('service_runtimes_bundle_deployment_id_idx').on(table.bundleDeploymentId),
+  idxAccount: index('service_runtimes_account_id_idx').on(table.accountId),
 }));
 
 export const serviceRuntimes = serviceRuntimesTable;

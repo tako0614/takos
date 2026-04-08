@@ -27,6 +27,20 @@ Authorization: Bearer <access_token>
 `<access_token>` には PAT（`tak_pat_...`）か OAuth
 トークン（`tak_oat_...`）を指定する。
 
+::: tip Session cookie 仕様
+- name: `takos_session`
+- attributes: `HttpOnly`、`Secure`、`SameSite=Lax`
+- domain: parent domain (`.{ADMIN_DOMAIN}` or 該当 tenant base) で scope (subdomain 共有)
+- expiry: **30 日 sliding** (リクエストごとに延長)
+:::
+
+::: tip App token 仕様
+- 形式: JWT (RS256 署名、`/.well-known/jwks.json` で公開)
+- claims: `iss="takos-kernel"` / `aud="takos-app"` / `sub="group:{groupName}"` / `scope` / `iat` / `exp`
+- 有効期間: **24 時間** (deploy ごとに自動更新)
+- 発行条件: `app.yml` の `scopes` 配列が宣言されているときのみ
+:::
+
 ## エラーレスポンスの共通形式
 
 すべての API エンドポイントは、エラー発生時に以下の共通形式で返す:
@@ -430,6 +444,10 @@ MCP (Model Context Protocol) サーバー管理。
 ::: warning `token`
 フィールドは作成時のレスポンスにのみ含まれる。再取得はできない。 :::
 
+::: tip Scope wildcard
+`scopes: "*"` を指定すると、issuance 時点の **全 scope** を expand して付与する。新しく追加された scope は自動 grant されない (再発行が必要)。
+:::
+
 ---
 
 ## spaces
@@ -572,6 +590,21 @@ space の CRUD・モデル設定・エクスポート。
 | POST   | `/api/spaces/:spaceId/storage/bulk-move`     | 一括移動               |
 | POST   | `/api/spaces/:spaceId/storage/bulk-rename`   | 一括リネーム           |
 
+::: tip MIME type detection
+ファイル作成時の `mimeType` field は client が指定可能。未指定なら kernel が
+**ファイル名拡張子から推定** する (`.md` → `text/markdown`、`.png` → `image/png` 等)。
+推定失敗時は `application/octet-stream` を fallback として保存。
+保存後の content sniffing は行われません (client が誤った MIME を渡せばそのまま記録される)。
+:::
+
+::: warning Move / rename atomicity
+`PATCH /storage/:fileId` と `bulk-move` / `bulk-rename` は **per-file atomic** です:
+- 各 file の rename / parent folder 変更は単一 DB transaction で実行
+- ただし bulk operation 全体は **non-atomic**: 中間で失敗しても部分的な成功が残る
+- 競合 (同名 destination 存在) は per-file で `CONFLICT (409)` を返し、残りの items は処理を継続
+- response body に成功/失敗を per-item で含む
+:::
+
 ---
 
 ## spaces.common-env
@@ -660,6 +693,14 @@ registry と repository import の管理 surface。kernel
 | GET    | `/api/spaces/:spaceId/store-registry/updates`                      | サブスクリプション更新確認                              |
 | POST   | `/api/spaces/:spaceId/store-registry/updates/mark-seen`            | 更新を既読にする                                        |
 | POST   | `/api/spaces/:spaceId/store-registry/:entryId/poll`                | 手動ポーリング _(owner/admin)_                          |
+
+::: tip Subscription model
+Store registry の subscription は **pull-based** です。
+- リモートストア追加時 + `refresh` 呼び出し時に metadata を fetch (ActivityPub actor + outbox)
+- 自動 polling は **行われません**。space owner が `/refresh` または `/poll` を叩くか、catalog app の cron で更新を取得する設計
+- `updates` endpoint は last `mark-seen` 以降に追加された Add activity の差分を返す
+- `import-repository` は inventory の repository entry を Local DB に複製 (mirror) する
+:::
 
 ---
 
@@ -1902,6 +1943,11 @@ OAuth 2.0 サーバーエンドポイント。詳しいフローは
 | GET    | `/oauth/userinfo`           | OpenID Connect UserInfo                                                                      |
 | POST   | `/oauth/register`           | 動的クライアント登録                                                                         |
 | GET    | `/oauth/register/:clientId` | クライアント登録情報取得                                                                     |
+
+::: tip Audience claim validation
+OAuth access token (`tak_oat_...`) の `aud` claim は issuance 時に **`client_id`** を埋め込みます。
+validation 側 (introspect / API auth middleware) では legacy compatibility のため `client_id` / `issuer` / `${issuer}/api` のいずれかを accept する fallback がある。
+:::
 
 ### auth (server-side)
 

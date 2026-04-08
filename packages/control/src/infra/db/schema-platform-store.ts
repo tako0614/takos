@@ -48,6 +48,13 @@ export const repoGrants = sqliteTable('repo_grants', {
 }));
 
 // 120. StoreInventoryItems — explicit inventory registration + outbox activity log
+//
+// NOTE: migration 0042_store_inventory.sql also creates a partial unique index
+// `idx_store_inventory_unique_active ON (account_id, store_slug, repo_actor_url)
+// WHERE is_active = 1` that drizzle-kit cannot represent. Application-level
+// duplicate detection lives in store-inventory.ts addToInventory(); the partial
+// unique index is the DB-side safety net. Do NOT run `drizzle-kit push` against
+// this table without first reapplying the partial index by hand.
 export const storeInventoryItems = sqliteTable('store_inventory_items', {
   id: text('id').primaryKey(),
   storeSlug: text('store_slug').notNull(),

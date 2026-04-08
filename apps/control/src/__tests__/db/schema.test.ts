@@ -1135,7 +1135,8 @@ Deno.test("schema-platform - infraEndpoints table - has unique index on account+
 
 Deno.test("schema-platform - serviceRuntimes table - has unique index on account+name", () => {
   const uniq = uniqueIndexNames(serviceRuntimes);
-  assertHasEntry(uniq, "idx_service_runtimes_account_name");
+  // Index name matches migration 0030_service_runtimes_table.sql
+  assertHasEntry(uniq, "service_runtimes_account_id_name_key");
 });
 
 Deno.test("schema-platform - infraEndpointRoutes table - has composite primary key on endpointId+position", () => {
