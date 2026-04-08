@@ -28,10 +28,10 @@ Authorization: Bearer <access_token>
 トークン（`tak_oat_...`）を指定する。
 
 ::: tip Session cookie 仕様
-- name: `takos_session`
-- attributes: `HttpOnly`、`Secure`、`SameSite=Lax`
-- domain: parent domain (`.{ADMIN_DOMAIN}` or 該当 tenant base) で scope (subdomain 共有)
-- expiry: **30 日 sliding** (リクエストごとに延長)
+- name: **`__Host-tp_session`** (`__Host-` prefix は Domain attribute を禁止し、Path=/ + Secure を強制する仕様)
+- attributes: `Path=/`、`Secure`、`HttpOnly`、`SameSite=Strict`
+- domain: なし (host-only cookie。subdomain には流れない)
+- expiry: **7 日 fixed** (`Max-Age=604800`、自動延長なし。期限切れ時は再ログインが必要)
 :::
 
 ::: tip App token 仕様
@@ -56,16 +56,29 @@ Authorization: Bearer <access_token>
 
 主要なエラーコード:
 
-| code             | HTTP status | 意味                   |
-| ---------------- | ----------- | ---------------------- |
-| `BAD_REQUEST`    | 400         | リクエストが不正       |
-| `UNAUTHORIZED`   | 401         | 認証が必要             |
-| `FORBIDDEN`      | 403         | 権限が不足             |
-| `NOT_FOUND`      | 404         | リソースが見つからない |
-| `CONFLICT`       | 409         | 競合が発生             |
-| `GONE`           | 410         | リソースが期限切れ     |
-| `RATE_LIMITED`   | 429         | レート制限に到達       |
-| `INTERNAL_ERROR` | 500         | サーバー内部エラー     |
+| code                     | HTTP status | 意味                                          |
+| ------------------------ | ----------- | --------------------------------------------- |
+| `BAD_REQUEST`            | 400         | リクエストが不正                              |
+| `VALIDATION_ERROR`       | 400         | request body / params が schema に違反        |
+| `UNAUTHORIZED`           | 401         | 認証が必要                                    |
+| `FORBIDDEN`              | 403         | 権限が不足                                    |
+| `NOT_FOUND`              | 404         | リソースが見つからない                        |
+| `CONFLICT`               | 409         | 競合が発生                                    |
+| `GONE`                   | 410         | リソースが期限切れ                            |
+| `PAYMENT_REQUIRED`       | 402         | 課金 quota / plan 制限に到達                  |
+| `PAYLOAD_TOO_LARGE`      | 413         | request body が max_size を超過               |
+| `MISSING_CONTENT_TYPE`   | 415         | POST / PUT / PATCH で Content-Type header 無し |
+| `UNSUPPORTED_CONTENT_TYPE` | 415       | Content-Type が allowlist 外                  |
+| `RATE_LIMITED`           | 429         | レート制限に到達                              |
+| `INTERNAL_ERROR`         | 500         | サーバー内部エラー                            |
+| `NOT_IMPLEMENTED`        | 501         | 機能が未実装                                  |
+| `BAD_GATEWAY`            | 502         | 上流サービスから不正な応答                    |
+| `SERVICE_UNAVAILABLE`    | 503         | サービスが一時的に利用不可                    |
+| `GATEWAY_TIMEOUT`        | 504         | 上流サービスがタイムアウト                    |
+
+::: tip OAuth endpoints
+`/oauth/*` endpoints は RFC 6749/6750 準拠の error format を使用 (`{ error: "invalid_token", error_description: "..." }`)。これは仕様上意図的に common envelope と異なります。
+:::
 
 ## Rate limit
 
@@ -82,7 +95,7 @@ Authorization: Bearer <access_token>
 | `oauth.deviceCode` | 10 | Device Authorization Grant `/device/code` |
 | `oauth.deviceVerify` | 60 | Device verification UI |
 
-レート制限到達時は HTTP `429` を返し、`error.code: "RATE_LIMITED"`。response header に `X-RateLimit-Limit`, `X-RateLimit-Remaining`, `X-RateLimit-Reset` を付与する。
+レート制限到達時は HTTP `429` を返し、`error.code: "RATE_LIMITED"` + `error.details.retryAfter` (秒)。response header に `X-RateLimit-Limit`, `X-RateLimit-Remaining`, `X-RateLimit-Reset`, `Retry-After` を付与する。
 
 deploy 系 / billing meter 系の usage 制限は plan gate で別途 enforce される ([billing](/platform/billing) 参照)。
 

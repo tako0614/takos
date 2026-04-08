@@ -45,9 +45,12 @@ Deno.test("billingGate - fails closed with 503 when quota check throws", async (
     );
 
     assertEquals(res.status, 503);
+    // Common error envelope: { error: { code, message } }
     await assertEquals(await res.json(), {
-      error: "Billing unavailable",
-      code: "SERVICE_UNAVAILABLE",
+      error: {
+        code: "SERVICE_UNAVAILABLE",
+        message: "Billing unavailable",
+      },
     });
   } finally {
     Object.assign(billingMiddlewareDeps, originalBillingDeps);

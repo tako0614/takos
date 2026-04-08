@@ -278,6 +278,9 @@ wrangler secret put GOOGLE_CLIENT_SECRET
 wrangler secret put PLATFORM_PRIVATE_KEY
 wrangler secret put PLATFORM_PUBLIC_KEY
 
+# Common-env 暗号化鍵 (32 byte base64) — 起動時 required
+wrangler secret put ENCRYPTION_KEY
+
 # Cloudflare API トークン（Worker 管理用）
 wrangler secret put CF_API_TOKEN
 ```

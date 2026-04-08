@@ -8,7 +8,7 @@
 import { validator } from 'hono/validator';
 import type { ValidationTargets } from 'hono';
 import type { z } from 'zod';
-import { ValidationError } from 'takos-common/errors';
+import { ValidationError, type ValidationErrorDetail } from 'takos-common/errors';
 
 export function zValidator<T extends z.ZodTypeAny, Target extends keyof ValidationTargets>(
   target: Target,
@@ -17,7 +17,13 @@ export function zValidator<T extends z.ZodTypeAny, Target extends keyof Validati
   return validator(target, (value, _c) => {
     const result = schema.safeParse(value);
     if (!result.success) {
-      throw new ValidationError('Validation error');
+      // Surface field-level details so clients can show per-field errors.
+      // The global error handler serializes these as `error.details.fields`.
+      const fieldErrors: ValidationErrorDetail[] = result.error.issues.map((issue) => ({
+        field: issue.path.join('.'),
+        message: issue.message,
+      }));
+      throw new ValidationError('Request validation failed', fieldErrors);
     }
     return result.data as z.infer<T>;
   });

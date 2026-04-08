@@ -310,13 +310,21 @@ export class InMemoryRateLimiter {
       c.header('X-RateLimit-Reset', String(Math.ceil(info.reset / MS_PER_SECOND)));
 
       if (info.remaining <= 0) {
-        c.header('Retry-After', String(Math.ceil((info.reset - Date.now()) / MS_PER_SECOND)));
+        const retryAfter = Math.ceil((info.reset - Date.now()) / MS_PER_SECOND);
+        c.header('Retry-After', String(retryAfter));
+        // Match the documented common error envelope (docs/reference/api.md):
+        // { error: { code: "RATE_LIMITED", message: "..." } }.
+        // Retry-After is conveyed via the header and via error.details.retryAfter
+        // for clients that prefer body parsing.
         return c.json(
           {
-            error: this.config.message,
-            retryAfter: Math.ceil((info.reset - Date.now()) / MS_PER_SECOND),
+            error: {
+              code: 'RATE_LIMITED',
+              message: this.config.message,
+              details: { retryAfter },
+            },
           },
-          429
+          429,
         );
       }
 
