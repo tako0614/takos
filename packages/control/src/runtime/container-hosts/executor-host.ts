@@ -422,6 +422,24 @@ export default {
         if (forwarded) return forwarded;
       }
 
+      // -----------------------------------------------------------------
+      // Reserved bindings family (/proxy/{db,offload,git-objects,do,
+      // vectorize,ai,egress,runtime,browser,queue}/*).
+      //
+      // RESERVED: these endpoints all require the `bindings` capability
+      // (see `getRequiredProxyCapability` in executor-auth.ts), but no
+      // dispatch path currently issues a token with that capability — the
+      // only capability generated at dispatch time is `control` (see
+      // `executor-host.ts createExecutorContainerClass.dispatchStart`).
+      //
+      // They are kept as a reserved extension surface for a future "container
+      // has direct binding access" execution mode. Any request will fail the
+      // capability check at line 407 above and return 401 Unauthorized.
+      //
+      // Round 11 audit — Container Hosts finding #2 (dead /proxy/* family).
+      // See docs/architecture/container-hosts.md "Reserved bindings family".
+      // -----------------------------------------------------------------
+
       // DB proxy endpoints
       if (path.startsWith("/proxy/db/")) {
         return handleDbProxy(path, body, env);

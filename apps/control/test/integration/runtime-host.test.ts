@@ -142,7 +142,10 @@ Deno.test("runtime-host proxies /forward/cli-proxy requests to takos-web via ser
   const proxiedRequest = takosWebFetch.calls[0]?.args[0];
   assert(proxiedRequest instanceof Request);
   assertEquals(proxiedRequest.url, "https://takos-web/api/repos/repo-1/status");
-  assertEquals(proxiedRequest.headers.get("X-Takos-Internal"), "1");
+  // The marker header distinguishes this call from the unrelated
+  // `X-Takos-Internal` shared-secret consumed by executor-proxy-api.ts.
+  assertEquals(proxiedRequest.headers.get("X-Takos-Internal-Marker"), "1");
+  assertEquals(proxiedRequest.headers.get("X-Takos-Internal"), null);
   assertEquals(
     proxiedRequest.headers.get("X-Takos-Session-Id"),
     "session-id-1234567890",
@@ -189,7 +192,8 @@ Deno.test("runtime-host proxies /forward/heartbeat requests to takos-web via ser
     proxiedRequest.url,
     "https://takos-web/api/sessions/session-id-1234567890/heartbeat",
   );
-  assertEquals(proxiedRequest.headers.get("X-Takos-Internal"), "1");
+  assertEquals(proxiedRequest.headers.get("X-Takos-Internal-Marker"), "1");
+  assertEquals(proxiedRequest.headers.get("X-Takos-Internal"), null);
   assertEquals(
     proxiedRequest.headers.get("X-Takos-Session-Id"),
     "session-id-1234567890",

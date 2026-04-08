@@ -45,6 +45,52 @@ interface BrowserHostEnv {
 type Env = BrowserHostEnv;
 
 // ---------------------------------------------------------------------------
+// Per-space concurrent-session cap
+// ---------------------------------------------------------------------------
+
+/**
+ * Maximum number of concurrent browser sessions allowed per space.
+ *
+ * Enforced by `createSession` via a counter Durable Object (see
+ * `getSpaceCounterStub`). A conservative limit that prevents a single space
+ * from monopolising container capacity while remaining permissive enough for
+ * the typical multi-tab agent workflow.
+ *
+ * Round 11 MEDIUM #12: per-space concurrent browser session cap.
+ */
+export const MAX_BROWSER_SESSIONS_PER_SPACE = 5;
+
+/**
+ * Special DO name prefix used to distinguish counter-only instances from
+ * per-session container instances. Counter instances only touch `ctx.storage`
+ * and never call `startAndWaitForPorts`, so no container boots for them.
+ */
+const SPACE_COUNTER_PREFIX = "space-counter:";
+
+function getSpaceCounterStub(
+  env: Env,
+  spaceId: string,
+): (DurableObjectStub & BrowserSessionContainer) | null {
+  // In unit tests the env.BROWSER_CONTAINER stub may not implement
+  // `idFromName` (see apps/control/src/__tests__/container-hosts/
+  // browser-session-host.test.ts `createContainerInstance`). When the
+  // namespace is not a real Cloudflare DO namespace we return null and let
+  // the caller skip the per-space cap check — the cap only guards production
+  // traffic, and the stub path is exercised by tests that do not care about
+  // cross-space counting.
+  const ns = env.BROWSER_CONTAINER as unknown as
+    | { idFromName?: (name: string) => unknown; get?: (id: unknown) => unknown }
+    | undefined;
+  if (!ns || typeof ns.idFromName !== 'function' || typeof ns.get !== 'function') {
+    return null;
+  }
+  const id = ns.idFromName(`${SPACE_COUNTER_PREFIX}${spaceId}`);
+  return ns.get(id) as unknown as
+    & DurableObjectStub
+    & BrowserSessionContainer;
+}
+
+// ---------------------------------------------------------------------------
 // Container TCP port fetcher type (internal CF Containers API)
 // ---------------------------------------------------------------------------
 
@@ -62,6 +108,12 @@ export class BrowserSessionContainer extends HostContainerRuntime<Env> {
 
   /**
    * Create a browser session: generate token, start container, bootstrap browser.
+   *
+   * Per-space concurrency cap: before starting the container, reserves a slot
+   * on the space counter DO. If the space already has
+   * `MAX_BROWSER_SESSIONS_PER_SPACE` active sessions, throws an error that the
+   * edge route converts to a 429. If container bootstrap fails after the slot
+   * is reserved, the slot is released to avoid leaking capacity.
    */
   async createSession(
     payload: CreateSessionPayload,
@@ -93,53 +145,87 @@ export class BrowserSessionContainer extends HostContainerRuntime<Env> {
       }
     }
 
-    const proxyToken = browserSessionHostDeps.generateProxyToken();
-    const tokenInfo: BrowserSessionTokenInfo = {
-      sessionId: payload.sessionId,
-      spaceId: payload.spaceId,
-      userId: payload.userId,
-    };
-
-    // Persist token in DO storage + in-memory cache
-    const tokenMap: Record<string, BrowserSessionTokenInfo> = {
-      [proxyToken]: tokenInfo,
-    };
-    await this.ctx.storage.put("proxyTokens", tokenMap);
-    this.cachedTokens = new Map(Object.entries(tokenMap));
-
-    this.sessionState = {
-      sessionId: payload.sessionId,
-      spaceId: payload.spaceId,
-      userId: payload.userId,
-      status: "starting",
-      createdAt: new Date().toISOString(),
-    };
-
-    // Start container and wait for port 8080
-    await this.startAndWaitForPorts([8080]);
-
-    // Bootstrap the browser in the container
-    const tcpPort = (this as unknown as HostContainerInternals).container
-      .getTcpPort(8080);
-    const bootstrapResponse = await tcpPort.fetch(
-      "http://internal/internal/bootstrap",
-      new Request("http://internal/internal/bootstrap", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          url: payload.url,
-          viewport: payload.viewport,
-        }),
-      }),
-    );
-
-    if (!bootstrapResponse.ok) {
-      const errorText = await bootstrapResponse.text();
-      throw new Error(`Browser bootstrap failed: ${errorText}`);
+    // Round 11 MEDIUM #12 — per-space concurrent session cap.
+    // Reserve a slot on the space counter DO. Over-cap throws `BROWSER_SESSION_CAP`
+    // which the edge route maps to 429 + RATE_LIMITED envelope.
+    //
+    // `getSpaceCounterStub` returns null when the DO namespace stub does not
+    // implement `idFromName` (unit tests). In that path we skip the cap —
+    // tests rely on direct construction of BrowserSessionContainer and do not
+    // exercise cross-space accounting.
+    const counterStub = getSpaceCounterStub(this.env, payload.spaceId);
+    if (counterStub) {
+      const reservation = await counterStub.reserveSlot(payload.sessionId);
+      if (!reservation.ok) {
+        throw new Error(
+          `BROWSER_SESSION_CAP: Too many concurrent browser sessions for this space (limit ${MAX_BROWSER_SESSIONS_PER_SPACE}, active ${reservation.active})`,
+        );
+      }
     }
 
-    this.sessionState.status = "active";
-    return { ok: true, proxyToken };
+    let slotReleaseNeeded = counterStub !== null;
+    try {
+      const proxyToken = browserSessionHostDeps.generateProxyToken();
+      const tokenInfo: BrowserSessionTokenInfo = {
+        sessionId: payload.sessionId,
+        spaceId: payload.spaceId,
+        userId: payload.userId,
+      };
+
+      // Persist token in DO storage + in-memory cache
+      const tokenMap: Record<string, BrowserSessionTokenInfo> = {
+        [proxyToken]: tokenInfo,
+      };
+      await this.ctx.storage.put("proxyTokens", tokenMap);
+      this.cachedTokens = new Map(Object.entries(tokenMap));
+
+      this.sessionState = {
+        sessionId: payload.sessionId,
+        spaceId: payload.spaceId,
+        userId: payload.userId,
+        status: "starting",
+        createdAt: new Date().toISOString(),
+      };
+
+      // Start container and wait for port 8080
+      await this.startAndWaitForPorts([8080]);
+
+      // Bootstrap the browser in the container
+      const tcpPort = (this as unknown as HostContainerInternals).container
+        .getTcpPort(8080);
+      const bootstrapResponse = await tcpPort.fetch(
+        "http://internal/internal/bootstrap",
+        new Request("http://internal/internal/bootstrap", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            url: payload.url,
+            viewport: payload.viewport,
+          }),
+        }),
+      );
+
+      if (!bootstrapResponse.ok) {
+        const errorText = await bootstrapResponse.text();
+        throw new Error(`Browser bootstrap failed: ${errorText}`);
+      }
+
+      this.sessionState.status = "active";
+      slotReleaseNeeded = false;
+      return { ok: true, proxyToken };
+    } finally {
+      if (slotReleaseNeeded && counterStub) {
+        // Best-effort: release the slot so a failed bootstrap doesn't
+        // permanently consume capacity. Swallow errors — the counter DO
+        // already handles idempotent releases.
+        try {
+          await counterStub.releaseSlot(payload.sessionId);
+        } catch (_err) {
+          // ignore — over-cap slots drop out of the active set eventually
+          // when destroySession fires or when the DO is reclaimed.
+        }
+      }
+    }
   }
 
   /** RPC: verify a proxy token via constant-time comparison. */
@@ -166,12 +252,76 @@ export class BrowserSessionContainer extends HostContainerRuntime<Env> {
 
   /** RPC: destroy session — stop container and clear state. */
   async destroySession(): Promise<void> {
-    if (this.sessionState) {
-      this.sessionState.status = "stopped";
+    const sessionState = this.sessionState;
+    if (sessionState) {
+      sessionState.status = "stopped";
+      // Release the per-space slot so the space can create a new session.
+      // `getSpaceCounterStub` may return null in test mocks — skip cleanly.
+      const counterStub = getSpaceCounterStub(this.env, sessionState.spaceId);
+      if (counterStub) {
+        try {
+          await counterStub.releaseSlot(sessionState.sessionId);
+        } catch (_err) {
+          // ignore — best-effort cleanup
+        }
+      }
     }
     this.cachedTokens = null;
     await this.ctx.storage.delete("proxyTokens");
     await this.destroy();
+  }
+
+  // -------------------------------------------------------------------------
+  // Space counter RPCs
+  //
+  // When called on a DO instance named `space-counter:<spaceId>`, these
+  // methods treat the instance as a counter-only store. They never invoke
+  // `startAndWaitForPorts`, so no container is started for the counter DO.
+  // -------------------------------------------------------------------------
+
+  /**
+   * RPC: reserve a browser-session slot for a space.
+   *
+   * Returns `{ ok: true, active }` if the slot was reserved successfully.
+   * Returns `{ ok: false, active }` if the space is already at the cap.
+   * Idempotent on `sessionId` — calling twice with the same id does not
+   * double-count.
+   */
+  async reserveSlot(
+    sessionId: string,
+  ): Promise<{ ok: boolean; active: number }> {
+    const stored = await this.ctx.storage.get<string[]>("activeSessions");
+    const active = new Set(stored ?? []);
+    if (active.has(sessionId)) {
+      return { ok: true, active: active.size };
+    }
+    if (active.size >= MAX_BROWSER_SESSIONS_PER_SPACE) {
+      return { ok: false, active: active.size };
+    }
+    active.add(sessionId);
+    await this.ctx.storage.put("activeSessions", Array.from(active));
+    return { ok: true, active: active.size };
+  }
+
+  /**
+   * RPC: release a browser-session slot for a space. Idempotent.
+   */
+  async releaseSlot(sessionId: string): Promise<{ active: number }> {
+    const stored = await this.ctx.storage.get<string[]>("activeSessions");
+    const active = new Set(stored ?? []);
+    active.delete(sessionId);
+    if (active.size === 0) {
+      await this.ctx.storage.delete("activeSessions");
+    } else {
+      await this.ctx.storage.put("activeSessions", Array.from(active));
+    }
+    return { active: active.size };
+  }
+
+  /** RPC: return current active count for the space (counter DO only). */
+  async getActiveSlotCount(): Promise<number> {
+    const stored = await this.ctx.storage.get<string[]>("activeSessions");
+    return stored ? stored.length : 0;
   }
 
   /**
@@ -224,7 +374,14 @@ app.post("/create", async (c) => {
     const result = await stub.createSession(payload);
     return c.json(result, 201);
   } catch (err) {
-    return c.json({ error: getErrorMessage(err, "Unknown error") }, 500);
+    const message = getErrorMessage(err, "Unknown error");
+    // Host endpoint uses a flat error envelope (internal RPC, not public API
+    // contract). The `BROWSER_SESSION_CAP:` prefix is recognised by the edge
+    // route which translates it into a 429 + common error envelope.
+    if (message.startsWith("BROWSER_SESSION_CAP:")) {
+      return c.json({ error: message }, 429);
+    }
+    return c.json({ error: message }, 500);
   }
 });
 

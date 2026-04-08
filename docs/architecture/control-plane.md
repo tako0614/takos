@@ -72,6 +72,51 @@ worker-attached container workload は current runtime では namespace binding
 経由で worker から参照される。Cloudflare backend でも image-backed `services` /
 `containers` 自体は OCI deployment adapter で解決される。
 
+### CLI proxy loopback bypass
+
+operator の workstation にある Takos CLI から runtime-service の
+CLI-proxy endpoint (`/cli-proxy/*`) に到達するまでの traffic flow:
+
+```text
+CLI on operator workstation
+  │  ① HTTPS POST /api/cli-proxy/...
+  │     Authorization: Bearer <PAT>
+  ▼
+takos (main worker)
+  │  ② PAT 認証 + session lookup
+  │  ③ env.RUNTIME_HOST.fetch(...)  (service binding)
+  ▼
+takos-runtime-host worker
+  │  ④ proxy token 検証 → /forward/cli-proxy/* を
+  │     container loopback 経由で呼び出す
+  ▼
+takos-runtime-service (container, 127.0.0.1)
+  │  ⑤ X-Forwarded-For が loopback であることを確認
+  │  ⑥ allowlist path (`/api/repos/:id/(import|export|status|log|commit)`)
+  │     のみ forward を許可
+  ▼
+実 git/repo 処理
+```
+
+- ① → ②: kernel 側の `/api/cli-proxy/*` route が PAT を検証 (`tak_pat_*`
+  prefix + DB lookup)
+- ②: container mode では (3) のように service binding 経由で runtime-host を
+  呼ぶ。通常の direct HTTP mode ではここで kernel が直接 runtime-service を
+  叩く (loopback bypass は使わない)
+- ③ → ④: `RUNTIME_HOST` service binding は Cloudflare worker binding なので、
+  kernel → runtime-host は net hop を経由しない
+- ④: `runtime-host` は container 内の deno process に loopback で到達する
+  (CF Container DO は `127.0.0.1` を立てる)
+- ⑤ → ⑥: `X-Forwarded-For` / `X-Real-IP` が `127.0.0.1` / `::1` /
+  `::ffff:127.0.0.1` の場合に service-token JWT 不要の bypass 条件を満たす。
+  bypass 時も `X-Takos-Session-Id` は required で、session vs `X-Takos-Space-Id`
+  の照合で workspace 分離が保たれる
+- `X-Forwarded-For` の spoof 防止は **ingress 側の責務**: CF Container は
+  外部から渡された header を丸ごと渡すので、kernel / runtime-host で
+  header を strip する必要がある。bypass 経路全体の詳細は
+  [runtime-service § CLI-proxy loopback bypass](/architecture/runtime-service#cli-proxy-loopback-bypass)
+  を参照
+
 ## Dispatch Namespace
 
 tenant worker は Cloudflare backend では dispatch namespace

@@ -4,8 +4,13 @@ import { AuthenticationError } from 'takos-common/errors';
 export async function authenticateServiceRequest(
   c: SessionContext,
 ): Promise<Record<string, unknown> | null> {
-  // Internal requests from service binding (runtime-host /forward/* proxy)
-  const isInternal = c.req.header('X-Takos-Internal') === '1';
+  // Internal requests from service binding (runtime-host /forward/* proxy).
+  // Reads `X-Takos-Internal-Marker: "1"` (renamed from the legacy
+  // `X-Takos-Internal: "1"` sentinel) to avoid colliding with the unrelated
+  // `X-Takos-Internal` shared-secret header consumed by
+  // `runtime/executor-proxy-api.ts`. See Round 11 MEDIUM #11 and
+  // docs/architecture/container-hosts.md.
+  const isInternal = c.req.header('X-Takos-Internal-Marker') === '1';
   if (isInternal) {
     const sessionId = c.req.header('X-Takos-Session-Id');
     const spaceId = c.req.header('X-Takos-Space-Id');

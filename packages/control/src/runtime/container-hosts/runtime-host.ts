@@ -239,7 +239,13 @@ export default {
           new Request(`https://takos-web${apiPath}${search}`, {
             method: request.method,
             headers: {
-              "X-Takos-Internal": "1",
+              // X-Takos-Internal-Marker: sentinel that tells the edge auth
+              // middleware (`server/middleware/auth.ts`) this call originated
+              // from the runtime-host /forward/* proxy. Distinct from
+              // X-Takos-Internal, which is a shared secret consumed only by
+              // `runtime/executor-proxy-api.ts` with a constant-time compare.
+              // See Round 11 MEDIUM #11 and docs/architecture/container-hosts.md.
+              "X-Takos-Internal-Marker": "1",
               "X-Takos-Session-Id": sessionId,
               "X-Takos-Space-Id": tokenInfo.spaceId,
               "Content-Type": request.headers.get("Content-Type") ||
@@ -259,7 +265,8 @@ export default {
           new Request(`https://takos-web/api/sessions/${sessionId}/heartbeat`, {
             method: "POST",
             headers: {
-              "X-Takos-Internal": "1",
+              // See note above on /forward/cli-proxy/*.
+              "X-Takos-Internal-Marker": "1",
               "X-Takos-Session-Id": sessionId,
               "X-Takos-Space-Id": tokenInfo.spaceId,
               "Content-Type": "application/json",

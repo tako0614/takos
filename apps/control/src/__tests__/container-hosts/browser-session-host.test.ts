@@ -267,6 +267,137 @@ Deno.test("BrowserSessionContainer - destroySession - handles destroy when no se
   assertEquals(ctx.storage.delete.calls[0]?.args, ["proxyTokens"]);
 });
 
+// ---------------------------------------------------------------------------
+// Per-space concurrent session cap (Round 11 MEDIUM #12)
+// ---------------------------------------------------------------------------
+
+Deno.test("BrowserSessionContainer - reserveSlot - accepts the first session for a space", async () => {
+  const { container } = createContainerInstance();
+  const result = await container.reserveSlot("sess-a");
+  assertEquals(result, { ok: true, active: 1 });
+});
+
+Deno.test("BrowserSessionContainer - reserveSlot - is idempotent for the same sessionId", async () => {
+  const { container } = createContainerInstance();
+  const first = await container.reserveSlot("sess-a");
+  const second = await container.reserveSlot("sess-a");
+  assertEquals(first, { ok: true, active: 1 });
+  assertEquals(second, { ok: true, active: 1 });
+});
+
+Deno.test(
+  "BrowserSessionContainer - reserveSlot - rejects over the MAX_BROWSER_SESSIONS_PER_SPACE cap",
+  async () => {
+    const { container } = createContainerInstance();
+    // Max cap is 5 — fill it up.
+    for (const id of ["a", "b", "c", "d", "e"]) {
+      const r = await container.reserveSlot(`sess-${id}`);
+      assertEquals(r.ok, true);
+    }
+    const over = await container.reserveSlot("sess-f");
+    assertEquals(over, { ok: false, active: 5 });
+    // Cap did not drop the pending id.
+    const count = await container.getActiveSlotCount();
+    assertEquals(count, 5);
+  },
+);
+
+Deno.test(
+  "BrowserSessionContainer - releaseSlot - frees capacity for a new session",
+  async () => {
+    const { container } = createContainerInstance();
+    for (const id of ["a", "b", "c", "d", "e"]) {
+      await container.reserveSlot(`sess-${id}`);
+    }
+    const overBefore = await container.reserveSlot("sess-f");
+    assertEquals(overBefore.ok, false);
+    await container.releaseSlot("sess-a");
+    const afterRelease = await container.reserveSlot("sess-f");
+    assertEquals(afterRelease, { ok: true, active: 5 });
+  },
+);
+
+Deno.test("BrowserSessionContainer - releaseSlot - is idempotent for unknown ids", async () => {
+  const { container } = createContainerInstance();
+  const result = await container.releaseSlot("not-reserved");
+  assertEquals(result, { active: 0 });
+});
+
+Deno.test(
+  "BrowserSessionContainer - createSession - rejects when the per-space cap is exceeded",
+  async () => {
+    // Build a minimal counter DO plus a separate session DO. When createSession
+    // runs, it calls env.BROWSER_CONTAINER.idFromName('space-counter:...') and
+    // then env.BROWSER_CONTAINER.get(id); we route those through a shared
+    // counter instance whose storage starts full.
+    const counterCtx = makeMockCtx();
+    const counterEnv = { BROWSER_CONTAINER: {} } as any;
+    const counterContainer = new BrowserSessionContainer(counterCtx, counterEnv);
+    for (const id of ["a", "b", "c", "d", "e"]) {
+      await counterContainer.reserveSlot(`sess-${id}`);
+    }
+
+    const sessionCtx = makeMockCtx();
+    const envWithCounter: any = {
+      BROWSER_CONTAINER: {
+        idFromName: (_name: string) => ({ toString: () => "counter-id" }),
+        get: () => counterContainer,
+      },
+    };
+    const sessionContainer = new BrowserSessionContainer(
+      sessionCtx,
+      envWithCounter,
+    );
+    (sessionContainer as any).container = {
+      getTcpPort: () => makeMockTcpPortFetcher(),
+    };
+
+    await assertRejects(
+      () =>
+        sessionContainer.createSession({
+          sessionId: "sess-over",
+          spaceId: "space-1",
+          userId: "user-1",
+        }),
+      Error,
+      "BROWSER_SESSION_CAP",
+    );
+
+    // The counter should still show 5 active — the failed create did not
+    // consume an extra slot.
+    assertEquals(await counterContainer.getActiveSlotCount(), 5);
+  },
+);
+
+Deno.test(
+  "browser-session-host Worker routes - POST /create - maps cap errors to 429",
+  async () => {
+    // Wire a DO stub whose createSession throws a BROWSER_SESSION_CAP error.
+    const env = makeBrowserHostEnv({
+      createSession: spy(async () => {
+        throw new Error(
+          "BROWSER_SESSION_CAP: Too many concurrent browser sessions for this space (limit 5, active 5)",
+        );
+      }),
+    });
+    const res = await browserSessionHost.fetch(
+      new Request("http://localhost/create", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          sessionId: "sess-1",
+          spaceId: "space-1",
+          userId: "user-1",
+        }),
+      }),
+      env,
+    );
+    assertEquals(res.status, 429);
+    const body = await res.json() as { error: string };
+    assertStringIncludes(body.error, "BROWSER_SESSION_CAP");
+  },
+);
+
 Deno.test("BrowserSessionContainer - forwardToContainer - forwards a request to the internal TCP port", async () => {
   const { container, tcpPortFetcher } = createContainerInstance();
   tcpPortFetcher.fetch = spy(async (_request: Request) =>
