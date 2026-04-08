@@ -66,6 +66,33 @@ export class BrowserSessionContainer extends HostContainerRuntime<Env> {
   async createSession(
     payload: CreateSessionPayload,
   ): Promise<{ ok: true; proxyToken: string }> {
+    // Validate the URL scheme — only http/https are allowed. Block file://,
+    // javascript:, data:, etc. so a malicious caller cannot point the browser
+    // at the container's local filesystem or trigger script execution.
+    if (payload.url) {
+      let parsed: URL;
+      try {
+        parsed = new URL(payload.url);
+      } catch {
+        throw new Error('Invalid url: must be an absolute URL');
+      }
+      if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
+        throw new Error(`Invalid url scheme: ${parsed.protocol}`);
+      }
+    }
+
+    // Clamp viewport to sensible ranges so a typo or attack can't request
+    // a 1e9-pixel browser window.
+    if (payload.viewport) {
+      const { width, height } = payload.viewport;
+      if (
+        typeof width !== 'number' || !Number.isFinite(width) || width < 320 || width > 3840 ||
+        typeof height !== 'number' || !Number.isFinite(height) || height < 240 || height > 2160
+      ) {
+        throw new Error('Invalid viewport: width must be 320-3840, height must be 240-2160');
+      }
+    }
+
     const proxyToken = browserSessionHostDeps.generateProxyToken();
     const tokenInfo: BrowserSessionTokenInfo = {
       sessionId: payload.sessionId,

@@ -46,8 +46,16 @@ export default new Hono<AuthenticatedRouteEnv>()
     const name = c.req.param('name');
     const body = await parseJsonBody<{ value: string }>(c);
 
-    if (!body || !body.value) {
-      throw new BadRequestError( 'Secret value is required');
+    if (!body || typeof body.value !== 'string' || body.value.length === 0) {
+      throw new BadRequestError('Secret value is required');
+    }
+    // Cap secret value at 64 KB. The encrypted blob lives in D1 and large
+    // values silently bloat row size + encryption cost.
+    const MAX_SECRET_VALUE_BYTES = 64 * 1024;
+    if (body.value.length > MAX_SECRET_VALUE_BYTES) {
+      throw new BadRequestError(
+        `Secret value exceeds maximum length of ${MAX_SECRET_VALUE_BYTES} bytes`,
+      );
     }
 
     const repoAccess = await checkRepoAccess(c.env, repoId, user.id, ['owner', 'admin']);

@@ -47,11 +47,11 @@ export const WAIT_POLL_INTERVAL_MS = 1_000;
 /** Maximum time to wait for a "pending clear" operation to complete. */
 export const MAX_PENDING_CLEAR_WAIT_MS = 5 * 60 * 1_000;
 
-/** Executor container sleeps after this idle period. */
-export const SESSION_SLEEP_AFTER_MS = 5 * 60 * 1_000;
-
-/** Runtime host sleeps after this idle period. */
-export const RUNTIME_SLEEP_AFTER_MS = 10 * 60 * 1_000;
+// NOTE: Per-tier sleepAfter values are hardcoded as string literals on the
+// container DO classes (`runtime/container-hosts/executor-host.ts`,
+// `browser-session-host.ts`, `runtime-host.ts`). The previous numeric
+// constants here were never imported by those classes, so changing them did
+// nothing. Update the DO class properties directly when tuning idle windows.
 
 // ---------------------------------------------------------------------------
 // Stale detection
