@@ -90,7 +90,15 @@ export function buildRepoDeleteActivity(
     actor: repoActorId,
     published: createdAt,
     to: [AS_PUBLIC],
-    object: repoActorId,
+    // ActivityStreams §3.3 recommends a Tombstone object instead of a bare URL
+    // for Delete activities. Mastodon accepts both but Tombstone is the spec
+    // form and lets receivers know what type was deleted (`formerType`).
+    object: {
+      type: "Tombstone",
+      id: repoActorId,
+      formerType: "Repository",
+      deleted: createdAt,
+    },
   };
 }
 
