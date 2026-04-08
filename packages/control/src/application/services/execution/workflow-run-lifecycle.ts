@@ -209,7 +209,7 @@ export async function cancelRun(db: D1Database, runId: string): Promise<void> {
     .where(
       and(
         eq(workflowRuns.id, runId),
-        inArray(workflowRuns.status, ['queued', 'in_progress', 'waiting']),
+        inArray(workflowRuns.status, ['queued', 'in_progress']),
       )
     )
     .run();
@@ -223,7 +223,7 @@ export async function cancelRun(db: D1Database, runId: string): Promise<void> {
     .where(
       and(
         eq(workflowJobs.runId, runId),
-        inArray(workflowJobs.status, ['queued', 'in_progress', 'waiting']),
+        inArray(workflowJobs.status, ['queued', 'in_progress']),
       )
     )
     .run();

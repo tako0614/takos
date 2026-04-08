@@ -122,7 +122,11 @@ export function buildStoreSummary(store: StoreRecord): string {
 export function buildRepoActor(
   origin: string,
   repo: StoreRepositoryRecord,
-  options?: { includeContext?: boolean; omitPushUri?: boolean },
+  options?: {
+    includeContext?: boolean;
+    omitPushUri?: boolean;
+    publicKeyPem?: string;
+  },
 ): Record<string, unknown> {
   const owner = repo.ownerSlug;
   const repoActorId = buildRepoActorId(origin, owner, repo.name);
@@ -134,6 +138,9 @@ export function buildRepoActor(
     name: repo.name,
     summary: repo.description || "",
     url: baseProfileUrl,
+    // ForgeFed §3.1: Repository SHOULD point at its owning user/group via
+    // attributedTo. Mastodon/Forgejo display logic depends on this.
+    attributedTo: `${origin}/@${enc(owner)}`,
     published: repo.createdAt,
     updated: repo.updatedAt,
     inbox: `${repoActorId}/inbox`,
@@ -146,6 +153,19 @@ export function buildRepoActor(
       : undefined,
     defaultBranchHash: repo.defaultBranchHash ?? null,
   };
+
+  // Repository actors must publish a publicKey so other servers can verify
+  // signed delivery from this actor (signed `Push`/`Update`/`Delete`).
+  // Without this, signed inbound POST verification cannot resolve the key
+  // and cross-instance federation breaks. The kernel reuses
+  // PLATFORM_PUBLIC_KEY for all platform-managed actors.
+  if (options?.publicKeyPem) {
+    obj.publicKey = {
+      id: `${repoActorId}#main-key`,
+      owner: repoActorId,
+      publicKeyPem: options.publicKeyPem,
+    };
+  }
 
   if (!options?.omitPushUri) {
     obj.pushUri = [`${origin}/git/${enc(owner)}/${enc(repo.name)}.git`];

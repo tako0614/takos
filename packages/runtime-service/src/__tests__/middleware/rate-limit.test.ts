@@ -30,9 +30,13 @@ Deno.test(
         headers: { "x-rate-key": "key-2" },
       });
       assertEquals(second.status, 429);
+      // Common error envelope: { error: { code, message, details } }
       assertEquals(await second.json(), {
-        error: "Rate limiter capacity reached. Please try again later.",
-        retry_after_seconds: 60,
+        error: {
+          code: "RATE_LIMITED",
+          message: "Rate limiter capacity reached. Please try again later.",
+          details: { retryAfter: 60 },
+        },
       });
       assertEquals(second.headers.get("retry-after"), "60");
     } finally {

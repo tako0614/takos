@@ -25,7 +25,7 @@ import {
   jobManager,
   sanitizeOutputs,
 } from '../../runtime/actions/job-manager.ts';
-import { internalError } from 'takos-common/middleware/hono';
+import { badRequest, internalError, notFound } from 'takos-common/middleware/hono';
 
 const app = new Hono<RuntimeEnv>();
 
@@ -43,7 +43,7 @@ app.post('/actions/jobs/:jobId/checkout', async (c) => {
 
   try {
     const job = jobManager.jobs.get(jobId);
-    if (!job || job.status !== 'running') return c.json({ error: 'Job not found or not running' }, 404);
+    if (!job || job.status !== 'running') return notFound(c, 'Job not found or not running');
 
     const targetPath = checkoutPath
       ? resolvePathWithin(job.workspacePath, checkoutPath, 'checkout path', true)
@@ -55,7 +55,7 @@ app.post('/actions/jobs/:jobId/checkout', async (c) => {
 
     // Validate repoUrl to prevent SSRF — only allow the configured git endpoint or default
     if (repoUrl && !repoUrl.startsWith(GIT_ENDPOINT_URL)) {
-      return c.json({ error: 'Invalid repoUrl: must use the configured git endpoint' }, 400);
+      return badRequest(c, 'Invalid repoUrl: must use the configured git endpoint');
     }
     const gitUrl = repoUrl || `${GIT_ENDPOINT_URL}/${job.repoId}.git`;
     const gitRef = ref || job.ref;
@@ -69,10 +69,7 @@ app.post('/actions/jobs/:jobId/checkout', async (c) => {
 
     if (!cloneResult.success) {
       pushLog(job.logs, `Checkout failed: ${cloneResult.output}`);
-      return c.json({
-        error: 'Checkout failed',
-        output: cloneResult.output,
-      }, 500);
+      return internalError(c, 'Checkout failed', { output: cloneResult.output });
     }
 
     pushLog(job.logs, 'Checkout completed successfully');
@@ -98,11 +95,11 @@ app.post('/actions/jobs/:jobId/step/:stepNumber', async (c) => {
 
   try {
     const job = jobManager.jobs.get(jobId);
-    if (!job || job.status !== 'running') return c.json({ error: 'Job not found or not running' }, 404);
+    if (!job || job.status !== 'running') return notFound(c, 'Job not found or not running');
 
     const stepNum = parseInt(stepNumber, 10);
     if (!Number.isFinite(stepNum) || stepNum < 0) {
-      return c.json({ error: 'Invalid step number' }, 400);
+      return badRequest(c, 'Invalid step number');
     }
 
     const elapsedMs = Date.now() - job.startedAt;
@@ -113,10 +110,13 @@ app.post('/actions/jobs/:jobId/step/:stepNumber', async (c) => {
         job,
         `Job exceeded max duration (${SANDBOX_LIMITS.maxJobDuration}ms)`,
       );
+      // 408 Request Timeout — common envelope shape
       return c.json({
-        error: 'Job exceeded maximum duration',
-        elapsedMs,
-        maxDurationMs: SANDBOX_LIMITS.maxJobDuration,
+        error: {
+          code: 'GATEWAY_TIMEOUT',
+          message: 'Job exceeded maximum duration',
+          details: { elapsedMs, maxDurationMs: SANDBOX_LIMITS.maxJobDuration },
+        },
       }, 408);
     }
 
@@ -157,9 +157,7 @@ app.post('/actions/jobs/:jobId/step/:stepNumber', async (c) => {
       if (shouldBlockForSecretExposure(body.run)) {
         const reason = mightExposeSecrets(body.run);
         pushLog(job.logs, `[SECURITY] Command blocked: ${reason ?? 'may expose secrets'}`, job.secretsSanitizer);
-        return c.json({
-          error: `Command blocked for security: ${reason ?? 'may expose environment secrets'}`,
-        }, 400);
+        return badRequest(c, `Command blocked for security: ${reason ?? 'may expose environment secrets'}`);
       }
 
       pushLog(
@@ -179,7 +177,7 @@ app.post('/actions/jobs/:jobId/step/:stepNumber', async (c) => {
         timeoutMs
       );
     } else {
-      return c.json({ error: 'Step must have either "run" or "uses"' }, 400);
+      return badRequest(c, 'Step must have either "run" or "uses"');
     }
 
     const sanitizedStdout = job.secretsSanitizer.sanitize(result.stdout);
