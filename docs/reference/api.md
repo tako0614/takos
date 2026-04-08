@@ -1237,6 +1237,14 @@ space 内のファイル横断 search。filename / content / semantic の 3 mode
 | PATCH  | `/api/memories/:id`                    | メモリ更新                         |
 | DELETE | `/api/memories/:id`                    | メモリ削除                         |
 
+::: warning `type` field enum
+`type` field は schema-level enum check が無いため、application code が
+`episode` / `semantic` / `procedural` 以外を insert できます。client は
+**これら 3 値のみ** を使うこと。未知の値を insert した場合、memory graph の
+activation bundle が正しく分類されず、agent runner 側で silently 無視される
+可能性があります。
+:::
+
 ---
 
 ## reminders
@@ -1552,6 +1560,12 @@ GitHub Actions YAML の `on:` は **`push` / `pull_request` / `workflow_dispatch
 
 `PARALLEL_WORKFLOW_STEPS=1` env var で step parallel 実行 (DAG ベース) を opt-in できますが、sequential mode と semantics が一部異なる (independent step が前 step output を待たない、`continue-on-error` 伝播の差異) ため、デフォルトは sequential。
 
+`strategy.matrix`, `jobs.<id>.outputs`, `jobs.<id>.timeout-minutes`,
+`workflow.defaults` / `job.defaults`, secret masking は **未実装または部分実装**
+です。parser が受理する YAML であっても runner 側で ignore される
+field があります。詳細は `packages/actions-engine/README.md` の compatibility
+table を参照してください。
+
 </div>
 
 ---
@@ -1667,9 +1681,15 @@ GitHub Actions YAML の `on:` は **`push` / `pull_request` / `workflow_dispatch
 
 ::: tip Notification delivery model
 - **Storage**: 永続化された DB row + Durable Object 内の in-memory ring buffer
-- **Retention**: ring buffer は最新の N event を保持 (replay window)、DB row は user が `read` するまで残る
-- **Delivery guarantee**: at-most-once (best-effort)。SSE / WebSocket 接続切断中の event は ring buffer 内なら replay される
-- **Replay**: SSE 接続時に `Last-Event-ID` header をサポート (ring buffer の範囲内で replay)
+- **Retention**: `NotificationNotifierDO` の ring buffer は **最大 30 entries** を
+  保持。DB row は user が `read` するまで残る
+- **Delivery guarantee**: **at-most-once** (best-effort)。ring buffer に保存され、
+  SSE / WebSocket 接続中の client に push される。disconnect 中の通知は ring buffer
+  から evict されると失われる
+- **Replay window**: 接続再開時に直近 30 件のみ replay 可能 (`Last-Event-ID` header で
+  範囲指定)。それ以前は REST `/api/notifications` から取得する必要がある
+- **Durability**: durability が必要な通知は別途 `notification_settings` の email /
+  push 経由で送る必要がある (SSE / WS だけでは保証されない)
 :::
 
 ```bash
@@ -1842,9 +1862,16 @@ group を再生成することはありません。
 | DELETE | `/api/browser-sessions/:id`             | セッション破棄         |
 
 ::: tip Browser session lifecycle
-Browser session は外部 `BROWSER_HOST` service に delegate される。idle timeout /
-TTL / auto-close の挙動は `BROWSER_HOST` 実装に依存する。明示的に session を
-閉じるには `DELETE /api/browser-sessions/:id` を呼ぶ。
+Browser session は外部 `BROWSER_HOST` service (Cloudflare backend では
+`takos-browser-host` の `BrowserSessionContainer` Durable Object) に delegate
+される。session は作成後 idle で **5-15 分** (tier 依存) で自動 close される
+(CF Container DO の `sleepAfter` window)。
+
+明示的に close するには
+`DELETE /api/spaces/:spaceId/browser-sessions/:sessionId` を呼ぶ。
+close 後の再 attach は **不可能** — session id は revoke され、新 session を
+作成する必要がある。長時間の browser task は session の idle 延命を前提にせず、
+reconnect ではなく新 session 作成で対応すること。
 :::
 
 ---

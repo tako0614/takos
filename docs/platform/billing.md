@@ -254,7 +254,7 @@ POST /api/billing/subscribe
   → 支払い完了
   → Webhook: checkout.session.completed (purchase_kind: "plus_subscription")
   → planId を "plan_plus" に更新
-  → stripeCustomerId / stripeSubscriptionId を保存
+  → providerCustomerId / providerSubscriptionId を保存
 ```
 
 ### Free → Pay As You Go
@@ -275,6 +275,19 @@ Stripe Billing Portal でサブスクリプションをキャンセル
   → Webhook: customer.subscription.deleted
   → 残高があれば "plan_payg" に、なければ "plan_free" にダウングレード
 ```
+
+## Handled webhook events
+
+`/api/billing/webhook` で処理される Stripe event の一覧です。列挙された event 以外は
+signature 検証後に `200 OK` で ack しますが、state 更新は行いません。
+
+| event | 用途 |
+| --- | --- |
+| `checkout.session.completed` | Pro top-up クレジット付与 / Plus subscription start |
+| `invoice.paid` | Plus subscription period end の同期 |
+| `invoice.payment_failed` | `status='past_due'` に flip (dunning UI) |
+| `customer.subscription.updated` | plan change / cancel-at-period-end / status の同期 |
+| `customer.subscription.deleted` | terminal cancel → `plan_payg` or `plan_free` にダウングレード |
 
 ## API 一覧
 
