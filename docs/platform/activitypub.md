@@ -404,7 +404,23 @@ inbound activity の verification は **strict mode**:
 - keyId format: `{actor-url}#main-key`
 - signature header **必須**。欠落 or 検証失敗で 401 reject。
 
-outbound delivery は `PLATFORM_PRIVATE_KEY` env が設定されている場合に署名付きで delivery、未設定時は warning ログを残して unsigned で best-effort 配信。
+#### Replay 保護
+
+Cavage §2.1.2 と Mastodon の慣行に合わせて、inbox は以下の replay 保護を追加で行う:
+
+1. **`Date` header skew check** — `Date` が無い、parse できない、現在時刻 ±5 分を超える場合は 401 reject
+2. **Activity id dedup** — verification 後に `body.id` を bounded な in-memory set に記録 (worker instance ごと、最大 2,048 件、TTL 20 分)。同じ activity id の再 delivery は 200 を返して再処理しない (`{ duplicate: true }`)
+3. **Actor public-key cache** — `keyId` で fetch した actor document は **24 時間** in-memory にキャッシュ (worker instance ごと、最大 512 entries)。同じ remote actor からの burst で N 回 `apFetch` が走るのを防ぐ
+
+cache はすべて process-local なので CF Worker の cold start で flush される。クロスインスタンス共有が必要なら routing KV / D1 に promote すること。
+
+#### 配信側
+
+outbound delivery は `PLATFORM_PRIVATE_KEY` env が設定されている場合に署名付きで delivery、未設定時は warning ログを残して unsigned で best-effort 配信。`Repository` actor (`buildRepoActor`) も自身の `publicKey` を公開するため、他サーバーから signed delivery を受け取って verify できる。
+
+::: warning Delivery retry
+現状、`deliverToFollowers` は **one-shot `Promise.allSettled`** で、失敗時の **retry / backoff / DLQ は未実装**。配送先が一時的に down している場合 activity は失われる。kernel の cron / queue ベースの delivery queue が必要 (Round 11 audit ActivityPub finding #4)。
+:::
 
 ---
 

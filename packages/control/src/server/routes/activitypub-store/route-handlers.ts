@@ -61,6 +61,46 @@ export function withCanonicalRepo(
   };
 }
 
+// ---------------------------------------------------------------------------
+// Inbox replay protection
+// ---------------------------------------------------------------------------
+//
+// Two complementary checks: (1) reject requests whose `Date` header is more
+// than 5 minutes off our clock, matching Cavage §2.1.2; (2) record recently
+// seen activity ids in a bounded in-memory set so re-delivered identical
+// signed POSTs return 200 OK without re-processing. Cache survives only the
+// worker instance's lifetime, which is acceptable for short-window replay
+// protection (a determined attacker who waits past worker recycling will get
+// through, but the same recycle drops their signature's freshness window
+// anyway since signatures cover the `Date` header).
+
+const INBOX_DATE_SKEW_MS = 5 * 60 * 1_000;
+const INBOX_DEDUP_MAX_ENTRIES = 2_048;
+const inboxDedup = new Map<string, number>(); // activityId → expiresAt
+
+function isWithinInboxDedup(activityId: string): boolean {
+  const expires = inboxDedup.get(activityId);
+  if (!expires) return false;
+  if (expires < Date.now()) {
+    inboxDedup.delete(activityId);
+    return false;
+  }
+  return true;
+}
+
+function recordInboxDedup(activityId: string): void {
+  if (inboxDedup.size >= INBOX_DEDUP_MAX_ENTRIES) {
+    const oldestKey = inboxDedup.keys().next().value;
+    if (oldestKey !== undefined) inboxDedup.delete(oldestKey);
+  }
+  inboxDedup.set(activityId, Date.now() + INBOX_DATE_SKEW_MS * 4);
+}
+
+/** Test helper. */
+export function _resetInboxDedupForTests(): void {
+  inboxDedup.clear();
+}
+
 export async function handleInbox(
   c: ActivityPubContext,
   targetActorUrl: string,
@@ -78,6 +118,21 @@ export async function handleInbox(
 
   if (!actorUrl) {
     return c.json({ error: "actor field is required" }, 400);
+  }
+
+  // Date-skew check (replay protection step 1).
+  // The HTTP Signature spec requires a `Date` header in the signing string,
+  // so reject requests where Date is missing or more than 5 minutes off.
+  const dateHeader = c.req.header("date");
+  if (!dateHeader) {
+    return c.json({ error: "Date header is required" }, 400);
+  }
+  const requestDate = Date.parse(dateHeader);
+  if (!Number.isFinite(requestDate)) {
+    return c.json({ error: "Invalid Date header" }, 400);
+  }
+  if (Math.abs(Date.now() - requestDate) > INBOX_DATE_SKEW_MS) {
+    return c.json({ error: "Date header skew exceeds 5 minutes" }, 401);
   }
 
   const signatureHeader = c.req.header("signature");
@@ -111,6 +166,18 @@ export async function handleInbox(
 
     console.error("HTTP Signature verification error:", err);
     return c.json({ error: "Signature verification failed" }, 401);
+  }
+
+  // Replay dedup (step 2). After signature verification, dedup by activity
+  // id so a captured signed POST cannot be replayed indefinitely. Activities
+  // without an `id` field cannot be deduped — those are processed every time
+  // (which the addFollower / removeFollower paths handle idempotently).
+  const activityId = typeof body.id === "string" ? body.id : null;
+  if (activityId) {
+    if (isWithinInboxDedup(activityId)) {
+      return c.json({ duplicate: true });
+    }
+    recordInboxDedup(activityId);
   }
 
   if (type === "Follow") {
