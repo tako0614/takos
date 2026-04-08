@@ -1,6 +1,7 @@
 import { Hono } from 'hono';
 import type { Context } from 'hono';
 import { z } from 'zod';
+import { eq } from 'drizzle-orm';
 import type { R2Bucket } from '../../../shared/types/bindings.ts';
 import type { AuthenticatedRouteEnv } from '../route-auth.ts';
 import { parsePagination } from '../../../shared/utils/index.ts';
@@ -15,8 +16,12 @@ import { createEmbeddingsService } from '../../../application/services/execution
 import { generateId } from '../../../shared/utils/index.ts';
 import type { IndexJobQueueMessage } from '../../../shared/types/index.ts';
 import { INDEX_QUEUE_MESSAGE_VERSION } from '../../../shared/types/index.ts';
-import { logError } from '../../../shared/utils/logger.ts';
+import { logError, logWarn } from '../../../shared/utils/logger.ts';
 import { BadRequestError, NotFoundError, InternalError, NotImplementedError, PayloadTooLargeError, isAppError } from 'takos-common/errors';
+import { getDb } from '../../../infra/db/index.ts';
+import { accounts, repositories } from '../../../infra/db/schema.ts';
+import { recordPushActivity } from '../../../application/services/activitypub/push-activities.ts';
+import { deliverToFollowers } from '../../../application/services/activitypub/activity-delivery.ts';
 import {
   GIT_SEARCH_MAX_TOTAL_BYTES,
   GIT_SEARCH_MAX_FILE_BYTES,
@@ -266,10 +271,40 @@ const repoGitAdvanced = new Hono<AuthenticatedRouteEnv>()
       timestamp: Date.now(),
     };
     await c.env.INDEX_QUEUE.send(message);
+
+    // Round 11: record the push activity + fan out to followers as soon as
+    // the vectorize job is queued. The push-event semantics do not depend
+    // on the index job completing; the outbox entry must exist for the
+    // repo actor so ForgeFed/ActivityPub consumers see the ref advance.
+    c.executionCtx.waitUntil(
+      recordAndDeliverPushActivity(c, {
+        repoId,
+        spaceId: repoAccess.repo.space_id,
+        ref: `refs/heads/${ref.replace(/^refs\/heads\//, '')}`,
+        afterSha: resolvedCommit.resolvedCommitSha,
+        user,
+      }),
+    );
+
     return c.json({ status: 'queued', job_id: jobId, ref, tree_oid: resolvedCommit.commit.tree });
   }
 
   const result = await embeddingsService.indexRepoFiles(repoId, bucket, resolvedCommit.commit.tree);
+
+  // Round 11: push completion path — emit ForgeFed Push activity + deliver
+  // to repo actor followers. Any failure here must not crash the
+  // index response, so the side-effects run via waitUntil with internal
+  // error logging.
+  c.executionCtx.waitUntil(
+    recordAndDeliverPushActivity(c, {
+      repoId,
+      spaceId: repoAccess.repo.space_id,
+      ref: `refs/heads/${ref.replace(/^refs\/heads\//, '')}`,
+      afterSha: resolvedCommit.resolvedCommitSha,
+      user,
+    }),
+  );
+
   return c.json({
     status: 'completed',
     ref,
@@ -279,6 +314,98 @@ const repoGitAdvanced = new Hono<AuthenticatedRouteEnv>()
     errors: result.errors,
   });
   });
+
+/**
+ * Record a ForgeFed `Push` activity in the repo outbox and fan it out to
+ * the repo actor's ActivityPub followers. Used by the semantic-index
+ * completion path (Round 11 audit finding #2: `recordPushActivity` had
+ * zero callers prior to this wire-up).
+ *
+ * Returns void; caller should `waitUntil` or otherwise guard against
+ * rejection so the primary response is not blocked.
+ */
+async function recordAndDeliverPushActivity(
+  c: Context<AuthenticatedRouteEnv>,
+  input: {
+    repoId: string;
+    spaceId: string;
+    ref: string;
+    afterSha: string;
+    user: { id: string; name?: string | null };
+  },
+): Promise<void> {
+  try {
+    const record = await recordPushActivity(c.env.DB, {
+      repoId: input.repoId,
+      accountId: input.spaceId,
+      ref: input.ref,
+      beforeSha: null,
+      afterSha: input.afterSha,
+      pusherName: input.user.name ?? null,
+      pusherActorUrl: null,
+      commitCount: 0,
+      commits: [],
+    });
+
+    // Build the repo actor URL for this origin. Both owner slug and repo
+    // name must be encoded the same way as the AP routes in
+    // activitypub-store/repo-routes.ts and helpers.ts.
+    const db = getDb(c.env.DB);
+    const joined = await db.select({
+      repoName: repositories.name,
+      ownerSlug: accounts.slug,
+    })
+      .from(repositories)
+      .leftJoin(accounts, eq(accounts.id, repositories.accountId))
+      .where(eq(repositories.id, input.repoId))
+      .get();
+
+    if (!joined || !joined.ownerSlug) {
+      logWarn('recordAndDeliverPushActivity: unable to resolve repo owner', {
+        action: 'push_activity_deliver',
+        repoId: input.repoId,
+      });
+      return;
+    }
+
+    const origin = new URL(c.req.url).origin;
+    const repoActorUrl = `${origin}/ap/repos/${encodeURIComponent(joined.ownerSlug)}/${encodeURIComponent(joined.repoName)}`;
+
+    const pushActivity: Record<string, unknown> = {
+      '@context': [
+        'https://www.w3.org/ns/activitystreams',
+        'https://forgefed.org/ns',
+      ],
+      id: `${repoActorUrl}/activities/push/${encodeURIComponent(record.createdAt)}`,
+      type: 'Push',
+      actor: repoActorUrl,
+      published: record.createdAt,
+      to: ['https://www.w3.org/ns/activitystreams#Public'],
+      target: input.ref,
+      object: {
+        type: 'OrderedCollection',
+        totalItems: 0,
+        orderedItems: [],
+      },
+    };
+
+    const signingKey = c.env.PLATFORM_PRIVATE_KEY || undefined;
+    const signingKeyId = signingKey ? `${repoActorUrl}#main-key` : undefined;
+
+    await deliverToFollowers(
+      c.env.DB,
+      repoActorUrl,
+      pushActivity,
+      signingKey,
+      signingKeyId,
+    );
+  } catch (err) {
+    logError('Failed to record/deliver push activity', err, {
+      action: 'push_activity_deliver',
+      repoId: input.repoId,
+    });
+  }
+}
 
 async function handleFileHistoryRequest(c: Context<AuthenticatedRouteEnv>) {
   const user = c.get('user');

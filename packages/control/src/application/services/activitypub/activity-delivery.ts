@@ -3,28 +3,48 @@
  *
  * Fetches each follower's actor document to resolve their inbox URL,
  * then POSTs the activity JSON with optional HTTP Signature authentication.
+ *
+ * Round 11 (delivery retry queue):
+ * `deliverToFollowers` attempts each inbox once inline for fast-path
+ * latency, then persists any failed (or unresolvable) inbox into
+ * `ap_delivery_queue` via `enqueueDelivery`. The hourly cron
+ * (`tickDeliveryQueue`) replays the queue on an exponential backoff
+ * ladder until either 2xx or the DLQ threshold is reached. This closes
+ * the Round 11 audit finding that failed deliveries were silently dropped.
  */
 
 import type { D1Database } from '../../../shared/types/bindings.ts';
 import { listFollowers } from './followers.ts';
 import { apFetch } from './remote-store-client.ts';
 import { logError, logInfo, logWarn } from '../../../shared/utils/logger.ts';
+import { enqueueDelivery } from './delivery-queue.ts';
 
 const AP_CONTENT_TYPE = 'application/activity+json';
 const DELIVERY_BATCH_SIZE = 50;
 const FETCH_TIMEOUT_MS = 10_000;
+/** Delay before the first retry of a delivery that failed the immediate attempt. */
+const INITIAL_RETRY_DELAY_MS = 60_000;
 
 export interface DeliveryResult {
   delivered: number;
   failed: number;
+  /** Entries persisted into `ap_delivery_queue` for retry (failed first attempts). */
+  requeued?: number;
 }
 
 /**
  * Delivers an activity to all followers of an actor.
  * Fetches each follower's inbox URL and POSTs the activity.
  *
- * Delivery is best-effort: individual failures are logged but do not
- * cause the overall operation to throw.
+ * Delivery semantics:
+ *   1. For each follower, resolve the inbox URL and attempt one inline POST.
+ *   2. Successful inboxes increment `delivered`.
+ *   3. Failed inboxes (or unresolvable followers that had a known inbox URL)
+ *      are persisted into `ap_delivery_queue` so the hourly cron can retry
+ *      them with exponential backoff. They increment `failed` + `requeued`.
+ *
+ * Individual failures never throw; callers can rely on this function
+ * completing even when every inbox errors.
  */
 export async function deliverToFollowers(
   dbBinding: D1Database,
@@ -35,7 +55,12 @@ export async function deliverToFollowers(
 ): Promise<DeliveryResult> {
   let delivered = 0;
   let failed = 0;
+  let requeued = 0;
   let offset = 0;
+
+  const activityId = typeof activity.id === 'string' && activity.id.length > 0
+    ? activity.id
+    : `${actorUrl}#${new Date().toISOString()}`;
 
   // Paginate through all followers
   while (true) {
@@ -47,7 +72,9 @@ export async function deliverToFollowers(
     if (page.items.length === 0) break;
 
     const results = await Promise.allSettled(
-      page.items.map(async (followerActorUrl) => {
+      page.items.map(async (followerActorUrl): Promise<
+        { ok: true } | { ok: false; inboxUrl: string | null }
+      > => {
         try {
           const inboxUrl = await resolveInbox(followerActorUrl);
           if (!inboxUrl) {
@@ -55,26 +82,50 @@ export async function deliverToFollowers(
               action: 'activity_delivery',
               followerActorUrl,
             });
-            return false;
+            return { ok: false, inboxUrl: null };
           }
 
           const success = await signAndDeliver(inboxUrl, activity, signingKeyPem, keyId);
-          return success;
+          return success ? { ok: true } : { ok: false, inboxUrl };
         } catch (err) {
           logError('Failed to deliver activity to follower', err, {
             action: 'activity_delivery',
             followerActorUrl,
           });
-          return false;
+          return { ok: false, inboxUrl: null };
         }
       }),
     );
 
     for (const result of results) {
-      if (result.status === 'fulfilled' && result.value) {
+      if (result.status === 'fulfilled' && result.value.ok) {
         delivered++;
-      } else {
-        failed++;
+        continue;
+      }
+      failed++;
+
+      // Persist failed inboxes into the retry queue. Unresolvable followers
+      // (no inbox URL) cannot be retried against a specific inbox, so we
+      // skip the enqueue for those — there is nothing to POST to.
+      if (result.status === 'fulfilled' && !result.value.ok && result.value.inboxUrl) {
+        try {
+          await enqueueDelivery({
+            db: dbBinding,
+            activityId,
+            inboxUrl: result.value.inboxUrl,
+            payload: activity,
+            signingKeyId: keyId ?? null,
+            initialDelayMs: INITIAL_RETRY_DELAY_MS,
+            initialAttempts: 1,
+          });
+          requeued++;
+        } catch (enqueueErr) {
+          logError('Failed to enqueue delivery for retry', enqueueErr, {
+            action: 'activity_delivery_enqueue',
+            inboxUrl: result.value.inboxUrl,
+            activityId,
+          });
+        }
       }
     }
 
@@ -82,16 +133,17 @@ export async function deliverToFollowers(
     if (offset >= page.total) break;
   }
 
-  if (delivered > 0 || failed > 0) {
+  if (delivered > 0 || failed > 0 || requeued > 0) {
     logInfo('Activity delivery completed', {
       action: 'activity_delivery',
       actorUrl,
       delivered: String(delivered),
       failed: String(failed),
+      requeued: String(requeued),
     });
   }
 
-  return { delivered, failed };
+  return { delivered, failed, requeued };
 }
 
 /**
