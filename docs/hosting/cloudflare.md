@@ -366,7 +366,7 @@ control plane を Cloudflare にデプロイする場合に使う主要な環境
 | `CF_ACCOUNT_ID` | Cloudflare アカウント ID（CLI では `CLOUDFLARE_ACCOUNT_ID` を推奨） |
 | `CF_ZONE_ID` | DNS ゾーン ID |
 | `WFP_DISPATCH_NAMESPACE` | dispatch namespace 名 |
-| `ROUTING_DO_PHASE` | RoutingDO rollout phase（`1`-`4`、本番は `4`） |
+| `ROUTING_DO_PHASE` | RoutingDO rollout phase。詳細は下記 [Routing phases](#routing-phases) |
 | `PLATFORM_PRIVATE_KEY` / `PLATFORM_PUBLIC_KEY` | プラットフォーム署名鍵 |
 | `STRIPE_*` | Stripe 決済連携 |
 
@@ -403,6 +403,26 @@ Docker などの provider-aware adapter で解決する。
 ### Dispatch Namespace
 
 テナント Worker を論理分離する Cloudflare の仕組み。他環境では `compatible` な Takos runtime-host に直接 dispatch される。
+
+### Routing phases
+
+`ROUTING_DO_PHASE` (`packages/control/src/application/services/routing/phase.ts`)
+は hostname → service routing の data source rollout を gradual に切り替える
+ための feature flag。値は `1`-`4` のいずれかで、production は **`4`**、
+新規環境の bootstrap は `1` から始めて段階的に進める想定。
+
+| phase | 読み取り primary | 書き込み primary | 補足 |
+| --- | --- | --- | --- |
+| `1` | KV のみ | KV のみ (DO は best-effort backfill) | 旧経路。L1 cache 無し |
+| `2` | DO verify (KV と差分検出時は KV refresh) | KV + DO 並行 | DO 移行中の dual-write |
+| `3` | L1 cache → DO primary, KV は L2 cache | DO 必須 | DO が unavailable なら stale KV へ fallback |
+| `4` | phase 3 + KV TTL (`L2_KV_TTL_SECONDS`) | DO 必須 + KV expirationTtl | 通常の本番設定 |
+
+`takos-dispatch` worker (`apps/control/wrangler.dispatch.toml`) と
+control-plane worker (`apps/control/wrangler.toml`) で同じ値を設定すること。
+phase を下げる方向の rollback はサポートされる (KV/DO 双方が更新されているため)
+が、phase 1 から phase 3 以上へ jumping すると DO が空のため routing が壊れる。
+順次進めること。
 
 ### Analytics Engine
 

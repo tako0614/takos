@@ -29,7 +29,7 @@ export function isValidIndexJobQueueMessage(msg: unknown): msg is IndexJobQueueM
     typeof m.jobId === 'string' &&
     typeof m.spaceId === 'string' &&
     typeof m.type === 'string' &&
-    ['full', 'file', 'vectorize', 'info_unit', 'thread_context', 'repo_code_index', 'memory_build_paths'].includes(m.type as string) &&
+    ['vectorize', 'info_unit', 'thread_context', 'repo_code_index', 'memory_build_paths'].includes(m.type as string) &&
     typeof m.timestamp === 'number'
   );
 }

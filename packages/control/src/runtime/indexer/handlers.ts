@@ -108,6 +108,33 @@ export async function handleRepoCodeIndex(env: Env, jobId: string, body: IndexJo
   logInfo(`${TAG} Repo code index job ${jobId}: indexed=${result.indexed}, chunks=${result.chunks}, errors=${result.errors.length}`, { module: 'indexer' });
 }
 
+/**
+ * Memory graph path build job (`memory_build_paths`).
+ *
+ * Producers:
+ *   - `application/services/memory-graph/memory-graph-runtime.ts` (after agent run finalize)
+ *   - `runtime/container-hosts/executor-control-rpc.ts` (after memory finalize RPC)
+ *
+ * Intent: walk the new claims/evidence inserted during a run and materialize
+ * `memory_paths` rows so retrieval can return pre-computed activation bundles
+ * (`getPathsForClaim` consumer).
+ *
+ * Status: the build algorithm is not yet implemented. The handler ack-completes
+ * the job so the queue doesn't infinitely retry; downstream readers fall back
+ * to claim-only activation until the path builder lands.
+ */
+export async function handleMemoryBuildPaths(
+  _env: Env,
+  jobId: string,
+  spaceId: string,
+  targetId?: string,
+): Promise<void> {
+  logInfo(
+    `${TAG} memory_build_paths job ${jobId} acknowledged (path builder not yet implemented)`,
+    { module: 'indexer', detail: { spaceId, targetId } },
+  );
+}
+
 export async function handleIndexJobDlq(
   body: unknown,
   env: { DB: D1Database },

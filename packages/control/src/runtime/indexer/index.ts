@@ -14,6 +14,7 @@ import {
   handleInfoUnit,
   handleThreadContext,
   handleRepoCodeIndex,
+  handleMemoryBuildPaths,
 } from './handlers.ts';
 
 export { handleIndexJobDlq } from './handlers.ts';
@@ -82,6 +83,9 @@ export default {
             break;
           case 'repo_code_index':
             await handleRepoCodeIndex(env, jobId, body, targetId);
+            break;
+          case 'memory_build_paths':
+            await handleMemoryBuildPaths(env, jobId, spaceId, targetId);
             break;
           default:
             logWarn(`${TAG} Unknown job type: ${type}`, { module: 'indexer' });

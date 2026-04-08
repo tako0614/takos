@@ -235,7 +235,7 @@ storage:
     type: vector-index
     bind: EMBEDDINGS
     vectorIndex:
-      dimensions: 1536
+      dimensions: 768 # bge-base-en-v1.5 (kernel default)
       metric: cosine # cosine | euclidean | dot-product
   api-key:
     type: secret

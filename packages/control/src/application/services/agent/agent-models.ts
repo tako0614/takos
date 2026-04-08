@@ -41,7 +41,6 @@ export type AgentEventType =
   | 'tool_call'
   | 'tool_result'
   | 'message'
-  | 'artifact'
   | 'completed'
   | 'error'
   | 'cancelled'

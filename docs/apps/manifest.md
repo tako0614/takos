@@ -359,7 +359,7 @@ storage:
     type: vector-index
     bind: EMBEDDINGS
     vectorIndex:
-      dimensions: 1536
+      dimensions: 768 # bge-base-en-v1.5: 768 / bge-large: 1024 / openai text-embedding-3-small: 1536
       metric: cosine # cosine | euclidean | dot-product
   app-secret:
     type: secret

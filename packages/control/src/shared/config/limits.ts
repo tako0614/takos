@@ -80,8 +80,17 @@ export const THREAD_CONTEXT_MAX_CHARS = 12_000;
 /** Default embedding model used across all services (Cloudflare Workers AI). */
 export const EMBEDDING_MODEL = '@cf/baai/bge-base-en-v1.5';
 
-/** Default vector dimensions for Vectorize indexes. */
-export const VECTORIZE_DEFAULT_DIMENSIONS = 1536;
+/**
+ * Default vector dimensions for Vectorize indexes.
+ *
+ * Must match the output dimension of `EMBEDDING_MODEL`. Cloudflare's
+ * `@cf/baai/bge-base-en-v1.5` produces **768-dim** vectors, so any newly
+ * provisioned Vectorize index uses 768. If `EMBEDDING_MODEL` changes (e.g. to
+ * `bge-large` → 1024 or to OpenAI `text-embedding-3-small` → 1536), this
+ * constant must move in lockstep — otherwise insert/query will reject with a
+ * dimension-mismatch error.
+ */
+export const VECTORIZE_DEFAULT_DIMENSIONS = 768;
 
 // ---------------------------------------------------------------------------
 // Deployment

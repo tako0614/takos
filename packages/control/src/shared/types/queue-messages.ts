@@ -12,11 +12,26 @@ export interface RunQueueMessage {
   model?: string;
 }
 
+/**
+ * Index job types that can be enqueued onto INDEX_QUEUE.
+ *
+ * Note: `'full'` and `'file'` are NOT queue types — they live only on the
+ * `indexJobs` DB row created by the rebuild / per-file index endpoints, which
+ * run via `scheduleBackground` (in-process tail). They are intentionally
+ * excluded from this union so producers cannot accidentally enqueue them.
+ */
+export type IndexJobQueueType =
+  | 'vectorize'
+  | 'info_unit'
+  | 'thread_context'
+  | 'repo_code_index'
+  | 'memory_build_paths';
+
 export interface IndexJobQueueMessage {
   version: typeof INDEX_QUEUE_MESSAGE_VERSION;
   jobId: string;
   spaceId: string;
-  type: 'full' | 'file' | 'vectorize' | 'info_unit' | 'thread_context' | 'repo_code_index' | 'memory_build_paths';
+  type: IndexJobQueueType;
   targetId?: string;
   repoId?: string;
   timestamp: number;
