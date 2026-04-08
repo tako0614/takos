@@ -1,9 +1,43 @@
 # takos-actions-engine
 
-GitHub Actions-compatible CI/workflow engine for Takos. Parses YAML workflow
-definitions, validates them against Zod schemas with semantic checks, builds
-dependency graphs, plans phased execution order, and runs jobs/steps with
-matrix strategy support.
+GitHub Actions-flavored CI/workflow **parser, validator, and execution
+planner** for Takos. The package's stable, exported surface is:
+
+- `parseWorkflow(yamlString)` — YAML → `ParsedWorkflow`
+- `validateWorkflow(workflow)` — Zod schema + semantic checks (cycles,
+  duplicate ids, unknown `needs`)
+- `createExecutionPlan(workflow)` — DAG → phased execution order
+
+The in-package `JobScheduler` / `StepRunner` are present for the kernel's
+own runtime use and for tests, but they are **not exported from `index.ts`**
+and are not part of the package's stable surface.
+
+## Compatibility status
+
+The engine implements a **subset** of GitHub Actions semantics. Many fields
+are accepted by the schema but not enforced at runtime. Workflow authors
+copying real-world `.github/workflows/*.yml` files should expect the
+following gaps:
+
+| Feature | Status | Notes |
+| --- | --- | --- |
+| `jobs.<id>.steps[*].run` | supported | shell selection per step |
+| `jobs.<id>.steps[*].uses` | partial | only `actions/checkout@*` and `actions/setup-node@*` are recognised, both as **no-op stubs**. Marketplace actions throw `Unsupported action`. Pass a custom `actionResolver` via `StepRunnerOptions` for real behaviour. |
+| `jobs.<id>.needs` | supported | dependency phases |
+| `jobs.<id>.strategy.matrix` | **NOT IMPLEMENTED** | parser accepts it; runtime never expands matrix combinations. A job with `strategy.matrix.node: [16,18,20]` runs once with `context.matrix === undefined`. |
+| `jobs.<id>.timeout-minutes` | **NOT ENFORCED at job level** | step-level timeout works. The job-level value is read into the type but no setTimeout/AbortController gates it. |
+| `jobs.<id>.outputs` | **NOT EVALUATED** | `JobResult.outputs` is populated by `collectStepOutputs` (last-writer-wins flatten of all step outputs), not by evaluating the user-declared `outputs` map against `steps.*` context. |
+| `defaults.run.shell` / `working-directory` (workflow / job level) | **NOT APPLIED** | only step-level `shell` / `working-directory` are honored. |
+| `if: success()` / `failure()` / `cancelled()` / `always()` | **BROKEN** | the engine seeds `context.job.status = 'success'` once and never updates it as steps fail, so status-check functions always evaluate `success=true`, `failure=false`. Job-level `if:` also bypasses the dependency-skip logic incorrectly when these functions are used. |
+| `steps.<id>.outcome` vs `conclusion` | not differentiated | both are set to the same value, even when `continue-on-error` rewrites the conclusion. |
+| `${{ contains() }}`, `startsWith()`, arithmetic, ternary | not supported | only `success/always/failure/cancelled/format/join/toJSON/fromJSON/hashFiles` are recognised. Unknown expressions evaluate to `false`. |
+| Reusable workflows (`uses: ./.github/workflows/x.yml` at job level) | **NOT IMPLEMENTED** | `workflow_call` trigger is parsed but no resolver exists. |
+| `${{ secrets.X }}` masking in logs | **NO MASKING** | secret values are interpolated verbatim into commands and `StepResult.error`. Callers must wrap the runner in their own log sanitiser. |
+| `GITHUB_STEP_SUMMARY` | not implemented | `$GITHUB_STEP_SUMMARY` writes are dropped. |
+| Artifact upload/download | not the engine's concern | persistence is handled externally by the kernel. |
+
+If you need any of the above, supply a custom `actionResolver`,
+`shellExecutor`, or wrap the runtime invocation in your own glue code.
 
 ## Architecture
 
