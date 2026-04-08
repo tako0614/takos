@@ -1,6 +1,7 @@
 # Tenant Runtime
 
-Tenant runtime は deploy された group の workload が実際の HTTP request を処理する面。
+Tenant runtime は deploy された group の workload が実際の HTTP request
+を処理する面。
 
 ## Canonical artifact
 
@@ -15,11 +16,15 @@ worker path そのものではない。
 
 ## Container runtime
 
-`services` と `containers` はどちらも `container-image`
-artifact を持つ container-service workload だが、group の中での役割が異なる。
+`compute.<name>` の `kind="service"` (image-only) と
+`compute.<name>.containers.<sub>` の `kind="attached-container"` はどちらも
+`container-image` artifact を持つ container-service workload だが、group の中
+での役割が異なる。
 
-- `services`: standalone な long-running HTTP service
-- `containers`: worker に紐づく attached container workload
+- service (`compute.<name>` with `image`): standalone な long-running HTTP
+  service
+- attached container (`compute.<name>.containers.<sub>`): worker に紐づく
+  attached container workload
 
 共通する runtime contract:
 
@@ -37,7 +42,7 @@ container runtime は v1 では HTTP routable な service に限定される。
 ## Attached containers
 
 `containers` は worker に紐づく image-backed workload。manifest 上は
-`workers.<name>.containers` で参照する。
+`compute.<name>.containers` で参照する。
 
 ```yaml
 compute:
@@ -56,8 +61,8 @@ compute:
 
 worker 側には attached container binding が注入される。current 実装では
 DurableObjectNamespace-compatible な namespace binding として expose
-されるが、これは current runtime detail であり、Cloudflare product
-surface と 1 対 1 に固定された契約ではない。
+されるが、これは current runtime detail であり、Cloudflare product surface と 1
+対 1 に固定された契約ではない。
 
 ## Dispatch の役割
 
@@ -68,7 +73,8 @@ dispatch は次を行う。
 - hostname から group を特定する
 - hostname で kernel or group に振り分ける
   - `{KERNEL_DOMAIN}` → kernel（`/api/*`, `/auth/*`, `/settings`）
-  - `{space-slug}-{group-slug}.{TENANT_BASE_DOMAIN}` (auto) / custom slug / custom domain → group の worker
+  - `{space-slug}-{group-slug}.{TENANT_BASE_DOMAIN}` (auto) / custom slug /
+    custom domain → group の worker
 - group 内では `service-ref` または `http-url` に request を振り分ける
 - tenant request に内部ヘッダを付与する
 - control plane と tenant runtime の境界を固定する
@@ -87,8 +93,8 @@ Cloudflare では `worker-bundle` を Workers backend に載せ、tenant runtime
 
 ## Local backend
 
-local でも tenant の canonical artifact は `worker-bundle` のまま。
-local は Cloudflare account なしで tenant worker contract を検証するための backend。
+local でも tenant の canonical artifact は `worker-bundle` のまま。 local は
+Cloudflare account なしで tenant worker contract を検証するための backend。
 
 - control plane は Node-backed
 - tenant runtime は Workers-compatible adapter
@@ -101,19 +107,21 @@ AWS / GCP / k8s では public spec は変わらないが、runtime topology は
 provider-aware になる。
 
 - worker workload: runtime-host compatibility path
-- image-backed workload: `ecs` / `cloud-run` / `k8s`
-  など provider-backed container service
+- image-backed workload: `ecs` / `cloud-run` / `k8s` など provider-backed
+  container service
 - routing: Takos-managed hostname routing + provider ingress
 
 ## Routing contract
 
 tenant runtime が受ける target は dispatch が RoutingRecord から解決した結果。
 
-- `service-ref` (`routeRef`): dispatch namespace 内の worker 参照。RoutingRecord の deployments[].routeRef と同義
-- `http-url`: 外部 backend や container endpoint のための URL。RoutingRecord の endpoints[].target.baseUrl と同義
+- `service-ref` (`routeRef`): dispatch namespace 内の worker 参照。RoutingRecord
+  の deployments[].routeRef と同義
+- `http-url`: 外部 backend や container endpoint のための URL。RoutingRecord の
+  endpoints[].target.baseUrl と同義
 
-dispatch が canary weight の解決と path routing を行った後、
-tenant runtime は単一の target を受け取る。
+dispatch が canary weight の解決と path routing を行った後、 tenant runtime
+は単一の target を受け取る。
 
 ## Snapshot-based execution
 

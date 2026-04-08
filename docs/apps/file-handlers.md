@@ -19,16 +19,18 @@ publish:
 ```yaml
 publish:
   - type: FileHandler
+    name: markdown
     mimeTypes: [text/markdown]
     extensions: [.md]
     path: /files/:id
   - type: FileHandler
+    name: image
     mimeTypes: [image/png, image/jpeg, image/gif]
     extensions: [.png, .jpg, .jpeg, .gif]
     path: /viewer/:id
 ```
 
-`publish` に複数の `FileHandler` を並べればよい。
+`publish` に複数の `FileHandler` を並べればよい。同 group + 同 type の publication が複数ある場合、`name` field が **required** (これにより env 名 `TAKOS_*_*_*_URL` が一意になる)。
 
 ## フィールド
 
@@ -37,9 +39,10 @@ publication は generic object であり固定の schema はないが、`FileHan
 | field | required | 説明 |
 | --- | --- | --- |
 | `type` | yes | `FileHandler` 固定 |
-| `mimeTypes` | yes | 対応する MIME type のリスト |
-| `extensions` | yes | 対応するファイル拡張子のリスト |
+| `mimeTypes` | conditional | 対応する MIME type のリスト (`mimeTypes` または `extensions` の最低 1 つが必須) |
+| `extensions` | conditional | 対応するファイル拡張子のリスト (`mimeTypes` または `extensions` の最低 1 つが必須) |
 | `path` | yes | ファイルを開く際の path (`:id` がファイル ID に置換) |
+| `name` | conditional | 同 group + 同 type の publication が複数ある場合 required |
 
 `path` は app のルートからの相対 path。
 

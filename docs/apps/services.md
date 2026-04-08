@@ -49,12 +49,13 @@ compute:
 | --- | --- | --- | --- |
 | `image` | **yes** | string | digest-pinned image ref (`@sha256:...`) |
 | `port` | **yes** | number | listen port |
-| `dockerfile` | no | string | local build 用 Dockerfile path |
-| `provider` | no | string | OPTIONAL. 特定 backend を強制したい場合のみ指定。省略時は kernel が判断。値: `oci`, `ecs`, `cloud-run`, `k8s` |
-| `triggers` | no | object | schedules のみ |
+| `dockerfile` | no | string | local build 用 Dockerfile path (local provider only) |
+| `triggers` | no | object | `schedules` または `queues` |
 | `env` | no | object | container env |
 | `healthCheck` | no | object | ヘルスチェック |
 | `volumes` | no | object | volume mount |
+| `scaling` | no | object | `{ minInstances?, maxInstances? }` |
+| `instanceType` | no | string | provider 別 instance enum |
 | `depends` | no | array | storage / compute 名の配列 |
 
 ## deploy source の制約

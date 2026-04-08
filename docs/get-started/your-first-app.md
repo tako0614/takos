@@ -7,7 +7,8 @@
 
 - `takos-cli` がインストール済み（[Get Started](/get-started/) 参照）
 - `takos login` でログイン済み
-- Cloudflare アカウント ID と API トークンを用意
+
+Takos endpoint に `takos login` で認証していれば、追加の provider 設定は不要です。Takos kernel をセルフホストする operator 向けの設定は [Hosting / Cloudflare](/hosting/cloudflare) を参照してください。
 
 ## 1. プロジェクトを作る
 

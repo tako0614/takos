@@ -22,8 +22,8 @@ Takos は次の面を別々に管理します。
 - resource CRUD
 - access grant (`/access`)
 - token / connection info (`/tokens`, `/connection`)
-- D1 introspection / query / export
-- R2 object list / stats / delete
+- sql introspection / query / export (Cloudflare backend では D1 に解決)
+- object-store object list / stats / delete (Cloudflare backend では R2 に解決)
 - bind / unbind
 
 ### common env と bindings

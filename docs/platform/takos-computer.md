@@ -28,15 +28,17 @@ hostname は routing layer が割り当てる。
   /sandbox/mcp      → サンドボックス MCP Server endpoint
 ```
 
-### コンテナ構成
+### Workload 構成
 
-| コンテナ | worker | 用途 |
+takos-computer は flat manifest schema で以下の compute を宣言します:
+
+| compute name | kind | 用途 |
 | --- | --- | --- |
-| browser | browser-host | Playwright ブラウザインスタンス |
-| sandbox | sandbox-host | Linux サンドボックス |
+| `computer-browser` | Worker (`build` あり) | ブラウザ操作 routing。`containers.browser` で Playwright container を attach |
+| `computer-sandbox` | Service (`image` のみ) | Linux sandbox の常設 container |
 
-browser-host worker は sandbox-host サービスへのバインディングを持ち、
-ブラウザ操作からサンドボックスへの連携が可能。
+`computer-browser` Worker は `computer-sandbox` Service へ binding を持ち、
+ブラウザ操作からサンドボックスへの連携が可能です。
 
 ## Publications
 
@@ -70,6 +72,15 @@ takos-computer は永続データを持たない。
 
 | resource | manifest 上の宣言 | 用途 |
 | --- | --- | --- |
-| mcp-auth-secret | `storage.<name>.type: secret` (`generate: true`) | MCP 認証トークン (自動生成) |
-| browser | `compute.<host>.containers.browser` (Attached Container) | Playwright ブラウザ (standard-2, max 25) |
-| sandbox | `compute.<host>.containers.sandbox` (Attached Container) | Linux サンドボックス (basic, max 100) |
+| mcp-auth-secret | `storage.mcp-auth-secret.type: secret` (`generate: true`) | MCP 認証トークン (自動生成) |
+| browser | `compute.computer-browser.containers.browser` (Attached Container, kind: 'attached-container') | Playwright ブラウザ (standard-2, max 25) |
+| sandbox | `compute.computer-sandbox` (Service, kind: 'service') | Linux サンドボックス (basic, max 100) |
+
+## Scopes
+
+| scope | 用途 |
+| --- | --- |
+| `mcp:invoke` | 自身および他 group の MCP server を呼ぶ |
+| `events:subscribe` | event bus の subscribe |
+| `files:read` | kernel Storage からの artifact 読み取り |
+| `files:write` | kernel Storage への artifact 書き込み |

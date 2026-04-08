@@ -37,8 +37,8 @@ storage:
     generate: true
 
 routes:
-  - path: /mcp
-    target: web
+  - target: web
+    path: /mcp
 
 publish:
   - type: McpServer
@@ -222,7 +222,7 @@ Worker をビルドしてから、curl で MCP endpoint をテストできます
 # ビルド
 npm run build
 
-# ローカルで Worker を起動（wrangler を使う場合）
+# ローカルで Worker を起動 (Workers-compatible runtime: wrangler / workerd / miniflare のいずれか)
 npx wrangler dev dist/worker/index.js --var MCP_AUTH_TOKEN=test-token
 ```
 
