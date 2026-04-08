@@ -75,21 +75,27 @@ export function useSourceFetchActions({
     }
     try {
       setInstallingId(item.id);
+      // Backend (packages/control/src/server/routes/app-deployments.ts) expects
+      // a discriminated `source` object with a canonical Takos repository URL.
+      const repositoryUrl = `${globalThis.location.origin}/git/${item.owner.username}/${item.name}.git`;
       const response = await fetch(`/api/spaces/${effectiveSpaceId()}/app-deployments`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          repo_id: item.id,
-          ref: item.default_branch || 'main',
-          ref_type: 'branch',
+          source: {
+            kind: 'git_ref',
+            repository_url: repositoryUrl,
+            ref: item.default_branch || 'main',
+            ref_type: 'branch',
+          },
         }),
       });
-      const data = await rpcJson<{ data?: { app_deployment_id?: string } }>(response);
+      const data = await rpcJson<{ app_deployment?: { id?: string } }>(response);
       showToast('success', t('deployedItem', { name: item.name }));
 
       const installation: SourceItemInstallation = {
         installed: true,
-        app_deployment_id: data.data?.app_deployment_id || null,
+        app_deployment_id: data.app_deployment?.id ?? null,
         installed_version: item.takopack.latest_version,
         deployed_at: new Date().toISOString(),
       };

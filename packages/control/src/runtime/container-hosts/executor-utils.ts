@@ -235,6 +235,7 @@ const CONTROL_RPC_PATH_MAP: Record<string, string> = {
   '/rpc/control/run-reset': '/internal/executor-rpc/run-reset',
   '/proxy/run/reset': '/internal/executor-rpc/run-reset',
   '/rpc/control/run-context': '/internal/executor-rpc/run-context',
+  '/rpc/control/run-config': '/internal/executor-rpc/run-config',
   '/rpc/control/no-llm-complete': '/internal/executor-rpc/no-llm-complete',
   '/rpc/control/current-session': '/internal/executor-rpc/current-session',
   '/rpc/control/is-cancelled': '/internal/executor-rpc/is-cancelled',

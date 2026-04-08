@@ -42,6 +42,7 @@ import {
   handleToolExecute,
   handleToolCleanup,
   handleRunEvent,
+  handleRunConfig,
 } from './container-hosts/executor-control-rpc.ts';
 
 import { recordRunUsageBatch } from '../application/services/billing/billing.ts';
@@ -115,6 +116,11 @@ export function createExecutorProxyRouter() {
   router.post('/run-context', async (c) => {
     const body = await c.req.json();
     return handleRunContext(body, c.env as never);
+  });
+
+  router.post('/run-config', async (c) => {
+    const body = await c.req.json();
+    return handleRunConfig(body, c.env as never);
   });
 
   router.post('/no-llm-complete', async (c) => {

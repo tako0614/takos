@@ -7,8 +7,8 @@
  */
 
 import { getDb } from '../../infra/db/index.ts';
-import { type runs as _runs, runEvents } from '../../infra/db/schema.ts';
-import type { eq as _eq, and as _and } from 'drizzle-orm';
+import { type runs as _runs, runEvents, runs } from '../../infra/db/schema.ts';
+import { eq } from 'drizzle-orm';
 import { logError, logWarn } from '../../shared/utils/logger.ts';
 import { persistMessage } from '../../application/services/agent/message-persistence.ts';
 import type { AgentMessage } from '../../application/services/agent/agent-models.ts';
@@ -16,6 +16,7 @@ import {
   buildConversationHistory,
   updateRunStatusImpl,
 } from '../../application/services/agent/runner.ts';
+import { getAgentConfig } from '../../application/services/agent/runner-config.ts';
 import { buildSkillResolutionContext, resolveSkillPlanForRun } from '../../application/services/agent/skills.ts';
 import { listDetailedSkillContext, listEnabledCustomSkillContext } from '../../application/services/source/skills.ts';
 import { createToolExecutor, type ToolExecutorLike } from '../../application/tools/executor.ts';
@@ -103,6 +104,51 @@ async function cleanupRemoteToolExecutor(runId: string): Promise<void> {
 // ---------------------------------------------------------------------------
 // Handlers
 // ---------------------------------------------------------------------------
+
+/**
+ * Resolve the agent runtime config for a run.
+ *
+ * Mirrors the local-platform handler at
+ * `local-platform/executor-control-rpc.ts:localHandleRunConfig`. The rust-agent
+ * (`apps/rust-agent/src/control_rpc.rs`) calls `/rpc/control/run-config`
+ * unconditionally before each iteration to learn its system prompt, max
+ * iterations, temperature, and tool list.
+ */
+export async function handleRunConfig(body: Record<string, unknown>, env: Env): Promise<Response> {
+  const runId = typeof body.runId === 'string' ? body.runId : null;
+  const explicitAgentType = typeof body.agentType === 'string' ? body.agentType : null;
+
+  let agentType = explicitAgentType;
+  if (!agentType && runId) {
+    try {
+      const db = getDb(env.DB);
+      const run = await db.select({ agentType: runs.agentType })
+        .from(runs)
+        .where(eq(runs.id, runId))
+        .get();
+      agentType = run?.agentType ?? null;
+    } catch (e) {
+      logWarn('Failed to look up run agentType', { module: 'executor-host', detail: e });
+    }
+  }
+
+  const config = getAgentConfig(agentType ?? 'default', env as unknown as Parameters<typeof getAgentConfig>[1]);
+  return ok({
+    ...config,
+    agentType: config.type,
+    agent_type: config.type,
+    systemPrompt: config.systemPrompt,
+    system_prompt: config.systemPrompt,
+    maxIterations: config.maxIterations ?? null,
+    max_iterations: config.maxIterations ?? null,
+    max_graph_steps: config.maxIterations ?? null,
+    max_tool_rounds: config.maxIterations ?? null,
+    temperature: config.temperature ?? null,
+    rateLimit: config.rateLimit ?? null,
+    rate_limit: config.rateLimit ?? null,
+    tools: config.tools,
+  });
+}
 
 export async function handleConversationHistory(body: Record<string, unknown>, env: Env): Promise<Response> {
   const {
