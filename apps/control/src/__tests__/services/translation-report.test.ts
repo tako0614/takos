@@ -45,6 +45,12 @@ function makeDesiredState(
         spec: { type: "sql" },
         specFingerprint: "db",
       },
+      bucket: {
+        name: "bucket",
+        type: "object-store",
+        spec: { type: "object-store" },
+        specFingerprint: "bucket",
+      },
     },
     workloads: {
       api: {
@@ -83,6 +89,20 @@ Deno.test("buildTranslationReport - maps cloudflare resources and workloads to n
       semanticType: "sql",
       implementation: "d1",
       driver: "cloudflare-d1",
+      provider: "cloudflare-native",
+      status: "native",
+      resolutionMode: "cloudflare-native",
+      requirements: ["CF_ACCOUNT_ID", "CF_API_TOKEN"],
+      notes: [
+        "Takos runtime realizes this Cloudflare-native resource directly on the Cloudflare backend.",
+      ],
+    },
+    {
+      name: "bucket",
+      publicType: "object-store",
+      semanticType: "object_store",
+      implementation: "r2",
+      driver: "cloudflare-r2",
       provider: "cloudflare-native",
       status: "native",
       resolutionMode: "cloudflare-native",
@@ -152,6 +172,20 @@ Deno.test("buildTranslationReport - maps non-cloudflare resources and workloads 
         "Takos runtime on aws realizes this Cloudflare-native resource through a provider-backed adapter.",
       ],
     },
+    {
+      name: "bucket",
+      publicType: "object-store",
+      semanticType: "object_store",
+      implementation: "r2",
+      driver: "takos-object-store",
+      provider: "aws-backing-service",
+      status: "portable",
+      resolutionMode: "provider-backed",
+      requirements: [],
+      notes: [
+        "Takos runtime on aws realizes this Cloudflare-native resource through a provider-backed adapter.",
+      ],
+    },
   ]);
   assertEquals(report.workloads, [
     {
@@ -204,6 +238,18 @@ Deno.test("buildTranslationReport - marks portable resources as provider-backed 
     spec: { type: "queue" },
     specFingerprint: "jobs",
   };
+  desiredState.resources.vec = {
+    name: "vec",
+    type: "vector-index",
+    spec: { type: "vector-index" },
+    specFingerprint: "vec",
+  };
+  desiredState.resources.events = {
+    name: "events",
+    type: "analytics-engine",
+    spec: { type: "analytics-engine" },
+    specFingerprint: "events",
+  };
   desiredState.resources.flow = {
     name: "flow",
     type: "workflow",
@@ -212,6 +258,15 @@ Deno.test("buildTranslationReport - marks portable resources as provider-backed 
       workflow: { class: "Main", script: "api" },
     },
     specFingerprint: "flow",
+  };
+  desiredState.resources.counter = {
+    name: "counter",
+    type: "durable-object",
+    spec: {
+      type: "durable-object",
+      durableObject: { class: "Counter", script: "api" },
+    },
+    specFingerprint: "counter",
   };
   desiredState.resources.creds = {
     name: "creds",
@@ -238,6 +293,20 @@ Deno.test("buildTranslationReport - marks portable resources as provider-backed 
       ],
     },
     {
+      name: "bucket",
+      publicType: "object-store",
+      semanticType: "object_store",
+      implementation: "r2",
+      driver: "takos-object-store",
+      provider: "aws-backing-service",
+      status: "portable",
+      resolutionMode: "provider-backed",
+      requirements: [],
+      notes: [
+        "Takos runtime on aws realizes this Cloudflare-native resource through a provider-backed adapter.",
+      ],
+    },
+    {
       name: "jobs",
       publicType: "queue",
       semanticType: "queue",
@@ -252,11 +321,53 @@ Deno.test("buildTranslationReport - marks portable resources as provider-backed 
       ],
     },
     {
+      name: "vec",
+      publicType: "vector-index",
+      semanticType: "vector_index",
+      implementation: "vectorize",
+      driver: "takos-vector-store",
+      provider: "aws-backing-service",
+      status: "portable",
+      resolutionMode: "provider-backed",
+      requirements: ["POSTGRES_URL or DATABASE_URL", "PGVECTOR_ENABLED=true"],
+      notes: [
+        "Takos runtime on aws realizes this Cloudflare-native resource through a provider-backed adapter.",
+      ],
+    },
+    {
+      name: "events",
+      publicType: "analytics-engine",
+      semanticType: "analytics_store",
+      implementation: "analytics_engine",
+      driver: "takos-analytics-store",
+      provider: "takos-runtime",
+      status: "portable",
+      resolutionMode: "takos-runtime",
+      requirements: [],
+      notes: [
+        "Takos runtime on aws realizes this Cloudflare-native resource through the compatibility runtime.",
+      ],
+    },
+    {
       name: "flow",
       publicType: "workflow",
       semanticType: "workflow_runtime",
       implementation: "workflow_binding",
       driver: "takos-workflow-runtime",
+      provider: "takos-runtime",
+      status: "portable",
+      resolutionMode: "takos-runtime",
+      requirements: [],
+      notes: [
+        "Takos runtime on aws realizes this Cloudflare-native resource through the compatibility runtime.",
+      ],
+    },
+    {
+      name: "counter",
+      publicType: "durable-object",
+      semanticType: "durable_namespace",
+      implementation: "durable_object_namespace",
+      driver: "takos-durable-runtime",
       provider: "takos-runtime",
       status: "portable",
       resolutionMode: "takos-runtime",

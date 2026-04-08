@@ -212,11 +212,13 @@ export async function createAppDeploymentRecordForManifest(
     hostnames: string[];
     applyResult: SafeApplyResult;
     createdByAccountId: string | null;
+    snapshot?: StoredDeploymentSnapshot | null;
     rollbackOfAppDeploymentId?: string | null;
   },
 ): Promise<AppDeploymentRecord> {
   const db = getDb(env.DB);
   const now = new Date().toISOString();
+  const snapshot = input.snapshot ?? null;
   const row = {
     id: input.deploymentId,
     spaceId: input.group.spaceId,
@@ -241,10 +243,10 @@ export async function createAppDeploymentRecordForManifest(
     // build_sources_json column so the rollback / audit pipeline can read it.
     buildSourcesJson: JSON.stringify(input.artifacts),
     hostnamesJson: JSON.stringify(input.hostnames),
-    snapshotR2Key: null,
-    snapshotSha256: null,
-    snapshotSizeBytes: null,
-    snapshotFormat: null,
+    snapshotR2Key: snapshot?.r2Key ?? null,
+    snapshotSha256: snapshot?.sha256 ?? null,
+    snapshotSizeBytes: snapshot?.sizeBytes ?? null,
+    snapshotFormat: snapshot?.format ?? null,
     resultJson: JSON.stringify(input.applyResult),
     rollbackOfAppDeploymentId: input.rollbackOfAppDeploymentId ?? null,
     createdAt: now,

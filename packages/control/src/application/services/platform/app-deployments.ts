@@ -83,7 +83,8 @@ function fallbackGroupName(row: AppDeploymentRow): string {
 
 function buildTargetFromSnapshot(
   snapshot: StoredDeploymentSnapshot["payload"],
-): ResolvedGitTarget {
+): ResolvedGitTarget | null {
+  if (snapshot.source.kind !== "git_ref") return null;
   return {
     repositoryUrl: snapshot.source.repository_url,
     normalizedRepositoryUrl: repositoryUrlKey(
@@ -281,11 +282,14 @@ export class AppDeploymentService {
       providerName: parseProviderName(group.provider) ?? input.providerName ??
         null,
       envName: input.envName ?? group.env ?? null,
-      target: input.target,
+      source: {
+        kind: "git_ref",
+        target: input.target,
+        buildSources: input.buildSources,
+        packageFiles: input.packageFiles,
+      },
       manifest: input.manifest,
-      buildSources: input.buildSources,
       artifacts: input.artifacts,
-      packageFiles: input.packageFiles,
     });
     return await this.finalizeDeploymentRecord({
       deploymentId,
@@ -341,11 +345,14 @@ export class AppDeploymentService {
       groupName: fallbackGroupName(row),
       providerName: parseProviderName(group?.provider),
       envName: group?.env ?? null,
-      target: resolved.target,
+      source: {
+        kind: "git_ref",
+        target: resolved.target,
+        buildSources: resolved.buildSources,
+        packageFiles: resolved.packageFiles,
+      },
       manifest: resolved.manifest,
-      buildSources: resolved.buildSources,
       artifacts: resolved.artifacts,
-      packageFiles: resolved.packageFiles,
     });
 
     const db = getDb(this.env.DB);
@@ -439,14 +446,30 @@ export class AppDeploymentService {
     const state = await getGroupState(this.env, group.id);
     const hostnames = collectGroupHostnames(state);
     const deploymentId = generateId();
+    const manifestArtifacts = input.artifacts ?? [];
+    // Persist an immutable R2 snapshot so the deployment can later be used as
+    // a rollback target — matching the existing git_ref deploy behavior.
+    const snapshot = await this.buildSnapshot(deploymentId, {
+      groupName: group.name,
+      providerName: parseProviderName(group.provider) ?? input.providerName ??
+        null,
+      envName,
+      source: {
+        kind: "manifest",
+        manifestArtifacts,
+      },
+      manifest: input.manifest,
+      artifacts: {},
+    });
     const appDeployment = await createAppDeploymentRecordForManifest(this.env, {
       deploymentId,
       group,
       manifest: input.manifest,
-      artifacts: input.artifacts ?? [],
+      artifacts: manifestArtifacts,
       hostnames,
       applyResult,
       createdByAccountId: userId,
+      snapshot,
       rollbackOfAppDeploymentId: input.rollbackOfAppDeploymentId,
     });
     if (!hasApplyFailures(applyResult)) {
@@ -611,14 +634,74 @@ export class AppDeploymentService {
       deploymentId,
       snapshot,
     );
+
+    if (snapshot.payload.source.kind === "manifest") {
+      return await this.finalizeManifestDeploymentRecord({
+        deploymentId,
+        group,
+        snapshot: clonedSnapshot,
+        createdByAccountId: userId,
+        envName,
+        rollbackOfAppDeploymentId: current.id,
+      });
+    }
+
+    const target = buildTargetFromSnapshot(snapshot.payload);
+    if (!target) {
+      throw new ConflictError(
+        "Snapshot is missing a git_ref target and cannot be rolled back",
+      );
+    }
     return await this.finalizeDeploymentRecord({
       deploymentId,
       group,
-      target: buildTargetFromSnapshot(snapshot.payload),
+      target,
       snapshot: clonedSnapshot,
       createdByAccountId: userId,
       envName,
       rollbackOfAppDeploymentId: current.id,
     });
+  }
+
+  private async finalizeManifestDeploymentRecord(
+    input: {
+      deploymentId: string;
+      group: Awaited<ReturnType<typeof ensureTargetGroup>>;
+      snapshot: StoredDeploymentSnapshot;
+      createdByAccountId: string | null;
+      envName: string | null | undefined;
+      rollbackOfAppDeploymentId?: string | null;
+    },
+  ): Promise<AppDeploymentMutationResult> {
+    const { applyResult, hostnames } = await this.applySnapshotToGroup(
+      input.group,
+      input.snapshot,
+      input.envName,
+    );
+    const manifestArtifacts =
+      input.snapshot.payload.source.kind === "manifest"
+        ? input.snapshot.payload.source.manifest_artifacts
+        : [];
+    const appDeployment = await createAppDeploymentRecordForManifest(this.env, {
+      deploymentId: input.deploymentId,
+      group: input.group,
+      manifest: input.snapshot.payload.manifest,
+      artifacts: manifestArtifacts,
+      hostnames,
+      applyResult,
+      createdByAccountId: input.createdByAccountId,
+      snapshot: input.snapshot,
+      rollbackOfAppDeploymentId: input.rollbackOfAppDeploymentId ?? null,
+    });
+    if (!hasApplyFailures(applyResult)) {
+      await updateGroupSourceProjection(this.env, input.group.id, {
+        kind: "local_upload",
+        currentAppDeploymentId: appDeployment.id,
+      });
+    }
+    return {
+      appDeployment,
+      applyResult,
+    };
   }
 }

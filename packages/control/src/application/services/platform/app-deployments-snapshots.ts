@@ -14,6 +14,7 @@ import {
 } from "../source/app-manifest.ts";
 import type {
   DeploymentSnapshotPayload,
+  DeploymentSnapshotSource,
   ResolvedGitTarget,
   SnapshotApplyArtifact,
   StoredDeploymentSnapshot,
@@ -25,6 +26,51 @@ function getSnapshotBucket(env: Env) {
   return env.TENANT_SOURCE || env.GIT_OBJECTS || null;
 }
 
+export type BuildSnapshotGitRefSource = {
+  kind: "git_ref";
+  target: ResolvedGitTarget;
+  buildSources: AppDeploymentBuildSource[];
+  packageFiles: Map<string, ArrayBuffer | Uint8Array | string>;
+};
+
+export type BuildSnapshotManifestSource = {
+  kind: "manifest";
+  manifestArtifacts: Array<Record<string, unknown>>;
+};
+
+export type BuildSnapshotSource =
+  | BuildSnapshotGitRefSource
+  | BuildSnapshotManifestSource;
+
+function toSnapshotSource(source: BuildSnapshotSource): DeploymentSnapshotSource {
+  if (source.kind === "git_ref") {
+    return {
+      kind: "git_ref",
+      repository_url: source.target.repositoryUrl,
+      ref: source.target.ref,
+      ref_type: source.target.refType,
+      commit_sha: source.target.commitSha,
+      resolved_repo_id: source.target.resolvedRepoId,
+    };
+  }
+  return {
+    kind: "manifest",
+    manifest_artifacts: source.manifestArtifacts,
+  };
+}
+
+function buildSourcesFor(source: BuildSnapshotSource): AppDeploymentBuildSource[] {
+  return source.kind === "git_ref" ? source.buildSources : [];
+}
+
+function packageFilesFor(
+  source: BuildSnapshotSource,
+): Map<string, ArrayBuffer | Uint8Array | string> {
+  return source.kind === "git_ref"
+    ? new Map(source.packageFiles)
+    : new Map<string, ArrayBuffer | Uint8Array | string>();
+}
+
 export async function buildSnapshot(
   env: Env,
   deploymentId: string,
@@ -32,11 +78,9 @@ export async function buildSnapshot(
     groupName: string;
     providerName: "cloudflare" | "local" | "aws" | "gcp" | "k8s" | null;
     envName: string | null;
-    target: ResolvedGitTarget;
+    source: BuildSnapshotSource;
     manifest: AppManifest;
-    buildSources: AppDeploymentBuildSource[];
     artifacts: Record<string, SnapshotApplyArtifact>;
-    packageFiles: Map<string, ArrayBuffer | Uint8Array | string>;
   },
 ): Promise<StoredDeploymentSnapshot> {
   const bucket = getSnapshotBucket(env);
@@ -46,31 +90,25 @@ export async function buildSnapshot(
     );
   }
 
+  const buildSources = buildSourcesFor(input.source);
   const payload: DeploymentSnapshotPayload = {
     schema_version: SNAPSHOT_SCHEMA_VERSION,
     created_at: new Date().toISOString(),
     group_name: input.groupName,
     provider: input.providerName,
     env_name: input.envName,
-    source: {
-      kind: "git_ref" as const,
-      repository_url: input.target.repositoryUrl,
-      ref: input.target.ref,
-      ref_type: input.target.refType,
-      commit_sha: input.target.commitSha,
-      resolved_repo_id: input.target.resolvedRepoId,
-    },
+    source: toSnapshotSource(input.source),
     manifest: input.manifest,
-    build_sources: input.buildSources,
+    build_sources: buildSources,
     artifacts: input.artifacts,
   };
 
-  const files = new Map(input.packageFiles);
+  const files = packageFilesFor(input.source);
   files.set("snapshot.json", JSON.stringify(payload, null, 2));
   const bundleData = await buildBundlePackageData(
     appManifestToBundleDocs(
       input.manifest,
-      new Map(input.buildSources.map((entry) => [entry.service_name, entry])),
+      new Map(buildSources.map((entry) => [entry.service_name, entry])),
     ),
     files,
   );
@@ -123,7 +161,8 @@ export async function loadSnapshot(
   );
   if (
     !parsed || parsed.schema_version !== SNAPSHOT_SCHEMA_VERSION ||
-    parsed.source?.kind !== "git_ref" || !parsed.manifest
+    !parsed.source || !parsed.manifest ||
+    (parsed.source.kind !== "git_ref" && parsed.source.kind !== "manifest")
   ) {
     throw new ConflictError(`Snapshot payload is invalid: ${snapshotR2Key}`);
   }
