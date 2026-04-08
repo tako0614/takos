@@ -60,4 +60,27 @@ export { parseWorkflow } from './parser/workflow.ts';
 export { validateWorkflow, type ValidationResult } from './parser/validator.ts';
 
 // スケジューラー API（公開）
-export { createExecutionPlan } from './scheduler/job.ts';
+export {
+  createExecutionPlan,
+  JobScheduler,
+  type JobSchedulerEvent,
+  type JobSchedulerListener,
+  type JobSchedulerOptions,
+} from './scheduler/job.ts';
+export {
+  StepRunner,
+  type StepRunMetadata,
+  type StepRunnerOptions,
+} from './scheduler/step.ts';
+export type {
+  ShellExecutor,
+  ShellExecutorOptions,
+  ShellExecutorResult,
+} from './scheduler/step-shell-executor.ts';
+
+// コンテキストヘルパー（公開）
+export {
+  createBaseContext,
+  parseGitHubEnvFile,
+  type ContextBuilderOptions,
+} from './context.ts';

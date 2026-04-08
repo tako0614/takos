@@ -325,6 +325,11 @@ export interface StepResult {
   status: RunStatus;
   /** 最終結果 */
   conclusion?: Conclusion;
+  /**
+   * 生の実行結果（continue-on-error による書き換え前）。
+   * `steps.<id>.outcome` の評価用。
+   */
+  outcome?: Conclusion;
   /** ステップ出力 */
   outputs: Record<string, string>;
   /** 開始時刻 */

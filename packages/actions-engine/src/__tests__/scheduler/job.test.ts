@@ -138,8 +138,11 @@ Deno.test("JobScheduler fail-fast behavior - stops remaining steps after a faile
 
   const results = await scheduler.run(createBaseContext());
 
+  // 後続ステップは実行されないが、`skipped` としてステップ履歴へ記録される
   assertEquals(executedCommands, ["fail"]);
-  assertEquals(results.build.steps.length, 1);
+  assertEquals(results.build.steps.length, 2);
+  assertEquals(results.build.steps[0].conclusion, "failure");
+  assertEquals(results.build.steps[1].conclusion, "skipped");
   assertEquals(results.build.conclusion, "failure");
 });
 Deno.test("JobScheduler fail-fast behavior - continues independent jobs and skips only dependency-failed jobs when fail-fast is disabled", async () => {

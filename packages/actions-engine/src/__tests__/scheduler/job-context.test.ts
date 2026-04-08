@@ -2,6 +2,7 @@ import type { ExecutionContext, JobResult } from "../../workflow-models.ts";
 import {
   buildJobExecutionContext,
   buildNeedsContext,
+  computeInitialJobStatus,
 } from "../../scheduler/job-policy.ts";
 
 import { assert, assertEquals } from "jsr:@std/assert";
@@ -134,4 +135,34 @@ Deno.test("job-context helpers - builds job execution context with merged env an
   assertEquals(jobContext.job.status, "success");
   assertEquals(jobContext.steps, {});
   assert(jobContext.steps !== baseContext.steps);
+});
+Deno.test("computeInitialJobStatus - returns success when needs are empty", () => {
+  assertEquals(computeInitialJobStatus({}), "success");
+});
+Deno.test("computeInitialJobStatus - returns failure when any dependency failed", () => {
+  assertEquals(
+    computeInitialJobStatus({
+      setup: { outputs: {}, result: "success" },
+      build: { outputs: {}, result: "failure" },
+    }),
+    "failure",
+  );
+});
+Deno.test("computeInitialJobStatus - returns cancelled when cancelled takes precedence over success", () => {
+  assertEquals(
+    computeInitialJobStatus({
+      setup: { outputs: {}, result: "success" },
+      build: { outputs: {}, result: "cancelled" },
+    }),
+    "cancelled",
+  );
+});
+Deno.test("computeInitialJobStatus - failure beats cancelled", () => {
+  assertEquals(
+    computeInitialJobStatus({
+      setup: { outputs: {}, result: "cancelled" },
+      build: { outputs: {}, result: "failure" },
+    }),
+    "failure",
+  );
 });
