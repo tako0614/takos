@@ -154,3 +154,44 @@ Deno.test("handleWorkflowJobDlq - marks job and run as failed without a bucket",
     true,
   );
 });
+
+// Round 11 workflow #12: When a job enters the DLQ, sibling jobs that are
+// still `queued` / `in_progress` must be cancelled so the run's UI state
+// stops showing phantom "running" jobs. The handler emits an
+// `UPDATE workflow_jobs SET status = cancelled` statement with a sibling
+// filter (`run_id = ? AND id != ? AND status IN ('queued','in_progress')`),
+// plus a matching `UPDATE workflow_steps` cascade. We assert on the SQL
+// shape because the fake D1 doesn't actually persist rows.
+Deno.test("handleWorkflowJobDlq - cancels sibling jobs and pending steps when entering DLQ", async () => {
+  const { db, prepareCalls } = createFakeD1(createJobRow());
+  const env = createEnv({ DB: db, GIT_OBJECTS: undefined });
+
+  await handleWorkflowJobDlq(validMessage(), env, 5);
+
+  // Expect at least one UPDATE workflow_jobs statement that references
+  // the 'cancelled' status. Drizzle serializes set values as bound params,
+  // so we look for the keyword appearing either in the SQL or in bind args.
+  const siblingJobUpdate = prepareCalls.find((call) => {
+    const sql = call.sql.toLowerCase();
+    if (!sql.includes('update "workflow_jobs"')) return false;
+    const args = call.args.map((a) => String(a));
+    return args.includes('cancelled');
+  });
+  assertEquals(
+    siblingJobUpdate !== undefined,
+    true,
+    "expected UPDATE workflow_jobs ... set status = 'cancelled' for siblings",
+  );
+
+  const siblingStepUpdate = prepareCalls.find((call) => {
+    const sql = call.sql.toLowerCase();
+    if (!sql.includes('update "workflow_steps"')) return false;
+    const args = call.args.map((a) => String(a));
+    return args.includes('cancelled');
+  });
+  assertEquals(
+    siblingStepUpdate !== undefined,
+    true,
+    "expected UPDATE workflow_steps ... set status = 'cancelled' for siblings",
+  );
+});

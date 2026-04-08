@@ -7,6 +7,19 @@ import { Card } from '../ui/Card.tsx';
 import { Button } from '../ui/Button.tsx';
 import { Input } from '../ui/Input.tsx';
 import { useI18n } from '../../store/i18n.ts';
+import { rpc, rpcJson } from '../../lib/rpc.ts';
+
+/**
+ * Full row returned by POST /api/me/personal-access-tokens.
+ *
+ * NOTE: the `token` field is the plaintext PAT value. It is ONLY populated
+ * in the POST response — subsequent GETs only return the metadata fields
+ * defined in {@link PersonalAccessToken}. The UI captures the plaintext
+ * once for display and never persists it beyond the modal session.
+ */
+interface PersonalAccessTokenCreated extends PersonalAccessToken {
+  token: string;
+}
 
 interface OAuthTokenTabProps {
   loading: boolean;
@@ -36,8 +49,8 @@ export function OAuthTokenTab(props: OAuthTokenTabProps) {
   async function fetchTokens(): Promise<void> {
     props.onLoadingChange(true);
     try {
-      const res = await fetch('/api/me/personal-access-tokens');
-      const data = await res.json() as { tokens: PersonalAccessToken[] };
+      const res = await rpc.me['personal-access-tokens'].$get();
+      const data = await rpcJson<{ tokens: PersonalAccessToken[] }>(res);
       setTokens(data.tokens || []);
     } catch (err) {
       console.error('Failed to fetch tokens:', err);
@@ -54,20 +67,18 @@ export function OAuthTokenTab(props: OAuthTokenTabProps) {
     setCreatingToken(true);
     setTokenError(null);
     try {
-      const res = await fetch('/api/me/personal-access-tokens', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name: newTokenName().trim() }),
+      const res = await rpc.me['personal-access-tokens'].$post({
+        json: { name: newTokenName().trim() },
       });
-      if (!res.ok) {
-        setTokenError(t('failedToCreateToken'));
-        return;
-      }
-      const data = await res.json() as { token: string };
+      // The POST response includes the full record *plus* the plaintext
+      // `token` field, which only exists on creation. We surface it once
+      // via setCreatedToken and rely on fetchTokens() to refresh the list
+      // with the metadata-only rows.
+      const data = await rpcJson<PersonalAccessTokenCreated>(res);
       setCreatedToken(data.token);
       fetchTokens();
-    } catch {
-      setTokenError(t('failedToCreateToken'));
+    } catch (err) {
+      setTokenError(err instanceof Error && err.message ? err.message : t('failedToCreateToken'));
     } finally {
       setCreatingToken(false);
     }
@@ -76,7 +87,10 @@ export function OAuthTokenTab(props: OAuthTokenTabProps) {
   async function handleDeleteToken(tokenId: string): Promise<void> {
     setDeletingToken(tokenId);
     try {
-      await fetch(`/api/me/personal-access-tokens/${tokenId}`, { method: 'DELETE' });
+      const res = await rpc.me['personal-access-tokens'][':id'].$delete({
+        param: { id: tokenId },
+      });
+      await rpcJson(res);
       setTokens(prev => prev.filter(tk => tk.id !== tokenId));
     } catch (err) {
       console.error('Failed to delete token:', err);

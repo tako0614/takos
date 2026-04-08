@@ -1,5 +1,6 @@
 import { createSignal, createEffect, on, Show, For } from 'solid-js';
 import { useI18n } from '../../../store/i18n.ts';
+import { rpcJson } from '../../../lib/rpc.ts';
 
 interface ConflictFile {
   path: string;
@@ -48,8 +49,11 @@ export function ConflictResolver(props: ConflictResolverProps) {
     setLoading(true);
     setError(null);
     try {
+      // Raw fetch is used here because the `/api/repos/:repoId/pulls/:n/conflicts`
+      // route is not yet in the Hono rpc schema. `rpcJson` still gives us
+      // 401 redirect handling and consistent error envelope parsing.
       const res = await fetch(`/api/repos/${props.repoId}/pulls/${props.prNumber}/conflicts`);
-      const data: ConflictsResponse = await res.json();
+      const data = await rpcJson<ConflictsResponse>(res);
       if (data.is_mergeable) {
         setError(t('noConflictsToResolve'));
         return;
@@ -59,8 +63,8 @@ export function ConflictResolver(props: ConflictResolverProps) {
       const first = data.conflicts[0] ?? null;
       setSelectedFile(first?.path ?? null);
       setEditContent(first ? (first.ours || first.theirs || '') : '');
-    } catch {
-      setError(t('failedToLoadConflicts'));
+    } catch (err) {
+      setError(err instanceof Error && err.message ? err.message : t('failedToLoadConflicts'));
     } finally {
       setLoading(false);
     }
@@ -105,6 +109,9 @@ export function ConflictResolver(props: ConflictResolverProps) {
     setError(null);
 
     try {
+      // Raw fetch is used here because the `/api/repos/:repoId/pulls/:n/resolve`
+      // route is not yet in the Hono rpc schema. `rpcJson` still gives us
+      // 401 redirect handling and consistent error envelope parsing.
       const res = await fetch(`/api/repos/${props.repoId}/pulls/${props.prNumber}/resolve`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -117,15 +124,10 @@ export function ConflictResolver(props: ConflictResolverProps) {
         }),
       });
 
-      if (!res.ok) {
-        const data = await res.json();
-        setError(data.error || t('failedToSubmitResolutions'));
-        return;
-      }
-
+      await rpcJson(res);
       props.onResolved();
-    } catch {
-      setError(t('failedToSubmitResolutions'));
+    } catch (err) {
+      setError(err instanceof Error && err.message ? err.message : t('failedToSubmitResolutions'));
     } finally {
       setSubmitting(false);
     }

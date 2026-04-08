@@ -50,11 +50,6 @@ export function useSpaceStorage(spaceId: Accessor<string | undefined>): UseSpace
       if (version !== loadVersion) return;
       if (spaceId() !== currentSpaceId) return;
 
-      if (!res.ok) {
-        const data = await rpcJson<{ error: string }>(res);
-        throw new Error(data.error || 'Failed to load files');
-      }
-
       const data = await rpcJson<{ files: StorageFile[]; path: string; truncated?: boolean }>(res);
       setFiles(data.files || []);
       setCurrentPath(data.path || path);
@@ -84,11 +79,6 @@ export function useSpaceStorage(spaceId: Accessor<string | undefined>): UseSpace
         json: { name, parent_path: currentPath() },
       });
 
-      if (!res.ok) {
-        const data = await rpcJson<{ error: string }>(res);
-        throw new Error(data.error || 'Failed to create folder');
-      }
-
       const data = await rpcJson<{ folder: StorageFile }>(res);
       await loadFiles(currentPath());
       return data.folder;
@@ -114,11 +104,6 @@ export function useSpaceStorage(spaceId: Accessor<string | undefined>): UseSpace
         },
       });
 
-      if (!urlRes.ok) {
-        const data = await rpcJson<{ error: string }>(urlRes);
-        throw new Error(data.error || 'Failed to get upload URL');
-      }
-
       const urlData = await rpcJson<{
         file_id: string;
         upload_url: string;
@@ -143,11 +128,6 @@ export function useSpaceStorage(spaceId: Accessor<string | undefined>): UseSpace
         json: { file_id: urlData.file_id },
       });
 
-      if (!confirmRes.ok) {
-        const data = await rpcJson<{ error: string }>(confirmRes);
-        throw new Error(data.error || 'Failed to confirm upload');
-      }
-
       const confirmData = await rpcJson<{ file: StorageFile }>(confirmRes);
       await loadFiles(currentPath());
       return confirmData.file;
@@ -167,10 +147,7 @@ export function useSpaceStorage(spaceId: Accessor<string | undefined>): UseSpace
         param: { spaceId: currentSpaceId, fileId },
       });
 
-      if (!res.ok) {
-        const data = await rpcJson<{ error: string }>(res);
-        throw new Error(data.error || 'Failed to delete');
-      }
+      await rpcJson(res);
 
       await loadFiles(currentPath());
       return true;
@@ -191,10 +168,7 @@ export function useSpaceStorage(spaceId: Accessor<string | undefined>): UseSpace
         json: { file_ids: fileIds },
       });
 
-      if (!res.ok) {
-        const data = await rpcJson<{ error: string }>(res);
-        throw new Error(data.error || 'Failed to delete');
-      }
+      await rpcJson(res);
 
       await loadFiles(currentPath());
       return true;
@@ -214,11 +188,6 @@ export function useSpaceStorage(spaceId: Accessor<string | undefined>): UseSpace
         param: { spaceId: currentSpaceId, fileId },
         json: { name },
       });
-
-      if (!res.ok) {
-        const data = await rpcJson<{ error: string }>(res);
-        throw new Error(data.error || 'Failed to rename');
-      }
 
       const data = await rpcJson<{ file: StorageFile }>(res);
       await loadFiles(currentPath());
@@ -240,11 +209,6 @@ export function useSpaceStorage(spaceId: Accessor<string | undefined>): UseSpace
         json: { parent_path: parentPath },
       });
 
-      if (!res.ok) {
-        const data = await rpcJson<{ error: string }>(res);
-        throw new Error(data.error || 'Failed to move');
-      }
-
       const data = await rpcJson<{ file: StorageFile }>(res);
       await loadFiles(currentPath());
       return data.file;
@@ -265,10 +229,7 @@ export function useSpaceStorage(spaceId: Accessor<string | undefined>): UseSpace
         json: { file_ids: fileIds, parent_path: parentPath },
       });
 
-      if (!res.ok) {
-        const data = await rpcJson<{ error: string }>(res);
-        throw new Error(data.error || 'Failed to move');
-      }
+      await rpcJson(res);
 
       await loadFiles(currentPath());
       return true;
@@ -289,10 +250,7 @@ export function useSpaceStorage(spaceId: Accessor<string | undefined>): UseSpace
         json: { renames },
       });
 
-      if (!res.ok) {
-        const data = await rpcJson<{ error: string }>(res);
-        throw new Error(data.error || 'Failed to rename');
-      }
+      await rpcJson(res);
 
       await loadFiles(currentPath());
       return true;
@@ -311,11 +269,6 @@ export function useSpaceStorage(spaceId: Accessor<string | undefined>): UseSpace
         param: { spaceId: currentSpaceId },
         query: { file_id: fileId },
       });
-
-      if (!res.ok) {
-        const data = await rpcJson<{ error: string }>(res);
-        throw new Error(data.error || 'Failed to get download URL');
-      }
 
       const data = await rpcJson<{ download_url: string }>(res);
       return data.download_url;
