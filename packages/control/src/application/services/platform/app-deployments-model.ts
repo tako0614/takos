@@ -60,20 +60,37 @@ export type ResolvedBuildArtifacts = {
   artifacts: Record<string, SnapshotApplyArtifact>;
 };
 
+export type DeploymentSnapshotGitRefSource = {
+  kind: "git_ref";
+  repository_url: string;
+  ref: string;
+  ref_type: RepoRefType;
+  commit_sha: string;
+  resolved_repo_id: string | null;
+};
+
+export type DeploymentSnapshotManifestSource = {
+  kind: "manifest";
+  /**
+   * Caller-supplied build provenance metadata as accepted by
+   * `POST /api/spaces/:spaceId/app-deployments` with `source.kind: 'manifest'`.
+   * Stored verbatim so a manifest-sourced rollback can carry the same
+   * provenance through to the new deployment row.
+   */
+  manifest_artifacts: Array<Record<string, unknown>>;
+};
+
+export type DeploymentSnapshotSource =
+  | DeploymentSnapshotGitRefSource
+  | DeploymentSnapshotManifestSource;
+
 export type DeploymentSnapshotPayload = {
   schema_version: 1;
   created_at: string;
   group_name: string;
   provider: "cloudflare" | "local" | "aws" | "gcp" | "k8s" | null;
   env_name: string | null;
-  source: {
-    kind: "git_ref";
-    repository_url: string;
-    ref: string;
-    ref_type: RepoRefType;
-    commit_sha: string;
-    resolved_repo_id: string | null;
-  };
+  source: DeploymentSnapshotSource;
   manifest: AppManifest;
   build_sources: AppDeploymentBuildSource[];
   artifacts: Record<string, SnapshotApplyArtifact>;

@@ -40,28 +40,40 @@ export type ResourceDriver =
   | 'takos-workflow-runtime'
   | 'takos-durable-runtime';
 
+// Canonical hyphenated storage type names from the flat manifest schema
+// (`docs/apps/manifest.md`) take precedence; legacy Cloudflare-style names
+// (`d1`, `r2`, `kv`, `vectorize`, `analyticsEngine`, `secretRef`, `workflow`,
+// `durableObject`) and snake_case forms are kept as backward-compatible
+// aliases so older deploy records and stored configs continue to resolve.
 const RESOURCE_CAPABILITY_BY_TYPE: Record<string, ResourceCapability> = {
-  sql: 'sql',
-  d1: 'sql',
-  object_store: 'object_store',
-  r2: 'object_store',
-  kv: 'kv',
-  queue: 'queue',
-  vector_index: 'vector_index',
-  vectorize: 'vector_index',
-  analytics_store: 'analytics_store',
-  analyticsEngine: 'analytics_store',
-  analytics_engine: 'analytics_store',
-  secret: 'secret',
-  secretRef: 'secret',
-  secret_ref: 'secret',
-  workflow_runtime: 'workflow_runtime',
-  workflow: 'workflow_runtime',
-  workflow_binding: 'workflow_runtime',
-  durable_namespace: 'durable_namespace',
-  durableObject: 'durable_namespace',
-  durable_object: 'durable_namespace',
-  durable_object_namespace: 'durable_namespace',
+  // canonical (flat manifest schema)
+  'sql': 'sql',
+  'object-store': 'object_store',
+  'key-value': 'kv',
+  'queue': 'queue',
+  'vector-index': 'vector_index',
+  'analytics-engine': 'analytics_store',
+  'secret': 'secret',
+  'workflow': 'workflow_runtime',
+  'durable-object': 'durable_namespace',
+  // legacy aliases (Cloudflare-native names + snake_case forms)
+  'd1': 'sql',
+  'object_store': 'object_store',
+  'r2': 'object_store',
+  'kv': 'kv',
+  'vector_index': 'vector_index',
+  'vectorize': 'vector_index',
+  'analytics_store': 'analytics_store',
+  'analyticsEngine': 'analytics_store',
+  'analytics_engine': 'analytics_store',
+  'secretRef': 'secret',
+  'secret_ref': 'secret',
+  'workflow_runtime': 'workflow_runtime',
+  'workflow_binding': 'workflow_runtime',
+  'durable_namespace': 'durable_namespace',
+  'durableObject': 'durable_namespace',
+  'durable_object': 'durable_namespace',
+  'durable_object_namespace': 'durable_namespace',
 };
 
 const RESOURCE_IMPLEMENTATION_BY_CAPABILITY: Record<ResourceCapability, ResourceImplementation> = {
@@ -124,16 +136,24 @@ const RESOURCE_PUBLIC_TYPE_BY_CAPABILITY: Record<ResourceCapability, ResourcePub
   durable_namespace: 'durableObject',
 };
 
+// Canonical (hyphenated, flat-manifest) names listed first so look-ups
+// surface them as the preferred form when applicable.
 const RESOURCE_QUERY_VALUES_BY_CAPABILITY: Record<ResourceCapability, string[]> = {
   sql: ['sql', 'd1'],
-  object_store: ['object_store', 'r2'],
-  kv: ['kv'],
+  object_store: ['object-store', 'object_store', 'r2'],
+  kv: ['key-value', 'kv'],
   queue: ['queue'],
-  vector_index: ['vector_index', 'vectorize'],
-  analytics_store: ['analytics_store', 'analyticsEngine', 'analytics_engine'],
+  vector_index: ['vector-index', 'vector_index', 'vectorize'],
+  analytics_store: ['analytics-engine', 'analytics_store', 'analyticsEngine', 'analytics_engine'],
   secret: ['secret', 'secretRef', 'secret_ref'],
-  workflow_runtime: ['workflow_runtime', 'workflow', 'workflow_binding'],
-  durable_namespace: ['durable_namespace', 'durableObject', 'durable_object', 'durable_object_namespace'],
+  workflow_runtime: ['workflow', 'workflow_runtime', 'workflow_binding'],
+  durable_namespace: [
+    'durable-object',
+    'durable_namespace',
+    'durableObject',
+    'durable_object',
+    'durable_object_namespace',
+  ],
 };
 
 function parseResourceConfig(

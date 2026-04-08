@@ -19,6 +19,10 @@ import {
   loadAppManifest,
   resolveAppManifestPath,
 } from "../lib/app-manifest.ts";
+import {
+  collectArtifactsForManifest,
+  resolveWorkspaceDir,
+} from "../lib/artifact-collector.ts";
 import type { DiffResult } from "../lib/apply/types.ts";
 import type { TranslationReport } from "../lib/translation-report.ts";
 
@@ -58,15 +62,6 @@ type DeployPlanResponse = {
   diff: DiffResult;
   translationReport: TranslationReport;
 };
-
-type DeployArtifactInput =
-  | { kind: "worker_bundle"; bundleContent: string; deployMessage?: string }
-  | {
-    kind: "container_image";
-    imageRef: string;
-    provider?: "oci" | "ecs" | "cloud-run" | "k8s";
-    deployMessage?: string;
-  };
 
 type DeployCommandOptions = {
   space?: string;
@@ -165,16 +160,29 @@ async function runDeploy(
       groupName = manifest.name;
     }
 
-    // TODO: collect workflow artifacts from .takos/workflows/ once
-    // Phase 3 / 4 introduces local artifact build support. For now we
-    // forward an empty artifact map and let the backend reject if it
-    // requires bundles.
-    const artifacts: Record<string, DeployArtifactInput> = {};
+    // Walk manifest.compute for entries with `build.fromWorkflow` and
+    // pack the local build outputs (file by file, base64) so the
+    // deploy request body carries the artifacts the backend would
+    // otherwise have to fetch from a workflow run.
+    const workspaceDir = resolveWorkspaceDir(manifestPath);
+    const collected = collectArtifactsForManifest(manifest, {
+      workspaceDir,
+    });
+    for (const warning of collected.warnings) {
+      console.log(yellow(`Warning: ${warning}`));
+    }
+    if (collected.warnings.length > 0 && collected.artifacts.length === 0) {
+      console.log(
+        yellow(
+          "No local artifacts collected. Run your build first if a worker bundle is required.",
+        ),
+      );
+    }
 
     source = {
       kind: "manifest",
       manifest,
-      artifacts,
+      artifacts: collected.artifacts,
     };
   }
 
