@@ -94,6 +94,7 @@ export default defineConfig({
           { text: "App Publications", link: "/architecture/app-publications" },
           { text: "Control Plane", link: "/architecture/control-plane" },
           { text: "Tenant Runtime", link: "/architecture/tenant-runtime" },
+          { text: "Container Hosts", link: "/architecture/container-hosts" },
           { text: "Runtime Service", link: "/architecture/runtime-service" },
           { text: "互換性と制限", link: "/architecture/compatibility" },
         ],
