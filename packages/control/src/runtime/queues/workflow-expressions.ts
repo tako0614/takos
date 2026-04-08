@@ -1,10 +1,23 @@
 import type { ConditionContext, ExpressionContext } from './workflow-types.ts';
+import { logWarn } from '../../shared/utils/logger.ts';
 
 // ---------------------------------------------------------------------------
 // Expression evaluation
 // ---------------------------------------------------------------------------
 
-// Simplified GitHub Actions expression evaluator (not a full parser).
+// Simplified GitHub Actions expression evaluator. This implements only the
+// subset of GH Actions expression syntax that the workflow runner needs:
+//
+//   - bare status functions: `always()`, `success()`, `failure()`, `cancelled()`
+//   - simple `${{ ... }}` lookups for `steps.<id>.outputs.<key>`, `env.<key>`,
+//     `inputs.<key>`, `github.event.inputs.<key>`
+//
+// Anything else (`contains()`, `startsWith()`, `==`, `&&`, `||`, ternary,
+// arithmetic, composite expressions) is **NOT supported** and will quietly
+// evaluate to `false` after a warning log. Workflow authors copy-pasting a
+// real-world GH Actions workflow should expect non-trivial `if:` conditions to
+// silently skip the step. See `packages/actions-engine/README.md` for the full
+// compatibility table.
 export function evaluateCondition(
   expression: string,
   context: ConditionContext
@@ -12,7 +25,10 @@ export function evaluateCondition(
   const expr = expression.trim();
 
   if (expr === 'always()') return true;
-  if (expr === 'cancelled()') return false;
+  // `cancelled()` should be true when the parent run was cancelled. The
+  // condition context exposes job.status which is set to 'cancelled' on the
+  // terminal cancel transition, so we can implement this correctly.
+  if (expr === 'cancelled()') return context.job?.status === 'cancelled';
   if (expr === 'failure()') return context.job?.status === 'failure';
   if (expr === 'success()') return context.job?.status === 'success';
 
@@ -40,6 +56,13 @@ export function evaluateCondition(
     }
   }
 
+  // Unrecognized expression — log a warning so workflow authors notice that
+  // their `if:` is being silently skipped instead of evaluated. (See the
+  // README compatibility table for the supported subset.)
+  logWarn(
+    `Unrecognized workflow expression — evaluated as false. Only a subset of GitHub Actions expression syntax is supported.`,
+    { module: 'workflow-expressions', detail: { expression: expr } },
+  );
   return false;
 }
 

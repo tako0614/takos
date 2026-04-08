@@ -1522,7 +1522,7 @@ Space File Sync セッションのライフサイクル管理。
 
 ::: warning Artifact upload
 現状、artifact の **作成** は workflow runner 内部からのみ可能で、 専用の HTTP POST endpoint はありません。
-ステップ内で `actions/upload-artifact` 相当の処理を行うには、runtime-host が R2 に直接書き込む必要があります。retention は 30 日固定。
+ステップ内で `actions/upload-artifact` 相当の処理を行うには、runtime-host が R2 に直接書き込む必要があります。retention は **30 日 fixed** で、`expiresAt` を超えた行は kernel の hourly cron が R2 + DB から自動削除します。
 :::
 
 ### Workflow run / job / step status enum
@@ -1538,6 +1538,21 @@ Space File Sync セッションのライフサイクル管理。
 ### Trigger compatibility
 
 GitHub Actions YAML の `on:` は **`push` / `pull_request` / `workflow_dispatch`** のみ正常に dispatch されます。`schedule:` (cron) / `repository_dispatch` / `workflow_call` 等は parser で受理されますが **kernel 側に scan / dispatch 経路が無く、silently never fires**。scheduled workflow が必要な場合は、kernel の cron worker から直接 `dispatchWorkflowRun()` を叩く設計が必要。
+
+### Expression compatibility
+
+<div v-pre>
+
+`if:` 条件式の評価器は GitHub Actions の極一部のみ実装:
+
+- `always()` / `success()` / `failure()` / `cancelled()`
+- `${{ steps.<id>.outputs.<key> }}`、`${{ env.<key> }}`、`${{ inputs.<key> }}`、`${{ github.event.inputs.<key> }}`
+
+`contains()` / `startsWith()` / `==` / `&&` / `||` / 三項演算子 / 算術 / composite expression は **未サポート**。未認識の expression は `false` と評価され warning log を出力します。`steps.<id>.conclusion` と `outcome` の区別、`success()` の dependency-aware semantics、`continue-on-error` 後の status 上書きも未対応。詳細は `packages/actions-engine/README.md`。
+
+`PARALLEL_WORKFLOW_STEPS=1` env var で step parallel 実行 (DAG ベース) を opt-in できますが、sequential mode と semantics が一部異なる (independent step が前 step output を待たない、`continue-on-error` 伝播の差異) ため、デフォルトは sequential。
+
+</div>
 
 ---
 

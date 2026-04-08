@@ -24,6 +24,7 @@ import { smartHttpRoutes } from './server/routes/smart-http.ts';
 import { runCustomDomainReverification, reconcileStuckDomains, cleanupDeadSessions, runSnapshotGcBatch } from './application/services/maintenance/index.ts';
 import { runR2OrphanedObjectGcBatch } from './application/services/r2/orphaned-object-gc.ts';
 import { runCommonEnvScheduledMaintenance } from './application/services/common-env/index.ts';
+import { runWorkflowArtifactGcBatch } from './application/services/execution/workflow-storage.ts';
 import { requireAuth, optionalAuth } from './server/middleware/auth.ts';
 import { staticAssetsMiddleware } from './server/middleware/static-assets.ts';
 import { isInvalidArrayBufferError } from './shared/utils/db-guards.ts';
@@ -575,6 +576,20 @@ export function createWebWorker(
       } catch (error) {
         errors.push({
           job: 'r2-orphaned-object-gc',
+          error: error instanceof Error ? error.message : String(error),
+        });
+      }
+
+      // Workflow artifact GC: delete expired R2 objects + DB rows. The
+      // `idx_workflow_artifacts_expires_at` index makes this scan cheap.
+      try {
+        const wfGcSummary = await runWorkflowArtifactGcBatch(bindings.DB, bindings.GIT_OBJECTS, { maxDeletes: 100 });
+        if (wfGcSummary.deletedRows > 0) {
+          logInfo('workflow artifact GC batch completed', { module: 'cron', ...{ cron, ...wfGcSummary } });
+        }
+      } catch (error) {
+        errors.push({
+          job: 'workflow-artifact-gc',
           error: error instanceof Error ? error.message : String(error),
         });
       }
