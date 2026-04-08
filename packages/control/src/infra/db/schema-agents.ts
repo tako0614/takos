@@ -1,11 +1,30 @@
 import { sqliteTable, text, integer, real, index, uniqueIndex, primaryKey } from 'drizzle-orm/sqlite-core';
 import { createdAtColumn, timestamps } from './schema-utils.ts';
+import { accounts } from './schema-accounts.ts';
+
+/**
+ * Index naming drift NOTE (Round 11 audit Finding #6).
+ *
+ * Drizzle declarations here use the `idx_<table>_<col>` prefix pattern.
+ * The baseline migration (apps/control/db/migrations/0001_baseline.sql)
+ * uses the legacy `<table>_<col>_idx` suffix pattern. Both names point at
+ * the same physical index in the live D1 database (the one created by the
+ * baseline migration). Drizzle-kit `generate` will see this as drift and
+ * try to emit hundreds of rename statements. Do NOT run drizzle-kit
+ * generate against this schema without first deciding whether to:
+ *   (a) accept the rename migration and apply it to all environments, or
+ *   (b) hand-edit the generated migration to a no-op.
+ *
+ * Newer tables (auth_identities, usage_events, service_runtimes,
+ * memory_*) intentionally match the legacy suffix shape via explicit
+ * .index() names so they don't add to the drift.
+ */
 
 // 13. AgentTask
 export const agentTasks = sqliteTable('agent_tasks', {
   id: text('id').primaryKey(),
-  accountId: text('account_id').notNull(),
-  createdByAccountId: text('created_by_account_id'),
+  accountId: text('account_id').notNull().references(() => accounts.id),
+  createdByAccountId: text('created_by_account_id').references(() => accounts.id),
   threadId: text('thread_id'),
   lastRunId: text('last_run_id'),
   title: text('title').notNull(),
@@ -33,8 +52,8 @@ export const agentTasks = sqliteTable('agent_tasks', {
 // 15. Artifact
 export const artifacts = sqliteTable('artifacts', {
   id: text('id').primaryKey(),
-  runId: text('run_id').notNull(),
-  accountId: text('account_id').notNull(),
+  runId: text('run_id').notNull().references(() => runsTable.id),
+  accountId: text('account_id').notNull().references(() => accounts.id),
   type: text('type').notNull().default('code'),
   title: text('title'),
   content: text('content'),
@@ -51,9 +70,9 @@ export const artifacts = sqliteTable('artifacts', {
 // 42. InfoUnit
 export const infoUnits = sqliteTable('info_units', {
   id: text('id').primaryKey(),
-  accountId: text('account_id').notNull(),
-  threadId: text('thread_id'),
-  runId: text('run_id'),
+  accountId: text('account_id').notNull().references(() => accounts.id),
+  threadId: text('thread_id').references(() => threads.id),
+  runId: text('run_id').references(() => runsTable.id),
   sessionId: text('session_id'),
   kind: text('kind').notNull().default('session'),
   title: text('title'),
@@ -108,9 +127,9 @@ export const lgWrites = sqliteTable('lg_writes', {
 // 52. Memory
 export const memories = sqliteTable('memories', {
   id: text('id').primaryKey(),
-  accountId: text('account_id').notNull(),
-  authorAccountId: text('author_account_id'),
-  threadId: text('thread_id'),
+  accountId: text('account_id').notNull().references(() => accounts.id),
+  authorAccountId: text('author_account_id').references(() => accounts.id),
+  threadId: text('thread_id').references(() => threads.id),
   type: text('type').notNull(),
   category: text('category'),
   content: text('content').notNull(),
@@ -126,6 +145,10 @@ export const memories = sqliteTable('memories', {
   idxType: index('idx_memories_type').on(table.type),
   idxTypeCategory: index('idx_memories_type_category').on(table.type, table.category),
   idxThread: index('idx_memories_thread_id').on(table.threadId),
+  // NOTE (Round 11 audit Finding #9): baseline migration 0001 creates
+  // `memories_importance_idx` with DESC order (`importance DESC`). Drizzle
+  // cannot express column-level ASC/DESC inside `index()`, so the physical
+  // order is determined by the migration, not this declaration.
   idxImportance: index('idx_memories_importance').on(table.importance),
   idxAuthor: index('idx_memories_author_account_id').on(table.authorAccountId),
   idxAccount: index('idx_memories_account_id').on(table.accountId),
@@ -134,7 +157,7 @@ export const memories = sqliteTable('memories', {
 // 53. Message
 export const messages = sqliteTable('messages', {
   id: text('id').primaryKey(),
-  threadId: text('thread_id').notNull(),
+  threadId: text('thread_id').notNull().references(() => threads.id),
   role: text('role').notNull(),
   content: text('content').notNull(),
   r2Key: text('r2_key'),
@@ -152,8 +175,8 @@ export const messages = sqliteTable('messages', {
 // 72. Reminder
 export const reminders = sqliteTable('reminders', {
   id: text('id').primaryKey(),
-  accountId: text('account_id').notNull(),
-  ownerAccountId: text('owner_account_id'),
+  accountId: text('account_id').notNull().references(() => accounts.id),
+  ownerAccountId: text('owner_account_id').references(() => accounts.id),
   content: text('content').notNull(),
   context: text('context'),
   triggerType: text('trigger_type').notNull(),
@@ -171,7 +194,7 @@ export const reminders = sqliteTable('reminders', {
 // 83. RunEvent
 export const runEvents = sqliteTable('run_events', {
   id: integer('id').primaryKey({ autoIncrement: true }),
-  runId: text('run_id').notNull(),
+  runId: text('run_id').notNull().references(() => runsTable.id),
   type: text('type').notNull(),
   data: text('data').notNull().default('{}'),
   ...createdAtColumn,
@@ -184,9 +207,9 @@ export const runEvents = sqliteTable('run_events', {
 // 84. Run
 const runsTable = sqliteTable('runs', {
   id: text('id').primaryKey(),
-  threadId: text('thread_id').notNull(),
-  accountId: text('account_id').notNull(),
-  requesterAccountId: text('requester_account_id'),
+  threadId: text('thread_id').notNull().references(() => threads.id),
+  accountId: text('account_id').notNull().references(() => accounts.id),
+  requesterAccountId: text('requester_account_id').references(() => accounts.id),
   sessionId: text('session_id'),
   parentRunId: text('parent_run_id'),
   childThreadId: text('child_thread_id'),
@@ -232,7 +255,7 @@ export const runs = Object.assign(runsTable, {
 // 92. Skill
 export const skills = sqliteTable('skills', {
   id: text('id').primaryKey(),
-  accountId: text('account_id').notNull(),
+  accountId: text('account_id').notNull().references(() => accounts.id),
   name: text('name').notNull(),
   description: text('description'),
   instructions: text('instructions').notNull(),
@@ -249,9 +272,9 @@ export const skills = sqliteTable('skills', {
 // 95. ThreadShare
 export const threadShares = sqliteTable('thread_shares', {
   id: text('id').primaryKey(),
-  threadId: text('thread_id').notNull(),
-  accountId: text('account_id').notNull(),
-  createdByAccountId: text('created_by_account_id'),
+  threadId: text('thread_id').notNull().references(() => threads.id),
+  accountId: text('account_id').notNull().references(() => accounts.id),
+  createdByAccountId: text('created_by_account_id').references(() => accounts.id),
   token: text('token').notNull().unique(),
   mode: text('mode').notNull().default('public'),
   passwordHash: text('password_hash'),
@@ -269,7 +292,7 @@ export const threadShares = sqliteTable('thread_shares', {
 // 96. Thread
 export const threads = sqliteTable('threads', {
   id: text('id').primaryKey(),
-  accountId: text('account_id').notNull(),
+  accountId: text('account_id').notNull().references(() => accounts.id),
   title: text('title'),
   locale: text('locale'),
   status: text('status').notNull().default('active'),
@@ -286,7 +309,7 @@ export const threads = sqliteTable('threads', {
 // 97. ToolOperation (idempotent tool execution tracking)
 export const toolOperations = sqliteTable('tool_operations', {
   id: text('id').primaryKey(),
-  runId: text('run_id').notNull(),
+  runId: text('run_id').notNull().references(() => runsTable.id),
   operationKey: text('operation_key').notNull(),
   toolName: text('tool_name').notNull(),
   status: text('status').notNull().default('pending'),

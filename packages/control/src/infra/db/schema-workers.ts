@@ -1,12 +1,31 @@
 import { sqliteTable, text, integer, index, uniqueIndex, primaryKey } from 'drizzle-orm/sqlite-core';
 import { createdAtColumn, timestamps } from './schema-utils.ts';
 import { services, serviceBindings, serviceCommonEnvLinks } from './schema-services.ts';
+import { accounts } from './schema-accounts.ts';
+
+/**
+ * Index naming drift NOTE (Round 11 audit Finding #6).
+ *
+ * Drizzle declarations here use the `idx_<table>_<col>` prefix pattern.
+ * The baseline migration (apps/control/db/migrations/0001_baseline.sql)
+ * uses the legacy `<table>_<col>_idx` suffix pattern. Both names point at
+ * the same physical index in the live D1 database (the one created by the
+ * baseline migration). Drizzle-kit `generate` will see this as drift and
+ * try to emit hundreds of rename statements. Do NOT run drizzle-kit
+ * generate against this schema without first deciding whether to:
+ *   (a) accept the rename migration and apply it to all environments, or
+ *   (b) hand-edit the generated migration to a no-op.
+ *
+ * Newer tables (auth_identities, usage_events, service_runtimes,
+ * memory_*) intentionally match the legacy suffix shape via explicit
+ * .index() names so they don't add to the drift.
+ */
 
 // 14. App
 const appsTable = sqliteTable('apps', {
   id: text('id').primaryKey(),
-  accountId: text('account_id').notNull(),
-  serviceId: text('service_id'),
+  accountId: text('account_id').notNull().references(() => accounts.id),
+  serviceId: text('service_id').references(() => services.id),
   name: text('name').notNull(),
   description: text('description'),
   icon: text('icon'),
@@ -26,7 +45,7 @@ export const apps = Object.assign(appsTable, {
 // 26. BundleDeploymentEvent
 export const bundleDeploymentEvents = sqliteTable('bundle_deployment_events', {
   id: text('id').primaryKey(),
-  accountId: text('account_id').notNull(),
+  accountId: text('account_id').notNull().references(() => accounts.id),
   bundleDeploymentId: text('bundle_deployment_id'),
   name: text('name').notNull(),
   appId: text('app_id').notNull(),
@@ -51,7 +70,7 @@ export const bundleDeploymentEvents = sqliteTable('bundle_deployment_events', {
 // 27. BundleDeployment
 export const bundleDeployments = sqliteTable('bundle_deployments', {
   id: text('id').primaryKey(),
-  accountId: text('account_id').notNull(),
+  accountId: text('account_id').notNull().references(() => accounts.id),
   name: text('name').notNull(),
   appId: text('app_id').notNull(),
   bundleKey: text('bundle_key').notNull(),
@@ -84,12 +103,12 @@ export const bundleDeployments = sqliteTable('bundle_deployments', {
 // 30. CommonEnvAuditLog
 const commonEnvAuditLogsTable = sqliteTable('common_env_audit_logs', {
   id: text('id').primaryKey(),
-  accountId: text('account_id').notNull(),
-  actorAccountId: text('actor_account_id'),
+  accountId: text('account_id').notNull().references(() => accounts.id),
+  actorAccountId: text('actor_account_id').references(() => accounts.id),
   actorType: text('actor_type').notNull(),
   eventType: text('event_type').notNull(),
   envName: text('env_name').notNull(),
-  serviceId: text('service_id'),
+  serviceId: text('service_id').references(() => services.id),
   linkSource: text('link_source'),
   changeBefore: text('change_before').notNull().default('{}'),
   changeAfter: text('change_after').notNull().default('{}'),
@@ -112,8 +131,8 @@ export const serviceCommonEnvAuditLogs = commonEnvAuditLogs;
 // 31. CommonEnvReconcileJob
 const commonEnvReconcileJobsTable = sqliteTable('common_env_reconcile_jobs', {
   id: text('id').primaryKey(),
-  accountId: text('account_id').notNull(),
-  serviceId: text('service_id').notNull(),
+  accountId: text('account_id').notNull().references(() => accounts.id),
+  serviceId: text('service_id').notNull().references(() => services.id),
   targetKeysJson: text('target_keys_json'),
   trigger: text('trigger').notNull(),
   status: text('status').notNull().default('pending'),
@@ -142,7 +161,7 @@ export const serviceCommonEnvReconcileJobs = commonEnvReconcileJobs;
 // 32. CustomDomain
 const customDomainsTable = sqliteTable('custom_domains', {
   id: text('id').primaryKey(),
-  serviceId: text('service_id').notNull(),
+  serviceId: text('service_id').notNull().references(() => services.id),
   domain: text('domain').notNull().unique(),
   status: text('status').notNull().default('pending'),
   verificationToken: text('verification_token').notNull(),
@@ -166,8 +185,8 @@ export const serviceCustomDomains = customDomains;
 // 33. DeploymentEvent
 export const deploymentEvents = sqliteTable('deployment_events', {
   id: integer('id').primaryKey({ autoIncrement: true }),
-  deploymentId: text('deployment_id').notNull(),
-  actorAccountId: text('actor_account_id'),
+  deploymentId: text('deployment_id').notNull().references(() => deploymentTable.id),
+  actorAccountId: text('actor_account_id').references(() => accounts.id),
   eventType: text('event_type').notNull(),
   stepName: text('step_name'),
   message: text('message'),
@@ -182,8 +201,8 @@ export const deploymentEvents = sqliteTable('deployment_events', {
 // 34. Deployment
 const deploymentTable = sqliteTable('deployments', {
   id: text('id').primaryKey(),
-  serviceId: text('service_id').notNull(),
-  accountId: text('account_id').notNull(),
+  serviceId: text('service_id').notNull().references(() => services.id),
+  accountId: text('account_id').notNull().references(() => accounts.id),
   version: integer('version').notNull(),
   artifactRef: text('artifact_ref'),
   bundleR2Key: text('bundle_r2_key'),
@@ -219,6 +238,11 @@ const deploymentTable = sqliteTable('deployments', {
   uniqServiceVersion: uniqueIndex('idx_deployments_service_version').on(table.serviceId, table.version),
   idxServiceRouting: index('idx_deployments_service_routing_status').on(table.serviceId, table.routingStatus),
   idxService: index('idx_deployments_service_id').on(table.serviceId),
+  // NOTE (Round 11 audit Finding #9): baseline migration 0001 creates
+  // `deployments_worker_id_created_at_idx` with DESC order
+  // (`created_at DESC`). Drizzle cannot express column-level ASC/DESC
+  // inside `index()`, so the physical order is determined by the
+  // migration, not this declaration.
   idxServiceCreatedAt: index('idx_deployments_service_created_at').on(table.serviceId, table.createdAt),
   idxStatus: index('idx_deployments_status').on(table.status),
   idxAccountStatus: index('idx_deployments_account_status').on(table.accountId, table.status),
@@ -234,8 +258,8 @@ export const serviceDeployments = deployments;
 // 49. ManagedTakosToken
 const managedTakosTokensTable = sqliteTable('managed_takos_tokens', {
   id: text('id').primaryKey(),
-  accountId: text('account_id').notNull(),
-  serviceId: text('service_id').notNull(),
+  accountId: text('account_id').notNull().references(() => accounts.id),
+  serviceId: text('service_id').notNull().references(() => services.id),
   envName: text('env_name').notNull(),
   subjectAccountId: text('subject_account_id').notNull(),
   subjectMode: text('subject_mode').notNull(),
@@ -271,8 +295,8 @@ export const workerCommonEnvLinks = Object.assign(serviceCommonEnvLinks, {
 // 102. ServiceEnvVar
 const serviceEnvVarsTable = sqliteTable('service_env_vars', {
   id: text('id').primaryKey(),
-  serviceId: text('service_id').notNull(),
-  accountId: text('account_id').notNull(),
+  serviceId: text('service_id').notNull().references(() => services.id),
+  accountId: text('account_id').notNull().references(() => accounts.id),
   name: text('name').notNull(),
   valueEncrypted: text('value_encrypted').notNull(),
   isSecret: integer('is_secret', { mode: 'boolean' }).notNull().default(false),
@@ -291,7 +315,7 @@ export const workerEnvVars = Object.assign(serviceEnvVarsTable, {
 
 // 103. ServiceMcpEndpoint
 const serviceMcpEndpointsTable = sqliteTable('service_mcp_endpoints', {
-  serviceId: text('service_id').notNull(),
+  serviceId: text('service_id').notNull().references(() => services.id),
   name: text('name').notNull(),
   path: text('path').notNull(),
   enabled: integer('enabled', { mode: 'boolean' }).notNull().default(true),
@@ -307,7 +331,7 @@ export const workerMcpEndpoints = Object.assign(serviceMcpEndpointsTable, {
 
 // 104. ServiceRuntimeFlag
 const serviceRuntimeFlagsTable = sqliteTable('service_runtime_flags', {
-  serviceId: text('service_id').notNull(),
+  serviceId: text('service_id').notNull().references(() => services.id),
   flag: text('flag').notNull(),
 }, (table) => ({
   pk: primaryKey({ columns: [table.serviceId, table.flag] }),
@@ -321,7 +345,7 @@ export const workerRuntimeFlags = Object.assign(serviceRuntimeFlagsTable, {
 
 // 105. ServiceRuntimeLimit
 const serviceRuntimeLimitsTable = sqliteTable('service_runtime_limits', {
-  serviceId: text('service_id').primaryKey(),
+  serviceId: text('service_id').primaryKey().references(() => services.id),
   cpuMs: integer('cpu_ms'),
   memoryMb: integer('memory_mb'),
   subrequestLimit: integer('subrequest_limit'),
@@ -335,8 +359,8 @@ export const workerRuntimeLimits = Object.assign(serviceRuntimeLimitsTable, {
 
 // 106. ServiceRuntimeSetting
 const serviceRuntimeSettingsTable = sqliteTable('service_runtime_settings', {
-  serviceId: text('service_id').primaryKey(),
-  accountId: text('account_id').notNull(),
+  serviceId: text('service_id').primaryKey().references(() => services.id),
+  accountId: text('account_id').notNull().references(() => accounts.id),
   compatibilityDate: text('compatibility_date'),
   ...timestamps,
 }, (table) => ({

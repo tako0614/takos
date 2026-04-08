@@ -1,13 +1,32 @@
 import { sqliteTable, text, integer, index, uniqueIndex } from 'drizzle-orm/sqlite-core';
 import { createdAtColumn, timestamps } from './schema-utils.ts';
+import { accounts } from './schema-accounts.ts';
+
+/**
+ * Index naming drift NOTE (Round 11 audit Finding #6).
+ *
+ * Drizzle declarations here use the `idx_<table>_<col>` prefix pattern.
+ * The baseline migration (apps/control/db/migrations/0001_baseline.sql)
+ * uses the legacy `<table>_<col>_idx` suffix pattern. Both names point at
+ * the same physical index in the live D1 database (the one created by the
+ * baseline migration). Drizzle-kit `generate` will see this as drift and
+ * try to emit hundreds of rename statements. Do NOT run drizzle-kit
+ * generate against this schema without first deciding whether to:
+ *   (a) accept the rename migration and apply it to all environments, or
+ *   (b) hand-edit the generated migration to a no-op.
+ *
+ * Newer tables (auth_identities, usage_events, service_runtimes,
+ * memory_*) intentionally match the legacy suffix shape via explicit
+ * .index() names so they don't add to the drift.
+ */
 
 // 80. ResourceAccess
 export const resourceAccess = sqliteTable('resource_access', {
   id: text('id').primaryKey(),
-  resourceId: text('resource_id').notNull(),
-  accountId: text('account_id').notNull(),
+  resourceId: text('resource_id').notNull().references(() => resources.id),
+  accountId: text('account_id').notNull().references(() => accounts.id),
   permission: text('permission').notNull().default('read'),
-  grantedByAccountId: text('granted_by_account_id'),
+  grantedByAccountId: text('granted_by_account_id').references(() => accounts.id),
   ...createdAtColumn,
 }, (table) => ({
   uniqResourceAccount: uniqueIndex('idx_resource_access_resource_account').on(table.resourceId, table.accountId),
@@ -18,7 +37,7 @@ export const resourceAccess = sqliteTable('resource_access', {
 // 81. ResourceAccessToken
 export const resourceAccessTokens = sqliteTable('resource_access_tokens', {
   id: text('id').primaryKey(),
-  resourceId: text('resource_id').notNull(),
+  resourceId: text('resource_id').notNull().references(() => resources.id),
   name: text('name').notNull(),
   tokenHash: text('token_hash').notNull().unique(),
   tokenPrefix: text('token_prefix').notNull(),
@@ -35,8 +54,8 @@ export const resourceAccessTokens = sqliteTable('resource_access_tokens', {
 // 82. Resource
 export const resources = sqliteTable('resources', {
   id: text('id').primaryKey(),
-  ownerAccountId: text('owner_account_id').notNull(),
-  accountId: text('account_id'),
+  ownerAccountId: text('owner_account_id').notNull().references(() => accounts.id),
+  accountId: text('account_id').references(() => accounts.id),
   groupId: text('group_id'),
   name: text('name').notNull(),
   type: text('type').notNull(),

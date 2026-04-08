@@ -1,10 +1,28 @@
 import { sqliteTable, text, integer, index, uniqueIndex } from 'drizzle-orm/sqlite-core';
 import { createdAtColumn } from './schema-utils.ts';
 
+/**
+ * Index naming drift NOTE (Round 11 audit Finding #6).
+ *
+ * Drizzle declarations here use the `idx_<table>_<col>` prefix pattern.
+ * The baseline migration (apps/control/db/migrations/0001_baseline.sql)
+ * uses the legacy `<table>_<col>_idx` suffix pattern. Both names point at
+ * the same physical index in the live D1 database (the one created by the
+ * baseline migration). Drizzle-kit `generate` will see this as drift and
+ * try to emit hundreds of rename statements. Do NOT run drizzle-kit
+ * generate against this schema without first deciding whether to:
+ *   (a) accept the rename migration and apply it to all environments, or
+ *   (b) hand-edit the generated migration to a no-op.
+ *
+ * Newer tables (auth_identities, usage_events, service_runtimes,
+ * memory_*) intentionally match the legacy suffix shape via explicit
+ * .index() names so they don't add to the drift.
+ */
+
 // 108. WorkflowArtifact
 export const workflowArtifacts = sqliteTable('workflow_artifacts', {
   id: text('id').primaryKey(),
-  runId: text('run_id').notNull(),
+  runId: text('run_id').notNull().references(() => workflowRuns.id),
   name: text('name').notNull(),
   r2Key: text('r2_key').notNull(),
   sizeBytes: integer('size_bytes'),
@@ -19,7 +37,7 @@ export const workflowArtifacts = sqliteTable('workflow_artifacts', {
 // 109. WorkflowJob
 export const workflowJobs = sqliteTable('workflow_jobs', {
   id: text('id').primaryKey(),
-  runId: text('run_id').notNull(),
+  runId: text('run_id').notNull().references(() => workflowRuns.id),
   jobKey: text('job_key'),
   name: text('name').notNull(),
   status: text('status').notNull().default('queued'),
@@ -41,6 +59,9 @@ export const workflowJobs = sqliteTable('workflow_jobs', {
 export const workflowRuns = sqliteTable('workflow_runs', {
   id: text('id').primaryKey(),
   repoId: text('repo_id').notNull(),
+  // NOTE: references(() => repositories.id) intentionally omitted to avoid
+  // a circular module import between schema-workflows and schema-repos; the
+  // FK is declared in baseline migration 0001_baseline.sql.
   workflowId: text('workflow_id'),
   workflowPath: text('workflow_path').notNull(),
   event: text('event').notNull(),
@@ -61,6 +82,10 @@ export const workflowRuns = sqliteTable('workflow_runs', {
   idxStatus: index('idx_workflow_runs_status').on(table.status),
   idxRepo: index('idx_workflow_runs_repo_id').on(table.repoId),
   idxEvent: index('idx_workflow_runs_event').on(table.event),
+  // NOTE (Round 11 audit Finding #9): baseline migration 0001 creates
+  // `workflow_runs_created_at_idx` with DESC order (`created_at DESC`).
+  // Drizzle cannot express column-level ASC/DESC inside `index()`, so the
+  // physical order is determined by the migration, not this declaration.
   idxCreatedAt: index('idx_workflow_runs_created_at').on(table.createdAt),
   idxActor: index('idx_workflow_runs_actor_account_id').on(table.actorAccountId),
 }));
@@ -81,7 +106,7 @@ export const workflowSecrets = sqliteTable('workflow_secrets', {
 // 112. WorkflowStep
 export const workflowSteps = sqliteTable('workflow_steps', {
   id: text('id').primaryKey(),
-  jobId: text('job_id').notNull(),
+  jobId: text('job_id').notNull().references(() => workflowJobs.id),
   number: integer('number').notNull(),
   name: text('name').notNull(),
   status: text('status').notNull().default('pending'),

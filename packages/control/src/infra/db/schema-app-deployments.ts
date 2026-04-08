@@ -1,12 +1,31 @@
 import { index, integer, sqliteTable, text } from "drizzle-orm/sqlite-core";
 import { timestamps } from "./schema-utils.ts";
+import { accounts } from "./schema-accounts.ts";
+
+/**
+ * Index naming drift NOTE (Round 11 audit Finding #6).
+ *
+ * Drizzle declarations here use the `idx_<table>_<col>` prefix pattern.
+ * The baseline migration (apps/control/db/migrations/0001_baseline.sql)
+ * uses the legacy `<table>_<col>_idx` suffix pattern. Both names point at
+ * the same physical index in the live D1 database (the one created by the
+ * baseline migration). Drizzle-kit `generate` will see this as drift and
+ * try to emit hundreds of rename statements. Do NOT run drizzle-kit
+ * generate against this schema without first deciding whether to:
+ *   (a) accept the rename migration and apply it to all environments, or
+ *   (b) hand-edit the generated migration to a no-op.
+ *
+ * Newer tables (auth_identities, usage_events, service_runtimes,
+ * memory_*) intentionally match the legacy suffix shape via explicit
+ * .index() names so they don't add to the drift.
+ */
 
 export const appDeployments = sqliteTable("app_deployments", {
   id: text("id").primaryKey(),
   spaceId: text("space_id").notNull(),
   groupId: text("group_id").notNull(),
   groupNameSnapshot: text("group_name_snapshot"),
-  createdByAccountId: text("created_by_account_id"),
+  createdByAccountId: text("created_by_account_id").references(() => accounts.id),
   sourceKind: text("source_kind").notNull(),
   sourceRepositoryUrl: text("source_repository_url"),
   sourceResolvedRepoId: text("source_resolved_repo_id"),
