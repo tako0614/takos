@@ -1520,6 +1520,25 @@ Space File Sync セッションのライフサイクル管理。
 | GET    | `/api/repos/:repoId/actions/artifacts/:artifactId` | アーティファクトダウンロード                |
 | DELETE | `/api/repos/:repoId/actions/artifacts/:artifactId` | アーティファクト削除 _(owner/admin/editor)_ |
 
+::: warning Artifact upload
+現状、artifact の **作成** は workflow runner 内部からのみ可能で、 専用の HTTP POST endpoint はありません。
+ステップ内で `actions/upload-artifact` 相当の処理を行うには、runtime-host が R2 に直接書き込む必要があります。retention は 30 日固定。
+:::
+
+### Workflow run / job / step status enum
+
+| entity | status 値 | conclusion 値 | terminal? |
+| --- | --- | --- | --- |
+| `workflowRuns` | `queued` / `in_progress` / `completed` / `cancelled` | `success` / `failure` / `cancelled` / `skipped` | `completed` / `cancelled` |
+| `workflowJobs` | `queued` / `in_progress` / `completed` / `cancelled` | 同上 | 同上 |
+| `workflowSteps` | `pending` / `in_progress` / `completed` / `skipped` / `cancelled` | 同上 | 同上 |
+
+`status` と `conclusion` は分離されています — `status` は execution lifecycle、`conclusion` は最終結果。terminal status (`completed` / `cancelled`) になった瞬間に `conclusion` が確定。
+
+### Trigger compatibility
+
+GitHub Actions YAML の `on:` は **`push` / `pull_request` / `workflow_dispatch`** のみ正常に dispatch されます。`schedule:` (cron) / `repository_dispatch` / `workflow_call` 等は parser で受理されますが **kernel 側に scan / dispatch 経路が無く、silently never fires**。scheduled workflow が必要な場合は、kernel の cron worker から直接 `dispatchWorkflowRun()` を叩く設計が必要。
+
 ---
 
 ## repos.releases

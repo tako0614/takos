@@ -163,7 +163,10 @@ export function createRuntimeServiceApp(options: RuntimeServiceOptions = {}): Ho
   const cliProxyRateLimiter = createRateLimiter({ maxRequests: RATE_LIMIT_CLI_PROXY_MAX, windowMs: RATE_LIMIT_WINDOW_MS });
 
   app.use('/exec/*', execRateLimiter);
-  app.use('/session/exec/*', execRateLimiter);
+  // /execute-tool is a sibling path, not a child of /exec, so the wildcard
+  // above does not match it. Apply the exec limiter explicitly.
+  app.use('/execute-tool', execRateLimiter);
+  app.use('/session/exec', execRateLimiter);
   app.use('/session/snapshot/*', snapshotRateLimiter);
   app.use('/session/*', sessionRateLimiter);
   app.use('/sessions/*', sessionRateLimiter);
@@ -201,7 +204,12 @@ export function createRuntimeServiceApp(options: RuntimeServiceOptions = {}): Ho
   return app;
 }
 
-export function startRuntimeService(options: RuntimeServiceOptions = {}): void {
+export function startRuntimeService(
+  options: RuntimeServiceOptions = {},
+): {
+  app: ReturnType<typeof createRuntimeServiceApp>;
+  server: Deno.HttpServer<Deno.NetAddr>;
+} {
   const logger = createLogger({ service: options.serviceName ?? 'takos-runtime' });
   const port = options.port ?? PORT;
   const app = createRuntimeServiceApp(options);

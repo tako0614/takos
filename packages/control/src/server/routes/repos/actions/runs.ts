@@ -2,7 +2,7 @@ import { Hono } from 'hono';
 import { z } from 'zod';
 import type { AuthenticatedRouteEnv } from '../../route-auth.ts';
 import { parsePagination } from '../../../../shared/utils/index.ts';
-import { BadRequestError } from 'takos-common/errors';
+import { BadRequestError, ErrorCodes } from 'takos-common/errors';
 import { zValidator } from '../../zod-validator.ts';
 import { checkRepoAccess } from '../../../../application/services/source/repos.ts';
 import {
@@ -82,9 +82,15 @@ export default new Hono<AuthenticatedRouteEnv>()
       inputs: body.inputs,
     });
     if (!result.ok) {
-      return c.json(
-        result.details ? { error: result.error, details: result.details } : { error: result.error },
+      // Match the documented common error envelope
+      // (docs/reference/api.md "エラーレスポンスの共通形式").
+      throw new AppError(
+        result.error,
+        result.status === 404 ? ErrorCodes.NOT_FOUND
+          : result.status === 500 ? ErrorCodes.INTERNAL_ERROR
+          : ErrorCodes.BAD_REQUEST,
         result.status,
+        result.details ? { details: result.details } : undefined,
       );
     }
     return c.json({ run: result.run }, result.status);
@@ -130,7 +136,11 @@ export default new Hono<AuthenticatedRouteEnv>()
     }
     const result = await cancelWorkflowRun(c.env, { repoId, runId });
     if (!result.ok) {
-      throw new AppError(result.error, undefined, result.status);
+      throw new AppError(
+        result.error,
+        result.status === 404 ? ErrorCodes.NOT_FOUND : ErrorCodes.BAD_REQUEST,
+        result.status,
+      );
     }
     return c.json({ cancelled: result.cancelled });
   })
@@ -149,9 +159,13 @@ export default new Hono<AuthenticatedRouteEnv>()
       defaultBranch: repoAccess.repo.default_branch || 'main',
     });
     if (!result.ok) {
-      return c.json(
-        result.details ? { error: result.error, details: result.details } : { error: result.error },
+      throw new AppError(
+        result.error,
+        result.status === 404 ? ErrorCodes.NOT_FOUND
+          : result.status === 500 ? ErrorCodes.INTERNAL_ERROR
+          : ErrorCodes.BAD_REQUEST,
         result.status,
+        result.details ? { details: result.details } : undefined,
       );
     }
     return c.json({ run: result.run }, result.status);

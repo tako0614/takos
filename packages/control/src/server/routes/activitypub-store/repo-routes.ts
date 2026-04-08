@@ -37,11 +37,13 @@ async function handleRepoActorRoute(
   const owner = c.req.param("owner") ?? "";
   const repoName = c.req.param("repoName") ?? "";
 
+  const publicKeyPem = c.env.PLATFORM_PUBLIC_KEY;
+
   const publicRepo = await deps.findCanonicalRepo(c.env, owner, repoName);
   if (publicRepo) {
     return activityJson(
       c,
-      buildRepoActor(getOriginFromUrl(c.req.url), publicRepo),
+      buildRepoActor(getOriginFromUrl(c.req.url), publicRepo, { publicKeyPem }),
     );
   }
 
@@ -71,7 +73,10 @@ async function handleRepoActorRoute(
 
   return activityJson(
     c,
-    buildRepoActor(getOriginFromUrl(c.req.url), repo, { omitPushUri: true }),
+    buildRepoActor(getOriginFromUrl(c.req.url), repo, {
+      omitPushUri: true,
+      publicKeyPem,
+    }),
   );
 }
 

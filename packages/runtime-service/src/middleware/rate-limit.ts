@@ -58,9 +58,13 @@ export function createRateLimiter<E extends Env = Env>(options: RateLimitOptions
         if (!evicted && store.size >= maxKeys) {
           const retryAfter = Math.ceil(windowMs / 1000);
           c.header('Retry-After', String(retryAfter));
+          // Common error envelope: { error: { code, message, details } }
           return c.json({
-            error: 'Rate limiter capacity reached. Please try again later.',
-            retry_after_seconds: retryAfter,
+            error: {
+              code: 'RATE_LIMITED',
+              message: 'Rate limiter capacity reached. Please try again later.',
+              details: { retryAfter },
+            },
           }, 429);
         }
       }
@@ -78,9 +82,13 @@ export function createRateLimiter<E extends Env = Env>(options: RateLimitOptions
     if (entry.count > maxRequests) {
       const retryAfter = Math.ceil((entry.resetAt - now) / 1000);
       c.header('Retry-After', String(retryAfter));
+      // Common error envelope: { error: { code, message, details } }
       return c.json({
-        error: 'Too many requests. Please try again later.',
-        retry_after_seconds: retryAfter,
+        error: {
+          code: 'RATE_LIMITED',
+          message: 'Too many requests. Please try again later.',
+          details: { retryAfter },
+        },
       }, 429);
     }
 

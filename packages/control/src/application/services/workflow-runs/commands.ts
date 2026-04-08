@@ -239,7 +239,7 @@ export async function cancelWorkflowRun(
     .run();
   await db.update(workflowJobs)
     .set({ status: 'cancelled', conclusion: 'cancelled', completedAt: timestamp })
-    .where(and(eq(workflowJobs.runId, params.runId), inArray(workflowJobs.status, ['queued', 'in_progress', 'waiting'])))
+    .where(and(eq(workflowJobs.runId, params.runId), inArray(workflowJobs.status, ['queued', 'in_progress'])))
     .run();
 
   const jobIds = await db.select({ id: workflowJobs.id })

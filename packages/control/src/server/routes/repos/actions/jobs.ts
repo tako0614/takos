@@ -26,6 +26,7 @@ export default new Hono<AuthenticatedRouteEnv>()
     const jobResult = await db.select({
       id: workflowJobs.id,
       runId: workflowJobs.runId,
+      jobKey: workflowJobs.jobKey,
       name: workflowJobs.name,
       status: workflowJobs.status,
       conclusion: workflowJobs.conclusion,
@@ -55,6 +56,9 @@ export default new Hono<AuthenticatedRouteEnv>()
       job: {
         id: jobResult.id,
         run_id: jobResult.runId,
+        // YAML job key — clients use this to filter / match jobs by their
+        // declared name in the workflow file.
+        job_key: jobResult.jobKey ?? null,
         name: jobResult.name,
         status: jobResult.status,
         conclusion: jobResult.conclusion,
