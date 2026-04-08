@@ -53,6 +53,34 @@ Authorization: Bearer <access_token>
 | `RATE_LIMITED`   | 429         | レート制限に到達       |
 | `INTERNAL_ERROR` | 500         | サーバー内部エラー     |
 
+## Rate limit
+
+主要な敏感系 endpoint には sliding window の rate limit が適用される (1 分 window):
+
+| カテゴリ | 上限 (req/min) | 適用対象 |
+|---|---|---|
+| `auth` | 100 | 認証エンドポイント (login / verify) |
+| `sensitive` | 100 | bulk operations (storage bulk-delete / bulk-move / bulk-rename) |
+| `oauth.token` | 20 | OAuth `/token` endpoint |
+| `oauth.authorize` | 30 | OAuth `/authorize` endpoint |
+| `oauth.revoke` | 10 | OAuth `/revoke` endpoint |
+| `oauth.register` | 10 | Dynamic Client Registration |
+| `oauth.deviceCode` | 10 | Device Authorization Grant `/device/code` |
+| `oauth.deviceVerify` | 60 | Device verification UI |
+
+レート制限到達時は HTTP `429` を返し、`error.code: "RATE_LIMITED"`。response header に `X-RateLimit-Limit`, `X-RateLimit-Remaining`, `X-RateLimit-Reset` を付与する。
+
+deploy 系 / billing meter 系の usage 制限は plan gate で別途 enforce される ([billing](/platform/billing) 参照)。
+
+## Idempotency
+
+長時間 / 副作用のある書き込み endpoint は `Idempotency-Key` header をサポート:
+
+- `POST /api/services/:id/deployments`
+- (将来追加予定の重要 mutation endpoint)
+
+同じ `Idempotency-Key` で再 POST すると、サーバは初回の result を返す (実体は 1 度だけ実行)。
+
 ## ページネーション
 
 多くのリスト系エンドポイントは `limit` / `offset` または `cursor`
