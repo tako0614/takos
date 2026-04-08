@@ -229,6 +229,33 @@ export async function hasExplicitInventory(
   return !!row;
 }
 
+export type StoreInventoryMode = 'explicit' | 'auto';
+
+/**
+ * Resolve which Store inventory mode to use for a given (space, store).
+ *
+ * Per docs/platform/store.md, the Store has two inventory modes:
+ *   - `explicit`: only entries that have been explicitly registered via the
+ *     inventory API are visible. The Store falls into this mode the moment
+ *     at least one explicit entry exists.
+ *   - `auto`: when no explicit entries exist, the Store can advertise the
+ *     space's public repos automatically.
+ *
+ * The current implementation returns `explicit` whenever any inventory row
+ * exists for the (space, slug) pair, otherwise `auto`. Auto-mode collection
+ * of public repos is not yet wired into the inventory listing — callers
+ * should treat `auto` as "no entries available yet" until the auto-collector
+ * lands.
+ */
+export async function resolveInventoryMode(
+  dbBinding: D1Database,
+  accountId: string,
+  storeSlug: string,
+): Promise<StoreInventoryMode> {
+  const explicit = await hasExplicitInventory(dbBinding, accountId, storeSlug);
+  return explicit ? 'explicit' : 'auto';
+}
+
 export async function countActiveItems(
   dbBinding: D1Database,
   accountId: string,

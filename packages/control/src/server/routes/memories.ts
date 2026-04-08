@@ -7,6 +7,7 @@ import type {
   ReminderTriggerType as _ReminderTriggerType,
   ReminderPriority as _ReminderPriority,
 } from '../../shared/types/index.ts';
+import { BadRequestError } from 'takos-common/errors';
 import { checkSpaceAccess } from '../../application/services/identity/space-access.ts';
 import { requireSpaceAccess, type BaseVariables } from './route-auth.ts';
 import { parsePagination } from '../../shared/utils/index.ts';
@@ -46,6 +47,20 @@ export const memoriesRouteDeps = {
   triggerReminder,
 };
 
+// ==================== Memory type validation ====================
+
+const VALID_MEMORY_TYPES = ['episode', 'semantic', 'procedural'] as const;
+
+function validateMemoryType(value: string | undefined): MemoryType | undefined {
+  if (value === undefined || value === '') return undefined;
+  if (!VALID_MEMORY_TYPES.includes(value as MemoryType)) {
+    throw new BadRequestError(
+      `Invalid memory type: ${value}. Must be one of: ${VALID_MEMORY_TYPES.join(', ')}`,
+    );
+  }
+  return value as MemoryType;
+}
+
 // ==================== Memories ====================
 
 export default new Hono<{ Bindings: Env; Variables: BaseVariables }>()
@@ -65,7 +80,7 @@ export default new Hono<{ Bindings: Env; Variables: BaseVariables }>()
     const access = await memoriesRouteDeps.requireSpaceAccess(c, spaceId, user.id);
 
     const validatedQuery = c.req.valid('query');
-    const type = validatedQuery.type as MemoryType | undefined;
+    const type = validateMemoryType(validatedQuery.type);
     const category = validatedQuery.category;
     const { limit, offset } = parsePagination(validatedQuery, { limit: 50, maxLimit: 100 });
 
@@ -99,7 +114,7 @@ export default new Hono<{ Bindings: Env; Variables: BaseVariables }>()
 
     const validatedQuery = c.req.valid('query');
     const query = (validatedQuery.q || '').trim();
-    const type = validatedQuery.type as MemoryType | undefined;
+    const type = validateMemoryType(validatedQuery.type);
     const { limit } = parsePagination(validatedQuery, { maxLimit: 100 });
 
     const memoriesResult = await memoriesRouteDeps.searchMemories(

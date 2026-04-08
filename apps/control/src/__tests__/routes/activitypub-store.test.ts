@@ -101,12 +101,16 @@ function applyActivitypubStoreMocks() {
       mocks.listFollowers(...args),
     checkGrant: (...args: Parameters<typeof mocks.checkGrant>) =>
       mocks.checkGrant(...args),
-    verifyHttpSignature: async () =>
-      ({
+    verifyHttpSignature: async (request: Request) => {
+      // Test mock: extract actor from a header so each test can wire up
+      // signature verification without re-parsing the request body.
+      const actorUrl = request.headers.get("x-test-signature-actor") ?? "";
+      return {
         verified: true,
-        actorUrl: "",
+        actorUrl,
         keyId: "",
-      }) as any,
+      } as any;
+    },
   });
 }
 
@@ -311,7 +315,11 @@ Deno.test("activitypub store routes - accepts Follow on store inbox and returns 
   const response = await app.fetch(
     new Request("https://test.takos.jp/ap/stores/alice/inbox", {
       method: "POST",
-      headers: { "Content-Type": "application/activity+json" },
+      headers: {
+        "Content-Type": "application/activity+json",
+        signature: "test-signature",
+        "x-test-signature-actor": "https://remote.example/ap/users/bob",
+      },
       body: JSON.stringify({
         type: "Follow",
         actor: "https://remote.example/ap/users/bob",
@@ -360,7 +368,11 @@ Deno.test("activitypub store routes - rejects unsupported activity types on inbo
   const response = await app.fetch(
     new Request("https://test.takos.jp/ap/stores/alice/inbox", {
       method: "POST",
-      headers: { "Content-Type": "application/activity+json" },
+      headers: {
+        "Content-Type": "application/activity+json",
+        signature: "test-signature",
+        "x-test-signature-actor": "https://remote.example/ap/users/bob",
+      },
       body: JSON.stringify({
         type: "Like",
         actor: "https://remote.example/ap/users/bob",

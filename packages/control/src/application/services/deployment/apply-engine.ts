@@ -337,12 +337,14 @@ export async function applyManifest(
   const takosScopes = plan.effectiveManifest.scopes;
   if (takosScopes && takosScopes.length > 0) {
     try {
-      result.appToken = await AppTokenService.issueToken(env, {
-        groupId,
+      const issued = await AppTokenService.issueToken(env, {
+        groupName: plan.effectiveManifest.name,
         spaceId: group.spaceId,
-        appName: plan.effectiveManifest.name,
         scopes: takosScopes,
       });
+      if (issued) {
+        result.appToken = issued;
+      }
     } catch {
       // Token issuance failure is non-fatal — the deploy itself succeeded.
       // The caller can retry or issue tokens separately.

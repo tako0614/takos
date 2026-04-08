@@ -1020,6 +1020,27 @@ curl -N \
 
 Server-Sent Events 形式で Run の状態変化・ログをストリーミングで受信する。
 
+#### SSE event types
+
+`GET /api/runs/:id/events` / `GET /api/runs/:id/sse` で配信される event 種別:
+
+| event        | payload                                  | 意味                                   |
+| ------------ | ---------------------------------------- | -------------------------------------- |
+| `started`    | `{ agent_type, ... }`                    | run 開始                               |
+| `thinking`   | `{ message, iteration?, engine? }`       | 推論中 (progress / debug 情報)         |
+| `tool_call`  | `{ tool, input, id }`                    | tool 呼び出し開始                      |
+| `tool_result`| `{ tool, output, id }`                   | tool 呼び出し結果                      |
+| `message`    | `{ content }`                            | assistant message 追加                 |
+| `artifact`   | `{ artifact }`                           | artifact 生成                          |
+| `progress`   | `{ message, phase? }`                    | session close など汎用 progress        |
+| `completed`  | `{ status: "completed", run, ... }`      | 正常終了 (terminal)                    |
+| `error`      | `{ status: "failed", run, error, ... }` | 実行中エラー (terminal)                |
+| `cancelled`  | `{ status: "cancelled", run, ... }`     | cancel 要求で停止 (terminal)           |
+| `run.failed` | `{ status: "failed", run, error, ... }` | system レベルの失敗 (terminal)         |
+
+terminal event を受信したら client は接続を閉じる。cursor ベースの replay
+は `?last_event_id=` query を `/events` endpoint に渡す。
+
 ---
 
 ## search
@@ -1590,6 +1611,12 @@ group を再生成することはありません。
 | GET    | `/api/browser-sessions/:id/screenshot`  | スクリーンショット取得 |
 | POST   | `/api/browser-sessions/:id/pdf`         | PDF 生成               |
 | DELETE | `/api/browser-sessions/:id`             | セッション破棄         |
+
+::: tip Browser session lifecycle
+Browser session は外部 `BROWSER_HOST` service に delegate される。idle timeout /
+TTL / auto-close の挙動は `BROWSER_HOST` 実装に依存する。明示的に session を
+閉じるには `DELETE /api/browser-sessions/:id` を呼ぶ。
+:::
 
 ---
 

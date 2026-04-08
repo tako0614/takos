@@ -238,10 +238,14 @@ export const OAUTH_SCOPES: Record<string, OAuthScope> = {
   'memories:write': { name: 'memories:write', description: 'Write memories', category: 'resource' },
   'threads:read': { name: 'threads:read', description: 'Read threads', category: 'resource' },
   'threads:write': { name: 'threads:write', description: 'Write threads', category: 'resource' },
+  'runs:read': { name: 'runs:read', description: 'Read runs', category: 'resource' },
+  'runs:write': { name: 'runs:write', description: 'Trigger or cancel runs', category: 'resource' },
   'agents:execute': { name: 'agents:execute', description: 'Execute agents', category: 'resource' },
   'repos:read': { name: 'repos:read', description: 'Read repositories', category: 'resource' },
   'repos:write': { name: 'repos:write', description: 'Write repositories', category: 'resource' },
+  'mcp:invoke': { name: 'mcp:invoke', description: 'Invoke MCP servers', category: 'resource' },
   'events:subscribe': { name: 'events:subscribe', description: 'Subscribe to space lifecycle events', category: 'resource' },
+  'billing:meter': { name: 'billing:meter', description: 'Submit usage records', category: 'resource' },
 };
 
 export const ALL_SCOPES = Object.keys(OAUTH_SCOPES);

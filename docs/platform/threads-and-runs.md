@@ -29,9 +29,15 @@ Thread で対話コンテキストを管理し、Run で実行する。
 
 Thread 上で発生する 1 回の実行。
 
+### Run state machine
+
 ```text
-pending -> queued -> running -> completed / failed / cancelled
+queued (初期) → running → completed
+                       → failed
+                       → cancelled
 ```
+
+`queued` が初期状態。`pending` という別状態は持たない。
 
 ### 主要フィールド
 
