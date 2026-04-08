@@ -6,7 +6,9 @@ import { tmpdir } from "node:os";
 import { DEFAULT_TIMEOUT_MINUTES, MINUTES_TO_MS } from "../constants.ts";
 import type {
   ActionResolver,
+  Conclusion,
   ExecutionContext,
+  JobDefaults,
   Step,
   StepResult,
 } from "../workflow-models.ts";
@@ -26,6 +28,7 @@ import {
 import { defaultActionResolver } from "./step-action-resolver.ts";
 import {
   defaultShellExecutor,
+  maskSecretsInText,
   resolvePlatformDefaultShell,
   type ShellExecutor,
 } from "./step-shell-executor.ts";
@@ -44,6 +47,15 @@ export interface StepRunnerOptions {
   workingDirectory?: string;
   /** デフォルトシェル */
   defaultShell?: Step["shell"];
+  /**
+   * job / workflow の defaults.run 設定。
+   * step 側で shell / working-directory が未設定なら
+   * job.defaults.run -> workflow.defaults.run の順で fallback する。
+   */
+  defaults?: {
+    workflow?: JobDefaults;
+    job?: JobDefaults;
+  };
 }
 
 /**
@@ -52,6 +64,17 @@ export interface StepRunnerOptions {
 export interface StepRunMetadata {
   /** ジョブ内の 0 始まりインデックス */
   index?: number;
+  /**
+   * ステップ実行前のジョブ状態。
+   * `if: failure()` / `cancelled()` / `always()` の評価に使う。
+   * 未指定なら `success` とみなす。
+   */
+  jobStatus?: "success" | "failure" | "cancelled";
+  /**
+   * このステップが所属するジョブの defaults.run 設定。
+   * step / job / workflow の fallback 順で shell と working-directory を決める。
+   */
+  jobDefaults?: JobDefaults;
 }
 
 export type {
@@ -85,7 +108,7 @@ export class StepRunner {
   async runStep(
     step: Step,
     context: ExecutionContext,
-    _metadata: StepRunMetadata = {},
+    metadata: StepRunMetadata = {},
   ): Promise<StepResult> {
     const startedAt = new Date();
     const result: StepResult = {
@@ -96,13 +119,23 @@ export class StepRunner {
       startedAt,
     };
 
+    // metadata.jobStatus を反映して `success()` / `failure()` /
+    // `cancelled()` / `always()` が直前ステップの失敗を観測できるようにする。
+    const stepExecutionContext: ExecutionContext = metadata.jobStatus
+      ? {
+          ...context,
+          job: { ...context.job, status: metadata.jobStatus },
+        }
+      : context;
+
     try {
       // 条件判定
       if (step.if !== undefined) {
-        const shouldRun = evaluateCondition(step.if, context);
+        const shouldRun = evaluateCondition(step.if, stepExecutionContext);
         if (!shouldRun) {
           result.status = "completed";
           result.conclusion = "skipped";
+          result.outcome = "skipped";
           result.completedAt = new Date();
           return result;
         }
@@ -112,16 +145,16 @@ export class StepRunner {
 
       // 環境変数をマージ
       const env = {
-        ...context.env,
+        ...stepExecutionContext.env,
         ...(step.env || {}),
       };
 
       // 環境変数を補間
-      const interpolatedEnv = interpolateObject(env, context);
+      const interpolatedEnv = interpolateObject(env, stepExecutionContext);
 
       // 補間済み環境変数でステップコンテキストを作成
       const stepContext: ExecutionContext = {
-        ...context,
+        ...stepExecutionContext,
         env: interpolatedEnv,
       };
 
@@ -129,17 +162,41 @@ export class StepRunner {
       if (step.uses) {
         await this.runAction(step, stepContext, result);
       } else if (step.run) {
-        await this.runShell(step, stepContext, context.env, result);
+        await this.runShell(
+          step,
+          stepContext,
+          context.env,
+          result,
+          metadata.jobDefaults,
+        );
       } else {
         throw new Error('Step must have either "uses" or "run"');
       }
 
       result.status = "completed";
-      result.conclusion = result.conclusion ?? "success";
+      const rawOutcome: Conclusion = result.conclusion ?? "success";
+      result.outcome = rawOutcome;
+      // continue-on-error によって失敗を success に書き換える
+      if (rawOutcome === "failure" && step["continue-on-error"]) {
+        result.conclusion = "success";
+      } else {
+        result.conclusion = rawOutcome;
+      }
     } catch (error) {
       result.status = "completed";
+      result.outcome = "failure";
       result.conclusion = step["continue-on-error"] ? "success" : "failure";
-      result.error = error instanceof Error ? error.message : String(error);
+      const rawError = error instanceof Error ? error.message : String(error);
+      result.error = maskSecretsInText(
+        rawError,
+        collectSecretValues(stepExecutionContext),
+      );
+    }
+
+    // secret 値を stdout/stderr/error から安全にマスクする
+    const secrets = collectSecretValues(stepExecutionContext);
+    if (secrets.length > 0 && result.error) {
+      result.error = maskSecretsInText(result.error, secrets);
     }
 
     result.completedAt = new Date();
@@ -187,17 +244,17 @@ export class StepRunner {
     context: ExecutionContext,
     sharedEnv: Record<string, string>,
     result: StepResult,
+    jobDefaults?: JobDefaults,
   ): Promise<void> {
     // コマンド文字列を補間
     const command = interpolateString(step.run!, context);
 
-    // 使用シェルを決定
-    const shell = step.shell ?? this.options.defaultShell;
+    // 使用シェルを決定（step -> job.defaults -> workflow.defaults -> runner 既定）
+    const shell = this.resolveShell(step, jobDefaults);
 
-    // 作業ディレクトリを決定
-    const workingDirectory = step["working-directory"] ??
-      this.options.workingDirectory;
-    const interpolatedWorkDir = interpolateString(workingDirectory!, context);
+    // 作業ディレクトリを決定（同上の fallback）
+    const workingDirectory = this.resolveWorkingDirectory(step, jobDefaults);
+    const interpolatedWorkDir = interpolateString(workingDirectory, context);
 
     // タイムアウトを計算
     const timeout = (step["timeout-minutes"] ?? this.options.defaultTimeout!) *
@@ -219,6 +276,9 @@ export class StepRunner {
       GITHUB_PATH: commandFiles.path,
     };
 
+    // ${{ secrets.X }} 経由で解決された機密値を集める
+    const secretValues = collectSecretValues(context);
+
     try {
       // コマンドを実行
       const shellResult = await this.shellExecutor(command, {
@@ -228,15 +288,22 @@ export class StepRunner {
         timeout,
       });
 
+      // secrets を出力からマスク
+      const maskedStdout = maskSecretsInText(shellResult.stdout, secretValues);
+      const maskedStderr = maskSecretsInText(shellResult.stderr, secretValues);
+
       // stdout から GitHub Actions 形式の出力をパース
-      const stdoutOutputs = parseOutputs(shellResult.stdout);
+      const stdoutOutputs = parseOutputs(maskedStdout);
       Object.assign(result.outputs, stdoutOutputs);
 
       // コマンドファイル出力（echo "name=value" >> $GITHUB_OUTPUT）を統合
       const commandFileOutputs = await parseStepCommandFileOutputs(
         commandFiles.output,
       );
-      Object.assign(result.outputs, commandFileOutputs);
+      // コマンドファイル経由の値にも同じマスクを適用する
+      for (const [key, value] of Object.entries(commandFileOutputs)) {
+        result.outputs[key] = maskSecretsInText(value, secretValues);
+      }
 
       // GITHUB_ENV と GITHUB_PATH の更新を後続ステップへ反映
       await applyStepCommandFileEnvironmentUpdates(
@@ -249,13 +316,104 @@ export class StepRunner {
       result.conclusion = shellResult.exitCode === 0 ? "success" : "failure";
 
       if (shellResult.exitCode !== 0) {
-        result.error = `Exit code: ${shellResult.exitCode}`;
-        if (shellResult.stderr) {
-          result.error += `\n${shellResult.stderr}`;
+        let errorMessage = `Exit code: ${shellResult.exitCode}`;
+        if (maskedStderr) {
+          errorMessage += `\n${maskedStderr}`;
         }
+        result.error = errorMessage;
       }
     } finally {
       await removeStepCommandFilesDirectory(commandFiles.directory);
     }
   }
+
+  /**
+   * step の shell を resolve する。
+   * 優先度: step.shell > 呼び出し側 jobDefaults > options.defaults.workflow > options.defaultShell
+   */
+  private resolveShell(
+    step: Step,
+    jobDefaults?: JobDefaults,
+  ): Step["shell"] {
+    if (step.shell) {
+      return step.shell;
+    }
+
+    const jobShell = jobDefaults?.run?.shell;
+    if (jobShell) {
+      return normalizeDefaultShell(jobShell);
+    }
+    const workflowShell = this.options.defaults?.workflow?.run?.shell;
+    if (workflowShell) {
+      return normalizeDefaultShell(workflowShell);
+    }
+    // options.defaults.job はレガシー (constructor 時点で設定する場合) の fallback
+    const constructorJobShell = this.options.defaults?.job?.run?.shell;
+    if (constructorJobShell) {
+      return normalizeDefaultShell(constructorJobShell);
+    }
+
+    return this.options.defaultShell;
+  }
+
+  /**
+   * step の working-directory を resolve する。
+   * 優先度: step['working-directory'] > jobDefaults > workflow defaults > options.workingDirectory
+   */
+  private resolveWorkingDirectory(
+    step: Step,
+    jobDefaults?: JobDefaults,
+  ): string {
+    if (step["working-directory"]) {
+      return step["working-directory"];
+    }
+
+    const jobDir = jobDefaults?.run?.["working-directory"];
+    if (jobDir) {
+      return jobDir;
+    }
+    const workflowDir =
+      this.options.defaults?.workflow?.run?.["working-directory"];
+    if (workflowDir) {
+      return workflowDir;
+    }
+    const constructorJobDir =
+      this.options.defaults?.job?.run?.["working-directory"];
+    if (constructorJobDir) {
+      return constructorJobDir;
+    }
+
+    return this.options.workingDirectory!;
+  }
+}
+
+function normalizeDefaultShell(shell: string): Step["shell"] {
+  switch (shell) {
+    case "bash":
+    case "pwsh":
+    case "python":
+    case "sh":
+    case "cmd":
+    case "powershell":
+      return shell;
+    default:
+      return shell as Step["shell"];
+  }
+}
+
+/**
+ * ExecutionContext.secrets の値を配列で返す。
+ * 空文字は秘密情報マッチに含めない（誤置換を避ける）。
+ */
+function collectSecretValues(context: ExecutionContext): string[] {
+  const values: string[] = [];
+  if (!context.secrets) {
+    return values;
+  }
+  for (const value of Object.values(context.secrets)) {
+    if (typeof value === "string" && value.length > 0) {
+      values.push(value);
+    }
+  }
+  return values;
 }

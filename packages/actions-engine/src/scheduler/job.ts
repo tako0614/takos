@@ -1,6 +1,7 @@
 /**
  * ジョブスケジューラと実行管理
  */
+import { MINUTES_TO_MS } from '../constants.ts';
 import type {
   Workflow,
   Job,
@@ -8,6 +9,8 @@ import type {
   ExecutionPlan,
   ExecutionContext,
   Conclusion,
+  MatrixContext,
+  StrategyContext,
 } from '../workflow-models.ts';
 import { evaluateCondition } from '../parser/expression.ts';
 import {
@@ -27,6 +30,7 @@ import {
   getDependencySkipReason,
   type JobExecutionState,
 } from './job-policy.ts';
+import { buildMatrixJobId, expandMatrix } from './matrix.ts';
 
 // --- needsInput 正規化 ---
 
@@ -34,6 +38,117 @@ export function normalizeNeedsInput(needs: unknown): string[] {
   if (typeof needs === 'string') return [needs];
   if (Array.isArray(needs)) return needs.filter((need): need is string => typeof need === 'string');
   return [];
+}
+
+// --- マトリクス展開されたジョブ ---
+
+/**
+ * スケジューラ内部で使用する展開済みジョブ記述子。
+ * matrix を持たないジョブは一件の展開エントリとして扱う。
+ */
+interface ExpandedJob {
+  /** 展開後の一意な id (matrix がある場合は `${baseId}-${hash}` 形式) */
+  id: string;
+  /** 元ジョブ id */
+  baseId: string;
+  /** ジョブ定義 */
+  job: Job;
+  /** matrix context（matrix が無い場合は undefined） */
+  matrix?: MatrixContext;
+  /** strategy context（matrix が無い場合は undefined） */
+  strategy?: StrategyContext;
+}
+
+/**
+ * ワークフローを matrix 展開してスケジューラ内部で使う ExpandedJob の集合を返す。
+ * - matrix が空なら元ジョブをそのまま 1 エントリにする
+ * - matrix がある場合は組み合わせごとに `${baseId}-${hash}` を生成する
+ */
+function buildExpandedJobs(workflow: Workflow): {
+  jobs: Map<string, ExpandedJob>;
+  expansionMap: Map<string, string[]>;
+} {
+  const jobs = new Map<string, ExpandedJob>();
+  const expansionMap = new Map<string, string[]>();
+
+  for (const [jobId, job] of Object.entries(workflow.jobs)) {
+    const expansions = expandMatrix(job.strategy);
+
+    if (expansions.length === 0) {
+      // 展開が無いジョブ (matrix 未指定 or 結果 0 件) → 単独エントリ
+      jobs.set(jobId, {
+        id: jobId,
+        baseId: jobId,
+        job,
+      });
+      expansionMap.set(jobId, [jobId]);
+      continue;
+    }
+
+    // 展開されたエントリを全て追加
+    const expandedIds: string[] = [];
+    for (const expansion of expansions) {
+      const expandedId = buildMatrixJobId(jobId, expansion.hash);
+      // 万が一 hash 衝突した場合でも一意化するための suffix
+      let uniqueId = expandedId;
+      let counter = 1;
+      while (jobs.has(uniqueId)) {
+        uniqueId = `${expandedId}-${counter}`;
+        counter += 1;
+      }
+      jobs.set(uniqueId, {
+        id: uniqueId,
+        baseId: jobId,
+        job,
+        matrix: expansion.matrix,
+        strategy: expansion.strategy,
+      });
+      expandedIds.push(uniqueId);
+    }
+    expansionMap.set(jobId, expandedIds);
+  }
+
+  return { jobs, expansionMap };
+}
+
+/**
+ * 展開後ジョブ用の DependencyGraph を構築する。
+ * needs 参照は展開先 ID 全てに置き換える。
+ */
+function buildExpandedDependencyGraph(
+  expandedJobs: Map<string, ExpandedJob>,
+  expansionMap: Map<string, string[]>
+): DependencyGraph {
+  const nodes = new Set<string>();
+  const edges = new Map<string, Set<string>>();
+  const reverseEdges = new Map<string, Set<string>>();
+
+  for (const expanded of expandedJobs.values()) {
+    nodes.add(expanded.id);
+    edges.set(expanded.id, new Set());
+    reverseEdges.set(expanded.id, new Set());
+  }
+
+  for (const expanded of expandedJobs.values()) {
+    const needs = normalizeNeedsInput(expanded.job.needs);
+    for (const need of needs) {
+      const targets = expansionMap.get(need);
+      if (!targets || targets.length === 0) {
+        throw new Error(
+          `Job "${expanded.baseId}" depends on unknown job "${need}"`
+        );
+      }
+      for (const target of targets) {
+        if (!nodes.has(target)) {
+          continue;
+        }
+        edges.get(expanded.id)!.add(target);
+        reverseEdges.get(target)!.add(expanded.id);
+      }
+    }
+  }
+
+  return { nodes, edges, reverseEdges };
 }
 
 // --- ジョブスケジューラ ---
@@ -68,11 +183,27 @@ export type JobSchedulerEvent =
 export type JobSchedulerListener = (event: JobSchedulerEvent) => void;
 
 /**
+ * `always()` / `failure()` / `cancelled()` を含む if 条件は
+ * 依存スキップの早期 return を抑制する必要がある。
+ *
+ * これらは式内部で自由に組み合わせ可能（例: `${{ failure() && steps.x.outcome == 'failure' }}`）
+ * なので単純な文字列マッチを行う。
+ */
+function shouldSuppressDependencySkip(condition: string | undefined): boolean {
+  if (condition === undefined || condition === '') {
+    return false;
+  }
+  return /\b(always|failure|cancelled)\s*\(/.test(condition);
+}
+
+/**
  * ワークフロー実行のジョブスケジューラ
  */
 export class JobScheduler {
   private workflow: Workflow;
   private options: JobSchedulerOptions;
+  private expandedJobs: Map<string, ExpandedJob>;
+  private expansionMap: Map<string, string[]>;
   private graph: DependencyGraph;
   private results: Map<string, JobResult>;
   private listeners: JobSchedulerListener[];
@@ -82,12 +213,30 @@ export class JobScheduler {
 
   constructor(workflow: Workflow, options: JobSchedulerOptions = {}) {
     this.workflow = workflow;
+    // workflow.defaults と step runner options を合成
+    // ユーザが明示的に defaults.workflow を渡した場合はそれを優先。
+    const userDefaults = options.stepRunner?.defaults ?? {};
+    const stepRunnerOptions: StepRunnerOptions = {
+      ...(options.stepRunner ?? {}),
+      defaults: {
+        workflow: userDefaults.workflow ?? workflow.defaults,
+        job: userDefaults.job,
+      },
+    };
     this.options = {
       maxParallel: options.maxParallel ?? 0,
       failFast: options.failFast ?? true,
-      stepRunner: options.stepRunner ?? {},
+      stepRunner: stepRunnerOptions,
     };
-    this.graph = buildDependencyGraph(workflow);
+    const expanded = buildExpandedJobs(workflow);
+    this.expandedJobs = expanded.jobs;
+    this.expansionMap = expanded.expansionMap;
+    // 依存グラフ構築時にサイクル検査 / 未知参照検査を先に行う（後方互換性）
+    buildDependencyGraph(workflow);
+    this.graph = buildExpandedDependencyGraph(
+      this.expandedJobs,
+      this.expansionMap
+    );
     this.results = new Map();
     this.listeners = [];
     this.cancelled = false;
@@ -255,13 +404,14 @@ export class JobScheduler {
         continue;
       }
 
+      const expanded = this.expandedJobs.get(jobId);
+      if (!expanded) {
+        continue;
+      }
+
       this.completeTerminalJob(
         jobId,
-        createCompletedJobResult(
-          jobId,
-          this.workflow.jobs[jobId].name,
-          'cancelled'
-        )
+        createCompletedJobResult(jobId, expanded.job.name, 'cancelled')
       );
     }
   }
@@ -273,7 +423,11 @@ export class JobScheduler {
     jobId: string,
     context: ExecutionContext
   ): Promise<JobResult> {
-    const job = this.workflow.jobs[jobId];
+    const expanded = this.expandedJobs.get(jobId);
+    if (!expanded) {
+      throw new Error(`Unknown job "${jobId}"`);
+    }
+    const job = expanded.job;
     const existingResult = this.results.get(jobId);
     const cancellationShortCircuitResult =
       this.getCancellationShortCircuitResult(jobId, job.name, existingResult);
@@ -283,32 +437,66 @@ export class JobScheduler {
     }
 
     // needs を含むジョブ固有コンテキストを構築
-    const jobContext = this.buildJobContext(jobId, context);
+    const jobContext = this.buildJobContext(expanded, context);
+
+    // 依存 skip 判定は `if` が status-check 関数を含む場合は抑制する
+    // （例: `if: always()` は依存失敗時でも本ジョブを走らせる必要がある）
+    const suppressDependencySkip = shouldSuppressDependencySkip(job.if);
+    const needs = normalizeNeedsInput(job.needs);
+    const dependencySkipReason = suppressDependencySkip
+      ? null
+      : this.computeDependencySkipReason(needs);
 
     // ジョブをスキップすべきか確認
     if (!evaluateCondition(job.if, jobContext)) {
-      return this.skipJob(jobId, job.name, 'Condition not met');
+      return this.skipJob(jobId, job.name, 'Condition not met', expanded);
     }
 
-    // 依存ジョブは成功時のみ継続扱い。非成功時は本ジョブをスキップ。
-    const needs = normalizeNeedsInput(job.needs);
-    const dependencySkipReason = getDependencySkipReason(needs, this.results);
     if (dependencySkipReason) {
-      return this.skipJob(jobId, job.name, dependencySkipReason);
+      return this.skipJob(jobId, job.name, dependencySkipReason, expanded);
     }
 
     this.emit({ type: 'job:start', jobId, job });
 
     const result = createInProgressJobResult(jobId, job.name);
+    if (expanded.matrix) {
+      result.matrix = { ...expanded.matrix };
+    }
     let executionState: JobExecutionState;
 
     try {
-      executionState = await this.executeJobSteps(job, jobContext, result);
+      executionState = await this.executeJobStepsWithTimeout(
+        job,
+        jobContext,
+        result
+      );
     } catch {
       executionState = { failed: true, cancelled: false };
     }
 
-    return this.finalizeAndStoreJobResult(jobId, result, executionState);
+    return this.finalizeAndStoreJobResult(
+      jobId,
+      result,
+      executionState,
+      job,
+      jobContext
+    );
+  }
+
+  /**
+   * needs 全体から展開 ID を収集してスキップ理由を計算する。
+   * - base id は expansion map 経由で展開 id 群に置換される
+   * - 一つでも非成功の結果があればその理由を返す
+   */
+  private computeDependencySkipReason(needs: string[]): string | null {
+    const expandedNeeds: string[] = [];
+    for (const need of needs) {
+      const targets = this.expansionMap.get(need);
+      if (targets) {
+        expandedNeeds.push(...targets);
+      }
+    }
+    return getDependencySkipReason(expandedNeeds, this.results);
   }
 
   /**
@@ -338,27 +526,132 @@ export class JobScheduler {
   }
 
   /**
+   * job['timeout-minutes'] を AbortController で wrap して ExecuteJobSteps を呼ぶ。
+   */
+  private async executeJobStepsWithTimeout(
+    job: Job,
+    jobContext: ExecutionContext,
+    result: JobResult
+  ): Promise<JobExecutionState> {
+    const jobTimeoutMinutes = job['timeout-minutes'];
+    if (
+      jobTimeoutMinutes === undefined ||
+      jobTimeoutMinutes === null ||
+      jobTimeoutMinutes <= 0
+    ) {
+      return this.executeJobSteps(job, jobContext, result);
+    }
+
+    const controller = new AbortController();
+    const timeoutMs = jobTimeoutMinutes * MINUTES_TO_MS;
+    let timedOut = false;
+    const timer = setTimeout(() => {
+      timedOut = true;
+      controller.abort();
+    }, timeoutMs);
+    // Deno の timer を unref してテスト終了を妨げない（存在しない環境は無視）
+    const denoRef = (globalThis as { Deno?: { unrefTimer?: (id: number) => void } }).Deno;
+    try {
+      denoRef?.unrefTimer?.(timer as unknown as number);
+    } catch {
+      // unrefTimer が無い環境は無視
+    }
+
+    try {
+      return await this.executeJobSteps(
+        job,
+        jobContext,
+        result,
+        controller.signal
+      );
+    } finally {
+      clearTimeout(timer);
+      if (timedOut) {
+        result.steps[result.steps.length - 1] ??= {
+          status: 'completed',
+          conclusion: 'failure',
+          outputs: {},
+        };
+        const last = result.steps[result.steps.length - 1];
+        if (last && !last.error) {
+          last.error = `Job timed out after ${jobTimeoutMinutes} minute(s)`;
+        }
+      }
+    }
+  }
+
+  /**
    * ジョブの全ステップを実行し、最終実行状態を返す
    */
   private async executeJobSteps(
     job: Job,
     jobContext: ExecutionContext,
-    result: JobResult
+    result: JobResult,
+    abortSignal?: AbortSignal
   ): Promise<JobExecutionState> {
     const executionState: JobExecutionState = { failed: false, cancelled: false };
+
+    // ジョブ単位で観測する状態: success -> failure への単方向遷移
+    let jobStatus: 'success' | 'failure' | 'cancelled' = jobContext.job.status;
+    let jobFailedStep = false;
+    let workflowShouldCancel = false;
 
     for (let i = 0; i < job.steps.length; i++) {
       if (this.cancelled) {
         executionState.cancelled = true;
+        jobStatus = 'cancelled';
+        // キャンセル状態でも after-failure / always cleanup を実行する余地を残す
+        // が、scheduler 全体がキャンセルされている場合は中断する。
+        break;
+      }
+      if (abortSignal?.aborted) {
+        jobStatus = 'cancelled';
+        executionState.cancelled = false;
+        executionState.failed = true;
         break;
       }
 
       const step = job.steps[i];
+
+      // 既にジョブが失敗している場合、次の step は:
+      // - `if` に status-check 関数 (always/failure/cancelled) を含む: 実行
+      // - 含まない: skip
+      // これにより cleanup や必ず走る通知ステップが機能する。
+      if (jobFailedStep) {
+        const hasStatusCheck = shouldSuppressDependencySkip(step.if);
+        if (!hasStatusCheck) {
+          // 通常 step は失敗以降 skip 扱いにする
+          const skipped: typeof result.steps[number] = {
+            id: step.id,
+            name: step.name,
+            status: 'completed',
+            conclusion: 'skipped',
+            outcome: 'skipped',
+            outputs: {},
+          };
+          result.steps.push(skipped);
+          continue;
+        }
+      }
+
       const stepContext = this.buildStepContext(jobContext, result);
       const stepResult = await this.stepRunner.runStep(step, stepContext, {
         index: i,
+        jobStatus,
+        jobDefaults: job.defaults,
       });
       result.steps.push(stepResult);
+
+      // outcome ベースで jobStatus を更新する。
+      // continue-on-error は conclusion を書き換えるが outcome は raw failure のまま。
+      // ただし job 全体を failure にするのは continue-on-error が無い場合のみ。
+      if (
+        stepResult.outcome === 'failure' &&
+        !step['continue-on-error'] &&
+        jobStatus === 'success'
+      ) {
+        jobStatus = 'failure';
+      }
 
       const stepControl = classifyStepControl(
         step,
@@ -371,11 +664,22 @@ export class JobScheduler {
 
       if (stepControl.shouldMarkJobFailed) {
         executionState.failed = true;
+        jobFailedStep = true;
       }
       if (stepControl.shouldCancelWorkflow) {
-        this.cancelled = true;
+        // workflow レベルのキャンセルは残ステップの cleanup を完了した後に行う
+        workflowShouldCancel = true;
       }
-      break;
+      // 残ステップには status-check cleanup があるかもしれないので継続
+      continue;
+    }
+
+    if (abortSignal?.aborted) {
+      executionState.failed = true;
+    }
+
+    if (workflowShouldCancel) {
+      this.cancelled = true;
     }
 
     return executionState;
@@ -387,9 +691,11 @@ export class JobScheduler {
   private finalizeAndStoreJobResult(
     jobId: string,
     result: JobResult,
-    executionState: JobExecutionState
+    executionState: JobExecutionState,
+    job?: Job,
+    jobContext?: ExecutionContext
   ): JobResult {
-    finalizeJobResult(result, executionState);
+    finalizeJobResult(result, executionState, { job, jobContext });
     return this.completeTerminalJob(jobId, result);
   }
 
@@ -399,13 +705,14 @@ export class JobScheduler {
   private skipJob(
     jobId: string,
     jobName: JobResult['name'],
-    reason: string
+    reason: string,
+    expanded?: ExpandedJob
   ): JobResult {
-    return this.completeTerminalJob(
-      jobId,
-      createCompletedJobResult(jobId, jobName, 'skipped'),
-      { skipReason: reason }
-    );
+    const skipped = createCompletedJobResult(jobId, jobName, 'skipped');
+    if (expanded?.matrix) {
+      skipped.matrix = { ...expanded.matrix };
+    }
+    return this.completeTerminalJob(jobId, skipped, { skipReason: reason });
   }
 
   /**
@@ -454,17 +761,67 @@ export class JobScheduler {
    * needs 情報付きの実行コンテキストを構築
    */
   private buildJobContext(
-    jobId: string,
+    expanded: ExpandedJob,
     context: ExecutionContext
   ): ExecutionContext {
-    const job = this.workflow.jobs[jobId];
+    const job = expanded.job;
     const needs = normalizeNeedsInput(job.needs);
-    const needsContext = buildNeedsContext(needs, this.results);
-    return buildJobExecutionContext(context, needsContext, [
+    // 展開先 id を経由して needs context を集約する
+    const expandedNeeds: string[] = [];
+    for (const need of needs) {
+      const targets = this.expansionMap.get(need);
+      if (targets) {
+        expandedNeeds.push(...targets);
+      }
+    }
+    const needsContext = buildNeedsContext(expandedNeeds, this.results);
+    // base id 参照もサポートするため、重複しない形で上書きする
+    // 展開されたエントリ全てが success なら base id = success にする
+    for (const need of needs) {
+      const targets = this.expansionMap.get(need);
+      if (!targets || targets.length === 0) continue;
+      if (needsContext[need] !== undefined) continue;
+      let aggregatedResult: 'success' | 'failure' | 'cancelled' | 'skipped' =
+        'success';
+      const aggregatedOutputs: Record<string, string> = {};
+      for (const target of targets) {
+        const targetContext = needsContext[target];
+        if (!targetContext) continue;
+        Object.assign(aggregatedOutputs, targetContext.outputs);
+        if (targetContext.result === 'failure') {
+          aggregatedResult = 'failure';
+        } else if (
+          targetContext.result === 'cancelled' &&
+          aggregatedResult !== 'failure'
+        ) {
+          aggregatedResult = 'cancelled';
+        } else if (
+          targetContext.result === 'skipped' &&
+          aggregatedResult === 'success'
+        ) {
+          aggregatedResult = 'skipped';
+        }
+      }
+      needsContext[need] = {
+        outputs: aggregatedOutputs,
+        result: aggregatedResult,
+      };
+    }
+
+    const baseContext = buildJobExecutionContext(context, needsContext, [
       context.env,
       this.workflow.env,
       job.env,
     ]);
+
+    // matrix / strategy を context に反映
+    const withMatrix: ExecutionContext = {
+      ...baseContext,
+      matrix: expanded.matrix ? { ...expanded.matrix } : undefined,
+      strategy: expanded.strategy ? { ...expanded.strategy } : undefined,
+    };
+
+    return withMatrix;
   }
 
   /**
@@ -517,7 +874,11 @@ export class JobScheduler {
  * ワークフロー実行計画を作成
  */
 export function createExecutionPlan(workflow: Workflow): ExecutionPlan {
-  const graph = buildDependencyGraph(workflow);
+  // matrix 展開を適用した実行計画
+  const { jobs, expansionMap } = buildExpandedJobs(workflow);
+  // サイクル検査は元グラフでも行う（後方互換）
+  buildDependencyGraph(workflow);
+  const graph = buildExpandedDependencyGraph(jobs, expansionMap);
   const phases = groupIntoPhases(graph);
   return { phases };
 }

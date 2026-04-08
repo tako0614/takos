@@ -1,16 +1,14 @@
 # takos-actions-engine
 
 GitHub Actions-flavored CI/workflow **parser, validator, and execution
-planner** for Takos. The package's stable, exported surface is:
+engine** for Takos. The package's stable, exported surface is:
 
 - `parseWorkflow(yamlString)` — YAML → `ParsedWorkflow`
 - `validateWorkflow(workflow)` — Zod schema + semantic checks (cycles,
   duplicate ids, unknown `needs`)
 - `createExecutionPlan(workflow)` — DAG → phased execution order
-
-The in-package `JobScheduler` / `StepRunner` are present for the kernel's
-own runtime use and for tests, but they are **not exported from `index.ts`**
-and are not part of the package's stable surface.
+- `JobScheduler` / `StepRunner` — runtime job and step execution
+- `createBaseContext` / `parseGitHubEnvFile` — context helpers
 
 ## Compatibility status
 
@@ -24,15 +22,15 @@ following gaps:
 | `jobs.<id>.steps[*].run` | supported | shell selection per step |
 | `jobs.<id>.steps[*].uses` | partial | only `actions/checkout@*` and `actions/setup-node@*` are recognised, both as **no-op stubs**. Marketplace actions throw `Unsupported action`. Pass a custom `actionResolver` via `StepRunnerOptions` for real behaviour. |
 | `jobs.<id>.needs` | supported | dependency phases |
-| `jobs.<id>.strategy.matrix` | **NOT IMPLEMENTED** | parser accepts it; runtime never expands matrix combinations. A job with `strategy.matrix.node: [16,18,20]` runs once with `context.matrix === undefined`. |
-| `jobs.<id>.timeout-minutes` | **NOT ENFORCED at job level** | step-level timeout works. The job-level value is read into the type but no setTimeout/AbortController gates it. |
-| `jobs.<id>.outputs` | **NOT EVALUATED** | `JobResult.outputs` is populated by `collectStepOutputs` (last-writer-wins flatten of all step outputs), not by evaluating the user-declared `outputs` map against `steps.*` context. |
-| `defaults.run.shell` / `working-directory` (workflow / job level) | **NOT APPLIED** | only step-level `shell` / `working-directory` are honored. |
-| `if: success()` / `failure()` / `cancelled()` / `always()` | **BROKEN** | the engine seeds `context.job.status = 'success'` once and never updates it as steps fail, so status-check functions always evaluate `success=true`, `failure=false`. Job-level `if:` also bypasses the dependency-skip logic incorrectly when these functions are used. |
-| `steps.<id>.outcome` vs `conclusion` | not differentiated | both are set to the same value, even when `continue-on-error` rewrites the conclusion. |
+| `jobs.<id>.strategy.matrix` | supported | cartesian product with `include` / `exclude`, expanded into separate job entries (`${baseId}-${hash}`). Downstream jobs via `needs` wait for all matrix expansions. `context.matrix` and `context.strategy` are populated per entry. |
+| `jobs.<id>.timeout-minutes` | supported | job wall-clock is gated by an `AbortController`; the step loop aborts and the job is marked `failure` on timeout. |
+| `jobs.<id>.outputs` | supported | `JobResult.outputs` is populated by interpolating the user-declared `outputs` map against the finalized `steps.*` context; legacy last-writer-wins flatten is used as a fallback when `outputs` is undefined. |
+| `defaults.run.shell` / `working-directory` (workflow / job level) | supported | resolution order: `step.shell` → `job.defaults.run.shell` → `workflow.defaults.run.shell` → runner default. Same for `working-directory`. |
+| `if: success()` / `failure()` / `cancelled()` / `always()` | supported | `context.job.status` is tracked through the step loop (initialized from the worst `needs` result and promoted on unguarded step failures). Job-level `if:` with any status-check function suppresses the dependency-skip short-circuit so cleanup / notify jobs run. |
+| `steps.<id>.outcome` vs `conclusion` | differentiated | `outcome` is the raw result of a step; `conclusion` reflects `continue-on-error` rewriting. Both are exposed in the `steps` context. |
 | `${{ contains() }}`, `startsWith()`, arithmetic, ternary | not supported | only `success/always/failure/cancelled/format/join/toJSON/fromJSON/hashFiles` are recognised. Unknown expressions evaluate to `false`. |
 | Reusable workflows (`uses: ./.github/workflows/x.yml` at job level) | **NOT IMPLEMENTED** | `workflow_call` trigger is parsed but no resolver exists. |
-| `${{ secrets.X }}` masking in logs | **NO MASKING** | secret values are interpolated verbatim into commands and `StepResult.error`. Callers must wrap the runner in their own log sanitiser. |
+| `${{ secrets.X }}` masking in logs | supported | resolved secret values are collected per-step and replaced with `***` in step output, command-file outputs, and `StepResult.error`. |
 | `GITHUB_STEP_SUMMARY` | not implemented | `$GITHUB_STEP_SUMMARY` writes are dropped. |
 | Artifact upload/download | not the engine's concern | persistence is handled externally by the kernel. |
 
@@ -94,13 +92,17 @@ can run in parallel; phases execute sequentially.
 
 ## Key Exports
 
-### Functions
+### Functions and classes
 
 | Export | Description |
 |---|---|
 | `parseWorkflow(content)` | Parse YAML workflow string into `ParsedWorkflow` |
 | `validateWorkflow(workflow)` | Validate a `Workflow` object, returns `ValidationResult` |
-| `createExecutionPlan(workflow)` | Build phased execution plan from job dependencies |
+| `createExecutionPlan(workflow)` | Build phased execution plan from job dependencies (matrix-aware) |
+| `JobScheduler` | Runtime scheduler (matrix expansion, status tracking, event emitter) |
+| `StepRunner` | Per-step executor (shell/action, secret masking, defaults fallback) |
+| `createBaseContext(options)` | Create a default `ExecutionContext` |
+| `parseGitHubEnvFile(content)` | Parse a `$GITHUB_ENV` / `$GITHUB_OUTPUT` file |
 
 ### Types -- Triggers
 

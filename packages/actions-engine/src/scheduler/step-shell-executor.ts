@@ -2,6 +2,39 @@ import { spawn } from "node:child_process";
 
 import type { Step } from "../workflow-models.ts";
 
+/**
+ * テキスト内の秘密情報文字列を `***` に置換する。
+ *
+ * - 空文字 / undefined は通さず素通し
+ * - 複数回マッチしても全て置換
+ * - 長い secret を先に置換して部分マッチによる書き換えを回避
+ */
+export function maskSecretsInText(
+  text: string | undefined,
+  secrets: readonly string[],
+): string {
+  if (text === undefined || text === null) {
+    return "";
+  }
+  if (secrets.length === 0) {
+    return text;
+  }
+
+  // より長い値から置換して重複マスクの副作用を避ける
+  const sortedSecrets = [...secrets]
+    .filter((value) => typeof value === "string" && value.length > 0)
+    .sort((a, b) => b.length - a.length);
+
+  let result = text;
+  for (const secret of sortedSecrets) {
+    if (!secret) continue;
+    // 文字列全体を置換（正規表現メタ文字をエスケープ）
+    const escaped = secret.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    result = result.replace(new RegExp(escaped, "g"), "***");
+  }
+  return result;
+}
+
 export type ShellExecutor = (
   command: string,
   options: ShellExecutorOptions,

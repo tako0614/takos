@@ -2,12 +2,15 @@
  * ジョブポリシーヘルパー（コンテキスト生成・結果生成・ステップ制御）
  */
 import type {
+  Job,
+  JobContext,
   JobResult,
   ExecutionContext,
   Conclusion,
   Step,
   StepResult,
 } from '../workflow-models.ts';
+import { interpolateString } from '../parser/expression.ts';
 
 // --- ジョブ実行状態 ---
 
@@ -20,6 +23,26 @@ export interface StepControl {
   shouldStopJob: boolean;
   shouldMarkJobFailed: boolean;
   shouldCancelWorkflow: boolean;
+}
+
+/**
+ * needs の結果を集約して job.status の初期値を決定する。
+ * 優先順位: failure > cancelled > success
+ * needs が空の場合は success。
+ */
+export function computeInitialJobStatus(
+  needsContext: ExecutionContext['needs']
+): JobContext['status'] {
+  let worst: JobContext['status'] = 'success';
+  for (const entry of Object.values(needsContext)) {
+    if (entry.result === 'failure') {
+      return 'failure';
+    }
+    if (entry.result === 'cancelled') {
+      worst = 'cancelled';
+    }
+  }
+  return worst;
 }
 
 // --- ジョブコンテキストヘルパー ---
@@ -74,7 +97,7 @@ export function buildJobExecutionContext(
     needs: needsContext,
     job: {
       ...context.job,
-      status: 'success',
+      status: computeInitialJobStatus(needsContext),
     },
     steps: {},
   };
@@ -86,9 +109,12 @@ export function buildStepsContext(stepResults: StepResult[]): ExecutionContext['
   for (const stepResult of stepResults) {
     if (stepResult.id) {
       const conclusion = stepResult.conclusion || 'success';
+      // outcome は continue-on-error による書き換え前の生結果。
+      // StepResult に outcome が無い（後方互換）場合は conclusion を使う。
+      const outcome = stepResult.outcome ?? conclusion;
       stepsContext[stepResult.id] = {
         outputs: { ...stepResult.outputs },
-        outcome: conclusion,
+        outcome,
         conclusion,
       };
     }
@@ -160,9 +186,42 @@ export function collectStepOutputs(steps: StepResult[]): Record<string, string> 
 
 // --- ジョブ最終化 ---
 
+/**
+ * `job.outputs` 宣言を steps コンテキスト経由で評価する。
+ * 定義されていなければ null を返す（呼び出し側が fallback 動作を選択する）。
+ */
+export function evaluateJobOutputs(
+  job: Job,
+  stepsContext: ExecutionContext['steps'],
+  context: ExecutionContext
+): Record<string, string> | null {
+  if (!job.outputs) {
+    return null;
+  }
+
+  const outputContext: ExecutionContext = {
+    ...context,
+    steps: stepsContext,
+  };
+
+  const resolved: Record<string, string> = {};
+  for (const [key, template] of Object.entries(job.outputs)) {
+    if (typeof template !== 'string') {
+      continue;
+    }
+    resolved[key] = interpolateString(template, outputContext);
+  }
+
+  return resolved;
+}
+
 export function finalizeJobResult(
   result: JobResult,
-  executionState: JobExecutionState
+  executionState: JobExecutionState,
+  options: {
+    job?: Job;
+    jobContext?: ExecutionContext;
+  } = {}
 ): void {
   result.status = 'completed';
   result.conclusion = executionState.cancelled
@@ -171,6 +230,22 @@ export function finalizeJobResult(
       ? 'failure'
       : 'success';
   result.completedAt = new Date();
+
+  // job.outputs が定義されていればそれを steps コンテキストで評価して優先する。
+  // 未定義なら従来通り step 出力を last-writer-wins でフラット化する。
+  if (options.job && options.jobContext) {
+    const stepsContext = buildStepsContext(result.steps);
+    const resolvedOutputs = evaluateJobOutputs(
+      options.job,
+      stepsContext,
+      options.jobContext
+    );
+    if (resolvedOutputs !== null) {
+      result.outputs = resolvedOutputs;
+      return;
+    }
+  }
+
   result.outputs = collectStepOutputs(result.steps);
 }
 
