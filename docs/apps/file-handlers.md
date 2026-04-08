@@ -54,6 +54,19 @@ kernel は `type` の意味を解釈しない。
 他の app が FileHandler を発見するには、deploy 時に kernel が注入する環境変数を使います。
 kernel は `publish` で宣言された情報を、**space 内のすべての group の env に inject** します（scoping や dependency declaration なし）。
 
+## Discovery API selection ranking
+
+`GET /api/spaces/:spaceId/storage/file-handlers?mime=...&ext=...` で複数の handler が match した場合、以下の order で sort される (rank 0 が最優先):
+
+| rank | 条件 |
+|---|---|
+| 0 | mime + ext 両方が exact match |
+| 1 | mime のみ match (ext 不問) |
+| 2 | extension のみ match (mime 不問) |
+| 3 | filter 無し (no params) |
+
+同 rank 内では declaration order (DB 登録順、`created_at ASC`) で tie-break。
+
 ## 次のステップ
 
 - [MCP Server](/apps/mcp) --- MCP Server の公開方法
