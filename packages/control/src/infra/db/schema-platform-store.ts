@@ -1,5 +1,24 @@
 import { sqliteTable, text, integer, index, uniqueIndex } from 'drizzle-orm/sqlite-core';
 import { createdAtColumn, timestamps } from './schema-utils.ts';
+import { accounts } from './schema-accounts.ts';
+
+/**
+ * Index naming drift NOTE (Round 11 audit Finding #6).
+ *
+ * Drizzle declarations here use the `idx_<table>_<col>` prefix pattern.
+ * The baseline migration (apps/control/db/migrations/0001_baseline.sql)
+ * uses the legacy `<table>_<col>_idx` suffix pattern. Both names point at
+ * the same physical index in the live D1 database (the one created by the
+ * baseline migration). Drizzle-kit `generate` will see this as drift and
+ * try to emit hundreds of rename statements. Do NOT run drizzle-kit
+ * generate against this schema without first deciding whether to:
+ *   (a) accept the rename migration and apply it to all environments, or
+ *   (b) hand-edit the generated migration to a no-op.
+ *
+ * Newer tables (auth_identities, usage_events, service_runtimes,
+ * memory_*) intentionally match the legacy suffix shape via explicit
+ * .index() names so they don't add to the drift.
+ */
 
 // ── Federation tables ────────────────────────────────────────────────
 
@@ -14,11 +33,34 @@ export const apFollowers = sqliteTable('ap_followers', {
   uniqFollow: uniqueIndex('idx_ap_followers_unique').on(table.targetActorUrl, table.followerActorUrl),
 }));
 
+// 122. APDeliveryQueue — retry/backoff/DLQ queue for outbound ActivityPub POSTs
+//
+// Round 11 audit finding #4: deliverToFollowers previously used one-shot
+// Promise.allSettled and silently dropped failed deliveries. This table
+// persists each (activity, inbox) pair so the hourly cron tick can replay
+// failed POSTs with exponential backoff until either a 2xx or the
+// dead-letter threshold (attempts >= 7) is reached.
+export const apDeliveryQueue = sqliteTable('ap_delivery_queue', {
+  id: text('id').primaryKey(),
+  activityId: text('activity_id').notNull(),
+  inboxUrl: text('inbox_url').notNull(),
+  payload: text('payload').notNull(),
+  signingKeyId: text('signing_key_id'),
+  attempts: integer('attempts').notNull().default(0),
+  nextAttemptAt: integer('next_attempt_at').notNull(),
+  lastError: text('last_error'),
+  status: text('status').notNull().default('pending'),
+  ...createdAtColumn,
+}, (table) => ({
+  idxStatusNext: index('idx_ap_delivery_queue_status_next').on(table.status, table.nextAttemptAt),
+  idxActivityId: index('idx_ap_delivery_queue_activity_id').on(table.activityId),
+}));
+
 // 118. RepoPushActivities — ForgeFed Push activities for repo outbox
 export const repoPushActivities = sqliteTable('repo_push_activities', {
   id: text('id').primaryKey(),
   repoId: text('repo_id').notNull(),
-  accountId: text('account_id').notNull(),
+  accountId: text('account_id').notNull().references(() => accounts.id),
   ref: text('ref').notNull(),
   beforeSha: text('before_sha'),
   afterSha: text('after_sha').notNull(),
@@ -58,7 +100,7 @@ export const repoGrants = sqliteTable('repo_grants', {
 export const storeInventoryItems = sqliteTable('store_inventory_items', {
   id: text('id').primaryKey(),
   storeSlug: text('store_slug').notNull(),
-  accountId: text('account_id').notNull(),
+  accountId: text('account_id').notNull().references(() => accounts.id),
   repoActorUrl: text('repo_actor_url').notNull(),
   repoName: text('repo_name'),
   repoSummary: text('repo_summary'),
@@ -79,7 +121,7 @@ export const storeInventoryItems = sqliteTable('store_inventory_items', {
 // 115. StoreRegistry — tracks remote ActivityPub stores known to this instance
 export const storeRegistry = sqliteTable('store_registry', {
   id: text('id').primaryKey(),
-  accountId: text('account_id').notNull(),
+  accountId: text('account_id').notNull().references(() => accounts.id),
   actorUrl: text('actor_url').notNull(),
   domain: text('domain').notNull(),
   storeSlug: text('store_slug').notNull(),

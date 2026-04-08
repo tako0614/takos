@@ -1,10 +1,29 @@
 import { sqliteTable, text, integer, index, uniqueIndex } from 'drizzle-orm/sqlite-core';
 import { createdAtColumn, timestamps, updatedAtColumn } from './schema-utils.ts';
+import { accounts } from './schema-accounts.ts';
+
+/**
+ * Index naming drift NOTE (Round 11 audit Finding #6).
+ *
+ * Drizzle declarations here use the `idx_<table>_<col>` prefix pattern.
+ * The baseline migration (apps/control/db/migrations/0001_baseline.sql)
+ * uses the legacy `<table>_<col>_idx` suffix pattern. Both names point at
+ * the same physical index in the live D1 database (the one created by the
+ * baseline migration). Drizzle-kit `generate` will see this as drift and
+ * try to emit hundreds of rename statements. Do NOT run drizzle-kit
+ * generate against this schema without first deciding whether to:
+ *   (a) accept the rename migration and apply it to all environments, or
+ *   (b) hand-edit the generated migration to a no-op.
+ *
+ * Newer tables (auth_identities, usage_events, service_runtimes,
+ * memory_*) intentionally match the legacy suffix shape via explicit
+ * .index() names so they don't add to the drift.
+ */
 
 // 50. McpOAuthPending
 export const mcpOauthPending = sqliteTable('mcp_oauth_pending', {
   id: text('id').primaryKey(),
-  accountId: text('account_id').notNull(),
+  accountId: text('account_id').notNull().references(() => accounts.id),
   serverName: text('server_name').notNull(),
   serverUrl: text('server_url').notNull(),
   state: text('state').notNull().unique(),
@@ -22,7 +41,7 @@ export const mcpOauthPending = sqliteTable('mcp_oauth_pending', {
 // 51. McpServer
 const mcpServersTable = sqliteTable('mcp_servers', {
   id: text('id').primaryKey(),
-  accountId: text('account_id').notNull(),
+  accountId: text('account_id').notNull().references(() => accounts.id),
   name: text('name').notNull(),
   url: text('url').notNull(),
   transport: text('transport').notNull().default('streamable-http'),

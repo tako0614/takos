@@ -1,9 +1,28 @@
 import { sqliteTable, text, integer, index, uniqueIndex, primaryKey } from 'drizzle-orm/sqlite-core';
 import { createdAtColumn, timestamps } from './schema-utils.ts';
+import { accounts } from './schema-accounts.ts';
+
+/**
+ * Index naming drift NOTE (Round 11 audit Finding #6).
+ *
+ * Drizzle declarations here use the `idx_<table>_<col>` prefix pattern.
+ * The baseline migration (apps/control/db/migrations/0001_baseline.sql)
+ * uses the legacy `<table>_<col>_idx` suffix pattern. Both names point at
+ * the same physical index in the live D1 database (the one created by the
+ * baseline migration). Drizzle-kit `generate` will see this as drift and
+ * try to emit hundreds of rename statements. Do NOT run drizzle-kit
+ * generate against this schema without first deciding whether to:
+ *   (a) accept the rename migration and apply it to all environments, or
+ *   (b) hand-edit the generated migration to a no-op.
+ *
+ * Newer tables (auth_identities, usage_events, service_runtimes,
+ * memory_*) intentionally match the legacy suffix shape via explicit
+ * .index() names so they don't add to the drift.
+ */
 
 // 56. NotificationPreference
 export const notificationPreferences = sqliteTable('notification_preferences', {
-  accountId: text('account_id').notNull(),
+  accountId: text('account_id').notNull().references(() => accounts.id),
   type: text('type').notNull(),
   channel: text('channel').notNull(),
   enabled: integer('enabled', { mode: 'boolean' }).notNull().default(true),
@@ -25,8 +44,8 @@ export const notificationSettings = sqliteTable('notification_settings', {
 // 58. Notification
 export const notifications = sqliteTable('notifications', {
   id: text('id').primaryKey(),
-  recipientAccountId: text('recipient_account_id').notNull(),
-  accountId: text('account_id'),
+  recipientAccountId: text('recipient_account_id').notNull().references(() => accounts.id),
+  accountId: text('account_id').references(() => accounts.id),
   type: text('type').notNull(),
   title: text('title').notNull(),
   body: text('body'),
@@ -79,8 +98,8 @@ export const sessionRepos = sqliteTable('session_repos', {
 // 88. Session
 export const sessions = sqliteTable('sessions', {
   id: text('id').primaryKey(),
-  accountId: text('account_id').notNull(),
-  userAccountId: text('user_account_id'),
+  accountId: text('account_id').notNull().references(() => accounts.id),
+  userAccountId: text('user_account_id').references(() => accounts.id),
   baseSnapshotId: text('base_snapshot_id').notNull(),
   headSnapshotId: text('head_snapshot_id'),
   status: text('status').notNull(),

@@ -1,9 +1,28 @@
 import { index, integer, sqliteTable, text, uniqueIndex } from 'drizzle-orm/sqlite-core';
 import { createdAtColumn, timestamps } from './schema-utils.ts';
+import { accounts } from './schema-accounts.ts';
+
+/**
+ * Index naming drift NOTE (Round 11 audit Finding #6).
+ *
+ * Drizzle declarations here use the `idx_<table>_<col>` prefix pattern.
+ * The baseline migration (apps/control/db/migrations/0001_baseline.sql)
+ * uses the legacy `<table>_<col>_idx` suffix pattern. Both names point at
+ * the same physical index in the live D1 database (the one created by the
+ * baseline migration). Drizzle-kit `generate` will see this as drift and
+ * try to emit hundreds of rename statements. Do NOT run drizzle-kit
+ * generate against this schema without first deciding whether to:
+ *   (a) accept the rename migration and apply it to all environments, or
+ *   (b) hand-edit the generated migration to a no-op.
+ *
+ * Newer tables (auth_identities, usage_events, service_runtimes,
+ * memory_*) intentionally match the legacy suffix shape via explicit
+ * .index() names so they don't add to the drift.
+ */
 
 const servicesTable = sqliteTable('services', {
   id: text('id').primaryKey(),
-  accountId: text('account_id').notNull(),
+  accountId: text('account_id').notNull().references(() => accounts.id),
   groupId: text('group_id'),
   serviceType: text('service_type').notNull().default('app'),
   nameType: text('name_type'),
@@ -32,7 +51,7 @@ export const services = Object.assign(servicesTable, {
 
 export const serviceBindings = sqliteTable('service_bindings', {
   id: text('id').primaryKey(),
-  serviceId: text('service_id').notNull(),
+  serviceId: text('service_id').notNull().references(() => servicesTable.id),
   resourceId: text('resource_id').notNull(),
   bindingName: text('binding_name').notNull(),
   bindingType: text('binding_type').notNull(),
@@ -46,8 +65,8 @@ export const serviceBindings = sqliteTable('service_bindings', {
 
 export const serviceCommonEnvLinks = sqliteTable('service_common_env_links', {
   id: text('id').primaryKey(),
-  accountId: text('account_id').notNull(),
-  serviceId: text('service_id').notNull(),
+  accountId: text('account_id').notNull().references(() => accounts.id),
+  serviceId: text('service_id').notNull().references(() => servicesTable.id),
   envName: text('env_name').notNull(),
   source: text('source').notNull().default('manual'),
   lastAppliedFingerprint: text('last_applied_fingerprint'),

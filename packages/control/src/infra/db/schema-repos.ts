@@ -1,9 +1,28 @@
 import { sqliteTable, text, integer, index, uniqueIndex, primaryKey } from 'drizzle-orm/sqlite-core';
 import { createdAtColumn, timestamps } from './schema-utils.ts';
+import { accounts } from './schema-accounts.ts';
+
+/**
+ * Index naming drift NOTE (Round 11 audit Finding #6).
+ *
+ * Drizzle declarations here use the `idx_<table>_<col>` prefix pattern.
+ * The baseline migration (apps/control/db/migrations/0001_baseline.sql)
+ * uses the legacy `<table>_<col>_idx` suffix pattern. Both names point at
+ * the same physical index in the live D1 database (the one created by the
+ * baseline migration). Drizzle-kit `generate` will see this as drift and
+ * try to emit hundreds of rename statements. Do NOT run drizzle-kit
+ * generate against this schema without first deciding whether to:
+ *   (a) accept the rename migration and apply it to all environments, or
+ *   (b) hand-edit the generated migration to a no-op.
+ *
+ * Newer tables (auth_identities, usage_events, service_runtimes,
+ * memory_*) intentionally match the legacy suffix shape via explicit
+ * .index() names so they don't add to the drift.
+ */
 
 // 24. Blob
 export const blobs = sqliteTable('blobs', {
-  accountId: text('account_id').notNull(),
+  accountId: text('account_id').notNull().references(() => accounts.id),
   hash: text('hash').notNull(),
   size: integer('size').notNull(),
   isBinary: integer('is_binary', { mode: 'boolean' }).notNull().default(false),
@@ -17,7 +36,7 @@ export const blobs = sqliteTable('blobs', {
 // 25. Branch
 export const branches = sqliteTable('branches', {
   id: text('id').primaryKey(),
-  repoId: text('repo_id').notNull(),
+  repoId: text('repo_id').notNull().references(() => repositories.id),
   name: text('name').notNull(),
   commitSha: text('commit_sha').notNull(),
   isDefault: integer('is_default', { mode: 'boolean' }).notNull().default(false),
@@ -32,8 +51,8 @@ export const branches = sqliteTable('branches', {
 // 28. Chunk
 export const chunks = sqliteTable('chunks', {
   id: text('id').primaryKey(),
-  fileId: text('file_id').notNull(),
-  accountId: text('account_id').notNull(),
+  fileId: text('file_id').notNull().references(() => files.id),
+  accountId: text('account_id').notNull().references(() => accounts.id),
   startLine: integer('start_line').notNull(),
   endLine: integer('end_line').notNull(),
   content: text('content').notNull(),
@@ -48,7 +67,7 @@ export const chunks = sqliteTable('chunks', {
 // 29. Commit
 export const commits = sqliteTable('commits', {
   id: text('id').primaryKey(),
-  repoId: text('repo_id').notNull(),
+  repoId: text('repo_id').notNull().references(() => repositories.id),
   sha: text('sha').notNull(),
   treeSha: text('tree_sha').notNull(),
   parentShas: text('parent_shas'),
@@ -70,7 +89,7 @@ export const commits = sqliteTable('commits', {
 // 38. File
 export const files = sqliteTable('files', {
   id: text('id').primaryKey(),
-  accountId: text('account_id').notNull(),
+  accountId: text('account_id').notNull().references(() => accounts.id),
   path: text('path').notNull(),
   sha256: text('sha256'),
   mimeType: text('mime_type'),
@@ -91,9 +110,9 @@ export const files = sqliteTable('files', {
 // 39. GitCommit
 export const gitCommits = sqliteTable('git_commits', {
   id: text('id').primaryKey(),
-  accountId: text('account_id').notNull(),
+  accountId: text('account_id').notNull().references(() => accounts.id),
   message: text('message').notNull(),
-  authorAccountId: text('author_account_id').notNull(),
+  authorAccountId: text('author_account_id').notNull().references(() => accounts.id),
   authorName: text('author_name').notNull(),
   parentId: text('parent_id'),
   filesChanged: integer('files_changed').notNull().default(0),
@@ -103,6 +122,10 @@ export const gitCommits = sqliteTable('git_commits', {
   ...createdAtColumn,
 }, (table) => ({
   idxParent: index('idx_git_commits_parent_id').on(table.parentId),
+  // NOTE (Round 11 audit Finding #9): baseline migration 0001 creates
+  // `git_commits_created_at_idx` with DESC order (`created_at DESC`).
+  // Drizzle cannot express column-level ASC/DESC inside `index()`, so the
+  // physical order is determined by the migration, not this declaration.
   idxCreatedAt: index('idx_git_commits_created_at').on(table.createdAt),
   idxAuthor: index('idx_git_commits_author_account_id').on(table.authorAccountId),
   idxAccount: index('idx_git_commits_account_id').on(table.accountId),
@@ -129,7 +152,7 @@ export const gitFileChanges = sqliteTable('git_file_changes', {
 // 41. IndexJob
 export const indexJobs = sqliteTable('index_jobs', {
   id: text('id').primaryKey(),
-  accountId: text('account_id').notNull(),
+  accountId: text('account_id').notNull().references(() => accounts.id),
   type: text('type').notNull(),
   targetId: text('target_id'),
   status: text('status').notNull().default('queued'),
@@ -147,7 +170,7 @@ export const indexJobs = sqliteTable('index_jobs', {
 // 69. PrComment
 export const prComments = sqliteTable('pr_comments', {
   id: text('id').primaryKey(),
-  prId: text('pr_id').notNull(),
+  prId: text('pr_id').notNull().references(() => pullRequests.id),
   authorType: text('author_type').notNull().default('ai'),
   authorId: text('author_id'),
   content: text('content').notNull(),
@@ -163,7 +186,7 @@ export const prComments = sqliteTable('pr_comments', {
 // 70. PrReview
 export const prReviews = sqliteTable('pr_reviews', {
   id: text('id').primaryKey(),
-  prId: text('pr_id').notNull(),
+  prId: text('pr_id').notNull().references(() => pullRequests.id),
   reviewerType: text('reviewer_type').notNull().default('ai'),
   reviewerId: text('reviewer_id'),
   status: text('status').notNull(),
@@ -179,7 +202,7 @@ export const prReviews = sqliteTable('pr_reviews', {
 // 71. PullRequest
 export const pullRequests = sqliteTable('pull_requests', {
   id: text('id').primaryKey(),
-  repoId: text('repo_id').notNull(),
+  repoId: text('repo_id').notNull().references(() => repositories.id),
   number: integer('number').notNull(),
   title: text('title').notNull(),
   description: text('description'),
@@ -231,7 +254,7 @@ export const repoReleaseAssets = sqliteTable('repo_release_assets', {
 // 75. RepoRelease
 export const repoReleases = sqliteTable('repo_releases', {
   id: text('id').primaryKey(),
-  repoId: text('repo_id').notNull(),
+  repoId: text('repo_id').notNull().references(() => repositories.id),
   tag: text('tag').notNull(),
   name: text('name'),
   description: text('description'),
@@ -252,7 +275,7 @@ export const repoReleases = sqliteTable('repo_releases', {
 // 76. RepoRemote
 export const repoRemotes = sqliteTable('repo_remotes', {
   id: text('id').primaryKey(),
-  repoId: text('repo_id').notNull(),
+  repoId: text('repo_id').notNull().references(() => repositories.id),
   name: text('name').notNull().default('upstream'),
   upstreamRepoId: text('upstream_repo_id').notNull().default(''),
   /** External git URL (for repos imported from external servers). */
@@ -267,8 +290,8 @@ export const repoRemotes = sqliteTable('repo_remotes', {
 
 // 77. RepoStar
 export const repoStars = sqliteTable('repo_stars', {
-  accountId: text('account_id').notNull(),
-  repoId: text('repo_id').notNull(),
+  accountId: text('account_id').notNull().references(() => accounts.id),
+  repoId: text('repo_id').notNull().references(() => repositories.id),
   ...createdAtColumn,
 }, (table) => ({
   pk: primaryKey({ columns: [table.accountId, table.repoId] }),
@@ -279,7 +302,7 @@ export const repoStars = sqliteTable('repo_stars', {
 // 79. Repository
 export const repositories = sqliteTable('repositories', {
   id: text('id').primaryKey(),
-  accountId: text('account_id').notNull(),
+  accountId: text('account_id').notNull().references(() => accounts.id),
   name: text('name').notNull(),
   description: text('description'),
   visibility: text('visibility').notNull().default('private'),
@@ -315,7 +338,7 @@ export const repositories = sqliteTable('repositories', {
 // 93. Snapshot
 export const snapshots = sqliteTable('snapshots', {
   id: text('id').primaryKey(),
-  accountId: text('account_id').notNull(),
+  accountId: text('account_id').notNull().references(() => accounts.id),
   parentIds: text('parent_ids'),
   treeKey: text('tree_key').notNull(),
   message: text('message'),
@@ -330,7 +353,7 @@ export const snapshots = sqliteTable('snapshots', {
 // 94. Tag
 export const tags = sqliteTable('tags', {
   id: text('id').primaryKey(),
-  repoId: text('repo_id').notNull(),
+  repoId: text('repo_id').notNull().references(() => repositories.id),
   name: text('name').notNull(),
   commitSha: text('commit_sha').notNull(),
   message: text('message'),

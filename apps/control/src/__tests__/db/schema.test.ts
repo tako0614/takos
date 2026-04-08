@@ -133,6 +133,7 @@ import {
 
 // ---- schema-platform ----
 import {
+  apDeliveryQueue,
   dlqEntries,
   edges,
   fileHandlerMatchers,
@@ -1178,6 +1179,38 @@ Deno.test("schema-platform - storeRegistryUpdates table - has unique index on re
   const uniq = uniqueIndexNames(storeRegistryUpdates);
   assertHasEntry(uniq, "idx_store_registry_updates_activity");
 });
+
+Deno.test('schema-platform - apDeliveryQueue table - is named "ap_delivery_queue"', () => {
+  assertEquals(getTableName(apDeliveryQueue), "ap_delivery_queue");
+});
+Deno.test("schema-platform - apDeliveryQueue table - has all required columns", () => {
+  const cols = colNames(apDeliveryQueue);
+  const required = [
+    "id",
+    "activityId",
+    "inboxUrl",
+    "payload",
+    "signingKeyId",
+    "attempts",
+    "nextAttemptAt",
+    "lastError",
+    "status",
+    "createdAt",
+  ];
+  for (const col of required) {
+    assertHasEntry(cols, col);
+  }
+});
+Deno.test("schema-platform - apDeliveryQueue table - defaults status to pending and attempts to 0", () => {
+  const cols = getTableColumns(apDeliveryQueue);
+  assertEquals(cols.status.default, "pending");
+  assertEquals(cols.attempts.default, 0);
+});
+Deno.test("schema-platform - apDeliveryQueue table - has indexes on status+nextAttemptAt and activityId", () => {
+  const idxs = indexNames(apDeliveryQueue);
+  assertHasEntry(idxs, "idx_ap_delivery_queue_status_next");
+  assertHasEntry(idxs, "idx_ap_delivery_queue_activity_id");
+});
 // ===================================================================
 // schema-workflows
 // ===================================================================
@@ -1346,6 +1379,7 @@ const expectedNames: [Parameters<typeof getTableName>[0], string][] = [
   [shortcutGroups, "shortcut_groups"],
   [shortcuts, "shortcuts"],
   [uiExtensions, "ui_extensions"],
+  [apDeliveryQueue, "ap_delivery_queue"],
   [dlqEntries, "dlq_entries"],
   [storeRegistry, "store_registry"],
   [storeRegistryUpdates, "store_registry_updates"],

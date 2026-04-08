@@ -1,10 +1,29 @@
 import { sqliteTable, text, integer, real, index, uniqueIndex, primaryKey } from 'drizzle-orm/sqlite-core';
 import { createdAtColumn, timestamps } from './schema-utils.ts';
+import { accounts } from './schema-accounts.ts';
+
+/**
+ * Index naming drift NOTE (Round 11 audit Finding #6).
+ *
+ * Drizzle declarations here use the `idx_<table>_<col>` prefix pattern.
+ * The baseline migration (apps/control/db/migrations/0001_baseline.sql)
+ * uses the legacy `<table>_<col>_idx` suffix pattern. Both names point at
+ * the same physical index in the live D1 database (the one created by the
+ * baseline migration). Drizzle-kit `generate` will see this as drift and
+ * try to emit hundreds of rename statements. Do NOT run drizzle-kit
+ * generate against this schema without first deciding whether to:
+ *   (a) accept the rename migration and apply it to all environments, or
+ *   (b) hand-edit the generated migration to a no-op.
+ *
+ * Newer tables (auth_identities, usage_events, service_runtimes,
+ * memory_*) intentionally match the legacy suffix shape via explicit
+ * .index() names so they don't add to the drift.
+ */
 
 // 35. Edge
 export const edges = sqliteTable('edges', {
   id: text('id').primaryKey(),
-  accountId: text('account_id').notNull(),
+  accountId: text('account_id').notNull().references(() => accounts.id),
   sourceId: text('source_id').notNull(),
   targetId: text('target_id').notNull(),
   type: text('type').notNull(),
@@ -30,7 +49,7 @@ export const fileHandlerMatchers = sqliteTable('file_handler_matchers', {
 // 37. FileHandler
 const fileHandlersTable = sqliteTable('file_handlers', {
   id: text('id').primaryKey(),
-  accountId: text('account_id').notNull(),
+  accountId: text('account_id').notNull().references(() => accounts.id),
   bundleDeploymentId: text('bundle_deployment_id').notNull(),
   serviceHostname: text('service_hostname').notNull(),
   name: text('name').notNull(),
@@ -57,7 +76,7 @@ export const infraEndpointRoutes = sqliteTable('infra_endpoint_routes', {
 // 44. InfraEndpoint
 export const infraEndpoints = sqliteTable('infra_endpoints', {
   id: text('id').primaryKey(),
-  accountId: text('account_id').notNull(),
+  accountId: text('account_id').notNull().references(() => accounts.id),
   name: text('name').notNull(),
   protocol: text('protocol').notNull().default('http'),
   targetServiceRef: text('target_service_ref').notNull(),
@@ -76,7 +95,7 @@ export const serviceEndpoints = infraEndpoints;
 // 45. ServiceRuntime
 const serviceRuntimesTable = sqliteTable('service_runtimes', {
   id: text('id').primaryKey(),
-  accountId: text('account_id').notNull(),
+  accountId: text('account_id').notNull().references(() => accounts.id),
   name: text('name').notNull(),
   runtime: text('runtime').notNull().default('cloudflare.worker'),
   cloudflareServiceRef: text('cloudflare_service_ref'),
@@ -97,7 +116,7 @@ export const infraWorkers = serviceRuntimesTable;
 // 55. Node
 export const nodes = sqliteTable('nodes', {
   id: text('id').primaryKey(),
-  accountId: text('account_id').notNull(),
+  accountId: text('account_id').notNull().references(() => accounts.id),
   type: text('type').notNull(),
   refId: text('ref_id').notNull(),
   label: text('label'),
@@ -132,7 +151,7 @@ export const shortcutGroupItems = Object.assign(shortcutGroupItemsTable, {
 // 90. ShortcutGroup
 export const shortcutGroups = sqliteTable('shortcut_groups', {
   id: text('id').primaryKey(),
-  accountId: text('account_id').notNull(),
+  accountId: text('account_id').notNull().references(() => accounts.id),
   name: text('name').notNull(),
   icon: text('icon'),
   bundleDeploymentId: text('bundle_deployment_id'),
@@ -144,8 +163,8 @@ export const shortcutGroups = sqliteTable('shortcut_groups', {
 // 91. Shortcut
 export const shortcuts = sqliteTable('shortcuts', {
   id: text('id').primaryKey(),
-  userAccountId: text('user_account_id').notNull(),
-  accountId: text('account_id').notNull(),
+  userAccountId: text('user_account_id').notNull().references(() => accounts.id),
+  accountId: text('account_id').notNull().references(() => accounts.id),
   resourceType: text('resource_type').notNull(),
   resourceId: text('resource_id').notNull(),
   name: text('name').notNull(),
@@ -162,7 +181,7 @@ export const shortcuts = sqliteTable('shortcuts', {
 // 97. UIExtension
 export const uiExtensions = sqliteTable('ui_extensions', {
   id: text('id').primaryKey(),
-  accountId: text('account_id').notNull(),
+  accountId: text('account_id').notNull().references(() => accounts.id),
   path: text('path').notNull(),
   label: text('label').notNull(),
   icon: text('icon'),
