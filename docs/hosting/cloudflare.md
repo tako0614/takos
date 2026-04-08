@@ -368,7 +368,8 @@ control plane を Cloudflare にデプロイする場合に使う主要な環境
 | `WFP_DISPATCH_NAMESPACE` | dispatch namespace 名 |
 | `ROUTING_DO_PHASE` | RoutingDO rollout phase。詳細は下記 [Routing phases](#routing-phases) |
 | `PLATFORM_PRIVATE_KEY` / `PLATFORM_PUBLIC_KEY` | プラットフォーム署名鍵 |
-| `STRIPE_*` | Stripe 決済連携 |
+| `BILLING_PROVIDER` | payment-provider の選択。default は `stripe`。将来追加 provider はここで切り替え |
+| `STRIPE_*` | Stripe 決済連携 (`BILLING_PROVIDER=stripe` 時のみ有効) |
 
 認証系:
 
