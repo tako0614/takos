@@ -21,7 +21,6 @@ export const BUCKET_NAMES = [
   'TENANT_SOURCE',
   'WORKER_BUNDLES',
   'TENANT_BUILDS',
-  'UI_BUNDLES',
 ] as const;
 
 export type BucketName = (typeof BUCKET_NAMES)[number];
@@ -32,7 +31,6 @@ const S3_ENV_MAP: Record<BucketName, string> = {
   TENANT_SOURCE: 'AWS_S3_TENANT_SOURCE_BUCKET',
   WORKER_BUNDLES: 'AWS_S3_WORKER_BUNDLES_BUCKET',
   TENANT_BUILDS: 'AWS_S3_TENANT_BUILDS_BUCKET',
-  UI_BUNDLES: 'AWS_S3_UI_BUNDLES_BUCKET',
 };
 
 const GCS_ENV_MAP: Record<BucketName, string> = {
@@ -41,7 +39,6 @@ const GCS_ENV_MAP: Record<BucketName, string> = {
   TENANT_SOURCE: 'GCP_GCS_TENANT_SOURCE_BUCKET',
   WORKER_BUNDLES: 'GCP_GCS_WORKER_BUNDLES_BUCKET',
   TENANT_BUILDS: 'GCP_GCS_TENANT_BUILDS_BUCKET',
-  UI_BUNDLES: 'GCP_GCS_UI_BUNDLES_BUCKET',
 };
 
 const PERSISTENT_BUCKET_MAP: Record<BucketName, string> = {
@@ -50,7 +47,6 @@ const PERSISTENT_BUCKET_MAP: Record<BucketName, string> = {
   TENANT_SOURCE: 'tenant-source.json',
   WORKER_BUNDLES: 'worker-bundles.json',
   TENANT_BUILDS: 'tenant-builds.json',
-  UI_BUNDLES: 'ui-bundles.json',
 };
 
 // ---------------------------------------------------------------------------

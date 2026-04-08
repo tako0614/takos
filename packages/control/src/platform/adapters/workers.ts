@@ -68,7 +68,6 @@ function buildWorkersPlatform<TBindings extends object>(env: TBindings & Platfor
       tenantSource: env.TENANT_SOURCE as Env['TENANT_SOURCE'] | undefined,
       workerBundles: env.WORKER_BUNDLES as Env['WORKER_BUNDLES'] | undefined,
       tenantBuilds: env.TENANT_BUILDS as Env['TENANT_BUILDS'] | undefined,
-      uiBundles: env.UI_BUNDLES as Env['UI_BUNDLES'] | undefined,
     },
     notifications: {
       runNotifier: env.RUN_NOTIFIER as Env['RUN_NOTIFIER'] | undefined,

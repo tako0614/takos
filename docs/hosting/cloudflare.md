@@ -258,10 +258,6 @@ binding = "BROWSER"
 
 # Internal service bindings
 [[services]]
-binding = "TAKOS_DISPATCH"
-service = "takos-dispatch"
-
-[[services]]
 binding = "TAKOS_EGRESS"
 service = "takos-worker"
 

@@ -408,10 +408,47 @@ client
 
 queue と DO ベースの notifier を併用する。
 
-- queue: deployment, workflow, index
-- DO stream: notification notifier
-- DO infra: session, routing
-- container DO: runtime host
+- queue: deployment, workflow, index, **runs** (`RUN_QUEUE` / `takos-runs`)
+- DO stream: notification notifier, run notifier
+- DO infra: session, routing, rate limiter, git push lock
+- container DO: runtime host, executor host, browser host
+
+各 queue には DLQ (`*-dlq`) が `apps/control/wrangler.worker.toml` の
+`[[queues.consumers]]` の `dead_letter_queue` field で設定されている。
+配送に `max_retries` 回 (queue ごとに 2-3) 失敗した message は自動的に
+DLQ へ rotate される。kernel 側で DLQ message を replay する仕組みは
+現状無く、operator が手動で `wrangler queues consumer dlq move` する想定。
+
+| queue | max_retries | DLQ |
+| --- | --- | --- |
+| `RUN_QUEUE` (`takos-runs`) | 3 | `takos-runs-dlq` |
+| `INDEX_QUEUE` (`takos-index-jobs`) | 2 | `takos-index-jobs-dlq` |
+| `WORKFLOW_QUEUE` (`takos-workflow-jobs`) | 3 | `takos-workflow-jobs-dlq` |
+| `DEPLOY_QUEUE` (`takos-deployment-jobs`) | 3 | `takos-deployment-jobs-dlq` |
+
+### Cron schedules
+
+control-plane web worker (`apps/control/wrangler.toml [triggers]`) は 2 系統の
+cron を運用する。Cloudflare の cron-storm window を避けるため offset を
+使用している:
+
+| schedule (wrangler) | dev / HTTP form | family | jobs |
+| --- | --- | --- | --- |
+| `3,18,33,48 * * * *` | `*/15 * * * *` | quarter hour | custom domain reverify, stuck-domain reconcile, common-env reconcile batch |
+| `5 * * * *` | `0 * * * *` | hourly | dead session cleanup, snapshot GC, R2 orphaned object GC, common-env drift sweep |
+
+`packages/control/src/web.ts` の `scheduled()` handler は
+`isQuarterHourCron(cron)` / `isHourlyCron(cron)` で family を判定し、
+両方の cron 表記を同じ job に dispatch する。
+
+control-plane runtime worker (`apps/control/wrangler.worker.toml`) は
+`1-59/2 * * * *` (奇数分ごと) で `runtime/runner/index.ts` の stale-run
+recovery を実行する。recovery は cron 文字列で branch せず、毎回
+unconditional に走る。
+
+dev 環境では `POST /internal/scheduled?cron={form}` を loopback / cluster
+hostname から叩くと同じ maintenance job を実行できる
+(`web.ts:230` の `/internal/scheduled` endpoint)。
 
 ## DB migration
 

@@ -106,6 +106,51 @@ Deno.test("runCommonEnvScheduledMaintenance - captures drift sweep errors", asyn
   }
 });
 
+Deno.test("runCommonEnvScheduledMaintenance - processes reconcile jobs on wrangler offset 15-min cron", async () => {
+  const processReconcileJobs = stub(
+    CommonEnvOrchestrator.prototype,
+    "processReconcileJobs",
+    async () => ({ processed: 1, completed: 1, retried: 0 }),
+  );
+  const errors: Array<{ job: string; error: string }> = [];
+
+  try {
+    await runCommonEnvScheduledMaintenance({
+      env: createTestEnv(),
+      // Production wrangler.toml uses offset crons to spread cron load.
+      cron: "3,18,33,48 * * * *",
+      errors,
+    });
+
+    assertSpyCallArgs(processReconcileJobs, 0, [150]);
+    assertEquals(errors, []);
+  } finally {
+    processReconcileJobs.restore();
+  }
+});
+
+Deno.test("runCommonEnvScheduledMaintenance - enqueues drift sweep on wrangler offset hourly cron", async () => {
+  const enqueuePeriodicDriftSweep = stub(
+    CommonEnvOrchestrator.prototype,
+    "enqueuePeriodicDriftSweep",
+    async () => 7,
+  );
+  const errors: Array<{ job: string; error: string }> = [];
+
+  try {
+    await runCommonEnvScheduledMaintenance({
+      env: createTestEnv(),
+      cron: "5 * * * *",
+      errors,
+    });
+
+    assertSpyCallArgs(enqueuePeriodicDriftSweep, 0, [200]);
+    assertEquals(errors, []);
+  } finally {
+    enqueuePeriodicDriftSweep.restore();
+  }
+});
+
 Deno.test("runCommonEnvScheduledMaintenance - does nothing for unrelated cron expressions", async () => {
   const processReconcileJobs = stub(
     CommonEnvOrchestrator.prototype,

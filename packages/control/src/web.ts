@@ -91,6 +91,31 @@ function isSelfHostInternalHostname(hostname: string): boolean {
   return hostname === 'control-web';
 }
 
+// Cron schedule classifiers.
+//
+// Production wrangler.toml uses offset cron strings (e.g. `3,18,33,48 * * * *`,
+// `5 * * * *`) to spread cron load and avoid Cloudflare cron-storm windows.
+// Local / dev callers use the canonical `*/15 * * * *` and `0 * * * *` forms.
+// Both must dispatch to the same maintenance jobs, so the dispatcher matches
+// on schedule *family* rather than literal equality.
+const QUARTER_HOUR_CRONS = new Set([
+  '*/15 * * * *',
+  '3,18,33,48 * * * *',
+]);
+
+const HOURLY_CRONS = new Set([
+  '0 * * * *',
+  '5 * * * *',
+]);
+
+function isQuarterHourCron(cron: string): boolean {
+  return QUARTER_HOUR_CRONS.has(cron);
+}
+
+function isHourlyCron(cron: string): boolean {
+  return HOURLY_CRONS.has(cron);
+}
+
 // CORS - explicit configuration for security
 // Configured with:
 // - Allowed origins: Admin domain (env.ADMIN_DOMAIN) and localhost for development
@@ -243,11 +268,11 @@ app.post('/internal/scheduled', async (c) => {
   const errors: Array<{ job: string; error: string }> = [];
 
   try {
-    if (cron === '*/15 * * * *' || cron === '* * * * *') {
+    if (isQuarterHourCron(cron) || cron === '* * * * *') {
       await runCustomDomainReverification(env, { batchSize: 200 });
       await reconcileStuckDomains(env);
     }
-    if (cron === '0 * * * *' || cron === '* * * * *') {
+    if (isHourlyCron(cron) || cron === '* * * * *') {
       await cleanupDeadSessions(env);
       await runSnapshotGcBatch(env, { maxSpaces: 5 });
       await runR2OrphanedObjectGcBatch(env, {
@@ -448,7 +473,7 @@ export function createWebWorker(
     const cron = controller.cron;
     const errors: Array<{ job: string; error: string }> = [];
 
-    if (cron === '*/15 * * * *') {
+    if (isQuarterHourCron(cron)) {
       try {
         // Re-verify active custom domains and remove expired/failed routing automatically.
         const summary = await runCustomDomainReverification(bindings, { batchSize: 200 });
@@ -473,7 +498,7 @@ export function createWebWorker(
     }
 
     // Hourly maintenance window: keep batch small to stay within cron execution limits.
-    if (cron === '0 * * * *') {
+    if (isHourlyCron(cron)) {
       try {
         const sessionSummary = await cleanupDeadSessions(bindings);
         logInfo('dead session cleanup completed', { module: 'cron', ...{

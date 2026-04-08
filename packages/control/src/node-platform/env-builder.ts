@@ -117,13 +117,12 @@ async function buildSharedState() {
 
   const pgPool = await resolvePgPool(postgresUrl);
 
-  const [gitObjects, offload, tenantSource, workerBundles, tenantBuilds, uiBundles, aiBinding, vectorizeBinding] = await Promise.all([
+  const [gitObjects, offload, tenantSource, workerBundles, tenantBuilds, aiBinding, vectorizeBinding] = await Promise.all([
     resolveBucket('GIT_OBJECTS', dataDir),
     resolveBucket('TAKOS_OFFLOAD', dataDir),
     resolveBucket('TENANT_SOURCE', dataDir),
     resolveBucket('WORKER_BUNDLES', dataDir),
     resolveBucket('TENANT_BUILDS', dataDir),
-    resolveBucket('UI_BUNDLES', dataDir),
     resolveAiBinding(),
     resolveVectorizeBinding(pgPool),
   ]);
@@ -148,7 +147,6 @@ async function buildSharedState() {
     tenantSource,
     workerBundles,
     tenantBuilds,
-    uiBundles,
     aiBinding,
     vectorizeBinding,
     pgPool,
@@ -283,7 +281,6 @@ export async function createNodeWebEnv(): Promise<Env> {
     TENANT_SOURCE: shared.tenantSource,
     WORKER_BUNDLES: shared.workerBundles,
     TENANT_BUILDS: shared.tenantBuilds,
-    UI_BUNDLES: shared.uiBundles,
     GOOGLE_CLIENT_ID: config.GOOGLE_CLIENT_ID,
     GOOGLE_CLIENT_SECRET: config.GOOGLE_CLIENT_SECRET,
     ADMIN_DOMAIN: config.ADMIN_DOMAIN,
