@@ -54,24 +54,6 @@ export const SPACE_OPERATION_POLICIES: Record<
     allowed_roles: EDITOR_PLUS_ROLES,
     sensitive_read_policy: "none",
   },
-  "workspace_common_env.list": {
-    id: "workspace_common_env.list",
-    user_surface: "GET /api/spaces/:spaceId/common-env",
-    allowed_roles: ALL_SPACE_ROLES,
-    sensitive_read_policy: "masked",
-  },
-  "workspace_common_env.write": {
-    id: "workspace_common_env.write",
-    user_surface: "PUT /api/spaces/:spaceId/common-env",
-    allowed_roles: ADMIN_ROLES,
-    sensitive_read_policy: "write_only",
-  },
-  "workspace_common_env.delete": {
-    id: "workspace_common_env.delete",
-    user_surface: "DELETE /api/spaces/:spaceId/common-env/:name",
-    allowed_roles: ADMIN_ROLES,
-    sensitive_read_policy: "write_only",
-  },
   "repo.create": {
     id: "repo.create",
     user_surface: "POST /api/spaces/:spaceId/repos",
@@ -113,18 +95,6 @@ export const SPACE_OPERATION_POLICIES: Record<
     user_surface: "PATCH /api/services/:id/env",
     allowed_roles: EDITOR_PLUS_ROLES,
     sensitive_read_policy: "write_only",
-  },
-  "service.bindings.read": {
-    id: "service.bindings.read",
-    user_surface: "GET /api/services/:id/bindings",
-    allowed_roles: ALL_SPACE_ROLES,
-    sensitive_read_policy: "none",
-  },
-  "service.bindings.write": {
-    id: "service.bindings.write",
-    user_surface: "PATCH /api/services/:id/bindings",
-    allowed_roles: EDITOR_PLUS_ROLES,
-    sensitive_read_policy: "none",
   },
   "service.runtime.read": {
     id: "service.runtime.read",

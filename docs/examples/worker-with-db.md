@@ -1,7 +1,21 @@
-# Worker + SQL / Object Store
+# Worker + DB
 
 ```yaml
 name: notes-app
+
+publish:
+  - name: primary-db
+    provider: takos
+    kind: sql
+    spec:
+      resource: notes-db
+      permission: write
+  - name: assets
+    provider: takos
+    kind: object-store
+    spec:
+      resource: notes-assets
+      permission: write
 
 compute:
   web:
@@ -11,19 +25,20 @@ compute:
         job: bundle
         artifact: web
         artifactPath: dist/worker
-
-storage:
-  primary-db:
-    type: sql
-    bind: DB
-    migrations: .takos/migrations/primary-db
-  assets:
-    type: object-store
-    bind: ASSETS
+    consume:
+      - publication: primary-db
+        env:
+          endpoint: DATABASE_URL
+          apiKey: DATABASE_API_KEY
+      - publication: assets
+        env:
+          endpoint: ASSETS_ENDPOINT
+          apiKey: ASSETS_API_KEY
 
 routes:
   - target: web
     path: /
 ```
 
-Cloudflare backend では `sql` は D1 に、`object-store` は R2 に解決されます。互換 backend では Takos runtime が同じ spec を SQL / object storage 相当の実装に解決します。
+この contract では deploy core は DB や object store の native binding
+を知りません。 app は endpoint と credential を env で受け取ります。

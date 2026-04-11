@@ -1,61 +1,68 @@
-import { BadRequestError } from 'takos-common/errors';
-import { generateId } from '../../../shared/utils/index.ts';
-import type { RoutingTarget } from '../routing/routing-models.ts';
-import { normalizeEnvName } from '../common-env/crypto.ts';
-import { encrypt } from '../../../shared/utils/crypto.ts';
+import { BadRequestError } from "takos-common/errors";
+import { generateId } from "../../../shared/utils/index.ts";
+import type { RoutingTarget } from "../routing/routing-models.ts";
+import { encrypt } from "../../../shared/utils/crypto.ts";
 import {
   deployments,
   getDb,
   resources,
   serviceDeployments,
   serviceEnvVars,
-} from '../../../infra/db/index.ts';
-import { physicalServiceBindings, serviceBindings } from '../../../infra/db/schema-services.ts';
-import { and, desc, eq, gt, inArray, isNotNull, sql } from 'drizzle-orm';
-import { getDeploymentRouteHead } from '../deployment/store.ts';
+} from "../../../infra/db/index.ts";
+import {
+  physicalServiceBindings,
+  serviceBindings,
+} from "../../../infra/db/schema-services.ts";
+import { and, desc, eq, gt, inArray, isNotNull, sql } from "drizzle-orm";
+import { getDeploymentRouteHead } from "../deployment/store.ts";
 
 // Re-export types from the types module
 export type {
   ServiceBindingSpec,
-  ServiceManagedMcpServerState,
-  ServiceRuntimeConfigState,
+  ServiceDesiredStateSnapshot,
   ServiceLocalEnvVarState,
   ServiceLocalEnvVarSummary,
-  ServiceDesiredStateSnapshot,
-} from './desired-state-types.ts';
+  ServiceRuntimeConfigState,
+} from "./desired-state-types.ts";
 
 import type {
   DesiredStateEnv,
-  ServiceBindingRow,
   ServiceBindingSpec,
   ServiceDesiredStateSnapshot,
   ServiceLocalEnvVarState,
   ServiceLocalEnvVarSummary,
-  ServiceManagedMcpServerState,
   ServiceRuntimeConfigState,
   ServiceRuntimeLimits,
-} from './desired-state-types.ts';
-import { MASKED_SECRET_VALUE } from './desired-state-types.ts';
+} from "./desired-state-types.ts";
+import { MASKED_SECRET_VALUE } from "./desired-state-types.ts";
 
 import {
   normalizeRoutingWeight,
   sortBindings,
   toServiceBinding,
-} from './resource-bindings.ts';
+} from "./resource-bindings.ts";
 
 import {
   buildServiceEnvSalt,
   requireEncryptionKey,
   resolveServiceCommonEnvState,
-} from './env-state-resolution.ts';
+} from "./env-state-resolution.ts";
 
-import {
-  getRuntimeConfig,
-  saveRuntimeConfig,
-} from './runtime-config.ts';
+import { getRuntimeConfig, saveRuntimeConfig } from "./runtime-config.ts";
 
 // Re-export resolveServiceCommonEnvState for external consumers
-export { resolveServiceCommonEnvState } from './env-state-resolution.ts';
+export { resolveServiceCommonEnvState } from "./env-state-resolution.ts";
+
+function normalizeEnvName(name: string): string {
+  const normalized = String(name || "").trim();
+  if (!normalized) {
+    throw new Error("Environment variable name is required");
+  }
+  if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(normalized)) {
+    throw new Error(`Invalid environment variable name: ${normalized}`);
+  }
+  return normalized.toUpperCase();
+}
 
 export class ServiceDesiredStateService {
   private readonly encryptionKey: string;
@@ -68,7 +75,10 @@ export class ServiceDesiredStateService {
     return getDb(this.env.DB);
   }
 
-  async getRuntimeConfig(spaceId: string, serviceId: string): Promise<ServiceRuntimeConfigState> {
+  async getRuntimeConfig(
+    spaceId: string,
+    serviceId: string,
+  ): Promise<ServiceRuntimeConfigState> {
     return getRuntimeConfig(this.env, spaceId, serviceId);
   }
 
@@ -79,22 +89,31 @@ export class ServiceDesiredStateService {
     compatibilityDate?: string;
     compatibilityFlags?: string[];
     limits?: ServiceRuntimeLimits;
-    mcpServer?: ServiceManagedMcpServerState;
   }): Promise<ServiceRuntimeConfigState> {
     return saveRuntimeConfig(this.env, params);
   }
 
-  async listLocalEnvVars(spaceId: string, serviceId: string): Promise<ServiceLocalEnvVarState[]> {
-    const resolved = await resolveServiceCommonEnvState(this.env, spaceId, serviceId);
+  async listLocalEnvVars(
+    spaceId: string,
+    serviceId: string,
+  ): Promise<ServiceLocalEnvVarState[]> {
+    const resolved = await resolveServiceCommonEnvState(
+      this.env,
+      spaceId,
+      serviceId,
+    );
     return resolved.localEnvVars.sort((a, b) => a.name.localeCompare(b.name));
   }
 
-  async listLocalEnvVarSummaries(spaceId: string, serviceId: string): Promise<ServiceLocalEnvVarSummary[]> {
+  async listLocalEnvVarSummaries(
+    spaceId: string,
+    serviceId: string,
+  ): Promise<ServiceLocalEnvVarSummary[]> {
     const vars = await this.listLocalEnvVars(spaceId, serviceId);
     return vars.map((row) => ({
       name: row.name,
-      type: row.secret ? 'secret_text' : 'plain_text',
-      value: row.secret ? '********' : row.value,
+      type: row.secret ? "secret_text" : "plain_text",
+      value: row.secret ? "********" : row.value,
       updated_at: row.updated_at,
     }));
   }
@@ -107,7 +126,9 @@ export class ServiceDesiredStateService {
   }): Promise<void> {
     const serviceId = params.serviceId ?? params.workerId;
     if (!serviceId) {
-      throw new BadRequestError('Local env replacement requires a service identifier');
+      throw new BadRequestError(
+        "Local env replacement requires a service identifier",
+      );
     }
     const existingVars = await this.listLocalEnvVars(params.spaceId, serviceId);
     const existingMap = new Map(existingVars.map((row) => [row.name, row]));
@@ -115,12 +136,13 @@ export class ServiceDesiredStateService {
     for (const variable of params.variables) {
       const name = normalizeEnvName(variable.name);
       const existing = existingMap.get(name);
-      const shouldPreserveSecret =
-        variable.secret === true
-        && variable.value === MASKED_SECRET_VALUE
-        && existing?.secret === true;
+      const shouldPreserveSecret = variable.secret === true &&
+        variable.value === MASKED_SECRET_VALUE &&
+        existing?.secret === true;
       deduped.set(name, {
-        value: shouldPreserveSecret ? existing.value : String(variable.value ?? ''),
+        value: shouldPreserveSecret
+          ? existing.value
+          : String(variable.value ?? ""),
         secret: variable.secret === true,
       });
     }
@@ -137,7 +159,7 @@ export class ServiceDesiredStateService {
       const enc = await encrypt(
         variable.value,
         this.encryptionKey,
-        buildServiceEnvSalt(serviceId, name)
+        buildServiceEnvSalt(serviceId, name),
       );
       encrypted.push({
         name,
@@ -149,7 +171,7 @@ export class ServiceDesiredStateService {
     // Use raw BEGIN/COMMIT for transactional atomicity since D1 Drizzle
     // doesn't support .transaction(). Individual statements inside are
     // Drizzle query-builder calls.
-    await this.env.DB.prepare('BEGIN IMMEDIATE').run();
+    await this.env.DB.prepare("BEGIN IMMEDIATE").run();
     try {
       await this.db.delete(serviceEnvVars)
         .where(and(
@@ -171,10 +193,10 @@ export class ServiceDesiredStateService {
           })));
       }
 
-      await this.env.DB.prepare('COMMIT').run();
+      await this.env.DB.prepare("COMMIT").run();
     } catch (error) {
       try {
-        await this.env.DB.prepare('ROLLBACK').run();
+        await this.env.DB.prepare("ROLLBACK").run();
       } catch {
         // Ignore rollback failures and rethrow the original error.
       }
@@ -182,13 +204,15 @@ export class ServiceDesiredStateService {
     }
   }
 
-  async listResourceBindings(serviceId: string): Promise<Array<{
-    id: string;
-    name: string;
-    type: ServiceBindingSpec['type'];
-    resource_id: string;
-    resource_name: string | null;
-  }>> {
+  async listResourceBindings(serviceId: string): Promise<
+    Array<{
+      id: string;
+      name: string;
+      type: ServiceBindingSpec["type"];
+      resource_id: string;
+      resource_name: string | null;
+    }>
+  > {
     const rows = await this.db.select({
       id: serviceBindings.id,
       bindingName: serviceBindings.bindingName,
@@ -209,16 +233,16 @@ export class ServiceDesiredStateService {
         id: row.id,
         bindingName: row.bindingName,
         bindingType: row.bindingType,
-        config: '{}',
+        config: "{}",
         resourceId: row.resourceId,
         resourceName: row.resourceName,
-        resourceType: '',
-        resourceStatus: 'active',
+        resourceType: "",
+        resourceStatus: "active",
         resourceProviderName: null,
         resourceProviderResourceId: null,
         resourceProviderResourceName: row.resourceName,
-        resourceConfig: '{}',
-      })?.type ?? 'service',
+        resourceConfig: "{}",
+      })?.type ?? "service",
       resource_id: row.resourceId,
       resource_name: row.resourceName,
     }));
@@ -229,18 +253,20 @@ export class ServiceDesiredStateService {
     workerId?: string;
     bindings: Array<{
       name: string;
-      type: Exclude<ServiceBindingSpec['type'], 'plain_text' | 'secret_text'>;
+      type: Exclude<ServiceBindingSpec["type"], "plain_text" | "secret_text">;
       resourceId: string;
       config?: Record<string, unknown>;
     }>;
   }): Promise<void> {
     const serviceId = params.serviceId ?? params.workerId;
     if (!serviceId) {
-      throw new BadRequestError('Resource binding replacement requires a service identifier');
+      throw new BadRequestError(
+        "Resource binding replacement requires a service identifier",
+      );
     }
     const timestamp = new Date().toISOString();
 
-    await this.env.DB.prepare('BEGIN IMMEDIATE').run();
+    await this.env.DB.prepare("BEGIN IMMEDIATE").run();
     try {
       await this.db.delete(physicalServiceBindings)
         .where(eq(physicalServiceBindings.serviceId, serviceId));
@@ -258,10 +284,10 @@ export class ServiceDesiredStateService {
           })));
       }
 
-      await this.env.DB.prepare('COMMIT').run();
+      await this.env.DB.prepare("COMMIT").run();
     } catch (error) {
       try {
-        await this.env.DB.prepare('ROLLBACK').run();
+        await this.env.DB.prepare("ROLLBACK").run();
       } catch {
         // Ignore rollback failures and rethrow the original error.
       }
@@ -269,57 +295,29 @@ export class ServiceDesiredStateService {
     }
   }
 
-  async resolveDeploymentState(spaceId: string, serviceId: string): Promise<ServiceDesiredStateSnapshot> {
-    const [runtimeConfig, commonEnvState, resourceRows] = await Promise.all([
+  async resolveDeploymentState(
+    spaceId: string,
+    serviceId: string,
+  ): Promise<ServiceDesiredStateSnapshot> {
+    const [runtimeConfig, commonEnvState] = await Promise.all([
       this.getRuntimeConfig(spaceId, serviceId),
       resolveServiceCommonEnvState(this.env, spaceId, serviceId),
-      this.db.select({
-        id: serviceBindings.id,
-        bindingName: serviceBindings.bindingName,
-        bindingType: serviceBindings.bindingType,
-        config: serviceBindings.config,
-        resourceId: serviceBindings.resourceId,
-        resourceName: resources.name,
-        resourceType: resources.type,
-        resourceStatus: resources.status,
-        resourceProviderName: resources.providerName,
-        resourceProviderResourceId: resources.providerResourceId,
-        resourceProviderResourceName: resources.providerResourceName,
-        resourceConfig: resources.config,
-      })
-        .from(serviceBindings)
-        .innerJoin(resources, eq(resources.id, serviceBindings.resourceId))
-        .where(eq(serviceBindings.serviceId, serviceId))
-        .orderBy(serviceBindings.bindingName)
-        .all(),
     ]);
-
-    const resourceBindings: ServiceBindingSpec[] = [];
-    for (const row of resourceRows) {
-      if (row.resourceStatus !== 'active') {
-        throw new BadRequestError(`Bound resource is not active: ${row.resourceName || row.resourceId}`);
-      }
-
-      const binding = toServiceBinding(row as ServiceBindingRow);
-      if (!binding) {
-        throw new BadRequestError(`Unsupported or incomplete service binding: ${row.bindingName}`);
-      }
-      resourceBindings.push(binding);
-    }
-
-    const bindings = sortBindings([...resourceBindings, ...commonEnvState.envBindings]);
+    const bindings = sortBindings([...commonEnvState.envBindings]);
 
     return {
       envVars: commonEnvState.envVars,
       envBindings: commonEnvState.envBindings,
-      resourceBindings,
+      resourceBindings: [],
       bindings,
       runtimeConfig,
       commonEnvUpdates: commonEnvState.commonEnvUpdates,
     };
   }
 
-  async getCurrentDeploymentArtifactRef(serviceId: string): Promise<string | null> {
+  async getCurrentDeploymentArtifactRef(
+    serviceId: string,
+  ): Promise<string | null> {
     const routeHead = await getDeploymentRouteHead(this.env.DB, serviceId);
     if (!routeHead.exists || !routeHead.activeDeploymentId) {
       return null;
@@ -349,7 +347,7 @@ export class ServiceDesiredStateService {
       .where(and(
         eq(serviceDeployments.serviceId, serviceId),
         isNotNull(deployments.artifactRef),
-        inArray(deployments.routingStatus, ['active', 'canary', 'rollback']),
+        inArray(deployments.routingStatus, ["active", "canary", "rollback"]),
         gt(deployments.routingWeight, 0),
       ))
       .orderBy(
@@ -365,32 +363,34 @@ export class ServiceDesiredStateService {
 
     const deploys = rows
       .map((row) => ({
-        routeRef: row.artifactRef || '',
+        routeRef: row.artifactRef || "",
         weight: normalizeRoutingWeight(row.routingWeight),
         deploymentId: row.id,
-        status: row.routingStatus as 'active' | 'canary' | 'rollback',
+        status: row.routingStatus as "active" | "canary" | "rollback",
       }))
       .filter((row) => row.routeRef && row.weight > 0);
 
     if (deploys.length > 0) {
       return {
-        type: 'deployments',
+        type: "deployments",
         deployments: deploys,
       };
     }
 
-    const fallbackArtifactRef = await this.getCurrentDeploymentArtifactRef(serviceId);
+    const fallbackArtifactRef = await this.getCurrentDeploymentArtifactRef(
+      serviceId,
+    );
     if (!fallbackArtifactRef) {
       return null;
     }
 
     return {
-      type: 'deployments',
+      type: "deployments",
       deployments: [
         {
           routeRef: fallbackArtifactRef,
           weight: 100,
-          status: 'active',
+          status: "active",
         },
       ],
     };
@@ -398,7 +398,6 @@ export class ServiceDesiredStateService {
 }
 
 // Legacy aliases for backward compatibility
-export type WorkerManagedMcpServerState = ServiceManagedMcpServerState;
 export type WorkerRuntimeConfigState = ServiceRuntimeConfigState;
 export type WorkerLocalEnvVarState = ServiceLocalEnvVarState;
 export type WorkerLocalEnvVarSummary = ServiceLocalEnvVarSummary;

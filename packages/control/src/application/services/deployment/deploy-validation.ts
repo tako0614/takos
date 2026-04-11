@@ -14,33 +14,30 @@
  * Validators implemented (per docs `reference/manifest-spec.md` and
  * `architecture/app-publications.md`):
  *
- *   1. validateBindingsWorkerOnly        — object-typed storage bind
- *      (`sql`, `object-store`, `key-value`, `queue`, `vector-index`,
- *      `workflow`, `durable-object`, `analytics-engine`) targets
- *      Service / Attached Container.
- *   2. validateAttachedNotRouteTarget    — `route.target` references an
+ *   1. validateAttachedNotRouteTarget    — `route.target` references an
  *      attached container instead of a top-level Worker / Service.
- *   3. validateRouteUniqueness           — multiple routes share the same
+ *   2. validateRouteUniqueness           — multiple routes share the same
  *      `path` and have any overlapping HTTP method (full overlap or partial).
- *   4. validatePublicationEnvCollision   — multiple publications would
- *      generate the same `TAKOS_*_*_URL` env name within the same layer.
+ *   3. validateConsumeReferences         — `compute.<name>.consume` references
+ *      a missing publication or an unknown output alias key.
+ *   4. validateConsumeEnvCollision       — consume env aliases collide within
+ *      the same compute or with local/static env names.
  *   5. validatePublicationKnownFields    — known publication type
  *      (`McpServer`, `FileHandler`, `UiSurface`) carries a field that is
  *      not part of its schema (typo / wrong type).
- *   6. validateAppTokenImmutable         — top-level or per-compute env
- *      tries to override the kernel-injected `TAKOS_APP_TOKEN`.
- *
  * The validators operate on the flat `AppManifest` shape produced by the
- * parser (`compute` / `storage` / `routes` / `publish` / `env` / `scopes`).
+ * parser (`compute` / `routes` / `publish` / `env`).
  */
 import type {
   AppCompute,
   AppManifest,
   AppPublication,
   AppRoute,
-  AppStorage,
-  StorageType,
 } from "../source/app-manifest-types.ts";
+import {
+  publicationAllowedFields,
+  publicationOutputContract,
+} from "../platform/service-publications.ts";
 
 // ── Public types ─────────────────────────────────────────────────────────────
 
@@ -53,12 +50,12 @@ import type {
 export type ParsedManifest = AppManifest;
 
 export type ValidationErrorCode =
-  | "binding_worker_only"
   | "attached_not_route_target"
   | "route_duplicate"
-  | "publication_env_collision"
-  | "publication_unknown_field"
-  | "app_token_immutable";
+  | "consume_unknown_publication"
+  | "consume_unknown_output"
+  | "consume_env_collision"
+  | "publication_unknown_field";
 
 export interface ValidationError {
   code: ValidationErrorCode;
@@ -96,7 +93,9 @@ function getAttachedContainers(
   manifest: ParsedManifest,
 ): Record<string, AppCompute & { parentWorker: string }> {
   const out: Record<string, AppCompute & { parentWorker: string }> = {};
-  for (const [workerName, compute] of Object.entries(getTopLevelCompute(manifest))) {
+  for (
+    const [workerName, compute] of Object.entries(getTopLevelCompute(manifest))
+  ) {
     if (compute.kind !== "worker") continue;
     for (
       const [childName, child] of Object.entries(compute.containers ?? {})
@@ -107,22 +106,6 @@ function getAttachedContainers(
   return out;
 }
 
-function getServices(
-  manifest: ParsedManifest,
-): Record<string, AppCompute> {
-  return Object.fromEntries(
-    Object.entries(getTopLevelCompute(manifest)).filter(
-      ([, compute]) => compute.kind === "service",
-    ),
-  );
-}
-
-function getStorage(
-  manifest: ParsedManifest,
-): Record<string, AppStorage> {
-  return manifest.storage ?? {};
-}
-
 function getRoutes(manifest: ParsedManifest): AppRoute[] {
   return manifest.routes ?? [];
 }
@@ -131,118 +114,32 @@ function getPublications(manifest: ParsedManifest): AppPublication[] {
   return manifest.publish ?? [];
 }
 
-/**
- * Normalize a name to the env-var segment used by the publication injector
- * (uppercase, hyphen → underscore).
- */
-function normalizeEnvSegment(value: string): string {
-  return value.replace(/-/g, "_").toUpperCase();
-}
-
-interface PublicationEntry {
-  /** Path inside `manifest` for diagnostics. */
+type PublicationEntry = {
   path: string;
-  type: string;
-  name?: string;
+  publication: AppPublication;
   raw: Record<string, unknown>;
+};
+
+function normalizeEnvName(name: string): string {
+  const normalized = String(name || "").trim();
+  if (!normalized) {
+    throw new Error("Environment variable name is required");
+  }
+  if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(normalized)) {
+    throw new Error(`Invalid environment variable name: ${normalized}`);
+  }
+  return normalized.toUpperCase();
 }
 
 function collectPublications(manifest: ParsedManifest): PublicationEntry[] {
-  const out: PublicationEntry[] = [];
-  const publications = getPublications(manifest);
-  for (let i = 0; i < publications.length; i++) {
-    const pub = publications[i];
-    out.push({
-      path: `publish[${i}]`,
-      type: pub.type,
-      ...(pub.name ? { name: pub.name } : {}),
-      raw: pub as unknown as Record<string, unknown>,
-    });
-  }
-  return out;
+  return getPublications(manifest).map((pub, index) => ({
+    path: `publish[${index}]`,
+    publication: pub,
+    raw: pub as unknown as Record<string, unknown>,
+  }));
 }
 
-// ── Validator 1: Storage bind "Worker only" ──────────────────────────────────
-
-/**
- * Object-typed storage produces a non-string binding on the compute side
- * (D1 database handle, R2 bucket handle, ...). These are only supported on
- * Workers. Only `secret` storage produces a plain string env var, which is
- * legal on every compute kind.
- */
-function isObjectBindingStorageType(type: StorageType): boolean {
-  switch (type) {
-    case "sql":
-    case "object-store":
-    case "key-value":
-    case "queue":
-    case "vector-index":
-    case "workflow":
-    case "durable-object":
-    case "analytics-engine":
-      return true;
-    case "secret":
-      return false;
-  }
-}
-
-/**
- * In the flat schema the binding direction is flipped: storage declares
- * `bind` (the env name), and compute implicitly receives every storage bind
- * whose kind it is compatible with. For the Worker-only validator, the rule
- * we enforce is: if any Service or Attached-container compute depends on a
- * storage with an object-typed binding, flag the storage (since the storage
- * declaration is what "chose" the binding direction).
- *
- * Currently the parser does not track explicit storage-to-compute wiring,
- * so the validator walks the `env`-derived binding namespace and flags any
- * storage whose declared `bind` collides with a Service/Attached compute's
- * explicit env map (indicating the author tried to wire it manually).
- */
-export function validateBindingsWorkerOnly(
-  manifest: ParsedManifest,
-): ValidationError[] {
-  const errors: ValidationError[] = [];
-  const storage = getStorage(manifest);
-  const services = getServices(manifest);
-  const attached = getAttachedContainers(manifest);
-
-  const violatingComputes: Array<
-    { kind: "service" | "attached-container"; name: string; env?: Record<string, string> }
-  > = [];
-  for (const [name, service] of Object.entries(services)) {
-    violatingComputes.push({ kind: "service", name, env: service.env });
-  }
-  for (const [name, container] of Object.entries(attached)) {
-    violatingComputes.push({
-      kind: "attached-container",
-      name,
-      env: container.env,
-    });
-  }
-
-  for (const [storageName, storageEntry] of Object.entries(storage)) {
-    if (!isObjectBindingStorageType(storageEntry.type)) continue;
-    const bindName = storageEntry.bind;
-    if (!bindName) continue;
-    for (const compute of violatingComputes) {
-      if (!compute.env) continue;
-      if (!(bindName in compute.env)) continue;
-      errors.push({
-        code: "binding_worker_only",
-        path: `storage.${storageName}`,
-        message:
-          `compute '${compute.name}' (${compute.kind}) cannot bind storage '${storageName}' (type '${storageEntry.type}'); ` +
-          `object-typed bindings are Worker-only. Bind it to a Worker compute instead, ` +
-          `or change the storage type to 'secret' if a string env is acceptable.`,
-      });
-    }
-  }
-
-  return errors;
-}
-
-// ── Validator 2: Attached container as route target ─────────────────────────
+// ── Validator 1: Attached container as route target ─────────────────────────
 
 export function validateAttachedNotRouteTarget(
   manifest: ParsedManifest,
@@ -270,7 +167,9 @@ export function validateAttachedNotRouteTarget(
         message:
           `route target '${target}' is an attached container; routes can only target ` +
           `top-level Worker or Service compute. Point the route at the parent worker ` +
-          `(declared via 'compute.${attached[target].parentWorker}.containers.${target}').`,
+          `(declared via 'compute.${
+            attached[target].parentWorker
+          }.containers.${target}').`,
       });
     }
   }
@@ -278,7 +177,7 @@ export function validateAttachedNotRouteTarget(
   return errors;
 }
 
-// ── Validator 3: Same path + method route duplicates ────────────────────────
+// ── Validator 2: Same path + method route duplicates ────────────────────────
 
 function expandMethods(methods: string[] | undefined): Set<string> {
   if (!methods || methods.length === 0) {
@@ -327,7 +226,9 @@ export function validateRouteUniqueness(
           code: "route_duplicate",
           path: `routes[${bucket[j].index}]`,
           message:
-            `route at path '${bucket[j].path}' duplicates routes[${bucket[i].index}] ` +
+            `route at path '${bucket[j].path}' duplicates routes[${
+              bucket[i].index
+            }] ` +
             `for method(s) ${
               overlap.sort().join(", ")
             }; either separate the methods ` +
@@ -340,169 +241,116 @@ export function validateRouteUniqueness(
   return errors;
 }
 
-// ── Validator 4: Publication env collision ──────────────────────────────────
+// ── Validator 3: Consume references ─────────────────────────────────────────
 
-function publicationEnvName(
-  groupName: string,
-  pub: PublicationEntry,
-  needsName: boolean,
-): string {
-  const segments = [
-    "TAKOS",
-    normalizeEnvSegment(groupName),
-    normalizeEnvSegment(pub.type),
-  ];
-  if (needsName && pub.name) {
-    segments.push(normalizeEnvSegment(pub.name));
-  }
-  segments.push("URL");
-  return segments.join("_");
+function collectPublicationMap(
+  manifest: ParsedManifest,
+): Map<string, AppPublication> {
+  return new Map(
+    getPublications(manifest).map((
+      publication,
+    ) => [publication.name, publication]),
+  );
 }
 
-export function validatePublicationEnvCollision(
+export function validateConsumeReferences(
   manifest: ParsedManifest,
 ): ValidationError[] {
   const errors: ValidationError[] = [];
-  const groupName = manifest.name ?? "GROUP";
-  const publications = collectPublications(manifest);
-
-  const countByType = new Map<string, number>();
-  for (const pub of publications) {
-    countByType.set(pub.type, (countByType.get(pub.type) ?? 0) + 1);
-  }
-
-  const seen = new Map<string, PublicationEntry>();
-  for (const pub of publications) {
-    const needsName = (countByType.get(pub.type) ?? 0) > 1;
-    if (needsName && !pub.name) {
-      errors.push({
-        code: "publication_env_collision",
-        path: pub.path,
-        message:
-          `publication of type '${pub.type}' is declared more than once but is missing 'name'; ` +
-          `add a unique 'name' to each duplicate so the injector can build distinct ` +
-          `TAKOS_${normalizeEnvSegment(groupName)}_${
-            normalizeEnvSegment(pub.type)
-          }_<NAME>_URL env vars.`,
-      });
-      continue;
+  const publicationMap = collectPublicationMap(manifest);
+  for (
+    const [computeName, compute] of Object.entries(getTopLevelCompute(manifest))
+  ) {
+    for (const [index, consume] of (compute.consume ?? []).entries()) {
+      const publication = publicationMap.get(consume.publication);
+      if (!publication) {
+        errors.push({
+          code: "consume_unknown_publication",
+          path: `compute.${computeName}.consume[${index}]`,
+          message:
+            `consume references unknown publication '${consume.publication}'. Declare it in top-level publish first.`,
+        });
+        continue;
+      }
+      const outputs = new Set(
+        publicationOutputContract(publication).map((entry) => entry.name),
+      );
+      for (const key of Object.keys(consume.env ?? {})) {
+        if (outputs.has(key)) continue;
+        errors.push({
+          code: "consume_unknown_output",
+          path: `compute.${computeName}.consume[${index}].env.${key}`,
+          message:
+            `publication '${consume.publication}' does not expose output '${key}'. Known outputs: ${
+              Array.from(outputs).sort().join(", ")
+            }.`,
+        });
+      }
     }
-    const envName = publicationEnvName(groupName, pub, needsName);
-    const previous = seen.get(envName);
-    if (previous) {
-      errors.push({
-        code: "publication_env_collision",
-        path: pub.path,
-        message:
-          `publication '${pub.type}${
-            pub.name ? `:${pub.name}` : ""
-          }' would inject env ` +
-          `'${envName}' which already comes from ${previous.path}; pick distinct 'name' ` +
-          `values for each publication of the same type within the same group.`,
-      });
-      continue;
-    }
-    seen.set(envName, pub);
   }
+  return errors;
+}
 
+// ── Validator 4: Consume env collision ──────────────────────────────────────
+
+export function validateConsumeEnvCollision(
+  manifest: ParsedManifest,
+): ValidationError[] {
+  const errors: ValidationError[] = [];
+  const publicationMap = collectPublicationMap(manifest);
+  const topLevelEnvNames = new Set(
+    Object.keys(manifest.env ?? {}).map((name) => normalizeEnvName(name)),
+  );
+
+  for (
+    const [computeName, compute] of Object.entries(getTopLevelCompute(manifest))
+  ) {
+    const seen = new Set<string>([
+      ...topLevelEnvNames,
+      ...Object.keys(compute.env ?? {}).map((name) => normalizeEnvName(name)),
+    ]);
+    for (const [index, consume] of (compute.consume ?? []).entries()) {
+      const publication = publicationMap.get(consume.publication);
+      if (!publication) continue;
+      for (const output of publicationOutputContract(publication)) {
+        const envName = normalizeEnvName(
+          consume.env?.[output.name] ?? output.defaultEnv,
+        );
+        if (seen.has(envName)) {
+          errors.push({
+            code: "consume_env_collision",
+            path: `compute.${computeName}.consume[${index}]`,
+            message:
+              `consume '${consume.publication}' resolves env '${envName}' which already exists in compute '${computeName}'. Pick a different alias or remove the conflicting env/bind.`,
+          });
+          continue;
+        }
+        seen.add(envName);
+      }
+    }
+  }
   return errors;
 }
 
 // ── Validator 5: Publication unknown field ──────────────────────────────────
-
-const PUBLICATION_KNOWN_FIELDS: Record<string, ReadonlySet<string>> = {
-  McpServer: new Set([
-    "type",
-    "name",
-    "path",
-    "transport",
-    "authSecretRef",
-    "title",
-  ]),
-  FileHandler: new Set([
-    "type",
-    "name",
-    "path",
-    "mimeTypes",
-    "extensions",
-    "title",
-  ]),
-  UiSurface: new Set([
-    "type",
-    "name",
-    "path",
-    "title",
-    "icon",
-  ]),
-};
 
 export function validatePublicationKnownFields(
   manifest: ParsedManifest,
 ): ValidationError[] {
   const errors: ValidationError[] = [];
   for (const pub of collectPublications(manifest)) {
-    const allowed = PUBLICATION_KNOWN_FIELDS[pub.type];
-    if (!allowed) continue;
+    const allowed = publicationAllowedFields(pub.publication);
     for (const key of Object.keys(pub.raw)) {
       if (allowed.has(key)) continue;
       errors.push({
         code: "publication_unknown_field",
         path: `${pub.path}.${key}`,
         message:
-          `publication of type '${pub.type}' has unknown field '${key}'. ` +
-          `Known fields: ${Array.from(allowed).sort().join(", ")}. ` +
-          `Remove the field or fix the typo (kernel does not interpret type semantics, ` +
-          `but enforces a known schema for built-in publication types).`,
+          `publication '${pub.publication.name}' has unknown field '${key}'. ` +
+          `Known fields: ${Array.from(allowed).sort().join(", ")}.`,
       });
     }
   }
-  return errors;
-}
-
-// ── Validator 6: App token immutable ────────────────────────────────────────
-
-const APP_TOKEN_ENV = "TAKOS_APP_TOKEN";
-
-function checkEnvForAppToken(
-  envVars: Record<string, string> | undefined,
-  path: string,
-): ValidationError[] {
-  if (!envVars) return [];
-  if (!Object.prototype.hasOwnProperty.call(envVars, APP_TOKEN_ENV)) return [];
-  return [{
-    code: "app_token_immutable",
-    path: `${path}.${APP_TOKEN_ENV}`,
-    message:
-      `'${APP_TOKEN_ENV}' is reserved and injected by the kernel for every compute; ` +
-      `it cannot be set via top-level env or compute env. Remove the override.`,
-  }];
-}
-
-export function validateAppTokenImmutable(
-  manifest: ParsedManifest,
-): ValidationError[] {
-  const errors: ValidationError[] = [];
-
-  // Top-level `env` (flat Record<string, string>).
-  errors.push(...checkEnvForAppToken(manifest.env, "env"));
-
-  // Per-compute env (top-level compute).
-  for (const [name, compute] of Object.entries(getTopLevelCompute(manifest))) {
-    errors.push(
-      ...checkEnvForAppToken(compute.env, `compute.${name}.env`),
-    );
-  }
-
-  // Attached-container env (nested under workers).
-  for (const [name, container] of Object.entries(getAttachedContainers(manifest))) {
-    errors.push(
-      ...checkEnvForAppToken(
-        container.env,
-        `compute.${container.parentWorker}.containers.${name}.env`,
-      ),
-    );
-  }
-
   return errors;
 }
 
@@ -512,12 +360,11 @@ export function runDeployValidations(
   manifest: ParsedManifest,
 ): ValidationError[] {
   return [
-    ...validateBindingsWorkerOnly(manifest),
     ...validateAttachedNotRouteTarget(manifest),
     ...validateRouteUniqueness(manifest),
-    ...validatePublicationEnvCollision(manifest),
+    ...validateConsumeReferences(manifest),
+    ...validateConsumeEnvCollision(manifest),
     ...validatePublicationKnownFields(manifest),
-    ...validateAppTokenImmutable(manifest),
   ];
 }
 

@@ -2,16 +2,15 @@ import type {
   AppCompute,
   AppManifest,
   AppManifestOverride,
-  AppStorage,
-} from '../source/app-manifest-types.ts';
+} from "../source/app-manifest-types.ts";
 
-export type GroupWorkloadCategory = 'worker' | 'container' | 'service';
+export type GroupWorkloadCategory = "worker" | "container" | "service";
 
 export interface DesiredResourceState {
   name: string;
-  type: AppStorage['type'];
+  type: string;
   binding?: string;
-  spec: AppStorage;
+  spec: Record<string, unknown>;
   specFingerprint: string;
 }
 
@@ -34,8 +33,8 @@ export interface DesiredRouteState {
 }
 
 export interface GroupDesiredState {
-  apiVersion: 'takos.dev/v1alpha1';
-  kind: 'GroupDesiredState';
+  apiVersion: "takos.dev/v1alpha1";
+  kind: "GroupDesiredState";
   groupName: string;
   version: string;
   provider: string;
@@ -110,7 +109,7 @@ function sortValue(value: unknown): unknown {
   if (Array.isArray(value)) {
     return value.map((entry) => sortValue(entry));
   }
-  if (value && typeof value === 'object') {
+  if (value && typeof value === "object") {
     return Object.fromEntries(
       Object.keys(value as JsonObject)
         .sort()
@@ -121,7 +120,7 @@ function sortValue(value: unknown): unknown {
 }
 
 function isPlainObject(value: unknown): value is Record<string, unknown> {
-  return value !== null && typeof value === 'object' && !Array.isArray(value);
+  return value !== null && typeof value === "object" && !Array.isArray(value);
 }
 
 function deepMerge(
@@ -146,11 +145,14 @@ function deepMerge(
 
 /**
  * Apply env-specific overrides from `manifest.overrides[envName]` to the
- * flat manifest shape. Only the whitelisted fields (compute / storage /
- * routes / publish / env / scopes / oauth) are merged — everything else on
+ * flat manifest shape. Only the whitelisted fields (compute /
+ * routes / publish / env) are merged — everything else on
  * the override record is ignored.
  */
-export function applyManifestOverrides(manifest: AppManifest, envName: string): AppManifest {
+export function applyManifestOverrides(
+  manifest: AppManifest,
+  envName: string,
+): AppManifest {
   const overrides = manifest.overrides?.[envName];
   if (!overrides) return { ...manifest, overrides: undefined };
 
@@ -161,12 +163,6 @@ export function applyManifestOverrides(manifest: AppManifest, envName: string): 
       overrides.compute as Record<string, unknown>,
     ) as Record<string, AppCompute>;
   }
-  if (overrides.storage) {
-    merged.storage = deepMerge(
-      manifest.storage as Record<string, unknown>,
-      overrides.storage as Record<string, unknown>,
-    ) as Record<string, AppStorage>;
-  }
   if (overrides.routes) {
     merged.routes = overrides.routes;
   }
@@ -176,24 +172,20 @@ export function applyManifestOverrides(manifest: AppManifest, envName: string): 
   if (overrides.env) {
     merged.env = { ...manifest.env, ...overrides.env };
   }
-  if (overrides.scopes) {
-    merged.scopes = overrides.scopes;
-  }
-  if (overrides.oauth) {
-    merged.oauth = overrides.oauth;
-  }
   merged.overrides = undefined;
   return merged;
 }
 
-function workloadCategoryFromKind(kind: AppCompute['kind']): GroupWorkloadCategory {
+function workloadCategoryFromKind(
+  kind: AppCompute["kind"],
+): GroupWorkloadCategory {
   switch (kind) {
-    case 'worker':
-      return 'worker';
-    case 'service':
-      return 'service';
-    case 'attached-container':
-      return 'container';
+    case "worker":
+      return "worker";
+    case "service":
+      return "service";
+    case "attached-container":
+      return "container";
   }
 }
 
@@ -205,9 +197,8 @@ export function compileGroupDesiredState(
     envName?: string;
   } = {},
 ): GroupDesiredState {
-  const envName = opts.envName ?? 'default';
+  const envName = opts.envName ?? "default";
   const resolvedManifest = applyManifestOverrides(manifest, envName);
-  const storage = resolvedManifest.storage ?? {};
   const compute = resolvedManifest.compute ?? {};
   const routeList = resolvedManifest.routes ?? [];
 
@@ -218,9 +209,13 @@ export function compileGroupDesiredState(
   // workloads map for scheduling purposes.
   const routes = Object.fromEntries(
     routeList.map((route, index) => [
-      route.target ? `${route.target}:${route.path ?? index}` : `route-${index}`,
+      route.target
+        ? `${route.target}:${route.path ?? index}`
+        : `route-${index}`,
       {
-        name: route.target ? `${route.target}:${route.path ?? index}` : `route-${index}`,
+        name: route.target
+          ? `${route.target}:${route.path ?? index}`
+          : `route-${index}`,
         target: route.target,
         ...(route.path ? { path: route.path } : {}),
         ...(route.methods ? { methods: route.methods } : {}),
@@ -236,19 +231,6 @@ export function compileGroupDesiredState(
     routeNamesByTarget.set(route.target, current);
   }
 
-  const desiredResources = Object.fromEntries(
-    Object.entries(storage).map(([name, resource]) => [
-      name,
-      {
-        name,
-        type: resource.type,
-        ...(resource.bind ? { binding: resource.bind } : {}),
-        spec: resource,
-        specFingerprint: stableFingerprint(resource),
-      } satisfies DesiredResourceState,
-    ]),
-  );
-
   const desiredWorkloads: Record<string, DesiredWorkloadState> = {};
 
   for (const [name, entry] of Object.entries(compute)) {
@@ -263,7 +245,7 @@ export function compileGroupDesiredState(
 
     // Surface attached containers as their own workload entries so the
     // deploy pipeline can treat them as independent reconciliation units.
-    if (entry.kind === 'worker' && entry.containers) {
+    if (entry.kind === "worker" && entry.containers) {
       for (const [childName, childEntry] of Object.entries(entry.containers)) {
         desiredWorkloads[childName] = {
           name: childName,
@@ -278,14 +260,14 @@ export function compileGroupDesiredState(
   }
 
   return {
-    apiVersion: 'takos.dev/v1alpha1',
-    kind: 'GroupDesiredState',
+    apiVersion: "takos.dev/v1alpha1",
+    kind: "GroupDesiredState",
     groupName: opts.groupName ?? manifest.name,
-    version: resolvedManifest.version ?? '0.0.0',
-    provider: opts.provider ?? 'cloudflare',
+    version: resolvedManifest.version ?? "0.0.0",
+    provider: opts.provider ?? "cloudflare",
     env: envName,
     manifest: resolvedManifest,
-    resources: desiredResources,
+    resources: {},
     workloads: desiredWorkloads,
     routes,
   };
@@ -295,11 +277,15 @@ export function resolveRouteOwner(route: DesiredRouteState): string {
   return route.ingress ?? route.target;
 }
 
-export function resolveWorkloadBaseUrl(workload: ObservedWorkloadState | undefined): string | undefined {
+export function resolveWorkloadBaseUrl(
+  workload: ObservedWorkloadState | undefined,
+): string | undefined {
   if (!workload) return undefined;
   if (workload.resolvedBaseUrl) return workload.resolvedBaseUrl;
   if (workload.hostname) return `https://${workload.hostname}`;
-  if (workload.ipv4 && workload.port) return `http://${workload.ipv4}:${workload.port}`;
+  if (workload.ipv4 && workload.port) {
+    return `http://${workload.ipv4}:${workload.port}`;
+  }
   return undefined;
 }
 
@@ -314,7 +300,7 @@ export function materializeRoute(
   if (baseUrl) {
     try {
       url = route.path
-        ? new URL(route.path, `${baseUrl.replace(/\/+$/, '')}/`).toString()
+        ? new URL(route.path, `${baseUrl.replace(/\/+$/, "")}/`).toString()
         : baseUrl;
     } catch {
       url = baseUrl;
@@ -339,7 +325,9 @@ export function materializeRoutes(
   updatedAt?: string,
 ): Record<string, ObservedRouteState> {
   return Object.fromEntries(
-    Object.entries(desiredRoutes).map(([name, route]) => [name, materializeRoute(route, workloads, updatedAt)]),
+    Object.entries(desiredRoutes).map((
+      [name, route],
+    ) => [name, materializeRoute(route, workloads, updatedAt)]),
   );
 }
 

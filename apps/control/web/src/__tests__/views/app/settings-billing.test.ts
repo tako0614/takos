@@ -10,9 +10,9 @@ import { assertEquals, assertStringIncludes } from 'jsr:@std/assert';
 
   Deno.test('settings billing helpers - sorts featured packs first and then by credit size', () => {
   assertEquals(sortBillingTopupPacks([
-      { id: 'team', label: 'Team', price_id: 'price_team', credits_cents: 10000, featured: false, badge: null },
-      { id: 'starter', label: 'Starter', price_id: 'price_starter', credits_cents: 2500, featured: true, badge: 'Popular' },
-      { id: 'growth', label: 'Growth', price_id: 'price_growth', credits_cents: 5000, featured: false, badge: null },
+      { id: 'team', label: 'Team', credits_cents: 10000, featured: false, badge: null },
+      { id: 'starter', label: 'Starter', credits_cents: 2500, featured: true, badge: 'Popular' },
+      { id: 'growth', label: 'Growth', credits_cents: 5000, featured: false, badge: null },
     ]).map((pack) => pack.id), ['starter', 'growth', 'team']);
 })
   Deno.test('settings billing helpers - formats billing amounts as USD currency', () => {

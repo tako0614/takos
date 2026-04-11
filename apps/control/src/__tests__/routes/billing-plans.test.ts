@@ -5,6 +5,16 @@ import { createMockEnv } from "../../../test/integration/setup.ts";
 import { assertEquals, assertThrows } from "jsr:@std/assert";
 import { assertSpyCalls, spy } from "jsr:@std/testing/mock";
 
+import type {
+  BillingWebhookEvent,
+  CheckoutSessionResult,
+  CompletedCheckoutSession,
+  CreateCheckoutInput,
+  ListInvoicesInput,
+  NormalizedInvoice,
+  PaymentProvider,
+} from "@/services/billing/billing";
+
 const billingMocks = {
   getOrCreateBillingAccount: ((..._args: any[]) => undefined) as any,
   addCredits: spy((..._args: any[]) => undefined) as any,
@@ -29,23 +39,36 @@ const billingMocks = {
   ),
 };
 
-const stripeMocks = {
-  createCheckoutSession: ((..._args: any[]) => undefined) as any,
-  createPortalSession: ((..._args: any[]) => undefined) as any,
-  verifyWebhookSignature: ((..._args: any[]) => undefined) as any,
-  retrieveCheckoutSession: ((..._args: any[]) => undefined) as any,
-  listInvoices: ((..._args: any[]) => undefined) as any,
-  retrieveInvoice: ((..._args: any[]) => undefined) as any,
-  sendInvoice: ((..._args: any[]) => undefined) as any,
-};
+interface ProviderMock {
+  createCheckoutSession: (input: CreateCheckoutInput) => Promise<CheckoutSessionResult>;
+  createPortalSession: (input: unknown) => Promise<{ url: string }>;
+  retrieveCheckoutSession: (sessionId: string) => Promise<CompletedCheckoutSession>;
+  listInvoices: (input: ListInvoicesInput) => Promise<{ invoices: NormalizedInvoice[]; hasMore: boolean }>;
+  retrieveInvoice: (invoiceId: string) => Promise<NormalizedInvoice>;
+  sendInvoice: (invoiceId: string) => Promise<void>;
+  parseWebhook: (payload: string, signature: string) => Promise<BillingWebhookEvent>;
+  isTrustedPdfUrl: (url: URL) => boolean;
+}
+
+let providerMock: ProviderMock;
+
+function newProviderMock(): ProviderMock {
+  return {
+    createCheckoutSession: ((..._a: any[]) => undefined) as any,
+    createPortalSession: ((..._a: any[]) => undefined) as any,
+    retrieveCheckoutSession: ((..._a: any[]) => undefined) as any,
+    listInvoices: ((..._a: any[]) => undefined) as any,
+    retrieveInvoice: ((..._a: any[]) => undefined) as any,
+    sendInvoice: ((..._a: any[]) => undefined) as any,
+    parseWebhook: ((..._a: any[]) => undefined) as any,
+    isTrustedPdfUrl: (url: URL) => url.hostname.endsWith(".stripe.com"),
+  };
+}
 
 const dbMocks = {
   getDb: ((..._args: any[]) => undefined) as any,
 };
 
-// [Deno] vi.mock removed - manually stub imports from '@/services/billing/billing'
-// [Deno] vi.mock removed - manually stub imports from '@/services/billing/stripe'
-// [Deno] vi.mock removed - manually stub imports from '@/db'
 import billingRoutes, {
   billingRouteDeps,
   billingWebhookHandler,
@@ -100,647 +123,611 @@ function syncBillingRouteDeps() {
     .resolveBillingPlanTier as any;
   billingRouteDeps.WEEKLY_RUNTIME_LIMIT_SECONDS =
     billingMocks.WEEKLY_RUNTIME_LIMIT_SECONDS;
-  billingRouteDeps.createCheckoutSession = stripeMocks.createCheckoutSession;
-  billingRouteDeps.createPortalSession = stripeMocks.createPortalSession;
-  billingRouteDeps.verifyWebhookSignature = stripeMocks.verifyWebhookSignature;
-  billingRouteDeps.retrieveCheckoutSession =
-    stripeMocks.retrieveCheckoutSession;
-  billingRouteDeps.listInvoices = stripeMocks.listInvoices;
-  billingRouteDeps.retrieveInvoice = stripeMocks.retrieveInvoice;
-  billingRouteDeps.sendInvoice = stripeMocks.sendInvoice;
+  billingRouteDeps.resolvePaymentProvider = (() =>
+    ({ name: "stripe", ...providerMock }) as PaymentProvider) as any;
 }
 
 Deno.test("billing plan management routes - GET /api/billing returns billing mode and available actions", async () => {
-  /* mocks cleared (no-op in Deno) */ void 0;
+  providerMock = newProviderMock();
   dbMocks.getDb = (() => ({
     billingAccount: {
       update: async () => undefined,
       findFirst: async () => null,
     },
   })) as any;
-  try {
-    billingMocks.getOrCreateBillingAccount = (async () => ({
-      id: "acct-1",
-      planId: "plan_payg",
-      billingPlan: {
-        id: "plan_payg",
-        name: "payg",
-        displayName: "Pay As You Go",
-        billingPlanQuotas: [],
-        billingPlanRates: [],
-        billingPlanFeatures: [],
-      },
-      balanceCents: 420,
-      status: "active",
-      stripeCustomerId: "cus_1",
-      stripeSubscriptionId: null,
-      subscriptionPeriodEnd: null,
-    })) as any;
-    syncBillingRouteDeps();
+  billingMocks.getOrCreateBillingAccount = (async () => ({
+    id: "acct-1",
+    planId: "plan_payg",
+    billingPlan: {
+      id: "plan_payg",
+      name: "payg",
+      displayName: "Pay As You Go",
+      billingPlanQuotas: [],
+      billingPlanRates: [],
+      billingPlanFeatures: [],
+    },
+    balanceCents: 420,
+    status: "active",
+    providerName: "stripe",
+    providerCustomerId: "cus_1",
+    providerSubscriptionId: null,
+    subscriptionPeriodEnd: null,
+  })) as any;
+  syncBillingRouteDeps();
 
-    const app = createApp(createUser());
-    const env = createMockEnv({
-      STRIPE_PRO_TOPUP_PACKS_JSON: JSON.stringify([
-        {
-          id: "starter",
-          label: "Starter",
-          price_id: "price_starter",
-          credits_cents: 2500,
-          featured: true,
-          badge: "Popular",
-        },
-      ]),
-    }) as unknown as Env;
-    const res = await app.fetch(
-      new Request("http://localhost/api/billing"),
-      env,
-      {} as ExecutionContext,
-    );
+  const app = createApp(createUser());
+  const env = createMockEnv({
+    STRIPE_PRO_TOPUP_PACKS_JSON: JSON.stringify([
+      {
+        id: "starter",
+        label: "Starter",
+        price_id: "price_starter",
+        credits_cents: 2500,
+        featured: true,
+        badge: "Popular",
+      },
+    ]),
+  }) as unknown as Env;
+  const res = await app.fetch(
+    new Request("http://localhost/api/billing"),
+    env,
+    {} as ExecutionContext,
+  );
 
-    assertEquals(res.status, 200);
-    assertEquals(await res.json(), {
-      plan: {
-        id: "plan_payg",
-        name: "payg",
-        display_name: "Pay As You Go",
+  assertEquals(res.status, 200);
+  assertEquals(await res.json(), {
+    plan: {
+      id: "plan_payg",
+      name: "payg",
+      display_name: "Pay As You Go",
+    },
+    plan_tier: "pro",
+    billing_mode: "pro_prepaid",
+    available_actions: {
+      subscribe_plus: true,
+      top_up_pro: true,
+      manage_subscription: false,
+    },
+    topup_packs: [
+      {
+        id: "starter",
+        label: "Starter",
+        credits_cents: 2500,
+        featured: true,
+        badge: "Popular",
       },
-      plan_tier: "pro",
-      billing_mode: "pro_prepaid",
-      available_actions: {
-        subscribe_plus: true,
-        top_up_pro: true,
-        manage_subscription: false,
-      },
-      topup_packs: [
-        {
-          id: "starter",
-          label: "Starter",
-          price_id: "price_starter",
-          credits_cents: 2500,
-          featured: true,
-          badge: "Popular",
-        },
-      ],
-      balance_cents: 420,
-      status: "active",
-      has_stripe_customer: true,
-      has_subscription: false,
-      subscription_period_end: null,
-      runtime_limit_7d_seconds: 18_000,
-    });
-  } finally {
-    /* TODO: restore stubbed globals manually */ void 0;
-  }
+    ],
+    balance_cents: 420,
+    status: "active",
+    has_payment_account: true,
+    has_subscription: false,
+    subscription_period_end: null,
+    runtime_limit_7d_seconds: 18_000,
+  });
 });
+
 Deno.test("billing plan management routes - POST /api/billing/subscribe uses the plus subscription price", async () => {
-  /* mocks cleared (no-op in Deno) */ void 0;
-  dbMocks.getDb = (() => ({
-    billingAccount: {
-      update: async () => undefined,
-      findFirst: async () => null,
-    },
+  providerMock = newProviderMock();
+  dbMocks.getDb = (() => ({})) as any;
+  billingMocks.getOrCreateBillingAccount = (async () => ({
+    providerCustomerId: "cus_1",
+    providerSubscriptionId: null,
   })) as any;
-  try {
-    billingMocks.getOrCreateBillingAccount = (async () => ({
-      stripeCustomerId: "cus_1",
-      stripeSubscriptionId: null,
-    })) as any;
-    stripeMocks.createCheckoutSession = spy(async () => ({
-      url: "https://stripe.test/checkout",
-      sessionId: "cs_1",
-    })) as any;
-    syncBillingRouteDeps();
+  const checkoutSpy = spy(async (_input: CreateCheckoutInput) => ({
+    url: "https://stripe.test/checkout",
+    sessionId: "cs_1",
+  }));
+  providerMock.createCheckoutSession = checkoutSpy as any;
+  syncBillingRouteDeps();
 
-    const app = createApp(createUser());
-    const env = createMockEnv({
-      STRIPE_SECRET_KEY: "sk_test",
-      STRIPE_PLUS_PRICE_ID: "price_plus",
-    }) as unknown as Env;
+  const app = createApp(createUser());
+  const env = createMockEnv({
+    STRIPE_SECRET_KEY: "sk_test",
+    STRIPE_PLUS_PRICE_ID: "price_plus",
+  }) as unknown as Env;
 
-    const res = await app.fetch(
-      new Request("http://localhost/api/billing/subscribe", { method: "POST" }),
-      env,
-      {} as ExecutionContext,
-    );
+  const res = await app.fetch(
+    new Request("http://localhost/api/billing/subscribe", { method: "POST" }),
+    env,
+    {} as ExecutionContext,
+  );
 
-    assertEquals(res.status, 200);
-    const checkoutCall = stripeMocks.createCheckoutSession.calls[0]?.args[0];
-    assertEquals(checkoutCall.priceId, "price_plus");
-    assertEquals(checkoutCall.mode, "subscription");
-    assertEquals(checkoutCall.metadata, { purchase_kind: "plus_subscription" });
-  } finally {
-    /* TODO: restore stubbed globals manually */ void 0;
-  }
+  assertEquals(res.status, 200);
+  const checkoutCall = checkoutSpy.calls[0]?.args[0];
+  assertEquals(checkoutCall?.providerPriceId, "price_plus");
+  assertEquals(checkoutCall?.mode, "subscription");
+  assertEquals(checkoutCall?.metadata, { purchase_kind: "plus_subscription" });
 });
+
 Deno.test("billing plan management routes - POST /api/billing/credits/checkout rejects when plus is active", async () => {
-  /* mocks cleared (no-op in Deno) */ void 0;
-  dbMocks.getDb = (() => ({
-    billingAccount: {
-      update: async () => undefined,
-      findFirst: async () => null,
-    },
+  providerMock = newProviderMock();
+  dbMocks.getDb = (() => ({})) as any;
+  billingMocks.getOrCreateBillingAccount = (async () => ({
+    planId: "plan_plus",
+    providerSubscriptionId: "sub_1",
+    providerCustomerId: "cus_1",
   })) as any;
-  try {
-    billingMocks.getOrCreateBillingAccount = (async () => ({
-      planId: "plan_plus",
-      stripeSubscriptionId: "sub_1",
-      stripeCustomerId: "cus_1",
-    })) as any;
-    syncBillingRouteDeps();
+  syncBillingRouteDeps();
 
-    const app = createApp(createUser());
-    const env = createMockEnv({
-      STRIPE_SECRET_KEY: "sk_test",
-      STRIPE_PRO_TOPUP_PACKS_JSON: JSON.stringify([
-        {
-          id: "starter",
-          label: "Starter",
-          price_id: "price_topup",
-          credits_cents: 2500,
-          featured: true,
-        },
-      ]),
-    }) as unknown as Env;
+  const app = createApp(createUser());
+  const env = createMockEnv({
+    STRIPE_SECRET_KEY: "sk_test",
+    STRIPE_PRO_TOPUP_PACKS_JSON: JSON.stringify([
+      {
+        id: "starter",
+        label: "Starter",
+        price_id: "price_topup",
+        credits_cents: 2500,
+        featured: true,
+      },
+    ]),
+  }) as unknown as Env;
 
-    const res = await app.fetch(
-      new Request("http://localhost/api/billing/credits/checkout", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ pack_id: "starter" }),
-      }),
-      env,
-      {} as ExecutionContext,
-    );
+  const res = await app.fetch(
+    new Request("http://localhost/api/billing/credits/checkout", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ pack_id: "starter" }),
+    }),
+    env,
+    {} as ExecutionContext,
+  );
 
-    assertEquals(res.status, 409);
-    assertEquals(await res.json(), {
-      error: "Plus subscription is active; cancel it before switching to Pro",
-      code: "CONFLICT",
-    });
-  } finally {
-    /* TODO: restore stubbed globals manually */ void 0;
-  }
+  assertEquals(res.status, 409);
+  assertEquals(await res.json(), {
+    error: "Plus subscription is active; cancel it before switching to Pro",
+    code: "CONFLICT",
+  });
 });
+
 Deno.test("billing plan management routes - POST /api/billing/credits/checkout uses the selected top-up pack", async () => {
-  /* mocks cleared (no-op in Deno) */ void 0;
-  dbMocks.getDb = (() => ({
-    billingAccount: {
-      update: async () => undefined,
-      findFirst: async () => null,
-    },
+  providerMock = newProviderMock();
+  dbMocks.getDb = (() => ({})) as any;
+  billingMocks.getOrCreateBillingAccount = (async () => ({
+    planId: "plan_free",
+    providerSubscriptionId: null,
+    providerCustomerId: "cus_1",
   })) as any;
-  try {
-    billingMocks.getOrCreateBillingAccount = (async () => ({
-      planId: "plan_free",
-      stripeSubscriptionId: null,
-      stripeCustomerId: "cus_1",
-    })) as any;
-    stripeMocks.createCheckoutSession = spy(async () => ({
-      url: "https://stripe.test/topup",
-      sessionId: "cs_topup",
-    })) as any;
-    syncBillingRouteDeps();
+  const topupSpy = spy(async (_input: CreateCheckoutInput) => ({
+    url: "https://stripe.test/topup",
+    sessionId: "cs_topup",
+  }));
+  providerMock.createCheckoutSession = topupSpy as any;
+  syncBillingRouteDeps();
 
-    const app = createApp(createUser());
-    const env = createMockEnv({
-      STRIPE_SECRET_KEY: "sk_test",
-      STRIPE_PRO_TOPUP_PACKS_JSON: JSON.stringify([
-        {
-          id: "starter",
-          label: "Starter",
-          price_id: "price_starter",
-          credits_cents: 2500,
-          featured: true,
-        },
-        {
-          id: "team",
-          label: "Team",
-          price_id: "price_team",
-          credits_cents: 10000,
-          featured: false,
-        },
-      ]),
-    }) as unknown as Env;
+  const app = createApp(createUser());
+  const env = createMockEnv({
+    STRIPE_SECRET_KEY: "sk_test",
+    STRIPE_PRO_TOPUP_PACKS_JSON: JSON.stringify([
+      {
+        id: "starter",
+        label: "Starter",
+        price_id: "price_starter",
+        credits_cents: 2500,
+        featured: true,
+      },
+      {
+        id: "team",
+        label: "Team",
+        price_id: "price_team",
+        credits_cents: 10000,
+        featured: false,
+      },
+    ]),
+  }) as unknown as Env;
 
-    const res = await app.fetch(
-      new Request("http://localhost/api/billing/credits/checkout", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ pack_id: "team" }),
-      }),
-      env,
-      {} as ExecutionContext,
-    );
+  const res = await app.fetch(
+    new Request("http://localhost/api/billing/credits/checkout", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ pack_id: "team" }),
+    }),
+    env,
+    {} as ExecutionContext,
+  );
 
-    assertEquals(res.status, 200);
-    const topupCall = stripeMocks.createCheckoutSession.calls[0]?.args[0];
-    assertEquals(topupCall.priceId, "price_team");
-    assertEquals(topupCall.mode, "payment");
-    assertEquals(topupCall.metadata, {
-      purchase_kind: "pro_topup",
-      pack_id: "team",
-    });
-  } finally {
-    /* TODO: restore stubbed globals manually */ void 0;
-  }
+  assertEquals(res.status, 200);
+  const topupCall = topupSpy.calls[0]?.args[0];
+  assertEquals(topupCall?.providerPriceId, "price_team");
+  assertEquals(topupCall?.mode, "one_time");
+  assertEquals(topupCall?.metadata, {
+    purchase_kind: "pro_topup",
+    pack_id: "team",
+  });
 });
+
 Deno.test("billing plan management routes - POST /api/billing/credits/checkout rejects unknown pack ids", async () => {
-  /* mocks cleared (no-op in Deno) */ void 0;
-  dbMocks.getDb = (() => ({
-    billingAccount: {
-      update: async () => undefined,
-      findFirst: async () => null,
-    },
+  providerMock = newProviderMock();
+  dbMocks.getDb = (() => ({})) as any;
+  billingMocks.getOrCreateBillingAccount = (async () => ({
+    planId: "plan_free",
+    providerSubscriptionId: null,
+    providerCustomerId: null,
   })) as any;
-  try {
-    billingMocks.getOrCreateBillingAccount = (async () => ({
-      planId: "plan_free",
-      stripeSubscriptionId: null,
-      stripeCustomerId: null,
-    })) as any;
-    syncBillingRouteDeps();
+  syncBillingRouteDeps();
 
-    const app = createApp(createUser());
-    const env = createMockEnv({
-      STRIPE_SECRET_KEY: "sk_test",
-      STRIPE_PRO_TOPUP_PACKS_JSON: JSON.stringify([
-        {
-          id: "starter",
-          label: "Starter",
-          price_id: "price_starter",
-          credits_cents: 2500,
-          featured: true,
-        },
-      ]),
-    }) as unknown as Env;
+  const app = createApp(createUser());
+  const env = createMockEnv({
+    STRIPE_SECRET_KEY: "sk_test",
+    STRIPE_PRO_TOPUP_PACKS_JSON: JSON.stringify([
+      {
+        id: "starter",
+        label: "Starter",
+        price_id: "price_starter",
+        credits_cents: 2500,
+        featured: true,
+      },
+    ]),
+  }) as unknown as Env;
 
-    const res = await app.fetch(
-      new Request("http://localhost/api/billing/credits/checkout", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ pack_id: "missing" }),
-      }),
-      env,
-      {} as ExecutionContext,
-    );
+  const res = await app.fetch(
+    new Request("http://localhost/api/billing/credits/checkout", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ pack_id: "missing" }),
+    }),
+    env,
+    {} as ExecutionContext,
+  );
 
-    assertEquals(res.status, 404);
-    assertEquals(await res.json(), {
-      error: "Top-up pack not found",
-      code: "NOT_FOUND",
-    });
-  } finally {
-    /* TODO: restore stubbed globals manually */ void 0;
-  }
+  assertEquals(res.status, 404);
+  assertEquals(await res.json(), {
+    error: "Top-up pack not found",
+    code: "NOT_FOUND",
+  });
 });
-Deno.test("billing plan management routes - webhook checkout.session.completed upgrades plus subscriptions without credits", async () => {
-  /* mocks cleared (no-op in Deno) */ void 0;
-  dbMocks.getDb = (() => ({
-    billingAccount: {
-      update: async () => undefined,
-      findFirst: async () => null,
-    },
-  })) as any;
-  try {
-    const setCalls: unknown[] = [];
-    const createDrizzleDbMock = () => ({
+
+Deno.test("billing plan management routes - webhook checkout_completed upgrades plus subscriptions without credits", async () => {
+  providerMock = newProviderMock();
+  const setCalls: unknown[] = [];
+  const createDrizzleDbMock = () => {
+    let firstSelect = true;
+    return {
       select: () => ({
         from: () => ({
           where: () => ({
-            get: async () => null,
+            // First select: stripe_webhook_events idempotency lookup → row.status = 'received'
+            // Subsequent selects: billing_accounts lookup → null (account looked up by user id elsewhere)
+            get: async () => {
+              if (firstSelect) {
+                firstSelect = false;
+                return { status: "received" };
+              }
+              return null;
+            },
           }),
+        }),
+      }),
+      insert: () => ({
+        values: () => ({
+          onConflictDoNothing: async () => undefined,
         }),
       }),
       update: () => ({
         set: (data: unknown) => {
-          setCalls.push(data);
+          // Capture the billing_accounts update; ignore the
+          // stripe_webhook_events status update.
+          if ((data as Record<string, unknown>).planId !== undefined) {
+            setCalls.push(data);
+          }
           return {
             where: async () => undefined,
           };
         },
       }),
-    });
-    dbMocks.getDb = (() => createDrizzleDbMock()) as any;
-    stripeMocks.verifyWebhookSignature = (async () => ({
-      event: {
-        type: "checkout.session.completed",
-        data: {
-          object: {
-            id: "cs_1",
-            customer: "cus_1",
-            subscription: "sub_1",
-            metadata: {
-              user_id: "user-1",
-              purchase_kind: "plus_subscription",
-            },
-          },
-        },
-      },
-    })) as any;
-    stripeMocks.retrieveCheckoutSession = (async () => ({
-      id: "cs_1",
-      customer: "cus_1",
-      subscription: "sub_1",
+    };
+  };
+  dbMocks.getDb = (() => createDrizzleDbMock()) as any;
+
+  providerMock.parseWebhook = (async () => ({
+    kind: "checkout_completed",
+    eventId: "evt_plus_1",
+    session: {
+      sessionId: "cs_1",
+      customerId: "cus_1",
+      subscriptionId: "sub_1",
       mode: "subscription",
+      paymentStatus: null,
       metadata: {
         user_id: "user-1",
         purchase_kind: "plus_subscription",
       },
-    })) as any;
-    billingMocks.getOrCreateBillingAccount = (async () => ({
-      id: "acct-1",
-      planId: "plan_free",
-      stripeCustomerId: null,
-      stripeSubscriptionId: null,
-    })) as any;
-    syncBillingRouteDeps();
-
-    const app = createApp(createUser());
-    const env = createMockEnv({
-      STRIPE_SECRET_KEY: "sk_test",
-      STRIPE_WEBHOOK_SECRET: "whsec_test",
-    }) as unknown as Env;
-
-    const res = await app.fetch(
-      new Request("http://localhost/api/billing/webhook", {
-        method: "POST",
-        headers: { "stripe-signature": "sig" },
-        body: "{}",
-      }),
-      env,
-      {} as ExecutionContext,
-    );
-
-    assertEquals(res.status, 200);
-    assertEquals(setCalls.length, 1);
-    const plusUpdate = setCalls[0] as Record<string, unknown>;
-    assertEquals(plusUpdate.planId, "plan_plus");
-    assertEquals(plusUpdate.stripeCustomerId, "cus_1");
-    assertEquals(plusUpdate.stripeSubscriptionId, "sub_1");
-    assertEquals(typeof plusUpdate.subscriptionStartedAt, "string");
-    assertEquals(plusUpdate.subscriptionPeriodEnd, null);
-    assertEquals(typeof plusUpdate.updatedAt, "string");
-    assertSpyCalls(billingMocks.addCredits, 0);
-  } finally {
-    /* TODO: restore stubbed globals manually */ void 0;
-  }
-});
-Deno.test("billing plan management routes - webhook checkout.session.completed tops up pro credits and switches to payg", async () => {
-  /* mocks cleared (no-op in Deno) */ void 0;
-  dbMocks.getDb = (() => ({
-    billingAccount: {
-      update: async () => undefined,
-      findFirst: async () => null,
     },
+  } as BillingWebhookEvent)) as any;
+  providerMock.retrieveCheckoutSession = (async () => ({
+    sessionId: "cs_1",
+    customerId: "cus_1",
+    subscriptionId: "sub_1",
+    mode: "subscription",
+    paymentStatus: null,
+    metadata: {
+      user_id: "user-1",
+      purchase_kind: "plus_subscription",
+    },
+  } as CompletedCheckoutSession)) as any;
+  billingMocks.getOrCreateBillingAccount = (async () => ({
+    id: "acct-1",
+    planId: "plan_free",
+    providerName: "stripe",
+    providerCustomerId: null,
+    providerSubscriptionId: null,
   })) as any;
-  try {
-    const setCalls: unknown[] = [];
-    const createDrizzleDbMock = () => ({
+  syncBillingRouteDeps();
+
+  const app = createApp(createUser());
+  const env = createMockEnv({
+    STRIPE_SECRET_KEY: "sk_test",
+    STRIPE_WEBHOOK_SECRET: "whsec_test",
+  }) as unknown as Env;
+
+  const res = await app.fetch(
+    new Request("http://localhost/api/billing/webhook", {
+      method: "POST",
+      headers: { "stripe-signature": "sig" },
+      body: "{}",
+    }),
+    env,
+    {} as ExecutionContext,
+  );
+
+  assertEquals(res.status, 200);
+  assertEquals(setCalls.length, 1);
+  const plusUpdate = setCalls[0] as Record<string, unknown>;
+  assertEquals(plusUpdate.planId, "plan_plus");
+  assertEquals(plusUpdate.providerCustomerId, "cus_1");
+  assertEquals(plusUpdate.providerSubscriptionId, "sub_1");
+  assertEquals(plusUpdate.providerName, "stripe");
+  assertEquals(typeof plusUpdate.subscriptionStartedAt, "string");
+  assertEquals(plusUpdate.subscriptionPeriodEnd, null);
+  assertEquals(typeof plusUpdate.updatedAt, "string");
+  assertSpyCalls(billingMocks.addCredits, 0);
+});
+
+Deno.test("billing plan management routes - webhook checkout_completed tops up pro credits and switches to payg", async () => {
+  providerMock = newProviderMock();
+  const setCalls: unknown[] = [];
+  const createDrizzleDbMock = () => {
+    let firstSelect = true;
+    return {
       select: () => ({
         from: () => ({
           where: () => ({
-            get: async () => null,
+            get: async () => {
+              if (firstSelect) {
+                firstSelect = false;
+                return { status: "received" };
+              }
+              return null;
+            },
           }),
+        }),
+      }),
+      insert: () => ({
+        values: () => ({
+          onConflictDoNothing: async () => undefined,
         }),
       }),
       update: () => ({
         set: (data: unknown) => {
-          setCalls.push(data);
+          if ((data as Record<string, unknown>).planId !== undefined) {
+            setCalls.push(data);
+          }
           return {
             where: async () => undefined,
           };
         },
       }),
-    });
-    dbMocks.getDb = (() => createDrizzleDbMock()) as any;
-    stripeMocks.verifyWebhookSignature = (async () => ({
-      event: {
-        type: "checkout.session.completed",
-        data: {
-          object: {
-            id: "cs_2",
-            customer: "cus_1",
-            subscription: null,
-            payment_status: "paid",
-            metadata: {
-              user_id: "user-1",
-              purchase_kind: "pro_topup",
-              pack_id: "starter",
-            },
-          },
-        },
-      },
-    })) as any;
-    stripeMocks.retrieveCheckoutSession = (async () => ({
-      id: "cs_2",
-      customer: "cus_1",
-      subscription: null,
-      payment_status: "paid",
-      mode: "payment",
+    };
+  };
+  dbMocks.getDb = (() => createDrizzleDbMock()) as any;
+
+  providerMock.parseWebhook = (async () => ({
+    kind: "checkout_completed",
+    eventId: "evt_topup_1",
+    session: {
+      sessionId: "cs_2",
+      customerId: "cus_1",
+      subscriptionId: null,
+      mode: "one_time",
+      paymentStatus: "paid",
       metadata: {
         user_id: "user-1",
         purchase_kind: "pro_topup",
         pack_id: "starter",
       },
-    })) as any;
-    billingMocks.getOrCreateBillingAccount = (async () => ({
-      id: "acct-1",
-      planId: "plan_free",
-      stripeCustomerId: null,
-      stripeSubscriptionId: null,
-    })) as any;
-    syncBillingRouteDeps();
-
-    const app = createApp(createUser());
-    const env = createMockEnv({
-      STRIPE_SECRET_KEY: "sk_test",
-      STRIPE_WEBHOOK_SECRET: "whsec_test",
-      STRIPE_PRO_TOPUP_PACKS_JSON: JSON.stringify([
-        {
-          id: "starter",
-          label: "Starter",
-          price_id: "price_starter",
-          credits_cents: 2500,
-          featured: true,
-        },
-      ]),
-    }) as unknown as Env;
-
-    const res = await app.fetch(
-      new Request("http://localhost/api/billing/webhook", {
-        method: "POST",
-        headers: { "stripe-signature": "sig" },
-        body: "{}",
-      }),
-      env,
-      {} as ExecutionContext,
-    );
-
-    assertEquals(res.status, 200);
-    assertEquals(setCalls.length, 1);
-    const topupUpdate = setCalls[0] as Record<string, unknown>;
-    assertEquals(topupUpdate.planId, "plan_payg");
-    assertEquals(topupUpdate.stripeCustomerId, "cus_1");
-    assertEquals(typeof topupUpdate.updatedAt, "string");
-    assertEquals(
-      billingMocks.addCredits.calls[0]?.args.slice(1),
-      [
-        "acct-1",
-        2500,
-        "Pro top-up credit (starter, 2500¢)",
-      ],
-    );
-  } finally {
-    /* TODO: restore stubbed globals manually */ void 0;
-  }
-});
-Deno.test("billing plan management routes - subscription deletion falls back to payg when balance remains", async () => {
-  /* mocks cleared (no-op in Deno) */ void 0;
-  dbMocks.getDb = (() => ({
-    billingAccount: {
-      update: async () => undefined,
-      findFirst: async () => null,
     },
-  })) as any;
-  try {
-    const setCalls: unknown[] = [];
-    const createDrizzleDbMock = () => ({
-      select: () => ({
-        from: () => ({
-          where: () => ({
-            get: async () => ({
-              id: "acct-1",
-              balanceCents: 120,
-              stripeCustomerId: "cus_1",
-            }),
-          }),
-        }),
-      }),
-      update: () => ({
-        set: (data: unknown) => {
-          setCalls.push(data);
-          return {
-            where: async () => undefined,
-          };
-        },
-      }),
-    });
-    dbMocks.getDb = (() => createDrizzleDbMock()) as any;
-    stripeMocks.verifyWebhookSignature = (async () => ({
-      event: {
-        type: "customer.subscription.deleted",
-        data: {
-          object: {
-            id: "sub_1",
-            customer: "cus_1",
-            status: "canceled",
-          },
-        },
-      },
-    })) as any;
-    syncBillingRouteDeps();
-
-    const app = createApp(createUser());
-    const env = createMockEnv({
-      STRIPE_SECRET_KEY: "sk_test",
-      STRIPE_WEBHOOK_SECRET: "whsec_test",
-    }) as unknown as Env;
-
-    const res = await app.fetch(
-      new Request("http://localhost/api/billing/webhook", {
-        method: "POST",
-        headers: { "stripe-signature": "sig" },
-        body: "{}",
-      }),
-      env,
-      {} as ExecutionContext,
-    );
-
-    assertEquals(res.status, 200);
-    assertEquals(setCalls.length, 1);
-    const deletionUpdate = setCalls[0] as Record<string, unknown>;
-    assertEquals(deletionUpdate.planId, "plan_payg");
-    assertEquals(deletionUpdate.stripeSubscriptionId, null);
-    assertEquals(deletionUpdate.subscriptionStartedAt, null);
-    assertEquals(deletionUpdate.subscriptionPeriodEnd, null);
-    assertEquals(typeof deletionUpdate.updatedAt, "string");
-  } finally {
-    /* TODO: restore stubbed globals manually */ void 0;
-  }
-});
-Deno.test("billing plan management routes - parses configured top-up packs from JSON config", () => {
-  /* mocks cleared (no-op in Deno) */ void 0;
-  dbMocks.getDb = (() => ({
-    billingAccount: {
-      update: async () => undefined,
-      findFirst: async () => null,
+  } as BillingWebhookEvent)) as any;
+  providerMock.retrieveCheckoutSession = (async () => ({
+    sessionId: "cs_2",
+    customerId: "cus_1",
+    subscriptionId: null,
+    mode: "one_time",
+    paymentStatus: "paid",
+    metadata: {
+      user_id: "user-1",
+      purchase_kind: "pro_topup",
+      pack_id: "starter",
     },
+  } as CompletedCheckoutSession)) as any;
+  billingMocks.getOrCreateBillingAccount = (async () => ({
+    id: "acct-1",
+    planId: "plan_free",
+    providerName: "stripe",
+    providerCustomerId: null,
+    providerSubscriptionId: null,
   })) as any;
+  // Reset addCredits spy
+  billingMocks.addCredits = spy((..._args: any[]) => undefined) as any;
   syncBillingRouteDeps();
-  try {
-    const packs = getConfiguredProTopupPacks(createMockEnv({
-      STRIPE_PRO_TOPUP_PACKS_JSON: JSON.stringify([
-        {
-          id: "starter",
-          label: "Starter",
-          price_id: "price_starter",
-          credits_cents: 2500,
-          featured: true,
-          badge: "Popular",
-        },
-      ]),
-    }) as unknown as Env);
 
-    assertEquals(packs, [
+  const app = createApp(createUser());
+  const env = createMockEnv({
+    STRIPE_SECRET_KEY: "sk_test",
+    STRIPE_WEBHOOK_SECRET: "whsec_test",
+    STRIPE_PRO_TOPUP_PACKS_JSON: JSON.stringify([
       {
         id: "starter",
         label: "Starter",
-        priceId: "price_starter",
-        creditsCents: 2500,
+        price_id: "price_starter",
+        credits_cents: 2500,
+        featured: true,
+      },
+    ]),
+  }) as unknown as Env;
+
+  const res = await app.fetch(
+    new Request("http://localhost/api/billing/webhook", {
+      method: "POST",
+      headers: { "stripe-signature": "sig" },
+      body: "{}",
+    }),
+    env,
+    {} as ExecutionContext,
+  );
+
+  assertEquals(res.status, 200);
+  assertEquals(setCalls.length, 1);
+  const topupUpdate = setCalls[0] as Record<string, unknown>;
+  assertEquals(topupUpdate.planId, "plan_payg");
+  assertEquals(topupUpdate.providerCustomerId, "cus_1");
+  assertEquals(topupUpdate.providerName, "stripe");
+  assertEquals(typeof topupUpdate.updatedAt, "string");
+  assertEquals(
+    billingMocks.addCredits.calls[0]?.args.slice(1),
+    [
+      "acct-1",
+      2500,
+      "Pro top-up credit (starter, 2500¢)",
+    ],
+  );
+});
+
+Deno.test("billing plan management routes - subscription cancellation falls back to payg when balance remains", async () => {
+  providerMock = newProviderMock();
+  const setCalls: unknown[] = [];
+  // The webhook handler calls getDb twice (once for idempotency dedup, once
+  // for the account lookup). The mock must persist `selectCount` across both
+  // calls, so we instantiate it once and reuse it.
+  let selectCount = 0;
+  const drizzleMock = {
+    select: () => ({
+      from: () => ({
+        where: () => ({
+          get: async () => {
+            selectCount++;
+            // First select hits stripe_webhook_events for idempotency dedup.
+            if (selectCount === 1) return { status: "received" };
+            // Subsequent selects hit billing_accounts.
+            return {
+              id: "acct-1",
+              balanceCents: 120,
+              providerCustomerId: "cus_1",
+            };
+          },
+        }),
+      }),
+    }),
+    insert: () => ({
+      values: () => ({
+        onConflictDoNothing: async () => undefined,
+      }),
+    }),
+    update: () => ({
+      set: (data: unknown) => {
+        if ((data as Record<string, unknown>).planId !== undefined) {
+          setCalls.push(data);
+        }
+        return {
+          where: async () => undefined,
+        };
+      },
+    }),
+  };
+  dbMocks.getDb = (() => drizzleMock) as any;
+
+  providerMock.parseWebhook = (async () => ({
+    kind: "subscription_canceled",
+    eventId: "evt_cancel_1",
+    customerId: "cus_1",
+  } as BillingWebhookEvent)) as any;
+  syncBillingRouteDeps();
+
+  const app = createApp(createUser());
+  const env = createMockEnv({
+    STRIPE_SECRET_KEY: "sk_test",
+    STRIPE_WEBHOOK_SECRET: "whsec_test",
+  }) as unknown as Env;
+
+  const res = await app.fetch(
+    new Request("http://localhost/api/billing/webhook", {
+      method: "POST",
+      headers: { "stripe-signature": "sig" },
+      body: "{}",
+    }),
+    env,
+    {} as ExecutionContext,
+  );
+
+  assertEquals(res.status, 200);
+  assertEquals(setCalls.length, 1);
+  const deletionUpdate = setCalls[0] as Record<string, unknown>;
+  assertEquals(deletionUpdate.planId, "plan_payg");
+  assertEquals(deletionUpdate.providerSubscriptionId, null);
+  assertEquals(deletionUpdate.subscriptionStartedAt, null);
+  assertEquals(deletionUpdate.subscriptionPeriodEnd, null);
+  assertEquals(typeof deletionUpdate.updatedAt, "string");
+});
+
+Deno.test("billing plan management routes - parses configured top-up packs from JSON config", () => {
+  const packs = getConfiguredProTopupPacks(createMockEnv({
+    STRIPE_PRO_TOPUP_PACKS_JSON: JSON.stringify([
+      {
+        id: "starter",
+        label: "Starter",
+        price_id: "price_starter",
+        credits_cents: 2500,
         featured: true,
         badge: "Popular",
       },
-    ]);
-  } finally {
-    /* TODO: restore stubbed globals manually */ void 0;
-  }
-});
-Deno.test("billing plan management routes - rejects invalid pack catalogs", () => {
-  /* mocks cleared (no-op in Deno) */ void 0;
-  dbMocks.getDb = (() => ({
-    billingAccount: {
-      update: async () => undefined,
-      findFirst: async () => null,
-    },
-  })) as any;
-  syncBillingRouteDeps();
-  try {
-    assertThrows(
-      () =>
-        getConfiguredProTopupPacks(createMockEnv({
-          STRIPE_PRO_TOPUP_PACKS_JSON: JSON.stringify([]),
-        }) as unknown as Env),
-      Error,
-      "STRIPE_PRO_TOPUP_PACKS_JSON must be a non-empty array",
-    );
+    ]),
+  }) as unknown as Env);
 
-    assertThrows(
-      () =>
-        getConfiguredProTopupPacks(createMockEnv({
-          STRIPE_PRO_TOPUP_PACKS_JSON: JSON.stringify([
-            {
-              id: "starter",
-              label: "Starter",
-              price_id: "",
-              credits_cents: 2500,
-              featured: true,
-            },
-          ]),
-        }) as unknown as Env),
-      Error,
-      'Top-up pack "starter" is missing price_id',
-    );
-  } finally {
-    /* TODO: restore stubbed globals manually */ void 0;
-  }
+  assertEquals(packs, [
+    {
+      id: "starter",
+      label: "Starter",
+      priceId: "price_starter",
+      creditsCents: 2500,
+      featured: true,
+      badge: "Popular",
+    },
+  ]);
+});
+
+Deno.test("billing plan management routes - rejects invalid pack catalogs", () => {
+  assertThrows(
+    () =>
+      getConfiguredProTopupPacks(createMockEnv({
+        STRIPE_PRO_TOPUP_PACKS_JSON: JSON.stringify([]),
+      }) as unknown as Env),
+    Error,
+    "STRIPE_PRO_TOPUP_PACKS_JSON must be a non-empty array",
+  );
+
+  assertThrows(
+    () =>
+      getConfiguredProTopupPacks(createMockEnv({
+        STRIPE_PRO_TOPUP_PACKS_JSON: JSON.stringify([
+          {
+            id: "starter",
+            label: "Starter",
+            price_id: "",
+            credits_cents: 2500,
+            featured: true,
+          },
+        ]),
+      }) as unknown as Env),
+    Error,
+    'Top-up pack "starter" is missing price_id',
+  );
 });

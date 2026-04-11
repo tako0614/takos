@@ -1,15 +1,11 @@
-import { eq } from 'drizzle-orm';
-import { getDb } from '../../../infra/db/client.ts';
-import { groups } from '../../../infra/db/schema-groups.ts';
-import type {
-  AppCompute,
-  AppManifest,
-  AppStorage,
-} from '../source/app-manifest-types.ts';
-import type { Env } from '../../../shared/types/env.ts';
-import { safeJsonParseOrDefault } from '../../../shared/utils/logger.ts';
+import { eq } from "drizzle-orm";
+import { getDb } from "../../../infra/db/client.ts";
+import { groups } from "../../../infra/db/schema-groups.ts";
+import type { AppCompute, AppManifest } from "../source/app-manifest-types.ts";
+import type { Env } from "../../../shared/types/env.ts";
+import { safeJsonParseOrDefault } from "../../../shared/utils/logger.ts";
 
-type WorkloadCategory = 'worker' | 'container' | 'service';
+type WorkloadCategory = "worker" | "container" | "service";
 
 type GroupRow = {
   id: string;
@@ -18,14 +14,14 @@ type GroupRow = {
   desiredSpecJson: string | null;
 };
 
-function categoryToKind(category: WorkloadCategory): AppCompute['kind'] {
+function categoryToKind(category: WorkloadCategory): AppCompute["kind"] {
   switch (category) {
-    case 'worker':
-      return 'worker';
-    case 'service':
-      return 'service';
-    case 'container':
-      return 'attached-container';
+    case "worker":
+      return "worker";
+    case "service":
+      return "service";
+    case "container":
+      return "attached-container";
   }
 }
 
@@ -34,11 +30,9 @@ function createEmptyManifest(group: GroupRow): AppManifest {
     name: group.name,
     ...(group.appVersion ? { version: group.appVersion } : {}),
     compute: {},
-    storage: {},
     routes: [],
     publish: [],
     env: {},
-    scopes: [],
   };
 }
 
@@ -58,7 +52,11 @@ async function loadGroup(env: Env, groupId: string): Promise<GroupRow> {
   return group;
 }
 
-async function saveManifest(env: Env, groupId: string, manifest: AppManifest): Promise<void> {
+async function saveManifest(
+  env: Env,
+  groupId: string,
+  manifest: AppManifest,
+): Promise<void> {
   const db = getDb(env.DB);
   await db.update(groups)
     .set({
@@ -75,7 +73,7 @@ async function saveManifest(env: Env, groupId: string, manifest: AppManifest): P
  * mutates it in place, and persist the result.
  *
  * The mutator is responsible for adjusting the flat manifest fields
- * (`compute`, `storage`, `publish`, etc.).
+ * (`compute`, `publish`, etc.).
  */
 async function mutateGroupManifest(
   env: Env,
@@ -83,42 +81,40 @@ async function mutateGroupManifest(
   mutator: (manifest: AppManifest) => void,
 ): Promise<AppManifest> {
   const group = await loadGroup(env, groupId);
-  const parsed = safeJsonParseOrDefault<AppManifest | null>(group.desiredSpecJson, null);
+  const parsed = safeJsonParseOrDefault<AppManifest | null>(
+    group.desiredSpecJson,
+    null,
+  );
   const manifest = parsed ?? createEmptyManifest(group);
   // Backfill required fields in case the persisted blob was created before
   // the flat-schema cutover.
   manifest.compute ??= {};
-  manifest.storage ??= {};
   manifest.routes ??= [];
   manifest.publish ??= [];
   manifest.env ??= {};
-  manifest.scopes ??= [];
   mutator(manifest);
   await saveManifest(env, groupId, manifest);
   return manifest;
 }
 
 // ---------------------------------------------------------------------------
-// Storage (resource) projections
+// Resource projections
 // ---------------------------------------------------------------------------
+
+// Resource CRUD remains available as a platform API, but it no longer mutates
+// the app manifest. Publication/consume is now the only deploy substrate.
 
 export async function upsertGroupDesiredResource(
   env: Env,
   input: {
     groupId: string;
     name: string;
-    resource: AppStorage;
+    resource: unknown;
   },
 ): Promise<AppManifest> {
-  return mutateGroupManifest(env, input.groupId, (manifest) => {
-    manifest.storage = {
-      ...manifest.storage,
-      [input.name]: {
-        ...(manifest.storage[input.name] ?? {}),
-        ...input.resource,
-      },
-    };
-  });
+  void input.name;
+  void input.resource;
+  return mutateGroupManifest(env, input.groupId, () => {});
 }
 
 export async function removeGroupDesiredResource(
@@ -128,10 +124,8 @@ export async function removeGroupDesiredResource(
     name: string;
   },
 ): Promise<AppManifest> {
-  return mutateGroupManifest(env, input.groupId, (manifest) => {
-    if (!manifest.storage[input.name]) return;
-    delete manifest.storage[input.name];
-  });
+  void input.name;
+  return mutateGroupManifest(env, input.groupId, () => {});
 }
 
 export async function renameGroupDesiredResource(
@@ -142,14 +136,9 @@ export async function renameGroupDesiredResource(
     toName: string;
   },
 ): Promise<AppManifest> {
-  return mutateGroupManifest(env, input.groupId, (manifest) => {
-    if (!manifest.storage[input.fromName] || input.fromName === input.toName) return;
-    manifest.storage = {
-      ...manifest.storage,
-      [input.toName]: manifest.storage[input.fromName],
-    };
-    delete manifest.storage[input.fromName];
-  });
+  void input.fromName;
+  void input.toName;
+  return mutateGroupManifest(env, input.groupId, () => {});
 }
 
 // ---------------------------------------------------------------------------

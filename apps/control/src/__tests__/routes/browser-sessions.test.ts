@@ -102,6 +102,46 @@ Deno.test("browser-sessions routes - POST /api/spaces/:spaceId/browser-sessions 
 
   assertEquals(res.status, 500);
 });
+Deno.test(
+  "browser-sessions routes - POST /api/spaces/:spaceId/browser-sessions - maps host 429 to RATE_LIMITED envelope",
+  async () => {
+    // Round 11 MEDIUM #12 — per-space concurrent browser session cap.
+    // The host returns a flat { error: "BROWSER_SESSION_CAP: ..." } envelope
+    // on 429; the edge route must translate it into the public common
+    // error envelope { error: { code, message } }.
+    const browserHost = createBrowserHostMock(
+      new Response(
+        JSON.stringify({
+          error:
+            "BROWSER_SESSION_CAP: Too many concurrent browser sessions for this space (limit 5, active 5)",
+        }),
+        {
+          status: 429,
+          headers: { "Content-Type": "application/json" },
+        },
+      ),
+    );
+    const env = createMockEnv({ BROWSER_HOST: browserHost });
+
+    const app = createApp(createUser());
+    const res = await app.fetch(
+      new Request("http://localhost/api/spaces/sp-1/browser-sessions", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ url: "https://example.com" }),
+      }),
+      env as unknown as Env,
+      {} as ExecutionContext,
+    );
+
+    assertEquals(res.status, 429);
+    const body = await res.json() as { error: { code: string; message: string } };
+    assertEquals(body.error.code, "RATE_LIMITED");
+    assert(body.error.message.includes("Too many concurrent browser sessions"));
+    // The internal marker prefix must not leak into the public envelope.
+    assert(!body.error.message.includes("BROWSER_SESSION_CAP"));
+  },
+);
 Deno.test("browser-sessions routes - POST /api/spaces/:spaceId/browser-sessions - returns 503 when BROWSER_HOST is not configured", async () => {
   /* mocks cleared (no-op in Deno) */ void 0;
   const env = createMockEnv(); // no BROWSER_HOST

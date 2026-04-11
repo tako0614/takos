@@ -3,57 +3,42 @@ import { BadGatewayError, NotFoundError } from "takos-common/errors";
 import type { Env } from "../../../shared/types/index.ts";
 import type { BaseVariables } from "../route-auth.ts";
 import { logError, logWarn } from "../../../shared/utils/logger.ts";
-import { toStripeCustomerId } from "./stripe.ts";
+import type { NormalizedInvoice } from "../../../application/services/billing/payment-provider.ts";
 import { billingRouteDeps } from "./deps.ts";
 import {
   parseInvoiceListQuery,
-  requireStripeCustomerId,
-  requireStripeSecretKey,
+  requirePaymentCustomerId,
 } from "./helpers.ts";
 
 type BillingRouter = Hono<{ Bindings: Env; Variables: BaseVariables }>;
 
-function toInvoiceSummary(invoice: {
-  id: string;
-  number?: string | null;
-  status?: string | null;
-  currency?: string | null;
-  amount_due?: number | null;
-  amount_paid?: number | null;
-  total?: number | null;
-  created?: number | null;
-  period_start?: number | null;
-  period_end?: number | null;
-  hosted_invoice_url?: string | null;
-  invoice_pdf?: string | null;
-}) {
+function toInvoiceSummary(invoice: NormalizedInvoice) {
   return {
     id: invoice.id,
-    number: invoice.number ?? null,
-    status: invoice.status ?? null,
-    currency: invoice.currency ?? null,
-    amount_due: invoice.amount_due ?? null,
-    amount_paid: invoice.amount_paid ?? null,
-    total: invoice.total ?? null,
-    created: invoice.created ?? null,
-    period_start: invoice.period_start ?? null,
-    period_end: invoice.period_end ?? null,
-    hosted_invoice_url: invoice.hosted_invoice_url ?? null,
-    invoice_pdf: invoice.invoice_pdf ?? null,
+    number: invoice.number,
+    status: invoice.status,
+    currency: invoice.currency,
+    amount_due: invoice.amountDueCents,
+    amount_paid: invoice.amountPaidCents,
+    total: invoice.totalCents,
+    created: invoice.createdUnix,
+    period_start: invoice.periodStartUnix,
+    period_end: invoice.periodEndUnix,
+    hosted_invoice_url: invoice.hostedUrl,
+    invoice_pdf: invoice.pdfUrl,
   };
 }
 
 export function registerBillingInvoiceRoutes(app: BillingRouter) {
   app.get("/invoices", async (c) => {
-    const secretKey = requireStripeSecretKey(c);
-    const { customerId } = await requireStripeCustomerId(c);
+    const provider = billingRouteDeps.resolvePaymentProvider(c.env);
+    const { customerId } = await requirePaymentCustomerId(c);
     const { limit, startingAfter, endingBefore } = parseInvoiceListQuery(
       new URL(c.req.url),
     );
 
     try {
-      const result = await billingRouteDeps.listInvoices({
-        secretKey,
+      const result = await provider.listInvoices({
         customerId,
         limit,
         startingAfter,
@@ -62,7 +47,7 @@ export function registerBillingInvoiceRoutes(app: BillingRouter) {
 
       return c.json({
         invoices: result.invoices.map(toInvoiceSummary),
-        has_more: result.has_more,
+        has_more: result.hasMore,
       });
     } catch (err) {
       logError("listInvoices failed", err, { module: "billing" });
@@ -71,29 +56,23 @@ export function registerBillingInvoiceRoutes(app: BillingRouter) {
   });
 
   app.get("/invoices/:id/pdf", async (c) => {
-    const secretKey = requireStripeSecretKey(c);
+    const provider = billingRouteDeps.resolvePaymentProvider(c.env);
     const invoiceId = c.req.param("id");
-    const { customerId } = await requireStripeCustomerId(c);
+    const { customerId } = await requirePaymentCustomerId(c);
 
-    let invoice;
+    let invoice: NormalizedInvoice;
     try {
-      invoice = await billingRouteDeps.retrieveInvoice({
-        secretKey,
-        invoiceId,
-      });
+      invoice = await provider.retrieveInvoice(invoiceId);
     } catch (err) {
       logError("retrieveInvoice failed", err, { module: "billing" });
       throw new NotFoundError("Invoice");
     }
 
-    if (toStripeCustomerId(invoice.customer) !== customerId) {
+    if (invoice.customerId !== customerId) {
       throw new NotFoundError("Invoice");
     }
 
-    const pdfUrl =
-      typeof invoice.invoice_pdf === "string" && invoice.invoice_pdf
-        ? invoice.invoice_pdf
-        : null;
+    const pdfUrl = invoice.pdfUrl;
     if (!pdfUrl) {
       throw new NotFoundError("Invoice PDF");
     }
@@ -102,12 +81,12 @@ export function registerBillingInvoiceRoutes(app: BillingRouter) {
     try {
       pdfUrlParsed = new URL(pdfUrl);
     } catch {
-      logError("invoice_pdf URL is malformed", pdfUrl, { module: "billing" });
+      logError("invoice pdf URL is malformed", pdfUrl, { module: "billing" });
       throw new NotFoundError("Invoice PDF");
     }
-    if (!pdfUrlParsed.hostname.endsWith(".stripe.com")) {
+    if (!provider.isTrustedPdfUrl(pdfUrlParsed)) {
       logError(
-        "invoice_pdf URL is not from stripe.com",
+        "invoice pdf URL is not from a trusted host",
         pdfUrlParsed.hostname,
         { module: "billing" },
       );
@@ -118,7 +97,7 @@ export function registerBillingInvoiceRoutes(app: BillingRouter) {
     try {
       pdfRes = await fetch(pdfUrl);
     } catch (err) {
-      logError("failed to fetch invoice_pdf URL", err, { module: "billing" });
+      logError("failed to fetch invoice pdf URL", err, { module: "billing" });
       throw new BadGatewayError("Failed to fetch invoice PDF");
     }
 
@@ -130,7 +109,7 @@ export function registerBillingInvoiceRoutes(app: BillingRouter) {
         });
         return "";
       });
-      logError("invoice_pdf fetch failed", { status: pdfRes.status, text }, {
+      logError("invoice pdf fetch failed", { status: pdfRes.status, text }, {
         module: "billing",
       });
       throw new BadGatewayError("Failed to fetch invoice PDF");
@@ -140,7 +119,7 @@ export function registerBillingInvoiceRoutes(app: BillingRouter) {
     headers.set("Content-Type", "application/pdf");
     headers.set(
       "Content-Disposition",
-      `attachment; filename="stripe-invoice-${invoiceId}.pdf"`,
+      `attachment; filename="invoice-${invoiceId}.pdf"`,
     );
     headers.set("Cache-Control", "no-store");
     const contentLength = pdfRes.headers.get("content-length");
@@ -152,27 +131,24 @@ export function registerBillingInvoiceRoutes(app: BillingRouter) {
   });
 
   app.post("/invoices/:id/send", async (c) => {
-    const secretKey = requireStripeSecretKey(c);
+    const provider = billingRouteDeps.resolvePaymentProvider(c.env);
     const invoiceId = c.req.param("id");
-    const { customerId } = await requireStripeCustomerId(c);
+    const { customerId } = await requirePaymentCustomerId(c);
 
-    let invoice;
+    let invoice: NormalizedInvoice;
     try {
-      invoice = await billingRouteDeps.retrieveInvoice({
-        secretKey,
-        invoiceId,
-      });
+      invoice = await provider.retrieveInvoice(invoiceId);
     } catch (err) {
       logError("retrieveInvoice failed", err, { module: "billing" });
       throw new NotFoundError("Invoice");
     }
 
-    if (toStripeCustomerId(invoice.customer) !== customerId) {
+    if (invoice.customerId !== customerId) {
       throw new NotFoundError("Invoice");
     }
 
     try {
-      await billingRouteDeps.sendInvoice({ secretKey, invoiceId });
+      await provider.sendInvoice(invoiceId);
     } catch (err) {
       logError("sendInvoice failed", err, { module: "billing" });
       throw new BadGatewayError("Failed to send invoice email");

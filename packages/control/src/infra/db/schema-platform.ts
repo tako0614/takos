@@ -38,6 +38,7 @@ export {
 } from './schema-platform-resources.ts';
 
 export {
+  apDeliveryQueue,
   apFollowers,
   repoPushActivities,
   repoGrants,

@@ -72,6 +72,30 @@ browserSessions.post('/spaces/:spaceId/browser-sessions', async (c) => {
   });
 
   if (!response.ok) {
+    // Round 11 MEDIUM #12 — per-space concurrent browser session cap.
+    // The host endpoint returns 429 with a flat `{ error: "BROWSER_SESSION_CAP: ..." }`
+    // shape when the space hits MAX_BROWSER_SESSIONS_PER_SPACE. Convert it to
+    // the public common error envelope ({ error: { code, message } }).
+    if (response.status === 429) {
+      let message = 'Too many concurrent browser sessions for this space';
+      try {
+        const payload = await response.json() as { error?: unknown };
+        if (typeof payload.error === 'string') {
+          message = payload.error.replace(/^BROWSER_SESSION_CAP:\s*/, '');
+        }
+      } catch {
+        // Non-JSON body; fall through with the default message.
+      }
+      return c.json(
+        {
+          error: {
+            code: 'RATE_LIMITED',
+            message,
+          },
+        },
+        429,
+      );
+    }
     const error = await response.text();
     return c.json({ error: `Failed to create browser session: ${error}` }, 500);
   }

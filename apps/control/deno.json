@@ -73,7 +73,7 @@
     "@/routes/auth/cli": "../../packages/control/src/server/routes/auth/cli.ts",
     "@/routes/auth/provisioning": "../../packages/control/src/server/routes/auth/provisioning.ts",
     "@/routes/billing/routes": "../../packages/control/src/server/routes/billing/routes.ts",
-    "@/routes/browser-sessions": "../../packages/control/src/server/routes/browser-sessions.ts",
+    "@/routes/browser-sessions": "../../packages/control/src/server/routes/browser-sessions/index.ts",
     "@/routes/common-env-handlers": "../../packages/control/src/server/routes/common-env-handlers.ts",
     "@/routes/custom-domains": "../../packages/control/src/server/routes/custom-domains.ts",
     "@/routes/explore": "../../packages/control/src/server/routes/explore/index.ts",

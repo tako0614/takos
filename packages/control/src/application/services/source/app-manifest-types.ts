@@ -61,6 +61,11 @@ export type AppTriggers = {
   queues?: QueueTrigger[];
 };
 
+export type AppConsume = {
+  publication: string;
+  env?: Record<string, string>;
+};
+
 // --- Compute (worker / service / attached-container) ---
 
 export type ComputeKind = "worker" | "service" | "attached-container";
@@ -83,6 +88,7 @@ export type AppCompute = {
   triggers?: AppTriggers;
   healthCheck?: HealthCheck; // service / attached only
   dockerfile?: string; // local provider only
+  consume?: AppConsume[];
   /**
    * Legacy alias for `scaling.maxInstances`. Transitional — Phase 2 removes.
    */
@@ -144,14 +150,17 @@ export type AppRoute = {
 // --- Publications (MCP servers, file handlers, UI surfaces, etc.) ---
 
 export type AppPublication = {
-  type: string; // open string — kernel validates known types
-  path: string; // always required
-  name?: string; // required when same group + same type has multiple
+  name: string;
+  provider?: string;
+  kind?: string;
+  spec?: Record<string, unknown>;
+  type?: string;
+  path?: string;
   title?: string;
-  // type-specific fields (kernel validates known types)
+  // route/public interface fields
   /** McpServer */
   transport?: string;
-  /** McpServer — env var name */
+  /** McpServer */
   authSecretRef?: string;
   /** FileHandler */
   mimeTypes?: string[];
@@ -161,26 +170,12 @@ export type AppPublication = {
   icon?: string;
 };
 
-// --- OAuth configuration ---
-
-export type AppOAuthConfig = {
-  clientName?: string;
-  redirectUris?: string[];
-  scopes?: string[];
-  autoEnv?: boolean;
-  metadata?: {
-    logoUri?: string;
-    tosUri?: string;
-    policyUri?: string;
-  };
-};
-
 // --- Environment overrides ---
 
 export type AppManifestOverride = Partial<
   Pick<
     AppManifest,
-    "compute" | "storage" | "routes" | "publish" | "env" | "scopes" | "oauth"
+    "compute" | "routes" | "publish" | "env"
   >
 >;
 
@@ -190,12 +185,15 @@ export type AppManifest = {
   name: string;
   version?: string;
   compute: Record<string, AppCompute>;
-  storage: Record<string, AppStorage>;
+  /**
+   * @deprecated Internal-only legacy field. Public app manifests must not use
+   * `storage`; publish a provider-backed resource and consume its outputs
+   * instead.
+   */
+  storage?: Record<string, AppStorage>;
   routes: AppRoute[];
   publish: AppPublication[];
   env: Record<string, string>;
-  scopes: string[];
-  oauth?: AppOAuthConfig;
   overrides?: Record<string, AppManifestOverride>;
 };
 

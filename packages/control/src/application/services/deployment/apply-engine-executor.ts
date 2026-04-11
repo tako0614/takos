@@ -1,4 +1,5 @@
 import type { AppCompute } from "../source/app-manifest-types.ts";
+import type { AppStorage } from "../source/app-manifest-types.ts";
 
 // Legacy alias names used by this module to label compute entries.
 type AppWorker = AppCompute & { kind: "worker" };
@@ -89,7 +90,12 @@ function resolveWorkloadDeploymentProvider(
   artifact: ApplyArtifactInput | null,
 ): DeploymentProviderName {
   if (category === "worker") {
-    return provider === "cloudflare" ? "workers-dispatch" : "runtime-host";
+    if (provider === "cloudflare") {
+      return "workers-dispatch";
+    }
+    throw new Error(
+      `Worker workload deploy provider is not configured for group provider '${provider}'.`,
+    );
   }
   if (artifact?.kind === "container_image" && artifact.provider) {
     return artifact.provider;
@@ -404,7 +410,7 @@ export async function executeApplyEntry(
           spaceId: input.group.spaceId,
           providerName: input.desiredState.provider,
           specFingerprint: resource.specFingerprint,
-          spec: resource.spec,
+          spec: resource.spec as AppStorage,
         });
       }
       if (input.entry.action === "update") {
@@ -416,7 +422,7 @@ export async function executeApplyEntry(
         await deps.updateManagedResource(env, input.groupId, input.entry.name, {
           binding: resource.binding,
           specFingerprint: resource.specFingerprint,
-          spec: resource.spec,
+          spec: resource.spec as AppStorage,
         });
       }
       if (input.entry.action === "delete") {

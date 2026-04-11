@@ -1,19 +1,22 @@
 FROM denoland/deno:2 AS builder
 WORKDIR /workspace
 
-# Copy workspace config and lockfile
-COPY deno.json deno.lock* ./
-
-# Copy required packages
-COPY packages/common/ ./packages/common/
-COPY packages/actions-engine/ ./packages/actions-engine/
-COPY packages/runtime-service/ ./packages/runtime-service/
-COPY apps/runtime/ ./apps/runtime/
-COPY apps/cli/ ./apps/cli/
+# Build context is the ecosystem root so the runtime image can include the
+# Takos monorepo packages and the standalone takos-cli source of truth.
+COPY takos/deno.json takos/deno.lock* ./takos/
+COPY takos/packages/common/ ./takos/packages/common/
+COPY takos/packages/actions-engine/ ./takos/packages/actions-engine/
+COPY takos/packages/runtime-service/ ./takos/packages/runtime-service/
+COPY takos/packages/control/ ./takos/packages/control/
+COPY takos/apps/runtime/ ./takos/apps/runtime/
+COPY takos-cli/ ./takos-cli/
 
 # Cache dependencies
+WORKDIR /workspace/takos-cli
+RUN deno cache src/index.ts
+
+WORKDIR /workspace/takos
 RUN deno cache apps/runtime/src/index.ts
-RUN deno cache apps/cli/src/index.ts
 
 FROM denoland/deno:alpine-2
 WORKDIR /workspace
@@ -33,9 +36,9 @@ COPY --from=builder /workspace /workspace
 COPY --from=builder /root/.cache/deno /root/.cache/deno
 
 # Install takos CLI globally
-RUN printf '#!/bin/sh\nexec deno run --allow-all /workspace/apps/cli/src/index.ts "$@"\n' > /usr/local/bin/takos && chmod +x /usr/local/bin/takos
+RUN printf '#!/bin/sh\ncd /workspace/takos-cli\nexec deno run --allow-all src/index.ts "$@"\n' > /usr/local/bin/takos && chmod +x /usr/local/bin/takos
 
-WORKDIR /workspace/apps/runtime
+WORKDIR /workspace/takos/apps/runtime
 
 # Run as non-root for security
 RUN addgroup -S takos && adduser -S takos -G takos && \

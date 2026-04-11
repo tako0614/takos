@@ -8,13 +8,17 @@ export const billingAccounts = sqliteTable('billing_accounts', {
   planId: text('plan_id').notNull(),
   balanceCents: integer('balance_cents').notNull().default(0),
   status: text('status').notNull().default('active'),
-  stripeCustomerId: text('stripe_customer_id'),
-  stripeSubscriptionId: text('stripe_subscription_id'),
+  /** Active payment provider for this account ('stripe' for now). */
+  providerName: text('provider_name').notNull().default('stripe'),
+  /** Provider-side customer identifier (e.g. Stripe `cus_*`). */
+  providerCustomerId: text('provider_customer_id'),
+  /** Provider-side recurring subscription identifier (e.g. Stripe `sub_*`). */
+  providerSubscriptionId: text('provider_subscription_id'),
   subscriptionStartedAt: text('subscription_started_at'),
   subscriptionPeriodEnd: text('subscription_period_end'),
   ...timestamps,
 }, (table) => ({
-  idxStripeCustomer: index('idx_billing_accounts_stripe_customer_id').on(table.stripeCustomerId),
+  idxProviderCustomer: index('idx_billing_accounts_provider_customer_id').on(table.providerCustomerId),
   idxStatus: index('idx_billing_accounts_status').on(table.status),
   idxPlan: index('idx_billing_accounts_plan_id').on(table.planId),
   idxAccount: index('idx_billing_accounts_account_id').on(table.accountId),
@@ -106,6 +110,14 @@ export const usageEvents = sqliteTable('usage_events', {
 // re-send identical events during replay. Without dedup, retried events would
 // double-credit balances and double-flip plan transitions. The webhook handler
 // inserts the event id BEFORE dispatch and returns 200 on duplicate.
+//
+// Note: this table intentionally keeps the `stripe_webhook_events` name even
+// after the billing system was generalized to a `PaymentProvider` interface.
+// When a non-Stripe provider is added, give it its own dedup table or rename
+// this one (with the corresponding migration). The webhook handler currently
+// stores the normalized `event.kind` in the `type` column, so the `id` PK is
+// the only Stripe-specific assumption (Stripe `evt_*` IDs are globally unique
+// per Stripe account).
 export const stripeWebhookEvents = sqliteTable('stripe_webhook_events', {
   // Stripe event id (`evt_*`); also the primary key.
   id: text('id').primaryKey(),

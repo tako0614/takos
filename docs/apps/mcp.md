@@ -1,75 +1,68 @@
 # MCP Server
 
-app が MCP endpoint を公開するには `publish` で `type: McpServer` を宣言する。
+app が MCP endpoint を公開するには route publication を `publish` に書きます。
 
 ## 基本
 
 ```yaml
+compute:
+  web:
+    build:
+      fromWorkflow:
+        path: .takos/workflows/deploy.yml
+        job: bundle
+        artifact: web
+        artifactPath: dist/worker
+    readiness: /mcp
+
 routes:
-  - path: /mcp
-    target: main
+  - target: web
+    path: /mcp
 
 publish:
-  - type: McpServer
+  - name: browser
+    type: McpServer
     path: /mcp
+    transport: streamable-http
 ```
 
-`path` は app のルートからの相対 path。
-route は `routes` に宣言しておく必要がある。
+`routes` が実際の ingress で、`publish` は discovery metadata です。
 
-## 認証付き
+## consume で使う
+
+publication は自動で space 全体へ注入されません。必要な compute が明示的に
+`consume` します。
 
 ```yaml
-storage:
-  mcp-auth-secret:
-    type: secret
-    bind: MCP_AUTH_TOKEN
-    generate: true
+compute:
+  agent:
+    build: ...
+    consume:
+      - publication: browser
+        env:
+          url: BROWSER_MCP_URL
+```
 
-routes:
-  - target: main
-    path: /mcp
+この例では `agent` に `BROWSER_MCP_URL` が入ります。
 
+## authSecretRef
+
+`authSecretRef` は route publication の optional metadata です。MCP client に
+「どの env 名の token を送ればよいか」を伝えたいときに使います。
+
+```yaml
 publish:
-  - type: McpServer
+  - name: browser
+    type: McpServer
     path: /mcp
+    transport: streamable-http
     authSecretRef: MCP_AUTH_TOKEN
 ```
 
-認証トークンは `type: secret` resource で生成し、workload 側で検証する。`authSecretRef` は client 向け discovery metadata で、対応する env 変数名 (`MCP_AUTH_TOKEN`) を宣言する。
+実際の `MCP_AUTH_TOKEN` の値は manifest では自動生成されません。service env
+settings か別の provider publication から供給してください。
 
-## Transport
+## 実 URL
 
-`transport` は publish のオプショナルなメタデータ。manifest に含めても省略してもよい。
-現在は `streamable-http` のみサポートしている。
-
-```yaml
-publish:
-  - type: McpServer
-    path: /mcp
-    transport: streamable-http   # optional
-```
-
-## 実 URL の導出
-
-各 group は routing layer から割り当てられた自身の hostname を持ちます。
-MCP endpoint の実 URL は group の hostname + `path` で構成されます。
-
-```
-name: takos-storage
-path: /mcp
-→ 実 URL: https://{space-slug}-{group-slug}.{TENANT_BASE_DOMAIN}/mcp
-```
-
-group の hostname は auto (`{space-slug}-{group-slug}.{TENANT_BASE_DOMAIN}`)、custom slug、custom domain のいずれか。
-kernel domain ではなく、group 自身の hostname で解決されます。
-
-## env injection による発見
-
-他の app やクライアントが MCP endpoint を発見するには、deploy 時に kernel が注入する環境変数を使います。
-kernel は `publish` で宣言された情報を、**space 内のすべての group の env に inject** します（scoping や dependency declaration なし）。runtime discovery API は使いません。
-
-## 次のステップ
-
-- [File Handlers](/apps/file-handlers) --- ファイルハンドラーの公開方法
-- [マニフェスト](/apps/manifest) --- app.yml の全体像
+route publication の output は `url` です。default env 名は publication 名から
+決まり、`browser` なら `PUBLICATION_BROWSER_URL` になります。

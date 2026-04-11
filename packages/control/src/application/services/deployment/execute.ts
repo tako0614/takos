@@ -2,20 +2,20 @@
  * Deployment execution orchestrator.
  *
  * Implements the multi-step deployment pipeline: deploy worker, update routing,
- * reconcile MCP, and handle failure rollback. Extracted from DeploymentService
+ * and handle failure rollback. Extracted from DeploymentService
  * to keep the main service file focused on coordination.
  */
-import { safeJsonParseOrDefault } from '../../../shared/utils/index.ts';
-import type { ServiceRuntimeConfigState } from '../platform/worker-desired-state.ts';
-import type { Deployment, DeploymentEnv } from './models.ts';
+import { safeJsonParseOrDefault } from "../../../shared/utils/index.ts";
+import type { ServiceRuntimeConfigState } from "../platform/worker-desired-state.ts";
+import type { Deployment, DeploymentEnv } from "./models.ts";
 import {
   createDeploymentProvider,
   parseDeploymentTargetConfig,
-} from './provider.ts';
+} from "./provider.ts";
 import {
   createDeploymentProviderRegistry,
   resolveDeploymentProviderConfigsFromEnv,
-} from '../../../platform/deployment-providers.ts';
+} from "../../../platform/deployment-providers.ts";
 import {
   getDeploymentById,
   getDeploymentEvents,
@@ -23,9 +23,8 @@ import {
   getServiceDeploymentBasics,
   logDeploymentEvent,
   updateDeploymentRecord,
-} from './store.ts';
-import { executeDeploymentStep, updateDeploymentState } from './state.ts';
-import { reconcileManagedWorkerMcpServer } from '../platform/mcp.ts';
+} from "./store.ts";
+import { executeDeploymentStep, updateDeploymentState } from "./state.ts";
 import {
   applyRoutingDbUpdates,
   applyRoutingToHostnames,
@@ -33,32 +32,32 @@ import {
   collectHostnames,
   fetchServiceWithDomains,
   restoreRoutingSnapshot,
-  snapshotRouting,
   type RoutingSnapshot,
-} from './routing.ts';
-import { rollbackDeploymentSteps } from './rollback.ts';
-import { deployments, getDb, services } from '../../../infra/db/index.ts';
-import { eq } from 'drizzle-orm';
-import { CF_COMPATIBILITY_DATE } from '../../../shared/constants/index.ts';
-import { logError } from '../../../shared/utils/logger.ts';
-import { InternalError, NotFoundError } from 'takos-common/errors';
+  snapshotRouting,
+} from "./routing.ts";
+import { rollbackDeploymentSteps } from "./rollback.ts";
+import { deployments, getDb, services } from "../../../infra/db/index.ts";
+import { eq } from "drizzle-orm";
+import { CF_COMPATIBILITY_DATE } from "../../../shared/constants/index.ts";
+import { logError } from "../../../shared/utils/logger.ts";
+import { InternalError, NotFoundError } from "takos-common/errors";
 import {
-  resolveDeploymentArtifactRef,
-  parseRuntimeConfig,
   extractErrorMessage,
-} from './artifact-refs.ts';
+  parseRuntimeConfig,
+  resolveDeploymentArtifactRef,
+} from "./artifact-refs.ts";
 import {
-  getBundleContent,
-  verifyBundleIntegrity,
-  getWasmContent,
   decryptBindings,
-} from './artifact-io.ts';
+  getBundleContent,
+  getWasmContent,
+  verifyBundleIntegrity,
+} from "./artifact-io.ts";
 import {
   buildProbeUrl,
   DEFAULT_READINESS_PATH,
   describeReadinessFailure,
   probeWorkerReadiness,
-} from './readiness-probe.ts';
+} from "./readiness-probe.ts";
 
 /**
  * Execute a deployment through all pipeline steps (deploy_worker, update_routing, finalize).
@@ -76,15 +75,20 @@ export async function executeDeploymentPipeline(
     throw new NotFoundError(`Deployment ${deploymentId}`);
   }
 
-  if (deployment.status === 'success' || deployment.status === 'rolled_back') {
+  if (deployment.status === "success" || deployment.status === "rolled_back") {
     return deployment;
   }
 
   const completedStepNames = (await getDeploymentEvents(env.DB, deploymentId))
-    .filter((event) => event.event_type === 'step_completed' && event.step_name)
+    .filter((event) => event.event_type === "step_completed" && event.step_name)
     .map((event) => event.step_name as string);
 
-  await updateDeploymentState(env.DB, deploymentId, 'in_progress', deployment.deploy_state);
+  await updateDeploymentState(
+    env.DB,
+    deploymentId,
+    "in_progress",
+    deployment.deploy_state,
+  );
   const deploymentServiceId = getDeploymentServiceId(deployment);
 
   let workerHostname: string | null = null;
@@ -92,9 +96,12 @@ export async function executeDeploymentPipeline(
   let routingRollbackSnapshot: RoutingSnapshot | null = null;
 
   try {
-    const serviceBasics = await getServiceDeploymentBasics(env.DB, deploymentServiceId);
+    const serviceBasics = await getServiceDeploymentBasics(
+      env.DB,
+      deploymentServiceId,
+    );
     if (!serviceBasics.exists) {
-      throw new NotFoundError('Worker');
+      throw new NotFoundError("Worker");
     }
 
     workerHostname = serviceBasics.hostname;
@@ -107,7 +114,9 @@ export async function executeDeploymentPipeline(
 
     const deployArtifactRef = deploymentArtifactRef;
     const providerRegistry = createDeploymentProviderRegistry(
-      resolveDeploymentProviderConfigsFromEnv(env as unknown as Record<string, unknown>),
+      resolveDeploymentProviderConfigsFromEnv(
+        env as unknown as Record<string, unknown>,
+      ),
     );
     const provider = createDeploymentProvider(deployment, {
       cloudflareEnv: env,
@@ -117,69 +126,82 @@ export async function executeDeploymentPipeline(
     });
 
     if (!deployArtifactRef) {
-      throw new InternalError('Deployment artifact ref is missing');
+      throw new InternalError("Deployment artifact ref is missing");
     }
 
-    const isContainerDeploy = deployment.artifact_kind === 'container-image';
+    const isContainerDeploy = deployment.artifact_kind === "container-image";
 
-    if (!completedStepNames.includes('deploy_worker')) {
-      await executeDeploymentStep(env.DB, deploymentId, 'deploying_worker', 'deploy_worker', async () => {
-        let bundleContent: string | undefined;
-        let wasmContent: ArrayBuffer | null = null;
+    if (!completedStepNames.includes("deploy_worker")) {
+      await executeDeploymentStep(
+        env.DB,
+        deploymentId,
+        "deploying_worker",
+        "deploy_worker",
+        async () => {
+          let bundleContent: string | undefined;
+          let wasmContent: ArrayBuffer | null = null;
 
-        if (!isContainerDeploy) {
-          bundleContent = await getBundleContent(env, deployment);
-          await verifyBundleIntegrity(bundleContent, deployment);
-          wasmContent = deployment.wasm_r2_key
-            ? await getWasmContent(env, deployment)
-            : null;
-        }
-
-        const runtimeConfig = parseRuntimeConfig(deployment.runtime_config_snapshot_json);
-        const compatibilityDate = runtimeConfig.compatibility_date || CF_COMPATIBILITY_DATE;
-        const compatibilityFlags = runtimeConfig.compatibility_flags.length > 0
-          ? runtimeConfig.compatibility_flags
-          : wasmContent
-            ? ['nodejs_compat']
-            : [];
-
-        const bindings = (!isContainerDeploy && deployment.bindings_snapshot_encrypted)
-          ? await decryptBindings(encryptionKey, deployment)
-          : [];
-        const deployResult = await provider.deploy({
-          deployment,
-          artifactRef: deployArtifactRef,
-          bundleContent,
-          wasmContent,
-          runtime: {
-            profile: isContainerDeploy ? 'container-service' : 'workers',
-            bindings,
-            config: {
-              compatibility_date: compatibilityDate,
-              compatibility_flags: compatibilityFlags,
-              limits: runtimeConfig.limits,
-            },
-          },
-        });
-
-        // Store resolved endpoint from container provider in provider_state_json
-        if (deployResult?.resolvedEndpoint) {
-          const providerState = safeJsonParseOrDefault<Record<string, unknown>>(
-            deployment.provider_state_json,
-            {},
-          );
-          providerState.resolved_endpoint = deployResult.resolvedEndpoint;
-          if (deployResult.logsRef) {
-            providerState.logs_ref = deployResult.logsRef;
+          if (!isContainerDeploy) {
+            bundleContent = await getBundleContent(env, deployment);
+            await verifyBundleIntegrity(bundleContent, deployment);
+            wasmContent = deployment.wasm_r2_key
+              ? await getWasmContent(env, deployment)
+              : null;
           }
-          await updateDeploymentRecord(env.DB, deploymentId, {
-            providerStateJson: JSON.stringify(providerState),
+
+          const runtimeConfig = parseRuntimeConfig(
+            deployment.runtime_config_snapshot_json,
+          );
+          const compatibilityDate = runtimeConfig.compatibility_date ||
+            CF_COMPATIBILITY_DATE;
+          const compatibilityFlags =
+            runtimeConfig.compatibility_flags.length > 0
+              ? runtimeConfig.compatibility_flags
+              : wasmContent
+              ? ["nodejs_compat"]
+              : [];
+
+          const bindings =
+            (!isContainerDeploy && deployment.bindings_snapshot_encrypted)
+              ? await decryptBindings(encryptionKey, deployment)
+              : [];
+          const deployResult = await provider.deploy({
+            deployment,
+            artifactRef: deployArtifactRef,
+            bundleContent,
+            wasmContent,
+            runtime: {
+              profile: isContainerDeploy ? "container-service" : "workers",
+              bindings,
+              config: {
+                compatibility_date: compatibilityDate,
+                compatibility_flags: compatibilityFlags,
+                limits: runtimeConfig.limits,
+              },
+            },
           });
-          // Update in-memory deployment for routing step
-          deployment.provider_state_json = JSON.stringify(providerState);
-        }
-      });
-      completedStepNames.push('deploy_worker');
+
+          // Store resolved endpoint from container provider in provider_state_json
+          if (deployResult?.resolvedEndpoint) {
+            const providerState = safeJsonParseOrDefault<
+              Record<string, unknown>
+            >(
+              deployment.provider_state_json,
+              {},
+            );
+            providerState.resolved_endpoint = deployResult.resolvedEndpoint;
+            if (deployResult.logsRef) {
+              providerState.logs_ref = deployResult.logsRef;
+            }
+            await updateDeploymentRecord(env.DB, deploymentId, {
+              providerStateJson: JSON.stringify(providerState),
+            });
+            // Update in-memory deployment for routing step
+            deployment.provider_state_json = JSON.stringify(providerState);
+          }
+        },
+      );
+      completedStepNames.push("deploy_worker");
     }
 
     // -----------------------------------------------------------------------
@@ -199,20 +221,20 @@ export async function executeDeploymentPipeline(
     // -----------------------------------------------------------------------
     if (
       !isContainerDeploy &&
-      !completedStepNames.includes('probe_readiness')
+      !completedStepNames.includes("probe_readiness")
     ) {
       await executeDeploymentStep(
         env.DB,
         deploymentId,
-        'deploying_worker',
-        'probe_readiness',
+        "deploying_worker",
+        "probe_readiness",
         async () => {
           const deploymentTarget = parseDeploymentTargetConfig(deployment);
           const readinessPath = deploymentTarget.readiness?.path ??
             DEFAULT_READINESS_PATH;
 
           // Probe URL の base を resolve する。
-          // - workers-dispatch / runtime-host: services.hostname (例: my-app.takos.app)
+          // - worker deploys: services.hostname (例: my-app.takos.app)
           // - container providers: ここでは到達しない (isContainerDeploy guard 済み)
           if (!workerHostname) {
             // hostname 未割り当ての worker (まだ routing が無い空 deploy など) は
@@ -221,8 +243,8 @@ export async function executeDeploymentPipeline(
             return;
           }
 
-          const baseUrl = workerHostname.startsWith('http://') ||
-              workerHostname.startsWith('https://')
+          const baseUrl = workerHostname.startsWith("http://") ||
+              workerHostname.startsWith("https://")
             ? workerHostname
             : `https://${workerHostname}`;
           const probeUrl = buildProbeUrl(baseUrl, readinessPath);
@@ -235,113 +257,142 @@ export async function executeDeploymentPipeline(
           if (!outcome.ok) {
             // fail-fast: throw して executeDeploymentStep の catch に rollback を委ねる。
             // 上位 catch は rollbackDeploymentSteps を呼び、routing は更新されない。
-            throw new InternalError(describeReadinessFailure(probeUrl, outcome));
+            throw new InternalError(
+              describeReadinessFailure(probeUrl, outcome),
+            );
           }
         },
       );
-      completedStepNames.push('probe_readiness');
+      completedStepNames.push("probe_readiness");
     }
 
-    if (!completedStepNames.includes('update_routing')) {
-      await executeDeploymentStep(env.DB, deploymentId, 'routing', 'update_routing', async () => {
-        const db = getDb(env.DB);
+    if (!completedStepNames.includes("update_routing")) {
+      await executeDeploymentStep(
+        env.DB,
+        deploymentId,
+        "routing",
+        "update_routing",
+        async () => {
+          const db = getDb(env.DB);
 
-        const serviceRouteRecord = await fetchServiceWithDomains(env, deploymentServiceId);
-
-        if (!serviceRouteRecord) {
-          throw new NotFoundError('Worker');
-        }
-
-        const hostnameList = collectHostnames(serviceRouteRecord);
-
-        if (hostnameList.length === 0) {
-          return;
-        }
-
-        routingRollbackSnapshot = await snapshotRouting(env, hostnameList);
-
-        if (env.WORKER_BUNDLES && routingRollbackSnapshot) {
-          const snapshotKey = `deployment-snapshots/${deploymentId}.json`;
-          await env.WORKER_BUNDLES.put(snapshotKey, JSON.stringify(routingRollbackSnapshot));
-        }
-
-        const nowIso = new Date().toISOString();
-        const promoteToActive = deployment.routing_status !== 'canary';
-
-        let activeDeployment = null;
-        if (!promoteToActive && serviceRouteRecord.activeDeploymentId) {
-          activeDeployment = await db.select({
-            id: deployments.id,
-            artifactRef: deployments.artifactRef,
-            targetJson: deployments.targetJson,
-            routingStatus: deployments.routingStatus,
-          })
-            .from(deployments)
-            .where(eq(deployments.id, serviceRouteRecord.activeDeploymentId))
-            .get() ?? null;
-        }
-
-        // For container deploys, inject the resolved endpoint as the routing target
-        let deploymentTarget = parseDeploymentTargetConfig(deployment);
-        if (isContainerDeploy) {
-          const providerState = safeJsonParseOrDefault<Record<string, unknown>>(
-            deployment.provider_state_json,
-            {},
+          const serviceRouteRecord = await fetchServiceWithDomains(
+            env,
+            deploymentServiceId,
           );
-          const resolvedEp = providerState.resolved_endpoint as { base_url?: string } | undefined;
-          if (resolvedEp?.base_url) {
-            deploymentTarget = {
-              ...deploymentTarget,
-              endpoint: { kind: 'http-url', base_url: resolvedEp.base_url },
-            };
+
+          if (!serviceRouteRecord) {
+            throw new NotFoundError("Worker");
           }
-        }
 
-        const routingCtx = {
-          deploymentId,
-          deploymentVersion: deployment.version,
-          deployArtifactRef,
-          deploymentTarget,
-          serviceRouteRecord,
-          desiredRoutingStatus: deployment.routing_status,
-          desiredRoutingWeight: deployment.routing_weight,
-          activeDeployment,
-        };
+          const hostnameList = collectHostnames(serviceRouteRecord);
 
-        const { target, auditDetails } = buildRoutingTarget(routingCtx, hostnameList);
-
-        await applyRoutingToHostnames(env, hostnameList, target);
-
-        try {
-          await applyRoutingDbUpdates(env, routingCtx, nowIso);
-        } catch (dbErr) {
-          if (routingRollbackSnapshot) {
-            await restoreRoutingSnapshot(env, routingRollbackSnapshot).catch((e) => {
-              logError('Failed to restore routing snapshot during rollback', e, { module: 'deployment' });
-            });
+          if (hostnameList.length === 0) {
+            return;
           }
-          throw dbErr;
-        }
 
-        await logDeploymentEvent(
-          env.DB,
-          deploymentId,
-          'routing_updated',
-          'update_routing',
-          promoteToActive ? 'Promoted deployment to active routing' : 'Configured canary routing',
-          {
-            actorAccountId: deployment.deployed_by ?? null,
-            details: auditDetails,
+          routingRollbackSnapshot = await snapshotRouting(env, hostnameList);
+
+          if (env.WORKER_BUNDLES && routingRollbackSnapshot) {
+            const snapshotKey = `deployment-snapshots/${deploymentId}.json`;
+            await env.WORKER_BUNDLES.put(
+              snapshotKey,
+              JSON.stringify(routingRollbackSnapshot),
+            );
           }
-        );
-      });
-      completedStepNames.push('update_routing');
+
+          const nowIso = new Date().toISOString();
+          const promoteToActive = deployment.routing_status !== "canary";
+
+          let activeDeployment = null;
+          if (!promoteToActive && serviceRouteRecord.activeDeploymentId) {
+            activeDeployment = await db.select({
+              id: deployments.id,
+              artifactRef: deployments.artifactRef,
+              targetJson: deployments.targetJson,
+              routingStatus: deployments.routingStatus,
+            })
+              .from(deployments)
+              .where(eq(deployments.id, serviceRouteRecord.activeDeploymentId))
+              .get() ?? null;
+          }
+
+          // For container deploys, inject the resolved endpoint as the routing target
+          let deploymentTarget = parseDeploymentTargetConfig(deployment);
+          if (isContainerDeploy) {
+            const providerState = safeJsonParseOrDefault<
+              Record<string, unknown>
+            >(
+              deployment.provider_state_json,
+              {},
+            );
+            const resolvedEp = providerState.resolved_endpoint as {
+              base_url?: string;
+            } | undefined;
+            if (resolvedEp?.base_url) {
+              deploymentTarget = {
+                ...deploymentTarget,
+                endpoint: { kind: "http-url", base_url: resolvedEp.base_url },
+              };
+            }
+          }
+
+          const routingCtx = {
+            deploymentId,
+            deploymentVersion: deployment.version,
+            deployArtifactRef,
+            deploymentTarget,
+            serviceRouteRecord,
+            desiredRoutingStatus: deployment.routing_status,
+            desiredRoutingWeight: deployment.routing_weight,
+            activeDeployment,
+          };
+
+          const { target, auditDetails } = buildRoutingTarget(
+            routingCtx,
+            hostnameList,
+          );
+
+          await applyRoutingToHostnames(env, hostnameList, target);
+
+          try {
+            await applyRoutingDbUpdates(env, routingCtx, nowIso);
+          } catch (dbErr) {
+            if (routingRollbackSnapshot) {
+              await restoreRoutingSnapshot(env, routingRollbackSnapshot).catch(
+                (e) => {
+                  logError(
+                    "Failed to restore routing snapshot during rollback",
+                    e,
+                    { module: "deployment" },
+                  );
+                },
+              );
+            }
+            throw dbErr;
+          }
+
+          await logDeploymentEvent(
+            env.DB,
+            deploymentId,
+            "routing_updated",
+            "update_routing",
+            promoteToActive
+              ? "Promoted deployment to active routing"
+              : "Configured canary routing",
+            {
+              actorAccountId: deployment.deployed_by ?? null,
+              details: auditDetails,
+            },
+          );
+        },
+      );
+      completedStepNames.push("update_routing");
     }
 
     const finishedAt = new Date().toISOString();
     await updateDeploymentRecord(env.DB, deploymentId, {
-      deployState: 'completed',
-      status: 'success',
+      deployState: "completed",
+      status: "success",
       completedAt: finishedAt,
       updatedAt: finishedAt,
     });
@@ -349,46 +400,42 @@ export async function executeDeploymentPipeline(
       const db = getDb(env.DB);
       await db.update(services)
         .set({
-          status: 'deployed',
+          status: "deployed",
           updatedAt: finishedAt,
         })
         .where(eq(services.id, deploymentServiceId))
         .run();
     } catch (e) {
-      logError('Failed to update service status to deployed (non-critical)', e, { module: 'deployment' });
+      logError(
+        "Failed to update service status to deployed (non-critical)",
+        e,
+        { module: "deployment" },
+      );
     }
 
-    const runtimeConfig = safeJsonParseOrDefault<Partial<ServiceRuntimeConfigState>>(
-      deployment.runtime_config_snapshot_json,
-      {},
+    await logDeploymentEvent(
+      env.DB,
+      deploymentId,
+      "completed",
+      null,
+      "Deployment completed successfully",
     );
-    const currentService = await getServiceDeploymentBasics(env.DB, deploymentServiceId);
-
-    await reconcileManagedWorkerMcpServer(env.DB, env, {
-      spaceId: deployment.space_id,
-      serviceId: deploymentServiceId,
-      enabled: runtimeConfig.mcp_server?.enabled === true,
-      name: runtimeConfig.mcp_server?.name ?? null,
-      url: currentService.hostname && runtimeConfig.mcp_server?.path
-        ? `https://${currentService.hostname}${runtimeConfig.mcp_server.path}`
-        : null,
-    }).catch((err) => {
-      logError('Failed to reconcile managed worker MCP server', err, { module: 'deploymentservice' });
-    });
-
-    await logDeploymentEvent(env.DB, deploymentId, 'completed', null, 'Deployment completed successfully');
 
     // Clean up routing snapshot after successful deployment
     if (env.WORKER_BUNDLES) {
       const snapshotKey = `deployment-snapshots/${deploymentId}.json`;
       await env.WORKER_BUNDLES.delete(snapshotKey).catch((e: unknown) => {
-        logError('Failed to clean up deployment snapshot (non-critical)', e, { module: 'deployment' });
+        logError("Failed to clean up deployment snapshot (non-critical)", e, {
+          module: "deployment",
+        });
       });
     }
 
     const finalDeployment = await getDeploymentById(env.DB, deploymentId);
     if (!finalDeployment) {
-      throw new InternalError(`Deployment ${deploymentId} not found after successful completion`);
+      throw new InternalError(
+        `Deployment ${deploymentId} not found after successful completion`,
+      );
     }
     return finalDeployment;
   } catch (error) {
@@ -408,34 +455,49 @@ export async function executeDeploymentPipeline(
         orchestratorUrl: env.OCI_ORCHESTRATOR_URL,
         orchestratorToken: env.OCI_ORCHESTRATOR_TOKEN,
         providerRegistry: createDeploymentProviderRegistry(
-          resolveDeploymentProviderConfigsFromEnv(env as unknown as Record<string, unknown>),
+          resolveDeploymentProviderConfigsFromEnv(
+            env as unknown as Record<string, unknown>,
+          ),
         ),
       }),
     });
 
     await updateDeploymentRecord(env.DB, deploymentId, {
-      deployState: 'failed',
-      status: 'failed',
+      deployState: "failed",
+      status: "failed",
       stepError: errorMessage,
       updatedAt: now,
     });
-    const currentService = await getServiceDeploymentBasics(env.DB, deploymentServiceId);
+    const currentService = await getServiceDeploymentBasics(
+      env.DB,
+      deploymentServiceId,
+    );
     if (!currentService.activeDeploymentId) {
       try {
         const db = getDb(env.DB);
         await db.update(services)
           .set({
-            status: 'failed',
+            status: "failed",
             updatedAt: now,
           })
           .where(eq(services.id, deploymentServiceId))
           .run();
       } catch (e) {
-        logError('Failed to update service status to failed (non-critical)', e, { module: 'deployment' });
+        logError(
+          "Failed to update service status to failed (non-critical)",
+          e,
+          { module: "deployment" },
+        );
       }
     }
 
-    await logDeploymentEvent(env.DB, deploymentId, 'failed', deployment.current_step, errorMessage);
+    await logDeploymentEvent(
+      env.DB,
+      deploymentId,
+      "failed",
+      deployment.current_step,
+      errorMessage,
+    );
 
     throw error;
   }

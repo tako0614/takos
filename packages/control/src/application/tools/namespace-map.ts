@@ -47,8 +47,6 @@ export const TOOL_NAMESPACE_MAP: Record<string, ToolNamespaceMeta> = {
   deployment_rollback: { namespace: 'deploy', family: 'deploy.release',  risk_level: 'high',   side_effects: true },
   service_env_get:      { namespace: 'deploy', family: 'deploy.service.config',   risk_level: 'none',   side_effects: false },
   service_env_set:      { namespace: 'deploy', family: 'deploy.service.config',   risk_level: 'medium', side_effects: true },
-  service_bindings_get: { namespace: 'deploy', family: 'deploy.service.config',   risk_level: 'none',   side_effects: false },
-  service_bindings_set: { namespace: 'deploy', family: 'deploy.service.config',   risk_level: 'medium', side_effects: true },
   service_runtime_get:  { namespace: 'deploy', family: 'deploy.service.config',   risk_level: 'none',   side_effects: false },
   service_runtime_set:  { namespace: 'deploy', family: 'deploy.service.config',   risk_level: 'medium', side_effects: true },
   domain_list:         { namespace: 'deploy', family: 'deploy.domains',  risk_level: 'none',   side_effects: false },
@@ -76,10 +74,6 @@ export const TOOL_NAMESPACE_MAP: Record<string, ToolNamespaceMeta> = {
   create_d1:           { namespace: 'storage', family: 'storage.create', risk_level: 'medium', side_effects: true },
   create_kv:           { namespace: 'storage', family: 'storage.create', risk_level: 'medium', side_effects: true },
   create_r2:           { namespace: 'storage', family: 'storage.create', risk_level: 'medium', side_effects: true },
-
-  workspace_env_list:   { namespace: 'workspace.env', family: 'workspace.env.ops', risk_level: 'none',   side_effects: false },
-  workspace_env_set:    { namespace: 'workspace.env', family: 'workspace.env.ops', risk_level: 'medium', side_effects: true },
-  workspace_env_delete: { namespace: 'workspace.env', family: 'workspace.env.ops', risk_level: 'medium', side_effects: true },
 
   skill_list:          { namespace: 'workspace.skills', family: 'workspace.skills.ops', risk_level: 'none',   side_effects: false },
   skill_get:           { namespace: 'workspace.skills', family: 'workspace.skills.ops', risk_level: 'none',   side_effects: false },

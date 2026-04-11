@@ -15,8 +15,8 @@ import {
   services,
 } from "../../../infra/db/index.ts";
 import {
-  buildSafeApplyResult,
   type ApplyManifestOpts,
+  buildSafeApplyResult,
 } from "../../../application/services/deployment/apply-engine.ts";
 import {
   createGroupByName,
@@ -256,11 +256,9 @@ export function buildUninstallManifest(group: GroupRow): AppManifest {
     name: group.name,
     ...(group.appVersion ? { version: group.appVersion } : {}),
     compute: {},
-    storage: {},
     routes: [],
     publish: [],
     env: {},
-    scopes: [],
   };
 }
 

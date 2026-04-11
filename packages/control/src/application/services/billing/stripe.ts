@@ -1,8 +1,17 @@
 /**
- * Stripe API Service for takos-control
+ * Low-level Stripe REST API helpers for takos-control.
  *
- * Uses raw fetch() + crypto.subtle for Workers compatibility.
- * No Stripe SDK dependency.
+ * This module is the bottom-most layer of the Stripe integration. It only
+ * exposes raw fetch-based API calls and webhook signature verification — it
+ * has no knowledge of the billing system's domain (plans, accounts, top-up
+ * packs).
+ *
+ * Consumers MUST go through `providers/stripe/stripe-provider.ts`, which
+ * adapts these helpers into the provider-agnostic `PaymentProvider` interface.
+ * Code outside `providers/stripe/` should not import from this file.
+ *
+ * Uses raw fetch() + crypto.subtle for Cloudflare Workers compatibility (no
+ * Stripe SDK dependency).
  */
 
 import { constantTimeEqual } from '../../../shared/utils/hash.ts';

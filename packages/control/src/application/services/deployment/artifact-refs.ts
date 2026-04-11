@@ -65,14 +65,12 @@ export function parseRuntimeConfig(raw: string | null | undefined): ServiceRunti
     compatibility_date?: string;
     compatibility_flags?: string[];
     limits?: { cpu_ms?: number; subrequests?: number };
-    mcp_server?: ServiceRuntimeConfigState['mcp_server'];
   }>(raw, {});
 
   return {
     compatibility_date: parsed.compatibility_date,
     compatibility_flags: Array.isArray(parsed.compatibility_flags) ? parsed.compatibility_flags : [],
     limits: parsed.limits && typeof parsed.limits === 'object' ? parsed.limits : {},
-    mcp_server: parsed.mcp_server,
     updated_at: null,
   };
 }
@@ -91,7 +89,6 @@ export function snapshotFromOverride(
       compatibility_date: override.runtimeConfig?.compatibility_date,
       compatibility_flags: override.runtimeConfig?.compatibility_flags ?? [],
       limits: override.runtimeConfig?.limits ?? {},
-      mcp_server: override.runtimeConfig?.mcp_server,
       updated_at: null,
     },
   };

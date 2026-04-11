@@ -9,7 +9,6 @@ import spacesBase from './routes.ts';
 import spacesMembers from './members.ts';
 import spacesRepos from './repositories.ts';
 import spacesStorage from './storage.ts';
-import spacesCommonEnv from './common-env.ts';
 import spacesStores from './stores.ts';
 import spacesStoreRegistry from './store-registry.ts';
 
@@ -19,7 +18,6 @@ spaces.route('/', spacesBase);
 spaces.route('/', spacesMembers);
 spaces.route('/', spacesRepos);
 spaces.route('/', spacesStorage);
-spaces.route('/', spacesCommonEnv);
 spaces.route('/', spacesStores);
 spaces.route('/', spacesStoreRegistry);
 

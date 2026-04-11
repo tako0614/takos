@@ -1,25 +1,3 @@
-// ============================================================
-// parse-publish.ts
-// ============================================================
-//
-// Flat-schema publication parser (Phase 1).
-//
-// Walks the top-level `publish[]` array and builds
-// `AppPublication[]`. Replaces the old `parseMcpServers` and
-// `parseFileHandlers` (which lived under `spec.mcpServers` and
-// `spec.fileHandlers`).
-//
-// `type` is an open string; the kernel validates known types.
-// Phase 1 recognizes:
-//   - McpServer (transport, authSecretRef)
-//   - FileHandler (mimeTypes, extensions — at least one required)
-//   - UiSurface (icon, title)
-//
-// The `name` field is required when multiple publications share
-// both group (derived from `type`) and `type`. Phase 1 applies
-// this check after collecting all entries.
-// ============================================================
-
 import type { AppPublication } from "../app-manifest-types.ts";
 import {
   asRecord,
@@ -28,9 +6,38 @@ import {
   asStringArray,
 } from "../app-manifest-utils.ts";
 
-// ============================================================
-// Known type validators
-// ============================================================
+const ROUTE_PUBLICATION_FIELDS = new Set([
+  "name",
+  "type",
+  "path",
+  "title",
+  "transport",
+  "authSecretRef",
+  "mimeTypes",
+  "extensions",
+  "icon",
+]);
+
+const PROVIDER_PUBLICATION_FIELDS = new Set([
+  "name",
+  "provider",
+  "kind",
+  "spec",
+]);
+
+function assertAllowedFields(
+  record: Record<string, unknown>,
+  prefix: string,
+  allowed: ReadonlySet<string>,
+): void {
+  for (const key of Object.keys(record)) {
+    if (!allowed.has(key)) {
+      throw new Error(
+        `${prefix}.${key} is not supported by the publish/consume contract`,
+      );
+    }
+  }
+}
 
 function parseMcpServer(
   prefix: string,
@@ -70,37 +77,32 @@ function parseFileHandler(
 function parseUiSurface(
   prefix: string,
   record: Record<string, unknown>,
-): Pick<AppPublication, "icon"> {
+): Pick<AppPublication, "icon" | "title"> {
   const icon = asString(record.icon, `${prefix}.icon`);
+  const title = asString(record.title, `${prefix}.title`);
   return {
     ...(icon ? { icon } : {}),
+    ...(title ? { title } : {}),
   };
 }
 
-// ============================================================
-// Single publication entry
-// ============================================================
-
-function parsePublicationEntry(
+function parseRoutePublication(
   index: number,
-  raw: unknown,
+  record: Record<string, unknown>,
 ): AppPublication {
   const prefix = `publish[${index}]`;
-  const record = asRecord(raw);
+  assertAllowedFields(record, prefix, ROUTE_PUBLICATION_FIELDS);
 
   const type = asRequiredString(record.type, `${prefix}.type`);
   const path = asRequiredString(record.path, `${prefix}.path`);
   if (!path.startsWith("/")) {
     throw new Error(`${prefix}.path must start with '/' (got: ${path})`);
   }
-  const name = asString(record.name, `${prefix}.name`);
-  const title = asString(record.title, `${prefix}.title`);
 
   const base: AppPublication = {
+    name: asRequiredString(record.name, `${prefix}.name`),
     type,
     path,
-    ...(name ? { name } : {}),
-    ...(title ? { title } : {}),
   };
 
   switch (type) {
@@ -111,42 +113,52 @@ function parsePublicationEntry(
     case "UiSurface":
       return { ...base, ...parseUiSurface(prefix, record) };
     default:
-      // Unknown type — preserve open-string behavior so the kernel
-      // can validate its own first-party types.
-      return base;
+      return {
+        ...base,
+        ...(asString(record.title, `${prefix}.title`)
+          ? { title: asString(record.title, `${prefix}.title`)! }
+          : {}),
+      };
   }
 }
 
-// ============================================================
-// Duplicate-name validation
-// ============================================================
+function parseProviderPublication(
+  index: number,
+  record: Record<string, unknown>,
+): AppPublication {
+  const prefix = `publish[${index}]`;
+  assertAllowedFields(record, prefix, PROVIDER_PUBLICATION_FIELDS);
+
+  const spec = record.spec == null ? {} : asRecord(record.spec);
+  return {
+    name: asRequiredString(record.name, `${prefix}.name`),
+    provider: asRequiredString(record.provider, `${prefix}.provider`),
+    kind: asRequiredString(record.kind, `${prefix}.kind`),
+    spec,
+  };
+}
+
+function parsePublicationEntry(
+  index: number,
+  raw: unknown,
+): AppPublication {
+  const record = asRecord(raw);
+  if (record.provider != null || record.kind != null) {
+    return parseProviderPublication(index, record);
+  }
+  return parseRoutePublication(index, record);
+}
 
 function validateUniqueness(entries: AppPublication[]): void {
-  const countsByType = new Map<string, number>();
-  for (const entry of entries) {
-    countsByType.set(entry.type, (countsByType.get(entry.type) ?? 0) + 1);
-  }
   const seen = new Set<string>();
   entries.forEach((entry, index) => {
-    if ((countsByType.get(entry.type) ?? 0) <= 1) return;
-    if (!entry.name) {
-      throw new Error(
-        `publish[${index}] requires 'name' when multiple ${entry.type} publications exist`,
-      );
-    }
-    const key = `${entry.type}::${entry.name}`;
+    const key = entry.name.trim();
     if (seen.has(key)) {
-      throw new Error(
-        `publish[${index}] duplicate ${entry.type} publication name: ${entry.name}`,
-      );
+      throw new Error(`publish[${index}] duplicate publication name: ${key}`);
     }
     seen.add(key);
   });
 }
-
-// ============================================================
-// Top-level publication walker
-// ============================================================
 
 export function parsePublish(
   topLevel: Record<string, unknown>,

@@ -1,17 +1,24 @@
 import type { WorkerBinding } from '../../../platform/providers/cloudflare/wfp.ts';
-import type { ServiceLinkRow } from '../common-env/repository.ts';
-import { normalizeEnvName } from '../common-env/crypto.ts';
 import { safeJsonParseOrDefault } from '../../../shared/utils/index.ts';
 import type {
   ServiceRuntimeLimits,
   ServiceRuntimeRow,
   ServiceRuntimeFlagRow,
   ServiceRuntimeLimitRow,
-  ServiceRuntimeMcpEndpointRow,
   ServiceRuntimeConfigState,
   ServiceBindingRow,
-  EffectiveCommonEnvLink,
 } from './desired-state-types.ts';
+
+function normalizeEnvName(name: string): string {
+  const normalized = String(name || '').trim();
+  if (!normalized) {
+    throw new Error('Environment variable name is required');
+  }
+  if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(normalized)) {
+    throw new Error(`Invalid environment variable name: ${normalized}`);
+  }
+  return normalized.toUpperCase();
+}
 
 export function normalizeLimits(input?: ServiceRuntimeLimits | null): ServiceRuntimeLimits {
   const limits: ServiceRuntimeLimits = {};
@@ -31,7 +38,6 @@ export function parseRuntimeRow(
   row: ServiceRuntimeRow | null,
   flags: ServiceRuntimeFlagRow[],
   limitsRow: ServiceRuntimeLimitRow | null,
-  mcpEndpoints: ServiceRuntimeMcpEndpointRow[]
 ): ServiceRuntimeConfigState {
   if (!row) {
     return {
@@ -41,8 +47,6 @@ export function parseRuntimeRow(
     };
   }
 
-  const enabledEndpoint = mcpEndpoints.find((endpoint) => endpoint.enabled) || mcpEndpoints[0];
-
   return {
     compatibility_date: row.compatibilityDate || undefined,
     compatibility_flags: flags.map((flag) => flag.flag),
@@ -50,41 +54,8 @@ export function parseRuntimeRow(
       cpu_ms: limitsRow?.cpuMs ?? undefined,
       subrequests: limitsRow?.subrequestLimit ?? undefined,
     }),
-    mcp_server: enabledEndpoint
-      ? {
-          enabled: enabledEndpoint.enabled,
-          name: enabledEndpoint.name,
-          path: enabledEndpoint.path,
-        }
-      : undefined,
     updated_at: row.updatedAt,
   };
-}
-
-export function getEffectiveLinks(rows: ServiceLinkRow[]): Map<string, EffectiveCommonEnvLink> {
-  const grouped = new Map<string, { manual?: ServiceLinkRow; required?: ServiceLinkRow }>();
-
-  for (const row of rows) {
-    const key = normalizeEnvName(row.env_name);
-    const bucket = grouped.get(key) || {};
-    if (row.source === 'manual') bucket.manual = row;
-    if (row.source === 'required') bucket.required = row;
-    grouped.set(key, bucket);
-  }
-
-  const out = new Map<string, EffectiveCommonEnvLink>();
-  for (const [envName, bucket] of grouped.entries()) {
-    const selected = bucket.manual || bucket.required;
-    if (!selected) continue;
-    out.set(envName, {
-      rowId: selected.id,
-      envName,
-      source: selected.source,
-      lastAppliedFingerprint: selected.last_applied_fingerprint,
-    });
-  }
-
-  return out;
 }
 
 export function sortBindings(bindings: WorkerBinding[]): WorkerBinding[] {

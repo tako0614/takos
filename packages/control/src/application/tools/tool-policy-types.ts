@@ -13,12 +13,6 @@ export const WORKSPACE_STORAGE_OPS = [
   'workspace_storage.move',
 ] as const;
 
-export const WORKSPACE_COMMON_ENV_OPS = [
-  'workspace_common_env.list',
-  'workspace_common_env.write',
-  'workspace_common_env.delete',
-] as const;
-
 export const REPO_OPS = [
   'repo.create',
   'repo.fork',
@@ -30,8 +24,6 @@ export const SERVICE_OPS = [
   'service.delete',
   'service.env.read',
   'service.env.write',
-  'service.bindings.read',
-  'service.bindings.write',
   'service.runtime.read',
   'service.runtime.write',
 ] as const;
@@ -79,7 +71,6 @@ export const MCP_SERVER_OPS = [
 
 export type SpaceOperationId =
   | (typeof WORKSPACE_STORAGE_OPS)[number]
-  | (typeof WORKSPACE_COMMON_ENV_OPS)[number]
   | (typeof REPO_OPS)[number]
   | (typeof SERVICE_OPS)[number]
   | (typeof CUSTOM_DOMAIN_OPS)[number]
@@ -95,4 +86,3 @@ export interface SpaceOperationPolicy {
   allowed_roles: SpaceRole[];
   sensitive_read_policy: SensitiveReadPolicy;
 }
-

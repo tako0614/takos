@@ -1,6 +1,5 @@
 {
   "workspace": [
-    "./apps/cli",
     "./apps/control",
     "./apps/runtime",
     "./docs",
@@ -47,7 +46,7 @@
     "check:boundaries": "deno run --allow-read scripts/check-boundaries.mjs",
     "dev:takos": "deno task --cwd apps/control dev",
     "dev:runtime": "deno task --cwd apps/runtime dev",
-    "dev:cli": "deno task --cwd apps/cli dev",
+    "dev:cli": "bash -lc 'cd ../takos-cli && deno task dev'",
     "clean": "find . -name 'node_modules' -type d -prune -exec rm -rf {} + && find . -name 'dist' -type d -prune -exec rm -rf {} +"
   }
 }

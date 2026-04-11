@@ -5,6 +5,15 @@ import { createMockEnv } from "../../../test/integration/setup.ts";
 import { assertEquals } from "jsr:@std/assert";
 import { assertSpyCalls, spy } from "jsr:@std/testing/mock";
 
+import type {
+  BillingWebhookEvent,
+  CheckoutSessionResult,
+  CompletedCheckoutSession,
+  ListInvoicesInput,
+  NormalizedInvoice,
+  PaymentProvider,
+} from "@/services/billing/billing";
+
 const billingMocks = {
   getOrCreateBillingAccount: ((..._args: any[]) => undefined) as any,
   addCredits: ((..._args: any[]) => undefined) as any,
@@ -29,18 +38,32 @@ const billingMocks = {
   ),
 };
 
-const stripeMocks = {
-  createCheckoutSession: ((..._args: any[]) => undefined) as any,
-  createPortalSession: ((..._args: any[]) => undefined) as any,
-  verifyWebhookSignature: ((..._args: any[]) => undefined) as any,
-  retrieveCheckoutSession: ((..._args: any[]) => undefined) as any,
-  listInvoices: ((..._args: any[]) => undefined) as any,
-  retrieveInvoice: ((..._args: any[]) => undefined) as any,
-  sendInvoice: ((..._args: any[]) => undefined) as any,
-};
+interface ProviderMock {
+  createCheckoutSession: (input: unknown) => Promise<CheckoutSessionResult>;
+  createPortalSession: (input: unknown) => Promise<{ url: string }>;
+  retrieveCheckoutSession: (sessionId: string) => Promise<CompletedCheckoutSession>;
+  listInvoices: (input: ListInvoicesInput) => Promise<{ invoices: NormalizedInvoice[]; hasMore: boolean }>;
+  retrieveInvoice: (invoiceId: string) => Promise<NormalizedInvoice>;
+  sendInvoice: (invoiceId: string) => Promise<void>;
+  parseWebhook: (payload: string, signature: string) => Promise<BillingWebhookEvent>;
+  isTrustedPdfUrl: (url: URL) => boolean;
+}
 
-// [Deno] vi.mock removed - manually stub imports from '@/services/billing/billing'
-// [Deno] vi.mock removed - manually stub imports from '@/services/billing/stripe'
+let providerMock: ProviderMock;
+
+function newProviderMock(): ProviderMock {
+  return {
+    createCheckoutSession: ((..._a: any[]) => undefined) as any,
+    createPortalSession: ((..._a: any[]) => undefined) as any,
+    retrieveCheckoutSession: ((..._a: any[]) => undefined) as any,
+    listInvoices: ((..._a: any[]) => undefined) as any,
+    retrieveInvoice: ((..._a: any[]) => undefined) as any,
+    sendInvoice: ((..._a: any[]) => undefined) as any,
+    parseWebhook: ((..._a: any[]) => undefined) as any,
+    isTrustedPdfUrl: (url: URL) => url.hostname.endsWith(".stripe.com"),
+  };
+}
+
 import billingRoutes, { billingRouteDeps } from "@/routes/billing/routes";
 
 const TEST_TIMESTAMP = "2026-02-11T00:00:00.000Z";
@@ -87,250 +110,254 @@ function syncBillingRouteDeps() {
   billingRouteDeps.resolveBillingMode = billingMocks.resolveBillingMode as any;
   billingRouteDeps.resolveBillingPlanTier = billingMocks
     .resolveBillingPlanTier as any;
-  billingRouteDeps.createCheckoutSession = stripeMocks.createCheckoutSession;
-  billingRouteDeps.createPortalSession = stripeMocks.createPortalSession;
-  billingRouteDeps.verifyWebhookSignature = stripeMocks.verifyWebhookSignature;
-  billingRouteDeps.retrieveCheckoutSession =
-    stripeMocks.retrieveCheckoutSession;
-  billingRouteDeps.listInvoices = stripeMocks.listInvoices;
-  billingRouteDeps.retrieveInvoice = stripeMocks.retrieveInvoice;
-  billingRouteDeps.sendInvoice = stripeMocks.sendInvoice;
+  billingRouteDeps.resolvePaymentProvider = (() =>
+    ({ name: "stripe", ...providerMock }) as PaymentProvider) as any;
 }
 
 Deno.test("billing invoices API - GET /api/billing/invoices returns 500 when Stripe is not configured", async () => {
-  /* mocks cleared (no-op in Deno) */ void 0;
-  try {
-    syncBillingRouteDeps();
-    const user = createUser();
-    const app = createBillingApp(user);
-    const env = createMockEnv() as unknown as Env;
+  providerMock = newProviderMock();
+  // Simulate provider factory failing because STRIPE_SECRET_KEY is missing.
+  billingRouteDeps.resolvePaymentProvider = (() => {
+    throw new Error("STRIPE_SECRET_KEY is not configured");
+  }) as any;
 
-    const res = await app.fetch(
-      new Request("http://localhost/api/billing/invoices"),
-      env,
-      {} as ExecutionContext,
-    );
+  const user = createUser();
+  const app = createBillingApp(user);
+  const env = createMockEnv() as unknown as Env;
 
-    assertEquals(res.status, 500);
-    assertEquals(await res.json(), {
-      error: "Billing not configured",
-      code: "INTERNAL_ERROR",
-    });
-  } finally {
-    /* TODO: restore stubbed globals manually */ void 0;
-  }
+  const res = await app.fetch(
+    new Request("http://localhost/api/billing/invoices"),
+    env,
+    {} as ExecutionContext,
+  );
+
+  assertEquals(res.status, 500);
+  const body = await res.json();
+  assertEquals((body as { code: string }).code, "INTERNAL_ERROR");
 });
-Deno.test("billing invoices API - GET /api/billing/invoices returns 400 when user has no Stripe customer", async () => {
-  /* mocks cleared (no-op in Deno) */ void 0;
-  try {
-    billingMocks.getOrCreateBillingAccount = (async () => ({
-      stripeCustomerId: null,
-    })) as any;
-    syncBillingRouteDeps();
-    const user = createUser();
-    const app = createBillingApp(user);
-    const env = createMockEnv({
-      STRIPE_SECRET_KEY: "sk_test",
-    }) as unknown as Env;
 
-    const res = await app.fetch(
-      new Request("http://localhost/api/billing/invoices"),
-      env,
-      {} as ExecutionContext,
-    );
+Deno.test("billing invoices API - GET /api/billing/invoices returns 400 when user has no payment account", async () => {
+  providerMock = newProviderMock();
+  billingMocks.getOrCreateBillingAccount = (async () => ({
+    providerCustomerId: null,
+  })) as any;
+  syncBillingRouteDeps();
+  const user = createUser();
+  const app = createBillingApp(user);
+  const env = createMockEnv({
+    STRIPE_SECRET_KEY: "sk_test",
+  }) as unknown as Env;
 
-    assertEquals(res.status, 400);
-    assertEquals(await res.json(), {
-      error: "No Stripe customer found",
-      code: "BAD_REQUEST",
-    });
-  } finally {
-    /* TODO: restore stubbed globals manually */ void 0;
-  }
+  const res = await app.fetch(
+    new Request("http://localhost/api/billing/invoices"),
+    env,
+    {} as ExecutionContext,
+  );
+
+  assertEquals(res.status, 400);
+  assertEquals(await res.json(), {
+    error: "No payment account found",
+    code: "BAD_REQUEST",
+  });
 });
+
 Deno.test("billing invoices API - GET /api/billing/invoices returns invoices list", async () => {
-  /* mocks cleared (no-op in Deno) */ void 0;
-  try {
-    billingMocks.getOrCreateBillingAccount = (async () => ({
-      stripeCustomerId: "cus_123",
-    })) as any;
-    stripeMocks.listInvoices = spy(async () => ({
-      invoices: [
-        {
-          id: "in_1",
-          number: "A-1",
-          status: "paid",
-          currency: "jpy",
-          amount_due: 100,
-          amount_paid: 100,
-          total: 100,
-          created: 123,
-          period_start: 1,
-          period_end: 2,
-          hosted_invoice_url: "https://example.com/hosted",
-          invoice_pdf: "https://example.com/pdf",
-        },
-      ],
-      has_more: false,
-    })) as any;
-    syncBillingRouteDeps();
-    const user = createUser();
-    const app = createBillingApp(user);
-    const env = createMockEnv({
-      STRIPE_SECRET_KEY: "sk_test",
-    }) as unknown as Env;
+  providerMock = newProviderMock();
+  billingMocks.getOrCreateBillingAccount = (async () => ({
+    providerCustomerId: "cus_123",
+  })) as any;
+  const listInvoicesSpy = spy(async (_input: ListInvoicesInput) => ({
+    invoices: [
+      {
+        id: "in_1",
+        customerId: "cus_123",
+        number: "A-1",
+        status: "paid",
+        currency: "jpy",
+        amountDueCents: 100,
+        amountPaidCents: 100,
+        totalCents: 100,
+        createdUnix: 123,
+        periodStartUnix: 1,
+        periodEndUnix: 2,
+        hostedUrl: "https://example.com/hosted",
+        pdfUrl: "https://example.com/pdf",
+      } as NormalizedInvoice,
+    ],
+    hasMore: false,
+  }));
+  providerMock.listInvoices = listInvoicesSpy as any;
+  syncBillingRouteDeps();
+  const user = createUser();
+  const app = createBillingApp(user);
+  const env = createMockEnv({
+    STRIPE_SECRET_KEY: "sk_test",
+  }) as unknown as Env;
 
-    const res = await app.fetch(
-      new Request("http://localhost/api/billing/invoices?limit=10"),
-      env,
-      {} as ExecutionContext,
-    );
+  const res = await app.fetch(
+    new Request("http://localhost/api/billing/invoices?limit=10"),
+    env,
+    {} as ExecutionContext,
+  );
 
-    assertEquals(res.status, 200);
-    assertEquals(await res.json(), {
-      invoices: [
-        {
-          id: "in_1",
-          number: "A-1",
-          status: "paid",
-          currency: "jpy",
-          amount_due: 100,
-          amount_paid: 100,
-          total: 100,
-          created: 123,
-          period_start: 1,
-          period_end: 2,
-          hosted_invoice_url: "https://example.com/hosted",
-          invoice_pdf: "https://example.com/pdf",
-        },
-      ],
-      has_more: false,
-    });
-    const listInvoicesCall = stripeMocks.listInvoices.calls[0]?.args[0];
-    assertEquals(listInvoicesCall.customerId, "cus_123");
-    assertEquals(listInvoicesCall.limit, 10);
-  } finally {
-    /* TODO: restore stubbed globals manually */ void 0;
-  }
+  assertEquals(res.status, 200);
+  assertEquals(await res.json(), {
+    invoices: [
+      {
+        id: "in_1",
+        number: "A-1",
+        status: "paid",
+        currency: "jpy",
+        amount_due: 100,
+        amount_paid: 100,
+        total: 100,
+        created: 123,
+        period_start: 1,
+        period_end: 2,
+        hosted_invoice_url: "https://example.com/hosted",
+        invoice_pdf: "https://example.com/pdf",
+      },
+    ],
+    has_more: false,
+  });
+  const listCall = listInvoicesSpy.calls[0]?.args[0];
+  assertEquals(listCall?.customerId, "cus_123");
+  assertEquals(listCall?.limit, 10);
 });
+
 Deno.test("billing invoices API - GET /api/billing/invoices/:id/pdf returns 404 when invoice is not owned by customer", async () => {
-  /* mocks cleared (no-op in Deno) */ void 0;
-  try {
-    billingMocks.getOrCreateBillingAccount = (async () => ({
-      stripeCustomerId: "cus_123",
-    })) as any;
-    stripeMocks.retrieveInvoice = (async () => ({
-      id: "in_1",
-      customer: "cus_other",
-      invoice_pdf: "https://example.com/pdf",
-    })) as any;
-    syncBillingRouteDeps();
-    const fetchMock = spy(async () => new Response("PDF", { status: 200 }));
-    (globalThis as any).fetch = fetchMock as unknown as typeof fetch;
+  providerMock = newProviderMock();
+  billingMocks.getOrCreateBillingAccount = (async () => ({
+    providerCustomerId: "cus_123",
+  })) as any;
+  providerMock.retrieveInvoice = (async () => ({
+    id: "in_1",
+    customerId: "cus_other",
+    number: null,
+    status: null,
+    currency: null,
+    amountDueCents: null,
+    amountPaidCents: null,
+    totalCents: null,
+    createdUnix: null,
+    periodStartUnix: null,
+    periodEndUnix: null,
+    hostedUrl: null,
+    pdfUrl: "https://example.com/pdf",
+  } as NormalizedInvoice)) as any;
+  syncBillingRouteDeps();
+  const fetchMock = spy(async () => new Response("PDF", { status: 200 }));
+  (globalThis as any).fetch = fetchMock as unknown as typeof fetch;
 
-    const user = createUser();
-    const app = createBillingApp(user);
-    const env = createMockEnv({
-      STRIPE_SECRET_KEY: "sk_test",
-    }) as unknown as Env;
+  const user = createUser();
+  const app = createBillingApp(user);
+  const env = createMockEnv({
+    STRIPE_SECRET_KEY: "sk_test",
+  }) as unknown as Env;
 
-    const res = await app.fetch(
-      new Request("http://localhost/api/billing/invoices/in_1/pdf"),
-      env,
-      {} as ExecutionContext,
-    );
+  const res = await app.fetch(
+    new Request("http://localhost/api/billing/invoices/in_1/pdf"),
+    env,
+    {} as ExecutionContext,
+  );
 
-    assertEquals(res.status, 404);
-    assertEquals(await res.json(), {
-      error: "Invoice not found",
-      code: "NOT_FOUND",
-    });
-    assertSpyCalls(fetchMock, 0);
-  } finally {
-    /* TODO: restore stubbed globals manually */ void 0;
-  }
+  assertEquals(res.status, 404);
+  assertEquals(await res.json(), {
+    error: "Invoice not found",
+    code: "NOT_FOUND",
+  });
+  assertSpyCalls(fetchMock, 0);
 });
+
 Deno.test("billing invoices API - GET /api/billing/invoices/:id/pdf streams the invoice PDF", async () => {
-  /* mocks cleared (no-op in Deno) */ void 0;
-  try {
-    billingMocks.getOrCreateBillingAccount = (async () => ({
-      stripeCustomerId: "cus_123",
-    })) as any;
-    stripeMocks.retrieveInvoice = (async () => ({
-      id: "in_1",
-      customer: "cus_123",
-      invoice_pdf: "https://files.stripe.com/pdf/in_1",
-    })) as any;
-    syncBillingRouteDeps();
-    const fetchMock = spy(async () =>
-      new Response("PDFDATA", {
-        status: 200,
-        headers: { "content-length": "7" },
-      })
-    );
-    (globalThis as any).fetch = fetchMock as unknown as typeof fetch;
+  providerMock = newProviderMock();
+  billingMocks.getOrCreateBillingAccount = (async () => ({
+    providerCustomerId: "cus_123",
+  })) as any;
+  providerMock.retrieveInvoice = (async () => ({
+    id: "in_1",
+    customerId: "cus_123",
+    number: null,
+    status: null,
+    currency: null,
+    amountDueCents: null,
+    amountPaidCents: null,
+    totalCents: null,
+    createdUnix: null,
+    periodStartUnix: null,
+    periodEndUnix: null,
+    hostedUrl: null,
+    pdfUrl: "https://files.stripe.com/pdf/in_1",
+  } as NormalizedInvoice)) as any;
+  syncBillingRouteDeps();
+  const fetchMock = spy(async () =>
+    new Response("PDFDATA", {
+      status: 200,
+      headers: { "content-length": "7" },
+    })
+  );
+  (globalThis as any).fetch = fetchMock as unknown as typeof fetch;
 
-    const user = createUser();
-    const app = createBillingApp(user);
-    const env = createMockEnv({
-      STRIPE_SECRET_KEY: "sk_test",
-    }) as unknown as Env;
+  const user = createUser();
+  const app = createBillingApp(user);
+  const env = createMockEnv({
+    STRIPE_SECRET_KEY: "sk_test",
+  }) as unknown as Env;
 
-    const res = await app.fetch(
-      new Request("http://localhost/api/billing/invoices/in_1/pdf"),
-      env,
-      {} as ExecutionContext,
-    );
+  const res = await app.fetch(
+    new Request("http://localhost/api/billing/invoices/in_1/pdf"),
+    env,
+    {} as ExecutionContext,
+  );
 
-    assertEquals(res.status, 200);
-    assertEquals(res.headers.get("content-type"), "application/pdf");
-    assertEquals(
-      res.headers.get("content-disposition"),
-      'attachment; filename="stripe-invoice-in_1.pdf"',
-    );
-    assertEquals(await res.text(), "PDFDATA");
-  } finally {
-    /* TODO: restore stubbed globals manually */ void 0;
-  }
+  assertEquals(res.status, 200);
+  assertEquals(res.headers.get("content-type"), "application/pdf");
+  assertEquals(
+    res.headers.get("content-disposition"),
+    'attachment; filename="invoice-in_1.pdf"',
+  );
+  assertEquals(await res.text(), "PDFDATA");
 });
+
 Deno.test("billing invoices API - POST /api/billing/invoices/:id/send returns success", async () => {
-  /* mocks cleared (no-op in Deno) */ void 0;
-  try {
-    billingMocks.getOrCreateBillingAccount = (async () => ({
-      stripeCustomerId: "cus_123",
-    })) as any;
-    stripeMocks.retrieveInvoice = (async () => ({
-      id: "in_1",
-      customer: "cus_123",
-      invoice_pdf: "https://files.stripe.com/pdf/in_1",
-    })) as any;
-    stripeMocks.sendInvoice = spy(async () => ({
-      id: "in_1",
-      customer: "cus_123",
-    })) as any;
-    syncBillingRouteDeps();
+  providerMock = newProviderMock();
+  billingMocks.getOrCreateBillingAccount = (async () => ({
+    providerCustomerId: "cus_123",
+  })) as any;
+  providerMock.retrieveInvoice = (async () => ({
+    id: "in_1",
+    customerId: "cus_123",
+    number: null,
+    status: null,
+    currency: null,
+    amountDueCents: null,
+    amountPaidCents: null,
+    totalCents: null,
+    createdUnix: null,
+    periodStartUnix: null,
+    periodEndUnix: null,
+    hostedUrl: null,
+    pdfUrl: "https://files.stripe.com/pdf/in_1",
+  } as NormalizedInvoice)) as any;
+  const sendInvoiceSpy = spy(async (_invoiceId: string) => undefined);
+  providerMock.sendInvoice = sendInvoiceSpy as any;
+  syncBillingRouteDeps();
 
-    const user = createUser();
-    const app = createBillingApp(user);
-    const env = createMockEnv({
-      STRIPE_SECRET_KEY: "sk_test",
-    }) as unknown as Env;
+  const user = createUser();
+  const app = createBillingApp(user);
+  const env = createMockEnv({
+    STRIPE_SECRET_KEY: "sk_test",
+  }) as unknown as Env;
 
-    const res = await app.fetch(
-      new Request("http://localhost/api/billing/invoices/in_1/send", {
-        method: "POST",
-      }),
-      env,
-      {} as ExecutionContext,
-    );
+  const res = await app.fetch(
+    new Request("http://localhost/api/billing/invoices/in_1/send", {
+      method: "POST",
+    }),
+    env,
+    {} as ExecutionContext,
+  );
 
-    assertEquals(res.status, 200);
-    assertEquals(await res.json(), { success: true });
-    assertEquals(stripeMocks.sendInvoice.calls[0]?.args[0], {
-      secretKey: "sk_test",
-      invoiceId: "in_1",
-    });
-  } finally {
-    /* TODO: restore stubbed globals manually */ void 0;
-  }
+  assertEquals(res.status, 200);
+  assertEquals(await res.json(), { success: true });
+  assertEquals(sendInvoiceSpy.calls[0]?.args[0], "in_1");
 });

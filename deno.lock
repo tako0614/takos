@@ -7,7 +7,6 @@
     "jsr:@std/assert@^1.0.19": "1.0.19",
     "jsr:@std/async@^1.1.0": "1.2.0",
     "jsr:@std/data-structures@^1.0.10": "1.0.10",
-    "jsr:@std/fmt@1": "1.0.9",
     "jsr:@std/internal@^1.0.12": "1.0.12",
     "jsr:@std/testing@*": "1.0.17",
     "jsr:@std/testing@^1.0.17": "1.0.17",
@@ -29,7 +28,6 @@
     "npm:@solid-primitives/storage@^4.3.4": "4.3.4_solid-js@1.9.12",
     "npm:@solidjs/router@~0.16.1": "0.16.1_solid-js@1.9.12",
     "npm:@vueuse/core@^12.4.0": "12.8.2",
-    "npm:commander@^12.1.0": "12.1.0",
     "npm:drizzle-kit@~0.31.9": "0.31.10",
     "npm:drizzle-orm@~0.45.1": "0.45.2_@cloudflare+workers-types@4.20260331.1_@libsql+client@0.17.2_pg@8.20.0",
     "npm:fflate@~0.8.2": "0.8.2",
@@ -53,7 +51,6 @@
     "npm:vue@^3.5.0": "3.5.31",
     "npm:wrangler@*": "4.79.0_@cloudflare+workers-types@4.20260331.1",
     "npm:wrangler@^4.61.0": "4.79.0_@cloudflare+workers-types@4.20260331.1",
-    "npm:ws@^8.19.0": "8.20.0",
     "npm:yaml@^2.8.2": "2.8.3",
     "npm:zod@^3.25.32": "3.25.76"
   },
@@ -69,9 +66,6 @@
     },
     "@std/data-structures@1.0.10": {
       "integrity": "f574f86b0e07c69b9edc555fcc814b57d29258bad39fd5a34ba8a80ecf033cfe"
-    },
-    "@std/fmt@1.0.9": {
-      "integrity": "2487343e8899fb2be5d0e3d35013e54477ada198854e52dd05ed0422eddcabe0"
     },
     "@std/internal@1.0.12": {
       "integrity": "972a634fd5bc34b242024402972cd5143eac68d8dffaca5eaa4dba30ce17b027"
@@ -1058,7 +1052,7 @@
         "@puppeteer/browsers",
         "debug",
         "devtools-protocol",
-        "ws@8.20.0"
+        "ws"
       ]
     },
     "@cloudflare/unenv-preset@2.16.0_unenv@2.0.0-rc.24_workerd@1.20260329.1": {
@@ -2034,7 +2028,7 @@
       "integrity": "sha512-DtLWIH29onUYR00i0GlQ3UdcTRC6EP4u9w/h9LxpUZJWRMARk6dQwZ6Jkd+QdwVpuAOrdxt18v0K2uIYR3fwFg==",
       "dependencies": [
         "@types/ws",
-        "ws@8.20.0"
+        "ws"
       ]
     },
     "@libsql/linux-arm-gnueabihf@0.5.29": {
@@ -3373,9 +3367,6 @@
     "comma-separated-tokens@2.0.3": {
       "integrity": "sha512-Fu4hJdvzeylCfQPp9SGWidpzrMs7tTrlu6Vb8XGaRGck8QSNZJJp538Wrb60Lax4fPwR64ViY468OIUTbRlGZg=="
     },
-    "commander@12.1.0": {
-      "integrity": "sha512-Vw8qHK3bZM9y/P10u3Vib8o/DdkvA2OtPtZvD871QKjy74Wj1WSKFILMPRPSdUSx5RFK1arlJzEtA4PkFgnbuA=="
-    },
     "console-table-printer@2.15.0": {
       "integrity": "sha512-SrhBq4hYVjLCkBVOWaTzceJalvn5K1Zq5aQA6wXC/cYjI3frKWNPEMK3sZsJfNNQApvCQmgBcc13ZKmFj8qExw==",
       "dependencies": [
@@ -4244,12 +4235,10 @@
         "openai",
         "p-queue@6.6.2",
         "semver@7.7.4",
-        "uuid@10.0.0",
-        "ws@8.20.0"
+        "uuid@10.0.0"
       ],
       "optionalPeers": [
-        "openai",
-        "ws@8.20.0"
+        "openai"
       ]
     },
     "libsql@0.5.29": {
@@ -4391,7 +4380,7 @@
         "sharp",
         "undici",
         "workerd",
-        "ws@8.18.0",
+        "ws",
         "youch"
       ],
       "bin": true
@@ -4492,11 +4481,9 @@
     "openai@6.33.0_ws@8.20.0_zod@3.25.76": {
       "integrity": "sha512-xAYN1W3YsDXJWA5F277135YfkEk6H7D3D6vWwRhJ3OEkzRgcyK8z/P5P9Gyi/wB4N8kK9kM5ZjprfvyHagKmpw==",
       "dependencies": [
-        "ws@8.20.0",
         "zod"
       ],
       "optionalPeers": [
-        "ws@8.20.0",
         "zod"
       ],
       "bin": true
@@ -5500,9 +5487,6 @@
     "ws@8.18.0": {
       "integrity": "sha512-8VbfWfHLbbwu3+N6OKsOMpBdT4kXPDDB9cJk2bJ6mh9ucxdlnNvH1e+roYkKmN9Nxw2yjz7VzeO9oOz2zJ04Pw=="
     },
-    "ws@8.20.0": {
-      "integrity": "sha512-sAt8BhgNbzCtgGbt2OxmpuryO63ZoDk/sqaB/znQm94T4fCEsy/yV+7CdC1kJhOU9lboAEU7R3kquuycDoibVA=="
-    },
     "xtend@4.0.2": {
       "integrity": "sha512-LKYU1iAXJXUgAXn9URjiu+MWhyUXHsvfp7mcuYm9dSUKK0/CjtrUwFAxD82/mCWbtLsGjFIad0wIsod4zrTAEQ=="
     },
@@ -5573,16 +5557,6 @@
   },
   "workspace": {
     "members": {
-      "apps/cli": {
-        "dependencies": [
-          "jsr:@std/assert@^1.0.19",
-          "jsr:@std/fmt@1",
-          "jsr:@std/testing@^1.0.17",
-          "npm:commander@^12.1.0",
-          "npm:ws@^8.19.0",
-          "npm:yaml@^2.8.2"
-        ]
-      },
       "apps/control": {
         "dependencies": [
           "jsr:@std/assert@1.0.19",

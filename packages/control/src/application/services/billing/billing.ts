@@ -62,3 +62,16 @@ export {
 
 // Run-level batch usage recording
 export { recordRunUsageBatch } from './billing-run-usage.ts';
+
+// Payment provider abstraction
+export type {
+  BillingWebhookEvent,
+  CheckoutSessionResult,
+  CompletedCheckoutSession,
+  CreateCheckoutInput,
+  CreatePortalInput,
+  ListInvoicesInput,
+  NormalizedInvoice,
+  PaymentProvider,
+} from './payment-provider.ts';
+export { resolvePaymentProvider } from './providers/index.ts';

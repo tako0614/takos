@@ -235,8 +235,9 @@ export async function loadBillingAccountWithPlan(db: Database, accountIdFilter: 
     planId: account.planId,
     balanceCents: account.balanceCents,
     status: account.status,
-    stripeCustomerId: account.stripeCustomerId ?? null,
-    stripeSubscriptionId: account.stripeSubscriptionId ?? null,
+    providerName: account.providerName,
+    providerCustomerId: account.providerCustomerId ?? null,
+    providerSubscriptionId: account.providerSubscriptionId ?? null,
     subscriptionPeriodEnd: account.subscriptionPeriodEnd ?? null,
     billingPlan: {
       id: plan.id,

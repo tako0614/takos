@@ -49,8 +49,8 @@ Cloudflare R2 compatibility aliases (`R2_ACCOUNT_ID`, `R2_ACCESS_KEY_ID`, etc.) 
 The runtime ships with a multi-stage `Dockerfile` based on `denoland/deno:alpine-2`. The image includes git, curl, wget, and unzip for user action execution, and installs the `takos` CLI globally.
 
 ```sh
-# Build from the takos monorepo root
-cd takos && docker build -f apps/runtime/Dockerfile -t takos-runtime .
+# Build from the ecosystem root (includes ../takos-cli)
+cd takos && docker build -f takos/apps/runtime/Dockerfile -t takos-runtime ..
 
 # Run
 docker run -p 8080:8080 --env-file apps/runtime/.env takos-runtime

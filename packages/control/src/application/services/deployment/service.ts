@@ -5,23 +5,23 @@
  * execution, rollback, and query operations by delegating to the executor,
  * rollback, artifact, and helper sub-modules.
  */
-import type { WorkerBinding } from '../../../platform/providers/cloudflare/wfp.ts';
-import { generateId } from '../../../shared/utils/index.ts';
-import { encrypt, encryptEnvVars } from '../../../shared/utils/crypto.ts';
-import { computeSHA256 } from '../../../shared/utils/hash.ts';
-import { ServiceDesiredStateService } from '../platform/worker-desired-state.ts';
+import type { WorkerBinding } from "../../../platform/providers/cloudflare/wfp.ts";
+import { generateId } from "../../../shared/utils/index.ts";
+import { encrypt, encryptEnvVars } from "../../../shared/utils/crypto.ts";
+import { computeSHA256 } from "../../../shared/utils/hash.ts";
+import { ServiceDesiredStateService } from "../platform/worker-desired-state.ts";
 import type {
   ArtifactKind,
-  Deployment,
-  DeploymentEvent,
-  DeploymentEnv,
   CreateDeploymentInput,
+  Deployment,
+  DeploymentEnv,
+  DeploymentEvent,
   RollbackInput,
-} from './models.ts';
+} from "./models.ts";
 import {
   parseDeploymentTargetConfig,
   serializeDeploymentTarget,
-} from './provider.ts';
+} from "./provider.ts";
 import {
   createDeploymentWithVersion,
   getDeploymentById,
@@ -31,29 +31,33 @@ import {
   getServiceDeploymentBasics,
   logDeploymentEvent,
   updateDeploymentRecord,
-} from './store.ts';
-import { detectStuckDeployments, resetStuckDeployment } from './state.ts';
-import { getDb, services } from '../../../infra/db/index.ts';
-import { eq } from 'drizzle-orm';
-import { logError } from '../../../shared/utils/logger.ts';
-import { BadRequestError, InternalError, NotFoundError } from 'takos-common/errors';
+} from "./store.ts";
+import { detectStuckDeployments, resetStuckDeployment } from "./state.ts";
+import { getDb, services } from "../../../infra/db/index.ts";
+import { eq } from "drizzle-orm";
+import { logError } from "../../../shared/utils/logger.ts";
 import {
+  BadRequestError,
+  InternalError,
+  NotFoundError,
+} from "takos-common/errors";
+import {
+  assertMatchingIdempotentRequest,
   resolveDeploymentArtifactBaseRef,
   resolveDeploymentServiceId,
   snapshotFromOverride,
-  assertMatchingIdempotentRequest,
-} from './artifact-refs.ts';
+} from "./artifact-refs.ts";
 // Re-export for backward compatibility — external code imports buildDeploymentArtifactRef / DeploymentEnv from here.
-export { buildDeploymentArtifactRef } from './artifact-refs.ts';
-export type { DeploymentEnv } from './models.ts';
-import { buildDeploymentArtifactRef } from './artifact-refs.ts';
-import { executeDeploymentPipeline } from './execute.ts';
-import { executeRollback } from './rollback-orchestrator.ts';
+export { buildDeploymentArtifactRef } from "./artifact-refs.ts";
+export type { DeploymentEnv } from "./models.ts";
+import { buildDeploymentArtifactRef } from "./artifact-refs.ts";
+import { executeDeploymentPipeline } from "./execute.ts";
+import { executeRollback } from "./rollback-orchestrator.ts";
 import {
+  decryptBindings,
   getEnvVars,
   getMaskedEnvVars,
-  decryptBindings,
-} from './artifact-io.ts';
+} from "./artifact-io.ts";
 
 export class DeploymentService {
   private encryptionKey: string;
@@ -62,9 +66,11 @@ export class DeploymentService {
     private env: DeploymentEnv,
     encryptionKey?: string,
   ) {
-    this.encryptionKey = encryptionKey ?? env.ENCRYPTION_KEY ?? '';
+    this.encryptionKey = encryptionKey ?? env.ENCRYPTION_KEY ?? "";
     if (!this.encryptionKey) {
-      throw new InternalError('ENCRYPTION_KEY must be set for deployment service');
+      throw new InternalError(
+        "ENCRYPTION_KEY must be set for deployment service",
+      );
     }
   }
 
@@ -73,44 +79,55 @@ export class DeploymentService {
     const now = new Date().toISOString();
     const serviceId = resolveDeploymentServiceId(input);
 
-    const serviceBasics = await getServiceDeploymentBasics(this.env.DB, serviceId);
+    const serviceBasics = await getServiceDeploymentBasics(
+      this.env.DB,
+      serviceId,
+    );
     if (!serviceBasics.exists) {
-      throw new NotFoundError('Worker');
+      throw new NotFoundError("Worker");
     }
 
-    const artifactKind: ArtifactKind = input.artifactKind ?? 'worker-bundle';
-    const isContainerDeploy = artifactKind === 'container-image';
+    const artifactKind: ArtifactKind = input.artifactKind ?? "worker-bundle";
+    const isContainerDeploy = artifactKind === "container-image";
 
     // Enforce same-kind rule: a service cannot mix artifact kinds after its first deploy.
-    if (serviceBasics.workloadKind && serviceBasics.workloadKind !== artifactKind) {
+    if (
+      serviceBasics.workloadKind && serviceBasics.workloadKind !== artifactKind
+    ) {
       throw new BadRequestError(
-        `Service workload kind is '${serviceBasics.workloadKind}'; cannot deploy '${artifactKind}'`
+        `Service workload kind is '${serviceBasics.workloadKind}'; cannot deploy '${artifactKind}'`,
       );
     }
 
-    const strategy = input.strategy ?? 'direct';
+    const strategy = input.strategy ?? "direct";
     const requestedCanaryWeight = input.canaryWeight ?? 1;
-    const defaultProvider = input.provider
-      ?? (!isContainerDeploy
-        && (!this.env.CF_ACCOUNT_ID || !this.env.CF_API_TOKEN || !this.env.WFP_DISPATCH_NAMESPACE)
-        ? { name: 'runtime-host' as const }
-        : undefined);
     const serializedTarget = serializeDeploymentTarget({
-      provider: defaultProvider,
+      provider: input.provider,
       target: input.target,
     });
     const normalizedTarget = parseDeploymentTargetConfig({
       provider_name: serializedTarget.providerName,
       target_json: serializedTarget.targetJson,
     });
-    const artifactBaseRef = resolveDeploymentArtifactBaseRef(serviceId, normalizedTarget);
+    const artifactBaseRef = resolveDeploymentArtifactBaseRef(
+      serviceId,
+      normalizedTarget,
+    );
 
-    const bundleHash = isContainerDeploy ? null : await computeSHA256(input.bundleContent!);
-    const bundleSize = isContainerDeploy ? null : new TextEncoder().encode(input.bundleContent!).byteLength;
+    const bundleHash = isContainerDeploy
+      ? null
+      : await computeSHA256(input.bundleContent!);
+    const bundleSize = isContainerDeploy
+      ? null
+      : new TextEncoder().encode(input.bundleContent!).byteLength;
     const imageRef = normalizedTarget.artifact?.image_ref;
 
     if (input.idempotencyKey) {
-      const existing = await getDeploymentByIdempotencyKey(this.env.DB, serviceId, input.idempotencyKey);
+      const existing = await getDeploymentByIdempotencyKey(
+        this.env.DB,
+        serviceId,
+        input.idempotencyKey,
+      );
       if (existing) {
         assertMatchingIdempotentRequest(existing, {
           artifactKind,
@@ -133,21 +150,24 @@ export class DeploymentService {
       envVarsSnapshotEncrypted = await encryptEnvVars(
         snapshot.envVars,
         this.encryptionKey,
-        deploymentId
+        deploymentId,
       );
     }
 
     let bindingsSnapshotEncrypted: string | null = null;
     if (snapshot.bindings.length > 0) {
       const bindingsJson = JSON.stringify(snapshot.bindings);
-      const encrypted = await encrypt(bindingsJson, this.encryptionKey, deploymentId);
+      const encrypted = await encrypt(
+        bindingsJson,
+        this.encryptionKey,
+        deploymentId,
+      );
       bindingsSnapshotEncrypted = JSON.stringify(encrypted);
     }
     const runtimeConfigSnapshotJson = JSON.stringify({
       compatibility_date: snapshot.runtimeConfig.compatibility_date,
       compatibility_flags: snapshot.runtimeConfig.compatibility_flags,
       limits: snapshot.runtimeConfig.limits,
-      mcp_server: snapshot.runtimeConfig.mcp_server,
     });
 
     const uploadedR2Keys: string[] = [];
@@ -165,18 +185,22 @@ export class DeploymentService {
           serviceId,
           accountId: input.spaceId,
           version,
-          bundleR2Key: isContainerDeploy ? null : `deployments/${serviceId}/${version}/bundle.js`,
+          bundleR2Key: isContainerDeploy
+            ? null
+            : `deployments/${serviceId}/${version}/bundle.js`,
           bundleHash,
           bundleSize,
-          wasmR2Key: (!isContainerDeploy && input.wasmContent) ? `deployments/${serviceId}/${version}/module.wasm` : null,
+          wasmR2Key: (!isContainerDeploy && input.wasmContent)
+            ? `deployments/${serviceId}/${version}/module.wasm`
+            : null,
           wasmHash: null,
           runtimeConfigSnapshotJson,
           bindingsSnapshotEncrypted,
           envVarsSnapshotEncrypted,
-          deployState: 'pending',
-          status: 'pending',
-          routingStatus: strategy === 'canary' ? 'canary' : 'active',
-          routingWeight: strategy === 'canary' ? requestedCanaryWeight : 100,
+          deployState: "pending",
+          status: "pending",
+          routingStatus: strategy === "canary" ? "canary" : "active",
+          routingWeight: strategy === "canary" ? requestedCanaryWeight : 100,
           deployedBy: input.userId,
           deployMessage: input.deployMessage || null,
           providerName: serializedTarget.providerName,
@@ -186,7 +210,7 @@ export class DeploymentService {
           startedAt: now,
           createdAt: now,
           updatedAt: now,
-        })
+        }),
       );
 
       // Lock workload_kind on first deploy
@@ -217,14 +241,25 @@ export class DeploymentService {
         }
       }
 
-      await logDeploymentEvent(this.env.DB, deploymentId, 'started', null, 'Deployment created', {
-        actorAccountId: input.userId ?? null,
-      });
+      await logDeploymentEvent(
+        this.env.DB,
+        deploymentId,
+        "started",
+        null,
+        "Deployment created",
+        {
+          actorAccountId: input.userId ?? null,
+        },
+      );
 
       return deployment;
     } catch (error) {
       if (input.idempotencyKey) {
-        const existing = await getDeploymentByIdempotencyKey(this.env.DB, serviceId, input.idempotencyKey);
+        const existing = await getDeploymentByIdempotencyKey(
+          this.env.DB,
+          serviceId,
+          input.idempotencyKey,
+        );
         if (existing) {
           assertMatchingIdempotentRequest(existing, {
             artifactKind,
@@ -242,7 +277,9 @@ export class DeploymentService {
           try {
             await this.env.WORKER_BUNDLES.delete(key);
           } catch (cleanupErr) {
-            logError(`Failed to clean up R2 artifact ${key}`, cleanupErr, { module: 'deployment' });
+            logError(`Failed to clean up R2 artifact ${key}`, cleanupErr, {
+              module: "deployment",
+            });
           }
         }
       }
@@ -251,15 +288,28 @@ export class DeploymentService {
   }
 
   async executeDeployment(deploymentId: string): Promise<Deployment> {
-    return executeDeploymentPipeline(this.env, this.encryptionKey, deploymentId);
+    return executeDeploymentPipeline(
+      this.env,
+      this.encryptionKey,
+      deploymentId,
+    );
   }
 
   async rollback(input: RollbackInput): Promise<Deployment> {
     return executeRollback(this.env, input);
   }
 
-  async rollbackWorker(workerId: string, userId: string, targetVersion?: number): Promise<Deployment> {
-    return this.rollback({ serviceId: workerId, workerId, userId, targetVersion });
+  async rollbackWorker(
+    workerId: string,
+    userId: string,
+    targetVersion?: number,
+  ): Promise<Deployment> {
+    return this.rollback({
+      serviceId: workerId,
+      workerId,
+      userId,
+      targetVersion,
+    });
   }
 
   async resumeDeployment(deploymentId: string): Promise<Deployment> {
@@ -269,7 +319,9 @@ export class DeploymentService {
       throw new NotFoundError(`Deployment ${deploymentId}`);
     }
 
-    if (deployment.status === 'success' || deployment.status === 'rolled_back') {
+    if (
+      deployment.status === "success" || deployment.status === "rolled_back"
+    ) {
       return deployment;
     }
 
@@ -287,7 +339,10 @@ export class DeploymentService {
     return getDeploymentById(this.env.DB, deploymentId);
   }
 
-  async getDeploymentHistory(serviceId: string, limit: number = 10): Promise<Deployment[]> {
+  async getDeploymentHistory(
+    serviceId: string,
+    limit: number = 10,
+  ): Promise<Deployment[]> {
     return getDeploymentHistory(this.env.DB, serviceId, limit);
   }
 
@@ -299,7 +354,9 @@ export class DeploymentService {
     return getEnvVars(this.encryptionKey, deployment);
   }
 
-  async getMaskedEnvVars(deployment: Deployment): Promise<Record<string, string>> {
+  async getMaskedEnvVars(
+    deployment: Deployment,
+  ): Promise<Record<string, string>> {
     return getMaskedEnvVars(this.encryptionKey, deployment);
   }
 
@@ -322,7 +379,9 @@ export class DeploymentService {
       await resetStuckDeployment(
         this.env.DB,
         deployment.id,
-        `Deployment stuck in step "${deployment.current_step}" for over ${Math.round((timeoutMs || 600000) / 60000)} minutes; auto-reset to failed`
+        `Deployment stuck in step "${deployment.current_step}" for over ${
+          Math.round((timeoutMs || 600000) / 60000)
+        } minutes; auto-reset to failed`,
       );
     }
     return stuck.length;

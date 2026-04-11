@@ -1,4 +1,4 @@
-export { getDb, type Database } from './client.ts';
+export { type Database, getDb } from "./client.ts";
 
 // Accounts
 export {
@@ -10,12 +10,12 @@ export {
   accountMetadata,
   accountModeration,
   accountMutes,
+  accounts,
   accountSettings,
   accountStats,
   accountStorageFiles,
-  accounts,
   authIdentities,
-} from './schema.ts';
+} from "./schema.ts";
 
 // Auth
 export {
@@ -24,7 +24,7 @@ export {
   authSessions,
   personalAccessTokens,
   serviceTokens,
-} from './schema.ts';
+} from "./schema.ts";
 
 // Billing
 export {
@@ -36,7 +36,7 @@ export {
   billingTransactions,
   usageEvents,
   usageRollups,
-} from './schema.ts';
+} from "./schema.ts";
 
 // Repos
 export {
@@ -55,11 +55,11 @@ export {
   repoReleaseAssets,
   repoReleases,
   repoRemotes,
-  repoStars,
   repositories,
+  repoStars,
   snapshots,
   tags,
-} from './schema.ts';
+} from "./schema.ts";
 
 // Agents
 export {
@@ -74,20 +74,22 @@ export {
   runEvents,
   runs,
   skills,
-  threadShares,
   threads,
+  threadShares,
   toolOperations,
-} from './schema.ts';
+} from "./schema.ts";
 
 // Services
 export {
-  serviceBindings,
-  serviceCommonEnvLinks,
-  services,
-  physicalServices,
   physicalServiceBindings,
   physicalServiceCommonEnvLinks,
-} from './schema.ts';
+  physicalServices,
+  publications,
+  serviceBindings,
+  serviceCommonEnvLinks,
+  serviceConsumes,
+  services,
+} from "./schema.ts";
 
 // OAuth
 export {
@@ -100,10 +102,11 @@ export {
   oauthDeviceCodes,
   oauthStates,
   oauthTokens,
-} from './schema.ts';
+} from "./schema.ts";
 
 // Platform
 export {
+  apFollowers,
   dlqEntries,
   edges,
   fileHandlerMatchers,
@@ -114,44 +117,40 @@ export {
   moderationAuditLogs,
   nodes,
   notificationPreferences,
-  notificationSettings,
   notifications,
-  apFollowers,
-  reports,
+  notificationSettings,
   repoGrants,
   repoPushActivities,
-  storeInventoryItems,
+  reports,
   resourceAccess,
   resourceAccessTokens,
   resources,
   serviceEndpoints,
+  serviceRuntimes,
   sessionFiles,
   sessionRepos,
   sessions,
-  serviceRuntimes,
   shortcutGroupItems,
   shortcutGroups,
   shortcuts,
+  storeInventoryItems,
   storeRegistry,
   storeRegistryUpdates,
   uiExtensions,
-} from './schema.ts';
+} from "./schema.ts";
 
 // Workflows
 export {
   workflowArtifacts,
   workflowJobs,
   workflowRuns,
+  workflows,
   workflowSecrets,
   workflowSteps,
-  workflows,
-} from './schema.ts';
+} from "./schema.ts";
 
 // Groups
-export {
-  appDeployments,
-  groups,
-} from './schema.ts';
+export { appDeployments, groups } from "./schema.ts";
 
 // Workers
 export {
@@ -182,4 +181,4 @@ export {
   workerRuntimeLimits,
   workerRuntimeSettings,
   workers,
-} from './schema.ts';
+} from "./schema.ts";

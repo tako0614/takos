@@ -10,6 +10,7 @@ import {
 import { and, desc, eq, inArray, or, sql } from "drizzle-orm";
 import { resolveActorPrincipalId as realResolveActorPrincipalId } from "../identity/principals.ts";
 import { resolveAccessibleAccountIds as realResolveAccessibleAccountIds } from "../identity/membership-resolver.ts";
+import { deleteServiceConsumes } from "./service-publications.ts";
 import { textDate } from "../../../shared/utils/db-guards.ts";
 
 const MAX_SERVICES = 100;
@@ -525,5 +526,16 @@ export async function createService(
 
 export async function deleteService(d1: D1Database, serviceId: string) {
   const db = workerServiceDeps.getDb(d1);
+  const existing = await db.select({
+    accountId: services.accountId,
+  }).from(services).where(eq(services.id, serviceId)).get();
+  if (existing) {
+    await deleteServiceConsumes({
+      DB: d1,
+    }, {
+      spaceId: existing.accountId,
+      serviceId,
+    }).catch(() => undefined);
+  }
   await db.delete(services).where(eq(services.id, serviceId));
 }

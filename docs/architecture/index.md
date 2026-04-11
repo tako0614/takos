@@ -36,8 +36,12 @@ kernel が提供するもの:
 ## 詳細ページ
 
 - [Kernel](./kernel.md) — Takos の定義、routing、publication
-- [Deploy System](./deploy-system.md) — primitive (Layer 1) と group (Layer 2) の二層モデル、deploy pipeline
-- [App Publications](./app-publications.md) — publication の仕組みと env injection
+- [Personal Runtime Proposal](./personal-runtime.md) — 1人用 runtime +
+  distribution service への再設計案
+- [Deploy System](./deploy-system.md) — primitive (Layer 1) と group (Layer 2)
+  の二層モデル、deploy pipeline
+- [App Publications](./app-publications.md) — publication の仕組みと env
+  injection
 - [Control Plane](./control-plane.md) — API, DB, routing layer
 - [Tenant Runtime](./tenant-runtime.md) — dispatch, worker execution, container
 - [互換性と制限](./compatibility.md) — backend parity

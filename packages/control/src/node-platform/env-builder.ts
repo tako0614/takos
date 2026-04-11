@@ -330,6 +330,7 @@ export async function createNodeWebEnv(): Promise<Env> {
     ANTHROPIC_API_KEY: optionalEnv('ANTHROPIC_API_KEY'),
     GOOGLE_API_KEY: optionalEnv('GOOGLE_API_KEY'),
     SERPER_API_KEY: optionalEnv('SERPER_API_KEY'),
+    BILLING_PROVIDER: optionalEnv('BILLING_PROVIDER'),
     STRIPE_SECRET_KEY: optionalEnv('STRIPE_SECRET_KEY'),
     STRIPE_WEBHOOK_SECRET: optionalEnv('STRIPE_WEBHOOK_SECRET'),
     STRIPE_PLUS_PRICE_ID: optionalEnv('STRIPE_PLUS_PRICE_ID'),

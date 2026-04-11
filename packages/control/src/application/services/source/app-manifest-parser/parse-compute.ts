@@ -15,11 +15,11 @@
 
 import type {
   AppCompute,
+  AppConsume,
   AppTriggers,
   BuildConfig,
   ComputeKind,
   HealthCheck,
-  QueueTrigger,
   ScheduleTrigger,
   VolumeMount,
 } from "../app-manifest-types.ts";
@@ -177,39 +177,6 @@ function parseSchedules(
   });
 }
 
-function parseQueues(
-  prefix: string,
-  raw: unknown,
-): QueueTrigger[] | undefined {
-  if (raw == null) return undefined;
-  if (!Array.isArray(raw)) {
-    throw new Error(`${prefix}.triggers.queues must be an array`);
-  }
-  return raw.map((entry, index) => {
-    const record = asRecord(entry);
-    // Canonical flat field is `storage` — legacy `queue` field is ignored.
-    const storage = asRequiredString(
-      record.storage,
-      `${prefix}.triggers.queues[${index}].storage`,
-    );
-    const batchSize = asOptionalInteger(
-      record.batchSize,
-      `${prefix}.triggers.queues[${index}].batchSize`,
-      { min: 1 },
-    );
-    const maxRetries = asOptionalInteger(
-      record.maxRetries,
-      `${prefix}.triggers.queues[${index}].maxRetries`,
-      { min: 0 },
-    );
-    return {
-      storage,
-      ...(batchSize != null ? { batchSize } : {}),
-      ...(maxRetries != null ? { maxRetries } : {}),
-    };
-  });
-}
-
 function parseTriggers(
   prefix: string,
   raw: unknown,
@@ -217,12 +184,50 @@ function parseTriggers(
   if (raw == null) return undefined;
   const record = asRecord(raw);
   const schedules = parseSchedules(prefix, record.schedules);
-  const queues = parseQueues(prefix, record.queues);
+  if (record.queues != null) {
+    throw new Error(
+      `${prefix}.triggers.queues is retired. Publish a queue provider and consume its outputs instead.`,
+    );
+  }
   const result: AppTriggers = {
     ...(schedules && schedules.length > 0 ? { schedules } : {}),
-    ...(queues && queues.length > 0 ? { queues } : {}),
   };
   return Object.keys(result).length > 0 ? result : undefined;
+}
+
+function parseConsume(
+  prefix: string,
+  raw: unknown,
+): AppConsume[] | undefined {
+  if (raw == null) return undefined;
+  if (!Array.isArray(raw)) {
+    throw new Error(`${prefix}.consume must be an array`);
+  }
+
+  const result: AppConsume[] = raw.map((entry, index) => {
+    const record = asRecord(entry);
+    const env = asStringMap(record.env, `${prefix}.consume[${index}].env`);
+    return {
+      publication: asRequiredString(
+        record.publication,
+        `${prefix}.consume[${index}].publication`,
+      ),
+      ...(env ? { env } : {}),
+    };
+  });
+
+  const seen = new Set<string>();
+  for (const entry of result) {
+    const key = entry.publication.trim();
+    if (seen.has(key)) {
+      throw new Error(
+        `${prefix}.consume contains duplicate publication reference: ${key}`,
+      );
+    }
+    seen.add(key);
+  }
+
+  return result;
 }
 
 // ============================================================
@@ -280,7 +285,10 @@ function parseComputeEntry(
     })()
     : undefined;
   const env = asStringMap(record.env, `${prefix}.env`);
-  const readiness = validateReadinessPath(record.readiness, `${prefix}.readiness`);
+  const readiness = validateReadinessPath(
+    record.readiness,
+    `${prefix}.readiness`,
+  );
   const scaling = validateServiceScaling(record.scaling, `${prefix}.scaling`);
   const instanceType = validateInstanceType(
     record.instanceType,
@@ -291,11 +299,17 @@ function parseComputeEntry(
   const depends = asStringArray(record.depends, `${prefix}.depends`);
   const triggers = parseTriggers(prefix, record.triggers);
   const dockerfile = asString(record.dockerfile, `${prefix}.dockerfile`);
+  const consume = parseConsume(prefix, record.consume);
   const maxInstances = asOptionalInteger(
     record.maxInstances,
     `${prefix}.maxInstances`,
     { min: 1 },
   );
+  if (record.capabilities != null) {
+    throw new Error(
+      `${prefix}.capabilities is retired. Use top-level publish + ${prefix}.consume instead.`,
+    );
+  }
 
   // Health check only applies to service / attached compute
   let healthCheck: HealthCheck | undefined;
@@ -351,6 +365,7 @@ function parseComputeEntry(
     ...(triggers ? { triggers } : {}),
     ...(healthCheck ? { healthCheck } : {}),
     ...(dockerfile ? { dockerfile: normalizeRepoPath(dockerfile) } : {}),
+    ...(consume ? { consume } : {}),
     ...(maxInstances != null ? { maxInstances } : {}),
   };
 }

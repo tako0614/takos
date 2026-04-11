@@ -5,19 +5,16 @@ import {
   serviceRuntimeSettings,
   serviceRuntimeFlags,
   serviceRuntimeLimits,
-  serviceMcpEndpoints,
 } from '../../../infra/db/index.ts';
 import { eq, and } from 'drizzle-orm';
 import { normalizeLimits, parseRuntimeRow } from './resource-bindings.ts';
 import type {
   DesiredStateEnv,
-  ServiceManagedMcpServerState,
   ServiceRuntimeConfigState,
   ServiceRuntimeLimits,
   ServiceRuntimeRow,
   ServiceRuntimeFlagRow,
   ServiceRuntimeLimitRow,
-  ServiceRuntimeMcpEndpointRow,
 } from './desired-state-types.ts';
 
 export async function getRuntimeConfig(
@@ -27,7 +24,7 @@ export async function getRuntimeConfig(
 ): Promise<ServiceRuntimeConfigState> {
   const db = getDb(env.DB);
 
-  const [row, flagRows, limitsRow, mcpRows] = await Promise.all([
+  const [row, flagRows, limitsRow] = await Promise.all([
     db.select({
       compatibilityDate: serviceRuntimeSettings.compatibilityDate,
       updatedAt: serviceRuntimeSettings.updatedAt,
@@ -53,23 +50,12 @@ export async function getRuntimeConfig(
       .from(serviceRuntimeLimits)
       .where(eq(serviceRuntimeLimits.serviceId, serviceId))
       .get(),
-
-    db.select({
-      name: serviceMcpEndpoints.name,
-      path: serviceMcpEndpoints.path,
-      enabled: serviceMcpEndpoints.enabled,
-    })
-      .from(serviceMcpEndpoints)
-      .where(eq(serviceMcpEndpoints.serviceId, serviceId))
-      .orderBy(serviceMcpEndpoints.name)
-      .all(),
   ]);
 
   return parseRuntimeRow(
     (row as ServiceRuntimeRow) || null,
     flagRows as ServiceRuntimeFlagRow[],
     (limitsRow as ServiceRuntimeLimitRow) || null,
-    mcpRows as ServiceRuntimeMcpEndpointRow[]
   );
 }
 
@@ -82,7 +68,6 @@ export async function saveRuntimeConfig(
     compatibilityDate?: string;
     compatibilityFlags?: string[];
     limits?: ServiceRuntimeLimits;
-    mcpServer?: ServiceManagedMcpServerState;
   }
 ): Promise<ServiceRuntimeConfigState> {
   const db = getDb(env.DB);
@@ -134,20 +119,6 @@ export async function saveRuntimeConfig(
         cpuMs: limits.cpu_ms ?? null,
         memoryMb: null,
         subrequestLimit: limits.subrequests ?? null,
-      });
-  }
-
-  // Replace MCP endpoints: delete all then insert
-  await db.delete(serviceMcpEndpoints)
-    .where(eq(serviceMcpEndpoints.serviceId, serviceId));
-
-  if (params.mcpServer) {
-    await db.insert(serviceMcpEndpoints)
-      .values({
-        serviceId,
-        name: params.mcpServer.name,
-        path: params.mcpServer.path,
-        enabled: !!params.mcpServer.enabled,
       });
   }
 

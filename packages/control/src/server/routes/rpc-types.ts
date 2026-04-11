@@ -18,7 +18,6 @@ import spacesBase from './spaces/routes.ts';
 import spacesMembers from './spaces/members.ts';
 import spacesRepos from './spaces/repositories.ts';
 import spacesStorage from './spaces/storage.ts';
-import spacesCommonEnv from './spaces/common-env.ts';
 import spacesStores from './spaces/stores.ts';
 import spacesStoreRegistry from './spaces/store-registry.ts';
 import services from './workers/index.ts';
@@ -60,7 +59,6 @@ const apiRoutes = new Hono<ApiEnv>()
   .route('/spaces', spacesMembers)
   .route('/spaces', spacesRepos)
   .route('/spaces', spacesStorage)
-  .route('/spaces', spacesCommonEnv)
   .route('/spaces', spacesStores)
   .route('/spaces', spacesStoreRegistry)
   .route('/services', services)

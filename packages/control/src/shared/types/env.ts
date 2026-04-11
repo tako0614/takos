@@ -195,6 +195,8 @@ export interface Env
   ENCRYPTION_KEY?: string;
   AUDIT_IP_HASH_KEY?: string;
   // Billing
+  /** Active payment provider name. Defaults to 'stripe'. */
+  BILLING_PROVIDER?: string;
   STRIPE_SECRET_KEY?: string;
   STRIPE_WEBHOOK_SECRET?: string;
   STRIPE_PLUS_PRICE_ID?: string;

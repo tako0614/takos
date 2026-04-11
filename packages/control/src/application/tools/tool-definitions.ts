@@ -1,17 +1,17 @@
-import type { D1Database, R2Bucket } from '../../shared/types/bindings.ts';
-import type { Env } from '../../shared/types/index.ts';
-import type { SpaceRole } from '../../shared/types/index.ts';
+import type { D1Database, R2Bucket } from "../../shared/types/bindings.ts";
+import type { Env } from "../../shared/types/index.ts";
+import type { SpaceRole } from "../../shared/types/index.ts";
 import type {
-  ToolClass,
-  SpaceOperationId,
   SensitiveReadPolicy,
-} from './tool-policy-types.ts';
-import type { CapabilityNamespace, RiskLevel } from './capability-types.ts';
-import type { CapabilityRegistry } from './capability-registry.ts';
+  SpaceOperationId,
+  ToolClass,
+} from "./tool-policy-types.ts";
+import type { CapabilityNamespace, RiskLevel } from "./capability-types.ts";
+import type { CapabilityRegistry } from "./capability-registry.ts";
 
 export interface ToolContext {
   spaceId: string;
-  sessionId?: string;  // Session for file isolation (container must be started)
+  sessionId?: string; // Session for file isolation (container must be started)
   threadId: string;
   runId: string;
   userId: string;
@@ -25,7 +25,9 @@ export interface ToolContext {
   // Session management - used by container tools
   setSessionId: (sessionId: string | undefined) => void;
   getLastContainerStartFailure: () => ContainerStartFailure | undefined;
-  setLastContainerStartFailure: (failure: ContainerStartFailure | undefined) => void;
+  setLastContainerStartFailure: (
+    failure: ContainerStartFailure | undefined,
+  ) => void;
   // Browser session ID — managed by browser tools
   browserSessionId?: string;
   // Optional cancellation signal (e.g., tool timeout)
@@ -56,14 +58,14 @@ export interface ToolDefinition {
   risk_level?: RiskLevel;
   side_effects?: boolean;
   parameters: {
-    type: 'object';
+    type: "object";
     properties: Record<string, ToolParameter>;
     required?: string[];
   };
 }
 
 export interface ToolParameter {
-  type: 'string' | 'number' | 'boolean' | 'array' | 'object';
+  type: "string" | "number" | "boolean" | "array" | "object";
   description: string;
   enum?: string[];
   items?: ToolParameter;
@@ -74,18 +76,18 @@ export interface ToolParameter {
 }
 
 export type ToolCategory =
-  | 'file'       // file_read, file_write, file_list, file_delete
-  | 'deploy'     // deploy_frontend
-  | 'runtime'    // runtime_exec, runtime_status
-  | 'storage'    // kv_*, d1_*, r2_*, create_*
-  | 'workspace'  // workspace_env_*, custom_tool_*, skill_*
-  | 'web'        // web_fetch
-  | 'memory'     // remember, recall, set_reminder
-  | 'artifact'   // create_artifact
-  | 'container'  // container_start, container_status, container_commit, container_stop
-  | 'agent'      // spawn_agent
-  | 'mcp'        // mcp_add_server, mcp_list_servers, mcp_remove_server, + dynamically loaded MCP tools
-  | 'browser';   // browser_open, browser_goto, browser_action, browser_screenshot, browser_extract, browser_html, browser_close
+  | "file" // file_read, file_write, file_list, file_delete
+  | "deploy" // deploy_frontend
+  | "runtime" // runtime_exec, runtime_status
+  | "storage" // kv_*, d1_*, r2_*, create_*
+  | "workspace" // custom_tool_*, skill_*
+  | "web" // web_fetch
+  | "memory" // remember, recall, set_reminder
+  | "artifact" // create_artifact
+  | "container" // container_start, container_status, container_commit, container_stop
+  | "agent" // spawn_agent
+  | "mcp" // mcp_add_server, mcp_list_servers, mcp_remove_server, + dynamically loaded MCP tools
+  | "browser"; // browser_open, browser_goto, browser_action, browser_screenshot, browser_extract, browser_html, browser_close
 
 export interface ToolResult {
   tool_call_id: string;
@@ -95,7 +97,7 @@ export interface ToolResult {
 
 export type ToolHandler = (
   args: Record<string, unknown>,
-  context: ToolContext
+  context: ToolContext,
 ) => Promise<string>;
 
 export interface RegisteredTool {
@@ -119,7 +121,7 @@ export interface RuntimeExecRequest {
 
 export interface RuntimeExecResponse {
   runtime_id: string;
-  status: 'running' | 'completed' | 'failed';
+  status: "running" | "completed" | "failed";
   output?: string;
   exit_code?: number;
   error?: string;

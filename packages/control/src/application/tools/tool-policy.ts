@@ -11,7 +11,6 @@ export type {
 } from './tool-policy-types.ts';
 export {
   WORKSPACE_STORAGE_OPS,
-  WORKSPACE_COMMON_ENV_OPS,
   REPO_OPS,
   SERVICE_OPS,
   CUSTOM_DOMAIN_OPS,
@@ -127,14 +126,6 @@ export const BUILTIN_TOOL_POLICY_METADATA: Record<string, ToolPolicyMetadata> = 
     operation_id: 'service.env.write',
     sensitive_read_policy: 'write_only',
   },
-  service_bindings_get: {
-    tool_class: 'workspace_mapped',
-    operation_id: 'service.bindings.read',
-  },
-  service_bindings_set: {
-    tool_class: 'workspace_mapped',
-    operation_id: 'service.bindings.write',
-  },
   service_runtime_get: {
     tool_class: 'workspace_mapped',
     operation_id: 'service.runtime.read',
@@ -158,21 +149,6 @@ export const BUILTIN_TOOL_POLICY_METADATA: Record<string, ToolPolicyMetadata> = 
   domain_remove: {
     tool_class: 'workspace_mapped',
     operation_id: 'custom_domain.delete',
-  },
-  workspace_env_list: {
-    tool_class: 'workspace_mapped',
-    operation_id: 'workspace_common_env.list',
-    sensitive_read_policy: 'masked',
-  },
-  workspace_env_set: {
-    tool_class: 'workspace_mapped',
-    operation_id: 'workspace_common_env.write',
-    sensitive_read_policy: 'write_only',
-  },
-  workspace_env_delete: {
-    tool_class: 'workspace_mapped',
-    operation_id: 'workspace_common_env.delete',
-    sensitive_read_policy: 'write_only',
   },
   skill_list: {
     tool_class: 'workspace_mapped',

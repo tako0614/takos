@@ -12,35 +12,28 @@
 //   - name       (required)
 //   - version    (optional — semver if present)
 //   - compute    (required shape)
-//   - storage    (optional)
 //   - routes     (optional)
 //   - publish    (optional)
 //   - env        (optional — flat Record<string, string>)
-//   - scopes     (optional)
-//   - oauth      (optional)
 //   - overrides  (optional)
 //
 // This file owns orchestration only — individual sections are
-// implemented in parse-compute.ts, parse-storage.ts, parse-publish.ts,
-// and parse-routes.ts.
+// implemented in parse-compute.ts, parse-publish.ts, and parse-routes.ts.
 // ============================================================
 
 import YAML from "yaml";
 import type {
   AppManifest,
   AppManifestOverride,
-  AppOAuthConfig,
 } from "../app-manifest-types.ts";
 import {
   asRecord,
   asRequiredString,
   asString,
-  asStringArray,
   asStringMap,
 } from "../app-manifest-utils.ts";
 import { validateSemver } from "./parse-common.ts";
 import { parseCompute } from "./parse-compute.ts";
-import { parseStorage } from "./parse-storage.ts";
 import { parsePublish } from "./parse-publish.ts";
 import { parseRoutes } from "./parse-routes.ts";
 
@@ -56,44 +49,26 @@ function rejectEnvelope(record: Record<string, unknown>): void {
   }
 }
 
-function parseOAuth(raw: unknown): AppOAuthConfig | undefined {
-  if (raw == null) return undefined;
-  const record = asRecord(raw);
-  const clientName = asString(record.clientName, "oauth.clientName");
-  const redirectUris = asStringArray(
-    record.redirectUris,
-    "oauth.redirectUris",
-  );
-  const scopes = asStringArray(record.scopes, "oauth.scopes");
-  const autoEnv = record.autoEnv === true ? true : undefined;
-  const metadataRaw = record.metadata != null
-    ? asRecord(record.metadata)
-    : undefined;
-  const metadata = metadataRaw
-    ? {
-      ...((): Record<string, string> => {
-        const logoUri = asString(metadataRaw.logoUri, "oauth.metadata.logoUri");
-        const tosUri = asString(metadataRaw.tosUri, "oauth.metadata.tosUri");
-        const policyUri = asString(
-          metadataRaw.policyUri,
-          "oauth.metadata.policyUri",
-        );
-        return {
-          ...(logoUri ? { logoUri } : {}),
-          ...(tosUri ? { tosUri } : {}),
-          ...(policyUri ? { policyUri } : {}),
-        };
-      })(),
-    }
-    : undefined;
-  const result: AppOAuthConfig = {
-    ...(clientName ? { clientName } : {}),
-    ...(redirectUris ? { redirectUris } : {}),
-    ...(scopes ? { scopes } : {}),
-    ...(autoEnv ? { autoEnv } : {}),
-    ...(metadata && Object.keys(metadata).length > 0 ? { metadata } : {}),
-  };
-  return Object.keys(result).length > 0 ? result : undefined;
+function rejectRetiredFields(
+  record: Record<string, unknown>,
+  prefix = "",
+): void {
+  const base = prefix ? `${prefix}.` : "";
+  if (record.scopes != null) {
+    throw new Error(
+      `${base}scopes is retired. Use top-level publish + compute.<name>.consume instead.`,
+    );
+  }
+  if (record.oauth != null) {
+    throw new Error(
+      `${base}oauth is retired. Use top-level publish + compute.<name>.consume instead.`,
+    );
+  }
+  if (record.storage != null) {
+    throw new Error(
+      `${base}storage is retired. Publish a provider-backed resource and consume its outputs instead.`,
+    );
+  }
 }
 
 function parseOverrides(
@@ -104,12 +79,10 @@ function parseOverrides(
   const result: Record<string, AppManifestOverride> = {};
   for (const [envName, envOverrides] of Object.entries(record)) {
     const envRecord = asRecord(envOverrides);
+    rejectRetiredFields(envRecord, `overrides.${envName}`);
     const entry: AppManifestOverride = {};
     if (envRecord.compute != null) {
       entry.compute = parseCompute({ compute: envRecord.compute });
-    }
-    if (envRecord.storage != null) {
-      entry.storage = parseStorage({ storage: envRecord.storage });
     }
     if (envRecord.routes != null) {
       // Routes in overrides are validated against the merged compute
@@ -129,17 +102,6 @@ function parseOverrides(
       const envMap = asStringMap(envRecord.env, `overrides.${envName}.env`);
       if (envMap) entry.env = envMap;
     }
-    if (envRecord.scopes != null) {
-      const scopes = asStringArray(
-        envRecord.scopes,
-        `overrides.${envName}.scopes`,
-      );
-      if (scopes) entry.scopes = scopes;
-    }
-    if (envRecord.oauth != null) {
-      const oauth = parseOAuth(envRecord.oauth);
-      if (oauth) entry.oauth = oauth;
-    }
     if (Object.keys(entry).length > 0) {
       result[envName] = entry;
     }
@@ -152,6 +114,7 @@ export function parseAppManifestYaml(raw: string): AppManifest {
   const record = asRecord(parsed);
 
   rejectEnvelope(record);
+  rejectRetiredFields(record);
 
   // --- Top-level scalars ---
   const name = asRequiredString(record.name, "name");
@@ -162,18 +125,11 @@ export function parseAppManifestYaml(raw: string): AppManifest {
 
   // --- Major sections ---
   const compute = parseCompute(record);
-  const storage = parseStorage(record);
   const routes = parseRoutes(record, compute);
   const publish = parsePublish(record);
 
   // --- Env (flat Record<string, string>) ---
   const env = asStringMap(record.env, "env") ?? {};
-
-  // --- Scopes ---
-  const scopes = asStringArray(record.scopes, "scopes") ?? [];
-
-  // --- OAuth ---
-  const oauth = parseOAuth(record.oauth);
 
   // --- Overrides ---
   const overrides = parseOverrides(record.overrides);
@@ -191,28 +147,13 @@ export function parseAppManifestYaml(raw: string): AppManifest {
     }
   }
 
-  // --- queue trigger → storage cross-ref validation ---
-  for (const [computeName, entry] of Object.entries(compute)) {
-    const queueTriggers = entry.triggers?.queues ?? [];
-    for (const trigger of queueTriggers) {
-      if (storage[trigger.storage]?.type !== "queue") {
-        throw new Error(
-          `compute.${computeName}.triggers.queues references unknown queue storage: ${trigger.storage}`,
-        );
-      }
-    }
-  }
-
   return {
     name,
     ...(version ? { version } : {}),
     compute,
-    storage,
     routes,
     publish,
     env,
-    scopes,
-    ...(oauth ? { oauth } : {}),
     ...(overrides ? { overrides } : {}),
   };
 }
@@ -221,6 +162,5 @@ export const parseAppManifestText = parseAppManifestYaml;
 
 // Re-export parsers for any consumers that import them directly
 export { parseCompute } from "./parse-compute.ts";
-export { parseStorage } from "./parse-storage.ts";
 export { parsePublish } from "./parse-publish.ts";
 export { parseRoutes } from "./parse-routes.ts";

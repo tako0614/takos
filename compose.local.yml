@@ -246,8 +246,8 @@ services:
 
   runtime:
     build:
-      context: .
-      dockerfile: apps/runtime/Dockerfile
+      context: ..
+      dockerfile: takos/apps/runtime/Dockerfile
     depends_on:
       minio-init:
         condition: service_completed_successfully

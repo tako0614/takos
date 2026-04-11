@@ -68,7 +68,7 @@ export function SettingsBilling(props: { user: User | null }) {
 
         setBillingSummary(nextBilling);
 
-        if (!nextBilling.has_stripe_customer) {
+        if (!nextBilling.has_payment_account) {
           setBillingInvoices([]);
           setInvoiceLoading(false);
           return;
@@ -355,30 +355,30 @@ export function SettingsBilling(props: { user: User | null }) {
               </p>
             </div>
 
-            {!bs.has_stripe_customer && (
+            {!bs.has_payment_account && (
               <div class="text-sm text-zinc-500 dark:text-zinc-400">
                 {t('billingNoCustomer')}
               </div>
             )}
 
-            {bs.has_stripe_customer && invoiceLoading() && (
+            {bs.has_payment_account && invoiceLoading() && (
               <div class="flex items-center gap-3 text-sm text-zinc-500 dark:text-zinc-400">
                 <Icons.Loader class="h-4 w-4 animate-spin" />
                 <span>{t('loading')}</span>
               </div>
             )}
 
-            {bs.has_stripe_customer && !invoiceLoading() && invoiceError() && (
+            {bs.has_payment_account && !invoiceLoading() && invoiceError() && (
               <div class="text-sm text-amber-700 dark:text-amber-300">{invoiceError()}</div>
             )}
 
-            {bs.has_stripe_customer && !invoiceLoading() && !invoiceError() && billingInvoices().length === 0 && (
+            {bs.has_payment_account && !invoiceLoading() && !invoiceError() && billingInvoices().length === 0 && (
               <div class="text-sm text-zinc-500 dark:text-zinc-400">
                 {t('billingNoInvoices')}
               </div>
             )}
 
-            {bs.has_stripe_customer && !invoiceLoading() && billingInvoices().length > 0 && (
+            {bs.has_payment_account && !invoiceLoading() && billingInvoices().length > 0 && (
               <div class="space-y-3">
                 {billingInvoices().map((invoice: BillingInvoice) => (
                   <div

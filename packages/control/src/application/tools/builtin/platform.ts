@@ -7,14 +7,10 @@ import { DEPLOYMENT_HISTORY_TOOLS, DEPLOYMENT_HISTORY_HANDLERS } from './platfor
 export {
   WORKER_ENV_GET as SERVICE_ENV_GET,
   WORKER_ENV_SET as SERVICE_ENV_SET,
-  WORKER_BINDINGS_GET as SERVICE_BINDINGS_GET,
-  WORKER_BINDINGS_SET as SERVICE_BINDINGS_SET,
   WORKER_RUNTIME_GET as SERVICE_RUNTIME_GET,
   WORKER_RUNTIME_SET as SERVICE_RUNTIME_SET,
   workerEnvGetHandler,
   workerEnvSetHandler,
-  workerBindingsGetHandler,
-  workerBindingsSetHandler,
   workerRuntimeGetHandler,
   workerRuntimeSetHandler,
 } from './platform/worker-settings.ts';

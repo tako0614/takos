@@ -6,7 +6,6 @@ COPY deno.json deno.lock* ./
 COPY packages ./packages
 COPY apps/control ./apps/control
 COPY apps/runtime ./apps/runtime
-COPY apps/cli ./apps/cli
 COPY docs ./docs
 COPY scripts ./scripts
 
