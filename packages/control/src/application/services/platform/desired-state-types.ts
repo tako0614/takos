@@ -10,17 +10,10 @@ export type ServiceRuntimeLimits = {
   subrequests?: number;
 };
 
-export type ServiceManagedMcpServerState = {
-  enabled: boolean;
-  name: string;
-  path: string;
-};
-
 export type ServiceRuntimeConfigState = {
   compatibility_date?: string;
   compatibility_flags: string[];
   limits: ServiceRuntimeLimits;
-  mcp_server?: ServiceManagedMcpServerState;
   updated_at: string | null;
 };
 
@@ -72,12 +65,6 @@ export type ServiceRuntimeLimitRow = {
   subrequestLimit: number | null;
 };
 
-export type ServiceRuntimeMcpEndpointRow = {
-  name: string;
-  path: string;
-  enabled: boolean;
-};
-
 export type ServiceBindingRow = {
   id: string;
   bindingName: string;
@@ -98,13 +85,6 @@ export type RoutingRow = {
   artifactRef: string | null;
   routingStatus: string;
   routingWeight: number | string;
-};
-
-export type EffectiveCommonEnvLink = {
-  rowId: string;
-  envName: string;
-  source: 'manual' | 'required';
-  lastAppliedFingerprint: string | null;
 };
 
 export type CommonEnvValue = {

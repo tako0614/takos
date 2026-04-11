@@ -1,5 +1,9 @@
 # 実装計画
 
+::: warning Historical note このページは初期計画メモです。現行の app deploy
+contract は `publish + consume` で、ここに出てくる legacy deploy JWT や
+publication env fanout は historical context と して読んでください。 :::
+
 ## 現状
 
 apps/control (monolith) に全機能が統合済み。 Agent, Git, Storage, Store, Auth,
@@ -14,8 +18,8 @@ kernel はそのまま維持。 外部 group を deploy できる基盤を構築
 ### Phase 0: Group deploy 基盤
 
 - routing layer: RoutingRecord で group に hostname を割り当て
-- publication env injection: group 間の URL 解決
-- app token: group 用の JWT 発行
+- publication/consume substrate: group 間の URL / credential 解決
+- provider-backed credential: Takos も 1 provider として扱う
 - manifest parser: .takos/app.yml の parse と desired state 生成
 
 ### Phase 1: Default group の deploy

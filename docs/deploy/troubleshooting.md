@@ -17,7 +17,8 @@ name: my-app
 
 ### `Error: workflow path must be under .takos/workflows/`
 
-`build.fromWorkflow.path` が `.takos/workflows/` 配下を指しているか確認してください。
+`build.fromWorkflow.path` が `.takos/workflows/`
+配下を指しているか確認してください。
 
 ```yaml
 # OK
@@ -33,7 +34,8 @@ build:
 
 ### `Error: target "compute.xxx" not found in manifest`
 
-`--target` で指定した workload 名が `.takos/app.yml` に存在するか確認してください。
+`--target` で指定した workload 名が `.takos/app.yml`
+に存在するか確認してください。
 
 ```bash
 # app.yml に compute.web がある場合
@@ -41,18 +43,19 @@ takos deploy --env staging --target compute.web    # OK
 takos deploy --env staging --target compute.api    # NG（存在しない）
 ```
 
-## ストレージ作成失敗
+## publication/provider 解決失敗
 
-### `Error: Failed to create sql storage`
+### `Error: publication references unknown Takos ... resource`
 
-- Takos 側の deploy 権限を持つアカウントで `takos login` しているか確認してください
-- 利用 plan の sql storage クォータに空きがあるか確認してください
-- backend 固有のクォータ / 名前制約は [Hosting / Cloudflare](/hosting/cloudflare) などの provider docs を参照してください
+- `publish[].spec.resource` が存在するか確認してください
+- `publish[].kind` と resource type が一致しているか確認してください
+- publish/consume の shape は [Manifest Reference](/reference/manifest-spec)
+  を参照してください
 
-### `Error: Failed to create object-store storage`
+### `Error: publication ... provider/kind is unsupported`
 
-- Takos 側の deploy 権限を持つアカウントで `takos login` しているか確認してください
-- ストレージ名の正規化規則に従っているか確認してください
+- `provider` と `kind` の組み合わせが存在するか確認してください
+- `GET /api/publications/providers` で利用可能な provider 一覧を確認してください
 
 ## デプロイ失敗
 
@@ -71,9 +74,11 @@ takos deploy --env staging --target compute.web
 ```
 
 3. よくある原因:
-   - storage bind の参照先リソースが存在しない
+   - `consume` が存在しない publication を参照している
+   - `consume.env` が既存 env と衝突している
    - Worker のコードにシンタックスエラーがある
-   - readiness probe (`GET /` または `compute.<name>.readiness`) が 200 を返さない
+   - readiness probe (`GET /` または `compute.<name>.readiness`) が 200
+     を返さない
 
 ### `Error: Authentication failed`
 
@@ -95,15 +100,17 @@ takos deploy --plan
 
 - `.takos/app.yml` にトップレベルの `name` があること
 - `build.fromWorkflow.path` が `.takos/workflows/` 配下であること
-- compute / storage / routes の参照が整合していること
-- `--target` で指定した compute / storage / routes が manifest 内に存在すること
+- compute / publish / routes の参照が整合していること
+- `--target` で指定した compute / routes が manifest 内に存在すること
 
 ## それでも解決しない場合
 
 1. `takos deploy --plan` で manifest の解釈結果と差分を確認
-2. `takos deploy status --space SPACE_ID` で control plane 側の deployment 状態を確認
+2. `takos deploy status --space SPACE_ID` で control plane 側の deployment
+   状態を確認
 3. `takos group show GROUP_NAME` で group inventory を確認
-4. provider 固有の問題は [Hosting / Cloudflare](/hosting/cloudflare) などの provider docs を参照
+4. provider 固有の問題は [Hosting / Cloudflare](/hosting/cloudflare) などの
+   provider docs を参照
 
 ## 次のステップ
 

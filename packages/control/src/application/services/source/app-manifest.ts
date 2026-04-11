@@ -1,13 +1,13 @@
 // Re-export types from the flat-schema source of truth.
 export type {
   AppCompute,
+  AppConsume,
   AppContainer,
   AppDeploymentBuildSource,
   AppFileHandler,
   AppManifest,
   AppManifestOverride,
   AppMcpServer,
-  AppOAuthConfig,
   AppPublication,
   AppResource,
   AppRoute,

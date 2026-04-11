@@ -13,7 +13,6 @@ import type { DiffResult, GroupState } from "./diff.ts";
 import { topologicalSortApplyEntries } from "./apply-order.ts";
 import type { TranslationReport } from "./translation-report.ts";
 import type { Env } from "../../../shared/types/env.ts";
-import { type AppTokenResult, AppTokenService } from "./app-token-service.ts";
 import { buildManifestPlan } from "./apply-engine-plan.ts";
 import { assertDeployValid } from "./deploy-validation.ts";
 import {
@@ -43,26 +42,13 @@ export interface ApplyResult {
   skipped: string[];
   diff: DiffResult;
   translationReport: TranslationReport;
-  appToken?: AppTokenResult;
 }
 
-export interface SafeApplyResult extends Omit<ApplyResult, "appToken"> {
-  appToken?: {
-    issued: true;
-    scopes: string[];
-    expiresIn: number;
-  };
-}
-
-export interface AppTokenPlan {
-  willIssue: true;
-  scopes: string[];
-}
+export type SafeApplyResult = ApplyResult;
 
 export interface PlanResult {
   diff: DiffResult;
   translationReport: TranslationReport;
-  appTokenPlan?: AppTokenPlan;
 }
 
 export interface ApplyManifestOpts {
@@ -334,40 +320,11 @@ export async function applyManifest(
     hasFailures ? "degraded" : "ready",
   );
 
-  const takosScopes = plan.effectiveManifest.scopes;
-  if (takosScopes && takosScopes.length > 0) {
-    try {
-      const issued = await AppTokenService.issueToken(env, {
-        groupName: plan.effectiveManifest.name,
-        spaceId: group.spaceId,
-        scopes: takosScopes,
-      });
-      if (issued) {
-        result.appToken = issued;
-      }
-    } catch {
-      // Token issuance failure is non-fatal — the deploy itself succeeded.
-      // The caller can retry or issue tokens separately.
-    }
-  }
-
   return result;
 }
 
 export function buildSafeApplyResult(result: ApplyResult): SafeApplyResult {
-  const { appToken, ...rest } = result;
-  return {
-    ...rest,
-    ...(appToken
-      ? {
-        appToken: {
-          issued: true,
-          scopes: appToken.scopes,
-          expiresIn: appToken.expiresIn,
-        },
-      }
-      : {}),
-  };
+  return result;
 }
 
 export async function planManifest(
@@ -395,15 +352,8 @@ export async function planManifest(
     getCurrentState: (targetGroupId) => getGroupState(env, targetGroupId),
   });
 
-  const takosScopes = plan.effectiveManifest.scopes;
-  const appTokenPlan: AppTokenPlan | undefined =
-    takosScopes && takosScopes.length > 0
-      ? { willIssue: true, scopes: takosScopes }
-      : undefined;
-
   return {
     diff: plan.diff,
     translationReport: plan.translationReport,
-    ...(appTokenPlan ? { appTokenPlan } : {}),
   };
 }

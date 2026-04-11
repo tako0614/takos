@@ -13,20 +13,19 @@ import {
   PLUS_SUBSCRIPTION_PURCHASE_KIND,
   PRO_TOPUP_PURCHASE_KIND,
   resolveConfiguredProTopupPack,
-} from "./stripe.ts";
+} from "../../../application/services/billing/providers/stripe/stripe-purchase-config.ts";
 import { billingRouteDeps } from "./deps.ts";
 import {
   getRequestOrigin,
   loadBillingAccount,
-  requireStripeCustomerId,
-  requireStripeSecretKey,
+  requirePaymentCustomerId,
 } from "./helpers.ts";
 
 type BillingRouter = Hono<{ Bindings: Env; Variables: BaseVariables }>;
 
 export function registerBillingCheckoutRoutes(app: BillingRouter) {
   app.post("/subscribe", async (c) => {
-    const secretKey = requireStripeSecretKey(c);
+    const provider = billingRouteDeps.resolvePaymentProvider(c.env);
     const priceId = c.env.STRIPE_PLUS_PRICE_ID;
     if (!priceId) {
       throw new InternalError("Billing not configured");
@@ -34,17 +33,16 @@ export function registerBillingCheckoutRoutes(app: BillingRouter) {
 
     const user = c.get("user");
     const account = await loadBillingAccount(c);
-    if (account.stripeSubscriptionId) {
+    if (account.providerSubscriptionId) {
       throw new BadRequestError("Already subscribed");
     }
 
-    const { url } = await billingRouteDeps.createCheckoutSession({
-      secretKey,
-      priceId,
+    const { url } = await provider.createCheckoutSession({
       mode: "subscription",
+      providerPriceId: priceId,
       userId: user.id,
       customerEmail: user.email,
-      stripeCustomerId: account.stripeCustomerId ?? undefined,
+      existingCustomerId: account.providerCustomerId ?? undefined,
       successUrl: `${getRequestOrigin(c)}/?billing=success`,
       cancelUrl: `${getRequestOrigin(c)}/?billing=cancel`,
       metadata: {
@@ -56,7 +54,7 @@ export function registerBillingCheckoutRoutes(app: BillingRouter) {
   });
 
   app.post("/credits/checkout", async (c) => {
-    const secretKey = requireStripeSecretKey(c);
+    const provider = billingRouteDeps.resolvePaymentProvider(c.env);
     const body = await c.req.json().catch(() => null) as
       | { pack_id?: unknown }
       | null;
@@ -80,19 +78,18 @@ export function registerBillingCheckoutRoutes(app: BillingRouter) {
 
     const user = c.get("user");
     const account = await loadBillingAccount(c);
-    if (account.stripeSubscriptionId || account.planId === "plan_plus") {
+    if (account.providerSubscriptionId || account.planId === "plan_plus") {
       throw new ConflictError(
         "Plus subscription is active; cancel it before switching to Pro",
       );
     }
 
-    const { url } = await billingRouteDeps.createCheckoutSession({
-      secretKey,
-      priceId: pack.priceId,
-      mode: "payment",
+    const { url } = await provider.createCheckoutSession({
+      mode: "one_time",
+      providerPriceId: pack.priceId,
       userId: user.id,
       customerEmail: user.email,
-      stripeCustomerId: account.stripeCustomerId ?? undefined,
+      existingCustomerId: account.providerCustomerId ?? undefined,
       successUrl: `${getRequestOrigin(c)}/?billing=success`,
       cancelUrl: `${getRequestOrigin(c)}/?billing=cancel`,
       metadata: {
@@ -105,11 +102,10 @@ export function registerBillingCheckoutRoutes(app: BillingRouter) {
   });
 
   app.post("/portal", async (c) => {
-    const secretKey = requireStripeSecretKey(c);
-    const { customerId } = await requireStripeCustomerId(c);
+    const provider = billingRouteDeps.resolvePaymentProvider(c.env);
+    const { customerId } = await requirePaymentCustomerId(c);
 
-    const { url } = await billingRouteDeps.createPortalSession({
-      secretKey,
+    const { url } = await provider.createPortalSession({
       customerId,
       returnUrl: `${getRequestOrigin(c)}/?section=billing`,
     });

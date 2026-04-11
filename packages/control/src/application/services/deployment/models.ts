@@ -174,17 +174,10 @@ export interface CreateDeploymentInput {
   };
 }
 
-export interface McpServerConfig {
-  enabled: boolean;
-  name: string;
-  path: string;
-}
-
 export interface RuntimeConfig {
   compatibility_date?: string;
   compatibility_flags?: string[];
   limits?: { cpu_ms?: number; subrequests?: number };
-  mcp_server?: McpServerConfig;
 }
 
 export interface RollbackInput {

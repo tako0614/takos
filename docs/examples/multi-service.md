@@ -3,6 +3,20 @@
 ```yaml
 name: full-stack-app
 
+publish:
+  - name: shared-db
+    provider: takos
+    kind: sql
+    spec:
+      resource: app-db
+      permission: write
+  - name: uploads
+    provider: takos
+    kind: object-store
+    spec:
+      resource: app-uploads
+      permission: write
+
 compute:
   api:
     build:
@@ -11,7 +25,16 @@ compute:
         job: build-api
         artifact: api
         artifactPath: dist/api.js
-    depends: [jobs]
+    consume:
+      - publication: shared-db
+        env:
+          endpoint: DATABASE_URL
+          apiKey: DATABASE_API_KEY
+      - publication: uploads
+        env:
+          endpoint: UPLOADS_ENDPOINT
+          apiKey: UPLOADS_API_KEY
+
   jobs:
     build:
       fromWorkflow:
@@ -19,23 +42,14 @@ compute:
         job: build-jobs
         artifact: jobs
         artifactPath: dist/jobs.js
+    depends:
+      - api
     triggers:
-      queues:
-        - storage: jobs
-          batchSize: 10
-          maxRetries: 3
-
-storage:
-  main-db:
-    type: sql
-    bind: DB
-  uploads:
-    type: object-store
-    bind: UPLOADS
-  jobs:
-    type: queue
-    bind: JOB_QUEUE
-  events:
-    type: analytics-engine
-    bind: ANALYTICS
+      schedules:
+        - cron: "*/10 * * * *"
+    consume:
+      - publication: shared-db
+        env:
+          endpoint: DATABASE_URL
+          apiKey: DATABASE_API_KEY
 ```

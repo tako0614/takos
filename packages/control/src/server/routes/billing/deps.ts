@@ -7,15 +7,7 @@ import {
   resolveBillingPlanTier,
   WEEKLY_RUNTIME_LIMIT_SECONDS,
 } from "../../../application/services/billing/billing.ts";
-import {
-  createCheckoutSession,
-  createPortalSession,
-  listInvoices,
-  retrieveCheckoutSession,
-  retrieveInvoice,
-  sendInvoice,
-  verifyWebhookSignature,
-} from "../../../application/services/billing/stripe.ts";
+import { resolvePaymentProvider } from "../../../application/services/billing/providers/index.ts";
 
 export const billingRouteDeps = {
   getDb,
@@ -25,11 +17,5 @@ export const billingRouteDeps = {
   resolveBillingMode,
   resolveBillingPlanTier,
   WEEKLY_RUNTIME_LIMIT_SECONDS,
-  createCheckoutSession,
-  createPortalSession,
-  verifyWebhookSignature,
-  retrieveCheckoutSession,
-  listInvoices,
-  retrieveInvoice,
-  sendInvoice,
+  resolvePaymentProvider,
 };

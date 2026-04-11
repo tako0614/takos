@@ -2,8 +2,8 @@
 // app-manifest-bundle-docs.ts
 // ============================================================
 //
-// Build bundle documents (Package / Resource / Workload / Endpoint /
-// Binding / McpServer) from a flat-schema `AppManifest`. Phase 2 port
+// Build bundle documents (Package / Workload / Endpoint / McpServer)
+// from a flat-schema `AppManifest`. Phase 2 port
 // of the legacy envelope-schema emitter.
 //
 // The output document list is consumed by `buildBundlePackageData` which
@@ -14,7 +14,6 @@ import {
   type AppCompute,
   type AppDeploymentBuildSource,
   type AppManifest,
-  type AppStorage,
   BUILD_SOURCE_LABELS,
   type BundleDoc,
 } from "./app-manifest-types.ts";
@@ -47,36 +46,9 @@ function emitPackageDoc(manifest: AppManifest, docs: BundleDoc[]): void {
     spec: {
       ...(manifest.version ? { version: manifest.version } : {}),
       ...(Object.keys(manifest.env).length > 0 ? { env: manifest.env } : {}),
-      ...(manifest.scopes.length > 0 ? { scopes: manifest.scopes } : {}),
-      ...(manifest.oauth ? { oauth: manifest.oauth } : {}),
       ...(manifest.overrides ? { overrides: manifest.overrides } : {}),
     },
   });
-}
-
-function emitStorageDocs(manifest: AppManifest, docs: BundleDoc[]): void {
-  for (const [storageName, storage] of Object.entries(manifest.storage)) {
-    docs.push({
-      apiVersion: "takos.dev/v1alpha1",
-      kind: "Resource",
-      metadata: { name: storageName },
-      spec: storageToDocSpec(storage),
-    });
-  }
-}
-
-function storageToDocSpec(storage: AppStorage): Record<string, unknown> {
-  const spec: Record<string, unknown> = {
-    type: storage.type,
-    ...(storage.bind ? { binding: storage.bind } : {}),
-  };
-  if (storage.migrations) spec.migrations = storage.migrations;
-  if (storage.queue) spec.queue = storage.queue;
-  if (storage.vectorIndex) spec.vectorIndex = storage.vectorIndex;
-  if (storage.generate) spec.generate = storage.generate;
-  if (storage.workflow) spec.workflow = storage.workflow;
-  if (storage.durableObject) spec.durableObject = storage.durableObject;
-  return spec;
 }
 
 function computeToWorkloadSpec(
@@ -94,6 +66,7 @@ function computeToWorkloadSpec(
     pluginConfig,
   };
   if (compute.env) spec.env = compute.env;
+  if (compute.consume) spec.consume = compute.consume;
   if (compute.healthCheck) spec.healthCheck = compute.healthCheck;
   if (compute.volumes) spec.volumes = compute.volumes;
   if (compute.depends) spec.dependsOn = compute.depends;
@@ -120,7 +93,9 @@ function emitComputeDocs(
   docs: BundleDoc[],
 ): void {
   for (const [name, compute] of Object.entries(manifest.compute)) {
-    const source = compute.kind === "worker" ? buildSources.get(name) : undefined;
+    const source = compute.kind === "worker"
+      ? buildSources.get(name)
+      : undefined;
     if (compute.kind === "worker" && !source && !compute.build) {
       throw new Error(`Build source is missing for worker: ${name}`);
     }
@@ -167,39 +142,6 @@ function emitComputeDocs(
   }
 }
 
-function emitStorageBindings(
-  manifest: AppManifest,
-  docs: BundleDoc[],
-): void {
-  // Flat schema: every top-level compute (worker / service) that has an
-  // explicit env map referencing a storage `bind` name gets a Binding doc.
-  // Attached containers never carry direct storage bindings.
-  const eligibleWorkloads = Object.entries(manifest.compute).filter(
-    ([, compute]) =>
-      compute.kind === "worker" || compute.kind === "service",
-  );
-
-  for (const [storageName, storage] of Object.entries(manifest.storage)) {
-    if (!storage.bind) continue;
-    for (const [workloadName, compute] of eligibleWorkloads) {
-      if (!compute.env || !(storage.bind in compute.env)) continue;
-      docs.push({
-        apiVersion: "takos.dev/v1alpha1",
-        kind: "Binding",
-        metadata: { name: `${storageName}-to-${workloadName}` },
-        spec: {
-          from: storageName,
-          to: workloadName,
-          mount: {
-            as: storage.bind,
-            type: storage.type,
-          },
-        },
-      });
-    }
-  }
-}
-
 function emitRouteDocs(manifest: AppManifest, docs: BundleDoc[]): void {
   for (const [index, route] of manifest.routes.entries()) {
     docs.push({
@@ -219,11 +161,11 @@ function emitRouteDocs(manifest: AppManifest, docs: BundleDoc[]): void {
 
 function emitPublishDocs(manifest: AppManifest, docs: BundleDoc[]): void {
   for (const pub of manifest.publish) {
-    if (pub.type !== "McpServer") continue;
+    if (pub.type !== "McpServer" || !pub.path) continue;
     docs.push({
       apiVersion: "takos.dev/v1alpha1",
       kind: "McpServer",
-      metadata: { name: pub.name ?? "mcp" },
+      metadata: { name: pub.name },
       spec: {
         path: pub.path,
         ...(pub.transport ? { transport: pub.transport } : {}),
@@ -239,9 +181,7 @@ export function buildBundleDocs(
 ): BundleDoc[] {
   const docs: BundleDoc[] = [];
   emitPackageDoc(manifest, docs);
-  emitStorageDocs(manifest, docs);
   emitComputeDocs(manifest, buildSources, docs);
-  emitStorageBindings(manifest, docs);
   emitRouteDocs(manifest, docs);
   emitPublishDocs(manifest, docs);
   return docs;

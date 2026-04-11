@@ -1,15 +1,14 @@
 /**
  * Group Deploy Orchestrator.
  *
- * Deploys an entire app.yml manifest as a group — provisions storage,
- * deploys worker compute via wrangler, and wires up every storage binding.
+ * Deploys an entire app.yml manifest as a group.
  *
  * This bypasses the Takos store install flow and deploys directly to
  * Cloudflare infrastructure using the Cloudflare API and wrangler CLI.
  *
- * Phase 2: rewritten against the flat-schema `AppManifest`. Worker
- * selection is now `compute.filter(kind=worker)` and bindings are
- * materialized from the top-level `storage` map.
+ * The public manifest contract no longer supports `storage`, so this path
+ * only deploys worker compute and treats any legacy storage entries as a
+ * hard error.
  */
 import { execFile } from "node:child_process";
 import fs from "node:fs/promises";
@@ -17,17 +16,14 @@ import os from "node:os";
 import path from "node:path";
 import type { AppCompute } from "../source/app-manifest-types.ts";
 import type {
-  BindingResult,
   GroupDeployOptions,
   GroupDeployResult,
   ServiceDeployResult,
 } from "./group-deploy-types.ts";
-import { provisionResources } from "./resource-provisioner.ts";
 import {
   generateWranglerConfig,
   serializeWranglerToml,
 } from "./wrangler-config-gen.ts";
-import { CloudflareApiClient } from "../cloudflare/api-client.ts";
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -163,10 +159,8 @@ function buildDryRunServiceResult(
  * Deploy an app manifest as a group.
  *
  * Steps:
- * 1. Provision storage (sql / object-store / key-value / secret)
- * 2. Deploy each worker compute via wrangler
- * 3. Wire up every storage binding as part of the wrangler config
- * 4. Report results
+ * 1. Deploy each worker compute via wrangler
+ * 2. Report results
  *
  * Errors in individual workers do not abort the entire deployment —
  * every worker is attempted and the result reports each status.
@@ -196,43 +190,25 @@ export async function deployGroup(
     bindings: [],
   };
 
-  // ── Step 1: Provision storage ─────────────────────────────────────────────
-
-  let client: CloudflareApiClient | null = null;
-  if (!dryRun) {
-    client = new CloudflareApiClient({ accountId, apiToken });
+  if (manifest.storage && Object.keys(manifest.storage).length > 0) {
+    throw new Error(
+      "group deploy no longer supports manifest.storage; publish provider-backed resources and consume their outputs instead",
+    );
   }
 
-  const { provisioned, results: resourceResults } = await provisionResources(
-    manifest.storage ?? {},
-    { accountId, apiToken, groupName, env, dryRun },
-    client,
-  );
-  result.resources = resourceResults;
-
-  // Collect secrets so every deployed worker gets them applied.
-  const sharedSecrets = new Map<string, string>();
-  for (const provisionedResource of provisioned.values()) {
-    if (provisionedResource.type === "secret" && provisionedResource.id) {
-      sharedSecrets.set(
-        provisionedResource.binding,
-        provisionedResource.id,
-      );
-    }
-  }
-
-  // ── Step 2: Deploy each worker ────────────────────────────────────────────
+  // ── Step 1: Deploy each worker ────────────────────────────────────────────
 
   const workerEntries = Object.entries(manifest.compute ?? {}).filter(
     ([, compute]) => compute.kind === "worker",
   );
+  const emptyResources = new Map<string, never>();
 
   for (const [workerName, worker] of workerEntries) {
     const wranglerConfig = generateWranglerConfig(worker, workerName, {
       groupName,
       env,
       namespace,
-      resources: provisioned,
+      resources: emptyResources,
       compatibilityDate,
     });
 
@@ -240,14 +216,6 @@ export async function deployGroup(
       result.services.push(
         buildDryRunServiceResult(workerName, worker, wranglerConfig.name),
       );
-      for (const [resourceName, resource] of provisioned) {
-        result.bindings.push({
-          from: workerName,
-          to: resourceName,
-          type: resource.type,
-          status: "bound",
-        });
-      }
       continue;
     }
 
@@ -258,7 +226,6 @@ export async function deployGroup(
         accountId,
         apiToken,
         namespace,
-        secrets: sharedSecrets,
         dryRun: false,
       });
 
@@ -269,9 +236,6 @@ export async function deployGroup(
           status: "deployed",
           scriptName: wranglerConfig.name,
         });
-        result.bindings.push(
-          ...collectBindingResults(workerName, provisioned, "bound"),
-        );
       } else {
         result.services.push({
           name: workerName,
@@ -280,9 +244,6 @@ export async function deployGroup(
           scriptName: wranglerConfig.name,
           error: deployResult.error,
         });
-        result.bindings.push(
-          ...collectBindingResults(workerName, provisioned, "failed"),
-        );
       }
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
@@ -297,21 +258,4 @@ export async function deployGroup(
   }
 
   return result;
-}
-
-function collectBindingResults(
-  workerName: string,
-  provisioned: Map<string, import("./group-deploy-types.ts").ProvisionedResource>,
-  status: "bound" | "failed",
-): BindingResult[] {
-  const results: BindingResult[] = [];
-  for (const [resourceName, resource] of provisioned) {
-    results.push({
-      from: workerName,
-      to: resourceName,
-      type: resource.type,
-      status,
-    });
-  }
-  return results;
 }

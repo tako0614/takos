@@ -74,8 +74,12 @@ export interface BillingAccountWithPlan {
   planId: string;
   balanceCents: number;
   status: string;
-  stripeCustomerId: string | null;
-  stripeSubscriptionId: string | null;
+  /** Active payment provider for this account ('stripe' is the default). */
+  providerName: string;
+  /** Provider-side customer ID (e.g. Stripe `cus_*`). */
+  providerCustomerId: string | null;
+  /** Provider-side recurring subscription ID (e.g. Stripe `sub_*`). */
+  providerSubscriptionId: string | null;
   subscriptionPeriodEnd: string | null;
   billingPlan: {
     id: string;

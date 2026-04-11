@@ -12,7 +12,7 @@
  * - 失敗したら deploy fail-fast (worker は起動扱いされず、routing は更新されない)
  *
  * Service / Container は manifest の `healthCheck` field を使うので、この probe は
- * Worker (workers-dispatch / runtime-host) のみで動く。
+ * Worker runtime のみで動く。
  */
 
 /** kernel readiness probe の hard-coded timeout (10 秒)。 */

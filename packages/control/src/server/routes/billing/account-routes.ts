@@ -9,7 +9,7 @@ import {
   getAvailableActions,
   getConfiguredProTopupPacks,
   toTopupPackResponse,
-} from "./stripe.ts";
+} from "../../../application/services/billing/providers/stripe/stripe-purchase-config.ts";
 import { billingRouteDeps } from "./deps.ts";
 import { loadBillingAccount } from "./helpers.ts";
 import { InternalError } from "takos-common/errors";
@@ -43,8 +43,8 @@ export function registerBillingAccountRoutes(app: BillingRouter) {
       runtime_limit_7d_seconds: billingRouteDeps.WEEKLY_RUNTIME_LIMIT_SECONDS,
       balance_cents: account.balanceCents,
       status: account.status,
-      has_stripe_customer: !!account.stripeCustomerId,
-      has_subscription: !!account.stripeSubscriptionId,
+      has_payment_account: !!account.providerCustomerId,
+      has_subscription: !!account.providerSubscriptionId,
       subscription_period_end: account.subscriptionPeriodEnd ?? null,
     });
   });

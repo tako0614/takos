@@ -11,7 +11,6 @@ export interface BillingAvailableActions {
 export interface BillingTopupPack {
   id: string;
   label: string;
-  price_id: string;
   credits_cents: number;
   featured: boolean;
   badge: string | null;
@@ -30,9 +29,9 @@ export interface BillingSummary {
   runtime_limit_7d_seconds: number;
   balance_cents: number;
   status: string;
-  // Backend exposes only presence flags, never the raw Stripe IDs.
+  // Backend exposes only presence flags, never the raw provider IDs.
   // (packages/control/src/server/routes/billing/account-routes.ts)
-  has_stripe_customer: boolean;
+  has_payment_account: boolean;
   has_subscription: boolean;
   subscription_period_end: string | null;
 }

@@ -99,8 +99,9 @@ Deno.test("billing catalog self-heal - seeds free-plan quotas when an account ex
     planId: "plan_free",
     balanceCents: 0,
     status: "active",
-    stripeCustomerId: null,
-    stripeSubscriptionId: null,
+    providerName: "stripe",
+    providerCustomerId: null,
+    providerSubscriptionId: null,
     subscriptionPeriodEnd: null,
   };
   const plan = {
@@ -197,8 +198,9 @@ Deno.test("billing catalog self-heal - normalizes legacy payg aliases to canonic
     planId: "plan_pro",
     balanceCents: 500,
     status: "active",
-    stripeCustomerId: null,
-    stripeSubscriptionId: null,
+    providerName: "stripe",
+    providerCustomerId: null,
+    providerSubscriptionId: null,
     subscriptionPeriodEnd: null,
   };
   const payGPlan = {
@@ -268,8 +270,9 @@ Deno.test("billing catalog self-heal - fails closed when a payg account is missi
     planId: "plan_payg",
     balanceCents: 500,
     status: "active",
-    stripeCustomerId: null,
-    stripeSubscriptionId: null,
+    providerName: "stripe",
+    providerCustomerId: null,
+    providerSubscriptionId: null,
     subscriptionPeriodEnd: null,
   };
   const payGPlan = {

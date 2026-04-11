@@ -1,5 +1,5 @@
 import type { Context } from "hono";
-import { BadRequestError, InternalError } from "takos-common/errors";
+import { BadRequestError } from "takos-common/errors";
 import type { Env } from "../../../shared/types/index.ts";
 import type { BaseVariables } from "../route-auth.ts";
 import { billingRouteDeps } from "./deps.ts";
@@ -9,27 +9,19 @@ export type BillingRouteContext = Context<{
   Variables: BaseVariables;
 }>;
 
-export function requireStripeSecretKey(c: BillingRouteContext): string {
-  const secretKey = c.env.STRIPE_SECRET_KEY;
-  if (!secretKey) {
-    throw new InternalError("Billing not configured");
-  }
-  return secretKey;
-}
-
 export async function loadBillingAccount(c: BillingRouteContext) {
   const user = c.get("user");
   return await billingRouteDeps.getOrCreateBillingAccount(c.env.DB, user.id);
 }
 
-export async function requireStripeCustomerId(c: BillingRouteContext) {
+export async function requirePaymentCustomerId(c: BillingRouteContext) {
   const account = await loadBillingAccount(c);
-  if (!account.stripeCustomerId) {
-    throw new BadRequestError("No Stripe customer found");
+  if (!account.providerCustomerId) {
+    throw new BadRequestError("No payment account found");
   }
   return {
     account,
-    customerId: account.stripeCustomerId,
+    customerId: account.providerCustomerId,
   };
 }
 

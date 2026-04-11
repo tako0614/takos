@@ -13,7 +13,6 @@ import { DEPLOY_TOOLS, DEPLOY_HANDLERS } from './deploy.ts';
 import { AGENT_TOOLS, AGENT_HANDLERS } from './agent.ts';
 import { MCP_TOOLS, MCP_HANDLERS } from './mcp.ts';
 import { WORKSPACE_FILES_TOOLS, WORKSPACE_FILES_HANDLERS } from './space-files.ts';
-import { WORKSPACE_COMMON_ENV_TOOLS, WORKSPACE_COMMON_ENV_HANDLERS } from './space-common-env.ts';
 import { WORKSPACE_SKILL_TOOLS, WORKSPACE_SKILL_HANDLERS } from './space-skills.ts';
 import {
   WORKSPACE_APP_DEPLOYMENT_TOOLS,
@@ -43,7 +42,6 @@ const RAW_BUILTIN_TOOLS: ToolDefinition[] = [
   ...AGENT_TOOLS,
   ...MCP_TOOLS,
   ...WORKSPACE_FILES_TOOLS,
-  ...WORKSPACE_COMMON_ENV_TOOLS,
   ...WORKSPACE_SKILL_TOOLS,
   ...WORKSPACE_APP_DEPLOYMENT_TOOLS,
   ...WORKSPACE_SOURCE_TOOLS,
@@ -69,7 +67,6 @@ export const BUILTIN_HANDLERS: Record<string, ToolHandler> = {
   ...AGENT_HANDLERS,
   ...MCP_HANDLERS,
   ...WORKSPACE_FILES_HANDLERS,
-  ...WORKSPACE_COMMON_ENV_HANDLERS,
   ...WORKSPACE_SKILL_HANDLERS,
   ...WORKSPACE_APP_DEPLOYMENT_HANDLERS,
   ...WORKSPACE_SOURCE_HANDLERS,
@@ -90,7 +87,6 @@ export const TOOL_CATEGORIES = {
     'service_list', 'service_create', 'service_delete',
     'deployment_history', 'deployment_get', 'deployment_rollback',
     'service_env_get', 'service_env_set',
-    'service_bindings_get', 'service_bindings_set',
     'service_runtime_get', 'service_runtime_set',
     'domain_list', 'domain_add', 'domain_verify', 'domain_remove',
   ],
@@ -102,7 +98,6 @@ export const TOOL_CATEGORIES = {
     'create_d1', 'create_kv', 'create_r2', 'list_resources',
   ],
   workspace: [
-    'workspace_env_list', 'workspace_env_set', 'workspace_env_delete',
     'skill_list', 'skill_get', 'skill_create', 'skill_update', 'skill_toggle', 'skill_delete', 'skill_context', 'skill_catalog', 'skill_describe',
     'app_deployment_list', 'app_deployment_get', 'app_deployment_deploy_from_repo', 'app_deployment_remove', 'app_deployment_rollback',
     'store_search', 'repo_fork',

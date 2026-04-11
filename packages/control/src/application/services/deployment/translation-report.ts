@@ -218,24 +218,24 @@ function translateWorkload(
       return {
         name,
         category,
-        provider: 'runtime-host',
+        provider: 'takos-runtime',
         runtime: 'workers',
         runtimeProfile: 'workers',
         status: 'portable',
-        requirements: ['runtime-host'],
-        notes: ['Takos runtime on local realizes worker workloads through the runtime-host compatibility layer.'],
+        requirements: ['compatibility-runtime'],
+        notes: ['Takos runtime on local realizes worker workloads through the compatibility runtime layer.'],
       };
     }
 
     return {
       name,
       category,
-      provider: 'runtime-host',
+      provider: 'takos-runtime',
       runtime: 'workers',
       runtimeProfile: 'workers',
       status: 'portable',
-      requirements: ['runtime-host adapter'],
-      notes: [`Takos runtime on ${provider} realizes worker workloads through the runtime-host compatibility layer.`],
+      requirements: ['compatibility-runtime adapter'],
+      notes: [`Takos runtime on ${provider} realizes worker workloads through the compatibility runtime layer.`],
     };
   }
 
@@ -310,11 +310,11 @@ function translateRoute(
     return {
       name,
       target,
-      adapter: 'runtime-host-routing',
-      provider: 'runtime-host-routing',
+      adapter: 'compatibility-runtime-routing',
+      provider: 'compatibility-runtime-routing',
       status: 'portable',
-      requirements: ['runtime-host'],
-      notes: ['Takos runtime on local materializes routes through runtime-host/local routing adapters.'],
+      requirements: ['compatibility-runtime'],
+      notes: ['Takos runtime on local materializes routes through compatibility runtime/local routing adapters.'],
     };
   }
 

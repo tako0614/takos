@@ -90,6 +90,10 @@ export default defineConfig({
         items: [
           { text: "概要", link: "/architecture/" },
           { text: "Kernel", link: "/architecture/kernel" },
+          {
+            text: "Personal Runtime Proposal",
+            link: "/architecture/personal-runtime",
+          },
           { text: "Deploy System", link: "/architecture/deploy-system" },
           { text: "App Publications", link: "/architecture/app-publications" },
           { text: "Control Plane", link: "/architecture/control-plane" },

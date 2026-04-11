@@ -281,11 +281,9 @@ function buildUninstallManifest(group: GroupRow): AppManifest {
     name: group.name,
     ...(group.appVersion ? { version: group.appVersion } : {}),
     compute: {},
-    storage: {},
     routes: [],
     publish: [],
     env: {},
-    scopes: [],
   };
 }
 

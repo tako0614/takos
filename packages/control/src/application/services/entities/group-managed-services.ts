@@ -1,14 +1,19 @@
-import { eq } from 'drizzle-orm';
-import { getDb } from '../../../infra/db/client.ts';
-import { deployments, serviceBindings, services } from '../../../infra/db/index.ts';
-import type { SelectOf } from '../../../shared/types/drizzle-utils.ts';
-import type { Env } from '../../../shared/types/env.ts';
-import { safeJsonParseOrDefault } from '../../../shared/utils/logger.ts';
+import { eq } from "drizzle-orm";
+import { getDb } from "../../../infra/db/client.ts";
+import {
+  deployments,
+  serviceBindings,
+  services,
+} from "../../../infra/db/index.ts";
+import { deleteServiceConsumes } from "../platform/service-publications.ts";
+import type { SelectOf } from "../../../shared/types/drizzle-utils.ts";
+import type { Env } from "../../../shared/types/env.ts";
+import { safeJsonParseOrDefault } from "../../../shared/utils/logger.ts";
 
-export type ManagedServiceComponentKind = 'worker' | 'container' | 'service';
+export type ManagedServiceComponentKind = "worker" | "container" | "service";
 
 export interface ManagedServiceConfig {
-  managedBy?: 'group';
+  managedBy?: "group";
   manifestName?: string;
   componentKind?: ManagedServiceComponentKind;
   specFingerprint?: string;
@@ -37,15 +42,26 @@ function generateManagedServiceId(): string {
 function slugifySegment(value: string): string {
   return value
     .toLowerCase()
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/^-|-$/g, '');
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-|-$/g, "");
 }
 
-function buildManagedSlug(groupId: string, envName: string, componentKind: ManagedServiceComponentKind, manifestName: string): string {
-  const base = ['grp', groupId.slice(0, 8), envName, componentKind, manifestName]
+function buildManagedSlug(
+  groupId: string,
+  envName: string,
+  componentKind: ManagedServiceComponentKind,
+  manifestName: string,
+): string {
+  const base = [
+    "grp",
+    groupId.slice(0, 8),
+    envName,
+    componentKind,
+    manifestName,
+  ]
     .map((part) => slugifySegment(part))
     .filter(Boolean)
-    .join('-');
+    .join("-");
   const slug = base.slice(0, 48);
   return slug || `grp-${groupId.slice(0, 8)}`;
 }
@@ -56,14 +72,22 @@ export function buildManagedRouteRef(
   componentKind: ManagedServiceComponentKind,
   manifestName: string,
 ): string {
-  const base = ['grp', groupId.slice(0, 8), envName, componentKind, manifestName]
+  const base = [
+    "grp",
+    groupId.slice(0, 8),
+    envName,
+    componentKind,
+    manifestName,
+  ]
     .map((part) => slugifySegment(part))
     .filter(Boolean)
-    .join('-');
+    .join("-");
   return base.slice(0, 63) || `grp-${groupId.slice(0, 8)}-worker`;
 }
 
-export function parseManagedServiceConfig(configJson: string | null): ManagedServiceConfig {
+export function parseManagedServiceConfig(
+  configJson: string | null,
+): ManagedServiceConfig {
   return safeJsonParseOrDefault<ManagedServiceConfig>(configJson, {});
 }
 
@@ -72,12 +96,15 @@ function isMatchingManagedService(
   manifestName: string,
   componentKind: ManagedServiceComponentKind,
 ): boolean {
-  return record.config.managedBy === 'group'
-    && record.config.manifestName === manifestName
-    && record.config.componentKind === componentKind;
+  return record.config.managedBy === "group" &&
+    record.config.manifestName === manifestName &&
+    record.config.componentKind === componentKind;
 }
 
-export async function listGroupManagedServices(env: Env, groupId: string): Promise<ManagedServiceRecord[]> {
+export async function listGroupManagedServices(
+  env: Env,
+  groupId: string,
+): Promise<ManagedServiceRecord[]> {
   const db = getDb(env.DB);
   const rows = await db
     .select()
@@ -87,7 +114,7 @@ export async function listGroupManagedServices(env: Env, groupId: string): Promi
   return rows.map((row) => ({
     row,
     config: parseManagedServiceConfig(row.config),
-  })).filter((record) => record.config.managedBy === 'group');
+  })).filter((record) => record.config.managedBy === "group");
 }
 
 export async function findGroupManagedService(
@@ -97,7 +124,9 @@ export async function findGroupManagedService(
   componentKind: ManagedServiceComponentKind,
 ): Promise<ManagedServiceRecord | null> {
   const records = await listGroupManagedServices(env, groupId);
-  return records.find((record) => isMatchingManagedService(record, manifestName, componentKind)) ?? null;
+  return records.find((record) =>
+    isMatchingManagedService(record, manifestName, componentKind)
+  ) ?? null;
 }
 
 export async function upsertGroupManagedService(
@@ -109,7 +138,7 @@ export async function upsertGroupManagedService(
     componentKind: ManagedServiceComponentKind;
     manifestName: string;
     status: string;
-    serviceType: 'app' | 'service';
+    serviceType: "app" | "service";
     workloadKind: string;
     specFingerprint: string;
     desiredSpec: Record<string, unknown>;
@@ -127,31 +156,54 @@ export async function upsertGroupManagedService(
 ): Promise<ManagedServiceRecord> {
   const db = getDb(env.DB);
   const now = new Date().toISOString();
-  const existing = await findGroupManagedService(env, input.groupId, input.manifestName, input.componentKind);
+  const existing = await findGroupManagedService(
+    env,
+    input.groupId,
+    input.manifestName,
+    input.componentKind,
+  );
 
-  const slug = existing?.row.slug
-    ?? buildManagedSlug(input.groupId, input.envName, input.componentKind, input.manifestName);
-  const hostname = existing?.row.hostname
-    ?? (env.TENANT_BASE_DOMAIN ? `${slug}.${env.TENANT_BASE_DOMAIN}` : null);
-  const routeRef = existing?.row.routeRef
-    ?? buildManagedRouteRef(input.groupId, input.envName, input.componentKind, input.manifestName);
+  const slug = existing?.row.slug ??
+    buildManagedSlug(
+      input.groupId,
+      input.envName,
+      input.componentKind,
+      input.manifestName,
+    );
+  const hostname = existing?.row.hostname ??
+    (env.TENANT_BASE_DOMAIN ? `${slug}.${env.TENANT_BASE_DOMAIN}` : null);
+  const routeRef = existing?.row.routeRef ??
+    buildManagedRouteRef(
+      input.groupId,
+      input.envName,
+      input.componentKind,
+      input.manifestName,
+    );
 
   const config: ManagedServiceConfig = {
-    managedBy: 'group',
+    managedBy: "group",
     manifestName: input.manifestName,
     componentKind: input.componentKind,
     specFingerprint: input.specFingerprint,
     desiredSpec: input.desiredSpec,
-    ...(input.routeNames && input.routeNames.length > 0 ? { routeNames: input.routeNames } : {}),
-    ...(input.dependsOn && input.dependsOn.length > 0 ? { dependsOn: input.dependsOn } : {}),
+    ...(input.routeNames && input.routeNames.length > 0
+      ? { routeNames: input.routeNames }
+      : {}),
+    ...(input.dependsOn && input.dependsOn.length > 0
+      ? { dependsOn: input.dependsOn }
+      : {}),
     ...(input.deployedAt ? { deployedAt: input.deployedAt } : {}),
     ...(input.codeHash ? { codeHash: input.codeHash } : {}),
     ...(input.imageHash ? { imageHash: input.imageHash } : {}),
     ...(input.imageRef ? { imageRef: input.imageRef } : {}),
-    ...(typeof input.port === 'number' ? { port: input.port } : {}),
+    ...(typeof input.port === "number" ? { port: input.port } : {}),
     ...(input.ipv4 ? { ipv4: input.ipv4 } : {}),
-    ...(input.dispatchNamespace ? { dispatchNamespace: input.dispatchNamespace } : {}),
-    ...(input.resolvedBaseUrl ? { resolvedBaseUrl: input.resolvedBaseUrl } : {}),
+    ...(input.dispatchNamespace
+      ? { dispatchNamespace: input.dispatchNamespace }
+      : {}),
+    ...(input.resolvedBaseUrl
+      ? { resolvedBaseUrl: input.resolvedBaseUrl }
+      : {}),
   };
 
   if (existing) {
@@ -226,11 +278,22 @@ export async function deleteGroupManagedService(
   componentKind: ManagedServiceComponentKind,
 ): Promise<ManagedServiceRecord> {
   const db = getDb(env.DB);
-  const existing = await findGroupManagedService(env, groupId, manifestName, componentKind);
+  const existing = await findGroupManagedService(
+    env,
+    groupId,
+    manifestName,
+    componentKind,
+  );
   if (!existing) {
-    throw new Error(`${componentKind} "${manifestName}" not found in group ${groupId}`);
+    throw new Error(
+      `${componentKind} "${manifestName}" not found in group ${groupId}`,
+    );
   }
 
+  await deleteServiceConsumes(env, {
+    spaceId: existing.row.accountId,
+    serviceId: existing.row.id,
+  });
   await db.delete(serviceBindings)
     .where(eq(serviceBindings.serviceId, existing.row.id))
     .run();

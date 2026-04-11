@@ -1,21 +1,20 @@
-import { Hono, type MiddlewareHandler } from 'hono';
-import * as jose from 'jose';
-import type { Env } from '../../../shared/types/index.ts';
-import type { BaseVariables } from '../route-auth.ts';
+import { Hono, type MiddlewareHandler } from "hono";
+import type { Env } from "../../../shared/types/index.ts";
+import type { BaseVariables } from "../route-auth.ts";
 import {
   AppError,
   BadRequestError,
   ErrorCodes,
   NotFoundError,
-} from 'takos-common/errors';
-import { getPlatformServices } from '../../../platform/accessors.ts';
+} from "takos-common/errors";
+import { getPlatformServices } from "../../../platform/accessors.ts";
 import {
   checkSpaceAccess,
   loadSpace,
-} from '../../../application/services/identity/space-access.ts';
-import { logWarn } from '../../../shared/utils/logger.ts';
-import { requireAnyAuth } from '../../middleware/oauth-auth.ts';
-import type { PlatformServices } from '../../../platform/platform-config.ts';
+} from "../../../application/services/identity/space-access.ts";
+import { logWarn } from "../../../shared/utils/logger.ts";
+import { requireAnyAuth } from "../../middleware/oauth-auth.ts";
+import type { PlatformServices } from "../../../platform/platform-config.ts";
 
 type EventsRouteEnv = { Bindings: Env; Variables: BaseVariables };
 
@@ -39,10 +38,10 @@ export function buildSpaceEventChannel(spaceId: string): string {
 // ---------------------------------------------------------------------------
 
 export type GroupLifecycleEventType =
-  | 'group.deployed'
-  | 'group.deleted'
-  | 'group.rollback'
-  | 'group.unhealthy';
+  | "group.deployed"
+  | "group.deleted"
+  | "group.rollback"
+  | "group.unhealthy";
 
 export interface GroupLifecycleEventPayload {
   event: GroupLifecycleEventType;
@@ -60,53 +59,30 @@ export interface GroupLifecycleEventPayload {
  * Resolve the target space id for the request, in the order:
  *
  *   1. `X-Takos-Space-Id` header
- *   2. app token (JWT) `space_id` claim — checked before the session fallback
- *      because the token claim is explicit and unambiguous, while session
- *      cookies only carry an implicit "personal space" association.
- *   3. session cookie -> user's personal space
+ *   2. session cookie -> user's personal space
  *
  * Throws `BadRequestError` if no source supplies a space id.
  */
 async function resolveEventsSpaceId(
-  c: import('hono').Context<EventsRouteEnv>,
+  c: import("hono").Context<EventsRouteEnv>,
 ): Promise<string> {
   // 1. Header takes precedence
-  const headerValue = c.req.header('X-Takos-Space-Id');
+  const headerValue = c.req.header("X-Takos-Space-Id");
   if (headerValue && headerValue.trim().length > 0) {
     return headerValue.trim();
   }
 
-  // 2. App token JWT claim
-  //    The token has already been verified by requireAnyAuth (signature +
-  //    scope check). We only need to read the unverified payload to extract
-  //    the `space_id` claim issued by AppTokenService.
-  const authHeader = c.req.header('Authorization');
-  if (authHeader && authHeader.startsWith('Bearer ')) {
-    const token = authHeader.slice(7).trim();
-    if (token && !token.startsWith('tak_pat_')) {
-      try {
-        const payload = jose.decodeJwt(token);
-        const claim = (payload as { space_id?: unknown }).space_id;
-        if (typeof claim === 'string' && claim.trim().length > 0) {
-          return claim.trim();
-        }
-      } catch {
-        // Malformed JWT — fall through to session/personal-space fallback.
-      }
-    }
-  }
-
-  // 3. Session cookie -> user's personal space
-  const user = c.get('user');
+  // 2. Session cookie -> user's personal space
+  const user = c.get("user");
   if (user) {
-    const personalSpace = await loadSpace(c.env.DB, 'me', user.id);
+    const personalSpace = await loadSpace(c.env.DB, "me", user.id);
     if (personalSpace) {
       return personalSpace.id;
     }
   }
 
   throw new BadRequestError(
-    'space scope is required: provide X-Takos-Space-Id header, an app token with space_id claim, or authenticate with a session cookie linked to a personal space',
+    "space scope is required: provide X-Takos-Space-Id header or authenticate with a session cookie linked to a personal space",
   );
 }
 
@@ -121,7 +97,7 @@ async function resolveEventsSpaceId(
  *
  * Spec: `docs/reference/api.md#events`, `docs/architecture/kernel.md#event-bus`.
  *
- * Auth: session cookie, PAT, OAuth bearer, or app token.
+ * Auth: session cookie, PAT, or OAuth bearer.
  * Required scope (token-based auth): `events:subscribe`. Session cookie users
  * skip the scope check (matching the design note in `oauth-auth.ts`).
  *
@@ -130,26 +106,26 @@ async function resolveEventsSpaceId(
 export function createEventsRouter(): Hono<EventsRouteEnv> {
   const router = new Hono<EventsRouteEnv>();
 
-  // Single combined auth middleware: session cookie | PAT | OAuth | app token.
+  // Single combined auth middleware: session cookie | PAT | OAuth.
   // Cast: requireAnyAuth declares `Variables: { user?: User }`, but after the
   // middleware runs `user` is always set — the route handlers below can rely
   // on `c.get('user')` returning a non-null value.
   router.use(
-    '*',
-    requireAnyAuth(['events:subscribe']) as MiddlewareHandler<EventsRouteEnv>,
+    "*",
+    requireAnyAuth(["events:subscribe"]) as MiddlewareHandler<EventsRouteEnv>,
   );
 
-  router.get('/', async (c) => {
-    // 1. Resolve target space id (header > token claim > personal space)
+  router.get("/", async (c) => {
+    // 1. Resolve target space id (header > personal space)
     const spaceId = await resolveEventsSpaceId(c);
 
     // 2. Membership check — confirm the authenticated user has access to the
     //    resolved space. Without this, an attacker holding a valid token for
     //    space A could subscribe to space B by spoofing the header.
-    const user = c.get('user');
+    const user = c.get("user");
     const access = await checkSpaceAccess(c.env.DB, spaceId, user.id);
     if (!access) {
-      throw new NotFoundError('Space');
+      throw new NotFoundError("Space");
     }
 
     // 3. Acquire SSE notifier (Node-only service — not available on CF Workers)
@@ -157,14 +133,15 @@ export function createEventsRouter(): Hono<EventsRouteEnv> {
     const sseNotifier = services.sseNotifier;
     if (!sseNotifier) {
       throw new AppError(
-        'SSE not available in this environment',
+        "SSE not available in this environment",
         ErrorCodes.NOT_FOUND,
         404,
       );
     }
 
     // 4. Optional Last-Event-ID resume support (mirrors runs/sse.ts)
-    const lastEventIdRaw = c.req.header('Last-Event-ID') ?? c.req.query('last_event_id');
+    const lastEventIdRaw = c.req.header("Last-Event-ID") ??
+      c.req.query("last_event_id");
     let lastEventId: number | undefined;
     if (lastEventIdRaw) {
       const parsed = parseInt(lastEventIdRaw, 10);
@@ -179,9 +156,9 @@ export function createEventsRouter(): Hono<EventsRouteEnv> {
 
     return new Response(stream, {
       headers: {
-        'Content-Type': 'text/event-stream',
-        'Cache-Control': 'no-cache',
-        'Connection': 'keep-alive',
+        "Content-Type": "text/event-stream",
+        "Cache-Control": "no-cache",
+        "Connection": "keep-alive",
       },
     });
   });
@@ -217,7 +194,7 @@ export function emitGroupLifecycleEvent(
   // run-events.ts. Avoiding `getPlatformServices()` here keeps this helper
   // usable from non-Hono call sites.
   const sseNotifier =
-    (env as unknown as { SSE_NOTIFIER?: PlatformServices['sseNotifier'] })
+    (env as unknown as { SSE_NOTIFIER?: PlatformServices["sseNotifier"] })
       .SSE_NOTIFIER;
   if (!sseNotifier) {
     // No notifier (CF Workers env, or Node without Redis-backed SSE). The
@@ -240,7 +217,7 @@ export function emitGroupLifecycleEvent(
     });
   } catch (err) {
     logWarn(`Failed to emit group lifecycle event ${params.type}`, {
-      module: 'routes/events',
+      module: "routes/events",
       detail: err,
     });
   }
