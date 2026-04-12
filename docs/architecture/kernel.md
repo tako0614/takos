@@ -45,9 +45,11 @@ space は Takos の分離単位。法人のようなもの。
 
 - **Layer 1: primitive (foundation)** — 1st-class エンティティ。それぞれ独立した
   lifecycle を持つ
-  - **compute**: worker / service (常設 container) / attached container
-  - **storage**: sql / object-store / key-value / queue / vector-index / secret
-    / analytics-engine / workflow / durable-object
+  - **compute**: worker / service (常設 container) / attached container。consume
+    は各 compute の中で宣言する
+  - **resource**: sql / object-store / key-value / queue / vector-index / secret
+    / analytics-engine / workflow / durable-object。public manifest の
+    `storage:` は retired/internal history としてのみ扱う
   - **route**: hostname/path → compute のマッピング
   - **publish**: 外部 interface の公開情報
 
@@ -55,26 +57,27 @@ space は Takos の分離単位。法人のようなもの。
   lifecycle (snapshot / rollback / uninstall) と desired state management を
   提供する optional な仕組み
 
-primitive は group に所属することも、standalone で存在することもできる。CLI /
-API は両層を 1st-class でサポートする (`takos worker` などの primitive 個別
-コマンド + `takos deploy` などの group bulk コマンド)。
+primitive は group に所属することも、standalone で存在することもできる。CLI は
+group bulk コマンドを、API は control-plane の internal model をサポートする。
 
 group は kernel features ではない (agent, git, storage, store は kernel 機能で
 あり group ではない)。"app" は group の user-facing な呼び方。manifest
-のファイル 名は `.takos/app.yml`。
+のファイル名は `.takos/app.yml`。
 
 ### `.takos/app.yml`
 
 group の desired state を宣言する flat YAML。envelope なし、全 field
 がトップレベル。
 
-| field     | 役割                                                      |
-| --------- | --------------------------------------------------------- |
-| `name`    | group 名（routing の hostname に使用）                    |
-| `compute` | worker, container, attached container                     |
-| `storage` | sql, object-store, key-value, queue, vector-index, secret |
-| `routes`  | path → workload のマッピング                              |
-| `publish` | 外部 interface の公開情報                                 |
+| field     | 役割                                                            |
+| --------- | --------------------------------------------------------------- |
+| `name`    | group 名（routing の hostname に使用）                          |
+| `compute` | worker, container, attached container (consume は各 compute 内) |
+| `routes`  | path → workload のマッピング                                    |
+| `publish` | 外部 interface の公開情報                                       |
+
+resource / storage の管理は control-plane の internal model で扱い、public
+manifest の top-level field には含めない。
 
 ### Default groups
 
@@ -124,26 +127,28 @@ routing の実装詳細は
 
 ## Resource broker
 
-kernel は compute (worker / service) に storage を binding する。
+kernel は compute に対する resource / publication の解決を行う。
 
 - sql, object-store, key-value, queue, vector-index, secret, analytics-engine,
   workflow, durable-object
-- storage は space 単位で分離される
-- manifest の `storage` で宣言した場合は deploy 時に group の primitive として
-  作成される。standalone primitive として CLI / API 経由で個別に作成することも
-  できる
-- 既存 storage を後から group に所属させることも可能
+- resource は space 単位で分離される
+- public manifest は `storage` ではなく `publish` / `consume` を使う
+- standalone resource は control-plane の internal model として扱う
 
 kernel 自身の storage は kernel DB / object-store を使う（group とは別）。
 
 ## Publication と env injection
 
-group が manifest で `publish` を宣言すると、deploy 時に kernel が **space
-内のすべての group の env** に inject する。 publication の必須 field は `type`
-と `path` の 2 つ。 すべての publication は URL を持つため `path` は必須。
+group が manifest で `publish` を宣言すると、deploy 時に kernel が publication
+catalog を保存し、`compute.<name>.consume` を宣言した consumer にだけ env を
+inject する。 publication は route publication と provider publication の 2 種類
+で、必須 field は kind ごとに異なる。
+
+### route publication
+
+route publication は group が公開する interface の metadata。
 
 ```yaml
-# takos-docs の manifest
 publish:
   - type: McpServer
     path: /mcp
@@ -151,6 +156,36 @@ publish:
     path: /
     title: Docs
 ```
+
+必須 field:
+
+- `type`
+- `path`
+
+### provider publication
+
+provider publication は provider-backed credential/env bundle。
+
+```yaml
+publish:
+  - name: takos-api
+    provider: takos
+    kind: api
+    spec:
+      scopes:
+        - files:read
+```
+
+必須 field:
+
+- `name`
+- `provider`
+- `kind`
+- `spec`
+
+`spec` は kind ごとに required / optional field が変わる。 route publication は
+URL を持つ。 provider publication は provider が定義する outputs を consumer
+ごとに env へ変換する。
 
 deploy 時に kernel は:
 

@@ -42,13 +42,44 @@ Deno.test("validateAttachedNotRouteTarget fails when a route targets an attached
         containers: {
           sandbox: {
             kind: "attached-container",
-            image: "ghcr.io/org/sandbox@sha256:def",
+            image:
+              "ghcr.io/org/sandbox@sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
             port: 3000,
           },
         },
       },
     },
     routes: [{ target: "sandbox", path: "/sb" }],
+  });
+  const errors = validateAttachedNotRouteTarget(manifest);
+  assertEquals(errors.length, 1);
+  assertEquals(errors[0].code, "attached_not_route_target");
+});
+
+Deno.test("validateAttachedNotRouteTarget fails when a route targets an internal attached workload name", () => {
+  const manifest = makeManifest({
+    compute: {
+      web: {
+        kind: "worker",
+        build: {
+          fromWorkflow: {
+            path: ".takos/workflows/deploy.yml",
+            job: "bundle",
+            artifact: "web",
+            artifactPath: "dist/worker",
+          },
+        },
+        containers: {
+          sandbox: {
+            kind: "attached-container",
+            image:
+              "ghcr.io/org/sandbox@sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+            port: 3000,
+          },
+        },
+      },
+    },
+    routes: [{ target: "web-sandbox", path: "/sb" }],
   });
   const errors = validateAttachedNotRouteTarget(manifest);
   assertEquals(errors.length, 1);
@@ -193,6 +224,40 @@ Deno.test("validatePublicationKnownFields rejects unknown field on provider publ
   assertEquals(errors[0].code, "publication_unknown_field");
 });
 
+Deno.test("runDeployValidations aggregates publication normalization failures", () => {
+  const manifest = makeManifest({
+    publish: [
+      {
+        name: "bad-provider",
+        provider: "nope",
+        kind: "api",
+        spec: {},
+      },
+      {
+        name: "bad-resource",
+        provider: "takos",
+        kind: "sql",
+        spec: {},
+      },
+    ],
+  });
+  const errors = runDeployValidations(manifest);
+  const publicationErrors = errors.filter((error) =>
+    error.code === "publication_invalid_definition"
+  );
+  assertEquals(publicationErrors.length, 2);
+  assert(
+    publicationErrors.some((error) =>
+      error.message.includes("provider/kind is unsupported")
+    ),
+  );
+  assert(
+    publicationErrors.some((error) =>
+      error.message.includes("spec.resource is required")
+    ),
+  );
+});
+
 Deno.test("runDeployValidations aggregates errors from every validator", () => {
   const manifest = makeManifest({
     publish: [
@@ -201,7 +266,8 @@ Deno.test("runDeployValidations aggregates errors from every validator", () => {
     compute: {
       api: {
         kind: "service",
-        image: "ghcr.io/org/api@sha256:abc123",
+        image:
+          "ghcr.io/org/api@sha256:fedcba9876543210fedcba9876543210fedcba9876543210fedcba9876543210",
         port: 8080,
         env: {
           PUBLICATION_BROWSER_URL: "override",

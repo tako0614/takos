@@ -1,7 +1,11 @@
-import type { WorkerBinding } from '../../../platform/providers/cloudflare/wfp.ts';
-import type { DbEnv } from '../../../shared/types/index.ts';
-import type { DurableNamespaceBinding, KvStoreBinding, ObjectStoreBinding } from '../../../shared/types/bindings.ts';
-import type { WfpDeploymentProviderEnv } from './provider.ts';
+import type { WorkerBinding } from "../../../platform/providers/cloudflare/wfp.ts";
+import type { DbEnv } from "../../../shared/types/index.ts";
+import type {
+  DurableNamespaceBinding,
+  KvStoreBinding,
+  ObjectStoreBinding,
+} from "../../../shared/types/bindings.ts";
+import type { WfpDeploymentProviderEnv } from "./provider.ts";
 
 export type DeploymentEnv = DbEnv & WfpDeploymentProviderEnv & {
   ENCRYPTION_KEY?: string;
@@ -43,24 +47,35 @@ export type DeploymentEnv = DbEnv & WfpDeploymentProviderEnv & {
   SERVICE_INTERNAL_JWT_ISSUER?: string;
 };
 
-export type ArtifactKind = 'worker-bundle' | 'container-image';
+export type ArtifactKind = "worker-bundle" | "container-image";
 
 export type DeployState =
-  | 'pending'
-  | 'uploading_bundle'
-  | 'creating_resources'
-  | 'deploying_worker'
-  | 'setting_bindings'
-  | 'routing'
-  | 'completed'
-  | 'failed'
-  | 'rolled_back';
+  | "pending"
+  | "uploading_bundle"
+  | "creating_resources"
+  | "deploying_worker"
+  | "setting_bindings"
+  | "routing"
+  | "completed"
+  | "failed"
+  | "rolled_back";
 
-export type DeploymentStatus = 'pending' | 'in_progress' | 'success' | 'failed' | 'rolled_back';
+export type DeploymentStatus =
+  | "pending"
+  | "in_progress"
+  | "success"
+  | "failed"
+  | "rolled_back";
 
-export type RoutingStatus = 'active' | 'canary' | 'rollback' | 'archived';
+export type RoutingStatus = "active" | "canary" | "rollback" | "archived";
 
-export type DeploymentProviderName = 'workers-dispatch' | 'runtime-host' | 'oci' | 'ecs' | 'cloud-run' | 'k8s';
+export type DeploymentProviderName =
+  | "workers-dispatch"
+  | "runtime-host"
+  | "oci"
+  | "ecs"
+  | "cloud-run"
+  | "k8s";
 
 export type DeploymentProviderRef = {
   name: DeploymentProviderName;
@@ -68,19 +83,22 @@ export type DeploymentProviderRef = {
 
 export type DeploymentTargetEndpoint =
   | {
-      kind: 'service-ref';
-      ref: string;
-    }
+    kind: "service-ref";
+    ref: string;
+  }
   | {
-      kind: 'http-url';
-      base_url: string;
-    };
+    kind: "http-url";
+    base_url: string;
+  };
 
 export type DeploymentTargetArtifact = {
   kind?: ArtifactKind;
   image_ref?: string;
   exposed_port?: number;
   health_path?: string;
+  health_interval?: number;
+  health_timeout?: number;
+  health_unhealthy_threshold?: number;
 };
 
 /**
@@ -163,7 +181,7 @@ export interface CreateDeploymentInput {
   bundleContent?: string;
   wasmContent?: ArrayBuffer | null;
   deployMessage?: string;
-  strategy?: 'direct' | 'canary';
+  strategy?: "direct" | "canary";
   canaryWeight?: number;
   provider?: DeploymentProviderRef;
   target?: DeploymentTarget;

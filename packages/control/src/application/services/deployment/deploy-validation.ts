@@ -22,7 +22,9 @@
  *      a missing publication or an unknown output alias key.
  *   4. validateConsumeEnvCollision       — consume env aliases collide within
  *      the same compute or with local/static env names.
- *   5. validatePublicationKnownFields    — known publication type
+ *   5. validatePublicationDefinitions    — publication normalization fails
+ *      (`provider`/`kind`/`spec` mismatch or provider-specific field errors).
+ *   6. validatePublicationKnownFields    — known publication type
  *      (`McpServer`, `FileHandler`, `UiSurface`) carries a field that is
  *      not part of its schema (typo / wrong type).
  * The validators operate on the flat `AppManifest` shape produced by the
@@ -34,7 +36,9 @@ import type {
   AppPublication,
   AppRoute,
 } from "../source/app-manifest-types.ts";
+import { BadRequestError } from "takos-common/errors";
 import {
+  normalizePublicationDefinition,
   publicationAllowedFields,
   publicationOutputContract,
 } from "../platform/service-publications.ts";
@@ -55,6 +59,7 @@ export type ValidationErrorCode =
   | "consume_unknown_publication"
   | "consume_unknown_output"
   | "consume_env_collision"
+  | "publication_invalid_definition"
   | "publication_unknown_field";
 
 export interface ValidationError {
@@ -85,14 +90,23 @@ function getTopLevelCompute(
 
 /**
  * Return a record of attached-container compute entries (the nested
- * `worker.containers.*` map). Attached containers are keyed by their child
- * name — collisions across workers are still visible to validators so they
- * can flag them.
+ * `worker.containers.*` map). Attached containers are keyed by both their
+ * public child name and internal `${parent}-${child}` workload name so route
+ * validation catches either form.
  */
+type AttachedContainerEntry = AppCompute & {
+  parentWorker: string;
+  childName: string;
+};
+
+function attachedWorkloadName(parentName: string, childName: string): string {
+  return `${parentName}-${childName}`;
+}
+
 function getAttachedContainers(
   manifest: ParsedManifest,
-): Record<string, AppCompute & { parentWorker: string }> {
-  const out: Record<string, AppCompute & { parentWorker: string }> = {};
+): Record<string, AttachedContainerEntry> {
+  const out: Record<string, AttachedContainerEntry> = {};
   for (
     const [workerName, compute] of Object.entries(getTopLevelCompute(manifest))
   ) {
@@ -100,7 +114,9 @@ function getAttachedContainers(
     for (
       const [childName, child] of Object.entries(compute.containers ?? {})
     ) {
-      out[childName] = { ...child, parentWorker: workerName };
+      const entry = { ...child, parentWorker: workerName, childName };
+      out[childName] = entry;
+      out[attachedWorkloadName(workerName, childName)] = entry;
     }
   }
   return out;
@@ -120,6 +136,10 @@ type PublicationEntry = {
   raw: Record<string, unknown>;
 };
 
+type ValidatedPublicationEntry = PublicationEntry & {
+  normalized: AppPublication | null;
+};
+
 function normalizeEnvName(name: string): string {
   const normalized = String(name || "").trim();
   if (!normalized) {
@@ -137,6 +157,37 @@ function collectPublications(manifest: ParsedManifest): PublicationEntry[] {
     publication: pub,
     raw: pub as unknown as Record<string, unknown>,
   }));
+}
+
+function collectValidatedPublications(
+  manifest: ParsedManifest,
+): {
+  entries: ValidatedPublicationEntry[];
+  errors: ValidationError[];
+} {
+  const entries: ValidatedPublicationEntry[] = [];
+  const errors: ValidationError[] = [];
+  for (const publication of collectPublications(manifest)) {
+    try {
+      entries.push({
+        ...publication,
+        normalized: normalizePublicationDefinition(publication.publication),
+      });
+    } catch (err) {
+      entries.push({
+        ...publication,
+        normalized: null,
+      });
+      errors.push({
+        code: "publication_invalid_definition",
+        path: publication.path,
+        message: `publication '${
+          publication.publication.name ?? "(unnamed)"
+        }' is invalid: ${err instanceof Error ? err.message : String(err)}`,
+      });
+    }
+  }
+  return { entries, errors };
 }
 
 // ── Validator 1: Attached container as route target ─────────────────────────
@@ -167,9 +218,9 @@ export function validateAttachedNotRouteTarget(
         message:
           `route target '${target}' is an attached container; routes can only target ` +
           `top-level Worker or Service compute. Point the route at the parent worker ` +
-          `(declared via 'compute.${
-            attached[target].parentWorker
-          }.containers.${target}').`,
+          `(declared via 'compute.${attached[target].parentWorker}.containers.${
+            attached[target].childName
+          }').`,
       });
     }
   }
@@ -243,27 +294,29 @@ export function validateRouteUniqueness(
 
 // ── Validator 3: Consume references ─────────────────────────────────────────
 
-function collectPublicationMap(
-  manifest: ParsedManifest,
-): Map<string, AppPublication> {
-  return new Map(
-    getPublications(manifest).map((
-      publication,
-    ) => [publication.name, publication]),
-  );
-}
-
 export function validateConsumeReferences(
   manifest: ParsedManifest,
 ): ValidationError[] {
   const errors: ValidationError[] = [];
-  const publicationMap = collectPublicationMap(manifest);
+  const { entries } = collectValidatedPublications(manifest);
+  const publicationMap = new Map(
+    entries.flatMap((entry) =>
+      entry.normalized ? [[entry.normalized.name, entry.normalized]] : []
+    ),
+  );
   for (
     const [computeName, compute] of Object.entries(getTopLevelCompute(manifest))
   ) {
     for (const [index, consume] of (compute.consume ?? []).entries()) {
       const publication = publicationMap.get(consume.publication);
       if (!publication) {
+        if (
+          entries.some((entry) =>
+            entry.publication.name === consume.publication && !entry.normalized
+          )
+        ) {
+          continue;
+        }
         errors.push({
           code: "consume_unknown_publication",
           path: `compute.${computeName}.consume[${index}]`,
@@ -297,7 +350,12 @@ export function validateConsumeEnvCollision(
   manifest: ParsedManifest,
 ): ValidationError[] {
   const errors: ValidationError[] = [];
-  const publicationMap = collectPublicationMap(manifest);
+  const { entries } = collectValidatedPublications(manifest);
+  const publicationMap = new Map(
+    entries.flatMap((entry) =>
+      entry.normalized ? [[entry.normalized.name, entry.normalized]] : []
+    ),
+  );
   const topLevelEnvNames = new Set(
     Object.keys(manifest.env ?? {}).map((name) => normalizeEnvName(name)),
   );
@@ -338,8 +396,10 @@ export function validatePublicationKnownFields(
   manifest: ParsedManifest,
 ): ValidationError[] {
   const errors: ValidationError[] = [];
-  for (const pub of collectPublications(manifest)) {
-    const allowed = publicationAllowedFields(pub.publication);
+  const { entries } = collectValidatedPublications(manifest);
+  for (const pub of entries) {
+    if (!pub.normalized) continue;
+    const allowed = publicationAllowedFields(pub.normalized);
     for (const key of Object.keys(pub.raw)) {
       if (allowed.has(key)) continue;
       errors.push({
@@ -356,10 +416,17 @@ export function validatePublicationKnownFields(
 
 // ── Aggregate entry points ──────────────────────────────────────────────────
 
+export function validatePublicationDefinitions(
+  manifest: ParsedManifest,
+): ValidationError[] {
+  return collectValidatedPublications(manifest).errors;
+}
+
 export function runDeployValidations(
   manifest: ParsedManifest,
 ): ValidationError[] {
   return [
+    ...validatePublicationDefinitions(manifest),
     ...validateAttachedNotRouteTarget(manifest),
     ...validateRouteUniqueness(manifest),
     ...validateConsumeReferences(manifest),
@@ -382,9 +449,5 @@ export function formatValidationErrors(errors: ValidationError[]): string {
 export function assertDeployValid(manifest: ParsedManifest): void {
   const errors = runDeployValidations(manifest);
   if (errors.length === 0) return;
-  const err = new Error(formatValidationErrors(errors));
-  (err as Error & { details?: { errors: ValidationError[] } }).details = {
-    errors,
-  };
-  throw err;
+  throw new BadRequestError(formatValidationErrors(errors), { errors });
 }

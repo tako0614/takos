@@ -151,6 +151,10 @@ function createOrchestratedDeploymentProvider(
       const orchestratorUrl = config.orchestratorUrl?.trim();
       const imageRef = target.artifact?.image_ref?.trim();
       const healthPath = target.artifact?.health_path?.trim() || "/health";
+      const healthInterval = target.artifact?.health_interval;
+      const healthTimeout = target.artifact?.health_timeout;
+      const healthUnhealthyThreshold = target.artifact
+        ?.health_unhealthy_threshold;
 
       if (!imageRef) {
         if (externalBaseUrl) {
@@ -205,6 +209,10 @@ function createOrchestratedDeploymentProvider(
               image_ref: imageRef,
               exposed_port: exposedPort ?? undefined,
               health_path: healthPath,
+              health_interval: healthInterval ?? undefined,
+              health_timeout: healthTimeout ?? undefined,
+              health_unhealthy_threshold: healthUnhealthyThreshold ??
+                undefined,
             },
           },
           runtime: {

@@ -48,7 +48,10 @@ Deno.test("DB ops contract - routes shell reset through the canonical JS impleme
 
 Deno.test("DB ops contract - makes remote DB maintenance scripts require explicit environments", () => {
   assertStringIncludes(resetDbScript, "--env <staging|production>");
-  assertStringIncludes(resetDbScript, "For local reset, use: pnpm db:reset");
+  assertStringIncludes(
+    resetDbScript,
+    "For local reset, use the local stack/bootstrap flow (`deno task local:up`); this script is for staging/production only.",
+  );
   assertStringIncludes(resetDbScript, "DB");
   assert(!resetDbScript.includes("takos-control-db ${mode}"));
 

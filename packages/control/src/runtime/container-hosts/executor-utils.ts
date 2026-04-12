@@ -5,17 +5,20 @@
 
 import type {
   DurableObjectNamespace,
-  R2Bucket,
   Queue,
-} from '../../shared/types/bindings.ts';
-import { jsonResponse, errorJsonResponse } from '../../shared/utils/http-response.ts';
-import { base64ToBytes } from '../../shared/utils/encoding-utils.ts';
+  R2Bucket,
+} from "../../shared/types/bindings.ts";
+import {
+  errorJsonResponse,
+  jsonResponse,
+} from "../../shared/utils/http-response.ts";
+import { base64ToBytes } from "../../shared/utils/encoding-utils.ts";
 import type {
-  DbEnv,
-  StorageEnv,
   AiEnv,
+  DbEnv,
   IndexJobQueueMessage,
-} from '../../shared/types/index.ts';
+  StorageEnv,
+} from "../../shared/types/index.ts";
 
 // ---------------------------------------------------------------------------
 // Environment types
@@ -29,11 +32,19 @@ export interface AgentExecutorEnv extends DbEnv, StorageEnv, AiEnv {
   EXECUTOR_CONTAINER_TIER3?: ContainerNamespace;
   RUN_NOTIFIER: DurableObjectNamespace;
   TAKOS_OFFLOAD: R2Bucket;
-  TAKOS_EGRESS: { fetch(input: RequestInfo | URL, init?: RequestInit): Promise<Response> };
-  RUNTIME_HOST?: { fetch(input: RequestInfo | URL, init?: RequestInit): Promise<Response> };
-  BROWSER_HOST?: { fetch(input: RequestInfo | URL, init?: RequestInit): Promise<Response> };
+  TAKOS_EGRESS: {
+    fetch(input: RequestInfo | URL, init?: RequestInit): Promise<Response>;
+  };
+  RUNTIME_HOST?: {
+    fetch(input: RequestInfo | URL, init?: RequestInit): Promise<Response>;
+  };
+  BROWSER_HOST?: {
+    fetch(input: RequestInfo | URL, init?: RequestInit): Promise<Response>;
+  };
   /** Service binding to main takos-web worker for control RPC forwarding. */
-  TAKOS_CONTROL?: { fetch(input: RequestInfo | URL, init?: RequestInit): Promise<Response> };
+  TAKOS_CONTROL?: {
+    fetch(input: RequestInfo | URL, init?: RequestInit): Promise<Response>;
+  };
   /** Shared secret for authenticating forwarded requests to the main worker. */
   EXECUTOR_PROXY_SECRET?: string;
   INDEX_QUEUE?: Queue<IndexJobQueueMessage>;
@@ -50,7 +61,7 @@ export type Env = AgentExecutorEnv;
 import type {
   AgentExecutorDispatchPayload,
   AgentExecutorDispatchResult,
-} from './executor-dispatch.ts';
+} from "./executor-dispatch.ts";
 
 /** Token metadata stored alongside each random proxy token. */
 export interface ProxyTokenInfo {
@@ -61,8 +72,11 @@ export interface ProxyTokenInfo {
 
 export interface ExecutorContainerStub {
   fetch(input: RequestInfo | URL, init?: RequestInit): Promise<Response>;
-  dispatchStart(body: AgentExecutorDispatchPayload): Promise<AgentExecutorDispatchResult>;
+  dispatchStart(
+    body: AgentExecutorDispatchPayload,
+  ): Promise<AgentExecutorDispatchResult>;
   verifyProxyToken(token: string): Promise<ProxyTokenInfo | null>;
+  revokeProxyTokens?(): Promise<void>;
 }
 
 export interface ContainerNamespace extends DurableObjectNamespace {
@@ -74,9 +88,16 @@ export interface ContainerNamespace extends DurableObjectNamespace {
  * Resolve the ContainerNamespace for a given executor tier.
  * Falls back to EXECUTOR_CONTAINER (tier 1) when the tier-specific binding is not configured.
  */
-export function resolveContainerNamespace(env: AgentExecutorEnv, tier: ExecutorTier): ContainerNamespace {
-  if (tier === 3 && env.EXECUTOR_CONTAINER_TIER3) return env.EXECUTOR_CONTAINER_TIER3;
-  if (tier === 2 && env.EXECUTOR_CONTAINER_TIER2) return env.EXECUTOR_CONTAINER_TIER2;
+export function resolveContainerNamespace(
+  env: AgentExecutorEnv,
+  tier: ExecutorTier,
+): ContainerNamespace {
+  if (tier === 3 && env.EXECUTOR_CONTAINER_TIER3) {
+    return env.EXECUTOR_CONTAINER_TIER3;
+  }
+  if (tier === 2 && env.EXECUTOR_CONTAINER_TIER2) {
+    return env.EXECUTOR_CONTAINER_TIER2;
+  }
   return env.EXECUTOR_CONTAINER;
 }
 
@@ -85,7 +106,11 @@ export function resolveContainerNamespace(env: AgentExecutorEnv, tier: ExecutorT
  * Defaults to tier 1 if not specified.
  */
 export function parseExecutorTier(value: unknown): ExecutorTier {
-  const n = typeof value === 'number' ? value : typeof value === 'string' ? parseInt(value, 10) : NaN;
+  const n = typeof value === "number"
+    ? value
+    : typeof value === "string"
+    ? parseInt(value, 10)
+    : NaN;
   if (n === 2 || n === 3) return n;
   return 1;
 }
@@ -99,14 +124,14 @@ export interface AiRunBinding {
   run(model: string, inputs: Record<string, unknown>): Promise<unknown>;
 }
 
-export type ProxyCapability = 'bindings' | 'control';
+export type ProxyCapability = "bindings" | "control";
 
 // ---------------------------------------------------------------------------
 // Response helpers
 // ---------------------------------------------------------------------------
 
 export function unauthorized(): Response {
-  return errorJsonResponse('Unauthorized', 401);
+  return errorJsonResponse("Unauthorized", 401);
 }
 
 export function ok(data: unknown): Response {
@@ -121,44 +146,49 @@ export function err(message: string, status = 500): Response {
 // Error classification
 // ---------------------------------------------------------------------------
 
-export function classifyProxyError(e: unknown): { status: number; message: string } {
-  const name = e instanceof Error ? e.name : '';
+export function classifyProxyError(
+  e: unknown,
+): { status: number; message: string } {
+  const name = e instanceof Error ? e.name : "";
   const msg = e instanceof Error ? e.message : String(e);
 
   // Timeout / AbortError
-  if (name === 'AbortError' || name === 'TimeoutError' || msg.includes('timed out') || msg.includes('timeout')) {
-    return { status: 504, message: 'Proxy request timed out' };
+  if (
+    name === "AbortError" || name === "TimeoutError" ||
+    msg.includes("timed out") || msg.includes("timeout")
+  ) {
+    return { status: 504, message: "Proxy request timed out" };
   }
 
   // SQLite errors
-  if (msg.includes('SQLITE_BUSY') || msg.includes('database is locked')) {
-    return { status: 503, message: 'Database busy, retry later' };
+  if (msg.includes("SQLITE_BUSY") || msg.includes("database is locked")) {
+    return { status: 503, message: "Database busy, retry later" };
   }
-  if (msg.includes('SQLITE_CONSTRAINT')) {
-    return { status: 409, message: 'Database constraint violation' };
+  if (msg.includes("SQLITE_CONSTRAINT")) {
+    return { status: 409, message: "Database constraint violation" };
   }
-  if (msg.includes('SQLITE_ERROR') || msg.includes('D1_ERROR')) {
-    return { status: 400, message: 'Database query error' };
+  if (msg.includes("SQLITE_ERROR") || msg.includes("D1_ERROR")) {
+    return { status: 400, message: "Database query error" };
   }
 
   // Network errors
   if (
-    name === 'NetworkError' ||
-    msg.includes('ECONNREFUSED') ||
-    msg.includes('ECONNRESET') ||
-    msg.includes('ENOTFOUND') ||
-    msg.includes('fetch failed') ||
-    msg.includes('network')
+    name === "NetworkError" ||
+    msg.includes("ECONNREFUSED") ||
+    msg.includes("ECONNRESET") ||
+    msg.includes("ENOTFOUND") ||
+    msg.includes("fetch failed") ||
+    msg.includes("network")
   ) {
-    return { status: 502, message: 'Upstream connection failed' };
+    return { status: 502, message: "Upstream connection failed" };
   }
 
   // Client-side type/range errors
   if (e instanceof TypeError || e instanceof RangeError) {
-    return { status: 400, message: 'Invalid request' };
+    return { status: 400, message: "Invalid request" };
   }
 
-  return { status: 500, message: 'Internal proxy error' };
+  return { status: 500, message: "Internal proxy error" };
 }
 
 // ---------------------------------------------------------------------------
@@ -176,8 +206,12 @@ export function headersToRecord(headers: Headers): Record<string, string> {
 export { base64ToBytes };
 
 export function readRunServiceId(body: Record<string, unknown>): string | null {
-  if (typeof body.serviceId === 'string' && body.serviceId.length > 0) return body.serviceId;
-  if (typeof body.workerId === 'string' && body.workerId.length > 0) return body.workerId;
+  if (typeof body.serviceId === "string" && body.serviceId.length > 0) {
+    return body.serviceId;
+  }
+  if (typeof body.workerId === "string" && body.workerId.length > 0) {
+    return body.workerId;
+  }
   return null;
 }
 
@@ -188,30 +222,32 @@ export function readRunServiceId(body: Record<string, unknown>): string | null {
 const proxyUsageCounters = new Map<string, number>();
 
 export function recordProxyUsage(path: string): void {
-  const bucket = path.startsWith('/proxy/db/')
-    ? 'db'
-    : path.startsWith('/proxy/offload/')
-      ? 'offload'
-      : path.startsWith('/proxy/do/')
-        ? 'do'
-        : path === '/rpc/control/tool-catalog'
-          ? 'tool-catalog'
-          : path === '/rpc/control/tool-execute'
-            ? 'tool-execute'
-            : path === '/rpc/control/tool-cleanup'
-              ? 'tool-cleanup'
-              : path === '/rpc/control/run-event'
-                ? 'run-event'
-                : path.startsWith('/proxy/')
-                  ? 'other-proxy'
-                  : path.startsWith('/rpc/control/')
-                    ? 'other-control-rpc'
-                    : 'other';
+  const bucket = path.startsWith("/proxy/db/")
+    ? "db"
+    : path.startsWith("/proxy/offload/")
+    ? "offload"
+    : path.startsWith("/proxy/do/")
+    ? "do"
+    : path === "/rpc/control/tool-catalog"
+    ? "tool-catalog"
+    : path === "/rpc/control/tool-execute"
+    ? "tool-execute"
+    : path === "/rpc/control/tool-cleanup"
+    ? "tool-cleanup"
+    : path === "/rpc/control/run-event"
+    ? "run-event"
+    : path.startsWith("/proxy/")
+    ? "other-proxy"
+    : path.startsWith("/rpc/control/")
+    ? "other-control-rpc"
+    : "other";
   proxyUsageCounters.set(bucket, (proxyUsageCounters.get(bucket) ?? 0) + 1);
 }
 
 export function getProxyUsageSnapshot(): Record<string, number> {
-  return Object.fromEntries([...proxyUsageCounters.entries()].sort(([a], [b]) => a.localeCompare(b)));
+  return Object.fromEntries(
+    [...proxyUsageCounters.entries()].sort(([a], [b]) => a.localeCompare(b)),
+  );
 }
 
 // ---------------------------------------------------------------------------
@@ -224,37 +260,39 @@ export function getProxyUsageSnapshot(): Record<string, number> {
  * DB/service access in the main worker.
  */
 const CONTROL_RPC_PATH_MAP: Record<string, string> = {
-  '/rpc/control/heartbeat': '/internal/executor-rpc/heartbeat',
-  '/proxy/heartbeat': '/internal/executor-rpc/heartbeat',
-  '/rpc/control/run-status': '/internal/executor-rpc/run-status',
-  '/proxy/run/status': '/internal/executor-rpc/run-status',
-  '/rpc/control/run-record': '/internal/executor-rpc/run-record',
-  '/rpc/control/run-bootstrap': '/internal/executor-rpc/run-bootstrap',
-  '/rpc/control/run-fail': '/internal/executor-rpc/run-fail',
-  '/proxy/run/fail': '/internal/executor-rpc/run-fail',
-  '/rpc/control/run-reset': '/internal/executor-rpc/run-reset',
-  '/proxy/run/reset': '/internal/executor-rpc/run-reset',
-  '/rpc/control/run-context': '/internal/executor-rpc/run-context',
-  '/rpc/control/run-config': '/internal/executor-rpc/run-config',
-  '/rpc/control/no-llm-complete': '/internal/executor-rpc/no-llm-complete',
-  '/rpc/control/current-session': '/internal/executor-rpc/current-session',
-  '/rpc/control/is-cancelled': '/internal/executor-rpc/is-cancelled',
-  '/rpc/control/conversation-history': '/internal/executor-rpc/conversation-history',
-  '/rpc/control/skill-runtime-context': '/internal/executor-rpc/skill-runtime-context',
-  '/rpc/control/skill-catalog': '/internal/executor-rpc/skill-catalog',
-  '/rpc/control/skill-plan': '/internal/executor-rpc/skill-plan',
-  '/rpc/control/memory-activation': '/internal/executor-rpc/memory-activation',
-  '/rpc/control/memory-finalize': '/internal/executor-rpc/memory-finalize',
-  '/rpc/control/add-message': '/internal/executor-rpc/add-message',
-  '/rpc/control/update-run-status': '/internal/executor-rpc/update-run-status',
-  '/rpc/control/tool-catalog': '/internal/executor-rpc/tool-catalog',
-  '/rpc/control/tool-execute': '/internal/executor-rpc/tool-execute',
-  '/rpc/control/tool-cleanup': '/internal/executor-rpc/tool-cleanup',
-  '/rpc/control/run-event': '/internal/executor-rpc/run-event',
-  '/rpc/control/billing-run-usage': '/internal/executor-rpc/billing-run-usage',
-  '/proxy/billing/run-usage': '/internal/executor-rpc/billing-run-usage',
-  '/rpc/control/api-keys': '/internal/executor-rpc/api-keys',
-  '/proxy/api-keys': '/internal/executor-rpc/api-keys',
+  "/rpc/control/heartbeat": "/internal/executor-rpc/heartbeat",
+  "/proxy/heartbeat": "/internal/executor-rpc/heartbeat",
+  "/rpc/control/run-status": "/internal/executor-rpc/run-status",
+  "/proxy/run/status": "/internal/executor-rpc/run-status",
+  "/rpc/control/run-record": "/internal/executor-rpc/run-record",
+  "/rpc/control/run-bootstrap": "/internal/executor-rpc/run-bootstrap",
+  "/rpc/control/run-fail": "/internal/executor-rpc/run-fail",
+  "/proxy/run/fail": "/internal/executor-rpc/run-fail",
+  "/rpc/control/run-reset": "/internal/executor-rpc/run-reset",
+  "/proxy/run/reset": "/internal/executor-rpc/run-reset",
+  "/rpc/control/run-context": "/internal/executor-rpc/run-context",
+  "/rpc/control/run-config": "/internal/executor-rpc/run-config",
+  "/rpc/control/no-llm-complete": "/internal/executor-rpc/no-llm-complete",
+  "/rpc/control/current-session": "/internal/executor-rpc/current-session",
+  "/rpc/control/is-cancelled": "/internal/executor-rpc/is-cancelled",
+  "/rpc/control/conversation-history":
+    "/internal/executor-rpc/conversation-history",
+  "/rpc/control/skill-runtime-context":
+    "/internal/executor-rpc/skill-runtime-context",
+  "/rpc/control/skill-catalog": "/internal/executor-rpc/skill-catalog",
+  "/rpc/control/skill-plan": "/internal/executor-rpc/skill-plan",
+  "/rpc/control/memory-activation": "/internal/executor-rpc/memory-activation",
+  "/rpc/control/memory-finalize": "/internal/executor-rpc/memory-finalize",
+  "/rpc/control/add-message": "/internal/executor-rpc/add-message",
+  "/rpc/control/update-run-status": "/internal/executor-rpc/update-run-status",
+  "/rpc/control/tool-catalog": "/internal/executor-rpc/tool-catalog",
+  "/rpc/control/tool-execute": "/internal/executor-rpc/tool-execute",
+  "/rpc/control/tool-cleanup": "/internal/executor-rpc/tool-cleanup",
+  "/rpc/control/run-event": "/internal/executor-rpc/run-event",
+  "/rpc/control/billing-run-usage": "/internal/executor-rpc/billing-run-usage",
+  "/proxy/billing/run-usage": "/internal/executor-rpc/billing-run-usage",
+  "/rpc/control/api-keys": "/internal/executor-rpc/api-keys",
+  "/proxy/api-keys": "/internal/executor-rpc/api-keys",
 };
 
 /**
@@ -282,15 +320,20 @@ export async function forwardToControlPlane(
   try {
     return await controlBinding.fetch(
       new Request(`https://internal${targetPath}`, {
-        method: 'POST',
+        method: "POST",
         headers: {
-          'Content-Type': 'application/json',
-          'X-Takos-Internal': env.EXECUTOR_PROXY_SECRET ?? '',
+          "Content-Type": "application/json",
+          "X-Takos-Internal": env.EXECUTOR_PROXY_SECRET ?? "",
         },
         body: JSON.stringify(body),
       }),
     );
   } catch (e) {
-    return err(`Control plane forwarding failed: ${e instanceof Error ? e.message : String(e)}`, 502);
+    return err(
+      `Control plane forwarding failed: ${
+        e instanceof Error ? e.message : String(e)
+      }`,
+      502,
+    );
   }
 }

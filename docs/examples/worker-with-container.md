@@ -24,10 +24,11 @@ compute:
         artifactPath: dist/host.js
     containers:
       browser:
-        image: ghcr.io/example/browser-service@sha256:0123456789abcdef
+        image: ghcr.io/example/browser-service@sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef
         port: 8080
         instanceType: standard-2
-        maxInstances: 10
+        scaling:
+          maxInstances: 10
 
 routes:
   - target: browser-host

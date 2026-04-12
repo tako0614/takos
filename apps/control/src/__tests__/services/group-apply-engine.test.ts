@@ -2,6 +2,7 @@ import {
   assert,
   assertEquals,
   assertObjectMatch,
+  assertRejects,
   assertStringIncludes,
 } from "jsr:@std/assert";
 
@@ -25,6 +26,7 @@ const mocks = {
   executeDeployment: ((..._args: any[]) => undefined) as any,
   syncGroupManagedDesiredState: (async () => []) as any,
   reconcileGroupRouting: ((..._args: any[]) => undefined) as any,
+  assertTranslationSupported: ((..._args: any[]) => undefined) as any,
   groupUpdateRun: ((..._args: any[]) => undefined) as any,
   getDeploymentById: ((..._args: any[]) => undefined) as any,
   findDeploymentByArtifactRef: ((..._args: any[]) => undefined) as any,
@@ -126,6 +128,9 @@ function installApplyEngineDeps() {
   applyEngineDeps.reconcileGroupRouting = (
     ...args: Parameters<typeof mocks.reconcileGroupRouting>
   ) => mocks.reconcileGroupRouting(...args);
+  applyEngineDeps.assertTranslationSupported = (
+    ...args: Parameters<typeof mocks.assertTranslationSupported>
+  ) => mocks.assertTranslationSupported(...args);
   applyEngineDeps.DeploymentService = class {
     constructor(_env: unknown) {}
     createDeployment(...args: Parameters<typeof mocks.createDeployment>) {
@@ -156,13 +161,58 @@ function makeManifest(): AppManifest {
         },
       },
     },
-    storage: {},
     routes: [
       { target: "api", path: "/api" },
     ],
     publish: [],
     env: {},
-    scopes: [],
+  };
+}
+
+function makeManagedWorkerRecord(
+  options: {
+    name?: string;
+    status?: string;
+    specFingerprint?: string;
+    hostname?: string;
+    routeRef?: string;
+  } = {},
+) {
+  const manifest = makeManifest();
+  const name = options.name ?? "api";
+  const hostname = options.hostname ??
+    `grp-group-1-production-worker-${name}.example.test`;
+  const routeRef = options.routeRef ?? `grp-group-1-production-worker-${name}`;
+  return {
+    row: {
+      id: `svc-${name}`,
+      accountId: "ws-1",
+      groupId: "group-1",
+      serviceType: "app",
+      nameType: null,
+      status: options.status ?? "deployed",
+      config: "{}",
+      hostname,
+      routeRef,
+      slug: routeRef,
+      activeDeploymentId: null,
+      fallbackDeploymentId: null,
+      currentVersion: 0,
+      workloadKind: "worker-bundle",
+      createdAt: "2026-03-29T00:00:00.000Z",
+      updatedAt: "2026-03-29T00:00:00.000Z",
+    },
+    config: {
+      managedBy: "group",
+      manifestName: name,
+      componentKind: "worker",
+      sourceKind: "worker",
+      executionProfile: "workers",
+      artifactKind: "worker-bundle",
+      specFingerprint: options.specFingerprint ??
+        stableFingerprint(manifest.compute.api),
+      deployedAt: "2026-03-29T00:00:00.000Z",
+    },
   };
 }
 
@@ -447,7 +497,600 @@ Deno.test("group apply engine - applies worker workloads through deployment serv
   assertEquals(result.applied[0].status, "success");
 });
 
-Deno.test("group apply engine - passes canonical resource specs into resource creation", async () => {
+Deno.test("group apply engine - reasserts translation support on the mutating apply path", async () => {
+  const manifest = makeManifest();
+  mocks.assertTranslationSupported = createRecordedMock(async () =>
+    undefined
+  ) as any;
+  mocks.reconcileGroupRouting = createRecordedMock(async () => ({
+    routes: {},
+    failedRoutes: [],
+  })) as any;
+  mocks.createResource = createRecordedMock(async () => undefined) as any;
+  mocks.updateManagedResource = createRecordedMock(async () =>
+    undefined
+  ) as any;
+  mocks.groupGet = createRecordedMock(async () => ({
+    id: "group-1",
+    spaceId: "ws-1",
+    name: "demo-app",
+    provider: "cloudflare",
+    env: "production",
+    appVersion: "1.0.0",
+    desiredSpecJson: JSON.stringify(manifest),
+    providerStateJson: "{}",
+    reconcileStatus: "ready",
+    lastAppliedAt: "2026-03-29T00:00:00.000Z",
+    createdAt: "2026-03-29T00:00:00.000Z",
+    updatedAt: "2026-03-29T00:00:00.000Z",
+  })) as any;
+  mocks.listResources = createRecordedMock(async () => []) as any;
+  mocks.listGroupManagedServices = createRecordedMock(async () => [
+    makeManagedWorkerRecord({
+      status: "pending",
+      specFingerprint: "stale-worker-fingerprint",
+    }),
+  ]) as any;
+  mocks.upsertGroupManagedService = createRecordedMock(async () =>
+    makeManagedWorkerRecord({
+      status: "pending",
+      specFingerprint: stableFingerprint(manifest.compute.api),
+    })
+  ) as any;
+  mocks.syncGroupManagedDesiredState = createRecordedMock(
+    async () => [],
+  ) as any;
+  mocks.createDeployment = createRecordedMock(async () => ({
+    id: "dep-1",
+  })) as any;
+  mocks.executeDeployment = createRecordedMock(async () => ({
+    id: "dep-1",
+    completed_at: "2026-03-29T00:00:01.000Z",
+    provider_state_json: "{}",
+    bundle_hash: "sha256:demo",
+  })) as any;
+
+  await applyManifest(
+    { DB: {} as never } as never,
+    "group-1",
+    manifest,
+    {
+      artifacts: {
+        api: {
+          kind: "worker-bundle",
+          bundleContent: "export default {}",
+        },
+      },
+    },
+  );
+
+  assertEquals(mocks.assertTranslationSupported.calls.length, 1);
+});
+
+Deno.test("group apply engine - planManifest runs deploy validation before returning", async () => {
+  const manifest = makeManifest();
+  manifest.routes.push({ target: "api", path: "/" });
+  manifest.routes.push({ target: "api", path: "/" });
+  mocks.groupGet = createRecordedMock(async () => ({
+    id: "group-1",
+    spaceId: "ws-1",
+    name: "demo-app",
+    provider: "cloudflare",
+    env: "production",
+    appVersion: "1.0.0",
+    desiredSpecJson: JSON.stringify(manifest),
+    providerStateJson: "{}",
+    reconcileStatus: "ready",
+    lastAppliedAt: "2026-03-29T00:00:00.000Z",
+    createdAt: "2026-03-29T00:00:00.000Z",
+    updatedAt: "2026-03-29T00:00:00.000Z",
+  })) as any;
+  mocks.listResources = createRecordedMock(async () => []) as any;
+  mocks.listGroupManagedServices = createRecordedMock(async () => [
+    makeManagedWorkerRecord({
+      status: "pending",
+      specFingerprint: stableFingerprint(manifest.compute.api),
+    }),
+  ]) as any;
+
+  await assertRejects(
+    () =>
+      planManifest(
+        { DB: {} as never } as never,
+        "group-1",
+        manifest,
+      ),
+    Error,
+    "Deploy validation failed",
+  );
+});
+
+Deno.test("group apply engine - syncs managed desired state once for multi-workload deploy", async () => {
+  const manifest = makeManifest();
+  manifest.compute.admin = {
+    ...manifest.compute.api,
+    build: {
+      fromWorkflow: {
+        path: ".takos/workflows/deploy.yml",
+        job: "build-admin",
+        artifact: "admin-worker",
+        artifactPath: "dist/admin.js",
+      },
+    },
+  };
+  mocks.reconcileGroupRouting = createRecordedMock(async () => ({
+    routes: {},
+    failedRoutes: [],
+  })) as any;
+  mocks.createResource = createRecordedMock(async () => undefined) as any;
+  mocks.updateManagedResource = createRecordedMock(async () =>
+    undefined
+  ) as any;
+  mocks.groupGet = createRecordedMock(async () => ({
+    id: "group-1",
+    spaceId: "ws-1",
+    name: "demo-app",
+    provider: "cloudflare",
+    env: "production",
+    appVersion: "1.0.0",
+    desiredSpecJson: JSON.stringify(manifest),
+    providerStateJson: "{}",
+    reconcileStatus: "ready",
+    lastAppliedAt: "2026-03-29T00:00:00.000Z",
+    createdAt: "2026-03-29T00:00:00.000Z",
+    updatedAt: "2026-03-29T00:00:00.000Z",
+  })) as any;
+  mocks.listResources = createRecordedMock(async () => []) as any;
+  mocks.listGroupManagedServices = createRecordedMock(async () => [
+    makeManagedWorkerRecord({
+      name: "api",
+      status: "pending",
+      specFingerprint: "stale-api-fingerprint",
+    }),
+    makeManagedWorkerRecord({
+      name: "admin",
+      status: "pending",
+      specFingerprint: "stale-admin-fingerprint",
+    }),
+  ]) as any;
+  mocks.upsertGroupManagedService = createRecordedMock(
+    async (_env: unknown, input: { manifestName: string }) =>
+      makeManagedWorkerRecord({
+        name: input.manifestName,
+        status: "pending",
+      }),
+  ) as any;
+  mocks.syncGroupManagedDesiredState = createRecordedMock(
+    async () => [],
+  ) as any;
+  mocks.createDeployment = createRecordedMock(async () => ({
+    id: "dep-1",
+  })) as any;
+  mocks.executeDeployment = createRecordedMock(async () => ({
+    id: "dep-1",
+    completed_at: "2026-03-29T00:00:01.000Z",
+    provider_state_json: "{}",
+    bundle_hash: "sha256:demo",
+  })) as any;
+
+  const result = await applyManifest(
+    { DB: {} as never } as never,
+    "group-1",
+    manifest,
+    {
+      artifacts: {
+        api: {
+          kind: "worker-bundle",
+          bundleContent: "export default {}",
+        },
+        admin: {
+          kind: "worker-bundle",
+          bundleContent: "export default {}",
+        },
+      },
+    },
+  );
+
+  assertEquals(mocks.createDeployment.calls.length, 2);
+  assertEquals(mocks.executeDeployment.calls.length, 2);
+  assertEquals(mocks.syncGroupManagedDesiredState.calls.length, 1);
+  assertEquals(
+    result.applied.filter((entry: { category: string }) =>
+      entry.category === "worker"
+    ).length,
+    2,
+  );
+});
+
+Deno.test("group apply engine - does not reconcile routes after workload deployment failure", async () => {
+  const manifest = makeManifest();
+  mocks.reconcileGroupRouting = createRecordedMock(async () => ({
+    routes: {},
+    failedRoutes: [],
+  })) as any;
+  mocks.createResource = createRecordedMock(async () => undefined) as any;
+  mocks.updateManagedResource = createRecordedMock(async () =>
+    undefined
+  ) as any;
+  mocks.groupGet = createRecordedMock(async () => ({
+    id: "group-1",
+    spaceId: "ws-1",
+    name: "demo-app",
+    provider: "cloudflare",
+    env: "production",
+    appVersion: "1.0.0",
+    desiredSpecJson: JSON.stringify(manifest),
+    providerStateJson: "{}",
+    reconcileStatus: "ready",
+    lastAppliedAt: "2026-03-29T00:00:00.000Z",
+    createdAt: "2026-03-29T00:00:00.000Z",
+    updatedAt: "2026-03-29T00:00:00.000Z",
+  })) as any;
+  mocks.listResources = createRecordedMock(async () => []) as any;
+  mocks.listGroupManagedServices = createRecordedMock(async () => [
+    makeManagedWorkerRecord({
+      status: "pending",
+      specFingerprint: "stale-worker-fingerprint",
+    }),
+  ]) as any;
+  mocks.upsertGroupManagedService = createRecordedMock(async () =>
+    makeManagedWorkerRecord({
+      status: "pending",
+      specFingerprint: stableFingerprint(manifest.compute.api),
+    })
+  ) as any;
+  mocks.syncGroupManagedDesiredState = createRecordedMock(
+    async () => [],
+  ) as any;
+  mocks.createDeployment = createRecordedMock(async () => ({
+    id: "dep-1",
+  })) as any;
+  mocks.executeDeployment = createRecordedMock(async () => {
+    throw new Error("provider deploy failed");
+  }) as any;
+
+  const result = await applyManifest(
+    { DB: {} as never } as never,
+    "group-1",
+    manifest,
+    {
+      artifacts: {
+        api: {
+          kind: "worker-bundle",
+          bundleContent: "export default {}",
+        },
+      },
+    },
+  );
+
+  assertEquals(result.applied.length, 1);
+  assertEquals(result.applied[0].status, "failed");
+  assertStringIncludes(result.applied[0].error ?? "", "provider deploy failed");
+  assertEquals(mocks.syncGroupManagedDesiredState.calls.length, 0);
+  assertEquals(mocks.reconcileGroupRouting.calls.length, 0);
+});
+
+Deno.test("group apply engine - applies portable worker workloads through runtime-host outside Cloudflare", async () => {
+  const manifest = makeManifest();
+  mocks.reconcileGroupRouting = createRecordedMock(async () => ({
+    routes: {},
+    failedRoutes: [],
+  })) as any;
+  mocks.createResource = createRecordedMock(async () => undefined) as any;
+  mocks.updateManagedResource = createRecordedMock(async () =>
+    undefined
+  ) as any;
+  mocks.groupGet = createRecordedMock(async () => ({
+    id: "group-1",
+    spaceId: "ws-1",
+    name: "demo-app",
+    provider: "local",
+    env: "production",
+    appVersion: "1.0.0",
+    desiredSpecJson: JSON.stringify(manifest),
+    providerStateJson: "{}",
+    reconcileStatus: "ready",
+    lastAppliedAt: "2026-03-29T00:00:00.000Z",
+    createdAt: "2026-03-29T00:00:00.000Z",
+    updatedAt: "2026-03-29T00:00:00.000Z",
+  })) as any;
+  mocks.listResources = createRecordedMock(async () => []) as any;
+  mocks.listGroupManagedServices = createRecordedMock(async () => [
+    makeManagedWorkerRecord({
+      status: "pending",
+      specFingerprint: "stale-worker-fingerprint",
+    }),
+  ]) as any;
+  mocks.upsertGroupManagedService = createRecordedMock(async () =>
+    makeManagedWorkerRecord({
+      status: "pending",
+      specFingerprint: stableFingerprint(manifest.compute.api),
+    })
+  ) as any;
+  mocks.syncGroupManagedDesiredState = createRecordedMock(
+    async () => [],
+  ) as any;
+  mocks.createDeployment = createRecordedMock(async () => ({
+    id: "dep-1",
+  })) as any;
+  mocks.executeDeployment = createRecordedMock(async () => ({
+    id: "dep-1",
+    completed_at: "2026-03-29T00:00:01.000Z",
+    provider_state_json: "{}",
+    bundle_hash: "sha256:demo",
+  })) as any;
+
+  await applyManifest(
+    { DB: {} as never } as never,
+    "group-1",
+    manifest,
+    {
+      artifacts: {
+        api: {
+          kind: "worker-bundle",
+          bundleContent: "export default {}",
+        },
+      },
+    },
+  );
+
+  const createDeploymentArgs = mocks.createDeployment.calls[0]
+    .args[0] as Record<string, unknown>;
+  assertEquals(
+    (createDeploymentArgs.provider as { name?: string }).name,
+    "runtime-host",
+  );
+});
+
+Deno.test("group apply engine - syncs manifest env and publications when workload diff is unchanged", async () => {
+  const previousManifest = makeManifest();
+  const manifest: AppManifest = {
+    ...previousManifest,
+    env: { GLOBAL_MODE: "prod" },
+    publish: [{ name: "browser", type: "McpServer", path: "/api" }],
+  };
+  mocks.reconcileGroupRouting = createRecordedMock(async () => ({
+    routes: {},
+    failedRoutes: [],
+  })) as any;
+  mocks.createResource = createRecordedMock(async () => undefined) as any;
+  mocks.updateManagedResource = createRecordedMock(async () =>
+    undefined
+  ) as any;
+  mocks.groupGet = createRecordedMock(async () => ({
+    id: "group-1",
+    spaceId: "ws-1",
+    name: "demo-app",
+    provider: "cloudflare",
+    env: "production",
+    appVersion: "1.0.0",
+    desiredSpecJson: JSON.stringify(previousManifest),
+    providerStateJson: "{}",
+    reconcileStatus: "ready",
+    lastAppliedAt: "2026-03-29T00:00:00.000Z",
+    createdAt: "2026-03-29T00:00:00.000Z",
+    updatedAt: "2026-03-29T00:00:00.000Z",
+  })) as any;
+  mocks.listResources = createRecordedMock(async () => []) as any;
+  mocks.listGroupManagedServices = createRecordedMock(async () => [
+    makeManagedWorkerRecord({
+      specFingerprint: stableFingerprint(manifest.compute.api),
+    }),
+  ]) as any;
+  mocks.upsertGroupManagedService = createRecordedMock(async () =>
+    makeManagedWorkerRecord()
+  ) as any;
+  mocks.syncGroupManagedDesiredState = createRecordedMock(
+    async () => [],
+  ) as any;
+  mocks.createDeployment = createRecordedMock(async () => ({
+    id: "dep-1",
+  })) as any;
+  mocks.executeDeployment = createRecordedMock(async () => ({
+    id: "dep-1",
+  })) as any;
+
+  const result = await applyManifest(
+    { DB: {} as never } as never,
+    "group-1",
+    manifest,
+  );
+
+  assertEquals(result.diff.hasChanges, false);
+  assertEquals(mocks.createDeployment.calls.length, 0);
+  assertEquals(mocks.syncGroupManagedDesiredState.calls.length, 1);
+  const syncInput = mocks.syncGroupManagedDesiredState.calls[0]
+    .args[1] as { desiredState: { manifest: AppManifest } };
+  assertEquals(syncInput.desiredState.manifest.env, { GLOBAL_MODE: "prod" });
+  assertEquals(syncInput.desiredState.manifest.publish, manifest.publish);
+});
+
+Deno.test("group apply engine - does not reconcile routes after managed-state sync failure", async () => {
+  const previousManifest = makeManifest();
+  const manifest: AppManifest = {
+    ...previousManifest,
+    env: { GLOBAL_MODE: "prod" },
+  };
+  mocks.reconcileGroupRouting = createRecordedMock(async () => ({
+    routes: {},
+    failedRoutes: [],
+  })) as any;
+  mocks.createResource = createRecordedMock(async () => undefined) as any;
+  mocks.updateManagedResource = createRecordedMock(async () =>
+    undefined
+  ) as any;
+  mocks.groupGet = createRecordedMock(async () => ({
+    id: "group-1",
+    spaceId: "ws-1",
+    name: "demo-app",
+    provider: "cloudflare",
+    env: "production",
+    appVersion: "1.0.0",
+    desiredSpecJson: JSON.stringify(previousManifest),
+    providerStateJson: "{}",
+    reconcileStatus: "ready",
+    lastAppliedAt: "2026-03-29T00:00:00.000Z",
+    createdAt: "2026-03-29T00:00:00.000Z",
+    updatedAt: "2026-03-29T00:00:00.000Z",
+  })) as any;
+  mocks.listResources = createRecordedMock(async () => []) as any;
+  mocks.listGroupManagedServices = createRecordedMock(async () => [
+    makeManagedWorkerRecord({
+      specFingerprint: stableFingerprint(manifest.compute.api),
+    }),
+  ]) as any;
+  mocks.upsertGroupManagedService = createRecordedMock(async () =>
+    makeManagedWorkerRecord()
+  ) as any;
+  mocks.syncGroupManagedDesiredState = createRecordedMock(
+    async () => [{ name: "api", error: "consume sync failed" }],
+  ) as any;
+  mocks.createDeployment = createRecordedMock(async () => ({
+    id: "dep-1",
+  })) as any;
+  mocks.executeDeployment = createRecordedMock(async () => ({
+    id: "dep-1",
+  })) as any;
+
+  const result = await applyManifest(
+    { DB: {} as never } as never,
+    "group-1",
+    manifest,
+  );
+
+  assertEquals(result.applied.length, 1);
+  assertEquals(result.applied[0], {
+    name: "api",
+    category: "managed-state",
+    action: "update",
+    status: "failed",
+    error: "consume sync failed",
+  });
+  assertEquals(mocks.createDeployment.calls.length, 0);
+  assertEquals(mocks.reconcileGroupRouting.calls.length, 0);
+});
+
+Deno.test("group apply engine - passes service healthCheck path to deployment target", async () => {
+  const imageRef = `ghcr.io/acme/api@sha256:${"a".repeat(64)}`;
+  const manifest: AppManifest = {
+    name: "demo-app",
+    version: "1.0.0",
+    compute: {
+      api: {
+        kind: "service",
+        image: imageRef,
+        port: 8080,
+        healthCheck: {
+          path: "/readyz",
+          interval: 15,
+          timeout: 3,
+          unhealthyThreshold: 2,
+        },
+      },
+    },
+    routes: [],
+    publish: [],
+    env: {},
+  };
+  const managedRecord = {
+    row: {
+      id: "svc-api",
+      accountId: "ws-1",
+      groupId: "group-1",
+      serviceType: "service",
+      nameType: null,
+      status: "pending",
+      config: "{}",
+      hostname: "grp-group-1-production-service-api.example.test",
+      routeRef: null,
+      slug: "grp-group-1-production-service-api",
+      activeDeploymentId: null,
+      fallbackDeploymentId: null,
+      currentVersion: 0,
+      workloadKind: "container-image",
+      createdAt: "2026-03-29T00:00:00.000Z",
+      updatedAt: "2026-03-29T00:00:00.000Z",
+    },
+    config: {
+      managedBy: "group",
+      manifestName: "api",
+      componentKind: "service",
+      sourceKind: "service",
+      executionProfile: "services",
+      artifactKind: "container-image",
+      specFingerprint: stableFingerprint(manifest.compute.api),
+    },
+  };
+  mocks.reconcileGroupRouting = createRecordedMock(async () => ({
+    routes: {},
+    failedRoutes: [],
+  })) as any;
+  mocks.createResource = createRecordedMock(async () => undefined) as any;
+  mocks.updateManagedResource = createRecordedMock(async () =>
+    undefined
+  ) as any;
+  mocks.groupGet = createRecordedMock(async () => ({
+    id: "group-1",
+    spaceId: "ws-1",
+    name: "demo-app",
+    provider: "gcp",
+    env: "production",
+    appVersion: "1.0.0",
+    desiredSpecJson: JSON.stringify(manifest),
+    providerStateJson: "{}",
+    reconcileStatus: "ready",
+    lastAppliedAt: "2026-03-29T00:00:00.000Z",
+    createdAt: "2026-03-29T00:00:00.000Z",
+    updatedAt: "2026-03-29T00:00:00.000Z",
+  })) as any;
+  mocks.listResources = createRecordedMock(async () => []) as any;
+  mocks.listGroupManagedServices = createRecordedMock(async () => []) as any;
+  mocks.upsertGroupManagedService = createRecordedMock(async () =>
+    managedRecord
+  ) as any;
+  mocks.syncGroupManagedDesiredState = createRecordedMock(
+    async () => [],
+  ) as any;
+  mocks.createDeployment = createRecordedMock(async () => ({
+    id: "dep-1",
+  })) as any;
+  mocks.executeDeployment = createRecordedMock(async () => ({
+    id: "dep-1",
+    completed_at: "2026-03-29T00:00:01.000Z",
+    provider_state_json: "{}",
+    bundle_hash: null,
+  })) as any;
+
+  await applyManifest(
+    {
+      DB: {} as never,
+      OCI_ORCHESTRATOR_URL: "https://orchestrator.example.test",
+    } as never,
+    "group-1",
+    manifest,
+  );
+
+  const createDeploymentArgs = mocks.createDeployment.calls[0]
+    .args[0] as Record<string, unknown>;
+  assertEquals(createDeploymentArgs.artifactKind, "container-image");
+  assertEquals(
+    (createDeploymentArgs.provider as { name?: string }).name,
+    "cloud-run",
+  );
+  assertObjectMatch(createDeploymentArgs.target as Record<string, unknown>, {
+    artifact: {
+      kind: "container-image",
+      image_ref: imageRef,
+      exposed_port: 8080,
+      health_path: "/readyz",
+      health_interval: 15,
+      health_timeout: 3,
+      health_unhealthy_threshold: 2,
+    },
+  });
+});
+
+Deno.test("group apply engine - ignores legacy storage resources during app apply", async () => {
   /* mocks cleared (no-op in Deno) */ void 0;
   mocks.reconcileGroupRouting =
     (async () => ({ routes: {}, failedRoutes: [] })) as any;
@@ -479,7 +1122,6 @@ Deno.test("group apply engine - passes canonical resource specs into resource cr
     routes: [],
     publish: [],
     env: {},
-    scopes: [],
   };
 
   mocks.groupGet = (async () => ({
@@ -505,12 +1147,5 @@ Deno.test("group apply engine - passes canonical resource specs into resource cr
     manifest,
   );
 
-  const createResourceArgs = mocks.createResource.calls[0].args;
-  assert(createResourceArgs[0] !== undefined);
-  assertEquals(createResourceArgs[1], "group-1");
-  assertEquals(createResourceArgs[2], "events");
-  assertObjectMatch(createResourceArgs[3] as Record<string, unknown>, {
-    type: "queue",
-    spec: manifest.storage.events,
-  });
+  assertEquals(mocks.createResource.calls.length, 0);
 });

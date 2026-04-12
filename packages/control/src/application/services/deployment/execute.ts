@@ -6,7 +6,6 @@
  * to keep the main service file focused on coordination.
  */
 import { safeJsonParseOrDefault } from "../../../shared/utils/index.ts";
-import type { ServiceRuntimeConfigState } from "../platform/worker-desired-state.ts";
 import type { Deployment, DeploymentEnv } from "./models.ts";
 import {
   createDeploymentProvider,

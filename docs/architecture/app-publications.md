@@ -25,7 +25,8 @@ publish:
     path: /mcp
 ```
 
-route publication の canonical output は `url` です。
+route publication の canonical output は `url` です。 必須 field は `type` と
+`path` です。
 
 ### provider publication
 
@@ -41,7 +42,9 @@ publish:
       permission: write
 ```
 
-`takos/sql` の canonical outputs は `endpoint` と `apiKey` です。
+`takos/sql` の canonical outputs は `endpoint` と `apiKey` です。 必須 field は
+`name`、`provider`、`kind`、`spec` です。 `spec` は kind ごとの required /
+optional field を持ちます。
 
 ## consume
 

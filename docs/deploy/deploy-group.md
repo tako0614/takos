@@ -5,8 +5,9 @@
 
 Takos の deploy system は **二層モデル**:
 
-- **Layer 1 (foundation)**: primitive (compute / route / publish)
-  はそれぞれ独立した 1st-class エンティティで、個別の lifecycle を持つ
+- **Layer 1 (foundation)**: primitive (compute / resource / route / publish)
+  はそれぞれ独立した 1st-class エンティティで、個別の lifecycle を持つ。 ただし
+  public CLI ではなく control plane の internal API で扱う
 - **Layer 2 (上位 bundling layer)**: group は複数の primitive を束ねて、bulk
   lifecycle と desired state management を提供する optional な仕組み
 
@@ -44,14 +45,14 @@ group は明示的に作成する必要はありません。`takos deploy` / `ta
 実行したとき、対象の group が存在しなければ自動的に作成されます。
 
 ```bash
-takos deploy --env staging
+takos deploy --env staging --space SPACE_ID
 ```
 
 group 名は `--group` で明示指定するか、省略時は manifest の `name`
 が使われます。
 
 ```bash
-takos deploy --env staging --group my-custom-group
+takos deploy --env staging --space SPACE_ID --group my-custom-group
 ```
 
 ::: info group 名の解決順
@@ -64,46 +65,47 @@ takos deploy --env staging --group my-custom-group
 ### 一覧
 
 ```bash
-takos group list
+takos group list --space SPACE_ID
 ```
 
 ### 詳細表示
 
 ```bash
-takos group show my-app
+takos group show my-app --space SPACE_ID
 ```
 
 ### desired manifest の取得・置換
 
 ```bash
-takos group desired get my-app
-takos group desired put my-app --file app.yml
+takos group desired get my-app --space SPACE_ID
+takos group desired put my-app --file app.yml --space SPACE_ID
 ```
 
 ### 削除
 
 ```bash
-takos group delete my-app
+takos group delete my-app --space SPACE_ID
 ```
 
 ::: danger group を削除すると、紐づく desired state と inventory
-が消えます。稼働中の workload がある場合は先に `takos uninstall`
-で停止・削除してください。 :::
+が消えます。稼働中の workload がある場合は先に
+`takos uninstall GROUP_NAME --space SPACE_ID` で停止・削除してください。 :::
 
 ## deploy / install と group の関係
 
-| 観点          | local manifest deploy            | repo URL deploy / `takos install`                         |
-| ------------- | -------------------------------- | --------------------------------------------------------- |
-| source        | local working tree               | repository URL / catalog metadata                         |
-| group 作成    | 未作成なら初回 deploy 時に作成   | 未作成なら初回 deploy 時に作成                            |
-| group 指定    | `--group` または `name`          | `--group` または API body の `group_name`                 |
-| desired 更新  | manifest を group desired に保存 | repo source から解決した manifest を group desired に保存 |
-| snapshot 作成 | immutable snapshot を作る        | immutable snapshot を作る                                 |
-| rollback      | `takos rollback GROUP_NAME`      | `takos rollback GROUP_NAME`                               |
+| 観点          | local manifest deploy                        | repo URL deploy / `takos install`                         |
+| ------------- | -------------------------------------------- | --------------------------------------------------------- |
+| source        | local working tree                           | repository URL / catalog metadata                         |
+| group 作成    | 未作成なら初回 deploy 時に作成               | 未作成なら初回 deploy 時に作成                            |
+| group 指定    | `--group` または `name`                      | `--group` または API body の `group_name`                 |
+| desired 更新  | manifest を group desired に保存             | repo source から解決した manifest を group desired に保存 |
+| snapshot 作成 | immutable snapshot を作る                    | immutable snapshot を作る                                 |
+| rollback      | `takos rollback GROUP_NAME --space SPACE_ID` | `takos rollback GROUP_NAME --space SPACE_ID`              |
 
 どちらの経路でも、最終的には group の desired state が更新され、差分が計算されて
-primitive に反映されます。lifecycle は両者で同一であり、`source` field は
-manifest の出どころを示す metadata でしかありません。
+primitive に反映されます。lifecycle は両者で同一です。API source kind は local
+manifest deploy では `manifest`、repo URL / install では `git_ref` で、manifest
+の出どころを示す metadata でしかありません。
 
 ## マルチテナント構成での group
 
@@ -111,8 +113,8 @@ manifest の出どころを示す metadata でしかありません。
 することで、テナントごとに独立した環境を作れます。
 
 ```bash
-takos deploy --env production --group tenant-a
-takos deploy --env production --group tenant-b
+takos deploy --env production --space SPACE_ID --group tenant-a
+takos deploy --env production --space SPACE_ID --group tenant-b
 ```
 
 Cloudflare backend では worker の実配置先として dispatch namespace
@@ -127,8 +129,8 @@ Cloudflare backend では worker の実配置先として dispatch namespace
 ### サービスごとに分離
 
 ```bash
-cd api-service && takos deploy --env staging --group api
-cd job-worker && takos deploy --env staging --group jobs
+cd api-service && takos deploy --env staging --space SPACE_ID --group api
+cd job-worker && takos deploy --env staging --space SPACE_ID --group jobs
 ```
 
 ### 1 つの group にまとめる
@@ -144,6 +146,11 @@ compute:
         job: build-api
         artifact: api
         artifactPath: dist/api.js
+    consume:
+      - publication: main-db
+        env:
+          endpoint: DATABASE_URL
+          apiKey: DATABASE_API_KEY
   jobs:
     build:
       fromWorkflow:
@@ -159,14 +166,6 @@ publish:
     spec:
       resource: main-db
       permission: write
-
-compute:
-  api:
-    consume:
-      - publication: main-db
-        env:
-          endpoint: DATABASE_URL
-          apiKey: DATABASE_API_KEY
 ```
 
 1 回の `takos deploy` で全 workload をまとめて deploy できます。
@@ -190,10 +189,9 @@ standalone primitive (group に属さない、それぞれ独立 lifecycle):
   route: legacy-redirect
 ```
 
-standalone primitive の作成・操作は CLI の `takos worker` / `takos resource` /
-`takos route` などの個別コマンドか、API 直接呼び出しで行います。 既存 standalone
-primitive を group に所属させたい場合は `PATCH /api/services/:id/group` /
-`PATCH /api/resources/:id/group` を使います。
+standalone primitive の作成・操作は public CLI ではなく、control plane の API
+直接呼び出しで行います。既存 standalone primitive を group に所属させたい場合は
+`PATCH /api/services/:id/group` / `PATCH /api/resources/:id/group` を使います。
 
 詳細は [Deploy System](/architecture/deploy-system) を参照してください。
 

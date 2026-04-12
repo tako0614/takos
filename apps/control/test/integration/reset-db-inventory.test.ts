@@ -98,7 +98,10 @@ Deno.test("reset DB inventory - keeps remote reset script-driven instead of hidi
     resetDbScript,
     "Usage: node scripts/reset-db.js --env <staging|production> [--include-accounts]",
   );
-  assertStringIncludes(resetDbScript, "For local reset, use: pnpm db:reset");
+  assertStringIncludes(
+    resetDbScript,
+    "For local reset, use the local stack/bootstrap flow (`deno task local:up`); this script is for staging/production only.",
+  );
   assertStringIncludes(
     resetDbShellScript,
     'node "$SCRIPT_DIR/reset-db.js" "$@"',

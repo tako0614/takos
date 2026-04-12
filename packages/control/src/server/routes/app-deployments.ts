@@ -59,6 +59,54 @@ const APP_DEPLOYMENT_REMOVE_ROLES =
 
 const routes = new Hono<SpaceAccessRouteEnv>()
   .post(
+    "/spaces/:spaceId/app-deployments/plan",
+    spaceAccess({ roles: APP_DEPLOYMENT_DEPLOY_ROLES }),
+    zValidator("json", createAppDeploymentSchema),
+    async (c) => {
+      const { space } = c.get("access");
+      const user = c.get("user");
+      try {
+        const body = c.req.valid("json");
+        const service = new AppDeploymentService(c.env);
+        if (body.source.kind === "manifest") {
+          let manifest;
+          try {
+            manifest = parseAppManifestYaml(
+              JSON.stringify(body.source.manifest),
+            );
+          } catch (parseError) {
+            throw new BadRequestError(
+              parseError instanceof Error
+                ? parseError.message
+                : "Invalid app manifest",
+            );
+          }
+          const result = await service.planFromManifest(space.id, user.id, {
+            manifest,
+            groupName: body.group_name,
+            providerName: body.provider,
+            envName: body.env,
+          });
+          return c.json(result);
+        }
+        const result = await service.plan(space.id, user.id, {
+          source: {
+            kind: "git_ref",
+            repositoryUrl: body.source.repository_url,
+            ref: body.source.ref,
+            refType: body.source.ref_type,
+          },
+          groupName: body.group_name,
+          providerName: body.provider,
+          envName: body.env,
+        });
+        return c.json(result);
+      } catch (error) {
+        handleRouteError(error, "plan app deployment");
+      }
+    },
+  )
+  .post(
     "/spaces/:spaceId/app-deployments",
     spaceAccess({ roles: APP_DEPLOYMENT_DEPLOY_ROLES }),
     zValidator("json", createAppDeploymentSchema),

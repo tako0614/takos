@@ -10,34 +10,40 @@ import type {
   RoutingTarget,
   StoredHttpEndpoint,
   WeightedDeploymentTarget,
-} from './routing-models.ts';
+} from "./routing-models.ts";
 
 function isRoutingTarget(value: unknown): value is RoutingTarget {
-  if (!value || typeof value !== 'object') return false;
+  if (!value || typeof value !== "object") return false;
   const v = value as Record<string, unknown>;
-  if (v.type === 'deployments' && Array.isArray(v.deployments) && v.deployments.length > 0) {
+  if (
+    v.type === "deployments" && Array.isArray(v.deployments) &&
+    v.deployments.length > 0
+  ) {
     for (const entry of v.deployments) {
-      if (!entry || typeof entry !== 'object') continue;
+      if (!entry || typeof entry !== "object") continue;
       const e = entry as Record<string, unknown>;
-      if (typeof e.routeRef === 'string' && e.routeRef) {
+      if (typeof e.routeRef === "string" && e.routeRef) {
         return true;
       }
     }
   }
-  if (v.type === 'http-endpoint-set' && Array.isArray(v.endpoints) && v.endpoints.length > 0) return true;
+  if (
+    v.type === "http-endpoint-set" && Array.isArray(v.endpoints) &&
+    v.endpoints.length > 0
+  ) return true;
   return false;
 }
 
 export function toSingleDeploymentTarget(routeRef: string): RoutingTarget {
   return {
-    type: 'deployments',
-    deployments: [{ routeRef, weight: 100, status: 'active' }],
+    type: "deployments",
+    deployments: [{ routeRef, weight: 100, status: "active" }],
   };
 }
 
 export function parseEpochMillis(raw: unknown): number | undefined {
-  if (typeof raw === 'number' && Number.isFinite(raw) && raw > 0) return raw;
-  if (typeof raw === 'string' && raw.trim()) {
+  if (typeof raw === "number" && Number.isFinite(raw) && raw > 0) return raw;
+  if (typeof raw === "string" && raw.trim()) {
     const asNum = Number(raw);
     if (Number.isFinite(asNum) && asNum > 0) return asNum;
     const asDate = Date.parse(raw);
@@ -47,11 +53,11 @@ export function parseEpochMillis(raw: unknown): number | undefined {
 }
 
 export function coercePositiveInt(raw: unknown): number | null {
-  if (typeof raw === 'number' && Number.isFinite(raw)) {
+  if (typeof raw === "number" && Number.isFinite(raw)) {
     const n = Math.floor(raw);
     return n > 0 ? n : null;
   }
-  if (typeof raw === 'string' && raw.trim()) {
+  if (typeof raw === "string" && raw.trim()) {
     const parsed = Number(raw);
     if (!Number.isFinite(parsed)) return null;
     const n = Math.floor(parsed);
@@ -64,6 +70,20 @@ export function normalizeHostname(hostname: string): string {
   return hostname.trim().toLowerCase();
 }
 
+function normalizePathPrefix(prefix: string): string {
+  if (prefix === "/") return prefix;
+  return prefix.replace(/\/+$/, "");
+}
+
+function pathMatchesPrefix(path: string, prefix: string): boolean {
+  const normalizedPrefix = normalizePathPrefix(prefix);
+  if (!normalizedPrefix) return true;
+  if (normalizedPrefix === "/") return true;
+  if (path === normalizedPrefix) return true;
+  if (!path.startsWith(normalizedPrefix)) return false;
+  return path.charAt(normalizedPrefix.length) === "/";
+}
+
 /**
  * Select a concrete worker name from a routing target.
  *
@@ -71,24 +91,26 @@ export function normalizeHostname(hostname: string): string {
  */
 export function selectRouteRefFromRoutingTarget(
   target: RoutingTarget,
-  options?: { random?: () => number }
+  options?: { random?: () => number },
 ): string | null {
-  return selectDeploymentTargetFromRoutingTarget(target, options)?.routeRef ?? null;
+  return selectDeploymentTargetFromRoutingTarget(target, options)?.routeRef ??
+    null;
 }
 
 export function selectDeploymentTargetFromRoutingTarget(
   target: RoutingTarget,
-  options?: { random?: () => number }
+  options?: { random?: () => number },
 ): WeightedDeploymentTarget | null {
-  if (target.type !== 'deployments') return null;
+  if (target.type !== "deployments") return null;
 
   const rng = options?.random ?? Math.random;
   const candidates: Array<WeightedDeploymentTarget & { weight: number }> = [];
 
   for (const entry of target.deployments) {
-    const routeRef = typeof entry?.routeRef === 'string' && entry.routeRef.length > 0
-      ? entry.routeRef
-      : '';
+    const routeRef =
+      typeof entry?.routeRef === "string" && entry.routeRef.length > 0
+        ? entry.routeRef
+        : "";
     if (!routeRef) continue;
     const weight = coercePositiveInt(entry.weight) ?? 0;
     if (weight <= 0) continue;
@@ -103,9 +125,10 @@ export function selectDeploymentTargetFromRoutingTarget(
   if (candidates.length === 0) {
     // Fall back to the first valid route ref even if weight is missing/invalid.
     for (const entry of target.deployments) {
-      const routeRef = typeof entry?.routeRef === 'string' && entry.routeRef.length > 0
-        ? entry.routeRef
-        : '';
+      const routeRef =
+        typeof entry?.routeRef === "string" && entry.routeRef.length > 0
+          ? entry.routeRef
+          : "";
       if (routeRef) {
         return {
           routeRef,
@@ -131,12 +154,13 @@ export function selectDeploymentTargetFromRoutingTarget(
 
 /**
  * Select a worker name from an http-endpoint-set routing target.
- * Uses longest pathPrefix match among cloudflare.worker endpoints.
+ * Uses the longest URL-path-segment-safe pathPrefix match among
+ * cloudflare.worker endpoints.
  */
 export function selectHttpEndpointFromHttpEndpointSet(
   endpoints: StoredHttpEndpoint[],
   path: string,
-  method: string
+  method: string,
 ): StoredHttpEndpoint | null {
   let best: StoredHttpEndpoint | null = null;
   let bestPrefixLen = -1;
@@ -153,8 +177,8 @@ export function selectHttpEndpointFromHttpEndpointSet(
     }
 
     for (const route of routes) {
-      const prefix = route.pathPrefix ?? '';
-      if (prefix && !path.startsWith(prefix)) continue;
+      const prefix = route.pathPrefix ?? "";
+      if (prefix && !pathMatchesPrefix(path, prefix)) continue;
       if (route.methods && route.methods.length > 0) {
         if (!route.methods.includes(method.toUpperCase())) continue;
       }
@@ -172,56 +196,74 @@ export function selectHttpEndpointFromHttpEndpointSet(
 export function selectRouteRefFromHttpEndpointSet(
   endpoints: StoredHttpEndpoint[],
   path: string,
-  method: string
+  method: string,
 ): string | null {
-  const endpoint = selectHttpEndpointFromHttpEndpointSet(endpoints, path, method);
+  const endpoint = selectHttpEndpointFromHttpEndpointSet(
+    endpoints,
+    path,
+    method,
+  );
   if (!endpoint) {
     return null;
   }
-  return endpoint.target.kind === 'service-ref' ? endpoint.target.ref : null;
+  return endpoint.target.kind === "service-ref" ? endpoint.target.ref : null;
 }
 
-export function parseRoutingValue(raw: string | null | undefined): ParsedRoutingValue {
+export function parseRoutingValue(
+  raw: string | null | undefined,
+): ParsedRoutingValue {
   if (!raw) {
-    return { target: null, rawFormat: 'empty' };
+    return { target: null, rawFormat: "empty" };
   }
 
   // JSON envelope (new)
   try {
     const parsed = JSON.parse(raw) as unknown;
-    if (typeof parsed === 'string' && parsed) {
-      return { target: toSingleDeploymentTarget(parsed), rawFormat: 'json' };
+    if (typeof parsed === "string" && parsed) {
+      return { target: toSingleDeploymentTarget(parsed), rawFormat: "json" };
     }
-    if (parsed && typeof parsed === 'object') {
+    if (parsed && typeof parsed === "object") {
       const obj = parsed as Record<string, unknown>;
 
       const tombstoneUntil = parseEpochMillis(obj.tombstoneUntil);
       const updatedAt = parseEpochMillis(obj.updatedAt);
-      const version = typeof obj.version === 'number' && Number.isFinite(obj.version) ? obj.version : undefined;
+      const version =
+        typeof obj.version === "number" && Number.isFinite(obj.version)
+          ? obj.version
+          : undefined;
 
-      if (obj.tombstone === true || (typeof tombstoneUntil === 'number' && tombstoneUntil > 0)) {
+      if (
+        obj.tombstone === true ||
+        (typeof tombstoneUntil === "number" && tombstoneUntil > 0)
+      ) {
         return {
           target: null,
           tombstoneUntil,
           updatedAt,
           version,
-          rawFormat: 'json',
+          rawFormat: "json",
         };
       }
 
       if (isRoutingTarget(obj)) {
-        return { target: obj, tombstoneUntil, updatedAt, version, rawFormat: 'json' };
+        return {
+          target: obj,
+          tombstoneUntil,
+          updatedAt,
+          version,
+          rawFormat: "json",
+        };
       }
 
       // Parsed JSON but unknown/unsupported shape: fail-close.
-      return { target: null, rawFormat: 'unknown' };
+      return { target: null, rawFormat: "unknown" };
     }
 
     // Parsed JSON primitive but not supported.
-    return { target: null, rawFormat: 'unknown' };
+    return { target: null, rawFormat: "unknown" };
   } catch {
     // fallthrough
   }
 
-  return { target: null, rawFormat: 'unknown' };
+  return { target: null, rawFormat: "unknown" };
 }

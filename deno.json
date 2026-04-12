@@ -33,6 +33,8 @@
     "build:all": "echo 'No tsc build needed — Deno runs .ts directly'",
     "test:all": "deno test --allow-all --ignore=packages/actions-engine/dist",
     "lint": "deno lint",
+    "lint:docs": "deno task --cwd scripts validate-docs",
+    "lint:agent-docs": "deno task --cwd scripts validate-agent-docs",
     "fmt": "deno fmt",
     "fmt:check": "deno fmt --check",
     "docs:dev": "deno task --cwd docs dev",

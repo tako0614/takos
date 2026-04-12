@@ -17,7 +17,7 @@ compute:
     depends:
       - api
   api:
-    image: ghcr.io/org/api@sha256:abc123
+    image: ghcr.io/org/api@sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef
     port: 8080
 
 routes:
@@ -44,7 +44,7 @@ compute:
         artifactPath: dist/worker
     containers:
       sandbox:
-        image: ghcr.io/org/sandbox@sha256:def456
+        image: ghcr.io/org/sandbox@sha256:fedcba9876543210fedcba9876543210fedcba9876543210fedcba9876543210
         port: 3000
         consume:
           - publication: notes

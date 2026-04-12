@@ -1,19 +1,28 @@
 import { and, desc, eq, lt, ne } from "drizzle-orm";
 import { appDeployments, getDb } from "../../../infra/db/index.ts";
-import { ConflictError, NotFoundError } from "takos-common/errors";
+import {
+  BadRequestError,
+  ConflictError,
+  NotFoundError,
+} from "takos-common/errors";
 import type { Env } from "../../../shared/types/index.ts";
 import {
   generateId,
   safeJsonParseOrDefault,
 } from "../../../shared/utils/index.ts";
+import { base64ToBytes } from "../../../shared/utils/encoding-utils.ts";
 import {
   applyManifest,
   buildSafeApplyResult,
   getGroupState,
   type SafeApplyResult,
 } from "../deployment/apply-engine.ts";
+import { applyEngineDeps } from "../deployment/apply-engine-shared.ts";
+import { assertDeployValid } from "../deployment/deploy-validation.ts";
+import { computeDiff } from "../deployment/diff.ts";
 import {
   findGroupById,
+  findGroupByName,
   type GroupProviderName,
   updateGroupSourceProjection,
 } from "../groups/records.ts";
@@ -26,6 +35,7 @@ import {
 import { resolveBuildArtifacts } from "./app-deployments-artifacts.ts";
 import type {
   AppDeploymentMutationResult,
+  AppDeploymentPlanResult,
   AppDeploymentRecord,
   AppDeploymentRow,
   AppDeploymentSourceInput,
@@ -79,6 +89,155 @@ function fallbackGroupName(row: AppDeploymentRow): string {
     safeJsonParseOrDefault<AppManifest | null>(row.manifestJson, null)
       ?.name ||
     row.groupId;
+}
+
+type ManifestArtifactFile = {
+  path: string;
+  encoding: "base64";
+  content: string;
+};
+
+function decodeManifestArtifactContent(
+  compute: string,
+  content: string,
+): string {
+  try {
+    return new TextDecoder().decode(base64ToBytes(content));
+  } catch {
+    throw new BadRequestError(
+      `Manifest artifact for compute "${compute}" has invalid base64 content`,
+    );
+  }
+}
+
+function parseManifestArtifactFile(
+  compute: string,
+  file: unknown,
+  index: number,
+): ManifestArtifactFile {
+  if (!file || typeof file !== "object" || Array.isArray(file)) {
+    throw new BadRequestError(
+      `Manifest artifact for compute "${compute}" has an invalid file entry`,
+    );
+  }
+  const fileRecord = file as Record<string, unknown>;
+  const encoding = typeof fileRecord.encoding === "string"
+    ? fileRecord.encoding
+    : "";
+  if (encoding !== "base64") {
+    throw new BadRequestError(
+      `Manifest artifact for compute "${compute}" file ${index} must use base64 encoding`,
+    );
+  }
+  const content = typeof fileRecord.content === "string"
+    ? fileRecord.content
+    : null;
+  if (content === null) {
+    throw new BadRequestError(
+      `Manifest artifact for compute "${compute}" file ${index} is missing content`,
+    );
+  }
+  const path = typeof fileRecord.path === "string" && fileRecord.path.trim()
+    ? fileRecord.path.trim()
+    : `file-${index}`;
+  return { path, encoding: "base64", content };
+}
+
+function selectManifestArtifactBundleFile(
+  compute: string,
+  files: ManifestArtifactFile[],
+): ManifestArtifactFile {
+  if (files.length === 1) return files[0];
+  const scriptFiles = files.filter((file) =>
+    /\.(?:mjs|js|cjs)$/i.test(file.path)
+  );
+  if (scriptFiles.length === 1) return scriptFiles[0];
+  if (scriptFiles.length > 1) {
+    throw new BadRequestError(
+      `Manifest artifact for compute "${compute}" contains multiple JavaScript bundle candidates (${
+        scriptFiles.map((file) => file.path).sort().join(", ")
+      }); set artifactPath to a single bundle file`,
+    );
+  }
+  throw new BadRequestError(
+    `Manifest artifact for compute "${compute}" must contain a single worker bundle file`,
+  );
+}
+
+export function normalizeManifestArtifacts(
+  artifacts: Array<Record<string, unknown>> | undefined,
+): Record<string, SnapshotApplyArtifact> {
+  const normalized: Record<string, SnapshotApplyArtifact> = {};
+  for (const entry of artifacts ?? []) {
+    const compute = typeof entry.compute === "string"
+      ? entry.compute.trim()
+      : "";
+    if (!compute) {
+      throw new BadRequestError("Manifest artifact entries require compute");
+    }
+    if (normalized[compute]) {
+      throw new BadRequestError(
+        `Duplicate manifest artifact for compute "${compute}"`,
+      );
+    }
+
+    const files = Array.isArray(entry.files) ? entry.files : [];
+    if (files.length === 0) {
+      throw new BadRequestError(
+        `Manifest artifact for compute "${compute}" requires at least one file`,
+      );
+    }
+    const bundleFile = selectManifestArtifactBundleFile(
+      compute,
+      files.map((file, index) =>
+        parseManifestArtifactFile(compute, file, index)
+      ),
+    );
+    if (!bundleFile.content) {
+      throw new BadRequestError(
+        `Manifest artifact for compute "${compute}" has an empty bundle`,
+      );
+    }
+    normalized[compute] = {
+      kind: "worker_bundle",
+      bundleContent: decodeManifestArtifactContent(compute, bundleFile.content),
+      deployMessage: `takos deploy ${compute}`,
+    };
+  }
+  return normalized;
+}
+
+function buildPlanResponse(input: {
+  group: Awaited<ReturnType<typeof findGroupByName>> | null;
+  groupName: string;
+  manifest: AppManifest;
+  currentState: Awaited<ReturnType<typeof getGroupState>>;
+  providerName?: GroupProviderName | null;
+  envName?: string | null;
+  ociOrchestratorUrl?: string;
+}): AppDeploymentPlanResult {
+  assertDeployValid(input.manifest);
+  const desiredState = applyEngineDeps.compileGroupDesiredState(
+    input.manifest,
+    {
+      groupName: input.group?.name ?? input.groupName,
+      provider: input.providerName ?? input.group?.provider ?? "cloudflare",
+      envName: input.envName ?? input.group?.env ?? "default",
+    },
+  );
+  const translationReport = applyEngineDeps.buildTranslationReport(
+    desiredState,
+    { ociOrchestratorUrl: input.ociOrchestratorUrl },
+  );
+  return {
+    group: {
+      id: input.group?.id ?? null,
+      name: input.group?.name ?? input.groupName,
+      exists: Boolean(input.group),
+    },
+    diff: computeDiff(desiredState, input.currentState),
+    translationReport,
+  };
 }
 
 function buildTargetFromSnapshot(
@@ -187,6 +346,32 @@ export class AppDeploymentService {
       applyResult,
       hostnames: collectGroupHostnames(state),
     };
+  }
+
+  private async buildPlanForManifest(
+    spaceId: string,
+    input: {
+      manifest: AppManifest;
+      groupName?: string;
+      providerName?: GroupProviderName;
+      envName?: string;
+    },
+  ): Promise<AppDeploymentPlanResult> {
+    const groupName = input.groupName ||
+      resolveDefaultGroupName(input.manifest);
+    const group = await findGroupByName(this.env, spaceId, groupName);
+    const currentState = group?.id
+      ? await getGroupState(this.env, group.id)
+      : null;
+    return buildPlanResponse({
+      group,
+      groupName,
+      manifest: input.manifest,
+      currentState,
+      providerName: input.providerName,
+      envName: input.envName,
+      ociOrchestratorUrl: this.env.OCI_ORCHESTRATOR_URL,
+    });
   }
 
   private async updateGroupProjectionIfApplied(
@@ -421,7 +606,8 @@ export class AppDeploymentService {
       rollbackOfAppDeploymentId?: string | null;
     },
   ): Promise<AppDeploymentMutationResult> {
-    const groupName = input.groupName || resolveDefaultGroupName(input.manifest);
+    const groupName = input.groupName ||
+      resolveDefaultGroupName(input.manifest);
     const group = await this.ensureTargetGroup(
       spaceId,
       groupName,
@@ -432,6 +618,7 @@ export class AppDeploymentService {
       },
     );
     const envName = input.envName ?? group.env ?? null;
+    const applyArtifacts = normalizeManifestArtifacts(input.artifacts);
     const applyResult = buildSafeApplyResult(
       await applyManifest(
         this.env,
@@ -440,6 +627,7 @@ export class AppDeploymentService {
         {
           groupName: group.name,
           envName: envName ?? undefined,
+          artifacts: applyArtifacts,
         },
       ),
     );
@@ -459,7 +647,7 @@ export class AppDeploymentService {
         manifestArtifacts,
       },
       manifest: input.manifest,
-      artifacts: {},
+      artifacts: applyArtifacts,
     });
     const appDeployment = await createAppDeploymentRecordForManifest(this.env, {
       deploymentId,
@@ -482,6 +670,19 @@ export class AppDeploymentService {
       appDeployment,
       applyResult,
     };
+  }
+
+  async planFromManifest(
+    spaceId: string,
+    _userId: string,
+    input: {
+      manifest: AppManifest;
+      groupName?: string;
+      providerName?: GroupProviderName;
+      envName?: string;
+    },
+  ): Promise<AppDeploymentPlanResult> {
+    return await this.buildPlanForManifest(spaceId, input);
   }
 
   async deployFromRepoRef(
@@ -514,6 +715,32 @@ export class AppDeploymentService {
         ref: input.ref,
         refType: input.refType,
       },
+    });
+  }
+
+  async plan(
+    spaceId: string,
+    userId: string,
+    input: {
+      source: GitRefDeploymentSource;
+      groupName?: string;
+      providerName?: GroupProviderName;
+      envName?: string;
+    },
+  ): Promise<AppDeploymentPlanResult> {
+    const target = await resolveGitTarget(this.env, {
+      spaceId,
+      userId,
+      repositoryUrl: input.source.repositoryUrl,
+      ref: input.source.ref,
+      refType: input.source.refType,
+    });
+    const manifest = await readManifestFromRepoTarget(this.env, target);
+    return await this.buildPlanForManifest(spaceId, {
+      manifest,
+      groupName: input.groupName,
+      providerName: input.providerName,
+      envName: input.envName,
     });
   }
 
@@ -678,10 +905,9 @@ export class AppDeploymentService {
       input.snapshot,
       input.envName,
     );
-    const manifestArtifacts =
-      input.snapshot.payload.source.kind === "manifest"
-        ? input.snapshot.payload.source.manifest_artifacts
-        : [];
+    const manifestArtifacts = input.snapshot.payload.source.kind === "manifest"
+      ? input.snapshot.payload.source.manifest_artifacts
+      : [];
     const appDeployment = await createAppDeploymentRecordForManifest(this.env, {
       deploymentId: input.deploymentId,
       group: input.group,

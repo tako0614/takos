@@ -3,14 +3,11 @@
 // ============================================================
 //
 // Historical helper that parsed explicit per-workload `bindings` blocks
-// from the Kubernetes-envelope manifest schema. In the flat-schema world
-// (Phase 1) the envelope was retired and storage-to-compute wiring is
-// derived from the top-level `storage` map — there is no per-workload
-// bindings record to parse anymore.
+// from the retired Kubernetes-envelope manifest schema.
 //
-// This module still exports a trivial stub so older deploy pipeline code
-// can continue to import it. Any caller that still needs binding
-// introspection should migrate to reading `manifest.storage` directly.
+// Public manifests now use the flat `publish + consume` contract. This
+// module only remains as compatibility glue for older deploy pipeline
+// code that still imports "bindings" helpers during the migration.
 // ============================================================
 
 import type { AppStorage, StorageType } from "./app-manifest-types.ts";
@@ -19,7 +16,7 @@ import type { AppStorage, StorageType } from "./app-manifest-types.ts";
  * Legacy stub type kept so the deploy pipeline can refer to "bindings"
  * without pulling in Cloudflare-specific type names. In the flat schema
  * there are no per-workload binding records, so this shape intentionally
- * has no fields — callers should use `manifest.storage` instead.
+ * has no fields.
  */
 export type AppWorkloadBindings = Record<string, never>;
 
@@ -62,11 +59,10 @@ export function parseWorkloadBindings(
 }
 
 /**
- * Legacy descriptor helper. In the flat schema every storage entry is
- * implicitly bound to every compute workload (until the explicit
- * `compute.storage[]` wiring lands in Phase 3), so the "bindings" for a
- * workload are just the full storage map. Returns an empty list when no
- * bindings object is supplied so legacy callers short-circuit.
+ * Legacy descriptor helper. Public manifests no longer describe storage
+ * wiring here; bindings are resolved through provider-backed
+ * `publish + consume` data instead. This stub returns an empty list so
+ * legacy callers short-circuit cleanly.
  */
 export function getWorkloadResourceBindingDescriptors(
   _bindings?: AppWorkloadBindings,

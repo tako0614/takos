@@ -1,9 +1,4 @@
-import {
-  assert,
-  assertEquals,
-  assertObjectMatch,
-  assertThrows,
-} from "jsr:@std/assert";
+import { assert, assertEquals, assertThrows } from "jsr:@std/assert";
 
 import { parseAppManifestYaml } from "@/application/services/source/app-manifest.ts";
 
@@ -56,25 +51,23 @@ compute:
   );
 });
 
-Deno.test("app manifest parses runtime storage and worker queue triggers", () => {
+Deno.test("app manifest parses provider publications, consumes, and worker schedule triggers", () => {
   const manifest = parseAppManifestYaml(`
 name: runtime-app
 version: 1.0.0
-storage:
-  jobs:
-    type: queue
-    bind: JOBS
-    queue:
-      maxRetries: 5
-  events:
-    type: analytics-engine
-    bind: ANALYTICS
-  onboarding:
-    type: workflow
-    bind: ONBOARDING_FLOW
-    workflow:
-      class: OnboardingWorkflow
-      script: api
+publish:
+  - name: jobs
+    provider: takos
+    kind: queue
+    spec:
+      resource: runtime-jobs
+      permission: write
+  - name: events
+    provider: takos
+    kind: analytics-engine
+    spec:
+      resource: runtime-events
+      permission: write
 compute:
   api:
     build:
@@ -86,37 +79,50 @@ compute:
     triggers:
       schedules:
         - cron: "*/5 * * * *"
-      queues:
-        - storage: jobs
+    consume:
+      - publication: jobs
+        env:
+          endpoint: JOBS_ENDPOINT
+          apiKey: JOBS_API_KEY
+      - publication: events
 `);
 
-  assertObjectMatch(manifest.storage ?? {}, {
-    jobs: {
-      type: "queue",
-      bind: "JOBS",
-      queue: {
-        maxRetries: 5,
+  assertEquals(manifest.storage, undefined);
+  assertEquals(manifest.publish, [
+    {
+      name: "jobs",
+      provider: "takos",
+      kind: "queue",
+      spec: {
+        resource: "runtime-jobs",
+        permission: "write",
       },
     },
-    events: {
-      type: "analytics-engine",
-      bind: "ANALYTICS",
-    },
-    onboarding: {
-      type: "workflow",
-      bind: "ONBOARDING_FLOW",
-      workflow: {
-        class: "OnboardingWorkflow",
-        script: "api",
+    {
+      name: "events",
+      provider: "takos",
+      kind: "analytics-engine",
+      spec: {
+        resource: "runtime-events",
+        permission: "write",
       },
     },
-  });
+  ]);
 
   const apiCompute = manifest.compute.api;
   assert(apiCompute);
   assertEquals(apiCompute.kind, "worker");
   assertEquals(apiCompute.triggers, {
     schedules: [{ cron: "*/5 * * * *" }],
-    queues: [{ storage: "jobs" }],
   });
+  assertEquals(apiCompute.consume, [
+    {
+      publication: "jobs",
+      env: {
+        endpoint: "JOBS_ENDPOINT",
+        apiKey: "JOBS_API_KEY",
+      },
+    },
+    { publication: "events" },
+  ]);
 });

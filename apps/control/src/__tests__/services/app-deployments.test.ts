@@ -1,6 +1,15 @@
-import { assertEquals, assertMatch, assertRejects } from "jsr:@std/assert";
+import {
+  assertEquals,
+  assertMatch,
+  assertRejects,
+  assertThrows,
+} from "jsr:@std/assert";
 import { assertSpyCalls, stub } from "jsr:@std/testing/mock";
-import { AppDeploymentService } from "@/services/platform/app-deployments";
+import {
+  AppDeploymentService,
+  normalizeManifestArtifacts,
+} from "@/services/platform/app-deployments";
+import { buildSourceFromRow } from "../../../../../packages/control/src/application/services/platform/app-deployments-targets.ts";
 import {
   shouldTryContentReducingFallback,
   supportsRemoteBloblessFallback,
@@ -174,6 +183,92 @@ Deno.test("app deployment service - remote fetch fallback call sites are guarded
     source,
     /catch \(bloblessError\) \{\s+if \(!shouldTryContentReducingFallback\(bloblessError\)\) \{\s+throw bloblessError;\s+\}/s,
   );
+});
+
+Deno.test("app deployment service - manifest records expose manifest source provenance", async () => {
+  const source = await buildSourceFromRow({} as never, {
+    sourceKind: "manifest",
+    buildSourcesJson: JSON.stringify([{ compute: "web" }]),
+  } as never);
+  assertEquals(source, {
+    kind: "manifest",
+    artifact_count: 1,
+  });
+});
+
+Deno.test("app deployment service - local manifest artifact directories resolve to one script bundle", () => {
+  const artifacts = normalizeManifestArtifacts([
+    {
+      compute: "web",
+      files: [
+        {
+          path: "index.js",
+          encoding: "base64",
+          content: btoa("export default {};"),
+        },
+        {
+          path: "index.js.map",
+          encoding: "base64",
+          content: btoa("{}"),
+        },
+      ],
+    },
+  ]);
+  const artifact = artifacts.web;
+  assertEquals(artifact?.kind, "worker_bundle");
+  if (artifact?.kind !== "worker_bundle") {
+    throw new Error("expected worker bundle artifact");
+  }
+  assertEquals(artifact.bundleContent, "export default {};");
+});
+
+Deno.test("app deployment service - local manifest artifact directories reject multiple scripts", () => {
+  assertThrows(
+    () =>
+      normalizeManifestArtifacts([
+        {
+          compute: "web",
+          files: [
+            {
+              path: "index.js",
+              encoding: "base64",
+              content: btoa("export default {};"),
+            },
+            {
+              path: "chunk.js",
+              encoding: "base64",
+              content: btoa("export const chunk = true;"),
+            },
+          ],
+        },
+      ]),
+    Error,
+    "contains multiple JavaScript bundle candidates",
+  );
+});
+
+Deno.test("app deployment service - planFromManifest runs deploy validation", async () => {
+  const planService = new AppDeploymentService({ DB: {} } as never);
+  globalThis.__takosDbMock = createSelectOnlyDb([null]) as never;
+
+  try {
+    await assertRejects(
+      () =>
+        planService.planFromManifest("space-1", "user-1", {
+          manifest: {
+            name: "demo-app",
+            routes: [
+              { target: "api", path: "/" },
+              { target: "api", path: "/" },
+            ],
+          } as never,
+        }),
+      Error,
+      "Deploy validation failed",
+    );
+  } finally {
+    globalThis.__takosDbMock = undefined;
+  }
 });
 
 Deno.test("app deployment service - rollback fails when the target group row no longer exists", async () => {

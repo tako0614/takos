@@ -2,25 +2,27 @@
 
 Takos を Google Cloud Platform にホストする方法。このページは **takos オペレーター**向け。Cloud Run 上で Takos runtime の互換 backend を動かす。
 
+このページの resource 名は `gcp-prod` Terraform overlay の current naming に合わせています。`takos-prod` prefix と `-production` suffix を前提に読み替えてください。
+
 ::: info アプリ開発者へ
 このページは takos オペレーター向けです。public spec は Cloudflare-native のままで、GCP では Takos runtime が provider-backed resource と Takos-managed runtime を組み合わせて同じ `takos deploy` surface を解決します。
 :::
 
 ## リソースマッピング
 
-`.takos/app.yml` の `storage` / `compute` 宣言が GCP サービスに自動マッピングされる:
+`.takos/app.yml` の `publish` / `compute` 宣言が GCP サービスに解決される:
 
-| app.yml | GCP サービス | アダプタ |
+| manifest surface | GCP サービス | アダプタ |
 | --- | --- | --- |
-| `storage.<name>.type: sql` | PostgreSQL (Cloud SQL) | PostgreSQL adapter |
-| `storage.<name>.type: object-store` | Cloud Storage (GCS) | `gcs-object-store` |
-| `storage.<name>.type: key-value` | Firestore | `firestore-kv-store` |
-| `storage.<name>.type: queue` | Pub/Sub | `pubsub-queue` |
-| `storage.<name>.type: vector-index` | PostgreSQL + pgvector (Cloud SQL) | `pgvector-store` |
-| `storage.<name>.type: analytics-engine` | Takos analytics runtime | `analytics-engine-binding` |
-| `storage.<name>.type: workflow` | Takos workflow runtime | `workflow-binding` |
-| `storage.<name>.type: durable-object` | Takos durable runtime | `persistent-durable-objects` |
-| `storage.<name>.type: secret` | Secret Manager | `gcp-secret-manager` |
+| `publish.kind: sql` | PostgreSQL (Cloud SQL) | PostgreSQL adapter |
+| `publish.kind: object-store` | Cloud Storage (GCS) | `gcs-object-store` |
+| `publish.kind: key-value` | Firestore | `firestore-kv-store` |
+| `publish.kind: queue` | Pub/Sub | `pubsub-queue` |
+| `publish.kind: vector-index` | PostgreSQL + pgvector (Cloud SQL) | `pgvector-store` |
+| `publish.kind: analytics-engine` | Takos analytics runtime | `analytics-engine-binding` |
+| `publish.kind: workflow` | Takos workflow runtime | `workflow-binding` |
+| `publish.kind: durable-object` | Takos durable runtime | `persistent-durable-objects` |
+| `publish.kind: secret` | Secret Manager | `gcp-secret-manager` |
 | `compute.<name>` (Worker = `build` あり) | Cloud Run (Node.js) | Node.js platform adapter |
 | `compute.<name>` (Service = `image` あり, `build` なし) | Cloud Run | OCI deployment provider (`cloud-run`) |
 
@@ -62,7 +64,7 @@ export GCP_PROJECT_ID="your-project-id"
 export DATABASE_URL="postgresql://takos:password@/takos?host=/cloudsql/project:region:instance"
 
 # GCS
-export GCS_BUCKET="takos-worker-bundles"
+export GCS_BUCKET="takos-prod-worker-bundles-production"
 export GCS_PROJECT_ID="${GCP_PROJECT_ID}"
 
 # Firestore
@@ -70,11 +72,20 @@ export FIRESTORE_PROJECT_ID="${GCP_PROJECT_ID}"
 export FIRESTORE_COLLECTION_NAME="takos-kv"
 
 # Pub/Sub（platform background queues）
-export GCP_PUBSUB_RUN_TOPIC="takos-runs"
+export GCP_PUBSUB_RUN_TOPIC="takos-runs-production"
+export GCP_PUBSUB_INDEX_TOPIC="takos-index-jobs-production"
+export GCP_PUBSUB_WORKFLOW_TOPIC="takos-workflow-jobs-production"
+export GCP_PUBSUB_DEPLOY_TOPIC="takos-deployment-jobs-production"
+
+# worker polling 用 subscriptions
+export GCP_PUBSUB_RUN_SUBSCRIPTION="takos-runs-production-sub"
+export GCP_PUBSUB_INDEX_SUBSCRIPTION="takos-index-jobs-production-sub"
+export GCP_PUBSUB_WORKFLOW_SUBSCRIPTION="takos-workflow-jobs-production-sub"
+export GCP_PUBSUB_DEPLOY_SUBSCRIPTION="takos-deployment-jobs-production-sub"
 
 # tenant queue / secret resources
-# queue (storage.<name>.type: queue) は provider_resource_name を Pub/Sub topic 名として作成し、subscription は自動生成する
-# secret (storage.<name>.type: secret) は provider_resource_name を Secret Manager secret 名として作成・解決する
+# tenant queue (publish.kind: queue) は provider_resource_name を Pub/Sub topic 名として作成し、subscription は自動生成する
+# secret (publish.kind: secret) は provider_resource_name を Secret Manager secret 名として作成・解決する
 
 # pgvector（セマンティック検索を使う場合）
 export PGVECTOR_ENABLED="true"
@@ -86,16 +97,16 @@ export POSTGRES_URL="${DATABASE_URL}"
 #### Cloud SQL (PostgreSQL)
 
 ```bash
-gcloud sql instances create takos-db \
+gcloud sql instances create takos-production-postgres \
   --database-version=POSTGRES_16 \
   --tier=db-custom-2-4096 \
   --region=asia-northeast1
 
 gcloud sql databases create takos \
-  --instance=takos-db
+  --instance=takos-production-postgres
 
 gcloud sql users create takos \
-  --instance=takos-db \
+  --instance=takos-production-postgres \
   --password="your-password"
 ```
 
@@ -112,10 +123,10 @@ Cloud SQL for PostgreSQL は pgvector をネイティブサポートしている
 #### GCS バケット
 
 ```bash
-gsutil mb -l asia-northeast1 gs://takos-worker-bundles
-gsutil mb -l asia-northeast1 gs://takos-tenant-builds
-gsutil mb -l asia-northeast1 gs://takos-tenant-source
-gsutil mb -l asia-northeast1 gs://takos-git-objects
+gsutil mb -l asia-northeast1 gs://takos-prod-worker-bundles-production
+gsutil mb -l asia-northeast1 gs://takos-prod-tenant-builds-production
+gsutil mb -l asia-northeast1 gs://takos-prod-tenant-source-production
+gsutil mb -l asia-northeast1 gs://takos-prod-git-objects-production
 ```
 
 #### Firestore
@@ -137,16 +148,16 @@ gcloud firestore fields ttls update expiresAt \
 #### Pub/Sub（platform background queues）
 
 ```bash
-gcloud pubsub topics create takos-runs
-gcloud pubsub topics create takos-index-jobs
-gcloud pubsub topics create takos-workflow-jobs
-gcloud pubsub topics create takos-deployment-jobs
+gcloud pubsub topics create takos-runs-production
+gcloud pubsub topics create takos-index-jobs-production
+gcloud pubsub topics create takos-workflow-jobs-production
+gcloud pubsub topics create takos-deployment-jobs-production
 
 # サブスクリプション（worker のポーリング用）
-gcloud pubsub subscriptions create takos-runs-sub --topic=takos-runs
-gcloud pubsub subscriptions create takos-index-jobs-sub --topic=takos-index-jobs
-gcloud pubsub subscriptions create takos-workflow-jobs-sub --topic=takos-workflow-jobs
-gcloud pubsub subscriptions create takos-deployment-jobs-sub --topic=takos-deployment-jobs
+gcloud pubsub subscriptions create takos-runs-production-sub --topic=takos-runs-production
+gcloud pubsub subscriptions create takos-index-jobs-production-sub --topic=takos-index-jobs-production
+gcloud pubsub subscriptions create takos-workflow-jobs-production-sub --topic=takos-workflow-jobs-production
+gcloud pubsub subscriptions create takos-deployment-jobs-production-sub --topic=takos-deployment-jobs-production
 ```
 
 ## takos のデプロイ
@@ -165,7 +176,7 @@ gcloud run deploy takos-control-web \
 アプリ開発者がアプリをデプロイするときは、環境を問わず同じコマンド:
 
 ```bash
-takos deploy --env production
+takos deploy --env production --space SPACE_ID
 ```
 
 ## Cloudflare backend との差分
@@ -176,7 +187,7 @@ takos deploy --env production
 | Analytics Engine | Takos analytics runtime |
 | Dispatch Namespace | runtime-host dispatch path |
 | Container workloads | Cloud Run サービス |
-| Browser Rendering | browser-service コンテナ（Cloud Run） |
+| Browser Rendering | browser コンテナ（Cloud Run） |
 
 ## 次に読むページ
 

@@ -236,7 +236,7 @@ spec:
       containers:
         - name: control-web
           image: your-registry/takos-control:latest
-          command: ["pnpm", "local:web"]
+          command: ["deno", "task", "dev:local:web"]
           ports:
             - containerPort: 8787
           env:
@@ -284,7 +284,7 @@ kubectl apply -f takos-deployment.yaml
 アプリ開発者がアプリをデプロイするときは、環境を問わず同じコマンド:
 
 ```bash
-takos deploy --env production
+takos deploy --env production --space SPACE_ID
 ```
 
 ## バッキングサービスの選択

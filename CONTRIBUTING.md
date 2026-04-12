@@ -1,6 +1,6 @@
 # Contributing to Takos
 
-- Run Node and pnpm commands from this repo root
+- Run Deno tasks from this repo root
 - Keep implementation ownership inside `takos/`; do not move product logic to
   the ecosystem root
 - Keep `packages/*` as the source of truth and treat `apps/*` as thin
@@ -10,5 +10,5 @@
 - Keep public setup instructions working without private docs
 
 Before opening a PR, update user-facing docs when behavior, API, or deployment
-contracts change. Use `pnpm docs:dev`, `pnpm docs:build`, and `pnpm lint:docs`
-to verify docs changes locally.
+contracts change. Use `deno task docs:dev`, `deno task docs:build`, and
+`deno task lint:docs` to verify docs changes locally.

@@ -1,70 +1,70 @@
-import { createTestApp, testRequest } from '../setup.ts';
+import { createTestApp, testRequest } from "../setup.ts";
 
-import { assertEquals } from 'jsr:@std/assert';
-import { assertSpyCalls, stub } from 'jsr:@std/testing/mock';
+import { assertEquals, assertNotEquals } from "jsr:@std/assert";
+import { assertSpyCalls, stub } from "jsr:@std/testing/mock";
 
-type CliProxyModule = typeof import('../../routes/cli/proxy.ts');
+type CliProxyModule = typeof import("../../routes/cli/proxy.ts");
 
 async function freshImport<T>(relativePath: string): Promise<T> {
   const url = new URL(relativePath, import.meta.url);
-  url.searchParams.set('test', crypto.randomUUID());
+  url.searchParams.set("test", crypto.randomUUID());
   return await import(url.href) as T;
 }
 
-Deno.test('cli-proxy route - forwards query parameters via PROXY_BASE_URL while validating the path only', async () => {
-  const originalTakosApiUrl = Deno.env.get('TAKOS_API_URL');
-  const originalProxyBaseUrl = Deno.env.get('PROXY_BASE_URL');
-  Deno.env.set('TAKOS_API_URL', 'https://takos.example.test');
-  Deno.env.set('PROXY_BASE_URL', 'https://runtime-host.example.test');
+Deno.test("cli-proxy route - forwards query parameters via PROXY_BASE_URL while validating the path only", async () => {
+  const originalTakosApiUrl = Deno.env.get("TAKOS_API_URL");
+  const originalProxyBaseUrl = Deno.env.get("PROXY_BASE_URL");
+  Deno.env.set("TAKOS_API_URL", "https://takos.example.test");
+  Deno.env.set("PROXY_BASE_URL", "https://runtime-host.example.test");
 
   const heartbeatFetchStub = stub(
     globalThis,
-    'fetch',
+    "fetch",
     (async () =>
-      new Response('', {
+      new Response(null, {
         status: 204,
       })) as typeof globalThis.fetch,
   );
-  const { sessionStore } = await import('../../routes/sessions/storage.ts');
+  const { sessionStore } = await import("../../routes/sessions/storage.ts");
 
-  const sessionId = 'a12345678901234b';
+  const sessionId = "a12345678901234b";
   await sessionStore.getSessionDir(
     sessionId,
-    'space-a',
+    "space-a",
     undefined,
-    'random-proxy-token-abc',
+    "random-proxy-token-abc",
   );
 
   heartbeatFetchStub.restore();
 
   const fetchSpy = stub(
     globalThis,
-    'fetch',
+    "fetch",
     (async (..._args: Parameters<typeof globalThis.fetch>) => {
       return new Response(JSON.stringify({ ok: true }), {
         status: 200,
-        headers: { 'Content-Type': 'application/json' },
+        headers: { "Content-Type": "application/json" },
       });
     }) as typeof globalThis.fetch,
   );
 
   try {
     const { default: cliProxyRoutes } = await freshImport<CliProxyModule>(
-      '../../routes/cli/proxy.ts',
+      "../../routes/cli/proxy.ts",
     );
     const app = createTestApp();
-    app.route('/', cliProxyRoutes);
+    app.route("/", cliProxyRoutes);
 
     const response = await testRequest(app, {
-      method: 'GET',
-      path: '/cli-proxy/api/repos/repo-1/status',
+      method: "GET",
+      path: "/cli-proxy/api/repos/repo-1/status",
       query: {
-        ref: 'refs/heads/main',
-        verbose: '1',
+        ref: "refs/heads/main",
+        verbose: "1",
       },
       headers: {
-        'X-Takos-Session-Id': sessionId,
-        'X-Takos-Space-Id': 'space-a',
+        "X-Takos-Session-Id": sessionId,
+        "X-Takos-Space-Id": "space-a",
       },
     });
 
@@ -79,27 +79,87 @@ Deno.test('cli-proxy route - forwards query parameters via PROXY_BASE_URL while 
 
     assertEquals(
       forwardedUrl,
-      'https://runtime-host.example.test/forward/cli-proxy/api/repos/repo-1/status?ref=refs%2Fheads%2Fmain&verbose=1',
+      "https://runtime-host.example.test/forward/cli-proxy/api/repos/repo-1/status?ref=refs%2Fheads%2Fmain&verbose=1",
     );
-    assertEquals(forwardedOptions.method, 'GET');
-    assertEquals(forwardedOptions.headers['X-Takos-Session-Id'], sessionId);
+    assertEquals(forwardedOptions.method, "GET");
+    assertEquals(forwardedOptions.headers["X-Takos-Session-Id"], sessionId);
     assertEquals(
       forwardedOptions.headers.Authorization,
-      'Bearer random-proxy-token-abc',
+      "Bearer random-proxy-token-abc",
     );
   } finally {
     fetchSpy.restore();
-    await sessionStore.destroySession(sessionId, 'space-a');
+    await sessionStore.destroySession(sessionId, "space-a");
 
     if (originalTakosApiUrl === undefined) {
-      Deno.env.delete('TAKOS_API_URL');
+      Deno.env.delete("TAKOS_API_URL");
     } else {
-      Deno.env.set('TAKOS_API_URL', originalTakosApiUrl);
+      Deno.env.set("TAKOS_API_URL", originalTakosApiUrl);
     }
     if (originalProxyBaseUrl === undefined) {
-      Deno.env.delete('PROXY_BASE_URL');
+      Deno.env.delete("PROXY_BASE_URL");
     } else {
-      Deno.env.set('PROXY_BASE_URL', originalProxyBaseUrl);
+      Deno.env.set("PROXY_BASE_URL", originalProxyBaseUrl);
     }
   }
+});
+
+Deno.test({
+  name:
+    "runtime service - cli-proxy bypass is loopback-only and service token takes precedence",
+  sanitizeOps: false,
+  sanitizeResources: false,
+  async fn() {
+    const { createRuntimeServiceApp } = await import("../../app.ts");
+    const app = createRuntimeServiceApp({ isProduction: false });
+    const sessionId = "a12345678901234c";
+
+    const nonLoopback = await testRequest(app as never, {
+      method: "GET",
+      path: "/cli-proxy/api/repos/repo-1/status",
+      headers: {
+        "X-Takos-Session-Id": sessionId,
+        "x-forwarded-for": "203.0.113.10",
+      },
+    });
+    assertEquals(nonLoopback.status, 403);
+    assertEquals(nonLoopback.body, {
+      error: {
+        code: "FORBIDDEN",
+        message: "Authorization header required",
+      },
+    });
+
+    const loopback = await testRequest(app as never, {
+      method: "GET",
+      path: "/cli-proxy/api/repos/repo-1/status",
+      headers: {
+        "X-Takos-Session-Id": sessionId,
+        "x-forwarded-for": "127.0.0.1",
+      },
+    });
+    assertEquals(loopback.status, 403);
+    assertEquals(loopback.body, {
+      error: {
+        code: "FORBIDDEN",
+        message: "Session not found",
+      },
+    });
+
+    const invalidToken = await testRequest(app as never, {
+      method: "GET",
+      path: "/cli-proxy/api/repos/repo-1/status",
+      headers: {
+        Authorization: "Bearer invalid-token",
+        "X-Takos-Session-Id": sessionId,
+        "x-forwarded-for": "127.0.0.1",
+      },
+    });
+    assertNotEquals(invalidToken.body, {
+      error: {
+        code: "FORBIDDEN",
+        message: "Session not found",
+      },
+    });
+  },
 });

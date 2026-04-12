@@ -65,26 +65,30 @@ public surface での deployable unit。manifest では `compute.<name>` に `bu
 ### Resource
 
 compute が利用する backing capability。 sql, object-store, key-value, queue,
-vector-index, secret, analytics-engine, workflow, durable-object などを manifest
-の `storage` で宣言する。
+vector-index, secret, analytics-engine, workflow, durable-object などは control
+plane 側の resource として扱う。current public manifest contract では
+`storage:` ではなく `publish` / `consume` を使う。
 
 ### Binding
 
-compute に resource を渡す名前付き接続。storage 側の `bind:` で env
-名を指定すると、 manifest 内の全 compute の env に自動注入される。
+compute に resource あるいは publication を渡す名前付き接続。legacy の
+storage-side `bind:` auto-injection は retired で、current contract では
+`compute.<name>.consume` にだけ env が inject される。
 
 ## Deploy
 
 ### App Manifest (`.takos/app.yml`)
 
-flat manifest の single-document YAML。 compute / storage / routes / publish /
-OAuth / MCP / file handler を宣言する current contract。
+flat manifest の single-document YAML。 `name` / `compute` / `routes` / `publish`
+を宣言する current contract。 resource / storage の宣言は public manifest に
+は含めない。
 
 ### Primitive
 
 deploy system の foundation layer。compute (worker / service / attached) /
-storage / route / publish の 4 種類があり、それぞれ独立した 1st-class エンティ
-ティで、個別の lifecycle を持つ。CLI / API で個別操作できる。
+resource / route / publish の 4 種類があり、それぞれ独立した 1st-class
+エンティティとして control plane が管理する。public CLI では primitive
+個別 CRUD を出さない。
 
 ### Group
 
@@ -105,7 +109,7 @@ group が manifest で宣言する公開情報。route publication (`type` + `pa
 provider publication (`provider` + `kind` + `spec`) のいずれかを取る。
 publication output は `compute.<name>.consume` を宣言した consumer にだけ env
 として渡される。kernel features (Agent / Chat, Git, Store, Auth) は publication
-ではなく kernel API として直接提供。
+ではなく kernel API として直接提供される。
 
 ### App Deployment
 

@@ -125,7 +125,7 @@ compute:
 ```yaml
 compute:
   api:
-    image: ghcr.io/org/api@sha256:abc123
+    image: ghcr.io/org/api@sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef
     port: 8080
 ```
 
@@ -137,13 +137,15 @@ compute:
     build: ...
     containers:
       sandbox:
-        image: ghcr.io/org/sandbox@sha256:def456
+        image: ghcr.io/org/sandbox@sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef
         port: 3000
 ```
 
 ### consume
 
-`consume` は publication 名と optional alias map を持ちます。
+`consume` は publication 名と optional alias map を持ちます。 alias map は
+output 名 -> env 名 の対応です。必要な output だけ指定でき、 未指定の output は
+publication の default env 名をそのまま使います。
 
 ```yaml
 consume:
@@ -182,12 +184,13 @@ triggers:
 ### healthCheck / readiness
 
 - `healthCheck` は service / attached container 用
-- `readiness` は worker 用
+- `readiness` は worker 用の deploy readiness probe
+- `readiness` の path は HTTP 200 を返す必要があります
 
 ```yaml
 compute:
   api:
-    image: ghcr.io/org/api@sha256:abc123
+    image: ghcr.io/org/api@sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef
     port: 8080
     healthCheck:
       path: /health
@@ -222,7 +225,15 @@ publish:
   - name: browser
     type: McpServer
     path: /mcp
+    title: Browser MCP
 ```
+
+route publication は `name` / `type` / `path` が必須です。`type` には
+`McpServer` / `FileHandler` / `UiSurface` などを指定できます。
+`path` は `/` で始まる app 内 path です。`title` は route publication 共通の
+discovery metadata です。`McpServer` は `transport` / `authSecretRef`、
+`FileHandler` は `mimeTypes` または `extensions`、`UiSurface` は `icon`
+などの metadata を持てます。
 
 ### provider publication
 
@@ -235,6 +246,10 @@ publish:
       resource: notes-db
       permission: write
 ```
+
+provider publication は `name` / `provider` / `kind` / `spec` で定義します。
+`consume.env` で output を任意の env 名へ alias できます。alias を書かない
+output は provider default の env 名を使います。
 
 ### built-in Takos provider kinds
 
@@ -265,15 +280,15 @@ overrides:
       LOG_LEVEL: warn
 ```
 
-`takos deploy --env production` で base manifest に deep merge されます。
+`takos deploy --env production --space SPACE_ID` で base manifest に deep merge されます。
 
 ## deploy
 
 ```bash
-takos deploy --env staging
+takos deploy --env staging --space SPACE_ID
 ```
 
 manifest の online deploy source は次で解決されます。
 
-- worker: `build.fromWorkflow.artifactPath`
+- worker: `build.fromWorkflow.artifactPath`（省略時は `dist/worker.js`）
 - service / attached container: `image`

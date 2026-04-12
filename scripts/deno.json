@@ -2,7 +2,7 @@
   "version": "1.0.0",
   "tasks": {
     "check-lockfiles": "deno run --allow-read check-lockfiles.mjs",
-    "lint-docs": "deno run --allow-read --allow-run lint-docs.ts",
-    "lint-agent-docs": "deno run --allow-read --allow-run lint-agent-docs.ts"
+    "validate-docs": "deno run --allow-read --allow-env validate-docs.ts",
+    "validate-agent-docs": "deno run --allow-read --allow-env validate-agent-docs.ts"
   }
 }

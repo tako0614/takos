@@ -6,12 +6,12 @@
  * serialized to TOML for wrangler deploy, or used directly with the
  * Cloudflare API.
  *
- * Phase 2: rewritten against the flat-schema `AppCompute` type. In the flat
- * schema, workers no longer carry explicit `bindings` arrays — the deploy
- * pipeline materializes every declared `storage` entry as a binding on the
- * worker. `generateWranglerConfig` therefore takes the full
- * `provisioned` map and emits a binding per entry keyed by its canonical
- * storage type.
+ * Phase 2: rewritten against the flat-schema `AppCompute` type.
+ *
+ * Public manifests use provider-backed `publish + consume` wiring. The
+ * remaining `provisioned` map is legacy/internal deploy state that still
+ * needs to be translated into Wrangler bindings for old storage-backed
+ * resources during migration.
  */
 import type { AppCompute } from "../source/app-manifest-types.ts";
 import type {
@@ -70,7 +70,7 @@ export function generateWranglerConfig(
   const queueProducers: WranglerQueueProducer[] = [];
   const vectorizeBindings: WranglerVectorizeIndex[] = [];
   // Service binding wiring is managed separately by the kernel in the flat
-  // schema; generateWranglerConfig does not emit service bindings anymore.
+  // schema; public manifests should not add service bindings here.
   const serviceBindings: WranglerServiceBinding[] = [];
 
   for (const [resourceName, provisioned] of options.resources.entries()) {

@@ -18,8 +18,8 @@ compute:
 
 ## resource access
 
-Worker が DB や object store を使う場合は `storage` ではなく `publish + consume`
-で env を受け取ります。
+Worker が DB や object store を使う場合は provider-backed publication を
+`publish + consume` で受け取ります。
 
 ```yaml
 publish:
@@ -59,7 +59,7 @@ compute:
       - api
 ```
 
-旧 `storage` への依存宣言は廃止されました。
+依存関係は `depends` で表し、resource 接続は `publish + consume` で扱います。
 
 ## triggers
 
@@ -89,7 +89,8 @@ compute:
     readiness: /mcp
 ```
 
-root path が 200 を返さない Worker では明示しておくと安全です。
+指定した path は deploy 時に HTTP 200 を返す必要があります。200 を返さない
+Worker は readiness failed として扱われます。
 
 ## attached container
 
@@ -101,7 +102,7 @@ compute:
     build: ...
     containers:
       sandbox:
-        image: ghcr.io/org/sandbox@sha256:def456
+        image: ghcr.io/org/sandbox@sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef
         port: 3000
         healthCheck:
           path: /health

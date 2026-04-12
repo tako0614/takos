@@ -11,9 +11,6 @@ function makeManifest(): AppManifest {
   return {
     name: "demo-app",
     version: "1.0.0",
-    storage: {
-      db: { type: "sql", bind: "DB" },
-    },
     compute: {
       api: {
         kind: "worker",
@@ -39,7 +36,6 @@ function makeManifest(): AppManifest {
     ],
     publish: [],
     env: {},
-    scopes: [],
     overrides: {
       production: {
         compute: {
@@ -62,7 +58,7 @@ Deno.test("group desired state compiler - compiles a manifest into canonical wor
 
   assertEquals(compiled.groupName, "demo-prod");
   assertEquals(compiled.env, "production");
-  assertObjectMatch(compiled.resources.db, { type: "sql", binding: "DB" });
+  assertEquals(compiled.resources, {});
   assertEquals(compiled.workloads.api.category, "worker");
   assertEquals(compiled.workloads.api.routeNames, ["api:/api"]);
   assertEquals(
@@ -98,8 +94,51 @@ Deno.test("group desired state compiler - surfaces attached containers as their 
   };
 
   const compiled = compileGroupDesiredState(manifest);
-  assertEquals(compiled.workloads.sidecar.category, "container");
+  assertEquals(compiled.workloads["api-sidecar"].category, "container");
   assertEquals(compiled.workloads.api.category, "worker");
+});
+
+Deno.test("group desired state compiler - namespaces attached containers by parent workload", () => {
+  const worker = makeManifest().compute.api;
+  const manifest: AppManifest = {
+    ...makeManifest(),
+    compute: {
+      api: {
+        ...worker,
+        containers: {
+          sidecar: {
+            kind: "attached-container",
+            image: "ghcr.io/example/api-sidecar:latest",
+          },
+        },
+      },
+      admin: {
+        ...worker,
+        containers: {
+          sidecar: {
+            kind: "attached-container",
+            image: "ghcr.io/example/admin-sidecar:latest",
+          },
+        },
+      },
+    },
+    routes: [],
+  };
+
+  const compiled = compileGroupDesiredState(manifest);
+
+  assertEquals(
+    Object.keys(compiled.workloads).sort(),
+    ["admin", "admin-sidecar", "api", "api-sidecar"],
+  );
+  assertEquals(
+    compiled.workloads["api-sidecar"].spec.image,
+    "ghcr.io/example/api-sidecar:latest",
+  );
+  assertEquals(
+    compiled.workloads["admin-sidecar"].spec.image,
+    "ghcr.io/example/admin-sidecar:latest",
+  );
 });
 
 Deno.test("group diff - detects resource, workload, and route updates from canonical state", () => {
@@ -178,7 +217,7 @@ Deno.test("group diff - detects resource, workload, and route updates from canon
     },
   });
 
-  assertEquals(diff.summary.update, 3);
+  assertEquals(diff.summary.update, 2);
   assertEquals(
     diff.entries.filter((entry) => entry.action !== "unchanged").map((
       entry,
@@ -188,7 +227,6 @@ Deno.test("group diff - detects resource, workload, and route updates from canon
       action: entry.action,
     })),
     [
-      { name: "db", category: "resource", action: "update" },
       { name: "api", category: "worker", action: "update" },
       { name: "web:/", category: "route", action: "update" },
     ],

@@ -50,16 +50,29 @@ Cloudflare-native の public surface は維持しつつ、互換 backend では 
 ## 例
 
 ```yaml
-storage:
-  db:
-    type: sql
-    bind: DB
-  assets:
-    type: object-store
-    bind: STORAGE
-  cache:
-    type: key-value
-    bind: CACHE
+publish:
+  - name: db
+    provider: takos
+    kind: sql
+    spec:
+      resource: app-db
+      permission: write
+  - name: assets
+    provider: takos
+    kind: object-store
+    spec:
+      resource: app-assets
+      permission: write
+
+compute:
+  web:
+    consume:
+      - publication: db
+        env:
+          endpoint: DATABASE_URL
+      - publication: assets
+        env:
+          endpoint: ASSETS_ENDPOINT
 ```
 
-Cloudflare backend では通常これがそのまま `D1 / R2 / KV Namespace` に `native` 解決され、互換 backend では Takos runtime が SQL / object storage / KV 相当の実装へ `compatible` 解決します。
+Cloudflare backend ではこれらの publication が通常そのまま `D1 / R2 / KV Namespace` に `native` 解決され、互換 backend では Takos runtime が provider-backed resource へ `compatible` 解決します。

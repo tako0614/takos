@@ -25,20 +25,26 @@ single worker (web) 構成。
 
 ```text
 {hostname}
-  /     → スプレッドシート UI (UiSurface)
+  /     → built frontend / static asset surface (deployment mount)
   /mcp  → MCP Server (McpServer)
 ```
 
 ## Publications
 
+`path: /` は built frontend / static asset surface の mount point を表し、server entrypoint 自体の root route を意味しない。
+
 ```yaml
 publish:
-  - type: UiSurface
+  - name: excel-ui
+    type: UiSurface
     path: /
     title: Excel
-  - type: McpServer
+  - name: excel-mcp
+    type: McpServer
     path: /mcp
 ```
+
+UI は build 済みの frontend / static asset surface として mount され、server entrypoint は MCP と health を公開する。`/` を UI 直下として扱うのは deployment 側の責務で、entrypoint そのものの責務ではない。
 
 ## MCP tools
 

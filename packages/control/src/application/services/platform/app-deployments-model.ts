@@ -1,5 +1,7 @@
 import type { appDeployments } from "../../../infra/db/index.ts";
 import type { SafeApplyResult } from "../deployment/apply-engine.ts";
+import type { DiffResult } from "../deployment/diff.ts";
+import type { TranslationReport } from "../deployment/translation-report.ts";
 import type {
   AppDeploymentBuildSource,
   AppManifest,
@@ -107,7 +109,7 @@ export type StoredDeploymentSnapshot = {
 
 export type AppDeploymentRow = typeof appDeployments.$inferSelect;
 
-export type AppDeploymentSource = {
+export type AppDeploymentGitRefSource = {
   kind: "git_ref";
   repository_url: string | null;
   ref: string | null;
@@ -115,6 +117,15 @@ export type AppDeploymentSource = {
   commit_sha: string | null;
   resolved_repo_id: string | null;
 };
+
+export type AppDeploymentManifestSource = {
+  kind: "manifest";
+  artifact_count: number;
+};
+
+export type AppDeploymentSource =
+  | AppDeploymentGitRefSource
+  | AppDeploymentManifestSource;
 
 export type AppDeploymentRecord = {
   id: string;
@@ -136,6 +147,12 @@ export type AppDeploymentRecord = {
 export type AppDeploymentMutationResult = {
   appDeployment: AppDeploymentRecord;
   applyResult: SafeApplyResult;
+};
+
+export type AppDeploymentPlanResult = {
+  group: { id: string | null; name: string; exists: boolean };
+  diff: DiffResult;
+  translationReport: TranslationReport;
 };
 
 export type RepositoryLocatorRow = {

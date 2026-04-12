@@ -2,7 +2,8 @@
 // app-manifest-validation.ts
 // ============================================================
 //
-// Shared validators for the flat-schema manifest parser (Phase 1).
+// Shared validators for the flat-schema manifest parser plus legacy storage
+// compatibility checks used by the deploy pipeline migration.
 //
 // Phase 1 scope:
 //   - Keep workflow YAML helpers used by deploy pipeline
@@ -13,9 +14,9 @@
 //       validateServiceScaling
 //       validateWorkflowScriptIsWorker
 //
-// `parseResources` and `validateResourceBindings` were removed
-// when `storage` replaced Cloudflare-style `resources`. Phase 2
-// refactors deploy pipeline callers accordingly.
+// Public app manifests now use provider-backed `publish + consume`
+// wiring. The legacy `storage` model remains here only for internal
+// translation and compatibility code until those callers are removed.
 // ============================================================
 
 import {
@@ -24,7 +25,10 @@ import {
   type Workflow,
 } from "takos-actions-engine";
 import type { AppCompute, AppStorage } from "./app-manifest-types.ts";
-import { asOptionalInteger, filterWorkflowErrors } from "./app-manifest-utils.ts";
+import {
+  asOptionalInteger,
+  filterWorkflowErrors,
+} from "./app-manifest-utils.ts";
 
 // ============================================================
 // Workflow YAML helpers
@@ -132,9 +136,9 @@ export function validateReadinessPath(
 // ============================================================
 
 /**
- * Validate that every `workflow` storage entry references a worker
- * via its `script` field. Attached containers / services are rejected
- * because workflow scripts must run as Workers.
+ * Validate that every legacy `workflow` storage entry references a
+ * worker via its `script` field. Attached containers / services are
+ * rejected because workflow scripts must run as Workers.
  *
  * Returns an array of error messages (empty when valid). The caller
  * decides whether to throw or aggregate.

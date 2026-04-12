@@ -3,7 +3,8 @@
 /**
  * Remote DB Reset Script
  * Resets remote D1 databases (staging/production) by deleting rows.
- * For local reset, use `pnpm db:reset` (local D1 rebuild).
+ * For local reset, use the local stack/bootstrap flow (`deno task local:up`);
+ * this script is for staging/production only.
  *
  * Usage: node scripts/reset-db.js --env <staging|production> [--include-accounts]
  */
@@ -46,7 +47,9 @@ function printUsage() {
   console.log("  --env production    Reset production remote database");
   console.log("  --include-accounts  Also delete accounts table");
   console.log("");
-  console.log("For local reset, use: pnpm db:reset");
+  console.log(
+    "For local reset, use the local stack/bootstrap flow (`deno task local:up`); this script is for staging/production only.",
+  );
 }
 
 // Canonical table inventory in child-first order.

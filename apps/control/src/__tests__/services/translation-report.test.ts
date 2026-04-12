@@ -12,11 +12,9 @@ function baseManifest(): AppManifest {
     name: "demo",
     version: "1.0.0",
     compute: {},
-    storage: {},
     routes: [],
     publish: [],
     env: {},
-    scopes: [],
   };
 }
 
