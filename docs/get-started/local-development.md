@@ -1,7 +1,7 @@
 # ローカル開発ガイド
 
 ::: warning このページは operator 向け
-`.takos/app.yml` を書きたい **app developer** はこのページを読む必要はありません。`takos login` で managed Takos endpoint に認証して `takos deploy` するだけで開発できます。
+`.takos/app.yml` を書きたい **app developer** はこのページを読む必要はありません。`takos login` で managed Takos endpoint に認証して `takos deploy --space SPACE_ID` するだけで開発できます。
 
 このページは **Takos kernel 自体を local に立ち上げる operator** 向けです。
 :::

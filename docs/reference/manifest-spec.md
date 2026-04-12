@@ -40,34 +40,47 @@ retired:
 | `env`                             | no       | object | local env              |
 | `depends`                         | no       | array  | compute 依存           |
 | `scaling`                         | no       | object | provider-specific hint |
+| `maxInstances`                    | no       | number | legacy scaling alias   |
 
 ### 2.2 Service
 
 `image` を持つ compute は service です。
 
-| field         | required | type   | 説明                |
-| ------------- | -------- | ------ | ------------------- |
-| `image`       | yes      | string | digest-pinned image |
-| `port`        | yes      | number | listen port         |
-| `dockerfile`  | no       | string | local build 用      |
-| `healthCheck` | no       | object | health check        |
-| `consume`     | no       | array  | publication consume |
-| `env`         | no       | object | local env           |
-| `depends`     | no       | array  | compute 依存        |
+| field          | required | type   | 説明                   |
+| -------------- | -------- | ------ | ---------------------- |
+| `image`        | yes      | string | digest-pinned image    |
+| `port`         | yes      | number | listen port            |
+| `dockerfile`   | no       | string | local build 用         |
+| `healthCheck`  | no       | object | health check           |
+| `volumes`      | no       | object | volume mount           |
+| `scaling`      | no       | object | provider-specific hint |
+| `instanceType` | no       | string | instance hint          |
+| `maxInstances` | no       | number | legacy scaling alias   |
+| `consume`      | no       | array  | publication consume    |
+| `env`          | no       | object | local env              |
+| `depends`      | no       | array  | compute 依存           |
 
 ### 2.3 Attached container
 
 worker の `containers` 配下に定義します。
 
-| field          | required | type   | 説明                 |
-| -------------- | -------- | ------ | -------------------- |
-| `image`        | yes      | string | image                |
-| `port`         | no       | number | listen port          |
-| `env`          | no       | object | local env            |
-| `healthCheck`  | no       | object | health check         |
-| `volumes`      | no       | object | volume mount         |
-| `instanceType` | no       | string | instance hint        |
-| `maxInstances` | no       | number | legacy scaling alias |
+| field          | required | type   | 説明                   |
+| -------------- | -------- | ------ | ---------------------- |
+| `image`        | yes      | string | image                  |
+| `port`         | no       | number | listen port            |
+| `env`          | no       | object | local env              |
+| `healthCheck`  | no       | object | health check           |
+| `volumes`      | no       | object | volume mount           |
+| `scaling`      | no       | object | provider-specific hint |
+| `instanceType` | no       | string | instance hint          |
+| `maxInstances` | no       | number | legacy scaling alias   |
+| `consume`      | no       | array  | publication consume    |
+| `depends`      | no       | array  | compute 依存           |
+| `dockerfile`   | no       | string | local build 用         |
+
+`build.fromWorkflow.artifactPath` を省略した worker deploy では `dist/worker.js`
+が既定値として使われます。`maxInstances` は `scaling.maxInstances` の legacy
+alias です。
 
 ## 3. consume
 
@@ -124,6 +137,9 @@ routes:
 
 ## 7. publish
 
+`publish` には 2 形態あります。route publication は公開経路を定義し、 provider
+publication は provider-backed resource を定義します。required fields は別です。
+
 ### 7.1 route publication
 
 ```yaml
@@ -134,7 +150,7 @@ publish:
     transport: streamable-http
 ```
 
-common fields:
+required fields:
 
 | field  | required | type   | 説明                   |
 | ------ | -------- | ------ | ---------------------- |
@@ -150,6 +166,14 @@ optional route metadata:
 - `mimeTypes`
 - `extensions`
 - `icon`
+
+route publication の代表的な `type`:
+
+| type          | type-specific fields                                      |
+| ------------- | --------------------------------------------------------- |
+| `McpServer`   | `transport`, `authSecretRef`, `title`                     |
+| `FileHandler` | `mimeTypes` または `extensions` の少なくとも一方, `title` |
+| `UiSurface`   | `title`, `icon`                                           |
 
 ### 7.2 provider publication
 
@@ -168,7 +192,10 @@ publish:
 | `name`     | yes      | string | publication 名     |
 | `provider` | yes      | string | provider 名        |
 | `kind`     | yes      | string | provider kind      |
-| `spec`     | no       | object | kind-specific spec |
+| `spec`     | yes      | object | kind-specific spec |
+
+provider publication の output は `consume.env` で明示的に alias できます。
+alias を省略した output は provider の default env 名を使います。
 
 ### 7.3 built-in Takos kinds
 

@@ -31,8 +31,8 @@ top-level `env` は全 compute に入ります。`compute.<name>.env` はその 
 
 ## consume で env を受け取る
 
-provider publication は named outputs を公開し、consumer 側が必要な env 名へ
-alias できます。
+`consume.env` は output 名 -> env 名 の alias map です。必要な output だけ
+指定でき、書かなかった output は provider の default env 名をそのまま使います。
 
 ```yaml
 publish:
@@ -60,7 +60,7 @@ compute:
 
 この例では `web` に `DATABASE_URL` と `DATABASE_API_KEY` が入ります。
 
-alias を省略した場合は provider が持つ default env 名が使われます。たとえば
+alias を省略した output は provider が持つ default env 名が使われます。たとえば
 `primary-db` の default は `PUBLICATION_PRIMARY_DB_ENDPOINT` と
 `PUBLICATION_PRIMARY_DB_API_KEY` です。
 
@@ -104,7 +104,7 @@ compute:
         artifactPath: dist/worker
     containers:
       sandbox:
-        image: ghcr.io/org/sandbox@sha256:def456
+        image: ghcr.io/org/sandbox@sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef
         port: 8080
         env:
           HEADLESS: "true"

@@ -95,7 +95,7 @@ export type AppCompute = {
   maxInstances?: number;
 };
 
-// --- Storage (kernel-managed stateful resources) ---
+// --- Storage (legacy/internal resource model) ---
 
 export type StorageType =
   | "sql"
@@ -108,6 +108,14 @@ export type StorageType =
   | "workflow"
   | "durable-object";
 
+/**
+ * @deprecated Internal-only legacy storage model.
+ *
+ * Public app manifests must use provider-backed publications and
+ * `compute.<name>.consume` for wiring. This type remains available for
+ * internal deploy / translation code until the remaining callers are
+ * fully removed.
+ */
 export type AppStorage = {
   type: StorageType;
   bind?: string;

@@ -69,6 +69,12 @@ const sampleApplyResult: AppDeploymentMutationResult["applyResult"] = {
   },
 };
 
+const samplePlanResult = {
+  group: { id: null, name: "demo-group", exists: false },
+  diff: sampleApplyResult.diff,
+  translationReport: sampleApplyResult.translationReport,
+};
+
 function mockSpaceAccess() {
   routeAuthDeps.requireSpaceAccess = (async () => ({
     space: { id: "ws1" },
@@ -172,6 +178,60 @@ Deno.test("app deployment routes - deploys from a repository URL", async () => {
     ]);
   } finally {
     deployStub.restore();
+    routeAuthDeps.requireSpaceAccess = originalRequireSpaceAccess;
+  }
+});
+
+Deno.test("app deployment routes - plans from a repository URL without mutating", async () => {
+  const planStub = stub(
+    AppDeploymentService.prototype,
+    "plan",
+    async () => samplePlanResult,
+  );
+
+  try {
+    mockSpaceAccess();
+    const app = createApp({ id: "user-1" });
+    const res = await app.request(
+      "/spaces/ws1/app-deployments/plan",
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          group_name: "demo-group",
+          env: "staging",
+          provider: "cloudflare",
+          source: {
+            kind: "git_ref",
+            repository_url: "https://github.com/acme/demo.git",
+            ref: "main",
+            ref_type: "branch",
+          },
+        }),
+      },
+      makeEnv(),
+    );
+
+    assertEquals(res.status, 200);
+    await assertObjectMatch(await res.json(), samplePlanResult);
+    assertSpyCalls(planStub, 1);
+    assertSpyCallArgs(planStub, 0, [
+      "ws1",
+      "user-1",
+      {
+        source: {
+          kind: "git_ref",
+          repositoryUrl: "https://github.com/acme/demo.git",
+          ref: "main",
+          refType: "branch",
+        },
+        groupName: "demo-group",
+        providerName: "cloudflare",
+        envName: "staging",
+      },
+    ]);
+  } finally {
+    planStub.restore();
     routeAuthDeps.requireSpaceAccess = originalRequireSpaceAccess;
   }
 });

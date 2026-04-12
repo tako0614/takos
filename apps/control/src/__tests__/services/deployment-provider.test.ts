@@ -22,6 +22,10 @@ Deno.test("deployment provider helpers - serializes and parses an OCI deployment
       artifact: {
         image_ref: "ghcr.io/takos/worker:latest",
         exposed_port: 8080,
+        health_path: "/ready",
+        health_interval: 15,
+        health_timeout: 3,
+        health_unhealthy_threshold: 2,
       },
     },
   });
@@ -41,6 +45,10 @@ Deno.test("deployment provider helpers - serializes and parses an OCI deployment
       artifact: {
         image_ref: "ghcr.io/takos/worker:latest",
         exposed_port: 8080,
+        health_path: "/ready",
+        health_interval: 15,
+        health_timeout: 3,
+        health_unhealthy_threshold: 2,
       },
     },
   );
@@ -266,6 +274,9 @@ for (
             image_ref: "ghcr.io/takos/worker:latest",
             exposed_port: 8080,
             health_path: "/ready",
+            health_interval: 15,
+            health_timeout: 3,
+            health_unhealthy_threshold: 2,
           },
         }),
       }, {
@@ -331,6 +342,9 @@ for (
             image_ref: "ghcr.io/takos/worker:latest",
             exposed_port: 8080,
             health_path: "/ready",
+            health_interval: 15,
+            health_timeout: 3,
+            health_unhealthy_threshold: 2,
           },
         },
         runtime: {
@@ -385,6 +399,10 @@ Deno.test("deployment provider helpers - posts OCI image targets to the configur
       artifact: {
         image_ref: "ghcr.io/takos/worker:latest",
         exposed_port: 8080,
+        health_path: "/ready",
+        health_interval: 15,
+        health_timeout: 3,
+        health_unhealthy_threshold: 2,
       },
     }),
   }, {
@@ -433,7 +451,10 @@ Deno.test("deployment provider helpers - posts OCI image targets to the configur
       artifact: {
         image_ref: "ghcr.io/takos/worker:latest",
         exposed_port: 8080,
-        health_path: "/health",
+        health_path: "/ready",
+        health_interval: 15,
+        health_timeout: 3,
+        health_unhealthy_threshold: 2,
       },
     },
     runtime: {

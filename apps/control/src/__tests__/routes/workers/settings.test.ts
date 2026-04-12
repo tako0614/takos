@@ -4,85 +4,21 @@ import type { Env, User } from "@/types";
 import type { AuthenticatedRouteEnv } from "@/routes/shared/helpers";
 import { createMockEnv } from "../../../../test/integration/setup.ts";
 
-import { assert, assertEquals } from "jsr:@std/assert";
+import { assertEquals } from "jsr:@std/assert";
 import { assertSpyCallArgs, assertSpyCalls, spy } from "jsr:@std/testing/mock";
 
-const mocks = {
-  getDb: ((..._args: any[]) => undefined) as any,
-  getServiceForUser: ((..._args: any[]) => undefined) as any,
-  getServiceForUserWithRole: ((..._args: any[]) => undefined) as any,
-  ServiceDesiredStateService: ((..._args: any[]) => undefined) as any,
-  createCommonEnvDeps: ((..._args: any[]) => undefined) as any,
-  listServiceCommonEnvLinks: ((..._args: any[]) => undefined) as any,
-  listServiceBuiltins: ((..._args: any[]) => undefined) as any,
-  listServiceManualLinkNames: ((..._args: any[]) => undefined) as any,
-  setServiceManualLinks: ((..._args: any[]) => undefined) as any,
-  patchServiceManualLinks: ((..._args: any[]) => undefined) as any,
-  markRequiredKeysLocallyOverriddenForService: ((..._args: any[]) => undefined) as any,
-  upsertServiceTakosAccessTokenConfig: ((..._args: any[]) => undefined) as any,
-  deleteServiceTakosAccessTokenConfig: ((..._args: any[]) => undefined) as any,
-  buildCommonEnvActor: ((..._args: any[]) => undefined) as any,
-};
-
-// [Deno] vi.mock removed - manually stub imports from '@/db'
-// [Deno] vi.mock removed - manually stub imports from '@/services/platform/workers'
-// [Deno] vi.mock removed - manually stub imports from '@/services/platform/worker-desired-state'
-// [Deno] vi.mock removed - manually stub imports from '@/application/services/common-env'
-// [Deno] vi.mock removed - manually stub imports from '@/routes/common-env-handlers'
 import workersSettings from "@/routes/workers/settings";
 import { workersSettingsConfigRouteDeps } from "@/routes/workers/settings-config.ts";
+import { workersSettingsConsumesRouteDeps } from "@/routes/workers/settings-consumes.ts";
 import { workersSettingsEnvVarsRouteDeps } from "@/routes/workers/settings-env-vars.ts";
-import { workersSettingsBindingsRouteDeps } from "@/routes/workers/settings-bindings.ts";
-import { workersSettingsCommonEnvRouteDeps } from "@/routes/workers/settings-common-env.ts";
 
-function mockCommonEnvDeps() {
-  const deps = {
-    serviceLink: { kind: "service-link" },
-    manualLink: { kind: "manual-link" },
-  };
-  mocks.createCommonEnvDeps = (() => deps) as any;
-  return deps;
-}
-
-function _createLinkPresenceDb(sources: string[] = []) {
-  return {
-    prepare: () => ({
-      bind: () => ({
-        all: async () => ({
-          results: sources.map((source) => ({ source })),
-          success: true,
-          meta: {},
-        }),
-      }),
-    }),
-  };
-}
-
-/**
- * Create a mock Drizzle DB that supports select().from().where().all()/.get() chains.
- * - `allResults` is returned by `.all()` calls
- * - `getResult` is returned by `.get()` calls
- */
-function createDrizzleDb(options: {
-  allResults?: unknown[];
-  getResult?: unknown;
-} = {}) {
-  const chain: Record<string, unknown> = {};
-  chain.from = () => chain;
-  chain.leftJoin = () => chain;
-  chain.where = () => chain;
-  chain.orderBy = () => chain;
-  chain.limit = () => chain;
-  chain.all = async () => options.allResults ?? [];
-  chain.get = async () => options.getResult ?? null;
-  return {
-    select: spy(() => chain),
-    update: () => ({ set: () => ({ where: async () => undefined }) }),
-    insert: () => ({ values: async () => undefined }),
-    delete: () => ({ where: async () => undefined }),
-    _chain: chain,
-  };
-}
+const mocks = {
+  getServiceForUser: ((..._args: any[]) => undefined) as any,
+  getServiceForUserWithRole: ((..._args: any[]) => undefined) as any,
+  createDesiredStateService: ((..._args: any[]) => undefined) as any,
+  listServiceConsumes: ((..._args: any[]) => undefined) as any,
+  replaceServiceConsumes: ((..._args: any[]) => undefined) as any,
+};
 
 function createUser(): User {
   return {
@@ -101,31 +37,27 @@ function createUser(): User {
 
 function createApp(user: User): Hono<AuthenticatedRouteEnv> {
   const app = new Hono<AuthenticatedRouteEnv>();
+
   workersSettingsConfigRouteDeps.getServiceForUser = mocks.getServiceForUser;
-  workersSettingsConfigRouteDeps.getServiceForUserWithRole = mocks.getServiceForUserWithRole;
-  workersSettingsConfigRouteDeps.createDesiredStateService = ((...args: any[]) => (mocks.ServiceDesiredStateService as any)(...args)) as any;
+  workersSettingsConfigRouteDeps.getServiceForUserWithRole =
+    mocks.getServiceForUserWithRole;
+  workersSettingsConfigRouteDeps.createDesiredStateService =
+    mocks.createDesiredStateService;
+
   workersSettingsEnvVarsRouteDeps.getServiceForUser = mocks.getServiceForUser;
-  workersSettingsEnvVarsRouteDeps.getServiceForUserWithRole = mocks.getServiceForUserWithRole;
-  workersSettingsEnvVarsRouteDeps.createDesiredStateService = ((...args: any[]) => (mocks.ServiceDesiredStateService as any)(...args)) as any;
-  workersSettingsEnvVarsRouteDeps.createCommonEnvDeps = mocks.createCommonEnvDeps;
-  workersSettingsEnvVarsRouteDeps.markRequiredKeysLocallyOverriddenForService = mocks.markRequiredKeysLocallyOverriddenForService;
-  workersSettingsEnvVarsRouteDeps.buildCommonEnvActor = mocks.buildCommonEnvActor;
-  workersSettingsCommonEnvRouteDeps.getServiceForUser = mocks.getServiceForUser;
-  workersSettingsCommonEnvRouteDeps.getServiceForUserWithRole = mocks.getServiceForUserWithRole;
-  workersSettingsCommonEnvRouteDeps.createCommonEnvDeps = mocks.createCommonEnvDeps;
-  workersSettingsCommonEnvRouteDeps.listServiceCommonEnvLinks = mocks.listServiceCommonEnvLinks;
-  workersSettingsCommonEnvRouteDeps.listServiceBuiltins = mocks.listServiceBuiltins;
-  workersSettingsCommonEnvRouteDeps.listServiceManualLinkNames = mocks.listServiceManualLinkNames;
-  workersSettingsCommonEnvRouteDeps.setServiceManualLinks = mocks.setServiceManualLinks;
-  workersSettingsCommonEnvRouteDeps.patchServiceManualLinks = mocks.patchServiceManualLinks;
-  workersSettingsCommonEnvRouteDeps.upsertServiceTakosAccessTokenConfig = mocks.upsertServiceTakosAccessTokenConfig;
-  workersSettingsCommonEnvRouteDeps.deleteServiceTakosAccessTokenConfig = mocks.deleteServiceTakosAccessTokenConfig;
-  workersSettingsCommonEnvRouteDeps.buildCommonEnvActor = mocks.buildCommonEnvActor;
-  workersSettingsCommonEnvRouteDeps.getDb = mocks.getDb;
-  workersSettingsBindingsRouteDeps.getServiceForUser = mocks.getServiceForUser;
-  workersSettingsBindingsRouteDeps.getServiceForUserWithRole = mocks.getServiceForUserWithRole;
-  workersSettingsBindingsRouteDeps.getDb = mocks.getDb;
-  workersSettingsBindingsRouteDeps.createDesiredStateService = ((...args: any[]) => (mocks.ServiceDesiredStateService as any)(...args)) as any;
+  workersSettingsEnvVarsRouteDeps.getServiceForUserWithRole =
+    mocks.getServiceForUserWithRole;
+  workersSettingsEnvVarsRouteDeps.createDesiredStateService =
+    mocks.createDesiredStateService;
+
+  workersSettingsConsumesRouteDeps.getServiceForUser = mocks.getServiceForUser;
+  workersSettingsConsumesRouteDeps.getServiceForUserWithRole =
+    mocks.getServiceForUserWithRole;
+  workersSettingsConsumesRouteDeps.listServiceConsumes =
+    mocks.listServiceConsumes;
+  workersSettingsConsumesRouteDeps.replaceServiceConsumes =
+    mocks.replaceServiceConsumes;
+
   app.onError((error, c) => {
     if (isAppError(error)) {
       return c.json(
@@ -156,125 +88,141 @@ function createApp(user: User): Hono<AuthenticatedRouteEnv> {
   return app;
 }
 
-Deno.test("services settings bindings workspace scope - uses workspace boundary scope when listing available resources", async () => {
-  /* mocks cleared (no-op in Deno) */ void 0;
-  mockCommonEnvDeps();
-  mocks.listServiceCommonEnvLinks = (async () => []) as any;
-  mocks.listServiceBuiltins = (async () => ({})) as any;
-  mocks.listServiceManualLinkNames = (async () => []) as any;
-  mocks.setServiceManualLinks = (async () => undefined) as any;
-  mocks.patchServiceManualLinks =
-    (async () => ({ added: [], removed: [] })) as any;
-  mocks.upsertServiceTakosAccessTokenConfig = (async () => undefined) as any;
-  mocks.deleteServiceTakosAccessTokenConfig = (async () => undefined) as any;
-  mocks.buildCommonEnvActor = (async () => ({
-    type: "user",
-    userId: "user-1",
-    requestId: undefined,
-    ipHash: undefined,
-    userAgent: undefined,
-  })) as any;
-  // Production code uses Drizzle chains:
-  //   db.select({...}).from(resourceAccess).where(...).all() -> accessible IDs
-  //   db.select({...}).from(resources).where(...).all() -> resource rows
-  const drizzleDb = createDrizzleDb({
-    allResults: [{
-      id: "res-1",
-      name: "db-one",
-      providerResourceId: "cf-d1-1",
-      providerResourceName: "db-one",
-    }],
-  });
-  // First .all() call returns resourceAccess rows, second returns resource rows
-  let callCount = 0;
-  drizzleDb._chain.all = async () => {
-    callCount++;
-    if (callCount === 1) return [{ resourceId: "res-1" }]; // resourceAccess rows
-    return [{
-      id: "res-1",
-      name: "db-one",
-      providerResourceId: "cf-d1-1",
-      providerResourceName: "db-one",
-    }]; // resource rows
-  };
-
+Deno.test("services settings route - reads runtime config from desired state", async () => {
   const desiredState = {
-    listResourceBindings: spy(async () => [
-      {
-        id: "binding-1",
-        name: "DB",
-        type: "d1",
-        resource_id: "res-1",
-        resource_name: "db-one",
-      },
-    ]),
+    getRuntimeConfig: spy(async () => ({
+      compatibility_date: "2026-03-01",
+      compatibility_flags: ["nodejs_compat"],
+      limits: { cpu_ms: 50 },
+      updated_at: "2026-03-01T00:00:00.000Z",
+    })),
   };
-  mocks.getDb = (() => drizzleDb) as any;
-  mocks.ServiceDesiredStateService = (() => desiredState) as any;
-  mocks.getServiceForUser = (async () => ({
-    id: "worker-1",
+  mocks.getServiceForUser = spy(async () => ({
+    id: "service-1",
     space_id: "ws-1",
   })) as any;
+  mocks.createDesiredStateService = (() => desiredState) as any;
 
   const app = createApp(createUser());
   const env = createMockEnv() as unknown as Env;
   const response = await app.fetch(
-    new Request("http://localhost/api/services/worker-1/bindings"),
+    new Request("http://localhost/api/services/service-1/settings"),
     env,
     {} as ExecutionContext,
   );
 
   assertEquals(response.status, 200);
-  assert(drizzleDb.select.calls.length > 0);
-  assertSpyCallArgs(desiredState.listResourceBindings, 0, ["worker-1"]);
-});
-Deno.test("services settings bindings workspace scope - uses workspace boundary scope when resolving resource_id on bindings update", async () => {
-  /* mocks cleared (no-op in Deno) */ void 0;
-  mockCommonEnvDeps();
-  mocks.listServiceCommonEnvLinks = (async () => []) as any;
-  mocks.listServiceBuiltins = (async () => ({})) as any;
-  mocks.listServiceManualLinkNames = (async () => []) as any;
-  mocks.setServiceManualLinks = (async () => undefined) as any;
-  mocks.patchServiceManualLinks =
-    (async () => ({ added: [], removed: [] })) as any;
-  mocks.upsertServiceTakosAccessTokenConfig = (async () => undefined) as any;
-  mocks.deleteServiceTakosAccessTokenConfig = (async () => undefined) as any;
-  mocks.buildCommonEnvActor = (async () => ({
-    type: "user",
-    userId: "user-1",
-    requestId: undefined,
-    ipHash: undefined,
-    userAgent: undefined,
-  })) as any;
-  // Production code uses Drizzle chains:
-  //   db.select({...}).from(resourceAccess).where(...).all() -> accessible IDs
-  //   db.select({...}).from(resources).where(...).get() -> resource row
-  const drizzleDb = createDrizzleDb({
-    allResults: [], // no extra accessible resources
-    getResult: { id: "res-1", type: "d1" }, // found resource
+  assertEquals(await response.json(), {
+    compatibility_date: "2026-03-01",
+    compatibility_flags: ["nodejs_compat"],
+    limits: { cpu_ms: 50 },
+    applies_on_next_deploy: true,
+    updated_at: "2026-03-01T00:00:00.000Z",
   });
+  assertSpyCallArgs(mocks.getServiceForUser, 0, [
+    env.DB,
+    "service-1",
+    "user-1",
+  ]);
+  assertSpyCallArgs(desiredState.getRuntimeConfig, 0, [
+    "ws-1",
+    "service-1",
+  ]);
+});
+
+Deno.test("services settings route - replaces local env vars for the next deployment", async () => {
   const desiredState = {
-    replaceResourceBindings: spy(async () => undefined),
+    replaceLocalEnvVars: spy(async () => undefined),
+    listLocalEnvVarSummaries: spy(async () => [
+      { name: "API_URL", type: "plain_text" },
+      { name: "API_TOKEN", type: "secret_text" },
+    ]),
   };
-  mocks.ServiceDesiredStateService = (() => desiredState) as any;
-  mocks.getDb = (() => drizzleDb) as any;
-  mocks.getServiceForUserWithRole = (async () => ({
-    id: "worker-1",
+  mocks.getServiceForUserWithRole = spy(async () => ({
+    id: "service-1",
     space_id: "ws-1",
   })) as any;
+  mocks.createDesiredStateService = (() => desiredState) as any;
 
   const app = createApp(createUser());
   const env = createMockEnv() as unknown as Env;
   const response = await app.fetch(
-    new Request("http://localhost/api/services/worker-1/bindings", {
+    new Request("http://localhost/api/services/service-1/env", {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        bindings: [
+        variables: [
+          { name: "API_URL", value: "https://api.example.test" },
+          { name: "API_TOKEN", value: "secret", secret: true },
+        ],
+      }),
+    }),
+    env,
+    {} as ExecutionContext,
+  );
+
+  assertEquals(response.status, 200);
+  assertEquals(await response.json(), {
+    success: true,
+    env: [
+      { name: "API_URL", type: "plain_text" },
+      { name: "API_TOKEN", type: "secret_text" },
+    ],
+    applies_on_next_deploy: true,
+  });
+  assertSpyCallArgs(mocks.getServiceForUserWithRole, 0, [
+    env.DB,
+    "service-1",
+    "user-1",
+    ["owner", "admin", "editor"],
+  ]);
+  assertSpyCallArgs(desiredState.replaceLocalEnvVars, 0, [{
+    spaceId: "ws-1",
+    workerId: "service-1",
+    variables: [
+      {
+        name: "API_URL",
+        value: "https://api.example.test",
+        secret: false,
+      },
+      {
+        name: "API_TOKEN",
+        value: "secret",
+        secret: true,
+      },
+    ],
+  }]);
+  assertSpyCallArgs(desiredState.listLocalEnvVarSummaries, 0, [
+    "ws-1",
+    "service-1",
+  ]);
+});
+
+Deno.test("services settings route - replaces consumes as next-deploy desired state", async () => {
+  mocks.getServiceForUserWithRole = spy(async () => ({
+    id: "service-1",
+    space_id: "ws-1",
+    slug: "api",
+    service_name: "fallback-api",
+  })) as any;
+  mocks.replaceServiceConsumes = spy(async () => [
+    {
+      publication: "auth.default",
+      env: { AUTH_URL: "PUBLIC_URL" },
+    },
+  ]) as any;
+
+  const app = createApp(createUser());
+  const env = createMockEnv() as unknown as Env;
+  const response = await app.fetch(
+    new Request("http://localhost/api/services/service-1/consumes", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        consumes: [
           {
-            name: "DB",
-            type: "d1",
-            resource_id: "res-1",
+            publication: "auth.default",
+            env: { AUTH_URL: "PUBLIC_URL" },
           },
         ],
       }),
@@ -284,328 +232,35 @@ Deno.test("services settings bindings workspace scope - uses workspace boundary 
   );
 
   assertEquals(response.status, 200);
-  assert(drizzleDb.select.calls.length > 0);
-  assertSpyCallArgs(desiredState.replaceResourceBindings, 0, [{
-    workerId: "worker-1",
-    bindings: [
-      {
-        name: "DB",
-        type: "d1",
-        resourceId: "res-1",
-      },
-    ],
-  }]);
-});
-Deno.test("services settings bindings workspace scope - returns builtins alongside service common env links", async () => {
-  /* mocks cleared (no-op in Deno) */ void 0;
-  mockCommonEnvDeps();
-  mocks.listServiceCommonEnvLinks = (async () => []) as any;
-  mocks.listServiceBuiltins = (async () => ({})) as any;
-  mocks.listServiceManualLinkNames = (async () => []) as any;
-  mocks.setServiceManualLinks = (async () => undefined) as any;
-  mocks.patchServiceManualLinks =
-    (async () => ({ added: [], removed: [] })) as any;
-  mocks.upsertServiceTakosAccessTokenConfig = (async () => undefined) as any;
-  mocks.deleteServiceTakosAccessTokenConfig = (async () => undefined) as any;
-  mocks.buildCommonEnvActor = (async () => ({
-    type: "user",
-    userId: "user-1",
-    requestId: undefined,
-    ipHash: undefined,
-    userAgent: undefined,
-  })) as any;
-  mocks.listServiceCommonEnvLinks = spy(async () => [
-    {
-      name: "TAKOS_API_URL",
-      source: "manual",
-      sync_state: "managed",
-      sync_reason: null,
-      has_value: true,
-    },
-  ]) as any;
-  mocks.listServiceBuiltins = spy(async () => ({
-    TAKOS_API_URL: {
-      managed: true,
-      available: true,
-      sync_state: "managed",
-      sync_reason: null,
-    },
-  })) as any;
-  mocks.getServiceForUser = (async () => ({
-    id: "worker-1",
-    space_id: "ws-1",
-  })) as any;
-
-  const app = createApp(createUser());
-  const env = createMockEnv() as unknown as Env;
-  const response = await app.fetch(
-    new Request("http://localhost/api/services/worker-1/common-env-links"),
-    env,
-    {} as ExecutionContext,
-  );
-
-  assertEquals(response.status, 200);
-  await assertEquals(await response.json(), {
-    links: [
-      {
-        name: "TAKOS_API_URL",
-        source: "manual",
-        sync_state: "managed",
-        sync_reason: null,
-        has_value: true,
-      },
-    ],
-    builtins: {
-      TAKOS_API_URL: {
-        managed: true,
-        available: true,
-        sync_state: "managed",
-        sync_reason: null,
-      },
-    },
-  });
-  assertSpyCalls(mocks.listServiceCommonEnvLinks, 1);
-  assert(mocks.listServiceCommonEnvLinks.calls[0].args[0] != null);
-  assertEquals(mocks.listServiceCommonEnvLinks.calls[0].args.slice(1), [
-    "ws-1",
-    "worker-1",
-  ]);
-  assertSpyCalls(mocks.listServiceBuiltins, 1);
-  assert(mocks.listServiceBuiltins.calls[0].args[0] != null);
-  assertEquals(mocks.listServiceBuiltins.calls[0].args.slice(1), [
-    "ws-1",
-    "worker-1",
-  ]);
-});
-Deno.test("services settings bindings workspace scope - requires owner or admin to configure TAKOS_ACCESS_TOKEN builtins", async () => {
-  /* mocks cleared (no-op in Deno) */ void 0;
-  mockCommonEnvDeps();
-  mocks.listServiceCommonEnvLinks = (async () => []) as any;
-  mocks.listServiceBuiltins = (async () => ({})) as any;
-  mocks.listServiceManualLinkNames = (async () => []) as any;
-  mocks.setServiceManualLinks = spy(async () => undefined) as any;
-  mocks.patchServiceManualLinks =
-    (async () => ({ added: [], removed: [] })) as any;
-  mocks.upsertServiceTakosAccessTokenConfig = spy(async () => undefined) as any;
-  mocks.deleteServiceTakosAccessTokenConfig = (async () => undefined) as any;
-  mocks.buildCommonEnvActor = (async () => ({
-    type: "user",
-    userId: "user-1",
-    requestId: undefined,
-    ipHash: undefined,
-    userAgent: undefined,
-  })) as any;
-  mocks.getServiceForUserWithRole = (async (_db: unknown, _workerId: string, _userId: string, roles: string[]) => {
-    if (roles.includes("editor")) {
-      return {
-        id: "worker-1",
-        space_id: "ws-1",
-      };
-    }
-    return null;
-  }) as any;
-
-  // getCurrentTakosAccessTokenLinkPresence uses Drizzle:
-  // db.select({source}).from(workerCommonEnvLinks).where(...).all()
-  mocks.getDb = (() => createDrizzleDb({ allResults: [] })) as any;
-
-  const app = createApp(createUser());
-  const env = createMockEnv() as unknown as Env;
-  const response = await app.fetch(
-    new Request("http://localhost/api/services/worker-1/common-env-links", {
-      method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        keys: ["TAKOS_ACCESS_TOKEN"],
-        builtins: {
-          TAKOS_ACCESS_TOKEN: {
-            scopes: ["repo:read"],
-          },
-        },
-      }),
-    }),
-    env,
-    {} as ExecutionContext,
-  );
-
-  assertEquals(response.status, 400);
-  await assertEquals(await response.json(), {
-    error: {
-      code: "BAD_REQUEST",
-      message: "Service not found",
-    },
-  });
-  assertSpyCalls(mocks.setServiceManualLinks, 0);
-  assertSpyCalls(mocks.upsertServiceTakosAccessTokenConfig, 0);
-});
-Deno.test("services settings bindings workspace scope - requires scopes when TAKOS_ACCESS_TOKEN is first linked", async () => {
-  /* mocks cleared (no-op in Deno) */ void 0;
-  mockCommonEnvDeps();
-  mocks.listServiceCommonEnvLinks = (async () => []) as any;
-  mocks.listServiceBuiltins = (async () => ({})) as any;
-  mocks.listServiceManualLinkNames = (async () => []) as any;
-  mocks.setServiceManualLinks = spy(async () => undefined) as any;
-  mocks.patchServiceManualLinks =
-    (async () => ({ added: [], removed: [] })) as any;
-  mocks.upsertServiceTakosAccessTokenConfig = (async () => undefined) as any;
-  mocks.deleteServiceTakosAccessTokenConfig = (async () => undefined) as any;
-  mocks.buildCommonEnvActor = (async () => ({
-    type: "user",
-    userId: "user-1",
-    requestId: undefined,
-    ipHash: undefined,
-    userAgent: undefined,
-  })) as any;
-  mocks.listServiceBuiltins = (async () => ({})) as any;
-  mocks.getServiceForUserWithRole = (async () => ({
-    id: "worker-1",
-    space_id: "ws-1",
-  })) as any;
-
-  // getCurrentTakosAccessTokenLinkPresence uses Drizzle chains
-  mocks.getDb = (() => createDrizzleDb({ allResults: [] })) as any;
-
-  const app = createApp(createUser());
-  const env = createMockEnv() as unknown as Env;
-  const response = await app.fetch(
-    new Request("http://localhost/api/services/worker-1/common-env-links", {
-      method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        keys: ["TAKOS_ACCESS_TOKEN"],
-      }),
-    }),
-    env,
-    {} as ExecutionContext,
-  );
-
-  assertEquals(response.status, 400);
-  await assertEquals(await response.json(), {
-    error: {
-      code: "BAD_REQUEST",
-      message:
-        "TAKOS_ACCESS_TOKEN requires builtins.TAKOS_ACCESS_TOKEN.scopes when first linked",
-    },
-  });
-  assertSpyCalls(mocks.setServiceManualLinks, 0);
-});
-Deno.test("services settings bindings workspace scope - stores TAKOS_ACCESS_TOKEN scopes when linked explicitly", async () => {
-  /* mocks cleared (no-op in Deno) */ void 0;
-  mockCommonEnvDeps();
-  mocks.listServiceCommonEnvLinks = (async () => []) as any;
-  mocks.listServiceBuiltins = (async () => ({})) as any;
-  mocks.listServiceManualLinkNames = (async () => []) as any;
-  mocks.setServiceManualLinks = spy(async () => undefined) as any;
-  mocks.patchServiceManualLinks =
-    (async () => ({ added: [], removed: [] })) as any;
-  mocks.upsertServiceTakosAccessTokenConfig = spy(async () => undefined) as any;
-  mocks.deleteServiceTakosAccessTokenConfig = (async () => undefined) as any;
-  mocks.buildCommonEnvActor = (async () => ({
-    type: "user",
-    userId: "user-1",
-    requestId: undefined,
-    ipHash: undefined,
-    userAgent: undefined,
-  })) as any;
-  let listBuiltinsCallCount = 0;
-  mocks.listServiceBuiltins = spy(async () => {
-    listBuiltinsCallCount++;
-    if (listBuiltinsCallCount === 1) {
-      return {};
-    }
-    return {
-      TAKOS_ACCESS_TOKEN: {
-        managed: true,
-        available: true,
-        configured: true,
-        scopes: ["repo:read"],
-        subject_mode: "workspace_actor",
-        sync_state: "managed",
-        sync_reason: null,
-      },
-    };
-  }) as any;
-  mocks.listServiceCommonEnvLinks = (async () => [
-    {
-      name: "TAKOS_ACCESS_TOKEN",
-      source: "manual",
-      sync_state: "managed",
-      sync_reason: null,
-      has_value: true,
-    },
-  ]) as any;
-  mocks.getServiceForUserWithRole = (async () => ({
-    id: "worker-1",
-    space_id: "ws-1",
-  })) as any;
-
-  // getCurrentTakosAccessTokenLinkPresence uses Drizzle chains
-  mocks.getDb = (() => createDrizzleDb({ allResults: [] })) as any;
-
-  const app = createApp(createUser());
-  const env = createMockEnv() as unknown as Env;
-  const response = await app.fetch(
-    new Request("http://localhost/api/services/worker-1/common-env-links", {
-      method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        keys: ["TAKOS_ACCESS_TOKEN"],
-        builtins: {
-          TAKOS_ACCESS_TOKEN: {
-            scopes: ["repo:read"],
-          },
-        },
-      }),
-    }),
-    env,
-    {} as ExecutionContext,
-  );
-
-  assertEquals(response.status, 200);
-  assertSpyCallArgs(mocks.setServiceManualLinks, 0, [
-    { kind: "manual-link" },
-    {
-      spaceId: "ws-1",
-      serviceId: "worker-1",
-      keys: ["TAKOS_ACCESS_TOKEN"],
-      actor: {
-        type: "user",
-        userId: "user-1",
-        requestId: undefined,
-        ipHash: undefined,
-        userAgent: undefined,
-      },
-    },
-  ]);
-  assertSpyCallArgs(mocks.upsertServiceTakosAccessTokenConfig, 0, [
-    { kind: "manual-link" },
-    {
-      spaceId: "ws-1",
-      serviceId: "worker-1",
-      scopes: ["repo:read"],
-    },
-  ]);
-  await assertEquals(await response.json(), {
+  assertEquals(await response.json(), {
     success: true,
-    links: [
+    consumes: [
       {
-        name: "TAKOS_ACCESS_TOKEN",
-        source: "manual",
-        sync_state: "managed",
-        sync_reason: null,
-        has_value: true,
+        publication: "auth.default",
+        env: { AUTH_URL: "PUBLIC_URL" },
       },
     ],
-    builtins: {
-      TAKOS_ACCESS_TOKEN: {
-        managed: true,
-        available: true,
-        configured: true,
-        scopes: ["repo:read"],
-        subject_mode: "workspace_actor",
-        sync_state: "managed",
-        sync_reason: null,
-      },
-    },
+    applies_on_next_deploy: true,
   });
+  assertSpyCallArgs(mocks.getServiceForUserWithRole, 0, [
+    env.DB,
+    "service-1",
+    "user-1",
+    ["owner", "admin"],
+  ]);
+  assertSpyCallArgs(mocks.replaceServiceConsumes, 0, [
+    env,
+    {
+      spaceId: "ws-1",
+      serviceId: "service-1",
+      serviceName: "api",
+      consumes: [
+        {
+          publication: "auth.default",
+          env: { AUTH_URL: "PUBLIC_URL" },
+        },
+      ],
+    },
+  ]);
+  assertSpyCalls(mocks.replaceServiceConsumes, 1);
 });

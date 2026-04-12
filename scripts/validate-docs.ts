@@ -149,6 +149,7 @@ const API_ROUTE_IDENTIFIER_TO_FAMILY: Record<string, string> = {
   profilesApi: "profiles",
   publicShare: "public-share",
   mcpRoutes: "mcp",
+  createEventsRouter: "events",
   setup: "setup",
   me: "me",
   spacesBase: "spaces",
@@ -179,6 +180,7 @@ const API_ROUTE_IDENTIFIER_TO_FAMILY: Record<string, string> = {
   pullRequests: "pull-requests",
   appDeployments: "app-deployments",
   browserSessions: "browser-sessions",
+  publications: "publications",
   billingWebhookHandler: "billing",
   billingRoutes: "billing",
   authApi: "auth",
@@ -254,6 +256,20 @@ function stripFencedCodeBlocks(content: string): string {
   return content.replace(/```[\s\S]*?```/g, "");
 }
 
+type MarkdownCodeBlock = {
+  language: string;
+  content: string;
+};
+
+function extractMarkdownCodeBlocks(content: string): MarkdownCodeBlock[] {
+  return Array.from(content.matchAll(/```([^\n`]*)\n([\s\S]*?)```/g))
+    .map((match) => ({
+      language: (match[1] ?? "").trim().toLowerCase(),
+      content: (match[2] ?? "").trim(),
+    }))
+    .filter((block) => block.content.length > 0);
+}
+
 function resolveDocsLinkPath(
   docsDir: string,
   file: string,
@@ -307,8 +323,12 @@ function extractFullManifestCodeBlocks(content: string): string[] {
     .map((match) => match[1]?.trim() ?? "")
     .filter(Boolean);
   return blocks.filter((block) =>
-    block.includes("apiVersion: takos.dev/v1alpha1") &&
-    block.includes("kind: App")
+    /^name:\s/m.test(block) &&
+    /^compute:\s/m.test(block) &&
+    !block.includes("apiVersion:") &&
+    !block.includes("kind:") &&
+    !block.includes("metadata:") &&
+    !block.includes("spec:")
   );
 }
 
@@ -330,6 +350,179 @@ function validateManifestExamples(
           `[docs] invalid manifest example in ${relativePath}#${
             index + 1
           }: ${message}`,
+        );
+      }
+    }
+  }
+}
+
+function validatePublicContractExamples(
+  docsDir: string,
+  result: ValidationResult,
+): void {
+  const publicDocPrefixes = [
+    "apps/",
+    "deploy/",
+    "examples/",
+    "get-started/",
+    "reference/manifest-spec.md",
+  ];
+
+  for (const file of walkFiles(docsDir)) {
+    if (!file.endsWith(".md")) continue;
+    const relativePath = path.relative(docsDir, file).replace(/\\/g, "/");
+    if (
+      !publicDocPrefixes.some((prefix) => relativePath.startsWith(prefix))
+    ) {
+      continue;
+    }
+
+    const content = readFileSync(file, "utf8");
+    const blocks = extractMarkdownCodeBlocks(content);
+    for (const [index, block] of blocks.entries()) {
+      const location = `${relativePath}#${index + 1}`;
+      if (/@sha256:(?![a-f0-9]{64}\b)/i.test(block.content)) {
+        result.errors.push(
+          `[docs] short digest example in ${location}: use a full 64-hex @sha256 digest`,
+        );
+      }
+      if (/^(?:apiVersion|kind|metadata|spec):/m.test(block.content)) {
+        result.errors.push(
+          `[docs] retired envelope fields are not allowed in public contract examples: ${location}`,
+        );
+      }
+      if (/^(?:storage|bindings|common-env):/m.test(block.content)) {
+        result.errors.push(
+          `[docs] retired manifest fields are not allowed in public contract examples: ${location}`,
+        );
+      }
+      if (/triggers:\s*[\s\S]*?queues:/m.test(block.content)) {
+        result.errors.push(
+          `[docs] retired queue triggers are not allowed in public contract examples: ${location}`,
+        );
+      }
+      if (/^\s*capabilities:\s*$/m.test(block.content)) {
+        result.errors.push(
+          `[docs] retired compute capabilities are not allowed in public contract examples: ${location}`,
+        );
+      }
+    }
+  }
+}
+
+function validateTerminologyBoundary(
+  docsDir: string,
+  result: ValidationResult,
+): void {
+  const publicDocPrefixes = [
+    "apps/",
+    "deploy/",
+    "examples/",
+    "get-started/",
+    "reference/glossary.md",
+    "reference/manifest-spec.md",
+  ];
+  const retiredTermPatterns = [
+    /\bstorage\.[A-Za-z0-9_-]+/,
+    /\bstorage:/,
+    /\bbindings\b/,
+    /\bcommon-env\b/,
+    /\bbind:/,
+  ];
+  const framedLegacyTerms =
+    /(legacy|retired|internal|deprecated|current contract|public contract|public manifest contract|current public manifest contract|旧|廃止)/;
+
+  for (const file of walkFiles(docsDir)) {
+    if (!file.endsWith(".md")) continue;
+    const relativePath = path.relative(docsDir, file).replace(/\\/g, "/");
+    if (
+      !publicDocPrefixes.some((prefix) => relativePath.startsWith(prefix))
+    ) {
+      continue;
+    }
+
+    const content = stripFencedCodeBlocks(readFileSync(file, "utf8"));
+    const lines = content.split(/\r?\n/);
+    for (const [index, line] of lines.entries()) {
+      if (!retiredTermPatterns.some((pattern) => pattern.test(line))) continue;
+      const context = [
+        lines[index - 1] ?? "",
+        line,
+        lines[index + 1] ?? "",
+      ].join("\n");
+      if (framedLegacyTerms.test(context)) continue;
+      result.errors.push(
+        `[docs] retired terminology must be framed as legacy/internal in public docs: ${relativePath}:${
+          index + 1
+        }`,
+      );
+    }
+  }
+}
+
+function validateDeployRuntimeContractDocs(
+  docsDir: string,
+  result: ValidationResult,
+): void {
+  const contractDriftChecks: Array<{
+    pattern: RegExp;
+    message: string;
+    allowContext?: RegExp;
+  }> = [
+    {
+      pattern: /全 group の publish を解決し env に\s*inject/,
+      message:
+        "publication env injection must be described as explicit consume, not all-group fanout",
+    },
+    {
+      pattern:
+        /space 内のすべての publication を解決し、すべての group\s*の env に inject/,
+      message:
+        "space-wide publication fanout is retired; docs must say explicit consume only",
+    },
+    {
+      pattern: /publication の必須 field は `type` と `path`/,
+      message:
+        "type/path are required only for route publications; provider publications use provider/kind/spec",
+      allowContext: /route publication/,
+    },
+    {
+      pattern: /すべての publication (?:は|が).*URL/,
+      message:
+        "provider publications do not have route URLs; only route publications expose URL output",
+      allowContext: /route publication/,
+    },
+    {
+      pattern: /200\/2xx\/3xx|2xx\/3xx/,
+      message:
+        "worker readiness docs must use the current 200-only readiness rule",
+    },
+    {
+      pattern: /個別 worker の rollback は deployment history/,
+      message:
+        "group rollback is group-snapshot only; individual Worker/Container rollback is not current surface",
+    },
+  ];
+
+  for (const file of walkFiles(docsDir)) {
+    if (!file.endsWith(".md")) continue;
+    const relativePath = path.relative(docsDir, file).replace(/\\/g, "/");
+    const content = stripFencedCodeBlocks(readFileSync(file, "utf8"));
+    const lines = content.split(/\r?\n/);
+
+    for (const [index, line] of lines.entries()) {
+      const context = [
+        lines[index - 1] ?? "",
+        line,
+        lines[index + 1] ?? "",
+      ].join("\n");
+      for (const check of contractDriftChecks) {
+        if (!check.pattern.test(context)) continue;
+        if (check.allowContext?.test(context)) continue;
+        result.errors.push(
+          `[docs] deploy/runtime contract drift in ${relativePath}:${
+            index + 1
+          }: ${check.message}`,
         );
       }
     }
@@ -519,12 +712,44 @@ function validateManifestDocs(
   }
 
   const manifestContent = readFileSync(manifestDoc, "utf8");
+  const currentManifestExample = [
+    "name: sample-app",
+    "compute:",
+    "  web:",
+    "    build:",
+    "      fromWorkflow:",
+    "        path: .takos/workflows/deploy.yml",
+    "        job: bundle",
+    "        artifact: web",
+    "routes:",
+    "  - target: web",
+    "    path: /",
+    "publish: []",
+    "env: {}",
+  ].join("\n");
+  try {
+    parseAppManifestYaml(currentManifestExample);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    result.errors.push(
+      `[docs] current flat manifest sample no longer parses: ${message}`,
+    );
+  }
+
   for (
-    const requiredSnippet of ["kind: App", "build:", "fromWorkflow", "spec:"]
+    const requiredSnippet of [
+      "compute:",
+      "publish:",
+      "consume:",
+      "env:",
+      "routes:",
+      "build:",
+      "fromWorkflow:",
+    ]
   ) {
     if (!manifestContent.includes(requiredSnippet)) {
       result.errors.push(
-        `[docs] apps/manifest.md must mention current contract snippet: ${requiredSnippet}`,
+        `[docs] apps/manifest.md must mention current flat contract snippet: ${requiredSnippet}`,
       );
     }
   }
@@ -532,10 +757,23 @@ function validateManifestDocs(
   const manifestSpecDoc = path.join(docsDir, "reference", "manifest-spec.md");
   if (isFile(manifestSpecDoc)) {
     const specContent = readFileSync(manifestSpecDoc, "utf8");
-    for (const requiredSnippet of ["apiVersion", "kind", "metadata", "spec"]) {
+    for (
+      const requiredSnippet of [
+        "top-level fields",
+        "compute",
+        "consume",
+        "routes",
+        "publish",
+        "env",
+        "build.fromWorkflow.path",
+        "readiness",
+        "healthCheck",
+        "overrides",
+      ]
+    ) {
       if (!specContent.includes(requiredSnippet)) {
         result.errors.push(
-          `[docs] reference/manifest-spec.md must mention field: ${requiredSnippet}`,
+          `[docs] reference/manifest-spec.md must mention current flat contract field: ${requiredSnippet}`,
         );
       }
     }
@@ -612,9 +850,13 @@ function validatePlatformMatrixDoc(
     const snippet of [
       ".env.local.example",
       "apps/control/.env.example",
-      "apps/control/.env.self-host.example",
+      "takos-private/.env.server.example",
+      "takos-private/compose.server.yml",
+      "takos-private/apps/executor",
+      "takos-private/apps/browser",
       "apps/control/SECRETS.md",
       "apps/control/wrangler*.toml",
+      "apps/control/.secrets/<env>",
       "deploy/helm/takos/",
     ]
   ) {
@@ -623,20 +865,6 @@ function validatePlatformMatrixDoc(
         `[docs] platform matrix is missing tracked template snippet: ${snippet}`,
       );
     }
-  }
-
-  const selfHostTemplateCount =
-    (content.match(/apps\/control\/\.env\.self-host\.example/g) ?? []).length;
-  if (selfHostTemplateCount !== 1) {
-    result.errors.push(
-      `[docs] platform matrix must mention apps/control/.env.self-host.example exactly once (found ${selfHostTemplateCount})`,
-    );
-  }
-
-  if (content.includes("secret 管理コマンド")) {
-    result.errors.push(
-      "[docs] platform matrix must reference a tracked file, not a vague secret command entry",
-    );
   }
 }
 
@@ -665,7 +893,6 @@ function validateApiDocs(
       "/api/spaces/:spaceId/app-deployments",
       "/api/runs/:id/sse",
       "/api/notifications/sse",
-      "/api/spaces/:spaceId/common-env",
       "/api/services/:id/custom-domains",
     ]
   ) {
@@ -689,6 +916,8 @@ const ENDPOINT_FILE_MOUNT: Record<string, string> = {
   "auth-api.ts": "/auth",
   "oauth-consent-api.ts": "/oauth",
   "mcp.ts": "/mcp",
+  "events/routes.ts": "/events",
+  "publications/routes.ts": "/publications",
   "public-share.ts": "/public",
   "billing/webhook.ts": "/billing/webhook",
   "runs/sse.ts": "/runs",
@@ -699,13 +928,18 @@ const ENDPOINT_FILE_MOUNT: Record<string, string> = {
 const ENDPOINT_DIR_MOUNT: Record<string, string> = {
   workers: "/services",
   resources: "/resources",
+  publications: "/publications",
   spaces: "/spaces",
   explore: "/explore",
   profiles: "/users",
   billing: "/billing",
 };
 
-const ENDPOINT_SKIP_DIRS = new Set(["activitypub-store", "auth", "oauth"]);
+const ENDPOINT_SKIP_DIRS = new Set([
+  "activitypub-store",
+  "auth",
+  "oauth",
+]);
 
 const ENDPOINT_SKIP_FILES = new Set([
   "api.ts",
@@ -721,10 +955,8 @@ const ENDPOINT_SKIP_FILES = new Set([
 const ENDPOINT_DUPLICATE_ROUTE_FILES = new Set([
   "agent-tasks/routes.ts",
   "apps/routes.ts",
-  "browser-sessions/routes.ts",
   "custom-domains/routes.ts",
   "git/routes.ts",
-  "groups/routes.ts",
   "mcp/routes.ts",
   "me/routes.ts",
   "memories/routes.ts",
@@ -1112,6 +1344,9 @@ function main(): void {
   validateCurrentTruthFiles(repoRoot, docsDir, result);
   validatePrimaryDocsStructure(docsDir, result);
   validateManifestExamples(docsDir, result);
+  validatePublicContractExamples(docsDir, result);
+  validateTerminologyBoundary(docsDir, result);
+  validateDeployRuntimeContractDocs(docsDir, result);
 
   for (const warning of result.warnings) {
     console.warn(warning);

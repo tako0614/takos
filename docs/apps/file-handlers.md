@@ -8,6 +8,8 @@
 ```yaml
 publish:
   - type: FileHandler
+    name: markdown
+    title: Markdown
     mimeTypes: [text/markdown]
     extensions: [.md]
     path: /files/:id
@@ -22,11 +24,13 @@ publish:
 publish:
   - type: FileHandler
     name: markdown
+    title: Markdown
     mimeTypes: [text/markdown]
     extensions: [.md]
     path: /files/:id
   - type: FileHandler
     name: image
+    title: Images
     mimeTypes: [image/png, image/jpeg, image/gif]
     extensions: [.png, .jpg, .jpeg, .gif]
     path: /viewer/:id
@@ -46,9 +50,10 @@ publication は generic object であり固定の schema はないが、`FileHan
 | `mimeTypes`  | conditional | 対応する MIME type のリスト (`mimeTypes` または `extensions` の最低 1 つが必須)    |
 | `extensions` | conditional | 対応するファイル拡張子のリスト (`mimeTypes` または `extensions` の最低 1 つが必須) |
 | `path`       | yes         | ファイルを開く際の path (`:id` がファイル ID に置換)                               |
-| `name`       | conditional | 同 group + 同 type の publication が複数ある場合 required                          |
+| `name`       | yes         | publication 名。FileHandler では常に required                                      |
+| `title`      | no          | UI / discovery 用の表示名                                                          |
 
-`path` は app のルートからの相対 path。
+`path` は `/` で始まる app 内 path。
 
 ## Publication の仕組み
 

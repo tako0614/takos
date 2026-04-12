@@ -16,8 +16,6 @@ import {
   domainAddHandler,
   PLATFORM_HANDLERS,
   PLATFORM_TOOLS,
-  SERVICE_BINDINGS_GET,
-  SERVICE_BINDINGS_SET,
   SERVICE_CREATE,
   SERVICE_DELETE,
   SERVICE_ENV_GET,
@@ -53,8 +51,6 @@ Deno.test("platform tools - exports the combined builtin tool list", () => {
     const name of [
       "service_env_get",
       "service_env_set",
-      "service_bindings_get",
-      "service_bindings_set",
       "service_runtime_get",
       "service_runtime_set",
       "domain_list",
@@ -85,11 +81,6 @@ Deno.test("platform tools - exports the combined builtin tool list", () => {
 Deno.test("platform tools - definitions expose the expected required arguments", () => {
   assertEquals(SERVICE_ENV_GET.parameters.required, ["service_name"]);
   assertEquals(SERVICE_ENV_SET.parameters.required, ["service_name", "env"]);
-  assertEquals(SERVICE_BINDINGS_GET.parameters.required, ["service_name"]);
-  assertEquals(SERVICE_BINDINGS_SET.parameters.required, [
-    "service_name",
-    "bindings",
-  ]);
   assertEquals(SERVICE_RUNTIME_GET.parameters.required, ["service_name"]);
   assertEquals(SERVICE_RUNTIME_SET.parameters.required, ["service_name"]);
   assertEquals(DOMAIN_LIST.parameters.required, ["service_id"]);

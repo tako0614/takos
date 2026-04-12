@@ -24,6 +24,7 @@ import {
 import {
   executeApplyEntry,
   reconcileAppliedRoutes,
+  syncGroupDesiredStateForWorkloads,
 } from "./apply-engine-executor.ts";
 
 export { applyEngineDeps };
@@ -237,6 +238,9 @@ export async function applyManifest(
   // DB write or provider apply so the deploy fails fast with a clear error
   // and the caller never sees a partially-applied state.
   assertDeployValid(plan.effectiveManifest);
+  applyEngineDeps.assertTranslationSupported(plan.translationReport, {
+    ociOrchestratorUrl: env.OCI_ORCHESTRATOR_URL,
+  });
 
   let entries = plan.diff.entries;
   if (opts.target && opts.target.length > 0) {
@@ -289,29 +293,53 @@ export async function applyManifest(
         error: error instanceof Error ? error.message : String(error),
       });
 
-      if (opts.rollbackOnFailure) {
-        break;
-      }
+      break;
     }
   }
 
-  const refreshedState = await getGroupState(env, groupId);
-  if (refreshedState) {
-    const routeResults = await reconcileAppliedRoutes(
+  let hasFailures = result.applied.some((entry) => entry.status === "failed");
+  const shouldSyncManagedState = !hasFailures;
+  if (shouldSyncManagedState) {
+    const syncFailures = await syncGroupDesiredStateForWorkloads(
       applyEngineDeps,
+      getGroupState,
       env,
-      {
-        desiredState: plan.desiredState,
-        currentRoutes: plan.currentState?.routes ?? {},
-        refreshedWorkloads: refreshedState.workloads,
-        routeEntries,
-        appliedAt: new Date().toISOString(),
-      },
+      groupId,
+      plan.desiredState,
+      group.spaceId,
     );
-    result.applied.push(...routeResults);
+    result.applied.push(
+      ...syncFailures.map((failure) => ({
+        name: failure.name,
+        category: "managed-state",
+        action: "update",
+        status: "failed" as const,
+        error: failure.error,
+      })),
+    );
+    hasFailures = result.applied.some((entry) => entry.status === "failed");
   }
 
-  const hasFailures = result.applied.some((entry) => entry.status === "failed");
+  const shouldReconcileRoutes = !hasFailures;
+  if (shouldReconcileRoutes) {
+    const refreshedState = await getGroupState(env, groupId);
+    if (refreshedState) {
+      const routeResults = await reconcileAppliedRoutes(
+        applyEngineDeps,
+        env,
+        {
+          desiredState: plan.desiredState,
+          currentRoutes: plan.currentState?.routes ?? {},
+          refreshedWorkloads: refreshedState.workloads,
+          routeEntries,
+          appliedAt: new Date().toISOString(),
+        },
+      );
+      result.applied.push(...routeResults);
+      hasFailures = result.applied.some((entry) => entry.status === "failed");
+    }
+  }
+
   await saveGroupSnapshots(
     env,
     groupId,
@@ -351,6 +379,7 @@ export async function planManifest(
     loadDesiredManifest,
     getCurrentState: (targetGroupId) => getGroupState(env, targetGroupId),
   });
+  assertDeployValid(plan.effectiveManifest);
 
   return {
     diff: plan.diff,

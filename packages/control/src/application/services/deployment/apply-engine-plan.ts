@@ -20,10 +20,6 @@ export type ApplyEnginePlannerDeps = {
     desiredState: GroupDesiredState,
     context: { ociOrchestratorUrl: string | undefined },
   ) => TranslationReport;
-  assertTranslationSupported: (
-    report: TranslationReport,
-    context: { ociOrchestratorUrl: string | undefined },
-  ) => void;
 };
 
 export type BuildManifestPlanInput<TGroup extends ApplyEnginePlanGroup> = {
@@ -79,7 +75,6 @@ export async function buildManifestPlan<TGroup extends ApplyEnginePlanGroup>(
     desiredState,
     translationContext,
   );
-  deps.assertTranslationSupported(translationReport, translationContext);
 
   return {
     effectiveManifest,

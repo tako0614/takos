@@ -189,6 +189,10 @@ function workloadCategoryFromKind(
   }
 }
 
+function attachedWorkloadName(parentName: string, childName: string): string {
+  return `${parentName}-${childName}`;
+}
+
 export function compileGroupDesiredState(
   manifest: AppManifest,
   opts: {
@@ -204,9 +208,8 @@ export function compileGroupDesiredState(
 
   // In the flat schema all top-level compute entries are unique by name.
   // Attached containers are nested under `worker.containers.<name>` and
-  // share a flat namespace with the parent — kernel validation is in
-  // parse-compute.ts; we just surface them here under the same desired
-  // workloads map for scheduling purposes.
+  // are surfaced as `${parent}-${child}` to match bundle workload documents and
+  // avoid collisions when multiple workers use the same child container name.
   const routes = Object.fromEntries(
     routeList.map((route, index) => [
       route.target
@@ -247,13 +250,14 @@ export function compileGroupDesiredState(
     // deploy pipeline can treat them as independent reconciliation units.
     if (entry.kind === "worker" && entry.containers) {
       for (const [childName, childEntry] of Object.entries(entry.containers)) {
-        desiredWorkloads[childName] = {
-          name: childName,
+        const workloadName = attachedWorkloadName(name, childName);
+        desiredWorkloads[workloadName] = {
+          name: workloadName,
           category: workloadCategoryFromKind(childEntry.kind),
           spec: childEntry,
           specFingerprint: stableFingerprint(childEntry),
           dependsOn: childEntry.depends ?? [],
-          routeNames: routeNamesByTarget.get(childName) ?? [],
+          routeNames: routeNamesByTarget.get(workloadName) ?? [],
         };
       }
     }

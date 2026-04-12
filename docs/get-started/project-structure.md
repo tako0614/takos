@@ -8,15 +8,10 @@ Takos プロジェクトで使う `.takos/` ディレクトリと関連ファイ
 my-app/
 ├── .takos/
 │   ├── app.yml              ← アプリの構成定義
-│   ├── workflows/
-│   │   └── deploy.yml       ← ビルド・デプロイのワークフロー
-│   └── migrations/          ← DB マイグレーション（sql storage を使う場合）
-│       └── primary-db/
-│           ├── 0001_create_users.sql
-│           └── 0002_add_email_index.sql
+│   └── workflows/
+│       └── deploy.yml       ← ビルド・デプロイのワークフロー
 ├── src/
 │   └── index.ts
-├── package.json
 └── ...
 ```
 
@@ -24,13 +19,14 @@ my-app/
 
 ### アプリマニフェスト (`.takos/app.yml`)
 
-Takos
-で「何をデプロイするか」を宣言するファイル。compute、storage、routes、publish、環境変数を定義する。
+Takos で「何をデプロイするか」を宣言する flat manifest。compute、routes、
+publish、env、overrides を定義する。
 
 `.takos/app.yml` は deploy/runtime contract です。
 
 ```yaml
 name: my-app
+version: 0.1.0
 
 compute:
   web:
@@ -40,6 +36,23 @@ compute:
         job: bundle
         artifact: web
         artifactPath: dist/worker
+    consume:
+      - publication: primary-db
+        env:
+          endpoint: DATABASE_URL
+          apiKey: DATABASE_API_KEY
+
+publish:
+  - name: primary-db
+    provider: takos
+    kind: sql
+    spec:
+      resource: primary-db
+      permission: write
+
+routes:
+  - target: web
+    path: /
 ```
 
 詳しくは [アプリマニフェスト](/apps/manifest) を参照。フィールド一覧は
@@ -51,13 +64,9 @@ compute:
 ビルド手順と artifact の出力先を記述。`app.yml` の `build.fromWorkflow`
 がこのファイルを参照する。
 
-### `.takos/migrations/`
-
-`sql` storage 用のマイグレーションファイル。ディレクトリ名が `app.yml` の
-storage 名に対応する。各 storage ディレクトリ直下に `.sql`
-ファイルをファイル名順で配置する （forward-only。`up/` `down/`
-のサブディレクトリは存在せず、rollback による schema
-巻き戻しはサポートしない。schema を戻したい場合は新しい migration として書く）。
+stateful resource の schema や初期化手順は provider-backed publication とその
+consumer 側のコードで扱う。manifest 側に専用の stateful-resource
+フィールドはなく、 `.takos/migrations/` は current contract には含まれない。
 
 ## 制約
 

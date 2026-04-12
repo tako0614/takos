@@ -97,7 +97,7 @@ npm install && npm run build
 
 ```bash
 takos login
-takos deploy --env staging
+takos deploy --env staging --space SPACE_ID
 ```
 
 ::: tip CLI は Takos の認証情報を使います。`takos login` 後は `--account-id` や
@@ -106,7 +106,8 @@ takos deploy --env staging
 デプロイ成功すると URL が表示される。ブラウザで開いて "Hello from Takos!"
 が出れば成功。
 
-manifest の整合性だけ先に確認したい場合: `takos deploy --plan`
+manifest の整合性だけ先に確認したい場合:
+`takos deploy --plan --space SPACE_ID`
 
 ::: tip flat manifest
 `app.yml` は flat 構造です。`apiVersion` / `kind` / `metadata` / `spec`

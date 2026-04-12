@@ -32,15 +32,16 @@ build:
     path: workflows/deploy.yml
 ```
 
-### `Error: target "compute.xxx" not found in manifest`
+### `--target` で何も反映されない
 
-`--target` で指定した workload 名が `.takos/app.yml`
-に存在するか確認してください。
+`--target` は dotted path ではなく deploy diff entry の `name` に完全一致します。
+workload は compute 名、route は `${target}:${path}` 形式です。publication は
+target filter の対象外で、manifest catalog として同期されます。
 
 ```bash
-# app.yml に compute.web がある場合
-takos deploy --env staging --target compute.web    # OK
-takos deploy --env staging --target compute.api    # NG（存在しない）
+# app.yml に compute.web と routes: [{ target: web, path: "/" }] がある場合
+takos deploy --env staging --space SPACE_ID --target web       # workload
+takos deploy --env staging --space SPACE_ID --target 'web:/'   # route
 ```
 
 ## publication/provider 解決失敗
@@ -64,13 +65,13 @@ takos deploy --env staging --target compute.api    # NG（存在しない）
 1. まず plan を確認しましょう:
 
 ```bash
-takos deploy --plan
+takos deploy --plan --space SPACE_ID
 ```
 
 2. 変更対象を絞って切り分けます:
 
 ```bash
-takos deploy --env staging --target compute.web
+takos deploy --env staging --space SPACE_ID --target web
 ```
 
 3. よくある原因:
@@ -93,7 +94,7 @@ takos endpoint show
 デプロイ前に manifest だけ検証したい場合:
 
 ```bash
-takos deploy --plan
+takos deploy --plan --space SPACE_ID
 ```
 
 以下の項目が検証されます。
@@ -101,14 +102,14 @@ takos deploy --plan
 - `.takos/app.yml` にトップレベルの `name` があること
 - `build.fromWorkflow.path` が `.takos/workflows/` 配下であること
 - compute / publish / routes の参照が整合していること
-- `--target` で指定した compute / routes が manifest 内に存在すること
+- `--target` で指定した workload / route の diff entry 名が plan と一致すること
 
 ## それでも解決しない場合
 
-1. `takos deploy --plan` で manifest の解釈結果と差分を確認
+1. `takos deploy --plan --space SPACE_ID` で manifest の解釈結果と差分を確認
 2. `takos deploy status --space SPACE_ID` で control plane 側の deployment
    状態を確認
-3. `takos group show GROUP_NAME` で group inventory を確認
+3. `takos group show GROUP_NAME --space SPACE_ID` で group inventory を確認
 4. provider 固有の問題は [Hosting / Cloudflare](/hosting/cloudflare) などの
    provider docs を参照
 

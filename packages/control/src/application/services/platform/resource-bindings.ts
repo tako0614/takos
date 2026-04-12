@@ -1,33 +1,26 @@
-import type { WorkerBinding } from '../../../platform/providers/cloudflare/wfp.ts';
-import { safeJsonParseOrDefault } from '../../../shared/utils/index.ts';
+import type { WorkerBinding } from "../../../platform/providers/cloudflare/wfp.ts";
+import { safeJsonParseOrDefault } from "../../../shared/utils/index.ts";
 import type {
-  ServiceRuntimeLimits,
-  ServiceRuntimeRow,
+  ServiceBindingRow,
+  ServiceRuntimeConfigState,
   ServiceRuntimeFlagRow,
   ServiceRuntimeLimitRow,
-  ServiceRuntimeConfigState,
-  ServiceBindingRow,
-} from './desired-state-types.ts';
+  ServiceRuntimeLimits,
+  ServiceRuntimeRow,
+} from "./desired-state-types.ts";
 
-function normalizeEnvName(name: string): string {
-  const normalized = String(name || '').trim();
-  if (!normalized) {
-    throw new Error('Environment variable name is required');
-  }
-  if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(normalized)) {
-    throw new Error(`Invalid environment variable name: ${normalized}`);
-  }
-  return normalized.toUpperCase();
-}
-
-export function normalizeLimits(input?: ServiceRuntimeLimits | null): ServiceRuntimeLimits {
+export function normalizeLimits(
+  input?: ServiceRuntimeLimits | null,
+): ServiceRuntimeLimits {
   const limits: ServiceRuntimeLimits = {};
   if (!input) return limits;
 
-  if (typeof input.cpu_ms === 'number' && Number.isFinite(input.cpu_ms)) {
+  if (typeof input.cpu_ms === "number" && Number.isFinite(input.cpu_ms)) {
     limits.cpu_ms = Math.floor(input.cpu_ms);
   }
-  if (typeof input.subrequests === 'number' && Number.isFinite(input.subrequests)) {
+  if (
+    typeof input.subrequests === "number" && Number.isFinite(input.subrequests)
+  ) {
     limits.subrequests = Math.floor(input.subrequests);
   }
 
@@ -67,7 +60,7 @@ export function sortBindings(bindings: WorkerBinding[]): WorkerBinding[] {
 }
 
 export function normalizeRoutingWeight(raw: number | string): number {
-  const value = typeof raw === 'number' ? raw : Number(raw);
+  const value = typeof raw === "number" ? raw : Number(raw);
   if (!Number.isFinite(value)) return 0;
   const normalized = Math.floor(value);
   return normalized > 0 ? normalized : 0;
@@ -78,8 +71,9 @@ function parseBindingConfig(config: string): Record<string, unknown> {
 }
 
 function sanitizePortableName(name: string): string {
-  const sanitized = name.replace(/[^a-zA-Z0-9._-]/g, '-').replace(/-+/g, '-').replace(/^-|-$/g, '');
-  return sanitized || 'resource';
+  const sanitized = name.replace(/[^a-zA-Z0-9._-]/g, "-").replace(/-+/g, "-")
+    .replace(/^-|-$/g, "");
+  return sanitized || "resource";
 }
 
 function derivePortableQueueSubscriptionName(name: string): string {
@@ -91,103 +85,124 @@ export function toServiceBinding(row: ServiceBindingRow): WorkerBinding | null {
   const resourceConfig = parseBindingConfig(row.resourceConfig);
 
   switch (row.bindingType) {
-    case 'd1':
+    case "d1":
       if (!row.resourceProviderResourceId) return null;
       return {
-        type: 'd1',
+        type: "d1",
         name: row.bindingName,
         database_id: row.resourceProviderResourceId,
       };
-    case 'r2':
+    case "r2":
       if (!row.resourceProviderResourceName) return null;
       return {
-        type: 'r2_bucket',
+        type: "r2_bucket",
         name: row.bindingName,
         bucket_name: row.resourceProviderResourceName,
       };
-    case 'kv':
+    case "kv":
       if (!row.resourceProviderResourceId) return null;
       return {
-        type: 'kv_namespace',
+        type: "kv_namespace",
         name: row.bindingName,
         namespace_id: row.resourceProviderResourceId,
       };
-    case 'queue':
-      if (!row.resourceProviderResourceName && !row.resourceProviderResourceId) return null;
+    case "queue":
+      if (
+        !row.resourceProviderResourceName && !row.resourceProviderResourceId
+      ) return null;
       return {
-        type: 'queue',
+        type: "queue",
         name: row.bindingName,
-        queue_name: row.resourceProviderResourceName || row.resourceProviderResourceId || undefined,
-        ...(row.resourceProviderName === 'aws'
+        queue_name: row.resourceProviderResourceName ||
+          row.resourceProviderResourceId || undefined,
+        ...(row.resourceProviderName === "aws"
           ? {
-              queue_backend: 'sqs' as const,
-              queue_url: row.resourceProviderResourceId || undefined,
-              provider_name: 'aws' as const,
-            }
+            queue_backend: "sqs" as const,
+            queue_url: row.resourceProviderResourceId || undefined,
+            provider_name: "aws" as const,
+          }
           : {}),
-        ...(row.resourceProviderName === 'gcp'
+        ...(row.resourceProviderName === "gcp"
           ? {
-              queue_backend: 'pubsub' as const,
-              subscription_name: typeof resourceConfig.subscriptionName === 'string'
+            queue_backend: "pubsub" as const,
+            subscription_name:
+              typeof resourceConfig.subscriptionName === "string"
                 ? resourceConfig.subscriptionName
-                : derivePortableQueueSubscriptionName(row.resourceProviderResourceName || row.resourceId),
-              provider_name: 'gcp' as const,
-            }
+                : derivePortableQueueSubscriptionName(
+                  row.resourceProviderResourceName || row.resourceId,
+                ),
+            provider_name: "gcp" as const,
+          }
           : {}),
-        ...(row.resourceProviderName === 'k8s'
+        ...(row.resourceProviderName === "k8s"
           ? {
-              queue_backend: 'redis' as const,
-              provider_name: 'k8s' as const,
-            }
+            queue_backend: "redis" as const,
+            provider_name: "k8s" as const,
+          }
           : {}),
       };
-    case 'analytics_engine':
-      if (!row.resourceProviderResourceName && !row.resourceProviderResourceId) return null;
+    case "analytics_engine":
+      if (
+        !row.resourceProviderResourceName && !row.resourceProviderResourceId
+      ) return null;
       return {
-        type: 'analytics_engine',
+        type: "analytics_engine",
         name: row.bindingName,
-        dataset: row.resourceProviderResourceName || row.resourceProviderResourceId || undefined,
+        dataset: row.resourceProviderResourceName ||
+          row.resourceProviderResourceId || undefined,
       };
-    case 'vectorize':
+    case "vectorize":
       if (!row.resourceProviderResourceName) return null;
       return {
-        type: 'vectorize',
+        type: "vectorize",
         name: row.bindingName,
         index_name: row.resourceProviderResourceName,
       };
-    case 'analyticsEngine':
-      if (!row.resourceProviderResourceName && !row.resourceProviderResourceId) return null;
+    case "analyticsEngine":
+      if (
+        !row.resourceProviderResourceName && !row.resourceProviderResourceId
+      ) return null;
       return {
-        type: 'analytics_engine',
+        type: "analytics_engine",
         name: row.bindingName,
-        dataset: row.resourceProviderResourceName || row.resourceProviderResourceId || undefined,
+        dataset: row.resourceProviderResourceName ||
+          row.resourceProviderResourceId || undefined,
       };
-    case 'workflow':
-      if (!row.resourceProviderResourceName && !row.resourceProviderResourceId) return null;
+    case "workflow":
+      if (
+        !row.resourceProviderResourceName && !row.resourceProviderResourceId
+      ) return null;
       return {
-        type: 'workflow',
+        type: "workflow",
         name: row.bindingName,
-        workflow_name: row.resourceProviderResourceName || row.resourceProviderResourceId || undefined,
+        workflow_name: row.resourceProviderResourceName ||
+          row.resourceProviderResourceId || undefined,
       };
-    case 'durable_object_namespace':
-    case 'durableObject': {
-      const className = typeof config.className === 'string'
+    case "durable_object_namespace":
+    case "durableObject": {
+      const className = typeof config.className === "string"
         ? config.className
-        : row.resourceProviderResourceName || row.resourceProviderResourceId || undefined;
+        : row.resourceProviderResourceName || row.resourceProviderResourceId ||
+          undefined;
       if (!className) return null;
       return {
-        type: 'durable_object_namespace',
+        type: "durable_object_namespace",
         name: row.bindingName,
         class_name: className,
-        script_name: typeof config.scriptName === 'string' ? config.scriptName : undefined,
+        script_name: typeof config.scriptName === "string"
+          ? config.scriptName
+          : undefined,
       };
     }
-    case 'service':
+    case "service":
       return {
-        type: 'service',
+        type: "service",
         name: row.bindingName,
-        service: row.resourceProviderResourceName || row.resourceProviderResourceId || undefined,
-        environment: typeof config.environment === 'string' ? config.environment : undefined,
+        service: row.resourceProviderResourceName ||
+          row.resourceProviderResourceId || undefined,
+        environment: typeof config.environment === "string"
+          ? config.environment
+          : undefined,
       };
     default:
       return null;

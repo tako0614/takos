@@ -44,7 +44,7 @@ spec を書けることと、 Cloudflare product surface に 1 対 1
 
 ### manifest-level feature support
 
-| feature (`storage.<name>.type` または compute trigger) | manifest | bundle docs | runtime parity                                      |
+| feature (`publish.kind` または compute trigger)        | manifest | bundle docs | runtime parity                                      |
 | ------------------------------------------------------ | -------- | ----------- | --------------------------------------------------- |
 | `queue`                                                | yes      | yes         | backend 依存                                        |
 | `scheduled` (compute.triggers.schedules)               | yes      | yes         | backend 依存                                        |

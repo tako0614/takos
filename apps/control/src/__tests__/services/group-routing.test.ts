@@ -31,7 +31,6 @@ Deno.test("group routing reconciler - publishes hostname routing from canonical 
           port: 8080,
         },
       },
-      storage: {},
       routes: [
         {
           target: "api",
@@ -40,7 +39,6 @@ Deno.test("group routing reconciler - publishes hostname routing from canonical 
       ],
       publish: [],
       env: {},
-      scopes: [],
     },
     {
       groupName: "demo-app",

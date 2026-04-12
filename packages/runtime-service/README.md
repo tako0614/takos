@@ -62,7 +62,7 @@ Rate limit: 60 req/min
 Sandboxed command execution with allowlisted commands and blocklist patterns.
 Supports file staging, output collection, and concurrent execution limits.
 
-### Tool Invocation (`/exec/tools`)
+### Tool Invocation (`/execute-tool`)
 
 Named tool registration and invocation with configurable timeouts (max 60s).
 

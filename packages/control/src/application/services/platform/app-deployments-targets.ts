@@ -2,6 +2,7 @@ import { and, eq } from "drizzle-orm";
 import { accounts, getDb, repositories } from "../../../infra/db/index.ts";
 import { BadRequestError, NotFoundError } from "takos-common/errors";
 import type { Env } from "../../../shared/types/index.ts";
+import { safeJsonParseOrDefault } from "../../../shared/utils/index.ts";
 import { checkRepoAccess } from "../source/repos.ts";
 import * as gitStore from "../git-smart/index.ts";
 import { fetchPackFromRemote } from "../git-smart/client/fetch-pack.ts";
@@ -495,6 +496,13 @@ export async function buildSourceFromRow(
   env: Env,
   row: AppDeploymentRow,
 ): Promise<AppDeploymentSource> {
+  if (row.sourceKind === "manifest") {
+    const artifacts = safeJsonParseOrDefault<unknown>(row.buildSourcesJson, []);
+    return {
+      kind: "manifest",
+      artifact_count: Array.isArray(artifacts) ? artifacts.length : 0,
+    };
+  }
   return {
     kind: "git_ref",
     repository_url: await resolveRepositoryUrlForRow(env, row),

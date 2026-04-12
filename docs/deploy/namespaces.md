@@ -22,7 +22,9 @@ current public CLI の `takos deploy` / `takos install`
   control-plane 環境変数に接続する
 
 Cloudflare 用の実運用では `WFP_DISPATCH_NAMESPACE`
-などの operator 設定が namespace 解決を担う。
+などの operator 設定が namespace 解決を担う。private control plane の current
+config では production namespace が `takos-tenants`、staging namespace が
+`takos-staging-tenants` です。
 
 ## group との関係
 
@@ -40,8 +42,8 @@ surface ではない。
 Cloudflare backend では namespace 自体を先に作る。
 
 ```bash
+wrangler dispatch-namespace create takos-tenants
 wrangler dispatch-namespace create takos-staging-tenants
-wrangler dispatch-namespace create takos-production-tenants
 ```
 
 その後、operator 設定から Takos control plane に接続する。

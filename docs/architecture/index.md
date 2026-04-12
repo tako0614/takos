@@ -16,8 +16,9 @@ kernel が提供するもの:
 
 外部ワークロードは **二層モデル**:
 
-- **primitive (foundation)**: compute / storage / route / publish。1st-class
-  エンティティで、それぞれ独立した lifecycle を持つ
+- **primitive (foundation)**: compute / resource / route / publish。1st-class
+  エンティティで、それぞれ独立した lifecycle を持つ。public manifest では
+  `storage:` ではなく `publish` / `consume` を使う
 - **group (上位 bundling layer)**: 複数の primitive を束ねて bulk lifecycle と
   desired state management を提供する optional な仕組み。user-facing には
   「app」と呼ぶ

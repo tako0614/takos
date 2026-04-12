@@ -93,9 +93,7 @@ function resolveWorkloadDeploymentProvider(
     if (provider === "cloudflare") {
       return "workers-dispatch";
     }
-    throw new Error(
-      `Worker workload deploy provider is not configured for group provider '${provider}'.`,
-    );
+    return "runtime-host";
   }
   if (artifact?.kind === "container_image" && artifact.provider) {
     return artifact.provider;
@@ -143,6 +141,20 @@ function buildManagedDeploymentTarget(
     ? artifact.imageRef
     : (typeof spec.image === "string" ? spec.image : undefined);
   const port = typeof spec.port === "number" ? spec.port : undefined;
+  const healthPath = typeof spec.healthCheck?.path === "string" &&
+      spec.healthCheck.path.length > 0
+    ? spec.healthCheck.path
+    : undefined;
+  const healthInterval = typeof spec.healthCheck?.interval === "number"
+    ? spec.healthCheck.interval
+    : undefined;
+  const healthTimeout = typeof spec.healthCheck?.timeout === "number"
+    ? spec.healthCheck.timeout
+    : undefined;
+  const healthUnhealthyThreshold =
+    typeof spec.healthCheck?.unhealthyThreshold === "number"
+      ? spec.healthCheck.unhealthyThreshold
+      : undefined;
 
   return {
     ...(managed.row.routeRef ? { route_ref: managed.row.routeRef } : {}),
@@ -150,11 +162,17 @@ function buildManagedDeploymentTarget(
       kind: "container-image" as const,
       ...(imageRef ? { image_ref: imageRef } : {}),
       ...(typeof port === "number" ? { exposed_port: port } : {}),
+      ...(healthPath ? { health_path: healthPath } : {}),
+      ...(healthInterval != null ? { health_interval: healthInterval } : {}),
+      ...(healthTimeout != null ? { health_timeout: healthTimeout } : {}),
+      ...(healthUnhealthyThreshold != null
+        ? { health_unhealthy_threshold: healthUnhealthyThreshold }
+        : {}),
     },
   };
 }
 
-async function syncGroupDesiredStateForWorkloads(
+export async function syncGroupDesiredStateForWorkloads(
   deps: ApplyEngineExecutorDeps,
   getGroupState: GroupStateLoader,
   env: Env,
@@ -171,14 +189,6 @@ async function syncGroupDesiredStateForWorkloads(
     observedState,
     resourceRows,
   });
-}
-
-function getSyncFailure(
-  failures: Array<{ name: string; error: string }>,
-  workloadName: string,
-): string | null {
-  const failure = failures.find((entry) => entry.name === workloadName);
-  return failure?.error ?? null;
 }
 
 async function upsertManagedWorkload(
@@ -300,7 +310,7 @@ async function deployManagedWorkload(
 
 async function executeWorkloadEntry(
   deps: ApplyEngineExecutorDeps,
-  getGroupState: GroupStateLoader,
+  _getGroupState: GroupStateLoader,
   env: Env,
   input: {
     entry: DiffEntry;
@@ -326,20 +336,6 @@ async function executeWorkloadEntry(
       category: input.category,
       workload,
     });
-    const syncFailures = await syncGroupDesiredStateForWorkloads(
-      deps,
-      getGroupState,
-      env,
-      input.groupId,
-      input.desiredState,
-      input.group.spaceId,
-    );
-    const syncFailure = getSyncFailure(syncFailures, input.entry.name);
-    if (syncFailure) {
-      throw new Error(
-        `Failed to sync desired state for "${input.entry.name}": ${syncFailure}`,
-      );
-    }
     const artifact = await resolveArtifactForApply(
       deps,
       env,

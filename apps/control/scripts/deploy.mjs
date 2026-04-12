@@ -1,6 +1,6 @@
-#!/usr/bin/env node
+#!/usr/bin/env -S deno run --allow-all
 // Parameterized deploy script for takos-control-app services.
-// Usage: node scripts/deploy.mjs <service> <environment> [--debug]
+// Usage: deno run --allow-all scripts/deploy.mjs <service> <environment> [--debug]
 //
 // Services: web, dispatch, worker, runtime-host, executor-host, browser-host
 // Environments: production, staging
@@ -35,10 +35,10 @@ const [service, env] = positional;
 
 function usage() {
   console.error(`
-Usage: node scripts/deploy.mjs <service> <environment> [--debug]
+Usage: deno task deploy:service <service> <environment> [--debug]
 
 Services:
-  web            Main web worker (runs deploy:prepare + build before deploy)
+  web            Main web worker (runs build before deploy)
   dispatch       Dispatch service
   worker         Background worker
   runtime-host   Runtime host service
@@ -53,10 +53,10 @@ Flags:
   --debug        Build with staging-debug mode (web + staging only)
 
 Examples:
-  node scripts/deploy.mjs web production
-  node scripts/deploy.mjs web staging --debug
-  node scripts/deploy.mjs dispatch staging
-  node scripts/deploy.mjs runtime-host production
+  deno task deploy:service web production
+  deno task deploy:service web staging --debug
+  deno task deploy:service dispatch staging
+  deno task deploy:service runtime-host production
 `);
   Deno.exit(1);
 }
@@ -72,14 +72,18 @@ if (!service || !env) {
 
 if (!(service in SERVICES)) {
   console.error(
-    `Error: unknown service "${service}". Valid services: ${Object.keys(SERVICES).join(", ")}\n`,
+    `Error: unknown service "${service}". Valid services: ${
+      Object.keys(SERVICES).join(", ")
+    }\n`,
   );
   usage();
 }
 
 if (!ENVIRONMENTS.includes(env)) {
   console.error(
-    `Error: unknown environment "${env}". Valid environments: ${ENVIRONMENTS.join(", ")}\n`,
+    `Error: unknown environment "${env}". Valid environments: ${
+      ENVIRONMENTS.join(", ")
+    }\n`,
   );
   usage();
 }
@@ -100,13 +104,12 @@ function run(cmd) {
 }
 
 if (service === "web") {
-  // Web requires building dependencies and the frontend before deploying.
-  run("pnpm deploy:prepare");
-  run(debug ? "pnpm build:debug" : "pnpm build");
-  run(`wrangler deploy --env ${env}`);
+  // Web requires building the frontend before deploying.
+  run(debug ? "deno task build --mode staging-debug" : "deno task build");
+  run(`deno run -A npm:wrangler deploy --env ${env}`);
 } else {
   const config = SERVICES[service];
-  run(`wrangler deploy --config ${config} --env ${env}`);
+  run(`deno run -A npm:wrangler deploy --config ${config} --env ${env}`);
 }
 
 console.log(`\nDeployed ${service} to ${env} successfully.`);

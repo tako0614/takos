@@ -40,5 +40,5 @@ routes:
     path: /
 ```
 
-この contract では deploy core は DB や object store の native binding
-を知りません。 app は endpoint と credential を env で受け取ります。
+この contract では deploy core は DB や object store を直接は解決しません。
+app は provider-backed publication の endpoint と credential を env で受け取ります。

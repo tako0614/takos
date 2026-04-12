@@ -10,7 +10,8 @@ Takos の public spec は Cloudflare-native です。runtime model は Takos run
 | --- | --- | --- | --- |
 | Cloudflare Workers + container adapter | `stable` | tracked Cloudflare templates | current primary deploy surface |
 | Local Docker Compose | `stable` | `.env.local.example`, `compose.local.yml` | 開発・smoke 用 |
-| Local-platform manual process | `supported` | self-host env template + `dev:local:*` scripts | compose を使わない manual 起動 |
+| takos-private server stack | `supported` | `takos-private/.env.server.example`, `takos-private/compose.server.yml`, `takos-private/apps/executor`, `takos-private/apps/browser` | sibling private composition |
+| Local-platform manual process | `supported` | `.env.local` + `dev:local:*` scripts | compose を使わない manual 起動 |
 | Helm / Kubernetes | `supported` | Helm chart | self-host packaging |
 | Generic OCI orchestrator | `experimental` | `OCI_ORCHESTRATOR_*`, `TAKOS_LOCAL_*` | provider-aware runtime。`k8s` / `cloud-run` / `ecs` は native backend、その他は fallback backend |
 | ECS / Cloud Run / k8s 直 deploy | `provider-dependent` | custom operator wiring + OCI-backed provider | repo 内 backend あり。ECS は task/service bootstrap env が必要 |
@@ -23,9 +24,14 @@ Resource layer は Cloudflare-native public kind を維持し、Cloudflare backe
 | --- | --- |
 | `.env.local.example` | compose/local stack |
 | `apps/control/.env.example` | control app の baseline env template |
-| `apps/control/.env.self-host.example` | manual local-platform / self-host env template |
+| `apps/control/.env.self-host.example` | retired legacy template; use `takos-private/.env.server.example` instead |
+| `takos-private/.env.server.example` | takos-private server stack template |
+| `takos-private/compose.server.yml` | takos-private server compose |
+| `takos-private/apps/executor` | takos-private executor composition |
+| `takos-private/apps/browser` | takos-private browser composition |
 | `apps/control/SECRETS.md` | Cloudflare / self-host secret inventory |
 | `apps/control/wrangler*.toml` | Cloudflare deploy template (6 ファイル) |
+| `apps/control/.secrets/<env>` | Cloudflare runtime secret source of truth |
 | `deploy/helm/takos/` | self-host Helm chart |
 
 ## current env groups
@@ -34,6 +40,8 @@ Resource layer は Cloudflare-native public kind を維持し、Cloudflare backe
 
 主に次を使います。
 
+- OSS local stack: `.env.local.example` / `.env.local`
+- takos-private server stack: `takos-private/.env.server.example` / `takos-private/compose.server.yml`
 - `TAKOS_LOCAL_*`
 - `OCI_ORCHESTRATOR_*`
 - `DATABASE_URL` / `POSTGRES_URL`

@@ -1,19 +1,21 @@
 # Repository / Catalog デプロイ
 
-> このページでわかること: `takos deploy` / `takos install` の current surface と、
-> ローカル deploy / repo deploy / catalog install の役割分担。
-> Store は発見のみ。lifecycle は Group + Git が担当。
+> このページでわかること: `takos deploy` / `takos install` の current surface
+> と、 ローカル deploy / repo deploy / catalog install の役割分担。 Store
+> は発見のみ。lifecycle は Group + Git が担当。
 
 Takos の deploy 入口はシンプルです。
 
 - `takos deploy`: 唯一の deploy entrypoint。ローカル manifest（primary）または
   repository URL（alternative）から deploy する
-- `takos install owner/repo@TAG`: `takos deploy https://github.com/owner/repo.git --ref TAG`
-  の sugar。catalog (Store) が owner/repo + version を repo URL に解決し、
+- `takos install owner/repo --version TAG`:
+  `takos deploy https://github.com/owner/repo.git --ref TAG` の explicit
+  form。catalog (Store) が owner/repo + version を repo URL に解決し、
   内部的には `takos deploy` と同じ pipeline を通る
 
-両者はどちらも同じ `takos deploy` pipeline を通り、同じ immutable snapshot を作ります。
-`takos install` は catalog で発見したパッケージを楽に呼び出すための薄いラッパーです。
+両者はどちらも同じ `takos deploy` pipeline を通り、同じ immutable snapshot
+を作ります。 `takos install` は catalog
+で発見したパッケージを楽に呼び出すための薄いラッパーです。
 
 ## Store の役割
 
@@ -23,15 +25,16 @@ Store は ActivityPub ベースのリポジトリ発見 SNS。
 - フォロー先のリポジトリがフィードに流れてくる
 - リポジトリに `.takos/app.yml` がある = installable マーク
 
-Store は発見のみ。install / update / rollback の実行は Group + Git の deploy lifecycle が担当する。
+Store は発見のみ。install / update / rollback の実行は Group + Git の deploy
+lifecycle が担当する。
 
 ## 基本的な使い方
 
 ```bash
 # local manifest から deploy（primary）
-takos deploy                          # from local .takos/app.yml
-takos deploy --env staging            # with environment
-takos deploy --plan                   # dry-run preview
+takos deploy --space SPACE_ID                         # from local .takos/app.yml
+takos deploy --env staging --space SPACE_ID           # with environment
+takos deploy --plan --space SPACE_ID                  # dry-run preview
 ```
 
 ```bash
@@ -42,46 +45,46 @@ takos deploy https://github.com/acme/my-app.git --space SPACE_ID --ref main
 ```bash
 # catalog で発見した repo を install
 takos install owner/repo --space SPACE_ID
-takos install owner/repo --version v1.0.0    # explicit flag
-takos install owner/repo@v1.0.0              # shorthand
+takos install owner/repo --space SPACE_ID --version v1.0.0    # explicit flag
 ```
 
-`--version v1.0.0` と `owner/repo@v1.0.0` は等価です。どちらを使っても同じ挙動に
-なります。
+`--version v1.0.0` を使って version を指定します。
 
 ## local deploy と repo deploy / install の違い
 
 ローカル manifest 由来でも repo URL / catalog 由来でも、`takos deploy` の
 lifecycle は同じです。どちらも kernel に manifest を渡して immutable snapshot を
-作り、`takos rollback GROUP_NAME` で巻き戻せます。違いは「manifest がどこから
-来るか」という provenance だけです。
+作り、`takos rollback GROUP_NAME --space SPACE_ID`
+で巻き戻せます。違いは「manifest がどこから 来るか」という provenance だけです。
 
 repo URL / `takos install` を使う場合、**CLI は repository URL を control plane
 に渡す。control plane が repo を fetch し、manifest を parse し、deploy pipeline
 を実行する。CLI 側で repo を clone することはない。** CLI は thin client として
 振る舞います。
 
-| 観点 | local manifest deploy | repo URL deploy / `takos install` |
-| --- | --- | --- |
-| source | local working tree | `repository_url + ref/ref_type` |
-| source 解決 | CLI が manifest / artifact を読む | control plane が repo を fetch して manifest を parse する（CLI は URL を渡すだけ） |
-| snapshot 作成 | immutable snapshot を作る | immutable snapshot を作る |
-| rollback | `takos rollback GROUP_NAME` で前回 snapshot を再適用 | `takos rollback GROUP_NAME` で前回 snapshot を再適用 |
-| source 表記 | `local` | `repo:owner/repo@ref` |
-| 主な用途 | 開発中の manifest 反映 | release / catalog install / repo-based deploy |
+| 観点            | local manifest deploy                                                 | repo URL deploy / `takos install`                                                   |
+| --------------- | --------------------------------------------------------------------- | ----------------------------------------------------------------------------------- |
+| source          | local working tree                                                    | `repository_url + ref/ref_type`                                                     |
+| source 解決     | CLI が manifest / artifact を読む                                     | control plane が repo を fetch して manifest を parse する（CLI は URL を渡すだけ） |
+| snapshot 作成   | immutable snapshot を作る                                             | immutable snapshot を作る                                                           |
+| rollback        | `takos rollback GROUP_NAME --space SPACE_ID` で前回 snapshot を再適用 | `takos rollback GROUP_NAME --space SPACE_ID` で前回 snapshot を再適用               |
+| API source kind | `manifest`                                                            | `git_ref`                                                                           |
+| 表示名          | `local`                                                               | `repo:owner/repo@ref`                                                               |
+| 主な用途        | 開発中の manifest 反映                                                | release / catalog install / repo-based deploy                                       |
 
-ローカル deploy も repo deploy も同じ pipeline を通り、同じ snapshot を作ります。
-`source` field は manifest の出どころを示す metadata であり、lifecycle の差では
-ありません。
+ローカル deploy も repo deploy も同じ pipeline を通り、同じ snapshot
+を作ります。 API source kind は `manifest` / `git_ref` で分かれますが、 これは
+manifest の出どころを示す metadata であり、lifecycle の差では ありません。
 
 ## `takos deploy`
 
-`takos deploy` はローカル manifest からの deploy（primary）と repository URL からの
-deploy（alternative）の両方を扱います。`takos apply` は廃止されました。
+`takos deploy` はローカル manifest からの deploy（primary）と repository URL
+からの deploy（alternative）の両方を扱います。`takos apply` と `takos plan` は
+legacy compatibility command として残っています。
 
 ```bash
 # local manifest から deploy
-takos deploy --env staging --group my-app
+takos deploy --env staging --space SPACE_ID --group my-app
 
 # repository URL から deploy
 takos deploy https://github.com/acme/my-app.git \
@@ -91,80 +94,88 @@ takos deploy https://github.com/acme/my-app.git \
   --env staging
 
 # dry-run preview
-takos deploy --plan
+takos deploy --plan --space SPACE_ID
 ```
 
 positional argument を省略するとローカルの `.takos/app.yml` を source にします。
-repo URL を指定した場合、ref を省略すると repository 側の既定 branch 解決に従います。
+repo URL を指定した場合、ref を省略すると repository 側の既定 branch
+解決に従います。
 
 ## `takos install`
 
-`takos install OWNER/REPO@TAG` は `takos deploy` の sugar です。catalog (Store)
-が owner/repo + version を repository URL に解決し、内部的には
-`takos deploy https://github.com/owner/repo.git --ref TAG` と同じ call path を通ります。
-CLI 自身は repo を clone せず、control plane が repo source を解決します。
+`takos install OWNER/REPO --version TAG` は `takos deploy` の sugar
+です。catalog (Store) が owner/repo + version を repository URL
+に解決し、内部的には `takos deploy https://github.com/owner/repo.git --ref TAG`
+と同じ call path を通ります。 CLI 自身は repo を clone せず、control plane が
+repo source を解決します。
 
 ```bash
 # 以下は等価
-takos install owner/repo@v1.2.0 --space SPACE_ID
+takos install owner/repo --version v1.2.0 --space SPACE_ID
 takos deploy https://github.com/owner/repo.git --ref v1.2.0 --space SPACE_ID
 ```
 
-target space に Store app が install されている必要はありません。
-Store は発見に使えるが、install の実行には不要。
+target space に Store app が install されている必要はありません。 Store
+は発見に使えるが、install の実行には不要。
 
 ## `takos rollback`
 
 deploy は snapshot を持つ。rollback は snapshot を再適用する。
 
 ```bash
-takos rollback my-app               # 直前の snapshot に戻す
+takos rollback my-app --space SPACE_ID    # 直前の snapshot に戻す
 ```
 
 - 引数は group 名
-- code + config + bindings が戻る
+- code + config + publication outputs が戻る
 - DB data は戻らない（forward-only migration）
 - group がすでに削除されている場合は失敗し、deleted group を再生成しない
 
 ## 更新と pin（future / not in current surface）
 
-`takos update` / `takos pin` / `takos unpin` / `takos config` は current CLI surface
-には含まれません（design only）。新しい release を反映したい場合は
-`takos deploy URL --ref <new-ref>` または `takos install owner/repo@<new-version>`
+`takos update` / `takos pin` / `takos unpin` / `takos config` は current CLI
+surface には含まれません（design only）。新しい release を反映したい場合は
+`takos deploy URL --ref <new-ref> --space SPACE_ID` または
+`takos install owner/repo --version <new-version> --space SPACE_ID`
 を再実行してください。
 
 ## デプロイ前の検証
 
-manifest 由来の差分確認には `takos deploy --plan` を使います。
+manifest 由来の差分確認には `takos deploy --plan --space SPACE_ID` を使います。
 
 ```bash
-takos deploy --plan
+takos deploy --plan --space SPACE_ID
 ```
 
-`takos deploy --plan` は non-mutating preview です。group が未作成でも DB row
-は作りません。standalone の `takos plan` コマンドはありません。
+`takos deploy --plan --space SPACE_ID` は non-mutating preview です。group
+が未作成でも DB row は作りません。`takos apply` と `takos plan` は legacy
+compatibility command として 残っています。
 
 ## デプロイ状態の確認
 
 ```bash
 takos deploy status --space SPACE_ID
 takos deploy status APP_DEPLOYMENT_ID --space SPACE_ID
-takos group show my-app
+takos group show my-app --space SPACE_ID
 ```
 
 ## Source tracking
 
 group は source 情報を持つ:
-- `local`: ローカル manifest を `takos deploy` で手元から deploy
-- `repo:owner/repo@v1.2.0`: `takos install` または `takos deploy URL` で repo から deploy
 
-どちらの source の group も、新しい code を反映するには `takos deploy` を再実行する。
-（`takos update` / `takos pin` は current CLI surface には含まれない。design only。）
+- `local`: ローカル manifest を `takos deploy` で手元から deploy
+- `repo:owner/repo@v1.2.0`:
+  `takos install owner/repo --version v1.2.0 --space SPACE_ID` または
+  `takos deploy URL --space SPACE_ID` で repo から deploy
+
+どちらの source の group も、新しい code を反映するには
+`takos deploy --space SPACE_ID` を再実行する。 （`takos update` / `takos pin` は
+current CLI surface には含まれない。design only。）
 
 ## イメージ参照の制約
 
-`compute.<name>` の image-backed workload を online deploy するときは
-`image` に digest pin (`@sha256:...`) が必要です。mutable tag (`:latest` など)
+`compute.<name>` の image-backed workload を online deploy するときは `image` に
+digest pin (64-hex `sha256` digest) が必要です。mutable tag (`:latest` など)
 は受け付けません。
 
 ## public repo の取得
@@ -180,9 +191,11 @@ public repo では、それでも解決できないときだけ archive download
 
 ## API
 
-repo / catalog source の deployment history には app deployment API を使います。
+local / repo / catalog source の deployment history には app deployment API
+を使います。
 
 ```text
+POST   /api/spaces/:spaceId/app-deployments/plan
 POST   /api/spaces/:spaceId/app-deployments
 GET    /api/spaces/:spaceId/app-deployments
 GET    /api/spaces/:spaceId/app-deployments/:appDeploymentId
@@ -190,7 +203,8 @@ POST   /api/spaces/:spaceId/app-deployments/:appDeploymentId/rollback
 DELETE /api/spaces/:spaceId/app-deployments/:appDeploymentId
 ```
 
-manifest-driven deploy / desired state 管理には group API を使います。
+compatibility layer の manifest-driven desired state 管理には group API
+も残っています。
 
 ```text
 GET    /api/spaces/:spaceId/groups
@@ -203,9 +217,9 @@ GET    /api/spaces/:spaceId/groups/:groupId/deployments
 
 ## アンインストール
 
-稼働中 app の uninstall は `takos uninstall GROUP_NAME` または
-`POST /api/spaces/:spaceId/groups/uninstall` を使います。uninstall は group を削除
-する terminal 操作で、rollback で group を再生成することはできません。
+稼働中 app の uninstall は `takos uninstall GROUP_NAME --space SPACE_ID` または
+`POST /api/spaces/:spaceId/groups/uninstall` を使います。uninstall は group
+を削除 する terminal 操作で、rollback で group を再生成することはできません。
 
 ## 次のステップ
 

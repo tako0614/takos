@@ -69,6 +69,24 @@ function normalizeTargetArtifact(
     ) {
       normalized.health_path = parsed.health_path;
     }
+    if (
+      typeof parsed.health_interval === "number" &&
+      Number.isFinite(parsed.health_interval)
+    ) {
+      normalized.health_interval = parsed.health_interval;
+    }
+    if (
+      typeof parsed.health_timeout === "number" &&
+      Number.isFinite(parsed.health_timeout)
+    ) {
+      normalized.health_timeout = parsed.health_timeout;
+    }
+    if (
+      typeof parsed.health_unhealthy_threshold === "number" &&
+      Number.isFinite(parsed.health_unhealthy_threshold)
+    ) {
+      normalized.health_unhealthy_threshold = parsed.health_unhealthy_threshold;
+    }
     return Object.keys(normalized).length > 0 ? normalized : undefined;
   }
 
@@ -153,6 +171,16 @@ export function serializeDeploymentTarget(options?: {
     }
     if (target.artifact.health_path) {
       artifactRaw.health_path = target.artifact.health_path;
+    }
+    if (target.artifact.health_interval != null) {
+      artifactRaw.health_interval = target.artifact.health_interval;
+    }
+    if (target.artifact.health_timeout != null) {
+      artifactRaw.health_timeout = target.artifact.health_timeout;
+    }
+    if (target.artifact.health_unhealthy_threshold != null) {
+      artifactRaw.health_unhealthy_threshold =
+        target.artifact.health_unhealthy_threshold;
     }
     if (Object.keys(artifactRaw).length > 0) raw.artifact = artifactRaw;
   }

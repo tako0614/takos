@@ -77,7 +77,7 @@ export default {
 ## デプロイ
 
 ```bash
-takos deploy --env staging
+takos deploy --env staging --space SPACE_ID
 ```
 
 ## ポイント

@@ -218,6 +218,11 @@ function createExecutorContainerClass(
       }
       return null;
     }
+
+    async revokeProxyTokens(): Promise<void> {
+      await this.ctx.storage.delete("proxyTokens");
+      this.cachedTokens = new Map();
+    }
   };
 }
 
@@ -298,6 +303,11 @@ export class TakosAgentExecutorContainer extends HostContainerRuntime<Env> {
       if (constantTimeEqual(token, storedToken)) return info;
     }
     return null;
+  }
+
+  async revokeProxyTokens(): Promise<void> {
+    await this.ctx.storage.delete("proxyTokens");
+    this.cachedTokens = new Map();
   }
 }
 
@@ -523,12 +533,16 @@ export default {
       }
 
       if (path === "/proxy/run/fail" || path === "/rpc/control/run-fail") {
-        return handleRunFail(body, env);
+        const response = await handleRunFail(body, env);
+        await revokeProxyTokensAfterTerminalResponse(response, stub);
+        return response;
       }
 
       // Run reset (on failure)
       if (path === "/proxy/run/reset" || path === "/rpc/control/run-reset") {
-        return handleRunReset(body, env);
+        const response = await handleRunReset(body, env);
+        await revokeProxyTokensAfterTerminalResponse(response, stub);
+        return response;
       }
 
       if (path === "/rpc/control/run-context") {
@@ -540,7 +554,9 @@ export default {
       }
 
       if (path === "/rpc/control/no-llm-complete") {
-        return handleNoLlmComplete(body, env);
+        const response = await handleNoLlmComplete(body, env);
+        await revokeProxyTokensAfterTerminalResponse(response, stub);
+        return response;
       }
 
       if (path === "/rpc/control/conversation-history") {
@@ -572,7 +588,11 @@ export default {
       }
 
       if (path === "/rpc/control/update-run-status") {
-        return handleUpdateRunStatus(body, env);
+        const response = await handleUpdateRunStatus(body, env);
+        if (isTerminalRunStatus(body.status)) {
+          await revokeProxyTokensAfterTerminalResponse(response, stub);
+        }
+        return response;
       }
 
       if (path === "/rpc/control/current-session") {
@@ -596,7 +616,11 @@ export default {
       }
 
       if (path === "/rpc/control/run-event") {
-        return handleRunEvent(body, env);
+        const response = await handleRunEvent(body, env);
+        if (isTerminalRunEvent(body.type, body.data)) {
+          await revokeProxyTokensAfterTerminalResponse(response, stub);
+        }
+        return response;
       }
 
       // Billing — record run usage after completion
@@ -637,3 +661,45 @@ export default {
     return new Response("takos-executor-host", { status: 200 });
   },
 } satisfies ExportedHandler<Env>;
+
+function isTerminalRunStatus(status: unknown): boolean {
+  return status === "completed" || status === "failed" ||
+    status === "cancelled";
+}
+
+function isTerminalRunEvent(type: unknown, data: unknown): boolean {
+  if (
+    type === "completed" || type === "error" || type === "cancelled" ||
+    type === "run.failed"
+  ) {
+    return true;
+  }
+  if (type !== "run_status" || !data || typeof data !== "object") {
+    return false;
+  }
+  const payload = data as Record<string, unknown>;
+  if (isTerminalRunStatus(payload.status)) {
+    return true;
+  }
+  const run = payload.run;
+  return Boolean(
+    run && typeof run === "object" &&
+      isTerminalRunStatus((run as Record<string, unknown>).status),
+  );
+}
+
+async function revokeProxyTokensAfterTerminalResponse(
+  response: Response,
+  stub: { revokeProxyTokens?(): Promise<void> },
+): Promise<void> {
+  if (!response.ok || !stub.revokeProxyTokens) {
+    return;
+  }
+  try {
+    await stub.revokeProxyTokens();
+  } catch (error) {
+    logError("Proxy token revoke failed after terminal run update", error, {
+      module: "executor-host",
+    });
+  }
+}

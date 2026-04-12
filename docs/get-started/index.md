@@ -79,12 +79,14 @@ jobs:
 ### 5. デプロイ
 
 ```bash
-takos deploy --env staging
+takos deploy --env staging --space SPACE_ID
 ```
 
 ステージング環境にデプロイされます。URL
 がターミナルに表示されるので、ブラウザで開いてみましょう。
 `routes` で宣言した `/` がそのまま開きます。
+`TAKOS_WORKSPACE_ID` または `.takos-session` で既定 workspace が決まっている場合は
+`--space` を省略できます。
 
 ## 次のステップ
 

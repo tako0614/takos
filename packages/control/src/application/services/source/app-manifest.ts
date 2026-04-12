@@ -9,10 +9,8 @@ export type {
   AppManifestOverride,
   AppMcpServer,
   AppPublication,
-  AppResource,
   AppRoute,
   AppService,
-  AppStorage,
   AppTriggers,
   AppWorker,
   BuildConfig,
@@ -21,7 +19,6 @@ export type {
   HealthCheck,
   QueueTrigger,
   ScheduleTrigger,
-  StorageType,
   VolumeMount,
 } from "./app-manifest-types.ts";
 

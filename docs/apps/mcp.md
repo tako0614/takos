@@ -23,6 +23,7 @@ publish:
   - name: browser
     type: McpServer
     path: /mcp
+    title: Browser MCP
     transport: streamable-http
 ```
 
@@ -55,6 +56,7 @@ publish:
   - name: browser
     type: McpServer
     path: /mcp
+    title: Browser MCP
     transport: streamable-http
     authSecretRef: MCP_AUTH_TOKEN
 ```
