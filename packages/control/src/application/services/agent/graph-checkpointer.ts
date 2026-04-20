@@ -6,19 +6,19 @@
 
 import {
   BaseCheckpointSaver,
+  type ChannelVersions,
   type Checkpoint,
   type CheckpointMetadata,
   type CheckpointTuple,
   type PendingWrite,
-  type ChannelVersions,
-} from '@langchain/langgraph-checkpoint';
-import type { RunnableConfig } from '@langchain/core/runnables';
-import { BadRequestError, InternalError } from 'takos-common/errors';
-import { getDb, lgCheckpoints, lgWrites } from '../../../infra/db/index.ts';
-import { eq, and, lt, desc } from 'drizzle-orm';
-import { logError, logInfo, logWarn } from '../../../shared/utils/logger.ts';
-import type { SqlDatabaseBinding } from '../../../shared/types/bindings.ts';
-import { textDateNullable } from '../../../shared/utils/db-guards.ts';
+} from "@langchain/langgraph-checkpoint";
+import type { RunnableConfig } from "@langchain/core/runnables";
+import { BadRequestError, InternalError } from "takos-common/errors";
+import { getDb, lgCheckpoints, lgWrites } from "../../../infra/db/index.ts";
+import { and, desc, eq, lt } from "drizzle-orm";
+import { logError, logInfo, logWarn } from "../../../shared/utils/logger.ts";
+import type { SqlDatabaseBinding } from "../../../shared/types/bindings.ts";
+import { textDateNullable } from "../../../shared/utils/db-guards.ts";
 
 // ── Internal helpers ─────────────────────────────────────────────────────
 
@@ -33,7 +33,9 @@ const DEFAULT_CHECKPOINT_LIMIT = 50;
 
 /** Validate and bound the limit parameter to a safe integer range. */
 function validateLimit(limit: number | undefined): number {
-  if (limit === undefined || !Number.isInteger(limit) || !Number.isFinite(limit)) {
+  if (
+    limit === undefined || !Number.isInteger(limit) || !Number.isFinite(limit)
+  ) {
     return DEFAULT_CHECKPOINT_LIMIT;
   }
   return Math.max(MIN_CHECKPOINT_LIMIT, Math.min(MAX_CHECKPOINT_LIMIT, limit));
@@ -51,8 +53,11 @@ interface ConfigurableRunnableConfig extends RunnableConfig {
   configurable?: LangGraphConfigurable;
 }
 
-function hasConfigurable(config: RunnableConfig): config is ConfigurableRunnableConfig {
-  return config != null && typeof config === 'object' && 'configurable' in config;
+function hasConfigurable(
+  config: RunnableConfig,
+): config is ConfigurableRunnableConfig {
+  return config != null && typeof config === "object" &&
+    "configurable" in config;
 }
 
 function getConfigurable(config: RunnableConfig): LangGraphConfigurable {
@@ -63,7 +68,7 @@ function getConfigurable(config: RunnableConfig): LangGraphConfigurable {
 }
 
 export function toBase64(u8: Uint8Array): string {
-  let s = '';
+  let s = "";
   for (const c of u8) s += String.fromCharCode(c);
   return btoa(s);
 }
@@ -84,8 +89,10 @@ function getThreadConfig(config: RunnableConfig): {
 } {
   const c = getConfigurable(config);
   const thread_id = c.thread_id;
-  if (!thread_id) throw new BadRequestError('configurable.thread_id is required');
-  const checkpoint_ns = c.checkpoint_ns ?? '';
+  if (!thread_id) {
+    throw new BadRequestError("configurable.thread_id is required");
+  }
+  const checkpoint_ns = c.checkpoint_ns ?? "";
   const checkpoint_id = c.checkpoint_id ?? null;
   const session_id = c.session_id ?? null;
   const snapshot_id = c.snapshot_id ?? null;
@@ -107,10 +114,14 @@ export class D1CheckpointSaver extends BaseCheckpointSaver<number> {
     try {
       const db = getDb(this.db);
       await db.delete(lgWrites).where(eq(lgWrites.threadId, threadId));
-      await db.delete(lgCheckpoints).where(eq(lgCheckpoints.threadId, threadId));
+      await db.delete(lgCheckpoints).where(
+        eq(lgCheckpoints.threadId, threadId),
+      );
     } catch (error) {
       const errorMsg = errorMessage(error);
-      throw new InternalError(`Failed to delete thread checkpoints: ${errorMsg}`);
+      throw new InternalError(
+        `Failed to delete thread checkpoints: ${errorMsg}`,
+      );
     }
   }
 
@@ -121,8 +132,8 @@ export class D1CheckpointSaver extends BaseCheckpointSaver<number> {
    */
   async recoverCorruptedCheckpoint(
     threadId: string,
-    checkpointNs: string = '',
-    checkpointId?: string
+    checkpointNs: string = "",
+    checkpointId?: string,
   ): Promise<{
     recovered: boolean;
     cleanedWrites: number;
@@ -134,27 +145,39 @@ export class D1CheckpointSaver extends BaseCheckpointSaver<number> {
 
       const row = checkpointId
         ? await db.select().from(lgCheckpoints).where(
-            and(
-              eq(lgCheckpoints.threadId, threadId),
-              eq(lgCheckpoints.checkpointNs, checkpointNs),
-              eq(lgCheckpoints.checkpointId, checkpointId),
-            )
-          ).get()
+          and(
+            eq(lgCheckpoints.threadId, threadId),
+            eq(lgCheckpoints.checkpointNs, checkpointNs),
+            eq(lgCheckpoints.checkpointId, checkpointId),
+          ),
+        ).get()
         : await db.select().from(lgCheckpoints).where(
-            and(
-              eq(lgCheckpoints.threadId, threadId),
-              eq(lgCheckpoints.checkpointNs, checkpointNs),
-            )
-          ).orderBy(desc(lgCheckpoints.ts)).get();
+          and(
+            eq(lgCheckpoints.threadId, threadId),
+            eq(lgCheckpoints.checkpointNs, checkpointNs),
+          ),
+        ).orderBy(desc(lgCheckpoints.ts)).get();
 
       if (!row) {
-        return { recovered: false, cleanedWrites: 0, resetToParent: false, error: 'Checkpoint not found' };
+        return {
+          recovered: false,
+          cleanedWrites: 0,
+          resetToParent: false,
+          error: "Checkpoint not found",
+        };
       }
 
       try {
-        await this.serde.loadsTyped(row.checkpointType, fromBase64(row.checkpointData));
+        await this.serde.loadsTyped(
+          row.checkpointType,
+          fromBase64(row.checkpointData),
+        );
       } catch {
-        logError(`Core checkpoint ${row.checkpointId} is corrupted, resetting to parent`, undefined, { module: 'd1checkpointer' });
+        logError(
+          `Core checkpoint ${row.checkpointId} is corrupted, resetting to parent`,
+          undefined,
+          { module: "d1checkpointer" },
+        );
 
         if (row.parentCheckpointId) {
           // Delete this corrupted checkpoint and its writes
@@ -162,28 +185,29 @@ export class D1CheckpointSaver extends BaseCheckpointSaver<number> {
             and(
               eq(lgWrites.threadId, threadId),
               eq(lgWrites.checkpointId, row.checkpointId),
-            )
+            ),
           );
           await db.delete(lgCheckpoints).where(
             and(
               eq(lgCheckpoints.threadId, threadId),
               eq(lgCheckpoints.checkpointNs, checkpointNs),
               eq(lgCheckpoints.checkpointId, row.checkpointId),
-            )
+            ),
           );
 
           return {
             recovered: true,
             cleanedWrites: 0,
             resetToParent: true,
-            error: `Corrupted checkpoint deleted, will resume from parent: ${row.parentCheckpointId}`,
+            error:
+              `Corrupted checkpoint deleted, will resume from parent: ${row.parentCheckpointId}`,
           };
         } else {
           return {
             recovered: false,
             cleanedWrites: 0,
             resetToParent: false,
-            error: 'Root checkpoint is corrupted and cannot be recovered',
+            error: "Root checkpoint is corrupted and cannot be recovered",
           };
         }
       }
@@ -198,7 +222,7 @@ export class D1CheckpointSaver extends BaseCheckpointSaver<number> {
           eq(lgWrites.threadId, threadId),
           eq(lgWrites.checkpointNs, checkpointNs),
           eq(lgWrites.checkpointId, row.checkpointId),
-        )
+        ),
       ).all();
 
       const corruptedWrites: Array<{ taskId: string; channel: string }> = [];
@@ -223,12 +247,17 @@ export class D1CheckpointSaver extends BaseCheckpointSaver<number> {
             eq(lgWrites.checkpointId, row.checkpointId),
             eq(lgWrites.taskId, write.taskId),
             eq(lgWrites.channel, write.channel),
-          )
+          ),
         );
       }
 
-      logInfo(`Recovered checkpoint ${row.checkpointId}: ` +
-        `deleted ${corruptedWrites.length} corrupted writes from channels: ${corruptedWrites.map(w => w.channel).join(', ')}`, { module: 'd1checkpointer' });
+      logInfo(
+        `Recovered checkpoint ${row.checkpointId}: ` +
+          `deleted ${corruptedWrites.length} corrupted writes from channels: ${
+            corruptedWrites.map((w) => w.channel).join(", ")
+          }`,
+        { module: "d1checkpointer" },
+      );
 
       return {
         recovered: true,
@@ -250,7 +279,7 @@ export class D1CheckpointSaver extends BaseCheckpointSaver<number> {
   private async validateAncestry(
     threadId: string,
     checkpointNs: string,
-    parentCheckpointId: string | null
+    parentCheckpointId: string | null,
   ): Promise<{ valid: boolean; error?: string }> {
     if (!parentCheckpointId) return { valid: true };
 
@@ -265,20 +294,24 @@ export class D1CheckpointSaver extends BaseCheckpointSaver<number> {
           eq(lgCheckpoints.threadId, threadId),
           eq(lgCheckpoints.checkpointNs, checkpointNs),
           eq(lgCheckpoints.checkpointId, parentCheckpointId),
-        )
+        ),
       ).get();
 
       if (!parent) {
         return {
           valid: false,
-          error: `Parent checkpoint ${parentCheckpointId} not found for thread ${threadId}`,
+          error:
+            `Parent checkpoint ${parentCheckpointId} not found for thread ${threadId}`,
         };
       }
 
-      if (parent.threadId !== threadId || parent.checkpointNs !== checkpointNs) {
+      if (
+        parent.threadId !== threadId || parent.checkpointNs !== checkpointNs
+      ) {
         return {
           valid: false,
-          error: `Parent checkpoint ${parentCheckpointId} belongs to different thread/namespace`,
+          error:
+            `Parent checkpoint ${parentCheckpointId} belongs to different thread/namespace`,
         };
       }
 
@@ -294,18 +327,25 @@ export class D1CheckpointSaver extends BaseCheckpointSaver<number> {
     config: RunnableConfig,
     checkpoint: Checkpoint,
     metadata: CheckpointMetadata,
-    _newVersions: ChannelVersions
+    _newVersions: ChannelVersions,
   ): Promise<RunnableConfig<Record<string, any>>> {
-    const { thread_id, checkpoint_ns, session_id, snapshot_id } = getThreadConfig(config);
+    const { thread_id, checkpoint_ns, session_id, snapshot_id } =
+      getThreadConfig(config);
     const configurable = getConfigurable(config);
     const parent_checkpoint_id = configurable.checkpoint_id ?? null;
 
     try {
       const db = getDb(this.db);
 
-      const ancestryResult = await this.validateAncestry(thread_id, checkpoint_ns, parent_checkpoint_id);
+      const ancestryResult = await this.validateAncestry(
+        thread_id,
+        checkpoint_ns,
+        parent_checkpoint_id,
+      );
       if (!ancestryResult.valid) {
-        logWarn(`Ancestry validation warning: ${ancestryResult.error}`, { module: 'd1checkpointer' });
+        logWarn(`Ancestry validation warning: ${ancestryResult.error}`, {
+          module: "d1checkpointer",
+        });
       }
 
       const [ckType, ckBytes] = await this.serde.dumpsTyped(checkpoint);
@@ -326,7 +366,11 @@ export class D1CheckpointSaver extends BaseCheckpointSaver<number> {
       };
 
       await db.insert(lgCheckpoints).values(data).onConflictDoUpdate({
-        target: [lgCheckpoints.threadId, lgCheckpoints.checkpointNs, lgCheckpoints.checkpointId],
+        target: [
+          lgCheckpoints.threadId,
+          lgCheckpoints.checkpointNs,
+          lgCheckpoints.checkpointId,
+        ],
         set: {
           parentCheckpointId: parent_checkpoint_id,
           ts: checkpoint.ts,
@@ -357,9 +401,17 @@ export class D1CheckpointSaver extends BaseCheckpointSaver<number> {
   }
 
   /** Save pending writes for a checkpoint. */
-  async putWrites(config: RunnableConfig, writes: PendingWrite[], taskId: string): Promise<void> {
+  async putWrites(
+    config: RunnableConfig,
+    writes: PendingWrite[],
+    taskId: string,
+  ): Promise<void> {
     const { thread_id, checkpoint_ns, checkpoint_id } = getThreadConfig(config);
-    if (!checkpoint_id) throw new BadRequestError('configurable.checkpoint_id is required for putWrites');
+    if (!checkpoint_id) {
+      throw new BadRequestError(
+        "configurable.checkpoint_id is required for putWrites",
+      );
+    }
 
     try {
       const db = getDb(this.db);
@@ -376,7 +428,13 @@ export class D1CheckpointSaver extends BaseCheckpointSaver<number> {
           valueType: vType,
           valueData: toBase64(new Uint8Array(vBytes)),
         }).onConflictDoUpdate({
-          target: [lgWrites.threadId, lgWrites.checkpointNs, lgWrites.checkpointId, lgWrites.taskId, lgWrites.channel],
+          target: [
+            lgWrites.threadId,
+            lgWrites.checkpointNs,
+            lgWrites.checkpointId,
+            lgWrites.taskId,
+            lgWrites.channel,
+          ],
           set: {
             valueType: vType,
             valueData: toBase64(new Uint8Array(vBytes)),
@@ -398,28 +456,31 @@ export class D1CheckpointSaver extends BaseCheckpointSaver<number> {
 
       const row = checkpoint_id
         ? await db.select().from(lgCheckpoints).where(
-            and(
-              eq(lgCheckpoints.threadId, thread_id),
-              eq(lgCheckpoints.checkpointNs, checkpoint_ns),
-              eq(lgCheckpoints.checkpointId, checkpoint_id),
-            )
-          ).get()
+          and(
+            eq(lgCheckpoints.threadId, thread_id),
+            eq(lgCheckpoints.checkpointNs, checkpoint_ns),
+            eq(lgCheckpoints.checkpointId, checkpoint_id),
+          ),
+        ).get()
         : await db.select().from(lgCheckpoints).where(
-            and(
-              eq(lgCheckpoints.threadId, thread_id),
-              eq(lgCheckpoints.checkpointNs, checkpoint_ns),
-            )
-          ).orderBy(desc(lgCheckpoints.ts)).get();
+          and(
+            eq(lgCheckpoints.threadId, thread_id),
+            eq(lgCheckpoints.checkpointNs, checkpoint_ns),
+          ),
+        ).orderBy(desc(lgCheckpoints.ts)).get();
 
       if (!row) return undefined;
 
       const checkpoint = await this.serde.loadsTyped(
         row.checkpointType,
-        fromBase64(row.checkpointData)
+        fromBase64(row.checkpointData),
       ) as Checkpoint;
 
       const metadata = row.metadataType && row.metadataData
-        ? (await this.serde.loadsTyped(row.metadataType, fromBase64(row.metadataData)) as CheckpointMetadata)
+        ? (await this.serde.loadsTyped(
+          row.metadataType,
+          fromBase64(row.metadataData),
+        ) as CheckpointMetadata)
         : undefined;
 
       const writes = await db.select({
@@ -432,7 +493,7 @@ export class D1CheckpointSaver extends BaseCheckpointSaver<number> {
           eq(lgWrites.threadId, thread_id),
           eq(lgWrites.checkpointNs, checkpoint_ns),
           eq(lgWrites.checkpointId, checkpoint.id),
-        )
+        ),
       ).all();
 
       const pendingWrites: [string, string, unknown][] = [];
@@ -441,32 +502,42 @@ export class D1CheckpointSaver extends BaseCheckpointSaver<number> {
 
       for (const w of writes) {
         try {
-          const val = await this.serde.loadsTyped(w.valueType, fromBase64(w.valueData));
+          const val = await this.serde.loadsTyped(
+            w.valueType,
+            fromBase64(w.valueData),
+          );
           pendingWrites.push([w.taskId, w.channel, val]);
         } catch (writeError) {
           corruptedWriteCount++;
           corruptedChannels.push(w.channel);
-          logWarn(`Failed to deserialize pending write for channel ${w.channel}`, { module: 'services/agent/d1-checkpointer', detail: writeError });
+          logWarn(
+            `Failed to deserialize pending write for channel ${w.channel}`,
+            { module: "services/agent/d1-checkpointer", detail: writeError },
+          );
         }
       }
 
       if (corruptedWriteCount > 0) {
-        logError(`Checkpoint ${checkpoint.id} has ${corruptedWriteCount} corrupted pending writes. ` +
-          `Affected channels: ${corruptedChannels.join(', ')}. ` +
-          `This may indicate data corruption and could affect agent state consistency.`, undefined, { module: 'd1checkpointer' });
+        logError(
+          `Checkpoint ${checkpoint.id} has ${corruptedWriteCount} corrupted pending writes. ` +
+            `Affected channels: ${corruptedChannels.join(", ")}. ` +
+            `This may indicate data corruption and could affect agent state consistency.`,
+          undefined,
+          { module: "d1checkpointer" },
+        );
       }
 
       const configurable = getConfigurable(config);
 
       const enhancedMetadata = corruptedWriteCount > 0
         ? {
-            ...metadata,
-            _checkpointWarning: {
-              corruptedWriteCount,
-              corruptedChannels,
-              message: 'Some pending writes could not be deserialized',
-            },
-          }
+          ...metadata,
+          _checkpointWarning: {
+            corruptedWriteCount,
+            corruptedChannels,
+            message: "Some pending writes could not be deserialized",
+          },
+        }
         : metadata;
 
       return {
@@ -482,7 +553,13 @@ export class D1CheckpointSaver extends BaseCheckpointSaver<number> {
         },
         metadata: enhancedMetadata as CheckpointMetadata,
         parentConfig: row.parentCheckpointId
-          ? { configurable: { thread_id, checkpoint_ns, checkpoint_id: row.parentCheckpointId } }
+          ? {
+            configurable: {
+              thread_id,
+              checkpoint_ns,
+              checkpoint_id: row.parentCheckpointId,
+            },
+          }
           : undefined,
         pendingWrites,
       };
@@ -495,7 +572,7 @@ export class D1CheckpointSaver extends BaseCheckpointSaver<number> {
   /** List checkpoints for a thread. The limit parameter is validated and bounded. */
   async *list(
     config: RunnableConfig,
-    options?: { limit?: number; before?: RunnableConfig }
+    options?: { limit?: number; before?: RunnableConfig },
   ): AsyncGenerator<CheckpointTuple> {
     const { thread_id, checkpoint_ns } = getThreadConfig(config);
     const limit = validateLimit(options?.limit);
@@ -515,7 +592,7 @@ export class D1CheckpointSaver extends BaseCheckpointSaver<number> {
               eq(lgCheckpoints.threadId, thread_id),
               eq(lgCheckpoints.checkpointNs, checkpoint_ns),
               eq(lgCheckpoints.checkpointId, beforeConfig.checkpoint_id),
-            )
+            ),
           ).get();
 
           if (beforeRow) {
@@ -541,11 +618,18 @@ export class D1CheckpointSaver extends BaseCheckpointSaver<number> {
       for (const row of rows) {
         try {
           const tuple = await this.getTuple({
-            configurable: { thread_id, checkpoint_ns, checkpoint_id: row.checkpointId },
+            configurable: {
+              thread_id,
+              checkpoint_ns,
+              checkpoint_id: row.checkpointId,
+            },
           } as RunnableConfig);
           if (tuple) yield tuple;
         } catch (tupleError) {
-          logWarn(`Failed to get tuple for checkpoint ${row.checkpointId}`, { module: 'services/agent/d1-checkpointer', detail: tupleError });
+          logWarn(`Failed to get tuple for checkpoint ${row.checkpointId}`, {
+            module: "services/agent/d1-checkpointer",
+            detail: tupleError,
+          });
         }
       }
     } catch (error) {

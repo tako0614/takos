@@ -4,9 +4,10 @@
 
 ## バリデーションエラー
 
-### `Error: app.yml must have a name field`
+### `Invalid manifest: name is required`
 
-`.takos/app.yml` のトップレベルに `name` フィールドがあるか確認してください。
+deploy manifest (`.takos/app.yml`) のトップレベルに `name` フィールドがあるか
+確認してください。
 
 ```yaml
 # OK
@@ -15,7 +16,18 @@ name: my-app
 # NG（name がない、または apiVersion/kind/metadata でラップしている）
 ```
 
-### `Error: workflow path must be under .takos/workflows/`
+### `--group <name>` is required
+
+`takos deploy` / `takos install` は group snapshot 機能を使うため、 対象 group
+を明示する必要があります。manifest の `name` は display 名であり、 group
+名として暗黙解決されません。
+
+```bash
+takos deploy --space SPACE_ID --group my-app
+takos install owner/repo --space SPACE_ID --group my-app
+```
+
+### `Invalid manifest: compute.<name>.build.fromWorkflow.path must be under .takos/workflows/`
 
 `build.fromWorkflow.path` が `.takos/workflows/`
 配下を指しているか確認してください。
@@ -25,38 +37,79 @@ name: my-app
 build:
   fromWorkflow:
     path: .takos/workflows/deploy.yml
+    job: bundle
+    artifact: web
+    artifactPath: dist/worker
 
 # NG
 build:
   fromWorkflow:
     path: workflows/deploy.yml
+    job: bundle
+    artifact: web
+    artifactPath: dist/worker
 ```
 
-### `--target` で何も反映されない
+### `Build output ... contains multiple JavaScript bundle candidates`
 
-`--target` は dotted path ではなく deploy diff entry の `name` に完全一致します。
-workload は compute 名、route は `${target}:${path}` 形式です。publication は
+`compute.<name>.build.fromWorkflow.artifactPath` は repository relative path
+で、絶対パスや `..` は使えません。値は単一 bundle file か、`.js` / `.mjs` /
+`.cjs` が 1 つだけに定まる directory artifact を指します。directory 内に複数の
+JavaScript file がある場合、現行の tenant runtime deployment path では module
+graph として扱わず失敗します。
+
+```yaml
+# OK: exact bundle file
+build:
+  fromWorkflow:
+    path: .takos/workflows/deploy.yml
+    job: bundle
+    artifact: web
+    artifactPath: dist/worker.js
+
+# OK: directory 内に worker.js だけがある場合
+build:
+  fromWorkflow:
+    path: .takos/workflows/deploy.yml
+    job: bundle
+    artifact: web
+    artifactPath: dist/worker
+```
+
+複数 file に分かれる build output
+は、`esbuild --bundle --outfile=dist/worker.js` のように単一 bundle
+にまとめ、`artifactPath` をその file に向けてください。
+
+### `--target` は plan でだけ使う
+
+`--target` は `takos deploy --plan` / `takos install --plan` の diff entry
+filter です。workload は compute 名、route は `${target}:${path}` 形式です。
+`web`, `web:/` のような canonical entry 名に加えて、`workers.web`,
+`routes.web:/` のような dotted category key も受け付けます。publication は
 target filter の対象外で、manifest catalog として同期されます。
 
 ```bash
-# app.yml に compute.web と routes: [{ target: web, path: "/" }] がある場合
-takos deploy --env staging --space SPACE_ID --target web       # workload
-takos deploy --env staging --space SPACE_ID --target 'web:/'   # route
+# deploy manifest に compute.web と routes: [{ target: web, path: "/" }] がある場合
+takos deploy --plan --env staging --space SPACE_ID --group my-app --target web       # workload
+takos deploy --plan --env staging --space SPACE_ID --group my-app --target 'web:/'   # route
+takos deploy --plan --env staging --space SPACE_ID --group my-app --target workers.web
+takos deploy --plan --env staging --space SPACE_ID --group my-app --target routes.web:/
 ```
 
-## publication/provider 解決失敗
+## publication / capability 解決失敗
 
-### `Error: publication references unknown Takos ... resource`
+### `Error: publication ... publisher/type is unsupported`
 
-- `publish[].spec.resource` が存在するか確認してください
-- `publish[].kind` と resource type が一致しているか確認してください
-- publish/consume の shape は [Manifest Reference](/reference/manifest-spec)
+このエラーは `publisher: takos` の publication に未対応の `type`
+を指定した場合に 出ます。Takos publisher type は `api-key` と `oauth-client`
+です。SQL / object-store / queue などの resource type は publish に入れません。
+
+- `publish[].publisher` が `takos` の場合、`type` が `api-key` または
+  `oauth-client` か確認してください
+- route publication の場合、`publisher` が route の `target`
+  と一致しているか確認してください
+- publish / consume の shape は [Manifest Reference](/reference/manifest-spec)
   を参照してください
-
-### `Error: publication ... provider/kind is unsupported`
-
-- `provider` と `kind` の組み合わせが存在するか確認してください
-- `GET /api/publications/providers` で利用可能な provider 一覧を確認してください
 
 ## デプロイ失敗
 
@@ -65,21 +118,21 @@ takos deploy --env staging --space SPACE_ID --target 'web:/'   # route
 1. まず plan を確認しましょう:
 
 ```bash
-takos deploy --plan --space SPACE_ID
+takos deploy --plan --space SPACE_ID --group my-app
 ```
 
 2. 変更対象を絞って切り分けます:
 
 ```bash
-takos deploy --env staging --space SPACE_ID --target web
+takos deploy --plan --env staging --space SPACE_ID --group my-app --target web
 ```
 
 3. よくある原因:
-   - `consume` が存在しない publication を参照している
-   - `consume.env` が既存 env と衝突している
-   - Worker のコードにシンタックスエラーがある
-   - readiness probe (`GET /` または `compute.<name>.readiness`) が 200
-     を返さない
+
+- `consume` が存在しない publication / capability grant を参照している
+- `consume.env` が既存 env と衝突している
+- Worker のコードにシンタックスエラーがある
+- readiness probe (`GET /` または `compute.<name>.readiness`) が 200 を返さない
 
 ### `Error: Authentication failed`
 
@@ -94,24 +147,27 @@ takos endpoint show
 デプロイ前に manifest だけ検証したい場合:
 
 ```bash
-takos deploy --plan --space SPACE_ID
+takos deploy --plan --space SPACE_ID --group my-app
 ```
 
 以下の項目が検証されます。
 
-- `.takos/app.yml` にトップレベルの `name` があること
+- deploy manifest (`.takos/app.yml`) にトップレベルの `name` があること
 - `build.fromWorkflow.path` が `.takos/workflows/` 配下であること
-- compute / publish / routes の参照が整合していること
-- `--target` で指定した workload / route の diff entry 名が plan と一致すること
+- worker bundle が単一 file、または一意に解決できる directory artifact
+  であること
+- compute / routes / publication の参照が整合していること
+- `--target` を使う場合は `--plan` が必要で、指定した workload / route の diff
+  entry 名が plan と一致すること
 
 ## それでも解決しない場合
 
-1. `takos deploy --plan --space SPACE_ID` で manifest の解釈結果と差分を確認
+1. `takos deploy --plan --space SPACE_ID --group GROUP_NAME` で manifest
+   の解釈結果と差分を確認
 2. `takos deploy status --space SPACE_ID` で control plane 側の deployment
    状態を確認
 3. `takos group show GROUP_NAME --space SPACE_ID` で group inventory を確認
-4. provider 固有の問題は [Hosting / Cloudflare](/hosting/cloudflare) などの
-   provider docs を参照
+4. backend 固有の問題は operator-only の [Hosting docs](/hosting/) を参照
 
 ## 次のステップ
 

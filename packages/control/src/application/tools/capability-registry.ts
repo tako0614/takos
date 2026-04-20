@@ -2,7 +2,7 @@ import type {
   CapabilityDescriptor,
   CapabilityKind,
   CapabilityNamespace,
-} from './capability-types.ts';
+} from "./capability-types.ts";
 
 export class CapabilityRegistry {
   private descriptors: Map<string, CapabilityDescriptor> = new Map();
@@ -12,7 +12,7 @@ export class CapabilityRegistry {
   }
 
   registerAll(descriptors: CapabilityDescriptor[]): void {
-    descriptors.forEach(d => this.register(d));
+    descriptors.forEach((d) => this.register(d));
   }
 
   all(): CapabilityDescriptor[] {
@@ -24,15 +24,15 @@ export class CapabilityRegistry {
   }
 
   byKind(kind: CapabilityKind): CapabilityDescriptor[] {
-    return this.all().filter(d => d.kind === kind);
+    return this.all().filter((d) => d.kind === kind);
   }
 
   byNamespace(ns: CapabilityNamespace): CapabilityDescriptor[] {
-    return this.all().filter(d => d.namespace === ns);
+    return this.all().filter((d) => d.namespace === ns);
   }
 
   byFamily(family: string): CapabilityDescriptor[] {
-    return this.all().filter(d => d.family === family);
+    return this.all().filter((d) => d.family === family);
   }
 
   families(): { family: string; count: number }[] {
@@ -51,14 +51,14 @@ export class CapabilityRegistry {
     if (terms.length === 0) return this.all().slice(0, limit);
 
     const weights: [(_: CapabilityDescriptor) => string, number][] = [
-      [d => d.name, 30],
-      [d => d.tags.join(' '), 30],
-      [d => (d.triggers ?? []).join(' '), 40],
-      [d => d.summary, 20],
+      [(d) => d.name, 30],
+      [(d) => d.tags.join(" "), 30],
+      [(d) => (d.triggers ?? []).join(" "), 40],
+      [(d) => d.summary, 20],
     ];
 
     return [...this.descriptors.values()]
-      .map(d => {
+      .map((d) => {
         let score = 0;
         for (const term of terms) {
           for (const [getText, weight] of weights) {
@@ -67,10 +67,10 @@ export class CapabilityRegistry {
         }
         return { d, score };
       })
-      .filter(e => e.score > 0)
+      .filter((e) => e.score > 0)
       .sort((a, b) => b.score - a.score)
       .slice(0, limit)
-      .map(e => e.d);
+      .map((e) => e.d);
   }
 
   get size(): number {

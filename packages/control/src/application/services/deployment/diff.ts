@@ -5,7 +5,7 @@
  * Current state is reconstructed from canonical tables (`groups`, `resources`,
  * `services`) plus the group's observed routing snapshot.
  *
- * Resource reconciliation was retired from the app deploy substrate. The
+ * Resource reconciliation was retired from the manifest deploy pipeline. The
  * current-state resource snapshot is still carried for observability and
  * legacy internal APIs, but app-manifest diffs intentionally ignore it.
  */
@@ -15,7 +15,6 @@ import type { GroupDesiredState, ObservedGroupState } from "./group-state.ts";
 export type DiffAction = "create" | "update" | "delete" | "unchanged";
 
 export type EntityCategory =
-  | "resource"
   | "worker"
   | "container"
   | "service"
@@ -42,6 +41,89 @@ export interface DiffResult {
 
 export type GroupState = ObservedGroupState;
 
+function summarizeEntries(entries: DiffEntry[]): DiffResult["summary"] {
+  const summary = { create: 0, update: 0, delete: 0, unchanged: 0 };
+  for (const entry of entries) {
+    summary[entry.action]++;
+  }
+  return summary;
+}
+
+function pluralCategory(category: EntityCategory): string {
+  return `${category}s`;
+}
+
+export function diffEntryMatchesTarget(
+  entry: DiffEntry,
+  target: string,
+): boolean {
+  const normalized = target.trim();
+  if (!normalized) return false;
+  if (normalized === entry.name) return true;
+  return normalized === `${entry.category}.${entry.name}` ||
+    normalized === `${pluralCategory(entry.category)}.${entry.name}`;
+}
+
+function desiredEntryMatchesTarget(
+  desired: { name: string; category: EntityCategory },
+  target: string,
+): boolean {
+  return diffEntryMatchesTarget(
+    {
+      name: desired.name,
+      category: desired.category,
+      action: "unchanged",
+    },
+    target,
+  );
+}
+
+export function validateTargetsAgainstDesiredState(
+  desired: Pick<GroupDesiredState, "workloads" | "routes">,
+  targets?: string[],
+): string[] {
+  const normalizedTargets = (targets ?? []).map((target) => target.trim())
+    .filter(Boolean);
+  if (normalizedTargets.length === 0) return [];
+
+  const unmatched: string[] = [];
+  for (const target of normalizedTargets) {
+    const workloadMatch = Object.values(desired.workloads).some((workload) =>
+      desiredEntryMatchesTarget(
+        { name: workload.name, category: workload.category },
+        target,
+      )
+    );
+    const routeMatch = Object.values(desired.routes).some((route) =>
+      desiredEntryMatchesTarget({ name: route.name, category: "route" }, target)
+    );
+    if (!workloadMatch && !routeMatch) {
+      unmatched.push(target);
+    }
+  }
+  return unmatched;
+}
+
+export function filterDiffByTargets(
+  diff: DiffResult,
+  targets?: string[],
+): DiffResult {
+  const normalizedTargets = (targets ?? []).map((target) => target.trim())
+    .filter(Boolean);
+  if (normalizedTargets.length === 0) return diff;
+
+  const entries = diff.entries.filter((entry) =>
+    normalizedTargets.some((target) => diffEntryMatchesTarget(entry, target))
+  );
+  const summary = summarizeEntries(entries);
+  return {
+    entries,
+    hasChanges: summary.create > 0 || summary.update > 0 ||
+      summary.delete > 0,
+    summary,
+  };
+}
+
 function computeRouteShape(route: {
   target: string;
   path?: string;
@@ -56,6 +138,10 @@ function computeRouteShape(route: {
     ingress: route.ingress ?? null,
     timeoutMs: route.timeoutMs ?? null,
   });
+}
+
+function isRetryableWorkloadStatus(status: string): boolean {
+  return status === "pending" || status === "failed";
 }
 
 export function computeDiff(
@@ -96,6 +182,14 @@ export function computeDiff(
         action: "update",
         type: workload.category,
         reason: "spec changed",
+      });
+    } else if (isRetryableWorkloadStatus(existing.status)) {
+      entries.push({
+        name,
+        category: workload.category,
+        action: "update",
+        type: workload.category,
+        reason: `workload status ${existing.status}`,
       });
     } else {
       entries.push({
@@ -164,10 +258,7 @@ export function computeDiff(
     }
   }
 
-  const summary = { create: 0, update: 0, delete: 0, unchanged: 0 };
-  for (const entry of entries) {
-    summary[entry.action]++;
-  }
+  const summary = summarizeEntries(entries);
 
   return {
     entries,

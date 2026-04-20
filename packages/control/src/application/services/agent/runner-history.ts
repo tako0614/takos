@@ -5,27 +5,30 @@
  * message-related helpers extracted from runner.ts.
  */
 
-import type { RunStatus, Env } from '../../../shared/types/index.ts';
-import type { AgentMessage, ToolCall } from './agent-models.ts';
-import { getDb, runs, threads, messages } from '../../../infra/db/index.ts';
-import { and, eq, sql, desc } from 'drizzle-orm';
-import { resolveHistoryTokenBudget } from './model-catalog.ts';
-import { estimateTokens } from './prompt-budget.ts';
-import { readMessageFromR2 } from '../offload/messages.ts';
-import { buildThreadContextSystemMessage, queryRelevantThreadMessages } from './thread-context.ts';
-import { logInfo, logWarn } from '../../../shared/utils/logger.ts';
+import type { Env, RunStatus } from "../../../shared/types/index.ts";
+import type { AgentMessage, ToolCall } from "./agent-models.ts";
+import { getDb, messages, runs, threads } from "../../../infra/db/index.ts";
+import { and, desc, eq, sql } from "drizzle-orm";
+import { resolveHistoryTokenBudget } from "./model-catalog.ts";
+import { estimateTokens } from "./prompt-budget.ts";
+import { readMessageFromR2 } from "../offload/messages.ts";
 import {
-  THREAD_RETRIEVAL_TOP_K,
-  THREAD_RETRIEVAL_MIN_SCORE,
+  buildThreadContextSystemMessage,
+  queryRelevantThreadMessages,
+} from "./thread-context.ts";
+import { logInfo, logWarn } from "../../../shared/utils/logger.ts";
+import {
   THREAD_CONTEXT_MAX_CHARS,
-} from '../../../shared/config/limits.ts';
-import { safeJsonParseOrDefault } from '../../../shared/utils/index.ts';
+  THREAD_RETRIEVAL_MIN_SCORE,
+  THREAD_RETRIEVAL_TOP_K,
+} from "../../../shared/config/limits.ts";
+import { safeJsonParseOrDefault } from "../../../shared/utils/index.ts";
 import {
   buildDelegationSystemMessage,
   buildDelegationUserMessage,
   getDelegationPacketFromRunInput,
-} from './delegation.ts';
-import type { SqlDatabaseBinding } from '../../../shared/types/bindings.ts';
+} from "./delegation.ts";
+import type { SqlDatabaseBinding } from "../../../shared/types/bindings.ts";
 
 // ── Run status persistence ──────────────────────────────────────────
 
@@ -55,11 +58,11 @@ export async function updateRunStatusImpl(
     usage: JSON.stringify(totalUsage),
   };
 
-  if (status === 'running') {
+  if (status === "running") {
     updateData.startedAt = now;
   }
 
-  if (status === 'completed' || status === 'failed' || status === 'cancelled') {
+  if (status === "completed" || status === "failed" || status === "cancelled") {
     updateData.completedAt = now;
   }
 
@@ -71,7 +74,24 @@ export async function updateRunStatusImpl(
     updateData.error = error;
   }
 
-  const condition = status === 'cancelled'
+  if (status === "completed" || status === "failed" || status === "cancelled") {
+    const existing = await drizzleDb.select({
+      status: runs.status,
+      usage: runs.usage,
+      output: runs.output,
+      error: runs.error,
+    }).from(runs).where(eq(runs.id, runId)).get();
+    if (
+      existing?.status === status &&
+      existing.usage === updateData.usage &&
+      (output === undefined || existing.output === output) &&
+      (error === undefined || existing.error === error)
+    ) {
+      return;
+    }
+  }
+
+  const condition = status === "cancelled"
     ? eq(runs.id, runId)
     : and(eq(runs.id, runId), sql`${runs.status} != 'cancelled'`);
 
@@ -83,13 +103,13 @@ export async function updateRunStatusImpl(
 /** Type guard to validate tool_calls array structure */
 export function isValidToolCallsArray(value: unknown): value is ToolCall[] {
   if (!Array.isArray(value)) return false;
-  return value.every(item => {
-    if (typeof item !== 'object' || item === null) return false;
+  return value.every((item) => {
+    if (typeof item !== "object" || item === null) return false;
     const obj = item as Record<string, unknown>;
     return (
-      typeof obj.id === 'string' &&
-      typeof obj.name === 'string' &&
-      typeof obj.arguments === 'object' &&
+      typeof obj.id === "string" &&
+      typeof obj.name === "string" &&
+      typeof obj.arguments === "object" &&
       obj.arguments !== null
     );
   });
@@ -104,13 +124,15 @@ export interface ConversationHistoryDeps {
   aiModel: string;
 }
 
-export function normalizeRunStatus(value: string | null | undefined): RunStatus | null {
-  return value === 'pending'
-    || value === 'queued'
-    || value === 'running'
-    || value === 'completed'
-    || value === 'failed'
-    || value === 'cancelled'
+export function normalizeRunStatus(
+  value: string | null | undefined,
+): RunStatus | null {
+  return value === "pending" ||
+      value === "queued" ||
+      value === "running" ||
+      value === "completed" ||
+      value === "failed" ||
+      value === "cancelled"
     ? value
     : null;
 }
@@ -123,24 +145,30 @@ type MessageAttachmentRef = {
   size?: number;
 };
 
-function parseMessageAttachmentRefs(metadata: string | null | undefined): MessageAttachmentRef[] {
+function parseMessageAttachmentRefs(
+  metadata: string | null | undefined,
+): MessageAttachmentRef[] {
   if (!metadata) return [];
   try {
     const parsed = JSON.parse(metadata) as unknown;
-    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return [];
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+      return [];
+    }
     const attachments = (parsed as Record<string, unknown>).attachments;
     if (!Array.isArray(attachments)) return [];
     const parsedAttachments: MessageAttachmentRef[] = [];
     for (const entry of attachments) {
-      if (!entry || typeof entry !== 'object' || Array.isArray(entry)) continue;
+      if (!entry || typeof entry !== "object" || Array.isArray(entry)) continue;
       const value = entry as Record<string, unknown>;
-      if (typeof value.file_id !== 'string' || typeof value.name !== 'string') continue;
+      if (typeof value.file_id !== "string" || typeof value.name !== "string") {
+        continue;
+      }
       parsedAttachments.push({
         file_id: value.file_id,
-        path: typeof value.path === 'string' ? value.path : undefined,
+        path: typeof value.path === "string" ? value.path : undefined,
         name: value.name,
-        mime_type: typeof value.mime_type === 'string' ? value.mime_type : null,
-        size: typeof value.size === 'number' ? value.size : undefined,
+        mime_type: typeof value.mime_type === "string" ? value.mime_type : null,
+        size: typeof value.size === "number" ? value.size : undefined,
       });
     }
     return parsedAttachments;
@@ -149,36 +177,45 @@ function parseMessageAttachmentRefs(metadata: string | null | undefined): Messag
   }
 }
 
-function appendAttachmentContext(content: string, attachments: MessageAttachmentRef[]): string {
+function appendAttachmentContext(
+  content: string,
+  attachments: MessageAttachmentRef[],
+): string {
   if (attachments.length === 0) return content;
 
   const lines = [
-    'Attached workspace storage files are available for this message.',
-    'Use workspace_files_read with file_id or path if you need to inspect them.',
+    "Attached space storage files are available for this message.",
+    "Use space_files_read with file_id or path if you need to inspect them.",
     ...attachments.map((attachment) => {
       const parts = [
         attachment.path || attachment.name,
         `file_id: ${attachment.file_id}`,
       ];
-      if (attachment.mime_type) parts.push(`mime_type: ${attachment.mime_type}`);
-      if (typeof attachment.size === 'number') parts.push(`size: ${attachment.size}`);
-      return `- ${parts.join(', ')}`;
+      if (attachment.mime_type) {
+        parts.push(`mime_type: ${attachment.mime_type}`);
+      }
+      if (typeof attachment.size === "number") {
+        parts.push(`size: ${attachment.size}`);
+      }
+      return `- ${parts.join(", ")}`;
     }),
   ];
 
-  const attachmentContext = lines.join('\n');
+  const attachmentContext = lines.join("\n");
   return content.trim()
     ? `${content}\n\n${attachmentContext}`
     : attachmentContext;
 }
 
-export async function buildConversationHistory(deps: ConversationHistoryDeps): Promise<AgentMessage[]> {
+export async function buildConversationHistory(
+  deps: ConversationHistoryDeps,
+): Promise<AgentMessage[]> {
   const { db: dbBinding, env, threadId, runId, spaceId, aiModel } = deps;
   const db = getDb(dbBinding);
   const startedAt = Date.now();
 
   let threadSummary: string | null = null;
-  let threadKeyPointsJson = '[]';
+  let threadKeyPointsJson = "[]";
 
   const thread = await db.select({
     summary: threads.summary,
@@ -187,10 +224,13 @@ export async function buildConversationHistory(deps: ConversationHistoryDeps): P
 
   if (thread) {
     threadSummary = thread.summary ?? null;
-    threadKeyPointsJson = thread.keyPoints || '[]';
+    threadKeyPointsJson = thread.keyPoints || "[]";
   }
 
-  const tokenBudget = resolveHistoryTokenBudget(aiModel, env.MODEL_CONTEXT_WINDOWS);
+  const tokenBudget = resolveHistoryTokenBudget(
+    aiModel,
+    env.MODEL_CONTEXT_WINDOWS,
+  );
 
   // Fetch recent messages (generous upper bound; trimmed by token budget below)
   const MAX_FETCH = 500;
@@ -215,7 +255,9 @@ export async function buildConversationHistory(deps: ConversationHistoryDeps): P
     const bucket = env.TAKOS_OFFLOAD;
     const candidates = rows
       .map((m, idx) => ({ idx, key: m.r2Key }))
-      .filter((x) => typeof x.key === 'string' && x.key.length > 0) as Array<{ idx: number; key: string }>;
+      .filter((x) => typeof x.key === "string" && x.key.length > 0) as Array<
+        { idx: number; key: string }
+      >;
 
     const concurrency = 20;
     for (let i = 0; i < candidates.length; i += concurrency) {
@@ -234,23 +276,30 @@ export async function buildConversationHistory(deps: ConversationHistoryDeps): P
   }
 
   const excludeSequences = new Set<number>();
-  let lastUserQuery = '';
+  let lastUserQuery = "";
 
   // Build all candidate messages (newest first in rows, but rows is already reversed to chronological)
-  interface CandidateMessage { msg: AgentMessage; sequence: number; tokens: number }
+  interface CandidateMessage {
+    msg: AgentMessage;
+    sequence: number;
+    tokens: number;
+  }
   const candidates: CandidateMessage[] = [];
 
   for (const msg of rows) {
     excludeSequences.add(msg.sequence);
-    if (msg.role === 'user') {
-      lastUserQuery = appendAttachmentContext(msg.content, parseMessageAttachmentRefs(msg.metadata));
+    if (msg.role === "user") {
+      lastUserQuery = appendAttachmentContext(
+        msg.content,
+        parseMessageAttachmentRefs(msg.metadata),
+      );
     }
 
-    const attachments = msg.role === 'user'
+    const attachments = msg.role === "user"
       ? parseMessageAttachmentRefs(msg.metadata)
       : [];
     const agentMsg: AgentMessage = {
-      role: msg.role as AgentMessage['role'],
+      role: msg.role as AgentMessage["role"],
       content: appendAttachmentContext(msg.content, attachments),
     };
 
@@ -260,10 +309,17 @@ export async function buildConversationHistory(deps: ConversationHistoryDeps): P
         if (isValidToolCallsArray(parsed)) {
           agentMsg.tool_calls = parsed;
         } else {
-          logWarn('Invalid tool_calls structure, skipping', { module: 'services/agent/conversation-history' });
+          logWarn("Invalid tool_calls structure, skipping", {
+            module: "services/agent/conversation-history",
+          });
         }
       } catch (parseError) {
-        logWarn('Failed to parse tool_calls from message', { module: 'services/agent/conversation-history', error: parseError instanceof Error ? parseError.message : String(parseError) });
+        logWarn("Failed to parse tool_calls from message", {
+          module: "services/agent/conversation-history",
+          error: parseError instanceof Error
+            ? parseError.message
+            : String(parseError),
+        });
       }
     }
 
@@ -271,8 +327,10 @@ export async function buildConversationHistory(deps: ConversationHistoryDeps): P
       agentMsg.tool_call_id = msg.toolCallId;
     }
 
-    const tokens = estimateTokens(agentMsg.content || '')
-      + (agentMsg.tool_calls ? estimateTokens(JSON.stringify(agentMsg.tool_calls)) : 0);
+    const tokens = estimateTokens(agentMsg.content || "") +
+      (agentMsg.tool_calls
+        ? estimateTokens(JSON.stringify(agentMsg.tool_calls))
+        : 0);
     candidates.push({ msg: agentMsg, sequence: msg.sequence, tokens });
   }
 
@@ -287,8 +345,10 @@ export async function buildConversationHistory(deps: ConversationHistoryDeps): P
   }
 
   const trimmed = candidates.slice(trimIndex);
-  const agentMessages = trimmed.map(c => c.msg);
-  const oldestRecentSequence = trimmed.length > 0 ? trimmed[0].sequence : undefined;
+  const agentMessages = trimmed.map((c) => c.msg);
+  const oldestRecentSequence = trimmed.length > 0
+    ? trimmed[0].sequence
+    : undefined;
 
   let retrieved: Awaited<ReturnType<typeof queryRelevantThreadMessages>> = [];
   try {
@@ -303,7 +363,10 @@ export async function buildConversationHistory(deps: ConversationHistoryDeps): P
       excludeSequences,
     });
   } catch (err) {
-    logWarn(`Vector search failed for thread ${threadId}`, { module: 'thread_context', detail: err });
+    logWarn(`Vector search failed for thread ${threadId}`, {
+      module: "thread_context",
+      detail: err,
+    });
   }
 
   const contextMsg = buildThreadContextSystemMessage({
@@ -328,13 +391,16 @@ export async function buildConversationHistory(deps: ConversationHistoryDeps): P
         agentMessages.unshift(buildDelegationSystemMessage(delegationPacket));
         agentMessages.push(buildDelegationUserMessage(delegationPacket));
       } else {
-        const parsed = safeJsonParseOrDefault<Record<string, unknown> | unknown>(runRow.input || '{}', {});
-        const task = parsed && typeof parsed === 'object' && !Array.isArray(parsed)
-          ? (parsed as Record<string, unknown>).task
-          : null;
-        if (typeof task === 'string' && task.trim()) {
+        const parsed = safeJsonParseOrDefault<
+          Record<string, unknown> | unknown
+        >(runRow.input || "{}", {});
+        const task =
+          parsed && typeof parsed === "object" && !Array.isArray(parsed)
+            ? (parsed as Record<string, unknown>).task
+            : null;
+        if (typeof task === "string" && task.trim()) {
           agentMessages.push({
-            role: 'user',
+            role: "user",
             content:
               `[Delegated sub-task from parent agent (run: ${runRow.parentRunId})]\n\n` +
               task.trim(),
@@ -344,22 +410,28 @@ export async function buildConversationHistory(deps: ConversationHistoryDeps): P
     }
   } catch (err) {
     // Non-fatal: if we can't inject the task, the sub-agent still has the thread context
-    logWarn(`Failed to inject task for run ${runId}`, { module: 'sub_agent', detail: err });
+    logWarn(`Failed to inject task for run ${runId}`, {
+      module: "sub_agent",
+      detail: err,
+    });
   }
 
   // Lightweight benchmark log (helps validate context optimization in production logs).
   try {
     let chars = 0;
     for (const msg of agentMessages) {
-      chars += (msg.content || '').length;
+      chars += (msg.content || "").length;
       if (msg.tool_calls) {
         chars += JSON.stringify(msg.tool_calls).length;
       }
     }
     const estTokens = Math.ceil(chars / 4);
     const elapsedMs = Date.now() - startedAt;
-    logInfo(`built thread=${threadId} model=${aiModel} budget=${tokenBudget} ` +
-      `fetched=${rows.length} used=${trimmed.length} retrieved=${retrieved.length} estTokens=${estTokens} ms=${elapsedMs}`, { module: 'thread_context' });
+    logInfo(
+      `built thread=${threadId} model=${aiModel} budget=${tokenBudget} ` +
+        `fetched=${rows.length} used=${trimmed.length} retrieved=${retrieved.length} estTokens=${estTokens} ms=${elapsedMs}`,
+      { module: "thread_context" },
+    );
   } catch {
     // ignore
   }

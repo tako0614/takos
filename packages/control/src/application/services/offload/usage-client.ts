@@ -1,11 +1,4 @@
-import type { Env } from '../../../shared/types/index.ts';
-import type { DurableObjectStubBinding } from '../../../shared/types/bindings.ts';
-
-
-type RunNotifierNamespace = {
-  idFromName(name: string): unknown;
-  get(id: unknown): DurableObjectStubBinding;
-};
+import type { Env } from "../../../shared/types/index.ts";
 
 export async function emitRunUsageEvent(
   env: Env,
@@ -15,18 +8,21 @@ export async function emitRunUsageEvent(
     units: number;
     referenceType?: string;
     metadata?: unknown;
-  }
+  },
 ): Promise<void> {
   if (!env.TAKOS_OFFLOAD) return;
-  const ns = env.RUN_NOTIFIER as unknown as RunNotifierNamespace;
+  const ns = env.RUN_NOTIFIER;
   if (!ns) return;
   if (!input.runId) return;
 
   const id = ns.idFromName(input.runId);
-  const stub = ns.get(id) as DurableObjectStubBinding;
-  const request = new Request('https://internal.do/usage', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', 'X-Takos-Internal': '1' },
+  const stub = ns.get(id);
+  const request = new Request("https://internal.do/usage", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "X-Takos-Internal-Marker": "1",
+    },
     body: JSON.stringify({
       runId: input.runId,
       meter_type: input.meterType,

@@ -7,46 +7,47 @@ export {
   fileHandlers,
   infraEndpointRoutes,
   infraEndpoints,
-  serviceEndpoints,
-  serviceRuntimes,
   infraWorkers,
   nodes,
+  serviceEndpoints,
+  serviceRuntimes,
   shortcutGroupItems,
   shortcutGroups,
   shortcuts,
   uiExtensions,
-} from './schema-platform-infra.ts';
+} from "./schema-platform-infra.ts";
 
 export {
   notificationPreferences,
-  notificationSettings,
   notifications,
+  notificationSettings,
   sessionFiles,
   sessionRepos,
   sessions,
-} from './schema-platform-notifications.ts';
+} from "./schema-platform-notifications.ts";
 
-export {
-  moderationAuditLogs,
-  reports,
-} from './schema-platform-moderation.ts';
+export { moderationAuditLogs, reports } from "./schema-platform-moderation.ts";
 
 export {
   resourceAccess,
   resourceAccessTokens,
   resources,
-} from './schema-platform-resources.ts';
+} from "./schema-platform-resources.ts";
 
 export {
   apDeliveryQueue,
   apFollowers,
-  repoPushActivities,
   repoGrants,
+  repoPushActivities,
   storeInventoryItems,
   storeRegistry,
   storeRegistryUpdates,
-} from './schema-platform-store.ts';
+} from "./schema-platform-store.ts";
+
+export { dlqEntries } from "./schema-platform-dlq.ts";
 
 export {
-  dlqEntries,
-} from './schema-platform-dlq.ts';
+  defaultAppDistributionConfig,
+  defaultAppDistributionEntries,
+  defaultAppPreinstallJobs,
+} from "./schema-default-app-distribution.ts";

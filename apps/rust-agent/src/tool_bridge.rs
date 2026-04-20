@@ -1,4 +1,3 @@
-use std::collections::HashSet;
 use std::sync::Arc;
 
 use async_trait::async_trait;
@@ -9,9 +8,7 @@ use takos_agent_engine::tools::memory_tools::MemoryTools;
 use takos_agent_engine::{EngineError, Result};
 
 use crate::control_rpc::{ControlRpcClient, RpcToolResult, SkillCatalogResponse, ToolDefinition};
-use crate::skills::{
-    execute_local_skill_tool, local_skill_tool_definitions, LOCAL_SKILL_TOOL_NAMES,
-};
+use crate::skills::{execute_local_skill_tool, LOCAL_SKILL_TOOL_NAMES};
 
 const LOCAL_MEMORY_TOOL_NAMES: [&str; 4] = [
     "semantic_search_memory",
@@ -26,7 +23,6 @@ pub struct CompositeToolExecutor {
     remote_tools: Arc<Vec<ToolDefinition>>,
     local_skill_catalog: Arc<SkillCatalogResponse>,
     local_executor: Option<Arc<DefaultToolExecutor>>,
-    local_tool_names: Arc<HashSet<String>>,
 }
 
 impl CompositeToolExecutor {
@@ -35,17 +31,11 @@ impl CompositeToolExecutor {
         remote_tools: Vec<ToolDefinition>,
         local_skill_catalog: SkillCatalogResponse,
     ) -> Self {
-        let local_tool_names = LOCAL_MEMORY_TOOL_NAMES
-            .iter()
-            .chain(LOCAL_SKILL_TOOL_NAMES.iter())
-            .map(|name| name.to_string())
-            .collect();
         Self {
             client,
             remote_tools: Arc::new(remote_tools),
             local_skill_catalog: Arc::new(local_skill_catalog),
             local_executor: None,
-            local_tool_names: Arc::new(local_tool_names),
         }
     }
 
@@ -55,19 +45,7 @@ impl CompositeToolExecutor {
     }
 
     pub fn exposed_tools(&self) -> Vec<ToolDefinition> {
-        let mut tools = local_memory_tool_definitions();
-        tools.extend(local_skill_tool_definitions());
-        tools.extend(
-            self.remote_tools
-                .iter()
-                .filter(|tool| !self.is_local_tool(&tool.name))
-                .cloned(),
-        );
-        tools
-    }
-
-    fn is_local_tool(&self, name: &str) -> bool {
-        self.local_tool_names.contains(name)
+        self.remote_tools.as_ref().clone()
     }
 }
 
@@ -169,6 +147,7 @@ fn rpc_tool_result_to_engine(name: &str, rpc: RpcToolResult) -> ToolCallResult {
     }
 }
 
+#[allow(dead_code)]
 pub fn local_memory_tool_definitions() -> Vec<ToolDefinition> {
     vec![
         ToolDefinition {
@@ -278,7 +257,7 @@ mod tests {
     }
 
     #[test]
-    fn exposed_tools_keep_local_tools_and_filter_remote_duplicates() {
+    fn exposed_tools_mirror_remote_catalog_without_injecting_local_tools() {
         let executor = CompositeToolExecutor::new(
             test_client(),
             vec![
@@ -302,13 +281,6 @@ mod tests {
             .map(|tool| tool.name.as_str())
             .collect::<Vec<_>>();
 
-        assert!(names.contains(&"semantic_search_memory"));
-        assert!(names.contains(&"skill_list"));
-        assert!(names.contains(&"repo_list"));
-        assert_eq!(
-            names.iter().filter(|name| **name == "skill_list").count(),
-            1,
-            "local skill tools should win over duplicate remote names"
-        );
+        assert_eq!(names, vec!["skill_list", "repo_list"]);
     }
 }

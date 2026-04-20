@@ -1,8 +1,12 @@
-import type { SpaceRole } from '../../shared/types/index.ts';
-import type { CapabilityDescriptor } from './capability-types.ts';
-import type { CapabilityRegistry } from './capability-registry.ts';
+import type { SpaceRole } from "../../shared/types/index.ts";
+import type { CapabilityDescriptor } from "./capability-types.ts";
+import type { CapabilityRegistry } from "./capability-registry.ts";
 
-export const DISCOVERY_TOOL_NAMES = new Set(['capability_search', 'capability_families', 'capability_invoke']);
+export const DISCOVERY_TOOL_NAMES = new Set([
+  "capability_search",
+  "capability_families",
+  "capability_invoke",
+]);
 
 export interface SelectionContext {
   role?: SpaceRole;
@@ -12,7 +16,6 @@ export interface SelectionContext {
   recentToolCalls?: string[];
   sessionState?: {
     hasActiveContainer: boolean;
-    hasActiveBrowser: boolean;
   };
   boostedFamilies?: string[];
 }
@@ -39,18 +42,27 @@ export class CandidateSelector {
     this.topKSkills = opts?.topKSkills ?? DEFAULT_TOP_K_SKILLS;
   }
 
-  select(registry: CapabilityRegistry, ctx: SelectionContext): SelectedCapabilities {
+  select(
+    registry: CapabilityRegistry,
+    ctx: SelectionContext,
+  ): SelectedCapabilities {
     const allDescriptors = registry.all();
-    const candidates = allDescriptors.filter(d => this.passesHardFilter(d, ctx));
+    const candidates = allDescriptors.filter((d) =>
+      this.passesHardFilter(d, ctx)
+    );
 
-    const toolCandidates = candidates.filter(d => d.kind === 'tool' && !DISCOVERY_TOOL_NAMES.has(d.name));
-    const skillCandidates = candidates.filter(d => d.kind === 'skill');
+    const toolCandidates = candidates.filter((d) =>
+      d.kind === "tool" && !DISCOVERY_TOOL_NAMES.has(d.name)
+    );
+    const skillCandidates = candidates.filter((d) => d.kind === "skill");
 
     const scoredTools = this.scoreAndSort(toolCandidates, ctx);
     const selectedTools = this.applyDiversity(scoredTools, this.topKTools);
 
     const scoredSkills = this.scoreAndSort(skillCandidates, ctx);
-    const selectedSkills = scoredSkills.slice(0, this.topKSkills).map(s => s.descriptor);
+    const selectedSkills = scoredSkills.slice(0, this.topKSkills).map((s) =>
+      s.descriptor
+    );
 
     return {
       tools: selectedTools,
@@ -59,35 +71,54 @@ export class CandidateSelector {
     };
   }
 
-  private passesHardFilter(d: CapabilityDescriptor, ctx: SelectionContext): boolean {
+  private passesHardFilter(
+    d: CapabilityDescriptor,
+    ctx: SelectionContext,
+  ): boolean {
     if (!d.selectable) return false;
 
-    if (d.required_roles?.length && ctx.role && !d.required_roles.includes(ctx.role)) {
+    if (
+      d.required_roles?.length && ctx.role &&
+      !d.required_roles.includes(ctx.role)
+    ) {
       return false;
     }
 
-    if (d.required_capabilities?.length && !d.required_capabilities.every(cap => ctx.capabilities.includes(cap))) {
+    if (
+      d.required_capabilities?.length &&
+      !d.required_capabilities.every((cap) => ctx.capabilities.includes(cap))
+    ) {
       return false;
     }
 
-    if (ctx.role === 'viewer' && d.risk_level === 'high') return false;
+    if (ctx.role === "viewer" && d.risk_level === "high") return false;
 
     return true;
   }
 
-  private scoreAndSort(descriptors: CapabilityDescriptor[], ctx: SelectionContext): ScoredDescriptor[] {
-    const scored = descriptors.map(d => ({ descriptor: d, score: this.scoreDescriptor(d, ctx) }));
+  private scoreAndSort(
+    descriptors: CapabilityDescriptor[],
+    ctx: SelectionContext,
+  ): ScoredDescriptor[] {
+    const scored = descriptors.map((d) => ({
+      descriptor: d,
+      score: this.scoreDescriptor(d, ctx),
+    }));
     scored.sort((a, b) => b.score - a.score);
     return scored;
   }
 
-  private scoreDescriptor(d: CapabilityDescriptor, ctx: SelectionContext): number {
+  private scoreDescriptor(
+    d: CapabilityDescriptor,
+    ctx: SelectionContext,
+  ): number {
     let score = 0;
-    const terms = ctx.userQuery.toLowerCase().split(/\s+/).filter(Boolean).slice(0, 50);
+    const terms = ctx.userQuery.toLowerCase().split(/\s+/).filter(Boolean)
+      .slice(0, 50);
 
     const nameLower = d.name.toLowerCase();
-    const tagsJoined = d.tags.join(' ').toLowerCase();
-    const triggersJoined = (d.triggers ?? []).join(' ').toLowerCase();
+    const tagsJoined = d.tags.join(" ").toLowerCase();
+    const triggersJoined = (d.triggers ?? []).join(" ").toLowerCase();
     const summaryLower = d.summary.toLowerCase();
 
     for (const term of terms) {
@@ -97,28 +128,32 @@ export class CandidateSelector {
       if (summaryLower.includes(term)) score += 20;
     }
 
-    if (ctx.sessionState?.hasActiveContainer && (d.namespace === 'file' || d.namespace === 'runtime')) {
+    if (
+      ctx.sessionState?.hasActiveContainer &&
+      (d.namespace === "file" || d.namespace === "runtime")
+    ) {
       score += 25;
     }
-    if (ctx.sessionState?.hasActiveBrowser && d.namespace === 'browser') {
-      score += 25;
-    }
-
     if (ctx.recentToolCalls?.includes(d.name)) score += 20;
 
-    if (d.family && ctx.boostedFamilies?.includes(d.family)) score += FAMILY_BOOST;
+    if (d.family && ctx.boostedFamilies?.includes(d.family)) {
+      score += FAMILY_BOOST;
+    }
 
     return score;
   }
 
-  private applyDiversity(scored: ScoredDescriptor[], limit: number): CapabilityDescriptor[] {
+  private applyDiversity(
+    scored: ScoredDescriptor[],
+    limit: number,
+  ): CapabilityDescriptor[] {
     const result: CapabilityDescriptor[] = [];
     const familyCounts = new Map<string, number>();
 
     for (const { descriptor } of scored) {
       if (result.length >= limit) break;
 
-      const family = descriptor.family ?? '__none__';
+      const family = descriptor.family ?? "__none__";
       const count = familyCounts.get(family) ?? 0;
       if (count >= MAX_PER_FAMILY) continue;
 

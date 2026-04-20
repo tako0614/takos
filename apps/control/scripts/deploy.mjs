@@ -2,7 +2,7 @@
 // Parameterized deploy script for takos-control-app services.
 // Usage: deno run --allow-all scripts/deploy.mjs <service> <environment> [--debug]
 //
-// Services: web, dispatch, worker, runtime-host, executor-host, browser-host
+// Services: web, dispatch, worker, runtime-host, executor-host
 // Environments: production, staging
 // Flags: --debug  (only valid for web + staging — uses staging-debug build)
 
@@ -18,7 +18,6 @@ const SERVICES = {
   worker: "wrangler.worker.toml",
   "runtime-host": "wrangler.runtime-host.toml",
   "executor-host": "wrangler.executor.toml",
-  "browser-host": "wrangler.browser-host.toml",
 };
 
 const ENVIRONMENTS = ["production", "staging"];
@@ -43,7 +42,6 @@ Services:
   worker         Background worker
   runtime-host   Runtime host service
   executor-host  Executor host service
-  browser-host   Browser host service
 
 Environments:
   production     Deploy to production

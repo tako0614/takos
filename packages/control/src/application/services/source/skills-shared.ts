@@ -2,13 +2,13 @@ import type { D1Database } from "../../../shared/types/bindings.ts";
 import { logWarn } from "../../../shared/utils/logger.ts";
 import { textDate } from "../../../shared/utils/db-guards.ts";
 import {
-  getOfficialSkillById,
-  listLocalizedOfficialSkills,
-  type LocalizedOfficialSkill,
+  getManagedSkillById,
+  listLocalizedManagedSkills,
+  type LocalizedManagedSkill,
   normalizeCustomSkillMetadata,
   resolveSkillLocale,
   validateCustomSkillMetadata,
-} from "../agent/official-skills.ts";
+} from "../agent/managed-skills.ts";
 import {
   applySkillAvailability,
   cloneExecutionContract,
@@ -147,14 +147,14 @@ export function toCustomSkillContext(skill: SkillRow): SkillContext {
   };
 }
 
-export function toAvailableOfficialSkill(
-  skill: LocalizedOfficialSkill,
+export function toAvailableManagedSkill(
+  skill: LocalizedManagedSkill,
 ): SkillContext {
   return {
     ...skill,
     triggers: [...skill.triggers],
     activation_tags: [...skill.activation_tags],
-    source: "official",
+    source: "managed",
     execution_contract: cloneExecutionContract(skill.execution_contract),
     availability: "available",
     availability_reasons: [],
@@ -202,7 +202,7 @@ export async function getSkillAvailabilityDetails(
   };
 }
 
-export async function listAvailableOfficialSkillContexts(
+export async function listAvailableManagedSkillContexts(
   db: D1Database,
   spaceId: string,
   locale: SkillLocale,
@@ -211,7 +211,7 @@ export async function listAvailableOfficialSkillContexts(
   const details = availability ??
     await getSkillAvailabilityDetails(db, spaceId);
   return applySkillAvailability(
-    listLocalizedOfficialSkills(locale).map(toAvailableOfficialSkill),
+    listLocalizedManagedSkills(locale).map(toAvailableManagedSkill),
     details,
   );
 }
@@ -257,8 +257,8 @@ export async function validateSkillMetadataForWorkspace(
 
 export {
   applySkillAvailability,
-  getOfficialSkillById,
-  listLocalizedOfficialSkills,
+  getManagedSkillById,
+  listLocalizedManagedSkills,
   resolveSkillLocale,
   toSkillCatalogEntry,
 };

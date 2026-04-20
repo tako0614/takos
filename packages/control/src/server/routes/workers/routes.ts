@@ -11,14 +11,10 @@ import {
   WORKSPACE_SERVICE_LIMITS,
 } from "../../../application/services/platform/workers.ts";
 import { ServiceDesiredStateService } from "../../../application/services/platform/worker-desired-state.ts";
-import {
-  removeGroupDesiredWorkload,
-  upsertGroupDesiredWorkload,
-} from "../../../application/services/deployment/group-desired-projector.ts";
 import { parsePagination } from "../../../shared/utils/index.ts";
 import { getDb } from "../../../infra/db/index.ts";
-import { deployments, services } from "../../../infra/db/schema.ts";
-import { createCloudflareApiClient } from "../../../platform/providers/cloudflare/api-client.ts";
+import { services } from "../../../infra/db/schema.ts";
+import { createCloudflareApiClient } from "../../../platform/backends/cloudflare/api-client.ts";
 import { InternalError, NotFoundError } from "takos-common/errors";
 import type { AuthenticatedRouteEnv } from "../route-auth.ts";
 import { requireSpaceAccess } from "../route-auth.ts";
@@ -28,11 +24,6 @@ import {
   resolveCreateSpaceId,
   resolveGroupIdForSpace,
 } from "./group-validation.ts";
-import {
-  buildGroupWorkloadForAssignment,
-  buildGroupWorkloadForCreate,
-  describeGroupWorkloadTarget,
-} from "./projected-workloads.ts";
 
 /** Shape of a single invocation record from the Cloudflare GraphQL Analytics API */
 interface CfInvocationRecord {
@@ -61,16 +52,6 @@ const workersBase = new Hono<AuthenticatedRouteEnv>()
     const user = c.get("user");
 
     const workersList = await listServicesForUser(c.env.DB, user.id);
-
-    return c.json({ services: workersList });
-  })
-  .get("/space/:spaceId", async (c) => {
-    const user = c.get("user");
-    const spaceId = c.req.param("spaceId");
-
-    const access = await requireSpaceAccess(c, spaceId, user.id);
-
-    const workersList = await listServicesForSpace(c.env.DB, access.space.id);
 
     return c.json({ services: workersList });
   })
@@ -128,23 +109,6 @@ const workersBase = new Hono<AuthenticatedRouteEnv>()
         throw new InternalError("Failed to create service");
       }
 
-      if (groupResolution.groupId) {
-        const workload = describeGroupWorkloadTarget({
-          id: result.service.id,
-          slug: result.service.slug,
-          serviceType: result.service.service_type,
-        });
-        await upsertGroupDesiredWorkload(c.env, {
-          groupId: groupResolution.groupId,
-          category: workload.category,
-          name: workload.name,
-          workload: buildGroupWorkloadForCreate({
-            serviceType: result.service.service_type,
-            config: body.config ?? null,
-          }),
-        });
-      }
-
       return c.json({ service: result.service }, 201);
     },
   )
@@ -200,59 +164,6 @@ const workersBase = new Hono<AuthenticatedRouteEnv>()
         })
         .where(eq(services.id, worker.id))
         .run();
-
-      if (groupResolution.groupId) {
-        const updatedService = await db.select({
-          id: services.id,
-          serviceType: services.serviceType,
-          config: services.config,
-          routeRef: services.routeRef,
-          activeDeploymentId: services.activeDeploymentId,
-          slug: services.slug,
-        }).from(services)
-          .where(eq(services.id, worker.id))
-          .get();
-        const activeDeployment = updatedService?.activeDeploymentId
-          ? await db.select({
-            id: deployments.id,
-            artifactRef: deployments.artifactRef,
-            providerName: deployments.providerName,
-            targetJson: deployments.targetJson,
-          }).from(deployments).where(
-            eq(deployments.id, updatedService.activeDeploymentId),
-          ).get()
-          : null;
-
-        if (updatedService) {
-          const workload = describeGroupWorkloadTarget({
-            id: updatedService.id,
-            slug: updatedService.slug,
-            serviceType: updatedService.serviceType,
-          });
-          await upsertGroupDesiredWorkload(c.env, {
-            groupId: groupResolution.groupId,
-            category: workload.category,
-            name: workload.name,
-            workload: buildGroupWorkloadForAssignment({
-              serviceType: updatedService.serviceType,
-              config: updatedService.config,
-              serviceName: updatedService.routeRef,
-              activeDeployment,
-            }),
-          });
-        }
-      } else if (worker.group_id) {
-        const workload = describeGroupWorkloadTarget({
-          id: worker.id,
-          slug: worker.slug,
-          serviceType: worker.service_type,
-        });
-        await removeGroupDesiredWorkload(c.env, {
-          groupId: worker.group_id,
-          category: workload.category,
-          name: workload.name,
-        });
-      }
 
       const updated = await getServiceForUser(c.env.DB, workerId, user.id);
       return c.json({ service: updated });
@@ -360,6 +271,18 @@ const workersBase = new Hono<AuthenticatedRouteEnv>()
     await deleteServiceWithCleanup(c, worker);
 
     return c.json({ success: true });
+  });
+
+export const workersSpaceRoutes = new Hono<AuthenticatedRouteEnv>()
+  .get("/:spaceId/services", async (c) => {
+    const user = c.get("user");
+    const spaceId = c.req.param("spaceId");
+
+    const access = await requireSpaceAccess(c, spaceId, user.id);
+
+    const workersList = await listServicesForSpace(c.env.DB, access.space.id);
+
+    return c.json({ services: workersList });
   });
 
 export default workersBase;

@@ -32,6 +32,7 @@ export const workerServiceDeps = {
 
 export interface ServiceRow {
   id: string;
+  name: string | null;
   space_id: string;
   group_id?: string | null;
   service_type: "app" | "service";
@@ -51,6 +52,7 @@ export interface ServiceWithSpaceName extends ServiceRow {
 export type ServiceRouteRecord = {
   id: string;
   accountId: string;
+  groupId?: string | null;
   workerType: string;
   status: string;
   hostname: string | null;
@@ -92,6 +94,7 @@ function toApiService(row: {
 }): ServiceRow {
   return {
     id: row.id,
+    name: row.routeRef,
     space_id: row.accountId,
     group_id: row.groupId ?? null,
     service_type: row.workerType as "app" | "service",
@@ -111,6 +114,7 @@ function normalizeServiceRouteRecord(
   return {
     id: row.id,
     accountId: row.accountId,
+    groupId: row.groupId ?? null,
     workerType: row.workerType,
     status: row.status,
     hostname: row.hostname,
@@ -295,6 +299,7 @@ export async function listServiceRouteRecordsByIds(
   const rows = await db.select({
     id: services.id,
     accountId: services.accountId,
+    groupId: services.groupId,
     workerType: services.workerType,
     status: services.status,
     hostname: services.hostname,
@@ -393,6 +398,7 @@ export async function getServiceForUser(
   const service = await db.select({
     id: services.id,
     accountId: services.accountId,
+    groupId: services.groupId,
     workerType: services.workerType,
     status: services.status,
     config: services.config,
@@ -436,6 +442,7 @@ export async function getServiceForUserWithRole(
   const service = await db.select({
     id: services.id,
     accountId: services.accountId,
+    groupId: services.groupId,
     workerType: services.workerType,
     status: services.status,
     config: services.config,

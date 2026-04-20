@@ -36,6 +36,14 @@ EGRESS_RATE_LIMIT_SHADOW_SAMPLE_RATE = "0.01"
 EGRESS_MAX_RESPONSE_BYTES = "26214400"
 EGRESS_TIMEOUT_MS = "300000"
 
+# Secrets (set via wrangler secret put):
+# - PLATFORM_PRIVATE_KEY / PLATFORM_PUBLIC_KEY: same key pair as takos. The
+#   workflow runner signs runtime-service JWTs with PLATFORM_PRIVATE_KEY.
+# - ENCRYPTION_KEY: same value as takos for common env crypto.
+# - CF_API_TOKEN: required only when Cloudflare management is enabled.
+# - OPENAI_API_KEY / ANTHROPIC_API_KEY / GOOGLE_API_KEY: at least one for agent
+#   functionality.
+
 # --- Database ---
 
 [[d1_databases]]
@@ -49,7 +57,7 @@ database_id = "replace-with-d1-database-id"
 binding = "HOSTNAME_ROUTING"
 id = "replace-with-kv-namespace-id"
 
-# --- Durable Objects (all external, owned by takos-web) ---
+# --- Durable Objects (all external, owned by takos) ---
 
 [[durable_objects.bindings]]
 name = "RUN_NOTIFIER"
@@ -165,9 +173,6 @@ index_name = "takos-embeddings"
 [ai]
 binding = "AI"
 
-[browser]
-binding = "BROWSER"
-
 # --- Service Bindings ---
 
 [[services]]
@@ -202,7 +207,7 @@ EGRESS_TIMEOUT_MS = "300000"
 
 [[env.staging.d1_databases]]
 binding = "DB"
-database_name = "takos-control-staging-db-2"
+database_name = "takos-control-staging-db"
 database_id = "replace-with-staging-d1-database-id"
 
 [[env.staging.kv_namespaces]]
@@ -310,9 +315,6 @@ index_name = "takos-embeddings-staging"
 
 [env.staging.ai]
 binding = "AI"
-
-[env.staging.browser]
-binding = "BROWSER"
 
 [[env.staging.services]]
 binding = "RUNTIME_HOST"

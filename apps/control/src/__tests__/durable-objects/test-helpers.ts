@@ -117,7 +117,7 @@ export function internalHeaders(
   extra: Record<string, string> = {},
 ): Record<string, string> {
   return {
-    "X-Takos-Internal": "1",
+    "X-Takos-Internal-Marker": "1",
     "Content-Type": "application/json",
     ...extra,
   };

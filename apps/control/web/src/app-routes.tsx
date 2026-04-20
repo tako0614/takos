@@ -1,11 +1,4 @@
-import {
-  type Component,
-  createEffect,
-  createMemo,
-  type JSX,
-  lazy,
-  Suspense,
-} from "solid-js";
+import { createEffect, createMemo, type JSX, lazy, Suspense } from "solid-js";
 import { Navigate, Route, useLocation, useParams } from "@solidjs/router";
 import { LoadingScreen } from "./components/common/LoadingScreen.tsx";
 import { Button } from "./components/ui/Button.tsx";
@@ -35,80 +28,86 @@ import { SetupPage } from "./views/SetupPage.tsx";
 import { LoginPage } from "./views/app/AuthViews.tsx";
 import { AuthenticatedLayout } from "./components/layout/AuthenticatedLayout.tsx";
 
-const SourcePage = lazyNamed(
-  () => import("./views/source/SourcePage.tsx"),
-  "SourcePage",
+const SourcePage = lazy(() =>
+  import("./views/source/SourcePage.tsx").then((module) => ({
+    default: module.SourcePage,
+  }))
 );
-const RepoDetailPage = lazyNamed(
-  () => import("./views/repos/RepoDetailPage.tsx"),
-  "RepoDetailPage",
+const RepoDetailPage = lazy(() =>
+  import("./views/repos/RepoDetailPage.tsx").then((module) => ({
+    default: module.RepoDetailPage,
+  }))
 );
-const ChatPage = lazyNamed(
-  () => import("./views/chat/ChatPage.tsx"),
-  "ChatPage",
+const ChatPage = lazy(() =>
+  import("./views/chat/ChatPage.tsx").then((module) => ({
+    default: module.ChatPage,
+  }))
 );
-const AppsPage = lazyNamed(
-  () => import("./views/apps/AppsPage.tsx"),
-  "AppsPage",
+const AppsPage = lazy(() =>
+  import("./views/apps/AppsPage.tsx").then((module) => ({
+    default: module.AppsPage,
+  }))
 );
-const ReposPanel = lazyNamed(
-  () => import("./views/repos/ReposPanel.tsx"),
-  "ReposPanel",
+const ReposPanel = lazy(() =>
+  import("./views/repos/ReposPanel.tsx").then((module) => ({
+    default: module.ReposPanel,
+  }))
 );
-const DeployPanel = lazyNamed(
-  () => import("./views/app/space/DeployPanel.tsx"),
-  "DeployPanel",
+const DeployPanel = lazy(() =>
+  import("./views/app/space/DeployPanel.tsx").then((module) => ({
+    default: module.DeployPanel,
+  }))
 );
-const StoragePage = lazyNamed(
-  () => import("./views/storage/StoragePage.tsx"),
-  "StoragePage",
+const StoragePage = lazy(() =>
+  import("./views/storage/StoragePage.tsx").then((module) => ({
+    default: module.StoragePage,
+  }))
 );
-const StoreManagementPage = lazyNamed(
-  () => import("./views/store/StoreManagementPage.tsx"),
-  "StoreManagementPage",
+const StoreManagementPage = lazy(() =>
+  import("./views/store/StoreManagementPage.tsx").then((module) => ({
+    default: module.StoreManagementPage,
+  }))
 );
-const SpaceSettingsPage = lazyNamed(
-  () => import("./views/hub/SpaceSettingsPage.tsx"),
-  "SpaceSettingsPage",
+const SpaceSettingsPage = lazy(() =>
+  import("./views/hub/SpaceSettingsPage.tsx").then((module) => ({
+    default: module.SpaceSettingsPage,
+  }))
 );
-const SettingsView = lazyNamed(
-  () => import("./views/app/SettingsView.tsx"),
-  "SettingsView",
+const SettingsView = lazy(() =>
+  import("./views/app/SettingsView.tsx").then((module) => ({
+    default: module.SettingsView,
+  }))
 );
-const MemoryPage = lazyNamed(
-  () => import("./views/MemoryPage.tsx"),
-  "MemoryPage",
+const MemoryPage = lazy(() =>
+  import("./views/MemoryPage.tsx").then((module) => ({
+    default: module.MemoryPage,
+  }))
 );
-const UserProfilePage = lazyNamed(
-  () => import("./views/profile/UserProfilePage.tsx"),
-  "UserProfilePage",
+const UserProfilePage = lazy(() =>
+  import("./views/profile/UserProfilePage.tsx").then((module) => ({
+    default: module.UserProfilePage,
+  }))
 );
-const LegalPage = lazyNamed(
-  () => import("./views/legal/LegalPage.tsx"),
-  "LegalPage",
+const LegalPage = lazy(() =>
+  import("./views/legal/LegalPage.tsx").then((module) => ({
+    default: module.LegalPage,
+  }))
 );
-const SharedThreadPage = lazyNamed(
-  () => import("./views/share/SharedThreadPage.tsx"),
-  "SharedThreadPage",
+const SharedThreadPage = lazy(() =>
+  import("./views/share/SharedThreadPage.tsx").then((module) => ({
+    default: module.SharedThreadPage,
+  }))
 );
-const OAuthConsentView = lazyNamed(
-  () => import("./views/oauth/OAuthConsentView.tsx"),
-  "OAuthConsentView",
+const OAuthConsentView = lazy(() =>
+  import("./views/oauth/OAuthConsentView.tsx").then((module) => ({
+    default: module.OAuthConsentView,
+  }))
 );
-const DeviceAuthView = lazyNamed(
-  () => import("./views/oauth/DeviceAuthView.tsx"),
-  "DeviceAuthView",
+const DeviceAuthView = lazy(() =>
+  import("./views/oauth/DeviceAuthView.tsx").then((module) => ({
+    default: module.DeviceAuthView,
+  }))
 );
-
-function lazyNamed<
-  TModule extends Record<string, unknown>,
-  TKey extends keyof TModule & string,
->(loader: () => Promise<TModule>, key: TKey) {
-  return lazy(async () => {
-    const module = await loader();
-    return { default: module[key] as Component<any> };
-  });
-}
 
 function BootstrapErrorScreen(props: {
   title: string;
@@ -708,6 +707,7 @@ function AppsRoute() {
   return (
     <RouteSurface>
       <AppsPage
+        spaceId={appsSpaceId()!}
         onNavigateToStore={() =>
           navigation.navigate({ view: "store", storeTab: "discover" })}
       />
@@ -919,7 +919,7 @@ const LegacyAppResourcesRoute = createLegacyShortcutRoute({
   deploySection: "resources",
 });
 
-const ROUTE_COMPONENTS: Record<AppRouteComponentKey, Component<any>> = {
+const ROUTE_COMPONENTS: Record<AppRouteComponentKey, () => JSX.Element> = {
   "oauth-authorize": OAuthAuthorizeRoute,
   "oauth-device": OAuthDeviceRoute,
   terms: TermsRoute,

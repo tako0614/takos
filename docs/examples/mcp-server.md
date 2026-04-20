@@ -3,7 +3,7 @@
 MCP Server を公開する最小構成です。現行 contract では route publication を
 `publish` に書き、必要なら他 compute が explicit consume します。
 
-## app.yml
+## deploy manifest
 
 ```yaml
 name: my-tools
@@ -25,8 +25,10 @@ routes:
 publish:
   - name: my-tools
     type: McpServer
+    publisher: web
     path: /mcp
-    transport: streamable-http
+    spec:
+      transport: streamable-http
 ```
 
 `readiness: /mcp` は root path が 200 を返さない MCP-only Worker
@@ -87,16 +89,18 @@ export default {
 
 ## auth を付けたい場合
 
-`authSecretRef` は publication metadata です。実際の token 値は service env
-settings か provider publication から供給します。
+`authSecretRef` は publication `spec` 内の metadata です。実際の token 値は
+service env settings か secret resource / runtime binding から供給します。
 
 ```yaml
 publish:
   - name: my-tools
     type: McpServer
+    publisher: web
     path: /mcp
-    transport: streamable-http
-    authSecretRef: MCP_AUTH_TOKEN
+    spec:
+      transport: streamable-http
+      authSecretRef: MCP_AUTH_TOKEN
 ```
 
 ## ローカルテスト

@@ -1,7 +1,13 @@
 import { createEffect, createMemo, createSignal, onCleanup } from "solid-js";
 import { For, Show } from "solid-js";
 import { useI18n } from "../store/i18n.ts";
-import type { Thread } from "../types/index.ts";
+import type { TranslationKey } from "../store/i18n.ts";
+import type {
+  AgentTaskPriority,
+  AgentTaskStatus,
+  Run,
+  Thread,
+} from "../types/index.ts";
 import { rpc, rpcJson } from "../lib/rpc.ts";
 import { useToast } from "../store/toast.ts";
 import { Icons } from "../lib/Icons.tsx";
@@ -16,6 +22,30 @@ import { useChatSession } from "../hooks/useChatSession.ts";
 import { useChatSharing } from "../hooks/useChatSharing.ts";
 import { useMobileHeader } from "../store/mobile-header.ts";
 import { getFocusedRunEntries, getFocusedRunMeta } from "./chat/focused-run.ts";
+
+const TASK_STATUS_LABEL_KEYS: Record<AgentTaskStatus, TranslationKey> = {
+  planned: "taskStatus.planned",
+  in_progress: "taskStatus.in_progress",
+  blocked: "taskStatus.blocked",
+  completed: "taskStatus.completed",
+  cancelled: "taskStatus.cancelled",
+};
+
+const TASK_PRIORITY_LABEL_KEYS: Record<AgentTaskPriority, TranslationKey> = {
+  low: "taskPriority.low",
+  medium: "taskPriority.medium",
+  high: "taskPriority.high",
+  urgent: "taskPriority.urgent",
+};
+
+const RUN_STATUS_LABEL_KEYS: Record<Run["status"], TranslationKey> = {
+  pending: "runStatus_pending",
+  queued: "runStatus_queued",
+  running: "runStatus_running",
+  completed: "runStatus_completed",
+  failed: "runStatus_failed",
+  cancelled: "runStatus_cancelled",
+};
 
 export interface ChatViewProps {
   thread: Thread;
@@ -316,10 +346,10 @@ export function ChatView(props: ChatViewProps) {
                 {currentTaskContext()!.title}
               </span>
               <span>
-                {t(`taskStatus.${currentTaskContext()!.status}` as never)}
+                {t(TASK_STATUS_LABEL_KEYS[currentTaskContext()!.status])}
               </span>
               <span>
-                {t(`taskPriority.${currentTaskContext()!.priority}` as never)}
+                {t(TASK_PRIORITY_LABEL_KEYS[currentTaskContext()!.priority])}
               </span>
             </div>
           </div>
@@ -337,7 +367,7 @@ export function ChatView(props: ChatViewProps) {
                   </span>
                   <Show when={focusedRunMeta()}>
                     <span>
-                      {t(`runStatus_${focusedRunMeta()!.status}` as never)}
+                      {t(RUN_STATUS_LABEL_KEYS[focusedRunMeta()!.status])}
                     </span>
                   </Show>
                 </div>

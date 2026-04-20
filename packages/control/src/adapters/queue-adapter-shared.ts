@@ -1,14 +1,18 @@
 /**
  * Shared infrastructure for cloud queue adapters (SQS, Pub/Sub, etc.).
  *
- * Each adapter supplies provider-specific `send`, `sendBatch`, and `receive`
+ * Each adapter supplies backend-specific `send`, `sendBatch`, and `receive`
  * callbacks.  This module wires them into the canonical
  * `Queue<T> & Partial<ConsumableQueue<T>>` shape expected by the worker poll
  * loop, handling the common queueName metadata plumbing.
  */
 
-import type { Queue } from '../shared/types/bindings.ts';
-import type { ConsumableQueue, LocalQueueName, LocalQueueRecord } from '../local-platform/queue-runtime.ts';
+import type { Queue } from "../shared/types/bindings.ts";
+import type {
+  ConsumableQueue,
+  LocalQueueName,
+  LocalQueueRecord,
+} from "../local-platform/queue-runtime.ts";
 
 // ---------------------------------------------------------------------------
 // Config base shared by all queue adapters
@@ -21,12 +25,14 @@ export type QueueAdapterConfigBase = {
 };
 
 // ---------------------------------------------------------------------------
-// Provider callbacks
+// Backend callbacks
 // ---------------------------------------------------------------------------
 
-export type QueueProviderCallbacks<T> = {
+export type QueueBackendCallbacks<T> = {
   send(message: T, options?: { delaySeconds?: number }): Promise<void>;
-  sendBatch(messages: Iterable<{ body: T; delaySeconds?: number }>): Promise<void>;
+  sendBatch(
+    messages: Iterable<{ body: T; delaySeconds?: number }>,
+  ): Promise<void>;
   /** If undefined, the adapter will not expose receive(). */
   receive?: () => Promise<LocalQueueRecord<T> | null>;
 };
@@ -36,15 +42,15 @@ export type QueueProviderCallbacks<T> = {
 // ---------------------------------------------------------------------------
 
 /**
- * Build the standard queue adapter object from provider-specific callbacks.
+ * Build the standard queue adapter object from backend-specific callbacks.
  *
  * The returned object satisfies `Queue<T> & Partial<ConsumableQueue<T>>`.
  */
 export function buildQueueAdapter<T>(
   config: QueueAdapterConfigBase,
-  callbacks: QueueProviderCallbacks<T>,
+  callbacks: QueueBackendCallbacks<T>,
 ): Queue<T> & Partial<ConsumableQueue<T>> {
-  const queue = {
+  const queue: Queue<T> & Partial<ConsumableQueue<T>> = {
     // -- ConsumableQueue metadata ------------------------------------------
     ...(config.queueName ? { queueName: config.queueName } : {}),
 
@@ -56,7 +62,7 @@ export function buildQueueAdapter<T>(
     ...(callbacks.receive ? { receive: callbacks.receive } : {}),
   };
 
-  return queue as unknown as Queue<T> & Partial<ConsumableQueue<T>>;
+  return queue;
 }
 
 // ---------------------------------------------------------------------------

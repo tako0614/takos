@@ -79,7 +79,9 @@ function createFakeD1(selectRows: QueryRow[] = []) {
 }
 
 function createRunNotifier() {
-  const fetchSpy = spy(async () => new Response(null, { status: 204 }));
+  const fetchSpy = spy(async (_request: Request) =>
+    new Response(null, { status: 204 })
+  );
 
   return {
     fetchSpy,
@@ -316,8 +318,8 @@ Deno.test("executeStepLoop - runs each step through the runtime host", async () 
 
 Deno.test("executeStepLoop - cancels the runtime job when the run is cancelled", async () => {
   const { db } = createFakeD1([{ status: "cancelled" }]);
-  const { namespace } = createRunNotifier();
-  const { fetchSpy, host } = createRuntimeHost(() =>
+  const { namespace, fetchSpy: notifierFetchSpy } = createRunNotifier();
+  const { fetchSpy: runtimeFetchSpy, host } = createRuntimeHost(() =>
     new Response(null, { status: 200 })
   );
   const engine = createEngine();
@@ -339,7 +341,17 @@ Deno.test("executeStepLoop - cancels the runtime job when the run is cancelled",
   assertEquals(state.jobConclusion, "cancelled");
   assertSpyCalls(engine.cancelRun, 1);
   assertSpyCalls(engine.storeJobLogs, 1);
-  assertSpyCalls(fetchSpy, 1);
+  assertSpyCalls(runtimeFetchSpy, 1);
+  assertSpyCalls(notifierFetchSpy, 1);
+
+  const eventRequest = notifierFetchSpy.calls[0].args[0] as Request;
+  const eventPayload = await eventRequest.json() as {
+    type: string;
+    data: { status: string; conclusion: string };
+  };
+  assertEquals(eventPayload.type, "workflow.job.completed");
+  assertEquals(eventPayload.data.status, "cancelled");
+  assertEquals(eventPayload.data.conclusion, "cancelled");
 });
 
 Deno.test("completeJobSuccess - persists evaluated job outputs", async () => {

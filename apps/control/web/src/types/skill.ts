@@ -5,8 +5,8 @@ export interface Skill {
   instructions: string;
   triggers: string[];
   metadata?: {
-    locale?: 'ja' | 'en';
-    category?: 'research' | 'writing' | 'planning' | 'slides' | 'software';
+    locale?: "ja" | "en";
+    category?: "research" | "writing" | "planning" | "slides" | "software";
     activation_tags?: string[];
     execution_contract?: {
       preferred_tools?: string[];
@@ -16,25 +16,25 @@ export interface Skill {
       template_ids?: string[];
     };
   };
-  source: 'custom';
+  source: "custom";
   editable: true;
   enabled: boolean;
   created_at: string;
   updated_at: string;
 }
 
-export interface OfficialSkill {
+export interface ManagedSkill {
   id: string;
   version?: string;
   name: string;
   description: string;
   triggers: string[];
-  source: 'official';
+  source: "managed";
   editable: false;
   enabled: boolean;
   category: string;
-  locale: 'ja' | 'en';
-  availability?: 'available' | 'warning' | 'unavailable';
+  locale: "ja" | "en";
+  availability?: "available" | "warning" | "unavailable";
   availability_reasons?: string[];
   activation_tags?: string[];
   execution_contract?: {

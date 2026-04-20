@@ -62,7 +62,8 @@ function createApp(user?: User) {
   smartHttpRouteDeps.handleInfoRefs = mocks.handleInfoRefs;
   smartHttpRouteDeps.handleUploadPack = mocks.handleUploadPack;
   smartHttpRouteDeps.handleReceivePack = mocks.handleReceivePack;
-  smartHttpRouteDeps.handleReceivePackFromStream = mocks.handleReceivePackFromStream;
+  smartHttpRouteDeps.handleReceivePackFromStream =
+    mocks.handleReceivePackFromStream;
   smartHttpRouteDeps.triggerPushWorkflows = mocks.triggerPushWorkflows;
   smartHttpRouteDeps.getDb = mocks.getDb;
   smartHttpRouteDeps.checkSpaceAccess = mocks.checkWorkspaceAccess;
@@ -97,9 +98,6 @@ const PUBLIC_REPO = {
   stars: 0,
   forks: 0,
   gitEnabled: true,
-  isOfficial: false,
-  officialCategory: null,
-  officialMaintainer: null,
   featured: false,
   installCount: 0,
   createdAt: "2026-03-01",
@@ -158,6 +156,19 @@ Deno.test("smart-http routes - GET /git/:owner/:repo/info/refs - returns 404 whe
   const res = await app.fetch(
     new Request(
       "http://localhost/git/testuser/repo.git/info/refs?service=git-upload-pack",
+    ),
+    env as unknown as Env,
+    {} as ExecutionContext,
+  );
+
+  assertEquals(res.status, 404);
+});
+Deno.test("smart-http routes - GET /git/:owner/:repo/info/refs - rejects non-.git alias", async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+  const app = createApp(createUser());
+  const res = await app.fetch(
+    new Request(
+      "http://localhost/git/testuser/repo/info/refs?service=git-upload-pack",
     ),
     env as unknown as Env,
     {} as ExecutionContext,
@@ -331,6 +342,20 @@ Deno.test("smart-http routes - POST /git/:owner/:repo/git-upload-pack - returns 
 
   assertEquals(res.status, 404);
 });
+Deno.test("smart-http routes - POST /git/:owner/:repo/git-upload-pack - rejects non-.git alias", async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+  const app = createApp(createUser());
+  const res = await app.fetch(
+    new Request("http://localhost/git/testuser/repo/git-upload-pack", {
+      method: "POST",
+      body: new Uint8Array(),
+    }),
+    env as unknown as Env,
+    {} as ExecutionContext,
+  );
+
+  assertEquals(res.status, 404);
+});
 Deno.test("smart-http routes - POST /git/:owner/:repo/git-upload-pack - succeeds for public repo without auth", async () => {
   /* mocks cleared (no-op in Deno) */ void 0;
   mocks.optionalGitAuth.mockResult = null;
@@ -441,6 +466,20 @@ Deno.test("smart-http routes - POST /git/:owner/:repo/git-receive-pack - returns
   const app = createApp(createUser());
   const res = await app.fetch(
     new Request("http://localhost/git/testuser/repo.git/git-receive-pack", {
+      method: "POST",
+      body: new Uint8Array(),
+    }),
+    env as unknown as Env,
+    {} as ExecutionContext,
+  );
+
+  assertEquals(res.status, 404);
+});
+Deno.test("smart-http routes - POST /git/:owner/:repo/git-receive-pack - rejects non-.git alias", async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+  const app = createApp(createUser());
+  const res = await app.fetch(
+    new Request("http://localhost/git/testuser/repo/git-receive-pack", {
       method: "POST",
       body: new Uint8Array(),
     }),

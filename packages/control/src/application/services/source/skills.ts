@@ -21,9 +21,9 @@ export {
 } from "./skills-custom.ts";
 export {
   describeAgentSkill,
-  getOfficialSkillCatalogEntry,
+  getManagedSkillCatalogEntry,
   listDetailedSkillContext,
-  listOfficialSkillsCatalog,
+  listManagedSkillsCatalog,
   listSkillCatalog,
   listSkillContext,
 } from "./skills-catalog.ts";

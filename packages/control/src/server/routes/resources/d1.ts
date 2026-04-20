@@ -1,26 +1,38 @@
-import { type Context, Hono } from 'hono';
-import { z } from 'zod';
-import type { Resource, ResourcePermission } from '../../../shared/types/index.ts';
-import { type AuthenticatedRouteEnv, parseJsonBody } from '../route-auth.ts';
-import { parsePagination } from '../../../shared/utils/index.ts';
-import { AuthorizationError, BadRequestError, InternalError, NotFoundError, isAppError } from 'takos-common/errors';
-import { zValidator } from '../zod-validator.ts';
-import { createOptionalCloudflareWfpProvider } from '../../../platform/providers/cloudflare/wfp.ts';
-import { getPortableSqlDatabase, isPortableResourceProvider } from './portable-runtime.ts';
-import { checkResourceAccess } from '../../../application/services/resources/index.ts';
-import { getDb } from '../../../infra/db/index.ts';
-import { resources } from '../../../infra/db/schema.ts';
-import { and, eq, inArray } from 'drizzle-orm';
-import { logError } from '../../../shared/utils/logger.ts';
-import { getResourceTypeQueryValues } from '../../../application/services/resources/capabilities.ts';
-import { textDate } from '../../../shared/utils/db-guards.ts';
-import { resolvePostgresUrl } from '../../../node-platform/resolvers/env-utils.ts';
+import { type Context, Hono } from "hono";
+import { z } from "zod";
+import type {
+  Resource,
+  ResourcePermission,
+} from "../../../shared/types/index.ts";
+import { type AuthenticatedRouteEnv, parseJsonBody } from "../route-auth.ts";
+import { parsePagination } from "../../../shared/utils/index.ts";
+import {
+  AuthorizationError,
+  BadRequestError,
+  InternalError,
+  isAppError,
+  NotFoundError,
+} from "takos-common/errors";
+import { zValidator } from "../zod-validator.ts";
+import { createOptionalCloudflareWfpBackend } from "../../../platform/backends/cloudflare/wfp.ts";
+import {
+  getPortableSqlDatabase,
+  isPortableResourceBackend,
+} from "./portable-runtime.ts";
+import { checkResourceAccess } from "../../../application/services/resources/index.ts";
+import { getDb } from "../../../infra/db/index.ts";
+import { resources } from "../../../infra/db/schema.ts";
+import { and, eq, inArray } from "drizzle-orm";
+import { logError } from "../../../shared/utils/logger.ts";
+import { getResourceTypeQueryValues } from "../../../application/services/resources/capabilities.ts";
+import { textDate } from "../../../shared/utils/db-guards.ts";
+import { resolvePostgresUrl } from "../../../node-platform/resolvers/env-utils.ts";
 
 export const d1RouteDeps = {
   getDb,
   getPortableSqlDatabase,
-  isPortableResourceProvider,
-  createOptionalCloudflareWfpProvider,
+  isPortableResourceBackend,
+  createOptionalCloudflareWfpBackend,
   checkResourceAccess,
 };
 
@@ -28,19 +40,19 @@ type D1ResourceData = {
   id: string;
   ownerAccountId: string;
   accountId: string | null;
-  providerName?: string | null;
+  backendName?: string | null;
   name: string;
   type: string;
   status: string;
-  providerResourceId?: string | null;
-  providerResourceName?: string | null;
+  backingResourceId?: string | null;
+  backingResourceName?: string | null;
   config: string;
   metadata: string;
   createdAt: string | Date;
   updatedAt: string | Date;
 };
 
-const READ_ONLY_PREFIXES = new Set(['SELECT', 'PRAGMA', 'EXPLAIN', 'WITH']);
+const READ_ONLY_PREFIXES = new Set(["SELECT", "PRAGMA", "EXPLAIN", "WITH"]);
 const MUTATING_SQL_KEYWORD_PATTERN =
   /\b(INSERT|UPDATE|DELETE|REPLACE|CREATE|ALTER|DROP|TRUNCATE|ATTACH|DETACH|VACUUM|REINDEX|ANALYZE|BEGIN|COMMIT|ROLLBACK|SAVEPOINT|RELEASE)\b/i;
 
@@ -48,16 +60,17 @@ function stripLeadingSqlComments(sql: string): string {
   let remaining = sql.trim();
 
   while (remaining.length > 0) {
-    if (remaining.startsWith('--')) {
-      const nextLineBreak = remaining.indexOf('\n');
-      remaining = (nextLineBreak >= 0 ? remaining.slice(nextLineBreak + 1) : '').trimStart();
+    if (remaining.startsWith("--")) {
+      const nextLineBreak = remaining.indexOf("\n");
+      remaining = (nextLineBreak >= 0 ? remaining.slice(nextLineBreak + 1) : "")
+        .trimStart();
       continue;
     }
 
-    if (remaining.startsWith('/*')) {
-      const commentEnd = remaining.indexOf('*/', 2);
+    if (remaining.startsWith("/*")) {
+      const commentEnd = remaining.indexOf("*/", 2);
       if (commentEnd < 0) {
-        return '';
+        return "";
       }
       remaining = remaining.slice(commentEnd + 2).trimStart();
       continue;
@@ -77,7 +90,7 @@ function maskQuotedSqlLiterals(sql: string): string {
 
 function isReadOnlySql(sql: string): boolean {
   const sqlNoComments = stripLeadingSqlComments(sql);
-  const firstWord = sqlNoComments.split(/\s+/)[0]?.toUpperCase() ?? '';
+  const firstWord = sqlNoComments.split(/\s+/)[0]?.toUpperCase() ?? "";
   if (!READ_ONLY_PREFIXES.has(firstWord)) {
     return false;
   }
@@ -91,12 +104,14 @@ function toSnakeCaseResource(resourceData: D1ResourceData): Resource {
     id: resourceData.id,
     owner_id: resourceData.ownerAccountId,
     space_id: resourceData.accountId,
-    ...(resourceData.providerName !== undefined ? { provider_name: resourceData.providerName } : {}),
+    ...(resourceData.backendName !== undefined
+      ? { backend_name: resourceData.backendName }
+      : {}),
     name: resourceData.name,
-    type: resourceData.type as Resource['type'],
-    status: resourceData.status as Resource['status'],
-    provider_resource_id: resourceData.providerResourceId ?? null,
-    provider_resource_name: resourceData.providerResourceName ?? null,
+    type: resourceData.type as Resource["type"],
+    status: resourceData.status as Resource["status"],
+    backing_resource_id: resourceData.backingResourceId ?? null,
+    backing_resource_name: resourceData.backingResourceName ?? null,
     config: resourceData.config,
     metadata: resourceData.metadata,
     created_at: textDate(resourceData.createdAt),
@@ -108,20 +123,28 @@ async function loadD1ResourceWithAccess(
   c: Context<AuthenticatedRouteEnv>,
   resourceId: string,
   userId: string,
-  requiredPermissions?: ResourcePermission[]
+  requiredPermissions?: ResourcePermission[],
 ): Promise<Resource> {
   const db = d1RouteDeps.getDb(c.env.DB);
   const resourceData = await db.select().from(resources).where(
-    and(eq(resources.id, resourceId), inArray(resources.type, getResourceTypeQueryValues('sql')))
+    and(
+      eq(resources.id, resourceId),
+      inArray(resources.type, getResourceTypeQueryValues("sql")),
+    ),
   ).get();
 
   if (!resourceData) {
-    throw new NotFoundError('D1 resource');
+    throw new NotFoundError("D1 resource");
   }
 
   const resource = toSnakeCaseResource(resourceData);
   const hasAccess = resource.owner_id === userId ||
-    await d1RouteDeps.checkResourceAccess(c.env.DB, resourceId, userId, requiredPermissions);
+    await d1RouteDeps.checkResourceAccess(
+      c.env.DB,
+      resourceId,
+      userId,
+      requiredPermissions,
+    );
 
   if (!hasAccess) {
     throw new AuthorizationError();
@@ -132,11 +155,10 @@ async function loadD1ResourceWithAccess(
 
 async function listPortableTables(resource: Resource) {
   const db = await d1RouteDeps.getPortableSqlDatabase(resource);
-  const usePortablePostgres =
-    !!resolvePostgresUrl()
-    && !!resource.provider_name
-    && resource.provider_name !== 'cloudflare'
-    && resource.provider_name !== 'local';
+  const usePortablePostgres = !!resolvePostgresUrl() &&
+    !!resource.backend_name &&
+    resource.backend_name !== "cloudflare" &&
+    resource.backend_name !== "local";
 
   if (usePortablePostgres) {
     const tablesResult = await db
@@ -163,7 +185,9 @@ async function listPortableTables(resource: Resource) {
                AND table_name = ?
              ORDER BY ordinal_position`,
           ).bind(name).all<Record<string, unknown>>(),
-          db.prepare(`SELECT COUNT(*) as count FROM "${name}"`).first<{ count?: number }>('count'),
+          db.prepare(`SELECT COUNT(*) as count FROM "${name}"`).first<
+            { count?: number }
+          >("count"),
         ]);
         return {
           name,
@@ -175,16 +199,22 @@ async function listPortableTables(resource: Resource) {
   }
 
   const tablesResult = await db
-    .prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%' ORDER BY name")
+    .prepare(
+      "SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%' ORDER BY name",
+    )
     .all<{ name: string }>();
   const tables = tablesResult.results ?? [];
 
   return Promise.all(
     tables.map(async ({ name }: { name: string }) => {
-      const safeName = name.replace(/[^a-zA-Z0-9_]/g, '');
+      const safeName = name.replace(/[^a-zA-Z0-9_]/g, "");
       const [columnsResult, countResult] = await Promise.all([
-        db.prepare(`PRAGMA table_info(${safeName})`).all<Record<string, unknown>>(),
-        db.prepare(`SELECT COUNT(*) as count FROM ${safeName}`).first<{ count?: number }>('count'),
+        db.prepare(`PRAGMA table_info(${safeName})`).all<
+          Record<string, unknown>
+        >(),
+        db.prepare(`SELECT COUNT(*) as count FROM ${safeName}`).first<
+          { count?: number }
+        >("count"),
       ]);
       return {
         name: safeName,
@@ -196,33 +226,35 @@ async function listPortableTables(resource: Resource) {
 }
 
 async function listTablesHandler(c: Context<AuthenticatedRouteEnv>) {
-  const user = c.get('user');
-  const resourceId = c.req.param('id');
+  const user = c.get("user");
+  const resourceId = c.req.param("id");
   if (!resourceId) {
-    throw new BadRequestError('Resource ID is required');
+    throw new BadRequestError("Resource ID is required");
   }
   const resource = await loadD1ResourceWithAccess(c, resourceId, user.id);
 
-  if (d1RouteDeps.isPortableResourceProvider(resource.provider_name)) {
+  if (d1RouteDeps.isPortableResourceBackend(resource.backend_name)) {
     try {
       const tables = await listPortableTables(resource);
       return c.json({ tables });
     } catch (err) {
       if (isAppError(err)) throw err;
-      logError('Failed to list portable SQL tables', err, { module: 'routes/resources/d1' });
-      throw new InternalError('Failed to list tables');
+      logError("Failed to list portable SQL tables", err, {
+        module: "routes/resources/d1",
+      });
+      throw new InternalError("Failed to list tables");
     }
   }
 
-  const databaseId = resource.provider_resource_id;
+  const databaseId = resource.backing_resource_id;
   if (!databaseId) {
-    throw new BadRequestError('D1 database not provisioned');
+    throw new BadRequestError("D1 database not provisioned");
   }
 
   try {
-    const wfp = d1RouteDeps.createOptionalCloudflareWfpProvider(c.env);
+    const wfp = d1RouteDeps.createOptionalCloudflareWfpBackend(c.env);
     if (!wfp) {
-      throw new InternalError('Cloudflare WFP not configured');
+      throw new InternalError("Cloudflare WFP not configured");
     }
     const tables = await wfp.d1.listD1Tables(databaseId);
 
@@ -241,42 +273,46 @@ async function listTablesHandler(c: Context<AuthenticatedRouteEnv>) {
         } catch {
           return { name: t.name, columns: [], row_count: 0 };
         }
-      })
+      }),
     );
 
     return c.json({ tables: tablesWithInfo });
   } catch (err) {
     if (isAppError(err)) throw err;
-    logError('Failed to list D1 tables', err, { module: 'routes/resources/d1' });
-    throw new InternalError('Failed to list tables');
+    logError("Failed to list D1 tables", err, {
+      module: "routes/resources/d1",
+    });
+    throw new InternalError("Failed to list tables");
   }
 }
 
 async function tableDetailsHandler(c: Context<AuthenticatedRouteEnv>) {
-  const user = c.get('user');
-  const resourceId = c.req.param('id');
-  const tableName = c.req.param('tableName');
+  const user = c.get("user");
+  const resourceId = c.req.param("id");
+  const tableName = c.req.param("tableName");
   if (!resourceId) {
-    throw new BadRequestError('Resource ID is required');
+    throw new BadRequestError("Resource ID is required");
   }
   if (!tableName) {
-    throw new BadRequestError('Table name is required');
+    throw new BadRequestError("Table name is required");
   }
   const resource = await loadD1ResourceWithAccess(c, resourceId, user.id);
-  const { limit, offset } = parsePagination(c.req.query(), { limit: 50, maxLimit: 1000 });
-  const safeName = tableName.replace(/[^a-zA-Z0-9_]/g, '');
+  const { limit, offset } = parsePagination(c.req.query(), {
+    limit: 50,
+    maxLimit: 1000,
+  });
+  const safeName = tableName.replace(/[^a-zA-Z0-9_]/g, "");
   if (safeName !== tableName) {
-    throw new BadRequestError('Invalid table name');
+    throw new BadRequestError("Invalid table name");
   }
 
-  if (d1RouteDeps.isPortableResourceProvider(resource.provider_name)) {
+  if (d1RouteDeps.isPortableResourceBackend(resource.backend_name)) {
     try {
       const db = await d1RouteDeps.getPortableSqlDatabase(resource);
-      const usePortablePostgres =
-        !!resolvePostgresUrl()
-        && !!resource.provider_name
-        && resource.provider_name !== 'cloudflare'
-        && resource.provider_name !== 'local';
+      const usePortablePostgres = !!resolvePostgresUrl() &&
+        !!resource.backend_name &&
+        resource.backend_name !== "cloudflare" &&
+        resource.backend_name !== "local";
 
       if (usePortablePostgres) {
         const [columnsResult, countValue, rowsResult] = await Promise.all([
@@ -290,8 +326,12 @@ async function tableDetailsHandler(c: Context<AuthenticatedRouteEnv>) {
                AND table_name = ?
              ORDER BY ordinal_position`,
           ).bind(safeName).all<Record<string, unknown>>(),
-          db.prepare(`SELECT COUNT(*) as count FROM "${safeName}"`).first<number>('count'),
-          db.prepare(`SELECT * FROM "${safeName}" LIMIT ${limit} OFFSET ${offset}`).all<Record<string, unknown>>(),
+          db.prepare(`SELECT COUNT(*) as count FROM "${safeName}"`).first<
+            number
+          >("count"),
+          db.prepare(
+            `SELECT * FROM "${safeName}" LIMIT ${limit} OFFSET ${offset}`,
+          ).all<Record<string, unknown>>(),
         ]);
 
         return c.json({
@@ -305,9 +345,14 @@ async function tableDetailsHandler(c: Context<AuthenticatedRouteEnv>) {
       }
 
       const [columnsResult, countValue, rowsResult] = await Promise.all([
-        db.prepare(`PRAGMA table_info(${safeName})`).all<Record<string, unknown>>(),
-        db.prepare(`SELECT COUNT(*) as count FROM ${safeName}`).first<number>('count'),
-        db.prepare(`SELECT * FROM ${safeName} LIMIT ${limit} OFFSET ${offset}`).all<Record<string, unknown>>(),
+        db.prepare(`PRAGMA table_info(${safeName})`).all<
+          Record<string, unknown>
+        >(),
+        db.prepare(`SELECT COUNT(*) as count FROM ${safeName}`).first<number>(
+          "count",
+        ),
+        db.prepare(`SELECT * FROM ${safeName} LIMIT ${limit} OFFSET ${offset}`)
+          .all<Record<string, unknown>>(),
       ]);
 
       return c.json({
@@ -320,30 +365,35 @@ async function tableDetailsHandler(c: Context<AuthenticatedRouteEnv>) {
       });
     } catch (err) {
       if (isAppError(err)) throw err;
-      logError('Failed to get portable table data', err, { module: 'routes/resources/d1' });
-      throw new InternalError('Failed to get table data');
+      logError("Failed to get portable table data", err, {
+        module: "routes/resources/d1",
+      });
+      throw new InternalError("Failed to get table data");
     }
   }
 
-  const databaseId = resource.provider_resource_id;
+  const databaseId = resource.backing_resource_id;
   if (!databaseId) {
-    throw new BadRequestError('D1 database not provisioned');
+    throw new BadRequestError("D1 database not provisioned");
   }
 
   try {
-    const wfp = d1RouteDeps.createOptionalCloudflareWfpProvider(c.env);
+    const wfp = d1RouteDeps.createOptionalCloudflareWfpBackend(c.env);
     if (!wfp) {
-      throw new InternalError('Cloudflare WFP not configured');
+      throw new InternalError("Cloudflare WFP not configured");
     }
 
     const [columns, count, rowsResult] = await Promise.all([
       wfp.d1.getD1TableInfo(databaseId, safeName),
       wfp.d1.getD1TableCount(databaseId, safeName),
-      wfp.d1.runD1SQL(databaseId, `SELECT * FROM ${safeName} LIMIT ${limit} OFFSET ${offset}`),
+      wfp.d1.runD1SQL(
+        databaseId,
+        `SELECT * FROM ${safeName} LIMIT ${limit} OFFSET ${offset}`,
+      ),
     ]);
 
     if (!Array.isArray(rowsResult) || !rowsResult[0]?.results) {
-      throw new InternalError('Invalid response from D1');
+      throw new InternalError("Invalid response from D1");
     }
 
     return c.json({
@@ -356,29 +406,38 @@ async function tableDetailsHandler(c: Context<AuthenticatedRouteEnv>) {
     });
   } catch (err) {
     if (isAppError(err)) throw err;
-    logError('Failed to get table data', err, { module: 'routes/resources/d1' });
-    throw new InternalError('Failed to get table data');
+    logError("Failed to get table data", err, {
+      module: "routes/resources/d1",
+    });
+    throw new InternalError("Failed to get table data");
   }
 }
 
 async function queryHandler(c: Context<AuthenticatedRouteEnv>) {
-  const user = c.get('user');
-  const resourceId = c.req.param('id');
+  const user = c.get("user");
+  const resourceId = c.req.param("id");
   if (!resourceId) {
-    throw new BadRequestError('Resource ID is required');
+    throw new BadRequestError("Resource ID is required");
   }
   const body = await parseJsonBody<{ sql?: string }>(c);
 
   if (!body?.sql?.trim()) {
-    throw new BadRequestError('SQL query is required');
+    throw new BadRequestError("SQL query is required");
   }
 
   const sqlTrimmed = body.sql.trim();
   const isReadOnly = isReadOnlySql(sqlTrimmed);
-  const requiredPermissions: ResourcePermission[] | undefined = isReadOnly ? undefined : ['write', 'admin'];
-  const resource = await loadD1ResourceWithAccess(c, resourceId, user.id, requiredPermissions);
+  const requiredPermissions: ResourcePermission[] | undefined = isReadOnly
+    ? undefined
+    : ["write", "admin"];
+  const resource = await loadD1ResourceWithAccess(
+    c,
+    resourceId,
+    user.id,
+    requiredPermissions,
+  );
 
-  if (d1RouteDeps.isPortableResourceProvider(resource.provider_name)) {
+  if (d1RouteDeps.isPortableResourceBackend(resource.backend_name)) {
     try {
       const db = await d1RouteDeps.getPortableSqlDatabase(resource);
       const statement = db.prepare(body.sql);
@@ -388,50 +447,58 @@ async function queryHandler(c: Context<AuthenticatedRouteEnv>) {
       return c.json({ result: [result] });
     } catch (err) {
       if (isAppError(err)) throw err;
-      logError('Failed to execute portable SQL', err, { module: 'routes/resources/d1' });
-      throw new InternalError('SQL execution failed');
+      logError("Failed to execute portable SQL", err, {
+        module: "routes/resources/d1",
+      });
+      throw new InternalError("SQL execution failed");
     }
   }
 
-  const databaseId = resource.provider_resource_id;
+  const databaseId = resource.backing_resource_id;
   if (!databaseId) {
-    throw new BadRequestError('D1 database not provisioned');
+    throw new BadRequestError("D1 database not provisioned");
   }
 
   try {
-    const wfp = d1RouteDeps.createOptionalCloudflareWfpProvider(c.env);
+    const wfp = d1RouteDeps.createOptionalCloudflareWfpBackend(c.env);
     if (!wfp) {
-      throw new InternalError('Cloudflare WFP not configured');
+      throw new InternalError("Cloudflare WFP not configured");
     }
     const result = await wfp.d1.runD1SQL(databaseId, body.sql);
     return c.json({ result });
   } catch (err) {
     if (isAppError(err)) throw err;
-    logError('Failed to execute SQL', err, { module: 'routes/resources/d1' });
-    throw new InternalError('SQL execution failed');
+    logError("Failed to execute SQL", err, { module: "routes/resources/d1" });
+    throw new InternalError("SQL execution failed");
   }
 }
 
 async function exportHandler(c: Context<AuthenticatedRouteEnv>) {
-  const user = c.get('user');
-  const resourceId = c.req.param('id');
+  const user = c.get("user");
+  const resourceId = c.req.param("id");
   if (!resourceId) {
-    throw new BadRequestError('Resource ID is required');
+    throw new BadRequestError("Resource ID is required");
   }
   const body = await parseJsonBody<{ tables?: string[] }>(c);
-  const resource = await loadD1ResourceWithAccess(c, resourceId, user.id, ['read']);
+  const resource = await loadD1ResourceWithAccess(c, resourceId, user.id, [
+    "read",
+  ]);
 
-  if (d1RouteDeps.isPortableResourceProvider(resource.provider_name)) {
+  if (d1RouteDeps.isPortableResourceBackend(resource.backend_name)) {
     try {
       const db = await d1RouteDeps.getPortableSqlDatabase(resource);
       const tableRows = body?.tables && body.tables.length > 0
         ? body.tables
-        : (await listPortableTables(resource)).map((table: { name: string }) => table.name);
+        : (await listPortableTables(resource)).map((table: { name: string }) =>
+          table.name
+        );
 
       const tables: Record<string, unknown[]> = {};
       for (const table of tableRows) {
-        const safeName = String(table).replace(/[^a-zA-Z0-9_]/g, '');
-        const result = await db.prepare(`SELECT * FROM ${safeName}`).all<Record<string, unknown>>();
+        const safeName = String(table).replace(/[^a-zA-Z0-9_]/g, "");
+        const result = await db.prepare(`SELECT * FROM ${safeName}`).all<
+          Record<string, unknown>
+        >();
         tables[safeName] = result.results ?? [];
       }
 
@@ -441,29 +508,36 @@ async function exportHandler(c: Context<AuthenticatedRouteEnv>) {
       });
     } catch (err) {
       if (isAppError(err)) throw err;
-      logError('Failed to export portable SQL resource', err, { module: 'routes/resources/d1' });
-      throw new InternalError('Export failed');
+      logError("Failed to export portable SQL resource", err, {
+        module: "routes/resources/d1",
+      });
+      throw new InternalError("Export failed");
     }
   }
 
-  const databaseId = resource.provider_resource_id;
+  const databaseId = resource.backing_resource_id;
   if (!databaseId) {
-    throw new BadRequestError('D1 database not provisioned');
+    throw new BadRequestError("D1 database not provisioned");
   }
 
   try {
-    const wfp = d1RouteDeps.createOptionalCloudflareWfpProvider(c.env);
+    const wfp = d1RouteDeps.createOptionalCloudflareWfpBackend(c.env);
     if (!wfp) {
-      throw new InternalError('Cloudflare WFP not configured');
+      throw new InternalError("Cloudflare WFP not configured");
     }
     const tableRows = body?.tables && body.tables.length > 0
       ? body.tables
-      : (await wfp.d1.listD1Tables(databaseId)).map((t: { name: string }) => t.name);
+      : (await wfp.d1.listD1Tables(databaseId)).map((t: { name: string }) =>
+        t.name
+      );
 
     const tables: Record<string, unknown[]> = {};
     for (const table of tableRows) {
-      const safeName = String(table).replace(/[^a-zA-Z0-9_]/g, '');
-      const result = await wfp.d1.runD1SQL(databaseId, `SELECT * FROM ${safeName}`);
+      const safeName = String(table).replace(/[^a-zA-Z0-9_]/g, "");
+      const result = await wfp.d1.runD1SQL(
+        databaseId,
+        `SELECT * FROM ${safeName}`,
+      );
       if (!Array.isArray(result) || !result[0]?.results) {
         continue;
       }
@@ -476,31 +550,37 @@ async function exportHandler(c: Context<AuthenticatedRouteEnv>) {
     });
   } catch (err) {
     if (isAppError(err)) throw err;
-    logError('Failed to export D1', err, { module: 'routes/resources/d1' });
-    throw new InternalError('Export failed');
+    logError("Failed to export D1", err, { module: "routes/resources/d1" });
+    throw new InternalError("Export failed");
   }
 }
 
 const resourcesD1 = new Hono<AuthenticatedRouteEnv>()
-.get('/:id/d1/tables', listTablesHandler)
-.get('/:id/sql/tables', listTablesHandler)
-
-.get('/:id/d1/tables/:tableName', tableDetailsHandler)
-.get('/:id/sql/tables/:tableName', tableDetailsHandler)
-
-.post('/:id/d1/query',
-  zValidator('json', z.object({
-    sql: z.string(),
-  })),
-  queryHandler)
-
-.post('/:id/sql/query',
-  zValidator('json', z.object({
-    sql: z.string(),
-  })),
-  queryHandler)
-
-.post('/:id/d1/export', exportHandler)
-.post('/:id/sql/export', exportHandler);
+  .get("/:id/d1/tables", listTablesHandler)
+  .get("/:id/sql/tables", listTablesHandler)
+  .get("/:id/d1/tables/:tableName", tableDetailsHandler)
+  .get("/:id/sql/tables/:tableName", tableDetailsHandler)
+  .post(
+    "/:id/d1/query",
+    zValidator(
+      "json",
+      z.object({
+        sql: z.string(),
+      }),
+    ),
+    queryHandler,
+  )
+  .post(
+    "/:id/sql/query",
+    zValidator(
+      "json",
+      z.object({
+        sql: z.string(),
+      }),
+    ),
+    queryHandler,
+  )
+  .post("/:id/d1/export", exportHandler)
+  .post("/:id/sql/export", exportHandler);
 
 export default resourcesD1;

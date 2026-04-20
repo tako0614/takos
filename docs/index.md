@@ -13,21 +13,21 @@ hero:
       text: Takos の全体像
       link: /overview/
     - theme: alt
-      text: アプリ構成を見る
+      text: Deploy 構成を見る
       link: /apps/
 
 features:
   - icon: 🧭
     title: Takos 全体像
-    details: "infra kernel と app の境界から Takos を理解する"
+    details: "infra kernel と group の境界から Takos を理解する"
     link: /overview/
   - icon: 🚀
     title: はじめる
-    details: "CLI ログインから最初の app 作成、`.takos/` ディレクトリ構成、最初の deploy まで順に追う"
+    details: "CLI ログインから最初の group 作成、`.takos/` ディレクトリ構成、最初の deploy まで順に追う"
     link: /get-started/
   - icon: 🧩
-    title: アプリ構成
-    details: "アプリマニフェスト、Workers、Containers、Routes、環境変数、MCP、OAuth の public surface をまとめて確認する"
+    title: Deploy 構成
+    details: "Deploy Manifest、Workers、Containers、Routes、環境変数、MCP、OAuth の public surface をまとめて確認する"
     link: /apps/
   - icon: 🌐
     title: デプロイと配布
@@ -35,10 +35,10 @@ features:
     link: /deploy/
   - icon: 🏪
     title: プラットフォーム
-    details: "kernel、課金、federation と app の関係を確認する"
+    details: "kernel、課金、federation と group の関係を確認する"
     link: /platform/
   - icon: 📚
     title: リファレンス
-    details: "CLI、API、アプリマニフェスト、用語集を参照する"
+    details: "CLI、API、deploy manifest、用語集を参照する"
     link: /reference/
 ---

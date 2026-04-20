@@ -143,7 +143,7 @@ Deno.test("spaces service queries - reads model settings from spaces", async () 
 
   drizzle._.results.push({
     ai_model: "gpt-5.4-nano",
-    ai_provider: "openai",
+    model_backend: "openai",
     security_posture: "standard",
   });
 
@@ -151,7 +151,7 @@ Deno.test("spaces service queries - reads model settings from spaces", async () 
 
   assertEquals(result, {
     ai_model: "gpt-5.4-nano",
-    ai_provider: "openai",
+    model_backend: "openai",
     security_posture: "standard",
   });
   assert(drizzle.selectCalls() > 0);

@@ -139,30 +139,30 @@ Deno.test("job-context helpers - builds job execution context with merged env an
 Deno.test("computeInitialJobStatus - returns success when needs are empty", () => {
   assertEquals(computeInitialJobStatus({}), "success");
 });
-Deno.test("computeInitialJobStatus - returns failure when any dependency failed", () => {
+Deno.test("computeInitialJobStatus - ignores dependency failure", () => {
   assertEquals(
     computeInitialJobStatus({
       setup: { outputs: {}, result: "success" },
       build: { outputs: {}, result: "failure" },
     }),
-    "failure",
+    "success",
   );
 });
-Deno.test("computeInitialJobStatus - returns cancelled when cancelled takes precedence over success", () => {
+Deno.test("computeInitialJobStatus - ignores dependency cancellation", () => {
   assertEquals(
     computeInitialJobStatus({
       setup: { outputs: {}, result: "success" },
       build: { outputs: {}, result: "cancelled" },
     }),
-    "cancelled",
+    "success",
   );
 });
-Deno.test("computeInitialJobStatus - failure beats cancelled", () => {
+Deno.test("computeInitialJobStatus - ignores mixed dependency outcomes", () => {
   assertEquals(
     computeInitialJobStatus({
       setup: { outputs: {}, result: "cancelled" },
       build: { outputs: {}, result: "failure" },
     }),
-    "failure",
+    "success",
   );
 });

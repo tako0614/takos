@@ -1,21 +1,22 @@
-import { getDb, runEvents } from '../../../infra/db/index.ts';
-import type { Env } from '../../../shared/types/index.ts';
-import type { PlatformServices } from '../../../platform/platform-config.ts';
+import { getDb, runEvents } from "../../../infra/db/index.ts";
+import type { Env } from "../../../shared/types/index.ts";
+import type { PlatformServices } from "../../../platform/platform-config.ts";
 
 import {
   buildRunNotifierEmitPayload,
   buildRunNotifierEmitRequest,
   getRunNotifierStub,
   type RunNotifierEmitPayload,
-} from '../run-notifier/index.ts';
-import { logWarn } from '../../../shared/utils/logger.ts';
+} from "../run-notifier/index.ts";
+import { logWarn } from "../../../shared/utils/logger.ts";
 
 // ---------------------------------------------------------------------------
 // SSE notifier accessor
 // ---------------------------------------------------------------------------
 
-function getSseNotifier(env: Env): PlatformServices['sseNotifier'] | undefined {
-  return (env as unknown as Record<string, unknown>).SSE_NOTIFIER as PlatformServices['sseNotifier'] | undefined;
+function getSseNotifier(env: Env): PlatformServices["sseNotifier"] | undefined {
+  return (env as Env & { SSE_NOTIFIER?: PlatformServices["sseNotifier"] })
+    .SSE_NOTIFIER;
 }
 
 // ---------------------------------------------------------------------------
@@ -26,7 +27,7 @@ export async function persistRunEvent(
   env: Env,
   runId: string,
   type: string,
-  data: unknown
+  data: unknown,
 ): Promise<number> {
   const db = getDb(env.DB);
   const event = await db.insert(runEvents).values({
@@ -46,7 +47,7 @@ export async function emitToNotifier(
   env: Env,
   runId: string,
   payload: RunNotifierEmitPayload,
-  useTimeout: boolean = false
+  useTimeout: boolean = false,
 ): Promise<Response> {
   const notifierStub = getRunNotifierStub(env, runId);
   const request = buildRunNotifierEmitRequest(payload);
@@ -54,7 +55,7 @@ export async function emitToNotifier(
   if (useTimeout) {
     return fetchWithTimeout(notifierStub, request);
   }
-  return notifierStub.fetch(request) as unknown as Response;
+  return notifierStub.fetch(request);
 }
 
 // ---------------------------------------------------------------------------
@@ -67,7 +68,7 @@ export async function persistAndEmitEvent(
   runId: string,
   type: string,
   data: unknown,
-  useTimeout: boolean = false
+  useTimeout: boolean = false,
 ): Promise<void> {
   const eventId = env.TAKOS_OFFLOAD
     ? null
@@ -81,7 +82,10 @@ export async function persistAndEmitEvent(
       useTimeout,
     );
   } catch (notifyErr) {
-    logWarn(`Failed to notify WebSocket about ${type}`, { module: 'services/execution/run-events', detail: notifyErr });
+    logWarn(`Failed to notify WebSocket about ${type}`, {
+      module: "services/execution/run-events",
+      detail: notifyErr,
+    });
   }
 
   // Also emit via SSE notifier for Node.js / k8s environments
@@ -94,7 +98,10 @@ export async function persistAndEmitEvent(
         event_id: eventId ?? undefined,
       });
     } catch (sseErr) {
-      logWarn(`Failed to emit SSE event for ${type}`, { module: 'services/execution/run-events', detail: sseErr });
+      logWarn(`Failed to emit SSE event for ${type}`, {
+        module: "services/execution/run-events",
+        detail: sseErr,
+      });
     }
   }
 }
@@ -106,9 +113,11 @@ export async function persistAndEmitEvent(
 const DO_FETCH_TIMEOUT_MS = 10_000;
 
 export async function fetchWithTimeout(
-  stub: { fetch(input: RequestInfo | URL, init?: RequestInit): Promise<Response> },
+  stub: {
+    fetch(input: RequestInfo | URL, init?: RequestInit): Promise<Response>;
+  },
   request: Request | URL | string,
-  timeoutMs: number = DO_FETCH_TIMEOUT_MS
+  timeoutMs: number = DO_FETCH_TIMEOUT_MS,
 ): Promise<Response> {
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
@@ -117,7 +126,7 @@ export async function fetchWithTimeout(
     const req = new Request(request, { signal: controller.signal });
     return await stub.fetch(req);
   } catch (error) {
-    if (error instanceof Error && error.name === 'AbortError') {
+    if (error instanceof Error && error.name === "AbortError") {
       throw new Error(`DO fetch timeout after ${timeoutMs}ms`);
     }
     throw error;

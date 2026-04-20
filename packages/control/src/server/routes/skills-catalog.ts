@@ -30,10 +30,10 @@ async function skillContextHandler(c: SkillsContext) {
   });
 }
 
-async function listOfficialSkillsHandler(c: SkillsContext) {
+async function listManagedSkillsHandler(c: SkillsContext) {
   const { space } = c.get("access");
   return c.json(
-    await skillsRouteDeps.listOfficialSkillsCatalog(
+    await skillsRouteDeps.listManagedSkillsCatalog(
       c.env.DB,
       space.id,
       getSkillLocaleInput(c),
@@ -41,16 +41,16 @@ async function listOfficialSkillsHandler(c: SkillsContext) {
   );
 }
 
-async function getOfficialSkillHandler(c: SkillsContext) {
+async function getManagedSkillHandler(c: SkillsContext) {
   const { space } = c.get("access");
-  const skill = await skillsRouteDeps.getOfficialSkillCatalogEntry(
+  const skill = await skillsRouteDeps.getManagedSkillCatalogEntry(
     c.env.DB,
     space.id,
     getSkillIdParam(c),
     getSkillLocaleInput(c),
   );
   if (!skill) {
-    throw new NotFoundError("Official skill");
+    throw new NotFoundError("Managed skill");
   }
   return c.json({ skill });
 }
@@ -58,32 +58,17 @@ async function getOfficialSkillHandler(c: SkillsContext) {
 export function registerSkillCatalogRoutes(skills: SkillsRouter) {
   skills
     .get(
-      "/spaces/:spaceId/official-skills",
+      "/spaces/:spaceId/managed-skills",
       spaceAccess({ roles: SKILL_DESCRIBE_ROLES }),
-      listOfficialSkillsHandler,
+      listManagedSkillsHandler,
     )
     .get(
-      "/workspaces/:workspaceId/official-skills",
+      "/spaces/:spaceId/managed-skills/:skillId",
       spaceAccess({ roles: SKILL_DESCRIBE_ROLES }),
-      listOfficialSkillsHandler,
-    )
-    .get(
-      "/spaces/:spaceId/official-skills/:skillId",
-      spaceAccess({ roles: SKILL_DESCRIBE_ROLES }),
-      getOfficialSkillHandler,
-    )
-    .get(
-      "/workspaces/:workspaceId/official-skills/:skillId",
-      spaceAccess({ roles: SKILL_DESCRIBE_ROLES }),
-      getOfficialSkillHandler,
+      getManagedSkillHandler,
     )
     .get(
       "/spaces/:spaceId/skills-context",
-      spaceAccess({ roles: SKILL_CONTEXT_ROLES }),
-      skillContextHandler,
-    )
-    .get(
-      "/workspaces/:workspaceId/skills-context",
       spaceAccess({ roles: SKILL_CONTEXT_ROLES }),
       skillContextHandler,
     );

@@ -11,18 +11,18 @@ minio:
 
 # AWS RDS PostgreSQL
 externalDatabase:
-  url: ""  # Set via --set or external secret: postgresql://user:pass@rds-endpoint:5432/takos
+  url: "" # Set via --set or external secret: postgresql://user:pass@rds-endpoint:5432/takos
 
 # AWS ElastiCache Redis
 externalRedis:
-  url: ""  # Set via --set or external secret: redis://elasticache-endpoint:6379
+  url: "" # Set via --set or external secret: redis://elasticache-endpoint:6379
 
 # AWS S3
 externalS3:
   endpoint: "https://s3.amazonaws.com"
   region: "ap-northeast-1"
   bucket: "takos-tenant-source"
-  accessKeyId: ""      # Use IAM roles for EKS instead
+  accessKeyId: "" # Use IAM roles for EKS instead
   secretAccessKey: ""
 
 # Production domains
@@ -30,17 +30,19 @@ domains:
   admin: "admin.takos.example.com"
   tenantBase: "app.takos.example.com"
 
-# Use existing secrets managed by External Secrets Operator or sealed-secrets
+# Empty values keep the chart default secret names derived from the Helm release:
+# <release>-platform, <release>-auth, <release>-llm, <release>-database,
+# <release>-redis, <release>-s3. Set a field only when an external secret uses
+# a different name.
 secrets:
   create: false
   existingSecrets:
-    platform: "takos-platform-secret"
-    auth: "takos-auth-secret"
-    encryption: "takos-platform-secret"
-    llm: "takos-llm-secret"
-    database: "takos-database-secret"
-    redis: "takos-redis-secret"
-    s3: "takos-s3-secret"
+    platform: ""
+    auth: ""
+    llm: ""
+    database: ""
+    redis: ""
+    s3: ""
 
 # AWS ALB Ingress
 ingress:
@@ -50,9 +52,9 @@ ingress:
     alb.ingress.kubernetes.io/scheme: internet-facing
     alb.ingress.kubernetes.io/target-type: ip
     alb.ingress.kubernetes.io/listen-ports: '[{"HTTPS":443}]'
-    alb.ingress.kubernetes.io/certificate-arn: ""  # Set to ACM certificate ARN
+    alb.ingress.kubernetes.io/certificate-arn: "" # Set to ACM certificate ARN
   tls:
-    enabled: false  # ALB handles TLS termination via ACM
+    enabled: false # ALB handles TLS termination via ACM
 
 # Production resource tuning
 controlWeb:
@@ -72,9 +74,10 @@ controlWorker:
   replicaCount: 2
 
 runtime:
+  replicaCount: 1
   autoscaling:
-    enabled: true
-    minReplicas: 2
+    enabled: false
+    minReplicas: 1
     maxReplicas: 20
 
 executor:
@@ -83,14 +86,8 @@ executor:
     minReplicas: 2
     maxReplicas: 20
 
-browser:
-  autoscaling:
-    enabled: true
-    minReplicas: 1
-    maxReplicas: 10
-
 # EKS service account for IAM roles (IRSA)
 serviceAccount:
   create: true
   annotations:
-    eks.amazonaws.com/role-arn: ""  # Set to IAM role ARN
+    eks.amazonaws.com/role-arn: "" # Set to IAM role ARN

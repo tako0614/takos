@@ -4,6 +4,7 @@ import type { Env } from "../../../shared/types/index.ts";
 
 const INTERNAL_ONLY_HEADERS = [
   "X-Takos-Internal",
+  "X-Takos-Internal-Marker",
   "X-WS-Auth-Validated",
   "X-WS-User-Id",
 ] as const;
@@ -26,15 +27,6 @@ function buildSanitizedDOHeaders(
 
 export const workflowRunStreamDeps = {
   getDb,
-};
-
-type DurableObjectFetchLike = {
-  fetch(input: string | URL, init?: RequestInit): Promise<Response>;
-};
-
-type RunNotifierNamespace = {
-  idFromName(name: string): unknown;
-  get(id: unknown): DurableObjectFetchLike;
 };
 
 export async function connectWorkflowRunStream(
@@ -74,7 +66,7 @@ export async function connectWorkflowRunStream(
     );
   }
 
-  const namespace = env.RUN_NOTIFIER as unknown as RunNotifierNamespace;
+  const namespace = env.RUN_NOTIFIER;
   const id = namespace.idFromName(params.runId);
   const notifierFetcher = namespace.get(id);
 

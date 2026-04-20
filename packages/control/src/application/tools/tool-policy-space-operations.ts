@@ -12,44 +12,44 @@ export const SPACE_OPERATION_POLICIES: Record<
   SpaceOperationId,
   SpaceOperationPolicy
 > = {
-  "workspace_storage.list": {
-    id: "workspace_storage.list",
+  "space_storage.list": {
+    id: "space_storage.list",
     user_surface: "GET /api/spaces/:spaceId/storage",
     allowed_roles: ALL_SPACE_ROLES,
     sensitive_read_policy: "none",
   },
-  "workspace_storage.read": {
-    id: "workspace_storage.read",
+  "space_storage.read": {
+    id: "space_storage.read",
     user_surface: "GET /api/spaces/:spaceId/storage/:fileId/content",
     allowed_roles: ALL_SPACE_ROLES,
     sensitive_read_policy: "none",
   },
-  "workspace_storage.write": {
-    id: "workspace_storage.write",
+  "space_storage.write": {
+    id: "space_storage.write",
     user_surface: "PUT /api/spaces/:spaceId/storage/:fileId/content",
     allowed_roles: EDITOR_PLUS_ROLES,
     sensitive_read_policy: "none",
   },
-  "workspace_storage.create": {
-    id: "workspace_storage.create",
+  "space_storage.create": {
+    id: "space_storage.create",
     user_surface: "POST /api/spaces/:spaceId/storage/files|folders",
     allowed_roles: EDITOR_PLUS_ROLES,
     sensitive_read_policy: "none",
   },
-  "workspace_storage.delete": {
-    id: "workspace_storage.delete",
+  "space_storage.delete": {
+    id: "space_storage.delete",
     user_surface: "DELETE /api/spaces/:spaceId/storage/:fileId",
     allowed_roles: EDITOR_PLUS_ROLES,
     sensitive_read_policy: "none",
   },
-  "workspace_storage.rename": {
-    id: "workspace_storage.rename",
+  "space_storage.rename": {
+    id: "space_storage.rename",
     user_surface: "PATCH /api/spaces/:spaceId/storage/:fileId/rename",
     allowed_roles: EDITOR_PLUS_ROLES,
     sensitive_read_policy: "none",
   },
-  "workspace_storage.move": {
-    id: "workspace_storage.move",
+  "space_storage.move": {
+    id: "space_storage.move",
     user_surface: "PATCH /api/spaces/:spaceId/storage/:fileId/move",
     allowed_roles: EDITOR_PLUS_ROLES,
     sensitive_read_policy: "none",
@@ -68,7 +68,7 @@ export const SPACE_OPERATION_POLICIES: Record<
   },
   "service.list": {
     id: "service.list",
-    user_surface: "GET /api/services/space/:spaceId",
+    user_surface: "GET /api/spaces/:spaceId/services",
     allowed_roles: ALL_SPACE_ROLES,
     sensitive_read_policy: "none",
   },
@@ -110,25 +110,25 @@ export const SPACE_OPERATION_POLICIES: Record<
   },
   "custom_domain.list": {
     id: "custom_domain.list",
-    user_surface: "GET /api/services/:id/domains",
+    user_surface: "GET /api/services/:id/custom-domains",
     allowed_roles: ALL_SPACE_ROLES,
     sensitive_read_policy: "none",
   },
   "custom_domain.add": {
     id: "custom_domain.add",
-    user_surface: "POST /api/services/:id/domains",
+    user_surface: "POST /api/services/:id/custom-domains",
     allowed_roles: EDITOR_PLUS_ROLES,
     sensitive_read_policy: "none",
   },
   "custom_domain.verify": {
     id: "custom_domain.verify",
-    user_surface: "POST /api/services/:id/domains/verify",
+    user_surface: "POST /api/services/:id/custom-domains/:domainId/verify",
     allowed_roles: EDITOR_PLUS_ROLES,
     sensitive_read_policy: "none",
   },
   "custom_domain.delete": {
     id: "custom_domain.delete",
-    user_surface: "DELETE /api/services/:id/domains/:domain",
+    user_surface: "DELETE /api/services/:id/custom-domains/:domainId",
     allowed_roles: EDITOR_PLUS_ROLES,
     sensitive_read_policy: "none",
   },
@@ -205,44 +205,46 @@ export const SPACE_OPERATION_POLICIES: Record<
   "skill.describe": {
     id: "skill.describe",
     user_surface:
-      "GET /api/spaces/:spaceId/official-skills/:skillId | GET /api/spaces/:spaceId/skills/id/:skillId | GET /api/spaces/:spaceId/skills/:skillName",
+      "GET /api/spaces/:spaceId/managed-skills/:skillId | GET /api/spaces/:spaceId/skills/id/:skillId | GET /api/spaces/:spaceId/skills/:skillName",
     allowed_roles: ALL_SPACE_ROLES,
     sensitive_read_policy: "none",
   },
-  "app_deployment.list": {
-    id: "app_deployment.list",
-    user_surface: "GET /api/spaces/:spaceId/app-deployments",
+  "group_deployment_snapshot.list": {
+    id: "group_deployment_snapshot.list",
+    user_surface: "GET /api/spaces/:spaceId/group-deployment-snapshots",
     allowed_roles: ALL_SPACE_ROLES,
     sensitive_read_policy: "none",
   },
-  "app_deployment.get": {
-    id: "app_deployment.get",
-    user_surface: "GET /api/spaces/:spaceId/app-deployments/:appDeploymentId",
-    allowed_roles: ALL_SPACE_ROLES,
-    sensitive_read_policy: "none",
-  },
-  "app_deployment.deploy_from_repo": {
-    id: "app_deployment.deploy_from_repo",
-    user_surface: "POST /api/spaces/:spaceId/app-deployments",
-    allowed_roles: ADMIN_ROLES,
-    sensitive_read_policy: "none",
-  },
-  "app_deployment.deploy_frontend": {
-    id: "app_deployment.deploy_frontend",
-    user_surface: "builtin deploy_frontend",
-    allowed_roles: ADMIN_ROLES,
-    sensitive_read_policy: "none",
-  },
-  "app_deployment.remove": {
-    id: "app_deployment.remove",
-    user_surface: "DELETE /api/spaces/:spaceId/app-deployments/:appDeploymentId",
-    allowed_roles: ADMIN_ROLES,
-    sensitive_read_policy: "none",
-  },
-  "app_deployment.rollback": {
-    id: "app_deployment.rollback",
+  "group_deployment_snapshot.get": {
+    id: "group_deployment_snapshot.get",
     user_surface:
-      "POST /api/spaces/:spaceId/app-deployments/:appDeploymentId/rollback",
+      "GET /api/spaces/:spaceId/group-deployment-snapshots/:groupDeploymentSnapshotId",
+    allowed_roles: ALL_SPACE_ROLES,
+    sensitive_read_policy: "none",
+  },
+  "group_deployment_snapshot.deploy_from_repo": {
+    id: "group_deployment_snapshot.deploy_from_repo",
+    user_surface: "POST /api/spaces/:spaceId/group-deployment-snapshots",
+    allowed_roles: ADMIN_ROLES,
+    sensitive_read_policy: "none",
+  },
+  "group_deployment_snapshot.deploy_frontend": {
+    id: "group_deployment_snapshot.deploy_frontend",
+    user_surface: "Takos-managed deploy_frontend",
+    allowed_roles: ADMIN_ROLES,
+    sensitive_read_policy: "none",
+  },
+  "group_deployment_snapshot.remove": {
+    id: "group_deployment_snapshot.remove",
+    user_surface:
+      "DELETE /api/spaces/:spaceId/group-deployment-snapshots/:groupDeploymentSnapshotId",
+    allowed_roles: ADMIN_ROLES,
+    sensitive_read_policy: "none",
+  },
+  "group_deployment_snapshot.rollback": {
+    id: "group_deployment_snapshot.rollback",
+    user_surface:
+      "POST /api/spaces/:spaceId/group-deployment-snapshots/:groupDeploymentSnapshotId/rollback",
     allowed_roles: ADMIN_ROLES,
     sensitive_read_policy: "none",
   },
@@ -254,7 +256,7 @@ export const SPACE_OPERATION_POLICIES: Record<
   },
   "mcp_server.create": {
     id: "mcp_server.create",
-    user_surface: "builtin mcp_add_server + OAuth callback",
+    user_surface: "Takos-managed mcp_add_server + OAuth callback",
     allowed_roles: EDITOR_PLUS_ROLES,
     sensitive_read_policy: "none",
   },

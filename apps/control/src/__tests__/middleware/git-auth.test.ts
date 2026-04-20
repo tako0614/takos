@@ -90,7 +90,7 @@ Deno.test("git auth PAT hardening - accepts personal access tokens", async () =>
     Object.assign(gitAuthDeps, originalGitAuthDeps);
   }
 });
-Deno.test("git auth PAT hardening - rejects managed built-in tokens", async () => {
+Deno.test("git auth PAT hardening - rejects managed Takos tokens", async () => {
   /* mocks cleared (no-op in Deno) */ void 0;
   const validateTakosPersonalAccessToken = spy(async () => null) as any;
   const getCachedUser = spy(async () => null) as any;

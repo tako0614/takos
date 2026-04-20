@@ -25,5 +25,10 @@ Deno.test("jsonErrorWithStatus returns a JSON response with the requested status
 
   assertEquals(response.status, 409);
   assertEquals(response.headers.get("content-type"), "application/json");
-  assertEquals(await response.json(), { error: "REF_CONFLICT" });
+  assertEquals(await response.json(), {
+    error: {
+      code: "CONFLICT",
+      message: "REF_CONFLICT",
+    },
+  });
 });

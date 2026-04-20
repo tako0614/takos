@@ -1,27 +1,35 @@
 # Deploy System
 
 ::: tip Internal implementation このページは deploy system の internal
-実装を説明する。 public contract ではない。実装は変更される可能性がある。 public
-contract は [manifest spec](/reference/manifest-spec) と
-[API reference](/reference/api) を参照。`storage` / legacy deploy JWT /
-space-wide env injection に関する記述は legacy implementation
-の説明であり、現行の public app contract では使わない。 :::
+実装を説明する。public contract は [manifest spec](/reference/manifest-spec) と
+[API reference](/reference/api) を参照。:::
 
-Takos のデプロイシステムは **二層モデル**:
+Takos の deploy system は **primitive-first** です。worker / service / route /
+publication / resource / consume edge は個別 record として保存され、group
+に所属しているかどうかで runtime や resource provider の扱いは変わりません。
 
-- **Layer 1: primitive (foundation)** — compute / resource / route / publish。
-  それぞれ独立した 1st-class エンティティで、個別の lifecycle を持つ。 public
-  manifest では `storage:` を使わない。
-- **Layer 2: group (上位 bundling layer)** — primitive を束ねて、bulk lifecycle
-  と desired state management を提供する optional な上位レイヤー。
+実装上の分かれ方:
 
-primitive は group に所属することも、standalone で存在することもできる。manifest
-deploy は「primitive 群を宣言 + group を作る」bulk wrapper にすぎない。
+- **Primitive records** — service、deployment、route、custom domain、resource、
+  publication、consume edge などの実体 record
+- **Group** — primitive を任意に束ねる state scope。inventory、source metadata、
+  current snapshot pointer、reconcile status など group 機能の state を持つ
+- **Manifest / source** — primitive desired declaration の入力。local file、
+  repository ref、catalog package から解決される
+- **Deployment snapshot** — group に所属する deployable primitive の applied
+  state を保存する immutable history
+
+Group は runtime backend でも resource provider でもありません。worker /
+container / resource はそれぞれ個別 record として存在し、group は `group_id` と
+snapshot metadata でそれらを同じ inventory / lifecycle scope に載せます。group
+なし primitive も、group 所属 primitive も、個別 API と runtime adapter 上は同じ
+primitive です。
 
 ## Manifest format
 
-`.takos/app.yml` は flat YAML。トップレベルに name, compute, routes, publish を
-並べる。
+`.takos/app.yml` は flat YAML。既定の deploy manifest path で、`.takos/app.yaml`
+も受け付ける。ファイル名には `app` が残るが、意味上は primitive desired
+declaration です。トップレベルに name, compute, routes, publish を並べる。
 
 ```yaml
 name: my-app
@@ -35,31 +43,38 @@ compute:
         artifact: web
         artifactPath: dist/worker
     consume:
-      - publication: db
+      - publication: takos-api
         env:
-          endpoint: DATABASE_URL
-          apiKey: DATABASE_API_KEY
+          endpoint: TAKOS_API_ENDPOINT
+          apiKey: TAKOS_API_KEY
 
 publish:
-  - name: db
-    provider: takos
-    kind: sql
+  - name: takos-api
+    publisher: takos
+    type: api-key
     spec:
-      resource: app-db
-      permission: write
-  - name: browser
+      scopes:
+        - files:read
+  - name: search
     type: McpServer
+    publisher: web
     path: /mcp
+    spec:
+      transport: streamable-http
 
 routes:
   - target: web
     path: /
+  - target: web
+    path: /mcp
 ```
 
 envelope (`apiVersion` / `kind` / `metadata` / `spec`) は無い。全 field
 がトップレベル。
 
-## Compute
+## Primitive model
+
+### Workload
 
 `compute` は deployable workload を宣言する。3 形態があり、field
 の組み合わせで自動判定される。
@@ -70,164 +85,23 @@ envelope (`apiVersion` / `kind` / `metadata` / `spec`) は無い。全 field
 | **Service**           | `image` あり（`build` なし） | 常設、always-on container    |
 | **Worker + Attached** | `build` + `containers` あり  | worker に container が紐づく |
 
-### Worker
+worker / service / attached container は `services` と `deployments`
+に保存される。group 所属の有無は record の runtime 形態を変えない。
 
-`build` がある = Worker。serverless で request-driven。
+### Resources
 
-```yaml
-compute:
-  web:
-    build:
-      fromWorkflow:
-        path: .takos/workflows/deploy.yml
-        job: bundle
-        artifact: web
-        artifactPath: dist/worker
-```
+SQL / object-store / queue などの stateful capability は `resources` record
+として管理する。manifest の `publish` は resource creation
+ではなく、route/interface metadata と Takos capability output を共有する catalog
+です。
 
-### Service（常設コンテナ）
+resource の abstract type (`sql`, `object-store`, `key-value`, `queue`,
+`vector-index`, `analytics-engine`, `secret`, `workflow`, `durable-object`) は
+resource API / runtime binding 側で扱う。backend / adapter の選択は
+operator-only configuration に閉じる。resource が group に所属していても、
+resource CRUD / access / binding の扱いは group なし resource と同じです。
 
-`image` がある（`build` なし） = Service。always-on の long-running container。
-
-```yaml
-compute:
-  inference:
-    image: ghcr.io/my-org/ml-model@sha256:1111111111111111111111111111111111111111111111111111111111111111
-    port: 3000
-```
-
-Service は常時起動し、HTTP request を受け付ける。Worker と違い request
-がなくても動作する。
-
-### Worker + Attached container
-
-`build` + `containers` がある = Worker に container が紐づく。 container は
-namespace binding 経由で worker から参照される。
-
-```yaml
-compute:
-  api:
-    build:
-      fromWorkflow:
-        path: .takos/workflows/deploy.yml
-        job: bundle
-        artifact: api
-        artifactPath: dist/worker
-    containers:
-      renderer:
-        image: ghcr.io/my-org/renderer@sha256:2222222222222222222222222222222222222222222222222222222222222222
-```
-
-### depends
-
-compute 間の起動順序を `depends` で宣言する。depends は各 compute に書く。
-
-```yaml
-compute:
-  api:
-    build: ...
-    depends: [db]
-  worker:
-    build: ...
-    depends: [db, cache]
-```
-
-deploy pipeline は depends の DAG に沿って topological order で apply する。
-
-### healthCheck
-
-`healthCheck` は **Service / Attached container のみ** で設定できる。 Worker は
-request-driven のため manifest で health check を宣言しない （Worker の
-readiness は kernel が deploy 時に simple HTTP probe で判定する）。
-
-```yaml
-compute:
-  inference:
-    image: ghcr.io/my-org/ml-model@sha256:1111111111111111111111111111111111111111111111111111111111111111
-    port: 3000
-    healthCheck:
-      path: /health
-      interval: 30 # 秒
-      timeout: 5 # 秒
-      unhealthyThreshold: 3
-```
-
-| field                | required | default | 説明                             |
-| -------------------- | -------- | ------- | -------------------------------- |
-| `path`               | no       | /health | HTTP GET を送る path             |
-| `interval`           | no       | 30      | チェック間隔（秒）               |
-| `timeout`            | no       | 5       | レスポンス待ちタイムアウト（秒） |
-| `unhealthyThreshold` | no       | 3       | 連続失敗でunhealthy とみなす回数 |
-
-### scaling
-
-compute の scaling を設定する。
-
-```yaml
-compute:
-  api:
-    image: ghcr.io/my-org/api@sha256:1111111111111111111111111111111111111111111111111111111111111111
-    port: 8080
-    scaling:
-      minInstances: 1
-      maxInstances: 10
-```
-
-| field          | required | default | 説明             |
-| -------------- | -------- | ------- | ---------------- |
-| `minInstances` | no       | 0       | 最小インスタンス |
-| `maxInstances` | no       | -       | 最大インスタンス |
-
-### triggers
-
-compute に対して cron schedule を設定する。
-
-```yaml
-compute:
-  batch:
-    build: ...
-    triggers:
-      schedules:
-        - cron: "0 * * * *" # 毎時実行
-```
-
-| field (schedules) | required | 説明    |
-| ----------------- | -------- | ------- |
-| `cron`            | yes      | cron 式 |
-
-`triggers.queues` は retired。queue 連携は queue publication を consume
-する通常の compute として扱う。
-
-## Provider-backed resources
-
-現行の public contract では stateful resource も provider publication
-として宣言する。
-
-| provider/kind            | outputs              |
-| ------------------------ | -------------------- |
-| `takos/sql`              | `endpoint`, `apiKey` |
-| `takos/object-store`     | `endpoint`, `apiKey` |
-| `takos/key-value`        | `endpoint`, `apiKey` |
-| `takos/queue`            | `endpoint`, `apiKey` |
-| `takos/vector-index`     | `endpoint`, `apiKey` |
-| `takos/analytics-engine` | `endpoint`, `apiKey` |
-
-```yaml
-publish:
-  - name: db
-    provider: takos
-    kind: sql
-    spec:
-      resource: app-db
-      permission: write
-```
-
-### migration
-
-SQL migration の運用は provider 実装に依存する。現行の public manifest contract
-には `storage.db.migrations` のような field はない。
-
-## Routes
+### Routes
 
 `routes` は hostname/path → compute のマッピング。
 
@@ -243,206 +117,190 @@ routes:
 
 hostname は routing layer で管理:
 
-- auto hostname: `{space-slug}-{name}.{TENANT_BASE_DOMAIN}`
+- auto hostname: `{space-slug}-{group-slug}.{TENANT_BASE_DOMAIN}`
 - custom slug: `{slug}.{TENANT_BASE_DOMAIN}`
 - custom domain: 任意（DNS 検証 + SSL）
 
-## Publish
+同じ `path` で HTTP method が重なる route は duplicate として invalid。route
+publication は `publisher + path` で route を参照するため、同じ
+`publisher + path` を複数 route に分けることも invalid。
 
-`publish` は公開メタデータまたは provider-backed output contract。env へは
+### Publications / consumes
+
+`publish` は primitive が他者へ共有する information sharing / access output
+を宣言する。route publication は公開 interface metadata、Takos capability grant
+は API key / OAuth client の access output metadata です。env へは
 `compute.<name>.consume` を宣言した consumer にだけ inject される。
+
+publication は space-level catalog entry です。group 所属 publication は group
+inventory から作られた projection ですが、catalog lookup と consume injection は
+group なし publication と同じ model で扱う。
 
 ```yaml
 publish:
-  - type: McpServer
+  - name: tools
+    type: McpServer
+    publisher: web
     path: /mcp
-  - type: UiSurface
+    spec:
+      transport: streamable-http
+  - name: docs
+    type: UiSurface
+    publisher: web
     path: /
     title: Docs
+    spec:
+      icon: book
 ```
 
-→ explicit consume の env: `PUBLICATION_{NAME}_URL=https://{hostname}/{path}`
-
-## Output mapping
-
-現行 contract では auto binding は無く、consumer が output ごとに env
-名を決める。
+consumer は output ごとに env 名を決める。
 
 ```yaml
 compute:
   web:
     consume:
-      - publication: db
+      - publication: takos-api
         env:
-          endpoint: DATABASE_URL
-          apiKey: DATABASE_API_KEY
+          endpoint: INTERNAL_TAKOS_API_URL
+          apiKey: INTERNAL_TAKOS_API_KEY
 ```
 
-alias を省略した場合は provider の default env 名が使われる。
+## CLI / API
 
-## CLI
-
-CLI surface も二層モデルに沿って primitive と group を両方持つ。
-
-### group bulk operations (manifest 経由)
+CLI は manifest / repository / catalog source から primitive declaration を
+apply する task-oriented surface を提供する。`takos deploy` / `takos install` は
+group snapshot 機能なので group 名を明示し、その group inventory と group
+snapshot に参加する。
 
 ```bash
-takos deploy --space SPACE_ID              # manifest の全 primitive を group として deploy
-takos deploy --plan --space SPACE_ID       # 差分プレビュー（non-mutating）
-takos install OWNER/REPO --space SPACE_ID  # catalog から group を space に install
-takos rollback GROUP_NAME --space SPACE_ID # group 単位の rollback
+takos deploy --space SPACE_ID --group my-app              # group inventory へ apply
+takos deploy --plan --space SPACE_ID --group my-app       # 差分プレビュー（non-mutating）
+takos install OWNER/REPO --space SPACE_ID --group my-app  # catalog から source を解決して apply
+takos rollback GROUP_NAME --space SPACE_ID # group snapshot を再適用
 takos uninstall GROUP_NAME --space SPACE_ID
 takos group list --space SPACE_ID          # group inventory
 takos group show NAME --space SPACE_ID
 ```
 
-### primitive 個別操作
+個別 primitive 操作:
 
-primitive は個別に作成・更新・削除できるが、current public CLI surface
-では提供しない。compute (worker / service) / route (custom domain) の個別 CRUD
-は `/api/services/*` HTTP API 経由で行い、resource / provider-backed resource は
-control-plane の internal API で扱う。
+- resource: `takos resource` / `takos res` または `/api/resources/*`
+- compute / route / custom domain: `/api/services/*`
+- publication / grant: `/api/publications/*`
 
-```bash
-# compute / route は HTTP API を直接呼び出す
-curl -X POST /api/services ...
-curl -X POST /api/services/:id/custom-domains ...
-```
-
-CLI の current surface は [CLI リファレンス](/reference/cli) を参照。
-
-既存 standalone primitive を後から group に所属させたい場合は
+既存 service / resource を後から group inventory に入れたい場合は
 `PATCH /api/services/:id/group` / `PATCH /api/resources/:id/group` を呼ぶ。
 
-## Primitive と group の関係
+## Group features
 
-primitive (compute / resource / route / publish) は **1st-class エンティティ**
-で、 それぞれ独立した lifecycle を持つ。group はその上にある **bundling layer**
-で、 複数の primitive を束ねて bulk lifecycle (snapshot, rollback, uninstall) と
-desired state management を提供する optional な仕組み。
+Group と primitive record の責務は次のように分ける。
 
-- primitive は group に所属することも、standalone で存在することもできる
-- group は kernel が追跡する bulk lifecycle unit。standalone primitive
-  はそれぞれ単独の lifecycle unit
-- manifest deploy は「primitive 群を宣言 + group を作る」bulk wrapper
-- 既存の primitive を後から group に所属させることも可能
-  (`PATCH /api/services/:id/group` / `PATCH /api/resources/:id/group`)
+- worker / service / attached container は `services` と `deployments`
+  に保存される
+- route は routing / custom-domain record に保存される
+- publication は `publications`、consume は `service_consumes` に保存される
+- resource は `resources` に保存される
+- group は `groups` row として inventory / source metadata / current snapshot
+  pointer / reconcile status を持つ
+- group snapshot / rollback / uninstall は group inventory に対する機能であり、
+  primitive runtime の特別処理ではない
 
-```
-group "my-app" (bundling layer):
-  compute: web    ┐
-  publish: db     │ group の lifecycle で一括管理
-  publish: files  │ (snapshot / rollback / uninstall)
-  route: app      ┘
+```text
+group "my-app":
+  groups row:
+    inventory / source metadata / current snapshot pointer / reconcile status
+  group features:
+    plan / apply / snapshot / rollback / uninstall
+  inventory:
+    service: web
+    route: /
+    publication: files
+    resource: shared-cache
 
-standalone primitive (group に属さない、それぞれ独立 lifecycle):
-  compute: cron-job
-  publish: shared-cache
-  route: legacy-redirect
+group なし primitive:
+  service: cron-job
+  resource: shared-db
+  route/custom-domain: redirect
 ```
 
 ## Deploy pipeline
 
-個別操作も manifest 操作も、同じ内部 pipeline を通る。
+`takos deploy` / `takos deploy --plan` が public deploy entrypoint。group apply
+の HTTP API path も同じ内部 pipeline を通る。
 
-```
-1. Desired state の生成
-   - 個別: CLI の引数から
-   - manifest: app.yml を parse して
-
-2. Diff（現在の state と比較）
-
-3. Apply（topological order）
-  - resource resolution → compute → routes → publish
-   - per-compute depends で順序を制御
-
-4. Binding injection
-   - publish → `compute.<name>.consume` を宣言した consumer の env に inject
-   - legacy storage-side auto-injection は retired
-
-5. Routing update
-   - RoutingRecord を upsert
-```
+1. Desired declaration の生成
+   - deploy manifest を parse して primitive desired declaration に compile
+   - group が指定されている場合は group membership を付与する
+2. Diff
+   - worker / service / attached container / route / publication / grant を現在
+     state と比較
+   - resource creation は resource API 側の責務として扱う
+3. Workload apply
+   - worker / service / attached container を topological order で apply
+   - per-compute `depends` で順序を制御
+4. Managed-state sync
+   - publication catalog を同期
+   - Takos capability grant を検証し、`compute.<name>.consume` を宣言した
+     consumer の env に inject
+5. Routing reconcile
+   - workload apply と managed-state sync が成功した場合だけ route を reconcile
+6. Snapshot update
+   - group がある場合は group-scoped declaration / observed state / snapshot
+     pointer を更新する
 
 ## Rollback
 
-deploy は snapshot を持つ。rollback は group snapshot を再適用する。
+rollback は group snapshot を再適用する group 機能です。
 
 - code + config + bindings が戻る
 - DB data は戻らない（forward-only migration）
-- 個別 worker / container の rollback はできない。 group 単位の snapshot で
-  再適用する
+- resource の data / schema は自動巻き戻ししない
+- group なし primitive の個別 rollback は、その primitive API の contract に従う
 
-## App Lifecycle
+## Install / version / source tracking
 
-Group の install / update / rollback は Git repo と連携して動作する。
+`takos install` は catalog (Store) で発見した repository を
+`takos deploy URL --ref ...` へ解決する薄い wrapper です。Store 自体は発見と
+source 解決だけを担当します。
 
-### Install
-
-```bash
-takos install owner/repo --space SPACE_ID                     # latest release から deploy
-takos install owner/repo --version v1.2.0 --space SPACE_ID    # 特定 version
-```
-
-1. Git repo の release/tag を解決
-2. release に含まれる manifest を fetch
-3. 通常の deploy pipeline で deploy
-4. group に source repo と installed version を記録
-
-### Update / Pin（design only / not in current CLI surface）
-
-::: warning `takos update` / `takos pin` / `takos unpin` / `takos config` は
-**current CLI surface には含まれません**（design only）。新しい release
-を反映したい場合は `takos deploy URL --ref <new-ref> --space SPACE_ID` または
-`takos install owner/repo --version <new-version> --space SPACE_ID` を再実行してください。 :::
-
-design 上の動作は次のとおり:
-
-1. group の source repo と installed version を読む
-2. Git repo の最新 release を確認
-3. 新しい release があれば manifest を fetch → deploy
-4. 前の deployment を snapshot として保持
-
-### Version
-
-Git tag が version の正本。manifest の `version` field は display 用。
+repo deploy / install の version は catalog が解決する Git ref / tag
+が基準です。manifest の `version` field は display 用。
 
 ```yaml
 name: my-app
 version: "1.2.0" # display 用。Git tag と一致させる慣習
 ```
 
-### Source tracking
-
-group は source 情報を持つ:
+group がある場合、source 情報を group metadata と snapshot に保存します。
 
 - `local`: takos deploy で手元から deploy
-- `repo:owner/repo@v1.2.0`: `takos install owner/repo --version v1.2.0 --space SPACE_ID` で repo
-  から deploy
-
-どちらの source の group も、新しい code を反映するには `takos deploy --space SPACE_ID`
-を再実行する。 （`takos update` / `takos pin` は current CLI surface
-には含まれない。design only。）
+- `repo:owner/repo@v1.2.0`:
+  `takos install owner/repo --version v1.2.0 --space SPACE_ID --group NAME` で
+  catalog が解決した repo/ref から deploy
 
 ## まとめ
 
+```text
+Takos deploy system (primitive-first):
+
+  Primitive records
+    - services + deployments (worker / service / attached)
+    - resources (sql / object-store / kv / queue / vector / secret / ...)
+    - routes / custom domains
+    - publications / consumes
+
+  Optional group scope
+    - groups row
+    - inventory / source metadata / current snapshot pointer / reconcile status
+    - features: plan / apply / snapshot / rollback / uninstall / updates
+
+  CLI / API surface
+    - deploy:    takos deploy / install
+    - group:     takos group / rollback / uninstall
+    - resource:  takos resource / takos res (+ /api/resources/*)
+    - compute:   /api/services/*
+    - grant:     /api/publications/*
 ```
-Takos deploy system (二層モデル):
 
-  Layer 2: group (上位 bundling layer)
-    ↑ primitive を束ねて bulk lifecycle / desired state を提供
-    ↑ optional — primitive は group なしでも存在できる
-
-  Layer 1: primitive (foundation / 1st-class)
-    - compute (worker / service / attached)
-    - resource (sql / object-store / kv / queue / vector / secret / ...)
-    - route
-    - publish
-
-  CLI surface:
-    - primitive 個別: control-plane API (+ /api/services/* HTTP API for compute/route)
-    - group bulk:    takos deploy / install / rollback / uninstall
-```
-
-すべての primitive は kernel data model 上で独立して存在する。manifest と group
-は primitive 群を束ねて扱うための上位レイヤーであり、必須ではない。
+group に所属している primitive は group 機能を使える。所属していない primitive
+も同じ primitive model で扱われる。

@@ -3,7 +3,6 @@ import path from "node:path";
 import os from "node:os";
 import { eq } from "drizzle-orm";
 import {
-  createLocalBrowserHostFetchForTests,
   createLocalDispatchFetchForTests,
   createLocalExecutorHostFetchForTests,
   createLocalRuntimeHostFetchForTests,
@@ -38,7 +37,7 @@ const queueMocks = {
 
 type LocalPlatformTestHooks = {
   __TAKOS_TEST_MINIFLARE__?: { Miniflare: typeof MockMiniflare };
-  __TAKOS_TEST_PROVIDER_QUEUE_ADAPTER__?: (
+  __TAKOS_TEST_BACKEND_QUEUE_ADAPTER__?: (
     binding: WorkerBinding & { queue_backend?: string },
   ) => {
     send(
@@ -55,7 +54,7 @@ type LocalPlatformTestHooks = {
 function prepareQueueMocks(): void {
   const hooks = globalThis as typeof globalThis & LocalPlatformTestHooks;
   hooks.__TAKOS_TEST_MINIFLARE__ = { Miniflare: MockMiniflare };
-  hooks.__TAKOS_TEST_PROVIDER_QUEUE_ADAPTER__ = (binding) => {
+  hooks.__TAKOS_TEST_BACKEND_QUEUE_ADAPTER__ = (binding) => {
     if (binding.queue_backend !== "sqs") {
       return null;
     }
@@ -131,7 +130,6 @@ async function withLocalBootstrapEnv(
   Deno.env.delete("TAKOS_LOCAL_DISPATCH_TARGETS_JSON");
   Deno.env.delete("TAKOS_LOCAL_RUNTIME_URL");
   Deno.env.delete("TAKOS_LOCAL_EXECUTOR_URL");
-  Deno.env.delete("TAKOS_LOCAL_BROWSER_URL");
   tempDataDir = await mkdtemp(path.join(os.tmpdir(), "takos-local-test-"));
   Deno.env.set("TAKOS_LOCAL_DATA_DIR", tempDataDir);
   Deno.env.delete("AWS_REGION");
@@ -296,11 +294,10 @@ const originalEnv = {
   TAKOS_LOCAL_DATA_DIR: Deno.env.get("TAKOS_LOCAL_DATA_DIR"),
   TAKOS_LOCAL_RUNTIME_URL: Deno.env.get("TAKOS_LOCAL_RUNTIME_URL"),
   TAKOS_LOCAL_EXECUTOR_URL: Deno.env.get("TAKOS_LOCAL_EXECUTOR_URL"),
-  TAKOS_LOCAL_BROWSER_URL: Deno.env.get("TAKOS_LOCAL_BROWSER_URL"),
 };
 let tempDataDir: string | null = null;
 localBootstrapTest(
-  "local bootstrap - serves takos-web health without Cloudflare bindings",
+  "local bootstrap - serves takos health without Cloudflare bindings",
   async () => {
     await withLocalBootstrapEnv(async ({ tempDataDir }) => {
       void tempDataDir;
@@ -1038,7 +1035,7 @@ localBootstrapTest(
   },
 );
 localBootstrapTest(
-  "local bootstrap - materializes provider-backed tenant queue producer bindings",
+  "local bootstrap - materializes backend-backed tenant queue producer bindings",
   async () => {
     await withLocalBootstrapEnv(async ({ tempDataDir }) => {
       void tempDataDir;
@@ -1712,98 +1709,6 @@ localBootstrapTest(
         assertSpyCalls(upstreamFetch, 1);
         assertEquals(response.status, 202);
         await assertEquals(await response.json(), { status: "accepted" });
-      } finally {
-        upstreamFetch.restore();
-      }
-    });
-  },
-);
-localBootstrapTest(
-  "local bootstrap - serves browser-host in local mode",
-  async () => {
-    await withLocalBootstrapEnv(async ({ tempDataDir }) => {
-      void tempDataDir;
-      const fetch = await createLocalBrowserHostFetchForTests();
-
-      const response = await fetch(
-        new Request("http://browser-host/create", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            sessionId: "session-1",
-            spaceId: "space-1",
-            userId: "user-1",
-          }),
-        }),
-      );
-
-      assertEquals(response.status, 201);
-      const body = await response.json() as { ok: boolean; proxyToken: string };
-      assertEquals(body.ok, true);
-      assertEquals(typeof body.proxyToken, "string");
-    });
-  },
-);
-localBootstrapTest(
-  "local bootstrap - serves browser-host health in local mode",
-  async () => {
-    await withLocalBootstrapEnv(async ({ tempDataDir }) => {
-      void tempDataDir;
-      const fetch = await createLocalBrowserHostFetchForTests();
-
-      const response = await fetch(new Request("http://browser-host/health"));
-
-      assertEquals(response.status, 200);
-      await assertEquals(await response.json(), {
-        status: "ok",
-        service: "takos-browser-host",
-      });
-    });
-  },
-);
-localBootstrapTest(
-  "local bootstrap - forwards browser bootstrap to a configured browser service",
-  async () => {
-    await withLocalBootstrapEnv(async ({ tempDataDir }) => {
-      void tempDataDir;
-      Deno.env.set("TAKOS_LOCAL_BROWSER_URL", "http://browser.internal/base/");
-
-      const upstreamFetch = stubGlobalFetch(async (request) => {
-        assertEquals(
-          request.url,
-          "http://browser.internal/base/internal/bootstrap",
-        );
-        const body = await request.json() as Record<string, unknown>;
-        assertEquals(body.url, "https://example.com");
-        return new Response(JSON.stringify({ ok: true }), {
-          status: 200,
-          headers: { "Content-Type": "application/json" },
-        });
-      });
-
-      try {
-        const fetch = await createLocalBrowserHostFetchForTests();
-        const response = await fetch(
-          new Request("http://browser-host/create", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              sessionId: "session-forward",
-              spaceId: "space-forward",
-              userId: "user-forward",
-              url: "https://example.com",
-            }),
-          }),
-        );
-
-        assertSpyCalls(upstreamFetch, 1);
-        assertEquals(response.status, 201);
-        const body = await response.json() as {
-          ok: boolean;
-          proxyToken: string;
-        };
-        assertEquals(body.ok, true);
-        assertEquals(typeof body.proxyToken, "string");
       } finally {
         upstreamFetch.restore();
       }

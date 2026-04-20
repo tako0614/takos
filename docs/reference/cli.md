@@ -2,43 +2,68 @@
 
 Takos CLI は、認証、manifest の preview / deploy、repository deploy、group
 inventory、task-oriented API surface を扱う current public entrypoint です。
-compute / route / publish の個別 CRUD は public CLI では出しません。 resource は
-`takos resource|res` で low-level CRUD を提供します。
+compute / route / publication の個別 CRUD は public CLI では出しません。
+resource は `takos resource|res` で個別 CRUD を提供します。
 
-## 二層モデル
+## deploy model
 
-Takos の deploy system は二層構造ですが、CLI は current public surface として
-group bulk operations を中心に提供します。primitive は control-plane の internal
-model です。
+Takos の CLI は manifest / repository / catalog source から primitive
+declaration を apply する surface を提供します。group は primitive
+を任意に束ねる state scope で、inventory、snapshot、rollback、uninstall などの
+group 機能を持ちます。resource API / runtime binding と publish catalog
+は分けます。`publish` は route/interface metadata と Takos capability output
+の共有に使い、SQL / object-store / queue などの resource API / runtime binding
+とは分けます。
 
-- **Layer 1: primitive (foundation)** — compute (worker / service / attached) /
-  route / publish。これらの個別操作は public CLI では提供しない
-- **Layer 1b: resource (low-level)** — `takos resource|res` で resource /
-  provider-backed resource の CRUD を扱う
-- **Layer 2: group (上位 bundling)** — primitive 群を束ねた bulk lifecycle
-  unit。 manifest 経由で `takos deploy` / `takos install` / `takos rollback`
-  を使う
+- **Primitive records** — workload / route / publication / resource / consume
+  edge などの個別 record
+- **Group features** — group inventory、snapshot、rollback、uninstall、updates
+- **Resource surface** — `takos resource|res` で resource CRUD を扱う
 
-primitive を group に束ねるかどうかは optional。standalone primitive と
-group-attached primitive はどちらも 1st-class エンティティです。
+group 所属は primitive が group 機能を使えることを意味します。group なしの
+service / route / publication も同じ primitive model で扱います。
+
+public task-oriented surface の domain は次の通りです。
+
+- `me`
+- `setup`
+- `space`
+- `thread`
+- `run`
+- `task`
+- `repo`
+- `app`
+- `git`
+- `capability` / `cap`
+- `context` / `ctx`
+- `shortcut`
+- `notification`
+- `public-share`
+- `auth`
+- `discover`
 
 ## deploy entrypoint
 
-`.takos/app.yml` を直接扱うのは `takos deploy` で、ローカル manifest からの
-deploy（primary）と repository URL からの
-deploy（alternative）の両方を扱います。 preview は
-`takos deploy --plan --space SPACE_ID` を使います。`takos apply` と `takos plan`
-は legacy compatibility command として残っています。`takos install` は catalog
-経由で `takos deploy` を呼ぶ sugar です。 public spec は Cloudflare-native
-で、実行モデルは Takos runtime です。
+`.takos/app.yml` / `.takos/app.yaml` を直接扱うのは `takos deploy` で、ローカル
+manifest からの deploy（primary）と repository URL からの
+deploy（alternative）の両方を扱います。preview は
+`takos deploy --plan --space SPACE_ID --group GROUP_NAME`
+を使います。`takos install` は catalog 経由で `takos deploy` を呼ぶ sugar
+です。public spec は backend-neutral で、 実行モデルは tenant runtime
+です。`takos deploy` / `takos install` は group snapshot 機能を使うため
+`--group` が必須です。
 
-`takos deploy` はローカル working tree 由来でも repo/ref source
-由来でも、いずれも 同じ pipeline を通り、immutable な app deployment
-record（snapshot）を作ります。 API の source kind はローカル manifest では
+`takos deploy` はローカル working tree 由来でも repo/ref source 由来でも同じ
+pipeline を通り、明示した group inventory へ primitive declaration を apply
+します。group snapshot も作ります。API の source kind はローカル manifest では
 `manifest`、repo/ref では `git_ref` です。CLI / UI の表示名として `local` /
-`repo:owner/repo@ref` を使いますが、これは manifest の出どころを 示す metadata
-であり、lifecycle の差ではありません。どちらの経路で deploy された group も
-`takos rollback GROUP_NAME --space SPACE_ID` で snapshot を再適用できます。
+`repo:owner/repo@ref` を使いますが、これは manifest の出どころを示す metadata
+であり、lifecycle の差ではありません。
+
+ローカル manifest 経路では、CLI が `build.fromWorkflow` の workflow を
+workflow-runner でローカル実行し、生成した build artifact を `source.artifacts`
+として送ります。repository URL 経路では CLI は repo を fetch せず、control plane
+に `repository_url + ref/ref_type` を渡します。
 
 ## Top-level
 
@@ -51,31 +76,20 @@ record（snapshot）を作ります。 API の source kind はローカル manif
 | `takos logout`       | 保存済み認証情報を削除            |
 | `takos endpoint ...` | 接続先管理                        |
 
-### Layer 2: group bulk operations
+### Deploy / group operations
 
-| command                  | 説明                                                         |
-| ------------------------ | ------------------------------------------------------------ |
-| `takos deploy`           | ローカル manifest または repository URL から group を deploy |
-| `takos deploy --plan`    | `.takos/app.yml` の non-mutating preview（dry-run）          |
-| `takos install`          | `takos deploy` の sugar。catalog で owner/repo を解決        |
-| `takos rollback <group>` | group の直前 snapshot を再適用                               |
-| `takos uninstall`        | group を terminal uninstall して managed resources を削除    |
-| `takos group ...`        | group inventory / desired state の参照と管理                 |
-
-### Legacy compatibility
-
-| command       | 説明                                 |
-| ------------- | ------------------------------------ |
-| `takos apply` | `takos deploy` の互換 surface        |
-| `takos plan`  | `takos deploy --plan` の互換 surface |
+| command                  | 説明                                                                                           |
+| ------------------------ | ---------------------------------------------------------------------------------------------- |
+| `takos deploy`           | ローカル manifest または repository URL から group inventory へ primitive declaration を apply |
+| `takos deploy --plan`    | `.takos/app.yml` / `.takos/app.yaml` の group-scoped non-mutating preview（dry-run）           |
+| `takos install`          | `takos deploy` の sugar。catalog で owner/repo を解決                                          |
+| `takos rollback <group>` | group snapshot を再適用                                                                        |
+| `takos uninstall`        | group を terminal uninstall して manifest-managed primitive を削除                             |
+| `takos group ...`        | group inventory / declaration / group 機能の参照と管理                                         |
 
 > compute (worker / service) の個別 CRUD は `/api/services/*` HTTP API 経由で
-> 行います。CLI には primitive 個別サブコマンドはありません。
-
-`takos api ...` は removed legacy surface です。current CLI には含めません。
-`takos deploy` / `takos deploy --plan` が current preferred flow です。
-`takos apply` と `takos plan` は legacy compatibility command
-として残っています。
+> 行います。public CLI にある個別 record 系は `takos resource|res` のみで、
+> compute / route / publication の個別 CRUD サブコマンドはありません。
 
 ## 認証
 
@@ -94,61 +108,80 @@ manifest からの deploy（primary）と repository URL からの
 deploy（alternative）の両方を 一つのコマンドで扱います。
 
 ```bash
-takos deploy --space SPACE_ID                         # from local .takos/app.yml
-takos deploy --env staging --space SPACE_ID           # with environment
-takos deploy https://github.com/... --space SPACE_ID  # from repo URL
-takos deploy --plan --space SPACE_ID                  # dry-run preview
+takos deploy --space SPACE_ID --group my-app                         # from local .takos/app.yml
+takos deploy --env staging --space SPACE_ID --group my-app           # with environment
+takos deploy https://github.com/... --space SPACE_ID --group my-app  # from repo URL
+takos deploy --plan --space SPACE_ID --group my-app                  # dry-run preview
 ```
 
-positional argument を省略するとローカルの `.takos/app.yml` を source にします。
-URL を渡すとその repository を source にします。 `TAKOS_WORKSPACE_ID` または
-`.takos-session` で既定 workspace が決まっている場合は `--space`
-を省略できます。
+positional argument を省略するとローカルの `.takos/app.yml` または
+`.takos/app.yaml` を source にします。URL を渡すとその repository を source
+にします。`TAKOS_SPACE_ID` または `.takos-session` で既定 space
+が決まっている場合は `--space` を省略できます。
 
-| option                     | 説明                                                                     |
-| -------------------------- | ------------------------------------------------------------------------ |
-| positional `repositoryUrl` | (optional) canonical HTTPS git repository URL。省略時はローカル manifest |
-| `--plan`                   | dry-run preview（実際には apply しない）                                 |
-| `--manifest <path>`        | manifest path。既定は `.takos/app.yml`（ローカル deploy 時）             |
-| `--auto-approve`           | 確認プロンプトを省略                                                     |
-| `--target <key...>`        | 一部だけ反映。diff entry 名を指定する。例: `web`, `web:/`                |
-| `--ref <ref>`              | branch / tag / commit（repo URL 指定時）                                 |
-| `--ref-type <type>`        | `branch` / `tag` / `commit`（repo URL 指定時）                           |
-| `--group <name>`           | 対象 group 名。省略時は `name`                                           |
-| `--env <name>`             | target env                                                               |
-| `--provider <provider>`    | `cloudflare`, `local`, `aws`, `gcp`, `k8s`                               |
-| `--space <id>`             | 対象 space ID                                                            |
-| `--json`                   | JSON 出力                                                                |
+| option                     | 説明                                                                             |
+| -------------------------- | -------------------------------------------------------------------------------- |
+| positional `repositoryUrl` | (optional) canonical HTTPS git repository URL。省略時はローカル manifest         |
+| `--plan`                   | dry-run preview（実際には変更を反映せず、deploy もしない）                       |
+| `--manifest <path>`        | manifest path。既定は `.takos/app.yml` / `.takos/app.yaml`（ローカル deploy 時） |
+| `--auto-approve`           | 確認プロンプトを省略                                                             |
+| `--target <key...>`        | `--plan` 時のみ使う diff entry filter。例: `web`, `web:/`                        |
+| `--ref <ref>`              | branch / tag / commit（repo URL 指定時）                                         |
+| `--ref-type <type>`        | `branch` / `tag` / `commit`（repo URL 指定時、CLI で choice validation）         |
+| `--group <name>`           | primitive を所属させる group 名。deploy / install では必須                       |
+| `--env <name>`             | target env                                                                       |
+| `--space <id>`             | 対象 space ID                                                                    |
+| `--json`                   | JSON 出力                                                                        |
 
-`takos deploy --plan --space SPACE_ID` は non-mutating preview です。group
-が未作成でも DB row は作りません。`takos deploy --space SPACE_ID` /
-`takos deploy --plan --space SPACE_ID` はどちらも provider translation report
-を表示します。表示は `Spec: Cloudflare-native` と `Runtime: Takos runtime`
-を前提にしつつ、どの backend でその spec を実現するかを 示します。未接続の
-provider / resource / workload / route が含まれる場合は fail-fast
-で終了します。`takos apply` と `takos plan` は legacy compatibility command
-として残っています。
+`repositoryUrl` と `--manifest` を同時に渡した場合はエラーになります。
 
-ローカル deploy と repo deploy はどちらも同じ pipeline を通り、同じ immutable
-snapshot を作ります。違いは「manifest がどこから来るか」という provenance だけ
-で、`takos rollback GROUP_NAME --space SPACE_ID` でいずれの group
-も巻き戻せます。
+`takos deploy --plan --space SPACE_ID --group NAME` は non-mutating preview
+です。group が未作成でも DB row
+は作りません。`takos deploy --space SPACE_ID --group NAME` /
+`takos deploy --plan --space SPACE_ID --group NAME` はどちらも runtime
+translation report を表示します。表示は
+`Spec: Takos deploy manifest`、`Runtime: tenant runtime`、 `Surface: Portable`
+を前提にしつつ、compiled workload / route を tenant runtime へ渡すための backend
+requirement preflight を示します。backend / adapter 名は operator-only
+configuration であり、通常の report には出しません。runtime translation report
+が扱うのは `desiredState.workloads` / `desiredState.routes` と runtime
+が満たすべき operator/backend 要件です。未接続の workload / route は fail-fast
+で終了しますが、この report は full runtime compatibility や resource API /
+runtime binding の存在確認を判定しません。
 
-| 観点            | local manifest deploy                                           | repo URL deploy                                                 |
-| --------------- | --------------------------------------------------------------- | --------------------------------------------------------------- |
-| source          | local working tree                                              | `repository_url + ref/ref_type`                                 |
-| source 解決     | CLI が manifest / artifact を読む                               | control plane が repo source を解決                             |
-| snapshot 作成   | immutable snapshot を作る                                       | immutable snapshot を作る                                       |
-| rollback        | `takos rollback GROUP_NAME --space SPACE_ID` で snapshot 再適用 | `takos rollback GROUP_NAME --space SPACE_ID` で snapshot 再適用 |
-| API source kind | `manifest`                                                      | `git_ref`                                                       |
-| 表示名          | `local`                                                         | `repo:owner/repo@ref`                                           |
+`--target` は `takos deploy --plan` と `takos install --plan` でだけ使えます。
+target は diff entry 名で、`web`, `web:/` のほか `workers.web`, `routes.web:/`
+のような dotted category key も受け付けます。ローカル manifest 経路では、
+`compute.<name>.build.fromWorkflow.artifactPath` を local artifact collection の
+入力として CLI が API call 前に確認します。`artifactPath` は public manifest
+schema では optional の local/private build metadata ですが、local deploy で
+worker bundle を収集する場合は必要です。worker bundle が見つからない場合 や
+directory 内に複数の JavaScript bundle 候補がある場合は `takos deploy
+--plan`
+でも `takos deploy` でも失敗します。
+
+ローカル deploy と repo deploy はどちらも同じ pipeline を通ります。違いは
+「manifest がどこから来るか」という provenance だけです。group snapshot
+がある場合は `takos rollback GROUP_NAME --space SPACE_ID` で再適用できます。
+
+| 観点            | local manifest flow                                     | repo URL deploy                                         |
+| --------------- | ------------------------------------------------------- | ------------------------------------------------------- |
+| source          | local working tree                                      | `repository_url + ref/ref_type`                         |
+| source 解決     | CLI が manifest / artifact を読む                       | control plane が repo source を解決                     |
+| primitive apply | worker / service / route / publication / grant を apply | worker / service / route / publication / grant を apply |
+| group snapshot  | group 指定時に作る                                      | group 指定時に作る                                      |
+| rollback        | group snapshot がある場合に再適用                       | group snapshot がある場合に再適用                       |
+| API source kind | `manifest`                                              | `git_ref`                                               |
+| 表示名          | `local`                                                 | `repo:owner/repo@ref`                                   |
 
 サブコマンド:
 
-| command                    | 説明            |
-| -------------------------- | --------------- |
-| `takos deploy status`      | deployment 一覧 |
-| `takos deploy status <id>` | deployment 詳細 |
+| command                    | 説明                |
+| -------------------------- | ------------------- |
+| `takos deploy status`      | group snapshot 一覧 |
+| `takos deploy status <id>` | group snapshot 詳細 |
+
+`takos deploy status` は `--space <id>` と `--json` を受け付けます。
 
 ## `takos rollback`
 
@@ -157,7 +190,7 @@ takos rollback my-app --space SPACE_ID    # 直前の snapshot に戻す
 ```
 
 `takos rollback GROUP_NAME --space SPACE_ID` は group に対する rollback
-操作です。前回成功した deployment の immutable snapshot を再適用します。
+操作です。前回成功した group snapshot を再適用します。
 
 - 引数は group 名（省略不可）
 - group row が既に削除されている場合は失敗し、deleted group を再生成しない
@@ -168,17 +201,32 @@ takos rollback my-app --space SPACE_ID    # 直前の snapshot に戻す
 | ---------------------- | -------------------------- |
 | positional `groupName` | (required) 対象の group 名 |
 | `--space <id>`         | 対象 space ID              |
+| `--json`               | JSON 出力                  |
 
 ## `takos install`
 
+`takos install` は package catalog を通す deploy sugar です。通常 path は
+`takos deploy` / `takos deploy --plan` で、`takos install` は catalog で package
+ref を解決したうえで同じ deploy pipeline に入れます。
+
 ```bash
-takos install owner/repo --space SPACE_ID --version v1.0.0    # explicit flag
+takos install owner/repo --space SPACE_ID --version v1.0.0 --group my-app
 ```
 
-`--version v1.0.0` で version を指定します。
+`takos install` は `--version`、`--group`、`--env`、`--space`、`--target`、
+`--plan`、`--json` を受け付けます。`--version` は package catalog の release
+version または tag を指定し、未指定時は latest package を使います。`--group` は
+deploy group 名を明示し、`--env` は target env を指定します。`--target` は
+`takos install --plan` でだけ使う diff entry filter です。`--plan` は
+non-mutating preview、`--json` は JSON 出力です。
 
-catalog metadata から `repository_url + release tag` を解決して app deployment
-を作成します。target space に Store app が install されている必要はありません。
+catalog metadata から `repository_url + Git tag`
+を解決し、`source.kind = "git_ref"` / `ref_type = "tag"` で同じ deploy pipeline
+に入れます。group を指定した場合は group snapshot を作成します。target space に
+Store app-label / package が install されている必要はありません。
+
+`takos install` が必要とする Store の latest / versions レスポンスでは、
+`repository_url`、`release.tag`、`version` が返る必要があります。
 
 ## `takos uninstall`
 
@@ -186,56 +234,91 @@ catalog metadata から `repository_url + release tag` を解決して app deplo
 takos uninstall GROUP_NAME --space SPACE_ID
 ```
 
-group の desired state を empty に apply し、managed resources を削除してから
-group row も削除します。`takos uninstall` は terminal 操作で、あとから rollback
-で deleted group を再生成することはできません。
+group-scoped declaration を empty に apply し、manifest-managed workload / route
+/ publication を削除してから group row も削除します。`takos uninstall` は
+terminal 操作で、あとから rollback で deleted group
+を再生成することはできません。
+
+| option                 | 説明                       |
+| ---------------------- | -------------------------- |
+| positional `groupName` | (required) 対象の group 名 |
+| `--space <id>`         | 対象 space ID              |
+| `--json`               | JSON 出力                  |
 
 ## `takos group`
 
-| command                                         | 説明                                 |
-| ----------------------------------------------- | ------------------------------------ |
-| `takos group list`                              | group 一覧                           |
-| `takos group show <name>`                       | group inventory 表示                 |
-| `takos group delete <name>`                     | 空の group を削除                    |
-| `takos group desired get <name>`                | group の desired app manifest を取得 |
-| `takos group desired put <name> --file app.yml` | group の desired app manifest を置換 |
+| command                     | 説明                 |
+| --------------------------- | -------------------- |
+| `takos group list`          | group 一覧           |
+| `takos group show <name>`   | group inventory 表示 |
+| `takos group delete <name>` | 空の group を削除    |
 
 API-backed group commands は `--space SPACE_ID` を受け付けます。
-`TAKOS_WORKSPACE_ID` または `.takos-session` で default workspace
-が解決できる場合だけ 省略できます。
+`TAKOS_SPACE_ID` または `.takos-session` で default space が解決できる場合だけ
+省略できます。
+
+| command               | options                                |
+| --------------------- | -------------------------------------- |
+| `group list`          | `--space <id>`, `--json`, `--offline`  |
+| `group show <name>`   | `--space <id>`, `--json`, `--offline`  |
+| `group delete <name>` | `--space <id>`, `--force`, `--offline` |
+
+deploy manifest の preview / apply は `takos deploy --plan` / `takos deploy`
+を使います。group-scoped declaration の直接取得・置換は HTTP API の advanced
+surface で、通常の deploy path ではありません。
 
 ## `takos resource` / `takos res`
 
-| command                                  | 説明                                     |
-| ---------------------------------------- | ---------------------------------------- |
-| `takos resource list`                    | resource 一覧                            |
-| `takos resource show <name>`             | resource 詳細                            |
-| `takos resource create <name>`           | resource を作成                          |
-| `takos resource delete <name>`           | resource を削除                          |
-| `takos resource bind <name>`             | worker / service に resource を bind     |
-| `takos resource unbind <name>`           | worker / service から resource を unbind |
-| `takos resource attach <name>`           | group に resource を attach              |
-| `takos resource detach <name>`           | group から resource を detach            |
-| `takos resource sql tables <name>`       | SQL resource の tables を表示            |
-| `takos resource sql query <name> <sql>`  | SQL resource に query を実行             |
-| `takos resource object ls <name>`        | object resource の一覧                   |
-| `takos resource object get <name> <key>` | object を取得                            |
-| `takos resource object put <name> <key>` | object を保存                            |
-| `takos resource object rm <name> <key>`  | object を削除                            |
-| `takos resource kv ls <name>`            | KV resource の一覧                       |
-| `takos resource kv get <name> <key>`     | KV entry を取得                          |
-| `takos resource kv put <name> <key>`     | KV entry を保存                          |
-| `takos resource kv rm <name> <key>`      | KV entry を削除                          |
-| `takos resource get-secret <name>`       | secret を表示                            |
-| `takos resource rotate-secret <name>`    | secret をローテーション                  |
+| command                                     | 説明                                     |
+| ------------------------------------------- | ---------------------------------------- |
+| `takos resource list`                       | resource 一覧                            |
+| `takos resource show <name>`                | resource 詳細                            |
+| `takos resource create <name>`              | resource を作成                          |
+| `takos resource delete <name>`              | resource を削除                          |
+| `takos resource bind <name>`                | worker / service に resource を bind     |
+| `takos resource unbind <name>`              | worker / service から resource を unbind |
+| `takos resource attach <name>`              | group に resource を attach              |
+| `takos resource detach <name>`              | group から resource を detach            |
+| `takos resource sql tables <name>`          | SQL resource の tables を表示            |
+| `takos resource sql query <name> <sql>`     | SQL resource に query を実行             |
+| `takos resource object ls <name>`           | object resource の一覧                   |
+| `takos resource object get <name> <key>`    | object を取得                            |
+| `takos resource object put <name> <key>`    | object を保存                            |
+| `takos resource object rm <name> <key>`     | object を削除                            |
+| `takos resource key-value ls <name>`        | key-value resource の一覧                |
+| `takos resource key-value get <name> <key>` | key-value entry を取得                   |
+| `takos resource key-value put <name> <key>` | key-value entry を保存                   |
+| `takos resource key-value rm <name> <key>`  | key-value entry を削除                   |
+| `takos resource get-secret <name>`          | secret を表示                            |
+| `takos resource rotate-secret <name>`       | secret をローテーション                  |
 
-## Primitive 個別操作
+主要 options:
 
-primitive (compute / route / publish) は control-plane の internal model
-です。current public CLI surface では個別 CRUD を提供せず、compute / route は
-`/api/services/*` HTTP API で管理します。resource / provider-backed resource は
-`takos resource|res` の low-level surface か `/api/resources/*` と
-`/api/publications/*` で管理します。
+Cloudflare の account ID / API token は `resource create` / `resource delete` の
+CLI option では渡しません。control/server 側の環境変数または secret
+設定で管理し、CLI は Takos API 認証と `--space` で対象を指定します。
+
+| command family                      | options                                                                               |
+| ----------------------------------- | ------------------------------------------------------------------------------------- |
+| `resource list/show`                | `--space <id>`, `--json`                                                              |
+| `resource create`                   | `--type`, `--binding`, `--env`, `--group`, `--space`, `--json`                        |
+| `resource delete`                   | `--space <id>`                                                                        |
+| `resource attach/detach`            | `attach --group <name>`, `--space <id>`                                               |
+| `resource bind/unbind`              | `--binding <binding>` for bind, `--worker <name>`, `--service <name>`, `--space <id>` |
+| `resource sql`                      | `--space <id>`, `--json`                                                              |
+| `resource object ls/get`            | `ls --prefix <prefix>`, `--space <id>`, `--json`                                      |
+| `resource object put`               | `--value <value>`, `--file <path>`, `--content-type <type>`, `--space <id>`           |
+| `resource object rm`                | `--space <id>`                                                                        |
+| `resource key-value ls/get`         | `ls --prefix <prefix>`, `--space <id>`, `--json`                                      |
+| `resource key-value put/rm`         | `put --value <value>`, `put --file <path>`, `--space <id>`                            |
+| `resource get-secret/rotate-secret` | `--space <id>`, `--json`                                                              |
+
+## 個別 record 操作
+
+compute / route / publication と resource record は control-plane の primitive
+model です。public CLI surface では compute / route / publication の個別 CRUD
+を提供せず、compute / route は `/api/services/*` HTTP API で管理します。resource
+は `takos resource|res` か `/api/resources/*` で管理します。
 
 ```bash
 # compute / route は HTTP API を直接呼び出す
@@ -247,15 +330,15 @@ POST   /api/services/:id/custom-domains
 POST   /api/services/:id/custom-domains/:domainId/verify
 ```
 
-manifest 経由の `takos deploy` と組み合わせて、group bulk lifecycle と control
-plane の個別管理を分けて扱います。
+manifest 経由の `takos deploy` と組み合わせて、group 機能と control plane の個別
+primitive 管理を分けて扱います。
 
 ## Task-oriented CLI
 
 Takos CLI では、単純な HTTP verb 直叩きではなく `domain + task` を使います。
 
 ```bash
-takos workspace list
+takos space list
 takos repo create --body '{"name":"my-repo"}'
 takos run follow RUN_ID --transport ws
 takos discover list /explore/repos
@@ -265,7 +348,7 @@ takos discover list /explore/repos
 
 | domain               | base path / 役割                   |
 | -------------------- | ---------------------------------- |
-| `workspace` (`ws`)   | `/api/spaces`                      |
+| `space`              | `/api/spaces`                      |
 | `repo`               | `/api/repos`                       |
 | `run`                | `/api/runs`                        |
 | `app`                | `/api/apps`                        |
@@ -291,20 +374,32 @@ current HTTP API surface として残っており、直接 `/api/services/*` を
 | `probe`    | HEAD        | 存在確認             |
 | `describe` | OPTIONS     | 利用可能な操作の確認 |
 
-stream 対応 domain は追加で `watch` と `follow` を持ちます。
+stream 対応 domain は追加で `watch` と `follow` を持ちます。`watch` と
+`takos run follow` は WebSocket / SSE を選べます。`takos repo follow` は
+repository action run stream 用で、現在は WebSocket のみです。
 
-## Legacy compatibility / removed surface
+common task options:
 
-Takos CLI は current preferred surface と compatibility surface
-を分けて扱います。
-
-- `takos apply`（`takos deploy` の compatibility surface）
-- `takos plan`（`takos deploy --plan` の compatibility surface）
-- `takos api ...`
-- 直接的な HTTP verb style subcommand
-- `takos build`
-- `takos publish`
-- `takos promote`
+- `--query <key=value>`: repeatable query parameter
+- `--header <key=value>`: repeatable additional header
+- `--space <id>`: `X-Takos-Space-Id` の上書き
+- `--json`: machine-readable JSON output
+- body / form / output options:
+  - `--body <json>`
+  - `--body-file <path>`
+  - `--raw-body <text>`
+  - `--raw-body-file <path>`
+  - `--content-type <mime>`
+  - `--form <key=value>` (repeatable)
+  - `--form-file <key=path>` (repeatable)
+  - `--output <path>`
+- stream options (`watch` / `run follow`):
+  - `--transport <ws|sse>`
+  - `--last-event-id <id>` (SSE only)
+  - `--send <message>` (repeatable, WS connection 後に送信)
+- stream options (`repo follow`):
+  - `--transport <ws>` (WebSocket only)
+  - `--send <message>` (repeatable, WS connection 後に送信)
 
 ## 次に読むページ
 

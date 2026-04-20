@@ -56,7 +56,7 @@ Deno.test("emitWorkflowEvent - sends a notifier request with the serialized payl
   const request = notifier.fetchSpy.calls[0]?.args[0] as Request | undefined;
   assertEquals(request?.url, "https://internal.do/emit");
   assertEquals(request?.method, "POST");
-  assertEquals(request?.headers.get("X-Takos-Internal"), "1");
+  assertEquals(request?.headers.get("X-Takos-Internal-Marker"), "1");
   assertEquals(request?.headers.get("Content-Type"), "application/json");
   assertEquals(await request?.json(), {
     runId: "run-1",

@@ -1,6 +1,6 @@
-export type BillingPlanTier = 'free' | 'plus' | 'pro';
+export type BillingPlanTier = "free" | "plus" | "pro";
 
-export type BillingMode = 'free' | 'plus_subscription' | 'pro_prepaid';
+export type BillingMode = "free" | "plus_subscription" | "pro_prepaid";
 
 export interface BillingAvailableActions {
   subscribe_plus: boolean;
@@ -29,7 +29,7 @@ export interface BillingSummary {
   runtime_limit_7d_seconds: number;
   balance_cents: number;
   status: string;
-  // Backend exposes only presence flags, never the raw provider IDs.
+  // Backend exposes only presence flags, never the raw processor IDs.
   // (packages/control/src/server/routes/billing/account-routes.ts)
   has_payment_account: boolean;
   has_subscription: boolean;

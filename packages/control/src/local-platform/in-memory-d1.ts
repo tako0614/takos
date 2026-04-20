@@ -9,7 +9,7 @@
 import type {
   D1Database,
   D1PreparedStatement,
-} from '../shared/types/bindings.ts';
+} from "../shared/types/bindings.ts";
 
 /**
  * Structural mirror interfaces for the Cloudflare abstract classes.
@@ -38,14 +38,24 @@ interface D1PreparedStatementShape {
   first<T = Record<string, unknown>>(colName?: string): Promise<T | null>;
   run<T = Record<string, unknown>>(): Promise<D1ResultShape<T>>;
   all<T = Record<string, unknown>>(): Promise<D1ResultShape<T>>;
-  raw<T = unknown[]>(options?: { columnNames?: boolean }): Promise<T[] | [string[], ...T[]]>;
+  raw<T = unknown[]>(
+    options?: { columnNames?: boolean },
+  ): Promise<T[] | [string[], ...T[]]>;
 }
 
 interface D1DatabaseShape {
   prepare(query: string): D1PreparedStatementShape;
-  batch<T = Record<string, unknown>>(statements: D1PreparedStatementShape[]): Promise<D1ResultShape<T>[]>;
+  batch<T = Record<string, unknown>>(
+    statements: D1PreparedStatementShape[],
+  ): Promise<D1ResultShape<T>[]>;
   exec(query: string): Promise<{ count: number; duration: number }>;
-  withSession(): { prepare(query: string): D1PreparedStatementShape; batch<T = Record<string, unknown>>(statements: D1PreparedStatementShape[]): Promise<D1ResultShape<T>[]>; getBookmark(): null };
+  withSession(): {
+    prepare(query: string): D1PreparedStatementShape;
+    batch<T = Record<string, unknown>>(
+      statements: D1PreparedStatementShape[],
+    ): Promise<D1ResultShape<T>[]>;
+    getBookmark(): null;
+  };
   dump(): Promise<ArrayBuffer>;
 }
 
@@ -57,17 +67,34 @@ function createD1Meta(): D1MetaShape {
     last_row_id: 0,
     rows_read: 0,
     rows_written: 0,
-    served_by: 'local',
+    served_by: "local",
     size_after: 0,
   };
 }
 
 function createPreparedStatement(): D1PreparedStatement {
-  const statement: D1PreparedStatementShape = {
+  async function raw<T = unknown[]>(options: {
+    columnNames: true;
+  }): Promise<[string[], ...T[]]>;
+  async function raw<T = unknown[]>(options?: {
+    columnNames?: false;
+  }): Promise<T[]>;
+  async function raw<T = unknown[]>(
+    options?: { columnNames?: boolean },
+  ): Promise<T[] | [string[], ...T[]]> {
+    if (options?.columnNames) {
+      return [[]] as [string[], ...T[]];
+    }
+    return [];
+  }
+
+  const statement: D1PreparedStatement = {
     bind(..._values: unknown[]) {
       return statement;
     },
-    async first<T = Record<string, unknown>>(_colName?: string): Promise<T | null> {
+    async first<T = Record<string, unknown>>(
+      _colName?: string,
+    ): Promise<T | null> {
       return null;
     },
     async run<T = Record<string, unknown>>(): Promise<D1ResultShape<T>> {
@@ -84,17 +111,10 @@ function createPreparedStatement(): D1PreparedStatement {
         meta: createD1Meta(),
       } satisfies D1ResultShape<T>;
     },
-    async raw<T = unknown[]>(options?: { columnNames?: boolean }): Promise<T[] | [string[], ...T[]]> {
-      if (options?.columnNames) {
-        return [[]] as [string[], ...T[]];
-      }
-      return [];
-    },
+    raw,
   };
 
-  // The mock satisfies D1PreparedStatementShape structurally; the abstract class
-  // boundary requires a cast at the return site.
-  return statement as unknown as D1PreparedStatement;
+  return statement;
 }
 
 export function createInMemoryD1Database(): D1Database {
@@ -102,7 +122,9 @@ export function createInMemoryD1Database(): D1Database {
     prepare(_query: string) {
       return createPreparedStatement();
     },
-    async batch<T = Record<string, unknown>>(statements: D1PreparedStatement[]) {
+    async batch<T = Record<string, unknown>>(
+      statements: D1PreparedStatement[],
+    ) {
       return Promise.all(statements.map((statement) => statement.run<T>()));
     },
     getBookmark() {
@@ -110,11 +132,13 @@ export function createInMemoryD1Database(): D1Database {
     },
   };
 
-  const db = {
+  const db: D1Database = {
     prepare(_query: string) {
       return createPreparedStatement();
     },
-    async batch<T = Record<string, unknown>>(statements: D1PreparedStatement[]) {
+    async batch<T = Record<string, unknown>>(
+      statements: D1PreparedStatement[],
+    ) {
       return Promise.all(statements.map((statement) => statement.run<T>()));
     },
     async exec(_query: string) {
@@ -126,9 +150,7 @@ export function createInMemoryD1Database(): D1Database {
     async dump() {
       return new ArrayBuffer(0);
     },
-  } satisfies D1DatabaseShape;
+  };
 
-  // The mock satisfies D1DatabaseShape structurally; the abstract class
-  // boundary requires a single cast at the return site.
-  return db as unknown as D1Database;
+  return db;
 }

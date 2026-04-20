@@ -1,7 +1,7 @@
 import { assertEquals } from "jsr:@std/assert";
 import { getRequiredProxyCapability } from "../executor-auth.ts";
 
-Deno.test("executor auth keeps reserved binding proxy paths behind bindings capability", () => {
+Deno.test("executor auth rejects removed binding proxy paths", () => {
   for (
     const path of [
       "/proxy/db/query",
@@ -12,11 +12,11 @@ Deno.test("executor auth keeps reserved binding proxy paths behind bindings capa
       "/proxy/ai/run",
       "/proxy/egress/fetch",
       "/proxy/runtime/fetch",
-      "/proxy/browser/fetch",
+      "/proxy/unknown/fetch",
       "/proxy/queue/send",
     ]
   ) {
-    assertEquals(getRequiredProxyCapability(path), "bindings");
+    assertEquals(getRequiredProxyCapability(path), null);
   }
 });
 

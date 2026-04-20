@@ -143,7 +143,7 @@ function createFakeD1Database(
     async dump() {
       return new ArrayBuffer(0);
     },
-  } as Env["DB"] & { prepared: PreparedStatementRecord[] };
+  } as unknown as Env["DB"] & { prepared: PreparedStatementRecord[] };
 
   return { db, prepared };
 }

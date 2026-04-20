@@ -2,6 +2,8 @@
 /**
  * Delete a worker from WFP dispatch namespace
  */
+import process from "node:process";
+import { resolveCloudflareDispatchNamespace } from "./cloudflare-dispatch-namespace.ts";
 
 const CF_API_BASE = 'https://api.cloudflare.com/client/v4';
 
@@ -9,22 +11,22 @@ async function main() {
   const workerName = process.argv[2];
   if (!workerName) {
     console.error('Usage: npx tsx scripts/delete-wfp-worker.ts <worker-name>');
-    Deno.exit(1);
+    process.exit(1);
   }
 
   // Get required env vars
   // Canonical env vars: CLOUDFLARE_API_TOKEN, CLOUDFLARE_ACCOUNT_ID
   // CF_API_TOKEN and CF_ACCOUNT_ID are deprecated aliases kept for backward compatibility.
-  const token = Deno.env.get('CLOUDFLARE_API_TOKEN') || Deno.env.get('CF_API_TOKEN');
-  const accountId = Deno.env.get('CLOUDFLARE_ACCOUNT_ID') || Deno.env.get('CF_ACCOUNT_ID');
-  const namespace = Deno.env.get('CF_DISPATCH_NAMESPACE') || 'takos-tenants';
+  const token = process.env.CLOUDFLARE_API_TOKEN || process.env.CF_API_TOKEN;
+  const accountId = process.env.CLOUDFLARE_ACCOUNT_ID || process.env.CF_ACCOUNT_ID;
+  const namespace = resolveCloudflareDispatchNamespace();
   if (!token) {
     console.error('CLOUDFLARE_API_TOKEN not set');
-    Deno.exit(1);
+    process.exit(1);
   }
   if (!accountId) {
     console.error('CLOUDFLARE_ACCOUNT_ID not set');
-    Deno.exit(1);
+    process.exit(1);
   }
 
   console.log(`Deleting worker: ${workerName}`);
@@ -39,15 +41,18 @@ async function main() {
     }
   );
 
-  const data = await response.json();
+  const data = await response.json() as { success?: boolean };
   console.log(JSON.stringify(data, null, 2));
 
   if (data.success) {
     console.log('Worker deleted successfully');
   } else {
     console.error('Failed to delete worker');
-    Deno.exit(1);
+    process.exit(1);
   }
 }
 
-main().catch(console.error);
+main().catch((error) => {
+  console.error(error);
+  process.exit(1);
+});

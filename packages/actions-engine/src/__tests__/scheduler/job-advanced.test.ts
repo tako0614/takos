@@ -2,10 +2,7 @@ import { assert, assertEquals } from "jsr:@std/assert";
 
 import { createBaseContext } from "../../context.ts";
 import { JobScheduler } from "../../scheduler/job.ts";
-import {
-  type ShellExecutor,
-  StepRunner,
-} from "../../scheduler/step.ts";
+import { type ShellExecutor, StepRunner } from "../../scheduler/step.ts";
 import type {
   ExecutionContext,
   Step,
@@ -207,7 +204,7 @@ Deno.test("JobScheduler - masks secret values in stdout-derived outputs", async 
     jobs: {
       build: {
         "runs-on": "ubuntu-latest",
-        steps: [{ id: "leak", run: 'echo result=${{ secrets.TOKEN }}' }],
+        steps: [{ id: "leak", run: "echo result=${{ secrets.TOKEN }}" }],
       },
     },
   };
@@ -377,10 +374,10 @@ Deno.test("JobScheduler - workflow.defaults.run.working-directory applies when s
 });
 
 // ============================================================================
-// outcome vs conclusion (MEDIUM #3)
+// outcome / conclusion compatibility
 // ============================================================================
 
-Deno.test("StepResult - distinguishes raw outcome from continue-on-error conclusion", async () => {
+Deno.test("StepResult - mirrors outcome to conclusion", async () => {
   const executor: ShellExecutor = async () => ({
     exitCode: 1,
     stdout: "",
@@ -396,10 +393,10 @@ Deno.test("StepResult - distinguishes raw outcome from continue-on-error conclus
 
   const result = await runner.runStep(step, createBaseContext());
   assertEquals(result.outcome, "failure");
-  assertEquals(result.conclusion, "success");
+  assertEquals(result.conclusion, "failure");
 });
 
-Deno.test("buildStepsContext - reports outcome=failure even when continue-on-error rewrites conclusion", async () => {
+Deno.test("JobScheduler - treats continue-on-error as unsupported status rewrite", async () => {
   const executor: ShellExecutor = async () => ({
     exitCode: 1,
     stdout: "",
@@ -444,10 +441,7 @@ Deno.test("buildStepsContext - reports outcome=failure even when continue-on-err
 
   await scheduler.run(createBaseContext());
 
-  const observedContext = observed[0];
-  assert(observedContext);
-  assertEquals(observedContext.steps.flaky.outcome, "failure");
-  assertEquals(observedContext.steps.flaky.conclusion, "success");
+  assertEquals(observed.length, 0);
 });
 
 // ============================================================================

@@ -1,12 +1,15 @@
-import type { ExecutionContext } from '../../../shared/types/bindings.ts';
-import * as gitStore from '../../../application/services/git-smart/index.ts';
-import { scheduleActionsAutoTrigger, triggerPushWorkflows } from '../../../application/services/actions/index.ts';
-import type { AuthenticatedRouteEnv } from '../route-auth.ts';
-import { toGitBucket, type RepoBucketBinding, type GitBucket } from './routes.ts';
-
-type WorkflowTriggerBucket = NonNullable<
-  NonNullable<Parameters<typeof triggerPushWorkflows>[0]['bucket']>
->;
+import type { ExecutionContext } from "../../../shared/types/bindings.ts";
+import * as gitStore from "../../../application/services/git-smart/index.ts";
+import {
+  scheduleActionsAutoTrigger,
+  triggerPushWorkflows,
+} from "../../../application/services/actions/index.ts";
+import type { AuthenticatedRouteEnv } from "../route-auth.ts";
+import {
+  type GitBucket,
+  type RepoBucketBinding,
+  toGitBucket,
+} from "./routes.ts";
 
 export interface FileEntry {
   path: string;
@@ -27,13 +30,13 @@ interface PushTriggerParams {
 }
 
 interface BaseWriteOptions {
-  db: AuthenticatedRouteEnv['Bindings']['DB'];
+  db: AuthenticatedRouteEnv["Bindings"]["DB"];
   bucket: RepoBucketBinding;
   repoId: string;
   files: FileEntry[];
   user: { id: string; name: string; email: string };
   executionCtx: ExecutionContext;
-  workflowQueue: AuthenticatedRouteEnv['Bindings']['WORKFLOW_QUEUE'];
+  workflowQueue: AuthenticatedRouteEnv["Bindings"]["WORKFLOW_QUEUE"];
   encryptionKey: string | undefined;
 }
 
@@ -47,19 +50,19 @@ interface ImportFilesOptions extends BaseWriteOptions {
 }
 
 function toWorkflowTriggerBucket(
-  bucket: AuthenticatedRouteEnv['Bindings']['GIT_OBJECTS'],
-): WorkflowTriggerBucket | undefined {
-  return bucket as unknown as WorkflowTriggerBucket | undefined;
+  bucket: AuthenticatedRouteEnv["Bindings"]["GIT_OBJECTS"],
+) {
+  return bucket;
 }
 
 function buildCommitSignature(
   user: { name: string; email: string },
 ): gitStore.GitSignature {
   return {
-    name: user.name || 'User',
-    email: user.email || 'user@takos.dev',
+    name: user.name || "User",
+    email: user.email || "user@takos.dev",
     timestamp: Math.floor(Date.now() / 1000),
-    tzOffset: '+0000',
+    tzOffset: "+0000",
   };
 }
 
@@ -69,7 +72,10 @@ async function uploadFilesToBlobs(
 ): Promise<BlobEntry[]> {
   const entries: BlobEntry[] = [];
   for (const file of files) {
-    const content = Uint8Array.from(atob(file.content), (ch) => ch.charCodeAt(0));
+    const content = Uint8Array.from(
+      atob(file.content),
+      (ch) => ch.charCodeAt(0),
+    );
     const sha = await gitStore.putBlob(bucket, content);
     entries.push({ path: file.path, sha });
   }
@@ -77,29 +83,33 @@ async function uploadFilesToBlobs(
 }
 
 function schedulePushTrigger(
-  options: Pick<BaseWriteOptions, 'db' | 'bucket' | 'executionCtx' | 'workflowQueue' | 'encryptionKey'>,
+  options: Pick<
+    BaseWriteOptions,
+    "db" | "bucket" | "executionCtx" | "workflowQueue" | "encryptionKey"
+  >,
   params: PushTriggerParams,
   label: string,
 ): void {
   scheduleActionsAutoTrigger(
     options.executionCtx,
-    () => triggerPushWorkflows(
-      {
-        db: options.db,
-        bucket: toWorkflowTriggerBucket(options.bucket),
-        queue: options.workflowQueue,
-        encryptionKey: options.encryptionKey,
-      },
-      {
-        repoId: params.repoId,
-        branch: params.branchName,
-        before: params.before,
-        after: params.after,
-        actorId: params.user.id,
-        actorName: params.user.name,
-        actorEmail: params.user.email,
-      },
-    ),
+    () =>
+      triggerPushWorkflows(
+        {
+          db: options.db,
+          bucket: toWorkflowTriggerBucket(options.bucket),
+          queue: options.workflowQueue,
+          encryptionKey: options.encryptionKey,
+        },
+        {
+          repoId: params.repoId,
+          branch: params.branchName,
+          before: params.before,
+          after: params.after,
+          actorId: params.user.id,
+          actorName: params.user.name,
+          actorEmail: params.user.email,
+        },
+      ),
     label,
   );
 }
@@ -110,35 +120,49 @@ export async function importFilesToDefaultBranch(
   const bucket = toGitBucket(options.bucket);
   const branch = await gitStore.getDefaultBranch(options.db, options.repoId);
   if (!branch) {
-    throw new Error('Repository not initialized');
+    throw new Error("Repository not initialized");
   }
 
   const fileEntries = await uploadFilesToBlobs(bucket, options.files);
 
   let treeSha: string;
   if (options.appendMode) {
-    const currentCommit = await gitStore.getCommit(options.db, bucket, options.repoId, branch.commit_sha);
+    const currentCommit = await gitStore.getCommit(
+      options.db,
+      bucket,
+      options.repoId,
+      branch.commit_sha,
+    );
     if (!currentCommit) {
-      throw new Error('Current commit not found');
+      throw new Error("Current commit not found");
     }
     const changes = fileEntries.map((file) => ({
       path: file.path,
-      operation: 'add' as const,
+      operation: "add" as const,
       sha: file.sha,
     }));
-    treeSha = await gitStore.applyTreeChanges(bucket, currentCommit.tree, changes);
+    treeSha = await gitStore.applyTreeChanges(
+      bucket,
+      currentCommit.tree,
+      changes,
+    );
   } else {
     treeSha = await gitStore.buildTreeFromPaths(bucket, fileEntries);
   }
 
   const signature = buildCommitSignature(options.user);
-  const commit = await gitStore.createCommit(options.db, bucket, options.repoId, {
-    tree: treeSha,
-    parents: [branch.commit_sha],
-    message: options.message,
-    author: signature,
-    committer: signature,
-  });
+  const commit = await gitStore.createCommit(
+    options.db,
+    bucket,
+    options.repoId,
+    {
+      tree: treeSha,
+      parents: [branch.commit_sha],
+      message: options.message,
+      author: signature,
+      committer: signature,
+    },
+  );
 
   const updateResult = await gitStore.updateBranch(
     options.db,
@@ -148,7 +172,7 @@ export async function importFilesToDefaultBranch(
     commit.sha,
   );
   if (!updateResult.success) {
-    throw new Error(updateResult.error || 'Failed to update branch');
+    throw new Error(updateResult.error || "Failed to update branch");
   }
 
   schedulePushTrigger(
@@ -175,20 +199,25 @@ export async function commitFilesToDefaultBranch(
   const bucket = toGitBucket(options.bucket);
   const branch = await gitStore.getDefaultBranch(options.db, options.repoId);
   if (!branch) {
-    throw new Error('Repository not initialized');
+    throw new Error("Repository not initialized");
   }
 
   const fileEntries = await uploadFilesToBlobs(bucket, options.files);
   const treeSha = await gitStore.buildTreeFromPaths(bucket, fileEntries);
 
   const signature = buildCommitSignature(options.user);
-  const commit = await gitStore.createCommit(options.db, bucket, options.repoId, {
-    tree: treeSha,
-    parents: [branch.commit_sha],
-    message: options.message,
-    author: signature,
-    committer: signature,
-  });
+  const commit = await gitStore.createCommit(
+    options.db,
+    bucket,
+    options.repoId,
+    {
+      tree: treeSha,
+      parents: [branch.commit_sha],
+      message: options.message,
+      author: signature,
+      committer: signature,
+    },
+  );
 
   const updateResult = await gitStore.updateBranch(
     options.db,
@@ -198,7 +227,7 @@ export async function commitFilesToDefaultBranch(
     commit.sha,
   );
   if (!updateResult.success) {
-    throw new Error(updateResult.error || 'Failed to update branch');
+    throw new Error(updateResult.error || "Failed to update branch");
   }
 
   schedulePushTrigger(

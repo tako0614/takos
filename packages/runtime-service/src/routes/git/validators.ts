@@ -39,7 +39,7 @@ export async function fileExists(filePath: string): Promise<boolean> {
 export function validateRepoParams(
   c: Context<RuntimeEnv>,
 ): ValidatedRepoParams | { error: Response } {
-  const spaceId = c.req.param("spaceId") ?? c.req.param("workspaceId") ?? "";
+  const spaceId = c.req.param("spaceId") ?? "";
   const pathParts = c.req.path.split("/").filter(Boolean);
   const repoSegment = c.req.param("repoName") ?? pathParts[2] ?? "";
   const repoName = repoSegment.replace(/\.git$/i, "");

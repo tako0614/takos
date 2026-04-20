@@ -62,7 +62,7 @@ export function registerRunListRoutes(app: RunRouteApp) {
     async (c) => {
       const user = c.get("user");
       const threadId = c.req.param("threadId");
-      const runsQuery = c.req.valid("query" as never) as {
+      const runsQuery = c.req.valid("query") as {
         active_only?: string;
         limit?: string;
         cursor?: string;

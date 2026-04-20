@@ -1,8 +1,8 @@
 ALTER TABLE resources ADD COLUMN semantic_type text;
 ALTER TABLE resources ADD COLUMN driver text;
-ALTER TABLE resources ADD COLUMN provider_name text;
-ALTER TABLE resources ADD COLUMN provider_resource_id text;
-ALTER TABLE resources ADD COLUMN provider_resource_name text;
+ALTER TABLE resources ADD COLUMN backend_name text;
+ALTER TABLE resources ADD COLUMN backing_resource_id text;
+ALTER TABLE resources ADD COLUMN backing_resource_name text;
 
 UPDATE resources
 SET semantic_type = CASE
@@ -35,17 +35,17 @@ END
 WHERE driver IS NULL;
 
 UPDATE resources
-SET provider_name = COALESCE(provider_name, 'cloudflare')
-WHERE provider_name IS NULL;
+SET backend_name = COALESCE(backend_name, 'cloudflare')
+WHERE backend_name IS NULL;
 
 UPDATE resources
-SET provider_resource_id = COALESCE(provider_resource_id, cf_id)
-WHERE provider_resource_id IS NULL;
+SET backing_resource_id = COALESCE(backing_resource_id, cf_id)
+WHERE backing_resource_id IS NULL;
 
 UPDATE resources
-SET provider_resource_name = COALESCE(provider_resource_name, cf_name)
-WHERE provider_resource_name IS NULL;
+SET backing_resource_name = COALESCE(backing_resource_name, cf_name)
+WHERE backing_resource_name IS NULL;
 
 CREATE INDEX idx_resources_semantic_type ON resources(semantic_type);
-CREATE INDEX idx_resources_provider_name ON resources(provider_name);
-CREATE INDEX idx_resources_provider_resource_id ON resources(provider_resource_id);
+CREATE INDEX idx_resources_backend_name ON resources(backend_name);
+CREATE INDEX idx_resources_backing_resource_id ON resources(backing_resource_id);

@@ -1,14 +1,22 @@
-import os from 'node:os';
-import path from 'node:path';
-import { mkdir, writeFile } from 'node:fs/promises';
+import os from "node:os";
+import path from "node:path";
+import { mkdir, writeFile } from "node:fs/promises";
 import { Buffer } from "node:buffer";
-import { and, desc, eq, inArray } from 'drizzle-orm';
-import type { D1Database, Fetcher, R2Bucket } from '../shared/types/bindings.ts';
-import type { WorkerBinding } from '../application/services/wfp/index.ts';
-import { deployments, getDb } from '../infra/db/index.ts';
-import { services } from '../infra/db/schema-services.ts';
-import { decrypt, decryptEnvVars, type EncryptedData } from '../shared/utils/crypto.ts';
-import type { ServiceTargetMap } from './url-registry.ts';
+import { and, desc, eq, inArray } from "drizzle-orm";
+import type {
+  D1Database,
+  Fetcher,
+  R2Bucket,
+} from "../shared/types/bindings.ts";
+import type { WorkerBinding } from "../application/services/wfp/index.ts";
+import { deployments, getDb } from "../infra/db/index.ts";
+import { services } from "../infra/db/schema-services.ts";
+import {
+  decrypt,
+  decryptEnvVars,
+  type EncryptedData,
+} from "../shared/utils/crypto.ts";
+import type { ServiceTargetMap } from "./url-registry.ts";
 
 export type FetcherLike = Fetcher;
 
@@ -20,7 +28,12 @@ export type LocalTenantWorkerRegistryOptions = {
   persistRoot?: string | null;
   serviceTargets?: ServiceTargetMap;
   /** PostgreSQL pool for pgvector-backed Vectorize bindings. */
-  pgPool?: { query(text: string, values?: unknown[]): Promise<{ rows: Record<string, unknown>[]; rowCount: number | null }> };
+  pgPool?: {
+    query(
+      text: string,
+      values?: unknown[],
+    ): Promise<{ rows: Record<string, unknown>[]; rowCount: number | null }>;
+  };
   /** OpenAI API key for AI bindings. */
   openAiApiKey?: string;
   /** OpenAI-compatible base URL for AI bindings. */
@@ -52,26 +65,35 @@ export type PreparedBundle = {
   scriptPath: string;
 };
 
-const LOCAL_ROUTING_STATUSES = ['active', 'canary', 'rollback'] as const;
+const LOCAL_ROUTING_STATUSES = ["active", "canary", "rollback"] as const;
 
-export function resolveRoot(explicit: string | null | undefined, suffix: string): string {
+export function resolveRoot(
+  explicit: string | null | undefined,
+  suffix: string,
+): string {
   return explicit && explicit.trim()
     ? path.resolve(explicit)
-    : path.resolve(os.tmpdir(), 'takos-miniflare', suffix);
+    : path.resolve(os.tmpdir(), "takos-miniflare", suffix);
 }
 
 export function sanitizeWorkerRef(workerRef: string): string {
-  return workerRef.replace(/[^a-zA-Z0-9._-]+/g, '-');
+  return workerRef.replace(/[^a-zA-Z0-9._-]+/g, "-");
 }
 
-export function parseRuntimeConfig(raw: string | null | undefined): WorkerRuntimeConfigSnapshot {
+export function parseRuntimeConfig(
+  raw: string | null | undefined,
+): WorkerRuntimeConfigSnapshot {
   if (!raw) return {};
   try {
     const parsed = JSON.parse(raw) as Record<string, unknown>;
     return {
-      compatibility_date: typeof parsed.compatibility_date === 'string' ? parsed.compatibility_date : undefined,
+      compatibility_date: typeof parsed.compatibility_date === "string"
+        ? parsed.compatibility_date
+        : undefined,
       compatibility_flags: Array.isArray(parsed.compatibility_flags)
-        ? parsed.compatibility_flags.filter((value): value is string => typeof value === 'string')
+        ? parsed.compatibility_flags.filter((value): value is string =>
+          typeof value === "string"
+        )
         : undefined,
     };
   } catch {
@@ -79,21 +101,30 @@ export function parseRuntimeConfig(raw: string | null | undefined): WorkerRuntim
   }
 }
 
-function deploymentMatchesWorkerRef(deployment: DeploymentRuntimeRecord, workerRef: string): boolean {
-  return deployment.routeRef === workerRef || deployment.artifactRef === workerRef;
+function deploymentMatchesWorkerRef(
+  deployment: DeploymentRuntimeRecord,
+  workerRef: string,
+): boolean {
+  return deployment.routeRef === workerRef ||
+    deployment.artifactRef === workerRef;
 }
 
-function parseDeploymentRouteRef(targetJson: string | null | undefined): string | null {
+function parseDeploymentRouteRef(
+  targetJson: string | null | undefined,
+): string | null {
   if (!targetJson) return null;
   try {
     const parsed = JSON.parse(targetJson) as Record<string, unknown>;
-    if (typeof parsed.route_ref === 'string' && parsed.route_ref.trim()) {
+    if (typeof parsed.route_ref === "string" && parsed.route_ref.trim()) {
       return parsed.route_ref.trim();
     }
     const endpoint = parsed.endpoint;
-    if (endpoint && typeof endpoint === 'object') {
+    if (endpoint && typeof endpoint === "object") {
       const endpointRecord = endpoint as Record<string, unknown>;
-      if (endpointRecord.kind === 'service-ref' && typeof endpointRecord.ref === 'string' && endpointRecord.ref.trim()) {
+      if (
+        endpointRecord.kind === "service-ref" &&
+        typeof endpointRecord.ref === "string" && endpointRecord.ref.trim()
+      ) {
         return endpointRecord.ref.trim();
       }
     }
@@ -109,11 +140,19 @@ export async function decryptBindingsSnapshot(
 ): Promise<WorkerBinding[]> {
   if (!deployment.bindingsSnapshotEncrypted) return [];
   if (!encryptionKey) {
-    throw new Error(`ENCRYPTION_KEY is required to load bindings for ${deployment.artifactRef}`);
+    throw new Error(
+      `ENCRYPTION_KEY is required to load bindings for ${deployment.artifactRef}`,
+    );
   }
 
-  const encryptedParsed = JSON.parse(deployment.bindingsSnapshotEncrypted) as EncryptedData;
-  const decrypted = await decrypt(encryptedParsed, encryptionKey, deployment.id);
+  const encryptedParsed = JSON.parse(
+    deployment.bindingsSnapshotEncrypted,
+  ) as EncryptedData;
+  const decrypted = await decrypt(
+    encryptedParsed,
+    encryptionKey,
+    deployment.id,
+  );
   const bindings = JSON.parse(decrypted) as unknown;
   if (!Array.isArray(bindings)) {
     throw new Error(`Invalid bindings snapshot for ${deployment.artifactRef}`);
@@ -127,9 +166,15 @@ export async function decryptEnvVarSnapshot(
 ): Promise<Record<string, string>> {
   if (!deployment.envVarsSnapshotEncrypted) return {};
   if (!encryptionKey) {
-    throw new Error(`ENCRYPTION_KEY is required to load env vars for ${deployment.artifactRef}`);
+    throw new Error(
+      `ENCRYPTION_KEY is required to load env vars for ${deployment.artifactRef}`,
+    );
   }
-  return decryptEnvVars(deployment.envVarsSnapshotEncrypted, encryptionKey, deployment.id);
+  return decryptEnvVars(
+    deployment.envVarsSnapshotEncrypted,
+    encryptionKey,
+    deployment.id,
+  );
 }
 
 export async function resolveDeploymentRuntime(
@@ -276,7 +321,9 @@ export async function resolveDeploymentRuntime(
 
   const matchedDeployment = matchedDeployments[0];
 
-  if (!matchedDeployment?.artifactRef || !matchedDeployment.bundleR2Key) return null;
+  if (!matchedDeployment?.artifactRef || !matchedDeployment.bundleR2Key) {
+    return null;
+  }
   return {
     id: matchedDeployment.id,
     serviceId: matchedDeployment.serviceId,
@@ -301,15 +348,21 @@ export async function loadBundleContent(
   }
 
   const bundleContent = await bundleObject.text();
-  const workerDir = path.join(bundleCacheRoot, sanitizeWorkerRef(deployment.artifactRef));
+  const workerDir = path.join(
+    bundleCacheRoot,
+    sanitizeWorkerRef(deployment.artifactRef),
+  );
   await mkdir(workerDir, { recursive: true });
-  const scriptPath = path.join(workerDir, 'bundle.mjs');
-  await writeFile(scriptPath, bundleContent, 'utf8');
+  const scriptPath = path.join(workerDir, "bundle.mjs");
+  await writeFile(scriptPath, bundleContent, "utf8");
 
   if (deployment.wasmR2Key) {
     const wasmObject = await workerBundles.get(deployment.wasmR2Key);
     if (wasmObject) {
-      await writeFile(path.join(workerDir, 'module.wasm'), Buffer.from(await wasmObject.arrayBuffer()));
+      await writeFile(
+        path.join(workerDir, "module.wasm"),
+        Buffer.from(await wasmObject.arrayBuffer()),
+      );
     }
   }
 
@@ -320,18 +373,19 @@ export async function loadBundleContent(
   };
 }
 
-export function createMissingBindingFetcher(kind: string, name: string): Fetcher {
-  return {
+export function createMissingBindingFetcher(
+  kind: string,
+  name: string,
+): Fetcher {
+  const fetcher: Fetcher = {
     async fetch(): Promise<Response> {
       return Response.json({
         error: `Local ${kind} target not configured`,
         target: name,
       }, { status: 503 });
     },
-    connect(): never {
-      throw new Error(`Local ${kind} target not configured: ${name}`);
-    },
-  } as unknown as Fetcher;
+  };
+  return fetcher;
 }
 
 export function normalizeFetcherInput(
@@ -339,7 +393,7 @@ export function normalizeFetcherInput(
   init?: RequestInit,
 ): [string | URL, RequestInit | undefined] {
   if (input instanceof Request) {
-    const body = input.method === 'GET' || input.method === 'HEAD'
+    const body = input.method === "GET" || input.method === "HEAD"
       ? undefined
       : input.clone().body;
     return [input.url, {

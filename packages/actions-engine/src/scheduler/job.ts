@@ -1,42 +1,44 @@
 /**
  * ジョブスケジューラと実行管理
  */
-import { MINUTES_TO_MS } from '../constants.ts';
+import { MINUTES_TO_MS } from "../constants.ts";
 import type {
-  Workflow,
+  Conclusion,
+  ExecutionContext,
+  ExecutionPlan,
   Job,
   JobResult,
-  ExecutionPlan,
-  ExecutionContext,
-  Conclusion,
   MatrixContext,
   StrategyContext,
-} from '../workflow-models.ts';
-import { evaluateCondition } from '../parser/expression.ts';
+  Workflow,
+} from "../workflow-models.ts";
+import { evaluateCondition } from "../parser/expression.ts";
 import {
   buildDependencyGraph,
-  groupIntoPhases,
   type DependencyGraph,
-} from './dependency.ts';
-import { StepRunner, type StepRunnerOptions } from './step.ts';
+  groupIntoPhases,
+} from "./dependency.ts";
+import { StepRunner, type StepRunnerOptions } from "./step.ts";
 import {
-  buildNeedsContext,
   buildJobExecutionContext,
+  buildNeedsContext,
   buildStepsContext,
+  classifyStepControl,
   createCompletedJobResult,
   createInProgressJobResult,
-  classifyStepControl,
   finalizeJobResult,
   getDependencySkipReason,
   type JobExecutionState,
-} from './job-policy.ts';
-import { buildMatrixJobId, expandMatrix } from './matrix.ts';
+} from "./job-policy.ts";
+import { buildMatrixJobId, expandMatrix } from "./matrix.ts";
 
 // --- needsInput 正規化 ---
 
 export function normalizeNeedsInput(needs: unknown): string[] {
-  if (typeof needs === 'string') return [needs];
-  if (Array.isArray(needs)) return needs.filter((need): need is string => typeof need === 'string');
+  if (typeof needs === "string") return [needs];
+  if (Array.isArray(needs)) {
+    return needs.filter((need): need is string => typeof need === "string");
+  }
   return [];
 }
 
@@ -117,7 +119,7 @@ function buildExpandedJobs(workflow: Workflow): {
  */
 function buildExpandedDependencyGraph(
   expandedJobs: Map<string, ExpandedJob>,
-  expansionMap: Map<string, string[]>
+  expansionMap: Map<string, string[]>,
 ): DependencyGraph {
   const nodes = new Set<string>();
   const edges = new Map<string, Set<string>>();
@@ -135,7 +137,7 @@ function buildExpandedDependencyGraph(
       const targets = expansionMap.get(need);
       if (!targets || targets.length === 0) {
         throw new Error(
-          `Job "${expanded.baseId}" depends on unknown job "${need}"`
+          `Job "${expanded.baseId}" depends on unknown job "${need}"`,
         );
       }
       for (const target of targets) {
@@ -169,13 +171,13 @@ export interface JobSchedulerOptions {
  * ジョブスケジューラのイベント種別
  */
 export type JobSchedulerEvent =
-  | { type: 'job:start'; jobId: string; job: Job }
-  | { type: 'job:complete'; jobId: string; result: JobResult }
-  | { type: 'job:skip'; jobId: string; reason: string; result: JobResult }
-  | { type: 'phase:start'; phase: number; jobs: string[] }
-  | { type: 'phase:complete'; phase: number }
-  | { type: 'workflow:start'; phases: string[][] }
-  | { type: 'workflow:complete'; results: Record<string, JobResult> };
+  | { type: "job:start"; jobId: string; job: Job }
+  | { type: "job:complete"; jobId: string; result: JobResult }
+  | { type: "job:skip"; jobId: string; reason: string; result: JobResult }
+  | { type: "phase:start"; phase: number; jobs: string[] }
+  | { type: "phase:complete"; phase: number }
+  | { type: "workflow:start"; phases: string[][] }
+  | { type: "workflow:complete"; results: Record<string, JobResult> };
 
 /**
  * ジョブスケジューラのイベントリスナー
@@ -186,11 +188,10 @@ export type JobSchedulerListener = (event: JobSchedulerEvent) => void;
  * `always()` / `failure()` / `cancelled()` を含む if 条件は
  * 依存スキップの早期 return を抑制する必要がある。
  *
- * これらは式内部で自由に組み合わせ可能（例: `${{ failure() && steps.x.outcome == 'failure' }}`）
- * なので単純な文字列マッチを行う。
+ * これらは expression 全体で現れるので単純な文字列マッチを行う。
  */
 function shouldSuppressDependencySkip(condition: string | undefined): boolean {
-  if (condition === undefined || condition === '') {
+  if (condition === undefined || condition === "") {
     return false;
   }
   return /\b(always|failure|cancelled)\s*\(/.test(condition);
@@ -235,7 +236,7 @@ export class JobScheduler {
     buildDependencyGraph(workflow);
     this.graph = buildExpandedDependencyGraph(
       this.expandedJobs,
-      this.expansionMap
+      this.expansionMap,
     );
     this.results = new Map();
     this.listeners = [];
@@ -302,7 +303,7 @@ export class JobScheduler {
    */
   async run(context: ExecutionContext): Promise<Record<string, JobResult>> {
     if (this.running) {
-      throw new Error('JobScheduler is already running');
+      throw new Error("JobScheduler is already running");
     }
 
     this.running = true;
@@ -310,23 +311,23 @@ export class JobScheduler {
 
     try {
       const plan = this.createPlan();
-      this.emit({ type: 'workflow:start', phases: plan.phases });
+      this.emit({ type: "workflow:start", phases: plan.phases });
 
       for (let phaseIndex = 0; phaseIndex < plan.phases.length; phaseIndex++) {
         if (this.cancelled) break;
 
         const phase = plan.phases[phaseIndex];
-        this.emit({ type: 'phase:start', phase: phaseIndex, jobs: phase });
+        this.emit({ type: "phase:start", phase: phaseIndex, jobs: phase });
 
         // フェーズ内ジョブを実行（必要に応じ並列）
         await this.runPhase(phase, context);
 
-        this.emit({ type: 'phase:complete', phase: phaseIndex });
+        this.emit({ type: "phase:complete", phase: phaseIndex });
 
         // フェイルファストモードで失敗を確認
         if (this.options.failFast) {
           const phaseFailed = phase.some(
-            (jobId) => this.results.get(jobId)?.conclusion === 'failure'
+            (jobId) => this.results.get(jobId)?.conclusion === "failure",
           );
           if (!phaseFailed) {
             continue;
@@ -342,7 +343,7 @@ export class JobScheduler {
 
       const results = this.getResults();
       this.emit({
-        type: 'workflow:complete',
+        type: "workflow:complete",
         results: structuredClone(results),
       });
       return results;
@@ -356,7 +357,7 @@ export class JobScheduler {
    */
   private async runPhase(
     jobIds: string[],
-    context: ExecutionContext
+    context: ExecutionContext,
   ): Promise<void> {
     const maxParallel = this.options.maxParallel || jobIds.length;
     const chunks: string[][] = [];
@@ -388,7 +389,7 @@ export class JobScheduler {
    */
   private markPendingChunksCancelled(
     chunks: string[][],
-    startIndex: number
+    startIndex: number,
   ): void {
     for (let pending = startIndex; pending < chunks.length; pending++) {
       this.markJobsCancelled(chunks[pending]);
@@ -411,7 +412,7 @@ export class JobScheduler {
 
       this.completeTerminalJob(
         jobId,
-        createCompletedJobResult(jobId, expanded.job.name, 'cancelled')
+        createCompletedJobResult(jobId, expanded.job.name, "cancelled"),
       );
     }
   }
@@ -421,7 +422,7 @@ export class JobScheduler {
    */
   private async runJob(
     jobId: string,
-    context: ExecutionContext
+    context: ExecutionContext,
   ): Promise<JobResult> {
     const expanded = this.expandedJobs.get(jobId);
     if (!expanded) {
@@ -429,8 +430,8 @@ export class JobScheduler {
     }
     const job = expanded.job;
     const existingResult = this.results.get(jobId);
-    const cancellationShortCircuitResult =
-      this.getCancellationShortCircuitResult(jobId, job.name, existingResult);
+    const cancellationShortCircuitResult = this
+      .getCancellationShortCircuitResult(jobId, job.name, existingResult);
 
     if (cancellationShortCircuitResult) {
       return cancellationShortCircuitResult;
@@ -449,14 +450,14 @@ export class JobScheduler {
 
     // ジョブをスキップすべきか確認
     if (!evaluateCondition(job.if, jobContext)) {
-      return this.skipJob(jobId, job.name, 'Condition not met', expanded);
+      return this.skipJob(jobId, job.name, "Condition not met", expanded);
     }
 
     if (dependencySkipReason) {
       return this.skipJob(jobId, job.name, dependencySkipReason, expanded);
     }
 
-    this.emit({ type: 'job:start', jobId, job });
+    this.emit({ type: "job:start", jobId, job });
 
     const result = createInProgressJobResult(jobId, job.name);
     if (expanded.matrix) {
@@ -468,7 +469,7 @@ export class JobScheduler {
       executionState = await this.executeJobStepsWithTimeout(
         job,
         jobContext,
-        result
+        result,
       );
     } catch {
       executionState = { failed: true, cancelled: false };
@@ -479,7 +480,7 @@ export class JobScheduler {
       result,
       executionState,
       job,
-      jobContext
+      jobContext,
     );
   }
 
@@ -504,10 +505,10 @@ export class JobScheduler {
    */
   private getCancellationShortCircuitResult(
     jobId: string,
-    jobName: JobResult['name'],
-    existingResult?: JobResult
+    jobName: JobResult["name"],
+    existingResult?: JobResult,
   ): JobResult | undefined {
-    if (existingResult?.conclusion === 'cancelled') {
+    if (existingResult?.conclusion === "cancelled") {
       return structuredClone(existingResult);
     }
 
@@ -521,7 +522,7 @@ export class JobScheduler {
 
     return this.completeTerminalJob(
       jobId,
-      createCompletedJobResult(jobId, jobName, 'cancelled')
+      createCompletedJobResult(jobId, jobName, "cancelled"),
     );
   }
 
@@ -531,9 +532,9 @@ export class JobScheduler {
   private async executeJobStepsWithTimeout(
     job: Job,
     jobContext: ExecutionContext,
-    result: JobResult
+    result: JobResult,
   ): Promise<JobExecutionState> {
-    const jobTimeoutMinutes = job['timeout-minutes'];
+    const jobTimeoutMinutes = job["timeout-minutes"];
     if (
       jobTimeoutMinutes === undefined ||
       jobTimeoutMinutes === null ||
@@ -550,9 +551,13 @@ export class JobScheduler {
       controller.abort();
     }, timeoutMs);
     // Deno の timer を unref してテスト終了を妨げない（存在しない環境は無視）
-    const denoRef = (globalThis as { Deno?: { unrefTimer?: (id: number) => void } }).Deno;
+    const denoRef =
+      (globalThis as { Deno?: { unrefTimer?: (id: number) => void } }).Deno;
     try {
-      denoRef?.unrefTimer?.(timer as unknown as number);
+      const timerId = Number(timer);
+      if (Number.isFinite(timerId)) {
+        denoRef?.unrefTimer?.(timerId);
+      }
     } catch {
       // unrefTimer が無い環境は無視
     }
@@ -562,14 +567,14 @@ export class JobScheduler {
         job,
         jobContext,
         result,
-        controller.signal
+        controller.signal,
       );
     } finally {
       clearTimeout(timer);
       if (timedOut) {
         result.steps[result.steps.length - 1] ??= {
-          status: 'completed',
-          conclusion: 'failure',
+          status: "completed",
+          conclusion: "failure",
           outputs: {},
         };
         const last = result.steps[result.steps.length - 1];
@@ -587,25 +592,28 @@ export class JobScheduler {
     job: Job,
     jobContext: ExecutionContext,
     result: JobResult,
-    abortSignal?: AbortSignal
+    abortSignal?: AbortSignal,
   ): Promise<JobExecutionState> {
-    const executionState: JobExecutionState = { failed: false, cancelled: false };
+    const executionState: JobExecutionState = {
+      failed: false,
+      cancelled: false,
+    };
 
     // ジョブ単位で観測する状態: success -> failure への単方向遷移
-    let jobStatus: 'success' | 'failure' | 'cancelled' = jobContext.job.status;
+    let jobStatus: "success" | "failure" | "cancelled" = jobContext.job.status;
     let jobFailedStep = false;
     let workflowShouldCancel = false;
 
     for (let i = 0; i < job.steps.length; i++) {
       if (this.cancelled) {
         executionState.cancelled = true;
-        jobStatus = 'cancelled';
+        jobStatus = "cancelled";
         // キャンセル状態でも after-failure / always cleanup を実行する余地を残す
         // が、scheduler 全体がキャンセルされている場合は中断する。
         break;
       }
       if (abortSignal?.aborted) {
-        jobStatus = 'cancelled';
+        jobStatus = "cancelled";
         executionState.cancelled = false;
         executionState.failed = true;
         break;
@@ -624,9 +632,9 @@ export class JobScheduler {
           const skipped: typeof result.steps[number] = {
             id: step.id,
             name: step.name,
-            status: 'completed',
-            conclusion: 'skipped',
-            outcome: 'skipped',
+            status: "completed",
+            conclusion: "skipped",
+            outcome: "skipped",
             outputs: {},
           };
           result.steps.push(skipped);
@@ -642,21 +650,14 @@ export class JobScheduler {
       });
       result.steps.push(stepResult);
 
-      // outcome ベースで jobStatus を更新する。
-      // continue-on-error は conclusion を書き換えるが outcome は raw failure のまま。
-      // ただし job 全体を failure にするのは continue-on-error が無い場合のみ。
-      if (
-        stepResult.outcome === 'failure' &&
-        !step['continue-on-error'] &&
-        jobStatus === 'success'
-      ) {
-        jobStatus = 'failure';
+      if (stepResult.conclusion === "failure" && jobStatus === "success") {
+        jobStatus = "failure";
       }
 
       const stepControl = classifyStepControl(
         step,
         stepResult,
-        this.options.failFast ?? true
+        this.options.failFast ?? true,
       );
       if (!stepControl.shouldStopJob) {
         continue;
@@ -693,7 +694,7 @@ export class JobScheduler {
     result: JobResult,
     executionState: JobExecutionState,
     job?: Job,
-    jobContext?: ExecutionContext
+    jobContext?: ExecutionContext,
   ): JobResult {
     finalizeJobResult(result, executionState, { job, jobContext });
     return this.completeTerminalJob(jobId, result);
@@ -704,11 +705,11 @@ export class JobScheduler {
    */
   private skipJob(
     jobId: string,
-    jobName: JobResult['name'],
+    jobName: JobResult["name"],
     reason: string,
-    expanded?: ExpandedJob
+    expanded?: ExpandedJob,
   ): JobResult {
-    const skipped = createCompletedJobResult(jobId, jobName, 'skipped');
+    const skipped = createCompletedJobResult(jobId, jobName, "skipped");
     if (expanded?.matrix) {
       skipped.matrix = { ...expanded.matrix };
     }
@@ -721,14 +722,14 @@ export class JobScheduler {
   private completeTerminalJob(
     jobId: string,
     result: JobResult,
-    options: { skipReason?: string } = {}
+    options: { skipReason?: string } = {},
   ): JobResult {
     const storedResult = structuredClone(result);
     this.results.set(jobId, storedResult);
     this.emitTerminalObservationEvents(
       jobId,
       storedResult,
-      options.skipReason
+      options.skipReason,
     );
     return structuredClone(storedResult);
   }
@@ -739,11 +740,11 @@ export class JobScheduler {
   private emitTerminalObservationEvents(
     jobId: string,
     storedResult: JobResult,
-    skipReason?: string
+    skipReason?: string,
   ): void {
     if (skipReason !== undefined) {
       this.emit({
-        type: 'job:skip',
+        type: "job:skip",
         jobId,
         reason: skipReason,
         result: structuredClone(storedResult),
@@ -751,7 +752,7 @@ export class JobScheduler {
     }
 
     this.emit({
-      type: 'job:complete',
+      type: "job:complete",
       jobId,
       result: structuredClone(storedResult),
     });
@@ -762,7 +763,7 @@ export class JobScheduler {
    */
   private buildJobContext(
     expanded: ExpandedJob,
-    context: ExecutionContext
+    context: ExecutionContext,
   ): ExecutionContext {
     const job = expanded.job;
     const needs = normalizeNeedsInput(job.needs);
@@ -781,25 +782,25 @@ export class JobScheduler {
       const targets = this.expansionMap.get(need);
       if (!targets || targets.length === 0) continue;
       if (needsContext[need] !== undefined) continue;
-      let aggregatedResult: 'success' | 'failure' | 'cancelled' | 'skipped' =
-        'success';
+      let aggregatedResult: "success" | "failure" | "cancelled" | "skipped" =
+        "success";
       const aggregatedOutputs: Record<string, string> = {};
       for (const target of targets) {
         const targetContext = needsContext[target];
         if (!targetContext) continue;
         Object.assign(aggregatedOutputs, targetContext.outputs);
-        if (targetContext.result === 'failure') {
-          aggregatedResult = 'failure';
+        if (targetContext.result === "failure") {
+          aggregatedResult = "failure";
         } else if (
-          targetContext.result === 'cancelled' &&
-          aggregatedResult !== 'failure'
+          targetContext.result === "cancelled" &&
+          aggregatedResult !== "failure"
         ) {
-          aggregatedResult = 'cancelled';
+          aggregatedResult = "cancelled";
         } else if (
-          targetContext.result === 'skipped' &&
-          aggregatedResult === 'success'
+          targetContext.result === "skipped" &&
+          aggregatedResult === "success"
         ) {
-          aggregatedResult = 'skipped';
+          aggregatedResult = "skipped";
         }
       }
       needsContext[need] = {
@@ -829,7 +830,7 @@ export class JobScheduler {
    */
   private buildStepContext(
     jobContext: ExecutionContext,
-    jobResult: JobResult
+    jobResult: JobResult,
   ): ExecutionContext {
     const stepsContext = buildStepsContext(jobResult.steps);
 
@@ -852,21 +853,21 @@ export class JobScheduler {
   getConclusion(): Conclusion {
     let hasFailure = false;
     for (const result of this.results.values()) {
-      if (result.conclusion === 'failure') {
+      if (result.conclusion === "failure") {
         hasFailure = true;
         break;
       }
     }
 
     if (hasFailure) {
-      return 'failure';
+      return "failure";
     }
 
     if (this.cancelled) {
-      return 'cancelled';
+      return "cancelled";
     }
 
-    return 'success';
+    return "success";
   }
 }
 

@@ -57,6 +57,7 @@ function buildTenantHeaders(request: Request, hostname: string): Headers {
   headers.delete("X-Tenant-Deployment");
   headers.delete("X-Tenant-Endpoint");
   headers.delete("X-Takos-Internal");
+  headers.delete("X-Takos-Internal-Marker");
   headers.set("X-Forwarded-Host", hostname);
   return headers;
 }
@@ -86,9 +87,7 @@ export function createDispatchWorker(
       ctx: PlatformExecutionContext,
     ): Promise<Response> {
       const platform = await buildPlatform(env);
-      const envError = envGuard(
-        platform.bindings as unknown as Record<string, unknown>,
-      );
+      const envError = envGuard(platform.bindings);
       if (envError) {
         return errorJsonResponse("Configuration Error", 503, {
           message:
@@ -168,7 +167,7 @@ export function createDispatchWorker(
             );
           }
           headers.set("X-Tenant-Worker", routeRef);
-          headers.set("X-Takos-Internal", "1");
+          headers.set("X-Takos-Internal-Marker", "1");
           const userWorker = platform.services.serviceRegistry?.get(routeRef);
           if (!userWorker) {
             return errorJsonResponse(
@@ -207,7 +206,7 @@ export function createDispatchWorker(
           });
         }
         headers.set("X-Tenant-Worker", routeRef);
-        headers.set("X-Takos-Internal", "1");
+        headers.set("X-Takos-Internal-Marker", "1");
         if (deploymentTarget.deploymentId) {
           headers.set("X-Tenant-Deployment", deploymentTarget.deploymentId);
         } else {

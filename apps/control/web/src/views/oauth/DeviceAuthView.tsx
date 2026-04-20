@@ -1,28 +1,32 @@
-import { createEffect, createSignal } from 'solid-js';
-import { useI18n } from '../../store/i18n.ts';
-import { Button } from '../../components/ui/Button.tsx';
-import { ConsentLayout, ConsentLogo } from './ConsentLayout.tsx';
-import { ScopeList } from './ScopeList.tsx';
-import { LoadingScreen } from '../../components/common/LoadingScreen.tsx';
+import { createEffect, createSignal } from "solid-js";
+import { useI18n } from "../../store/i18n.ts";
+import { Button } from "../../components/ui/Button.tsx";
+import { ConsentLayout, ConsentLogo } from "./ConsentLayout.tsx";
+import { ScopeList } from "./ScopeList.tsx";
+import { LoadingScreen } from "../../components/common/LoadingScreen.tsx";
 
-type DeviceResultState = { status: 'auto_approved' | 'result' | 'error'; title: string; message: string };
+type DeviceResultState = {
+  status: "auto_approved" | "result" | "error";
+  title: string;
+  message: string;
+};
 
 type DeviceContextResponse =
-  | { status: 'code_entry'; user: { email: string } }
+  | { status: "code_entry"; user: { email: string } }
   | {
-      status: 'consent_required';
-      client: { name: string; logo_uri: string | null };
-      user: { email: string };
-      user_code: string;
-      scopes: { identity: string[]; resources: string[] };
-      csrf_token: string;
-    }
+    status: "consent_required";
+    client: { name: string; logo_uri: string | null };
+    user: { email: string };
+    user_code: string;
+    scopes: { identity: string[]; resources: string[] };
+    csrf_token: string;
+  }
   | DeviceResultState
-  | { status: 'unauthenticated' };
+  | { status: "unauthenticated" };
 
 type DeviceDecisionResponse =
-  | { status: 'approved' | 'denied'; title: string; message: string }
-  | { status: 'error'; title: string; message: string }
+  | { status: "approved" | "denied"; title: string; message: string }
+  | { status: "error"; title: string; message: string }
   | { error: string };
 
 export function DeviceAuthView() {
@@ -30,25 +34,31 @@ export function DeviceAuthView() {
   const [state, setState] = createSignal<DeviceContextResponse | null>(null);
   const [loading, setLoading] = createSignal(true);
   const [submitting, setSubmitting] = createSignal(false);
-  const [codeInput, setCodeInput] = createSignal('');
+  const [codeInput, setCodeInput] = createSignal("");
 
   const fetchContext = async (userCode?: string) => {
     setLoading(true);
     try {
-      const params = userCode ? `?user_code=${encodeURIComponent(userCode)}` : '';
-      const res = await fetch(`/api/oauth/device/context${params}`, { credentials: 'include' });
+      const params = userCode
+        ? `?user_code=${encodeURIComponent(userCode)}`
+        : "";
+      const res = await fetch(`/api/oauth/device/context${params}`, {
+        credentials: "include",
+      });
       const data = await res.json() as DeviceContextResponse;
 
-      if (data.status === 'unauthenticated') {
+      if (data.status === "unauthenticated") {
         const search = globalThis.location.search;
         const returnTo = `/oauth/device${search}`;
-        globalThis.location.href = `/auth/login?return_to=${encodeURIComponent(returnTo)}`;
+        globalThis.location.href = `/auth/login?return_to=${
+          encodeURIComponent(returnTo)
+        }`;
         return;
       }
 
       setState(data);
     } catch {
-      setState({ status: 'error', title: 'Error', message: 'Failed to load.' });
+      setState({ status: "error", title: "Error", message: "Failed to load." });
     } finally {
       setLoading(false);
     }
@@ -56,7 +66,7 @@ export function DeviceAuthView() {
 
   createEffect(() => {
     const params = new URLSearchParams(globalThis.location.search);
-    const userCode = params.get('user_code') || undefined;
+    const userCode = params.get("user_code") || undefined;
     if (userCode) setCodeInput(userCode);
     fetchContext(userCode);
   });
@@ -67,20 +77,20 @@ export function DeviceAuthView() {
     if (!trimmed) return;
     // Update URL and fetch context
     const newUrl = `/oauth/device?user_code=${encodeURIComponent(trimmed)}`;
-    globalThis.history.replaceState(null, '', newUrl);
+    globalThis.history.replaceState(null, "", newUrl);
     fetchContext(trimmed);
   };
 
-  const handleDecision = async (action: 'allow' | 'deny') => {
+  const handleDecision = async (action: "allow" | "deny") => {
     const s = state();
-    if (!s || s.status !== 'consent_required') return;
+    if (!s || s.status !== "consent_required") return;
     setSubmitting(true);
 
     try {
-      const res = await fetch('/api/oauth/device/decision', {
-        method: 'POST',
-        credentials: 'include',
-        headers: { 'Content-Type': 'application/json' },
+      const res = await fetch("/api/oauth/device/decision", {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           user_code: s.user_code,
           action,
@@ -90,13 +100,21 @@ export function DeviceAuthView() {
 
       const data = await res.json() as DeviceDecisionResponse;
 
-      if ('error' in data) {
-        setState({ status: 'error', title: 'Error', message: data.error });
+      if ("error" in data) {
+        setState({ status: "error", title: "Error", message: data.error });
       } else {
-        setState({ status: 'result', title: data.title, message: data.message });
+        setState({
+          status: "result",
+          title: data.title,
+          message: data.message,
+        });
       }
     } catch {
-      setState({ status: 'error', title: 'Error', message: 'Failed to submit.' });
+      setState({
+        status: "error",
+        title: "Error",
+        message: "Failed to submit.",
+      });
     } finally {
       setSubmitting(false);
     }
@@ -106,28 +124,29 @@ export function DeviceAuthView() {
     return <LoadingScreen />;
   }
 
-  if (!state()) {
+  const currentState = state();
+  if (!currentState) {
     return <LoadingScreen />;
   }
 
   // Code entry screen
-  if (state()!.status === 'code_entry') {
-    const s = state() as Extract<DeviceContextResponse, { status: 'code_entry' }>;
+  if (currentState.status === "code_entry") {
+    const s = currentState;
     return (
       <ConsentLayout>
         <ConsentLogo />
         <h1 class="text-xl font-bold text-[var(--color-text-primary)] mb-2">
-          {t('deviceAuthTitle')}
+          {t("deviceAuthTitle")}
         </h1>
         <p class="text-xs text-[var(--color-text-tertiary)] mb-4">
-          {s.user.email} {t('oauthConsentLoggedInAs')}
+          {s.user.email} {t("oauthConsentLoggedInAs")}
         </p>
         <p class="text-sm text-[var(--color-text-secondary)] mb-4">
-          {t('deviceAuthCodePrompt')}
+          {t("deviceAuthCodePrompt")}
         </p>
         <form onSubmit={handleCodeSubmit} class="text-left">
           <label class="block text-xs text-[var(--color-text-tertiary)] mb-2">
-            {t('deviceAuthCodeLabel')}
+            {t("deviceAuthCodeLabel")}
           </label>
           <input
             type="text"
@@ -135,13 +154,13 @@ export function DeviceAuthView() {
             onInput={(e) => setCodeInput(e.target.value)}
             autocomplete="one-time-code"
             inputmode="text"
-            placeholder={t('deviceAuthCodePlaceholder')}
+            placeholder={t("deviceAuthCodePlaceholder")}
             required
             class="w-full px-3 py-3 rounded-lg border border-[var(--color-border-primary)] bg-[var(--color-bg-primary)] text-[var(--color-text-primary)] text-base tracking-wider uppercase placeholder:text-[var(--color-text-tertiary)] placeholder:normal-case placeholder:tracking-normal"
           />
           <div class="mt-4">
             <Button variant="primary" class="w-full" type="submit">
-              {t('deviceAuthContinue')}
+              {t("deviceAuthContinue")}
             </Button>
           </div>
         </form>
@@ -150,8 +169,8 @@ export function DeviceAuthView() {
   }
 
   // Consent screen
-  if (state()!.status === 'consent_required') {
-    const s = state() as Extract<DeviceContextResponse, { status: 'consent_required' }>;
+  if (currentState.status === "consent_required") {
+    const s = currentState;
     return (
       <ConsentLayout>
         <ConsentLogo src={s.client.logo_uri} />
@@ -159,18 +178,26 @@ export function DeviceAuthView() {
           {s.client.name}
         </h1>
         <p class="text-xs text-[var(--color-text-tertiary)] mb-4">
-          {s.user.email} {t('oauthConsentLoggedInAs')}
+          {s.user.email} {t("oauthConsentLoggedInAs")}
         </p>
         <p class="text-sm text-[var(--color-text-secondary)] mb-2">
-          <strong class="text-[var(--color-text-primary)]">{s.client.name}</strong>
-          {t('oauthConsentDeviceRequesting')}
+          <strong class="text-[var(--color-text-primary)]">
+            {s.client.name}
+          </strong>
+          {t("oauthConsentDeviceRequesting")}
         </p>
         <p class="text-xs text-[var(--color-text-tertiary)] mb-4">
-          {t('deviceAuthCode')}: <span class="tracking-wider uppercase text-[var(--color-text-secondary)]">{s.user_code}</span>
+          {t("deviceAuthCode")}:{" "}
+          <span class="tracking-wider uppercase text-[var(--color-text-secondary)]">
+            {s.user_code}
+          </span>
         </p>
 
         <div class="mb-4">
-          <ScopeList identity={s.scopes.identity} resources={s.scopes.resources} />
+          <ScopeList
+            identity={s.scopes.identity}
+            resources={s.scopes.resources}
+          />
         </div>
 
         <div class="flex gap-3">
@@ -178,26 +205,30 @@ export function DeviceAuthView() {
             variant="secondary"
             class="flex-1"
             disabled={submitting()}
-            onClick={() => handleDecision('deny')}
+            onClick={() => handleDecision("deny")}
           >
-            {t('oauthConsentDeny')}
+            {t("oauthConsentDeny")}
           </Button>
           <Button
             variant="primary"
             class="flex-1"
             isLoading={submitting()}
-            onClick={() => handleDecision('allow')}
+            onClick={() => handleDecision("allow")}
           >
-            {t('oauthConsentAllow')}
+            {t("oauthConsentAllow")}
           </Button>
         </div>
       </ConsentLayout>
     );
   }
 
+  if (currentState.status === "unauthenticated") {
+    return <LoadingScreen />;
+  }
+
   // Result / Error / Auto-approved screens
   // At this point, code_entry / consent_required / unauthenticated are already handled above
-  const resultState = state() as unknown as DeviceResultState;
+  const resultState = currentState;
   return (
     <ConsentLayout>
       <ConsentLogo />

@@ -133,6 +133,7 @@ function assertErrorDescriptionIncludes(
 }
 
 const db = createMockDrizzleDb();
+const d1 = db as unknown as D1Database;
 (globalThis as typeof globalThis & { __takosDbMock?: unknown }).__takosDbMock = db as never;
 
 const mocks = {
@@ -158,7 +159,7 @@ const originalAuthorizationDeps = { ...authorizationDeps };
 Deno.test("validateAuthorizationRequest - rejects unsupported response_type", async () => {
   /* mocks cleared (no-op in Deno) */ void 0;
   mocks.getDb = (() => db) as any;
-  const result = await validateAuthorizationRequest({} as D1Database, {
+  const result = await validateAuthorizationRequest(d1, {
     response_type: "token" as never,
   });
 
@@ -168,7 +169,7 @@ Deno.test("validateAuthorizationRequest - rejects unsupported response_type", as
 Deno.test("validateAuthorizationRequest - rejects missing client_id", async () => {
   /* mocks cleared (no-op in Deno) */ void 0;
   mocks.getDb = (() => db) as any;
-  const result = await validateAuthorizationRequest({} as D1Database, {
+  const result = await validateAuthorizationRequest(d1, {
     response_type: "code",
   });
 
@@ -181,7 +182,7 @@ Deno.test("validateAuthorizationRequest - rejects nonexistent client", async () 
   mocks.getDb = (() => db) as any;
   db._.get = (async () => null) as any; // getClientById returns null
 
-  const result = await validateAuthorizationRequest({} as D1Database, {
+  const result = await validateAuthorizationRequest(d1, {
     response_type: "code",
     client_id: "nonexistent",
   });
@@ -214,7 +215,7 @@ Deno.test("validateAuthorizationRequest - rejects missing redirect_uri", async (
     updatedAt: "2026-01-01T00:00:00.000Z",
   })) as any;
 
-  const result = await validateAuthorizationRequest({} as D1Database, {
+  const result = await validateAuthorizationRequest(d1, {
     response_type: "code",
     client_id: "client-1",
   });
@@ -248,7 +249,7 @@ Deno.test("validateAuthorizationRequest - rejects unregistered redirect_uri", as
     updatedAt: "2026-01-01T00:00:00.000Z",
   })) as any;
 
-  const result = await validateAuthorizationRequest({} as D1Database, {
+  const result = await validateAuthorizationRequest(d1, {
     response_type: "code",
     client_id: "client-1",
     redirect_uri: "https://evil.com/cb",
@@ -283,7 +284,7 @@ Deno.test("validateAuthorizationRequest - rejects missing state", async () => {
     updatedAt: "2026-01-01T00:00:00.000Z",
   })) as any;
 
-  const result = await validateAuthorizationRequest({} as D1Database, {
+  const result = await validateAuthorizationRequest(d1, {
     response_type: "code",
     client_id: "client-1",
     redirect_uri: "https://example.com/cb",
@@ -319,7 +320,7 @@ Deno.test("validateAuthorizationRequest - rejects missing code_challenge (PKCE i
     updatedAt: "2026-01-01T00:00:00.000Z",
   })) as any;
 
-  const result = await validateAuthorizationRequest({} as D1Database, {
+  const result = await validateAuthorizationRequest(d1, {
     response_type: "code",
     client_id: "client-1",
     redirect_uri: "https://example.com/cb",
@@ -355,7 +356,7 @@ Deno.test("validateAuthorizationRequest - rejects non-S256 code_challenge_method
     updatedAt: "2026-01-01T00:00:00.000Z",
   })) as any;
 
-  const result = await validateAuthorizationRequest({} as D1Database, {
+  const result = await validateAuthorizationRequest(d1, {
     response_type: "code",
     client_id: "client-1",
     redirect_uri: "https://example.com/cb",
@@ -393,7 +394,7 @@ Deno.test("validateAuthorizationRequest - rejects invalid scope", async () => {
     updatedAt: "2026-01-01T00:00:00.000Z",
   })) as any;
 
-  const result = await validateAuthorizationRequest({} as D1Database, {
+  const result = await validateAuthorizationRequest(d1, {
     response_type: "code",
     client_id: "client-1",
     redirect_uri: "https://example.com/cb",
@@ -431,7 +432,7 @@ Deno.test("validateAuthorizationRequest - rejects scopes that exceed client allo
     updatedAt: "2026-01-01T00:00:00.000Z",
   })) as any;
 
-  const result = await validateAuthorizationRequest({} as D1Database, {
+  const result = await validateAuthorizationRequest(d1, {
     response_type: "code",
     client_id: "client-1",
     redirect_uri: "https://example.com/cb",
@@ -470,7 +471,7 @@ Deno.test("validateAuthorizationRequest - returns valid for a complete correct r
     updatedAt: "2026-01-01T00:00:00.000Z",
   })) as any;
 
-  const result = await validateAuthorizationRequest({} as D1Database, {
+  const result = await validateAuthorizationRequest(d1, {
     response_type: "code",
     client_id: "client-1",
     redirect_uri: "https://example.com/cb",
@@ -495,7 +496,7 @@ Deno.test("generateAuthorizationCode - returns a non-empty authorization code st
   // insert().values() resolves via the mock chain
   db._.chain.values = (async () => undefined) as any;
 
-  const code = await generateAuthorizationCode({} as D1Database, {
+  const code = await generateAuthorizationCode(d1, {
     clientId: "client-1",
     userId: "user-1",
     redirectUri: "https://example.com/cb",
@@ -513,7 +514,7 @@ Deno.test("generateAuthorizationCode - calls db.insert to persist the code", asy
   db.insert.calls.length = 0;
   db._.chain.values = (async () => undefined) as any;
 
-  await generateAuthorizationCode({} as D1Database, {
+  await generateAuthorizationCode(d1, {
     clientId: "client-1",
     userId: "user-1",
     redirectUri: "https://example.com/cb",
@@ -561,7 +562,7 @@ Deno.test("exchangeAuthorizationCode - returns invalid_grant when code is not fo
   mocks.getDb = (() => db) as any;
   db._.get = (async () => null) as any;
 
-  const result = await exchangeAuthorizationCode({} as D1Database, {
+  const result = await exchangeAuthorizationCode(d1, {
     code: "nonexistent-code",
     clientId: "client-1",
     redirectUri: "https://example.com/cb",
@@ -583,7 +584,7 @@ Deno.test("exchangeAuthorizationCode - returns invalid_grant and revokes tokens 
   authorizationDeps.revokeTokensByAuthorizationCode = mocks.revokeTokensByAuthorizationCode as typeof authorizationDeps.revokeTokensByAuthorizationCode;
 
   try {
-    const result = await exchangeAuthorizationCode({} as D1Database, {
+    const result = await exchangeAuthorizationCode(d1, {
       code,
       clientId: "client-1",
       redirectUri: "https://example.com/cb",
@@ -608,7 +609,7 @@ Deno.test("exchangeAuthorizationCode - returns invalid_grant when code is expire
 
   db._.get = (async () => row) as any;
 
-  const result = await exchangeAuthorizationCode({} as D1Database, {
+  const result = await exchangeAuthorizationCode(d1, {
     code,
     clientId: row.clientId,
     redirectUri: row.redirectUri,
@@ -627,7 +628,7 @@ Deno.test("exchangeAuthorizationCode - returns invalid_grant when client_id mism
 
   db._.get = (async () => row) as any;
 
-  const result = await exchangeAuthorizationCode({} as D1Database, {
+  const result = await exchangeAuthorizationCode(d1, {
     code,
     clientId: "wrong-client-id",
     redirectUri: row.redirectUri,
@@ -646,7 +647,7 @@ Deno.test("exchangeAuthorizationCode - returns invalid_grant when redirect_uri m
 
   db._.get = (async () => row) as any;
 
-  const result = await exchangeAuthorizationCode({} as D1Database, {
+  const result = await exchangeAuthorizationCode(d1, {
     code,
     clientId: row.clientId,
     redirectUri: "https://evil.com/cb",
@@ -666,7 +667,7 @@ Deno.test("exchangeAuthorizationCode - returns invalid_grant when PKCE verificat
   db._.get = (async () => row) as any;
 
   // Use a deliberately wrong code_verifier
-  const result = await exchangeAuthorizationCode({} as D1Database, {
+  const result = await exchangeAuthorizationCode(d1, {
     code,
     clientId: row.clientId,
     redirectUri: row.redirectUri,
@@ -688,7 +689,7 @@ Deno.test("exchangeAuthorizationCode - returns valid with the authorization code
   // db.update().set().where() should resolve with changes: 1 (CAS success)
   // The default mock already returns { meta: { changes: 1 } }
 
-  const result = await exchangeAuthorizationCode({} as D1Database, {
+  const result = await exchangeAuthorizationCode(d1, {
     code,
     clientId: row.clientId,
     redirectUri: row.redirectUri,
@@ -719,7 +720,7 @@ Deno.test("exchangeAuthorizationCode - returns invalid_grant when CAS update ret
   })) as any;
 
   try {
-    const result = await exchangeAuthorizationCode({} as D1Database, {
+    const result = await exchangeAuthorizationCode(d1, {
       code,
       clientId: row.clientId,
       redirectUri: row.redirectUri,

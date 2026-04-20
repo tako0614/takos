@@ -262,7 +262,7 @@ Deno.test("threads routes - PATCH /api/threads/:id - validates context_window ra
     {} as ExecutionContext,
   );
 
-  assertEquals(res.status, 422);
+  assertEquals(res.status, 400);
 });
 
 Deno.test("threads routes - DELETE /api/threads/:id - soft-deletes a thread", async () => {
@@ -433,7 +433,7 @@ Deno.test("threads routes - POST /api/threads/:id/messages - rejects invalid rol
     {} as ExecutionContext,
   );
 
-  assertEquals(res.status, 422);
+  assertEquals(res.status, 400);
 });
 
 Deno.test("threads routes - GET /api/spaces/:spaceId/threads/search - returns 400 when q is missing", async () => {

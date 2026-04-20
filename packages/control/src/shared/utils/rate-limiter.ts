@@ -1,5 +1,5 @@
-import type { Context, Next } from 'hono';
-import { logWarn } from './logger.ts';
+import type { Context, Next } from "hono";
+import { logWarn } from "./logger.ts";
 
 // ---------------------------------------------------------------------------
 // Sliding Window
@@ -34,7 +34,7 @@ export function hitSlidingWindow(
   timestamps: number[],
   config: SlidingWindowConfig,
   now: number = Date.now(),
-  dryRun: boolean = false
+  dryRun: boolean = false,
 ): { timestamps: number[]; result: SlidingWindowResult } {
   const windowStart = now - config.windowMs;
   const validTimestamps = timestamps.filter((t) => t > windowStart);
@@ -46,7 +46,9 @@ export function hitSlidingWindow(
   }
 
   const remaining = Math.max(0, config.maxRequests - validTimestamps.length);
-  const reset = validTimestamps.length > 0 ? validTimestamps[0] + config.windowMs : now + config.windowMs;
+  const reset = validTimestamps.length > 0
+    ? validTimestamps[0] + config.windowMs
+    : now + config.windowMs;
 
   return {
     timestamps: validTimestamps,
@@ -66,7 +68,7 @@ export function hitSlidingWindow(
 export function cleanupExpiredEntries(
   entries: Map<string, number[]>,
   windowMs: number,
-  now: number = Date.now()
+  now: number = Date.now(),
 ): void {
   const windowStart = now - windowMs;
 
@@ -87,14 +89,17 @@ const KEY_EVICTION_BUFFER = 100;
  * Evict the oldest keys from a Map when its size exceeds `maxKeys`.
  * Returns the number of entries removed.
  */
-export function enforceKeyLimit(entries: Map<string, number[]>, maxKeys: number): number {
+export function enforceKeyLimit(
+  entries: Map<string, number[]>,
+  maxKeys: number,
+): number {
   if (entries.size < maxKeys) {
     return 0;
   }
 
   const entriesToRemove = Math.max(
     0,
-    Math.min(entries.size - maxKeys + KEY_EVICTION_BUFFER, entries.size)
+    Math.min(entries.size - maxKeys + KEY_EVICTION_BUFFER, entries.size),
   );
 
   let removed = 0;
@@ -105,7 +110,9 @@ export function enforceKeyLimit(entries: Map<string, number[]>, maxKeys: number)
   }
 
   if (removed > 0) {
-    logWarn(`Rate limiter: Force-removed ${removed} entries due to key limit`, { module: 'utils/sliding-window' });
+    logWarn(`Rate limiter: Force-removed ${removed} entries due to key limit`, {
+      module: "utils/sliding-window",
+    });
   }
 
   return removed;
@@ -133,7 +140,7 @@ function getRatePerMs(config: SlidingWindowConfig): number {
 function refill(
   state: TokenBucketState | undefined,
   config: SlidingWindowConfig,
-  now: number
+  now: number,
 ): TokenBucketState {
   const capacity = getCapacity(config);
   const ratePerMs = getRatePerMs(config);
@@ -154,7 +161,7 @@ function refill(
 function computeResetMs(
   tokens: number,
   config: SlidingWindowConfig,
-  now: number
+  now: number,
 ): number {
   const capacity = getCapacity(config);
   const ratePerMs = getRatePerMs(config);
@@ -176,7 +183,7 @@ export function hitTokenBucket(
   state: TokenBucketState | undefined,
   config: SlidingWindowConfig,
   now: number = Date.now(),
-  dryRun: boolean = false
+  dryRun: boolean = false,
 ): { state: TokenBucketState; result: SlidingWindowResult } {
   const next = refill(state, config, now);
 
@@ -208,7 +215,7 @@ export function hitTokenBucket(
 const MS_PER_SECOND = 1000;
 
 function getClientIpForRateLimit(c: Context): string | null {
-  return c.req.header('CF-Connecting-IP') ?? null;
+  return c.req.header("CF-Connecting-IP") ?? null;
 }
 
 export interface RateLimitConfig {
@@ -237,8 +244,9 @@ export class InMemoryRateLimiter {
     this.config = {
       maxRequests: config.maxRequests,
       windowMs: config.windowMs,
-      keyGenerator: config.keyGenerator || ((c) => getClientIpForRateLimit(c) || 'unknown'),
-      message: config.message || 'Too many requests, please try again later',
+      keyGenerator: config.keyGenerator ||
+        ((c) => getClientIpForRateLimit(c) || "unknown"),
+      message: config.message || "Too many requests, please try again later",
       skip: config.skip || (() => false),
     };
   }
@@ -265,10 +273,15 @@ export class InMemoryRateLimiter {
     this.maybeCleanup();
 
     const timestamps = this.requests.get(key) || [];
-    const { result } = hitSlidingWindow(timestamps, {
-      maxRequests: this.config.maxRequests,
-      windowMs: this.config.windowMs,
-    }, undefined, true);
+    const { result } = hitSlidingWindow(
+      timestamps,
+      {
+        maxRequests: this.config.maxRequests,
+        windowMs: this.config.windowMs,
+      },
+      undefined,
+      true,
+    );
 
     return {
       remaining: result.remaining,
@@ -305,13 +318,19 @@ export class InMemoryRateLimiter {
       const key = this.config.keyGenerator(c);
       const info = this.check(key);
 
-      c.header('X-RateLimit-Limit', String(info.total));
-      c.header('X-RateLimit-Remaining', String(info.remaining));
-      c.header('X-RateLimit-Reset', String(Math.ceil(info.reset / MS_PER_SECOND)));
+      c.header("X-RateLimit-Limit", String(info.total));
+      c.header("X-RateLimit-Remaining", String(info.remaining));
+      c.header(
+        "X-RateLimit-Reset",
+        String(Math.ceil(info.reset / MS_PER_SECOND)),
+      );
 
       if (info.remaining <= 0) {
-        const retryAfter = Math.ceil((info.reset - Date.now()) / MS_PER_SECOND);
-        c.header('Retry-After', String(retryAfter));
+        const retryAfter = Math.max(
+          1,
+          Math.ceil((info.reset - Date.now()) / MS_PER_SECOND),
+        );
+        c.header("Retry-After", String(retryAfter));
         // Match the documented common error envelope (docs/reference/api.md):
         // { error: { code: "RATE_LIMITED", message: "..." } }.
         // Retry-After is conveyed via the header and via error.details.retryAfter
@@ -319,7 +338,7 @@ export class InMemoryRateLimiter {
         return c.json(
           {
             error: {
-              code: 'RATE_LIMITED',
+              code: "RATE_LIMITED",
               message: this.config.message,
               details: { retryAfter },
             },
@@ -343,12 +362,52 @@ export class InMemoryRateLimiter {
 const RATE_LIMIT_WINDOW_MS = 60_000;
 
 export const RateLimiters = {
-  auth: () => new InMemoryRateLimiter({ maxRequests: 100, windowMs: RATE_LIMIT_WINDOW_MS, message: 'Too many authentication attempts.' }),
-  sensitive: () => new InMemoryRateLimiter({ maxRequests: 100, windowMs: RATE_LIMIT_WINDOW_MS, message: 'Too many requests.' }),
-  oauthToken: () => new InMemoryRateLimiter({ maxRequests: 20, windowMs: RATE_LIMIT_WINDOW_MS, message: 'Too many token requests.' }),
-  oauthAuthorize: () => new InMemoryRateLimiter({ maxRequests: 30, windowMs: RATE_LIMIT_WINDOW_MS, message: 'Too many authorization requests.' }),
-  oauthRevoke: () => new InMemoryRateLimiter({ maxRequests: 10, windowMs: RATE_LIMIT_WINDOW_MS, message: 'Too many revocation requests.' }),
-  oauthRegister: () => new InMemoryRateLimiter({ maxRequests: 10, windowMs: RATE_LIMIT_WINDOW_MS, message: 'Too many client registration requests.' }),
-  oauthDeviceCode: () => new InMemoryRateLimiter({ maxRequests: 10, windowMs: RATE_LIMIT_WINDOW_MS, message: 'Too many device authorization requests.' }),
-  oauthDeviceVerify: () => new InMemoryRateLimiter({ maxRequests: 60, windowMs: RATE_LIMIT_WINDOW_MS, message: 'Too many device verification requests.' }),
+  auth: () =>
+    new InMemoryRateLimiter({
+      maxRequests: 100,
+      windowMs: RATE_LIMIT_WINDOW_MS,
+      message: "Too many authentication attempts.",
+    }),
+  sensitive: () =>
+    new InMemoryRateLimiter({
+      maxRequests: 100,
+      windowMs: RATE_LIMIT_WINDOW_MS,
+      message: "Too many requests.",
+    }),
+  oauthToken: () =>
+    new InMemoryRateLimiter({
+      maxRequests: 20,
+      windowMs: RATE_LIMIT_WINDOW_MS,
+      message: "Too many token requests.",
+    }),
+  oauthAuthorize: () =>
+    new InMemoryRateLimiter({
+      maxRequests: 30,
+      windowMs: RATE_LIMIT_WINDOW_MS,
+      message: "Too many authorization requests.",
+    }),
+  oauthRevoke: () =>
+    new InMemoryRateLimiter({
+      maxRequests: 10,
+      windowMs: RATE_LIMIT_WINDOW_MS,
+      message: "Too many revocation requests.",
+    }),
+  oauthRegister: () =>
+    new InMemoryRateLimiter({
+      maxRequests: 10,
+      windowMs: RATE_LIMIT_WINDOW_MS,
+      message: "Too many client registration requests.",
+    }),
+  oauthDeviceCode: () =>
+    new InMemoryRateLimiter({
+      maxRequests: 10,
+      windowMs: RATE_LIMIT_WINDOW_MS,
+      message: "Too many device authorization requests.",
+    }),
+  oauthDeviceVerify: () =>
+    new InMemoryRateLimiter({
+      maxRequests: 60,
+      windowMs: RATE_LIMIT_WINDOW_MS,
+      message: "Too many device verification requests.",
+    }),
 };

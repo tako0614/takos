@@ -1,28 +1,36 @@
 # Takos OSS Deployment Template - Secrets Configuration
 
-This document describes the current secret contract for the tracked Cloudflare deployment templates in `apps/control`.
+This document describes the current secret contract for the tracked Cloudflare
+deployment templates in `apps/control`. It is the reference for the OSS template
+and local/self-host operators. Production and staging secret operations are
+centralized in `takos-private/`.
 
-Secrets are managed with `wrangler secret put`. Non-secret configuration belongs in `wrangler*.toml` `[vars]` / `[env.*.vars]`.
+Within the tracked template, secrets are managed with `wrangler secret put`.
+Non-secret configuration belongs in `wrangler*.toml` `[vars]` / `[env.*.vars]`.
 
 ## Worker mapping
 
 Use `--config` to target the correct worker template.
 
-| Script name | Config | Responsibility |
-| --- | --- | --- |
-| `takos` / `takos-staging` | `wrangler.toml` | web/API worker, auth, setup, billing webhook, cron |
-| `takos-dispatch` | `wrangler.dispatch.toml` | tenant hostname dispatch |
-| `takos-worker` | `wrangler.worker.toml` | background queues, egress, recovery cron |
-| `takos-runtime-host` | `wrangler.runtime-host.toml` | runtime container host |
-| `takos-executor-host` | `wrangler.executor.toml` | executor container host |
-| `takos-browser-host` | `wrangler.browser-host.toml` | browser container host |
+| Script name               | Config                       | Responsibility                                     |
+| ------------------------- | ---------------------------- | -------------------------------------------------- |
+| `takos` / `takos-staging` | `wrangler.toml`              | web/API worker, auth, setup, billing webhook, cron |
+| `takos-dispatch`          | `wrangler.dispatch.toml`     | tenant hostname dispatch                           |
+| `takos-worker`            | `wrangler.worker.toml`       | background queues, egress, recovery cron           |
+| `takos-runtime-host`      | `wrangler.runtime-host.toml` | runtime container host                             |
+| `takos-executor-host`     | `wrangler.executor.toml`     | executor container host                            |
 
 ## Quick examples
 
+Examples for the tracked template or local/self-host environments only.
+
 ```bash
-wrangler secret put GOOGLE_CLIENT_SECRET --config wrangler.toml --env production
+wrangler secret put GOOGLE_CLIENT_SECRET --config wrangler.toml
 wrangler secret put OPENAI_API_KEY --config wrangler.worker.toml --env staging
-wrangler secret put ENCRYPTION_KEY --config wrangler.worker.toml --env production
+wrangler secret put ENCRYPTION_KEY --config wrangler.worker.toml
+wrangler secret put PLATFORM_PUBLIC_KEY --config wrangler.runtime-host.toml < platform-public.pem
+wrangler secret put EXECUTOR_PROXY_SECRET --config wrangler.toml
+wrangler secret put EXECUTOR_PROXY_SECRET --config wrangler.executor.toml
 ```
 
 ## Required / optional by worker
@@ -35,6 +43,7 @@ Required secrets:
 - `PLATFORM_PRIVATE_KEY`
 - `PLATFORM_PUBLIC_KEY`
 - `ENCRYPTION_KEY`
+- `EXECUTOR_PROXY_SECRET`
 
 Required when Cloudflare management is enabled:
 
@@ -76,6 +85,8 @@ Primary non-secret vars:
 Required secrets:
 
 - `ENCRYPTION_KEY`
+- `PLATFORM_PRIVATE_KEY`
+- `PLATFORM_PUBLIC_KEY`
 
 Required for agent functionality:
 
@@ -98,11 +109,12 @@ Primary non-secret vars:
 
 Required secrets:
 
-- none
+- `PLATFORM_PUBLIC_KEY`
 
 Optional:
 
-- `JWT_PUBLIC_KEY`
+- `JWT_PUBLIC_KEY` compatibility override. If set, it must match
+  `PLATFORM_PUBLIC_KEY`.
 
 Primary non-secret vars:
 
@@ -113,13 +125,6 @@ Primary non-secret vars:
 
 Required secrets:
 
-- none
-
-Optional:
-
-- `OPENAI_API_KEY`
-- `ANTHROPIC_API_KEY`
-- `GOOGLE_API_KEY`
 - `EXECUTOR_PROXY_SECRET`
 
 Primary non-secret vars:
@@ -127,48 +132,59 @@ Primary non-secret vars:
 - `ADMIN_DOMAIN`
 - `CONTROL_RPC_BASE_URL`
 
-### `wrangler.browser-host.toml`
-
-Required secrets:
-
-- none
-
-Primary non-secret vars:
-
-- `ADMIN_DOMAIN`
-
 ## Key details
 
 ### Google OAuth
 
 ```bash
-wrangler secret put GOOGLE_CLIENT_SECRET --config wrangler.toml --env production
+wrangler secret put GOOGLE_CLIENT_SECRET --config wrangler.toml
 ```
 
-`GOOGLE_CLIENT_ID` is a non-secret var. The callback URL must match the deployed admin domain.
+`GOOGLE_CLIENT_ID` is a non-secret var. The callback URL must match the deployed
+admin domain.
 
 ### Platform keys
 
 ```bash
-openssl genrsa -out platform-private.pem 2048
+openssl genpkey -algorithm RSA -pkeyopt rsa_keygen_bits:2048 -out platform-private.pem
 openssl rsa -in platform-private.pem -pubout -out platform-public.pem
 
-wrangler secret put PLATFORM_PRIVATE_KEY --config wrangler.toml --env production < platform-private.pem
-wrangler secret put PLATFORM_PUBLIC_KEY --config wrangler.toml --env production < platform-public.pem
+wrangler secret put PLATFORM_PRIVATE_KEY --config wrangler.toml < platform-private.pem
+wrangler secret put PLATFORM_PUBLIC_KEY --config wrangler.toml < platform-public.pem
+wrangler secret put PLATFORM_PRIVATE_KEY --config wrangler.worker.toml < platform-private.pem
+wrangler secret put PLATFORM_PUBLIC_KEY --config wrangler.worker.toml < platform-public.pem
+wrangler secret put PLATFORM_PUBLIC_KEY --config wrangler.runtime-host.toml < platform-public.pem
 ```
+
+`PLATFORM_PRIVATE_KEY` is the only private key used to sign runtime-service
+JWTs. `takos-runtime-host` passes its `PLATFORM_PUBLIC_KEY` to the runtime
+container as `JWT_PUBLIC_KEY`; do not configure a separate `JWT_PRIVATE_KEY`.
 
 ### Encryption
 
 ```bash
-openssl rand -base64 32 | wrangler secret put ENCRYPTION_KEY --config wrangler.worker.toml --env production
-openssl rand -base64 32 | wrangler secret put ENCRYPTION_KEY --config wrangler.toml --env production
+openssl rand -base64 32 | wrangler secret put ENCRYPTION_KEY --config wrangler.worker.toml
+openssl rand -base64 32 | wrangler secret put ENCRYPTION_KEY --config wrangler.toml
 ```
 
 Use the same key on the web/API worker and the background worker.
 
+### Executor RPC
+
+```bash
+secret="$(openssl rand -base64 32)"
+printf "%s" "$secret" | wrangler secret put EXECUTOR_PROXY_SECRET --config wrangler.toml
+printf "%s" "$secret" | wrangler secret put EXECUTOR_PROXY_SECRET --config wrangler.executor.toml
+```
+
+Use the same `EXECUTOR_PROXY_SECRET` value on the main `takos` worker and
+`takos-executor-host`. The executor-host does not keep LLM provider API keys; it
+forwards authenticated control RPC to the main worker through `TAKOS_CONTROL`.
+
 ### Cloudflare API token
 
-When you manage WFP/custom-domain resources from Takos itself, provision `CF_API_TOKEN`.
+When you manage WFP/custom-domain resources from Takos itself, provision
+`CF_API_TOKEN`.
 
 Minimum permissions usually include:
 
@@ -192,7 +208,10 @@ Webhook endpoint:
 
 ## Listing / deleting
 
+Use the same `takos-private/` caveat for private production and staging
+operations.
+
 ```bash
-wrangler secret list --config wrangler.toml --env production
-wrangler secret delete SECRET_NAME --config wrangler.toml --env production
+wrangler secret list --config wrangler.toml
+wrangler secret delete SECRET_NAME --config wrangler.toml
 ```

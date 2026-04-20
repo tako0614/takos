@@ -1,12 +1,11 @@
 import { type Context, Hono } from "hono";
-import { and, desc, eq, inArray, isNull, lt, ne } from "drizzle-orm";
+import { and, desc, eq, isNull, lt, ne } from "drizzle-orm";
 import type { Env } from "../../../shared/types/index.ts";
 import { spaceAccess, type SpaceAccessRouteEnv } from "../route-auth.ts";
 import {
-  appDeployments,
   appTokens,
-  deployments,
   getDb,
+  groupDeploymentSnapshots,
   groups,
   resources,
   services,
@@ -26,7 +25,6 @@ import {
 import {
   createGroupByName,
   findGroupByName,
-  type GroupProviderName,
   type GroupRow,
   type GroupSourceProjectionInput,
   updateGroupMetadata,
@@ -35,7 +33,7 @@ import {
 import {
   normalizeRepositoryUrl,
   type RepoRefType,
-} from "../../../application/services/platform/app-deployment-source.ts";
+} from "../../../application/services/platform/group-deployment-snapshot-source.ts";
 import {
   parseAppManifestText,
   parseAppManifestYaml,
@@ -43,13 +41,13 @@ import {
 import { getUpdateType } from "../../../application/services/deployment/store-install.ts";
 import { safeJsonParseOrDefault } from "../../../shared/utils/logger.ts";
 import type { AppManifest } from "../../../application/services/source/app-manifest-types.ts";
-import { AppDeploymentService } from "../../../application/services/platform/app-deployments.ts";
+import { GroupDeploymentSnapshotService } from "../../../application/services/deployment/group-deployment-snapshots.ts";
+import type { TranslationReport } from "../../../application/services/deployment/translation-report.ts";
+import { stripPublicInternalFields } from "../response-utils.ts";
 
 type GroupsContext = Context<SpaceAccessRouteEnv>;
 type GroupRouteBody = Record<string, unknown>;
 type GroupMetadataOverrides = {
-  providerProvided: boolean;
-  provider: GroupProviderName | null;
   envProvided: boolean;
   envName: string | null;
 };
@@ -57,13 +55,6 @@ type ParsedGroupDeployRequest = GroupMetadataOverrides & {
   manifest: AppManifest | undefined;
   source: GroupSourceProjectionInput | null;
 };
-const GROUP_PROVIDER_VALUES = [
-  "cloudflare",
-  "local",
-  "aws",
-  "gcp",
-  "k8s",
-] as const;
 
 export const groupsRouteDeps = {
   getDb,
@@ -75,22 +66,6 @@ export const groupsRouteDeps = {
 
 function groupRecordDeps() {
   return { getDb: groupsRouteDeps.getDb };
-}
-
-function parseGroupProvider(raw: unknown): GroupProviderName | null {
-  if (raw === undefined) return null;
-  if (raw === null) return null;
-  if (typeof raw !== "string") {
-    throw new BadRequestError(`Invalid provider: ${String(raw)}`);
-  }
-  const normalized = raw.trim().toLowerCase();
-  if (!normalized) {
-    throw new BadRequestError("provider must be a non-empty string");
-  }
-  if (!GROUP_PROVIDER_VALUES.includes(normalized as GroupProviderName)) {
-    throw new BadRequestError(`Invalid provider: ${raw}`);
-  }
-  return normalized as GroupProviderName;
 }
 
 function parseGroupEnv(raw: unknown): string | null {
@@ -140,9 +115,40 @@ function hasOwn(body: GroupRouteBody, key: string): boolean {
   return Object.prototype.hasOwnProperty.call(body, key);
 }
 
+function hasPublicBackendField(value: unknown): boolean {
+  if (!value || typeof value !== "object") return false;
+  if (Array.isArray(value)) {
+    return value.some((entry) => hasPublicBackendField(entry));
+  }
+  for (const [key, entry] of Object.entries(value as Record<string, unknown>)) {
+    if (
+      key === "backend" || key === "backendName" || key === "backend_name" ||
+      key === "backendState" || key === "backendStateJson" ||
+      key === "backend_state" || key === "backend_state_json"
+    ) {
+      return true;
+    }
+    if (hasPublicBackendField(entry)) return true;
+  }
+  return false;
+}
+
 function parseJsonField<T>(value: string | null): T | null {
   if (!value) return null;
   return safeJsonParseOrDefault<T | null>(value, null);
+}
+
+function assertNoPublicBackendInput(body: GroupRouteBody): void {
+  if (
+    hasOwn(body, "backend") ||
+    hasOwn(body, "backendName") || hasOwn(body, "backend_name") ||
+    hasOwn(body, "backendState") || hasOwn(body, "backendStateJson") ||
+    hasOwn(body, "backend_state") || hasOwn(body, "backend_state_json")
+  ) {
+    throw new BadRequestError(
+      "retired backend fields are not accepted on public group routes",
+    );
+  }
 }
 
 function toApiGroup(group: {
@@ -150,34 +156,85 @@ function toApiGroup(group: {
   spaceId: string;
   name: string;
   appVersion: string | null;
-  provider: string | null;
   env: string | null;
   sourceKind: string | null;
   sourceRepositoryUrl: string | null;
   sourceRef: string | null;
   sourceRefType: string | null;
   sourceCommitSha: string | null;
-  currentAppDeploymentId: string | null;
+  currentGroupDeploymentSnapshotId: string | null;
   desiredSpecJson: string | null;
-  providerStateJson: string | null;
   reconcileStatus: string;
   lastAppliedAt: string | null;
   createdAt: string;
   updatedAt: string;
 }) {
   return {
-    ...group,
-    desiredSpecJson: parseJsonField(group.desiredSpecJson),
-    providerStateJson: parseJsonField(group.providerStateJson),
+    id: group.id,
+    spaceId: group.spaceId,
+    name: group.name,
+    appVersion: group.appVersion,
+    env: group.env,
+    sourceKind: group.sourceKind,
+    sourceRepositoryUrl: group.sourceRepositoryUrl,
+    sourceRef: group.sourceRef,
+    sourceRefType: group.sourceRefType,
+    sourceCommitSha: group.sourceCommitSha,
+    currentGroupDeploymentSnapshotId: group.currentGroupDeploymentSnapshotId,
+    desiredSpecJson: stripPublicInternalFields(
+      parseJsonField(group.desiredSpecJson),
+    ),
+    reconcileStatus: group.reconcileStatus,
+    lastAppliedAt: group.lastAppliedAt,
+    createdAt: group.createdAt,
+    updatedAt: group.updatedAt,
   };
+}
+
+function toApiGroupState(
+  observed: Awaited<ReturnType<typeof groupsRouteDeps.getGroupState>>,
+) {
+  if (!observed) return null;
+  const { backend: _backend, ...apiObserved } = observed;
+  return stripPublicInternalFields(apiObserved);
+}
+
+function toApiTranslationReport(report: TranslationReport) {
+  return stripPublicInternalFields(report);
+}
+
+function toApiResult<T extends { translationReport: TranslationReport }>(
+  result: T,
+) {
+  return {
+    ...result,
+    translationReport: toApiTranslationReport(result.translationReport),
+  };
+}
+
+function toApiGroupDeploymentSnapshot<T>(snapshot: T) {
+  const stripped = stripPublicInternalFields(snapshot);
+  if (!stripped || typeof stripped !== "object" || Array.isArray(stripped)) {
+    return stripped;
+  }
+  return stripped;
 }
 
 function parseDesiredManifestInput(raw: unknown): AppManifest {
   if (!raw) {
     throw new BadRequestError("desired manifest body is required");
   }
+  if (hasPublicBackendField(raw)) {
+    throw new BadRequestError("desired state must not contain backend fields");
+  }
   try {
-    return parseAppManifestText(JSON.stringify(raw));
+    const manifest = parseAppManifestText(JSON.stringify(raw));
+    if (hasPublicBackendField(manifest)) {
+      throw new BadRequestError(
+        "desired state must not contain backend fields",
+      );
+    }
+    return manifest;
   } catch (error) {
     throw new BadRequestError(
       error instanceof Error
@@ -189,8 +246,15 @@ function parseDesiredManifestInput(raw: unknown): AppManifest {
 
 function parseRequestManifest(raw: unknown): AppManifest | undefined {
   if (raw === undefined) return undefined;
+  if (hasPublicBackendField(raw)) {
+    throw new BadRequestError("manifest must not contain backend fields");
+  }
   if (typeof raw === "string") {
-    return groupsRouteDeps.parseAppManifestYaml(raw);
+    const manifest = groupsRouteDeps.parseAppManifestYaml(raw);
+    if (hasPublicBackendField(manifest)) {
+      throw new BadRequestError("manifest must not contain backend fields");
+    }
+    return manifest;
   }
   return raw as AppManifest;
 }
@@ -198,11 +262,9 @@ function parseRequestManifest(raw: unknown): AppManifest | undefined {
 function parseGroupMetadataOverrides(
   body: GroupRouteBody,
 ): GroupMetadataOverrides {
-  const providerProvided = hasOwn(body, "provider");
+  assertNoPublicBackendInput(body);
   const envProvided = hasOwn(body, "env");
   return {
-    providerProvided,
-    provider: providerProvided ? parseGroupProvider(body.provider) : null,
     envProvided,
     envName: envProvided ? parseGroupEnv(body.env) : null,
   };
@@ -218,15 +280,9 @@ function parseGroupDeployRequest(
   };
 }
 
-function resolveGroupName(
-  raw: unknown,
-  manifest?: AppManifest,
-): string {
+function resolveGroupName(raw: unknown): string {
   if (typeof raw === "string" && raw.trim().length > 0) {
     return raw.trim();
-  }
-  if (typeof manifest?.name === "string" && manifest.name.trim().length > 0) {
-    return manifest.name.trim();
   }
   throw new BadRequestError("group_name is required");
 }
@@ -248,6 +304,9 @@ function parseGroupSourceProjection(
   }
 
   const source = raw as Record<string, unknown>;
+  if (hasPublicBackendField(source)) {
+    throw new BadRequestError("source must not contain backend fields");
+  }
   const kind = typeof source.kind === "string" ? source.kind.trim() : "";
   if (kind === "local_upload") {
     return { kind: "local_upload" };
@@ -301,7 +360,7 @@ async function assertGroupNameAvailable(
   );
   if (existing && existing.id !== excludeGroupId) {
     throw new BadRequestError(
-      `Group "${groupName}" already exists in this workspace`,
+      `Group "${groupName}" already exists in this space`,
     );
   }
 }
@@ -342,14 +401,13 @@ async function applyGroupMetadataOverrides(
   group: GroupRow,
   overrides: GroupMetadataOverrides,
 ): Promise<GroupRow> {
-  if (!overrides.providerProvided && !overrides.envProvided) {
+  if (!overrides.envProvided) {
     return group;
   }
   return updateGroupMetadata(
     env,
     group.id,
     {
-      provider: overrides.providerProvided ? overrides.provider : undefined,
       envName: overrides.envProvided ? overrides.envName : undefined,
     },
     groupRecordDeps(),
@@ -361,6 +419,7 @@ async function updatePersistedGroupMetadata(
   group: GroupRow,
   body: GroupRouteBody,
 ): Promise<GroupRow> {
+  assertNoPublicBackendInput(body);
   const { space } = c.get("access");
   const nextName = typeof body.name === "string" && body.name.trim().length > 0
     ? body.name.trim()
@@ -371,9 +430,6 @@ async function updatePersistedGroupMetadata(
   await db.update(groups)
     .set({
       name: nextName,
-      provider: hasOwn(body, "provider")
-        ? parseGroupProvider(body.provider)
-        : group.provider,
       env: hasOwn(body, "env") ? parseGroupEnv(body.env) : group.env,
       appVersion: typeof body.appVersion === "string"
         ? body.appVersion
@@ -410,10 +466,17 @@ async function syncGroupSourceProjection(
   source: GroupSourceProjectionInput | null,
   result: ReturnType<typeof buildSafeApplyResult>,
 ): Promise<void> {
-  if (!source || hasFailedApplyEntries(result)) {
+  if (hasFailedApplyEntries(result)) {
     return;
   }
-  await updateGroupSourceProjection(env, groupId, source, groupRecordDeps());
+  // Direct group apply does not create an immutable snapshot record; clear the
+  // pointer explicitly instead of leaving a stale snapshot reference behind.
+  await updateGroupSourceProjection(
+    env,
+    groupId,
+    source ?? { kind: "local_upload", currentGroupDeploymentSnapshotId: null },
+    groupRecordDeps(),
+  );
 }
 
 async function resolveNamedManifestGroup(
@@ -422,7 +485,7 @@ async function resolveNamedManifestGroup(
   manifest?: AppManifest,
 ): Promise<{ groupName: string; group: GroupRow | null }> {
   const { space } = c.get("access");
-  const groupName = resolveGroupName(body.group_name, manifest);
+  const groupName = resolveGroupName(body.group_name);
   const group = await findGroupInSpaceByName(c.env, space.id, groupName);
   assertManifestProvidedForMissingGroup(group, groupName, manifest);
   return { groupName, group };
@@ -430,12 +493,12 @@ async function resolveNamedManifestGroup(
 
 function buildPlanOptions(
   groupName: string,
-  currentProvider: string | null | undefined,
+  currentBackendName: string | null | undefined,
   overrides: GroupMetadataOverrides,
 ) {
   return {
     groupName,
-    providerName: overrides.provider ?? currentProvider ?? undefined,
+    backendName: currentBackendName ?? undefined,
     envName: overrides.envProvided ? overrides.envName ?? undefined : undefined,
   };
 }
@@ -497,7 +560,7 @@ async function revokeGroupTokensAndDelete(
     .set({ revokedAt: new Date().toISOString() })
     .where(and(eq(appTokens.groupId, groupId), isNull(appTokens.revokedAt)))
     .run();
-  await db.delete(groups).where(eq(groups.id, groupId));
+  await db.delete(groups).where(eq(groups.id, groupId)).run();
 }
 
 // ---------------------------------------------------------------------------
@@ -520,7 +583,7 @@ async function createGroupHandler(c: GroupsContext) {
   const group = await createGroupByName(c.env, {
     spaceId: space.id,
     groupName: requireNonEmptyString(body.name, "name"),
-    provider: overrides.providerProvided ? overrides.provider : null,
+    backendName: null,
     envName: overrides.envProvided ? overrides.envName : null,
     appVersion: typeof body.appVersion === "string" ? body.appVersion : null,
     manifest: body.desiredSpecJson ?? null,
@@ -531,15 +594,16 @@ async function createGroupHandler(c: GroupsContext) {
 async function getGroupHandler(c: GroupsContext) {
   const group = await requireGroupInSpace(c);
   const observed = await groupsRouteDeps.getGroupState(c.env, group.id);
+  const apiObserved = toApiGroupState(observed);
   const apiGroup = toApiGroup(group);
   return c.json({
     ...apiGroup,
-    observed,
+    observed: apiObserved,
     inventory: observed
       ? {
-        resources: Object.values(observed.resources),
-        workloads: Object.values(observed.workloads),
-        routes: Object.values(observed.routes),
+        resources: stripPublicInternalFields(Object.values(observed.resources)),
+        workloads: stripPublicInternalFields(Object.values(observed.workloads)),
+        routes: stripPublicInternalFields(Object.values(observed.routes)),
       }
       : { resources: [], workloads: [], routes: [] },
   });
@@ -555,7 +619,9 @@ async function patchGroupMetadataHandler(c: GroupsContext) {
 async function getGroupDesiredHandler(c: GroupsContext) {
   const group = await requireGroupInSpace(c);
   return c.json({
-    desired: parseJsonField<AppManifest>(group.desiredSpecJson),
+    desired: stripPublicInternalFields(
+      parseJsonField<AppManifest>(group.desiredSpecJson),
+    ),
   });
 }
 
@@ -575,7 +641,10 @@ async function putGroupDesiredHandler(c: GroupsContext) {
     .run();
 
   const updated = await requireGroupInSpace(c);
-  return c.json({ group: toApiGroup(updated), desired });
+  return c.json({
+    group: toApiGroup(updated),
+    desired: stripPublicInternalFields(desired),
+  });
 }
 
 async function deleteGroupHandler(c: GroupsContext) {
@@ -613,9 +682,11 @@ async function listGroupResourcesHandler(c: GroupsContext) {
     .all();
   return c.json({
     resources: result.map((resource) => ({
-      ...resource,
-      config: parseJsonField(resource.config) ?? {},
-      metadata: parseJsonField(resource.metadata) ?? {},
+      ...stripPublicInternalFields(resource),
+      config: stripPublicInternalFields(parseJsonField(resource.config) ?? {}),
+      metadata: stripPublicInternalFields(
+        parseJsonField(resource.metadata) ?? {},
+      ),
     })),
   });
 }
@@ -629,30 +700,26 @@ async function listGroupServicesHandler(c: GroupsContext) {
     .all();
   return c.json({
     services: result.map((service) => ({
-      ...service,
-      config: parseJsonField(service.config) ?? {},
+      ...stripPublicInternalFields(service),
+      config: stripPublicInternalFields(parseJsonField(service.config) ?? {}),
     })),
   });
 }
 
 async function listGroupDeploymentsHandler(c: GroupsContext) {
+  const { space } = c.get("access");
   const group = await requireGroupInSpace(c);
-  const db = groupsRouteDeps.getDb(c.env.DB);
-  const ownedServices = await db.select({ id: services.id })
-    .from(services)
-    .where(eq(services.groupId, group.id))
-    .all();
-  const serviceIds = ownedServices.map((service) => service.id);
-
-  if (serviceIds.length === 0) {
-    return c.json({ deployments: [] });
-  }
-
-  const result = await db.select()
-    .from(deployments)
-    .where(inArray(deployments.serviceId, serviceIds))
-    .all();
-  return c.json({ deployments: result });
+  const snapshots = await new GroupDeploymentSnapshotService(c.env)
+    .listForGroup(
+      space.id,
+      group.id,
+      group.name,
+    );
+  return c.json({
+    group_deployment_snapshots: snapshots.map((snapshot) =>
+      toApiGroupDeploymentSnapshot(snapshot)
+    ),
+  });
 }
 
 // ---------------------------------------------------------------------------
@@ -668,9 +735,12 @@ async function planGroupHandler(c: GroupsContext) {
     c.env,
     group.id,
     input.manifest,
-    buildPlanOptions(group.name, group.provider, input),
+    {
+      ...buildPlanOptions(group.name, group.backend, input),
+      target: body.target as ApplyManifestOpts["target"],
+    },
   );
-  return c.json(result);
+  return c.json(toApiResult(result));
 }
 
 async function planGroupByNameHandler(c: GroupsContext) {
@@ -686,7 +756,10 @@ async function planGroupByNameHandler(c: GroupsContext) {
     c.env,
     group?.id ?? null,
     input.manifest,
-    buildPlanOptions(groupName, group?.provider, input),
+    {
+      ...buildPlanOptions(groupName, group?.backend, input),
+      target: body.target as ApplyManifestOpts["target"],
+    },
   );
   return c.json({
     group: {
@@ -694,7 +767,7 @@ async function planGroupByNameHandler(c: GroupsContext) {
       name: groupName,
       exists: !!group,
     },
-    ...result,
+    ...toApiResult(result),
   });
 }
 
@@ -715,7 +788,7 @@ async function applyGroupHandler(c: GroupsContext) {
       source: input.source,
     },
   );
-  return c.json(safeResult);
+  return c.json(toApiResult(safeResult));
 }
 
 async function applyGroupByNameHandler(c: GroupsContext) {
@@ -735,7 +808,7 @@ async function applyGroupByNameHandler(c: GroupsContext) {
   const finalGroup = group ?? await createGroupByName(c.env, {
     spaceId: space.id,
     groupName,
-    provider: input.providerProvided ? input.provider : undefined,
+    backendName: undefined,
     envName: input.envProvided ? input.envName : undefined,
     appVersion: typeof input.manifest?.version === "string"
       ? input.manifest.version
@@ -757,7 +830,7 @@ async function applyGroupByNameHandler(c: GroupsContext) {
   );
   return c.json({
     group: { id: finalGroup.id, name: finalGroup.name },
-    ...safeResult,
+    ...toApiResult(safeResult),
   });
 }
 
@@ -794,7 +867,7 @@ async function uninstallGroupByNameHandler(c: GroupsContext) {
 
   return c.json({
     group: { id: group.id, name: group.name },
-    apply_result: safeResult,
+    apply_result: toApiResult(safeResult),
     uninstalled: true,
     deleted_group: true,
   });
@@ -821,57 +894,75 @@ async function updatesGroupHandler(c: GroupsContext) {
   });
 }
 
-async function rollbackGroupHandler(c: GroupsContext) {
+async function rollbackGroup(c: GroupsContext, group: GroupRow) {
   const { space } = c.get("access");
   const user = c.get("user");
   if (!user) {
     throw new BadRequestError("Authentication required");
   }
-  const group = await requireGroupInSpace(c);
-  if (!group.currentAppDeploymentId) {
+  if (!group.currentGroupDeploymentSnapshotId) {
     throw new ConflictError(
-      "Group has no current app deployment to roll back",
+      "Group has no current deployment snapshot to roll back",
     );
   }
-  const currentDeploymentId = group.currentAppDeploymentId;
+  const currentDeploymentId = group.currentGroupDeploymentSnapshotId;
 
-  // Resolve the prior successful deployment so the response can advertise the
-  // version we are rolling back TO. This mirrors the workers rollback shape
-  // (`rolled_back_to` is the previous successful deployment, not the current).
+  // Resolve the prior successful snapshot so the response can advertise the
+  // version we are rolling back to.
   const db = groupsRouteDeps.getDb(c.env.DB);
-  const currentRow = await db.select().from(appDeployments).where(and(
-    eq(appDeployments.id, currentDeploymentId),
-    eq(appDeployments.spaceId, space.id),
-    ne(appDeployments.status, "deleted"),
+  const currentRow = await db.select().from(groupDeploymentSnapshots).where(and(
+    eq(groupDeploymentSnapshots.id, currentDeploymentId),
+    eq(groupDeploymentSnapshots.spaceId, space.id),
+    ne(groupDeploymentSnapshots.status, "deleted"),
   )).get();
   if (!currentRow) {
-    throw new NotFoundError("App deployment");
+    throw new NotFoundError("Group deployment snapshot");
   }
-  const previousRow = await db.select().from(appDeployments).where(and(
-    eq(appDeployments.spaceId, space.id),
-    eq(appDeployments.groupId, currentRow.groupId),
-    eq(appDeployments.status, "applied"),
-    ne(appDeployments.id, currentRow.id),
-    lt(appDeployments.createdAt, currentRow.createdAt),
-  )).orderBy(desc(appDeployments.createdAt)).get();
+  const previousRow = await db.select().from(groupDeploymentSnapshots).where(
+    and(
+      eq(groupDeploymentSnapshots.spaceId, space.id),
+      eq(groupDeploymentSnapshots.groupId, currentRow.groupId),
+      eq(groupDeploymentSnapshots.status, "applied"),
+      ne(groupDeploymentSnapshots.id, currentRow.id),
+      lt(groupDeploymentSnapshots.createdAt, currentRow.createdAt),
+    ),
+  ).orderBy(desc(groupDeploymentSnapshots.createdAt)).get();
   if (!previousRow) {
     throw new ConflictError(
       "No previous successful deployment to roll back to",
     );
   }
 
-  const result = await new AppDeploymentService(c.env).rollback(
+  const result = await new GroupDeploymentSnapshotService(c.env).rollback(
     space.id,
     user.id,
-    currentDeploymentId,
+    previousRow.id,
   );
   return c.json({
+    group: { id: group.id, name: group.name },
     group_id: group.id,
-    deployment_id: result.appDeployment.id,
-    rolled_back_to: previousRow.id,
-    app_deployment: result.appDeployment,
-    apply_result: result.applyResult,
+    group_deployment_snapshot_id: result.groupDeploymentSnapshot.id,
+    rolled_back_to_group_deployment_snapshot_id: previousRow.id,
+    group_deployment_snapshot: toApiGroupDeploymentSnapshot(
+      result.groupDeploymentSnapshot,
+    ),
+    apply_result: toApiResult(result.applyResult),
   });
+}
+
+async function rollbackGroupHandler(c: GroupsContext) {
+  const group = await requireGroupInSpace(c);
+  return rollbackGroup(c, group);
+}
+
+async function rollbackGroupByNameHandler(c: GroupsContext) {
+  const { space } = c.get("access");
+  const groupName = requireNonEmptyString(
+    c.req.param("groupName"),
+    "groupName param",
+  );
+  const group = await requireGroupByNameInSpace(c.env, space.id, groupName);
+  return rollbackGroup(c, group);
 }
 
 // ---------------------------------------------------------------------------
@@ -902,6 +993,11 @@ groupsRouter
     "/spaces/:spaceId/groups/uninstall",
     spaceAccess({ roles: ["owner", "admin", "editor"] }),
     uninstallGroupByNameHandler,
+  )
+  .post(
+    "/spaces/:spaceId/groups/by-name/:groupName/rollback",
+    spaceAccess({ roles: ["owner", "admin", "editor"] }),
+    rollbackGroupByNameHandler,
   )
   .get("/spaces/:spaceId/groups/:groupId", spaceAccess(), getGroupHandler)
   .patch(

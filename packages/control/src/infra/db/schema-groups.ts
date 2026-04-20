@@ -1,5 +1,5 @@
-import { sqliteTable, text, uniqueIndex } from 'drizzle-orm/sqlite-core';
-import { timestamps } from './schema-utils.ts';
+import { sqliteTable, text, uniqueIndex } from "drizzle-orm/sqlite-core";
+import { timestamps } from "./schema-utils.ts";
 
 /**
  * Index naming drift NOTE (Round 11 audit Finding #6).
@@ -19,24 +19,27 @@ import { timestamps } from './schema-utils.ts';
  * .index() names so they don't add to the drift.
  */
 
-export const groups = sqliteTable('groups', {
-  id: text('id').primaryKey(),
-  spaceId: text('space_id').notNull(),
-  name: text('name').notNull(),
-  appVersion: text('app_version'),
-  provider: text('provider'),
-  env: text('env'),
-  sourceKind: text('source_kind'),
-  sourceRepositoryUrl: text('source_repository_url'),
-  sourceRef: text('source_ref'),
-  sourceRefType: text('source_ref_type'),
-  sourceCommitSha: text('source_commit_sha'),
-  currentAppDeploymentId: text('current_app_deployment_id'),
-  desiredSpecJson: text('desired_spec_json'),
-  providerStateJson: text('provider_state_json'),
-  reconcileStatus: text('reconcile_status').notNull().default('idle'),
-  lastAppliedAt: text('last_applied_at'),
+export const groups = sqliteTable("groups", {
+  id: text("id").primaryKey(),
+  spaceId: text("space_id").notNull(),
+  name: text("name").notNull(),
+  appVersion: text("app_version"),
+  backend: text("backend"),
+  env: text("env"),
+  sourceKind: text("source_kind"),
+  sourceRepositoryUrl: text("source_repository_url"),
+  sourceRef: text("source_ref"),
+  sourceRefType: text("source_ref_type"),
+  sourceCommitSha: text("source_commit_sha"),
+  currentGroupDeploymentSnapshotId: text("current_group_deployment_snapshot_id"),
+  desiredSpecJson: text("desired_spec_json"),
+  backendStateJson: text("backend_state_json"),
+  reconcileStatus: text("reconcile_status").notNull().default("idle"),
+  lastAppliedAt: text("last_applied_at"),
   ...timestamps,
 }, (table) => ({
-  uniqSpaceName: uniqueIndex('idx_groups_space_name').on(table.spaceId, table.name),
+  uniqSpaceName: uniqueIndex("idx_groups_space_name").on(
+    table.spaceId,
+    table.name,
+  ),
 }));

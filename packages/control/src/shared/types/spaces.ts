@@ -1,6 +1,6 @@
-export type SpaceRole = 'owner' | 'admin' | 'editor' | 'viewer';
-export type SpaceKind = 'user' | 'team' | 'system';
-export type SecurityPosture = 'standard' | 'restricted_egress';
+export type SpaceRole = "owner" | "admin" | "editor" | "viewer";
+export type SpaceKind = "user" | "team" | "system";
+export type SecurityPosture = "standard" | "restricted_egress";
 
 export interface Space {
   id: string;
@@ -14,7 +14,7 @@ export interface Space {
   automation_principal_id?: string | null;
   head_snapshot_id?: string | null;
   ai_model?: string | null;
-  ai_provider?: string | null;
+  model_backend?: string | null;
   security_posture?: SecurityPosture;
   created_at: string;
   updated_at: string;

@@ -1,11 +1,12 @@
 # Attached Container
 
 Worker に紐づく container workload を `compute.<name>.containers` 内で定義する。
-ブラウザ自動化、heavy computation、external binary を必要とする host process など、
-Worker から呼び出したい image-backed workload 向け。
+heavy computation、external binary を必要とする host process など、Worker
+から呼び出したい image-backed workload 向け。
 
-Attached Container はトップレベルの compute エントリではなく、Worker の `containers`
-map 内に定義する。
+Attached Container はトップレベルの compute エントリではなく、Worker の
+`containers` map 内に定義する。Attached Container は runtime binding / health
+check の接続先を推測しないため、`port` が必須です。
 
 ## 基本
 
@@ -19,8 +20,8 @@ compute:
         artifact: host
         artifactPath: dist/host.js
     containers:
-      browser:
-        image: ghcr.io/org/browser@sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef
+      worker:
+        image: ghcr.io/org/worker@sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef
         port: 8080
 ```
 
@@ -38,54 +39,64 @@ compute:
         artifact: host
         artifactPath: dist/host.js
     containers:
-      browser:
-        image: ghcr.io/org/browser@sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef
+      worker:
+        image: ghcr.io/org/worker@sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef
         port: 8080
         env:
           NODE_ENV: production
           LOG_LEVEL: info
 ```
 
-アプリ全体の環境変数はトップレベル `env` で設定する。詳しくは
+group 全体の環境変数はトップレベル `env` で設定する。詳しくは
 [環境変数](/apps/environment) を参照。
 
 ## フィールド
 
 Worker の `containers` map 内で定義する各 container のフィールド。
 
-| field | required | type | 説明 |
-| --- | --- | --- | --- |
-| `image` | **yes** | string | digest-pinned container image (64-hex `sha256` digest) |
-| `port` | no | number | コンテナのリッスンポート |
-| `instanceType` | no | string | provider 別 instance enum |
-| `scaling` | no | object | `{ minInstances?, maxInstances? }` |
-| `env` | no | object | コンテナ環境変数 |
-| `volumes` | no | object | volume mount |
-| `healthCheck` | no | object | ヘルスチェック |
-| `depends` | no | array | compute 名の配列 |
-| `dockerfile` | no | string | local build 用 (local provider only) |
+| field         | required      | type   | 説明                                                      |
+| ------------- | ------------- | ------ | --------------------------------------------------------- |
+| `image`       | online deploy | string | digest-pinned container image (64-hex `sha256` digest)    |
+| `port`        | yes           | number | コンテナのリッスンポート                                  |
+| `scaling`     | no            | object | parser / desired metadata。runtime へ直接 apply しない    |
+| `env`         | no            | object | コンテナ環境変数                                          |
+| `consume`     | no            | array  | publication / grant consume                               |
+| `volumes`     | no            | object | parser / desired metadata。runtime へ直接 apply しない    |
+| `healthCheck` | no            | object | ヘルスチェック                                            |
+| `depends`     | no            | array  | compute 名の配列                                          |
+| `dockerfile`  | local only    | string | local/private build 用。online deploy では `image` も必要 |
 
-`readiness` は Worker 専用です。Attached Container は `healthCheck` を使います。
+`readiness` は Worker 専用です。Attached Container の `healthCheck` は deploy
+target に渡すヘルスチェック入力です。kernel の deploy 後定期監視 contract
+ではありません。
 
 ## deploy source の制約
 
-`takos deploy` / `takos install` で online deploy する場合は
-digest pin された `image` が必要。`image` は 64-hex の `sha256` digest を含む
-必要がある。
+`takos deploy` / `takos install` で group snapshot として online deploy
+する場合は digest pin された `image` が必要。`image` は 64-hex の `sha256`
+digest を含む必要がある。`dockerfile` は `image` と併用する local/private
+builder metadata であり、`dockerfile` だけの attached container は current
+public deploy manifest として invalid。`port` は local/private builder metadata
+付き manifest でも online deploy でも必須。
 
 ## Attached Container vs Service vs Worker
 
-| 形態 | 定義場所 | 動作 | route target | 典型用途 |
-| --- | --- | --- | --- | --- |
-| Worker | `compute.<name>` (with `build`) | serverless、request-driven | yes | ルーティング、軽量処理 |
-| Service | `compute.<name>` (with `image`) | always-on container | yes | API サーバー、常設バックエンド |
-| Attached Container | `compute.<name>.containers.<name>` | worker に紐づく container | **no** | browser / executor / host process |
+| 形態               | 定義場所                           | 動作                       | route target | 典型用途                       |
+| ------------------ | ---------------------------------- | -------------------------- | ------------ | ------------------------------ |
+| Worker             | `compute.<name>` (with `build`)    | serverless、request-driven | yes          | ルーティング、軽量処理         |
+| Service            | `compute.<name>` (with `image`)    | always-on container        | yes          | API サーバー、常設バックエンド |
+| Attached Container | `compute.<name>.containers.<name>` | worker に紐づく container  | **no**       | executor / host process        |
 
-attached container は **routes の `target` にできない**。`routes` は親 worker / service を
-対象に書き、そこから attached container を呼び出す。
+attached container は **routes の `target` にできない**。`routes` は親 worker /
+service を 対象に書き、そこから attached container を呼び出す。
 
-Worker コードからは attached container reference を通じて参照する。current
-runtime では DurableObjectNamespace-compatible な handle として利用できる。
+Worker コードからは attached container reference を通じて参照する。binding 名は
+child 名を uppercase に正規化した `${NAME}_CONTAINER` になる。たとえば `worker`
+なら `env.WORKER_CONTAINER` を使う。current runtime では
+DurableObjectNamespace-compatible な handle として利用できる。
+
+`__TAKOS_ATTACHED_CONTAINER_${NAME}_URL` 形式の internal URL env は runtime
+generated の内部実装であり、public contract ではない。
 
 ## 次のステップ
 

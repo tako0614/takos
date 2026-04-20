@@ -1,10 +1,10 @@
-import { spawn } from 'node:child_process';
-import { filterSafeEnv } from '../utils/sandbox-env.ts';
-import { createLogger } from 'takos-common/logger';
-import { gracefulKill } from '../utils/process-kill.ts';
+import { spawn } from "node:child_process";
+import { filterSafeEnv } from "../utils/sandbox-env.ts";
+import { createLogger } from "takos-common/logger";
+import { gracefulKill } from "../utils/process-kill.ts";
 import { Buffer } from "node:buffer";
 
-const logger = createLogger({ service: 'takos-runtime' });
+const logger = createLogger({ service: "takos-runtime" });
 
 export interface GitHttpBackendRequest {
   projectRoot: string;
@@ -12,6 +12,7 @@ export interface GitHttpBackendRequest {
   service: string;
   requestBody: Buffer | null;
   contentType: string | undefined;
+  gitProtocol?: string | undefined;
 }
 
 export interface GitHttpBackendResponse {
@@ -26,14 +27,35 @@ const GIT_HTTP_BACKEND_TIMEOUT_MS = 30 * 60 * 1000;
 // Maximum buffer size for git http-backend output (100 MB)
 const MAX_GIT_BACKEND_OUTPUT_BYTES = 100 * 1024 * 1024;
 
+export function buildGitHttpBackendEnv(
+  request: GitHttpBackendRequest,
+): NodeJS.ProcessEnv {
+  const env: NodeJS.ProcessEnv = {
+    ...filterSafeEnv(Deno.env.toObject()),
+    GIT_PROJECT_ROOT: request.projectRoot,
+    GIT_HTTP_EXPORT_ALL: "1",
+    PATH_INFO: request.gitPath,
+    REQUEST_METHOD: request.requestBody ? "POST" : "GET",
+    QUERY_STRING: `service=${request.service}`,
+    CONTENT_TYPE: request.contentType || "",
+    GIT_TERMINAL_PROMPT: "0",
+  };
+
+  if (request.gitProtocol) {
+    env.GIT_PROTOCOL = request.gitProtocol;
+  }
+
+  return env;
+}
+
 function parseBackendOutput(output: Buffer): GitHttpBackendResponse {
   const outputStr = output.toString();
 
-  let headerEnd = outputStr.indexOf('\r\n\r\n');
-  let separator = '\r\n\r\n';
+  let headerEnd = outputStr.indexOf("\r\n\r\n");
+  let separator = "\r\n\r\n";
   if (headerEnd === -1) {
-    headerEnd = outputStr.indexOf('\n\n');
-    separator = '\n\n';
+    headerEnd = outputStr.indexOf("\n\n");
+    separator = "\n\n";
   }
 
   if (headerEnd === -1) {
@@ -45,7 +67,7 @@ function parseBackendOutput(output: Buffer): GitHttpBackendResponse {
   const headerSection = outputStr.slice(0, headerEnd);
 
   for (const line of headerSection.split(/\r?\n/)) {
-    const colonIdx = line.indexOf(':');
+    const colonIdx = line.indexOf(":");
     if (colonIdx === -1) {
       continue;
     }
@@ -53,8 +75,8 @@ function parseBackendOutput(output: Buffer): GitHttpBackendResponse {
     const key = line.slice(0, colonIdx).trim().toLowerCase();
     const value = line.slice(colonIdx + 1).trim();
 
-    if (key === 'status') {
-      status = parseInt(value.split(' ')[0], 10) || 200;
+    if (key === "status") {
+      status = parseInt(value.split(" ")[0], 10) || 200;
     } else {
       headers[key] = value;
     }
@@ -68,23 +90,14 @@ function parseBackendOutput(output: Buffer): GitHttpBackendResponse {
 }
 
 export async function runGitHttpBackend(
-  request: GitHttpBackendRequest
+  request: GitHttpBackendRequest,
 ): Promise<GitHttpBackendResponse> {
   return new Promise((resolve, reject) => {
-    const env: NodeJS.ProcessEnv = {
-      ...filterSafeEnv(Deno.env.toObject()),
-      GIT_PROJECT_ROOT: request.projectRoot,
-      GIT_HTTP_EXPORT_ALL: '1',
-      PATH_INFO: request.gitPath,
-      REQUEST_METHOD: request.requestBody ? 'POST' : 'GET',
-      QUERY_STRING: `service=${request.service}`,
-      CONTENT_TYPE: request.contentType || '',
-      GIT_TERMINAL_PROMPT: '0',
-    };
+    const env = buildGitHttpBackendEnv(request);
 
-    const child = spawn('git', ['http-backend'], {
+    const child = spawn("git", ["http-backend"], {
       env,
-      stdio: ['pipe', 'pipe', 'pipe'],
+      stdio: ["pipe", "pipe", "pipe"],
     });
 
     let isTimedOut = false;
@@ -99,16 +112,20 @@ export async function runGitHttpBackend(
     const stderrChunks: Buffer[] = [];
     let totalOutputBytes = 0;
 
-    child.stdout.on('data', (chunk: Buffer) => {
+    child.stdout.on("data", (chunk: Buffer) => {
       totalOutputBytes += chunk.length;
       if (totalOutputBytes > MAX_GIT_BACKEND_OUTPUT_BYTES) {
-        child.kill('SIGKILL');
-        reject(new Error(`git http-backend output exceeded ${MAX_GIT_BACKEND_OUTPUT_BYTES} bytes`));
+        child.kill("SIGKILL");
+        reject(
+          new Error(
+            `git http-backend output exceeded ${MAX_GIT_BACKEND_OUTPUT_BYTES} bytes`,
+          ),
+        );
         return;
       }
       chunks.push(chunk);
     });
-    child.stderr.on('data', (chunk: Buffer) => stderrChunks.push(chunk));
+    child.stderr.on("data", (chunk: Buffer) => stderrChunks.push(chunk));
 
     if (request.requestBody) {
       child.stdin.write(request.requestBody);
@@ -120,23 +137,27 @@ export async function runGitHttpBackend(
       if (forceKillHandle) clearTimeout(forceKillHandle);
     }
 
-    child.on('error', (err) => {
+    child.on("error", (err) => {
       clearTimers();
       reject(err);
     });
 
-    child.on('close', (code) => {
+    child.on("close", (code) => {
       clearTimers();
 
       if (isTimedOut) {
-        reject(new Error(`git http-backend timed out after ${GIT_HTTP_BACKEND_TIMEOUT_MS}ms`));
+        reject(
+          new Error(
+            `git http-backend timed out after ${GIT_HTTP_BACKEND_TIMEOUT_MS}ms`,
+          ),
+        );
         return;
       }
 
       if (code !== 0) {
         const stderr = Buffer.concat(stderrChunks).toString();
         logger.error(`[git-http] Process failed with code ${code}`, { stderr });
-        reject(new Error('Git operation failed'));
+        reject(new Error("Git operation failed"));
         return;
       }
 

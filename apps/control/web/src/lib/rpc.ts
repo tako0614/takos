@@ -154,7 +154,7 @@ export async function rpcJson<T>(response: JsonResponseLike): Promise<T> {
 // ---------------------------------------------------------------------------
 // Typed RPC helpers for routes whose wildcard patterns (`/*`) or missing
 // schema entries break hono/client's type inference.
-// These use `rpcPath` so no `as any` leaks into call-sites.
+// These use `rpcPath` so route access stays structural at call-sites.
 // ---------------------------------------------------------------------------
 
 /** GET /repos/:repoId/tree/:ref */
@@ -178,23 +178,5 @@ export function repoBlob(
   return rpcPath(rpc, "repos", ":repoId", "blob", ":ref").$get({
     param: { repoId, ref },
     query: query ?? {},
-  });
-}
-
-/** GET /sessions/:sessionId/diff */
-export function sessionDiff(sessionId: string): Promise<RpcResponse> {
-  return rpcPath(rpc, "sessions", ":sessionId", "diff").$get({
-    param: { sessionId },
-  });
-}
-
-/** POST /sessions/:sessionId/merge */
-export function sessionMerge(
-  sessionId: string,
-  json: Record<string, unknown>,
-): Promise<RpcResponse> {
-  return rpcPath(rpc, "sessions", ":sessionId", "merge").$post({
-    param: { sessionId },
-    json,
   });
 }

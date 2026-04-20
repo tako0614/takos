@@ -6,6 +6,41 @@ import {
   syncGroupManagedDesiredState,
 } from "@/services/deployment/group-managed-desired-state";
 
+function createManagedStateDbMock() {
+  const emptyRowsQuery = {
+    all: async () => [],
+    orderBy: () => emptyRowsQuery,
+    then: (
+      resolve: (value: unknown[]) => void,
+      reject: (reason?: unknown) => void,
+    ) => Promise.resolve([]).then(resolve, reject),
+  };
+  return {
+    select: () => ({
+      from: () => ({
+        where: () => emptyRowsQuery,
+      }),
+    }),
+    insert: () => ({
+      values: () => ({
+        run: async () => undefined,
+      }),
+    }),
+    update: () => ({
+      set: () => ({
+        where: () => ({
+          run: async () => undefined,
+        }),
+      }),
+    }),
+    delete: () => ({
+      where: () => ({
+        run: async () => undefined,
+      }),
+    }),
+  };
+}
+
 Deno.test("group managed desired state sync - syncs publications, consumes, and resolved env into service desired state", async () => {
   const replaceManifestPublicationsCalls: unknown[] = [];
   const replaceServiceConsumesCalls: unknown[] = [];
@@ -14,12 +49,17 @@ Deno.test("group managed desired state sync - syncs publications, consumes, and 
 
   const deps = {
     createDesiredStateService: () => ({
+      listLocalEnvVars: async () => [],
       replaceLocalEnvVars: async (params: unknown) => {
         replaceLocalEnvVarsCalls.push(params);
       },
     }),
     replaceManifestPublications: async (_env, params) => {
       replaceManifestPublicationsCalls.push(params);
+    },
+    previewServiceConsumeEnvVars: async (_env, params) => {
+      if (!params.consumes) return [];
+      return [{ name: "TOOLS_URL", secret: false }];
     },
     replaceServiceConsumes: async (_env, params) => {
       replaceServiceConsumesCalls.push(params);
@@ -36,6 +76,11 @@ Deno.test("group managed desired state sync - syncs publications, consumes, and 
         },
       ];
     },
+    resolveLinkedCommonEnvState: async () => ({
+      envBindings: [],
+      envVars: {},
+      commonEnvUpdates: [],
+    }),
   } satisfies GroupManagedDesiredStateDeps;
 
   const desired = compileGroupDesiredState(
@@ -83,14 +128,15 @@ Deno.test("group managed desired state sync - syncs publications, consumes, and 
         {
           type: "McpServer",
           name: "tools",
+          publisher: "edge",
           path: "/mcp",
-          transport: "streamable-http",
+          spec: { transport: "streamable-http" },
         },
       ],
     },
     {
       groupName: "demo-app",
-      provider: "cloudflare",
+      backend: "cloudflare",
       envName: "production",
     },
   );
@@ -99,7 +145,7 @@ Deno.test("group managed desired state sync - syncs publications, consumes, and 
     {
       ENCRYPTION_KEY: "test-key",
       ADMIN_DOMAIN: "admin.example.test",
-      DB: {} as never,
+      DB: createManagedStateDbMock(),
     } as never,
     {
       spaceId: "ws-1",
@@ -107,7 +153,7 @@ Deno.test("group managed desired state sync - syncs publications, consumes, and 
       observedState: {
         groupId: "group-1",
         groupName: "demo-app",
-        provider: "cloudflare",
+        backend: "cloudflare",
         env: "production",
         version: "1.0.0",
         updatedAt: "2026-03-29T00:00:00.000Z",
@@ -151,8 +197,9 @@ Deno.test("group managed desired state sync - syncs publications, consumes, and 
         {
           type: "McpServer",
           name: "tools",
+          publisher: "edge",
           path: "/mcp",
-          transport: "streamable-http",
+          spec: { transport: "streamable-http" },
         },
       ],
       routes: [
@@ -162,7 +209,7 @@ Deno.test("group managed desired state sync - syncs publications, consumes, and 
     observedState: {
       groupId: "group-1",
       groupName: "demo-app",
-      provider: "cloudflare",
+      backend: "cloudflare",
       env: "production",
       version: "1.0.0",
       updatedAt: "2026-03-29T00:00:00.000Z",
@@ -239,4 +286,111 @@ Deno.test("group managed desired state sync - syncs publications, consumes, and 
       ],
     },
   ]);
+});
+
+Deno.test("group managed desired state sync - preflights consume env collisions before persisting consumes", async () => {
+  const replaceServiceConsumesCalls: unknown[] = [];
+
+  const deps = {
+    createDesiredStateService: () => ({
+      listLocalEnvVars: async () => [],
+      replaceLocalEnvVars: async () => {},
+    }),
+    replaceManifestPublications: async () => {},
+    previewServiceConsumeEnvVars: async () => [
+      { name: "PUBLICATION_SEARCH_URL", secret: false },
+    ],
+    replaceServiceConsumes: async (_env, params) => {
+      replaceServiceConsumesCalls.push(params);
+      return params.consumes ?? [];
+    },
+    resolveServiceConsumeEnvVars: async () => [],
+    resolveLinkedCommonEnvState: async () => ({
+      envBindings: [],
+      envVars: {},
+      commonEnvUpdates: [],
+    }),
+  } satisfies GroupManagedDesiredStateDeps;
+
+  const desired = compileGroupDesiredState(
+    {
+      name: "demo-app",
+      version: "1.0.0",
+      env: {},
+      compute: {
+        web: {
+          kind: "worker",
+          build: {
+            fromWorkflow: {
+              path: ".takos/workflows/deploy.yml",
+              job: "build",
+              artifact: "web",
+              artifactPath: "dist/web.js",
+            },
+          },
+          env: {
+            PUBLICATION_SEARCH_URL: "manual",
+          },
+          consume: [{ publication: "search" }],
+        },
+      },
+      routes: [],
+      publish: [],
+    },
+    {
+      groupName: "demo-app",
+      backend: "cloudflare",
+      envName: "production",
+    },
+  );
+
+  const failures = await syncGroupManagedDesiredState(
+    {
+      ENCRYPTION_KEY: "test-key",
+      ADMIN_DOMAIN: "admin.example.test",
+      DB: createManagedStateDbMock(),
+    } as never,
+    {
+      spaceId: "ws-1",
+      desiredState: desired,
+      observedState: {
+        groupId: "group-1",
+        groupName: "demo-app",
+        backend: "cloudflare",
+        env: "production",
+        version: "1.0.0",
+        updatedAt: "2026-03-29T00:00:00.000Z",
+        resources: {},
+        workloads: {
+          web: {
+            serviceId: "svc-web",
+            name: "web",
+            category: "worker",
+            status: "deployed",
+            hostname: "web.example.test",
+            routeRef: "worker-web",
+            updatedAt: "2026-03-29T00:00:00.000Z",
+          },
+        },
+        routes: {},
+      },
+      resourceRows: [],
+    },
+    deps,
+  );
+
+  assertEquals(replaceServiceConsumesCalls, [
+    {
+      spaceId: "ws-1",
+      serviceId: "svc-web",
+      serviceName: "demo-app:web",
+      consumes: [],
+    },
+  ]);
+  assertEquals(failures.length, 1);
+  assertEquals(failures[0].name, "web");
+  assertEquals(
+    failures[0].error,
+    "consume output resolves env 'PUBLICATION_SEARCH_URL' which already exists in compute 'web'",
+  );
 });

@@ -1,6 +1,7 @@
 # Resource Governance
 
-Takos の current resource governance は、old docs の `space_plans` / `app_quotas` 中心モデルではなく、**resource CRUD + access control + runtime settings + billing gates** の組み合わせで成立しています。
+Takos の resource governance は、**resource CRUD + access control + runtime
+settings + billing gates** の組み合わせで成立しています。
 
 ## 管理対象
 
@@ -17,13 +18,13 @@ Takos は次の面を別々に管理します。
 
 ### resources
 
-`/api/resources` family が resource 正本です。
+`/api/resources` family が resource 基準です。
 
 - resource CRUD
 - access grant (`/access`)
 - token / connection info (`/tokens`, `/connection`)
-- sql introspection / query / export (Cloudflare backend では D1 に解決)
-- object-store object list / stats / delete (Cloudflare backend では R2 に解決)
+- sql introspection / query / export (backend example: D1)
+- object-store object list / stats / delete (backend example: R2)
 - bind / unbind
 
 ### common env と bindings
@@ -40,7 +41,8 @@ state は次に分かれています。
 
 ### runtime settings
 
-service / worker ごとに runtime setting, limit, flag を持てます。operator が調整する主な対象は次です。
+service / worker ごとに runtime setting, limit, flag を持てます。operator
+が調整する主な対象は次です。
 
 - hostname / route
 - common env links
@@ -49,14 +51,15 @@ service / worker ごとに runtime setting, limit, flag を持てます。operat
 
 ## billing gate
 
-current implementation では request path ごとに billing/plan gate をかけています。
+current implementation では request path ごとに billing/plan gate
+をかけています。
 
-| gate | path family |
-| --- | --- |
-| vector search | `/api/spaces/:spaceId/search*` |
-| embeddings / index | `/api/spaces/:spaceId/index*` |
-| sessions exec time | `/api/sessions*` |
-| service / WFP usage | `/api/services*` |
+| gate                            | path family                                                        |
+| ------------------------------- | ------------------------------------------------------------------ |
+| vector search                   | `/api/spaces/:spaceId/search*`                                     |
+| embeddings / index              | `/api/spaces/:spaceId/index*`                                      |
+| sessions exec time              | `/api/sessions*`                                                   |
+| service / WFP usage             | `/api/services*`                                                   |
 | agent runtime + token preflight | `/api/spaces/:spaceId/threads*`, `/api/runs*`, `/api/agent-tasks*` |
 
 agent 系は特に次を併用します。
@@ -74,7 +77,8 @@ usage と請求は account 中心です。主要な group:
 - `usageEvents`
 - `usageRollups`
 
-current public billing API は `/api/billing` family です。`/api/billing/usage` は current account の usage rollup を返します。
+current public billing API は `/api/billing` family です。`/api/billing/usage`
+は current account の usage rollup を返します。
 
 ## operator が見るべき state
 
@@ -85,4 +89,6 @@ current public billing API は `/api/billing` family です。`/api/billing/usag
 - usage rollup
 - billing status
 
-詳しい public path は [API リファレンス](/reference/api) を参照してください。billing の詳細は [Billing](/platform/billing) を参照してください。
+詳しい public path は [API リファレンス](/reference/api)
+を参照してください。billing の詳細は [Billing](/platform/billing)
+を参照してください。

@@ -2,15 +2,15 @@
 // parse-compute.ts
 // ============================================================
 //
-// Flat-schema compute parser (Phase 1).
+// Flat-schema compute parser.
 //
 // Walks `compute.<name>` entries in the top-level manifest and
 // builds a `Record<string, AppCompute>`. The compute `kind`
 // (worker / service / attached-container) is auto-detected from
-// the presence of `build`, `image`, and `containers` fields.
+// the presence of `build`, `image`, `dockerfile`, and `containers`
+// fields.
 //
-// Previous files (parse-workers.ts / parse-services.ts /
-// parse-containers.ts) are retired in favor of this unified walker.
+// Unified walker for all compute entries.
 // ============================================================
 
 import type {
@@ -31,12 +31,62 @@ import {
   asStringArray,
   asStringMap,
   normalizeRepoPath,
+  normalizeRepoRelativePath,
 } from "../app-manifest-utils.ts";
 import {
-  validateInstanceType,
+  validateDigestPinnedImageRef,
   validateReadinessPath,
   validateServiceScaling,
 } from "../app-manifest-validation.ts";
+
+const COMPUTE_FIELDS = new Set([
+  "build",
+  "image",
+  "port",
+  "env",
+  "readiness",
+  "scaling",
+  "volumes",
+  "containers",
+  "depends",
+  "triggers",
+  "healthCheck",
+  "dockerfile",
+  "consume",
+]);
+const INTERNAL_COMPUTE_FIELDS = new Set([...COMPUTE_FIELDS, "kind"]);
+
+const BUILD_FIELDS = new Set(["fromWorkflow"]);
+const FROM_WORKFLOW_FIELDS = new Set([
+  "path",
+  "job",
+  "artifact",
+  "artifactPath",
+]);
+const VOLUME_FIELDS = new Set(["source", "target", "persistent"]);
+const HEALTH_CHECK_FIELDS = new Set([
+  "path",
+  "interval",
+  "timeout",
+  "unhealthyThreshold",
+]);
+const TRIGGER_FIELDS = new Set(["schedules"]);
+const SCHEDULE_FIELDS = new Set(["cron"]);
+const CONSUME_FIELDS = new Set(["publication", "env"]);
+
+function assertAllowedFields(
+  record: Record<string, unknown>,
+  prefix: string,
+  allowed: ReadonlySet<string>,
+): void {
+  for (const key of Object.keys(record)) {
+    if (!allowed.has(key)) {
+      throw new Error(
+        `${prefix}.${key} is not supported by the app manifest contract`,
+      );
+    }
+  }
+}
 
 // ============================================================
 // Build configuration
@@ -48,22 +98,29 @@ function parseBuildConfig(
 ): BuildConfig | undefined {
   if (raw == null) return undefined;
   const record = asRecord(raw);
+  assertAllowedFields(record, `${prefix}.build`, BUILD_FIELDS);
   const fromWorkflow = asRecord(record.fromWorkflow);
+  assertAllowedFields(
+    fromWorkflow,
+    `${prefix}.build.fromWorkflow`,
+    FROM_WORKFLOW_FIELDS,
+  );
   if (Object.keys(fromWorkflow).length === 0) {
     throw new Error(`${prefix}.build.fromWorkflow is required`);
   }
-  const workflowPath = normalizeRepoPath(
+  const workflowPath = normalizeRepoRelativePath(
     asRequiredString(
       fromWorkflow.path,
       `${prefix}.build.fromWorkflow.path`,
     ),
+    `${prefix}.build.fromWorkflow.path`,
   );
   if (!workflowPath.startsWith(".takos/workflows/")) {
     throw new Error(
       `${prefix}.build.fromWorkflow.path must be under .takos/workflows/`,
     );
   }
-  const artifactPathRaw = asString(
+  const artifactPath = asString(
     fromWorkflow.artifactPath,
     `${prefix}.build.fromWorkflow.artifactPath`,
   );
@@ -78,8 +135,13 @@ function parseBuildConfig(
         fromWorkflow.artifact,
         `${prefix}.build.fromWorkflow.artifact`,
       ),
-      ...(artifactPathRaw
-        ? { artifactPath: normalizeRepoPath(artifactPathRaw) }
+      ...(artifactPath
+        ? {
+          artifactPath: normalizeRepoRelativePath(
+            artifactPath,
+            `${prefix}.build.fromWorkflow.artifactPath`,
+          ),
+        }
         : {}),
     },
   };
@@ -100,6 +162,11 @@ function parseVolumeMounts(
   const result: Record<string, VolumeMount> = {};
   for (const [name, value] of Object.entries(raw as Record<string, unknown>)) {
     const mountRecord = asRecord(value);
+    assertAllowedFields(
+      mountRecord,
+      `${prefix}.volumes.${name}`,
+      VOLUME_FIELDS,
+    );
     const source = asRequiredString(
       mountRecord.source,
       `${prefix}.volumes.${name}.source`,
@@ -129,6 +196,7 @@ function parseHealthCheckFlat(
 ): HealthCheck | undefined {
   if (raw == null) return undefined;
   const record = asRecord(raw);
+  assertAllowedFields(record, `${prefix}.healthCheck`, HEALTH_CHECK_FIELDS);
   const path = asString(record.path, `${prefix}.healthCheck.path`);
   const interval = asOptionalInteger(
     record.interval,
@@ -168,6 +236,11 @@ function parseSchedules(
   }
   return raw.map((entry, index) => {
     const record = asRecord(entry);
+    assertAllowedFields(
+      record,
+      `${prefix}.triggers.schedules[${index}]`,
+      SCHEDULE_FIELDS,
+    );
     return {
       cron: asRequiredString(
         record.cron,
@@ -183,16 +256,30 @@ function parseTriggers(
 ): AppTriggers | undefined {
   if (raw == null) return undefined;
   const record = asRecord(raw);
+  assertAllowedFields(record, `${prefix}.triggers`, TRIGGER_FIELDS);
   const schedules = parseSchedules(prefix, record.schedules);
-  if (record.queues != null) {
-    throw new Error(
-      `${prefix}.triggers.queues is retired. Publish a queue provider and consume its outputs instead.`,
-    );
-  }
   const result: AppTriggers = {
     ...(schedules && schedules.length > 0 ? { schedules } : {}),
   };
   return Object.keys(result).length > 0 ? result : undefined;
+}
+
+function normalizeConsumeEnvAliases(
+  env: Record<string, string> | undefined,
+  field: string,
+): Record<string, string> | undefined {
+  if (!env) return undefined;
+  const normalized: Record<string, string> = {};
+  for (const [outputName, envName] of Object.entries(env)) {
+    const trimmed = envName.trim();
+    if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(trimmed)) {
+      throw new Error(
+        `${field}.${outputName} has invalid env name: ${envName}`,
+      );
+    }
+    normalized[outputName] = trimmed.toUpperCase();
+  }
+  return normalized;
 }
 
 function parseConsume(
@@ -206,11 +293,16 @@ function parseConsume(
 
   const result: AppConsume[] = raw.map((entry, index) => {
     const record = asRecord(entry);
-    const env = asStringMap(record.env, `${prefix}.consume[${index}].env`);
+    const consumePrefix = `${prefix}.consume[${index}]`;
+    assertAllowedFields(record, consumePrefix, CONSUME_FIELDS);
+    const env = normalizeConsumeEnvAliases(
+      asStringMap(record.env, `${consumePrefix}.env`),
+      `${consumePrefix}.env`,
+    );
     return {
       publication: asRequiredString(
         record.publication,
-        `${prefix}.consume[${index}].publication`,
+        `${consumePrefix}.publication`,
       ),
       ...(env ? { env } : {}),
     };
@@ -230,6 +322,17 @@ function parseConsume(
   return result;
 }
 
+function describeComputeKind(kind: ComputeKind): string {
+  switch (kind) {
+    case "worker":
+      return "worker compute";
+    case "service":
+      return "service compute";
+    case "attached-container":
+      return "attached container compute";
+  }
+}
+
 // ============================================================
 // Compute kind detection
 // ============================================================
@@ -241,20 +344,41 @@ function detectComputeKind(
 ): ComputeKind {
   const hasBuild = record.build != null;
   const hasImage = record.image != null;
+  const hasDockerfile = record.dockerfile != null;
+  if (parentKind === "worker") {
+    if (hasBuild) {
+      throw new Error(
+        `${prefix}.build is not supported for attached container compute; use digest-pinned image instead.`,
+      );
+    }
+    if (hasDockerfile && !hasImage) {
+      throw new Error(
+        `${prefix}.dockerfile may only be used as metadata with a digest-pinned image`,
+      );
+    }
+    if (hasImage) {
+      // Nested entries under a worker's `containers` map are attached-containers.
+      return "attached-container";
+    }
+    throw new Error(
+      `${prefix} must define 'image' for attached container compute`,
+    );
+  }
   if (hasBuild && hasImage) {
     throw new Error(
       `${prefix} must not define both 'build' and 'image' (choose one)`,
     );
-  }
-  if (parentKind === "worker") {
-    // Nested entries under a worker's `containers` map are attached-containers.
-    return "attached-container";
   }
   if (hasBuild) {
     return "worker";
   }
   if (hasImage) {
     return "service";
+  }
+  if (hasDockerfile) {
+    throw new Error(
+      `${prefix}.dockerfile may only be used as metadata with a digest-pinned image`,
+    );
   }
   throw new Error(
     `${prefix} must define 'build' (worker) or 'image' (service)`,
@@ -269,12 +393,21 @@ function parseComputeEntry(
   prefix: string,
   raw: unknown,
   parentKind: ComputeKind | null,
+  options: ParseComputeOptions,
 ): AppCompute {
   const record = asRecord(raw);
+  assertAllowedFields(
+    record,
+    prefix,
+    options.allowInternalKind ? INTERNAL_COMPUTE_FIELDS : COMPUTE_FIELDS,
+  );
   const kind = detectComputeKind(prefix, record, parentKind);
 
   const build = parseBuildConfig(prefix, record.build);
-  const image = asString(record.image, `${prefix}.image`);
+  const image = validateDigestPinnedImageRef(
+    asString(record.image, `${prefix}.image`),
+    `${prefix}.image`,
+  );
   const port = record.port != null
     ? (() => {
       const value = Number(record.port);
@@ -284,32 +417,38 @@ function parseComputeEntry(
       return value;
     })()
     : undefined;
+  if (kind !== "worker" && port == null) {
+    throw new Error(
+      `${prefix}.port is required for ${describeComputeKind(kind)}`,
+    );
+  }
   const env = asStringMap(record.env, `${prefix}.env`);
-  const readiness = validateReadinessPath(
-    record.readiness,
-    `${prefix}.readiness`,
-  );
+  const readiness = record.readiness != null
+    ? (() => {
+      if (kind !== "worker") {
+        throw new Error(
+          `${prefix}.readiness is not supported for ${
+            describeComputeKind(kind)
+          }; readiness is worker-only`,
+        );
+      }
+      return validateReadinessPath(
+        record.readiness,
+        `${prefix}.readiness`,
+      );
+    })()
+    : undefined;
   const scaling = validateServiceScaling(record.scaling, `${prefix}.scaling`);
-  const instanceType = validateInstanceType(
-    record.instanceType,
-    undefined,
-    `${prefix}.instanceType`,
-  );
   const volumes = parseVolumeMounts(prefix, record.volumes);
+  if (kind === "worker" && volumes) {
+    throw new Error(
+      `${prefix}.volumes is not supported for worker compute`,
+    );
+  }
   const depends = asStringArray(record.depends, `${prefix}.depends`);
   const triggers = parseTriggers(prefix, record.triggers);
   const dockerfile = asString(record.dockerfile, `${prefix}.dockerfile`);
   const consume = parseConsume(prefix, record.consume);
-  const maxInstances = asOptionalInteger(
-    record.maxInstances,
-    `${prefix}.maxInstances`,
-    { min: 1 },
-  );
-  if (record.capabilities != null) {
-    throw new Error(
-      `${prefix}.capabilities is retired. Use top-level publish + ${prefix}.consume instead.`,
-    );
-  }
 
   // Health check only applies to service / attached compute
   let healthCheck: HealthCheck | undefined;
@@ -336,6 +475,7 @@ function parseComputeEntry(
         `${prefix}.containers.${nestedName}`,
         nestedValue,
         "worker",
+        options,
       );
     }
     if (Object.keys(resolved).length > 0) {
@@ -358,7 +498,6 @@ function parseComputeEntry(
     ...(env ? { env } : {}),
     ...(readiness ? { readiness } : {}),
     ...(scaling ? { scaling } : {}),
-    ...(instanceType ? { instanceType } : {}),
     ...(volumes ? { volumes } : {}),
     ...(nested ? { containers: nested } : {}),
     ...(depends ? { depends } : {}),
@@ -366,7 +505,6 @@ function parseComputeEntry(
     ...(healthCheck ? { healthCheck } : {}),
     ...(dockerfile ? { dockerfile: normalizeRepoPath(dockerfile) } : {}),
     ...(consume ? { consume } : {}),
-    ...(maxInstances != null ? { maxInstances } : {}),
   };
 }
 
@@ -374,8 +512,13 @@ function parseComputeEntry(
 // Top-level compute walker
 // ============================================================
 
+export type ParseComputeOptions = {
+  allowInternalKind?: boolean;
+};
+
 export function parseCompute(
   topLevel: Record<string, unknown>,
+  options: ParseComputeOptions = {},
 ): Record<string, AppCompute> {
   if (topLevel.compute == null) {
     return {};
@@ -383,7 +526,7 @@ export function parseCompute(
   const computeRecord = asRecord(topLevel.compute);
   const result: Record<string, AppCompute> = {};
   for (const [name, value] of Object.entries(computeRecord)) {
-    result[name] = parseComputeEntry(`compute.${name}`, value, null);
+    result[name] = parseComputeEntry(`compute.${name}`, value, null, options);
   }
   return result;
 }

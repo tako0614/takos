@@ -13,7 +13,7 @@ export interface CustomTool {
   enabled: boolean;
   type?: string;
   workerId?: string;
-  takopackId?: string | null;
+  bundleDeploymentId?: string | null;
   createdAt?: string;
   updatedAt?: string;
 }

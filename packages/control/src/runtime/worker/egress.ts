@@ -17,9 +17,7 @@ import {
   validateEgressEnv,
 } from "../../shared/utils/validate-env.ts";
 import { logError, logInfo, logWarn } from "../../shared/utils/logger.ts";
-import {
-  errorJsonResponse,
-} from "../../shared/utils/http-response.ts";
+import { errorJsonResponse } from "../../shared/utils/http-response.ts";
 
 interface Env {
   RATE_LIMITER_DO?: DurableObjectNamespace;
@@ -30,13 +28,6 @@ interface Env {
   EGRESS_MAX_RESPONSE_BYTES?: string; // default 26214400 (25MB)
   EGRESS_TIMEOUT_MS?: string; // default 300000 (5 min)
 }
-
-type RateLimiterNamespace = {
-  idFromName(name: string): unknown;
-  get(
-    id: unknown,
-  ): { fetch(input: RequestInfo | URL, init?: RequestInit): Promise<Response> };
-};
 
 const DEFAULT_MAX_REQUEST_BYTES = 10 * 1024 * 1024; // 10MB
 const DEFAULT_MAX_REQUESTS = 300;
@@ -185,7 +176,7 @@ async function rateLimitIfConfigured(
     : Number.NaN;
 
   try {
-    const namespace = env.RATE_LIMITER_DO as unknown as RateLimiterNamespace;
+    const namespace = env.RATE_LIMITER_DO;
     const id = namespace.idFromName(`egress:${spaceId}`);
     const stub = namespace.get(id);
     const body: Record<string, unknown> = {
@@ -242,7 +233,7 @@ const envGuard = createEnvGuard(validateEgressEnv);
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
     // Validate environment on first request (cached).
-    const envError = envGuard(env as unknown as Record<string, unknown>);
+    const envError = envGuard(env);
     if (envError) {
       return errorJsonResponse("Configuration Error", 503, {
         message:
@@ -252,8 +243,8 @@ export default {
 
     const startedAt = Date.now();
 
-    // Service binding callers set X-Takos-Internal: 1 — required for all requests
-    const isInternal = request.headers.get("X-Takos-Internal") === "1";
+    // Service binding callers set X-Takos-Internal-Marker: 1 — required for all requests
+    const isInternal = request.headers.get("X-Takos-Internal-Marker") === "1";
 
     if (!isInternal) {
       return errorJsonResponse("Unauthorized", 401);

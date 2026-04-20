@@ -21,9 +21,9 @@ export type {
 // ─── Options for app creation ───
 
 export interface OciOrchestratorAppOptions {
-  /** Fixed backend to use for every provider. Preserved for tests and explicit overrides. */
+  /** Fixed backend to use for every request. Preserved for tests and explicit overrides. */
   backend?: ContainerBackend;
-  /** Resolve a backend from the requested provider. Defaults to a provider-aware resolver. */
+  /** Resolve a backend from the requested backend name. Defaults to a backend-aware resolver. */
   backendResolver?: OciOrchestratorBackendResolver;
 }
 
@@ -65,7 +65,7 @@ export async function startLocalOciOrchestratorServer(
           ? (options.backend.constructor?.name ?? "custom-backend")
           : options?.backendResolver
           ? "custom-resolver"
-          : "provider-aware-default",
+          : "backend-aware-default",
       });
     },
   });

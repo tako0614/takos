@@ -70,7 +70,7 @@ export async function deployFrontendFromWorkspace(
     }
   }
 
-  // Get files from workspace
+  // Get files from the space.
   const fileRows = await drizzle.select({
     id: files.id,
     path: files.path,

@@ -1,17 +1,20 @@
-import type { QueueBinding, QueueMessageBatch } from '../shared/types/bindings.ts';
+import type {
+  QueueBinding,
+  QueueMessageBatch,
+} from "../shared/types/bindings.ts";
 
 export const LOCAL_QUEUE_NAMES = {
-  run: 'takos-runs',
-  index: 'takos-index-jobs',
-  workflow: 'takos-workflow-jobs',
-  deployment: 'takos-deployment-jobs',
+  run: "takos-runs",
+  index: "takos-index-jobs",
+  workflow: "takos-workflow-jobs",
+  deployment: "takos-deployment-jobs",
 } as const;
 
 export const LOCAL_DLQ_QUEUE_NAMES = {
-  [LOCAL_QUEUE_NAMES.run]: 'takos-runs-dlq',
-  [LOCAL_QUEUE_NAMES.index]: 'takos-index-jobs-dlq',
-  [LOCAL_QUEUE_NAMES.workflow]: 'takos-workflow-jobs-dlq',
-  [LOCAL_QUEUE_NAMES.deployment]: 'takos-deployment-jobs-dlq',
+  [LOCAL_QUEUE_NAMES.run]: "takos-runs-dlq",
+  [LOCAL_QUEUE_NAMES.index]: "takos-index-jobs-dlq",
+  [LOCAL_QUEUE_NAMES.workflow]: "takos-workflow-jobs-dlq",
+  [LOCAL_QUEUE_NAMES.deployment]: "takos-deployment-jobs-dlq",
 } as const;
 
 export const LOCAL_QUEUE_RETRY_LIMITS = {
@@ -44,16 +47,20 @@ export type LocalQueue<T = unknown> = ConsumableQueue<T> & {
   sent: LocalQueueRecord<T>[];
 };
 
-export function isConsumableQueue(value: unknown): value is ConsumableQueue<unknown> {
-  if (!value || typeof value !== 'object') return false;
+export function isConsumableQueue(
+  value: unknown,
+): value is ConsumableQueue<unknown> {
+  if (!value || typeof value !== "object") return false;
   const candidate = value as Partial<ConsumableQueue<unknown>>;
-  return typeof candidate.queueName === 'string' && typeof candidate.receive === 'function';
+  return typeof candidate.queueName === "string" &&
+    typeof candidate.receive === "function";
 }
 
 export function isLocalQueue(value: unknown): value is LocalQueue<unknown> {
-  if (!value || typeof value !== 'object') return false;
+  if (!value || typeof value !== "object") return false;
   const candidate = value as Partial<LocalQueue<unknown>>;
-  return typeof candidate.queueName === 'string' && typeof candidate.receive === 'function';
+  return typeof candidate.queueName === "string" &&
+    typeof candidate.receive === "function";
 }
 
 export function buildLocalMessageBatch<T>(
@@ -78,8 +85,9 @@ export function buildLocalMessageBatch<T>(
     },
   };
 
-  return {
+  const batch: QueueMessageBatch<T> = {
     queue: queueName,
     messages: [message],
-  } as unknown as QueueMessageBatch<T>;
+  };
+  return batch;
 }

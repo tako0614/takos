@@ -1,4 +1,5 @@
 import { assertEquals, assertThrows } from "jsr:@std/assert";
+import { applyManifestOverrides } from "../../deployment/group-state.ts";
 import { parseAppManifestYaml } from "../app-manifest.ts";
 
 Deno.test("public manifest contract - allows compute depends to reference compute entries", () => {
@@ -29,6 +30,95 @@ routes:
   assertEquals(manifest.compute.api.depends, undefined);
 });
 
+Deno.test("public manifest contract - treats build artifactPath as optional metadata", () => {
+  const manifest = parseAppManifestYaml(`
+name: artifact-path-app
+
+compute:
+  web:
+    build:
+      fromWorkflow:
+        path: .takos/workflows/deploy.yml
+        job: bundle
+        artifact: web
+        artifactPath: ./dist//worker
+
+routes:
+  - target: web
+    path: /
+`);
+
+  assertEquals(
+    manifest.compute.web.build?.fromWorkflow.artifactPath,
+    "dist/worker",
+  );
+
+  const missingArtifactPath = parseAppManifestYaml(`
+name: missing-artifact-path-app
+
+compute:
+  web:
+    build:
+      fromWorkflow:
+        path: .takos/workflows/deploy.yml
+        job: bundle
+        artifact: web
+
+routes:
+  - target: web
+    path: /
+`);
+
+  assertEquals(
+    missingArtifactPath.compute.web.build?.fromWorkflow.artifactPath,
+    undefined,
+  );
+
+  assertThrows(
+    () =>
+      parseAppManifestYaml(`
+name: escaping-artifact-path-app
+
+compute:
+  web:
+    build:
+      fromWorkflow:
+        path: .takos/workflows/deploy.yml
+        job: bundle
+        artifact: web
+        artifactPath: ../dist/worker
+
+routes:
+  - target: web
+    path: /
+`),
+    Error,
+    "compute.web.build.fromWorkflow.artifactPath must not contain path traversal",
+  );
+
+  assertThrows(
+    () =>
+      parseAppManifestYaml(`
+name: escaping-workflow-path-app
+
+compute:
+  web:
+    build:
+      fromWorkflow:
+        path: .takos/workflows/../deploy.yml
+        job: bundle
+        artifact: web
+        artifactPath: dist/worker
+
+routes:
+  - target: web
+    path: /
+`),
+    Error,
+    "compute.web.build.fromWorkflow.path must not contain path traversal",
+  );
+});
+
 Deno.test("public manifest contract - parses worker with attached container and route publication", () => {
   const manifest = parseAppManifestYaml(`
 name: notes-assistant
@@ -56,10 +146,12 @@ routes:
     path: /mcp
 
 publish:
-  - type: McpServer
+  - type: com.example.McpEndpoint
     name: notes
+    publisher: web
     path: /mcp
-    transport: streamable-http
+    spec:
+      protocol: streamable-http
 `);
 
   assertEquals(manifest.compute.web.kind, "worker");
@@ -77,22 +169,1140 @@ publish:
     }],
   );
   assertEquals(manifest.publish[0]?.name, "notes");
+  assertEquals(manifest.publish[0]?.publisher, "web");
+  assertEquals(manifest.publish[0]?.spec, { protocol: "streamable-http" });
 });
 
-Deno.test("public manifest contract - parses provider publications and compute consume", () => {
+Deno.test("public manifest contract - rejects routes targeting attached containers", () => {
+  assertThrows(
+    () =>
+      parseAppManifestYaml(`
+name: attached-route-app
+
+compute:
+  web:
+    build:
+      fromWorkflow:
+        path: .takos/workflows/deploy.yml
+        job: bundle
+        artifact: web
+        artifactPath: dist/worker
+    containers:
+      sandbox:
+        image: ghcr.io/org/sandbox@sha256:fedcba9876543210fedcba9876543210fedcba9876543210fedcba9876543210
+        port: 3000
+
+routes:
+  - target: sandbox
+    path: /sandbox
+`),
+    Error,
+    "routes[0].target references attached container compute",
+  );
+});
+
+Deno.test("public manifest contract - rejects duplicate route target/path entries during parse", () => {
+  assertThrows(
+    () =>
+      parseAppManifestYaml(`
+name: duplicate-route-app
+
+compute:
+  web:
+    build:
+      fromWorkflow:
+        path: .takos/workflows/deploy.yml
+        job: bundle
+        artifact: web
+        artifactPath: dist/worker
+
+routes:
+  - target: web
+    path: /mcp
+    methods:
+      - GET
+  - target: web
+    path: /mcp
+    methods:
+      - POST
+`),
+    Error,
+    "route target/path 'web /mcp' duplicates routes[0]",
+  );
+});
+
+Deno.test("public manifest contract - rejects overlapping route paths during parse", () => {
+  assertThrows(
+    () =>
+      parseAppManifestYaml(`
+name: overlapping-route-app
+
+compute:
+  web:
+    build:
+      fromWorkflow:
+        path: .takos/workflows/deploy.yml
+        job: bundle
+        artifact: web
+        artifactPath: dist/worker
+  api:
+    build:
+      fromWorkflow:
+        path: .takos/workflows/deploy.yml
+        job: bundle
+        artifact: api
+        artifactPath: dist/api
+
+routes:
+  - target: web
+    path: /mcp
+    methods:
+      - GET
+  - target: api
+    path: /mcp
+`),
+    Error,
+    "route path '/mcp' overlaps routes[0] for method GET",
+  );
+});
+
+Deno.test("public manifest contract - rejects Takos grants with missing required spec fields during parse", () => {
+  assertThrows(
+    () =>
+      parseAppManifestYaml(`
+name: missing-takos-grant-spec-app
+
+publish:
+  - name: takos-api
+    publisher: takos
+    type: api-key
+    spec: {}
+
+compute:
+  web:
+    build:
+      fromWorkflow:
+        path: .takos/workflows/deploy.yml
+        job: bundle
+        artifact: web
+        artifactPath: dist/worker
+`),
+    Error,
+    "publication 'takos-api'.spec.scopes must be an array",
+  );
+
+  assertThrows(
+    () =>
+      parseAppManifestYaml(`
+name: missing-oauth-grant-spec-app
+
+publish:
+  - name: app-oauth
+    publisher: takos
+    type: oauth-client
+    spec:
+      scopes:
+        - threads:read
+
+compute:
+  web:
+    build:
+      fromWorkflow:
+        path: .takos/workflows/deploy.yml
+        job: bundle
+        artifact: web
+        artifactPath: dist/worker
+`),
+    Error,
+    "publication 'app-oauth'.spec.redirectUris must be an array",
+  );
+});
+
+Deno.test("public manifest contract - rejects invalid route timeoutMs", () => {
+  assertThrows(
+    () =>
+      parseAppManifestYaml(`
+name: bad-route-timeout-app
+
+compute:
+  web:
+    build:
+      fromWorkflow:
+        path: .takos/workflows/deploy.yml
+        job: bundle
+        artifact: web
+        artifactPath: dist/worker
+
+routes:
+  - target: web
+    path: /
+    timeoutMs: nope
+`),
+    Error,
+    "routes[0].timeoutMs must be an integer",
+  );
+
+  assertThrows(
+    () =>
+      parseAppManifestYaml(`
+name: negative-route-timeout-app
+
+compute:
+  web:
+    build:
+      fromWorkflow:
+        path: .takos/workflows/deploy.yml
+        job: bundle
+        artifact: web
+        artifactPath: dist/worker
+
+routes:
+  - target: web
+    path: /
+    timeoutMs: 0
+`),
+    Error,
+    "routes[0].timeoutMs must be >= 1",
+  );
+});
+
+Deno.test("public manifest contract - uppercases route methods during parse", () => {
+  const manifest = parseAppManifestYaml(`
+name: method-normalization-app
+
+compute:
+  web:
+    build:
+      fromWorkflow:
+        path: .takos/workflows/deploy.yml
+        job: bundle
+        artifact: web
+        artifactPath: dist/worker
+
+routes:
+  - target: web
+    path: /api
+    methods:
+      - get
+      - post
+`);
+
+  assertEquals(manifest.routes[0]?.methods, ["GET", "POST"]);
+});
+
+Deno.test("public manifest contract - rejects unsupported legacy route fields", () => {
+  assertThrows(
+    () =>
+      parseAppManifestYaml(`
+name: unsupported-route-fields-app
+
+compute:
+  web:
+    build:
+      fromWorkflow:
+        path: .takos/workflows/deploy.yml
+        job: bundle
+        artifact: web
+        artifactPath: dist/worker
+
+routes:
+  - name: route-name
+    target: web
+    path: /
+`),
+    Error,
+    "routes[0].name is not supported by the app manifest contract",
+  );
+
+  assertThrows(
+    () =>
+      parseAppManifestYaml(`
+name: unsupported-route-fields-app
+
+compute:
+  web:
+    build:
+      fromWorkflow:
+        path: .takos/workflows/deploy.yml
+        job: bundle
+        artifact: web
+        artifactPath: dist/worker
+
+routes:
+  - ingress: public
+    target: web
+    path: /
+`),
+    Error,
+    "routes[0].ingress is not supported by the app manifest contract",
+  );
+});
+
+Deno.test("public manifest contract - defers override route target validation to apply time", () => {
+  const manifest = parseAppManifestYaml(`
+name: override-route-app
+
+compute:
+  web:
+    build:
+      fromWorkflow:
+        path: .takos/workflows/deploy.yml
+        job: bundle
+        artifact: web
+        artifactPath: dist/worker
+
+routes:
+  - target: web
+    path: /
+
+overrides:
+  staging:
+    routes:
+      - target: api
+        path: /api
+`);
+
+  assertEquals(manifest.overrides?.staging?.routes, [{
+    target: "api",
+    path: "/api",
+  }]);
+
+  assertThrows(
+    () => applyManifestOverrides(manifest, "staging"),
+    Error,
+    "routes[0].target references unknown compute: api",
+  );
+});
+
+Deno.test("public manifest contract - accepts partial compute overrides and deep merges them at apply time", () => {
+  const manifest = parseAppManifestYaml(`
+name: override-compute-app
+
+compute:
+  web:
+    build:
+      fromWorkflow:
+        path: .takos/workflows/deploy.yml
+        job: bundle
+        artifact: web
+        artifactPath: dist/worker
+
+routes:
+  - target: web
+    path: /
+
+overrides:
+  production:
+    compute:
+      web:
+        scaling:
+          minInstances: 2
+`);
+
+  assertEquals(manifest.overrides?.production?.compute?.web?.scaling, {
+    minInstances: 2,
+  });
+
+  const resolved = applyManifestOverrides(manifest, "production");
+  assertEquals(
+    resolved.compute.web.build?.fromWorkflow.artifactPath,
+    "dist/worker",
+  );
+  assertEquals(resolved.compute.web.scaling, { minInstances: 2 });
+});
+
+Deno.test("public manifest contract - validates compute overrides after merge", () => {
+  const serviceManifest = parseAppManifestYaml(`
+name: override-service-readiness-app
+
+compute:
+  api:
+    image: ghcr.io/org/api@sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef
+    port: 8080
+
+routes:
+  - target: api
+    path: /
+
+overrides:
+  production:
+    compute:
+      api:
+        readiness: /ready
+`);
+
+  assertThrows(
+    () => applyManifestOverrides(serviceManifest, "production"),
+    Error,
+    "compute.api.readiness is not supported for service compute; readiness is worker-only",
+  );
+
+  const workerManifest = parseAppManifestYaml(`
+name: override-worker-health-app
+
+compute:
+  web:
+    build:
+      fromWorkflow:
+        path: .takos/workflows/deploy.yml
+        job: bundle
+        artifact: web
+        artifactPath: dist/worker
+
+routes:
+  - target: web
+    path: /
+
+overrides:
+  production:
+    compute:
+      web:
+        healthCheck:
+          path: /healthz
+`);
+
+  assertThrows(
+    () => applyManifestOverrides(workerManifest, "production"),
+    Error,
+    "compute.web.healthCheck is not supported for worker compute",
+  );
+
+  const dependsManifest = parseAppManifestYaml(`
+name: override-bad-depends-app
+
+compute:
+  web:
+    build:
+      fromWorkflow:
+        path: .takos/workflows/deploy.yml
+        job: bundle
+        artifact: web
+        artifactPath: dist/worker
+
+routes:
+  - target: web
+    path: /
+
+overrides:
+  production:
+    compute:
+      web:
+        depends:
+          - api
+`);
+
+  assertThrows(
+    () => applyManifestOverrides(dependsManifest, "production"),
+    Error,
+    "compute.web.depends references unknown compute: api",
+  );
+});
+
+Deno.test("public manifest contract - accepts partial publish overrides", () => {
+  const manifest = parseAppManifestYaml(`
+name: override-publish-app
+
+compute:
+  web:
+    build:
+      fromWorkflow:
+        path: .takos/workflows/deploy.yml
+        job: bundle
+        artifact: web
+        artifactPath: dist/worker
+
+routes:
+  - target: web
+    path: /mcp
+
+publish:
+  - name: notes
+    type: com.example.McpEndpoint
+    publisher: web
+    path: /mcp
+    spec:
+      protocol: streamable-http
+
+overrides:
+  production:
+    publish:
+      - title: Production Notes
+`);
+
+  assertEquals(manifest.overrides?.production?.publish as unknown, [{
+    title: "Production Notes",
+  }]);
+
+  const resolved = applyManifestOverrides(manifest, "production");
+  assertEquals(resolved.publish, [{
+    name: "notes",
+    type: "com.example.McpEndpoint",
+    publisher: "web",
+    path: "/mcp",
+    spec: { protocol: "streamable-http" },
+    title: "Production Notes",
+  }]);
+});
+
+Deno.test("public manifest contract - merges named publish overrides", () => {
+  const manifest = parseAppManifestYaml(`
+name: named-publish-override-app
+
+compute:
+  web:
+    build:
+      fromWorkflow:
+        path: .takos/workflows/deploy.yml
+        job: bundle
+        artifact: web
+        artifactPath: dist/worker
+
+routes:
+  - target: web
+    path: /mcp
+  - target: web
+    path: /assets
+
+publish:
+  - name: notes
+    type: com.example.McpEndpoint
+    publisher: web
+    path: /mcp
+    spec:
+      protocol: streamable-http
+  - name: assets
+    type: com.example.FileEndpoint
+    publisher: web
+    path: /assets
+    spec:
+      contentTypes:
+        - image/png
+
+overrides:
+  production:
+    publish:
+      - name: assets
+        title: Production Assets
+`);
+
+  const resolved = applyManifestOverrides(manifest, "production");
+  assertEquals(resolved.publish, [
+    {
+      name: "notes",
+      type: "com.example.McpEndpoint",
+      publisher: "web",
+      path: "/mcp",
+      spec: { protocol: "streamable-http" },
+    },
+    {
+      name: "assets",
+      type: "com.example.FileEndpoint",
+      publisher: "web",
+      path: "/assets",
+      spec: { contentTypes: ["image/png"] },
+      title: "Production Assets",
+    },
+  ]);
+});
+
+Deno.test("public manifest contract - rejects unsupported fields in overrides", () => {
+  assertThrows(
+    () =>
+      parseAppManifestYaml(`
+name: override-unsupported-field-app
+
+compute:
+  web:
+    build:
+      fromWorkflow:
+        path: .takos/workflows/deploy.yml
+        job: bundle
+        artifact: web
+        artifactPath: dist/worker
+
+routes:
+  - target: web
+    path: /
+
+overrides:
+  production:
+    storage:
+      placeholder: {}
+`),
+    Error,
+    "overrides.production.storage is not supported by the override contract",
+  );
+});
+
+Deno.test("public manifest contract - rejects readiness on non-worker compute", () => {
+  assertThrows(
+    () =>
+      parseAppManifestYaml(`
+name: service-readiness-app
+
+compute:
+  api:
+    image: ghcr.io/org/api@sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef
+    port: 8080
+    readiness: /ready
+
+routes:
+  - target: api
+    path: /
+`),
+    Error,
+    "compute.api.readiness is not supported for service compute; readiness is worker-only",
+  );
+
+  assertThrows(
+    () =>
+      parseAppManifestYaml(`
+name: attached-readiness-app
+
+compute:
+  web:
+    build:
+      fromWorkflow:
+        path: .takos/workflows/deploy.yml
+        job: bundle
+        artifact: web
+        artifactPath: dist/worker
+    containers:
+      sandbox:
+        image: ghcr.io/org/sandbox@sha256:fedcba9876543210fedcba9876543210fedcba9876543210fedcba9876543210
+        dockerfile: ./containers/sandbox.Dockerfile
+        port: 3000
+        readiness: /ready
+
+routes:
+  - target: web
+    path: /
+`),
+    Error,
+    "compute.web.containers.sandbox.readiness is not supported for attached container compute; readiness is worker-only",
+  );
+});
+
+Deno.test("public manifest contract - requires digest-pinned image refs", () => {
+  assertThrows(
+    () =>
+      parseAppManifestYaml(`
+name: mutable-service-image-app
+
+compute:
+  api:
+    image: ghcr.io/org/api:latest
+    port: 8080
+
+routes:
+  - target: api
+    path: /
+`),
+    Error,
+    "compute.api.image must be a digest-pinned image ref",
+  );
+
+  assertThrows(
+    () =>
+      parseAppManifestYaml(`
+name: mutable-attached-image-app
+
+compute:
+  web:
+    build:
+      fromWorkflow:
+        path: .takos/workflows/deploy.yml
+        job: bundle
+        artifact: web
+        artifactPath: dist/worker
+    containers:
+      sandbox:
+        image: ghcr.io/org/sandbox:latest
+        dockerfile: containers/sandbox.Dockerfile
+
+routes:
+  - target: web
+    path: /
+`),
+    Error,
+    "compute.web.containers.sandbox.image must be a digest-pinned image ref",
+  );
+
+  assertThrows(
+    () =>
+      parseAppManifestYaml(`
+name: mutable-override-image-app
+
+compute:
+  api:
+    image: ghcr.io/org/api@sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef
+    port: 8080
+
+routes:
+  - target: api
+    path: /
+
+overrides:
+  production:
+    compute:
+      api:
+        image: ghcr.io/org/api:latest
+`),
+    Error,
+    "overrides.compute.api.image must be a digest-pinned image ref",
+  );
+});
+
+Deno.test("public manifest contract - rejects non-portable compute tuning fields", () => {
+  assertThrows(
+    () =>
+      parseAppManifestYaml(`
+name: instance-type-app
+
+compute:
+  api:
+    image: ghcr.io/org/api@sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef
+    instanceType: c7g.large
+`),
+    Error,
+    "compute.api.instanceType is not supported by the app manifest contract",
+  );
+
+  assertThrows(
+    () =>
+      parseAppManifestYaml(`
+name: scaling-extra-app
+
+compute:
+  api:
+    image: ghcr.io/org/api@sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef
+    port: 8080
+    scaling:
+      minInstances: 1
+      cpu: 2
+`),
+    Error,
+    "compute.api.scaling.cpu is not supported by the app manifest contract",
+  );
+});
+
+Deno.test("public manifest contract - allows image-backed attached containers with dockerfile metadata", () => {
+  const manifest = parseAppManifestYaml(`
+name: attached-image-dockerfile-app
+
+compute:
+  web:
+    build:
+      fromWorkflow:
+        path: .takos/workflows/deploy.yml
+        job: bundle
+        artifact: web
+        artifactPath: dist/worker
+    containers:
+      sandbox:
+        image: ghcr.io/org/sandbox@sha256:fedcba9876543210fedcba9876543210fedcba9876543210fedcba9876543210
+        dockerfile: ./containers//sandbox.Dockerfile
+        port: 3000
+
+routes:
+  - target: web
+    path: /
+`);
+
+  assertEquals(
+    manifest.compute.web.containers?.sandbox.kind,
+    "attached-container",
+  );
+  assertEquals(
+    manifest.compute.web.containers?.sandbox.image,
+    "ghcr.io/org/sandbox@sha256:fedcba9876543210fedcba9876543210fedcba9876543210fedcba9876543210",
+  );
+  assertEquals(
+    manifest.compute.web.containers?.sandbox.dockerfile,
+    "containers/sandbox.Dockerfile",
+  );
+});
+
+Deno.test("public manifest contract - rejects dockerfile-only attached containers", () => {
+  assertThrows(
+    () =>
+      parseAppManifestYaml(`
+name: attached-dockerfile-only-app
+
+compute:
+  web:
+    build:
+      fromWorkflow:
+        path: .takos/workflows/deploy.yml
+        job: bundle
+        artifact: web
+        artifactPath: dist/worker
+    containers:
+      sandbox:
+        dockerfile: ./containers//sandbox.Dockerfile
+        port: 3000
+
+routes:
+  - target: web
+    path: /
+`),
+    Error,
+    "compute.web.containers.sandbox.dockerfile may only be used as metadata with a digest-pinned image",
+  );
+});
+
+Deno.test("public manifest contract - rejects dockerfile-only services", () => {
+  assertThrows(
+    () =>
+      parseAppManifestYaml(`
+name: service-dockerfile-only-app
+
+compute:
+  api:
+    dockerfile: ./services/api.Dockerfile
+    port: 8080
+
+routes:
+  - target: api
+    path: /
+`),
+    Error,
+    "compute.api.dockerfile may only be used as metadata with a digest-pinned image",
+  );
+});
+
+Deno.test("public manifest contract - requires port on image-backed compute", () => {
+  assertThrows(
+    () =>
+      parseAppManifestYaml(`
+name: service-port-app
+
+compute:
+  api:
+    image: ghcr.io/org/api@sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef
+
+routes:
+  - target: api
+    path: /
+`),
+    Error,
+    "compute.api.port is required for service compute",
+  );
+
+  assertThrows(
+    () =>
+      parseAppManifestYaml(`
+name: attached-port-app
+
+compute:
+  web:
+    build:
+      fromWorkflow:
+        path: .takos/workflows/deploy.yml
+        job: bundle
+        artifact: web
+        artifactPath: dist/worker
+    containers:
+      sandbox:
+        image: ghcr.io/org/sandbox@sha256:fedcba9876543210fedcba9876543210fedcba9876543210fedcba9876543210
+
+routes:
+  - target: web
+    path: /
+`),
+    Error,
+    "compute.web.containers.sandbox.port is required for attached container compute",
+  );
+});
+
+Deno.test("public manifest contract - rejects volumes on workers", () => {
+  assertThrows(
+    () =>
+      parseAppManifestYaml(`
+name: worker-volume-app
+
+compute:
+  web:
+    build:
+      fromWorkflow:
+        path: .takos/workflows/deploy.yml
+        job: bundle
+        artifact: web
+        artifactPath: dist/worker
+    volumes:
+      cache:
+        source: cache
+        target: /cache
+
+routes:
+  - target: web
+    path: /
+`),
+    Error,
+    "compute.web.volumes is not supported for worker compute",
+  );
+});
+
+Deno.test("public manifest contract - rejects build under attached containers", () => {
+  assertThrows(
+    () =>
+      parseAppManifestYaml(`
+name: attached-build-app
+
+compute:
+  web:
+    build:
+      fromWorkflow:
+        path: .takos/workflows/deploy.yml
+        job: bundle
+        artifact: web
+        artifactPath: dist/worker
+    containers:
+      sandbox:
+        build:
+          fromWorkflow:
+            path: .takos/workflows/deploy.yml
+            job: bundle
+            artifact: sandbox
+            artifactPath: dist/container
+        image: ghcr.io/org/sandbox@sha256:fedcba9876543210fedcba9876543210fedcba9876543210fedcba9876543210
+
+routes:
+  - target: web
+    path: /
+`),
+    Error,
+    "compute.web.containers.sandbox.build is not supported for attached container compute",
+  );
+});
+
+Deno.test("public manifest contract - preserves route publication titles", () => {
+  const manifest = parseAppManifestYaml(`
+name: publication-title-app
+
+compute:
+  web:
+    build:
+      fromWorkflow:
+        path: .takos/workflows/deploy.yml
+        job: bundle
+        artifact: web
+        artifactPath: dist/worker
+
+routes:
+  - target: web
+    path: /mcp
+  - target: web
+    path: /assets/:id
+
+publish:
+  - type: com.example.McpEndpoint
+    name: notes
+    publisher: web
+    path: /mcp
+    title: Notes MCP
+    spec:
+      protocol: streamable-http
+  - type: com.example.FileEndpoint
+    name: assets
+    publisher: web
+    path: /assets/:id
+    title: Asset Browser
+    spec:
+      contentTypes:
+        - image/png
+`);
+
+  assertEquals(manifest.publish[0]?.title, "Notes MCP");
+  assertEquals(manifest.publish[1]?.title, "Asset Browser");
+  assertEquals(manifest.publish[1]?.path, "/assets/:id");
+});
+
+Deno.test("public manifest contract - parses FileHandler publications with :id paths and selector lists", () => {
+  const manifest = parseAppManifestYaml(`
+name: file-handler-app
+
+compute:
+  web:
+    build:
+      fromWorkflow:
+        path: .takos/workflows/deploy.yml
+        job: bundle
+        artifact: web
+        artifactPath: dist/worker
+
+routes:
+  - target: web
+    path: /files/:id
+
+publish:
+  - type: FileHandler
+    name: markdown
+    publisher: web
+    title: Markdown
+    path: /files/:id
+    spec:
+      mimeTypes:
+        - text/markdown
+`);
+
+  assertEquals(manifest.publish[0]?.type, "FileHandler");
+  assertEquals(manifest.publish[0]?.path, "/files/:id");
+  assertEquals(manifest.publish[0]?.spec, {
+    mimeTypes: ["text/markdown"],
+  });
+});
+
+Deno.test("public manifest contract - rejects duplicate route publication publisher/path", () => {
+  assertThrows(
+    () =>
+      parseAppManifestYaml(`
+name: duplicate-route-publication-app
+
+compute:
+  web:
+    build:
+      fromWorkflow:
+        path: .takos/workflows/deploy.yml
+        job: bundle
+        artifact: web
+        artifactPath: dist/worker
+
+routes:
+  - target: web
+    path: /mcp
+
+publish:
+  - type: com.example.McpEndpoint
+    name: notes
+    publisher: web
+    path: /mcp
+  - type: com.example.SearchEndpoint
+    name: search
+    publisher: web
+    path: /mcp
+`),
+    Error,
+    "duplicate route publication publisher/path 'web /mcp'",
+  );
+});
+
+Deno.test("public manifest contract - rejects FileHandler publications without :id launch paths", () => {
+  assertThrows(
+    () =>
+      parseAppManifestYaml(`
+name: file-handler-missing-id-app
+
+compute:
+  web:
+    build:
+      fromWorkflow:
+        path: .takos/workflows/deploy.yml
+        job: bundle
+        artifact: web
+        artifactPath: dist/worker
+
+routes:
+  - target: web
+    path: /files/open
+
+publish:
+  - type: FileHandler
+    name: markdown
+    publisher: web
+    title: Markdown
+    path: /files/open
+    spec:
+      mimeTypes:
+        - text/markdown
+`),
+    Error,
+    "publish[0].path must include :id for FileHandler",
+  );
+});
+
+Deno.test("public manifest contract - rejects FileHandler publications without mimeTypes or extensions", () => {
+  assertThrows(
+    () =>
+      parseAppManifestYaml(`
+name: file-handler-missing-selectors-app
+
+compute:
+  web:
+    build:
+      fromWorkflow:
+        path: .takos/workflows/deploy.yml
+        job: bundle
+        artifact: web
+        artifactPath: dist/worker
+
+routes:
+  - target: web
+    path: /files/:id
+
+publish:
+  - type: FileHandler
+    name: markdown
+    publisher: web
+    title: Markdown
+    path: /files/:id
+    spec:
+      note: no selectors
+`),
+    Error,
+    "publish[0].spec.mimeTypes or publish[0].spec.extensions is required for FileHandler",
+  );
+});
+
+Deno.test("public manifest contract - rejects unknown FileHandler spec fields", () => {
+  assertThrows(
+    () =>
+      parseAppManifestYaml(`
+name: file-handler-extra-spec-app
+
+compute:
+  web:
+    build:
+      fromWorkflow:
+        path: .takos/workflows/deploy.yml
+        job: bundle
+        artifact: web
+        artifactPath: dist/worker
+
+routes:
+  - target: web
+    path: /files/:id
+
+publish:
+  - type: FileHandler
+    name: markdown
+    publisher: web
+    title: Markdown
+    path: /files/:id
+    spec:
+      mimeTypes:
+        - text/markdown
+      note: no extra keys
+`),
+    Error,
+    "publish[0].spec.note is not supported by the publish/consume contract",
+  );
+});
+
+Deno.test("public manifest contract - parses Takos capability grants and compute consume", () => {
   const manifest = parseAppManifestYaml(`
 name: publication-app
 
 publish:
   - name: takos-api
-    provider: takos
-    kind: api
+    publisher: takos
+    type: api-key
     spec:
       scopes:
         - files:read
   - name: app-oauth
-    provider: takos
-    kind: oauth-client
+    publisher: takos
+    type: oauth-client
     spec:
       clientName: Notes App
       redirectUris:
@@ -109,6 +1319,7 @@ compute:
         path: .takos/workflows/deploy.yml
         job: bundle
         artifact: web
+        artifactPath: dist/worker
     consume:
       - publication: takos-api
       - publication: app-oauth
@@ -131,27 +1342,131 @@ compute:
   ]);
 });
 
-Deno.test("public manifest contract - rejects retired envelope schema", () => {
+Deno.test("public manifest contract - rejects unknown Takos grant spec fields", () => {
+  assertThrows(
+    () =>
+      parseAppManifestYaml(`
+name: takos-grant-extra-spec-app
+publish:
+  - name: takos-api
+    publisher: takos
+    type: api-key
+    spec:
+      scopes:
+        - files:read
+      extra: nope
+compute:
+  web:
+    build:
+      fromWorkflow:
+        path: .takos/workflows/deploy.yml
+        job: bundle
+        artifact: web
+        artifactPath: dist/worker
+`),
+    Error,
+    "publish[0].spec.extra is not supported by the publish/consume contract",
+  );
+
+  assertThrows(
+    () =>
+      parseAppManifestYaml(`
+name: takos-oauth-extra-metadata-app
+publish:
+  - name: app-oauth
+    publisher: takos
+    type: oauth-client
+    spec:
+      redirectUris:
+        - https://example.com/oauth/callback
+      scopes:
+        - threads:read
+      metadata:
+        logoUri: https://example.com/logo.png
+        unknownUri: https://example.com/unknown
+compute:
+  web:
+    build:
+      fromWorkflow:
+        path: .takos/workflows/deploy.yml
+        job: bundle
+        artifact: web
+        artifactPath: dist/worker
+`),
+    Error,
+    "publish[0].spec.metadata.unknownUri is not supported by the publish/consume contract",
+  );
+});
+
+Deno.test("public manifest contract - normalizes and validates consume env aliases", () => {
+  const manifest = parseAppManifestYaml(`
+name: consume-env-alias-app
+
+compute:
+  web:
+    build:
+      fromWorkflow:
+        path: .takos/workflows/deploy.yml
+        job: bundle
+        artifact: web
+        artifactPath: dist/worker
+    consume:
+      - publication: external-api
+        env:
+          endpoint: external_api_url
+`);
+
+  assertEquals(manifest.compute.web.consume, [
+    {
+      publication: "external-api",
+      env: { endpoint: "EXTERNAL_API_URL" },
+    },
+  ]);
+
+  assertThrows(
+    () =>
+      parseAppManifestYaml(`
+name: bad-consume-env-alias-app
+
+compute:
+  web:
+    build:
+      fromWorkflow:
+        path: .takos/workflows/deploy.yml
+        job: bundle
+        artifact: web
+        artifactPath: dist/worker
+    consume:
+      - publication: external-api
+        env:
+          endpoint: bad-env-name
+`),
+    Error,
+    "compute.web.consume[0].env.endpoint has invalid env name: bad-env-name",
+  );
+});
+
+Deno.test("public manifest contract - rejects unsupported top-level manifest fields", () => {
   assertThrows(
     () =>
       parseAppManifestYaml(`
 apiVersion: takos.dev/v1alpha1
 kind: App
 metadata:
-  name: legacy-app
+  name: unsupported-top-level-fields-app
 spec:
   compute: {}
 `),
     Error,
-    "Kubernetes-style manifest envelope is no longer supported",
+    "apiVersion is not supported by the app manifest contract",
   );
 });
 
-Deno.test("public manifest contract - rejects retired top-level scopes and oauth", () => {
+Deno.test("public manifest contract - rejects unsupported top-level scopes and oauth", () => {
   assertThrows(
     () =>
       parseAppManifestYaml(`
-name: legacy-app
+name: unsupported-top-level-fields-app
 scopes:
   - files:read
 compute:
@@ -161,15 +1476,16 @@ compute:
         path: .takos/workflows/deploy.yml
         job: bundle
         artifact: web
+        artifactPath: dist/worker
 `),
     Error,
-    "scopes is retired",
+    "scopes is not supported by the app manifest contract",
   );
 
   assertThrows(
     () =>
       parseAppManifestYaml(`
-name: legacy-app
+name: unsupported-top-level-fields-app
 oauth:
   redirectUris:
     - https://example.com/callback
@@ -182,17 +1498,18 @@ compute:
         path: .takos/workflows/deploy.yml
         job: bundle
         artifact: web
+        artifactPath: dist/worker
 `),
     Error,
-    "oauth is retired",
+    "oauth is not supported by the app manifest contract",
   );
 });
 
-Deno.test("public manifest contract - rejects retired storage", () => {
+Deno.test("public manifest contract - rejects unsupported storage", () => {
   assertThrows(
     () =>
       parseAppManifestYaml(`
-name: legacy-app
+name: unsupported-top-level-fields-app
 storage:
   db:
     type: sql
@@ -203,21 +1520,22 @@ compute:
         path: .takos/workflows/deploy.yml
         job: bundle
         artifact: web
+        artifactPath: dist/worker
 `),
     Error,
-    "storage is retired",
+    "storage is not supported by the app manifest contract",
   );
 });
 
-Deno.test("public manifest contract - rejects retired provider-specific fields outside spec", () => {
+Deno.test("public manifest contract - rejects grant fields outside spec", () => {
   assertThrows(
     () =>
       parseAppManifestYaml(`
-name: legacy-provider-app
+name: unsupported-publish-field-app
 publish:
   - name: takos-api
-    provider: takos
-    kind: api
+    publisher: takos
+    type: api-key
     scopes:
       - files:read
 compute:
@@ -227,17 +1545,26 @@ compute:
         path: .takos/workflows/deploy.yml
         job: bundle
         artifact: web
+        artifactPath: dist/worker
 `),
     Error,
-    "is not supported by the publish/consume contract",
+    "publish[0].scopes is not supported by the publish/consume contract",
   );
 });
 
-Deno.test("public manifest contract - rejects retired compute capabilities", () => {
+Deno.test("public manifest contract - rejects unsupported Takos grant field", () => {
   assertThrows(
     () =>
       parseAppManifestYaml(`
-name: legacy-app
+name: unsupported-takos-publication-field-app
+publish:
+  - name: takos-api
+    catalog: takos
+    publisher: takos
+    type: api-key
+    spec:
+      scopes:
+        - files:read
 compute:
   web:
     build:
@@ -245,21 +1572,118 @@ compute:
         path: .takos/workflows/deploy.yml
         job: bundle
         artifact: web
+        artifactPath: dist/worker
+`),
+    Error,
+    "publish[0].catalog is not supported by the publish/consume contract",
+  );
+});
+
+Deno.test("public manifest contract - rejects deploy resources as Takos publications", () => {
+  assertThrows(
+    () =>
+      parseAppManifestYaml(`
+name: resource-publish-app
+publish:
+  - name: primary-db
+    publisher: takos
+    type: resource
+    spec:
+      resource: notes-db
+compute:
+  web:
+    build:
+      fromWorkflow:
+        path: .takos/workflows/deploy.yml
+        job: bundle
+        artifact: web
+        artifactPath: dist/worker
+`),
+    Error,
+    "publish[0].type is unsupported for publisher 'takos': resource",
+  );
+});
+
+Deno.test("public manifest contract - rejects route fields on Takos grants", () => {
+  assertThrows(
+    () =>
+      parseAppManifestYaml(`
+name: takos-grant-route-field-app
+publish:
+  - name: takos-api
+    publisher: takos
+    type: api-key
+    path: /mcp
+    spec:
+      scopes:
+        - files:read
+compute:
+  web:
+    build:
+      fromWorkflow:
+        path: .takos/workflows/deploy.yml
+        job: bundle
+        artifact: web
+        artifactPath: dist/worker
+`),
+    Error,
+    "publish[0].path is not supported for publisher 'takos'",
+  );
+
+  assertThrows(
+    () =>
+      parseAppManifestYaml(`
+name: takos-grant-title-field-app
+publish:
+  - name: takos-api
+    publisher: takos
+    type: api-key
+    title: Takos API
+    spec:
+      scopes:
+        - files:read
+compute:
+  web:
+    build:
+      fromWorkflow:
+        path: .takos/workflows/deploy.yml
+        job: bundle
+        artifact: web
+        artifactPath: dist/worker
+`),
+    Error,
+    "publish[0].title is not supported for publisher 'takos'",
+  );
+});
+
+Deno.test("public manifest contract - rejects unsupported compute capabilities", () => {
+  assertThrows(
+    () =>
+      parseAppManifestYaml(`
+name: unsupported-compute-capabilities-app
+compute:
+  web:
+    build:
+      fromWorkflow:
+        path: .takos/workflows/deploy.yml
+        job: bundle
+        artifact: web
+        artifactPath: dist/worker
     capabilities:
       takosApi:
         scopes:
           - files:read
 `),
     Error,
-    "capabilities is retired",
+    "compute.web.capabilities is not supported by the app manifest contract",
   );
 });
 
-Deno.test("public manifest contract - rejects retired queue triggers", () => {
+Deno.test("public manifest contract - rejects unsupported queue triggers", () => {
   assertThrows(
     () =>
       parseAppManifestYaml(`
-name: legacy-queue-app
+name: unsupported-queue-trigger-app
 compute:
   worker:
     build:
@@ -267,11 +1691,12 @@ compute:
         path: .takos/workflows/deploy.yml
         job: bundle
         artifact: web
+        artifactPath: dist/worker
     triggers:
       queues:
         - storage: jobs
 `),
     Error,
-    "triggers.queues is retired",
+    "compute.worker.triggers.queues is not supported by the app manifest contract",
   );
 });

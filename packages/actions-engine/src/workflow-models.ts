@@ -11,11 +11,11 @@
  */
 export interface BranchFilter {
   branches?: string[];
-  'branches-ignore'?: string[];
+  "branches-ignore"?: string[];
   tags?: string[];
-  'tags-ignore'?: string[];
+  "tags-ignore"?: string[];
   paths?: string[];
-  'paths-ignore'?: string[];
+  "paths-ignore"?: string[];
 }
 
 /**
@@ -31,27 +31,27 @@ export interface PullRequestTriggerConfig extends BranchFilter {
  * GitHub Actions 互換: https://docs.github.com/en/actions/using-workflows/events-that-trigger-workflows#pull_request
  */
 export type PullRequestEventType =
-  | 'assigned'
-  | 'unassigned'
-  | 'labeled'
-  | 'unlabeled'
-  | 'opened'
-  | 'edited'
-  | 'closed'
-  | 'reopened'
-  | 'synchronize'
-  | 'converted_to_draft'
-  | 'ready_for_review'
-  | 'locked'
-  | 'unlocked'
-  | 'review_requested'
-  | 'review_request_removed'
-  | 'auto_merge_enabled'
-  | 'auto_merge_disabled'
-  | 'milestoned'
-  | 'demilestoned'
-  | 'enqueued'
-  | 'dequeued';
+  | "assigned"
+  | "unassigned"
+  | "labeled"
+  | "unlabeled"
+  | "opened"
+  | "edited"
+  | "closed"
+  | "reopened"
+  | "synchronize"
+  | "converted_to_draft"
+  | "ready_for_review"
+  | "locked"
+  | "unlocked"
+  | "review_requested"
+  | "review_request_removed"
+  | "auto_merge_enabled"
+  | "auto_merge_disabled"
+  | "milestoned"
+  | "demilestoned"
+  | "enqueued"
+  | "dequeued";
 
 /**
  * issues イベント種別
@@ -59,44 +59,44 @@ export type PullRequestEventType =
  * GitHub Actions 互換: https://docs.github.com/en/actions/using-workflows/events-that-trigger-workflows#issues
  */
 export type IssuesEventType =
-  | 'opened'
-  | 'edited'
-  | 'deleted'
-  | 'transferred'
-  | 'pinned'
-  | 'unpinned'
-  | 'closed'
-  | 'reopened'
-  | 'assigned'
-  | 'unassigned'
-  | 'labeled'
-  | 'unlabeled'
-  | 'locked'
-  | 'unlocked'
-  | 'milestoned'
-  | 'demilestoned';
+  | "opened"
+  | "edited"
+  | "deleted"
+  | "transferred"
+  | "pinned"
+  | "unpinned"
+  | "closed"
+  | "reopened"
+  | "assigned"
+  | "unassigned"
+  | "labeled"
+  | "unlabeled"
+  | "locked"
+  | "unlocked"
+  | "milestoned"
+  | "demilestoned";
 
 /**
  * issue_comment イベント種別
  */
-export type IssueCommentEventType = 'created' | 'edited' | 'deleted';
+export type IssueCommentEventType = "created" | "edited" | "deleted";
 
 /**
  * release イベント種別
  */
 export type ReleaseEventType =
-  | 'published'
-  | 'unpublished'
-  | 'created'
-  | 'edited'
-  | 'deleted'
-  | 'prereleased'
-  | 'released';
+  | "published"
+  | "unpublished"
+  | "created"
+  | "edited"
+  | "deleted"
+  | "prereleased"
+  | "released";
 
 /**
  * watch イベント種別
  */
-export type WatchEventType = 'started';
+export type WatchEventType = "started";
 
 /**
  * workflow_dispatch 入力定義
@@ -105,7 +105,7 @@ export interface WorkflowDispatchInput {
   description?: string;
   required?: boolean;
   default?: string;
-  type?: 'string' | 'boolean' | 'choice' | 'environment';
+  type?: "string" | "boolean" | "choice" | "environment";
   options?: string[];
 }
 
@@ -137,7 +137,7 @@ export interface WorkflowCallInput {
   description?: string;
   required?: boolean;
   default?: string | boolean | number;
-  type: 'string' | 'boolean' | 'number';
+  type: "string" | "boolean" | "number";
 }
 
 /**
@@ -205,9 +205,9 @@ export interface Step {
   /** 実行するシェルコマンド */
   run?: string;
   /** run ステップの作業ディレクトリ */
-  'working-directory'?: string;
+  "working-directory"?: string;
   /** run ステップで使うシェル */
-  shell?: 'bash' | 'pwsh' | 'python' | 'sh' | 'cmd' | 'powershell';
+  shell?: "bash" | "pwsh" | "python" | "sh" | "cmd" | "powershell";
   /** アクションに渡す入力パラメータ */
   with?: Record<string, unknown>;
   /** このステップの環境変数 */
@@ -215,9 +215,9 @@ export interface Step {
   /** 条件付き実行 */
   if?: string;
   /** エラー時も継続 */
-  'continue-on-error'?: boolean;
+  "continue-on-error"?: boolean;
   /** タイムアウト（分） */
-  'timeout-minutes'?: number;
+  "timeout-minutes"?: number;
 }
 
 // =============================================================================
@@ -228,15 +228,18 @@ export interface Step {
  * 戦略マトリクス設定
  * 配列と include/exclude の両方を扱うため、より柔軟な型を使用
  */
-export type MatrixConfig = Record<string, unknown[] | Record<string, unknown>[]>;
+export type MatrixConfig = Record<
+  string,
+  unknown[] | Record<string, unknown>[]
+>;
 
 /**
  * ジョブ戦略設定
  */
 export interface JobStrategy {
   matrix?: MatrixConfig;
-  'fail-fast'?: boolean;
-  'max-parallel'?: number;
+  "fail-fast"?: boolean;
+  "max-parallel"?: number;
 }
 
 /**
@@ -262,10 +265,10 @@ export type JobOutputs = Record<string, string>;
 /**
  * 権限設定
  */
-export type PermissionLevel = 'read' | 'write' | 'none';
+export type PermissionLevel = "read" | "write" | "none";
 export type Permissions =
-  | 'read-all'
-  | 'write-all'
+  | "read-all"
+  | "write-all"
   | Record<string, PermissionLevel>;
 
 /**
@@ -273,7 +276,7 @@ export type Permissions =
  */
 export interface ConcurrencyConfig {
   group: string;
-  'cancel-in-progress'?: boolean;
+  "cancel-in-progress"?: boolean;
 }
 
 /**
@@ -282,7 +285,7 @@ export interface ConcurrencyConfig {
 export interface JobDefaults {
   run?: {
     shell?: string;
-    'working-directory'?: string;
+    "working-directory"?: string;
   };
 }
 
@@ -293,7 +296,7 @@ export interface Job {
   /** ジョブ表示名 */
   name?: string;
   /** ランナーラベルまたはランナーグループ */
-  'runs-on': string | string[];
+  "runs-on": string | string[];
   /** 依存ジョブ */
   needs?: string | string[];
   /** 条件付き実行 */
@@ -311,9 +314,9 @@ export interface Job {
   /** サービスコンテナ */
   services?: Record<string, ContainerConfig>;
   /** タイムアウト（分） */
-  'timeout-minutes'?: number;
+  "timeout-minutes"?: number;
   /** ジョブ失敗時にワークフローを継続する */
-  'continue-on-error'?: boolean;
+  "continue-on-error"?: boolean;
   /** ジョブ権限 */
   permissions?: Permissions;
   /** 同時実行設定 */
@@ -339,7 +342,7 @@ export interface Workflow {
    * 式補間をサポートするが、現状 runtime はテンプレート文字列として
    * そのまま保持するのみで、`${{ ... }}` の interpolation は将来実装。
    */
-  'run-name'?: string;
+  "run-name"?: string;
   /** トリガーイベント */
   on: WorkflowTrigger | string | string[];
   /** グローバル環境変数 */
@@ -367,12 +370,12 @@ export interface Workflow {
  * Web UI（apps/control/web/src/views/repos/components/actions/actions-types.ts）では
  * concurrency ブロック中表示用に 'waiting' を追加している。
  */
-export type RunStatus = 'queued' | 'in_progress' | 'completed' | 'cancelled';
+export type RunStatus = "queued" | "in_progress" | "completed" | "cancelled";
 
 /**
  * 実行結果
  */
-export type Conclusion = 'success' | 'failure' | 'cancelled' | 'skipped';
+export type Conclusion = "success" | "failure" | "cancelled" | "skipped";
 
 /**
  * ステップ実行結果
@@ -386,10 +389,7 @@ export interface StepResult {
   status: RunStatus;
   /** 最終結果 */
   conclusion?: Conclusion;
-  /**
-   * 生の実行結果（continue-on-error による書き換え前）。
-   * `steps.<id>.outcome` の評価用。
-   */
+  /** `steps.<id>.outcome` 互換用。現状は `conclusion` と同じ値。 */
   outcome?: Conclusion;
   /** ステップ出力 */
   outputs: Record<string, string>;
@@ -399,14 +399,6 @@ export interface StepResult {
   completedAt?: Date;
   /** 失敗時のエラーメッセージ */
   error?: string;
-  /**
-   * `$GITHUB_STEP_SUMMARY` に書き込まれた markdown。
-   * 未書き込み or 空 の場合は `undefined`。
-   *
-   * 現状 UI 配線は未実装で、storage/artifact への永続化も future work。
-   * runtime 側で capture しておき、将来 step summary card として render する。
-   */
-  summary?: string;
 }
 
 /**
@@ -516,9 +508,9 @@ export interface RunnerContext {
   /** ランナー名 */
   name: string;
   /** ランナー OS */
-  os: 'Linux' | 'Windows' | 'macOS';
+  os: "Linux" | "Windows" | "macOS";
   /** ランナーアーキテクチャ */
-  arch: 'X86' | 'X64' | 'ARM' | 'ARM64';
+  arch: "X86" | "X64" | "ARM" | "ARM64";
   /** テンポラリディレクトリ */
   temp: string;
   /** ツールキャッシュディレクトリ */
@@ -532,7 +524,7 @@ export interface RunnerContext {
  */
 export interface JobContext {
   /** ジョブステータス */
-  status: 'success' | 'failure' | 'cancelled';
+  status: "success" | "failure" | "cancelled";
   /** コンテナ情報 */
   container?: {
     id: string;
@@ -556,8 +548,8 @@ export type StepsContext = Record<
   string,
   {
     outputs: Record<string, string>;
-    outcome: 'success' | 'failure' | 'cancelled' | 'skipped';
-    conclusion: 'success' | 'failure' | 'cancelled' | 'skipped';
+    outcome: "success" | "failure" | "cancelled" | "skipped";
+    conclusion: "success" | "failure" | "cancelled" | "skipped";
   }
 >;
 
@@ -568,7 +560,7 @@ export type NeedsContext = Record<
   string,
   {
     outputs: Record<string, string>;
-    result: 'success' | 'failure' | 'cancelled' | 'skipped';
+    result: "success" | "failure" | "cancelled" | "skipped";
   }
 >;
 
@@ -576,10 +568,10 @@ export type NeedsContext = Record<
  * Strategy コンテキスト
  */
 export interface StrategyContext {
-  'fail-fast': boolean;
-  'job-index': number;
-  'job-total': number;
-  'max-parallel': number;
+  "fail-fast": boolean;
+  "job-index": number;
+  "job-total": number;
+  "max-parallel": number;
 }
 
 /**
@@ -626,7 +618,7 @@ export interface ParsedWorkflow {
 /**
  * 診断の重大度
  */
-export type DiagnosticSeverity = 'error' | 'warning' | 'info';
+export type DiagnosticSeverity = "error" | "warning" | "info";
 
 /**
  * ワークフロー診断（error/warning）
@@ -657,12 +649,12 @@ export interface ExecutionPlan {
  */
 export type StepExecutor = (
   step: Step,
-  context: ExecutionContext
+  context: ExecutionContext,
 ) => Promise<StepResult>;
 
 /**
  * アクション解決関数の型
  */
 export type ActionResolver = (
-  uses: string
+  uses: string,
 ) => Promise<{ run: StepExecutor } | null>;

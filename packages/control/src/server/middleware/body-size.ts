@@ -1,5 +1,5 @@
-import type { MiddlewareHandler } from 'hono';
-import { bodyLimit as honoBodyLimit } from 'hono/body-limit';
+import type { MiddlewareHandler } from "hono";
+import { bodyLimit as honoBodyLimit } from "hono/body-limit";
 
 type BodySizeLimitOptions = {
   maxSize: number;
@@ -21,8 +21,8 @@ export function bodyLimit(options: BodySizeLimitOptions): MiddlewareHandler {
       return c.json(
         {
           error: {
-            code: 'PAYLOAD_TOO_LARGE',
-            message: message || 'Request body too large',
+            code: "PAYLOAD_TOO_LARGE",
+            message: message || "Request body too large",
           },
           max_size: maxSize,
         },
@@ -32,7 +32,7 @@ export function bodyLimit(options: BodySizeLimitOptions): MiddlewareHandler {
   });
 
   return async (c, next) => {
-    if (!['POST', 'PUT', 'PATCH'].includes(c.req.method)) {
+    if (!["POST", "PUT", "PATCH"].includes(c.req.method)) {
       await next();
       return;
     }
@@ -48,17 +48,18 @@ export function bodyLimit(options: BodySizeLimitOptions): MiddlewareHandler {
 
 export const generalApiBodyLimit = bodyLimit({
   maxSize: 1 * 1024 * 1024, // 1MB
-  message: 'Request body exceeds maximum allowed size of 1MB',
-  skipPaths: [/\/api\/spaces\/[^/]+\/app-deployments(?:\/|$)/],
+  message: "Request body exceeds maximum allowed size of 1MB",
+  skipPaths: [
+    /\/api\/spaces\/[^/]+\/group-deployment-snapshots(?:\/|$)/,
+  ],
 });
 
 export const oauthBodyLimit = bodyLimit({
   maxSize: 64 * 1024, // 64KB
-  message: 'Request body exceeds maximum allowed size of 64KB',
+  message: "Request body exceeds maximum allowed size of 64KB",
 });
 
 export const searchBodyLimit = bodyLimit({
   maxSize: 256 * 1024, // 256KB
-  message: 'Request body exceeds maximum allowed size of 256KB',
+  message: "Request body exceeds maximum allowed size of 256KB",
 });
-

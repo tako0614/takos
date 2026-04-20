@@ -23,8 +23,8 @@ export function estimateTokens(text: string): number {
   const cjkCount = cjkMatches ? cjkMatches.length : 0;
 
   // Remove CJK characters and count remaining words
-  const nonCjk = text.replace(CJK_REGEX, ' ');
-  const words = nonCjk.split(WORD_BOUNDARY_REGEX).filter(w => w.length > 0);
+  const nonCjk = text.replace(CJK_REGEX, " ");
+  const words = nonCjk.split(WORD_BOUNDARY_REGEX).filter((w) => w.length > 0);
 
   // Each word is roughly 1.3 tokens on average (subword tokenization)
   const wordTokens = Math.ceil(words.length * 1.3);
@@ -62,7 +62,9 @@ export function buildBudgetedSystemPrompt(
   const totalBudget = config?.totalBudget ?? DEFAULT_TOTAL_BUDGET;
 
   // Sort by priority (lower number = higher priority)
-  const sorted = [...lanes].filter(l => l.content.length > 0).sort((a, b) => a.priority - b.priority);
+  const sorted = [...lanes].filter((l) => l.content.length > 0).sort((a, b) =>
+    a.priority - b.priority
+  );
 
   const parts: string[] = [];
   let usedTokens = 0;
@@ -88,7 +90,7 @@ export function buildBudgetedSystemPrompt(
     }
   }
 
-  return parts.join('\n\n');
+  return parts.join("\n\n");
 }
 
 /**
@@ -96,7 +98,7 @@ export function buildBudgetedSystemPrompt(
  * Tries to break at paragraph or sentence boundaries.
  */
 function truncateToTokenBudget(text: string, budget: number): string {
-  if (budget <= 0) return '';
+  if (budget <= 0) return "";
 
   const tokens = estimateTokens(text);
   if (tokens <= budget) return text;
@@ -106,19 +108,19 @@ function truncateToTokenBudget(text: string, budget: number): string {
   const targetChars = Math.floor(text.length * ratio);
 
   // Try to break at paragraph boundary
-  const paragraphs = text.split('\n\n');
-  let result = '';
+  const paragraphs = text.split("\n\n");
+  let result = "";
   for (const para of paragraphs) {
     if (estimateTokens(result + para) > budget) break;
-    result += (result ? '\n\n' : '') + para;
+    result += (result ? "\n\n" : "") + para;
   }
 
   if (result) {
-    return result + '\n\n[... truncated]';
+    return result + "\n\n[... truncated]";
   }
 
   // Fallback: hard cut at target chars
-  return text.slice(0, targetChars) + '\n\n[... truncated]';
+  return text.slice(0, targetChars) + "\n\n[... truncated]";
 }
 
 /** Standard lane priorities */

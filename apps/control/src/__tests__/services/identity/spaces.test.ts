@@ -74,7 +74,7 @@ Deno.test("spaces service (Drizzle) - getWorkspaceByIdOrSlug - returns mapped wo
     ownerAccountId: "user-1",
     headSnapshotId: null,
     aiModel: "gpt-5.4-nano",
-    aiProvider: "openai",
+    modelBackend: "openai",
     securityPosture: "standard",
     createdAt: "2026-01-01T00:00:00.000Z",
     updatedAt: "2026-01-02T00:00:00.000Z",
@@ -89,6 +89,7 @@ Deno.test("spaces service (Drizzle) - getWorkspaceByIdOrSlug - returns mapped wo
   assertEquals(ws!.slug, "my-team");
   assertEquals(ws!.owner_principal_id, "user-1");
   assertEquals(ws!.ai_model, "gpt-5.4-nano");
+  assertEquals(ws!.model_backend, "openai");
   assertEquals(ws!.security_posture, "standard");
 });
 Deno.test("spaces service (Drizzle) - getWorkspaceByIdOrSlug - returns null when not found", async () => {
@@ -113,7 +114,7 @@ Deno.test("spaces service (Drizzle) - getWorkspaceByIdOrSlug - maps user type to
     ownerAccountId: null,
     headSnapshotId: null,
     aiModel: null,
-    aiProvider: null,
+    modelBackend: null,
     securityPosture: null,
     createdAt: "2026-01-01T00:00:00.000Z",
     updatedAt: "2026-01-01T00:00:00.000Z",
@@ -137,7 +138,7 @@ Deno.test("spaces service (Drizzle) - getWorkspaceByIdOrSlug - maps restricted_e
     ownerAccountId: "user-1",
     headSnapshotId: null,
     aiModel: null,
-    aiProvider: null,
+    modelBackend: null,
     securityPosture: "restricted_egress",
     createdAt: "2026-01-01T00:00:00.000Z",
     updatedAt: "2026-01-01T00:00:00.000Z",
@@ -153,14 +154,14 @@ Deno.test("spaces service (Drizzle) - getWorkspaceModelSettings - returns model 
   spaceModelDeps.getDb = (() => db) as any;
   db._.get = (async () => ({
     ai_model: "gpt-5.4-nano",
-    ai_provider: "openai",
+    model_backend: "openai",
     security_posture: "standard",
   })) as any;
 
   const settings = await getWorkspaceModelSettings({} as D1Database, "ws-1");
   assertEquals(settings, {
     ai_model: "gpt-5.4-nano",
-    ai_provider: "openai",
+    model_backend: "openai",
     security_posture: "standard",
   });
 });

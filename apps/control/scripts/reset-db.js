@@ -141,7 +141,7 @@ const TABLES = [
   "billing_plan_rates",
   "billing_plans",
 
-  // Worker / deploy / resource / takopack
+  // Worker / deploy / resource / package
   "worker_mcp_endpoints",
   "worker_runtime_limits",
   "worker_runtime_flags",
@@ -167,6 +167,9 @@ const TABLES = [
   "deployments",
   "workers",
   "bundle_deployments",
+  "default_app_preinstall_jobs",
+  "default_app_distribution_entries",
+  "default_app_distribution_config",
 
   // Files / repositories / account hierarchy
   "files",

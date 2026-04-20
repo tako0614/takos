@@ -12,13 +12,18 @@ const mocks = {
 
 // [Deno] vi.mock removed - manually stub imports from '@/db'
 // [Deno] vi.mock removed - manually stub imports from '@/shared/utils/logger'
-import { exportThread, threadExportDeps } from "@/services/threads/thread-export";
+import {
+  exportThread,
+  threadExportDeps,
+} from "@/services/threads/thread-export";
 import type { D1Database } from "@cloudflare/workers-types";
 
 type MockDb = D1Database;
 
-threadExportDeps.getDb = ((db) => mocks.getDb(db)) as typeof threadExportDeps.getDb;
-threadExportDeps.logError = ((...args) => mocks.logError(...args)) as typeof threadExportDeps.logError;
+threadExportDeps.getDb =
+  ((db) => mocks.getDb(db)) as typeof threadExportDeps.getDb;
+threadExportDeps.logError =
+  ((...args) => mocks.logError(...args)) as typeof threadExportDeps.logError;
 
 function makeThreadRow(overrides: Partial<{
   id: string;
@@ -287,7 +292,7 @@ Deno.test("exportThread - returns 503 when PDF format requested without renderPd
   const body = await result!.json() as { error: string };
   assertStringIncludes(
     body.error ?? "",
-    "PDF export requires Browser rendering",
+    "PDF export renderer is not configured",
   );
 });
 Deno.test("exportThread - exports thread as PDF when renderPdf is provided", async () => {

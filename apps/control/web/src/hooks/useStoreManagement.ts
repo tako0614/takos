@@ -1,5 +1,5 @@
-import { createSignal, createEffect, on, type Accessor } from 'solid-js';
-import { rpc, rpcJson, rpcPath } from '../lib/rpc.ts';
+import { type Accessor, createEffect, createSignal, on } from "solid-js";
+import { rpc, rpcJson, rpcPath } from "../lib/rpc.ts";
 
 export interface StoreItem {
   slug: string;
@@ -55,7 +55,7 @@ export function useStoreManagement(spaceId: Accessor<string | undefined>) {
     setLoading(true);
     setError(null);
     try {
-      const res = await rpc.spaces[':spaceId'].stores.$get({
+      const res = await rpc.spaces[":spaceId"].stores.$get({
         param: { spaceId: currentSpaceId },
       });
       const data = await rpcJson<{ stores: StoreItem[] }>(res);
@@ -65,7 +65,7 @@ export function useStoreManagement(spaceId: Accessor<string | undefined>) {
     } catch (err) {
       if (requestId !== storesRequestSeq) return;
       if (spaceId() !== currentSpaceId) return;
-      setError(err instanceof Error ? err.message : 'Failed to load stores');
+      setError(err instanceof Error ? err.message : "Failed to load stores");
     } finally {
       if (requestId === storesRequestSeq && spaceId() === currentSpaceId) {
         setLoading(false);
@@ -76,9 +76,9 @@ export function useStoreManagement(spaceId: Accessor<string | undefined>) {
   const createStore = async (slug: string, name?: string, summary?: string) => {
     const currentSpaceId = spaceId();
     if (!currentSpaceId) {
-      throw new Error('Missing space');
+      throw new Error("Missing space");
     }
-    const res = await rpc.spaces[':spaceId'].stores.$post({
+    const res = await rpc.spaces[":spaceId"].stores.$post({
       param: { spaceId: currentSpaceId },
       json: { slug, name, summary },
     });
@@ -92,9 +92,9 @@ export function useStoreManagement(spaceId: Accessor<string | undefined>) {
   const deleteStore = async (storeSlug: string) => {
     const currentSpaceId = spaceId();
     if (!currentSpaceId) {
-      throw new Error('Missing space');
+      throw new Error("Missing space");
     }
-    await rpc.spaces[':spaceId'].stores[':storeSlug'].$delete({
+    await rpc.spaces[":spaceId"].stores[":storeSlug"].$delete({
       param: { spaceId: currentSpaceId, storeSlug },
     });
     if (currentSpaceId === spaceId()) {
@@ -102,7 +102,9 @@ export function useStoreManagement(spaceId: Accessor<string | undefined>) {
     }
   };
 
-  createEffect(on(() => spaceId(), () => { void fetchStores(); }));
+  createEffect(on(() => spaceId(), () => {
+    void fetchStores();
+  }));
 
   return { stores, loading, error, fetchStores, createStore, deleteStore };
 }
@@ -132,19 +134,32 @@ export function useStoreInventory(
     setLoading(true);
     setError(null);
     try {
-      const res = await rpcPath(rpc, 'spaces', ':spaceId', 'stores', ':storeSlug', 'inventory').$get({
+      const res = await rpcPath(
+        rpc,
+        "spaces",
+        ":spaceId",
+        "stores",
+        ":storeSlug",
+        "inventory",
+      ).$get({
         param: { spaceId: currentSpaceId, storeSlug: currentStoreSlug },
-        query: { limit: '100', offset: '0' },
-      }) as unknown as Response;
-      const data = await rpcJson<{ total: number; items: InventoryItem[] }>(res);
+        query: { limit: "100", offset: "0" },
+      });
+      const data = await rpcJson<{ total: number; items: InventoryItem[] }>(
+        res,
+      );
       if (requestId !== itemsRequestSeq) return;
-      if (spaceId() !== currentSpaceId || storeSlug() !== currentStoreSlug) return;
+      if (spaceId() !== currentSpaceId || storeSlug() !== currentStoreSlug) {
+        return;
+      }
       setItems(data.items);
       setTotal(data.total);
     } catch (err) {
       if (requestId !== itemsRequestSeq) return;
-      if (spaceId() !== currentSpaceId || storeSlug() !== currentStoreSlug) return;
-      setError(err instanceof Error ? err.message : 'Failed to load inventory');
+      if (spaceId() !== currentSpaceId || storeSlug() !== currentStoreSlug) {
+        return;
+      }
+      setError(err instanceof Error ? err.message : "Failed to load inventory");
     } finally {
       if (
         requestId === itemsRequestSeq &&
@@ -160,12 +175,13 @@ export function useStoreInventory(
     const currentSpaceId = spaceId();
     const currentStoreSlug = storeSlug();
     if (!currentSpaceId || !currentStoreSlug) {
-      throw new Error('Missing store context');
+      throw new Error("Missing store context");
     }
-    const res = await rpc.spaces[':spaceId'].stores[':storeSlug'].inventory.$post({
-      param: { spaceId: currentSpaceId, storeSlug: currentStoreSlug },
-      json: { repo_actor_url: repoActorUrl, repo_name: repoName },
-    });
+    const res = await rpc.spaces[":spaceId"].stores[":storeSlug"].inventory
+      .$post({
+        param: { spaceId: currentSpaceId, storeSlug: currentStoreSlug },
+        json: { repo_actor_url: repoActorUrl, repo_name: repoName },
+      });
     await rpcJson(res);
     await fetchItems();
   };
@@ -174,18 +190,21 @@ export function useStoreInventory(
     const currentSpaceId = spaceId();
     const currentStoreSlug = storeSlug();
     if (!currentSpaceId || !currentStoreSlug) {
-      throw new Error('Missing store context');
+      throw new Error("Missing store context");
     }
-    await rpc.spaces[':spaceId'].stores[':storeSlug'].inventory[':itemId'].$delete({
-      param: { spaceId: currentSpaceId, storeSlug: currentStoreSlug, itemId },
-    });
+    await rpc.spaces[":spaceId"].stores[":storeSlug"].inventory[":itemId"]
+      .$delete({
+        param: { spaceId: currentSpaceId, storeSlug: currentStoreSlug, itemId },
+      });
     if (currentSpaceId === spaceId() && currentStoreSlug === storeSlug()) {
       setItems((prev) => prev.filter((i) => i.id !== itemId));
       setTotal((prev) => prev - 1);
     }
   };
 
-  createEffect(on(() => [spaceId(), storeSlug()], () => { void fetchItems(); }));
+  createEffect(on(() => [spaceId(), storeSlug()], () => {
+    void fetchItems();
+  }));
 
   return { items, total, loading, error, fetchItems, addItem, removeItem };
 }
@@ -209,9 +228,10 @@ export function useStoreRegistry(spaceId: Accessor<string | undefined>) {
     setLoading(true);
     setError(null);
     try {
-      const res = await rpc.spaces[':spaceId']['store-registry'].$get({
-        param: { spaceId: currentSpaceId },
-      });
+      const res = await rpcPath(rpc, "spaces", ":spaceId", "store-registry")
+        .$get({
+          param: { spaceId: currentSpaceId },
+        });
       const data = await rpcJson<{ stores: RegistryEntry[] }>(res);
       if (requestId !== entriesRequestSeq) return;
       if (spaceId() !== currentSpaceId) return;
@@ -219,7 +239,9 @@ export function useStoreRegistry(spaceId: Accessor<string | undefined>) {
     } catch (err) {
       if (requestId !== entriesRequestSeq) return;
       if (spaceId() !== currentSpaceId) return;
-      setError(err instanceof Error ? err.message : 'Failed to load remote stores');
+      setError(
+        err instanceof Error ? err.message : "Failed to load remote stores",
+      );
     } finally {
       if (requestId === entriesRequestSeq && spaceId() === currentSpaceId) {
         setLoading(false);
@@ -230,12 +252,13 @@ export function useStoreRegistry(spaceId: Accessor<string | undefined>) {
   const addRemoteStore = async (identifier: string, subscribe = false) => {
     const currentSpaceId = spaceId();
     if (!currentSpaceId) {
-      throw new Error('Missing space');
+      throw new Error("Missing space");
     }
-    const res = await rpc.spaces[':spaceId']['store-registry'].$post({
-      param: { spaceId: currentSpaceId },
-      json: { identifier, set_active: true, subscribe },
-    });
+    const res = await rpcPath(rpc, "spaces", ":spaceId", "store-registry")
+      .$post({
+        param: { spaceId: currentSpaceId },
+        json: { identifier, set_active: true, subscribe },
+      });
     await rpcJson(res);
     await fetchEntries();
   };
@@ -243,17 +266,20 @@ export function useStoreRegistry(spaceId: Accessor<string | undefined>) {
   const removeEntry = async (entryId: string) => {
     const currentSpaceId = spaceId();
     if (!currentSpaceId) {
-      throw new Error('Missing space');
+      throw new Error("Missing space");
     }
-    await rpc.spaces[':spaceId']['store-registry'][':entryId'].$delete({
-      param: { spaceId: currentSpaceId, entryId },
-    });
+    await rpcPath(rpc, "spaces", ":spaceId", "store-registry", ":entryId")
+      .$delete({
+        param: { spaceId: currentSpaceId, entryId },
+      });
     if (currentSpaceId === spaceId()) {
       setEntries((prev) => prev.filter((e) => e.id !== entryId));
     }
   };
 
-  createEffect(on(() => spaceId(), () => { void fetchEntries(); }));
+  createEffect(on(() => spaceId(), () => {
+    void fetchEntries();
+  }));
 
   return { entries, loading, error, fetchEntries, addRemoteStore, removeEntry };
 }

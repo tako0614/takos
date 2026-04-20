@@ -14,16 +14,16 @@ const mocks = {
   getPortableSqlDatabase: ((..._args: any[]) => undefined) as any,
   getPortableObjectStore: ((..._args: any[]) => undefined) as any,
   getPortableKvStore: ((..._args: any[]) => undefined) as any,
-  isPortableResourceProvider: (providerName?: string | null) =>
-    providerName != null && providerName !== "cloudflare",
-  createOptionalCloudflareWfpProvider: ((..._args: any[]) => undefined) as any,
+  isPortableResourceBackend: (backendName?: string | null) =>
+    backendName != null && backendName !== "cloudflare",
+  createOptionalCloudflareWfpBackend: ((..._args: any[]) => undefined) as any,
   resourceRow: null as Record<string, unknown> | null,
 };
 
 // [Deno] vi.mock removed - manually stub imports from '@/db'
 // [Deno] vi.mock removed - manually stub imports from '@/services/resources'
 // [Deno] vi.mock removed - manually stub imports from '@/routes/resources/portable-runtime'
-// [Deno] vi.mock removed - manually stub imports from '@/platform/providers/cloudflare/wfp.ts'
+// [Deno] vi.mock removed - manually stub Cloudflare WFP imports
 import resourcesRouter from "@/routes/resources";
 
 const TEST_USER_ID = "user-1";
@@ -75,15 +75,17 @@ function installDbMock() {
 }
 
 function syncResourceRouteDeps() {
-  for (const deps of [d1RouteDeps as any, r2RouteDeps as any, kvRouteDeps as any]) {
+  for (
+    const deps of [d1RouteDeps as any, r2RouteDeps as any, kvRouteDeps as any]
+  ) {
     deps.getDb = mocks.getDb;
     deps.checkResourceAccess = mocks.checkResourceAccess;
     deps.getPortableSqlDatabase = mocks.getPortableSqlDatabase;
     deps.getPortableObjectStore = mocks.getPortableObjectStore;
     deps.getPortableKvStore = mocks.getPortableKvStore;
-    deps.isPortableResourceProvider = mocks.isPortableResourceProvider;
-    deps.createOptionalCloudflareWfpProvider =
-      mocks.createOptionalCloudflareWfpProvider;
+    deps.isPortableResourceBackend = mocks.isPortableResourceBackend;
+    deps.createOptionalCloudflareWfpBackend =
+      mocks.createOptionalCloudflareWfpBackend;
   }
 }
 
@@ -98,19 +100,19 @@ Deno.test("portable resource data-plane routes - serves sql tables through the p
   Deno.env.delete("POSTGRES_URL");
   Deno.env.delete("DATABASE_URL");
   mocks.checkResourceAccess = (async () => true) as any;
-  mocks.isPortableResourceProvider = (providerName?: string | null) =>
-    providerName != null && providerName !== "cloudflare" as any;
-  mocks.createOptionalCloudflareWfpProvider;
+  mocks.isPortableResourceBackend = (backendName?: string | null) =>
+    backendName != null && backendName !== "cloudflare" as any;
+  mocks.createOptionalCloudflareWfpBackend;
   mocks.resourceRow = {
     id: "res-sql",
     ownerAccountId: TEST_USER_ID,
     accountId: "space-1",
-    providerName: "local",
+    backendName: "local",
     name: "db",
     type: "d1",
     status: "active",
-    providerResourceId: "db-res-sql",
-    providerResourceName: "db-res-sql",
+    backingResourceId: "db-res-sql",
+    backingResourceName: "db-res-sql",
     config: "{}",
     metadata: "{}",
     createdAt: TEST_TIMESTAMP,
@@ -160,20 +162,20 @@ Deno.test("portable resource data-plane routes - serves sql tables through the p
   Deno.env.delete("POSTGRES_URL");
   Deno.env.delete("DATABASE_URL");
   mocks.checkResourceAccess = (async () => true) as any;
-  mocks.isPortableResourceProvider = (providerName?: string | null) =>
-    providerName != null && providerName !== "cloudflare" as any;
-  mocks.createOptionalCloudflareWfpProvider;
+  mocks.isPortableResourceBackend = (backendName?: string | null) =>
+    backendName != null && backendName !== "cloudflare" as any;
+  mocks.createOptionalCloudflareWfpBackend;
   Deno.env.set("POSTGRES_URL", "postgresql://takos:takos@postgres:5432/takos");
   mocks.resourceRow = {
     id: "res-sql-pg",
     ownerAccountId: TEST_USER_ID,
     accountId: "space-1",
-    providerName: "aws",
+    backendName: "aws",
     name: "db",
     type: "d1",
     status: "active",
-    providerResourceId: "db-res-sql-pg",
-    providerResourceName: "db-res-sql-pg",
+    backingResourceId: "db-res-sql-pg",
+    backingResourceName: "db-res-sql-pg",
     config: "{}",
     metadata: "{}",
     createdAt: TEST_TIMESTAMP,
@@ -227,19 +229,19 @@ Deno.test("portable resource data-plane routes - serves object listings and read
   Deno.env.delete("POSTGRES_URL");
   Deno.env.delete("DATABASE_URL");
   mocks.checkResourceAccess = (async () => true) as any;
-  mocks.isPortableResourceProvider = (providerName?: string | null) =>
-    providerName != null && providerName !== "cloudflare" as any;
-  mocks.createOptionalCloudflareWfpProvider;
+  mocks.isPortableResourceBackend = (backendName?: string | null) =>
+    backendName != null && backendName !== "cloudflare" as any;
+  mocks.createOptionalCloudflareWfpBackend;
   mocks.resourceRow = {
     id: "res-obj",
     ownerAccountId: TEST_USER_ID,
     accountId: "space-1",
-    providerName: "k8s",
+    backendName: "k8s",
     name: "bucket",
     type: "r2",
     status: "active",
-    providerResourceId: null,
-    providerResourceName: "bucket-res-obj",
+    backingResourceId: null,
+    backingResourceName: "bucket-res-obj",
     config: "{}",
     metadata: "{}",
     createdAt: TEST_TIMESTAMP,
@@ -304,19 +306,19 @@ Deno.test("portable resource data-plane routes - mounts kv routes and serves ent
   Deno.env.delete("POSTGRES_URL");
   Deno.env.delete("DATABASE_URL");
   mocks.checkResourceAccess = (async () => true) as any;
-  mocks.isPortableResourceProvider = (providerName?: string | null) =>
-    providerName != null && providerName !== "cloudflare" as any;
-  mocks.createOptionalCloudflareWfpProvider;
+  mocks.isPortableResourceBackend = (backendName?: string | null) =>
+    backendName != null && backendName !== "cloudflare" as any;
+  mocks.createOptionalCloudflareWfpBackend;
   mocks.resourceRow = {
     id: "res-kv",
     ownerAccountId: TEST_USER_ID,
     accountId: "space-1",
-    providerName: "aws",
+    backendName: "aws",
     name: "kv-one",
     type: "kv",
     status: "active",
-    providerResourceId: "kv-res-kv",
-    providerResourceName: "kv-res-kv",
+    backingResourceId: "kv-res-kv",
+    backingResourceName: "kv-res-kv",
     config: "{}",
     metadata: "{}",
     createdAt: TEST_TIMESTAMP,
@@ -360,7 +362,7 @@ Deno.test("portable resource data-plane routes - mounts kv routes and serves ent
     metadata: { lang: "en" },
   });
 });
-Deno.test("portable resource data-plane routes - serves object read/write through the Cloudflare WFP provider on canonical routes", async () => {
+Deno.test("portable resource data-plane routes - serves object read/write through the Cloudflare WFP backend on canonical routes", async () => {
   /* mocks cleared (no-op in Deno) */ void 0;
   mocks.resourceRow = null;
   installDbMock();
@@ -369,19 +371,19 @@ Deno.test("portable resource data-plane routes - serves object read/write throug
   Deno.env.delete("POSTGRES_URL");
   Deno.env.delete("DATABASE_URL");
   mocks.checkResourceAccess = (async () => true) as any;
-  mocks.isPortableResourceProvider = (providerName?: string | null) =>
-    providerName != null && providerName !== "cloudflare" as any;
-  mocks.createOptionalCloudflareWfpProvider;
+  mocks.isPortableResourceBackend = (backendName?: string | null) =>
+    backendName != null && backendName !== "cloudflare" as any;
+  mocks.createOptionalCloudflareWfpBackend;
   mocks.resourceRow = {
     id: "res-cf-r2",
     ownerAccountId: TEST_USER_ID,
     accountId: "space-1",
-    providerName: "cloudflare",
+    backendName: "cloudflare",
     name: "bucket",
     type: "r2",
     status: "active",
-    providerResourceId: null,
-    providerResourceName: "bucket-res-cf",
+    backingResourceId: null,
+    backingResourceName: "bucket-res-cf",
     config: "{}",
     metadata: "{}",
     createdAt: TEST_TIMESTAMP,
@@ -396,7 +398,7 @@ Deno.test("portable resource data-plane routes - serves object read/write throug
     contentType: "text/plain",
     size: 13,
   });
-  mocks.createOptionalCloudflareWfpProvider = (() => ({
+  mocks.createOptionalCloudflareWfpBackend = (() => ({
     r2: { uploadToR2, getR2Object },
   })) as any;
   syncResourceRouteDeps();

@@ -2,31 +2,25 @@ export {
   getPlatform,
   getPlatformConfig,
   getPlatformServices,
-} from './accessors.ts';
+} from "./accessors.ts";
+
+export type { PlatformContext, PlatformContextVariables } from "./context.ts";
+export { getPlatformContext, setPlatformContext } from "./context.ts";
 
 export type {
-  PlatformContextVariables,
-  PlatformContext,
-} from './context.ts';
-export {
-  setPlatformContext,
-  getPlatformContext,
-} from './context.ts';
-
-export type {
-  PlatformSource,
-  PlatformServiceBinding,
-  WorkersDispatchDeployProviderConfig,
-  OciDeployProviderConfig,
-  EcsDeployProviderConfig,
-  CloudRunDeployProviderConfig,
-  K8sDeployProviderConfig,
-  PlatformDeployProviderConfig,
-  PlatformDeployProviderRegistry,
-  PlatformConfig,
-  PlatformRoutingService,
-  PlatformQueues,
-  PlatformObjects,
-  PlatformServices,
+  CloudRunDeployBackendConfig,
   ControlPlatform,
-} from './platform-config.ts';
+  EcsDeployBackendConfig,
+  K8sDeployBackendConfig,
+  OciDeployBackendConfig,
+  PlatformConfig,
+  PlatformDeployBackendConfig,
+  PlatformDeployBackendRegistry,
+  PlatformObjects,
+  PlatformQueues,
+  PlatformRoutingService,
+  PlatformServiceBinding,
+  PlatformServices,
+  PlatformSource,
+  WorkersDispatchDeployBackendConfig,
+} from "./platform-config.ts";

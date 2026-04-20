@@ -1,4 +1,4 @@
-const SECRET_MASK = '***';
+const SECRET_MASK = "***";
 
 /**
  * Maximum length for a single secret value to prevent ReDoS.
@@ -38,9 +38,9 @@ export class SecretsSanitizer {
         this.longSecrets.add(secret);
         continue;
       }
-      const escaped = secret.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      const escaped = secret.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
       try {
-        this.secretPatterns.push(new RegExp(escaped, 'g'));
+        this.secretPatterns.push(new RegExp(escaped, "g"));
       } catch {
         // Regex construction failed — fall back to string replacement
         this.longSecrets.add(secret);
@@ -66,7 +66,7 @@ export class SecretsSanitizer {
   }
 
   sanitizeLogs(logs: string[]): string[] {
-    return logs.map(log => this.sanitize(log));
+    return logs.map((log) => this.sanitize(log));
   }
 
   clear(): void {
@@ -80,10 +80,21 @@ export class SecretsSanitizer {
  * Commands that would directly dump environment variables containing secrets.
  * These are blocked (not just warned) to prevent secret leakage.
  */
-const SECRET_EXPOSING_COMMANDS: Array<{ pattern: RegExp; description: string }> = [
-  { pattern: /^\s*env\s*$/, description: 'bare "env" dumps all environment variables' },
-  { pattern: /^\s*printenv\s*$/, description: 'bare "printenv" dumps all environment variables' },
-  { pattern: /^\s*export\s+-p\s*$/, description: '"export -p" dumps all exported variables' },
+const SECRET_EXPOSING_COMMANDS: Array<
+  { pattern: RegExp; description: string }
+> = [
+  {
+    pattern: /^\s*env\s*$/,
+    description: 'bare "env" dumps all environment variables',
+  },
+  {
+    pattern: /^\s*printenv\s*$/,
+    description: 'bare "printenv" dumps all environment variables',
+  },
+  {
+    pattern: /^\s*export\s+-p\s*$/,
+    description: '"export -p" dumps all exported variables',
+  },
 ];
 
 /**
@@ -91,9 +102,9 @@ const SECRET_EXPOSING_COMMANDS: Array<{ pattern: RegExp; description: string }> 
  * Returns a description of the risk if detected, or null if safe.
  */
 export function mightExposeSecrets(command: string): string | null {
-  for (const line of command.split('\n')) {
+  for (const line of command.split("\n")) {
     const trimmed = line.trim();
-    if (!trimmed || trimmed.startsWith('#')) continue;
+    if (!trimmed || trimmed.startsWith("#")) continue;
     for (const { pattern, description } of SECRET_EXPOSING_COMMANDS) {
       if (pattern.test(trimmed)) {
         return description;
@@ -114,7 +125,7 @@ export function shouldBlockForSecretExposure(command: string): boolean {
 
 export function createSecretsSanitizer(
   secrets: Record<string, string>,
-  extraValues: string[] = []
+  extraValues: string[] = [],
 ): SecretsSanitizer {
   const sanitizer = new SecretsSanitizer();
   sanitizer.registerSecrets(secrets);
@@ -139,11 +150,13 @@ const EXTRA_SENSITIVE_ENV_PATTERNS = [
 ];
 
 const EXTRA_SENSITIVE_ENV_KEYS = new Set([
-  'TAKOS_TOKEN',
-  'TAKOS_SESSION_ID',
+  "TAKOS_TOKEN",
+  "TAKOS_SESSION_ID",
 ]);
 
-export function collectSensitiveEnvValues(env?: Record<string, string>): string[] {
+export function collectSensitiveEnvValues(
+  env?: Record<string, string>,
+): string[] {
   if (!env) return [];
   const values: string[] = [];
 

@@ -2,21 +2,35 @@
 // explore-packages.ts — main entry point that composes search, filter, stats
 // ---------------------------------------------------------------------------
 
-import type { D1Database } from '../../../shared/types/bindings.ts';
-import { getDb } from '../../../infra/db/index.ts';
+import type { D1Database } from "../../../shared/types/bindings.ts";
+import { getDb } from "../../../infra/db/index.ts";
 import type {
-  PackageWithTakopack,
   PackageDto,
+  PackageRatingStats,
+  PackageWithRelease,
   SearchPackagesParams,
   SearchPackagesResult,
   SuggestPackageDto,
   SuggestPackagesParams,
-  TakopackRatingStats,
-} from './explore-package-types.ts';
-import { queryReleasesWithRepo, loadAssetsForReleases, buildPackagesFromRows } from './explore-search.ts';
-import { SORT_ALIASES, filterPackages, sortPackages } from './explore-package-filters.ts';
-import { getTakopackRatingStats, type getTakopackRatingSummary as _getTakopackRatingSummary, fetchPublishStatuses } from './explore-stats.ts';
-import { textDateNullable } from '../../../shared/utils/db-guards.ts';
+} from "./explore-package-types.ts";
+import {
+  buildPackagesFromRows,
+  loadAssetsForReleases,
+  queryReleasesWithRepo,
+} from "./explore-search.ts";
+import {
+  filterPackages,
+  SORT_ALIASES,
+  sortPackages,
+} from "./explore-package-filters.ts";
+import {
+  fetchPublishStatuses,
+  getPackageRatingStats,
+  type PublishStatus,
+} from "./explore-stats.ts";
+import { hasDeployManifestForRelease } from "./explore-catalog.ts";
+import { textDateNullable } from "../../../shared/utils/db-guards.ts";
+import type { R2Bucket } from "../../../shared/types/bindings.ts";
 
 // ---------------------------------------------------------------------------
 // Re-export types and functions so existing importers continue to work
@@ -28,16 +42,52 @@ export type {
   SearchPackagesResult,
   SuggestPackageDto,
   SuggestPackagesParams,
-  TakopackRatingStats,
-} from './explore-package-types.ts';
+} from "./explore-package-types.ts";
 
-export { getTakopackRatingStats, getTakopackRatingSummary } from './explore-stats.ts';
+export {
+  getPackageRatingStats,
+  getPackageRatingSummary,
+} from "./explore-stats.ts";
+
+export async function filterDeployablePackageReleases(
+  dbBinding: D1Database,
+  gitObjects: R2Bucket | undefined,
+  releases: Array<{
+    repoId: string;
+    tag: string;
+    commitSha: string | null;
+  }>,
+): Promise<
+  Array<{
+    repoId: string;
+    tag: string;
+    commitSha: string | null;
+  }>
+> {
+  const deployable: Array<{
+    repoId: string;
+    tag: string;
+    commitSha: string | null;
+  }> = [];
+
+  for (const release of releases) {
+    if (
+      await hasDeployManifestForRelease(dbBinding, gitObjects, release)
+    ) {
+      deployable.push(release);
+    }
+  }
+
+  return deployable;
+}
 
 // ---------------------------------------------------------------------------
 // Internal helpers
 // ---------------------------------------------------------------------------
 
-function resolvePackageOwner(account: PackageWithTakopack['release']['repository']['account']) {
+function resolvePackageOwner(
+  account: PackageWithRelease["release"]["repository"]["account"],
+) {
   return {
     id: account.id,
     name: account.name,
@@ -47,24 +97,28 @@ function resolvePackageOwner(account: PackageWithTakopack['release']['repository
 }
 
 function toPackageDto(
-  pkg: PackageWithTakopack,
-  ratingStatsByRepoId: Map<string, TakopackRatingStats>,
-  publishStatusByKey: Map<string, string>,
+  pkg: PackageWithRelease,
+  ratingStatsByRepoId: Map<string, PackageRatingStats>,
+  publishStatusByKey: Map<string, PublishStatus>,
 ): PackageDto {
-  const publishKey = `${pkg.release.id}:${pkg.primaryAsset.id}`;
-  const publishStatus = publishStatusByKey.get(publishKey) || 'none';
+  const publishKey = pkg.primaryAsset
+    ? `${pkg.release.id}:${pkg.primaryAsset.id}`
+    : null;
+  const publishStatus = publishKey
+    ? (publishStatusByKey.get(publishKey) || "none")
+    : "none";
 
   return {
     id: pkg.release.id,
-    name: pkg.primaryAsset.bundle_meta?.version
-      ? pkg.release.repository.name
-      : pkg.primaryAsset.name.replace('.takopack', ''),
-    app_id: pkg.primaryAsset.bundle_meta?.app_id || pkg.primaryAsset.bundle_meta?.name || pkg.release.repository.name,
-    version: pkg.primaryAsset.bundle_meta?.version || pkg.release.tag,
-    description: pkg.primaryAsset.bundle_meta?.description || pkg.release.description,
-    icon: pkg.primaryAsset.bundle_meta?.icon,
-    category: pkg.primaryAsset.bundle_meta?.category,
-    tags: pkg.primaryAsset.bundle_meta?.tags,
+    name: pkg.release.repository.name,
+    app_id: pkg.primaryAsset?.bundle_meta?.app_id ||
+      pkg.primaryAsset?.bundle_meta?.name || pkg.release.repository.name,
+    version: pkg.primaryAsset?.bundle_meta?.version || pkg.release.tag,
+    description: pkg.primaryAsset?.bundle_meta?.description ||
+      pkg.release.description,
+    icon: pkg.primaryAsset?.bundle_meta?.icon,
+    category: pkg.primaryAsset?.bundle_meta?.category,
+    tags: pkg.primaryAsset?.bundle_meta?.tags,
     repository: {
       id: pkg.release.repository.id,
       name: pkg.release.repository.name,
@@ -77,18 +131,22 @@ function toPackageDto(
       tag: pkg.release.tag,
       published_at: textDateNullable(pkg.release.publishedAt),
     },
-    asset: {
-      id: pkg.primaryAsset.id,
-      name: pkg.primaryAsset.name,
-      size: pkg.primaryAsset.size,
-      download_count: pkg.primaryAsset.download_count,
-    },
+    asset: pkg.primaryAsset
+      ? {
+        id: pkg.primaryAsset.id,
+        name: pkg.primaryAsset.name,
+        size: pkg.primaryAsset.size,
+        download_count: pkg.primaryAsset.download_count,
+      }
+      : null,
     total_downloads: pkg.totalDownloads,
     published_at: textDateNullable(pkg.release.publishedAt),
-    rating_avg: ratingStatsByRepoId.get(pkg.release.repository.id)?.rating_avg ?? null,
-    rating_count: ratingStatsByRepoId.get(pkg.release.repository.id)?.rating_count ?? 0,
+    rating_avg:
+      ratingStatsByRepoId.get(pkg.release.repository.id)?.rating_avg ?? null,
+    rating_count:
+      ratingStatsByRepoId.get(pkg.release.repository.id)?.rating_count ?? 0,
     publish_status: publishStatus,
-    certified: publishStatus === 'approved',
+    certified: publishStatus === "approved",
   };
 }
 
@@ -97,7 +155,7 @@ function toPackageDto(
 // ---------------------------------------------------------------------------
 
 /**
- * Search, filter, sort, and paginate takopack packages.
+ * Search, filter, sort, and paginate release-backed packages.
  */
 export async function searchPackages(
   d1: D1Database,
@@ -107,11 +165,12 @@ export async function searchPackages(
   const { searchQuery, limit, offset, category, tags, certifiedOnly } = params;
   const sortParam = SORT_ALIASES[params.sortParamRaw] || params.sortParamRaw;
 
-  const ORDER_BY_MAP: Record<string, 'updatedAt' | 'createdAt' | 'downloads'> = {
-    updated: 'updatedAt',
-    created: 'createdAt',
-  };
-  const orderByColumn = ORDER_BY_MAP[sortParam] || 'downloads';
+  const ORDER_BY_MAP: Record<string, "updatedAt" | "createdAt" | "downloads"> =
+    {
+      updated: "updatedAt",
+      created: "createdAt",
+    };
+  const orderByColumn = ORDER_BY_MAP[sortParam] || "downloads";
 
   const releaseRows = await queryReleasesWithRepo(db, {
     searchQuery: searchQuery || undefined,
@@ -123,23 +182,40 @@ export async function searchPackages(
   const releaseIds = releaseRows.map((r) => r.id);
   const assetsByRelease = await loadAssetsForReleases(db, releaseIds);
 
-  const packagesWithTakopack = buildPackagesFromRows(releaseRows, assetsByRelease);
+  const packagesWithRelease = buildPackagesFromRows(
+    releaseRows,
+    assetsByRelease,
+  );
 
-  const hasMore = packagesWithTakopack.length > limit;
-  if (hasMore) packagesWithTakopack.pop();
+  const hasMore = packagesWithRelease.length > limit;
+  if (hasMore) packagesWithRelease.pop();
 
-  let filtered = filterPackages(packagesWithTakopack, category, tags);
+  let filtered = filterPackages(packagesWithRelease, category, tags);
 
-  const repoIds = Array.from(new Set(filtered.map((p) => p.release.repository.id)));
-  const ratingStatsByRepoId = await getTakopackRatingStats(db, repoIds);
+  const repoIds = Array.from(
+    new Set(filtered.map((p) => p.release.repository.id)),
+  );
+  const ratingStatsByRepoId = await getPackageRatingStats(db, repoIds);
 
   sortPackages(filtered, sortParam, params.sortParamRaw, ratingStatsByRepoId);
 
-  const publishStatusByKey = await fetchPublishStatuses(db, filtered);
+  const publishStatusByKey = await fetchPublishStatuses(
+    db,
+    filtered
+      .filter((pkg) => !!pkg.primaryAsset)
+      .map((pkg) => ({
+        repoId: pkg.release.repository.id,
+        releaseTag: pkg.release.tag,
+        assetId: pkg.primaryAsset!.id,
+      })),
+  );
 
   if (certifiedOnly) {
     filtered = filtered.filter(
-      (p) => publishStatusByKey.get(`${p.release.id}:${p.primaryAsset.id}`) === 'approved',
+      (p) =>
+        !!p.primaryAsset &&
+        publishStatusByKey.get(`${p.release.id}:${p.primaryAsset.id}`) ===
+          "approved",
     );
   }
 
@@ -147,7 +223,7 @@ export async function searchPackages(
   if (hasMoreFiltered) filtered.pop();
 
   const packages = filtered.map((pkg) =>
-    toPackageDto(pkg, ratingStatsByRepoId, publishStatusByKey),
+    toPackageDto(pkg, ratingStatsByRepoId, publishStatusByKey)
   );
 
   return { packages, has_more: hasMoreFiltered };
@@ -166,7 +242,7 @@ export async function suggestPackages(
 
   const releaseRows = await queryReleasesWithRepo(db, {
     searchQuery: query,
-    orderByColumn: 'downloads',
+    orderByColumn: "downloads",
     limit: 50,
     offset: 0,
   });
@@ -177,20 +253,23 @@ export async function suggestPackages(
   const packages = releaseRows
     .map((release) => {
       const assets = assetsByRelease.get(release.id) ?? [];
-      const takopackAssets = assets.filter((a) => a.bundle_format === 'takopack');
-      if (takopackAssets.length === 0) return null;
-      const primaryAsset = takopackAssets[0];
-      const totalDownloads = takopackAssets.reduce((sum, a) => sum + (a.download_count || 0), 0);
+      const primaryAsset = assets[0] ?? null;
+      const totalDownloads = assets.reduce(
+        (sum, a) => sum + (a.download_count || 0),
+        0,
+      );
 
       return {
         id: release.id,
         name: release.repoName,
-        app_id: primaryAsset.bundle_meta?.app_id || primaryAsset.bundle_meta?.name || release.repoName,
-        version: primaryAsset.bundle_meta?.version || release.tag,
-        description: primaryAsset.bundle_meta?.description || release.description,
-        icon: primaryAsset.bundle_meta?.icon,
-        category: primaryAsset.bundle_meta?.category,
-        tags: primaryAsset.bundle_meta?.tags,
+        app_id: primaryAsset?.bundle_meta?.app_id ||
+          primaryAsset?.bundle_meta?.name || release.repoName,
+        version: primaryAsset?.bundle_meta?.version || release.tag,
+        description: primaryAsset?.bundle_meta?.description ||
+          release.description,
+        icon: primaryAsset?.bundle_meta?.icon,
+        category: primaryAsset?.bundle_meta?.category,
+        tags: primaryAsset?.bundle_meta?.tags,
         repository: {
           id: release.repoId,
           name: release.repoName,
@@ -208,22 +287,23 @@ export async function suggestPackages(
           tag: release.tag,
           published_at: textDateNullable(release.publishedAt),
         },
-        asset: {
-          id: primaryAsset.id,
-          name: primaryAsset.name,
-          size: primaryAsset.size,
-          download_count: primaryAsset.download_count,
-        },
+        asset: primaryAsset
+          ? {
+            id: primaryAsset.id,
+            name: primaryAsset.name,
+            size: primaryAsset.size,
+            download_count: primaryAsset.download_count,
+          }
+          : null,
         total_downloads: totalDownloads,
         published_at: textDateNullable(release.publishedAt),
       };
     })
-    .filter((p): p is NonNullable<typeof p> => p !== null)
     .filter((p) => {
       if (category && p.category !== category) return false;
       if (tags.length > 0) {
         const pkgTags = (p.tags || [])
-          .map((t) => String(t || '').trim().toLowerCase())
+          .map((t) => String(t || "").trim().toLowerCase())
           .filter(Boolean);
         if (pkgTags.length === 0) return false;
         if (!tags.every((t) => pkgTags.includes(t))) return false;

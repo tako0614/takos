@@ -31,7 +31,7 @@ export type ResolvedWorkflowArtifactFile = {
   artifactName: string;
   artifactPath: string;
   r2Key: string;
-  source: "inventory" | "prefix-fallback";
+  source: "inventory" | "prefix-fallback" | "directory-fallback";
 };
 
 function normalizePath(value: string): string {
@@ -41,6 +41,31 @@ function normalizePath(value: string): string {
     .replace(/^\/+/, "")
     .replace(/\/{2,}/g, "/")
     .trim();
+}
+
+function normalizeArtifactPath(value: string): string {
+  const raw = String(value || "").trim();
+  if (/^(?:[a-zA-Z]:[\\/]|[\\/])/.test(raw)) {
+    throw new Error("artifact path must be repository-relative");
+  }
+  const normalized = normalizePath(raw);
+  if (!normalized) {
+    throw new Error("artifact path is required");
+  }
+  const segments = normalized.split("/");
+  if (
+    segments.some((segment) => segment === ".." || segment === ".")
+  ) {
+    throw new Error("artifact path must not contain path traversal");
+  }
+  return normalized;
+}
+
+function normalizeOptionalArtifactPath(
+  value: string | null | undefined,
+): string | undefined {
+  if (value == null) return undefined;
+  return normalizeArtifactPath(value);
 }
 
 function isExpired(expiresAt: string | null): boolean {
@@ -62,6 +87,77 @@ async function getObjectFromSources(
   const primaryObject = primary ? await primary.get(key) : null;
   if (primaryObject) return primaryObject;
   return secondary ? await secondary.get(key) : null;
+}
+
+async function listScriptKeys(
+  bucket: ArtifactBucket | null | undefined,
+  prefix: string,
+): Promise<string[]> {
+  if (!bucket?.list) return [];
+  const listed = await bucket.list({ prefix });
+  const objects = (listed as { objects?: Array<{ key?: string }> }).objects ??
+    [];
+  return objects
+    .map((object) => typeof object.key === "string" ? object.key : "")
+    .filter((key) => key.startsWith(prefix))
+    .filter((key) => /\.(?:mjs|js|cjs)$/i.test(key));
+}
+
+async function resolveArtifactObjectKeyFromSources(
+  primary: ArtifactBucket | null | undefined,
+  secondary: ArtifactBucket | null | undefined,
+  key: string,
+): Promise<{ r2Key: string; source: "exact" | "directory" } | null> {
+  const exactObject = await getObjectFromSources(primary, secondary, key);
+  if (exactObject) return { r2Key: key, source: "exact" };
+
+  const prefix = `${key.replace(/\/+$/, "")}/`;
+  const scriptKeys = new Set<string>();
+  for (const scriptKey of await listScriptKeys(primary, prefix)) {
+    scriptKeys.add(scriptKey);
+  }
+  for (const scriptKey of await listScriptKeys(secondary, prefix)) {
+    scriptKeys.add(scriptKey);
+  }
+  const sortedScriptKeys = [...scriptKeys].sort((a, b) => a.localeCompare(b));
+  if (sortedScriptKeys.length === 1) {
+    return { r2Key: sortedScriptKeys[0], source: "directory" };
+  }
+  if (sortedScriptKeys.length > 1) {
+    throw new Error(
+      `Workflow artifact directory contains multiple JavaScript bundle candidates (${
+        sortedScriptKeys.join(", ")
+      }); set artifactPath to a single bundle file`,
+    );
+  }
+  return null;
+}
+
+function resolveArtifactPathForKey(
+  artifactPath: string | undefined,
+  candidateKey: string,
+  resolvedKey: string,
+): string {
+  if (resolvedKey === candidateKey) {
+    if (artifactPath) return artifactPath;
+    const normalizedCandidate = candidateKey.replace(/\/+$/, "");
+    return normalizedCandidate.split("/").pop() ?? "";
+  }
+  const prefix = `${candidateKey.replace(/\/+$/, "")}/`;
+  if (!resolvedKey.startsWith(prefix)) return artifactPath ?? "";
+  const suffix = resolvedKey.slice(prefix.length);
+  if (!artifactPath) return suffix;
+  return `${artifactPath.replace(/\/+$/, "")}/${suffix}`;
+}
+
+function appendArtifactPath(
+  baseKey: string,
+  artifactPath: string | undefined,
+): string {
+  const normalizedBase = baseKey.replace(/\/+$/, "");
+  if (!artifactPath) return normalizedBase;
+  if (normalizedBase.endsWith(`/${artifactPath}`)) return normalizedBase;
+  return `${normalizedBase}/${artifactPath}`;
 }
 
 export async function listWorkflowArtifactsForRun(
@@ -159,14 +255,11 @@ export async function resolveWorkflowArtifactFileForJob(
     runId: string;
     jobId: string;
     artifactName: string;
-    artifactPath: string;
+    artifactPath?: string | null;
   },
 ): Promise<ResolvedWorkflowArtifactFile> {
   const db = workflowArtifactDeps.getDb(env.DB);
-  const artifactPath = normalizePath(params.artifactPath);
-  if (!artifactPath) {
-    throw new Error("artifact path is required");
-  }
+  const artifactPath = normalizeOptionalArtifactPath(params.artifactPath);
 
   // Find inventory artifact by name + runId, verifying repoId via join
   const inventoryArtifact = await db.select({
@@ -188,37 +281,48 @@ export async function resolveWorkflowArtifactFileForJob(
     .get();
 
   if (inventoryArtifact && !isExpired(inventoryArtifact.expiresAt)) {
-    const candidateKey = inventoryArtifact.r2Key.endsWith(`/${artifactPath}`)
-      ? inventoryArtifact.r2Key
-      : `${inventoryArtifact.r2Key.replace(/\/+$/, "")}/${artifactPath}`;
-    const artifactObject = await getObjectFromSources(
+    const candidateKey = appendArtifactPath(
+      inventoryArtifact.r2Key,
+      artifactPath,
+    );
+    const resolved = await resolveArtifactObjectKeyFromSources(
       env.GIT_OBJECTS,
       env.TENANT_SOURCE,
       candidateKey,
     );
-    if (artifactObject) {
+    if (resolved) {
       return {
         runId: params.runId,
         jobId: params.jobId,
         artifactName: params.artifactName,
-        artifactPath,
-        r2Key: candidateKey,
-        source: "inventory",
+        artifactPath: resolveArtifactPathForKey(
+          artifactPath,
+          candidateKey,
+          resolved.r2Key,
+        ),
+        r2Key: resolved.r2Key,
+        source: resolved.source === "directory"
+          ? "directory-fallback"
+          : "inventory",
       };
     }
   }
 
-  const prefixKey = `${
-    buildWorkflowArtifactPrefix(params.jobId, params.artifactName)
-  }${artifactPath}`;
-  const prefixedObject = await getObjectFromSources(
+  const prefixKey = appendArtifactPath(
+    buildWorkflowArtifactPrefix(params.jobId, params.artifactName),
+    artifactPath,
+  );
+  const prefixedObject = await resolveArtifactObjectKeyFromSources(
     env.GIT_OBJECTS,
     env.TENANT_SOURCE,
     prefixKey,
   );
   if (!prefixedObject) {
+    const artifactLabel = artifactPath
+      ? `${params.artifactName}@${artifactPath}`
+      : params.artifactName;
     throw new Error(
-      `Workflow artifact file not found: ${params.artifactName}@${artifactPath} (job ${params.jobId})`,
+      `Workflow artifact file not found: ${artifactLabel} (job ${params.jobId})`,
     );
   }
 
@@ -226,8 +330,14 @@ export async function resolveWorkflowArtifactFileForJob(
     runId: params.runId,
     jobId: params.jobId,
     artifactName: params.artifactName,
-    artifactPath,
-    r2Key: prefixKey,
-    source: "prefix-fallback",
+    artifactPath: resolveArtifactPathForKey(
+      artifactPath,
+      prefixKey,
+      prefixedObject.r2Key,
+    ),
+    r2Key: prefixedObject.r2Key,
+    source: prefixedObject.source === "directory"
+      ? "directory-fallback"
+      : "prefix-fallback",
   };
 }

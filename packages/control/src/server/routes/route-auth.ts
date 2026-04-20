@@ -74,11 +74,18 @@ export type AppContext<TVariables extends BaseVariables = BaseVariables> =
     Variables: TVariables;
   }>;
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-type AnyCtx = Context<any>;
+type RouteHelperContext = {
+  env: Env;
+  req: {
+    header(name: string): string | undefined;
+    param(name: string): string;
+    query(name: string): string | undefined;
+    text(): Promise<string>;
+  };
+};
 
 export async function requireSpaceAccess(
-  c: AnyCtx,
+  c: RouteHelperContext,
   spaceId: string,
   userId: string,
   roles?: Array<"owner" | "admin" | "editor" | "viewer">,
@@ -96,7 +103,9 @@ export const routeAuthDeps = {
   requireSpaceAccess,
 };
 
-export function getRequestedSpaceIdentifier(c: AnyCtx): string | null {
+export function getRequestedSpaceIdentifier(
+  c: RouteHelperContext,
+): string | null {
   const value = c.req.header("X-Takos-Space-Id");
   if (!value) return null;
   const trimmed = value.trim();
@@ -104,7 +113,7 @@ export function getRequestedSpaceIdentifier(c: AnyCtx): string | null {
 }
 
 export function requireTenantSource(
-  c: AnyCtx,
+  c: RouteHelperContext,
   message = "Storage not configured",
 ) {
   if (!c.env.TENANT_SOURCE) {
@@ -113,13 +122,16 @@ export function requireTenantSource(
   return c.env.TENANT_SOURCE;
 }
 
-export async function parseJsonBody<T>(c: AnyCtx, fallback: T): Promise<T>;
 export async function parseJsonBody<T>(
-  c: AnyCtx,
+  c: RouteHelperContext,
+  fallback: T,
+): Promise<T>;
+export async function parseJsonBody<T>(
+  c: RouteHelperContext,
   fallback?: T | null,
 ): Promise<T | null>;
 export async function parseJsonBody<T>(
-  c: AnyCtx,
+  c: RouteHelperContext,
   fallback: T | null = null,
 ): Promise<T | null> {
   try {
@@ -165,14 +177,14 @@ export type { SpaceAccess };
  * Resolve the space identifier from the request.
  *
  * Checks, in order:
- * 1. URL params `:spaceId` or `:workspaceId`
+ * 1. URL param `:spaceId`
  * 2. Query params `spaceId` or `space_id`
  *
  * Returns `null` if none found.
  */
-function resolveSpaceIdentifier(c: AnyCtx): string | null {
+function resolveSpaceIdentifier(c: RouteHelperContext): string | null {
   // URL path params
-  const paramSpaceId = c.req.param("spaceId") || c.req.param("workspaceId");
+  const paramSpaceId = c.req.param("spaceId");
   if (paramSpaceId) return paramSpaceId;
 
   // Query params

@@ -4,9 +4,6 @@ import {
   deleteServiceTakosAccessTokenConfig,
 } from "../../../application/services/common-env/index.ts";
 import {
-  removeGroupDesiredWorkload,
-} from "../../../application/services/deployment/group-desired-projector.ts";
-import {
   deleteCloudflareCustomHostname,
 } from "../../../application/services/platform/custom-domains.ts";
 import {
@@ -16,10 +13,9 @@ import {
 import { deleteHostnameRouting } from "../../../application/services/routing/service.ts";
 import { getDb } from "../../../infra/db/index.ts";
 import { deployments, serviceCustomDomains } from "../../../infra/db/schema.ts";
-import { createOptionalCloudflareWfpProvider } from "../../../platform/providers/cloudflare/wfp.ts";
+import { createOptionalCloudflareWfpBackend } from "../../../platform/backends/cloudflare/wfp.ts";
 import { logWarn } from "../../../shared/utils/logger.ts";
 import type { AppContext } from "../route-auth.ts";
-import { describeGroupWorkloadTarget } from "./projected-workloads.ts";
 
 async function cleanupServiceCustomDomains(
   c: AppContext,
@@ -117,7 +113,7 @@ async function cleanupServiceArtifacts(
     return;
   }
 
-  const wfp = createOptionalCloudflareWfpProvider(c.env);
+  const wfp = createOptionalCloudflareWfpBackend(c.env);
   if (!wfp) {
     logWarn(
       "Skipping WFP artifact cleanup because Cloudflare WFP is not configured",
@@ -159,19 +155,6 @@ export async function deleteServiceWithCleanup(
   c: AppContext,
   worker: ServiceRow,
 ): Promise<void> {
-  if (worker.group_id) {
-    const workload = describeGroupWorkloadTarget({
-      id: worker.id,
-      slug: worker.slug,
-      serviceType: worker.service_type,
-    });
-    await removeGroupDesiredWorkload(c.env, {
-      groupId: worker.group_id,
-      category: workload.category,
-      name: workload.name,
-    });
-  }
-
   await cleanupServiceCustomDomains(c, worker.id);
   await cleanupPrimaryHostname(c, worker.hostname);
   await cleanupServiceArtifacts(c, worker);

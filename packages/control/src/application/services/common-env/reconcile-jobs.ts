@@ -1,25 +1,28 @@
-import type { Env } from '../../../shared/types/index.ts';
-import { generateId } from '../../../shared/utils/index.ts';
-import { getDb, serviceCommonEnvReconcileJobs } from '../../../infra/db/index.ts';
-import { eq, and, or, inArray, isNull, isNotNull, lte } from 'drizzle-orm';
+import type { Env } from "../../../shared/types/index.ts";
+import { generateId } from "../../../shared/utils/index.ts";
+import {
+  getDb,
+  serviceCommonEnvReconcileJobs,
+} from "../../../infra/db/index.ts";
+import { and, eq, inArray, isNotNull, isNull, lte, or } from "drizzle-orm";
 
 export type CommonEnvReconcileTrigger =
-  | 'workspace_env_put'
-  | 'workspace_env_delete'
-  | 'worker_env_patch'
-  | 'manual_links_set'
-  | 'manual_links_patch'
-  | 'bundle_required_links'
-  | 'periodic_drift'
-  | 'retry_dispatch';
+  | "workspace_env_put"
+  | "workspace_env_delete"
+  | "worker_env_patch"
+  | "manual_links_set"
+  | "manual_links_patch"
+  | "bundle_required_links"
+  | "periodic_drift"
+  | "retry_dispatch";
 
 export type CommonEnvReconcileStatus =
-  | 'pending'
-  | 'queued'
-  | 'processing'
-  | 'completed'
-  | 'retry_wait'
-  | 'dead_letter';
+  | "pending"
+  | "queued"
+  | "processing"
+  | "completed"
+  | "retry_wait"
+  | "dead_letter";
 
 export interface CommonEnvReconcileJobRow {
   id: string;
@@ -49,7 +52,7 @@ function parseTargetKeys(json: string | null): string[] | undefined {
   try {
     const parsed = JSON.parse(json) as unknown;
     if (!Array.isArray(parsed)) return undefined;
-    const keys = parsed.filter((v): v is string => typeof v === 'string');
+    const keys = parsed.filter((v): v is string => typeof v === "string");
     if (keys.length === 0) return undefined;
     return keys;
   } catch {
@@ -74,11 +77,13 @@ function staleProcessingCutoff(baseMs = Date.now()): string {
 }
 
 function toErrorCode(error: unknown): string {
-  return error instanceof Error ? 'apply_failed' : 'unknown_error';
+  return error instanceof Error ? "apply_failed" : "unknown_error";
 }
 
 function toErrorMessage(error: unknown): string {
-  return error instanceof Error ? error.message.slice(0, 500) : String(error).slice(0, 500);
+  return error instanceof Error
+    ? error.message.slice(0, 500)
+    : String(error).slice(0, 500);
 }
 
 interface CommonEnvReconcileJobAttemptRow {
@@ -92,17 +97,20 @@ interface ActiveJobRow {
   targetKeysJson: string | null;
 }
 
-type TargetKeySet = Set<string> | null | 'invalid';
+type TargetKeySet = Set<string> | null | "invalid";
 
 function toTargetKeySet(targetKeysJson: string | null): TargetKeySet {
   if (targetKeysJson === null) return null;
   const keys = parseTargetKeys(targetKeysJson);
-  if (!keys) return 'invalid';
+  if (!keys) return "invalid";
   return new Set(keys);
 }
 
-function isCoveredBy(existing: TargetKeySet, requested: Set<string> | null): boolean {
-  if (existing === 'invalid') return false;
+function isCoveredBy(
+  existing: TargetKeySet,
+  requested: Set<string> | null,
+): boolean {
+  if (existing === "invalid") return false;
   if (existing === null) return true;
   if (requested === null) return false;
   for (const key of requested) {
@@ -111,9 +119,12 @@ function isCoveredBy(existing: TargetKeySet, requested: Set<string> | null): boo
   return true;
 }
 
-function mergeTargetKeySets(existing: TargetKeySet, requested: Set<string> | null): string | null {
+function mergeTargetKeySets(
+  existing: TargetKeySet,
+  requested: Set<string> | null,
+): string | null {
   if (existing === null || requested === null) return null;
-  if (existing === 'invalid') {
+  if (existing === "invalid") {
     return normalizeTargetKeys(Array.from(requested));
   }
   const merged = new Set(existing);
@@ -144,7 +155,7 @@ export class CommonEnvReconcileJobStore {
         and(
           eq(t.accountId, params.spaceId),
           eq(t.serviceId, params.serviceId),
-          inArray(t.status, ['pending', 'queued', 'processing', 'retry_wait']),
+          inArray(t.status, ["pending", "queued", "processing", "retry_wait"]),
         ),
       )
       .orderBy(t.createdAt)
@@ -167,8 +178,8 @@ export class CommonEnvReconcileJobStore {
     await db
       .update(t)
       .set({
-        status: 'pending',
-        trigger: 'retry_dispatch',
+        status: "pending",
+        trigger: "retry_dispatch",
         nextAttemptAt: null,
         leaseToken: null,
         leaseExpiresAt: null,
@@ -177,7 +188,7 @@ export class CommonEnvReconcileJobStore {
         enqueuedAt: ts,
         updatedAt: ts,
       })
-      .where(and(eq(t.id, jobId), eq(t.status, 'retry_wait')));
+      .where(and(eq(t.id, jobId), eq(t.status, "retry_wait")));
   }
 
   private async retargetActiveJob(params: {
@@ -187,11 +198,11 @@ export class CommonEnvReconcileJobStore {
   }): Promise<void> {
     const db = getDb(this.env.DB);
     const ts = new Date().toISOString();
-    if (params.job.status === 'retry_wait') {
+    if (params.job.status === "retry_wait") {
       await db
         .update(t)
         .set({
-          status: 'pending',
+          status: "pending",
           targetKeysJson: params.targetKeysJson,
           trigger: params.trigger,
           nextAttemptAt: null,
@@ -202,11 +213,11 @@ export class CommonEnvReconcileJobStore {
           enqueuedAt: ts,
           updatedAt: ts,
         })
-        .where(and(eq(t.id, params.job.id), eq(t.status, 'retry_wait')));
+        .where(and(eq(t.id, params.job.id), eq(t.status, "retry_wait")));
       return;
     }
 
-    if (params.job.status === 'pending' || params.job.status === 'queued') {
+    if (params.job.status === "pending" || params.job.status === "queued") {
       await db
         .update(t)
         .set({
@@ -217,7 +228,7 @@ export class CommonEnvReconcileJobStore {
         .where(
           and(
             eq(t.id, params.job.id),
-            inArray(t.status, ['pending', 'queued']),
+            inArray(t.status, ["pending", "queued"]),
           ),
         );
     }
@@ -230,7 +241,9 @@ export class CommonEnvReconcileJobStore {
     trigger: CommonEnvReconcileTrigger;
   }): Promise<string> {
     const targetKeysJson = normalizeTargetKeys(params.targetKeys);
-    const requestedKeys = targetKeysJson ? new Set(parseTargetKeys(targetKeysJson) || []) : null;
+    const requestedKeys = targetKeysJson
+      ? new Set(parseTargetKeys(targetKeysJson) || [])
+      : null;
     const activeJobs = await this.listActiveJobsForService({
       spaceId: params.spaceId,
       serviceId: params.serviceId,
@@ -239,7 +252,7 @@ export class CommonEnvReconcileJobStore {
     for (const job of activeJobs) {
       const existingKeys = toTargetKeySet(job.targetKeysJson);
       if (!isCoveredBy(existingKeys, requestedKeys)) continue;
-      if (job.status === 'retry_wait') {
+      if (job.status === "retry_wait") {
         await this.bumpRetryWaitToPending(job.id);
       }
       return job.id;
@@ -247,7 +260,8 @@ export class CommonEnvReconcileJobStore {
 
     if (requestedKeys === null) {
       const promotable = activeJobs.find((job) =>
-        job.status === 'pending' || job.status === 'queued' || job.status === 'retry_wait'
+        job.status === "pending" || job.status === "queued" ||
+        job.status === "retry_wait"
       );
       if (promotable) {
         await this.retargetActiveJob({
@@ -259,12 +273,13 @@ export class CommonEnvReconcileJobStore {
       }
     } else {
       const mergeCandidate = activeJobs.find((job) =>
-        job.status === 'pending' || job.status === 'queued' || job.status === 'retry_wait'
+        job.status === "pending" || job.status === "queued" ||
+        job.status === "retry_wait"
       );
       if (mergeCandidate) {
         const mergedTargetKeysJson = mergeTargetKeySets(
           toTargetKeySet(mergeCandidate.targetKeysJson),
-          requestedKeys
+          requestedKeys,
         );
         await this.retargetActiveJob({
           job: mergeCandidate,
@@ -286,7 +301,7 @@ export class CommonEnvReconcileJobStore {
         serviceId: params.serviceId,
         targetKeysJson,
         trigger: params.trigger,
-        status: 'pending',
+        status: "pending",
         attempts: 0,
         nextAttemptAt: null,
         leaseToken: null,
@@ -365,8 +380,11 @@ export class CommonEnvReconcileJobStore {
       .from(t)
       .where(
         and(
-          inArray(t.status, ['pending', 'retry_wait']),
-          or(isNull(t.nextAttemptAt), lte(t.nextAttemptAt, new Date().toISOString())),
+          inArray(t.status, ["pending", "retry_wait"]),
+          or(
+            isNull(t.nextAttemptAt),
+            lte(t.nextAttemptAt, new Date().toISOString()),
+          ),
         ),
       )
       .orderBy(t.createdAt)
@@ -383,7 +401,7 @@ export class CommonEnvReconcileJobStore {
     const result = await db
       .update(t)
       .set({
-        status: 'processing',
+        status: "processing",
         startedAt: ts,
         leaseToken,
         leaseExpiresAt,
@@ -392,7 +410,7 @@ export class CommonEnvReconcileJobStore {
       .where(
         and(
           eq(t.id, jobId),
-          inArray(t.status, ['pending', 'retry_wait']),
+          inArray(t.status, ["pending", "retry_wait"]),
         ),
       )
       .returning({ id: t.id });
@@ -405,7 +423,7 @@ export class CommonEnvReconcileJobStore {
     await db
       .update(t)
       .set({
-        status: 'completed',
+        status: "completed",
         leaseToken: null,
         leaseExpiresAt: null,
         completedAt: ts,
@@ -416,7 +434,11 @@ export class CommonEnvReconcileJobStore {
       .where(eq(t.id, jobId));
   }
 
-  async markRetry(jobId: string, currentAttempts: number, error: unknown): Promise<void> {
+  async markRetry(
+    jobId: string,
+    currentAttempts: number,
+    error: unknown,
+  ): Promise<void> {
     const db = getDb(this.env.DB);
     const attempts = currentAttempts + 1;
     const ts = new Date().toISOString();
@@ -426,7 +448,7 @@ export class CommonEnvReconcileJobStore {
       await db
         .update(t)
         .set({
-          status: 'dead_letter',
+          status: "dead_letter",
           attempts,
           nextAttemptAt: null,
           leaseToken: null,
@@ -439,11 +461,12 @@ export class CommonEnvReconcileJobStore {
       return;
     }
 
-    const nextAttemptAt = new Date(Date.now() + backoffMs(attempts)).toISOString();
+    const nextAttemptAt = new Date(Date.now() + backoffMs(attempts))
+      .toISOString();
     await db
       .update(t)
       .set({
-        status: 'retry_wait',
+        status: "retry_wait",
         attempts,
         nextAttemptAt,
         leaseToken: null,
@@ -455,7 +478,9 @@ export class CommonEnvReconcileJobStore {
       .where(eq(t.id, jobId));
   }
 
-  private async listStaleProcessing(limit: number): Promise<CommonEnvReconcileJobAttemptRow[]> {
+  private async listStaleProcessing(
+    limit: number,
+  ): Promise<CommonEnvReconcileJobAttemptRow[]> {
     const db = getDb(this.env.DB);
     const nowIso = new Date().toISOString();
     const fallbackCutoff = staleProcessingCutoff();
@@ -467,7 +492,7 @@ export class CommonEnvReconcileJobStore {
       .from(t)
       .where(
         and(
-          eq(t.status, 'processing'),
+          eq(t.status, "processing"),
           or(
             and(isNotNull(t.leaseExpiresAt), lte(t.leaseExpiresAt, nowIso)),
             and(isNull(t.leaseExpiresAt), lte(t.updatedAt, fallbackCutoff)),
@@ -482,7 +507,7 @@ export class CommonEnvReconcileJobStore {
   async recoverStaleProcessing(limit: number): Promise<number> {
     const staleJobs = await this.listStaleProcessing(limit);
     for (const job of staleJobs) {
-      await this.markRetry(job.id, job.attempts, new Error('processing_stale'));
+      await this.markRetry(job.id, job.attempts, new Error("processing_stale"));
     }
     return staleJobs.length;
   }
@@ -517,13 +542,15 @@ export class CommonEnvReconcileJobStore {
       await this.enqueueService({
         spaceId: row.account_id,
         serviceId: row.service_id,
-        trigger: 'periodic_drift',
+        trigger: "periodic_drift",
       });
     }
     return rows.length;
   }
 
-  static parseTargetKeys(row: { targetKeysJson: string | null }): string[] | undefined {
+  static parseTargetKeys(
+    row: { targetKeysJson: string | null },
+  ): string[] | undefined {
     return parseTargetKeys(row.targetKeysJson);
   }
 }

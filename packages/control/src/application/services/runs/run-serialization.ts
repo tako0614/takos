@@ -1,5 +1,5 @@
-import type { Run, RunStatus } from '../../../shared/types/index.ts';
-import { textDate } from '../../../shared/utils/db-guards.ts';
+import type { Run, RunStatus } from "../../../shared/types/index.ts";
+import { textDate } from "../../../shared/utils/db-guards.ts";
 
 export type RunRow = {
   id: string;
@@ -38,13 +38,51 @@ export type SpaceModelLookup = {
   aiModel: string | null;
 };
 
-
 export type D1CountRow = {
   count: number | string;
 };
 
+function stringField(row: Record<string, unknown>, key: keyof RunRow): string {
+  const value = row[key];
+  if (typeof value === "string") return value;
+  throw new TypeError(`Run row field ${String(key)} must be a string`);
+}
+
+function nullableStringField(
+  row: Record<string, unknown>,
+  key: keyof RunRow,
+): string | null {
+  const value = row[key];
+  if (value == null) return null;
+  if (typeof value === "string") return value;
+  throw new TypeError(`Run row field ${String(key)} must be a string or null`);
+}
+
+function nullableDateField(
+  row: Record<string, unknown>,
+  key: keyof RunRow,
+): string | Date | null {
+  const value = row[key];
+  if (value == null) return null;
+  if (typeof value === "string" || value instanceof Date) return value;
+  throw new TypeError(`Run row field ${String(key)} must be a date or null`);
+}
+
+function dateField(
+  row: Record<string, unknown>,
+  key: keyof RunRow,
+): string | Date {
+  const value = row[key];
+  if (typeof value === "string" || value instanceof Date) return value;
+  throw new TypeError(`Run row field ${String(key)} must be a date`);
+}
+
 function toNullableIsoString(value: string | Date | null): string | null {
-  return value == null ? null : typeof value === 'string' ? value : value.toISOString();
+  return value == null
+    ? null
+    : typeof value === "string"
+    ? value
+    : value.toISOString();
 }
 
 export const runSelect = {
@@ -70,7 +108,29 @@ export const runSelect = {
 } as const;
 
 export function asRunRow(row: Record<string, unknown>): RunRow {
-  return row as unknown as RunRow;
+  return {
+    id: stringField(row, "id"),
+    threadId: stringField(row, "threadId"),
+    spaceId: stringField(row, "spaceId"),
+    sessionId: nullableStringField(row, "sessionId"),
+    parentRunId: nullableStringField(row, "parentRunId"),
+    childThreadId: nullableStringField(row, "childThreadId"),
+    rootThreadId: nullableStringField(row, "rootThreadId"),
+    rootRunId: nullableStringField(row, "rootRunId"),
+    agentType: stringField(row, "agentType"),
+    status: stringField(row, "status"),
+    input: stringField(row, "input"),
+    output: nullableStringField(row, "output"),
+    error: nullableStringField(row, "error"),
+    usage: stringField(row, "usage"),
+    serviceId: nullableStringField(row, "serviceId"),
+    workerId: nullableStringField(row, "workerId"),
+    serviceHeartbeat: nullableDateField(row, "serviceHeartbeat"),
+    workerHeartbeat: nullableDateField(row, "workerHeartbeat"),
+    startedAt: nullableDateField(row, "startedAt"),
+    completedAt: nullableDateField(row, "completedAt"),
+    createdAt: dateField(row, "createdAt"),
+  };
 }
 
 export function runRowToApi(row: RunRow): Run {

@@ -32,6 +32,7 @@ export function registerGitBackendRoutes(app: Hono<RuntimeEnv>): void {
           service,
           requestBody: null,
           contentType: undefined,
+          gitProtocol: c.req.header("git-protocol"),
         }),
       );
     } catch (err) {

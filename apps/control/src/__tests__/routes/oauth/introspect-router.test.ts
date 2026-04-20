@@ -4,7 +4,12 @@ import type { Env } from "@/types";
 import oauthIntrospect from "../../../../../../packages/control/src/server/routes/oauth/introspect.ts";
 
 class MockD1PreparedStatement {
-  bind(..._values: unknown[]): MockD1PreparedStatement {
+  private values: unknown[] = [];
+
+  constructor(private readonly query: string) {}
+
+  bind(...values: unknown[]): MockD1PreparedStatement {
+    this.values = values;
     return this;
   }
 
@@ -28,13 +33,39 @@ class MockD1PreparedStatement {
   }
 
   async raw<T = unknown[]>(): Promise<T[]> {
+    if (
+      this.query.includes('from "oauth_clients"') &&
+      this.values[0] === "client-1"
+    ) {
+      return [[
+        "internal-client-1",
+        "client-1",
+        null,
+        "public",
+        "Test Client",
+        null,
+        null,
+        null,
+        null,
+        null,
+        '["https://example.com/callback"]',
+        '["authorization_code","refresh_token"]',
+        '["code"]',
+        '["openid","profile"]',
+        null,
+        null,
+        "active",
+        "2026-01-01T00:00:00.000Z",
+        "2026-01-01T00:00:00.000Z",
+      ]] as T[];
+    }
     return [];
   }
 }
 
 class MockD1Database {
-  prepare(_query: string): MockD1PreparedStatement {
-    return new MockD1PreparedStatement();
+  prepare(query: string): MockD1PreparedStatement {
+    return new MockD1PreparedStatement(query);
   }
 
   exec(_query: string): Promise<{ count: number; duration: number }> {
@@ -49,7 +80,7 @@ class MockD1Database {
 
   withSession() {
     return {
-      prepare: (_query: string) => new MockD1PreparedStatement(),
+      prepare: (query: string) => new MockD1PreparedStatement(query),
       batch: <T>(statements: MockD1PreparedStatement[]) =>
         this.batch<T>(statements),
       getBookmark: () => null,
@@ -114,4 +145,14 @@ Deno.test("oauth introspect returns invalid_client when the client cannot be fou
     error: "invalid_client",
     error_description: "Client not found",
   });
+});
+
+Deno.test("oauth introspect treats raw JWT access tokens as inactive", async () => {
+  const response = await callIntrospect({
+    token: "header.payload.signature",
+    client_id: "client-1",
+  });
+
+  assertEquals(response.status, 200);
+  assertEquals(await response.json(), { active: false });
 });

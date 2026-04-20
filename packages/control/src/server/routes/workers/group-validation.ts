@@ -1,8 +1,10 @@
 import { eq } from "drizzle-orm";
+import { ValidationError } from "takos-common/errors";
 import { getDb } from "../../../infra/db/index.ts";
 import { groups } from "../../../infra/db/schema.ts";
 import type { AppContext } from "../route-auth.ts";
 import { requireSpaceAccess } from "../route-auth.ts";
+import { errorResponse } from "../response-utils.ts";
 
 type GroupResolutionResult = {
   groupId: string | null;
@@ -54,7 +56,11 @@ export async function resolveGroupIdForSpace(
   if (!group || group.spaceId !== input.spaceId) {
     return {
       groupId: null,
-      response: c.json({ error: input.errorMessage }, 400),
+      response: errorResponse(
+        new ValidationError(input.errorMessage, [
+          { field: "group_id", message: input.errorMessage },
+        ]),
+      ),
     };
   }
 

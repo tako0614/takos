@@ -1,13 +1,13 @@
-import { useI18n } from '../../../store/i18n.ts';
-import type { TranslationKey } from '../../../i18n.ts';
-import { Icons } from '../../../lib/Icons.tsx';
-import type { AgentTask } from '../../../types/index.ts';
+import { useI18n } from "../../../store/i18n.ts";
+import type { TranslationKey } from "../../../i18n.ts";
+import { Icons } from "../../../lib/Icons.tsx";
+import type { AgentTask } from "../../../types/index.ts";
 import {
-  getStatusClasses,
   getPriorityClasses,
+  getStatusClasses,
   parsePlan,
   resolveAgentTypeLabel,
-} from './task-work-utils.ts';
+} from "./task-work-utils.ts";
 
 interface TaskCardProps {
   task: AgentTask;
@@ -39,10 +39,15 @@ export function TaskCard({
 
   const plan = parsePlan(task.plan);
   const dueDate = task.due_at
-    ? new Date(task.due_at).toLocaleDateString(lang === 'ja' ? 'ja-JP' : 'en-US', { timeZone: 'UTC' })
+    ? new Date(task.due_at).toLocaleDateString(
+      lang === "ja" ? "ja-JP" : "en-US",
+      { timeZone: "UTC" },
+    )
     : null;
-  const canStartTask = task.status !== 'completed' && task.status !== 'cancelled';
-  const canCompleteTask = task.status !== 'completed' && task.status !== 'cancelled';
+  const canStartTask = task.status !== "completed" &&
+    task.status !== "cancelled";
+  const canCompleteTask = task.status !== "completed" &&
+    task.status !== "cancelled";
   const latestRun = task.latest_run;
 
   return (
@@ -50,11 +55,19 @@ export function TaskCard({
       <div class="flex flex-wrap items-start justify-between gap-3">
         <div>
           <div class="flex flex-wrap items-center gap-2">
-            <h5 class="text-sm font-semibold text-zinc-900 dark:text-zinc-100">{task.title}</h5>
-            <span class={`text-xs font-medium px-2 py-0.5 rounded-full border ${getStatusClasses(task.status)}`}>
+            <h5 class="text-sm font-semibold text-zinc-900 dark:text-zinc-100">
+              {task.title}
+            </h5>
+            <span
+              class={`text-xs font-medium px-2 py-0.5 rounded-full border ${
+                getStatusClasses(task.status)
+              }`}
+            >
               {tx(`taskStatus.${task.status}`)}
             </span>
-            <span class={`text-xs font-medium ${getPriorityClasses(task.priority)}`}>
+            <span
+              class={`text-xs font-medium ${getPriorityClasses(task.priority)}`}
+            >
               {tx(`taskPriority.${task.priority}`)}
             </span>
           </div>
@@ -64,34 +77,51 @@ export function TaskCard({
             </p>
           )}
           <div class="text-xs text-zinc-500 dark:text-zinc-400 mt-2 flex flex-wrap gap-3">
-            {dueDate && <span>{t('taskDueLabel')}: {dueDate}</span>}
+            {dueDate && <span>{t("taskDueLabel")}: {dueDate}</span>}
             {task.agent_type && (
-              <span>{t('taskAgentLabel')}: {resolveAgentTypeLabel(t, task.agent_type)}</span>
+              <span>
+                {t("taskAgentLabel")}:{" "}
+                {resolveAgentTypeLabel(t, task.agent_type)}
+              </span>
             )}
-            {task.model && <span>{t('taskModelLabel')}: {task.model}</span>}
-            {task.thread_title && <span>{t('taskThreadLabel')}: {task.thread_title}</span>}
+            {task.model && <span>{t("taskModelLabel")}: {task.model}</span>}
+            {task.thread_title && (
+              <span>{t("taskThreadLabel")}: {task.thread_title}</span>
+            )}
           </div>
           {latestRun && (
             <div class="mt-3 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white/60 dark:bg-zinc-900/60 px-3 py-3 text-xs text-zinc-500 dark:text-zinc-400">
               <div class="flex flex-wrap items-center gap-2">
-                <span class="font-medium text-zinc-800 dark:text-zinc-200">{t('taskLatestRun')}</span>
-                <span>{t(`runStatus_${latestRun.status}` as TranslationKey)}</span>
-                <span>{t('taskArtifactsCount', { count: latestRun.artifact_count })}</span>
+                <span class="font-medium text-zinc-800 dark:text-zinc-200">
+                  {t("taskLatestRun")}
+                </span>
+                <span>
+                  {t(`runStatus_${latestRun.status}` as TranslationKey)}
+                </span>
+                <span>
+                  {t("taskArtifactsCount", { count: latestRun.artifact_count })}
+                </span>
               </div>
               {latestRun.error && (
-                <div class="mt-2 text-red-600 dark:text-red-400 whitespace-pre-wrap">{latestRun.error}</div>
+                <div class="mt-2 text-red-600 dark:text-red-400 whitespace-pre-wrap">
+                  {latestRun.error}
+                </div>
               )}
             </div>
           )}
           {plan && (
             <div class="mt-3 text-xs text-zinc-500 dark:text-zinc-400 bg-white/60 dark:bg-zinc-900/60 border border-zinc-200 dark:border-zinc-700 rounded-lg p-3 space-y-1">
-              <div class="font-medium text-zinc-800 dark:text-zinc-200">{t('taskPlan')}</div>
-              {plan.type && <div>{t('taskPlanType')}: {plan.type}</div>}
+              <div class="font-medium text-zinc-800 dark:text-zinc-200">
+                {t("taskPlan")}
+              </div>
+              {plan.type && <div>{t("taskPlanType")}: {plan.type}</div>}
               {plan.tools && plan.tools.length > 0 && (
-                <div>{t('taskPlanTools')}: {plan.tools.join(', ')}</div>
+                <div>{t("taskPlanTools")}: {plan.tools.join(", ")}</div>
               )}
               {plan.reasoning && (
-                <div class="text-zinc-500 dark:text-zinc-400">{plan.reasoning}</div>
+                <div class="text-zinc-500 dark:text-zinc-400">
+                  {plan.reasoning}
+                </div>
               )}
             </div>
           )}
@@ -104,8 +134,10 @@ export function TaskCard({
               onClick={() => onStart(task)}
               disabled={isStarting}
             >
-              {isStarting ? <Icons.Loader class="w-4 h-4 animate-spin" /> : <Icons.Play class="w-4 h-4" />}
-              {t('taskStart')}
+              {isStarting
+                ? <Icons.Loader class="w-4 h-4 animate-spin" />
+                : <Icons.Play class="w-4 h-4" />}
+              {t("taskStart")}
             </button>
           )}
           {!task.plan && (
@@ -116,7 +148,7 @@ export function TaskCard({
               disabled={isPlanning}
             >
               {isPlanning && <Icons.Loader class="w-4 h-4 animate-spin" />}
-              {t('taskGeneratePlan')}
+              {t("taskGeneratePlan")}
             </button>
           )}
           {task.thread_id && (
@@ -126,7 +158,7 @@ export function TaskCard({
               onClick={() => onOpenChat(task)}
             >
               <Icons.ExternalLink />
-              {t('taskResumeChat')}
+              {t("taskResumeChat")}
             </button>
           )}
           {canCompleteTask && (
@@ -136,7 +168,7 @@ export function TaskCard({
               onClick={() => onComplete(task.id)}
             >
               <Icons.Check />
-              {t('taskComplete')}
+              {t("taskComplete")}
             </button>
           )}
           <button
@@ -144,7 +176,7 @@ export function TaskCard({
             class="px-3 min-h-[44px] text-xs font-medium rounded-lg border border-zinc-200 dark:border-zinc-700 text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-100 transition-colors"
             onClick={() => onEdit(task)}
           >
-            {t('edit')}
+            {t("edit")}
           </button>
           <button
             type="button"
@@ -153,7 +185,7 @@ export function TaskCard({
             disabled={isDeleting}
           >
             {isDeleting && <Icons.Loader class="w-4 h-4 animate-spin" />}
-            {t('delete')}
+            {t("delete")}
           </button>
         </div>
       </div>

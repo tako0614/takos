@@ -10,40 +10,39 @@
  */
 
 // helpers (public subset)
-export { buildAuthorizationCodeTokenFamily } from './token-helpers.ts';
+export { buildAuthorizationCodeTokenFamily } from "./token-helpers.ts";
 
 // grants / issuance
 export {
+  formatOAuthAccessToken,
   generateAccessToken,
-  verifyAccessToken,
   generateRefreshToken,
+  generateTokenResponse,
+  OAUTH_ACCESS_TOKEN_PREFIX,
   storeAccessToken,
   storeRefreshToken,
-  generateTokenResponse,
-} from './token-grants.ts';
+  verifyAccessToken,
+} from "./token-grants.ts";
 
 // introspection / validation
-export {
-  getRefreshToken,
-  isAccessTokenValid,
-} from './token-introspection.ts';
+export { getRefreshToken, isAccessTokenValid } from "./token-introspection.ts";
 
 // revocation
 export {
-  revokeTokenByHash,
-  revokeToken,
-  revokeRefreshTokenAndChildren,
-  revokeAllUserClientTokens,
-  revokeTokensByAuthorizationCode,
-  revokeAllClientTokens,
-  revokeTokenFamily,
   deleteExpiredTokens,
-} from './token-revocation.ts';
+  revokeAllClientTokens,
+  revokeAllUserClientTokens,
+  revokeRefreshTokenAndChildren,
+  revokeToken,
+  revokeTokenByHash,
+  revokeTokenFamily,
+  revokeTokensByAuthorizationCode,
+} from "./token-revocation.ts";
 
 // refresh
 export {
-  RefreshTokenReuseDetectedError,
-  markRefreshTokenAsUsed,
   getRefreshTokenWithReuseCheck,
+  markRefreshTokenAsUsed,
+  RefreshTokenReuseDetectedError,
   rotateRefreshToken,
-} from './token-refresh.ts';
+} from "./token-refresh.ts";

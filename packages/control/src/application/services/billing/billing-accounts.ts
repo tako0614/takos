@@ -2,20 +2,24 @@
  * Billing account management: creation, plan assignment, credits, and feature access.
  */
 
-import { getDb, billingAccounts, billingTransactions } from '../../../infra/db/index.ts';
-import { generateId } from '../../../shared/utils/index.ts';
-import { InternalError, NotFoundError } from 'takos-common/errors';
-import type { D1Database } from '../../../shared/types/bindings.ts';
-import { eq, sql } from 'drizzle-orm';
-import type { BillingAccountWithPlan } from './billing-types.ts';
 import {
-  CANONICAL_BILLING_PLAN_IDS,
+  billingAccounts,
+  billingTransactions,
+  getDb,
+} from "../../../infra/db/index.ts";
+import { generateId } from "../../../shared/utils/index.ts";
+import { InternalError, NotFoundError } from "takos-common/errors";
+import type { D1Database } from "../../../shared/types/bindings.ts";
+import { eq, sql } from "drizzle-orm";
+import type { BillingAccountWithPlan } from "./billing-types.ts";
+import {
   assertBillingPlanId,
-  resolveCanonicalBillingPlanId,
-  hasExpectedBillingCatalog,
+  CANONICAL_BILLING_PLAN_IDS,
   ensureDefaultBillingCatalog,
+  hasExpectedBillingCatalog,
   loadBillingAccountWithPlan,
-} from './billing-plans.ts';
+  resolveCanonicalBillingPlanId,
+} from "./billing-plans.ts";
 
 /**
  * Get or create a billing account for a user (lazy init).
@@ -23,14 +27,19 @@ import {
  */
 export async function getOrCreateBillingAccount(
   d1: D1Database,
-  userId: string
+  userId: string,
 ): Promise<BillingAccountWithPlan> {
   const db = getDb(d1);
 
   let existing = await loadBillingAccountWithPlan(db, { byAccountId: userId });
 
-  const normalizedExistingPlanId = existing ? resolveCanonicalBillingPlanId(existing.planId) : null;
-  if (existing && normalizedExistingPlanId && normalizedExistingPlanId !== existing.planId) {
+  const normalizedExistingPlanId = existing
+    ? resolveCanonicalBillingPlanId(existing.planId)
+    : null;
+  if (
+    existing && normalizedExistingPlanId &&
+    normalizedExistingPlanId !== existing.planId
+  ) {
     await db.update(billingAccounts).set({
       planId: normalizedExistingPlanId,
       updatedAt: new Date().toISOString(),
@@ -38,12 +47,14 @@ export async function getOrCreateBillingAccount(
     existing = await loadBillingAccountWithPlan(db, { byAccountId: userId });
   }
 
-  if (existing && hasExpectedBillingCatalog({
-    id: existing.billingPlan.id,
-    name: existing.billingPlan.name,
-    quotas: existing.billingPlan.billingPlanQuotas,
-    rates: existing.billingPlan.billingPlanRates,
-  })) {
+  if (
+    existing && hasExpectedBillingCatalog({
+      id: existing.billingPlan.id,
+      name: existing.billingPlan.name,
+      quotas: existing.billingPlan.billingPlanQuotas,
+      rates: existing.billingPlan.billingPlanRates,
+    })
+  ) {
     assertBillingPlanId(existing.planId);
     return existing;
   }
@@ -64,14 +75,14 @@ export async function getOrCreateBillingAccount(
     accountId: userId,
     planId: CANONICAL_BILLING_PLAN_IDS[0],
     balanceCents: 0,
-    status: 'active',
+    status: "active",
   }).onConflictDoUpdate({
     target: billingAccounts.accountId,
     set: { updatedAt: new Date().toISOString() },
   });
 
   const account = await loadBillingAccountWithPlan(db, { byAccountId: userId });
-  if (!account) throw new InternalError('Failed to create billing account');
+  if (!account) throw new InternalError("Failed to create billing account");
   return account;
 }
 
@@ -81,7 +92,7 @@ export async function getOrCreateBillingAccount(
 export async function assignPlanToUser(
   d1: D1Database,
   userId: string,
-  planId: string
+  planId: string,
 ) {
   const db = getDb(d1);
   const account = await getOrCreateBillingAccount(d1, userId);
@@ -107,7 +118,7 @@ export async function addCredits(
   d1: D1Database,
   accountId: string,
   amount: number,
-  description: string
+  description: string,
 ) {
   const db = getDb(d1);
 
@@ -130,7 +141,9 @@ export async function addCredits(
   }).where(eq(billingAccounts.id, accountId));
 
   // Re-read the updated balance for the transaction record
-  const updated = await db.select({ balanceCents: billingAccounts.balanceCents })
+  const updated = await db.select({
+    balanceCents: billingAccounts.balanceCents,
+  })
     .from(billingAccounts)
     .where(eq(billingAccounts.id, accountId))
     .get();
@@ -139,11 +152,11 @@ export async function addCredits(
   await db.insert(billingTransactions).values({
     id: transactionId,
     billingAccountId: accountId,
-    type: 'purchase',
+    type: "purchase",
     amountCents: amount,
     balanceAfterCents: newBalance,
     description,
-    metadata: '{}',
+    metadata: "{}",
   });
 
   return { balanceCents: newBalance, transactionId };
@@ -155,11 +168,15 @@ export async function addCredits(
 export async function checkFeatureAccess(
   d1: D1Database,
   userId: string,
-  feature: string
+  feature: string,
 ): Promise<boolean> {
   const account = await getOrCreateBillingAccount(d1, userId);
 
-  const features = Object.fromEntries(account.billingPlan.billingPlanFeatures.map((item) => [item.featureKey, item.enabled]));
+  const features = Object.fromEntries(
+    account.billingPlan.billingPlanFeatures.map((
+      item,
+    ) => [item.featureKey, item.enabled]),
+  );
 
   return features[feature] === true;
 }

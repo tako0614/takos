@@ -27,7 +27,7 @@ spec:
         - name: runtime-host
           image: "{{ .Values.images.control.repository }}:{{ .Values.images.control.tag }}"
           imagePullPolicy: {{ .Values.images.control.pullPolicy }}
-          command: ["pnpm", "local:runtime-host"]
+          command: ["deno", "task", "dev:local:runtime-host"]
           ports:
             - name: http
               containerPort: {{ .Values.runtimeHost.port }}

@@ -2,38 +2,36 @@
 
 > このページでわかること: Worker と Docker コンテナを組み合わせる方法。
 
-takos-agent と同じアーキテクチャです。ブラウザ自動化やヘビーな処理など、Docker
+Agent runtime の worker + attached container pattern
+と同じ考え方です。重い画像処理や API backend など、Docker
 が必要な場合に使います。
 
 この例は現行の `takos deploy`（ローカル manifest）で読める構成に合わせています。
-同じ manifest は repo/ref source の `takos deploy URL` や catalog package install
-でも使えます。
+同じ manifest は repo/ref source の `takos deploy URL` や catalog package
+install でも使えます。
 
-## app.yml
+## deploy manifest
 
 ```yaml
-name: browser-service
+name: processor-service
 
 compute:
-  browser-host:
+  processor-host:
     build:
       fromWorkflow:
         path: .takos/workflows/deploy.yml
         job: build-host
-        artifact: browser-host
+        artifact: processor-host
         artifactPath: dist/host.js
     containers:
-      browser:
-        image: ghcr.io/example/browser-service@sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef
+      processor:
+        image: ghcr.io/example/processor-service@sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef
         port: 8080
-        instanceType: standard-2
-        scaling:
-          maxInstances: 10
 
 routes:
-  - target: browser-host
+  - target: processor-host
     path: /api
-  - target: browser-host
+  - target: processor-host
     path: /gui
 
 env:
@@ -47,13 +45,14 @@ env:
 name: deploy
 jobs:
   build-host:
+    runs-on: ubuntu-latest
     steps:
       - name: Install dependencies
         run: npm install
       - name: Build host worker
         run: npm run build:host
     artifacts:
-      browser-host:
+      processor-host:
         path: dist/host.js
 ```
 
@@ -62,8 +61,6 @@ jobs:
 ```dockerfile
 # Dockerfile
 FROM node:20-slim
-
-RUN npx playwright install --with-deps chromium
 
 WORKDIR /app
 COPY package*.json ./
@@ -79,7 +76,7 @@ CMD ["node", "dist/server.js"]
 ```typescript
 // src/host.ts
 interface Env {
-  BROWSER_CONTAINER: DurableObjectNamespace;
+  PROCESSOR_CONTAINER: DurableObjectNamespace;
   API_SECRET: string;
 }
 
@@ -92,8 +89,8 @@ export default {
     }
 
     // コンテナにリクエストを転送
-    const id = env.BROWSER_CONTAINER.idFromName("default");
-    const stub = env.BROWSER_CONTAINER.get(id);
+    const id = env.PROCESSOR_CONTAINER.idFromName("default");
+    const stub = env.PROCESSOR_CONTAINER.get(id);
     return stub.fetch(request);
   },
 };
@@ -104,21 +101,18 @@ export default {
 - `compute.<name>.containers` でコンテナを Worker 内に定義します
 - コンテナは worker-attached container workload として実行されます
 - Worker がルーティングを担当し、コンテナがヘビーな処理を担当します
-- `instanceType` でコンテナのスペックを指定できます（`basic`, `standard-2`
-  など）
-- `maxInstances` で最大インスタンス数を制御します
 
 ## compute の 3 形態
 
-|            | Worker                     | Service                      | Worker + Attached Container  |
-| ---------- | -------------------------- | ---------------------------- | ---------------------------- |
-| 判定条件   | `build` あり               | `image` あり（`build` なし） | `build` + `containers` あり  |
-| 実行モデル | serverless, request-driven | always-on container          | worker に container が紐づく |
-| 用途       | ルーティング、軽量処理     | 独立稼働する Docker コンテナ | Docker が必要な処理          |
-| deploy source | workflow artifact       | digest-pinned `image`        | workflow artifact + `image`  |
+|               | Worker                     | Service                      | Worker + Attached Container  |
+| ------------- | -------------------------- | ---------------------------- | ---------------------------- |
+| 判定条件      | `build` あり               | `image` あり（`build` なし） | `build` + `containers` あり  |
+| 実行モデル    | serverless, request-driven | always-on container          | worker に container が紐づく |
+| 用途          | ルーティング、軽量処理     | 独立稼働する Docker コンテナ | Docker が必要な処理          |
+| deploy source | workflow artifact          | digest-pinned `image`        | workflow artifact + `image`  |
 
 ## 次のステップ
 
 - MCP Server を公開したい → [MCP Server](/examples/mcp-server)
 - コンテナの詳細 → [Containers ガイド](/apps/containers)
-- 実際の takos-agent の構成 → [app.yml リファレンス](/apps/manifest#完全な例)
+- 完全な構成例 → [Deploy Manifest リファレンス](/apps/manifest#完全な例)

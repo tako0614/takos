@@ -2,22 +2,19 @@
  * Shared helpers for R2-compatible object store adapters (S3, GCS, etc.).
  *
  * Contains the common logic for building R2Object / R2ObjectBody shapes and
- * normalising request bodies, so that individual provider adapters only need
- * to handle provider-specific SDK translation.
+ * normalising request bodies, so that individual backend adapters only need
+ * to handle backend-specific SDK translation.
  */
 
-import type {
-  R2Object,
-  R2ObjectBody,
-} from '../shared/types/bindings.ts';
-import type { R2ChecksumsLike, R2HTTPMetadataLike } from './r2-compat-types.ts';
+import type { R2Object, R2ObjectBody } from "../shared/types/bindings.ts";
+import type { R2ChecksumsLike, R2HTTPMetadataLike } from "./r2-compat-types.ts";
 import { Buffer } from "node:buffer";
 
 // ---------------------------------------------------------------------------
 // Types
 // ---------------------------------------------------------------------------
 
-/** Provider-neutral metadata bag fed into the shared R2Object builder. */
+/** Backend-independent metadata bag fed into the shared R2Object builder. */
 export interface R2ObjectMeta {
   key: string;
   etag: string;
@@ -44,14 +41,14 @@ export function emptyChecksums(): R2ChecksumsLike {
 }
 
 /**
- * Build the common R2Object shape from provider-neutral metadata.
+ * Build the common R2Object shape from backend-independent metadata.
  */
 export function toR2Object(meta: R2ObjectMeta): R2Object {
   const httpMetadata: R2HTTPMetadataLike = {
     contentType: meta.contentType,
   };
 
-  return {
+  const object: R2Object = {
     key: meta.key,
     version: meta.version,
     size: meta.size,
@@ -65,7 +62,8 @@ export function toR2Object(meta: R2ObjectMeta): R2Object {
     writeHttpMetadata(_headers: Headers) {
       // no-op – Cloudflare-specific helper
     },
-  } as unknown as R2Object;
+  };
+  return object;
 }
 
 /**
@@ -77,9 +75,8 @@ export function toR2ObjectBody(
   base: R2Object,
   bytes: ArrayBuffer,
 ): R2ObjectBody {
-  const contentType =
-    (base as unknown as { httpMetadata?: R2HTTPMetadataLike }).httpMetadata
-      ?.contentType ?? 'application/octet-stream';
+  const contentType = base.httpMetadata?.contentType ??
+    "application/octet-stream";
 
   let bodyUsed = false;
 
@@ -116,7 +113,7 @@ export function toR2ObjectBody(
     writeHttpMetadata(_headers: Headers) {
       // no-op
     },
-  } as unknown as R2ObjectBody;
+  };
 
   return objectBody;
 }
@@ -129,10 +126,10 @@ export async function normaliseBody(
   value: ReadableStream | ArrayBuffer | string | null | Blob,
 ): Promise<Buffer | Uint8Array | string | undefined> {
   if (value === null || value === undefined) return undefined;
-  if (typeof value === 'string') return value;
+  if (typeof value === "string") return value;
   if (value instanceof ArrayBuffer) return Buffer.from(value);
   if (value instanceof Uint8Array) return value;
-  if (typeof Blob !== 'undefined' && value instanceof Blob) {
+  if (typeof Blob !== "undefined" && value instanceof Blob) {
     const ab = await value.arrayBuffer();
     return Buffer.from(ab);
   }

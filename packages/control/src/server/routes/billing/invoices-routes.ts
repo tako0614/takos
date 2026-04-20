@@ -3,12 +3,9 @@ import { BadGatewayError, NotFoundError } from "takos-common/errors";
 import type { Env } from "../../../shared/types/index.ts";
 import type { BaseVariables } from "../route-auth.ts";
 import { logError, logWarn } from "../../../shared/utils/logger.ts";
-import type { NormalizedInvoice } from "../../../application/services/billing/payment-provider.ts";
+import type { NormalizedInvoice } from "../../../application/services/billing/payment-processor.ts";
 import { billingRouteDeps } from "./deps.ts";
-import {
-  parseInvoiceListQuery,
-  requirePaymentCustomerId,
-} from "./helpers.ts";
+import { parseInvoiceListQuery, requirePaymentCustomerId } from "./helpers.ts";
 
 type BillingRouter = Hono<{ Bindings: Env; Variables: BaseVariables }>;
 
@@ -31,14 +28,14 @@ function toInvoiceSummary(invoice: NormalizedInvoice) {
 
 export function registerBillingInvoiceRoutes(app: BillingRouter) {
   app.get("/invoices", async (c) => {
-    const provider = billingRouteDeps.resolvePaymentProvider(c.env);
+    const processor = billingRouteDeps.resolvePaymentProcessor(c.env);
     const { customerId } = await requirePaymentCustomerId(c);
     const { limit, startingAfter, endingBefore } = parseInvoiceListQuery(
       new URL(c.req.url),
     );
 
     try {
-      const result = await provider.listInvoices({
+      const result = await processor.listInvoices({
         customerId,
         limit,
         startingAfter,
@@ -56,13 +53,13 @@ export function registerBillingInvoiceRoutes(app: BillingRouter) {
   });
 
   app.get("/invoices/:id/pdf", async (c) => {
-    const provider = billingRouteDeps.resolvePaymentProvider(c.env);
+    const processor = billingRouteDeps.resolvePaymentProcessor(c.env);
     const invoiceId = c.req.param("id");
     const { customerId } = await requirePaymentCustomerId(c);
 
     let invoice: NormalizedInvoice;
     try {
-      invoice = await provider.retrieveInvoice(invoiceId);
+      invoice = await processor.retrieveInvoice(invoiceId);
     } catch (err) {
       logError("retrieveInvoice failed", err, { module: "billing" });
       throw new NotFoundError("Invoice");
@@ -84,7 +81,7 @@ export function registerBillingInvoiceRoutes(app: BillingRouter) {
       logError("invoice pdf URL is malformed", pdfUrl, { module: "billing" });
       throw new NotFoundError("Invoice PDF");
     }
-    if (!provider.isTrustedPdfUrl(pdfUrlParsed)) {
+    if (!processor.isTrustedPdfUrl(pdfUrlParsed)) {
       logError(
         "invoice pdf URL is not from a trusted host",
         pdfUrlParsed.hostname,
@@ -131,13 +128,13 @@ export function registerBillingInvoiceRoutes(app: BillingRouter) {
   });
 
   app.post("/invoices/:id/send", async (c) => {
-    const provider = billingRouteDeps.resolvePaymentProvider(c.env);
+    const processor = billingRouteDeps.resolvePaymentProcessor(c.env);
     const invoiceId = c.req.param("id");
     const { customerId } = await requirePaymentCustomerId(c);
 
     let invoice: NormalizedInvoice;
     try {
-      invoice = await provider.retrieveInvoice(invoiceId);
+      invoice = await processor.retrieveInvoice(invoiceId);
     } catch (err) {
       logError("retrieveInvoice failed", err, { module: "billing" });
       throw new NotFoundError("Invoice");
@@ -148,7 +145,7 @@ export function registerBillingInvoiceRoutes(app: BillingRouter) {
     }
 
     try {
-      await provider.sendInvoice(invoiceId);
+      await processor.sendInvoice(invoiceId);
     } catch (err) {
       logError("sendInvoice failed", err, { module: "billing" });
       throw new BadGatewayError("Failed to send invoice email");

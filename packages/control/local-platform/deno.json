@@ -8,7 +8,6 @@
     "./dispatch": "./src/dispatch.ts",
     "./runtime-host": "./src/runtime-host.ts",
     "./executor-host": "./src/executor-host.ts",
-    "./browser-host": "./src/browser-host.ts",
     "./worker": "./src/worker.ts",
     "./oci-orchestrator": "./src/oci-orchestrator.ts",
     "./run-smoke": "./src/run-smoke.ts",

@@ -4,7 +4,9 @@ import { assertEquals } from "jsr:@std/assert";
 import type { Env, User } from "@/types";
 import { createMockEnv } from "../../../../test/integration/setup.ts";
 import type { AuthenticatedRouteEnv } from "../../../../../../packages/control/src/server/routes/route-auth.ts";
-import resourcesBase from "../../../../../../packages/control/src/server/routes/resources/routes.ts";
+import resourcesBase, {
+  stripPublicResourceBackingFields,
+} from "../../../../../../packages/control/src/server/routes/resources/routes.ts";
 
 function createUser(): User {
   return {
@@ -73,7 +75,7 @@ Deno.test("resource creation rejects blank names", async () => {
   });
 });
 
-Deno.test("resource creation rejects invalid providers", async () => {
+Deno.test("resource creation rejects backend fields", async () => {
   const app = createApp(createUser());
   const response = await app.fetch(
     new Request("http://localhost/api/resources", {
@@ -82,7 +84,7 @@ Deno.test("resource creation rejects invalid providers", async () => {
       body: JSON.stringify({
         name: "my-db",
         type: "sql",
-        provider: "invalid-provider",
+        backend_name: "cloudflare",
       }),
     }),
     createEnv(),
@@ -92,10 +94,37 @@ Deno.test("resource creation rejects invalid providers", async () => {
   assertEquals(response.status, 400);
   assertEquals(await response.json(), {
     error: {
-      code: "BAD_REQUEST",
-      message: "Invalid provider: invalid-provider",
+      code: "VALIDATION_ERROR",
+      message: "Request validation failed",
+      details: {
+        fields: [{
+          field: "",
+          message: "Unrecognized key(s) in object: 'backend_name'",
+        }],
+      },
     },
   });
+});
+
+Deno.test("resource responses hide backend backing fields", () => {
+  assertEquals(
+    stripPublicResourceBackingFields<unknown>({
+      resource: {
+        id: "res_1",
+        name: "my-db",
+        backend_name: "cloudflare",
+        backing_resource_id: "cf-db-id",
+        backing_resource_name: "cf-db-name",
+        backendStateJson: "{}",
+      },
+    }),
+    {
+      resource: {
+        id: "res_1",
+        name: "my-db",
+      },
+    },
+  );
 });
 
 Deno.test("resource creation rejects invalid resource types", async () => {

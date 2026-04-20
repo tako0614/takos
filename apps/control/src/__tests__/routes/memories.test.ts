@@ -234,7 +234,7 @@ Deno.test("memories routes - POST /api/spaces/:spaceId/memories - rejects invali
     {} as ExecutionContext,
   );
 
-  assertEquals(res.status, 422);
+  assertEquals(res.status, 400);
 });
 Deno.test("memories routes - POST /api/spaces/:spaceId/memories - rejects empty content", async () => {
   /* mocks cleared (no-op in Deno) */ void 0;
@@ -254,7 +254,7 @@ Deno.test("memories routes - POST /api/spaces/:spaceId/memories - rejects empty 
     {} as ExecutionContext,
   );
 
-  assertEquals(res.status, 422);
+  assertEquals(res.status, 400);
 });
 
 Deno.test("memories routes - PATCH /api/memories/:id - updates a memory", async () => {
@@ -410,7 +410,7 @@ Deno.test("memories routes - Reminders - POST /api/spaces/:spaceId/reminders - r
     {} as ExecutionContext,
   );
 
-  assertEquals(res.status, 422);
+  assertEquals(res.status, 400);
 });
 Deno.test("memories routes - Reminders - POST /api/spaces/:spaceId/reminders - rejects empty content", async () => {
   /* mocks cleared (no-op in Deno) */ void 0;
@@ -430,7 +430,7 @@ Deno.test("memories routes - Reminders - POST /api/spaces/:spaceId/reminders - r
     {} as ExecutionContext,
   );
 
-  assertEquals(res.status, 422);
+  assertEquals(res.status, 400);
 });
 
 Deno.test("memories routes - Reminders - PATCH /api/reminders/:id - updates a reminder", async () => {

@@ -2,12 +2,23 @@
  * Capability Grants Service — manages visit/read/write/admin grants for repo access.
  */
 
-import { and, eq } from 'drizzle-orm';
-import type { D1Database } from '../../../shared/types/bindings.ts';
-import { getDb, repoGrants } from '../../../infra/db/index.ts';
-import { generateId } from '../../../shared/utils/index.ts';
+import { and, eq, inArray } from "drizzle-orm";
+import type { D1Database } from "../../../shared/types/bindings.ts";
+import { getDb, repoGrants } from "../../../infra/db/index.ts";
+import { generateId } from "../../../shared/utils/index.ts";
 
-export type Capability = 'visit' | 'read' | 'write' | 'admin';
+export type Capability = "visit" | "read" | "write" | "admin";
+
+const CAPABILITY_HIERARCHY: Record<Capability, Capability[]> = {
+  visit: ["visit", "read", "write", "admin"],
+  read: ["read", "write", "admin"],
+  write: ["write", "admin"],
+  admin: ["admin"],
+};
+
+export function grantCapabilitiesFor(capability: Capability): Capability[] {
+  return CAPABILITY_HIERARCHY[capability];
+}
 
 export interface GrantRecord {
   id: string;
@@ -70,30 +81,26 @@ export async function checkGrant(
   const db = getDb(dbBinding);
   const now = new Date().toISOString();
 
-  const row = await db.select({ id: repoGrants.id }).from(repoGrants)
+  const rows = await db.select({
+    id: repoGrants.id,
+    expiresAt: repoGrants.expiresAt,
+  }).from(repoGrants)
     .where(and(
       eq(repoGrants.repoId, repoId),
       eq(repoGrants.granteeActorUrl, granteeActorUrl),
-      eq(repoGrants.capability, capability),
+      inArray(repoGrants.capability, grantCapabilitiesFor(capability)),
     ))
-    .limit(1)
-    .get();
+    .all();
 
-  if (!row) return false;
-
-  // Check expiration
-  const fullRow = await db.select().from(repoGrants)
-    .where(eq(repoGrants.id, row.id))
-    .limit(1)
-    .get();
-
-  if (fullRow?.expiresAt && fullRow.expiresAt < now) {
-    // Expired — clean up
-    await db.delete(repoGrants).where(eq(repoGrants.id, row.id));
-    return false;
+  for (const row of rows) {
+    if (row.expiresAt && row.expiresAt < now) {
+      await db.delete(repoGrants).where(eq(repoGrants.id, row.id));
+      continue;
+    }
+    return true;
   }
 
-  return true;
+  return false;
 }
 
 export async function revokeGrant(

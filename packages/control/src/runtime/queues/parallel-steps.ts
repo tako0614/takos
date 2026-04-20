@@ -10,24 +10,24 @@
  * by calling {@link executeStepLoopParallel} instead.
  */
 
-import type { WorkflowStepResult } from '../../application/services/execution/workflow-engine.ts';
-import type { JobExecutionState, JobQueueContext } from './workflow-types.ts';
+import type { WorkflowStepResult } from "../../application/services/execution/workflow-engine.ts";
+import type { JobExecutionState, JobQueueContext } from "./workflow-types.ts";
 import {
-  runtimeDelete,
   getRunStatus,
   getStepDisplayName,
-} from './workflow-runtime-client.ts';
-import { evaluateCondition } from './workflow-expressions.ts';
-import { emitWorkflowEvent } from './workflow-events.ts';
-import { executeStep } from './workflow-steps.ts';
-import { executeStepLoop } from './workflow-job-phases.ts';
-import { logInfo, logWarn } from '../../shared/utils/logger.ts';
+  runtimeDelete,
+} from "./workflow-runtime-client.ts";
+import { evaluateCondition } from "./workflow-expressions.ts";
+import { emitWorkflowEvent } from "./workflow-events.ts";
+import { executeStep } from "./workflow-steps.ts";
+import { executeStepLoop } from "./workflow-job-phases.ts";
+import { logInfo, logWarn } from "../../shared/utils/logger.ts";
 
 // ---------------------------------------------------------------------------
 // Step type — mirrors the inline type from WorkflowJobDefinition.steps
 // ---------------------------------------------------------------------------
 
-type JobStep = JobQueueContext['message']['jobDefinition']['steps'][number];
+type JobStep = JobQueueContext["message"]["jobDefinition"]["steps"][number];
 
 // ---------------------------------------------------------------------------
 // Dependency graph
@@ -203,7 +203,7 @@ export class StepDependencyGraph {
 export async function executeStepLoopParallel(
   ctx: JobQueueContext,
   state: JobExecutionState,
-): Promise<'cancelled' | void> {
+): Promise<"cancelled" | void> {
   const { jobDefinition, runId, jobId, repoId, jobKey } = ctx.message;
   const steps = jobDefinition.steps;
 
@@ -212,10 +212,13 @@ export async function executeStepLoopParallel(
 
   // Cycle detected — fall back to sequential execution
   if (graph.hasCycle()) {
-    logWarn('Step dependency cycle detected, falling back to sequential execution', {
-      module: 'parallel-steps',
-      action: 'fallback',
-    });
+    logWarn(
+      "Step dependency cycle detected, falling back to sequential execution",
+      {
+        module: "parallel-steps",
+        action: "fallback",
+      },
+    );
     return executeStepLoop(ctx, state);
   }
 
@@ -225,26 +228,30 @@ export async function executeStepLoopParallel(
   while (completedIndices.size < steps.length) {
     // ── Cancellation check ──────────────────────────────────────────
     const runStatus = await getRunStatus(ctx.env.DB, runId);
-    if (runStatus === 'cancelled') {
-      state.jobConclusion = 'cancelled';
-      state.logs.push('Job cancelled (run was cancelled)');
-      state.logs.push('');
+    if (runStatus === "cancelled") {
+      state.jobConclusion = "cancelled";
+      state.logs.push("Job cancelled (run was cancelled)");
+      state.logs.push("");
       await ctx.engine.cancelRun(runId);
       if (state.runtimeStarted) {
         state.runtimeCancelled = true;
         if (state.runtimeSpaceId) {
-          await runtimeDelete(ctx.env, `/actions/jobs/${jobId}`, state.runtimeSpaceId);
+          await runtimeDelete(
+            ctx.env,
+            `/actions/jobs/${jobId}`,
+            state.runtimeSpaceId,
+          );
         }
       }
-      await ctx.engine.storeJobLogs(jobId, state.logs.join('\n'));
-      await emitWorkflowEvent(ctx.env, runId, 'workflow.job.completed', {
+      await ctx.engine.storeJobLogs(jobId, state.logs.join("\n"));
+      await emitWorkflowEvent(ctx.env, runId, "workflow.job.completed", {
         runId,
         jobId,
         repoId,
         jobKey,
         name: ctx.jobName,
-        status: 'completed',
-        conclusion: 'cancelled',
+        status: "cancelled",
+        conclusion: "cancelled",
         completedAt: new Date().toISOString(),
       });
       cancelled = true;
@@ -256,24 +263,24 @@ export async function executeStepLoopParallel(
 
     if (readyIndices.length === 0 && completedIndices.size < steps.length) {
       // Should not happen if hasCycle() returned false, but guard anyway
-      logWarn('No ready steps but graph is incomplete — possible deadlock', {
-        module: 'parallel-steps',
+      logWarn("No ready steps but graph is incomplete — possible deadlock", {
+        module: "parallel-steps",
       });
-      state.jobConclusion = 'failure';
-      state.logs.push('Internal error: step dependency deadlock');
-      state.logs.push('');
+      state.jobConclusion = "failure";
+      state.logs.push("Internal error: step dependency deadlock");
+      state.logs.push("");
       break;
     }
 
     if (readyIndices.length > 1) {
       logInfo(`Executing ${readyIndices.length} steps in parallel`, {
-        module: 'parallel-steps',
+        module: "parallel-steps",
       });
     }
 
     // ── Execute batch ───────────────────────────────────────────────
     const batchPromises = readyIndices.map((i) =>
-      executeSingleStep(ctx, state, i),
+      executeSingleStep(ctx, state, i)
     );
 
     const batchResults = await Promise.allSettled(batchPromises);
@@ -285,7 +292,7 @@ export async function executeStepLoopParallel(
 
       completedIndices.add(stepIndex);
 
-      if (outcome.status === 'rejected') {
+      if (outcome.status === "rejected") {
         // Unexpected error — treat as failure
         const step = steps[stepIndex];
         const stepNumber = stepIndex + 1;
@@ -297,18 +304,18 @@ export async function executeStepLoopParallel(
         const failResult: WorkflowStepResult = {
           stepNumber,
           name: stepName,
-          status: 'completed',
-          conclusion: 'failure',
+          status: "completed",
+          conclusion: "failure",
           error: errorMessage,
           outputs: {},
         };
         state.stepResults.push(failResult);
         state.logs.push(`--- Step ${stepNumber}: ${stepName} ---`);
         state.logs.push(`Error: ${errorMessage}`);
-        state.logs.push('');
+        state.logs.push("");
 
-        if (!step['continue-on-error']) {
-          state.jobConclusion = 'failure';
+        if (!step["continue-on-error"]) {
+          state.jobConclusion = "failure";
         }
       }
       // fulfilled results are already recorded by executeSingleStep
@@ -316,7 +323,7 @@ export async function executeStepLoopParallel(
   }
 
   if (cancelled) {
-    return 'cancelled';
+    return "cancelled";
   }
 }
 
@@ -351,10 +358,12 @@ async function executeSingleStep(
     shouldRun = evaluateCondition(step.if, {
       env: stepEnv,
       steps: state.stepOutputs,
-      job: { status: state.jobConclusion === 'success' ? 'success' : 'failure' },
+      job: {
+        status: state.jobConclusion === "success" ? "success" : "failure",
+      },
       inputs: ctx.runContext.inputs,
     });
-  } else if (state.jobConclusion === 'failure') {
+  } else if (state.jobConclusion === "failure") {
     shouldRun = false;
   }
 
@@ -362,19 +371,23 @@ async function executeSingleStep(
     const skippedResult: WorkflowStepResult = {
       stepNumber,
       name: stepName,
-      status: 'skipped',
-      conclusion: 'skipped',
+      status: "skipped",
+      conclusion: "skipped",
       outputs: {},
     };
     state.stepResults.push(skippedResult);
-    await ctx.engine.updateStepStatus(jobId, stepNumber, 'skipped', 'skipped');
-    state.logs.push(step.if ? 'Skipped (condition not met)' : 'Skipped (previous step failed)');
-    state.logs.push('');
+    await ctx.engine.updateStepStatus(jobId, stepNumber, "skipped", "skipped");
+    state.logs.push(
+      step.if
+        ? "Skipped (condition not met)"
+        : "Skipped (previous step failed)",
+    );
+    state.logs.push("");
     return;
   }
 
   // ── Execute ───────────────────────────────────────────────────────
-  await ctx.engine.updateStepStatus(jobId, stepNumber, 'in_progress');
+  await ctx.engine.updateStepStatus(jobId, stepNumber, "in_progress");
   const stepStartedAt = new Date().toISOString();
 
   const result = await executeStep(step, {
@@ -383,7 +396,8 @@ async function executeSingleStep(
     stepNumber,
     spaceId: state.runtimeSpaceId!,
     shell: step.shell ?? jobDefinition.defaults?.run?.shell,
-    workingDirectory: step['working-directory'] ?? jobDefinition.defaults?.run?.['working-directory'],
+    workingDirectory: step["working-directory"] ??
+      jobDefinition.defaults?.run?.["working-directory"],
   });
 
   const stepCompletedAt = new Date().toISOString();
@@ -391,8 +405,8 @@ async function executeSingleStep(
   const stepResult: WorkflowStepResult = {
     stepNumber,
     name: stepName,
-    status: 'completed',
-    conclusion: result.success ? 'success' : 'failure',
+    status: "completed",
+    conclusion: result.success ? "success" : "failure",
     exitCode: result.exitCode,
     error: result.error,
     outputs: result.outputs || {},
@@ -409,7 +423,7 @@ async function executeSingleStep(
   await ctx.engine.updateStepStatus(
     jobId,
     stepNumber,
-    'completed',
+    "completed",
     stepResult.conclusion ?? undefined,
     result.exitCode,
     result.error,
@@ -425,9 +439,9 @@ async function executeSingleStep(
     state.logs.push(`Error: ${result.error}`);
   }
   state.logs.push(`Exit code: ${result.exitCode ?? 0}`);
-  state.logs.push('');
+  state.logs.push("");
 
-  if (!result.success && !step['continue-on-error']) {
-    state.jobConclusion = 'failure';
+  if (!result.success && !step["continue-on-error"]) {
+    state.jobConclusion = "failure";
   }
 }

@@ -8,7 +8,7 @@
  */
 export function parseKeyValueFile(content: string): Record<string, string> {
   const result: Record<string, string> = {};
-  const lines = content.replace(/\r\n/g, '\n').split('\n');
+  const lines = content.replace(/\r\n/g, "\n").split("\n");
 
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i];
@@ -24,11 +24,11 @@ export function parseKeyValueFile(content: string): Record<string, string> {
         valueLines.push(lines[i]);
         i++;
       }
-      result[name] = valueLines.join('\n');
+      result[name] = valueLines.join("\n");
       continue;
     }
 
-    const eqIndex = line.indexOf('=');
+    const eqIndex = line.indexOf("=");
     if (eqIndex === -1) continue;
     const name = line.slice(0, eqIndex);
     const value = line.slice(eqIndex + 1);
@@ -44,8 +44,8 @@ export function parseKeyValueFile(content: string): Record<string, string> {
  */
 export function parsePathFile(content: string): string[] {
   return content
-    .replace(/\r\n/g, '\n')
-    .split('\n')
+    .replace(/\r\n/g, "\n")
+    .split("\n")
     .map((line) => line.trim())
     .filter((line) => line.length > 0);
 }

@@ -87,6 +87,27 @@ Deno.test("cli-proxy route - forwards query parameters via PROXY_BASE_URL while 
       forwardedOptions.headers.Authorization,
       "Bearer random-proxy-token-abc",
     );
+
+    const mismatchedSpace = await testRequest(app, {
+      method: "GET",
+      path: "/cli-proxy/api/repos/repo-1/status",
+      query: {
+        ref: "refs/heads/main",
+      },
+      headers: {
+        "X-Takos-Session-Id": sessionId,
+        "X-Takos-Space-Id": "space-b",
+      },
+    });
+
+    assertEquals(mismatchedSpace.status, 403);
+    assertEquals(mismatchedSpace.body, {
+      error: {
+        code: "FORBIDDEN",
+        message: "Session does not belong to the specified space",
+      },
+    });
+    assertSpyCalls(fetchSpy, 1);
   } finally {
     fetchSpy.restore();
     await sessionStore.destroySession(sessionId, "space-a");
@@ -106,12 +127,43 @@ Deno.test("cli-proxy route - forwards query parameters via PROXY_BASE_URL while 
 
 Deno.test({
   name:
-    "runtime service - cli-proxy bypass is loopback-only and service token takes precedence",
+    "runtime service - cli-proxy loopback bypass is disabled unless explicitly enabled",
   sanitizeOps: false,
   sanitizeResources: false,
   async fn() {
     const { createRuntimeServiceApp } = await import("../../app.ts");
     const app = createRuntimeServiceApp({ isProduction: false });
+    const sessionId = "a12345678901234c";
+
+    const spoofedLoopback = await testRequest(app as never, {
+      method: "GET",
+      path: "/cli-proxy/api/repos/repo-1/status",
+      headers: {
+        "X-Takos-Session-Id": sessionId,
+        "x-forwarded-for": "127.0.0.1",
+      },
+    });
+    assertEquals(spoofedLoopback.status, 403);
+    assertEquals(spoofedLoopback.body, {
+      error: {
+        code: "FORBIDDEN",
+        message: "Authorization header required",
+      },
+    });
+  },
+});
+
+Deno.test({
+  name:
+    "runtime service - explicitly enabled cli-proxy bypass is loopback-only and service token takes precedence",
+  sanitizeOps: false,
+  sanitizeResources: false,
+  async fn() {
+    const { createRuntimeServiceApp } = await import("../../app.ts");
+    const app = createRuntimeServiceApp({
+      isProduction: false,
+      allowLocalCliProxyBypass: true,
+    });
     const sessionId = "a12345678901234c";
 
     const nonLoopback = await testRequest(app as never, {
@@ -161,5 +213,81 @@ Deno.test({
         message: "Session not found",
       },
     });
+  },
+});
+
+Deno.test({
+  name:
+    "runtime service - loopback cli-proxy bypass rejects mismatched session space",
+  sanitizeOps: false,
+  sanitizeResources: false,
+  async fn() {
+    const heartbeatFetchStub = stub(
+      globalThis,
+      "fetch",
+      (async () =>
+        new Response(null, {
+          status: 204,
+        })) as typeof globalThis.fetch,
+    );
+    let heartbeatRestored = false;
+
+    try {
+      const { createRuntimeServiceApp } = await import("../../app.ts");
+      const { sessionStore } = await import("../../routes/sessions/storage.ts");
+      const sessionId = "a12345678901234d";
+      await sessionStore.getSessionDir(
+        sessionId,
+        "space-a",
+        undefined,
+        "random-proxy-token-abc",
+      );
+
+      heartbeatFetchStub.restore();
+      heartbeatRestored = true;
+
+      const app = createRuntimeServiceApp({
+        isProduction: false,
+        allowLocalCliProxyBypass: true,
+      });
+      const fetchSpy = stub(
+        globalThis,
+        "fetch",
+        (async (..._args: Parameters<typeof globalThis.fetch>) => {
+          return new Response(JSON.stringify({ ok: true }), {
+            status: 200,
+            headers: { "Content-Type": "application/json" },
+          });
+        }) as typeof globalThis.fetch,
+      );
+
+      try {
+        const response = await testRequest(app as never, {
+          method: "GET",
+          path: "/cli-proxy/api/repos/repo-1/status",
+          headers: {
+            "X-Takos-Session-Id": sessionId,
+            "X-Takos-Space-Id": "space-b",
+            "x-forwarded-for": "127.0.0.1",
+          },
+        });
+
+        assertEquals(response.status, 403);
+        assertEquals(response.body, {
+          error: {
+            code: "FORBIDDEN",
+            message: "Session does not belong to the specified space",
+          },
+        });
+        assertSpyCalls(fetchSpy, 0);
+      } finally {
+        fetchSpy.restore();
+        await sessionStore.destroySession(sessionId, "space-a");
+      }
+    } finally {
+      if (!heartbeatRestored) {
+        heartbeatFetchStub.restore();
+      }
+    }
   },
 });

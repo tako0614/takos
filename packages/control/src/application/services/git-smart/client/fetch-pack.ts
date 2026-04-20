@@ -165,11 +165,13 @@ export async function fetchPackFromRemote(
   if (authHeader) {
     headers["Authorization"] = authHeader;
   }
+  const requestBodyBuffer = new ArrayBuffer(requestBody.byteLength);
+  new Uint8Array(requestBodyBuffer).set(requestBody);
 
   const response = await fetch(uploadPackUrl, {
     method: "POST",
     headers,
-    body: requestBody as unknown as BodyInit,
+    body: requestBodyBuffer,
   });
 
   if (!response.ok) {

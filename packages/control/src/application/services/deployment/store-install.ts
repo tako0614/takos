@@ -17,7 +17,7 @@ export interface InstallRequest {
 export interface InstallResult {
   installationId: string;
   version: string;
-  status: 'installed' | 'failed';
+  status: "installed" | "failed";
   entities: {
     resources: Array<{ name: string; type: string; id: string }>;
     workers: Array<{ name: string; scriptName: string }>;
@@ -32,7 +32,7 @@ export interface UpdateCheckResult {
   available: boolean;
   currentVersion: string;
   latestVersion: string | null;
-  updateType: 'patch' | 'minor' | 'major' | null;
+  updateType: "patch" | "minor" | "major" | null;
 }
 
 export interface UpdateRequest {
@@ -54,8 +54,8 @@ export interface UninstallResult {
  * Returns `[major, minor, patch]` or throws on invalid input.
  */
 function parseSemver(version: string): [number, number, number] {
-  const cleaned = version.startsWith('v') ? version.slice(1) : version;
-  const parts = cleaned.split('.');
+  const cleaned = version.startsWith("v") ? version.slice(1) : version;
+  const parts = cleaned.split(".");
   if (parts.length !== 3) {
     throw new Error(`Invalid semver: "${version}"`);
   }
@@ -87,11 +87,14 @@ export function compareSemver(a: string, b: string): -1 | 0 | 1 {
  * @returns 'major' | 'minor' | 'patch'
  * @throws if current >= latest (no update available)
  */
-export function getUpdateType(current: string, latest: string): 'patch' | 'minor' | 'major' {
+export function getUpdateType(
+  current: string,
+  latest: string,
+): "patch" | "minor" | "major" {
   const [cMajor, cMinor] = parseSemver(current);
   const [lMajor, lMinor] = parseSemver(latest);
 
-  if (lMajor !== cMajor) return 'major';
-  if (lMinor !== cMinor) return 'minor';
-  return 'patch';
+  if (lMajor !== cMajor) return "major";
+  if (lMinor !== cMinor) return "minor";
+  return "patch";
 }

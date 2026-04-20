@@ -1,10 +1,13 @@
-import { createClient } from 'redis';
-import type { DurableObjectNamespace, DurableObjectStub } from '../shared/types/bindings.ts';
-import { logWarn } from '../shared/utils/logger.ts';
+import { createClient } from "redis";
+import type {
+  DurableObjectNamespace,
+  DurableObjectStub,
+} from "../shared/types/bindings.ts";
+import { logWarn } from "../shared/utils/logger.ts";
 
 type RedisClient = ReturnType<typeof createClient>;
 
-const REDIS_KEY_PREFIX = 'takos:do';
+const REDIS_KEY_PREFIX = "takos:do";
 
 type RedisClientState = {
   url: string;
@@ -17,12 +20,20 @@ async function getRedisClient(redisUrl: string): Promise<RedisClient> {
   if (redisClientState?.url !== redisUrl) {
     if (redisClientState) {
       void redisClientState.clientPromise
-        .then((client) => client.quit().catch((err) => {
-          logWarn('Failed to quit stale Redis client', { module: 'redis-durable-object', error: err instanceof Error ? err.message : String(err) });
-          return undefined;
-        }))
+        .then((client) =>
+          client.quit().catch((err) => {
+            logWarn("Failed to quit stale Redis client", {
+              module: "redis-durable-object",
+              error: err instanceof Error ? err.message : String(err),
+            });
+            return undefined;
+          })
+        )
         .catch((err) => {
-          logWarn('Failed to resolve stale Redis client for quit', { module: 'redis-durable-object', error: err instanceof Error ? err.message : String(err) });
+          logWarn("Failed to resolve stale Redis client for quit", {
+            module: "redis-durable-object",
+            error: err instanceof Error ? err.message : String(err),
+          });
           return undefined;
         });
     }
@@ -39,12 +50,20 @@ export async function disposeRedisDurableObjectClient(): Promise<void> {
   const state = redisClientState;
   redisClientState = null;
   await state.clientPromise
-    .then((client) => client.quit().catch((err) => {
-      logWarn('Failed to quit Redis client during dispose', { module: 'redis-durable-object', error: err instanceof Error ? err.message : String(err) });
-      return undefined;
-    }))
+    .then((client) =>
+      client.quit().catch((err) => {
+        logWarn("Failed to quit Redis client during dispose", {
+          module: "redis-durable-object",
+          error: err instanceof Error ? err.message : String(err),
+        });
+        return undefined;
+      })
+    )
     .catch((err) => {
-      logWarn('Failed to resolve Redis client for dispose', { module: 'redis-durable-object', error: err instanceof Error ? err.message : String(err) });
+      logWarn("Failed to resolve Redis client for dispose", {
+        module: "redis-durable-object",
+        error: err instanceof Error ? err.message : String(err),
+      });
       return undefined;
     });
 }
@@ -79,81 +98,35 @@ export function createRedisDurableObjectNamespace(
   function makeStub(id: string): DurableObjectStub {
     const storage = createRedisDurableObjectStorage(redisUrl, prefix, id);
 
-    const stub = {
-      id: {
-        equals(other: { toString(): string }) {
-          return other.toString() === id;
-        },
-        toString() {
-          return id;
-        },
-        name: id,
-      },
-      name: id,
-      async fetch(input: RequestInfo | URL, init?: RequestInit): Promise<Response> {
+    return {
+      async fetch(
+        input: RequestInfo | URL,
+        init?: RequestInit,
+      ): Promise<Response> {
         if (fetchHandler) {
           const request = new Request(input, init);
           return fetchHandler(id, storage, request);
         }
         return Response.json({ ok: true, durableObject: id });
       },
-      connect() {
-        throw new Error('connect() is not supported in the Redis durable object stub');
-      },
     };
-
-    return stub as unknown as DurableObjectStub;
   }
 
-  const namespace = {
-    newUniqueId() {
-      const raw = crypto.randomUUID();
-      return {
-        equals(other: { toString(): string }) {
-          return other.toString() === raw;
-        },
-        toString() {
-          return raw;
-        },
-        name: raw,
-      };
-    },
+  const namespace: DurableObjectNamespace = {
     idFromName(name: string) {
-      return {
-        equals(other: { toString(): string }) {
-          return other.toString() === name;
-        },
-        toString() {
-          return name;
-        },
-        name,
-      };
+      return name;
     },
-    idFromString(id: string) {
-      return {
-        equals(other: { toString(): string }) {
-          return other.toString() === id;
-        },
-        toString() {
-          return id;
-        },
-        name: id,
-      };
-    },
-    get(id: { toString(): string }) {
-      const key = id.toString();
+    get(id: unknown) {
+      const key = typeof id === "string" ? id : String(id);
       if (!stubs.has(key)) stubs.set(key, makeStub(key));
       return stubs.get(key)!;
     },
     getByName(name: string) {
       return namespace.get(namespace.idFromName(name));
     },
-    jurisdiction() {
-      return namespace;
-    },
   };
 
-  return namespace as unknown as DurableObjectNamespace;
+  return namespace;
 }
 
 /**
@@ -167,7 +140,9 @@ export type RedisDurableObjectStorage = {
   putMultiple(entries: Record<string, unknown>): Promise<void>;
   delete(key: string): Promise<boolean>;
   deleteMultiple(keys: string[]): Promise<number>;
-  list<T = unknown>(options?: { prefix?: string; limit?: number }): Promise<Map<string, T>>;
+  list<T = unknown>(
+    options?: { prefix?: string; limit?: number },
+  ): Promise<Map<string, T>>;
 };
 
 export function createRedisDurableObjectStorage(
@@ -227,11 +202,13 @@ export function createRedisDurableObjectStorage(
       return await client.hDel(hashKey, keys);
     },
 
-    async list<T = unknown>(options?: { prefix?: string; limit?: number }): Promise<Map<string, T>> {
+    async list<T = unknown>(
+      options?: { prefix?: string; limit?: number },
+    ): Promise<Map<string, T>> {
       const client = await getRedisClient(redisUrl);
       const all = await client.hGetAll(hashKey);
       const result = new Map<string, T>();
-      const prefix = options?.prefix ?? '';
+      const prefix = options?.prefix ?? "";
       const limit = options?.limit ?? Infinity;
       const entries = Object.entries(all)
         .filter(([key]) => key.startsWith(prefix))

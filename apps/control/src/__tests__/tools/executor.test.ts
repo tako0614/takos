@@ -46,7 +46,7 @@ function createExecutor(
 ) {
   const registry = new Map(tools.map((tool) => [tool.name, {
     definition: tool,
-    builtin: false,
+    custom: false,
     handler: async () => "ok",
   }]));
 
@@ -117,7 +117,7 @@ Deno.test("ToolExecutor visibility filtering - propagates run-level abort signal
 
   const registry = new Map([[tool.name, {
     definition: tool,
-    builtin: false,
+    custom: false,
     handler,
   }]]);
 

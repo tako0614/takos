@@ -1,30 +1,30 @@
 import {
-  S3Client,
-  HeadObjectCommand,
-  GetObjectCommand,
-  PutObjectCommand,
+  AbortMultipartUploadCommand,
+  CompleteMultipartUploadCommand,
+  CreateMultipartUploadCommand,
   DeleteObjectCommand,
   DeleteObjectsCommand,
-  ListObjectsV2Command,
-  CreateMultipartUploadCommand,
-  UploadPartCommand,
-  CompleteMultipartUploadCommand,
-  AbortMultipartUploadCommand,
-  type HeadObjectCommandOutput,
+  GetObjectCommand,
   type GetObjectCommandOutput,
-} from '@aws-sdk/client-s3';
+  HeadObjectCommand,
+  type HeadObjectCommandOutput,
+  ListObjectsV2Command,
+  PutObjectCommand,
+  S3Client,
+  UploadPartCommand,
+} from "@aws-sdk/client-s3";
 import type {
   R2Bucket,
   R2Object,
   R2ObjectBody,
-} from '../shared/types/bindings.ts';
-import type { R2Objects } from './r2-compat-types.ts';
+} from "../shared/types/bindings.ts";
+import type { R2Objects } from "./r2-compat-types.ts";
 import {
-  toR2Object as toR2ObjectShared,
-  toR2ObjectBody as toR2ObjectBodyShared,
   normaliseBody,
   type R2ObjectMeta,
-} from './r2-adapter-shared.ts';
+  toR2Object as toR2ObjectShared,
+  toR2ObjectBody as toR2ObjectBodyShared,
+} from "./r2-adapter-shared.ts";
 
 // ---------------------------------------------------------------------------
 // Local type helpers – avoid adding @smithy/types or @cloudflare/workers-types
@@ -68,11 +68,11 @@ function lazyClient(config: S3ObjectStoreConfig): () => S3Client {
         ...(config.endpoint ? { endpoint: config.endpoint } : {}),
         ...(config.accessKeyId && config.secretAccessKey
           ? {
-              credentials: {
-                accessKeyId: config.accessKeyId,
-                secretAccessKey: config.secretAccessKey,
-              },
-            }
+            credentials: {
+              accessKeyId: config.accessKeyId,
+              secretAccessKey: config.secretAccessKey,
+            },
+          }
           : {}),
       });
     }
@@ -81,14 +81,14 @@ function lazyClient(config: S3ObjectStoreConfig): () => S3Client {
 }
 
 /**
- * Map an S3 head / get response to provider-neutral metadata, then build R2Object.
+ * Map an S3 head / get response to backend-independent metadata, then build R2Object.
  */
 function s3ToR2Object(
   key: string,
   output: HeadObjectCommandOutput | GetObjectCommandOutput,
   range?: { offset: number; length: number },
 ): R2Object {
-  const etag = (output.ETag ?? '').replace(/"/g, '');
+  const etag = (output.ETag ?? "").replace(/"/g, "");
   const meta: R2ObjectMeta = {
     key,
     etag,
@@ -108,14 +108,14 @@ function s3ToR2Object(
  * its contents as an ArrayBuffer.
  */
 async function consumeBody(
-  body: GetObjectCommandOutput['Body'],
+  body: GetObjectCommandOutput["Body"],
 ): Promise<ArrayBuffer> {
   if (!body) return new ArrayBuffer(0);
 
   // The AWS SDK v3 body is a Readable (Node) or ReadableStream (browser).
   // transformToByteArray() is available on the SdkStream wrapper.
   const sdkBody = body as Partial<SdkStreamLike>;
-  if (typeof sdkBody.transformToByteArray === 'function') {
+  if (typeof sdkBody.transformToByteArray === "function") {
     const bytes: Uint8Array = await sdkBody.transformToByteArray();
     return bytes.buffer.slice(
       bytes.byteOffset,
@@ -174,7 +174,7 @@ function buildRangeHeader(
 export function createS3ObjectStore(config: S3ObjectStoreConfig): R2Bucket {
   const getClient = lazyClient(config);
 
-  const store = {
+  const store: R2Bucket = {
     // ----- head -----
     async head(key: string): Promise<R2Object | null> {
       try {
@@ -184,7 +184,9 @@ export function createS3ObjectStore(config: S3ObjectStoreConfig): R2Bucket {
         return s3ToR2Object(key, output);
       } catch (err: unknown) {
         const sdkErr = err as Partial<AwsSdkError>;
-        if (sdkErr.name === 'NotFound' || sdkErr.$metadata?.httpStatusCode === 404) {
+        if (
+          sdkErr.name === "NotFound" || sdkErr.$metadata?.httpStatusCode === 404
+        ) {
           return null;
         }
         throw err;
@@ -199,8 +201,9 @@ export function createS3ObjectStore(config: S3ObjectStoreConfig): R2Bucket {
       },
     ): Promise<R2ObjectBody | null> {
       try {
-        const rangeHeader =
-          options?.range ? buildRangeHeader(options.range) : undefined;
+        const rangeHeader = options?.range
+          ? buildRangeHeader(options.range)
+          : undefined;
 
         const output = await getClient().send(
           new GetObjectCommand({
@@ -213,8 +216,7 @@ export function createS3ObjectStore(config: S3ObjectStoreConfig): R2Bucket {
         let rangeInfo: { offset: number; length: number } | undefined;
         if (options?.range) {
           const offset = options.range.offset ?? 0;
-          const length =
-            options.range.length ?? (output.ContentLength ?? 0);
+          const length = options.range.length ?? (output.ContentLength ?? 0);
           rangeInfo = { offset, length };
         }
 
@@ -222,7 +224,7 @@ export function createS3ObjectStore(config: S3ObjectStoreConfig): R2Bucket {
       } catch (err: unknown) {
         const sdkErr = err as Partial<AwsSdkError>;
         if (
-          sdkErr.name === 'NoSuchKey' ||
+          sdkErr.name === "NoSuchKey" ||
           sdkErr.$metadata?.httpStatusCode === 404
         ) {
           return null;
@@ -263,7 +265,7 @@ export function createS3ObjectStore(config: S3ObjectStoreConfig): R2Bucket {
 
     // ----- delete -----
     async delete(keys: string | string[]): Promise<void> {
-      if (typeof keys === 'string') {
+      if (typeof keys === "string") {
         await getClient().send(
           new DeleteObjectCommand({ Bucket: config.bucket, Key: keys }),
         );
@@ -303,17 +305,15 @@ export function createS3ObjectStore(config: S3ObjectStoreConfig): R2Bucket {
           Bucket: config.bucket,
           ...(options?.prefix ? { Prefix: options.prefix } : {}),
           ...(options?.limit ? { MaxKeys: options.limit } : {}),
-          ...(options?.cursor
-            ? { ContinuationToken: options.cursor }
-            : {}),
+          ...(options?.cursor ? { ContinuationToken: options.cursor } : {}),
           ...(options?.delimiter ? { Delimiter: options.delimiter } : {}),
         }),
       );
 
       const objects: R2Object[] = (output.Contents ?? []).map((item) => {
-        const etag = (item.ETag ?? '').replace(/"/g, '');
+        const etag = (item.ETag ?? "").replace(/"/g, "");
         return toR2ObjectShared({
-          key: item.Key ?? '',
+          key: item.Key ?? "",
           etag,
           httpEtag: item.ETag ?? `"${etag}"`,
           size: item.Size ?? 0,
@@ -332,7 +332,7 @@ export function createS3ObjectStore(config: S3ObjectStoreConfig): R2Bucket {
           ? { cursor: output.NextContinuationToken }
           : {}),
         delimitedPrefixes: (output.CommonPrefixes ?? [])
-          .map((p) => p.Prefix ?? '')
+          .map((p) => p.Prefix ?? "")
           .filter(Boolean),
       };
     },
@@ -345,10 +345,9 @@ export function createS3ObjectStore(config: S3ObjectStoreConfig): R2Bucket {
         httpMetadata?: { contentType?: string; [k: string]: unknown } | Headers;
       },
     ) {
-      const contentType =
-        options?.httpMetadata instanceof Headers
-          ? options.httpMetadata.get('content-type') ?? undefined
-          : options?.httpMetadata?.contentType;
+      const contentType = options?.httpMetadata instanceof Headers
+        ? options.httpMetadata.get("content-type") ?? undefined
+        : options?.httpMetadata?.contentType;
 
       const output = await getClient().send(
         new CreateMultipartUploadCommand({
@@ -363,7 +362,7 @@ export function createS3ObjectStore(config: S3ObjectStoreConfig): R2Bucket {
 
       const uploadId = output.UploadId;
       if (!uploadId) {
-        throw new Error('S3 CreateMultipartUpload did not return an UploadId');
+        throw new Error("S3 CreateMultipartUpload did not return an UploadId");
       }
 
       return {
@@ -385,7 +384,7 @@ export function createS3ObjectStore(config: S3ObjectStoreConfig): R2Bucket {
             }),
           );
 
-          const etag = (partOutput.ETag ?? '').replace(/"/g, '');
+          const etag = (partOutput.ETag ?? "").replace(/"/g, "");
           if (!etag) {
             throw new Error(
               `S3 UploadPart did not return an ETag for part ${partNumber}`,
@@ -435,5 +434,5 @@ export function createS3ObjectStore(config: S3ObjectStoreConfig): R2Bucket {
     },
   };
 
-  return store as unknown as R2Bucket;
+  return store;
 }

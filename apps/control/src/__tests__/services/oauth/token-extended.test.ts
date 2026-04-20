@@ -1,12 +1,16 @@
 import * as jose from "jose";
 import {
   buildAuthorizationCodeTokenFamily,
+  formatOAuthAccessToken,
   generateAccessToken,
   generateRefreshToken,
+  generateTokenResponse,
   RefreshTokenReuseDetectedError,
   verifyAccessToken,
 } from "@/services/oauth/token";
+import type { JsonStringArray, OAuthClient } from "@/types/oauth";
 import { OAUTH_CONSTANTS } from "@/types/oauth";
+import { createMockEnv } from "../../../../test/integration/setup.ts";
 
 // ---------------------------------------------------------------------------
 // Token generation and verification tests
@@ -21,6 +25,35 @@ async function createKeyPairPem() {
   return {
     privateKeyPem: await jose.exportPKCS8(privateKey),
     publicKeyPem: await jose.exportSPKI(publicKey),
+  };
+}
+
+function jsonArray(value: string[]): JsonStringArray {
+  return JSON.stringify(value) as JsonStringArray;
+}
+
+function makeClient(overrides: Partial<OAuthClient> = {}): OAuthClient {
+  return {
+    id: "internal-id",
+    client_id: "client-1",
+    client_secret_hash: null,
+    client_type: "public",
+    name: "Test Client",
+    description: null,
+    logo_uri: null,
+    client_uri: null,
+    policy_uri: null,
+    tos_uri: null,
+    redirect_uris: jsonArray(["https://example.com/callback"]),
+    grant_types: jsonArray(["authorization_code", "refresh_token"]),
+    response_types: jsonArray(["code"]),
+    allowed_scopes: jsonArray(["openid", "profile"]),
+    owner_id: null,
+    registration_access_token_hash: null,
+    status: "active",
+    created_at: "2026-01-01T00:00:00.000Z",
+    updated_at: "2026-01-01T00:00:00.000Z",
+    ...overrides,
   };
 }
 
@@ -41,7 +74,7 @@ Deno.test("generateAccessToken - generates a valid JWT with correct claims", asy
 
   // Verify the token
   const payload = await verifyAccessToken({
-    token,
+    token: formatOAuthAccessToken(token),
     publicKeyPem,
     issuer: "https://admin.takos.test",
   });
@@ -53,6 +86,62 @@ Deno.test("generateAccessToken - generates a valid JWT with correct claims", asy
   assertEquals(payload!.client_id, "client-1");
   assertEquals(payload!.scope, "openid profile");
   assertEquals(payload!.jti, jti);
+});
+Deno.test("generateTokenResponse - returns a tak_oat-prefixed public access token", async () => {
+  const { privateKeyPem, publicKeyPem } = await createKeyPairPem();
+  const env = createMockEnv();
+  const response = await generateTokenResponse(
+    env.DB as unknown as Parameters<typeof generateTokenResponse>[0],
+    {
+      privateKeyPem,
+      issuer: "https://admin.takos.test",
+      userId: "user-1",
+      client: makeClient(),
+      scope: "openid profile",
+    },
+  );
+
+  assert(response.access_token.startsWith("tak_oat_"));
+  assert(response.refresh_token);
+  assert(!response.refresh_token.startsWith("tak_oat_"));
+
+  const payload = await verifyAccessToken({
+    token: response.access_token,
+    publicKeyPem,
+    issuer: "https://admin.takos.test",
+  });
+  assertNotEquals(payload, null);
+  assertEquals(payload!.sub, "user-1");
+  assertEquals(payload!.client_id, "client-1");
+});
+Deno.test("OAuth access token formatter is idempotent and public verifier rejects raw JWTs", async () => {
+  const { privateKeyPem, publicKeyPem } = await createKeyPairPem();
+  const { token } = await generateAccessToken({
+    privateKeyPem,
+    issuer: "https://admin.takos.test",
+    userId: "user-1",
+    clientId: "client-1",
+    scope: "openid profile",
+  });
+
+  const prefixed = formatOAuthAccessToken(token);
+  assert(prefixed.startsWith("tak_oat_"));
+  assertEquals(formatOAuthAccessToken(prefixed), prefixed);
+
+  const rawPayload = await verifyAccessToken({
+    token,
+    publicKeyPem,
+    issuer: "https://admin.takos.test",
+  });
+  const prefixedPayload = await verifyAccessToken({
+    token: prefixed,
+    publicKeyPem,
+    issuer: "https://admin.takos.test",
+  });
+
+  assertEquals(rawPayload, null);
+  assertNotEquals(prefixedPayload, null);
+  assertEquals(prefixedPayload?.client_id, "client-1");
 });
 Deno.test("generateAccessToken - uses default expiry of ACCESS_TOKEN_EXPIRES_IN seconds", async () => {
   const { privateKeyPem } = await createKeyPairPem();
@@ -114,7 +203,7 @@ Deno.test("verifyAccessToken - returns null for an expired token", async () => {
   });
 
   const payload = await verifyAccessToken({
-    token,
+    token: formatOAuthAccessToken(token),
     publicKeyPem,
     issuer: "https://admin.takos.test",
   });
@@ -132,7 +221,7 @@ Deno.test("verifyAccessToken - returns null for wrong issuer", async () => {
   });
 
   const payload = await verifyAccessToken({
-    token,
+    token: formatOAuthAccessToken(token),
     publicKeyPem,
     issuer: "https://wrong-issuer.test",
   });
@@ -152,7 +241,7 @@ Deno.test("verifyAccessToken - returns null for a tampered token", async () => {
   const tampered = token.slice(0, -5) + "XXXXX";
 
   const payload = await verifyAccessToken({
-    token: tampered,
+    token: formatOAuthAccessToken(tampered),
     publicKeyPem,
     issuer: "https://admin.takos.test",
   });
@@ -173,7 +262,7 @@ Deno.test("verifyAccessToken - returns null for a token signed with a different 
   });
 
   const payload = await verifyAccessToken({
-    token,
+    token: formatOAuthAccessToken(token),
     publicKeyPem, // original key, not the one used to sign
     issuer: "https://admin.takos.test",
   });
@@ -191,7 +280,7 @@ Deno.test("verifyAccessToken - enforces audience when expectedAudience is provid
   });
 
   const correct = await verifyAccessToken({
-    token,
+    token: formatOAuthAccessToken(token),
     publicKeyPem,
     issuer: "https://admin.takos.test",
     expectedAudience: "client-a",
@@ -199,7 +288,7 @@ Deno.test("verifyAccessToken - enforces audience when expectedAudience is provid
   assertNotEquals(correct, null);
 
   const wrong = await verifyAccessToken({
-    token,
+    token: formatOAuthAccessToken(token),
     publicKeyPem,
     issuer: "https://admin.takos.test",
     expectedAudience: "client-b",
@@ -209,7 +298,7 @@ Deno.test("verifyAccessToken - enforces audience when expectedAudience is provid
 Deno.test("verifyAccessToken - returns null for completely garbage input", async () => {
   const { publicKeyPem } = await createKeyPairPem();
   const payload = await verifyAccessToken({
-    token: "not-a-jwt",
+    token: "tak_oat_not-a-jwt",
     publicKeyPem,
     issuer: "https://admin.takos.test",
   });

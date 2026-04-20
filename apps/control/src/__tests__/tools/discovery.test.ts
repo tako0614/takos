@@ -2,7 +2,7 @@ import {
   capabilityFamiliesHandler,
   capabilityInvokeHandler,
   capabilitySearchHandler,
-} from "@/tools/builtin/discovery";
+} from "@/tools/custom/discovery";
 import { CapabilityRegistry } from "@/tools/capability-registry";
 import type { CapabilityDescriptor } from "@/tools/capability-types";
 import type { ToolContext } from "@/tools/types";
@@ -24,7 +24,7 @@ function makeDescriptor(
     tags: [],
     risk_level: "none",
     side_effects: false,
-    source: "builtin",
+    source: "custom",
     discoverable: true,
     selectable: true,
     ...overrides,
@@ -48,12 +48,12 @@ Deno.test("discovery tools - capability_search - returns matching results for a 
     family: "file.ops",
   }));
   registry.register(makeDescriptor({
-    id: "tool:browser_open",
-    name: "browser_open",
-    namespace: "browser",
-    summary: "Open a browser",
-    tags: ["browser"],
-    family: "browser.nav",
+    id: "tool:web_fetch",
+    name: "web_fetch",
+    namespace: "web",
+    summary: "Fetch a URL",
+    tags: ["web"],
+    family: "web.fetch",
   }));
   ctx = makeContext(registry);
   const result = JSON.parse(
@@ -72,16 +72,16 @@ Deno.test("discovery tools - capability_search - respects limit parameter", asyn
     family: "file.ops",
   }));
   registry.register(makeDescriptor({
-    id: "tool:browser_open",
-    name: "browser_open",
-    namespace: "browser",
-    summary: "Open a browser",
-    tags: ["browser"],
-    family: "browser.nav",
+    id: "tool:web_fetch",
+    name: "web_fetch",
+    namespace: "web",
+    summary: "Fetch a URL",
+    tags: ["web"],
+    family: "web.fetch",
   }));
   ctx = makeContext(registry);
   const result = JSON.parse(
-    await capabilitySearchHandler({ query: "file browser", limit: 1 }, ctx),
+    await capabilitySearchHandler({ query: "file web", limit: 1 }, ctx),
   );
   assertEquals(result.results.length, 1);
 });
@@ -95,12 +95,12 @@ Deno.test("discovery tools - capability_search - filters out non-discoverable en
     family: "file.ops",
   }));
   registry.register(makeDescriptor({
-    id: "tool:browser_open",
-    name: "browser_open",
-    namespace: "browser",
-    summary: "Open a browser",
-    tags: ["browser"],
-    family: "browser.nav",
+    id: "tool:web_fetch",
+    name: "web_fetch",
+    namespace: "web",
+    summary: "Fetch a URL",
+    tags: ["web"],
+    family: "web.fetch",
   }));
   ctx = makeContext(registry);
   registry.register(makeDescriptor({
@@ -130,12 +130,12 @@ Deno.test("discovery tools - capability_search - returns total_available count",
     family: "file.ops",
   }));
   registry.register(makeDescriptor({
-    id: "tool:browser_open",
-    name: "browser_open",
-    namespace: "browser",
-    summary: "Open a browser",
-    tags: ["browser"],
-    family: "browser.nav",
+    id: "tool:web_fetch",
+    name: "web_fetch",
+    namespace: "web",
+    summary: "Fetch a URL",
+    tags: ["web"],
+    family: "web.fetch",
   }));
   ctx = makeContext(registry);
   const result = JSON.parse(
@@ -153,12 +153,12 @@ Deno.test("discovery tools - capability_search - returns guidance when registry 
     family: "file.ops",
   }));
   registry.register(makeDescriptor({
-    id: "tool:browser_open",
-    name: "browser_open",
-    namespace: "browser",
-    summary: "Open a browser",
-    tags: ["browser"],
-    family: "browser.nav",
+    id: "tool:web_fetch",
+    name: "web_fetch",
+    namespace: "web",
+    summary: "Fetch a URL",
+    tags: ["web"],
+    family: "web.fetch",
   }));
   ctx = makeContext(registry);
   const bareCtx = makeContext(undefined);
@@ -178,12 +178,12 @@ Deno.test("discovery tools - capability_families - returns family list with coun
     family: "file.ops",
   }));
   registry.register(makeDescriptor({
-    id: "tool:browser_open",
-    name: "browser_open",
-    namespace: "browser",
-    summary: "Open a browser",
-    tags: ["browser"],
-    family: "browser.nav",
+    id: "tool:web_fetch",
+    name: "web_fetch",
+    namespace: "web",
+    summary: "Fetch a URL",
+    tags: ["web"],
+    family: "web.fetch",
   }));
   ctx = makeContext(registry);
   const result = JSON.parse(await capabilityFamiliesHandler({}, ctx));
@@ -195,7 +195,7 @@ Deno.test("discovery tools - capability_families - returns family list with coun
   assert(
     result.families.some((item: any) =>
       JSON.stringify(item) ===
-        JSON.stringify({ family: "browser.nav", count: 1 })
+        JSON.stringify({ family: "web.fetch", count: 1 })
     ),
   );
   assertEquals(result.total_capabilities, 2);
@@ -210,12 +210,12 @@ Deno.test("discovery tools - capability_families - returns guidance when registr
     family: "file.ops",
   }));
   registry.register(makeDescriptor({
-    id: "tool:browser_open",
-    name: "browser_open",
-    namespace: "browser",
-    summary: "Open a browser",
-    tags: ["browser"],
-    family: "browser.nav",
+    id: "tool:web_fetch",
+    name: "web_fetch",
+    namespace: "web",
+    summary: "Fetch a URL",
+    tags: ["web"],
+    family: "web.fetch",
   }));
   ctx = makeContext(registry);
   const bareCtx = makeContext(undefined);
@@ -233,12 +233,12 @@ Deno.test("discovery tools - per-run isolation - different contexts have differe
     family: "file.ops",
   }));
   registry.register(makeDescriptor({
-    id: "tool:browser_open",
-    name: "browser_open",
-    namespace: "browser",
-    summary: "Open a browser",
-    tags: ["browser"],
-    family: "browser.nav",
+    id: "tool:web_fetch",
+    name: "web_fetch",
+    namespace: "web",
+    summary: "Fetch a URL",
+    tags: ["web"],
+    family: "web.fetch",
   }));
   ctx = makeContext(registry);
   const registry2 = new CapabilityRegistry();
@@ -270,12 +270,12 @@ Deno.test("discovery tools - capability_invoke - throws when tool_name is missin
     family: "file.ops",
   }));
   registry.register(makeDescriptor({
-    id: "tool:browser_open",
-    name: "browser_open",
-    namespace: "browser",
-    summary: "Open a browser",
-    tags: ["browser"],
-    family: "browser.nav",
+    id: "tool:web_fetch",
+    name: "web_fetch",
+    namespace: "web",
+    summary: "Fetch a URL",
+    tags: ["web"],
+    family: "web.fetch",
   }));
   ctx = makeContext(registry);
   await assertRejects(async () => {
@@ -292,12 +292,12 @@ Deno.test("discovery tools - capability_invoke - throws when executor is not ava
     family: "file.ops",
   }));
   registry.register(makeDescriptor({
-    id: "tool:browser_open",
-    name: "browser_open",
-    namespace: "browser",
-    summary: "Open a browser",
-    tags: ["browser"],
-    family: "browser.nav",
+    id: "tool:web_fetch",
+    name: "web_fetch",
+    namespace: "web",
+    summary: "Fetch a URL",
+    tags: ["web"],
+    family: "web.fetch",
   }));
   ctx = makeContext(registry);
   await assertRejects(async () => {
@@ -314,12 +314,12 @@ Deno.test("discovery tools - capability_invoke - executes a tool via injected ex
     family: "file.ops",
   }));
   registry.register(makeDescriptor({
-    id: "tool:browser_open",
-    name: "browser_open",
-    namespace: "browser",
-    summary: "Open a browser",
-    tags: ["browser"],
-    family: "browser.nav",
+    id: "tool:web_fetch",
+    name: "web_fetch",
+    namespace: "web",
+    summary: "Fetch a URL",
+    tags: ["web"],
+    family: "web.fetch",
   }));
   ctx = makeContext(registry);
   const mockExecutor = {
@@ -348,12 +348,12 @@ Deno.test("discovery tools - capability_invoke - throws on executor error (visib
     family: "file.ops",
   }));
   registry.register(makeDescriptor({
-    id: "tool:browser_open",
-    name: "browser_open",
-    namespace: "browser",
-    summary: "Open a browser",
-    tags: ["browser"],
-    family: "browser.nav",
+    id: "tool:web_fetch",
+    name: "web_fetch",
+    namespace: "web",
+    summary: "Fetch a URL",
+    tags: ["web"],
+    family: "web.fetch",
   }));
   ctx = makeContext(registry);
   const mockExecutor = {
@@ -384,12 +384,12 @@ Deno.test("discovery tools - capability_invoke - blocks invocation of non-discov
     family: "file.ops",
   }));
   registry.register(makeDescriptor({
-    id: "tool:browser_open",
-    name: "browser_open",
-    namespace: "browser",
-    summary: "Open a browser",
-    tags: ["browser"],
-    family: "browser.nav",
+    id: "tool:web_fetch",
+    name: "web_fetch",
+    namespace: "web",
+    summary: "Fetch a URL",
+    tags: ["web"],
+    family: "web.fetch",
   }));
   ctx = makeContext(registry);
   // Add a tool that is NOT discoverable
@@ -427,12 +427,12 @@ Deno.test("discovery tools - capability_invoke - blocks self-invocation to preve
     family: "file.ops",
   }));
   registry.register(makeDescriptor({
-    id: "tool:browser_open",
-    name: "browser_open",
-    namespace: "browser",
-    summary: "Open a browser",
-    tags: ["browser"],
-    family: "browser.nav",
+    id: "tool:web_fetch",
+    name: "web_fetch",
+    namespace: "web",
+    summary: "Fetch a URL",
+    tags: ["web"],
+    family: "web.fetch",
   }));
   ctx = makeContext(registry);
   const mockExecutor = {
@@ -462,15 +462,15 @@ Deno.test("discovery tools - capability_invoke - allows invocation of discoverab
     family: "file.ops",
   }));
   registry.register(makeDescriptor({
-    id: "tool:browser_open",
-    name: "browser_open",
-    namespace: "browser",
-    summary: "Open a browser",
-    tags: ["browser"],
-    family: "browser.nav",
+    id: "tool:web_fetch",
+    name: "web_fetch",
+    namespace: "web",
+    summary: "Fetch a URL",
+    tags: ["web"],
+    family: "web.fetch",
   }));
   ctx = makeContext(registry);
-  // browser_open is discoverable (default policy)
+  // web_fetch is discoverable (default policy)
   const mockExecutor = {
     execute: async (call: { name: string }) => ({
       output: `executed ${call.name}`,
@@ -482,8 +482,8 @@ Deno.test("discovery tools - capability_invoke - allows invocation of discoverab
   } as unknown as ToolContext;
 
   const result = await capabilityInvokeHandler(
-    { tool_name: "browser_open", arguments: {} },
+    { tool_name: "web_fetch", arguments: {} },
     ctxWithExecutor,
   );
-  assertEquals(result, "executed browser_open");
+  assertEquals(result, "executed web_fetch");
 });

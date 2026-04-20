@@ -1,20 +1,26 @@
 // Queue handler: processes run queue messages and DLQ entries.
-import type { MessageBatch } from '../../shared/types/bindings.ts';
-import type { RunQueueMessage, RunnerEnv as Env } from '../../shared/types/index.ts';
-import { isValidRunQueueMessage } from '../../shared/types/index.ts';
-import { getDb, runs, dlqEntries } from '../../infra/db/index.ts';
-import { eq, and, lt, ne, isNull, sql } from 'drizzle-orm';
+import type { MessageBatch } from "../../shared/types/bindings.ts";
+import type {
+  RunnerEnv as Env,
+  RunQueueMessage,
+} from "../../shared/types/index.ts";
+import { isValidRunQueueMessage } from "../../shared/types/index.ts";
+import { dlqEntries, getDb, runs } from "../../infra/db/index.ts";
+import { and, eq, isNull, lt, ne, sql } from "drizzle-orm";
 import {
   notifyRunFailedEvent,
   persistRunFailedEvent,
-} from '../../application/services/run-notifier/index.ts';
+} from "../../application/services/run-notifier/index.ts";
 
-import { logError, logInfo, logWarn } from '../../shared/utils/logger.ts';
-import { STALE_WORKER_THRESHOLD_MS, envGuard } from './runner-constants.ts';
+import { logError, logInfo, logWarn } from "../../shared/utils/logger.ts";
+import { envGuard, STALE_WORKER_THRESHOLD_MS } from "./runner-constants.ts";
 
-export async function handleQueue(batch: MessageBatch<unknown>, env: Env): Promise<void> {
+export async function handleQueue(
+  batch: MessageBatch<unknown>,
+  env: Env,
+): Promise<void> {
   // Validate environment on first invocation (cached).
-  const envError = envGuard(env as unknown as Record<string, unknown>);
+  const envError = envGuard(env);
   if (envError) {
     // Retry all messages so they are not lost due to misconfiguration.
     for (const message of batch.messages) {
@@ -24,10 +30,10 @@ export async function handleQueue(batch: MessageBatch<unknown>, env: Env): Promi
   }
 
   const rawQueueName = batch.queue;
-  const queueName = rawQueueName.replace(/-staging$/i, '');
+  const queueName = rawQueueName.replace(/-staging$/i, "");
 
-  if (queueName !== 'takos-runs' && queueName !== 'takos-runs-dlq') {
-    logWarn(`Unknown queue: ${rawQueueName}`, { module: 'runner_queue' });
+  if (queueName !== "takos-runs" && queueName !== "takos-runs-dlq") {
+    logWarn(`Unknown queue: ${rawQueueName}`, { module: "runner_queue" });
     for (const message of batch.messages) {
       message.ack();
     }
@@ -38,14 +44,18 @@ export async function handleQueue(batch: MessageBatch<unknown>, env: Env): Promi
 
   // Fail fast if required bindings are missing — before claiming any run
   if (!env.EXECUTOR_HOST) {
-    logError('EXECUTOR_HOST binding is missing; cannot dispatch runs', undefined, { module: 'run_queue' });
+    logError(
+      "EXECUTOR_HOST binding is missing; cannot dispatch runs",
+      undefined,
+      { module: "run_queue" },
+    );
     for (const message of batch.messages) {
       message.retry();
     }
     return;
   }
 
-  if (queueName === 'takos-runs-dlq') {
+  if (queueName === "takos-runs-dlq") {
     for (const message of batch.messages) {
       const body = message.body as RunQueueMessage;
       const { runId } = body;
@@ -60,43 +70,50 @@ export async function handleQueue(batch: MessageBatch<unknown>, env: Env): Promi
       }).from(runs).where(eq(runs.id, runId)).get();
 
       const dlqEntry = {
-        level: 'CRITICAL',
-        event: 'RUN_DLQ_ENTRY',
+        level: "CRITICAL",
+        event: "RUN_DLQ_ENTRY",
         queue: rawQueueName,
         runId,
-        spaceId: run?.accountId || 'unknown',
-        threadId: run?.threadId || 'unknown',
-        agentType: run?.agentType || 'unknown',
-        previousError: run?.error || 'none',
+        spaceId: run?.accountId || "unknown",
+        threadId: run?.threadId || "unknown",
+        agentType: run?.agentType || "unknown",
+        previousError: run?.error || "none",
         timestamp: new Date().toISOString(),
         retryCount: message.attempts,
       };
-      logError(`CRITICAL: ${JSON.stringify(dlqEntry)}`, undefined, { module: 'run_dlq' });
+      logError(`CRITICAL: ${JSON.stringify(dlqEntry)}`, undefined, {
+        module: "run_dlq",
+      });
 
       try {
         await dbForDlq.insert(dlqEntries).values({
           id: crypto.randomUUID(),
           queue: rawQueueName,
           messageBody: JSON.stringify(body),
-          error: run?.error || 'Max retries exceeded',
+          error: run?.error || "Max retries exceeded",
           retryCount: message.attempts,
         }).run();
       } catch (persistErr) {
-        logError('Failed to persist DLQ entry', persistErr, { module: 'run_dlq' });
+        logError("Failed to persist DLQ entry", persistErr, {
+          module: "run_dlq",
+        });
       }
 
       const dlqNow = new Date().toISOString();
       await dbForDlq.update(runs).set({
-        status: 'failed',
-        error: `DLQ: Run failed permanently after max retries. Previous error: ${run?.error || 'unknown'}`,
+        status: "failed",
+        error:
+          `DLQ: Run failed permanently after max retries. Previous error: ${
+            run?.error || "unknown"
+          }`,
         completedAt: dlqNow,
-      }).where(and(eq(runs.id, runId), ne(runs.status, 'completed')));
+      }).where(and(eq(runs.id, runId), ne(runs.status, "completed")));
 
       const failedEvent = await persistRunFailedEvent(
         env,
         runId,
         {
-          error: 'Run failed permanently after multiple retries',
+          error: "Run failed permanently after multiple retries",
           permanent: true,
           createdAt: dlqNow,
           sessionId: run?.sessionId ?? null,
@@ -106,7 +123,9 @@ export async function handleQueue(batch: MessageBatch<unknown>, env: Env): Promi
       try {
         await notifyRunFailedEvent(env, runId, failedEvent);
       } catch (notifyErr) {
-        logError(`Failed to notify WebSocket about DLQ entry`, notifyErr, { module: 'run_dlq' });
+        logError(`Failed to notify WebSocket about DLQ entry`, notifyErr, {
+          module: "run_dlq",
+        });
       }
 
       message.ack();
@@ -119,7 +138,11 @@ export async function handleQueue(batch: MessageBatch<unknown>, env: Env): Promi
     const body = message.body;
 
     if (!isValidRunQueueMessage(body)) {
-      logError(`Invalid message format, skipping`, JSON.stringify(body).slice(0, 200), { module: 'run_queue' });
+      logError(
+        `Invalid message format, skipping`,
+        JSON.stringify(body).slice(0, 200),
+        { module: "run_queue" },
+      );
       message.ack();
       continue;
     }
@@ -130,26 +153,41 @@ export async function handleQueue(batch: MessageBatch<unknown>, env: Env): Promi
       const db = getDb(env.DB);
 
       // Recover stale run from previous dead worker
-      const staleThreshold = new Date(Date.now() - STALE_WORKER_THRESHOLD_MS).toISOString();
+      const staleThreshold = new Date(Date.now() - STALE_WORKER_THRESHOLD_MS)
+        .toISOString();
       const staleRecovery = await db.update(runs).set({
-        status: 'queued',
+        status: "queued",
         serviceId: null,
         serviceHeartbeat: null,
-      }).where(and(eq(runs.id, runId), eq(runs.status, 'running'), lt(runs.serviceHeartbeat, staleThreshold)));
+      }).where(
+        and(
+          eq(runs.id, runId),
+          eq(runs.status, "running"),
+          lt(runs.serviceHeartbeat, staleThreshold),
+        ),
+      );
 
       if (staleRecovery.meta.changes > 0) {
-        logWarn(`Recovered stale run ${runId} from dead worker`, { module: 'run_queue' });
+        logWarn(`Recovered stale run ${runId} from dead worker`, {
+          module: "run_queue",
+        });
       }
 
       const now = new Date().toISOString();
       // Claim with service lease owner IS NULL guard + lease_version increment to prevent dual-claim race (#4)
       const claimResult = await db.update(runs).set({
-        status: 'running',
+        status: "running",
         startedAt: now,
         serviceId,
         serviceHeartbeat: now,
         leaseVersion: sql`lease_version + 1`,
-      }).where(and(eq(runs.id, runId), eq(runs.status, 'queued'), isNull(runs.serviceId)));
+      }).where(
+        and(
+          eq(runs.id, runId),
+          eq(runs.status, "queued"),
+          isNull(runs.serviceId),
+        ),
+      );
 
       if (claimResult.meta.changes === 0) {
         // Run already claimed by another worker or in a terminal state
@@ -158,11 +196,15 @@ export async function handleQueue(batch: MessageBatch<unknown>, env: Env): Promi
       }
 
       // Read back the leaseVersion after claim — guard with serviceId to prevent TOCTOU
-      const claimed = await db.select({ leaseVersion: runs.leaseVersion }).from(runs)
+      const claimed = await db.select({ leaseVersion: runs.leaseVersion }).from(
+        runs,
+      )
         .where(and(eq(runs.id, runId), eq(runs.serviceId, serviceId))).get();
       if (!claimed) {
         // Run was taken over between claim and read-back
-        logWarn(`Run ${runId} lost between claim and read-back`, { module: 'run_queue' });
+        logWarn(`Run ${runId} lost between claim and read-back`, {
+          module: "run_queue",
+        });
         message.ack();
         continue;
       }
@@ -178,9 +220,9 @@ export async function handleQueue(batch: MessageBatch<unknown>, env: Env): Promi
       let res: Response;
       try {
         res = await env.EXECUTOR_HOST.fetch(
-          new Request('https://executor/dispatch', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+          new Request("https://executor/dispatch", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
               runId,
               serviceId,
@@ -188,35 +230,71 @@ export async function handleQueue(batch: MessageBatch<unknown>, env: Env): Promi
               model,
               leaseVersion,
             }),
-          })
+          }),
         );
       } catch (dispatchErr) {
-        logError(`EXECUTOR_HOST.fetch() threw for run ${runId}: ${dispatchErr}`, dispatchErr, { module: 'run_queue' });
+        logError(
+          `EXECUTOR_HOST.fetch() threw for run ${runId}: ${dispatchErr}`,
+          dispatchErr,
+          { module: "run_queue" },
+        );
         await db.update(runs).set({
-          status: 'failed',
+          status: "failed",
           error: `Dispatch exception: ${String(dispatchErr).slice(0, 500)}`,
           completedAt: new Date().toISOString(),
-        }).where(and(eq(runs.id, runId), eq(runs.status, 'running'), eq(runs.serviceId, serviceId)));
+        }).where(
+          and(
+            eq(runs.id, runId),
+            eq(runs.status, "running"),
+            eq(runs.serviceId, serviceId),
+          ),
+        );
         message.ack();
         continue;
       }
 
       if (!res.ok) {
-        const text = await res.text().catch((e) => { logWarn('Failed to read container dispatch response body', { module: 'run_queue', error: String(e) }); return ''; });
-        logError(`Container dispatch failed for run ${runId}: ${res.status} ${text}`, undefined, { module: 'run_queue' });
+        const text = await res.text().catch((e) => {
+          logWarn("Failed to read container dispatch response body", {
+            module: "run_queue",
+            error: String(e),
+          });
+          return "";
+        });
+        logError(
+          `Container dispatch failed for run ${runId}: ${res.status} ${text}`,
+          undefined,
+          { module: "run_queue" },
+        );
 
         if (res.status >= 400 && res.status < 500) {
           // Permanent client error — mark run as failed, do not retry
           await db.update(runs).set({
-            status: 'failed',
+            status: "failed",
             error: `Dispatch rejected: ${res.status} ${text.slice(0, 500)}`,
             completedAt: new Date().toISOString(),
-          }).where(and(eq(runs.id, runId), eq(runs.status, 'running'), eq(runs.serviceId, serviceId)));
+          }).where(
+            and(
+              eq(runs.id, runId),
+              eq(runs.status, "running"),
+              eq(runs.serviceId, serviceId),
+            ),
+          );
           message.ack();
         } else {
           // Transient server error — reset run back to queued and retry
-          await db.update(runs).set({ status: 'queued', serviceId: null, serviceHeartbeat: null })
-            .where(and(eq(runs.id, runId), eq(runs.status, 'running'), eq(runs.serviceId, serviceId)));
+          await db.update(runs).set({
+            status: "queued",
+            serviceId: null,
+            serviceHeartbeat: null,
+          })
+            .where(
+              and(
+                eq(runs.id, runId),
+                eq(runs.status, "running"),
+                eq(runs.serviceId, serviceId),
+              ),
+            );
           message.retry();
         }
         continue;
@@ -224,21 +302,33 @@ export async function handleQueue(batch: MessageBatch<unknown>, env: Env): Promi
 
       // Container accepted the run (202) — ack immediately
       // Heartbeat and billing are handled by the container
-      logInfo(`Run ${runId} dispatched to container service lease ${serviceId}`, { module: 'run_queue' });
+      logInfo(
+        `Run ${runId} dispatched to container service lease ${serviceId}`,
+        { module: "run_queue" },
+      );
       message.ack();
       continue;
     } catch (error) {
-      logError(`Run ${runId} failed`, error, { module: 'run_queue' });
+      logError(`Run ${runId} failed`, error, { module: "run_queue" });
 
       const dbForReset = getDb(env.DB);
       const resetResult = await dbForReset.update(runs).set({
-        status: 'queued',
+        status: "queued",
         serviceId: null,
         serviceHeartbeat: null,
-      }).where(and(eq(runs.id, runId), eq(runs.status, 'running'), eq(runs.serviceId, serviceId)));
+      }).where(
+        and(
+          eq(runs.id, runId),
+          eq(runs.status, "running"),
+          eq(runs.serviceId, serviceId),
+        ),
+      );
 
       if (resetResult.meta.changes === 0) {
-        logWarn(`Could not reset run ${runId} - not owned by this worker or status changed`, { module: 'run_queue' });
+        logWarn(
+          `Could not reset run ${runId} - not owned by this worker or status changed`,
+          { module: "run_queue" },
+        );
       }
 
       message.retry();

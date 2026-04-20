@@ -11,16 +11,16 @@
  * does not propagate reliably in this setup.
  */
 
-import type { Env } from 'hono';
-import type { Logger } from 'takos-common/logger';
-import type { ServiceTokenPayloadWithClaims } from 'takos-common/middleware/hono';
+import type { Env } from "hono";
+import type { Logger } from "takos-common/logger";
+import type { ServiceTokenPayloadWithClaims } from "takos-common/middleware/hono";
 
 export interface RuntimeVariables {
   requestId: string;
   log: Logger;
   serviceToken: ServiceTokenPayloadWithClaims;
-  serviceAuthMethod: 'jwt';
-  /** Pre-parsed JSON body, set by body-parsing middleware for workspace-scope checks */
+  serviceAuthMethod: "jwt";
+  /** Pre-parsed JSON body, set by body-parsing middleware for space-scope checks */
   parsedBody: Record<string, unknown>;
 }
 

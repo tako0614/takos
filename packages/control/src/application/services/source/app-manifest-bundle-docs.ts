@@ -2,9 +2,8 @@
 // app-manifest-bundle-docs.ts
 // ============================================================
 //
-// Build bundle documents (Package / Workload / Endpoint / McpServer)
-// from a flat-schema `AppManifest`. Phase 2 port
-// of the legacy envelope-schema emitter.
+// Build bundle documents (Package / Workload / Endpoint / route publications)
+// from a flat-schema `AppManifest`.
 //
 // The output document list is consumed by `buildBundlePackageData` which
 // serializes it to `manifest.yaml` inside a bundle zip.
@@ -12,14 +11,14 @@
 
 import {
   type AppCompute,
-  type AppDeploymentBuildSource,
+  type GroupDeploymentSnapshotBuildSource,
   type AppManifest,
   BUILD_SOURCE_LABELS,
   type BundleDoc,
 } from "./app-manifest-types.ts";
 
 function buildSourceLabels(
-  source: AppDeploymentBuildSource,
+  source: GroupDeploymentSnapshotBuildSource,
 ): Record<string, string> {
   return {
     [BUILD_SOURCE_LABELS.workflowPath]: source.workflow_path,
@@ -58,8 +57,6 @@ function computeToWorkloadSpec(
   if (compute.image) pluginConfig.imageRef = compute.image;
   if (compute.dockerfile) pluginConfig.dockerfile = compute.dockerfile;
   if (compute.port != null) pluginConfig.port = compute.port;
-  if (compute.instanceType) pluginConfig.instanceType = compute.instanceType;
-  if (compute.maxInstances) pluginConfig.maxInstances = compute.maxInstances;
 
   const spec: Record<string, unknown> = {
     type: computeKindToDocType(compute.kind),
@@ -89,7 +86,7 @@ function computeKindToDocType(kind: AppCompute["kind"]): string {
 
 function emitComputeDocs(
   manifest: AppManifest,
-  buildSources: Map<string, AppDeploymentBuildSource>,
+  buildSources: Map<string, GroupDeploymentSnapshotBuildSource>,
   docs: BundleDoc[],
 ): void {
   for (const [name, compute] of Object.entries(manifest.compute)) {
@@ -161,15 +158,18 @@ function emitRouteDocs(manifest: AppManifest, docs: BundleDoc[]): void {
 
 function emitPublishDocs(manifest: AppManifest, docs: BundleDoc[]): void {
   for (const pub of manifest.publish) {
-    if (pub.type !== "McpServer" || !pub.path) continue;
+    if (pub.publisher === "takos" || !pub.type || !pub.publisher || !pub.path) {
+      continue;
+    }
     docs.push({
-      apiVersion: "takos.dev/v1alpha1",
-      kind: "McpServer",
+      apiVersion: "takos.dev/v1alpha1" as const,
+      kind: pub.type,
       metadata: { name: pub.name },
       spec: {
+        ...(pub.spec ? pub.spec : {}),
+        targetRef: pub.publisher,
         path: pub.path,
-        ...(pub.transport ? { transport: pub.transport } : {}),
-        ...(pub.authSecretRef ? { authSecretRef: pub.authSecretRef } : {}),
+        ...(pub.title ? { title: pub.title } : {}),
       },
     });
   }
@@ -177,7 +177,7 @@ function emitPublishDocs(manifest: AppManifest, docs: BundleDoc[]): void {
 
 export function buildBundleDocs(
   manifest: AppManifest,
-  buildSources: Map<string, AppDeploymentBuildSource>,
+  buildSources: Map<string, GroupDeploymentSnapshotBuildSource>,
 ): BundleDoc[] {
   const docs: BundleDoc[] = [];
   emitPackageDoc(manifest, docs);

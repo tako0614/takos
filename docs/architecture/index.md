@@ -14,14 +14,15 @@ kernel が提供するもの:
 - **Store**（配布 / カタログ）
 - **Auth / Deploy / Routing / Resources / Billing**
 
-外部ワークロードは **二層モデル**:
+外部ワークロードは **primitive-first deploy model**:
 
-- **primitive (foundation)**: compute / resource / route / publish。1st-class
-  エンティティで、それぞれ独立した lifecycle を持つ。public manifest では
-  `storage:` ではなく `publish` / `consume` を使う
-- **group (上位 bundling layer)**: 複数の primitive を束ねて bulk lifecycle と
-  desired state management を提供する optional な仕組み。user-facing には
-  「app」と呼ぶ
+- **primitive**: service / deployment / route / publication / resource / consume
+  edge などの個別 record
+- **group**: primitive を任意に束ねる state scope。所属 primitive は inventory、
+  snapshot、rollback、uninstall などの group 機能を使える
+- **manifest**: primitive desired declaration の入力。group 専用形式ではない
+- **resource**: SQL / object-store / queue などの backing capability。group
+  所属の有無で resource CRUD / runtime binding の扱いは変わらない
 
 ## Internal model
 
@@ -32,18 +33,16 @@ kernel が提供するもの:
 
 - Cloudflare: 主要 production backend
 - local: 検証用 backend
-- provider / adapter で backend 差分を閉じ込める
+- backend / adapter で backend 差分を閉じ込める。backend 名は operator-only
+  configuration で、public deploy manifest には書かない
 
 ## 詳細ページ
 
 - [Kernel](./kernel.md) — Takos の定義、routing、publication
-- [Personal Runtime Proposal](./personal-runtime.md) — 1人用 runtime +
-  distribution service への再設計案
-- [Deploy System](./deploy-system.md) — primitive (Layer 1) と group (Layer 2)
-  の二層モデル、deploy pipeline
-- [App Publications](./app-publications.md) — publication の仕組みと env
+- [Deploy System](./deploy-system.md) — primitive と group 機能の deploy
+  pipeline
+- [Publication / Grants](./app-publications.md) — publication の仕組みと env
   injection
 - [Control Plane](./control-plane.md) — API, DB, routing layer
 - [Tenant Runtime](./tenant-runtime.md) — dispatch, worker execution, container
 - [互換性と制限](./compatibility.md) — backend parity
-- [実装計画](./implementation-plan.md) — 移行計画

@@ -1,32 +1,34 @@
 import {
   createWorkflowEngine,
-} from '../../application/services/execution/workflow-engine.ts';
-import { getDb, workflowRuns, workflowJobs } from '../../infra/db/index.ts';
-import { eq, and } from 'drizzle-orm';
-import { logInfo, logWarn } from '../../shared/utils/logger.ts';
+} from "../../application/services/execution/workflow-engine.ts";
+import { getDb, workflowJobs, workflowRuns } from "../../infra/db/index.ts";
+import { and, eq } from "drizzle-orm";
+import { logInfo, logWarn } from "../../shared/utils/logger.ts";
 import type {
-  WorkflowQueueEnv,
-  WorkflowEngineBucket,
-  RunContext,
   JobQueueContext,
-} from './workflow-types.ts';
-import { createInitialState } from './workflow-types.ts';
+  RunContext,
+  WorkflowQueueEnv,
+} from "./workflow-types.ts";
+import { createInitialState } from "./workflow-types.ts";
 import {
-  runtimeJson,
   getRunContext,
   getSpaceIdFromRepoId,
   markJobSkipped,
-} from './workflow-runtime-client.ts';
-import { resolveSecretValues, collectReferencedSecretNamesFromEnv } from './workflow-secrets.ts';
-import { emitWorkflowEvent } from './workflow-events.ts';
+  runtimeJson,
+} from "./workflow-runtime-client.ts";
 import {
-  handleJobSkipped,
-  executeStepLoop,
-  completeJobSuccess,
+  collectReferencedSecretNamesFromEnv,
+  resolveSecretValues,
+} from "./workflow-secrets.ts";
+import { emitWorkflowEvent } from "./workflow-events.ts";
+import {
   completeJobFailure,
-} from './workflow-job-phases.ts';
-import { executeStepLoopParallel } from './parallel-steps.ts';
-import type { WorkflowJobQueueMessage } from '../../shared/types/index.ts';
+  completeJobSuccess,
+  executeStepLoop,
+  handleJobSkipped,
+} from "./workflow-job-phases.ts";
+import { executeStepLoopParallel } from "./parallel-steps.ts";
+import type { WorkflowJobQueueMessage } from "../../shared/types/index.ts";
 
 // ---------------------------------------------------------------------------
 // Main job handler
@@ -34,7 +36,7 @@ import type { WorkflowJobQueueMessage } from '../../shared/types/index.ts';
 
 export async function handleWorkflowJob(
   message: WorkflowJobQueueMessage,
-  env: WorkflowQueueEnv
+  env: WorkflowQueueEnv,
 ): Promise<void> {
   const {
     runId,
@@ -50,14 +52,14 @@ export async function handleWorkflowJob(
 
   const bucket = env.GIT_OBJECTS;
   if (!bucket) {
-    throw new Error('Git storage not configured');
+    throw new Error("Git storage not configured");
   }
 
   const encryptionKey = env.ENCRYPTION_KEY;
 
   const engine = createWorkflowEngine({
     db: env.DB,
-    bucket: bucket as unknown as WorkflowEngineBucket,
+    bucket,
     queue: env.WORKFLOW_QUEUE,
   });
 
@@ -69,44 +71,53 @@ export async function handleWorkflowJob(
 
   const db = getDb(env.DB);
   const [runRecord, jobRecord] = await Promise.all([
-    db.select({ status: workflowRuns.status }).from(workflowRuns).where(eq(workflowRuns.id, runId)).get(),
-    db.select({ status: workflowJobs.status }).from(workflowJobs).where(eq(workflowJobs.id, jobId)).get(),
+    db.select({ status: workflowRuns.status }).from(workflowRuns).where(
+      eq(workflowRuns.id, runId),
+    ).get(),
+    db.select({ status: workflowJobs.status }).from(workflowJobs).where(
+      eq(workflowJobs.id, jobId),
+    ).get(),
   ]);
 
   if (!runRecord || !jobRecord) {
-    logWarn(`Workflow run or job missing (runId=${runId}, jobId=${jobId})`, { module: 'queues/workflow-jobs' });
+    logWarn(`Workflow run or job missing (runId=${runId}, jobId=${jobId})`, {
+      module: "queues/workflow-jobs",
+    });
     return;
   }
 
-  if (jobRecord.status === 'completed') {
+  if (jobRecord.status === "completed") {
     return;
   }
 
-  if (runRecord.status === 'cancelled') {
+  if (runRecord.status === "cancelled") {
     await engine.cancelRun(runId);
     return;
   }
 
-  if (runRecord.status === 'completed') {
-    await markJobSkipped(env.DB, jobId, startedAt, 'skipped');
+  if (runRecord.status === "completed") {
+    await markJobSkipped(env.DB, jobId, startedAt, "skipped");
     return;
   }
 
   // Atomically claim the job (optimistic lock)
   const claimResult = await db.update(workflowJobs)
-    .set({ status: 'in_progress', startedAt: startedAt })
-    .where(and(eq(workflowJobs.id, jobId), eq(workflowJobs.status, 'queued')));
+    .set({ status: "in_progress", startedAt: startedAt })
+    .where(and(eq(workflowJobs.id, jobId), eq(workflowJobs.status, "queued")));
   if (claimResult.meta.changes === 0) {
-    logInfo(`Job ${jobId} already claimed, skipping`, { module: 'workflow' });
+    logInfo(`Job ${jobId} already claimed, skipping`, { module: "workflow" });
     return;
   }
 
-  let runContext: RunContext = { workflowPath: 'unknown', inputs: {} };
+  let runContext: RunContext = { workflowPath: "unknown", inputs: {} };
 
   try {
     runContext = await getRunContext(env.DB, runId);
   } catch (err) {
-    logWarn(`Failed to load run context for ${runId}`, { module: 'queues/workflow-jobs', detail: err });
+    logWarn(`Failed to load run context for ${runId}`, {
+      module: "queues/workflow-jobs",
+      detail: err,
+    });
   }
 
   const ctx: JobQueueContext = {
@@ -124,22 +135,24 @@ export async function handleWorkflowJob(
   state.logs.push(`Started at: ${startedAt}`);
   state.logs.push(`Ref: ${ref}`);
   state.logs.push(`SHA: ${sha}`);
-  state.logs.push('');
+  state.logs.push("");
 
   try {
     if (await handleJobSkipped(ctx, state)) return;
 
-    const referencedJobEnvSecretNames = collectReferencedSecretNamesFromEnv(effectiveJobEnv);
+    const referencedJobEnvSecretNames = collectReferencedSecretNamesFromEnv(
+      effectiveJobEnv,
+    );
     const secrets = await resolveSecretValues(
       env.DB,
       repoId,
       secretIds,
       encryptionKey,
-      referencedJobEnvSecretNames
+      referencedJobEnvSecretNames,
     );
 
-    await engine.onJobStart(jobId, 'cloudflare-worker', 'Cloudflare Workers');
-    await emitWorkflowEvent(env, runId, 'workflow.job.started', {
+    await engine.onJobStart(jobId, "cloudflare-worker", "Cloudflare Workers");
+    await emitWorkflowEvent(env, runId, "workflow.job.started", {
       runId,
       jobId,
       repoId,
@@ -149,29 +162,38 @@ export async function handleWorkflowJob(
     });
 
     if (!runtimeConfigured) {
-      throw new Error('RUNTIME_HOST binding is required for workflow execution');
+      throw new Error(
+        "RUNTIME_HOST binding is required for workflow execution",
+      );
     }
 
     state.runtimeSpaceId = await getSpaceIdFromRepoId(env.DB, repoId);
 
-    await runtimeJson(env, `/actions/jobs/${jobId}/start`, state.runtimeSpaceId, {
-      runId,
-      repoId,
-      ref,
-      sha,
-      workflowPath: runContext.workflowPath,
-      jobName,
-      steps: jobDefinition.steps,
-      env: effectiveJobEnv,
-      secrets,
-    });
+    await runtimeJson(
+      env,
+      `/actions/jobs/${jobId}/start`,
+      state.runtimeSpaceId,
+      {
+        runId,
+        repoId,
+        ref,
+        sha,
+        workflowPath: runContext.workflowPath,
+        jobName,
+        steps: jobDefinition.steps,
+        env: effectiveJobEnv,
+        secrets,
+      },
+    );
     state.runtimeStarted = true;
 
     // Use parallel step execution when enabled via env flag
     const useParallelSteps = Boolean(env.PARALLEL_WORKFLOW_STEPS);
-    const stepExecutor = useParallelSteps ? executeStepLoopParallel : executeStepLoop;
+    const stepExecutor = useParallelSteps
+      ? executeStepLoopParallel
+      : executeStepLoop;
     const loopResult = await stepExecutor(ctx, state);
-    if (loopResult === 'cancelled') return;
+    if (loopResult === "cancelled") return;
 
     await completeJobSuccess(ctx, state);
   } catch (err) {
@@ -180,13 +202,21 @@ export async function handleWorkflowJob(
     if (runtimeConfigured && state.runtimeStarted) {
       try {
         if (!state.runtimeCancelled && state.runtimeSpaceId) {
-          await runtimeJson(env, `/actions/jobs/${jobId}/complete`, state.runtimeSpaceId, {
-            conclusion: state.completionConclusion ?? state.jobConclusion,
-            uploadLogs: false,
-          });
+          await runtimeJson(
+            env,
+            `/actions/jobs/${jobId}/complete`,
+            state.runtimeSpaceId,
+            {
+              conclusion: state.completionConclusion ?? state.jobConclusion,
+              uploadLogs: false,
+            },
+          );
         }
       } catch (runtimeErr) {
-        logWarn(`Failed to complete runtime job ${jobId}`, { module: 'queues/workflow-jobs', detail: runtimeErr });
+        logWarn(`Failed to complete runtime job ${jobId}`, {
+          module: "queues/workflow-jobs",
+          detail: runtimeErr,
+        });
       }
     }
   }

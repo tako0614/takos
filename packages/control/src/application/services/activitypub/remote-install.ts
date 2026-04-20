@@ -3,25 +3,22 @@
  * into the local workspace by creating a local repo and cloning via git smart HTTP.
  */
 
-import type { D1Database } from '../../../shared/types/bindings.ts';
-import { generateId, sanitizeRepoName } from '../../../shared/utils/index.ts';
-import { getDb, repositories } from '../../../infra/db/index.ts';
-import { eq, and } from 'drizzle-orm';
+import type { D1Database } from "../../../shared/types/bindings.ts";
+import { generateId, sanitizeRepoName } from "../../../shared/utils/index.ts";
+import { getDb, repositories } from "../../../infra/db/index.ts";
+import { and, eq } from "drizzle-orm";
 import {
-  apFetch,
-  searchRemoteRepositories,
-  extractTkgField,
+  fetchRemoteRepositories,
+  fetchRemoteRepositoryActor,
   type RemoteRepository,
-} from './remote-store-client.ts';
-import { getRegistryEntry, type StoreRegistryEntry } from './store-registry.ts';
+} from "./remote-store-client.ts";
+import { getRegistryEntry } from "./store-registry.ts";
 
 export interface RemoteStoreRepositoryImportInput {
   /** Store registry entry ID */
   registryEntryId: string;
-  /** Owner slug on the remote store */
-  remoteOwner: string;
-  /** Repository name on the remote store */
-  remoteRepoName: string;
+  /** Canonical Repository actor URL from the remote inventory/search result */
+  canonicalRepoUrl: string;
   /** Local name override */
   localName?: string;
 }
@@ -47,29 +44,46 @@ export async function importRepositoryFromRemoteStore(
   input: RemoteStoreRepositoryImportInput,
 ): Promise<RemoteStoreRepositoryImportResult> {
   // 1. Look up registry entry
-  const entry = await getRegistryEntry(dbBinding, accountId, input.registryEntryId);
+  const entry = await getRegistryEntry(
+    dbBinding,
+    accountId,
+    input.registryEntryId,
+  );
   if (!entry) {
-    throw new Error('Remote store not found in registry');
+    throw new Error("Remote store not found in registry");
   }
 
   if (!entry.repositoriesUrl) {
-    throw new Error('Remote store does not expose a repositories endpoint');
+    throw new Error("Remote store does not expose an inventory endpoint");
   }
 
-  // 2. Fetch the specific repo from the remote store to get its clone URL
-  const remoteRepo = await findRemoteRepository(entry, input.remoteOwner, input.remoteRepoName);
-  if (!remoteRepo) {
+  const belongsToInventory = await repositoryIsInRemoteInventory(
+    entry.repositoriesUrl,
+    input.canonicalRepoUrl,
+  );
+  if (!belongsToInventory) {
     throw new Error(
-      `Repository "${input.remoteOwner}/${input.remoteRepoName}" not found on remote store "${entry.name}"`,
+      "Remote repository is not present in the selected store inventory",
     );
   }
 
+  // 2. Fetch the canonical repo actor to get clone metadata. The registry
+  // entry scopes which remote Store this import belongs to; the repo itself is
+  // identified by its canonical actor URL, not a Store-local owner/name path.
+  const remoteRepo = await fetchRemoteRepositoryActor(input.canonicalRepoUrl);
+
   if (!remoteRepo.cloneUrl) {
-    throw new Error('Remote repository does not expose a clone URL');
+    throw new Error("Remote repository does not expose a clone URL");
   }
 
   // 3. Determine local repo name
-  const localName = sanitizeRepoName(input.localName || remoteRepo.name);
+  const localName = sanitizeRepoName(
+    input.localName || remoteRepo.name ||
+      deriveRepoName(input.canonicalRepoUrl),
+  );
+  if (!localName) {
+    throw new Error("Remote repository name could not be derived");
+  }
 
   // 4. Check for name collision
   const db = getDb(dbBinding);
@@ -83,7 +97,9 @@ export async function importRepositoryFromRemoteStore(
     .get();
 
   if (existing) {
-    throw new Error(`A repository named "${localName}" already exists in this workspace`);
+    throw new Error(
+      `A repository named "${localName}" already exists in this workspace`,
+    );
   }
 
   // 5. Create local repository record
@@ -95,8 +111,8 @@ export async function importRepositoryFromRemoteStore(
     accountId,
     name: localName,
     description: remoteRepo.summary || null,
-    visibility: 'private',
-    defaultBranch: remoteRepo.defaultBranch || 'main',
+    visibility: "private",
+    defaultBranch: deriveDefaultBranch(remoteRepo),
     stars: 0,
     forks: 0,
     gitEnabled: true,
@@ -111,61 +127,59 @@ export async function importRepositoryFromRemoteStore(
     name: localName,
     cloneUrl: remoteRepo.cloneUrl,
     remoteStoreActorUrl: entry.actorUrl,
-    remoteBrowseUrl: remoteRepo.browseUrl || null,
+    remoteBrowseUrl: remoteRepo.browseUrl || remoteRepo.url ||
+      input.canonicalRepoUrl,
   };
 }
 
 export const installFromRemoteStore = importRepositoryFromRemoteStore;
 
-/**
- * Find a specific repository on a remote store by owner/name.
- */
-async function findRemoteRepository(
-  entry: StoreRegistryEntry,
-  owner: string,
-  repoName: string,
-): Promise<RemoteRepository | null> {
-  if (!entry.repositoriesUrl) return null;
+export async function repositoryIsInRemoteInventory(
+  repositoriesUrl: string,
+  canonicalRepoUrl: string,
+): Promise<boolean> {
+  const limit = 100;
+  const maxPages = 50;
+  let seenItems = 0;
 
-  // Try the direct repository URL pattern first
-  const directUrl = `${entry.actorUrl}/repositories/${encodeURIComponent(owner)}/${encodeURIComponent(repoName)}`;
-  try {
-    const response = await apFetch(directUrl);
-    if (response.ok) {
-      const body = await response.json() as Record<string, unknown>;
-      return {
-        id: String(body.id ?? ''),
-        type: body.type as string | string[],
-        name: String(body.name ?? ''),
-        summary: String(body.summary ?? ''),
-        url: String(body.url ?? ''),
-        published: String(body.published ?? ''),
-        updated: String(body.updated ?? ''),
-        attributedTo: String(body.attributedTo ?? ''),
-        owner: extractTkgField(body, 'owner'),
-        visibility: extractTkgField(body, 'visibility'),
-        defaultBranch: extractTkgField(body, 'defaultBranch'),
-        cloneUrl: extractTkgField(body, 'cloneUrl'),
-        browseUrl: extractTkgField(body, 'browseUrl'),
-      };
-    }
-  } catch {
-    // Fall through to search
-  }
-
-  // Fallback: search by name using the correct search function
-  if (entry.searchUrl) {
-    const collection = await searchRemoteRepositories(entry.searchUrl, repoName, {
-      page: 1,
-      limit: 10,
-      expand: true,
+  for (let page = 1; page <= maxPages; page++) {
+    const collection = await fetchRemoteRepositories(repositoriesUrl, {
+      page,
+      limit,
+      expand: false,
     });
-    if (collection.orderedItems) {
-      return collection.orderedItems.find(
-        (r) => r.name.toLowerCase() === repoName.toLowerCase(),
-      ) ?? null;
+    const items = collection.orderedItems ?? [];
+
+    if (
+      items.some((item) =>
+        item.id === canonicalRepoUrl || item.url === canonicalRepoUrl
+      )
+    ) {
+      return true;
+    }
+
+    seenItems += items.length;
+    if (items.length === 0 || seenItems >= collection.totalItems) {
+      return false;
     }
   }
 
-  return null;
+  throw new Error("Remote store inventory is too large to verify membership");
+}
+
+function deriveDefaultBranch(repo: RemoteRepository): string {
+  if (repo.defaultBranchRef?.startsWith("refs/heads/")) {
+    return repo.defaultBranchRef.slice("refs/heads/".length);
+  }
+  return repo.defaultBranch || "main";
+}
+
+function deriveRepoName(canonicalRepoUrl: string): string {
+  try {
+    const url = new URL(canonicalRepoUrl);
+    const parts = url.pathname.split("/").filter(Boolean);
+    return decodeURIComponent(parts[parts.length - 1] ?? "");
+  } catch {
+    return "";
+  }
 }

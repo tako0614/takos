@@ -13,9 +13,9 @@ const mocks = {
   deleteSkillByName: ((..._args: any[]) => undefined) as any,
   formatSkill: (s: any) => s,
   getSkill: ((..._args: any[]) => undefined) as any,
-  getOfficialSkillCatalogEntry: ((..._args: any[]) => undefined) as any,
+  getManagedSkillCatalogEntry: ((..._args: any[]) => undefined) as any,
   getSkillByName: ((..._args: any[]) => undefined) as any,
-  listOfficialSkillsCatalog: ((..._args: any[]) => undefined) as any,
+  listManagedSkillsCatalog: ((..._args: any[]) => undefined) as any,
   listSkillContext: ((..._args: any[]) => undefined) as any,
   listSkills: ((..._args: any[]) => undefined) as any,
   SkillMetadataValidationError: class extends Error {
@@ -84,11 +84,11 @@ function createApp(user: User) {
     formatSkill: (skill: any) => mocks.formatSkill(skill),
     getDb: (...args: any[]) => mocks.getDb(...args),
     getSkill: (...args: any[]) => mocks.getSkill(...args),
-    getOfficialSkillCatalogEntry: (...args: any[]) =>
-      mocks.getOfficialSkillCatalogEntry(...args),
+    getManagedSkillCatalogEntry: (...args: any[]) =>
+      mocks.getManagedSkillCatalogEntry(...args),
     getSkillByName: (...args: any[]) => mocks.getSkillByName(...args),
-    listOfficialSkillsCatalog: (...args: any[]) =>
-      mocks.listOfficialSkillsCatalog(...args),
+    listManagedSkillsCatalog: (...args: any[]) =>
+      mocks.listManagedSkillsCatalog(...args),
     listSkillContext: (...args: any[]) => mocks.listSkillContext(...args),
     listSkills: (...args: any[]) => mocks.listSkills(...args),
     updateSkill: (...args: any[]) => mocks.updateSkill(...args),
@@ -106,6 +106,17 @@ function createApp(user: User) {
 }
 
 const env = createMockEnv();
+
+Deno.test("skills routes - route map does not include workspace aliases", () => {
+  const signatures = skillsRoute.routes.map((
+    route: { method: string; path: string },
+  ) => `${route.method} ${route.path}`);
+
+  assertEquals(
+    signatures.some((signature) => signature.includes("/workspaces/")),
+    false,
+  );
+});
 
 Deno.test("skills routes - GET /api/spaces/:spaceId/skills - returns skills list", async () => {
   /* mocks cleared (no-op in Deno) */ void 0;
@@ -191,7 +202,7 @@ Deno.test("skills routes - POST /api/spaces/:spaceId/skills - rejects skill with
     {} as ExecutionContext,
   );
 
-  assertEquals(res.status, 422);
+  assertEquals(res.status, 400);
 });
 Deno.test("skills routes - POST /api/spaces/:spaceId/skills - rejects skill with missing instructions", async () => {
   /* mocks cleared (no-op in Deno) */ void 0;
@@ -210,7 +221,7 @@ Deno.test("skills routes - POST /api/spaces/:spaceId/skills - rejects skill with
     {} as ExecutionContext,
   );
 
-  assertEquals(res.status, 422);
+  assertEquals(res.status, 400);
 });
 Deno.test("skills routes - POST /api/spaces/:spaceId/skills - returns 409 when skill name already exists", async () => {
   /* mocks cleared (no-op in Deno) */ void 0;
@@ -647,17 +658,17 @@ Deno.test("skills routes - DELETE /api/spaces/:spaceId/skills/id/:skillId - retu
   assertEquals(res.status, 404);
 });
 
-Deno.test("skills routes - GET /api/spaces/:spaceId/official-skills - returns official skills catalog", async () => {
+Deno.test("skills routes - GET /api/spaces/:spaceId/managed-skills - returns managed skills catalog", async () => {
   /* mocks cleared (no-op in Deno) */ void 0;
   mocks.requireSpaceAccess =
     (async () => ({ workspace: { id: "ws-1" } })) as any;
-  mocks.listOfficialSkillsCatalog = (async () => ({
-    skills: [{ id: "os-1", name: "Official Skill" }],
+  mocks.listManagedSkillsCatalog = (async () => ({
+    skills: [{ id: "os-1", name: "Managed Skill" }],
   })) as any;
 
   const app = createApp(createUser());
   const res = await app.fetch(
-    new Request("http://localhost/api/spaces/sp-1/official-skills"),
+    new Request("http://localhost/api/spaces/sp-1/managed-skills"),
     env as unknown as Env,
     {} as ExecutionContext,
   );

@@ -6,7 +6,7 @@ use crate::control_rpc::{
     ActivatedSkill, SkillCatalogResponse, SkillPlanResponse, SkillResolutionContext,
     SkillRuntimeContextResponse, ToolDefinition,
 };
-use crate::official_skills::localized_official_skills;
+use crate::managed_skills::localized_managed_skills;
 
 const CONVERSATION_WINDOW: usize = 8;
 const MESSAGE_RECENCY_WEIGHTS: [f32; CONVERSATION_WINDOW] =
@@ -49,7 +49,11 @@ pub fn build_skill_catalog(
     runtime_context: &SkillRuntimeContextResponse,
     available_tool_names: &[String],
 ) -> SkillCatalogResponse {
-    let locale = resolve_skill_locale(&runtime_context.resolution_context);
+    let locale = runtime_context
+        .locale
+        .as_deref()
+        .and_then(|value| normalized_locale(Some(value)))
+        .unwrap_or_else(|| resolve_skill_locale(&runtime_context.resolution_context));
     let available_tools = available_tool_names
         .iter()
         .map(|tool| tool.as_str())
@@ -65,8 +69,24 @@ pub fn build_skill_catalog(
         .map(|id| id.as_str())
         .collect::<HashSet<_>>();
 
-    let mut skills = localized_official_skills(&locale);
-    skills.extend(runtime_context.custom_skills.clone());
+    let control_skills_include_managed = runtime_context
+        .skills
+        .iter()
+        .any(|skill| skill.source == "managed");
+
+    let (mut skills, managed_source) = if control_skills_include_managed {
+        (runtime_context.skills.clone(), Some("control".to_string()))
+    } else if !runtime_context.managed_skills.is_empty() {
+        let mut combined = runtime_context.managed_skills.clone();
+        merge_unique_skills(&mut combined, runtime_context.custom_skills.clone());
+        (combined, Some("control".to_string()))
+    } else {
+        let mut combined = localized_managed_skills(&locale);
+        merge_unique_skills(&mut combined, runtime_context.custom_skills.clone());
+        (combined, Some("fallback_local".to_string()))
+    };
+    merge_unique_skills(&mut skills, runtime_context.skills.clone());
+    merge_unique_skills(&mut skills, runtime_context.custom_skills.clone());
 
     let skills = skills
         .into_iter()
@@ -89,6 +109,21 @@ pub fn build_skill_catalog(
         locale,
         skills,
         resolution_context: runtime_context.resolution_context.clone(),
+        managed_source,
+    }
+}
+
+fn merge_unique_skills(target: &mut Vec<ActivatedSkill>, extra: Vec<ActivatedSkill>) {
+    let mut known = target
+        .iter()
+        .map(|skill| format!("{}:{}", skill.source, skill.id))
+        .collect::<HashSet<_>>();
+
+    for skill in extra {
+        let key = format!("{}:{}", skill.source, skill.id);
+        if known.insert(key) {
+            target.push(skill);
+        }
     }
 }
 
@@ -102,11 +137,12 @@ pub fn resolve_skill_plan(catalog: &SkillCatalogResponse) -> SkillPlanResponse {
     }
 }
 
+#[allow(dead_code)]
 pub fn local_skill_tool_definitions() -> Vec<ToolDefinition> {
     vec![
         ToolDefinition {
             name: "skill_list".to_string(),
-            description: "List custom skills configured for this workspace.".to_string(),
+            description: "List custom skills configured for this space.".to_string(),
             parameters: json!({
                 "type": "object",
                 "properties": {}
@@ -114,28 +150,26 @@ pub fn local_skill_tool_definitions() -> Vec<ToolDefinition> {
         },
         ToolDefinition {
             name: "skill_get".to_string(),
-            description:
-                "Get a custom workspace skill by id. skill_name remains as a compatibility alias."
-                    .to_string(),
+            description: "Get a custom skill in this space by id.".to_string(),
             parameters: json!({
                 "type": "object",
                 "properties": {
-                    "skill_id": { "type": "string", "description": "Skill id" },
-                    "skill_name": { "type": "string", "description": "Deprecated alias for skill name" }
-                }
+                    "skill_id": { "type": "string", "description": "Skill id" }
+                },
+                "required": ["skill_id"]
             }),
         },
         ToolDefinition {
             name: "skill_context".to_string(),
             description:
-                "List the agent-visible skill catalog, including official skills and enabled custom skills."
+                "List the agent-visible skill catalog, including managed skills and enabled custom skills."
                     .to_string(),
             parameters: json!({
                 "type": "object",
                 "properties": {
                     "locale": {
                         "type": "string",
-                        "description": "Optional locale for localized official skill text (ja or en).",
+                        "description": "Optional locale for localized managed skill text (ja or en).",
                         "enum": ["ja", "en"]
                     }
                 }
@@ -144,14 +178,14 @@ pub fn local_skill_tool_definitions() -> Vec<ToolDefinition> {
         ToolDefinition {
             name: "skill_catalog".to_string(),
             description:
-                "List the full agent-visible skill catalog, including official and enabled custom skills."
+                "List the full agent-visible skill catalog, including managed skills and enabled custom skills."
                     .to_string(),
             parameters: json!({
                 "type": "object",
                 "properties": {
                     "locale": {
                         "type": "string",
-                        "description": "Optional locale for localized official skill text (ja or en).",
+                        "description": "Optional locale for localized managed skill text (ja or en).",
                         "enum": ["ja", "en"]
                     }
                 }
@@ -159,30 +193,22 @@ pub fn local_skill_tool_definitions() -> Vec<ToolDefinition> {
         },
         ToolDefinition {
             name: "skill_describe".to_string(),
-            description: "Describe one official or custom skill in detail.".to_string(),
+            description: "Describe one managed or custom skill in detail.".to_string(),
             parameters: json!({
                 "type": "object",
                 "properties": {
                     "skill_ref": {
                         "type": "string",
-                        "description": "Skill reference. Official skills use the official skill id; custom skills should use the skill id. When source is omitted, Takos resolves official first, then custom by id, then custom by name."
+                        "description": "Skill reference. Managed skills use the managed skill id; custom skills should use the skill id. When source is omitted, Takos resolves managed first, then custom by id, then custom by name."
                     },
                     "source": {
                         "type": "string",
                         "description": "Optional skill source hint.",
-                        "enum": ["official", "custom"]
-                    },
-                    "skill_id": {
-                        "type": "string",
-                        "description": "Deprecated alias for official skill id."
-                    },
-                    "skill_name": {
-                        "type": "string",
-                        "description": "Deprecated alias for custom skill name."
+                        "enum": ["managed", "custom"]
                     },
                     "locale": {
                         "type": "string",
-                        "description": "Optional locale for localized official skill text (ja or en).",
+                        "description": "Optional locale for localized managed skill text (ja or en).",
                         "enum": ["ja", "en"]
                     }
                 }
@@ -206,15 +232,11 @@ pub fn execute_local_skill_tool(
         ),
         "skill_get" => {
             let skill_id = string_arg(arguments, "skill_id");
-            let skill_name = string_arg(arguments, "skill_name");
             let skill = catalog
                 .skills
                 .iter()
                 .filter(|skill| skill.source == "custom")
-                .find(|skill| {
-                    skill_id.as_deref().is_some_and(|id| skill.id == id)
-                        || skill_name.as_deref().is_some_and(|name| skill.name == name)
-                })?;
+                .find(|skill| skill_id.as_deref().is_some_and(|id| skill.id == id))?;
             Some(json!({ "skill": format_skill(skill) }).to_string())
         }
         "skill_context" => {
@@ -244,9 +266,7 @@ pub fn execute_local_skill_tool(
         }
         "skill_describe" => {
             let locale = string_arg(arguments, "locale").unwrap_or_else(|| catalog.locale.clone());
-            let skill_ref = string_arg(arguments, "skill_ref")
-                .or_else(|| string_arg(arguments, "skill_id"))
-                .or_else(|| string_arg(arguments, "skill_name"))?;
+            let skill_ref = string_arg(arguments, "skill_ref")?;
             let source_hint = string_arg(arguments, "source");
             let localized_catalog = localized_catalog_for_locale(catalog, &locale);
             let skill = describe_skill(&localized_catalog, &skill_ref, source_hint.as_deref())?;
@@ -849,14 +869,17 @@ fn localized_catalog_for_locale(
     if locale == catalog.locale {
         return catalog.clone();
     }
+    if catalog.managed_source.as_deref() == Some("control") {
+        return catalog.clone();
+    }
 
-    let skills = localized_official_skills(locale)
+    let skills = localized_managed_skills(locale)
         .into_iter()
         .map(|mut skill| {
             if let Some(existing) = catalog
                 .skills
                 .iter()
-                .find(|existing| existing.source == "official" && existing.id == skill.id)
+                .find(|existing| existing.source == "managed" && existing.id == skill.id)
             {
                 skill.availability = existing.availability.clone();
                 skill.availability_reasons = existing.availability_reasons.clone();
@@ -876,6 +899,7 @@ fn localized_catalog_for_locale(
         locale: locale.to_string(),
         skills,
         resolution_context: catalog.resolution_context.clone(),
+        managed_source: catalog.managed_source.clone(),
     }
 }
 
@@ -924,17 +948,17 @@ fn describe_skill<'a>(
 ) -> Option<&'a ActivatedSkill> {
     let skill_ref = skill_ref.trim();
     match source_hint {
-        Some("official") => catalog
+        Some("managed") => catalog
             .skills
             .iter()
-            .find(|skill| skill.source == "official" && skill.id == skill_ref),
+            .find(|skill| skill.source == "managed" && skill.id == skill_ref),
         Some("custom") => catalog.skills.iter().find(|skill| {
             skill.source == "custom" && (skill.id == skill_ref || skill.name == skill_ref)
         }),
         _ => catalog
             .skills
             .iter()
-            .find(|skill| skill.source == "official" && skill.id == skill_ref)
+            .find(|skill| skill.source == "managed" && skill.id == skill_ref)
             .or_else(|| {
                 catalog.skills.iter().find(|skill| {
                     skill.source == "custom" && (skill.id == skill_ref || skill.name == skill_ref)
@@ -1008,6 +1032,9 @@ mod tests {
         custom_skills: Vec<ActivatedSkill>,
     ) -> SkillRuntimeContextResponse {
         SkillRuntimeContextResponse {
+            locale: None,
+            skills: vec![],
+            managed_skills: vec![],
             custom_skills,
             resolution_context: SkillResolutionContext {
                 conversation: conversation
@@ -1028,22 +1055,52 @@ mod tests {
         }
     }
 
+    fn runtime_context_with_control_skills(
+        locale: Option<&str>,
+        skills: Vec<ActivatedSkill>,
+        custom_skills: Vec<ActivatedSkill>,
+    ) -> SkillRuntimeContextResponse {
+        SkillRuntimeContextResponse {
+            locale: locale.map(ToString::to_string),
+            managed_skills: skills
+                .iter()
+                .filter(|skill| skill.source == "managed")
+                .cloned()
+                .collect(),
+            skills,
+            custom_skills,
+            resolution_context: SkillResolutionContext {
+                conversation: vec!["Build and deploy this repo app".to_string()],
+                thread_title: Some("Deploy repository app".to_string()),
+                run_input: json!({}),
+                agent_type: Some("implementer".to_string()),
+                ..SkillResolutionContext::default()
+            },
+            available_mcp_server_names: vec!["github".to_string()],
+            available_template_ids: vec![
+                "custom-template".to_string(),
+                "repo-app-bootstrap".to_string(),
+                "api-worker".to_string(),
+            ],
+        }
+    }
+
     fn tool_names(values: &[&str]) -> Vec<String> {
         values.iter().map(|value| (*value).to_string()).collect()
     }
 
     #[test]
-    fn build_skill_catalog_merges_official_and_custom_skills() {
+    fn build_skill_catalog_merges_managed_and_custom_skills() {
         let context = runtime_context(
             &["このAPIをリポジトリからデプロイしたい"],
             json!({}),
             vec![
                 custom_skill(
                     "custom-plan",
-                    "Workspace Planner",
+                    "Space Planner",
                     "planning",
-                    "Create workspace-specific plans.",
-                    &["workspace", "plan"],
+                    "Create space-specific plans.",
+                    &["space", "plan"],
                     &["create_artifact"],
                     &[],
                     &[],
@@ -1071,7 +1128,7 @@ mod tests {
                 "create_repository",
                 "container_start",
                 "container_commit",
-                "app_deployment_deploy_from_repo",
+                "group_deployment_snapshot_deploy_from_repo",
             ]),
         );
 
@@ -1101,6 +1158,51 @@ mod tests {
             .availability_reasons
             .iter()
             .any(|reason| reason.contains("missing required templates")));
+        assert_eq!(catalog.managed_source.as_deref(), Some("fallback_local"));
+    }
+
+    #[test]
+    fn build_skill_catalog_prefers_control_managed_skills_when_available() {
+        let mut control_managed = localized_managed_skills("en")
+            .into_iter()
+            .find(|skill| skill.id == "research-brief")
+            .expect("research-brief fallback skill should exist");
+        control_managed.name = "Control Managed Research".to_string();
+
+        let context =
+            runtime_context_with_control_skills(Some("en"), vec![control_managed.clone()], vec![]);
+        let catalog = build_skill_catalog(&context, &tool_names(&["search", "web_fetch"]));
+
+        let skill = catalog
+            .skills
+            .iter()
+            .find(|entry| entry.id == "research-brief")
+            .expect("research-brief should be present");
+        assert_eq!(skill.name, "Control Managed Research");
+        assert_eq!(catalog.managed_source.as_deref(), Some("control"));
+    }
+
+    #[test]
+    fn build_skill_catalog_uses_local_fallback_when_control_has_no_managed_skills() {
+        let custom = custom_skill(
+            "custom-plan",
+            "Space Planner",
+            "planning",
+            "Create space-specific plans.",
+            &["space", "plan"],
+            &["create_artifact"],
+            &[],
+            &[],
+        );
+        let context =
+            runtime_context_with_control_skills(Some("en"), vec![custom.clone()], vec![custom]);
+        let catalog = build_skill_catalog(&context, &tool_names(&["create_artifact"]));
+
+        assert!(catalog
+            .skills
+            .iter()
+            .any(|skill| skill.id == "research-brief" && skill.source == "managed"));
+        assert_eq!(catalog.managed_source.as_deref(), Some("fallback_local"));
     }
 
     #[test]
@@ -1131,7 +1233,7 @@ mod tests {
                 "container_start",
                 "runtime_exec",
                 "container_commit",
-                "app_deployment_deploy_from_repo",
+                "group_deployment_snapshot_deploy_from_repo",
                 "create_artifact",
             ]),
         );
@@ -1158,14 +1260,14 @@ mod tests {
     #[test]
     fn local_skill_tools_expose_only_custom_entries_for_list_and_get() {
         let context = runtime_context(
-            &["Need a workspace plan"],
+            &["Need a space plan"],
             json!({}),
             vec![custom_skill(
                 "custom-plan",
-                "Workspace Planner",
+                "Space Planner",
                 "planning",
-                "Create workspace-specific plans.",
-                &["workspace", "plan"],
+                "Create space-specific plans.",
+                &["space", "plan"],
                 &["create_artifact"],
                 &[],
                 &[],
@@ -1187,7 +1289,7 @@ mod tests {
     }
 
     #[test]
-    fn skill_describe_supports_locale_override_for_official_skills() {
+    fn skill_describe_supports_locale_override_for_managed_skills() {
         let context = runtime_context(&["Need research"], json!({}), vec![]);
         let catalog = build_skill_catalog(&context, &tool_names(&["search", "web_fetch"]));
 
@@ -1195,7 +1297,7 @@ mod tests {
             "skill_describe",
             &json!({
                 "skill_ref": "research-brief",
-                "source": "official",
+                "source": "managed",
                 "locale": "ja",
             }),
             &catalog,
@@ -1204,6 +1306,36 @@ mod tests {
         let value: Value = serde_json::from_str(&payload).expect("valid JSON payload");
         assert_eq!(value["skill"]["id"].as_str(), Some("research-brief"));
         assert_eq!(value["skill"]["name"].as_str(), Some("調査ブリーフ"));
-        assert_eq!(value["skill"]["source"].as_str(), Some("official"));
+        assert_eq!(value["skill"]["source"].as_str(), Some("managed"));
+    }
+
+    #[test]
+    fn skill_describe_keeps_control_managed_content_when_locale_overridden() {
+        let mut control_managed = localized_managed_skills("en")
+            .into_iter()
+            .find(|skill| skill.id == "research-brief")
+            .expect("research-brief fallback skill should exist");
+        control_managed.name = "Control Managed Research".to_string();
+
+        let context =
+            runtime_context_with_control_skills(Some("en"), vec![control_managed], vec![]);
+        let catalog = build_skill_catalog(&context, &tool_names(&["search", "web_fetch"]));
+
+        let payload = execute_local_skill_tool(
+            "skill_describe",
+            &json!({
+                "skill_ref": "research-brief",
+                "source": "managed",
+                "locale": "ja",
+            }),
+            &catalog,
+        )
+        .expect("skill_describe should return a payload");
+        let value: Value = serde_json::from_str(&payload).expect("valid JSON payload");
+
+        assert_eq!(
+            value["skill"]["name"].as_str(),
+            Some("Control Managed Research")
+        );
     }
 }

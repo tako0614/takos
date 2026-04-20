@@ -17,6 +17,10 @@ const resetDbShellScript = readFileSync(
   resolve(appRoot, "scripts/reset-db.sh"),
   "utf8",
 );
+const defaultAppDistributionSql = readFileSync(
+  resolve(appRoot, "db/migrations/0054_default_app_distribution_entries.sql"),
+  "utf8",
+);
 const offloadBackfillScript = readFileSync(
   resolve(appRoot, "scripts/offload-backfill.ts"),
   "utf8",
@@ -40,7 +44,9 @@ const tasks = denoConfig.tasks ?? {};
 function parseBaselineTables(source: string): string[] {
   return [
     ...new Set(
-      [...source.matchAll(/CREATE TABLE "([^"]+)"/g)].map((match) => match[1]),
+      [...source.matchAll(
+        /CREATE TABLE(?: IF NOT EXISTS)?\s+"?([a-z0-9_]+)"?/g,
+      )].map((match) => match[1]),
     ),
   ].sort();
 }
@@ -64,7 +70,10 @@ function parseDropTables(source: string): string[] {
   ) => match[1]);
 }
 Deno.test("reset DB inventory - keeps reset-db.js aligned with the canonical baseline SQL table inventory", () => {
-  const baselineTables = parseBaselineTables(baselineSql);
+  const baselineTables = [
+    ...parseBaselineTables(baselineSql),
+    ...parseBaselineTables(defaultAppDistributionSql),
+  ].sort();
   const resetTables = parseQuotedArray(resetDbScript, "TABLES");
 
   assert(/const ACCOUNT_TABLE = ["']accounts["'];/.test(resetDbScript));
@@ -126,7 +135,10 @@ Deno.test("reset DB inventory - keeps OAuth seed SQL aligned with the canonical 
 });
 
 Deno.test("reset DB inventory - keeps drop_all.sql aligned with the canonical baseline SQL table inventory", () => {
-  const baselineTables = parseBaselineTables(baselineSql);
+  const baselineTables = [
+    ...parseBaselineTables(baselineSql),
+    ...parseBaselineTables(defaultAppDistributionSql),
+  ].sort();
   const dropTables = parseDropTables(dropAllSql);
 
   assertEquals(dropTables.length, new Set(dropTables).size);

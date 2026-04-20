@@ -87,7 +87,6 @@ const makeRepoRow = (id: string, stars = 5) => ({
   defaultBranch: "main",
   stars,
   forks: 0,
-  officialCategory: null,
   primaryLanguage: null,
   license: null,
   createdAt: "2026-03-20T00:00:00.000Z",

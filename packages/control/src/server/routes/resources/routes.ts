@@ -41,6 +41,7 @@ import { resolveActorPrincipalId } from "../../../application/services/identity/
 import { logError } from "../../../shared/utils/logger.ts";
 import {
   AuthorizationError,
+  ConflictError,
   InternalError,
   NotFoundError,
 } from "takos-common/errors";
@@ -51,16 +52,9 @@ import {
   toResourceCapability,
 } from "../../../application/services/resources/capabilities.ts";
 import {
-  removeGroupDesiredResource,
-  upsertGroupDesiredResource,
-} from "../../../application/services/deployment/group-desired-projector.ts";
-import { safeJsonParseOrDefault } from "../../../shared/utils/index.ts";
-import {
-  buildProjectedResourceSpec,
   buildProvisioningRequest,
-  inferResourceProvider,
-  normalizeResourceProvider,
-  resolveRequestedProviderResourceName,
+  inferResourceBackend,
+  resolveRequestedBackingResourceName,
 } from "./route-helpers.ts";
 import {
   deletePortableManagedResource,
@@ -74,23 +68,47 @@ type NamedResourceRecord = NonNullable<
   Awaited<ReturnType<typeof getResourceByName>>
 >;
 
+const PUBLIC_BACKING_FIELD_NAMES = new Set([
+  "backend",
+  "backendName",
+  "backend_name",
+  "backendState",
+  "backendStateJson",
+  "backend_state",
+  "backend_state_json",
+  "backingResourceId",
+  "backing_resource_id",
+  "backingResourceName",
+  "backing_resource_name",
+]);
+
+export function stripPublicResourceBackingFields<T>(value: T): T {
+  if (Array.isArray(value)) {
+    return value.map((entry) => stripPublicResourceBackingFields(entry)) as T;
+  }
+  if (!value || typeof value !== "object") {
+    return value;
+  }
+  const result: Record<string, unknown> = {};
+  for (const [key, entry] of Object.entries(value)) {
+    if (PUBLIC_BACKING_FIELD_NAMES.has(key)) {
+      continue;
+    }
+    result[key] = stripPublicResourceBackingFields(entry);
+  }
+  return result as T;
+}
+
+function toPublicResourcePayload<T>(value: T): T {
+  return stripPublicResourceBackingFields(value);
+}
+
 function requireDbBinding(c: ResourcesContext) {
   const dbBinding = getPlatformServices(c).sql?.binding;
   if (!dbBinding) {
     throw new InternalError("Database binding unavailable");
   }
   return dbBinding;
-}
-
-function parseStoredResourceConfig(
-  config: unknown,
-): Record<string, unknown> {
-  if (typeof config === "string") {
-    return safeJsonParseOrDefault<Record<string, unknown>>(config, {});
-  }
-  return config && typeof config === "object" && !Array.isArray(config)
-    ? config as Record<string, unknown>
-    : {};
 }
 
 function toStoredResourceConfig(
@@ -170,93 +188,14 @@ async function validateGroupForWorkspace(
   return group.id;
 }
 
-async function upsertProjectedGroupResourceFromRecord(
-  env: AuthenticatedRouteEnv["Bindings"],
-  groupId: string,
-  name: string,
-  type: ResourceType,
-  config: unknown,
-): Promise<void> {
-  await upsertGroupDesiredResource(env, {
-    groupId,
-    name,
-    resource: buildProjectedResourceSpec(
-      name,
-      { type, config: parseStoredResourceConfig(config) },
-    ) as never,
-  });
-}
-
-async function removeProjectedGroupResourceIfPresent(
-  env: AuthenticatedRouteEnv["Bindings"],
-  groupId: string | null | undefined,
-  name: string,
-): Promise<void> {
-  if (!groupId) return;
-  await removeGroupDesiredResource(env, { groupId, name });
-}
-
-async function reconcileProjectedGroupResourceUpdate(
-  env: AuthenticatedRouteEnv["Bindings"],
-  resource: ResourceRecord,
-  updates: {
-    name?: string;
-    config?: Record<string, unknown>;
-  },
-): Promise<void> {
-  if (!resource.group_id) return;
-
-  const nextName = updates.name?.trim() || resource.name;
-  const nextConfig = updates.config ??
-    parseStoredResourceConfig(resource.config);
-
-  if (nextName !== resource.name) {
-    await removeProjectedGroupResourceIfPresent(
-      env,
-      resource.group_id,
-      resource.name,
-    );
-  }
-
-  await upsertProjectedGroupResourceFromRecord(
-    env,
-    resource.group_id,
-    nextName,
-    resource.type as ResourceType,
-    nextConfig,
-  );
-}
-
-async function moveProjectedGroupResource(
-  env: AuthenticatedRouteEnv["Bindings"],
-  resource: ResourceRecord,
-  nextGroupId: string | null,
-): Promise<void> {
-  if (nextGroupId) {
-    await upsertProjectedGroupResourceFromRecord(
-      env,
-      nextGroupId,
-      resource.name,
-      resource.type as ResourceType,
-      resource.config,
-    );
-    return;
-  }
-  await removeProjectedGroupResourceIfPresent(
-    env,
-    resource.group_id,
-    resource.name,
-  );
-}
-
 async function deleteManagedResourceSafely(
   env: AuthenticatedRouteEnv["Bindings"],
   resource: {
     type: string;
     config: unknown;
-    provider_name?: string | null;
-    provider_resource_id?: string | null;
-    provider_resource_name?: string | null;
+    backend_name?: string | null;
+    backing_resource_id?: string | null;
+    backing_resource_name?: string | null;
   },
 ): Promise<void> {
   try {
@@ -266,9 +205,9 @@ async function deleteManagedResourceSafely(
         toStoredResourceConfig(resource.config),
       ) ??
         resource.type,
-      providerName: resource.provider_name ?? undefined,
-      providerResourceId: resource.provider_resource_id ?? null,
-      providerResourceName: resource.provider_resource_name ?? null,
+      backendName: resource.backend_name ?? undefined,
+      backingResourceId: resource.backing_resource_id ?? null,
+      backingResourceName: resource.backing_resource_name ?? null,
     });
   } catch (err) {
     logError("Failed to delete managed resource", err, {
@@ -286,17 +225,11 @@ async function deleteOwnedResourceRecord(
     name: string;
     type: string;
     config: unknown;
-    provider_name?: string | null;
-    provider_resource_id?: string | null;
-    provider_resource_name?: string | null;
+    backend_name?: string | null;
+    backing_resource_id?: string | null;
+    backing_resource_name?: string | null;
   },
 ): Promise<number | null> {
-  await removeProjectedGroupResourceIfPresent(
-    env,
-    resource.group_id,
-    resource.name,
-  );
-
   const bindingsCount = await countResourceBindings(dbBinding, resourceId);
   if (bindingsCount && bindingsCount.count > 0) {
     return bindingsCount.count;
@@ -388,7 +321,11 @@ export async function verifyResourceSecretValue(
   if (current && presented === current) return true;
 
   const initial = await getSecretRotationState(dbBinding, resource.id);
-  const state = await clearExpiredPreviousSecret(dbBinding, resource.id, initial);
+  const state = await clearExpiredPreviousSecret(
+    dbBinding,
+    resource.id,
+    initial,
+  );
   return state.previousValue !== null && presented === state.previousValue;
 }
 
@@ -402,17 +339,17 @@ async function readResourceSecretValue(
   const initial = await getSecretRotationState(dbBinding, resource.id);
   await clearExpiredPreviousSecret(dbBinding, resource.id, initial);
 
-  const providerName = resource.provider_name;
-  if (providerName && providerName !== "cloudflare") {
+  const backendName = resource.backend_name;
+  if (backendName && backendName !== "cloudflare") {
     return await getPortableSecretValue({
       id: resource.id,
-      provider_name: providerName,
-      provider_resource_id: resource.provider_resource_id,
-      provider_resource_name: resource.provider_resource_name,
+      backend_name: backendName,
+      backing_resource_id: resource.backing_resource_id,
+      backing_resource_name: resource.backing_resource_name,
       ...(resource.config ? { config: resource.config } : {}),
     });
   }
-  return resource.provider_resource_id ?? "";
+  return resource.backing_resource_id ?? "";
 }
 
 interface SecretRotationResult {
@@ -430,23 +367,23 @@ async function rotateResourceSecretValue(
     Date.parse(rotatedAt) + SECRET_ROTATION_GRACE_PERIOD_MS,
   ).toISOString();
   const newValue = generateSecretTokenHex();
-  const providerName = resource.provider_name;
+  const backendName = resource.backend_name;
 
   // 24h grace period: capture the current value before mutating, then store
   // it as `previous_secret_value` with an expiry of `now + 24h`. Any read or
   // rotate operation after the expiry will lazy-clear these columns. Future
   // verification paths should use `verifyResourceSecretValue` to check both
   // the current and grace-period value.
-  if (providerName && providerName !== "cloudflare") {
-    // For portable providers we must capture the existing value BEFORE the
+  if (backendName && backendName !== "cloudflare") {
+    // For portable backends we must capture the existing value BEFORE the
     // delete-and-regenerate cycle, otherwise the old material is lost.
     let oldValue = "";
     try {
       oldValue = await getPortableSecretValue({
         id: resource.id,
-        provider_name: providerName,
-        provider_resource_id: resource.provider_resource_id,
-        provider_resource_name: resource.provider_resource_name,
+        backend_name: backendName,
+        backing_resource_id: resource.backing_resource_id,
+        backing_resource_name: resource.backing_resource_name,
         ...(resource.config ? { config: resource.config } : {}),
       });
     } catch (_err) {
@@ -460,18 +397,18 @@ async function rotateResourceSecretValue(
     await deletePortableManagedResource(
       {
         id: resource.id,
-        provider_name: providerName,
-        provider_resource_id: resource.provider_resource_id,
-        provider_resource_name: resource.provider_resource_name,
+        backend_name: backendName,
+        backing_resource_id: resource.backing_resource_id,
+        backing_resource_name: resource.backing_resource_name,
         ...(resource.config ? { config: resource.config } : {}),
       },
       "secret",
     );
     const regenerated = await getPortableSecretValue({
       id: resource.id,
-      provider_name: providerName,
-      provider_resource_id: resource.provider_resource_id,
-      provider_resource_name: resource.provider_resource_name,
+      backend_name: backendName,
+      backing_resource_id: resource.backing_resource_id,
+      backing_resource_name: resource.backing_resource_name,
       ...(resource.config ? { config: resource.config } : {}),
     });
     await getDb(dbBinding).update(resources)
@@ -489,11 +426,11 @@ async function rotateResourceSecretValue(
     };
   }
 
-  // Cloudflare provider: the secret value lives in provider_resource_id.
-  const oldValue = resource.provider_resource_id ?? "";
+  // Cloudflare backend: the secret value lives in backing_resource_id.
+  const oldValue = resource.backing_resource_id ?? "";
   await getDb(dbBinding).update(resources)
     .set({
-      providerResourceId: newValue,
+      backingResourceId: newValue,
       updatedAt: rotatedAt,
       previousSecretValue: oldValue || null,
       previousSecretExpiresAt: oldValue ? previousValueExpiresAt : null,
@@ -542,12 +479,15 @@ resourcesBase
         access.space.id,
       );
 
-      return c.json({ resources: resourceList });
+      return c.json({ resources: toPublicResourcePayload(resourceList) });
     }
 
     const { owned, shared } = await listResourcesForUser(dbBinding, user.id);
 
-    return c.json({ owned, shared });
+    return c.json({
+      owned: toPublicResourcePayload(owned),
+      shared: toPublicResourcePayload(shared),
+    });
   })
   .get("/shared/:spaceId", async (c) => {
     const dbBinding = requireDbBinding(c);
@@ -584,8 +524,6 @@ resourcesBase
       capability?: string;
       implementation?: string | null;
       status: string;
-      provider_resource_id: string | null;
-      provider_resource_name: string | null;
       access_level: string;
       owner_name: string;
       owner_email: string | null;
@@ -621,8 +559,6 @@ resourcesBase
           }
           : {}),
         status: resource.status,
-        provider_resource_id: resource.providerResourceId,
-        provider_resource_name: resource.providerResourceName,
         access_level: a.permission,
         owner_name: owner?.name ?? "",
         owner_email: owner?.email ?? null,
@@ -647,7 +583,7 @@ resourcesBase
       resourceType as ResourceCapability,
     );
 
-    return c.json({ resources: resourceList });
+    return c.json({ resources: toPublicResourcePayload(resourceList) });
   })
   .get("/:id", async (c) => {
     const dbBinding = requireDbBinding(c);
@@ -663,7 +599,7 @@ resourcesBase
     const resourceBindings = await listResourceBindings(dbBinding, resourceId);
 
     return c.json({
-      resource,
+      resource: toPublicResourcePayload(resource),
       access,
       bindings: resourceBindings,
       is_owner: resource.owner_id === user.id,
@@ -677,10 +613,9 @@ resourcesBase
         name: z.string(),
         type: z.string(),
         config: z.record(z.unknown()).optional(),
-        provider: z.string().optional(),
         space_id: z.string().optional(),
         group_id: z.string().optional(),
-      }),
+      }).strict(),
     ),
     async (c) => {
       const dbBinding = requireDbBinding(c);
@@ -689,7 +624,6 @@ resourcesBase
         name: string;
         type: ResourceType;
         config?: Record<string, unknown>;
-        provider?: string;
         space_id?: string;
         group_id?: string;
       };
@@ -697,11 +631,7 @@ resourcesBase
         throw new BadRequestError("name is required");
       }
 
-      const providerName = normalizeResourceProvider(body.provider) ??
-        inferResourceProvider(c.env);
-      if (body.provider && !normalizeResourceProvider(body.provider)) {
-        throw new BadRequestError(`Invalid provider: ${body.provider}`);
-      }
+      const backendName = inferResourceBackend(c.env);
 
       const resourceCapability = toResourceCapability(body.type);
       if (!resourceCapability) {
@@ -716,7 +646,7 @@ resourcesBase
           spaceId,
           user.id,
           ["owner", "admin", "editor"],
-          "Workspace not found or insufficient permissions",
+          "Space not found or insufficient permissions",
           403,
         );
 
@@ -732,14 +662,14 @@ resourcesBase
           dbBinding,
           body.group_id.trim(),
           spaceId,
-          "group_id must belong to the selected workspace",
+          "group_id must belong to the selected space",
         );
       }
 
       const id = generateId();
       const timestamp = new Date().toISOString();
       const name = body.name.trim();
-      const providerResourceName = resolveRequestedProviderResourceName(
+      const backingResourceName = resolveRequestedBackingResourceName(
         body.type,
         `takos-${body.type}-${id}`,
         body.config,
@@ -756,31 +686,25 @@ resourcesBase
           type: resourceCapability,
           publicType: body.type,
           semanticType: resourceCapability,
-          providerName,
-          providerResourceName,
+          backendName,
+          backingResourceName,
           config: body.config || {},
           recordFailure: true,
           ...buildProvisioningRequest(resourceCapability, body.config),
         });
-        if (groupId) {
-          await upsertProjectedGroupResourceFromRecord(
-            c.env,
-            groupId,
-            name,
-            body.type,
-            body.config,
-          );
-        }
-        return c.json({ resource: await getResourceById(dbBinding, id) }, 201);
+        return c.json({
+          resource: toPublicResourcePayload(
+            await getResourceById(dbBinding, id),
+          ),
+        }, 201);
       } catch (err) {
         logError("Resource creation failed", err, {
           module: "routes/resources/base",
         });
 
-        return c.json({
-          error: "Failed to provision resource",
+        throw new InternalError("Failed to provision resource", {
           resource_id: id,
-        }, 500);
+        });
       }
     },
   )
@@ -799,7 +723,7 @@ resourcesBase
       const user = c.get("user");
       const resourceId = c.req.param("id");
       const body = c.req.valid("json");
-      const resource = await requireOwnedResource(
+      await requireOwnedResource(
         dbBinding,
         user.id,
         resourceId,
@@ -820,12 +744,7 @@ resourcesBase
         throw new BadRequestError("No valid updates provided");
       }
 
-      await reconcileProjectedGroupResourceUpdate(c.env, resource, {
-        name: body.name,
-        config: body.config,
-      });
-
-      return c.json({ resource: updated });
+      return c.json({ resource: toPublicResourcePayload(updated) });
     },
   )
   .patch(
@@ -854,7 +773,7 @@ resourcesBase
           dbBinding,
           nextGroupId,
           resource.space_id ?? resource.owner_id,
-          "group_id must belong to the same workspace as the resource",
+          "group_id must belong to the same space as the resource",
         );
       }
 
@@ -866,9 +785,11 @@ resourcesBase
         .where(eq(resources.id, resourceId))
         .run();
 
-      await moveProjectedGroupResource(c.env, resource, nextGroupId);
-
-      return c.json({ resource: await getResourceById(dbBinding, resourceId) });
+      return c.json({
+        resource: toPublicResourcePayload(
+          await getResourceById(dbBinding, resourceId),
+        ),
+      });
     },
   )
   .delete("/:id", async (c) => {
@@ -888,10 +809,9 @@ resourcesBase
       resource,
     );
     if (bindingCount !== null) {
-      return c.json({
-        error: "Resource is in use by workers",
+      throw new ConflictError("Resource is in use by workers", {
         binding_count: bindingCount,
-      }, 409);
+      });
     }
 
     return c.json({ success: true });
@@ -914,7 +834,7 @@ resourcesBase
     );
 
     return c.json({
-      resource: apiResource,
+      resource: toPublicResourcePayload(apiResource),
       access,
       bindings: resourceBindings,
       is_owner: true,
@@ -937,16 +857,15 @@ resourcesBase
       resource,
     );
     if (bindingCount !== null) {
-      return c.json({
-        error: "Resource is in use by workers",
+      throw new ConflictError("Resource is in use by workers", {
         binding_count: bindingCount,
-      }, 409);
+      });
     }
 
     return c.json({ success: true });
   })
   // Read the value of a secret-typed resource. Restricted to the resource
-  // owner (admin/owner role on the workspace).
+  // owner (admin/owner role on the space).
   .get("/:id/secret-value", async (c) => {
     const dbBinding = requireDbBinding(c);
     const user = c.get("user");
@@ -983,7 +902,7 @@ resourcesBase
     });
   })
   // Rotate the value of a secret-typed resource. Restricted to the resource
-  // owner (admin/owner role on the workspace).
+  // owner (admin/owner role on the space).
   .post("/:id/rotate-secret", async (c) => {
     const dbBinding = requireDbBinding(c);
     const user = c.get("user");

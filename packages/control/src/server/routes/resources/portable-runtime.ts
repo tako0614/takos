@@ -7,6 +7,6 @@ export {
   getPortableObjectStore,
   getPortableSecretValue,
   getPortableSqlDatabase,
-  isPortableResourceProvider,
+  isPortableResourceBackend,
   resetPortableResourceRuntimeCachesForTests,
-} from '../../../application/services/resources/portable-runtime.ts';
+} from "../../../application/services/resources/portable-runtime.ts";

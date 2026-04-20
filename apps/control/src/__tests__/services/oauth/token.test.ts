@@ -1,5 +1,9 @@
 import * as jose from "jose";
-import { generateAccessToken, verifyAccessToken } from "@/services/oauth/token";
+import {
+  formatOAuthAccessToken,
+  generateAccessToken,
+  verifyAccessToken,
+} from "@/services/oauth/token";
 
 import { assertEquals, assertNotEquals } from "jsr:@std/assert";
 
@@ -18,7 +22,7 @@ async function issueAccessToken(clientId = tokenAudience): Promise<string> {
     clientId,
     scope: "openid profile",
   });
-  return token;
+  return formatOAuthAccessToken(token);
 }
 
 Deno.test("verifyAccessToken audience enforcement (issue 008) - returns payload when expectedAudience matches token audience", async () => {

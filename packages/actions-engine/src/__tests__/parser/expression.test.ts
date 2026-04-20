@@ -5,6 +5,7 @@ import { join } from "node:path";
 
 import type { ExecutionContext } from "../../workflow-models.ts";
 import {
+  evaluateCondition,
   evaluateExpression,
   ExpressionError,
   interpolateString,
@@ -101,6 +102,34 @@ Deno.test("expression function behavior - returns SHA-256 hash for a matched fil
     rmSync(workspace, { recursive: true, force: true });
   }
 });
+Deno.test("expression function behavior - rejects unsupported string helpers", () => {
+  const context = createContext();
+  const unsupportedExpressions = [
+    "${{ contains('abc', 'a') }}",
+    "${{ startsWith('abc', 'a') }}",
+    "${{ endsWith('abc', 'c') }}",
+  ];
+
+  for (const expr of unsupportedExpressions) {
+    assertThrows(() => evaluateExpression(expr, context), ExpressionError);
+    assertEquals(evaluateCondition(expr, context), false);
+  }
+});
+
+Deno.test("expression function behavior - rejects unsupported operators", () => {
+  const context = createContext();
+  const unsupportedExpressions = [
+    "${{ env.BRANCH == 'main' }}",
+    "${{ true && false }}",
+    "${{ true || false }}",
+  ];
+
+  for (const expr of unsupportedExpressions) {
+    assertThrows(() => evaluateExpression(expr, context), ExpressionError);
+    assertEquals(evaluateCondition(expr, context), false);
+  }
+});
+
 Deno.test("expression function behavior - supports multiple patterns and exclusions in hashFiles", () => {
   const workspace = mkdtempSync(join(tmpdir(), "actions-engine-hash-"));
   writeFileSync(join(workspace, "one.txt"), "one");

@@ -3,7 +3,7 @@
  *
  * The OCI orchestrator delegates all container lifecycle operations to an
  * implementation of this interface. The active backend may be fixed for the
- * whole process or resolved per deployment provider.
+ * whole process or resolved per deployment backend.
  */
 
 export interface ContainerCreateOpts {
@@ -25,19 +25,19 @@ export interface ContainerCreateOpts {
   /** Optional labels / annotations for the container / pod. */
   labels?: Record<string, string>;
 
-  /** Optional health path used by provider-native runtimes. */
+  /** Optional health path used by backend-native runtimes. */
   healthPath?: string;
 
   /** Original endpoint request from the deployment target, when available. */
   requestedEndpoint?:
     | {
-        kind: 'service-ref';
-        ref: string;
-      }
+      kind: "service-ref";
+      ref: string;
+    }
     | {
-        kind: 'http-url';
-        base_url: string;
-      };
+      kind: "http-url";
+      base_url: string;
+    };
 }
 
 export interface ContainerCreateResult {
@@ -50,10 +50,10 @@ export interface ContainerCreateResult {
    */
   hostPort?: number;
 
-  /** Resolved runtime endpoint when the provider exposes a stable URL. */
-  resolvedEndpoint?: { kind: 'http-url'; base_url: string };
+  /** Resolved runtime endpoint when the backend exposes a stable URL. */
+  resolvedEndpoint?: { kind: "http-url"; base_url: string };
 
-  /** Explicit health-check URL for providers without direct pod/container IP access. */
+  /** Explicit health-check URL for backends without direct pod/container IP access. */
   healthCheckUrl?: string;
 }
 

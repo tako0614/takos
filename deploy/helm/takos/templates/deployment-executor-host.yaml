@@ -27,7 +27,7 @@ spec:
         - name: executor-host
           image: "{{ .Values.images.control.repository }}:{{ .Values.images.control.tag }}"
           imagePullPolicy: {{ .Values.images.control.pullPolicy }}
-          command: ["pnpm", "local:executor-host"]
+          command: ["deno", "task", "dev:local:executor-host"]
           ports:
             - name: http
               containerPort: {{ .Values.executorHost.port }}
@@ -41,8 +41,6 @@ spec:
               value: {{ include "takos.executorHostUrl" . | quote }}
             - name: TAKOS_LOCAL_RUNTIME_HOST_URL
               value: {{ include "takos.runtimeHostUrl" . | quote }}
-            - name: TAKOS_LOCAL_BROWSER_HOST_URL
-              value: {{ include "takos.browserHostUrl" . | quote }}
             - name: TAKOS_LOCAL_EXECUTOR_URL
               value: {{ include "takos.executorUrl" . | quote }}
           envFrom:

@@ -1,78 +1,47 @@
 # 環境ごとの差異
 
-このページは **Takos kernel をどのホスト環境に置いたときに何が変わるか**を説明します。Takos manifest は provider-neutral で、abstract type (`sql`, `object-store`, `key-value`, etc.) で書きます。Cloudflare はリファレンス backend、他は互換 backend です。
+このページは **current docs contract として公開している hosting surface**
+を比較します。provider-neutral resource materialization matrix ではありません。
 
-Takos 上で app を deploy する方法は [Deploy](/deploy/) を参照してください。
+Takos 上で group を deploy する方法は [Deploy](/deploy/) を参照してください。
 
-## Provider status の用語
+## Current Hosting Surface
 
-provider ごとの実装状態を説明する際、次の 3 つの用語を使います。
+| page                                | current contract                                                    | bundled / expected backing services                   |
+| ----------------------------------- | ------------------------------------------------------------------- | ----------------------------------------------------- |
+| [Cloudflare](/hosting/cloudflare)   | Cloudflare Workers / D1 / R2 / KV / Queues を使う reference backend | Cloudflare resources                                  |
+| [Local](/hosting/local)             | local development runtime                                           | local services                                        |
+| [Self-hosted](/hosting/self-hosted) | VM / Docker Compose / Helm packaging guidance                       | PostgreSQL / Redis / S3-compatible storage            |
+| [Kubernetes](/hosting/kubernetes)   | `deploy/helm/takos` base chart                                      | Bitnami PostgreSQL / Redis / MinIO by default         |
+| [AWS](/hosting/aws)                 | EKS 向け Helm overlay (`values-aws.yaml`)                           | external PostgreSQL / Redis / S3-compatible storage   |
+| [GCP](/hosting/gcp)                 | GKE 向け Helm overlay (`values-gcp.yaml`)                           | external PostgreSQL / Redis / GCS S3 interoperability |
 
-| 用語 | 意味 |
-| --- | --- |
-| `native` | Cloudflare の native 実装（D1, R2, KV, Queues, Vectorize, Workflows, Durable Objects など） |
-| `compatible` | Takos-managed runtime または provider-backed な互換 backend で同じ spec を実現する |
-| `unsupported` | 現在未対応 |
+## Workload Surface
 
-## Resource Mapping
+| workload                           | Kubernetes / AWS / GCP Helm surface            |
+| ---------------------------------- | ---------------------------------------------- |
+| control API / UI                   | `control-web` Deployment                       |
+| dispatch                           | `control-dispatch` Deployment                  |
+| background jobs                    | `control-worker` Deployment                    |
+| tenant worker runtime              | `runtime-host` Deployment                      |
+| executor host                      | `executor-host` Deployment                     |
+| image-backed services / containers | `oci-orchestrator` Deployment + Service + RBAC |
+| agent runtime                      | `runtime` Deployment                           |
+| code executor                      | `executor` Deployment                          |
 
-| abstract type | Cloudflare | AWS | GCP | Self-hosted |
-| --- | --- | --- | --- | --- |
-| `sql` | native (D1) | compatible (PostgreSQL) | compatible (PostgreSQL) | compatible (PostgreSQL) |
-| `object-store` | native (R2) | compatible (S3) | compatible (GCS) | compatible (MinIO) |
-| `key-value` | native (KV Namespace) | compatible (DynamoDB or Takos KV runtime) | compatible (Firestore or Takos KV runtime) | compatible (Takos KV runtime) |
-| `queue` | native (Queues) | compatible (SQS) | compatible (Pub/Sub) | compatible (Redis-backed queue) |
-| `vector-index` | native (Vectorize) | compatible (pgvector) | compatible (pgvector) | compatible (pgvector) |
-| `analytics-engine` | native (Analytics Engine) | compatible (Takos analytics runtime) | compatible (Takos analytics runtime) | compatible (Takos analytics runtime) |
-| `secret` | native (Secrets / generated value) | compatible (AWS Secrets Manager) | compatible (GCP Secret Manager) | compatible (Kubernetes Secret) |
-| `workflow` | native (Workflows) | compatible (Takos workflow runtime) | compatible (Takos workflow runtime) | compatible (Takos workflow runtime) |
-| `durable-object` | native (Durable Objects) | compatible (Takos durable runtime) | compatible (Takos durable runtime) | compatible (Takos durable runtime) |
+## Not A Current Contract
 
-Cloudflare-native の public surface は維持しつつ、互換 backend では provider-backed なものと Takos-managed runtime で吸収するものに分かれます。
+次は current hosting docs の contract ではありません:
 
-## Workload Mapping
+- AWS ECS / Fargate へ Takos kernel を直接 deploy する手順
+- GCP Cloud Run へ Takos kernel を直接 deploy する手順
+- DynamoDB / Firestore / SQS / Pub/Sub / cloud secret manager を manifest
+  resource から自動 provisioning する provider matrix
+- 同じ deploy manifest が全 provider で byte-for-byte 同じ runtime behavior
+  になる保証
+- provider 固有 adapter 名を deploy manifest author 向け public surface
+  として固定する contract
 
-| manifest | Cloudflare | Other providers |
-| --- | --- | --- |
-| Worker compute (`build` あり) | native (Workers runtime) | compatible (provider-dependent / adapter-based) |
-| Service compute (`image` あり, `build` なし) | native (OCI or provider-specific service hosting) | compatible (provider-dependent) |
-| Attached Container (`containers:`) | compatible (OCI deployment adapter) | compatible (provider-dependent worker-attached container workload) |
-
-## 重要な境界
-
-- public spec は provider-neutral な abstract type を使う
-- Cloudflare backend では spec を `native` 実装に解決する
-- 互換 backend では `compatible` な provider-backed か Takos-managed runtime に解決する
-- 現時点で `unsupported` な機能はなし（すべての abstract type は何らかの形で解決される）
-- `takos deploy` は同じ manifest surface を使う
-- 同じ `app.yml` を全環境で byte-for-byte 同一挙動にする保証はない
-
-## 例
-
-```yaml
-publish:
-  - name: db
-    provider: takos
-    kind: sql
-    spec:
-      resource: app-db
-      permission: write
-  - name: assets
-    provider: takos
-    kind: object-store
-    spec:
-      resource: app-assets
-      permission: write
-
-compute:
-  web:
-    consume:
-      - publication: db
-        env:
-          endpoint: DATABASE_URL
-      - publication: assets
-        env:
-          endpoint: ASSETS_ENDPOINT
-```
-
-Cloudflare backend ではこれらの publication が通常そのまま `D1 / R2 / KV Namespace` に `native` 解決され、互換 backend では Takos runtime が provider-backed resource へ `compatible` 解決します。
+provider 固有の adapter や external service は operator
+が追加構成できますが、docs では Helm chart / overlay に存在する設定だけを
+current contract とします。

@@ -62,7 +62,7 @@ export async function onJobComplete(
 
   await drizzle.update(workflowJobs)
     .set({
-      status: "completed",
+      status: result.status,
       conclusion: result.conclusion,
       startedAt: result.startedAt,
       completedAt: result.completedAt,
@@ -104,7 +104,11 @@ export async function onJobComplete(
   const pendingJobsResult = await drizzle.select({ count: count() })
     .from(workflowJobs)
     .where(
-      and(eq(workflowJobs.runId, runId), ne(workflowJobs.status, "completed")),
+      and(
+        eq(workflowJobs.runId, runId),
+        ne(workflowJobs.status, "completed"),
+        ne(workflowJobs.status, "cancelled"),
+      ),
     )
     .get();
   const pendingJobsCount = pendingJobsResult?.count ?? 0;
@@ -293,7 +297,7 @@ export async function updateStepStatus(
   db: D1Database,
   jobId: string,
   stepNumber: number,
-  status: "in_progress" | "completed" | "skipped",
+  status: "in_progress" | "completed" | "skipped" | "cancelled",
   conclusion?: Conclusion,
   exitCode?: number,
   error?: string,
@@ -301,9 +305,10 @@ export async function updateStepStatus(
   const drizzle = workflowJobSchedulerDeps.getDb(db);
   const timestamp = new Date().toISOString();
   const startedAt = status === "in_progress" ? timestamp : undefined;
-  const completedAt = status === "completed" || status === "skipped"
-    ? timestamp
-    : undefined;
+  const completedAt =
+    status === "completed" || status === "skipped" || status === "cancelled"
+      ? timestamp
+      : undefined;
 
   await drizzle.update(workflowSteps)
     .set({

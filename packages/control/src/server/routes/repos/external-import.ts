@@ -5,24 +5,31 @@
  * POST /repos/:repoId/fetch-remote    — Re-fetch updates from the remote origin
  */
 
-import { Hono } from 'hono';
-import type { AuthenticatedRouteEnv } from '../route-auth.ts';
+import { Hono } from "hono";
+import type { AuthenticatedRouteEnv } from "../route-auth.ts";
 import {
-  importExternalRepository,
   fetchRemoteUpdates,
-} from '../../../application/services/source/external-import.ts';
-import { buildAuthHeader } from '../../../application/services/source/external-import-utils.ts';
-import { getDb, repositories } from '../../../infra/db/index.ts';
-import { eq } from 'drizzle-orm';
-import { logError } from '../../../shared/utils/logger.ts';
+  importExternalRepository,
+} from "../../../application/services/source/external-import.ts";
+import { buildAuthHeader } from "../../../application/services/source/external-import-utils.ts";
+import { getDb, repositories } from "../../../infra/db/index.ts";
+import { eq } from "drizzle-orm";
+import { logError } from "../../../shared/utils/logger.ts";
+import {
+  AuthenticationError,
+  BadRequestError,
+  ConflictError,
+  InternalError,
+  isAppError,
+  NotFoundError,
+} from "takos-common/errors";
 
 export default new Hono<AuthenticatedRouteEnv>()
-
   // ── Import external repository ──────────────────────────────────
 
-  .post('/repos/import-external', async (c) => {
-    const user = c.get('user');
-    if (!user) return c.json({ error: 'Authentication required' }, 401);
+  .post("/repos/import-external", async (c) => {
+    const user = c.get("user");
+    if (!user) throw new AuthenticationError();
 
     let body: {
       url?: string;
@@ -37,33 +44,34 @@ export default new Hono<AuthenticatedRouteEnv>()
       body = await c.req.json();
     } catch {
       // Request body is not valid JSON
-      return c.json({ error: 'Invalid JSON body' }, 400);
+      throw new BadRequestError("Invalid JSON body");
     }
 
     const { url, space_id, name, auth, description, visibility } = body;
 
-    if (!url || typeof url !== 'string') {
-      return c.json({ error: 'url is required' }, 400);
+    if (!url || typeof url !== "string") {
+      throw new BadRequestError("url is required");
     }
 
-    if (!space_id || typeof space_id !== 'string') {
-      return c.json({ error: 'space_id is required' }, 400);
+    if (!space_id || typeof space_id !== "string") {
+      throw new BadRequestError("space_id is required");
     }
 
     // Validate URL format
+    let parsedUrl: URL;
     try {
-      const parsed = new URL(url);
-      if (parsed.protocol !== 'https:' && parsed.protocol !== 'http:') {
-        return c.json({ error: 'Only https:// URLs are supported' }, 400);
-      }
+      parsedUrl = new URL(url);
     } catch {
       // URL constructor throws on malformed input
-      return c.json({ error: 'Invalid URL format' }, 400);
+      throw new BadRequestError("Invalid URL format");
+    }
+    if (parsedUrl.protocol !== "https:" && parsedUrl.protocol !== "http:") {
+      throw new BadRequestError("Only https:// URLs are supported");
     }
 
     const bucket = c.env.GIT_OBJECTS;
     if (!bucket) {
-      return c.json({ error: 'Git storage not configured' }, 500);
+      throw new InternalError("Git storage not configured");
     }
 
     const authHeader = buildAuthHeader(auth);
@@ -72,10 +80,10 @@ export default new Hono<AuthenticatedRouteEnv>()
       const result = await importExternalRepository(c.env.DB, bucket, {
         accountId: space_id,
         url,
-        name: typeof name === 'string' ? name : undefined,
+        name: typeof name === "string" ? name : undefined,
         authHeader,
-        description: typeof description === 'string' ? description : undefined,
-        visibility: visibility === 'public' ? 'public' : 'private',
+        description: typeof description === "string" ? description : undefined,
+        visibility: visibility === "public" ? "public" : "private",
       });
 
       return c.json({
@@ -92,35 +100,39 @@ export default new Hono<AuthenticatedRouteEnv>()
         },
       }, 201);
     } catch (err) {
-      const message = err instanceof Error ? err.message : 'Import failed';
-      logError('External import failed', err, { module: 'routes/external-import' });
+      if (isAppError(err)) throw err;
+      const message = err instanceof Error ? err.message : "Import failed";
+      logError("External import failed", err, {
+        module: "routes/external-import",
+      });
 
-      if (message.includes('already exists')) {
-        return c.json({ error: message }, 409);
+      if (message.includes("already exists")) {
+        throw new ConflictError(message);
       }
-      if (message.includes('HTTP 401') || message.includes('HTTP 403')) {
-        return c.json({ error: 'Authentication failed — check your credentials' }, 401);
+      if (message.includes("HTTP 401") || message.includes("HTTP 403")) {
+        throw new AuthenticationError(
+          "Authentication failed: check your credentials",
+        );
       }
-      if (message.includes('HTTP 404')) {
-        return c.json({ error: 'Repository not found at the given URL' }, 404);
+      if (message.includes("HTTP 404")) {
+        throw new NotFoundError("Repository");
       }
 
-      return c.json({ error: message }, 500);
+      throw new InternalError(message);
     }
   })
-
   // ── Fetch remote updates ────────────────────────────────────────
 
-  .post('/repos/:repoId/fetch-remote', async (c) => {
-    const user = c.get('user');
-    if (!user) return c.json({ error: 'Authentication required' }, 401);
+  .post("/repos/:repoId/fetch-remote", async (c) => {
+    const user = c.get("user");
+    if (!user) throw new AuthenticationError();
 
-    const repoId = c.req.param('repoId');
-    if (!repoId) return c.json({ error: 'repoId is required' }, 400);
+    const repoId = c.req.param("repoId");
+    if (!repoId) throw new BadRequestError("repoId is required");
 
     const bucket = c.env.GIT_OBJECTS;
     if (!bucket) {
-      return c.json({ error: 'Git storage not configured' }, 500);
+      throw new InternalError("Git storage not configured");
     }
 
     // Verify repo exists and has a remote URL
@@ -134,11 +146,11 @@ export default new Hono<AuthenticatedRouteEnv>()
       .get();
 
     if (!repo) {
-      return c.json({ error: 'Repository not found' }, 404);
+      throw new NotFoundError("Repository");
     }
 
     if (!repo.remoteCloneUrl) {
-      return c.json({ error: 'Repository does not have a remote origin' }, 400);
+      throw new BadRequestError("Repository does not have a remote origin");
     }
 
     try {
@@ -148,11 +160,15 @@ export default new Hono<AuthenticatedRouteEnv>()
         new_commits: result.newCommits,
         updated_branches: result.updatedBranches,
         new_tags: result.newTags,
-        up_to_date: result.newCommits === 0 && result.updatedBranches.length === 0,
+        up_to_date: result.newCommits === 0 &&
+          result.updatedBranches.length === 0,
       });
     } catch (err) {
-      const message = err instanceof Error ? err.message : 'Fetch failed';
-      logError('Remote fetch failed', err, { module: 'routes/external-import' });
-      return c.json({ error: message }, 500);
+      if (isAppError(err)) throw err;
+      const message = err instanceof Error ? err.message : "Fetch failed";
+      logError("Remote fetch failed", err, {
+        module: "routes/external-import",
+      });
+      throw new InternalError(message);
     }
   });

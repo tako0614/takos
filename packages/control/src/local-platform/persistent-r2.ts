@@ -6,10 +6,10 @@
  * where a real R2 bucket is not available.
  */
 
-import { createHash } from 'node:crypto';
+import { createHash } from "node:crypto";
 import { Buffer } from "node:buffer";
-import type { R2Bucket, R2Object, R2ObjectBody } from '../shared/types/bindings.ts';
-import { readJsonFile, writeJsonFile } from './persistent-shared.ts';
+import type { R2Bucket, R2ObjectBody } from "../shared/types/bindings.ts";
+import { readJsonFile, writeJsonFile } from "./persistent-shared.ts";
 
 type BucketRecord = {
   key: string;
@@ -38,22 +38,30 @@ type BucketState = {
   uploads: Record<string, MultipartUploadRecord>;
 };
 
-type LegacyBucketState = Record<string, Omit<BucketRecord, 'storageClass'> & { storageClass?: string }>;
+type LegacyBucketState = Record<
+  string,
+  Omit<BucketRecord, "storageClass"> & { storageClass?: string }
+>;
 
 function hashKey(key: string): string {
-  return createHash('sha256').update(key).digest('hex');
+  return createHash("sha256").update(key).digest("hex");
 }
 
 function encodeBase64(bytes: ArrayBuffer): string {
-  return Buffer.from(bytes).toString('base64');
+  return Buffer.from(bytes).toString("base64");
 }
 
 function decodeBase64(value: string): ArrayBuffer {
-  const buffer = Buffer.from(value, 'base64');
-  return buffer.buffer.slice(buffer.byteOffset, buffer.byteOffset + buffer.byteLength) as ArrayBuffer;
+  const buffer = Buffer.from(value, "base64");
+  return buffer.buffer.slice(
+    buffer.byteOffset,
+    buffer.byteOffset + buffer.byteLength,
+  ) as ArrayBuffer;
 }
 
-function normalizeHttpMetadata(metadata?: Record<string, string> | Headers): Record<string, string> {
+function normalizeHttpMetadata(
+  metadata?: Record<string, string> | Headers,
+): Record<string, string> {
   if (!metadata) return {};
   if (metadata instanceof Headers) {
     return Object.fromEntries(metadata.entries());
@@ -61,13 +69,17 @@ function normalizeHttpMetadata(metadata?: Record<string, string> | Headers): Rec
   return { ...metadata };
 }
 
-function isBucketState(raw: BucketState | LegacyBucketState): raw is BucketState {
-  return 'objects' in raw && 'uploads' in raw &&
-    typeof (raw as Record<string, unknown>).objects === 'object' &&
+function isBucketState(
+  raw: BucketState | LegacyBucketState,
+): raw is BucketState {
+  return "objects" in raw && "uploads" in raw &&
+    typeof (raw as Record<string, unknown>).objects === "object" &&
     !Array.isArray((raw as Record<string, unknown>).objects);
 }
 
-function normalizeBucketState(raw: BucketState | LegacyBucketState): BucketState {
+function normalizeBucketState(
+  raw: BucketState | LegacyBucketState,
+): BucketState {
   if (isBucketState(raw)) {
     return {
       objects: Object.fromEntries(
@@ -75,7 +87,7 @@ function normalizeBucketState(raw: BucketState | LegacyBucketState): BucketState
           key,
           {
             ...record,
-            storageClass: record.storageClass ?? 'Standard',
+            storageClass: record.storageClass ?? "Standard",
           },
         ]),
       ),
@@ -89,7 +101,7 @@ function normalizeBucketState(raw: BucketState | LegacyBucketState): BucketState
         key,
         {
           ...record,
-          storageClass: record.storageClass ?? 'Standard',
+          storageClass: record.storageClass ?? "Standard",
         },
       ]),
     ),
@@ -98,7 +110,7 @@ function normalizeBucketState(raw: BucketState | LegacyBucketState): BucketState
 }
 
 function toPartEtag(bytes: ArrayBuffer): string {
-  const digest = createHash('sha256').update(Buffer.from(bytes)).digest('hex');
+  const digest = createHash("sha256").update(Buffer.from(bytes)).digest("hex");
   return `"${digest}"`;
 }
 
@@ -106,10 +118,13 @@ async function toBuffer(
   value: ReadableStream | ArrayBuffer | ArrayBufferView | string | Blob | null,
 ): Promise<ArrayBuffer> {
   if (value === null) return new ArrayBuffer(0);
-  if (typeof value === 'string') return new TextEncoder().encode(value).buffer;
+  if (typeof value === "string") return new TextEncoder().encode(value).buffer;
   if (value instanceof ArrayBuffer) return value;
   if (ArrayBuffer.isView(value)) {
-    return value.buffer.slice(value.byteOffset, value.byteOffset + value.byteLength) as ArrayBuffer;
+    return value.buffer.slice(
+      value.byteOffset,
+      value.byteOffset + value.byteLength,
+    ) as ArrayBuffer;
   }
   if (value instanceof Blob) return value.arrayBuffer();
   return new Response(value).arrayBuffer();
@@ -121,14 +136,14 @@ function createR2Object(
   customMetadata: Record<string, string>,
   httpMetadata: Record<string, string>,
   uploadedAt: string,
-  storageClass = 'Standard',
+  storageClass = "Standard",
 ): R2ObjectBody {
   const blob = new Blob([bytes]);
   const etag = `"${hashKey(key)}-${bytes.byteLength}"`;
   const uploaded = new Date(uploadedAt);
-  const object = {
+  const object: R2ObjectBody = {
     key,
-    version: 'local',
+    version: "local",
     size: bytes.byteLength,
     etag,
     httpEtag: etag,
@@ -162,10 +177,14 @@ function createR2Object(
     },
   };
 
-  return object as unknown as R2ObjectBody;
+  return object;
 }
 
-function requireMultipartUpload(state: BucketState, uploadId: string, key: string): MultipartUploadRecord {
+function requireMultipartUpload(
+  state: BucketState,
+  uploadId: string,
+  key: string,
+): MultipartUploadRecord {
   const upload = state.uploads[uploadId];
   if (!upload) {
     throw new Error(`Multipart upload ${uploadId} is not active`);
@@ -219,7 +238,10 @@ export function createPersistentR2Bucket(filePath: string): R2Bucket {
 
   async function loadState(): Promise<BucketState> {
     if (cache) return cache;
-    const raw = await readJsonFile<BucketState | LegacyBucketState>(filePath, { objects: {}, uploads: {} });
+    const raw = await readJsonFile<BucketState | LegacyBucketState>(filePath, {
+      objects: {},
+      uploads: {},
+    });
     cache = normalizeBucketState(raw);
     return cache;
   }
@@ -231,8 +253,18 @@ export function createPersistentR2Bucket(filePath: string): R2Bucket {
 
   async function putObject(
     key: string,
-    value: ReadableStream | ArrayBuffer | ArrayBufferView | string | Blob | null,
-    options?: { customMetadata?: Record<string, string>; httpMetadata?: Record<string, string> | Headers; storageClass?: string },
+    value:
+      | ReadableStream
+      | ArrayBuffer
+      | ArrayBufferView
+      | string
+      | Blob
+      | null,
+    options?: {
+      customMetadata?: Record<string, string>;
+      httpMetadata?: Record<string, string> | Headers;
+      storageClass?: string;
+    },
   ) {
     const state = await loadState();
     const bytes = await toBuffer(value);
@@ -242,7 +274,7 @@ export function createPersistentR2Bucket(filePath: string): R2Bucket {
       uploadedAt: new Date().toISOString(),
       customMetadata: { ...(options?.customMetadata ?? {}) },
       httpMetadata: normalizeHttpMetadata(options?.httpMetadata),
-      storageClass: options?.storageClass ?? 'Standard',
+      storageClass: options?.storageClass ?? "Standard",
     };
     await flushState();
     return (await bucket.head(key))!;
@@ -274,7 +306,9 @@ export function createPersistentR2Bucket(filePath: string): R2Bucket {
         delete state.uploads[uploadId];
         await flushState();
       },
-      async complete(uploadedParts: Array<{ partNumber: number; etag: string }>) {
+      async complete(
+        uploadedParts: Array<{ partNumber: number; etag: string }>,
+      ) {
         const state = await loadState();
         const upload = requireMultipartUpload(state, uploadId, key);
         const bytes = toUploadedBytes(uploadedParts, upload);
@@ -289,7 +323,7 @@ export function createPersistentR2Bucket(filePath: string): R2Bucket {
     };
   }
 
-  const bucket = {
+  const bucket: R2Bucket = {
     async head(key: string) {
       const state = await loadState();
       const record = state.objects[key];
@@ -302,12 +336,14 @@ export function createPersistentR2Bucket(filePath: string): R2Bucket {
         record.uploadedAt,
         record.storageClass,
       );
-      return {
-        ...object,
-        body: null,
-      } as unknown as R2Object;
+      return object;
     },
-    async get(key: string, options?: { range?: { offset?: number; length?: number; suffix?: number } }) {
+    async get(
+      key: string,
+      options?: {
+        range?: { offset?: number; length?: number; suffix?: number };
+      },
+    ) {
       const state = await loadState();
       const record = state.objects[key];
       if (!record) return null;
@@ -334,8 +370,18 @@ export function createPersistentR2Bucket(filePath: string): R2Bucket {
     },
     async put(
       key: string,
-      value: ReadableStream | ArrayBuffer | ArrayBufferView | string | Blob | null,
-      options?: { customMetadata?: Record<string, string>; httpMetadata?: Record<string, string> | Headers; storageClass?: string },
+      value:
+        | ReadableStream
+        | ArrayBuffer
+        | ArrayBufferView
+        | string
+        | Blob
+        | null,
+      options?: {
+        customMetadata?: Record<string, string>;
+        httpMetadata?: Record<string, string> | Headers;
+        storageClass?: string;
+      },
     ) {
       return putObject(key, value, options);
     },
@@ -347,16 +393,20 @@ export function createPersistentR2Bucket(filePath: string): R2Bucket {
     },
     async list(options?: { prefix?: string; limit?: number; cursor?: string }) {
       const state = await loadState();
-      const prefix = options?.prefix ?? '';
+      const prefix = options?.prefix ?? "";
       const limit = options?.limit ?? 1000;
-      const offset = options?.cursor ? Number.parseInt(options.cursor, 10) || 0 : 0;
+      const offset = options?.cursor
+        ? Number.parseInt(options.cursor, 10) || 0
+        : 0;
       const keys = Object.keys(state.objects)
         .filter((key) => key.startsWith(prefix))
         .sort((a, b) => a.localeCompare(b));
       const page = keys.slice(offset, offset + limit);
       const nextOffset = offset + page.length;
       return {
-        objects: await Promise.all(page.map(async (key) => (await bucket.head(key))!)),
+        objects: await Promise.all(
+          page.map(async (key) => (await bucket.head(key))!),
+        ),
         truncated: nextOffset < keys.length,
         cursor: nextOffset < keys.length ? String(nextOffset) : undefined,
         delimitedPrefixes: [],
@@ -364,7 +414,12 @@ export function createPersistentR2Bucket(filePath: string): R2Bucket {
     },
     async createMultipartUpload(
       key: string,
-      options?: { customMetadata?: Record<string, string>; httpMetadata?: Record<string, string> | Headers; storageClass?: string; ssecKey?: ArrayBuffer | string },
+      options?: {
+        customMetadata?: Record<string, string>;
+        httpMetadata?: Record<string, string> | Headers;
+        storageClass?: string;
+        ssecKey?: ArrayBuffer | string;
+      },
     ) {
       const state = await loadState();
       const uploadId = crypto.randomUUID();
@@ -372,7 +427,7 @@ export function createPersistentR2Bucket(filePath: string): R2Bucket {
         key,
         customMetadata: { ...(options?.customMetadata ?? {}) },
         httpMetadata: normalizeHttpMetadata(options?.httpMetadata),
-        storageClass: options?.storageClass ?? 'Standard',
+        storageClass: options?.storageClass ?? "Standard",
         parts: {},
       };
       await flushState();
@@ -387,5 +442,5 @@ export function createPersistentR2Bucket(filePath: string): R2Bucket {
     },
   };
 
-  return bucket as unknown as R2Bucket;
+  return bucket;
 }

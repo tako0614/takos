@@ -1,21 +1,24 @@
-import { createSignal } from 'solid-js';
-import { Icons } from '../../../lib/Icons.tsx';
-import type { SourceItem, SourceItemTakopack } from '../../../hooks/useSourceData.ts';
+import { createSignal } from "solid-js";
+import { Icons } from "../../../lib/Icons.tsx";
+import type {
+  SourceItem,
+  SourceItemPackage,
+} from "../../../hooks/useSourceData.ts";
 
 interface CatalogRepoCardProps {
   item: SourceItem;
-  takopack: SourceItemTakopack;
+  pkg: SourceItemPackage;
   installingId: string | null;
   onSelect: (item: SourceItem) => void;
   onInstall: (item: SourceItem) => void;
   onStar: (item: SourceItem) => void;
   onOpenRepo: (item: SourceItem) => void;
-  onManage: (action: 'rollback' | 'uninstall', item: SourceItem) => void;
+  onManage: (action: "rollback" | "uninstall", item: SourceItem) => void;
 }
 
 export function CatalogRepoCard({
   item,
-  takopack,
+  pkg,
   installingId,
   onSelect,
   onInstall,
@@ -27,7 +30,7 @@ export function CatalogRepoCard({
   const installing = installingId === item.id;
   const installed = item.installation?.installed ?? false;
 
-  const ownerUsername = item.owner.username || item.owner.name || '?';
+  const ownerUsername = item.owner.username || item.owner.name || "?";
   const ownerInitial = ownerUsername.charAt(0).toUpperCase();
 
   return (
@@ -37,17 +40,19 @@ export function CatalogRepoCard({
     >
       {/* App icon */}
       <div class="mb-2.5">
-        {item.owner.avatar_url ? (
-          <img
-            src={item.owner.avatar_url}
-            alt=""
-            class="w-12 h-12 rounded-xl object-cover"
-          />
-        ) : (
-          <div class="w-12 h-12 rounded-xl bg-zinc-200 dark:bg-zinc-700 flex items-center justify-center text-xl font-bold text-zinc-500 dark:text-zinc-300">
-            {ownerInitial}
-          </div>
-        )}
+        {item.owner.avatar_url
+          ? (
+            <img
+              src={item.owner.avatar_url}
+              alt=""
+              class="w-12 h-12 rounded-xl object-cover"
+            />
+          )
+          : (
+            <div class="w-12 h-12 rounded-xl bg-zinc-200 dark:bg-zinc-700 flex items-center justify-center text-xl font-bold text-zinc-500 dark:text-zinc-300">
+              {ownerInitial}
+            </div>
+          )}
       </div>
 
       {/* Name */}
@@ -61,13 +66,13 @@ export function CatalogRepoCard({
       </p>
 
       {/* Description */}
-      {item.description ? (
-        <p class="text-[11px] text-zinc-500 dark:text-zinc-400 line-clamp-2 leading-relaxed flex-1">
-          {item.description}
-        </p>
-      ) : (
-        <div class="flex-1" />
-      )}
+      {item.description
+        ? (
+          <p class="text-[11px] text-zinc-500 dark:text-zinc-400 line-clamp-2 leading-relaxed flex-1">
+            {item.description}
+          </p>
+        )
+        : <div class="flex-1" />}
 
       {/* Bottom row */}
       <div
@@ -79,82 +84,96 @@ export function CatalogRepoCard({
           type="button"
           class={`flex items-center gap-1 text-[11px] transition-colors ${
             item.is_starred
-              ? 'text-amber-500 dark:text-amber-400'
-              : 'text-zinc-400 dark:text-zinc-500 hover:text-amber-500'
+              ? "text-amber-500 dark:text-amber-400"
+              : "text-zinc-400 dark:text-zinc-500 hover:text-amber-500"
           }`}
           onClick={() => onStar(item)}
         >
           <Icons.Star class="w-3.5 h-3.5" />
-          {item.stars > 0 ? item.stars : ''}
+          {item.stars > 0 ? item.stars : ""}
         </button>
 
         {/* Primary action */}
-        {item.is_mine ? (
-          <button
-            type="button"
-            class="text-[11px] font-semibold text-zinc-600 dark:text-zinc-300 hover:text-zinc-900 dark:hover:text-zinc-100 transition-colors"
-            onClick={() => onOpenRepo(item)}
-          >
-            Open
-          </button>
-        ) : installed ? (
-          <div class="relative">
+        {item.is_mine
+          ? (
             <button
               type="button"
-              class="flex items-center gap-0.5 text-[11px] font-semibold text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-200 transition-colors"
-              onClick={() => setManageOpen((prev) => !prev)}
+              class="text-[11px] font-semibold text-zinc-600 dark:text-zinc-300 hover:text-zinc-900 dark:hover:text-zinc-100 transition-colors"
+              onClick={() => onOpenRepo(item)}
             >
-              <Icons.Check class="w-3 h-3" />
-              {item.installation?.installed_version ? `v${item.installation.installed_version}` : 'Installed'}
-              <Icons.ChevronDown class="w-2.5 h-2.5 ml-0.5" />
+              Open
             </button>
-            {manageOpen() && (
-              <>
-                <div
-                  class="fixed inset-0 z-10"
-                  onClick={() => setManageOpen(false)}
-                />
-                <div class="absolute right-0 bottom-full mb-1 z-20 bg-white dark:bg-zinc-900 rounded-xl shadow-xl border border-zinc-100 dark:border-zinc-800 overflow-hidden min-w-[130px]">
-                  <button
-                    type="button"
-                    class="w-full text-left px-3 py-2 text-xs text-zinc-700 dark:text-zinc-200 hover:bg-zinc-50 dark:hover:bg-zinc-800"
-                    onClick={() => { onManage('rollback', item); setManageOpen(false); }}
-                  >
-                    Rollback
-                  </button>
-                  <button
-                    type="button"
-                    class="w-full text-left px-3 py-2 text-xs text-red-500 hover:bg-zinc-50 dark:hover:bg-zinc-800"
-                    onClick={() => { onManage('uninstall', item); setManageOpen(false); }}
-                  >
-                    Uninstall
-                  </button>
-                </div>
-              </>
-            )}
-          </div>
-        ) : takopack.available ? (
-          <button
-            type="button"
-            disabled={installing}
-            class="text-[11px] font-semibold text-emerald-600 dark:text-emerald-400 hover:text-emerald-800 dark:hover:text-emerald-200 disabled:opacity-40 transition-colors"
-            onClick={() => onInstall(item)}
-          >
-            {installing ? (
-              <Icons.Loader class="w-3.5 h-3.5 animate-spin inline" />
-            ) : (
-              'Install'
-            )}
-          </button>
-        ) : (
-          <button
-            type="button"
-            class="text-[11px] font-semibold text-zinc-400 dark:text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300 transition-colors"
-            onClick={() => onOpenRepo(item)}
-          >
-            View
-          </button>
-        )}
+          )
+          : installed
+          ? (
+            <div class="relative">
+              <button
+                type="button"
+                class="flex items-center gap-0.5 text-[11px] font-semibold text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-200 transition-colors"
+                onClick={() => setManageOpen((prev) => !prev)}
+              >
+                <Icons.Check class="w-3 h-3" />
+                {item.installation?.installed_version
+                  ? `v${item.installation.installed_version}`
+                  : "Installed"}
+                <Icons.ChevronDown class="w-2.5 h-2.5 ml-0.5" />
+              </button>
+              {manageOpen() && (
+                <>
+                  <div
+                    class="fixed inset-0 z-10"
+                    onClick={() => setManageOpen(false)}
+                  />
+                  <div class="absolute right-0 bottom-full mb-1 z-20 bg-white dark:bg-zinc-900 rounded-xl shadow-xl border border-zinc-100 dark:border-zinc-800 overflow-hidden min-w-[130px]">
+                    <button
+                      type="button"
+                      class="w-full text-left px-3 py-2 text-xs text-zinc-700 dark:text-zinc-200 hover:bg-zinc-50 dark:hover:bg-zinc-800"
+                      onClick={() => {
+                        onManage("rollback", item);
+                        setManageOpen(false);
+                      }}
+                    >
+                      Rollback
+                    </button>
+                    <button
+                      type="button"
+                      class="w-full text-left px-3 py-2 text-xs text-red-500 hover:bg-zinc-50 dark:hover:bg-zinc-800"
+                      onClick={() => {
+                        onManage("uninstall", item);
+                        setManageOpen(false);
+                      }}
+                    >
+                      Uninstall
+                    </button>
+                  </div>
+                </>
+              )}
+            </div>
+          )
+          : pkg.available
+          ? (
+            <button
+              type="button"
+              disabled={installing}
+              class="text-[11px] font-semibold text-emerald-600 dark:text-emerald-400 hover:text-emerald-800 dark:hover:text-emerald-200 disabled:opacity-40 transition-colors"
+              onClick={() => onInstall(item)}
+            >
+              {installing
+                ? <Icons.Loader class="w-3.5 h-3.5 animate-spin inline" />
+                : (
+                  "Install"
+                )}
+            </button>
+          )
+          : (
+            <button
+              type="button"
+              class="text-[11px] font-semibold text-zinc-400 dark:text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300 transition-colors"
+              onClick={() => onOpenRepo(item)}
+            >
+              View
+            </button>
+          )}
       </div>
     </article>
   );

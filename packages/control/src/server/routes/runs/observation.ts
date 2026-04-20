@@ -1,23 +1,17 @@
-import { getDb } from '../../../infra/db/index.ts';
-import { runEvents } from '../../../infra/db/schema.ts';
-import { eq, and, gt, asc } from 'drizzle-orm';
-import type { Env, RunStatus } from '../../../shared/types/index.ts';
-import type { PersistedRunEvent } from '../../../application/services/offload/run-events.ts';
-import { getRunEventsAfterFromR2 } from '../../../application/services/offload/run-events.ts';
-import {
-  deriveTerminalStatusFromRunEvent,
-} from '../../../application/services/run-notifier/index.ts';
+import { getDb } from "../../../infra/db/index.ts";
+import { runEvents } from "../../../infra/db/schema.ts";
+import { and, asc, eq, gt } from "drizzle-orm";
+import type { Env, RunStatus } from "../../../shared/types/index.ts";
+import type { PersistedRunEvent } from "../../../application/services/offload/run-events.ts";
+import { getRunEventsAfterFromR2 } from "../../../application/services/offload/run-events.ts";
+import { deriveTerminalStatusFromRunEvent } from "../../../application/services/run-notifier/index.ts";
+import { isRunTerminalStatus } from "../../../application/services/run-notifier/run-events-contract.ts";
 
 import {
   fetchWithTimeout,
-} from '../../../application/services/execution/run-events.ts';
-import { MAX_EVENTS_PER_RESPONSE } from '../../../shared/config/limits.ts';
-import { textDate } from '../../../shared/utils/db-guards.ts';
-
-type RunNotifierNamespace = {
-  idFromName(name: string): unknown;
-  get(id: unknown): { fetch(input: unknown, init?: unknown): Promise<Response> };
-};
+} from "../../../application/services/execution/run-events.ts";
+import { MAX_EVENTS_PER_RESPONSE } from "../../../shared/config/limits.ts";
+import { textDate } from "../../../shared/utils/db-guards.ts";
 
 export type FormattedRunEvent = {
   id: number;
@@ -33,8 +27,12 @@ export type RunObservation = {
   runStatus: RunStatus;
 };
 
+const SSE_POLL_INTERVAL_MS = 1000;
+const SSE_HEARTBEAT_INTERVAL_MS = 15_000;
+const sseEncoder = new TextEncoder();
+
 function stringifyPersistedData(value: unknown): string {
-  if (typeof value === 'string') return value;
+  if (typeof value === "string") return value;
   try {
     return JSON.stringify(value);
   } catch {
@@ -43,7 +41,10 @@ function stringifyPersistedData(value: unknown): string {
   }
 }
 
-function formatRunEvents(persisted: PersistedRunEvent[], runId: string): FormattedRunEvent[] {
+function formatRunEvents(
+  persisted: PersistedRunEvent[],
+  runId: string,
+): FormattedRunEvent[] {
   return persisted.map((e) => ({
     id: e.event_id,
     event_id: String(e.event_id),
@@ -60,7 +61,10 @@ export function deriveRunStatusFromTimelineEvents(
 ): RunStatus {
   let derivedStatus: RunStatus | null = null;
   for (const event of events) {
-    const terminalStatus = deriveTerminalStatusFromRunEvent(event.type, event.data);
+    const terminalStatus = deriveTerminalStatusFromRunEvent(
+      event.type,
+      event.data,
+    );
     if (terminalStatus) {
       derivedStatus = terminalStatus;
     }
@@ -73,22 +77,30 @@ async function getNotifierBufferedEvents(
   runId: string,
   afterEventId: number,
 ): Promise<PersistedRunEvent[]> {
-  const namespace = env.RUN_NOTIFIER as unknown as RunNotifierNamespace;
+  const namespace = env.RUN_NOTIFIER;
   const id = namespace.idFromName(runId);
   const stub = namespace.get(id);
   const res = await fetchWithTimeout(
     stub,
     new Request(`https://internal.do/events?after=${afterEventId}`, {
-      headers: { 'X-Takos-Internal': '1' },
+      headers: { "X-Takos-Internal-Marker": "1" },
     }),
   );
   if (!res.ok) return [];
   const json = await res.json() as {
-    events?: Array<{ id: number; type: string; data: unknown; timestamp: number; event_id?: string }>;
+    events?: Array<
+      {
+        id: number;
+        type: string;
+        data: unknown;
+        timestamp: number;
+        event_id?: string;
+      }
+    >;
   };
   const events = Array.isArray(json.events) ? json.events : [];
   return events
-    .filter((e) => typeof e?.id === 'number' && Number.isFinite(e.id))
+    .filter((e) => typeof e?.id === "number" && Number.isFinite(e.id))
     .map((e) => ({
       event_id: e.id,
       type: e.type,
@@ -113,7 +125,7 @@ async function fetchRunEventsAfter(
     data: runEvents.data,
     createdAt: runEvents.createdAt,
   }).from(runEvents).where(
-    and(eq(runEvents.runId, runId), gt(runEvents.id, afterEventId))
+    and(eq(runEvents.runId, runId), gt(runEvents.id, afterEventId)),
   ).orderBy(asc(runEvents.id)).all();
 
   for (const e of d1Result) {
@@ -136,7 +148,11 @@ async function fetchRunEventsAfter(
     for (const e of r2Events) byId.set(e.event_id, e);
 
     try {
-      const buffered = await getNotifierBufferedEvents(env, runId, afterEventId);
+      const buffered = await getNotifierBufferedEvents(
+        env,
+        runId,
+        afterEventId,
+      );
       for (const e of buffered) byId.set(e.event_id, e);
     } catch {
       // DO buffer unavailable — D1 and R2 data is sufficient
@@ -155,6 +171,130 @@ export async function loadRunObservation(
   const persistedEvents = await fetchRunEventsAfter(env, runId, lastEventId);
   return {
     events: formatRunEvents(persistedEvents, runId),
-    runStatus: deriveRunStatusFromTimelineEvents(fallbackStatus, persistedEvents),
+    runStatus: deriveRunStatusFromTimelineEvents(
+      fallbackStatus,
+      persistedEvents,
+    ),
   };
+}
+
+function encodeSseFrame(lines: string[]): Uint8Array {
+  return sseEncoder.encode(`${lines.join("\n")}\n`);
+}
+
+function formatSseComment(comment: string): Uint8Array {
+  return encodeSseFrame([`: ${comment}`, ""]);
+}
+
+function formatRunSseEvent(event: FormattedRunEvent): Uint8Array {
+  const dataLines = event.data.split(/\r?\n/);
+  return encodeSseFrame([
+    `id: ${event.id}`,
+    `event: ${event.type}`,
+    ...dataLines.map((line) => `data: ${line}`),
+    "",
+  ]);
+}
+
+export function createPollingRunObservationStream(
+  source: (afterEventId: number) => Promise<RunObservation>,
+  initialLastEventId: number,
+  options?: {
+    pollIntervalMs?: number;
+    heartbeatIntervalMs?: number;
+  },
+): ReadableStream<Uint8Array> {
+  const pollIntervalMs = options?.pollIntervalMs ?? SSE_POLL_INTERVAL_MS;
+  const heartbeatIntervalMs = options?.heartbeatIntervalMs ??
+    SSE_HEARTBEAT_INTERVAL_MS;
+  let closed = false;
+  let sleepTimer: ReturnType<typeof setTimeout> | undefined;
+
+  return new ReadableStream<Uint8Array>({
+    start(controller) {
+      let lastEventId = initialLastEventId;
+      let lastHeartbeatAt = Date.now();
+
+      const close = () => {
+        if (closed) return;
+        closed = true;
+        if (sleepTimer) {
+          clearTimeout(sleepTimer);
+          sleepTimer = undefined;
+        }
+        controller.close();
+      };
+
+      const sleep = (ms: number) =>
+        new Promise<void>((resolve) => {
+          sleepTimer = setTimeout(() => {
+            sleepTimer = undefined;
+            resolve();
+          }, ms);
+        });
+
+      void (async () => {
+        controller.enqueue(formatSseComment("connected"));
+
+        while (!closed) {
+          const observation = await source(lastEventId);
+
+          if (observation.events.length > 0) {
+            for (const event of observation.events) {
+              lastEventId = event.id;
+              controller.enqueue(formatRunSseEvent(event));
+            }
+            lastHeartbeatAt = Date.now();
+            if (isRunTerminalStatus(observation.runStatus)) {
+              close();
+              return;
+            }
+            continue;
+          }
+
+          if (isRunTerminalStatus(observation.runStatus)) {
+            close();
+            return;
+          }
+
+          const now = Date.now();
+          if (now - lastHeartbeatAt >= heartbeatIntervalMs) {
+            controller.enqueue(formatSseComment("heartbeat"));
+            lastHeartbeatAt = now;
+          }
+
+          await sleep(pollIntervalMs);
+        }
+      })().catch((error) => {
+        if (!closed) {
+          controller.error(error);
+        }
+      });
+    },
+    cancel() {
+      closed = true;
+      if (sleepTimer) {
+        clearTimeout(sleepTimer);
+        sleepTimer = undefined;
+      }
+    },
+  });
+}
+
+export function createRunObservationSseStream(
+  env: Env,
+  runId: string,
+  fallbackStatus: RunStatus,
+  lastEventId: number,
+  options?: {
+    pollIntervalMs?: number;
+    heartbeatIntervalMs?: number;
+  },
+): ReadableStream<Uint8Array> {
+  return createPollingRunObservationStream(
+    (afterEventId) =>
+      loadRunObservation(env, runId, fallbackStatus, afterEventId),
+    lastEventId,
+    options,
+  );
 }

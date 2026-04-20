@@ -5,6 +5,7 @@ import {
   createDefaultOciOrchestratorBackendResolver,
   createLocalOciOrchestratorFetchForTests,
 } from "../oci-orchestrator.ts";
+import { loadState } from "../oci-orchestrator-storage.ts";
 import type {
   ContainerBackend,
   ContainerCreateOpts,
@@ -116,7 +117,7 @@ Deno.test("oci orchestrator local service - stores deployments and exposes servi
           deployment_id: "dep-oci-1",
           space_id: "space-1",
           artifact_ref: "worker-v1",
-          provider: {
+          backend: {
             name: "k8s",
             config: {
               namespace: "takos",
@@ -132,12 +133,20 @@ Deno.test("oci orchestrator local service - stores deployments and exposes servi
             artifact: {
               image_ref: "ghcr.io/takos/worker:latest",
               exposed_port: 8080,
+              health_path: "/healthz",
+              health_interval: 5,
+              health_timeout: 30,
+              health_unhealthy_threshold: 3,
             },
           },
           runtime: {
+            profile: "container-service",
             compatibility_date: "2026-03-22",
             compatibility_flags: ["nodejs_compat"],
             limits: { cpu_ms: 50 },
+            env_vars: {
+              NODE_ENV: "production",
+            },
           },
         }),
       }),
@@ -152,8 +161,8 @@ Deno.test("oci orchestrator local service - stores deployments and exposes servi
         space_id: "space-1",
         route_ref: "worker",
         deployment_id: "dep-oci-1",
-        provider_name: "k8s",
-        provider_config: {
+        backend_name: "k8s",
+        backend_config: {
           namespace: "takos",
           deploymentName: "worker",
         },
@@ -170,7 +179,7 @@ Deno.test("oci orchestrator local service - stores deployments and exposes servi
     assertObjectMatch(await serviceResponse.json(), {
       service: {
         deployment_id: "dep-oci-1",
-        provider_name: "k8s",
+        backend_name: "k8s",
         image_ref: "ghcr.io/takos/worker:latest",
       },
     });
@@ -224,7 +233,7 @@ Deno.test("oci orchestrator local service - stores deployments and exposes servi
     }
   }
 });
-Deno.test("oci orchestrator local service - resolves provider-native backends from provider config", async () => {
+Deno.test("oci orchestrator local service - resolves backend-native implementations from backend config", async () => {
   tempDir = await mkdtemp(path.join(os.tmpdir(), "takos-oci-orchestrator-"));
   Deno.env.set("OCI_ORCHESTRATOR_DATA_DIR", tempDir);
   Deno.env.delete("TAKOS_LOCAL_DATA_DIR");
@@ -236,24 +245,24 @@ Deno.test("oci orchestrator local service - resolves provider-native backends fr
 
     assertEquals(
       resolver({
-        providerName: "k8s",
-        providerConfig: { namespace: "takos" },
+        backendName: "k8s",
+        backendConfig: { namespace: "takos" },
       }).constructor.name,
       "K8sContainerBackend",
     );
 
     assertEquals(
       resolver({
-        providerName: "cloud-run",
-        providerConfig: { projectId: "takos-project", region: "us-central1" },
+        backendName: "cloud-run",
+        backendConfig: { projectId: "takos-project", region: "us-central1" },
       }).constructor.name,
       "CloudRunContainerBackend",
     );
 
     assertEquals(
       resolver({
-        providerName: "ecs",
-        providerConfig: {
+        backendName: "ecs",
+        backendConfig: {
           region: "us-east-1",
           clusterArn: "arn:aws:ecs:us-east-1:123456789012:cluster/takos",
           taskDefinitionFamily: "takos-worker",
@@ -275,7 +284,44 @@ Deno.test("oci orchestrator local service - resolves provider-native backends fr
     }
   }
 });
-Deno.test("oci orchestrator local service - uses provider-specific backends across redeploy, logs, and remove", async () => {
+
+Deno.test("oci orchestrator local service - defaults missing backend fields when loading state", async () => {
+  tempDir = await mkdtemp(path.join(os.tmpdir(), "takos-oci-orchestrator-"));
+  Deno.env.set("OCI_ORCHESTRATOR_DATA_DIR", tempDir);
+  Deno.env.delete("TAKOS_LOCAL_DATA_DIR");
+  try {
+    await Deno.writeTextFile(
+      path.join(tempDir, "state.json"),
+      JSON.stringify({
+        services: {
+          "space-1::worker": {
+            space_id: "space-1",
+            route_ref: "worker",
+            deployment_id: "dep-default",
+            artifact_ref: "default-worker",
+          },
+        },
+      }),
+    );
+
+    const state = await loadState();
+    assertEquals(state.services["space-1::worker"].backend_name, "oci");
+    assertEquals(state.services["space-1::worker"].backend_config, null);
+  } finally {
+    for (const [key, value] of Object.entries(originalEnv)) {
+      if (value === undefined) {
+        Deno.env.delete(key);
+      } else {
+        Deno.env.set(key, value);
+      }
+    }
+    if (tempDir) {
+      await rm(tempDir, { recursive: true, force: true });
+      tempDir = null;
+    }
+  }
+});
+Deno.test("oci orchestrator local service - uses backend-specific implementations across redeploy, logs, and remove", async () => {
   tempDir = await mkdtemp(path.join(os.tmpdir(), "takos-oci-orchestrator-"));
   Deno.env.set("OCI_ORCHESTRATOR_DATA_DIR", tempDir);
   Deno.env.delete("TAKOS_LOCAL_DATA_DIR");
@@ -286,8 +332,8 @@ Deno.test("oci orchestrator local service - uses provider-specific backends acro
     const k8sBackend = createObservedContainerBackend("k8s", events);
     const fetch = await createLocalOciOrchestratorFetchForTests({
       backendResolver: (
-        { providerName },
-      ) => (providerName === "k8s" ? k8sBackend : dockerBackend),
+        { backendName },
+      ) => (backendName === "k8s" ? k8sBackend : dockerBackend),
     });
 
     const firstDeploy = await fetch(
@@ -298,7 +344,7 @@ Deno.test("oci orchestrator local service - uses provider-specific backends acro
           deployment_id: "dep-k8s-1",
           space_id: "space-1",
           artifact_ref: "worker-v1",
-          provider: {
+          backend: {
             name: "k8s",
             config: { namespace: "takos" },
           },
@@ -319,7 +365,7 @@ Deno.test("oci orchestrator local service - uses provider-specific backends acro
     assertEquals(firstDeploy.status, 200);
     assertObjectMatch(await firstDeploy.json(), {
       service: {
-        provider_name: "k8s",
+        backend_name: "k8s",
         container_id: "k8s-0",
       },
       resolved_endpoint: {
@@ -336,7 +382,7 @@ Deno.test("oci orchestrator local service - uses provider-specific backends acro
           deployment_id: "dep-oci-2",
           space_id: "space-1",
           artifact_ref: "worker-v2",
-          provider: {
+          backend: {
             name: "oci",
           },
           target: {
@@ -356,7 +402,7 @@ Deno.test("oci orchestrator local service - uses provider-specific backends acro
     assertEquals(secondDeploy.status, 200);
     assertObjectMatch(await secondDeploy.json(), {
       service: {
-        provider_name: "oci",
+        backend_name: "oci",
         container_id: "docker-0",
       },
       resolved_endpoint: {
@@ -384,24 +430,20 @@ Deno.test("oci orchestrator local service - uses provider-specific backends acro
     assertEquals(removeResponse.status, 200);
     assertObjectMatch(await removeResponse.json(), {
       service: {
-        provider_name: "oci",
+        backend_name: "oci",
         status: "removed",
       },
     });
 
     assertEquals(events, [
-      "k8s:stop:takos-space-1-worker",
-      "k8s:remove:takos-space-1-worker",
       "k8s:pull:ghcr.io/takos/worker:k8s",
-      "k8s:create:takos-space-1-worker",
+      "k8s:create:takos-space-1-worker-dep-k8s-1",
       "k8s:ip:k8s-0",
+      "docker:pull:ghcr.io/takos/worker:oci",
+      "docker:create:takos-space-1-worker-dep-oci-2",
+      "docker:ip:docker-0",
       "k8s:stop:k8s-0",
       "k8s:remove:k8s-0",
-      "docker:stop:takos-space-1-worker",
-      "docker:remove:takos-space-1-worker",
-      "docker:pull:ghcr.io/takos/worker:oci",
-      "docker:create:takos-space-1-worker",
-      "docker:ip:docker-0",
       "docker:logs:docker-0",
       "docker:stop:docker-0",
       "docker:remove:docker-0",
@@ -409,11 +451,85 @@ Deno.test("oci orchestrator local service - uses provider-specific backends acro
 
     assert(
       events.indexOf("k8s:stop:k8s-0") <
-        events.indexOf("docker:create:takos-space-1-worker"),
+        events.indexOf("docker:logs:docker-0"),
+    );
+    assert(
+      events.indexOf("k8s:stop:k8s-0") >
+        events.indexOf("docker:ip:docker-0"),
     );
     assert(
       events.indexOf("docker:logs:docker-0") >
-        events.indexOf("docker:create:takos-space-1-worker"),
+        events.indexOf("docker:create:takos-space-1-worker-dep-oci-2"),
+    );
+  } finally {
+    for (const [key, value] of Object.entries(originalEnv)) {
+      if (value === undefined) {
+        Deno.env.delete(key);
+      } else {
+        Deno.env.set(key, value);
+      }
+    }
+    if (tempDir) {
+      await rm(tempDir, { recursive: true, force: true });
+      tempDir = null;
+    }
+  }
+});
+
+Deno.test("oci orchestrator local service - keeps previous OCI container until replacement is healthy", async () => {
+  tempDir = await mkdtemp(path.join(os.tmpdir(), "takos-oci-orchestrator-"));
+  Deno.env.set("OCI_ORCHESTRATOR_DATA_DIR", tempDir);
+  Deno.env.delete("TAKOS_LOCAL_DATA_DIR");
+  Deno.env.set("TAKOS_SKIP_OCI_HEALTH_CHECK", "1");
+  try {
+    const events: string[] = [];
+    const dockerBackend = createObservedContainerBackend("docker", events);
+    const fetch = await createLocalOciOrchestratorFetchForTests({
+      backend: dockerBackend,
+    });
+
+    async function deploy(deploymentId: string, imageRef: string) {
+      return await fetch(
+        new Request("http://oci-orchestrator/deploy", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            deployment_id: deploymentId,
+            space_id: "space-1",
+            artifact_ref: deploymentId,
+            backend: { name: "oci" },
+            target: {
+              route_ref: "worker",
+              endpoint: {
+                kind: "http-url",
+                base_url: "https://worker.example.test",
+              },
+              artifact: {
+                image_ref: imageRef,
+                exposed_port: 8080,
+              },
+            },
+          }),
+        }),
+      );
+    }
+
+    const firstDeploy = await deploy("dep-oci-1", "ghcr.io/takos/worker:v1");
+    assertEquals(firstDeploy.status, 200);
+    const secondDeploy = await deploy("dep-oci-2", "ghcr.io/takos/worker:v2");
+    assertEquals(secondDeploy.status, 200);
+
+    assert(
+      events.indexOf("docker:stop:docker-0") >
+        events.indexOf("docker:ip:docker-1"),
+    );
+    assert(
+      events.indexOf("docker:remove:docker-0") >
+        events.indexOf("docker:ip:docker-1"),
+    );
+    assertEquals(
+      events.includes("docker:create:takos-space-1-worker-dep-oci-2"),
+      true,
     );
   } finally {
     for (const [key, value] of Object.entries(originalEnv)) {

@@ -151,7 +151,7 @@ CREATE TABLE "accounts" (
     "google_sub" TEXT,
     "takos_auth_id" TEXT,
     "ai_model" TEXT DEFAULT 'gpt-5-mini',
-    "ai_provider" TEXT DEFAULT 'openai',
+    "model_backend" TEXT DEFAULT 'openai',
     "owner_account_id" TEXT,
     "created_at" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updated_at" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -1197,9 +1197,6 @@ CREATE TABLE "repositories" (
     "stars" INTEGER NOT NULL DEFAULT 0,
     "forks" INTEGER NOT NULL DEFAULT 0,
     "git_enabled" INTEGER NOT NULL DEFAULT 0,
-    "is_official" INTEGER NOT NULL DEFAULT 0,
-    "official_category" TEXT,
-    "official_maintainer" TEXT,
     "primary_language" TEXT,
     "license" TEXT,
     "featured" INTEGER NOT NULL DEFAULT 0,
@@ -2498,13 +2495,7 @@ CREATE INDEX "repositories_visibility_idx" ON "repositories"("visibility");
 CREATE INDEX "repositories_primary_language_idx" ON "repositories"("primary_language");
 
 -- CreateIndex
-CREATE INDEX "repositories_official_category_idx" ON "repositories"("official_category");
-
--- CreateIndex
 CREATE INDEX "repositories_license_idx" ON "repositories"("license");
-
--- CreateIndex
-CREATE INDEX "repositories_is_official_idx" ON "repositories"("is_official");
 
 -- CreateIndex
 CREATE INDEX "repositories_forked_from_id_idx" ON "repositories"("forked_from_id");

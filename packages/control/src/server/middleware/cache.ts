@@ -1,12 +1,12 @@
-import type { Context, MiddlewareHandler, Next } from 'hono';
-import { computeSHA256 } from '../../shared/utils/hash.ts';
-import { logError, logWarn } from '../../shared/utils/logger.ts';
-import { SESSION_COOKIE_NAME } from '../../application/services/identity/session.ts';
+import type { Context, MiddlewareHandler, Next } from "hono";
+import { computeSHA256 } from "../../shared/utils/hash.ts";
+import { logError, logWarn } from "../../shared/utils/logger.ts";
+import { SESSION_COOKIE_NAME } from "../../application/services/identity/session.ts";
 
 // Detect the canonical session cookie by name. Avoid substring matching to
 // prevent accidental false positives if the cookie is renamed.
 const SESSION_COOKIE_PRESENT = new RegExp(
-  `(?:^|;\\s*)${SESSION_COOKIE_NAME.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}=`,
+  `(?:^|;\\s*)${SESSION_COOKIE_NAME.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}=`,
 );
 
 declare global {
@@ -24,14 +24,14 @@ export interface CacheConfig {
 }
 
 export const CacheTTL = {
-  PUBLIC_LISTING: 300,       // 5 minutes
-  SEARCH: 60,                // 1 minute
-  PUBLIC_CONTENT: 600,       // 10 minutes
+  PUBLIC_LISTING: 300, // 5 minutes
+  SEARCH: 60, // 1 minute
+  PUBLIC_CONTENT: 600, // 10 minutes
 } as const;
 
 export const CacheTags = {
-  EXPLORE: 'explore',
-  SEARCH: 'search',
+  EXPLORE: "explore",
+  SEARCH: "search",
 } as const;
 
 function generateCacheKey(c: Context, config: CacheConfig): string {
@@ -55,7 +55,7 @@ function generateCacheKey(c: Context, config: CacheConfig): string {
     } else {
       const sortedKeys = Array.from(url.searchParams.keys()).sort();
       for (const key of sortedKeys) {
-        params.set(key, url.searchParams.get(key) ?? '');
+        params.set(key, url.searchParams.get(key) ?? "");
       }
     }
 
@@ -76,19 +76,25 @@ async function generateETag(body: string): Promise<string> {
 function runWithWaitUntil(
   c: Context,
   task: Promise<void>,
-  errorMessage: string
+  errorMessage: string,
 ): void {
   const ctx = c.executionCtx;
-  if (ctx && typeof ctx.waitUntil === 'function') {
-    ctx.waitUntil(task.catch(err => logError(String(errorMessage), err, { module: 'middleware/cache' })));
+  if (ctx && typeof ctx.waitUntil === "function") {
+    ctx.waitUntil(
+      task.catch((err) =>
+        logError(String(errorMessage), err, { module: "middleware/cache" })
+      ),
+    );
   } else {
-    task.catch(err => logError(String(errorMessage), err, { module: 'middleware/cache' }));
+    task.catch((err) =>
+      logError(String(errorMessage), err, { module: "middleware/cache" })
+    );
   }
 }
 
 export function withCache(config: CacheConfig): MiddlewareHandler {
   return async (c: Context, next: Next): Promise<Response | void> => {
-    if (c.req.method !== 'GET') {
+    if (c.req.method !== "GET") {
       await next();
       return;
     }
@@ -96,28 +102,32 @@ export function withCache(config: CacheConfig): MiddlewareHandler {
     // Skip caching for authenticated requests. Use the canonical cookie name
     // parser instead of substring matching to avoid serving stale cached
     // responses to logged-in users when the cookie name is renamed.
-    const authHeader = c.req.header('Authorization');
-    const cookie = c.req.header('Cookie');
-    if (authHeader || (cookie && SESSION_COOKIE_PRESENT.test(cookie))) {
+    const authHeader = c.req.header("Authorization");
+    const signatureHeader = c.req.header("Signature");
+    const cookie = c.req.header("Cookie");
+    if (
+      authHeader || signatureHeader ||
+      (cookie && SESSION_COOKIE_PRESENT.test(cookie))
+    ) {
       await next();
       return;
     }
 
     const cacheKeyUrl = generateCacheKey(c, config);
-    const cacheKey = new Request(cacheKeyUrl, { method: 'GET' });
+    const cacheKey = new Request(cacheKeyUrl, { method: "GET" });
 
     const cache = caches.default;
     const cachedResponse = await cache.match(cacheKey);
 
     if (cachedResponse) {
-      const ifNoneMatch = c.req.header('If-None-Match');
-      const etag = cachedResponse.headers.get('ETag');
+      const ifNoneMatch = c.req.header("If-None-Match");
+      const etag = cachedResponse.headers.get("ETag");
       if (ifNoneMatch && etag && ifNoneMatch === etag) {
         return c.body(null, 304);
       }
 
-      const ifModifiedSince = c.req.header('If-Modified-Since');
-      const lastModified = cachedResponse.headers.get('Last-Modified');
+      const ifModifiedSince = c.req.header("If-Modified-Since");
+      const lastModified = cachedResponse.headers.get("Last-Modified");
       if (ifModifiedSince && lastModified) {
         if (new Date(ifModifiedSince) >= new Date(lastModified)) {
           return c.body(null, 304);
@@ -135,8 +145,10 @@ export function withCache(config: CacheConfig): MiddlewareHandler {
     if (c.res.status !== 200) return;
 
     // Never cache responses with Set-Cookie (prevents cache poisoning)
-    if (c.res.headers.get('Set-Cookie')) {
-      logWarn('Skipping cache for response with Set-Cookie header', { module: 'middleware/cache' });
+    if (c.res.headers.get("Set-Cookie")) {
+      logWarn("Skipping cache for response with Set-Cookie header", {
+        module: "middleware/cache",
+      });
       return;
     }
 
@@ -147,20 +159,23 @@ export function withCache(config: CacheConfig): MiddlewareHandler {
     const cacheControl = `public, max-age=${config.ttl}`;
 
     const headers = new Headers(c.res.headers);
-    headers.set('Cache-Control', cacheControl);
-    headers.set('ETag', etag);
-    headers.set('Last-Modified', now.toUTCString());
+    headers.set("Cache-Control", cacheControl);
+    headers.set("ETag", etag);
+    headers.set("Last-Modified", now.toUTCString());
     if (config.cacheTag) {
-      headers.set('Cache-Tag', config.cacheTag);
+      headers.set("Cache-Tag", config.cacheTag);
     }
-    headers.set('X-Cache', 'MISS');
+    headers.set("X-Cache", "MISS");
 
-    const responseToCache = new Response(responseBody, { status: 200, headers });
+    const responseToCache = new Response(responseBody, {
+      status: 200,
+      headers,
+    });
 
     runWithWaitUntil(
       c,
       cache.put(cacheKey, responseToCache.clone()),
-      'Failed to store response in cache:'
+      "Failed to store response in cache:",
     );
 
     c.res = new Response(responseBody, { status: 200, headers });
@@ -170,12 +185,12 @@ export function withCache(config: CacheConfig): MiddlewareHandler {
 export async function invalidateCache(urls: string[]): Promise<void> {
   const cache = caches.default;
   await Promise.all(
-    urls.map(url => cache.delete(new Request(url)))
+    urls.map((url) => cache.delete(new Request(url))),
   );
 }
 
 export function invalidateCacheOnMutation(
-  urlGenerators: Array<(c: Context) => string | string[]>
+  urlGenerators: Array<(c: Context) => string | string[]>,
 ): MiddlewareHandler {
   return async (c: Context, next: Next) => {
     await next();
@@ -195,7 +210,7 @@ export function invalidateCacheOnMutation(
     runWithWaitUntil(
       c,
       invalidateCache(urlsToInvalidate),
-      'Failed to invalidate cache:'
+      "Failed to invalidate cache:",
     );
   };
 }

@@ -1,11 +1,11 @@
 import {
+  DeleteItemCommand,
   DynamoDBClient,
   GetItemCommand,
   PutItemCommand,
-  DeleteItemCommand,
   ScanCommand,
-} from '@aws-sdk/client-dynamodb';
-import type { KVNamespace } from '../shared/types/bindings.ts';
+} from "@aws-sdk/client-dynamodb";
+import type { KVNamespace } from "../shared/types/bindings.ts";
 import { Buffer } from "node:buffer";
 
 export type DynamoKvStoreConfig = {
@@ -24,11 +24,11 @@ export function createDynamoKvStore(config: DynamoKvStoreConfig): KVNamespace {
         region: config.region,
         ...(config.accessKeyId && config.secretAccessKey
           ? {
-              credentials: {
-                accessKeyId: config.accessKeyId,
-                secretAccessKey: config.secretAccessKey,
-              },
-            }
+            credentials: {
+              accessKeyId: config.accessKeyId,
+              secretAccessKey: config.secretAccessKey,
+            },
+          }
           : {}),
       });
     }
@@ -45,11 +45,11 @@ export function createDynamoKvStore(config: DynamoKvStoreConfig): KVNamespace {
     return exp > 0 && exp <= nowEpoch();
   }
 
-  return {
+  const kv = {
     async get(
       key: string,
-      type?: 'text' | 'json' | 'arrayBuffer' | 'stream',
-    ): Promise<string | null> {
+      type?: "text" | "json" | "arrayBuffer" | "stream",
+    ): Promise<unknown> {
       const command = new GetItemCommand({
         TableName: config.tableName,
         Key: { pk: { S: key } },
@@ -62,18 +62,14 @@ export function createDynamoKvStore(config: DynamoKvStoreConfig): KVNamespace {
 
       const raw = item.value.S;
 
-      // Return type is declared as `string | null` to match the default
-      // KVNamespace.get() overload.  When `type` is 'json', 'arrayBuffer',
-      // or 'stream' the actual runtime value differs — this mirrors the
-      // overloaded behaviour of the Cloudflare KVNamespace interface.
       switch (type) {
-        case 'json':
-          return JSON.parse(raw) as string;
-        case 'arrayBuffer': {
+        case "json":
+          return JSON.parse(raw);
+        case "arrayBuffer": {
           const encoder = new TextEncoder();
-          return encoder.encode(raw).buffer as unknown as string;
+          return encoder.encode(raw).buffer;
         }
-        case 'stream': {
+        case "stream": {
           const encoder = new TextEncoder();
           const bytes = encoder.encode(raw);
           return new ReadableStream({
@@ -81,9 +77,9 @@ export function createDynamoKvStore(config: DynamoKvStoreConfig): KVNamespace {
               controller.enqueue(bytes);
               controller.close();
             },
-          }) as unknown as string;
+          });
         }
-        case 'text':
+        case "text":
         default:
           return raw;
       }
@@ -91,8 +87,14 @@ export function createDynamoKvStore(config: DynamoKvStoreConfig): KVNamespace {
 
     async getWithMetadata(
       key: string,
-      type?: 'text' | 'json' | 'arrayBuffer' | 'stream',
-    ): Promise<{ value: unknown; metadata: Record<string, string> | null; cacheStatus: null }> {
+      type?: "text" | "json" | "arrayBuffer" | "stream",
+    ): Promise<
+      {
+        value: unknown;
+        metadata: Record<string, string> | null;
+        cacheStatus: null;
+      }
+    > {
       const command = new GetItemCommand({
         TableName: config.tableName,
         Key: { pk: { S: key } },
@@ -108,15 +110,15 @@ export function createDynamoKvStore(config: DynamoKvStoreConfig): KVNamespace {
       let value: unknown;
 
       switch (type) {
-        case 'json':
+        case "json":
           value = JSON.parse(raw);
           break;
-        case 'arrayBuffer': {
+        case "arrayBuffer": {
           const encoder = new TextEncoder();
           value = encoder.encode(raw).buffer;
           break;
         }
-        case 'stream': {
+        case "stream": {
           const encoder = new TextEncoder();
           const bytes = encoder.encode(raw);
           value = new ReadableStream({
@@ -127,7 +129,7 @@ export function createDynamoKvStore(config: DynamoKvStoreConfig): KVNamespace {
           });
           break;
         }
-        case 'text':
+        case "text":
         default:
           value = raw;
           break;
@@ -151,7 +153,7 @@ export function createDynamoKvStore(config: DynamoKvStoreConfig): KVNamespace {
     ): Promise<void> {
       let serialized: string;
 
-      if (typeof value === 'string') {
+      if (typeof value === "string") {
         serialized = value;
       } else if (value instanceof ArrayBuffer) {
         const decoder = new TextDecoder();
@@ -193,7 +195,10 @@ export function createDynamoKvStore(config: DynamoKvStoreConfig): KVNamespace {
 
       const command = new PutItemCommand({
         TableName: config.tableName,
-        Item: item as Record<string, import('@aws-sdk/client-dynamodb').AttributeValue>,
+        Item: item as Record<
+          string,
+          import("@aws-sdk/client-dynamodb").AttributeValue
+        >,
       });
       await getClient().send(command);
     },
@@ -209,24 +214,31 @@ export function createDynamoKvStore(config: DynamoKvStoreConfig): KVNamespace {
     async list(
       options?: { prefix?: string; limit?: number; cursor?: string },
     ): Promise<{
-      keys: Array<{ name: string; expiration?: number; metadata?: Record<string, string> }>;
+      keys: Array<
+        { name: string; expiration?: number; metadata?: Record<string, string> }
+      >;
       list_complete: boolean;
       cursor?: string;
     }> {
       const limit = options?.limit ?? 1000;
 
-      const expressionAttributeValues: Record<string, import('@aws-sdk/client-dynamodb').AttributeValue> = {};
+      const expressionAttributeValues: Record<
+        string,
+        import("@aws-sdk/client-dynamodb").AttributeValue
+      > = {};
       let filterExpression: string | undefined;
 
       if (options?.prefix) {
-        filterExpression = 'begins_with(pk, :prefix)';
-        expressionAttributeValues[':prefix'] = { S: options.prefix };
+        filterExpression = "begins_with(pk, :prefix)";
+        expressionAttributeValues[":prefix"] = { S: options.prefix };
       }
 
-      let exclusiveStartKey: Record<string, import('@aws-sdk/client-dynamodb').AttributeValue> | undefined;
+      let exclusiveStartKey:
+        | Record<string, import("@aws-sdk/client-dynamodb").AttributeValue>
+        | undefined;
       if (options?.cursor) {
         exclusiveStartKey = JSON.parse(
-          Buffer.from(options.cursor, 'base64').toString('utf-8'),
+          Buffer.from(options.cursor, "base64").toString("utf-8"),
         );
       }
 
@@ -237,9 +249,7 @@ export function createDynamoKvStore(config: DynamoKvStoreConfig): KVNamespace {
         ...(Object.keys(expressionAttributeValues).length > 0
           ? { ExpressionAttributeValues: expressionAttributeValues }
           : {}),
-        ...(exclusiveStartKey
-          ? { ExclusiveStartKey: exclusiveStartKey }
-          : {}),
+        ...(exclusiveStartKey ? { ExclusiveStartKey: exclusiveStartKey } : {}),
       });
 
       const result = await getClient().send(command);
@@ -252,14 +262,21 @@ export function createDynamoKvStore(config: DynamoKvStoreConfig): KVNamespace {
           return exp === 0 || exp > now;
         })
         .map((item) => {
-          const entry: { name: string; expiration?: number; metadata?: Record<string, string> } = {
+          const entry: {
+            name: string;
+            expiration?: number;
+            metadata?: Record<string, string>;
+          } = {
             name: item.pk!.S!,
           };
           if (item.expiration?.N) {
             entry.expiration = Number(item.expiration.N);
           }
           if (item.metadata?.S) {
-            entry.metadata = JSON.parse(item.metadata.S) as Record<string, string>;
+            entry.metadata = JSON.parse(item.metadata.S) as Record<
+              string,
+              string
+            >;
           }
           return entry;
         });
@@ -269,7 +286,7 @@ export function createDynamoKvStore(config: DynamoKvStoreConfig): KVNamespace {
       if (result.LastEvaluatedKey) {
         cursor = Buffer.from(
           JSON.stringify(result.LastEvaluatedKey),
-        ).toString('base64');
+        ).toString("base64");
       }
 
       return {
@@ -278,8 +295,6 @@ export function createDynamoKvStore(config: DynamoKvStoreConfig): KVNamespace {
         ...(cursor ? { cursor } : {}),
       };
     },
-  // Cast required: this object structurally implements the KVNamespace
-  // interface, but TypeScript cannot verify compatibility with the
-  // Cloudflare Workers type definitions without the runtime environment.
-  } as unknown as KVNamespace;
+  };
+  return kv as KVNamespace;
 }

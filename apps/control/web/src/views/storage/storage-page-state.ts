@@ -1,4 +1,5 @@
 import type { RouteState } from "../../types/index.ts";
+import type { StorageFile } from "../../types/index.ts";
 import type { FileHandler } from "./storageUtils.tsx";
 
 export function getParentPath(path: string): string {
@@ -58,15 +59,41 @@ export function buildStorageNavigationState(
   };
 }
 
+function getFileHandlerRequestExtension(fileName: string): string {
+  const lastDot = fileName.lastIndexOf(".");
+  if (lastDot === -1 || lastDot === fileName.length - 1) return "";
+  return fileName.slice(lastDot).toLowerCase();
+}
+
+export function buildStorageFileHandlersUrl(
+  spaceId: string,
+  file?: Pick<StorageFile, "name" | "mime_type"> | null,
+): string {
+  const query = new URLSearchParams();
+  const mime = file?.mime_type?.trim();
+  if (mime) {
+    query.set("mime", mime);
+  }
+
+  const ext = file ? getFileHandlerRequestExtension(file.name) : "";
+  if (ext) {
+    query.set("ext", ext);
+  }
+
+  const queryString = query.toString();
+  return `/api/spaces/${encodeURIComponent(spaceId)}/storage/file-handlers${
+    queryString ? `?${queryString}` : ""
+  }`;
+}
+
 export async function loadStorageFileHandlers(
   spaceId: string,
   isCurrentRequest: () => boolean,
   fetchImpl: typeof fetch = globalThis.fetch,
+  file?: Pick<StorageFile, "name" | "mime_type"> | null,
 ): Promise<FileHandler[] | null> {
   try {
-    const res = await fetchImpl(
-      `/api/spaces/${encodeURIComponent(spaceId)}/storage/file-handlers`,
-    );
+    const res = await fetchImpl(buildStorageFileHandlersUrl(spaceId, file));
     if (!res.ok) return null;
 
     const data = await res.json() as { handlers?: FileHandler[] } | null;

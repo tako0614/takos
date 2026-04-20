@@ -2,30 +2,28 @@
  * 式の評価器
  * トークナイズ済み GitHub Actions 式のパースと評価を行う
  */
+import { MAX_EVALUATE_CALLS, MAX_PARSE_ACCESS_DEPTH } from "../constants.ts";
+import type { ExecutionContext } from "../workflow-models.ts";
+import { ExpressionError } from "./tokenizer.ts";
+import type { Token, TokenType } from "./tokenizer.ts";
 import {
-  MAX_EVALUATE_CALLS,
-  MAX_PARSE_ACCESS_DEPTH,
-} from '../constants.ts';
-import type { ExecutionContext } from '../workflow-models.ts';
-import { ExpressionError } from './tokenizer.ts';
-import type { Token, TokenType } from './tokenizer.ts';
-import {
-  fnContains,
-  fnStartsWith,
-  fnEndsWith,
-  fnFormat,
-  fnJoin,
-  fnToJSON,
-  fnFromJSON,
-  fnHashFiles,
-  fnSuccess,
   fnAlways,
   fnCancelled,
   fnFailure,
-} from './evaluator-builtins.ts';
+  fnFormat,
+  fnFromJSON,
+  fnHashFiles,
+  fnJoin,
+  fnSuccess,
+  fnToJSON,
+} from "./evaluator-functions.ts";
 
-const BLOCKED_PROPERTY_KEYS = new Set(['__proto__', 'constructor', 'prototype']);
-const COMPARISON_OPERATORS = new Set(['==', '!=', '<', '>', '<=', '>=']);
+const BLOCKED_PROPERTY_KEYS = new Set([
+  "__proto__",
+  "constructor",
+  "prototype",
+]);
+const COMPARISON_OPERATORS = new Set(["==", "!=", "<", ">", "<=", ">="]);
 
 /**
  * シンプルな式パーサー兼評価器
@@ -82,22 +80,22 @@ export class ExpressionEvaluator {
     if (token.type !== type) {
       throw new ExpressionError(
         `Expected ${type} but got ${token.type}`,
-        this.tokenSource()
+        this.tokenSource(),
       );
     }
     return this.advance();
   }
 
   private tokenSource(): string {
-    return this.tokens.map((t) => t.raw).join('');
+    return this.tokens.map((t) => t.raw).join("");
   }
 
   private getIdentifierValue(token: Token): string {
-    if (token.type !== 'identifier' || typeof token.value !== 'string') {
-      const valueType = token.value === null ? 'null' : typeof token.value;
+    if (token.type !== "identifier" || typeof token.value !== "string") {
+      const valueType = token.value === null ? "null" : typeof token.value;
       throw new ExpressionError(
         `Expected identifier token with string value but got ${token.type}(${valueType})`,
-        this.expression
+        this.expression,
       );
     }
     return token.value;
@@ -111,28 +109,24 @@ export class ExpressionEvaluator {
     if (this.evaluateCallCount > MAX_EVALUATE_CALLS) {
       throw new ExpressionError(
         `Expression evaluate call limit exceeded: ${MAX_EVALUATE_CALLS}`,
-        this.expression
+        this.expression,
       );
     }
     return this.parseOr();
   }
 
   private parseOr(): unknown {
-    let left = this.parseAnd();
-    while (this.current().value === '||') {
-      this.advance();
-      const right = this.parseAnd();
-      left = this.toBoolean(left) || this.toBoolean(right);
+    const left = this.parseAnd();
+    while (this.current().value === "||") {
+      throw new ExpressionError("Unsupported operator: ||", this.expression);
     }
     return left;
   }
 
   private parseAnd(): unknown {
-    let left = this.parseComparison();
-    while (this.current().value === '&&') {
-      this.advance();
-      const right = this.parseComparison();
-      left = this.toBoolean(left) && this.toBoolean(right);
+    const left = this.parseComparison();
+    while (this.current().value === "&&") {
+      throw new ExpressionError("Unsupported operator: &&", this.expression);
     }
     return left;
   }
@@ -140,16 +134,14 @@ export class ExpressionEvaluator {
   private parseComparison(): unknown {
     const left = this.parseUnary();
     const op = this.current().value;
-    if (typeof op === 'string' && COMPARISON_OPERATORS.has(op)) {
-      this.advance();
-      const right = this.parseUnary();
-      return this.compare(left, op, right);
+    if (typeof op === "string" && COMPARISON_OPERATORS.has(op)) {
+      throw new ExpressionError(`Unsupported operator: ${op}`, this.expression);
     }
     return left;
   }
 
   private parseUnary(): unknown {
-    if (this.current().value === '!') {
+    if (this.current().value === "!") {
       this.advance();
       const value = this.parseUnary();
       return !this.toBoolean(value);
@@ -161,7 +153,7 @@ export class ExpressionEvaluator {
     if (depth > MAX_PARSE_ACCESS_DEPTH) {
       throw new ExpressionError(
         `Expression access depth limit exceeded: ${MAX_PARSE_ACCESS_DEPTH}`,
-        this.expression
+        this.expression,
       );
     }
   }
@@ -171,14 +163,14 @@ export class ExpressionEvaluator {
     let depth = 0;
 
     while (true) {
-      if (this.match('dot')) {
+      if (this.match("dot")) {
         this.checkAccessDepth(++depth);
-        const prop = this.getIdentifierValue(this.expect('identifier'));
+        const prop = this.getIdentifierValue(this.expect("identifier"));
         value = this.getProperty(value, prop);
-      } else if (this.match('lbracket')) {
+      } else if (this.match("lbracket")) {
         this.checkAccessDepth(++depth);
         const index = this.evaluate();
-        this.expect('rbracket');
+        this.expect("rbracket");
         value = this.getProperty(value, index);
       } else {
         break;
@@ -191,20 +183,23 @@ export class ExpressionEvaluator {
   private parsePrimary(): unknown {
     const token = this.current();
 
-    if (token.type === 'string' || token.type === 'number' || token.type === 'boolean') {
+    if (
+      token.type === "string" || token.type === "number" ||
+      token.type === "boolean"
+    ) {
       this.advance();
       return token.value;
     }
-    if (token.type === 'null') {
+    if (token.type === "null") {
       this.advance();
       return null;
     }
 
-    if (token.type === 'identifier') {
+    if (token.type === "identifier") {
       const name = this.getIdentifierValue(this.advance());
 
       // 関数呼び出しか確認
-      if (this.current().type === 'lparen') {
+      if (this.current().type === "lparen") {
         return this.parseFunction(name);
       }
 
@@ -212,31 +207,31 @@ export class ExpressionEvaluator {
       return this.getContextValue(name);
     }
 
-    if (token.type === 'lparen') {
+    if (token.type === "lparen") {
       this.advance();
       const value = this.evaluate();
-      this.expect('rparen');
+      this.expect("rparen");
       return value;
     }
 
     throw new ExpressionError(
       `Unexpected token: ${token.type}`,
-      this.tokenSource()
+      this.tokenSource(),
     );
   }
 
   private parseFunction(name: string): unknown {
-    this.expect('lparen');
+    this.expect("lparen");
     const args: unknown[] = [];
 
-    if (this.current().type !== 'rparen') {
+    if (this.current().type !== "rparen") {
       args.push(this.evaluate());
-      while (this.match('comma')) {
+      while (this.match("comma")) {
         args.push(this.evaluate());
       }
     }
 
-    this.expect('rparen');
+    this.expect("rparen");
     return this.callFunction(name, args);
   }
 
@@ -252,29 +247,30 @@ export class ExpressionEvaluator {
     if (BLOCKED_PROPERTY_KEYS.has(keyString)) {
       return undefined;
     }
-    if (typeof obj === 'object') {
+    if (typeof obj === "object") {
       return (obj as Record<string, unknown>)[keyString];
     }
     return undefined;
   }
 
   private compare(left: unknown, op: string, right: unknown): boolean {
-    if (op === '==' || op === '!=') {
-      return op === '==' ? left === right : left !== right;
+    if (op === "==" || op === "!=") {
+      return op === "==" ? left === right : left !== right;
     }
 
-    const NUMERIC_OPERATORS: Record<string, (l: number, r: number) => boolean> = {
-      '<': (l, r) => l < r,
-      '>': (l, r) => l > r,
-      '<=': (l, r) => l <= r,
-      '>=': (l, r) => l >= r,
-    };
+    const NUMERIC_OPERATORS: Record<string, (l: number, r: number) => boolean> =
+      {
+        "<": (l, r) => l < r,
+        ">": (l, r) => l > r,
+        "<=": (l, r) => l <= r,
+        ">=": (l, r) => l >= r,
+      };
 
     const numericOp = NUMERIC_OPERATORS[op];
     if (!numericOp) {
       throw new ExpressionError(
         `Unknown comparison operator: ${op}`,
-        this.expression
+        this.expression,
       );
     }
 
@@ -283,23 +279,23 @@ export class ExpressionEvaluator {
     if (Number.isNaN(l) || Number.isNaN(r)) {
       throw new ExpressionError(
         `Comparison operator '${op}' received a NaN operand`,
-        this.expression
+        this.expression,
       );
     }
     return numericOp(l, r);
   }
 
   private toBoolean(value: unknown): boolean {
-    if (value === null || value === undefined || value === '') {
+    if (value === null || value === undefined || value === "") {
       return false;
     }
-    if (typeof value === 'boolean') {
+    if (typeof value === "boolean") {
       return value;
     }
-    if (typeof value === 'number') {
+    if (typeof value === "number") {
       return value !== 0;
     }
-    if (typeof value === 'string') {
+    if (typeof value === "string") {
       return value.length > 0;
     }
     return true;
@@ -307,25 +303,22 @@ export class ExpressionEvaluator {
 
   private callFunction(name: string, args: unknown[]): unknown {
     const FUNCTIONS: Record<string, () => unknown> = {
-      'contains': () => fnContains(args),
-      'startsWith': () => fnStartsWith(args),
-      'endsWith': () => fnEndsWith(args),
-      'format': () => fnFormat(args),
-      'join': () => fnJoin(args),
-      'toJSON': () => fnToJSON(args),
-      'fromJSON': () => fnFromJSON(args),
-      'hashFiles': () => fnHashFiles(args, this.context),
-      'success': () => fnSuccess(this.context),
-      'always': () => fnAlways(),
-      'cancelled': () => fnCancelled(this.context),
-      'failure': () => fnFailure(this.context),
+      "format": () => fnFormat(args),
+      "join": () => fnJoin(args),
+      "toJSON": () => fnToJSON(args),
+      "fromJSON": () => fnFromJSON(args),
+      "hashFiles": () => fnHashFiles(args, this.context),
+      "success": () => fnSuccess(this.context),
+      "always": () => fnAlways(),
+      "cancelled": () => fnCancelled(this.context),
+      "failure": () => fnFailure(this.context),
     };
 
     const fn = FUNCTIONS[name];
     if (!fn) {
       throw new ExpressionError(
         `Unknown function: ${name}`,
-        this.tokenSource()
+        this.tokenSource(),
       );
     }
     return fn();

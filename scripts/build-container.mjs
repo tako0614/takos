@@ -1,5 +1,5 @@
 /**
- * コンテナアプリ（executor、browser など）向けの共通ビルドユーティリティ。
+ * コンテナアプリ（executor など）向けの共通ビルドユーティリティ。
  * Node.js 向けコンテナバンドルを esbuild で共通設定として実行する。
  *
  * 使い方:
@@ -7,11 +7,11 @@
  *   await buildContainer({ entryPoint: 'src/index.ts', name: 'takos-executor', ... });
  */
 
-import { build } from 'esbuild';
-import { fileURLToPath } from 'url';
-import { dirname, resolve } from 'path';
+import { build } from "esbuild";
+import { fileURLToPath } from "url";
+import { dirname, resolve } from "path";
 
-const REPO_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
+const REPO_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 
 /**
  * @param {object} opts
@@ -26,8 +26,8 @@ export async function buildContainer(opts) {
   const {
     appDir,
     name,
-    entryPoint = 'src/index.ts',
-    outfile = 'dist/index.js',
+    entryPoint = "src/index.ts",
+    outfile = "dist/index.js",
     alias = {},
     external = [],
   } = opts;
@@ -35,26 +35,27 @@ export async function buildContainer(opts) {
   await build({
     entryPoints: [resolve(appDir, entryPoint)],
     bundle: true,
-    platform: 'node',
-    target: 'node20',
-    format: 'esm',
+    platform: "node",
+    target: "node20",
+    format: "esm",
     outfile: resolve(appDir, outfile),
     banner: {
-      js: "import { createRequire as __createRequire } from 'node:module'; const require = __createRequire(import.meta.url);",
+      js:
+        "import { createRequire as __createRequire } from 'node:module'; const require = __createRequire(import.meta.url);",
     },
     alias: {
-      'takos-common': resolve(REPO_ROOT, 'packages/common/src'),
+      "takos-common": resolve(REPO_ROOT, "packages/common/src"),
       ...alias,
     },
     loader: {
-      '.md': 'text',
+      ".md": "text",
     },
     external: [
-      'hono',
-      '@hono/node-server',
+      "hono",
+      "@hono/node-server",
       ...external,
     ],
-    logLevel: 'info',
+    logLevel: "info",
   });
 
   console.log(`Build complete (${name}): ${outfile}`);

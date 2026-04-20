@@ -51,6 +51,13 @@ export interface GroupLifecycleEventPayload {
   timestamp: string;
 }
 
+function isSseNotifier(
+  value: unknown,
+): value is PlatformServices["sseNotifier"] {
+  return typeof value === "object" && value !== null &&
+    "subscribe" in value && typeof value.subscribe === "function";
+}
+
 // ---------------------------------------------------------------------------
 // Space scope resolution
 // ---------------------------------------------------------------------------
@@ -129,7 +136,7 @@ export function createEventsRouter(): Hono<EventsRouteEnv> {
     }
 
     // 3. Acquire SSE notifier (Node-only service — not available on CF Workers)
-    const services = getPlatformServices(c as never);
+    const services = getPlatformServices(c);
     const sseNotifier = services.sseNotifier;
     if (!sseNotifier) {
       throw new AppError(
@@ -193,9 +200,10 @@ export function emitGroupLifecycleEvent(
   // Pull the SSE notifier from the env opaque slot — same pattern as
   // run-events.ts. Avoiding `getPlatformServices()` here keeps this helper
   // usable from non-Hono call sites.
-  const sseNotifier =
-    (env as unknown as { SSE_NOTIFIER?: PlatformServices["sseNotifier"] })
-      .SSE_NOTIFIER;
+  const maybeSseNotifier = Reflect.get(env, "SSE_NOTIFIER");
+  const sseNotifier = isSseNotifier(maybeSseNotifier)
+    ? maybeSseNotifier
+    : undefined;
   if (!sseNotifier) {
     // No notifier (CF Workers env, or Node without Redis-backed SSE). The
     // events bus is fire-and-forget so we silently drop the event.

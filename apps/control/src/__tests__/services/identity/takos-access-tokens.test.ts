@@ -56,7 +56,7 @@ Deno.test("issueTakosAccessToken - produces unique tokens on successive calls", 
   assertNotEquals(a.tokenHash, b.tokenHash);
 });
 
-Deno.test("validateTakosAccessToken - returns managed_builtin validation when managed token matches", async () => {
+Deno.test("validateTakosAccessToken - returns managed_takos validation when managed token matches", async () => {
   /* mocks cleared (no-op in Deno) */ void 0;
   mocks.getDb = (() => db) as any;
   takosAccessTokenDeps.getDb = (() => db) as any;
@@ -72,7 +72,7 @@ Deno.test("validateTakosAccessToken - returns managed_builtin validation when ma
   assertEquals(result, {
     userId: "user-1",
     scopes: ["spaces:read", "files:read"],
-    tokenKind: "managed_builtin",
+    tokenKind: "managed_takos",
   });
 });
 Deno.test("validateTakosAccessToken - falls through to personal token validation when managed returns null", async () => {
@@ -166,7 +166,7 @@ Deno.test('validateTakosAccessToken - returns all scopes when scopesJson is "*"'
 
   const result = await validateTakosAccessToken({} as D1Database, "some-token");
   assertNotEquals(result, null);
-  assertEquals(result!.tokenKind, "managed_builtin");
+  assertEquals(result!.tokenKind, "managed_takos");
   assert(result!.scopes.length > 0);
   assert(result!.scopes.includes("openid"));
   assert(result!.scopes.includes("spaces:read"));

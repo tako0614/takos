@@ -4,11 +4,16 @@
  * Extracted from runner.ts to separate skill concerns from the core run loop.
  */
 
-import type { AgentRunnerIo } from './runner-io.ts';
-import type { AgentMessage, AgentEvent } from './agent-models.ts';
-import type { ToolExecutorLike } from '../../tools/executor.ts';
-import type { SkillCatalogEntry, SkillSelection, SkillContext, SkillLoadResult } from './skills.ts';
-import { emitSkillLoadOutcome } from './skills.ts';
+import type { AgentRunnerIo } from "./runner-io.ts";
+import type { AgentEvent, AgentMessage } from "./agent-models.ts";
+import type { ToolExecutorLike } from "../../tools/executor.ts";
+import type {
+  SkillCatalogEntry,
+  SkillContext,
+  SkillLoadResult,
+  SkillSelection,
+} from "./skills.ts";
+import { emitSkillLoadOutcome } from "./skills.ts";
 
 export interface SkillPlanDeps {
   runIo: AgentRunnerIo;
@@ -19,7 +24,7 @@ export interface SkillPlanDeps {
 }
 
 export interface SkillState {
-  locale: 'ja' | 'en';
+  locale: "ja" | "en";
   availableSkills: SkillCatalogEntry[];
   selectedSkills: SkillSelection[];
   activatedSkills: SkillContext[];
@@ -34,7 +39,10 @@ export async function resolveAndApplySkills(
   state: SkillState,
   history: AgentMessage[],
   toolExecutor: ToolExecutorLike | undefined,
-  emitEvent: (type: AgentEvent['type'], data: Record<string, unknown>) => Promise<void>,
+  emitEvent: (
+    type: AgentEvent["type"],
+    data: Record<string, unknown>,
+  ) => Promise<void>,
 ): Promise<SkillLoadResult> {
   const result = await deps.runIo.resolveSkillPlan({
     runId: deps.runId,
@@ -42,7 +50,9 @@ export async function resolveAndApplySkills(
     spaceId: deps.spaceId,
     agentType: deps.agentType,
     history,
-    availableToolNames: toolExecutor?.getAvailableTools().map((tool) => tool.name) ?? [],
+    availableToolNames: toolExecutor?.getAvailableTools().map((tool) =>
+      tool.name
+    ) ?? [],
   });
 
   state.locale = result.skillLocale;
@@ -60,7 +70,9 @@ export function buildSkillPlan(state: SkillState) {
   return {
     locale: state.locale,
     availableSkills: state.availableSkills,
-    selectableSkills: state.availableSkills.filter((skill) => skill.availability !== 'unavailable'),
+    selectableSkills: state.availableSkills.filter((skill) =>
+      skill.availability !== "unavailable"
+    ),
     selectedSkills: state.selectedSkills,
     activatedSkills: state.activatedSkills,
   };

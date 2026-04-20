@@ -1,13 +1,17 @@
 import {
-  SQSClient,
-  SendMessageCommand,
-  SendMessageBatchCommand,
-  ReceiveMessageCommand,
   DeleteMessageCommand,
   MessageSystemAttributeName,
-} from '@aws-sdk/client-sqs';
-import type { Queue } from '../shared/types/bindings.ts';
-import type { ConsumableQueue, LocalQueueName, LocalQueueRecord } from '../local-platform/queue-runtime.ts';
+  ReceiveMessageCommand,
+  SendMessageBatchCommand,
+  SendMessageCommand,
+  SQSClient,
+} from "@aws-sdk/client-sqs";
+import type { Queue } from "../shared/types/bindings.ts";
+import type {
+  ConsumableQueue,
+  LocalQueueName,
+  LocalQueueRecord,
+} from "../local-platform/queue-runtime.ts";
 
 export type SqsQueueConfig = {
   region: string;
@@ -26,7 +30,9 @@ export type SqsQueueConfig = {
  * `receive()` performs long-polling (20 s) and immediately deletes the
  * message on receipt, matching the pop semantics of local/Redis queues.
  */
-export function createSqsQueue<T = unknown>(config: SqsQueueConfig): Queue<T> & Partial<ConsumableQueue<T>> {
+export function createSqsQueue<T = unknown>(
+  config: SqsQueueConfig,
+): Queue<T> & Partial<ConsumableQueue<T>> {
   let client: SQSClient | undefined;
 
   function getClient(): SQSClient {
@@ -35,18 +41,18 @@ export function createSqsQueue<T = unknown>(config: SqsQueueConfig): Queue<T> & 
         region: config.region,
         ...(config.accessKeyId && config.secretAccessKey
           ? {
-              credentials: {
-                accessKeyId: config.accessKeyId,
-                secretAccessKey: config.secretAccessKey,
-              },
-            }
+            credentials: {
+              accessKeyId: config.accessKeyId,
+              secretAccessKey: config.secretAccessKey,
+            },
+          }
           : {}),
       });
     }
     return client;
   }
 
-  const queue = {
+  const queue: Queue<T> & Partial<ConsumableQueue<T>> = {
     // -- ConsumableQueue metadata ------------------------------------------
     ...(config.queueName ? { queueName: config.queueName } : {}),
 
@@ -96,7 +102,9 @@ export function createSqsQueue<T = unknown>(config: SqsQueueConfig): Queue<T> & 
         QueueUrl: config.queueUrl,
         MaxNumberOfMessages: 1,
         WaitTimeSeconds: 20,
-        MessageSystemAttributeNames: [MessageSystemAttributeName.ApproximateReceiveCount],
+        MessageSystemAttributeNames: [
+          MessageSystemAttributeName.ApproximateReceiveCount,
+        ],
       });
 
       const response = await getClient().send(receiveCmd);
@@ -104,7 +112,7 @@ export function createSqsQueue<T = unknown>(config: SqsQueueConfig): Queue<T> & 
       if (!messages || messages.length === 0) return null;
 
       const msg = messages[0];
-      const body = JSON.parse(msg.Body ?? '{}') as T;
+      const body = JSON.parse(msg.Body ?? "{}") as T;
 
       // Immediately delete — matches the pop semantics of local queues.
       // On retry the worker loop re-enqueues via sendBatch().
@@ -118,8 +126,8 @@ export function createSqsQueue<T = unknown>(config: SqsQueueConfig): Queue<T> & 
 
       const approximateReceiveCount = Number(
         msg.Attributes?.ApproximateReceiveCount ??
-        msg.MessageAttributes?.ApproximateReceiveCount?.StringValue ??
-        '1',
+          msg.MessageAttributes?.ApproximateReceiveCount?.StringValue ??
+          "1",
       );
 
       return {
@@ -129,5 +137,5 @@ export function createSqsQueue<T = unknown>(config: SqsQueueConfig): Queue<T> & 
     },
   };
 
-  return queue as unknown as Queue<T> & Partial<ConsumableQueue<T>>;
+  return queue;
 }

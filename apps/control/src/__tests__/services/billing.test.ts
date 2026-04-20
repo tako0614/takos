@@ -99,9 +99,9 @@ Deno.test("billing catalog self-heal - seeds free-plan quotas when an account ex
     planId: "plan_free",
     balanceCents: 0,
     status: "active",
-    providerName: "stripe",
-    providerCustomerId: null,
-    providerSubscriptionId: null,
+    processorName: "stripe",
+    processorCustomerId: null,
+    processorSubscriptionId: null,
     subscriptionPeriodEnd: null,
   };
   const plan = {
@@ -123,9 +123,9 @@ Deno.test("billing catalog self-heal - seeds free-plan quotas when an account ex
 
   // ensureDefaultBillingCatalog: for each of 3 plans: select plan, then per-quota select, per-rate select
   const catalogSelects: unknown[] = [];
-  // plan_free: select plan, then 10 quota selects, 0 rate selects
+  // plan_free: select plan, then 9 quota selects, 0 rate selects
   catalogSelects.push(plan);
-  for (let i = 0; i < 10; i++) catalogSelects.push(undefined);
+  for (let i = 0; i < 9; i++) catalogSelects.push(undefined);
   // plan_plus
   catalogSelects.push({
     id: "plan_plus",
@@ -134,7 +134,7 @@ Deno.test("billing catalog self-heal - seeds free-plan quotas when an account ex
     description: null,
     isDefault: false,
   });
-  for (let i = 0; i < 10; i++) catalogSelects.push(undefined);
+  for (let i = 0; i < 9; i++) catalogSelects.push(undefined);
   // plan_payg
   catalogSelects.push({
     id: "plan_payg",
@@ -143,8 +143,8 @@ Deno.test("billing catalog self-heal - seeds free-plan quotas when an account ex
     description: null,
     isDefault: false,
   });
-  for (let i = 0; i < 10; i++) catalogSelects.push(undefined); // quotas
-  for (let i = 0; i < 10; i++) catalogSelects.push(undefined); // rates
+  for (let i = 0; i < 9; i++) catalogSelects.push(undefined); // quotas
+  for (let i = 0; i < 9; i++) catalogSelects.push(undefined); // rates
 
   // Second loadBillingAccountWithPlan: now has all expected quotas
   const allFreeQuotas = [
@@ -153,7 +153,6 @@ Deno.test("billing catalog self-heal - seeds free-plan quotas when an account ex
     { quotaKey: "embedding_count", limitValue: 200 },
     { quotaKey: "vector_search_count", limitValue: 100 },
     { quotaKey: "exec_seconds", limitValue: 600 },
-    { quotaKey: "browser_seconds", limitValue: 0 },
     { quotaKey: "web_search_count", limitValue: 20 },
     { quotaKey: "r2_storage_gb_month", limitValue: 1 },
     { quotaKey: "wfp_requests", limitValue: 100 },
@@ -198,9 +197,9 @@ Deno.test("billing catalog self-heal - normalizes legacy payg aliases to canonic
     planId: "plan_pro",
     balanceCents: 500,
     status: "active",
-    providerName: "stripe",
-    providerCustomerId: null,
-    providerSubscriptionId: null,
+    processorName: "stripe",
+    processorCustomerId: null,
+    processorSubscriptionId: null,
     subscriptionPeriodEnd: null,
   };
   const payGPlan = {
@@ -217,7 +216,6 @@ Deno.test("billing catalog self-heal - normalizes legacy payg aliases to canonic
     { quotaKey: "embedding_count", limitValue: -1 },
     { quotaKey: "vector_search_count", limitValue: -1 },
     { quotaKey: "exec_seconds", limitValue: -1 },
-    { quotaKey: "browser_seconds", limitValue: -1 },
     { quotaKey: "web_search_count", limitValue: -1 },
     { quotaKey: "r2_storage_gb_month", limitValue: -1 },
     { quotaKey: "wfp_requests", limitValue: -1 },
@@ -229,7 +227,6 @@ Deno.test("billing catalog self-heal - normalizes legacy payg aliases to canonic
     { meterType: "embedding_count", rateCents: 1 },
     { meterType: "vector_search_count", rateCents: 2 },
     { meterType: "exec_seconds", rateCents: 5 },
-    { meterType: "browser_seconds", rateCents: 10 },
     { meterType: "web_search_count", rateCents: 5 },
     { meterType: "r2_storage_gb_month", rateCents: 2300 },
     { meterType: "wfp_requests", rateCents: 1 },
@@ -257,7 +254,10 @@ Deno.test("billing catalog self-heal - normalizes legacy payg aliases to canonic
   const drizzleMock = createStatefulDrizzleMock(allSelects);
   mocks.getDb = (() => drizzleMock) as any;
 
-  const result = await getOrCreateBillingAccount(drizzleMock as D1Database, "user-2");
+  const result = await getOrCreateBillingAccount(
+    drizzleMock as D1Database,
+    "user-2",
+  );
 
   assertEquals(result.planId, "plan_payg");
   assertSpyCalls(drizzleMock.update, 1);
@@ -270,9 +270,9 @@ Deno.test("billing catalog self-heal - fails closed when a payg account is missi
     planId: "plan_payg",
     balanceCents: 500,
     status: "active",
-    providerName: "stripe",
-    providerCustomerId: null,
-    providerSubscriptionId: null,
+    processorName: "stripe",
+    processorCustomerId: null,
+    processorSubscriptionId: null,
     subscriptionPeriodEnd: null,
   };
   const payGPlan = {
@@ -289,7 +289,6 @@ Deno.test("billing catalog self-heal - fails closed when a payg account is missi
     { quotaKey: "embedding_count", limitValue: -1 },
     { quotaKey: "vector_search_count", limitValue: -1 },
     { quotaKey: "exec_seconds", limitValue: -1 },
-    { quotaKey: "browser_seconds", limitValue: -1 },
     { quotaKey: "web_search_count", limitValue: -1 },
     { quotaKey: "r2_storage_gb_month", limitValue: -1 },
     { quotaKey: "wfp_requests", limitValue: -1 },
@@ -301,7 +300,6 @@ Deno.test("billing catalog self-heal - fails closed when a payg account is missi
     { meterType: "embedding_count", rateCents: 1 },
     { meterType: "vector_search_count", rateCents: 2 },
     { meterType: "exec_seconds", rateCents: 5 },
-    { meterType: "browser_seconds", rateCents: 10 },
     { meterType: "web_search_count", rateCents: 5 },
     { meterType: "r2_storage_gb_month", rateCents: 2300 },
     { meterType: "wfp_requests", rateCents: 1 },

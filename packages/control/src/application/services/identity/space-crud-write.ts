@@ -24,6 +24,12 @@ import {
   getRepositoryById,
   loadSpaceById,
 } from "./space-crud-read.ts";
+import { enqueueDefaultAppPreinstallJob } from "../source/default-app-distribution.ts";
+import { logWarn } from "../../../shared/utils/logger.ts";
+
+export const spaceCrudWriteDeps = {
+  enqueueDefaultAppPreinstallJob,
+};
 
 async function generateUniqueSlug(
   db: D1Database,
@@ -107,7 +113,7 @@ async function createSpaceBundle(
     description: description || null,
     ownerAccountId: ownerUserId,
     aiModel: "gpt-5.4-nano",
-    aiProvider: "openai",
+    modelBackend: "openai",
     securityPosture: "standard",
     createdAt: timestamp,
     updatedAt: timestamp,
@@ -218,6 +224,19 @@ export async function createWorkspaceWithDefaultRepo(
     repoName: "main",
     timestamp,
   });
+  try {
+    await spaceCrudWriteDeps.enqueueDefaultAppPreinstallJob(env, {
+      spaceId,
+      createdByAccountId: userId,
+      timestamp,
+    });
+  } catch (error) {
+    logWarn("Failed to enqueue default app preinstall job", {
+      module: "spaces",
+      spaceId,
+      error: error instanceof Error ? error.message : String(error),
+    });
+  }
 
   const space = await loadSpaceById(env.DB, spaceId);
   const repository = await getRepositoryById(env.DB, repoId);
@@ -234,7 +253,7 @@ export async function updateWorkspace(
   updates: {
     name?: string;
     ai_model?: string;
-    ai_provider?: string;
+    model_backend?: string;
     security_posture?: SecurityPosture;
   },
 ): Promise<Space | null> {
@@ -243,7 +262,7 @@ export async function updateWorkspace(
 
   const nextName = updates.name ?? current.name;
   const nextModel = updates.ai_model ?? current.aiModel;
-  const nextProvider = updates.ai_provider ?? current.aiProvider;
+  const nextModelBackend = updates.model_backend ?? current.modelBackend;
   const nextSecurityPosture = updates.security_posture ??
     (current.securityPosture === "restricted_egress"
       ? "restricted_egress"
@@ -256,7 +275,7 @@ export async function updateWorkspace(
     .set({
       name: nextName,
       aiModel: nextModel,
-      aiProvider: nextProvider,
+      modelBackend: nextModelBackend,
       securityPosture: nextSecurityPosture,
       updatedAt: timestamp,
     })

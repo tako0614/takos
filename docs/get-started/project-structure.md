@@ -7,7 +7,7 @@ Takos プロジェクトで使う `.takos/` ディレクトリと関連ファイ
 ```text
 my-app/
 ├── .takos/
-│   ├── app.yml              ← アプリの構成定義
+│   ├── app.yml              ← deploy manifest
 │   └── workflows/
 │       └── deploy.yml       ← ビルド・デプロイのワークフロー
 ├── src/
@@ -17,12 +17,12 @@ my-app/
 
 ## 各ファイルの役割
 
-### アプリマニフェスト (`.takos/app.yml`)
+### Deploy Manifest (`.takos/app.yml`)
 
 Takos で「何をデプロイするか」を宣言する flat manifest。compute、routes、
 publish、env、overrides を定義する。
 
-`.takos/app.yml` は deploy/runtime contract です。
+`.takos/app.yml` は group の deploy/runtime contract です。
 
 ```yaml
 name: my-app
@@ -37,26 +37,26 @@ compute:
         artifact: web
         artifactPath: dist/worker
     consume:
-      - publication: primary-db
+      - publication: takos-api
         env:
-          endpoint: DATABASE_URL
-          apiKey: DATABASE_API_KEY
+          endpoint: TAKOS_API_ENDPOINT
+          apiKey: TAKOS_API_KEY
 
 publish:
-  - name: primary-db
-    provider: takos
-    kind: sql
+  - name: takos-api
+    publisher: takos
+    type: api-key
     spec:
-      resource: primary-db
-      permission: write
+      scopes:
+        - files:read
 
 routes:
   - target: web
     path: /
 ```
 
-詳しくは [アプリマニフェスト](/apps/manifest) を参照。フィールド一覧は
-[マニフェストリファレンス](/reference/manifest-spec)。kernel と app の境界は
+詳しくは [Deploy Manifest](/apps/manifest) を参照。フィールド一覧は
+[マニフェストリファレンス](/reference/manifest-spec)。kernel と group の境界は
 [Kernel](/architecture/kernel) を参照。
 
 ### `.takos/workflows/deploy.yml`
@@ -64,9 +64,9 @@ routes:
 ビルド手順と artifact の出力先を記述。`app.yml` の `build.fromWorkflow`
 がこのファイルを参照する。
 
-stateful resource の schema や初期化手順は provider-backed publication とその
-consumer 側のコードで扱う。manifest 側に専用の stateful-resource
-フィールドはなく、 `.takos/migrations/` は current contract には含まれない。
+stateful resource の schema や初期化手順は publish ではなく resource API /
+runtime binding 側で扱う。`publish[].publisher/type` は route publication と
+Takos capability grant のために使う。
 
 ## 制約
 
@@ -78,6 +78,6 @@ consumer 側のコードで扱う。manifest 側に専用の stateful-resource
 ## 次のステップ
 
 - [Takos 全体像](/overview/) -- platform と用語を先に整理する
-- [アプリ構成](/apps/) -- app manifest と周辺 public surface を確認する
+- [Deploy 構成](/apps/) -- deploy manifest と周辺 public surface を確認する
 - [Workers](/apps/workers) -- Worker の定義方法
 - [Containers](/apps/containers) -- Container の定義方法

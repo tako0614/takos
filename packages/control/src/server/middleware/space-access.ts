@@ -24,17 +24,17 @@
  * automatically.
  */
 
-import type { Context } from 'hono';
-import type { SpaceAccess } from '../../application/services/identity/space-access.ts';
-import type { SpaceRole } from '../../shared/types/index.ts';
-import { checkSpaceAccess } from '../../application/services/identity/space-access.ts';
-import { AppError } from 'takos-common/errors';
-import type { ErrorCode } from 'takos-common/errors';
+import type { Context } from "hono";
+import type { SpaceAccess } from "../../application/services/identity/space-access.ts";
+import type { Env, SpaceRole } from "../../shared/types/index.ts";
+import { checkSpaceAccess } from "../../application/services/identity/space-access.ts";
+import { AppError } from "takos-common/errors";
+import type { ErrorCode } from "takos-common/errors";
 
 /** Map HTTP status codes to the appropriate AppError subclass. */
 const STATUS_TO_ERROR_CODE: Record<number, ErrorCode> = {
-  403: 'FORBIDDEN',
-  404: 'NOT_FOUND',
+  403: "FORBIDDEN",
+  404: "NOT_FOUND",
 };
 
 /**
@@ -47,13 +47,12 @@ export class SpaceAccessError extends AppError {
   constructor(statusCode: number, message: string) {
     super(
       message,
-      STATUS_TO_ERROR_CODE[statusCode] ?? 'NOT_FOUND',
+      STATUS_TO_ERROR_CODE[statusCode] ?? "NOT_FOUND",
       statusCode,
     );
-    this.name = 'SpaceAccessError';
+    this.name = "SpaceAccessError";
   }
 }
-
 
 /**
  * Require space access, throwing {@link SpaceAccessError} on failure.
@@ -87,13 +86,12 @@ export class SpaceAccessError extends AppError {
  * });
  * ```
  */
-export async function requireSpaceAccessOrThrow(
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  c: Context<any>,
+export async function requireSpaceAccessOrThrow<TVariables extends object>(
+  c: Context<{ Bindings: Env; Variables: TVariables }>,
   spaceId: string,
   userId: string,
   roles?: SpaceRole[],
-  message = 'Space not found',
+  message = "Space not found",
   status = 404,
 ): Promise<SpaceAccess> {
   const access = await checkSpaceAccess(c.env.DB, spaceId, userId, roles);
@@ -102,7 +100,6 @@ export async function requireSpaceAccessOrThrow(
   }
   return access;
 }
-
 
 /**
  * Convenience predicate for use in error-handling middleware or
@@ -122,4 +119,3 @@ export async function requireSpaceAccessOrThrow(
 export function isSpaceAccessError(err: unknown): err is SpaceAccessError {
   return err instanceof SpaceAccessError;
 }
-

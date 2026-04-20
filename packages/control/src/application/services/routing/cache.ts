@@ -110,7 +110,18 @@ export function shouldUseKvValue(
 }
 
 function asRoutingFetcher(stub: unknown): RoutingFetcherLike {
-  return stub as unknown as RoutingFetcherLike;
+  if (
+    typeof stub !== "object" || stub === null ||
+    typeof Reflect.get(stub, "fetch") !== "function"
+  ) {
+    throw new TypeError("Routing Durable Object stub does not expose fetch()");
+  }
+  const fetcher = stub as RoutingFetcherLike;
+  return {
+    fetch(input, init) {
+      return fetcher.fetch(input, init);
+    },
+  };
 }
 
 async function fetchJsonWithTimeout<T>(
@@ -127,9 +138,7 @@ async function fetchJsonWithTimeout<T>(
       signal: controller.signal,
     };
     const request = new Request(url, requestInit);
-    const res = await stub.fetch(
-      request as unknown as Parameters<RoutingFetcherLike["fetch"]>[0],
-    );
+    const res = await stub.fetch(request);
     if (!res.ok) {
       throw new Error(`DO returned ${res.status}`);
     }

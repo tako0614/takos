@@ -68,9 +68,8 @@ export type FetchBinding = {
 export interface ContainerHostEnv {
   RUNTIME_HOST?: FetchBinding;
   EXECUTOR_HOST?: FetchBinding;
-  BROWSER_HOST?: FetchBinding;
   /**
-   * Egress proxy used by the web tool (`application/tools/builtin/web.ts`) and
+   * Egress proxy used by the web tool (`application/tools/custom/web.ts`) and
    * the executor host (`runtime/container-hosts/executor-host.ts` /
    * `executor-utils.ts`). Bound to the `takos-worker` service in production via
    * `apps/control/wrangler.toml [[services]] binding = "TAKOS_EGRESS"`.
@@ -133,6 +132,8 @@ export interface Env
   TENANT_BASE_DOMAIN: string;
   PLATFORM_PRIVATE_KEY: string;
   PLATFORM_PUBLIC_KEY: string;
+  /** Compatibility override for runtime-service JWT verification; prefer PLATFORM_PUBLIC_KEY. */
+  JWT_PUBLIC_KEY?: string;
   CF_ACCOUNT_ID?: string;
   CF_API_TOKEN?: string;
   WFP_DISPATCH_NAMESPACE?: string;
@@ -180,23 +181,38 @@ export interface Env
   TAKOS_APP_DEPLOY_REMOTE_BLOB_DELTA_RESULT_MAX_BYTES?: string;
   TAKOS_APP_DEPLOY_REMOTE_BLOB_DELTA_CHAIN_MAX_DEPTH?: string;
   TAKOS_APP_DEPLOY_REMOTE_ARCHIVE_MAX_BYTES?: string;
+  /** Operator-replaceable default app distribution JSON; wins over DB config. */
+  TAKOS_DEFAULT_APP_DISTRIBUTION_JSON?: string;
+  /** Operator-replaceable default app repository list JSON; wins over DB config. */
+  TAKOS_DEFAULT_APP_REPOSITORIES_JSON?: string;
+  /** Set to "false" to skip default docs/excel/slide preinstall on new spaces. */
+  TAKOS_DEFAULT_APPS_PREINSTALL?: string;
+  /** Default git ref for preinstalled default app repositories. */
+  TAKOS_DEFAULT_APP_REF?: string;
+  TAKOS_DEFAULT_APP_REF_TYPE?: string;
+  TAKOS_DEFAULT_APP_BACKEND?: string;
+  TAKOS_DEFAULT_APP_ENV?: string;
+  TAKOS_DEFAULT_DOCS_APP_REPOSITORY_URL?: string;
+  TAKOS_DEFAULT_EXCEL_APP_REPOSITORY_URL?: string;
+  TAKOS_DEFAULT_SLIDE_APP_REPOSITORY_URL?: string;
   HOSTNAME_ROUTING: KvStoreBinding;
   ROLLOUT_HEALTH_KV?: KvStoreBinding;
   ROUTING_STORE?: RoutingStore;
   DISPATCHER?: {
     get(name: string): { fetch(request: Request): Promise<Response> };
   };
-  // Assets & Browser
+  // Assets
   ASSETS?: FetchBinding;
-  BROWSER?: {
-    connect(): Promise<{ webSocketDebuggerUrl: string }>;
-  };
   // Security
   ENCRYPTION_KEY?: string;
+  /** Shared secret for non-loopback internal HTTP endpoints on control-web. */
+  TAKOS_INTERNAL_API_SECRET?: string;
+  /** Shared secret for takos-executor-host -> takos internal executor RPC. */
+  EXECUTOR_PROXY_SECRET?: string;
   AUDIT_IP_HASH_KEY?: string;
   // Billing
-  /** Active payment provider name. Defaults to 'stripe'. */
-  BILLING_PROVIDER?: string;
+  /** Active payment processor name. Defaults to 'stripe'. */
+  BILLING_PROCESSOR?: string;
   STRIPE_SECRET_KEY?: string;
   STRIPE_WEBHOOK_SECRET?: string;
   STRIPE_PLUS_PRICE_ID?: string;

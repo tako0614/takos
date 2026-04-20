@@ -5,35 +5,35 @@
  * when no LLM API key is configured.
  */
 
-import type { AgentMessage, AgentConfig, AgentEvent } from './agent-models.ts';
-import type { RunTerminalPayload } from '../run-notifier/index.ts';
-import type { LLMClient } from './llm.ts';
-import type { ToolExecutorLike } from '../../tools/executor.ts';
-import type { ToolExecution } from './runner-utils.ts';
-import type { Env } from '../../../shared/types/index.ts';
-import type { RunStatus } from '../../../shared/types/index.ts';
-import type { AgentMemoryRuntime } from '../memory-graph/memory-graph-runtime.ts';
+import type { AgentConfig, AgentEvent, AgentMessage } from "./agent-models.ts";
+import type { RunTerminalPayload } from "../run-notifier/index.ts";
+import type { LLMClient } from "./llm.ts";
+import type { ToolExecutorLike } from "../../tools/executor.ts";
+import type { ToolExecution } from "./runner-utils.ts";
+import type { Env } from "../../../shared/types/index.ts";
+import type { RunStatus } from "../../../shared/types/index.ts";
+import type { AgentMemoryRuntime } from "../memory-graph/memory-graph-runtime.ts";
 import type {
   SkillCatalogEntry,
-  SkillSelection,
   SkillContext,
-} from './skills.ts';
-import { buildSkillEnhancedPrompt } from './skills.ts';
-import { getTimeoutConfig } from './runner-config.ts';
-import { withTimeout } from '../../../shared/utils/with-timeout.ts';
+  SkillSelection,
+} from "./skills.ts";
+import { buildSkillEnhancedPrompt } from "./skills.ts";
+import { getTimeoutConfig } from "./runner-config.ts";
+import { withTimeout } from "../../../shared/utils/with-timeout.ts";
 import {
-  anySignal,
   addToolExecution,
-  redactSensitiveArgs,
+  anySignal,
   MAX_TOTAL_TOOL_CALLS,
-} from './runner-utils.ts';
+  redactSensitiveArgs,
+} from "./runner-utils.ts";
 
 export interface SimpleLoopDeps {
   env: Env;
   config: AgentConfig;
   llmClient: LLMClient;
   toolExecutor: ToolExecutorLike | undefined;
-  skillLocale: 'ja' | 'en';
+  skillLocale: "ja" | "en";
   availableSkills: SkillCatalogEntry[];
   selectedSkills: SkillSelection[];
   activatedSkills: SkillContext[];
@@ -47,11 +47,21 @@ export interface SimpleLoopDeps {
 
   // Callbacks
   throwIfCancelled: (context: string) => Promise<void>;
-  emitEvent: (type: AgentEvent['type'], data: Record<string, unknown>) => Promise<void>;
-  addMessage: (message: AgentMessage, metadata?: Record<string, unknown>) => Promise<void>;
-  updateRunStatus: (status: RunStatus, output?: string, error?: string) => Promise<void>;
+  emitEvent: (
+    type: AgentEvent["type"],
+    data: Record<string, unknown>,
+  ) => Promise<void>;
+  addMessage: (
+    message: AgentMessage,
+    metadata?: Record<string, unknown>,
+  ) => Promise<void>;
+  updateRunStatus: (
+    status: RunStatus,
+    output?: string,
+    error?: string,
+  ) => Promise<void>;
   buildTerminalEventPayload: (
-    status: 'completed' | 'failed' | 'cancelled',
+    status: "completed" | "failed" | "cancelled",
     details?: Record<string, unknown>,
   ) => RunTerminalPayload;
   getConversationHistory: () => Promise<AgentMessage[]>;
@@ -67,7 +77,9 @@ export async function runWithSimpleLoop(deps: SimpleLoopDeps): Promise<void> {
     {
       locale: deps.skillLocale,
       availableSkills: deps.availableSkills,
-      selectableSkills: deps.availableSkills.filter((skill) => skill.availability !== 'unavailable'),
+      selectableSkills: deps.availableSkills.filter((skill) =>
+        skill.availability !== "unavailable"
+      ),
       selectedSkills: deps.selectedSkills,
       activatedSkills: deps.activatedSkills,
     },
@@ -75,7 +87,7 @@ export async function runWithSimpleLoop(deps: SimpleLoopDeps): Promise<void> {
   );
 
   const messages: AgentMessage[] = [
-    { role: 'system', content: enhancedPrompt },
+    { role: "system", content: enhancedPrompt },
     ...history,
   ];
 
@@ -87,7 +99,7 @@ export async function runWithSimpleLoop(deps: SimpleLoopDeps): Promise<void> {
   const iterationTimeoutMs = timeoutConfig.iterationTimeout;
 
   while (iteration < maxIterations) {
-    await deps.throwIfCancelled('iteration');
+    await deps.throwIfCancelled("iteration");
     // Check total run timeout
     const elapsed = Date.now() - runStartTime;
     if (elapsed > totalTimeoutMs) {
@@ -96,18 +108,22 @@ export async function runWithSimpleLoop(deps: SimpleLoopDeps): Promise<void> {
     }
 
     iteration++;
-    await deps.emitEvent('thinking', { iteration, message: 'Processing...', engine: 'simple' });
+    await deps.emitEvent("thinking", {
+      iteration,
+      message: "Processing...",
+      engine: "simple",
+    });
 
     // Refresh active memory before each LLM call
     if (deps.memoryRuntime) {
       const activation = deps.memoryRuntime.beforeModel();
       if (activation.hasContent) {
         // Find or insert [ACTIVE_MEMORY] marker in messages
-        const markerIndex = messages.findIndex(m =>
-          m.role === 'system' && m.content.includes('[ACTIVE_MEMORY]'),
+        const markerIndex = messages.findIndex((m) =>
+          m.role === "system" && m.content.includes("[ACTIVE_MEMORY]")
         );
         const memoryMessage: AgentMessage = {
-          role: 'system',
+          role: "system",
           content: `[ACTIVE_MEMORY]\n${activation.segment}`,
         };
         if (markerIndex >= 0) {
@@ -128,7 +144,9 @@ export async function runWithSimpleLoop(deps: SimpleLoopDeps): Promise<void> {
         return deps.llmClient.chat(messages, deps.config.tools, combinedSignal);
       },
       iterationTimeoutMs,
-      `LLM call timed out after ${iterationTimeoutMs / 1000} seconds (iteration ${iteration})`
+      `LLM call timed out after ${
+        iterationTimeoutMs / 1000
+      } seconds (iteration ${iteration})`,
     );
 
     deps.totalUsage.inputTokens += response.usage.inputTokens;
@@ -136,7 +154,7 @@ export async function runWithSimpleLoop(deps: SimpleLoopDeps): Promise<void> {
 
     if (response.toolCalls && response.toolCalls.length > 0) {
       const assistantMsg: AgentMessage = {
-        role: 'assistant',
+        role: "assistant",
         content: response.content,
         tool_calls: response.toolCalls,
       };
@@ -144,33 +162,35 @@ export async function runWithSimpleLoop(deps: SimpleLoopDeps): Promise<void> {
       await deps.addMessage(assistantMsg);
 
       for (const toolCall of response.toolCalls) {
-        await deps.throwIfCancelled('tool-call');
+        await deps.throwIfCancelled("tool-call");
         // Rate limit check
         deps.toolCallCount++;
         const rateLimit = deps.config.rateLimit;
         if (rateLimit && deps.toolCallCount > rateLimit) {
-          const errorMsg = `Rate limit exceeded: ${deps.toolCallCount} tool calls (max: ${rateLimit})`;
+          const errorMsg =
+            `Rate limit exceeded: ${deps.toolCallCount} tool calls (max: ${rateLimit})`;
           throw new Error(errorMsg);
         }
 
         // Security: Hard limit on total tool calls per run
         deps.totalToolCalls++;
         if (deps.totalToolCalls > MAX_TOTAL_TOOL_CALLS) {
-          const errorMsg = `Total tool call limit exceeded: ${deps.totalToolCalls} (max: ${MAX_TOTAL_TOOL_CALLS})`;
+          const errorMsg =
+            `Total tool call limit exceeded: ${deps.totalToolCalls} (max: ${MAX_TOTAL_TOOL_CALLS})`;
           throw new Error(errorMsg);
         }
 
         const toolStartTime = Date.now();
         // Security: Redact sensitive arguments before logging/emitting
         const redactedArgs = redactSensitiveArgs(toolCall.arguments);
-        await deps.emitEvent('tool_call', {
+        await deps.emitEvent("tool_call", {
           tool: toolCall.name,
           arguments: redactedArgs,
           tool_call_id: toolCall.id,
         });
 
         if (!deps.toolExecutor) {
-          throw new Error('Tool executor not initialized');
+          throw new Error("Tool executor not initialized");
         }
         const result = await deps.toolExecutor.execute({
           id: toolCall.id,
@@ -189,7 +209,7 @@ export async function runWithSimpleLoop(deps: SimpleLoopDeps): Promise<void> {
           duration_ms: toolDuration,
         });
 
-        await deps.emitEvent('tool_result', {
+        await deps.emitEvent("tool_result", {
           tool: toolCall.name,
           output: result.output,
           error: result.error,
@@ -197,7 +217,7 @@ export async function runWithSimpleLoop(deps: SimpleLoopDeps): Promise<void> {
         });
 
         const toolMsg: AgentMessage = {
-          role: 'tool',
+          role: "tool",
           content: result.error || result.output,
           tool_call_id: toolCall.id,
         };
@@ -207,20 +227,22 @@ export async function runWithSimpleLoop(deps: SimpleLoopDeps): Promise<void> {
       continue;
     }
 
-    await deps.throwIfCancelled('before-complete');
+    await deps.throwIfCancelled("before-complete");
     // Final response with tool executions metadata
     const finalMsg: AgentMessage = {
-      role: 'assistant',
+      role: "assistant",
       content: response.content,
     };
 
     const messageMetadata: Record<string, unknown> = {};
     if (deps.toolExecutions.length > 0) {
-      messageMetadata.tool_executions = deps.toolExecutions.map(exec => ({
+      messageMetadata.tool_executions = deps.toolExecutions.map((exec) => ({
         name: exec.name,
         arguments: exec.arguments,
         result: exec.result
-          ? (exec.result.length > 500 ? exec.result.slice(0, 500) + '...' : exec.result)
+          ? (exec.result.length > 500
+            ? exec.result.slice(0, 500) + "..."
+            : exec.result)
           : undefined,
         error: exec.error,
         duration_ms: exec.duration_ms,
@@ -229,30 +251,36 @@ export async function runWithSimpleLoop(deps: SimpleLoopDeps): Promise<void> {
     }
 
     await deps.addMessage(finalMsg, messageMetadata);
-    await deps.emitEvent('message', { content: response.content });
+    await deps.emitEvent("message", { content: response.content });
 
-    await deps.updateRunStatus('completed', JSON.stringify({
-      response: response.content,
-      iterations: iteration,
-      engine: 'simple',
-    }));
-    await deps.emitEvent('completed', {
-      ...deps.buildTerminalEventPayload('completed', {
+    await deps.updateRunStatus(
+      "completed",
+      JSON.stringify({
+        response: response.content,
+        iterations: iteration,
+        engine: "simple",
+      }),
+    );
+    await deps.emitEvent("completed", {
+      ...deps.buildTerminalEventPayload("completed", {
         success: true,
         iterations: iteration,
-        engine: 'simple',
+        engine: "simple",
       }),
     });
     return;
   }
 
-  await deps.updateRunStatus('completed', JSON.stringify({
-    message: 'Max iterations reached',
-    iterations: iteration,
-    engine: 'simple',
-  }));
-  await deps.emitEvent('completed', {
-    ...deps.buildTerminalEventPayload('completed', {
+  await deps.updateRunStatus(
+    "completed",
+    JSON.stringify({
+      message: "Max iterations reached",
+      iterations: iteration,
+      engine: "simple",
+    }),
+  );
+  await deps.emitEvent("completed", {
+    ...deps.buildTerminalEventPayload("completed", {
       success: true,
       maxIterations: true,
     }),
@@ -261,11 +289,21 @@ export async function runWithSimpleLoop(deps: SimpleLoopDeps): Promise<void> {
 
 export interface NoLLMDeps {
   toolExecutor: ToolExecutorLike | undefined;
-  emitEvent: (type: AgentEvent['type'], data: Record<string, unknown>) => Promise<void>;
-  addMessage: (message: AgentMessage, metadata?: Record<string, unknown>) => Promise<void>;
-  updateRunStatus: (status: RunStatus, output?: string, error?: string) => Promise<void>;
+  emitEvent: (
+    type: AgentEvent["type"],
+    data: Record<string, unknown>,
+  ) => Promise<void>;
+  addMessage: (
+    message: AgentMessage,
+    metadata?: Record<string, unknown>,
+  ) => Promise<void>;
+  updateRunStatus: (
+    status: RunStatus,
+    output?: string,
+    error?: string,
+  ) => Promise<void>;
   buildTerminalEventPayload: (
-    status: 'completed' | 'failed' | 'cancelled',
+    status: "completed" | "failed" | "cancelled",
     details?: Record<string, unknown>,
   ) => RunTerminalPayload;
 }
@@ -277,25 +315,28 @@ export async function runWithoutLLM(
   deps: NoLLMDeps,
   history: AgentMessage[],
 ): Promise<void> {
-  await deps.emitEvent('thinking', { message: 'Processing (no LLM)...' });
+  await deps.emitEvent("thinking", { message: "Processing (no LLM)..." });
 
-  const lastUserMessage = history.filter(m => m.role === 'user').pop();
-  const userQuery = lastUserMessage?.content || 'No message provided';
+  const lastUserMessage = history.filter((m) => m.role === "user").pop();
+  const userQuery = lastUserMessage?.content || "No message provided";
 
   // Simple pattern matching
   const response = await generateSimpleResponse(deps.toolExecutor, userQuery);
 
   await deps.addMessage({
-    role: 'assistant',
+    role: "assistant",
     content: response,
   });
 
-  await deps.emitEvent('message', { content: response });
-  await deps.updateRunStatus('completed', JSON.stringify({ response, mode: 'no-llm' }));
-  await deps.emitEvent('completed', {
-    ...deps.buildTerminalEventPayload('completed', {
+  await deps.emitEvent("message", { content: response });
+  await deps.updateRunStatus(
+    "completed",
+    JSON.stringify({ response, mode: "no-llm" }),
+  );
+  await deps.emitEvent("completed", {
+    ...deps.buildTerminalEventPayload("completed", {
       success: true,
-      mode: 'no-llm',
+      mode: "no-llm",
     }),
   });
 }
@@ -308,29 +349,29 @@ async function generateSimpleResponse(
   query: string,
 ): Promise<string> {
   if (!toolExecutor) {
-    return 'Tool executor not available. Please try again.';
+    return "Tool executor not available. Please try again.";
   }
 
   const queryLower = query.toLowerCase();
 
-  if (queryLower.includes('list files') || queryLower.includes('show files')) {
+  if (queryLower.includes("list files") || queryLower.includes("show files")) {
     const result = await toolExecutor.execute({
-      id: 'simple-file-list',
-      name: 'file_list',
-      arguments: { path: '' },
+      id: "simple-file-list",
+      name: "file_list",
+      arguments: { path: "" },
     });
     if (result.error) {
       return `Error listing files: ${result.error}`;
     }
-    return `Here are the files in your workspace:\n\n${result.output}`;
+    return `Here are the files in your space:\n\n${result.output}`;
   }
 
-  if (queryLower.includes('read file') || queryLower.includes('show file')) {
+  if (queryLower.includes("read file") || queryLower.includes("show file")) {
     const pathMatch = query.match(/['"]([^'"]+)['"]/);
     if (pathMatch) {
       const result = await toolExecutor.execute({
-        id: 'simple-file-read',
-        name: 'file_read',
+        id: "simple-file-read",
+        name: "file_read",
         arguments: { path: pathMatch[1] },
       });
       if (result.error) {
@@ -338,16 +379,18 @@ async function generateSimpleResponse(
       }
       return `Content of ${pathMatch[1]}:\n\n\`\`\`\n${result.output}\n\`\`\``;
     }
-    return 'Please specify a file path, e.g., "read file \'packages/control/src/web.ts\'"';
+    return "Please specify a file path, e.g., \"read file 'packages/control/src/web.ts'\"";
   }
 
-  if (queryLower.includes('search for') || queryLower.includes('find')) {
-    const searchMatch = query.match(/(?:search for|find)\s+['"]?([^'"]+)['"]?/i);
+  if (queryLower.includes("search for") || queryLower.includes("find")) {
+    const searchMatch = query.match(
+      /(?:search for|find)\s+['"]?([^'"]+)['"]?/i,
+    );
     if (searchMatch) {
       const result = await toolExecutor.execute({
-        id: 'simple-search',
-        name: 'search',
-        arguments: { query: searchMatch[1], type: 'filename' },
+        id: "simple-search",
+        name: "search",
+        arguments: { query: searchMatch[1], type: "filename" },
       });
       return result.output;
     }
@@ -356,7 +399,7 @@ async function generateSimpleResponse(
   return `I understand you're asking about: "${query}"\n\n` +
     `I'm an AI agent that can help you with:\n` +
     `- Reading and writing files\n` +
-    `- Searching your workspace\n` +
+    `- Searching your space\n` +
     `- Deploying workers\n` +
     `- Running build commands\n` +
     `- Working with repositories and containers\n` +

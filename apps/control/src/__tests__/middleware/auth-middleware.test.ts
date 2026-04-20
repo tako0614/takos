@@ -5,9 +5,11 @@ import { assertEquals } from "jsr:@std/assert";
 import { isAppError } from "takos-common/errors";
 
 import {
+  authDeps,
   optionalAuth,
   requireAuth,
 } from "../../../../../packages/control/src/server/middleware/auth.ts";
+import { assertSpyCalls, spy } from "jsr:@std/testing/mock";
 
 type TestVars = { user?: User };
 type TestEnv = { Bindings: Env; Variables: TestVars };
@@ -87,7 +89,10 @@ function createEnv(): Env {
   return {
     DB: new MockD1Database(),
     PLATFORM: {
-      config: {},
+      config: {
+        adminDomain: "takos.jp",
+        platformPublicKey: "test-key",
+      },
       services: {
         sql: { binding: new MockD1Database() },
         notifications: { sessionStore: createSessionStore() },
@@ -95,6 +100,21 @@ function createEnv(): Env {
     },
   } as unknown as Env;
 }
+
+const resolvedUser: User = {
+  id: "user-1",
+  email: "user1@example.com",
+  name: "User1",
+  username: "user1",
+  bio: null,
+  picture: null,
+  trust_tier: "normal",
+  setup_completed: true,
+  created_at: "2026-02-13T00:00:00.000Z",
+  updated_at: "2026-02-13T00:00:00.000Z",
+};
+
+const originalAuthDeps = { ...authDeps };
 
 function installAppErrorHandler(app: Hono<TestEnv>) {
   app.onError((error, c) => {
@@ -143,12 +163,12 @@ function createOptionalAuthApp() {
   return app;
 }
 
-Deno.test("requireAuth rejects OAuth-style dotted bearer tokens", async () => {
+Deno.test("requireAuth rejects invalid tak_oat bearer tokens with the API error envelope", async () => {
   const app = createRequireAuthApp();
 
   const response = await app.fetch(
     new Request("https://takos.jp/api/me", {
-      headers: { Authorization: "Bearer malformed.token.value" },
+      headers: { Authorization: "Bearer tak_oat_malformed.token.value" },
     }),
     createEnv(),
     {} as ExecutionContext,
@@ -156,8 +176,10 @@ Deno.test("requireAuth rejects OAuth-style dotted bearer tokens", async () => {
 
   assertEquals(response.status, 401);
   assertEquals(await response.json(), {
-    error:
-      "OAuth bearer token is not supported on this endpoint. Use OAuth-protected routes.",
+    error: {
+      code: "UNAUTHORIZED",
+      message: "Invalid or expired OAuth bearer token",
+    },
   });
 });
 
@@ -174,17 +196,65 @@ Deno.test("requireAuth rejects invalid PAT bearer tokens", async () => {
 
   assertEquals(response.status, 401);
   assertEquals(await response.json(), {
-    error: "invalid_token",
-    error_description: "Invalid or expired PAT",
+    error: {
+      code: "UNAUTHORIZED",
+      message: "Invalid or expired PAT",
+    },
   });
 });
 
-Deno.test("requireAuth rejects unsupported non-PAT bearer tokens as unauthenticated", async () => {
+Deno.test("requireAuth accepts tak_oat-prefixed OAuth bearer tokens", async () => {
+  const verifyAccessTokenSpy = spy(
+    async (params: Parameters<typeof authDeps.verifyAccessToken>[0]) => {
+      assertEquals(params.token, "tak_oat_header.payload.signature");
+      return {
+        iss: "https://takos.jp",
+        sub: "user-1",
+        aud: "client-1",
+        exp: 1_800_000_000,
+        iat: 1_700_000_000,
+        jti: "jti-1",
+        scope: "profile",
+        client_id: "client-1",
+      };
+    },
+  );
+  const isAccessTokenValidSpy = spy(async () => true);
+  const getCachedUserSpy = spy(async () => resolvedUser);
+  authDeps.verifyAccessToken =
+    verifyAccessTokenSpy as typeof authDeps.verifyAccessToken;
+  authDeps.isAccessTokenValid =
+    isAccessTokenValidSpy as typeof authDeps.isAccessTokenValid;
+  authDeps.getCachedUser = getCachedUserSpy as typeof authDeps.getCachedUser;
+
+  try {
+    const app = createRequireAuthApp();
+    const response = await app.fetch(
+      new Request("https://takos.jp/api/me", {
+        headers: {
+          Authorization: "Bearer tak_oat_header.payload.signature",
+        },
+      }),
+      createEnv(),
+      {} as ExecutionContext,
+    );
+
+    assertEquals(response.status, 200);
+    assertEquals(await response.json(), { ok: true, user_id: "user-1" });
+    assertSpyCalls(verifyAccessTokenSpy, 1);
+    assertSpyCalls(isAccessTokenValidSpy, 1);
+    assertSpyCalls(getCachedUserSpy, 1);
+  } finally {
+    Object.assign(authDeps, originalAuthDeps);
+  }
+});
+
+Deno.test("requireAuth rejects raw JWT bearer tokens as unauthenticated", async () => {
   const app = createRequireAuthApp();
 
   const response = await app.fetch(
     new Request("https://takos.jp/api/me", {
-      headers: { Authorization: "Bearer short" },
+      headers: { Authorization: "Bearer header.payload.signature" },
     }),
     createEnv(),
     {} as ExecutionContext,

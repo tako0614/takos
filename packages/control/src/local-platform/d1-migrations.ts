@@ -1,7 +1,7 @@
-import type { Client } from '@libsql/client';
-import { readFile, readdir } from 'node:fs/promises';
-import path from 'node:path';
-import type { Pool } from 'pg';
+import type { Client } from "@libsql/client";
+import { readdir, readFile } from "node:fs/promises";
+import path from "node:path";
+import type { Pool } from "pg";
 import {
   isRecoverableSqliteSchemaDuplication,
   normalizeMigrationSql,
@@ -9,43 +9,59 @@ import {
   rewriteInsertOrIgnoreForPostgres,
   splitSqlStatements,
   stripLeadingSqlComments,
-} from './d1-sql-rewrite.ts';
+} from "./d1-sql-rewrite.ts";
 
 // ---------------------------------------------------------------------------
 // SQLite helpers
 // ---------------------------------------------------------------------------
 
-async function sqliteTableExists(client: Client, tableName: string): Promise<boolean> {
+async function sqliteTableExists(
+  client: Client,
+  tableName: string,
+): Promise<boolean> {
   const result = await client.execute({
-    sql: 'SELECT name FROM sqlite_master WHERE type = ? AND name = ? LIMIT 1',
-    args: ['table', tableName],
+    sql: "SELECT name FROM sqlite_master WHERE type = ? AND name = ? LIMIT 1",
+    args: ["table", tableName],
   });
   return result.rows.length > 0;
 }
 
-async function getSqliteTableColumns(client: Client, tableName: string): Promise<Set<string>> {
-  const safeName = tableName.replace(/[^a-zA-Z0-9_]/g, '');
+async function getSqliteTableColumns(
+  client: Client,
+  tableName: string,
+): Promise<Set<string>> {
+  const safeName = tableName.replace(/[^a-zA-Z0-9_]/g, "");
   const result = await client.execute(`PRAGMA table_info("${safeName}")`);
   return new Set(result.rows.map((row) => String(row.name)));
 }
 
-async function stripExistingSqliteServiceAddColumns(client: Client, sql: string): Promise<string> {
-  const createsServicesTable = /CREATE TABLE IF NOT EXISTS "services"/i.test(sql);
-  const existingColumns = (await sqliteTableExists(client, 'services'))
-    ? await getSqliteTableColumns(client, 'services')
+async function stripExistingSqliteServiceAddColumns(
+  client: Client,
+  sql: string,
+): Promise<string> {
+  const createsServicesTable = /CREATE TABLE IF NOT EXISTS "services"/i.test(
+    sql,
+  );
+  const existingColumns = (await sqliteTableExists(client, "services"))
+    ? await getSqliteTableColumns(client, "services")
     : new Set<string>();
   return sql
-    .split('\n')
+    .split("\n")
     .filter((line) => {
-      const match = line.match(/ALTER TABLE\s+"services"\s+ADD COLUMN\s+"([^"]+)"/i);
+      const match = line.match(
+        /ALTER TABLE\s+"services"\s+ADD COLUMN\s+"([^"]+)"/i,
+      );
       if (!match) return true;
       if (createsServicesTable) return false;
       return !existingColumns.has(match[1]);
     })
-    .join('\n');
+    .join("\n");
 }
 
-async function stripRedundantSqliteWorkerToServiceRenames(client: Client, sql: string): Promise<string> {
+async function stripRedundantSqliteWorkerToServiceRenames(
+  client: Client,
+  sql: string,
+): Promise<string> {
   const tableColumnsCache = new Map<string, Set<string>>();
 
   async function getColumns(tableName: string): Promise<Set<string>> {
@@ -58,26 +74,72 @@ async function stripRedundantSqliteWorkerToServiceRenames(client: Client, sql: s
     return columns;
   }
 
-  const lines = await Promise.all(sql.split('\n').map(async (line) => {
-    const match = line.match(/ALTER TABLE\s+"([^"]+)"\s+RENAME COLUMN\s+"worker_id"\s+TO\s+"service_id"/i);
-    if (!match) return line;
+  const lines = await Promise.all(
+    sql.split("\n").map(async (line) => {
+      const match = line.match(
+        /ALTER TABLE\s+"([^"]+)"\s+RENAME COLUMN\s+"worker_id"\s+TO\s+"service_id"/i,
+      );
+      if (!match) return line;
 
-    const columns = await getColumns(match[1]);
-    if (columns.has('worker_id') && !columns.has('service_id')) {
-      return line;
-    }
+      const columns = await getColumns(match[1]);
+      if (columns.has("worker_id") && !columns.has("service_id")) {
+        return line;
+      }
 
-    return '';
-  }));
+      return "";
+    }),
+  );
 
-  return lines.join('\n');
+  return lines.join("\n");
+}
+
+function rewriteLegacySqliteServicesInsertStatement(statement: string): string {
+  return statement.replace(
+    /^(INSERT INTO "services"\s*\(\n)([\s\S]*?)(\n\)\s*\nSELECT\n)/i,
+    (_match, prefix: string, columns: string, suffix: string) =>
+      `${prefix}${columns.replace(/"worker_type"/g, '"service_type"')}${suffix}`,
+  );
+}
+
+function isLegacySqliteServicesMirrorTrigger(statement: string): boolean {
+  return /^CREATE TRIGGER IF NOT EXISTS "trg_services_mirror_(?:insert|update|delete)_to_workers"/i
+    .test(statement);
+}
+
+async function normalizeSqliteLegacyServicesMigrationStatements(
+  client: Client,
+  sql: string,
+): Promise<string> {
+  const columns = await getSqliteTableColumns(client, "services").catch(() =>
+    new Set<string>()
+  );
+  if (!columns.has("service_type") || columns.has("worker_type")) {
+    return sql;
+  }
+
+  return splitSqlStatements(sql)
+    .map((statement) => stripLeadingSqlComments(statement))
+    .filter((statement) => statement.length > 0)
+    .flatMap((statement) => {
+      if (isLegacySqliteServicesMirrorTrigger(statement)) {
+        return [];
+      }
+      if (/^INSERT INTO "services"\s*\(/i.test(statement)) {
+        return [rewriteLegacySqliteServicesInsertStatement(statement)];
+      }
+      return [statement];
+    })
+    .join(";\n");
 }
 
 // ---------------------------------------------------------------------------
 // SQLite migration runner
 // ---------------------------------------------------------------------------
 
-export async function ensureServerMigrations(client: Client, migrationsDir: string): Promise<void> {
+export async function ensureServerMigrations(
+  client: Client,
+  migrationsDir: string,
+): Promise<void> {
   await client.execute(`
     CREATE TABLE IF NOT EXISTS "_takos_self_host_migrations" (
       "name" TEXT NOT NULL PRIMARY KEY,
@@ -86,17 +148,21 @@ export async function ensureServerMigrations(client: Client, migrationsDir: stri
   `);
 
   const files = (await readdir(migrationsDir))
-    .filter((entry) => entry.endsWith('.sql'))
+    .filter((entry) => entry.endsWith(".sql"))
     .sort((a, b) => a.localeCompare(b));
 
   for (const fileName of files) {
     const alreadyApplied = await client.execute({
-      sql: 'SELECT 1 AS value FROM "_takos_self_host_migrations" WHERE name = ? LIMIT 1',
+      sql:
+        'SELECT 1 AS value FROM "_takos_self_host_migrations" WHERE name = ? LIMIT 1',
       args: [fileName],
     });
     if (alreadyApplied.rows.length > 0) continue;
 
-    const migrationSql = normalizeMigrationSql(fileName, await readFile(path.join(migrationsDir, fileName), 'utf8'));
+    const migrationSql = normalizeMigrationSql(
+      fileName,
+      await readFile(path.join(migrationsDir, fileName), "utf8"),
+    );
     if (!migrationSql.trim()) {
       await client.execute({
         sql: 'INSERT INTO "_takos_self_host_migrations" (name) VALUES (?)',
@@ -108,15 +174,21 @@ export async function ensureServerMigrations(client: Client, migrationsDir: stri
       client,
       await stripExistingSqliteServiceAddColumns(client, migrationSql),
     );
-    const transaction = await client.transaction('write');
+    const normalizedMigrationSql = await normalizeSqliteLegacyServicesMigrationStatements(
+      client,
+      sqliteMigrationSql,
+    );
+    const transaction = await client.transaction("write");
     try {
-      for (const statement of splitSqlStatements(sqliteMigrationSql)) {
+      for (const statement of splitSqlStatements(normalizedMigrationSql)) {
         const normalizedStatement = stripLeadingSqlComments(statement);
         if (!normalizedStatement) continue;
         try {
           await transaction.execute(normalizedStatement);
         } catch (error) {
-          if (isRecoverableSqliteSchemaDuplication(error, normalizedStatement)) {
+          if (
+            isRecoverableSqliteSchemaDuplication(error, normalizedStatement)
+          ) {
             continue;
           }
           throw error;
@@ -128,7 +200,9 @@ export async function ensureServerMigrations(client: Client, migrationsDir: stri
       });
       await transaction.commit();
     } catch (error) {
-      await transaction.rollback().catch(() => undefined /* rollback: best-effort after migration failure */);
+      await transaction.rollback().catch(() =>
+        undefined /* rollback: best-effort after migration failure */
+      );
       throw error;
     } finally {
       transaction.close();
@@ -140,7 +214,10 @@ export async function ensureServerMigrations(client: Client, migrationsDir: stri
 // Postgres migration runner
 // ---------------------------------------------------------------------------
 
-export async function ensureServerPostgresMigrations(pool: Pool, migrationsDir: string): Promise<void> {
+export async function ensureServerPostgresMigrations(
+  pool: Pool,
+  migrationsDir: string,
+): Promise<void> {
   await pool.query(`
     CREATE TABLE IF NOT EXISTS "_takos_self_host_migrations" (
       "name" TEXT NOT NULL PRIMARY KEY,
@@ -149,7 +226,7 @@ export async function ensureServerPostgresMigrations(pool: Pool, migrationsDir: 
   `);
 
   const files = (await readdir(migrationsDir))
-    .filter((entry) => entry.endsWith('.sql'))
+    .filter((entry) => entry.endsWith(".sql"))
     .sort((a, b) => a.localeCompare(b));
 
   for (const fileName of files) {
@@ -161,7 +238,7 @@ export async function ensureServerPostgresMigrations(pool: Pool, migrationsDir: 
 
     const migrationSql = normalizePostgresMigrationSql(
       fileName,
-      await readFile(path.join(migrationsDir, fileName), 'utf8'),
+      await readFile(path.join(migrationsDir, fileName), "utf8"),
     );
 
     const client = await pool.connect();
@@ -170,20 +247,27 @@ export async function ensureServerPostgresMigrations(pool: Pool, migrationsDir: 
         for (const statement of splitSqlStatements(migrationSql)) {
           const normalizedStatement = stripLeadingSqlComments(statement);
           if (!normalizedStatement) continue;
-          const postgresStatement = rewriteInsertOrIgnoreForPostgres(normalizedStatement);
+          const postgresStatement = rewriteInsertOrIgnoreForPostgres(
+            normalizedStatement,
+          );
           try {
             await client.query(postgresStatement);
           } catch (error) {
             const pgError = error as NodeJS.ErrnoException & { code?: string };
             const isSchemaDuplication =
-              (pgError.code === '42P07' || pgError.code === '42710' || pgError.code === '42701')
-              && /^(CREATE TABLE|CREATE UNIQUE INDEX|CREATE INDEX|ALTER TABLE\s+"[^"]+"\s+ADD (CONSTRAINT|COLUMN))/i.test(postgresStatement);
+              (pgError.code === "42P07" || pgError.code === "42710" ||
+                pgError.code === "42701") &&
+              /^(CREATE TABLE|CREATE UNIQUE INDEX|CREATE INDEX|ALTER TABLE\s+"[^"]+"\s+ADD (CONSTRAINT|COLUMN))/i
+                .test(postgresStatement);
             if (isSchemaDuplication) continue;
             throw error;
           }
         }
       }
-      await client.query('INSERT INTO "_takos_self_host_migrations" (name) VALUES ($1)', [fileName]);
+      await client.query(
+        'INSERT INTO "_takos_self_host_migrations" (name) VALUES ($1)',
+        [fileName],
+      );
     } finally {
       client.release();
     }
@@ -194,8 +278,10 @@ export async function ensureServerPostgresMigrations(pool: Pool, migrationsDir: 
 // SQLite table shape repair
 // ---------------------------------------------------------------------------
 
-export async function ensureSqliteServicesTableShape(client: Client): Promise<void> {
-  if (!(await sqliteTableExists(client, 'services'))) {
+export async function ensureSqliteServicesTableShape(
+  client: Client,
+): Promise<void> {
+  if (!(await sqliteTableExists(client, "services"))) {
     await client.execute(`
       CREATE TABLE IF NOT EXISTS "services" (
         "id" TEXT PRIMARY KEY NOT NULL,
@@ -218,45 +304,69 @@ export async function ensureSqliteServicesTableShape(client: Client): Promise<vo
     `);
   }
 
-  const columns = await getSqliteTableColumns(client, 'services');
+  const columns = await getSqliteTableColumns(client, "services");
   const alterStatements: string[] = [];
 
-  if (columns.has('worker_type') && !columns.has('service_type')) {
-    alterStatements.push(`ALTER TABLE "services" RENAME COLUMN "worker_type" TO "service_type";`);
+  if (columns.has("worker_type") && !columns.has("service_type")) {
+    alterStatements.push(
+      `ALTER TABLE "services" RENAME COLUMN "worker_type" TO "service_type";`,
+    );
   }
-  if (!columns.has('service_type')) {
-    alterStatements.push(`ALTER TABLE "services" ADD COLUMN "service_type" TEXT NOT NULL DEFAULT 'app';`);
+  if (!columns.has("service_type")) {
+    alterStatements.push(
+      `ALTER TABLE "services" ADD COLUMN "service_type" TEXT NOT NULL DEFAULT 'app';`,
+    );
   }
-  if (!columns.has('name_type')) {
+  if (!columns.has("name_type")) {
     alterStatements.push(`ALTER TABLE "services" ADD COLUMN "name_type" TEXT;`);
   }
-  if (!columns.has('route_ref')) {
+  if (!columns.has("route_ref")) {
     alterStatements.push(`ALTER TABLE "services" ADD COLUMN "route_ref" TEXT;`);
   }
-  if (!columns.has('active_deployment_id')) {
-    alterStatements.push(`ALTER TABLE "services" ADD COLUMN "active_deployment_id" TEXT;`);
+  if (!columns.has("active_deployment_id")) {
+    alterStatements.push(
+      `ALTER TABLE "services" ADD COLUMN "active_deployment_id" TEXT;`,
+    );
   }
-  if (!columns.has('fallback_deployment_id')) {
-    alterStatements.push(`ALTER TABLE "services" ADD COLUMN "fallback_deployment_id" TEXT;`);
+  if (!columns.has("fallback_deployment_id")) {
+    alterStatements.push(
+      `ALTER TABLE "services" ADD COLUMN "fallback_deployment_id" TEXT;`,
+    );
   }
-  if (!columns.has('current_version')) {
-    alterStatements.push(`ALTER TABLE "services" ADD COLUMN "current_version" INTEGER NOT NULL DEFAULT 0;`);
+  if (!columns.has("current_version")) {
+    alterStatements.push(
+      `ALTER TABLE "services" ADD COLUMN "current_version" INTEGER NOT NULL DEFAULT 0;`,
+    );
   }
 
   for (const statement of alterStatements) {
     await client.execute(statement);
   }
 
-  await client.execute(`CREATE UNIQUE INDEX IF NOT EXISTS "services_route_ref_key" ON "services"("route_ref");`);
-  await client.execute(`CREATE INDEX IF NOT EXISTS "idx_services_id_account" ON "services"("id", "account_id");`);
-  await client.execute(`CREATE INDEX IF NOT EXISTS "idx_services_status" ON "services"("status");`);
-  await client.execute(`CREATE INDEX IF NOT EXISTS "idx_services_hostname" ON "services"("hostname");`);
-  await client.execute(`CREATE INDEX IF NOT EXISTS "idx_services_account_status" ON "services"("account_id", "status");`);
-  await client.execute(`CREATE INDEX IF NOT EXISTS "idx_services_account_id" ON "services"("account_id");`);
+  await client.execute(
+    `CREATE UNIQUE INDEX IF NOT EXISTS "services_route_ref_key" ON "services"("route_ref");`,
+  );
+  await client.execute(
+    `CREATE INDEX IF NOT EXISTS "idx_services_id_account" ON "services"("id", "account_id");`,
+  );
+  await client.execute(
+    `CREATE INDEX IF NOT EXISTS "idx_services_status" ON "services"("status");`,
+  );
+  await client.execute(
+    `CREATE INDEX IF NOT EXISTS "idx_services_hostname" ON "services"("hostname");`,
+  );
+  await client.execute(
+    `CREATE INDEX IF NOT EXISTS "idx_services_account_status" ON "services"("account_id", "status");`,
+  );
+  await client.execute(
+    `CREATE INDEX IF NOT EXISTS "idx_services_account_id" ON "services"("account_id");`,
+  );
 }
 
-export async function ensureSqliteAccountsTableShape(client: Client): Promise<void> {
-  if (!(await sqliteTableExists(client, 'accounts'))) {
+export async function ensureSqliteAccountsTableShape(
+  client: Client,
+): Promise<void> {
+  if (!(await sqliteTableExists(client, "accounts"))) {
     await client.execute(`
       CREATE TABLE IF NOT EXISTS "accounts" (
         "id" TEXT PRIMARY KEY NOT NULL,
@@ -273,7 +383,7 @@ export async function ensureSqliteAccountsTableShape(client: Client): Promise<vo
         "default_repository_id" TEXT,
         "head_snapshot_id" TEXT,
         "ai_model" TEXT DEFAULT 'gpt-5.4-nano',
-        "ai_provider" TEXT DEFAULT 'openai',
+        "model_backend" TEXT DEFAULT 'openai',
         "security_posture" TEXT NOT NULL DEFAULT 'standard',
         "owner_account_id" TEXT,
         "created_at" TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -282,29 +392,45 @@ export async function ensureSqliteAccountsTableShape(client: Client): Promise<vo
     `);
   }
 
-  const columns = await getSqliteTableColumns(client, 'accounts');
+  const columns = await getSqliteTableColumns(client, "accounts");
   const alterStatements: string[] = [];
 
-  if (!columns.has('security_posture')) {
-    alterStatements.push(`ALTER TABLE "accounts" ADD COLUMN "security_posture" TEXT NOT NULL DEFAULT 'standard';`);
+  if (!columns.has("security_posture")) {
+    alterStatements.push(
+      `ALTER TABLE "accounts" ADD COLUMN "security_posture" TEXT NOT NULL DEFAULT 'standard';`,
+    );
   }
-  if (!columns.has('head_snapshot_id')) {
-    alterStatements.push(`ALTER TABLE "accounts" ADD COLUMN "head_snapshot_id" TEXT;`);
+  if (!columns.has("head_snapshot_id")) {
+    alterStatements.push(
+      `ALTER TABLE "accounts" ADD COLUMN "head_snapshot_id" TEXT;`,
+    );
   }
 
   for (const statement of alterStatements) {
     await client.execute(statement);
   }
 
-  await client.execute(`CREATE INDEX IF NOT EXISTS "idx_accounts_type" ON "accounts"("type");`);
-  await client.execute(`CREATE INDEX IF NOT EXISTS "idx_accounts_slug" ON "accounts"("slug");`);
-  await client.execute(`CREATE INDEX IF NOT EXISTS "idx_accounts_owner_account_id" ON "accounts"("owner_account_id");`);
-  await client.execute(`CREATE INDEX IF NOT EXISTS "idx_accounts_email" ON "accounts"("email");`);
-  await client.execute(`CREATE INDEX IF NOT EXISTS "idx_accounts_default_repository_id" ON "accounts"("default_repository_id");`);
+  await client.execute(
+    `CREATE INDEX IF NOT EXISTS "idx_accounts_type" ON "accounts"("type");`,
+  );
+  await client.execute(
+    `CREATE INDEX IF NOT EXISTS "idx_accounts_slug" ON "accounts"("slug");`,
+  );
+  await client.execute(
+    `CREATE INDEX IF NOT EXISTS "idx_accounts_owner_account_id" ON "accounts"("owner_account_id");`,
+  );
+  await client.execute(
+    `CREATE INDEX IF NOT EXISTS "idx_accounts_email" ON "accounts"("email");`,
+  );
+  await client.execute(
+    `CREATE INDEX IF NOT EXISTS "idx_accounts_default_repository_id" ON "accounts"("default_repository_id");`,
+  );
 }
 
-export async function ensureSqliteDeploymentsTableShape(client: Client): Promise<void> {
-  if (!(await sqliteTableExists(client, 'deployments'))) {
+export async function ensureSqliteDeploymentsTableShape(
+  client: Client,
+): Promise<void> {
+  if (!(await sqliteTableExists(client, "deployments"))) {
     await client.execute(`
       CREATE TABLE IF NOT EXISTS "deployments" (
         "id" TEXT PRIMARY KEY NOT NULL,
@@ -329,9 +455,9 @@ export async function ensureSqliteDeploymentsTableShape(client: Client): Promise
         "routing_weight" INTEGER NOT NULL DEFAULT 0,
         "deployed_by" TEXT,
         "deploy_message" TEXT,
-        "provider_name" TEXT NOT NULL DEFAULT 'workers-dispatch',
+        "backend_name" TEXT NOT NULL DEFAULT 'workers-dispatch',
         "target_json" TEXT NOT NULL DEFAULT '{}',
-        "provider_state_json" TEXT NOT NULL DEFAULT '{}',
+        "backend_state_json" TEXT NOT NULL DEFAULT '{}',
         "artifact_kind" TEXT NOT NULL DEFAULT 'worker-bundle',
         "idempotency_key" TEXT UNIQUE,
         "is_rollback" INTEGER NOT NULL DEFAULT 0,
@@ -346,36 +472,176 @@ export async function ensureSqliteDeploymentsTableShape(client: Client): Promise
     `);
   }
 
-  const columns = await getSqliteTableColumns(client, 'deployments');
+  const columns = await getSqliteTableColumns(client, "deployments");
   const alterStatements: string[] = [];
 
-  const hasServiceId = columns.has('service_id');
-  const hasWorkerId = columns.has('worker_id');
+  const hasServiceId = columns.has("service_id");
+  const hasWorkerId = columns.has("worker_id");
 
   if (hasWorkerId && !hasServiceId) {
-    alterStatements.push(`ALTER TABLE "deployments" RENAME COLUMN "worker_id" TO "service_id";`);
+    alterStatements.push(
+      `ALTER TABLE "deployments" RENAME COLUMN "worker_id" TO "service_id";`,
+    );
   } else if (!hasServiceId) {
-    alterStatements.push(`ALTER TABLE "deployments" ADD COLUMN "service_id" TEXT;`);
+    alterStatements.push(
+      `ALTER TABLE "deployments" ADD COLUMN "service_id" TEXT;`,
+    );
   }
 
   for (const statement of alterStatements) {
     await client.execute(statement);
   }
 
-  await client.execute(`CREATE UNIQUE INDEX IF NOT EXISTS "idx_deployments_service_version" ON "deployments"("service_id", "version");`);
-  await client.execute(`CREATE INDEX IF NOT EXISTS "idx_deployments_service_routing_status" ON "deployments"("service_id", "routing_status");`);
-  await client.execute(`CREATE INDEX IF NOT EXISTS "idx_deployments_service_id" ON "deployments"("service_id");`);
-  await client.execute(`CREATE INDEX IF NOT EXISTS "idx_deployments_service_created_at" ON "deployments"("service_id", "created_at");`);
-  await client.execute(`CREATE INDEX IF NOT EXISTS "idx_deployments_status" ON "deployments"("status");`);
-  await client.execute(`CREATE INDEX IF NOT EXISTS "idx_deployments_account_status" ON "deployments"("account_id", "status");`);
-  await client.execute(`CREATE INDEX IF NOT EXISTS "idx_deployments_account_id" ON "deployments"("account_id");`);
+  await client.execute(
+    `CREATE UNIQUE INDEX IF NOT EXISTS "idx_deployments_service_version" ON "deployments"("service_id", "version");`,
+  );
+  await client.execute(
+    `CREATE INDEX IF NOT EXISTS "idx_deployments_service_routing_status" ON "deployments"("service_id", "routing_status");`,
+  );
+  await client.execute(
+    `CREATE INDEX IF NOT EXISTS "idx_deployments_service_id" ON "deployments"("service_id");`,
+  );
+  await client.execute(
+    `CREATE INDEX IF NOT EXISTS "idx_deployments_service_created_at" ON "deployments"("service_id", "created_at");`,
+  );
+  await client.execute(
+    `CREATE INDEX IF NOT EXISTS "idx_deployments_status" ON "deployments"("status");`,
+  );
+  await client.execute(
+    `CREATE INDEX IF NOT EXISTS "idx_deployments_account_status" ON "deployments"("account_id", "status");`,
+  );
+  await client.execute(
+    `CREATE INDEX IF NOT EXISTS "idx_deployments_account_id" ON "deployments"("account_id");`,
+  );
+}
+
+export async function ensureSqliteResourcesTableShape(
+  client: Client,
+): Promise<void> {
+  if (!(await sqliteTableExists(client, "resources"))) {
+    await client.execute(`
+      CREATE TABLE IF NOT EXISTS "resources" (
+        "id" TEXT PRIMARY KEY NOT NULL,
+        "owner_account_id" TEXT NOT NULL,
+        "account_id" TEXT,
+        "group_id" TEXT,
+        "name" TEXT NOT NULL,
+        "type" TEXT NOT NULL,
+        "semantic_type" TEXT,
+        "driver" TEXT,
+        "backend_name" TEXT,
+        "status" TEXT NOT NULL DEFAULT 'provisioning',
+        "backing_resource_id" TEXT,
+        "backing_resource_name" TEXT,
+        "config" TEXT NOT NULL DEFAULT '{}',
+        "metadata" TEXT NOT NULL DEFAULT '{}',
+        "size_bytes" INTEGER DEFAULT 0,
+        "item_count" INTEGER DEFAULT 0,
+        "last_used_at" TEXT,
+        "manifest_key" TEXT,
+        "orphaned_at" TEXT,
+        "previous_secret_value" TEXT,
+        "previous_secret_expires_at" TEXT,
+        "created_at" TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        "updated_at" TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+  }
+
+  const columns = await getSqliteTableColumns(client, "resources");
+  const alterStatements: string[] = [];
+
+  if (!columns.has("group_id")) {
+    alterStatements.push(`ALTER TABLE "resources" ADD COLUMN "group_id" TEXT;`);
+  }
+  if (!columns.has("semantic_type")) {
+    alterStatements.push(
+      `ALTER TABLE "resources" ADD COLUMN "semantic_type" TEXT;`,
+    );
+  }
+  if (!columns.has("driver")) {
+    alterStatements.push(`ALTER TABLE "resources" ADD COLUMN "driver" TEXT;`);
+  }
+  if (!columns.has("backend_name")) {
+    alterStatements.push(
+      `ALTER TABLE "resources" ADD COLUMN "backend_name" TEXT;`,
+    );
+  }
+  if (!columns.has("backing_resource_id")) {
+    alterStatements.push(
+      `ALTER TABLE "resources" ADD COLUMN "backing_resource_id" TEXT;`,
+    );
+  }
+  if (!columns.has("backing_resource_name")) {
+    alterStatements.push(
+      `ALTER TABLE "resources" ADD COLUMN "backing_resource_name" TEXT;`,
+    );
+  }
+  if (!columns.has("manifest_key")) {
+    alterStatements.push(
+      `ALTER TABLE "resources" ADD COLUMN "manifest_key" TEXT;`,
+    );
+  }
+  if (!columns.has("orphaned_at")) {
+    alterStatements.push(
+      `ALTER TABLE "resources" ADD COLUMN "orphaned_at" TEXT;`,
+    );
+  }
+  if (!columns.has("previous_secret_value")) {
+    alterStatements.push(
+      `ALTER TABLE "resources" ADD COLUMN "previous_secret_value" TEXT;`,
+    );
+  }
+  if (!columns.has("previous_secret_expires_at")) {
+    alterStatements.push(
+      `ALTER TABLE "resources" ADD COLUMN "previous_secret_expires_at" TEXT;`,
+    );
+  }
+
+  for (const statement of alterStatements) {
+    await client.execute(statement);
+  }
+
+  await client.execute(
+    `CREATE INDEX IF NOT EXISTS "idx_resources_type" ON "resources"("type");`,
+  );
+  await client.execute(
+    `CREATE INDEX IF NOT EXISTS "idx_resources_semantic_type" ON "resources"("semantic_type");`,
+  );
+  await client.execute(
+    `CREATE INDEX IF NOT EXISTS "idx_resources_backend_name" ON "resources"("backend_name");`,
+  );
+  await client.execute(
+    `CREATE INDEX IF NOT EXISTS "idx_resources_status" ON "resources"("status");`,
+  );
+  await client.execute(
+    `CREATE INDEX IF NOT EXISTS "idx_resources_owner_account_id" ON "resources"("owner_account_id");`,
+  );
+  await client.execute(
+    `CREATE INDEX IF NOT EXISTS "idx_resources_backing_resource_id" ON "resources"("backing_resource_id");`,
+  );
+  await client.execute(
+    `CREATE INDEX IF NOT EXISTS "idx_resources_account_id" ON "resources"("account_id");`,
+  );
+  await client.execute(
+    `CREATE INDEX IF NOT EXISTS "idx_resources_group_id" ON "resources"("group_id");`,
+  );
+  await client.execute(
+    `CREATE INDEX IF NOT EXISTS "idx_resources_manifest_key" ON "resources"("manifest_key");`,
+  );
+  await client.execute(
+    `CREATE INDEX IF NOT EXISTS "idx_resources_orphaned_at" ON "resources"("orphaned_at");`,
+  );
 }
 
 // ---------------------------------------------------------------------------
 // Postgres table shape repair
 // ---------------------------------------------------------------------------
 
-async function postgresTableExists(pool: Pool, tableName: string): Promise<boolean> {
+async function postgresTableExists(
+  pool: Pool,
+  tableName: string,
+): Promise<boolean> {
   const result = await pool.query(
     `SELECT 1
        FROM information_schema.tables
@@ -387,7 +653,10 @@ async function postgresTableExists(pool: Pool, tableName: string): Promise<boole
   return (result.rowCount ?? 0) > 0;
 }
 
-async function getPostgresTableColumns(pool: Pool, tableName: string): Promise<Set<string>> {
+async function getPostgresTableColumns(
+  pool: Pool,
+  tableName: string,
+): Promise<Set<string>> {
   const result = await pool.query<{ column_name: string }>(
     `SELECT column_name
        FROM information_schema.columns
@@ -395,11 +664,15 @@ async function getPostgresTableColumns(pool: Pool, tableName: string): Promise<S
         AND table_name = $1`,
     [tableName],
   );
-  return new Set(result.rows.map((row: { column_name: string }) => row.column_name));
+  return new Set(
+    result.rows.map((row: { column_name: string }) => row.column_name),
+  );
 }
 
-export async function ensurePostgresServicesTableShape(pool: Pool): Promise<void> {
-  if (!(await postgresTableExists(pool, 'services'))) {
+export async function ensurePostgresServicesTableShape(
+  pool: Pool,
+): Promise<void> {
+  if (!(await postgresTableExists(pool, "services"))) {
     await pool.query(`
       CREATE TABLE IF NOT EXISTS "services" (
         "id" TEXT PRIMARY KEY NOT NULL,
@@ -422,45 +695,69 @@ export async function ensurePostgresServicesTableShape(pool: Pool): Promise<void
     `);
   }
 
-  const columns = await getPostgresTableColumns(pool, 'services');
+  const columns = await getPostgresTableColumns(pool, "services");
   const alterStatements: string[] = [];
 
-  if (columns.has('worker_type') && !columns.has('service_type')) {
-    alterStatements.push(`ALTER TABLE "services" RENAME COLUMN "worker_type" TO "service_type";`);
+  if (columns.has("worker_type") && !columns.has("service_type")) {
+    alterStatements.push(
+      `ALTER TABLE "services" RENAME COLUMN "worker_type" TO "service_type";`,
+    );
   }
-  if (!columns.has('service_type')) {
-    alterStatements.push(`ALTER TABLE "services" ADD COLUMN "service_type" TEXT NOT NULL DEFAULT 'app';`);
+  if (!columns.has("service_type")) {
+    alterStatements.push(
+      `ALTER TABLE "services" ADD COLUMN "service_type" TEXT NOT NULL DEFAULT 'app';`,
+    );
   }
-  if (!columns.has('name_type')) {
+  if (!columns.has("name_type")) {
     alterStatements.push(`ALTER TABLE "services" ADD COLUMN "name_type" TEXT;`);
   }
-  if (!columns.has('route_ref')) {
+  if (!columns.has("route_ref")) {
     alterStatements.push(`ALTER TABLE "services" ADD COLUMN "route_ref" TEXT;`);
   }
-  if (!columns.has('active_deployment_id')) {
-    alterStatements.push(`ALTER TABLE "services" ADD COLUMN "active_deployment_id" TEXT;`);
+  if (!columns.has("active_deployment_id")) {
+    alterStatements.push(
+      `ALTER TABLE "services" ADD COLUMN "active_deployment_id" TEXT;`,
+    );
   }
-  if (!columns.has('fallback_deployment_id')) {
-    alterStatements.push(`ALTER TABLE "services" ADD COLUMN "fallback_deployment_id" TEXT;`);
+  if (!columns.has("fallback_deployment_id")) {
+    alterStatements.push(
+      `ALTER TABLE "services" ADD COLUMN "fallback_deployment_id" TEXT;`,
+    );
   }
-  if (!columns.has('current_version')) {
-    alterStatements.push(`ALTER TABLE "services" ADD COLUMN "current_version" INTEGER NOT NULL DEFAULT 0;`);
+  if (!columns.has("current_version")) {
+    alterStatements.push(
+      `ALTER TABLE "services" ADD COLUMN "current_version" INTEGER NOT NULL DEFAULT 0;`,
+    );
   }
 
   for (const statement of alterStatements) {
     await pool.query(statement);
   }
 
-  await pool.query(`CREATE UNIQUE INDEX IF NOT EXISTS "services_route_ref_key" ON "services"("route_ref");`);
-  await pool.query(`CREATE INDEX IF NOT EXISTS "idx_services_id_account" ON "services"("id", "account_id");`);
-  await pool.query(`CREATE INDEX IF NOT EXISTS "idx_services_status" ON "services"("status");`);
-  await pool.query(`CREATE INDEX IF NOT EXISTS "idx_services_hostname" ON "services"("hostname");`);
-  await pool.query(`CREATE INDEX IF NOT EXISTS "idx_services_account_status" ON "services"("account_id", "status");`);
-  await pool.query(`CREATE INDEX IF NOT EXISTS "idx_services_account_id" ON "services"("account_id");`);
+  await pool.query(
+    `CREATE UNIQUE INDEX IF NOT EXISTS "services_route_ref_key" ON "services"("route_ref");`,
+  );
+  await pool.query(
+    `CREATE INDEX IF NOT EXISTS "idx_services_id_account" ON "services"("id", "account_id");`,
+  );
+  await pool.query(
+    `CREATE INDEX IF NOT EXISTS "idx_services_status" ON "services"("status");`,
+  );
+  await pool.query(
+    `CREATE INDEX IF NOT EXISTS "idx_services_hostname" ON "services"("hostname");`,
+  );
+  await pool.query(
+    `CREATE INDEX IF NOT EXISTS "idx_services_account_status" ON "services"("account_id", "status");`,
+  );
+  await pool.query(
+    `CREATE INDEX IF NOT EXISTS "idx_services_account_id" ON "services"("account_id");`,
+  );
 }
 
-export async function ensurePostgresAccountsTableShape(pool: Pool): Promise<void> {
-  if (!(await postgresTableExists(pool, 'accounts'))) {
+export async function ensurePostgresAccountsTableShape(
+  pool: Pool,
+): Promise<void> {
+  if (!(await postgresTableExists(pool, "accounts"))) {
     await pool.query(`
       CREATE TABLE IF NOT EXISTS "accounts" (
         "id" TEXT PRIMARY KEY NOT NULL,
@@ -477,7 +774,7 @@ export async function ensurePostgresAccountsTableShape(pool: Pool): Promise<void
         "default_repository_id" TEXT,
         "head_snapshot_id" TEXT,
         "ai_model" TEXT DEFAULT 'gpt-5.4-nano',
-        "ai_provider" TEXT DEFAULT 'openai',
+        "model_backend" TEXT DEFAULT 'openai',
         "security_posture" TEXT NOT NULL DEFAULT 'standard',
         "owner_account_id" TEXT,
         "created_at" TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -486,29 +783,45 @@ export async function ensurePostgresAccountsTableShape(pool: Pool): Promise<void
     `);
   }
 
-  const columns = await getPostgresTableColumns(pool, 'accounts');
+  const columns = await getPostgresTableColumns(pool, "accounts");
   const alterStatements: string[] = [];
 
-  if (!columns.has('security_posture')) {
-    alterStatements.push(`ALTER TABLE "accounts" ADD COLUMN "security_posture" TEXT NOT NULL DEFAULT 'standard';`);
+  if (!columns.has("security_posture")) {
+    alterStatements.push(
+      `ALTER TABLE "accounts" ADD COLUMN "security_posture" TEXT NOT NULL DEFAULT 'standard';`,
+    );
   }
-  if (!columns.has('head_snapshot_id')) {
-    alterStatements.push(`ALTER TABLE "accounts" ADD COLUMN "head_snapshot_id" TEXT;`);
+  if (!columns.has("head_snapshot_id")) {
+    alterStatements.push(
+      `ALTER TABLE "accounts" ADD COLUMN "head_snapshot_id" TEXT;`,
+    );
   }
 
   for (const statement of alterStatements) {
     await pool.query(statement);
   }
 
-  await pool.query(`CREATE INDEX IF NOT EXISTS "idx_accounts_type" ON "accounts"("type");`);
-  await pool.query(`CREATE INDEX IF NOT EXISTS "idx_accounts_slug" ON "accounts"("slug");`);
-  await pool.query(`CREATE INDEX IF NOT EXISTS "idx_accounts_owner_account_id" ON "accounts"("owner_account_id");`);
-  await pool.query(`CREATE INDEX IF NOT EXISTS "idx_accounts_email" ON "accounts"("email");`);
-  await pool.query(`CREATE INDEX IF NOT EXISTS "idx_accounts_default_repository_id" ON "accounts"("default_repository_id");`);
+  await pool.query(
+    `CREATE INDEX IF NOT EXISTS "idx_accounts_type" ON "accounts"("type");`,
+  );
+  await pool.query(
+    `CREATE INDEX IF NOT EXISTS "idx_accounts_slug" ON "accounts"("slug");`,
+  );
+  await pool.query(
+    `CREATE INDEX IF NOT EXISTS "idx_accounts_owner_account_id" ON "accounts"("owner_account_id");`,
+  );
+  await pool.query(
+    `CREATE INDEX IF NOT EXISTS "idx_accounts_email" ON "accounts"("email");`,
+  );
+  await pool.query(
+    `CREATE INDEX IF NOT EXISTS "idx_accounts_default_repository_id" ON "accounts"("default_repository_id");`,
+  );
 }
 
-export async function ensurePostgresDeploymentsTableShape(pool: Pool): Promise<void> {
-  if (!(await postgresTableExists(pool, 'deployments'))) {
+export async function ensurePostgresDeploymentsTableShape(
+  pool: Pool,
+): Promise<void> {
+  if (!(await postgresTableExists(pool, "deployments"))) {
     await pool.query(`
       CREATE TABLE IF NOT EXISTS "deployments" (
         "id" TEXT PRIMARY KEY NOT NULL,
@@ -533,9 +846,9 @@ export async function ensurePostgresDeploymentsTableShape(pool: Pool): Promise<v
         "routing_weight" INTEGER NOT NULL DEFAULT 0,
         "deployed_by" TEXT,
         "deploy_message" TEXT,
-        "provider_name" TEXT NOT NULL DEFAULT 'workers-dispatch',
+        "backend_name" TEXT NOT NULL DEFAULT 'workers-dispatch',
         "target_json" TEXT NOT NULL DEFAULT '{}',
-        "provider_state_json" TEXT NOT NULL DEFAULT '{}',
+        "backend_state_json" TEXT NOT NULL DEFAULT '{}',
         "artifact_kind" TEXT NOT NULL DEFAULT 'worker-bundle',
         "idempotency_key" TEXT UNIQUE,
         "is_rollback" BOOLEAN NOT NULL DEFAULT false,
@@ -550,17 +863,150 @@ export async function ensurePostgresDeploymentsTableShape(pool: Pool): Promise<v
     `);
   }
 
-  await pool.query(`CREATE UNIQUE INDEX IF NOT EXISTS "idx_deployments_service_version" ON "deployments"("service_id", "version");`);
-  await pool.query(`CREATE INDEX IF NOT EXISTS "idx_deployments_service_routing_status" ON "deployments"("service_id", "routing_status");`);
-  await pool.query(`CREATE INDEX IF NOT EXISTS "idx_deployments_service_id" ON "deployments"("service_id");`);
-  await pool.query(`CREATE INDEX IF NOT EXISTS "idx_deployments_service_created_at" ON "deployments"("service_id", "created_at");`);
-  await pool.query(`CREATE INDEX IF NOT EXISTS "idx_deployments_status" ON "deployments"("status");`);
-  await pool.query(`CREATE INDEX IF NOT EXISTS "idx_deployments_account_status" ON "deployments"("account_id", "status");`);
-  await pool.query(`CREATE INDEX IF NOT EXISTS "idx_deployments_account_id" ON "deployments"("account_id");`);
+  await pool.query(
+    `CREATE UNIQUE INDEX IF NOT EXISTS "idx_deployments_service_version" ON "deployments"("service_id", "version");`,
+  );
+  await pool.query(
+    `CREATE INDEX IF NOT EXISTS "idx_deployments_service_routing_status" ON "deployments"("service_id", "routing_status");`,
+  );
+  await pool.query(
+    `CREATE INDEX IF NOT EXISTS "idx_deployments_service_id" ON "deployments"("service_id");`,
+  );
+  await pool.query(
+    `CREATE INDEX IF NOT EXISTS "idx_deployments_service_created_at" ON "deployments"("service_id", "created_at");`,
+  );
+  await pool.query(
+    `CREATE INDEX IF NOT EXISTS "idx_deployments_status" ON "deployments"("status");`,
+  );
+  await pool.query(
+    `CREATE INDEX IF NOT EXISTS "idx_deployments_account_status" ON "deployments"("account_id", "status");`,
+  );
+  await pool.query(
+    `CREATE INDEX IF NOT EXISTS "idx_deployments_account_id" ON "deployments"("account_id");`,
+  );
+}
+
+export async function ensurePostgresResourcesTableShape(
+  pool: Pool,
+): Promise<void> {
+  if (!(await postgresTableExists(pool, "resources"))) {
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS "resources" (
+        "id" TEXT PRIMARY KEY NOT NULL,
+        "owner_account_id" TEXT NOT NULL,
+        "account_id" TEXT,
+        "group_id" TEXT,
+        "name" TEXT NOT NULL,
+        "type" TEXT NOT NULL,
+        "semantic_type" TEXT,
+        "driver" TEXT,
+        "backend_name" TEXT,
+        "status" TEXT NOT NULL DEFAULT 'provisioning',
+        "backing_resource_id" TEXT,
+        "backing_resource_name" TEXT,
+        "config" TEXT NOT NULL DEFAULT '{}',
+        "metadata" TEXT NOT NULL DEFAULT '{}',
+        "size_bytes" INTEGER DEFAULT 0,
+        "item_count" INTEGER DEFAULT 0,
+        "last_used_at" TIMESTAMPTZ,
+        "manifest_key" TEXT,
+        "orphaned_at" TIMESTAMPTZ,
+        "previous_secret_value" TEXT,
+        "previous_secret_expires_at" TIMESTAMPTZ,
+        "created_at" TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        "updated_at" TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+  }
+
+  const columns = await getPostgresTableColumns(pool, "resources");
+  const alterStatements: string[] = [];
+
+  if (!columns.has("group_id")) {
+    alterStatements.push(`ALTER TABLE "resources" ADD COLUMN "group_id" TEXT;`);
+  }
+  if (!columns.has("semantic_type")) {
+    alterStatements.push(
+      `ALTER TABLE "resources" ADD COLUMN "semantic_type" TEXT;`,
+    );
+  }
+  if (!columns.has("driver")) {
+    alterStatements.push(`ALTER TABLE "resources" ADD COLUMN "driver" TEXT;`);
+  }
+  if (!columns.has("backend_name")) {
+    alterStatements.push(
+      `ALTER TABLE "resources" ADD COLUMN "backend_name" TEXT;`,
+    );
+  }
+  if (!columns.has("backing_resource_id")) {
+    alterStatements.push(
+      `ALTER TABLE "resources" ADD COLUMN "backing_resource_id" TEXT;`,
+    );
+  }
+  if (!columns.has("backing_resource_name")) {
+    alterStatements.push(
+      `ALTER TABLE "resources" ADD COLUMN "backing_resource_name" TEXT;`,
+    );
+  }
+  if (!columns.has("manifest_key")) {
+    alterStatements.push(
+      `ALTER TABLE "resources" ADD COLUMN "manifest_key" TEXT;`,
+    );
+  }
+  if (!columns.has("orphaned_at")) {
+    alterStatements.push(
+      `ALTER TABLE "resources" ADD COLUMN "orphaned_at" TIMESTAMPTZ;`,
+    );
+  }
+  if (!columns.has("previous_secret_value")) {
+    alterStatements.push(
+      `ALTER TABLE "resources" ADD COLUMN "previous_secret_value" TEXT;`,
+    );
+  }
+  if (!columns.has("previous_secret_expires_at")) {
+    alterStatements.push(
+      `ALTER TABLE "resources" ADD COLUMN "previous_secret_expires_at" TIMESTAMPTZ;`,
+    );
+  }
+
+  for (const statement of alterStatements) {
+    await pool.query(statement);
+  }
+
+  await pool.query(
+    `CREATE INDEX IF NOT EXISTS "idx_resources_type" ON "resources"("type");`,
+  );
+  await pool.query(
+    `CREATE INDEX IF NOT EXISTS "idx_resources_semantic_type" ON "resources"("semantic_type");`,
+  );
+  await pool.query(
+    `CREATE INDEX IF NOT EXISTS "idx_resources_backend_name" ON "resources"("backend_name");`,
+  );
+  await pool.query(
+    `CREATE INDEX IF NOT EXISTS "idx_resources_status" ON "resources"("status");`,
+  );
+  await pool.query(
+    `CREATE INDEX IF NOT EXISTS "idx_resources_owner_account_id" ON "resources"("owner_account_id");`,
+  );
+  await pool.query(
+    `CREATE INDEX IF NOT EXISTS "idx_resources_backing_resource_id" ON "resources"("backing_resource_id");`,
+  );
+  await pool.query(
+    `CREATE INDEX IF NOT EXISTS "idx_resources_account_id" ON "resources"("account_id");`,
+  );
+  await pool.query(
+    `CREATE INDEX IF NOT EXISTS "idx_resources_group_id" ON "resources"("group_id");`,
+  );
+  await pool.query(
+    `CREATE INDEX IF NOT EXISTS "idx_resources_manifest_key" ON "resources"("manifest_key");`,
+  );
+  await pool.query(
+    `CREATE INDEX IF NOT EXISTS "idx_resources_orphaned_at" ON "resources"("orphaned_at");`,
+  );
 }
 
 export async function ensurePostgresRunsTableShape(pool: Pool): Promise<void> {
-  if (!(await postgresTableExists(pool, 'runs'))) {
+  if (!(await postgresTableExists(pool, "runs"))) {
     await pool.query(`
       CREATE TABLE IF NOT EXISTS "runs" (
         "id" TEXT PRIMARY KEY NOT NULL,
@@ -589,55 +1035,101 @@ export async function ensurePostgresRunsTableShape(pool: Pool): Promise<void> {
     `);
   }
 
-  const columns = await getPostgresTableColumns(pool, 'runs');
+  const columns = await getPostgresTableColumns(pool, "runs");
   const alterStatements: string[] = [];
 
-  if (columns.has('worker_id') && !columns.has('service_id')) {
-    alterStatements.push(`ALTER TABLE "runs" RENAME COLUMN "worker_id" TO "service_id";`);
+  if (columns.has("worker_id") && !columns.has("service_id")) {
+    alterStatements.push(
+      `ALTER TABLE "runs" RENAME COLUMN "worker_id" TO "service_id";`,
+    );
   }
-  if (columns.has('worker_heartbeat') && !columns.has('service_heartbeat')) {
-    alterStatements.push(`ALTER TABLE "runs" RENAME COLUMN "worker_heartbeat" TO "service_heartbeat";`);
+  if (columns.has("worker_heartbeat") && !columns.has("service_heartbeat")) {
+    alterStatements.push(
+      `ALTER TABLE "runs" RENAME COLUMN "worker_heartbeat" TO "service_heartbeat";`,
+    );
   }
-  if (!columns.has('requester_account_id')) {
-    alterStatements.push(`ALTER TABLE "runs" ADD COLUMN "requester_account_id" TEXT;`);
+  if (!columns.has("requester_account_id")) {
+    alterStatements.push(
+      `ALTER TABLE "runs" ADD COLUMN "requester_account_id" TEXT;`,
+    );
   }
-  if (!columns.has('child_thread_id')) {
-    alterStatements.push(`ALTER TABLE "runs" ADD COLUMN "child_thread_id" TEXT;`);
+  if (!columns.has("child_thread_id")) {
+    alterStatements.push(
+      `ALTER TABLE "runs" ADD COLUMN "child_thread_id" TEXT;`,
+    );
   }
-  if (!columns.has('root_thread_id')) {
-    alterStatements.push(`ALTER TABLE "runs" ADD COLUMN "root_thread_id" TEXT;`);
+  if (!columns.has("root_thread_id")) {
+    alterStatements.push(
+      `ALTER TABLE "runs" ADD COLUMN "root_thread_id" TEXT;`,
+    );
   }
-  if (!columns.has('root_run_id')) {
+  if (!columns.has("root_run_id")) {
     alterStatements.push(`ALTER TABLE "runs" ADD COLUMN "root_run_id" TEXT;`);
   }
-  if (!columns.has('service_id')) {
+  if (!columns.has("service_id")) {
     alterStatements.push(`ALTER TABLE "runs" ADD COLUMN "service_id" TEXT;`);
   }
-  if (!columns.has('service_heartbeat')) {
-    alterStatements.push(`ALTER TABLE "runs" ADD COLUMN "service_heartbeat" TIMESTAMPTZ;`);
+  if (!columns.has("service_heartbeat")) {
+    alterStatements.push(
+      `ALTER TABLE "runs" ADD COLUMN "service_heartbeat" TIMESTAMPTZ;`,
+    );
   }
-  if (!columns.has('lease_version')) {
-    alterStatements.push(`ALTER TABLE "runs" ADD COLUMN "lease_version" INTEGER NOT NULL DEFAULT 0;`);
+  if (!columns.has("lease_version")) {
+    alterStatements.push(
+      `ALTER TABLE "runs" ADD COLUMN "lease_version" INTEGER NOT NULL DEFAULT 0;`,
+    );
   }
 
   for (const statement of alterStatements) {
     await pool.query(statement);
   }
 
-  await pool.query(`CREATE INDEX IF NOT EXISTS "idx_runs_service_id" ON "runs"("service_id");`);
-  await pool.query(`CREATE INDEX IF NOT EXISTS "idx_runs_service_heartbeat" ON "runs"("service_heartbeat");`);
-  await pool.query(`CREATE INDEX IF NOT EXISTS "idx_runs_thread_id" ON "runs"("thread_id");`);
-  await pool.query(`CREATE INDEX IF NOT EXISTS "idx_runs_thread_status" ON "runs"("thread_id", "status");`);
-  await pool.query(`CREATE INDEX IF NOT EXISTS "idx_runs_status" ON "runs"("status");`);
-  await pool.query(`CREATE INDEX IF NOT EXISTS "idx_runs_session_id" ON "runs"("session_id");`);
-  await pool.query(`CREATE INDEX IF NOT EXISTS "idx_runs_requester_account_id" ON "runs"("requester_account_id");`);
-  await pool.query(`CREATE INDEX IF NOT EXISTS "idx_runs_parent_run_id" ON "runs"("parent_run_id");`);
-  await pool.query(`CREATE INDEX IF NOT EXISTS "idx_runs_child_thread_id" ON "runs"("child_thread_id");`);
-  await pool.query(`CREATE INDEX IF NOT EXISTS "idx_runs_root_thread_id" ON "runs"("root_thread_id");`);
-  await pool.query(`CREATE INDEX IF NOT EXISTS "idx_runs_root_run_id" ON "runs"("root_run_id");`);
-  await pool.query(`CREATE INDEX IF NOT EXISTS "idx_runs_agent_type" ON "runs"("agent_type");`);
-  await pool.query(`CREATE INDEX IF NOT EXISTS "idx_runs_account_status" ON "runs"("account_id", "status");`);
-  await pool.query(`CREATE INDEX IF NOT EXISTS "idx_runs_account_status_created_at" ON "runs"("account_id", "status", "created_at");`);
-  await pool.query(`CREATE INDEX IF NOT EXISTS "idx_runs_account_id" ON "runs"("account_id");`);
-  await pool.query(`CREATE INDEX IF NOT EXISTS "idx_runs_account_created_at" ON "runs"("account_id", "created_at");`);
+  await pool.query(
+    `CREATE INDEX IF NOT EXISTS "idx_runs_service_id" ON "runs"("service_id");`,
+  );
+  await pool.query(
+    `CREATE INDEX IF NOT EXISTS "idx_runs_service_heartbeat" ON "runs"("service_heartbeat");`,
+  );
+  await pool.query(
+    `CREATE INDEX IF NOT EXISTS "idx_runs_thread_id" ON "runs"("thread_id");`,
+  );
+  await pool.query(
+    `CREATE INDEX IF NOT EXISTS "idx_runs_thread_status" ON "runs"("thread_id", "status");`,
+  );
+  await pool.query(
+    `CREATE INDEX IF NOT EXISTS "idx_runs_status" ON "runs"("status");`,
+  );
+  await pool.query(
+    `CREATE INDEX IF NOT EXISTS "idx_runs_session_id" ON "runs"("session_id");`,
+  );
+  await pool.query(
+    `CREATE INDEX IF NOT EXISTS "idx_runs_requester_account_id" ON "runs"("requester_account_id");`,
+  );
+  await pool.query(
+    `CREATE INDEX IF NOT EXISTS "idx_runs_parent_run_id" ON "runs"("parent_run_id");`,
+  );
+  await pool.query(
+    `CREATE INDEX IF NOT EXISTS "idx_runs_child_thread_id" ON "runs"("child_thread_id");`,
+  );
+  await pool.query(
+    `CREATE INDEX IF NOT EXISTS "idx_runs_root_thread_id" ON "runs"("root_thread_id");`,
+  );
+  await pool.query(
+    `CREATE INDEX IF NOT EXISTS "idx_runs_root_run_id" ON "runs"("root_run_id");`,
+  );
+  await pool.query(
+    `CREATE INDEX IF NOT EXISTS "idx_runs_agent_type" ON "runs"("agent_type");`,
+  );
+  await pool.query(
+    `CREATE INDEX IF NOT EXISTS "idx_runs_account_status" ON "runs"("account_id", "status");`,
+  );
+  await pool.query(
+    `CREATE INDEX IF NOT EXISTS "idx_runs_account_status_created_at" ON "runs"("account_id", "status", "created_at");`,
+  );
+  await pool.query(
+    `CREATE INDEX IF NOT EXISTS "idx_runs_account_id" ON "runs"("account_id");`,
+  );
+  await pool.query(
+    `CREATE INDEX IF NOT EXISTS "idx_runs_account_created_at" ON "runs"("account_id", "created_at");`,
+  );
 }

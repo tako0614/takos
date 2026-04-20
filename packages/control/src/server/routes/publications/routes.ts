@@ -8,23 +8,28 @@ import {
 } from "takos-common/errors";
 
 import {
+  type AppContext,
   type AuthenticatedRouteEnv,
   requireSpaceAccess,
 } from "../route-auth.ts";
+import {
+  hasPublicInternalField,
+  stripPublicInternalFields,
+} from "../response-utils.ts";
 import { zValidator } from "../zod-validator.ts";
 import {
   deletePublicationByName,
   getPublicationByName,
-  listPublicationProviders,
+  listPublicationKinds,
   listPublications,
   type PublicationRecord,
   upsertApiPublication,
 } from "../../../application/services/platform/service-publications.ts";
+import type { AppPublication } from "../../../application/services/source/app-manifest-types.ts";
 import { logError } from "../../../shared/utils/logger.ts";
 
 async function resolveSpaceId(
-  // deno-lint-ignore no-explicit-any
-  c: any,
+  c: AppContext,
   userId: string,
   roles?: Array<"owner" | "admin">,
 ): Promise<string> {
@@ -38,7 +43,7 @@ async function resolveSpaceId(
 }
 
 function toPublicPublication(record: PublicationRecord) {
-  const publication = record.publication;
+  const publication = stripPublicInternalFields(record.publication);
   const resolved = Object.fromEntries(
     record.outputs
       .filter((output) => output.secret === false)
@@ -50,9 +55,8 @@ function toPublicPublication(record: PublicationRecord) {
     sourceType: record.sourceType,
     groupId: record.groupId,
     ownerServiceId: record.ownerServiceId,
-    provider: publication.provider ?? null,
-    kind: publication.kind ?? null,
-    type: publication.type ?? null,
+    publisher: publication.publisher,
+    type: publication.type,
     publication,
     outputs: record.outputs,
     resolved,
@@ -61,14 +65,88 @@ function toPublicPublication(record: PublicationRecord) {
   };
 }
 
-const publicationBodySchema = z.object({}).catchall(z.unknown());
+const publicationBodySchema = z.object({
+  name: z.string().optional(),
+  publisher: z.literal("takos"),
+  type: z.enum(["api-key", "oauth-client"]),
+  spec: z.record(z.unknown()).optional(),
+}).strict().refine((body) => !hasPublicInternalField(body), {
+  message: "publication must not contain internal fields",
+});
+
+const TAKOS_API_KEY_SPEC_FIELDS = new Set([
+  "scopes",
+]);
+
+const TAKOS_OAUTH_SPEC_FIELDS = new Set([
+  "clientName",
+  "redirectUris",
+  "scopes",
+  "metadata",
+]);
+
+const TAKOS_OAUTH_METADATA_FIELDS = new Set([
+  "logoUri",
+  "tosUri",
+  "policyUri",
+]);
+
+function assertAllowedSpecFields(
+  spec: Record<string, unknown>,
+  allowed: ReadonlySet<string>,
+  field: string,
+): void {
+  for (const key of Object.keys(spec)) {
+    if (allowed.has(key)) continue;
+    throw new Error(
+      `${field}.${key} is not supported for Takos publication specs`,
+    );
+  }
+}
+
+export function assertTakosGrantSpecShape(
+  publication: Pick<AppPublication, "name" | "publisher" | "type" | "spec">,
+): void {
+  if (publication.publisher !== "takos" || publication.spec == null) return;
+  const spec = publication.spec;
+  if (typeof spec !== "object" || Array.isArray(spec)) {
+    throw new Error(`publication '${publication.name}'.spec must be an object`);
+  }
+  if (publication.type === "api-key") {
+    assertAllowedSpecFields(spec, TAKOS_API_KEY_SPEC_FIELDS, "spec");
+    return;
+  }
+  if (publication.type !== "oauth-client") return;
+  assertAllowedSpecFields(spec, TAKOS_OAUTH_SPEC_FIELDS, "spec");
+  const metadata = spec.metadata;
+  if (
+    metadata &&
+    typeof metadata === "object" &&
+    !Array.isArray(metadata)
+  ) {
+    assertAllowedSpecFields(
+      metadata as Record<string, unknown>,
+      TAKOS_OAUTH_METADATA_FIELDS,
+      "spec.metadata",
+    );
+  }
+}
+
+export function assertGrantPublicationDeleteAllowed(
+  record: PublicationRecord,
+): void {
+  if (record.publication.publisher === "takos") return;
+  throw new BadRequestError(
+    "Route publications cannot be deleted through DELETE /api/publications/:name. Manage route publications by deploying a manifest with publish[].",
+  );
+}
 
 const app = new Hono<AuthenticatedRouteEnv>()
-  .get("/providers", async (c) => {
+  .get("/kinds", async (c) => {
     const user = c.get("user");
     await resolveSpaceId(c, user.id);
     return c.json({
-      providers: listPublicationProviders(),
+      kinds: listPublicationKinds(),
     });
   })
   .get("/", async (c) => {
@@ -119,6 +197,10 @@ const app = new Hono<AuthenticatedRouteEnv>()
         if (typeof body.name === "string" && body.name !== name) {
           throw new Error("publication name in path/body must match");
         }
+        assertTakosGrantSpecShape({
+          ...body,
+          name,
+        });
         const publication = await upsertApiPublication(c.env, {
           spaceId,
           publication: {
@@ -151,13 +233,16 @@ const app = new Hono<AuthenticatedRouteEnv>()
       if (!existing) {
         throw new NotFoundError("Publication");
       }
+      assertGrantPublicationDeleteAllowed(existing);
       await deletePublicationByName(c.env, {
         spaceId,
         name,
       });
       return c.json({ success: true });
     } catch (err) {
-      if (err instanceof NotFoundError) throw err;
+      if (err instanceof NotFoundError || err instanceof BadRequestError) {
+        throw err;
+      }
       logError("Failed to delete publication", err, {
         module: "routes/publications",
       });

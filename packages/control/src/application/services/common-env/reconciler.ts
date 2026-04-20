@@ -1,15 +1,17 @@
-import type { Env } from '../../../shared/types/index.ts';
-import { normalizeEnvName } from './crypto.ts';
-import type { CommonEnvReconcileTrigger } from './reconcile-jobs.ts';
+import type { Env } from "../../../shared/types/index.ts";
+import { normalizeEnvName } from "./crypto.ts";
+import type { CommonEnvReconcileTrigger } from "./reconcile-jobs.ts";
 import {
-  listServiceLinks,
   getService,
+  listServiceLinks,
   updateLinkRuntime,
-} from './repository.ts';
-import { resolveServiceCommonEnvState } from '../platform/worker-desired-state.ts';
+} from "./repository.ts";
+import { resolveServiceCommonEnvState } from "../platform/worker-desired-state.ts";
 
 function errorMessage(error: unknown): string {
-  return error instanceof Error ? error.message.slice(0, 500) : String(error).slice(0, 500);
+  return error instanceof Error
+    ? error.message.slice(0, 500)
+    : String(error).slice(0, 500);
 }
 
 export class CommonEnvReconciler {
@@ -21,9 +23,17 @@ export class CommonEnvReconciler {
     targetKeys?: Set<string>;
     error: unknown;
   }): Promise<void> {
-    const rows = await listServiceLinks(this.env, params.spaceId, params.serviceId);
+    const rows = await listServiceLinks(
+      this.env,
+      params.spaceId,
+      params.serviceId,
+    );
     const targetKeys = params.targetKeys && params.targetKeys.size > 0
-      ? new Set(Array.from(params.targetKeys.values()).map((key) => normalizeEnvName(key)))
+      ? new Set(
+        Array.from(params.targetKeys.values()).map((key) =>
+          normalizeEnvName(key)
+        ),
+      )
       : null;
 
     if (rows.length === 0) return;
@@ -34,8 +44,8 @@ export class CommonEnvReconciler {
       if (targetKeys && !targetKeys.has(key)) continue;
       await updateLinkRuntime(this.env, {
         rowId: row.id,
-        syncState: 'error',
-        syncReason: 'apply_failed',
+        syncState: "error",
+        syncReason: "apply_failed",
         lastSyncError: message,
       });
     }
@@ -47,7 +57,7 @@ export class CommonEnvReconciler {
     options?: {
       targetKeys?: Set<string>;
       trigger?: CommonEnvReconcileTrigger;
-    }
+    },
   ): Promise<void> {
     void options?.trigger;
 
@@ -55,12 +65,24 @@ export class CommonEnvReconciler {
     if (!service) return;
 
     const targetKeys = options?.targetKeys && options.targetKeys.size > 0
-      ? new Set(Array.from(options.targetKeys.values()).map((key) => normalizeEnvName(key)))
+      ? new Set(
+        Array.from(options.targetKeys.values()).map((key) =>
+          normalizeEnvName(key)
+        ),
+      )
       : null;
 
-    const resolved = await resolveServiceCommonEnvState(this.env, spaceId, serviceId);
-    const linkRows = targetKeys ? await listServiceLinks(this.env, spaceId, serviceId) : [];
-    const rowIdToKey = new Map(linkRows.map((row) => [row.id, normalizeEnvName(row.env_name)]));
+    const resolved = await resolveServiceCommonEnvState(
+      this.env,
+      spaceId,
+      serviceId,
+    );
+    const linkRows = targetKeys
+      ? await listServiceLinks(this.env, spaceId, serviceId)
+      : [];
+    const rowIdToKey = new Map(
+      linkRows.map((row) => [row.id, normalizeEnvName(row.env_name)]),
+    );
 
     for (const update of resolved.commonEnvUpdates) {
       if (targetKeys) {

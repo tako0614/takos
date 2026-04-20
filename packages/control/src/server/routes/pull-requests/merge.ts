@@ -1,18 +1,27 @@
-import type { User } from '../../../shared/types/index.ts';
+import type { User } from "../../../shared/types/index.ts";
 
-import * as gitStore from '../../../application/services/git-smart/index.ts';
-import type { Database } from '../../../infra/db/index.ts';
-import { eq, and } from 'drizzle-orm';
-import { pullRequests, branches } from '../../../infra/db/schema.ts';
-import type { AuthenticatedRouteEnv } from '../route-auth.ts';
-import { toPullRequestRecord, type PullRequestRecord } from './dto.ts';
-import { toGitBucket, type GitBucket } from '../../../shared/utils/git-bucket.ts';
-import { GIT_REBASE_MAX_COMMITS } from '../../../shared/config/limits.ts';
+import * as gitStore from "../../../application/services/git-smart/index.ts";
+import type { Database } from "../../../infra/db/index.ts";
+import { and, eq } from "drizzle-orm";
+import { branches, pullRequests } from "../../../infra/db/schema.ts";
+import type { AuthenticatedRouteEnv } from "../route-auth.ts";
+import { type PullRequestRecord, toPullRequestRecord } from "./dto.ts";
+import {
+  type GitBucket,
+  toGitBucket,
+} from "../../../shared/utils/git-bucket.ts";
+import { GIT_REBASE_MAX_COMMITS } from "../../../shared/config/limits.ts";
+import { AppError, type ErrorCode, ErrorCodes } from "takos-common/errors";
+import { errorResponse } from "../response-utils.ts";
 
-type MergeApplyFailure = { success: false; error: 'branch_not_found' | 'ref_conflict'; current: string | null };
+type MergeApplyFailure = {
+  success: false;
+  error: "branch_not_found" | "ref_conflict";
+  current: string | null;
+};
 type MergeApplySuccess = { success: true; pullRequest: PullRequestRecord };
 type MergeApplyResult = MergeApplySuccess | MergeApplyFailure;
-export type MergeMethod = 'merge' | 'squash' | 'rebase';
+export type MergeMethod = "merge" | "squash" | "rebase";
 
 type MergeExecutionFailure = {
   success: false;
@@ -29,44 +38,139 @@ type MergeExecutionSuccess = {
   pushBefore: string | null;
 };
 
-export type MergeExecutionResult = MergeExecutionSuccess | MergeExecutionFailure;
+export type MergeExecutionResult =
+  | MergeExecutionSuccess
+  | MergeExecutionFailure;
 
 type MergeTargetSuccess = { success: true; newBaseSha: string };
 type MergeTargetResult = MergeTargetSuccess | MergeExecutionFailure;
 
-function buildUserSignature(user: User, timestamp: string): gitStore.GitSignature {
+function buildUserSignature(
+  user: User,
+  timestamp: string,
+): gitStore.GitSignature {
   return {
-    name: user.name || 'User',
-    email: user.email || 'user@takos.dev',
+    name: user.name || "User",
+    email: user.email || "user@takos.dev",
     timestamp: Math.floor(new Date(timestamp).getTime() / 1000),
-    tzOffset: '+0000',
+    tzOffset: "+0000",
   };
 }
 
-function mergeFailure(status: number, body: Record<string, unknown>): MergeExecutionFailure {
+function mergeFailure(
+  status: number,
+  body: Record<string, unknown>,
+): MergeExecutionFailure {
   return { success: false, status, body };
 }
 
-function mapMergeApplyFailure(result: MergeApplyFailure): MergeExecutionFailure {
-  if (result.error === 'branch_not_found') {
-    return mergeFailure(404, { error: 'Branch not found' });
+function errorCodeForStatus(status: number): ErrorCode {
+  switch (status) {
+    case 400:
+      return ErrorCodes.BAD_REQUEST;
+    case 401:
+      return ErrorCodes.UNAUTHORIZED;
+    case 403:
+      return ErrorCodes.FORBIDDEN;
+    case 404:
+      return ErrorCodes.NOT_FOUND;
+    case 409:
+      return ErrorCodes.CONFLICT;
+    case 410:
+      return ErrorCodes.GONE;
+    case 413:
+      return ErrorCodes.PAYLOAD_TOO_LARGE;
+    case 422:
+      return ErrorCodes.VALIDATION_ERROR;
+    case 429:
+      return ErrorCodes.RATE_LIMITED;
+    case 500:
+      return ErrorCodes.INTERNAL_ERROR;
+    case 501:
+      return ErrorCodes.NOT_IMPLEMENTED;
+    case 502:
+      return ErrorCodes.BAD_GATEWAY;
+    case 503:
+      return ErrorCodes.SERVICE_UNAVAILABLE;
+    case 504:
+      return ErrorCodes.GATEWAY_TIMEOUT;
+    default:
+      return ErrorCodes.INTERNAL_ERROR;
+  }
+}
+
+function isErrorCode(value: unknown): value is ErrorCode {
+  return typeof value === "string" &&
+    Object.values(ErrorCodes).includes(value as ErrorCode);
+}
+
+function normalizeErrorBody(
+  body: Record<string, unknown>,
+  status: number,
+): AppError {
+  if (
+    typeof body.error === "object" &&
+    body.error !== null &&
+    "code" in body.error &&
+    "message" in body.error
+  ) {
+    const error = body.error as {
+      code?: unknown;
+      message?: unknown;
+      details?: unknown;
+    };
+    return new AppError(
+      typeof error.message === "string" && error.message.trim()
+        ? error.message
+        : "Request failed",
+      isErrorCode(error.code) ? error.code : errorCodeForStatus(status),
+      status,
+      error.details,
+    );
+  }
+
+  const message = typeof body.message === "string" && body.message.trim()
+    ? body.message
+    : typeof body.error === "string" && body.error.trim()
+    ? body.error
+    : "Request failed";
+
+  const details: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(body)) {
+    if (key === "error" || key === "message") continue;
+    details[key] = value;
+  }
+
+  return new AppError(
+    message,
+    errorCodeForStatus(status),
+    status,
+    Object.keys(details).length > 0 ? details : undefined,
+  );
+}
+
+function mapMergeApplyFailure(
+  result: MergeApplyFailure,
+): MergeExecutionFailure {
+  if (result.error === "branch_not_found") {
+    return mergeFailure(404, { error: "Branch not found" });
   }
   return mergeFailure(409, {
-    error: 'REF_CONFLICT',
-    message: 'Ref conflict: branch was modified by another process',
+    error: "REF_CONFLICT",
+    message: "Ref conflict: branch was modified by another process",
     current: result.current || null,
   });
 }
 
-export function jsonErrorWithStatus(body: Record<string, unknown>, status: number): Response {
-  return new Response(JSON.stringify(body), {
-    status,
-    headers: { 'Content-Type': 'application/json' },
-  });
+export function jsonErrorWithStatus(
+  body: Record<string, unknown>,
+  status: number,
+): Response {
+  return errorResponse(normalizeErrorBody(body, status));
 }
 
 export function validateConflictResolutionPath(path: unknown): string | null {
-  if (typeof path !== 'string') {
+  if (typeof path !== "string") {
     return null;
   }
   const normalized = path.trim();
@@ -85,7 +189,7 @@ async function advanceBaseBranchAndMarkPullRequestMerged(
     newBaseSha: string;
     pullRequestId: string;
     timestamp: string;
-  }
+  },
 ): Promise<MergeApplyResult> {
   const branchUpdateResult = await db.update(branches)
     .set({
@@ -109,19 +213,19 @@ async function advanceBaseBranchAndMarkPullRequestMerged(
       .get();
 
     if (!currentBranch) {
-      return { success: false, error: 'branch_not_found', current: null };
+      return { success: false, error: "branch_not_found", current: null };
     }
 
     return {
       success: false,
-      error: 'ref_conflict',
+      error: "ref_conflict",
       current: currentBranch.commitSha,
     };
   }
 
   const updatedPullRequest = await db.update(pullRequests)
     .set({
-      status: 'merged',
+      status: "merged",
       mergedAt: params.timestamp,
       updatedAt: params.timestamp,
     })
@@ -136,7 +240,7 @@ async function advanceBaseBranchAndMarkPullRequestMerged(
 }
 
 async function createRebaseMergeTarget(params: {
-  env: AuthenticatedRouteEnv['Bindings'];
+  env: AuthenticatedRouteEnv["Bindings"];
   bucket: GitBucket;
   repoId: string;
   baseSha: string;
@@ -148,11 +252,11 @@ async function createRebaseMergeTarget(params: {
     params.bucket,
     params.repoId,
     params.baseSha,
-    params.headSha
+    params.headSha,
   );
   if (!mergeBase) {
     return mergeFailure(409, {
-      status: 'conflict',
+      status: "conflict",
       conflicts: [],
       merge_base: null,
     });
@@ -164,23 +268,28 @@ async function createRebaseMergeTarget(params: {
   while (cursorSha !== mergeBase) {
     const commit = await gitStore.getCommitData(params.bucket, cursorSha);
     if (!commit) {
-      return mergeFailure(500, { error: 'Failed to load commits for rebase' });
+      return mergeFailure(500, { error: "Failed to load commits for rebase" });
     }
     if (commit.parents.length !== 1) {
-      return mergeFailure(501, { error: 'Rebase merge does not support merge commits yet' });
+      return mergeFailure(501, {
+        error: "Rebase merge does not support merge commits yet",
+      });
     }
     commitsToRebase.push(commit);
     cursorSha = commit.parents[0];
     if (commitsToRebase.length > MAX_REBASE_COMMITS) {
-      return mergeFailure(413, { error: 'Rebase merge is too large' });
+      return mergeFailure(413, { error: "Rebase merge is too large" });
     }
   }
 
   commitsToRebase.reverse();
 
-  const baseCommit = await gitStore.getCommitData(params.bucket, params.baseSha);
+  const baseCommit = await gitStore.getCommitData(
+    params.bucket,
+    params.baseSha,
+  );
   if (!baseCommit) {
-    return mergeFailure(500, { error: 'Failed to load commits for rebase' });
+    return mergeFailure(500, { error: "Failed to load commits for rebase" });
   }
 
   let currentParentSha = params.baseSha;
@@ -188,21 +297,24 @@ async function createRebaseMergeTarget(params: {
 
   for (const original of commitsToRebase) {
     const originalParentSha = original.parents[0];
-    const originalParentCommit = await gitStore.getCommitData(params.bucket, originalParentSha);
+    const originalParentCommit = await gitStore.getCommitData(
+      params.bucket,
+      originalParentSha,
+    );
     if (!originalParentCommit) {
-      return mergeFailure(500, { error: 'Failed to load commits for rebase' });
+      return mergeFailure(500, { error: "Failed to load commits for rebase" });
     }
 
     const mergeResult = await gitStore.mergeTrees3Way(
       params.bucket,
       originalParentCommit.tree,
       currentTreeOid,
-      original.tree
+      original.tree,
     );
 
     if (!mergeResult.tree_sha || mergeResult.conflicts.length > 0) {
       return mergeFailure(409, {
-        status: 'conflict',
+        status: "conflict",
         conflicts: mergeResult.conflicts,
         merge_base: mergeBase,
         at_commit_sha: original.sha,
@@ -210,13 +322,18 @@ async function createRebaseMergeTarget(params: {
     }
 
     const timestamp = new Date().toISOString();
-    const commit = await gitStore.createCommit(params.env.DB, params.bucket, params.repoId, {
-      tree: mergeResult.tree_sha,
-      parents: [currentParentSha],
-      message: original.message,
-      author: original.author,
-      committer: buildUserSignature(params.user, timestamp),
-    });
+    const commit = await gitStore.createCommit(
+      params.env.DB,
+      params.bucket,
+      params.repoId,
+      {
+        tree: mergeResult.tree_sha,
+        parents: [currentParentSha],
+        message: original.message,
+        author: original.author,
+        committer: buildUserSignature(params.user, timestamp),
+      },
+    );
 
     currentParentSha = commit.sha;
     currentTreeOid = mergeResult.tree_sha;
@@ -226,12 +343,12 @@ async function createRebaseMergeTarget(params: {
 }
 
 async function createMergeOrSquashTarget(params: {
-  env: AuthenticatedRouteEnv['Bindings'];
+  env: AuthenticatedRouteEnv["Bindings"];
   bucket: GitBucket;
   repoId: string;
   pullRequest: PullRequestRecord;
   user: User;
-  mergeMethod: 'merge' | 'squash';
+  mergeMethod: "merge" | "squash";
   commitMessage: string;
   baseSha: string;
   headSha: string;
@@ -239,9 +356,12 @@ async function createMergeOrSquashTarget(params: {
 }): Promise<MergeTargetResult> {
   let treeOid: string;
   if (params.canFastForward) {
-    const headCommit = await gitStore.getCommitData(params.bucket, params.headSha);
+    const headCommit = await gitStore.getCommitData(
+      params.bucket,
+      params.headSha,
+    );
     if (!headCommit) {
-      return mergeFailure(500, { error: 'Failed to load commits for merge' });
+      return mergeFailure(500, { error: "Failed to load commits for merge" });
     }
     treeOid = headCommit.tree;
   } else {
@@ -250,11 +370,11 @@ async function createMergeOrSquashTarget(params: {
       params.bucket,
       params.repoId,
       params.baseSha,
-      params.headSha
+      params.headSha,
     );
     if (!mergeBase) {
       return mergeFailure(409, {
-        status: 'conflict',
+        status: "conflict",
         conflicts: [],
         merge_base: null,
       });
@@ -267,18 +387,18 @@ async function createMergeOrSquashTarget(params: {
     ]);
 
     if (!baseCommit || !localCommit || !incomingCommit) {
-      return mergeFailure(500, { error: 'Failed to load commits for merge' });
+      return mergeFailure(500, { error: "Failed to load commits for merge" });
     }
 
     const mergeResult = await gitStore.mergeTrees3Way(
       params.bucket,
       baseCommit.tree,
       localCommit.tree,
-      incomingCommit.tree
+      incomingCommit.tree,
     );
     if (!mergeResult.tree_sha || mergeResult.conflicts.length > 0) {
       return mergeFailure(409, {
-        status: 'conflict',
+        status: "conflict",
         conflicts: mergeResult.conflicts,
         merge_base: mergeBase,
       });
@@ -290,24 +410,31 @@ async function createMergeOrSquashTarget(params: {
   const timestamp = new Date().toISOString();
   const signature = buildUserSignature(params.user, timestamp);
   const message = params.commitMessage || (
-    params.mergeMethod === 'squash'
+    params.mergeMethod === "squash"
       ? `Squash merge ${params.pullRequest.headBranch} into ${params.pullRequest.baseBranch}`
       : `Merge ${params.pullRequest.headBranch} into ${params.pullRequest.baseBranch}`
   );
 
-  const commit = await gitStore.createCommit(params.env.DB, params.bucket, params.repoId, {
-    tree: treeOid,
-    parents: params.mergeMethod === 'squash' ? [params.baseSha] : [params.baseSha, params.headSha],
-    message,
-    author: signature,
-    committer: signature,
-  });
+  const commit = await gitStore.createCommit(
+    params.env.DB,
+    params.bucket,
+    params.repoId,
+    {
+      tree: treeOid,
+      parents: params.mergeMethod === "squash"
+        ? [params.baseSha]
+        : [params.baseSha, params.headSha],
+      message,
+      author: signature,
+      committer: signature,
+    },
+  );
 
   return { success: true, newBaseSha: commit.sha };
 }
 
 export async function performPullRequestMerge(params: {
-  env: AuthenticatedRouteEnv['Bindings'];
+  env: AuthenticatedRouteEnv["Bindings"];
   db: Database;
   repoId: string;
   pullRequest: PullRequestRecord;
@@ -317,14 +444,22 @@ export async function performPullRequestMerge(params: {
 }): Promise<MergeExecutionResult> {
   const bucketBinding = params.env.GIT_OBJECTS;
   if (!bucketBinding) {
-    return mergeFailure(500, { error: 'Git storage not configured' });
+    return mergeFailure(500, { error: "Git storage not configured" });
   }
   const bucket = toGitBucket(bucketBinding);
 
-  const baseBranch = await gitStore.getBranch(params.env.DB, params.repoId, params.pullRequest.baseBranch);
-  const headBranch = await gitStore.getBranch(params.env.DB, params.repoId, params.pullRequest.headBranch);
+  const baseBranch = await gitStore.getBranch(
+    params.env.DB,
+    params.repoId,
+    params.pullRequest.baseBranch,
+  );
+  const headBranch = await gitStore.getBranch(
+    params.env.DB,
+    params.repoId,
+    params.pullRequest.headBranch,
+  );
   if (!baseBranch || !headBranch) {
-    return mergeFailure(404, { error: 'Branch not found' });
+    return mergeFailure(404, { error: "Branch not found" });
   }
 
   const baseSha = baseBranch.commit_sha;
@@ -335,13 +470,13 @@ export async function performPullRequestMerge(params: {
     bucket,
     params.repoId,
     headSha,
-    baseSha
+    baseSha,
   );
   if (headIsAncestorOfBase) {
     const timestamp = new Date().toISOString();
     const updatedPullRequest = await params.db.update(pullRequests)
       .set({
-        status: 'merged',
+        status: "merged",
         mergedAt: timestamp,
         updatedAt: timestamp,
       })
@@ -364,13 +499,13 @@ export async function performPullRequestMerge(params: {
     bucket,
     params.repoId,
     baseSha,
-    headSha
+    headSha,
   );
 
   let mergeTarget: MergeTargetResult;
-  if (canFastForward && params.mergeMethod !== 'squash') {
+  if (canFastForward && params.mergeMethod !== "squash") {
     mergeTarget = { success: true, newBaseSha: headSha };
-  } else if (params.mergeMethod === 'rebase') {
+  } else if (params.mergeMethod === "rebase") {
     mergeTarget = await createRebaseMergeTarget({
       env: params.env,
       bucket,
@@ -386,7 +521,7 @@ export async function performPullRequestMerge(params: {
       repoId: params.repoId,
       pullRequest: params.pullRequest,
       user: params.user,
-      mergeMethod: params.mergeMethod === 'squash' ? 'squash' : 'merge',
+      mergeMethod: params.mergeMethod === "squash" ? "squash" : "merge",
       commitMessage: params.commitMessage,
       baseSha,
       headSha,
@@ -399,14 +534,17 @@ export async function performPullRequestMerge(params: {
   }
 
   const timestamp = new Date().toISOString();
-  const mergeApply = await advanceBaseBranchAndMarkPullRequestMerged(params.db, {
-    repoId: params.repoId,
-    baseBranch: params.pullRequest.baseBranch,
-    expectedBaseSha: baseSha,
-    newBaseSha: mergeTarget.newBaseSha,
-    pullRequestId: params.pullRequest.id,
-    timestamp,
-  });
+  const mergeApply = await advanceBaseBranchAndMarkPullRequestMerged(
+    params.db,
+    {
+      repoId: params.repoId,
+      baseBranch: params.pullRequest.baseBranch,
+      expectedBaseSha: baseSha,
+      newBaseSha: mergeTarget.newBaseSha,
+      pullRequestId: params.pullRequest.id,
+      timestamp,
+    },
+  );
 
   if (!mergeApply.success) {
     return mapMergeApplyFailure(mergeApply);

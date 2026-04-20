@@ -1,16 +1,29 @@
-import { Hono } from 'hono';
-import type { Context, Handler } from 'hono';
-import * as gitStore from '../../../application/services/git-smart/index.ts';
-import type { OptionalAuthRouteEnv } from '../route-auth.ts';
-import { parsePagination } from '../../../shared/utils/index.ts';
-import { findRepoByUsernameAndName } from './profile-queries.ts';
-import { getDb } from '../../../infra/db/index.ts';
-import { repoStars, branches, repoForks, repoRemotes, workflowSecrets, repositories } from '../../../infra/db/schema.ts';
-import { eq, and, sql } from 'drizzle-orm';
-import { checkSpaceAccess } from '../../../application/services/identity/space-access.ts';
-import { logError, logWarn } from '../../../shared/utils/logger.ts';
-import { BadRequestError, AuthenticationError, AuthorizationError, NotFoundError, InternalError } from 'takos-common/errors';
-import { textDateNullable } from '../../../shared/utils/db-guards.ts';
+import { Hono } from "hono";
+import type { Context, Handler } from "hono";
+import * as gitStore from "../../../application/services/git-smart/index.ts";
+import type { OptionalAuthRouteEnv } from "../route-auth.ts";
+import { parsePagination } from "../../../shared/utils/index.ts";
+import { findRepoByUsernameAndName } from "./profile-queries.ts";
+import { getDb } from "../../../infra/db/index.ts";
+import {
+  branches,
+  repoForks,
+  repoRemotes,
+  repositories,
+  repoStars,
+  workflowSecrets,
+} from "../../../infra/db/schema.ts";
+import { and, eq, sql } from "drizzle-orm";
+import { checkSpaceAccess } from "../../../application/services/identity/space-access.ts";
+import { logError, logWarn } from "../../../shared/utils/logger.ts";
+import {
+  AuthenticationError,
+  AuthorizationError,
+  BadRequestError,
+  InternalError,
+  NotFoundError,
+} from "takos-common/errors";
+import { textDateNullable } from "../../../shared/utils/db-guards.ts";
 
 const profilesRepo = new Hono<OptionalAuthRouteEnv>();
 type ProfileRepoContext = Context<OptionalAuthRouteEnv>;
@@ -28,12 +41,12 @@ export const profilesRepoRouteDeps = {
   getDefaultBranch: gitStore.getDefaultBranch,
 };
 
-profilesRepo.get('/:username/:repoName', async (c) => {
-  const user = c.get('user');
-  const username = c.req.param('username');
-  const repoName = c.req.param('repoName');
+profilesRepo.get("/:username/:repoName", async (c) => {
+  const user = c.get("user");
+  const username = c.req.param("username");
+  const repoName = c.req.param("repoName");
 
-  if (['repos', 'stars', 'followers', 'following'].includes(repoName)) {
+  if (["repos", "stars", "followers", "following"].includes(repoName)) {
     throw new NotFoundError();
   }
 
@@ -41,21 +54,26 @@ profilesRepo.get('/:username/:repoName', async (c) => {
     c.env.DB,
     username,
     repoName,
-    user?.id
+    user?.id,
   );
 
   if (!result) {
-    throw new NotFoundError('Repository');
+    throw new NotFoundError("Repository");
   }
 
-  const { repo, workspace, owner } = result;
+  const { repo, space, owner } = result;
 
   let branchCount = 0;
   try {
-    const branchesList = await profilesRepoRouteDeps.listBranches(c.env.DB, repo.id);
+    const branchesList = await profilesRepoRouteDeps.listBranches(
+      c.env.DB,
+      repo.id,
+    );
     branchCount = branchesList.length;
   } catch (err) {
-    logError('Failed to get branch count', err, { module: 'routes/profiles/repo' });
+    logError("Failed to get branch count", err, {
+      module: "routes/profiles/repo",
+    });
   }
 
   let starred = false;
@@ -83,8 +101,8 @@ profilesRepo.get('/:username/:repoName', async (c) => {
       created_at: textDateNullable(repo.created_at),
       updated_at: textDateNullable(repo.updated_at),
     },
-    workspace: {
-      name: workspace.name,
+    space: {
+      name: space.name,
     },
     owner: {
       name: owner.name,
@@ -99,48 +117,48 @@ profilesRepo.get('/:username/:repoName', async (c) => {
 function readableCommitErrorResponse(
   c: ProfileRepoContext,
   ref: string,
-  result: Extract<gitStore.ResolveReadableCommitResult, { ok: false }>
+  result: Extract<gitStore.ResolveReadableCommitResult, { ok: false }>,
 ) {
-  if (result.reason === 'ref_not_found') {
-    throw new NotFoundError('Ref');
+  if (result.reason === "ref_not_found") {
+    throw new NotFoundError("Ref");
   }
 
-  if (result.reason === 'commit_not_found') {
+  if (result.reason === "commit_not_found") {
     return c.json({
-      error: 'Commit object missing',
+      error: "Commit object missing",
       ref,
       commit_sha: result.refCommitSha || null,
     }, 409);
   }
 
   return c.json({
-    error: 'Commit tree missing',
+    error: "Commit tree missing",
     ref,
     commit_sha: result.refCommitSha || null,
   }, 409);
 }
 
 const handleProfileRepoTreeRequest: ProfileRepoHandler = async (c) => {
-  const user = c.get('user');
-  const username = c.req.param('username');
-  const repoName = c.req.param('repoName');
-  const ref = c.req.param('ref');
+  const user = c.get("user");
+  const username = c.req.param("username");
+  const repoName = c.req.param("repoName");
+  const ref = c.req.param("ref");
   if (!username || !repoName || !ref) {
-    throw new BadRequestError('Missing required parameters');
+    throw new BadRequestError("Missing required parameters");
   }
-  const wildcardPath = c.req.param('*') || '';
-  const queryPath = c.req.query('path') || '';
-  const path = (wildcardPath || queryPath).replace(/^\/+/, '');
+  const wildcardPath = c.req.param("*") || "";
+  const queryPath = c.req.query("path") || "";
+  const path = (wildcardPath || queryPath).replace(/^\/+/, "");
 
   const result = await profilesRepoRouteDeps.findRepoByUsernameAndName(
     c.env.DB,
     username,
     repoName,
-    user?.id
+    user?.id,
   );
 
   if (!result) {
-    throw new NotFoundError('Repository');
+    throw new NotFoundError("Repository");
   }
 
   const { repo } = result;
@@ -148,22 +166,30 @@ const handleProfileRepoTreeRequest: ProfileRepoHandler = async (c) => {
   try {
     const bucket = c.env.GIT_OBJECTS;
     if (!bucket) {
-      throw new InternalError('Git storage not configured');
+      throw new InternalError("Git storage not configured");
     }
 
-    const resolvedCommit = await profilesRepoRouteDeps.resolveReadableCommitFromRef(c.env.DB, bucket, repo.id, ref);
+    const resolvedCommit = await profilesRepoRouteDeps
+      .resolveReadableCommitFromRef(c.env.DB, bucket, repo.id, ref);
     if (!resolvedCommit.ok) {
       return readableCommitErrorResponse(c, ref, resolvedCommit);
     }
     const commit = resolvedCommit.commit;
 
     if (resolvedCommit.degraded) {
-      logWarn(`Falling back to readable commit ${resolvedCommit.resolvedCommitSha} for profile repo ${repo.id} ref ${ref} (requested ${resolvedCommit.refCommitSha})`, { module: 'git_readable_commit' });
+      logWarn(
+        `Falling back to readable commit ${resolvedCommit.resolvedCommitSha} for profile repo ${repo.id} ref ${ref} (requested ${resolvedCommit.refCommitSha})`,
+        { module: "git_readable_commit" },
+      );
     }
 
-    const entries = await profilesRepoRouteDeps.listDirectory(bucket, commit.tree, path);
+    const entries = await profilesRepoRouteDeps.listDirectory(
+      bucket,
+      commit.tree,
+      path,
+    );
     if (!entries) {
-      throw new NotFoundError('Path');
+      throw new NotFoundError("Path");
     }
 
     return c.json({
@@ -171,47 +197,53 @@ const handleProfileRepoTreeRequest: ProfileRepoHandler = async (c) => {
       ref,
       resolved_commit_sha: resolvedCommit.resolvedCommitSha,
       ref_commit_sha: resolvedCommit.refCommitSha,
-      entries: entries.map(e => ({
+      entries: entries.map((e) => ({
         name: e.name,
-        type: e.mode === gitStore.FILE_MODES.DIRECTORY ? 'directory' : 'file',
+        type: e.mode === gitStore.FILE_MODES.DIRECTORY ? "directory" : "file",
         mode: e.mode,
         oid: e.sha,
       })),
     });
   } catch (err) {
-    logError('Failed to get tree', err, { module: 'routes/profiles/repo' });
-    throw new InternalError('Failed to get file tree');
+    logError("Failed to get tree", err, { module: "routes/profiles/repo" });
+    throw new InternalError("Failed to get file tree");
   }
 };
 
-profilesRepo.get('/:username/:repoName/tree/:ref/*', handleProfileRepoTreeRequest);
-profilesRepo.get('/:username/:repoName/tree/:ref', handleProfileRepoTreeRequest);
+profilesRepo.get(
+  "/:username/:repoName/tree/:ref/*",
+  handleProfileRepoTreeRequest,
+);
+profilesRepo.get(
+  "/:username/:repoName/tree/:ref",
+  handleProfileRepoTreeRequest,
+);
 
 const handleProfileRepoBlobRequest: ProfileRepoHandler = async (c) => {
-  const user = c.get('user');
-  const username = c.req.param('username');
-  const repoName = c.req.param('repoName');
-  const ref = c.req.param('ref');
+  const user = c.get("user");
+  const username = c.req.param("username");
+  const repoName = c.req.param("repoName");
+  const ref = c.req.param("ref");
   if (!username || !repoName || !ref) {
-    throw new BadRequestError('Missing required parameters');
+    throw new BadRequestError("Missing required parameters");
   }
-  const wildcardPath = c.req.param('*') || '';
-  const queryPath = c.req.query('path') || '';
-  const path = (wildcardPath || queryPath).replace(/^\/+/, '');
+  const wildcardPath = c.req.param("*") || "";
+  const queryPath = c.req.query("path") || "";
+  const path = (wildcardPath || queryPath).replace(/^\/+/, "");
 
   if (!path) {
-    throw new BadRequestError('File path is required');
+    throw new BadRequestError("File path is required");
   }
 
   const result = await profilesRepoRouteDeps.findRepoByUsernameAndName(
     c.env.DB,
     username,
     repoName,
-    user?.id
+    user?.id,
   );
 
   if (!result) {
-    throw new NotFoundError('Repository');
+    throw new NotFoundError("Repository");
   }
 
   const { repo } = result;
@@ -219,28 +251,36 @@ const handleProfileRepoBlobRequest: ProfileRepoHandler = async (c) => {
   try {
     const bucket = c.env.GIT_OBJECTS;
     if (!bucket) {
-      throw new InternalError('Git storage not configured');
+      throw new InternalError("Git storage not configured");
     }
 
-    const resolvedCommit = await profilesRepoRouteDeps.resolveReadableCommitFromRef(c.env.DB, bucket, repo.id, ref);
+    const resolvedCommit = await profilesRepoRouteDeps
+      .resolveReadableCommitFromRef(c.env.DB, bucket, repo.id, ref);
     if (!resolvedCommit.ok) {
       return readableCommitErrorResponse(c, ref, resolvedCommit);
     }
     const commit = resolvedCommit.commit;
 
     if (resolvedCommit.degraded) {
-      logWarn(`Falling back to readable commit ${resolvedCommit.resolvedCommitSha} for profile repo ${repo.id} ref ${ref} (requested ${resolvedCommit.refCommitSha})`, { module: 'git_readable_commit' });
+      logWarn(
+        `Falling back to readable commit ${resolvedCommit.resolvedCommitSha} for profile repo ${repo.id} ref ${ref} (requested ${resolvedCommit.refCommitSha})`,
+        { module: "git_readable_commit" },
+      );
     }
 
-    const blob = await profilesRepoRouteDeps.getBlobAtPath(bucket, commit.tree, path);
+    const blob = await profilesRepoRouteDeps.getBlobAtPath(
+      bucket,
+      commit.tree,
+      path,
+    );
     if (!blob) {
-      throw new NotFoundError('File');
+      throw new NotFoundError("File");
     }
 
-    const isBinary = blob.some(byte => byte === 0);
+    const isBinary = blob.some((byte) => byte === 0);
 
     const base64Encode = (data: Uint8Array): string => {
-      let binary = '';
+      let binary = "";
       for (let i = 0; i < data.length; i++) {
         binary += String.fromCharCode(data[i]);
       }
@@ -252,38 +292,45 @@ const handleProfileRepoBlobRequest: ProfileRepoHandler = async (c) => {
       ref,
       resolved_commit_sha: resolvedCommit.resolvedCommitSha,
       ref_commit_sha: resolvedCommit.refCommitSha,
-      content: isBinary
-        ? base64Encode(blob)
-        : new TextDecoder().decode(blob),
+      content: isBinary ? base64Encode(blob) : new TextDecoder().decode(blob),
       size: blob.length,
       is_binary: isBinary,
-      encoding: isBinary ? 'base64' : 'utf-8',
+      encoding: isBinary ? "base64" : "utf-8",
     });
   } catch (err) {
-    logError('Failed to get blob', err, { module: 'routes/profiles/repo' });
-    throw new InternalError('Failed to get file content');
+    logError("Failed to get blob", err, { module: "routes/profiles/repo" });
+    throw new InternalError("Failed to get file content");
   }
 };
 
-profilesRepo.get('/:username/:repoName/blob/:ref/*', handleProfileRepoBlobRequest);
-profilesRepo.get('/:username/:repoName/blob/:ref', handleProfileRepoBlobRequest);
+profilesRepo.get(
+  "/:username/:repoName/blob/:ref/*",
+  handleProfileRepoBlobRequest,
+);
+profilesRepo.get(
+  "/:username/:repoName/blob/:ref",
+  handleProfileRepoBlobRequest,
+);
 
-profilesRepo.get('/:username/:repoName/commits', async (c) => {
-  const user = c.get('user');
-  const username = c.req.param('username');
-  const repoName = c.req.param('repoName');
-  const { limit } = parsePagination(c.req.query(), { limit: 50, maxLimit: 100 });
-  const branch = c.req.query('branch');
+profilesRepo.get("/:username/:repoName/commits", async (c) => {
+  const user = c.get("user");
+  const username = c.req.param("username");
+  const repoName = c.req.param("repoName");
+  const { limit } = parsePagination(c.req.query(), {
+    limit: 50,
+    maxLimit: 100,
+  });
+  const branch = c.req.query("branch");
 
   const result = await profilesRepoRouteDeps.findRepoByUsernameAndName(
     c.env.DB,
     username,
     repoName,
-    user?.id
+    user?.id,
   );
 
   if (!result) {
-    throw new NotFoundError('Repository');
+    throw new NotFoundError("Repository");
   }
 
   const { repo } = result;
@@ -291,14 +338,20 @@ profilesRepo.get('/:username/:repoName/commits', async (c) => {
   try {
     const bucket = c.env.GIT_OBJECTS;
     if (!bucket) {
-      throw new InternalError('Git storage not configured');
+      throw new InternalError("Git storage not configured");
     }
 
-    const refName = branch || repo.default_branch || 'main';
-    const commits = await profilesRepoRouteDeps.getCommitsFromRef(c.env.DB, bucket, repo.id, refName, limit);
+    const refName = branch || repo.default_branch || "main";
+    const commits = await profilesRepoRouteDeps.getCommitsFromRef(
+      c.env.DB,
+      bucket,
+      repo.id,
+      refName,
+      limit,
+    );
 
     return c.json({
-      commits: commits.map(commit => ({
+      commits: commits.map((commit) => ({
         hash: commit.sha,
         short_hash: commit.sha.slice(0, 7),
         author_name: commit.author.name,
@@ -308,35 +361,41 @@ profilesRepo.get('/:username/:repoName/commits', async (c) => {
       })),
     });
   } catch (err) {
-    logError('Failed to get commits', err, { module: 'routes/profiles/repo' });
-    throw new InternalError('Failed to get commit history');
+    logError("Failed to get commits", err, { module: "routes/profiles/repo" });
+    throw new InternalError("Failed to get commit history");
   }
 });
 
-profilesRepo.get('/:username/:repoName/branches', async (c) => {
-  const user = c.get('user');
-  const username = c.req.param('username');
-  const repoName = c.req.param('repoName');
+profilesRepo.get("/:username/:repoName/branches", async (c) => {
+  const user = c.get("user");
+  const username = c.req.param("username");
+  const repoName = c.req.param("repoName");
 
   const result = await profilesRepoRouteDeps.findRepoByUsernameAndName(
     c.env.DB,
     username,
     repoName,
-    user?.id
+    user?.id,
   );
 
   if (!result) {
-    throw new NotFoundError('Repository');
+    throw new NotFoundError("Repository");
   }
 
   const { repo } = result;
 
   try {
-    const branchesList = await profilesRepoRouteDeps.listBranches(c.env.DB, repo.id);
-    const defaultBranch = await profilesRepoRouteDeps.getDefaultBranch(c.env.DB, repo.id);
+    const branchesList = await profilesRepoRouteDeps.listBranches(
+      c.env.DB,
+      repo.id,
+    );
+    const defaultBranch = await profilesRepoRouteDeps.getDefaultBranch(
+      c.env.DB,
+      repo.id,
+    );
 
     return c.json({
-      branches: branchesList.map(b => ({
+      branches: branchesList.map((b) => ({
         name: b.name,
         is_head: b.is_default,
         commit_sha: b.commit_sha,
@@ -344,36 +403,42 @@ profilesRepo.get('/:username/:repoName/branches', async (c) => {
       default_branch: defaultBranch?.name || repo.default_branch,
     });
   } catch (err) {
-    logError('Failed to list branches', err, { module: 'routes/profiles/repo' });
-    throw new InternalError('Failed to list branches');
+    logError("Failed to list branches", err, {
+      module: "routes/profiles/repo",
+    });
+    throw new InternalError("Failed to list branches");
   }
 });
 
-profilesRepo.delete('/:username/:repoName', async (c) => {
-  const user = c.get('user');
+profilesRepo.delete("/:username/:repoName", async (c) => {
+  const user = c.get("user");
   if (!user) {
     throw new AuthenticationError();
   }
 
-  const username = c.req.param('username');
-  const repoName = c.req.param('repoName');
+  const username = c.req.param("username");
+  const repoName = c.req.param("repoName");
 
   const result = await profilesRepoRouteDeps.findRepoByUsernameAndName(
     c.env.DB,
     username,
     repoName,
-    user.id
+    user.id,
   );
 
   if (!result) {
-    throw new NotFoundError('Repository');
+    throw new NotFoundError("Repository");
   }
 
-  const { repo, workspace } = result;
+  const { repo, space } = result;
 
-  const access = await profilesRepoRouteDeps.checkSpaceAccess(c.env.DB, workspace.id, user.id);
-  if (!access || !['owner', 'admin'].includes(access.membership.role)) {
-    throw new AuthorizationError('Insufficient permissions');
+  const access = await profilesRepoRouteDeps.checkSpaceAccess(
+    c.env.DB,
+    space.id,
+    user.id,
+  );
+  if (!access || !["owner", "admin"].includes(access.membership.role)) {
+    throw new AuthorizationError("Insufficient permissions");
   }
 
   const db = profilesRepoRouteDeps.getDb(c.env.DB);

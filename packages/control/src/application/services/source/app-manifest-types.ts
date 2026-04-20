@@ -1,19 +1,10 @@
 // ============================================================
-// AppManifest — flat canonical schema (Phase 1)
+// AppManifest — flat canonical schema
 // ============================================================
 //
-// This file is the single source of truth for the Takos app manifest
-// internal type. The envelope-style `apiVersion/kind/metadata/spec`
-// structure has been retired in favor of a flat top-level shape that
-// mirrors the docs canonical spec (`docs/apps/manifest.md`).
-//
-// Phase 1 scope:
-//   - Rewrite AppManifest, AppCompute, AppStorage, AppPublication, etc.
-//   - Keep legacy type aliases (AppWorker/AppService/AppContainer/AppResource/
-//     AppMcpServer/AppFileHandler) so that the existing deploy pipeline
-//     code keeps parsing until Phase 2 rewrites it.
-//
-// Do NOT add new code that depends on the envelope shape.
+// This file is the single source of truth for the Takos deploy manifest
+// internal type. It mirrors the docs canonical spec
+// (`docs/apps/manifest.md`).
 // ============================================================
 
 // --- Build configuration ---
@@ -50,15 +41,8 @@ export type ScheduleTrigger = {
   cron: string;
 };
 
-export type QueueTrigger = {
-  storage: string; // canonical field name (not `queue`)
-  batchSize?: number;
-  maxRetries?: number;
-};
-
 export type AppTriggers = {
   schedules?: ScheduleTrigger[];
-  queues?: QueueTrigger[];
 };
 
 export type AppConsume = {
@@ -81,69 +65,13 @@ export type AppCompute = {
     minInstances?: number;
     maxInstances?: number;
   };
-  instanceType?: string;
   volumes?: Record<string, VolumeMount>;
   containers?: Record<string, AppCompute>; // attached containers (only when kind='worker')
   depends?: string[];
   triggers?: AppTriggers;
   healthCheck?: HealthCheck; // service / attached only
-  dockerfile?: string; // local provider only
+  dockerfile?: string; // metadata only; image remains the runtime artifact
   consume?: AppConsume[];
-  /**
-   * Legacy alias for `scaling.maxInstances`. Transitional — Phase 2 removes.
-   */
-  maxInstances?: number;
-};
-
-// --- Storage (legacy/internal resource model) ---
-
-export type StorageType =
-  | "sql"
-  | "object-store"
-  | "key-value"
-  | "queue"
-  | "vector-index"
-  | "secret"
-  | "analytics-engine"
-  | "workflow"
-  | "durable-object";
-
-/**
- * @deprecated Internal-only legacy storage model.
- *
- * Public app manifests must use provider-backed publications and
- * `compute.<name>.consume` for wiring. This type remains available for
- * internal deploy / translation code until the remaining callers are
- * fully removed.
- */
-export type AppStorage = {
-  type: StorageType;
-  bind?: string;
-  // type-specific
-  /** sql only */
-  migrations?: string;
-  /** queue only */
-  queue?: {
-    maxRetries?: number;
-    deadLetterQueue?: string;
-  };
-  /** vector-index only */
-  vectorIndex?: {
-    dimensions?: number;
-    metric?: "cosine" | "euclidean" | "dot-product";
-  };
-  /** secret only */
-  generate?: boolean;
-  /** workflow only */
-  workflow?: {
-    class: string;
-    script: string;
-  };
-  /** durable-object only */
-  durableObject?: {
-    class: string;
-    script: string;
-  };
 };
 
 // --- Routes ---
@@ -159,23 +87,11 @@ export type AppRoute = {
 
 export type AppPublication = {
   name: string;
-  provider?: string;
-  kind?: string;
-  spec?: Record<string, unknown>;
-  type?: string;
+  publisher: string;
+  type: string;
   path?: string;
   title?: string;
-  // route/public interface fields
-  /** McpServer */
-  transport?: string;
-  /** McpServer */
-  authSecretRef?: string;
-  /** FileHandler */
-  mimeTypes?: string[];
-  /** FileHandler */
-  extensions?: string[];
-  /** UiSurface */
-  icon?: string;
+  spec?: Record<string, unknown>;
 };
 
 // --- Environment overrides ---
@@ -193,12 +109,6 @@ export type AppManifest = {
   name: string;
   version?: string;
   compute: Record<string, AppCompute>;
-  /**
-   * @deprecated Internal-only legacy field. Public app manifests must not use
-   * `storage`; publish a provider-backed resource and consume its outputs
-   * instead.
-   */
-  storage?: Record<string, AppStorage>;
   routes: AppRoute[];
   publish: AppPublication[];
   env: Record<string, string>;
@@ -206,36 +116,10 @@ export type AppManifest = {
 };
 
 // ============================================================
-// Legacy type aliases (transitional — Phase 2 removes)
-// ============================================================
-//
-// These aliases let the existing deploy pipeline code keep compiling
-// until Phase 2 refactors those callers. Do NOT use in new code.
+// Supporting types for the deploy pipeline
 // ============================================================
 
-/** @deprecated Use `AppCompute` (kind: 'worker'). */
-export type AppWorker = AppCompute & { kind: "worker" };
-
-/** @deprecated Use `AppCompute` (kind: 'service'). */
-export type AppService = AppCompute & { kind: "service" };
-
-/** @deprecated Use `AppCompute` (kind: 'attached-container'). */
-export type AppContainer = AppCompute & { kind: "attached-container" };
-
-/** @deprecated Use `AppStorage`. */
-export type AppResource = AppStorage;
-
-/** @deprecated Use `AppPublication` (type: 'McpServer'). */
-export type AppMcpServer = AppPublication & { type: "McpServer" };
-
-/** @deprecated Use `AppPublication` (type: 'FileHandler'). */
-export type AppFileHandler = AppPublication & { type: "FileHandler" };
-
-// ============================================================
-// Supporting types kept for deploy pipeline compatibility
-// ============================================================
-
-export type AppDeploymentBuildSource = {
+export type GroupDeploymentSnapshotBuildSource = {
   service_name: string;
   workflow_path: string;
   workflow_job: string;
@@ -248,13 +132,7 @@ export type AppDeploymentBuildSource = {
 
 export type BundleDoc = {
   apiVersion: "takos.dev/v1alpha1";
-  kind:
-    | "Package"
-    | "Resource"
-    | "Workload"
-    | "Endpoint"
-    | "Binding"
-    | "McpServer";
+  kind: string;
   metadata: {
     name: string;
     labels?: Record<string, string>;

@@ -11,7 +11,8 @@ export interface AgentExecutorControlConfig {
   controlRpcToken: string;
 }
 
-export interface AgentExecutorStartPayload extends AgentExecutorDispatchPayload, AgentExecutorControlConfig {}
+export interface AgentExecutorStartPayload
+  extends AgentExecutorDispatchPayload, AgentExecutorControlConfig {}
 
 export interface AgentExecutorDispatchResult {
   ok: boolean;
@@ -25,10 +26,14 @@ export interface AgentExecutorDispatchTarget {
 }
 
 export interface AgentExecutorDispatchStub {
-  dispatchStart(body: AgentExecutorDispatchPayload): Promise<AgentExecutorDispatchResult>;
+  dispatchStart(
+    body: AgentExecutorDispatchPayload,
+  ): Promise<AgentExecutorDispatchResult>;
 }
 
-export function resolveAgentExecutorServiceId(body: AgentExecutorDispatchPayload): string | null {
+export function resolveAgentExecutorServiceId(
+  body: AgentExecutorDispatchPayload,
+): string | null {
   return body.serviceId?.trim() || body.workerId?.trim() || null;
 }
 
@@ -42,7 +47,7 @@ export async function dispatchAgentExecutorStart(
     return {
       ok: false,
       status: 400,
-      body: JSON.stringify({ error: 'Missing serviceId or workerId' }),
+      body: JSON.stringify({ error: "Missing serviceId or workerId" }),
     };
   }
   await target.startAndWaitForPorts(8080);
@@ -54,11 +59,13 @@ export async function dispatchAgentExecutorStart(
     ...controlConfig,
   };
 
-  const response = await target.fetch(new Request('https://executor/start', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(startPayload),
-  }));
+  const response = await target.fetch(
+    new Request("https://executor/start", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(startPayload),
+    }),
+  );
 
   return {
     ok: response.ok,
@@ -76,9 +83,12 @@ export async function forwardAgentExecutorDispatch(
     return new Response(result.body, { status: result.status });
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
-    return new Response(JSON.stringify({ error: `Failed to start container: ${message}` }), {
-      status: 500,
-      headers: { 'Content-Type': 'application/json' },
-    });
+    return new Response(
+      JSON.stringify({ error: `Failed to start container: ${message}` }),
+      {
+        status: 500,
+        headers: { "Content-Type": "application/json" },
+      },
+    );
   }
 }

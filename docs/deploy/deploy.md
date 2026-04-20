@@ -1,134 +1,170 @@
 # deploy
 
-`takos deploy` は Takos の current preferred deploy entrypoint です。
-`.takos/app.yml` を読み取り、ローカル source（または repository URL）を control
-plane に渡して group desired state として反映します。runtime model は Takos
-runtime で、Cloudflare backend と互換 backend のどちらにも同じ spec を流します。
-public manifest contract では `storage:` / `bind:` は使わず、`compute` /
-`routes` / `publish` と `compute.<name>.consume` を使います。standalone resource
-は control plane の internal model です。
+`takos deploy` は Takos の group-scoped deploy entrypoint です。deploy manifest
+(`.takos/app.yml` / `.takos/app.yaml`) または repository URL を入力にして、
+worker / service / route / publication / grant の primitive declaration を
+明示した group inventory へ渡します。
 
-::: info current preferred flow `takos deploy` と `takos deploy --plan` が
-current preferred flow です。 `takos apply` と `takos plan` は legacy
-compatibility command として残っています。 :::
+runtime model は tenant runtime で、operator-selected backend に同じ
+backend-neutral spec を流します。`--group` で指定した group に作成・更新される
+primitive が所属し、group snapshot / rollback / uninstall などの group
+機能を使えます。group 所属は runtime や resource provider
+の特別処理ではありません。group なしの primitive は個別 primitive API
+で管理します。
+
+`publish` は他の primitive へ共有する information sharing / capability output
+catalog です。Takos capability grant（`api-key` /
+`oauth-client`）もここに含めます。SQL / object-store / queue などの resource は
+`/api/resources/*` などの resource API / runtime binding で管理します。backend
+の選択は operator-only で、manifest には書きません。
+
+ローカル manifest 経路では、CLI が `build.fromWorkflow` の workflow を
+workflow-runner でローカル実行し、その build artifact を `source.artifacts`
+として送ります。repository URL deploy では CLI は repo を fetch せず、
+`repository_url + ref/ref_type` を control plane に渡します。
 
 ## 基本
 
 ```bash
-# ローカル manifest から deploy
-takos deploy --env staging --space SPACE_ID
+# ローカル manifest から group inventory へ deploy
+takos deploy --env staging --space SPACE_ID --group my-app
 
 # repository URL から deploy
-takos deploy https://github.com/acme/my-app.git --env staging --space SPACE_ID
+takos deploy https://github.com/acme/my-app.git --env staging --space SPACE_ID --group my-app
 
 # dry-run preview
-takos deploy --plan --space SPACE_ID
+takos deploy --plan --space SPACE_ID --group my-app
 ```
 
-positional argument を省略するとローカルの `.takos/app.yml` を source にします。
-URL を渡すとその repository を source にします。 `TAKOS_WORKSPACE_ID` または
-`.takos-session` で既定 workspace が決まっている場合は `--space`
-を省略できます。
+positional argument を省略するとローカルの `.takos/app.yml` または
+`.takos/app.yaml` を source にします。URL を渡すとその repository を source
+にします。`TAKOS_SPACE_ID` または `.takos-session` で既定 space
+が決まっている場合は `--space` を省略できます。
 
 ## 主なオプション
 
-| option                     | 説明                                                                     |
-| -------------------------- | ------------------------------------------------------------------------ |
-| positional `repositoryUrl` | (optional) canonical HTTPS git repository URL。省略時はローカル manifest |
-| `--plan`                   | dry-run preview                                                          |
-| `--env <name>`             | 反映先環境                                                               |
-| `--manifest <path>`        | manifest path。既定は `.takos/app.yml`                                   |
-| `--auto-approve`           | 確認プロンプトを省略                                                     |
-| `--target <key...>`        | 一部だけ反映。diff entry 名を指定する。例: `web`, `web:/`                |
-| `--ref <ref>`              | branch / tag / commit（repo URL 指定時）                                 |
-| `--ref-type <type>`        | `branch` / `tag` / `commit`（repo URL 指定時）                           |
-| `--group <name>`           | 対象 group 名                                                            |
-| `--provider <provider>`    | `cloudflare`, `local`, `aws`, `gcp`, `k8s`                               |
-| `--space <id>`             | 対象 space ID                                                            |
+| option                     | 説明                                                                                        |
+| -------------------------- | ------------------------------------------------------------------------------------------- |
+| positional `repositoryUrl` | (optional) canonical HTTPS git repository URL。省略時はローカル manifest                    |
+| `--plan`                   | dry-run preview                                                                             |
+| `--env <name>`             | 反映先環境                                                                                  |
+| `--manifest <path>`        | manifest path。既定は `.takos/app.yml` / `.takos/app.yaml`                                  |
+| `--auto-approve`           | 確認プロンプトを省略                                                                        |
+| `--json`                   | machine-readable JSON output                                                                |
+| `--target <key...>`        | `takos deploy --plan` / `takos install --plan` で使う diff entry filter。例: `web`, `web:/` |
+| `--ref <ref>`              | branch / tag / commit（repo URL 指定時）                                                    |
+| `--ref-type <type>`        | `branch` / `tag` / `commit`（repo URL 指定時、CLI で choice validation）                    |
+| `--group <name>`           | primitive を所属させる group 名。`takos deploy` / `takos install` では必須                  |
+| `--space <id>`             | 対象 space ID                                                                               |
+
+`repositoryUrl` と `--manifest` は同時指定できません。
 
 ## plan と deploy の境界
 
-1. `.takos/app.yml` か `--manifest` で指定した manifest を読み込む
-2. `takos deploy --plan --space SPACE_ID` で non-mutating な preview
-   を取り、差分と translation report を確認する
-3. `takos deploy --space SPACE_ID` で desired app manifest を group desired
-   として保存し、内部 canonical state に compile する
-4. compute / routes の差分を計算し、publication は manifest catalog
-   として同期する
-5. group の desired / observed snapshot を更新する
+1. `.takos/app.yml` / `.takos/app.yaml` か `--manifest` で指定した deploy
+   manifest を読み込む
+2. `takos deploy --plan --space SPACE_ID --group GROUP_NAME` で non-mutating な
+   preview を取り、差分と runtime translation report を確認する
+3. `takos deploy --space SPACE_ID --group GROUP_NAME` で primitive declaration
+   を compile し、 service / route / publication / grant へ apply する
+4. `--group` で明示した group の inventory に対象 primitive を所属させ、
+   group-scoped state を更新する
+5. workload / routes の差分を計算し、publication は catalog として同期する。
+   Takos capability grants は validation / sync する
+6. group 指定がある場合は group snapshot を更新する
 
-- `takos deploy --plan --space SPACE_ID` は DB を更新しません。group
-  が未作成でも preview だけ返します。
-- `takos deploy --space SPACE_ID` は group が未作成なら初回 deploy
+- `takos deploy --plan --space SPACE_ID --group NAME` は DB
+  を更新しません。group が未作成でも preview だけ返します。
+- `takos deploy --space SPACE_ID --group NAME` は group が未作成なら apply
   時に作成します。
-- `--provider` と `--env` は preview の評価条件であり、実際の group metadata
-  更新は deploy 時にだけ起きます。
-- `takos deploy` はローカル manifest 由来でも repo URL 由来でも、いずれも
-  immutable な app deployment record（snapshot）を作ります。両者は lifecycle 上
-  同等です。API の source kind はローカル manifest では `manifest`、repo URL
+- `--env` は preview の評価条件であり、実際の metadata 更新は deploy
+  時にだけ起きます。backend 選択は operator/runtime configuration の責務で、
+  manifest には書きません。
+- `takos deploy` はローカル manifest 由来でも repo URL 由来でも同じ pipeline
+  を通ります。API の source kind はローカル manifest では `manifest`、repo URL
   では `git_ref` で、人間向けの表示名として `local` / `repo:owner/repo@ref`
   を使います。
-- どちらの経路で deploy された group
-  も、`takos rollback GROUP_NAME --space SPACE_ID` で前回の snapshot
+- group snapshot がある primitive
+  は、`takos rollback GROUP_NAME --space SPACE_ID` で snapshot
   を再適用できます。
+- `--target` は `takos deploy --plan` と `takos install --plan` で使える diff
+  entry filter です。target は diff entry 名で、`web`, `web:/` のほか
+  `workers.web`, `routes.web:/` のような dotted category key も受け付けます。
+- ローカル manifest 経路では、`build.fromWorkflow.path` / `job` / `artifact`
+  に加えて `artifactPath` を使って worker bundle を CLI が API call 前に確認
+  します。CLI は workflow-runner で workflow step をローカル実行してから
+  artifact を集めます。`artifactPath` は public manifest schema では optional の
+  local/private build metadata ですが、local artifact collection
+  では必要です。worker bundle が見つからない場合や bundle 候補が解決できない
+  場合は、`takos deploy --plan` でも `takos deploy` でも失敗します。
 
 ## ローカル deploy と repo deploy の違い
 
 ローカル manifest 由来でも repo URL 由来でも、`takos deploy` の lifecycle は
-同じです（どちらも manifest を kernel に渡し、immutable snapshot を作り、
-`takos rollback GROUP_NAME --space SPACE_ID` で巻き戻せます）。違いは「manifest
-がどこから来るか」という provenance だけです。
+同じです。違いは「manifest がどこから来るか」という provenance だけです。
 
 repo URL を指定した場合、**CLI は repository URL を control plane に渡す。
 control plane が repo を fetch し、manifest を parse し、deploy pipeline
-を実行する。 CLI 側で repo を clone することはない。** CLI は thin client
+を実行する。CLI 側で repo を clone することはない。** CLI は thin client
 として振る舞います。
 
-| 観点            | local manifest deploy                                             | repo URL deploy                                                                     |
-| --------------- | ----------------------------------------------------------------- | ----------------------------------------------------------------------------------- |
-| source          | local working tree                                                | `repository_url + ref/ref_type`                                                     |
-| source 解決     | CLI が manifest / artifact を読む                                 | control plane が repo を fetch して manifest を parse する（CLI は URL を渡すだけ） |
-| snapshot 作成   | immutable snapshot を作る                                         | immutable snapshot を作る                                                           |
-| rollback 可否   | `takos rollback GROUP_NAME --space SPACE_ID` で snapshot を再適用 | `takos rollback GROUP_NAME --space SPACE_ID` で snapshot を再適用                   |
-| API source kind | `manifest`                                                        | `git_ref`                                                                           |
-| 表示名          | `local`                                                           | `repo:owner/repo@ref`                                                               |
+| 観点            | local manifest flow                                     | repo URL deploy                                                                     |
+| --------------- | ------------------------------------------------------- | ----------------------------------------------------------------------------------- |
+| source          | local working tree                                      | `repository_url + ref/ref_type`                                                     |
+| source 解決     | CLI が manifest / artifact を読む                       | control plane が repo を fetch して manifest を parse する（CLI は URL を渡すだけ） |
+| primitive apply | worker / service / route / publication / grant を apply | worker / service / route / publication / grant を apply                             |
+| group snapshot  | group 指定時に作る                                      | group 指定時に作る                                                                  |
+| rollback 可否   | group snapshot がある場合に再適用                       | group snapshot がある場合に再適用                                                   |
+| API source kind | `manifest`                                              | `git_ref`                                                                           |
+| 表示名          | `local`                                                 | `repo:owner/repo@ref`                                                               |
 
-## translation report
+## runtime translation report
 
-`takos deploy` は plan/deploy の前に provider translation report を表示します。
-CLI では `Spec: Cloudflare-native` と `Runtime: Takos runtime` を前提に、 どの
-backend でどう実現されるかを示します。
+`takos deploy` は plan/deploy の前に runtime translation report を表示します。
+CLI では `Spec: Takos deploy manifest`、`Runtime: tenant runtime`、
+`Surface: Portable` として、compiled workload / route を tenant runtime
+へ渡すための backend requirement preflight を示します。backend adapter 名は
+operator 内部の実装詳細として扱い、通常の report には出しません。
 
-- `native`: Cloudflare backend 上で spec を直接実現できる
-- `compatible`: compatibility backend 上で spec を provider-backed または
-  Takos-managed path で実現できる
+- `compatible`: tenant runtime contract として実現できる
 - `unsupported`: current deploy pipeline には接続されておらず fail-fast で止まる
 
-::: warning provider 別の対応状況 `cloudflare` provider 以外 (`aws` / `gcp` /
-`k8s` / `local`) は **compatibility backend** であり、resource / workload /
-route ごとに対応状況が異なります。translation report で `unsupported`
-と判定された項目が含まれる group の `takos deploy` は実行前に失敗します。各
-provider の現在の対応範囲は
+runtime translation report が対象にするのは `desiredState.workloads` /
+`desiredState.routes` と、runtime が満たすべき operator/backend 要件です。SQL /
+object-store / queue などの resource は publish catalog の対象ではなく、
+resource record は `/api/resources/*` などの resource API で扱います。この
+report は full runtime compatibility や resource existence を判定しません。
+manifest 側の workload / route / publication / consume の整合性は manifest
+validation と deploy validation で確認します。
+
+::: warning operator backend ごとの実装は同じ public deploy surface
+を使いますが、内部の adapter と backing service は backend
+ごとに異なります。backend / adapter 名は operator-only configuration
+であり、public deploy manifest には書きません。runtime translation report で
+`unsupported` と判定された workload / route は実行前に失敗します。resource は
+manifest の publish catalog とは別に resource API で扱います。operator 向けの
+現在の backing 実装は
 [hosting/aws](/hosting/aws)、[hosting/gcp](/hosting/gcp)、[hosting/kubernetes](/hosting/kubernetes)
-を参照してください。 :::
+を参照してください。:::
 
 ## 例
 
 ```bash
-# 一部 primitive のみ反映
-takos deploy --env production --space SPACE_ID --target web --target 'web:/'
+# 一部 workload / route の plan だけ確認
+takos deploy --plan --env production --space SPACE_ID --group my-app --target web --target 'web:/'
 
 # repo URL から特定の tag を deploy
-takos deploy https://github.com/acme/my-app.git --space SPACE_ID --ref v1.2.0 --ref-type tag
+takos deploy https://github.com/acme/my-app.git --space SPACE_ID --group my-app --ref v1.2.0 --ref-type tag
 
 # dry-run preview
-takos deploy --plan --space SPACE_ID
+takos deploy --plan --space SPACE_ID --group my-app
 ```
 
-ローカル working tree からの `takos deploy` も repo URL からの `takos deploy` も
-同じ pipeline を通り、同じ immutable snapshot を作ります。CLI 側の役割が異なる
-だけで（local は CLI が manifest を読んで kernel に渡し、repo は kernel が repo
-を 解決する）、kernel 側の lifecycle は両者で同一です。release / catalog package
+ローカル working tree からの `takos deploy` も repo URL からの `takos deploy`
+も同じ pipeline を通ります。CLI 側の役割が異なるだけで（local は CLI が manifest
+を読んで kernel に渡し、repo は kernel が repo を解決する）、kernel 側の
+primitive apply は同じです。`--target` は `takos deploy --plan` /
+`takos install --plan` の diff entry filter です。release / catalog package
 からの deploy は [Repository / Catalog デプロイ](/deploy/store-deploy)
 を参照してください。
 
@@ -136,6 +172,6 @@ takos deploy --plan --space SPACE_ID
 
 - [Repository / Catalog デプロイ](/deploy/store-deploy) --- repository / catalog
   経由のデプロイ
-- [Deploy Group](/deploy/deploy-group) --- group の管理と desired state
+- [Deploy Group](/deploy/deploy-group) --- group 機能と inventory
 - [ロールバック](/deploy/rollback) --- `takos rollback` の手順
 - [CLI コマンド](/reference/cli) --- CLI の全コマンド

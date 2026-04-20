@@ -2,7 +2,7 @@ import { assertEquals } from "jsr:@std/assert";
 
 import {
   describePortableResourceResolution,
-  isPortableResourceProvider,
+  isPortableResourceBackend,
 } from "@/services/resources/portable-runtime";
 
 const portableRuntimeSource = new URL(
@@ -10,23 +10,23 @@ const portableRuntimeSource = new URL(
   import.meta.url,
 );
 
-Deno.test("portable runtime - resolves provider-backed and takos-runtime resources", () => {
+Deno.test("portable runtime - resolves backend-backed and takos-runtime resources", () => {
   const awsSql = describePortableResourceResolution("aws", "sql");
   const localQueue = describePortableResourceResolution("local", "queue");
   const _unsupported = describePortableResourceResolution("cloudflare", "sql");
 
-  assertEquals(awsSql?.mode, "provider-backed");
+  assertEquals(awsSql?.mode, "backend-backed");
   assertEquals(awsSql?.backend, "postgres-schema-d1-adapter");
   assertEquals(localQueue?.mode, "takos-runtime");
   assertEquals(localQueue?.backend, "persistent-queue");
 });
 
-Deno.test("portable runtime - recognizes non-cloudflare providers", () => {
-  assertEquals(isPortableResourceProvider("aws"), true);
-  assertEquals(isPortableResourceProvider("gcp"), true);
-  assertEquals(isPortableResourceProvider("local"), true);
-  assertEquals(isPortableResourceProvider("cloudflare"), false);
-  assertEquals(isPortableResourceProvider(null), false);
+Deno.test("portable runtime - recognizes non-cloudflare backends", () => {
+  assertEquals(isPortableResourceBackend("aws"), true);
+  assertEquals(isPortableResourceBackend("gcp"), true);
+  assertEquals(isPortableResourceBackend("local"), true);
+  assertEquals(isPortableResourceBackend("cloudflare"), false);
+  assertEquals(isPortableResourceBackend(null), false);
 });
 
 Deno.test("portable runtime - source keeps cache reset and materialization entry points", async () => {

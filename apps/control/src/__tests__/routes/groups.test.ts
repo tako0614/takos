@@ -14,16 +14,16 @@ type GroupRow = {
   spaceId: string;
   name: string;
   appVersion: string | null;
-  provider: string | null;
+  backend: string | null;
   env: string | null;
   sourceKind: string | null;
   sourceRepositoryUrl: string | null;
   sourceRef: string | null;
   sourceRefType: string | null;
   sourceCommitSha: string | null;
-  currentAppDeploymentId: string | null;
+  currentGroupDeploymentSnapshotId: string | null;
   desiredSpecJson: string | null;
-  providerStateJson: string | null;
+  backendStateJson: string | null;
   reconcileStatus: string;
   lastAppliedAt: string | null;
   createdAt: string;
@@ -51,21 +51,48 @@ function createGroupRow(): GroupRow {
     spaceId: "ws1",
     name: "demo-group",
     appVersion: "1.0.0",
-    provider: "cloudflare",
+    backend: "cloudflare",
     env: "staging",
     sourceKind: null,
     sourceRepositoryUrl: null,
     sourceRef: null,
     sourceRefType: null,
     sourceCommitSha: null,
-    currentAppDeploymentId: null,
+    currentGroupDeploymentSnapshotId: null,
     desiredSpecJson: null,
-    providerStateJson: "{}",
+    backendStateJson: "{}",
     reconcileStatus: "idle",
     lastAppliedAt: null,
     createdAt: "2026-03-01T00:00:00.000Z",
     updatedAt: "2026-03-01T00:00:00.000Z",
   };
+}
+
+const publicBackendFieldNames = new Set([
+  "backend",
+  "backendName",
+  "backend_name",
+  "backendStateJson",
+  "backend_state_json",
+  "backend",
+  "backendName",
+  "backend_name",
+  "backendState",
+  "backendStateJson",
+  "backend_state",
+  "backend_state_json",
+]);
+
+function assertNoPublicBackendFields(value: unknown) {
+  if (Array.isArray(value)) {
+    for (const entry of value) assertNoPublicBackendFields(entry);
+    return;
+  }
+  if (!value || typeof value !== "object") return;
+  for (const [key, entry] of Object.entries(value)) {
+    assertEquals(publicBackendFieldNames.has(key), false, key);
+    assertNoPublicBackendFields(entry);
+  }
 }
 
 function createGroupDb(initialRow: GroupRow) {
@@ -183,10 +210,9 @@ Deno.test("groups routes - does not expose the legacy /entities inventory endpoi
       summary: { create: 0, update: 0, delete: 0, unchanged: 0 },
     },
     translationReport: {
-      provider: "aws",
+      backend: "aws",
       supported: true,
       requirements: [],
-      resources: [],
       workloads: [],
       routes: [],
       unsupported: [],
@@ -202,10 +228,9 @@ Deno.test("groups routes - does not expose the legacy /entities inventory endpoi
       summary: { create: 0, update: 0, delete: 0, unchanged: 0 },
     },
     translationReport: {
-      provider: "aws",
+      backend: "aws",
       supported: true,
       requirements: [],
-      resources: [],
       workloads: [],
       routes: [],
       unsupported: [],
@@ -232,7 +257,7 @@ Deno.test("groups routes - does not expose the legacy /entities inventory endpoi
   }
 });
 
-Deno.test("groups routes - passes provider/env overrides to the group-id plan route without mutating the group", async () => {
+Deno.test("groups routes - passes env overrides to the group-id plan route without mutating the group", async () => {
   const originalDeps = {
     getDb: groupsRouteDeps.getDb,
     getGroupState: groupsRouteDeps.getGroupState,
@@ -243,22 +268,37 @@ Deno.test("groups routes - passes provider/env overrides to the group-id plan ro
   };
 
   const { db, updateCalls } = createGroupDb(createGroupRow());
-  const planManifestSpy = spy(async () => ({
-    diff: {
-      entries: [],
-      hasChanges: false,
-      summary: { create: 0, update: 0, delete: 0, unchanged: 0 },
-    },
-    translationReport: {
-      provider: "aws",
-      supported: true,
-      requirements: [],
-      resources: [],
-      workloads: [],
-      routes: [],
-      unsupported: [],
-    },
-  }));
+  const planManifestSpy = spy(async () =>
+    ({
+      diff: {
+        entries: [],
+        hasChanges: false,
+        summary: { create: 0, update: 0, delete: 0, unchanged: 0 },
+      },
+      translationReport: {
+        backend: "aws",
+        supported: true,
+        requirements: [],
+        workloads: [{
+          name: "gateway",
+          category: "worker",
+          backend: "takos-worker-runtime",
+          runtime: "workers",
+          runtimeProfile: "workers",
+          status: "compatible",
+          requirements: [],
+        }],
+        routes: [{
+          name: "gateway",
+          target: "gateway",
+          backend: "takos-routing",
+          status: "compatible",
+          requirements: [],
+        }],
+        unsupported: [],
+      },
+    }) as unknown as Awaited<ReturnType<typeof groupsRouteDeps.planManifest>>
+  );
   groupsRouteDeps.getDb = (() => db) as any;
   groupsRouteDeps.getGroupState = async () => null;
   groupsRouteDeps.planManifest =
@@ -282,7 +322,6 @@ Deno.test("groups routes - passes provider/env overrides to the group-id plan ro
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
-          provider: "aws",
           env: "production",
           manifest,
         }),
@@ -292,6 +331,10 @@ Deno.test("groups routes - passes provider/env overrides to the group-id plan ro
     );
 
     assertEquals(res.status, 200);
+    const json = await res.json() as {
+      translationReport?: Record<string, unknown>;
+    };
+    assertNoPublicBackendFields(json);
     assertEquals(updateCalls.length, 0);
     assertSpyCalls(planManifestSpy, 1);
     const callArgs = planManifestSpy.calls[0]?.args as unknown[];
@@ -299,7 +342,7 @@ Deno.test("groups routes - passes provider/env overrides to the group-id plan ro
     assertEquals(callArgs[1], "group-1");
     assertEquals(callArgs[2], manifest);
     assertObjectMatch(callArgs[3] ?? {}, {
-      providerName: "aws",
+      backendName: "cloudflare",
       envName: "production",
       groupName: "demo-group",
     });
@@ -313,7 +356,81 @@ Deno.test("groups routes - passes provider/env overrides to the group-id plan ro
   }
 });
 
-Deno.test("groups routes - updates provider/env on the group-id apply route before apply", async () => {
+Deno.test("groups routes - rejects backend fields inside public manifest input", async () => {
+  const originalDeps = {
+    getDb: groupsRouteDeps.getDb,
+    getGroupState: groupsRouteDeps.getGroupState,
+    planManifest: groupsRouteDeps.planManifest,
+    applyManifest: groupsRouteDeps.applyManifest,
+    parseAppManifestYaml: groupsRouteDeps.parseAppManifestYaml,
+    requireSpaceAccess: routeAuthDeps.requireSpaceAccess,
+  };
+
+  const { db } = createGroupDb(createGroupRow());
+  const planManifestSpy = spy(async () => ({
+    diff: {
+      entries: [],
+      hasChanges: false,
+      summary: { create: 0, update: 0, delete: 0, unchanged: 0 },
+    },
+    translationReport: {
+      supported: true,
+      requirements: [],
+      workloads: [],
+      routes: [],
+      unsupported: [],
+    },
+  }));
+  groupsRouteDeps.getDb = (() => db) as any;
+  groupsRouteDeps.getGroupState = async () => null;
+  groupsRouteDeps.planManifest =
+    planManifestSpy as typeof groupsRouteDeps.planManifest;
+  groupsRouteDeps.applyManifest = async () => {
+    throw new Error("applyManifest should not be called");
+  };
+  routeAuthDeps.requireSpaceAccess = async () => ({
+    space: { id: "ws1" },
+  } as any);
+
+  try {
+    const app = createApp();
+    const res = await app.fetch(
+      new Request("http://localhost/spaces/ws1/groups/group-1/plan", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          manifest: {
+            name: "demo-group",
+            backend: "cloudflare",
+            compute: {},
+            routes: [],
+            publish: [],
+          },
+        }),
+      }),
+      { DB: {} } as Env,
+      {} as ExecutionContext,
+    );
+
+    assertEquals(res.status, 400);
+    await assertObjectMatch(await res.json(), {
+      error: {
+        code: "BAD_REQUEST",
+        message: "manifest must not contain backend fields",
+      },
+    });
+    assertSpyCalls(planManifestSpy, 0);
+  } finally {
+    groupsRouteDeps.getDb = originalDeps.getDb;
+    groupsRouteDeps.getGroupState = originalDeps.getGroupState;
+    groupsRouteDeps.planManifest = originalDeps.planManifest;
+    groupsRouteDeps.applyManifest = originalDeps.applyManifest;
+    groupsRouteDeps.parseAppManifestYaml = originalDeps.parseAppManifestYaml;
+    routeAuthDeps.requireSpaceAccess = originalDeps.requireSpaceAccess;
+  }
+});
+
+Deno.test("groups routes - rejects backend input on public group mutation routes", async () => {
   const originalDeps = {
     getDb: groupsRouteDeps.getDb,
     getGroupState: groupsRouteDeps.getGroupState,
@@ -324,25 +441,128 @@ Deno.test("groups routes - updates provider/env on the group-id apply route befo
   };
 
   const { db, updateCalls } = createGroupDb(createGroupRow());
-  const applyManifestSpy = spy(async () => ({
-    groupId: "group-1",
-    applied: [],
-    skipped: [],
+  const planManifestSpy = spy(async () => ({
     diff: {
       entries: [],
       hasChanges: false,
       summary: { create: 0, update: 0, delete: 0, unchanged: 0 },
     },
     translationReport: {
-      provider: "aws",
+      backend: "aws",
       supported: true,
       requirements: [],
-      resources: [],
       workloads: [],
       routes: [],
       unsupported: [],
     },
   }));
+  groupsRouteDeps.getDb = (() => db) as any;
+  groupsRouteDeps.getGroupState = async () => null;
+  groupsRouteDeps.planManifest =
+    planManifestSpy as typeof groupsRouteDeps.planManifest;
+  groupsRouteDeps.applyManifest = async () => {
+    throw new Error("applyManifest should not be called");
+  };
+  routeAuthDeps.requireSpaceAccess = async () => ({
+    space: { id: "ws1" },
+  } as any);
+
+  try {
+    const app = createApp();
+    const manifest = {
+      metadata: { name: "demo-group" },
+      spec: { version: "1.0.0" },
+    };
+
+    const planRes = await app.fetch(
+      new Request("http://localhost/spaces/ws1/groups/group-1/plan", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          backend: "aws",
+          manifest,
+        }),
+      }),
+      { DB: {} } as Env,
+      {} as ExecutionContext,
+    );
+
+    assertEquals(planRes.status, 400);
+    await assertObjectMatch(await planRes.json(), {
+      error: {
+        code: "BAD_REQUEST",
+        message:
+          "retired backend fields are not accepted on public group routes",
+      },
+    });
+    assertSpyCalls(planManifestSpy, 0);
+
+    const patchRes = await app.fetch(
+      new Request("http://localhost/spaces/ws1/groups/group-1/metadata", {
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          backend: "aws",
+        }),
+      }),
+      { DB: {} } as Env,
+      {} as ExecutionContext,
+    );
+
+    assertEquals(patchRes.status, 400);
+    await assertObjectMatch(await patchRes.json(), {
+      error: {
+        code: "BAD_REQUEST",
+        message:
+          "retired backend fields are not accepted on public group routes",
+      },
+    });
+    assertEquals(updateCalls.length, 0);
+  } finally {
+    groupsRouteDeps.getDb = originalDeps.getDb;
+    groupsRouteDeps.getGroupState = originalDeps.getGroupState;
+    groupsRouteDeps.planManifest = originalDeps.planManifest;
+    groupsRouteDeps.applyManifest = originalDeps.applyManifest;
+    groupsRouteDeps.parseAppManifestYaml = originalDeps.parseAppManifestYaml;
+    routeAuthDeps.requireSpaceAccess = originalDeps.requireSpaceAccess;
+  }
+});
+
+Deno.test("groups routes - updates env on the group-id apply route before apply", async () => {
+  const originalDeps = {
+    getDb: groupsRouteDeps.getDb,
+    getGroupState: groupsRouteDeps.getGroupState,
+    planManifest: groupsRouteDeps.planManifest,
+    applyManifest: groupsRouteDeps.applyManifest,
+    parseAppManifestYaml: groupsRouteDeps.parseAppManifestYaml,
+    requireSpaceAccess: routeAuthDeps.requireSpaceAccess,
+  };
+
+  const { db, updateCalls } = createGroupDb(createGroupRow());
+  const applyManifestSpy = spy(async () => {
+    assertEquals(updateCalls.length, 1);
+    assertObjectMatch(updateCalls[0], {
+      env: "preview",
+    });
+    return {
+      groupId: "group-1",
+      applied: [],
+      skipped: [],
+      diff: {
+        entries: [],
+        hasChanges: false,
+        summary: { create: 0, update: 0, delete: 0, unchanged: 0 },
+      },
+      translationReport: {
+        backend: "aws",
+        supported: true,
+        requirements: [],
+        workloads: [],
+        routes: [],
+        unsupported: [],
+      },
+    };
+  });
   groupsRouteDeps.getDb = (() => db) as any;
   groupsRouteDeps.getGroupState = async () => null;
   groupsRouteDeps.planManifest = async () => ({
@@ -352,10 +572,9 @@ Deno.test("groups routes - updates provider/env on the group-id apply route befo
       summary: { create: 0, update: 0, delete: 0, unchanged: 0 },
     },
     translationReport: {
-      provider: "aws",
+      backend: "aws",
       supported: true,
       requirements: [],
-      resources: [],
       workloads: [],
       routes: [],
       unsupported: [],
@@ -379,7 +598,6 @@ Deno.test("groups routes - updates provider/env on the group-id apply route befo
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
-          provider: "k8s",
           env: "preview",
           manifest,
         }),
@@ -389,10 +607,18 @@ Deno.test("groups routes - updates provider/env on the group-id apply route befo
     );
 
     assertEquals(res.status, 200);
-    assertEquals(updateCalls.length, 1);
+    const json = await res.json() as {
+      translationReport?: Record<string, unknown>;
+    };
+    assertNoPublicBackendFields(json);
+    assertEquals(updateCalls.length, 2);
     assertObjectMatch(updateCalls[0], {
-      provider: "k8s",
       env: "preview",
+    });
+    assertEquals("backend" in updateCalls[0], false);
+    assertObjectMatch(updateCalls[1], {
+      sourceKind: "local_upload",
+      currentGroupDeploymentSnapshotId: null,
     });
     assertSpyCalls(applyManifestSpy, 1);
     const callArgs = applyManifestSpy.calls[0]?.args as unknown[] | undefined;
@@ -415,7 +641,7 @@ Deno.test("groups routes - updates provider/env on the group-id apply route befo
   }
 });
 
-Deno.test("groups routes - local_upload source projection intentionally clears current app deployment id", async () => {
+Deno.test("groups routes - local_upload source projection intentionally clears current deployment snapshot id", async () => {
   const originalDeps = {
     getDb: groupsRouteDeps.getDb,
     getGroupState: groupsRouteDeps.getGroupState,
@@ -432,7 +658,7 @@ Deno.test("groups routes - local_upload source projection intentionally clears c
     sourceRef: "main",
     sourceRefType: "branch",
     sourceCommitSha: "commit-old",
-    currentAppDeploymentId: "appdep-old",
+    currentGroupDeploymentSnapshotId: "appdep-old",
   });
   const applyManifestSpy = spy(async () => ({
     groupId: "group-1",
@@ -453,10 +679,9 @@ Deno.test("groups routes - local_upload source projection intentionally clears c
       summary: { create: 1, update: 0, delete: 0, unchanged: 0 },
     },
     translationReport: {
-      provider: "cloudflare",
+      backend: "cloudflare",
       supported: true,
       requirements: [],
-      resources: [],
       workloads: [],
       routes: [],
       unsupported: [],
@@ -502,7 +727,7 @@ Deno.test("groups routes - local_upload source projection intentionally clears c
       sourceRef: null,
       sourceRefType: null,
       sourceCommitSha: null,
-      currentAppDeploymentId: null,
+      currentGroupDeploymentSnapshotId: null,
     });
 
     const groupRes = await app.fetch(
@@ -514,11 +739,14 @@ Deno.test("groups routes - local_upload source projection intentionally clears c
     );
 
     assertEquals(groupRes.status, 200);
-    await assertObjectMatch(await groupRes.json(), {
+    const groupJson = await groupRes.json() as Record<string, unknown>;
+    await assertObjectMatch(groupJson, {
       id: "group-1",
       sourceKind: "local_upload",
-      currentAppDeploymentId: null,
+      currentGroupDeploymentSnapshotId: null,
     });
+    assertEquals("backend" in groupJson, false);
+    assertEquals("backendStateJson" in groupJson, false);
   } finally {
     groupsRouteDeps.getDb = originalDeps.getDb;
     groupsRouteDeps.getGroupState = originalDeps.getGroupState;

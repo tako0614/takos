@@ -13,11 +13,7 @@ import {
   StepRunner,
 } from "../../scheduler/step.ts";
 
-import {
-  assert,
-  assertEquals,
-  assertRejects,
-} from "jsr:@std/assert";
+import { assert, assertEquals, assertRejects } from "jsr:@std/assert";
 
 function expectStoredAndEventResultSnapshots(
   eventResult: JobResult | undefined,
@@ -199,7 +195,7 @@ Deno.test("JobScheduler fail-fast behavior - continues independent jobs and skip
   assert(executedCommands.includes("lint"));
   assert(!executedCommands.includes("deploy"));
 });
-Deno.test("JobScheduler fail-fast behavior - preserves continue-on-error semantics when fail-fast is disabled", async () => {
+Deno.test("JobScheduler fail-fast behavior - treats continue-on-error as unsupported", async () => {
   const executedCommands: string[] = [];
   const shellExecutor: ShellExecutor = async (command) => {
     executedCommands.push(command);
@@ -240,9 +236,10 @@ Deno.test("JobScheduler fail-fast behavior - preserves continue-on-error semanti
 
   const results = await scheduler.run(createBaseContext());
 
-  assertEquals(executedCommands, ["allowed-fail", "after-continue"]);
+  assertEquals(executedCommands, ["allowed-fail"]);
   assertEquals(results.build.steps.length, 2);
-  assertEquals(results.build.conclusion, "success");
+  assertEquals(results.build.steps[1].conclusion, "skipped");
+  assertEquals(results.build.conclusion, "failure");
 });
 Deno.test("JobScheduler fail-fast behavior - propagates fail-fast cancellation within phase chunks", async () => {
   const executedCommands: string[] = [];

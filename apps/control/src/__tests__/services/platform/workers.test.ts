@@ -196,6 +196,7 @@ Deno.test("listServicesForSpace - returns mapped workers", async () => {
     assertEquals(workers[0].space_id, "ws-1");
     assertEquals(workers[0].service_type, "app");
     assertEquals(workers[0].status, "deployed");
+    assertEquals(workers[0].name, "worker-w1");
     assertEquals(workers[0].slug, "my-app");
   } finally {
     restoreWorkerDeps();
@@ -226,6 +227,7 @@ Deno.test("getServiceById - returns mapped worker when found", async () => {
     assertNotEquals(worker, null);
     assertEquals(worker!.id, "w1");
     assertEquals(worker!.hostname, "my-app.takos.dev");
+    assertEquals(worker!.name, "worker-w1");
     assertEquals(worker!.service_name, "worker-w1");
   } finally {
     restoreWorkerDeps();

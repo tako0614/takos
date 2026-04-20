@@ -287,7 +287,7 @@ Deno.test("reminders routes - POST /api/spaces/:spaceId/reminders - rejects empt
   );
 
   // Zod validation should reject empty content (min 1)
-  assertEquals(res.status, 422);
+  assertEquals(res.status, 400);
   assertEquals(mocks.createReminder.calls.length, 0);
 });
 Deno.test("reminders routes - POST /api/spaces/:spaceId/reminders - rejects invalid trigger_type", async () => {
@@ -314,7 +314,7 @@ Deno.test("reminders routes - POST /api/spaces/:spaceId/reminders - rejects inva
     {} as ExecutionContext,
   );
 
-  assertEquals(res.status, 422);
+  assertEquals(res.status, 400);
 });
 
 Deno.test("reminders routes - PATCH /api/reminders/:id - updates a reminder", async () => {
@@ -418,7 +418,7 @@ Deno.test("reminders routes - PATCH /api/reminders/:id - rejects invalid status 
     {} as ExecutionContext,
   );
 
-  assertEquals(res.status, 422);
+  assertEquals(res.status, 400);
 });
 
 Deno.test("reminders routes - DELETE /api/reminders/:id - deletes a reminder", async () => {

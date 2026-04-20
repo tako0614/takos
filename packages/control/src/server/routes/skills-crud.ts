@@ -158,11 +158,6 @@ export function registerSkillCrudRoutes(skills: SkillsRouter) {
       spaceAccess({ roles: SKILL_LIST_ROLES }),
       listSkillsHandler,
     )
-    .get(
-      "/workspaces/:workspaceId/skills",
-      spaceAccess({ roles: SKILL_LIST_ROLES }),
-      listSkillsHandler,
-    )
     .post(
       "/spaces/:spaceId/skills",
       spaceAccess({
@@ -171,34 +166,13 @@ export function registerSkillCrudRoutes(skills: SkillsRouter) {
       }),
       createSkillHandler,
     )
-    .post(
-      "/workspaces/:workspaceId/skills",
-      spaceAccess({
-        roles: SKILL_CREATE_ROLES,
-        message: "Workspace not found or insufficient permissions",
-      }),
-      createSkillHandler,
-    )
     .get(
       "/spaces/:spaceId/skills/id/:skillId",
       spaceAccess({ roles: SKILL_GET_ROLES }),
       getSkillByIdHandler,
     )
-    .get(
-      "/workspaces/:workspaceId/skills/id/:skillId",
-      spaceAccess({ roles: SKILL_GET_ROLES }),
-      getSkillByIdHandler,
-    )
     .put(
       "/spaces/:spaceId/skills/id/:skillId",
-      spaceAccess({
-        roles: SKILL_UPDATE_ROLES,
-        message: "Workspace not found or insufficient permissions",
-      }),
-      updateSkillByIdHandler,
-    )
-    .put(
-      "/workspaces/:workspaceId/skills/id/:skillId",
       spaceAccess({
         roles: SKILL_UPDATE_ROLES,
         message: "Workspace not found or insufficient permissions",
@@ -213,14 +187,6 @@ export function registerSkillCrudRoutes(skills: SkillsRouter) {
       }),
       patchSkillByIdHandler,
     )
-    .patch(
-      "/workspaces/:workspaceId/skills/id/:skillId",
-      spaceAccess({
-        roles: SKILL_TOGGLE_ROLES,
-        message: "Workspace not found or insufficient permissions",
-      }),
-      patchSkillByIdHandler,
-    )
     .delete(
       "/spaces/:spaceId/skills/id/:skillId",
       spaceAccess({
@@ -229,34 +195,13 @@ export function registerSkillCrudRoutes(skills: SkillsRouter) {
       }),
       deleteSkillByIdHandler,
     )
-    .delete(
-      "/workspaces/:workspaceId/skills/id/:skillId",
-      spaceAccess({
-        roles: SKILL_DELETE_ROLES,
-        message: "Workspace not found or insufficient permissions",
-      }),
-      deleteSkillByIdHandler,
-    )
     .get(
       "/spaces/:spaceId/skills/:skillName",
       spaceAccess({ roles: SKILL_GET_ROLES }),
       getSkillByNameHandler,
     )
-    .get(
-      "/workspaces/:workspaceId/skills/:skillName",
-      spaceAccess({ roles: SKILL_GET_ROLES }),
-      getSkillByNameHandler,
-    )
     .put(
       "/spaces/:spaceId/skills/:skillName",
-      spaceAccess({
-        roles: SKILL_UPDATE_ROLES,
-        message: "Workspace not found or insufficient permissions",
-      }),
-      updateSkillByNameHandler,
-    )
-    .put(
-      "/workspaces/:workspaceId/skills/:skillName",
       spaceAccess({
         roles: SKILL_UPDATE_ROLES,
         message: "Workspace not found or insufficient permissions",
@@ -271,24 +216,8 @@ export function registerSkillCrudRoutes(skills: SkillsRouter) {
       }),
       patchSkillByNameHandler,
     )
-    .patch(
-      "/workspaces/:workspaceId/skills/:skillName",
-      spaceAccess({
-        roles: SKILL_TOGGLE_ROLES,
-        message: "Workspace not found or insufficient permissions",
-      }),
-      patchSkillByNameHandler,
-    )
     .delete(
       "/spaces/:spaceId/skills/:skillName",
-      spaceAccess({
-        roles: SKILL_DELETE_ROLES,
-        message: "Workspace not found or insufficient permissions",
-      }),
-      deleteSkillByNameHandler,
-    )
-    .delete(
-      "/workspaces/:workspaceId/skills/:skillName",
       spaceAccess({
         roles: SKILL_DELETE_ROLES,
         message: "Workspace not found or insufficient permissions",

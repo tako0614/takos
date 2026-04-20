@@ -1,10 +1,13 @@
-import * as fs from 'node:fs/promises';
-import { createLogger } from 'takos-common/logger';
-import { pushLog } from '../logging.ts';
-import type { SecretsSanitizer } from './secrets.ts';
-import { SANDBOX_LIMITS } from '../../shared/config.ts';
+import * as fs from "node:fs/promises";
+import { createLogger } from "takos-common/logger";
+import { pushLog } from "../logging.ts";
+import type { SecretsSanitizer } from "./secrets.ts";
+import { SANDBOX_LIMITS } from "../../shared/config.ts";
 
-const logger = createLogger({ service: 'takos-runtime', defaultFields: { module: 'actions' } });
+const logger = createLogger({
+  service: "takos-runtime",
+  defaultFields: { module: "actions" },
+});
 
 // ---------------------------------------------------------------------------
 // Types
@@ -17,8 +20,8 @@ export interface StepDefinition {
   with?: Record<string, unknown>;
   env?: Record<string, string>;
   if?: string;
-  'continue-on-error'?: boolean;
-  'timeout-minutes'?: number;
+  "continue-on-error"?: boolean;
+  "timeout-minutes"?: number;
 }
 
 export interface ActiveJob {
@@ -30,7 +33,7 @@ export interface ActiveJob {
   workflowPath: string;
   jobName: string;
   workspacePath: string;
-  status: 'running' | 'completed' | 'failed';
+  status: "running" | "completed" | "failed";
   steps: StepDefinition[];
   env: Record<string, string>;
   secrets: Record<string, string>;
@@ -39,7 +42,7 @@ export interface ActiveJob {
   currentStep: number;
   startedAt: number;
   completedAt?: number;
-  conclusion?: 'success' | 'failure' | 'cancelled';
+  conclusion?: "success" | "failure" | "cancelled";
   outputs: Record<string, string>;
 }
 
@@ -62,13 +65,13 @@ export class JobManager {
 
   countRunningJobsForSpace(spaceId: string): number {
     return Array.from(this.jobs.values())
-      .filter(job => job.status === 'running' && job.spaceId === spaceId)
+      .filter((job) => job.status === "running" && job.spaceId === spaceId)
       .length;
   }
 
   countRunningJobsGlobal(): number {
     return Array.from(this.jobs.values())
-      .filter(job => job.status === 'running')
+      .filter((job) => job.status === "running")
       .length;
   }
 
@@ -79,11 +82,19 @@ export class JobManager {
   canStartJob(spaceId: string): { allowed: boolean; reason?: string } {
     const globalRunning = this.countRunningJobsGlobal();
     if (globalRunning >= SANDBOX_LIMITS.maxConcurrentJobs) {
-      return { allowed: false, reason: `Global concurrent job limit reached (${globalRunning}/${SANDBOX_LIMITS.maxConcurrentJobs})` };
+      return {
+        allowed: false,
+        reason:
+          `Global concurrent job limit reached (${globalRunning}/${SANDBOX_LIMITS.maxConcurrentJobs})`,
+      };
     }
     const wsRunning = this.countRunningJobsForSpace(spaceId);
     if (wsRunning >= SANDBOX_LIMITS.maxConcurrentJobs) {
-      return { allowed: false, reason: `Space concurrent job limit reached (${wsRunning}/${SANDBOX_LIMITS.maxConcurrentJobs})` };
+      return {
+        allowed: false,
+        reason:
+          `Space concurrent job limit reached (${wsRunning}/${SANDBOX_LIMITS.maxConcurrentJobs})`,
+      };
     }
     return { allowed: true };
   }
@@ -96,7 +107,7 @@ export class JobManager {
     this.jobs.delete(jobId);
     job.secretsSanitizer.clear();
     // Ensure job directory is cleaned up (best-effort, may already be removed)
-    await removeJobDirSafe(job.workspacePath, jobId, 'purged job');
+    await removeJobDirSafe(job.workspacePath, jobId, "purged job");
   }
 
   /** Schedule removal of a completed job after the retention window. */
@@ -104,7 +115,7 @@ export class JobManager {
     const tryPurge = (): void => {
       const job = this.jobs.get(jobId);
       if (!job) return;
-      if (job.status === 'running') {
+      if (job.status === "running") {
         // Still running -- retry after another retention window
         setTimeout(tryPurge, COMPLETED_JOB_RETENTION_MS);
         return;
@@ -120,11 +131,11 @@ export class JobManager {
     job: ActiveJob,
     reason: string,
   ): Promise<void> {
-    job.status = 'failed';
-    job.conclusion = 'failure';
+    job.status = "failed";
+    job.conclusion = "failure";
     job.completedAt = Date.now();
     pushLog(job.logs, reason, job.secretsSanitizer);
-    await removeJobDirSafe(job.workspacePath, jobId, 'failed job');
+    await removeJobDirSafe(job.workspacePath, jobId, "failed job");
     this.scheduleJobCleanup(jobId);
   }
 
@@ -139,7 +150,7 @@ export class JobManager {
 
       void this.cleanupStaleJobs()
         .catch((err) => {
-          logger.error('Error in periodic job cleanup', { error: err });
+          logger.error("Error in periodic job cleanup", { error: err });
         })
         .finally(() => {
           this.cleanupRunning = false;
@@ -162,17 +173,27 @@ export class JobManager {
 
       // Clean up jobs that exceeded maximum age regardless of status
       if (age > MAX_JOB_AGE_MS) {
-        logger.info('Cleaning up stale job (max age exceeded)', { jobId, status: job.status });
+        logger.info("Cleaning up stale job (max age exceeded)", {
+          jobId,
+          status: job.status,
+        });
         job.secretsSanitizer.clear();
-        await removeJobDirSafe(job.workspacePath, jobId, 'stale job');
+        await removeJobDirSafe(job.workspacePath, jobId, "stale job");
         this.jobs.delete(jobId);
         continue;
       }
 
       // Detect and fail running jobs that exceeded the maximum job duration
-      if (job.status === 'running' && age > SANDBOX_LIMITS.maxJobDuration) {
-        logger.warn('Failing job that exceeded max duration', { jobId, durationMs: age });
-        await this.failCloseJob(jobId, job, `Job exceeded maximum duration of ${SANDBOX_LIMITS.maxJobDuration}ms`);
+      if (job.status === "running" && age > SANDBOX_LIMITS.maxJobDuration) {
+        logger.warn("Failing job that exceeded max duration", {
+          jobId,
+          durationMs: age,
+        });
+        await this.failCloseJob(
+          jobId,
+          job,
+          `Job exceeded maximum duration of ${SANDBOX_LIMITS.maxJobDuration}ms`,
+        );
       }
     }
   }
@@ -191,10 +212,12 @@ export async function removeJobDirSafe(
   try {
     await fs.rm(workspacePath, { recursive: true, force: true });
   } catch (rmErr) {
-    logger.error(`Failed to remove ${context} job directory`, { jobId, error: rmErr });
+    logger.error(`Failed to remove ${context} job directory`, {
+      jobId,
+      error: rmErr,
+    });
   }
 }
-
 
 /** Sanitize a key-value map through the job's secrets sanitizer. */
 export function sanitizeOutputs(
@@ -202,7 +225,7 @@ export function sanitizeOutputs(
   sanitizer: SecretsSanitizer,
 ): Record<string, string> {
   return Object.fromEntries(
-    Object.entries(outputs).map(([k, v]) => [k, sanitizer.sanitize(v)])
+    Object.entries(outputs).map(([k, v]) => [k, sanitizer.sanitize(v)]),
   );
 }
 

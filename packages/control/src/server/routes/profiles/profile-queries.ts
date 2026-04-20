@@ -1,9 +1,16 @@
-import type { D1Database } from '../../../shared/types/bindings.ts';
-import { and, count, eq, inArray, sql } from 'drizzle-orm';
-import { getDb } from '../../../infra/db/index.ts';
-import { accountFollows, accountMutes, accountSettings, accounts, repositories, repoStars } from '../../../infra/db/schema.ts';
-import type { Repository, Space } from '../../../shared/types/index.ts';
-import { checkSpaceAccess } from '../../../application/services/identity/space-access.ts';
+import type { D1Database } from "../../../shared/types/bindings.ts";
+import { and, count, eq, inArray, sql } from "drizzle-orm";
+import { getDb } from "../../../infra/db/index.ts";
+import {
+  accountFollows,
+  accountMutes,
+  accounts,
+  accountSettings,
+  repositories,
+  repoStars,
+} from "../../../infra/db/schema.ts";
+import type { Repository, Space } from "../../../shared/types/index.ts";
+import { checkSpaceAccess } from "../../../application/services/identity/space-access.ts";
 
 export interface ProfileUser {
   id: string;
@@ -18,9 +25,9 @@ export interface ProfileUser {
 
 export async function getUserByUsername(
   dbBinding: D1Database,
-  username: string
+  username: string,
 ): Promise<ProfileUser | null> {
-  const cleanUsername = username.replace(/^@+/, '').trim().toLowerCase();
+  const cleanUsername = username.replace(/^@+/, "").trim().toLowerCase();
   if (!cleanUsername) {
     return null;
   }
@@ -37,7 +44,7 @@ export async function getUserByUsername(
 
   return {
     id: row.id,
-    email: row.email ?? '',
+    email: row.email ?? "",
     name: row.name,
     picture: row.picture,
     username: row.slug,
@@ -47,21 +54,29 @@ export async function getUserByUsername(
   };
 }
 
-export async function getUserStats(dbBinding: D1Database, userId: string): Promise<{
+export async function getUserStats(
+  dbBinding: D1Database,
+  userId: string,
+): Promise<{
   public_repo_count: number;
   followers_count: number;
   following_count: number;
 }> {
   const db = getDb(dbBinding);
 
-  const [repoCountRow, followersCountRow, followingCountRow] = await Promise.all([
-    db.select({ count: count() }).from(repositories).where(and(
-      eq(repositories.accountId, userId),
-      eq(repositories.visibility, 'public'),
-    )).get(),
-    db.select({ count: count() }).from(accountFollows).where(eq(accountFollows.followingAccountId, userId)).get(),
-    db.select({ count: count() }).from(accountFollows).where(eq(accountFollows.followerAccountId, userId)).get(),
-  ]);
+  const [repoCountRow, followersCountRow, followingCountRow] = await Promise
+    .all([
+      db.select({ count: count() }).from(repositories).where(and(
+        eq(repositories.accountId, userId),
+        eq(repositories.visibility, "public"),
+      )).get(),
+      db.select({ count: count() }).from(accountFollows).where(
+        eq(accountFollows.followingAccountId, userId),
+      ).get(),
+      db.select({ count: count() }).from(accountFollows).where(
+        eq(accountFollows.followerAccountId, userId),
+      ).get(),
+    ]);
 
   return {
     public_repo_count: repoCountRow?.count ?? 0,
@@ -73,14 +88,16 @@ export async function getUserStats(dbBinding: D1Database, userId: string): Promi
 export async function isFollowing(
   dbBinding: D1Database,
   currentUserId: string | undefined,
-  targetUserId: string
+  targetUserId: string,
 ): Promise<boolean> {
   if (!currentUserId) {
     return false;
   }
 
   const db = getDb(dbBinding);
-  const row = await db.select({ followerAccountId: accountFollows.followerAccountId })
+  const row = await db.select({
+    followerAccountId: accountFollows.followerAccountId,
+  })
     .from(accountFollows)
     .where(and(
       eq(accountFollows.followerAccountId, currentUserId),
@@ -92,13 +109,19 @@ export async function isFollowing(
   return !!row;
 }
 
-export type ActivityVisibility = 'public' | 'followers' | 'private';
-const ACTIVITY_VISIBILITY_VALUES: readonly ActivityVisibility[] = ['public', 'followers', 'private'];
+export type ActivityVisibility = "public" | "followers" | "private";
+const ACTIVITY_VISIBILITY_VALUES: readonly ActivityVisibility[] = [
+  "public",
+  "followers",
+  "private",
+];
 
 export async function getUserPrivacySettings(
   dbBinding: D1Database,
-  userId: string
-): Promise<{ private_account: boolean; activity_visibility: ActivityVisibility }> {
+  userId: string,
+): Promise<
+  { private_account: boolean; activity_visibility: ActivityVisibility }
+> {
   const db = getDb(dbBinding);
   const row = await db.select({
     privateAccount: accountSettings.privateAccount,
@@ -109,18 +132,22 @@ export async function getUserPrivacySettings(
     .get();
 
   const privateAccount = !!row?.privateAccount;
-  const visRaw = (row?.activityVisibility ?? 'public').toLowerCase();
-  const activityVisibility = (ACTIVITY_VISIBILITY_VALUES as readonly string[]).includes(visRaw)
-    ? (visRaw as ActivityVisibility)
-    : 'public';
+  const visRaw = (row?.activityVisibility ?? "public").toLowerCase();
+  const activityVisibility =
+    (ACTIVITY_VISIBILITY_VALUES as readonly string[]).includes(visRaw)
+      ? (visRaw as ActivityVisibility)
+      : "public";
 
-  return { private_account: privateAccount, activity_visibility: activityVisibility };
+  return {
+    private_account: privateAccount,
+    activity_visibility: activityVisibility,
+  };
 }
 
 export async function isMutedBy(
   dbBinding: D1Database,
   muterId: string,
-  mutedId: string
+  mutedId: string,
 ): Promise<boolean> {
   const db = getDb(dbBinding);
   const row = await db.select({ muterAccountId: accountMutes.muterAccountId })
@@ -138,7 +165,7 @@ export async function isMutedBy(
 export async function batchStarCheck(
   dbBinding: D1Database,
   currentUserId: string | undefined,
-  repoIds: string[]
+  repoIds: string[],
 ): Promise<Set<string>> {
   if (!currentUserId || repoIds.length === 0) {
     return new Set<string>();
@@ -160,8 +187,8 @@ export async function findRepoByUsernameAndName(
   dbBinding: D1Database,
   username: string,
   repoName: string,
-  currentUserId?: string
-): Promise<{ repo: Repository; workspace: Space; owner: ProfileUser } | null> {
+  currentUserId?: string,
+): Promise<{ repo: Repository; space: Space; owner: ProfileUser } | null> {
   const owner = await getUserByUsername(dbBinding, username);
   if (!owner) {
     return null;
@@ -187,7 +214,7 @@ export async function findRepoByUsernameAndName(
     space_id: repoData.accountId,
     name: repoData.name,
     description: repoData.description,
-    visibility: repoData.visibility as Repository['visibility'],
+    visibility: repoData.visibility as Repository["visibility"],
     default_branch: repoData.defaultBranch,
     forked_from_id: repoData.forkedFromId,
     stars: repoData.stars,
@@ -197,49 +224,59 @@ export async function findRepoByUsernameAndName(
     updated_at: repoData.updatedAt,
   };
 
-  const workspaceData = await db.select().from(accounts)
+  const spaceData = await db.select().from(accounts)
     .where(eq(accounts.id, owner.id))
     .limit(1)
     .get();
 
-  if (!workspaceData) {
+  if (!spaceData) {
     return null;
   }
 
-  const kind: Space['kind'] = workspaceData.type === 'user'
-    ? 'user'
-    : workspaceData.type === 'system'
-      ? 'system'
-      : 'team';
+  const kind: Space["kind"] = spaceData.type === "user"
+    ? "user"
+    : spaceData.type === "system"
+    ? "system"
+    : "team";
 
-  const workspace: Space = {
-    id: workspaceData.id,
+  const space: Space = {
+    id: spaceData.id,
     kind,
-    name: workspaceData.name,
-    slug: workspaceData.slug,
-    description: workspaceData.description,
-    principal_id: workspaceData.id,
-    owner_user_id: workspaceData.type === 'user' ? workspaceData.id : (workspaceData.ownerAccountId ?? workspaceData.id),
-    owner_principal_id: workspaceData.type === 'user' ? workspaceData.id : (workspaceData.ownerAccountId ?? workspaceData.id),
+    name: spaceData.name,
+    slug: spaceData.slug,
+    description: spaceData.description,
+    principal_id: spaceData.id,
+    owner_user_id: spaceData.type === "user"
+      ? spaceData.id
+      : (spaceData.ownerAccountId ?? spaceData.id),
+    owner_principal_id: spaceData.type === "user"
+      ? spaceData.id
+      : (spaceData.ownerAccountId ?? spaceData.id),
     automation_principal_id: null,
-    head_snapshot_id: workspaceData.headSnapshotId,
-    ai_model: workspaceData.aiModel,
-    ai_provider: workspaceData.aiProvider,
-    security_posture: workspaceData.securityPosture === 'restricted_egress' ? 'restricted_egress' : 'standard',
-    created_at: workspaceData.createdAt,
-    updated_at: workspaceData.updatedAt,
+    head_snapshot_id: spaceData.headSnapshotId,
+    ai_model: spaceData.aiModel,
+    model_backend: spaceData.modelBackend,
+    security_posture: spaceData.securityPosture === "restricted_egress"
+      ? "restricted_egress"
+      : "standard",
+    created_at: spaceData.createdAt,
+    updated_at: spaceData.updatedAt,
   };
 
-  if (repo.visibility === 'private') {
+  if (repo.visibility === "private") {
     if (!currentUserId) {
       return null;
     }
 
-    const access = await checkSpaceAccess(dbBinding, workspace.id, currentUserId);
+    const access = await checkSpaceAccess(
+      dbBinding,
+      space.id,
+      currentUserId,
+    );
     if (!access) {
       return null;
     }
   }
 
-  return { repo, workspace, owner };
+  return { repo, space, owner };
 }

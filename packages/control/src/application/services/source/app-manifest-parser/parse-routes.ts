@@ -2,11 +2,9 @@
 // parse-routes.ts
 // ============================================================
 //
-// Flat-schema route parser (Phase 1).
+// Flat-schema route parser.
 //
 // Walks the top-level `routes[]` array and builds `AppRoute[]`.
-// The old envelope schema had `name` and `ingress` fields — both
-// are rejected in the flat schema.
 //
 // Route shape:
 //   - target  (required) — compute name
@@ -17,6 +15,7 @@
 
 import type { AppCompute, AppRoute } from "../app-manifest-types.ts";
 import {
+  asOptionalInteger,
   asRecord,
   asRequiredString,
   asStringArray,
@@ -32,36 +31,151 @@ const VALID_HTTP_METHODS = [
   "OPTIONS",
 ];
 
+const ROUTE_FIELDS = new Set([
+  "target",
+  "path",
+  "methods",
+  "timeoutMs",
+]);
+
+const ALL_HTTP_METHODS = new Set([
+  "GET",
+  "POST",
+  "PUT",
+  "PATCH",
+  "DELETE",
+  "HEAD",
+  "OPTIONS",
+]);
+
+function assertAllowedFields(
+  record: Record<string, unknown>,
+  prefix: string,
+): void {
+  for (const key of Object.keys(record)) {
+    if (!ROUTE_FIELDS.has(key)) {
+      throw new Error(
+        `${prefix}.${key} is not supported by the app manifest contract`,
+      );
+    }
+  }
+}
+
+function collectAttachedContainers(
+  compute: Record<string, AppCompute>,
+): Record<string, { parentWorker: string; childName: string }> {
+  const attached: Record<string, { parentWorker: string; childName: string }> =
+    {};
+  for (const [parentWorker, entry] of Object.entries(compute)) {
+    if (entry.kind !== "worker") continue;
+    for (const childName of Object.keys(entry.containers ?? {})) {
+      attached[childName] = { parentWorker, childName };
+      attached[`${parentWorker}-${childName}`] = { parentWorker, childName };
+    }
+  }
+  return attached;
+}
+
+export function validateRouteTargets(
+  routes: AppRoute[],
+  compute: Record<string, AppCompute>,
+): void {
+  const attached = collectAttachedContainers(compute);
+  for (const [index, route] of routes.entries()) {
+    const target = route.target;
+    if (compute[target]) {
+      const topLevel = compute[target];
+      if (topLevel.kind === "worker" || topLevel.kind === "service") {
+        continue;
+      }
+    }
+
+    const attachedTarget = attached[target];
+    if (attachedTarget) {
+      throw new Error(
+        `routes[${index}].target references attached container compute: ${target} (use compute.${attachedTarget.parentWorker} instead)`,
+      );
+    }
+
+    throw new Error(
+      `routes[${index}].target references unknown compute: ${target}`,
+    );
+  }
+}
+
+function expandRouteMethods(route: AppRoute): Set<string> {
+  return route.methods ? new Set(route.methods) : new Set(ALL_HTTP_METHODS);
+}
+
+function firstMethodOverlap(
+  left: Set<string>,
+  right: Set<string>,
+): string | null {
+  for (const method of left) {
+    if (right.has(method)) return method;
+  }
+  return null;
+}
+
+export function validateRouteUniqueness(routes: AppRoute[]): void {
+  const byTargetPath = new Map<
+    string,
+    { index: number; target: string; path: string }
+  >();
+  const byPath = new Map<
+    string,
+    { index: number; methods: Set<string> }[]
+  >();
+
+  for (let index = 0; index < routes.length; index++) {
+    const route = routes[index];
+    const key = `${route.target}\0${route.path}`;
+    const previous = byTargetPath.get(key);
+    if (previous) {
+      throw new Error(
+        `route target/path '${route.target} ${route.path}' duplicates routes[${previous.index}]. A manifest must declare at most one route for the same target + path; list multiple methods on that route instead.`,
+      );
+    }
+    byTargetPath.set(key, {
+      index,
+      target: route.target,
+      path: route.path,
+    });
+
+    const methods = expandRouteMethods(route);
+    const pathBucket = byPath.get(route.path) ?? [];
+    for (const previousRoute of pathBucket) {
+      const overlap = firstMethodOverlap(methods, previousRoute.methods);
+      if (!overlap) continue;
+      throw new Error(
+        `route path '${route.path}' overlaps routes[${previousRoute.index}] for method ${overlap}. Omit methods only when the route owns every method for the path, or split by non-overlapping methods.`,
+      );
+    }
+    pathBucket.push({ index, methods });
+    byPath.set(route.path, pathBucket);
+  }
+}
+
+export type ParseRoutesOptions = {
+  validateTargets?: boolean;
+};
+
 export function parseRoutes(
   topLevel: Record<string, unknown>,
   compute: Record<string, AppCompute>,
+  options: ParseRoutesOptions = {},
 ): AppRoute[] {
   if (topLevel.routes == null) return [];
   if (!Array.isArray(topLevel.routes)) {
     throw new Error("routes must be an array");
   }
 
-  return topLevel.routes.map((entry, index) => {
+  const routes = topLevel.routes.map((entry, index) => {
     const route = asRecord(entry);
     const prefix = `routes[${index}]`;
-
-    if (route.name != null) {
-      throw new Error(
-        `${prefix}.name is not supported in the flat manifest schema`,
-      );
-    }
-    if (route.ingress != null) {
-      throw new Error(
-        `${prefix}.ingress is not supported in the flat manifest schema`,
-      );
-    }
+    assertAllowedFields(route, prefix);
 
     const target = asRequiredString(route.target, `${prefix}.target`);
-    if (!compute[target]) {
-      throw new Error(
-        `${prefix}.target references unknown compute: ${target}`,
-      );
-    }
 
     const path = asRequiredString(route.path, `${prefix}.path`);
     if (!path.startsWith("/")) {
@@ -82,10 +196,24 @@ export function parseRoutes(
     return {
       target,
       path,
-      ...(methods ? { methods } : {}),
+      ...(methods
+        ? { methods: methods.map((method) => method.toUpperCase()) }
+        : {}),
       ...(route.timeoutMs != null
-        ? { timeoutMs: Number(route.timeoutMs) }
+        ? {
+          timeoutMs: asOptionalInteger(route.timeoutMs, `${prefix}.timeoutMs`, {
+            min: 1,
+          }),
+        }
         : {}),
     };
   });
+
+  if (options.validateTargets !== false) {
+    validateRouteTargets(routes, compute);
+  }
+
+  validateRouteUniqueness(routes);
+
+  return routes;
 }

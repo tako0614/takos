@@ -1,8 +1,5 @@
 import { getDb } from "../../../infra/db/client.ts";
-import type {
-  AppCompute,
-  AppManifest,
-} from "../source/app-manifest-types.ts";
+import type { AppCompute, AppManifest } from "../source/app-manifest-types.ts";
 
 // Narrowed aliases for the three compute kinds.
 type AppWorker = AppCompute & { kind: "worker" };
@@ -14,6 +11,7 @@ import {
 } from "./group-state.ts";
 import {
   assertTranslationSupported,
+  buildTranslationContextFromEnv,
   buildTranslationReport,
 } from "./translation-report.ts";
 import {
@@ -32,7 +30,11 @@ import {
 import { DeploymentService } from "./service.ts";
 import { findDeploymentByArtifactRef, getDeploymentById } from "./store.ts";
 import { getBundleContent } from "./artifact-io.ts";
-import { syncGroupManagedDesiredState } from "./group-managed-desired-state.ts";
+import {
+  captureManagedWorkloadDesiredState,
+  restoreManagedWorkloadDesiredState,
+  syncGroupManagedDesiredState,
+} from "./group-managed-desired-state.ts";
 import { reconcileGroupRouting } from "./group-routing.ts";
 import { safeJsonParseOrDefault } from "../../../shared/utils/logger.ts";
 import type { Env } from "../../../shared/types/env.ts";
@@ -41,11 +43,11 @@ export type GroupRow = {
   id: string;
   spaceId: string;
   name: string;
-  provider: string | null;
+  backend: string | null;
   env: string | null;
   appVersion: string | null;
   desiredSpecJson: string | null;
-  providerStateJson: string | null;
+  backendStateJson: string | null;
   reconcileStatus: string;
   lastAppliedAt: string | null;
   createdAt: string;
@@ -61,7 +63,7 @@ export type ApplyWorkerArtifact = {
 export type ApplyContainerArtifact = {
   kind: "container_image";
   imageRef: string;
-  provider?: "oci" | "ecs" | "cloud-run" | "k8s";
+  backend?: "oci" | "ecs" | "cloud-run" | "k8s";
   deployMessage?: string;
 };
 
@@ -76,7 +78,7 @@ export type WorkerDirectArtifact = {
 export type ImageDirectArtifact = {
   kind: "image";
   imageRef: string;
-  provider?: "oci" | "ecs" | "cloud-run" | "k8s";
+  backend?: "oci" | "ecs" | "cloud-run" | "k8s";
 };
 
 export const applyEngineDeps = {
@@ -94,9 +96,12 @@ export const applyEngineDeps = {
   findDeploymentByArtifactRef,
   getDeploymentById,
   getBundleContent,
+  captureManagedWorkloadDesiredState,
+  restoreManagedWorkloadDesiredState,
   syncGroupManagedDesiredState,
   reconcileGroupRouting,
   buildTranslationReport,
+  buildTranslationContextFromEnv,
   assertTranslationSupported,
   compileGroupDesiredState,
 };
@@ -114,7 +119,7 @@ export function loadDesiredState(group: GroupRow): GroupDesiredState | null {
   try {
     return compileGroupDesiredState(manifest, {
       groupName: group.name,
-      provider: group.provider ?? "cloudflare",
+      backend: group.backend ?? "cloudflare",
       envName: group.env ?? "default",
     });
   } catch {

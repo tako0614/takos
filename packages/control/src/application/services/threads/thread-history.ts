@@ -1,22 +1,33 @@
-import { getDb, sessions, runs, artifacts, runEvents, agentTasks } from '../../../infra/db/index.ts';
-import { eq, desc, asc, inArray } from 'drizzle-orm';
+import {
+  agentTasks,
+  artifacts,
+  getDb,
+  runEvents,
+  runs,
+  sessions,
+} from "../../../infra/db/index.ts";
+import { asc, desc, eq, inArray } from "drizzle-orm";
 import type {
   AgentTask,
   ArtifactType,
   Env,
   Run,
   RunStatus,
-  ThreadHistoryChildRunSummary,
   ThreadHistoryArtifactSummary,
+  ThreadHistoryChildRunSummary,
   ThreadHistoryEvent,
   ThreadHistoryFocus,
   ThreadHistoryRunNode,
   ThreadHistoryTaskContext,
-} from '../../../shared/types/index.ts';
-import type { SelectOf } from '../../../shared/types/drizzle-utils.ts';
-import { isValidOpaqueId, textDate, textDateNullable } from '../../../shared/utils/db-guards.ts';
-import { listThreadMessages } from './thread-service.ts';
-import { logError } from '../../../shared/utils/logger.ts';
+} from "../../../shared/types/index.ts";
+import type { SelectOf } from "../../../shared/types/drizzle-utils.ts";
+import {
+  isValidOpaqueId,
+  textDate,
+  textDateNullable,
+} from "../../../shared/utils/db-guards.ts";
+import { listThreadMessages } from "./thread-service.ts";
+import { logError } from "../../../shared/utils/logger.ts";
 
 type PendingSessionDiffSummary = {
   sessionId: string;
@@ -27,8 +38,8 @@ type PendingSessionDiffSummary = {
 type HistoryTaskRow = {
   id: string;
   title: string;
-  status: AgentTask['status'];
-  priority: AgentTask['priority'];
+  status: string;
+  priority: string;
   updatedAt: string | Date;
 };
 
@@ -61,6 +72,28 @@ export const threadHistoryDeps = {
   logError,
 };
 
+const AGENT_TASK_STATUSES = new Set<AgentTask["status"]>([
+  "planned",
+  "in_progress",
+  "blocked",
+  "completed",
+  "cancelled",
+]);
+const AGENT_TASK_PRIORITIES = new Set<AgentTask["priority"]>([
+  "low",
+  "medium",
+  "high",
+  "urgent",
+]);
+
+function isAgentTaskStatus(value: string): value is AgentTask["status"] {
+  return AGENT_TASK_STATUSES.has(value as AgentTask["status"]);
+}
+
+function isAgentTaskPriority(value: string): value is AgentTask["priority"] {
+  return AGENT_TASK_PRIORITIES.has(value as AgentTask["priority"]);
+}
+
 function toHistoryRunSnapshot(row: SelectOf<typeof runs>): HistoryRunSnapshot {
   const rootThreadId = row.rootThreadId ?? row.threadId;
   const rootRunId = row.rootRunId ?? row.id;
@@ -83,7 +116,9 @@ function toHistoryRunSnapshot(row: SelectOf<typeof runs>): HistoryRunSnapshot {
       error: row.error ?? null,
       usage: row.usage,
       worker_id: row.serviceId ?? null,
-      worker_heartbeat: row.serviceHeartbeat ? textDateNullable(row.serviceHeartbeat) : null,
+      worker_heartbeat: row.serviceHeartbeat
+        ? textDateNullable(row.serviceHeartbeat)
+        : null,
       started_at: row.startedAt ? textDateNullable(row.startedAt) : null,
       completed_at: row.completedAt ? textDateNullable(row.completedAt) : null,
       created_at: textDate(row.createdAt),
@@ -113,7 +148,9 @@ function isRunInRootTree(
   return false;
 }
 
-function toHistoryArtifact(row: RunHistoryArtifactRow): ThreadHistoryArtifactSummary {
+function toHistoryArtifact(
+  row: RunHistoryArtifactRow,
+): ThreadHistoryArtifactSummary {
   return {
     id: row.id,
     run_id: row.runId,
@@ -191,16 +228,21 @@ function toChildRunSummary(run: Run): ThreadHistoryChildRunSummary {
   };
 }
 
-function buildThreadHistoryFocus(runIdsNewestFirst: Array<{
-  id: string;
-  status: string;
-}>): ThreadHistoryFocus {
+function buildThreadHistoryFocus(
+  runIdsNewestFirst: Array<{
+    id: string;
+    status: string;
+  }>,
+): ThreadHistoryFocus {
   const latestRunId = runIdsNewestFirst[0]?.id ?? null;
   const latestActiveRunId = runIdsNewestFirst.find((run) => (
-    run.status === 'pending' || run.status === 'queued' || run.status === 'running'
+    run.status === "pending" || run.status === "queued" ||
+    run.status === "running"
   ))?.id ?? null;
-  const latestFailedRunId = runIdsNewestFirst.find((run) => run.status === 'failed')?.id ?? null;
-  const latestCompletedRunId = runIdsNewestFirst.find((run) => run.status === 'completed')?.id ?? null;
+  const latestFailedRunId =
+    runIdsNewestFirst.find((run) => run.status === "failed")?.id ?? null;
+  const latestCompletedRunId =
+    runIdsNewestFirst.find((run) => run.status === "completed")?.id ?? null;
 
   return {
     latest_run_id: latestRunId,
@@ -222,9 +264,13 @@ async function getPendingSessionDiff(
 
     try {
       const db = threadHistoryDeps.getDb(env.DB);
-      const session = await db.select({ id: sessions.id, status: sessions.status, repoId: sessions.repoId }).from(sessions).where(eq(sessions.id, sessionId)).get();
+      const session = await db.select({
+        id: sessions.id,
+        status: sessions.status,
+        repoId: sessions.repoId,
+      }).from(sessions).where(eq(sessions.id, sessionId)).get();
 
-      if (session && session.status !== 'discarded') {
+      if (session && session.status !== "discarded") {
         return {
           sessionId: session.id,
           sessionStatus: session.status,
@@ -232,28 +278,49 @@ async function getPendingSessionDiff(
         };
       }
     } catch (err) {
-      threadHistoryDeps.logError('Failed to get session info for thread history', err, { module: 'services/threads/threads/thread-history', extra: ['session_id:', sessionId] });
+      threadHistoryDeps.logError(
+        "Failed to get session info for thread history",
+        err,
+        {
+          module: "services/threads/threads/thread-history",
+          extra: ["session_id:", sessionId],
+        },
+      );
     }
   }
 
   return null;
 }
 
-async function getThreadHistoryTaskContext(env: Env, threadId: string): Promise<ThreadHistoryTaskContext | null> {
+async function getThreadHistoryTaskContext(
+  env: Env,
+  threadId: string,
+): Promise<ThreadHistoryTaskContext | null> {
   const db = threadHistoryDeps.getDb(env.DB);
-  const taskRows = await db.select({
+  const taskRows: HistoryTaskRow[] = await db.select({
     id: agentTasks.id,
     title: agentTasks.title,
     status: agentTasks.status,
     priority: agentTasks.priority,
     updatedAt: agentTasks.updatedAt,
-  }).from(agentTasks).where(eq(agentTasks.threadId, threadId)).orderBy(desc(agentTasks.updatedAt)).limit(5).all() as unknown as HistoryTaskRow[];
+  }).from(agentTasks).where(eq(agentTasks.threadId, threadId)).orderBy(
+    desc(agentTasks.updatedAt),
+  ).limit(5).all();
 
   if (taskRows.length === 0) {
     return null;
   }
 
-  const preferred = taskRows.find((row) => row.status !== 'completed' && row.status !== 'cancelled') ?? taskRows[0];
+  const preferred =
+    taskRows.find((row) =>
+      row.status !== "completed" && row.status !== "cancelled"
+    ) ?? taskRows[0];
+  if (
+    !isAgentTaskStatus(preferred.status) ||
+    !isAgentTaskPriority(preferred.priority)
+  ) {
+    return null;
+  }
   return {
     id: preferred.id,
     title: preferred.title,
@@ -272,20 +339,26 @@ export async function getThreadHistory(
     rootRunId?: string | null;
   },
 ): Promise<{
-  messages: Awaited<ReturnType<typeof listThreadMessages>>['messages'];
+  messages: Awaited<ReturnType<typeof listThreadMessages>>["messages"];
   total: number;
   limit: number;
   offset: number;
   runs: ThreadHistoryRunNode[];
   focus: ThreadHistoryFocus;
-  activeRun: ThreadHistoryRunNode['run'] | null;
+  activeRun: ThreadHistoryRunNode["run"] | null;
   pendingSessionDiff: PendingSessionDiffSummary;
   taskContext: ThreadHistoryTaskContext | null;
 }> {
   const includeMessages = options.includeMessages !== false;
   const rootRunId = options.rootRunId?.trim() || null;
   const { messages, total } = includeMessages
-    ? await threadHistoryDeps.listThreadMessages(env, env.DB, threadId, options.limit, options.offset)
+    ? await threadHistoryDeps.listThreadMessages(
+      env,
+      env.DB,
+      threadId,
+      options.limit,
+      options.offset,
+    )
     : { messages: [], total: 0 };
   const db = threadHistoryDeps.getDb(env.DB);
 
@@ -293,58 +366,76 @@ export async function getThreadHistory(
     .where(eq(runs.threadId, threadId))
     .orderBy(desc(runs.createdAt), desc(runs.id))
     .all();
-  const threadRunsNewestFirst = threadRunRows.map((row) => toHistoryRunSnapshot(row));
-  const effectiveRootThreadId = threadRunsNewestFirst[0]?.run.root_thread_id ?? threadId;
+  const threadRunsNewestFirst = threadRunRows.map((row) =>
+    toHistoryRunSnapshot(row)
+  );
+  const effectiveRootThreadId = threadRunsNewestFirst[0]?.run.root_thread_id ??
+    threadId;
 
   const allRootRunRows = await db.select().from(runs)
     .where(eq(runs.rootThreadId, effectiveRootThreadId))
     .orderBy(desc(runs.createdAt), desc(runs.id))
     .all();
-  const allRunsNewestFirst = allRootRunRows.map((row) => toHistoryRunSnapshot(row));
+  const allRunsNewestFirst = allRootRunRows.map((row) =>
+    toHistoryRunSnapshot(row)
+  );
 
-  const runsById = new Map(allRunsNewestFirst.map((candidate) => [candidate.id, {
-    parent_run_id: candidate.run.parent_run_id,
-    thread_id: candidate.run.thread_id,
-  }]));
-  const defaultScopedRootRunId = rootRunId
-    || (threadId !== effectiveRootThreadId
+  const runsById = new Map(
+    allRunsNewestFirst.map((candidate) => [candidate.id, {
+      parent_run_id: candidate.run.parent_run_id,
+      thread_id: candidate.run.thread_id,
+    }]),
+  );
+  const defaultScopedRootRunId = rootRunId ||
+    (threadId !== effectiveRootThreadId
       ? findThreadAnchorRunId(threadId, allRunsNewestFirst, runsById)
       : null);
   const runsNewestFirst = defaultScopedRootRunId
-    ? allRunsNewestFirst.filter((row) => isRunInRootTree(row.id, defaultScopedRootRunId, runsById))
+    ? allRunsNewestFirst.filter((row) =>
+      isRunInRootTree(row.id, defaultScopedRootRunId, runsById)
+    )
     : allRunsNewestFirst;
 
   const runIds = runsNewestFirst.map((row) => row.id);
   const focus = buildThreadHistoryFocus(runsNewestFirst);
 
-  const [artifactRows, eventRows, taskContext, pendingSessionDiff] = await Promise.all([
-    runIds.length === 0
-      ? Promise.resolve([] as RunHistoryArtifactRow[])
-      : db.select({
-        id: artifacts.id,
-        runId: artifacts.runId,
-        type: artifacts.type,
-        title: artifacts.title,
-        fileId: artifacts.fileId,
-        createdAt: artifacts.createdAt,
-      }).from(artifacts).where(inArray(artifacts.runId, runIds)).orderBy(asc(artifacts.createdAt), asc(artifacts.id)).all() as unknown as Promise<RunHistoryArtifactRow[]>,
-    runIds.length === 0
-      ? Promise.resolve([] as RunHistoryEventRow[])
-      : db.select({
-        id: runEvents.id,
-        runId: runEvents.runId,
-        type: runEvents.type,
-        data: runEvents.data,
-        createdAt: runEvents.createdAt,
-      }).from(runEvents).where(inArray(runEvents.runId, runIds)).orderBy(asc(runEvents.createdAt), asc(runEvents.id)).all() as unknown as Promise<RunHistoryEventRow[]>,
-    getThreadHistoryTaskContext(env, threadId),
-    getPendingSessionDiff(
-      env,
-      runsNewestFirst
-        .filter((row) => row.run.status === 'completed' && row.run.session_id)
-        .map((row) => row.run.session_id!)
-    ),
-  ]);
+  const artifactRowsPromise: Promise<RunHistoryArtifactRow[]> =
+    runIds.length === 0 ? Promise.resolve([]) : db.select({
+      id: artifacts.id,
+      runId: artifacts.runId,
+      type: artifacts.type,
+      title: artifacts.title,
+      fileId: artifacts.fileId,
+      createdAt: artifacts.createdAt,
+    }).from(artifacts).where(inArray(artifacts.runId, runIds)).orderBy(
+      asc(artifacts.createdAt),
+      asc(artifacts.id),
+    ).all();
+  const eventRowsPromise: Promise<RunHistoryEventRow[]> = runIds.length === 0
+    ? Promise.resolve([])
+    : db.select({
+      id: runEvents.id,
+      runId: runEvents.runId,
+      type: runEvents.type,
+      data: runEvents.data,
+      createdAt: runEvents.createdAt,
+    }).from(runEvents).where(inArray(runEvents.runId, runIds)).orderBy(
+      asc(runEvents.createdAt),
+      asc(runEvents.id),
+    ).all();
+
+  const [artifactRows, eventRows, taskContext, pendingSessionDiff] =
+    await Promise.all([
+      artifactRowsPromise,
+      eventRowsPromise,
+      getThreadHistoryTaskContext(env, threadId),
+      getPendingSessionDiff(
+        env,
+        runsNewestFirst
+          .filter((row) => row.run.status === "completed" && row.run.session_id)
+          .map((row) => row.run.session_id!),
+      ),
+    ]);
 
   const artifactsByRunId = new Map<string, ThreadHistoryArtifactSummary[]>();
   for (const row of artifactRows) {
@@ -363,7 +454,9 @@ export async function getThreadHistory(
   }
 
   const childRunsByParentId = new Map<string, ThreadHistoryChildRunSummary[]>();
-  const filteredRunsById = new Map(runsNewestFirst.map((candidate) => [candidate.id, candidate.run]));
+  const filteredRunsById = new Map(
+    runsNewestFirst.map((candidate) => [candidate.id, candidate.run]),
+  );
   for (const { run } of runsNewestFirst) {
     if (!run.parent_run_id) {
       continue;
@@ -386,16 +479,18 @@ export async function getThreadHistory(
     .map(({ run }) => {
       const runEvents = eventsByRunId.get(run.id) ?? [];
       const runArtifacts = artifactsByRunId.get(run.id) ?? [];
-      const latestEventAt = runEvents[runEvents.length - 1]?.created_at
-        ?? run.completed_at
-        ?? run.started_at
-        ?? run.created_at;
+      const latestEventAt = runEvents[runEvents.length - 1]?.created_at ??
+        run.completed_at ??
+        run.started_at ??
+        run.created_at;
       const childRuns = childRunsByParentId.get(run.id) ?? [];
-      const uniqueChildThreadIds = Array.from(new Set(
-        childRuns
-          .map((child) => child.child_thread_id)
-          .filter((value): value is string => !!value),
-      ));
+      const uniqueChildThreadIds = Array.from(
+        new Set(
+          childRuns
+            .map((child) => child.child_thread_id)
+            .filter((value): value is string => !!value),
+        ),
+      );
 
       return {
         run,
@@ -403,14 +498,17 @@ export async function getThreadHistory(
         latest_event_at: latestEventAt,
         artifacts: runArtifacts,
         events: runEvents,
-        child_thread_id: uniqueChildThreadIds.length === 1 ? uniqueChildThreadIds[0] : null,
+        child_thread_id: uniqueChildThreadIds.length === 1
+          ? uniqueChildThreadIds[0]
+          : null,
         child_run_count: childRuns.length,
         child_runs: childRuns,
       };
     });
 
   const activeRun = runsNewestFirst.find((row) => (
-    row.run.status === 'pending' || row.run.status === 'queued' || row.run.status === 'running'
+    row.run.status === "pending" || row.run.status === "queued" ||
+    row.run.status === "running"
   ))?.run ?? null;
 
   return {

@@ -26,6 +26,7 @@ const fullEnv: Record<string, unknown> = {
   TENANT_BASE_DOMAIN: "test.com",
   PLATFORM_PRIVATE_KEY: "key",
   PLATFORM_PUBLIC_KEY: "key",
+  EXECUTOR_PROXY_SECRET: "executor-proxy-secret",
   ENCRYPTION_KEY: "encryption-key",
 };
 
@@ -42,7 +43,7 @@ Deno.test("validateWebEnv - returns null when all bindings are present", () => {
 
 Deno.test("validateWebEnv - reports missing bindings", () => {
   const err = expectError(validateWebEnv({}));
-  assertStringIncludes(err, "takos-web");
+  assertStringIncludes(err, "takos");
   assertStringIncludes(err, "DB");
 });
 
@@ -132,23 +133,56 @@ Deno.test("validateEgressEnv - always returns null (no required bindings)", () =
   assertEquals(validateEgressEnv({}), null);
 });
 
-Deno.test("validateRuntimeHostEnv - returns null when RUNTIME_CONTAINER is present", () => {
-  assertEquals(validateRuntimeHostEnv({ RUNTIME_CONTAINER: {} }), null);
+Deno.test("validateRuntimeHostEnv - returns null when RUNTIME_CONTAINER and PLATFORM_PUBLIC_KEY are present", () => {
+  assertEquals(
+    validateRuntimeHostEnv({
+      RUNTIME_CONTAINER: {},
+      PLATFORM_PUBLIC_KEY: "public-key",
+    }),
+    null,
+  );
 });
 
-Deno.test("validateRuntimeHostEnv - reports missing RUNTIME_CONTAINER", () => {
+Deno.test("validateRuntimeHostEnv - reports missing RUNTIME_CONTAINER and PLATFORM_PUBLIC_KEY", () => {
   const err = expectError(validateRuntimeHostEnv({}));
   assertStringIncludes(err, "RUNTIME_CONTAINER");
+  assertStringIncludes(err, "PLATFORM_PUBLIC_KEY");
+});
+
+Deno.test("validateRuntimeHostEnv - rejects JWT_PUBLIC_KEY without PLATFORM_PUBLIC_KEY", () => {
+  const err = expectError(validateRuntimeHostEnv({
+    RUNTIME_CONTAINER: {},
+    JWT_PUBLIC_KEY: "public-key",
+  }));
+  assertStringIncludes(err, "PLATFORM_PUBLIC_KEY");
+});
+
+Deno.test("validateRuntimeHostEnv - accepts matching JWT_PUBLIC_KEY compatibility override", () => {
+  assertEquals(
+    validateRuntimeHostEnv({
+      RUNTIME_CONTAINER: {},
+      PLATFORM_PUBLIC_KEY: "public-key",
+      JWT_PUBLIC_KEY: "public-key",
+    }),
+    null,
+  );
+});
+
+Deno.test("validateRuntimeHostEnv - rejects mismatched JWT_PUBLIC_KEY override", () => {
+  const err = expectError(validateRuntimeHostEnv({
+    RUNTIME_CONTAINER: {},
+    PLATFORM_PUBLIC_KEY: "platform-public-key",
+    JWT_PUBLIC_KEY: "other-public-key",
+  }));
+  assertStringIncludes(err, "JWT_PUBLIC_KEY must match PLATFORM_PUBLIC_KEY");
 });
 
 Deno.test("validateExecutorHostEnv - returns null when all bindings present", () => {
   const env = {
     EXECUTOR_CONTAINER: {},
-    DB: {},
-    RUN_NOTIFIER: {},
-    TAKOS_OFFLOAD: {},
-    TAKOS_EGRESS: {},
+    TAKOS_CONTROL: {},
     CONTROL_RPC_BASE_URL: "http://localhost",
+    EXECUTOR_PROXY_SECRET: "executor-proxy-secret",
   };
   assertEquals(validateExecutorHostEnv(env), null);
 });
@@ -156,8 +190,9 @@ Deno.test("validateExecutorHostEnv - returns null when all bindings present", ()
 Deno.test("validateExecutorHostEnv - reports all missing bindings", () => {
   const err = expectError(validateExecutorHostEnv({}));
   assertStringIncludes(err, "EXECUTOR_CONTAINER");
-  assertStringIncludes(err, "DB");
+  assertStringIncludes(err, "TAKOS_CONTROL");
   assertStringIncludes(err, "CONTROL_RPC_BASE_URL");
+  assertStringIncludes(err, "EXECUTOR_PROXY_SECRET");
 });
 
 Deno.test("createEnvGuard - runs validator on first call", () => {

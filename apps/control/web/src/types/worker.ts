@@ -2,10 +2,10 @@
 // The frontend worker/app/resource types represent enriched API response
 // shapes, so they are defined locally and reference backend types where useful.
 import type {
-  ServiceType,
-  ServiceStatus,
   AppType,
-} from 'takos-control/shared/types';
+  ServiceStatus,
+  ServiceType,
+} from "takos-control/shared/types";
 
 /**
  * Frontend Worker (maps to backend Service): includes enriched fields
@@ -44,7 +44,7 @@ export interface App {
   url?: string | null;
   workspace_name?: string | null;
   service_hostname?: string | null;
-  service_status?: Worker['status'] | null;
+  service_status?: Worker["status"] | null;
   worker?: Worker;
 }
 
@@ -52,12 +52,20 @@ export interface CustomDomain {
   id: string;
   service_id: string;
   domain: string;
-  status: 'pending' | 'verifying' | 'dns_verified' | 'ssl_pending' | 'ssl_failed' | 'active' | 'failed' | 'expired';
+  status:
+    | "pending"
+    | "verifying"
+    | "dns_verified"
+    | "ssl_pending"
+    | "ssl_failed"
+    | "active"
+    | "failed"
+    | "expired";
   verification_token: string;
   verification_host?: string;
-  verification_method: 'cname' | 'txt';
+  verification_method: "cname" | "txt";
   cf_custom_hostname_id?: string | null;
-  ssl_status: 'pending' | 'active' | 'failed' | null;
+  ssl_status: "pending" | "active" | "failed" | null;
   verified_at: string | null;
   created_at: string;
   updated_at: string;
@@ -71,10 +79,8 @@ export interface Resource {
   id: string;
   owner_id: string;
   name: string;
-  type: 'd1' | 'r2' | 'kv' | 'vectorize' | 'worker';
-  status: 'creating' | 'active' | 'error' | 'deleting' | 'deleted';
-  provider_resource_id: string | null;
-  provider_resource_name: string | null;
+  type: "d1" | "r2" | "kv" | "vectorize" | "worker";
+  status: "creating" | "active" | "error" | "deleting" | "deleted";
   config: string | null;
   metadata: string | null;
   created_at: string;

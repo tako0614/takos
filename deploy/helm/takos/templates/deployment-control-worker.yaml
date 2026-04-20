@@ -27,7 +27,7 @@ spec:
         - name: control-worker
           image: "{{ .Values.images.control.repository }}:{{ .Values.images.control.tag }}"
           imagePullPolicy: {{ .Values.images.control.pullPolicy }}
-          command: ["pnpm", "local:worker"]
+          command: ["deno", "task", "dev:local:worker"]
           env:
             - name: TAKOS_LOCAL_RUNTIME_HOST_URL
               value: {{ include "takos.runtimeHostUrl" . | quote }}

@@ -80,14 +80,12 @@ Deno.test("actions start step limits - accepts start when step count equals maxS
   }
 });
 
-Deno.test("actions start concurrency limits - applies maxConcurrentJobs per workspace", async () => {
+Deno.test("actions start concurrency limits - applies maxConcurrentJobs globally at start", async () => {
   const app = createTestApp();
   app.route("/", actionsRoutes);
 
   const startedJobIds: string[] = [];
   const prefix = `concurrency-${Date.now()}`;
-  const workspaceA = "workspace-a";
-  const workspaceB = "workspace-b";
 
   try {
     for (let i = 0; i < SANDBOX_LIMITS.maxConcurrentJobs; i++) {
@@ -95,28 +93,18 @@ Deno.test("actions start concurrency limits - applies maxConcurrentJobs per work
       const response = await testRequest(app, {
         method: "POST",
         path: `/actions/jobs/${jobId}/start`,
-        body: createStartBody(`job-${i}`, workspaceA),
+        body: createStartBody(`job-${i}`, `workspace-${i}`),
       });
 
       assertEquals(response.status, 200);
       startedJobIds.push(jobId);
     }
 
-    const otherWorkspaceJobId = `${prefix}-other-workspace`;
-    const otherWorkspaceResponse = await testRequest(app, {
-      method: "POST",
-      path: `/actions/jobs/${otherWorkspaceJobId}/start`,
-      body: createStartBody("job-other-workspace", workspaceB),
-    });
-
-    assertEquals(otherWorkspaceResponse.status, 200);
-    startedJobIds.push(otherWorkspaceJobId);
-
     const overflowJobId = `${prefix}-overflow`;
     const overflowResponse = await testRequest(app, {
       method: "POST",
       path: `/actions/jobs/${overflowJobId}/start`,
-      body: createStartBody("overflow-job", workspaceA),
+      body: createStartBody("overflow-job", "workspace-overflow"),
     });
 
     assertEquals(overflowResponse.status, 429);
@@ -124,7 +112,7 @@ Deno.test("actions start concurrency limits - applies maxConcurrentJobs per work
       error: {
         code: "RATE_LIMITED",
         message:
-          `Concurrent job limit reached (max ${SANDBOX_LIMITS.maxConcurrentJobs})`,
+          `Global concurrent job limit reached (${SANDBOX_LIMITS.maxConcurrentJobs}/${SANDBOX_LIMITS.maxConcurrentJobs})`,
       },
     });
   } finally {

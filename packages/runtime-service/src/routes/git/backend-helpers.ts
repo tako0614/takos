@@ -24,7 +24,7 @@ export function sendGitResult(
     headers.set(key, value);
   }
   const responseBody = Uint8Array.from(result.body);
-  return new Response(responseBody as unknown as BodyInit, {
+  return new Response(responseBody, {
     status: result.status,
     headers,
   });
@@ -50,6 +50,7 @@ export function createPackHandler(
           service,
           requestBody: rawBody,
           contentType: c.req.header("content-type"),
+          gitProtocol: c.req.header("git-protocol"),
         }),
       );
     } catch (err) {

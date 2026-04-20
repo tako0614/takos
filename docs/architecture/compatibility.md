@@ -1,8 +1,10 @@
 # 互換性と制限
 
-Takos manifest は provider-neutral。abstract type (sql, object-store, key-value,
-etc.) で書く。実装は Cloudflare がリファレンス backend、他は互換 backend
-として提供される。
+Takos manifest の deploy / runtime surface は backend-neutral な Takos deploy
+manifest (`.takos/app.yml`) を基準にし、resource layer も backend-neutral な
+abstract type (sql, object-store, key-value, etc.) で書く。Cloudflare / AWS /
+GCP / k8s / local は同じ public contract を共有し、差分は operator 内部の
+adapter に閉じる。
 
 backend は同一ではないため、「何を揃え、何を差分として扱うか」を明示する。
 
@@ -11,9 +13,10 @@ backend は同一ではないため、「何を揃え、何を差分として扱
 Takos が parity の対象にしているもの:
 
 - tenant artifact と deploy/runtime contract
-- manifest で宣言される `queue`, `analytics-engine`, `workflow`, `scheduled`
-  trigger の contract
-- app deployment の immutable snapshot
+- manifest で宣言される workload / route / route publication / Takos capability
+  grant / consume edge と compute trigger (`scheduled`) の contract
+- resource API / runtime binding で扱う abstract resource type
+- group snapshot
 - routing target が保持する service identity / deployment identity
 - deployment ごとの runtime config / bindings / env vars
 - dispatch を経由して tenant runtime に到達する request contract
@@ -21,11 +24,18 @@ Takos が parity の対象にしているもの:
 
 ### workload translation
 
-| manifest workload                                | Cloudflare                                                      | local / self-host                                                     | AWS / GCP / k8s                                                  |
-| ------------------------------------------------ | --------------------------------------------------------------- | --------------------------------------------------------------------- | ---------------------------------------------------------------- |
-| `compute.<name>` (Worker = `build` あり)         | `workers-dispatch`                                              | `runtime-host` compatibility layer                                    | `runtime-host` compatibility layer                               |
-| `compute.<name>` (Service = `image` あり)        | OCI deployment adapter                                          | local OCI deployment adapter                                          | provider-backed adapter (`ecs`, `cloud-run`, `k8s`)              |
-| `compute.<name>.containers` (Attached Container) | OCI deployment adapter + worker-side attached container binding | local OCI deployment adapter + worker-side attached container binding | provider-backed adapter + worker-side attached container binding |
+runtime translation report は compiled desired declaration の workload / route
+translation と backend requirement を `compatible` / `unsupported`
+で表現する。resource existence や full runtime compatibility を判定する report
+ではない。以下の backend 固有名は出さず、実際の materialization は operator
+adapter が選ぶ。backend / adapter 名は operator-only configuration であり、
+public deploy manifest の field ではない。
+
+| manifest workload                                | Public surface | Internal materialization                                 |
+| ------------------------------------------------ | -------------- | -------------------------------------------------------- |
+| `compute.<name>` (Worker = `build` あり)         | compatible     | selected worker runtime adapter                          |
+| `compute.<name>` (Service = `image` あり)        | compatible     | selected container runtime adapter / OCI orchestrator    |
+| `compute.<name>.containers` (Attached Container) | compatible     | selected container runtime adapter + worker-side binding |
 
 ### container-image deploy の制約
 
@@ -37,31 +47,48 @@ Takos が parity の対象にしているもの:
 - online `takos deploy` で image-backed compute (Service / Attached Container)
   を反映するときは `image` field（digest pin 必須）が必要
 
-Cloudflare backend 上でも、image-backed な compute (Service / Attached
-Container) は現在の実装では OCI deployment adapter を通る。Cloudflare-native
-spec を書けることと、 Cloudflare product surface に 1 対 1
-で対応することは同義ではない。
+image-backed な compute (Service / Attached Container) は backend に関係なく
+Takos の public contract では同じ扱いで、内部では選択された container adapter /
+orchestrator を通る。
 
 ### manifest-level feature support
 
-| feature (`publish.kind` または compute trigger)        | manifest | bundle docs | runtime parity                                      |
-| ------------------------------------------------------ | -------- | ----------- | --------------------------------------------------- |
-| `queue`                                                | yes      | yes         | backend 依存                                        |
-| `scheduled` (compute.triggers.schedules)               | yes      | yes         | backend 依存                                        |
-| `workflow`                                             | yes      | yes         | binding 可。orchestration は backend 依存           |
-| `analytics-engine`                                     | yes      | yes         | write path は compatible (contract のみ揃える)      |
-| `vector-index`                                         | yes      | yes         | local / self-host では PostgreSQL + pgvector が必要 |
-| `durable-object`                                       | yes      | yes         | local tenant runtime でも materialize               |
+| feature                                                  | manifest | bundle docs | runtime parity                                           |
+| -------------------------------------------------------- | -------- | ----------- | -------------------------------------------------------- |
+| worker / service compute                                 | yes      | yes         | selected worker / container runtime adapter              |
+| attached container                                       | yes      | yes         | selected container runtime adapter + worker-side binding |
+| route                                                    | yes      | yes         | selected routing runtime                                 |
+| route publication (`publish[].publisher/type/path`)      | yes      | yes         | publication catalog + route URL output                   |
+| Takos capability grant (`publish[].publisher/type/spec`) | yes      | yes         | publication catalog + grant output                       |
+| explicit consume edge (`compute.*.consume`)              | yes      | yes         | env injection only for declared consumer                 |
+| `scheduled` (`compute.triggers.schedules`)               | yes      | yes         | backend 依存                                             |
+| `queue trigger` (`compute.triggers.queues`)              | no       | no          | 現行 manifest contract では未サポート（schedules-only）  |
+
+SQL / object-store / queue / analytics-engine / workflow / vector-index /
+durable-object などの resource access は manifest の `publish` / `consume`
+surface ではなく、resource API / runtime binding 側で扱う。`publish` は route
+publication と Takos capability grant の catalog であり、resource creation や
+resource binding の入口ではない。
+
+### resource runtime binding support
+
+| resource type      | public surface                 | runtime parity                                      |
+| ------------------ | ------------------------------ | --------------------------------------------------- |
+| `queue`            | resource API / runtime binding | delivery semantics は backend 依存                  |
+| `workflow`         | resource API / runtime binding | orchestration semantics は backend 依存             |
+| `analytics-engine` | resource API / runtime binding | write path は contract を揃える                     |
+| `vector-index`     | resource API / runtime binding | local / self-host では PostgreSQL + pgvector が必要 |
+| `durable-object`   | resource API / runtime binding | local tenant runtime でも namespace を materialize  |
 
 ## Cloudflare
 
 Cloudflare は主要 production backend。
 
-- actual provider
+- actual Cloudflare backend
 - actual Workers backend
 - actual deploy / rollback / routing backend
-- worker workload は native
-- image-backed workload は OCI deployment adapter 経由
+- worker workload は Cloudflare adapter で materialize される
+- image-backed workload は selected container adapter / orchestrator 経由
 
 ## Local / Self-host
 
@@ -75,12 +102,12 @@ local / self-host は検証用 backend。
 
 ## AWS / GCP / k8s
 
-provider-backed な互換 backend。
+backend-specific runtime。
 
-- public spec は Cloudflare-native のまま
-- resource は provider-backed または Takos-managed runtime に解決される
-- worker workload は runtime-host compatibility path を使う
-- image-backed workload は `ecs` / `cloud-run` / `k8s` など provider-aware
+- public spec は backend-neutral な Takos deploy manifest のまま
+- resource は backend-specific または Takos-managed runtime に解決される
+- worker workload は operator-selected worker runtime path を使う
+- image-backed workload は `ecs` / `cloud-run` / `k8s` など backend-specific
   adapter に解決される
 
 ## 意図的に残している差分
@@ -90,24 +117,27 @@ provider-backed な互換 backend。
 local の control plane は Node-backed。control plane の起動性と local DX
 を優先した設計。
 
-### local tenant runtime は Workers-compatible adapter
+### local tenant runtime は worker runtime path
 
-local の tenant runtime は Workers-compatible だが、Cloudflare backend と
-byte-for-byte 同一ではない。local は `worker-bundle` を local adapter 上で
-materialize して実行する。
+local の tenant runtime は runtime-host worker runtime path で、内部では
+Workers-compatible local adapter を使う。Cloudflare backend と byte-for-byte
+同一ではない。local は `worker-bundle` を local adapter 上で materialize
+して実行する。
 
 ### non-AI features の parity
 
 feature ごとに成熟度が異なる。
 
-- `queue`: manifest / bundle docs 対応済み。delivery parity は backend 依存
+- `queue`: resource API / runtime binding 対応。delivery parity は backend 依存
+- `queue trigger`: 現行 manifest contract では未対応（worker trigger は
+  `schedules` のみ）
 - `scheduled`: manifest / bundle docs 対応済み。cron delivery は backend 依存
-- `workflow`: manifest / bundle docs 対応済み。orchestration は backend 依存
-- `analytics-engine`: write path は compatible (contract のみ揃える)。query
-  semantics は揃え切っていない
+- `workflow`: resource API / runtime binding 対応。orchestration は backend 依存
+- `analytics-engine`: resource API / runtime binding 対応。write path は
+  contract を揃える。query semantics は揃え切っていない
 
 `vector-index` は local で PostgreSQL + pgvector が利用可能であれば materialize
-される（`POSTGRES_URL` + `PGVECTOR_ENABLED=true` が必要）。 `durable-object` は
+される（`POSTGRES_URL` + `PGVECTOR_ENABLED=true` が必要）。`durable-object` は
 local tenant runtime でも namespace binding として materialize する。
 
 ### infra host は URL forward を使う
@@ -125,7 +155,7 @@ host 用。
 - Cloudflare 固有の内部最適化や実装差の再現
 - backend ごとの performance 特性の再現
 - PostgreSQL + pgvector なしで `vector-index` binding を実行すること
-- provider-native queue / scheduler / workflow semantics の完全再現
+- backend-specific queue / scheduler / workflow semantics の完全再現
 - production traffic 上での最終的な実証
 
 local は production backend の代替ではなく、product contract
@@ -136,7 +166,8 @@ local は production backend の代替ではなく、product contract
 実運用での使い分け:
 
 - local: 早い検証、smoke、proxyless 確認
-- staging: actual provider 上での deploy / routing / rollback 検証
+- staging: actual runtime/backend 上での deploy / routing / execution context
+  rollback 検証
 - production: 実 traffic と実 resource を扱う本番運用
 
-local が green でも、provider 固有の最終確認は staging / production で行う。
+local が green でも、backend 固有の最終確認は staging / production で行う。

@@ -2,7 +2,7 @@ import { createEffect, createSignal, type JSX, onCleanup } from "solid-js";
 import { For, Show } from "solid-js";
 import { useBreakpoint } from "../../hooks/useBreakpoint.ts";
 import { useI18n } from "../../store/i18n.ts";
-import { rpc, rpcJson } from "../../lib/rpc.ts";
+import { rpc, rpcJson, rpcPath } from "../../lib/rpc.ts";
 import { Icons } from "../../lib/Icons.tsx";
 import { Input } from "../../components/ui/Input.tsx";
 import { Modal } from "../../components/ui/Modal.tsx";
@@ -171,7 +171,7 @@ export function ChatSearchModal(props: ChatSearchModalProps) {
     let cancelled = false;
     setLoading(true);
     setError(null);
-    rpc.spaces[":spaceId"].threads.search.$get({
+    rpcPath(rpc, "spaces", ":spaceId", "threads", "search").$get({
       param: { spaceId: props.spaceId },
       query: { q, type, limit: "20", offset: "0" },
     })
@@ -180,7 +180,7 @@ export function ChatSearchModal(props: ChatSearchModalProps) {
         const data = await rpcJson<{ results: SpaceSearchResult[] }>(res);
         setResults(data.results || []);
       })
-      .catch((err) => {
+      .catch((err: unknown) => {
         if (cancelled) return;
         setError(err instanceof Error ? err.message : t("searchFailed"));
         setResults([]);

@@ -1,9 +1,9 @@
 # takos-executor-host Worker configuration
-# Hosts TakosAgentExecutorContainer (CF Containers sidecar for agent runs).
-# Called from takos-worker or takos-runtime-host through service bindings.
+# Hosts tiered executor containers (CF Containers sidecars for agent runs).
+# Called from takos-worker through service binding.
 #
-# OSS-safe deployment template. Replace placeholder IDs, bucket names, and
-# worker names before deploying.
+# OSS-safe deployment template. Replace placeholder IDs and worker names before
+# deploying.
 
 name = "takos-executor-host"
 main = "src/executor-host.ts"
@@ -31,11 +31,6 @@ class_name = "ExecutorContainerTier2"
 name = "EXECUTOR_CONTAINER_TIER3"
 class_name = "ExecutorContainerTier3"
 
-[[durable_objects.bindings]]
-name = "RUN_NOTIFIER"
-class_name = "RunNotifierDO"
-script_name = "takos"
-
 [[migrations]]
 tag = "v1"
 new_sqlite_classes = ["ExecutorContainerTier1", "ExecutorContainerTier2", "ExecutorContainerTier3"]
@@ -58,42 +53,6 @@ image = "your-executor-image:tag"
 instance_type = { vcpu = 1, memory_mib = 12288, disk_mb = 4000 }
 max_instances = 25
 
-[[d1_databases]]
-binding = "DB"
-database_name = "takos-control-db"
-database_id = "replace-with-d1-database-id"
-
-[[r2_buckets]]
-binding = "TAKOS_OFFLOAD"
-bucket_name = "takos-offload"
-
-[[r2_buckets]]
-binding = "GIT_OBJECTS"
-bucket_name = "takos-git-objects"
-
-[[queues.producers]]
-queue = "takos-index-jobs"
-binding = "INDEX_QUEUE"
-
-[[vectorize]]
-binding = "VECTORIZE"
-index_name = "takos-embeddings"
-
-[ai]
-binding = "AI"
-
-[[services]]
-binding = "TAKOS_EGRESS"
-service = "takos-worker"
-
-[[services]]
-binding = "RUNTIME_HOST"
-service = "takos-runtime-host"
-
-[[services]]
-binding = "BROWSER_HOST"
-service = "takos-browser-host"
-
 [[services]]
 binding = "TAKOS_CONTROL"
 service = "takos"
@@ -101,6 +60,9 @@ service = "takos"
 [vars]
 ADMIN_DOMAIN = "admin.example.com"
 CONTROL_RPC_BASE_URL = "https://your-executor-host.workers.dev"
+
+# Secrets (set via wrangler secret put):
+# - EXECUTOR_PROXY_SECRET: Same value as the main takos worker.
 
 [env.staging]
 name = "takos-executor-host-staging"
@@ -122,11 +84,6 @@ class_name = "ExecutorContainerTier2"
 name = "EXECUTOR_CONTAINER_TIER3"
 class_name = "ExecutorContainerTier3"
 
-[[env.staging.durable_objects.bindings]]
-name = "RUN_NOTIFIER"
-class_name = "RunNotifierDO"
-script_name = "takos-staging"
-
 [[env.staging.containers]]
 class_name = "ExecutorContainerTier1"
 image = "your-executor-image:tag"
@@ -144,39 +101,6 @@ class_name = "ExecutorContainerTier3"
 image = "your-executor-image:tag"
 instance_type = { vcpu = 1, memory_mib = 12288, disk_mb = 4000 }
 max_instances = 10
-
-[[env.staging.d1_databases]]
-binding = "DB"
-database_name = "takos-control-staging-db-2"
-database_id = "replace-with-staging-d1-database-id"
-
-[[env.staging.r2_buckets]]
-binding = "TAKOS_OFFLOAD"
-bucket_name = "takos-offload-staging"
-
-[[env.staging.r2_buckets]]
-binding = "GIT_OBJECTS"
-bucket_name = "takos-git-objects-staging"
-
-[[env.staging.queues.producers]]
-queue = "takos-index-jobs-staging"
-binding = "INDEX_QUEUE"
-
-[[env.staging.vectorize]]
-binding = "VECTORIZE"
-index_name = "takos-embeddings-staging"
-
-[[env.staging.services]]
-binding = "TAKOS_EGRESS"
-service = "takos-worker-staging"
-
-[[env.staging.services]]
-binding = "RUNTIME_HOST"
-service = "takos-runtime-host-staging"
-
-[[env.staging.services]]
-binding = "BROWSER_HOST"
-service = "takos-browser-host-staging"
 
 [[env.staging.services]]
 binding = "TAKOS_CONTROL"

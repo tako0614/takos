@@ -3,7 +3,7 @@
  *
  * This module collects validators that enforce cross-resource invariants on
  * a parsed manifest. They run at the very last moment before any DB write or
- * provider apply, so the deploy fails fast with a clear error message and
+ * runtime apply, so the deploy fails fast with a clear error message and
  * the caller never sees a partially-applied state.
  *
  * Each validator returns a list of `ValidationError` rather than throwing,
@@ -15,18 +15,22 @@
  * `architecture/app-publications.md`):
  *
  *   1. validateAttachedNotRouteTarget    — `route.target` references an
- *      attached container instead of a top-level Worker / Service.
- *   2. validateRouteUniqueness           — multiple routes share the same
- *      `path` and have any overlapping HTTP method (full overlap or partial).
- *   3. validateConsumeReferences         — `compute.<name>.consume` references
- *      a missing publication or an unknown output alias key.
- *   4. validateConsumeEnvCollision       — consume env aliases collide within
+ *      attached container or an unknown compute instead of a top-level
+ *      Worker / Service.
+ *   2. validateRouteUniqueness           — routes do not overlap by
+ *      `path + method`, and do not split the same `target + path`.
+ *   3. validateOnlineDeployImageSources  — service / attached container
+ *      workloads have digest-pinned images for online deploy.
+ *   4. validateConsumeReferences         — `compute.<name>.consume` references
+ *      an unknown output alias key for a publication declared in the same
+ *      manifest. External same-space catalog references are resolved by the
+ *      publication prerequisite/apply path.
+ *   5. validateConsumeEnvCollision       — consume env aliases collide within
  *      the same compute or with local/static env names.
- *   5. validatePublicationDefinitions    — publication normalization fails
- *      (`provider`/`kind`/`spec` mismatch or provider-specific field errors).
- *   6. validatePublicationKnownFields    — known publication type
- *      (`McpServer`, `FileHandler`, `UiSurface`) carries a field that is
- *      not part of its schema (typo / wrong type).
+ *   6. validatePublicationDefinitions    — publication normalization fails
+ *      (`publisher`/`type` mismatch or type-specific field errors).
+ *   7. validatePublicationKnownFields    — publication entries only use the
+ *      generic route-publication or grant fields.
  * The validators operate on the flat `AppManifest` shape produced by the
  * parser (`compute` / `routes` / `publish` / `env`).
  */
@@ -42,6 +46,7 @@ import {
   publicationAllowedFields,
   publicationOutputContract,
 } from "../platform/service-publications.ts";
+import { isDigestPinnedImageRef } from "./image-ref.ts";
 
 // ── Public types ─────────────────────────────────────────────────────────────
 
@@ -55,12 +60,18 @@ export type ParsedManifest = AppManifest;
 
 export type ValidationErrorCode =
   | "attached_not_route_target"
+  | "route_unknown_target"
   | "route_duplicate"
+  | "deploy_image_required"
+  | "deploy_image_invalid"
+  | "env_collision"
   | "consume_unknown_publication"
   | "consume_unknown_output"
   | "consume_env_collision"
+  | "publication_duplicate"
   | "publication_invalid_definition"
-  | "publication_unknown_field";
+  | "publication_unknown_field"
+  | "publication_route_mismatch";
 
 export interface ValidationError {
   code: ValidationErrorCode;
@@ -70,16 +81,6 @@ export interface ValidationError {
 }
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
-
-const ALL_HTTP_METHODS = [
-  "GET",
-  "POST",
-  "PUT",
-  "PATCH",
-  "DELETE",
-  "HEAD",
-  "OPTIONS",
-] as const;
 
 /** All top-level compute entries. */
 function getTopLevelCompute(
@@ -130,6 +131,62 @@ function getPublications(manifest: ParsedManifest): AppPublication[] {
   return manifest.publish ?? [];
 }
 
+const FILE_HANDLER_PUBLICATION_TYPE = "FileHandler";
+
+const FILE_HANDLER_SPEC_FIELDS = new Set([
+  "mimeTypes",
+  "extensions",
+]);
+
+const TAKOS_API_KEY_SPEC_FIELDS = new Set([
+  "scopes",
+]);
+
+const TAKOS_OAUTH_SPEC_FIELDS = new Set([
+  "clientName",
+  "redirectUris",
+  "scopes",
+  "metadata",
+]);
+
+const TAKOS_OAUTH_METADATA_FIELDS = new Set([
+  "logoUri",
+  "tosUri",
+  "policyUri",
+]);
+
+const ALL_HTTP_METHODS = [
+  "GET",
+  "POST",
+  "PUT",
+  "PATCH",
+  "DELETE",
+  "HEAD",
+  "OPTIONS",
+] as const;
+
+type ComputeEntry = {
+  name: string;
+  path: string;
+  compute: AppCompute;
+};
+
+function getComputeEntries(manifest: ParsedManifest): ComputeEntry[] {
+  const entries: ComputeEntry[] = [];
+  for (const [name, compute] of Object.entries(getTopLevelCompute(manifest))) {
+    entries.push({ name, path: `compute.${name}`, compute });
+    if (compute.kind !== "worker") continue;
+    for (const [childName, child] of Object.entries(compute.containers ?? {})) {
+      entries.push({
+        name: attachedWorkloadName(name, childName),
+        path: `compute.${name}.containers.${childName}`,
+        compute: child,
+      });
+    }
+  }
+  return entries;
+}
+
 type PublicationEntry = {
   path: string;
   publication: AppPublication;
@@ -155,7 +212,7 @@ function collectPublications(manifest: ParsedManifest): PublicationEntry[] {
   return getPublications(manifest).map((pub, index) => ({
     path: `publish[${index}]`,
     publication: pub,
-    raw: pub as unknown as Record<string, unknown>,
+    raw: Object.fromEntries(Object.entries(pub)),
   }));
 }
 
@@ -204,7 +261,6 @@ export function validateAttachedNotRouteTarget(
     const route = routes[i];
     const target = route.target;
     if (!target) continue;
-    // Acceptable: top-level Worker / Service (not attached).
     const topEntry = topLevel[target];
     if (
       topEntry && (topEntry.kind === "worker" || topEntry.kind === "service")
@@ -222,29 +278,36 @@ export function validateAttachedNotRouteTarget(
             attached[target].childName
           }').`,
       });
+      continue;
     }
+    errors.push({
+      code: "route_unknown_target",
+      path: `routes[${i}]`,
+      message: `route target '${target}' references unknown compute. Declare ` +
+        `compute.${target} or point the route at an existing top-level Worker or Service.`,
+    });
   }
 
   return errors;
 }
 
-// ── Validator 2: Same path + method route duplicates ────────────────────────
+// ── Validator 2: Route duplicates ──────────────────────────────────────────
 
-function expandMethods(methods: string[] | undefined): Set<string> {
-  if (!methods || methods.length === 0) {
+function expandRouteMethods(route: AppRoute): Set<string> {
+  if (!route.methods || route.methods.length === 0) {
     return new Set(ALL_HTTP_METHODS);
   }
-  const set = new Set<string>();
-  for (const method of methods) set.add(method.toUpperCase());
-  return set;
+  return new Set(route.methods.map((method) => method.toUpperCase()));
 }
 
-function methodsOverlap(a: Set<string>, b: Set<string>): string[] {
-  const overlap: string[] = [];
-  for (const m of a) {
-    if (b.has(m)) overlap.push(m);
+function firstMethodOverlap(
+  left: Set<string>,
+  right: Set<string>,
+): string | null {
+  for (const method of left) {
+    if (right.has(method)) return method;
   }
-  return overlap;
+  return null;
 }
 
 export function validateRouteUniqueness(
@@ -253,46 +316,155 @@ export function validateRouteUniqueness(
   const errors: ValidationError[] = [];
   const routes = getRoutes(manifest);
 
-  type Bucket = { index: number; path: string; methods: Set<string> };
-  const byPath = new Map<string, Bucket[]>();
+  const byTargetPath = new Map<
+    string,
+    { index: number; target: string; path: string }
+  >();
+  const byPath = new Map<
+    string,
+    { index: number; target: string; path: string; methods: Set<string> }[]
+  >();
   for (let i = 0; i < routes.length; i++) {
     const route = routes[i];
-    if (!route.path) continue;
-    const bucket = byPath.get(route.path) ?? [];
-    bucket.push({
-      index: i,
-      path: route.path,
-      methods: expandMethods(route.methods),
-    });
-    byPath.set(route.path, bucket);
-  }
-
-  for (const bucket of byPath.values()) {
-    if (bucket.length < 2) continue;
-    for (let i = 0; i < bucket.length; i++) {
-      for (let j = i + 1; j < bucket.length; j++) {
-        const overlap = methodsOverlap(bucket[i].methods, bucket[j].methods);
-        if (overlap.length === 0) continue;
-        errors.push({
-          code: "route_duplicate",
-          path: `routes[${bucket[j].index}]`,
-          message:
-            `route at path '${bucket[j].path}' duplicates routes[${
-              bucket[i].index
-            }] ` +
-            `for method(s) ${
-              overlap.sort().join(", ")
-            }; either separate the methods ` +
-            `(e.g. one route for [GET], another for [POST]) or remove the duplicate.`,
-        });
-      }
+    if (!route.target || !route.path) continue;
+    const key = `${route.target}\0${route.path}`;
+    const previous = byTargetPath.get(key);
+    if (previous) {
+      errors.push({
+        code: "route_duplicate",
+        path: `routes[${i}]`,
+        message:
+          `route target/path '${route.target} ${route.path}' duplicates routes[${previous.index}]. ` +
+          `A manifest must declare at most one route for the same target + path; list multiple methods on that route instead.`,
+      });
+      continue;
     }
+    byTargetPath.set(key, {
+      index: i,
+      target: route.target,
+      path: route.path,
+    });
+
+    const methods = expandRouteMethods(route);
+    const pathBucket = byPath.get(route.path) ?? [];
+    for (const previousRoute of pathBucket) {
+      const overlap = firstMethodOverlap(methods, previousRoute.methods);
+      if (!overlap) continue;
+      errors.push({
+        code: "route_duplicate",
+        path: `routes[${i}]`,
+        message:
+          `route path '${route.path}' overlaps routes[${previousRoute.index}] for method ${overlap}. ` +
+          `Omit methods only when the route owns every method for the path, or split by non-overlapping methods.`,
+      });
+      break;
+    }
+    pathBucket.push({
+      index: i,
+      target: route.target,
+      path: route.path,
+      methods,
+    });
+    byPath.set(route.path, pathBucket);
   }
 
   return errors;
 }
 
-// ── Validator 3: Consume references ─────────────────────────────────────────
+// ── Validator 3: Online deploy image sources ───────────────────────────────
+
+export function validateOnlineDeployImageSources(
+  manifest: ParsedManifest,
+): ValidationError[] {
+  const errors: ValidationError[] = [];
+  for (const entry of getComputeEntries(manifest)) {
+    if (
+      entry.compute.kind !== "service" &&
+      entry.compute.kind !== "attached-container"
+    ) {
+      continue;
+    }
+    const image = entry.compute.image?.trim();
+    if (!image) {
+      errors.push({
+        code: "deploy_image_required",
+        path: entry.path,
+        message:
+          `${entry.compute.kind} '${entry.name}' requires a digest-pinned image for online deploy; dockerfile-only workloads are local/private builder manifests.`,
+      });
+      continue;
+    }
+    if (!isDigestPinnedImageRef(image)) {
+      errors.push({
+        code: "deploy_image_invalid",
+        path: `${entry.path}.image`,
+        message:
+          `${entry.compute.kind} '${entry.name}' image must be digest-pinned with @sha256:<64 hex chars> for online deploy.`,
+      });
+    }
+  }
+  return errors;
+}
+
+// ── Validator 4: Env names ─────────────────────────────────────────────────
+
+function collectNormalizedEnvNames(
+  env: Record<string, string> | undefined,
+  path: string,
+): { names: Set<string>; errors: ValidationError[] } {
+  const names = new Set<string>();
+  const errors: ValidationError[] = [];
+  for (const name of Object.keys(env ?? {})) {
+    let normalized: string;
+    try {
+      normalized = normalizeEnvName(name);
+    } catch (error) {
+      errors.push({
+        code: "env_collision",
+        path: `${path}.${name}`,
+        message: error instanceof Error ? error.message : String(error),
+      });
+      continue;
+    }
+    if (names.has(normalized)) {
+      errors.push({
+        code: "env_collision",
+        path: `${path}.${name}`,
+        message:
+          `environment variable '${name}' duplicates another env entry after uppercase normalization (${normalized})`,
+      });
+      continue;
+    }
+    names.add(normalized);
+  }
+  return { names, errors };
+}
+
+export function validateLocalEnvNames(
+  manifest: ParsedManifest,
+): ValidationError[] {
+  const topLevel = collectNormalizedEnvNames(manifest.env, "env");
+  const errors = [...topLevel.errors];
+  for (const entry of getComputeEntries(manifest)) {
+    const local = collectNormalizedEnvNames(
+      entry.compute.env,
+      `${entry.path}.env`,
+    );
+    errors.push(...local.errors);
+    for (const name of local.names) {
+      if (!topLevel.names.has(name)) continue;
+      errors.push({
+        code: "env_collision",
+        path: `${entry.path}.env`,
+        message:
+          `compute '${entry.name}' defines env '${name}' which already exists in top-level env`,
+      });
+    }
+  }
+  return errors;
+}
+
+// ── Validator 5: Consume references ─────────────────────────────────────────
 
 export function validateConsumeReferences(
   manifest: ParsedManifest,
@@ -304,10 +476,8 @@ export function validateConsumeReferences(
       entry.normalized ? [[entry.normalized.name, entry.normalized]] : []
     ),
   );
-  for (
-    const [computeName, compute] of Object.entries(getTopLevelCompute(manifest))
-  ) {
-    for (const [index, consume] of (compute.consume ?? []).entries()) {
+  for (const entry of getComputeEntries(manifest)) {
+    for (const [index, consume] of (entry.compute.consume ?? []).entries()) {
       const publication = publicationMap.get(consume.publication);
       if (!publication) {
         if (
@@ -317,12 +487,6 @@ export function validateConsumeReferences(
         ) {
           continue;
         }
-        errors.push({
-          code: "consume_unknown_publication",
-          path: `compute.${computeName}.consume[${index}]`,
-          message:
-            `consume references unknown publication '${consume.publication}'. Declare it in top-level publish first.`,
-        });
         continue;
       }
       const outputs = new Set(
@@ -332,7 +496,7 @@ export function validateConsumeReferences(
         if (outputs.has(key)) continue;
         errors.push({
           code: "consume_unknown_output",
-          path: `compute.${computeName}.consume[${index}].env.${key}`,
+          path: `${entry.path}.consume[${index}].env.${key}`,
           message:
             `publication '${consume.publication}' does not expose output '${key}'. Known outputs: ${
               Array.from(outputs).sort().join(", ")
@@ -344,7 +508,7 @@ export function validateConsumeReferences(
   return errors;
 }
 
-// ── Validator 4: Consume env collision ──────────────────────────────────────
+// ── Validator 6: Consume env collision ──────────────────────────────────────
 
 export function validateConsumeEnvCollision(
   manifest: ParsedManifest,
@@ -356,18 +520,18 @@ export function validateConsumeEnvCollision(
       entry.normalized ? [[entry.normalized.name, entry.normalized]] : []
     ),
   );
-  const topLevelEnvNames = new Set(
-    Object.keys(manifest.env ?? {}).map((name) => normalizeEnvName(name)),
-  );
+  const topLevelEnvNames = collectNormalizedEnvNames(manifest.env, "env").names;
 
-  for (
-    const [computeName, compute] of Object.entries(getTopLevelCompute(manifest))
-  ) {
+  for (const entry of getComputeEntries(manifest)) {
+    const localEnvNames = collectNormalizedEnvNames(
+      entry.compute.env,
+      `${entry.path}.env`,
+    ).names;
     const seen = new Set<string>([
       ...topLevelEnvNames,
-      ...Object.keys(compute.env ?? {}).map((name) => normalizeEnvName(name)),
+      ...localEnvNames,
     ]);
-    for (const [index, consume] of (compute.consume ?? []).entries()) {
+    for (const [index, consume] of (entry.compute.consume ?? []).entries()) {
       const publication = publicationMap.get(consume.publication);
       if (!publication) continue;
       for (const output of publicationOutputContract(publication)) {
@@ -377,9 +541,9 @@ export function validateConsumeEnvCollision(
         if (seen.has(envName)) {
           errors.push({
             code: "consume_env_collision",
-            path: `compute.${computeName}.consume[${index}]`,
+            path: `${entry.path}.consume[${index}]`,
             message:
-              `consume '${consume.publication}' resolves env '${envName}' which already exists in compute '${computeName}'. Pick a different alias or remove the conflicting env/bind.`,
+              `consume '${consume.publication}' resolves env '${envName}' which already exists in compute '${entry.name}'. Pick a different alias or remove the conflicting env/bind.`,
           });
           continue;
         }
@@ -390,7 +554,74 @@ export function validateConsumeEnvCollision(
   return errors;
 }
 
-// ── Validator 5: Publication unknown field ──────────────────────────────────
+// ── Validator 7: Publications ───────────────────────────────────────────────
+
+export function validatePublicationUniqueness(
+  manifest: ParsedManifest,
+): ValidationError[] {
+  const errors: ValidationError[] = [];
+  const seen = new Map<string, number>();
+  const routePublisherPaths = new Map<string, number>();
+  for (const [index, publication] of getPublications(manifest).entries()) {
+    const name = String(publication.name ?? "").trim();
+    if (!name) continue;
+    const previous = seen.get(name);
+    if (previous != null) {
+      errors.push({
+        code: "publication_duplicate",
+        path: `publish[${index}]`,
+        message: `publication name '${name}' duplicates publish[${previous}]`,
+      });
+      continue;
+    }
+    seen.set(name, index);
+
+    if (publication.publisher === "takos") continue;
+    const publisher = String(publication.publisher ?? "").trim();
+    const path = String(publication.path ?? "").trim();
+    if (!publisher || !path) continue;
+    const routeKey = `${publisher}\0${path}`;
+    const previousRoutePublication = routePublisherPaths.get(routeKey);
+    if (previousRoutePublication != null) {
+      errors.push({
+        code: "publication_duplicate",
+        path: `publish[${index}]`,
+        message:
+          `route publication publisher/path '${publisher} ${path}' duplicates publish[${previousRoutePublication}]`,
+      });
+      continue;
+    }
+    routePublisherPaths.set(routeKey, index);
+  }
+  return errors;
+}
+
+export function validatePublicationRouteMatches(
+  manifest: ParsedManifest,
+): ValidationError[] {
+  const errors: ValidationError[] = [];
+  const { entries } = collectValidatedPublications(manifest);
+  const routes = getRoutes(manifest);
+  for (const entry of entries) {
+    const publication = entry.normalized;
+    if (!publication || publication.publisher === "takos") continue;
+    const target = publication.publisher;
+    const path = publication.path;
+    if (!target || !path) continue;
+    const matches = routes.filter((route) =>
+      route.target === target && route.path === path
+    );
+    if (matches.length === 1) continue;
+    errors.push({
+      code: "publication_route_mismatch",
+      path: entry.path,
+      message: matches.length === 0
+        ? `route publication '${publication.name}' publisher/path '${target} ${path}' does not match any route`
+        : `route publication '${publication.name}' publisher/path '${target} ${path}' matches multiple routes`,
+    });
+  }
+  return errors;
+}
 
 export function validatePublicationKnownFields(
   manifest: ParsedManifest,
@@ -410,6 +641,88 @@ export function validatePublicationKnownFields(
           `Known fields: ${Array.from(allowed).sort().join(", ")}.`,
       });
     }
+    errors.push(...validatePublicationSpecKnownFields(pub));
+  }
+  return errors;
+}
+
+function asSpecRecord(value: unknown): Record<string, unknown> | null {
+  return value && typeof value === "object" && !Array.isArray(value)
+    ? value as Record<string, unknown>
+    : null;
+}
+
+function specAllowedFieldsForPublication(
+  publication: AppPublication,
+): ReadonlySet<string> | null {
+  if (publication.publisher === "takos" && publication.type === "api-key") {
+    return TAKOS_API_KEY_SPEC_FIELDS;
+  }
+  if (
+    publication.publisher === "takos" && publication.type === "oauth-client"
+  ) {
+    return TAKOS_OAUTH_SPEC_FIELDS;
+  }
+  if (publication.type === FILE_HANDLER_PUBLICATION_TYPE) {
+    return FILE_HANDLER_SPEC_FIELDS;
+  }
+  return null;
+}
+
+function validateUnknownSpecKeys(
+  params: {
+    publicationName: string;
+    path: string;
+    spec: Record<string, unknown>;
+    allowed: ReadonlySet<string>;
+    label?: string;
+  },
+): ValidationError[] {
+  const errors: ValidationError[] = [];
+  for (const key of Object.keys(params.spec)) {
+    if (params.allowed.has(key)) continue;
+    errors.push({
+      code: "publication_unknown_field",
+      path: `${params.path}.${key}`,
+      message:
+        `publication '${params.publicationName}' has unknown ${
+          params.label ?? "spec"
+        } field '${key}'. ` +
+        `Known fields: ${Array.from(params.allowed).sort().join(", ")}.`,
+    });
+  }
+  return errors;
+}
+
+function validatePublicationSpecKnownFields(
+  pub: ValidatedPublicationEntry,
+): ValidationError[] {
+  if (!pub.normalized) return [];
+  const spec = asSpecRecord(pub.raw.spec);
+  if (!spec) return [];
+  const allowed = specAllowedFieldsForPublication(pub.normalized);
+  if (!allowed) return [];
+
+  const errors = validateUnknownSpecKeys({
+    publicationName: pub.publication.name,
+    path: `${pub.path}.spec`,
+    spec,
+    allowed,
+  });
+
+  const metadata = asSpecRecord(spec.metadata);
+  if (
+    pub.normalized.publisher === "takos" &&
+    pub.normalized.type === "oauth-client" &&
+    metadata
+  ) {
+    errors.push(...validateUnknownSpecKeys({
+      publicationName: pub.publication.name,
+      path: `${pub.path}.spec.metadata`,
+      spec: metadata,
+      allowed: TAKOS_OAUTH_METADATA_FIELDS,
+      label: "spec.metadata",
+    }));
   }
   return errors;
 }
@@ -429,8 +742,12 @@ export function runDeployValidations(
     ...validatePublicationDefinitions(manifest),
     ...validateAttachedNotRouteTarget(manifest),
     ...validateRouteUniqueness(manifest),
+    ...validateOnlineDeployImageSources(manifest),
+    ...validateLocalEnvNames(manifest),
     ...validateConsumeReferences(manifest),
     ...validateConsumeEnvCollision(manifest),
+    ...validatePublicationUniqueness(manifest),
+    ...validatePublicationRouteMatches(manifest),
     ...validatePublicationKnownFields(manifest),
   ];
 }

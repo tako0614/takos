@@ -5,8 +5,6 @@ import { assertEquals } from "jsr:@std/assert";
 for (
   const toolName of [
     "web_fetch",
-    "browser_open",
-    "browser_goto",
     "mcp_add_server",
     "domain_verify",
   ]
@@ -54,8 +52,8 @@ for (
 for (
   const toolName of [
     "search",
-    "workspace_files_list",
-    "workspace_files_read",
+    "space_files_list",
+    "space_files_read",
   ]
 ) {
   Deno.test(`requires storage.read for ${toolName}`, () => {
@@ -66,12 +64,12 @@ for (
 
 for (
   const toolName of [
-    "workspace_files_write",
-    "workspace_files_create",
-    "workspace_files_mkdir",
-    "workspace_files_delete",
-    "workspace_files_rename",
-    "workspace_files_move",
+    "space_files_write",
+    "space_files_create",
+    "space_files_mkdir",
+    "space_files_delete",
+    "space_files_rename",
+    "space_files_move",
   ]
 ) {
   Deno.test(`requires storage.write for ${toolName}`, () => {

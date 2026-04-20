@@ -3,6 +3,7 @@ export interface RunNotifierEmitPayload<TData = unknown> {
   type: string;
   data: TData;
   event_id?: number;
+  dedup_key?: string;
 }
 
 export function buildRunNotifierEmitPayload<TData>(

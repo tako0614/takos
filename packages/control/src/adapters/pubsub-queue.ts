@@ -1,6 +1,10 @@
-import type { PubSub, Message } from '@google-cloud/pubsub';
-import type { Queue } from '../shared/types/bindings.ts';
-import type { ConsumableQueue, LocalQueueName, LocalQueueRecord } from '../local-platform/queue-runtime.ts';
+import type { Message, PubSub } from "@google-cloud/pubsub";
+import type { Queue } from "../shared/types/bindings.ts";
+import type {
+  ConsumableQueue,
+  LocalQueueName,
+  LocalQueueRecord,
+} from "../local-platform/queue-runtime.ts";
 
 // ---------------------------------------------------------------------------
 // Config
@@ -25,7 +29,7 @@ function lazyPubSub(config: PubSubQueueConfig): () => Promise<PubSub> {
   return async () => {
     if (!pubsubPromise) {
       pubsubPromise = (async () => {
-        const { PubSub } = await import('@google-cloud/pubsub');
+        const { PubSub } = await import("@google-cloud/pubsub");
         return new PubSub({
           ...(config.projectId ? { projectId: config.projectId } : {}),
           ...(config.keyFilePath ? { keyFilename: config.keyFilePath } : {}),
@@ -38,15 +42,18 @@ function lazyPubSub(config: PubSubQueueConfig): () => Promise<PubSub> {
 
 function decodeMessageData(message: Message): string {
   const data = message.data as unknown;
-  if (!data) return '{}';
-  if (typeof data === 'string') return data;
+  if (!data) return "{}";
+  if (typeof data === "string") return data;
   if (data instanceof Uint8Array) {
     return new TextDecoder().decode(data);
   }
-  if (typeof data === 'object' && data !== null && 'toString' in data && typeof data.toString === 'function') {
-    return (data as { toString(encoding?: string): string }).toString('utf-8');
+  if (
+    typeof data === "object" && data !== null && "toString" in data &&
+    typeof data.toString === "function"
+  ) {
+    return (data as { toString(encoding?: string): string }).toString("utf-8");
   }
-  return '{}';
+  return "{}";
 }
 
 const RECEIVE_TIMEOUT_MS = 20_000;
@@ -65,14 +72,16 @@ const RECEIVE_TIMEOUT_MS = 20_000;
  * matching the pop semantics of local/Redis queues.
  * A `subscriptionName` must be provided in config for receive() to work.
  */
-export function createPubSubQueue<T = unknown>(config: PubSubQueueConfig): Queue<T> & Partial<ConsumableQueue<T>> {
+export function createPubSubQueue<T = unknown>(
+  config: PubSubQueueConfig,
+): Queue<T> & Partial<ConsumableQueue<T>> {
   const getPubSub = lazyPubSub(config);
 
   async function getTopic() {
     return (await getPubSub()).topic(config.topicName);
   }
 
-  const queue = {
+  const queue: Queue<T> & Partial<ConsumableQueue<T>> = {
     // -- ConsumableQueue metadata ------------------------------------------
     ...(config.queueName ? { queueName: config.queueName } : {}),
 
@@ -90,7 +99,9 @@ export function createPubSubQueue<T = unknown>(config: PubSubQueueConfig): Queue
     ): Promise<void> {
       const topic = await getTopic();
       for (const msg of messages) {
-        await topic.publishMessage({ json: msg.body as Record<string, unknown> });
+        await topic.publishMessage({
+          json: msg.body as Record<string, unknown>,
+        });
       }
     },
 
@@ -98,12 +109,14 @@ export function createPubSubQueue<T = unknown>(config: PubSubQueueConfig): Queue
     async receive(): Promise<LocalQueueRecord<T> | null> {
       if (!config.subscriptionName) {
         throw new Error(
-          'PubSub receive() requires a subscriptionName in config. ' +
-          'Set GCP_PUBSUB_{NAME}_SUBSCRIPTION to enable consuming.',
+          "PubSub receive() requires a subscriptionName in config. " +
+            "Set GCP_PUBSUB_{NAME}_SUBSCRIPTION to enable consuming.",
         );
       }
 
-      const subscription = (await getPubSub()).subscription(config.subscriptionName);
+      const subscription = (await getPubSub()).subscription(
+        config.subscriptionName,
+      );
 
       // Use a temporary message listener with a timeout.
       // The subscription's streaming pull will deliver messages to the handler.
@@ -113,7 +126,7 @@ export function createPubSubQueue<T = unknown>(config: PubSubQueueConfig): Queue
         const timer = setTimeout(() => {
           if (resolved) return;
           resolved = true;
-          subscription.removeListener('message', onMessage);
+          subscription.removeListener("message", onMessage);
           resolve(null);
         }, RECEIVE_TIMEOUT_MS);
 
@@ -121,7 +134,7 @@ export function createPubSubQueue<T = unknown>(config: PubSubQueueConfig): Queue
           if (resolved) return;
           resolved = true;
           clearTimeout(timer);
-          subscription.removeListener('message', onMessage);
+          subscription.removeListener("message", onMessage);
 
           const body = JSON.parse(decodeMessageData(message)) as T;
           const deliveryAttempt = message.deliveryAttempt ?? 1;
@@ -135,10 +148,10 @@ export function createPubSubQueue<T = unknown>(config: PubSubQueueConfig): Queue
           });
         }
 
-        subscription.on('message', onMessage);
+        subscription.on("message", onMessage);
       });
     },
   };
 
-  return queue as unknown as Queue<T> & Partial<ConsumableQueue<T>>;
+  return queue;
 }

@@ -8,7 +8,7 @@
 
 import { getDb } from "../../infra/db/index.ts";
 import { runEvents, runs, type runs as _runs } from "../../infra/db/schema.ts";
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { logError, logWarn } from "../../shared/utils/logger.ts";
 import { persistMessage } from "../../application/services/agent/message-persistence.ts";
 import type { AgentMessage } from "../../application/services/agent/agent-models.ts";
@@ -23,13 +23,12 @@ import {
 } from "../../application/services/agent/skills.ts";
 import {
   listDetailedSkillContext,
-  listEnabledCustomSkillContext,
 } from "../../application/services/source/skills.ts";
 import {
   createToolExecutor,
   type ToolExecutorLike,
 } from "../../application/tools/executor.ts";
-import { AGENT_DISABLED_BUILTIN_TOOLS } from "../../application/tools/tool-policy.ts";
+import { AGENT_DISABLED_CUSTOM_TOOLS } from "../../application/tools/tool-policy.ts";
 import type { ToolCall } from "../../application/tools/tool-definitions.ts";
 import {
   countEvidenceForClaims,
@@ -49,9 +48,8 @@ import {
   buildRunNotifierEmitRequest,
   getRunNotifierStub,
 } from "../../application/services/run-notifier/index.ts";
-import type { IndexJobQueueMessage } from "../../shared/types/index.ts";
+import type { Env, IndexJobQueueMessage } from "../../shared/types/index.ts";
 import { classifyProxyError, err, ok } from "./executor-utils.ts";
-import type { Env } from "./executor-utils.ts";
 import { getRunBootstrap } from "./executor-run-state.ts";
 
 // ---------------------------------------------------------------------------
@@ -70,7 +68,7 @@ async function createRemoteToolExecutor(
   const bootstrap = await getRunBootstrap(env, runId);
 
   return createToolExecutor(
-    env as unknown as Parameters<typeof createToolExecutor>[0],
+    env,
     env.DB,
     env.TAKOS_OFFLOAD,
     bootstrap.spaceId,
@@ -79,7 +77,7 @@ async function createRemoteToolExecutor(
     runId,
     bootstrap.userId,
     {
-      disabledBuiltinTools: [...AGENT_DISABLED_BUILTIN_TOOLS],
+      disabledCustomTools: [...AGENT_DISABLED_CUSTOM_TOOLS],
     },
     undefined,
     undefined,
@@ -127,7 +125,7 @@ function buildRunEventDedupKey(
   type: string,
   sequence: number,
 ): string {
-  return `${runId}\0${sequence}\0${type}`;
+  return `run:${runId}:sequence:${sequence}:type:${type}`;
 }
 
 function cleanupRecentRunEventKeys(nowMs: number): void {
@@ -187,10 +185,7 @@ export async function handleRunConfig(
     }
   }
 
-  const config = getAgentConfig(
-    agentType ?? "default",
-    env as unknown as Parameters<typeof getAgentConfig>[1],
-  );
+  const config = getAgentConfig(agentType ?? "default", env);
   return ok({
     ...config,
     agentType: config.type,
@@ -230,9 +225,7 @@ export async function handleConversationHistory(
   try {
     const history = await buildConversationHistory({
       db: env.DB,
-      env: env as unknown as Parameters<
-        typeof buildConversationHistory
-      >[0]["env"],
+      env,
       threadId,
       runId,
       spaceId,
@@ -385,12 +378,14 @@ export async function handleSkillRuntimeContext(
     spaceId,
     agentType,
     history,
+    availableToolNames,
   } = body as {
     runId?: string;
     threadId?: string;
     spaceId?: string;
     agentType?: string;
     history?: AgentMessage[];
+    availableToolNames?: string[];
   };
   if (
     !runId || !threadId || !spaceId || !agentType || !Array.isArray(history)
@@ -399,27 +394,62 @@ export async function handleSkillRuntimeContext(
   }
 
   try {
-    const [resolutionContext, customSkills, mcpServers] = await Promise.all([
-      buildSkillResolutionContext(
+    const resolutionContext = await buildSkillResolutionContext(
+      env.DB,
+      {
+        threadId,
+        runId,
+        spaceId,
+      },
+      {
+        type: agentType,
+        systemPrompt: "",
+        tools: [],
+      },
+      history,
+    );
+    const localeSamples = [
+      ...(resolutionContext.conversation ?? []),
+      resolutionContext.threadTitle ?? "",
+      resolutionContext.threadSummary ?? "",
+      ...((resolutionContext.threadKeyPoints ?? []).slice(0, 8)),
+    ].filter(Boolean);
+    const preferredLocale =
+      typeof resolutionContext.runInput?.skill_locale === "string"
+        ? resolutionContext.runInput.skill_locale
+        : typeof resolutionContext.runInput?.locale === "string"
+        ? resolutionContext.runInput.locale
+        : resolutionContext.preferredLocale ??
+          resolutionContext.spaceLocale ??
+          (typeof resolutionContext.runInput?.accept_language === "string"
+            ? resolutionContext.runInput.accept_language
+            : null);
+
+    const [catalog, mcpServers] = await Promise.all([
+      listDetailedSkillContext(
         env.DB,
+        spaceId,
         {
-          threadId,
-          runId,
-          spaceId,
+          preferredLocale,
+          acceptLanguage: resolutionContext.acceptLanguage,
+          textSamples: localeSamples,
         },
-        {
-          type: agentType,
-          systemPrompt: "",
-          tools: [],
-        },
-        history,
+        Array.isArray(availableToolNames) ? availableToolNames : [],
       ),
-      listEnabledCustomSkillContext(env.DB, spaceId),
       listMcpServers(env.DB, spaceId),
     ]);
+    const managedSkills = catalog.skills.filter((skill) =>
+      skill.source === "managed"
+    );
+    const customSkills = catalog.skills.filter((skill) =>
+      skill.source === "custom"
+    );
 
     return ok({
+      locale: catalog.locale,
       resolutionContext,
+      skills: catalog.skills,
+      managedSkills,
       customSkills,
       availableMcpServerNames: mcpServers.filter((server) => server.enabled)
         .map((server) => server.name),
@@ -571,10 +601,12 @@ export async function handleAddMessage(
     threadId,
     message,
     metadata,
+    idempotencyKey,
   } = body as {
     threadId?: string;
     message?: AgentMessage;
     metadata?: Record<string, unknown>;
+    idempotencyKey?: string;
   };
   if (!threadId || !message || typeof message !== "object") {
     return err("Missing threadId or message", 400);
@@ -591,11 +623,13 @@ export async function handleAddMessage(
     await persistMessage(
       {
         db: env.DB,
-        env: env as unknown as Parameters<typeof persistMessage>[0]["env"],
+        env,
         threadId,
       },
       message,
-      metadata,
+      typeof idempotencyKey === "string" && idempotencyKey.trim()
+        ? { ...(metadata ?? {}), idempotencyKey: idempotencyKey.trim() }
+        : metadata,
     );
     return ok({ success: true });
   } catch (e: unknown) {
@@ -760,24 +794,54 @@ export async function handleRunEvent(
   const now = new Date().toISOString();
   const offloadEnabled = Boolean(env.TAKOS_OFFLOAD);
   let legacyEventId: number | null = null;
+  let duplicate = false;
 
   try {
     if (!skipDb && !offloadEnabled) {
       const db = getDb(env.DB);
-      const persisted = await db.insert(runEvents).values({
-        runId,
-        type,
-        data: JSON.stringify({ ...data, _sequence: sequence }),
-        createdAt: now,
-      }).returning({ id: runEvents.id }).get();
-      legacyEventId = persisted?.id ?? null;
+      const existing = await db.select({ id: runEvents.id })
+        .from(runEvents)
+        .where(and(
+          eq(runEvents.runId, runId),
+          eq(runEvents.eventKey, dedupKey),
+        ))
+        .get();
+      if (existing) {
+        legacyEventId = existing.id;
+        duplicate = true;
+      } else {
+        try {
+          const persisted = await db.insert(runEvents).values({
+            runId,
+            type,
+            eventKey: dedupKey,
+            data: JSON.stringify({ ...data, _sequence: sequence }),
+            createdAt: now,
+          }).returning({ id: runEvents.id }).get();
+          legacyEventId = persisted?.id ?? null;
+        } catch (insertError) {
+          const raced = await db.select({ id: runEvents.id })
+            .from(runEvents)
+            .where(and(
+              eq(runEvents.runId, runId),
+              eq(runEvents.eventKey, dedupKey),
+            ))
+            .get();
+          if (!raced) throw insertError;
+          legacyEventId = raced.id;
+          duplicate = true;
+        }
+      }
     }
 
-    const stub = getRunNotifierStub(env as never, runId);
+    const stub = getRunNotifierStub(env, runId);
     const emitResponse = await stub.fetch(
       buildRunNotifierEmitRequest(
-        buildRunNotifierEmitPayload(runId, type, data, legacyEventId),
-      ) as never,
+        {
+          ...buildRunNotifierEmitPayload(runId, type, data, legacyEventId),
+          dedup_key: dedupKey,
+        },
+      ),
     );
 
     if (!emitResponse.ok) {
@@ -795,7 +859,15 @@ export async function handleRunEvent(
     }
 
     recentRunEventKeys.set(dedupKey, nowMs);
-    return ok({ success: true });
+    const emitBody = await emitResponse.clone().json().catch(() => null);
+    const durableDuplicate = !!(
+      emitBody && typeof emitBody === "object" &&
+      (emitBody as Record<string, unknown>).duplicate === true
+    );
+    return ok({
+      success: true,
+      ...(duplicate || durableDuplicate ? { duplicate: true } : {}),
+    });
   } catch (e: unknown) {
     logError("Run event RPC error", e, { module: "executor-host" });
     const classified = classifyProxyError(e);

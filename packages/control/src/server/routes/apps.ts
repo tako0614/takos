@@ -8,7 +8,6 @@ import {
 } from "./route-auth.ts";
 import {
   AuthenticationError,
-  AuthorizationError,
   BadRequestError,
   NotFoundError,
 } from "takos-common/errors";
@@ -24,45 +23,7 @@ type Variables = {
 /**
  * App type definitions for unified framework
  */
-export type AppType = "platform" | "builtin" | "custom";
-
-/**
- * Builtin apps configuration
- */
-const BUILTIN_APPS: Array<{
-  name: string;
-  description: string;
-  icon: string;
-  getPath: (spaceIdentifier?: string) => string;
-}> = [
-  {
-    name: "chat",
-    description: "AI chat workspace",
-    icon: "💬",
-    getPath: (spaceIdentifier) =>
-      spaceIdentifier ? `/chat/${spaceIdentifier}` : "/chat",
-  },
-  {
-    name: "repos",
-    description: "Source repository browser",
-    icon: "📁",
-    getPath: (spaceIdentifier) =>
-      spaceIdentifier ? `/repos/${spaceIdentifier}` : "/repos",
-  },
-  {
-    name: "store",
-    description: "Discover and install apps",
-    icon: "🛍️",
-    getPath: () => "/store",
-  },
-  {
-    name: "deploy",
-    description: "Workers and resources",
-    icon: "🛠️",
-    getPath: (spaceIdentifier) =>
-      spaceIdentifier ? `/deploy/w/${spaceIdentifier}` : "/deploy",
-  },
-];
+export type AppType = "platform" | "custom";
 
 function resolveCustomAppUrl(
   hostname: string | null | undefined,
@@ -106,6 +67,10 @@ async function resolveAppsSpaceScope(
   };
 }
 
+function toPublicAppType(appType: string | null | undefined): AppType {
+  return appType === "platform" ? "platform" : "custom";
+}
+
 /**
  * Register App API routes (requires authentication)
  */
@@ -114,7 +79,7 @@ export function registerAppApiRoutes<V extends Variables>(
 ) {
   const resolvePrincipalId = (user: User) => user.principal_id ?? user.id;
 
-  // List all apps (builtin + custom)
+  // List registered apps.
   api.get("/apps", async (c) => {
     const user = c.get("user");
     if (!user) {
@@ -155,7 +120,7 @@ export function registerAppApiRoutes<V extends Variables>(
       .orderBy(ascOrder(appsTable.name))
       .all();
 
-    const customApps = appRows.map((row) => ({
+    const registeredApps = appRows.map((row) => ({
       id: row.id,
       name: row.name,
       description: row.description,
@@ -175,37 +140,22 @@ export function registerAppApiRoutes<V extends Variables>(
       },
     }));
 
-    // Combine builtin and custom apps
-    const apps = [
-      ...BUILTIN_APPS.map((b) => ({
-        id: `builtin-${b.name}`,
-        name: b.name,
-        description: b.description,
-        icon: b.icon,
-        app_type: "builtin" as AppType,
-        url: b.getPath(spaceScope?.identifier),
-        space_id: spaceScope?.identifier || null,
-        space_name: null,
-        service_hostname: null,
-        service_status: null,
-      })),
-      ...customApps.map((a) => ({
-        id: a.id,
-        name: a.name,
-        description: a.description,
-        icon: a.icon || "📱",
-        app_type: (a.appType || "custom") as AppType,
-        url: resolveCustomAppUrl(a.service?.hostname, a.service?.status),
-        space_id: getSpaceIdentifierFromAccount(
-          a.account
-            ? { slug: a.account.slug, type: a.account.type ?? undefined }
-            : null,
-        ),
-        space_name: a.account?.name || null,
-        service_hostname: a.service?.hostname || null,
-        service_status: a.service?.status || null,
-      })),
-    ];
+    const apps = registeredApps.map((a) => ({
+      id: a.id,
+      name: a.name,
+      description: a.description,
+      icon: a.icon || "📱",
+      app_type: toPublicAppType(a.appType),
+      url: resolveCustomAppUrl(a.service?.hostname, a.service?.status),
+      space_id: getSpaceIdentifierFromAccount(
+        a.account
+          ? { slug: a.account.slug, type: a.account.type ?? undefined }
+          : null,
+      ),
+      space_name: a.account?.name || null,
+      service_hostname: a.service?.hostname || null,
+      service_status: a.service?.status || null,
+    }));
 
     return c.json({ apps });
   });
@@ -229,26 +179,7 @@ export function registerAppApiRoutes<V extends Variables>(
     );
     const principalId = resolvePrincipalId(user);
 
-    // Check if it's a builtin app
-    if (appId.startsWith("builtin-")) {
-      const builtinName = appId.slice(8);
-      const builtin = BUILTIN_APPS.find((b) => b.name === builtinName);
-      if (!builtin) {
-        throw new NotFoundError("App");
-      }
-      return c.json({
-        app: {
-          id: appId,
-          name: builtin.name,
-          description: builtin.description,
-          icon: builtin.icon,
-          app_type: "builtin",
-          url: builtin.getPath(spaceScope?.identifier),
-        },
-      });
-    }
-
-    // Get custom app - user must be a member of the workspace
+    // Get a registered app - user must be a member of the workspace.
     const targetAccountId = spaceScope ? spaceScope.spaceId : principalId;
     const appRow = await db.select({
       id: appsTable.id,
@@ -282,7 +213,7 @@ export function registerAppApiRoutes<V extends Variables>(
         name: appRow.name,
         description: appRow.description,
         icon: appRow.icon || "📱",
-        app_type: appRow.appType || "custom",
+        app_type: toPublicAppType(appRow.appType),
         url: resolveCustomAppUrl(appRow.serviceHostname, appRow.serviceStatus),
         space_id: getSpaceIdentifierFromAccount(
           appRow.accountSlug
@@ -311,10 +242,6 @@ export function registerAppApiRoutes<V extends Variables>(
     const appId = c.req.param("id");
     const db = appsRouteDeps.getDb(c.env.DB);
 
-    if (appId.startsWith("builtin-")) {
-      throw new AuthorizationError("Cannot modify builtin apps");
-    }
-
     const body = await parseJsonBody<{
       name?: string;
       description?: string;
@@ -325,10 +252,21 @@ export function registerAppApiRoutes<V extends Variables>(
       throw new BadRequestError("Invalid JSON body");
     }
 
+    const spaceScope = await resolveAppsSpaceScope(
+      c,
+      () =>
+        appsRouteDeps.requireSpaceAccess(
+          c,
+          getRequestedSpaceIdentifier(c) || "",
+          user.id,
+        ),
+    );
     const principalId = resolvePrincipalId(user);
+
     // Verify ownership - user must be owner or admin of the workspace
+    const targetAccountId = spaceScope ? spaceScope.spaceId : principalId;
     const app = await db.select().from(appsTable).where(
-      and(eq(appsTable.id, appId), eq(appsTable.accountId, principalId)),
+      and(eq(appsTable.id, appId), eq(appsTable.accountId, targetAccountId)),
     ).get();
 
     if (!app) {
@@ -370,16 +308,21 @@ export function registerAppApiRoutes<V extends Variables>(
     const appId = c.req.param("id");
     const db = appsRouteDeps.getDb(c.env.DB);
 
-    if (appId.startsWith("builtin-")) {
-      throw new AuthorizationError(
-        "Cannot generate client key for builtin apps",
-      );
-    }
-
+    const spaceScope = await resolveAppsSpaceScope(
+      c,
+      () =>
+        appsRouteDeps.requireSpaceAccess(
+          c,
+          getRequestedSpaceIdentifier(c) || "",
+          user.id,
+        ),
+    );
     const principalId = resolvePrincipalId(user);
+
     // Verify ownership - user must be owner or admin of the workspace
+    const targetAccountId = spaceScope ? spaceScope.spaceId : principalId;
     const app = await db.select().from(appsTable).where(
-      and(eq(appsTable.id, appId), eq(appsTable.accountId, principalId)),
+      and(eq(appsTable.id, appId), eq(appsTable.accountId, targetAccountId)),
     ).get();
 
     if (!app) {
@@ -411,14 +354,21 @@ export function registerAppApiRoutes<V extends Variables>(
     const appId = c.req.param("id");
     const db = appsRouteDeps.getDb(c.env.DB);
 
-    if (appId.startsWith("builtin-")) {
-      throw new AuthorizationError("Cannot delete builtin apps");
-    }
-
+    const spaceScope = await resolveAppsSpaceScope(
+      c,
+      () =>
+        appsRouteDeps.requireSpaceAccess(
+          c,
+          getRequestedSpaceIdentifier(c) || "",
+          user.id,
+        ),
+    );
     const principalId = resolvePrincipalId(user);
+
     // Verify ownership - only workspace owner can delete apps
+    const targetAccountId = spaceScope ? spaceScope.spaceId : principalId;
     const app = await db.select().from(appsTable).where(
-      and(eq(appsTable.id, appId), eq(appsTable.accountId, principalId)),
+      and(eq(appsTable.id, appId), eq(appsTable.accountId, targetAccountId)),
     ).get();
 
     if (!app) {

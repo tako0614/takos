@@ -23,8 +23,8 @@
     "./platform/adapters/node": "./src/platform/adapters/node.ts",
     "./platform/adapters/shared": "./src/platform/adapters/shared.ts",
     "./platform/adapters/workers": "./src/platform/adapters/workers.ts",
-    "./platform/providers/cloudflare": "./src/platform/providers/cloudflare/index.ts",
-    "./platform/providers/node/pdf-render": "./src/platform/providers/node/pdf-render.ts",
+    "./platform/backends/cloudflare": "./src/platform/backends/cloudflare/index.ts",
+    "./platform/backends/node/pdf-render": "./src/platform/backends/node/pdf-render.ts",
     "./runtime/worker": "./src/runtime/worker/index.ts",
     "./runtime/worker/env": "./src/runtime/worker/env.ts",
     "./runtime/worker/egress": "./src/runtime/worker/egress.ts",
@@ -36,9 +36,7 @@
     "./runtime/durable-objects": "./src/runtime/durable-objects/index.ts",
     "./runtime/queues": "./src/runtime/queues/index.ts",
     "./runtime/container-hosts": "./src/runtime/container-hosts/index.ts",
-    "./runtime/container-hosts/browser-session-host": "./src/runtime/container-hosts/browser-session-host.ts",
     "./runtime/container-hosts/executor-host": "./src/runtime/container-hosts/executor-host.ts",
-    "./runtime/container-hosts/proxy-token-manager": "./src/runtime/container-hosts/proxy-token-manager.ts",
     "./runtime/container-hosts/runtime-host": "./src/runtime/container-hosts/runtime-host.ts",
     "./runtime/container-hosts/executor-run-state": "./src/runtime/container-hosts/executor-run-state.ts",
     "./server/routes": "./src/server/routes/index.ts",
@@ -48,8 +46,7 @@
     "./shared/types": "./src/shared/types/index.ts",
     "./shared/config": "./src/shared/config/index.ts",
     "./shared/constants": "./src/shared/constants/index.ts",
-    "./runtime/queues/workflow-runtime-client": "./src/runtime/queues/workflow-runtime-client.ts",
-    "./deployment/group-deploy-types": "./src/application/services/deployment/group-deploy-types.ts"
+    "./runtime/queues/workflow-runtime-client": "./src/runtime/queues/workflow-runtime-client.ts"
   },
   "imports": {
     "@/": "./src/",

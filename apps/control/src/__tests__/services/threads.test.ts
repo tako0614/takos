@@ -15,11 +15,14 @@ const mocks = {
   generateId: () => "new-thread-id",
 };
 
-threadServiceDeps.getDb = ((db) => mocks.getDb(db)) as typeof threadServiceDeps.getDb;
+threadServiceDeps.getDb =
+  ((db) => mocks.getDb(db)) as typeof threadServiceDeps.getDb;
 threadServiceDeps.checkSpaceAccess = ((
   ...args: Parameters<typeof threadServiceDeps.checkSpaceAccess>
-) => mocks.checkSpaceAccess(...args)) as typeof threadServiceDeps.checkSpaceAccess;
-threadServiceDeps.generateId = (() => mocks.generateId()) as typeof threadServiceDeps.generateId;
+) =>
+  mocks.checkSpaceAccess(...args)) as typeof threadServiceDeps.checkSpaceAccess;
+threadServiceDeps.generateId =
+  (() => mocks.generateId()) as typeof threadServiceDeps.generateId;
 
 type SelectResponse = {
   get?: unknown;
@@ -52,11 +55,14 @@ function createDrizzleMock(
       });
       return chain;
     },
-  };
+  } as unknown as D1Database;
 }
 
 Deno.test("thread access fallback guards (issue 186) - rejects invalid IDs before DB query", async () => {
-  assertEquals(await checkThreadAccess({} as D1Database, "bad id", "user-1"), null);
+  assertEquals(
+    await checkThreadAccess({} as D1Database, "bad id", "user-1"),
+    null,
+  );
 });
 
 Deno.test("thread access fallback guards (issue 186) - returns thread access when thread exists and user has workspace access", async () => {

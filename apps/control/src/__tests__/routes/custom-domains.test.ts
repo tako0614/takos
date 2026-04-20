@@ -144,7 +144,7 @@ Deno.test("custom-domains routes - POST /api/services/:id/custom-domains - rejec
     {} as ExecutionContext,
   );
 
-  assertEquals(res.status, 422);
+  assertEquals(res.status, 400);
 });
 
 Deno.test("custom-domains routes - POST /api/services/:id/custom-domains/:domainId/verify - verifies a custom domain", async () => {

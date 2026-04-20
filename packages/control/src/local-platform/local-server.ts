@@ -7,28 +7,27 @@
  * stays free of Node server concerns (it is also used by tests and
  * platform-agnostic code).
  */
-import type { LocalFetch } from './runtime-types.ts';
-import { serveNodeFetch } from './fetch-server.ts';
-import { logInfo } from '../shared/utils/logger.ts';
+import type { LocalFetch } from "./runtime-types.ts";
+import { serveNodeFetch } from "./fetch-server.ts";
+import { logInfo } from "../shared/utils/logger.ts";
 import {
-  DEFAULT_LOCAL_PORTS,
-  createLocalBrowserHostFetch,
   createLocalDispatchFetch,
   createLocalExecutorHostFetch,
   createLocalRuntimeHostFetch,
   createLocalWebFetch,
-} from './runtime.ts';
+  DEFAULT_LOCAL_PORTS,
+} from "./runtime.ts";
 
 function resolvePort(defaultPort: number): number {
-  const parsed = Number.parseInt(Deno.env.get('PORT') ?? '', 10);
+  const parsed = Number.parseInt(Deno.env.get("PORT") ?? "", 10);
   return Number.isFinite(parsed) && parsed > 0 ? parsed : defaultPort;
 }
 
 function logLocalServerStart(service: string, port: number) {
   logInfo(`${service} local runtime listening on :${port}`, {
-    module: 'local_platform',
-    adapter: Deno.env.get('TAKOS_LOCAL_ADAPTER'),
-    runtime: 'node',
+    module: "local_platform",
+    adapter: Deno.env.get("TAKOS_LOCAL_ADAPTER"),
+    runtime: "node",
   });
 }
 
@@ -48,7 +47,7 @@ export async function startCanonicalLocalServer(options: {
 
 export async function startLocalWebServer(): Promise<void> {
   await startCanonicalLocalServer({
-    service: 'takos-web',
+    service: "takos",
     defaultPort: DEFAULT_LOCAL_PORTS.web,
     createFetch: createLocalWebFetch,
   });
@@ -56,7 +55,7 @@ export async function startLocalWebServer(): Promise<void> {
 
 export async function startLocalDispatchServer(): Promise<void> {
   await startCanonicalLocalServer({
-    service: 'takos-dispatch',
+    service: "takos-dispatch",
     defaultPort: DEFAULT_LOCAL_PORTS.dispatch,
     createFetch: createLocalDispatchFetch,
   });
@@ -64,7 +63,7 @@ export async function startLocalDispatchServer(): Promise<void> {
 
 export async function startLocalRuntimeHostServer(): Promise<void> {
   await startCanonicalLocalServer({
-    service: 'takos-runtime-host',
+    service: "takos-runtime-host",
     defaultPort: DEFAULT_LOCAL_PORTS.runtimeHost,
     createFetch: createLocalRuntimeHostFetch,
   });
@@ -72,16 +71,8 @@ export async function startLocalRuntimeHostServer(): Promise<void> {
 
 export async function startLocalExecutorHostServer(): Promise<void> {
   await startCanonicalLocalServer({
-    service: 'takos-executor-host',
+    service: "takos-executor-host",
     defaultPort: DEFAULT_LOCAL_PORTS.executorHost,
     createFetch: createLocalExecutorHostFetch,
-  });
-}
-
-export async function startLocalBrowserHostServer(): Promise<void> {
-  await startCanonicalLocalServer({
-    service: 'takos-browser-host',
-    defaultPort: DEFAULT_LOCAL_PORTS.browserHost,
-    createFetch: createLocalBrowserHostFetch,
   });
 }

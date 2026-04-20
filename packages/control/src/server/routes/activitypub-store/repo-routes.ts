@@ -4,6 +4,7 @@ import { parsePagination } from "../../../shared/utils/index.ts";
 import {
   DELETE_REF,
 } from "../../../application/services/activitypub/push-activities.ts";
+import { HttpSignatureError } from "../../middleware/http-signature.ts";
 import type { StoreRepositoryRecord } from "./activitypub-queries.ts";
 import type { ActivityPubStoreDeps } from "./deps.ts";
 import {
@@ -17,7 +18,6 @@ import {
   buildRepoActor,
   buildRepoActorId,
   buildStoreActorId,
-  enc,
   getOriginFromUrl,
   orderedCollectionResponse,
   parsePageNumber,
@@ -29,6 +29,55 @@ import {
   withCanonicalRepo,
 } from "./route-handlers.ts";
 import type { PublicRouteEnv } from "../route-auth.ts";
+
+const SIGNED_FETCH_DATE_SKEW_MS = 5 * 60 * 1_000;
+
+async function verifySignedActorFetch(
+  c: ActivityPubContext,
+  deps: ActivityPubStoreDeps,
+  expectedActorUrl: string,
+): Promise<Response | null> {
+  const dateHeader = c.req.header("date");
+  if (!dateHeader) {
+    return c.json({ error: "Date header is required" }, 400);
+  }
+  const requestDate = Date.parse(dateHeader);
+  if (!Number.isFinite(requestDate)) {
+    return c.json({ error: "Invalid Date header" }, 400);
+  }
+  if (Math.abs(Date.now() - requestDate) > SIGNED_FETCH_DATE_SKEW_MS) {
+    return c.json({ error: "Date header skew exceeds 5 minutes" }, 401);
+  }
+
+  if (!c.req.header("signature")) {
+    return c.json(
+      { error: "HTTP Signature header is required for private actor fetch" },
+      401,
+    );
+  }
+
+  try {
+    const sigResult = await deps.verifyHttpSignature(c.req.raw);
+    if (!sigResult.verified) {
+      return c.json({ error: "Invalid HTTP signature" }, 401);
+    }
+    if (sigResult.actorUrl !== expectedActorUrl) {
+      return c.json(
+        { error: "Signature actor does not match actor query" },
+        403,
+      );
+    }
+  } catch (err) {
+    if (err instanceof HttpSignatureError) {
+      return c.json({
+        error: `Signature verification failed: ${err.message}`,
+      }, 401);
+    }
+    return c.json({ error: "Signature verification failed" }, 401);
+  }
+
+  return null;
+}
 
 async function handleRepoActorRoute(
   c: ActivityPubContext,
@@ -60,6 +109,13 @@ async function handleRepoActorRoute(
   if (!requestActorUrl) {
     return c.json({ error: "Repository not found" }, 404);
   }
+
+  const signatureFailure = await verifySignedActorFetch(
+    c,
+    deps,
+    requestActorUrl,
+  );
+  if (signatureFailure) return signatureFailure;
 
   const hasGrant = await deps.checkGrant(
     c.env.DB,
@@ -240,19 +296,5 @@ export function registerRepoRoutes(
         storeUris,
       );
     }),
-  );
-
-  activitypubStore.get(
-    "/ap/stores/:store/repositories/:owner/:repoName",
-    (c) => {
-      const owner = c.req.param("owner");
-      const repoName = c.req.param("repoName");
-      return c.redirect(
-        `${getOriginFromUrl(c.req.url)}/ap/repos/${enc(owner)}/${
-          enc(repoName)
-        }`,
-        301,
-      );
-    },
   );
 }

@@ -1,19 +1,31 @@
-import type { D1Database, R2Bucket } from '../../shared/types/bindings.ts';
-import type { Env } from '../../shared/types/index.ts';
-import { getDb, runs } from '../../infra/db/index.ts';
-import { eq } from 'drizzle-orm';
-import type { PersistedRunEvent } from '../../application/services/offload/run-events.ts';
-import { RUN_TERMINAL_EVENT_TYPES } from '../../application/services/run-notifier/index.ts';
-import type { RunTerminalEventType } from '../../application/services/run-notifier/run-events-contract.ts';
-import { RUN_EVENT_SEGMENT_SIZE, segmentIndexForEventId, writeRunEventSegmentToR2 } from '../../application/services/offload/run-events.ts';
-import type { PersistedUsageEvent } from '../../application/services/offload/usage-events.ts';
-import { USAGE_EVENT_SEGMENT_SIZE, writeUsageEventSegmentToR2 } from '../../application/services/offload/usage-events.ts';
-import { logWarn } from '../../shared/utils/logger.ts';
-import { NotifierBase, jsonResponse, type EmitResult, type RingBufferEvent } from './notifier-base.ts';
-import { MAX_CONNECTIONS } from './do-header-utils.ts';
+import type { D1Database, R2Bucket } from "../../shared/types/bindings.ts";
+import type { Env } from "../../shared/types/index.ts";
+import { getDb, runs } from "../../infra/db/index.ts";
+import { eq } from "drizzle-orm";
+import type { PersistedRunEvent } from "../../application/services/offload/run-events.ts";
+import { RUN_TERMINAL_EVENT_TYPES } from "../../application/services/run-notifier/index.ts";
+import type { RunTerminalEventType } from "../../application/services/run-notifier/run-events-contract.ts";
+import {
+  RUN_EVENT_SEGMENT_SIZE,
+  segmentIndexForEventId,
+  writeRunEventSegmentToR2,
+} from "../../application/services/offload/run-events.ts";
+import type { PersistedUsageEvent } from "../../application/services/offload/usage-events.ts";
+import {
+  USAGE_EVENT_SEGMENT_SIZE,
+  writeUsageEventSegmentToR2,
+} from "../../application/services/offload/usage-events.ts";
+import { logWarn } from "../../shared/utils/logger.ts";
+import {
+  type EmitResult,
+  jsonResponse,
+  NotifierBase,
+  type RingBufferEvent,
+} from "./notifier-base.ts";
+import { MAX_CONNECTIONS } from "./do-header-utils.ts";
 
 export class RunNotifierDO extends NotifierBase {
-  protected readonly moduleName = 'runnotifierdo';
+  protected readonly moduleName = "runnotifierdo";
   protected readonly maxConnections = MAX_CONNECTIONS;
 
   private db: D1Database;
@@ -27,6 +39,7 @@ export class RunNotifierDO extends NotifierBase {
   private usageSegmentIndex = 1;
   private usageSegmentBuffer: PersistedUsageEvent[] = [];
   private usageLastFlushedSegmentIndex = 0;
+  private emitDedupKeys = new Map<string, number>();
 
   /**
    * Hard cap on segment buffer sizes to prevent unbounded growth
@@ -34,6 +47,8 @@ export class RunNotifierDO extends NotifierBase {
    * entries are dropped and a warning is logged.
    */
   private static readonly MAX_SEGMENT_BUFFER_SIZE = 10_000;
+  private static readonly EMIT_DEDUP_TTL_MS = 60 * 60 * 1000;
+  private static readonly MAX_EMIT_DEDUP_KEYS = 10_000;
 
   constructor(state: DurableObjectState, env: Env) {
     super(state);
@@ -56,22 +71,28 @@ export class RunNotifierDO extends NotifierBase {
       usageSegmentIndex?: number;
       usageSegmentBuffer?: PersistedUsageEvent[];
       usageLastFlushedSegmentIndex?: number;
-    }>('bufferState');
+      emitDedupKeys?: Array<[string, number]>;
+    }>("bufferState");
     if (stored) {
       this.eventBuffer = stored.eventBuffer;
       this.eventIdCounter = stored.eventIdCounter;
       this.runId = stored.runId;
       this.r2SegmentIndex = stored.r2SegmentIndex ?? this.r2SegmentIndex;
       this.r2SegmentBuffer = stored.r2SegmentBuffer ?? this.r2SegmentBuffer;
-      this.r2LastFlushedSegmentIndex = stored.r2LastFlushedSegmentIndex ?? this.r2LastFlushedSegmentIndex;
-      this.usageSegmentIndex = stored.usageSegmentIndex ?? this.usageSegmentIndex;
-      this.usageSegmentBuffer = stored.usageSegmentBuffer ?? this.usageSegmentBuffer;
-      this.usageLastFlushedSegmentIndex = stored.usageLastFlushedSegmentIndex ?? this.usageLastFlushedSegmentIndex;
+      this.r2LastFlushedSegmentIndex = stored.r2LastFlushedSegmentIndex ??
+        this.r2LastFlushedSegmentIndex;
+      this.usageSegmentIndex = stored.usageSegmentIndex ??
+        this.usageSegmentIndex;
+      this.usageSegmentBuffer = stored.usageSegmentBuffer ??
+        this.usageSegmentBuffer;
+      this.usageLastFlushedSegmentIndex = stored.usageLastFlushedSegmentIndex ??
+        this.usageLastFlushedSegmentIndex;
+      this.emitDedupKeys = new Map(stored.emitDedupKeys ?? []);
     }
   }
 
   protected async persistState(): Promise<void> {
-    await this.state.storage.put('bufferState', {
+    await this.state.storage.put("bufferState", {
       eventBuffer: this.eventBuffer,
       eventIdCounter: this.eventIdCounter,
       runId: this.runId,
@@ -81,6 +102,7 @@ export class RunNotifierDO extends NotifierBase {
       usageSegmentIndex: this.usageSegmentIndex,
       usageSegmentBuffer: this.usageSegmentBuffer,
       usageLastFlushedSegmentIndex: this.usageLastFlushedSegmentIndex,
+      emitDedupKeys: Array.from(this.emitDedupKeys.entries()),
     });
   }
 
@@ -88,30 +110,41 @@ export class RunNotifierDO extends NotifierBase {
   // WebSocket – domain-specific auth & subscribe message
   // ---------------------------------------------------------------------------
 
-  protected override async validateWebSocket(_request: Request, _url: URL): Promise<{ reject?: Response; tags?: string[] }> {
+  protected override async validateWebSocket(
+    _request: Request,
+    _url: URL,
+  ): Promise<{ reject?: Response; tags?: string[] }> {
     // RunNotifier does not perform extra validation beyond the base auth check
     return {};
   }
 
-  protected override async handleWsMessage(ws: WebSocket, message: string): Promise<void> {
+  protected override async handleWsMessage(
+    ws: WebSocket,
+    message: string,
+  ): Promise<void> {
     try {
       const raw = JSON.parse(message) as Record<string, unknown>;
-      if (raw.type === 'subscribe' && typeof raw.runId === 'string' && raw.runId) {
+      if (
+        raw.type === "subscribe" && typeof raw.runId === "string" && raw.runId
+      ) {
         // runId can only be set via /emit (internal service call), not from client subscribe
         if (this.runId && raw.runId !== this.runId) {
           ws.send(JSON.stringify({
-            type: 'error',
-            data: { message: 'runId mismatch' },
+            type: "error",
+            data: { message: "runId mismatch" },
           }));
           return;
         }
         ws.send(JSON.stringify({
-          type: 'subscribed',
+          type: "subscribed",
           data: { runId: this.runId ?? raw.runId },
         }));
       }
-    } catch {
-      // ignore parse errors
+    } catch (error) {
+      logWarn("Invalid websocket message ignored", {
+        module: this.moduleName,
+        error: error instanceof Error ? error.message : String(error),
+      });
     }
   }
 
@@ -119,14 +152,18 @@ export class RunNotifierDO extends NotifierBase {
   // Extra routes (/usage)
   // ---------------------------------------------------------------------------
 
-  protected override handleExtraRoutes(request: Request, _url: URL, path: string): Response | Promise<Response> | null {
-    if (path === '/usage' && request.method === 'POST') {
+  protected override handleExtraRoutes(
+    request: Request,
+    _url: URL,
+    path: string,
+  ): Response | Promise<Response> | null {
+    if (path === "/usage" && request.method === "POST") {
       return (async () => {
         let body;
         try {
           body = await request.json() as Parameters<typeof this.handleUsage>[0];
         } catch {
-          return jsonResponse({ error: 'Invalid JSON' }, 400);
+          return jsonResponse({ error: "Invalid JSON" }, 400);
         }
         return this.handleUsage(body);
       })();
@@ -139,25 +176,48 @@ export class RunNotifierDO extends NotifierBase {
   // ---------------------------------------------------------------------------
 
   protected override async validateEmit(
-    input: { type: string; data: unknown; runId?: string; [key: string]: unknown },
+    input: {
+      type: string;
+      data: unknown;
+      runId?: string;
+      [key: string]: unknown;
+    },
   ): Promise<Response | null> {
     if (input.runId !== undefined) {
-      if (typeof input.runId !== 'string' || input.runId.length > 64 || !/^[a-zA-Z0-9_-]+$/.test(input.runId)) {
-        return jsonResponse({ success: false, error: 'Invalid runId' }, 400);
+      if (
+        typeof input.runId !== "string" || input.runId.length > 64 ||
+        !/^[a-zA-Z0-9_-]+$/.test(input.runId)
+      ) {
+        return jsonResponse({ success: false, error: "Invalid runId" }, 400);
       }
+    }
+    this.cleanupEmitDedupKeys(Date.now());
+    const dedupKey = this.readDedupKey(input);
+    if (dedupKey && this.emitDedupKeys.has(dedupKey)) {
+      return jsonResponse({ success: true, duplicate: true });
     }
     return null;
   }
 
   protected override async processEmit(
-    input: { type: string; data: unknown; runId?: string; [key: string]: unknown },
+    input: {
+      type: string;
+      data: unknown;
+      runId?: string;
+      [key: string]: unknown;
+    },
     eventId: number,
   ): Promise<EmitResult> {
-    if (!this.runId && typeof input.runId === 'string' && input.runId.trim()) {
+    if (!this.runId && typeof input.runId === "string" && input.runId.trim()) {
       this.runId = input.runId.trim();
     }
 
     const emittedAt = new Date().toISOString();
+    const dedupKey = this.readDedupKey(input);
+    if (dedupKey) {
+      this.emitDedupKeys.set(dedupKey, Date.now());
+      this.cleanupEmitDedupKeys(Date.now());
+    }
 
     // R2 offload
     if (this.offloadBucket) {
@@ -168,7 +228,10 @@ export class RunNotifierDO extends NotifierBase {
     if (this.isSegmentBoundaryOrTerminal(eventId, input.type)) {
       this.persistLastEventId(eventId).catch((err) => {
         const msg = err instanceof Error ? err.message : String(err);
-        logWarn('Best-effort D1 last_event_id update failed', { module: 'runnotifierdo', detail: msg });
+        logWarn("Best-effort D1 last_event_id update failed", {
+          module: "runnotifierdo",
+          detail: msg,
+        });
       });
     }
 
@@ -176,12 +239,21 @@ export class RunNotifierDO extends NotifierBase {
     if (RUN_TERMINAL_EVENT_TYPES.has(input.type as RunTerminalEventType)) {
       if (this.usageSegmentBuffer.length > 0) {
         try {
-          await this.flushUsageSegment(this.usageSegmentIndex, this.usageSegmentBuffer);
+          await this.flushUsageSegment(
+            this.usageSegmentIndex,
+            this.usageSegmentBuffer,
+          );
           this.usageSegmentBuffer = [];
           this.usageSegmentIndex = this.usageSegmentIndex + 1;
         } catch (err) {
-          logWarn('Usage segment flush on terminal event failed', { module: 'runnotifierdo', detail: err });
-          this.usageSegmentBuffer = this.enforceSegmentBufferCap(this.usageSegmentBuffer, 'usageSegmentBuffer');
+          logWarn("Usage segment flush on terminal event failed", {
+            module: "runnotifierdo",
+            detail: err,
+          });
+          this.usageSegmentBuffer = this.enforceSegmentBufferCap(
+            this.usageSegmentBuffer,
+            "usageSegmentBuffer",
+          );
         }
       }
     }
@@ -209,7 +281,12 @@ export class RunNotifierDO extends NotifierBase {
   // R2 offload helpers
   // ---------------------------------------------------------------------------
 
-  private async handleR2Offload(eventId: number, type: string, data: unknown, emittedAt: string): Promise<void> {
+  private async handleR2Offload(
+    eventId: number,
+    type: string,
+    data: unknown,
+    emittedAt: string,
+  ): Promise<void> {
     const newEntry: PersistedRunEvent = {
       event_id: eventId,
       type,
@@ -225,8 +302,14 @@ export class RunNotifierDO extends NotifierBase {
         await this.flushR2Segment(prevIndex, prevBuffer);
         this.r2SegmentBuffer = [];
       } catch (err) {
-        logWarn('R2 segment flush failed, keeping buffer for retry', { module: 'runnotifierdo', detail: err });
-        this.r2SegmentBuffer = this.enforceSegmentBufferCap(this.r2SegmentBuffer, 'r2SegmentBuffer');
+        logWarn("R2 segment flush failed, keeping buffer for retry", {
+          module: "runnotifierdo",
+          detail: err,
+        });
+        this.r2SegmentBuffer = this.enforceSegmentBufferCap(
+          this.r2SegmentBuffer,
+          "r2SegmentBuffer",
+        );
       }
       this.r2SegmentIndex = segmentIndex;
     }
@@ -239,23 +322,62 @@ export class RunNotifierDO extends NotifierBase {
         this.r2SegmentBuffer = [];
         this.r2SegmentIndex = segmentIndexForEventId(eventId + 1);
       } catch (err) {
-        logWarn('R2 boundary/terminal flush failed', { module: 'runnotifierdo', detail: err });
-        this.r2SegmentBuffer = this.enforceSegmentBufferCap(this.r2SegmentBuffer, 'r2SegmentBuffer');
+        logWarn("R2 boundary/terminal flush failed", {
+          module: "runnotifierdo",
+          detail: err,
+        });
+        this.r2SegmentBuffer = this.enforceSegmentBufferCap(
+          this.r2SegmentBuffer,
+          "r2SegmentBuffer",
+        );
       }
     }
 
-    this.r2SegmentBuffer = this.enforceSegmentBufferCap(this.r2SegmentBuffer, 'r2SegmentBuffer');
+    this.r2SegmentBuffer = this.enforceSegmentBufferCap(
+      this.r2SegmentBuffer,
+      "r2SegmentBuffer",
+    );
   }
 
   private enforceSegmentBufferCap<T>(buffer: T[], label: string): T[] {
     if (buffer.length <= RunNotifierDO.MAX_SEGMENT_BUFFER_SIZE) return buffer;
     const excess = buffer.length - RunNotifierDO.MAX_SEGMENT_BUFFER_SIZE;
-    logWarn(`${label} exceeded max size (${buffer.length}), dropping ${excess} oldest entries`, { module: 'runnotifierdo' });
+    logWarn(
+      `${label} exceeded max size (${buffer.length}), dropping ${excess} oldest entries`,
+      { module: "runnotifierdo" },
+    );
     return buffer.slice(excess);
   }
 
+  private readDedupKey(input: { [key: string]: unknown }): string | null {
+    const dedupKey = input.dedup_key;
+    if (typeof dedupKey !== "string") return null;
+    const trimmed = dedupKey.trim();
+    if (!trimmed || trimmed.length > 512) return null;
+    return trimmed;
+  }
+
+  private cleanupEmitDedupKeys(nowMs: number): void {
+    for (const [key, seenAt] of this.emitDedupKeys) {
+      if (nowMs - seenAt > RunNotifierDO.EMIT_DEDUP_TTL_MS) {
+        this.emitDedupKeys.delete(key);
+      }
+    }
+    if (this.emitDedupKeys.size <= RunNotifierDO.MAX_EMIT_DEDUP_KEYS) {
+      return;
+    }
+    const overflow = this.emitDedupKeys.size -
+      RunNotifierDO.MAX_EMIT_DEDUP_KEYS;
+    let removed = 0;
+    for (const key of this.emitDedupKeys.keys()) {
+      this.emitDedupKeys.delete(key);
+      removed++;
+      if (removed >= overflow) break;
+    }
+  }
+
   private stringifyPersistedData(value: unknown): string {
-    if (typeof value === 'string') return value;
+    if (typeof value === "string") return value;
     try {
       return JSON.stringify(value);
     } catch {
@@ -269,24 +391,46 @@ export class RunNotifierDO extends NotifierBase {
     return RUN_TERMINAL_EVENT_TYPES.has(type as RunTerminalEventType);
   }
 
-  private async flushR2Segment(segmentIndex: number, events: PersistedRunEvent[]): Promise<void> {
+  private async flushR2Segment(
+    segmentIndex: number,
+    events: PersistedRunEvent[],
+  ): Promise<void> {
     if (!this.offloadBucket) return;
     if (!this.runId) return;
     if (events.length === 0) return;
     if (segmentIndex <= this.r2LastFlushedSegmentIndex) return;
 
-    await writeRunEventSegmentToR2(this.offloadBucket, this.runId, segmentIndex, events);
-    this.r2LastFlushedSegmentIndex = Math.max(this.r2LastFlushedSegmentIndex, segmentIndex);
+    await writeRunEventSegmentToR2(
+      this.offloadBucket,
+      this.runId,
+      segmentIndex,
+      events,
+    );
+    this.r2LastFlushedSegmentIndex = Math.max(
+      this.r2LastFlushedSegmentIndex,
+      segmentIndex,
+    );
   }
 
-  private async flushUsageSegment(segmentIndex: number, events: PersistedUsageEvent[]): Promise<void> {
+  private async flushUsageSegment(
+    segmentIndex: number,
+    events: PersistedUsageEvent[],
+  ): Promise<void> {
     if (!this.offloadBucket) return;
     if (!this.runId) return;
     if (events.length === 0) return;
     if (segmentIndex <= this.usageLastFlushedSegmentIndex) return;
 
-    await writeUsageEventSegmentToR2(this.offloadBucket, this.runId, segmentIndex, events);
-    this.usageLastFlushedSegmentIndex = Math.max(this.usageLastFlushedSegmentIndex, segmentIndex);
+    await writeUsageEventSegmentToR2(
+      this.offloadBucket,
+      this.runId,
+      segmentIndex,
+      events,
+    );
+    this.usageLastFlushedSegmentIndex = Math.max(
+      this.usageLastFlushedSegmentIndex,
+      segmentIndex,
+    );
   }
 
   private async persistLastEventId(eventId: number): Promise<void> {
@@ -297,7 +441,10 @@ export class RunNotifierDO extends NotifierBase {
         .where(eq(runs.id, this.runId));
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
-      logWarn('Failed to persist last_event_id', { module: 'runnotifierdo', detail: message });
+      logWarn("Failed to persist last_event_id", {
+        module: "runnotifierdo",
+        detail: message,
+      });
     }
   }
 
@@ -313,19 +460,31 @@ export class RunNotifierDO extends NotifierBase {
     metadata?: unknown;
   }): Promise<Response> {
     return this.state.blockConcurrencyWhile(async () => {
-      if (!this.runId && typeof input.runId === 'string' && input.runId.trim()) {
+      if (
+        !this.runId && typeof input.runId === "string" && input.runId.trim()
+      ) {
         this.runId = input.runId.trim();
       }
 
-      const meterType = typeof input.meter_type === 'string' ? input.meter_type.trim() : '';
-      const units = typeof input.units === 'number' ? input.units : parseFloat(String(input.units ?? ''));
+      const meterType = typeof input.meter_type === "string"
+        ? input.meter_type.trim()
+        : "";
+      const units = typeof input.units === "number"
+        ? input.units
+        : parseFloat(String(input.units ?? ""));
 
       if (!meterType) {
-        return jsonResponse({ success: false, error: 'meter_type is required' });
+        return jsonResponse({
+          success: false,
+          error: "meter_type is required",
+        });
       }
 
       if (!Number.isFinite(units) || units <= 0) {
-        return jsonResponse({ success: false, error: 'units must be positive' });
+        return jsonResponse({
+          success: false,
+          error: "units must be positive",
+        });
       }
 
       const metadataStr = input.metadata === undefined
@@ -335,19 +494,30 @@ export class RunNotifierDO extends NotifierBase {
       this.usageSegmentBuffer.push({
         meter_type: meterType,
         units,
-        reference_type: typeof input.reference_type === 'string' ? input.reference_type : null,
+        reference_type: typeof input.reference_type === "string"
+          ? input.reference_type
+          : null,
         metadata: metadataStr,
         created_at: new Date().toISOString(),
       });
 
       if (this.usageSegmentBuffer.length >= USAGE_EVENT_SEGMENT_SIZE) {
         try {
-          await this.flushUsageSegment(this.usageSegmentIndex, this.usageSegmentBuffer);
+          await this.flushUsageSegment(
+            this.usageSegmentIndex,
+            this.usageSegmentBuffer,
+          );
           this.usageSegmentBuffer = [];
           this.usageSegmentIndex = this.usageSegmentIndex + 1;
         } catch (err) {
-          logWarn('Usage segment flush failed', { module: 'runnotifierdo', detail: err });
-          this.usageSegmentBuffer = this.enforceSegmentBufferCap(this.usageSegmentBuffer, 'usageSegmentBuffer');
+          logWarn("Usage segment flush failed", {
+            module: "runnotifierdo",
+            detail: err,
+          });
+          this.usageSegmentBuffer = this.enforceSegmentBufferCap(
+            this.usageSegmentBuffer,
+            "usageSegmentBuffer",
+          );
         }
       }
 

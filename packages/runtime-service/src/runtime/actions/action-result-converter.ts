@@ -1,4 +1,4 @@
-import type { ExecutorStepResult } from './executor.ts';
+import type { ExecutorStepResult } from "./executor.ts";
 
 /**
  * Append a step result's stdout/stderr to accumulator arrays.
@@ -6,7 +6,7 @@ import type { ExecutorStepResult } from './executor.ts';
 export function appendOutput(
   result: ExecutorStepResult,
   stdoutParts: string[],
-  stderrParts: string[]
+  stderrParts: string[],
 ): void {
   if (result.stdout) stdoutParts.push(result.stdout);
   if (result.stderr) stderrParts.push(result.stderr);
@@ -19,12 +19,12 @@ export function buildCombinedResult(
   stdoutParts: string[],
   stderrParts: string[],
   outputs: Record<string, string>,
-  conclusion: 'success' | 'failure'
+  conclusion: "success" | "failure",
 ): ExecutorStepResult {
   return {
-    exitCode: conclusion === 'success' ? 0 : 1,
-    stdout: stdoutParts.join('\n').trimEnd(),
-    stderr: stderrParts.join('\n').trimEnd(),
+    exitCode: conclusion === "success" ? 0 : 1,
+    stdout: stdoutParts.join("\n").trimEnd(),
+    stderr: stderrParts.join("\n").trimEnd(),
     outputs,
     conclusion,
   };

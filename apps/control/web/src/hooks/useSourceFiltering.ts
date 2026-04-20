@@ -38,7 +38,6 @@ type PersistedSourceState = {
   filter: SourceFilter;
   sort: SourceSort;
   category: string;
-  officialOnly: boolean;
   query: string;
   selectedSpaceId: string | null;
 };
@@ -62,9 +61,6 @@ function readPersistedSourceState(): Partial<PersistedSourceState> {
         : undefined,
       category: typeof parsed.category === "string"
         ? parsed.category
-        : undefined,
-      officialOnly: typeof parsed.officialOnly === "boolean"
-        ? parsed.officialOnly
         : undefined,
       query: typeof parsed.query === "string" ? parsed.query : undefined,
       selectedSpaceId: typeof parsed.selectedSpaceId === "string"
@@ -100,8 +96,6 @@ export interface UseSourceFilteringResult {
   setSort: Setter<SourceSort>;
   category: Accessor<string>;
   setCategory: Setter<string>;
-  officialOnly: Accessor<boolean>;
-  setOfficialOnly: Setter<boolean>;
   query: Accessor<string>;
   setQuery: Setter<string>;
   debouncedQuery: Accessor<string>;
@@ -128,9 +122,6 @@ export function useSourceFiltering({
     persistedState.sort ?? "trending",
   );
   const [category, setCategory] = createSignal(persistedState.category ?? "");
-  const [officialOnly, setOfficialOnly] = createSignal(
-    persistedState.officialOnly ?? false,
-  );
   const [query, setQuery] = createSignal(persistedState.query ?? "");
   const [debouncedQuery, setDebouncedQuery] = createSignal(query());
 
@@ -190,7 +181,6 @@ export function useSourceFiltering({
       filter: filter(),
       sort: sort(),
       category: category(),
-      officialOnly: officialOnly(),
       query: query(),
       selectedSpaceId: effectiveSpaceId(),
     });
@@ -241,8 +231,6 @@ export function useSourceFiltering({
     setSort,
     category,
     setCategory,
-    officialOnly,
-    setOfficialOnly,
     query,
     setQuery,
     debouncedQuery,

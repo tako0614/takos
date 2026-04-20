@@ -39,6 +39,7 @@ import { MASKED_SECRET_VALUE } from "./desired-state-types.ts";
 import {
   normalizeRoutingWeight,
   sortBindings,
+  toRuntimeBindingType,
   toServiceBinding,
 } from "./resource-bindings.ts";
 
@@ -49,6 +50,7 @@ import {
 } from "./env-state-resolution.ts";
 
 import { getRuntimeConfig, saveRuntimeConfig } from "./runtime-config.ts";
+import { getPortableSecretValue } from "../resources/portable-runtime.ts";
 
 // Re-export resolveServiceCommonEnvState for external consumers
 export { resolveServiceCommonEnvState } from "./env-state-resolution.ts";
@@ -229,23 +231,59 @@ export class ServiceDesiredStateService {
     return rows.map((row) => ({
       id: row.id,
       name: row.bindingName,
-      type: toServiceBinding({
-        id: row.id,
-        bindingName: row.bindingName,
-        bindingType: row.bindingType,
-        config: "{}",
-        resourceId: row.resourceId,
-        resourceName: row.resourceName,
-        resourceType: "",
-        resourceStatus: "active",
-        resourceProviderName: null,
-        resourceProviderResourceId: null,
-        resourceProviderResourceName: row.resourceName,
-        resourceConfig: "{}",
-      })?.type ?? "service",
+      type: toRuntimeBindingType(row.bindingType) ?? "service",
       resource_id: row.resourceId,
       resource_name: row.resourceName,
     }));
+  }
+
+  private async resolveResourceBindings(
+    serviceId: string,
+  ): Promise<ServiceBindingSpec[]> {
+    const rows = await this.db.select({
+      id: serviceBindings.id,
+      bindingName: serviceBindings.bindingName,
+      bindingType: serviceBindings.bindingType,
+      config: serviceBindings.config,
+      resourceId: serviceBindings.resourceId,
+      resourceName: resources.name,
+      resourceType: resources.type,
+      resourceStatus: resources.status,
+      backendName: resources.backendName,
+      backingResourceId: resources.backingResourceId,
+      backingResourceName: resources.backingResourceName,
+      resourceConfig: resources.config,
+    })
+      .from(serviceBindings)
+      .innerJoin(resources, eq(resources.id, serviceBindings.resourceId))
+      .where(and(
+        eq(serviceBindings.serviceId, serviceId),
+        eq(resources.status, "active"),
+      ))
+      .orderBy(serviceBindings.bindingName)
+      .all();
+
+    const bindings: ServiceBindingSpec[] = [];
+    for (const row of rows) {
+      let secretText: string | undefined;
+      if (
+        toRuntimeBindingType(row.bindingType) === "secret_text" &&
+        row.backendName &&
+        row.backendName !== "cloudflare"
+      ) {
+        secretText = await getPortableSecretValue({
+          id: row.resourceId,
+          backend_name: row.backendName,
+          backing_resource_id: row.backingResourceId,
+          backing_resource_name: row.backingResourceName,
+          config: row.resourceConfig,
+        });
+      }
+
+      const binding = toServiceBinding(row, { secretText });
+      if (binding) bindings.push(binding);
+    }
+    return sortBindings(bindings);
   }
 
   async replaceResourceBindings(params: {
@@ -299,16 +337,22 @@ export class ServiceDesiredStateService {
     spaceId: string,
     serviceId: string,
   ): Promise<ServiceDesiredStateSnapshot> {
-    const [runtimeConfig, commonEnvState] = await Promise.all([
-      this.getRuntimeConfig(spaceId, serviceId),
-      resolveServiceCommonEnvState(this.env, spaceId, serviceId),
+    const [runtimeConfig, commonEnvState, resourceBindings] = await Promise.all(
+      [
+        this.getRuntimeConfig(spaceId, serviceId),
+        resolveServiceCommonEnvState(this.env, spaceId, serviceId),
+        this.resolveResourceBindings(serviceId),
+      ],
+    );
+    const bindings = sortBindings([
+      ...commonEnvState.envBindings,
+      ...resourceBindings,
     ]);
-    const bindings = sortBindings([...commonEnvState.envBindings]);
 
     return {
       envVars: commonEnvState.envVars,
       envBindings: commonEnvState.envBindings,
-      resourceBindings: [],
+      resourceBindings,
       bindings,
       runtimeConfig,
       commonEnvUpdates: commonEnvState.commonEnvUpdates,

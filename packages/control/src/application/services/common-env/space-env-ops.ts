@@ -1,44 +1,53 @@
-import { eq, and, sql } from 'drizzle-orm';
-import type { Env } from '../../../shared/types/index.ts';
-import { ConflictError } from 'takos-common/errors';
-import { generateId } from '../../../shared/utils/index.ts';
-import type { D1TransactionManager } from '../../../shared/utils/db-transaction.ts';
+import { and, eq, sql } from "drizzle-orm";
+import type { Env } from "../../../shared/types/index.ts";
+import { ConflictError } from "takos-common/errors";
+import { generateId } from "../../../shared/utils/index.ts";
+import type { D1TransactionManager } from "../../../shared/utils/db-transaction.ts";
 import {
   decryptCommonEnvValue,
   encryptCommonEnvValue,
   normalizeEnvName,
-} from './crypto.ts';
-import { writeCommonEnvAuditLog, type CommonEnvAuditActor } from './audit.ts';
-import { listSpaceEnvRows } from './repository.ts';
-import { assertSpaceCommonEnvKeyAllowed, getChanges } from './link-state.ts';
-import { getDb, accountEnvVars } from '../../../infra/db/index.ts';
+} from "./crypto.ts";
+import { type CommonEnvAuditActor, writeCommonEnvAuditLog } from "./audit.ts";
+import { listSpaceEnvRows } from "./repository.ts";
+import { assertSpaceCommonEnvKeyAllowed, getChanges } from "./link-state.ts";
+import { accountEnvVars, getDb } from "../../../infra/db/index.ts";
 
 export interface SpaceEnvDeps {
   env: Env;
   txManager: D1TransactionManager;
 }
 
-export async function listSpaceCommonEnv(deps: SpaceEnvDeps, spaceId: string): Promise<Array<{
-  name: string;
-  secret: boolean;
-  value: string;
-  updatedAt: string;
-}>> {
+export async function listSpaceCommonEnv(
+  deps: SpaceEnvDeps,
+  spaceId: string,
+): Promise<
+  Array<{
+    name: string;
+    secret: boolean;
+    value: string;
+    updatedAt: string;
+  }>
+> {
   const rows = await listSpaceEnvRows(deps.env, spaceId);
-  const out: Array<{ name: string; secret: boolean; value: string; updatedAt: string }> = [];
+  const out: Array<
+    { name: string; secret: boolean; value: string; updatedAt: string }
+  > = [];
   const dedupe = new Set<string>();
 
   for (const row of rows) {
     const canonicalName = normalizeEnvName(row.name);
     if (dedupe.has(canonicalName)) {
-      throw new ConflictError(`Conflicting common env entries exist for key: ${canonicalName}`);
+      throw new ConflictError(
+        `Conflicting common env entries exist for key: ${canonicalName}`,
+      );
     }
     dedupe.add(canonicalName);
     if (row.is_secret) {
       out.push({
         name: canonicalName,
         secret: true,
-        value: '********',
+        value: "********",
         updatedAt: row.updated_at,
       });
       continue;
@@ -66,9 +75,14 @@ export async function upsertSpaceCommonEnv(deps: SpaceEnvDeps, params: {
   const spaceId = params.spaceId;
   const name = normalizeEnvName(params.name);
   assertSpaceCommonEnvKeyAllowed(name);
-  const nextValue = String(params.value ?? '');
+  const nextValue = String(params.value ?? "");
   const timestamp = new Date().toISOString();
-  const encrypted = await encryptCommonEnvValue(deps.env, spaceId, name, nextValue);
+  const encrypted = await encryptCommonEnvValue(
+    deps.env,
+    spaceId,
+    name,
+    nextValue,
+  );
 
   const existing = await getDb(deps.env.DB).select({
     id: accountEnvVars.id,
@@ -85,7 +99,9 @@ export async function upsertSpaceCommonEnv(deps: SpaceEnvDeps, params: {
     .all();
 
   if (existing.length > 1) {
-    throw new ConflictError(`Conflicting common env entries exist for key: ${name}`);
+    throw new ConflictError(
+      `Conflicting common env entries exist for key: ${name}`,
+    );
   }
 
   if (existing.length === 1) {
@@ -115,7 +131,7 @@ export async function upsertSpaceCommonEnv(deps: SpaceEnvDeps, params: {
       await writeCommonEnvAuditLog({
         db: deps.env.DB,
         spaceId,
-        eventType: 'workspace_env_updated',
+        eventType: "workspace_env_updated",
         envName: name,
         changeBefore: {
           exists: true,
@@ -145,7 +161,7 @@ export async function upsertSpaceCommonEnv(deps: SpaceEnvDeps, params: {
       await writeCommonEnvAuditLog({
         db: deps.env.DB,
         spaceId,
-        eventType: 'workspace_env_created',
+        eventType: "workspace_env_created",
         envName: name,
         changeBefore: { exists: false },
         changeAfter: {
@@ -158,16 +174,25 @@ export async function upsertSpaceCommonEnv(deps: SpaceEnvDeps, params: {
   }
 }
 
-export async function ensureSystemCommonEnv(deps: SpaceEnvDeps, spaceId: string, entries: Array<{
-  name: string;
-  value: string;
-  secret?: boolean;
-}>): Promise<void> {
+export async function ensureSystemCommonEnv(
+  deps: SpaceEnvDeps,
+  spaceId: string,
+  entries: Array<{
+    name: string;
+    value: string;
+    secret?: boolean;
+  }>,
+): Promise<void> {
   for (const entry of entries) {
     const name = normalizeEnvName(entry.name);
-    const value = String(entry.value ?? '');
+    const value = String(entry.value ?? "");
     const isSecret = entry.secret === true;
-    const encrypted = await encryptCommonEnvValue(deps.env, spaceId, name, value);
+    const encrypted = await encryptCommonEnvValue(
+      deps.env,
+      spaceId,
+      name,
+      value,
+    );
     const timestamp = new Date().toISOString();
 
     await deps.txManager.runInTransaction(async () => {
@@ -190,20 +215,25 @@ export async function ensureSystemCommonEnv(deps: SpaceEnvDeps, spaceId: string,
       await writeCommonEnvAuditLog({
         db: deps.env.DB,
         spaceId,
-        eventType: 'workspace_env_created',
+        eventType: "workspace_env_created",
         envName: name,
         changeBefore: { exists: false },
         changeAfter: {
           exists: true,
           is_secret: isSecret,
         },
-        actor: { type: 'system' },
+        actor: { type: "system" },
       });
     });
   }
 }
 
-export async function deleteSpaceCommonEnv(deps: SpaceEnvDeps, spaceId: string, nameRaw: string, actor?: CommonEnvAuditActor): Promise<boolean> {
+export async function deleteSpaceCommonEnv(
+  deps: SpaceEnvDeps,
+  spaceId: string,
+  nameRaw: string,
+  actor?: CommonEnvAuditActor,
+): Promise<boolean> {
   const name = normalizeEnvName(nameRaw);
   assertSpaceCommonEnvKeyAllowed(name);
   const existing = await getDb(deps.env.DB).select({
@@ -230,7 +260,7 @@ export async function deleteSpaceCommonEnv(deps: SpaceEnvDeps, spaceId: string, 
     await writeCommonEnvAuditLog({
       db: deps.env.DB,
       spaceId,
-      eventType: 'workspace_env_deleted',
+      eventType: "workspace_env_deleted",
       envName: name,
       changeBefore: {
         exists: true,

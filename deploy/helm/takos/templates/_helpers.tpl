@@ -141,13 +141,6 @@ Executor Host internal URL
 {{- end }}
 
 {{/*
-Browser Host internal URL
-*/}}
-{{- define "takos.browserHostUrl" -}}
-{{- printf "http://%s-browser-host:%v" (include "takos.fullname" .) (int .Values.browserHost.port) }}
-{{- end }}
-
-{{/*
 Runtime internal URL
 */}}
 {{- define "takos.runtimeUrl" -}}
@@ -159,13 +152,6 @@ Executor internal URL
 */}}
 {{- define "takos.executorUrl" -}}
 {{- printf "http://%s-executor:%v" (include "takos.fullname" .) (int .Values.executor.port) }}
-{{- end }}
-
-{{/*
-Browser internal URL
-*/}}
-{{- define "takos.browserUrl" -}}
-{{- printf "http://%s-browser:%v" (include "takos.fullname" .) (int .Values.browser.port) }}
 {{- end }}
 
 {{/*

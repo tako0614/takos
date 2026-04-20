@@ -6,7 +6,7 @@ import {
 // ---------------------------------------------------------------------------
 // createInitialState
 // ---------------------------------------------------------------------------
-import { assertEquals } from 'jsr:@std/assert';
+import { assertEquals, assertThrows } from 'jsr:@std/assert';
 
   Deno.test('createInitialState - returns a fresh state with default values', () => {
   const state = createInitialState();
@@ -62,22 +62,27 @@ import { assertEquals } from 'jsr:@std/assert';
 // ---------------------------------------------------------------------------
 
 
-  Deno.test('asDurableObjectFetcher - casts any object to DurableObjectFetchLike', () => {
+  Deno.test('asDurableObjectFetcher - wraps a fetch-capable stub', async () => {
   const stub = {
       fetch: async () => new Response('ok'),
     };
     const fetcher = asDurableObjectFetcher(stub);
-    assertEquals(fetcher, stub);
     assertEquals(typeof fetcher.fetch, 'function');
+    assertEquals(await (await fetcher.fetch("http://localhost")).text(), "ok");
 })
-  Deno.test('asDurableObjectFetcher - casts null without throwing', () => {
-  const fetcher = asDurableObjectFetcher(null);
-    assertEquals(fetcher, null);
+  Deno.test('asDurableObjectFetcher - rejects null stubs', () => {
+  assertThrows(
+      () => asDurableObjectFetcher(null),
+      TypeError,
+      "Durable Object stub does not expose fetch()",
+    );
 })
-  Deno.test('asDurableObjectFetcher - casts a mock DO stub', () => {
+  Deno.test('asDurableObjectFetcher - forwards to a mock DO stub', async () => {
   const mockStub = {
       fetch: (async () => new Response('{"ok":true}')),
     };
     const fetcher = asDurableObjectFetcher(mockStub);
-    assertEquals(fetcher.fetch, mockStub.fetch);
+    assertEquals(await (await fetcher.fetch("http://localhost")).json(), {
+      ok: true,
+    });
 })

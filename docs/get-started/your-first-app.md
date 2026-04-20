@@ -1,6 +1,6 @@
-# はじめてのアプリ
+# はじめての group
 
-シンプルな Worker アプリを作って staging にデプロイし、Takos
+シンプルな Worker group を作って staging にデプロイし、Takos
 の基本的な流れを一通り触る。所要時間 10 分。
 
 ## 前提
@@ -8,12 +8,14 @@
 - `takos-cli` がインストール済み（[Get Started](/get-started/) 参照）
 - `takos login` でログイン済み
 
-Takos endpoint に `takos login` で認証していれば、追加の provider 設定は不要です。Takos kernel をセルフホストする operator 向けの設定は [Hosting / Cloudflare](/hosting/cloudflare) を参照してください。
+Takos endpoint に `takos login` で認証していれば、追加の operator backend
+設定は不要です。Takos kernel をセルフホストする operator 向けの設定は
+[Hosting](/hosting/) を参照してください。
 
 ## 1. プロジェクトを作る
 
 ```bash
-mkdir my-first-app && cd my-first-app
+mkdir my-first-group && cd my-first-group
 npm init -y
 ```
 
@@ -33,7 +35,7 @@ export default {
 };
 ```
 
-## 3. Takos のアプリ定義を書く
+## 3. Takos の deploy manifest を書く
 
 ```bash
 mkdir -p .takos/workflows
@@ -41,7 +43,7 @@ mkdir -p .takos/workflows
 
 ```yaml
 # .takos/app.yml
-name: my-first-app
+name: my-first-group
 
 compute:
   web:
@@ -64,6 +66,7 @@ routes:
 name: deploy
 jobs:
   bundle:
+    runs-on: ubuntu-latest
     steps:
       - name: Install dependencies
         run: npm install
@@ -97,22 +100,20 @@ npm install && npm run build
 
 ```bash
 takos login
-takos deploy --env staging --space SPACE_ID
+takos deploy --env staging --space SPACE_ID --group my-first-group
 ```
 
 ::: tip CLI は Takos の認証情報を使います。`takos login` 後は `--account-id` や
-`--api-token` を渡す必要はありません。 :::
+`--api-token` を渡す必要はありません。:::
 
 デプロイ成功すると URL が表示される。ブラウザで開いて "Hello from Takos!"
 が出れば成功。
 
 manifest の整合性だけ先に確認したい場合:
-`takos deploy --plan --space SPACE_ID`
+`takos deploy --plan --space SPACE_ID --group my-first-group`
 
-::: tip flat manifest
-`app.yml` は flat 構造です。`apiVersion` / `kind` / `metadata` / `spec`
-のラッパーは不要で、`name` をトップレベルに書きます。
-:::
+::: tip flat manifest `app.yml` は flat 構造です。`apiVersion` / `kind` /
+`metadata` / `spec` のラッパーは不要で、`name` をトップレベルに書きます。:::
 
 ## 次のステップ
 

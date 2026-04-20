@@ -8,62 +8,62 @@
 // Types and constants
 export {
   METER_TYPES,
-  WEEKLY_RUNTIME_WINDOW_DAYS,
   WEEKLY_RUNTIME_LIMIT_SECONDS,
-} from './billing-types.ts';
+  WEEKLY_RUNTIME_WINDOW_DAYS,
+} from "./billing-types.ts";
 
 export type {
-  MeterType,
-  TransactionType,
+  BillingAccountWithPlan,
   BillingCheckResult,
+  MeterType,
+  RollingUsageSnapshot,
+  TransactionType,
   UsageRecordInput,
   UsageRecordResult,
-  RollingUsageSnapshot,
   WeeklyRuntimeLimitCheck,
-  BillingAccountWithPlan,
-} from './billing-types.ts';
+} from "./billing-types.ts";
 
 // Plan definitions and resolution
 export {
-  CANONICAL_BILLING_PLAN_IDS,
   assertBillingPlanId,
-  resolveBillingPlanTier,
-  resolveBillingMode,
-  loadBillingAccountWithPlan,
-  ensureDefaultBillingCatalog,
-  hasExpectedBillingCatalog,
-  resolveCanonicalBillingPlanId,
-  resolveCanonicalBillingPlanIdFromName,
-  isCanonicalBillingPlanId,
+  CANONICAL_BILLING_PLAN_IDS,
   DEFAULT_BILLING_QUOTAS,
   DEFAULT_BILLING_RATES,
-} from './billing-plans.ts';
+  ensureDefaultBillingCatalog,
+  hasExpectedBillingCatalog,
+  isCanonicalBillingPlanId,
+  loadBillingAccountWithPlan,
+  resolveBillingMode,
+  resolveBillingPlanTier,
+  resolveCanonicalBillingPlanId,
+  resolveCanonicalBillingPlanIdFromName,
+} from "./billing-plans.ts";
 export type {
+  BillingMode,
   BillingPlanId,
   BillingPlanTier,
-  BillingMode,
-} from './billing-plans.ts';
+} from "./billing-plans.ts";
 
 // Account management
 export {
-  getOrCreateBillingAccount,
-  assignPlanToUser,
   addCredits,
+  assignPlanToUser,
   checkFeatureAccess,
-} from './billing-accounts.ts';
+  getOrCreateBillingAccount,
+} from "./billing-accounts.ts";
 
 // Usage tracking
 export {
   checkBillingQuota,
-  recordUsage,
-  getRollingUsage,
   checkWeeklyRuntimeLimit,
-} from './billing-usage.ts';
+  getRollingUsage,
+  recordUsage,
+} from "./billing-usage.ts";
 
 // Run-level batch usage recording
-export { recordRunUsageBatch } from './billing-run-usage.ts';
+export { recordRunUsageBatch } from "./billing-run-usage.ts";
 
-// Payment provider abstraction
+// Payment processor abstraction
 export type {
   BillingWebhookEvent,
   CheckoutSessionResult,
@@ -72,6 +72,6 @@ export type {
   CreatePortalInput,
   ListInvoicesInput,
   NormalizedInvoice,
-  PaymentProvider,
-} from './payment-provider.ts';
-export { resolvePaymentProvider } from './providers/index.ts';
+  PaymentProcessor,
+} from "./payment-processor.ts";
+export { resolvePaymentProcessor } from "./processors/index.ts";

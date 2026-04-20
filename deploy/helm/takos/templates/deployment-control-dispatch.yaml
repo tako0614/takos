@@ -27,7 +27,7 @@ spec:
         - name: control-dispatch
           image: "{{ .Values.images.control.repository }}:{{ .Values.images.control.tag }}"
           imagePullPolicy: {{ .Values.images.control.pullPolicy }}
-          command: ["pnpm", "local:dispatch"]
+          command: ["deno", "task", "dev:local:dispatch"]
           ports:
             - name: http
               containerPort: {{ .Values.controlDispatch.port }}

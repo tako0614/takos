@@ -1,91 +1,52 @@
 import type {
   DurableObjectNamespace,
   DurableObjectStub,
-} from '../shared/types/bindings.ts';
+} from "../shared/types/bindings.ts";
 
-export { createInMemoryD1Database } from './in-memory-d1.ts';
-export { createInMemoryKVNamespace } from './in-memory-kv.ts';
-export { createInMemoryR2Bucket } from './in-memory-r2.ts';
-export { createInMemoryQueue } from './in-memory-queue.ts';
+export { createInMemoryD1Database } from "./in-memory-d1.ts";
+export { createInMemoryKVNamespace } from "./in-memory-kv.ts";
+export { createInMemoryR2Bucket } from "./in-memory-r2.ts";
+export { createInMemoryQueue } from "./in-memory-queue.ts";
 
-export type InMemoryDurableObjectNamespace = DurableObjectNamespace & {
-  getByName(name: string): DurableObjectStub;
+export type InMemoryDurableObjectNamespace<
+  TStub = DurableObjectStub,
+> = DurableObjectNamespace<TStub> & {
+  getByName(name: string): TStub;
 };
 
-export function createInMemoryDurableObjectNamespace(
-  factory?: (id: string) => DurableObjectStub,
-): InMemoryDurableObjectNamespace {
-  const stubs = new Map<string, DurableObjectStub>();
+function durableObjectIdKey(id: unknown): string {
+  return typeof id === "string" ? id : String(id);
+}
 
-  const makeStub = (id: string): DurableObjectStub => {
+export function createInMemoryDurableObjectNamespace<
+  TStub = DurableObjectStub,
+>(
+  factory?: (id: string) => TStub,
+): InMemoryDurableObjectNamespace<TStub> {
+  const stubs = new Map<string, TStub>();
+
+  const makeStub = (id: string): TStub => {
     if (factory) return factory(id);
     return {
-      id: {
-        equals(other: { toString(): string }) {
-          return other.toString() === id;
-        },
-        toString() {
-          return id;
-        },
-        name: id,
-      },
-      name: id,
       async fetch() {
-        return Response.json({ ok: true, durableObject: id }) as unknown as Response;
+        return Response.json({ ok: true, durableObject: id });
       },
-      connect() {
-        throw new Error('connect() is not supported in the local durable object stub');
-      },
-    } as unknown as DurableObjectStub;
+    } as TStub;
   };
 
-  const namespace = {
-    newUniqueId() {
-      const raw = crypto.randomUUID();
-      return {
-        equals(other: { toString(): string }) {
-          return other.toString() === raw;
-        },
-        toString() {
-          return raw;
-        },
-        name: raw,
-      };
-    },
+  const namespace: InMemoryDurableObjectNamespace<TStub> = {
     idFromName(name: string) {
-      return {
-        equals(other: { toString(): string }) {
-          return other.toString() === name;
-        },
-        toString() {
-          return name;
-        },
-        name,
-      };
+      return name;
     },
-    idFromString(id: string) {
-      return {
-        equals(other: { toString(): string }) {
-          return other.toString() === id;
-        },
-        toString() {
-          return id;
-        },
-        name: id,
-      };
-    },
-    get(id: { toString(): string }) {
-      const key = id.toString();
+    get(id: unknown) {
+      const key = durableObjectIdKey(id);
       if (!stubs.has(key)) stubs.set(key, makeStub(key));
       return stubs.get(key)!;
     },
     getByName(name: string) {
       return namespace.get(namespace.idFromName(name));
     },
-    jurisdiction() {
-      return namespace;
-    },
   };
 
-  return namespace as unknown as InMemoryDurableObjectNamespace;
+  return namespace;
 }

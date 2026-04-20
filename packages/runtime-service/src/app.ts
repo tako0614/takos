@@ -48,6 +48,7 @@ export type RuntimeServiceOptions = {
   serviceName?: string;
   isProduction?: boolean;
   isContainerEnvironment?: boolean;
+  allowLocalCliProxyBypass?: boolean;
 };
 
 function isLoopbackAddress(addr: string): boolean {
@@ -56,7 +57,11 @@ function isLoopbackAddress(addr: string): boolean {
 
 function isLocalCliProxyBypassRequest(
   c: import("hono").Context<RuntimeEnv>,
+  allowLoopbackBypass: boolean,
 ): boolean {
+  if (!allowLoopbackBypass) {
+    return false;
+  }
   if (!c.req.path.startsWith("/cli-proxy/")) {
     return false;
   }
@@ -78,7 +83,7 @@ export function createRuntimeServiceApp(
     jwtPublicKey: JWT_PUBLIC_KEY,
     expectedIssuer: "takos-control",
     expectedAudience: "takos-runtime",
-    skipPaths: ["/health"],
+    skipPaths: ["/health", "/healthz"],
     clockToleranceSeconds: 30,
   });
 
@@ -86,6 +91,11 @@ export function createRuntimeServiceApp(
     Deno.env.get("NODE_ENV") === "production";
   const isContainerEnvironment = options.isContainerEnvironment ??
     !!Deno.env.get("CF_CONTAINER");
+  const allowLoopbackCliProxyBypass = options.allowLocalCliProxyBypass ??
+    (
+      Deno.env.get("TAKOS_RUNTIME_ALLOW_LOOPBACK_CLI_PROXY_BYPASS") === "1" ||
+      !!Deno.env.get("TAKOS_LOCAL_DATA_DIR")
+    );
   const logger = createLogger({
     service: options.serviceName ?? "takos-runtime",
   });
@@ -129,8 +139,8 @@ export function createRuntimeServiceApp(
     await next();
   });
 
-  app.get("/ping", (c) => c.text("pong", 200));
   app.get("/health", (c) => c.json({ ok: true }, 200));
+  app.get("/healthz", (c) => c.json({ ok: true }, 200));
 
   app.use("/cli-proxy/*", async (c, next) => {
     if (getServiceTokenFromHeader(c)) {
@@ -138,7 +148,7 @@ export function createRuntimeServiceApp(
       return;
     }
 
-    if (isLocalCliProxyBypassRequest(c)) {
+    if (isLocalCliProxyBypassRequest(c, allowLoopbackCliProxyBypass)) {
       await next();
       return;
     }
@@ -147,12 +157,14 @@ export function createRuntimeServiceApp(
   });
 
   app.use(async (c, next) => {
-    if (isLocalCliProxyBypassRequest(c)) {
+    if (isLocalCliProxyBypassRequest(c, allowLoopbackCliProxyBypass)) {
       await next();
       return;
     }
     return requireServiceToken(c, next);
   });
+
+  app.get("/ping", (c) => c.text("pong", 200));
 
   app.use(async (c, next) => {
     const ct = c.req.header("content-type") || "";
@@ -200,13 +212,16 @@ export function createRuntimeServiceApp(
   });
 
   app.use("/exec/*", execRateLimiter);
+  app.use("/exec", execRateLimiter);
   // /execute-tool is a sibling path, not a child of /exec, so the wildcard
   // above does not match it. Apply the exec limiter explicitly.
   app.use("/execute-tool", execRateLimiter);
+  app.use("/session/*", sessionRateLimiter);
   app.use("/session/exec", execRateLimiter);
   app.use("/session/snapshot/*", snapshotRateLimiter);
-  app.use("/session/*", sessionRateLimiter);
+  app.use("/session/snapshot", snapshotRateLimiter);
   app.use("/sessions/*", sessionRateLimiter);
+  app.use("/sessions", sessionRateLimiter);
   app.use("/actions/*", actionsRateLimiter);
   app.use("/git/*", gitRateLimiter);
   app.use("/repos/*", reposRateLimiter);
@@ -221,6 +236,7 @@ export function createRuntimeServiceApp(
   ]);
   app.use("/session/*", sessionSpaceScope);
   app.use("/sessions/*", sessionSpaceScope);
+  app.use("/sessions", sessionSpaceScope);
   app.use("/repos/*", repoSpaceScope);
 
   app.route("/", cliProxyRoutes);

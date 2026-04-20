@@ -81,8 +81,11 @@ Deno.test("local redis-backed bindings - uses redis for local queue and routing 
   const originalDisableRedisExternals = Deno.env.get(
     "TAKOS_DISABLE_REDIS_EXTERNALS",
   );
+  const originalLocalDataDir = Deno.env.get("TAKOS_LOCAL_DATA_DIR");
+  const tempLocalDataDir = await Deno.makeTempDir();
   Deno.env.set("REDIS_URL", "redis://localhost:6379");
   Deno.env.set("TAKOS_DISABLE_REDIS_EXTERNALS", "1");
+  Deno.env.set("TAKOS_LOCAL_DATA_DIR", tempLocalDataDir);
   calls.length = 0;
   stores.clear();
   installRedisMock();
@@ -151,8 +154,14 @@ Deno.test("local redis-backed bindings - uses redis for local queue and routing 
         originalDisableRedisExternals,
       );
     }
+    if (originalLocalDataDir === undefined) {
+      Deno.env.delete("TAKOS_LOCAL_DATA_DIR");
+    } else {
+      Deno.env.set("TAKOS_LOCAL_DATA_DIR", originalLocalDataDir);
+    }
     setRedisClientFactoryForTests(null);
     resetRedisClientForTests();
     await resetNodePlatformStateForTests();
+    await Deno.remove(tempLocalDataDir, { recursive: true });
   }
 });

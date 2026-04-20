@@ -125,15 +125,22 @@ export function StoragePage(props: StoragePageProps) {
 
   createEffect(() => {
     const spaceId = props.spaceId;
-    if (!spaceId) return;
+    const file = actions.viewingFile();
+    if (!spaceId || !file) {
+      setFileHandlers([]);
+      return;
+    }
     const requestVersion = ++fileHandlersRequestVersion;
     let cancelled = false;
     onCleanup(() => {
       cancelled = true;
     });
+    setFileHandlers([]);
     void loadStorageFileHandlers(
       spaceId,
       () => !cancelled && requestVersion === fileHandlersRequestVersion,
+      globalThis.fetch,
+      file,
     ).then((handlers) => {
       if (handlers) setFileHandlers(handlers);
     });

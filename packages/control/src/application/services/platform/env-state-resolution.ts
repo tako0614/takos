@@ -1,4 +1,4 @@
-import type { WorkerBinding } from "../../../platform/providers/cloudflare/wfp.ts";
+import type { WorkerBinding } from "../../../platform/backends/cloudflare/wfp.ts";
 import { ConflictError, InternalError } from "takos-common/errors";
 import { decrypt, type EncryptedData } from "../../../shared/utils/crypto.ts";
 import { resolveServiceConsumeEnvVars } from "./service-publications.ts";
@@ -11,6 +11,16 @@ import type {
   ServiceEnvRow,
   ServiceLocalEnvVarState,
 } from "./desired-state-types.ts";
+import {
+  createBindingFingerprint,
+  decryptCommonEnvValue,
+} from "../common-env/crypto.ts";
+import {
+  listServiceLinks,
+  listSpaceEnvRows,
+} from "../common-env/repository.ts";
+import { groupLinkRowsByEnvName } from "../common-env/link-state.ts";
+import type { ReconcileUpdate } from "../common-env/repository.ts";
 
 function normalizeEnvName(name: string): string {
   const normalized = String(name || "").trim();
@@ -65,6 +75,100 @@ export async function decryptServiceEnvRow(
   };
 }
 
+type ResolvedCommonEnvLinks = {
+  envBindings: WorkerBinding[];
+  envVars: Record<string, string>;
+  commonEnvUpdates: ReconcileUpdate[];
+};
+
+export async function resolveLinkedCommonEnvState(
+  env: DesiredStateEnv,
+  spaceId: string,
+  serviceId: string,
+): Promise<ResolvedCommonEnvLinks> {
+  const linkRows = await listServiceLinks(env, spaceId, serviceId);
+  const effectiveLinks = groupLinkRowsByEnvName(linkRows);
+  if (effectiveLinks.size === 0) {
+    return {
+      envBindings: [],
+      envVars: {},
+      commonEnvUpdates: [],
+    };
+  }
+
+  const envRows = await listSpaceEnvRows(env, spaceId);
+  const commonEnvRows = new Map<string, (typeof envRows)[number]>();
+  for (const row of envRows) {
+    const canonicalName = normalizeEnvName(row.name);
+    if (commonEnvRows.has(canonicalName)) {
+      throw new ConflictError(
+        `Conflicting common env entries exist for key: ${canonicalName}`,
+      );
+    }
+    commonEnvRows.set(canonicalName, row);
+  }
+
+  const envBindings: WorkerBinding[] = [];
+  const envVars: Record<string, string> = {};
+  const commonEnvUpdates: ReconcileUpdate[] = [];
+
+  for (
+    const [envName, linkRow] of Array.from(effectiveLinks.entries()).sort(
+      ([a], [b]) => a.localeCompare(b),
+    )
+  ) {
+    if (linkRow.sync_state === "overridden") {
+      continue;
+    }
+
+    const commonRow = commonEnvRows.get(envName);
+    if (!commonRow) {
+      commonEnvUpdates.push({
+        rowId: linkRow.id,
+        lastAppliedFingerprint: null,
+        lastObservedFingerprint: null,
+        syncState: "missing_common",
+        syncReason: `common env '${envName}' is not defined`,
+      });
+      continue;
+    }
+
+    const value = await decryptCommonEnvValue(env, {
+      space_id: commonRow.space_id,
+      name: commonRow.name,
+      value_encrypted: commonRow.value_encrypted,
+    });
+    const type = commonRow.is_secret ? "secret_text" : "plain_text";
+    const fingerprint = await createBindingFingerprint({
+      env,
+      spaceId,
+      envName,
+      type,
+      text: value,
+    });
+
+    envBindings.push({
+      type,
+      name: envName,
+      text: value,
+    });
+    envVars[envName] = value;
+    commonEnvUpdates.push({
+      rowId: linkRow.id,
+      lastAppliedFingerprint: fingerprint,
+      lastObservedFingerprint: fingerprint,
+      syncState: "managed",
+      syncReason: "common env resolved",
+    });
+  }
+
+  return {
+    envBindings: sortBindings(envBindings),
+    envVars,
+    commonEnvUpdates,
+  };
+}
+
 export async function resolveServiceCommonEnvState(
   env: DesiredStateEnv,
   spaceId: string,
@@ -110,6 +214,20 @@ export async function resolveServiceCommonEnvState(
     });
   }
 
+  const linkedCommonEnvState = await resolveLinkedCommonEnvState(
+    env,
+    spaceId,
+    serviceId,
+  );
+  for (const binding of linkedCommonEnvState.envBindings) {
+    if (envBindingMap.has(binding.name)) {
+      throw new ConflictError(
+        `Linked common env collides with existing env binding: ${binding.name}`,
+      );
+    }
+    envBindingMap.set(binding.name, binding);
+  }
+
   const publicationEnvVars = await resolveServiceConsumeEnvVars(env, {
     spaceId,
     serviceId,
@@ -140,6 +258,6 @@ export async function resolveServiceCommonEnvState(
     envBindings,
     envVars,
     localEnvVars,
-    commonEnvUpdates: [],
+    commonEnvUpdates: linkedCommonEnvState.commonEnvUpdates,
   };
 }

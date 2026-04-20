@@ -48,6 +48,7 @@ import {
   type CreateFileInput,
   type CreateFolderInput,
   type DownloadUrlResponse,
+  FILE_URL_EXPIRY_SECONDS,
   getStorageDb,
   MAX_CONTENT_SIZE,
   MAX_FILE_SIZE,
@@ -55,7 +56,6 @@ import {
   MAX_PATH_LENGTH,
   MAX_ZIP_ENTRIES,
   type MoveInput,
-  PRESIGN_EXPIRY_SECONDS,
   R2_KEY_PREFIX,
   type RenameInput,
   StorageError,
@@ -222,6 +222,38 @@ export async function moveStorageItem(
   });
 }
 
+export async function moveAndRenameStorageItem(
+  d1: D1Database,
+  spaceId: string,
+  fileId: string,
+  input: { parentPath: string; name: string },
+): Promise<StorageFileResponse> {
+  const db = getStorageDb(d1);
+  const file = await requireStorageItemResponse(d1, spaceId, fileId);
+  const name = ensureValidStorageName(input.name, "Invalid name");
+  const { normalizedParentPath, parentId } = await resolveStorageParentContext(
+    db,
+    spaceId,
+    input.parentPath,
+    "Destination folder not found",
+  );
+  const path = buildFullPath(normalizedParentPath, name);
+  validateFullPath(path);
+  if (
+    file.type === "folder" &&
+    (normalizedParentPath === file.path ||
+      normalizedParentPath.startsWith(`${file.path}/`))
+  ) {
+    throw new StorageError("Cannot move a folder into itself", "VALIDATION");
+  }
+  return await applyStoragePathMutation(d1, spaceId, file, {
+    name,
+    path,
+    parentId,
+    rollbackLabel: "Move",
+  });
+}
+
 export async function bulkDeleteStorageItems(
   d1: D1Database,
   spaceId: string,
@@ -258,12 +290,12 @@ export {
 };
 
 export {
+  FILE_URL_EXPIRY_SECONDS,
   MAX_CONTENT_SIZE,
   MAX_FILE_SIZE,
   MAX_LIST_ITEMS,
   MAX_PATH_LENGTH,
   MAX_ZIP_ENTRIES,
-  PRESIGN_EXPIRY_SECONDS,
   R2_KEY_PREFIX,
   StorageError,
 };

@@ -1,6 +1,17 @@
-import type { Resource, ResourceAccess, ResourcePermission, ResourceStatus, ResourceType, ServiceBinding } from '../../../shared/types/index.ts';
-import { textDateNullable } from '../../../shared/utils/db-guards.ts';
-import { getStoredResourceImplementation, toResourceCapability, toPublicResourceType } from './capabilities.ts';
+import type {
+  Resource,
+  ResourceAccess,
+  ResourcePermission,
+  ResourceStatus,
+  ResourceType,
+  ServiceBinding,
+} from "../../../shared/types/index.ts";
+import { textDateNullable } from "../../../shared/utils/db-guards.ts";
+import {
+  getStoredResourceImplementation,
+  toPublicResourceType,
+  toResourceCapability,
+} from "./capabilities.ts";
 
 export function toApiResource(r: {
   id: string;
@@ -11,10 +22,10 @@ export function toApiResource(r: {
   type: string;
   semanticType?: string | null;
   driver?: string | null;
-  providerName?: string | null;
+  backendName?: string | null;
   status: string;
-  providerResourceId?: string | null;
-  providerResourceName?: string | null;
+  backingResourceId?: string | null;
+  backingResourceName?: string | null;
   config: string;
   metadata: string;
   sizeBytes: number | null;
@@ -36,10 +47,10 @@ export function toApiResource(r: {
     ...(capability ? { capability } : {}),
     ...(implementation ? { implementation } : {}),
     ...(r.driver !== undefined ? { driver: r.driver } : {}),
-    ...(r.providerName !== undefined ? { provider_name: r.providerName } : {}),
+    ...(r.backendName !== undefined ? { backend_name: r.backendName } : {}),
     status: r.status as ResourceStatus,
-    provider_resource_id: r.providerResourceId ?? null,
-    provider_resource_name: r.providerResourceName ?? null,
+    backing_resource_id: r.backingResourceId ?? null,
+    backing_resource_name: r.backingResourceName ?? null,
     config: r.config,
     metadata: r.metadata,
     size_bytes: r.sizeBytes,

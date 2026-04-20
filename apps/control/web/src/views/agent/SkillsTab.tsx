@@ -1,27 +1,27 @@
-import { createEffect, createSignal } from 'solid-js';
-import { useI18n } from '../../store/i18n.ts';
-import { useToast } from '../../store/toast.ts';
-import { useConfirmDialog } from '../../store/confirm-dialog.ts';
-import { rpc, rpcJson, rpcPath } from '../../lib/rpc.ts';
-import { getErrorMessage } from '../../lib/errors.ts';
-import { SkeletonList } from '../../components/Skeleton.tsx';
-import type { OfficialSkill, Skill } from '../../types/index.ts';
-import { SkillList } from './SkillList.tsx';
+import { createEffect, createSignal } from "solid-js";
+import { useI18n } from "../../store/i18n.ts";
+import { useToast } from "../../store/toast.ts";
+import { useConfirmDialog } from "../../store/confirm-dialog.ts";
+import { rpc, rpcJson, rpcPath } from "../../lib/rpc.ts";
+import { getErrorMessage } from "../../lib/errors.ts";
+import { SkeletonList } from "../../components/Skeleton.tsx";
+import type { ManagedSkill, Skill } from "../../types/index.ts";
+import { SkillList } from "./SkillList.tsx";
 import {
-  SkillFormView,
-  INITIAL_SKILL_FORM,
   buildSkillMetadata,
-  splitCsv,
+  INITIAL_SKILL_FORM,
   readSkillMutationResponse,
   type SkillFormData,
-} from './SkillForm.tsx';
+  SkillFormView,
+  splitCsv,
+} from "./SkillForm.tsx";
 
 export function SkillsTab({ spaceId }: { spaceId: string }) {
   const { t } = useI18n();
   const { showToast } = useToast();
   const { confirm } = useConfirmDialog();
   const [skills, setSkills] = createSignal<Skill[]>([]);
-  const [officialSkills, setOfficialSkills] = createSignal<OfficialSkill[]>([]);
+  const [managedSkills, setManagedSkills] = createSignal<ManagedSkill[]>([]);
   const [loading, setLoading] = createSignal(true);
   const [editingSkill, setEditingSkill] = createSignal<Skill | null>(null);
   const [isCreating, setIsCreating] = createSignal(false);
@@ -29,7 +29,9 @@ export function SkillsTab({ spaceId }: { spaceId: string }) {
   const [form, setForm] = createSignal<SkillFormData>(INITIAL_SKILL_FORM);
   const [saving, setSaving] = createSignal(false);
   const [error, setError] = createSignal<string | null>(null);
-  const [fieldErrors, setFieldErrors] = createSignal<Record<string, string>>({});
+  const [fieldErrors, setFieldErrors] = createSignal<Record<string, string>>(
+    {},
+  );
 
   createEffect(() => {
     void fetchSkills();
@@ -38,22 +40,24 @@ export function SkillsTab({ spaceId }: { spaceId: string }) {
   const fetchSkills = async () => {
     setLoading(true);
     try {
-      const [customRes, officialRes] = await Promise.all([
-        rpcPath(rpc, 'spaces', ':spaceId', 'skills').$get({
+      const [customRes, managedRes] = await Promise.all([
+        rpcPath(rpc, "spaces", ":spaceId", "skills").$get({
           param: { spaceId },
-        }) as Promise<Response>,
-        rpcPath(rpc, 'spaces', ':spaceId', 'official-skills').$get({
+        }),
+        rpcPath(rpc, "spaces", ":spaceId", "managed-skills").$get({
           param: { spaceId },
-        }) as Promise<Response>,
+        }),
       ]);
       const customData = await rpcJson<{ skills: Skill[] }>(customRes);
-      const officialData = await rpcJson<{ skills: OfficialSkill[] }>(officialRes);
+      const managedData = await rpcJson<{ skills: ManagedSkill[] }>(
+        managedRes,
+      );
       setSkills(customData.skills || []);
-      setOfficialSkills(officialData.skills || []);
+      setManagedSkills(managedData.skills || []);
     } catch {
       setSkills([]);
-      setOfficialSkills([]);
-      showToast('error', t('failedToLoad') || 'Failed to load skills');
+      setManagedSkills([]);
+      showToast("error", t("failedToLoad") || "Failed to load skills");
     } finally {
       setLoading(false);
     }
@@ -74,17 +78,26 @@ export function SkillsTab({ spaceId }: { spaceId: string }) {
   const openEditForm = (skill: Skill) => {
     setForm({
       name: skill.name,
-      description: skill.description || '',
+      description: skill.description || "",
       instructions: skill.instructions,
-      triggers: skill.triggers.join(', '),
-      skillLocale: skill.metadata?.locale || '',
-      category: skill.metadata?.category || '',
-      activationTags: (skill.metadata?.activation_tags || []).join(', '),
-      preferredTools: (skill.metadata?.execution_contract?.preferred_tools || []).join(', '),
-      durableOutputs: (skill.metadata?.execution_contract?.durable_output_hints || []).join(', '),
-      outputModes: (skill.metadata?.execution_contract?.output_modes || []).join(', '),
-      requiredMcpServers: (skill.metadata?.execution_contract?.required_mcp_servers || []).join(', '),
-      templateIds: (skill.metadata?.execution_contract?.template_ids || []).join(', '),
+      triggers: skill.triggers.join(", "),
+      skillLocale: skill.metadata?.locale || "",
+      category: skill.metadata?.category || "",
+      activationTags: (skill.metadata?.activation_tags || []).join(", "),
+      preferredTools:
+        (skill.metadata?.execution_contract?.preferred_tools || []).join(", "),
+      durableOutputs:
+        (skill.metadata?.execution_contract?.durable_output_hints || []).join(
+          ", ",
+        ),
+      outputModes: (skill.metadata?.execution_contract?.output_modes || [])
+        .join(", "),
+      requiredMcpServers:
+        (skill.metadata?.execution_contract?.required_mcp_servers || []).join(
+          ", ",
+        ),
+      templateIds: (skill.metadata?.execution_contract?.template_ids || [])
+        .join(", "),
     });
     setError(null);
     setFieldErrors({});
@@ -98,7 +111,9 @@ export function SkillsTab({ spaceId }: { spaceId: string }) {
     resetForm();
   };
 
-  const handleSubmit = async (e: Event & { currentTarget: HTMLFormElement }) => {
+  const handleSubmit = async (
+    e: Event & { currentTarget: HTMLFormElement },
+  ) => {
     e.preventDefault();
     const f = form();
     if (!f.name.trim() || !f.instructions.trim()) return;
@@ -112,7 +127,14 @@ export function SkillsTab({ spaceId }: { spaceId: string }) {
 
     try {
       if (editingSkill()) {
-        const res = await rpcPath(rpc, 'spaces', ':spaceId', 'skills', 'id', ':skillId').$put({
+        const res = await rpcPath(
+          rpc,
+          "spaces",
+          ":spaceId",
+          "skills",
+          "id",
+          ":skillId",
+        ).$put({
           param: { spaceId, skillId: editingSkill()!.id },
           json: {
             name: f.name.trim(),
@@ -124,7 +146,7 @@ export function SkillsTab({ spaceId }: { spaceId: string }) {
         });
         await readSkillMutationResponse(res);
       } else {
-        const res = await rpcPath(rpc, 'spaces', ':spaceId', 'skills').$post({
+        const res = await rpcPath(rpc, "spaces", ":spaceId", "skills").$post({
           param: { spaceId },
           json: {
             name: f.name.trim(),
@@ -139,13 +161,13 @@ export function SkillsTab({ spaceId }: { spaceId: string }) {
       closeForm();
       await fetchSkills();
     } catch (err: unknown) {
-      if (typeof err === 'object' && err !== null && 'details' in err) {
+      if (typeof err === "object" && err !== null && "details" in err) {
         const details = (err as { details?: Record<string, string> }).details;
-        if (details && typeof details === 'object') {
+        if (details && typeof details === "object") {
           setFieldErrors(details);
         }
       }
-      setError(getErrorMessage(err, 'Failed to save skill'));
+      setError(getErrorMessage(err, "Failed to save skill"));
     } finally {
       setSaving(false);
     }
@@ -153,34 +175,48 @@ export function SkillsTab({ spaceId }: { spaceId: string }) {
 
   const handleDelete = async (skill: Skill) => {
     const confirmed = await confirm({
-      title: t('confirmDelete'),
-      message: t('confirmDeleteSkill'),
-      confirmText: t('delete'),
+      title: t("confirmDelete"),
+      message: t("confirmDeleteSkill"),
+      confirmText: t("delete"),
       danger: true,
     });
     if (!confirmed) return;
 
     try {
-      const res = await rpcPath(rpc, 'spaces', ':spaceId', 'skills', 'id', ':skillId').$delete({
+      const res = await rpcPath(
+        rpc,
+        "spaces",
+        ":spaceId",
+        "skills",
+        "id",
+        ":skillId",
+      ).$delete({
         param: { spaceId, skillId: skill.id },
-      }) as Response;
+      });
       await rpcJson(res);
       await fetchSkills();
     } catch {
-      showToast('error', t('deleteSkillFailed') || 'Failed to delete skill');
+      showToast("error", t("deleteSkillFailed") || "Failed to delete skill");
     }
   };
 
   const handleToggle = async (skill: Skill) => {
     try {
-      const res = await rpcPath(rpc, 'spaces', ':spaceId', 'skills', 'id', ':skillId').$patch({
+      const res = await rpcPath(
+        rpc,
+        "spaces",
+        ":spaceId",
+        "skills",
+        "id",
+        ":skillId",
+      ).$patch({
         param: { spaceId, skillId: skill.id },
         json: { enabled: !skill.enabled },
       });
       await rpcJson(res);
       await fetchSkills();
     } catch {
-      showToast('error', t('skillToggleFailed') || 'Failed to update skill');
+      showToast("error", t("skillToggleFailed") || "Failed to update skill");
     }
   };
 
@@ -206,7 +242,7 @@ export function SkillsTab({ spaceId }: { spaceId: string }) {
   return (
     <SkillList
       skills={skills()}
-      officialSkills={officialSkills()}
+      managedSkills={managedSkills()}
       onEdit={openEditForm}
       onDelete={handleDelete}
       onToggle={handleToggle}

@@ -69,7 +69,7 @@ Deno.test("workers routes reject unknown service_type values before hitting stor
     {} as ExecutionContext,
   );
 
-  assertEquals(response.status, 422);
+  assertEquals(response.status, 400);
 });
 
 Deno.test("workers routes reject non-string group_id on group patch", async () => {
@@ -83,5 +83,5 @@ Deno.test("workers routes reject non-string group_id on group patch", async () =
     {} as ExecutionContext,
   );
 
-  assertEquals(response.status, 422);
+  assertEquals(response.status, 400);
 });

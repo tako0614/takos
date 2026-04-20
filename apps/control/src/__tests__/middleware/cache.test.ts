@@ -65,6 +65,36 @@ Deno.test("withCache - bypasses cache for authenticated session cookies", async 
     restoreCachesMock();
   }
 });
+
+Deno.test("withCache - bypasses cache for signed ActivityPub fetches", async () => {
+  cache = createCacheMock();
+  installCachesMock();
+  try {
+    const app = new Hono();
+    app.get(
+      "/ap/repos/alice/demo",
+      withCache({ ttl: CacheTTL.PUBLIC_CONTENT }),
+      (c) => {
+        return c.json({ ok: true, source: "live" });
+      },
+    );
+
+    const res = await app.request("https://takos.test/ap/repos/alice/demo", {
+      headers: {
+        Signature:
+          'keyId="https://remote.example/ap/users/bob#main-key",signature="abc"',
+      },
+    });
+
+    assertEquals(res.status, 200);
+    assertEquals(await res.json(), { ok: true, source: "live" });
+    assertSpyCalls(cache.match, 0);
+    assertSpyCalls(cache.put, 0);
+  } finally {
+    restoreCachesMock();
+  }
+});
+
 Deno.test("withCache - uses cache for anonymous GET requests", async () => {
   cache = createCacheMock();
   installCachesMock();

@@ -56,16 +56,13 @@ Deno.test("platform architecture contract - keeps the shared platform builder fr
   assert(!sharedBuilder.includes("'DISPATCHER'"));
 });
 
-Deno.test("platform architecture contract - keeps Cloudflare-specific PDF rendering out of thread export application logic", () => {
+Deno.test("platform architecture contract - keeps browser rendering out of thread export application logic", () => {
   const threadExport = read(
     "src/application/services/threads/thread-export.ts",
   );
-  const cloudflarePdfProvider = read(
-    "src/platform/providers/cloudflare/pdf-render.ts",
-  );
 
   assert(!threadExport.includes("@cloudflare/puppeteer"));
-  assertStringIncludes(cloudflarePdfProvider, "@cloudflare/puppeteer");
+  assert(!threadExport.includes("BROWSER binding"));
 });
 
 Deno.test("platform architecture contract - keeps route and middleware layers off getPlatformBindings() and session Env bags", () => {
@@ -130,14 +127,14 @@ Deno.test("platform architecture contract - keeps deployment core off worker-cen
   }
 });
 
-Deno.test("platform architecture contract - keeps application, tool, and server layers off direct Cloudflare provider implementations", () => {
+Deno.test("platform architecture contract - keeps application, tool, and server layers off direct Cloudflare backend implementations", () => {
   const scopedFiles = [
     ...listTsFiles("src/application/services"),
     ...listTsFiles("src/application/tools"),
     ...listTsFiles("src/server"),
   ];
   const allowedDirectCloudflareCallers = new Set([
-    "src/application/tools/builtin/storage/resources.ts",
+    "src/application/tools/custom/storage/resources.ts",
     "src/server/routes/workers/routes.ts",
   ]);
 
@@ -161,7 +158,6 @@ Deno.test("platform architecture contract - keeps canonical core and local publi
   ].filter((relativePath) => !relativePath.endsWith(".test.ts"));
 
   const allowedCallers = new Set([
-    "src/runtime/container-hosts/browser-session-host.ts",
     "src/runtime/container-hosts/executor-host.ts",
     "src/runtime/container-hosts/runtime-host.ts",
     "src/local-platform/bootstrap.test.ts",
@@ -204,8 +200,8 @@ Deno.test("platform architecture contract - keeps worker-centric deployment sche
 Deno.test("platform architecture contract - keeps worker facade, platform tools, and resource binding routes on service-centric table aliases", () => {
   const scopedFiles = [
     "src/application/services/platform/workers.ts",
-    "src/application/tools/builtin/platform/deployments.ts",
-    "src/application/tools/builtin/platform/deployment-history.ts",
+    "src/application/tools/custom/platform/deployments.ts",
+    "src/application/tools/custom/platform/deployment-history.ts",
     "src/server/routes/resources/bindings.ts",
     "src/server/routes/apps.ts",
     "src/server/routes/workers/slug.ts",
@@ -229,7 +225,7 @@ Deno.test("platform architecture contract - keeps canonical deployment logic off
   const scopedFiles = [
     "src/application/services/deployment/service.ts",
     "src/application/services/deployment/routing.ts",
-    "src/application/services/deployment/provider.ts",
+    "src/application/services/deployment/backend.ts",
   ];
 
   for (const relativePath of scopedFiles) {
@@ -315,13 +311,6 @@ Deno.test("platform architecture contract - keeps local runtime scripts pointed 
     ),
     "utf8",
   );
-  const localBrowserHostEntrypoint = readFileSync(
-    path.join(
-      appRootDir,
-      "../../packages/control/local-platform/src/browser-host.ts",
-    ),
-    "utf8",
-  );
   const localWebScript = controlTasks["dev:local:web"];
 
   assert(localWebScript);
@@ -342,10 +331,7 @@ Deno.test("platform architecture contract - keeps local runtime scripts pointed 
     controlTasks["dev:local:executor-host"],
     "deno run --allow-all ../../packages/control/local-platform/src/executor-host.ts",
   );
-  assertEquals(
-    controlTasks["dev:local:browser-host"],
-    "deno run --allow-all ../../packages/control/local-platform/src/browser-host.ts",
-  );
+  assertEquals(controlTasks["dev:local:browser-host"], undefined);
   assertEquals(
     controlTasks["dev:local:worker"],
     "deno run --allow-all ../../packages/control/local-platform/src/worker.ts",
@@ -364,16 +350,12 @@ Deno.test("platform architecture contract - keeps local runtime scripts pointed 
     controlTasks["dev:local:executor-host:node"],
     undefined,
   );
-  assertEquals(
-    controlTasks["dev:local:browser-host:node"],
-    undefined,
-  );
+  assertEquals(controlTasks["dev:local:browser-host:node"], undefined);
   assertEquals(controlTasks["dev:local:worker:node"], undefined);
   assert(!localWebEntrypoint.includes("fetch-server.ts"));
   assert(!localDispatchEntrypoint.includes("fetch-server.ts"));
   assert(!localRuntimeHostEntrypoint.includes("fetch-server.ts"));
   assert(!localExecutorHostEntrypoint.includes("fetch-server.ts"));
-  assert(!localBrowserHostEntrypoint.includes("fetch-server.ts"));
 
   assertEquals(existsSync(localPlatformPackageJsonPath), false);
 });
@@ -447,7 +429,6 @@ Deno.test("platform architecture contract - keeps canonical local runtime on exp
 
   assert(!localRuntime.includes("takos-control-hosts/executor-host"));
   assert(!localRuntime.includes("takos-control-hosts/runtime-host"));
-  assert(!localRuntime.includes("takos-control-hosts/browser-host"));
   assert(!localRuntime.includes("../runtime/container-hosts/runtime-host.ts"));
   assert(!localRuntime.includes("../runtime/container-hosts/executor-host.ts"));
   assert(
@@ -458,11 +439,11 @@ Deno.test("platform architecture contract - keeps canonical local runtime on exp
 
   assertStringIncludes(
     envBuilder,
-    "from '../local-platform/tenant-worker-runtime.ts'",
+    'from "../local-platform/tenant-worker-runtime.ts"',
   );
   assert(
-    !envBuilder.includes("from '../local-platform/miniflare-registry.ts'"),
+    !envBuilder.includes('from "../local-platform/miniflare-registry.ts"'),
   );
-  assertStringIncludes(localTenantRuntime, "import('./miniflare-registry.ts')");
+  assertStringIncludes(localTenantRuntime, 'import("./miniflare-registry.ts")');
   assert(!localTenantRuntime.includes("TAKOS_LOCAL_DEBUG_TENANT_RUNTIME"));
 });

@@ -4,28 +4,34 @@
  * Extracted from workflow.ts to keep each module focused on a single concern.
  */
 
-import type { Env } from '../../../shared/types/index.ts';
+import type { Env } from "../../../shared/types/index.ts";
 
 // ── Public types ────────────────────────────────────────────────────────
 
 export interface TaskStep {
   id: string;
-  type: 'tool_call' | 'code_change' | 'review' | 'commit' | 'pr_create' | 'pr_merge';
+  type:
+    | "tool_call"
+    | "code_change"
+    | "review"
+    | "commit"
+    | "pr_create"
+    | "pr_merge";
   description: string;
-  status: 'pending' | 'running' | 'completed' | 'failed' | 'skipped';
+  status: "pending" | "running" | "completed" | "failed" | "skipped";
   result?: string;
   error?: string;
 }
 
 export interface TaskPlan {
-  type: 'conversation' | 'tool_only' | 'code_change' | 'composite';
+  type: "conversation" | "tool_only" | "code_change" | "composite";
   tools?: string[];
   needsRepo?: boolean;
   repoId?: string;
   needsRuntime?: boolean;
   usePR?: boolean;
   needsReview?: boolean;
-  reviewType?: 'self' | 'separate_ai';
+  reviewType?: "self" | "separate_ai";
   commitMessage?: string;
   steps?: TaskStep[];
   reasoning?: string;
@@ -51,14 +57,14 @@ export interface WorkflowResult {
 }
 
 export interface ReviewResult {
-  status: 'approved' | 'changes_requested' | 'commented';
+  status: "approved" | "changes_requested" | "commented";
   summary: string;
   issues: ReviewIssue[];
   suggestions: string[];
 }
 
 export interface ReviewIssue {
-  severity: 'error' | 'warning' | 'info';
+  severity: "error" | "warning" | "info";
   file?: string;
   line?: number;
   message: string;
@@ -69,7 +75,10 @@ export interface ReviewIssue {
 
 /** Valid task plan types. */
 export const VALID_PLAN_TYPES: ReadonlySet<string> = new Set([
-  'conversation', 'tool_only', 'code_change', 'composite',
+  "conversation",
+  "tool_only",
+  "code_change",
+  "composite",
 ]);
 
 /** Response shape returned by the runtime snapshot endpoint. */
@@ -79,7 +88,8 @@ export interface RuntimeSnapshotResponse {
 
 // ── Prompts ─────────────────────────────────────────────────────────────
 
-export const TASK_ANALYSIS_PROMPT = `You are a task analyzer for an AI agent system. Analyze the user's task and determine the best approach to complete it.
+export const TASK_ANALYSIS_PROMPT =
+  `You are a task analyzer for an AI agent system. Analyze the user's task and determine the best approach to complete it.
 
 Available tools: {tools}
 
@@ -102,7 +112,8 @@ Respond ONLY with valid JSON, no markdown or other text.
 
 User task: {task}`;
 
-export const REVIEW_PROMPT = `You are a code reviewer. Review the following changes and provide feedback.
+export const REVIEW_PROMPT =
+  `You are a code reviewer. Review the following changes and provide feedback.
 
 Changes (diff):
 {diff}

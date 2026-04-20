@@ -1,25 +1,32 @@
 import type { Env } from "../../../shared/types/env.ts";
 import type { AppManifest } from "../source/app-manifest-types.ts";
 import { computeDiff, type DiffResult, type GroupState } from "./diff.ts";
-import type { GroupDesiredState } from "./group-state.ts";
-import type { TranslationReport } from "./translation-report.ts";
+import {
+  applyManifestOverrides,
+  type GroupDesiredState,
+} from "./group-state.ts";
+import type {
+  TranslationContext,
+  TranslationReport,
+} from "./translation-report.ts";
 
 export type ApplyEnginePlanGroup = {
   id: string;
   name: string;
-  provider: string | null;
+  backend: string | null;
   env: string | null;
 };
 
 export type ApplyEnginePlannerDeps = {
   compileGroupDesiredState: (
     manifest: AppManifest,
-    options: { groupName: string; provider: string; envName: string },
+    options: { groupName: string; backend: string; envName: string },
   ) => GroupDesiredState;
   buildTranslationReport: (
     desiredState: GroupDesiredState,
-    context: { ociOrchestratorUrl: string | undefined },
+    context: TranslationContext,
   ) => TranslationReport;
+  buildTranslationContextFromEnv: (env: Env) => TranslationContext;
 };
 
 export type BuildManifestPlanInput<TGroup extends ApplyEnginePlanGroup> = {
@@ -29,7 +36,7 @@ export type BuildManifestPlanInput<TGroup extends ApplyEnginePlanGroup> = {
   manifest?: AppManifest;
   opts?: {
     groupName?: string;
-    providerName?: string;
+    backendName?: string;
     envName?: string;
   };
   loadDesiredManifest: (group: TGroup) => AppManifest | null;
@@ -48,9 +55,9 @@ export async function buildManifestPlan<TGroup extends ApplyEnginePlanGroup>(
   deps: ApplyEnginePlannerDeps,
   input: BuildManifestPlanInput<TGroup>,
 ): Promise<ManifestPlan> {
-  const effectiveManifest = input.manifest ??
+  const baseManifest = input.manifest ??
     (input.group ? input.loadDesiredManifest(input.group) : null);
-  if (!effectiveManifest) {
+  if (!baseManifest) {
     throw new Error(
       input.groupId
         ? `Group "${input.groupId}" does not have a desired manifest`
@@ -58,19 +65,19 @@ export async function buildManifestPlan<TGroup extends ApplyEnginePlanGroup>(
     );
   }
 
+  const envName = input.opts?.envName ?? input.group?.env ?? "default";
+  const effectiveManifest = applyManifestOverrides(baseManifest, envName);
   const desiredState = deps.compileGroupDesiredState(effectiveManifest, {
     groupName: input.opts?.groupName ?? input.group?.name ??
       effectiveManifest.name,
-    provider: input.opts?.providerName ?? input.group?.provider ??
+    backend: input.opts?.backendName ?? input.group?.backend ??
       "cloudflare",
-    envName: input.opts?.envName ?? input.group?.env ?? "default",
+    envName,
   });
   const currentState = input.groupId
     ? await input.getCurrentState(input.groupId)
     : null;
-  const translationContext = {
-    ociOrchestratorUrl: input.env.OCI_ORCHESTRATOR_URL,
-  };
+  const translationContext = deps.buildTranslationContextFromEnv(input.env);
   const translationReport = deps.buildTranslationReport(
     desiredState,
     translationContext,

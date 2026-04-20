@@ -142,8 +142,4 @@ export function registerWebfingerRoutes(
       return jsonLd(c, { "@context": takosContext() });
     },
   );
-
-  activitypubStore.get("/ns/takos-git", (c) => {
-    return c.redirect(`${getOriginFromUrl(c.req.url)}/ns/takos`, 301);
-  });
 }

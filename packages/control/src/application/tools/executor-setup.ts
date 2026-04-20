@@ -1,12 +1,15 @@
-import type { ToolContext, ContainerStartFailure } from './tool-definitions.ts';
-import type { Env } from '../../shared/types/index.ts';
-import type { SpaceRole } from '../../shared/types/index.ts';
-import type { ObjectStoreBinding, SqlDatabaseBinding } from '../../shared/types/bindings.ts';
-import { createToolResolver, type ToolResolverOptions } from './resolver.ts';
-import { resolveAllowedCapabilities } from '../services/platform/capabilities.ts';
-import { logError, logWarn } from '../../shared/utils/logger.ts';
-import { ToolExecutor } from './executor.ts';
-import { buildPerRunCapabilityRegistry } from './executor-utils.ts';
+import type { ContainerStartFailure, ToolContext } from "./tool-definitions.ts";
+import type { Env } from "../../shared/types/index.ts";
+import type { SpaceRole } from "../../shared/types/index.ts";
+import type {
+  ObjectStoreBinding,
+  SqlDatabaseBinding,
+} from "../../shared/types/bindings.ts";
+import { createToolResolver, type ToolResolverOptions } from "./resolver.ts";
+import { resolveAllowedCapabilities } from "../services/platform/capabilities.ts";
+import { logError, logWarn } from "../../shared/utils/logger.ts";
+import { ToolExecutor } from "./executor.ts";
+import { buildPerRunCapabilityRegistry } from "./executor-utils.ts";
 
 /** Session state with reference counting to prevent sessionId changes during execution. */
 export class SessionState {
@@ -34,9 +37,14 @@ export class SessionState {
   beginExecution(): string | undefined {
     this._activeExecutions++;
 
-    if (this._activeExecutions > SessionState.EXECUTION_COUNT_WARNING_THRESHOLD) {
-      logWarn(`High active execution count: ${this._activeExecutions}. ` +
-        `This may indicate endExecution() is not being called properly.`, { module: 'sessionstate' });
+    if (
+      this._activeExecutions > SessionState.EXECUTION_COUNT_WARNING_THRESHOLD
+    ) {
+      logWarn(
+        `High active execution count: ${this._activeExecutions}. ` +
+          `This may indicate endExecution() is not being called properly.`,
+        { module: "sessionstate" },
+      );
     }
 
     return this._sessionId;
@@ -46,7 +54,9 @@ export class SessionState {
     if (this._activeExecutions > 0) {
       this._activeExecutions--;
     } else {
-      logWarn('Warning: endExecution called with no active executions', { module: 'tools/executor' });
+      logWarn("Warning: endExecution called with no active executions", {
+        module: "tools/executor",
+      });
     }
 
     if (this._activeExecutions === 0 && this._pendingClear) {
@@ -71,7 +81,10 @@ export class SessionState {
       this._pendingClear = null;
     } else {
       if (this._activeExecutions > 0) {
-        logWarn(`Warning: Deferring sessionId clear - ${this._activeExecutions} executions active`, { module: 'tools/executor' });
+        logWarn(
+          `Warning: Deferring sessionId clear - ${this._activeExecutions} executions active`,
+          { module: "tools/executor" },
+        );
         this._pendingClear = () => {
           this._sessionId = undefined;
         };
@@ -79,8 +92,14 @@ export class SessionState {
         this._clearPendingTimeout();
         this._pendingClearTimeout = setTimeout(() => {
           if (this._pendingClear && this._activeExecutions > 0) {
-            logError(`Session clear still pending after ${SessionState.MAX_PENDING_CLEAR_WAIT_MS / 1000}s - ` +
-              `${this._activeExecutions} executions still active. NOT force-clearing to prevent data corruption.`, undefined, { module: 'tools/executor' });
+            logError(
+              `Session clear still pending after ${
+                SessionState.MAX_PENDING_CLEAR_WAIT_MS / 1000
+              }s - ` +
+                `${this._activeExecutions} executions still active. NOT force-clearing to prevent data corruption.`,
+              undefined,
+              { module: "tools/executor" },
+            );
           } else if (this._pendingClear) {
             this._pendingClear();
             this._pendingClear = null;
@@ -93,7 +112,9 @@ export class SessionState {
     }
   }
 
-  setLastContainerStartFailure(failure: ContainerStartFailure | undefined): void {
+  setLastContainerStartFailure(
+    failure: ContainerStartFailure | undefined,
+  ): void {
     this._lastContainerStartFailure = failure;
   }
 
@@ -107,7 +128,7 @@ export class SessionState {
       if (!this._pendingClear && this._activeExecutions === 0) {
         return true;
       }
-      await new Promise(resolve => setTimeout(resolve, 100));
+      await new Promise((resolve) => setTimeout(resolve, 100));
     }
 
     return false;
@@ -165,7 +186,9 @@ export async function createToolExecutor(
 
   const context: ToolContext = {
     spaceId,
-    get sessionId() { return sessionState.sessionId; },
+    get sessionId() {
+      return sessionState.sessionId;
+    },
     threadId,
     runId,
     userId,
@@ -178,15 +201,23 @@ export async function createToolExecutor(
       sessionState.setSessionId(newSessionId);
     },
     getLastContainerStartFailure: () => sessionState.lastContainerStartFailure,
-    setLastContainerStartFailure: (failure: ContainerStartFailure | undefined) => {
+    setLastContainerStartFailure: (
+      failure: ContainerStartFailure | undefined,
+    ) => {
       sessionState.setLastContainerStartFailure(failure);
     },
     abortSignal: runAbortSignal,
   };
 
-  const executor = new ToolExecutor(resolver, context, sessionState, undefined, toolExecutionTimeoutMs);
+  const executor = new ToolExecutor(
+    resolver,
+    context,
+    sessionState,
+    undefined,
+    toolExecutionTimeoutMs,
+  );
   const internalContext = context as ToolContext & {
-    _toolExecutor?: Pick<ToolExecutor, 'execute'>;
+    _toolExecutor?: Pick<ToolExecutor, "execute">;
   };
   internalContext.capabilityRegistry = buildPerRunCapabilityRegistry(executor);
   internalContext._toolExecutor = executor;

@@ -5,12 +5,12 @@ import {
   buildSkillDescriptor,
   buildToolDescriptor,
 } from "@/tools/descriptor-builder";
-import { BUILTIN_TOOLS } from "@/tools/builtin";
+import { CUSTOM_TOOLS } from "@/tools/custom";
 
 import { assert, assertEquals } from "jsr:@std/assert";
 
-Deno.test("descriptor-builder - buildToolDescriptor - converts a builtin tool to a descriptor", () => {
-  const fileRead = BUILTIN_TOOLS.find((t) => t.name === "file_read")!;
+Deno.test("descriptor-builder - buildToolDescriptor - converts a custom tool to a descriptor", () => {
+  const fileRead = CUSTOM_TOOLS.find((t) => t.name === "file_read")!;
   const descriptor = buildToolDescriptor(fileRead);
 
   assertEquals(descriptor.id, "tool:file_read");
@@ -20,12 +20,12 @@ Deno.test("descriptor-builder - buildToolDescriptor - converts a builtin tool to
   assertEquals(descriptor.summary, fileRead.description);
   assertEquals(descriptor.risk_level, "none");
   assertEquals(descriptor.side_effects, false);
-  assertEquals(descriptor.source, "builtin");
+  assertEquals(descriptor.source, "custom");
   assertEquals(descriptor.discoverable, true);
   assertEquals(descriptor.selectable, true);
 });
 Deno.test("descriptor-builder - buildToolDescriptor - includes family from namespace map", () => {
-  const containerStart = BUILTIN_TOOLS.find((t) =>
+  const containerStart = CUSTOM_TOOLS.find((t) =>
     t.name === "container_start"
   )!;
   const descriptor = buildToolDescriptor(containerStart);
@@ -33,13 +33,13 @@ Deno.test("descriptor-builder - buildToolDescriptor - includes family from names
   assertEquals(descriptor.family, "container.lifecycle");
 });
 Deno.test("descriptor-builder - buildToolDescriptor - includes required_capabilities if present", () => {
-  const webFetch = BUILTIN_TOOLS.find((t) => t.name === "web_fetch")!;
+  const webFetch = CUSTOM_TOOLS.find((t) => t.name === "web_fetch")!;
   const descriptor = buildToolDescriptor(webFetch);
 
   assert(descriptor.tags !== undefined);
 });
 
-Deno.test("descriptor-builder - buildSkillDescriptor - converts an official skill to a descriptor", () => {
+Deno.test("descriptor-builder - buildSkillDescriptor - converts a managed skill to a descriptor", () => {
   const descriptor = buildSkillDescriptor({
     id: "research-brief",
     version: "1.0.0",
@@ -63,7 +63,7 @@ Deno.test("descriptor-builder - buildSkillDescriptor - converts an official skil
   assertEquals(descriptor.id, "skill:research-brief");
   assertEquals(descriptor.kind, "skill");
   assertEquals(descriptor.namespace, "web");
-  assertEquals(descriptor.source, "official_skill");
+  assertEquals(descriptor.source, "managed_skill");
   assertEquals(descriptor.triggers, ["research", "investigate"]);
 });
 
@@ -147,9 +147,9 @@ Deno.test("descriptor-builder - buildMcpToolDescriptor - falls back to mcp.exter
 Deno.test("descriptor-builder - applyPolicyForRole - hides high-risk tools from viewers", () => {
   const descriptors = [
     buildToolDescriptor(
-      BUILTIN_TOOLS.find((t) => t.name === "deploy_frontend")!,
+      CUSTOM_TOOLS.find((t) => t.name === "deploy_frontend")!,
     ),
-    buildToolDescriptor(BUILTIN_TOOLS.find((t) => t.name === "file_read")!),
+    buildToolDescriptor(CUSTOM_TOOLS.find((t) => t.name === "file_read")!),
   ];
 
   const result = applyPolicyForRole(descriptors, "viewer");
@@ -161,10 +161,10 @@ Deno.test("descriptor-builder - applyPolicyForRole - hides high-risk tools from 
   assertEquals(fileRead.discoverable, true);
   assertEquals(fileRead.selectable, true);
 });
-Deno.test("descriptor-builder - applyPolicyForRole - restricts web/browser tools without egress.http capability", () => {
+Deno.test("descriptor-builder - applyPolicyForRole - restricts web tools without egress.http capability", () => {
   const descriptors = [
-    buildToolDescriptor(BUILTIN_TOOLS.find((t) => t.name === "web_fetch")!),
-    buildToolDescriptor(BUILTIN_TOOLS.find((t) => t.name === "file_read")!),
+    buildToolDescriptor(CUSTOM_TOOLS.find((t) => t.name === "web_fetch")!),
+    buildToolDescriptor(CUSTOM_TOOLS.find((t) => t.name === "file_read")!),
   ];
 
   const result = applyPolicyForRole(descriptors, "editor", []);

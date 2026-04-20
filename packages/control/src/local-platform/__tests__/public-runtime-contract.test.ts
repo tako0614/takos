@@ -40,7 +40,6 @@ Deno.test(
     const packageDispatch = await read("src/dispatch.ts", packageRoot);
     const packageRuntimeHost = await read("src/runtime-host.ts", packageRoot);
     const packageExecutorHost = await read("src/executor-host.ts", packageRoot);
-    const packageBrowserHost = await read("src/browser-host.ts", packageRoot);
     const packageWorker = await read("src/worker.ts", packageRoot);
     const packageOciOrchestrator = await read(
       "src/oci-orchestrator.ts",
@@ -56,7 +55,6 @@ Deno.test(
         packageDispatch,
         packageRuntimeHost,
         packageExecutorHost,
-        packageBrowserHost,
         packageWorker,
         packageOciOrchestrator,
       ]
@@ -78,7 +76,6 @@ Deno.test(
     assert(!sourceRuntime.includes("startLocalDispatchServer"));
     assert(!sourceRuntime.includes("startLocalRuntimeHostServer"));
     assert(!sourceRuntime.includes("startLocalExecutorHostServer"));
-    assert(!sourceRuntime.includes("startLocalBrowserHostServer"));
     assert(!sourceRuntime.includes("fetch-server.ts"));
 
     assertStringIncludes(sourceLocalServer, "startCanonicalLocalServer");
@@ -86,9 +83,8 @@ Deno.test(
     assertStringIncludes(sourceLocalServer, "startLocalDispatchServer");
     assertStringIncludes(sourceLocalServer, "startLocalRuntimeHostServer");
     assertStringIncludes(sourceLocalServer, "startLocalExecutorHostServer");
-    assertStringIncludes(sourceLocalServer, "startLocalBrowserHostServer");
-    assertStringIncludes(sourceLocalServer, "runtime: 'node'");
-    assertStringIncludes(sourceLocalServer, "from './fetch-server.ts'");
+    assertStringIncludes(sourceLocalServer, 'runtime: "node"');
+    assertStringIncludes(sourceLocalServer, 'from "./fetch-server.ts"');
 
     assertStringIncludes(
       packageRuntime,
@@ -131,11 +127,11 @@ Deno.test("local public runtime contract - keeps Miniflare wiring behind the can
 
   assertStringIncludes(
     envBuilder,
-    "from '../local-platform/tenant-worker-runtime.ts'",
+    'from "../local-platform/tenant-worker-runtime.ts"',
   );
   assertStringIncludes(
     dispatchResolver,
-    "from '../../local-platform/tenant-worker-runtime.ts'",
+    'from "../../local-platform/tenant-worker-runtime.ts"',
   );
   assertStringIncludes(
     dispatchResolver,
@@ -146,8 +142,8 @@ Deno.test("local public runtime contract - keeps Miniflare wiring behind the can
   assert(!envBuilder.includes("createDebugMiniflareFetcherRegistry"));
   assert(!envBuilder.includes("createLocalDebugTenantWorkerRuntimeRegistry"));
   assert(!tenantRuntime.includes("TAKOS_LOCAL_DEBUG_TENANT_RUNTIME"));
-  assertStringIncludes(tenantRuntime, "path.join(dataDir, 'tenant-runtime'");
-  assertStringIncludes(tenantRuntime, "import('./miniflare-registry.ts')");
+  assertStringIncludes(tenantRuntime, 'path.join(dataDir, "tenant-runtime"');
+  assertStringIncludes(tenantRuntime, 'import("./miniflare-registry.ts")');
   assertStringIncludes(tenantRuntime, "createLocalTenantRuntimeRegistry");
   assertStringIncludes(
     tenantRuntime,
@@ -178,10 +174,7 @@ Deno.test("local public runtime contract - publishes canonical local runtime ent
     localPlatformPackage.exports?.["./executor-host"],
     "./src/executor-host.ts",
   );
-  assertEquals(
-    localPlatformPackage.exports?.["./browser-host"],
-    "./src/browser-host.ts",
-  );
+  assertEquals(localPlatformPackage.exports?.["./browser-host"], undefined);
   assertEquals(localPlatformPackage.exports?.["./worker"], "./src/worker.ts");
   assertEquals(
     localPlatformPackage.exports?.["./oci-orchestrator"],
@@ -365,7 +358,6 @@ Deno.test(
         "local:dispatch",
         "local:runtime-host",
         "local:executor-host",
-        "local:browser-host",
         "local:worker",
         "local:oci-orchestrator",
         "local:run-smoke",
@@ -374,7 +366,6 @@ Deno.test(
         "dev:local:dispatch",
         "dev:local:runtime-host",
         "dev:local:executor-host",
-        "dev:local:browser-host",
         "dev:local:worker",
         "dev:local:oci-orchestrator",
         "dev:local:run-smoke",
@@ -414,7 +405,7 @@ Deno.test(
       compose,
       '["deno", "task", "dev:local:executor-host"]',
     );
-    assertStringIncludes(compose, '["deno", "task", "dev:local:browser-host"]');
+    assert(!compose.includes("dev:local:browser-host"));
     assertStringIncludes(compose, '["deno", "task", "dev:local:worker"]');
     assertStringIncludes(
       compose,

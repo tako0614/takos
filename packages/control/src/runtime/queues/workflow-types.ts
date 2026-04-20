@@ -1,8 +1,17 @@
-import type { D1Database as _D1Database, R2Bucket, DurableObjectNamespace, Queue } from '../../shared/types/bindings.ts';
-import type { Conclusion } from 'takos-actions-engine';
-import type { WorkflowStepResult } from '../../application/services/execution/workflow-engine.ts';
-import type { DbEnv, WorkflowJobQueueMessage, WorkflowShell } from '../../shared/types/index.ts';
-import type { WorkflowBucket } from '../../application/services/execution/workflow-engine-types.ts';
+import type {
+  D1Database as _D1Database,
+  DurableObjectNamespace,
+  Queue,
+  R2Bucket,
+} from "../../shared/types/bindings.ts";
+import type { Conclusion } from "takos-actions-engine";
+import type { WorkflowStepResult } from "../../application/services/execution/workflow-engine.ts";
+import type {
+  DbEnv,
+  WorkflowJobQueueMessage,
+  WorkflowShell,
+} from "../../shared/types/index.ts";
+import type { WorkflowBucket } from "../../application/services/execution/workflow-engine-types.ts";
 
 // ---------------------------------------------------------------------------
 // Environment
@@ -41,7 +50,9 @@ export interface RunContext {
   inputs: Record<string, unknown>;
 }
 
-export type WorkflowEventType = 'workflow.job.started' | 'workflow.job.completed';
+export type WorkflowEventType =
+  | "workflow.job.started"
+  | "workflow.job.completed";
 
 export interface JobCompletedEventData {
   runId: string;
@@ -49,7 +60,7 @@ export interface JobCompletedEventData {
   repoId: string;
   jobKey: string;
   name?: string;
-  status: 'completed';
+  status: "completed" | "cancelled";
   conclusion: Conclusion;
   completedAt: string;
   dlq?: boolean;
@@ -90,7 +101,8 @@ export interface JobExecutionState {
 
 export interface JobQueueContext {
   env: WorkflowQueueEnv;
-  engine: import('../../application/services/execution/workflow-engine.ts').WorkflowEngine;
+  engine:
+    import("../../application/services/execution/workflow-engine.ts").WorkflowEngine;
   message: WorkflowJobQueueMessage;
   jobName: string;
   effectiveJobEnv: Record<string, string>;
@@ -101,7 +113,7 @@ export interface JobQueueContext {
 
 export function createInitialState(): JobExecutionState {
   return {
-    jobConclusion: 'success',
+    jobConclusion: "success",
     runtimeStarted: false,
     runtimeCancelled: false,
     runtimeSpaceId: null,
@@ -141,7 +153,7 @@ export interface RuntimeStepResponse {
   stdout?: string;
   stderr?: string;
   outputs?: Record<string, string>;
-  conclusion?: 'success' | 'failure' | 'skipped';
+  conclusion?: "success" | "failure" | "skipped";
 }
 
 // ---------------------------------------------------------------------------
@@ -168,8 +180,22 @@ export type DurableObjectFetchLike = {
   fetch(input: RequestInfo | URL, init?: RequestInit): Promise<Response>;
 };
 
+function isDurableObjectFetcher(
+  stub: unknown,
+): stub is DurableObjectFetchLike {
+  return typeof stub === "object" && stub !== null &&
+    typeof Reflect.get(stub, "fetch") === "function";
+}
+
 export function asDurableObjectFetcher(
   stub: unknown,
 ): DurableObjectFetchLike {
-  return stub as unknown as DurableObjectFetchLike;
+  if (!isDurableObjectFetcher(stub)) {
+    throw new TypeError("Durable Object stub does not expose fetch()");
+  }
+  return {
+    fetch(input, init) {
+      return stub.fetch(input, init);
+    },
+  };
 }

@@ -42,7 +42,7 @@ Deno.test("group routing reconciler - publishes hostname routing from canonical 
     },
     {
       groupName: "demo-app",
-      provider: "cloudflare",
+      backend: "cloudflare",
       envName: "production",
     },
   );

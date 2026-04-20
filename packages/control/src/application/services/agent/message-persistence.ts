@@ -1,11 +1,15 @@
-import type { Env, MessageRole } from '../../../shared/types/index.ts';
-import type { AgentMessage } from './agent-models.ts';
-import { getDb, messages } from '../../../infra/db/index.ts';
-import { eq, sql } from 'drizzle-orm';
-import { generateId } from '../../../shared/utils/index.ts';
-import { makeMessagePreview, shouldOffloadMessage, writeMessageToR2 } from '../offload/messages.ts';
-import { logError, logWarn } from '../../../shared/utils/logger.ts';
-import type { SqlDatabaseBinding } from '../../../shared/types/bindings.ts';
+import type { Env, MessageRole } from "../../../shared/types/index.ts";
+import type { AgentMessage } from "./agent-models.ts";
+import { getDb, messages } from "../../../infra/db/index.ts";
+import { eq, sql } from "drizzle-orm";
+import { generateId } from "../../../shared/utils/index.ts";
+import {
+  makeMessagePreview,
+  shouldOffloadMessage,
+  writeMessageToR2,
+} from "../offload/messages.ts";
+import { logError, logWarn } from "../../../shared/utils/logger.ts";
+import type { SqlDatabaseBinding } from "../../../shared/types/bindings.ts";
 
 export interface MessagePersistenceDeps {
   db: SqlDatabaseBinding;
@@ -13,10 +17,19 @@ export interface MessagePersistenceDeps {
   threadId: string;
 }
 
+function stableIdHash(value: string): string {
+  let hash = 0xcbf29ce484222325n;
+  for (let i = 0; i < value.length; i++) {
+    hash ^= BigInt(value.charCodeAt(i));
+    hash = BigInt.asUintN(64, hash * 0x100000001b3n);
+  }
+  return hash.toString(36);
+}
+
 export async function persistMessage(
   deps: MessagePersistenceDeps,
   message: AgentMessage,
-  metadata?: Record<string, unknown>
+  metadata?: Record<string, unknown>,
 ): Promise<void> {
   const { db: dbBinding, env, threadId } = deps;
   const db = getDb(dbBinding);
@@ -25,25 +38,23 @@ export async function persistMessage(
   const baseDelayMs = 10;
   const maxDelayMs = 500;
 
-  // Deterministic ID based on content hash for idempotency across retries
-  const contentForHash = JSON.stringify({
-    threadId,
-    role: message.role,
-    content: message.content?.slice(0, 1000), // Use first 1000 chars for uniqueness
-    toolCalls: message.tool_calls ? JSON.stringify(message.tool_calls).slice(0, 500) : null,
-    toolCallId: message.tool_call_id || null,
-    timestamp: now.slice(0, 16), // Use timestamp to minute precision for grouping
-  });
-
-  let hash = 0;
-  for (let i = 0; i < contentForHash.length; i++) {
-    const char = contentForHash.charCodeAt(i);
-    hash = ((hash << 5) - hash) + char;
-    hash = hash & hash;
-  }
-  const idBase = Math.abs(hash).toString(36);
-  const randomSuffix = generateId(4);
-  const id = `msg_${idBase}_${randomSuffix}`;
+  const idempotencyKey = typeof metadata?.idempotencyKey === "string"
+    ? metadata.idempotencyKey.trim()
+    : "";
+  const id = idempotencyKey
+    ? `msg_idem_${stableIdHash(`${threadId}\0${idempotencyKey}`)}`
+    : `msg_${
+      stableIdHash(JSON.stringify({
+        threadId,
+        role: message.role,
+        content: message.content?.slice(0, 1000),
+        toolCalls: message.tool_calls
+          ? JSON.stringify(message.tool_calls).slice(0, 500)
+          : null,
+        toolCallId: message.tool_call_id || null,
+        timestamp: now.slice(0, 16),
+      }))
+    }_${generateId(4)}`;
 
   for (let attempt = 0; attempt < maxRetries; attempt++) {
     try {
@@ -64,7 +75,9 @@ export async function persistMessage(
 
       const nextSequence = (maxSeqResult?.maxSeq ?? -1) + 1;
 
-      const toolCallsStr = message.tool_calls ? JSON.stringify(message.tool_calls) : null;
+      const toolCallsStr = message.tool_calls
+        ? JSON.stringify(message.tool_calls)
+        : null;
       const metadataStr = JSON.stringify(metadata || {});
 
       let r2Key: string | null = null;
@@ -73,7 +86,13 @@ export async function persistMessage(
       let metadataForD1 = metadataStr;
 
       const offloadBucket = env.TAKOS_OFFLOAD;
-      if (offloadBucket && shouldOffloadMessage({ role: message.role as MessageRole, content: message.content })) {
+      if (
+        offloadBucket &&
+        shouldOffloadMessage({
+          role: message.role as MessageRole,
+          content: message.content,
+        })
+      ) {
         try {
           const { key } = await writeMessageToR2(offloadBucket, threadId, id, {
             id,
@@ -90,9 +109,12 @@ export async function persistMessage(
           contentForD1 = makeMessagePreview(message.content);
           toolCallsForD1 = null;
           // Keep D1 small; hydrate from R2 on reads.
-          metadataForD1 = '{}';
+          metadataForD1 = "{}";
         } catch (err) {
-          logWarn(`Failed to persist message ${id} to R2, storing inline`, { module: 'message_offload', detail: err });
+          logWarn(`Failed to persist message ${id} to R2, storing inline`, {
+            module: "message_offload",
+            detail: err,
+          });
         }
       }
 
@@ -111,33 +133,51 @@ export async function persistMessage(
 
       return; // Success
     } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : String(error);
+      const errorMessage = error instanceof Error
+        ? error.message
+        : String(error);
 
       // Duplicate ID means a previous retry already succeeded
-      if (errorMessage.includes('UNIQUE constraint') && errorMessage.includes('id')) {
+      if (
+        errorMessage.includes("UNIQUE constraint") &&
+        errorMessage.includes("id")
+      ) {
         return;
       }
 
       // Check if it's a sequence conflict (need to retry with new sequence)
-      const isSequenceConflict = errorMessage.includes('UNIQUE constraint');
-      const isRetryable = isSequenceConflict || errorMessage.includes('SQLITE_BUSY');
+      const isSequenceConflict = errorMessage.includes("UNIQUE constraint");
+      const isRetryable = isSequenceConflict ||
+        errorMessage.includes("SQLITE_BUSY");
 
       if (isRetryable && attempt < maxRetries - 1) {
-        const exponentialDelay = Math.min(maxDelayMs, baseDelayMs * Math.pow(2, attempt));
+        const exponentialDelay = Math.min(
+          maxDelayMs,
+          baseDelayMs * Math.pow(2, attempt),
+        );
         const jitter = Math.random() * exponentialDelay;
         const totalDelay = Math.floor(exponentialDelay + jitter);
 
         if (attempt >= 2) {
-          logWarn(`Message sequence conflict on attempt ${attempt + 1}/${maxRetries}, ` +
-            `retrying in ${totalDelay}ms (thread: ${threadId})`, { module: 'services/agent/message-persistence' });
+          logWarn(
+            `Message sequence conflict on attempt ${
+              attempt + 1
+            }/${maxRetries}, ` +
+              `retrying in ${totalDelay}ms (thread: ${threadId})`,
+            { module: "services/agent/message-persistence" },
+          );
         }
 
-        await new Promise(resolve => setTimeout(resolve, totalDelay));
+        await new Promise((resolve) => setTimeout(resolve, totalDelay));
         continue;
       }
 
       if (attempt === maxRetries - 1) {
-        logError(`Message insert failed after ${maxRetries} attempts: ${errorMessage}`, { threadId, role: message.role }, { module: 'services/agent/message-persistence' });
+        logError(
+          `Message insert failed after ${maxRetries} attempts: ${errorMessage}`,
+          { threadId, role: message.role },
+          { module: "services/agent/message-persistence" },
+        );
       }
 
       throw error;
@@ -146,6 +186,6 @@ export async function persistMessage(
 
   throw new Error(
     `Failed to add message after ${maxRetries} attempts due to sequence conflicts. ` +
-    `This may indicate very high concurrency on thread ${threadId}.`
+      `This may indicate very high concurrency on thread ${threadId}.`,
   );
 }

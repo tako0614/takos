@@ -94,6 +94,41 @@ Deno.test("GET /explore/catalog - returns 400 when sort is invalid", async () =>
   }
 });
 
+Deno.test("GET /explore/catalog - returns 400 for unknown catalog type", async () => {
+  const originalListCatalogItems = exploreRouteDeps.listCatalogItems;
+  const listCatalogItemsSpy = spy(async () => ({
+    items: [],
+    total: 0,
+    has_more: false,
+  }));
+  exploreRouteDeps.listCatalogItems =
+    listCatalogItemsSpy as typeof originalListCatalogItems;
+
+  try {
+    const app = createApp();
+    const env = createMockEnv() as unknown as Env;
+
+    const response = await app.fetch(
+      new Request("https://takos.jp/api/catalog?type=legacy", {
+        headers: { Authorization: "Bearer test" },
+      }),
+      env,
+      {} as ExecutionContext,
+    );
+
+    assertEquals(response.status, 400);
+    assertObjectMatch(await response.json(), {
+      error: {
+        code: "BAD_REQUEST",
+        message: "Invalid type",
+      },
+    });
+    assertSpyCalls(listCatalogItemsSpy, 0);
+  } finally {
+    exploreRouteDeps.listCatalogItems = originalListCatalogItems;
+  }
+});
+
 Deno.test("GET /explore/catalog - returns 401 when space_id is specified without auth", async () => {
   const originalListCatalogItems = exploreRouteDeps.listCatalogItems;
   const listCatalogItemsSpy = spy(async () => ({
@@ -170,6 +205,7 @@ Deno.test("GET /explore/catalog - calls listCatalogItems with normalized query o
         certifiedOnly: true,
         spaceId: undefined,
         userId: "user-1",
+        gitObjects: env.GIT_OBJECTS,
       },
     ]);
 

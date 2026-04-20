@@ -2,22 +2,16 @@
 export type {
   AppCompute,
   AppConsume,
-  AppContainer,
-  AppDeploymentBuildSource,
-  AppFileHandler,
   AppManifest,
   AppManifestOverride,
-  AppMcpServer,
   AppPublication,
   AppRoute,
-  AppService,
   AppTriggers,
-  AppWorker,
   BuildConfig,
   BundleDoc,
   ComputeKind,
+  GroupDeploymentSnapshotBuildSource,
   HealthCheck,
-  QueueTrigger,
   ScheduleTrigger,
   VolumeMount,
 } from "./app-manifest-types.ts";
@@ -27,13 +21,6 @@ export {
   parseAppManifestText,
   parseAppManifestYaml,
 } from "./app-manifest-parser/index.ts";
-
-// Re-export template engine
-export {
-  resolveTemplates,
-  type TemplateContext,
-  validateTemplateReferences,
-} from "./app-manifest-template.ts";
 
 // Re-export validation
 export {

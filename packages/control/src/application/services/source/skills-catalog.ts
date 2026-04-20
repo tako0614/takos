@@ -1,13 +1,13 @@
 import type { D1Database } from "../../../shared/types/bindings.ts";
 import {
   formatSkill,
-  getOfficialSkillById,
+  getManagedSkillById,
   getSkillAvailabilityDetails,
-  listAvailableOfficialSkillContexts,
-  listLocalizedOfficialSkills,
+  listAvailableManagedSkillContexts,
+  listLocalizedManagedSkills,
   resolveSkillLocale,
   type SkillLocaleInput,
-  toAvailableOfficialSkill,
+  toAvailableManagedSkill,
   toSkillCatalogEntry,
 } from "./skills-shared.ts";
 import { applySkillAvailability, type SkillContext } from "../agent/skills.ts";
@@ -33,7 +33,7 @@ export async function listDetailedSkillContext(
     locale,
     skills: [
       ...applySkillAvailability(
-        listLocalizedOfficialSkills(locale).map(toAvailableOfficialSkill),
+        listLocalizedManagedSkills(locale).map(toAvailableManagedSkill),
         {
           ...availability,
           availableToolNames,
@@ -64,7 +64,7 @@ export async function listSkillCatalog(
     locale,
     available_skills: [
       ...applySkillAvailability(
-        listLocalizedOfficialSkills(locale).map(toAvailableOfficialSkill),
+        listLocalizedManagedSkills(locale).map(toAvailableManagedSkill),
         availability,
       ).map(toSkillCatalogEntry),
       ...applySkillAvailability(customSkills, availability).map(
@@ -82,20 +82,20 @@ export async function listSkillContext(
   return await listSkillCatalog(db, spaceId, localeInput);
 }
 
-export async function listOfficialSkillsCatalog(
+export async function listManagedSkillsCatalog(
   db: D1Database,
   spaceId: string,
   localeInput?: SkillLocaleInput,
 ) {
   const locale = resolveSkillLocale(localeInput);
-  const officialSkills = await listAvailableOfficialSkillContexts(
+  const managedSkills = await listAvailableManagedSkillContexts(
     db,
     spaceId,
     locale,
   );
   return {
     locale,
-    skills: officialSkills.map((skill) => ({
+    skills: managedSkills.map((skill) => ({
       ...toSkillCatalogEntry(skill),
       editable: false,
       enabled: true,
@@ -103,21 +103,21 @@ export async function listOfficialSkillsCatalog(
   };
 }
 
-export async function getOfficialSkillCatalogEntry(
+export async function getManagedSkillCatalogEntry(
   db: D1Database,
   spaceId: string,
   skillId: string,
   localeInput?: SkillLocaleInput,
 ) {
   const locale = resolveSkillLocale(localeInput);
-  const skill = getOfficialSkillById(skillId, locale);
+  const skill = getManagedSkillById(skillId, locale);
   if (!skill) {
     return null;
   }
 
   const availability = await getSkillAvailabilityDetails(db, spaceId);
   const [withAvailability] = applySkillAvailability(
-    [toAvailableOfficialSkill(skill)],
+    [toAvailableManagedSkill(skill)],
     availability,
   );
   return {
@@ -132,7 +132,7 @@ export async function describeAgentSkill(
   db: D1Database,
   spaceId: string,
   input: {
-    source?: "official" | "custom";
+    source?: "managed" | "custom";
     skillId?: string;
     skillName?: string;
     skillRef?: string;
@@ -151,17 +151,17 @@ export async function describeAgentSkill(
     acceptLanguage: input.acceptLanguage,
   };
 
-  if (input.source === "official") {
-    const officialSkill = await getOfficialSkillCatalogEntry(
+  if (input.source === "managed") {
+    const managedSkill = await getManagedSkillCatalogEntry(
       db,
       spaceId,
       ref,
       localeInput,
     );
-    if (!officialSkill) {
-      throw new Error(`Official skill not found: ${ref}`);
+    if (!managedSkill) {
+      throw new Error(`Managed skill not found: ${ref}`);
     }
-    return officialSkill;
+    return managedSkill;
   }
 
   if (input.source === "custom") {
@@ -174,14 +174,14 @@ export async function describeAgentSkill(
     return formatSkill(customSkill);
   }
 
-  const officialSkill = await getOfficialSkillCatalogEntry(
+  const managedSkill = await getManagedSkillCatalogEntry(
     db,
     spaceId,
     ref,
     localeInput,
   );
-  if (officialSkill) {
-    return officialSkill;
+  if (managedSkill) {
+    return managedSkill;
   }
 
   const customSkill = await getSkill(db, spaceId, ref) ??

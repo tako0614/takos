@@ -92,7 +92,7 @@ export async function createSpaceBundle(
     description: description || null,
     ownerAccountId: ownerUserId,
     aiModel: "gpt-5.4-nano",
-    aiProvider: "openai",
+    modelBackend: "openai",
     securityPosture: "standard",
     createdAt: timestamp,
     updatedAt: timestamp,
