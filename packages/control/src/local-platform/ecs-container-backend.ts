@@ -2,41 +2,46 @@ import type {
   ContainerBackend,
   ContainerCreateOpts,
   ContainerCreateResult,
-} from './container-backend.ts';
+} from "./container-backend.ts";
 import {
-  execCommand,
   type CommandRunner,
   type CommandRunnerResult,
-} from './command-runner.ts';
+  execCommand,
+  pickHostCommandEnv,
+} from "./command-runner.ts";
 
 type EcsTaskDefinitionRecord = Record<string, unknown>;
 type EcsServiceRecord = Record<string, unknown>;
 
 function readString(value: unknown): string | undefined {
-  return typeof value === 'string' && value.trim().length > 0 ? value.trim() : undefined;
+  return typeof value === "string" && value.trim().length > 0
+    ? value.trim()
+    : undefined;
 }
 
 function sanitizeEcsServiceName(raw: string): string {
-  const normalized = raw.replace(/[^a-zA-Z0-9-_]/g, '-').slice(0, 255);
-  return normalized.length > 0 ? normalized : 'takos-service';
+  const normalized = raw.replace(/[^a-zA-Z0-9-_]/g, "-").slice(0, 255);
+  return normalized.length > 0 ? normalized : "takos-service";
 }
 
 function parseArnTerminalName(raw: string | undefined): string | undefined {
   if (!raw) return undefined;
   const trimmed = raw.trim();
-  const slash = trimmed.split('/').pop();
+  const slash = trimmed.split("/").pop();
   return slash && slash.length > 0 ? slash : undefined;
 }
 
 function readObjectRecord(value: unknown): Record<string, unknown> | undefined {
-  return value && typeof value === 'object' && !Array.isArray(value)
+  return value && typeof value === "object" && !Array.isArray(value)
     ? value as Record<string, unknown>
     : undefined;
 }
 
 function tailLines(text: string, tail: number): string {
   const lines = text.split(/\r?\n/).filter((line) => line.length > 0);
-  return `${lines.slice(Math.max(0, lines.length - tail)).join('\n')}${lines.length > 0 ? '\n' : ''}`;
+  return `${lines.slice(Math.max(0, lines.length - tail)).join("\n")}${
+    lines.length > 0 ? "\n" : ""
+  }`;
 }
 
 function buildEnvironment(
@@ -64,7 +69,10 @@ function buildEnvironment(
     : undefined;
 }
 
-function buildPortMappings(existing: unknown, exposedPort: number): Array<Record<string, unknown>> {
+function buildPortMappings(
+  existing: unknown,
+  exposedPort: number,
+): Array<Record<string, unknown>> {
   if (Array.isArray(existing) && existing.length > 0) {
     return existing.map((entry, index) => {
       const record = readObjectRecord(entry) ?? {};
@@ -82,7 +90,7 @@ function buildPortMappings(existing: unknown, exposedPort: number): Array<Record
   return [{
     containerPort: exposedPort,
     hostPort: exposedPort,
-    protocol: 'tcp',
+    protocol: "tcp",
   }];
 }
 
@@ -90,25 +98,27 @@ function cloneTaskDefinitionForRegister(
   taskDefinition: EcsTaskDefinitionRecord,
 ): EcsTaskDefinitionRecord {
   const registerInput: EcsTaskDefinitionRecord = {};
-  for (const key of [
-    'family',
-    'taskRoleArn',
-    'executionRoleArn',
-    'networkMode',
-    'containerDefinitions',
-    'volumes',
-    'placementConstraints',
-    'requiresCompatibilities',
-    'cpu',
-    'memory',
-    'tags',
-    'pidMode',
-    'ipcMode',
-    'proxyConfiguration',
-    'inferenceAccelerators',
-    'ephemeralStorage',
-    'runtimePlatform',
-  ]) {
+  for (
+    const key of [
+      "family",
+      "taskRoleArn",
+      "executionRoleArn",
+      "networkMode",
+      "containerDefinitions",
+      "volumes",
+      "placementConstraints",
+      "requiresCompatibilities",
+      "cpu",
+      "memory",
+      "tags",
+      "pidMode",
+      "ipcMode",
+      "proxyConfiguration",
+      "inferenceAccelerators",
+      "ephemeralStorage",
+      "runtimePlatform",
+    ]
+  ) {
     if (taskDefinition[key] !== undefined) {
       registerInput[key] = taskDefinition[key];
     }
@@ -117,7 +127,7 @@ function cloneTaskDefinitionForRegister(
 }
 
 function serviceExists(service: EcsServiceRecord | null): boolean {
-  return !!service && readString(service.status) !== 'INACTIVE';
+  return !!service && readString(service.status) !== "INACTIVE";
 }
 
 export type EcsContainerBackendOptions = {
@@ -176,7 +186,7 @@ export class EcsContainerBackend implements ContainerBackend {
     this.subnetIds = options.subnetIds ?? [];
     this.securityGroupIds = options.securityGroupIds ?? [];
     this.assignPublicIp = options.assignPublicIp ?? true;
-    this.launchType = options.launchType ?? 'FARGATE';
+    this.launchType = options.launchType ?? "FARGATE";
     this.desiredCount = options.desiredCount ?? 1;
     this.baseUrl = options.baseUrl;
     this.healthUrl = options.healthUrl;
@@ -188,88 +198,130 @@ export class EcsContainerBackend implements ContainerBackend {
   }
 
   private async aws(args: string[]): Promise<CommandRunnerResult> {
-    return this.commandRunner('aws', args, {
+    return this.commandRunner("aws", args, {
       env: {
+        ...pickHostCommandEnv([
+          "AWS_ACCESS_KEY_ID",
+          "AWS_SECRET_ACCESS_KEY",
+          "AWS_SESSION_TOKEN",
+          "AWS_SECURITY_TOKEN",
+          "AWS_PROFILE",
+          "AWS_CONFIG_FILE",
+          "AWS_SHARED_CREDENTIALS_FILE",
+          "AWS_CA_BUNDLE",
+          "AWS_ENDPOINT_URL",
+        ]),
         AWS_DEFAULT_REGION: this.region,
       },
     });
   }
 
   private async awsJson<T>(args: string[]): Promise<T> {
-    const result = await this.aws([...args, '--output', 'json']);
+    const result = await this.aws([...args, "--output", "json"]);
     if (result.exitCode !== 0) {
-      throw new Error(result.stderr || `aws ${args.join(' ')} exited with code ${result.exitCode}`);
+      throw new Error(
+        result.stderr ||
+          `aws ${args.join(" ")} exited with code ${result.exitCode}`,
+      );
     }
     try {
       return JSON.parse(result.stdout) as T;
     } catch (error) {
-      throw new Error(`Failed to parse aws JSON response: ${error instanceof Error ? error.message : String(error)}`);
+      throw new Error(
+        `Failed to parse aws JSON response: ${
+          error instanceof Error ? error.message : String(error)
+        }`,
+      );
     }
   }
 
   private resolveServiceName(fallbackName: string): string {
     return sanitizeEcsServiceName(
-      this.serviceName
-      ?? parseArnTerminalName(this.serviceArn)
-      ?? fallbackName,
+      this.serviceName ??
+        parseArnTerminalName(this.serviceArn) ??
+        fallbackName,
     );
   }
 
   private async describeTaskDefinition(): Promise<EcsTaskDefinitionRecord> {
-    const response = await this.awsJson<{ taskDefinition?: Record<string, unknown> }>([
-      'ecs',
-      'describe-task-definition',
-      '--task-definition',
+    const response = await this.awsJson<
+      { taskDefinition?: Record<string, unknown> }
+    >([
+      "ecs",
+      "describe-task-definition",
+      "--task-definition",
       this.taskDefinitionFamily,
     ]);
     if (!response.taskDefinition) {
-      throw new Error(`ECS task definition "${this.taskDefinitionFamily}" was not found`);
+      throw new Error(
+        `ECS task definition "${this.taskDefinitionFamily}" was not found`,
+      );
     }
     return response.taskDefinition;
   }
 
-  private async describeService(serviceName: string): Promise<EcsServiceRecord | null> {
-    const response = await this.awsJson<{ services?: Array<Record<string, unknown>> }>([
-      'ecs',
-      'describe-services',
-      '--cluster',
+  private async describeService(
+    serviceName: string,
+  ): Promise<EcsServiceRecord | null> {
+    const response = await this.awsJson<
+      { services?: Array<Record<string, unknown>> }
+    >([
+      "ecs",
+      "describe-services",
+      "--cluster",
       this.clusterArn,
-      '--services',
+      "--services",
       serviceName,
     ]);
-    const service = Array.isArray(response.services) ? response.services[0] : undefined;
+    const service = Array.isArray(response.services)
+      ? response.services[0]
+      : undefined;
     return service ?? null;
   }
 
   private pickContainerDefinition(
     taskDefinition: EcsTaskDefinitionRecord,
   ): { containerDefinitions: Array<Record<string, unknown>>; index: number } {
-    const containerDefinitions = Array.isArray(taskDefinition.containerDefinitions)
-      ? taskDefinition.containerDefinitions
-        .map((entry) => readObjectRecord(entry))
-        .filter((entry): entry is Record<string, unknown> => entry != null)
-      : [];
+    const containerDefinitions =
+      Array.isArray(taskDefinition.containerDefinitions)
+        ? taskDefinition.containerDefinitions
+          .map((entry) => readObjectRecord(entry))
+          .filter((entry): entry is Record<string, unknown> => entry != null)
+        : [];
     if (containerDefinitions.length === 0) {
-      throw new Error(`ECS task definition "${this.taskDefinitionFamily}" has no container definitions`);
+      throw new Error(
+        `ECS task definition "${this.taskDefinitionFamily}" has no container definitions`,
+      );
     }
 
     const index = this.containerName
-      ? containerDefinitions.findIndex((entry) => readString(entry.name) === this.containerName)
+      ? containerDefinitions.findIndex((entry) =>
+        readString(entry.name) === this.containerName
+      )
       : 0;
     if (index < 0) {
-      throw new Error(`ECS container "${this.containerName}" was not found in task definition "${this.taskDefinitionFamily}"`);
+      throw new Error(
+        `ECS container "${this.containerName}" was not found in task definition "${this.taskDefinitionFamily}"`,
+      );
     }
     return { containerDefinitions, index };
   }
 
-  private async registerTaskDefinition(opts: ContainerCreateOpts): Promise<string> {
+  private async registerTaskDefinition(
+    opts: ContainerCreateOpts,
+  ): Promise<string> {
     const taskDefinition = await this.describeTaskDefinition();
     const registerInput = cloneTaskDefinitionForRegister(taskDefinition);
-    const { containerDefinitions, index } = this.pickContainerDefinition(taskDefinition);
+    const { containerDefinitions, index } = this.pickContainerDefinition(
+      taskDefinition,
+    );
     const target = { ...containerDefinitions[index]! };
     target.image = opts.imageRef;
     target.environment = buildEnvironment(target.environment, opts.envVars);
-    target.portMappings = buildPortMappings(target.portMappings, opts.exposedPort);
+    target.portMappings = buildPortMappings(
+      target.portMappings,
+      opts.exposedPort,
+    );
     target.dockerLabels = {
       ...(readObjectRecord(target.dockerLabels) ?? {}),
       ...(opts.labels ?? {}),
@@ -282,72 +334,92 @@ export class EcsContainerBackend implements ContainerBackend {
         taskDefinitionArn?: string;
       };
     }>([
-      'ecs',
-      'register-task-definition',
-      '--cli-input-json',
+      "ecs",
+      "register-task-definition",
+      "--cli-input-json",
       JSON.stringify(registerInput),
     ]);
-    const taskDefinitionArn = readString(response.taskDefinition?.taskDefinitionArn);
+    const taskDefinitionArn = readString(
+      response.taskDefinition?.taskDefinitionArn,
+    );
     if (!taskDefinitionArn) {
-      throw new Error('ECS task definition registration did not return a taskDefinitionArn');
+      throw new Error(
+        "ECS task definition registration did not return a taskDefinitionArn",
+      );
     }
     return taskDefinitionArn;
   }
 
-  private async createService(serviceName: string, taskDefinitionArn: string): Promise<void> {
+  private async createService(
+    serviceName: string,
+    taskDefinitionArn: string,
+  ): Promise<void> {
     if (this.subnetIds.length === 0) {
-      throw new Error('ECS service creation requires subnetIds when the service does not already exist');
+      throw new Error(
+        "ECS service creation requires subnetIds when the service does not already exist",
+      );
     }
 
     const awsvpcParts = [
-      `subnets=[${this.subnetIds.join(',')}]`,
+      `subnets=[${this.subnetIds.join(",")}]`,
       ...(this.securityGroupIds.length > 0
-        ? [`securityGroups=[${this.securityGroupIds.join(',')}]`]
+        ? [`securityGroups=[${this.securityGroupIds.join(",")}]`]
         : []),
-      `assignPublicIp=${this.assignPublicIp ? 'ENABLED' : 'DISABLED'}`,
+      `assignPublicIp=${this.assignPublicIp ? "ENABLED" : "DISABLED"}`,
     ];
 
     const result = await this.aws([
-      'ecs',
-      'create-service',
-      '--cluster',
+      "ecs",
+      "create-service",
+      "--cluster",
       this.clusterArn,
-      '--service-name',
+      "--service-name",
       serviceName,
-      '--task-definition',
+      "--task-definition",
       taskDefinitionArn,
-      '--desired-count',
+      "--desired-count",
       String(this.desiredCount),
-      '--launch-type',
+      "--launch-type",
       this.launchType,
-      '--network-configuration',
-      `awsvpcConfiguration={${awsvpcParts.join(',')}}`,
+      "--network-configuration",
+      `awsvpcConfiguration={${awsvpcParts.join(",")}}`,
     ]);
     if (result.exitCode !== 0) {
-      throw new Error(result.stderr || `aws ecs create-service exited with code ${result.exitCode}`);
+      throw new Error(
+        result.stderr ||
+          `aws ecs create-service exited with code ${result.exitCode}`,
+      );
     }
   }
 
-  private async updateService(serviceName: string, taskDefinitionArn: string): Promise<void> {
+  private async updateService(
+    serviceName: string,
+    taskDefinitionArn: string,
+  ): Promise<void> {
     const result = await this.aws([
-      'ecs',
-      'update-service',
-      '--cluster',
+      "ecs",
+      "update-service",
+      "--cluster",
       this.clusterArn,
-      '--service',
+      "--service",
       serviceName,
-      '--task-definition',
+      "--task-definition",
       taskDefinitionArn,
-      '--desired-count',
+      "--desired-count",
       String(this.desiredCount),
-      '--force-new-deployment',
+      "--force-new-deployment",
     ]);
     if (result.exitCode !== 0) {
-      throw new Error(result.stderr || `aws ecs update-service exited with code ${result.exitCode}`);
+      throw new Error(
+        result.stderr ||
+          `aws ecs update-service exited with code ${result.exitCode}`,
+      );
     }
   }
 
-  async createAndStart(opts: ContainerCreateOpts): Promise<ContainerCreateResult> {
+  async createAndStart(
+    opts: ContainerCreateOpts,
+  ): Promise<ContainerCreateResult> {
     const serviceName = this.resolveServiceName(opts.name);
     const taskDefinitionArn = await this.registerTaskDefinition(opts);
     const existingService = await this.describeService(serviceName);
@@ -359,30 +431,38 @@ export class EcsContainerBackend implements ContainerBackend {
     }
 
     const waitResult = await this.aws([
-      'ecs',
-      'wait',
-      'services-stable',
-      '--cluster',
+      "ecs",
+      "wait",
+      "services-stable",
+      "--cluster",
       this.clusterArn,
-      '--services',
+      "--services",
       serviceName,
     ]);
     if (waitResult.exitCode !== 0) {
-      throw new Error(waitResult.stderr || `aws ecs wait services-stable exited with code ${waitResult.exitCode}`);
+      throw new Error(
+        waitResult.stderr ||
+          `aws ecs wait services-stable exited with code ${waitResult.exitCode}`,
+      );
     }
 
-    const baseUrl = this.baseUrl
-      ?? (opts.requestedEndpoint?.kind === 'http-url' ? opts.requestedEndpoint.base_url : undefined);
+    const baseUrl = this.baseUrl ??
+      (opts.requestedEndpoint?.kind === "http-url"
+        ? opts.requestedEndpoint.base_url
+        : undefined);
     if (!baseUrl) {
-      throw new Error('ECS deployment requires provider config baseUrl or a target http-url endpoint');
+      throw new Error(
+        "ECS deployment requires backend config baseUrl or a target http-url endpoint",
+      );
     }
 
-    const healthCheckUrl = this.healthUrl ?? new URL(opts.healthPath ?? '/health', baseUrl).toString();
+    const healthCheckUrl = this.healthUrl ??
+      new URL(opts.healthPath ?? "/health", baseUrl).toString();
 
     return {
       containerId: serviceName,
       resolvedEndpoint: {
-        kind: 'http-url',
+        kind: "http-url",
         base_url: baseUrl,
       },
       healthCheckUrl,
@@ -395,50 +475,55 @@ export class EcsContainerBackend implements ContainerBackend {
 
   async remove(containerId: string): Promise<void> {
     const result = await this.aws([
-      'ecs',
-      'delete-service',
-      '--cluster',
+      "ecs",
+      "delete-service",
+      "--cluster",
       this.clusterArn,
-      '--service',
+      "--service",
       sanitizeEcsServiceName(containerId),
-      '--force',
+      "--force",
     ]);
-    const notFound = result.stderr.includes('ServiceNotFoundException')
-      || result.stderr.includes('ClusterNotFoundException')
-      || result.stderr.includes('not found');
+    const notFound = result.stderr.includes("ServiceNotFoundException") ||
+      result.stderr.includes("ClusterNotFoundException") ||
+      result.stderr.includes("not found");
     if (result.exitCode !== 0 && !notFound) {
-      throw new Error(result.stderr || `aws ecs delete-service exited with code ${result.exitCode}`);
+      throw new Error(
+        result.stderr ||
+          `aws ecs delete-service exited with code ${result.exitCode}`,
+      );
     }
   }
 
   async getLogs(_containerId: string, tail = 100): Promise<string> {
     try {
       const taskDefinition = await this.describeTaskDefinition();
-      const { containerDefinitions, index } = this.pickContainerDefinition(taskDefinition);
+      const { containerDefinitions, index } = this.pickContainerDefinition(
+        taskDefinition,
+      );
       const selected = containerDefinitions[index]!;
       const logOptions = readObjectRecord(
         readObjectRecord(selected.logConfiguration)?.options,
       );
-      const logGroup = readString(logOptions?.['awslogs-group']);
+      const logGroup = readString(logOptions?.["awslogs-group"]);
       if (!logGroup) {
-        return '';
+        return "";
       }
 
       const result = await this.aws([
-        'logs',
-        'tail',
+        "logs",
+        "tail",
         logGroup,
-        '--since',
-        '1h',
-        '--format',
-        'short',
+        "--since",
+        "1h",
+        "--format",
+        "short",
       ]);
       if (result.exitCode !== 0) {
-        return '';
+        return "";
       }
       return tailLines(result.stdout, tail);
     } catch {
-      return '';
+      return "";
     }
   }
 

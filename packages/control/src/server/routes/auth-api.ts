@@ -5,18 +5,28 @@
  * Google OAuth is the sole authentication method.
  */
 
-import { Hono } from 'hono';
-import { z } from 'zod';
-import { eq, and, ne } from 'drizzle-orm';
-import type { Env, User } from '../../shared/types/index.ts';
-import { getDb, accounts, authIdentities } from '../../infra/db/index.ts';
+import { Hono } from "hono";
+import { z } from "zod";
+import { and, eq, ne } from "drizzle-orm";
+import type { Env, User } from "../../shared/types/index.ts";
+import { accounts, authIdentities, getDb } from "../../infra/db/index.ts";
 import {
   deleteAuthSession,
   isValidAvatarUrl,
-} from '../../application/services/identity/auth-utils.ts';
+} from "../../application/services/identity/auth-utils.ts";
+import {
+  clearSessionCookie,
+  deleteSession,
+  getSessionIdFromCookie,
+} from "../../application/services/identity/session.ts";
+import { getPlatformServices } from "../../platform/accessors.ts";
 
-import { BadRequestError, AuthenticationError, ConflictError } from 'takos-common/errors';
-import { zValidator } from './zod-validator.ts';
+import {
+  AuthenticationError,
+  BadRequestError,
+  ConflictError,
+} from "takos-common/errors";
+import { zValidator } from "./zod-validator.ts";
 
 type Variables = {
   user?: User;
@@ -38,8 +48,8 @@ const profileSchema = z.object({
 });
 
 // GET /api/auth/me - Get current user (requires auth middleware to set user)
-authApi.get('/me', async (c) => {
-  const user = c.get('user');
+authApi.get("/me", async (c) => {
+  const user = c.get("user");
   if (!user) {
     throw new AuthenticationError();
   }
@@ -47,7 +57,7 @@ authApi.get('/me', async (c) => {
   // Get linked auth identities
   const db = getDb(c.env.DB);
   const identities = await db.select({
-    provider: authIdentities.provider,
+    source: authIdentities.provider,
     emailSnapshot: authIdentities.emailSnapshot,
   }).from(authIdentities).where(eq(authIdentities.userId, user.id)).all();
 
@@ -58,7 +68,7 @@ authApi.get('/me', async (c) => {
       display_name: user.name,
       avatar_url: user.picture,
       auth_identities: identities.map((i) => ({
-        provider: i.provider,
+        source: i.source,
         email: i.emailSnapshot,
       })),
     },
@@ -70,54 +80,56 @@ authApi.get('/me', async (c) => {
 // ============================================================
 
 // POST /api/auth/setup-username - Set username (requires auth)
-authApi.post('/setup-username',
-  zValidator('json', setupUsernameSchema),
+authApi.post(
+  "/setup-username",
+  zValidator("json", setupUsernameSchema),
   async (c) => {
-  const user = c.get('user');
-  if (!user) {
-    throw new AuthenticationError();
-  }
+    const user = c.get("user");
+    if (!user) {
+      throw new AuthenticationError();
+    }
 
-  const body = c.req.valid('json');
+    const body = c.req.valid("json");
 
-  if (!body.username) {
-    throw new BadRequestError('Username is required');
-  }
+    if (!body.username) {
+      throw new BadRequestError("Username is required");
+    }
 
-  // Validate username format (3-30 chars, lowercase alphanumeric, underscores or hyphens)
-  if (!/^[a-z0-9][a-z0-9_-]{2,29}$/.test(body.username)) {
-    throw new BadRequestError('Username must be 3-30 characters, lowercase alphanumeric, underscores or hyphens');
-  }
+    // Validate username format (3-30 chars, lowercase alphanumeric, underscores or hyphens)
+    if (!/^[a-z0-9][a-z0-9_-]{2,29}$/.test(body.username)) {
+      throw new BadRequestError(
+        "Username must be 3-30 characters, lowercase alphanumeric, underscores or hyphens",
+      );
+    }
 
-  // Check if username is taken
-  const db = getDb(c.env.DB);
-  const existing = await db.select({ id: accounts.id })
-    .from(accounts)
-    .where(and(eq(accounts.slug, body.username), ne(accounts.id, user.id)))
-    .get();
+    // Check if username is taken
+    const db = getDb(c.env.DB);
+    const existing = await db.select({ id: accounts.id })
+      .from(accounts)
+      .where(and(eq(accounts.slug, body.username), ne(accounts.id, user.id)))
+      .get();
 
-  if (existing) {
-    throw new ConflictError('Username already taken');
-  }
+    if (existing) {
+      throw new ConflictError("Username already taken");
+    }
 
-  await db.update(accounts).set({
-    slug: body.username,
-    updatedAt: new Date().toISOString(),
-  }).where(eq(accounts.id, user.id)).run();
+    await db.update(accounts).set({
+      slug: body.username,
+      updatedAt: new Date().toISOString(),
+    }).where(eq(accounts.id, user.id)).run();
 
-  return c.json({ success: true, username: body.username });
-});
+    return c.json({ success: true, username: body.username });
+  },
+);
 
 // PATCH /api/auth/profile - Update profile (requires auth)
-authApi.patch('/profile',
-  zValidator('json', profileSchema),
-  async (c) => {
-  const user = c.get('user');
+authApi.patch("/profile", zValidator("json", profileSchema), async (c) => {
+  const user = c.get("user");
   if (!user) {
     throw new AuthenticationError();
   }
 
-  const body = c.req.valid('json');
+  const body = c.req.valid("json");
 
   const updateData: Record<string, string | null> = {};
 
@@ -126,30 +138,47 @@ authApi.patch('/profile',
   }
   if (body.avatar_url !== undefined) {
     if (body.avatar_url && !isValidAvatarUrl(body.avatar_url)) {
-      throw new BadRequestError('Invalid avatar URL. Must be a valid HTTPS URL.');
+      throw new BadRequestError(
+        "Invalid avatar URL. Must be a valid HTTPS URL.",
+      );
     }
     updateData.picture = body.avatar_url;
   }
 
   if (Object.keys(updateData).length === 0) {
-    throw new BadRequestError('No updates provided');
+    throw new BadRequestError("No updates provided");
   }
 
   updateData.updatedAt = new Date().toISOString();
 
   const db = getDb(c.env.DB);
-  await db.update(accounts).set(updateData).where(eq(accounts.id, user.id)).run();
+  await db.update(accounts).set(updateData).where(eq(accounts.id, user.id))
+    .run();
 
   return c.json({ success: true });
 });
 
 // POST /api/auth/logout - Logout (invalidate D1 session)
-authApi.post('/logout', async (c) => {
-  const authHeader = c.req.header('Authorization');
-  const token = authHeader?.startsWith('Bearer ') ? authHeader.slice(7).trim() || null : null;
+authApi.post("/logout", async (c) => {
+  const user = c.get("user");
+  if (!user) {
+    throw new AuthenticationError();
+  }
+
+  const sessionStore = getPlatformServices(c).notifications.sessionStore;
+  const sessionId = getSessionIdFromCookie(c.req.header("Cookie"));
+  if (sessionId && sessionStore) {
+    await deleteSession(sessionStore, sessionId);
+  }
+
+  const authHeader = c.req.header("Authorization");
+  const token = authHeader?.startsWith("Bearer ")
+    ? authHeader.slice(7).trim() || null
+    : null;
   if (token) {
     await deleteAuthSession(c.env.DB, token);
   }
+  c.header("Set-Cookie", clearSessionCookie());
   return c.json({ success: true });
 });
 

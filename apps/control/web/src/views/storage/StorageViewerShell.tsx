@@ -1,12 +1,13 @@
-import { Show } from 'solid-js';
-import type { JSX } from 'solid-js';
-import { formatFileSize, formatDateTime } from '../../lib/format.ts';
-import { Icons } from '../../lib/Icons.tsx';
-import { Button } from '../../components/ui/Button.tsx';
-import type { StorageFile } from '../../types/index.ts';
-import type { ResolvedHandler } from './storageUtils.tsx';
-import { handlerDisplayName } from './storageUtils.tsx';
-import { StorageHandlerDropdown } from './StorageHandlerPicker.tsx';
+import { Show } from "solid-js";
+import type { JSX } from "solid-js";
+import { formatDateTime, formatFileSize } from "../../lib/format.ts";
+import { Icons } from "../../lib/Icons.tsx";
+import { Button } from "../../components/ui/Button.tsx";
+import type { TranslationKey } from "../../store/i18n.ts";
+import type { StorageFile } from "../../types/index.ts";
+import type { ResolvedHandler } from "./storageUtils.tsx";
+import { handlerDisplayName } from "./storageUtils.tsx";
+import { StorageHandlerDropdown } from "./StorageHandlerPicker.tsx";
 
 export function StorageViewerShell(props: {
   file: StorageFile;
@@ -18,7 +19,7 @@ export function StorageViewerShell(props: {
   onSelectHandler: (h: ResolvedHandler, asDefault: boolean) => void;
   onClearDefault: () => void;
   onClose: () => void;
-  t: (key: any) => string;
+  t: (key: TranslationKey) => string;
   extraButtons?: JSX.Element;
   children: JSX.Element;
 }) {
@@ -29,10 +30,11 @@ export function StorageViewerShell(props: {
       {/* Header */}
       <div class="flex-shrink-0 px-4 py-3 border-b border-zinc-200 dark:border-zinc-700 flex items-center justify-between gap-3">
         <div class="flex items-center gap-3 min-w-0">
-          <button type="button"
+          <button
+            type="button"
             onClick={props.onClose}
             class="p-1.5 rounded-lg hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors"
-            title={props.t('back')}
+            title={props.t("back")}
           >
             <Icons.ArrowLeft class="w-5 h-5 text-zinc-600 dark:text-zinc-400" />
           </button>
@@ -41,7 +43,8 @@ export function StorageViewerShell(props: {
               {props.file.name}
             </h2>
             <p class="text-xs text-zinc-500 dark:text-zinc-400 truncate">
-              {props.file.path} &middot; {formatFileSize(props.file.size)} &middot; {formatDateTime(props.file.updated_at)}
+              {props.file.path} &middot; {formatFileSize(props.file.size)}{" "}
+              &middot; {formatDateTime(props.file.updated_at)}
             </p>
           </div>
         </div>
@@ -77,10 +80,15 @@ export function StorageViewerShell(props: {
             <Button
               variant="ghost"
               size="sm"
-              onClick={() => globalThis.open(props.downloadUrl!, '_blank', 'noopener,noreferrer')}
+              onClick={() =>
+                globalThis.open(
+                  props.downloadUrl!,
+                  "_blank",
+                  "noopener,noreferrer",
+                )}
               leftIcon={<Icons.Download class="w-4 h-4" />}
             >
-              {props.t('download')}
+              {props.t("download")}
             </Button>
           </Show>
         </div>

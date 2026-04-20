@@ -10,7 +10,7 @@ export type StorageFileRow = SelectOf<typeof accountStorageFiles>;
 
 export const R2_KEY_PREFIX = "ws-storage";
 export const MAX_FILE_SIZE = 10 * 1024 * 1024 * 1024;
-export const PRESIGN_EXPIRY_SECONDS = 900;
+export const FILE_URL_EXPIRY_SECONDS = 900;
 export const MAX_CONTENT_SIZE = 50 * 1024 * 1024; // 50MB - safe for Worker memory
 export const MAX_PATH_LENGTH = 1024;
 export const MAX_LIST_ITEMS = 5000;
@@ -54,13 +54,17 @@ export interface StorageFileResponse {
 
 export interface UploadUrlResponse {
   file_id: string;
+  /** Temporary authenticated API URL for the upload route. */
   upload_url: string;
   r2_key: string;
+  /** ISO timestamp when the upload URL stops being accepted. */
   expires_at: string;
 }
 
 export interface DownloadUrlResponse {
+  /** Temporary authenticated API URL for the download route. */
   download_url: string;
+  /** ISO timestamp when the download URL stops being accepted. */
   expires_at: string;
 }
 

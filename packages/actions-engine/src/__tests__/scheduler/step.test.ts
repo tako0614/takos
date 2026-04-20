@@ -129,12 +129,10 @@ Deno.test("step output parsing - parses command-file heredoc outputs written wit
   assertEquals(result.outputs.multi.includes("\r"), false);
 });
 
-Deno.test("step command files - captures markdown written to GITHUB_STEP_SUMMARY", async () => {
+Deno.test("step command files - does not expose GITHUB_STEP_SUMMARY", async () => {
   const runner = new StepRunner({
     shellExecutor: async (_command, options) => {
-      const summaryFile = options.env?.GITHUB_STEP_SUMMARY;
-      assert(summaryFile);
-      appendFileSync(summaryFile!, "# Build summary\n\n- ok: 3\n- failed: 0\n");
+      assertEquals(options.env?.GITHUB_STEP_SUMMARY, undefined);
       return { exitCode: 0, stdout: "", stderr: "" };
     },
   });
@@ -144,24 +142,10 @@ Deno.test("step command files - captures markdown written to GITHUB_STEP_SUMMARY
   const result = await runner.runStep(step, context);
 
   assertEquals(result.conclusion, "success");
-  assertEquals(result.summary, "# Build summary\n\n- ok: 3\n- failed: 0\n");
-});
-Deno.test("step command files - leaves summary unset when GITHUB_STEP_SUMMARY is empty", async () => {
-  const runner = new StepRunner({
-    shellExecutor: async (_command, options) => {
-      // summary file は作られるが何も書き込まない
-      const summaryFile = options.env?.GITHUB_STEP_SUMMARY;
-      assert(summaryFile);
-      return { exitCode: 0, stdout: "", stderr: "" };
-    },
-  });
-
-  const context = createBaseContext({ env: {} });
-  const step: Step = { id: "no-summary", run: "echo ok" };
-  const result = await runner.runStep(step, context);
-
-  assertEquals(result.conclusion, "success");
-  assertEquals(result.summary, undefined);
+  assertEquals(
+    Object.prototype.hasOwnProperty.call(result, "summary"),
+    false,
+  );
 });
 
 Deno.test("step default executors - uses pwsh by default on win32", async () => {
@@ -265,11 +249,11 @@ Deno.test("step default executors - returns failure when default shell executor 
   assertEquals(result.conclusion, "failure");
   assert(result.error?.includes("Exit code: 124") ?? false);
 });
-Deno.test("step default executors - supports builtin checkout action without a custom resolver", async () => {
+Deno.test("step default executors - supports compatibility checkout no-op without a custom resolver", async () => {
   const runner = new StepRunner();
   const context = createBaseContext();
   const step: Step = {
-    id: "builtin-checkout",
+    id: "compat-checkout",
     uses: "actions/checkout@v4",
   };
 

@@ -6,7 +6,6 @@
     "./packages/common",
     "./packages/actions-engine",
     "./packages/runtime-service",
-    "./packages/browser-service",
     "./packages/control",
     "./packages/control/local-platform",
     "./scripts"

@@ -1,29 +1,52 @@
-import type { Context } from 'hono';
-import type { ControlPlatform } from './platform-config.ts';
+import type { Context } from "hono";
+import type { ControlPlatform } from "./platform-config.ts";
 
 export type PlatformContextVariables<TBindings extends object = object> = {
   platform?: ControlPlatform<TBindings>;
 };
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any -- must accept any Variables shape from callers
 export type PlatformContext<TBindings extends object = object> = Context<{
   Bindings: TBindings & { PLATFORM?: ControlPlatform<TBindings> };
-  Variables: any;
+  Variables: PlatformContextVariables<TBindings>;
 }>;
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any -- accepts any Hono Context regardless of Variables shape
-export function setPlatformContext<TBindings extends object>(
-  c: Context<{ Bindings: TBindings; Variables: any }>,
-  platform: ControlPlatform<TBindings>,
-): void {
-  c.set('platform', platform as never);
+function isControlPlatform<TBindings extends object>(
+  value: unknown,
+): value is ControlPlatform<TBindings> {
+  return typeof value === "object" && value !== null &&
+    "config" in value &&
+    "services" in value &&
+    "bindings" in value;
 }
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any -- accepts any Hono Context regardless of Variables shape
-export function getPlatformContext<TBindings extends object>(
-  c: Context<{ Bindings: TBindings; Variables: any }>,
+function getPlatformVariable<TBindings extends object>(
+  variables: object,
 ): ControlPlatform<TBindings> | undefined {
-  const platform = c.get('platform') as ControlPlatform<TBindings> | undefined;
+  const platform = (variables as { platform?: unknown }).platform;
+  return isControlPlatform<TBindings>(platform) ? platform : undefined;
+}
+
+export function setPlatformContext<
+  TBindings extends object,
+  TVariables extends PlatformContextVariables<TBindings>,
+>(
+  c: Context<
+    { Bindings: TBindings; Variables: TVariables }
+  >,
+  platform: ControlPlatform<TBindings>,
+): void {
+  c.set("platform", platform);
+}
+
+export function getPlatformContext<
+  TBindings extends object,
+  TVariables extends object,
+>(
+  c: Context<
+    { Bindings: TBindings; Variables: TVariables }
+  >,
+): ControlPlatform<TBindings> | undefined {
+  const platform = getPlatformVariable<TBindings>(c.var);
   if (platform) return platform;
   return (c.env as { PLATFORM?: ControlPlatform<TBindings> }).PLATFORM;
 }

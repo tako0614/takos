@@ -1,5 +1,4 @@
 import type { AppCompute } from "../source/app-manifest-types.ts";
-import type { AppStorage } from "../source/app-manifest-types.ts";
 
 // Legacy alias names used by this module to label compute entries.
 type AppWorker = AppCompute & { kind: "worker" };
@@ -18,20 +17,26 @@ import type {
   ManagedServiceComponentKind,
   ManagedServiceRecord,
 } from "../entities/group-managed-services.ts";
-import type { DeploymentProviderName } from "./models.ts";
+import type { CreateDeploymentInput, DeploymentBackendName } from "./models.ts";
 import { safeJsonParseOrDefault } from "../../../shared/utils/logger.ts";
+import {
+  injectAttachedContainerBindings,
+  resolveAttachedContainerBindingPlans,
+} from "./attached-container-bindings.ts";
+import { ServiceDesiredStateService } from "../platform/worker-desired-state.ts";
 
 type ApplyGroupRecord = {
   id: string;
   spaceId: string;
   name: string;
-  provider: string | null;
+  backend: string | null;
   env: string | null;
 };
 
 type ApplyExecutionOptions = {
   envName?: string;
   artifacts?: Record<string, unknown>;
+  targetWorkloadNames?: string[];
 };
 
 export type ApplyEntryExecutionResult = {
@@ -59,6 +64,10 @@ export type ApplyEngineExecutorDeps = ApplyEngineArtifactDeps & {
     typeof import("./group-managed-desired-state.ts").syncGroupManagedDesiredState;
   reconcileGroupRouting:
     typeof import("./group-routing.ts").reconcileGroupRouting;
+  captureManagedWorkloadDesiredState:
+    typeof import("./group-managed-desired-state.ts").captureManagedWorkloadDesiredState;
+  restoreManagedWorkloadDesiredState:
+    typeof import("./group-managed-desired-state.ts").restoreManagedWorkloadDesiredState;
 };
 
 type GroupStateLoader = (
@@ -84,23 +93,23 @@ function resolveManagedServiceShape(
   };
 }
 
-function resolveWorkloadDeploymentProvider(
-  provider: string,
+function resolveWorkloadDeploymentBackend(
+  backend: string,
   category: ManagedServiceComponentKind,
   artifact: ApplyArtifactInput | null,
-): DeploymentProviderName {
+): DeploymentBackendName {
   if (category === "worker") {
-    if (provider === "cloudflare") {
+    if (backend === "cloudflare") {
       return "workers-dispatch";
     }
     return "runtime-host";
   }
-  if (artifact?.kind === "container_image" && artifact.provider) {
-    return artifact.provider;
+  if (artifact?.kind === "container_image" && artifact.backend) {
+    return artifact.backend;
   }
-  if (provider === "aws") return "ecs";
-  if (provider === "gcp") return "cloud-run";
-  if (provider === "k8s") return "k8s";
+  if (backend === "aws") return "ecs";
+  if (backend === "gcp") return "cloud-run";
+  if (backend === "k8s") return "k8s";
   return "oci";
 }
 
@@ -179,6 +188,9 @@ export async function syncGroupDesiredStateForWorkloads(
   groupId: string,
   desiredState: GroupDesiredState,
   spaceId: string,
+  options: {
+    targetWorkloadNames?: string[];
+  } = {},
 ): Promise<Array<{ name: string; error: string }>> {
   const observedState = await getGroupState(env, groupId);
   if (!observedState) return [];
@@ -188,6 +200,7 @@ export async function syncGroupDesiredStateForWorkloads(
     desiredState,
     observedState,
     resourceRows,
+    targetWorkloadNames: options.targetWorkloadNames,
   });
 }
 
@@ -228,6 +241,7 @@ async function upsertManagedWorkload(
 
 async function deployManagedWorkload(
   deps: ApplyEngineExecutorDeps,
+  getGroupState: GroupStateLoader,
   env: Env,
   input: {
     group: ApplyGroupRecord;
@@ -241,8 +255,8 @@ async function deployManagedWorkload(
   },
 ): Promise<void> {
   const deploymentService = new deps.DeploymentService(env);
-  const providerName = resolveWorkloadDeploymentProvider(
-    input.group.provider ?? "cloudflare",
+  const backendName = resolveWorkloadDeploymentBackend(
+    input.group.backend ?? "cloudflare",
     input.category,
     input.artifact,
   );
@@ -251,6 +265,11 @@ async function deployManagedWorkload(
     input.category,
     input.artifact,
     input.workload.spec as AppWorker | AppContainer | AppService,
+  );
+  const workerDeploymentOverride = await buildWorkerDeploymentOverride(
+    getGroupState,
+    env,
+    input,
   );
 
   const deployment = await deploymentService.createDeployment({
@@ -261,19 +280,23 @@ async function deployManagedWorkload(
       ? "worker-bundle"
       : "container-image",
     bundleContent: input.artifact?.kind === "worker_bundle"
-      ? input.artifact.bundleContent
+      ? workerDeploymentOverride.bundleContent ?? input.artifact.bundleContent
       : undefined,
-    deployMessage: input.artifact?.deployMessage ?? `takos apply ${input.name}`,
-    provider: { name: providerName },
+    deployMessage: input.artifact?.deployMessage ??
+      `takos deploy ${input.name}`,
+    backend: { name: backendName },
     target,
+    ...(workerDeploymentOverride.snapshotOverride
+      ? { snapshotOverride: workerDeploymentOverride.snapshotOverride }
+      : {}),
   });
   const executed = await deploymentService.executeDeployment(deployment.id);
 
-  const resolvedProviderState = safeJsonParseOrDefault<Record<string, unknown>>(
-    executed.provider_state_json,
+  const resolvedBackendState = safeJsonParseOrDefault<Record<string, unknown>>(
+    executed.backend_state_json,
     {},
   );
-  const resolvedEndpoint = resolvedProviderState.resolved_endpoint;
+  const resolvedEndpoint = resolvedBackendState.resolved_endpoint;
   const resolvedBaseUrl =
     resolvedEndpoint && typeof resolvedEndpoint === "object" &&
       !Array.isArray(resolvedEndpoint) &&
@@ -308,9 +331,66 @@ async function deployManagedWorkload(
   });
 }
 
+async function buildWorkerDeploymentOverride(
+  getGroupState: GroupStateLoader,
+  env: Env,
+  input: {
+    group: ApplyGroupRecord;
+    groupId: string;
+    name: string;
+    category: ManagedServiceComponentKind;
+    workload: GroupDesiredState["workloads"][string];
+    managed: ManagedServiceRecord;
+    artifact: ApplyArtifactInput | null;
+  },
+): Promise<{
+  bundleContent?: string;
+  snapshotOverride?: CreateDeploymentInput["snapshotOverride"];
+}> {
+  if (
+    input.category !== "worker" ||
+    input.artifact?.kind !== "worker_bundle"
+  ) {
+    return {};
+  }
+
+  const workerSpec = input.workload.spec as AppWorker;
+  if (
+    !workerSpec.containers || Object.keys(workerSpec.containers).length === 0
+  ) {
+    return {};
+  }
+
+  const observedState = await getGroupState(env, input.groupId);
+  const plans = resolveAttachedContainerBindingPlans(
+    input.name,
+    workerSpec,
+    observedState,
+  );
+  const desiredStateService = new ServiceDesiredStateService(env);
+  const snapshot = await desiredStateService.resolveDeploymentState(
+    input.group.spaceId,
+    input.managed.row.id,
+  );
+  const injected = injectAttachedContainerBindings({
+    bundleContent: input.artifact.bundleContent,
+    bindings: snapshot.bindings,
+    plans,
+  });
+
+  return {
+    bundleContent: injected.bundleContent,
+    snapshotOverride: {
+      envVars: snapshot.envVars,
+      bindings: injected.bindings,
+      runtimeConfig: snapshot.runtimeConfig,
+    },
+  };
+}
+
 async function executeWorkloadEntry(
   deps: ApplyEngineExecutorDeps,
-  _getGroupState: GroupStateLoader,
+  getGroupState: GroupStateLoader,
   env: Env,
   input: {
     entry: DiffEntry;
@@ -351,16 +431,78 @@ async function executeWorkloadEntry(
     } else {
       assertApplyImageArtifact(input.entry.name, input.category, artifact);
     }
-    await deployManagedWorkload(deps, env, {
-      group: input.group,
-      groupId: input.groupId,
-      envName: input.envName,
-      name: input.entry.name,
-      category: input.category,
-      workload,
-      managed,
-      artifact,
-    });
+
+    const desiredStateSnapshot = await deps.captureManagedWorkloadDesiredState(
+      env,
+      {
+        spaceId: input.group.spaceId,
+        serviceId: managed.row.id,
+        serviceName: `${input.desiredState.manifest.name}:${input.entry.name}`,
+      },
+    );
+
+    const syncFailures = await syncGroupDesiredStateForWorkloads(
+      deps,
+      getGroupState,
+      env,
+      input.groupId,
+      input.desiredState,
+      input.group.spaceId,
+      { targetWorkloadNames: [input.entry.name] },
+    );
+    if (syncFailures.length > 0) {
+      try {
+        await deps.restoreManagedWorkloadDesiredState(
+          env,
+          desiredStateSnapshot,
+        );
+      } catch (rollbackError) {
+        throw new Error(
+          `Failed to sync desired state for "${input.entry.name}": ${
+            syncFailures.map((failure) => failure.error).join("; ")
+          }; rollback failed: ${
+            rollbackError instanceof Error
+              ? rollbackError.message
+              : String(rollbackError)
+          }`,
+        );
+      }
+      throw new Error(
+        `Failed to sync desired state for "${input.entry.name}": ${
+          syncFailures.map((failure) => failure.error).join("; ")
+        }`,
+      );
+    }
+    try {
+      await deployManagedWorkload(deps, getGroupState, env, {
+        group: input.group,
+        groupId: input.groupId,
+        envName: input.envName,
+        name: input.entry.name,
+        category: input.category,
+        workload,
+        managed,
+        artifact,
+      });
+    } catch (error) {
+      try {
+        await deps.restoreManagedWorkloadDesiredState(
+          env,
+          desiredStateSnapshot,
+        );
+      } catch (rollbackError) {
+        throw new Error(
+          `${
+            error instanceof Error ? error.message : String(error)
+          }; rollback failed: ${
+            rollbackError instanceof Error
+              ? rollbackError.message
+              : String(rollbackError)
+          }`,
+        );
+      }
+      throw error;
+    }
   }
 
   if (input.entry.action !== "delete") return;
@@ -390,43 +532,6 @@ export async function executeApplyEntry(
   const envName = input.opts.envName ?? input.group.env ?? "default";
 
   switch (input.entry.category) {
-    case "resource": {
-      const resource = input.desiredState.resources[input.entry.name];
-      if (input.entry.action === "create") {
-        if (!resource) {
-          throw new Error(
-            `Resource "${input.entry.name}" not found in desired state`,
-          );
-        }
-        await deps.createResource(env, input.groupId, input.entry.name, {
-          type: resource.type,
-          binding: resource.binding,
-          groupName: input.group.name,
-          envName,
-          spaceId: input.group.spaceId,
-          providerName: input.desiredState.provider,
-          specFingerprint: resource.specFingerprint,
-          spec: resource.spec as AppStorage,
-        });
-      }
-      if (input.entry.action === "update") {
-        if (!resource) {
-          throw new Error(
-            `Resource "${input.entry.name}" not found in desired state`,
-          );
-        }
-        await deps.updateManagedResource(env, input.groupId, input.entry.name, {
-          binding: resource.binding,
-          specFingerprint: resource.specFingerprint,
-          spec: resource.spec as AppStorage,
-        });
-      }
-      if (input.entry.action === "delete") {
-        await deps.deleteResource(env, input.groupId, input.entry.name);
-      }
-      return;
-    }
-
     case "worker":
     case "container":
     case "service":
@@ -445,6 +550,8 @@ export async function reconcileAppliedRoutes(
   deps: ApplyEngineExecutorDeps,
   env: Env,
   input: {
+    groupId: string;
+    spaceId: string;
     desiredState: GroupDesiredState;
     currentRoutes: GroupState["routes"];
     refreshedWorkloads: GroupState["workloads"];
@@ -458,6 +565,10 @@ export async function reconcileAppliedRoutes(
     input.currentRoutes,
     input.refreshedWorkloads,
     input.appliedAt,
+    {
+      groupId: input.groupId,
+      spaceId: input.spaceId,
+    },
   );
   const failedRouteMap = new Map(
     routingResult.failedRoutes.map(

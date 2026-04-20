@@ -1,23 +1,25 @@
-import type { FileMetadata, GetFilesOptions, Storage } from '@google-cloud/storage';
+import type {
+  FileMetadata,
+  GetFilesOptions,
+  Storage,
+} from "@google-cloud/storage";
 import type {
   R2Bucket,
   R2Object,
   R2ObjectBody,
-} from '../shared/types/bindings.ts';
-import type {
-  R2Objects,
-  R2RangeLike,
-} from './r2-compat-types.ts';
+} from "../shared/types/bindings.ts";
+import type { R2Objects, R2RangeLike } from "./r2-compat-types.ts";
 import {
-  toR2Object as toR2ObjectShared,
-  toR2ObjectBody as toR2ObjectBodyShared,
   normaliseBody,
   type R2ObjectMeta,
-} from './r2-adapter-shared.ts';
+  toR2Object as toR2ObjectShared,
+  toR2ObjectBody as toR2ObjectBodyShared,
+} from "./r2-adapter-shared.ts";
 
 /** Type guard for GCS SDK errors that carry a numeric `code` property. */
 function isGcsError(err: unknown): err is Error & { code: number } {
-  return err instanceof Error && typeof (err as unknown as Record<string, unknown>).code === 'number';
+  return err instanceof Error &&
+    typeof Reflect.get(err, "code") === "number";
 }
 
 // ---------------------------------------------------------------------------
@@ -39,7 +41,7 @@ function lazyStorage(config: GcsObjectStoreConfig): () => Promise<Storage> {
   return async () => {
     if (!storagePromise) {
       storagePromise = (async () => {
-        const { Storage } = await import('@google-cloud/storage');
+        const { Storage } = await import("@google-cloud/storage");
         return new Storage({
           ...(config.projectId ? { projectId: config.projectId } : {}),
           ...(config.keyFilePath ? { keyFilename: config.keyFilePath } : {}),
@@ -51,35 +53,37 @@ function lazyStorage(config: GcsObjectStoreConfig): () => Promise<Storage> {
 }
 
 /**
- * Map GCS FileMetadata to provider-neutral metadata, then build R2Object.
+ * Map GCS FileMetadata to backend-independent metadata, then build R2Object.
  */
 function gcsToR2Object(
   key: string,
   metadata: FileMetadata,
   range?: R2RangeLike,
 ): R2Object {
-  const rawEtag = typeof metadata.etag === 'string' ? metadata.etag : '';
-  const etag = rawEtag.replace(/"/g, '');
-  const size = typeof metadata.size === 'string'
+  const rawEtag = typeof metadata.etag === "string" ? metadata.etag : "";
+  const etag = rawEtag.replace(/"/g, "");
+  const size = typeof metadata.size === "string"
     ? Number.parseInt(metadata.size, 10)
-    : typeof metadata.size === 'number'
-      ? metadata.size
-      : 0;
+    : typeof metadata.size === "number"
+    ? metadata.size
+    : 0;
 
-  const generation = typeof metadata.generation === 'string'
+  const generation = typeof metadata.generation === "string"
     ? metadata.generation
-    : typeof metadata.generation === 'number'
-      ? String(metadata.generation)
-      : undefined;
+    : typeof metadata.generation === "number"
+    ? String(metadata.generation)
+    : undefined;
 
   const meta: R2ObjectMeta = {
     key,
     etag,
     httpEtag: rawEtag || `"${etag}"`,
     size,
-    version: etag || generation || 'unknown',
+    version: etag || generation || "unknown",
     uploaded: metadata.updated ? new Date(metadata.updated) : new Date(),
-    contentType: typeof metadata.contentType === 'string' ? metadata.contentType : undefined,
+    contentType: typeof metadata.contentType === "string"
+      ? metadata.contentType
+      : undefined,
     customMetadata: (metadata.metadata ?? {}) as Record<string, string>,
     range,
   };
@@ -90,7 +94,10 @@ function gcsToR2Object(
  * Consume a GCS download buffer and return its contents as an ArrayBuffer.
  */
 function bufferToArrayBuffer(buf: Uint8Array): ArrayBuffer {
-  return buf.buffer.slice(buf.byteOffset, buf.byteOffset + buf.byteLength) as ArrayBuffer;
+  return buf.buffer.slice(
+    buf.byteOffset,
+    buf.byteOffset + buf.byteLength,
+  ) as ArrayBuffer;
 }
 
 /**
@@ -118,7 +125,7 @@ export function createGcsObjectStore(config: GcsObjectStoreConfig): R2Bucket {
     return (await getStorage()).bucket(config.bucket);
   }
 
-  const store = {
+  const store: R2Bucket = {
     // ----- head -----
     async head(key: string): Promise<R2Object | null> {
       try {
@@ -151,11 +158,11 @@ export function createGcsObjectStore(config: GcsObjectStoreConfig): R2Bucket {
           if (options.range.suffix !== undefined) {
             // GCS doesn't have a direct suffix option; compute start from metadata
             const [sizeMeta] = await file.getMetadata();
-            const fileSize = typeof sizeMeta.size === 'string'
+            const fileSize = typeof sizeMeta.size === "string"
               ? Number.parseInt(sizeMeta.size, 10)
-              : typeof sizeMeta.size === 'number'
-                ? sizeMeta.size
-                : 0;
+              : typeof sizeMeta.size === "number"
+              ? sizeMeta.size
+              : 0;
             const start = Math.max(0, fileSize - options.range.suffix);
             downloadOptions.start = start;
             downloadOptions.end = fileSize - 1;
@@ -208,7 +215,7 @@ export function createGcsObjectStore(config: GcsObjectStoreConfig): R2Bucket {
         saveOptions.metadata = options.customMetadata;
       }
 
-      await file.save(body ?? '', saveOptions);
+      await file.save(body ?? "", saveOptions);
 
       // Return metadata via head
       return store.head(key);
@@ -216,7 +223,7 @@ export function createGcsObjectStore(config: GcsObjectStoreConfig): R2Bucket {
 
     // ----- delete -----
     async delete(keys: string | string[]): Promise<void> {
-      if (typeof keys === 'string') {
+      if (typeof keys === "string") {
         try {
           const bucket = await getBucket();
           await bucket.file(keys).delete();
@@ -238,8 +245,8 @@ export function createGcsObjectStore(config: GcsObjectStoreConfig): R2Bucket {
             getBucket().then((bucket) =>
               bucket.file(k).delete().catch((err: unknown) => {
                 if (!isGcsError(err) || err.code !== 404) throw err;
-              }),
-            ),
+              })
+            )
           ),
         );
       }
@@ -264,17 +271,22 @@ export function createGcsObjectStore(config: GcsObjectStoreConfig): R2Bucket {
       };
 
       const bucket = await getBucket();
-      const [files, nextQuery, apiResponse] = await bucket.getFiles(queryOptions);
-
-      const objects: R2Object[] = files.map((file) =>
-        gcsToR2Object(file.name, file.metadata),
+      const [files, nextQuery, apiResponse] = await bucket.getFiles(
+        queryOptions,
       );
 
-      const nextPageToken = (nextQuery as Partial<Pick<GetFilesOptions, 'pageToken'>> | undefined)?.pageToken;
+      const objects: R2Object[] = files.map((file) =>
+        gcsToR2Object(file.name, file.metadata)
+      );
+
+      const nextPageToken =
+        (nextQuery as Partial<Pick<GetFilesOptions, "pageToken">> | undefined)
+          ?.pageToken;
       const truncated = !!nextPageToken;
       const cursor = truncated ? nextPageToken : undefined;
 
-      const apiPrefixes = (apiResponse as { prefixes?: string[] } | undefined)?.prefixes ?? [];
+      const apiPrefixes =
+        (apiResponse as { prefixes?: string[] } | undefined)?.prefixes ?? [];
 
       return {
         objects,
@@ -295,15 +307,17 @@ export function createGcsObjectStore(config: GcsObjectStoreConfig): R2Bucket {
       const uploadId = crypto.randomUUID();
 
       // Store options for use during complete()
-      const contentType =
-        options?.httpMetadata instanceof Headers
-          ? options.httpMetadata.get('content-type') ?? undefined
-          : options?.httpMetadata?.contentType;
+      const contentType = options?.httpMetadata instanceof Headers
+        ? options.httpMetadata.get("content-type") ?? undefined
+        : options?.httpMetadata?.contentType;
       const customMetadata = options?.customMetadata;
 
       // Track uploaded parts as temporary GCS objects
       const partPrefix = `__multipart_tmp/${uploadId}/`;
-      const uploadedParts = new Map<number, { tempKey: string; etag: string }>();
+      const uploadedParts = new Map<
+        number,
+        { tempKey: string; etag: string }
+      >();
 
       return {
         key,
@@ -314,17 +328,20 @@ export function createGcsObjectStore(config: GcsObjectStoreConfig): R2Bucket {
           value: ReadableStream | ArrayBuffer | string,
         ): Promise<{ partNumber: number; etag: string }> {
           const body = await normaliseBody(value);
-          const tempKey = `${partPrefix}${String(partNumber).padStart(6, '0')}`;
+          const tempKey = `${partPrefix}${String(partNumber).padStart(6, "0")}`;
           const bucket = await getBucket();
           const file = bucket.file(tempKey);
 
-          await file.save(body ?? '', {
+          await file.save(body ?? "", {
             resumable: false,
           });
 
           const [metadata] = await file.getMetadata();
-          const rawEtag = typeof metadata.etag === 'string' ? metadata.etag : '';
-          const etag = rawEtag.replace(/"/g, '') || `part-${partNumber}-${uploadId.slice(0, 8)}`;
+          const rawEtag = typeof metadata.etag === "string"
+            ? metadata.etag
+            : "";
+          const etag = rawEtag.replace(/"/g, "") ||
+            `part-${partNumber}-${uploadId.slice(0, 8)}`;
 
           uploadedParts.set(partNumber, { tempKey, etag });
 
@@ -354,7 +371,7 @@ export function createGcsObjectStore(config: GcsObjectStoreConfig): R2Bucket {
 
           if (sourceKeys.length === 0) {
             // No parts -- create an empty object
-            await destFile.save('', {
+            await destFile.save("", {
               ...(contentType ? { contentType } : {}),
               ...(customMetadata ? { metadata: customMetadata } : {}),
             });
@@ -381,7 +398,8 @@ export function createGcsObjectStore(config: GcsObjectStoreConfig): R2Bucket {
                 if (batch.length === 1) {
                   nextKeys.push(batch[0]!);
                 } else {
-                  const intermediateKey = `${partPrefix}__stage_${stageIndex}_${i}`;
+                  const intermediateKey =
+                    `${partPrefix}__stage_${stageIndex}_${i}`;
                   await bucket.combine(batch, intermediateKey);
                   nextKeys.push(intermediateKey);
                 }
@@ -409,7 +427,7 @@ export function createGcsObjectStore(config: GcsObjectStoreConfig): R2Bucket {
             tempFiles.map((f) =>
               f.delete().catch(() => {
                 // best-effort cleanup
-              }),
+              })
             ),
           );
 
@@ -433,7 +451,7 @@ export function createGcsObjectStore(config: GcsObjectStoreConfig): R2Bucket {
             tempFiles.map((f) =>
               f.delete().catch(() => {
                 // best-effort cleanup
-              }),
+              })
             ),
           );
           uploadedParts.clear();
@@ -442,5 +460,5 @@ export function createGcsObjectStore(config: GcsObjectStoreConfig): R2Bucket {
     },
   };
 
-  return store as unknown as R2Bucket;
+  return store;
 }

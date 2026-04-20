@@ -68,9 +68,28 @@ export function buildInventoryLogActivity(
 
 export function buildAnnounceActivity(
   actorId: string,
-  push: { ref: string; createdAt: string },
+  push: {
+    ref: string;
+    beforeSha?: string | null;
+    afterSha?: string;
+    createdAt: string;
+  },
   repoActorUrl: string,
 ): Record<string, unknown> {
+  const announcedObject: Record<string, unknown> = {
+    type: push.ref.startsWith("refs/tags/") ? "Create" : "Push",
+    actor: repoActorUrl,
+    published: push.createdAt,
+    target: push.ref,
+  };
+
+  if (!push.ref.startsWith("refs/tags/") && push.afterSha) {
+    announcedObject.afterHash = push.afterSha;
+    if (push.beforeSha) {
+      announcedObject.beforeHash = push.beforeSha;
+    }
+  }
+
   return {
     "@context": activityContext(),
     id: `${actorId}/activities/announce/${encodeURIComponent(push.createdAt)}`,
@@ -78,12 +97,7 @@ export function buildAnnounceActivity(
     actor: actorId,
     published: push.createdAt,
     to: [AS_PUBLIC],
-    object: {
-      type: push.ref.startsWith("refs/tags/") ? "Create" : "Push",
-      actor: repoActorUrl,
-      published: push.createdAt,
-      target: push.ref,
-    },
+    object: announcedObject,
   };
 }
 
@@ -135,6 +149,8 @@ export function buildRepoPushActivity(
   repoActorId: string,
   push: {
     ref: string;
+    beforeSha: string | null;
+    afterSha: string;
     createdAt: string;
     pusherActorUrl: string | null;
     commitCount: number;
@@ -156,6 +172,8 @@ export function buildRepoPushActivity(
     published: push.createdAt,
     to: [AS_PUBLIC],
     target: push.ref,
+    beforeHash: push.beforeSha ?? undefined,
+    afterHash: push.afterSha,
     object: push.commits.length > 0
       ? {
         type: "OrderedCollection",

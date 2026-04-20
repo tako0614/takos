@@ -20,26 +20,40 @@ type McpRow = {
 };
 
 function createFakeD1(rows: McpRow[], shouldThrow = false) {
+  let queryCount = 0;
   return {
-    prepare() {
+    select: () => {
+      queryCount++;
       if (shouldThrow) {
         throw new Error("db failed");
       }
-
       return {
-        bind() {
-          return {
-            all: async () => ({ results: rows }),
-            first: async () => rows[0] ?? null,
-            run: async () => ({
-              success: true,
-              meta: { changes: 0, last_row_id: 0, duration: 0 },
-            }),
-            raw: async () => rows.map((row) => Object.values(row)),
-          };
+        from: function (this: any) {
+          return this;
         },
+        where: function (this: any) {
+          return this;
+        },
+        orderBy: function (this: any) {
+          return this;
+        },
+        all: async () => (queryCount === 1 ? rows : []),
+        get: async () => (queryCount === 1 ? rows[0] ?? null : null),
       };
     },
+    insert: () => ({
+      values: () => ({
+        run: async () => undefined,
+      }),
+    }),
+    update: () => ({
+      set: () => ({
+        where: async () => ({ meta: { changes: 0 } }),
+      }),
+    }),
+    delete: () => ({
+      where: async () => ({ meta: { changes: 0 } }),
+    }),
   } as unknown as D1Database;
 }
 

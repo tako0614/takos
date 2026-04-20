@@ -5,10 +5,15 @@
  */
 
 import { getDb as realGetDb, uiExtensions } from "../../../infra/db/index.ts";
-import { and, asc, count as drizzleCount, eq, isNotNull } from "drizzle-orm";
+import { and, asc, count as drizzleCount, eq } from "drizzle-orm";
 import type { D1Database } from "../../../shared/types/bindings.ts";
 import type { R2Bucket } from "../../../shared/types/bindings.ts";
 import { textDate } from "../../../shared/utils/db-guards.ts";
+import {
+  listPublications,
+  type PublicationRecord,
+  publicationResolvedUrl,
+} from "./service-publications.ts";
 
 export const uiExtensionDeps = {
   getDb: realGetDb,
@@ -35,6 +40,14 @@ export interface UIExtensionWithBundle extends UIExtension {
   bundleUrl?: string;
 }
 
+type UISidebarItem = {
+  label: string;
+  icon: string;
+  path?: string;
+  url?: string;
+  extensionId: string;
+};
+
 function parseSidebarJson(json: string): UIExtension["sidebar"] | undefined {
   try {
     const parsed = JSON.parse(json);
@@ -46,6 +59,45 @@ function parseSidebarJson(json: string): UIExtension["sidebar"] | undefined {
   } catch {
     return undefined;
   }
+}
+
+function asRecord(value: unknown): Record<string, unknown> | null {
+  return value && typeof value === "object" && !Array.isArray(value)
+    ? value as Record<string, unknown>
+    : null;
+}
+
+function readOptionalString(
+  record: Record<string, unknown> | null,
+  key: string,
+): string | undefined {
+  const value = record?.[key];
+  return typeof value === "string" && value.trim().length > 0
+    ? value.trim()
+    : undefined;
+}
+
+function sidebarItemFromUiSurfacePublication(
+  record: PublicationRecord,
+): UISidebarItem | null {
+  const url = publicationResolvedUrl(record);
+  if (!url) return null;
+  const spec = record.publication.spec ?? {};
+  const sidebarSpec = asRecord(spec.sidebar);
+  const label = readOptionalString(sidebarSpec, "label") ??
+    record.publication.title ??
+    record.name;
+  const icon = readOptionalString(sidebarSpec, "icon") ??
+    readOptionalString(spec, "icon") ??
+    "app";
+  const path = readOptionalString(sidebarSpec, "path");
+  return {
+    label,
+    icon,
+    ...(path ? { path } : {}),
+    url,
+    extensionId: `publication:${record.id}`,
+  };
 }
 
 function mapUIExtension(ext: {
@@ -149,42 +201,18 @@ export async function getUIExtensionBundle(
 }
 
 /**
- * Get sidebar items for workspace (from all UI extensions)
+ * Get sidebar items for workspace from UiSurface route publications.
  */
 export async function getUISidebarItems(
   db: D1Database,
   spaceId: string,
-): Promise<
-  Array<
-    {
-      label: string;
-      icon: string;
-      path?: string;
-      url?: string;
-      extensionId: string;
-    }
-  >
-> {
-  const drizzle = uiExtensionDeps.getDb(db);
-
-  const extensions = await drizzle.select().from(uiExtensions).where(
-    and(
-      eq(uiExtensions.accountId, spaceId),
-      isNotNull(uiExtensions.sidebarJson),
-    ),
-  ).all();
-
-  return extensions
-    .filter((ext) => ext.sidebarJson)
-    .map((ext) => {
-      const sidebar = parseSidebarJson(ext.sidebarJson!);
-      if (!sidebar) return null;
-      return {
-        ...sidebar,
-        extensionId: ext.id,
-      };
-    })
+): Promise<UISidebarItem[]> {
+  const publicationItems = (await listPublications({ DB: db }, spaceId))
+    .filter((record) => record.publicationType === "UiSurface")
+    .map(sidebarItemFromUiSurfacePublication)
     .filter((item): item is NonNullable<typeof item> => item !== null);
+
+  return publicationItems;
 }
 
 /**

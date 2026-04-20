@@ -19,7 +19,6 @@ export interface ForkResult {
     id: string;
     name: string;
     space_id: string;
-    is_official: boolean;
   };
   workflows_copied?: number;
 }
@@ -97,7 +96,7 @@ export async function forkWithWorkflows(
 
   if (existing) {
     throw new Error(
-      "Repository with this name already exists in target workspace",
+      "Repository with this name already exists in target space",
     );
   }
 
@@ -145,7 +144,6 @@ export async function forkWithWorkflows(
       id: sourceRepo.id,
       name: sourceRepo.name,
       space_id: sourceRepo.accountId,
-      is_official: false,
     },
     workflows_copied: workflowsCopied,
   };

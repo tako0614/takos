@@ -63,9 +63,6 @@ export function toApiRepositoryFromDb(row: RepositoryRow): Repository {
     stars: row.stars,
     forks: row.forks,
     git_enabled: row.gitEnabled,
-    is_official: row.isOfficial,
-    official_category: row.officialCategory,
-    official_maintainer: row.officialMaintainer,
     featured: row.featured,
     install_count: row.installCount,
     created_at: row.createdAt,
@@ -189,13 +186,13 @@ export async function createRepository(
     );
   }
 
-  const workspace = await db.select({ id: accounts.id })
+  const space = await db.select({ id: accounts.id })
     .from(accounts)
     .where(eq(accounts.id, input.spaceId))
     .get();
 
-  if (!workspace) {
-    throw new RepositoryCreationError("Workspace not found", "SPACE_NOT_FOUND");
+  if (!space) {
+    throw new RepositoryCreationError("Space not found", "SPACE_NOT_FOUND");
   }
 
   const existing = await db.select({ id: repositories.id })

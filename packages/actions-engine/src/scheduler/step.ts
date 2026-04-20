@@ -22,7 +22,6 @@ import {
   applyStepCommandFileEnvironmentUpdates,
   createStepCommandFiles,
   parseStepCommandFileOutputs,
-  parseStepCommandFileSummary,
   removeStepCommandFilesDirectory,
   resolveRunnerTemp,
 } from "./step-command-files.ts";
@@ -124,9 +123,9 @@ export class StepRunner {
     // `cancelled()` / `always()` が直前ステップの失敗を観測できるようにする。
     const stepExecutionContext: ExecutionContext = metadata.jobStatus
       ? {
-          ...context,
-          job: { ...context.job, status: metadata.jobStatus },
-        }
+        ...context,
+        job: { ...context.job, status: metadata.jobStatus },
+      }
       : context;
 
     try {
@@ -175,18 +174,13 @@ export class StepRunner {
       }
 
       result.status = "completed";
-      const rawOutcome: Conclusion = result.conclusion ?? "success";
-      result.outcome = rawOutcome;
-      // continue-on-error によって失敗を success に書き換える
-      if (rawOutcome === "failure" && step["continue-on-error"]) {
-        result.conclusion = "success";
-      } else {
-        result.conclusion = rawOutcome;
-      }
+      const conclusion: Conclusion = result.conclusion ?? "success";
+      result.conclusion = conclusion;
+      result.outcome = conclusion;
     } catch (error) {
       result.status = "completed";
       result.outcome = "failure";
-      result.conclusion = step["continue-on-error"] ? "success" : "failure";
+      result.conclusion = "failure";
       const rawError = error instanceof Error ? error.message : String(error);
       result.error = maskSecretsInText(
         rawError,
@@ -275,9 +269,6 @@ export class StepRunner {
       GITHUB_ENV: commandFiles.env,
       GITHUB_OUTPUT: commandFiles.output,
       GITHUB_PATH: commandFiles.path,
-      // GITHUB_STEP_SUMMARY は markdown summary 書き込み先。現状 capture のみで
-      // UI 配線は未実装 (docs/reference/actions の "Unsupported" 項目参照)。
-      GITHUB_STEP_SUMMARY: commandFiles.stepSummary,
     };
 
     // ${{ secrets.X }} 経由で解決された機密値を集める
@@ -315,14 +306,6 @@ export class StepRunner {
         commandFiles,
         shellEnv,
       );
-
-      // GITHUB_STEP_SUMMARY を capture (UI 配線は未実装、現状 best-effort)
-      const rawSummary = await parseStepCommandFileSummary(
-        commandFiles.stepSummary,
-      );
-      if (rawSummary.length > 0) {
-        result.summary = maskSecretsInText(rawSummary, secretValues);
-      }
 
       // 終了コードで結果を確定
       result.conclusion = shellResult.exitCode === 0 ? "success" : "failure";
@@ -384,13 +367,13 @@ export class StepRunner {
     if (jobDir) {
       return jobDir;
     }
-    const workflowDir =
-      this.options.defaults?.workflow?.run?.["working-directory"];
+    const workflowDir = this.options.defaults?.workflow?.run
+      ?.["working-directory"];
     if (workflowDir) {
       return workflowDir;
     }
-    const constructorJobDir =
-      this.options.defaults?.job?.run?.["working-directory"];
+    const constructorJobDir = this.options.defaults?.job?.run
+      ?.["working-directory"];
     if (constructorJobDir) {
       return constructorJobDir;
     }

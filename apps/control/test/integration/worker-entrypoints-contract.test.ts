@@ -9,14 +9,13 @@ const rootDir = fileURLToPath(new URL("../..", import.meta.url));
 function read(relativePath: string): string {
   return readFileSync(path.join(rootDir, relativePath), "utf8");
 }
-Deno.test("worker entrypoint contract - routes every first-party worker through the runtime app entrypoints", () => {
+Deno.test("worker entrypoint contract - routes every managed worker through the runtime app entrypoints", () => {
   const cases = [
     ["wrangler.toml", "src/web.ts"],
     ["wrangler.dispatch.toml", "src/dispatch.ts"],
     ["wrangler.worker.toml", "src/worker.ts"],
     ["wrangler.runtime-host.toml", "src/runtime-host.ts"],
     ["wrangler.executor.toml", "src/executor-host.ts"],
-    ["wrangler.browser-host.toml", "src/browser-host.ts"],
   ] as const;
 
   for (const [configPath, expectedMain] of cases) {

@@ -14,6 +14,7 @@ import spacesRepos from "./spaces/repositories.ts";
 import spacesStorage from "./spaces/storage.ts";
 import spacesStores from "./spaces/stores.ts";
 import spacesStoreRegistry from "./spaces/store-registry.ts";
+import spacesTools from "./spaces/tools.ts";
 import seedRepositories from "./seed-repositories.ts";
 import threads from "./threads.ts";
 import runs from "./runs/routes.ts";
@@ -40,14 +41,14 @@ import authApi from "./auth-api.ts";
 import billingRoutes, { billingWebhookHandler } from "./billing/routes.ts";
 import publicShare from "./public-share.ts";
 import mcpRoutes from "./mcp.ts";
-import appDeployments from "./app-deployments.ts";
+import groupDeploymentSnapshots from "./group-deployment-snapshots.ts";
 import oauthConsentApi from "./oauth-consent-api.ts";
-import browserSessions from "./browser-sessions/index.ts";
 import groupsRouter from "./groups.ts";
 import publications from "./publications/routes.ts";
 import { createRunSseRouter } from "./runs/sse.ts";
 import { createNotificationSseRouter } from "./notifications-sse.ts";
 import { createEventsRouter } from "./events/routes.ts";
+import { workersSpaceRoutes } from "./workers/routes.ts";
 import { requireAnyAuth } from "../middleware/oauth-auth.ts";
 // Local type to mirror app Variables
 export type ApiVariables = BillingVariables & {
@@ -146,14 +147,6 @@ export function createApiRouter({
   optionalAuth: ApiAuthMiddleware;
 }) {
   const apiRouter = new Hono<{ Bindings: Env; Variables: ApiVariables }>();
-  const requireAuthForRepoMutations: ApiAuthMiddleware = async (c, next) => {
-    if (READ_ONLY_METHODS.has(c.req.method.toUpperCase())) {
-      await next();
-      return;
-    }
-    await requireAuth(c, next);
-  };
-
   const billingOpts = { shadow: false };
   const {
     vectorSearchGate,
@@ -215,8 +208,6 @@ export function createApiRouter({
       "/apps/:id/*",
       "/notifications/:id",
       "/notifications/:id/*",
-      "/browser-sessions/:id",
-      "/browser-sessions/:id/*",
     ]
   ) {
     apiRouter.use(pattern, validateApiOpaqueRouteParams);
@@ -279,8 +270,6 @@ export function createApiRouter({
   apiRouter.use("/reminders/*", requireAuth);
   apiRouter.use("/skills", requireAuth);
   apiRouter.use("/skills/*", requireAuth);
-  apiRouter.use("/workspaces/:workspaceId/skills", requireAuth);
-  apiRouter.use("/workspaces/:workspaceId/skills/*", requireAuth);
   apiRouter.use("/services", requireAuth);
   apiRouter.use("/services/*", requireAuth);
   apiRouter.use("/deployments", requireAuth);
@@ -293,10 +282,8 @@ export function createApiRouter({
   apiRouter.use("/publications/*", requireAuth);
   apiRouter.use("/sessions", requireAuth);
   apiRouter.use("/sessions/*", requireAuth);
-  apiRouter.use("/repos", optionalAuth);
-  apiRouter.use("/repos/*", optionalAuth);
-  apiRouter.use("/repos", requireAuthForRepoMutations);
-  apiRouter.use("/repos/*", requireAuthForRepoMutations);
+  apiRouter.use("/repos", requireAuth);
+  apiRouter.use("/repos/*", requireAuth);
   apiRouter.use("/git", requireAuth);
   apiRouter.use("/git/*", requireAuth);
   apiRouter.use("/agent-tasks", requireAuth);
@@ -307,8 +294,6 @@ export function createApiRouter({
   apiRouter.use("/shortcuts/*", requireAuth);
   apiRouter.use("/notifications", requireAuth);
   apiRouter.use("/notifications/*", requireAuth);
-  apiRouter.use("/browser-sessions", requireAuth);
-  apiRouter.use("/browser-sessions/*", requireAuth);
 
   // ================================================================
   // 5. Billing / plan gates (MUST follow section 4)
@@ -331,6 +316,7 @@ export function createApiRouter({
   // -- Service / WFP billing gate --
   useChain(apiRouter, "/services", wfpRequestsGate);
   useChain(apiRouter, "/services/*", wfpRequestsGate);
+  useChain(apiRouter, "/spaces/:spaceId/services", wfpRequestsGate);
 
   // -- AI agent usage gates --
   // Metered with:
@@ -364,6 +350,8 @@ export function createApiRouter({
   apiRouter.route("/spaces", spacesStorage);
   apiRouter.route("/spaces", spacesStores);
   apiRouter.route("/spaces", spacesStoreRegistry);
+  apiRouter.route("/spaces", spacesTools);
+  apiRouter.route("/spaces", workersSpaceRoutes);
   apiRouter.route("/", seedRepositories);
   apiRouter.route("/shortcuts", shortcuts);
   apiRouter.route("/", shortcutGroupRoutes); // Shortcut groups at /api/spaces/:id/shortcuts/groups
@@ -386,8 +374,7 @@ export function createApiRouter({
   apiRouter.route("/notifications", createNotificationSseRouter()); // SSE route at /api/notifications/sse (Node.js WebSocket alternative)
   apiRouter.route("/events", createEventsRouter()); // SSE route at /api/events for space lifecycle events (auth handled internally)
   apiRouter.route("/", pullRequests); // Pull request routes for code review
-  apiRouter.route("/", appDeployments); // App deployment routes at /api/spaces/:id/app-deployments
-  apiRouter.route("/", browserSessions); // Browser session routes at /api/browser-sessions/:id
+  apiRouter.route("/", groupDeploymentSnapshots); // Group deployment snapshot routes at /api/spaces/:id/group-deployment-snapshots
   apiRouter.route("/", groupsRouter); // Group management routes at /api/spaces/:id/groups
   apiRouter.route("/publications", publications); // Publications discovery API at /api/publications
   // ================================================================
@@ -414,6 +401,7 @@ export function createApiRouter({
   apiRouter.use("/auth/setup-password", requireAuth);
   apiRouter.use("/auth/setup-username", requireAuth);
   apiRouter.use("/auth/profile", requireAuth);
+  apiRouter.use("/auth/logout", requireAuth);
   apiRouter.route("/auth", authApi);
 
   // ================================================================

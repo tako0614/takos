@@ -2,15 +2,15 @@
  * ジョブポリシーヘルパー（コンテキスト生成・結果生成・ステップ制御）
  */
 import type {
+  Conclusion,
+  ExecutionContext,
   Job,
   JobContext,
   JobResult,
-  ExecutionContext,
-  Conclusion,
   Step,
   StepResult,
-} from '../workflow-models.ts';
-import { interpolateString } from '../parser/expression.ts';
+} from "../workflow-models.ts";
+import { interpolateString } from "../parser/expression.ts";
 
 // --- ジョブ実行状態 ---
 
@@ -25,46 +25,34 @@ export interface StepControl {
   shouldCancelWorkflow: boolean;
 }
 
-/**
- * needs の結果を集約して job.status の初期値を決定する。
- * 優先順位: failure > cancelled > success
- * needs が空の場合は success。
- */
 export function computeInitialJobStatus(
-  needsContext: ExecutionContext['needs']
-): JobContext['status'] {
-  let worst: JobContext['status'] = 'success';
-  for (const entry of Object.values(needsContext)) {
-    if (entry.result === 'failure') {
-      return 'failure';
-    }
-    if (entry.result === 'cancelled') {
-      worst = 'cancelled';
-    }
-  }
-  return worst;
+  _needsContext: ExecutionContext["needs"],
+): JobContext["status"] {
+  return "success";
 }
 
 // --- ジョブコンテキストヘルパー ---
 
-type NeedsResult = ExecutionContext['needs'][string]['result'];
+type NeedsResult = ExecutionContext["needs"][string]["result"];
 
-function normalizeNeedsResult(conclusion: JobResult['conclusion']): NeedsResult {
+function normalizeNeedsResult(
+  conclusion: JobResult["conclusion"],
+): NeedsResult {
   if (
-    conclusion === 'failure' ||
-    conclusion === 'cancelled' ||
-    conclusion === 'skipped'
+    conclusion === "failure" ||
+    conclusion === "cancelled" ||
+    conclusion === "skipped"
   ) {
     return conclusion;
   }
-  return 'success';
+  return "success";
 }
 
 export function buildNeedsContext(
   needs: string[],
-  results: ReadonlyMap<string, JobResult>
-): ExecutionContext['needs'] {
-  const needsContext: ExecutionContext['needs'] = {};
+  results: ReadonlyMap<string, JobResult>,
+): ExecutionContext["needs"] {
+  const needsContext: ExecutionContext["needs"] = {};
 
   for (const need of needs) {
     const needResult = results.get(need);
@@ -83,12 +71,14 @@ export function buildNeedsContext(
 
 export function buildJobExecutionContext(
   context: ExecutionContext,
-  needsContext: ExecutionContext['needs'],
-  envSources: Array<Record<string, string> | undefined>
+  needsContext: ExecutionContext["needs"],
+  envSources: Array<Record<string, string> | undefined>,
 ): ExecutionContext {
   const env = Object.assign(
     {},
-    ...envSources.filter((source): source is Record<string, string> => Boolean(source))
+    ...envSources.filter((source): source is Record<string, string> =>
+      Boolean(source)
+    ),
   );
 
   return {
@@ -103,18 +93,17 @@ export function buildJobExecutionContext(
   };
 }
 
-export function buildStepsContext(stepResults: StepResult[]): ExecutionContext['steps'] {
-  const stepsContext: ExecutionContext['steps'] = {};
+export function buildStepsContext(
+  stepResults: StepResult[],
+): ExecutionContext["steps"] {
+  const stepsContext: ExecutionContext["steps"] = {};
 
   for (const stepResult of stepResults) {
     if (stepResult.id) {
-      const conclusion = stepResult.conclusion || 'success';
-      // outcome は continue-on-error による書き換え前の生結果。
-      // StepResult に outcome が無い（後方互換）場合は conclusion を使う。
-      const outcome = stepResult.outcome ?? conclusion;
+      const conclusion = stepResult.conclusion || "success";
       stepsContext[stepResult.id] = {
         outputs: { ...stepResult.outputs },
-        outcome,
+        outcome: conclusion,
         conclusion,
       };
     }
@@ -128,28 +117,28 @@ export function buildStepsContext(stepResults: StepResult[]): ExecutionContext['
 export function createCompletedJobResult(
   id: string,
   name: string | undefined,
-  conclusion: Conclusion
+  conclusion: Conclusion,
 ): JobResult {
   return {
     id,
     name,
     steps: [],
     outputs: {},
-    status: 'completed',
+    status: "completed",
     conclusion,
   };
 }
 
 export function createInProgressJobResult(
   id: string,
-  name: string | undefined
+  name: string | undefined,
 ): JobResult {
   return {
     id,
     name,
     steps: [],
     outputs: {},
-    status: 'in_progress',
+    status: "in_progress",
     startedAt: new Date(),
   };
 }
@@ -157,11 +146,11 @@ export function createInProgressJobResult(
 // --- ステップ制御の分類 ---
 
 export function classifyStepControl(
-  step: Step,
+  _step: Step,
   result: StepResult,
-  failFast: boolean
+  failFast: boolean,
 ): StepControl {
-  const shouldStopJob = result.conclusion === 'failure' && !step['continue-on-error'];
+  const shouldStopJob = result.conclusion === "failure";
   return {
     shouldStopJob,
     shouldMarkJobFailed: shouldStopJob,
@@ -171,7 +160,9 @@ export function classifyStepControl(
 
 // --- 出力収集 ---
 
-export function collectStepOutputs(steps: StepResult[]): Record<string, string> {
+export function collectStepOutputs(
+  steps: StepResult[],
+): Record<string, string> {
   const outputs: Record<string, string> = {};
 
   for (const stepResult of steps) {
@@ -192,8 +183,8 @@ export function collectStepOutputs(steps: StepResult[]): Record<string, string> 
  */
 export function evaluateJobOutputs(
   job: Job,
-  stepsContext: ExecutionContext['steps'],
-  context: ExecutionContext
+  stepsContext: ExecutionContext["steps"],
+  context: ExecutionContext,
 ): Record<string, string> | null {
   if (!job.outputs) {
     return null;
@@ -206,7 +197,7 @@ export function evaluateJobOutputs(
 
   const resolved: Record<string, string> = {};
   for (const [key, template] of Object.entries(job.outputs)) {
-    if (typeof template !== 'string') {
+    if (typeof template !== "string") {
       continue;
     }
     resolved[key] = interpolateString(template, outputContext);
@@ -221,14 +212,14 @@ export function finalizeJobResult(
   options: {
     job?: Job;
     jobContext?: ExecutionContext;
-  } = {}
+  } = {},
 ): void {
-  result.status = 'completed';
+  result.status = "completed";
   result.conclusion = executionState.cancelled
-    ? 'cancelled'
+    ? "cancelled"
     : executionState.failed
-      ? 'failure'
-      : 'success';
+    ? "failure"
+    : "success";
   result.completedAt = new Date();
 
   // job.outputs が定義されていればそれを steps コンテキストで評価して優先する。
@@ -238,7 +229,7 @@ export function finalizeJobResult(
     const resolvedOutputs = evaluateJobOutputs(
       options.job,
       stepsContext,
-      options.jobContext
+      options.jobContext,
     );
     if (resolvedOutputs !== null) {
       result.outputs = resolvedOutputs;
@@ -253,7 +244,7 @@ export function finalizeJobResult(
 
 export function getDependencySkipReason(
   needs: string[],
-  results: ReadonlyMap<string, JobResult>
+  results: ReadonlyMap<string, JobResult>,
 ): string | null {
   for (const need of needs) {
     const dependencyResult = results.get(need);
@@ -261,11 +252,11 @@ export function getDependencySkipReason(
       continue;
     }
 
-    if (dependencyResult.conclusion === 'success') {
+    if (dependencyResult.conclusion === "success") {
       continue;
     }
 
-    const dependencyOutcome = dependencyResult.conclusion ?? 'did not succeed';
+    const dependencyOutcome = dependencyResult.conclusion ?? "did not succeed";
     return `Dependency "${need}" ${dependencyOutcome}`;
   }
 

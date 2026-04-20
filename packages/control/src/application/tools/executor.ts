@@ -1,27 +1,41 @@
-import type { ToolContext, ToolResult, ToolCall, ToolDefinition } from './tool-definitions.ts';
-import type { ToolResolver } from './resolver.ts';
-import { CircuitBreaker, type CircuitStats } from './circuit-breaker.ts';
-import type { ToolObserver } from '../services/memory-graph/graph-models.ts';
-import { checkIdempotency, completeOperation } from './idempotency.ts';
-import { logError, logInfo, logWarn } from '../../shared/utils/logger.ts';
-import { MAX_TOOL_OUTPUT_SIZE, MAX_PARALLEL_TOOL_EXECUTIONS } from '../../shared/config/limits.ts';
-import { AGENT_TOOL_EXECUTION_TIMEOUT_MS } from '../../shared/config/timeouts.ts';
-import type { SqlDatabaseBinding } from '../../shared/types/bindings.ts';
+import type {
+  ToolCall,
+  ToolContext,
+  ToolDefinition,
+  ToolResult,
+} from "./tool-definitions.ts";
+import type { ToolResolver } from "./resolver.ts";
+import { CircuitBreaker, type CircuitStats } from "./circuit-breaker.ts";
+import type { ToolObserver } from "../services/memory-graph/graph-models.ts";
+import { checkIdempotency, completeOperation } from "./idempotency.ts";
+import { logError, logInfo, logWarn } from "../../shared/utils/logger.ts";
+import {
+  MAX_PARALLEL_TOOL_EXECUTIONS,
+  MAX_TOOL_OUTPUT_SIZE,
+} from "../../shared/config/limits.ts";
+import { AGENT_TOOL_EXECUTION_TIMEOUT_MS } from "../../shared/config/timeouts.ts";
+import type { SqlDatabaseBinding } from "../../shared/types/bindings.ts";
 
 // Re-export error-classifier types so existing consumers keep working
-export { ErrorCodes, ToolError } from './tool-error-classifier.ts';
-export type { ErrorCode, ErrorSeverity } from './tool-error-classifier.ts';
+export { ErrorCodes, ToolError } from "./tool-error-classifier.ts";
+export type { ErrorCode, ErrorSeverity } from "./tool-error-classifier.ts";
 
 // Extracted modules
-import { classifyError, SEVERITY_HINTS } from './tool-error-classifier.ts';
-import { assertToolPermission, filterAccessibleTools } from './tool-permission.ts';
-import { ToolCircuitBreaker } from './tool-circuit-breaker.ts';
+import { classifyError, SEVERITY_HINTS } from "./tool-error-classifier.ts";
+import {
+  assertToolPermission,
+  filterAccessibleTools,
+} from "./tool-permission.ts";
+import { ToolCircuitBreaker } from "./tool-circuit-breaker.ts";
 
 // Re-export from split modules for backward compatibility
-export { createToolExecutor, SessionState } from './executor-setup.ts';
-export { toOpenAIFunctions, buildPerRunCapabilityRegistry } from './executor-utils.ts';
+export { createToolExecutor, SessionState } from "./executor-setup.ts";
+export {
+  buildPerRunCapabilityRegistry,
+  toOpenAIFunctions,
+} from "./executor-utils.ts";
 
-import type { SessionState } from './executor-setup.ts';
+import type { SessionState } from "./executor-setup.ts";
 
 export interface ToolExecutorLike {
   execute(toolCall: ToolCall): Promise<ToolResult>;
@@ -48,7 +62,7 @@ async function withTimeout<T>(
   promise: Promise<T>,
   timeoutMs: number,
   errorMessage: string,
-  onTimeout?: () => void
+  onTimeout?: () => void,
 ): Promise<T> {
   let timeoutId: ReturnType<typeof setTimeout> | undefined;
 
@@ -58,7 +72,12 @@ async function withTimeout<T>(
         try {
           onTimeout();
         } catch (timeoutErr) {
-          logWarn('Failed to execute timeout handler', { module: 'tools/executor', error: timeoutErr instanceof Error ? timeoutErr.message : String(timeoutErr) });
+          logWarn("Failed to execute timeout handler", {
+            module: "tools/executor",
+            error: timeoutErr instanceof Error
+              ? timeoutErr.message
+              : String(timeoutErr),
+          });
         }
       }
       reject(new Error(errorMessage));
@@ -78,8 +97,10 @@ interface TruncationInfo {
   truncatedLength?: number;
 }
 
-function truncateOutput(output: string): { output: string; truncation: TruncationInfo } {
-  if (typeof output !== 'string') {
+function truncateOutput(
+  output: string,
+): { output: string; truncation: TruncationInfo } {
+  if (typeof output !== "string") {
     output = String(output);
   }
 
@@ -92,7 +113,10 @@ function truncateOutput(output: string): { output: string; truncation: Truncatio
     `\n\n... [OUTPUT TRUNCATED: ${output.length} chars total, showing first and last ${halfSize} chars] ...\n\n` +
     output.slice(-halfSize);
 
-  logWarn(`Tool output truncated from ${output.length} to ${truncated.length} chars`, { module: 'tools/executor' });
+  logWarn(
+    `Tool output truncated from ${output.length} to ${truncated.length} chars`,
+    { module: "tools/executor" },
+  );
 
   return {
     output: truncated,
@@ -111,7 +135,9 @@ function anySignal(signals: AbortSignal[]): AbortSignal {
       controller.abort(signal.reason);
       return controller.signal;
     }
-    signal.addEventListener('abort', () => controller.abort(signal.reason), { once: true });
+    signal.addEventListener("abort", () => controller.abort(signal.reason), {
+      once: true,
+    });
   }
   return controller.signal;
 }
@@ -128,20 +154,24 @@ export class ToolExecutor implements ToolExecutorLike {
   private db: SqlDatabaseBinding | null = null;
   // 5 parallel executions × 10MB max output = 50MB worst case, safely under
   // the Workers 128MB heap limit with room for code, stack, and framework overhead.
-  private static readonly MAX_PARALLEL_EXECUTIONS = MAX_PARALLEL_TOOL_EXECUTIONS;
+  private static readonly MAX_PARALLEL_EXECUTIONS =
+    MAX_PARALLEL_TOOL_EXECUTIONS;
 
   constructor(
     resolver: ToolResolver,
     context: ToolContext,
     sessionState: SessionState,
     circuitBreaker?: CircuitBreaker,
-    toolExecutionTimeoutMs?: number
+    toolExecutionTimeoutMs?: number,
   ) {
     this.resolver = resolver;
     this.context = context;
     this.sessionState = sessionState;
-    this.circuitBreaker = new ToolCircuitBreaker(circuitBreaker || new CircuitBreaker());
-    this.toolExecutionTimeoutMs = toolExecutionTimeoutMs || AGENT_TOOL_EXECUTION_TIMEOUT_MS;
+    this.circuitBreaker = new ToolCircuitBreaker(
+      circuitBreaker || new CircuitBreaker(),
+    );
+    this.toolExecutionTimeoutMs = toolExecutionTimeoutMs ||
+      AGENT_TOOL_EXECUTION_TIMEOUT_MS;
     this.observer = null;
   }
 
@@ -161,7 +191,7 @@ export class ToolExecutor implements ToolExecutorLike {
     }
 
     const startTime = Date.now();
-    let observedOutput = '';
+    let observedOutput = "";
     let observedError: string | undefined;
 
     // Freeze sessionId for this execution to prevent race conditions
@@ -174,7 +204,9 @@ export class ToolExecutor implements ToolExecutorLike {
 
     const executionContext: ToolContext = {
       ...this.context,
-      get sessionId() { return frozenSessionId; },
+      get sessionId() {
+        return frozenSessionId;
+      },
       setSessionId: this.context.setSessionId,
       getLastContainerStartFailure: this.context.getLastContainerStartFailure,
       setLastContainerStartFailure: this.context.setLastContainerStartFailure,
@@ -187,7 +219,7 @@ export class ToolExecutor implements ToolExecutorLike {
       if (!tool) {
         return {
           tool_call_id: toolCall.id,
-          output: '',
+          output: "",
           error: `Unknown tool: ${toolCall.name}`,
         };
       }
@@ -204,8 +236,8 @@ export class ToolExecutor implements ToolExecutorLike {
           toolCall.arguments,
         );
 
-        if (idempotencyResult.action === 'cached') {
-          observedOutput = idempotencyResult.cachedOutput ?? '';
+        if (idempotencyResult.action === "cached") {
+          observedOutput = idempotencyResult.cachedOutput ?? "";
           observedError = idempotencyResult.cachedError;
           return {
             tool_call_id: toolCall.id,
@@ -214,11 +246,12 @@ export class ToolExecutor implements ToolExecutorLike {
           };
         }
 
-        if (idempotencyResult.action === 'in_progress') {
-          observedError = `Tool "${toolCall.name}" is already executing with the same parameters. Please wait.`;
+        if (idempotencyResult.action === "in_progress") {
+          observedError =
+            `Tool "${toolCall.name}" is already executing with the same parameters. Please wait.`;
           return {
             tool_call_id: toolCall.id,
-            output: '',
+            output: "",
             error: observedError,
           };
         }
@@ -229,8 +262,10 @@ export class ToolExecutor implements ToolExecutorLike {
           const rawOutput = await withTimeout(
             tool.handler(toolCall.arguments, executionContext),
             this.toolExecutionTimeoutMs,
-            `Tool '${toolCall.name}' execution timed out after ${this.toolExecutionTimeoutMs / 1000} seconds`,
-            () => abortController.abort()
+            `Tool '${toolCall.name}' execution timed out after ${
+              this.toolExecutionTimeoutMs / 1000
+            } seconds`,
+            () => abortController.abort(),
           );
 
           const { output, truncation } = truncateOutput(rawOutput);
@@ -240,14 +275,22 @@ export class ToolExecutor implements ToolExecutorLike {
           observedOutput = output;
           const result: ToolResult = { tool_call_id: toolCall.id, output };
           if (truncation.wasTruncated) {
-            result.error = `[NOTICE] Output was truncated from ${truncation.originalLength} to ${truncation.truncatedLength} chars.`;
+            result.error =
+              `[NOTICE] Output was truncated from ${truncation.originalLength} to ${truncation.truncatedLength} chars.`;
           }
           return result;
         } catch (sideEffectError) {
-          const errMsg = sideEffectError instanceof Error ? sideEffectError.message : String(sideEffectError);
-          await completeOperation(this.db!, operationId, '', errMsg).catch((opErr) => {
-            logWarn('Failed to complete operation record after tool error (non-critical)', { module: 'tools', error: opErr, operationId });
-          });
+          const errMsg = sideEffectError instanceof Error
+            ? sideEffectError.message
+            : String(sideEffectError);
+          await completeOperation(this.db!, operationId, "", errMsg).catch(
+            (opErr) => {
+              logWarn(
+                "Failed to complete operation record after tool error (non-critical)",
+                { module: "tools", error: opErr, operationId },
+              );
+            },
+          );
           throw sideEffectError;
         }
       }
@@ -255,8 +298,10 @@ export class ToolExecutor implements ToolExecutorLike {
       const rawOutput = await withTimeout(
         tool.handler(toolCall.arguments, executionContext),
         this.toolExecutionTimeoutMs,
-        `Tool '${toolCall.name}' execution timed out after ${this.toolExecutionTimeoutMs / 1000} seconds`,
-        () => abortController.abort()
+        `Tool '${toolCall.name}' execution timed out after ${
+          this.toolExecutionTimeoutMs / 1000
+        } seconds`,
+        () => abortController.abort(),
       );
 
       const { output, truncation } = truncateOutput(rawOutput);
@@ -268,14 +313,17 @@ export class ToolExecutor implements ToolExecutorLike {
       };
 
       if (truncation.wasTruncated) {
-        result.error = `[NOTICE] Output was truncated from ${truncation.originalLength} to ${truncation.truncatedLength} chars. ` +
+        result.error =
+          `[NOTICE] Output was truncated from ${truncation.originalLength} to ${truncation.truncatedLength} chars. ` +
           `The full output may contain additional relevant information.`;
       }
 
       observedOutput = output;
       return result;
     } catch (error) {
-      const errorInstance = error instanceof Error ? error : new Error(String(error));
+      const errorInstance = error instanceof Error
+        ? error
+        : new Error(String(error));
       const errorMessage = errorInstance.message;
 
       const classification = classifyError(errorInstance);
@@ -292,15 +340,19 @@ export class ToolExecutor implements ToolExecutorLike {
         sessionActive: !!frozenSessionId,
       });
 
-      const codePrefix = classification.code ? `[${classification.code}] ` : '';
-      const severityHint = SEVERITY_HINTS[errorSeverity] ?? ' (This may be a temporary issue, consider retrying)';
+      const codePrefix = classification.code ? `[${classification.code}] ` : "";
+      const severityHint = SEVERITY_HINTS[errorSeverity] ??
+        " (This may be a temporary issue, consider retrying)";
 
-      logError(`Tool execution error: ${errorMessage}`, { context: toolContext, stack: errorInstance.stack }, { module: 'tools/executor' });
+      logError(`Tool execution error: ${errorMessage}`, {
+        context: toolContext,
+        stack: errorInstance.stack,
+      }, { module: "tools/executor" });
 
       observedError = errorMessage;
       return {
         tool_call_id: toolCall.id,
-        output: '',
+        output: "",
         error: codePrefix + errorMessage + severityHint,
       };
     } finally {
@@ -344,33 +396,50 @@ export class ToolExecutor implements ToolExecutorLike {
 
   async executeParallel(toolCalls: ToolCall[]): Promise<ToolResult[]> {
     if (toolCalls.length > ToolExecutor.MAX_PARALLEL_EXECUTIONS) {
-      logWarn(`Limiting parallel tool executions from ${toolCalls.length} to ${ToolExecutor.MAX_PARALLEL_EXECUTIONS}`, { module: 'tools/executor' });
+      logWarn(
+        `Limiting parallel tool executions from ${toolCalls.length} to ${ToolExecutor.MAX_PARALLEL_EXECUTIONS}`,
+        { module: "tools/executor" },
+      );
     }
 
     const allResults: ToolResult[] = [];
-    for (let i = 0; i < toolCalls.length; i += ToolExecutor.MAX_PARALLEL_EXECUTIONS) {
-      const batch = toolCalls.slice(i, i + ToolExecutor.MAX_PARALLEL_EXECUTIONS);
+    for (
+      let i = 0;
+      i < toolCalls.length;
+      i += ToolExecutor.MAX_PARALLEL_EXECUTIONS
+    ) {
+      const batch = toolCalls.slice(
+        i,
+        i + ToolExecutor.MAX_PARALLEL_EXECUTIONS,
+      );
 
       this.parallelExecutionCount++;
       const batchId = this.parallelExecutionCount;
 
       const batchStartTime = Date.now();
-      const results = await Promise.allSettled(batch.map(tc => this.execute(tc)));
+      const results = await Promise.allSettled(
+        batch.map((tc) => this.execute(tc)),
+      );
       const batchDuration = Date.now() - batchStartTime;
 
-      const failures = results.filter(r => r.status === 'rejected').length;
+      const failures = results.filter((r) => r.status === "rejected").length;
       if (failures > 0 || batchDuration > 10000) {
-        logInfo(`Parallel batch ${batchId}: ${batch.length} tools, ${failures} failures, ${batchDuration}ms`, { module: 'tools/executor' });
+        logInfo(
+          `Parallel batch ${batchId}: ${batch.length} tools, ${failures} failures, ${batchDuration}ms`,
+          { module: "tools/executor" },
+        );
       }
 
       const batchResults = results.map((result, index) => {
-        if (result.status === 'fulfilled') {
+        if (result.status === "fulfilled") {
           return result.value;
         } else {
           return {
             tool_call_id: batch[index].id,
-            output: '',
-            error: result.reason instanceof Error ? result.reason.message : String(result.reason),
+            output: "",
+            error: result.reason instanceof Error
+              ? result.reason.message
+              : String(result.reason),
           };
         }
       });

@@ -87,13 +87,13 @@ The main admin-domain worker handling:
 
 - **Authentication**: External login (Google, etc.), session management, CLI
   auth, account linking, OAuth2 authorization server
-- **REST API**: Full CRUD under `/api` prefix (spaces, repos, deploys,
-  domains, users, billing, etc.)
+- **REST API**: Full CRUD under `/api` prefix (spaces, repos, deploys, domains,
+  users, billing, etc.)
 - **Git Smart HTTP**: Git clone/push/fetch over HTTP at `/git/` prefix
 - **Static Assets**: SPA serving with `index.html` fallback
 - **Security**: CORS, HTTPS enforcement, CSP headers, rate limiting
-- **Scheduled Jobs**: Cron-triggered maintenance (domain reverification,
-  dead session cleanup, snapshot GC, R2 orphan cleanup)
+- **Scheduled Jobs**: Cron-triggered maintenance (domain reverification, dead
+  session cleanup, snapshot GC, R2 orphan cleanup)
 - **ActivityPub**: Federation endpoints and store
 - **Profile Pages**: `/@username` routes
 
@@ -104,54 +104,54 @@ Tenant-domain routing worker that:
 - Resolves incoming hostname to a tenant worker via routing store
 - Forwards requests with security headers (`X-Forwarded-Host`,
   `X-Takos-Internal`, `X-Tenant-Worker`)
-- Supports multiple routing targets: Cloudflare Workers dispatch namespace,
-  HTTP URL endpoints, and local service bindings
+- Supports multiple routing targets: Cloudflare Workers dispatch namespace, HTTP
+  URL endpoints, and local service bindings
 - Handles versioned deployments via `X-Tenant-Deployment`
 
 ## Durable Objects
 
 Exported for wrangler.toml binding:
 
-| Durable Object | Description |
-|---|---|
-| `SessionDO` | WebSocket session management |
-| `RunNotifierDO` | Agent run status notifications |
-| `NotificationNotifierDO` | Push notification delivery |
-| `RateLimiterDO` | Distributed rate limiting |
-| `RoutingDO` | Hostname routing cache |
-| `GitPushLockDO` | Git push concurrency lock |
+| Durable Object           | Description                    |
+| ------------------------ | ------------------------------ |
+| `SessionDO`              | WebSocket session management   |
+| `RunNotifierDO`          | Agent run status notifications |
+| `NotificationNotifierDO` | Push notification delivery     |
+| `RateLimiterDO`          | Distributed rate limiting      |
+| `RoutingDO`              | Hostname routing cache         |
+| `GitPushLockDO`          | Git push concurrency lock      |
 
 ## Key Subpath Exports
 
 The package provides granular subpath imports (50+ exports in `deno.json`):
 
-| Import Specifier | Description |
-|---|---|
-| `takos-control/core` | Web worker entrypoint |
-| `takos-control/core/web` | Web worker app + factory |
-| `takos-control/core/dispatch` | Dispatch worker app + factory |
-| `takos-control/core/platform` | Platform abstraction layer |
-| `takos-control/agent` | AI agent service |
-| `takos-control/agent/public-runner` | Public agent runner |
-| `takos-control/git/smart` | Git Smart HTTP v2 protocol |
-| `takos-control/git/smart/client` | Git Smart HTTP client |
-| `takos-control/git/smart/operations` | Git operations helpers |
-| `takos-control/git/source` | Source code management |
-| `takos-control/platform` | Platform layer |
-| `takos-control/platform/adapters/node` | Node.js platform adapter |
-| `takos-control/platform/adapters/workers` | CF Workers platform adapter |
-| `takos-control/platform/providers/cloudflare` | CF-specific providers |
-| `takos-control/runtime/worker` | Worker runtime management |
-| `takos-control/runtime/runner` | Job runner |
-| `takos-control/runtime/durable-objects` | Durable Object exports |
-| `takos-control/runtime/queues` | Queue processing |
-| `takos-control/runtime/container-hosts` | Container host management |
-| `takos-control/server/routes` | Route definitions |
-| `takos-control/server/middleware` | Auth and asset middleware |
-| `takos-control/shared/types` | Shared type definitions |
-| `takos-control/shared/utils` | Shared utilities |
-| `takos-control/shared/config` | Configuration |
-| `takos-control/shared/constants` | Constants |
+| Import Specifier                             | Description                   |
+| -------------------------------------------- | ----------------------------- |
+| `takos-control/core`                         | Web worker entrypoint         |
+| `takos-control/core/web`                     | Web worker app + factory      |
+| `takos-control/core/dispatch`                | Dispatch worker app + factory |
+| `takos-control/core/platform`                | Platform abstraction layer    |
+| `takos-control/agent`                        | AI agent service              |
+| `takos-control/agent/public-runner`          | Public agent runner           |
+| `takos-control/git/smart`                    | Git Smart HTTP v2 protocol    |
+| `takos-control/git/smart/client`             | Git Smart HTTP client         |
+| `takos-control/git/smart/operations`         | Git operations helpers        |
+| `takos-control/git/source`                   | Source code management        |
+| `takos-control/platform`                     | Platform layer                |
+| `takos-control/platform/adapters/node`       | Node.js platform adapter      |
+| `takos-control/platform/adapters/workers`    | CF Workers platform adapter   |
+| `takos-control/platform/backends/cloudflare` | CF-specific backends          |
+| `takos-control/runtime/worker`               | Worker runtime management     |
+| `takos-control/runtime/runner`               | Job runner                    |
+| `takos-control/runtime/durable-objects`      | Durable Object exports        |
+| `takos-control/runtime/queues`               | Queue processing              |
+| `takos-control/runtime/container-hosts`      | Container host management     |
+| `takos-control/server/routes`                | Route definitions             |
+| `takos-control/server/middleware`            | Auth and asset middleware     |
+| `takos-control/shared/types`                 | Shared type definitions       |
+| `takos-control/shared/utils`                 | Shared utilities              |
+| `takos-control/shared/config`                | Configuration                 |
+| `takos-control/shared/constants`             | Constants                     |
 
 ## Platform Abstraction
 
@@ -161,8 +161,8 @@ Cloudflare Workers and Node.js runtimes. Platform builders
 environment-specific service implementations at startup.
 
 ```typescript
-import { createWebWorker } from 'takos-control/core/web';
-import { buildWorkersWebPlatform } from 'takos-control/platform/adapters/workers';
+import { createWebWorker } from "takos-control/core/web";
+import { buildWorkersWebPlatform } from "takos-control/platform/adapters/workers";
 
 // Default CF Workers platform
 export default createWebWorker();
@@ -181,8 +181,10 @@ Major dependencies:
 - `drizzle-orm` / `pg` / `@libsql/client` -- Database access
 - `@langchain/core` / `@langchain/langgraph` / `@langchain/openai` -- AI agent
 - `@modelcontextprotocol/sdk` -- MCP integration
-- `@aws-sdk/client-s3` / `@aws-sdk/client-dynamodb` / `@aws-sdk/client-sqs` -- AWS services
-- `@google-cloud/firestore` / `@google-cloud/pubsub` / `@google-cloud/storage` -- GCP services
+- `@aws-sdk/client-s3` / `@aws-sdk/client-dynamodb` / `@aws-sdk/client-sqs` --
+  AWS services
+- `@google-cloud/firestore` / `@google-cloud/pubsub` / `@google-cloud/storage`
+  -- GCP services
 - `@cloudflare/workers-types` -- CF Workers type definitions
 - `redis` -- Redis client
 - `yaml` -- YAML parsing

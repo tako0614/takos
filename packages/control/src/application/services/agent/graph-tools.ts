@@ -5,33 +5,40 @@
  * LangGraph agent subsystem.
  */
 
-import { z } from 'zod';
-import { DynamicStructuredTool } from '@langchain/core/tools';
-import type { BaseMessage } from '@langchain/core/messages';
-import type { ToolExecutorLike } from '../../tools/executor.ts';
-import type { ToolDefinition, ToolParameter } from '../../tools/tool-definitions.ts';
+import { z } from "zod";
+import { DynamicStructuredTool } from "@langchain/core/tools";
+import type { BaseMessage } from "@langchain/core/messages";
+import type { ToolExecutorLike } from "../../tools/executor.ts";
+import type {
+  ToolDefinition,
+  ToolParameter,
+} from "../../tools/tool-definitions.ts";
 
 // ── Shared helpers ──────────────────────────────────────────────────────
 
 /** Extract string content from a BaseMessage's content field (string or structured parts). */
-export function extractMessageText(content: BaseMessage['content']): string {
-  if (typeof content === 'string') return content;
+export function extractMessageText(content: BaseMessage["content"]): string {
+  if (typeof content === "string") return content;
   if (Array.isArray(content)) {
     return content
-      .map(part => {
-        if (typeof part === 'string') return part;
-        if (part && typeof part === 'object' && 'text' in part) {
+      .map((part) => {
+        if (typeof part === "string") return part;
+        if (part && typeof part === "object" && "text" in part) {
           return (part as { text: string }).text;
         }
-        return '';
+        return "";
       })
       .filter(Boolean)
-      .join('\n');
+      .join("\n");
   }
   if (content !== null && content !== undefined) {
-    try { return JSON.stringify(content); } catch { return String(content); }
+    try {
+      return JSON.stringify(content);
+    } catch {
+      return String(content);
+    }
   }
-  return '';
+  return "";
 }
 
 /** Convert a ToolParameter definition to a Zod schema type. */
@@ -39,23 +46,25 @@ export function toolParameterToZod(param: ToolParameter): z.ZodType {
   let zodType: z.ZodType;
 
   switch (param.type) {
-    case 'string':
+    case "string":
       zodType = param.enum
         ? z.enum(param.enum as [string, ...string[]])
         : z.string();
       break;
-    case 'number':
+    case "number":
       zodType = z.number();
       break;
-    case 'boolean':
+    case "boolean":
       zodType = z.boolean();
       break;
-    case 'array': {
-      const itemType = param.items ? toolParameterToZod(param.items) : z.string();
+    case "array": {
+      const itemType = param.items
+        ? toolParameterToZod(param.items)
+        : z.string();
       zodType = z.array(itemType);
       break;
     }
-    case 'object':
+    case "object":
       zodType = z.record(z.string(), z.unknown());
       break;
     default:
@@ -71,9 +80,13 @@ export function toolParameterToZod(param: ToolParameter): z.ZodType {
 
 /** Coerce an unknown tool invocation result into a string. */
 export function stringifyToolResult(result: unknown): string {
-  if (typeof result === 'string') return result;
-  if (result === null || result === undefined) return '';
-  try { return JSON.stringify(result); } catch { return String(result); }
+  if (typeof result === "string") return result;
+  if (result === null || result === undefined) return "";
+  try {
+    return JSON.stringify(result);
+  } catch {
+    return String(result);
+  }
 }
 
 export function anySignal(signals: AbortSignal[]): AbortSignal {
@@ -83,17 +96,26 @@ export function anySignal(signals: AbortSignal[]): AbortSignal {
       controller.abort(signal.reason);
       return controller.signal;
     }
-    signal.addEventListener('abort', () => controller.abort(signal.reason), { once: true });
+    signal.addEventListener("abort", () => controller.abort(signal.reason), {
+      once: true,
+    });
   }
   return controller.signal;
 }
 
-export { throwIfAborted } from 'takos-common/abort';
+export { throwIfAborted } from "takos-common/abort";
 
 // ── Public types ────────────────────────────────────────────────────────
 
 export interface LangGraphEvent {
-  type: 'thinking' | 'tool_call' | 'tool_result' | 'message' | 'completed' | 'error' | 'progress';
+  type:
+    | "thinking"
+    | "tool_call"
+    | "tool_result"
+    | "message"
+    | "completed"
+    | "error"
+    | "progress";
   data: Record<string, unknown>;
 }
 
@@ -104,7 +126,7 @@ export interface CreateAgentOptions {
   systemPrompt: string;
   tools: ToolDefinition[];
   toolExecutor: ToolExecutorLike;
-  db?: import('../../../shared/types/bindings.ts').SqlDatabaseBinding;
+  db?: import("../../../shared/types/bindings.ts").SqlDatabaseBinding;
   maxIterations?: number;
   abortSignal?: AbortSignal;
 }
@@ -113,14 +135,16 @@ export interface CreateAgentOptions {
 export function generateToolCallId(counter: number): string {
   const idBytes = new Uint8Array(8);
   crypto.getRandomValues(idBytes);
-  return `call_${Date.now()}_${counter}_${Array.from(idBytes, b => b.toString(16).padStart(2, '0')).join('')}`;
+  return `call_${Date.now()}_${counter}_${
+    Array.from(idBytes, (b) => b.toString(16).padStart(2, "0")).join("")
+  }`;
 }
 
 // ── ToolParameter → LangChain DynamicStructuredTool conversion ──────────
 
 export function createLangChainTool(
   toolDef: ToolDefinition,
-  executor: ToolExecutorLike
+  executor: ToolExecutorLike,
 ): DynamicStructuredTool {
   const schemaProps: Record<string, z.ZodTypeAny> = {};
   const required = toolDef.parameters.required || [];

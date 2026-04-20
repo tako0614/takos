@@ -1,5 +1,10 @@
-export type ServiceType = 'app' | 'service';
-export type ServiceStatus = 'pending' | 'building' | 'deployed' | 'failed' | 'stopped';
+export type ServiceType = "app" | "service";
+export type ServiceStatus =
+  | "pending"
+  | "building"
+  | "deployed"
+  | "failed"
+  | "stopped";
 
 export interface Service {
   id: string;
@@ -27,35 +32,52 @@ export interface ServiceBinding {
 }
 
 export type ResourceCapability =
-  | 'sql'
-  | 'object_store'
-  | 'kv'
-  | 'queue'
-  | 'vector_index'
-  | 'analytics_store'
-  | 'secret'
-  | 'workflow_runtime'
-  | 'durable_namespace';
+  | "sql"
+  | "object_store"
+  | "kv"
+  | "queue"
+  | "vector_index"
+  | "analytics_store"
+  | "secret"
+  | "workflow_runtime"
+  | "durable_namespace";
 
 export type ResourcePublicType =
-  | 'd1'
-  | 'r2'
-  | 'kv'
-  | 'queue'
-  | 'vectorize'
-  | 'analyticsEngine'
-  | 'secretRef'
-  | 'workflow'
-  | 'durableObject';
+  | "sql"
+  | "object-store"
+  | "key-value"
+  | "queue"
+  | "vector-index"
+  | "analytics-engine"
+  | "secret"
+  | "workflow"
+  | "durable-object";
+
+export type ResourceLegacyPublicType =
+  | "d1"
+  | "r2"
+  | "kv"
+  | "vectorize"
+  | "analyticsEngine"
+  | "secretRef"
+  | "durableObject";
 
 export type ResourceType =
   | ResourcePublicType
-  | 'worker'
-  | 'analytics_engine'
-  | 'durable_object'
-  | 'assets';
-export type ResourceStatus = 'provisioning' | 'active' | 'failed' | 'deleting' | 'deleted';
-export type ResourcePermission = 'read' | 'write' | 'admin';
+  | ResourceLegacyPublicType
+  | "worker"
+  | "analyticsEngine"
+  | "analytics_engine"
+  | "durableObject"
+  | "durable_object"
+  | "assets";
+export type ResourceStatus =
+  | "provisioning"
+  | "active"
+  | "failed"
+  | "deleting"
+  | "deleted";
+export type ResourcePermission = "read" | "write" | "admin";
 
 export interface Resource {
   id: string;
@@ -67,10 +89,10 @@ export interface Resource {
   capability?: string;
   implementation?: string | null;
   driver?: string | null;
-  provider_name?: string | null;
+  backend_name?: string | null;
   status: ResourceStatus;
-  provider_resource_id?: string | null;
-  provider_resource_name?: string | null;
+  backing_resource_id?: string | null;
+  backing_resource_name?: string | null;
   config: string;
   metadata: string;
   size_bytes?: number;
@@ -90,19 +112,19 @@ export interface ResourceAccess {
 }
 
 export type BindingType =
-  | 'd1'
-  | 'r2'
-  | 'kv'
-  | 'vectorize'
-  | 'queue'
-  | 'analyticsEngine'
-  | 'analytics_engine'
-  | 'secretRef'
-  | 'workflow'
-  | 'durableObject'
-  | 'service';
+  | "d1"
+  | "r2"
+  | "kv"
+  | "vectorize"
+  | "queue"
+  | "analyticsEngine"
+  | "analytics_engine"
+  | "secretRef"
+  | "workflow"
+  | "durableObject"
+  | "service";
 
-export type AppType = 'platform' | 'builtin' | 'custom';
+export type AppType = "platform" | "custom";
 
 export interface App {
   id: string;

@@ -5,11 +5,11 @@
  * guard logic that the executor needs at call boundaries.
  */
 
-import type { ToolResult } from './tool-definitions.ts';
-import { CircuitBreaker, type CircuitStats } from './circuit-breaker.ts';
-import { classifyError } from './tool-error-classifier.ts';
+import type { ToolResult } from "./tool-definitions.ts";
+import { CircuitBreaker, type CircuitStats } from "./circuit-breaker.ts";
+import { classifyError } from "./tool-error-classifier.ts";
 
-export type { CircuitStats } from './circuit-breaker.ts';
+export type { CircuitStats } from "./circuit-breaker.ts";
 
 /**
  * ToolCircuitBreaker bridges the generic CircuitBreaker with the
@@ -39,8 +39,9 @@ export class ToolCircuitBreaker {
     if (!canExecute.allowed) {
       return {
         tool_call_id: toolCallId,
-        output: '',
-        error: canExecute.reason || `Tool "${toolName}" is temporarily unavailable`,
+        output: "",
+        error: canExecute.reason ||
+          `Tool "${toolName}" is temporarily unavailable`,
       };
     }
     return null;
@@ -61,7 +62,7 @@ export class ToolCircuitBreaker {
    */
   recordClassifiedFailure(toolName: string, error: Error): void {
     const classification = classifyError(error);
-    if (classification.severity === 'retriable') {
+    if (classification.severity === "retriable") {
       this.breaker.recordFailure(toolName, error.message);
     }
   }

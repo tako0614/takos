@@ -7,7 +7,7 @@ services:
       POSTGRES_USER: takos
       POSTGRES_PASSWORD: takos
     ports:
-      - "${TAKOS_POSTGRES_PORT:-5432}:5432"
+      - "${TAKOS_POSTGRES_PORT:-15432}:5432"
     volumes:
       - takos-postgres:/var/lib/postgresql/data
     healthcheck:
@@ -20,7 +20,7 @@ services:
     image: redis:7-alpine
     restart: unless-stopped
     ports:
-      - "${TAKOS_REDIS_PORT:-6379}:6379"
+      - "${TAKOS_REDIS_PORT:-16379}:6379"
     volumes:
       - takos-redis:/data
     healthcheck:
@@ -57,8 +57,8 @@ services:
       - /bin/sh
       - -c
       - |
-        until mc alias set takos http://minio:9000 "${MINIO_ROOT_USER}" "${MINIO_ROOT_PASSWORD}"; do sleep 1; done
-        mc mb --ignore-existing takos/${S3_BUCKET}
+          until mc alias set takos http://minio:9000 "${MINIO_ROOT_USER}" "${MINIO_ROOT_PASSWORD}"; do sleep 1; done
+          mc mb --ignore-existing takos/${S3_BUCKET}
 
   oci-orchestrator:
     build:
@@ -82,7 +82,10 @@ services:
       - default
       - takos-containers
     healthcheck:
-      test: ["CMD-SHELL", "deno eval \"const r=await fetch('http://127.0.0.1:${TAKOS_OCI_ORCHESTRATOR_PORT}/health');Deno.exit(r.ok?0:1)\""]
+      test: [
+        "CMD-SHELL",
+        "deno eval \"const r=await fetch('http://127.0.0.1:${TAKOS_OCI_ORCHESTRATOR_PORT}/health');Deno.exit(r.ok?0:1)\"",
+      ]
       interval: 15s
       timeout: 5s
       retries: 10
@@ -108,7 +111,10 @@ services:
     volumes:
       - takos-control-data:/var/lib/takos/control
     healthcheck:
-      test: ["CMD-SHELL", "deno eval \"const r=await fetch('http://127.0.0.1:${TAKOS_CONTROL_WEB_PORT}/health');Deno.exit(r.ok?0:1)\""]
+      test: [
+        "CMD-SHELL",
+        "deno eval \"const r=await fetch('http://127.0.0.1:${TAKOS_CONTROL_WEB_PORT}/health');Deno.exit(r.ok?0:1)\"",
+      ]
       interval: 15s
       timeout: 5s
       retries: 10
@@ -133,7 +139,10 @@ services:
     volumes:
       - takos-control-data:/var/lib/takos/control
     healthcheck:
-      test: ["CMD-SHELL", "deno eval \"const r=await fetch('http://127.0.0.1:${TAKOS_CONTROL_DISPATCH_PORT}/health');Deno.exit(r.ok?0:1)\""]
+      test: [
+        "CMD-SHELL",
+        "deno eval \"const r=await fetch('http://127.0.0.1:${TAKOS_CONTROL_DISPATCH_PORT}/health');Deno.exit(r.ok?0:1)\"",
+      ]
       interval: 15s
       timeout: 5s
       retries: 10
@@ -167,26 +176,10 @@ services:
     volumes:
       - takos-control-data:/var/lib/takos/control
     healthcheck:
-      test: ["CMD-SHELL", "deno eval \"const path=Deno.env.get('TAKOS_LOCAL_WORKER_HEARTBEAT_FILE')||'/var/lib/takos/control/worker-heartbeat.json';const ttl=Number(Deno.env.get('TAKOS_LOCAL_WORKER_HEARTBEAT_TTL_MS')||'120000');try{const s=Deno.statSync(path);const age=Date.now()-(s.mtime?.getTime()??0);Deno.exit(age<=ttl?0:1)}catch{Deno.exit(1)}\""]
-      interval: 15s
-      timeout: 5s
-      retries: 10
-
-  browser-host:
-    build:
-      context: .
-      dockerfile: apps/control/Dockerfile.local
-    restart: unless-stopped
-    env_file:
-      - ${TAKOS_LOCAL_ENV_FILE:-.env.local}
-    environment:
-      PORT: ${TAKOS_BROWSER_HOST_PORT}
-      TAKOS_LOCAL_BROWSER_URL: ${TAKOS_LOCAL_BROWSER_URL}
-    command: ["deno", "task", "dev:local:browser-host"]
-    ports:
-      - "${TAKOS_BROWSER_HOST_PORT}:${TAKOS_BROWSER_HOST_PORT}"
-    healthcheck:
-      test: ["CMD-SHELL", "deno eval \"const r=await fetch('http://127.0.0.1:${TAKOS_BROWSER_HOST_PORT}/health');Deno.exit(r.ok?0:1)\""]
+      test: [
+        "CMD-SHELL",
+        "deno eval \"const path=Deno.env.get('TAKOS_LOCAL_WORKER_HEARTBEAT_FILE')||'/var/lib/takos/control/worker-heartbeat.json';const ttl=Number(Deno.env.get('TAKOS_LOCAL_WORKER_HEARTBEAT_TTL_MS')||'120000');try{const s=Deno.statSync(path);const age=Date.now()-(s.mtime?.getTime()??0);Deno.exit(age<=ttl?0:1)}catch{Deno.exit(1)}\"",
+      ]
       interval: 15s
       timeout: 5s
       retries: 10
@@ -211,7 +204,10 @@ services:
     ports:
       - "${TAKOS_RUNTIME_HOST_PORT}:${TAKOS_RUNTIME_HOST_PORT}"
     healthcheck:
-      test: ["CMD-SHELL", "deno eval \"const r=await fetch('http://127.0.0.1:${TAKOS_RUNTIME_HOST_PORT}/health');Deno.exit(r.ok?0:1)\""]
+      test: [
+        "CMD-SHELL",
+        "deno eval \"const r=await fetch('http://127.0.0.1:${TAKOS_RUNTIME_HOST_PORT}/health');Deno.exit(r.ok?0:1)\"",
+      ]
       interval: 15s
       timeout: 5s
       retries: 10
@@ -223,15 +219,12 @@ services:
     depends_on:
       runtime-host:
         condition: service_healthy
-      browser-host:
-        condition: service_healthy
     restart: unless-stopped
     env_file:
       - ${TAKOS_LOCAL_ENV_FILE:-.env.local}
     environment:
       PORT: ${TAKOS_EXECUTOR_HOST_PORT}
       TAKOS_LOCAL_RUNTIME_HOST_URL: http://runtime-host:${TAKOS_RUNTIME_HOST_PORT}/
-      TAKOS_LOCAL_BROWSER_HOST_URL: http://browser-host:${TAKOS_BROWSER_HOST_PORT}/
       TAKOS_LOCAL_EXECUTOR_URL: ${TAKOS_LOCAL_EXECUTOR_URL}
       PROXY_BASE_URL: http://executor-host:${TAKOS_EXECUTOR_HOST_PORT}
       CONTROL_RPC_BASE_URL: http://executor-host:${TAKOS_EXECUTOR_HOST_PORT}
@@ -239,7 +232,10 @@ services:
     ports:
       - "${TAKOS_EXECUTOR_HOST_PORT}:${TAKOS_EXECUTOR_HOST_PORT}"
     healthcheck:
-      test: ["CMD-SHELL", "deno eval \"const r=await fetch('http://127.0.0.1:${TAKOS_EXECUTOR_HOST_PORT}/health');Deno.exit(r.ok?0:1)\""]
+      test: [
+        "CMD-SHELL",
+        "deno eval \"const r=await fetch('http://127.0.0.1:${TAKOS_EXECUTOR_HOST_PORT}/health');Deno.exit(r.ok?0:1)\"",
+      ]
       interval: 15s
       timeout: 5s
       retries: 10
@@ -262,7 +258,10 @@ services:
     ports:
       - "${TAKOS_RUNTIME_PORT}:8080"
     healthcheck:
-      test: ["CMD-SHELL", "deno eval \"const r=await fetch('http://127.0.0.1:8080/health');Deno.exit(r.ok?0:1)\""]
+      test: [
+        "CMD-SHELL",
+        "deno eval \"const r=await fetch('http://127.0.0.1:8080/health');Deno.exit(r.ok?0:1)\"",
+      ]
       interval: 15s
       timeout: 5s
       retries: 10
@@ -287,26 +286,6 @@ services:
       - takos-rust-agent-data:/var/lib/takos/rust-agent
     healthcheck:
       test: ["CMD-SHELL", "curl -fsS http://127.0.0.1:8080/health >/dev/null"]
-      interval: 15s
-      timeout: 5s
-      retries: 10
-
-  browser:
-    build:
-      context: .
-      dockerfile: packages/browser-service/Dockerfile
-    depends_on:
-      browser-host:
-        condition: service_healthy
-    restart: unless-stopped
-    env_file:
-      - ${TAKOS_LOCAL_ENV_FILE:-.env.local}
-    environment:
-      PORT: 8080
-    ports:
-      - "${TAKOS_BROWSER_PORT}:8080"
-    healthcheck:
-      test: ["CMD-SHELL", "deno eval \"const r=await fetch('http://127.0.0.1:8080/internal/healthz');Deno.exit(r.ok?0:1)\""]
       interval: 15s
       timeout: 5s
       retries: 10

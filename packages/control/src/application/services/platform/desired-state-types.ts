@@ -1,9 +1,12 @@
-import type { WorkerBinding } from '../../../platform/providers/cloudflare/wfp.ts';
-import type { ReconcileUpdate } from '../common-env/repository.ts';
+import type { WorkerBinding } from "../../../platform/backends/cloudflare/wfp.ts";
+import type { ReconcileUpdate } from "../common-env/repository.ts";
 
 export type ServiceBindingSpec = WorkerBinding;
 
-export type DesiredStateEnv = Pick<import('../../../shared/types/index.ts').Env, 'DB' | 'ENCRYPTION_KEY' | 'ADMIN_DOMAIN'>;
+export type DesiredStateEnv = Pick<
+  import("../../../shared/types/index.ts").Env,
+  "DB" | "ENCRYPTION_KEY" | "ADMIN_DOMAIN"
+>;
 
 export type ServiceRuntimeLimits = {
   cpu_ms?: number;
@@ -26,7 +29,7 @@ export type ServiceLocalEnvVarState = {
 
 export type ServiceLocalEnvVarSummary = {
   name: string;
-  type: 'plain_text' | 'secret_text';
+  type: "plain_text" | "secret_text";
   value: string;
   updated_at: string;
 };
@@ -74,9 +77,9 @@ export type ServiceBindingRow = {
   resourceName: string | null;
   resourceType: string;
   resourceStatus: string;
-  resourceProviderName: string | null;
-  resourceProviderResourceId: string | null;
-  resourceProviderResourceName: string | null;
+  backendName: string | null;
+  backingResourceId: string | null;
+  backingResourceName: string | null;
   resourceConfig: string;
 };
 
@@ -92,4 +95,4 @@ export type CommonEnvValue = {
   isSecret: boolean;
 };
 
-export const MASKED_SECRET_VALUE = '********';
+export const MASKED_SECRET_VALUE = "********";

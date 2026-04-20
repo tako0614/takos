@@ -1,87 +1,145 @@
-import type { Env } from '../../../../shared/types/index.ts';
-import { getDb, serviceCustomDomains } from '../../../../infra/db/index.ts';
-import { eq, and } from 'drizzle-orm';
-
-import { resolveHostnameRouting, upsertHostnameRouting } from '../../routing/service.ts';
-import type { RoutingTarget } from '../../routing/routing-models.ts';
-import { ServiceDesiredStateService } from '../worker-desired-state.ts';
-import { logError } from '../../../../shared/utils/logger.ts';
+import type { Env } from "../../../../shared/types/index.ts";
 import {
-  SSL_TERMINAL_FAILURE_STATUSES,
+  getDb,
+  serviceCustomDomains,
+  services,
+} from "../../../../infra/db/index.ts";
+import { and, eq } from "drizzle-orm";
+
+import { upsertHostnameRouting } from "../../routing/service.ts";
+import type { RoutingTarget } from "../../routing/routing-models.ts";
+import { ServiceDesiredStateService } from "../worker-desired-state.ts";
+import { logError } from "../../../../shared/utils/logger.ts";
+import {
   CustomDomainError,
-} from './domain-models.ts';
-import type { DomainStatus, VerifyCustomDomainResult } from './domain-models.ts';
-import { getServiceForUser, requireServiceWriteAccess } from './access.ts';
-import { verifyDNS } from './dns.ts';
-import { createCloudflareCustomHostname, deleteCloudflareCustomHostname, getCloudflareCustomHostnameStatus } from './cloudflare.ts';
+  SSL_TERMINAL_FAILURE_STATUSES,
+} from "./domain-models.ts";
+import type {
+  DomainStatus,
+  VerifyCustomDomainResult,
+} from "./domain-models.ts";
+import { getServiceForUser, requireServiceWriteAccess } from "./access.ts";
+import { verifyDNS } from "./dns.ts";
+import {
+  createCloudflareCustomHostname,
+  deleteCloudflareCustomHostname,
+  getCloudflareCustomHostnameStatus,
+} from "./cloudflare.ts";
+import {
+  getCanonicalCnameTargetForService,
+  resolveRoutingTargetForServiceHostname,
+} from "../../routing/group-hostnames.ts";
+
+type CustomDomainRow = typeof serviceCustomDomains.$inferSelect;
+
+async function getCustomDomainInServiceScope(
+  db: ReturnType<typeof getDb>,
+  service: { id: string; group_id?: string | null },
+  domainId: string,
+): Promise<CustomDomainRow | null> {
+  if (service.group_id) {
+    const row = await db.select({
+      id: serviceCustomDomains.id,
+      serviceId: serviceCustomDomains.serviceId,
+      domain: serviceCustomDomains.domain,
+      status: serviceCustomDomains.status,
+      verificationToken: serviceCustomDomains.verificationToken,
+      verificationMethod: serviceCustomDomains.verificationMethod,
+      cfCustomHostnameId: serviceCustomDomains.cfCustomHostnameId,
+      sslStatus: serviceCustomDomains.sslStatus,
+      verifiedAt: serviceCustomDomains.verifiedAt,
+      createdAt: serviceCustomDomains.createdAt,
+      updatedAt: serviceCustomDomains.updatedAt,
+    }).from(serviceCustomDomains)
+      .innerJoin(services, eq(services.id, serviceCustomDomains.serviceId))
+      .where(and(
+        eq(serviceCustomDomains.id, domainId),
+        eq(services.groupId, service.group_id),
+      ))
+      .get();
+    return row ?? null;
+  }
+
+  return await db.select().from(serviceCustomDomains)
+    .where(and(
+      eq(serviceCustomDomains.id, domainId),
+      eq(serviceCustomDomains.serviceId, service.id),
+    ))
+    .get() ?? null;
+}
 
 export async function verifyCustomDomain(
   env: Env,
   serviceId: string,
   userId: string,
-  domainId: string
+  domainId: string,
 ): Promise<VerifyCustomDomainResult> {
   const db = getDb(env.DB);
 
   const service = await requireServiceWriteAccess(env, serviceId, userId);
   const desiredState = new ServiceDesiredStateService(env);
 
-  const customDomain = await db.select().from(serviceCustomDomains)
-    .where(and(
-      eq(serviceCustomDomains.id, domainId),
-      eq(serviceCustomDomains.serviceId, serviceId),
-    ))
-    .get();
+  const customDomain = await getCustomDomainInServiceScope(
+    db,
+    service,
+    domainId,
+  );
 
   if (!customDomain) {
-    throw new CustomDomainError('Custom domain not found', 404);
+    throw new CustomDomainError("Custom domain not found", 404);
   }
 
-  if (customDomain.status === 'active') {
-    return { status: 200, body: { status: 'active', message: 'Domain is already verified' } };
+  if (customDomain.status === "active") {
+    return {
+      status: 200,
+      body: { status: "active", message: "Domain is already verified" },
+    };
   }
 
   await db.update(serviceCustomDomains)
-    .set({ status: 'verifying', updatedAt: new Date().toISOString() })
+    .set({ status: "verifying", updatedAt: new Date().toISOString() })
     .where(eq(serviceCustomDomains.id, domainId));
 
   const verifyHost = `verify.${env.TENANT_BASE_DOMAIN}`;
-  const expectedValue = customDomain.verificationMethod === 'cname'
+  const expectedValue = customDomain.verificationMethod === "cname"
     ? `${customDomain.verificationToken}.${verifyHost}`
     : customDomain.verificationToken;
 
   const verification = await verifyDNS(
     customDomain.domain,
     expectedValue,
-    customDomain.verificationMethod as 'cname' | 'txt'
+    customDomain.verificationMethod as "cname" | "txt",
   );
 
   if (!verification.verified) {
     await db.update(serviceCustomDomains)
-      .set({ status: 'pending', updatedAt: new Date().toISOString() })
+      .set({ status: "pending", updatedAt: new Date().toISOString() })
       .where(eq(serviceCustomDomains.id, domainId));
 
     return {
       status: 400,
       body: {
-        status: 'pending',
-        message: verification.error || 'Verification failed',
+        status: "pending",
+        message: verification.error || "Verification failed",
         verified: false,
       },
     };
   }
 
   await db.update(serviceCustomDomains)
-    .set({ status: 'dns_verified', updatedAt: new Date().toISOString() })
+    .set({ status: "dns_verified", updatedAt: new Date().toISOString() })
     .where(eq(serviceCustomDomains.id, domainId));
 
-  const cfResult = await createCloudflareCustomHostname(env, customDomain.domain);
+  const cfResult = await createCloudflareCustomHostname(
+    env,
+    customDomain.domain,
+  );
 
   if (!cfResult.success) {
     await db.update(serviceCustomDomains)
       .set({
-        status: 'ssl_failed',
-        sslStatus: 'failed',
+        status: "ssl_failed",
+        sslStatus: "failed",
         updatedAt: new Date().toISOString(),
       })
       .where(eq(serviceCustomDomains.id, domainId));
@@ -89,8 +147,8 @@ export async function verifyCustomDomain(
     return {
       status: 500,
       body: {
-        status: 'ssl_failed',
-        message: cfResult.error || 'Failed to configure SSL/TLS certificate',
+        status: "ssl_failed",
+        message: cfResult.error || "Failed to configure SSL/TLS certificate",
         dns_verified: true,
         ssl_verified: false,
       },
@@ -98,8 +156,10 @@ export async function verifyCustomDomain(
   }
 
   const hasCustomHostname = !!cfResult.customHostnameId;
-  const initialStatus: DomainStatus = hasCustomHostname ? 'ssl_pending' : 'active';
-  const initialSslStatus = hasCustomHostname ? 'pending' : 'active';
+  const initialStatus: DomainStatus = hasCustomHostname
+    ? "ssl_pending"
+    : "active";
+  const initialSslStatus = hasCustomHostname ? "pending" : "active";
 
   const nowTimestamp = new Date().toISOString();
   try {
@@ -113,21 +173,18 @@ export async function verifyCustomDomain(
       })
       .where(eq(serviceCustomDomains.id, domainId));
   } catch (dbError) {
-    logError('DB update failed', dbError, { module: 'services/platform/custom-domains' });
+    logError("DB update failed", dbError, {
+      module: "services/platform/custom-domains",
+    });
     if (cfResult.customHostnameId) {
       await deleteCloudflareCustomHostname(env, cfResult.customHostnameId);
     }
-    return { status: 500, body: { error: 'Failed to update domain status' } };
+    return { status: 500, body: { error: "Failed to update domain status" } };
   }
 
-  let target: RoutingTarget | null = null;
-  if (service.hostname) {
-    const resolved = await resolveHostnameRouting({ env, hostname: service.hostname });
-    target = resolved.tombstone ? null : resolved.target;
-  }
-  if (!target) {
-    target = await desiredState.getRoutingTarget(serviceId);
-  }
+  let target: RoutingTarget | null =
+    await resolveRoutingTargetForServiceHostname(env, service);
+  target ??= await desiredState.getRoutingTarget(serviceId);
 
   if (target) {
     try {
@@ -137,11 +194,13 @@ export async function verifyCustomDomain(
         target,
       });
     } catch (kvError) {
-      logError('KV update failed, rolling back DB status', kvError, { module: 'services/platform/custom-domains' });
+      logError("KV update failed, rolling back DB status", kvError, {
+        module: "services/platform/custom-domains",
+      });
       try {
         await db.update(serviceCustomDomains)
           .set({
-            status: 'dns_verified',
+            status: "dns_verified",
             cfCustomHostnameId: null,
             sslStatus: null,
             verifiedAt: null,
@@ -149,12 +208,17 @@ export async function verifyCustomDomain(
           })
           .where(eq(serviceCustomDomains.id, domainId));
       } catch (compensateError) {
-        logError('Failed to compensate DB after KV failure', compensateError, { module: 'services/platform/custom-domains' });
+        logError("Failed to compensate DB after KV failure", compensateError, {
+          module: "services/platform/custom-domains",
+        });
       }
       if (cfResult.customHostnameId) {
         await deleteCloudflareCustomHostname(env, cfResult.customHostnameId);
       }
-      return { status: 500, body: { error: 'Failed to register hostname routing' } };
+      return {
+        status: 500,
+        body: { error: "Failed to register hostname routing" },
+      };
     }
   }
 
@@ -162,12 +226,13 @@ export async function verifyCustomDomain(
     return {
       status: 200,
       body: {
-        status: 'ssl_pending',
-        message: 'DNS verified. SSL/TLS certificate is being provisioned. Check back shortly.',
+        status: "ssl_pending",
+        message:
+          "DNS verified. SSL/TLS certificate is being provisioned. Check back shortly.",
         dns_verified: true,
         ssl_verified: false,
         verified_at: new Date().toISOString(),
-        ssl_status: 'pending',
+        ssl_status: "pending",
       },
     };
   }
@@ -175,12 +240,12 @@ export async function verifyCustomDomain(
   return {
     status: 200,
     body: {
-      status: 'active',
-      message: 'Domain verified and activated successfully',
+      status: "active",
+      message: "Domain verified and activated successfully",
       dns_verified: true,
       ssl_verified: true,
       verified_at: new Date().toISOString(),
-      ssl_status: 'active',
+      ssl_status: "active",
     },
   };
 }
@@ -189,55 +254,57 @@ export async function getCustomDomainDetails(
   env: Env,
   serviceId: string,
   userId: string,
-  domainId: string
+  domainId: string,
 ) {
   const db = getDb(env.DB);
 
   const service = await getServiceForUser(env, serviceId, userId);
   if (!service) {
-    throw new CustomDomainError('Service not found', 404);
+    throw new CustomDomainError("Service not found", 404);
   }
 
-  const customDomain = await db.select().from(serviceCustomDomains)
-    .where(and(
-      eq(serviceCustomDomains.id, domainId),
-      eq(serviceCustomDomains.serviceId, serviceId),
-    ))
-    .get();
+  const customDomain = await getCustomDomainInServiceScope(
+    db,
+    service,
+    domainId,
+  );
 
   if (!customDomain) {
-    throw new CustomDomainError('Custom domain not found', 404);
+    throw new CustomDomainError("Custom domain not found", 404);
   }
 
   let sslStatus = customDomain.sslStatus;
   let domainStatus = customDomain.status;
 
-  if (customDomain.cfCustomHostnameId && customDomain.sslStatus === 'pending') {
+  if (customDomain.cfCustomHostnameId && customDomain.sslStatus === "pending") {
     const cfStatus = await getCloudflareCustomHostnameStatus(
       env,
-      customDomain.cfCustomHostnameId
+      customDomain.cfCustomHostnameId,
     );
 
     if (cfStatus) {
-      if (cfStatus.sslStatus === 'active') {
-        sslStatus = 'active';
-        domainStatus = 'active';
+      if (cfStatus.sslStatus === "active") {
+        sslStatus = "active";
+        domainStatus = "active";
         await db.update(serviceCustomDomains)
           .set({
-            status: 'active',
-            sslStatus: 'active',
+            status: "active",
+            sslStatus: "active",
             updatedAt: new Date().toISOString(),
           })
           .where(eq(serviceCustomDomains.id, domainId));
-      } else if (['pending_validation', 'pending_issuance', 'pending_deployment'].includes(cfStatus.sslStatus)) {
-        sslStatus = 'pending';
+      } else if (
+        ["pending_validation", "pending_issuance", "pending_deployment"]
+          .includes(cfStatus.sslStatus)
+      ) {
+        sslStatus = "pending";
       } else if (SSL_TERMINAL_FAILURE_STATUSES.includes(cfStatus.sslStatus)) {
-        sslStatus = 'failed';
-        domainStatus = 'ssl_failed';
+        sslStatus = "failed";
+        domainStatus = "ssl_failed";
         await db.update(serviceCustomDomains)
           .set({
-            status: 'ssl_failed',
-            sslStatus: 'failed',
+            status: "ssl_failed",
+            sslStatus: "failed",
             updatedAt: new Date().toISOString(),
           })
           .where(eq(serviceCustomDomains.id, domainId));
@@ -245,7 +312,7 @@ export async function getCustomDomainDetails(
     }
   }
 
-  const cnameTarget = `${service.slug}.${env.TENANT_BASE_DOMAIN}`;
+  const cnameTarget = await getCanonicalCnameTargetForService(env, service);
   const verifyHost = `verify.${env.TENANT_BASE_DOMAIN}`;
 
   return {
@@ -256,20 +323,22 @@ export async function getCustomDomainDetails(
     ssl_status: sslStatus,
     verified_at: customDomain.verifiedAt,
     created_at: customDomain.createdAt,
-    instructions: domainStatus !== 'active' ? {
-      cname_target: cnameTarget,
-      verification_record: customDomain.verificationMethod === 'cname'
-        ? {
-            type: 'CNAME',
+    instructions: domainStatus !== "active"
+      ? {
+        cname_target: cnameTarget ?? service.hostname ?? "",
+        verification_record: customDomain.verificationMethod === "cname"
+          ? {
+            type: "CNAME",
             name: `_acme-challenge.${customDomain.domain}`,
             value: `${customDomain.verificationToken}.${verifyHost}`,
           }
-        : {
-            type: 'TXT',
+          : {
+            type: "TXT",
             name: `_takos-verify.${customDomain.domain}`,
             value: `takos-verify=${customDomain.verificationToken}`,
           },
-    } : undefined,
+      }
+      : undefined,
   };
 }
 
@@ -277,21 +346,20 @@ export async function refreshSslStatus(
   env: Env,
   serviceId: string,
   userId: string,
-  domainId: string
+  domainId: string,
 ) {
   const db = getDb(env.DB);
 
-  await requireServiceWriteAccess(env, serviceId, userId);
+  const service = await requireServiceWriteAccess(env, serviceId, userId);
 
-  const customDomain = await db.select().from(serviceCustomDomains)
-    .where(and(
-      eq(serviceCustomDomains.id, domainId),
-      eq(serviceCustomDomains.serviceId, serviceId),
-    ))
-    .get();
+  const customDomain = await getCustomDomainInServiceScope(
+    db,
+    service,
+    domainId,
+  );
 
   if (!customDomain) {
-    throw new CustomDomainError('Custom domain not found', 404);
+    throw new CustomDomainError("Custom domain not found", 404);
   }
 
   if (!customDomain.cfCustomHostnameId) {
@@ -303,7 +371,7 @@ export async function refreshSslStatus(
 
   const cfStatus = await getCloudflareCustomHostnameStatus(
     env,
-    customDomain.cfCustomHostnameId
+    customDomain.cfCustomHostnameId,
   );
 
   if (!cfStatus) {
@@ -316,18 +384,21 @@ export async function refreshSslStatus(
   let newSslStatus: string;
   let newDomainStatus: string;
 
-  if (cfStatus.sslStatus === 'active') {
-    newSslStatus = 'active';
-    newDomainStatus = 'active';
+  if (cfStatus.sslStatus === "active") {
+    newSslStatus = "active";
+    newDomainStatus = "active";
   } else if (SSL_TERMINAL_FAILURE_STATUSES.includes(cfStatus.sslStatus)) {
-    newSslStatus = 'failed';
-    newDomainStatus = 'ssl_failed';
+    newSslStatus = "failed";
+    newDomainStatus = "ssl_failed";
   } else {
-    newSslStatus = 'pending';
-    newDomainStatus = 'ssl_pending';
+    newSslStatus = "pending";
+    newDomainStatus = "ssl_pending";
   }
 
-  if (newSslStatus !== customDomain.sslStatus || newDomainStatus !== customDomain.status) {
+  if (
+    newSslStatus !== customDomain.sslStatus ||
+    newDomainStatus !== customDomain.status
+  ) {
     await db.update(serviceCustomDomains)
       .set({
         status: newDomainStatus,

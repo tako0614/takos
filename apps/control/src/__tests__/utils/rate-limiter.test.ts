@@ -3,12 +3,30 @@ import { InMemoryRateLimiter, RateLimiters } from "@/utils/rate-limiter";
 import { assert, assertEquals } from "jsr:@std/assert";
 import { assertSpyCalls, spy } from "jsr:@std/testing/mock";
 import { FakeTime } from "jsr:@std/testing/time";
+import { RateLimitError, ValidationError } from "takos-common/errors";
 
 Deno.test("InMemoryRateLimiter - allows requests within limit", () => {
   const limiter = new InMemoryRateLimiter({ maxRequests: 5, windowMs: 10_000 });
   const info = limiter.check("user-1");
   assertEquals(info.remaining, 5);
   assertEquals(info.total, 5);
+});
+Deno.test("ValidationError - uses the documented HTTP 400 status", () => {
+  const error = new ValidationError("Request validation failed");
+  assertEquals(error.statusCode, 400);
+  assertEquals(error.toResponse().error.code, "VALIDATION_ERROR");
+});
+Deno.test("RateLimitError - includes retryAfter in the common error envelope", () => {
+  const error = new RateLimitError("Too many requests.", 12.2);
+  assertEquals(error.statusCode, 429);
+  assertEquals(error.retryAfter, 13);
+  assertEquals(error.toResponse(), {
+    error: {
+      code: "RATE_LIMITED",
+      message: "Too many requests.",
+      details: { retryAfter: 13 },
+    },
+  });
 });
 Deno.test("InMemoryRateLimiter - decrements remaining on hit", () => {
   const limiter = new InMemoryRateLimiter({ maxRequests: 5, windowMs: 10_000 });

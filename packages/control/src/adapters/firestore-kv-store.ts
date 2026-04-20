@@ -8,7 +8,7 @@
  * propagation lag).
  */
 
-import type { KVNamespace } from '../shared/types/bindings.ts';
+import type { KVNamespace } from "../shared/types/bindings.ts";
 import { Buffer } from "node:buffer";
 
 // ---------------------------------------------------------------------------
@@ -35,8 +35,10 @@ function isExpired(expiration: number | null | undefined): boolean {
   return expiration <= nowEpoch();
 }
 
-function serializeValue(value: string | ArrayBuffer | ReadableStream): Promise<string> | string {
-  if (typeof value === 'string') return value;
+function serializeValue(
+  value: string | ArrayBuffer | ReadableStream,
+): Promise<string> | string {
+  if (typeof value === "string") return value;
   if (value instanceof ArrayBuffer) return new TextDecoder().decode(value);
 
   // ReadableStream
@@ -61,11 +63,11 @@ function serializeValue(value: string | ArrayBuffer | ReadableStream): Promise<s
 
 function coerceValue(raw: string, type?: string): unknown {
   switch (type) {
-    case 'json':
+    case "json":
       return JSON.parse(raw);
-    case 'arrayBuffer':
+    case "arrayBuffer":
       return new TextEncoder().encode(raw).buffer;
-    case 'stream': {
+    case "stream": {
       const bytes = new TextEncoder().encode(raw);
       return new ReadableStream({
         start(controller) {
@@ -74,7 +76,7 @@ function coerceValue(raw: string, type?: string): unknown {
         },
       });
     }
-    case 'text':
+    case "text":
     default:
       return raw;
   }
@@ -103,7 +105,9 @@ type FirestoreQuery = {
 // Public API
 // ---------------------------------------------------------------------------
 
-export function createFirestoreKvStore(config: FirestoreKvStoreConfig): KVNamespace {
+export function createFirestoreKvStore(
+  config: FirestoreKvStoreConfig,
+): KVNamespace {
   // Lazy-init Firestore client to avoid import cost when not used.
   // `unknown` is used because @google-cloud/firestore is an optional
   // dependency and its types may not be available at compile time.
@@ -112,7 +116,7 @@ export function createFirestoreKvStore(config: FirestoreKvStoreConfig): KVNamesp
   async function getFirestore(): Promise<unknown> {
     if (!firestorePromise) {
       firestorePromise = (async () => {
-        const { Firestore } = await import('@google-cloud/firestore');
+        const { Firestore } = await import("@google-cloud/firestore");
         return new Firestore({
           ...(config.projectId ? { projectId: config.projectId } : {}),
           ...(config.keyFilePath ? { keyFilename: config.keyFilePath } : {}),
@@ -126,7 +130,13 @@ export function createFirestoreKvStore(config: FirestoreKvStoreConfig): KVNamesp
     const db = await getFirestore() as { collection(name: string): unknown };
     return db.collection(config.collectionName) as {
       doc(id: string): {
-        get(): Promise<{ exists: boolean; data(): Record<string, unknown> | undefined; id: string }>;
+        get(): Promise<
+          {
+            exists: boolean;
+            data(): Record<string, unknown> | undefined;
+            id: string;
+          }
+        >;
         set(data: Record<string, unknown>): Promise<void>;
         delete(): Promise<void>;
         path: string;
@@ -135,12 +145,12 @@ export function createFirestoreKvStore(config: FirestoreKvStoreConfig): KVNamesp
     };
   }
 
-  return {
+  const kv = {
     // -- get ---------------------------------------------------------------
     async get(
       key: string,
-      type?: 'text' | 'json' | 'arrayBuffer' | 'stream',
-    ): Promise<string | null> {
+      type?: "text" | "json" | "arrayBuffer" | "stream",
+    ): Promise<unknown> {
       const col = await getCollection();
       const doc = await col.doc(key).get();
       if (!doc.exists) return null;
@@ -148,18 +158,20 @@ export function createFirestoreKvStore(config: FirestoreKvStoreConfig): KVNamesp
       const data = doc.data()!;
       if (isExpired(data.expiration as number | null | undefined)) return null;
 
-      // Return type is declared as `string | null` to match the default
-      // KVNamespace.get() overload.  When `type` is 'json', 'arrayBuffer',
-      // or 'stream' the actual runtime value differs — this mirrors the
-      // overloaded behaviour of the Cloudflare KVNamespace interface.
-      return coerceValue(data.value as string, type) as string | null;
+      return coerceValue(data.value as string, type);
     },
 
     // -- getWithMetadata ---------------------------------------------------
     async getWithMetadata(
       key: string,
-      type?: 'text' | 'json' | 'arrayBuffer' | 'stream',
-    ): Promise<{ value: unknown; metadata: Record<string, string> | null; cacheStatus: null }> {
+      type?: "text" | "json" | "arrayBuffer" | "stream",
+    ): Promise<
+      {
+        value: unknown;
+        metadata: Record<string, string> | null;
+        cacheStatus: null;
+      }
+    > {
       const col = await getCollection();
       const doc = await col.doc(key).get();
 
@@ -217,7 +229,9 @@ export function createFirestoreKvStore(config: FirestoreKvStoreConfig): KVNamesp
     async list(
       options?: { prefix?: string; limit?: number; cursor?: string },
     ): Promise<{
-      keys: Array<{ name: string; expiration?: number; metadata?: Record<string, string> }>;
+      keys: Array<
+        { name: string; expiration?: number; metadata?: Record<string, string> }
+      >;
       list_complete: boolean;
       cursor?: string;
     }> {
@@ -225,20 +239,23 @@ export function createFirestoreKvStore(config: FirestoreKvStoreConfig): KVNamesp
       const col = await getCollection();
       const now = nowEpoch();
 
-      let query = col.orderBy('__name__');
+      let query = col.orderBy("__name__");
 
       // Prefix filtering: Firestore range query on document ID
       if (options?.prefix) {
         const prefix = options.prefix;
         // endBefore the next character after the last char of prefix
-        const prefixEnd = prefix.slice(0, -1) + String.fromCharCode(prefix.charCodeAt(prefix.length - 1) + 1);
-        query = query.where('__name__', '>=', col.doc(prefix).path)
-                     .where('__name__', '<', col.doc(prefixEnd).path);
+        const prefixEnd = prefix.slice(0, -1) +
+          String.fromCharCode(prefix.charCodeAt(prefix.length - 1) + 1);
+        query = query.where("__name__", ">=", col.doc(prefix).path)
+          .where("__name__", "<", col.doc(prefixEnd).path);
       }
 
       // Cursor-based pagination
       if (options?.cursor) {
-        const cursorDocId = Buffer.from(options.cursor, 'base64').toString('utf-8');
+        const cursorDocId = Buffer.from(options.cursor, "base64").toString(
+          "utf-8",
+        );
         const cursorDoc = await col.doc(cursorDocId).get();
         if (cursorDoc.exists) {
           query = query.startAfter(cursorDoc);
@@ -248,7 +265,9 @@ export function createFirestoreKvStore(config: FirestoreKvStoreConfig): KVNamesp
       // Fetch one extra to determine if the list is complete
       const snapshot = await query.limit(limit + 1).get();
 
-      const keys: Array<{ name: string; expiration?: number; metadata?: Record<string, string> }> = [];
+      const keys: Array<
+        { name: string; expiration?: number; metadata?: Record<string, string> }
+      > = [];
 
       for (const doc of snapshot.docs.slice(0, limit)) {
         const data = doc.data();
@@ -258,11 +277,17 @@ export function createFirestoreKvStore(config: FirestoreKvStoreConfig): KVNamesp
         // Skip expired entries
         if (exp && exp > 0 && exp <= now) continue;
 
-        const entry: { name: string; expiration?: number; metadata?: Record<string, string> } = {
+        const entry: {
+          name: string;
+          expiration?: number;
+          metadata?: Record<string, string>;
+        } = {
           name: doc.id,
         };
         if (exp && exp > 0) entry.expiration = exp;
-        if (data.metadata) entry.metadata = data.metadata as Record<string, string>;
+        if (data.metadata) {
+          entry.metadata = data.metadata as Record<string, string>;
+        }
 
         keys.push(entry);
       }
@@ -271,7 +296,7 @@ export function createFirestoreKvStore(config: FirestoreKvStoreConfig): KVNamesp
       let cursor: string | undefined;
       if (!listComplete && snapshot.docs.length > 0) {
         const lastDoc = snapshot.docs[limit - 1];
-        cursor = Buffer.from(lastDoc.id).toString('base64');
+        cursor = Buffer.from(lastDoc.id).toString("base64");
       }
 
       return {
@@ -280,8 +305,6 @@ export function createFirestoreKvStore(config: FirestoreKvStoreConfig): KVNamesp
         ...(cursor ? { cursor } : {}),
       };
     },
-  // Cast required: this object structurally implements the KVNamespace
-  // interface, but TypeScript cannot verify compatibility with the
-  // Cloudflare Workers type definitions without the runtime environment.
-  } as unknown as KVNamespace;
+  };
+  return kv as KVNamespace;
 }

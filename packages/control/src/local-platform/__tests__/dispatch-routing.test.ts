@@ -99,7 +99,8 @@ Deno.test("dispatch routes service-ref deployments through the registry with dep
             return Response.json({
               worker: request.headers.get("X-Tenant-Worker"),
               deployment: request.headers.get("X-Tenant-Deployment"),
-              internal: request.headers.get("X-Takos-Internal"),
+              internal: request.headers.get("X-Takos-Internal-Marker"),
+              legacyInternal: request.headers.get("X-Takos-Internal"),
             });
           },
         };
@@ -118,6 +119,7 @@ Deno.test("dispatch routes service-ref deployments through the registry with dep
     worker: "worker-demo",
     deployment: "deployment-v2",
     internal: "1",
+    legacyInternal: null,
   });
   assertEquals(registryCall, {
     name: "worker-demo",
@@ -149,6 +151,7 @@ Deno.test("dispatch forwards http-url targets without tenant-internal headers", 
       assertEquals(request.headers.get("X-Tenant-Worker"), null);
       assertEquals(request.headers.get("X-Tenant-Deployment"), null);
       assertEquals(request.headers.get("X-Takos-Internal"), null);
+      assertEquals(request.headers.get("X-Takos-Internal-Marker"), null);
       return new Response("ok");
     }) as typeof globalThis.fetch,
   );
@@ -161,6 +164,7 @@ Deno.test("dispatch forwards http-url targets without tenant-internal headers", 
       new Request("https://tenant.local/api/run?x=1", {
         headers: {
           "X-Takos-Internal": "spoofed",
+          "X-Takos-Internal-Marker": "spoofed",
           "X-Tenant-Worker": "spoofed",
           "X-Tenant-Deployment": "spoofed",
         },

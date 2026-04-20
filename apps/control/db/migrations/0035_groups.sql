@@ -3,7 +3,7 @@ CREATE TABLE IF NOT EXISTS groups (
   space_id TEXT NOT NULL,
   name TEXT NOT NULL,
   app_version TEXT,
-  provider TEXT,
+  backend TEXT,
   env TEXT,
   manifest_json TEXT,
   created_at TEXT NOT NULL DEFAULT (datetime('now')),

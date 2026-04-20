@@ -10,6 +10,7 @@ import {
   buildRuntimeContainerEnv,
   buildRuntimeForwardRequest,
   RUNTIME_PROXY_TOKEN_HEADER,
+  RUNTIME_PROXY_TOKEN_TTL_MS,
   TakosRuntimeContainer,
 } from "@/container-hosts/runtime-host";
 import runtimeHost from "@/container-hosts/runtime-host";
@@ -23,6 +24,7 @@ import {
   assertEquals,
   assertNotEquals,
   assertStringIncludes,
+  assertThrows,
 } from "jsr:@std/assert";
 import { assertSpyCallArgs, assertSpyCalls, spy } from "jsr:@std/testing/mock";
 
@@ -47,13 +49,35 @@ Deno.test("buildRuntimeContainerEnv - omits PROXY_BASE_URL when empty string", (
   });
   assert(!("PROXY_BASE_URL" in result));
 });
-Deno.test("buildRuntimeContainerEnv - includes JWT_PUBLIC_KEY when provided", () => {
+Deno.test("buildRuntimeContainerEnv - includes matching JWT_PUBLIC_KEY override when provided", () => {
   const result = buildRuntimeContainerEnv({
     ADMIN_DOMAIN: "test.takos.jp",
     PROXY_BASE_URL: "",
     JWT_PUBLIC_KEY: "my-public-key",
+    PLATFORM_PUBLIC_KEY: "my-public-key",
   });
   assertEquals(result.JWT_PUBLIC_KEY, "my-public-key");
+});
+Deno.test("buildRuntimeContainerEnv - falls back to PLATFORM_PUBLIC_KEY for JWT_PUBLIC_KEY", () => {
+  const result = buildRuntimeContainerEnv({
+    ADMIN_DOMAIN: "test.takos.jp",
+    PROXY_BASE_URL: "",
+    PLATFORM_PUBLIC_KEY: "platform-public-key",
+  });
+  assertEquals(result.JWT_PUBLIC_KEY, "platform-public-key");
+});
+Deno.test("buildRuntimeContainerEnv - rejects mismatched JWT_PUBLIC_KEY override", () => {
+  assertThrows(
+    () =>
+      buildRuntimeContainerEnv({
+        ADMIN_DOMAIN: "test.takos.jp",
+        PROXY_BASE_URL: "",
+        PLATFORM_PUBLIC_KEY: "platform-public-key",
+        JWT_PUBLIC_KEY: "other-public-key",
+      }),
+    Error,
+    "JWT_PUBLIC_KEY must match PLATFORM_PUBLIC_KEY",
+  );
 });
 Deno.test("buildRuntimeContainerEnv - omits JWT_PUBLIC_KEY when undefined", () => {
   const result = buildRuntimeContainerEnv({
@@ -168,6 +192,35 @@ Deno.test("TakosRuntimeContainer proxy token lifecycle - persists tokens to stor
   assert(stored !== undefined);
   assertEquals(Object.keys(stored).length, 1);
 });
+Deno.test("TakosRuntimeContainer proxy token lifecycle - expires and purges old tokens", async () => {
+  mockStorage = new Map();
+  const now = Date.now();
+  mockStorage.set("proxyTokens", {
+    "expired-token": {
+      sessionId: "s-expired",
+      spaceId: "sp-expired",
+      createdAt: now - RUNTIME_PROXY_TOKEN_TTL_MS - 1000,
+      expiresAt: now - 1000,
+    },
+  });
+  const mockCtx = {
+    storage: {
+      get: async (key: string) => mockStorage.get(key) ?? undefined,
+      put: async (key: string, value: unknown) => {
+        mockStorage.set(key, value);
+      },
+    },
+  };
+
+  container = new TakosRuntimeContainer(mockCtx as any, {
+    ADMIN_DOMAIN: "test.takos.jp",
+    PROXY_BASE_URL: "",
+  } as any);
+
+  const info = await container.verifyProxyToken("expired-token");
+  assertEquals(info, null);
+  assertEquals(mockStorage.get("proxyTokens"), {});
+});
 Deno.test("TakosRuntimeContainer proxy token lifecycle - loads tokens from storage on first verify when cache is empty", async () => {
   mockStorage = new Map();
   const mockCtx = {
@@ -205,6 +258,37 @@ Deno.test("TakosRuntimeContainer proxy token lifecycle - loads tokens from stora
 
   const info = await freshContainer.verifyProxyToken("pre-existing-token");
   assertEquals(info, { sessionId: "s-old", spaceId: "sp-old" });
+});
+Deno.test("TakosRuntimeContainer proxy token lifecycle - revokes all tokens for a session", async () => {
+  mockStorage = new Map();
+  const mockCtx = {
+    storage: {
+      get: async (key: string) => mockStorage.get(key) ?? undefined,
+      put: async (key: string, value: unknown) => {
+        mockStorage.set(key, value);
+      },
+    },
+  };
+
+  container = new TakosRuntimeContainer(mockCtx as any, {
+    ADMIN_DOMAIN: "test.takos.jp",
+    PROXY_BASE_URL: "",
+  } as any);
+  const token1 = await container.generateSessionProxyToken(
+    "session-1",
+    "space-1",
+  );
+  const token2 = await container.generateSessionProxyToken(
+    "session-2",
+    "space-2",
+  );
+
+  assertEquals(await container.revokeSessionProxyTokens("session-1"), 1);
+  assertEquals(await container.verifyProxyToken(token1), null);
+  assertEquals(await container.verifyProxyToken(token2), {
+    sessionId: "session-2",
+    spaceId: "space-2",
+  });
 });
 Deno.test("TakosRuntimeContainer proxy token lifecycle - returns null when storage is empty and token is unknown", async () => {
   mockStorage = new Map();
@@ -376,6 +460,7 @@ Deno.test("runtime-host worker fetch error paths - returns 401 when /forward/ re
       }),
     },
     ADMIN_DOMAIN: "test.takos.jp",
+    PLATFORM_PUBLIC_KEY: "test-public-key",
     PROXY_BASE_URL: "",
   } as unknown as any;
 
@@ -392,6 +477,7 @@ Deno.test("runtime-host worker fetch error paths - returns 401 when /forward/ re
       getByName: () => ({ verifyProxyToken }),
     },
     ADMIN_DOMAIN: "test.takos.jp",
+    PLATFORM_PUBLIC_KEY: "test-public-key",
     PROXY_BASE_URL: "",
   } as unknown as any;
 
@@ -414,6 +500,7 @@ Deno.test("runtime-host worker fetch error paths - returns 500 when TAKOS_WEB is
       getByName: () => ({ verifyProxyToken }),
     },
     ADMIN_DOMAIN: "test.takos.jp",
+    PLATFORM_PUBLIC_KEY: "test-public-key",
     PROXY_BASE_URL: "",
     // No TAKOS_WEB
   } as unknown as any;
@@ -443,6 +530,7 @@ Deno.test("runtime-host worker fetch error paths - returns 404 for unknown /forw
     },
     TAKOS_WEB: { fetch: takosWebFetch },
     ADMIN_DOMAIN: "test.takos.jp",
+    PLATFORM_PUBLIC_KEY: "test-public-key",
     PROXY_BASE_URL: "",
   } as unknown as any;
 
@@ -467,6 +555,7 @@ Deno.test("runtime-host worker fetch error paths - returns 401 when /forward/cli
     },
     TAKOS_WEB: { fetch: takosWebFetch },
     ADMIN_DOMAIN: "test.takos.jp",
+    PLATFORM_PUBLIC_KEY: "test-public-key",
     PROXY_BASE_URL: "",
   } as unknown as any;
 
@@ -474,6 +563,34 @@ Deno.test("runtime-host worker fetch error paths - returns 401 when /forward/cli
     new Request("https://runtime-host/forward/cli-proxy/api/repos/r1/status", {
       headers: { Authorization: "Bearer valid-token" },
       // Missing X-Takos-Session-Id
+    }),
+    env,
+  );
+  assertEquals(res.status, 401);
+  assertSpyCalls(takosWebFetch, 0);
+});
+Deno.test("runtime-host worker fetch error paths - returns 401 when /forward/cli-proxy session does not match proxy token", async () => {
+  const verifyProxyToken = spy(async (_token: string) => ({
+    sessionId: "sess-1",
+    spaceId: "sp-1",
+  }));
+  const takosWebFetch = spy(async (_request: Request) => new Response());
+  const env = {
+    RUNTIME_CONTAINER: {
+      getByName: () => ({ verifyProxyToken }),
+    },
+    TAKOS_WEB: { fetch: takosWebFetch },
+    ADMIN_DOMAIN: "test.takos.jp",
+    PLATFORM_PUBLIC_KEY: "test-public-key",
+    PROXY_BASE_URL: "",
+  } as unknown as any;
+
+  const res = await runtimeHost.fetch(
+    new Request("https://runtime-host/forward/cli-proxy/api/repos/r1/status", {
+      headers: {
+        Authorization: "Bearer valid-token",
+        "X-Takos-Session-Id": "sess-2",
+      },
     }),
     env,
   );
@@ -494,6 +611,7 @@ Deno.test("runtime-host worker fetch error paths - correctly strips /forward/cli
     },
     TAKOS_WEB: { fetch: takosWebFetch },
     ADMIN_DOMAIN: "test.takos.jp",
+    PLATFORM_PUBLIC_KEY: "test-public-key",
     PROXY_BASE_URL: "",
   } as unknown as any;
 
@@ -513,7 +631,7 @@ Deno.test("runtime-host worker fetch error paths - correctly strips /forward/cli
   const proxiedRequest = takosWebFetch.calls[0]?.args[0] as Request;
   assertEquals(
     proxiedRequest.url,
-    "https://takos-web/api/repos/r1/tree?ref=main",
+    "https://takos/api/repos/r1/tree?ref=main",
   );
 });
 Deno.test("runtime-host worker fetch error paths - proxies heartbeat with correct URL format", async () => {
@@ -521,7 +639,7 @@ Deno.test("runtime-host worker fetch error paths - proxies heartbeat with correc
     new Response(JSON.stringify({ success: true }), { status: 200 })
   );
   const verifyProxyToken = spy(async (_token: string) => ({
-    sessionId: "sess-1",
+    sessionId: "my-session-id",
     spaceId: "sp-1",
   }));
   const env = {
@@ -530,6 +648,7 @@ Deno.test("runtime-host worker fetch error paths - proxies heartbeat with correc
     },
     TAKOS_WEB: { fetch: takosWebFetch },
     ADMIN_DOMAIN: "test.takos.jp",
+    PLATFORM_PUBLIC_KEY: "test-public-key",
     PROXY_BASE_URL: "",
   } as unknown as any;
 
@@ -544,7 +663,7 @@ Deno.test("runtime-host worker fetch error paths - proxies heartbeat with correc
   const proxiedRequest = takosWebFetch.calls[0]?.args[0] as Request;
   assertEquals(
     proxiedRequest.url,
-    "https://takos-web/api/sessions/my-session-id/heartbeat",
+    "https://takos/api/sessions/my-session-id/heartbeat",
   );
   assertEquals(proxiedRequest.method, "POST");
   assertEquals(proxiedRequest.headers.get("X-Takos-Internal-Marker"), "1");
@@ -554,6 +673,35 @@ Deno.test("runtime-host worker fetch error paths - proxies heartbeat with correc
     "my-session-id",
   );
   assertEquals(proxiedRequest.headers.get("X-Takos-Space-Id"), "sp-1");
+});
+Deno.test("runtime-host worker fetch error paths - returns 401 when /forward/heartbeat session does not match proxy token", async () => {
+  const takosWebFetch = spy(async (_request: Request) =>
+    new Response(JSON.stringify({ success: true }), { status: 200 })
+  );
+  const verifyProxyToken = spy(async (_token: string) => ({
+    sessionId: "sess-1",
+    spaceId: "sp-1",
+  }));
+  const env = {
+    RUNTIME_CONTAINER: {
+      getByName: () => ({ verifyProxyToken }),
+    },
+    TAKOS_WEB: { fetch: takosWebFetch },
+    ADMIN_DOMAIN: "test.takos.jp",
+    PLATFORM_PUBLIC_KEY: "test-public-key",
+    PROXY_BASE_URL: "",
+  } as unknown as any;
+
+  const res = await runtimeHost.fetch(
+    new Request("https://runtime-host/forward/heartbeat/sess-2", {
+      method: "POST",
+      headers: { Authorization: "Bearer valid-token" },
+    }),
+    env,
+  );
+
+  assertEquals(res.status, 401);
+  assertSpyCalls(takosWebFetch, 0);
 });
 Deno.test("runtime-host worker fetch error paths - returns 500 when container fetch throws", async () => {
   const stubFetch = async () => {
@@ -568,6 +716,7 @@ Deno.test("runtime-host worker fetch error paths - returns 500 when container fe
       }),
     },
     ADMIN_DOMAIN: "test.takos.jp",
+    PLATFORM_PUBLIC_KEY: "test-public-key",
     PROXY_BASE_URL: "",
   } as unknown as any;
 
@@ -578,4 +727,37 @@ Deno.test("runtime-host worker fetch error paths - returns 500 when container fe
   assertEquals(res.status, 500);
   const text = await res.text();
   assertStringIncludes(text, "container crashed");
+});
+Deno.test("runtime-host worker fetch handler - revokes session tokens after successful destroy", async () => {
+  const revokeSessionProxyTokens = spy(async (_sessionId: string) => 1);
+  const stubFetch = spy(
+    async (_request: Request) =>
+      new Response(JSON.stringify({ ok: true }), { status: 200 }),
+  );
+  const env = {
+    RUNTIME_CONTAINER: {
+      getByName: () => ({
+        fetch: stubFetch,
+        generateSessionProxyToken: ((..._args: any[]) => undefined) as any,
+        verifyProxyToken: ((..._args: any[]) => undefined) as any,
+        revokeSessionProxyTokens,
+      }),
+    },
+    ADMIN_DOMAIN: "test.takos.jp",
+    PLATFORM_PUBLIC_KEY: "test-public-key",
+    PROXY_BASE_URL: "",
+  } as unknown as any;
+
+  const res = await runtimeHost.fetch(
+    new Request("https://runtime-host/session/destroy", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ session_id: "sess-1", space_id: "sp-1" }),
+    }),
+    env,
+  );
+
+  assertEquals(res.status, 200);
+  assertSpyCalls(stubFetch, 1);
+  assertSpyCallArgs(revokeSessionProxyTokens, 0, ["sess-1"]);
 });

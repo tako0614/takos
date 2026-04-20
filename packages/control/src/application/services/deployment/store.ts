@@ -13,6 +13,7 @@ import {
 } from "../../../infra/db/index.ts";
 import { and, asc, desc, eq, inArray, isNotNull, lt, max } from "drizzle-orm";
 import type { ArtifactKind, Deployment, DeploymentEvent } from "./models.ts";
+import { normalizeDeploymentBackendName } from "./models.ts";
 import { textDateNullable } from "../../../shared/utils/db-guards.ts";
 
 type DeploymentInsert = InsertOf<typeof deployments>;
@@ -49,9 +50,10 @@ export function toApiDeployment(d: DeploymentRow): Deployment {
     routing_weight: d.routingWeight,
     deployed_by: d.deployedBy,
     deploy_message: d.deployMessage,
-    provider_name: d.providerName as Deployment["provider_name"],
+    backend_name: normalizeDeploymentBackendName(d.backendName) ??
+      (d.backendName as Deployment["backend_name"]),
     target_json: d.targetJson,
-    provider_state_json: d.providerStateJson,
+    backend_state_json: d.backendStateJson,
     idempotency_key: d.idempotencyKey,
     is_rollback: d.isRollback,
     rollback_from_version: d.rollbackFromVersion,

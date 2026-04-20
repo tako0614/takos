@@ -69,6 +69,32 @@ Deno.test("buildRoutingTarget - builds canary routing target and clamps weight",
   assertEquals(result.auditDetails.mode, "canary");
 });
 
+Deno.test("buildRoutingTarget - rounds fractional canary weight before clamping", () => {
+  const result = buildRoutingTarget({
+    deploymentId: "dep-2",
+    deploymentVersion: 2,
+    deployArtifactRef: "worker-w-1-v2",
+    deploymentTarget: { route_ref: "worker-w-1-v2" },
+    serviceRouteRecord: baseServiceRouteRecord,
+    desiredRoutingStatus: "canary",
+    desiredRoutingWeight: 1.9,
+    activeDeployment: {
+      id: "dep-1",
+      artifactRef: "worker-w-1-v1",
+      targetJson: '{"route_ref":"worker-w-1-v1"}',
+      routingStatus: "active",
+    },
+  }, ["test.example.com"]);
+
+  assertEquals(result.target.type, "deployments");
+  if (result.target.type === "deployments") {
+    const canarySlot = result.target.deployments.find((d) =>
+      d.status === "canary"
+    );
+    assertEquals(canarySlot?.weight, 2);
+  }
+});
+
 Deno.test("buildRoutingTarget - rejects unsupported or incomplete routing inputs", () => {
   assertThrows(
     () =>

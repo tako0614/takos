@@ -9,6 +9,11 @@ import {
   handleDeploymentJobDlq,
   isValidDeploymentQueueMessage,
 } from "../../../../../packages/control/src/runtime/queues/deploy-jobs.ts";
+import {
+  defaultAppPreinstallJobs,
+  groupDeploymentSnapshots,
+  groups,
+} from "../../../../../packages/control/src/infra/db/index.ts";
 
 type FakeDeploymentRow = unknown[] | null;
 
@@ -18,6 +23,30 @@ function validDeployMessage(): DeploymentQueueMessage {
     type: "deployment",
     deploymentId: "deploy-1",
     timestamp: Date.now(),
+  };
+}
+
+function validDefaultAppPreinstallMessage(
+  overrides: Partial<
+    Extract<
+      DeploymentQueueMessage,
+      { type: "group_deployment_snapshot" }
+    >
+  > = {},
+): DeploymentQueueMessage {
+  return {
+    version: 1,
+    type: "group_deployment_snapshot",
+    spaceId: "space-1",
+    groupId: "group-1",
+    groupName: "takos-docs",
+    repositoryUrl: "https://example.com/takos-docs.git",
+    ref: "main",
+    refType: "branch",
+    createdByAccountId: "account-1",
+    reason: "default_app_preinstall",
+    timestamp: Date.now(),
+    ...overrides,
   };
 }
 
@@ -37,6 +66,7 @@ function createDeploymentEnv(
 
 function createFakeD1(
   deploymentRow: FakeDeploymentRow = null,
+  preinstallJobRow: Record<string, unknown> | null = null,
 ): {
   db: D1Database;
   prepareCalls: Array<{ sql: string; args: unknown[] }>;
@@ -46,16 +76,27 @@ function createFakeD1(
   const db = {
     prepare(sql: string) {
       const normalized = sql.trim().toLowerCase();
-      const row = normalized.startsWith("select") ? deploymentRow : null;
+      const selectedObject = normalized.startsWith("select")
+        ? normalized.includes("default_app_preinstall_jobs")
+          ? preinstallJobRow
+          : rowToObject(deploymentRow)
+        : null;
+      const selectedRaw = normalized.startsWith("select")
+        ? normalized.includes("default_app_preinstall_jobs")
+          ? preinstallJobToRaw(preinstallJobRow)
+          : deploymentRow
+        : null;
 
       return {
         bind(..._args: unknown[]) {
           prepareCalls.push({ sql, args: _args });
           return {
-            get: async () => rowToObject(row),
-            first: async () => rowToObject(row),
-            all: async () => ({ results: row ? [rowToObject(row)] : [] }),
-            raw: async () => (row ? [row] : []),
+            get: async () => selectedObject,
+            first: async () => selectedObject,
+            all: async () => ({
+              results: selectedObject ? [selectedObject] : [],
+            }),
+            raw: async () => (selectedRaw ? [selectedRaw] : []),
             run: async () => ({ success: true, meta: { changes: 1 } }),
           };
         },
@@ -64,6 +105,107 @@ function createFakeD1(
   } as unknown as D1Database;
 
   return { db, prepareCalls };
+}
+
+function preinstallJobToRaw(
+  row: Record<string, unknown> | null,
+): unknown[] | null {
+  if (!row) return null;
+  return [
+    row.id,
+    row.spaceId,
+    row.createdByAccountId,
+    row.distributionJson,
+    row.expectedGroupIdsJson,
+    row.deploymentQueuedAt,
+    row.status,
+    row.attempts,
+    row.nextAttemptAt,
+    row.lockedAt,
+    row.lastError,
+    row.createdAt,
+    row.updatedAt,
+  ];
+}
+
+function createFakeGroupDb(
+  groupRow: Record<string, unknown> | null,
+  options: {
+    preinstallJobRow?: Record<string, unknown> | null;
+    snapshotRow?: Record<string, unknown> | null;
+    updateChanges?: number | null;
+  } = {},
+): {
+  db: D1Database;
+  updates: Array<{ table: unknown; values: Record<string, unknown> }>;
+} {
+  const updates: Array<{ table: unknown; values: Record<string, unknown> }> =
+    [];
+  const preinstallJobRow = "preinstallJobRow" in options
+    ? options.preinstallJobRow
+    : defaultPreinstallJobRow();
+  const snapshotRow = "snapshotRow" in options ? options.snapshotRow : null;
+  const db = {
+    select() {
+      return {
+        from(table: unknown) {
+          return {
+            where() {
+              return {
+                get: async () =>
+                  table === defaultAppPreinstallJobs
+                    ? preinstallJobRow
+                    : table === groupDeploymentSnapshots
+                    ? snapshotRow
+                    : groupRow,
+                all: async () => {
+                  const row = table === defaultAppPreinstallJobs
+                    ? preinstallJobRow
+                    : table === groupDeploymentSnapshots
+                    ? snapshotRow
+                    : groupRow;
+                  return row ? [row] : [];
+                },
+              };
+            },
+          };
+        },
+      };
+    },
+    update(table: unknown) {
+      return {
+        set(values: Record<string, unknown>) {
+          return {
+            where() {
+              return {
+                run: async () => {
+                  updates.push({ table, values });
+                  return options.updateChanges === null ? { success: true } : {
+                    success: true,
+                    meta: { changes: options.updateChanges ?? 1 },
+                  };
+                },
+              };
+            },
+          };
+        },
+      };
+    },
+    insert() {},
+    delete() {},
+  } as unknown as D1Database;
+
+  return { db, updates };
+}
+
+function defaultPreinstallJobRow(): Record<string, unknown> {
+  return {
+    id: "default-app-preinstall:space-1",
+    spaceId: "space-1",
+    distributionJson: null,
+    expectedGroupIdsJson: null,
+    deploymentQueuedAt: null,
+  };
 }
 
 function rowToObject(row: FakeDeploymentRow): Record<string, unknown> | null {
@@ -91,9 +233,9 @@ function rowToObject(row: FakeDeploymentRow): Record<string, unknown> | null {
     routingWeight: row[19],
     deployedBy: row[20],
     deployMessage: row[21],
-    providerName: row[22],
+    backendName: row[22],
     targetJson: row[23],
-    providerStateJson: row[24],
+    backendStateJson: row[24],
     artifactKind: row[25],
     idempotencyKey: row[26],
     isRollback: row[27],
@@ -257,5 +399,208 @@ Deno.test("handleDeploymentJobDlq - rethrows when deployment lookup fails", asyn
   await assertRejects(
     () => handleDeploymentJobDlq(validDeployMessage(), env, 1),
     Error,
+  );
+});
+
+Deno.test("handleDeploymentJobDlq - marks default app preinstall job failed", async () => {
+  const { db, prepareCalls } = createFakeD1(
+    null,
+    {
+      id: "default-app-preinstall:space-1",
+      expectedGroupIdsJson: null,
+      distributionJson: null,
+    },
+  );
+  const env = createDeploymentEnv({ DB: db });
+
+  await handleDeploymentJobDlq(validDefaultAppPreinstallMessage(), env, 5);
+
+  const preinstallUpdate = prepareCalls.find((call) =>
+    call.sql.toLowerCase().includes('update "default_app_preinstall_jobs"')
+  );
+  assertEquals(preinstallUpdate !== undefined, true);
+  assertEquals(preinstallUpdate?.args.includes("failed"), true);
+  assertEquals(
+    preinstallUpdate?.args.includes("default-app-preinstall:space-1"),
+    true,
+  );
+});
+
+Deno.test("handleDeploymentJobDlq - leaves non-default-app group jobs out of preinstall state", async () => {
+  const { db, prepareCalls } = createFakeD1();
+  const env = createDeploymentEnv({ DB: db });
+
+  await handleDeploymentJobDlq(
+    validDefaultAppPreinstallMessage({ reason: undefined }),
+    env,
+    5,
+  );
+
+  assertEquals(
+    prepareCalls.some((call) =>
+      call.sql.toLowerCase().includes('update "default_app_preinstall_jobs"')
+    ),
+    false,
+  );
+});
+
+Deno.test("handleDeploymentJob - marks already-applied default app preinstall completed", async () => {
+  const { db, updates } = createFakeGroupDb({
+    id: "group-1",
+    spaceId: "space-1",
+    name: "takos-docs",
+    sourceKind: "git_ref",
+    sourceRepositoryUrl: "https://example.com/takos-docs.git",
+    sourceRef: "main",
+    sourceRefType: "branch",
+    currentGroupDeploymentSnapshotId: "snapshot-1",
+    backendStateJson: JSON.stringify({
+      defaultAppDistribution: { preinstalled: true },
+    }),
+  }, {
+    snapshotRow: {
+      id: "snapshot-1",
+      spaceId: "space-1",
+      groupId: "group-1",
+      sourceKind: "git_ref",
+      sourceRepositoryUrl: "https://example.com/takos-docs.git",
+      sourceRef: "main",
+      sourceRefType: "branch",
+      status: "applied",
+    },
+  });
+  const env = createDeploymentEnv({ DB: db });
+
+  await handleDeploymentJob(validDefaultAppPreinstallMessage(), env);
+
+  const preinstallUpdate = updates.find((update) =>
+    update.table === defaultAppPreinstallJobs
+  );
+  assertEquals(preinstallUpdate?.values.status, "completed");
+  assertEquals(preinstallUpdate?.values.lastError, null);
+});
+
+Deno.test("handleDeploymentJob - marks stale default app preinstall jobs failed before completion", async () => {
+  const { db, updates } = createFakeGroupDb({
+    id: "group-1",
+    spaceId: "space-1",
+    name: "takos-docs",
+    sourceKind: "git_ref",
+    sourceRepositoryUrl: "https://example.com/takos-docs.git",
+    sourceRef: "main",
+    sourceRefType: "branch",
+    currentGroupDeploymentSnapshotId: "snapshot-1",
+    backendStateJson: JSON.stringify({
+      defaultAppDistribution: { preinstalled: true },
+    }),
+  });
+  const env = createDeploymentEnv({ DB: db });
+
+  await handleDeploymentJob(
+    validDefaultAppPreinstallMessage({
+      repositoryUrl: "https://example.com/other-app.git",
+    }),
+    env,
+  );
+
+  const preinstallUpdate = updates.find((update) =>
+    update.table === defaultAppPreinstallJobs
+  );
+  assertEquals(preinstallUpdate?.values.status, "failed");
+  assertEquals(
+    String(preinstallUpdate?.values.lastError ?? "").includes(
+      "Stale group deployment job",
+    ),
+    true,
+  );
+});
+
+Deno.test("handleDeploymentJob - ignores default app outcomes outside expected group ids", async () => {
+  const { db, updates } = createFakeGroupDb({
+    id: "group-1",
+    spaceId: "space-1",
+    name: "takos-docs",
+    sourceKind: "git_ref",
+    sourceRepositoryUrl: "https://example.com/takos-docs.git",
+    sourceRef: "main",
+    sourceRefType: "branch",
+    currentGroupDeploymentSnapshotId: "snapshot-1",
+    backendStateJson: JSON.stringify({
+      defaultAppDistribution: { preinstalled: true },
+    }),
+  }, {
+    preinstallJobRow: {
+      ...defaultPreinstallJobRow(),
+      expectedGroupIdsJson: JSON.stringify(["other-group"]),
+    },
+  });
+  const env = createDeploymentEnv({ DB: db });
+
+  await handleDeploymentJob(validDefaultAppPreinstallMessage(), env);
+
+  assertEquals(
+    updates.some((update) => update.table === defaultAppPreinstallJobs),
+    false,
+  );
+});
+
+Deno.test("handleDeploymentJob - ignores default app outcomes outside stored distribution snapshot", async () => {
+  const { db, updates } = createFakeGroupDb({
+    id: "group-1",
+    spaceId: "space-1",
+    name: "takos-docs",
+    sourceKind: "git_ref",
+    sourceRepositoryUrl: "https://example.com/takos-docs.git",
+    sourceRef: "main",
+    sourceRefType: "branch",
+    currentGroupDeploymentSnapshotId: "snapshot-1",
+    backendStateJson: JSON.stringify({
+      defaultAppDistribution: { preinstalled: true },
+    }),
+  }, {
+    preinstallJobRow: {
+      ...defaultPreinstallJobRow(),
+      distributionJson: JSON.stringify([{
+        name: "other-docs",
+        repositoryUrl: "https://example.com/other-docs.git",
+        ref: "main",
+        refType: "branch",
+      }]),
+    },
+  });
+  const env = createDeploymentEnv({ DB: db });
+
+  await handleDeploymentJob(validDefaultAppPreinstallMessage(), env);
+
+  assertEquals(
+    updates.some((update) => update.table === defaultAppPreinstallJobs),
+    false,
+  );
+});
+
+Deno.test("handleDeploymentJob - skips group snapshot when conditional claim affects no rows", async () => {
+  const { db, updates } = createFakeGroupDb({
+    id: "group-1",
+    spaceId: "space-1",
+    name: "takos-docs",
+    sourceKind: "git_ref",
+    sourceRepositoryUrl: "https://example.com/takos-docs.git",
+    sourceRef: "main",
+    sourceRefType: "branch",
+    reconcileStatus: "in_progress",
+    currentGroupDeploymentSnapshotId: null,
+    backendStateJson: JSON.stringify({
+      defaultAppDistribution: { preinstalled: true },
+    }),
+  }, { updateChanges: 0 });
+  const env = createDeploymentEnv({ DB: db });
+
+  await handleDeploymentJob(validDefaultAppPreinstallMessage(), env);
+
+  const groupUpdate = updates.find((update) => update.table === groups);
+  assertEquals(groupUpdate?.values.reconcileStatus, "in_progress");
+  assertEquals(
+    updates.some((update) => update.table === defaultAppPreinstallJobs),
+    false,
   );
 });

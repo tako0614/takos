@@ -7,25 +7,25 @@
  * assets.ts.
  */
 
-import type { WfpClient } from './client.ts';
-import type { WFPConfig } from './client.ts';
+import type { WfpClient } from "./client.ts";
+import type { WFPConfig } from "./client.ts";
 import type {
   AssetManifestEntry,
-  AssetUploadFile,
   AssetsUploadSession,
-} from './assets.ts';
+  AssetUploadFile,
+} from "./assets.ts";
 import {
   createAssetsUploadSession,
-  uploadAssets,
   uploadAllAssets,
-} from './assets.ts';
+  uploadAssets,
+} from "./assets.ts";
 import type {
-  WfpContext,
-  WorkerBinding,
   CloudflareBindingRecord,
   CreateWorkerOptions,
-} from './wfp-contracts.ts';
-import { buildWorkerMetadata } from './worker-metadata.ts';
+  WfpContext,
+  WorkerBinding,
+} from "./wfp-contracts.ts";
+import { buildWorkerMetadata } from "./worker-metadata.ts";
 
 // ---------------------------------------------------------------------------
 // Worker CRUD
@@ -34,11 +34,22 @@ import { buildWorkerMetadata } from './worker-metadata.ts';
 /**
  * Create or update a worker in the dispatch namespace.
  */
-export async function createWorker(ctx: WfpContext, options: CreateWorkerOptions): Promise<void> {
-  const { workerName, workerScript, bindings, compatibility_date, compatibility_flags, limits, assetsJwt } = options;
+export async function createWorker(
+  ctx: WfpContext,
+  options: CreateWorkerOptions,
+): Promise<void> {
+  const {
+    workerName,
+    workerScript,
+    bindings,
+    compatibility_date,
+    compatibility_flags,
+    limits,
+    assetsJwt,
+  } = options;
 
   const metadata = buildWorkerMetadata({
-    bindings: bindings.map(b => ctx.formatBinding(b)),
+    bindings: bindings.map((b) => ctx.formatBinding(b)),
     compatibility_date,
     compatibility_flags,
     limits,
@@ -46,15 +57,22 @@ export async function createWorker(ctx: WfpContext, options: CreateWorkerOptions
   });
 
   const formData = new FormData();
-  formData.append('worker.js', new Blob([workerScript], { type: 'application/javascript+module' }), 'worker.js');
-  formData.append('metadata', new Blob([JSON.stringify(metadata)], { type: 'application/json' }));
+  formData.append(
+    "worker.js",
+    new Blob([workerScript], { type: "application/javascript+module" }),
+    "worker.js",
+  );
+  formData.append(
+    "metadata",
+    new Blob([JSON.stringify(metadata)], { type: "application/json" }),
+  );
 
   await ctx.cfFetchWithRetry(
     ctx.scriptPath(workerName),
     {
-      method: 'PUT',
+      method: "PUT",
       body: formData,
-    }
+    },
   );
 }
 
@@ -65,7 +83,7 @@ export async function createWorkerAssetsUploadSession(
   client: WfpClient,
   config: WFPConfig,
   workerName: string,
-  manifest: Record<string, AssetManifestEntry>
+  manifest: Record<string, AssetManifestEntry>,
 ): Promise<AssetsUploadSession> {
   return createAssetsUploadSession(client, config, workerName, manifest);
 }
@@ -76,7 +94,7 @@ export async function createWorkerAssetsUploadSession(
 export async function uploadWorkerAssets(
   config: WFPConfig,
   sessionJwt: string,
-  files: Record<string, AssetUploadFile>
+  files: Record<string, AssetUploadFile>,
 ): Promise<string> {
   return uploadAssets(config, sessionJwt, files);
 }
@@ -88,7 +106,7 @@ export async function uploadAllWorkerAssets(
   client: WfpClient,
   config: WFPConfig,
   workerName: string,
-  files: Array<{ path: string; content: ArrayBuffer; contentType?: string }>
+  files: Array<{ path: string; content: ArrayBuffer; contentType?: string }>,
 ): Promise<string> {
   return uploadAllAssets(client, config, workerName, files);
 }
@@ -96,17 +114,23 @@ export async function uploadAllWorkerAssets(
 /**
  * Delete a worker from the dispatch namespace.
  */
-export async function deleteWorker(ctx: WfpContext, workerName: string): Promise<void> {
+export async function deleteWorker(
+  ctx: WfpContext,
+  workerName: string,
+): Promise<void> {
   await ctx.cfFetchWithRetry(
     ctx.scriptPath(workerName),
-    { method: 'DELETE' }
+    { method: "DELETE" },
   );
 }
 
 /**
  * Get worker details.
  */
-export async function getWorker(ctx: WfpContext, workerName: string): Promise<unknown> {
+export async function getWorker(
+  ctx: WfpContext,
+  workerName: string,
+): Promise<unknown> {
   const response = await ctx.cfFetch(ctx.scriptPath(workerName));
   return response.result;
 }
@@ -115,12 +139,15 @@ export async function getWorker(ctx: WfpContext, workerName: string): Promise<un
  * Check if worker exists.
  * @returns true if worker exists, false if 404, throws on other errors
  */
-export async function workerExists(ctx: WfpContext, workerName: string): Promise<boolean> {
+export async function workerExists(
+  ctx: WfpContext,
+  workerName: string,
+): Promise<boolean> {
   try {
     await ctx.cfFetch(ctx.scriptPath(workerName));
     return true;
   } catch (error) {
-    const cfError = error as import('./client.ts').CloudflareAPIError;
+    const cfError = error as import("./client.ts").CloudflareAPIError;
     if (cfError.statusCode === 404) {
       return false;
     }
@@ -131,19 +158,25 @@ export async function workerExists(ctx: WfpContext, workerName: string): Promise
 /**
  * List all workers in the dispatch namespace.
  */
-export async function listWorkers(ctx: WfpContext): Promise<Array<{
-  id: string;
-  script: string;
-  created_on: string;
-  modified_on: string;
-}>> {
-  const response = await ctx.cfFetch<Array<{
+export async function listWorkers(ctx: WfpContext): Promise<
+  Array<{
     id: string;
     script: string;
     created_on: string;
     modified_on: string;
-  }>>(
-    ctx.accountPath(`/workers/dispatch/namespaces/${ctx.config.dispatchNamespace}/scripts`)
+  }>
+> {
+  const response = await ctx.cfFetch<
+    Array<{
+      id: string;
+      script: string;
+      created_on: string;
+      modified_on: string;
+    }>
+  >(
+    ctx.accountPath(
+      `/workers/dispatch/namespaces/${ctx.config.dispatchNamespace}/scripts`,
+    ),
   );
   return response.result || [];
 }
@@ -154,7 +187,9 @@ export async function listWorkers(ctx: WfpContext): Promise<Array<{
  */
 export async function updateWorkerSettings(ctx: WfpContext, options: {
   workerName: string;
-  bindings?: Array<WorkerBinding | CloudflareBindingRecord | Record<string, unknown>>;
+  bindings?: Array<
+    WorkerBinding | CloudflareBindingRecord | Record<string, unknown>
+  >;
   compatibility_date?: string;
   compatibility_flags?: string[];
   limits?: {
@@ -162,7 +197,13 @@ export async function updateWorkerSettings(ctx: WfpContext, options: {
     subrequests?: number;
   };
 }): Promise<void> {
-  const { workerName, bindings, compatibility_date, compatibility_flags, limits } = options;
+  const {
+    workerName,
+    bindings,
+    compatibility_date,
+    compatibility_flags,
+    limits,
+  } = options;
 
   const settings: Record<string, unknown> = {};
 
@@ -185,17 +226,20 @@ export async function updateWorkerSettings(ctx: WfpContext, options: {
   await ctx.cfFetchWithRetry(
     `${ctx.scriptPath(workerName)}/settings`,
     {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
       body: JSON.stringify(settings),
-    }
+    },
   );
 }
 
 /**
  * Get worker settings.
  */
-export async function getWorkerSettings(ctx: WfpContext, workerName: string): Promise<{
+export async function getWorkerSettings(
+  ctx: WfpContext,
+  workerName: string,
+): Promise<{
   bindings: CloudflareBindingRecord[];
   compatibility_date?: string;
   compatibility_flags?: string[];
@@ -207,7 +251,7 @@ export async function getWorkerSettings(ctx: WfpContext, workerName: string): Pr
     compatibility_flags?: string[];
     limits?: { cpu_ms?: number; subrequests?: number };
   }>(
-    `${ctx.scriptPath(workerName)}/settings`
+    `${ctx.scriptPath(workerName)}/settings`,
   );
   return response.result;
 }
@@ -225,6 +269,7 @@ export async function createWorkerWithWasm(
     bindings: Array<{
       type: string;
       name: string;
+      database_id?: string;
       id?: string;
       bucket_name?: string;
       namespace_id?: string;
@@ -245,41 +290,57 @@ export async function createWorkerWithWasm(
     };
     /** JWT from assets upload completion (for static assets) */
     assetsJwt?: string;
-  }
+  },
 ): Promise<void> {
-  const { bindings, compatibility_date, compatibility_flags, limits, assetsJwt } = options;
+  const {
+    bindings,
+    compatibility_date,
+    compatibility_flags,
+    limits,
+    assetsJwt,
+  } = options;
 
-  const formattedBindings = bindings.map(b => {
+  const formattedBindings = bindings.map((b) => {
     switch (b.type) {
-      case 'd1':
-        return { type: 'd1', name: b.name, id: b.id };
-      case 'r2_bucket':
-        return { type: 'r2_bucket', name: b.name, bucket_name: b.bucket_name };
-      case 'kv_namespace':
-        return { type: 'kv_namespace', name: b.name, namespace_id: b.namespace_id };
-      case 'queue':
+      case "d1":
         return {
-          type: 'queue',
+          type: "d1",
+          name: b.name,
+          id: b.database_id ?? b.id,
+        };
+      case "r2_bucket":
+        return { type: "r2_bucket", name: b.name, bucket_name: b.bucket_name };
+      case "kv_namespace":
+        return {
+          type: "kv_namespace",
+          name: b.name,
+          namespace_id: b.namespace_id,
+        };
+      case "queue":
+        return {
+          type: "queue",
           name: b.name,
           queue_name: b.queue_name,
-          ...(typeof b.delivery_delay === 'number' ? { delivery_delay: b.delivery_delay } : {}),
+          ...(typeof b.delivery_delay === "number"
+            ? { delivery_delay: b.delivery_delay }
+            : {}),
         };
-      case 'analytics_engine':
-        return { type: 'analytics_engine', name: b.name, dataset: b.dataset };
-      case 'workflow':
+      case "analytics_engine":
+        return { type: "analytics_engine", name: b.name, dataset: b.dataset };
+      case "workflow":
         return {
-          type: 'workflow',
+          type: "workflow",
           name: b.name,
           ...(b.workflow_name ? { workflow_name: b.workflow_name } : {}),
           ...(b.class_name ? { class_name: b.class_name } : {}),
-          ...(typeof (b as { script_name?: string }).script_name === 'string'
+          ...(typeof (b as { script_name?: string }).script_name === "string"
             ? { script_name: (b as { script_name: string }).script_name }
             : {}),
         };
-      case 'vectorize':
-        return { type: 'vectorize', name: b.name, index_name: b.index_name };
-      case 'plain_text':
-        return { type: 'plain_text', name: b.name, text: b.text };
+      case "vectorize":
+        return { type: "vectorize", name: b.name, index_name: b.index_name };
+      case "plain_text":
+        return { type: "plain_text", name: b.name, text: b.text };
       default:
         return b;
     }
@@ -294,19 +355,30 @@ export async function createWorkerWithWasm(
   });
 
   const formData = new FormData();
-  formData.append('worker.js', new Blob([workerScript], { type: 'application/javascript+module' }), 'worker.js');
+  formData.append(
+    "worker.js",
+    new Blob([workerScript], { type: "application/javascript+module" }),
+    "worker.js",
+  );
 
   if (wasmContent) {
-    formData.append('query_compiler_bg.wasm', new Blob([wasmContent], { type: 'application/wasm' }), 'query_compiler_bg.wasm');
+    formData.append(
+      "query_compiler_bg.wasm",
+      new Blob([wasmContent], { type: "application/wasm" }),
+      "query_compiler_bg.wasm",
+    );
   }
 
-  formData.append('metadata', new Blob([JSON.stringify(metadata)], { type: 'application/json' }));
+  formData.append(
+    "metadata",
+    new Blob([JSON.stringify(metadata)], { type: "application/json" }),
+  );
 
   await ctx.cfFetchWithRetry(
     ctx.scriptPath(workerName),
     {
-      method: 'PUT',
+      method: "PUT",
       body: formData,
-    }
+    },
   );
 }

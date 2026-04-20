@@ -43,7 +43,7 @@ Deno.test("steps-context helpers - builds context entries from step results and 
   assert(stepsContext.build.outputs !== secondOutputs);
   assert(stepsContext.build.outputs !== firstOutputs);
 });
-Deno.test("steps-context helpers - preserves outcome separately from continue-on-error conclusion", () => {
+Deno.test("steps-context helpers - mirrors conclusion into outcome", () => {
   const stepsContext = buildStepsContext([
     createStepResult({
       id: "flaky",
@@ -53,6 +53,6 @@ Deno.test("steps-context helpers - preserves outcome separately from continue-on
     }),
   ]);
 
-  assertEquals(stepsContext.flaky.outcome, "failure");
+  assertEquals(stepsContext.flaky.outcome, "success");
   assertEquals(stepsContext.flaky.conclusion, "success");
 });

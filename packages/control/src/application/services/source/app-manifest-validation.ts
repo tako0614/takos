@@ -2,21 +2,15 @@
 // app-manifest-validation.ts
 // ============================================================
 //
-// Shared validators for the flat-schema manifest parser plus legacy storage
-// compatibility checks used by the deploy pipeline migration.
+// Shared validators for the flat-schema manifest parser.
 //
-// Phase 1 scope:
+// Scope:
 //   - Keep workflow YAML helpers used by deploy pipeline
-//   - Keep primitive validators that new parsers reuse:
+//   - Keep shared field validators that new parsers reuse:
 //       validateReadinessPath
 //       validateVectorIndexMetric
-//       validateInstanceType
 //       validateServiceScaling
-//       validateWorkflowScriptIsWorker
 //
-// Public app manifests now use provider-backed `publish + consume`
-// wiring. The legacy `storage` model remains here only for internal
-// translation and compatibility code until those callers are removed.
 // ============================================================
 
 import {
@@ -24,7 +18,6 @@ import {
   validateWorkflow,
   type Workflow,
 } from "takos-actions-engine";
-import type { AppCompute, AppStorage } from "./app-manifest-types.ts";
 import {
   asOptionalInteger,
   filterWorkflowErrors,
@@ -132,40 +125,21 @@ export function validateReadinessPath(
 }
 
 // ============================================================
-// Workflow storage → compute cross-ref validator
+// Digest-pinned image ref validator
 // ============================================================
 
-/**
- * Validate that every legacy `workflow` storage entry references a
- * worker via its `script` field. Attached containers / services are
- * rejected because workflow scripts must run as Workers.
- *
- * Returns an array of error messages (empty when valid). The caller
- * decides whether to throw or aggregate.
- */
-export function validateWorkflowScriptIsWorker(
-  storage: Record<string, AppStorage>,
-  compute: Record<string, AppCompute>,
-): string[] {
-  const errors: string[] = [];
-  for (const [storageName, entry] of Object.entries(storage)) {
-    if (entry.type !== "workflow") continue;
-    const scriptRef = entry.workflow?.script;
-    if (!scriptRef) continue;
-    const target = compute[scriptRef];
-    if (!target) {
-      errors.push(
-        `storage.${storageName}.workflow.script references unknown compute: ${scriptRef}`,
-      );
-      continue;
-    }
-    if (target.kind !== "worker") {
-      errors.push(
-        `storage.${storageName}.workflow.script must reference a worker (got ${target.kind}: ${scriptRef})`,
-      );
-    }
+export function validateDigestPinnedImageRef(
+  value: string | undefined,
+  field = "image",
+): string | undefined {
+  if (!value) return undefined;
+  const trimmed = value.trim();
+  if (!/@sha256:[a-f0-9]{64}$/i.test(trimmed)) {
+    throw new Error(
+      `${field} must be a digest-pinned image ref (@sha256:<64 hex digest>)`,
+    );
   }
-  return errors;
+  return trimmed;
 }
 
 // ============================================================
@@ -198,50 +172,6 @@ export function validateVectorIndexMetric(
 }
 
 // ============================================================
-// Instance type validator
-// ============================================================
-
-const INSTANCE_TYPE_BY_PROVIDER: Record<string, readonly string[]> = {
-  cloudflare: ["basic", "standard", "standard-2", "standard-4"],
-  aws: ["t3.small", "t3.medium", "t3.large"],
-  gcp: ["cpu-1", "cpu-2", "cpu-4"],
-};
-
-/**
- * Validate instance type string.
- *
- * - undefined → undefined
- * - must be a string
- * - if provider is known (cloudflare/aws/gcp) the value must be in the
- *   provider-specific enum.
- * - k8s / local providers skip enum check (any string allowed).
- * - unknown providers fall back to a string-only check.
- */
-export function validateInstanceType(
-  value: unknown,
-  provider?: string,
-  field = "instanceType",
-): string | undefined {
-  if (value == null) return undefined;
-  if (typeof value !== "string") {
-    throw new Error(`${field} must be a string`);
-  }
-  const trimmed = value.trim();
-  if (!trimmed) return undefined;
-  if (provider && provider !== "k8s" && provider !== "local") {
-    const allowed = INSTANCE_TYPE_BY_PROVIDER[provider];
-    if (allowed && !allowed.includes(trimmed)) {
-      throw new Error(
-        `${field} must be one of ${
-          allowed.join("/")
-        } for provider '${provider}' (got: ${trimmed})`,
-      );
-    }
-  }
-  return trimmed;
-}
-
-// ============================================================
 // Service / attached-container scaling validator
 // ============================================================
 
@@ -268,6 +198,13 @@ export function validateServiceScaling(
     throw new Error(`${field} must be an object`);
   }
   const record = value as Record<string, unknown>;
+  for (const key of Object.keys(record)) {
+    if (key !== "minInstances" && key !== "maxInstances") {
+      throw new Error(
+        `${field}.${key} is not supported by the app manifest contract`,
+      );
+    }
+  }
   const minInstances = asOptionalInteger(
     record.minInstances,
     `${field}.minInstances`,

@@ -3,11 +3,11 @@ import { assertEquals, assertThrows } from "jsr:@std/assert";
 import {
   createLLMClientFromEnv,
   LLMClient,
-  VALID_PROVIDERS,
+  VALID_MODEL_BACKENDS,
 } from "../../../../../../packages/control/src/application/services/agent/llm.ts";
 
-Deno.test("LLM client - exposes the supported provider list", () => {
-  assertEquals(VALID_PROVIDERS, ["openai", "anthropic", "google"]);
+Deno.test("LLM client - exposes the supported backend list", () => {
+  assertEquals(VALID_MODEL_BACKENDS, ["openai", "anthropic", "google"]);
 });
 
 Deno.test("LLMClient - preserves the provided config", () => {
@@ -16,34 +16,34 @@ Deno.test("LLMClient - preserves the provided config", () => {
     model: "gpt-5.4-mini",
     maxTokens: 8192,
     temperature: 0,
-    provider: "openai" as const,
+    backend: "openai" as const,
   };
 
   const client = new LLMClient(config);
   assertEquals(client.getConfig(), config);
 });
 
-Deno.test("createLLMClientFromEnv - returns a client with provider-specific config", () => {
+Deno.test("createLLMClientFromEnv - returns a client with backend-specific config", () => {
   const openaiClient = createLLMClientFromEnv({ OPENAI_API_KEY: "oai-key" });
-  assertEquals(openaiClient.getConfig().provider, "openai");
+  assertEquals(openaiClient.getConfig().backend, "openai");
   assertEquals(openaiClient.getConfig().apiKey, "oai-key");
 
   const anthropicClient = createLLMClientFromEnv({
     ANTHROPIC_API_KEY: "ant-key",
     AI_MODEL: "claude-4-sonnet",
   });
-  assertEquals(anthropicClient.getConfig().provider, "anthropic");
+  assertEquals(anthropicClient.getConfig().backend, "anthropic");
   assertEquals(anthropicClient.getConfig().model, "claude-4-sonnet");
 
   const googleClient = createLLMClientFromEnv({
     GOOGLE_API_KEY: "goog-key",
     AI_MODEL: "gemini-2.0-flash",
   });
-  assertEquals(googleClient.getConfig().provider, "google");
+  assertEquals(googleClient.getConfig().backend, "google");
   assertEquals(googleClient.getConfig().model, "gemini-2.0-flash");
 });
 
-Deno.test("createLLMClientFromEnv - rejects when the provider key is missing", () => {
+Deno.test("createLLMClientFromEnv - rejects when the backend key is missing", () => {
   assertThrows(
     () => createLLMClientFromEnv({}),
     Error,
@@ -61,11 +61,11 @@ Deno.test("createLLMClientFromEnv - rejects when the provider key is missing", (
   );
 });
 
-Deno.test("createLLMClientFromEnv - ignores invalid AI_PROVIDER values", () => {
+Deno.test("createLLMClientFromEnv - ignores invalid AI_BACKEND values", () => {
   const client = createLLMClientFromEnv({
     OPENAI_API_KEY: "oai-key",
-    AI_PROVIDER: "invalid-provider",
+    AI_BACKEND: "invalid-backend",
   });
 
-  assertEquals(client.getConfig().provider, "openai");
+  assertEquals(client.getConfig().backend, "openai");
 });

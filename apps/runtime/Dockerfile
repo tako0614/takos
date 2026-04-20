@@ -23,7 +23,7 @@ WORKDIR /workspace
 
 # These tools are required at runtime:
 # - git/curl/wget/unzip: exposed via ALLOWED_COMMANDS for user actions
-#   and used directly by the marketplace action downloader
+#   and used directly by the Store action downloader
 # - ca-certificates: HTTPS connectivity
 RUN apk add --no-cache \
     git \

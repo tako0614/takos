@@ -1,12 +1,26 @@
-import type { D1Database } from '../../../shared/types/bindings.ts';
-import type { Resource, ResourceCapability, ResourcePermission, ResourceType, ResourceStatus } from '../../../shared/types/index.ts';
-import type { SelectOf } from '../../../shared/types/drizzle-utils.ts';
-import { getDb, resources, resourceAccess } from '../../../infra/db/index.ts';
-import { eq, and, ne, inArray, desc, asc, type count as _count } from 'drizzle-orm';
-import { toApiResource } from './format.ts';
-import { resolveAccessibleAccountIds } from '../identity/membership-resolver.ts';
-import { textDateNullable } from '../../../shared/utils/db-guards.ts';
-import { getResourceTypeQueryValues } from './capabilities.ts';
+import type { D1Database } from "../../../shared/types/bindings.ts";
+import type {
+  Resource,
+  ResourceCapability,
+  ResourcePermission,
+  ResourceStatus,
+  ResourceType,
+} from "../../../shared/types/index.ts";
+import type { SelectOf } from "../../../shared/types/drizzle-utils.ts";
+import { getDb, resourceAccess, resources } from "../../../infra/db/index.ts";
+import {
+  and,
+  asc,
+  type count as _count,
+  desc,
+  eq,
+  inArray,
+  ne,
+} from "drizzle-orm";
+import { toApiResource } from "./format.ts";
+import { resolveAccessibleAccountIds } from "../identity/membership-resolver.ts";
+import { textDateNullable } from "../../../shared/utils/db-guards.ts";
+import { getResourceTypeQueryValues } from "./capabilities.ts";
 
 export const resourceStoreDeps = {
   getDb,
@@ -14,7 +28,9 @@ export const resourceStoreDeps = {
   now: () => new Date().toISOString(),
 };
 
-function buildAccessMap(grants: { resourceId: string; permission: string }[]): Map<string, string> {
+function buildAccessMap(
+  grants: { resourceId: string; permission: string }[],
+): Map<string, string> {
   const map = new Map<string, string>();
   for (const grant of grants) map.set(grant.resourceId, grant.permission);
   return map;
@@ -29,10 +45,10 @@ function toApiResourceRow(r: {
   type: string;
   semanticType?: string | null;
   driver?: string | null;
-  providerName?: string | null;
+  backendName?: string | null;
   status: string;
-  providerResourceId?: string | null;
-  providerResourceName?: string | null;
+  backingResourceId?: string | null;
+  backingResourceName?: string | null;
   config: string;
   metadata: string;
   sizeBytes: number | null;
@@ -48,9 +64,9 @@ function toApiResourceRow(r: {
     groupId: r.groupId ?? null,
     semanticType: r.semanticType ?? null,
     driver: r.driver ?? null,
-    providerName: r.providerName ?? null,
-    providerResourceId: r.providerResourceId ?? null,
-    providerResourceName: r.providerResourceName ?? null,
+    backendName: r.backendName ?? null,
+    backingResourceId: r.backingResourceId ?? null,
+    backingResourceName: r.backingResourceName ?? null,
     lastUsedAt: textDateNullable(r.lastUsedAt),
     createdAt: textDateNullable(r.createdAt) ?? new Date(0).toISOString(),
     updatedAt: textDateNullable(r.updatedAt) ?? new Date(0).toISOString(),
@@ -60,36 +76,40 @@ function toApiResourceRow(r: {
 export async function listResourcesForWorkspace(
   db: D1Database,
   _userId: string,
-  spaceId: string
+  spaceId: string,
 ) {
   const drizzle = resourceStoreDeps.getDb(db);
 
   const ownedResources = await drizzle.select().from(resources)
     .where(and(
       eq(resources.accountId, spaceId),
-      ne(resources.status, 'deleted'),
+      ne(resources.status, "deleted"),
     ))
     .orderBy(desc(resources.updatedAt))
     .all();
 
   // For shared resources, use a subquery approach since Drizzle doesn't support relation filters in where
-  const sharedAccessGrants = await drizzle.select({ resourceId: resourceAccess.resourceId })
+  const sharedAccessGrants = await drizzle.select({
+    resourceId: resourceAccess.resourceId,
+  })
     .from(resourceAccess)
     .where(eq(resourceAccess.accountId, spaceId))
     .all();
-  const sharedResourceIds = sharedAccessGrants.map(a => a.resourceId);
+  const sharedResourceIds = sharedAccessGrants.map((a) => a.resourceId);
 
-  let sharedResources: Array<SelectOf<typeof resources> & { accessPermission?: string }> = [];
+  let sharedResources: Array<
+    SelectOf<typeof resources> & { accessPermission?: string }
+  > = [];
   if (sharedResourceIds.length > 0) {
     const rawShared = await drizzle.select().from(resources)
       .where(and(
-        ne(resources.status, 'deleted'),
+        ne(resources.status, "deleted"),
         inArray(resources.id, sharedResourceIds),
       ))
       .orderBy(desc(resources.updatedAt))
       .all();
 
-    sharedResources = rawShared.filter(r => r.accountId !== spaceId);
+    sharedResources = rawShared.filter((r) => r.accountId !== spaceId);
   }
 
   // Get access permissions for shared resources
@@ -101,7 +121,7 @@ export async function listResourcesForWorkspace(
     }).from(resourceAccess)
       .where(and(
         eq(resourceAccess.accountId, spaceId),
-        inArray(resourceAccess.resourceId, sharedResources.map(r => r.id)),
+        inArray(resourceAccess.resourceId, sharedResources.map((r) => r.id)),
       ))
       .all();
     sharedResourceAccessMap = buildAccessMap(accessRecords);
@@ -109,12 +129,12 @@ export async function listResourcesForWorkspace(
 
   const ownedWithLevel = ownedResources.map((r) => ({
     ...toApiResourceRow(r),
-    access_level: 'owner',
+    access_level: "owner",
   }));
 
   const sharedWithLevel = sharedResources.map((r) => ({
     ...toApiResourceRow(r),
-    access_level: sharedResourceAccessMap.get(r.id) || 'read',
+    access_level: sharedResourceAccessMap.get(r.id) || "read",
   }));
 
   const combined = [...ownedWithLevel, ...sharedWithLevel];
@@ -125,7 +145,8 @@ export async function listResourcesForWorkspace(
 
 export async function listResourcesForUser(db: D1Database, userId: string) {
   const drizzle = resourceStoreDeps.getDb(db);
-  const accessibleAccountIds = await resourceStoreDeps.resolveAccessibleAccountIds(db, userId);
+  const accessibleAccountIds = await resourceStoreDeps
+    .resolveAccessibleAccountIds(db, userId);
 
   const ownedResources = await drizzle.select().from(resources)
     .where(eq(resources.ownerAccountId, userId))
@@ -133,11 +154,14 @@ export async function listResourcesForUser(db: D1Database, userId: string) {
     .all();
 
   // Get shared resources via access grants
-  const accessGrants = await drizzle.select({ resourceId: resourceAccess.resourceId, permission: resourceAccess.permission })
+  const accessGrants = await drizzle.select({
+    resourceId: resourceAccess.resourceId,
+    permission: resourceAccess.permission,
+  })
     .from(resourceAccess)
     .where(inArray(resourceAccess.accountId, accessibleAccountIds))
     .all();
-  const sharedResourceIds = [...new Set(accessGrants.map(a => a.resourceId))];
+  const sharedResourceIds = [...new Set(accessGrants.map((a) => a.resourceId))];
   const accessMap = buildAccessMap(accessGrants);
 
   let sharedResources: Array<SelectOf<typeof resources>> = [];
@@ -154,11 +178,11 @@ export async function listResourcesForUser(db: D1Database, userId: string) {
   return {
     owned: ownedResources.map((r) => ({
       ...toApiResourceRow(r),
-      access_level: 'owner',
+      access_level: "owner",
     })),
     shared: sharedResources.map((r) => ({
       ...toApiResourceRow(r),
-      access_level: accessMap.get(r.id) || 'read',
+      access_level: accessMap.get(r.id) || "read",
     })),
   };
 }
@@ -166,10 +190,11 @@ export async function listResourcesForUser(db: D1Database, userId: string) {
 export async function listResourcesByType(
   db: D1Database,
   userId: string,
-  resourceType: ResourceType | ResourceCapability
+  resourceType: ResourceType | ResourceCapability,
 ) {
   const drizzle = resourceStoreDeps.getDb(db);
-  const accessibleAccountIds = await resourceStoreDeps.resolveAccessibleAccountIds(db, userId);
+  const accessibleAccountIds = await resourceStoreDeps
+    .resolveAccessibleAccountIds(db, userId);
   const typeQueryValues = getResourceTypeQueryValues(resourceType);
 
   const ownedResources = await drizzle.select().from(resources)
@@ -181,11 +206,14 @@ export async function listResourcesByType(
     .all();
 
   // Get shared resources via access grants
-  const accessGrants = await drizzle.select({ resourceId: resourceAccess.resourceId, permission: resourceAccess.permission })
+  const accessGrants = await drizzle.select({
+    resourceId: resourceAccess.resourceId,
+    permission: resourceAccess.permission,
+  })
     .from(resourceAccess)
     .where(inArray(resourceAccess.accountId, accessibleAccountIds))
     .all();
-  const sharedResourceIds = [...new Set(accessGrants.map(a => a.resourceId))];
+  const sharedResourceIds = [...new Set(accessGrants.map((a) => a.resourceId))];
   const accessPermMap = buildAccessMap(accessGrants);
 
   let sharedResources: Array<SelectOf<typeof resources>> = [];
@@ -202,12 +230,12 @@ export async function listResourcesByType(
 
   const ownedWithLevel = ownedResources.map((r) => ({
     ...toApiResourceRow(r),
-    access_level: 'owner',
+    access_level: "owner",
   }));
 
   const sharedWithLevel = sharedResources.map((r) => ({
     ...toApiResourceRow(r),
-    access_level: accessPermMap.get(r.id) || 'read',
+    access_level: accessPermMap.get(r.id) || "read",
   }));
 
   const combined = [...ownedWithLevel, ...sharedWithLevel];
@@ -226,7 +254,11 @@ export async function getResourceById(db: D1Database, resourceId: string) {
   return toApiResourceRow(resource);
 }
 
-export async function getResourceByName(db: D1Database, userId: string, resourceName: string) {
+export async function getResourceByName(
+  db: D1Database,
+  userId: string,
+  resourceName: string,
+) {
   const drizzle = resourceStoreDeps.getDb(db);
   const resource = await drizzle.select().from(resources)
     .where(and(
@@ -251,16 +283,16 @@ export async function insertResource(
     type: ResourceType;
     semantic_type?: ResourceCapability | null;
     driver?: string | null;
-    provider_name?: string | null;
+    backend_name?: string | null;
     status: ResourceStatus;
-    provider_resource_id?: string | null;
-    provider_resource_name?: string | null;
+    backing_resource_id?: string | null;
+    backing_resource_name?: string | null;
     config: Record<string, unknown>;
     space_id?: string | null;
     group_id?: string | null;
     created_at: string;
     updated_at: string;
-  }
+  },
 ) {
   const drizzle = resourceStoreDeps.getDb(db);
   await drizzle.insert(resources).values({
@@ -270,12 +302,12 @@ export async function insertResource(
     type: input.type,
     semanticType: input.semantic_type ?? null,
     driver: input.driver ?? null,
-    providerName: input.provider_name ?? null,
+    backendName: input.backend_name ?? null,
     status: input.status,
-    providerResourceId: input.provider_resource_id ?? null,
-    providerResourceName: input.provider_resource_name ?? null,
+    backingResourceId: input.backing_resource_id ?? null,
+    backingResourceName: input.backing_resource_name ?? null,
     config: JSON.stringify(input.config || {}),
-    metadata: '{}',
+    metadata: "{}",
     accountId: input.space_id || null,
     groupId: input.group_id || null,
     createdAt: input.created_at,
@@ -294,14 +326,14 @@ export async function insertFailedResource(
     type: ResourceType;
     semantic_type?: ResourceCapability | null;
     driver?: string | null;
-    provider_name?: string | null;
-    provider_resource_name?: string | null;
+    backend_name?: string | null;
+    backing_resource_name?: string | null;
     config: Record<string, unknown>;
     space_id?: string | null;
     group_id?: string | null;
     created_at: string;
     updated_at: string;
-  }
+  },
 ) {
   const drizzle = resourceStoreDeps.getDb(db);
   await drizzle.insert(resources).values({
@@ -311,11 +343,11 @@ export async function insertFailedResource(
     type: input.type,
     semanticType: input.semantic_type ?? null,
     driver: input.driver ?? null,
-    providerName: input.provider_name ?? null,
-    status: 'failed',
-    providerResourceName: input.provider_resource_name ?? null,
+    backendName: input.backend_name ?? null,
+    status: "failed",
+    backingResourceName: input.backing_resource_name ?? null,
     config: JSON.stringify(input.config || {}),
-    metadata: '{}',
+    metadata: "{}",
     accountId: input.space_id || null,
     groupId: input.group_id || null,
     createdAt: input.created_at,
@@ -326,7 +358,11 @@ export async function insertFailedResource(
 export async function updateResourceMetadata(
   db: D1Database,
   resourceId: string,
-  updates: { name?: string; config?: Record<string, unknown>; metadata?: Record<string, unknown> }
+  updates: {
+    name?: string;
+    config?: Record<string, unknown>;
+    metadata?: Record<string, unknown>;
+  },
 ) {
   const drizzle = resourceStoreDeps.getDb(db);
 
@@ -359,7 +395,7 @@ export async function markResourceDeleting(db: D1Database, resourceId: string) {
   const drizzle = resourceStoreDeps.getDb(db);
   await drizzle.update(resources)
     .set({
-      status: 'deleting',
+      status: "deleting",
       updatedAt: resourceStoreDeps.now(),
     })
     .where(eq(resources.id, resourceId));
@@ -373,25 +409,28 @@ export async function deleteResource(db: D1Database, resourceId: string) {
 export async function getAvailableResourcesForWorkspace(
   db: D1Database,
   spaceId: string,
-  resourceType: ResourceType
-): Promise<Array<Resource & { access_level: 'owner' | ResourcePermission }>> {
+  resourceType: ResourceType,
+): Promise<Array<Resource & { access_level: "owner" | ResourcePermission }>> {
   const drizzle = resourceStoreDeps.getDb(db);
 
   const ownedResources = await drizzle.select().from(resources)
     .where(and(
       eq(resources.type, resourceType),
-      eq(resources.status, 'active'),
+      eq(resources.status, "active"),
       eq(resources.accountId, spaceId),
     ))
     .orderBy(asc(resources.name))
     .all();
 
   // Get shared resources via access grants
-  const accessGrants = await drizzle.select({ resourceId: resourceAccess.resourceId, permission: resourceAccess.permission })
+  const accessGrants = await drizzle.select({
+    resourceId: resourceAccess.resourceId,
+    permission: resourceAccess.permission,
+  })
     .from(resourceAccess)
     .where(eq(resourceAccess.accountId, spaceId))
     .all();
-  const sharedResourceIds = [...new Set(accessGrants.map(a => a.resourceId))];
+  const sharedResourceIds = [...new Set(accessGrants.map((a) => a.resourceId))];
   const accessPermMap = buildAccessMap(accessGrants);
 
   let sharedResources: Array<SelectOf<typeof resources>> = [];
@@ -399,7 +438,7 @@ export async function getAvailableResourcesForWorkspace(
     sharedResources = await drizzle.select().from(resources)
       .where(and(
         eq(resources.type, resourceType),
-        eq(resources.status, 'active'),
+        eq(resources.status, "active"),
         ne(resources.accountId, spaceId),
         inArray(resources.id, sharedResourceIds),
       ))
@@ -409,12 +448,12 @@ export async function getAvailableResourcesForWorkspace(
 
   const ownedWithLevel = ownedResources.map((r) => ({
     ...toApiResourceRow(r),
-    access_level: 'owner' as const,
+    access_level: "owner" as const,
   }));
 
   const sharedWithLevel = sharedResources.map((r) => ({
     ...toApiResourceRow(r),
-    access_level: (accessPermMap.get(r.id) || 'read') as ResourcePermission,
+    access_level: (accessPermMap.get(r.id) || "read") as ResourcePermission,
   }));
 
   return [...ownedWithLevel, ...sharedWithLevel];

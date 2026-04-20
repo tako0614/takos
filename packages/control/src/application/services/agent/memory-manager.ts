@@ -4,13 +4,16 @@
  * Extracted from runner.ts to separate memory concerns from the core run loop.
  */
 
-import type { SqlDatabaseBinding } from '../../../shared/types/bindings.ts';
-import type { Env } from '../../../shared/types/index.ts';
-import type { AgentContext } from './agent-models.ts';
-import type { AgentRunnerIo } from './runner-io.ts';
-import type { ToolExecutorLike } from '../../tools/executor.ts';
-import { AgentMemoryRuntime, type AgentMemoryBackend } from '../memory-graph/memory-graph-runtime.ts';
-import { logWarn } from '../../../shared/utils/logger.ts';
+import type { SqlDatabaseBinding } from "../../../shared/types/bindings.ts";
+import type { Env } from "../../../shared/types/index.ts";
+import type { AgentContext } from "./agent-models.ts";
+import type { AgentRunnerIo } from "./runner-io.ts";
+import type { ToolExecutorLike } from "../../tools/executor.ts";
+import {
+  type AgentMemoryBackend,
+  AgentMemoryRuntime,
+} from "../memory-graph/memory-graph-runtime.ts";
+import { logWarn } from "../../../shared/utils/logger.ts";
 
 export interface MemoryManagerDeps {
   db: SqlDatabaseBinding;
@@ -46,8 +49,8 @@ export async function bootstrapMemory(
       toolExecutor.setObserver(observer);
     }
   } catch (err) {
-    logWarn('Memory runtime initialization failed, continuing without memory', {
-      module: 'services/agent/memory-manager',
+    logWarn("Memory runtime initialization failed, continuing without memory", {
+      module: "services/agent/memory-manager",
       detail: err,
     });
     state.runtime = undefined;
@@ -63,22 +66,26 @@ export async function finalizeMemory(state: MemoryState): Promise<void> {
   try {
     await state.runtime.finalize();
   } catch (err) {
-    logWarn('Memory runtime finalize failed during cleanup', {
-      module: 'services/agent/memory-manager',
+    logWarn("Memory runtime finalize failed during cleanup", {
+      module: "services/agent/memory-manager",
       detail: err,
     });
   }
   state.runtime = undefined;
 }
 
-function createMemoryBackend(deps: MemoryManagerDeps): AgentMemoryBackend | undefined {
+function createMemoryBackend(
+  deps: MemoryManagerDeps,
+): AgentMemoryBackend | undefined {
   return {
-    bootstrap: () => deps.runIo.getMemoryActivation({ spaceId: deps.context.spaceId }),
-    finalize: ({ claims, evidence }) => deps.runIo.finalizeMemoryOverlay({
-      runId: deps.context.runId,
-      spaceId: deps.context.spaceId,
-      claims,
-      evidence,
-    }),
+    bootstrap: () =>
+      deps.runIo.getMemoryActivation({ spaceId: deps.context.spaceId }),
+    finalize: ({ claims, evidence }) =>
+      deps.runIo.finalizeMemoryOverlay({
+        runId: deps.context.runId,
+        spaceId: deps.context.spaceId,
+        claims,
+        evidence,
+      }),
   };
 }

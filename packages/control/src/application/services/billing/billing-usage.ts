@@ -3,22 +3,31 @@
  * and weekly runtime limits.
  */
 
-import { getDb, billingAccounts, billingTransactions, usageEvents, usageRollups } from '../../../infra/db/index.ts';
-import { generateId } from '../../../shared/utils/index.ts';
-import { InternalError } from 'takos-common/errors';
-import type { D1Database } from '../../../shared/types/bindings.ts';
-import { eq, and, gte, sum, asc, sql } from 'drizzle-orm';
+import {
+  billingAccounts,
+  billingTransactions,
+  getDb,
+  usageEvents,
+  usageRollups,
+} from "../../../infra/db/index.ts";
+import { generateId } from "../../../shared/utils/index.ts";
+import { InternalError } from "takos-common/errors";
+import type { D1Database } from "../../../shared/types/bindings.ts";
+import { and, asc, eq, gte, sql, sum } from "drizzle-orm";
 import type {
-  MeterType,
   BillingCheckResult,
+  MeterType,
+  RollingUsageSnapshot,
   UsageRecordInput,
   UsageRecordResult,
-  RollingUsageSnapshot,
   WeeklyRuntimeLimitCheck,
-} from './billing-types.ts';
-import { WEEKLY_RUNTIME_WINDOW_DAYS, WEEKLY_RUNTIME_LIMIT_SECONDS } from './billing-types.ts';
-import { loadBillingAccountWithPlan } from './billing-plans.ts';
-import { getOrCreateBillingAccount } from './billing-accounts.ts';
+} from "./billing-types.ts";
+import {
+  WEEKLY_RUNTIME_LIMIT_SECONDS,
+  WEEKLY_RUNTIME_WINDOW_DAYS,
+} from "./billing-types.ts";
+import { loadBillingAccountWithPlan } from "./billing-plans.ts";
+import { getOrCreateBillingAccount } from "./billing-accounts.ts";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -30,7 +39,7 @@ import { getOrCreateBillingAccount } from './billing-accounts.ts';
 function getCurrentPeriodStart(): string {
   const now = new Date();
   const year = now.getUTCFullYear();
-  const month = String(now.getUTCMonth() + 1).padStart(2, '0');
+  const month = String(now.getUTCMonth() + 1).padStart(2, "0");
   return `${year}-${month}-01`;
 }
 
@@ -54,7 +63,7 @@ export async function checkBillingQuota(
   d1: D1Database,
   userId: string,
   meterType: MeterType,
-  estimatedUnits: number = 1
+  estimatedUnits: number = 1,
 ): Promise<BillingCheckResult> {
   const account = await getOrCreateBillingAccount(d1, userId);
 
@@ -64,7 +73,7 @@ export async function checkBillingQuota(
     balanceCents: account.balanceCents,
   };
 
-  if (account.status !== 'active') {
+  if (account.status !== "active") {
     return {
       ...baseResult,
       allowed: false,
@@ -73,8 +82,16 @@ export async function checkBillingQuota(
     };
   }
 
-  const quotas = Object.fromEntries(account.billingPlan.billingPlanQuotas.map((quota) => [quota.quotaKey, quota.limitValue]));
-  const meterRates = Object.fromEntries(account.billingPlan.billingPlanRates.map((rate) => [rate.meterType, rate.rateCents]));
+  const quotas = Object.fromEntries(
+    account.billingPlan.billingPlanQuotas.map((
+      quota,
+    ) => [quota.quotaKey, quota.limitValue]),
+  );
+  const meterRates = Object.fromEntries(
+    account.billingPlan.billingPlanRates.map((
+      rate,
+    ) => [rate.meterType, rate.rateCents]),
+  );
 
   const quota = quotas[meterType];
   const rate = meterRates[meterType];
@@ -85,7 +102,8 @@ export async function checkBillingQuota(
     return {
       ...baseResult,
       allowed: false,
-      reason: `${meterType} is not available on the ${account.billingPlan.displayName} plan`,
+      reason:
+        `${meterType} is not available on the ${account.billingPlan.displayName} plan`,
       estimatedCostCents,
     };
   }
@@ -120,7 +138,8 @@ export async function checkBillingQuota(
     return {
       ...baseResult,
       allowed: false,
-      reason: `Billing configuration incomplete for ${meterType} on the ${account.billingPlan.displayName} plan`,
+      reason:
+        `Billing configuration incomplete for ${meterType} on the ${account.billingPlan.displayName} plan`,
       estimatedCostCents: 0,
     };
   }
@@ -129,7 +148,8 @@ export async function checkBillingQuota(
     return {
       ...baseResult,
       allowed: false,
-      reason: `Insufficient balance (have ${account.balanceCents}¢, need ${estimatedCostCents}¢)`,
+      reason:
+        `Insufficient balance (have ${account.balanceCents}¢, need ${estimatedCostCents}¢)`,
       estimatedCostCents,
     };
   }
@@ -147,22 +167,34 @@ export async function checkBillingQuota(
  */
 export async function recordUsage(
   d1: D1Database,
-  input: UsageRecordInput
+  input: UsageRecordInput,
 ): Promise<UsageRecordResult> {
   const db = getDb(d1);
 
-  const account = await loadBillingAccountWithPlan(db, { byId: input.accountId });
+  const account = await loadBillingAccountWithPlan(db, {
+    byId: input.accountId,
+  });
 
   if (!account) {
-    return { success: false, balanceCents: 0, costCents: 0, eventId: '' };
+    return { success: false, balanceCents: 0, costCents: 0, eventId: "" };
   }
 
-  const meterRates = Object.fromEntries(account.billingPlan.billingPlanRates.map((rate) => [rate.meterType, rate.rateCents]));
-  const planQuotas = Object.fromEntries(account.billingPlan.billingPlanQuotas.map((quota) => [quota.quotaKey, quota.limitValue]));
+  const meterRates = Object.fromEntries(
+    account.billingPlan.billingPlanRates.map((
+      rate,
+    ) => [rate.meterType, rate.rateCents]),
+  );
+  const planQuotas = Object.fromEntries(
+    account.billingPlan.billingPlanQuotas.map((
+      quota,
+    ) => [quota.quotaKey, quota.limitValue]),
+  );
   const rate = meterRates[input.meterType];
   const quota = planQuotas[input.meterType];
   if ((quota === -1 || quota === undefined) && rate === undefined) {
-    throw new InternalError(`Billing configuration incomplete for ${input.meterType} on plan ${account.billingPlan.id}`);
+    throw new InternalError(
+      `Billing configuration incomplete for ${input.meterType} on plan ${account.billingPlan.id}`,
+    );
   }
   const normalizedRate = rate ?? 0;
   const costCents = Math.ceil(input.units * normalizedRate);
@@ -171,8 +203,8 @@ export async function recordUsage(
   const transactionId = generateId();
   const periodStart = getCurrentPeriodStart();
   const now = new Date().toISOString();
-  const metadataJson = input.metadata ? JSON.stringify(input.metadata) : '{}';
-  const scopeType = input.spaceId ? 'space' : 'account';
+  const metadataJson = input.metadata ? JSON.stringify(input.metadata) : "{}";
+  const scopeType = input.spaceId ? "space" : "account";
 
   let applied = true;
   let resultingBalance = account.balanceCents;
@@ -231,7 +263,13 @@ export async function recordUsage(
         updatedAt: now,
       })
       .onConflictDoUpdate({
-        target: [usageRollups.billingAccountId, usageRollups.scopeType, usageRollups.accountId, usageRollups.meterType, usageRollups.periodStart],
+        target: [
+          usageRollups.billingAccountId,
+          usageRollups.scopeType,
+          usageRollups.accountId,
+          usageRollups.meterType,
+          usageRollups.periodStart,
+        ],
         set: {
           units: sql`${usageRollups.units} + ${input.units}`,
           costCents: sql`${usageRollups.costCents} + ${costCents}`,
@@ -259,12 +297,12 @@ export async function recordUsage(
     await db.insert(billingTransactions).values({
       id: transactionId,
       billingAccountId: input.accountId,
-      type: 'usage',
+      type: "usage",
       amountCents: -costCents,
       balanceAfterCents: resultingBalance,
       description: `${input.meterType}: ${input.units} units`,
       referenceId: eventId,
-      metadata: '{}',
+      metadata: "{}",
     });
   }
 
@@ -282,7 +320,7 @@ export async function recordUsage(
     success: true,
     balanceCents: resultingBalance,
     costCents: applied ? costCents : 0,
-    eventId: applied ? eventId : '',
+    eventId: applied ? eventId : "",
   };
 }
 
@@ -294,11 +332,13 @@ export async function getRollingUsage(
   d1: D1Database,
   userId: string,
   meterType: MeterType,
-  windowDays: number = WEEKLY_RUNTIME_WINDOW_DAYS
+  windowDays: number = WEEKLY_RUNTIME_WINDOW_DAYS,
 ): Promise<RollingUsageSnapshot> {
   const account = await getOrCreateBillingAccount(d1, userId);
   const db = getDb(d1);
-  const windowStartDate = new Date(Date.now() - (windowDays * 24 * 60 * 60 * 1000));
+  const windowStartDate = new Date(
+    Date.now() - (windowDays * 24 * 60 * 60 * 1000),
+  );
 
   const agg = await db
     .select({ total: sum(usageEvents.units) })
@@ -325,11 +365,16 @@ export async function checkWeeklyRuntimeLimit(
   options?: {
     limitSeconds?: number;
     windowDays?: number;
-  }
+  },
 ): Promise<WeeklyRuntimeLimitCheck> {
   const limitSeconds = options?.limitSeconds ?? WEEKLY_RUNTIME_LIMIT_SECONDS;
   const windowDays = options?.windowDays ?? WEEKLY_RUNTIME_WINDOW_DAYS;
-  const snapshot = await getRollingUsage(d1, userId, 'exec_seconds', windowDays);
+  const snapshot = await getRollingUsage(
+    d1,
+    userId,
+    "exec_seconds",
+    windowDays,
+  );
   const projected = snapshot.units + Math.max(0, estimatedAdditionalSeconds);
   const remainingSeconds = Math.max(0, limitSeconds - snapshot.units);
   let retryAfterSeconds = 0;
@@ -342,7 +387,7 @@ export async function checkWeeklyRuntimeLimit(
       .from(usageEvents)
       .where(and(
         eq(usageEvents.billingAccountId, account.id),
-        eq(usageEvents.meterType, 'exec_seconds'),
+        eq(usageEvents.meterType, "exec_seconds"),
         gte(usageEvents.createdAt, snapshot.windowStart),
       ))
       .orderBy(asc(usageEvents.createdAt))
@@ -353,7 +398,10 @@ export async function checkWeeklyRuntimeLimit(
       const oldestMs = Date.parse(String(oldest.createdAt));
       if (Number.isFinite(oldestMs)) {
         const releaseAtMs = oldestMs + (windowDays * 24 * 60 * 60 * 1000);
-        retryAfterSeconds = Math.max(1, Math.ceil((releaseAtMs - Date.now()) / 1000));
+        retryAfterSeconds = Math.max(
+          1,
+          Math.ceil((releaseAtMs - Date.now()) / 1000),
+        );
       }
     }
   }

@@ -26,7 +26,7 @@ const deploySchema = z.object({
   deployment_id: z.string().min(1),
   space_id: z.string().min(1),
   artifact_ref: z.string().min(1),
-  provider: z.object({
+  backend: z.object({
     name: z.enum(["oci", "ecs", "cloud-run", "k8s"]),
     config: z.record(z.string(), z.unknown()).optional(),
   }).strict().optional(),
@@ -46,15 +46,20 @@ const deploySchema = z.object({
       image_ref: z.string().min(1).optional(),
       exposed_port: z.number().int().positive().optional(),
       health_path: z.string().min(1).optional(),
+      health_interval: z.number().int().positive().optional(),
+      health_timeout: z.number().int().positive().optional(),
+      health_unhealthy_threshold: z.number().int().positive().optional(),
     }).strict().optional(),
   }).strict(),
   runtime: z.object({
+    profile: z.enum(["workers", "container-service"]),
     compatibility_date: z.string().min(1).optional().nullable(),
     compatibility_flags: z.array(z.string()).default([]),
     limits: z.object({
       cpu_ms: z.number().int().positive().optional(),
       subrequests: z.number().int().positive().optional(),
     }).optional().nullable(),
+    env_vars: z.record(z.string()).default({}),
   }).strict().optional(),
 });
 
@@ -93,11 +98,25 @@ function requirePathParam(c: Context, name: string): string {
   return c.req.param(name) ?? "";
 }
 
+function deploymentContainerName(
+  spaceId: string,
+  routeRef: string,
+  deploymentId: string,
+): string {
+  const baseName = containerName(spaceId, routeRef);
+  const suffix = deploymentId
+    .replace(/[^a-zA-Z0-9_.-]/g, "-")
+    .replace(/^-+/, "")
+    .slice(0, 24) || crypto.randomUUID().slice(0, 12);
+  return `${baseName.slice(0, Math.max(1, 127 - suffix.length))}-${suffix}`;
+}
+
 async function stopAndRemoveContainer(
   backendResolver: OciOrchestratorBackendResolver,
   record: OciServiceRecord,
   spaceId: string,
   routeRef: string,
+  options?: { strict?: boolean },
 ): Promise<void> {
   if (!record.container_id) {
     return;
@@ -112,6 +131,9 @@ async function stopAndRemoveContainer(
       `CONTAINER_REMOVED ${record.container_id}`,
     );
   } catch (err) {
+    if (options?.strict) {
+      throw err;
+    }
     logError(`Failed to stop/remove container ${record.container_id}`, err, {
       module: "oci-orchestrator",
     });
@@ -145,42 +167,26 @@ function createDeployHandler(deps: OciOrchestratorRouteDeps) {
     const imageRef = payload.target.artifact?.image_ref ?? null;
     const exposedPort = payload.target.artifact?.exposed_port ?? 8080;
     const healthPath = payload.target.artifact?.health_path ?? "/health";
-    const providerName = payload.provider?.name ?? "oci";
-    const providerConfig = payload.provider?.config ?? null;
+    const backendName = payload.backend?.name ?? "oci";
+    const backendConfig = payload.backend?.config ?? null;
     const runtime: NonNullable<DeployPayload["runtime"]> = payload.runtime ?? {
+      profile: "container-service",
       compatibility_flags: [],
+      env_vars: {},
     };
-    const backend = deps.backendResolver({ providerName, providerConfig });
+    const backend = deps.backendResolver({ backendName, backendConfig });
 
     let newContainerId: string | null = null;
     let resolvedEndpoint: { kind: "http-url"; base_url: string } | null = null;
 
     if (imageRef) {
-      const cName = containerName(payload.space_id, routeRef);
+      const cName = deploymentContainerName(
+        payload.space_id,
+        routeRef,
+        payload.deployment_id,
+      );
 
       try {
-        if (previous?.container_id) {
-          await stopAndRemoveContainer(
-            deps.backendResolver,
-            previous,
-            payload.space_id,
-            routeRef,
-          );
-        }
-
-        try {
-          await backend.stop(cName);
-          await backend.remove(cName);
-        } catch (err) {
-          logWarn(
-            "stop/remove pre-existing container by name failed (non-critical)",
-            {
-              module: "oci-orchestrator",
-              error: err instanceof Error ? err.message : String(err),
-            },
-          );
-        }
-
         await appendServiceLog(
           payload.space_id,
           routeRef,
@@ -197,6 +203,7 @@ function createDeployHandler(deps: OciOrchestratorRouteDeps) {
           imageRef,
           name: cName,
           exposedPort,
+          envVars: runtime.env_vars,
           network: deps.dockerNetwork ?? DEFAULT_DOCKER_NETWORK,
           healthPath,
           requestedEndpoint: payload.target.endpoint,
@@ -283,8 +290,8 @@ function createDeployHandler(deps: OciOrchestratorRouteDeps) {
       route_ref: routeRef,
       deployment_id: payload.deployment_id,
       artifact_ref: payload.artifact_ref,
-      provider_name: providerName,
-      provider_config: providerConfig,
+      backend_name: backendName,
+      backend_config: backendConfig,
       endpoint: payload.target.endpoint,
       image_ref: imageRef,
       exposed_port: exposedPort,
@@ -311,12 +318,31 @@ function createDeployHandler(deps: OciOrchestratorRouteDeps) {
         JSON.stringify({
           deployment_id: payload.deployment_id,
           artifact_ref: payload.artifact_ref,
-          provider: payload.provider ?? { name: "oci" },
+          backend: payload.backend ?? { name: "oci" },
           target: payload.target,
           runtime,
         })
       }`,
     );
+
+    if (imageRef && previous?.container_id) {
+      try {
+        await stopAndRemoveContainer(
+          deps.backendResolver,
+          previous,
+          payload.space_id,
+          routeRef,
+        );
+      } catch (err) {
+        logWarn(
+          "cleanup of previous container after successful deployment failed (non-critical)",
+          {
+            module: "oci-orchestrator",
+            error: err instanceof Error ? err.message : String(err),
+          },
+        );
+      }
+    }
 
     return c.json({
       ok: true,
@@ -360,26 +386,34 @@ function createRemoveServiceHandler(deps: OciOrchestratorRouteDeps) {
       return c.json({ error: "Service not found" }, 404);
     }
 
-    if (record.container_id) {
-      await stopAndRemoveContainer(
-        deps.backendResolver,
-        record,
-        query.data.space_id,
-        routeRef,
-      );
-    }
+    try {
+      if (record.container_id) {
+        await stopAndRemoveContainer(
+          deps.backendResolver,
+          record,
+          query.data.space_id,
+          routeRef,
+          { strict: true },
+        );
+      }
 
-    const updated: OciServiceRecord = {
-      ...record,
-      status: "removed",
-      container_id: null,
-      resolved_endpoint: null,
-      updated_at: new Date().toISOString(),
-    };
-    state.services[key] = updated;
-    await saveState(state);
-    await appendServiceLog(query.data.space_id, routeRef, "REMOVE");
-    return c.json({ ok: true, service: updated });
+      const updated: OciServiceRecord = {
+        ...record,
+        status: "removed",
+        container_id: null,
+        resolved_endpoint: null,
+        updated_at: new Date().toISOString(),
+      };
+      state.services[key] = updated;
+      await saveState(state);
+      await appendServiceLog(query.data.space_id, routeRef, "REMOVE");
+      return c.json({ ok: true, service: updated });
+    } catch (err) {
+      return c.json({
+        error: "Failed to remove service runtime",
+        details: err instanceof Error ? err.message : String(err),
+      }, 502);
+    }
   };
 }
 

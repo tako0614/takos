@@ -115,3 +115,21 @@ Deno.test("parseContentLength accepts numeric headers and rejects invalid values
   assertEquals(parseContentLength(undefined), null);
   assertEquals(Number.isNaN(parseContentLength("abc")), true);
 });
+
+Deno.test("buildGitHttpBackendEnv propagates Git-Protocol for protocol v2", async () => {
+  const { buildGitHttpBackendEnv } = await import(
+    "../../runtime/git-http-backend.ts"
+  );
+
+  const env = buildGitHttpBackendEnv({
+    projectRoot: "/repos",
+    gitPath: "/space/repo.git/info/refs",
+    service: "git-upload-pack",
+    requestBody: null,
+    contentType: undefined,
+    gitProtocol: "version=2",
+  });
+
+  assertEquals(env.GIT_PROTOCOL, "version=2");
+  assertEquals(env.REQUEST_METHOD, "GET");
+});

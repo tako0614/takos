@@ -1,35 +1,44 @@
-import { Hono } from 'hono';
-import { z } from 'zod';
-import type { ReviewStatus, ReviewerType } from '../../../shared/types/index.ts';
-import { generateId } from '../../../shared/utils/index.ts';
-import type { AuthenticatedRouteEnv } from '../route-auth.ts';
-import { BadRequestError } from 'takos-common/errors';
-import { zValidator } from '../zod-validator.ts';
-import { checkRepoAccess } from '../../../application/services/source/repos.ts';
-import { getDb } from '../../../infra/db/index.ts';
-import { eq, and, asc } from 'drizzle-orm';
-import { pullRequests, prReviews } from '../../../infra/db/schema.ts';
-import { AiReviewError, runAiReview } from '../../../application/services/pull-requests/ai-review.ts';
-import { createNotification } from '../../../application/services/notifications/service.ts';
+import { Hono } from "hono";
+import { z } from "zod";
+import type {
+  ReviewerType,
+  ReviewStatus,
+} from "../../../shared/types/index.ts";
+import { generateId } from "../../../shared/utils/index.ts";
+import type { AuthenticatedRouteEnv } from "../route-auth.ts";
+import { BadRequestError } from "takos-common/errors";
+import { zValidator } from "../zod-validator.ts";
+import { checkRepoAccess } from "../../../application/services/source/repos.ts";
+import { getDb } from "../../../infra/db/index.ts";
+import { and, asc, eq } from "drizzle-orm";
+import { prReviews, pullRequests } from "../../../infra/db/schema.ts";
+import {
+  AiReviewError,
+  runAiReview,
+} from "../../../application/services/pull-requests/ai-review.ts";
+import { createNotification } from "../../../application/services/notifications/service.ts";
 
-import type { PullRequestCommentDto, PullRequestReviewDto } from './dto.ts';
-import { AI_USER_LITE, buildUserLiteMap, resolveActorLite } from './dto.ts';
-import { logError, logWarn } from '../../../shared/utils/logger.ts';
-import { NotFoundError, InternalError } from 'takos-common/errors';
-import { textDate } from '../../../shared/utils/db-guards.ts';
+import type { PullRequestCommentDto, PullRequestReviewDto } from "./dto.ts";
+import { AI_USER_LITE, buildUserLiteMap, resolveActorLite } from "./dto.ts";
+import { logError, logWarn } from "../../../shared/utils/logger.ts";
+import { InternalError, NotFoundError } from "takos-common/errors";
+import { textDate } from "../../../shared/utils/db-guards.ts";
 
 function toReviewStatus(value: string): ReviewStatus {
-  if (value === 'approved' || value === 'changes_requested' || value === 'commented') {
+  if (
+    value === "approved" || value === "changes_requested" ||
+    value === "commented"
+  ) {
     return value;
   }
-  return 'commented';
+  return "commented";
 }
 
 function toReviewerType(value: string): ReviewerType {
-  if (value === 'user' || value === 'ai') {
+  if (value === "user" || value === "ai") {
     return value;
   }
-  return 'user';
+  return "user";
 }
 
 function toReviewDto(
@@ -43,7 +52,7 @@ function toReviewDto(
     analysis: string | null;
     createdAt: string | Date;
   },
-  userMap: Map<string, { id: string; name: string; avatar_url: string | null }>
+  userMap: Map<string, { id: string; name: string; avatar_url: string | null }>,
 ): PullRequestReviewDto {
   return {
     id: review.id,
@@ -75,7 +84,7 @@ function toAiReviewDto(review: {
   return {
     id: review.id,
     pr_id: review.pr_id,
-    reviewer_type: review.reviewer_type === 'ai' ? 'ai' : 'user',
+    reviewer_type: review.reviewer_type === "ai" ? "ai" : "user",
     reviewer_id: review.reviewer_id,
     status: toReviewStatus(review.status),
     body: review.body,
@@ -98,7 +107,7 @@ function toAiCommentDto(comment: {
   return {
     id: comment.id,
     pr_id: comment.pr_id,
-    author_type: comment.author_type === 'ai' ? 'ai' : 'user',
+    author_type: comment.author_type === "ai" ? "ai" : "user",
     author_id: comment.author_id,
     body: comment.content,
     path: comment.file_path,
@@ -109,96 +118,126 @@ function toAiCommentDto(comment: {
 }
 
 export default new Hono<AuthenticatedRouteEnv>()
-  .post('/repos/:repoId/pulls/:prNumber/reviews',
-    zValidator('json', z.object({
-      status: z.enum(['approved', 'changes_requested', 'commented']),
-      body: z.string().optional(),
-    })),
+  .post(
+    "/repos/:repoId/pulls/:prNumber/reviews",
+    zValidator(
+      "json",
+      z.object({
+        status: z.enum(["approved", "changes_requested", "commented"]),
+        body: z.string().optional(),
+      }),
+    ),
     async (c) => {
-    const user = c.get('user');
-    const repoId = c.req.param('repoId');
-    const prNumber = parseInt(c.req.param('prNumber'));
-    const body = c.req.valid('json');
+      const user = c.get("user");
+      const repoId = c.req.param("repoId");
+      const prNumber = parseInt(c.req.param("prNumber"));
+      const body = c.req.valid("json");
 
-    const repoAccess = await checkRepoAccess(c.env, repoId, user.id);
-    if (!repoAccess) {
-      throw new NotFoundError('Repository');
-    }
+      const repoAccess = await checkRepoAccess(c.env, repoId, user.id);
+      if (!repoAccess) {
+        throw new NotFoundError("Repository");
+      }
 
-    const db = getDb(c.env.DB);
-    const pullRequest = await db.select()
-      .from(pullRequests)
-      .where(and(eq(pullRequests.repoId, repoId), eq(pullRequests.number, prNumber)))
-      .get();
+      const db = getDb(c.env.DB);
+      const pullRequest = await db.select()
+        .from(pullRequests)
+        .where(
+          and(
+            eq(pullRequests.repoId, repoId),
+            eq(pullRequests.number, prNumber),
+          ),
+        )
+        .get();
 
-    if (!pullRequest) {
-      throw new NotFoundError('Pull request');
-    }
+      if (!pullRequest) {
+        throw new NotFoundError("Pull request");
+      }
 
-    const validStatuses: ReviewStatus[] = ['approved', 'changes_requested', 'commented'];
-    if (!body.status || !validStatuses.includes(body.status)) {
-      throw new BadRequestError( 'Invalid review status');
-    }
+      const validStatuses: ReviewStatus[] = [
+        "approved",
+        "changes_requested",
+        "commented",
+      ];
+      if (!body.status || !validStatuses.includes(body.status)) {
+        throw new BadRequestError("Invalid review status");
+      }
 
-    const id = generateId();
-    const reviewerType = 'user';
-    const timestamp = new Date().toISOString();
+      const id = generateId();
+      const reviewerType = "user";
+      const timestamp = new Date().toISOString();
 
-    const review = await db.insert(prReviews).values({
-      id,
-      prId: pullRequest.id,
-      reviewerType,
-      reviewerId: user.id,
-      status: body.status,
-      body: body.body || null,
-      analysis: null,
-      createdAt: timestamp,
-    }).returning().get();
+      const review = await db.insert(prReviews).values({
+        id,
+        prId: pullRequest.id,
+        reviewerType,
+        reviewerId: user.id,
+        status: body.status,
+        body: body.body || null,
+        analysis: null,
+        createdAt: timestamp,
+      }).returning().get();
 
-    // Notify PR author
-    try {
-      if (pullRequest.authorType === 'user' && pullRequest.authorId && pullRequest.authorId !== user.id) {
-        await createNotification(c.env, {
-          userId: pullRequest.authorId,
-          spaceId: repoAccess.repo.space_id,
-          type: 'pr.comment',
-          title: `Review on PR #${prNumber}: ${pullRequest.title}`,
-          body: body.body ? body.body.slice(0, 200) : `Status: ${body.status}`,
-          data: {
-            repo_id: repoId,
-            repo_name: repoAccess.repo.name,
-            pr_number: prNumber,
-            pr_title: pullRequest.title,
-            review_status: body.status,
-            reviewer_id: user.id,
-          },
+      // Notify PR author
+      try {
+        if (
+          pullRequest.authorType === "user" && pullRequest.authorId &&
+          pullRequest.authorId !== user.id
+        ) {
+          await createNotification(c.env, {
+            userId: pullRequest.authorId,
+            spaceId: repoAccess.repo.space_id,
+            type: "pr.comment",
+            title: `Review on PR #${prNumber}: ${pullRequest.title}`,
+            body: body.body
+              ? body.body.slice(0, 200)
+              : `Status: ${body.status}`,
+            data: {
+              repo_id: repoId,
+              repo_name: repoAccess.repo.name,
+              pr_number: prNumber,
+              pr_title: pullRequest.title,
+              review_status: body.status,
+              reviewer_id: user.id,
+            },
+          });
+        }
+      } catch (err) {
+        logWarn("Failed to create PR review notification", {
+          module: "notifications",
+          error: err instanceof Error ? err.message : String(err),
         });
       }
-    } catch (err) {
-      logWarn('Failed to create PR review notification', { module: 'notifications', error: err instanceof Error ? err.message : String(err) });
-    }
 
-    const userMap = await buildUserLiteMap(db, [user.id]);
-    return c.json({ review: toReviewDto(review, userMap) }, 201);
-  })
-  .get('/repos/:repoId/pulls/:prNumber/reviews', async (c) => {
-    const user = c.get('user');
-    const repoId = c.req.param('repoId');
-    const prNumber = parseInt(c.req.param('prNumber'));
+      const userMap = await buildUserLiteMap(db, [user.id]);
+      return c.json({ review: toReviewDto(review, userMap) }, 201);
+    },
+  )
+  .get("/repos/:repoId/pulls/:prNumber/reviews", async (c) => {
+    const user = c.get("user");
+    const repoId = c.req.param("repoId");
+    const prNumber = parseInt(c.req.param("prNumber"));
 
-    const repoAccess = await checkRepoAccess(c.env, repoId, user?.id, undefined, { allowPublicRead: true });
+    const repoAccess = await checkRepoAccess(
+      c.env,
+      repoId,
+      user?.id,
+      undefined,
+      { allowPublicRead: true },
+    );
     if (!repoAccess) {
-      throw new NotFoundError('Repository');
+      throw new NotFoundError("Repository");
     }
 
     const db = getDb(c.env.DB);
     const pullRequest = await db.select()
       .from(pullRequests)
-      .where(and(eq(pullRequests.repoId, repoId), eq(pullRequests.number, prNumber)))
+      .where(
+        and(eq(pullRequests.repoId, repoId), eq(pullRequests.number, prNumber)),
+      )
       .get();
 
     if (!pullRequest) {
-      throw new NotFoundError('Pull request');
+      throw new NotFoundError("Pull request");
     }
 
     const reviews = await db.select()
@@ -208,7 +247,7 @@ export default new Hono<AuthenticatedRouteEnv>()
       .all();
 
     const userIds = reviews
-      .filter((review) => review.reviewerType === 'user' && review.reviewerId)
+      .filter((review) => review.reviewerType === "user" && review.reviewerId)
       .map((review) => review.reviewerId!) as string[];
     const userMap = await buildUserLiteMap(db, userIds);
 
@@ -216,24 +255,26 @@ export default new Hono<AuthenticatedRouteEnv>()
       reviews: reviews.map((review) => toReviewDto(review, userMap)),
     });
   })
-  .post('/repos/:repoId/pulls/:prNumber/ai-review', async (c) => {
-    const user = c.get('user');
-    const repoId = c.req.param('repoId');
-    const prNumber = parseInt(c.req.param('prNumber'));
+  .post("/repos/:repoId/pulls/:prNumber/ai-review", async (c) => {
+    const user = c.get("user");
+    const repoId = c.req.param("repoId");
+    const prNumber = parseInt(c.req.param("prNumber"));
 
     const repoAccess = await checkRepoAccess(c.env, repoId, user.id);
     if (!repoAccess) {
-      throw new NotFoundError('Repository');
+      throw new NotFoundError("Repository");
     }
 
     const db = getDb(c.env.DB);
     const pullRequest = await db.select()
       .from(pullRequests)
-      .where(and(eq(pullRequests.repoId, repoId), eq(pullRequests.number, prNumber)))
+      .where(
+        and(eq(pullRequests.repoId, repoId), eq(pullRequests.number, prNumber)),
+      )
       .get();
 
     if (!pullRequest) {
-      throw new NotFoundError('Pull request');
+      throw new NotFoundError("Pull request");
     }
 
     try {
@@ -248,13 +289,13 @@ export default new Hono<AuthenticatedRouteEnv>()
         review: toAiReviewDto(result.review),
         comments: result.comments.map((comment) => toAiCommentDto(comment)),
         model: result.model,
-        provider: result.provider,
+        backend: result.backend,
       }, 201);
     } catch (err) {
       if (err instanceof AiReviewError) {
         throw err;
       }
-      logError('AI review failed', err, { module: 'reviews' });
-      throw new InternalError('AI review failed');
+      logError("AI review failed", err, { module: "reviews" });
+      throw new InternalError("AI review failed");
     }
   });

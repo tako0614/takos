@@ -9,46 +9,46 @@
 
 // ── Scoring ─────────────────────────────────────────────────────────────
 export {
-  CONVERSATION_WINDOW,
-  MESSAGE_RECENCY_WEIGHTS,
-  DEFAULT_EXECUTION_CONTRACT,
   cloneExecutionContract,
-  tokenize,
-  matchesPhrase,
-  getContextSegments,
+  CONVERSATION_WINDOW,
+  DEFAULT_EXECUTION_CONTRACT,
   getCategoryKeywords,
+  getContextSegments,
   getOutputModeKeywords,
+  matchesPhrase,
+  MESSAGE_RECENCY_WEIGHTS,
   scoreSkill,
   selectRelevantSkills,
-} from './skill-scoring.ts';
+  tokenize,
+} from "./skill-scoring.ts";
 
 // ── Resolution ──────────────────────────────────────────────────────────
-export type { SkillSource, SkillCategory } from './skill-resolution.ts';
+export type { SkillCategory, SkillSource } from "./skill-resolution.ts";
 export type {
-  SkillAvailabilityStatus,
+  ResolvedSkillPlan,
   SkillAvailabilityContext,
+  SkillAvailabilityStatus,
   SkillCatalogEntry,
   SkillContext,
-  SkillSelection,
   SkillResolutionContext,
-  ResolvedSkillPlan,
-} from './skill-resolution.ts';
+  SkillSelection,
+} from "./skill-resolution.ts";
 export {
-  toSkillCatalogEntry,
-  evaluateSkillAvailability,
-  applySkillAvailability,
   activateSelectedSkills,
+  applySkillAvailability,
   buildDynamicSkillNote,
-  formatContractList,
   buildSkillEnhancedPrompt,
+  evaluateSkillAvailability,
+  formatContractList,
   resolveSkillPlan,
-} from './skill-resolution.ts';
+  toSkillCatalogEntry,
+} from "./skill-resolution.ts";
 
 // ── Loader ──────────────────────────────────────────────────────────────
-export type { SkillLoadResult } from './skill-loader.ts';
+export type { SkillLoadResult } from "./skill-loader.ts";
 export {
-  loadEquippedSkills,
   buildSkillResolutionContext,
-  resolveSkillPlanForRun,
   emitSkillLoadOutcome,
-} from './skill-loader.ts';
+  loadEquippedSkills,
+  resolveSkillPlanForRun,
+} from "./skill-loader.ts";

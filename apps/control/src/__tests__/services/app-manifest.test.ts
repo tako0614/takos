@@ -8,7 +8,7 @@ name: direct-artifact-app
 version: 1.0.0
 compute:
   api:
-    image: ghcr.io/takos/api:latest
+    image: ghcr.io/takos/api@sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef
     port: 8080
   web:
     build:
@@ -20,7 +20,10 @@ compute:
 `);
 
   assertEquals(manifest.compute.api?.kind, "service");
-  assertEquals(manifest.compute.api?.image, "ghcr.io/takos/api:latest");
+  assertEquals(
+    manifest.compute.api?.image,
+    "ghcr.io/takos/api@sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+  );
   assertEquals(manifest.compute.api?.port, 8080);
 
   assertEquals(manifest.compute.web?.kind, "worker");
@@ -51,23 +54,26 @@ compute:
   );
 });
 
-Deno.test("app manifest parses provider publications, consumes, and worker schedule triggers", () => {
+Deno.test("app manifest parses Takos grants, consumes, and worker schedule triggers", () => {
   const manifest = parseAppManifestYaml(`
 name: runtime-app
 version: 1.0.0
 publish:
-  - name: jobs
-    provider: takos
-    kind: queue
+  - name: takos-api
+    publisher: takos
+    type: api-key
     spec:
-      resource: runtime-jobs
-      permission: write
-  - name: events
-    provider: takos
-    kind: analytics-engine
+      scopes:
+        - files:read
+        - runs:write
+  - name: app-oauth
+    publisher: takos
+    type: oauth-client
     spec:
-      resource: runtime-events
-      permission: write
+      redirectUris:
+        - https://example.com/callback
+      scopes:
+        - threads:read
 compute:
   api:
     build:
@@ -80,31 +86,29 @@ compute:
       schedules:
         - cron: "*/5 * * * *"
     consume:
-      - publication: jobs
+      - publication: takos-api
         env:
-          endpoint: JOBS_ENDPOINT
-          apiKey: JOBS_API_KEY
-      - publication: events
+          endpoint: TAKOS_API_ENDPOINT
+          apiKey: TAKOS_API_KEY
+      - publication: app-oauth
 `);
 
-  assertEquals(manifest.storage, undefined);
   assertEquals(manifest.publish, [
     {
-      name: "jobs",
-      provider: "takos",
-      kind: "queue",
+      name: "takos-api",
+      publisher: "takos",
+      type: "api-key",
       spec: {
-        resource: "runtime-jobs",
-        permission: "write",
+        scopes: ["files:read", "runs:write"],
       },
     },
     {
-      name: "events",
-      provider: "takos",
-      kind: "analytics-engine",
+      name: "app-oauth",
+      publisher: "takos",
+      type: "oauth-client",
       spec: {
-        resource: "runtime-events",
-        permission: "write",
+        redirectUris: ["https://example.com/callback"],
+        scopes: ["threads:read"],
       },
     },
   ]);
@@ -117,12 +121,12 @@ compute:
   });
   assertEquals(apiCompute.consume, [
     {
-      publication: "jobs",
+      publication: "takos-api",
       env: {
-        endpoint: "JOBS_ENDPOINT",
-        apiKey: "JOBS_API_KEY",
+        endpoint: "TAKOS_API_ENDPOINT",
+        apiKey: "TAKOS_API_KEY",
       },
     },
-    { publication: "events" },
+    { publication: "app-oauth" },
   ]);
 });

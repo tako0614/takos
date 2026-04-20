@@ -1,6 +1,6 @@
 import type { ActionResolver, StepResult } from "../workflow-models.ts";
 
-const BUILTIN_NOOP_ACTIONS = new Set([
+const COMPATIBILITY_NOOP_ACTIONS = new Set([
   "actions/checkout",
   "actions/setup-node",
 ]);
@@ -9,7 +9,7 @@ export const defaultActionResolver: ActionResolver = async (uses: string) => {
   const normalizedUses = uses.trim().toLowerCase();
   const actionName = normalizedUses.split("@")[0];
 
-  if (BUILTIN_NOOP_ACTIONS.has(actionName)) {
+  if (COMPATIBILITY_NOOP_ACTIONS.has(actionName)) {
     return {
       run: async (step, context): Promise<StepResult> => {
         const outputs: Record<string, string> = {};
@@ -37,7 +37,7 @@ export const defaultActionResolver: ActionResolver = async (uses: string) => {
   return {
     run: async (): Promise<StepResult> => {
       throw new Error(
-        `Unsupported action: ${uses}. Provide StepRunnerOptions.actionResolver for action steps.`,
+        `Unsupported action: ${uses}. Provide StepRunnerOptions.actionResolver or run through runtime-service managed actions.`,
       );
     },
   };

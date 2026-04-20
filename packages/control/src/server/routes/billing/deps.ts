@@ -7,7 +7,7 @@ import {
   resolveBillingPlanTier,
   WEEKLY_RUNTIME_LIMIT_SECONDS,
 } from "../../../application/services/billing/billing.ts";
-import { resolvePaymentProvider } from "../../../application/services/billing/providers/index.ts";
+import { resolvePaymentProcessor } from "../../../application/services/billing/processors/index.ts";
 
 export const billingRouteDeps = {
   getDb,
@@ -17,5 +17,5 @@ export const billingRouteDeps = {
   resolveBillingMode,
   resolveBillingPlanTier,
   WEEKLY_RUNTIME_LIMIT_SECONDS,
-  resolvePaymentProvider,
+  resolvePaymentProcessor,
 };

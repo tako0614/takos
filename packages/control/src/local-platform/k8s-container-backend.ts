@@ -15,15 +15,15 @@ import type {
   ContainerBackend,
   ContainerCreateOpts,
   ContainerCreateResult,
-} from './container-backend.ts';
-import { logInfo, logError } from '../shared/utils/logger.ts';
+} from "./container-backend.ts";
+import { logError, logInfo } from "../shared/utils/logger.ts";
 
 // ---------------------------------------------------------------------------
 // Re-export the types expected by the orchestrator
 // ---------------------------------------------------------------------------
 
-const K8S_NAMESPACE = Deno.env.get('K8S_NAMESPACE')?.trim() || 'default';
-const K8S_KUBECONFIG = Deno.env.get('K8S_KUBECONFIG')?.trim() || undefined;
+const K8S_NAMESPACE = Deno.env.get("K8S_NAMESPACE")?.trim() || "default";
+const K8S_KUBECONFIG = Deno.env.get("K8S_KUBECONFIG")?.trim() || undefined;
 
 /** How long to wait for a pod to reach the Running phase. */
 const POD_READY_TIMEOUT_MS = 120_000;
@@ -41,8 +41,16 @@ const POD_POLL_INTERVAL_MS = 2_000;
 // available when the package is installed (e.g. in local-platform builds).
 
 // Local type stubs for @kubernetes/client-node (avoids hard dependency)
-type K8sPodCondition = { type: string; status: string; reason?: string; message?: string };
-type K8sContainerStatus = { ready: boolean; state?: { waiting?: { reason?: string; message?: string } } };
+type K8sPodCondition = {
+  type: string;
+  status: string;
+  reason?: string;
+  message?: string;
+};
+type K8sContainerStatus = {
+  ready: boolean;
+  state?: { waiting?: { reason?: string; message?: string } };
+};
 type K8sPodStatus = {
   phase?: string;
   conditions?: K8sPodCondition[];
@@ -53,10 +61,24 @@ type K8sPodStatus = {
 };
 
 interface K8sCoreV1Api {
-  readNamespacedPod(params: { name: string; namespace: string }): Promise<{ body: { status?: K8sPodStatus } }>;
-  createNamespacedPod(params: { namespace: string; body: unknown }): Promise<unknown>;
-  deleteNamespacedPod(params: { name: string; namespace: string; gracePeriodSeconds?: number }): Promise<unknown>;
-  readNamespacedPodLog(params: { name: string; namespace: string; container?: string; tailLines?: number; timestamps?: boolean }): Promise<{ body: string }>;
+  readNamespacedPod(
+    params: { name: string; namespace: string },
+  ): Promise<{ body: { status?: K8sPodStatus } }>;
+  createNamespacedPod(
+    params: { namespace: string; body: unknown },
+  ): Promise<unknown>;
+  deleteNamespacedPod(
+    params: { name: string; namespace: string; gracePeriodSeconds?: number },
+  ): Promise<unknown>;
+  readNamespacedPodLog(
+    params: {
+      name: string;
+      namespace: string;
+      container?: string;
+      tailLines?: number;
+      timestamps?: boolean;
+    },
+  ): Promise<{ body: string }>;
 }
 
 interface K8sKubeConfig {
@@ -71,14 +93,35 @@ type K8sApi = {
   kc: K8sKubeConfig;
 };
 
+type K8sClientNodeModule = {
+  KubeConfig: new () => K8sKubeConfig;
+  CoreV1Api: unknown;
+  Log: new (kc: K8sKubeConfig) => unknown;
+};
+
 let _k8sApi: K8sApi | null = null;
+const K8S_CLIENT_MODULE_SPECIFIER = "@kubernetes/client-node";
+
+function isK8sClientNodeModule(value: unknown): value is K8sClientNodeModule {
+  return typeof value === "object" && value !== null &&
+    typeof Reflect.get(value, "KubeConfig") === "function" &&
+    typeof Reflect.get(value, "Log") === "function" &&
+    Reflect.has(value, "CoreV1Api");
+}
+
+async function importK8sClientNode(): Promise<K8sClientNodeModule> {
+  const module: unknown = await import(K8S_CLIENT_MODULE_SPECIFIER);
+  if (!isK8sClientNodeModule(module)) {
+    throw new Error("@kubernetes/client-node does not expose the expected API");
+  }
+  return module;
+}
 
 async function getK8sApi(): Promise<K8sApi> {
   if (_k8sApi) return _k8sApi;
 
   // Dynamic import so the dependency is truly optional at load time.
-  // @ts-expect-error — @kubernetes/client-node is an optional dependency
-  const k8s = await import('@kubernetes/client-node') as { KubeConfig: new () => K8sKubeConfig; CoreV1Api: unknown; Log: new (kc: K8sKubeConfig) => unknown };
+  const k8s = await importK8sClientNode();
   const kc = new k8s.KubeConfig();
 
   if (K8S_KUBECONFIG) {
@@ -108,10 +151,27 @@ async function getK8sApi(): Promise<K8sApi> {
 function sanitizePodName(raw: string): string {
   return raw
     .toLowerCase()
-    .replace(/[^a-z0-9-]/g, '-')
-    .replace(/^-+/, '')
-    .replace(/-+$/, '')
+    .replace(/[^a-z0-9-]/g, "-")
+    .replace(/^-+/, "")
+    .replace(/-+$/, "")
     .slice(0, 63);
+}
+
+function qualifyImageRef(imageRegistry: string, imageRef: string): string {
+  const normalizedRegistry = imageRegistry.trim().replace(/\/+$/, "");
+  const normalizedRef = imageRef.trim().replace(/^\/+/, "");
+  if (!normalizedRegistry || !normalizedRef) {
+    return imageRef;
+  }
+  const firstSegment = normalizedRef.split("/")[0] ?? "";
+  const [hostCandidate, portCandidate] = firstSegment.split(":");
+  if (
+    hostCandidate.includes(".") || hostCandidate === "localhost" ||
+    (portCandidate ? /^[0-9]+$/.test(portCandidate) : false)
+  ) {
+    return normalizedRef;
+  }
+  return `${normalizedRegistry}/${normalizedRef}`;
 }
 
 /**
@@ -140,47 +200,56 @@ async function waitForPodReady(
     for (const cs of containerStatuses) {
       const waiting = cs.state?.waiting;
       if (waiting) {
-        const reason = waiting.reason ?? '';
+        const reason = waiting.reason ?? "";
         // Permanent failures — abort immediately
         if (
-          reason === 'ErrImagePull' ||
-          reason === 'ImagePullBackOff' ||
-          reason === 'InvalidImageName' ||
-          reason === 'CreateContainerConfigError'
+          reason === "ErrImagePull" ||
+          reason === "ImagePullBackOff" ||
+          reason === "InvalidImageName" ||
+          reason === "CreateContainerConfigError"
         ) {
           throw new Error(
-            `Pod ${podName} failed to start: ${reason} — ${waiting.message ?? ''}`,
+            `Pod ${podName} failed to start: ${reason} — ${
+              waiting.message ?? ""
+            }`,
           );
         }
       }
 
       // CrashLoopBackOff — the container keeps crashing
-      if (cs.state?.waiting?.reason === 'CrashLoopBackOff') {
+      if (cs.state?.waiting?.reason === "CrashLoopBackOff") {
         throw new Error(
-          `Pod ${podName} is in CrashLoopBackOff: ${cs.state.waiting.message ?? 'container keeps crashing'}`,
+          `Pod ${podName} is in CrashLoopBackOff: ${
+            cs.state.waiting.message ?? "container keeps crashing"
+          }`,
         );
       }
     }
 
     // Pod reached Failed phase
-    if (phase === 'Failed') {
-      const msg = pod.status?.message ?? pod.status?.reason ?? 'unknown reason';
+    if (phase === "Failed") {
+      const msg = pod.status?.message ?? pod.status?.reason ?? "unknown reason";
       throw new Error(`Pod ${podName} failed: ${msg}`);
     }
 
     // Unschedulable
     const unschedulable = conditions.find(
-      (c) => c.type === 'PodScheduled' && c.status === 'False' && c.reason === 'Unschedulable',
+      (c) =>
+        c.type === "PodScheduled" && c.status === "False" &&
+        c.reason === "Unschedulable",
     );
     if (unschedulable) {
       throw new Error(
-        `Pod ${podName} is unschedulable: ${unschedulable.message ?? 'insufficient resources'}`,
+        `Pod ${podName} is unschedulable: ${
+          unschedulable.message ?? "insufficient resources"
+        }`,
       );
     }
 
     // Success: pod is Running and all containers are ready
-    if (phase === 'Running') {
-      const allReady = containerStatuses.length > 0 && containerStatuses.every((cs) => cs.ready);
+    if (phase === "Running") {
+      const allReady = containerStatuses.length > 0 &&
+        containerStatuses.every((cs) => cs.ready);
       if (allReady) {
         const podIp = pod.status?.podIP ?? null;
         if (podIp) return podIp;
@@ -201,9 +270,17 @@ async function waitForPodReady(
 
 export class K8sContainerBackend implements ContainerBackend {
   private readonly namespace: string;
+  private readonly deploymentName?: string;
+  private readonly imageRegistry?: string;
 
-  constructor(namespace?: string) {
-    this.namespace = namespace ?? K8S_NAMESPACE;
+  constructor(options?: {
+    namespace?: string;
+    deploymentName?: string;
+    imageRegistry?: string;
+  }) {
+    this.namespace = options?.namespace ?? K8S_NAMESPACE;
+    this.deploymentName = options?.deploymentName;
+    this.imageRegistry = options?.imageRegistry;
   }
 
   /**
@@ -211,15 +288,22 @@ export class K8sContainerBackend implements ContainerBackend {
    */
   async pullImage(_imageRef: string): Promise<void> {
     // Kubernetes handles image pulling at pod creation time.
-    logInfo('k8s pullImage is a no-op; image will be pulled on pod creation', {
-      module: 'k8s-backend',
+    logInfo("k8s pullImage is a no-op; image will be pulled on pod creation", {
+      module: "k8s-backend",
       image: _imageRef,
     });
   }
 
-  async createAndStart(opts: ContainerCreateOpts): Promise<ContainerCreateResult> {
+  async createAndStart(
+    opts: ContainerCreateOpts,
+  ): Promise<ContainerCreateResult> {
     const { core } = await getK8sApi();
-    const podName = sanitizePodName(opts.name);
+    const podName = sanitizePodName(
+      this.deploymentName ? `${this.deploymentName}-${opts.name}` : opts.name,
+    );
+    const imageRef = this.imageRegistry
+      ? qualifyImageRef(this.imageRegistry, opts.imageRef)
+      : opts.imageRef;
 
     // Build environment variables
     const envList: Array<{ name: string; value: string }> = [];
@@ -231,41 +315,41 @@ export class K8sContainerBackend implements ContainerBackend {
 
     // Merge labels
     const labels: Record<string, string> = {
-      'app.kubernetes.io/managed-by': 'takos-oci-orchestrator',
-      'takos.dev/pod-name': podName,
+      "app.kubernetes.io/managed-by": "takos-oci-orchestrator",
+      "takos.dev/pod-name": podName,
       ...opts.labels,
     };
 
     const podManifest = {
-      apiVersion: 'v1' as const,
-      kind: 'Pod' as const,
+      apiVersion: "v1" as const,
+      kind: "Pod" as const,
       metadata: {
         name: podName,
         namespace: this.namespace,
         labels,
       },
       spec: {
-        restartPolicy: 'Never' as const,
+        restartPolicy: "Never" as const,
         containers: [
           {
-            name: 'app',
-            image: opts.imageRef,
+            name: "app",
+            image: imageRef,
             ports: [
               {
                 containerPort: opts.exposedPort,
-                protocol: 'TCP' as const,
+                protocol: "TCP" as const,
               },
             ],
             env: envList.length > 0 ? envList : undefined,
             // Sensible resource defaults — prevents runaway pods
             resources: {
               requests: {
-                cpu: '100m',
-                memory: '128Mi',
+                cpu: "100m",
+                memory: "128Mi",
               },
               limits: {
-                cpu: '500m',
-                memory: '512Mi',
+                cpu: "500m",
+                memory: "512Mi",
               },
             },
           },
@@ -280,10 +364,11 @@ export class K8sContainerBackend implements ContainerBackend {
       });
     } catch (err: unknown) {
       // If the pod already exists (409 Conflict), attempt to delete and retry once.
-      const status = (err as { response?: { statusCode?: number } })?.response?.statusCode;
+      const status = (err as { response?: { statusCode?: number } })?.response
+        ?.statusCode;
       if (status === 409) {
         logInfo(`Pod ${podName} already exists — deleting and re-creating`, {
-          module: 'k8s-backend',
+          module: "k8s-backend",
         });
         await this.remove(podName);
         // Brief pause for deletion to propagate
@@ -298,15 +383,19 @@ export class K8sContainerBackend implements ContainerBackend {
     }
 
     logInfo(`Pod ${podName} created in namespace ${this.namespace}`, {
-      module: 'k8s-backend',
-      image: opts.imageRef,
+      module: "k8s-backend",
+      image: imageRef,
     });
 
     // Wait for the pod to become Ready and obtain its IP
-    const podIp = await waitForPodReady(podName, this.namespace, POD_READY_TIMEOUT_MS);
+    const podIp = await waitForPodReady(
+      podName,
+      this.namespace,
+      POD_READY_TIMEOUT_MS,
+    );
 
     logInfo(`Pod ${podName} is running at ${podIp}`, {
-      module: 'k8s-backend',
+      module: "k8s-backend",
     });
 
     return { containerId: podName };
@@ -327,9 +416,10 @@ export class K8sContainerBackend implements ContainerBackend {
         namespace: this.namespace,
         gracePeriodSeconds: 10,
       });
-      logInfo(`Pod ${podName} deleted`, { module: 'k8s-backend' });
+      logInfo(`Pod ${podName} deleted`, { module: "k8s-backend" });
     } catch (err: unknown) {
-      const status = (err as { response?: { statusCode?: number } })?.response?.statusCode;
+      const status = (err as { response?: { statusCode?: number } })?.response
+        ?.statusCode;
       if (status === 404) {
         // Already gone — treat as success
         return;
@@ -342,7 +432,10 @@ export class K8sContainerBackend implements ContainerBackend {
     const deadline = Date.now() + 30_000;
     while (Date.now() < deadline) {
       try {
-        await core.readNamespacedPod({ name: podName, namespace: this.namespace });
+        await core.readNamespacedPod({
+          name: podName,
+          namespace: this.namespace,
+        });
         // Still exists — keep waiting
         await new Promise((r) => setTimeout(r, 1_000));
       } catch {
@@ -360,19 +453,20 @@ export class K8sContainerBackend implements ContainerBackend {
       const { body } = await core.readNamespacedPodLog({
         name: podName,
         namespace: this.namespace,
-        container: 'app',
+        container: "app",
         tailLines: tail,
         timestamps: true,
       });
       // body is a string when the response is text/plain
-      return typeof body === 'string' ? body : String(body);
+      return typeof body === "string" ? body : String(body);
     } catch (err: unknown) {
-      const status = (err as { response?: { statusCode?: number } })?.response?.statusCode;
-      if (status === 404) return '';
+      const status = (err as { response?: { statusCode?: number } })?.response
+        ?.statusCode;
+      if (status === 404) return "";
       logError(`Failed to read logs for pod ${podName}`, err, {
-        module: 'k8s-backend',
+        module: "k8s-backend",
       });
-      return '';
+      return "";
     }
   }
 

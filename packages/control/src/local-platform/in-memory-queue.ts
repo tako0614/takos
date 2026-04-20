@@ -1,12 +1,12 @@
-import type {
-  Queue,
-} from '../shared/types/bindings.ts';
-import type { LocalQueue, LocalQueueRecord } from './queue-runtime.ts';
+import type { Queue } from "../shared/types/bindings.ts";
+import type { LocalQueue, LocalQueueRecord } from "./queue-runtime.ts";
 
-export function createInMemoryQueue<T = unknown>(queueName = 'takos-runs'): Queue<T> {
+export function createInMemoryQueue<T = unknown>(
+  queueName = "takos-runs",
+): Queue<T> {
   const sent: Array<LocalQueueRecord<T>> = [];
-  const queue = {
-    queueName,
+  const queue: LocalQueue<T> = {
+    queueName: queueName as LocalQueue<T>["queueName"],
     sent,
     async send(message: T, options?: unknown) {
       sent.push({ body: message, options });
@@ -19,5 +19,5 @@ export function createInMemoryQueue<T = unknown>(queueName = 'takos-runs'): Queu
     },
   };
 
-  return queue as unknown as LocalQueue<T>;
+  return queue;
 }

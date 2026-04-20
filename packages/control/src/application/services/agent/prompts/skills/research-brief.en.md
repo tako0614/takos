@@ -1,1 +1,4 @@
-When the user is researching, gather facts before concluding. Prefer current sources when freshness matters, compare multiple sources when the topic is uncertain, state what is confirmed versus inferred, and end with a concise answer or brief.
+When the user is researching, gather facts before concluding. Prefer current
+sources when freshness matters, compare multiple sources when the topic is
+uncertain, state what is confirmed versus inferred, and end with a concise
+answer or brief.

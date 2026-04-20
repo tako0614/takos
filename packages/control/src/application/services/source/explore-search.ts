@@ -2,17 +2,25 @@
 // Database query helpers for package exploration
 // ---------------------------------------------------------------------------
 
-import { repoReleases, repoReleaseAssets, repositories, accounts } from '../../../infra/db/index.ts';
-import { eq, and, desc, asc, like, sql } from 'drizzle-orm';
-import { toReleaseAssets } from './repo-release-assets.ts';
-import type { Database } from '../../../infra/db/index.ts';
-import type { ReleaseRow, PackageWithTakopack } from './explore-package-types.ts';
+import {
+  accounts,
+  repoReleaseAssets,
+  repoReleases,
+  repositories,
+} from "../../../infra/db/index.ts";
+import { and, asc, desc, eq, like, sql } from "drizzle-orm";
+import { toReleaseAssets } from "./repo-release-assets.ts";
+import type { Database } from "../../../infra/db/index.ts";
+import type {
+  PackageWithRelease,
+  ReleaseRow,
+} from "./explore-package-types.ts";
 
 export async function queryReleasesWithRepo(
   db: Database,
   opts: {
     searchQuery?: string;
-    orderByColumn: 'updatedAt' | 'createdAt' | 'downloads';
+    orderByColumn: "updatedAt" | "createdAt" | "downloads";
     limit: number;
     offset: number;
   },
@@ -28,12 +36,14 @@ export async function queryReleasesWithRepo(
   const conditions = [
     eq(repoReleases.isDraft, false),
     eq(repoReleases.isPrerelease, false),
-    eq(repositories.visibility, 'public'),
+    eq(repositories.visibility, "public"),
   ];
 
   if (searchQuery) {
     conditions.push(
-      sql`(${like(repositories.name, `%${searchQuery}%`)} OR ${like(repositories.description, `%${searchQuery}%`)})`,
+      sql`(${like(repositories.name, `%${searchQuery}%`)} OR ${
+        like(repositories.description, `%${searchQuery}%`)
+      })`,
     );
   }
 
@@ -73,7 +83,11 @@ export async function loadAssetsForReleases(
   const assetRows = await db
     .select()
     .from(repoReleaseAssets)
-    .where(sql`${repoReleaseAssets.releaseId} IN (${sql.join(releaseIds.map(id => sql`${id}`), sql`, `)})`)
+    .where(
+      sql`${repoReleaseAssets.releaseId} IN (${
+        sql.join(releaseIds.map((id) => sql`${id}`), sql`, `)
+      })`,
+    )
     .orderBy(asc(repoReleaseAssets.createdAt))
     .all();
 
@@ -94,12 +108,11 @@ export async function loadAssetsForReleases(
 export function buildPackagesFromRows(
   releaseRows: ReleaseRow[],
   assetsByRelease: Map<string, ReturnType<typeof toReleaseAssets>>,
-): PackageWithTakopack[] {
+): PackageWithRelease[] {
   return releaseRows
     .map((row) => {
       const assets = assetsByRelease.get(row.id) ?? [];
-      const takopackAssets = assets.filter((a) => a.bundle_format === 'takopack');
-      if (takopackAssets.length === 0) return null;
+      const primaryAsset = assets[0] ?? null;
 
       return {
         release: {
@@ -120,8 +133,11 @@ export function buildPackagesFromRows(
             },
           },
         },
-        primaryAsset: takopackAssets[0],
-        totalDownloads: takopackAssets.reduce((sum, a) => sum + (a.download_count || 0), 0),
+        primaryAsset,
+        totalDownloads: assets.reduce(
+          (sum, a) => sum + (a.download_count || 0),
+          0,
+        ),
       };
     })
     .filter((p): p is NonNullable<typeof p> => p !== null);

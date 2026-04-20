@@ -51,9 +51,9 @@ Deno.test("toApiDeployment - maps deployment row to API deployment format", () =
     routingWeight: 100,
     deployedBy: "user-1",
     deployMessage: "Fix bug",
-    providerName: "workers-dispatch",
+    backendName: "workers-dispatch",
     targetJson: "{}",
-    providerStateJson: "{}",
+    backendStateJson: "{}",
     idempotencyKey: "idem-1",
     isRollback: false,
     rollbackFromVersion: null,
@@ -81,7 +81,7 @@ Deno.test("toApiDeployment - maps deployment row to API deployment format", () =
   assertEquals(result.routing_weight, 100);
   assertEquals(result.deployed_by, "user-1");
   assertEquals(result.deploy_message, "Fix bug");
-  assertEquals(result.provider_name, "workers-dispatch");
+  assertEquals(result.backend_name, "workers-dispatch");
   assertEquals(result.idempotency_key, "idem-1");
   assertEquals(result.is_rollback, false);
 });
@@ -110,9 +110,9 @@ Deno.test("toApiDeployment - handles null dates", () => {
     routingWeight: 100,
     deployedBy: null,
     deployMessage: null,
-    providerName: "workers-dispatch",
+    backendName: "workers-dispatch",
     targetJson: "{}",
-    providerStateJson: "{}",
+    backendStateJson: "{}",
     idempotencyKey: null,
     isRollback: false,
     rollbackFromVersion: null,
@@ -168,9 +168,9 @@ Deno.test("getDeploymentHistory - returns mapped deployments ordered by version 
           routingWeight: 100,
           deployedBy: null,
           deployMessage: null,
-          providerName: "workers-dispatch",
+          backendName: "workers-dispatch",
           targetJson: "{}",
-          providerStateJson: "{}",
+          backendStateJson: "{}",
           idempotencyKey: null,
           isRollback: false,
           rollbackFromVersion: null,

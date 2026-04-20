@@ -1,127 +1,174 @@
-import { Hono } from 'hono';
-import type { Env, User } from '../../../shared/types/index.ts';
+import { Hono } from "hono";
+import type { Env, User } from "../../../shared/types/index.ts";
 import {
   listExploreRepos,
-  listTrendingRepos,
   listNewRepos,
   listRecentRepos,
-} from '../../../application/services/source/explore.ts';
-import { withCache, CacheTTL, CacheTags } from '../../middleware/cache.ts';
-import { getDb } from '../../../infra/db/index.ts';
-import { accounts, repositories, repoStars } from '../../../infra/db/schema.ts';
-import { eq, and } from 'drizzle-orm';
-import { checkRepoAccess } from '../../../application/services/source/repos.ts';
-import { parsePagination } from '../../../shared/utils/index.ts';
-import { NotFoundError } from 'takos-common/errors';
+  listTrendingRepos,
+} from "../../../application/services/source/explore.ts";
+import { CacheTags, CacheTTL, withCache } from "../../middleware/cache.ts";
+import { getDb } from "../../../infra/db/index.ts";
+import { accounts, repositories, repoStars } from "../../../infra/db/schema.ts";
+import { and, eq } from "drizzle-orm";
+import { checkRepoAccess } from "../../../application/services/source/repos.ts";
+import { parsePagination } from "../../../shared/utils/index.ts";
+import { NotFoundError } from "takos-common/errors";
 import {
   findRepoByUsernameAndName,
   parseExploreFilters,
   validateExploreFilters,
-} from './explore-filters.ts';
+} from "./explore-filters.ts";
 
 type Variables = {
   user?: User;
 };
 
 export default new Hono<{ Bindings: Env; Variables: Variables }>()
-  .get('/repos', withCache({
-    ttl: CacheTTL.PUBLIC_LISTING,
-    cacheTag: CacheTags.EXPLORE,
-    queryParamsToInclude: ['sort', 'order', 'limit', 'offset', 'q', 'category', 'language', 'license', 'since'],
-  }), async (c) => {
-    const user = c.get('user');
-    const filters = parseExploreFilters(c);
-    validateExploreFilters(c, filters);
+  .get(
+    "/repos",
+    withCache({
+      ttl: CacheTTL.PUBLIC_LISTING,
+      cacheTag: CacheTags.EXPLORE,
+      queryParamsToInclude: [
+        "sort",
+        "order",
+        "limit",
+        "offset",
+        "q",
+        "category",
+        "language",
+        "license",
+        "since",
+      ],
+    }),
+    async (c) => {
+      const user = c.get("user");
+      const filters = parseExploreFilters(c);
+      validateExploreFilters(c, filters);
 
-    const response = await listExploreRepos(c.env.DB, {
-      sort: c.req.query('sort') || 'stars',
-      order: c.req.query('order') || 'desc',
-      ...parsePagination(c.req.query()),
-      searchQuery: c.req.query('q')?.trim() || '',
-      ...filters,
-      userId: user?.id,
-    });
+      const response = await listExploreRepos(c.env.DB, {
+        sort: c.req.query("sort") || "stars",
+        order: c.req.query("order") || "desc",
+        ...parsePagination(c.req.query()),
+        searchQuery: c.req.query("q")?.trim() || "",
+        ...filters,
+        userId: user?.id,
+      });
 
-    return c.json(response);
-  })
-  .get('/repos/trending', withCache({
-    ttl: CacheTTL.PUBLIC_LISTING,
-    cacheTag: CacheTags.EXPLORE,
-    queryParamsToInclude: ['limit', 'offset', 'category', 'language', 'license', 'since'],
-  }), async (c) => {
-    const user = c.get('user');
-    const filters = parseExploreFilters(c);
-    validateExploreFilters(c, filters);
+      return c.json(response);
+    },
+  )
+  .get(
+    "/repos/trending",
+    withCache({
+      ttl: CacheTTL.PUBLIC_LISTING,
+      cacheTag: CacheTags.EXPLORE,
+      queryParamsToInclude: [
+        "limit",
+        "offset",
+        "category",
+        "language",
+        "license",
+        "since",
+      ],
+    }),
+    async (c) => {
+      const user = c.get("user");
+      const filters = parseExploreFilters(c);
+      validateExploreFilters(c, filters);
 
-    const response = await listTrendingRepos(c.env.DB, {
-      ...parsePagination(c.req.query()),
-      ...filters,
-      userId: user?.id,
-    });
+      const response = await listTrendingRepos(c.env.DB, {
+        ...parsePagination(c.req.query()),
+        ...filters,
+        userId: user?.id,
+      });
 
-    return c.json(response);
-  })
-  .get('/repos/new', withCache({
-    ttl: CacheTTL.PUBLIC_LISTING,
-    cacheTag: CacheTags.EXPLORE,
-    queryParamsToInclude: ['limit', 'offset', 'category', 'language', 'license', 'since'],
-  }), async (c) => {
-    const user = c.get('user');
-    const filters = parseExploreFilters(c);
-    validateExploreFilters(c, filters);
+      return c.json(response);
+    },
+  )
+  .get(
+    "/repos/new",
+    withCache({
+      ttl: CacheTTL.PUBLIC_LISTING,
+      cacheTag: CacheTags.EXPLORE,
+      queryParamsToInclude: [
+        "limit",
+        "offset",
+        "category",
+        "language",
+        "license",
+        "since",
+      ],
+    }),
+    async (c) => {
+      const user = c.get("user");
+      const filters = parseExploreFilters(c);
+      validateExploreFilters(c, filters);
 
-    const response = await listNewRepos(c.env.DB, {
-      ...parsePagination(c.req.query()),
-      ...filters,
-      userId: user?.id,
-    });
+      const response = await listNewRepos(c.env.DB, {
+        ...parsePagination(c.req.query()),
+        ...filters,
+        userId: user?.id,
+      });
 
-    return c.json(response);
-  })
-  .get('/repos/recent', withCache({
-    ttl: CacheTTL.PUBLIC_LISTING,
-    cacheTag: CacheTags.EXPLORE,
-    queryParamsToInclude: ['limit', 'offset', 'category', 'language', 'license', 'since'],
-  }), async (c) => {
-    const user = c.get('user');
-    const filters = parseExploreFilters(c);
-    validateExploreFilters(c, filters);
+      return c.json(response);
+    },
+  )
+  .get(
+    "/repos/recent",
+    withCache({
+      ttl: CacheTTL.PUBLIC_LISTING,
+      cacheTag: CacheTags.EXPLORE,
+      queryParamsToInclude: [
+        "limit",
+        "offset",
+        "category",
+        "language",
+        "license",
+        "since",
+      ],
+    }),
+    async (c) => {
+      const user = c.get("user");
+      const filters = parseExploreFilters(c);
+      validateExploreFilters(c, filters);
 
-    const response = await listRecentRepos(c.env.DB, {
-      ...parsePagination(c.req.query()),
-      ...filters,
-      userId: user?.id,
-    });
+      const response = await listRecentRepos(c.env.DB, {
+        ...parsePagination(c.req.query()),
+        ...filters,
+        userId: user?.id,
+      });
 
-    return c.json(response);
-  })
-  .get('/repos/by-name/:username/:repoName', async (c) => {
-    const user = c.get('user');
-    const username = c.req.param('username');
-    const repoName = c.req.param('repoName');
+      return c.json(response);
+    },
+  )
+  .get("/repos/by-name/:username/:repoName", async (c) => {
+    const user = c.get("user");
+    const username = c.req.param("username");
+    const repoName = c.req.param("repoName");
     const db = getDb(c.env.DB);
 
     const repo = await findRepoByUsernameAndName(db, username, repoName);
 
     if (!repo) {
-      throw new NotFoundError('Repository');
+      throw new NotFoundError("Repository");
     }
 
-    if (repo.visibility !== 'public') {
+    if (repo.visibility !== "public") {
       if (!user) {
-        throw new NotFoundError('Repository');
+        throw new NotFoundError("Repository");
       }
 
       const repoAccess = await checkRepoAccess(c.env, repo.id, user.id);
       if (!repoAccess) {
-        throw new NotFoundError('Repository');
+        throw new NotFoundError("Repository");
       }
     }
 
     let isStarred = false;
     if (user) {
       const star = await db.select().from(repoStars).where(
-        and(eq(repoStars.accountId, user.id), eq(repoStars.repoId, repo.id))
+        and(eq(repoStars.accountId, user.id), eq(repoStars.repoId, repo.id)),
       ).get();
       isStarred = !!star;
     }
@@ -138,7 +185,7 @@ export default new Hono<{ Bindings: Env; Variables: Variables }>()
         created_at: repo.created_at,
         updated_at: repo.updated_at,
       },
-      workspace: {
+      space: {
         id: repo.space_id,
         name: repo.workspace_name,
       },
@@ -151,9 +198,9 @@ export default new Hono<{ Bindings: Env; Variables: Variables }>()
       is_starred: isStarred,
     });
   })
-  .get('/repos/:id', async (c) => {
-    const user = c.get('user');
-    const repoId = c.req.param('id');
+  .get("/repos/:id", async (c) => {
+    const user = c.get("user");
+    const repoId = c.req.param("id");
     const db = getDb(c.env.DB);
 
     const result = await db.select({
@@ -172,17 +219,19 @@ export default new Hono<{ Bindings: Env; Variables: Variables }>()
       accountPicture: accounts.picture,
     }).from(repositories)
       .leftJoin(accounts, eq(repositories.accountId, accounts.id))
-      .where(and(eq(repositories.id, repoId), eq(repositories.visibility, 'public')))
+      .where(
+        and(eq(repositories.id, repoId), eq(repositories.visibility, "public")),
+      )
       .get();
 
     if (!result) {
-      throw new NotFoundError('Repository');
+      throw new NotFoundError("Repository");
     }
 
     let isStarred = false;
     if (user) {
       const star = await db.select().from(repoStars).where(
-        and(eq(repoStars.accountId, user.id), eq(repoStars.repoId, repoId))
+        and(eq(repoStars.accountId, user.id), eq(repoStars.repoId, repoId)),
       ).get();
       isStarred = !!star;
     }
@@ -199,7 +248,7 @@ export default new Hono<{ Bindings: Env; Variables: Variables }>()
         created_at: result.createdAt,
         updated_at: result.updatedAt,
       },
-      workspace: {
+      space: {
         id: result.accountId,
         name: result.accountName,
       },

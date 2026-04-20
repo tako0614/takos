@@ -19,59 +19,70 @@
  *   - memory-manager.ts     : memory runtime integration, memory graph processing
  */
 
-import type { RunStatus, Env } from '../../../shared/types/index.ts';
-import type { ObjectStoreBinding, SqlDatabaseBinding } from '../../../shared/types/bindings.ts';
-import type { AgentContext, AgentConfig, AgentEvent, AgentMessage } from './agent-models.ts';
-import type { ToolExecutorLike } from '../../tools/executor.ts';
-import { RunCancelledError } from './run-lifecycle.ts';
-import { getAgentConfig } from './runner-config.ts';
-import { DEFAULT_MODEL_ID } from './model-catalog.ts';
-import type { RunTerminalPayload } from '../run-notifier/index.ts';
-import { AppError } from 'takos-common/errors';
-import { autoCloseSession as autoCloseSessionImpl } from './session-closer.ts';
+import type { Env, RunStatus } from "../../../shared/types/index.ts";
+import type {
+  ObjectStoreBinding,
+  SqlDatabaseBinding,
+} from "../../../shared/types/bindings.ts";
+import type {
+  AgentConfig,
+  AgentContext,
+  AgentEvent,
+  AgentMessage,
+} from "./agent-models.ts";
+import type { ToolExecutorLike } from "../../tools/executor.ts";
+import { RunCancelledError } from "./run-lifecycle.ts";
+import { getAgentConfig } from "./runner-config.ts";
+import { DEFAULT_MODEL_ID } from "./model-catalog.ts";
+import type { RunTerminalPayload } from "../run-notifier/index.ts";
+import { AppError } from "takos-common/errors";
+import { autoCloseSession as autoCloseSessionImpl } from "./session-closer.ts";
 
 // IO interface (canonical source: runner-io.ts)
-import type { AgentRunnerIo } from './runner-io.ts';
-export type { AgentRunnerIo } from './runner-io.ts';
+import type { AgentRunnerIo } from "./runner-io.ts";
+export type { AgentRunnerIo } from "./runner-io.ts";
 
 // Event helpers
 import {
-  type EventEmitterState,
-  emitEventImpl,
   buildTerminalEventPayloadImpl,
-} from './runner-events.ts';
+  emitEventImpl,
+  type EventEmitterState,
+} from "./runner-events.ts";
 
 // Status helpers
-import type { normalizeRunStatus as _normalizeRunStatus } from './runner-history.ts';
+import type { normalizeRunStatus as _normalizeRunStatus } from "./runner-history.ts";
 
 // Manager state
-import { createLLMState, type LLMState } from './llm-manager.ts';
-import type { SkillState, SkillPlanDeps } from './skill-plan.ts';
-import type { MemoryState, MemoryManagerDeps } from './memory-manager.ts';
+import { createLLMState, type LLMState } from "./llm-manager.ts";
+import type { SkillPlanDeps, SkillState } from "./skill-plan.ts";
+import type { MemoryManagerDeps, MemoryState } from "./memory-manager.ts";
 
 // Orchestration
-import { runOrchestration, type OrchestrationDeps } from './runner-orchestration.ts';
+import {
+  type OrchestrationDeps,
+  runOrchestration,
+} from "./runner-orchestration.ts";
 
 // Extracted modules used for type only
-import type { ToolExecution } from './runner-utils.ts';
+import type { ToolExecution } from "./runner-utils.ts";
 
 // ── Re-exports for backward compatibility ────────────────────────────
 
 export {
-  type EventEmitterState,
-  emitEventImpl,
   buildTerminalEventPayloadImpl,
-} from './runner-events.ts';
+  emitEventImpl,
+  type EventEmitterState,
+} from "./runner-events.ts";
 
 export {
-  updateRunStatusImpl,
-  isValidToolCallsArray,
-  type ConversationHistoryDeps,
-  normalizeRunStatus,
   buildConversationHistory,
-} from './runner-history.ts';
+  type ConversationHistoryDeps,
+  isValidToolCallsArray,
+  normalizeRunStatus,
+  updateRunStatusImpl,
+} from "./runner-history.ts";
 
-export { executeRun } from './execute-run.ts';
+export { executeRun } from "./execute-run.ts";
 
 // ── AgentRunner class ────────────────────────────────────────────────
 
@@ -128,7 +139,7 @@ export class AgentRunner {
     this.llm = createLLMState({ apiKey, env, aiModel });
 
     this.skillState = {
-      locale: 'en',
+      locale: "en",
       availableSkills: [],
       selectedSkills: [],
       activatedSkills: [],
@@ -148,7 +159,7 @@ export class AgentRunner {
   // ── Bound delegates ────────────────────────────────────────────────
 
   private async emitEvent(
-    type: AgentEvent['type'],
+    type: AgentEvent["type"],
     data: Record<string, unknown>,
     options?: { skipDb?: boolean },
   ): Promise<void> {
@@ -181,7 +192,7 @@ export class AgentRunner {
   }
 
   private buildTerminalEventPayload(
-    status: 'completed' | 'failed' | 'cancelled',
+    status: "completed" | "failed" | "cancelled",
     details: Record<string, unknown> = {},
   ): RunTerminalPayload {
     return buildTerminalEventPayloadImpl(
@@ -192,7 +203,9 @@ export class AgentRunner {
     );
   }
 
-  private async autoCloseSession(status: 'completed' | 'failed'): Promise<void> {
+  private async autoCloseSession(
+    status: "completed" | "failed",
+  ): Promise<void> {
     return autoCloseSessionImpl(
       {
         env: this.env,
@@ -214,11 +227,16 @@ export class AgentRunner {
     }
 
     const now = Date.now();
-    if (!force && now - this.lastCancelCheck < AgentRunner.CANCEL_CHECK_INTERVAL_MS) {
+    if (
+      !force &&
+      now - this.lastCancelCheck < AgentRunner.CANCEL_CHECK_INTERVAL_MS
+    ) {
       return this.isCancelled;
     }
 
-    this.isCancelled = await this.runIo.isCancelled({ runId: this.context.runId });
+    this.isCancelled = await this.runIo.isCancelled({
+      runId: this.context.runId,
+    });
     this.lastCancelCheck = now;
     return this.isCancelled;
   }
@@ -228,9 +246,9 @@ export class AgentRunner {
       const reason = this.abortSignal.reason;
       const message = reason instanceof Error
         ? reason.message
-        : typeof reason === 'string'
-          ? reason
-          : 'Run aborted';
+        : typeof reason === "string"
+        ? reason
+        : "Run aborted";
       throw new AppError(`${message} (${ctx})`);
     }
 
@@ -250,7 +268,10 @@ export class AgentRunner {
     });
   }
 
-  private async addMessage(message: AgentMessage, metadata?: Record<string, unknown>): Promise<void> {
+  private async addMessage(
+    message: AgentMessage,
+    metadata?: Record<string, unknown>,
+  ): Promise<void> {
     return this.runIo.addMessage({
       runId: this.context.runId,
       threadId: this.context.threadId,
@@ -305,7 +326,9 @@ export class AgentRunner {
       getCurrentSessionId: this.getCurrentSessionId.bind(this),
       getRunRecord: this.getRunRecord.bind(this),
       getToolExecutor: () => this.toolExecutor,
-      setToolExecutor: (te) => { this.toolExecutor = te; },
+      setToolExecutor: (te) => {
+        this.toolExecutor = te;
+      },
     };
   }
 

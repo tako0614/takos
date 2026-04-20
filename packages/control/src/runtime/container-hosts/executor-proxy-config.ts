@@ -1,5 +1,5 @@
-import type { AgentExecutorControlConfig } from './executor-dispatch.ts';
-import { base64UrlEncode } from '../../shared/utils/encoding-utils.ts';
+import type { AgentExecutorControlConfig } from "./executor-dispatch.ts";
+import { base64UrlEncode } from "../../shared/utils/encoding-utils.ts";
 
 export interface AgentExecutorProxyConfigEnv {
   CONTROL_RPC_BASE_URL?: string;
@@ -30,9 +30,9 @@ export function buildAgentExecutorProxyConfig(
 }
 
 export function buildAgentExecutorContainerEnvVars(
-  env: Pick<AgentExecutorProxyConfigEnv, 'CONTROL_RPC_BASE_URL'>,
+  env: Pick<AgentExecutorProxyConfigEnv, "CONTROL_RPC_BASE_URL">,
 ): AgentExecutorContainerEnvVars {
   return {
-    CONTROL_RPC_BASE_URL: env.CONTROL_RPC_BASE_URL || '',
+    CONTROL_RPC_BASE_URL: env.CONTROL_RPC_BASE_URL || "",
   };
 }

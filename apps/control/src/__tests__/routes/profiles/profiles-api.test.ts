@@ -147,7 +147,7 @@ Deno.test("profiles repo routes - GET /:username/:repoName - returns repository 
       created_at: "2026-01-01T00:00:00.000Z",
       updated_at: "2026-02-01T00:00:00.000Z",
     },
-    workspace: { name: "Personal", id: "ws-1" },
+    space: { name: "Personal", id: "ws-1" },
     owner: {
       name: "User One",
       username: "user1",
@@ -192,7 +192,7 @@ Deno.test("profiles repo routes - GET /:username/:repoName - works for anonymous
       created_at: "2026-01-01T00:00:00.000Z",
       updated_at: "2026-01-01T00:00:00.000Z",
     },
-    workspace: { name: "Test", id: "ws-1" },
+    space: { name: "Test", id: "ws-1" },
     owner: { name: "Owner", username: "owner1", picture: null },
   })) as any;
   mocks.listBranches = (async () => []) as any;
@@ -227,7 +227,7 @@ Deno.test("profiles repo routes - GET /:username/:repoName/branches - returns br
   /* mocks cleared (no-op in Deno) */ void 0;
   mocks.findRepoByUsernameAndName = (async () => ({
     repo: { id: "repo-1", default_branch: "main" },
-    workspace: { name: "W" },
+    space: { name: "W" },
     owner: { username: "user1" },
   })) as any;
   mocks.listBranches = (async () => [
@@ -269,7 +269,7 @@ Deno.test("profiles repo routes - GET /:username/:repoName/commits - returns com
   /* mocks cleared (no-op in Deno) */ void 0;
   mocks.findRepoByUsernameAndName = (async () => ({
     repo: { id: "repo-1", default_branch: "main" },
-    workspace: { name: "W" },
+    space: { name: "W" },
     owner: { username: "user1" },
   })) as any;
   mocks.getCommitsFromRef = (async () => [
@@ -329,7 +329,7 @@ Deno.test("profiles repo routes - DELETE /:username/:repoName - returns 403 when
   /* mocks cleared (no-op in Deno) */ void 0;
   mocks.findRepoByUsernameAndName = (async () => ({
     repo: { id: "repo-1", forked_from_id: null },
-    workspace: { id: "ws-1" },
+    space: { id: "ws-1" },
     owner: { username: "user1" },
   })) as any;
   mocks.checkWorkspaceAccess = (async () => ({
@@ -349,7 +349,7 @@ Deno.test("profiles repo routes - DELETE /:username/:repoName - deletes repo whe
   /* mocks cleared (no-op in Deno) */ void 0;
   mocks.findRepoByUsernameAndName = (async () => ({
     repo: { id: "repo-1", forked_from_id: null },
-    workspace: { id: "ws-1" },
+    space: { id: "ws-1" },
     owner: { username: "user1" },
   })) as any;
   mocks.checkWorkspaceAccess = (async () => ({

@@ -108,7 +108,7 @@ function createFakeD1Database() {
     async dump() {
       return new ArrayBuffer(0);
     },
-  } as D1Database & { prepared: PreparedStatementRecord[] };
+  } as unknown as D1Database & { prepared: PreparedStatementRecord[] };
 
   return { db, prepared };
 }

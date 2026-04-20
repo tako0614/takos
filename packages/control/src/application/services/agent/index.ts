@@ -1,45 +1,49 @@
 export type {
+  AgentConfig,
   AgentContext,
-  ToolCall,
-  ToolResult,
+  AgentEvent,
+  AgentEventType,
   AgentMessage,
   AgentTool,
-  AgentConfig,
-  AgentEventType,
-  AgentEvent,
-} from './agent-models.ts';
-export type { AgentRunnerIo } from './runner-io.ts';
-export { AgentRunner, executeRun } from './runner.ts';
-export { D1CheckpointSaver } from './graph-agent.ts';
-export type { ModelProvider, ModelOption, SupportedModelId } from './model-catalog.ts';
+  ToolCall,
+  ToolResult,
+} from "./agent-models.ts";
+export type { AgentRunnerIo } from "./runner-io.ts";
+export { AgentRunner, executeRun } from "./runner.ts";
+export { D1CheckpointSaver } from "./graph-agent.ts";
+export type {
+  ModelBackend,
+  ModelOption,
+  SupportedModelId,
+} from "./model-catalog.ts";
 export {
-  OPENAI_MODELS,
-  SUPPORTED_MODEL_IDS,
   DEFAULT_MODEL_ID,
+  getModelBackend,
+  getModelTokenLimit,
   MODEL_TOKEN_LIMITS,
   normalizeModelId,
-  getModelProvider,
-  getModelTokenLimit,
+  OPENAI_MODELS,
   resolveHistoryTokenBudget,
-} from './model-catalog.ts';
-export type { RetrievedThreadMessage } from './thread-context.ts';
+  SUPPORTED_MODEL_IDS,
+} from "./model-catalog.ts";
+export type { RetrievedThreadMessage } from "./thread-context.ts";
 export {
-  THREAD_MESSAGE_VECTOR_KIND,
-  DEFAULT_MAX_MESSAGES_PER_THREAD_INDEX_JOB,
-  queryRelevantThreadMessages,
-  indexThreadContext,
   buildThreadContextSystemMessage,
-} from './thread-context.ts';
+  DEFAULT_MAX_MESSAGES_PER_THREAD_INDEX_JOB,
+  indexThreadContext,
+  queryRelevantThreadMessages,
+  THREAD_MESSAGE_VECTOR_KIND,
+} from "./thread-context.ts";
 export {
-  AGENT_DISABLED_BUILTIN_TOOLS,
-  isToolAllowedForAgent,
+  AGENT_DISABLED_CUSTOM_TOOLS,
   filterAgentAllowedToolNames,
-} from '../../tools/tool-policy.ts';
-export { shouldResetRunToQueuedOnContainerError } from './run-lifecycle.ts';
+  isToolAllowedForAgent,
+} from "../../tools/tool-policy.ts";
+export { shouldResetRunToQueuedOnContainerError } from "./run-lifecycle.ts";
 export {
-  type LLMConfig,
-  LLMClient,
-  VALID_PROVIDERS,
   createLLMClientFromEnv,
-  getProviderFromModel,
-} from './llm.ts';
+  getBackendFromModel,
+  LLMClient,
+  type LLMConfig,
+  VALID_MODEL_BACKENDS,
+} from "./llm.ts";

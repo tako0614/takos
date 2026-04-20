@@ -329,6 +329,152 @@ Deno.test("resolveWorkflowArtifactFileForJob - falls back to prefix when invento
     restoreWorkflowArtifactDeps();
   }
 });
+Deno.test("resolveWorkflowArtifactFileForJob - resolves directory artifact with one script", async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+  const drizzle = createDrizzleMock();
+  drizzle._.get = (async () => null) as any;
+  setWorkflowArtifactDb(drizzle);
+
+  const bucketGet = async (_key: string) => null;
+  const env = {
+    DB: {},
+    GIT_OBJECTS: {
+      get: bucketGet,
+      list: async () => ({
+        objects: [
+          { key: "actions/artifacts/job-1/gateway-dist/dist/worker.mjs" },
+          { key: "actions/artifacts/job-1/gateway-dist/dist/worker.mjs.map" },
+        ],
+      }),
+    },
+    TENANT_SOURCE: null,
+  } as any;
+
+  try {
+    const result = await resolveWorkflowArtifactFileForJob(env, {
+      repoId: "r1",
+      runId: "run-1",
+      jobId: "job-1",
+      artifactName: "gateway-dist",
+      artifactPath: "dist",
+    });
+
+    assertEquals(result.source, "directory-fallback");
+    assertEquals(result.artifactPath, "dist/worker.mjs");
+    assertEquals(
+      result.r2Key,
+      "actions/artifacts/job-1/gateway-dist/dist/worker.mjs",
+    );
+  } finally {
+    restoreWorkflowArtifactDeps();
+  }
+});
+Deno.test("resolveWorkflowArtifactFileForJob - resolves omitted artifact path from artifact root", async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+  const drizzle = createDrizzleMock();
+  drizzle._.get = (async () => null) as any;
+  setWorkflowArtifactDb(drizzle);
+
+  const env = {
+    DB: {},
+    GIT_OBJECTS: {
+      get: async () => null,
+      list: async () => ({
+        objects: [
+          { key: "actions/artifacts/job-1/gateway-dist/worker.mjs" },
+          { key: "actions/artifacts/job-1/gateway-dist/worker.mjs.map" },
+        ],
+      }),
+    },
+    TENANT_SOURCE: null,
+  } as any;
+
+  try {
+    const result = await resolveWorkflowArtifactFileForJob(env, {
+      repoId: "r1",
+      runId: "run-1",
+      jobId: "job-1",
+      artifactName: "gateway-dist",
+    });
+
+    assertEquals(result.source, "directory-fallback");
+    assertEquals(result.artifactPath, "worker.mjs");
+    assertEquals(
+      result.r2Key,
+      "actions/artifacts/job-1/gateway-dist/worker.mjs",
+    );
+  } finally {
+    restoreWorkflowArtifactDeps();
+  }
+});
+Deno.test("resolveWorkflowArtifactFileForJob - rejects ambiguous directory artifact scripts", async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+  const drizzle = createDrizzleMock();
+  drizzle._.get = (async () => null) as any;
+  setWorkflowArtifactDb(drizzle);
+
+  const env = {
+    DB: {},
+    GIT_OBJECTS: {
+      get: async () => null,
+      list: async () => ({
+        objects: [
+          { key: "actions/artifacts/job-1/gateway-dist/dist/index.js" },
+          { key: "actions/artifacts/job-1/gateway-dist/dist/chunk.js" },
+        ],
+      }),
+    },
+    TENANT_SOURCE: null,
+  } as any;
+
+  try {
+    await assertRejects(
+      () =>
+        resolveWorkflowArtifactFileForJob(env, {
+          repoId: "r1",
+          runId: "run-1",
+          jobId: "job-1",
+          artifactName: "gateway-dist",
+          artifactPath: "dist",
+        }),
+      Error,
+      "multiple JavaScript bundle candidates",
+    );
+  } finally {
+    restoreWorkflowArtifactDeps();
+  }
+});
+Deno.test("resolveWorkflowArtifactFileForJob - rejects artifact path traversal", async () => {
+  /* mocks cleared (no-op in Deno) */ void 0;
+  const drizzle = createDrizzleMock();
+  setWorkflowArtifactDb(drizzle);
+
+  const env = {
+    DB: {},
+    GIT_OBJECTS: {
+      get: async () => null,
+      list: async () => ({ objects: [] }),
+    },
+    TENANT_SOURCE: null,
+  } as any;
+
+  try {
+    await assertRejects(
+      () =>
+        resolveWorkflowArtifactFileForJob(env, {
+          repoId: "r1",
+          runId: "run-1",
+          jobId: "job-1",
+          artifactName: "gateway-dist",
+          artifactPath: "../dist/worker.mjs",
+        }),
+      Error,
+      "artifact path must not contain path traversal",
+    );
+  } finally {
+    restoreWorkflowArtifactDeps();
+  }
+});
 Deno.test("resolveWorkflowArtifactFileForJob - throws when artifact file not found anywhere", async () => {
   /* mocks cleared (no-op in Deno) */ void 0;
   const drizzle = createDrizzleMock();

@@ -1,8 +1,9 @@
 # Service
 
 image-based の常設 container workload を `compute` 内で定義する。`image` があり
-`build` がない compute エントリは自動的に Service と判定される。HTTP API、webhook
-receiver、常設バックエンドなど always-on な container workload 向け。
+`build` がない compute エントリは自動的に Service と判定される。HTTP
+API、webhook receiver、常設バックエンドなど always-on な container workload
+向け。
 
 ## 基本
 
@@ -13,7 +14,8 @@ compute:
     port: 3000
 ```
 
-`build` を持たず `image` を持つ compute エントリが Service になる。
+`build` を持たず `image` を持つ compute エントリが Service になる。Service は
+image-backed runtime に渡す listen port を推測しないため、`port` が必須です。
 
 ## ルート公開
 
@@ -32,17 +34,18 @@ routes:
 
 ## env
 
-Service には環境変数を設定できる。provider-backed publication を `consume`
-する compute だけに、その publication outputs が注入される。
+Service には環境変数を設定できる。publication / capability grant を `consume`
+する compute だけに、その outputs が注入される。Takos capability grant は
+`publish[].publisher/type` として書く。
 
 ```yaml
 publish:
-  - name: primary-db
-    provider: takos
-    kind: sql
+  - name: takos-api
+    publisher: takos
+    type: api-key
     spec:
-      resource: notes-db
-      permission: write
+      scopes:
+        - files:read
 
 compute:
   api:
@@ -51,42 +54,45 @@ compute:
     env:
       NODE_ENV: production
     consume:
-      - publication: primary-db
+      - publication: takos-api
         env:
-          endpoint: DATABASE_URL
-          apiKey: DATABASE_API_KEY
+          endpoint: TAKOS_API_ENDPOINT
+          apiKey: TAKOS_API_KEY
 ```
 
 ## フィールド
 
-| field | required | type | 説明 |
-| --- | --- | --- | --- |
-| `image` | **yes** | string | digest-pinned image ref (64-hex `sha256` digest) |
-| `port` | **yes** | number | listen port |
-| `dockerfile` | no | string | local build 用 Dockerfile path (local provider only) |
-| `env` | no | object | container env |
-| `healthCheck` | no | object | ヘルスチェック |
-| `volumes` | no | object | volume mount |
-| `scaling` | no | object | `{ minInstances?, maxInstances? }` |
-| `instanceType` | no | string | provider 別 instance enum |
-| `depends` | no | array | compute 名の配列 |
+| field         | required | type   | 説明                                                   |
+| ------------- | -------- | ------ | ------------------------------------------------------ |
+| `image`       | **yes**  | string | digest-pinned image ref (64-hex `sha256` digest)       |
+| `port`        | **yes**  | number | listen port                                            |
+| `dockerfile`  | no       | string | `image` 併用時の local/private build metadata          |
+| `env`         | no       | object | container env                                          |
+| `consume`     | no       | array  | grant / publication consume                            |
+| `healthCheck` | no       | object | ヘルスチェック                                         |
+| `volumes`     | no       | object | parser / desired metadata。runtime へ直接 apply しない |
+| `scaling`     | no       | object | parser / desired metadata。runtime へ直接 apply しない |
+| `depends`     | no       | array  | compute 名の配列                                       |
 
-`triggers` は Worker 専用です。Service は `healthCheck` で可用性を表します。
+`triggers` は Worker 専用です。Service の `healthCheck` は deploy target に渡す
+ヘルスチェック入力です。kernel の deploy 後定期監視 contract ではありません。
 
 ## deploy source の制約
 
-`takos deploy` / `takos install` が full deployment pipeline
-を通るとき、Service は `image` で解決される。`image` は digest pin (64-hex
-`sha256` digest) 必須。
-`dockerfile` だけでは online deploy source としては不十分。
+`takos deploy` / `takos install` が full deployment pipeline を通るとき、Service
+は `image` で解決される。`image` は digest pin (64-hex `sha256` digest) 必須。
+Service compute の `dockerfile` は `image` と併用する local/private builder
+metadata として扱う。`dockerfile` だけの Service は online deploy source
+としては不十分で、builder が作った digest-pinned `image` を Service に渡します。
+`port` は local/private builder metadata の有無にかかわらず必須です。
 
 ## Service vs Worker vs Attached Container
 
-| 形態 | 判定条件 | 動作 | 典型用途 |
-| --- | --- | --- | --- |
-| Worker | `build` あり | serverless、request-driven | ルーティング、軽量処理 |
-| Service | `image` あり（`build` なし） | always-on container | API サーバー、常設バックエンド |
-| Worker + Attached | `build` + `containers` あり | worker に container が紐づく | browser automation、executor |
+| 形態              | 判定条件                     | 動作                         | 典型用途                       |
+| ----------------- | ---------------------------- | ---------------------------- | ------------------------------ |
+| Worker            | `build` あり                 | serverless、request-driven   | ルーティング、軽量処理         |
+| Service           | `image` あり（`build` なし） | always-on container          | API サーバー、常設バックエンド |
+| Worker + Attached | `build` + `containers` あり  | worker に container が紐づく | executor、heavy processing     |
 
 ## 次のステップ
 

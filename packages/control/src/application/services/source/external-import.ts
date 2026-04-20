@@ -90,7 +90,7 @@ export async function importExternalRepository(
     throw new Error("Could not determine a valid repository name from the URL");
   }
 
-  // Check for duplicate name in this workspace
+  // Check for duplicate name in this space.
   const db = getDb(dbBinding);
   const existing = await db.select({ id: repositories.id })
     .from(repositories)
@@ -102,7 +102,7 @@ export async function importExternalRepository(
 
   if (existing) {
     throw new Error(
-      `Repository "${localName}" already exists in this workspace`,
+      `Repository "${localName}" already exists in this space`,
     );
   }
 

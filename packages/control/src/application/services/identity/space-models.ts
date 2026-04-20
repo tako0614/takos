@@ -7,7 +7,7 @@ import { eq } from "drizzle-orm";
 
 interface ModelSettings {
   ai_model: string | null;
-  ai_provider: string | null;
+  model_backend: string | null;
   security_posture: SecurityPosture;
 }
 
@@ -28,7 +28,7 @@ export async function getWorkspaceModelSettings(
   const row = await drizzle
     .select({
       ai_model: accounts.aiModel,
-      ai_provider: accounts.aiProvider,
+      model_backend: accounts.modelBackend,
       security_posture: accounts.securityPosture,
     })
     .from(accounts)
@@ -39,7 +39,7 @@ export async function getWorkspaceModelSettings(
   return row
     ? {
       ai_model: row.ai_model,
-      ai_provider: row.ai_provider,
+      model_backend: row.model_backend,
       security_posture: row.security_posture === "restricted_egress"
         ? "restricted_egress"
         : "standard",
@@ -51,14 +51,14 @@ export async function updateWorkspaceModel(
   db: D1Database,
   spaceId: string,
   model: string,
-  provider: string,
+  modelBackend: string,
 ): Promise<void> {
   const drizzle = getDb(db);
   await drizzle
     .update(accounts)
     .set({
       aiModel: model,
-      aiProvider: provider,
+      modelBackend: modelBackend,
       updatedAt: new Date().toISOString(),
     })
     .where(eq(accounts.id, spaceId));

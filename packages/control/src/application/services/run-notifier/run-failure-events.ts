@@ -62,7 +62,5 @@ export async function notifyRunFailedEvent(
     event.eventId,
   );
   const request = buildRunNotifierEmitRequest(payload);
-  await notifierStub.fetch(
-    request as unknown as Parameters<typeof notifierStub.fetch>[0],
-  );
+  await notifierStub.fetch(request);
 }

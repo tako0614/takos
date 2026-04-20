@@ -1,28 +1,33 @@
-import type { D1Database } from '../../../shared/types/bindings.ts';
-import type { AuthorType, PullRequestStatus, User } from '../../../shared/types/index.ts';
-import * as gitStore from '../git-smart/index.ts';
-import { getDb, branches, pullRequests } from '../../../infra/db/index.ts';
-import { eq, and } from 'drizzle-orm';
-import { decodeBlobContent } from '../../../shared/utils/unified-diff.ts';
-import { textDate, textDateNullable } from '../../../shared/utils/db-guards.ts';
+import type { D1Database } from "../../../shared/types/bindings.ts";
+import type {
+  AuthorType,
+  PullRequestStatus,
+  User,
+} from "../../../shared/types/index.ts";
+import * as gitStore from "../git-smart/index.ts";
+import { branches, getDb, pullRequests } from "../../../infra/db/index.ts";
+import { and, eq } from "drizzle-orm";
+import { decodeBlobContent } from "../../../shared/utils/unified-diff.ts";
+import { textDate, textDateNullable } from "../../../shared/utils/db-guards.ts";
 
 type GitBucket = Parameters<typeof gitStore.getBlob>[0];
 
-function castGitBucket<T>(bucket: GitBucket): T {
-  return bucket as unknown as T;
-}
-
 function getCommitData(bucket: GitBucket, sha: string) {
-  return gitStore.getCommitData(castGitBucket<Parameters<typeof gitStore.getCommitData>[0]>(bucket), sha);
+  return gitStore.getCommitData(bucket, sha);
 }
 
 function putBlob(bucket: GitBucket, blob: Uint8Array) {
-  return gitStore.putBlob(castGitBucket<Parameters<typeof gitStore.putBlob>[0]>(bucket), blob);
+  return gitStore.putBlob(bucket, blob);
 }
 
-function mergeTrees3Way(bucket: GitBucket, baseTree: string, localTree: string, incomingTree: string) {
+function mergeTrees3Way(
+  bucket: GitBucket,
+  baseTree: string,
+  localTree: string,
+  incomingTree: string,
+) {
   return gitStore.mergeTrees3Way(
-    castGitBucket<Parameters<typeof gitStore.mergeTrees3Way>[0]>(bucket),
+    bucket,
     baseTree,
     localTree,
     incomingTree,
@@ -30,7 +35,7 @@ function mergeTrees3Way(bucket: GitBucket, baseTree: string, localTree: string, 
 }
 
 function flattenTree(bucket: GitBucket, treeSha: string) {
-  return gitStore.flattenTree(castGitBucket<Parameters<typeof gitStore.flattenTree>[0]>(bucket), treeSha);
+  return gitStore.flattenTree(bucket, treeSha);
 }
 
 function buildTreeFromPaths(
@@ -38,7 +43,7 @@ function buildTreeFromPaths(
   files: Array<{ path: string; sha: string; mode?: string }>,
 ) {
   return gitStore.buildTreeFromPaths(
-    castGitBucket<Parameters<typeof gitStore.buildTreeFromPaths>[0]>(bucket),
+    bucket,
     files,
   );
 }
@@ -51,7 +56,7 @@ function createCommit(
 ) {
   return gitStore.createCommit(
     db,
-    castGitBucket<Parameters<typeof gitStore.createCommit>[1]>(bucket),
+    bucket,
     repoId,
     params,
   );
@@ -105,7 +110,9 @@ export type MergeResolutionFailure = {
   body: Record<string, unknown>;
 };
 
-export type MergeResolutionResult = MergeResolutionSuccess | MergeResolutionFailure;
+export type MergeResolutionResult =
+  | MergeResolutionSuccess
+  | MergeResolutionFailure;
 
 // ---------------------------------------------------------------------------
 // Core logic
@@ -118,20 +125,35 @@ export type MergeResolutionResult = MergeResolutionSuccess | MergeResolutionFail
 export async function resolveConflictsAndMerge(
   params: MergeResolutionParams,
 ): Promise<MergeResolutionResult> {
-  const { db: dbBinding, bucket, repoId, pullRequestId, baseBranch, headBranch, resolutions, user } = params;
+  const {
+    db: dbBinding,
+    bucket,
+    repoId,
+    pullRequestId,
+    baseBranch,
+    headBranch,
+    resolutions,
+    user,
+  } = params;
 
   const baseBranchRef = await gitStore.getBranch(dbBinding, repoId, baseBranch);
   const headBranchRef = await gitStore.getBranch(dbBinding, repoId, headBranch);
   if (!baseBranchRef || !headBranchRef) {
-    return failure(404, { error: 'Branch not found' });
+    return failure(404, { error: "Branch not found" });
   }
 
   const baseSha = baseBranchRef.commit_sha;
   const headSha = headBranchRef.commit_sha;
 
-  const mergeBase = await gitStore.findMergeBase(dbBinding, bucket, repoId, baseSha, headSha);
+  const mergeBase = await gitStore.findMergeBase(
+    dbBinding,
+    bucket,
+    repoId,
+    baseSha,
+    headSha,
+  );
   if (!mergeBase) {
-    return failure(409, { error: 'No common ancestor found' });
+    return failure(409, { error: "No common ancestor found" });
   }
 
   const [baseCommit, localCommit, incomingCommit] = await Promise.all([
@@ -141,18 +163,19 @@ export async function resolveConflictsAndMerge(
   ]);
 
   if (!baseCommit || !localCommit || !incomingCommit) {
-    return failure(500, { error: 'Failed to load commits' });
+    return failure(500, { error: "Failed to load commits" });
   }
 
   // Apply user resolutions to blobs
-  const treeChanges: Array<{ path: string; sha: string | null; mode: string }> = [];
+  const treeChanges: Array<{ path: string; sha: string | null; mode: string }> =
+    [];
   for (const resolution of resolutions) {
     if (resolution.delete) {
-      treeChanges.push({ path: resolution.path, sha: null, mode: '100644' });
+      treeChanges.push({ path: resolution.path, sha: null, mode: "100644" });
     } else {
       const blob = new TextEncoder().encode(resolution.content);
       const sha = await putBlob(bucket, blob);
-      treeChanges.push({ path: resolution.path, sha, mode: '100644' });
+      treeChanges.push({ path: resolution.path, sha, mode: "100644" });
     }
   }
 
@@ -170,7 +193,12 @@ export async function resolveConflictsAndMerge(
   ]);
 
   const conflictPaths = new Set(mergeResult.conflicts.map((cf) => cf.path));
-  const mergedFiles = buildMergedFileMap(baseFiles, localFiles, incomingFiles, conflictPaths);
+  const mergedFiles = buildMergedFileMap(
+    baseFiles,
+    localFiles,
+    incomingFiles,
+    conflictPaths,
+  );
 
   // Apply user resolution changes
   for (const change of treeChanges) {
@@ -184,8 +212,12 @@ export async function resolveConflictsAndMerge(
   // Validate all conflicts are resolved
   const resolutionPaths = new Set(resolutions.map((r) => r.path));
   for (const conflict of mergeResult.conflicts) {
-    if (!resolutionPaths.has(conflict.path) && !mergedFiles.has(conflict.path)) {
-      return failure(400, { error: `Conflict not resolved for path: ${conflict.path}` });
+    if (
+      !resolutionPaths.has(conflict.path) && !mergedFiles.has(conflict.path)
+    ) {
+      return failure(400, {
+        error: `Conflict not resolved for path: ${conflict.path}`,
+      });
     }
   }
 
@@ -198,8 +230,7 @@ export async function resolveConflictsAndMerge(
 
   const timestamp = new Date().toISOString();
   const signature = buildUserSignature(user, timestamp);
-  const message =
-    params.commitMessage ||
+  const message = params.commitMessage ||
     `Merge branch '${headBranch}' into ${baseBranch} (conflicts resolved)`;
   const commit = await createCommit(dbBinding, bucket, repoId, {
     tree: treeOid,
@@ -264,7 +295,7 @@ export async function checkConflicts(
   const baseBranch = await gitStore.getBranch(db, repoId, baseBranchName);
   const headBranch = await gitStore.getBranch(db, repoId, headBranchName);
   if (!baseBranch || !headBranch) {
-    throw new ConflictCheckError(404, 'Branch not found');
+    throw new ConflictCheckError(404, "Branch not found");
   }
 
   const mergeBase = await gitStore.findMergeBase(
@@ -275,7 +306,12 @@ export async function checkConflicts(
     headBranch.commit_sha,
   );
   if (!mergeBase) {
-    return { conflicts: [], merge_base: null, is_mergeable: false, message: 'No common ancestor' };
+    return {
+      conflicts: [],
+      merge_base: null,
+      is_mergeable: false,
+      message: "No common ancestor",
+    };
   }
 
   const [baseCommit, localCommit, incomingCommit] = await Promise.all([
@@ -285,7 +321,7 @@ export async function checkConflicts(
   ]);
 
   if (!baseCommit || !localCommit || !incomingCommit) {
-    throw new ConflictCheckError(500, 'Failed to load commits');
+    throw new ConflictCheckError(500, "Failed to load commits");
   }
 
   const mergeResult = await mergeTrees3Way(
@@ -302,9 +338,14 @@ export async function checkConflicts(
   const detailedConflicts = await Promise.all(
     mergeResult.conflicts.map(async (conflict) => {
       const [baseBlob, oursBlob, theirsBlob] = await Promise.all([
-        gitStore.getBlobAtPath(bucket, baseCommit.tree, conflict.path).catch(() => null),
-        gitStore.getBlobAtPath(bucket, localCommit.tree, conflict.path).catch(() => null),
-        gitStore.getBlobAtPath(bucket, incomingCommit.tree, conflict.path).catch(() => null),
+        gitStore.getBlobAtPath(bucket, baseCommit.tree, conflict.path).catch(
+          () => null,
+        ),
+        gitStore.getBlobAtPath(bucket, localCommit.tree, conflict.path).catch(
+          () => null,
+        ),
+        gitStore.getBlobAtPath(bucket, incomingCommit.tree, conflict.path)
+          .catch(() => null),
       ]);
 
       return {
@@ -332,7 +373,7 @@ export class ConflictCheckError extends Error {
     message: string,
   ) {
     super(message);
-    this.name = 'ConflictCheckError';
+    this.name = "ConflictCheckError";
   }
 }
 
@@ -351,7 +392,11 @@ function buildMergedFileMap(
   const baseMap = new Map(baseFiles.map((f) => [f.path, f]));
   const localMap = new Map(localFiles.map((f) => [f.path, f]));
   const incomingMap = new Map(incomingFiles.map((f) => [f.path, f]));
-  const allPaths = new Set([...baseMap.keys(), ...localMap.keys(), ...incomingMap.keys()]);
+  const allPaths = new Set([
+    ...baseMap.keys(),
+    ...localMap.keys(),
+    ...incomingMap.keys(),
+  ]);
 
   const mergedFilesMap = new Map<string, { sha: string; mode: string }>();
 
@@ -362,24 +407,34 @@ function buildMergedFileMap(
     const localEntry = localMap.get(path);
     const incomingEntry = incomingMap.get(path);
 
-    const localChanged =
-      !baseEntry || !localEntry ||
+    const localChanged = !baseEntry || !localEntry ||
       baseEntry.sha !== localEntry.sha ||
       baseEntry.mode !== localEntry.mode;
-    const incomingChanged =
-      !baseEntry || !incomingEntry ||
+    const incomingChanged = !baseEntry || !incomingEntry ||
       baseEntry.sha !== incomingEntry.sha ||
       baseEntry.mode !== incomingEntry.mode;
 
     if (!localChanged && !incomingChanged) {
-      if (baseEntry) mergedFilesMap.set(path, { sha: baseEntry.sha, mode: baseEntry.mode });
+      if (baseEntry) {
+        mergedFilesMap.set(path, { sha: baseEntry.sha, mode: baseEntry.mode });
+      }
     } else if (localChanged && !incomingChanged) {
-      if (localEntry) mergedFilesMap.set(path, { sha: localEntry.sha, mode: localEntry.mode });
+      if (localEntry) {
+        mergedFilesMap.set(path, {
+          sha: localEntry.sha,
+          mode: localEntry.mode,
+        });
+      }
     } else if (!localChanged && incomingChanged) {
       if (incomingEntry) {
-        mergedFilesMap.set(path, { sha: incomingEntry.sha, mode: incomingEntry.mode });
+        mergedFilesMap.set(path, {
+          sha: incomingEntry.sha,
+          mode: incomingEntry.mode,
+        });
       }
-    } else if (localEntry && incomingEntry && localEntry.sha === incomingEntry.sha) {
+    } else if (
+      localEntry && incomingEntry && localEntry.sha === incomingEntry.sha
+    ) {
       mergedFilesMap.set(path, { sha: localEntry.sha, mode: localEntry.mode });
     }
   }
@@ -392,10 +447,10 @@ function buildUserSignature(
   _timestamp: string,
 ): { name: string; email: string; timestamp: number; tzOffset: string } {
   return {
-    name: user.name || 'User',
-    email: user.email || 'user@takos.dev',
+    name: user.name || "User",
+    email: user.email || "user@takos.dev",
     timestamp: Math.floor(Date.now() / 1000),
-    tzOffset: '+0000',
+    tzOffset: "+0000",
   };
 }
 
@@ -405,18 +460,21 @@ function decodeBlob(blob: Uint8Array | null): string | null {
   return isBinary ? null : text;
 }
 
-function failure(status: number, body: Record<string, unknown>): MergeResolutionFailure {
+function failure(
+  status: number,
+  body: Record<string, unknown>,
+): MergeResolutionFailure {
   return { success: false, status, body };
 }
 
 type MergeApplyFailure = {
   success: false;
-  error: 'branch_not_found' | 'ref_conflict';
+  error: "branch_not_found" | "ref_conflict";
   current: string | null;
 };
 type MergeApplySuccess = {
   success: true;
-  pullRequest: MergeResolutionSuccess['pullRequest'];
+  pullRequest: MergeResolutionSuccess["pullRequest"];
 };
 type MergeApplyResult = MergeApplySuccess | MergeApplyFailure;
 
@@ -456,19 +514,23 @@ async function advanceBaseBranchAndMarkMerged(
       .get();
 
     if (!currentBranch) {
-      return { success: false as const, error: 'branch_not_found' as const, current: null };
+      return {
+        success: false as const,
+        error: "branch_not_found" as const,
+        current: null,
+      };
     }
 
     return {
       success: false as const,
-      error: 'ref_conflict' as const,
+      error: "ref_conflict" as const,
       current: currentBranch.commitSha,
     };
   }
 
   const updatedPullRequest = await db.update(pullRequests)
     .set({
-      status: 'merged',
+      status: "merged",
       mergedAt: params.timestamp,
       updatedAt: params.timestamp,
     })
@@ -489,13 +551,15 @@ async function advanceBaseBranchAndMarkMerged(
   };
 }
 
-function mapMergeApplyFailure(result: MergeApplyFailure): MergeResolutionFailure {
-  if (result.error === 'branch_not_found') {
-    return failure(404, { error: 'Branch not found' });
+function mapMergeApplyFailure(
+  result: MergeApplyFailure,
+): MergeResolutionFailure {
+  if (result.error === "branch_not_found") {
+    return failure(404, { error: "Branch not found" });
   }
   return failure(409, {
-    error: 'REF_CONFLICT',
-    message: 'Ref conflict: branch was modified by another process',
+    error: "REF_CONFLICT",
+    message: "Ref conflict: branch was modified by another process",
     current: result.current || null,
   });
 }

@@ -1,24 +1,42 @@
-import type { DbEnv } from '../../../shared/types/index.ts';
-import { deployments, getDb, serviceDeployments, services } from '../../../infra/db/index.ts';
-import { eq, and, ne, inArray } from 'drizzle-orm';
-import { deleteHostnameRouting, resolveHostnameRouting, upsertHostnameRouting } from '../routing/service.ts';
-import type { RoutingBindings, RoutingTarget } from '../routing/routing-models.ts';
-import { parseDeploymentTargetConfig } from './provider.ts';
+import type { DbEnv } from "../../../shared/types/index.ts";
 import {
+  deployments,
+  getDb,
+  serviceDeployments,
+  services,
+} from "../../../infra/db/index.ts";
+import { and, eq, inArray, ne } from "drizzle-orm";
+import {
+  deleteHostnameRouting,
+  resolveHostnameRouting,
+  upsertHostnameRouting,
+} from "../routing/service.ts";
+import type {
+  RoutingBindings,
+  RoutingTarget,
+} from "../routing/routing-models.ts";
+import { parseDeploymentBackendConfig } from "./backend.ts";
+import {
+  type DeploymentRoutingServiceRecord,
   getDeploymentById,
   getDeploymentRoutingServiceRecord,
-  type DeploymentRoutingServiceRecord,
   logDeploymentEvent,
   updateServiceDeploymentPointers,
-} from './store.ts';
-import type { Deployment, DeploymentEnv, DeploymentTarget } from './models.ts';
-import { safeJsonParseOrDefault } from '../../../shared/utils/index.ts';
-import { logWarn } from '../../../shared/utils/logger.ts';
-import { BadRequestError, ConflictError, NotFoundError } from 'takos-common/errors';
+} from "./store.ts";
+import type { Deployment, DeploymentEnv, DeploymentTarget } from "./models.ts";
+import { safeJsonParseOrDefault } from "../../../shared/utils/index.ts";
+import { logWarn } from "../../../shared/utils/logger.ts";
+import {
+  BadRequestError,
+  ConflictError,
+  NotFoundError,
+} from "takos-common/errors";
 
 type DeploymentRoutingEnv = DbEnv & RoutingBindings;
 
-export type RoutingSnapshot = Array<{ hostname: string; target: RoutingTarget | null }>;
+export type RoutingSnapshot = Array<
+  { hostname: string; target: RoutingTarget | null }
+>;
 
 type ActiveDeploymentInfo = {
   id: string;
@@ -48,23 +66,25 @@ function resolveDeploymentRouteRef(input: {
   targetJson?: string;
   artifactRef: string | null;
 }): string | null {
-  const target = input.deploymentTarget
-    ?? (input.targetJson
-      ? parseDeploymentTargetConfig({
-          provider_name: 'workers-dispatch',
-          target_json: input.targetJson,
-        })
+  const target = input.deploymentTarget ??
+    (input.targetJson
+      ? parseDeploymentBackendConfig({
+        backend_name: "workers-dispatch",
+        target_json: input.targetJson,
+      })
       : undefined);
-  const routeRef = target?.route_ref?.trim()
-    || (target?.endpoint?.kind === 'service-ref' ? target.endpoint.ref.trim() : '')
-    || input.artifactRef?.trim()
-    || '';
+  const routeRef = target?.route_ref?.trim() ||
+    (target?.endpoint?.kind === "service-ref"
+      ? target.endpoint.ref.trim()
+      : "") ||
+    input.artifactRef?.trim() ||
+    "";
   return routeRef || null;
 }
 
 function normalizeCanaryWeight(raw: number): number {
   if (!Number.isFinite(raw)) return 1;
-  const normalized = Math.floor(raw);
+  const normalized = Math.round(raw);
   return Math.min(99, Math.max(1, normalized));
 }
 
@@ -73,56 +93,113 @@ export function collectHostnames(serviceRouteRecord: {
   customDomains: Array<{ domain: string | null }>;
 }): string[] {
   const hostnames = new Set<string>();
-  if (serviceRouteRecord.hostname) hostnames.add(serviceRouteRecord.hostname.toLowerCase());
+  if (serviceRouteRecord.hostname) {
+    hostnames.add(serviceRouteRecord.hostname.toLowerCase());
+  }
   for (const customDomain of serviceRouteRecord.customDomains) {
     if (customDomain.domain) hostnames.add(customDomain.domain.toLowerCase());
   }
   return Array.from(hostnames);
 }
 
-export async function snapshotRouting(env: DeploymentRoutingEnv, hostnameList: string[]): Promise<RoutingSnapshot> {
+export async function snapshotRouting(
+  env: DeploymentRoutingEnv,
+  hostnameList: string[],
+): Promise<RoutingSnapshot> {
   const snapshots: RoutingSnapshot = [];
   for (const hostname of hostnameList) {
     const resolved = await resolveHostnameRouting({ env, hostname });
-    snapshots.push({ hostname, target: resolved.tombstone ? null : resolved.target });
+    snapshots.push({
+      hostname,
+      target: resolved.tombstone ? null : resolved.target,
+    });
   }
   return snapshots;
 }
 
-export async function restoreRoutingSnapshot(env: DeploymentRoutingEnv, snapshot: RoutingSnapshot): Promise<void> {
+export async function restoreRoutingSnapshot(
+  env: DeploymentRoutingEnv,
+  snapshot: RoutingSnapshot,
+): Promise<void> {
   for (const item of snapshot) {
     if (item.target) {
-      await upsertHostnameRouting({ env, hostname: item.hostname, target: item.target });
+      await upsertHostnameRouting({
+        env,
+        hostname: item.hostname,
+        target: item.target,
+      });
     } else {
       await deleteHostnameRouting({ env, hostname: item.hostname });
     }
   }
 }
 
-export function buildRoutingTarget(ctx: RoutingContext, hostnameList: string[]): RoutingPlan {
+type RoutingMutationRollbackLogContext = {
+  module?: string;
+  message?: string;
+};
+
+export async function runRoutingMutationWithRollback<T>(
+  env: DeploymentRoutingEnv,
+  snapshot: RoutingSnapshot | null | undefined,
+  operation: () => Promise<T>,
+  logContext: RoutingMutationRollbackLogContext = {},
+): Promise<T> {
+  const rollbackSnapshot = snapshot ?? [];
+
+  try {
+    return await operation();
+  } catch (error) {
+    if (rollbackSnapshot.length > 0) {
+      await restoreRoutingSnapshot(env, rollbackSnapshot).catch(
+        (restoreError) => {
+          logWarn(
+            logContext.message ??
+              "Failed to restore routing snapshot during routing mutation (non-critical)",
+            {
+              module: logContext.module ?? "routing",
+              error: restoreError instanceof Error
+                ? restoreError.message
+                : String(restoreError),
+            },
+          );
+        },
+      );
+    }
+    throw error;
+  }
+}
+
+export function buildRoutingTarget(
+  ctx: RoutingContext,
+  hostnameList: string[],
+): RoutingPlan {
   const baseDetails: Record<string, unknown> = {
     hostnames: hostnameList,
     desired_routing_status: ctx.desiredRoutingStatus,
     desired_routing_weight: ctx.desiredRoutingWeight,
-    deployment_target_endpoint_kind: ctx.deploymentTarget.endpoint?.kind ?? null,
+    deployment_target_endpoint_kind: ctx.deploymentTarget.endpoint?.kind ??
+      null,
   };
 
-  if (ctx.deploymentTarget.endpoint?.kind === 'http-url') {
-    if (ctx.desiredRoutingStatus === 'canary') {
-      throw new Error('http-url deployment targets do not support canary routing');
+  if (ctx.deploymentTarget.endpoint?.kind === "http-url") {
+    if (ctx.desiredRoutingStatus === "canary") {
+      throw new Error(
+        "http-url deployment targets do not support canary routing",
+      );
     }
 
-    const endpointName = ctx.deploymentTarget.route_ref
-      || ctx.deployArtifactRef;
+    const endpointName = ctx.deploymentTarget.route_ref ||
+      ctx.deployArtifactRef;
     return {
       target: {
-        type: 'http-endpoint-set',
+        type: "http-endpoint-set",
         endpoints: [
           {
             name: endpointName,
             routes: [],
             target: {
-              kind: 'http-url',
+              kind: "http-url",
               baseUrl: ctx.deploymentTarget.endpoint.base_url,
             },
           },
@@ -130,7 +207,7 @@ export function buildRoutingTarget(ctx: RoutingContext, hostnameList: string[]):
       },
       auditDetails: {
         ...baseDetails,
-        mode: 'http-url',
+        mode: "http-url",
         http_endpoint: ctx.deploymentTarget.endpoint.base_url,
         route_ref: ctx.deploymentTarget.route_ref ?? null,
       },
@@ -142,14 +219,16 @@ export function buildRoutingTarget(ctx: RoutingContext, hostnameList: string[]):
     artifactRef: ctx.deployArtifactRef,
   });
   if (!deploymentRouteRef) {
-    throw new Error('Deployment route ref is missing');
+    throw new Error("Deployment route ref is missing");
   }
 
-  if (ctx.desiredRoutingStatus !== 'canary') {
-    const deploymentStatus = ctx.desiredRoutingStatus === 'rollback' ? 'rollback' : 'active';
+  if (ctx.desiredRoutingStatus !== "canary") {
+    const deploymentStatus = ctx.desiredRoutingStatus === "rollback"
+      ? "rollback"
+      : "active";
     return {
       target: {
-        type: 'deployments',
+        type: "deployments",
         deployments: [
           {
             routeRef: deploymentRouteRef,
@@ -173,35 +252,37 @@ export function buildRoutingTarget(ctx: RoutingContext, hostnameList: string[]):
   const activeWeight = 100 - canaryWeight;
   const activeRouteRef = ctx.activeDeployment
     ? resolveDeploymentRouteRef({
-        targetJson: ctx.activeDeployment.targetJson,
-        artifactRef: ctx.activeDeployment.artifactRef,
-      })
+      targetJson: ctx.activeDeployment.targetJson,
+      artifactRef: ctx.activeDeployment.artifactRef,
+    })
     : null;
   if (!activeRouteRef) {
-    throw new Error('Active deployment route ref is missing');
+    throw new Error("Active deployment route ref is missing");
   }
 
   return {
     target: {
-      type: 'deployments',
+      type: "deployments",
       deployments: [
         {
           routeRef: activeRouteRef,
           weight: activeWeight,
           deploymentId: ctx.activeDeployment?.id,
-          status: ctx.activeDeployment?.routingStatus === 'rollback' ? 'rollback' : 'active',
+          status: ctx.activeDeployment?.routingStatus === "rollback"
+            ? "rollback"
+            : "active",
         },
         {
           routeRef: deploymentRouteRef,
           weight: canaryWeight,
           deploymentId: ctx.deploymentId,
-          status: 'canary',
+          status: "canary",
         },
       ],
     },
     auditDetails: {
       ...baseDetails,
-      mode: 'canary',
+      mode: "canary",
       active_weight: activeWeight,
       canary_weight: canaryWeight,
       active_deployment_id: ctx.activeDeployment?.id,
@@ -218,25 +299,25 @@ export async function applyRoutingDbUpdates(
 ): Promise<void> {
   const db = getDb(env.DB);
 
-  if (ctx.desiredRoutingStatus !== 'canary') {
+  if (ctx.desiredRoutingStatus !== "canary") {
     await db.update(deployments)
       .set({
-        routingStatus: 'archived',
+        routingStatus: "archived",
         routingWeight: 0,
         updatedAt: nowIso,
       })
       .where(
         and(
-        eq(serviceDeployments.serviceId, ctx.serviceRouteRecord.id),
+          eq(serviceDeployments.serviceId, ctx.serviceRouteRecord.id),
           ne(deployments.id, ctx.deploymentId),
-          inArray(deployments.routingStatus, ['active', 'rollback', 'canary']),
-        )
+          inArray(deployments.routingStatus, ["active", "rollback", "canary"]),
+        ),
       )
       .run();
 
     await db.update(deployments)
       .set({
-        routingStatus: 'active',
+        routingStatus: "active",
         routingWeight: 100,
         updatedAt: nowIso,
       })
@@ -244,7 +325,7 @@ export async function applyRoutingDbUpdates(
       .run();
 
     await updateServiceDeploymentPointers(env.DB, ctx.serviceRouteRecord.id, {
-      status: 'deployed',
+      status: "deployed",
       fallbackDeploymentId: ctx.serviceRouteRecord.activeDeploymentId ?? null,
       activeDeploymentId: ctx.deploymentId,
       activeDeploymentVersion: ctx.deploymentVersion,
@@ -260,7 +341,9 @@ export async function applyRoutingDbUpdates(
   if (ctx.activeDeployment?.id) {
     await db.update(deployments)
       .set({
-        routingStatus: ctx.activeDeployment.routingStatus === 'rollback' ? 'rollback' : 'active',
+        routingStatus: ctx.activeDeployment.routingStatus === "rollback"
+          ? "rollback"
+          : "active",
         routingWeight: activeWeight,
         updatedAt: nowIso,
       })
@@ -270,22 +353,22 @@ export async function applyRoutingDbUpdates(
 
   await db.update(deployments)
     .set({
-      routingStatus: 'archived',
+      routingStatus: "archived",
       routingWeight: 0,
       updatedAt: nowIso,
     })
     .where(
       and(
         eq(serviceDeployments.serviceId, ctx.serviceRouteRecord.id),
-        eq(deployments.routingStatus, 'canary'),
+        eq(deployments.routingStatus, "canary"),
         ne(deployments.id, ctx.deploymentId),
-      )
+      ),
     )
     .run();
 
   await db.update(deployments)
     .set({
-      routingStatus: 'canary',
+      routingStatus: "canary",
       routingWeight: canaryWeight,
       updatedAt: nowIso,
     })
@@ -294,7 +377,7 @@ export async function applyRoutingDbUpdates(
 
   await db.update(services)
     .set({
-      status: 'deployed',
+      status: "deployed",
       updatedAt: nowIso,
     })
     .where(eq(services.id, ctx.serviceRouteRecord.id))
@@ -311,7 +394,10 @@ export async function applyRoutingToHostnames(
   }
 }
 
-export async function fetchServiceWithDomains(env: DeploymentRoutingEnv, serviceId: string): Promise<DeploymentRoutingServiceRecord | null> {
+export async function fetchServiceWithDomains(
+  env: DeploymentRoutingEnv,
+  serviceId: string,
+): Promise<DeploymentRoutingServiceRecord | null> {
   return getDeploymentRoutingServiceRecord(env.DB, serviceId);
 }
 
@@ -334,20 +420,24 @@ export interface AbortCanaryResult {
  * Resolve the deployment target for a deployment, injecting the resolved
  * container endpoint when the artifact is a container image.
  */
-function resolveDeploymentTargetForRouting(deployment: Deployment): DeploymentTarget {
-  const baseTarget = parseDeploymentTargetConfig(deployment);
-  if (deployment.artifact_kind !== 'container-image') {
+function resolveDeploymentTargetForRouting(
+  deployment: Deployment,
+): DeploymentTarget {
+  const baseTarget = parseDeploymentBackendConfig(deployment);
+  if (deployment.artifact_kind !== "container-image") {
     return baseTarget;
   }
-  const providerState = safeJsonParseOrDefault<Record<string, unknown>>(
-    deployment.provider_state_json,
+  const backendState = safeJsonParseOrDefault<Record<string, unknown>>(
+    deployment.backend_state_json,
     {},
   );
-  const resolvedEp = providerState.resolved_endpoint as { base_url?: string } | undefined;
+  const resolvedEp = backendState.resolved_endpoint as
+    | { base_url?: string }
+    | undefined;
   if (resolvedEp?.base_url) {
     return {
       ...baseTarget,
-      endpoint: { kind: 'http-url', base_url: resolvedEp.base_url },
+      endpoint: { kind: "http-url", base_url: resolvedEp.base_url },
     };
   }
   return baseTarget;
@@ -366,18 +456,23 @@ export async function promoteCanaryDeployment(
 ): Promise<PromoteCanaryResult> {
   const canary = await getDeploymentById(env.DB, input.deploymentId);
   if (!canary || canary.service_id !== input.serviceId) {
-    throw new NotFoundError('Deployment');
+    throw new NotFoundError("Deployment");
   }
-  if (canary.routing_status !== 'canary') {
-    throw new ConflictError('Deployment is not in canary state');
+  if (canary.routing_status !== "canary") {
+    throw new ConflictError("Deployment is not in canary state");
   }
   if (!canary.artifact_ref) {
-    throw new BadRequestError('Canary deployment has no artifact_ref; cannot promote via routing pointer');
+    throw new BadRequestError(
+      "Canary deployment has no artifact_ref; cannot promote via routing pointer",
+    );
   }
 
-  const serviceRouteRecord = await fetchServiceWithDomains(env, input.serviceId);
+  const serviceRouteRecord = await fetchServiceWithDomains(
+    env,
+    input.serviceId,
+  );
   if (!serviceRouteRecord) {
-    throw new NotFoundError('Service');
+    throw new NotFoundError("Service");
   }
 
   const hostnameList = collectHostnames(serviceRouteRecord);
@@ -393,7 +488,7 @@ export async function promoteCanaryDeployment(
     deployArtifactRef: canary.artifact_ref,
     deploymentTarget,
     serviceRouteRecord,
-    desiredRoutingStatus: 'active',
+    desiredRoutingStatus: "active",
     desiredRoutingWeight: 100,
     activeDeployment: null,
   };
@@ -401,7 +496,16 @@ export async function promoteCanaryDeployment(
   const { target, auditDetails } = buildRoutingTarget(routingCtx, hostnameList);
 
   if (hostnameList.length > 0) {
-    await applyRoutingToHostnames(env, hostnameList, target);
+    await runRoutingMutationWithRollback(
+      env,
+      routingRollbackSnapshot,
+      () => applyRoutingToHostnames(env, hostnameList, target),
+      {
+        module: "routing",
+        message:
+          "Failed to restore routing snapshot during canary promote (non-critical)",
+      },
+    );
   }
 
   const nowIso = new Date().toISOString();
@@ -410,10 +514,13 @@ export async function promoteCanaryDeployment(
   } catch (dbErr) {
     if (routingRollbackSnapshot.length > 0) {
       await restoreRoutingSnapshot(env, routingRollbackSnapshot).catch((e) => {
-        logWarn('Failed to restore routing snapshot during canary promote (non-critical)', {
-          module: 'routing',
-          error: e instanceof Error ? e.message : String(e),
-        });
+        logWarn(
+          "Failed to restore routing snapshot during canary promote (non-critical)",
+          {
+            module: "routing",
+            error: e instanceof Error ? e.message : String(e),
+          },
+        );
       });
     }
     throw dbErr;
@@ -422,9 +529,9 @@ export async function promoteCanaryDeployment(
   await logDeploymentEvent(
     env.DB,
     canary.id,
-    'canary_promoted',
+    "canary_promoted",
     null,
-    'Promoted canary deployment to 100% active routing',
+    "Promoted canary deployment to 100% active routing",
     {
       actorAccountId: input.userId,
       details: {
@@ -447,28 +554,35 @@ export async function abortCanaryDeployment(
 ): Promise<AbortCanaryResult> {
   const canary = await getDeploymentById(env.DB, input.deploymentId);
   if (!canary || canary.service_id !== input.serviceId) {
-    throw new NotFoundError('Deployment');
+    throw new NotFoundError("Deployment");
   }
-  if (canary.routing_status !== 'canary') {
-    throw new ConflictError('Deployment is not in canary state');
+  if (canary.routing_status !== "canary") {
+    throw new ConflictError("Deployment is not in canary state");
   }
 
-  const serviceRouteRecord = await fetchServiceWithDomains(env, input.serviceId);
+  const serviceRouteRecord = await fetchServiceWithDomains(
+    env,
+    input.serviceId,
+  );
   if (!serviceRouteRecord) {
-    throw new NotFoundError('Service');
+    throw new NotFoundError("Service");
   }
 
   const previousActiveId = serviceRouteRecord.activeDeploymentId;
   if (!previousActiveId) {
-    throw new ConflictError('No previously active deployment to roll back to');
+    throw new ConflictError("No previously active deployment to roll back to");
   }
 
   const previousActive = await getDeploymentById(env.DB, previousActiveId);
   if (!previousActive || previousActive.service_id !== input.serviceId) {
-    throw new ConflictError('Previously active deployment is missing or invalid');
+    throw new ConflictError(
+      "Previously active deployment is missing or invalid",
+    );
   }
   if (!previousActive.artifact_ref) {
-    throw new BadRequestError('Previously active deployment has no artifact_ref; cannot restore routing');
+    throw new BadRequestError(
+      "Previously active deployment has no artifact_ref; cannot restore routing",
+    );
   }
 
   const hostnameList = collectHostnames(serviceRouteRecord);
@@ -484,7 +598,7 @@ export async function abortCanaryDeployment(
     deployArtifactRef: previousActive.artifact_ref,
     deploymentTarget: restoreTarget,
     serviceRouteRecord,
-    desiredRoutingStatus: 'active',
+    desiredRoutingStatus: "active",
     desiredRoutingWeight: 100,
     activeDeployment: null,
   };
@@ -492,7 +606,16 @@ export async function abortCanaryDeployment(
   const { target, auditDetails } = buildRoutingTarget(routingCtx, hostnameList);
 
   if (hostnameList.length > 0) {
-    await applyRoutingToHostnames(env, hostnameList, target);
+    await runRoutingMutationWithRollback(
+      env,
+      routingRollbackSnapshot,
+      () => applyRoutingToHostnames(env, hostnameList, target),
+      {
+        module: "routing",
+        message:
+          "Failed to restore routing snapshot during canary abort (non-critical)",
+      },
+    );
   }
 
   const nowIso = new Date().toISOString();
@@ -502,7 +625,7 @@ export async function abortCanaryDeployment(
     // Restore the previously active deployment to active/100%.
     await db.update(deployments)
       .set({
-        routingStatus: 'active',
+        routingStatus: "active",
         routingWeight: 100,
         updatedAt: nowIso,
       })
@@ -514,14 +637,14 @@ export async function abortCanaryDeployment(
     // as rolled_back below).
     await db.update(deployments)
       .set({
-        routingStatus: 'archived',
+        routingStatus: "archived",
         routingWeight: 0,
         updatedAt: nowIso,
       })
       .where(
         and(
           eq(serviceDeployments.serviceId, serviceRouteRecord.id),
-          inArray(deployments.routingStatus, ['active', 'rollback', 'canary']),
+          inArray(deployments.routingStatus, ["active", "rollback", "canary"]),
           ne(deployments.id, previousActive.id),
           ne(deployments.id, canary.id),
         ),
@@ -532,9 +655,9 @@ export async function abortCanaryDeployment(
     // operational state visible; status='rolled_back' tracks the lifecycle.
     await db.update(deployments)
       .set({
-        routingStatus: 'rollback',
+        routingStatus: "rollback",
         routingWeight: 0,
-        status: 'rolled_back',
+        status: "rolled_back",
         rolledBackAt: nowIso,
         rolledBackBy: input.userId,
         updatedAt: nowIso,
@@ -548,7 +671,7 @@ export async function abortCanaryDeployment(
     // status / updatedAt so the lifecycle reflects the abort.
     await db.update(services)
       .set({
-        status: 'deployed',
+        status: "deployed",
         updatedAt: nowIso,
       })
       .where(eq(services.id, serviceRouteRecord.id))
@@ -556,10 +679,13 @@ export async function abortCanaryDeployment(
   } catch (dbErr) {
     if (routingRollbackSnapshot.length > 0) {
       await restoreRoutingSnapshot(env, routingRollbackSnapshot).catch((e) => {
-        logWarn('Failed to restore routing snapshot during canary abort (non-critical)', {
-          module: 'routing',
-          error: e instanceof Error ? e.message : String(e),
-        });
+        logWarn(
+          "Failed to restore routing snapshot during canary abort (non-critical)",
+          {
+            module: "routing",
+            error: e instanceof Error ? e.message : String(e),
+          },
+        );
       });
     }
     throw dbErr;
@@ -568,9 +694,9 @@ export async function abortCanaryDeployment(
   await logDeploymentEvent(
     env.DB,
     canary.id,
-    'canary_aborted',
+    "canary_aborted",
     null,
-    'Aborted canary deployment and restored previous active routing',
+    "Aborted canary deployment and restored previous active routing",
     {
       actorAccountId: input.userId,
       details: {

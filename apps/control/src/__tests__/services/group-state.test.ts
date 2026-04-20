@@ -2,7 +2,7 @@ import {
   compileGroupDesiredState,
   materializeRoutes,
 } from "@/services/deployment/group-state";
-import { computeDiff } from "@/services/deployment/diff";
+import { computeDiff, filterDiffByTargets } from "@/services/deployment/diff";
 import type { AppManifest } from "@/application/services/source/app-manifest-types.ts";
 
 import { assertEquals, assertObjectMatch } from "jsr:@std/assert";
@@ -26,7 +26,8 @@ function makeManifest(): AppManifest {
       },
       web: {
         kind: "service",
-        image: "ghcr.io/example/web:latest",
+        image:
+          "ghcr.io/example/web@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
         port: 8080,
       },
     },
@@ -52,13 +53,13 @@ function makeManifest(): AppManifest {
 Deno.test("group desired state compiler - compiles a manifest into canonical workload/resource/route state", () => {
   const compiled = compileGroupDesiredState(makeManifest(), {
     groupName: "demo-prod",
-    provider: "cloudflare",
+    backend: "cloudflare",
     envName: "production",
   });
 
   assertEquals(compiled.groupName, "demo-prod");
   assertEquals(compiled.env, "production");
-  assertEquals(compiled.resources, {});
+  assertEquals(compiled.backend, "cloudflare");
   assertEquals(compiled.workloads.api.category, "worker");
   assertEquals(compiled.workloads.api.routeNames, ["api:/api"]);
   assertEquals(
@@ -86,7 +87,8 @@ Deno.test("group desired state compiler - surfaces attached containers as their 
         containers: {
           sidecar: {
             kind: "attached-container",
-            image: "ghcr.io/example/sidecar:latest",
+            image:
+              "ghcr.io/example/sidecar@sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
           },
         },
       },
@@ -108,7 +110,8 @@ Deno.test("group desired state compiler - namespaces attached containers by pare
         containers: {
           sidecar: {
             kind: "attached-container",
-            image: "ghcr.io/example/api-sidecar:latest",
+            image:
+              "ghcr.io/example/api-sidecar@sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
           },
         },
       },
@@ -117,7 +120,8 @@ Deno.test("group desired state compiler - namespaces attached containers by pare
         containers: {
           sidecar: {
             kind: "attached-container",
-            image: "ghcr.io/example/admin-sidecar:latest",
+            image:
+              "ghcr.io/example/admin-sidecar@sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
           },
         },
       },
@@ -133,18 +137,18 @@ Deno.test("group desired state compiler - namespaces attached containers by pare
   );
   assertEquals(
     compiled.workloads["api-sidecar"].spec.image,
-    "ghcr.io/example/api-sidecar:latest",
+    "ghcr.io/example/api-sidecar@sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
   );
   assertEquals(
     compiled.workloads["admin-sidecar"].spec.image,
-    "ghcr.io/example/admin-sidecar:latest",
+    "ghcr.io/example/admin-sidecar@sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
   );
 });
 
 Deno.test("group diff - detects resource, workload, and route updates from canonical state", () => {
   const desired = compileGroupDesiredState(makeManifest(), {
     groupName: "demo-prod",
-    provider: "cloudflare",
+    backend: "cloudflare",
     envName: "production",
   });
   const currentRoutes = materializeRoutes(desired.routes, {
@@ -172,7 +176,7 @@ Deno.test("group diff - detects resource, workload, and route updates from canon
   const diff = computeDiff(desired, {
     groupId: "group-1",
     groupName: "demo-prod",
-    provider: "cloudflare",
+    backend: "cloudflare",
     env: "production",
     version: "0.9.0",
     updatedAt: "2026-03-29T00:00:00.000Z",
@@ -231,4 +235,77 @@ Deno.test("group diff - detects resource, workload, and route updates from canon
       { name: "web:/", category: "route", action: "update" },
     ],
   );
+});
+
+Deno.test("group diff - retries pending and failed workloads even when spec fingerprint matches", () => {
+  const desired = compileGroupDesiredState(makeManifest(), {
+    groupName: "demo-prod",
+    backend: "cloudflare",
+    envName: "production",
+  });
+
+  const diff = computeDiff(desired, {
+    groupId: "group-1",
+    groupName: "demo-prod",
+    backend: "cloudflare",
+    env: "production",
+    version: "1.0.0",
+    updatedAt: "2026-03-29T00:00:00.000Z",
+    resources: {},
+    workloads: {
+      api: {
+        serviceId: "svc-api",
+        name: "api",
+        category: "worker",
+        status: "pending",
+        specFingerprint: desired.workloads.api.specFingerprint,
+        updatedAt: "2026-03-29T00:00:00.000Z",
+      },
+      web: {
+        serviceId: "svc-web",
+        name: "web",
+        category: "service",
+        status: "failed",
+        specFingerprint: desired.workloads.web.specFingerprint,
+        updatedAt: "2026-03-29T00:00:00.000Z",
+      },
+    },
+    routes: {},
+  });
+
+  assertEquals(
+    diff.entries.filter((entry) => entry.category !== "route").map((
+      entry,
+    ) => ({
+      name: entry.name,
+      action: entry.action,
+      reason: entry.reason,
+    })),
+    [
+      { name: "api", action: "update", reason: "workload status pending" },
+      { name: "web", action: "update", reason: "workload status failed" },
+    ],
+  );
+  assertEquals(diff.summary.update, 2);
+});
+
+Deno.test("group diff - filters target names with canonical and dotted category keys", () => {
+  const diff = filterDiffByTargets({
+    entries: [
+      { name: "api", category: "worker", action: "update" },
+      { name: "web:/", category: "route", action: "update" },
+      { name: "admin", category: "service", action: "unchanged" },
+    ],
+    hasChanges: true,
+    summary: { create: 0, update: 2, delete: 0, unchanged: 1 },
+  }, ["workers.api", "routes.web:/"]);
+
+  assertEquals(diff.entries.map((entry) => entry.name), ["api", "web:/"]);
+  assertEquals(diff.summary, {
+    create: 0,
+    update: 2,
+    delete: 0,
+    unchanged: 0,
+  });
+  assertEquals(diff.hasChanges, true);
 });

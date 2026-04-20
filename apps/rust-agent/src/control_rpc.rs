@@ -153,11 +153,15 @@ pub struct SkillCatalogResponse {
     pub locale: String,
     pub skills: Vec<ActivatedSkill>,
     pub resolution_context: SkillResolutionContext,
+    pub managed_source: Option<String>,
 }
 
 #[allow(dead_code)]
 #[derive(Debug, Clone, Default)]
 pub struct SkillRuntimeContextResponse {
+    pub locale: Option<String>,
+    pub skills: Vec<ActivatedSkill>,
+    pub managed_skills: Vec<ActivatedSkill>,
     pub custom_skills: Vec<ActivatedSkill>,
     pub resolution_context: SkillResolutionContext,
     pub available_mcp_server_names: Vec<String>,
@@ -253,6 +257,15 @@ impl ControlRpcClient {
 
     pub fn next_sequence(&self) -> u64 {
         self.sequence.fetch_add(1, Ordering::SeqCst)
+    }
+
+    fn idempotency_hash(value: &str) -> String {
+        let mut hash: u64 = 0xcbf29ce484222325;
+        for byte in value.as_bytes() {
+            hash ^= *byte as u64;
+            hash = hash.wrapping_mul(0x100000001b3);
+        }
+        format!("{:x}", hash)
     }
 
     pub async fn run_bootstrap(&self) -> AppResult<RunBootstrap> {
@@ -396,6 +409,7 @@ impl ControlRpcClient {
             locale: string_field(&payload, &["locale"]).unwrap_or_else(|| "en".to_string()),
             skills,
             resolution_context,
+            managed_source: Some("control".to_string()),
         })
     }
 
@@ -405,6 +419,7 @@ impl ControlRpcClient {
         space_id: &str,
         agent_type: &str,
         history: &[HistoryMessage],
+        available_tool_names: &[String],
     ) -> AppResult<SkillRuntimeContextResponse> {
         let payload: Value = self
             .post_json(
@@ -415,18 +430,16 @@ impl ControlRpcClient {
                     "spaceId": space_id,
                     "agentType": agent_type,
                     "history": history,
+                    "availableToolNames": available_tool_names,
                 }),
             )
             .await?;
 
-        let custom_skills = payload
-            .get("customSkills")
-            .and_then(Value::as_array)
-            .cloned()
-            .unwrap_or_default()
-            .into_iter()
-            .filter_map(|value| serde_json::from_value::<ActivatedSkill>(value).ok())
-            .collect();
+        let skills = activated_skill_array_field(&payload, &["skills"]);
+        let managed_skills =
+            activated_skill_array_field(&payload, &["managedSkills", "managed_skills"]);
+        let custom_skills =
+            activated_skill_array_field(&payload, &["customSkills", "custom_skills"]);
 
         let resolution_context = payload
             .get("resolutionContext")
@@ -436,6 +449,9 @@ impl ControlRpcClient {
             .unwrap_or_default();
 
         Ok(SkillRuntimeContextResponse {
+            locale: string_field(&payload, &["locale"]),
+            skills,
+            managed_skills,
             custom_skills,
             resolution_context,
             available_mcp_server_names: string_array_field(
@@ -512,11 +528,17 @@ impl ControlRpcClient {
     }
 
     pub async fn add_assistant_message(&self, thread_id: &str, content: &str) -> AppResult<()> {
+        let idempotency_key = format!(
+            "run:{}:assistant-message:{}",
+            self.run_id,
+            Self::idempotency_hash(content)
+        );
         let _: Value = self
             .post_json(
                 "/rpc/control/add-message",
                 json!({
                     "threadId": thread_id,
+                    "idempotencyKey": idempotency_key,
                     "message": {
                         "role": "assistant",
                         "content": content,
@@ -642,6 +664,21 @@ fn string_array_field(payload: &Value, keys: &[&str]) -> Vec<String> {
                     .iter()
                     .filter_map(Value::as_str)
                     .map(ToString::to_string)
+                    .collect::<Vec<_>>()
+            })
+        })
+        .unwrap_or_default()
+}
+
+fn activated_skill_array_field(payload: &Value, keys: &[&str]) -> Vec<ActivatedSkill> {
+    keys.iter()
+        .find_map(|key| {
+            payload.get(*key).and_then(Value::as_array).map(|values| {
+                values
+                    .iter()
+                    .filter_map(|value| {
+                        serde_json::from_value::<ActivatedSkill>(value.clone()).ok()
+                    })
                     .collect::<Vec<_>>()
             })
         })

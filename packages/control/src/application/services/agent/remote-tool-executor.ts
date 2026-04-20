@@ -1,6 +1,10 @@
-import type { ToolObserver } from '../memory-graph/graph-models.ts';
-import type { ToolCall, ToolDefinition, ToolResult } from '../../tools/tool-definitions.ts';
-import type { ToolExecutorLike } from '../../tools/executor.ts';
+import type { ToolObserver } from "../memory-graph/graph-models.ts";
+import type {
+  ToolCall,
+  ToolDefinition,
+  ToolResult,
+} from "../../tools/tool-definitions.ts";
+import type { ToolExecutorLike } from "../../tools/executor.ts";
 
 type RemoteToolCatalog = {
   tools: ToolDefinition[];
@@ -9,7 +13,9 @@ type RemoteToolCatalog = {
 
 export interface RemoteToolExecutorIo {
   getToolCatalog(input: { runId: string }): Promise<RemoteToolCatalog>;
-  executeTool(input: { runId: string; toolCall: ToolCall }): Promise<ToolResult>;
+  executeTool(
+    input: { runId: string; toolCall: ToolCall },
+  ): Promise<ToolResult>;
   cleanupToolExecutor(input: { runId: string }): Promise<void>;
 }
 
@@ -20,18 +26,27 @@ export class RemoteToolExecutor implements ToolExecutorLike {
   private readonly failedServers: string[];
   private observer: ToolObserver | null = null;
 
-  private constructor(runId: string, catalog: RemoteToolCatalog, io: RemoteToolExecutorIo) {
+  private constructor(
+    runId: string,
+    catalog: RemoteToolCatalog,
+    io: RemoteToolExecutorIo,
+  ) {
     this.io = io;
     this.runId = runId;
     this.tools = catalog.tools;
     this.failedServers = catalog.mcpFailedServers;
   }
 
-  static async create(runId: string, io: RemoteToolExecutorIo): Promise<RemoteToolExecutor> {
+  static async create(
+    runId: string,
+    io: RemoteToolExecutorIo,
+  ): Promise<RemoteToolExecutor> {
     const catalog = await io.getToolCatalog({ runId });
     return new RemoteToolExecutor(runId, {
       tools: Array.isArray(catalog.tools) ? catalog.tools : [],
-      mcpFailedServers: Array.isArray(catalog.mcpFailedServers) ? catalog.mcpFailedServers : [],
+      mcpFailedServers: Array.isArray(catalog.mcpFailedServers)
+        ? catalog.mcpFailedServers
+        : [],
     }, io);
   }
 
@@ -59,7 +74,7 @@ export class RemoteToolExecutor implements ToolExecutorLike {
         this.observer.observe({
           toolName: toolCall.name,
           arguments: toolCall.arguments,
-          result: result.error ? '' : result.output,
+          result: result.error ? "" : result.output,
           error: result.error,
           timestamp: startedAt,
           duration: Date.now() - startedAt,

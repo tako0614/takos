@@ -15,7 +15,7 @@ Deno.test("runtime-host builds the runtime container env from the host worker en
   assertEquals(
     buildRuntimeContainerEnv({
       ADMIN_DOMAIN: "test.takos.jp",
-      JWT_PUBLIC_KEY: "public-key",
+      PLATFORM_PUBLIC_KEY: "public-key",
       PROXY_BASE_URL: "https://takos-runtime-host-staging.takos.workers.dev",
     }),
     {
@@ -43,6 +43,7 @@ Deno.test("runtime-host forwards requests through the runtime container DO fetch
   const env = {
     RUNTIME_CONTAINER: { getByName },
     ADMIN_DOMAIN: "test.takos.jp",
+    PLATFORM_PUBLIC_KEY: "public-key",
     PROXY_BASE_URL: "https://takos-runtime-host-staging.takos.workers.dev",
   } as unknown as Parameters<typeof runtimeHost.fetch>[1];
   const request = new Request("https://runtime-host/api/runtime/ping");
@@ -74,6 +75,7 @@ Deno.test("runtime-host injects a proxy token on runtime session creation", asyn
       }),
     },
     ADMIN_DOMAIN: "test.takos.jp",
+    PLATFORM_PUBLIC_KEY: "public-key",
     PROXY_BASE_URL: "https://takos-runtime-host-staging.takos.workers.dev",
   } as unknown as Parameters<typeof runtimeHost.fetch>[1];
 
@@ -106,7 +108,7 @@ Deno.test("runtime-host injects a proxy token on runtime session creation", asyn
   });
 });
 
-Deno.test("runtime-host proxies /forward/cli-proxy requests to takos-web via service binding", async () => {
+Deno.test("runtime-host proxies /forward/cli-proxy requests to takos via service binding", async () => {
   const takosWebFetch = spy(async (_request: Request) =>
     new Response(JSON.stringify({ ok: true }), { status: 200 })
   );
@@ -120,6 +122,7 @@ Deno.test("runtime-host proxies /forward/cli-proxy requests to takos-web via ser
     },
     TAKOS_WEB: { fetch: takosWebFetch },
     ADMIN_DOMAIN: "test.takos.jp",
+    PLATFORM_PUBLIC_KEY: "public-key",
     PROXY_BASE_URL: "https://takos-runtime-host-staging.takos.workers.dev",
   } as unknown as Parameters<typeof runtimeHost.fetch>[1];
 
@@ -141,7 +144,7 @@ Deno.test("runtime-host proxies /forward/cli-proxy requests to takos-web via ser
   assertSpyCalls(takosWebFetch, 1);
   const proxiedRequest = takosWebFetch.calls[0]?.args[0];
   assert(proxiedRequest instanceof Request);
-  assertEquals(proxiedRequest.url, "https://takos-web/api/repos/repo-1/status");
+  assertEquals(proxiedRequest.url, "https://takos/api/repos/repo-1/status");
   // The marker header distinguishes this call from the unrelated
   // `X-Takos-Internal` shared-secret consumed by executor-proxy-api.ts.
   assertEquals(proxiedRequest.headers.get("X-Takos-Internal-Marker"), "1");
@@ -154,7 +157,7 @@ Deno.test("runtime-host proxies /forward/cli-proxy requests to takos-web via ser
   assertEquals(response.status, 200);
 });
 
-Deno.test("runtime-host proxies /forward/heartbeat requests to takos-web via service binding", async () => {
+Deno.test("runtime-host proxies /forward/heartbeat requests to takos via service binding", async () => {
   const takosWebFetch = spy(async (_request: Request) =>
     new Response(JSON.stringify({ success: true }), { status: 200 })
   );
@@ -168,6 +171,7 @@ Deno.test("runtime-host proxies /forward/heartbeat requests to takos-web via ser
     },
     TAKOS_WEB: { fetch: takosWebFetch },
     ADMIN_DOMAIN: "test.takos.jp",
+    PLATFORM_PUBLIC_KEY: "public-key",
     PROXY_BASE_URL: "https://takos-runtime-host-staging.takos.workers.dev",
   } as unknown as Parameters<typeof runtimeHost.fetch>[1];
 
@@ -190,7 +194,7 @@ Deno.test("runtime-host proxies /forward/heartbeat requests to takos-web via ser
   assert(proxiedRequest instanceof Request);
   assertEquals(
     proxiedRequest.url,
-    "https://takos-web/api/sessions/session-id-1234567890/heartbeat",
+    "https://takos/api/sessions/session-id-1234567890/heartbeat",
   );
   assertEquals(proxiedRequest.headers.get("X-Takos-Internal-Marker"), "1");
   assertEquals(proxiedRequest.headers.get("X-Takos-Internal"), null);
@@ -209,6 +213,7 @@ Deno.test("runtime-host rejects /forward/* requests without a valid proxy token"
       getByName: () => ({ verifyProxyToken }),
     },
     ADMIN_DOMAIN: "test.takos.jp",
+    PLATFORM_PUBLIC_KEY: "public-key",
     PROXY_BASE_URL: "https://takos-runtime-host-staging.takos.workers.dev",
   } as unknown as Parameters<typeof runtimeHost.fetch>[1];
 
@@ -249,6 +254,7 @@ Deno.test("runtime-host surfaces startup failures from the runtime container DO 
         }),
       },
       ADMIN_DOMAIN: "test.takos.jp",
+      PLATFORM_PUBLIC_KEY: "public-key",
       PROXY_BASE_URL: "https://takos-runtime-host-staging.takos.workers.dev",
     } as unknown as Parameters<typeof runtimeHost.fetch>[1];
 

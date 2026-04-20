@@ -1,18 +1,18 @@
-import type { Env } from '../../../shared/types/index.ts';
-import { normalizeEnvName, uniqueEnvNames } from './crypto.ts';
+import type { Env } from "../../../shared/types/index.ts";
+import { normalizeEnvName, uniqueEnvNames } from "./crypto.ts";
 import {
   CommonEnvReconcileJobStore,
   type CommonEnvReconcileTrigger,
-} from './reconcile-jobs.ts';
-import { listServiceIdsLinkedToEnvKey } from './repository.ts';
-import type { CommonEnvReconciler } from './reconciler.ts';
-import { logError } from '../../../shared/utils/logger.ts';
+} from "./reconcile-jobs.ts";
+import { listServiceIdsLinkedToEnvKey } from "./repository.ts";
+import type { CommonEnvReconciler } from "./reconciler.ts";
+import { logError } from "../../../shared/utils/logger.ts";
 
 export class CommonEnvOrchestrator {
   constructor(
-    private readonly env: Pick<Env, 'DB'>,
+    private readonly env: Pick<Env, "DB">,
     private readonly jobs: CommonEnvReconcileJobStore,
-    private readonly reconciler: CommonEnvReconciler
+    private readonly reconciler: CommonEnvReconciler,
   ) {}
 
   async enqueueServiceReconcile(params: {
@@ -32,10 +32,14 @@ export class CommonEnvOrchestrator {
   async reconcileServicesForEnvKey(
     spaceId: string,
     envNameRaw: string,
-    trigger: CommonEnvReconcileTrigger = 'workspace_env_put'
+    trigger: CommonEnvReconcileTrigger = "workspace_env_put",
   ): Promise<void> {
     const envName = normalizeEnvName(envNameRaw);
-    const serviceIds = await listServiceIdsLinkedToEnvKey(this.env, spaceId, envName);
+    const serviceIds = await listServiceIdsLinkedToEnvKey(
+      this.env,
+      spaceId,
+      envName,
+    );
     await this.jobs.enqueueForServices({
       spaceId,
       serviceIds,
@@ -55,11 +59,13 @@ export class CommonEnvOrchestrator {
       spaceId: params.spaceId,
       serviceIds: params.serviceIds,
       targetKeys,
-      trigger: params.trigger || 'bundle_required_links',
+      trigger: params.trigger || "bundle_required_links",
     });
   }
 
-  async processReconcileJobs(limit = 50): Promise<{ processed: number; completed: number; retried: number }> {
+  async processReconcileJobs(
+    limit = 50,
+  ): Promise<{ processed: number; completed: number; retried: number }> {
     const recoveredStale = await this.jobs.recoverStaleProcessing(limit);
     const jobs = await this.jobs.listRunnable(limit);
     let completed = 0;
@@ -69,13 +75,19 @@ export class CommonEnvOrchestrator {
       const claimed = await this.jobs.markProcessing(job.id);
       if (!claimed) continue;
       const keys = CommonEnvReconcileJobStore.parseTargetKeys(job);
-      const normalizedTargetKeys = keys ? new Set(uniqueEnvNames(keys)) : undefined;
+      const normalizedTargetKeys = keys
+        ? new Set(uniqueEnvNames(keys))
+        : undefined;
 
       try {
-        await this.reconciler.reconcileServiceCommonEnv(job.accountId, job.serviceId, {
-          targetKeys: normalizedTargetKeys,
-          trigger: job.trigger,
-        });
+        await this.reconciler.reconcileServiceCommonEnv(
+          job.accountId,
+          job.serviceId,
+          {
+            targetKeys: normalizedTargetKeys,
+            trigger: job.trigger,
+          },
+        );
         await this.jobs.markCompleted(job.id);
         completed += 1;
       } catch (error) {
@@ -87,7 +99,11 @@ export class CommonEnvOrchestrator {
             error,
           });
         } catch (updateError) {
-          logError('failed to mark link apply failure runtime state', updateError, { module: 'common-env' });
+          logError(
+            "failed to mark link apply failure runtime state",
+            updateError,
+            { module: "common-env" },
+          );
         }
         await this.jobs.markRetry(job.id, job.attempts, error);
         retried += 1;

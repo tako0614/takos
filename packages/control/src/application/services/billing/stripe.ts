@@ -6,18 +6,18 @@
  * has no knowledge of the billing system's domain (plans, accounts, top-up
  * packs).
  *
- * Consumers MUST go through `providers/stripe/stripe-provider.ts`, which
- * adapts these helpers into the provider-agnostic `PaymentProvider` interface.
- * Code outside `providers/stripe/` should not import from this file.
+ * Consumers MUST go through `processors/stripe/stripe-processor.ts`, which
+ * adapts these helpers into the processor-agnostic `PaymentProcessor` interface.
+ * Code outside `processors/stripe/` should not import from this file.
  *
  * Uses raw fetch() + crypto.subtle for Cloudflare Workers compatibility (no
  * Stripe SDK dependency).
  */
 
-import { constantTimeEqual } from '../../../shared/utils/hash.ts';
-import { bytesToHex } from '../../../shared/utils/encoding-utils.ts';
+import { constantTimeEqual } from "../../../shared/utils/hash.ts";
+import { bytesToHex } from "../../../shared/utils/encoding-utils.ts";
 
-const STRIPE_API_BASE = 'https://api.stripe.com/v1';
+const STRIPE_API_BASE = "https://api.stripe.com/v1";
 
 // ============================================================================
 // Shared Helpers
@@ -34,7 +34,7 @@ async function stripeRequest<T>(
   init?: RequestInit,
 ): Promise<T> {
   const headers: Record<string, string> = {
-    'Authorization': `Bearer ${secretKey}`,
+    "Authorization": `Bearer ${secretKey}`,
     ...((init?.headers as Record<string, string>) ?? {}),
   };
 
@@ -58,9 +58,9 @@ async function stripePost<T>(
   params?: URLSearchParams,
 ): Promise<T> {
   return stripeRequest<T>(secretKey, path, label, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-    body: params?.toString() ?? '',
+    method: "POST",
+    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    body: params?.toString() ?? "",
   });
 }
 
@@ -71,7 +71,7 @@ async function stripePost<T>(
 export async function createCheckoutSession(opts: {
   secretKey: string;
   priceId: string;
-  mode: 'subscription' | 'payment';
+  mode: "subscription" | "payment";
   userId: string;
   customerEmail: string;
   stripeCustomerId?: string;
@@ -80,26 +80,26 @@ export async function createCheckoutSession(opts: {
   metadata?: Record<string, string>;
 }): Promise<{ url: string; sessionId: string }> {
   const params = new URLSearchParams();
-  params.set('mode', opts.mode);
-  params.set('line_items[0][price]', opts.priceId);
-  params.set('line_items[0][quantity]', '1');
-  params.set('success_url', opts.successUrl);
-  params.set('cancel_url', opts.cancelUrl);
-  params.set('metadata[user_id]', opts.userId);
+  params.set("mode", opts.mode);
+  params.set("line_items[0][price]", opts.priceId);
+  params.set("line_items[0][quantity]", "1");
+  params.set("success_url", opts.successUrl);
+  params.set("cancel_url", opts.cancelUrl);
+  params.set("metadata[user_id]", opts.userId);
   for (const [key, value] of Object.entries(opts.metadata ?? {})) {
     params.set(`metadata[${key}]`, value);
   }
 
   if (opts.stripeCustomerId) {
-    params.set('customer', opts.stripeCustomerId);
+    params.set("customer", opts.stripeCustomerId);
   } else {
-    params.set('customer_email', opts.customerEmail);
+    params.set("customer_email", opts.customerEmail);
   }
 
   const data = await stripePost<{ id: string; url: string }>(
     opts.secretKey,
-    '/checkout/sessions',
-    'checkout',
+    "/checkout/sessions",
+    "checkout",
     params,
   );
   return { url: data.url, sessionId: data.id };
@@ -115,13 +115,13 @@ export async function createPortalSession(opts: {
   returnUrl: string;
 }): Promise<{ url: string }> {
   const params = new URLSearchParams();
-  params.set('customer', opts.customerId);
-  params.set('return_url', opts.returnUrl);
+  params.set("customer", opts.customerId);
+  params.set("return_url", opts.returnUrl);
 
   const data = await stripePost<{ url: string }>(
     opts.secretKey,
-    '/billing_portal/sessions',
-    'portal',
+    "/billing_portal/sessions",
+    "portal",
     params,
   );
   return { url: data.url };
@@ -135,7 +135,7 @@ export interface StripeCheckoutSession {
   id: string;
   customer: string | null;
   subscription: string | null;
-  mode?: 'subscription' | 'payment';
+  mode?: "subscription" | "payment";
   payment_status?: string | null;
   metadata: Record<string, string>;
 }
@@ -147,7 +147,7 @@ export async function retrieveCheckoutSession(opts: {
   return stripeRequest<StripeCheckoutSession>(
     opts.secretKey,
     `/checkout/sessions/${opts.sessionId}`,
-    'retrieve session',
+    "retrieve session",
   );
 }
 
@@ -163,7 +163,7 @@ export async function verifyWebhookSignature(opts: {
   payload: string;
   signature: string;
   secret: string;
-  // Tolerance window in seconds. Default matches Stripe's official SDK (300s).
+  // Tolerance window in seconds. Default matches Stripe SDK behavior (300s).
   // Stricter values cause intermittent failures under load due to clock skew
   // + network queue latency, which then trigger retry storms.
   tolerance?: number;
@@ -171,50 +171,58 @@ export async function verifyWebhookSignature(opts: {
   const tolerance = opts.tolerance ?? 300;
 
   // Parse the Stripe-Signature header
-  const parts = opts.signature.split(',');
-  let timestamp = '';
+  const parts = opts.signature.split(",");
+  let timestamp = "";
   const signatures: string[] = [];
 
   for (const part of parts) {
-    const [key, value] = part.split('=');
-    if (key === 't') timestamp = value;
-    if (key === 'v1') signatures.push(value);
+    const [key, value] = part.split("=");
+    if (key === "t") timestamp = value;
+    if (key === "v1") signatures.push(value);
   }
 
   if (!timestamp || signatures.length === 0) {
-    throw new Error('Invalid Stripe signature format');
+    throw new Error("Invalid Stripe signature format");
   }
 
   // Check timestamp tolerance
   const ts = parseInt(timestamp, 10);
   const now = Math.floor(Date.now() / 1000);
   if (Math.abs(now - ts) > tolerance) {
-    throw new Error('Webhook timestamp too old');
+    throw new Error("Webhook timestamp too old");
   }
 
   // Compute expected signature
   const signedPayload = `${timestamp}.${opts.payload}`;
   const encoder = new TextEncoder();
   const key = await crypto.subtle.importKey(
-    'raw',
+    "raw",
     encoder.encode(opts.secret),
-    { name: 'HMAC', hash: 'SHA-256' },
+    { name: "HMAC", hash: "SHA-256" },
     false,
-    ['sign']
+    ["sign"],
   );
-  const sig = await crypto.subtle.sign('HMAC', key, encoder.encode(signedPayload));
+  const sig = await crypto.subtle.sign(
+    "HMAC",
+    key,
+    encoder.encode(signedPayload),
+  );
   const expected = bytesToHex(new Uint8Array(sig));
 
   // Constant-time comparison
   if (!signatures.some((s) => constantTimeEqual(s, expected))) {
-    throw new Error('Invalid webhook signature');
+    throw new Error("Invalid webhook signature");
   }
 
   let event: StripeWebhookEvent;
   try {
     event = JSON.parse(opts.payload) as StripeWebhookEvent;
   } catch (err) {
-    throw new Error(`Failed to parse webhook payload: ${err instanceof Error ? err.message : String(err)}`);
+    throw new Error(
+      `Failed to parse webhook payload: ${
+        err instanceof Error ? err.message : String(err)
+      }`,
+    );
   }
   return { event };
 }
@@ -274,7 +282,7 @@ export interface StripeWebhookCheckoutSession {
   id: string;
   customer: string | null;
   subscription: string | null;
-  mode?: 'subscription' | 'payment';
+  mode?: "subscription" | "payment";
   payment_status?: string | null;
   metadata: Record<string, string>;
 }
@@ -284,11 +292,11 @@ export interface StripeWebhookCheckoutSession {
  * Unmapped event types fall back to Record<string, unknown>.
  */
 export interface StripeEventObjectMap {
-  'checkout.session.completed': StripeWebhookCheckoutSession;
-  'invoice.paid': StripeWebhookInvoice;
-  'invoice.payment_failed': StripeWebhookInvoice;
-  'customer.subscription.updated': StripeSubscription;
-  'customer.subscription.deleted': StripeSubscription;
+  "checkout.session.completed": StripeWebhookCheckoutSession;
+  "invoice.paid": StripeWebhookInvoice;
+  "invoice.payment_failed": StripeWebhookInvoice;
+  "customer.subscription.updated": StripeSubscription;
+  "customer.subscription.deleted": StripeSubscription;
 }
 
 export type StripeWebhookEventType = keyof StripeEventObjectMap;
@@ -297,8 +305,7 @@ export interface StripeWebhookEvent<T extends string = string> {
   id: string;
   type: T;
   data: {
-    object: T extends StripeWebhookEventType
-      ? StripeEventObjectMap[T]
+    object: T extends StripeWebhookEventType ? StripeEventObjectMap[T]
       : Record<string, unknown>;
   };
 }
@@ -311,15 +318,17 @@ export async function listInvoices(opts: {
   endingBefore?: string;
 }): Promise<{ invoices: StripeInvoice[]; has_more: boolean }> {
   const params = new URLSearchParams();
-  params.set('customer', opts.customerId);
-  params.set('limit', String(opts.limit ?? 20));
-  if (opts.startingAfter) params.set('starting_after', opts.startingAfter);
-  if (opts.endingBefore) params.set('ending_before', opts.endingBefore);
+  params.set("customer", opts.customerId);
+  params.set("limit", String(opts.limit ?? 20));
+  if (opts.startingAfter) params.set("starting_after", opts.startingAfter);
+  if (opts.endingBefore) params.set("ending_before", opts.endingBefore);
 
-  const data = await stripeRequest<{ data: StripeInvoice[]; has_more: boolean }>(
+  const data = await stripeRequest<
+    { data: StripeInvoice[]; has_more: boolean }
+  >(
     opts.secretKey,
     `/invoices?${params.toString()}`,
-    'list invoices',
+    "list invoices",
   );
   return { invoices: data.data || [], has_more: Boolean(data.has_more) };
 }
@@ -331,7 +340,7 @@ export async function retrieveInvoice(opts: {
   return stripeRequest<StripeInvoice>(
     opts.secretKey,
     `/invoices/${opts.invoiceId}`,
-    'retrieve invoice',
+    "retrieve invoice",
   );
 }
 
@@ -342,6 +351,6 @@ export async function sendInvoice(opts: {
   return stripePost<StripeInvoice>(
     opts.secretKey,
     `/invoices/${opts.invoiceId}/send`,
-    'send invoice',
+    "send invoice",
   );
 }

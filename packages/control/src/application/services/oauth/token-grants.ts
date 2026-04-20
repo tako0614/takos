@@ -1,16 +1,33 @@
-import * as jose from 'jose';
-import type { D1Database } from '../../../shared/types/bindings.ts';
+import * as jose from "jose";
+import type { D1Database } from "../../../shared/types/bindings.ts";
 import type {
   OAuthAccessTokenPayload,
-  TokenResponse,
   OAuthClient,
-} from '../../../shared/types/oauth.ts';
-import { OAUTH_CONSTANTS, parseJsonStringArray } from '../../../shared/types/oauth.ts';
-import { generateRandomString, generateId } from './pkce.ts';
-import { computeSHA256 } from '../../../shared/utils/hash.ts';
-import { getDb } from '../../../infra/db/index.ts';
-import { oauthTokens } from '../../../infra/db/index.ts';
-import type { AccessTokenJwtPayload } from './token-helpers.ts';
+  TokenResponse,
+} from "../../../shared/types/oauth.ts";
+import {
+  OAUTH_CONSTANTS,
+  parseJsonStringArray,
+} from "../../../shared/types/oauth.ts";
+import { generateId, generateRandomString } from "./pkce.ts";
+import { computeSHA256 } from "../../../shared/utils/hash.ts";
+import { getDb } from "../../../infra/db/index.ts";
+import { oauthTokens } from "../../../infra/db/index.ts";
+import type { AccessTokenJwtPayload } from "./token-helpers.ts";
+
+export const OAUTH_ACCESS_TOKEN_PREFIX = "tak_oat_";
+
+export function formatOAuthAccessToken(token: string): string {
+  return token.startsWith(OAUTH_ACCESS_TOKEN_PREFIX)
+    ? token
+    : `${OAUTH_ACCESS_TOKEN_PREFIX}${token}`;
+}
+
+function getRawAccessTokenFromPublicValue(token: string): string | null {
+  return token.startsWith(OAUTH_ACCESS_TOKEN_PREFIX)
+    ? token.slice(OAUTH_ACCESS_TOKEN_PREFIX.length)
+    : null;
+}
 
 export async function generateAccessToken(params: {
   privateKeyPem: string;
@@ -29,7 +46,7 @@ export async function generateAccessToken(params: {
     expiresInSeconds = OAUTH_CONSTANTS.ACCESS_TOKEN_EXPIRES_IN,
   } = params;
 
-  const privateKey = await jose.importPKCS8(privateKeyPem, 'RS256');
+  const privateKey = await jose.importPKCS8(privateKeyPem, "RS256");
 
   const now = Math.floor(Date.now() / 1000);
   const exp = now + expiresInSeconds;
@@ -40,7 +57,7 @@ export async function generateAccessToken(params: {
     client_id: clientId,
     jti,
   })
-    .setProtectedHeader({ alg: 'RS256', typ: 'at+jwt' })
+    .setProtectedHeader({ alg: "RS256", typ: "at+jwt" })
     .setIssuer(issuer)
     .setAudience(clientId)
     .setSubject(userId)
@@ -55,7 +72,7 @@ export async function generateAccessToken(params: {
   };
 }
 
-export async function verifyAccessToken(params: {
+async function verifyRawAccessToken(params: {
   token: string;
   publicKeyPem: string;
   issuer: string;
@@ -64,7 +81,7 @@ export async function verifyAccessToken(params: {
   const { token, publicKeyPem, issuer, expectedAudience } = params;
 
   try {
-    const publicKey = await jose.importSPKI(publicKeyPem, 'RS256');
+    const publicKey = await jose.importSPKI(publicKeyPem, "RS256");
 
     const verifyOptions: jose.JWTVerifyOptions = {
       issuer,
@@ -73,7 +90,11 @@ export async function verifyAccessToken(params: {
       verifyOptions.audience = expectedAudience;
     }
 
-    const { payload } = await jose.jwtVerify<AccessTokenJwtPayload>(token, publicKey, verifyOptions);
+    const { payload } = await jose.jwtVerify<AccessTokenJwtPayload>(
+      token,
+      publicKey,
+      verifyOptions,
+    );
     const aud = Array.isArray(payload.aud) ? payload.aud[0] : payload.aud;
 
     return {
@@ -91,13 +112,28 @@ export async function verifyAccessToken(params: {
   }
 }
 
+export async function verifyAccessToken(params: {
+  token: string;
+  publicKeyPem: string;
+  issuer: string;
+  expectedAudience?: string | string[];
+}): Promise<OAuthAccessTokenPayload | null> {
+  const token = getRawAccessTokenFromPublicValue(params.token);
+  if (!token) return null;
+
+  return await verifyRawAccessToken({
+    ...params,
+    token,
+  });
+}
+
 export function generateRefreshToken(): {
   token: string;
   expiresAt: Date;
 } {
   const token = generateRandomString(OAUTH_CONSTANTS.REFRESH_TOKEN_LENGTH);
   const expiresAt = new Date(
-    Date.now() + OAUTH_CONSTANTS.REFRESH_TOKEN_EXPIRES_IN * 1000
+    Date.now() + OAUTH_CONSTANTS.REFRESH_TOKEN_EXPIRES_IN * 1000,
   );
 
   return { token, expiresAt };
@@ -113,7 +149,7 @@ export async function storeAccessToken(
     expiresAt: Date;
     refreshTokenId?: string;
     tokenFamily?: string;
-  }
+  },
 ): Promise<string> {
   const db = getDb(dbBinding);
   const id = generateId();
@@ -121,7 +157,7 @@ export async function storeAccessToken(
 
   await db.insert(oauthTokens).values({
     id,
-    tokenType: 'access',
+    tokenType: "access",
     tokenHash,
     clientId: params.clientId,
     accountId: params.userId,
@@ -145,7 +181,7 @@ export async function storeRefreshToken(
     scope: string;
     expiresAt: Date;
     tokenFamily?: string;
-  }
+  },
 ): Promise<{ id: string; tokenFamily: string }> {
   const db = getDb(dbBinding);
   const id = generateId();
@@ -154,7 +190,7 @@ export async function storeRefreshToken(
 
   await db.insert(oauthTokens).values({
     id,
-    tokenType: 'refresh',
+    tokenType: "refresh",
     tokenHash,
     clientId: params.clientId,
     accountId: params.userId,
@@ -179,24 +215,33 @@ export async function generateTokenResponse(
     scope: string;
     includeRefreshToken?: boolean;
     tokenFamily?: string;
-  }
+  },
 ): Promise<TokenResponse> {
-  const { privateKeyPem, issuer, userId, client, scope, includeRefreshToken = true, tokenFamily } = params;
-
-  const { token: accessToken, jti, expiresAt: accessExpiresAt } = await generateAccessToken({
+  const {
     privateKeyPem,
     issuer,
     userId,
-    clientId: client.client_id,
+    client,
     scope,
-  });
+    includeRefreshToken = true,
+    tokenFamily,
+  } = params;
+
+  const { token: accessToken, jti, expiresAt: accessExpiresAt } =
+    await generateAccessToken({
+      privateKeyPem,
+      issuer,
+      userId,
+      clientId: client.client_id,
+      scope,
+    });
 
   let refreshTokenId: string | undefined;
   let refreshToken: string | undefined;
 
   if (includeRefreshToken) {
     const grantTypes = parseJsonStringArray(client.grant_types);
-    if (grantTypes.includes('refresh_token')) {
+    if (grantTypes.includes("refresh_token")) {
       const refresh = generateRefreshToken();
       refreshToken = refresh.token;
 
@@ -223,8 +268,8 @@ export async function generateTokenResponse(
   });
 
   return {
-    access_token: accessToken,
-    token_type: 'Bearer',
+    access_token: formatOAuthAccessToken(accessToken),
+    token_type: "Bearer",
     expires_in: OAUTH_CONSTANTS.ACCESS_TOKEN_EXPIRES_IN,
     refresh_token: refreshToken,
     scope,

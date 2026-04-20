@@ -1,13 +1,13 @@
-import type { WorkerBinding } from "../../../platform/providers/cloudflare/wfp.ts";
+import type { WorkerBinding } from "../../../platform/backends/cloudflare/wfp.ts";
 import type { DbEnv } from "../../../shared/types/index.ts";
 import type {
   DurableNamespaceBinding,
   KvStoreBinding,
   ObjectStoreBinding,
 } from "../../../shared/types/bindings.ts";
-import type { WfpDeploymentProviderEnv } from "./provider.ts";
+import type { WfpDeploymentBackendEnv } from "./backend-contracts.ts";
 
-export type DeploymentEnv = DbEnv & WfpDeploymentProviderEnv & {
+export type DeploymentEnv = DbEnv & WfpDeploymentBackendEnv & {
   ENCRYPTION_KEY?: string;
   ADMIN_DOMAIN: string;
   WORKER_BUNDLES?: ObjectStoreBinding;
@@ -69,7 +69,8 @@ export type DeploymentStatus =
 
 export type RoutingStatus = "active" | "canary" | "rollback" | "archived";
 
-export type DeploymentProviderName =
+export type DeploymentBackendName =
+  | "cloudflare"
   | "workers-dispatch"
   | "runtime-host"
   | "oci"
@@ -77,8 +78,26 @@ export type DeploymentProviderName =
   | "cloud-run"
   | "k8s";
 
-export type DeploymentProviderRef = {
-  name: DeploymentProviderName;
+export function normalizeDeploymentBackendName(
+  backendName: string | null | undefined,
+): DeploymentBackendName | null {
+  switch (backendName) {
+    case "cloudflare":
+      return "workers-dispatch";
+    case "workers-dispatch":
+    case "runtime-host":
+    case "oci":
+    case "ecs":
+    case "cloud-run":
+    case "k8s":
+      return backendName;
+    default:
+      return null;
+  }
+}
+
+export type DeploymentBackendRef = {
+  name: DeploymentBackendName;
 };
 
 export type DeploymentTargetEndpoint =
@@ -146,9 +165,9 @@ export interface Deployment {
   routing_weight: number;
   deployed_by: string | null;
   deploy_message: string | null;
-  provider_name: DeploymentProviderName;
+  backend_name: DeploymentBackendName;
   target_json: string;
-  provider_state_json: string;
+  backend_state_json: string;
   idempotency_key: string | null;
   is_rollback: boolean;
   rollback_from_version: number | null;
@@ -183,7 +202,7 @@ export interface CreateDeploymentInput {
   deployMessage?: string;
   strategy?: "direct" | "canary";
   canaryWeight?: number;
-  provider?: DeploymentProviderRef;
+  backend?: DeploymentBackendRef;
   target?: DeploymentTarget;
   snapshotOverride?: {
     envVars: Record<string, string>;

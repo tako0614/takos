@@ -2,15 +2,16 @@ import { createSignal } from "solid-js";
 import { Icons } from "../../lib/Icons.tsx";
 import { useI18n } from "../../store/i18n.ts";
 import { Modal } from "../../components/ui/Modal.tsx";
+import type { TranslationKey } from "../../store/i18n.ts";
 import type { SourceFilter, SourceSort } from "../../hooks/useSourceData.ts";
 
-const FILTER_CHIPS: Array<{ value: SourceFilter; labelKey: string }> = [
+const FILTER_CHIPS: Array<{ value: SourceFilter; labelKey: TranslationKey }> = [
   { value: "all", labelKey: "sourceFilterAll" },
   { value: "mine", labelKey: "sourceFilterMine" },
   { value: "starred", labelKey: "sourceFilterStarred" },
 ];
 
-const CATEGORY_CHIPS = [
+const CATEGORY_CHIPS: Array<{ value: string; labelKey: TranslationKey }> = [
   { value: "app", labelKey: "categoryApps" },
   { value: "service", labelKey: "categoryServices" },
   { value: "library", labelKey: "categoryLibraries" },
@@ -18,7 +19,7 @@ const CATEGORY_CHIPS = [
   { value: "social", labelKey: "categorySocial" },
 ];
 
-const SORT_OPTIONS: Array<{ value: SourceSort; labelKey: string }> = [
+const SORT_OPTIONS: Array<{ value: SourceSort; labelKey: TranslationKey }> = [
   { value: "trending", labelKey: "sortTrending" },
   { value: "new", labelKey: "sortNew" },
   { value: "stars", labelKey: "sortStars" },
@@ -79,7 +80,7 @@ function SortDropdown(props: {
         class={props.buttonClassName ??
           "flex items-center gap-1 px-3 py-1.5 rounded-full bg-white dark:bg-zinc-900 text-xs font-medium text-zinc-600 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors"}
       >
-        {t(currentSortOpt.labelKey as never)}
+        {t(currentSortOpt.labelKey)}
         <Icons.ChevronDown class="w-3 h-3" />
       </button>
       {props.sortOpen && (
@@ -106,7 +107,7 @@ function SortDropdown(props: {
                     : "text-zinc-600 dark:text-zinc-300 hover:bg-zinc-50 dark:hover:bg-zinc-800"
                 }`}
               >
-                {t(opt.labelKey as never)}
+                {t(opt.labelKey)}
               </button>
             ))}
           </div>
@@ -123,8 +124,6 @@ interface DesktopFilterBarProps {
   setFilter: (v: SourceFilter) => void;
   category: string;
   setCategory: (v: string) => void;
-  officialOnly: boolean;
-  setOfficialOnly: (v: boolean | ((prev: boolean) => boolean)) => void;
   sort: SourceSort;
   setSort: (v: SourceSort) => void;
   isAuthenticated: boolean;
@@ -156,7 +155,7 @@ export function DesktopFilterBar(props: DesktopFilterBarProps) {
               : "bg-white dark:bg-zinc-900 text-zinc-600 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-800"
           }`}
         >
-          {t(chip.labelKey as never)}
+          {t(chip.labelKey)}
         </button>
       ))}
 
@@ -173,24 +172,9 @@ export function DesktopFilterBar(props: DesktopFilterBarProps) {
               : "bg-white dark:bg-zinc-900 text-zinc-600 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-800"
           }`}
         >
-          {t(chip.labelKey as never)}
+          {t(chip.labelKey)}
         </button>
       ))}
-
-      {props.filter !== "mine" && (
-        <button
-          type="button"
-          onClick={() => props.setOfficialOnly((v) => !v)}
-          class={`flex-shrink-0 flex items-center gap-1 px-3.5 py-1.5 rounded-full text-xs font-medium transition-colors ${
-            props.officialOnly
-              ? "bg-blue-600 text-white"
-              : "bg-white dark:bg-zinc-900 text-zinc-600 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-800"
-          }`}
-        >
-          <Icons.Check class="w-3 h-3" />
-          {t("officialLabel")}
-        </button>
-      )}
 
       {props.filter !== "mine" && (
         <SortDropdown
@@ -256,8 +240,6 @@ interface MobileFiltersModalProps {
   setFilter: (v: SourceFilter) => void;
   category: string;
   setCategory: (v: string) => void;
-  officialOnly: boolean;
-  setOfficialOnly: (v: boolean | ((prev: boolean) => boolean)) => void;
   isAuthenticated: boolean;
   onRequireLogin: () => void;
 }
@@ -297,7 +279,7 @@ export function MobileFiltersModal(props: MobileFiltersModalProps) {
                     : "bg-zinc-100 text-zinc-700 dark:bg-zinc-800 dark:text-zinc-300"
                 }`}
               >
-                {t(chip.labelKey as never)}
+                {t(chip.labelKey)}
               </button>
             ))}
           </div>
@@ -321,25 +303,11 @@ export function MobileFiltersModal(props: MobileFiltersModalProps) {
                     : "bg-zinc-100 text-zinc-700 dark:bg-zinc-800 dark:text-zinc-300"
                 }`}
               >
-                {t(chip.labelKey as never)}
+                {t(chip.labelKey)}
               </button>
             ))}
           </div>
         </div>
-
-        {props.filter !== "mine" && (
-          <button
-            type="button"
-            onClick={() => props.setOfficialOnly((v) => !v)}
-            class={`w-full min-h-[44px] rounded-xl text-sm font-medium transition-colors ${
-              props.officialOnly
-                ? "bg-blue-600 text-white"
-                : "bg-zinc-100 text-zinc-700 dark:bg-zinc-800 dark:text-zinc-300"
-            }`}
-          >
-            {t("officialOnly")}
-          </button>
-        )}
 
         <button
           type="button"
@@ -347,7 +315,6 @@ export function MobileFiltersModal(props: MobileFiltersModalProps) {
           onClick={() => {
             props.setFilter("all");
             props.setCategory("");
-            props.setOfficialOnly(false);
           }}
         >
           {t("resetFilters")}

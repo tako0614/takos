@@ -1,6 +1,7 @@
 import type { Env } from "../../../shared/types/env.ts";
 import type { AppCompute } from "../source/app-manifest-types.ts";
 import type { GroupDesiredState } from "./group-state.ts";
+import type { Deployment } from "./models.ts";
 import { isDigestPinnedImageRef } from "./image-ref.ts";
 
 // Narrowed aliases for the three compute kinds.
@@ -17,7 +18,7 @@ export type ApplyWorkerArtifact = {
 export type ApplyContainerArtifact = {
   kind: "container_image";
   imageRef: string;
-  provider?: "oci" | "ecs" | "cloud-run" | "k8s";
+  backend?: "oci" | "ecs" | "cloud-run" | "k8s";
   deployMessage?: string;
 };
 
@@ -29,7 +30,7 @@ export type ApplyEngineArtifactDeps = {
     db: Env["DB"],
     artifactRef: string,
   ) => Promise<unknown>;
-  getBundleContent: (env: Env, deployment: any) => Promise<string>;
+  getBundleContent: (env: Env, deployment: Deployment) => Promise<string>;
 };
 
 export function parseApplyArtifact(input: unknown): ApplyArtifactInput | null {
@@ -53,13 +54,16 @@ export function parseApplyArtifact(input: unknown): ApplyArtifactInput | null {
     typeof parsed.imageRef === "string" &&
     parsed.imageRef.trim().length > 0
   ) {
+    const backend = parsed.backend;
     return {
       kind: "container_image",
       imageRef: parsed.imageRef,
-      ...(parsed.provider === "oci" || parsed.provider === "ecs" ||
-          parsed.provider === "cloud-run" || parsed.provider === "k8s"
-        ? { provider: parsed.provider }
-        : {}),
+      ...(
+        backend === "oci" || backend === "ecs" ||
+          backend === "cloud-run" || backend === "k8s"
+          ? { backend }
+          : {}
+      ),
       ...(typeof parsed.deployMessage === "string"
         ? { deployMessage: parsed.deployMessage }
         : {}),
@@ -86,7 +90,7 @@ function resolveContainerImageArtifact(
     return {
       kind: "container_image",
       imageRef: spec.image,
-      deployMessage: `takos apply ${workloadName}`,
+      deployMessage: `takos deploy ${workloadName}`,
     };
   }
   return null;

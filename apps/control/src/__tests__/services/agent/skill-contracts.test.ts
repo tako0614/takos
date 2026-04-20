@@ -1,7 +1,7 @@
 import type {
   CustomSkillMetadata,
   DurableOutputHint,
-  OfficialSkillCategory,
+  ManagedSkillCategory,
   SkillCategory,
   SkillExecutionContract,
   SkillLocale,
@@ -17,8 +17,8 @@ Deno.test("skill-contracts type definitions - SkillLocale accepts ja and en", ()
   assertEquals(ja, "ja");
   assertEquals(en, "en");
 });
-Deno.test("skill-contracts type definitions - OfficialSkillCategory covers all expected values", () => {
-  const categories: OfficialSkillCategory[] = [
+Deno.test("skill-contracts type definitions - ManagedSkillCategory covers all expected values", () => {
+  const categories: ManagedSkillCategory[] = [
     "research",
     "writing",
     "planning",
@@ -27,7 +27,7 @@ Deno.test("skill-contracts type definitions - OfficialSkillCategory covers all e
   ];
   assertEquals(categories.length, 5);
 });
-Deno.test("skill-contracts type definitions - SkillCategory extends OfficialSkillCategory with custom", () => {
+Deno.test("skill-contracts type definitions - SkillCategory extends ManagedSkillCategory with custom", () => {
   const custom: SkillCategory = "custom";
   assertEquals(custom, "custom");
 });
@@ -53,8 +53,8 @@ Deno.test("skill-contracts type definitions - SkillOutputMode includes chat and 
   assertEquals(modes.length, 6);
   assert(modes.includes("chat"));
 });
-Deno.test("skill-contracts type definitions - SkillSource accepts official and custom", () => {
-  const sources: SkillSource[] = ["official", "custom"];
+Deno.test("skill-contracts type definitions - SkillSource accepts managed and custom", () => {
+  const sources: SkillSource[] = ["managed", "custom"];
   assertEquals(sources.length, 2);
 });
 Deno.test("skill-contracts type definitions - SkillExecutionContract has required fields", () => {

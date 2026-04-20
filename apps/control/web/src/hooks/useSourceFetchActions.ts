@@ -1,14 +1,14 @@
-import type { Accessor, Setter } from 'solid-js';
-import { useI18n } from '../store/i18n.ts';
-import { rpc, rpcJson } from '../lib/rpc.ts';
-import { useToast } from '../store/toast.ts';
+import type { Accessor, Setter } from "solid-js";
+import { useI18n } from "../store/i18n.ts";
+import { rpc, rpcJson } from "../lib/rpc.ts";
+import { useToast } from "../store/toast.ts";
 import type {
   SourceItem,
   SourceItemInstallation,
-  SourceItemTakopack,
-} from './useSourceData.ts';
+  SourceItemPackage,
+} from "./useSourceData.ts";
 
-function makeEmptyTakopack(): SourceItemTakopack {
+function makeEmptyPackage(): SourceItemPackage {
   return {
     available: false,
     latest_version: null,
@@ -40,9 +40,13 @@ export interface UseSourceFetchActionsResult {
   uninstall: (item: SourceItem) => Promise<void>;
   rollback: (item: SourceItem) => Promise<void>;
   toggleStar: (item: SourceItem) => Promise<void>;
-  createRepo: (name: string, description: string, visibility: 'public' | 'private') => Promise<boolean>;
+  createRepo: (
+    name: string,
+    description: string,
+    visibility: "public" | "private",
+  ) => Promise<boolean>;
   openRepo: (item: SourceItem) => void;
-  getItemTakopack: (item: SourceItem) => SourceItemTakopack;
+  getItemPackage: (item: SourceItem) => SourceItemPackage;
 }
 
 export function useSourceFetchActions({
@@ -66,44 +70,58 @@ export function useSourceFetchActions({
       return;
     }
     if (!effectiveSpaceId()) {
-      showToast('error', t('selectSpaceFirst'));
+      showToast("error", t("selectSpaceFirst"));
       return;
     }
-    if (!item.takopack?.available) {
-      showToast('error', t('noDeployableAppManifest'));
+    if (!item.package?.available) {
+      showToast("error", t("noDeployableAppManifest"));
       return;
     }
     try {
       setInstallingId(item.id);
-      // Backend (packages/control/src/server/routes/app-deployments.ts) expects
+      // Backend expects
       // a discriminated `source` object with a canonical Takos repository URL.
-      const repositoryUrl = `${globalThis.location.origin}/git/${item.owner.username}/${item.name}.git`;
-      const response = await fetch(`/api/spaces/${effectiveSpaceId()}/app-deployments`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          source: {
-            kind: 'git_ref',
-            repository_url: repositoryUrl,
-            ref: item.default_branch || 'main',
-            ref_type: 'branch',
-          },
-        }),
-      });
-      const data = await rpcJson<{ app_deployment?: { id?: string } }>(response);
-      showToast('success', t('deployedItem', { name: item.name }));
+      const repositoryUrl =
+        `${globalThis.location.origin}/git/${item.owner.username}/${item.name}.git`;
+      const response = await fetch(
+        `/api/spaces/${effectiveSpaceId()}/group-deployment-snapshots`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            source: {
+              kind: "git_ref",
+              repository_url: repositoryUrl,
+              ref: item.default_branch || "main",
+              ref_type: "branch",
+            },
+          }),
+        },
+      );
+      const data = await rpcJson<
+        { group_deployment_snapshot?: { id?: string } }
+      >(response);
+      showToast("success", t("deployedItem", { name: item.name }));
 
       const installation: SourceItemInstallation = {
         installed: true,
-        app_deployment_id: data.app_deployment?.id ?? null,
-        installed_version: item.takopack.latest_version,
+        group_deployment_snapshot_id: data.group_deployment_snapshot?.id ??
+          null,
+        installed_version: item.package.latest_version,
         deployed_at: new Date().toISOString(),
       };
-      const updateItem = (i: SourceItem) => (i.id === item.id ? { ...i, installation } : i);
+      const updateItem = (
+        i: SourceItem,
+      ) => (i.id === item.id ? { ...i, installation } : i);
       setItems((prev) => prev.map(updateItem));
-      setSelectedItem((prev) => (prev?.id === item.id ? updateItem(prev) : prev));
+      setSelectedItem((
+        prev,
+      ) => (prev?.id === item.id ? updateItem(prev) : prev));
     } catch (err) {
-      showToast('error', err instanceof Error && err.message ? err.message : t('installFailed'));
+      showToast(
+        "error",
+        err instanceof Error && err.message ? err.message : t("installFailed"),
+      );
     } finally {
       setInstallingId(null);
     }
@@ -114,22 +132,34 @@ export function useSourceFetchActions({
       onRequireLogin();
       return;
     }
-    if (!effectiveSpaceId() || !item.installation?.app_deployment_id) return;
+    if (
+      !effectiveSpaceId() || !item.installation?.group_deployment_snapshot_id
+    ) return;
     try {
       // Use rpcJson so we pick up 401 auto-redirect, OAuth/envelope error
       // message parsing, and consistent error shapes.
       const response = await fetch(
-        `/api/spaces/${effectiveSpaceId()}/app-deployments/${item.installation.app_deployment_id}`,
-        { method: 'DELETE' },
+        `/api/spaces/${effectiveSpaceId()}/group-deployment-snapshots/${item.installation.group_deployment_snapshot_id}`,
+        { method: "DELETE" },
       );
       await rpcJson(response);
-      showToast('success', t('uninstalledItem', { name: item.name }));
+      showToast("success", t("uninstalledItem", { name: item.name }));
       const updateItem = (i: SourceItem) =>
         i.id === item.id ? { ...i, installation: undefined } : i;
       setItems((prev) => prev.map(updateItem));
-      setSelectedItem((prev) => (prev?.id === item.id ? { ...prev, installation: undefined } : prev));
+      setSelectedItem((
+        prev,
+      ) => (prev?.id === item.id
+        ? { ...prev, installation: undefined }
+        : prev)
+      );
     } catch (err) {
-      showToast('error', err instanceof Error && err.message ? err.message : t('uninstallFailed'));
+      showToast(
+        "error",
+        err instanceof Error && err.message
+          ? err.message
+          : t("uninstallFailed"),
+      );
     }
   };
 
@@ -138,18 +168,27 @@ export function useSourceFetchActions({
       onRequireLogin();
       return;
     }
-    if (!effectiveSpaceId() || !item.installation?.app_deployment_id) return;
+    if (
+      !effectiveSpaceId() || !item.installation?.group_deployment_snapshot_id
+    ) return;
     try {
       // Use rpcJson so we pick up 401 auto-redirect, OAuth/envelope error
       // message parsing, and consistent error shapes.
       const response = await fetch(
-        `/api/spaces/${effectiveSpaceId()}/app-deployments/${item.installation.app_deployment_id}/rollback`,
-        { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' },
+        `/api/spaces/${effectiveSpaceId()}/group-deployment-snapshots/${item.installation.group_deployment_snapshot_id}/rollback`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: "{}",
+        },
       );
       await rpcJson(response);
-      showToast('success', t('rolledBackItem', { name: item.name }));
+      showToast("success", t("rolledBackItem", { name: item.name }));
     } catch (err) {
-      showToast('error', err instanceof Error && err.message ? err.message : t('rollbackFailed'));
+      showToast(
+        "error",
+        err instanceof Error && err.message ? err.message : t("rollbackFailed"),
+      );
     }
   };
 
@@ -160,53 +199,67 @@ export function useSourceFetchActions({
     }
     try {
       if (item.is_starred) {
-        await rpcJson(await rpc.repos[':repoId'].star.$delete({ param: { repoId: item.id } }));
+        await rpcJson(
+          await rpc.repos[":repoId"].star.$delete({
+            param: { repoId: item.id },
+          }),
+        );
       } else {
-        await rpcJson(await rpc.repos[':repoId'].star.$post({ param: { repoId: item.id } }));
+        await rpcJson(
+          await rpc.repos[":repoId"].star.$post({ param: { repoId: item.id } }),
+        );
       }
       const delta = item.is_starred ? -1 : 1;
       const updateItem = (i: SourceItem) =>
         i.id === item.id
-          ? { ...i, is_starred: !i.is_starred, stars: Math.max(0, i.stars + delta) }
+          ? {
+            ...i,
+            is_starred: !i.is_starred,
+            stars: Math.max(0, i.stars + delta),
+          }
           : i;
       setItems((prev) => {
         const updated = prev.map(updateItem);
-        if (filter() === 'starred' && item.is_starred) {
+        if (filter() === "starred" && item.is_starred) {
           return updated.filter((i) => i.id !== item.id);
         }
         return updated;
       });
       setSelectedItem((prev) => {
         if (prev?.id !== item.id) return prev;
-        if (filter() === 'starred' && item.is_starred) {
+        if (filter() === "starred" && item.is_starred) {
           return null;
         }
         return updateItem(prev);
       });
     } catch {
-      showToast('error', t('failedToUpdateStar'));
+      showToast("error", t("failedToUpdateStar"));
     }
   };
 
-  const createRepo = async (name: string, description: string, visibility: 'public' | 'private'): Promise<boolean> => {
+  const createRepo = async (
+    name: string,
+    description: string,
+    visibility: "public" | "private",
+  ): Promise<boolean> => {
     if (!isAuthenticated()) {
       onRequireLogin();
       return false;
     }
     if (!effectiveSpaceId()) return false;
     try {
-      const response = await rpc.spaces[':spaceId'].repos.$post({
+      const response = await rpc.spaces[":spaceId"].repos.$post({
         param: { spaceId: effectiveSpaceId()! },
         json: { name, description, visibility },
       });
       await rpcJson(response);
-      showToast('success', t('repositoryCreated'));
-      if (filter() === 'mine') {
+      showToast("success", t("repositoryCreated"));
+      if (filter() === "mine") {
         void fetchMine(refs.requestSeqRef);
       }
       return true;
     } catch {
-      showToast('error', t('failedToCreateRepository'));
+      showToast("error", t("failedToCreateRepository"));
       return false;
     }
   };
@@ -217,9 +270,8 @@ export function useSourceFetchActions({
     }
   };
 
-  // Expose a no-takopack placeholder so components always have a takopack field to check
-  const getItemTakopack = (item: SourceItem): SourceItemTakopack =>
-    item.takopack ?? makeEmptyTakopack();
+  const getItemPackage = (item: SourceItem): SourceItemPackage =>
+    item.package ?? makeEmptyPackage();
 
   return {
     install,
@@ -228,6 +280,6 @@ export function useSourceFetchActions({
     toggleStar,
     createRepo,
     openRepo,
-    getItemTakopack,
+    getItemPackage,
   };
 }

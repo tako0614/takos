@@ -8,9 +8,9 @@ const mocks = {
   orphanedResources: [] as Array<{
     id: string;
     type: string;
-    providerName: string | null;
-    providerResourceId: string | null;
-    providerResourceName: string | null;
+    backendName: string | null;
+    backingResourceId: string | null;
+    backingResourceName: string | null;
   }>,
 };
 
@@ -53,35 +53,36 @@ Deno.test("gcOrphanedResources - reclaims cloudflare and portable orphaned resou
     {
       id: "res-cf",
       type: "d1",
-      providerName: "cloudflare",
-      providerResourceId: "cf-db",
-      providerResourceName: "cf-db",
+      backendName: "cloudflare",
+      backingResourceId: "cf-db",
+      backingResourceName: "cf-db",
     },
     {
       id: "res-portable",
       type: "kv",
-      providerName: "aws",
-      providerResourceId: "portable-kv",
-      providerResourceName: "portable-kv",
+      backendName: "aws",
+      backingResourceId: "portable-kv",
+      backingResourceName: "portable-kv",
     },
   ];
   resourceOrphanGcDeps.getDb = mocks.getDb;
-  resourceOrphanGcDeps.deleteManagedResource = mocks.deleteManagedResource as any;
+  resourceOrphanGcDeps.deleteManagedResource = mocks
+    .deleteManagedResource as any;
 
   const result = await gcOrphanedResources(env);
 
   assertSpyCalls(mocks.deleteManagedResource, 2);
   assertSpyCallArgs(mocks.deleteManagedResource, 0, [env, {
     type: "d1",
-    providerName: "cloudflare",
-    providerResourceId: "cf-db",
-    providerResourceName: "cf-db",
+    backendName: "cloudflare",
+    backingResourceId: "cf-db",
+    backingResourceName: "cf-db",
   }]);
   assertSpyCallArgs(mocks.deleteManagedResource, 1, [env, {
     type: "kv",
-    providerName: "aws",
-    providerResourceId: "portable-kv",
-    providerResourceName: "portable-kv",
+    backendName: "aws",
+    backingResourceId: "portable-kv",
+    backingResourceName: "portable-kv",
   }]);
   assertEquals(result.deleted, 2);
   assertEquals(result.failed, 0);

@@ -1,14 +1,15 @@
 # takos-docs
 
-リッチテキストドキュメントエディタ app（Google Docs 代替）。
+Google Docs 代替のリッチテキストドキュメントエディタ。default app distribution
+metadata を持つが、primitive や group は特権化されない。
 
 ## 役割
 
 - Tiptap ベースのリッチテキストエディタ
 - ドキュメントの作成・編集・閲覧
-- MCP Server でドキュメント操作をエージェントに公開
+- source tree の standalone MCP server でドキュメント操作 tools を提供
 - kernel の Storage 機能に依存（files:read / files:write）
-- standalone でも動作可能
+- group に所属しなくても動作可能
 
 ## Takos 上での動作
 
@@ -22,41 +23,57 @@ hostname は routing layer が割り当てる。
 ```text
 {hostname}
   /    → built frontend / static asset surface (deployment mount)
-  /mcp → MCP Server endpoint
 ```
 
-単一の web worker で MCP と health を公開し、UI は deployment 側で built frontend / static asset として mount される。
+default app manifest は UI の built frontend / static asset surface だけを
+publish する。source tree には standalone MCP server (`src/server.ts`)
+もあるが、 現在の default deploy workflow artifact には含めない。
 
 ## Publications
 
-`path: /` は built frontend / static asset surface の mount point を表し、server entrypoint 自体の root route を意味しない。
+`path: /` は built frontend / static asset surface の mount point を表し、server
+entrypoint 自体の root route を意味しない。
 
 ```yaml
 publish:
   - name: docs-ui
     type: UiSurface
+    publisher: web
     path: /
     title: Docs
-  - name: docs-mcp
-    type: McpServer
-    path: /mcp
 ```
 
-## 他 app からの利用
+`UiSurface` は custom route publication type であり、deploy manifest の
+`publish` entry で catalog を管理します。
 
-kernel 等がドキュメント操作を行いたい場合:
+## Capability grants
 
-1. env injection で takos-docs の URL を得る
-2. MCP プロトコルで接続し tool を呼び出す
+`takos-api` は route / interface publication ではなく、kernel API への access を
+受け取る capability grant です。
 
-## UI と runtime の分離
+```yaml
+publish:
+  - name: takos-api
+    publisher: takos
+    type: api-key
+    spec:
+      scopes:
+        - files:read
+        - files:write
+```
 
-UI は build 済みの frontend / static asset surface として mount される想定で、server entrypoint 自体は `GET /healthz` と `POST /mcp` を公開する。
+## UI と standalone MCP server の分離
+
+default app manifest / workflow は UI の built frontend / static asset surface
+だけを publish する。source tree の standalone MCP server は同じ app source に
+含まれるが、現在の default deploy surface では `GET /healthz` / `POST /mcp`
+route として公開しない。
 
 ## Storage との連携
 
-takos-docs は `takos-api` publication を consume して kernel API の endpoint /
-credential を受け取り、Storage API を呼び出してファイルの読み書きを行う。
+takos-docs は `takos-api` capability grant を consume して kernel API の
+endpoint / credential を受け取り、Storage API
+を呼び出してファイルの読み書きを行う。
 
 ## Scopes
 
@@ -64,11 +81,10 @@ credential を受け取り、Storage API を呼び出してファイルの読み
 | ------------- | ----------------------------------------------- |
 | `files:read`  | kernel Storage からドキュメントファイル読み取り |
 | `files:write` | kernel Storage へドキュメントファイル書き込み   |
-| `mcp:invoke`  | 他 group の MCP server を呼ぶ (group 間連携)    |
 
 ## 所有する data
 
-takos-docs 自体は永続データを持たない。 ドキュメントデータは kernel の Storage
+takos-docs 自体は永続データを持たない。ドキュメントデータは kernel の Storage
 に保存される。
 
 ## Resources

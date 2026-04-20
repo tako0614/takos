@@ -165,32 +165,28 @@ export function createCustomDomainsRoute(
     verification_method: z.enum(["cname", "txt"]).optional(),
   });
 
-  async function addCustomDomainHandler(c: AppContext) {
-    const user = c.get("user");
-    const serviceId = c.req.param("id");
-    if (!serviceId) throw new BadRequestError("Missing serviceId");
-    const body = c.req.valid("json" as never) as z.infer<
-      typeof addCustomDomainSchema
-    >;
-    try {
-      const result = await deps.addCustomDomain(
-        c.env,
-        serviceId,
-        user.id,
-        body,
-      );
-      return c.json(result.body, toStatusCode(result.status));
-    } catch (err) {
-      handleCustomDomainError(err, "Failed to create custom domain");
-    }
-  }
-
   return route
     .get("/services/:id/custom-domains", listCustomDomainsHandler)
     .post(
       "/services/:id/custom-domains",
       zValidator("json", addCustomDomainSchema),
-      addCustomDomainHandler,
+      async (c) => {
+        const user = c.get("user");
+        const serviceId = c.req.param("id");
+        if (!serviceId) throw new BadRequestError("Missing serviceId");
+        const body = c.req.valid("json");
+        try {
+          const result = await deps.addCustomDomain(
+            c.env,
+            serviceId,
+            user.id,
+            body,
+          );
+          return c.json(result.body, toStatusCode(result.status));
+        } catch (err) {
+          handleCustomDomainError(err, "Failed to create custom domain");
+        }
+      },
     )
     .post(
       "/services/:id/custom-domains/:domainId/verify",

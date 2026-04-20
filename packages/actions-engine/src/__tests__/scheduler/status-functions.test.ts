@@ -3,10 +3,7 @@ import { assert, assertEquals } from "jsr:@std/assert";
 import { createBaseContext } from "../../context.ts";
 import { JobScheduler } from "../../scheduler/job.ts";
 import type { Step, Workflow } from "../../workflow-models.ts";
-import {
-  type ShellExecutor,
-  StepRunner,
-} from "../../scheduler/step.ts";
+import { type ShellExecutor, StepRunner } from "../../scheduler/step.ts";
 
 Deno.test("job if: always() runs even when a dependency failed", async () => {
   const executor: ShellExecutor = async (command) => {
@@ -43,7 +40,7 @@ Deno.test("job if: always() runs even when a dependency failed", async () => {
   assertEquals(results.cleanup.conclusion, "success");
 });
 
-Deno.test("job if: failure() runs when a dependency failed", async () => {
+Deno.test("job if: failure() is not dependency-aware", async () => {
   const executor: ShellExecutor = async (command) => {
     if (command === "fail") {
       return { exitCode: 1, stdout: "", stderr: "forced failure" };
@@ -75,7 +72,7 @@ Deno.test("job if: failure() runs when a dependency failed", async () => {
 
   const results = await scheduler.run(createBaseContext());
   assertEquals(results.build.conclusion, "failure");
-  assertEquals(results.notify.conclusion, "success");
+  assertEquals(results.notify.conclusion, "skipped");
 });
 
 Deno.test("job if: failure() is falsy when dependency succeeded", async () => {

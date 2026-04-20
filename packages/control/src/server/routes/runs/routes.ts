@@ -29,6 +29,7 @@ import { runsRouteDeps } from "./deps.ts";
 
 const INTERNAL_ONLY_HEADERS = [
   "X-Takos-Internal",
+  "X-Takos-Internal-Marker",
   "X-WS-Auth-Validated",
   "X-WS-User-Id",
 ] as const;
@@ -75,13 +76,6 @@ const VALID_ARTIFACT_TYPES: ReadonlySet<ArtifactType> = new Set<ArtifactType>([
   "other",
 ]);
 
-type RunNotifierNamespace = {
-  idFromName(name: string): unknown;
-  get(
-    id: unknown,
-  ): { fetch(input: unknown, init?: unknown): Promise<Response> };
-};
-
 function artifactRowToApi(row: ArtifactRow): Artifact {
   return {
     id: row.id,
@@ -93,6 +87,50 @@ function artifactRowToApi(row: ArtifactRow): Artifact {
     file_id: row.fileId,
     metadata: row.metadata,
     created_at: textDate(row.createdAt),
+  };
+}
+
+function artifactStringField(
+  row: Record<string, unknown>,
+  key: keyof ArtifactRow,
+): string {
+  const value = row[key];
+  if (typeof value === "string") return value;
+  throw new TypeError(`Artifact row field ${String(key)} must be a string`);
+}
+
+function artifactNullableStringField(
+  row: Record<string, unknown>,
+  key: keyof ArtifactRow,
+): string | null {
+  const value = row[key];
+  if (value == null) return null;
+  if (typeof value === "string") return value;
+  throw new TypeError(
+    `Artifact row field ${String(key)} must be a string or null`,
+  );
+}
+
+function artifactDateField(
+  row: Record<string, unknown>,
+  key: keyof ArtifactRow,
+): string | Date {
+  const value = row[key];
+  if (typeof value === "string" || value instanceof Date) return value;
+  throw new TypeError(`Artifact row field ${String(key)} must be a date`);
+}
+
+function asArtifactRow(row: Record<string, unknown>): ArtifactRow {
+  return {
+    id: artifactStringField(row, "id"),
+    runId: artifactStringField(row, "runId"),
+    accountId: artifactStringField(row, "accountId"),
+    type: artifactStringField(row, "type"),
+    title: artifactNullableStringField(row, "title"),
+    content: artifactNullableStringField(row, "content"),
+    fileId: artifactNullableStringField(row, "fileId"),
+    metadata: artifactStringField(row, "metadata"),
+    createdAt: artifactDateField(row, "createdAt"),
   };
 }
 
@@ -159,9 +197,11 @@ function registerRunDetailRoutes(app: RunRouteApp): void {
     async (c) => {
       const user = c.get("user");
       const runId = c.req.param("id");
+      const lastEventIdQuery = c.req.valid("query") as {
+        last_event_id?: string;
+      };
       const lastEventId = Number.parseInt(
-        (c.req.valid("query" as never) as { last_event_id?: string })
-          .last_event_id ?? "0",
+        lastEventIdQuery.last_event_id ?? "0",
         10,
       );
 
@@ -208,7 +248,7 @@ function registerRunDetailRoutes(app: RunRouteApp): void {
       );
     }
 
-    const namespace = c.env.RUN_NOTIFIER as unknown as RunNotifierNamespace;
+    const namespace = c.env.RUN_NOTIFIER;
     const id = namespace.idFromName(runId);
     const stub = namespace.get(id);
     const headers = buildSanitizedDOHeaders(c.req.raw.headers, {
@@ -221,7 +261,7 @@ function registerRunDetailRoutes(app: RunRouteApp): void {
       headers,
       body: c.req.raw.body,
     });
-    return await stub.fetch(request) as unknown as Response;
+    return await stub.fetch(request);
   });
 
   app.get("/runs/:id/replay", async (c) => {
@@ -269,9 +309,7 @@ function registerRunArtifactRoutes(app: RunRouteApp): void {
     ).orderBy(asc(artifacts.createdAt)).all();
 
     return c.json({
-      artifacts: rows.map((row) =>
-        artifactRowToApi(row as unknown as ArtifactRow)
-      ),
+      artifacts: rows.map((row) => artifactRowToApi(asArtifactRow(row))),
     });
   });
 
@@ -290,7 +328,7 @@ function registerRunArtifactRoutes(app: RunRouteApp): void {
     async (c) => {
       const user = c.get("user");
       const runId = c.req.param("id");
-      const body = c.req.valid("json" as never) as {
+      const body = c.req.valid("json") as {
         type: ArtifactType;
         title?: string;
         content?: string;
@@ -326,7 +364,7 @@ function registerRunArtifactRoutes(app: RunRouteApp): void {
       }).returning().get();
 
       return c.json({
-        artifact: artifactRowToApi(created as unknown as ArtifactRow),
+        artifact: artifactRowToApi(asArtifactRow(created)),
       }, 201);
     },
   );
@@ -353,7 +391,7 @@ function registerRunArtifactRoutes(app: RunRouteApp): void {
     }
 
     return c.json({
-      artifact: artifactRowToApi(artifactRow as unknown as ArtifactRow),
+      artifact: artifactRowToApi(asArtifactRow(artifactRow)),
     });
   });
 }

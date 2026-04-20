@@ -2,11 +2,10 @@
 // app-manifest-parser/index.ts
 // ============================================================
 //
-// Flat-schema manifest parser entry point (Phase 1).
+// Flat-schema manifest parser entry point.
 //
 // Reads a YAML string, parses the top-level flat schema, and
-// returns an `AppManifest`. The old envelope schema
-// (`apiVersion/kind/metadata/spec`) is explicitly rejected.
+// returns an `AppManifest`.
 //
 // Top-level fields:
 //   - name       (required)
@@ -23,80 +22,456 @@
 
 import YAML from "yaml";
 import type {
+  AppCompute,
   AppManifest,
   AppManifestOverride,
+  AppPublication,
 } from "../app-manifest-types.ts";
 import {
+  asOptionalInteger,
   asRecord,
   asRequiredString,
   asString,
+  asStringArray,
   asStringMap,
+  normalizeRepoPath,
+  normalizeRepoRelativePath,
 } from "../app-manifest-utils.ts";
+import {
+  validateDigestPinnedImageRef,
+  validateReadinessPath,
+  validateServiceScaling,
+} from "../app-manifest-validation.ts";
 import { validateSemver } from "./parse-common.ts";
 import { parseCompute } from "./parse-compute.ts";
 import { parsePublish } from "./parse-publish.ts";
 import { parseRoutes } from "./parse-routes.ts";
 
-const ENVELOPE_FIELDS = ["apiVersion", "kind", "metadata", "spec"] as const;
+const TOP_LEVEL_FIELDS = new Set([
+  "name",
+  "version",
+  "compute",
+  "routes",
+  "publish",
+  "env",
+  "overrides",
+]);
 
-function rejectEnvelope(record: Record<string, unknown>): void {
-  for (const field of ENVELOPE_FIELDS) {
-    if (record[field] !== undefined) {
+function requireRecord(
+  raw: unknown,
+  field: string,
+): Record<string, unknown> {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) {
+    throw new Error(`${field} must be an object`);
+  }
+  return raw as Record<string, unknown>;
+}
+
+function assertAllowedFields(
+  record: Record<string, unknown>,
+  prefix: string,
+  allowed: ReadonlySet<string>,
+): void {
+  for (const key of Object.keys(record)) {
+    if (!allowed.has(key)) {
       throw new Error(
-        "Kubernetes-style manifest envelope is no longer supported. Use flat top-level schema.",
+        `${prefix}.${key} is not supported by the override contract`,
       );
     }
   }
 }
 
-function rejectRetiredFields(
-  record: Record<string, unknown>,
-  prefix = "",
-): void {
-  const base = prefix ? `${prefix}.` : "";
-  if (record.scopes != null) {
-    throw new Error(
-      `${base}scopes is retired. Use top-level publish + compute.<name>.consume instead.`,
+function assertAllowedTopLevelFields(record: Record<string, unknown>): void {
+  for (const key of Object.keys(record)) {
+    if (!TOP_LEVEL_FIELDS.has(key)) {
+      throw new Error(`${key} is not supported by the app manifest contract`);
+    }
+  }
+}
+
+const OVERRIDE_COMPUTE_FIELDS = new Set([
+  "build",
+  "image",
+  "port",
+  "env",
+  "readiness",
+  "scaling",
+  "volumes",
+  "containers",
+  "depends",
+  "triggers",
+  "healthCheck",
+  "dockerfile",
+  "consume",
+]);
+
+const OVERRIDE_BUILD_FIELDS = new Set(["fromWorkflow"]);
+
+const OVERRIDE_FROM_WORKFLOW_FIELDS = new Set([
+  "path",
+  "job",
+  "artifact",
+  "artifactPath",
+]);
+
+const OVERRIDE_VOLUME_FIELDS = new Set(["source", "target", "persistent"]);
+
+const OVERRIDE_TRIGGER_FIELDS = new Set(["schedules"]);
+const OVERRIDE_SCHEDULE_FIELDS = new Set(["cron"]);
+const OVERRIDE_CONSUME_FIELDS = new Set(["publication", "env"]);
+const OVERRIDE_PUBLISH_FIELDS = new Set([
+  "name",
+  "publisher",
+  "spec",
+  "type",
+  "path",
+  "title",
+]);
+
+const OVERRIDE_HEALTH_CHECK_FIELDS = new Set([
+  "path",
+  "interval",
+  "timeout",
+  "unhealthyThreshold",
+]);
+
+function parseOverrideBuild(
+  prefix: string,
+  raw: unknown,
+): Record<string, unknown> | undefined {
+  if (raw == null) return undefined;
+  const record = requireRecord(raw, prefix);
+  assertAllowedFields(record, prefix, OVERRIDE_BUILD_FIELDS);
+  const result: Record<string, unknown> = {};
+
+  if (record.fromWorkflow != null) {
+    const fromWorkflowRecord = requireRecord(
+      record.fromWorkflow,
+      `${prefix}.fromWorkflow`,
+    );
+    assertAllowedFields(
+      fromWorkflowRecord,
+      `${prefix}.fromWorkflow`,
+      OVERRIDE_FROM_WORKFLOW_FIELDS,
+    );
+    const fromWorkflow: Record<string, unknown> = {};
+    const workflowPath = asString(
+      fromWorkflowRecord.path,
+      `${prefix}.fromWorkflow.path`,
+    );
+    if (workflowPath) {
+      fromWorkflow.path = normalizeRepoRelativePath(
+        workflowPath,
+        `${prefix}.fromWorkflow.path`,
+      );
+    }
+    const job = asString(fromWorkflowRecord.job, `${prefix}.fromWorkflow.job`);
+    if (job) fromWorkflow.job = job;
+    const artifact = asString(
+      fromWorkflowRecord.artifact,
+      `${prefix}.fromWorkflow.artifact`,
+    );
+    if (artifact) fromWorkflow.artifact = artifact;
+    const artifactPath = asString(
+      fromWorkflowRecord.artifactPath,
+      `${prefix}.fromWorkflow.artifactPath`,
+    );
+    if (artifactPath) {
+      fromWorkflow.artifactPath = normalizeRepoRelativePath(
+        artifactPath,
+        `${prefix}.fromWorkflow.artifactPath`,
+      );
+    }
+    result.fromWorkflow = fromWorkflow;
+  }
+
+  return result;
+}
+
+function parseOverrideVolumes(
+  prefix: string,
+  raw: unknown,
+): Record<string, Record<string, unknown>> | undefined {
+  if (raw == null) return undefined;
+  const record = requireRecord(raw, prefix);
+  const result: Record<string, Record<string, unknown>> = {};
+  for (const [name, value] of Object.entries(record)) {
+    const mountRecord = requireRecord(value, `${prefix}.${name}`);
+    assertAllowedFields(
+      mountRecord,
+      `${prefix}.${name}`,
+      OVERRIDE_VOLUME_FIELDS,
+    );
+    const mount: Record<string, unknown> = {};
+    const source = asString(mountRecord.source, `${prefix}.${name}.source`);
+    if (source) mount.source = source;
+    const target = asString(mountRecord.target, `${prefix}.${name}.target`);
+    if (target) mount.target = target;
+    if (mountRecord.persistent != null) {
+      mount.persistent = Boolean(mountRecord.persistent);
+    }
+    result[name] = mount;
+  }
+  return result;
+}
+
+function parseOverrideSchedules(
+  prefix: string,
+  raw: unknown,
+): Record<string, unknown>[] | undefined {
+  if (raw == null) return undefined;
+  if (!Array.isArray(raw)) {
+    throw new Error(`${prefix} must be an array`);
+  }
+  return raw.map((entry, index) => {
+    const record = requireRecord(entry, `${prefix}[${index}]`);
+    assertAllowedFields(
+      record,
+      `${prefix}[${index}]`,
+      OVERRIDE_SCHEDULE_FIELDS,
+    );
+    const cron = asRequiredString(record.cron, `${prefix}[${index}].cron`);
+    return { cron };
+  });
+}
+
+function parseOverrideTriggers(
+  prefix: string,
+  raw: unknown,
+): Record<string, unknown> | undefined {
+  if (raw == null) return undefined;
+  const record = requireRecord(raw, prefix);
+  assertAllowedFields(record, prefix, OVERRIDE_TRIGGER_FIELDS);
+  const schedules = parseOverrideSchedules(
+    `${prefix}.schedules`,
+    record.schedules,
+  );
+  const result: Record<string, unknown> = {};
+  if (schedules) result.schedules = schedules;
+  return result;
+}
+
+function parseOverrideHealthCheck(
+  prefix: string,
+  raw: unknown,
+): Record<string, unknown> | undefined {
+  if (raw == null) return undefined;
+  const record = requireRecord(raw, prefix);
+  assertAllowedFields(record, prefix, OVERRIDE_HEALTH_CHECK_FIELDS);
+  const result: Record<string, unknown> = {};
+  const path = asString(record.path, `${prefix}.path`);
+  if (path) result.path = path;
+  const interval = asOptionalInteger(record.interval, `${prefix}.interval`, {
+    min: 1,
+  });
+  if (interval != null) result.interval = interval;
+  const timeout = asOptionalInteger(record.timeout, `${prefix}.timeout`, {
+    min: 1,
+  });
+  if (timeout != null) result.timeout = timeout;
+  const unhealthyThreshold = asOptionalInteger(
+    record.unhealthyThreshold,
+    `${prefix}.unhealthyThreshold`,
+    { min: 1 },
+  );
+  if (unhealthyThreshold != null) {
+    result.unhealthyThreshold = unhealthyThreshold;
+  }
+  return result;
+}
+
+function parseOverrideConsumes(
+  prefix: string,
+  raw: unknown,
+): Record<string, unknown>[] | undefined {
+  if (raw == null) return undefined;
+  if (!Array.isArray(raw)) {
+    throw new Error(`${prefix} must be an array`);
+  }
+  return raw.map((entry, index) => {
+    const record = requireRecord(entry, `${prefix}[${index}]`);
+    assertAllowedFields(record, `${prefix}[${index}]`, OVERRIDE_CONSUME_FIELDS);
+    const publication = asRequiredString(
+      record.publication,
+      `${prefix}[${index}].publication`,
+    );
+    const result: Record<string, unknown> = { publication };
+    if (record.env != null) {
+      result.env = asStringMap(
+        record.env,
+        `${prefix}[${index}].env`,
+      );
+    }
+    return result;
+  });
+}
+
+function parseOverrideComputeEntry(
+  prefix: string,
+  raw: unknown,
+): Record<string, unknown> {
+  const record = requireRecord(raw, prefix);
+  assertAllowedFields(record, prefix, OVERRIDE_COMPUTE_FIELDS);
+
+  const result: Record<string, unknown> = {};
+  const build = parseOverrideBuild(`${prefix}.build`, record.build);
+  if (build !== undefined) result.build = build;
+
+  const image = validateDigestPinnedImageRef(
+    asString(record.image, `${prefix}.image`),
+    `${prefix}.image`,
+  );
+  if (image) result.image = image;
+
+  const port = asOptionalInteger(record.port, `${prefix}.port`, { min: 1 });
+  if (port != null) result.port = port;
+
+  const env = asStringMap(record.env, `${prefix}.env`);
+  if (env) result.env = env;
+
+  const readiness = asString(record.readiness, `${prefix}.readiness`);
+  if (readiness) {
+    result.readiness = validateReadinessPath(
+      readiness,
+      `${prefix}.readiness`,
     );
   }
-  if (record.oauth != null) {
-    throw new Error(
-      `${base}oauth is retired. Use top-level publish + compute.<name>.consume instead.`,
+
+  const scaling = validateServiceScaling(record.scaling, `${prefix}.scaling`);
+  if (scaling) result.scaling = scaling;
+
+  const volumes = parseOverrideVolumes(`${prefix}.volumes`, record.volumes);
+  if (volumes) result.volumes = volumes;
+
+  const depends = record.depends == null
+    ? undefined
+    : asStringArray(record.depends, `${prefix}.depends`);
+  if (depends) result.depends = depends;
+
+  const triggers = parseOverrideTriggers(`${prefix}.triggers`, record.triggers);
+  if (triggers) result.triggers = triggers;
+
+  const dockerfile = asString(record.dockerfile, `${prefix}.dockerfile`);
+  if (dockerfile) result.dockerfile = normalizeRepoPath(dockerfile);
+
+  const consume = parseOverrideConsumes(`${prefix}.consume`, record.consume);
+  if (consume) result.consume = consume;
+
+  const healthCheck = parseOverrideHealthCheck(
+    `${prefix}.healthCheck`,
+    record.healthCheck,
+  );
+  if (healthCheck) result.healthCheck = healthCheck;
+
+  if (record.containers != null) {
+    const nestedRecord = requireRecord(
+      record.containers,
+      `${prefix}.containers`,
     );
+    const nested: Record<string, Record<string, unknown>> = {};
+    for (const [nestedName, nestedValue] of Object.entries(nestedRecord)) {
+      nested[nestedName] = parseOverrideComputeEntry(
+        `${prefix}.containers.${nestedName}`,
+        nestedValue,
+      );
+    }
+    result.containers = nested;
   }
-  if (record.storage != null) {
-    throw new Error(
-      `${base}storage is retired. Publish a provider-backed resource and consume its outputs instead.`,
-    );
+
+  return result;
+}
+
+function parseOverrideCompute(
+  raw: unknown,
+): Record<string, AppCompute> | undefined {
+  if (raw == null) return undefined;
+  const record = requireRecord(raw, "overrides.compute");
+  const result: Record<string, AppCompute> = {};
+  for (const [computeName, computeOverride] of Object.entries(record)) {
+    result[computeName] = parseOverrideComputeEntry(
+      `overrides.compute.${computeName}`,
+      computeOverride,
+    ) as AppCompute;
   }
+  return result;
+}
+
+function parseOverridePublishEntry(
+  index: number,
+  raw: unknown,
+): Record<string, unknown> {
+  const prefix = `overrides.publish[${index}]`;
+  const record = requireRecord(raw, prefix);
+  assertAllowedFields(record, prefix, OVERRIDE_PUBLISH_FIELDS);
+
+  const result: Record<string, unknown> = {};
+  const name = asString(record.name, `${prefix}.name`);
+  if (name) result.name = name;
+  const publisher = asString(record.publisher, `${prefix}.publisher`);
+  if (publisher) result.publisher = publisher;
+  const spec = record.spec;
+  if (spec != null) result.spec = requireRecord(spec, `${prefix}.spec`);
+  const type = asString(record.type, `${prefix}.type`);
+  if (type) result.type = type;
+  const path = asString(record.path, `${prefix}.path`);
+  if (path) {
+    if (!path.startsWith("/")) {
+      throw new Error(`${prefix}.path must start with '/' (got: ${path})`);
+    }
+    result.path = path;
+  }
+  const title = asString(record.title, `${prefix}.title`);
+  if (title) result.title = title;
+
+  return result;
+}
+
+function parseOverridePublish(
+  raw: unknown,
+): AppPublication[] | undefined {
+  if (raw == null) return undefined;
+  if (!Array.isArray(raw)) {
+    throw new Error("overrides.publish must be an array");
+  }
+  return raw.map((entry, index) =>
+    parseOverridePublishEntry(index, entry) as AppPublication
+  );
 }
 
 function parseOverrides(
   raw: unknown,
 ): Record<string, AppManifestOverride> | undefined {
   if (raw == null) return undefined;
-  const record = asRecord(raw);
+  const record = requireRecord(raw, "overrides");
   const result: Record<string, AppManifestOverride> = {};
   for (const [envName, envOverrides] of Object.entries(record)) {
-    const envRecord = asRecord(envOverrides);
-    rejectRetiredFields(envRecord, `overrides.${envName}`);
+    const envRecord = requireRecord(envOverrides, `overrides.${envName}`);
+    assertAllowedFields(
+      envRecord,
+      `overrides.${envName}`,
+      new Set(["compute", "routes", "publish", "env"]),
+    );
     const entry: AppManifestOverride = {};
     if (envRecord.compute != null) {
-      entry.compute = parseCompute({ compute: envRecord.compute });
+      entry.compute = parseOverrideCompute(envRecord.compute) as Record<
+        string,
+        AppCompute
+      >;
     }
     if (envRecord.routes != null) {
-      // Routes in overrides are validated against the merged compute
-      // at apply time — the override parser cannot resolve compute
-      // references in isolation, so we accept a thin shape here.
+      // Routes in overrides still defer compute target resolution until
+      // apply time, but the parser can safely validate their shape and
+      // intra-list uniqueness now.
       entry.routes = parseRoutes(
         { routes: envRecord.routes },
-        // Pass an empty compute map; `target` ref validation is deferred
-        // to apply-time merge. Phase 2 hooks this up.
         {},
+        { validateTargets: false },
       );
     }
     if (envRecord.publish != null) {
-      entry.publish = parsePublish({ publish: envRecord.publish });
+      entry.publish = parseOverridePublish(
+        envRecord.publish,
+      ) as AppPublication[];
     }
     if (envRecord.env != null) {
       const envMap = asStringMap(envRecord.env, `overrides.${envName}.env`);
@@ -109,12 +484,36 @@ function parseOverrides(
   return Object.keys(result).length > 0 ? result : undefined;
 }
 
+function validatePublicationRoutes(
+  publish: AppPublication[],
+  routes: Array<{ target: string; path: string }>,
+): void {
+  for (const [index, publication] of publish.entries()) {
+    if (publication.publisher === "takos") continue;
+    const target = publication.publisher;
+    const path = publication.path;
+    if (!target || !path) continue;
+    const matches = routes.filter((route) =>
+      route.target === target && route.path === path
+    );
+    if (matches.length === 0) {
+      throw new Error(
+        `publish[${index}] publisher/path does not match any route: ${target} ${path}`,
+      );
+    }
+    if (matches.length > 1) {
+      throw new Error(
+        `publish[${index}] publisher/path matches multiple routes: ${target} ${path}`,
+      );
+    }
+  }
+}
+
 export function parseAppManifestYaml(raw: string): AppManifest {
   const parsed = YAML.parse(raw);
   const record = asRecord(parsed);
 
-  rejectEnvelope(record);
-  rejectRetiredFields(record);
+  assertAllowedTopLevelFields(record);
 
   // --- Top-level scalars ---
   const name = asRequiredString(record.name, "name");
@@ -127,6 +526,7 @@ export function parseAppManifestYaml(raw: string): AppManifest {
   const compute = parseCompute(record);
   const routes = parseRoutes(record, compute);
   const publish = parsePublish(record);
+  validatePublicationRoutes(publish, routes);
 
   // --- Env (flat Record<string, string>) ---
   const env = asStringMap(record.env, "env") ?? {};

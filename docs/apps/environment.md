@@ -1,12 +1,10 @@
 # 環境変数
 
-Takos の app deploy contract では、compute に入る env は次の 3 系統だけです。
+Takos の group deploy contract では、compute に入る env は次の 3 系統だけです。
 
 1. top-level `env`
 2. `compute.<name>.env`
-3. `compute.<name>.consume` が解決した publication outputs
-
-旧 `storage.bind` / `common-env` / `bindings` の自動注入は廃止されました。
+3. `compute.<name>.consume` が解決した publication / grant outputs
 
 ## 基本
 
@@ -31,17 +29,23 @@ top-level `env` は全 compute に入ります。`compute.<name>.env` はその 
 
 ## consume で env を受け取る
 
-`consume.env` は output 名 -> env 名 の alias map です。必要な output だけ
-指定でき、書かなかった output は provider の default env 名をそのまま使います。
+`consume.env` は output 名 -> env 名 の alias map です。output の filter では
+ありません。publication / capability grant の全 outputs が inject 対象になり、
+書かなかった output は default env 名をそのまま使います。Takos capability grant
+は `publish[].publisher/type` で宣言します。SQL / object-store / queue などの
+resource は publish ではなく resource API / runtime binding 側で扱います。
+
+alias に使う env 名は任意文字列ではなく `[A-Za-z_][A-Za-z0-9_]*` に一致する
+必要があります。保存時と注入時には uppercase に正規化されます。
 
 ```yaml
 publish:
-  - name: primary-db
-    provider: takos
-    kind: sql
+  - name: takos-api
+    publisher: takos
+    type: api-key
     spec:
-      resource: notes-db
-      permission: write
+      scopes:
+        - files:read
 
 compute:
   web:
@@ -52,24 +56,36 @@ compute:
         artifact: web
         artifactPath: dist/worker
     consume:
-      - publication: primary-db
+      - publication: takos-api
         env:
-          endpoint: DATABASE_URL
-          apiKey: DATABASE_API_KEY
+          endpoint: TAKOS_API_ENDPOINT
+          apiKey: TAKOS_API_KEY
 ```
 
-この例では `web` に `DATABASE_URL` と `DATABASE_API_KEY` が入ります。
+この例では `web` に `TAKOS_API_ENDPOINT` と `TAKOS_API_KEY` が入ります。
 
-alias を省略した output は provider が持つ default env 名が使われます。たとえば
-`primary-db` の default は `PUBLICATION_PRIMARY_DB_ENDPOINT` と
-`PUBLICATION_PRIMARY_DB_API_KEY` です。
+alias を省略した output は type ごとの default env 名が使われます。たとえば
+`takos-api` の default は `PUBLICATION_TAKOS_API_ENDPOINT` と
+`PUBLICATION_TAKOS_API_API_KEY` です。
 
 ## collision rule
 
 `consume` が解決した env 名は、既存の local env と衝突できません。衝突した場合は
-deploy / settings update が失敗します。
+deploy / settings update が失敗します。衝突判定は uppercase
+正規化後に行われます。同じ compute に対して、top-level
+`env`、`compute.<name>.env`、consumed publication / grant output
+のいずれかが同じ env 名に解決されると invalid です。複数の `consume` が同じ
+default env 名または alias に解決される場合も invalid です。
 
 ```yaml
+publish:
+  - name: takos-api
+    publisher: takos
+    type: api-key
+    spec:
+      scopes:
+        - files:read
+
 env:
   DATABASE_URL: sqlite://local
 
@@ -82,7 +98,7 @@ compute:
         artifact: web
         artifactPath: dist/worker
     consume:
-      - publication: primary-db
+      - publication: takos-api
         env:
           endpoint: DATABASE_URL
 ```
@@ -112,12 +128,11 @@ compute:
 
 ## よく使う output 名
 
-| publication 種別                                                                           | outputs                              |
-| ------------------------------------------------------------------------------------------ | ------------------------------------ |
-| route publication                                                                          | `url`                                |
-| `takos/api`                                                                                | `endpoint`, `apiKey`                 |
-| `takos/oauth-client`                                                                       | `clientId`, `clientSecret`, `issuer` |
-| `takos/sql` / `object-store` / `key-value` / `queue` / `vector-index` / `analytics-engine` | `endpoint`, `apiKey`                 |
+| output source     | outputs                              |
+| ----------------- | ------------------------------------ |
+| route publication | `url`                                |
+| `api-key`         | `endpoint`, `apiKey`                 |
+| `oauth-client`    | `clientId`, `clientSecret`, `issuer` |
 
 ## 次のステップ
 

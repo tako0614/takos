@@ -5,14 +5,14 @@
  * handling functions across agent execution engines.
  */
 
-import type { BaseMessage } from '@langchain/core/messages';
+import type { BaseMessage } from "@langchain/core/messages";
 import {
-  SystemMessage,
-  HumanMessage,
   AIMessage,
+  HumanMessage,
+  SystemMessage,
   ToolMessage,
-} from '@langchain/core/messages';
-import { logWarn } from '../../../shared/utils/logger.ts';
+} from "@langchain/core/messages";
+import { logWarn } from "../../../shared/utils/logger.ts";
 
 // ── Message text extraction ─────────────────────────────────────────────
 
@@ -22,24 +22,28 @@ import { logWarn } from '../../../shared/utils/logger.ts';
  * Handles plain strings, structured content parts (text blocks),
  * and arbitrary values by falling back to JSON serialization.
  */
-export function extractMessageText(content: BaseMessage['content']): string {
-  if (typeof content === 'string') return content;
+export function extractMessageText(content: BaseMessage["content"]): string {
+  if (typeof content === "string") return content;
   if (Array.isArray(content)) {
     return content
-      .map(part => {
-        if (typeof part === 'string') return part;
-        if (part && typeof part === 'object' && 'text' in part) {
+      .map((part) => {
+        if (typeof part === "string") return part;
+        if (part && typeof part === "object" && "text" in part) {
           return (part as { text: string }).text;
         }
-        return '';
+        return "";
       })
       .filter(Boolean)
-      .join('\n');
+      .join("\n");
   }
   if (content !== null && content !== undefined) {
-    try { return JSON.stringify(content); } catch { return String(content); }
+    try {
+      return JSON.stringify(content);
+    } catch {
+      return String(content);
+    }
   }
-  return '';
+  return "";
 }
 
 // ── Tool result stringification ─────────────────────────────────────────
@@ -51,9 +55,13 @@ export function extractMessageText(content: BaseMessage['content']): string {
  * for null/undefined, and a JSON representation for everything else.
  */
 export function stringifyToolResult(result: unknown): string {
-  if (typeof result === 'string') return result;
-  if (result === null || result === undefined) return '';
-  try { return JSON.stringify(result); } catch { return String(result); }
+  if (typeof result === "string") return result;
+  if (result === null || result === undefined) return "";
+  try {
+    return JSON.stringify(result);
+  } catch {
+    return String(result);
+  }
 }
 
 // ── DB ↔ LangChain message conversion ───────────────────────────────────
@@ -87,38 +95,42 @@ export interface DbMessageOutput {
  * BaseMessage instances suitable for agent consumption.
  */
 export function dbMessagesToLangChain(messages: DbMessageRow[]): BaseMessage[] {
-  return messages.map(msg => {
+  return messages.map((msg) => {
     switch (msg.role) {
-      case 'system':
+      case "system":
         return new SystemMessage(msg.content);
-      case 'user':
+      case "user":
       default:
         return new HumanMessage(msg.content);
-      case 'assistant': {
+      case "assistant": {
         const aiMsg = new AIMessage(msg.content);
         if (msg.tool_calls) {
           try {
             const parsed = JSON.parse(msg.tool_calls);
             if (!Array.isArray(parsed)) {
-              logWarn('tool_calls is not an array, skipping', { module: 'services/agent/graph-agent' });
+              logWarn("tool_calls is not an array, skipping", {
+                module: "services/agent/graph-agent",
+              });
             } else {
               aiMsg.tool_calls = parsed.map((tc: SerializedToolCall) => ({
-                id: tc.id || '',
+                id: tc.id || "",
                 name: tc.name,
                 args: tc.arguments || tc.args || {},
-                type: 'tool_call' as const,
+                type: "tool_call" as const,
               }));
             }
           } catch {
-            logWarn('Failed to parse tool_calls JSON', { module: 'services/agent/graph-agent' });
+            logWarn("Failed to parse tool_calls JSON", {
+              module: "services/agent/graph-agent",
+            });
           }
         }
         return aiMsg;
       }
-      case 'tool':
+      case "tool":
         return new ToolMessage({
           content: msg.content,
-          tool_call_id: msg.tool_call_id || '',
+          tool_call_id: msg.tool_call_id || "",
         });
     }
   });
@@ -132,21 +144,21 @@ export function langChainMessageToDb(msg: BaseMessage): DbMessageOutput {
   const content = extractMessageText(msg.content);
 
   if (msg instanceof SystemMessage) {
-    return { role: 'system', content };
+    return { role: "system", content };
   }
 
   if (msg instanceof HumanMessage) {
-    return { role: 'user', content };
+    return { role: "user", content };
   }
 
   if (msg instanceof AIMessage) {
     const result: DbMessageOutput = {
-      role: 'assistant',
+      role: "assistant",
       content,
     };
     if (msg.tool_calls && msg.tool_calls.length > 0) {
-      const normalizedToolCalls = msg.tool_calls.map(tc => ({
-        id: tc.id || '',
+      const normalizedToolCalls = msg.tool_calls.map((tc) => ({
+        id: tc.id || "",
         name: tc.name,
         arguments: tc.args || {},
       }));
@@ -157,11 +169,11 @@ export function langChainMessageToDb(msg: BaseMessage): DbMessageOutput {
 
   if (msg instanceof ToolMessage) {
     return {
-      role: 'tool',
+      role: "tool",
       content,
       tool_call_id: msg.tool_call_id,
     };
   }
 
-  return { role: 'user', content };
+  return { role: "user", content };
 }

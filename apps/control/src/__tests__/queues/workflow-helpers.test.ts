@@ -93,7 +93,7 @@ Deno.test("runtimeJson - sends a POST request with space_id and parses JSON", as
   const request = fetch.calls[0]?.args[0] as Request;
   assertEquals(request.method, "POST");
   assertEquals(request.url, "https://runtime-host/test/endpoint");
-  assertEquals(request.headers.get("X-Takos-Internal"), "1");
+  assertEquals(request.headers.get("X-Takos-Internal-Marker"), "1");
   assertEquals(await request.json(), {
     key: "value",
     space_id: "space-1",

@@ -4,7 +4,7 @@ import type { Env } from "@/types";
 import { assert, assertEquals } from "jsr:@std/assert";
 
 import { createToolResolver, ToolResolver } from "@/tools/resolver";
-import { BUILTIN_TOOLS } from "@/tools/builtin";
+import { CUSTOM_TOOLS } from "@/tools/custom";
 
 type McpRow = {
   id: string;
@@ -21,31 +21,43 @@ type McpRow = {
 };
 
 function createFakeD1(rows: McpRow[], shouldThrow = false) {
-  let prepareCount = 0;
+  let queryCount = 0;
   const db = {
-    prepare() {
-      prepareCount++;
+    select: () => {
+      queryCount++;
       if (shouldThrow) {
         throw new Error("db failed");
       }
-
       return {
-        bind() {
-          return {
-            all: async () => ({ results: rows }),
-            first: async () => rows[0] ?? null,
-            run: async () => ({
-              success: true,
-              meta: { changes: 0, last_row_id: 0, duration: 0 },
-            }),
-            raw: async () => rows.map((row) => Object.values(row)),
-          };
+        from: function (this: any) {
+          return this;
         },
+        where: function (this: any) {
+          return this;
+        },
+        orderBy: function (this: any) {
+          return this;
+        },
+        all: async () => (queryCount === 1 ? rows : []),
+        get: async () => (queryCount === 1 ? rows[0] ?? null : null),
       };
     },
+    insert: () => ({
+      values: () => ({
+        run: async () => undefined,
+      }),
+    }),
+    update: () => ({
+      set: () => ({
+        where: async () => ({ meta: { changes: 0 } }),
+      }),
+    }),
+    delete: () => ({
+      where: async () => ({ meta: { changes: 0 } }),
+    }),
   } as unknown as D1Database;
 
-  return { db, getPrepareCount: () => prepareCount };
+  return { db, getPrepareCount: () => queryCount };
 }
 
 const EXTERNAL_SERVER: McpRow = {
@@ -62,13 +74,13 @@ const EXTERNAL_SERVER: McpRow = {
   oauthTokenExpiresAt: null,
 };
 
-Deno.test("ToolResolver - resolve - resolves a builtin tool by name", async () => {
+Deno.test("ToolResolver - resolve - resolves a Takos-managed tool by name", async () => {
   const resolver = new ToolResolver({} as D1Database, "ws-test");
   await resolver.init();
 
   const tool = resolver.resolve("file_read");
   assert(tool !== undefined);
-  assertEquals(tool!.builtin, true);
+  assertEquals(tool!.custom, true);
   assertEquals(tool!.definition.name, "file_read");
   assertEquals(typeof tool!.handler, "function");
 });
@@ -90,7 +102,7 @@ Deno.test("ToolResolver - resolve - returns undefined for invalid tool names", a
   assertEquals(resolver.resolve(undefined as unknown as string), undefined);
 });
 
-Deno.test("ToolResolver - exists - returns true for existing builtin tools", async () => {
+Deno.test("ToolResolver - exists - returns true for existing Takos-managed tools", async () => {
   const resolver = new ToolResolver({} as D1Database, "ws-test");
   await resolver.init();
 
@@ -105,23 +117,23 @@ Deno.test("ToolResolver - exists - returns false for nonexistent tools", async (
   assertEquals(resolver.exists("does_not_exist"), false);
 });
 
-Deno.test("ToolResolver - isBuiltin - identifies builtin tools", async () => {
+Deno.test("ToolResolver - isCustom - identifies Takos-managed tools", async () => {
   const resolver = new ToolResolver({} as D1Database, "ws-test");
   await resolver.init();
 
-  assertEquals(resolver.isBuiltin("file_read"), true);
-  assertEquals(resolver.isBuiltin("nonexistent"), false);
+  assertEquals(resolver.isCustom("file_read"), true);
+  assertEquals(resolver.isCustom("nonexistent"), false);
 });
 
-Deno.test("ToolResolver - getAvailableTools - returns all builtin tools when no MCP tools loaded", async () => {
+Deno.test("ToolResolver - getAvailableTools - returns all Takos-managed tools when no MCP tools loaded", async () => {
   const resolver = new ToolResolver({} as D1Database, "ws-test");
   await resolver.init();
 
   const tools = resolver.getAvailableTools();
-  assertEquals(tools.length, BUILTIN_TOOLS.length);
+  assertEquals(tools.length, CUSTOM_TOOLS.length);
 });
 
-Deno.test("ToolResolver - getAvailableTools - keeps builtin tools when MCP exposure filters out all servers", async () => {
+Deno.test("ToolResolver - getAvailableTools - keeps Takos-managed tools when MCP exposure filters out all servers", async () => {
   const { db } = createFakeD1([EXTERNAL_SERVER]);
   const env = {} as Env;
   const resolver = new ToolResolver(db, "ws-test", env, {
@@ -133,12 +145,12 @@ Deno.test("ToolResolver - getAvailableTools - keeps builtin tools when MCP expos
   await resolver.init();
 
   const tools = resolver.getAvailableTools();
-  assertEquals(tools.length, BUILTIN_TOOLS.length);
+  assertEquals(tools.length, CUSTOM_TOOLS.length);
 });
 
-Deno.test("ToolResolver - disabledBuiltinTools - hides disabled builtin tools from getAvailableTools", async () => {
+Deno.test("ToolResolver - disabledCustomTools - hides disabled Takos-managed tools from getAvailableTools", async () => {
   const resolver = new ToolResolver({} as D1Database, "ws-test", undefined, {
-    disabledBuiltinTools: ["file_read", "file_write"],
+    disabledCustomTools: ["file_read", "file_write"],
   });
   await resolver.init();
 
@@ -147,15 +159,15 @@ Deno.test("ToolResolver - disabledBuiltinTools - hides disabled builtin tools fr
   assertEquals(tools.some((tool) => tool.name === "file_write"), false);
 });
 
-Deno.test("ToolResolver - disabledBuiltinTools - returns undefined when resolving disabled builtin tools", async () => {
+Deno.test("ToolResolver - disabledCustomTools - returns undefined when resolving disabled Takos-managed tools", async () => {
   const resolver = new ToolResolver({} as D1Database, "ws-test", undefined, {
-    disabledBuiltinTools: ["file_read"],
+    disabledCustomTools: ["file_read"],
   });
   await resolver.init();
 
   assertEquals(resolver.resolve("file_read"), undefined);
   assertEquals(resolver.exists("file_read"), false);
-  assertEquals(resolver.isBuiltin("file_read"), false);
+  assertEquals(resolver.isCustom("file_read"), false);
 });
 
 Deno.test("ToolResolver - init idempotency - does not reinitialize on second call", async () => {
@@ -170,8 +182,8 @@ Deno.test("ToolResolver - init idempotency - does not reinitialize on second cal
   await resolver.init();
   await resolver.init();
 
-  assertEquals(getPrepareCount(), 1);
-  assertEquals(resolver.getAvailableTools().length, BUILTIN_TOOLS.length);
+  assertEquals(getPrepareCount(), 2);
+  assertEquals(resolver.getAvailableTools().length, CUSTOM_TOOLS.length);
 });
 
 Deno.test("ToolResolver - mcpFailedServers - exposes failed MCP server names", async () => {

@@ -1,8 +1,8 @@
-import { Hono } from 'hono';
-import type { Env } from '../../shared/types/index.ts';
-import type { BaseVariables } from './route-auth.ts';
-import { AppError, ErrorCodes } from 'takos-common/errors';
-import { getPlatformServices } from '../../platform/accessors.ts';
+import { Hono } from "hono";
+import type { Env } from "../../shared/types/index.ts";
+import type { BaseVariables } from "./route-auth.ts";
+import { AppError, ErrorCodes } from "takos-common/errors";
+import { getPlatformServices } from "../../platform/accessors.ts";
 
 type NotificationSseRouteEnv = { Bindings: Env; Variables: BaseVariables };
 
@@ -15,20 +15,24 @@ type NotificationSseRouteEnv = { Bindings: Env; Variables: BaseVariables };
 export function createNotificationSseRouter(): Hono<NotificationSseRouteEnv> {
   const router = new Hono<NotificationSseRouteEnv>();
 
-  router.get('/sse', async (c) => {
-    const user = c.get('user');
+  router.get("/sse", async (c) => {
+    const user = c.get("user");
 
     // Get SSE notifier from platform services
-    const services = getPlatformServices(c as never);
+    const services = getPlatformServices(c);
     const sseNotifier = services.sseNotifier;
     if (!sseNotifier) {
       // SSE not available (running on CF Workers — use WebSocket instead)
-      throw new AppError('SSE not available in this environment. Use WebSocket endpoint instead.', ErrorCodes.NOT_FOUND, 404);
+      throw new AppError(
+        "SSE not available in this environment. Use WebSocket endpoint instead.",
+        ErrorCodes.NOT_FOUND,
+        404,
+      );
     }
 
     // Parse Last-Event-ID from header or query parameter
-    const lastEventIdRaw =
-      c.req.header('Last-Event-ID') ?? c.req.query('last_event_id');
+    const lastEventIdRaw = c.req.header("Last-Event-ID") ??
+      c.req.query("last_event_id");
     let lastEventId: number | undefined;
     if (lastEventIdRaw) {
       const parsed = parseInt(lastEventIdRaw, 10);
@@ -43,9 +47,9 @@ export function createNotificationSseRouter(): Hono<NotificationSseRouteEnv> {
 
     return new Response(stream, {
       headers: {
-        'Content-Type': 'text/event-stream',
-        'Cache-Control': 'no-cache',
-        'Connection': 'keep-alive',
+        "Content-Type": "text/event-stream",
+        "Cache-Control": "no-cache",
+        "Connection": "keep-alive",
       },
     });
   });

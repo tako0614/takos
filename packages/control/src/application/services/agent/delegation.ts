@@ -1,9 +1,9 @@
-import type { AgentMessage } from './agent-models.ts';
+import type { AgentMessage } from "./agent-models.ts";
 
-export const PRODUCT_HINTS = ['takos', 'yurucommu', 'roadtome'] as const;
+export const PRODUCT_HINTS = ["takos", "yurucommu", "roadtome"] as const;
 type ProductHint = typeof PRODUCT_HINTS[number];
 
-export type DelegationLocale = 'ja' | 'en';
+export type DelegationLocale = "ja" | "en";
 
 export type DelegationPacket = {
   task: string;
@@ -50,7 +50,7 @@ type BuildDelegationPacketInput = {
 };
 
 function normalizeText(value: unknown): string | null {
-  if (typeof value !== 'string') {
+  if (typeof value !== "string") {
     return null;
   }
   const trimmed = value.trim();
@@ -67,18 +67,19 @@ export function normalizeStringArray(value: unknown): string[] {
 }
 
 export function isDelegationLocale(value: unknown): value is DelegationLocale {
-  return value === 'ja' || value === 'en';
+  return value === "ja" || value === "en";
 }
 
 export function isProductHint(value: unknown): value is ProductHint {
-  return typeof value === 'string' && (PRODUCT_HINTS as readonly string[]).includes(value);
+  return typeof value === "string" &&
+    (PRODUCT_HINTS as readonly string[]).includes(value);
 }
 
 export function parseRunInputObject(input: unknown): Record<string, unknown> {
-  if (typeof input === 'string') {
+  if (typeof input === "string") {
     try {
       const parsed = JSON.parse(input) as unknown;
-      if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+      if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
         return parsed as Record<string, unknown>;
       }
     } catch {
@@ -87,22 +88,28 @@ export function parseRunInputObject(input: unknown): Record<string, unknown> {
     return {};
   }
 
-  if (input && typeof input === 'object' && !Array.isArray(input)) {
+  if (input && typeof input === "object" && !Array.isArray(input)) {
     return input as Record<string, unknown>;
   }
 
   return {};
 }
 
-function flattenDelegationSource(input: Record<string, unknown>): Record<string, unknown> {
+function flattenDelegationSource(
+  input: Record<string, unknown>,
+): Record<string, unknown> {
   const delegation = input.delegation;
-  if (delegation && typeof delegation === 'object' && !Array.isArray(delegation)) {
+  if (
+    delegation && typeof delegation === "object" && !Array.isArray(delegation)
+  ) {
     return delegation as Record<string, unknown>;
   }
   return input;
 }
 
-export function getDelegationPacketFromRunInput(input: unknown): DelegationPacket | null {
+export function getDelegationPacketFromRunInput(
+  input: unknown,
+): DelegationPacket | null {
   const packetSource = flattenDelegationSource(parseRunInputObject(input));
   const task = normalizeText(packetSource.task);
   const parentRunId = normalizeText(packetSource.parent_run_id);
@@ -113,8 +120,12 @@ export function getDelegationPacketFromRunInput(input: unknown): DelegationPacke
     return null;
   }
 
-  const productHint = isProductHint(packetSource.product_hint) ? packetSource.product_hint : null;
-  const locale = isDelegationLocale(packetSource.locale) ? packetSource.locale : null;
+  const productHint = isProductHint(packetSource.product_hint)
+    ? packetSource.product_hint
+    : null;
+  const locale = isDelegationLocale(packetSource.locale)
+    ? packetSource.locale
+    : null;
 
   return {
     task,
@@ -133,7 +144,9 @@ export function getDelegationPacketFromRunInput(input: unknown): DelegationPacke
   };
 }
 
-export function inferProductHintFromTextSamples(samples: Array<string | null | undefined>): ProductHint | null {
+export function inferProductHintFromTextSamples(
+  samples: Array<string | null | undefined>,
+): ProductHint | null {
   const weights: Record<ProductHint, number> = {
     takos: 0,
     yurucommu: 0,
@@ -165,7 +178,11 @@ export function inferProductHintFromTextSamples(samples: Array<string | null | u
     if (!sample) {
       continue;
     }
-    for (const [product, regexes] of Object.entries(matchers) as Array<[ProductHint, RegExp[]]>) {
+    for (
+      const [product, regexes] of Object.entries(matchers) as Array<
+        [ProductHint, RegExp[]]
+      >
+    ) {
       for (const regex of regexes) {
         if (regex.test(sample)) {
           weights[product] += 1;
@@ -187,15 +204,22 @@ export function inferProductHintFromTextSamples(samples: Array<string | null | u
   return ranked[0][0];
 }
 
-function getStringFromSource(source: Record<string, unknown>, key: string): string | null {
+function getStringFromSource(
+  source: Record<string, unknown>,
+  key: string,
+): string | null {
   return normalizeText(source[key]);
 }
 
-function getProductHintFromSource(source: Record<string, unknown>): ProductHint | null {
+function getProductHintFromSource(
+  source: Record<string, unknown>,
+): ProductHint | null {
   return isProductHint(source.product_hint) ? source.product_hint : null;
 }
 
-function getLocaleFromSource(source: Record<string, unknown>): DelegationLocale | null {
+function getLocaleFromSource(
+  source: Record<string, unknown>,
+): DelegationLocale | null {
   return isDelegationLocale(source.locale) ? source.locale : null;
 }
 
@@ -205,10 +229,12 @@ export function buildDelegationPacket(input: BuildDelegationPacketInput): {
 } {
   const explicitTask = normalizeText(input.task);
   if (!explicitTask) {
-    throw new Error('Delegation task must be a non-empty string');
+    throw new Error("Delegation task must be a non-empty string");
   }
 
-  const parentRunSource = flattenDelegationSource(parseRunInputObject(input.parentRunInput ?? {}));
+  const parentRunSource = flattenDelegationSource(
+    parseRunInputObject(input.parentRunInput ?? {}),
+  );
 
   let explicitFieldCount = 1; // task is always explicit for spawn_agent
   let inferredFieldCount = 0;
@@ -217,8 +243,12 @@ export function buildDelegationPacket(input: BuildDelegationPacketInput): {
   const explicitDeliverable = normalizeText(input.deliverable);
   const explicitConstraints = normalizeStringArray(input.constraints);
   const explicitContext = normalizeStringArray(input.context);
-  const explicitAcceptanceCriteria = normalizeStringArray(input.acceptanceCriteria);
-  const explicitProductHint = isProductHint(input.productHint) ? input.productHint : null;
+  const explicitAcceptanceCriteria = normalizeStringArray(
+    input.acceptanceCriteria,
+  );
+  const explicitProductHint = isProductHint(input.productHint)
+    ? input.productHint
+    : null;
   const explicitLocale = isDelegationLocale(input.locale) ? input.locale : null;
 
   if (explicitGoal) explicitFieldCount++;
@@ -229,29 +259,32 @@ export function buildDelegationPacket(input: BuildDelegationPacketInput): {
   if (explicitProductHint) explicitFieldCount++;
   if (explicitLocale) explicitFieldCount++;
 
-  const inferredGoal = normalizeText(input.latestUserMessage)
-    ?? getStringFromSource(parentRunSource, 'goal')
-    ?? getStringFromSource(parentRunSource, 'task');
+  const inferredGoal = normalizeText(input.latestUserMessage) ??
+    getStringFromSource(parentRunSource, "goal") ??
+    getStringFromSource(parentRunSource, "task");
   const goal = explicitGoal ?? inferredGoal;
   if (!explicitGoal && goal) inferredFieldCount++;
 
-  const deliverable = explicitDeliverable ?? getStringFromSource(parentRunSource, 'deliverable');
+  const deliverable = explicitDeliverable ??
+    getStringFromSource(parentRunSource, "deliverable");
   if (!explicitDeliverable && deliverable) inferredFieldCount++;
 
-  const productHint = explicitProductHint ?? getProductHintFromSource(parentRunSource) ?? inferProductHintFromTextSamples([
-    explicitTask,
-    goal,
-    deliverable,
-    input.latestUserMessage ?? null,
-    input.threadSummary ?? null,
-    ...(input.threadKeyPoints ?? []),
-  ]);
+  const productHint = explicitProductHint ??
+    getProductHintFromSource(parentRunSource) ??
+    inferProductHintFromTextSamples([
+      explicitTask,
+      goal,
+      deliverable,
+      input.latestUserMessage ?? null,
+      input.threadSummary ?? null,
+      ...(input.threadKeyPoints ?? []),
+    ]);
   if (!explicitProductHint && productHint) inferredFieldCount++;
 
-  const locale = explicitLocale
-    ?? getLocaleFromSource(parentRunSource)
-    ?? (isDelegationLocale(input.threadLocale) ? input.threadLocale : null)
-    ?? (isDelegationLocale(input.spaceLocale) ? input.spaceLocale : null);
+  const locale = explicitLocale ??
+    getLocaleFromSource(parentRunSource) ??
+    (isDelegationLocale(input.threadLocale) ? input.threadLocale : null) ??
+    (isDelegationLocale(input.spaceLocale) ? input.spaceLocale : null);
   if (!explicitLocale && locale) inferredFieldCount++;
 
   const packet: DelegationPacket = {
@@ -267,7 +300,8 @@ export function buildDelegationPacket(input: BuildDelegationPacketInput): {
     parent_thread_id: input.parentThreadId,
     root_thread_id: input.rootThreadId,
     thread_summary: normalizeText(input.threadSummary),
-    thread_key_points: (input.threadKeyPoints ?? []).map((item) => item.trim()).filter(Boolean),
+    thread_key_points: (input.threadKeyPoints ?? []).map((item) => item.trim())
+      .filter(Boolean),
   };
 
   return {
@@ -282,47 +316,54 @@ export function buildDelegationPacket(input: BuildDelegationPacketInput): {
   };
 }
 
-export function buildDelegationSystemMessage(packet: DelegationPacket): AgentMessage {
-  const lines = ['Delegated execution context:'];
+export function buildDelegationSystemMessage(
+  packet: DelegationPacket,
+): AgentMessage {
+  const lines = ["Delegated execution context:"];
 
   if (packet.goal) lines.push(`Goal: ${packet.goal}`);
   if (packet.product_hint) lines.push(`Product hint: ${packet.product_hint}`);
   if (packet.deliverable) lines.push(`Deliverable: ${packet.deliverable}`);
-  if (packet.thread_summary) lines.push(`Parent thread summary: ${packet.thread_summary}`);
+  if (packet.thread_summary) {
+    lines.push(`Parent thread summary: ${packet.thread_summary}`);
+  }
   if (packet.thread_key_points.length > 0) {
-    lines.push('Parent thread key points:');
+    lines.push("Parent thread key points:");
     for (const keyPoint of packet.thread_key_points) {
       lines.push(`- ${keyPoint}`);
     }
   }
   if (packet.constraints.length > 0) {
-    lines.push('Constraints:');
+    lines.push("Constraints:");
     for (const constraint of packet.constraints) {
       lines.push(`- ${constraint}`);
     }
   }
   if (packet.context.length > 0) {
-    lines.push('Relevant context:');
+    lines.push("Relevant context:");
     for (const item of packet.context) {
       lines.push(`- ${item}`);
     }
   }
   if (packet.acceptance_criteria.length > 0) {
-    lines.push('Acceptance criteria:');
+    lines.push("Acceptance criteria:");
     for (const criterion of packet.acceptance_criteria) {
       lines.push(`- ${criterion}`);
     }
   }
 
   return {
-    role: 'system',
-    content: lines.join('\n'),
+    role: "system",
+    content: lines.join("\n"),
   };
 }
 
-export function buildDelegationUserMessage(packet: DelegationPacket): AgentMessage {
+export function buildDelegationUserMessage(
+  packet: DelegationPacket,
+): AgentMessage {
   return {
-    role: 'user',
-    content: `[Delegated sub-task from parent agent (run: ${packet.parent_run_id})]\n\n${packet.task}`,
+    role: "user",
+    content:
+      `[Delegated sub-task from parent agent (run: ${packet.parent_run_id})]\n\n${packet.task}`,
   };
 }

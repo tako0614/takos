@@ -1,4 +1,4 @@
-import { eq } from "drizzle-orm";
+import { and, eq, ne } from "drizzle-orm";
 import { getDb } from "../../../infra/db/client.ts";
 import {
   deployments,
@@ -6,6 +6,10 @@ import {
   services,
 } from "../../../infra/db/index.ts";
 import { deleteServiceConsumes } from "../platform/service-publications.ts";
+import {
+  getGroupAutoHostname,
+  slugifyGroupHostnameSegment,
+} from "../routing/group-hostnames.ts";
 import type { SelectOf } from "../../../shared/types/drizzle-utils.ts";
 import type { Env } from "../../../shared/types/env.ts";
 import { safeJsonParseOrDefault } from "../../../shared/utils/logger.ts";
@@ -14,8 +18,10 @@ export type ManagedServiceComponentKind = "worker" | "container" | "service";
 
 export interface ManagedServiceConfig {
   managedBy?: "group";
+  envName?: string;
   manifestName?: string;
   componentKind?: ManagedServiceComponentKind;
+  customSlug?: string;
   specFingerprint?: string;
   desiredSpec?: Record<string, unknown>;
   routeNames?: string[];
@@ -40,13 +46,10 @@ function generateManagedServiceId(): string {
 }
 
 function slugifySegment(value: string): string {
-  return value
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-|-$/g, "");
+  return slugifyGroupHostnameSegment(value);
 }
 
-function buildManagedSlug(
+export function buildManagedSlug(
   groupId: string,
   envName: string,
   componentKind: ManagedServiceComponentKind,
@@ -64,6 +67,42 @@ function buildManagedSlug(
     .join("-");
   const slug = base.slice(0, 48);
   return slug || `grp-${groupId.slice(0, 8)}`;
+}
+
+type ControlDb = ReturnType<typeof getDb>;
+
+async function isHostnameAvailable(
+  db: ControlDb,
+  hostname: string,
+  existingId: string | null,
+): Promise<boolean> {
+  const row = await db.select({ id: services.id }).from(services)
+    .where(
+      existingId
+        ? and(eq(services.hostname, hostname), ne(services.id, existingId))
+        : eq(services.hostname, hostname),
+    )
+    .get() ?? null;
+  return row === null;
+}
+
+async function resolveManagedHostname(
+  db: ControlDb,
+  env: Env,
+  input: {
+    groupId: string;
+    spaceId: string;
+    existingId: string | null;
+  },
+): Promise<string | null> {
+  const autoHostname = await getGroupAutoHostname(env, {
+    groupId: input.groupId,
+    spaceId: input.spaceId,
+  });
+  if (!autoHostname) return null;
+  return await isHostnameAvailable(db, autoHostname, input.existingId)
+    ? autoHostname
+    : null;
 }
 
 export function buildManagedRouteRef(
@@ -170,8 +209,11 @@ export async function upsertGroupManagedService(
       input.componentKind,
       input.manifestName,
     );
-  const hostname = existing?.row.hostname ??
-    (env.TENANT_BASE_DOMAIN ? `${slug}.${env.TENANT_BASE_DOMAIN}` : null);
+  const hostname = await resolveManagedHostname(db, env, {
+    groupId: input.groupId,
+    spaceId: input.spaceId,
+    existingId: existing?.row.id ?? null,
+  });
   const routeRef = existing?.row.routeRef ??
     buildManagedRouteRef(
       input.groupId,
@@ -182,8 +224,12 @@ export async function upsertGroupManagedService(
 
   const config: ManagedServiceConfig = {
     managedBy: "group",
+    envName: input.envName,
     manifestName: input.manifestName,
     componentKind: input.componentKind,
+    ...(existing?.config.customSlug
+      ? { customSlug: existing.config.customSlug }
+      : {}),
     specFingerprint: input.specFingerprint,
     desiredSpec: input.desiredSpec,
     ...(input.routeNames && input.routeNames.length > 0

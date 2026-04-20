@@ -1,5 +1,4 @@
-import type { webcrypto } from 'node:crypto';
-import { hexToBytes, bytesToBase64, base64ToBytes } from './encoding-utils.ts';
+import { base64ToBytes, bytesToBase64, hexToBytes } from "./encoding-utils.ts";
 
 /** Number of PBKDF2 iterations for key derivation. */
 const PBKDF2_ITERATIONS = 100_000;
@@ -31,61 +30,64 @@ const MASK_ASTERISK_COUNT = 4;
 export interface EncryptedData {
   ciphertext: string;
   iv: string;
-  alg: 'AES-256-GCM';
+  alg: "AES-256-GCM";
   v: 1;
 }
 
-async function deriveKey(masterSecret: string, salt: string): Promise<webcrypto.CryptoKey> {
-  const secretBytesRaw = masterSecret.startsWith('0x')
+async function deriveKey(
+  masterSecret: string,
+  salt: string,
+): Promise<CryptoKey> {
+  const secretBytesRaw = masterSecret.startsWith("0x")
     ? hexToBytes(masterSecret.slice(HEX_PREFIX_LENGTH))
     : masterSecret.length === HEX_ENCODED_SECRET_LENGTH
-      ? hexToBytes(masterSecret)
-      : new TextEncoder().encode(masterSecret);
+    ? hexToBytes(masterSecret)
+    : new TextEncoder().encode(masterSecret);
 
   const secretBytes = new Uint8Array(secretBytesRaw).buffer as ArrayBuffer;
 
   const saltBytes = new TextEncoder().encode(salt);
 
   const baseKey = await crypto.subtle.importKey(
-    'raw',
+    "raw",
     secretBytes,
-    { name: 'PBKDF2' },
+    { name: "PBKDF2" },
     false,
-    ['deriveKey']
+    ["deriveKey"],
   );
 
   return crypto.subtle.deriveKey(
     {
-      name: 'PBKDF2',
+      name: "PBKDF2",
       salt: saltBytes,
       iterations: PBKDF2_ITERATIONS,
-      hash: 'SHA-256',
+      hash: "SHA-256",
     },
     baseKey,
-    { name: 'AES-GCM', length: AES_KEY_LENGTH_BITS },
+    { name: "AES-GCM", length: AES_KEY_LENGTH_BITS },
     false,
-    ['encrypt', 'decrypt']
+    ["encrypt", "decrypt"],
   );
 }
 
 export async function encrypt(
   plaintext: string,
   masterSecret: string,
-  salt: string
+  salt: string,
 ): Promise<EncryptedData> {
   const key = await deriveKey(masterSecret, salt);
   const iv = crypto.getRandomValues(new Uint8Array(AES_GCM_IV_BYTE_LENGTH));
   const plaintextBytes = new TextEncoder().encode(plaintext);
   const ciphertext = await crypto.subtle.encrypt(
-    { name: 'AES-GCM', iv },
-    key as unknown as CryptoKey,
-    plaintextBytes
+    { name: "AES-GCM", iv },
+    key,
+    plaintextBytes,
   );
 
   return {
     ciphertext: bytesToBase64(new Uint8Array(ciphertext)),
     iv: bytesToBase64(iv),
-    alg: 'AES-256-GCM',
+    alg: "AES-256-GCM",
     v: 1,
   };
 }
@@ -93,10 +95,12 @@ export async function encrypt(
 export async function decrypt(
   encrypted: EncryptedData,
   masterSecret: string,
-  salt: string
+  salt: string,
 ): Promise<string> {
-  if (encrypted.alg !== 'AES-256-GCM' || encrypted.v !== 1) {
-    throw new Error(`Unsupported encryption format: ${encrypted.alg} v${encrypted.v}`);
+  if (encrypted.alg !== "AES-256-GCM" || encrypted.v !== 1) {
+    throw new Error(
+      `Unsupported encryption format: ${encrypted.alg} v${encrypted.v}`,
+    );
   }
 
   const key = await deriveKey(masterSecret, salt);
@@ -106,9 +110,9 @@ export async function decrypt(
   const ciphertext = new Uint8Array(ciphertextRaw).buffer as ArrayBuffer;
 
   const plaintextBytes = await crypto.subtle.decrypt(
-    { name: 'AES-GCM', iv },
-    key as unknown as CryptoKey,
-    ciphertext
+    { name: "AES-GCM", iv },
+    key,
+    ciphertext,
   );
 
   return new TextDecoder().decode(plaintextBytes);
@@ -117,7 +121,7 @@ export async function decrypt(
 export async function encryptEnvVars(
   envVars: Record<string, string>,
   masterSecret: string,
-  salt: string
+  salt: string,
 ): Promise<string> {
   const plaintext = JSON.stringify(envVars);
   const encrypted = await encrypt(plaintext, masterSecret, salt);
@@ -127,23 +131,25 @@ export async function encryptEnvVars(
 export async function decryptEnvVars(
   encryptedJson: string,
   masterSecret: string,
-  salt: string
+  salt: string,
 ): Promise<Record<string, string>> {
   let encrypted: EncryptedData;
   try {
     const raw = JSON.parse(encryptedJson);
     if (
-      typeof raw !== 'object' || raw === null ||
-      typeof raw.ciphertext !== 'string' ||
-      typeof raw.iv !== 'string' ||
-      raw.alg !== 'AES-256-GCM'
+      typeof raw !== "object" || raw === null ||
+      typeof raw.ciphertext !== "string" ||
+      typeof raw.iv !== "string" ||
+      raw.alg !== "AES-256-GCM"
     ) {
-      throw new Error('decryptEnvVars: encryptedJson does not have expected EncryptedData shape (ciphertext, iv, alg)');
+      throw new Error(
+        "decryptEnvVars: encryptedJson does not have expected EncryptedData shape (ciphertext, iv, alg)",
+      );
     }
     encrypted = raw as EncryptedData;
   } catch (err) {
     if (err instanceof SyntaxError) {
-      throw new Error('decryptEnvVars: encryptedJson is not valid JSON');
+      throw new Error("decryptEnvVars: encryptedJson is not valid JSON");
     }
     throw err;
   }
@@ -151,13 +157,15 @@ export async function decryptEnvVars(
   let parsed: Record<string, string>;
   try {
     const raw = JSON.parse(plaintext);
-    if (typeof raw !== 'object' || raw === null || Array.isArray(raw)) {
-      throw new Error('decryptEnvVars: decrypted plaintext is not a valid key-value object');
+    if (typeof raw !== "object" || raw === null || Array.isArray(raw)) {
+      throw new Error(
+        "decryptEnvVars: decrypted plaintext is not a valid key-value object",
+      );
     }
     parsed = raw as Record<string, string>;
   } catch (err) {
     if (err instanceof SyntaxError) {
-      throw new Error('decryptEnvVars: decrypted plaintext is not valid JSON');
+      throw new Error("decryptEnvVars: decrypted plaintext is not valid JSON");
     }
     throw err;
   }
@@ -166,17 +174,19 @@ export async function decryptEnvVars(
 
 function maskValue(value: string): string {
   if (value.length <= MASK_SHORT_VALUE_THRESHOLD) {
-    return '****';
+    return "****";
   }
-  return `${value.slice(0, MASK_VISIBLE_PREFIX_LENGTH)}${'*'.repeat(MASK_ASTERISK_COUNT)}${value.slice(-MASK_VISIBLE_SUFFIX_LENGTH)}`;
+  return `${value.slice(0, MASK_VISIBLE_PREFIX_LENGTH)}${
+    "*".repeat(MASK_ASTERISK_COUNT)
+  }${value.slice(-MASK_VISIBLE_SUFFIX_LENGTH)}`;
 }
 
-export function maskEnvVars(envVars: Record<string, string>): Record<string, string> {
+export function maskEnvVars(
+  envVars: Record<string, string>,
+): Record<string, string> {
   const masked: Record<string, string> = {};
   for (const [key, value] of Object.entries(envVars)) {
     masked[key] = maskValue(value);
   }
   return masked;
 }
-
-

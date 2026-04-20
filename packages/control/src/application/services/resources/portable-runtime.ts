@@ -25,30 +25,30 @@ import {
 } from "../../../node-platform/resolvers/env-utils.ts";
 import { toResourceCapability } from "./capabilities.ts";
 import {
-  deletePortableProviderQueue,
-  ensurePortableProviderQueue,
-  getPortableProviderResolution,
+  deletePortableBackendQueue,
+  ensurePortableBackendQueue,
+  getPortableBackendResolution,
   getPortableSecretStore,
-  missingPortableBootstrapRequirementsForProvider,
-  normalizePortableProvider,
-  resetPortableProviderRuntimeCachesForTests,
-  resolvePortableKvCloudAdapter as resolvePortableProviderKvCloudAdapter,
+  missingPortableBootstrapRequirementsForBackend,
+  normalizePortableBackend,
+  resetPortableBackendRuntimeCachesForTests,
+  resolvePortableKvCloudAdapter as resolvePortableBackendKvCloudAdapter,
   resolvePortableObjectStoreCloudAdapter,
-  resolvePortableQueueReferenceId as resolvePortableProviderQueueReferenceId,
+  resolvePortableQueueReferenceId as resolvePortableBackendQueueReferenceId,
   sanitizeName,
   sanitizeSqlIdentifier,
-} from "./portable-runtime-provider-registry.ts";
+} from "./portable-runtime-backend-registry.ts";
 
 export type PortableResourceRef = {
   id: string;
-  provider_name?: string | null;
-  provider_resource_id?: string | null;
-  provider_resource_name?: string | null;
+  backend_name?: string | null;
+  backing_resource_id?: string | null;
+  backing_resource_name?: string | null;
   config?: unknown;
 };
 
 export type PortableResourceResolutionMode =
-  | "provider-backed"
+  | "backend-backed"
   | "takos-runtime";
 
 export type PortableResourceResolution = {
@@ -75,8 +75,8 @@ function resolvePortableDataDir(): string {
 }
 
 function resourceCacheKey(resource: PortableResourceRef): string {
-  return `${resource.provider_name ?? "portable"}:${resource.id}:${
-    resource.provider_resource_name ?? ""
+  return `${resource.backend_name ?? "portable"}:${resource.id}:${
+    resource.backing_resource_name ?? ""
   }`;
 }
 
@@ -94,7 +94,7 @@ function resolveResourceBasePath(
   resource: PortableResourceRef,
 ): string {
   const baseDir = resolvePortableDataDir();
-  const fileBase = sanitizeName(resource.provider_resource_name ?? resource.id);
+  const fileBase = sanitizeName(resource.backing_resource_name ?? resource.id);
   return path.join(baseDir, "managed-resources", kind, fileBase);
 }
 
@@ -112,21 +112,21 @@ function resolveControlMigrationsDir(): string {
 
 function resolvePortableSqlSchemaName(resource: PortableResourceRef): string {
   return `resource_${
-    sanitizeSqlIdentifier(resource.provider_resource_name ?? resource.id)
+    sanitizeSqlIdentifier(resource.backing_resource_name ?? resource.id)
   }`;
 }
 
 function resolvePortableVectorTableName(resource: PortableResourceRef): string {
   return `vector_${
-    sanitizeSqlIdentifier(resource.provider_resource_name ?? resource.id)
+    sanitizeSqlIdentifier(resource.backing_resource_name ?? resource.id)
   }`;
 }
 
 function usesPortablePostgres(resource: PortableResourceRef): boolean {
   return !!resolvePostgresUrl() &&
-    !!resource.provider_name &&
-    resource.provider_name !== "cloudflare" &&
-    resource.provider_name !== "local";
+    !!resource.backend_name &&
+    resource.backend_name !== "cloudflare" &&
+    resource.backend_name !== "local";
 }
 
 function isNotFoundError(error: unknown): boolean {
@@ -135,13 +135,13 @@ function isNotFoundError(error: unknown): boolean {
 }
 
 export function describePortableResourceResolution(
-  providerName?: string | null,
+  backendName?: string | null,
   typeOrCapability?: string | null,
 ): PortableResourceResolution | null {
   const capability = resourceCapability(typeOrCapability);
   if (!capability) return null;
-  return getPortableProviderResolution(
-    normalizePortableProvider(providerName),
+  return getPortableBackendResolution(
+    normalizePortableBackend(backendName),
     capability,
   );
 }
@@ -178,8 +178,8 @@ function missingPortableBootstrapRequirements(
   resource: PortableResourceRef,
   capability: ResourceCapability,
 ): string[] {
-  const provider = normalizePortableProvider(resource.provider_name);
-  return missingPortableBootstrapRequirementsForProvider(provider, capability);
+  const backend = normalizePortableBackend(resource.backend_name);
+  return missingPortableBootstrapRequirementsForBackend(backend, capability);
 }
 
 function assertPortableBootstrapRequirements(
@@ -190,12 +190,12 @@ function assertPortableBootstrapRequirements(
   if (missing.length === 0) return;
 
   const resolution = describePortableResourceResolution(
-    resource.provider_name,
+    resource.backend_name,
     capability,
   );
-  const provider = normalizePortableProvider(resource.provider_name);
+  const backend = normalizePortableBackend(resource.backend_name);
   throw new Error(
-    `${provider} ${capability} requires ${missing.join(", ")}` +
+    `${backend} ${capability} requires ${missing.join(", ")}` +
       (resolution ? ` (${resolution.backend})` : ""),
   );
 }
@@ -243,15 +243,15 @@ async function dropPortableVectorStore(
   }
 }
 
-async function ensurePortableProviderSecret(
+async function ensurePortableBackendSecret(
   resource: PortableResourceRef,
 ): Promise<string> {
   const secretName = sanitizeName(
-    resource.provider_resource_name ?? resource.id,
+    resource.backing_resource_name ?? resource.id,
   );
   const generatedValue = generateSecretToken();
   const store = getPortableSecretStore(
-    normalizePortableProvider(resource.provider_name),
+    normalizePortableBackend(resource.backend_name),
   );
 
   if (!store) {
@@ -273,14 +273,14 @@ async function ensurePortableProviderSecret(
 async function resolvePortableQueueReferenceId(
   resource: PortableResourceRef,
 ): Promise<string> {
-  return await resolvePortableProviderQueueReferenceId(resource) ??
-    sanitizeName(resource.provider_resource_name ?? resource.id);
+  return await resolvePortableBackendQueueReferenceId(resource) ??
+    sanitizeName(resource.backing_resource_name ?? resource.id);
 }
 
 async function ensurePortableQueueResource(
   resource: PortableResourceRef,
 ): Promise<void> {
-  if (await ensurePortableProviderQueue(resource)) {
+  if (await ensurePortableBackendQueue(resource)) {
     return;
   }
   await ensureJsonStateFile(
@@ -292,7 +292,7 @@ async function ensurePortableQueueResource(
 async function deletePortableQueueResource(
   resource: PortableResourceRef,
 ): Promise<void> {
-  if (await deletePortableProviderQueue(resource)) {
+  if (await deletePortableBackendQueue(resource)) {
     return;
   }
   await removePath(`${resolveResourceBasePath("queue", resource)}.json`);
@@ -302,8 +302,8 @@ async function ensurePortableObjectStoreResource(
   resource: PortableResourceRef,
 ): Promise<void> {
   if (
-    describePortableResourceResolution(resource.provider_name, "object_store")
-      ?.mode === "provider-backed"
+    describePortableResourceResolution(resource.backend_name, "object_store")
+      ?.mode === "backend-backed"
   ) {
     getPortableObjectStore(resource);
     return;
@@ -323,7 +323,7 @@ async function ensurePortableObjectStoreResource(
 function resolvePortableKvCloudAdapter(
   resource: PortableResourceRef,
 ): KVNamespace | null {
-  return resolvePortableProviderKvCloudAdapter(
+  return resolvePortableBackendKvCloudAdapter(
     resource,
     createPrefixedKvNamespace,
   );
@@ -334,8 +334,8 @@ async function ensurePortableKvResource(
 ): Promise<void> {
   assertPortableBootstrapRequirements(resource, "kv");
   if (
-    describePortableResourceResolution(resource.provider_name, "kv")?.mode ===
-      "provider-backed"
+    describePortableResourceResolution(resource.backend_name, "kv")?.mode ===
+      "backend-backed"
   ) {
     getPortableKvStore(resource);
     return;
@@ -391,11 +391,11 @@ async function deletePortableKvResource(
   await removePath(`${resolveResourceBasePath("kv", resource)}.json`);
 }
 
-async function deletePortableProviderSecret(
+async function deletePortableBackendSecret(
   resource: PortableResourceRef,
 ): Promise<void> {
   const store = getPortableSecretStore(
-    normalizePortableProvider(resource.provider_name),
+    normalizePortableBackend(resource.backend_name),
   );
   if (!store) {
     await removePath(
@@ -404,7 +404,7 @@ async function deletePortableProviderSecret(
     return;
   }
   await store.deleteSecret(
-    sanitizeName(resource.provider_resource_name ?? resource.id),
+    sanitizeName(resource.backing_resource_name ?? resource.id),
   );
 }
 
@@ -448,8 +448,8 @@ function markerPayload(
   const base = {
     kind,
     resourceId: resource.id,
-    providerName: resource.provider_name ?? null,
-    providerResourceName: resource.provider_resource_name ?? null,
+    backendName: resource.backend_name ?? null,
+    backingResourceName: resource.backing_resource_name ?? null,
   };
 
   switch (kind) {
@@ -461,13 +461,13 @@ function markerPayload(
     case "analytics-store":
       return {
         ...base,
-        dataset: resource.provider_resource_name ?? resource.id,
+        dataset: resource.backing_resource_name ?? resource.id,
         datapoints: [],
       };
     case "workflow-runtime":
       return {
         ...base,
-        workflowName: resource.provider_resource_name ?? resource.id,
+        workflowName: resource.backing_resource_name ?? resource.id,
         instances: {},
       };
     case "durable-namespace":
@@ -506,11 +506,11 @@ export async function getPortableSecretValue(
   resource: PortableResourceRef,
 ): Promise<string> {
   const store = getPortableSecretStore(
-    normalizePortableProvider(resource.provider_name),
+    normalizePortableBackend(resource.backend_name),
   );
   if (store) {
     return store.getSecretValue(
-      sanitizeName(resource.provider_resource_name ?? resource.id),
+      sanitizeName(resource.backing_resource_name ?? resource.id),
     );
   }
 
@@ -528,10 +528,10 @@ export async function getPortableSecretValue(
   return payload.value as string;
 }
 
-export function isPortableResourceProvider(
-  providerName?: string | null,
+export function isPortableResourceBackend(
+  backendName?: string | null,
 ): boolean {
-  return !!providerName && providerName !== "cloudflare";
+  return !!backendName && backendName !== "cloudflare";
 }
 
 export async function getPortableSqlDatabase(
@@ -543,11 +543,11 @@ export async function getPortableSqlDatabase(
 
   const postgresUrl = resolvePostgresUrl();
   if (
-    resource.provider_name && resource.provider_name !== "cloudflare" &&
-    resource.provider_name !== "local" && !postgresUrl
+    resource.backend_name && resource.backend_name !== "cloudflare" &&
+    resource.backend_name !== "local" && !postgresUrl
   ) {
     throw new Error(
-      `${resource.provider_name} sql requires POSTGRES_URL or DATABASE_URL (postgres-schema-d1-adapter)`,
+      `${resource.backend_name} sql requires POSTGRES_URL or DATABASE_URL (postgres-schema-d1-adapter)`,
     );
   }
 
@@ -575,30 +575,13 @@ export function createPrefixedKvNamespace(
 
   const namespace = {
     async get(key: string, type?: "text" | "json" | "arrayBuffer" | "stream") {
-      return (base.get as unknown as (
-        key: string,
-        type?: string,
-      ) => Promise<string | ArrayBuffer | ReadableStream | null>)(
-        withPrefix(key),
-        type,
-      );
+      return base.get(withPrefix(key), type);
     },
     async getWithMetadata(
       key: string,
       type?: "text" | "json" | "arrayBuffer" | "stream",
     ) {
-      return (base.getWithMetadata as unknown as (
-        key: string,
-        type?: string,
-      ) => Promise<
-        {
-          value: string | ArrayBuffer | ReadableStream | null;
-          metadata: unknown;
-        }
-      >)(
-        withPrefix(key),
-        type,
-      );
+      return base.getWithMetadata(withPrefix(key), type);
     },
     async put(
       key: string,
@@ -609,15 +592,7 @@ export function createPrefixedKvNamespace(
         metadata?: Record<string, string>;
       },
     ) {
-      await (base.put as unknown as (
-        key: string,
-        value: string | ArrayBuffer | ArrayBufferView | ReadableStream,
-        options?: {
-          expiration?: number;
-          expirationTtl?: number;
-          metadata?: Record<string, string | null>;
-        },
-      ) => Promise<void>)(withPrefix(key), value, options);
+      await base.put(withPrefix(key), value, options);
     },
     async delete(key: string) {
       await base.delete(withPrefix(key));
@@ -666,11 +641,11 @@ export function getPortableKvStore(resource: PortableResourceRef): KVNamespace {
   if (existing) return existing;
 
   const resolution = describePortableResourceResolution(
-    resource.provider_name,
+    resource.backend_name,
     "kv",
   );
   const cloudAdapter = resolvePortableKvCloudAdapter(resource);
-  if (resolution?.mode === "provider-backed" && !cloudAdapter) {
+  if (resolution?.mode === "backend-backed" && !cloudAdapter) {
     assertPortableBootstrapRequirements(resource, "kv");
   }
 
@@ -728,10 +703,10 @@ async function ensurePortableSecretResource(
 ): Promise<void> {
   assertPortableBootstrapRequirements(resource, "secret");
   if (
-    describePortableResourceResolution(resource.provider_name, "secret")
-      ?.mode === "provider-backed"
+    describePortableResourceResolution(resource.backend_name, "secret")
+      ?.mode === "backend-backed"
   ) {
-    await ensurePortableProviderSecret(resource);
+    await ensurePortableBackendSecret(resource);
     return;
   }
   await getPortableSecretValue(resource);
@@ -797,8 +772,8 @@ const PORTABLE_MANAGED_RESOURCE_HANDLERS: Partial<
   },
   secret: {
     ensure: ensurePortableSecretResource,
-    delete: deletePortableProviderSecret,
-    resolveReferenceId: ensurePortableProviderSecret,
+    delete: deletePortableBackendSecret,
+    resolveReferenceId: ensurePortableBackendSecret,
   },
 };
 
@@ -827,7 +802,7 @@ export async function deletePortableManagedResource(
 }
 
 export function resetPortableResourceRuntimeCachesForTests(): void {
-  resetPortableProviderRuntimeCachesForTests();
+  resetPortableBackendRuntimeCachesForTests();
   sqlCache.clear();
   objectStoreCache.clear();
   kvStoreCache.clear();

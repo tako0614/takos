@@ -1,14 +1,20 @@
-
-import { useI18n } from '../../../store/i18n.ts';
-import type { TranslationKey } from '../../../i18n.ts';
-import { Icons } from '../../../lib/Icons.tsx';
-import type { AgentTask, AgentTaskPriority, AgentTaskStatus } from '../../../types/index.ts';
+import { useI18n } from "../../../store/i18n.ts";
+import type { TranslationKey } from "../../../i18n.ts";
+import { Icons } from "../../../lib/Icons.tsx";
+import type {
+  AgentTask,
+  AgentTaskPriority,
+  AgentTaskStatus,
+} from "../../../types/index.ts";
 import {
-  STATUS_ORDER,
-  PRIORITY_OPTIONS,
   type ModelSelectOption,
-} from './task-work-types.ts';
-import { getAgentTypeOptions, getLocalDateInputMin } from './task-work-utils.ts';
+  PRIORITY_OPTIONS,
+  STATUS_ORDER,
+} from "./task-work-types.ts";
+import {
+  getAgentTypeOptions,
+  getLocalDateInputMin,
+} from "./task-work-utils.ts";
 
 interface TaskFormProps {
   editingTask: AgentTask | null;
@@ -64,29 +70,37 @@ export function TaskForm({
       <div class="flex items-start justify-between gap-3 mb-2">
         <div class="space-y-1">
           <h4 class="text-base font-semibold text-zinc-900 dark:text-zinc-100">
-            {editingTask ? t('editTask') : t('createTask')}
+            {editingTask ? t("editTask") : t("createTask")}
           </h4>
           <p class="text-sm text-zinc-500 dark:text-zinc-400">
             {editingTask
-              ? tOr('taskFormEditHint' as TranslationKey, 'Update scope, status, or execution settings without leaving the board.')
-              : tOr('taskFormCreateHint' as TranslationKey, 'Define one outcome, then let the agent pick it up from chat.')}
+              ? tOr(
+                "taskFormEditHint" as TranslationKey,
+                "Update scope, status, or execution settings without leaving the board.",
+              )
+              : tOr(
+                "taskFormCreateHint" as TranslationKey,
+                "Define one outcome, then let the agent pick it up from chat.",
+              )}
           </p>
         </div>
         <button
           type="button"
           class="p-2 rounded-lg hover:bg-zinc-200 dark:hover:bg-zinc-700 text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-100 transition-colors"
           onClick={onClose}
-          aria-label={t('close')}
+          aria-label={t("close")}
         >
           <Icons.X />
         </button>
       </div>
       <div class="flex flex-col gap-2">
-        <label class="text-sm font-medium text-zinc-500 dark:text-zinc-400">{t('taskTitle')}</label>
+        <label class="text-sm font-medium text-zinc-500 dark:text-zinc-400">
+          {t("taskTitle")}
+        </label>
         <input
           type="text"
           class="w-full px-3 py-2 bg-zinc-100 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-lg text-zinc-900 dark:text-zinc-100 placeholder:text-zinc-500 dark:placeholder:text-zinc-400 focus:outline-none focus:border-zinc-900 dark:focus:border-zinc-100"
-          placeholder={t('taskTitlePlaceholder')}
+          placeholder={t("taskTitlePlaceholder")}
           value={title}
           onInput={(e) => setTitle(e.target.value)}
           autofocus
@@ -94,10 +108,12 @@ export function TaskForm({
         />
       </div>
       <div class="flex flex-col gap-2">
-        <label class="text-sm font-medium text-zinc-500 dark:text-zinc-400">{t('taskDescription')}</label>
+        <label class="text-sm font-medium text-zinc-500 dark:text-zinc-400">
+          {t("taskDescription")}
+        </label>
         <textarea
           class="w-full px-3 py-2 bg-zinc-100 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-lg text-zinc-900 dark:text-zinc-100 placeholder:text-zinc-500 dark:placeholder:text-zinc-400 focus:outline-none focus:border-zinc-900 dark:focus:border-zinc-100 resize-y min-h-[140px]"
-          placeholder={t('taskDescriptionPlaceholder')}
+          placeholder={t("taskDescriptionPlaceholder")}
           value={description}
           onInput={(e) => setDescription(e.target.value)}
           rows={5}
@@ -105,7 +121,9 @@ export function TaskForm({
       </div>
       <div class="grid gap-4 md:grid-cols-2">
         <div class="flex flex-col gap-2">
-          <label class="text-sm font-medium text-zinc-500 dark:text-zinc-400">{t('taskStatus')}</label>
+          <label class="text-sm font-medium text-zinc-500 dark:text-zinc-400">
+            {t("taskStatus")}
+          </label>
           <select
             class="w-full px-3 py-2 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 rounded-lg text-zinc-900 dark:text-zinc-100 focus:outline-none focus:border-zinc-900 dark:focus:border-zinc-100"
             value={status}
@@ -119,7 +137,9 @@ export function TaskForm({
           </select>
         </div>
         <div class="flex flex-col gap-2">
-          <label class="text-sm font-medium text-zinc-500 dark:text-zinc-400">{t('taskPriority')}</label>
+          <label class="text-sm font-medium text-zinc-500 dark:text-zinc-400">
+            {t("taskPriority")}
+          </label>
           <select
             class="w-full px-3 py-2 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 rounded-lg text-zinc-900 dark:text-zinc-100 focus:outline-none focus:border-zinc-900 dark:focus:border-zinc-100"
             value={priority}
@@ -135,7 +155,9 @@ export function TaskForm({
       </div>
       <div class="grid gap-4 md:grid-cols-2">
         <div class="flex flex-col gap-2">
-          <label class="text-sm font-medium text-zinc-500 dark:text-zinc-400">{t('taskAgentType')}</label>
+          <label class="text-sm font-medium text-zinc-500 dark:text-zinc-400">
+            {t("taskAgentType")}
+          </label>
           <select
             class="w-full px-3 py-2 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 rounded-lg text-zinc-900 dark:text-zinc-100 focus:outline-none focus:border-zinc-900 dark:focus:border-zinc-100"
             value={agentType}
@@ -149,7 +171,9 @@ export function TaskForm({
           </select>
         </div>
         <div class="flex flex-col gap-2">
-          <label class="text-sm font-medium text-zinc-500 dark:text-zinc-400">{t('taskModel')}</label>
+          <label class="text-sm font-medium text-zinc-500 dark:text-zinc-400">
+            {t("taskModel")}
+          </label>
           <select
             class="w-full px-3 py-2 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 rounded-lg text-zinc-900 dark:text-zinc-100 focus:outline-none focus:border-zinc-900 dark:focus:border-zinc-100"
             value={model}
@@ -164,7 +188,9 @@ export function TaskForm({
         </div>
       </div>
       <div class="flex flex-col gap-2">
-        <label class="text-sm font-medium text-zinc-500 dark:text-zinc-400">{t('taskDueDate')}</label>
+        <label class="text-sm font-medium text-zinc-500 dark:text-zinc-400">
+          {t("taskDueDate")}
+        </label>
         <input
           type="date"
           class="w-full px-3 py-2 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 rounded-lg text-zinc-900 dark:text-zinc-100 focus:outline-none focus:border-zinc-900 dark:focus:border-zinc-100"
@@ -173,25 +199,30 @@ export function TaskForm({
           min={getLocalDateInputMin()}
           aria-describedby="due-date-hint"
         />
-        <span id="due-date-hint" class="text-xs text-zinc-500 dark:text-zinc-400">
-          {t('taskDueDateHint') || 'Optional - select a future date'}
+        <span
+          id="due-date-hint"
+          class="text-xs text-zinc-500 dark:text-zinc-400"
+        >
+          {t("taskDueDateHint") || "Optional - select a future date"}
         </span>
       </div>
-      {error && <div class="text-red-600 dark:text-red-400 text-sm">{error}</div>}
+      {error && (
+        <div class="text-red-600 dark:text-red-400 text-sm">{error}</div>
+      )}
       <div class="flex flex-col-reverse sm:flex-row sm:justify-end gap-3 mt-4">
         <button
           type="button"
           class="w-full sm:w-auto px-4 py-2 bg-zinc-100 dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100 rounded-lg hover:bg-zinc-200 dark:hover:bg-zinc-700 transition-colors"
           onClick={onClose}
         >
-          {t('cancel')}
+          {t("cancel")}
         </button>
         <button
           type="submit"
           class="w-full sm:w-auto px-4 py-2 bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900 rounded-lg hover:bg-zinc-700 dark:hover:bg-zinc-300 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
           disabled={saving || !title.trim()}
         >
-          {saving ? t('saving') : t('save')}
+          {saving ? t("saving") : t("save")}
         </button>
       </div>
     </form>

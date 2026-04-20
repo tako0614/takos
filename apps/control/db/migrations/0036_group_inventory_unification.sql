@@ -1,6 +1,6 @@
 ALTER TABLE groups ADD COLUMN desired_spec_json TEXT;
 ALTER TABLE groups ADD COLUMN observed_state_json TEXT;
-ALTER TABLE groups ADD COLUMN provider_state_json TEXT;
+ALTER TABLE groups ADD COLUMN backend_state_json TEXT;
 ALTER TABLE groups ADD COLUMN reconcile_status TEXT NOT NULL DEFAULT 'idle';
 ALTER TABLE groups ADD COLUMN last_applied_at TEXT;
 
@@ -10,14 +10,16 @@ WHERE desired_spec_json IS NULL
   AND manifest_json IS NOT NULL;
 
 UPDATE groups
-SET provider_state_json = '{}'
-WHERE provider_state_json IS NULL;
+SET backend_state_json = '{}'
+WHERE backend_state_json IS NULL;
 
 ALTER TABLE services ADD COLUMN group_id TEXT;
 CREATE INDEX IF NOT EXISTS idx_services_group_id ON services(group_id);
 
 ALTER TABLE resources ADD COLUMN group_id TEXT;
 CREATE INDEX IF NOT EXISTS idx_resources_group_id ON resources(group_id);
+ALTER TABLE resources ADD COLUMN manifest_key TEXT;
+CREATE INDEX IF NOT EXISTS idx_resources_manifest_key ON resources(manifest_key);
 
 INSERT OR IGNORE INTO resources (
   id,

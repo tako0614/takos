@@ -13,7 +13,7 @@ const minimalBindings = {
   TENANT_BASE_DOMAIN: "tenant.example.test",
 };
 
-Deno.test("platform adapters - keeps the shared platform builder provider-neutral", () => {
+Deno.test("platform adapters - keeps the shared platform builder backend-neutral", () => {
   const platform = buildPlatform(
     "node",
     minimalBindings,
@@ -34,10 +34,10 @@ Deno.test("platform adapters - keeps the shared platform builder provider-neutra
     }),
   );
 
-  assertEquals(platform.services.deploymentProviders, undefined);
+  assertEquals(platform.services.deploymentBackends, undefined);
 });
-Deno.test("platform adapters - preserves an attached deployment provider registry when one is supplied by the caller", () => {
-  const deploymentProviders = {
+Deno.test("platform adapters - preserves an attached deployment backend registry when one is supplied by the caller", () => {
+  const deploymentBackends = {
     defaultName: "ecs",
     list: () => [
       {
@@ -88,15 +88,15 @@ Deno.test("platform adapters - preserves an attached deployment provider registr
           selectRouteRef: () => null,
         },
       }),
-      deploymentProviders,
+      deploymentBackends,
     } as never,
   );
 
   assertEquals(
-    platform.services.deploymentProviders,
-    deploymentProviders as typeof platform.services.deploymentProviders,
+    platform.services.deploymentBackends,
+    deploymentBackends as typeof platform.services.deploymentBackends,
   );
-  assertEquals(platform.services.deploymentProviders?.list(), [
+  assertEquals(platform.services.deploymentBackends?.list(), [
     {
       name: "ecs",
       config: {
@@ -122,19 +122,16 @@ Deno.test("platform adapters - preserves an attached deployment provider registr
     },
   ]);
 });
-Deno.test("platform adapters - attaches workers-dispatch deploy provider in the workers adapter", () => {
+Deno.test("platform adapters - attaches workers-dispatch deploy backend in the workers adapter", () => {
   const platform = buildWorkersWebPlatform({
     ...minimalBindings,
     CF_ACCOUNT_ID: "cf-account",
     CF_API_TOKEN: "cf-token",
     CF_ZONE_ID: "cf-zone",
     WFP_DISPATCH_NAMESPACE: "dispatch-ns",
-    BROWSER: {
-      connect: async () => ({ webSocketDebuggerUrl: "ws://example.test" }),
-    },
   } as never);
 
-  assertEquals(platform.services.deploymentProviders?.list(), [{
+  assertEquals(platform.services.deploymentBackends?.list(), [{
     name: "workers-dispatch",
     config: {
       accountId: "cf-account",
@@ -144,12 +141,12 @@ Deno.test("platform adapters - attaches workers-dispatch deploy provider in the 
     },
   }]);
   assertEquals(
-    platform.services.deploymentProviders?.defaultName,
+    platform.services.deploymentBackends?.defaultName,
     "workers-dispatch",
   );
-  assertEquals(typeof platform.services.documents.renderPdf, "function");
+  assertEquals(platform.services.documents.renderPdf, undefined);
 });
-Deno.test("platform adapters - attaches deploy providers in the node adapter", async () => {
+Deno.test("platform adapters - attaches deploy backends in the node adapter", async () => {
   const platform = await buildNodeWebPlatform({
     ...minimalBindings,
     OCI_ORCHESTRATOR_URL: "http://oci-orchestrator.internal/deploy",
@@ -157,7 +154,7 @@ Deno.test("platform adapters - attaches deploy providers in the node adapter", a
     AWS_ECS_REGION: "us-east-1",
     AWS_ECS_CLUSTER_ARN: "arn:aws:ecs:us-east-1:123456789012:cluster/takos",
     AWS_ECS_TASK_DEFINITION_FAMILY: "takos-worker",
-    AWS_ECS_SERVICE_NAME: "takos-web",
+    AWS_ECS_SERVICE_NAME: "takos",
     AWS_ECS_CONTAINER_NAME: "app",
     AWS_ECS_SUBNET_IDS: "subnet-a,subnet-b",
     AWS_ECS_SECURITY_GROUP_IDS: "sg-1",
@@ -179,14 +176,14 @@ Deno.test("platform adapters - attaches deploy providers in the node adapter", a
     K8S_DEPLOYMENT_NAME: "takos-worker",
   } as never);
 
-  assertEquals(platform.services.deploymentProviders?.list(), [
+  assertEquals(platform.services.deploymentBackends?.list(), [
     {
       name: "ecs",
       config: {
         region: "us-east-1",
         clusterArn: "arn:aws:ecs:us-east-1:123456789012:cluster/takos",
         taskDefinitionFamily: "takos-worker",
-        serviceName: "takos-web",
+        serviceName: "takos",
         containerName: "app",
         subnetIds: ["subnet-a", "subnet-b"],
         securityGroupIds: ["sg-1"],
@@ -225,6 +222,6 @@ Deno.test("platform adapters - attaches deploy providers in the node adapter", a
       },
     },
   ]);
-  assertEquals(platform.services.deploymentProviders?.defaultName, "ecs");
+  assertEquals(platform.services.deploymentBackends?.defaultName, "ecs");
   assertEquals(platform.services.documents.renderPdf, undefined);
 });

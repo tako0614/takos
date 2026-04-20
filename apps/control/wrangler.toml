@@ -17,7 +17,11 @@ head_sampling_rate = 0.1
 # Non-sensitive configuration only
 ADMIN_DOMAIN = "admin.example.com"
 TENANT_BASE_DOMAIN = "app.example.com"
+AUTH_PUBLIC_BASE_URL = "https://admin.example.com"
+AUTH_ALLOWED_REDIRECT_DOMAINS = "app.example.com"
 GOOGLE_CLIENT_ID = "your-google-client-id.apps.googleusercontent.com"
+# OCI deployment adapter for image-backed services / containers.
+OCI_ORCHESTRATOR_URL = ""
 # RoutingDO rollout phase (1-4). Node/local platform defaults to 1; CF Workers should set 4.
 ROUTING_DO_PHASE = "4"
 WFP_DISPATCH_NAMESPACE = "your-dispatch-namespace"
@@ -136,6 +140,17 @@ bucket_name = "takos-offload"
 # Platform keys:
 # - PLATFORM_PRIVATE_KEY: Private key for signing platform tokens
 # - PLATFORM_PUBLIC_KEY: Public key for verifying platform tokens
+#   The same pair is used for runtime-service JWTs: takos/takos-worker sign
+#   with PLATFORM_PRIVATE_KEY, and takos-runtime-host passes PLATFORM_PUBLIC_KEY
+#   to the runtime container as JWT_PUBLIC_KEY.
+#
+# Internal executor RPC:
+# - EXECUTOR_PROXY_SECRET: Shared secret accepted by /internal/executor-rpc/*
+#   and set to the same value on takos-executor-host.
+#
+# OCI deployment adapter:
+# - OCI_ORCHESTRATOR_TOKEN: optional auth token for image-backed services /
+#   containers when the orchestrator requires it.
 #
 # Cloudflare API:
 # - CF_API_TOKEN: Cloudflare API token for worker management
@@ -169,10 +184,6 @@ index_name = "takos-embeddings"
 [ai]
 binding = "AI"
 
-# Browser rendering (Puppeteer)
-[browser]
-binding = "BROWSER"
-
 # Internal service bindings
 [[services]]
 binding = "TAKOS_EGRESS"
@@ -189,6 +200,8 @@ workers_dev = true
 [env.staging.vars]
 ADMIN_DOMAIN = "staging-admin.example.com"
 TENANT_BASE_DOMAIN = "staging-app.example.com"
+AUTH_PUBLIC_BASE_URL = "https://staging-admin.example.com"
+AUTH_ALLOWED_REDIRECT_DOMAINS = "staging-app.example.com"
 GOOGLE_CLIENT_ID = "your-staging-google-client-id.apps.googleusercontent.com"
 ROUTING_DO_PHASE = "4"
 WFP_DISPATCH_NAMESPACE = "your-staging-dispatch-namespace"
@@ -197,7 +210,7 @@ CF_ZONE_ID = "replace-with-staging-zone-id"
 
 [[env.staging.d1_databases]]
 binding = "DB"
-database_name = "takos-control-staging-db-2"
+database_name = "takos-control-staging-db"
 database_id = "replace-with-staging-d1-database-id"
 migrations_dir = "db/migrations"
 
@@ -275,9 +288,6 @@ index_name = "takos-embeddings-staging"
 
 [env.staging.ai]
 binding = "AI"
-
-[env.staging.browser]
-binding = "BROWSER"
 
 [[env.staging.services]]
 binding = "TAKOS_EGRESS"

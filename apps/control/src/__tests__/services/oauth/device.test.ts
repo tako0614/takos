@@ -66,11 +66,13 @@ function createMockDrizzleDb() {
         where: (async () => ({ meta: { changes: 1 } })),
       }),
     }),
+    delete: () => chain,
     _: control,
   };
 }
 
 const db = createMockDrizzleDb();
+const d1 = db as unknown as D1Database;
 (globalThis as typeof globalThis & { __takosDbMock?: unknown }).__takosDbMock = db as never;
 
 const mocks = ({
@@ -93,7 +95,7 @@ import { OAUTH_CONSTANTS } from '@/types/oauth';
   Deno.test('createDeviceAuthorization - returns device code, user code, and expiry info', async () => {
   /* mocks cleared (no-op in Deno) */ void 0;
     mocks.getDb = (() => db) as any;
-  const result = await createDeviceAuthorization({} as D1Database, {
+  const result = await createDeviceAuthorization(d1, {
       clientId: 'client-1',
       scope: 'openid profile',
     });
@@ -109,7 +111,7 @@ import { OAUTH_CONSTANTS } from '@/types/oauth';
   Deno.test('createDeviceAuthorization - uses custom expiry and interval when provided', async () => {
   /* mocks cleared (no-op in Deno) */ void 0;
     mocks.getDb = (() => db) as any;
-  const result = await createDeviceAuthorization({} as D1Database, {
+  const result = await createDeviceAuthorization(d1, {
       clientId: 'client-1',
       scope: 'openid',
       expiresInSeconds: 1800,
@@ -123,14 +125,14 @@ import { OAUTH_CONSTANTS } from '@/types/oauth';
   Deno.test('getDeviceAuthorizationByUserCode - returns null for empty user code', async () => {
   /* mocks cleared (no-op in Deno) */ void 0;
     mocks.getDb = (() => db) as any;
-  const result = await getDeviceAuthorizationByUserCode({} as D1Database, '');
+  const result = await getDeviceAuthorizationByUserCode(d1, '');
     assertEquals(result, null);
 })
   Deno.test('getDeviceAuthorizationByUserCode - returns null when not found', async () => {
   /* mocks cleared (no-op in Deno) */ void 0;
     mocks.getDb = (() => db) as any;
   db._.get = (async () => null) as any;
-    const result = await getDeviceAuthorizationByUserCode({} as D1Database, 'ABCD-EFGH');
+    const result = await getDeviceAuthorizationByUserCode(d1, 'ABCD-EFGH');
     assertEquals(result, null);
 })
   Deno.test('getDeviceAuthorizationByUserCode - returns mapped device code when found', async () => {
@@ -154,7 +156,7 @@ import { OAUTH_CONSTANTS } from '@/types/oauth';
       updatedAt: '2026-01-01T00:00:00.000Z',
     })) as any;
 
-    const result = await getDeviceAuthorizationByUserCode({} as D1Database, 'ABCDEFGH');
+    const result = await getDeviceAuthorizationByUserCode(d1, 'ABCDEFGH');
     assertNotEquals(result, null);
     assertEquals(result!.client_id, 'client-1');
     assertEquals(result!.status, 'pending');
@@ -163,21 +165,21 @@ import { OAUTH_CONSTANTS } from '@/types/oauth';
   Deno.test('getDeviceAuthorizationByDeviceCode - returns null for empty device code', async () => {
   /* mocks cleared (no-op in Deno) */ void 0;
     mocks.getDb = (() => db) as any;
-  const result = await getDeviceAuthorizationByDeviceCode({} as D1Database, '');
+  const result = await getDeviceAuthorizationByDeviceCode(d1, '');
     assertEquals(result, null);
 })
   Deno.test('getDeviceAuthorizationByDeviceCode - returns null when not found', async () => {
   /* mocks cleared (no-op in Deno) */ void 0;
     mocks.getDb = (() => db) as any;
   db._.get = (async () => null) as any;
-    const result = await getDeviceAuthorizationByDeviceCode({} as D1Database, 'some-code');
+    const result = await getDeviceAuthorizationByDeviceCode(d1, 'some-code');
     assertEquals(result, null);
 })
 
   Deno.test('approveDeviceAuthorization - returns true when successfully approved', async () => {
   /* mocks cleared (no-op in Deno) */ void 0;
     mocks.getDb = (() => db) as any;
-  const result = await approveDeviceAuthorization({} as D1Database, {
+  const result = await approveDeviceAuthorization(d1, {
       id: 'dc-1',
       userId: 'user-1',
     });
@@ -187,7 +189,7 @@ import { OAUTH_CONSTANTS } from '@/types/oauth';
   Deno.test('denyDeviceAuthorization - returns true when successfully denied', async () => {
   /* mocks cleared (no-op in Deno) */ void 0;
     mocks.getDb = (() => db) as any;
-  const result = await denyDeviceAuthorization({} as D1Database, {
+  const result = await denyDeviceAuthorization(d1, {
       id: 'dc-1',
       userId: 'user-1',
     });
@@ -197,7 +199,7 @@ import { OAUTH_CONSTANTS } from '@/types/oauth';
   Deno.test('pollDeviceAuthorization - returns not_found for empty device code', async () => {
   /* mocks cleared (no-op in Deno) */ void 0;
     mocks.getDb = (() => db) as any;
-  const result = await pollDeviceAuthorization({} as D1Database, {
+  const result = await pollDeviceAuthorization(d1, {
       deviceCode: '',
       clientId: 'client-1',
     });
@@ -207,7 +209,7 @@ import { OAUTH_CONSTANTS } from '@/types/oauth';
   /* mocks cleared (no-op in Deno) */ void 0;
     mocks.getDb = (() => db) as any;
   db._.get = (async () => null) as any;
-    const result = await pollDeviceAuthorization({} as D1Database, {
+    const result = await pollDeviceAuthorization(d1, {
       deviceCode: 'nonexistent',
       clientId: 'client-1',
     });
@@ -234,7 +236,7 @@ import { OAUTH_CONSTANTS } from '@/types/oauth';
       updatedAt: '2026-01-01T00:00:00.000Z',
     })) as any;
 
-    const result = await pollDeviceAuthorization({} as D1Database, {
+    const result = await pollDeviceAuthorization(d1, {
       deviceCode: 'some-code',
       clientId: 'different-client',
     });
@@ -261,7 +263,7 @@ import { OAUTH_CONSTANTS } from '@/types/oauth';
       updatedAt: '2026-01-01T00:00:00.000Z',
     })) as any;
 
-    const result = await pollDeviceAuthorization({} as D1Database, {
+    const result = await pollDeviceAuthorization(d1, {
       deviceCode: 'some-code',
       clientId: 'client-1',
     });
@@ -271,6 +273,6 @@ import { OAUTH_CONSTANTS } from '@/types/oauth';
   Deno.test('consumeApprovedDeviceAuthorization - returns true when successfully consumed', async () => {
   /* mocks cleared (no-op in Deno) */ void 0;
     mocks.getDb = (() => db) as any;
-  const result = await consumeApprovedDeviceAuthorization({} as D1Database, 'dc-1');
+  const result = await consumeApprovedDeviceAuthorization(d1, 'dc-1');
     assertEquals(result, true);
 })

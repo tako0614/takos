@@ -1,4 +1,4 @@
-# Worker だけのシンプルなアプリ
+# Worker だけのシンプルな group
 
 > このページでわかること: Worker 1 つだけの最小構成の書き方。
 
@@ -15,7 +15,7 @@ my-app/
 └── package.json
 ```
 
-## app.yml
+## deploy manifest
 
 ```yaml
 name: simple-worker
@@ -41,6 +41,7 @@ routes:
 name: deploy
 jobs:
   bundle:
+    runs-on: ubuntu-latest
     steps:
       - name: Install dependencies
         run: npm install
@@ -77,17 +78,20 @@ export default {
 ## デプロイ
 
 ```bash
-takos deploy --env staging --space SPACE_ID
+takos deploy --env staging --space SPACE_ID --group simple-worker
 ```
 
 ## ポイント
 
-- `name` がリソース名のプレフィックスになります。短くてわかりやすい名前にしましょう
-- `routes` の `path: /` で Worker をルートパスに公開しています。ドメインはシステムが自動付与します
-- Worker のコードは Cloudflare Workers の標準的な `fetch` ハンドラです
+- `name` は display 名です。group snapshot に入れる名前は `--group` で指定します
+- `routes` の `path: /` で Worker
+  をルートパスに公開しています。ドメインはシステムが自動付与します
+- Worker のコードは標準 Fetch API の `fetch` ハンドラです
 
 ## 次のステップ
 
-- データベースを追加したい → [Worker + SQL データベース](/examples/worker-with-db)
-- Docker コンテナを使いたい → [Worker + Container](/examples/worker-with-container)
+- データベースを追加したい →
+  [Worker + SQL データベース](/examples/worker-with-db)
+- Docker コンテナを使いたい →
+  [Worker + Container](/examples/worker-with-container)
 - MCP Server を公開したい → [MCP Server](/examples/mcp-server)

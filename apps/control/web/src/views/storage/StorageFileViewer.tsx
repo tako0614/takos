@@ -1,18 +1,19 @@
-import { createSignal, Show } from 'solid-js';
-import { useI18n } from '../../store/i18n.ts';
-import type { StorageFile } from '../../types/index.ts';
-import type { FileHandler, ResolvedHandler } from './storageUtils.tsx';
+import { createSignal, Show } from "solid-js";
+import { useI18n } from "../../store/i18n.ts";
+import type { StorageFile } from "../../types/index.ts";
+import type { FileHandler, ResolvedHandler } from "./storageUtils.tsx";
+import { buildFileHandlerLaunchUrl } from "./fileHandlerUrls.ts";
 import {
-  BUILTIN_IMAGE_VIEWER,
-  resolveHandlers,
-  getDefaultHandler,
-  setDefaultHandler,
   clearDefaultHandler,
-} from './storageUtils.tsx';
-import { StorageHandlerPicker } from './StorageHandlerPicker.tsx';
-import { StorageViewerShell } from './StorageViewerShell.tsx';
-import { StorageTextEditor } from './StorageTextEditor.tsx';
-import { StorageEmptyState } from './StorageEmptyState.tsx';
+  getDefaultHandler,
+  LOCAL_IMAGE_VIEWER,
+  resolveHandlers,
+  setDefaultHandler,
+} from "./storageUtils.tsx";
+import { StorageHandlerPicker } from "./StorageHandlerPicker.tsx";
+import { StorageViewerShell } from "./StorageViewerShell.tsx";
+import { StorageTextEditor } from "./StorageTextEditor.tsx";
+import { StorageEmptyState } from "./StorageEmptyState.tsx";
 
 interface StorageFileViewerProps {
   spaceId: string;
@@ -31,8 +32,10 @@ export function StorageFileViewer(props: StorageFileViewerProps) {
   const savedDefault = getDefaultHandler(props.file, allHandlers);
 
   // Active handler state: use saved default, or show picker if multiple
-  const [activeHandler, setActiveHandler] = createSignal<ResolvedHandler | null>(
-    savedDefault ?? (allHandlers.length === 1 ? allHandlers[0] : null)
+  const [activeHandler, setActiveHandler] = createSignal<
+    ResolvedHandler | null
+  >(
+    savedDefault ?? (allHandlers.length === 1 ? allHandlers[0] : null),
   );
   const [showHandlerMenu, setShowHandlerMenu] = createSignal(false);
 
@@ -40,9 +43,13 @@ export function StorageFileViewer(props: StorageFileViewerProps) {
     if (asDefault) {
       setDefaultHandler(props.file, h);
     }
-    if (h.type === 'app') {
-      const url = `${h.handler.open_url}?file_id=${encodeURIComponent(props.file.id)}&space_id=${encodeURIComponent(props.file.space_id)}`;
-      globalThis.open(url, '_blank', 'noopener,noreferrer');
+    if (h.type === "app") {
+      const url = buildFileHandlerLaunchUrl(
+        h.handler,
+        props.file,
+        props.spaceId,
+      );
+      globalThis.open(url, "_blank", "noopener,noreferrer");
     } else {
       setActiveHandler(h);
     }
@@ -56,22 +63,27 @@ export function StorageFileViewer(props: StorageFileViewerProps) {
   };
 
   // If active handler is an app handler, it was already opened in a new globalThis.
-  // Show builtin viewer or picker.
+  // Show local viewer or picker.
 
   return (
-    <Show when={activeHandler()} fallback={
-      <StorageHandlerPicker
-        file={props.file}
-        downloadUrl={props.downloadUrl}
-        handlers={allHandlers}
-        onSelect={handleSelectHandler}
-        onClose={props.onClose}
-        t={t}
-      />
-    }>
+    <Show
+      when={activeHandler()}
+      fallback={
+        <StorageHandlerPicker
+          file={props.file}
+          downloadUrl={props.downloadUrl}
+          handlers={allHandlers}
+          onSelect={handleSelectHandler}
+          onClose={props.onClose}
+          t={t}
+        />
+      }
+    >
       {(handler) => (
         <Show
-          when={handler().type === 'builtin' && (handler() as { type: 'builtin'; builtinId: string }).builtinId === BUILTIN_IMAGE_VIEWER}
+          when={handler().type === "local" &&
+            (handler() as { type: "local"; localId: string }).localId ===
+              LOCAL_IMAGE_VIEWER}
           fallback={
             <StorageTextEditor
               spaceId={props.spaceId}
@@ -100,9 +112,16 @@ export function StorageFileViewer(props: StorageFileViewerProps) {
             onClose={props.onClose}
             t={t}
           >
-            <Show when={props.downloadUrl} fallback={
-              <StorageEmptyState file={props.file} downloadUrl={props.downloadUrl} t={t} />
-            }>
+            <Show
+              when={props.downloadUrl}
+              fallback={
+                <StorageEmptyState
+                  file={props.file}
+                  downloadUrl={props.downloadUrl}
+                  t={t}
+                />
+              }
+            >
               <div class="flex items-center justify-center h-full p-8">
                 <img
                   src={props.downloadUrl!}

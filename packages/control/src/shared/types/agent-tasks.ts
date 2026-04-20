@@ -1,8 +1,14 @@
-import type { RunStatus } from './runs.ts';
+import type { RunStatus } from "./runs.ts";
 
-export type AgentTaskStatus = 'planned' | 'in_progress' | 'blocked' | 'completed' | 'cancelled';
+export type AgentTaskStatus =
+  | "planned"
+  | "in_progress"
+  | "blocked"
+  | "completed"
+  | "cancelled"
+  | "failed";
 
-export type AgentTaskPriority = 'low' | 'medium' | 'high' | 'urgent';
+export type AgentTaskPriority = "low" | "medium" | "high" | "urgent";
 
 /** Core DB-mapped properties for an agent task. */
 export interface AgentTaskBase {
@@ -46,5 +52,5 @@ export interface AgentTaskRunSummary {
 export interface AgentTaskResumeTarget {
   thread_id: string;
   run_id: string | null;
-  reason: 'active' | 'failed' | 'latest' | 'thread';
+  reason: "active" | "failed" | "latest" | "thread";
 }

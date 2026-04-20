@@ -14,8 +14,7 @@ import {
 } from "./store-registry-helpers.ts";
 
 const installSchema = z.object({
-  remote_owner: z.string().min(1),
-  remote_repo_name: z.string().min(1),
+  canonical_repo_url: z.string().min(1),
   local_name: z.string().optional(),
 });
 
@@ -141,8 +140,7 @@ export function registerStoreRegistryRepositoryRoutes(
             access.space.id,
             {
               registryEntryId: c.req.param("entryId"),
-              remoteOwner: body.remote_owner,
-              remoteRepoName: body.remote_repo_name,
+              canonicalRepoUrl: body.canonical_repo_url,
               localName: body.local_name,
             },
           );

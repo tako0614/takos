@@ -2,24 +2,46 @@
  * Workflow Engine – run lifecycle (start, cancel, finalize)
  */
 
-import type { Workflow, Conclusion } from 'takos-actions-engine';
+import type { Conclusion, Workflow } from "takos-actions-engine";
 import {
+  createExecutionPlan,
   parseWorkflow,
   validateWorkflow,
-  createExecutionPlan,
-} from 'takos-actions-engine';
-import { generateId } from '../../../shared/utils/index.ts';
-import * as gitStore from '../git-smart/index.ts';
-import { getDb, workflowRuns, workflowJobs, workflowSteps, workflows, workflowSecrets } from '../../../infra/db/index.ts';
-import { eq, and, ne, max, inArray, count } from 'drizzle-orm';
-import { buildWorkflowDispatchEnv } from '../actions/index.ts';
-import { BadRequestError, InternalError, NotFoundError, ValidationError } from 'takos-common/errors';
-import type { WorkflowJobDefinition, WorkflowJobQueueMessage } from '../../../shared/types/index.ts';
-import type { WorkflowBucket, StartRunOptions, WorkflowRunRecord } from './workflow-engine-types.ts';
-import type { D1Database, Queue } from '../../../shared/types/bindings.ts';
-import { toWorkflowJobDefinition, toRunRecord } from './workflow-engine-converters.ts';
-import { WORKFLOW_QUEUE_MESSAGE_VERSION } from '../../../shared/types/index.ts';
-import { logWarn } from '../../../shared/utils/logger.ts';
+} from "takos-actions-engine";
+import { generateId } from "../../../shared/utils/index.ts";
+import * as gitStore from "../git-smart/index.ts";
+import {
+  getDb,
+  workflowJobs,
+  workflowRuns,
+  workflows,
+  workflowSecrets,
+  workflowSteps,
+} from "../../../infra/db/index.ts";
+import { and, count, eq, inArray, max, ne } from "drizzle-orm";
+import { buildWorkflowDispatchEnv } from "../actions/index.ts";
+import {
+  BadRequestError,
+  InternalError,
+  NotFoundError,
+  ValidationError,
+} from "takos-common/errors";
+import type {
+  WorkflowJobDefinition,
+  WorkflowJobQueueMessage,
+} from "../../../shared/types/index.ts";
+import type {
+  StartRunOptions,
+  WorkflowBucket,
+  WorkflowRunRecord,
+} from "./workflow-engine-types.ts";
+import type { D1Database, Queue } from "../../../shared/types/bindings.ts";
+import {
+  toRunRecord,
+  toWorkflowJobDefinition,
+} from "./workflow-engine-converters.ts";
+import { WORKFLOW_QUEUE_MESSAGE_VERSION } from "../../../shared/types/index.ts";
+import { logWarn } from "../../../shared/utils/logger.ts";
 
 // ---------------------------------------------------------------------------
 // startRun
@@ -52,24 +74,39 @@ export async function startRun(
   const content = new TextDecoder().decode(blob);
 
   const { workflow, diagnostics } = parseWorkflow(content);
-  const errors = diagnostics.filter((d) => d.severity === 'error');
+  const errors = diagnostics.filter((d) => d.severity === "error");
   if (errors.length > 0) {
-    throw new ValidationError(`Workflow parse errors: ${errors.map((e) => e.message).join(', ')}`);
+    throw new ValidationError(
+      `Workflow parse errors: ${errors.map((e) => e.message).join(", ")}`,
+    );
   }
 
   const validation = validateWorkflow(workflow);
-  const validationErrors = validation.diagnostics.filter((d) => d.severity === 'error');
+  const validationErrors = validation.diagnostics.filter((d) =>
+    d.severity === "error"
+  );
   if (validationErrors.length > 0) {
-    throw new ValidationError(`Workflow validation errors: ${validationErrors.map((e) => e.message).join(', ')}`);
+    throw new ValidationError(
+      `Workflow validation errors: ${
+        validationErrors.map((e) => e.message).join(", ")
+      }`,
+    );
   }
 
   if (!checkTrigger(workflow, event)) {
     throw new BadRequestError(`Workflow does not support event: ${event}`);
   }
 
-  const lastRun = await drizzle.select({ maxRunNumber: max(workflowRuns.runNumber) })
+  const lastRun = await drizzle.select({
+    maxRunNumber: max(workflowRuns.runNumber),
+  })
     .from(workflowRuns)
-    .where(and(eq(workflowRuns.repoId, repoId), eq(workflowRuns.workflowPath, workflowPath)))
+    .where(
+      and(
+        eq(workflowRuns.repoId, repoId),
+        eq(workflowRuns.workflowPath, workflowPath),
+      ),
+    )
     .get();
 
   const runNumber = (lastRun?.maxRunNumber || 0) + 1;
@@ -88,7 +125,7 @@ export async function startRun(
       ref: `refs/heads/${ref}`,
       sha: sha || commitSha,
       actorAccountId: actorId,
-      status: 'queued',
+      status: "queued",
       queuedAt: timestamp,
       inputs: inputs ? JSON.stringify(inputs) : null,
       runNumber,
@@ -113,7 +150,7 @@ export async function startRun(
         runId,
         jobKey: entry.key,
         name: entry.name,
-        status: 'queued',
+        status: "queued",
         queuedAt: timestamp,
         createdAt: timestamp,
       })
@@ -121,14 +158,15 @@ export async function startRun(
 
     await Promise.all(entry.definition.steps.map(async (step, i) => {
       const stepId = generateId();
-      const stepName = step.name || step.uses || step.run?.slice(0, 50) || `Step ${i + 1}`;
+      const stepName = step.name || step.uses || step.run?.slice(0, 50) ||
+        `Step ${i + 1}`;
       await drizzle.insert(workflowSteps)
         .values({
           id: stepId,
           jobId: entry.id,
           number: i + 1,
           name: stepName,
-          status: 'pending',
+          status: "pending",
           runCommand: step.run || null,
           usesAction: step.uses || null,
           createdAt: timestamp,
@@ -153,7 +191,8 @@ export async function startRun(
       const jobRecord = jobRecords.find((j) => j.key === jobKey);
       if (!jobRecord) continue;
 
-      const queuedJobDefinition: WorkflowJobDefinition = toWorkflowJobDefinition(jobRecord.definition);
+      const queuedJobDefinition: WorkflowJobDefinition =
+        toWorkflowJobDefinition(jobRecord.definition);
       const dispatchEnv = buildWorkflowDispatchEnv({
         workflow,
         workflowPath,
@@ -202,29 +241,29 @@ export async function cancelRun(db: D1Database, runId: string): Promise<void> {
 
   await drizzle.update(workflowRuns)
     .set({
-      status: 'cancelled',
-      conclusion: 'cancelled',
+      status: "cancelled",
+      conclusion: "cancelled",
       completedAt: timestamp,
     })
     .where(
       and(
         eq(workflowRuns.id, runId),
-        inArray(workflowRuns.status, ['queued', 'in_progress']),
-      )
+        inArray(workflowRuns.status, ["queued", "in_progress"]),
+      ),
     )
     .run();
 
   await drizzle.update(workflowJobs)
     .set({
-      status: 'completed',
-      conclusion: 'cancelled',
+      status: "cancelled",
+      conclusion: "cancelled",
       completedAt: timestamp,
     })
     .where(
       and(
         eq(workflowJobs.runId, runId),
-        inArray(workflowJobs.status, ['queued', 'in_progress']),
-      )
+        inArray(workflowJobs.status, ["queued", "in_progress"]),
+      ),
     )
     .run();
 
@@ -233,20 +272,20 @@ export async function cancelRun(db: D1Database, runId: string): Promise<void> {
     .where(eq(workflowJobs.runId, runId))
     .all();
 
-  const jobIds = jobs.map(j => j.id);
+  const jobIds = jobs.map((j) => j.id);
 
   if (jobIds.length > 0) {
     await drizzle.update(workflowSteps)
       .set({
-        status: 'completed',
-        conclusion: 'cancelled',
+        status: "cancelled",
+        conclusion: "cancelled",
         completedAt: timestamp,
       })
       .where(
         and(
           inArray(workflowSteps.jobId, jobIds),
-          inArray(workflowSteps.status, ['pending', 'in_progress']),
-        )
+          inArray(workflowSteps.status, ["pending", "in_progress"]),
+        ),
       )
       .run();
   }
@@ -259,12 +298,19 @@ export async function cancelRun(db: D1Database, runId: string): Promise<void> {
 /**
  * If all jobs for a run are completed, determine and persist the run conclusion.
  */
-export async function finalizeRunIfComplete(db: D1Database, runId: string): Promise<void> {
+export async function finalizeRunIfComplete(
+  db: D1Database,
+  runId: string,
+): Promise<void> {
   const drizzle = getDb(db);
 
   const pendingResult = await drizzle.select({ count: count() })
     .from(workflowJobs)
-    .where(and(eq(workflowJobs.runId, runId), ne(workflowJobs.status, 'completed')))
+    .where(and(
+      eq(workflowJobs.runId, runId),
+      ne(workflowJobs.status, "completed"),
+      ne(workflowJobs.status, "cancelled"),
+    ))
     .get();
   const pendingJobsCount = pendingResult?.count ?? 0;
 
@@ -272,26 +318,36 @@ export async function finalizeRunIfComplete(db: D1Database, runId: string): Prom
 
   const failedResult = await drizzle.select({ count: count() })
     .from(workflowJobs)
-    .where(and(eq(workflowJobs.runId, runId), eq(workflowJobs.conclusion, 'failure')))
+    .where(
+      and(
+        eq(workflowJobs.runId, runId),
+        eq(workflowJobs.conclusion, "failure"),
+      ),
+    )
     .get();
   const failedJobsCount = failedResult?.count ?? 0;
 
   const cancelledResult = await drizzle.select({ count: count() })
     .from(workflowJobs)
-    .where(and(eq(workflowJobs.runId, runId), eq(workflowJobs.conclusion, 'cancelled')))
+    .where(
+      and(
+        eq(workflowJobs.runId, runId),
+        eq(workflowJobs.conclusion, "cancelled"),
+      ),
+    )
     .get();
   const cancelledJobsCount = cancelledResult?.count ?? 0;
 
-  let conclusion: Conclusion = 'success';
+  let conclusion: Conclusion = "success";
   if (failedJobsCount > 0) {
-    conclusion = 'failure';
+    conclusion = "failure";
   } else if (cancelledJobsCount > 0) {
-    conclusion = 'cancelled';
+    conclusion = "cancelled";
   }
 
   await drizzle.update(workflowRuns)
     .set({
-      status: 'completed',
+      status: conclusion === "cancelled" ? "cancelled" : "completed",
       conclusion,
       completedAt: new Date().toISOString(),
     })
@@ -309,7 +365,7 @@ export async function finalizeRunIfComplete(db: D1Database, runId: string): Prom
 export function checkTrigger(workflow: Workflow, event: string): boolean {
   const on = workflow.on;
 
-  if (typeof on === 'string') {
+  if (typeof on === "string") {
     return on === event;
   }
 
@@ -317,7 +373,7 @@ export function checkTrigger(workflow: Workflow, event: string): boolean {
     return on.includes(event);
   }
 
-  if (on && typeof on === 'object') {
+  if (on && typeof on === "object") {
     return event in on;
   }
 
@@ -327,7 +383,11 @@ export function checkTrigger(workflow: Workflow, event: string): boolean {
 /**
  * Resolve the workflow ID from the database, or return null if not found.
  */
-export async function resolveWorkflowId(db: D1Database, repoId: string, workflowPath: string): Promise<string | null> {
+export async function resolveWorkflowId(
+  db: D1Database,
+  repoId: string,
+  workflowPath: string,
+): Promise<string | null> {
   const drizzle = getDb(db);
   const existing = await drizzle.select({ id: workflows.id })
     .from(workflows)
@@ -339,7 +399,10 @@ export async function resolveWorkflowId(db: D1Database, repoId: string, workflow
 /**
  * Retrieve secret IDs for a repo.
  */
-export async function getSecretIds(db: D1Database, repoId: string): Promise<string[]> {
+export async function getSecretIds(
+  db: D1Database,
+  repoId: string,
+): Promise<string[]> {
   const drizzle = getDb(db);
   const secretRecords = await drizzle.select({ id: workflowSecrets.id })
     .from(workflowSecrets)
@@ -366,13 +429,15 @@ export async function enqueueJob(
   },
 ): Promise<void> {
   if (!queue) {
-    logWarn('No queue configured, job will not be executed', { module: 'services/execution/workflow-engine' });
+    logWarn("No queue configured, job will not be executed", {
+      module: "services/execution/workflow-engine",
+    });
     return;
   }
 
   const message: WorkflowJobQueueMessage = {
     version: WORKFLOW_QUEUE_MESSAGE_VERSION,
-    type: 'job',
+    type: "job",
     runId: options.runId,
     jobId: options.jobId,
     repoId: options.repoId,

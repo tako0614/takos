@@ -2,10 +2,7 @@
 // parse-common.ts
 // ============================================================
 //
-// Flat-schema shared helpers. Phase 1 only exposes semver
-// validation; lifecycle/update-strategy/dependsOn helpers were
-// removed when the envelope schema retired. Phase 2 adds any
-// flat-schema equivalents the deploy pipeline needs.
+// Flat-schema shared helpers.
 // ============================================================
 
 const SEMVER_RE =

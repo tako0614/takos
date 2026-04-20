@@ -4,34 +4,34 @@ import { DockerContainerBackend } from "./docker-container-backend.ts";
 import { EcsContainerBackend } from "./ecs-container-backend.ts";
 import { K8sContainerBackend } from "./k8s-container-backend.ts";
 import type {
-  OciProviderName,
+  OciBackendName,
   OciServiceRecord,
 } from "./oci-orchestrator-storage.ts";
 
 export type OciOrchestratorBackendResolverInput = {
-  providerName: OciProviderName;
-  providerConfig: Record<string, unknown> | null;
+  backendName: OciBackendName;
+  backendConfig: Record<string, unknown> | null;
 };
 
 export type OciOrchestratorBackendResolver = (
   input: OciOrchestratorBackendResolverInput,
 ) => ContainerBackend;
 
-function readProviderConfigString(
-  providerConfig: Record<string, unknown> | null,
+function readBackendConfigString(
+  backendConfig: Record<string, unknown> | null,
   key: string,
 ): string | undefined {
-  const value = providerConfig?.[key];
+  const value = backendConfig?.[key];
   return typeof value === "string" && value.trim().length > 0
     ? value.trim()
     : undefined;
 }
 
-function readProviderConfigBoolean(
-  providerConfig: Record<string, unknown> | null,
+function readBackendConfigBoolean(
+  backendConfig: Record<string, unknown> | null,
   key: string,
 ): boolean | undefined {
-  const value = providerConfig?.[key];
+  const value = backendConfig?.[key];
   if (typeof value === "boolean") {
     return value;
   }
@@ -47,11 +47,11 @@ function readProviderConfigBoolean(
   return undefined;
 }
 
-function readProviderConfigNumber(
-  providerConfig: Record<string, unknown> | null,
+function readBackendConfigNumber(
+  backendConfig: Record<string, unknown> | null,
   key: string,
 ): number | undefined {
-  const value = providerConfig?.[key];
+  const value = backendConfig?.[key];
   if (typeof value === "number" && Number.isFinite(value)) {
     return value;
   }
@@ -62,11 +62,11 @@ function readProviderConfigNumber(
   return undefined;
 }
 
-function readProviderConfigStringArray(
-  providerConfig: Record<string, unknown> | null,
+function readBackendConfigStringArray(
+  backendConfig: Record<string, unknown> | null,
   key: string,
 ): string[] | undefined {
-  const value = providerConfig?.[key];
+  const value = backendConfig?.[key];
   if (Array.isArray(value)) {
     const entries = value
       .filter((entry): entry is string => typeof entry === "string")
@@ -84,116 +84,144 @@ function readProviderConfigStringArray(
   return undefined;
 }
 
+function requireBackendConfigString(
+  backendName: OciBackendName,
+  backendConfig: Record<string, unknown> | null,
+  key: string,
+): string {
+  const value = readBackendConfigString(backendConfig, key);
+  if (!value) {
+    throw new Error(`${backendName} backend requires backend_config.${key}`);
+  }
+  return value;
+}
+
 export function createDefaultOciOrchestratorBackendResolver(options?: {
   fallbackBackend?: ContainerBackend;
 }): OciOrchestratorBackendResolver {
   const fallbackBackend = options?.fallbackBackend ??
     new DockerContainerBackend();
-  const providerBackends = new Map<string, ContainerBackend>();
+  const backendInstances = new Map<string, ContainerBackend>();
 
-  return ({ providerName, providerConfig }) => {
-    if (providerName === "oci") {
+  return ({ backendName, backendConfig }) => {
+    if (backendName === "oci") {
       return fallbackBackend;
     }
 
-    const cacheKey = `${providerName}:${JSON.stringify(providerConfig ?? {})}`;
-    const existing = providerBackends.get(cacheKey);
+    const cacheKey = `${backendName}:${JSON.stringify(backendConfig ?? {})}`;
+    const existing = backendInstances.get(cacheKey);
     if (existing) {
       return existing;
     }
 
     let backend: ContainerBackend;
-    switch (providerName) {
+    switch (backendName) {
       case "k8s": {
-        backend = new K8sContainerBackend(
-          readProviderConfigString(providerConfig, "namespace"),
-        );
+        backend = new K8sContainerBackend({
+          namespace: readBackendConfigString(backendConfig, "namespace"),
+          deploymentName: readBackendConfigString(
+            backendConfig,
+            "deploymentName",
+          ),
+          imageRegistry: readBackendConfigString(
+            backendConfig,
+            "imageRegistry",
+          ),
+        });
         break;
       }
       case "cloud-run": {
-        const projectId = readProviderConfigString(providerConfig, "projectId");
-        const region = readProviderConfigString(providerConfig, "region");
-        if (!projectId || !region) {
-          return fallbackBackend;
-        }
+        const projectId = requireBackendConfigString(
+          backendName,
+          backendConfig,
+          "projectId",
+        );
+        const region = requireBackendConfigString(
+          backendName,
+          backendConfig,
+          "region",
+        );
         backend = new CloudRunContainerBackend({
           projectId,
           region,
-          serviceId: readProviderConfigString(providerConfig, "serviceId"),
-          serviceAccount: readProviderConfigString(
-            providerConfig,
+          serviceId: readBackendConfigString(backendConfig, "serviceId"),
+          serviceAccount: readBackendConfigString(
+            backendConfig,
             "serviceAccount",
           ),
-          ingress: readProviderConfigString(providerConfig, "ingress"),
-          allowUnauthenticated: readProviderConfigBoolean(
-            providerConfig,
+          ingress: readBackendConfigString(backendConfig, "ingress"),
+          allowUnauthenticated: readBackendConfigBoolean(
+            backendConfig,
             "allowUnauthenticated",
           ),
-          baseUrl: readProviderConfigString(providerConfig, "baseUrl"),
-          deleteOnRemove: readProviderConfigBoolean(
-            providerConfig,
+          baseUrl: readBackendConfigString(backendConfig, "baseUrl"),
+          deleteOnRemove: readBackendConfigBoolean(
+            backendConfig,
             "deleteOnRemove",
           ),
         });
         break;
       }
       case "ecs": {
-        const region = readProviderConfigString(providerConfig, "region");
-        const clusterArn = readProviderConfigString(
-          providerConfig,
+        const region = requireBackendConfigString(
+          backendName,
+          backendConfig,
+          "region",
+        );
+        const clusterArn = requireBackendConfigString(
+          backendName,
+          backendConfig,
           "clusterArn",
         );
-        const taskDefinitionFamily = readProviderConfigString(
-          providerConfig,
+        const taskDefinitionFamily = requireBackendConfigString(
+          backendName,
+          backendConfig,
           "taskDefinitionFamily",
         );
-        if (!region || !clusterArn || !taskDefinitionFamily) {
-          return fallbackBackend;
-        }
         backend = new EcsContainerBackend({
           region,
           clusterArn,
           taskDefinitionFamily,
-          serviceArn: readProviderConfigString(providerConfig, "serviceArn"),
-          serviceName: readProviderConfigString(providerConfig, "serviceName"),
-          containerName: readProviderConfigString(
-            providerConfig,
+          serviceArn: readBackendConfigString(backendConfig, "serviceArn"),
+          serviceName: readBackendConfigString(backendConfig, "serviceName"),
+          containerName: readBackendConfigString(
+            backendConfig,
             "containerName",
           ),
-          subnetIds: readProviderConfigStringArray(providerConfig, "subnetIds"),
-          securityGroupIds: readProviderConfigStringArray(
-            providerConfig,
+          subnetIds: readBackendConfigStringArray(backendConfig, "subnetIds"),
+          securityGroupIds: readBackendConfigStringArray(
+            backendConfig,
             "securityGroupIds",
           ),
-          assignPublicIp: readProviderConfigBoolean(
-            providerConfig,
+          assignPublicIp: readBackendConfigBoolean(
+            backendConfig,
             "assignPublicIp",
           ),
-          launchType: readProviderConfigString(providerConfig, "launchType"),
-          desiredCount: readProviderConfigNumber(
-            providerConfig,
+          launchType: readBackendConfigString(backendConfig, "launchType"),
+          desiredCount: readBackendConfigNumber(
+            backendConfig,
             "desiredCount",
           ),
-          baseUrl: readProviderConfigString(providerConfig, "baseUrl"),
-          healthUrl: readProviderConfigString(providerConfig, "healthUrl"),
+          baseUrl: readBackendConfigString(backendConfig, "baseUrl"),
+          healthUrl: readBackendConfigString(backendConfig, "healthUrl"),
         });
         break;
       }
       default:
-        return fallbackBackend;
+        throw new Error(`Unsupported OCI backend: ${backendName}`);
     }
 
-    providerBackends.set(cacheKey, backend);
+    backendInstances.set(cacheKey, backend);
     return backend;
   };
 }
 
 export function resolveServiceBackend(
   backendResolver: OciOrchestratorBackendResolver,
-  record: Pick<OciServiceRecord, "provider_name" | "provider_config">,
+  record: Pick<OciServiceRecord, "backend_name" | "backend_config">,
 ): ContainerBackend {
   return backendResolver({
-    providerName: record.provider_name,
-    providerConfig: record.provider_config,
+    backendName: record.backend_name,
+    backendConfig: record.backend_config,
   });
 }

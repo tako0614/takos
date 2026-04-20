@@ -15,7 +15,7 @@ function createRequest(
   return new Request(url, {
     method,
     headers: {
-      "X-Takos-Internal": "1",
+      "X-Takos-Internal-Marker": "1",
       ...headers,
     },
   });
@@ -29,7 +29,7 @@ function createEnv(
   };
 }
 
-Deno.test("egress handler - rejects requests without X-Takos-Internal header", async () => {
+Deno.test("egress handler - rejects requests without X-Takos-Internal-Marker header", async () => {
   /* mocks cleared (no-op in Deno) */ void 0;
   const request = new Request("https://example.com", {
     method: "GET",
@@ -95,7 +95,7 @@ Deno.test("egress handler - rejects requests with body too large", async () => {
   const request = new Request("https://example.com", {
     method: "POST",
     headers: {
-      "X-Takos-Internal": "1",
+      "X-Takos-Internal-Marker": "1",
     },
     body: "small",
   });

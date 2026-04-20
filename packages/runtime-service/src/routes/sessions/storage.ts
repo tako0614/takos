@@ -1,21 +1,21 @@
-import * as fs from 'node:fs/promises';
-import * as os from 'node:os';
-import * as path from 'node:path';
-import { createLogger } from 'takos-common/logger';
+import * as fs from "node:fs/promises";
+import * as os from "node:os";
+import * as path from "node:path";
+import { createLogger } from "takos-common/logger";
 import {
   HEARTBEAT_ASSUMED_INTERVAL_MS,
   HEARTBEAT_INTERVAL_MS,
-  SESSION_IDLE_TIMEOUT_MS,
-  SESSION_MAX_DURATION_MS,
-  SESSION_CLEANUP_INTERVAL_MS,
   MAX_SESSIONS_PER_WORKSPACE,
   MAX_TOTAL_SESSIONS,
-} from '../../shared/config.ts';
-import { isValidSessionId, validateSpaceId } from '../../runtime/validation.ts';
-import { OwnerBindingError } from '../../shared/errors.ts';
-import { startHeartbeat } from '../../runtime/heartbeat.ts';
+  SESSION_CLEANUP_INTERVAL_MS,
+  SESSION_IDLE_TIMEOUT_MS,
+  SESSION_MAX_DURATION_MS,
+} from "../../shared/config.ts";
+import { isValidSessionId, validateSpaceId } from "../../runtime/validation.ts";
+import { OwnerBindingError } from "../../shared/errors.ts";
+import { startHeartbeat } from "../../runtime/heartbeat.ts";
 
-const logger = createLogger({ service: 'takos-runtime' });
+const logger = createLogger({ service: "takos-runtime" });
 
 // ===========================================================================
 // Session store
@@ -56,22 +56,24 @@ export interface Session {
   heartbeatTimer?: ReturnType<typeof setInterval> | null;
 }
 
-type SessionExpiryReason = 'inactive_timeout' | 'max_duration';
-type SessionStopReason = SessionExpiryReason | 'manual';
+type SessionExpiryReason = "inactive_timeout" | "max_duration";
+type SessionStopReason = SessionExpiryReason | "manual";
 
 const MAX_OWNER_SUB_LENGTH = 256;
 
 if (HEARTBEAT_INTERVAL_MS > HEARTBEAT_ASSUMED_INTERVAL_MS) {
-  logger.warn('Heartbeat interval exceeds lifecycle assumption', {
+  logger.warn("Heartbeat interval exceeds lifecycle assumption", {
     configuredMs: HEARTBEAT_INTERVAL_MS,
     assumedMaxMs: HEARTBEAT_ASSUMED_INTERVAL_MS,
   });
 }
 
 function normalizeOwnerSub(ownerSub?: string): string | undefined {
-  if (typeof ownerSub !== 'string') return undefined;
+  if (typeof ownerSub !== "string") return undefined;
   const trimmed = ownerSub.trim();
-  if (trimmed.length === 0 || trimmed.length > MAX_OWNER_SUB_LENGTH) return undefined;
+  if (trimmed.length === 0 || trimmed.length > MAX_OWNER_SUB_LENGTH) {
+    return undefined;
+  }
   return trimmed;
 }
 
@@ -81,7 +83,7 @@ function enforceSessionOwnerBinding(session: Session, ownerSub?: string): void {
     // If the session has an ownerSub set, we require the caller to provide one.
     // Only skip validation when both the session and request lack ownerSub.
     if (session.ownerSub) {
-      throw new Error('Session requires owner authentication');
+      throw new Error("Session requires owner authentication");
     }
     return;
   }
@@ -92,12 +94,15 @@ function enforceSessionOwnerBinding(session: Session, ownerSub?: string): void {
   }
 }
 
-function getSessionExpiryReason(session: Session, now: number): SessionExpiryReason | null {
+function getSessionExpiryReason(
+  session: Session,
+  now: number,
+): SessionExpiryReason | null {
   if (now - session.lastAccessedAt >= SESSION_IDLE_TIMEOUT_MS) {
-    return 'inactive_timeout';
+    return "inactive_timeout";
   }
   if (now - session.createdAt >= SESSION_MAX_DURATION_MS) {
-    return 'max_duration';
+    return "max_duration";
   }
   return null;
 }
@@ -112,14 +117,27 @@ export class SessionStore {
     return this.sessions.get(sessionId);
   }
 
-  getSessionWithValidation(sessionId: string, spaceId: string, ownerSub?: string): Session {
+  getSessionByWorkDir(workDir: string): Session | undefined {
+    for (const session of this.sessions.values()) {
+      if (session.workDir === workDir) {
+        return session;
+      }
+    }
+    return undefined;
+  }
+
+  getSessionWithValidation(
+    sessionId: string,
+    spaceId: string,
+    ownerSub?: string,
+  ): Session {
     const validatedSpaceId = validateSpaceId(spaceId);
     const session = this.sessions.get(sessionId);
     if (!session) {
-      throw new Error('Session not found');
+      throw new Error("Session not found");
     }
     if (session.spaceId !== validatedSpaceId) {
-      throw new Error('Session does not belong to the specified workspace');
+      throw new Error("Session does not belong to the specified space");
     }
     enforceSessionOwnerBinding(session, ownerSub);
 
@@ -127,7 +145,7 @@ export class SessionStore {
     const reason = getSessionExpiryReason(session, now);
     if (reason) {
       this.stopSessionBestEffort(sessionId, session, reason);
-      throw new Error('Session not found');
+      throw new Error("Session not found");
     }
 
     session.lastAccessedAt = now;
@@ -141,15 +159,24 @@ export class SessionStore {
     proxyToken?: string,
   ): Promise<string> {
     if (!isValidSessionId(sessionId)) {
-      throw new Error('Invalid session ID format');
+      throw new Error("Invalid session ID format");
     }
 
     const validatedSpaceId = validateSpaceId(spaceId);
-    const session = await this.createSession(sessionId, validatedSpaceId, ownerSub, proxyToken);
+    const session = await this.createSession(
+      sessionId,
+      validatedSpaceId,
+      ownerSub,
+      proxyToken,
+    );
     return session.workDir;
   }
 
-  async destroySession(sessionId: string, spaceId?: string, ownerSub?: string): Promise<boolean> {
+  async destroySession(
+    sessionId: string,
+    spaceId?: string,
+    ownerSub?: string,
+  ): Promise<boolean> {
     await this.mutex.acquire();
     try {
       const session = this.sessions.get(sessionId);
@@ -157,11 +184,11 @@ export class SessionStore {
         return false;
       }
       if (spaceId && session.spaceId !== validateSpaceId(spaceId)) {
-        throw new Error('Session does not belong to the specified workspace');
+        throw new Error("Session does not belong to the specified space");
       }
       enforceSessionOwnerBinding(session, ownerSub);
 
-      await this.stopSession(sessionId, session, 'manual');
+      await this.stopSession(sessionId, session, "manual");
 
       return true;
     } finally {
@@ -178,7 +205,9 @@ export class SessionStore {
 
       void this.cleanupExpiredSessions()
         .catch((err) => {
-          logger.error('Error in session cleanup interval', { error: err as Error });
+          logger.error("Error in session cleanup interval", {
+            error: err as Error,
+          });
         })
         .finally(() => {
           this.cleanupInProgress = false;
@@ -214,33 +243,47 @@ export class SessionStore {
     }
   }
 
-  private async stopSession(sessionId: string, session: Session, reason: SessionStopReason): Promise<void> {
+  private async stopSession(
+    sessionId: string,
+    session: Session,
+    reason: SessionStopReason,
+  ): Promise<void> {
     this.stopSessionInMemory(sessionId, session);
 
     try {
       await fs.rm(session.workDir, { recursive: true, force: true });
     } catch (err) {
-      logger.warn('Failed to remove session workDir', {
+      logger.warn("Failed to remove session workDir", {
         sessionId,
         workDir: session.workDir,
         error: err as Error,
       });
     }
 
-    logger.info('Stopped session', {
+    logger.info("Stopped session", {
       sessionId,
       spaceId: session.spaceId,
       reason,
     });
   }
 
-  private stopSessionBestEffort(sessionId: string, session: Session, reason: SessionStopReason): void {
+  private stopSessionBestEffort(
+    sessionId: string,
+    session: Session,
+    reason: SessionStopReason,
+  ): void {
     void this.stopSession(sessionId, session, reason).catch((err) => {
-      logger.warn('Failed to stop session', { sessionId, reason, error: err as Error });
+      logger.warn("Failed to stop session", {
+        sessionId,
+        reason,
+        error: err as Error,
+      });
     });
   }
 
-  private async cleanupExpiredSessions(now: number = Date.now()): Promise<void> {
+  private async cleanupExpiredSessions(
+    now: number = Date.now(),
+  ): Promise<void> {
     for (const [sessionId, session] of this.sessions.entries()) {
       const reason = getSessionExpiryReason(session, now);
       if (!reason) continue;
@@ -265,7 +308,7 @@ export class SessionStore {
       const existing = this.sessions.get(sessionId);
       if (existing) {
         if (existing.spaceId !== validatedSpaceId) {
-          throw new Error('Session does not belong to the specified workspace');
+          throw new Error("Session does not belong to the specified space");
         }
         enforceSessionOwnerBinding(existing, normalizedOwnerSub);
         if (proxyToken) {
@@ -277,17 +320,22 @@ export class SessionStore {
       }
 
       if (this.sessions.size >= MAX_TOTAL_SESSIONS) {
-        throw new Error('Maximum total sessions reached. Please try again later.');
+        throw new Error(
+          "Maximum total sessions reached. Please try again later.",
+        );
       }
       let spaceCount = 0;
       for (const s of this.sessions.values()) {
         if (s.spaceId === validatedSpaceId) spaceCount++;
       }
       if (spaceCount >= MAX_SESSIONS_PER_WORKSPACE) {
-        throw new Error('Maximum sessions per workspace reached');
+        throw new Error("Maximum sessions per space reached");
       }
 
-      const workDir = path.join(os.tmpdir(), `takos-session-${validatedSpaceId}-${sessionId}`);
+      const workDir = path.join(
+        os.tmpdir(),
+        `takos-session-${validatedSpaceId}-${sessionId}`,
+      );
       await fs.mkdir(workDir, { recursive: true });
 
       const sessionInfo = {
@@ -295,9 +343,9 @@ export class SessionStore {
         space_id: validatedSpaceId,
       };
       await fs.writeFile(
-        path.join(workDir, '.takos-session'),
+        path.join(workDir, ".takos-session"),
         JSON.stringify(sessionInfo, null, 2),
-        { encoding: 'utf-8', mode: 0o600 }
+        { encoding: "utf-8", mode: 0o600 },
       );
 
       const session: Session = {
@@ -313,7 +361,7 @@ export class SessionStore {
       this.sessions.set(sessionId, session);
       this.startSessionHeartbeat(session);
 
-      logger.info('Created session', { sessionId, workDir });
+      logger.info("Created session", { sessionId, workDir });
 
       return session;
     } finally {

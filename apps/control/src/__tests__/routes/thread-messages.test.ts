@@ -451,7 +451,7 @@ Deno.test("thread-messages routes - POST /api/threads/:id/messages - rejects inv
   );
 
   // Zod validation rejects invalid enum before route-level handling.
-  assertEquals(res.status, 422);
+  assertEquals(res.status, 400);
 });
 Deno.test("thread-messages routes - POST /api/threads/:id/messages - accepts tool role with tool_call_id", async () => {
   /* mocks cleared (no-op in Deno) */ void 0;

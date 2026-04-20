@@ -88,7 +88,7 @@ Deno.test("emitRunUsageEvent - sends a POST /usage request to the durable object
   assertEquals(req.method, "POST");
   assertStringIncludes(req.url, "/usage");
   assertEquals(req.headers.get("Content-Type"), "application/json");
-  assertEquals(req.headers.get("X-Takos-Internal"), "1");
+  assertEquals(req.headers.get("X-Takos-Internal-Marker"), "1");
 
   const body = await req.json() as Record<string, unknown>;
   assertEquals(body.runId, "run-123");

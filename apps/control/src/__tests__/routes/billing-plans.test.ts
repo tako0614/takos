@@ -12,7 +12,7 @@ import type {
   CreateCheckoutInput,
   ListInvoicesInput,
   NormalizedInvoice,
-  PaymentProvider,
+  PaymentProcessor,
 } from "@/services/billing/billing";
 
 const billingMocks = {
@@ -39,20 +39,29 @@ const billingMocks = {
   ),
 };
 
-interface ProviderMock {
-  createCheckoutSession: (input: CreateCheckoutInput) => Promise<CheckoutSessionResult>;
+interface ProcessorMock {
+  createCheckoutSession: (
+    input: CreateCheckoutInput,
+  ) => Promise<CheckoutSessionResult>;
   createPortalSession: (input: unknown) => Promise<{ url: string }>;
-  retrieveCheckoutSession: (sessionId: string) => Promise<CompletedCheckoutSession>;
-  listInvoices: (input: ListInvoicesInput) => Promise<{ invoices: NormalizedInvoice[]; hasMore: boolean }>;
+  retrieveCheckoutSession: (
+    sessionId: string,
+  ) => Promise<CompletedCheckoutSession>;
+  listInvoices: (
+    input: ListInvoicesInput,
+  ) => Promise<{ invoices: NormalizedInvoice[]; hasMore: boolean }>;
   retrieveInvoice: (invoiceId: string) => Promise<NormalizedInvoice>;
   sendInvoice: (invoiceId: string) => Promise<void>;
-  parseWebhook: (payload: string, signature: string) => Promise<BillingWebhookEvent>;
+  parseWebhook: (
+    payload: string,
+    signature: string,
+  ) => Promise<BillingWebhookEvent>;
   isTrustedPdfUrl: (url: URL) => boolean;
 }
 
-let providerMock: ProviderMock;
+let processorMock: ProcessorMock;
 
-function newProviderMock(): ProviderMock {
+function newProcessorMock(): ProcessorMock {
   return {
     createCheckoutSession: ((..._a: any[]) => undefined) as any,
     createPortalSession: ((..._a: any[]) => undefined) as any,
@@ -123,12 +132,12 @@ function syncBillingRouteDeps() {
     .resolveBillingPlanTier as any;
   billingRouteDeps.WEEKLY_RUNTIME_LIMIT_SECONDS =
     billingMocks.WEEKLY_RUNTIME_LIMIT_SECONDS;
-  billingRouteDeps.resolvePaymentProvider = (() =>
-    ({ name: "stripe", ...providerMock }) as PaymentProvider) as any;
+  billingRouteDeps.resolvePaymentProcessor =
+    (() => ({ name: "stripe", ...processorMock }) as PaymentProcessor) as any;
 }
 
 Deno.test("billing plan management routes - GET /api/billing returns billing mode and available actions", async () => {
-  providerMock = newProviderMock();
+  processorMock = newProcessorMock();
   dbMocks.getDb = (() => ({
     billingAccount: {
       update: async () => undefined,
@@ -148,9 +157,9 @@ Deno.test("billing plan management routes - GET /api/billing returns billing mod
     },
     balanceCents: 420,
     status: "active",
-    providerName: "stripe",
-    providerCustomerId: "cus_1",
-    providerSubscriptionId: null,
+    processorName: "stripe",
+    processorCustomerId: "cus_1",
+    processorSubscriptionId: null,
     subscriptionPeriodEnd: null,
   })) as any;
   syncBillingRouteDeps();
@@ -207,17 +216,17 @@ Deno.test("billing plan management routes - GET /api/billing returns billing mod
 });
 
 Deno.test("billing plan management routes - POST /api/billing/subscribe uses the plus subscription price", async () => {
-  providerMock = newProviderMock();
+  processorMock = newProcessorMock();
   dbMocks.getDb = (() => ({})) as any;
   billingMocks.getOrCreateBillingAccount = (async () => ({
-    providerCustomerId: "cus_1",
-    providerSubscriptionId: null,
+    processorCustomerId: "cus_1",
+    processorSubscriptionId: null,
   })) as any;
   const checkoutSpy = spy(async (_input: CreateCheckoutInput) => ({
     url: "https://stripe.test/checkout",
     sessionId: "cs_1",
   }));
-  providerMock.createCheckoutSession = checkoutSpy as any;
+  processorMock.createCheckoutSession = checkoutSpy as any;
   syncBillingRouteDeps();
 
   const app = createApp(createUser());
@@ -234,18 +243,18 @@ Deno.test("billing plan management routes - POST /api/billing/subscribe uses the
 
   assertEquals(res.status, 200);
   const checkoutCall = checkoutSpy.calls[0]?.args[0];
-  assertEquals(checkoutCall?.providerPriceId, "price_plus");
+  assertEquals(checkoutCall?.priceId, "price_plus");
   assertEquals(checkoutCall?.mode, "subscription");
   assertEquals(checkoutCall?.metadata, { purchase_kind: "plus_subscription" });
 });
 
 Deno.test("billing plan management routes - POST /api/billing/credits/checkout rejects when plus is active", async () => {
-  providerMock = newProviderMock();
+  processorMock = newProcessorMock();
   dbMocks.getDb = (() => ({})) as any;
   billingMocks.getOrCreateBillingAccount = (async () => ({
     planId: "plan_plus",
-    providerSubscriptionId: "sub_1",
-    providerCustomerId: "cus_1",
+    processorSubscriptionId: "sub_1",
+    processorCustomerId: "cus_1",
   })) as any;
   syncBillingRouteDeps();
 
@@ -281,18 +290,18 @@ Deno.test("billing plan management routes - POST /api/billing/credits/checkout r
 });
 
 Deno.test("billing plan management routes - POST /api/billing/credits/checkout uses the selected top-up pack", async () => {
-  providerMock = newProviderMock();
+  processorMock = newProcessorMock();
   dbMocks.getDb = (() => ({})) as any;
   billingMocks.getOrCreateBillingAccount = (async () => ({
     planId: "plan_free",
-    providerSubscriptionId: null,
-    providerCustomerId: "cus_1",
+    processorSubscriptionId: null,
+    processorCustomerId: "cus_1",
   })) as any;
   const topupSpy = spy(async (_input: CreateCheckoutInput) => ({
     url: "https://stripe.test/topup",
     sessionId: "cs_topup",
   }));
-  providerMock.createCheckoutSession = topupSpy as any;
+  processorMock.createCheckoutSession = topupSpy as any;
   syncBillingRouteDeps();
 
   const app = createApp(createUser());
@@ -328,7 +337,7 @@ Deno.test("billing plan management routes - POST /api/billing/credits/checkout u
 
   assertEquals(res.status, 200);
   const topupCall = topupSpy.calls[0]?.args[0];
-  assertEquals(topupCall?.providerPriceId, "price_team");
+  assertEquals(topupCall?.priceId, "price_team");
   assertEquals(topupCall?.mode, "one_time");
   assertEquals(topupCall?.metadata, {
     purchase_kind: "pro_topup",
@@ -337,12 +346,12 @@ Deno.test("billing plan management routes - POST /api/billing/credits/checkout u
 });
 
 Deno.test("billing plan management routes - POST /api/billing/credits/checkout rejects unknown pack ids", async () => {
-  providerMock = newProviderMock();
+  processorMock = newProcessorMock();
   dbMocks.getDb = (() => ({})) as any;
   billingMocks.getOrCreateBillingAccount = (async () => ({
     planId: "plan_free",
-    providerSubscriptionId: null,
-    providerCustomerId: null,
+    processorSubscriptionId: null,
+    processorCustomerId: null,
   })) as any;
   syncBillingRouteDeps();
 
@@ -378,7 +387,7 @@ Deno.test("billing plan management routes - POST /api/billing/credits/checkout r
 });
 
 Deno.test("billing plan management routes - webhook checkout_completed upgrades plus subscriptions without credits", async () => {
-  providerMock = newProviderMock();
+  processorMock = newProcessorMock();
   const setCalls: unknown[] = [];
   const createDrizzleDbMock = () => {
     let firstSelect = true;
@@ -419,7 +428,7 @@ Deno.test("billing plan management routes - webhook checkout_completed upgrades 
   };
   dbMocks.getDb = (() => createDrizzleDbMock()) as any;
 
-  providerMock.parseWebhook = (async () => ({
+  processorMock.parseWebhook = (async () => ({
     kind: "checkout_completed",
     eventId: "evt_plus_1",
     session: {
@@ -434,7 +443,7 @@ Deno.test("billing plan management routes - webhook checkout_completed upgrades 
       },
     },
   } as BillingWebhookEvent)) as any;
-  providerMock.retrieveCheckoutSession = (async () => ({
+  processorMock.retrieveCheckoutSession = (async () => ({
     sessionId: "cs_1",
     customerId: "cus_1",
     subscriptionId: "sub_1",
@@ -448,9 +457,9 @@ Deno.test("billing plan management routes - webhook checkout_completed upgrades 
   billingMocks.getOrCreateBillingAccount = (async () => ({
     id: "acct-1",
     planId: "plan_free",
-    providerName: "stripe",
-    providerCustomerId: null,
-    providerSubscriptionId: null,
+    processorName: "stripe",
+    processorCustomerId: null,
+    processorSubscriptionId: null,
   })) as any;
   syncBillingRouteDeps();
 
@@ -474,9 +483,9 @@ Deno.test("billing plan management routes - webhook checkout_completed upgrades 
   assertEquals(setCalls.length, 1);
   const plusUpdate = setCalls[0] as Record<string, unknown>;
   assertEquals(plusUpdate.planId, "plan_plus");
-  assertEquals(plusUpdate.providerCustomerId, "cus_1");
-  assertEquals(plusUpdate.providerSubscriptionId, "sub_1");
-  assertEquals(plusUpdate.providerName, "stripe");
+  assertEquals(plusUpdate.processorCustomerId, "cus_1");
+  assertEquals(plusUpdate.processorSubscriptionId, "sub_1");
+  assertEquals(plusUpdate.processorName, "stripe");
   assertEquals(typeof plusUpdate.subscriptionStartedAt, "string");
   assertEquals(plusUpdate.subscriptionPeriodEnd, null);
   assertEquals(typeof plusUpdate.updatedAt, "string");
@@ -484,7 +493,7 @@ Deno.test("billing plan management routes - webhook checkout_completed upgrades 
 });
 
 Deno.test("billing plan management routes - webhook checkout_completed tops up pro credits and switches to payg", async () => {
-  providerMock = newProviderMock();
+  processorMock = newProcessorMock();
   const setCalls: unknown[] = [];
   const createDrizzleDbMock = () => {
     let firstSelect = true;
@@ -521,7 +530,7 @@ Deno.test("billing plan management routes - webhook checkout_completed tops up p
   };
   dbMocks.getDb = (() => createDrizzleDbMock()) as any;
 
-  providerMock.parseWebhook = (async () => ({
+  processorMock.parseWebhook = (async () => ({
     kind: "checkout_completed",
     eventId: "evt_topup_1",
     session: {
@@ -537,7 +546,7 @@ Deno.test("billing plan management routes - webhook checkout_completed tops up p
       },
     },
   } as BillingWebhookEvent)) as any;
-  providerMock.retrieveCheckoutSession = (async () => ({
+  processorMock.retrieveCheckoutSession = (async () => ({
     sessionId: "cs_2",
     customerId: "cus_1",
     subscriptionId: null,
@@ -552,9 +561,9 @@ Deno.test("billing plan management routes - webhook checkout_completed tops up p
   billingMocks.getOrCreateBillingAccount = (async () => ({
     id: "acct-1",
     planId: "plan_free",
-    providerName: "stripe",
-    providerCustomerId: null,
-    providerSubscriptionId: null,
+    processorName: "stripe",
+    processorCustomerId: null,
+    processorSubscriptionId: null,
   })) as any;
   // Reset addCredits spy
   billingMocks.addCredits = spy((..._args: any[]) => undefined) as any;
@@ -589,8 +598,8 @@ Deno.test("billing plan management routes - webhook checkout_completed tops up p
   assertEquals(setCalls.length, 1);
   const topupUpdate = setCalls[0] as Record<string, unknown>;
   assertEquals(topupUpdate.planId, "plan_payg");
-  assertEquals(topupUpdate.providerCustomerId, "cus_1");
-  assertEquals(topupUpdate.providerName, "stripe");
+  assertEquals(topupUpdate.processorCustomerId, "cus_1");
+  assertEquals(topupUpdate.processorName, "stripe");
   assertEquals(typeof topupUpdate.updatedAt, "string");
   assertEquals(
     billingMocks.addCredits.calls[0]?.args.slice(1),
@@ -603,7 +612,7 @@ Deno.test("billing plan management routes - webhook checkout_completed tops up p
 });
 
 Deno.test("billing plan management routes - subscription cancellation falls back to payg when balance remains", async () => {
-  providerMock = newProviderMock();
+  processorMock = newProcessorMock();
   const setCalls: unknown[] = [];
   // The webhook handler calls getDb twice (once for idempotency dedup, once
   // for the account lookup). The mock must persist `selectCount` across both
@@ -621,7 +630,7 @@ Deno.test("billing plan management routes - subscription cancellation falls back
             return {
               id: "acct-1",
               balanceCents: 120,
-              providerCustomerId: "cus_1",
+              processorCustomerId: "cus_1",
             };
           },
         }),
@@ -645,7 +654,7 @@ Deno.test("billing plan management routes - subscription cancellation falls back
   };
   dbMocks.getDb = (() => drizzleMock) as any;
 
-  providerMock.parseWebhook = (async () => ({
+  processorMock.parseWebhook = (async () => ({
     kind: "subscription_canceled",
     eventId: "evt_cancel_1",
     customerId: "cus_1",
@@ -672,7 +681,7 @@ Deno.test("billing plan management routes - subscription cancellation falls back
   assertEquals(setCalls.length, 1);
   const deletionUpdate = setCalls[0] as Record<string, unknown>;
   assertEquals(deletionUpdate.planId, "plan_payg");
-  assertEquals(deletionUpdate.providerSubscriptionId, null);
+  assertEquals(deletionUpdate.processorSubscriptionId, null);
   assertEquals(deletionUpdate.subscriptionStartedAt, null);
   assertEquals(deletionUpdate.subscriptionPeriodEnd, null);
   assertEquals(typeof deletionUpdate.updatedAt, "string");

@@ -1,109 +1,116 @@
-import { BUILTIN_TOOLS, getBuiltinTool } from '@/tools/builtin';
+import { CUSTOM_TOOLS, getCustomTool } from "@/tools/custom";
 import {
   canRoleAccessTool,
   filterToolsForRole,
   getToolPolicyMetadata,
-  validateBuiltinToolPolicies,
-} from '@/tools/tool-policy';
-import { getRequiredCapabilitiesForTool } from '@/tools/capabilities';
+  validateCustomToolPolicies,
+} from "@/tools/tool-policy";
+import { getRequiredCapabilitiesForTool } from "@/tools/capabilities";
 
+import { assert, assertEquals, assertObjectMatch } from "jsr:@std/assert";
 
-import { assertEquals, assert, assertObjectMatch } from 'jsr:@std/assert';
+Deno.test("tool-policy - validates Takos-managed space policy metadata", () => {
+  assertEquals(validateCustomToolPolicies(CUSTOM_TOOLS), []);
+});
+Deno.test("tool-policy - enforces service delete access policy", () => {
+  const serviceDelete = getCustomTool("service_delete");
 
-  Deno.test('tool-policy - validates built-in workspace policy metadata', () => {
-  assertEquals(validateBuiltinToolPolicies(BUILTIN_TOOLS), []);
-})
-  Deno.test('tool-policy - enforces service delete access policy', () => {
-  const serviceDelete = getBuiltinTool('service_delete');
+  assert(serviceDelete !== undefined);
 
-    assert(serviceDelete !== undefined);
+  assertEquals(canRoleAccessTool("editor", serviceDelete!), false);
+  assertEquals(canRoleAccessTool("owner", serviceDelete!), true);
+});
+Deno.test("tool-policy - enforces deploy_frontend access policy", () => {
+  const deployFrontend = getCustomTool("deploy_frontend");
 
-    assertEquals(canRoleAccessTool('editor', serviceDelete!), false);
-    assertEquals(canRoleAccessTool('owner', serviceDelete!), true);
-})
-  Deno.test('tool-policy - enforces deploy_frontend access policy', () => {
-  const deployFrontend = getBuiltinTool('deploy_frontend');
+  assert(deployFrontend !== undefined);
 
-    assert(deployFrontend !== undefined);
-
-    assertEquals(canRoleAccessTool('editor', deployFrontend!), false);
-    assertEquals(canRoleAccessTool('admin', deployFrontend!), true);
-})
-  Deno.test('tool-policy - filters workspace-mapped tools by workspace role', () => {
+  assertEquals(canRoleAccessTool("editor", deployFrontend!), false);
+  assertEquals(canRoleAccessTool("admin", deployFrontend!), true);
+});
+Deno.test("tool-policy - filters space-mapped tools by space role", () => {
   const tools = [
-      getBuiltinTool('service_list')!,
-      getBuiltinTool('service_delete')!,
-      getBuiltinTool('skill_list')!,
-      getBuiltinTool('skill_update')!,
-    ];
+    getCustomTool("service_list")!,
+    getCustomTool("service_delete")!,
+    getCustomTool("skill_list")!,
+    getCustomTool("skill_update")!,
+  ];
 
-    assertEquals(filterToolsForRole(tools, 'viewer').map((tool) => tool.name), [
-      'service_list',
-      'skill_list',
-    ]);
-    assertEquals(filterToolsForRole(tools, 'admin').map((tool) => tool.name), [
-      'service_list',
-      'service_delete',
-      'skill_list',
-      'skill_update',
-    ]);
-})
-  Deno.test('tool-policy - maps service lifecycle tools to workspace operations', () => {
-  assertObjectMatch(getToolPolicyMetadata('service_delete'), {
-      operation_id: 'service.delete',
-    });
-})
-  Deno.test('tool-policy - maps repository ownership tools to workspace operations', () => {
-  assertObjectMatch(getToolPolicyMetadata('create_repository'), {
-      operation_id: 'repo.create',
-    });
-    assertObjectMatch(getToolPolicyMetadata('repo_fork'), {
-      operation_id: 'repo.fork',
-    });
-})
-  Deno.test('tool-policy - hides repo ownership tools from viewers', () => {
+  assertEquals(filterToolsForRole(tools, "viewer").map((tool) => tool.name), [
+    "service_list",
+    "skill_list",
+  ]);
+  assertEquals(filterToolsForRole(tools, "admin").map((tool) => tool.name), [
+    "service_list",
+    "service_delete",
+    "skill_list",
+    "skill_update",
+  ]);
+});
+Deno.test("tool-policy - maps service lifecycle tools to space operations", () => {
+  assertObjectMatch(getToolPolicyMetadata("service_delete"), {
+    operation_id: "service.delete",
+  });
+});
+Deno.test("tool-policy - maps repository ownership tools to space operations", () => {
+  assertObjectMatch(getToolPolicyMetadata("create_repository"), {
+    operation_id: "repo.create",
+  });
+  assertObjectMatch(getToolPolicyMetadata("repo_fork"), {
+    operation_id: "repo.fork",
+  });
+});
+Deno.test("tool-policy - hides repo ownership tools from viewers", () => {
   const tools = [
-      getBuiltinTool('create_repository')!,
-      getBuiltinTool('repo_fork')!,
-      getBuiltinTool('store_search')!,
-    ];
+    getCustomTool("create_repository")!,
+    getCustomTool("repo_fork")!,
+    getCustomTool("store_search")!,
+  ];
 
-    assertEquals(filterToolsForRole(tools, 'viewer').map((tool) => tool.name), [
-      'store_search',
-    ]);
-    assertEquals(filterToolsForRole(tools, 'editor').map((tool) => tool.name), [
-      'create_repository',
-      'repo_fork',
-      'store_search',
-    ]);
-})
-  Deno.test('tool-policy - maps skill introspection helpers to workspace operations', () => {
-  assertObjectMatch(getToolPolicyMetadata('skill_catalog'), {
-      operation_id: 'skill.catalog',
-    });
-    assertObjectMatch(getToolPolicyMetadata('skill_describe'), {
-      operation_id: 'skill.describe',
-    });
-})
-  Deno.test('tool-policy - exposes skill introspection helpers to viewers', () => {
+  assertEquals(filterToolsForRole(tools, "viewer").map((tool) => tool.name), [
+    "store_search",
+  ]);
+  assertEquals(filterToolsForRole(tools, "editor").map((tool) => tool.name), [
+    "create_repository",
+    "repo_fork",
+    "store_search",
+  ]);
+});
+Deno.test("tool-policy - maps skill introspection helpers to space operations", () => {
+  assertObjectMatch(getToolPolicyMetadata("skill_catalog"), {
+    operation_id: "skill.catalog",
+  });
+  assertObjectMatch(getToolPolicyMetadata("skill_describe"), {
+    operation_id: "skill.describe",
+  });
+});
+Deno.test("tool-policy - exposes skill introspection helpers to viewers", () => {
   const tools = [
-      getBuiltinTool('skill_catalog')!,
-      getBuiltinTool('skill_describe')!,
-      getBuiltinTool('skill_delete')!,
-    ];
+    getCustomTool("skill_catalog")!,
+    getCustomTool("skill_describe")!,
+    getCustomTool("skill_delete")!,
+  ];
 
-    assertEquals(filterToolsForRole(tools, 'viewer').map((tool) => tool.name), [
-      'skill_catalog',
-      'skill_describe',
-    ]);
-})
-  Deno.test('tool-policy - maps workspace storage write helpers to storage.write capability', () => {
-  assertEquals(getRequiredCapabilitiesForTool('workspace_files_write'), ['storage.write']);
-    assertEquals(getRequiredCapabilitiesForTool('workspace_files_create'), ['storage.write']);
-    assertEquals(getRequiredCapabilitiesForTool('workspace_files_delete'), ['storage.write']);
-})
-  Deno.test('tool-policy - maps repository ownership helpers to repo capabilities', () => {
-  assertEquals(getRequiredCapabilitiesForTool('create_repository'), ['repo.write']);
-    assertEquals(getRequiredCapabilitiesForTool('repo_fork'), ['repo.write']);
-    assertEquals(getRequiredCapabilitiesForTool('repo_switch'), ['repo.read']);
-})
+  assertEquals(filterToolsForRole(tools, "viewer").map((tool) => tool.name), [
+    "skill_catalog",
+    "skill_describe",
+  ]);
+});
+Deno.test("tool-policy - maps space storage write helpers to storage.write capability", () => {
+  assertEquals(getRequiredCapabilitiesForTool("space_files_write"), [
+    "storage.write",
+  ]);
+  assertEquals(getRequiredCapabilitiesForTool("space_files_create"), [
+    "storage.write",
+  ]);
+  assertEquals(getRequiredCapabilitiesForTool("space_files_delete"), [
+    "storage.write",
+  ]);
+});
+Deno.test("tool-policy - maps repository ownership helpers to repo capabilities", () => {
+  assertEquals(getRequiredCapabilitiesForTool("create_repository"), [
+    "repo.write",
+  ]);
+  assertEquals(getRequiredCapabilitiesForTool("repo_fork"), ["repo.write"]);
+  assertEquals(getRequiredCapabilitiesForTool("repo_switch"), ["repo.read"]);
+});

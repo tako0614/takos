@@ -2,7 +2,7 @@ import YAML from "yaml";
 import { computeSHA256 } from "../../../shared/utils/hash.ts";
 import { safeJsonParseOrDefault } from "../../../shared/utils/index.ts";
 import {
-  type AppDeploymentBuildSource,
+  type GroupDeploymentSnapshotBuildSource,
   type AppManifest,
   BUILD_SOURCE_LABELS,
   type BundleDoc,
@@ -12,7 +12,7 @@ import { buildBundleDocs } from "./app-manifest-bundle-docs.ts";
 
 export function appManifestToBundleDocs(
   manifest: AppManifest,
-  buildSources: Map<string, AppDeploymentBuildSource>,
+  buildSources: Map<string, GroupDeploymentSnapshotBuildSource>,
 ): BundleDoc[] {
   return buildBundleDocs(manifest, buildSources);
 }
@@ -97,7 +97,7 @@ export async function buildParsedPackageFromDocs(
 
 export function extractBuildSourcesFromManifestJson(
   manifestJson: string | null | undefined,
-): AppDeploymentBuildSource[] {
+): GroupDeploymentSnapshotBuildSource[] {
   const manifest = safeJsonParseOrDefault<
     {
       objects?: Array<
@@ -138,9 +138,9 @@ export function extractBuildSourcesFromManifestJson(
         ...(labels[BUILD_SOURCE_LABELS.sourceSha]
           ? { source_sha: labels[BUILD_SOURCE_LABELS.sourceSha] }
           : {}),
-      } satisfies AppDeploymentBuildSource;
+      } satisfies GroupDeploymentSnapshotBuildSource;
     })
-    .filter((item): item is AppDeploymentBuildSource => item != null)
+    .filter((item): item is GroupDeploymentSnapshotBuildSource => item != null)
     .sort((left, right) => left.service_name.localeCompare(right.service_name));
 }
 

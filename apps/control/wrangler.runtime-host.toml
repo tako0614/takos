@@ -1,9 +1,11 @@
 # takos-runtime-host Worker configuration
 # Hosts TakosRuntimeContainer (CF Containers sidecar for takos-runtime).
-# Called via RUNTIME_HOST service binding from takos (main worker) and takos-runner.
+# Called via RUNTIME_HOST service binding from takos (main worker) and takos-worker.
 #
 # The runtime container communicates back via /forward/* proxy endpoints on this
-# worker, which proxies to takos-web via service binding. No JWT keys needed.
+# worker, which proxies to takos via service binding. The host passes
+# PLATFORM_PUBLIC_KEY to the container as JWT_PUBLIC_KEY for runtime-service
+# request verification.
 #
 # OSS-safe deployment template. Replace placeholder domains and URLs before
 # deploying.
@@ -18,6 +20,11 @@ enabled = true
 
 [observability.logs]
 head_sampling_rate = 0.1
+
+# Secrets (set via wrangler secret put):
+# - PLATFORM_PUBLIC_KEY: public key matching takos/takos-worker PLATFORM_PRIVATE_KEY.
+# - JWT_PUBLIC_KEY: optional compatibility override; if set, it must match
+#   PLATFORM_PUBLIC_KEY.
 
 # Container DO binding
 [[durable_objects.bindings]]
@@ -38,7 +45,7 @@ image_build_context = "../../.."
 instance_type = "standard-2"
 max_instances = 25
 
-# Service binding to takos-web for proxying container requests
+# Service binding to takos for proxying container requests
 [[services]]
 binding = "TAKOS_WEB"
 service = "takos"

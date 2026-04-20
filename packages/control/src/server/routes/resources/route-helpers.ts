@@ -9,7 +9,7 @@ import {
   toResourceCapability,
 } from "../../../application/services/resources/capabilities.ts";
 
-export const RESOURCE_PROVIDER_VALUES = [
+export const RESOURCE_BACKEND_VALUES = [
   "cloudflare",
   "local",
   "aws",
@@ -17,27 +17,59 @@ export const RESOURCE_PROVIDER_VALUES = [
   "k8s",
 ] as const;
 
-export type ResourceProviderName = (typeof RESOURCE_PROVIDER_VALUES)[number];
+export type ResourceBackendName = (typeof RESOURCE_BACKEND_VALUES)[number];
 
-export function inferResourceProvider(
+function readEnvString(
   env: AuthenticatedRouteEnv["Bindings"],
-): "cloudflare" | "local" {
-  return env.CF_ACCOUNT_ID && env.CF_API_TOKEN ? "cloudflare" : "local";
+  key: string,
+): string | undefined {
+  const value = Reflect.get(env, key);
+  return typeof value === "string" && value.trim().length > 0
+    ? value.trim()
+    : undefined;
 }
 
-export function normalizeResourceProvider(
-  provider: unknown,
-): ResourceProviderName | undefined {
-  if (provider === undefined || provider === null) {
+export function inferResourceBackend(
+  env: AuthenticatedRouteEnv["Bindings"],
+): ResourceBackendName {
+  const configuredBackend = normalizeResourceBackend(
+    readEnvString(env, "TAKOS_RESOURCE_BACKEND"),
+  );
+  if (configuredBackend) return configuredBackend;
+  if (env.CF_ACCOUNT_ID && env.CF_API_TOKEN) return "cloudflare";
+  if (
+    readEnvString(env, "AWS_REGION") ||
+    readEnvString(env, "AWS_ECS_REGION") ||
+    readEnvString(env, "AWS_ECS_CLUSTER_ARN")
+  ) {
+    return "aws";
+  }
+  if (
+    readEnvString(env, "GCP_PROJECT_ID") ||
+    readEnvString(env, "GCP_REGION") ||
+    readEnvString(env, "GCP_CLOUD_RUN_REGION")
+  ) {
+    return "gcp";
+  }
+  if (readEnvString(env, "K8S_NAMESPACE")) {
+    return "k8s";
+  }
+  return "local";
+}
+
+export function normalizeResourceBackend(
+  backend: unknown,
+): ResourceBackendName | undefined {
+  if (backend === undefined || backend === null) {
     return undefined;
   }
 
-  const providerName = typeof provider === "string"
-    ? provider.trim().toLowerCase()
+  const backendName = typeof backend === "string"
+    ? backend.trim().toLowerCase()
     : "";
 
-  return RESOURCE_PROVIDER_VALUES.includes(providerName as ResourceProviderName)
-    ? providerName as ResourceProviderName
+  return RESOURCE_BACKEND_VALUES.includes(backendName as ResourceBackendName)
+    ? backendName as ResourceBackendName
     : undefined;
 }
 
@@ -57,11 +89,11 @@ export function buildProjectedResourceSpec(
       ? config.binding.trim()
       : name.toUpperCase().replace(/-/g, "_");
   switch (canonicalType) {
-    case "d1":
+    case "sql":
       return { type: "d1" as const, binding };
-    case "r2":
+    case "object-store":
       return { type: "r2" as const, binding };
-    case "kv":
+    case "key-value":
       return { type: "kv" as const, binding };
     case "queue":
       return {
@@ -69,7 +101,7 @@ export function buildProjectedResourceSpec(
         binding,
         ...(asObject(config.queue) ? { queue: asObject(config.queue)! } : {}),
       };
-    case "vectorize":
+    case "vector-index":
       return {
         type: "vectorize" as const,
         binding,
@@ -82,7 +114,7 @@ export function buildProjectedResourceSpec(
           }
           : {}),
       };
-    case "analyticsEngine":
+    case "analytics-engine":
       return {
         type: "analyticsEngine" as const,
         binding,
@@ -101,7 +133,7 @@ export function buildProjectedResourceSpec(
           export: String(config.export ?? workflowConfig?.export ?? ""),
         },
       };
-    case "durableObject":
+    case "durable-object":
       return {
         type: "durableObject" as const,
         binding,
@@ -116,7 +148,7 @@ export function buildProjectedResourceSpec(
             : {}),
         },
       };
-    case "secretRef":
+    case "secret":
       return {
         type: "secretRef" as const,
         binding,
@@ -129,7 +161,7 @@ export function buildProjectedResourceSpec(
   }
 }
 
-export function resolveRequestedProviderResourceName(
+export function resolveRequestedBackingResourceName(
   type: string,
   fallbackName: string,
   config?: Record<string, unknown>,

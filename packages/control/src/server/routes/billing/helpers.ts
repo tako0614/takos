@@ -16,12 +16,12 @@ export async function loadBillingAccount(c: BillingRouteContext) {
 
 export async function requirePaymentCustomerId(c: BillingRouteContext) {
   const account = await loadBillingAccount(c);
-  if (!account.providerCustomerId) {
+  if (!account.processorCustomerId) {
     throw new BadRequestError("No payment account found");
   }
   return {
     account,
-    customerId: account.providerCustomerId,
+    customerId: account.processorCustomerId,
   };
 }
 

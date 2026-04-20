@@ -52,6 +52,7 @@ export default defineConfig({
         text: "アプリ構成",
         items: [
           { text: "アプリマニフェスト", link: "/apps/manifest" },
+          { text: "Services", link: "/apps/services" },
           { text: "Containers", link: "/apps/containers" },
           { text: "Workers", link: "/apps/workers" },
           { text: "Routes", link: "/apps/routes" },
@@ -90,10 +91,6 @@ export default defineConfig({
         items: [
           { text: "概要", link: "/architecture/" },
           { text: "Kernel", link: "/architecture/kernel" },
-          {
-            text: "Personal Runtime Proposal",
-            link: "/architecture/personal-runtime",
-          },
           { text: "Deploy System", link: "/architecture/deploy-system" },
           { text: "App Publications", link: "/architecture/app-publications" },
           { text: "Control Plane", link: "/architecture/control-plane" },
@@ -107,11 +104,16 @@ export default defineConfig({
         text: "プラットフォーム",
         items: [
           { text: "Space", link: "/platform/spaces" },
+          { text: "Threads and Runs", link: "/platform/threads-and-runs" },
           { text: "Store", link: "/platform/store" },
           { text: "課金", link: "/platform/billing" },
           { text: "ActivityPub", link: "/platform/activitypub" },
           { text: "Default Groups", link: "/platform/default-apps" },
-          { text: "takos-computer", link: "/platform/takos-computer" },
+          { text: "互換性", link: "/platform/compatibility" },
+          {
+            text: "Resource Governance",
+            link: "/platform/resource-governance",
+          },
           { text: "takos-docs", link: "/platform/takos-docs" },
           { text: "takos-excel", link: "/platform/takos-excel" },
           { text: "takos-slide", link: "/platform/takos-slide" },

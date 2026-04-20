@@ -1,10 +1,13 @@
-import type { AppCompute } from "../source/app-manifest-types.ts";
+import type { AppCompute, AppConsume } from "../source/app-manifest-types.ts";
 import {
+  listServiceConsumes,
+  previewServiceConsumeEnvVars,
   replaceManifestPublications,
   replaceServiceConsumes,
   resolveServiceConsumeEnvVars,
 } from "../platform/service-publications.ts";
 import { ServiceDesiredStateService } from "../platform/worker-desired-state.ts";
+import { resolveLinkedCommonEnvState } from "../platform/env-state-resolution.ts";
 import type { Env } from "../../../shared/types/env.ts";
 import {
   type GroupDesiredState,
@@ -34,24 +37,124 @@ type DesiredEnvVar = { name: string; value: string; secret: boolean };
 
 type DesiredStateService = Pick<
   ServiceDesiredStateService,
-  "replaceLocalEnvVars"
+  "listLocalEnvVars" | "replaceLocalEnvVars"
 >;
+
+export type ManagedWorkloadDesiredStateSnapshot = {
+  spaceId: string;
+  serviceId: string;
+  serviceName: string;
+  consumes: AppConsume[];
+  localEnvVars: Array<{ name: string; value: string; secret: boolean }>;
+};
 
 export type GroupManagedDesiredStateDeps = {
   createDesiredStateService: (env: Env) => DesiredStateService;
+  previewServiceConsumeEnvVars: typeof previewServiceConsumeEnvVars;
   replaceManifestPublications: typeof replaceManifestPublications;
   replaceServiceConsumes: typeof replaceServiceConsumes;
   resolveServiceConsumeEnvVars: typeof resolveServiceConsumeEnvVars;
+  resolveLinkedCommonEnvState: typeof resolveLinkedCommonEnvState;
+};
+
+type ManagedWorkloadDesiredStateHelpers = {
+  createDesiredStateService: (env: Env) => DesiredStateService;
+  listServiceConsumes: typeof listServiceConsumes;
+  replaceServiceConsumes: typeof replaceServiceConsumes;
 };
 
 const defaultGroupManagedDesiredStateDeps: GroupManagedDesiredStateDeps = {
   createDesiredStateService: (env: Env) => new ServiceDesiredStateService(env),
+  previewServiceConsumeEnvVars,
   replaceManifestPublications,
   replaceServiceConsumes,
   resolveServiceConsumeEnvVars,
+  resolveLinkedCommonEnvState,
 };
 
+const defaultManagedWorkloadDesiredStateHelpers:
+  ManagedWorkloadDesiredStateHelpers = {
+    createDesiredStateService: (env: Env) =>
+      new ServiceDesiredStateService(env),
+    listServiceConsumes,
+    replaceServiceConsumes,
+  };
+
 export { materializeRoutes, resolveWorkloadBaseUrl };
+
+export async function captureManagedWorkloadDesiredState(
+  env: Env,
+  params: {
+    spaceId: string;
+    serviceId: string;
+    serviceName: string;
+  },
+  deps: Partial<ManagedWorkloadDesiredStateHelpers> = {},
+): Promise<ManagedWorkloadDesiredStateSnapshot> {
+  const resolvedDeps = {
+    ...defaultManagedWorkloadDesiredStateHelpers,
+    ...deps,
+  };
+  const desiredStateService = resolvedDeps.createDesiredStateService(env);
+  const [consumes, localEnvVars] = await Promise.all([
+    resolvedDeps.listServiceConsumes(env, params.spaceId, params.serviceId),
+    desiredStateService.listLocalEnvVars(params.spaceId, params.serviceId),
+  ]);
+
+  return {
+    spaceId: params.spaceId,
+    serviceId: params.serviceId,
+    serviceName: params.serviceName,
+    consumes,
+    localEnvVars: localEnvVars.map((row) => ({
+      name: row.name,
+      value: row.value,
+      secret: row.secret,
+    })),
+  };
+}
+
+export async function restoreManagedWorkloadDesiredState(
+  env: Env,
+  snapshot: ManagedWorkloadDesiredStateSnapshot,
+  deps: Partial<ManagedWorkloadDesiredStateHelpers> = {},
+): Promise<void> {
+  const resolvedDeps = {
+    ...defaultManagedWorkloadDesiredStateHelpers,
+    ...deps,
+  };
+  const desiredStateService = resolvedDeps.createDesiredStateService(env);
+  const errors: string[] = [];
+
+  try {
+    await resolvedDeps.replaceServiceConsumes(env, {
+      spaceId: snapshot.spaceId,
+      serviceId: snapshot.serviceId,
+      serviceName: snapshot.serviceName,
+      consumes: snapshot.consumes,
+    });
+  } catch (error) {
+    errors.push(
+      error instanceof Error ? error.message : String(error),
+    );
+  }
+
+  try {
+    await desiredStateService.replaceLocalEnvVars({
+      spaceId: snapshot.spaceId,
+      serviceId: snapshot.serviceId,
+      variables: snapshot.localEnvVars,
+    });
+  } catch (error) {
+    errors.push(
+      error instanceof Error ? error.message : String(error),
+    );
+  }
+
+  if (errors.length > 0) {
+    throw new Error(errors.join("; "));
+  }
+}
 
 export async function syncGroupManagedDesiredState(
   env: Env,
@@ -60,6 +163,7 @@ export async function syncGroupManagedDesiredState(
     desiredState: GroupDesiredState;
     observedState: ObservedGroupState;
     resourceRows: unknown[];
+    targetWorkloadNames?: string[];
   },
   deps: Partial<GroupManagedDesiredStateDeps> = {},
 ): Promise<Array<{ name: string; error: string }>> {
@@ -70,6 +174,11 @@ export async function syncGroupManagedDesiredState(
   const desiredStateService = resolvedDeps.createDesiredStateService(env);
   const injectedEnv = buildInjectedEnv(input.desiredState);
   const failures: Array<{ name: string; error: string }> = [];
+  const targetWorkloadNames = input.targetWorkloadNames
+    ? new Set(
+      input.targetWorkloadNames.map((name) => name.trim()).filter(Boolean),
+    )
+    : null;
 
   await resolvedDeps.replaceManifestPublications(env, {
     spaceId: input.spaceId,
@@ -86,8 +195,17 @@ export async function syncGroupManagedDesiredState(
       input.desiredState.workloads,
     )
   ) {
+    if (targetWorkloadNames && !targetWorkloadNames.has(workloadName)) {
+      continue;
+    }
     const observedWorkload = input.observedState.workloads[workloadName];
     if (!observedWorkload) continue;
+
+    const restoreSnapshot = await captureManagedWorkloadDesiredState(env, {
+      spaceId: input.spaceId,
+      serviceId: observedWorkload.serviceId,
+      serviceName: `${input.desiredState.manifest.name}:${workloadName}`,
+    });
 
     try {
       const workloadSpec: AppCompute = desiredWorkload.spec;
@@ -112,6 +230,22 @@ export async function syncGroupManagedDesiredState(
           value: entry.value,
           secret: entry.secret,
         });
+      }
+
+      const consumeEnvPreview = await resolvedDeps.previewServiceConsumeEnvVars(
+        env,
+        {
+          spaceId: input.spaceId,
+          consumes: workloadSpec.consume,
+        },
+      );
+      for (const entry of consumeEnvPreview) {
+        const key = normalizeEnvName(entry.name);
+        if (localEnvMap.has(key)) {
+          throw new Error(
+            `consume output resolves env '${key}' which already exists in compute '${workloadName}'`,
+          );
+        }
       }
 
       await resolvedDeps.replaceServiceConsumes(env, {
@@ -140,12 +274,50 @@ export async function syncGroupManagedDesiredState(
         });
       }
 
+      const linkedCommonEnvState = await resolvedDeps
+        .resolveLinkedCommonEnvState(
+          env,
+          input.spaceId,
+          observedWorkload.serviceId,
+        );
+      for (const entry of linkedCommonEnvState.envBindings) {
+        const key = normalizeEnvName(entry.name);
+        if (localEnvMap.has(key)) {
+          throw new Error(
+            `common env '${key}' already exists in compute '${workloadName}'`,
+          );
+        }
+        localEnvMap.set(key, {
+          name: entry.name,
+          value: entry.text ?? "",
+          secret: entry.type === "secret_text",
+        });
+      }
+
       await desiredStateService.replaceLocalEnvVars({
         spaceId: input.spaceId,
         serviceId: observedWorkload.serviceId,
         variables: Array.from(localEnvMap.values()),
       });
     } catch (error) {
+      try {
+        await restoreManagedWorkloadDesiredState(env, restoreSnapshot, {
+          createDesiredStateService: resolvedDeps.createDesiredStateService,
+          replaceServiceConsumes: resolvedDeps.replaceServiceConsumes,
+        });
+      } catch (restoreError) {
+        failures.push({
+          name: workloadName,
+          error: `${
+            error instanceof Error ? error.message : String(error)
+          }; rollback failed: ${
+            restoreError instanceof Error
+              ? restoreError.message
+              : String(restoreError)
+          }`,
+        });
+        continue;
+      }
       failures.push({
         name: workloadName,
         error: error instanceof Error ? error.message : String(error),

@@ -24,6 +24,11 @@ function createBatch(queue: string, messages: MockMessage[]) {
 }
 
 const minimalEnv = { DB: {} } as const;
+const deploymentEnv = {
+  DB: {},
+  ENCRYPTION_KEY: "test-key",
+  HOSTNAME_ROUTING: {},
+} as const;
 
 async function loadWorkflowRunner(tag: string) {
   return (await import(
@@ -75,7 +80,7 @@ Deno.test("workflow-runner queue handler - takos-deployment-jobs queue acks inva
   const msg = createMessage({ invalid: true });
   const batch = createBatch("takos-deployment-jobs", [msg]);
 
-  await workflowRunner.queue(batch as any, minimalEnv as any);
+  await workflowRunner.queue(batch as any, deploymentEnv as any);
 
   assertSpyCalls(msg.ack, 1);
   assertSpyCalls(msg.retry, 0);
@@ -100,7 +105,7 @@ Deno.test("workflow-runner queue handler - deployment queue accepts stage suffix
   const msg = createMessage({ invalid: true });
   const batch = createBatch("takos-deployment-jobs-staging", [msg]);
 
-  await workflowRunner.queue(batch as any, minimalEnv as any);
+  await workflowRunner.queue(batch as any, deploymentEnv as any);
 
   assertSpyCalls(msg.ack, 1);
   assertSpyCalls(msg.retry, 0);

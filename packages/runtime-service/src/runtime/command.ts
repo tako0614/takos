@@ -1,8 +1,8 @@
-import { spawn } from 'node:child_process';
-import type { Readable } from 'node:stream';
-import { pushLog } from './logging.ts';
-import { filterSafeEnv } from '../utils/sandbox-env.ts';
-import { gracefulKill } from '../utils/process-kill.ts';
+import { spawn } from "node:child_process";
+import type { Readable } from "node:stream";
+import { pushLog } from "./logging.ts";
+import { filterSafeEnv } from "../utils/sandbox-env.ts";
+import { gracefulKill } from "../utils/process-kill.ts";
 import type { Buffer } from "node:buffer";
 
 const DEFAULT_COMMAND_TIMEOUT_MS = 60 * 60 * 1000;
@@ -13,17 +13,33 @@ const MAX_STDOUT_BUFFER_BYTES = 50 * 1024 * 1024;
 const MAX_STDERR_BUFFER_BYTES = 10 * 1024 * 1024;
 
 const DENIED_ENV_KEYS = new Set([
-  'NODE_OPTIONS', 'LD_PRELOAD', 'LD_LIBRARY_PATH', 'DYLD_INSERT_LIBRARIES',
-  'BASH_ENV', 'ENV', 'CDPATH', 'PYTHONSTARTUP', 'PERL5OPT', 'RUBYOPT',
-  'PYTHONPATH', 'GIT_ASKPASS', 'SSH_ASKPASS', 'PROMPT_COMMAND',
-  'BASH_FUNC_PERCENT_AT_PERCENT', 'BASHOPTS', 'SHELLOPTS',
-  'PS1', 'PS2', 'PS3', 'PS4',
+  "NODE_OPTIONS",
+  "LD_PRELOAD",
+  "LD_LIBRARY_PATH",
+  "DYLD_INSERT_LIBRARIES",
+  "BASH_ENV",
+  "ENV",
+  "CDPATH",
+  "PYTHONSTARTUP",
+  "PERL5OPT",
+  "RUBYOPT",
+  "PYTHONPATH",
+  "GIT_ASKPASS",
+  "SSH_ASKPASS",
+  "PROMPT_COMMAND",
+  "BASH_FUNC_PERCENT_AT_PERCENT",
+  "BASHOPTS",
+  "SHELLOPTS",
+  "PS1",
+  "PS2",
+  "PS3",
+  "PS4",
 ]);
 
 class CommandTimeoutError extends Error {
   constructor(command: string, timeoutMs: number) {
     super(`Command '${command}' timed out after ${timeoutMs}ms`);
-    this.name = 'CommandTimeoutError';
+    this.name = "CommandTimeoutError";
   }
 }
 
@@ -31,49 +47,62 @@ function pipeStreamToLogs(
   stream: Readable,
   logs: string[],
   maxBytes: number,
-  streamName: string
+  streamName: string,
 ): void {
   let totalBytes = 0;
   let truncated = false;
 
-  stream.on('data', (data: Buffer) => {
+  stream.on("data", (data: Buffer) => {
     totalBytes += data.length;
     if (totalBytes > maxBytes) {
       if (!truncated) {
         truncated = true;
-        pushLog(logs, `[WARNING] ${streamName} exceeded ${maxBytes} bytes, further output truncated`);
+        pushLog(
+          logs,
+          `[WARNING] ${streamName} exceeded ${maxBytes} bytes, further output truncated`,
+        );
       }
       return;
     }
-    for (const line of data.toString('utf-8').split('\n')) {
+    for (const line of data.toString("utf-8").split("\n")) {
       if (line.trim().length > 0) {
         pushLog(logs, line);
       }
     }
   });
-  stream.on('error', (err) => {
+  stream.on("error", (err) => {
     pushLog(logs, `[WARNING] ${streamName} stream error: ${err.message}`);
   });
 }
 
-function sanitizeUserEnv(userEnv: Record<string, string | undefined>): Record<string, string | undefined> {
+function sanitizeUserEnv(
+  userEnv: Record<string, string | undefined>,
+): Record<string, string | undefined> {
   const sanitized = { ...userEnv };
   for (const key of Object.keys(sanitized)) {
-    if (DENIED_ENV_KEYS.has(key) || key.startsWith('BASH_FUNC_')) {
+    if (DENIED_ENV_KEYS.has(key) || key.startsWith("BASH_FUNC_")) {
       delete sanitized[key];
     }
   }
-  delete sanitized['PATH'];
+  delete sanitized["PATH"];
   return sanitized;
 }
 
 export function runCommand(
   command: string,
   args: string[],
-  options: { cwd: string; logs: string[]; env?: NodeJS.ProcessEnv; timeoutMs?: number }
+  options: {
+    cwd: string;
+    logs: string[];
+    env?: NodeJS.ProcessEnv;
+    timeoutMs?: number;
+  },
 ): Promise<number> {
   return new Promise((resolve, reject) => {
-    const timeoutMs = Math.min(options.timeoutMs ?? DEFAULT_COMMAND_TIMEOUT_MS, MAX_COMMAND_TIMEOUT_MS);
+    const timeoutMs = Math.min(
+      options.timeoutMs ?? DEFAULT_COMMAND_TIMEOUT_MS,
+      MAX_COMMAND_TIMEOUT_MS,
+    );
 
     let isTimedOut = false;
 
@@ -85,31 +114,45 @@ export function runCommand(
 
     const child = spawn(command, args, {
       cwd: options.cwd,
-      stdio: ['ignore', 'pipe', 'pipe'],
+      stdio: ["ignore", "pipe", "pipe"],
       env: childEnv,
+      detached: process.platform !== "win32",
     });
 
     let forceKillHandle: ReturnType<typeof setTimeout> | undefined;
     const timeoutHandle = setTimeout(() => {
       isTimedOut = true;
-      pushLog(options.logs, `[TIMEOUT] Command timed out after ${timeoutMs}ms, killing process...`);
+      pushLog(
+        options.logs,
+        `[TIMEOUT] Command timed out after ${timeoutMs}ms, killing process...`,
+      );
       forceKillHandle = gracefulKill(child);
     }, timeoutMs);
 
-    pipeStreamToLogs(child.stdout, options.logs, MAX_STDOUT_BUFFER_BYTES, 'stdout');
-    pipeStreamToLogs(child.stderr, options.logs, MAX_STDERR_BUFFER_BYTES, 'stderr');
+    pipeStreamToLogs(
+      child.stdout,
+      options.logs,
+      MAX_STDOUT_BUFFER_BYTES,
+      "stdout",
+    );
+    pipeStreamToLogs(
+      child.stderr,
+      options.logs,
+      MAX_STDERR_BUFFER_BYTES,
+      "stderr",
+    );
 
     function cleanup(): void {
       clearTimeout(timeoutHandle);
       if (forceKillHandle) clearTimeout(forceKillHandle);
     }
 
-    child.on('error', (err) => {
+    child.on("error", (err) => {
       cleanup();
       reject(err);
     });
 
-    child.on('close', (code, signal) => {
+    child.on("close", (code, signal) => {
       cleanup();
       if (isTimedOut) {
         reject(new CommandTimeoutError(command, timeoutMs));

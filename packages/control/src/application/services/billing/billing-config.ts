@@ -7,15 +7,18 @@
  * OSS / self-hosted deployments.
  */
 
-import { WEEKLY_RUNTIME_LIMIT_SECONDS, WEEKLY_RUNTIME_WINDOW_DAYS } from './billing-types.ts';
-import type { MeterType } from './billing-types.ts';
+import {
+  WEEKLY_RUNTIME_LIMIT_SECONDS,
+  WEEKLY_RUNTIME_WINDOW_DAYS,
+} from "./billing-types.ts";
+import type { MeterType } from "./billing-types.ts";
 
 // ---------------------------------------------------------------------------
 // Core toggle
 // ---------------------------------------------------------------------------
 
 export function isBillingEnabled(env: { BILLING_ENABLED?: string }): boolean {
-  return env.BILLING_ENABLED === 'true';
+  return env.BILLING_ENABLED === "true";
 }
 
 // ---------------------------------------------------------------------------
@@ -36,9 +39,11 @@ export function resolveBillingConfig(env: {
   return {
     enabled: isBillingEnabled(env),
     weeklyRuntimeLimitSeconds:
-      parsePositiveInt(env.BILLING_WEEKLY_RUNTIME_LIMIT_SECONDS) ?? WEEKLY_RUNTIME_LIMIT_SECONDS,
+      parsePositiveInt(env.BILLING_WEEKLY_RUNTIME_LIMIT_SECONDS) ??
+        WEEKLY_RUNTIME_LIMIT_SECONDS,
     weeklyRuntimeWindowDays:
-      parsePositiveInt(env.BILLING_WEEKLY_RUNTIME_WINDOW_DAYS) ?? WEEKLY_RUNTIME_WINDOW_DAYS,
+      parsePositiveInt(env.BILLING_WEEKLY_RUNTIME_WINDOW_DAYS) ??
+        WEEKLY_RUNTIME_WINDOW_DAYS,
   };
 }
 
@@ -60,7 +65,7 @@ export interface BillingPlanConfig {
 
 /**
  * Parse BILLING_PLANS_JSON into a validated plan catalog.
- * Returns null when the env var is unset (use built-in defaults).
+ * Returns null when the env var is unset (use the default catalog).
  * Throws on malformed JSON so misconfigurations surface early.
  */
 export function resolveCustomBillingPlans(env: {
@@ -73,31 +78,39 @@ export function resolveCustomBillingPlans(env: {
   try {
     parsed = JSON.parse(raw);
   } catch {
-    throw new Error('BILLING_PLANS_JSON is invalid JSON');
+    throw new Error("BILLING_PLANS_JSON is invalid JSON");
   }
 
   if (!isRecord(parsed)) {
-    throw new Error('BILLING_PLANS_JSON must be an object with plans, quotas, and rates');
+    throw new Error(
+      "BILLING_PLANS_JSON must be an object with plans, quotas, and rates",
+    );
   }
 
   const { plans, quotas, rates } = parsed as Record<string, unknown>;
 
   if (!Array.isArray(plans) || plans.length === 0) {
-    throw new Error('BILLING_PLANS_JSON.plans must be a non-empty array');
+    throw new Error("BILLING_PLANS_JSON.plans must be a non-empty array");
   }
 
   for (const [i, plan] of plans.entries()) {
-    if (!isRecord(plan)) throw new Error(`BILLING_PLANS_JSON.plans[${i}] must be an object`);
-    if (typeof plan.id !== 'string' || !plan.id) throw new Error(`BILLING_PLANS_JSON.plans[${i}].id is required`);
-    if (typeof plan.name !== 'string' || !plan.name) throw new Error(`BILLING_PLANS_JSON.plans[${i}].name is required`);
+    if (!isRecord(plan)) {
+      throw new Error(`BILLING_PLANS_JSON.plans[${i}] must be an object`);
+    }
+    if (typeof plan.id !== "string" || !plan.id) {
+      throw new Error(`BILLING_PLANS_JSON.plans[${i}].id is required`);
+    }
+    if (typeof plan.name !== "string" || !plan.name) {
+      throw new Error(`BILLING_PLANS_JSON.plans[${i}].name is required`);
+    }
   }
 
   if (!isRecord(quotas)) {
-    throw new Error('BILLING_PLANS_JSON.quotas must be an object');
+    throw new Error("BILLING_PLANS_JSON.quotas must be an object");
   }
 
   if (!isRecord(rates)) {
-    throw new Error('BILLING_PLANS_JSON.rates must be an object');
+    throw new Error("BILLING_PLANS_JSON.rates must be an object");
   }
 
   return {
@@ -105,7 +118,7 @@ export function resolveCustomBillingPlans(env: {
       id: p.id as string,
       name: p.name as string,
       displayName: (p.displayName as string) || (p.name as string),
-      description: (p.description as string) || '',
+      description: (p.description as string) || "",
       isDefault: Boolean(p.isDefault),
     })),
     quotas: quotas as Record<string, Partial<Record<MeterType, number>>>,
@@ -124,5 +137,5 @@ function parsePositiveInt(value: string | undefined): number | null {
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null && !Array.isArray(value);
+  return typeof value === "object" && value !== null && !Array.isArray(value);
 }

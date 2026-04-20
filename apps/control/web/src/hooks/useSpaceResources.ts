@@ -1,15 +1,15 @@
-import { createSignal, onMount } from 'solid-js';
-import { rpc, rpcJson, rpcPath } from '../lib/rpc.ts';
-import { useConfirmDialog } from '../store/confirm-dialog.ts';
-import { useI18n } from '../store/i18n.ts';
-import { useToast } from '../store/toast.ts';
-import type { Resource } from '../types/index.ts';
+import { createSignal, onMount } from "solid-js";
+import { rpc, rpcJson, rpcPath } from "../lib/rpc.ts";
+import { useConfirmDialog } from "../store/confirm-dialog.ts";
+import { useI18n } from "../store/i18n.ts";
+import { useToast } from "../store/toast.ts";
+import type { Resource } from "../types/index.ts";
 
 function isYurucommuResource(resource: Resource): boolean {
   if (!resource.metadata) return false;
   try {
     const metadata = JSON.parse(resource.metadata) as { source?: string };
-    return metadata?.source === 'yurucommu';
+    return metadata?.source === "yurucommu";
   } catch {
     return false;
   }
@@ -22,19 +22,25 @@ export function useSpaceResources(spaceId: string | null) {
 
   const [resources, setResources] = createSignal<Resource[]>([]);
   const [loadingResources, setLoadingResources] = createSignal(true);
-  const [showCreateResourceModal, setShowCreateResourceModal] = createSignal(false);
-  const [newResourceName, setNewResourceName] = createSignal('');
-  const [newResourceType, setNewResourceType] = createSignal<Resource['type']>('d1');
+  const [showCreateResourceModal, setShowCreateResourceModal] = createSignal(
+    false,
+  );
+  const [newResourceName, setNewResourceName] = createSignal("");
+  const [newResourceType, setNewResourceType] = createSignal<Resource["type"]>(
+    "d1",
+  );
   const [creatingResource, setCreatingResource] = createSignal(false);
 
   const refreshResources = async () => {
     setLoadingResources(true);
     try {
-      const res = await rpcPath(rpc, 'resources').$get({
+      const res = await rpcPath(rpc, "resources").$get({
         param: {},
         query: spaceId ? { space_id: spaceId } : {},
-      }) as Response;
-      const data = await rpcJson<{ resources?: Resource[]; owned?: Resource[]; shared?: Resource[] }>(res);
+      });
+      const data = await rpcJson<
+        { resources?: Resource[]; owned?: Resource[]; shared?: Resource[] }
+      >(res);
       if (data.resources) {
         setResources(data.resources);
       } else {
@@ -55,7 +61,7 @@ export function useSpaceResources(spaceId: string | null) {
     if (!newResourceName().trim()) return false;
     setCreatingResource(true);
     try {
-      const res = await rpcPath(rpc, 'resources').$post({
+      const res = await rpcPath(rpc, "resources").$post({
         param: {},
         json: {
           name: newResourceName().trim(),
@@ -65,12 +71,12 @@ export function useSpaceResources(spaceId: string | null) {
       });
       await rpcJson(res);
       setShowCreateResourceModal(false);
-      setNewResourceName('');
-      showToast('success', t('created'));
+      setNewResourceName("");
+      showToast("success", t("created"));
       await refreshResources();
       return true;
     } catch {
-      showToast('error', t('failedToCreate'));
+      showToast("error", t("failedToCreate"));
       return false;
     } finally {
       setCreatingResource(false);
@@ -78,25 +84,27 @@ export function useSpaceResources(spaceId: string | null) {
   };
 
   const deleteResource = async (resource: Resource) => {
-    const baseMessage = t('confirmDeleteResource');
+    const baseMessage = t("confirmDeleteResource");
     const warning = isYurucommuResource(resource)
       ? `${baseMessage}\n\nWarning: This resource is linked to Yurucommu. Deleting it may break your Yurucommu instance.`
       : baseMessage;
     const confirmed = await confirm({
-      title: t('deleteResource'),
+      title: t("deleteResource"),
       message: warning,
-      confirmText: t('delete'),
+      confirmText: t("delete"),
       danger: true,
     });
     if (!confirmed) return false;
     try {
-      const res = await rpcPath(rpc, 'resources', 'by-name', ':name').$delete({ param: { name: resource.name } }) as Response;
+      const res = await rpcPath(rpc, "resources", "by-name", ":name").$delete({
+        param: { name: resource.name },
+      });
       await rpcJson(res);
-      showToast('success', t('deleted'));
+      showToast("success", t("deleted"));
       await refreshResources();
       return true;
     } catch {
-      showToast('error', t('failedToDelete'));
+      showToast("error", t("failedToDelete"));
       return false;
     }
   };

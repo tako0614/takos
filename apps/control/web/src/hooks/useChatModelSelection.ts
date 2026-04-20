@@ -41,9 +41,8 @@ export function useChatModelSelection({
       });
       const data = await rpcJson<{
         ai_model?: string;
-        ai_provider?: string;
         model?: string;
-        provider?: string;
+        model_backend?: string;
         available_models: {
           openai: ModelOption[];
           anthropic: ModelOption[];
@@ -51,11 +50,11 @@ export function useChatModelSelection({
         };
       }>(res);
 
-      const provider = data.ai_provider || data.provider || "openai";
+      const modelBackend = data.model_backend || "openai";
       let raw: ModelOption[] | undefined;
-      if (provider === "anthropic") {
+      if (modelBackend === "anthropic") {
         raw = data.available_models?.anthropic;
-      } else if (provider === "google") {
+      } else if (modelBackend === "google") {
         raw = data.available_models?.google;
       } else {
         raw = data.available_models?.openai;

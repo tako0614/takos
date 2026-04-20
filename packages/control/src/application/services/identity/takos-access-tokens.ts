@@ -12,7 +12,7 @@ import { eq } from "drizzle-orm";
 export type TakosAccessTokenValidation = {
   userId: string;
   scopes: string[];
-  tokenKind: "personal" | "managed_builtin";
+  tokenKind: "personal" | "managed_takos";
 };
 
 export const takosAccessTokenDeps = {
@@ -87,7 +87,7 @@ async function validateManagedTakosToken(
   return {
     userId: row.subjectAccountId,
     scopes,
-    tokenKind: "managed_builtin",
+    tokenKind: "managed_takos",
   };
 }
 

@@ -23,7 +23,7 @@ export function registerRunCreateRoutes(app: RunRouteApp) {
     async (c) => {
       const user = c.get("user");
       const threadId = c.req.param("threadId");
-      const body = c.req.valid("json" as never) as {
+      const body = c.req.valid("json") as {
         agent_type?: string;
         input?: Record<string, unknown>;
         parent_run_id?: string;

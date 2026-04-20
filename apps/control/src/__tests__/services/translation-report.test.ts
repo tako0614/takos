@@ -19,7 +19,7 @@ function baseManifest(): AppManifest {
 }
 
 function makeDesiredState(
-  provider: string,
+  backend: string,
   options?: {
     webImage?: string;
   },
@@ -33,23 +33,9 @@ function makeDesiredState(
     kind: "GroupDesiredState",
     groupName: "demo",
     version: "1.0.0",
-    provider,
+    backend,
     env: "production",
     manifest: baseManifest(),
-    resources: {
-      db: {
-        name: "db",
-        type: "sql",
-        spec: { type: "sql" },
-        specFingerprint: "db",
-      },
-      bucket: {
-        name: "bucket",
-        type: "object-store",
-        spec: { type: "object-store" },
-        specFingerprint: "bucket",
-      },
-    },
     workloads: {
       api: {
         name: "api",
@@ -77,62 +63,30 @@ function makeDesiredState(
   };
 }
 
-Deno.test("buildTranslationReport - maps cloudflare resources and workloads to native providers", () => {
+Deno.test("buildTranslationReport - maps cloudflare workloads to runtime entries", () => {
   const report = buildTranslationReport(makeDesiredState("cloudflare"));
 
-  assertEquals(report.resources, [
-    {
-      name: "db",
-      publicType: "sql",
-      semanticType: "sql",
-      implementation: "d1",
-      driver: "cloudflare-d1",
-      provider: "cloudflare-native",
-      status: "native",
-      resolutionMode: "cloudflare-native",
-      requirements: ["CF_ACCOUNT_ID", "CF_API_TOKEN"],
-      notes: [
-        "Takos runtime realizes this Cloudflare-native resource directly on the Cloudflare backend.",
-      ],
-    },
-    {
-      name: "bucket",
-      publicType: "object-store",
-      semanticType: "object_store",
-      implementation: "r2",
-      driver: "cloudflare-r2",
-      provider: "cloudflare-native",
-      status: "native",
-      resolutionMode: "cloudflare-native",
-      requirements: ["CF_ACCOUNT_ID", "CF_API_TOKEN"],
-      notes: [
-        "Takos runtime realizes this Cloudflare-native resource directly on the Cloudflare backend.",
-      ],
-    },
-  ]);
   assertEquals(report.workloads, [
     {
       name: "api",
       category: "worker",
-      provider: "workers-dispatch",
       runtime: "workers",
       runtimeProfile: "workers",
-      status: "native",
-      requirements: ["CF_ACCOUNT_ID", "CF_API_TOKEN", "WFP_DISPATCH_NAMESPACE"],
+      status: "compatible",
+      requirements: [],
       notes: [
-        "Takos runtime realizes worker workloads directly on the Cloudflare backend.",
+        "tenant runtime realizes worker workloads through the worker runtime.",
       ],
     },
     {
       name: "web",
       category: "service",
-      provider: "oci",
       runtime: "container-service",
       runtimeProfile: "container-service",
-      status: "portable",
+      status: "compatible",
       requirements: [],
       notes: [
-        "Takos runtime on the Cloudflare backend uses the OCI deployment adapter for service/container workloads.",
+        "tenant runtime realizes service and container workloads through the container runtime.",
       ],
     },
   ]);
@@ -140,74 +94,40 @@ Deno.test("buildTranslationReport - maps cloudflare resources and workloads to n
     {
       name: "api-route",
       target: "api",
-      adapter: "hostname-routing",
-      provider: "hostname-routing",
-      status: "native",
-      requirements: ["HOSTNAME_ROUTING"],
+      status: "compatible",
+      requirements: [],
       notes: [
-        "Takos runtime realizes routing directly through the Cloudflare hostname routing backend.",
+        "tenant runtime materializes routes through the routing runtime.",
       ],
     },
   ]);
   assertEquals(report.unsupported, []);
 });
 
-Deno.test("buildTranslationReport - maps non-cloudflare resources and workloads to portable drivers", () => {
+Deno.test("buildTranslationReport - maps non-cloudflare workloads to the same runtime entries", () => {
   const report = buildTranslationReport(makeDesiredState("aws"));
 
-  assertEquals(report.resources, [
-    {
-      name: "db",
-      publicType: "sql",
-      semanticType: "sql",
-      implementation: "d1",
-      driver: "takos-sql",
-      provider: "aws-backing-service",
-      status: "portable",
-      resolutionMode: "provider-backed",
-      requirements: ["POSTGRES_URL or DATABASE_URL"],
-      notes: [
-        "Takos runtime on aws realizes this Cloudflare-native resource through a provider-backed adapter.",
-      ],
-    },
-    {
-      name: "bucket",
-      publicType: "object-store",
-      semanticType: "object_store",
-      implementation: "r2",
-      driver: "takos-object-store",
-      provider: "aws-backing-service",
-      status: "portable",
-      resolutionMode: "provider-backed",
-      requirements: [],
-      notes: [
-        "Takos runtime on aws realizes this Cloudflare-native resource through a provider-backed adapter.",
-      ],
-    },
-  ]);
   assertEquals(report.workloads, [
     {
       name: "api",
       category: "worker",
-      provider: "runtime-host",
       runtime: "workers",
       runtimeProfile: "workers",
-      status: "portable",
-      requirements: ["runtime-host adapter"],
+      status: "compatible",
+      requirements: [],
       notes: [
-        "Takos runtime on aws realizes worker workloads through the runtime-host compatibility layer.",
+        "tenant runtime realizes worker workloads through the worker runtime.",
       ],
     },
     {
       name: "web",
       category: "service",
-      provider: "ecs",
       runtime: "container-service",
       runtimeProfile: "container-service",
-      status: "portable",
+      status: "compatible",
       requirements: [],
       notes: [
-        "Takos runtime on aws realizes service execution through the OCI deployment adapter.",
+        "tenant runtime realizes service and container workloads through the container runtime.",
       ],
     },
   ]);
@@ -215,12 +135,10 @@ Deno.test("buildTranslationReport - maps non-cloudflare resources and workloads 
     {
       name: "api-route",
       target: "api",
-      adapter: "ingress-routing",
-      provider: "ingress-routing",
-      status: "portable",
-      requirements: ["provider ingress adapter", "HOSTNAME_ROUTING store"],
+      status: "compatible",
+      requirements: [],
       notes: [
-        "Takos runtime on aws realizes routing through Takos-managed hostname routing plus provider ingress.",
+        "tenant runtime materializes routes through the routing runtime.",
       ],
     },
   ]);
@@ -228,170 +146,7 @@ Deno.test("buildTranslationReport - maps non-cloudflare resources and workloads 
   assertEquals(report.unsupported, []);
 });
 
-Deno.test("buildTranslationReport - marks portable resources as provider-backed or takos-runtime based on the resolved backend", () => {
-  const desiredState = makeDesiredState("aws");
-  desiredState.resources.jobs = {
-    name: "jobs",
-    type: "queue",
-    spec: { type: "queue" },
-    specFingerprint: "jobs",
-  };
-  desiredState.resources.vec = {
-    name: "vec",
-    type: "vector-index",
-    spec: { type: "vector-index" },
-    specFingerprint: "vec",
-  };
-  desiredState.resources.events = {
-    name: "events",
-    type: "analytics-engine",
-    spec: { type: "analytics-engine" },
-    specFingerprint: "events",
-  };
-  desiredState.resources.flow = {
-    name: "flow",
-    type: "workflow",
-    spec: {
-      type: "workflow",
-      workflow: { class: "Main", script: "api" },
-    },
-    specFingerprint: "flow",
-  };
-  desiredState.resources.counter = {
-    name: "counter",
-    type: "durable-object",
-    spec: {
-      type: "durable-object",
-      durableObject: { class: "Counter", script: "api" },
-    },
-    specFingerprint: "counter",
-  };
-  desiredState.resources.creds = {
-    name: "creds",
-    type: "secret",
-    spec: { type: "secret" },
-    specFingerprint: "creds",
-  };
-
-  const report = buildTranslationReport(desiredState);
-
-  assertEquals(report.resources, [
-    {
-      name: "db",
-      publicType: "sql",
-      semanticType: "sql",
-      implementation: "d1",
-      driver: "takos-sql",
-      provider: "aws-backing-service",
-      status: "portable",
-      resolutionMode: "provider-backed",
-      requirements: ["POSTGRES_URL or DATABASE_URL"],
-      notes: [
-        "Takos runtime on aws realizes this Cloudflare-native resource through a provider-backed adapter.",
-      ],
-    },
-    {
-      name: "bucket",
-      publicType: "object-store",
-      semanticType: "object_store",
-      implementation: "r2",
-      driver: "takos-object-store",
-      provider: "aws-backing-service",
-      status: "portable",
-      resolutionMode: "provider-backed",
-      requirements: [],
-      notes: [
-        "Takos runtime on aws realizes this Cloudflare-native resource through a provider-backed adapter.",
-      ],
-    },
-    {
-      name: "jobs",
-      publicType: "queue",
-      semanticType: "queue",
-      implementation: "queue",
-      driver: "takos-queue",
-      provider: "aws-backing-service",
-      status: "portable",
-      resolutionMode: "provider-backed",
-      requirements: [],
-      notes: [
-        "Takos runtime on aws realizes this Cloudflare-native resource through a provider-backed adapter.",
-      ],
-    },
-    {
-      name: "vec",
-      publicType: "vector-index",
-      semanticType: "vector_index",
-      implementation: "vectorize",
-      driver: "takos-vector-store",
-      provider: "aws-backing-service",
-      status: "portable",
-      resolutionMode: "provider-backed",
-      requirements: ["POSTGRES_URL or DATABASE_URL", "PGVECTOR_ENABLED=true"],
-      notes: [
-        "Takos runtime on aws realizes this Cloudflare-native resource through a provider-backed adapter.",
-      ],
-    },
-    {
-      name: "events",
-      publicType: "analytics-engine",
-      semanticType: "analytics_store",
-      implementation: "analytics_engine",
-      driver: "takos-analytics-store",
-      provider: "takos-runtime",
-      status: "portable",
-      resolutionMode: "takos-runtime",
-      requirements: [],
-      notes: [
-        "Takos runtime on aws realizes this Cloudflare-native resource through the compatibility runtime.",
-      ],
-    },
-    {
-      name: "flow",
-      publicType: "workflow",
-      semanticType: "workflow_runtime",
-      implementation: "workflow_binding",
-      driver: "takos-workflow-runtime",
-      provider: "takos-runtime",
-      status: "portable",
-      resolutionMode: "takos-runtime",
-      requirements: [],
-      notes: [
-        "Takos runtime on aws realizes this Cloudflare-native resource through the compatibility runtime.",
-      ],
-    },
-    {
-      name: "counter",
-      publicType: "durable-object",
-      semanticType: "durable_namespace",
-      implementation: "durable_object_namespace",
-      driver: "takos-durable-runtime",
-      provider: "takos-runtime",
-      status: "portable",
-      resolutionMode: "takos-runtime",
-      requirements: [],
-      notes: [
-        "Takos runtime on aws realizes this Cloudflare-native resource through the compatibility runtime.",
-      ],
-    },
-    {
-      name: "creds",
-      publicType: "secret",
-      semanticType: "secret",
-      implementation: "secret_ref",
-      driver: "takos-secret",
-      provider: "aws-backing-service",
-      status: "portable",
-      resolutionMode: "provider-backed",
-      requirements: [],
-      notes: [
-        "Takos runtime on aws realizes this Cloudflare-native resource through a provider-backed adapter.",
-      ],
-    },
-  ]);
-});
-
-Deno.test("buildTranslationReport - uses workload-level image provider when specified", () => {
+Deno.test("buildTranslationReport - reports image workload runtime requirements", () => {
   const report = buildTranslationReport(makeDesiredState("cloudflare", {
     webImage: "ghcr.io/example/web:latest",
   }));
@@ -400,25 +155,23 @@ Deno.test("buildTranslationReport - uses workload-level image provider when spec
     {
       name: "api",
       category: "worker",
-      provider: "workers-dispatch",
       runtime: "workers",
       runtimeProfile: "workers",
-      status: "native",
-      requirements: ["CF_ACCOUNT_ID", "CF_API_TOKEN", "WFP_DISPATCH_NAMESPACE"],
+      status: "compatible",
+      requirements: [],
       notes: [
-        "Takos runtime realizes worker workloads directly on the Cloudflare backend.",
+        "tenant runtime realizes worker workloads through the worker runtime.",
       ],
     },
     {
       name: "web",
       category: "service",
-      provider: "oci",
       runtime: "container-service",
       runtimeProfile: "container-service",
-      status: "portable",
+      status: "compatible",
       requirements: ["OCI_ORCHESTRATOR_URL"],
       notes: [
-        "Takos runtime on the Cloudflare backend uses the OCI deployment adapter for service/container workloads.",
+        "tenant runtime realizes service and container workloads through the container runtime.",
       ],
     },
   ]);

@@ -3,7 +3,7 @@ import type {
   RoutingStore,
   RoutingTarget,
   WeightedDeploymentTarget,
-} from '../application/services/routing/routing-models.ts';
+} from "../application/services/routing/routing-models.ts";
 import type {
   AiBinding,
   DurableNamespaceBinding,
@@ -13,16 +13,16 @@ import type {
   QueueBinding,
   SqlDatabaseBinding,
   VectorIndexBinding,
-} from '../shared/types/bindings.ts';
+} from "../shared/types/bindings.ts";
 
-export type PlatformSource = 'workers' | 'node';
+export type PlatformSource = "workers" | "node";
 
 export type PlatformServiceBinding = {
   fetch(input: RequestInfo | URL, init?: RequestInit): Promise<Response>;
 };
 
-export type WorkersDispatchDeployProviderConfig = {
-  name: 'workers-dispatch';
+export type WorkersDispatchDeployBackendConfig = {
+  name: "workers-dispatch";
   config: {
     accountId: string;
     apiToken: string;
@@ -31,16 +31,16 @@ export type WorkersDispatchDeployProviderConfig = {
   };
 };
 
-export type OciDeployProviderConfig = {
-  name: 'oci';
+export type OciDeployBackendConfig = {
+  name: "oci";
   config: {
     orchestratorUrl: string;
     orchestratorToken?: string;
   };
 };
 
-export type EcsDeployProviderConfig = {
-  name: 'ecs';
+export type EcsDeployBackendConfig = {
+  name: "ecs";
   config: {
     region: string;
     clusterArn: string;
@@ -59,8 +59,8 @@ export type EcsDeployProviderConfig = {
   };
 };
 
-export type CloudRunDeployProviderConfig = {
-  name: 'cloud-run';
+export type CloudRunDeployBackendConfig = {
+  name: "cloud-run";
   config: {
     projectId: string;
     region: string;
@@ -74,8 +74,8 @@ export type CloudRunDeployProviderConfig = {
   };
 };
 
-export type K8sDeployProviderConfig = {
-  name: 'k8s';
+export type K8sDeployBackendConfig = {
+  name: "k8s";
   config: {
     namespace: string;
     deploymentName?: string;
@@ -83,17 +83,17 @@ export type K8sDeployProviderConfig = {
   };
 };
 
-export type PlatformDeployProviderConfig =
-  | WorkersDispatchDeployProviderConfig
-  | OciDeployProviderConfig
-  | EcsDeployProviderConfig
-  | CloudRunDeployProviderConfig
-  | K8sDeployProviderConfig;
+export type PlatformDeployBackendConfig =
+  | WorkersDispatchDeployBackendConfig
+  | OciDeployBackendConfig
+  | EcsDeployBackendConfig
+  | CloudRunDeployBackendConfig
+  | K8sDeployBackendConfig;
 
-export type PlatformDeployProviderRegistry = {
-  defaultName: PlatformDeployProviderConfig['name'];
-  list(): PlatformDeployProviderConfig[];
-  get(name: string): PlatformDeployProviderConfig | undefined;
+export type PlatformDeployBackendRegistry = {
+  defaultName: PlatformDeployBackendConfig["name"];
+  list(): PlatformDeployBackendConfig[];
+  get(name: string): PlatformDeployBackendConfig | undefined;
 };
 
 export type PlatformConfig = {
@@ -109,9 +109,20 @@ export type PlatformConfig = {
 };
 
 export type PlatformRoutingService = {
-  resolveHostname(hostname: string, executionContext: PlatformExecutionContext): Promise<ResolvedRouting>;
-  selectDeploymentTarget(target: RoutingTarget, pathname: string, method: string): WeightedDeploymentTarget | null;
-  selectRouteRef(target: RoutingTarget, pathname: string, method: string): string | null;
+  resolveHostname(
+    hostname: string,
+    executionContext: PlatformExecutionContext,
+  ): Promise<ResolvedRouting>;
+  selectDeploymentTarget(
+    target: RoutingTarget,
+    pathname: string,
+    method: string,
+  ): WeightedDeploymentTarget | null;
+  selectRouteRef(
+    target: RoutingTarget,
+    pathname: string,
+    method: string,
+  ): string | null;
 };
 
 export type PlatformQueues = {
@@ -134,7 +145,7 @@ export type PlatformServices = {
   routing: PlatformRoutingService;
   routingStore?: RoutingStore;
   hostnameRouting?: KvStoreBinding;
-  deploymentProviders?: PlatformDeployProviderRegistry;
+  deploymentBackends?: PlatformDeployBackendRegistry;
   queues: PlatformQueues;
   objects: PlatformObjects;
   notifications: {
@@ -149,7 +160,6 @@ export type PlatformServices = {
   hosts: {
     runtimeHost?: PlatformServiceBinding;
     executorHost?: PlatformServiceBinding;
-    browserHost?: PlatformServiceBinding;
   };
   ai: {
     binding?: AiBinding;
@@ -165,12 +175,21 @@ export type PlatformServices = {
     renderPdf?: (html: string) => Promise<ArrayBuffer>;
   };
   serviceRegistry?: {
-    get(name: string, options?: { deploymentId?: string }): PlatformServiceBinding;
+    get(
+      name: string,
+      options?: { deploymentId?: string },
+    ): PlatformServiceBinding;
   };
   /** SSE-based event notifier for Node.js environments (WebSocket alternative). */
   sseNotifier?: {
-    emit(channel: string, event: { type: string; data: unknown; event_id?: number }): void;
-    subscribe(channel: string, lastEventId?: number): ReadableStream<Uint8Array>;
+    emit(
+      channel: string,
+      event: { type: string; data: unknown; event_id?: number },
+    ): void;
+    subscribe(
+      channel: string,
+      lastEventId?: number,
+    ): ReadableStream<Uint8Array>;
   };
 };
 

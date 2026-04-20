@@ -1,3 +1,5 @@
+import type { D1Database } from "@cloudflare/workers-types";
+
 import { assert, assertEquals } from "jsr:@std/assert";
 
 function createMockDrizzleDb() {
@@ -13,12 +15,16 @@ function createMockDrizzleDb() {
   insert.calls = [] as unknown[][];
   const chain = { values };
   return {
+    select: () => chain,
     insert,
+    update: () => chain,
+    delete: () => chain,
     _: { chain },
   };
 }
 
 const db = createMockDrizzleDb();
+const d1 = db as unknown as D1Database;
 (globalThis as typeof globalThis & { __takosDbMock?: unknown }).__takosDbMock = db as never;
 
 const mocks = {
@@ -28,13 +34,12 @@ const mocks = {
 // [Deno] vi.mock removed - manually stub imports from '@/db'
 import { logOAuthEvent } from "@/services/oauth/audit";
 import type { OAuthAuditEvent } from "@/services/oauth/audit";
-import type { D1Database } from "@cloudflare/workers-types";
 
 Deno.test("logOAuthEvent - inserts an audit log entry with all fields", async () => {
   /* mocks cleared (no-op in Deno) */ db.insert.calls.length = 0;
   db._.chain.values.calls.length = 0;
   mocks.getDb = (() => db) as any;
-  await logOAuthEvent({} as D1Database, {
+  await logOAuthEvent(d1, {
     userId: "user-1",
     clientId: "client-1",
     eventType: "authorize_approved",
@@ -63,7 +68,7 @@ Deno.test("logOAuthEvent - stores null for optional fields when not provided", a
   /* mocks cleared (no-op in Deno) */ db.insert.calls.length = 0;
   db._.chain.values.calls.length = 0;
   mocks.getDb = (() => db) as any;
-  await logOAuthEvent({} as D1Database, {
+  await logOAuthEvent(d1, {
     eventType: "token_issued",
   });
 

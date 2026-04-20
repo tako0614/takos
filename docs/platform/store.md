@@ -5,53 +5,25 @@ Store は Takos kernel に統合されたカタログ / マーケットプレイ
 
 ## 公開の仕組み
 
-public リポジトリに `.takos/app.yml` があり、Release を作成すると Store
-に表示されます。
+public リポジトリに deploy manifest (`.takos/app.yml` / `.takos/app.yaml`)
+があり、Release を作成すると Store に表示されます。
 
-Release に含まれる `takopack` 形式のアセットが Store
-カタログに掲載される対象です。アセットには
-`app_id`、`version`、`description`、`icon` などのメタデータが埋め込まれます。
+Store の deployable 判定は release-backed です。public repository の non-draft /
+non-prerelease release と `.takos/app.yml` / `.takos/app.yaml`
+を基準にカタログ掲載を判定します。release asset
+は添付ファイルとして扱われ、Store の deployable 判定条件では ありません。
+control plane が Git object store (`GIT_OBJECTS`) を読めず `.takos/app.yml` /
+`.takos/app.yaml` を確認できない場合、その release は deployable
+として扱いません。
 
-## Official Packages と Seed Repositories
+## Seed Repositories
 
-これは current implementation の bootstrap / curation 方法です。Store app
-contract の必須要件ではありません。
+Seed Repository は Store カタログとは別の bootstrap 補助です。space 作成時に
+operator-defined repository 候補を表示するための任意機能であり、Store package /
+app-label contract の必須要件ではありません。
 
-Takos には Store カタログとは別に、2 つのコード定義リストがあります。
-
-|                | Official Packages                  | Seed Repositories                      |
-| -------------- | ---------------------------------- | -------------------------------------- |
-| 定義場所       | `official-packages.ts`（コード）   | `seed-repositories.ts`（コード）       |
-| 表示タイミング | Store カタログに常時表示           | ワークスペース作成時のポップアップのみ |
-| 目的           | ファーストパーティアプリの推奨     | 初回セットアップの推奨リポジトリ       |
-| DB 依存        | なし（コードで定義）               | なし（コードで定義）                   |
-| バッジ         | `certified: true` で公式バッジ付き | なし                                   |
-| プリチェック   | `recommended: true` で上位表示     | `checked: true` でプリチェック         |
-
-### Official Packages の型定義
-
-```typescript
-interface OfficialPackage {
-  id: string; // "official/takos-agent"
-  name: string; // "Takos Agent"
-  description: string; // 短い説明
-  category: "app" | "service" | "library" | "template" | "tool";
-  url: string; // Git clone URL
-  owner: {
-    name: string;
-    username: string;
-  };
-  tags: string[]; // 検索・フィルタ用タグ
-  recommended: boolean; // true で上位表示
-  priority: number; // 数値が大きいほど先に表示
-}
-```
-
-現在登録されている Official Package:
-
-| ID                     | 名前        | カテゴリ | 説明                                  |
-| ---------------------- | ----------- | -------- | ------------------------------------- |
-| `official/takos-agent` | Takos Agent | tool     | Browser automation and agent executor |
+Takos Agent は kernel / agent runtime に含まれるため、Store package や Seed
+Repository として扱いません。
 
 ### Seed Repositories の型定義
 
@@ -67,16 +39,18 @@ interface SeedRepository {
 
 現在登録されている Seed Repository:
 
-| 名前        | カテゴリ | プリチェック |
-| ----------- | -------- | ------------ |
-| Takos Agent | tool     | yes          |
+なし。
 
 ## Store の 3 つの経路
 
 - package catalog: public な package release を検索する
-- package install: Store package を app deployment として導入する
+- package install: Store package の source を解決して deploy pipeline に渡す
 - remote repository import: ActivityPub remote store
   からリポジトリ参照を取り込む
+
+catalog の `deployable-app` は release-backed の deployable package を
+指します。`all` は全 catalog item、`repo` は repository card、`deployable-app`
+は release から deploy 可能な package を返します。
 
 `install` という語は package install にだけ使います。remote store
 からの取り込みは `import repository` と呼びます。
@@ -84,9 +58,9 @@ interface SeedRepository {
 ## Store API
 
 以下の `/api/explore/*` や `/api/seed-repositories` は current implementation の
-public surface です。Store app の product contract は「kernel
-の上に乗る app」であることであり、これらの route 形状そのものを不変
-contract とみなすわけではありません。
+public surface です。Store で表示される `app` は product label であり、deploy
+model を説明するときは primitive / group を使います。これらの route
+形状そのものを不変 contract とみなすわけではありません。
 
 ### カタログ取得
 
@@ -96,29 +70,31 @@ GET /api/explore/catalog?sort=trending&limit=20
 
 クエリパラメータ:
 
-| パラメータ       | 説明                                                          | 例                   |
-| ---------------- | ------------------------------------------------------------- | -------------------- |
-| `q`              | フリーテキスト検索                                            | `browser`            |
-| `sort`           | ソート順 (`trending`, `new`, `stars`, `updated`, `downloads`) | `trending`           |
-| `type`           | タイプフィルタ (`all`, `repo`, `deployable-app`, `official`)  | `all`                |
-| `category`       | カテゴリフィルタ                                              | `tool`               |
-| `tags`           | カンマ区切りのタグフィルタ                                    | `browser,automation` |
-| `certified_only` | 公式パッケージのみ                                            | `true`               |
-| `limit`          | 取得件数（最大 50、デフォルト 20）                            | `20`                 |
-| `offset`         | ページネーション用オフセット                                  | `0`                  |
+| パラメータ       | 説明                                                                                                    | 例           |
+| ---------------- | ------------------------------------------------------------------------------------------------------- | ------------ |
+| `q`              | フリーテキスト検索                                                                                      | `notes`      |
+| `sort`           | ソート順 (`trending`, `new`, `stars`, `updated`, `downloads`)                                           | `trending`   |
+| `type`           | タイプフィルタ (`all`, `repo`, `deployable-app`)。`deployable-app` は release-backed deployable package | `all`        |
+| `category`       | カテゴリフィルタ                                                                                        | `app`        |
+| `tags`           | カンマ区切りのタグフィルタ                                                                              | `docs,notes` |
+| `certified_only` | approved package のみ                                                                                   | `true`       |
+| `space_id`       | 認証 user がアクセスできる space での installation 情報を付ける                                         | `space_123`  |
+| `limit`          | 取得件数（最大 50、デフォルト 20）                                                                      | `20`         |
+| `offset`         | ページネーション用オフセット                                                                            | `0`          |
 
 ```bash
-# 公式パッケージだけ取得
-curl "https://takos.example.com/api/explore/catalog?type=official&sort=stars"
-
 # タグで絞り込み
-curl "https://takos.example.com/api/explore/catalog?tags=browser,automation&limit=10"
+curl "https://takos.example.com/api/explore/catalog?tags=docs,notes&limit=10"
 ```
+
+`space_id` を付けた場合、レスポンスの
+`installation.group_deployment_snapshot_id` は current group snapshot の ID
+です。legacy `bundle_deployments` ID はここに入りません。
 
 ### パッケージ検索
 
 ```bash
-GET /api/explore/packages?q=browser&sort=popular&limit=20
+GET /api/explore/packages?q=notes&sort=popular&limit=20
 ```
 
 ### パッケージサジェスト
@@ -133,29 +109,21 @@ GET /api/explore/packages/suggest?q=tak&limit=10
 GET /api/explore/packages/{username}/{repoName}/latest
 ```
 
+`takos install` はこのレスポンスの
+`package.repository_url`、`package.release.tag`、`package.version` を使って
+deploy source を解決します。
+
 レスポンス例:
 
 ```json
 {
   "package": {
-    "name": "takos-agent",
-    "app_id": "takos-agent",
     "version": "1.0.0",
-    "description": "Browser automation and agent executor",
-    "repository": {
-      "id": "repo_xxx",
-      "name": "takos-agent",
-      "stars": 42
-    },
-    "owner": {
-      "username": "takos"
-    },
+    "repository_url": "https://github.com/acme/acme-notes.git",
     "release": {
       "tag": "v1.0.0",
       "published_at": "2026-03-01T00:00:00.000Z"
-    },
-    "rating_avg": 4.5,
-    "rating_count": 10
+    }
   }
 }
 ```
@@ -164,6 +132,29 @@ GET /api/explore/packages/{username}/{repoName}/latest
 
 ```bash
 GET /api/explore/packages/{username}/{repoName}/versions
+```
+
+`takos install --version <value>` はこのレスポンスの `version` または `tag`
+を照合し、選ばれた要素の `repository_url`、`tag`、`version` を deploy source
+として使います。
+
+レスポンス例:
+
+```json
+{
+  "versions": [
+    {
+      "version": "1.0.0",
+      "repository_url": "https://github.com/acme/acme-notes.git",
+      "tag": "v1.0.0"
+    },
+    {
+      "version": "1.1.0",
+      "repository_url": "https://github.com/acme/acme-notes.git",
+      "tag": "v1.1.0"
+    }
+  ]
+}
 ```
 
 ### Seed Repositories 取得
@@ -176,38 +167,29 @@ GET /api/seed-repositories
 
 ```json
 {
-  "repositories": [
-    {
-      "url": "https://github.com/tako0614/takos-agent.git",
-      "name": "Takos Agent",
-      "description": "Browser automation and agent executor",
-      "category": "tool",
-      "checked": true
-    }
-  ]
+  "repositories": []
 }
 ```
 
 認証不要 --- 静的な公開設定として返されます。
 
-## アプリを Store に公開するには
+## group を Store に公開するには
 
 1. リポジトリを public にする
-2. `.takos/app.yml` を追加
-3. Release を作成（`takopack` 形式のアセットを含める）
+2. deploy manifest (`.takos/app.yml` / `.takos/app.yaml`) を追加
+3. non-draft / non-prerelease Release を作成
 
-これだけで自動的に Store カタログに表示されます。
+control plane が release commit の `.takos/app.yml` / `.takos/app.yaml`
+を確認できると Store カタログに deployable package として表示されます。
 
-Official Package として登録したい場合は `official-packages.ts`
-にエントリを追加してください。Seed Repository
-として新規ワークスペース作成時に表示したい場合は `seed-repositories.ts`
+Seed Repository として新規 space 作成時に表示したい場合は `seed-repositories.ts`
 に追加します。
 
 ## ecosystem で自動化されるもの
 
 manifest と deploy を通じて、以下が自動的に関連づけられます:
 
-- app identity / service / route / hostname
+- group identity / service / route / hostname
 - resource binding / OAuth client
 - publication registration (MCP server, file handler, etc.)
 
@@ -217,13 +199,20 @@ manifest の `publish` で `type: McpServer` を宣言する。
 
 ```yaml
 publish:
-  - type: McpServer
+  - name: tools
+    type: McpServer
+    publisher: web
     path: /mcp
+    spec:
+      transport: streamable-http
 ```
 
-deploy 後に control plane が MCP endpoint を登録し、agent 側が server
-をロードする。詳細は [MCP Server](/apps/mcp) を参照。
-publication の仕組みについては [App Publications](/architecture/app-publications) を参照。
+MCP server catalog は deploy manifest の `publish` entry で管理します。deploy
+後に control plane が catalog entry を保存し、agent 側が server をロードする。
+`McpServer` は custom route publication type であり、core の固定 type
+ではありません。詳細は [MCP Server](/apps/mcp) を参照。publication
+の仕組みについては [Publication / Grants](/architecture/app-publications)
+を参照。
 
 ## file handler 統合
 
@@ -231,18 +220,27 @@ manifest の `publish` で `type: FileHandler` を宣言する。
 
 ```yaml
 publish:
-  - type: FileHandler
-    mimeTypes: [text/markdown]
-    extensions: [.md]
+  - name: markdown
+    type: FileHandler
+    publisher: web
     path: /files/:id
+    spec:
+      mimeTypes: [text/markdown]
+      extensions: [.md]
 ```
 
-space storage と app UI が loose coupling のまま連携できる。詳細は
-[File Handlers](/apps/file-handlers) を参照。
-publication の仕組みについては [App Publications](/architecture/app-publications) を参照。
+FileHandler catalog は deploy manifest の `publish` entry で管理します。space
+storage と deployed UI が loose coupling のまま連携できる。`FileHandler` の
+`path` は `:id` path segment を必ず含み、storage catalog では `:id` を含まない
+handler を公開しません。`FileHandler` の launch contract は file ID の path
+segment が primary です。current storage UI は起動時に `space_id` query
+parameter も追加しますが、`file_id` query fallback はありません。 `FileHandler`
+は custom route publication type です。詳細は
+[File Handlers](/apps/file-handlers) を参照。publication の仕組みについては
+[Publication / Grants](/architecture/app-publications) を参照。
 
 ## 次に読むページ
 
-- [app.yml の書き方](/apps/manifest)
+- [Deploy Manifest の書き方](/apps/manifest)
 - [マニフェストリファレンス](/reference/manifest-spec)
 - [Repository / Catalog デプロイ](/deploy/store-deploy)

@@ -5,7 +5,7 @@ CREATE TABLE IF NOT EXISTS publications (
   owner_service_id TEXT REFERENCES services(id),
   source_type TEXT NOT NULL DEFAULT 'api',
   name TEXT NOT NULL,
-  provider_name TEXT,
+  catalog_name TEXT,
   publication_type TEXT NOT NULL,
   spec_json TEXT NOT NULL,
   resolved_json TEXT NOT NULL DEFAULT '{}',

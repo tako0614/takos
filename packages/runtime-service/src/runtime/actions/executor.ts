@@ -1,40 +1,43 @@
-import * as fs from 'node:fs/promises';
-import * as path from 'node:path';
-import { pushLog } from '../logging.ts';
-import { validateCommand } from '../validation.ts';
-import { SANDBOX_LIMITS } from '../../shared/config.ts';
-import * as builtinActions from './builtin/index.ts';
-import { getErrorMessage } from 'takos-common/errors';
-import { resolvePathWithin } from '../paths.ts';
+import * as fs from "node:fs/promises";
+import * as path from "node:path";
+import { pushLog } from "../logging.ts";
+import { validateCommand } from "../validation.ts";
+import { SANDBOX_LIMITS } from "../../shared/config.ts";
+import * as managedActions from "./managed/index.ts";
+import { getErrorMessage } from "takos-common/errors";
+import { resolvePathWithin } from "../paths.ts";
 import {
   failureResult,
-  successResult,
   spawnWithTimeout,
-} from './process-spawner.ts';
+  successResult,
+} from "./process-spawner.ts";
 import {
+  type ActionOutputDefinition,
+  type ActionRuns,
   executeCompositeAction,
   isPathWithin,
-  type ActionRuns,
-  type ActionOutputDefinition,
-} from './composite-executor.ts';
-import { appendOutput, buildCombinedResult } from './action-result-converter.ts';
-import { parseKeyValueFile, parsePathFile } from './file-parsers.ts';
+} from "./composite-executor.ts";
 import {
-  fetchMarketplaceRepo,
+  appendOutput,
+  buildCombinedResult,
+} from "./action-result-converter.ts";
+import { parseKeyValueFile, parsePathFile } from "./file-parsers.ts";
+import {
   type ActionRefInfo,
+  buildInputEnv,
+  fetchStoreActionRepo,
   loadActionMetadata,
   parseActionRef,
-  validateActionComponent,
   resolveInputs,
-  buildInputEnv,
-} from './action-registry.ts';
+  validateActionComponent,
+} from "./action-registry.ts";
 
 export interface ExecutorStepResult {
   exitCode: number;
   stdout: string;
   stderr: string;
   outputs: Record<string, string>;
-  conclusion: 'success' | 'failure' | 'skipped';
+  conclusion: "success" | "failure" | "skipped";
 }
 
 export interface ActionContext {
@@ -47,7 +50,7 @@ export interface ActionContext {
 }
 
 const ACTION_SCRIPT_PATH_PATTERN = /^[A-Za-z0-9._/-]+$/;
-type NodeActionPhase = 'pre' | 'main' | 'post';
+type NodeActionPhase = "pre" | "main" | "post";
 
 function hasControlCharacters(value: string): boolean {
   for (let i = 0; i < value.length; i++) {
@@ -75,7 +78,7 @@ export class StepExecutor {
   async executeRun(
     command: string,
     timeoutMs?: number,
-    options?: { shell?: string; workingDirectory?: string }
+    options?: { shell?: string; workingDirectory?: string },
   ): Promise<ExecutorStepResult> {
     this.outputs = {};
     this.logs = [];
@@ -104,7 +107,7 @@ export class StepExecutor {
     action: string,
     inputs: Record<string, unknown>,
     timeoutMs?: number,
-    options?: { basePath?: string }
+    options?: { basePath?: string },
   ): Promise<ExecutorStepResult> {
     const timeout = timeoutMs || SANDBOX_LIMITS.maxExecutionTime;
     this.outputs = {};
@@ -114,20 +117,33 @@ export class StepExecutor {
     try {
       const context = this.createActionContext();
 
-      if (action.startsWith('docker://')) {
-        return failureResult('Docker-based actions are not supported in takos-runtime.');
+      if (action.startsWith("docker://")) {
+        return failureResult(
+          "Docker-based actions are not supported in takos-runtime.",
+        );
       }
 
-      if (action.startsWith('./') || action.startsWith('.\\')) {
-        return await this.executeLocalAction(action, inputs, context, timeout, basePath);
+      if (action.startsWith("./") || action.startsWith(".\\")) {
+        return await this.executeLocalAction(
+          action,
+          inputs,
+          context,
+          timeout,
+          basePath,
+        );
       }
 
       const actionRef = parseActionRef(action);
 
-      if (actionRef.owner === 'actions') {
-        const builtinResult = await this.executeBuiltinAction(actionRef.repo, inputs, context, timeout);
-        if (builtinResult) {
-          return builtinResult;
+      if (actionRef.owner === "actions") {
+        const managedResult = await this.executeManagedAction(
+          actionRef.repo,
+          inputs,
+          context,
+          timeout,
+        );
+        if (managedResult) {
+          return managedResult;
         }
       }
 
@@ -135,9 +151,17 @@ export class StepExecutor {
         return failureResult(`Invalid action reference: ${action}`);
       }
 
-      return await this.executeMarketplaceAction(actionRef, inputs, context, timeout);
+      return await this.executeStoreAction(
+        actionRef,
+        inputs,
+        context,
+        timeout,
+      );
     } catch (err) {
-      return failureResult(`Action execution failed: ${getErrorMessage(err)}`, this.outputs);
+      return failureResult(
+        `Action execution failed: ${getErrorMessage(err)}`,
+        this.outputs,
+      );
     }
   }
 
@@ -157,7 +181,8 @@ export class StepExecutor {
         this.env[name] = value;
       },
       addPath: (pathToAdd: string) => {
-        this.env.PATH = pathToAdd + path.delimiter + (this.env.PATH || Deno.env.get('PATH') || '');
+        this.env.PATH = pathToAdd + path.delimiter +
+          (this.env.PATH || Deno.env.get("PATH") || "");
       },
     };
   }
@@ -166,15 +191,17 @@ export class StepExecutor {
   // Workflow command parsing
   // -------------------------------------------------------------------------
 
-  private static readonly WORKFLOW_LOG_COMMANDS: Array<{ pattern: RegExp; format: string }> = [
-    { pattern: /^::error(?:\s+[^:]*)?::(.*)$/, format: '[ERROR] ' },
-    { pattern: /^::warning(?:\s+[^:]*)?::(.*)$/, format: '[WARNING] ' },
-    { pattern: /^::debug::(.*)$/, format: '[DEBUG] ' },
-    { pattern: /^::group::(.*)$/, format: '\n>>> ' },
+  private static readonly WORKFLOW_LOG_COMMANDS: Array<
+    { pattern: RegExp; format: string }
+  > = [
+    { pattern: /^::error(?:\s+[^:]*)?::(.*)$/, format: "[ERROR] " },
+    { pattern: /^::warning(?:\s+[^:]*)?::(.*)$/, format: "[WARNING] " },
+    { pattern: /^::debug::(.*)$/, format: "[DEBUG] " },
+    { pattern: /^::group::(.*)$/, format: "\n>>> " },
   ];
 
   private parseWorkflowCommands(text: string): void {
-    for (const line of text.split('\n')) {
+    for (const line of text.split("\n")) {
       const setOutputMatch = line.match(/^::set-output\s+name=([^:]+)::(.*)$/);
       if (setOutputMatch) {
         this.outputs[setOutputMatch[1]] = setOutputMatch[2];
@@ -195,54 +222,85 @@ export class StepExecutor {
       }
       if (matched) continue;
 
-      if (line === '::endgroup::') {
-        pushLog(this.logs, '<<<\n');
+      if (line === "::endgroup::") {
+        pushLog(this.logs, "<<<\n");
       }
     }
   }
 
   // -------------------------------------------------------------------------
-  // Built-in action dispatch
+  // Managed action dispatch
   // -------------------------------------------------------------------------
 
-  private static readonly BUILTIN_ACTIONS: Record<
+  private static readonly MANAGED_ACTIONS: Record<
     string,
-    (inputs: Record<string, unknown>, context: ActionContext) => Promise<unknown>
+    (
+      inputs: Record<string, unknown>,
+      context: ActionContext,
+    ) => Promise<unknown>
   > = {
-    'checkout': (inputs, ctx) =>
-      builtinActions.checkout(inputs as { ref?: string; path?: string; repository?: string }, ctx),
-    'setup-node': (inputs, ctx) =>
-      builtinActions.setupNode(inputs as { 'node-version': string; cache?: 'npm' | 'pnpm' | 'yarn' }, ctx),
-    'cache': (inputs, ctx) =>
-      builtinActions.cache(inputs as { path: string | string[]; key: string; 'restore-keys'?: string[] }, ctx),
-    'upload-artifact': (inputs, ctx) =>
-      builtinActions.uploadArtifact(inputs as { name: string; path: string | string[]; 'retention-days'?: number }, ctx),
-    'download-artifact': (inputs, ctx) =>
-      builtinActions.downloadArtifact(inputs as { name: string; path?: string }, ctx),
+    "checkout": (inputs, ctx) =>
+      managedActions.checkout(
+        inputs as { ref?: string; path?: string; repository?: string },
+        ctx,
+      ),
+    "setup-node": (inputs, ctx) =>
+      managedActions.setupNode(
+        inputs as { "node-version": string; cache?: "npm" | "pnpm" | "yarn" },
+        ctx,
+      ),
+    "cache": (inputs, ctx) =>
+      managedActions.cache(
+        inputs as {
+          path: string | string[];
+          key: string;
+          "restore-keys"?: string[];
+        },
+        ctx,
+      ),
+    "upload-artifact": (inputs, ctx) =>
+      managedActions.uploadArtifact(
+        inputs as {
+          name: string;
+          path: string | string[];
+          "retention-days"?: number;
+        },
+        ctx,
+      ),
+    "download-artifact": (inputs, ctx) =>
+      managedActions.downloadArtifact(
+        inputs as { name: string; path?: string },
+        ctx,
+      ),
   };
 
-  private async executeBuiltinAction(
+  private async executeManagedAction(
     actionName: string,
     inputs: Record<string, unknown>,
     context: ActionContext,
-    _timeout: number
+    _timeout: number,
   ): Promise<ExecutorStepResult | null> {
-    const handler = StepExecutor.BUILTIN_ACTIONS[actionName];
+    const handler = StepExecutor.MANAGED_ACTIONS[actionName];
     if (!handler) return null;
 
     try {
       const result = await handler(inputs, context);
-      if (actionName === 'cache' && result && typeof result === 'object' && 'cacheHit' in result) {
-        this.outputs['cache-hit'] = (result as { cacheHit: boolean }).cacheHit ? 'true' : 'false';
+      if (
+        actionName === "cache" && result && typeof result === "object" &&
+        "cacheHit" in result
+      ) {
+        this.outputs["cache-hit"] = (result as { cacheHit: boolean }).cacheHit
+          ? "true"
+          : "false";
       }
-      return successResult(context.logs.join('\n'), this.outputs);
+      return successResult(context.logs.join("\n"), this.outputs);
     } catch (err) {
       return {
         exitCode: 1,
-        stdout: context.logs.join('\n'),
-        stderr: `Built-in action failed: ${getErrorMessage(err)}`,
+        stdout: context.logs.join("\n"),
+        stderr: `Managed action failed: ${getErrorMessage(err)}`,
         outputs: this.outputs,
-        conclusion: 'failure',
+        conclusion: "failure",
       };
     }
   }
@@ -256,44 +314,69 @@ export class StepExecutor {
     inputs: Record<string, unknown>,
     context: ActionContext,
     timeout: number,
-    basePath: string
+    basePath: string,
   ): Promise<ExecutorStepResult> {
-    const fullActionPath = resolvePathWithin(basePath, actionPath, 'action path', true);
+    const fullActionPath = resolvePathWithin(
+      basePath,
+      actionPath,
+      "action path",
+      true,
+    );
 
     try {
       const realActionPath = await fs.realpath(fullActionPath);
       const realBasePath = await fs.realpath(basePath);
-      if (realActionPath !== realBasePath && !realActionPath.startsWith(realBasePath + path.sep)) {
-        return failureResult('Local action path escapes workspace boundary via symlink');
+      if (
+        realActionPath !== realBasePath &&
+        !realActionPath.startsWith(realBasePath + path.sep)
+      ) {
+        return failureResult(
+          "Local action path escapes workspace boundary via symlink",
+        );
       }
     } catch {
       return failureResult(`Local action path not found: ${actionPath}`);
     }
 
-    return this.executeActionFromPath(fullActionPath, inputs, context, timeout, {
-      owner: '', repo: '', actionPath, ref: '',
-    });
+    return this.executeActionFromPath(
+      fullActionPath,
+      inputs,
+      context,
+      timeout,
+      {
+        owner: "",
+        repo: "",
+        actionPath,
+        ref: "",
+      },
+    );
   }
 
   // -------------------------------------------------------------------------
-  // Marketplace action execution
+  // Store action execution
   // -------------------------------------------------------------------------
 
-  private async executeMarketplaceAction(
+  private async executeStoreAction(
     actionRef: ActionRefInfo,
     inputs: Record<string, unknown>,
     context: ActionContext,
-    timeout: number
+    timeout: number,
   ): Promise<ExecutorStepResult> {
-    validateActionComponent(actionRef.owner, 'owner');
-    validateActionComponent(actionRef.repo, 'repo');
+    validateActionComponent(actionRef.owner, "owner");
+    validateActionComponent(actionRef.repo, "repo");
 
-    const repoDir = await fetchMarketplaceRepo(actionRef, this.env);
+    const repoDir = await fetchStoreActionRepo(actionRef, this.env);
     const actionDir = actionRef.actionPath
-      ? resolvePathWithin(repoDir, actionRef.actionPath, 'action path', true)
+      ? resolvePathWithin(repoDir, actionRef.actionPath, "action path", true)
       : repoDir;
 
-    return this.executeActionFromPath(actionDir, inputs, context, timeout, actionRef);
+    return this.executeActionFromPath(
+      actionDir,
+      inputs,
+      context,
+      timeout,
+      actionRef,
+    );
   }
 
   // -------------------------------------------------------------------------
@@ -305,7 +388,7 @@ export class StepExecutor {
     inputs: Record<string, unknown>,
     _context: ActionContext,
     timeout: number,
-    actionRef?: ActionRefInfo
+    actionRef?: ActionRefInfo,
   ): Promise<ExecutorStepResult> {
     const metadata = await loadActionMetadata(actionDir);
     const runs = metadata.runs;
@@ -315,7 +398,7 @@ export class StepExecutor {
 
     const { resolvedInputs, missing } = resolveInputs(metadata.inputs, inputs);
     if (missing.length > 0) {
-      return failureResult(`Missing required inputs: ${missing.join(', ')}`);
+      return failureResult(`Missing required inputs: ${missing.join(", ")}`);
     }
 
     const inputEnv = buildInputEnv(resolvedInputs);
@@ -323,21 +406,30 @@ export class StepExecutor {
 
     this.env.GITHUB_ACTION_PATH = actionDir;
     if (actionRef?.owner && actionRef?.repo) {
-      this.env.GITHUB_ACTION_REPOSITORY = `${actionRef.owner}/${actionRef.repo}`;
+      this.env.GITHUB_ACTION_REPOSITORY =
+        `${actionRef.owner}/${actionRef.repo}`;
       this.env.GITHUB_ACTION_REF = actionRef.ref;
     }
 
     try {
       return await this.withTemporaryEnv(inputEnv, async () => {
         switch (runs.using?.toLowerCase()) {
-          case 'node12':
-          case 'node16':
-          case 'node20':
+          case "node12":
+          case "node16":
+          case "node20":
             return this.executeNodeAction(runs, actionDir, timeout);
-          case 'composite':
-            return this.executeCompositeActionWrapper(runs, actionDir, resolvedInputs, timeout, metadata.outputs);
-          case 'docker':
-            return failureResult('Docker actions are not supported in takos-runtime.');
+          case "composite":
+            return this.executeCompositeActionWrapper(
+              runs,
+              actionDir,
+              resolvedInputs,
+              timeout,
+              metadata.outputs,
+            );
+          case "docker":
+            return failureResult(
+              "Docker actions are not supported in takos-runtime.",
+            );
           default:
             return failureResult(`Unsupported action type: ${runs.using}`);
         }
@@ -354,20 +446,27 @@ export class StepExecutor {
   private async executeNodeAction(
     runs: ActionRuns,
     actionDir: string,
-    timeout: number
+    timeout: number,
   ): Promise<ExecutorStepResult> {
     if (!runs.main) {
       return failureResult('JavaScript action missing "main" entry point');
     }
 
-    const runScript = async (phase: NodeActionPhase, relativePath: string): Promise<ExecutorStepResult> => {
+    const runScript = async (
+      phase: NodeActionPhase,
+      relativePath: string,
+    ): Promise<ExecutorStepResult> => {
       let scriptPath: string;
       try {
-        scriptPath = await this.resolveNodeActionScriptPath(actionDir, relativePath, phase);
+        scriptPath = await this.resolveNodeActionScriptPath(
+          actionDir,
+          relativePath,
+          phase,
+        );
       } catch (err) {
         return failureResult(getErrorMessage(err));
       }
-      return spawnWithTimeout('node', [scriptPath], {
+      return spawnWithTimeout("node", [scriptPath], {
         timeout,
         cwd: actionDir,
         shell: false,
@@ -376,7 +475,8 @@ export class StepExecutor {
         logs: this.logs,
         outputs: this.outputs,
         workspacePath: this.workspacePath,
-        parseWorkflowCommands: (text: string) => this.parseWorkflowCommands(text),
+        parseWorkflowCommands: (text: string) =>
+          this.parseWorkflowCommands(text),
         parseKeyValueFile: (content: string) => parseKeyValueFile(content),
         parsePathFile: (content: string) => parsePathFile(content),
       });
@@ -384,10 +484,12 @@ export class StepExecutor {
 
     const stdoutParts: string[] = [];
     const stderrParts: string[] = [];
-    const phases: Array<{ phase: NodeActionPhase; script: string | undefined }> = [
-      { phase: 'pre', script: runs.pre },
-      { phase: 'main', script: runs.main },
-      { phase: 'post', script: runs.post },
+    const phases: Array<
+      { phase: NodeActionPhase; script: string | undefined }
+    > = [
+      { phase: "pre", script: runs.pre },
+      { phase: "main", script: runs.main },
+      { phase: "post", script: runs.post },
     ];
 
     let mainOutputs: Record<string, string> = {};
@@ -398,23 +500,28 @@ export class StepExecutor {
       const result = await runScript(phase, script);
       appendOutput(result, stdoutParts, stderrParts);
 
-      if (phase === 'main') {
+      if (phase === "main") {
         mainOutputs = { ...result.outputs };
       }
 
       if (result.exitCode !== 0) {
         return {
           exitCode: result.exitCode,
-          stdout: stdoutParts.join('\n').trimEnd(),
-          stderr: stderrParts.join('\n').trimEnd(),
-          outputs: phase === 'pre' ? result.outputs : mainOutputs,
-          conclusion: 'failure',
+          stdout: stdoutParts.join("\n").trimEnd(),
+          stderr: stderrParts.join("\n").trimEnd(),
+          outputs: phase === "pre" ? result.outputs : mainOutputs,
+          conclusion: "failure",
         };
       }
     }
 
     this.outputs = mainOutputs;
-    return buildCombinedResult(stdoutParts, stderrParts, mainOutputs, 'success');
+    return buildCombinedResult(
+      stdoutParts,
+      stderrParts,
+      mainOutputs,
+      "success",
+    );
   }
 
   // -------------------------------------------------------------------------
@@ -424,12 +531,16 @@ export class StepExecutor {
   private async resolveNodeActionScriptPath(
     actionDir: string,
     scriptPath: string,
-    phase: NodeActionPhase
+    phase: NodeActionPhase,
   ): Promise<string> {
     this.validateNodeActionScriptPath(scriptPath, phase);
 
     const normalizedPath = path.posix.normalize(scriptPath);
-    const resolvedScriptPath = resolvePathWithin(actionDir, normalizedPath, `${phase} script`);
+    const resolvedScriptPath = resolvePathWithin(
+      actionDir,
+      normalizedPath,
+      `${phase} script`,
+    );
 
     let realActionDir: string;
     let realScriptPath: string;
@@ -454,18 +565,36 @@ export class StepExecutor {
     return realScriptPath;
   }
 
-  private static readonly SCRIPT_PATH_VALIDATORS: Array<[(p: string) => boolean, string]> = [
-    [(p) => typeof p !== 'string' || p.length === 0, 'path is required'],
-    [(p) => p.trim() !== p, 'path must not include leading/trailing whitespace'],
-    [(p) => hasControlCharacters(p), 'path contains control characters'],
-    [(p) => /["'`]/.test(p), 'path contains disallowed quote characters'],
-    [(p) => p.includes('\\'), 'path must use "/" separators'],
-    [(p) => path.isAbsolute(p) || /^[A-Za-z]:/.test(p), 'path must be relative'],
-    [(p) => !ACTION_SCRIPT_PATH_PATTERN.test(p), 'path contains invalid characters'],
-    [(p) => { const n = path.posix.normalize(p); return n === '.' || n === '..' || n.startsWith('../') || n.includes('/../'); }, 'path traversal is not allowed'],
+  private static readonly SCRIPT_PATH_VALIDATORS: Array<
+    [(p: string) => boolean, string]
+  > = [
+    [(p) => typeof p !== "string" || p.length === 0, "path is required"],
+    [
+      (p) => p.trim() !== p,
+      "path must not include leading/trailing whitespace",
+    ],
+    [(p) => hasControlCharacters(p), "path contains control characters"],
+    [(p) => /["'`]/.test(p), "path contains disallowed quote characters"],
+    [(p) => p.includes("\\"), 'path must use "/" separators'],
+    [
+      (p) => path.isAbsolute(p) || /^[A-Za-z]:/.test(p),
+      "path must be relative",
+    ],
+    [
+      (p) => !ACTION_SCRIPT_PATH_PATTERN.test(p),
+      "path contains invalid characters",
+    ],
+    [(p) => {
+      const n = path.posix.normalize(p);
+      return n === "." || n === ".." || n.startsWith("../") ||
+        n.includes("/../");
+    }, "path traversal is not allowed"],
   ];
 
-  private validateNodeActionScriptPath(scriptPath: string, phase: NodeActionPhase): void {
+  private validateNodeActionScriptPath(
+    scriptPath: string,
+    phase: NodeActionPhase,
+  ): void {
     for (const [test, message] of StepExecutor.SCRIPT_PATH_VALIDATORS) {
       if (test(scriptPath)) {
         throw new Error(`Node action ${phase} script ${message}`);
@@ -478,35 +607,46 @@ export class StepExecutor {
   // -------------------------------------------------------------------------
 
   private static readonly ALLOWED_SHELLS = new Set([
-    '/bin/bash', '/bin/sh', 'bash', 'sh',
-    'cmd.exe', 'pwsh', 'powershell',
-    '/usr/bin/bash', '/usr/bin/sh',
-    '/usr/local/bin/bash',
+    "/bin/bash",
+    "/bin/sh",
+    "bash",
+    "sh",
+    "cmd.exe",
+    "pwsh",
+    "powershell",
+    "/usr/bin/bash",
+    "/usr/bin/sh",
+    "/usr/local/bin/bash",
   ]);
 
   private resolveShell(
     command: string,
-    shellOverride?: string
+    shellOverride?: string,
   ): { shell: string; shellArgs: string[] } {
     if (shellOverride) {
       const shellLower = shellOverride.toLowerCase();
-      const base = shellLower.split('/').pop() ?? shellLower;
-      if (!StepExecutor.ALLOWED_SHELLS.has(shellLower) && !StepExecutor.ALLOWED_SHELLS.has(base)) {
-        throw new Error(`Unsupported shell: ${shellOverride}. Allowed: bash, sh, pwsh`);
+      const base = shellLower.split("/").pop() ?? shellLower;
+      if (
+        !StepExecutor.ALLOWED_SHELLS.has(shellLower) &&
+        !StepExecutor.ALLOWED_SHELLS.has(base)
+      ) {
+        throw new Error(
+          `Unsupported shell: ${shellOverride}. Allowed: bash, sh, pwsh`,
+        );
       }
-      if (shellLower.includes('pwsh') || shellLower.includes('powershell')) {
-        return { shell: shellOverride, shellArgs: ['-Command', command] };
+      if (shellLower.includes("pwsh") || shellLower.includes("powershell")) {
+        return { shell: shellOverride, shellArgs: ["-Command", command] };
       }
-      if (shellLower.includes('cmd')) {
-        return { shell: shellOverride, shellArgs: ['/c', command] };
+      if (shellLower.includes("cmd")) {
+        return { shell: shellOverride, shellArgs: ["/c", command] };
       }
-      return { shell: shellOverride, shellArgs: ['-e', '-c', command] };
+      return { shell: shellOverride, shellArgs: ["-e", "-c", command] };
     }
 
-    const isWindows = process.platform === 'win32';
+    const isWindows = process.platform === "win32";
     return isWindows
-      ? { shell: 'cmd.exe', shellArgs: ['/c', command] }
-      : { shell: '/bin/bash', shellArgs: ['-e', '-c', command] };
+      ? { shell: "cmd.exe", shellArgs: ["/c", command] }
+      : { shell: "/bin/bash", shellArgs: ["-e", "-c", command] };
   }
 
   // -------------------------------------------------------------------------
@@ -518,18 +658,39 @@ export class StepExecutor {
     actionDir: string,
     inputs: Record<string, string>,
     timeout: number,
-    outputs?: Record<string, ActionOutputDefinition>
+    outputs?: Record<string, ActionOutputDefinition>,
   ): Promise<ExecutorStepResult> {
     const delegate = {
-      executeRun: (cmd: string, t?: number, opts?: { shell?: string; workingDirectory?: string }) => this.executeRun(cmd, t, opts),
-      executeAction: (act: string, inp: Record<string, unknown>, t?: number, opts?: { basePath?: string }) => this.executeAction(act, inp, t, opts),
+      executeRun: (
+        cmd: string,
+        t?: number,
+        opts?: { shell?: string; workingDirectory?: string },
+      ) => this.executeRun(cmd, t, opts),
+      executeAction: (
+        act: string,
+        inp: Record<string, unknown>,
+        t?: number,
+        opts?: { basePath?: string },
+      ) => this.executeAction(act, inp, t, opts),
       getEnv: () => this.env,
-      setEnv: (env: Record<string, string>) => { this.env = env; },
+      setEnv: (env: Record<string, string>) => {
+        this.env = env;
+      },
       getWorkspacePath: () => this.workspacePath,
-      withTemporaryEnv: <T>(tempEnv: Record<string, string>, fn: () => Promise<T>) => this.withTemporaryEnv(tempEnv, fn),
+      withTemporaryEnv: <T>(
+        tempEnv: Record<string, string>,
+        fn: () => Promise<T>,
+      ) => this.withTemporaryEnv(tempEnv, fn),
     };
 
-    const result = await executeCompositeAction(runs, actionDir, inputs, timeout, outputs, delegate);
+    const result = await executeCompositeAction(
+      runs,
+      actionDir,
+      inputs,
+      timeout,
+      outputs,
+      delegate,
+    );
     this.outputs = result.outputs;
     return result;
   }
@@ -538,7 +699,10 @@ export class StepExecutor {
   // Environment management
   // -------------------------------------------------------------------------
 
-  private withTemporaryEnv<T>(tempEnv: Record<string, string>, fn: () => Promise<T>): Promise<T> {
+  private withTemporaryEnv<T>(
+    tempEnv: Record<string, string>,
+    fn: () => Promise<T>,
+  ): Promise<T> {
     if (!tempEnv || Object.keys(tempEnv).length === 0) {
       return fn();
     }
@@ -559,9 +723,9 @@ export class StepExecutor {
   }
 
   private static readonly ACTION_ENV_KEYS = [
-    'GITHUB_ACTION_PATH',
-    'GITHUB_ACTION_REPOSITORY',
-    'GITHUB_ACTION_REF',
+    "GITHUB_ACTION_PATH",
+    "GITHUB_ACTION_REPOSITORY",
+    "GITHUB_ACTION_REF",
   ] as const;
 
   private snapshotActionEnv(): Record<string, string | undefined> {
@@ -581,5 +745,4 @@ export class StepExecutor {
       }
     }
   }
-
 }

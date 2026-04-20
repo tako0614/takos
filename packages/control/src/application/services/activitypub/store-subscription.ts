@@ -3,17 +3,25 @@
  * and caches them as updates for the subscribing workspace.
  */
 
-import { and, eq, desc, count as countFn } from 'drizzle-orm';
-import type { D1Database } from '../../../shared/types/bindings.ts';
-import { getDb, storeRegistry, storeRegistryUpdates } from '../../../infra/db/index.ts';
-import { generateId } from '../../../shared/utils/index.ts';
-import { fetchRemoteOutbox } from './remote-store-client.ts';
+import { and, count as countFn, desc, eq } from "drizzle-orm";
+import type { D1Database } from "../../../shared/types/bindings.ts";
+import {
+  getDb,
+  storeRegistry,
+  storeRegistryUpdates,
+} from "../../../infra/db/index.ts";
+import { generateId } from "../../../shared/utils/index.ts";
+import {
+  fetchRemoteOutbox,
+  fetchRemoteRepositoryActor,
+  type RemoteRepository,
+} from "./remote-store-client.ts";
 import {
   listSubscribedStores,
   markOutboxChecked,
   type StoreRegistryEntry,
-} from './store-registry.ts';
-import { logError } from '../../../shared/utils/logger.ts';
+} from "./store-registry.ts";
+import { logError } from "../../../shared/utils/logger.ts";
 
 export interface StoreUpdate {
   id: string;
@@ -46,8 +54,8 @@ export async function pollAllSubscribedStores(
       const count = await pollSingleStore(dbBinding, entry);
       totalNew += count;
     } catch (err) {
-      logError('Failed to poll remote store', err, {
-        module: 'store-subscription',
+      logError("Failed to poll remote store", err, {
+        module: "store-subscription",
         storeId: entry.id,
         domain: entry.domain,
       });
@@ -69,7 +77,10 @@ export async function pollSingleStore(
   }
 
   // Fetch the first page of the outbox (preserves activity wrapper)
-  const result = await fetchRemoteOutbox(entry.outboxUrl, { page: 1, limit: 50 });
+  const result = await fetchRemoteOutbox(entry.outboxUrl, {
+    page: 1,
+    limit: 50,
+  });
   if (!result.activities || result.activities.length === 0) {
     await markOutboxChecked(dbBinding, entry.id);
     return 0;
@@ -96,8 +107,10 @@ export async function pollSingleStore(
       continue;
     }
 
-    const obj = activity.object;
-    const objectType = Array.isArray(obj.type) ? obj.type.join(',') : String(obj.type || '');
+    const obj = await hydrateRepositoryReference(activity.object);
+    const objectType = Array.isArray(obj.type)
+      ? obj.type.join(",")
+      : String(obj.type || "");
 
     await db.insert(storeRegistryUpdates).values({
       id: generateId(),
@@ -121,6 +134,25 @@ export async function pollSingleStore(
   return newCount;
 }
 
+async function hydrateRepositoryReference(
+  obj: RemoteRepository,
+): Promise<RemoteRepository> {
+  if (!obj.id || obj.name) return obj;
+  try {
+    const fetched = await fetchRemoteRepositoryActor(obj.id);
+    return {
+      ...obj,
+      ...fetched,
+      id: fetched.id || obj.id,
+      url: fetched.url || obj.url,
+      published: fetched.published || obj.published,
+      updated: fetched.updated || obj.updated,
+    };
+  } catch {
+    return obj;
+  }
+}
+
 /**
  * Get updates for a workspace, across all subscribed stores.
  */
@@ -134,14 +166,20 @@ export async function getStoreUpdates(
   const offset = options.offset ?? 0;
 
   const baseWhere = options.unseenOnly
-    ? and(eq(storeRegistryUpdates.accountId, accountId), eq(storeRegistryUpdates.seen, false))
+    ? and(
+      eq(storeRegistryUpdates.accountId, accountId),
+      eq(storeRegistryUpdates.seen, false),
+    )
     : eq(storeRegistryUpdates.accountId, accountId);
 
   // Get total count with same JOIN as data query for consistency
   const [totalResult, rows] = await Promise.all([
     db.select({ count: countFn() })
       .from(storeRegistryUpdates)
-      .innerJoin(storeRegistry, eq(storeRegistryUpdates.registryEntryId, storeRegistry.id))
+      .innerJoin(
+        storeRegistry,
+        eq(storeRegistryUpdates.registryEntryId, storeRegistry.id),
+      )
       .where(baseWhere)
       .get(),
     db.select({
@@ -160,7 +198,10 @@ export async function getStoreUpdates(
       storeDomain: storeRegistry.domain,
     })
       .from(storeRegistryUpdates)
-      .innerJoin(storeRegistry, eq(storeRegistryUpdates.registryEntryId, storeRegistry.id))
+      .innerJoin(
+        storeRegistry,
+        eq(storeRegistryUpdates.registryEntryId, storeRegistry.id),
+      )
       .where(baseWhere)
       .orderBy(desc(storeRegistryUpdates.createdAt))
       .limit(limit)

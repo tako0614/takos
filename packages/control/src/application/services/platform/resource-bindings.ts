@@ -1,4 +1,4 @@
-import type { WorkerBinding } from "../../../platform/providers/cloudflare/wfp.ts";
+import type { WorkerBinding } from "../../../platform/backends/cloudflare/wfp.ts";
 import { safeJsonParseOrDefault } from "../../../shared/utils/index.ts";
 import type {
   ServiceBindingRow,
@@ -59,6 +59,86 @@ export function sortBindings(bindings: WorkerBinding[]): WorkerBinding[] {
   });
 }
 
+function isPortableBackend(backendName: string | null): boolean {
+  return !!backendName && backendName !== "cloudflare";
+}
+
+function bindingTypeCapability(type: string): string {
+  switch (type) {
+    case "sql":
+    case "d1":
+      return "sql";
+    case "object-store":
+    case "object_store":
+    case "r2":
+    case "r2_bucket":
+      return "object_store";
+    case "key-value":
+    case "kv":
+    case "kv_namespace":
+      return "kv";
+    case "queue":
+      return "queue";
+    case "vector-index":
+    case "vector_index":
+    case "vectorize":
+      return "vector_index";
+    case "analytics-engine":
+    case "analytics_store":
+    case "analyticsEngine":
+    case "analytics_engine":
+      return "analytics_store";
+    case "secret":
+    case "secretRef":
+    case "secret_ref":
+    case "secret_text":
+      return "secret";
+    case "workflow":
+    case "workflow_runtime":
+    case "workflow_binding":
+      return "workflow_runtime";
+    case "durable-object":
+    case "durable_namespace":
+    case "durableObject":
+    case "durable_object":
+    case "durable_object_namespace":
+      return "durable_namespace";
+    case "service":
+      return "service";
+    default:
+      return type;
+  }
+}
+
+export function toRuntimeBindingType(
+  bindingType: string,
+): WorkerBinding["type"] | null {
+  switch (bindingTypeCapability(bindingType)) {
+    case "sql":
+      return "d1";
+    case "object_store":
+      return "r2_bucket";
+    case "kv":
+      return "kv_namespace";
+    case "queue":
+      return "queue";
+    case "vector_index":
+      return "vectorize";
+    case "analytics_store":
+      return "analytics_engine";
+    case "secret":
+      return "secret_text";
+    case "workflow_runtime":
+      return "workflow";
+    case "durable_namespace":
+      return "durable_object_namespace";
+    case "service":
+      return "service";
+    default:
+      return null;
+  }
+}
+
 export function normalizeRoutingWeight(raw: number | string): number {
   const value = typeof raw === "number" ? raw : Number(raw);
   if (!Number.isFinite(value)) return 0;
@@ -80,109 +160,111 @@ function derivePortableQueueSubscriptionName(name: string): string {
   return `${sanitizePortableName(name)}-subscription`;
 }
 
-export function toServiceBinding(row: ServiceBindingRow): WorkerBinding | null {
+export function toServiceBinding(
+  row: ServiceBindingRow,
+  options: { secretText?: string } = {},
+): WorkerBinding | null {
   const config = parseBindingConfig(row.config);
   const resourceConfig = parseBindingConfig(row.resourceConfig);
 
-  switch (row.bindingType) {
-    case "d1":
-      if (!row.resourceProviderResourceId) return null;
+  switch (bindingTypeCapability(row.bindingType)) {
+    case "sql":
+      if (!row.backingResourceId) return null;
       return {
         type: "d1",
         name: row.bindingName,
-        database_id: row.resourceProviderResourceId,
+        database_id: row.backingResourceId,
       };
-    case "r2":
-      if (!row.resourceProviderResourceName) return null;
+    case "object_store":
+      if (!row.backingResourceName) return null;
       return {
         type: "r2_bucket",
         name: row.bindingName,
-        bucket_name: row.resourceProviderResourceName,
+        bucket_name: row.backingResourceName,
       };
     case "kv":
-      if (!row.resourceProviderResourceId) return null;
+      if (!row.backingResourceId) return null;
       return {
         type: "kv_namespace",
         name: row.bindingName,
-        namespace_id: row.resourceProviderResourceId,
+        namespace_id: row.backingResourceId,
       };
     case "queue":
       if (
-        !row.resourceProviderResourceName && !row.resourceProviderResourceId
+        !row.backingResourceName && !row.backingResourceId
       ) return null;
       return {
         type: "queue",
         name: row.bindingName,
-        queue_name: row.resourceProviderResourceName ||
-          row.resourceProviderResourceId || undefined,
-        ...(row.resourceProviderName === "aws"
+        queue_name: row.backingResourceName ||
+          row.backingResourceId || undefined,
+        ...(row.backendName === "aws"
           ? {
             queue_backend: "sqs" as const,
-            queue_url: row.resourceProviderResourceId || undefined,
-            provider_name: "aws" as const,
+            queue_url: row.backingResourceId || undefined,
+            backend_name: "aws" as const,
           }
           : {}),
-        ...(row.resourceProviderName === "gcp"
+        ...(row.backendName === "gcp"
           ? {
             queue_backend: "pubsub" as const,
             subscription_name:
               typeof resourceConfig.subscriptionName === "string"
                 ? resourceConfig.subscriptionName
                 : derivePortableQueueSubscriptionName(
-                  row.resourceProviderResourceName || row.resourceId,
+                  row.backingResourceName || row.resourceId,
                 ),
-            provider_name: "gcp" as const,
+            backend_name: "gcp" as const,
           }
           : {}),
-        ...(row.resourceProviderName === "k8s"
+        ...(row.backendName === "k8s"
           ? {
             queue_backend: "redis" as const,
-            provider_name: "k8s" as const,
+            backend_name: "k8s" as const,
           }
           : {}),
       };
-    case "analytics_engine":
+    case "analytics_store":
       if (
-        !row.resourceProviderResourceName && !row.resourceProviderResourceId
+        !row.backingResourceName && !row.backingResourceId
       ) return null;
       return {
         type: "analytics_engine",
         name: row.bindingName,
-        dataset: row.resourceProviderResourceName ||
-          row.resourceProviderResourceId || undefined,
+        dataset: row.backingResourceName ||
+          row.backingResourceId || undefined,
       };
-    case "vectorize":
-      if (!row.resourceProviderResourceName) return null;
+    case "vector_index":
+      if (!row.backingResourceName) return null;
       return {
         type: "vectorize",
         name: row.bindingName,
-        index_name: row.resourceProviderResourceName,
+        index_name: row.backingResourceName,
       };
-    case "analyticsEngine":
+    case "secret":
       if (
-        !row.resourceProviderResourceName && !row.resourceProviderResourceId
+        options.secretText === undefined &&
+        isPortableBackend(row.backendName)
       ) return null;
       return {
-        type: "analytics_engine",
+        type: "secret_text",
         name: row.bindingName,
-        dataset: row.resourceProviderResourceName ||
-          row.resourceProviderResourceId || undefined,
+        text: options.secretText ?? row.backingResourceId ?? "",
       };
-    case "workflow":
+    case "workflow_runtime":
       if (
-        !row.resourceProviderResourceName && !row.resourceProviderResourceId
+        !row.backingResourceName && !row.backingResourceId
       ) return null;
       return {
         type: "workflow",
         name: row.bindingName,
-        workflow_name: row.resourceProviderResourceName ||
-          row.resourceProviderResourceId || undefined,
+        workflow_name: row.backingResourceName ||
+          row.backingResourceId || undefined,
       };
-    case "durable_object_namespace":
-    case "durableObject": {
+    case "durable_namespace": {
       const className = typeof config.className === "string"
         ? config.className
-        : row.resourceProviderResourceName || row.resourceProviderResourceId ||
+        : row.backingResourceName || row.backingResourceId ||
           undefined;
       if (!className) return null;
       return {
@@ -198,8 +280,8 @@ export function toServiceBinding(row: ServiceBindingRow): WorkerBinding | null {
       return {
         type: "service",
         name: row.bindingName,
-        service: row.resourceProviderResourceName ||
-          row.resourceProviderResourceId || undefined,
+        service: row.backingResourceName ||
+          row.backingResourceId || undefined,
         environment: typeof config.environment === "string"
           ? config.environment
           : undefined,

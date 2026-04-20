@@ -1,30 +1,33 @@
-import * as fs from 'node:fs/promises';
-import * as path from 'node:path';
-import { isPathWithinBase } from '../paths.ts';
-import { successResult } from './process-spawner.ts';
-import type { ExecutorStepResult } from './executor.ts';
-import { appendOutput, buildCombinedResult } from './action-result-converter.ts';
+import * as fs from "node:fs/promises";
+import * as path from "node:path";
+import { isPathWithinBase } from "../paths.ts";
+import { successResult } from "./process-spawner.ts";
+import type { ExecutorStepResult } from "./executor.ts";
 import {
-  type InterpolationContext,
+  appendOutput,
+  buildCombinedResult,
+} from "./action-result-converter.ts";
+import {
   type ActionOutputDefinition,
-  interpolateString,
   evaluateCondition,
+  interpolateString,
+  type InterpolationContext,
+  resolveCompositeOutputs,
   resolveEnv,
   resolveWith,
-  resolveCompositeOutputs,
-} from './composite-expression.ts';
+} from "./composite-expression.ts";
 
 // Re-export expression utilities so existing consumers continue to work.
 export {
-  type InterpolationContext,
   type ActionOutputDefinition,
-  resolveExpressionValue,
-  interpolateString,
   evaluateCondition,
+  interpolateString,
+  type InterpolationContext,
   normalizeInputValue,
   resolveEnv,
+  resolveExpressionValue,
   resolveWith,
-} from './composite-expression.ts';
+} from "./composite-expression.ts";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -39,9 +42,9 @@ export interface ActionStep {
   env?: Record<string, string>;
   if?: string;
   shell?: string;
-  'working-directory'?: string;
-  'continue-on-error'?: boolean;
-  'timeout-minutes'?: number;
+  "working-directory"?: string;
+  "continue-on-error"?: boolean;
+  "timeout-minutes"?: number;
 }
 
 export interface ActionRuns {
@@ -64,7 +67,7 @@ async function resolveCompositeWorkingDirectory(
   workingDirectory: string | undefined,
   actionDir: string,
   context: InterpolationContext,
-  workspacePath: string
+  workspacePath: string,
 ): Promise<string> {
   if (!workingDirectory) {
     return workspacePath;
@@ -93,7 +96,10 @@ async function resolveCompositeWorkingDirectory(
     throw new Error(`Invalid working directory: ${workingDirectory}`);
   }
 
-  if (isPathWithin(realWorkingPath, realWorkspacePath) || isPathWithin(realWorkingPath, realActionPath)) {
+  if (
+    isPathWithin(realWorkingPath, realWorkspacePath) ||
+    isPathWithin(realWorkingPath, realActionPath)
+  ) {
     return realWorkingPath;
   }
 
@@ -111,22 +117,40 @@ export async function executeCompositeAction(
   timeout: number,
   outputs: Record<string, ActionOutputDefinition> | undefined,
   delegate: {
-    executeRun(command: string, timeoutMs?: number, options?: { shell?: string; workingDirectory?: string }): Promise<ExecutorStepResult>;
-    executeAction(action: string, inputs: Record<string, unknown>, timeoutMs?: number, options?: { basePath?: string }): Promise<ExecutorStepResult>;
+    executeRun(
+      command: string,
+      timeoutMs?: number,
+      options?: { shell?: string; workingDirectory?: string },
+    ): Promise<ExecutorStepResult>;
+    executeAction(
+      action: string,
+      inputs: Record<string, unknown>,
+      timeoutMs?: number,
+      options?: { basePath?: string },
+    ): Promise<ExecutorStepResult>;
     getEnv(): Record<string, string>;
     setEnv(env: Record<string, string>): void;
     getWorkspacePath(): string;
-    withTemporaryEnv<T>(tempEnv: Record<string, string>, fn: () => Promise<T>): Promise<T>;
-  }
+    withTemporaryEnv<T>(
+      tempEnv: Record<string, string>,
+      fn: () => Promise<T>,
+    ): Promise<T>;
+  },
 ): Promise<ExecutorStepResult> {
   if (!runs.steps || !Array.isArray(runs.steps)) {
-    return { exitCode: 1, stdout: '', stderr: 'Composite action missing "steps"', outputs: {}, conclusion: 'failure' };
+    return {
+      exitCode: 1,
+      stdout: "",
+      stderr: 'Composite action missing "steps"',
+      outputs: {},
+      conclusion: "failure",
+    };
   }
 
   const stdoutParts: string[] = [];
   const stderrParts: string[] = [];
   const stepOutputs: Record<string, Record<string, string>> = {};
-  let jobStatus: 'success' | 'failure' = 'success';
+  let jobStatus: "success" | "failure" = "success";
 
   for (const step of runs.steps) {
     const context: InterpolationContext = {
@@ -141,18 +165,18 @@ export async function executeCompositeAction(
     }
 
     const stepEnv = resolveEnv(step.env, context);
-    const stepTimeout = step['timeout-minutes']
-      ? step['timeout-minutes'] * 60 * 1000
+    const stepTimeout = step["timeout-minutes"]
+      ? step["timeout-minutes"] * 60 * 1000
       : timeout;
 
     const result = await delegate.withTemporaryEnv(stepEnv, async () => {
       if (step.run) {
         const command = interpolateString(step.run, context);
         const workingDirectory = await resolveCompositeWorkingDirectory(
-          step['working-directory'],
+          step["working-directory"],
           actionDir,
           context,
-          delegate.getWorkspacePath()
+          delegate.getWorkspacePath(),
         );
         return delegate.executeRun(command, stepTimeout, {
           shell: step.shell,
@@ -163,10 +187,12 @@ export async function executeCompositeAction(
       if (step.uses) {
         const usesRef = interpolateString(step.uses, context);
         const resolvedWith = resolveWith(step.with, context);
-        return delegate.executeAction(usesRef, resolvedWith, stepTimeout, { basePath: actionDir });
+        return delegate.executeAction(usesRef, resolvedWith, stepTimeout, {
+          basePath: actionDir,
+        });
       }
 
-      return successResult('', {});
+      return successResult("", {});
     });
 
     appendOutput(result, stdoutParts, stderrParts);
@@ -175,9 +201,9 @@ export async function executeCompositeAction(
       stepOutputs[step.id] = result.outputs || {};
     }
 
-    const stepSuccess = result.conclusion === 'success';
-    if (!stepSuccess && !step['continue-on-error']) {
-      jobStatus = 'failure';
+    const stepSuccess = result.conclusion === "success";
+    if (!stepSuccess && !step["continue-on-error"]) {
+      jobStatus = "failure";
       break;
     }
   }
@@ -188,5 +214,10 @@ export async function executeCompositeAction(
     steps: stepOutputs,
     jobStatus,
   });
-  return buildCombinedResult(stdoutParts, stderrParts, resolvedOutputs, jobStatus);
+  return buildCombinedResult(
+    stdoutParts,
+    stderrParts,
+    resolvedOutputs,
+    jobStatus,
+  );
 }

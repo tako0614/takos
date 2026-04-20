@@ -5,7 +5,7 @@
  * execution, rollback, and query operations by delegating to the executor,
  * rollback, artifact, and helper sub-modules.
  */
-import type { WorkerBinding } from "../../../platform/providers/cloudflare/wfp.ts";
+import type { WorkerBinding } from "../../../platform/backends/cloudflare/wfp.ts";
 import { generateId } from "../../../shared/utils/index.ts";
 import { encrypt, encryptEnvVars } from "../../../shared/utils/crypto.ts";
 import { computeSHA256 } from "../../../shared/utils/hash.ts";
@@ -19,9 +19,9 @@ import type {
   RollbackInput,
 } from "./models.ts";
 import {
-  parseDeploymentTargetConfig,
-  serializeDeploymentTarget,
-} from "./provider.ts";
+  parseDeploymentBackendConfig,
+  serializeDeploymentBackendTarget,
+} from "./backend.ts";
 import {
   createDeploymentWithVersion,
   getDeploymentById,
@@ -78,6 +78,14 @@ export class DeploymentService {
     const deploymentId = generateId();
     const now = new Date().toISOString();
     const serviceId = resolveDeploymentServiceId(input);
+    const artifactKind: ArtifactKind = input.artifactKind ?? "worker-bundle";
+    const isContainerDeploy = artifactKind === "container-image";
+
+    if (!isContainerDeploy && !this.env.WORKER_BUNDLES) {
+      throw new InternalError(
+        "WORKER_BUNDLES must be configured for worker-bundle deployments",
+      );
+    }
 
     const serviceBasics = await getServiceDeploymentBasics(
       this.env.DB,
@@ -86,9 +94,6 @@ export class DeploymentService {
     if (!serviceBasics.exists) {
       throw new NotFoundError("Worker");
     }
-
-    const artifactKind: ArtifactKind = input.artifactKind ?? "worker-bundle";
-    const isContainerDeploy = artifactKind === "container-image";
 
     // Enforce same-kind rule: a service cannot mix artifact kinds after its first deploy.
     if (
@@ -101,12 +106,12 @@ export class DeploymentService {
 
     const strategy = input.strategy ?? "direct";
     const requestedCanaryWeight = input.canaryWeight ?? 1;
-    const serializedTarget = serializeDeploymentTarget({
-      provider: input.provider,
+    const serializedTarget = serializeDeploymentBackendTarget({
+      backend: input.backend,
       target: input.target,
     });
-    const normalizedTarget = parseDeploymentTargetConfig({
-      provider_name: serializedTarget.providerName,
+    const normalizedTarget = parseDeploymentBackendConfig({
+      backend_name: serializedTarget.backendName,
       target_json: serializedTarget.targetJson,
     });
     const artifactBaseRef = resolveDeploymentArtifactBaseRef(
@@ -140,6 +145,7 @@ export class DeploymentService {
         return existing;
       }
     }
+
     const desiredState = new ServiceDesiredStateService(this.env);
     const snapshot = input.snapshotOverride
       ? snapshotFromOverride(input.snapshotOverride)
@@ -203,9 +209,9 @@ export class DeploymentService {
           routingWeight: strategy === "canary" ? requestedCanaryWeight : 100,
           deployedBy: input.userId,
           deployMessage: input.deployMessage || null,
-          providerName: serializedTarget.providerName,
+          backendName: serializedTarget.backendName,
           targetJson: serializedTarget.targetJson,
-          providerStateJson: serializedTarget.providerStateJson,
+          backendStateJson: serializedTarget.backendStateJson,
           idempotencyKey: input.idempotencyKey ?? null,
           startedAt: now,
           createdAt: now,

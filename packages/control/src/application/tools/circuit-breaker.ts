@@ -1,5 +1,5 @@
-import { logInfo, logWarn } from '../../shared/utils/logger.ts';
-export type CircuitState = 'CLOSED' | 'OPEN' | 'HALF_OPEN';
+import { logInfo, logWarn } from "../../shared/utils/logger.ts";
+export type CircuitState = "CLOSED" | "OPEN" | "HALF_OPEN";
 
 export interface CircuitStats {
   state: CircuitState;
@@ -37,7 +37,7 @@ export class CircuitBreaker {
     let circuit = this.circuits.get(toolName);
     if (!circuit) {
       circuit = {
-        state: 'CLOSED',
+        state: "CLOSED",
         failures: 0,
         successes: 0,
         lastFailure: null,
@@ -54,25 +54,35 @@ export class CircuitBreaker {
     const now = Date.now();
 
     switch (circuit.state) {
-      case 'CLOSED':
+      case "CLOSED":
         return { allowed: true };
 
-      case 'OPEN':
+      case "OPEN":
         // Check if reset timeout has passed
-        if (circuit.openedAt && now - circuit.openedAt >= this.config.resetTimeout) {
+        if (
+          circuit.openedAt && now - circuit.openedAt >= this.config.resetTimeout
+        ) {
           // Transition to half-open
-          circuit.state = 'HALF_OPEN';
+          circuit.state = "HALF_OPEN";
           circuit.successes = 0;
-          logInfo(`Tool "${toolName}" transitioning to HALF_OPEN state`, { module: 'circuitbreaker' });
+          logInfo(`Tool "${toolName}" transitioning to HALF_OPEN state`, {
+            module: "circuitbreaker",
+          });
           return { allowed: true };
         }
         return {
           allowed: false,
-          reason: `Circuit breaker OPEN for tool "${toolName}" - ${this.config.failureThreshold} consecutive failures. ` +
-                  `Will retry in ${Math.ceil((this.config.resetTimeout - (now - (circuit.openedAt || 0))) / 1000)}s.`,
+          reason:
+            `Circuit breaker OPEN for tool "${toolName}" - ${this.config.failureThreshold} consecutive failures. ` +
+            `Will retry in ${
+              Math.ceil(
+                (this.config.resetTimeout - (now - (circuit.openedAt || 0))) /
+                  1000,
+              )
+            }s.`,
         };
 
-      case 'HALF_OPEN':
+      case "HALF_OPEN":
         return { allowed: true };
 
       default:
@@ -85,18 +95,21 @@ export class CircuitBreaker {
     circuit.lastSuccess = Date.now();
 
     switch (circuit.state) {
-      case 'HALF_OPEN':
+      case "HALF_OPEN":
         circuit.successes++;
         if (circuit.successes >= this.config.successThreshold) {
           // Close the circuit
-          circuit.state = 'CLOSED';
+          circuit.state = "CLOSED";
           circuit.failures = 0;
           circuit.openedAt = null;
-          logInfo(`Tool "${toolName}" circuit CLOSED after successful recovery`, { module: 'circuitbreaker' });
+          logInfo(
+            `Tool "${toolName}" circuit CLOSED after successful recovery`,
+            { module: "circuitbreaker" },
+          );
         }
         break;
 
-      case 'CLOSED':
+      case "CLOSED":
         // Reset failure count on success
         circuit.failures = 0;
         break;
@@ -109,19 +122,25 @@ export class CircuitBreaker {
     circuit.lastFailure = Date.now();
 
     switch (circuit.state) {
-      case 'HALF_OPEN':
+      case "HALF_OPEN":
         // Any failure in half-open reopens the circuit
-        circuit.state = 'OPEN';
+        circuit.state = "OPEN";
         circuit.openedAt = Date.now();
-        logWarn(`Tool "${toolName}" circuit REOPENED after failure in HALF_OPEN: ${error}`, { module: 'circuitbreaker' });
+        logWarn(
+          `Tool "${toolName}" circuit REOPENED after failure in HALF_OPEN: ${error}`,
+          { module: "circuitbreaker" },
+        );
         break;
 
-      case 'CLOSED':
+      case "CLOSED":
         if (circuit.failures >= this.config.failureThreshold) {
-          circuit.state = 'OPEN';
+          circuit.state = "OPEN";
           circuit.openedAt = Date.now();
-          logWarn(`Tool "${toolName}" circuit OPENED after ${this.config.failureThreshold} failures. ` +
-            `Last error: ${error}`, { module: 'circuitbreaker' });
+          logWarn(
+            `Tool "${toolName}" circuit OPENED after ${this.config.failureThreshold} failures. ` +
+              `Last error: ${error}`,
+            { module: "circuitbreaker" },
+          );
         }
         break;
     }

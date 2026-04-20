@@ -100,9 +100,6 @@ const makeRepoRow = (overrides: Partial<Record<string, unknown>> = {}) => ({
   stars: 5,
   forks: 2,
   gitEnabled: true,
-  isOfficial: false,
-  officialCategory: null,
-  officialMaintainer: null,
   featured: false,
   installCount: 0,
   createdAt: "2026-01-01T00:00:00.000Z",
@@ -234,7 +231,7 @@ Deno.test("createRepository - throws INVALID_NAME for empty name", async () => {
   );
 });
 
-Deno.test("createRepository - throws SPACE_NOT_FOUND when workspace does not exist", async () => {
+Deno.test("createRepository - throws SPACE_NOT_FOUND when space does not exist", async () => {
   const db = createFakeD1Database([{ get: undefined }]);
 
   await assertRejects(

@@ -8,13 +8,18 @@ export interface ToolExecution {
 
 /**
  * Canonical Agent RunStatus definition.
- * Intentionally duplicated in (cross-repo boundary prevents direct import):
- *   - takos-agent/packages/computer-core/src/shared/types.ts
+ * Shared by Takos control and agent runtime surfaces.
  *
  * NOT the same as the GitHub Actions RunStatus in packages/actions-engine/src/types.ts
  * ('queued'|'in_progress'|'completed'|'cancelled') — different domain concept.
  */
-export type RunStatus = 'pending' | 'queued' | 'running' | 'completed' | 'failed' | 'cancelled';
+export type RunStatus =
+  | "pending"
+  | "queued"
+  | "running"
+  | "completed"
+  | "failed"
+  | "cancelled";
 
 export interface Run {
   id: string;

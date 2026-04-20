@@ -16,10 +16,10 @@ import { analyzeTask } from "../../application/services/agent/workflow.ts";
 import {
   DEFAULT_MODEL_ID,
   filterAgentAllowedToolNames,
-  getProviderFromModel,
+  getBackendFromModel,
   normalizeModelId,
 } from "../../application/services/agent/index.ts";
-import { BUILTIN_TOOLS } from "../../application/tools/builtin/index.ts";
+import { CUSTOM_TOOLS } from "../../application/tools/custom/index.ts";
 import { getDb } from "../../infra/db/index.ts";
 import { agentTasks, runs, threads } from "../../infra/db/schema.ts";
 import { and, desc, eq } from "drizzle-orm";
@@ -35,8 +35,8 @@ import {
   VALID_STATUSES,
 } from "./agent-tasks-handlers.ts";
 
-const BUILTIN_TOOL_NAMES = filterAgentAllowedToolNames(
-  BUILTIN_TOOLS.map((tool) => tool.name),
+const CUSTOM_TOOL_NAMES = filterAgentAllowedToolNames(
+  CUSTOM_TOOLS.map((tool) => tool.name),
 );
 export const agentTaskRouteDeps = {
   checkSpaceAccess,
@@ -375,12 +375,12 @@ export default new Hono<{ Bindings: Env; Variables: BaseVariables }>()
     const model = normalizeModelId(task.model) ||
       normalizeModelId(access.space.ai_model) ||
       DEFAULT_MODEL_ID;
-    const provider = getProviderFromModel(model);
+    const backend = getBackendFromModel(model);
 
     let apiKey: string | undefined;
-    if (provider === "anthropic") {
+    if (backend === "anthropic") {
       apiKey = c.env.ANTHROPIC_API_KEY;
-    } else if (provider === "google") {
+    } else if (backend === "google") {
       apiKey = c.env.GOOGLE_API_KEY;
     } else {
       apiKey = c.env.OPENAI_API_KEY;
@@ -388,7 +388,7 @@ export default new Hono<{ Bindings: Env; Variables: BaseVariables }>()
 
     if (!apiKey) {
       throw new BadRequestError(
-        `API key for provider "${provider}" is not configured`,
+        `API key for backend "${backend}" is not configured`,
       );
     }
 
@@ -398,7 +398,7 @@ export default new Hono<{ Bindings: Env; Variables: BaseVariables }>()
       const plan = await analyzeTask(taskText, {
         spaceId: task.space_id,
         userId: user.id,
-        tools: BUILTIN_TOOL_NAMES,
+        tools: CUSTOM_TOOL_NAMES,
         apiKey,
         model,
       });

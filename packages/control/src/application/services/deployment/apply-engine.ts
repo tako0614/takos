@@ -2,14 +2,22 @@
  * Canonical group reconciler for the control plane.
  *
  * `.takos/app.yml` is compiled into `GroupDesiredState`, diffed against
- * canonical resources/services state, then reconciled through provider ops.
+ * canonical resources/services state, then reconciled through backend ops.
  */
 
 import { eq } from "drizzle-orm";
+import { BadRequestError } from "takos-common/errors";
 import { groups } from "../../../infra/db/schema-groups.ts";
 import type { AppManifest } from "../source/app-manifest-types.ts";
+import { assertManifestPublicationPrerequisites } from "../platform/service-publications.ts";
+import { getGroupAutoHostname } from "../routing/group-hostnames.ts";
 import { type GroupDesiredState, materializeRoutes } from "./group-state.ts";
-import type { DiffResult, GroupState } from "./diff.ts";
+import {
+  type DiffResult,
+  filterDiffByTargets,
+  type GroupState,
+  validateTargetsAgainstDesiredState,
+} from "./diff.ts";
 import { topologicalSortApplyEntries } from "./apply-order.ts";
 import type { TranslationReport } from "./translation-report.ts";
 import type { Env } from "../../../shared/types/env.ts";
@@ -54,11 +62,8 @@ export interface PlanResult {
 
 export interface ApplyManifestOpts {
   target?: string[];
-  autoApprove?: boolean;
   groupName?: string;
   envName?: string;
-  dispatchNamespace?: string;
-  rollbackOnFailure?: boolean;
   artifacts?: Record<string, unknown>;
 }
 
@@ -93,14 +98,14 @@ export async function getGroupState(
       {
         name: row.name,
         type: row.config.type,
-        resourceId: row.providerResourceId ?? row.config.providerResourceId ??
+        resourceId: row.backingResourceId ?? row.config.backingResourceId ??
           "",
         binding: row.config.binding,
         status: "active",
-        ...((row.providerResourceName ?? row.config.providerResourceName)
+        ...((row.backingResourceName ?? row.config.backingResourceName)
           ? {
-            providerResourceName: row.providerResourceName ??
-              row.config.providerResourceName,
+            backingResourceName: row.backingResourceName ??
+              row.config.backingResourceName,
           }
           : {}),
         ...(row.config.specFingerprint
@@ -161,8 +166,16 @@ export async function getGroupState(
       ]),
   );
 
+  const groupHostname = desiredState
+    ? await getGroupAutoHostname(env, {
+      groupId,
+      spaceId: group.spaceId,
+    })
+    : null;
   const routes = desiredState
-    ? materializeRoutes(desiredState.routes, workloads, group.updatedAt)
+    ? materializeRoutes(desiredState.routes, workloads, group.updatedAt, {
+      groupHostname,
+    })
     : {};
 
   if (
@@ -175,7 +188,7 @@ export async function getGroupState(
   return {
     groupId,
     groupName: group.name,
-    provider: group.provider ?? "cloudflare",
+    backend: group.backend ?? "cloudflare",
     env: group.env ?? "default",
     version: group.appVersion,
     updatedAt: group.updatedAt,
@@ -194,20 +207,71 @@ async function saveGroupSnapshots(
 ): Promise<void> {
   const db = applyEngineDeps.getDb(env.DB);
   const now = new Date().toISOString();
+  const snapshot = buildGroupSnapshotUpdate(
+    desiredState,
+    currentGroup,
+    status,
+  );
 
   await db.update(groups)
     .set({
-      appVersion: desiredState.version,
-      provider: desiredState.provider,
-      env: desiredState.env,
-      desiredSpecJson: JSON.stringify(desiredState.manifest),
-      providerStateJson: currentGroup?.providerStateJson ?? "{}",
-      reconcileStatus: status,
-      lastAppliedAt: now,
+      ...snapshot,
+      lastAppliedAt: status === "ready"
+        ? now
+        : currentGroup?.lastAppliedAt ?? null,
       updatedAt: now,
     })
     .where(eq(groups.id, groupId))
     .run();
+}
+
+export function buildGroupSnapshotUpdate(
+  desiredState: GroupDesiredState,
+  currentGroup: GroupRow | null,
+  status: "ready" | "degraded",
+): {
+  appVersion: string | null;
+  backend: string | null;
+  env: string | null;
+  desiredSpecJson: string | null;
+  backendStateJson: string;
+  reconcileStatus: "ready" | "degraded";
+} {
+  if (status === "ready") {
+    return {
+      appVersion: desiredState.version,
+      backend: desiredState.backend,
+      env: desiredState.env,
+      desiredSpecJson: JSON.stringify(desiredState.manifest),
+      backendStateJson: currentGroup?.backendStateJson ?? "{}",
+      reconcileStatus: status,
+    };
+  }
+
+  return {
+    appVersion: currentGroup?.appVersion ?? null,
+    backend: currentGroup?.backend ?? null,
+    env: currentGroup?.env ?? null,
+    desiredSpecJson: currentGroup?.desiredSpecJson ?? null,
+    backendStateJson: currentGroup?.backendStateJson ?? "{}",
+    reconcileStatus: status,
+  };
+}
+
+function resolveTargetWorkloadNames(
+  diff: DiffResult,
+  targets?: string[],
+): string[] | undefined {
+  const normalizedTargets = (targets ?? []).map((target) => target.trim())
+    .filter(Boolean);
+  if (normalizedTargets.length === 0) return undefined;
+
+  const names = new Set(
+    diff.entries
+      .filter((entry) => entry.category !== "route")
+      .map((entry) => entry.name),
+  );
+  return names.size > 0 ? Array.from(names.values()) : [];
 }
 
 export async function applyManifest(
@@ -234,19 +298,33 @@ export async function applyManifest(
     getCurrentState: (targetGroupId) => getGroupState(env, targetGroupId),
   });
 
-  // Cross-resource deploy-time validation gate. Runs immediately before any
-  // DB write or provider apply so the deploy fails fast with a clear error
-  // and the caller never sees a partially-applied state.
+  const unmatchedTargets = validateTargetsAgainstDesiredState(
+    plan.desiredState,
+    opts.target,
+  );
+  if (unmatchedTargets.length > 0) {
+    throw new BadRequestError(
+      `Target${unmatchedTargets.length > 1 ? "s" : ""} ${
+        unmatchedTargets.map((target) => `'${target}'`).join(", ")
+      } did not match any desired workload or route`,
+    );
+  }
+
+  // Cross-resource deploy-time validation gates. They run immediately before
+  // runtime apply so deploy fails fast with a clear error instead of reaching
+  // managed-state sync after workloads have been applied.
   assertDeployValid(plan.effectiveManifest);
+  await assertManifestPublicationPrerequisites(env, {
+    spaceId: group.spaceId,
+    manifest: plan.effectiveManifest,
+  });
   applyEngineDeps.assertTranslationSupported(plan.translationReport, {
-    ociOrchestratorUrl: env.OCI_ORCHESTRATOR_URL,
+    ...applyEngineDeps.buildTranslationContextFromEnv(env),
   });
 
-  let entries = plan.diff.entries;
-  if (opts.target && opts.target.length > 0) {
-    const targetSet = new Set(opts.target);
-    entries = entries.filter((entry) => targetSet.has(entry.name));
-  }
+  const diff = filterDiffByTargets(plan.diff, opts.target);
+  const targetWorkloadNames = resolveTargetWorkloadNames(diff, opts.target);
+  const entries = diff.entries;
 
   const ordered = topologicalSortApplyEntries(entries, plan.desiredState);
 
@@ -254,7 +332,7 @@ export async function applyManifest(
     groupId,
     applied: [],
     skipped: [],
-    diff: plan.diff,
+    diff,
     translationReport: plan.translationReport,
   };
   const routeEntries = ordered.filter((entry) =>
@@ -307,6 +385,9 @@ export async function applyManifest(
       groupId,
       plan.desiredState,
       group.spaceId,
+      {
+        targetWorkloadNames,
+      },
     );
     result.applied.push(
       ...syncFailures.map((failure) => ({
@@ -328,6 +409,8 @@ export async function applyManifest(
         applyEngineDeps,
         env,
         {
+          groupId,
+          spaceId: group.spaceId,
           desiredState: plan.desiredState,
           currentRoutes: plan.currentState?.routes ?? {},
           refreshedWorkloads: refreshedState.workloads,
@@ -361,8 +444,9 @@ export async function planManifest(
   manifest?: AppManifest,
   opts: {
     groupName?: string;
-    providerName?: string;
+    backendName?: string;
     envName?: string;
+    target?: string[];
   } = {},
 ): Promise<PlanResult> {
   const group = groupId ? await getGroupRecord(env, groupId) : null;
@@ -380,9 +464,15 @@ export async function planManifest(
     getCurrentState: (targetGroupId) => getGroupState(env, targetGroupId),
   });
   assertDeployValid(plan.effectiveManifest);
+  if (group) {
+    await assertManifestPublicationPrerequisites(env, {
+      spaceId: group.spaceId,
+      manifest: plan.effectiveManifest,
+    });
+  }
 
   return {
-    diff: plan.diff,
+    diff: filterDiffByTargets(plan.diff, opts.target),
     translationReport: plan.translationReport,
   };
 }

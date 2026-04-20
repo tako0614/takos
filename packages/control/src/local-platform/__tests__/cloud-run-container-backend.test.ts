@@ -62,7 +62,10 @@ Deno.test("CloudRunContainerBackend - deploys a service, returns the service URL
   );
   await assertEquals(await backend.remove("takos-service"), undefined);
 
-  const deployArgs = commandRunner.calls[0]!.args as unknown as [string, string[]];
+  const deployArgs = commandRunner.calls[0]!.args as unknown as [
+    string,
+    string[],
+  ];
   assertEquals(deployArgs[0], "gcloud");
   assertEquals(deployArgs[1].slice(0, 7), [
     "run",
@@ -76,6 +79,16 @@ Deno.test("CloudRunContainerBackend - deploys a service, returns the service URL
   assertEquals(deployArgs[1].includes("--service-account"), true);
   assertEquals(deployArgs[1].includes("--ingress"), true);
   assertEquals(deployArgs[1].includes("--no-allow-unauthenticated"), true);
+  assertEquals(
+    deployArgs[1].includes("--set-env-vars"),
+    true,
+  );
+  assertEquals(
+    deployArgs[1].some((entry) =>
+      String(entry).includes("NODE_ENV=production")
+    ),
+    true,
+  );
   assertEquals(deployArgs[1].includes("--project"), true);
   const logArgs = commandRunner.calls[1]!.args as unknown as [string, string[]];
   assertEquals(logArgs[0], "gcloud");
@@ -95,5 +108,5 @@ Deno.test("CloudRunContainerBackend - deploys a service, returns the service URL
     "--quiet",
     "--project",
     "takos-project",
-  ]]);
+  ], { env: {} }]);
 });

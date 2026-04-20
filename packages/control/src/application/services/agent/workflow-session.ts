@@ -1,41 +1,44 @@
 /**
  * Session management for the agent workflow system.
  *
- * Handles starting runtime sessions, snapshotting workspace state,
+ * Handles starting runtime sessions, snapshotting space state,
  * and committing session results back to the account.
  */
 
-import type { SnapshotTree } from '../sync/models.ts';
-import type { WorkflowContext, RuntimeSnapshotResponse } from './workflow-types.ts';
-import { SnapshotManager } from '../sync/snapshot.ts';
-import { generateId } from '../../../shared/utils/index.ts';
-import { getDb, sessions, accounts, runs } from '../../../infra/db/index.ts';
-import { eq } from 'drizzle-orm';
-import { callRuntimeRequest } from '../execution/runtime-request-handler.ts';
-import { logError } from '../../../shared/utils/logger.ts';
+import type { SnapshotTree } from "../sync/models.ts";
+import type {
+  RuntimeSnapshotResponse,
+  WorkflowContext,
+} from "./workflow-types.ts";
+import { SnapshotManager } from "../sync/snapshot.ts";
+import { generateId } from "../../../shared/utils/index.ts";
+import { accounts, getDb, runs, sessions } from "../../../infra/db/index.ts";
+import { eq } from "drizzle-orm";
+import { callRuntimeRequest } from "../execution/runtime-request-handler.ts";
+import { logError } from "../../../shared/utils/logger.ts";
 
 // ── Session start ───────────────────────────────────────────────────────
 
 export async function startWorkflowSession(
   context: WorkflowContext,
-  needsRuntime: boolean
+  needsRuntime: boolean,
 ): Promise<{ sessionId: string; snapshotId: string }> {
   const { env, spaceId, runId } = context;
   const db = getDb(env.DB);
   const timestamp = new Date().toISOString();
 
-  const workspace = await db.select({
+  const space = await db.select({
     headSnapshotId: accounts.headSnapshotId,
   }).from(accounts).where(eq(accounts.id, spaceId)).get();
 
-  const baseSnapshotId = workspace?.headSnapshotId || '';
+  const baseSnapshotId = space?.headSnapshotId || "";
   const sessionId = generateId();
 
   await db.insert(sessions).values({
     id: sessionId,
     accountId: spaceId,
     baseSnapshotId,
-    status: 'running',
+    status: "running",
     createdAt: timestamp,
     updatedAt: timestamp,
   });
@@ -44,7 +47,9 @@ export async function startWorkflowSession(
 
   if (needsRuntime) {
     if (!env.RUNTIME_HOST) {
-      throw new Error('RUNTIME_HOST binding is required when needsRuntime is true');
+      throw new Error(
+        "RUNTIME_HOST binding is required when needsRuntime is true",
+      );
     }
 
     const snapshotManager = new SnapshotManager(env, spaceId);
@@ -62,8 +67,8 @@ export async function startWorkflowSession(
       }
     }
 
-    await callRuntimeRequest(env, '/session/init', {
-      method: 'POST',
+    await callRuntimeRequest(env, "/session/init", {
+      method: "POST",
       body: {
         session_id: sessionId,
         space_id: spaceId,
@@ -79,13 +84,13 @@ export async function startWorkflowSession(
 
 export async function commitWorkflowSession(
   context: WorkflowContext,
-  message: string
+  message: string,
 ): Promise<{ snapshotId: string; hash?: string }> {
   const { env, spaceId, sessionId } = context;
   const db = getDb(env.DB);
 
   if (!sessionId) {
-    throw new Error('No session to commit');
+    throw new Error("No session to commit");
   }
 
   const timestamp = new Date().toISOString();
@@ -105,8 +110,8 @@ export async function commitWorkflowSession(
     const BLOB_CHUNK_SIZE = 50;
 
     try {
-      const response = await callRuntimeRequest(env, '/session/snapshot', {
-        method: 'POST',
+      const response = await callRuntimeRequest(env, "/session/snapshot", {
+        method: "POST",
         body: {
           session_id: sessionId,
           space_id: spaceId,
@@ -120,12 +125,14 @@ export async function commitWorkflowSession(
           const chunk = snapshot.files.slice(i, i + BLOB_CHUNK_SIZE);
 
           for (const file of chunk) {
-            const { hash, size } = await snapshotManager.writeBlob(file.content);
+            const { hash, size } = await snapshotManager.writeBlob(
+              file.content,
+            );
             tree[file.path] = {
               hash,
               size,
               mode: 0o644,
-              type: 'file',
+              type: "file",
             };
             (file as { content: string | null }).content = null;
           }
@@ -134,7 +141,9 @@ export async function commitWorkflowSession(
         snapshot.files.length = 0;
       }
     } catch (error) {
-      logError('Failed to get runtime snapshot', error, { module: 'services/agent/workflow-session' });
+      logError("Failed to get runtime snapshot", error, {
+        module: "services/agent/workflow-session",
+      });
     }
   }
 
@@ -142,12 +151,19 @@ export async function commitWorkflowSession(
     tree,
     session.baseSnapshotId ? [session.baseSnapshotId] : [],
     message,
-    'ai'
+    "ai",
   );
 
-  await db.update(sessions).set({ status: 'stopped', headSnapshotId: newSnapshot.id, updatedAt: timestamp })
+  await db.update(sessions).set({
+    status: "stopped",
+    headSnapshotId: newSnapshot.id,
+    updatedAt: timestamp,
+  })
     .where(eq(sessions.id, sessionId));
-  await db.update(accounts).set({ headSnapshotId: newSnapshot.id, updatedAt: timestamp })
+  await db.update(accounts).set({
+    headSnapshotId: newSnapshot.id,
+    updatedAt: timestamp,
+  })
     .where(eq(accounts.id, spaceId));
 
   await snapshotManager.completeSnapshot(newSnapshot.id);

@@ -35,4 +35,12 @@ Deno.test("handleRunEvent deduplicates replayed run event sequence", async () =>
   assertEquals(second.status, 200);
   assertEquals(await second.json(), { success: true, duplicate: true });
   assertEquals(emittedRequests.length, 1);
+  const emittedBody = await emittedRequests[0].json() as Record<
+    string,
+    unknown
+  >;
+  assertEquals(
+    emittedBody.dedup_key,
+    `run:${body.runId}:sequence:${body.sequence}:type:${body.type}`,
+  );
 });

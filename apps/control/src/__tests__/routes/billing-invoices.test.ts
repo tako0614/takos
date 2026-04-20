@@ -11,7 +11,7 @@ import type {
   CompletedCheckoutSession,
   ListInvoicesInput,
   NormalizedInvoice,
-  PaymentProvider,
+  PaymentProcessor,
 } from "@/services/billing/billing";
 
 const billingMocks = {
@@ -38,20 +38,27 @@ const billingMocks = {
   ),
 };
 
-interface ProviderMock {
+interface ProcessorMock {
   createCheckoutSession: (input: unknown) => Promise<CheckoutSessionResult>;
   createPortalSession: (input: unknown) => Promise<{ url: string }>;
-  retrieveCheckoutSession: (sessionId: string) => Promise<CompletedCheckoutSession>;
-  listInvoices: (input: ListInvoicesInput) => Promise<{ invoices: NormalizedInvoice[]; hasMore: boolean }>;
+  retrieveCheckoutSession: (
+    sessionId: string,
+  ) => Promise<CompletedCheckoutSession>;
+  listInvoices: (
+    input: ListInvoicesInput,
+  ) => Promise<{ invoices: NormalizedInvoice[]; hasMore: boolean }>;
   retrieveInvoice: (invoiceId: string) => Promise<NormalizedInvoice>;
   sendInvoice: (invoiceId: string) => Promise<void>;
-  parseWebhook: (payload: string, signature: string) => Promise<BillingWebhookEvent>;
+  parseWebhook: (
+    payload: string,
+    signature: string,
+  ) => Promise<BillingWebhookEvent>;
   isTrustedPdfUrl: (url: URL) => boolean;
 }
 
-let providerMock: ProviderMock;
+let processorMock: ProcessorMock;
 
-function newProviderMock(): ProviderMock {
+function newProcessorMock(): ProcessorMock {
   return {
     createCheckoutSession: ((..._a: any[]) => undefined) as any,
     createPortalSession: ((..._a: any[]) => undefined) as any,
@@ -110,14 +117,14 @@ function syncBillingRouteDeps() {
   billingRouteDeps.resolveBillingMode = billingMocks.resolveBillingMode as any;
   billingRouteDeps.resolveBillingPlanTier = billingMocks
     .resolveBillingPlanTier as any;
-  billingRouteDeps.resolvePaymentProvider = (() =>
-    ({ name: "stripe", ...providerMock }) as PaymentProvider) as any;
+  billingRouteDeps.resolvePaymentProcessor =
+    (() => ({ name: "stripe", ...processorMock }) as PaymentProcessor) as any;
 }
 
 Deno.test("billing invoices API - GET /api/billing/invoices returns 500 when Stripe is not configured", async () => {
-  providerMock = newProviderMock();
-  // Simulate provider factory failing because STRIPE_SECRET_KEY is missing.
-  billingRouteDeps.resolvePaymentProvider = (() => {
+  processorMock = newProcessorMock();
+  // Simulate processor factory failing because STRIPE_SECRET_KEY is missing.
+  billingRouteDeps.resolvePaymentProcessor = (() => {
     throw new Error("STRIPE_SECRET_KEY is not configured");
   }) as any;
 
@@ -137,9 +144,9 @@ Deno.test("billing invoices API - GET /api/billing/invoices returns 500 when Str
 });
 
 Deno.test("billing invoices API - GET /api/billing/invoices returns 400 when user has no payment account", async () => {
-  providerMock = newProviderMock();
+  processorMock = newProcessorMock();
   billingMocks.getOrCreateBillingAccount = (async () => ({
-    providerCustomerId: null,
+    processorCustomerId: null,
   })) as any;
   syncBillingRouteDeps();
   const user = createUser();
@@ -162,9 +169,9 @@ Deno.test("billing invoices API - GET /api/billing/invoices returns 400 when use
 });
 
 Deno.test("billing invoices API - GET /api/billing/invoices returns invoices list", async () => {
-  providerMock = newProviderMock();
+  processorMock = newProcessorMock();
   billingMocks.getOrCreateBillingAccount = (async () => ({
-    providerCustomerId: "cus_123",
+    processorCustomerId: "cus_123",
   })) as any;
   const listInvoicesSpy = spy(async (_input: ListInvoicesInput) => ({
     invoices: [
@@ -186,7 +193,7 @@ Deno.test("billing invoices API - GET /api/billing/invoices returns invoices lis
     ],
     hasMore: false,
   }));
-  providerMock.listInvoices = listInvoicesSpy as any;
+  processorMock.listInvoices = listInvoicesSpy as any;
   syncBillingRouteDeps();
   const user = createUser();
   const app = createBillingApp(user);
@@ -226,11 +233,11 @@ Deno.test("billing invoices API - GET /api/billing/invoices returns invoices lis
 });
 
 Deno.test("billing invoices API - GET /api/billing/invoices/:id/pdf returns 404 when invoice is not owned by customer", async () => {
-  providerMock = newProviderMock();
+  processorMock = newProcessorMock();
   billingMocks.getOrCreateBillingAccount = (async () => ({
-    providerCustomerId: "cus_123",
+    processorCustomerId: "cus_123",
   })) as any;
-  providerMock.retrieveInvoice = (async () => ({
+  processorMock.retrieveInvoice = (async () => ({
     id: "in_1",
     customerId: "cus_other",
     number: null,
@@ -270,11 +277,11 @@ Deno.test("billing invoices API - GET /api/billing/invoices/:id/pdf returns 404 
 });
 
 Deno.test("billing invoices API - GET /api/billing/invoices/:id/pdf streams the invoice PDF", async () => {
-  providerMock = newProviderMock();
+  processorMock = newProcessorMock();
   billingMocks.getOrCreateBillingAccount = (async () => ({
-    providerCustomerId: "cus_123",
+    processorCustomerId: "cus_123",
   })) as any;
-  providerMock.retrieveInvoice = (async () => ({
+  processorMock.retrieveInvoice = (async () => ({
     id: "in_1",
     customerId: "cus_123",
     number: null,
@@ -320,11 +327,11 @@ Deno.test("billing invoices API - GET /api/billing/invoices/:id/pdf streams the 
 });
 
 Deno.test("billing invoices API - POST /api/billing/invoices/:id/send returns success", async () => {
-  providerMock = newProviderMock();
+  processorMock = newProcessorMock();
   billingMocks.getOrCreateBillingAccount = (async () => ({
-    providerCustomerId: "cus_123",
+    processorCustomerId: "cus_123",
   })) as any;
-  providerMock.retrieveInvoice = (async () => ({
+  processorMock.retrieveInvoice = (async () => ({
     id: "in_1",
     customerId: "cus_123",
     number: null,
@@ -340,7 +347,7 @@ Deno.test("billing invoices API - POST /api/billing/invoices/:id/send returns su
     pdfUrl: "https://files.stripe.com/pdf/in_1",
   } as NormalizedInvoice)) as any;
   const sendInvoiceSpy = spy(async (_invoiceId: string) => undefined);
-  providerMock.sendInvoice = sendInvoiceSpy as any;
+  processorMock.sendInvoice = sendInvoiceSpy as any;
   syncBillingRouteDeps();
 
   const user = createUser();

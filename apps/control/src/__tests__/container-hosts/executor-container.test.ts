@@ -1,4 +1,4 @@
-import { TakosAgentExecutorContainer } from "@/container-hosts/executor-host";
+import { ExecutorContainerTier1 } from "@/container-hosts/executor-host";
 
 import { assert, assertEquals, assertNotEquals } from "jsr:@std/assert";
 import { assertSpyCallArgs, spy } from "jsr:@std/testing/mock";
@@ -26,21 +26,22 @@ let env: ReturnType<typeof createMockCtxAndEnv>["env"];
 let storage: ReturnType<typeof createMockCtxAndEnv>["storage"];
 
 Deno.test(
-  "TakosAgentExecutorContainer - injects CONTROL_RPC_BASE_URL into container env vars",
+  "ExecutorContainerTier1 - injects CONTROL_RPC_BASE_URL and executor tier into container env vars",
   () => {
     ({ ctx, env, storage } = createMockCtxAndEnv());
-    const container = new TakosAgentExecutorContainer(ctx as any, env as any);
+    const container = new ExecutorContainerTier1(ctx as any, env as any);
     assertEquals(container.envVars, {
       CONTROL_RPC_BASE_URL: "https://control-rpc.example.internal",
+      EXECUTOR_TIER: "1",
     });
   },
 );
 
 Deno.test(
-  "TakosAgentExecutorContainer - dispatchStart forwards the canonical control RPC payload and persists the control token",
+  "ExecutorContainerTier1 - dispatchStart forwards the canonical control RPC payload and persists the control token",
   async () => {
     ({ ctx, env, storage } = createMockCtxAndEnv());
-    const container = new TakosAgentExecutorContainer(ctx as any, env as any);
+    const container = new ExecutorContainerTier1(ctx as any, env as any);
 
     let capturedRequest: Request | null = null;
     (container as any).container = {
@@ -84,7 +85,7 @@ Deno.test(
       {
         runId: string;
         serviceId: string;
-        capability: "bindings" | "control";
+        capability: "control";
       }
     >;
     assert(tokenMap !== undefined);
@@ -108,23 +109,23 @@ Deno.test(
 );
 
 Deno.test(
-  "TakosAgentExecutorContainer - verifyProxyToken loads persisted tokens from storage and rejects unknown token",
+  "ExecutorContainerTier1 - verifyProxyToken loads persisted tokens from storage and rejects unknown token",
   async () => {
     ({ ctx, env, storage } = createMockCtxAndEnv());
     storage.set("proxyTokens", {
       "persisted-token": {
         runId: "run-old",
         serviceId: "worker-old",
-        capability: "bindings",
+        capability: "control",
       },
     });
 
-    const container = new TakosAgentExecutorContainer(ctx as any, env as any);
+    const container = new ExecutorContainerTier1(ctx as any, env as any);
 
     assertEquals(await container.verifyProxyToken("persisted-token"), {
       runId: "run-old",
       serviceId: "worker-old",
-      capability: "bindings",
+      capability: "control",
     });
     assertEquals(await container.verifyProxyToken("unknown-token"), null);
   },

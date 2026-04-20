@@ -48,6 +48,37 @@ function createDrizzleMock() {
   };
 }
 
+function createPublicationDb(rows: unknown[]) {
+  return {
+    select: () => ({
+      from: function (this: any) {
+        return this;
+      },
+      where: function (this: any) {
+        return this;
+      },
+      orderBy: function (this: any) {
+        return this;
+      },
+      all: async () => rows,
+      get: async () => rows[0] ?? null,
+    }),
+    insert: () => ({
+      values: () => ({
+        run: async () => undefined,
+      }),
+    }),
+    update: () => ({
+      set: () => ({
+        where: async () => ({ meta: { changes: 0 } }),
+      }),
+    }),
+    delete: () => ({
+      where: async () => ({ meta: { changes: 0 } }),
+    }),
+  } as D1Database;
+}
+
 const makeExtRow = (overrides: Record<string, unknown> = {}) => ({
   id: "ext-1",
   accountId: "ws-1",
@@ -224,7 +255,10 @@ Deno.test("getUISidebarItems - returns empty array when no sidebar extensions", 
   setUiDb(drizzle);
 
   try {
-    const result = await getUISidebarItems({} as D1Database, "ws-1");
+    const result = await getUISidebarItems(
+      createPublicationDb([]),
+      "ws-1",
+    );
     assertEquals(result, []);
   } finally {
     restoreUiDeps();
@@ -239,11 +273,67 @@ Deno.test("getUISidebarItems - filters out invalid sidebar JSON", async () => {
   ]) as any;
   setUiDb(drizzle);
 
+  const publicationRows = [
+    {
+      id: "pub-1",
+      name: "panel-1",
+      sourceType: "manifest",
+      groupId: null,
+      ownerServiceId: null,
+      catalogName: null,
+      publicationType: "UiSurface",
+      specJson: JSON.stringify({
+        name: "panel-1",
+        publisher: "external",
+        type: "ui-surface",
+        path: "/custom-panel",
+        spec: {
+          sidebar: {
+            label: "Panel",
+            icon: "star",
+            path: "/custom-panel",
+          },
+        },
+      }),
+      resolvedJson: JSON.stringify({ url: "https://example.com/custom-panel" }),
+      createdAt: "2026-01-01T00:00:00.000Z",
+      updatedAt: "2026-01-01T00:00:00.000Z",
+    },
+    {
+      id: "pub-2",
+      name: "panel-2",
+      sourceType: "manifest",
+      groupId: null,
+      ownerServiceId: null,
+      catalogName: null,
+      publicationType: "UiSurface",
+      specJson: JSON.stringify({
+        name: "panel-2",
+        publisher: "external",
+        type: "ui-surface",
+        path: "/custom-panel-2",
+        spec: {
+          sidebar: {
+            label: "Panel 2",
+            icon: "sparkles",
+            path: "/custom-panel-2",
+          },
+        },
+      }),
+      resolvedJson: JSON.stringify({}),
+      createdAt: "2026-01-01T00:00:00.000Z",
+      updatedAt: "2026-01-01T00:00:00.000Z",
+    },
+  ];
+
   try {
-    const result = await getUISidebarItems({} as D1Database, "ws-1");
+    const result = await getUISidebarItems(
+      createPublicationDb(publicationRows),
+      "ws-1",
+    );
     // The first has valid sidebar, the second is missing label/icon
     assertEquals(result.length, 1);
-    assertEquals(result[0].extensionId, "ext-1");
+    assertEquals(result[0].extensionId, "publication:pub-1");
   } finally {
     restoreUiDeps();
   }

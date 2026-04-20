@@ -1,9 +1,9 @@
 /**
  * Billing API Routes
  *
- * Endpoints for subscription management, usage viewing, and payment provider
- * integration. The active provider is selected via the `BILLING_PROVIDER` env
- * (default: 'stripe') — see `application/services/billing/providers/`.
+ * Endpoints for subscription management, usage viewing, and payment processor
+ * integration. The active processor is selected via the `BILLING_PROCESSOR` env
+ * (default: 'stripe') — see `application/services/billing/processors/`.
  */
 
 import { Hono } from "hono";
@@ -25,6 +25,6 @@ export { billingRouteDeps, billingWebhookHandler };
 export {
   getConfiguredProTopupPacks,
   resolveConfiguredProTopupPack,
-} from "../../../application/services/billing/providers/stripe/stripe-purchase-config.ts";
+} from "../../../application/services/billing/processors/stripe/stripe-purchase-config.ts";
 
 export default billingRoutes;

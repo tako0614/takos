@@ -1,4 +1,5 @@
 import { Hono } from "hono";
+import { isAppError } from "takos-common/errors";
 import { assertEquals } from "jsr:@std/assert";
 import { assertSpyCalls, spy } from "jsr:@std/testing/mock";
 
@@ -25,6 +26,28 @@ function createApp(
   user: User,
 ): Hono<{ Bindings: Env; Variables: { user: User } }> {
   const app = new Hono<{ Bindings: Env; Variables: { user: User } }>();
+  app.onError((error, c) => {
+    if (isAppError(error)) {
+      return c.json(
+        error.toResponse(),
+        error.statusCode as
+          | 400
+          | 401
+          | 403
+          | 404
+          | 409
+          | 410
+          | 422
+          | 429
+          | 500
+          | 501
+          | 502
+          | 503
+          | 504,
+      );
+    }
+    throw error;
+  });
   app.use("*", async (c, next) => {
     c.set("user", user);
     await next();
@@ -84,7 +107,7 @@ Deno.test(
           {} as ExecutionContext,
         );
 
-        assertEquals(response.status, 500);
+        assertEquals(response.status, 404);
         assertSpyCalls(requireSpaceAccessSpy, 1);
         assertEquals(
           (requireSpaceAccessSpy.calls[0] as any).args[1],

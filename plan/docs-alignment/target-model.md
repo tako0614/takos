@@ -1,41 +1,61 @@
-# Takos Docs-First Target Model
+# Takos Docs Alignment
 
-docs 整合のために固定する target model。実装判断で迷う場合はこの文書より public docs を優先し、この文書はその適用ルールを補足する。
+この文書を `plan/docs-alignment/` の単一の整理メモとする。public docs
+が正本で、この文書は current contract を実装・docs 修正時にぶらさないための
+補助メモです。
 
-## Canonical Public Surface
+## Current Public Contract
 
-- deploy entrypoint は `takos deploy` のみ
-- preview は standalone command ではなく `takos deploy --plan`
-- install は catalog resolution を行う `takos deploy` の sugar
-- rollback は group の previous successful snapshot を再適用する操作
-- uninstall は group の desired state を空にしたうえで managed resources と group row を削除する terminal 操作
-- manifest の public schema は flat top-level の `.takos/app.yml` のみ
+- deploy entrypoint は `takos deploy`。preview は `takos deploy --plan`。
+  `takos install` は catalog resolution を行う `takos deploy` の sugar。
+- deploy manifest は flat top-level の `.takos/app.yml` / `.takos/app.yaml`。
+  filename には `app` が残るが、意味上は app catalog ではなく group deploy
+  manifest。
+- public manifest の top-level field は `name`, `version`, `compute`, `routes`,
+  `publish`, `env`, `overrides`。`provider` / `backend` / `resources`
+  は current manifest field ではない。
+- backend / adapter 選択は operator-only runtime configuration。public manifest,
+  public API request, examples には backend 名を書かない。
+- deploy lifecycle の正本語は group deployment snapshot。source kind
+  (`manifest` / `git_ref`) は provenance であり lifecycle の差ではない。
+- `publish` は information sharing catalog。route/interface metadata と Takos
+  capability grants だけを扱う。
+- Takos capability grant は `publisher: takos` と `type: api-key` /
+  `type: oauth-client`。SQL / object-store / queue などの resource type は
+  Takos publisher type ではない。
+- route publication の `type` は custom string。`McpServer` / `FileHandler` /
+  `UiSurface` は platform / app が解釈する custom type の例で、core の固定 type
+  ではない。
+- resource lifecycle は `/api/resources/*`, `takos resource|res`, runtime
+  binding の責務。resource access を `publish[].spec.resource` や
+  `type: resource` で表現しない。
+- `compute.<name>.consume` は publication / grant output を env に注入する明示的な
+  alias map。自動注入はしない。
 
-## Canonical Model
+## Implementation Alignment Rules
 
-- `primitive` は compute / storage / route / publish の 1st-class entity
-- `group` は primitive を束ねる optional bundling layer
-- `app deployment` は local manifest / repo deploy / install のどれでも immutable snapshot を作る
-- `source` は provenance であり lifecycle の別物ではない
-- `desired state` は group にひもづく canonical manifest projection
-
-## Compatibility Rules
-
-- hidden legacy CLI command は互換のために残してよいが、public help と current docs に出さない
-- deprecated manifest type alias は既存 deploy code の移行が終わるまで許容するが、新規コードでは使わない
-- envelope schema は parser の public entrypoint では受けない
-- legacy field alias を受ける場合は parser compatibility に閉じ込め、canonical output は必ず docs の field 名に正規化する
+- parser は envelope schema (`apiVersion` / `kind` / `metadata` / `spec`) を public
+  entrypoint で受けない。
+- parser compatibility が legacy alias を受ける場合でも、canonical output は public
+  docs の field 名に正規化する。
+- hidden legacy CLI command は互換層として残してよいが、public help と current
+  docs には出さない。
+- deploy HTTP API / tool / docs は `/api/spaces/:spaceId/group-deployment-snapshots`
+  と `group_deployment_snapshot_*` を canonical surface とする。
+- service-level desired state は runtime materialization / next-deploy settings
+  として扱い、group manifest と同格の public desired state に見せない。
+- resource CRUD から group desired manifest への逆投影は current public contract
+  ではない。既存 foundation を group に所属させる操作は inventory 操作として扱う。
+- `resources:` / `compute.<name>.resources` manifest syntax は採用しない。
 
 ## Required Guards
 
-- CLI help contract test: `deploy`, `rollback`, `install`, `uninstall`, `group`, `resource` を current surface として固定する
-- removed legacy surface test: `apply`, `plan`, `api`, `service` を public help に出さない
-- manifest contract test: docs 例の worker/service/attached-container/publish が parse できる
-- dependency contract test: `compute.<name>.depends` は compute と storage の両方を許可する
-
-## Migration Order
-
-1. parser と CLI help の public contract を test で固定する
-2. deploy 内部の canonical type import に寄せる
-3. 補助文書と user-facing copy の legacy surface を削る
-4. rollback event など未完了の lifecycle semantics を current docs に揃える
+- CLI help contract: `deploy`, `rollback`, `install`, `uninstall`, `group`,
+  `resource` を current surface として固定する。
+- removed legacy surface: `apply`, `plan`, `api`, `service` を public help に出さない。
+- manifest contract: docs 例の worker / service / attached-container / publish /
+  consume が parse できる。
+- dependency contract: `compute.<name>.depends` は compute 名だけを許可し、resource
+  dependency は resource lifecycle / runtime binding に寄せる。
+- terminology guard: public deploy docs で `app deployment` や provider-specific
+  deploy surface を canonical term として増やさない。

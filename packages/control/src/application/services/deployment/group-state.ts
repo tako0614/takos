@@ -2,17 +2,12 @@ import type {
   AppCompute,
   AppManifest,
   AppManifestOverride,
+  AppPublication,
 } from "../source/app-manifest-types.ts";
+import { parseCompute } from "../source/app-manifest-parser/parse-compute.ts";
+import { validateRouteTargets } from "../source/app-manifest-parser/parse-routes.ts";
 
 export type GroupWorkloadCategory = "worker" | "container" | "service";
-
-export interface DesiredResourceState {
-  name: string;
-  type: string;
-  binding?: string;
-  spec: Record<string, unknown>;
-  specFingerprint: string;
-}
 
 export interface DesiredWorkloadState {
   name: string;
@@ -37,10 +32,9 @@ export interface GroupDesiredState {
   kind: "GroupDesiredState";
   groupName: string;
   version: string;
-  provider: string;
+  backend: string;
   env: string;
   manifest: AppManifest;
-  resources: Record<string, DesiredResourceState>;
   workloads: Record<string, DesiredWorkloadState>;
   routes: Record<string, DesiredRouteState>;
 }
@@ -51,7 +45,7 @@ export interface ObservedResourceState {
   resourceId: string;
   binding: string;
   status: string;
-  providerResourceName?: string;
+  backingResourceName?: string;
   specFingerprint?: string;
   updatedAt: string;
 }
@@ -90,7 +84,7 @@ export interface ObservedRouteState {
 export interface ObservedGroupState {
   groupId: string;
   groupName: string;
-  provider: string;
+  backend: string;
   env: string;
   version?: string | null;
   updatedAt: string;
@@ -143,6 +137,54 @@ function deepMerge(
   return result;
 }
 
+function toPlainRecord(value: object): Record<string, unknown> {
+  return Object.fromEntries(Object.entries(value));
+}
+
+function mergePublishOverrides(
+  base: AppPublication[],
+  patch: AppManifestOverride["publish"],
+): AppPublication[] {
+  if (!patch) return base;
+  const result = [...base];
+
+  patch.forEach((entry, index) => {
+    const patchRecord = toPlainRecord(entry);
+    const baseIndex = typeof patchRecord.name === "string"
+      ? result.findIndex((publication) => publication.name === patchRecord.name)
+      : index;
+    if (baseIndex < 0 || baseIndex >= result.length) {
+      result.push(entry);
+      return;
+    }
+    const baseEntry = result[baseIndex];
+    result[baseIndex] = baseEntry
+      ? deepMerge(
+        toPlainRecord(baseEntry),
+        patchRecord,
+      ) as AppPublication
+      : entry;
+  });
+
+  return result;
+}
+
+function validateComputeDependencies(
+  compute: Record<string, AppCompute>,
+): void {
+  const computeNames = new Set(Object.keys(compute));
+  for (const [name, entry] of Object.entries(compute)) {
+    if (!entry.depends) continue;
+    for (const dep of entry.depends) {
+      if (!computeNames.has(dep)) {
+        throw new Error(
+          `compute.${name}.depends references unknown compute: ${dep}`,
+        );
+      }
+    }
+  }
+}
+
 /**
  * Apply env-specific overrides from `manifest.overrides[envName]` to the
  * flat manifest shape. Only the whitelisted fields (compute /
@@ -158,20 +200,28 @@ export function applyManifestOverrides(
 
   const merged: AppManifest = { ...manifest };
   if (overrides.compute) {
-    merged.compute = deepMerge(
+    const mergedCompute = deepMerge(
       manifest.compute as Record<string, unknown>,
       overrides.compute as Record<string, unknown>,
-    ) as Record<string, AppCompute>;
+    );
+    merged.compute = parseCompute({ compute: mergedCompute }, {
+      allowInternalKind: true,
+    });
   }
   if (overrides.routes) {
     merged.routes = overrides.routes;
   }
   if (overrides.publish) {
-    merged.publish = overrides.publish;
+    merged.publish = mergePublishOverrides(
+      manifest.publish ?? [],
+      overrides.publish,
+    );
   }
   if (overrides.env) {
     merged.env = { ...manifest.env, ...overrides.env };
   }
+  validateComputeDependencies(merged.compute);
+  validateRouteTargets(merged.routes, merged.compute);
   merged.overrides = undefined;
   return merged;
 }
@@ -189,7 +239,10 @@ function workloadCategoryFromKind(
   }
 }
 
-function attachedWorkloadName(parentName: string, childName: string): string {
+export function attachedWorkloadName(
+  parentName: string,
+  childName: string,
+): string {
   return `${parentName}-${childName}`;
 }
 
@@ -197,7 +250,7 @@ export function compileGroupDesiredState(
   manifest: AppManifest,
   opts: {
     groupName?: string;
-    provider?: string;
+    backend?: string;
     envName?: string;
   } = {},
 ): GroupDesiredState {
@@ -241,7 +294,10 @@ export function compileGroupDesiredState(
       name,
       category: workloadCategoryFromKind(entry.kind),
       spec: entry,
-      specFingerprint: stableFingerprint(entry),
+      specFingerprint: stableFingerprint({
+        spec: entry,
+        manifestEnv: resolvedManifest.env ?? {},
+      }),
       dependsOn: entry.depends ?? [],
       routeNames: routeNamesByTarget.get(name) ?? [],
     };
@@ -255,7 +311,10 @@ export function compileGroupDesiredState(
           name: workloadName,
           category: workloadCategoryFromKind(childEntry.kind),
           spec: childEntry,
-          specFingerprint: stableFingerprint(childEntry),
+          specFingerprint: stableFingerprint({
+            spec: childEntry,
+            manifestEnv: resolvedManifest.env ?? {},
+          }),
           dependsOn: childEntry.depends ?? [],
           routeNames: routeNamesByTarget.get(workloadName) ?? [],
         };
@@ -268,10 +327,9 @@ export function compileGroupDesiredState(
     kind: "GroupDesiredState",
     groupName: opts.groupName ?? manifest.name,
     version: resolvedManifest.version ?? "0.0.0",
-    provider: opts.provider ?? "cloudflare",
+    backend: opts.backend ?? "cloudflare",
     env: envName,
     manifest: resolvedManifest,
-    resources: {},
     workloads: desiredWorkloads,
     routes,
   };
@@ -297,8 +355,12 @@ export function materializeRoute(
   route: DesiredRouteState,
   workloads: Record<string, ObservedWorkloadState>,
   updatedAt?: string,
+  options: { groupHostname?: string | null } = {},
 ): ObservedRouteState {
-  const baseUrl = resolveWorkloadBaseUrl(workloads[route.target]);
+  const groupHostname = options.groupHostname?.trim();
+  const baseUrl = groupHostname
+    ? `https://${groupHostname}`
+    : resolveWorkloadBaseUrl(workloads[route.target]);
   let url: string | undefined;
 
   if (baseUrl) {
@@ -327,11 +389,12 @@ export function materializeRoutes(
   desiredRoutes: Record<string, DesiredRouteState>,
   workloads: Record<string, ObservedWorkloadState>,
   updatedAt?: string,
+  options: { groupHostname?: string | null } = {},
 ): Record<string, ObservedRouteState> {
   return Object.fromEntries(
     Object.entries(desiredRoutes).map((
       [name, route],
-    ) => [name, materializeRoute(route, workloads, updatedAt)]),
+    ) => [name, materializeRoute(route, workloads, updatedAt, options)]),
   );
 }
 

@@ -14,7 +14,6 @@ RUN deno cache \
   packages/control/local-platform/src/dispatch.ts \
   packages/control/local-platform/src/runtime-host.ts \
   packages/control/local-platform/src/executor-host.ts \
-  packages/control/local-platform/src/browser-host.ts \
   packages/control/local-platform/src/worker.ts \
   packages/control/local-platform/src/oci-orchestrator.ts
 

@@ -28,14 +28,14 @@
  *   attempt 7 → +48h  (last retry, then DLQ)
  */
 
-import { and, eq, lte, sql } from 'drizzle-orm';
-import type { D1Database } from '../../../shared/types/bindings.ts';
-import type { Env } from '../../../shared/types/env.ts';
-import { getDb } from '../../../infra/db/client.ts';
-import { apDeliveryQueue } from '../../../infra/db/schema.ts';
-import { generateId } from '../../../shared/utils/index.ts';
-import { logError, logInfo, logWarn } from '../../../shared/utils/logger.ts';
-import { signAndDeliver } from './activity-delivery.ts';
+import { and, eq, lte, sql } from "drizzle-orm";
+import type { D1Database } from "../../../shared/types/bindings.ts";
+import type { Env } from "../../../shared/types/env.ts";
+import { getDb } from "../../../infra/db/client.ts";
+import { apDeliveryQueue } from "../../../infra/db/schema.ts";
+import { generateId } from "../../../shared/utils/index.ts";
+import { logError, logInfo, logWarn } from "../../../shared/utils/logger.ts";
+import { signAndDeliver } from "./activity-delivery.ts";
 
 /** Maximum delivery attempts before moving an entry to the DLQ ('failed'). */
 const MAX_ATTEMPTS = 7;
@@ -104,7 +104,7 @@ export async function enqueueDelivery(
     attempts: initialAttempts,
     nextAttemptAt,
     lastError: null,
-    status: 'pending' as const,
+    status: "pending" as const,
     createdAt: new Date().toISOString(),
   };
 
@@ -114,7 +114,7 @@ export async function enqueueDelivery(
 
 export interface TickDeliveryQueueInput {
   db: D1Database;
-  env: Pick<Env, 'PLATFORM_PRIVATE_KEY'>;
+  env: Pick<Env, "PLATFORM_PRIVATE_KEY">;
   /** Maximum number of pending entries to process in this tick. Default 20. */
   batch?: number;
   /** Override the current time — used only for deterministic tests. */
@@ -135,7 +135,7 @@ export interface TickDeliveryQueueResult {
 /**
  * Drain a batch of pending, due delivery entries. For each entry:
  *   1. Parse the stored payload JSON
- *   2. Resolve the signing key (from env.PLATFORM_PRIVATE_KEY) if needed
+ *   2. Resolve the signing key from env.PLATFORM_PRIVATE_KEY
  *   3. Call `signAndDeliver(inboxUrl, activity, pem, keyId)`
  *   4. On success → status='delivered'
  *      On failure → attempts++, either re-queue with backoff or DLQ
@@ -154,7 +154,7 @@ export async function tickDeliveryQueue(
   const rows = await db.select()
     .from(apDeliveryQueue)
     .where(and(
-      eq(apDeliveryQueue.status, 'pending'),
+      eq(apDeliveryQueue.status, "pending"),
       lte(apDeliveryQueue.nextAttemptAt, now),
     ))
     .limit(batch)
@@ -176,15 +176,19 @@ export async function tickDeliveryQueue(
       } catch (parseErr) {
         // A row with an unparseable payload is poison. DLQ it immediately
         // so the queue is not stuck on a single bad entry.
-        logError('Delivery queue payload parse failed — dead-lettering', parseErr, {
-          action: 'ap_delivery_tick_parse',
-          entryId: row.id,
-          activityId: row.activityId,
-        });
+        logError(
+          "Delivery queue payload parse failed — dead-lettering",
+          parseErr,
+          {
+            action: "ap_delivery_tick_parse",
+            entryId: row.id,
+            activityId: row.activityId,
+          },
+        );
         await db.update(apDeliveryQueue)
           .set({
-            status: 'failed',
-            lastError: 'payload_parse_error',
+            status: "failed",
+            lastError: "payload_parse_error",
           })
           .where(eq(apDeliveryQueue.id, row.id));
         dlq++;
@@ -192,26 +196,53 @@ export async function tickDeliveryQueue(
       }
 
       const signingKeyId = row.signingKeyId;
-      const signingKeyPem = signingKeyId ? (input.env.PLATFORM_PRIVATE_KEY || undefined) : undefined;
-      if (signingKeyId && !signingKeyPem) {
-        logWarn('Delivery entry expects signing but PLATFORM_PRIVATE_KEY is unset', {
-          action: 'ap_delivery_tick_unsigned',
+      const signingKeyPem = input.env.PLATFORM_PRIVATE_KEY?.trim();
+      if (!signingKeyId || !signingKeyPem) {
+        const nextAttempts = row.attempts + 1;
+        if (nextAttempts >= MAX_ATTEMPTS) {
+          await db.update(apDeliveryQueue)
+            .set({
+              status: "failed",
+              attempts: nextAttempts,
+              lastError: !signingKeyId
+                ? "missing_signing_key_id"
+                : "missing_platform_private_key",
+            })
+            .where(eq(apDeliveryQueue.id, row.id));
+          dlq++;
+          continue;
+        }
+
+        const slot = Math.min(nextAttempts, BACKOFF_MS.length - 1);
+        await db.update(apDeliveryQueue)
+          .set({
+            attempts: nextAttempts,
+            nextAttemptAt: now + BACKOFF_MS[slot],
+            lastError: !signingKeyId
+              ? "missing_signing_key_id"
+              : "missing_platform_private_key",
+          })
+          .where(eq(apDeliveryQueue.id, row.id));
+        requeued++;
+        logWarn("Delivery entry cannot be signed; retrying later", {
+          action: "ap_delivery_tick_signing_required",
           entryId: row.id,
-          signingKeyId,
+          signingKeyId: signingKeyId ?? "",
         });
+        continue;
       }
 
       const ok = await signAndDeliver(
         row.inboxUrl,
         activity,
         signingKeyPem,
-        signingKeyId ?? undefined,
+        signingKeyId,
       );
 
       if (ok) {
         await db.update(apDeliveryQueue)
           .set({
-            status: 'delivered',
+            status: "delivered",
             lastError: null,
           })
           .where(eq(apDeliveryQueue.id, row.id));
@@ -223,14 +254,14 @@ export async function tickDeliveryQueue(
       if (nextAttempts >= MAX_ATTEMPTS) {
         await db.update(apDeliveryQueue)
           .set({
-            status: 'failed',
+            status: "failed",
             attempts: nextAttempts,
-            lastError: 'max_attempts_exceeded',
+            lastError: "max_attempts_exceeded",
           })
           .where(eq(apDeliveryQueue.id, row.id));
         dlq++;
-        logWarn('Delivery entry moved to DLQ after max attempts', {
-          action: 'ap_delivery_tick_dlq',
+        logWarn("Delivery entry moved to DLQ after max attempts", {
+          action: "ap_delivery_tick_dlq",
           entryId: row.id,
           activityId: row.activityId,
           inboxUrl: row.inboxUrl,
@@ -249,21 +280,23 @@ export async function tickDeliveryQueue(
         .set({
           attempts: nextAttempts,
           nextAttemptAt: nextAt,
-          lastError: 'delivery_failed',
+          lastError: "delivery_failed",
         })
         .where(eq(apDeliveryQueue.id, row.id));
       requeued++;
     } catch (err) {
       // Never let one bad row poison the whole tick. Log and mark the row
       // with a generic error so the next tick can retry it.
-      logError('Unexpected error handling delivery entry', err, {
-        action: 'ap_delivery_tick_entry',
+      logError("Unexpected error handling delivery entry", err, {
+        action: "ap_delivery_tick_entry",
         entryId: row.id,
       });
       try {
         await db.update(apDeliveryQueue)
           .set({
-            lastError: err instanceof Error ? err.message.slice(0, 500) : 'unknown_error',
+            lastError: err instanceof Error
+              ? err.message.slice(0, 500)
+              : "unknown_error",
           })
           .where(eq(apDeliveryQueue.id, row.id));
       } catch (_innerErr) {
@@ -273,8 +306,8 @@ export async function tickDeliveryQueue(
   }
 
   if (rows.length > 0) {
-    logInfo('Delivery queue tick completed', {
-      action: 'ap_delivery_tick',
+    logInfo("Delivery queue tick completed", {
+      action: "ap_delivery_tick",
       scanned: String(rows.length),
       delivered: String(delivered),
       requeued: String(requeued),
@@ -308,9 +341,9 @@ export async function countDeliveryQueueStatuses(
 
   const counts = { pending: 0, delivered: 0, failed: 0 };
   for (const row of result) {
-    if (row.status === 'pending') counts.pending = Number(row.count);
-    else if (row.status === 'delivered') counts.delivered = Number(row.count);
-    else if (row.status === 'failed') counts.failed = Number(row.count);
+    if (row.status === "pending") counts.pending = Number(row.count);
+    else if (row.status === "delivered") counts.delivered = Number(row.count);
+    else if (row.status === "failed") counts.failed = Number(row.count);
   }
   return counts;
 }

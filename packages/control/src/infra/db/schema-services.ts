@@ -124,7 +124,7 @@ export const publications = sqliteTable("publications", {
   ownerServiceId: text("owner_service_id").references(() => servicesTable.id),
   sourceType: text("source_type").notNull().default("api"),
   name: text("name").notNull(),
-  providerName: text("provider_name"),
+  catalogName: text("catalog_name"),
   publicationType: text("publication_type").notNull(),
   specJson: text("spec_json").notNull(),
   resolvedJson: text("resolved_json").notNull().default("{}"),

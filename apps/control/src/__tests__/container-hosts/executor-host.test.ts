@@ -1,9 +1,7 @@
-import { assert, assertEquals } from "jsr:@std/assert";
-import executorHost, {
-  validateProxyResourceAccess,
-} from "@/container-hosts/executor-host";
+import { assertEquals } from "jsr:@std/assert";
+import executorHost from "@/container-hosts/executor-host";
 
-type ProxyCapability = "bindings" | "control";
+type ProxyCapability = "control";
 
 type MockContainerStub = {
   dispatchStart(body: Record<string, unknown>): Promise<{
@@ -18,12 +16,14 @@ type MockContainerStub = {
       capability: ProxyCapability;
     } | null
   >;
+  revokeProxyTokens(): Promise<void>;
 };
 
 function createExecutorContainerNamespace() {
   const dispatchBodies: Record<string, unknown>[] = [];
   let lastRunId: string | null = null;
   let lastToken: string | null = null;
+  let revokeCount = 0;
 
   const namespace = {
     getByName(runId: string): MockContainerStub {
@@ -43,13 +43,13 @@ function createExecutorContainerNamespace() {
         },
         async verifyProxyToken(token) {
           lastToken = token;
-          if (token === "bindings-token") {
-            return { runId, serviceId: "svc-1", capability: "bindings" };
-          }
           if (token === "control-token") {
             return { runId, serviceId: "svc-1", capability: "control" };
           }
           return null;
+        },
+        async revokeProxyTokens() {
+          revokeCount++;
         },
       };
     },
@@ -60,65 +60,38 @@ function createExecutorContainerNamespace() {
     dispatchBodies,
     getLastRunId: () => lastRunId,
     getLastToken: () => lastToken,
+    getRevokeCount: () => revokeCount,
   };
 }
 
 function createEnv(overrides: Partial<Record<string, unknown>> = {}) {
   const tier1 = createExecutorContainerNamespace();
   const tier2 = createExecutorContainerNamespace();
-  const runtimeRequests: Request[] = [];
-  const browserRequests: Request[] = [];
-  const egressRequests: Request[] = [];
+  const controlRequests: Request[] = [];
 
   const env = {
     EXECUTOR_CONTAINER: tier1.namespace,
     EXECUTOR_CONTAINER_TIER2: tier2.namespace,
-    DB: { prepare: () => ({ bind: () => ({}) }) },
-    RUN_NOTIFIER: {
-      idFromName: () => ({ toString: () => "do-id" }),
-      get: () => ({ fetch: async () => new Response("{}") }),
-    },
-    TAKOS_OFFLOAD: {
-      get: async () => null,
-      put: async () => null,
-      delete: async () => undefined,
-      list: async () => ({ objects: [], truncated: false }),
-      head: async () => null,
-    },
-    TAKOS_EGRESS: {
-      fetch: async (input: RequestInfo | URL, init?: RequestInit) => {
-        const request = input instanceof Request
-          ? input
-          : new Request(input, init);
-        egressRequests.push(request);
-        return new Response("egress-ok", { status: 200 });
-      },
-    },
-    RUNTIME_HOST: {
-      fetch: async (input: RequestInfo | URL, init?: RequestInit) => {
-        const request = input instanceof Request
-          ? input
-          : new Request(input, init);
-        runtimeRequests.push(request);
-        return new Response("runtime-ok", {
-          status: 200,
-          headers: { "Content-Type": "text/plain" },
-        });
-      },
-    },
-    BROWSER_HOST: {
-      fetch: async (input: RequestInfo | URL, init?: RequestInit) => {
-        const request = input instanceof Request
-          ? input
-          : new Request(input, init);
-        browserRequests.push(request);
-        return new Response("browser-ok", { status: 200 });
-      },
-    },
     CONTROL_RPC_BASE_URL: "https://executor-host.example",
-    OPENAI_API_KEY: "openai-key",
-    ANTHROPIC_API_KEY: "anthropic-key",
-    GOOGLE_API_KEY: "google-key",
+    EXECUTOR_PROXY_SECRET: "executor-secret",
+    TAKOS_CONTROL: {
+      fetch: async (input: RequestInfo | URL, init?: RequestInit) => {
+        const request = input instanceof Request
+          ? input
+          : new Request(input, init);
+        controlRequests.push(request);
+        return new Response(
+          JSON.stringify({
+            ok: true,
+            path: new URL(request.url).pathname,
+          }),
+          {
+            status: 200,
+            headers: { "Content-Type": "application/json" },
+          },
+        );
+      },
+    },
     ...overrides,
   };
 
@@ -126,9 +99,7 @@ function createEnv(overrides: Partial<Record<string, unknown>> = {}) {
     env,
     tier1,
     tier2,
-    runtimeRequests,
-    browserRequests,
-    egressRequests,
+    controlRequests,
   };
 }
 
@@ -156,64 +127,6 @@ function createProxyRequest(
     body: method === "GET" ? undefined : JSON.stringify(body ?? {}),
   });
 }
-
-async function readProxyUsageCounts(env: Record<string, unknown>) {
-  const response = await executorHost.fetch(
-    new Request("http://localhost/internal/proxy-usage", { method: "GET" }),
-    env as never,
-  );
-  assertEquals(response.status, 200);
-  const body = await response.json() as { counts?: Record<string, number> };
-  return body.counts ?? {};
-}
-
-function diffCounts(
-  before: Record<string, number>,
-  after: Record<string, number>,
-) {
-  const delta: Record<string, number> = {};
-  for (const key of new Set([...Object.keys(before), ...Object.keys(after)])) {
-    delta[key] = (after[key] ?? 0) - (before[key] ?? 0);
-  }
-  return delta;
-}
-
-Deno.test("validateProxyResourceAccess allows expected runtime and browser targets", () => {
-  assertEquals(
-    validateProxyResourceAccess("/proxy/runtime/fetch", { run_id: "run-1" }, {
-      url: "https://runtime-host/session/exec",
-    }),
-    true,
-  );
-  assertEquals(
-    validateProxyResourceAccess("/proxy/browser/fetch", { run_id: "run-1" }, {
-      url: "https://browser-host.internal/session/session-1/screenshot",
-    }),
-    true,
-  );
-});
-
-Deno.test("validateProxyResourceAccess rejects invalid DO, queue, and host targets", () => {
-  assertEquals(
-    validateProxyResourceAccess("/proxy/do/fetch", { run_id: "run-1" }, {
-      namespace: "SESSION_DO",
-      name: "run-1",
-    }),
-    false,
-  );
-  assertEquals(
-    validateProxyResourceAccess("/proxy/queue/send", { run_id: "run-1" }, {
-      queue: "other",
-    }),
-    false,
-  );
-  assertEquals(
-    validateProxyResourceAccess("/proxy/runtime/fetch", { run_id: "run-1" }, {
-      url: "https://evil.example/session/exec",
-    }),
-    false,
-  );
-});
 
 Deno.test("executorHost fetch returns health status", async () => {
   const { env } = createEnv();
@@ -268,9 +181,9 @@ Deno.test("executorHost dispatch forwards to tier-specific namespace", async () 
 Deno.test("executorHost proxy rejects missing auth headers", async () => {
   const { env } = createEnv();
   const response = await executorHost.fetch(
-    createProxyRequest("/proxy/runtime/fetch", {
+    createProxyRequest("/rpc/control/api-keys", {
       bearerToken: undefined,
-      body: { url: "https://runtime-host/status" },
+      body: { runId: "run-1", serviceId: "svc-1" },
     }),
     env as never,
   );
@@ -278,12 +191,11 @@ Deno.test("executorHost proxy rejects missing auth headers", async () => {
   assertEquals(response.status, 401);
 });
 
-Deno.test("executorHost runtime proxy forwards allowed requests and tracks usage", async () => {
-  const { env, runtimeRequests, tier1 } = createEnv();
-  const before = await readProxyUsageCounts(env);
+Deno.test("executorHost rejects removed binding proxy paths", async () => {
+  const { env, controlRequests, tier1 } = createEnv();
   const response = await executorHost.fetch(
     createProxyRequest("/proxy/runtime/fetch", {
-      bearerToken: "bindings-token",
+      bearerToken: "control-token",
       body: {
         runId: "run-1",
         serviceId: "svc-1",
@@ -293,32 +205,28 @@ Deno.test("executorHost runtime proxy forwards allowed requests and tracks usage
     }),
     env as never,
   );
-  const after = await readProxyUsageCounts(env);
 
-  assertEquals(response.status, 200);
-  assertEquals(await response.text(), "runtime-ok");
-  assertEquals(runtimeRequests.length, 1);
-  assertEquals(runtimeRequests[0].headers.get("X-Takos-Internal"), "1");
-  assertEquals(new URL(runtimeRequests[0].url).pathname, "/status");
-  assertEquals(tier1.getLastToken(), "bindings-token");
-  assertEquals(diffCounts(before, after)["other-proxy"] ?? 0, 1);
+  assertEquals(response.status, 401);
+  assertEquals(controlRequests.length, 0);
+  assertEquals(tier1.getLastToken(), "control-token");
 });
 
-Deno.test("executorHost control RPC requires control capability", async () => {
-  const { env } = createEnv();
+Deno.test("executorHost control RPC rejects invalid proxy tokens", async () => {
+  const { env, controlRequests } = createEnv();
   const response = await executorHost.fetch(
     createProxyRequest("/rpc/control/api-keys", {
-      bearerToken: "bindings-token",
+      bearerToken: "invalid-token",
       body: { runId: "run-1", serviceId: "svc-1" },
     }),
     env as never,
   );
 
   assertEquals(response.status, 401);
+  assertEquals(controlRequests.length, 0);
 });
 
-Deno.test("executorHost control RPC returns configured API keys", async () => {
-  const { env, tier1 } = createEnv();
+Deno.test("executorHost control RPC forwards to TAKOS_CONTROL", async () => {
+  const { env, controlRequests, tier1 } = createEnv();
   const response = await executorHost.fetch(
     createProxyRequest("/rpc/control/api-keys", {
       bearerToken: "control-token",
@@ -329,50 +237,31 @@ Deno.test("executorHost control RPC returns configured API keys", async () => {
 
   assertEquals(response.status, 200);
   assertEquals(await response.json(), {
-    openai: "openai-key",
-    anthropic: "anthropic-key",
-    google: "google-key",
+    ok: true,
+    path: "/internal/executor-rpc/api-keys",
   });
+  assertEquals(controlRequests.length, 1);
+  assertEquals(
+    controlRequests[0].headers.get("X-Takos-Internal"),
+    "executor-secret",
+  );
   assertEquals(tier1.getLastToken(), "control-token");
 });
 
-Deno.test("executorHost browser proxy rejects disallowed browser targets", async () => {
-  const { env, browserRequests } = createEnv();
+Deno.test("executorHost revokes control token after terminal forwarded RPC", async () => {
+  const { env, tier1 } = createEnv();
   const response = await executorHost.fetch(
-    createProxyRequest("/proxy/browser/fetch", {
-      bearerToken: "bindings-token",
+    createProxyRequest("/rpc/control/update-run-status", {
+      bearerToken: "control-token",
       body: {
         runId: "run-1",
         serviceId: "svc-1",
-        url: "https://browser-host.internal/admin",
-        method: "GET",
-      },
-    }),
-    env as never,
-  );
-
-  assertEquals(response.status, 401);
-  assertEquals(browserRequests.length, 0);
-});
-
-Deno.test("executorHost egress proxy forwards bindings requests", async () => {
-  const { env, egressRequests } = createEnv();
-  const response = await executorHost.fetch(
-    createProxyRequest("/proxy/egress/fetch", {
-      bearerToken: "bindings-token",
-      body: {
-        runId: "run-1",
-        serviceId: "svc-1",
-        url: "https://example.com/data",
-        method: "GET",
+        status: "completed",
       },
     }),
     env as never,
   );
 
   assertEquals(response.status, 200);
-  assertEquals(await response.text(), "egress-ok");
-  assertEquals(egressRequests.length, 1);
-  assertEquals(new URL(egressRequests[0].url).hostname, "example.com");
-  assert(egressRequests[0].headers.get("X-Takos-Internal") === "1");
+  assertEquals(tier1.getRevokeCount(), 1);
 });

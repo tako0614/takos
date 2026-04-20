@@ -38,6 +38,8 @@ export function takosContext(): Record<string, unknown> {
     stores: { "@id": "takos:stores", "@type": "@id" },
     defaultBranchRef: "takos:defaultBranchRef",
     defaultBranchHash: "takos:defaultBranchHash",
+    beforeHash: "takos:beforeHash",
+    afterHash: "takos:afterHash",
   };
 }
 

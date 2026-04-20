@@ -1,9 +1,5 @@
 import type {
   Ai as CfAi,
-  D1Database as CfD1Database,
-  D1PreparedStatement as CfD1PreparedStatement,
-  D1Result as CfD1Result,
-  Fetcher as CfFetcher,
   KVNamespace as CfKVNamespace,
   MessageBatch as CfMessageBatch,
   Queue as CfQueue,
@@ -13,8 +9,8 @@ import type {
   ScheduledController as CfScheduledController,
   ScheduledEvent as CfScheduledEvent,
   VectorizeIndex as CfVectorizeIndex,
-} from '@cloudflare/workers-types';
-import type { ExecutionContext as CfExecutionContext } from 'hono';
+} from "@cloudflare/workers-types";
+import type { ExecutionContext as CfExecutionContext } from "hono";
 
 // ---------------------------------------------------------------------------
 // Cloudflare-idiomatic exports (canonical names matching the CF platform API).
@@ -22,11 +18,52 @@ import type { ExecutionContext as CfExecutionContext } from 'hono';
 // ---------------------------------------------------------------------------
 
 export type Ai = CfAi;
-export type D1Database = CfD1Database;
-export type D1PreparedStatement = CfD1PreparedStatement;
-export type D1Result<T = unknown> = CfD1Result<T>;
+export type D1Meta = {
+  duration: number;
+  size_after: number;
+  rows_read: number;
+  rows_written: number;
+  last_row_id: number;
+  changed_db: boolean;
+  changes: number;
+  served_by?: string;
+  [key: string]: unknown;
+};
+export type D1Result<T = unknown> = {
+  results: T[];
+  success: true;
+  meta: D1Meta;
+};
+export type D1PreparedStatement = {
+  bind(...values: unknown[]): D1PreparedStatement;
+  first<T = Record<string, unknown>>(colName?: string): Promise<T | null>;
+  run<T = Record<string, unknown>>(): Promise<D1Result<T>>;
+  all<T = Record<string, unknown>>(): Promise<D1Result<T>>;
+  raw<T = unknown[]>(options: { columnNames: true }): Promise<
+    [string[], ...T[]]
+  >;
+  raw<T = unknown[]>(options?: { columnNames?: false }): Promise<T[]>;
+};
+export type D1DatabaseSession = {
+  prepare(query: string): D1PreparedStatement;
+  batch<T = Record<string, unknown>>(
+    statements: D1PreparedStatement[],
+  ): Promise<D1Result<T>[]>;
+  getBookmark(): string | null;
+};
+export type D1Database = {
+  prepare(query: string): D1PreparedStatement;
+  batch<T = Record<string, unknown>>(
+    statements: D1PreparedStatement[],
+  ): Promise<D1Result<T>[]>;
+  exec(query: string): Promise<{ count: number; duration: number }>;
+  withSession(bookmark?: string): D1DatabaseSession;
+  dump(): Promise<ArrayBuffer>;
+};
 export type ExecutionContext = CfExecutionContext;
-export type Fetcher = CfFetcher;
+export type Fetcher = {
+  fetch(input: RequestInfo | URL, init?: RequestInit): Promise<Response>;
+};
 export type KVNamespace = CfKVNamespace;
 export type MessageBatch<T = unknown> = CfMessageBatch<T>;
 export type Queue<T = unknown> = CfQueue<T>;
@@ -43,10 +80,10 @@ export type VectorizeIndex = CfVectorizeIndex;
 export type DurableObjectStub<T = unknown> = {
   fetch(input: Request | URL | string, init?: RequestInit): Promise<Response>;
 };
-export type DurableObjectNamespace<T = unknown> = {
+export type DurableObjectNamespace<TStub = DurableObjectStub> = {
   idFromName(name: string): unknown;
-  get(id: unknown): DurableObjectStub<T>;
-  getByName?(name: string): DurableObjectStub<T>;
+  get(id: unknown): TStub;
+  getByName?(name: string): TStub;
 };
 
 // ---------------------------------------------------------------------------
@@ -59,7 +96,8 @@ export type SqlPreparedStatementBinding = D1PreparedStatement;
 export type SqlResultBinding<T = unknown> = D1Result<T>;
 export type KvStoreBinding = KVNamespace;
 export type DurableObjectStubBinding<T = unknown> = DurableObjectStub<T>;
-export type DurableNamespaceBinding<T = unknown> = DurableObjectNamespace<T>;
+export type DurableNamespaceBinding<TStub = DurableObjectStub> =
+  DurableObjectNamespace<TStub>;
 export type ObjectStoreBinding = R2Bucket;
 export type AiBinding = Ai;
 export type QueueBinding<T = unknown> = Queue<T>;

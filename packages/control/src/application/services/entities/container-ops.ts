@@ -3,7 +3,7 @@
  *
  * Manages container-workload records in the canonical services table.
  *
- * The actual deployment-provider selection lives in the deployment pipeline;
+ * The actual deployment-backend selection lives in the deployment pipeline;
  * this wrapper only persists lifecycle intent and optional OCI-orchestrator
  * side effects when configured.
  *
@@ -11,13 +11,13 @@
  * OCI orchestrator URL for container lifecycle management.
  */
 
-import type { Env } from '../../../shared/types/env.ts';
+import type { Env } from "../../../shared/types/env.ts";
 import {
   deleteGroupManagedService,
   findGroupManagedService,
   listGroupManagedServices,
   upsertGroupManagedService,
-} from './group-managed-services.ts';
+} from "./group-managed-services.ts";
 
 // ---------------------------------------------------------------------------
 // Public types
@@ -69,51 +69,60 @@ async function deployContainerImage(
   },
 ): Promise<{ imageHash: string }> {
   if (env.OCI_ORCHESTRATOR_URL) {
-    const response = await fetch(`${env.OCI_ORCHESTRATOR_URL}/containers/deploy`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        ...(env.OCI_ORCHESTRATOR_TOKEN
-          ? { Authorization: `Bearer ${env.OCI_ORCHESTRATOR_TOKEN}` }
-          : {}),
+    const response = await fetch(
+      `${env.OCI_ORCHESTRATOR_URL}/containers/deploy`,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          ...(env.OCI_ORCHESTRATOR_TOKEN
+            ? { Authorization: `Bearer ${env.OCI_ORCHESTRATOR_TOKEN}` }
+            : {}),
+        },
+        body: JSON.stringify({
+          name: containerName,
+          imageRef: _opts.imageRef,
+          port: _opts.port,
+        }),
       },
-      body: JSON.stringify({
-        name: containerName,
-        imageRef: _opts.imageRef,
-        port: _opts.port,
-      }),
-    });
+    );
 
     if (!response.ok) {
-      const text = await response.text().catch(() => '');
+      const text = await response.text().catch(() => "");
       throw new Error(`Container deploy failed (${response.status}): ${text}`);
     }
 
     const data = (await response.json()) as { imageHash?: string };
-    return { imageHash: data.imageHash ?? '' };
+    return { imageHash: data.imageHash ?? "" };
   }
 
   // Stub: no orchestrator configured. Record intent only.
-  return { imageHash: '' };
+  return { imageHash: "" };
 }
 
-async function deleteContainerImage(
+async function deleteContainerRuntime(
   env: Env,
-  containerName: string,
+  routeRef: string,
+  spaceId: string,
 ): Promise<void> {
   if (env.OCI_ORCHESTRATOR_URL) {
-    const response = await fetch(`${env.OCI_ORCHESTRATOR_URL}/containers/${encodeURIComponent(containerName)}`, {
-      method: 'DELETE',
-      headers: {
-        ...(env.OCI_ORCHESTRATOR_TOKEN
-          ? { Authorization: `Bearer ${env.OCI_ORCHESTRATOR_TOKEN}` }
-          : {}),
+    const response = await fetch(
+      `${env.OCI_ORCHESTRATOR_URL}/services/${
+        encodeURIComponent(routeRef)
+      }/remove?space_id=${encodeURIComponent(spaceId)}`,
+      {
+        method: "POST",
+        headers: {
+          ...(env.OCI_ORCHESTRATOR_TOKEN
+            ? { Authorization: `Bearer ${env.OCI_ORCHESTRATOR_TOKEN}` }
+            : {}),
+        },
       },
-    });
+    );
 
     if (!response.ok && response.status !== 404) {
-      const text = await response.text().catch(() => '');
-      throw new Error(`Container delete failed (${response.status}): ${text}`);
+      const text = await response.text().catch(() => "");
+      throw new Error(`Container cleanup failed (${response.status}): ${text}`);
     }
   }
 }
@@ -140,7 +149,7 @@ export async function deployContainer(
 ): Promise<ContainerEntityResult> {
   const now = new Date().toISOString();
 
-  let imageHash = opts.imageHash ?? '';
+  let imageHash = opts.imageHash ?? "";
   let resolvedBaseUrl: string | undefined;
 
   if (!imageHash) {
@@ -155,12 +164,12 @@ export async function deployContainer(
     groupId,
     spaceId: opts.spaceId,
     envName: opts.envName,
-    componentKind: 'container',
+    componentKind: "container",
     manifestName: name,
-    status: 'deployed',
-    serviceType: 'service',
-    workloadKind: 'container-image',
-    specFingerprint: opts.specFingerprint ?? '',
+    status: "deployed",
+    serviceType: "service",
+    workloadKind: "container-image",
+    specFingerprint: opts.specFingerprint ?? "",
     desiredSpec: opts.desiredSpec ?? {},
     routeNames: opts.routeNames,
     dependsOn: opts.dependsOn,
@@ -183,18 +192,21 @@ export async function deleteContainer(
   groupId: string,
   name: string,
 ): Promise<void> {
-  const record = await findGroupManagedService(env, groupId, name, 'container');
+  const record = await findGroupManagedService(env, groupId, name, "container");
   if (!record) {
     throw new Error(`Container entity "${name}" not found in group ${groupId}`);
   }
 
-  try {
-    await deleteContainerImage(env, name);
-  } catch (error) {
-    console.warn(`Failed to delete container "${name}":`, error);
+  const spaceId = record.row.accountId;
+  if (!spaceId) {
+    throw new Error(
+      `Container entity "${name}" is missing its owning space id`,
+    );
   }
 
-  await deleteGroupManagedService(env, groupId, name, 'container');
+  await deleteContainerRuntime(env, record.row.routeRef ?? name, spaceId);
+
+  await deleteGroupManagedService(env, groupId, name, "container");
 }
 
 // ---------------------------------------------------------------------------
@@ -207,19 +219,25 @@ export async function listContainers(
 ): Promise<ContainerEntityInfo[]> {
   const records = await listGroupManagedServices(env, groupId);
   return records
-    .filter((record) => record.config.componentKind === 'container')
+    .filter((record) => record.config.componentKind === "container")
     .map((record) => ({
       id: record.row.id,
       groupId: record.row.groupId ?? groupId,
       name: record.config.manifestName ?? record.row.slug ?? record.row.id,
-      category: 'container',
+      category: "container",
       config: {
         deployedAt: record.config.deployedAt ?? record.row.updatedAt,
-        imageHash: record.config.imageHash ?? '',
+        imageHash: record.config.imageHash ?? "",
         ...(record.config.imageRef ? { imageRef: record.config.imageRef } : {}),
-        ...(typeof record.config.port === 'number' ? { port: record.config.port } : {}),
-        ...(record.config.resolvedBaseUrl ? { resolvedBaseUrl: record.config.resolvedBaseUrl } : {}),
-        ...(record.config.specFingerprint ? { specFingerprint: record.config.specFingerprint } : {}),
+        ...(typeof record.config.port === "number"
+          ? { port: record.config.port }
+          : {}),
+        ...(record.config.resolvedBaseUrl
+          ? { resolvedBaseUrl: record.config.resolvedBaseUrl }
+          : {}),
+        ...(record.config.specFingerprint
+          ? { specFingerprint: record.config.specFingerprint }
+          : {}),
       },
       createdAt: record.row.createdAt,
       updatedAt: record.row.updatedAt,

@@ -659,7 +659,7 @@ Deno.test("activitypub store routes - builds outbox entries with ForgeFed Reposi
     }],
   });
 });
-Deno.test("activitypub store routes - redirects legacy /repositories to /inventory", async () => {
+Deno.test("activitypub store routes - does not serve legacy /repositories alias", async () => {
   /* mocks cleared (no-op in Deno) */ void 0;
   // Default to auto-list mode
   mocks.hasExplicitInventory = (async () => false) as any;
@@ -688,13 +688,9 @@ Deno.test("activitypub store routes - redirects legacy /repositories to /invento
     {} as ExecutionContext,
   );
 
-  assertEquals(response.status, 301);
-  assertEquals(
-    response.headers.get("Location"),
-    "https://test.takos.jp/ap/stores/alice/inventory?page=1",
-  );
+  assertEquals(response.status, 404);
 });
-Deno.test("activitypub store routes - redirects legacy /ns/takos-git to /ns/takos", async () => {
+Deno.test("activitypub store routes - does not serve legacy /ns/takos-git alias", async () => {
   /* mocks cleared (no-op in Deno) */ void 0;
   // Default to auto-list mode
   mocks.hasExplicitInventory = (async () => false) as any;
@@ -723,11 +719,7 @@ Deno.test("activitypub store routes - redirects legacy /ns/takos-git to /ns/tako
     {} as ExecutionContext,
   );
 
-  assertEquals(response.status, 301);
-  assertEquals(
-    response.headers.get("Location"),
-    "https://test.takos.jp/ns/takos",
-  );
+  assertEquals(response.status, 404);
 });
 Deno.test("activitypub store routes - serves takos namespace context at /ns/takos", async () => {
   /* mocks cleared (no-op in Deno) */ void 0;
@@ -768,6 +760,8 @@ Deno.test("activitypub store routes - serves takos namespace context at /ns/tako
   assertEquals(ctx.takos, "https://takos.jp/ns#");
   assertEquals(ctx.Store, "takos:Store");
   assertEquals(ctx.inventory, { "@id": "takos:inventory", "@type": "@id" });
+  assertEquals(ctx.beforeHash, "takos:beforeHash");
+  assertEquals(ctx.afterHash, "takos:afterHash");
 });
 Deno.test("activitypub store routes - includes pushUri and defaultBranchHash in repo actor", async () => {
   /* mocks cleared (no-op in Deno) */ void 0;
@@ -881,6 +875,95 @@ Deno.test("activitypub store routes - serves Add/Remove activities in store outb
     ],
   });
 });
+
+Deno.test("activitypub store routes - paginates explicit store outbox after merging inventory and announces", async () => {
+  resetInboxMocks();
+  mocks.findStoreBySlug =
+    (async () => ({ ...STORE_RECORD, publicRepoCount: 1 })) as any;
+  mocks.hasExplicitInventory = (async () => true) as any;
+  mocks.listInventoryActivities = (async (
+    _db: unknown,
+    _accountId: string,
+    _storeSlug: string,
+    options: { limit: number; offset: number },
+  ) => {
+    assertEquals(options, { limit: 2, offset: 0 });
+    return {
+      total: 2,
+      items: [
+        {
+          id: "inv-2",
+          storeSlug: "alice",
+          accountId: "acct-1",
+          repoActorUrl: "https://remote.example/ap/repos/bob/newer",
+          activityType: "Add",
+          isActive: true,
+          createdAt: "2026-03-03T00:00:00.000Z",
+        },
+        {
+          id: "inv-1",
+          storeSlug: "alice",
+          accountId: "acct-1",
+          repoActorUrl: "https://remote.example/ap/repos/bob/older",
+          activityType: "Add",
+          isActive: true,
+          createdAt: "2026-03-01T00:00:00.000Z",
+        },
+      ],
+    };
+  }) as any;
+  mocks.listInventoryItems = (async () => ({
+    total: 1,
+    items: [{
+      localRepoId: "repo-1",
+      repoActorUrl: "https://test.takos.jp/ap/repos/alice/demo",
+    }],
+  })) as any;
+  mocks.listPushActivitiesForRepoIds = (async (
+    _db: unknown,
+    _repoIds: string[],
+    options: { limit: number; offset: number },
+  ) => {
+    assertEquals(options, { limit: 2, offset: 0 });
+    return {
+      total: 1,
+      items: [{
+        id: "push-1",
+        repoId: "repo-1",
+        accountId: "acct-1",
+        ref: "refs/heads/main",
+        beforeSha: "aaaa000",
+        afterSha: "bbbb111",
+        pusherActorUrl: null,
+        pusherName: "Alice",
+        commitCount: 0,
+        commits: [],
+        createdAt: "2026-03-02T00:00:00.000Z",
+      }],
+    };
+  }) as any;
+
+  const app = createApp();
+  const response = await app.fetch(
+    new Request("https://test.takos.jp/ap/stores/alice/outbox?page=2&limit=1"),
+    createMockEnv() as unknown as Env,
+    {} as ExecutionContext,
+  );
+
+  assertEquals(response.status, 200);
+  await assertObjectMatch(await response.json(), {
+    type: "OrderedCollectionPage",
+    totalItems: 3,
+    orderedItems: [{
+      type: "Announce",
+      object: {
+        type: "Push",
+        target: "refs/heads/main",
+        afterHash: "bbbb111",
+      },
+    }],
+  });
+});
 /**
  * Helper: reset mocks to safe defaults for the inbox / outbox tests that
  * follow. Closely mirrors the inline stub block each existing test uses,
@@ -970,6 +1053,8 @@ Deno.test("activitypub store routes - serves Push activities with commit metadat
       type: "Push",
       actor: "https://test.takos.jp/ap/repos/alice/demo",
       target: "refs/heads/main",
+      beforeHash: "aaaa000",
+      afterHash: "bbbb111",
       object: {
         type: "OrderedCollection",
         totalItems: 1,
@@ -1223,6 +1308,91 @@ Deno.test("activitypub store routes - accepts Follow on private repo when visit 
   const payload = await response.json() as Record<string, unknown>;
   assertEquals(payload.type, "Accept");
   assertEquals(followerAdded, true);
+});
+
+Deno.test("activitypub store routes - requires signed fetch for private repo actor", async () => {
+  resetInboxMocks();
+  mocks.findCanonicalRepo = (async () => null) as any;
+  mocks.findCanonicalRepoIncludingPrivate = (async () => ({
+    ...REPO_RECORD,
+    visibility: "private",
+  })) as any;
+  mocks.checkGrant = (async () => true) as any;
+
+  const app = createApp();
+  const response = await app.fetch(
+    new Request(
+      "https://test.takos.jp/ap/repos/alice/demo?actor=https%3A%2F%2Fremote.example%2Fap%2Fusers%2Fbob",
+      {
+        headers: {
+          date: new Date().toUTCString(),
+        },
+      },
+    ),
+    createMockEnv() as unknown as Env,
+    {} as ExecutionContext,
+  );
+
+  assertEquals(response.status, 401);
+});
+
+Deno.test("activitypub store routes - rejects private repo actor fetch when signature actor differs from actor query", async () => {
+  resetInboxMocks();
+  mocks.findCanonicalRepo = (async () => null) as any;
+  mocks.findCanonicalRepoIncludingPrivate = (async () => ({
+    ...REPO_RECORD,
+    visibility: "private",
+  })) as any;
+  mocks.checkGrant = (async () => true) as any;
+
+  const app = createApp();
+  const response = await app.fetch(
+    new Request(
+      "https://test.takos.jp/ap/repos/alice/demo?actor=https%3A%2F%2Fremote.example%2Fap%2Fusers%2Fbob",
+      {
+        headers: {
+          date: new Date().toUTCString(),
+          signature: "test-signature",
+          "x-test-signature-actor": "https://remote.example/ap/users/eve",
+        },
+      },
+    ),
+    createMockEnv() as unknown as Env,
+    {} as ExecutionContext,
+  );
+
+  assertEquals(response.status, 403);
+});
+
+Deno.test("activitypub store routes - serves private repo actor to signed granted actor", async () => {
+  resetInboxMocks();
+  mocks.findCanonicalRepo = (async () => null) as any;
+  mocks.findCanonicalRepoIncludingPrivate = (async () => ({
+    ...REPO_RECORD,
+    visibility: "private",
+  })) as any;
+  mocks.checkGrant = (async () => true) as any;
+
+  const app = createApp();
+  const response = await app.fetch(
+    new Request(
+      "https://test.takos.jp/ap/repos/alice/demo?actor=https%3A%2F%2Fremote.example%2Fap%2Fusers%2Fbob",
+      {
+        headers: {
+          date: new Date().toUTCString(),
+          signature: "test-signature",
+          "x-test-signature-actor": "https://remote.example/ap/users/bob",
+        },
+      },
+    ),
+    createMockEnv() as unknown as Env,
+    {} as ExecutionContext,
+  );
+
+  assertEquals(response.status, 200);
+  const body = await response.json() as Record<string, unknown>;
+  assertEquals(body.id, "https://test.takos.jp/ap/repos/alice/demo");
+  assertEquals(body.pushUri, undefined);
 });
 
 Deno.test("activitypub store routes - repo outbox root reports real push totalItems", async () => {

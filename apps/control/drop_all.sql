@@ -88,7 +88,7 @@ DROP TABLE IF EXISTS billing_plan_quotas;
 DROP TABLE IF EXISTS billing_plan_rates;
 DROP TABLE IF EXISTS billing_plans;
 
--- Worker / deploy / resource / takopack
+-- Worker / deploy / resource / package
 DROP TABLE IF EXISTS worker_mcp_endpoints;
 DROP TABLE IF EXISTS worker_runtime_limits;
 DROP TABLE IF EXISTS worker_runtime_flags;
@@ -114,6 +114,9 @@ DROP TABLE IF EXISTS custom_domains;
 DROP TABLE IF EXISTS deployments;
 DROP TABLE IF EXISTS workers;
 DROP TABLE IF EXISTS bundle_deployments;
+DROP TABLE IF EXISTS default_app_preinstall_jobs;
+DROP TABLE IF EXISTS default_app_distribution_entries;
+DROP TABLE IF EXISTS default_app_distribution_config;
 
 -- Files / repositories / account hierarchy
 DROP TABLE IF EXISTS files;

@@ -18,7 +18,6 @@ import {
   buildSearchServiceId,
   buildStoreActorId,
   buildStoreSummary,
-  enc,
   getOriginFromUrl,
   isExpandedObjectRequest,
   orderedCollectionResponse,
@@ -183,13 +182,16 @@ async function handleStoreOutboxRoute(
       );
     }
 
+    const mergeOffset = (pageNum - 1) * limit;
+    const mergeLimit = mergeOffset + limit;
+
     const invResult = await deps.listInventoryActivities(
       c.env.DB,
       storeRecord.accountId,
       storeRecord.slug,
       {
-        limit,
-        offset: (pageNum - 1) * limit,
+        limit: mergeLimit,
+        offset: 0,
       },
     );
 
@@ -212,15 +214,17 @@ async function handleStoreOutboxRoute(
       ts: string;
       activity: Record<string, unknown>;
     }> = [];
+    let announceTotal = 0;
     if (localRepoIds.length > 0) {
       const pushResult = await deps.listPushActivitiesForRepoIds(
         c.env.DB,
         localRepoIds,
         {
-          limit,
-          offset: (pageNum - 1) * limit,
+          limit: mergeLimit,
+          offset: 0,
         },
       );
+      announceTotal = pushResult.total;
 
       const repoIdToItem = new Map(
         activeItems.items.filter((i) => i.localRepoId).map((i) => [
@@ -246,14 +250,14 @@ async function handleStoreOutboxRoute(
 
     const merged = [...invActivities, ...announceActivities]
       .sort((a, b) => b.ts.localeCompare(a.ts))
-      .slice(0, limit);
+      .slice(mergeOffset, mergeOffset + limit);
 
     return orderedCollectionResponse(
       c,
       collectionUrl,
       page,
       pageNum,
-      invResult.total + announceActivities.length,
+      invResult.total + announceTotal,
       merged.map((item) => item.activity),
     );
   }
@@ -361,16 +365,6 @@ export function registerStoreRoutes(
       (c, storeRecord) => handleStoreInventoryRoute(c, storeRecord, deps),
     ),
   );
-
-  activitypubStore.get("/ap/stores/:store/repositories", (c) => {
-    const store = c.req.param("store");
-    const origin = getOriginFromUrl(c.req.url);
-    const query = c.req.url.includes("?") ? `?${c.req.url.split("?")[1]}` : "";
-    return c.redirect(
-      `${origin}/ap/stores/${enc(store)}/inventory${query}`,
-      301,
-    );
-  });
 
   activitypubStore.get(
     "/ap/stores/:store/search",

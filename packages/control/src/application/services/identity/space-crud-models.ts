@@ -19,7 +19,7 @@ export type AccountLikeRow = {
   ownerAccountId: string | null;
   headSnapshotId: string | null;
   aiModel: string | null;
-  aiProvider: string | null;
+  modelBackend: string | null;
   securityPosture: string | null;
   createdAt: string;
   updatedAt: string;
@@ -76,7 +76,7 @@ export function accountToWorkspace(row: AccountLikeRow): Space {
     owner_principal_id: row.ownerAccountId ?? row.id,
     head_snapshot_id: row.headSnapshotId,
     ai_model: row.aiModel,
-    ai_provider: row.aiProvider,
+    model_backend: row.modelBackend,
     security_posture: toSecurityPosture(row.securityPosture),
     created_at: row.createdAt,
     updated_at: row.updatedAt,

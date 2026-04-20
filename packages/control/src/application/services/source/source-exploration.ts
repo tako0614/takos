@@ -104,7 +104,7 @@ export function mapExploreRepos(
       default_branch: repo.defaultBranch,
       stars: repo.stars,
       forks: repo.forks,
-      workspace: {
+      space: {
         id: repo.account.id,
         name: repo.account.name,
       },
@@ -155,7 +155,6 @@ export async function queryReposWithAccount(
     defaultBranch: repositories.defaultBranch,
     stars: repositories.stars,
     forks: repositories.forks,
-    officialCategory: repositories.officialCategory,
     primaryLanguage: repositories.primaryLanguage,
     license: repositories.license,
     createdAt: repositories.createdAt,
@@ -180,7 +179,6 @@ export async function queryReposWithAccount(
     defaultBranch: r.defaultBranch,
     stars: r.stars,
     forks: r.forks,
-    officialCategory: r.officialCategory,
     primaryLanguage: r.primaryLanguage,
     license: r.license,
     createdAt: r.createdAt,
@@ -215,9 +213,6 @@ export function buildBaseConditions(options: {
   searchQuery?: string;
 }): SQL[] {
   const conditions: SQL[] = [eq(repositories.visibility, "public")];
-  if (options.category) {
-    conditions.push(eq(repositories.officialCategory, options.category));
-  }
   if (options.language) {
     conditions.push(eq(repositories.primaryLanguage, options.language));
   }

@@ -369,6 +369,7 @@ export function AuthenticatedRoutes() {
       <AuthenticatedLayout>
         <ErrorBoundary>
           <AppsPage
+            spaceId={appsSpaceId}
             onNavigateToStore={() =>
               navigation.navigate({ view: "store", storeTab: "discover" })}
           />

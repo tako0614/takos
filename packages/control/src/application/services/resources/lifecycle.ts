@@ -1,16 +1,26 @@
-import type { Env } from '../../../shared/types/index.ts';
-import { generateId } from '../../../shared/utils/index.ts';
-import { insertFailedResource, insertResource } from './store.ts';
-import { CloudflareResourceService, type CloudflareManagedResourceType } from '../../../platform/providers/cloudflare/resources.ts';
-import type { ResourceCapability, ResourceType } from '../../../shared/types/index.ts';
-import { resolveResourceDriver, resolveResourceImplementation, toPublicResourceType } from './capabilities.ts';
+import type { Env } from "../../../shared/types/index.ts";
+import { generateId } from "../../../shared/utils/index.ts";
+import { insertFailedResource, insertResource } from "./store.ts";
+import {
+  type CloudflareManagedResourceType,
+  CloudflareResourceService,
+} from "../../../platform/backends/cloudflare/resources.ts";
+import type {
+  ResourceCapability,
+  ResourceType,
+} from "../../../shared/types/index.ts";
+import {
+  resolveResourceDriver,
+  resolveResourceImplementation,
+  toPublicResourceType,
+} from "./capabilities.ts";
 import {
   deletePortableManagedResource,
   ensurePortableManagedResource,
   resolvePortableResourceReferenceId,
-} from './portable-runtime.ts';
+} from "./portable-runtime.ts";
 
-type ManagedResourceProvider = 'cloudflare' | 'local' | 'aws' | 'gcp' | 'k8s';
+type ManagedResourceBackend = "cloudflare" | "local" | "aws" | "gcp" | "k8s";
 
 type ProvisionManagedResourceInput = {
   id?: string;
@@ -20,20 +30,20 @@ type ProvisionManagedResourceInput = {
   groupId?: string | null;
   name: string;
   type: string;
-  providerResourceName?: string;
+  backingResourceName?: string;
   publicType?: ResourceType;
   semanticType?: ResourceCapability;
-  providerName?: string;
+  backendName?: string;
   persist?: boolean;
   config?: Record<string, unknown>;
   recordFailure?: boolean;
   vectorize?: {
     dimensions: number;
-    metric: 'cosine' | 'euclidean' | 'dot-product';
+    metric: "cosine" | "euclidean" | "dot-product";
   };
   vectorIndex?: {
     dimensions: number;
-    metric: 'cosine' | 'euclidean' | 'dot-product';
+    metric: "cosine" | "euclidean" | "dot-product";
   };
   queue?: {
     deliveryDelaySeconds?: number;
@@ -62,45 +72,73 @@ type ProvisionManagedResourceInput = {
   };
 };
 
-function normalizeManagedResourceProvider(providerName?: string | null): ManagedResourceProvider {
-  switch (providerName) {
-    case 'local':
-    case 'aws':
-    case 'gcp':
-    case 'k8s':
-      return providerName;
-    case 'cloudflare':
+function normalizeManagedResourceBackend(
+  backendName?: string | null,
+): ManagedResourceBackend {
+  switch (backendName) {
+    case "local":
+    case "aws":
+    case "gcp":
+    case "k8s":
+      return backendName;
+    case "cloudflare":
     default:
-      return 'cloudflare';
+      return "cloudflare";
   }
 }
 
-function inferDefaultManagedResourceProvider(env: Pick<Env, 'CF_ACCOUNT_ID' | 'CF_API_TOKEN'>): ManagedResourceProvider {
-  return env.CF_ACCOUNT_ID && env.CF_API_TOKEN ? 'cloudflare' : 'local';
+function readEnvString(env: object, key: string): string | undefined {
+  const value = Reflect.get(env, key);
+  return typeof value === "string" && value.trim().length > 0
+    ? value.trim()
+    : undefined;
 }
 
-async function resolvePortableProviderResourceId(input: {
+export function inferDefaultManagedResourceBackend(
+  env: Partial<Env>,
+): ManagedResourceBackend {
+  const configuredBackend = readEnvString(env, "TAKOS_RESOURCE_BACKEND");
+  if (configuredBackend) {
+    return normalizeManagedResourceBackend(configuredBackend);
+  }
+  if (env.CF_ACCOUNT_ID && env.CF_API_TOKEN) return "cloudflare";
+  if (
+    env.AWS_REGION || env.AWS_ECS_REGION || env.AWS_ECS_CLUSTER_ARN
+  ) {
+    return "aws";
+  }
+  if (env.GCP_PROJECT_ID || env.GCP_REGION || env.GCP_CLOUD_RUN_REGION) {
+    return "gcp";
+  }
+  if (env.K8S_NAMESPACE) return "k8s";
+  return "local";
+}
+
+async function resolvePortableBackendResourceId(input: {
   id: string;
   semanticType: ResourceCapability;
-  providerName: ManagedResourceProvider;
-  providerResourceName: string;
+  backendName: ManagedResourceBackend;
+  backingResourceName: string;
   config?: Record<string, unknown>;
 }): Promise<string | null> {
   const resourceRef = {
     id: input.id,
-    provider_name: input.providerName,
-    provider_resource_name: input.providerResourceName,
+    backend_name: input.backendName,
+    backing_resource_name: input.backingResourceName,
     ...(input.config ? { config: input.config } : {}),
   };
 
   switch (input.semanticType) {
-    case 'queue':
-    case 'secret':
-      return resolvePortableResourceReferenceId(resourceRef, input.semanticType);
-    case 'sql':
-    case 'kv':
-    case 'vector_index':
-      return `${input.providerResourceName}-${input.id}`;
+    case "queue":
+    case "secret":
+      return resolvePortableResourceReferenceId(
+        resourceRef,
+        input.semanticType,
+      );
+    case "sql":
+    case "kv":
+    case "vector_index":
+      return `${input.backingResourceName}-${input.id}`;
     default:
       return null;
   }
@@ -108,36 +146,41 @@ async function resolvePortableProviderResourceId(input: {
 
 export async function provisionManagedResource(
   env: Env,
-  input: ProvisionManagedResourceInput
+  input: ProvisionManagedResourceInput,
 ): Promise<{
   id: string;
-  providerResourceId: string | null;
-  providerResourceName: string;
+  backingResourceId: string | null;
+  backingResourceName: string;
 }> {
   const id = input.id || generateId();
   const timestamp = input.timestamp || new Date().toISOString();
   const semanticType = input.semanticType ?? (input.type as ResourceCapability);
-  const publicType = input.publicType ?? toPublicResourceType(semanticType) ?? (input.type as ResourceType);
-  const providerName = normalizeManagedResourceProvider(input.providerName ?? inferDefaultManagedResourceProvider(env));
-  const driver = resolveResourceDriver(semanticType, providerName);
+  const publicType = input.publicType ?? toPublicResourceType(semanticType) ??
+    (input.type as ResourceType);
+  const backendName = normalizeManagedResourceBackend(
+    input.backendName ?? inferDefaultManagedResourceBackend(env),
+  );
+  const driver = resolveResourceDriver(semanticType, backendName);
   const persist = input.persist ?? true;
-  const providerResourceName = input.providerResourceName ?? `${input.type}-${id}`;
+  const backingResourceName = input.backingResourceName ??
+    `${input.type}-${id}`;
   const workflow = input.workflow ?? input.workflowRuntime;
-  const implementation = resolveResourceImplementation(semanticType) ?? (input.type as CloudflareManagedResourceType);
+  const implementation = resolveResourceImplementation(semanticType) ??
+    (input.type as CloudflareManagedResourceType);
 
   try {
-    if (providerName !== 'cloudflare') {
+    if (backendName !== "cloudflare") {
       await ensurePortableManagedResource({
         id,
-        provider_name: providerName,
-        provider_resource_name: providerResourceName,
+        backend_name: backendName,
+        backing_resource_name: backingResourceName,
         ...(input.config ? { config: input.config } : {}),
       }, semanticType);
-      const portableProviderResourceId = await resolvePortableProviderResourceId({
+      const portableBackingResourceId = await resolvePortableBackendResourceId({
         id,
         semanticType,
-        providerName,
-        providerResourceName,
+        backendName,
+        backingResourceName,
         ...(input.config ? { config: input.config } : {}),
       });
 
@@ -149,10 +192,10 @@ export async function provisionManagedResource(
           type: publicType,
           semantic_type: semanticType,
           driver,
-          provider_name: providerName,
-          status: 'active',
-          provider_resource_id: portableProviderResourceId,
-          provider_resource_name: providerResourceName,
+          backend_name: backendName,
+          status: "active",
+          backing_resource_id: portableBackingResourceId,
+          backing_resource_name: backingResourceName,
           config: input.config || {},
           space_id: input.spaceId || null,
           group_id: input.groupId || null,
@@ -163,18 +206,28 @@ export async function provisionManagedResource(
 
       return {
         id,
-        providerResourceId: portableProviderResourceId,
-        providerResourceName,
+        backingResourceId: portableBackingResourceId,
+        backingResourceName,
       };
     }
 
-    const provider = new CloudflareResourceService(env);
-    const created = await provider.createResource(implementation as CloudflareManagedResourceType, providerResourceName, {
-      ...(input.vectorize || input.vectorIndex ? { vectorize: input.vectorize ?? input.vectorIndex } : {}),
-      ...(input.queue ? { queue: input.queue } : {}),
-      ...(input.analyticsEngine || input.analyticsStore ? { analyticsEngine: input.analyticsEngine ?? input.analyticsStore } : {}),
-      ...(workflow ? { workflow } : {}),
-    });
+    const cloudflareResources = new CloudflareResourceService(env);
+    const created = await cloudflareResources.createResource(
+      implementation as CloudflareManagedResourceType,
+      backingResourceName,
+      {
+        ...(input.vectorize || input.vectorIndex
+          ? { vectorize: input.vectorize ?? input.vectorIndex }
+          : {}),
+        ...(input.queue ? { queue: input.queue } : {}),
+        ...(input.analyticsEngine || input.analyticsStore
+          ? { analyticsEngine: input.analyticsEngine ?? input.analyticsStore }
+          : {}),
+        ...(workflow ? { workflow } : {}),
+      },
+    );
+    const createdBackingResourceId = created.backingResourceId;
+    const createdBackingResourceName = created.backingResourceName;
 
     if (persist) {
       await insertResource(env.DB, {
@@ -184,10 +237,10 @@ export async function provisionManagedResource(
         type: publicType,
         semantic_type: semanticType,
         driver,
-        provider_name: providerName,
-        status: 'active',
-        provider_resource_id: created.providerResourceId,
-        provider_resource_name: created.providerResourceName,
+        backend_name: backendName,
+        status: "active",
+        backing_resource_id: createdBackingResourceId,
+        backing_resource_name: createdBackingResourceName,
         config: input.config || {},
         space_id: input.spaceId || null,
         group_id: input.groupId || null,
@@ -198,8 +251,8 @@ export async function provisionManagedResource(
 
     return {
       id,
-      providerResourceId: created.providerResourceId,
-      providerResourceName: created.providerResourceName,
+      backingResourceId: createdBackingResourceId,
+      backingResourceName: createdBackingResourceName,
     };
   } catch (error) {
     if (persist && input.recordFailure) {
@@ -210,8 +263,8 @@ export async function provisionManagedResource(
         type: publicType,
         semantic_type: semanticType,
         driver,
-        provider_name: providerName,
-        provider_resource_name: providerResourceName,
+        backend_name: backendName,
+        backing_resource_name: backingResourceName,
         config: {
           ...(input.config || {}),
           error: error instanceof Error ? error.message : String(error),
@@ -227,29 +280,32 @@ export async function provisionManagedResource(
 }
 
 export async function deleteManagedResource(
-  env: Pick<Env, 'CF_ACCOUNT_ID' | 'CF_API_TOKEN' | 'WFP_DISPATCH_NAMESPACE'>,
+  env: Pick<Env, "CF_ACCOUNT_ID" | "CF_API_TOKEN" | "WFP_DISPATCH_NAMESPACE">,
   input: {
     type: string;
-    providerName?: string | null;
-    providerResourceId?: string | null;
-    providerResourceName?: string | null;
+    backendName?: string | null;
+    backingResourceId?: string | null;
+    backingResourceName?: string | null;
   },
 ): Promise<void> {
-  const providerName = normalizeManagedResourceProvider(input.providerName ?? inferDefaultManagedResourceProvider(env));
-  if (providerName !== 'cloudflare') {
+  const backendName = normalizeManagedResourceBackend(
+    input.backendName ?? inferDefaultManagedResourceBackend(env),
+  );
+  if (backendName !== "cloudflare") {
     await deletePortableManagedResource({
-      id: input.providerResourceId ?? input.providerResourceName ?? input.type,
-      provider_name: providerName,
-      provider_resource_name: input.providerResourceName ?? undefined,
+      id: input.backingResourceId ?? input.backingResourceName ?? input.type,
+      backend_name: backendName,
+      backing_resource_name: input.backingResourceName ?? undefined,
     }, input.type);
     return;
   }
-  const provider = new CloudflareResourceService(env);
-  const implementation = resolveResourceImplementation(input.type) ?? (input.type as CloudflareManagedResourceType);
-  await provider.deleteResource({
+  const cloudflareResources = new CloudflareResourceService(env);
+  const implementation = resolveResourceImplementation(input.type) ??
+    (input.type as CloudflareManagedResourceType);
+  await cloudflareResources.deleteResource({
     type: implementation,
-    providerResourceId: input.providerResourceId,
-    providerResourceName: input.providerResourceName,
+    backingResourceId: input.backingResourceId,
+    backingResourceName: input.backingResourceName,
   });
 }
 

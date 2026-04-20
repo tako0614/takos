@@ -10,7 +10,7 @@ export type {
   CatalogSuggestionUser,
 } from "./useSourceFiltering.ts";
 
-export interface SourceItemTakopack {
+export interface SourceItemPackage {
   available: boolean;
   latest_version: string | null;
   latest_tag: string | null;
@@ -24,7 +24,7 @@ export interface SourceItemTakopack {
 
 export interface SourceItemInstallation {
   installed: boolean;
-  app_deployment_id: string | null;
+  group_deployment_snapshot_id: string | null;
   installed_version: string | null;
   deployed_at: string | null;
 }
@@ -43,7 +43,6 @@ export interface SourceItem {
   category?: string | null;
   is_starred: boolean;
   is_mine: boolean;
-  official?: boolean;
   owner: {
     id?: string;
     name: string;
@@ -51,7 +50,7 @@ export interface SourceItem {
     avatar_url?: string | null;
   };
   space?: { id: string; name: string };
-  takopack?: SourceItemTakopack;
+  package?: SourceItemPackage;
   installation?: SourceItemInstallation;
 }
 
@@ -79,19 +78,17 @@ export function useSourceData(
     debouncedQuery: filtering.debouncedQuery,
     sort: filtering.sort,
     category: filtering.category,
-    officialOnly: filtering.officialOnly,
     filter: filtering.filter,
     onNavigateToRepo,
     onRequireLogin,
   });
 
-  // Refetch whenever filter/sort/category/officialOnly/query/space changes
+  // Refetch whenever filter/sort/category/query/space changes
   createEffect(on(
     () => [
       filtering.filter(),
       filtering.sort(),
       filtering.category(),
-      filtering.officialOnly(),
       filtering.debouncedQuery(),
       filtering.effectiveSpaceId(),
       isAuthenticated(),
@@ -143,8 +140,6 @@ export function useSourceData(
     setSort: filtering.setSort,
     category: filtering.category,
     setCategory: filtering.setCategory,
-    officialOnly: filtering.officialOnly,
-    setOfficialOnly: filtering.setOfficialOnly,
     query: filtering.query,
     setQuery: filtering.setQuery,
 
@@ -175,6 +170,6 @@ export function useSourceData(
     toggleStar: fetching.toggleStar,
     createRepo,
     openRepo: fetching.openRepo,
-    getItemTakopack: fetching.getItemTakopack,
+    getItemPackage: fetching.getItemPackage,
   };
 }

@@ -1,46 +1,46 @@
-import type { AgentMessage, AgentTool } from './agent-models.ts';
+import type { AgentMessage, AgentTool } from "./agent-models.ts";
 import {
-  createProvider,
-  getProviderFromModel,
+  createBackend,
   DEFAULT_MODEL_ID,
-  type ModelConfig,
-  type ModelProvider,
-  type LLMProvider,
+  getBackendFromModel,
+  type LLMBackend,
   type LLMResponse,
-} from './llm-providers.ts';
+  type ModelBackend,
+  type ModelConfig,
+} from "./llm-backends.ts";
 
-export type { ModelConfig, ModelProvider, LLMProvider, LLMResponse };
-export { getProviderFromModel };
+export type { LLMBackend, LLMResponse, ModelBackend, ModelConfig };
+export { getBackendFromModel };
 
 export interface LLMConfig {
   apiKey: string;
   model?: string;
   maxTokens?: number;
   temperature?: number;
-  provider?: ModelProvider;
+  backend?: ModelBackend;
   anthropicApiKey?: string;
   googleApiKey?: string;
 }
 
 export class LLMClient {
-  private provider: LLMProvider;
+  private backend: LLMBackend;
   private config: LLMConfig;
 
   constructor(config: LLMConfig) {
     this.config = config;
 
     const model = config.model || DEFAULT_MODEL_ID;
-    const providerType = config.provider || getProviderFromModel(model);
+    const backendType = config.backend || getBackendFromModel(model);
 
     let apiKey = config.apiKey;
-    if (providerType === 'anthropic' && config.anthropicApiKey) {
+    if (backendType === "anthropic" && config.anthropicApiKey) {
       apiKey = config.anthropicApiKey;
-    } else if (providerType === 'google' && config.googleApiKey) {
+    } else if (backendType === "google" && config.googleApiKey) {
       apiKey = config.googleApiKey;
     }
 
-    this.provider = createProvider({
-      provider: providerType,
+    this.backend = createBackend({
+      backend: backendType,
       model,
       apiKey,
       maxTokens: config.maxTokens || 4096,
@@ -57,15 +57,23 @@ export class LLMClient {
     tools?: AgentTool[],
     signal?: AbortSignal,
   ): Promise<LLMResponse> {
-    return this.provider.chat(messages, tools, signal);
+    return this.backend.chat(messages, tools, signal);
   }
 }
 
-export const VALID_PROVIDERS: readonly ModelProvider[] = ['openai', 'anthropic', 'google'];
+export const VALID_MODEL_BACKENDS: readonly ModelBackend[] = [
+  "openai",
+  "anthropic",
+  "google",
+];
 
-function parseModelProvider(value: string | undefined): ModelProvider | undefined {
+function parseModelBackend(
+  value: string | undefined,
+): ModelBackend | undefined {
   if (!value) return undefined;
-  return (VALID_PROVIDERS as readonly string[]).includes(value) ? (value as ModelProvider) : undefined;
+  return (VALID_MODEL_BACKENDS as readonly string[]).includes(value)
+    ? (value as ModelBackend)
+    : undefined;
 }
 
 export function createLLMClientFromEnv(env: {
@@ -73,25 +81,39 @@ export function createLLMClientFromEnv(env: {
   ANTHROPIC_API_KEY?: string;
   GOOGLE_API_KEY?: string;
   AI_MODEL?: string;
-  AI_PROVIDER?: string;
+  AI_BACKEND?: string;
 }): LLMClient {
   const model = env.AI_MODEL || DEFAULT_MODEL_ID;
-  const providerType = parseModelProvider(env.AI_PROVIDER) || getProviderFromModel(model);
+  const backendType = parseModelBackend(env.AI_BACKEND) ||
+    getBackendFromModel(model);
 
-  const keyMap: Record<ModelProvider, { key: string | undefined; label: string }> = {
-    openai: { key: env.OPENAI_API_KEY, label: 'OpenAI API key (OPENAI_API_KEY) is required for OpenAI models' },
-    anthropic: { key: env.ANTHROPIC_API_KEY, label: 'Anthropic API key (ANTHROPIC_API_KEY) is required for Claude models' },
-    google: { key: env.GOOGLE_API_KEY, label: 'Google API key (GOOGLE_API_KEY) is required for Gemini models' },
+  const keyMap: Record<
+    ModelBackend,
+    { key: string | undefined; label: string }
+  > = {
+    openai: {
+      key: env.OPENAI_API_KEY,
+      label: "OpenAI API key (OPENAI_API_KEY) is required for OpenAI models",
+    },
+    anthropic: {
+      key: env.ANTHROPIC_API_KEY,
+      label:
+        "Anthropic API key (ANTHROPIC_API_KEY) is required for Claude models",
+    },
+    google: {
+      key: env.GOOGLE_API_KEY,
+      label: "Google API key (GOOGLE_API_KEY) is required for Gemini models",
+    },
   };
 
-  const entry = keyMap[providerType];
-  if (!entry) throw new Error(`Unknown provider type: ${providerType}`);
+  const entry = keyMap[backendType];
+  if (!entry) throw new Error(`Unknown backend type: ${backendType}`);
   if (!entry.key) throw new Error(entry.label);
 
   return new LLMClient({
     apiKey: entry.key,
     model,
-    provider: providerType,
+    backend: backendType,
     anthropicApiKey: env.ANTHROPIC_API_KEY,
     googleApiKey: env.GOOGLE_API_KEY,
   });

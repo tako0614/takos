@@ -495,8 +495,8 @@ export function createResource(options: ResourceFactoryOptions = {}): Resource {
     name: options.name || `test-resource-${idCounter}`,
     type: options.type || "d1",
     status: options.status || "active",
-    provider_resource_id: options.cf_id !== undefined ? options.cf_id : null,
-    provider_resource_name: options.cf_name !== undefined
+    backing_resource_id: options.cf_id !== undefined ? options.cf_id : null,
+    backing_resource_name: options.cf_name !== undefined
       ? options.cf_name
       : null,
     config: options.config || "{}",

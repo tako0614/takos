@@ -6,23 +6,23 @@
  * Subclasses provide domain-specific identity, persistence shape,
  * auth checks, and any extra endpoints or emit-time side effects.
  */
-import { logError, logWarn } from '../../shared/utils/logger.ts';
+import { logError, logWarn } from "../../shared/utils/logger.ts";
 import {
-  jsonResponse,
-  type RingBufferEvent,
-  type ExtendedWebSocket,
-  parseEventId,
   addToRingBuffer,
-  getEventsAfter,
-  cleanupStaleConnections,
-  scheduleCleanupAlarm,
   broadcastHeartbeat,
-  safeClose,
+  cleanupStaleConnections,
+  type ExtendedWebSocket,
+  getEventsAfter,
+  jsonResponse,
+  parseEventId,
   RECONNECT_CLOSE_CODE,
   RECONNECT_CLOSE_REASON,
-} from './do-header-utils.ts';
+  type RingBufferEvent,
+  safeClose,
+  scheduleCleanupAlarm,
+} from "./do-header-utils.ts";
 
-export { jsonResponse, type RingBufferEvent, type ExtendedWebSocket };
+export { type ExtendedWebSocket, jsonResponse, type RingBufferEvent };
 
 const HEARTBEAT_INTERVAL_MS = 2 * 60 * 1000;
 
@@ -65,7 +65,7 @@ export abstract class NotifierBase implements DurableObject {
         }
       } catch (e) {
         logError(
-          'Failed to load persisted state',
+          "Failed to load persisted state",
           e instanceof Error ? e.message : String(e),
           { module: this.moduleName },
         );
@@ -112,42 +112,51 @@ export abstract class NotifierBase implements DurableObject {
     const url = new URL(request.url);
     const path = url.pathname;
 
-    if (request.headers.get('Upgrade') === 'websocket') {
+    if (request.headers.get("Upgrade") === "websocket") {
       return this.handleWebSocket(request, url);
     }
 
     if (!this.isAuthorizedHttp(request)) {
-      return new Response('Unauthorized', { status: 401 });
+      return new Response("Unauthorized", { status: 401 });
     }
 
-    if (path === '/emit' && request.method === 'POST') {
+    if (path === "/emit" && request.method === "POST") {
       let body: unknown;
       try {
         body = await request.json();
       } catch {
-        return jsonResponse({ error: 'Invalid JSON' }, 400);
+        return jsonResponse({ error: "Invalid JSON" }, 400);
       }
-      return this.handleEmit(body as { type: string; data: unknown; event_id?: number | string; [key: string]: unknown });
+      return this.handleEmit(
+        body as {
+          type: string;
+          data: unknown;
+          event_id?: number | string;
+          [key: string]: unknown;
+        },
+      );
     }
 
-    if (path === '/events' && request.method === 'GET') {
+    if (path === "/events" && request.method === "GET") {
       return this.handleEventsEndpoint(url);
     }
 
-    if (path === '/state' && request.method === 'GET') {
+    if (path === "/state" && request.method === "GET") {
       return this.handleStateEndpoint();
     }
 
-    return this.handleExtraRoutes(request, url, path) ?? new Response('Not Found', { status: 404 });
+    return this.handleExtraRoutes(request, url, path) ??
+      new Response("Not Found", { status: 404 });
   }
 
   /**
    * Check whether an HTTP request (non-WebSocket) is authorized.
-   * Default: allow if X-WS-Auth-Validated or X-Takos-Internal headers present.
+   * Default: allow if X-WS-Auth-Validated or X-Takos-Internal-Marker headers present.
    */
   protected isAuthorizedHttp(request: Request): boolean {
-    const wsAuthValidated = request.headers.get('X-WS-Auth-Validated') === 'true';
-    const internalCall = request.headers.get('X-Takos-Internal') === '1';
+    const wsAuthValidated =
+      request.headers.get("X-WS-Auth-Validated") === "true";
+    const internalCall = request.headers.get("X-Takos-Internal-Marker") === "1";
     return wsAuthValidated || internalCall;
   }
 
@@ -155,7 +164,11 @@ export abstract class NotifierBase implements DurableObject {
    * Override to add domain-specific HTTP routes.
    * Return null to fall through to 404.
    */
-  protected handleExtraRoutes(_request: Request, _url: URL, _path: string): Response | Promise<Response> | null {
+  protected handleExtraRoutes(
+    _request: Request,
+    _url: URL,
+    _path: string,
+  ): Response | Promise<Response> | null {
     return null;
   }
 
@@ -168,7 +181,7 @@ export abstract class NotifierBase implements DurableObject {
    * Override to add stricter validation. Return null to signal invalid input.
    */
   protected parseReplayAfter(raw: string | null): number | null {
-    return parseInt(raw || '0');
+    return parseInt(raw || "0");
   }
 
   /**
@@ -184,11 +197,13 @@ export abstract class NotifierBase implements DurableObject {
   }
 
   private handleEventsEndpoint(url: URL): Response {
-    const after = this.parseReplayAfter(url.searchParams.get('after'));
+    const after = this.parseReplayAfter(url.searchParams.get("after"));
     if (after === null) {
-      return jsonResponse({ error: 'Invalid after cursor' }, 400);
+      return jsonResponse({ error: "Invalid after cursor" }, 400);
     }
-    const events = getEventsAfter(this.eventBuffer, after).map((e) => this.mapEventForHttp(e));
+    const events = getEventsAfter(this.eventBuffer, after).map((e) =>
+      this.mapEventForHttp(e)
+    );
     return jsonResponse({ events, lastEventId: this.eventIdCounter });
   }
 
@@ -219,7 +234,10 @@ export abstract class NotifierBase implements DurableObject {
    * Return a Response to reject the connection, or null to proceed.
    * Tags returned will be passed to `acceptWebSocket`.
    */
-  protected abstract validateWebSocket(request: Request, url: URL): Promise<{ reject?: Response; tags?: string[] }>;
+  protected abstract validateWebSocket(
+    request: Request,
+    url: URL,
+  ): Promise<{ reject?: Response; tags?: string[] }>;
 
   /**
    * Map a ring buffer event to the shape sent in WebSocket replay messages.
@@ -230,30 +248,34 @@ export abstract class NotifierBase implements DurableObject {
   }
 
   private async handleWebSocket(request: Request, url: URL): Promise<Response> {
-    const authValidated = request.headers.get('X-WS-Auth-Validated');
-    if (authValidated !== 'true') {
-      logWarn('WebSocket connection attempted without auth validation', { module: 'security' });
-      return new Response('Unauthorized', { status: 401 });
+    const authValidated = request.headers.get("X-WS-Auth-Validated");
+    if (authValidated !== "true") {
+      logWarn("WebSocket connection attempted without auth validation", {
+        module: "security",
+      });
+      return new Response("Unauthorized", { status: 401 });
     }
 
     const validation = await this.validateWebSocket(request, url);
     if (validation.reject) return validation.reject;
 
     if (this.connections.size >= this.maxConnections) {
-      return new Response('Too many connections', { status: 503 });
+      return new Response("Too many connections", { status: 503 });
     }
 
-    const lastEventIdRaw = url.searchParams.get('last_event_id');
+    const lastEventIdRaw = url.searchParams.get("last_event_id");
     const lastEventId = this.parseWsLastEventId(lastEventIdRaw);
     if (lastEventId === null) {
-      return jsonResponse({ error: 'Invalid last_event_id' }, 400);
+      return jsonResponse({ error: "Invalid last_event_id" }, 400);
     }
 
     const pair = new WebSocketPair();
     const [client, server] = Object.values(pair);
 
     const connectionId = crypto.randomUUID();
-    const tags = validation.tags ? [connectionId, ...validation.tags] : [connectionId];
+    const tags = validation.tags
+      ? [connectionId, ...validation.tags]
+      : [connectionId];
     this.state.acceptWebSocket(server, tags);
 
     const extendedServer = server as ExtendedWebSocket;
@@ -262,11 +284,11 @@ export abstract class NotifierBase implements DurableObject {
     this.connections.set(connectionId, extendedServer);
 
     scheduleCleanupAlarm(this.state).catch((err) => {
-      logError('Failed to schedule alarm', err, { module: this.moduleName });
+      logError("Failed to schedule alarm", err, { module: this.moduleName });
     });
 
     server.send(JSON.stringify({
-      type: 'connected',
+      type: "connected",
       data: { connectionId, lastEventId: this.eventIdCounter },
     }));
 
@@ -274,7 +296,7 @@ export abstract class NotifierBase implements DurableObject {
       const missedEvents = getEventsAfter(this.eventBuffer, lastEventId);
       if (missedEvents.length > 0) {
         server.send(JSON.stringify({
-          type: 'replay',
+          type: "replay",
           data: {
             events: missedEvents.map((e) => this.mapEventForWs(e)),
             count: missedEvents.length,
@@ -283,7 +305,11 @@ export abstract class NotifierBase implements DurableObject {
       }
     }
 
-    return new Response(null, { status: 101, webSocket: client } as unknown as ResponseInit);
+    const init: ResponseInit & { webSocket: WebSocket } = {
+      status: 101,
+      webSocket: client,
+    };
+    return new Response(null, init);
   }
 
   /**
@@ -292,23 +318,26 @@ export abstract class NotifierBase implements DurableObject {
    * Default: parse as integer, defaulting to 0 if absent.
    */
   protected parseWsLastEventId(raw: string | null): number | null {
-    return parseInt(raw || '0');
+    return parseInt(raw || "0");
   }
 
   // ---------------------------------------------------------------------------
   // Hibernation API handlers
   // ---------------------------------------------------------------------------
 
-  async webSocketMessage(ws: WebSocket, message: string | ArrayBuffer): Promise<void> {
+  async webSocketMessage(
+    ws: WebSocket,
+    message: string | ArrayBuffer,
+  ): Promise<void> {
     const extendedWs = ws as ExtendedWebSocket;
     extendedWs.lastActivity = Date.now();
 
-    if (message === 'ping') {
-      ws.send('pong');
+    if (message === "ping") {
+      ws.send("pong");
       return;
     }
 
-    if (typeof message === 'string') {
+    if (typeof message === "string") {
       await this.handleWsMessage(ws, message);
     }
   }
@@ -317,7 +346,10 @@ export abstract class NotifierBase implements DurableObject {
    * Handle a parsed string WebSocket message beyond ping/pong.
    * Override in subclasses to add domain-specific message handling.
    */
-  protected async handleWsMessage(_ws: WebSocket, _message: string): Promise<void> {
+  protected async handleWsMessage(
+    _ws: WebSocket,
+    _message: string,
+  ): Promise<void> {
     // No-op by default
   }
 
@@ -348,15 +380,25 @@ export abstract class NotifierBase implements DurableObject {
    * Core emit logic. Subclasses override `validateEmit` for pre-buffer
    * validation and `processEmit` for domain side effects.
    */
-  private async handleEmit(input: { type: string; data: unknown; event_id?: number | string; [key: string]: unknown }): Promise<Response> {
+  private async handleEmit(
+    input: {
+      type: string;
+      data: unknown;
+      event_id?: number | string;
+      [key: string]: unknown;
+    },
+  ): Promise<Response> {
     return this.state.blockConcurrencyWhile(async () => {
-      if (typeof input.type !== 'string' || input.type.length === 0 || input.type.length > 256) {
-        return jsonResponse({ success: false, error: 'Invalid type' }, 400);
+      if (
+        typeof input.type !== "string" || input.type.length === 0 ||
+        input.type.length > 256
+      ) {
+        return jsonResponse({ success: false, error: "Invalid type" }, 400);
       }
 
       const serializedData = JSON.stringify(input.data);
       if (serializedData.length >= 1_048_576) {
-        return jsonResponse({ success: false, error: 'Data too large' }, 400);
+        return jsonResponse({ success: false, error: "Data too large" }, 400);
       }
 
       // Domain-specific validation before mutating state
@@ -365,7 +407,13 @@ export abstract class NotifierBase implements DurableObject {
 
       const preferredEventId = parseEventId(input.event_id);
       const counter = { value: this.eventIdCounter };
-      const eventId = addToRingBuffer(this.eventBuffer, counter, input.type, input.data, preferredEventId);
+      const eventId = addToRingBuffer(
+        this.eventBuffer,
+        counter,
+        input.type,
+        input.data,
+        preferredEventId,
+      );
       this.eventIdCounter = counter.value;
 
       // Let the subclass perform domain-specific side effects and build the broadcast message
@@ -390,7 +438,12 @@ export abstract class NotifierBase implements DurableObject {
    * Default: no extra validation.
    */
   protected async validateEmit(
-    _input: { type: string; data: unknown; event_id?: number | string; [key: string]: unknown },
+    _input: {
+      type: string;
+      data: unknown;
+      event_id?: number | string;
+      [key: string]: unknown;
+    },
   ): Promise<Response | null | undefined> {
     return null;
   }
@@ -402,7 +455,12 @@ export abstract class NotifierBase implements DurableObject {
    * Return the broadcast message string and optional extra response fields.
    */
   protected abstract processEmit(
-    input: { type: string; data: unknown; event_id?: number | string; [key: string]: unknown },
+    input: {
+      type: string;
+      data: unknown;
+      event_id?: number | string;
+      [key: string]: unknown;
+    },
     eventId: number,
   ): Promise<EmitResult>;
 

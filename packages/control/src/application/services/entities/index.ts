@@ -9,34 +9,34 @@
 export {
   createResource,
   deleteResource,
-  listResources,
-  type EntityResult,
   type EntityInfo,
-} from './resource-ops.ts';
+  type EntityResult,
+  listResources,
+} from "./resource-ops.ts";
 
 // Workers
 export {
-  deployWorker,
   deleteWorker,
+  deployWorker,
   listWorkers,
-  type WorkerEntityResult,
   type WorkerEntityInfo,
-} from './worker-ops.ts';
+  type WorkerEntityResult,
+} from "./worker-ops.ts";
 
 // Containers
 export {
-  deployContainer,
-  deleteContainer,
-  listContainers,
-  type ContainerEntityResult,
   type ContainerEntityInfo,
-} from './container-ops.ts';
+  type ContainerEntityResult,
+  deleteContainer,
+  deployContainer,
+  listContainers,
+} from "./container-ops.ts";
 
 // Services
 export {
-  deployService,
   deleteService,
+  deployService,
   listServices,
-  type ServiceEntityResult,
   type ServiceEntityInfo,
-} from './service-ops.ts';
+  type ServiceEntityResult,
+} from "./service-ops.ts";

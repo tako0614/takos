@@ -134,6 +134,9 @@ import {
 // ---- schema-platform ----
 import {
   apDeliveryQueue,
+  defaultAppDistributionConfig,
+  defaultAppDistributionEntries,
+  defaultAppPreinstallJobs,
   dlqEntries,
   edges,
   fileHandlerMatchers,
@@ -271,7 +274,7 @@ Deno.test("schema-accounts - accounts table - has all required columns", () => {
     "defaultRepositoryId",
     "headSnapshotId",
     "aiModel",
-    "aiProvider",
+    "modelBackend",
     "securityPosture",
     "ownerAccountId",
     "createdAt",
@@ -614,15 +617,14 @@ Deno.test("schema-repos - repositories table - defaults visibility to private an
   assertEquals(cols.visibility.default, "private");
   assertEquals(cols.defaultBranch.default, "main");
 });
-Deno.test("schema-repos - repositories table - has gitEnabled, isOfficial, and featured boolean columns", () => {
-  for (const col of ["gitEnabled", "isOfficial", "featured"]) {
+Deno.test("schema-repos - repositories table - has gitEnabled and featured boolean columns", () => {
+  for (const col of ["gitEnabled", "featured"]) {
     assertEquals(hasColumn(repositories, col), true);
   }
 });
-Deno.test("schema-repos - repositories table - has indexes for visibility, official, featured, and primary language", () => {
+Deno.test("schema-repos - repositories table - has indexes for visibility, featured, and primary language", () => {
   const idxs = indexNames(repositories);
   assertHasEntry(idxs, "idx_repositories_visibility");
-  assertHasEntry(idxs, "idx_repositories_is_official");
   assertHasEntry(idxs, "idx_repositories_featured");
   assertHasEntry(idxs, "idx_repositories_primary_language");
 });
@@ -1033,14 +1035,14 @@ Deno.test("schema-platform - resources table - defaults status to provisioning",
   const cols = getTableColumns(resources);
   assertEquals(cols.status.default, "provisioning");
 });
-Deno.test("schema-platform - resources table - has indexes on type, semanticType, providerName, status, owner, providerResourceId, and account", () => {
+Deno.test("schema-platform - resources table - has indexes on type, semanticType, backendName, status, owner, backingResourceId, and account", () => {
   const idxs = indexNames(resources);
   assertHasEntry(idxs, "idx_resources_type");
   assertHasEntry(idxs, "idx_resources_semantic_type");
-  assertHasEntry(idxs, "idx_resources_provider_name");
+  assertHasEntry(idxs, "idx_resources_backend_name");
   assertHasEntry(idxs, "idx_resources_status");
   assertHasEntry(idxs, "idx_resources_owner_account_id");
-  assertHasEntry(idxs, "idx_resources_provider_resource_id");
+  assertHasEntry(idxs, "idx_resources_backing_resource_id");
   assertHasEntry(idxs, "idx_resources_account_id");
 });
 
@@ -1183,6 +1185,106 @@ Deno.test("schema-platform - storeRegistryUpdates table - has unique index on re
 Deno.test('schema-platform - apDeliveryQueue table - is named "ap_delivery_queue"', () => {
   assertEquals(getTableName(apDeliveryQueue), "ap_delivery_queue");
 });
+
+Deno.test('schema-platform - defaultAppDistributionConfig table - is named "default_app_distribution_config"', () => {
+  assertEquals(
+    getTableName(defaultAppDistributionConfig),
+    "default_app_distribution_config",
+  );
+});
+
+Deno.test("schema-platform - defaultAppDistributionConfig table - has singleton control columns", () => {
+  const cols = getTableColumns(defaultAppDistributionConfig);
+  assertEquals(cols.id.primary, true);
+  assertEquals(cols.configured.notNull, true);
+  assertEquals(cols.configured.default, false);
+  assertEquals(hasColumn(defaultAppDistributionConfig, "createdAt"), true);
+  assertEquals(hasColumn(defaultAppDistributionConfig, "updatedAt"), true);
+});
+
+Deno.test('schema-platform - defaultAppDistributionEntries table - is named "default_app_distribution_entries"', () => {
+  assertEquals(
+    getTableName(defaultAppDistributionEntries),
+    "default_app_distribution_entries",
+  );
+});
+
+Deno.test("schema-platform - defaultAppDistributionEntries table - has distribution columns", () => {
+  const cols = colNames(defaultAppDistributionEntries);
+  for (
+    const col of [
+      "id",
+      "name",
+      "title",
+      "repositoryUrl",
+      "ref",
+      "refType",
+      "preinstall",
+      "backendName",
+      "envName",
+      "position",
+      "enabled",
+      "createdAt",
+      "updatedAt",
+    ]
+  ) {
+    assertHasEntry(cols, col);
+  }
+});
+
+Deno.test("schema-platform - defaultAppDistributionEntries table - has name and enabled-position indexes", () => {
+  const uniq = uniqueIndexNames(defaultAppDistributionEntries);
+  const idxs = indexNames(defaultAppDistributionEntries);
+  assertHasEntry(uniq, "idx_default_app_distribution_entries_name");
+  assertHasEntry(
+    idxs,
+    "idx_default_app_distribution_entries_enabled_position",
+  );
+});
+
+Deno.test('schema-platform - defaultAppPreinstallJobs table - is named "default_app_preinstall_jobs"', () => {
+  assertEquals(
+    getTableName(defaultAppPreinstallJobs),
+    "default_app_preinstall_jobs",
+  );
+});
+
+Deno.test("schema-platform - defaultAppPreinstallJobs table - has job queue columns", () => {
+  const cols = colNames(defaultAppPreinstallJobs);
+  for (
+    const col of [
+      "id",
+      "spaceId",
+      "createdByAccountId",
+      "distributionJson",
+      "expectedGroupIdsJson",
+      "deploymentQueuedAt",
+      "status",
+      "attempts",
+      "nextAttemptAt",
+      "lockedAt",
+      "lastError",
+      "createdAt",
+      "updatedAt",
+    ]
+  ) {
+    assertHasEntry(cols, col);
+  }
+});
+
+Deno.test("schema-platform - defaultAppPreinstallJobs table - defaults status to queued and attempts to 0", () => {
+  const cols = getTableColumns(defaultAppPreinstallJobs);
+  assertEquals(cols.status.default, "queued");
+  assertEquals(cols.attempts.default, 0);
+});
+
+Deno.test("schema-platform - defaultAppPreinstallJobs table - has status-next-attempt index and unique space index", () => {
+  const idxs = indexNames(defaultAppPreinstallJobs);
+  const uniq = uniqueIndexNames(defaultAppPreinstallJobs);
+  assertHasEntry(idxs, "idx_default_app_preinstall_jobs_status_next_attempt");
+  assertHasEntry(uniq, "uniq_default_app_preinstall_jobs_space_id");
+});
+
 Deno.test("schema-platform - apDeliveryQueue table - has all required columns", () => {
   const cols = colNames(apDeliveryQueue);
   const required = [
@@ -1380,6 +1482,9 @@ const expectedNames: [Parameters<typeof getTableName>[0], string][] = [
   [shortcuts, "shortcuts"],
   [uiExtensions, "ui_extensions"],
   [apDeliveryQueue, "ap_delivery_queue"],
+  [defaultAppDistributionConfig, "default_app_distribution_config"],
+  [defaultAppDistributionEntries, "default_app_distribution_entries"],
+  [defaultAppPreinstallJobs, "default_app_preinstall_jobs"],
   [dlqEntries, "dlq_entries"],
   [storeRegistry, "store_registry"],
   [storeRegistryUpdates, "store_registry_updates"],

@@ -98,8 +98,8 @@ Deno.test("getResourceById - returns mapped resource when found", async () => {
     name: "my-db",
     type: "d1",
     status: "active",
-    providerResourceId: "cf-123",
-    providerResourceName: "my-d1-db",
+    backingResourceId: "cf-123",
+    backingResourceName: "my-d1-db",
     config: "{}",
     metadata: "{}",
     sizeBytes: null,
@@ -117,7 +117,7 @@ Deno.test("getResourceById - returns mapped resource when found", async () => {
   assertEquals(result!.id, "res-1");
   assertEquals(result!.owner_id, "user-1");
   assertEquals(result!.name, "my-db");
-  assertEquals(result!.type, "d1");
+  assertEquals(result!.type, "sql");
   assertEquals(result!.capability, "sql");
   assertEquals(result!.implementation, "d1");
   assertEquals(result!.status, "active");
@@ -148,8 +148,8 @@ Deno.test("getResourceByName - returns resource with _internal_id when found", a
     name: "my-db",
     type: "d1",
     status: "active",
-    providerResourceId: "cf-123",
-    providerResourceName: "my-d1-db",
+    backingResourceId: "cf-123",
+    backingResourceName: "my-d1-db",
     config: "{}",
     metadata: "{}",
     sizeBytes: null,
@@ -166,7 +166,7 @@ Deno.test("getResourceByName - returns resource with _internal_id when found", a
   assertNotEquals(result, null);
   assertEquals(result!._internal_id, "res-1");
   assertEquals(result!.name, "my-db");
-  assertEquals(result!.type, "d1");
+  assertEquals(result!.type, "sql");
 });
 
 Deno.test("updateResourceMetadata - returns null when no updates provided", async () => {
@@ -191,8 +191,8 @@ Deno.test("updateResourceMetadata - updates name when provided", async () => {
     name: "new-name",
     type: "d1",
     status: "active",
-    providerResourceId: null,
-    providerResourceName: null,
+    backingResourceId: null,
+    backingResourceName: null,
     config: "{}",
     metadata: "{}",
     sizeBytes: null,
@@ -222,8 +222,8 @@ Deno.test("updateResourceMetadata - serializes config and metadata as JSON", asy
     name: "test",
     type: "d1",
     status: "active",
-    providerResourceId: null,
-    providerResourceName: null,
+    backingResourceId: null,
+    backingResourceName: null,
     config: '{"key":"value"}',
     metadata: '{"meta":"data"}',
     sizeBytes: null,
@@ -270,8 +270,8 @@ Deno.test("insertResource - inserts a resource and returns it", async () => {
     name: "my-new-db",
     type: "d1",
     status: "active",
-    providerResourceId: "cf-123",
-    providerResourceName: "my-d1-db",
+    backingResourceId: "cf-123",
+    backingResourceName: "my-d1-db",
     config: "{}",
     metadata: "{}",
     sizeBytes: null,
@@ -289,8 +289,8 @@ Deno.test("insertResource - inserts a resource and returns it", async () => {
     name: "my-new-db",
     type: "d1",
     status: "active",
-    provider_resource_id: "cf-123",
-    provider_resource_name: "my-d1-db",
+    backing_resource_id: "cf-123",
+    backing_resource_name: "my-d1-db",
     config: {},
     space_id: "space-1",
     created_at: "2026-01-01T00:00:00.000Z",
@@ -312,7 +312,7 @@ Deno.test("insertFailedResource - inserts a resource with failed status", async 
     owner_id: "user-1",
     name: "failed-db",
     type: "d1",
-    provider_resource_name: "my-d1-db",
+    backing_resource_name: "my-d1-db",
     config: { error: "provisioning failed" },
     created_at: "2026-01-01T00:00:00.000Z",
     updated_at: "2026-01-01T00:00:00.000Z",

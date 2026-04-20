@@ -1,8 +1,12 @@
-import type { Ai, VectorizeIndex, D1Database } from '../../../shared/types/bindings.ts';
-import type { SkillCategory, SkillSource } from '../agent/skills.ts';
-import type { SkillCatalogEntry } from '../agent/skills.ts';
-import { CATEGORY_LABELS, getCategoryLabel } from '../agent/official-skills.ts';
-import { logWarn } from '../../../shared/utils/logger.ts';
+import type {
+  Ai,
+  D1Database,
+  VectorizeIndex,
+} from "../../../shared/types/bindings.ts";
+import type { SkillCategory, SkillSource } from "../agent/skills.ts";
+import type { SkillCatalogEntry } from "../agent/skills.ts";
+import { CATEGORY_LABELS, getCategoryLabel } from "../agent/managed-skills.ts";
+import { logWarn } from "../../../shared/utils/logger.ts";
 
 export interface SkillCatalogEntrySummary {
   id: string;
@@ -28,7 +32,7 @@ export interface SkillTreeResponse {
 export interface SkillSearchResult {
   skill: SkillCatalogEntrySummary;
   score: number;
-  match_source: 'text' | 'vector' | 'combined';
+  match_source: "text" | "vector" | "combined";
 }
 
 export interface SkillSearchResponse {
@@ -36,9 +40,16 @@ export interface SkillSearchResponse {
   total: number;
 }
 
-import { EMBEDDING_MODEL } from '../../../shared/config/limits.ts';
+import { EMBEDDING_MODEL } from "../../../shared/config/limits.ts";
 
-const CATEGORY_ORDER: SkillCategory[] = ['research', 'writing', 'planning', 'slides', 'software', 'custom'];
+const CATEGORY_ORDER: SkillCategory[] = [
+  "research",
+  "writing",
+  "planning",
+  "slides",
+  "software",
+  "custom",
+];
 
 function toSummary(skill: SkillCatalogEntry): SkillCatalogEntrySummary {
   return {
@@ -55,7 +66,7 @@ export function buildSkillTree(skills: SkillCatalogEntry[]): SkillTreeResponse {
   const grouped = new Map<SkillCategory, SkillCatalogEntrySummary[]>();
 
   for (const skill of skills) {
-    const cat: SkillCategory = skill.category ?? 'custom';
+    const cat: SkillCategory = skill.category ?? "custom";
     const list = grouped.get(cat);
     if (list) {
       list.push(toSummary(skill));
@@ -90,9 +101,11 @@ function textScore(skill: SkillCatalogEntrySummary, query: string): number {
   if (skill.triggers.some((t) => t.toLowerCase().includes(q))) return 50;
   if (skill.description.toLowerCase().includes(q)) return 40;
 
-  const cat = skill.category ?? 'custom';
+  const cat = skill.category ?? "custom";
   const catLabel = CATEGORY_LABELS[cat];
-  if (catLabel && [cat, catLabel.label].some((l) => l.toLowerCase().includes(q))) return 30;
+  if (
+    catLabel && [cat, catLabel.label].some((l) => l.toLowerCase().includes(q))
+  ) return 30;
 
   return 0;
 }
@@ -110,7 +123,7 @@ export function searchSkillsByText(
     const summary = toSummary(skill);
     const score = textScore(summary, query);
     if (score >= minScore) {
-      results.push({ skill: summary, score, match_source: 'text' });
+      results.push({ skill: summary, score, match_source: "text" });
     }
   }
 
@@ -118,16 +131,23 @@ export function searchSkillsByText(
   return results.slice(0, limit);
 }
 
-function buildSkillEmbedText(skill: { name: string; description: string; triggers: string[] }): string {
-  return `${skill.name} | ${skill.description} | ${skill.triggers.join(', ')}`;
+function buildSkillEmbedText(
+  skill: { name: string; description: string; triggers: string[] },
+): string {
+  return `${skill.name} | ${skill.description} | ${skill.triggers.join(", ")}`;
 }
 
 function skillVectorId(spaceId: string, skillId: string): string {
   return `skill:${spaceId}:${skillId}`;
 }
 
-async function generateEmbedding(ai: Ai, text: string): Promise<number[] | null> {
-  const result = await ai.run(EMBEDDING_MODEL, { text: [text] }) as { data: number[][] };
+async function generateEmbedding(
+  ai: Ai,
+  text: string,
+): Promise<number[] | null> {
+  const result = await ai.run(EMBEDDING_MODEL, { text: [text] }) as {
+    data: number[][];
+  };
   return result.data?.[0] ?? null;
 }
 
@@ -135,12 +155,19 @@ export async function indexSkillVector(
   ai: Ai,
   vectorize: VectorizeIndex,
   spaceId: string,
-  skill: { id: string; name: string; description: string; triggers: string[]; source: string; category?: string },
+  skill: {
+    id: string;
+    name: string;
+    description: string;
+    triggers: string[];
+    source: string;
+    category?: string;
+  },
 ): Promise<string> {
   const content = buildSkillEmbedText(skill);
   const embedding = await generateEmbedding(ai, content);
   if (!embedding) {
-    throw new Error('Failed to generate embedding for skill');
+    throw new Error("Failed to generate embedding for skill");
   }
 
   const vectorId = skillVectorId(spaceId, skill.id);
@@ -148,11 +175,11 @@ export async function indexSkillVector(
     id: vectorId,
     values: embedding,
     metadata: {
-      kind: 'skill',
+      kind: "skill",
       spaceId,
       skillId: skill.id,
       source: skill.source,
-      category: skill.category ?? 'custom',
+      category: skill.category ?? "custom",
       content: content.slice(0, 1000),
     },
   }]);
@@ -168,31 +195,36 @@ export async function removeSkillVector(
   await vectorize.deleteByIds([skillVectorId(spaceId, skillId)]);
 }
 
-export async function ensureOfficialSkillsIndexed(
+export async function ensureManagedSkillsIndexed(
   ai: Ai,
   vectorize: VectorizeIndex,
   spaceId: string,
   skills: SkillCatalogEntry[],
 ): Promise<void> {
   for (const skill of skills) {
-    if (skill.source !== 'official') continue;
+    if (skill.source !== "managed") continue;
     try {
       await indexSkillVector(ai, vectorize, spaceId, skill);
     } catch (err) {
-      logWarn(`Failed to index official skill ${skill.id}`, { module: 'skill-search', detail: err });
+      logWarn(`Failed to index managed skill ${skill.id}`, {
+        module: "skill-search",
+        detail: err,
+      });
     }
   }
 }
 
-function parseVectorMetadata(meta: Record<string, unknown>): SkillCatalogEntrySummary {
-  const parts = String(meta.content ?? '').split(' | ');
+function parseVectorMetadata(
+  meta: Record<string, unknown>,
+): SkillCatalogEntrySummary {
+  const parts = String(meta.content ?? "").split(" | ");
   return {
-    id: String(meta.skillId ?? ''),
-    name: parts[0] || String(meta.skillId ?? ''),
-    description: parts[1] || '',
-    triggers: (parts[2] || '').split(', ').filter(Boolean),
-    source: (meta.source as 'official' | 'custom') ?? 'custom',
-    category: (meta.category as SkillCategory) ?? 'custom',
+    id: String(meta.skillId ?? ""),
+    name: parts[0] || String(meta.skillId ?? ""),
+    description: parts[1] || "",
+    triggers: (parts[2] || "").split(", ").filter(Boolean),
+    source: (meta.source as "managed" | "custom") ?? "custom",
+    category: (meta.category as SkillCategory) ?? "custom",
   };
 }
 
@@ -216,8 +248,8 @@ export async function searchSkillsByVector(
 
   const matches = await vectorize.query(queryVector, {
     topK: limit,
-    filter: { kind: 'skill', spaceId },
-    returnMetadata: 'all',
+    filter: { kind: "skill", spaceId },
+    returnMetadata: "all",
   });
 
   const results: SkillSearchResult[] = [];
@@ -227,7 +259,7 @@ export async function searchSkillsByVector(
     results.push({
       skill: parseVectorMetadata(meta),
       score: match.score,
-      match_source: 'vector',
+      match_source: "vector",
     });
   }
 
@@ -256,13 +288,21 @@ export async function searchSkills(
 
   let textResults: SkillSearchResult[] = [];
   if (hasTextQuery) {
-    textResults = searchSkillsByText(skills, params.query!, { limit, min_score: minScore });
+    textResults = searchSkillsByText(skills, params.query!, {
+      limit,
+      min_score: minScore,
+    });
   }
 
   let vectorResults: SkillSearchResult[] = [];
   if (canVector && (hasTextQuery || params.vector)) {
     try {
-      await ensureOfficialSkillsIndexed(env.AI!, env.VECTORIZE!, spaceId, skills);
+      await ensureManagedSkillsIndexed(
+        env.AI!,
+        env.VECTORIZE!,
+        spaceId,
+        skills,
+      );
       vectorResults = await searchSkillsByVector(
         env.AI!,
         env.VECTORIZE!,
@@ -271,7 +311,10 @@ export async function searchSkills(
         { limit, min_score: 0.3 },
       );
     } catch (err) {
-      logWarn('Skill vector search failed, falling back to text only', { module: 'skill-search', detail: err });
+      logWarn("Skill vector search failed, falling back to text only", {
+        module: "skill-search",
+        detail: err,
+      });
     }
   }
 
@@ -284,14 +327,21 @@ export async function searchSkills(
   }
 
   if (textResults.length === 0) {
-    return { results: vectorResults.slice(0, limit), total: vectorResults.length };
+    return {
+      results: vectorResults.slice(0, limit),
+      total: vectorResults.length,
+    };
   }
 
   const maxTextScore = Math.max(...textResults.map((r) => r.score), 1);
   const merged = new Map<string, SkillSearchResult>();
 
   for (const r of textResults) {
-    merged.set(r.skill.id, { ...r, score: r.score / maxTextScore, match_source: 'text' });
+    merged.set(r.skill.id, {
+      ...r,
+      score: r.score / maxTextScore,
+      match_source: "text",
+    });
   }
 
   for (const r of vectorResults) {
@@ -300,7 +350,7 @@ export async function searchSkills(
       merged.set(r.skill.id, {
         skill: existing.skill,
         score: Math.max(existing.score, r.score),
-        match_source: 'combined',
+        match_source: "combined",
       });
     } else {
       merged.set(r.skill.id, r);

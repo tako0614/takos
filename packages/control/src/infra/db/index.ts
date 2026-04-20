@@ -107,6 +107,9 @@ export {
 // Platform
 export {
   apFollowers,
+  defaultAppDistributionConfig,
+  defaultAppDistributionEntries,
+  defaultAppPreinstallJobs,
   dlqEntries,
   edges,
   fileHandlerMatchers,
@@ -150,7 +153,7 @@ export {
 } from "./schema.ts";
 
 // Groups
-export { appDeployments, groups } from "./schema.ts";
+export { groupDeploymentSnapshots, groups } from "./schema.ts";
 
 // Workers
 export {

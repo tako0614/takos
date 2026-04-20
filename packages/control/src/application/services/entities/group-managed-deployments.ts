@@ -1,17 +1,20 @@
-import { and, eq, inArray, ne } from 'drizzle-orm';
-import { getDb } from '../../../infra/db/client.ts';
-import { deployments, services } from '../../../infra/db/index.ts';
-import type { SqlDatabaseBinding } from '../../../shared/types/bindings.ts';
-import { logDeploymentEvent, updateServiceDeploymentPointers } from '../deployment/store.ts';
+import { and, eq, inArray, ne } from "drizzle-orm";
+import { getDb } from "../../../infra/db/client.ts";
+import { deployments, services } from "../../../infra/db/index.ts";
+import type { SqlDatabaseBinding } from "../../../shared/types/bindings.ts";
+import {
+  logDeploymentEvent,
+  updateServiceDeploymentPointers,
+} from "../deployment/store.ts";
 import {
   buildDeploymentArtifactRef,
   resolveDeploymentArtifactBaseRef,
-} from '../deployment/artifact-refs.ts';
+} from "../deployment/artifact-refs.ts";
 import type {
   ArtifactKind,
-  DeploymentProviderName,
+  DeploymentBackendName,
   DeploymentTarget,
-} from '../deployment/models.ts';
+} from "../deployment/models.ts";
 
 function generateManagedDeploymentId(): string {
   return crypto.randomUUID();
@@ -31,24 +34,24 @@ function buildManagedDeploymentTarget(input: {
     target.route_ref = routeRef;
   }
 
-  if (input.artifactKind === 'worker-bundle' && routeRef) {
-    target.endpoint = { kind: 'service-ref', ref: routeRef };
-    target.artifact = { kind: 'worker-bundle' };
+  if (input.artifactKind === "worker-bundle" && routeRef) {
+    target.endpoint = { kind: "service-ref", ref: routeRef };
+    target.artifact = { kind: "worker-bundle" };
     return target;
   }
 
   if (input.resolvedBaseUrl) {
-    target.endpoint = { kind: 'http-url', base_url: input.resolvedBaseUrl };
+    target.endpoint = { kind: "http-url", base_url: input.resolvedBaseUrl };
   }
 
-  const artifact: NonNullable<DeploymentTarget['artifact']> = {
+  const artifact: NonNullable<DeploymentTarget["artifact"]> = {
     kind: input.artifactKind,
   };
 
   if (input.imageRef) {
     artifact.image_ref = input.imageRef;
   }
-  if (typeof input.port === 'number') {
+  if (typeof input.port === "number") {
     artifact.exposed_port = input.port;
   }
 
@@ -64,7 +67,7 @@ export async function recordGroupManagedDeployment(
   input: {
     serviceId: string;
     spaceId: string;
-    providerName: DeploymentProviderName;
+    backendName: DeploymentBackendName;
     artifactKind: ArtifactKind;
     routeRef?: string | null;
     specFingerprint?: string;
@@ -104,8 +107,10 @@ export async function recordGroupManagedDeployment(
     version,
   );
   const deploymentId = generateManagedDeploymentId();
-  const providerState = input.resolvedBaseUrl
-    ? { resolved_endpoint: { kind: 'http-url', base_url: input.resolvedBaseUrl } }
+  const backendState = input.resolvedBaseUrl
+    ? {
+      resolved_endpoint: { kind: "http-url", base_url: input.resolvedBaseUrl },
+    }
     : {};
 
   await db.insert(deployments).values({
@@ -115,25 +120,27 @@ export async function recordGroupManagedDeployment(
     version,
     artifactRef,
     bundleR2Key: null,
-    bundleHash: input.artifactKind === 'worker-bundle' ? (input.codeHash ?? input.specFingerprint ?? null) : null,
+    bundleHash: input.artifactKind === "worker-bundle"
+      ? (input.codeHash ?? input.specFingerprint ?? null)
+      : null,
     bundleSize: null,
     wasmR2Key: null,
     wasmHash: null,
     assetsManifest: null,
-    runtimeConfigSnapshotJson: '{}',
+    runtimeConfigSnapshotJson: "{}",
     bindingsSnapshotEncrypted: null,
     envVarsSnapshotEncrypted: null,
-    deployState: 'completed',
+    deployState: "completed",
     currentStep: null,
     stepError: null,
-    status: 'success',
-    routingStatus: 'active',
+    status: "success",
+    routingStatus: "active",
     routingWeight: 100,
     deployedBy: null,
-    deployMessage: 'Applied via group reconciler',
-    providerName: input.providerName,
+    deployMessage: "Applied via group reconciler",
+    backendName: input.backendName,
     targetJson: JSON.stringify(target),
-    providerStateJson: JSON.stringify(providerState),
+    backendStateJson: JSON.stringify(backendState),
     artifactKind: input.artifactKind,
     idempotencyKey: null,
     isRollback: false,
@@ -148,19 +155,19 @@ export async function recordGroupManagedDeployment(
 
   await db.update(deployments)
     .set({
-      routingStatus: 'archived',
+      routingStatus: "archived",
       routingWeight: 0,
       updatedAt: now,
     })
     .where(and(
       eq(deployments.serviceId, input.serviceId),
       ne(deployments.id, deploymentId),
-      inArray(deployments.routingStatus, ['active', 'canary', 'rollback']),
+      inArray(deployments.routingStatus, ["active", "canary", "rollback"]),
     ))
     .run();
 
   await updateServiceDeploymentPointers(env.DB, input.serviceId, {
-    status: 'deployed',
+    status: "deployed",
     fallbackDeploymentId: service.activeDeploymentId ?? null,
     activeDeploymentId: deploymentId,
     activeDeploymentVersion: version,
@@ -170,14 +177,14 @@ export async function recordGroupManagedDeployment(
   await logDeploymentEvent(
     env.DB,
     deploymentId,
-    'group_apply_deployed',
+    "group_apply_deployed",
     null,
-    'Deployment recorded by group reconciler',
+    "Deployment recorded by group reconciler",
     {
       details: {
         artifact_ref: artifactRef,
         artifact_kind: input.artifactKind,
-        provider_name: input.providerName,
+        backend_name: input.backendName,
         route_ref: input.routeRef ?? null,
         resolved_base_url: input.resolvedBaseUrl ?? null,
         image_hash: input.imageHash ?? null,

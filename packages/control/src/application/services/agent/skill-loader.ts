@@ -9,25 +9,31 @@
  * from scoring and resolution logic.
  */
 
-import type { AgentConfig, AgentMessage, AgentEvent } from './agent-models.ts';
-import type { ToolExecutorLike } from '../../tools/executor.ts';
-import { getDb, runs, threads } from '../../../infra/db/index.ts';
-import { eq } from 'drizzle-orm';
-import { listLocalizedOfficialSkills, resolveSkillLocale } from './official-skills.ts';
-import { listEnabledCustomSkillContext } from '../source/skills.ts';
-import { listMcpServers } from '../platform/mcp.ts';
-import { getSpaceLocale } from '../identity/locale.ts';
-import { getDelegationPacketFromRunInput, isDelegationLocale } from './delegation.ts';
-import { listSkillTemplates } from './skill-templates.ts';
-import { logError, logWarn } from '../../../shared/utils/logger.ts';
-import type { SqlDatabaseBinding } from '../../../shared/types/bindings.ts';
+import type { AgentConfig, AgentEvent, AgentMessage } from "./agent-models.ts";
+import type { ToolExecutorLike } from "../../tools/executor.ts";
+import { getDb, runs, threads } from "../../../infra/db/index.ts";
+import { eq } from "drizzle-orm";
+import {
+  listLocalizedManagedSkills,
+  resolveSkillLocale,
+} from "./managed-skills.ts";
+import { listEnabledCustomSkillContext } from "../source/skills.ts";
+import { listMcpServers } from "../platform/mcp.ts";
+import { getSpaceLocale } from "../identity/locale.ts";
+import {
+  getDelegationPacketFromRunInput,
+  isDelegationLocale,
+} from "./delegation.ts";
+import { listSkillTemplates } from "./skill-templates.ts";
+import { logError, logWarn } from "../../../shared/utils/logger.ts";
+import type { SqlDatabaseBinding } from "../../../shared/types/bindings.ts";
 import type {
   SkillCatalogEntry,
   SkillContext,
   SkillResolutionContext,
   SkillSelection,
-} from './skill-resolution.ts';
-import { resolveSkillPlan } from './skill-resolution.ts';
+} from "./skill-resolution.ts";
+import { resolveSkillPlan } from "./skill-resolution.ts";
 
 // ── Constants ───────────────────────────────────────────────────────────
 
@@ -40,7 +46,7 @@ const MAX_PER_SKILL_INSTRUCTIONS_SIZE = 50_000; // 50KB per skill
 export interface SkillLoadResult {
   success: boolean;
   error?: string;
-  skillLocale: 'ja' | 'en';
+  skillLocale: "ja" | "en";
   availableSkills: SkillCatalogEntry[];
   selectedSkills: SkillSelection[];
   activatedSkills: SkillContext[];
@@ -53,7 +59,7 @@ type SkillAvailabilityInput = {
 // ── Skill loading ───────────────────────────────────────────────────────
 
 /**
- * Load equipped skills for the workspace.
+ * Load equipped skills for the space.
  *
  * Security: Limits number of skills and total instruction size to prevent
  * DoS attacks via excessive skill data loading.
@@ -67,7 +73,7 @@ async function loadEquippedSkillsWithAvailability(
 ): Promise<SkillLoadResult> {
   const defaultResult: SkillLoadResult = {
     success: false,
-    skillLocale: 'en',
+    skillLocale: "en",
     availableSkills: [],
     selectedSkills: [],
     activatedSkills: [],
@@ -76,16 +82,20 @@ async function loadEquippedSkillsWithAvailability(
   try {
     const localeSamples = [
       ...(skillContext.conversation ?? []),
-      skillContext.threadTitle ?? '',
-      skillContext.threadSummary ?? '',
+      skillContext.threadTitle ?? "",
+      skillContext.threadSummary ?? "",
       ...((skillContext.threadKeyPoints ?? []).slice(0, 8)),
     ].filter(Boolean);
     const preferredLocale =
-      typeof skillContext.runInput?.skill_locale === 'string' ? skillContext.runInput.skill_locale
-        : typeof skillContext.runInput?.locale === 'string' ? skillContext.runInput.locale
-          : skillContext.preferredLocale
-            ?? skillContext.spaceLocale
-            ?? (typeof skillContext.runInput?.accept_language === 'string' ? skillContext.runInput.accept_language : null);
+      typeof skillContext.runInput?.skill_locale === "string"
+        ? skillContext.runInput.skill_locale
+        : typeof skillContext.runInput?.locale === "string"
+        ? skillContext.runInput.locale
+        : skillContext.preferredLocale ??
+          skillContext.spaceLocale ??
+          (typeof skillContext.runInput?.accept_language === "string"
+            ? skillContext.runInput.accept_language
+            : null);
     const skillLocale = resolveSkillLocale({
       preferredLocale,
       acceptLanguage: skillContext.acceptLanguage,
@@ -94,8 +104,12 @@ async function loadEquippedSkillsWithAvailability(
     const availableMcpServerNames = (await listMcpServers(db, spaceId))
       .filter((server) => server.enabled)
       .map((server) => server.name);
-    const availableTemplateIds = listSkillTemplates().map((template) => template.id);
-    const officialSkills = listLocalizedOfficialSkills(skillLocale).map((skill) => ({
+    const availableTemplateIds = listSkillTemplates().map((template) =>
+      template.id
+    );
+    const managedSkills = listLocalizedManagedSkills(skillLocale).map((
+      skill,
+    ) => ({
       id: skill.id,
       locale: skill.locale,
       version: skill.version,
@@ -103,25 +117,29 @@ async function loadEquippedSkillsWithAvailability(
       description: skill.description,
       instructions: skill.instructions,
       triggers: [...skill.triggers],
-      source: 'official' as const,
+      source: "managed" as const,
       category: skill.category,
       priority: skill.priority,
       activation_tags: [...skill.activation_tags],
       execution_contract: {
         preferred_tools: [...skill.execution_contract.preferred_tools],
-        durable_output_hints: [...skill.execution_contract.durable_output_hints],
+        durable_output_hints: [
+          ...skill.execution_contract.durable_output_hints,
+        ],
         output_modes: [...skill.execution_contract.output_modes],
-        required_mcp_servers: [...skill.execution_contract.required_mcp_servers],
+        required_mcp_servers: [
+          ...skill.execution_contract.required_mcp_servers,
+        ],
         template_ids: [...skill.execution_contract.template_ids],
       },
-      availability: 'available' as const,
+      availability: "available" as const,
       availability_reasons: [],
     }));
     const customSkills = await listEnabledCustomSkillContext(db, spaceId);
 
     const plan = resolveSkillPlan(
       [
-        ...officialSkills,
+        ...managedSkills,
         ...customSkills,
       ],
       {
@@ -144,7 +162,9 @@ async function loadEquippedSkillsWithAvailability(
     };
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : String(error);
-    logError('Failed to load equipped skills', errorMessage, { module: 'services/agent/runner' });
+    logError("Failed to load equipped skills", errorMessage, {
+      module: "services/agent/runner",
+    });
     return { ...defaultResult, error: errorMessage };
   }
 }
@@ -162,7 +182,8 @@ export async function loadEquippedSkills(
     config,
     skillContext,
     {
-      availableToolNames: toolExecutor?.getAvailableTools().map((tool) => tool.name) ?? [],
+      availableToolNames:
+        toolExecutor?.getAvailableTools().map((tool) => tool.name) ?? [],
     },
   );
 }
@@ -178,7 +199,7 @@ export async function buildSkillResolutionContext(
 ): Promise<SkillResolutionContext> {
   const drizzleDb = getDb(db);
   const recentUserConversation = history
-    .filter((message) => message.role === 'user')
+    .filter((message) => message.role === "user")
     .map((message) => message.content);
 
   const thread = await drizzleDb.select({
@@ -194,27 +215,35 @@ export async function buildSkillResolutionContext(
 
   let parsedRunInput: Record<string, unknown> = {};
   try {
-    const parsed = JSON.parse(runRow?.input || '{}') as unknown;
-    if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+    const parsed = JSON.parse(runRow?.input || "{}") as unknown;
+    if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
       parsedRunInput = parsed as Record<string, unknown>;
     }
   } catch (error) {
-    logWarn('Failed to parse run input for skill resolution', { module: 'services/agent/runner', error: error instanceof Error ? error.message : String(error) });
+    logWarn("Failed to parse run input for skill resolution", {
+      module: "services/agent/runner",
+      error: error instanceof Error ? error.message : String(error),
+    });
   }
 
   let threadKeyPoints: string[] = [];
   try {
-    const parsed = JSON.parse(thread?.keyPoints || '[]') as unknown;
+    const parsed = JSON.parse(thread?.keyPoints || "[]") as unknown;
     if (Array.isArray(parsed)) {
-      threadKeyPoints = parsed.map((item) => String(item).trim()).filter(Boolean);
+      threadKeyPoints = parsed.map((item) => String(item).trim()).filter(
+        Boolean,
+      );
     }
   } catch (error) {
-    logWarn('Failed to parse thread key points for skill resolution', { module: 'services/agent/runner', error: error instanceof Error ? error.message : String(error) });
+    logWarn("Failed to parse thread key points for skill resolution", {
+      module: "services/agent/runner",
+      error: error instanceof Error ? error.message : String(error),
+    });
   }
 
   const delegationPacket = getDelegationPacketFromRunInput(parsedRunInput);
-  const preferredLocale = delegationPacket?.locale
-    ?? (isDelegationLocale(thread?.locale) ? thread.locale : null);
+  const preferredLocale = delegationPacket?.locale ??
+    (isDelegationLocale(thread?.locale) ? thread.locale : null);
 
   return {
     conversation: recentUserConversation,
@@ -225,11 +254,11 @@ export async function buildSkillResolutionContext(
     agentType: config.type,
     preferredLocale,
     spaceLocale: await getSpaceLocale(db, context.spaceId),
-    acceptLanguage: typeof parsedRunInput.accept_language === 'string'
+    acceptLanguage: typeof parsedRunInput.accept_language === "string"
       ? parsedRunInput.accept_language
-      : typeof parsedRunInput.acceptLanguage === 'string'
-        ? parsedRunInput.acceptLanguage
-        : null,
+      : typeof parsedRunInput.acceptLanguage === "string"
+      ? parsedRunInput.acceptLanguage
+      : null,
   };
 }
 
@@ -253,7 +282,7 @@ export async function resolveSkillPlanForRun(
     },
     {
       type: input.agentType,
-      systemPrompt: '',
+      systemPrompt: "",
       tools: [],
     },
     input.history,
@@ -264,7 +293,7 @@ export async function resolveSkillPlanForRun(
     input.spaceId,
     {
       type: input.agentType,
-      systemPrompt: '',
+      systemPrompt: "",
       tools: [],
     },
     skillContext,
@@ -279,23 +308,35 @@ export async function resolveSkillPlanForRun(
  */
 export async function emitSkillLoadOutcome(
   result: SkillLoadResult,
-  emitEvent: (type: AgentEvent['type'], data: Record<string, unknown>) => Promise<void>,
+  emitEvent: (
+    type: AgentEvent["type"],
+    data: Record<string, unknown>,
+  ) => Promise<void>,
 ): Promise<void> {
   if (result.success && result.availableSkills.length > 0) {
-    const officialCount = result.availableSkills.filter((skill) => skill.source === 'official').length;
-    const customCount = result.availableSkills.filter((skill) => skill.source === 'custom').length;
-    await emitEvent('thinking', {
-      message: `Loaded ${result.availableSkills.length} available skill(s), selected ${result.selectedSkills.length}, activated ${result.activatedSkills.length} for this run`,
+    const managedCount = result.availableSkills.filter((skill) =>
+      skill.source === "managed"
+    ).length;
+    const customCount = result.availableSkills.filter((skill) =>
+      skill.source === "custom"
+    ).length;
+    await emitEvent("thinking", {
+      message:
+        `Loaded ${result.availableSkills.length} available skill(s), selected ${result.selectedSkills.length}, activated ${result.activatedSkills.length} for this run`,
       skill_locale: result.skillLocale,
       available_skill_count: result.availableSkills.length,
-      selectable_skill_count: result.availableSkills.filter((skill) => skill.availability !== 'unavailable').length,
+      selectable_skill_count: result.availableSkills.filter((skill) =>
+        skill.availability !== "unavailable"
+      ).length,
       selected_skill_count: result.selectedSkills.length,
       activated_skill_count: result.activatedSkills.length,
-      official_skill_count: officialCount,
+      managed_skill_count: managedCount,
       custom_skill_count: customCount,
-      available_skill_ids: result.availableSkills.map((skill) => skill.id),
+      available_skill_ids: result.availableSkills.map((skill) =>
+        skill.id
+      ),
       selectable_skill_ids: result.availableSkills
-        .filter((skill) => skill.availability !== 'unavailable')
+        .filter((skill) => skill.availability !== "unavailable")
         .map((skill) => skill.id),
       selected_skill_ids: result.selectedSkills.map((entry) => entry.skill.id),
       activated_skill_ids: result.activatedSkills.map((skill) => skill.id),
@@ -311,7 +352,7 @@ export async function emitSkillLoadOutcome(
   }
 
   if (!result.success) {
-    await emitEvent('thinking', {
+    await emitEvent("thinking", {
       message: `Warning: Failed to load skills - ${result.error}`,
       warning: true,
     });

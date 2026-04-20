@@ -1,6 +1,10 @@
-import path from 'node:path';
-import type { D1Database, Fetcher, R2Bucket } from '../shared/types/bindings.ts';
-import type { ServiceTargetMap } from './url-registry.ts';
+import path from "node:path";
+import type {
+  D1Database,
+  Fetcher,
+  R2Bucket,
+} from "../shared/types/bindings.ts";
+import type { ServiceTargetMap } from "./url-registry.ts";
 
 export type TenantWorkerScheduledOptions = {
   scheduledTime?: Date;
@@ -12,14 +16,16 @@ export type TenantWorkerScheduledResult = {
   noRetry: boolean;
 };
 
-export type TenantWorkerQueueMessage<Body = unknown> = {
-  id: string;
-  timestamp: Date;
-  attempts: number;
-} & (
-  | { body: Body }
-  | { serializedBody: ArrayBuffer | ArrayBufferView }
-);
+export type TenantWorkerQueueMessage<Body = unknown> =
+  & {
+    id: string;
+    timestamp: Date;
+    attempts: number;
+  }
+  & (
+    | { body: Body }
+    | { serializedBody: ArrayBuffer | ArrayBufferView }
+  );
 
 export type TenantWorkerQueueResult = {
   outcome: string;
@@ -37,14 +43,25 @@ export type TenantWorkflowInvocation = {
 export type TenantWorkflowInvocationResult = {
   id: string;
   workflowName: string;
-  status: 'queued' | 'running' | 'paused' | 'completed' | 'errored' | 'terminated';
+  status:
+    | "queued"
+    | "running"
+    | "paused"
+    | "completed"
+    | "errored"
+    | "terminated";
   serviceId: string;
   exportName: string;
 };
 
 export type TenantWorkerFetcher = Fetcher & {
-  scheduled(options?: TenantWorkerScheduledOptions): Promise<TenantWorkerScheduledResult>;
-  queue(queueName: string, messages: TenantWorkerQueueMessage[]): Promise<TenantWorkerQueueResult>;
+  scheduled(
+    options?: TenantWorkerScheduledOptions,
+  ): Promise<TenantWorkerScheduledResult>;
+  queue(
+    queueName: string,
+    messages: TenantWorkerQueueMessage[],
+  ): Promise<TenantWorkerQueueResult>;
 };
 
 export type TenantWorkerRuntimeFactoryOptions = {
@@ -55,7 +72,12 @@ export type TenantWorkerRuntimeFactoryOptions = {
   persistRoot?: string | null;
   serviceTargets?: ServiceTargetMap;
   /** PostgreSQL pool for pgvector-backed Vectorize bindings. */
-  pgPool?: { query(text: string, values?: unknown[]): Promise<{ rows: Record<string, unknown>[]; rowCount: number | null }> };
+  pgPool?: {
+    query(
+      text: string,
+      values?: unknown[],
+    ): Promise<{ rows: Record<string, unknown>[]; rowCount: number | null }>;
+  };
   /** OpenAI API key for AI bindings (auto-injected to all tenant workers). */
   openAiApiKey?: string;
   /** OpenAI-compatible base URL for AI bindings. */
@@ -87,7 +109,7 @@ export type TenantWorkerRuntimeRegistry = {
 
 export type LocalTenantWorkerRuntimeFactoryOptions = {
   dataDir?: string | null;
-} & Omit<TenantWorkerRuntimeFactoryOptions, 'bundleCacheRoot' | 'persistRoot'>;
+} & Omit<TenantWorkerRuntimeFactoryOptions, "bundleCacheRoot" | "persistRoot">;
 
 function resolveLocalPersistenceRoots(dataDir?: string | null) {
   if (!dataDir) {
@@ -98,15 +120,17 @@ function resolveLocalPersistenceRoots(dataDir?: string | null) {
   }
 
   return {
-    bundleCacheRoot: path.join(dataDir, 'tenant-runtime', 'bundles'),
-    persistRoot: path.join(dataDir, 'tenant-runtime', 'state'),
+    bundleCacheRoot: path.join(dataDir, "tenant-runtime", "bundles"),
+    persistRoot: path.join(dataDir, "tenant-runtime", "state"),
   };
 }
 
 export async function createLocalTenantWorkerRuntimeRegistry(
   options: LocalTenantWorkerRuntimeFactoryOptions,
 ): Promise<TenantWorkerRuntimeRegistry> {
-  const { bundleCacheRoot, persistRoot } = resolveLocalPersistenceRoots(options.dataDir);
+  const { bundleCacheRoot, persistRoot } = resolveLocalPersistenceRoots(
+    options.dataDir,
+  );
   const registryOptions: TenantWorkerRuntimeFactoryOptions = {
     ...options,
     bundleCacheRoot,
@@ -118,35 +142,50 @@ export async function createLocalTenantWorkerRuntimeRegistry(
 
   const loadRegistry = async (): Promise<TenantWorkerRuntimeRegistry> => {
     if (!registryPromise) {
-      const module = await import('./miniflare-registry.ts');
-      registryPromise = module.createLocalTenantRuntimeRegistry(registryOptions);
+      const module = await import("./miniflare-registry.ts");
+      registryPromise = module.createLocalTenantRuntimeRegistry(
+        registryOptions,
+      );
     }
     return registryPromise;
   };
 
   return {
-    get(name: string, options?: { deploymentId?: string }): TenantWorkerFetcher {
-      const cacheKey = `${name}:${options?.deploymentId ?? ''}`;
+    get(
+      name: string,
+      options?: { deploymentId?: string },
+    ): TenantWorkerFetcher {
+      const cacheKey = `${name}:${options?.deploymentId ?? ""}`;
       const cached = fetchers.get(cacheKey);
       if (cached) return cached as TenantWorkerFetcher;
 
       const lazyFetcher = {
-        async fetch(input: RequestInfo | URL, init?: RequestInit): Promise<Response> {
+        async fetch(
+          input: RequestInfo | URL,
+          init?: RequestInit,
+        ): Promise<Response> {
           const registry = await loadRegistry();
-          return registry.get(name, options).fetch(input as never, init as never) as unknown as Promise<Response>;
+          return registry.get(name, options).fetch(new Request(input, init));
         },
-        async scheduled(scheduledOptions?: TenantWorkerScheduledOptions): Promise<TenantWorkerScheduledResult> {
+        async scheduled(
+          scheduledOptions?: TenantWorkerScheduledOptions,
+        ): Promise<TenantWorkerScheduledResult> {
           const registry = await loadRegistry();
           return registry.dispatchScheduled(name, scheduledOptions, options);
         },
-        async queue(queueName: string, messages: TenantWorkerQueueMessage[]): Promise<TenantWorkerQueueResult> {
+        async queue(
+          queueName: string,
+          messages: TenantWorkerQueueMessage[],
+        ): Promise<TenantWorkerQueueResult> {
           const registry = await loadRegistry();
           return registry.dispatchQueue(name, queueName, messages, options);
         },
         connect(): never {
-          throw new Error('connect() is not supported by the local tenant runtime registry');
+          throw new Error(
+            "connect() is not supported by the local tenant runtime registry",
+          );
         },
-      } as unknown as TenantWorkerFetcher;
+      };
 
       fetchers.set(cacheKey, lazyFetcher);
       return lazyFetcher;
@@ -157,7 +196,11 @@ export async function createLocalTenantWorkerRuntimeRegistry(
       registryOptions?: { deploymentId?: string },
     ): Promise<TenantWorkerScheduledResult> {
       const registry = await loadRegistry();
-      return registry.dispatchScheduled(name, scheduledOptions, registryOptions);
+      return registry.dispatchScheduled(
+        name,
+        scheduledOptions,
+        registryOptions,
+      );
     },
     async dispatchQueue(
       name: string,

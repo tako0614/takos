@@ -472,6 +472,7 @@ export function createMockEnv(
     TENANT_BASE_DOMAIN: "app.test.takos.jp",
     PLATFORM_PRIVATE_KEY: "test-private-key",
     PLATFORM_PUBLIC_KEY: "test-public-key",
+    EXECUTOR_PROXY_SECRET: "test-executor-proxy-secret",
     CF_ACCOUNT_ID: "test-account-id",
     CF_API_TOKEN: "test-api-token",
     WFP_DISPATCH_NAMESPACE: "takos-tenants",

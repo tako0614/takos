@@ -3,21 +3,25 @@
  */
 
 export const METER_TYPES = [
-  'llm_tokens_input',
-  'llm_tokens_output',
-  'embedding_count',
-  'vector_search_count',
-  'exec_seconds',
-  'browser_seconds',
-  'web_search_count',
-  'r2_storage_gb_month',
-  'wfp_requests',
-  'queue_messages',
+  "llm_tokens_input",
+  "llm_tokens_output",
+  "embedding_count",
+  "vector_search_count",
+  "exec_seconds",
+  "web_search_count",
+  "r2_storage_gb_month",
+  "wfp_requests",
+  "queue_messages",
 ] as const;
 
 export type MeterType = typeof METER_TYPES[number];
 
-export type TransactionType = 'purchase' | 'usage' | 'refund' | 'bonus' | 'adjustment';
+export type TransactionType =
+  | "purchase"
+  | "usage"
+  | "refund"
+  | "bonus"
+  | "adjustment";
 
 export interface BillingCheckResult {
   allowed: boolean;
@@ -74,12 +78,12 @@ export interface BillingAccountWithPlan {
   planId: string;
   balanceCents: number;
   status: string;
-  /** Active payment provider for this account ('stripe' is the default). */
-  providerName: string;
-  /** Provider-side customer ID (e.g. Stripe `cus_*`). */
-  providerCustomerId: string | null;
-  /** Provider-side recurring subscription ID (e.g. Stripe `sub_*`). */
-  providerSubscriptionId: string | null;
+  /** Active payment processor for this account ('stripe' is the default). */
+  processorName: string;
+  /** Processor-side customer ID (e.g. Stripe `cus_*`). */
+  processorCustomerId: string | null;
+  /** Processor-side recurring subscription ID (e.g. Stripe `sub_*`). */
+  processorSubscriptionId: string | null;
   subscriptionPeriodEnd: string | null;
   billingPlan: {
     id: string;

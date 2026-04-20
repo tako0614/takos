@@ -1,7 +1,7 @@
-import type { D1Database } from '../../shared/types/bindings.ts';
-import { getDb, toolOperations } from '../../infra/db/index.ts';
-import { eq, and, lt, sql } from 'drizzle-orm';
-import { generateId } from '../../shared/utils/index.ts';
+import type { D1Database } from "../../shared/types/bindings.ts";
+import { getDb, toolOperations } from "../../infra/db/index.ts";
+import { and, eq, lt, sql } from "drizzle-orm";
+import { generateId } from "../../shared/utils/index.ts";
 
 const STALE_PENDING_THRESHOLD_MS = 5 * 60 * 1000; // 5 minutes
 
@@ -16,13 +16,16 @@ export async function generateOperationKey(
 ): Promise<string> {
   const payload = runId + toolName + JSON.stringify(sortKeys(args));
   const encoded = new TextEncoder().encode(payload);
-  const hashBuffer = await crypto.subtle.digest('SHA-256', encoded);
+  const hashBuffer = await crypto.subtle.digest("SHA-256", encoded);
   const hashArray = new Uint8Array(hashBuffer);
-  return Array.from(hashArray.slice(0, 16), b => b.toString(16).padStart(2, '0')).join('');
+  return Array.from(
+    hashArray.slice(0, 16),
+    (b) => b.toString(16).padStart(2, "0"),
+  ).join("");
 }
 
 function sortKeys(obj: unknown): unknown {
-  if (obj === null || obj === undefined || typeof obj !== 'object') return obj;
+  if (obj === null || obj === undefined || typeof obj !== "object") return obj;
   if (Array.isArray(obj)) return obj.map(sortKeys);
   const sorted: Record<string, unknown> = {};
   for (const key of Object.keys(obj as Record<string, unknown>).sort()) {
@@ -33,7 +36,7 @@ function sortKeys(obj: unknown): unknown {
 
 export interface IdempotencyResult {
   /** 'execute' = proceed with execution, 'cached' = return cached result, 'in_progress' = another execution is running */
-  action: 'execute' | 'cached' | 'in_progress';
+  action: "execute" | "cached" | "in_progress";
   cachedOutput?: string;
   cachedError?: string;
   operationId?: string;
@@ -54,30 +57,39 @@ export async function checkIdempotency(
 
   const existing = await drizzleDb.select()
     .from(toolOperations)
-    .where(and(eq(toolOperations.runId, runId), eq(toolOperations.operationKey, operationKey)))
+    .where(
+      and(
+        eq(toolOperations.runId, runId),
+        eq(toolOperations.operationKey, operationKey),
+      ),
+    )
     .get();
 
   if (existing) {
-    if (existing.status === 'completed') {
+    if (existing.status === "completed") {
       return {
-        action: 'cached',
+        action: "cached",
         cachedOutput: existing.resultOutput ?? undefined,
         cachedError: existing.resultError ?? undefined,
       };
     }
 
-    if (existing.status === 'failed') {
+    if (existing.status === "failed") {
       // Delete failed record and allow re-execution
-      await drizzleDb.delete(toolOperations).where(eq(toolOperations.id, existing.id));
+      await drizzleDb.delete(toolOperations).where(
+        eq(toolOperations.id, existing.id),
+      );
       // Fall through to create new pending record
-    } else if (existing.status === 'pending') {
+    } else if (existing.status === "pending") {
       const createdAt = new Date(existing.createdAt).getTime();
       if (Date.now() - createdAt > STALE_PENDING_THRESHOLD_MS) {
         // Stale pending — delete and allow re-execution
-        await drizzleDb.delete(toolOperations).where(eq(toolOperations.id, existing.id));
+        await drizzleDb.delete(toolOperations).where(
+          eq(toolOperations.id, existing.id),
+        );
         // Fall through to create new pending record
       } else {
-        return { action: 'in_progress' };
+        return { action: "in_progress" };
       }
     }
   }
@@ -86,22 +98,31 @@ export async function checkIdempotency(
   const operationId = generateId();
   const now = new Date().toISOString();
   const insertResult = await drizzleDb.run(
-    sql`INSERT OR IGNORE INTO tool_operations (id, run_id, operation_key, tool_name, status, created_at) VALUES (${operationId}, ${runId}, ${operationKey}, ${toolName}, 'pending', ${now})`
+    sql`INSERT OR IGNORE INTO tool_operations (id, run_id, operation_key, tool_name, status, created_at) VALUES (${operationId}, ${runId}, ${operationKey}, ${toolName}, 'pending', ${now})`,
   );
 
   if (insertResult.meta.changes === 0) {
     // Another worker inserted first — re-check status
     const raceCheck = await drizzleDb.select()
       .from(toolOperations)
-      .where(and(eq(toolOperations.runId, runId), eq(toolOperations.operationKey, operationKey)))
+      .where(
+        and(
+          eq(toolOperations.runId, runId),
+          eq(toolOperations.operationKey, operationKey),
+        ),
+      )
       .get();
-    if (raceCheck?.status === 'completed') {
-      return { action: 'cached', cachedOutput: raceCheck.resultOutput ?? undefined, cachedError: raceCheck.resultError ?? undefined };
+    if (raceCheck?.status === "completed") {
+      return {
+        action: "cached",
+        cachedOutput: raceCheck.resultOutput ?? undefined,
+        cachedError: raceCheck.resultError ?? undefined,
+      };
     }
-    return { action: 'in_progress' };
+    return { action: "in_progress" };
   }
 
-  return { action: 'execute', operationId };
+  return { action: "execute", operationId };
 }
 
 /**
@@ -116,7 +137,7 @@ export async function completeOperation(
   const drizzleDb = getDb(db);
   await drizzleDb.update(toolOperations)
     .set({
-      status: error ? 'failed' : 'completed',
+      status: error ? "failed" : "completed",
       resultOutput: output,
       resultError: error ?? null,
       completedAt: new Date().toISOString(),

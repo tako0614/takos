@@ -1,21 +1,20 @@
-import { eq, and, inArray, sql } from 'drizzle-orm';
-import type { Env } from '../../../shared/types/index.ts';
-import { BadRequestError } from 'takos-common/errors';
-import { generateId } from '../../../shared/utils/index.ts';
-import type { D1TransactionManager } from '../../../shared/utils/db-transaction.ts';
-import { normalizeEnvName, uniqueEnvNames } from './crypto.ts';
-import { writeCommonEnvAuditLog, type CommonEnvAuditActor } from './audit.ts';
-import { listServiceLinks, type SyncState } from './repository.ts';
-import type { CommonEnvOrchestrator } from './orchestrator.ts';
-import type { CommonEnvReconcileTrigger } from './reconcile-jobs.ts';
-import { getChanges } from './link-state.ts';
+import { and, eq, inArray, sql } from "drizzle-orm";
+import type { Env } from "../../../shared/types/index.ts";
+import { BadRequestError } from "takos-common/errors";
+import { generateId } from "../../../shared/utils/index.ts";
+import type { D1TransactionManager } from "../../../shared/utils/db-transaction.ts";
+import { normalizeEnvName, uniqueEnvNames } from "./crypto.ts";
+import { type CommonEnvAuditActor, writeCommonEnvAuditLog } from "./audit.ts";
+import { listServiceLinks, type SyncState } from "./repository.ts";
+import type { CommonEnvOrchestrator } from "./orchestrator.ts";
+import type { CommonEnvReconcileTrigger } from "./reconcile-jobs.ts";
+import { getChanges } from "./link-state.ts";
 import {
   deleteManagedTakosTokenConfig,
-  upsertManagedTakosTokenConfig,
   TAKOS_ACCESS_TOKEN_ENV_NAME,
-} from './takos-builtins.ts';
-import { getDb, serviceCommonEnvLinks } from '../../../infra/db/index.ts';
-
+  upsertManagedTakosTokenConfig,
+} from "./takos-managed.ts";
+import { getDb, serviceCommonEnvLinks } from "../../../infra/db/index.ts";
 
 export interface ManualLinkDeps {
   env: Env;
@@ -37,13 +36,16 @@ async function enqueueServiceReconcile(deps: ManualLinkDeps, params: {
   });
 }
 
-// --- Takos builtin config operations ---
+// --- Takos-managed config operations ---
 
-export async function upsertServiceTakosAccessTokenConfig(deps: ManualLinkDeps, params: {
-  spaceId: string;
-  serviceId: string;
-  scopes: string[];
-}): Promise<void> {
+export async function upsertServiceTakosAccessTokenConfig(
+  deps: ManualLinkDeps,
+  params: {
+    spaceId: string;
+    serviceId: string;
+    scopes: string[];
+  },
+): Promise<void> {
   await upsertManagedTakosTokenConfig({
     env: deps.env,
     spaceId: params.spaceId,
@@ -54,14 +56,17 @@ export async function upsertServiceTakosAccessTokenConfig(deps: ManualLinkDeps, 
     spaceId: params.spaceId,
     serviceId: params.serviceId,
     targetKeys: [TAKOS_ACCESS_TOKEN_ENV_NAME],
-    trigger: 'manual_links_patch',
+    trigger: "manual_links_patch",
   });
 }
 
-export async function deleteServiceTakosAccessTokenConfig(deps: ManualLinkDeps, params: {
-  spaceId: string;
-  serviceId: string;
-}): Promise<void> {
+export async function deleteServiceTakosAccessTokenConfig(
+  deps: ManualLinkDeps,
+  params: {
+    spaceId: string;
+    serviceId: string;
+  },
+): Promise<void> {
   await deleteManagedTakosTokenConfig({
     env: deps.env,
     spaceId: params.spaceId,
@@ -72,35 +77,49 @@ export async function deleteServiceTakosAccessTokenConfig(deps: ManualLinkDeps, 
     spaceId: params.spaceId,
     serviceId: params.serviceId,
     targetKeys: [TAKOS_ACCESS_TOKEN_ENV_NAME],
-    trigger: 'manual_links_patch',
+    trigger: "manual_links_patch",
   });
 }
 
-export async function deleteServiceTakosAccessTokenConfigs(deps: ManualLinkDeps, params: {
-  spaceId: string;
-  serviceIds: string[];
-}): Promise<void> {
-  await Promise.all(params.serviceIds.map((serviceId) =>
-    deleteManagedTakosTokenConfig({
-      env: deps.env,
-      spaceId: params.spaceId,
-      serviceId,
-      envName: TAKOS_ACCESS_TOKEN_ENV_NAME,
-    })
-  ));
+export async function deleteServiceTakosAccessTokenConfigs(
+  deps: ManualLinkDeps,
+  params: {
+    spaceId: string;
+    serviceIds: string[];
+  },
+): Promise<void> {
+  await Promise.all(
+    params.serviceIds.map((serviceId) =>
+      deleteManagedTakosTokenConfig({
+        env: deps.env,
+        spaceId: params.spaceId,
+        serviceId,
+        envName: TAKOS_ACCESS_TOKEN_ENV_NAME,
+      })
+    ),
+  );
 }
 
-async function cleanupManagedBuiltinConfigsIfNeeded(deps: ManualLinkDeps, params: {
-  spaceId: string;
-  serviceId: string;
-  removedKeys: string[];
-}): Promise<void> {
+async function cleanupManagedTakosConfigsIfNeeded(
+  deps: ManualLinkDeps,
+  params: {
+    spaceId: string;
+    serviceId: string;
+    removedKeys: string[];
+  },
+): Promise<void> {
   if (!params.removedKeys.includes(TAKOS_ACCESS_TOKEN_ENV_NAME)) {
     return;
   }
 
-  const remaining = await listServiceLinks(deps.env, params.spaceId, params.serviceId);
-  const stillLinked = remaining.some((row) => normalizeEnvName(row.env_name) === TAKOS_ACCESS_TOKEN_ENV_NAME);
+  const remaining = await listServiceLinks(
+    deps.env,
+    params.spaceId,
+    params.serviceId,
+  );
+  const stillLinked = remaining.some((row) =>
+    normalizeEnvName(row.env_name) === TAKOS_ACCESS_TOKEN_ENV_NAME
+  );
   if (!stillLinked) {
     await deleteManagedTakosTokenConfig({
       env: deps.env,
@@ -113,13 +132,19 @@ async function cleanupManagedBuiltinConfigsIfNeeded(deps: ManualLinkDeps, params
 
 // --- Manual link key helpers ---
 
-export async function listManualLinkKeys(deps: ManualLinkDeps, spaceId: string, serviceId: string): Promise<Set<string>> {
-  const rows = await getDb(deps.env.DB).select({ envName: serviceCommonEnvLinks.envName })
+export async function listManualLinkKeys(
+  deps: ManualLinkDeps,
+  spaceId: string,
+  serviceId: string,
+): Promise<Set<string>> {
+  const rows = await getDb(deps.env.DB).select({
+    envName: serviceCommonEnvLinks.envName,
+  })
     .from(serviceCommonEnvLinks)
     .where(and(
       eq(serviceCommonEnvLinks.accountId, spaceId),
       eq(serviceCommonEnvLinks.serviceId, serviceId),
-      eq(serviceCommonEnvLinks.source, 'manual'),
+      eq(serviceCommonEnvLinks.source, "manual"),
     ))
     .all();
   return new Set(rows.map((row) => normalizeEnvName(row.envName)));
@@ -133,7 +158,7 @@ export async function mutateManualLinks(deps: ManualLinkDeps, params: {
   toAdd: string[];
   toRemove: string[];
   actor?: CommonEnvAuditActor;
-  trigger: 'manual_links_set' | 'manual_links_patch';
+  trigger: "manual_links_set" | "manual_links_patch";
 }): Promise<{ added: string[]; removed: string[] }> {
   if (params.toAdd.length === 0 && params.toRemove.length === 0) {
     return { added: [], removed: [] };
@@ -154,16 +179,20 @@ export async function mutateManualLinks(deps: ManualLinkDeps, params: {
           accountId: params.spaceId,
           serviceId: params.serviceId,
           envName: key,
-          source: 'manual',
+          source: "manual",
           lastAppliedFingerprint: null,
-          syncState: 'pending',
-          syncReason: 'link_created',
+          syncState: "pending",
+          syncReason: "link_created",
           createdAt: timestamp,
           updatedAt: timestamp,
           stateUpdatedAt: timestamp,
         })
         .onConflictDoNothing({
-          target: [serviceCommonEnvLinks.serviceId, serviceCommonEnvLinks.envName, serviceCommonEnvLinks.source],
+          target: [
+            serviceCommonEnvLinks.serviceId,
+            serviceCommonEnvLinks.envName,
+            serviceCommonEnvLinks.source,
+          ],
         });
       const changes = getChanges(result);
       if (changes <= 0) continue;
@@ -171,10 +200,10 @@ export async function mutateManualLinks(deps: ManualLinkDeps, params: {
       await writeCommonEnvAuditLog({
         db: deps.env.DB,
         spaceId: params.spaceId,
-        eventType: 'worker_link_added',
+        eventType: "worker_link_added",
         envName: key,
         serviceId: params.serviceId,
-        linkSource: 'manual',
+        linkSource: "manual",
         changeBefore: { linked: false },
         changeAfter: { linked: true },
         actor: params.actor,
@@ -190,8 +219,11 @@ export async function mutateManualLinks(deps: ManualLinkDeps, params: {
         .where(and(
           eq(serviceCommonEnvLinks.accountId, params.spaceId),
           eq(serviceCommonEnvLinks.serviceId, params.serviceId),
-          eq(serviceCommonEnvLinks.source, 'manual'),
-          inArray(sql`UPPER(${serviceCommonEnvLinks.envName})`, params.toRemove),
+          eq(serviceCommonEnvLinks.source, "manual"),
+          inArray(
+            sql`UPPER(${serviceCommonEnvLinks.envName})`,
+            params.toRemove,
+          ),
         ))
         .all();
 
@@ -201,7 +233,7 @@ export async function mutateManualLinks(deps: ManualLinkDeps, params: {
           .where(and(
             eq(serviceCommonEnvLinks.accountId, params.spaceId),
             eq(serviceCommonEnvLinks.serviceId, params.serviceId),
-            eq(serviceCommonEnvLinks.source, 'manual'),
+            eq(serviceCommonEnvLinks.source, "manual"),
             inArray(serviceCommonEnvLinks.id, removableIds),
           ));
 
@@ -219,10 +251,10 @@ export async function mutateManualLinks(deps: ManualLinkDeps, params: {
           await writeCommonEnvAuditLog({
             db: deps.env.DB,
             spaceId: params.spaceId,
-            eventType: 'worker_link_removed',
+            eventType: "worker_link_removed",
             envName: key,
             serviceId: params.serviceId,
-            linkSource: 'manual',
+            linkSource: "manual",
             changeBefore: { linked: true },
             changeAfter: { linked: false },
             actor: params.actor,
@@ -245,7 +277,7 @@ export async function mutateManualLinks(deps: ManualLinkDeps, params: {
     removedOut = uniqueEnvNames(actuallyRemoved);
   });
 
-  await cleanupManagedBuiltinConfigsIfNeeded(deps, {
+  await cleanupManagedTakosConfigsIfNeeded(deps, {
     spaceId: params.spaceId,
     serviceId: params.serviceId,
     removedKeys: removedOut,
@@ -261,18 +293,24 @@ export async function setServiceManualLinks(deps: ManualLinkDeps, params: {
   actor?: CommonEnvAuditActor;
 }): Promise<void> {
   const manualKeys = uniqueEnvNames(params.keys || []);
-  const currentSet = await listManualLinkKeys(deps, params.spaceId, params.serviceId);
+  const currentSet = await listManualLinkKeys(
+    deps,
+    params.spaceId,
+    params.serviceId,
+  );
   const incomingSet = new Set(manualKeys);
 
   const toAdd = manualKeys.filter((key) => !currentSet.has(key));
-  const toRemove = Array.from(currentSet.values()).filter((key) => !incomingSet.has(key));
+  const toRemove = Array.from(currentSet.values()).filter((key) =>
+    !incomingSet.has(key)
+  );
   await mutateManualLinks(deps, {
     spaceId: params.spaceId,
     serviceId: params.serviceId,
     toAdd,
     toRemove,
     actor: params.actor,
-    trigger: 'manual_links_set',
+    trigger: "manual_links_set",
   });
 }
 
@@ -284,8 +322,12 @@ export async function patchServiceManualLinks(deps: ManualLinkDeps, params: {
   set?: string[];
   actor?: CommonEnvAuditActor;
 }): Promise<{ added: string[]; removed: string[] }> {
-  if (params.set && ((params.add && params.add.length > 0) || (params.remove && params.remove.length > 0))) {
-    throw new BadRequestError('set cannot be combined with add/remove');
+  if (
+    params.set &&
+    ((params.add && params.add.length > 0) ||
+      (params.remove && params.remove.length > 0))
+  ) {
+    throw new BadRequestError("set cannot be combined with add/remove");
   }
   if (params.set) {
     await setServiceManualLinks(deps, {
@@ -301,10 +343,16 @@ export async function patchServiceManualLinks(deps: ManualLinkDeps, params: {
   const remove = uniqueEnvNames(params.remove || []);
   const overlap = add.filter((k) => remove.includes(k));
   if (overlap.length > 0) {
-    throw new BadRequestError(`Cannot add and remove the same key: ${overlap.join(', ')}`);
+    throw new BadRequestError(
+      `Cannot add and remove the same key: ${overlap.join(", ")}`,
+    );
   }
 
-  const currentSet = await listManualLinkKeys(deps, params.spaceId, params.serviceId);
+  const currentSet = await listManualLinkKeys(
+    deps,
+    params.spaceId,
+    params.serviceId,
+  );
 
   const toAdd = add.filter((k) => !currentSet.has(k));
   const toRemove = remove.filter((k) => currentSet.has(k));
@@ -314,16 +362,19 @@ export async function patchServiceManualLinks(deps: ManualLinkDeps, params: {
     toAdd,
     toRemove,
     actor: params.actor,
-    trigger: 'manual_links_patch',
+    trigger: "manual_links_patch",
   });
 }
 
-export async function markRequiredKeysLocallyOverriddenForService(deps: ManualLinkDeps, params: {
-  spaceId: string;
-  serviceId: string;
-  keys: string[];
-  actor?: CommonEnvAuditActor;
-}): Promise<void> {
+export async function markRequiredKeysLocallyOverriddenForService(
+  deps: ManualLinkDeps,
+  params: {
+    spaceId: string;
+    serviceId: string;
+    keys: string[];
+    actor?: CommonEnvAuditActor;
+  },
+): Promise<void> {
   const keys = uniqueEnvNames(params.keys || []);
   if (keys.length === 0) return;
 
@@ -336,11 +387,11 @@ export async function markRequiredKeysLocallyOverriddenForService(deps: ManualLi
     .where(and(
       eq(serviceCommonEnvLinks.accountId, params.spaceId),
       eq(serviceCommonEnvLinks.serviceId, params.serviceId),
-      eq(serviceCommonEnvLinks.source, 'required'),
+      eq(serviceCommonEnvLinks.source, "required"),
       inArray(sql`UPPER(${serviceCommonEnvLinks.envName})`, keys),
     ))
     .all();
-  const rows = targetRows.filter((row) => row.syncState !== 'overridden');
+  const rows = targetRows.filter((row) => row.syncState !== "overridden");
   if (rows.length === 0) {
     return;
   }
@@ -352,8 +403,8 @@ export async function markRequiredKeysLocallyOverriddenForService(deps: ManualLi
   await deps.txManager.runInTransaction(async () => {
     await getDb(deps.env.DB).update(serviceCommonEnvLinks)
       .set({
-        syncState: 'overridden',
-        syncReason: 'user_override',
+        syncState: "overridden",
+        syncReason: "user_override",
         stateUpdatedAt: timestamp,
         updatedAt: timestamp,
       })
@@ -364,12 +415,12 @@ export async function markRequiredKeysLocallyOverriddenForService(deps: ManualLi
       await writeCommonEnvAuditLog({
         db: deps.env.DB,
         spaceId: params.spaceId,
-        eventType: 'required_link_overridden',
+        eventType: "required_link_overridden",
         envName: canonicalKey,
         serviceId: params.serviceId,
-        linkSource: 'required',
+        linkSource: "required",
         changeBefore: { sync_state: row.syncState as SyncState },
-        changeAfter: { sync_state: 'overridden' },
+        changeAfter: { sync_state: "overridden" },
         actor: params.actor,
       });
     }
@@ -378,7 +429,7 @@ export async function markRequiredKeysLocallyOverriddenForService(deps: ManualLi
       spaceId: params.spaceId,
       serviceId: params.serviceId,
       targetKeys: changedKeys,
-      trigger: 'worker_env_patch',
+      trigger: "worker_env_patch",
     });
   });
 }

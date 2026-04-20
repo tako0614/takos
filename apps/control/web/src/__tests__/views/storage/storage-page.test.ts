@@ -1,4 +1,8 @@
-import { assertEquals } from "jsr:@std/assert";
+import {
+  assertEquals,
+  assertStringIncludes,
+  assertThrows,
+} from "jsr:@std/assert";
 import type { FileHandler } from "../../../views/storage/storageUtils.tsx";
 
 const {
@@ -7,6 +11,9 @@ const {
   resolveStorageInitialPath,
   shouldEmitStoragePathChange,
 } = await import("../../../views/storage/storage-page-state.ts");
+const { buildFileHandlerLaunchUrl } = await import(
+  "../../../views/storage/fileHandlerUrls.ts"
+);
 
 function createDeferred<T>() {
   let resolve!: (value: T | PromiseLike<T>) => void;
@@ -107,7 +114,7 @@ Deno.test("loadStorageFileHandlers - ignores stale responses", async () => {
         name: "Current Handler",
         mime_types: [],
         extensions: [],
-        open_url: "https://example.com/current",
+        open_url: "https://example.com/current/:id",
       }],
     }),
   });
@@ -116,7 +123,7 @@ Deno.test("loadStorageFileHandlers - ignores stale responses", async () => {
     name: "Current Handler",
     mime_types: [],
     extensions: [],
-    open_url: "https://example.com/current",
+    open_url: "https://example.com/current/:id",
   }]);
 
   responses["space-a"].resolve({
@@ -127,9 +134,77 @@ Deno.test("loadStorageFileHandlers - ignores stale responses", async () => {
         name: "Stale Handler",
         mime_types: [],
         extensions: [],
-        open_url: "https://example.com/stale",
+        open_url: "https://example.com/stale/:id",
       }],
     }),
   });
   assertEquals(await firstRequest, null);
+});
+
+Deno.test("loadStorageFileHandlers - includes current file mime and ext query params", async () => {
+  const requestedUrls: string[] = [];
+
+  const fetchImpl = async (input: string | URL | Request) => {
+    requestedUrls.push(String(input));
+    return {
+      ok: true,
+      json: async () => ({
+        handlers: [],
+      }),
+    };
+  };
+
+  await loadStorageFileHandlers(
+    "space-a",
+    () => true,
+    fetchImpl as typeof fetch,
+    {
+      name: "README.md",
+      mime_type: "text/markdown",
+    },
+  );
+
+  assertEquals(requestedUrls.length, 1);
+  assertStringIncludes(
+    requestedUrls[0],
+    "/api/spaces/space-a/storage/file-handlers?",
+  );
+  assertStringIncludes(requestedUrls[0], "mime=text%2Fmarkdown");
+  assertStringIncludes(requestedUrls[0], "ext=.md");
+});
+
+Deno.test("buildFileHandlerLaunchUrl - replaces :id path template with file id", () => {
+  const url = buildFileHandlerLaunchUrl(
+    {
+      open_url: "https://docs.example.com/files/:id#edit",
+    },
+    {
+      id: "file 1",
+      space_id: "ws-1",
+    },
+    "fallback-space",
+  );
+
+  assertEquals(
+    url,
+    "https://docs.example.com/files/file%201?space_id=ws-1#edit",
+  );
+});
+
+Deno.test("buildFileHandlerLaunchUrl - requires :id in the path", () => {
+  assertThrows(
+    () =>
+      buildFileHandlerLaunchUrl(
+        {
+          open_url: "https://docs.example.com/open?next=:id",
+        },
+        {
+          id: "file 1",
+          space_id: "ws-1",
+        },
+        "fallback-space",
+      ),
+    Error,
+    "FileHandler open_url must include :id in the path",
+  );
 });

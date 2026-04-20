@@ -1,19 +1,38 @@
-import type { Env, AgentTask, AgentTaskBase, AgentTaskPriority, AgentTaskStatus, RunStatus } from '../../../shared/types/index.ts';
-import type { SelectOf } from '../../../shared/types/drizzle-utils.ts';
-import { normalizeModelId } from '../../../application/services/agent/index.ts';
-import { getDb } from '../../../infra/db/index.ts';
-import { agentTasks, threads, runs, artifacts } from '../../../infra/db/schema.ts';
-import { eq, desc, inArray } from 'drizzle-orm';
+import type {
+  AgentTask,
+  AgentTaskBase,
+  AgentTaskPriority,
+  AgentTaskStatus,
+  Env,
+  RunStatus,
+} from "../../../shared/types/index.ts";
+import type { SelectOf } from "../../../shared/types/drizzle-utils.ts";
+import { normalizeModelId } from "../../../application/services/agent/index.ts";
+import { getDb } from "../../../infra/db/index.ts";
+import {
+  agentTasks,
+  artifacts,
+  runs,
+  threads,
+} from "../../../infra/db/schema.ts";
+import { desc, eq, inArray } from "drizzle-orm";
 
 // ---------------------------------------------------------------------------
 // Constants
 // ---------------------------------------------------------------------------
 
-export const VALID_STATUSES = ['planned', 'in_progress', 'blocked', 'completed', 'cancelled'] as const;
-export const VALID_PRIORITIES = ['low', 'medium', 'high', 'urgent'] as const;
+export const VALID_STATUSES = [
+  "planned",
+  "in_progress",
+  "blocked",
+  "completed",
+  "failed",
+  "cancelled",
+] as const;
+export const VALID_PRIORITIES = ["low", "medium", "high", "urgent"] as const;
 
-export const DEFAULT_STATUS: AgentTaskStatus = 'planned';
-export const DEFAULT_PRIORITY: AgentTaskPriority = 'medium';
+export const DEFAULT_STATUS: AgentTaskStatus = "planned";
+export const DEFAULT_PRIORITY: AgentTaskPriority = "medium";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -33,7 +52,7 @@ function toIsoTimestamp(value: TimestampValue): string | null {
 }
 
 function toRequiredIsoTimestamp(value: TimestampValue): string {
-  return toIsoTimestamp(value) ?? '';
+  return toIsoTimestamp(value) ?? "";
 }
 
 /** Convert DB camelCase result to snake_case API shape (base fields only) */
@@ -63,9 +82,14 @@ export function toApiTask(row: AgentTaskRow): AgentTaskBase {
 // Data access
 // ---------------------------------------------------------------------------
 
-export async function fetchTask(d1: Env['DB'], taskId: string): Promise<AgentTaskBase | null> {
+export async function fetchTask(
+  d1: Env["DB"],
+  taskId: string,
+): Promise<AgentTaskBase | null> {
   const db = getDb(d1);
-  const result = await db.select().from(agentTasks).where(eq(agentTasks.id, taskId)).get();
+  const result = await db.select().from(agentTasks).where(
+    eq(agentTasks.id, taskId),
+  ).get();
   return result ? toApiTask(result) : null;
 }
 
@@ -73,50 +97,65 @@ export async function fetchTask(d1: Env['DB'], taskId: string): Promise<AgentTas
 // Enrichment logic
 // ---------------------------------------------------------------------------
 
-function buildThreadRunFocus(runList: Array<{
-  id: string;
-  status: RunStatus;
-}>): {
+function buildThreadRunFocus(
+  runList: Array<{
+    id: string;
+    status: RunStatus;
+  }>,
+): {
   latestRunId: string | null;
   resumeRunId: string | null;
-  resumeReason: 'active' | 'failed' | 'latest' | 'thread';
+  resumeReason: "active" | "failed" | "latest" | "thread";
 } {
   const latestRunId = runList[0]?.id ?? null;
   const latestActiveRunId = runList.find((run) => (
-    run.status === 'pending' || run.status === 'queued' || run.status === 'running'
+    run.status === "pending" || run.status === "queued" ||
+    run.status === "running"
   ))?.id ?? null;
-  const latestFailedRunId = runList.find((run) => run.status === 'failed')?.id ?? null;
+  const latestFailedRunId =
+    runList.find((run) => run.status === "failed")?.id ?? null;
   const resumeRunId = latestActiveRunId ?? latestFailedRunId ?? latestRunId;
 
   return {
     latestRunId,
     resumeRunId,
     resumeReason: latestActiveRunId
-      ? 'active'
+      ? "active"
       : latestFailedRunId
-        ? 'failed'
-        : latestRunId
-          ? 'latest'
-          : 'thread',
+      ? "failed"
+      : latestRunId
+      ? "latest"
+      : "thread",
   };
 }
 
-export async function enrichTasks(env: Env, tasks: AgentTaskBase[]): Promise<AgentTask[]> {
+export async function enrichTasks(
+  env: Env,
+  tasks: AgentTaskBase[],
+): Promise<AgentTask[]> {
   if (tasks.length === 0) {
     return tasks.map((task) => ({
       ...task,
       thread_title: null,
       latest_run: null,
-      resume_target: task.thread_id ? {
-        thread_id: task.thread_id,
-        run_id: task.last_run_id,
-        reason: task.last_run_id ? 'latest' as const : 'thread' as const,
-      } : null,
+      resume_target: task.thread_id
+        ? {
+          thread_id: task.thread_id,
+          run_id: task.last_run_id,
+          reason: task.last_run_id ? "latest" as const : "thread" as const,
+        }
+        : null,
     }));
   }
 
   const db = getDb(env.DB);
-  const threadIds = Array.from(new Set(tasks.map((task) => task.thread_id).filter((value): value is string => !!value)));
+  const threadIds = Array.from(
+    new Set(
+      tasks.map((task) => task.thread_id).filter((value): value is string =>
+        !!value
+      ),
+    ),
+  );
 
   if (threadIds.length === 0) {
     return tasks.map((task) => ({
@@ -142,7 +181,10 @@ export async function enrichTasks(env: Env, tasks: AgentTaskBase[]): Promise<Age
       completedAt: runs.completedAt,
       createdAt: runs.createdAt,
       error: runs.error,
-    }).from(runs).where(inArray(runs.threadId, threadIds)).orderBy(desc(runs.createdAt), desc(runs.id)).all(),
+    }).from(runs).where(inArray(runs.threadId, threadIds)).orderBy(
+      desc(runs.createdAt),
+      desc(runs.id),
+    ).all(),
   ]);
 
   const threadTitleById = new Map(threadRows.map((row) => [row.id, row.title]));
@@ -158,7 +200,10 @@ export async function enrichTasks(env: Env, tasks: AgentTaskBase[]): Promise<Age
   }
 
   const summaryRunIds = new Set<string>();
-  const focusByThreadId = new Map<string, ReturnType<typeof buildThreadRunFocus>>();
+  const focusByThreadId = new Map<
+    string,
+    ReturnType<typeof buildThreadRunFocus>
+  >();
 
   for (const [threadId, threadRuns] of runsByRootThreadId.entries()) {
     const focus = buildThreadRunFocus(threadRuns.map((run) => ({
@@ -173,10 +218,15 @@ export async function enrichTasks(env: Env, tasks: AgentTaskBase[]): Promise<Age
 
   const artifactRows = summaryRunIds.size === 0
     ? []
-    : await db.select({ runId: artifacts.runId }).from(artifacts).where(inArray(artifacts.runId, Array.from(summaryRunIds))).all();
+    : await db.select({ runId: artifacts.runId }).from(artifacts).where(
+      inArray(artifacts.runId, Array.from(summaryRunIds)),
+    ).all();
   const artifactCountByRunId = new Map<string, number>();
   for (const row of artifactRows) {
-    artifactCountByRunId.set(row.runId, (artifactCountByRunId.get(row.runId) ?? 0) + 1);
+    artifactCountByRunId.set(
+      row.runId,
+      (artifactCountByRunId.get(row.runId) ?? 0) + 1,
+    );
   }
 
   return tasks.map((task): AgentTask => {
@@ -196,26 +246,32 @@ export async function enrichTasks(env: Env, tasks: AgentTaskBase[]): Promise<Age
     return {
       ...task,
       thread_title: threadTitleById.get(task.thread_id) ?? null,
-      latest_run: latestRun ? {
-        run_id: latestRun.id,
-        status: latestRun.status as RunStatus,
-        agent_type: latestRun.agentType,
-        started_at: toIsoTimestamp(latestRun.startedAt),
-        completed_at: toIsoTimestamp(latestRun.completedAt),
-        created_at: toRequiredIsoTimestamp(latestRun.createdAt),
-        error: latestRun.error ?? null,
-        artifact_count: artifactCountByRunId.get(latestRun.id) ?? 0,
-      } : null,
+      latest_run: latestRun
+        ? {
+          run_id: latestRun.id,
+          status: latestRun.status as RunStatus,
+          agent_type: latestRun.agentType,
+          started_at: toIsoTimestamp(latestRun.startedAt),
+          completed_at: toIsoTimestamp(latestRun.completedAt),
+          created_at: toRequiredIsoTimestamp(latestRun.createdAt),
+          error: latestRun.error ?? null,
+          artifact_count: artifactCountByRunId.get(latestRun.id) ?? 0,
+        }
+        : null,
       resume_target: {
         thread_id: task.thread_id,
         run_id: focus?.resumeRunId ?? null,
-        reason: focus?.resumeReason ?? 'thread',
+        reason: focus?.resumeReason ?? "thread",
       },
     };
   });
 }
 
-export async function enrichTask(env: Env, task: AgentTaskBase): Promise<AgentTask> {
+export async function enrichTask(
+  env: Env,
+  task: AgentTaskBase,
+): Promise<AgentTask> {
   const [enriched] = await enrichTasks(env, [task]);
-  return enriched ?? { ...task, thread_title: null, latest_run: null, resume_target: null };
+  return enriched ??
+    { ...task, thread_title: null, latest_run: null, resume_target: null };
 }

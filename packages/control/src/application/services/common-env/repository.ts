@@ -1,11 +1,21 @@
-import type { Env } from '../../../shared/types/index.ts';
+import type { Env } from "../../../shared/types/index.ts";
 
-import { getDb, accountEnvVars, serviceCommonEnvLinks } from '../../../infra/db/index.ts';
-import { eq, and, sql, desc } from 'drizzle-orm';
-import { getServiceRouteRecord } from '../platform/workers.ts';
+import {
+  accountEnvVars,
+  getDb,
+  serviceCommonEnvLinks,
+} from "../../../infra/db/index.ts";
+import { and, desc, eq, sql } from "drizzle-orm";
+import { getServiceRouteRecord } from "../platform/workers.ts";
 
-export type LinkSource = 'manual' | 'required';
-export type SyncState = 'pending' | 'managed' | 'overridden' | 'missing_common' | 'missing_builtin' | 'error';
+export type LinkSource = "manual" | "required";
+export type SyncState =
+  | "pending"
+  | "managed"
+  | "overridden"
+  | "missing_common"
+  | "missing_included"
+  | "error";
 
 export interface ReconcileUpdate {
   rowId: string;
@@ -51,7 +61,10 @@ export interface ServiceLinkRow {
 export type WorkerRow = CommonEnvServiceRow;
 export type WorkerLinkRow = ServiceLinkRow;
 
-export async function listSpaceEnvRows(env: Pick<Env, 'DB'>, spaceId: string): Promise<SpaceEnvRow[]> {
+export async function listSpaceEnvRows(
+  env: Pick<Env, "DB">,
+  spaceId: string,
+): Promise<SpaceEnvRow[]> {
   const db = getDb(env.DB);
   const rows = await db
     .select({
@@ -78,7 +91,10 @@ export async function listSpaceEnvRows(env: Pick<Env, 'DB'>, spaceId: string): P
   }));
 }
 
-export async function listSpaceCommonEnvNames(env: Pick<Env, 'DB'>, spaceId: string): Promise<string[]> {
+export async function listSpaceCommonEnvNames(
+  env: Pick<Env, "DB">,
+  spaceId: string,
+): Promise<string[]> {
   const db = getDb(env.DB);
   const rows = await db
     .select({ name: accountEnvVars.name })
@@ -88,7 +104,11 @@ export async function listSpaceCommonEnvNames(env: Pick<Env, 'DB'>, spaceId: str
   return rows.map((row) => row.name);
 }
 
-export async function listServiceLinks(env: Pick<Env, 'DB'>, spaceId: string, serviceId: string): Promise<ServiceLinkRow[]> {
+export async function listServiceLinks(
+  env: Pick<Env, "DB">,
+  spaceId: string,
+  serviceId: string,
+): Promise<ServiceLinkRow[]> {
   const db = getDb(env.DB);
   const rows = await db
     .select({
@@ -129,7 +149,11 @@ export async function listServiceLinks(env: Pick<Env, 'DB'>, spaceId: string, se
   }));
 }
 
-export async function listServiceIdsLinkedToEnvKey(env: Pick<Env, 'DB'>, spaceId: string, envName: string): Promise<string[]> {
+export async function listServiceIdsLinkedToEnvKey(
+  env: Pick<Env, "DB">,
+  spaceId: string,
+  envName: string,
+): Promise<string[]> {
   const db = getDb(env.DB);
   const rows = await db
     .selectDistinct({ serviceId: serviceCommonEnvLinks.serviceId })
@@ -142,7 +166,11 @@ export async function listServiceIdsLinkedToEnvKey(env: Pick<Env, 'DB'>, spaceId
   return rows.map((row) => row.serviceId);
 }
 
-export async function getService(env: Pick<Env, 'DB'>, spaceId: string, serviceId: string): Promise<CommonEnvServiceRow | null> {
+export async function getService(
+  env: Pick<Env, "DB">,
+  spaceId: string,
+  serviceId: string,
+): Promise<CommonEnvServiceRow | null> {
   const r = await getServiceRouteRecord(env.DB, serviceId);
   if (!r || r.accountId !== spaceId) return null;
   return {
@@ -152,7 +180,10 @@ export async function getService(env: Pick<Env, 'DB'>, spaceId: string, serviceI
   };
 }
 
-export async function updateLinkRuntime(env: Pick<Env, 'DB'>, update: ReconcileUpdate): Promise<void> {
+export async function updateLinkRuntime(
+  env: Pick<Env, "DB">,
+  update: ReconcileUpdate,
+): Promise<void> {
   const db = getDb(env.DB);
   const ts = new Date().toISOString();
 

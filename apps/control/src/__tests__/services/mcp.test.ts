@@ -24,7 +24,16 @@ const mocks = {
 // ---------------------------------------------------------------------------
 
 function makeDb(): D1Database {
-  return {} as unknown as D1Database;
+  const stmt = {
+    bind: () => stmt,
+    all: async () => ({ results: [] }),
+    first: async () => undefined,
+    raw: async () => [],
+    run: async () => ({ meta: {} }),
+  };
+  return {
+    prepare: () => stmt,
+  } as unknown as D1Database;
 }
 
 function makeEnv(overrides: Partial<Env> = {}): Env {
@@ -230,6 +239,112 @@ Deno.test("consumeMcpOAuthPending - returns null when record does not exist", as
     "some_state",
   );
   assertEquals(result, null);
+});
+
+// ---------------------------------------------------------------------------
+// MCP publication authSecretRef
+// ---------------------------------------------------------------------------
+
+import { buildServiceEnvSalt } from "@/application/services/platform/env-state-resolution.ts";
+import {
+  mcpAuthSecretDeps,
+  readPublicationAuthSecretRef,
+  resolvePublicationAuthToken,
+} from "@/services/platform/mcp";
+import { encrypt } from "@/shared/utils/crypto";
+
+Deno.test("readPublicationAuthSecretRef - normalizes spec authSecretRef", () => {
+  assertEquals(
+    readPublicationAuthSecretRef({
+      publication: {
+        name: "tools",
+        publisher: "takos",
+        type: "McpServer",
+        spec: { authSecretRef: " mcp_auth_token " },
+      },
+    } as any),
+    "MCP_AUTH_TOKEN",
+  );
+});
+
+Deno.test("resolvePublicationAuthToken - reads bearer token from service env", async () => {
+  const originalGetDb = mcpAuthSecretDeps.getDb;
+  const env = makeEnv();
+  const encrypted = await encrypt(
+    "secret-token",
+    env.ENCRYPTION_KEY!,
+    buildServiceEnvSalt("svc-1", "MCP_AUTH_TOKEN"),
+  );
+  const drizzleMock = createDrizzleMock({
+    selectGet: {
+      id: "env-1",
+      serviceId: "svc-1",
+      accountId: "ws1",
+      name: "mcp_auth_token",
+      valueEncrypted: JSON.stringify(encrypted),
+      isSecret: true,
+      updatedAt: "2026-01-01T00:00:00.000Z",
+    },
+  });
+  mcpAuthSecretDeps.getDb = (() => drizzleMock) as any;
+  try {
+    const token = await resolvePublicationAuthToken(makeDb(), env, {
+      spaceId: "ws1",
+      publicationName: "tools",
+      ownerServiceId: "svc-1",
+      authSecretRef: "MCP_AUTH_TOKEN",
+    });
+    assertEquals(token, "secret-token");
+  } finally {
+    mcpAuthSecretDeps.getDb = originalGetDb;
+  }
+});
+
+Deno.test("resolvePublicationAuthToken - falls back to portable secret binding", async () => {
+  const originalGetDb = mcpAuthSecretDeps.getDb;
+  const originalGetResourceById = mcpAuthSecretDeps.getResourceById;
+  const originalGetPortableSecretValue =
+    mcpAuthSecretDeps.getPortableSecretValue;
+  const selectResults = [
+    undefined,
+    { resourceId: "secret-1", bindingName: "MCP_AUTH_TOKEN" },
+  ];
+  let selectIndex = 0;
+  const drizzleMock = {
+    select: () => ({
+      from: () => ({
+        where: () => ({
+          get: async () => selectResults[selectIndex++],
+        }),
+      }),
+    }),
+  };
+  mcpAuthSecretDeps.getDb = (() => drizzleMock) as any;
+  mcpAuthSecretDeps.getResourceById = (async () => ({
+    id: "secret-1",
+    status: "active",
+    type: "secretRef",
+    config: "{}",
+    backend_name: "local",
+    backing_resource_id: "secret-ref",
+    backing_resource_name: "mcp-auth-token",
+  })) as any;
+  mcpAuthSecretDeps.getPortableSecretValue =
+    (async () => "portable-secret-token") as any;
+
+  try {
+    const token = await resolvePublicationAuthToken(makeDb(), makeEnv(), {
+      spaceId: "ws1",
+      publicationName: "tools",
+      ownerServiceId: "svc-1",
+      authSecretRef: "MCP_AUTH_TOKEN",
+    });
+    assertEquals(token, "portable-secret-token");
+  } finally {
+    mcpAuthSecretDeps.getDb = originalGetDb;
+    mcpAuthSecretDeps.getResourceById = originalGetResourceById;
+    mcpAuthSecretDeps.getPortableSecretValue = originalGetPortableSecretValue;
+  }
 });
 // ---------------------------------------------------------------------------
 // listMcpServers / deleteMcpServer / updateMcpServer

@@ -12,7 +12,11 @@ import {
 import { getCachedUser } from "../../application/services/identity/user-cache.ts";
 import { validateTakosAccessToken } from "../../application/services/identity/takos-access-tokens.ts";
 
-import { AuthenticationError } from "takos-common/errors";
+import {
+  AuthenticationError,
+  AuthorizationError,
+  InternalError,
+} from "takos-common/errors";
 import {
   getPlatformConfig,
   getPlatformServices,
@@ -55,10 +59,8 @@ export function requireOAuthAuth(
 
     if (!token) {
       return c.json(
-        {
-          error: "invalid_token",
-          error_description: "Missing or invalid Authorization header",
-        },
+        new AuthenticationError("Missing or invalid Authorization header")
+          .toResponse(),
         401,
       );
     }
@@ -66,10 +68,10 @@ export function requireOAuthAuth(
     // Personal Access Token path
     if (token.startsWith("tak_pat_")) {
       if (!dbBinding) {
-        return c.json({
-          error: "server_error",
-          error_description: "Database binding unavailable",
-        }, 500);
+        return c.json(
+          new InternalError("Database binding unavailable").toResponse(),
+          500,
+        );
       }
       const validated = await oauthAuthDeps.validateTakosAccessToken(
         dbBinding,
@@ -80,25 +82,25 @@ export function requireOAuthAuth(
         ? {
           clientId: validated.tokenKind === "personal"
             ? "personal"
-            : "managed_builtin",
+            : "managed_takos",
           scope: validated.scopes.join(" "),
           scopes: validated.scopes,
           userId: validated.userId,
         }
         : null;
       if (!ctx) {
-        return c.json({
-          error: "invalid_token",
-          error_description: "Invalid or expired PAT",
-        }, 401);
+        return c.json(
+          new AuthenticationError("Invalid or expired PAT").toResponse(),
+          401,
+        );
       }
       c.set("oauth", ctx);
       const patUser = await oauthAuthDeps.getCachedUser(c, ctx.userId);
       if (!patUser) {
-        return c.json({
-          error: "invalid_token",
-          error_description: "User not found",
-        }, 401);
+        return c.json(
+          new AuthenticationError("User not found").toResponse(),
+          401,
+        );
       }
       c.set("user", patUser);
       await next();
@@ -107,10 +109,10 @@ export function requireOAuthAuth(
 
     const issuer = `https://${config.adminDomain}`;
     if (!config.platformPublicKey) {
-      return c.json({
-        error: "server_error",
-        error_description: "OAuth public key unavailable",
-      }, 500);
+      return c.json(
+        new InternalError("OAuth public key unavailable").toResponse(),
+        500,
+      );
     }
 
     const payload = await oauthAuthDeps.verifyAccessToken({
@@ -121,20 +123,17 @@ export function requireOAuthAuth(
 
     if (!payload) {
       return c.json(
-        {
-          error: "invalid_token",
-          error_description: "Token verification failed",
-        },
+        new AuthenticationError("Token verification failed").toResponse(),
         401,
       );
     }
 
     // Check revocation (expiration is already validated by jose's jwtVerify)
     if (!dbBinding) {
-      return c.json({
-        error: "server_error",
-        error_description: "Database binding unavailable",
-      }, 500);
+      return c.json(
+        new InternalError("Database binding unavailable").toResponse(),
+        500,
+      );
     }
     const isValid = await oauthAuthDeps.isAccessTokenValid(
       dbBinding,
@@ -142,10 +141,7 @@ export function requireOAuthAuth(
     );
     if (!isValid) {
       return c.json(
-        {
-          error: "invalid_token",
-          error_description: "Token has been revoked",
-        },
+        new AuthenticationError("Token has been revoked").toResponse(),
         401,
       );
     }
@@ -165,10 +161,9 @@ export function requireOAuthAuth(
 
       if (!hasValidAudience) {
         return c.json(
-          {
-            error: "invalid_token",
-            error_description: "Token audience is not valid for this resource",
-          },
+          new AuthenticationError(
+            "Token audience is not valid for this resource",
+          ).toResponse(),
           401,
         );
       }
@@ -182,10 +177,8 @@ export function requireOAuthAuth(
 
       if (!hasRequiredScopes) {
         return c.json(
-          {
-            error: "insufficient_scope",
-            error_description: `Required scopes: ${requiredScopes.join(" ")}`,
-          },
+          new AuthorizationError(`Required scopes: ${requiredScopes.join(" ")}`)
+            .toResponse(),
           403,
         );
       }
@@ -194,10 +187,7 @@ export function requireOAuthAuth(
     const user = await oauthAuthDeps.getCachedUser(c, payload.sub);
     if (!user) {
       return c.json(
-        {
-          error: "invalid_token",
-          error_description: "User not found",
-        },
+        new AuthenticationError("User not found").toResponse(),
         401,
       );
     }

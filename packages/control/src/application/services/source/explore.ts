@@ -1,20 +1,20 @@
 // Re-export all public types and functions so existing imports remain valid.
 
 export type {
-  ExploreRepoResponse,
-  ExploreReposResult,
-  CatalogRepoResponse,
-  CatalogTakopackResponse,
   CatalogInstallationResponse,
   CatalogItemResponse,
+  CatalogPackageResponse,
+  CatalogRepoResponse,
   CatalogResult,
-} from './explore-types.ts';
+  ExploreRepoResponse,
+  ExploreReposResult,
+} from "./explore-types.ts";
 
 export {
   listExploreRepos,
-  listTrendingRepos,
   listNewRepos,
   listRecentRepos,
-} from './explore-repos.ts';
+  listTrendingRepos,
+} from "./explore-repos.ts";
 
-export { listCatalogItems } from './explore-catalog.ts';
+export { listCatalogItems } from "./explore-catalog.ts";

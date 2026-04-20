@@ -1,34 +1,50 @@
-import type { D1Database } from '../../../shared/types/bindings.ts';
-import type { SpaceRole, Space, SpaceMembership } from '../../../shared/types/index.ts';
-import type { SelectOf } from '../../../shared/types/drizzle-utils.ts';
-import { isValidOpaqueId } from '../../../shared/utils/db-guards.ts';
-import { resolveUserPrincipalId } from './principals.ts';
-import { getDb } from '../../../infra/db/index.ts';
-import { accounts, accountMemberships } from '../../../infra/db/schema.ts';
-import { eq, and, or } from 'drizzle-orm';
+import type { D1Database } from "../../../shared/types/bindings.ts";
+import type {
+  Space,
+  SpaceMembership,
+  SpaceRole,
+} from "../../../shared/types/index.ts";
+import type { SelectOf } from "../../../shared/types/drizzle-utils.ts";
+import { isValidOpaqueId } from "../../../shared/utils/db-guards.ts";
+import { resolveUserPrincipalId } from "./principals.ts";
+import { getDb } from "../../../infra/db/index.ts";
+import { accountMemberships, accounts } from "../../../infra/db/schema.ts";
+import { and, eq, or } from "drizzle-orm";
 
 function toSpace(row: SelectOf<typeof accounts>): Space {
-  const kind = row.type === 'user' ? 'user' : row.type === 'system' ? 'system' : 'team';
+  const kind = row.type === "user"
+    ? "user"
+    : row.type === "system"
+    ? "system"
+    : "team";
   return {
     id: row.id,
-    kind: kind as 'user' | 'team' | 'system',
+    kind: kind as "user" | "team" | "system",
     name: row.name,
     slug: row.slug,
     description: row.description,
     principal_id: row.id,
-    owner_user_id: row.type === 'user' ? row.id : (row.ownerAccountId ?? row.id),
-    owner_principal_id: row.type === 'user' ? row.id : (row.ownerAccountId ?? row.id),
+    owner_user_id: row.type === "user"
+      ? row.id
+      : (row.ownerAccountId ?? row.id),
+    owner_principal_id: row.type === "user"
+      ? row.id
+      : (row.ownerAccountId ?? row.id),
     automation_principal_id: null,
     head_snapshot_id: row.headSnapshotId,
     ai_model: row.aiModel,
-    ai_provider: row.aiProvider,
-    security_posture: row.securityPosture === 'restricted_egress' ? 'restricted_egress' : 'standard',
+    model_backend: row.modelBackend,
+    security_posture: row.securityPosture === "restricted_egress"
+      ? "restricted_egress"
+      : "standard",
     created_at: row.createdAt,
     updated_at: row.updatedAt,
   };
 }
 
-function toSpaceMembership(row: SelectOf<typeof accountMemberships>): SpaceMembership {
+function toSpaceMembership(
+  row: SelectOf<typeof accountMemberships>,
+): SpaceMembership {
   return {
     id: row.id,
     space_id: row.accountId,
@@ -41,13 +57,13 @@ function toSpaceMembership(row: SelectOf<typeof accountMemberships>): SpaceMembe
 export async function loadSpace(
   db: D1Database,
   spaceIdOrSlug: string,
-  userId: string
+  userId: string,
 ): Promise<Space | null> {
   const drizzle = getDb(db);
 
-  if (spaceIdOrSlug === 'me') {
+  if (spaceIdOrSlug === "me") {
     const row = await drizzle.select().from(accounts)
-      .where(and(eq(accounts.id, userId), eq(accounts.type, 'user')))
+      .where(and(eq(accounts.id, userId), eq(accounts.type, "user")))
       .limit(1)
       .get();
     return row ? toSpace(row) : null;
@@ -64,11 +80,16 @@ export async function loadSpace(
 export async function loadSpaceMembership(
   db: D1Database,
   spaceId: string,
-  principalId: string
+  principalId: string,
 ): Promise<SpaceMembership | null> {
   const drizzle = getDb(db);
   const row = await drizzle.select().from(accountMemberships)
-    .where(and(eq(accountMemberships.accountId, spaceId), eq(accountMemberships.memberId, principalId)))
+    .where(
+      and(
+        eq(accountMemberships.accountId, spaceId),
+        eq(accountMemberships.memberId, principalId),
+      ),
+    )
     .limit(1)
     .get();
 
@@ -84,7 +105,7 @@ export async function checkSpaceAccess(
   db: D1Database,
   spaceIdOrSlug: string,
   userId: string,
-  requiredRoles?: SpaceRole[]
+  requiredRoles?: SpaceRole[],
 ): Promise<SpaceAccess | null> {
   if (!isValidOpaqueId(userId)) {
     return null;
@@ -113,7 +134,7 @@ export async function checkSpaceAccess(
 
 export function hasPermission(
   userRole: SpaceRole | null,
-  requiredRole: 'owner' | 'admin' | 'editor' | 'viewer'
+  requiredRole: "owner" | "admin" | "editor" | "viewer",
 ): boolean {
   if (!userRole) return false;
 

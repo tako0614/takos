@@ -28,8 +28,6 @@ export interface ToolContext {
   setLastContainerStartFailure: (
     failure: ContainerStartFailure | undefined,
   ) => void;
-  // Browser session ID — managed by browser tools
-  browserSessionId?: string;
   // Optional cancellation signal (e.g., tool timeout)
   abortSignal?: AbortSignal;
   // Capability registry for discovery tools
@@ -79,15 +77,14 @@ export type ToolCategory =
   | "file" // file_read, file_write, file_list, file_delete
   | "deploy" // deploy_frontend
   | "runtime" // runtime_exec, runtime_status
-  | "storage" // kv_*, d1_*, r2_*, create_*
-  | "workspace" // custom_tool_*, skill_*
+  | "storage" // key_value_*, sql_*, object_store_*, create_*
+  | "space" // space-scoped custom tools
   | "web" // web_fetch
   | "memory" // remember, recall, set_reminder
   | "artifact" // create_artifact
   | "container" // container_start, container_status, container_commit, container_stop
   | "agent" // spawn_agent
-  | "mcp" // mcp_add_server, mcp_list_servers, mcp_remove_server, + dynamically loaded MCP tools
-  | "browser"; // browser_open, browser_goto, browser_action, browser_screenshot, browser_extract, browser_html, browser_close
+  | "mcp"; // mcp_add_server, mcp_list_servers, mcp_remove_server, + dynamically loaded MCP tools
 
 export interface ToolResult {
   tool_call_id: string;
@@ -103,7 +100,7 @@ export type ToolHandler = (
 export interface RegisteredTool {
   definition: ToolDefinition;
   handler: ToolHandler;
-  builtin: boolean;
+  custom: boolean;
 }
 
 export interface ToolCall {

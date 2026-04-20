@@ -59,8 +59,10 @@ function makeDrizzleMock(result: unknown) {
   chain.from = () => chain;
   chain.leftJoin = () => chain;
   chain.where = () => chain;
+  chain.orderBy = () => chain;
   chain.limit = () => chain;
   chain.get = async () => result;
+  chain.all = async () => (Array.isArray(result) ? result : []);
   return {
     select: () => chain,
   };
@@ -121,6 +123,54 @@ Deno.test(
         assertEquals(body.app.id, "app-1");
         assertEquals(body.app.space_id, "team-one");
         assertEquals(body.app.url, "https://custom-app.example.com");
+      },
+    );
+  },
+);
+
+Deno.test(
+  "apps routes - list returns registered apps with custom app labels",
+  async () => {
+    const rows = [
+      {
+        id: "app-1",
+        name: "custom-app",
+        description: "Custom app",
+        icon: null,
+        appType: "custom",
+        accountId: "workspace-1",
+        serviceHostname: null,
+        serviceStatus: null,
+        accountName: "Workspace 1",
+        accountSlug: "team-one",
+        accountType: "team",
+      },
+    ];
+    const getDbSpy = spy(() => makeDrizzleMock(rows));
+
+    await withAppsDeps(
+      {
+        getDb: getDbSpy as never,
+      },
+      async () => {
+        const app = createApp();
+        const response = await app.fetch(
+          new Request("http://localhost/apps"),
+          createMockEnv() as unknown as Env,
+          {} as ExecutionContext,
+        );
+
+        assertEquals(response.status, 200);
+        const body = await response.json() as {
+          apps: Array<{ id: string; app_type: string }>;
+        };
+        assertEquals(body.apps.length, 1);
+        assertEquals(body.apps[0].id, "app-1");
+        assertEquals(body.apps[0].app_type, "custom");
+        assertEquals(
+          body.apps.some((app) => app.id.startsWith("custom-")),
+          false,
+        );
       },
     );
   },

@@ -8,7 +8,7 @@
 
 ### Current contract
 
-利用者が依存してよい documented public surface。 manifest, CLI, API, example
+利用者が依存してよい documented public surface。manifest, CLI, API, example
 がこの語で示す対象を優先して読む。
 
 ### Implementation note
@@ -18,12 +18,12 @@ current contract と実装 wiring の差分を示す注記。
 
 ### Public surface
 
-利用者・運用者・組み込み側が直接触る面。 `.takos/app.yml`、`takos` CLI、`/api/*`
-family などを含む。
+利用者・運用者・runtime 側が直接触る面。`.takos/app.yml` /
+`.takos/app.yaml`、`takos` CLI、`/api/*` family などを含む。
 
 ### Internal model
 
-control plane / provider / runtime の内部構造を説明する面。 重要でも public
+control plane / backend / runtime の内部構造を説明する面。重要でも public
 contract とは限らない。
 
 ## 中核概念
@@ -41,20 +41,19 @@ kernel が /settings で提供する space 管理 UI。
 
 所有・隔離の最上位単位（テナント）。session context で切り替え。
 
-### Installed App
+### Installed Group
 
-space に deploy された group の user-facing な呼び方。 first-party / third-party
-を問わず同じ manifest contract に従う。
+space に deploy された group。Store / UI では app と表示する場合があるが、
+deploy model では primitive / group と呼び分ける。
 
 ### Repo
 
-source と workflow artifact の起点。 deploy の source provenance を決める単位。
+source と workflow artifact の起点。deploy の source provenance を決める単位。
 
 ### Worker
 
 public surface での deployable unit。manifest では `compute.<name>` に `build`
-を持つエントリが Worker と判定される。内部管理 API family の正本は
-`/api/services`。
+を持つエントリが Worker と判定される。内部管理 API family は `/api/services`。
 
 ### Service
 
@@ -64,71 +63,89 @@ public surface での deployable unit。manifest では `compute.<name>` に `bu
 
 ### Resource
 
-compute が利用する backing capability。 sql, object-store, key-value, queue,
+compute が利用する backing capability。sql, object-store, key-value, queue,
 vector-index, secret, analytics-engine, workflow, durable-object などは control
-plane 側の resource として扱う。current public manifest contract では
-`storage:` ではなく `publish` / `consume` を使う。
+plane 側の `resources` record として扱う。group 所属の有無で CRUD / binding
+の扱いは変わらない。`publish` catalog とは分ける。
 
 ### Binding
 
-compute に resource あるいは publication を渡す名前付き接続。legacy の
-storage-side `bind:` auto-injection は retired で、current contract では
-`compute.<name>.consume` にだけ env が inject される。
+compute に capability や resource を渡す接続。publication の output を env
+として渡す接続は `service_consumes` record として扱い、manifest では
+`compute.<name>.consume` に宣言する。resource access は `publish` / `consume`
+ではなく resource API / runtime binding 側で扱う。
 
 ## Deploy
 
-### App Manifest (`.takos/app.yml`)
+### Deploy Manifest (`.takos/app.yml` / `.takos/app.yaml`)
 
-flat manifest の single-document YAML。 `name` / `compute` / `routes` / `publish`
-を宣言する current contract。 resource / storage の宣言は public manifest に
-は含めない。
+flat manifest の single-document YAML。`name` / `compute` / `routes` / `publish`
+を宣言する current contract。`.takos/app.yml` が既定の deploy manifest path
+で、`.takos/app.yaml` も受け付ける。app catalog ではない。filename には `app`
+が残るが、deploy model では primitive desired declaration を書く manifest
+として扱う。
 
-### Primitive
+### Primitive records
 
-deploy system の foundation layer。compute (worker / service / attached) /
-resource / route / publish の 4 種類があり、それぞれ独立した 1st-class
-エンティティとして control plane が管理する。public CLI では primitive
-個別 CRUD を出さない。
+control plane が個別に追跡する実体 record。workload は `services` と
+`deployments`、resource は `resources`、公開情報は `publications`、routing は
+routing / custom-domain record に保存される。deploy pipeline では publish
+catalog と resource API / runtime binding を分ける。
 
 ### Group
 
-primitive 群を束ねる **上位 bundling layer**。複数の primitive を 1 つの単位
-として扱い、bulk lifecycle (snapshot / rollback / uninstall) と desired state
-management を提供する optional な仕組み。manifest deploy は group を作る bulk
-wrapper にすぎず、primitive は group に所属することも standalone で存在する
-こともできる。kernel features (agent, git, storage, store) は group ではない。
-user-facing には「app」と呼ぶ。
+`groups` row として保存される optional state scope。group 名、source metadata、
+current snapshot pointer、reconcile status、inventory を持つ。group に所属する
+primitive は inventory、snapshot、rollback、uninstall などの group
+機能を使える。kernel features (agent, git, storage, store) は group ではない。
 
 ### App
 
-group の user-facing な呼び方。独立した概念としては存在しない。
+Store / UI 上の product label。deploy model を説明するときは primitive / group /
+worker / service / route / publication / resource を使う。
 
 ### Publication
 
-group が manifest で宣言する公開情報。route publication (`type` + `path`) または
-provider publication (`provider` + `kind` + `spec`) のいずれかを取る。
-publication output は `compute.<name>.consume` を宣言した consumer にだけ env
-として渡される。kernel features (Agent / Chat, Git, Store, Auth) は publication
-ではなく kernel API として直接提供される。
+space-level の information sharing catalog entry。`publications` record
+として保存され、名前は space 内で一意。manifest 由来の publication は primitive
+declaration の projection として保存され、API 由来の Takos capability grant は
+`source_type=api` として存在できる。
 
-### App Deployment
+route publication は route primitive から作られる catalog projection
+で、`name` + `publisher` + `type` + `path` で表す。`publisher` は対応する
+compute target であり、`publisher + path` は manifest の `routes[]` 1
+件に一致する必要がある。Takos capability grant は `publisher: takos` と `type` +
+`spec` で表す。publication / grant output は `compute.<name>.consume` を宣言した
+consumer にだけ env として渡される。ここでの publish は resource creation
+ではなく access output の共有を指す。kernel features (Agent / Chat, Git, Store,
+Auth) は publication ではなく kernel API として直接提供される。
 
-repo/ref から manifest と artifact provenance を束ねて作成される deploy の単位。
-public API family は `/api/spaces/:spaceId/app-deployments`。
+### Consume
+
+service-level の依存 edge。`service_consumes` record として保存され、service が
+publication 名を参照して output を env として受け取る。manifest で管理する
+service では deploy 時に `service_consumes` を置き換える。個別 service では
+`/api/services/:id/consumes` で直接管理できる。
+
+### Group Deployment Snapshot
+
+source provenance、manifest、artifact、実行 context を保存する group-scoped
+immutable snapshot。HTTP API path family は
+`/api/spaces/:spaceId/group-deployment-snapshots`。
 
 ### Rollout
 
-app deployment を段階的に公開する制御。 pause / resume / abort / promote
+group snapshot を段階的に公開する制御。pause / resume / abort / promote
 の操作を持つ。
 
 ### Rollback
 
-前の app deployment へ戻す操作。 データや schema の自動巻き戻しまで意味しない。
+前の group snapshot へ戻す操作。データや schema の自動巻き戻しまで意味しない。
 
 ### Workflow Artifact
 
-`.takos/workflows/` 配下の workflow が出力する build 成果物。 app deployment
-が参照する artifact provenance の正本。
+`.takos/workflows/` 配下の workflow が出力する build 成果物。group snapshot
+が参照する artifact provenance。
 
 ## AI 実行
 
@@ -138,7 +155,7 @@ app deployment を段階的に公開する制御。 pause / resume / abort / pro
 
 ### Run
 
-thread 上の 1 回の実行。 stream surface を持つ。
+thread 上の 1 回の実行。stream surface を持つ。
 
 ### Artifact
 
@@ -159,12 +176,12 @@ CLI / automation 用の bearer token。
 
 ### Managed Token
 
-deploy された app が Takos API を呼ぶための Takos-managed token。 権限は
+deploy された group が Takos API を呼ぶための Takos-managed token。権限は
 manifest 側の scope 宣言で制御する。
 
 ### OAuth Client
 
-Takos API へアクセスする third-party app の登録単位。
+Takos API へアクセスする third-party OAuth client の登録単位。
 
 ### Scope
 
@@ -174,27 +191,29 @@ OAuth / managed token が要求・付与する権限の粒度。
 
 ### Store
 
-kernel が提供する app の検索・配布・ActivityPub federation 機能。kernel
-の一部であり、group ではない。
+kernel が提供する app-label / package の検索・配布・ActivityPub federation
+機能。kernel の一部であり、group ではない。
 
 ### Canonical URL
 
-app 自身が所有する正本 URL。 bookmark、share、reload、direct access はこの URL
+group 自身が所有する基準 URL。bookmark、share、reload、direct access はこの URL
 を使う。
 
 ### Launch URL
 
-deploy dashboard から app を開くための URL。
+deploy dashboard から deployed UI を開くための URL。
 
 ### MCP (Model Context Protocol)
 
-repo や app がツール surface を公開するための主要 protocol。 manifest の
-`publish` に `type: McpServer` として宣言する。
+repo や group がツール surface を公開するための主要 protocol。manifest の
+`publish` に `type: McpServer` として宣言する。MCP server catalog は deploy
+manifest の `publish` entry で管理する。
 
 ### File Handler
 
-storage/file 系 UI から app を開く contract。manifest の `publish` に
-`type: FileHandler` として宣言する。
+storage/file 系 UI から handler UI を開く contract。manifest の `publish` に
+`type: FileHandler` として宣言する。FileHandler catalog は deploy manifest の
+`publish` entry で管理する。
 
 ## 実行基盤
 
@@ -206,7 +225,8 @@ API, deploy, routing, run lifecycle, resource 管理を担当する Takos の制
 
 deploy された artifact が実際に request を処理する実行面。
 
-### Provider
+### Backend
 
-deploy backend の種類。 Cloudflare と local などの差分は operations /
-architecture で扱う。
+deploy backend の種類。Cloudflare と local などの差分は operator-only
+configuration / architecture で扱う。public deploy manifest には backend
+名を書かない。

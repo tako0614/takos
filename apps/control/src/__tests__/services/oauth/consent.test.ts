@@ -34,6 +34,7 @@ function createMockDrizzleDb() {
       where: async () => ({ meta: { changes: 1 } }),
     }),
   });
+  db.delete = () => chain;
   db._ = {
     get: ((..._args: any[]) => undefined) as any,
     all: ((..._args: any[]) => undefined) as any,
@@ -43,6 +44,7 @@ function createMockDrizzleDb() {
 }
 
 const db = createMockDrizzleDb();
+const d1 = db as unknown as D1Database;
 (globalThis as typeof globalThis & { __takosDbMock?: unknown }).__takosDbMock =
   db as never;
 
@@ -74,7 +76,7 @@ Deno.test("consent service - getConsent - returns mapped consent when found", as
     updatedAt: "2026-01-01T00:00:00.000Z",
   })) as any;
 
-  const consent = await getConsent({} as D1Database, "user-1", "client-1");
+  const consent = await getConsent(d1, "user-1", "client-1");
 
   assertNotEquals(consent, null);
   assertEquals(consent!.user_id, "user-1");
@@ -87,7 +89,7 @@ Deno.test("consent service - getConsent - returns null when no consent exists", 
   mocks.getDb = (() => db) as any;
   db._.get = (async () => null) as any;
 
-  const consent = await getConsent({} as D1Database, "user-1", "client-1");
+  const consent = await getConsent(d1, "user-1", "client-1");
   assertEquals(consent, null);
 });
 
@@ -104,7 +106,7 @@ Deno.test("consent service - hasFullConsent - returns true when all requested sc
     updatedAt: "2026-01-01T00:00:00.000Z",
   })) as any;
 
-  const result = await hasFullConsent({} as D1Database, "user-1", "client-1", [
+  const result = await hasFullConsent(d1, "user-1", "client-1", [
     "openid",
     "profile",
   ]);
@@ -123,7 +125,7 @@ Deno.test("consent service - hasFullConsent - returns false when some scopes are
     updatedAt: "2026-01-01T00:00:00.000Z",
   })) as any;
 
-  const result = await hasFullConsent({} as D1Database, "user-1", "client-1", [
+  const result = await hasFullConsent(d1, "user-1", "client-1", [
     "openid",
     "profile",
   ]);
@@ -134,7 +136,7 @@ Deno.test("consent service - hasFullConsent - returns false when no consent exis
   mocks.getDb = (() => db) as any;
   db._.get = (async () => null) as any;
 
-  const result = await hasFullConsent({} as D1Database, "user-1", "client-1", [
+  const result = await hasFullConsent(d1, "user-1", "client-1", [
     "openid",
   ]);
   assertEquals(result, false);
@@ -153,7 +155,7 @@ Deno.test("consent service - getNewScopes - returns only scopes not yet granted"
     updatedAt: "2026-01-01T00:00:00.000Z",
   })) as any;
 
-  const result = await getNewScopes({} as D1Database, "user-1", "client-1", [
+  const result = await getNewScopes(d1, "user-1", "client-1", [
     "openid",
     "profile",
     "email",
@@ -165,7 +167,7 @@ Deno.test("consent service - getNewScopes - returns all requested scopes when no
   mocks.getDb = (() => db) as any;
   db._.get = (async () => null) as any;
 
-  const result = await getNewScopes({} as D1Database, "user-1", "client-1", [
+  const result = await getNewScopes(d1, "user-1", "client-1", [
     "openid",
     "profile",
   ]);
@@ -184,7 +186,7 @@ Deno.test("consent service - getNewScopes - returns empty array when all scopes 
     updatedAt: "2026-01-01T00:00:00.000Z",
   })) as any;
 
-  const result = await getNewScopes({} as D1Database, "user-1", "client-1", [
+  const result = await getNewScopes(d1, "user-1", "client-1", [
     "openid",
     "profile",
   ]);
@@ -196,7 +198,7 @@ Deno.test("consent service - grantConsent - creates new consent when none exists
   mocks.getDb = (() => db) as any;
   db._.get = (async () => null) as any; // getConsent returns null
 
-  const consent = await grantConsent({} as D1Database, "user-1", "client-1", [
+  const consent = await grantConsent(d1, "user-1", "client-1", [
     "openid",
     "profile",
   ]);
@@ -220,7 +222,7 @@ Deno.test("consent service - grantConsent - merges scopes when consent already e
     updatedAt: "2026-01-01T00:00:00.000Z",
   })) as any;
 
-  const consent = await grantConsent({} as D1Database, "user-1", "client-1", [
+  const consent = await grantConsent(d1, "user-1", "client-1", [
     "profile",
     "email",
   ]);
@@ -244,7 +246,7 @@ Deno.test("consent service - grantConsent - deduplicates scopes when merging", a
     updatedAt: "2026-01-01T00:00:00.000Z",
   })) as any;
 
-  const consent = await grantConsent({} as D1Database, "user-1", "client-1", [
+  const consent = await grantConsent(d1, "user-1", "client-1", [
     "openid",
     "email",
   ]);
@@ -279,7 +281,7 @@ Deno.test("consent service - getUserConsents - returns mapped consent list", asy
     },
   ]) as any;
 
-  const consents = await getUserConsents({} as D1Database, "user-1");
+  const consents = await getUserConsents(d1, "user-1");
   assertEquals(consents.length, 2);
   assertEquals(consents[0]!.client_id, "client-1");
   assertEquals(consents[1]!.client_id, "client-2");
@@ -289,6 +291,6 @@ Deno.test("consent service - getUserConsents - returns empty array when no conse
   mocks.getDb = (() => db) as any;
   db._.all = (async () => []) as any;
 
-  const consents = await getUserConsents({} as D1Database, "user-1");
+  const consents = await getUserConsents(d1, "user-1");
   assertEquals(consents, []);
 });

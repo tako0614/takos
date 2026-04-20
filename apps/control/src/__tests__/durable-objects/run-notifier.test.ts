@@ -190,6 +190,34 @@ Deno.test("RunNotifierDO - /emit - accepts preferred event_id", async () => {
   );
   assertEquals(r1.eventId, 50);
 });
+Deno.test("RunNotifierDO - /emit - deduplicates replayed dedup_key", async () => {
+  const { doInstance } = createDO();
+  const first = await jsonBody(
+    await doInstance.fetch(postJSON("/emit", {
+      type: "progress",
+      data: { message: "halfway" },
+      runId: "run-1",
+      dedup_key: "run:run-1:sequence:42:type:progress",
+    })),
+  );
+  const second = await jsonBody(
+    await doInstance.fetch(postJSON("/emit", {
+      type: "progress",
+      data: { message: "halfway" },
+      runId: "run-1",
+      dedup_key: "run:run-1:sequence:42:type:progress",
+    })),
+  );
+
+  assertEquals(first.success, true);
+  assertEquals(first.duplicate, undefined);
+  assertEquals(second.success, true);
+  assertEquals(second.duplicate, true);
+
+  const stateRes = await doInstance.fetch(getRequest("/events"));
+  const body = await jsonBody(stateRes);
+  assertEquals((body.events as unknown[]).length, 1);
+});
 Deno.test("RunNotifierDO - /emit - broadcasts to connected WebSocket clients", async () => {
   const { doInstance } = createDO();
 

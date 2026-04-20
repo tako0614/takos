@@ -1,7 +1,7 @@
 mod control_rpc;
 mod engine_support;
+mod managed_skills;
 mod model;
-mod official_skills;
 mod prompts;
 mod skills;
 mod tool_bridge;
@@ -30,7 +30,7 @@ use crate::engine_support::{
     last_user_message, safe_space_path,
 };
 use crate::model::TakosModelRunner;
-use crate::skills::{build_skill_catalog, local_skill_tool_definitions, resolve_skill_plan};
+use crate::skills::{build_skill_catalog, resolve_skill_plan};
 use crate::tool_bridge::CompositeToolExecutor;
 
 pub type AppResult<T> = Result<T, Box<dyn std::error::Error + Send + Sync>>;
@@ -135,6 +135,11 @@ async fn execute_run(payload: StartPayload, state: Arc<ServiceState>) -> AppResu
     let run_context = client.run_context().await.ok();
     let run_config = client.run_config(bootstrap.agent_type.as_deref()).await?;
     let tool_catalog = client.tool_catalog().await?;
+    let all_tool_names = tool_catalog
+        .tools
+        .iter()
+        .map(|tool| tool.name.clone())
+        .collect::<Vec<_>>();
     let history = client
         .conversation_history(
             &bootstrap.thread_id,
@@ -153,24 +158,10 @@ async fn execute_run(payload: StartPayload, state: Arc<ServiceState>) -> AppResu
                 .filter(|value| !value.is_empty())
                 .unwrap_or("default"),
             &history,
+            &all_tool_names,
         )
         .await
         .unwrap_or_default();
-    let all_tool_names = tool_catalog
-        .tools
-        .iter()
-        .map(|tool| tool.name.clone())
-        .chain(
-            crate::tool_bridge::local_memory_tool_definitions()
-                .into_iter()
-                .map(|tool| tool.name),
-        )
-        .chain(
-            local_skill_tool_definitions()
-                .into_iter()
-                .map(|tool| tool.name),
-        )
-        .collect::<Vec<_>>();
     let skill_catalog = build_skill_catalog(&skill_runtime_context, &all_tool_names);
     let skill_plan = resolve_skill_plan(&skill_catalog);
     let user_message = last_user_message(

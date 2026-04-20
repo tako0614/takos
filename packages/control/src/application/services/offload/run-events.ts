@@ -1,5 +1,9 @@
-import type { R2Bucket } from '../../../shared/types/bindings.ts';
-import { gzipCompressString, gzipDecompressToString } from '../../../shared/utils/gzip.ts';
+import type { R2Bucket } from "../../../shared/types/bindings.ts";
+import {
+  gzipCompressString,
+  gzipDecompressToString,
+} from "../../../shared/utils/gzip.ts";
+import { logWarn } from "../../../shared/utils/logger.ts";
 
 export interface PersistedRunEvent {
   event_id: number;
@@ -16,7 +20,7 @@ export const runEventsDeps = {
 };
 
 function pad6(n: number): string {
-  return String(n).padStart(6, '0');
+  return String(n).padStart(6, "0");
 }
 
 export function segmentIndexForEventId(eventId: number): number {
@@ -24,7 +28,10 @@ export function segmentIndexForEventId(eventId: number): number {
   return Math.floor((eventId - 1) / RUN_EVENT_SEGMENT_SIZE) + 1;
 }
 
-export function buildRunEventSegmentKey(runId: string, segmentIndex: number): string {
+export function buildRunEventSegmentKey(
+  runId: string,
+  segmentIndex: number,
+): string {
   return `runs/${runId}/events/${pad6(segmentIndex)}.jsonl.gz`;
 }
 
@@ -35,12 +42,12 @@ export async function writeRunEventSegmentToR2(
   events: PersistedRunEvent[],
 ): Promise<void> {
   const key = buildRunEventSegmentKey(runId, segmentIndex);
-  const jsonl = events.map((e) => JSON.stringify(e)).join('\n') + '\n';
+  const jsonl = events.map((e) => JSON.stringify(e)).join("\n") + "\n";
   const compressed = await runEventsDeps.gzipCompressString(jsonl);
   await bucket.put(key, compressed, {
     httpMetadata: {
-      contentType: 'application/x-ndjson; charset=utf-8',
-      contentEncoding: 'gzip',
+      contentType: "application/x-ndjson; charset=utf-8",
+      contentEncoding: "gzip",
     },
   });
 }
@@ -55,7 +62,10 @@ function parseSegmentIndexFromKey(key: string, prefix: string): number | null {
   return Math.floor(n);
 }
 
-export async function listRunEventSegmentIndexes(bucket: R2Bucket, runId: string): Promise<number[]> {
+export async function listRunEventSegmentIndexes(
+  bucket: R2Bucket,
+  runId: string,
+): Promise<number[]> {
   const prefix = `runs/${runId}/events/`;
   const indexes = new Set<number>();
 
@@ -85,21 +95,32 @@ export async function readRunEventSegmentFromR2(
   const obj = await bucket.get(key);
   if (!obj) return null;
   const compressed = await obj.arrayBuffer();
-  const jsonl = await runEventsDeps.gzipDecompressToString(compressed, { maxDecompressedBytes: 200 * 1024 * 1024 });
+  const jsonl = await runEventsDeps.gzipDecompressToString(compressed, {
+    maxDecompressedBytes: 200 * 1024 * 1024,
+  });
 
   const events: PersistedRunEvent[] = [];
-  for (const line of jsonl.split('\n')) {
+  for (const line of jsonl.split("\n")) {
     const trimmed = line.trim();
     if (!trimmed) continue;
     try {
       const parsed = JSON.parse(trimmed) as PersistedRunEvent;
-      if (!parsed || typeof parsed !== 'object') continue;
-      if (typeof parsed.event_id !== 'number' || !Number.isFinite(parsed.event_id)) continue;
-      if (typeof parsed.type !== 'string') continue;
-      if (typeof parsed.data !== 'string') continue;
-      if (typeof parsed.created_at !== 'string') continue;
+      if (!parsed || typeof parsed !== "object") continue;
+      if (
+        typeof parsed.event_id !== "number" || !Number.isFinite(parsed.event_id)
+      ) continue;
+      if (typeof parsed.type !== "string") continue;
+      if (typeof parsed.data !== "string") continue;
+      if (typeof parsed.created_at !== "string") continue;
       events.push(parsed);
-    } catch (_err) { /* ignored - skip malformed lines */ }
+    } catch (error) {
+      logWarn("Malformed run event segment line skipped", {
+        module: "offload/run-events",
+        runId,
+        segmentIndex: String(segmentIndex),
+        error: error instanceof Error ? error.message : String(error),
+      });
+    }
   }
 
   events.sort((a, b) => a.event_id - b.event_id);
@@ -112,8 +133,10 @@ export async function getRunEventsAfterFromR2(
   afterEventId: number,
   limit: number = 500,
 ): Promise<PersistedRunEvent[]> {
-  const startSegment = Math.floor(Math.max(0, afterEventId) / RUN_EVENT_SEGMENT_SIZE) + 1;
-  const segmentIndexes = (await listRunEventSegmentIndexes(bucket, runId)).filter((n) => n >= startSegment);
+  const startSegment =
+    Math.floor(Math.max(0, afterEventId) / RUN_EVENT_SEGMENT_SIZE) + 1;
+  const segmentIndexes = (await listRunEventSegmentIndexes(bucket, runId))
+    .filter((n) => n >= startSegment);
 
   const segments = await Promise.all(
     segmentIndexes.map((idx) => readRunEventSegmentFromR2(bucket, runId, idx)),

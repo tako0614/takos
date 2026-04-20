@@ -106,9 +106,6 @@ const sourceRepo = {
   stars: 10,
   forks: 3,
   gitEnabled: true,
-  isOfficial: false,
-  officialCategory: null,
-  officialMaintainer: null,
   featured: false,
   installCount: 0,
   createdAt: "2026-01-01T00:00:00.000Z",
@@ -126,7 +123,7 @@ Deno.test("forkWithWorkflows - throws when source repo not found", async () => {
 });
 
 Deno.test(
-  "forkWithWorkflows - throws when name already exists in target workspace",
+  "forkWithWorkflows - throws when name already exists in target space",
   async () => {
     const db = createFakeD1Database([
       { get: sourceRepo },
@@ -136,7 +133,7 @@ Deno.test(
     await assertRejects(
       () => forkWithWorkflows(db, undefined, "source-1", "ws-target"),
       Error,
-      "Repository with this name already exists in target workspace",
+      "Repository with this name already exists in target space",
     );
   },
 );

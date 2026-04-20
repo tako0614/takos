@@ -1,13 +1,31 @@
-import type { SpaceRole } from '../../../../shared/types/index.ts';
+import type { SpaceRole } from "../../../../shared/types/index.ts";
 
-export const MAX_CUSTOM_DOMAINS_PER_SERVICE = 20;
-export const CUSTOM_DOMAIN_WRITE_ROLES: SpaceRole[] = ['owner', 'admin', 'editor'];
-export const SSL_TERMINAL_FAILURE_STATUSES = ['deleted', 'expired', 'validation_timed_out', 'issuance_timed_out'];
+export const MAX_CUSTOM_DOMAINS_PER_SERVICE = 1;
+export const MAX_CUSTOM_DOMAINS_PER_GROUP = 1;
+export const MAX_GROUP_HOSTNAMES = 3;
+export const CUSTOM_DOMAIN_WRITE_ROLES: SpaceRole[] = [
+  "owner",
+  "admin",
+  "editor",
+];
+export const SSL_TERMINAL_FAILURE_STATUSES = [
+  "deleted",
+  "expired",
+  "validation_timed_out",
+  "issuance_timed_out",
+];
 
-export type DomainStatus = 'pending' | 'verifying' | 'dns_verified' | 'ssl_pending' | 'ssl_failed' | 'active' | 'failed';
+export type DomainStatus =
+  | "pending"
+  | "verifying"
+  | "dns_verified"
+  | "ssl_pending"
+  | "ssl_failed"
+  | "active"
+  | "failed";
 
 export interface DnsInstruction {
-  type: 'CNAME' | 'TXT';
+  type: "CNAME" | "TXT";
   name: string;
   value: string;
   description: string;
@@ -16,8 +34,8 @@ export interface DnsInstruction {
 export interface AddCustomDomainBody {
   id: string;
   domain: string;
-  status: 'pending';
-  verification_method: 'cname' | 'txt';
+  status: "pending";
+  verification_method: "cname" | "txt";
   verification_token: string;
   instructions: {
     step1: DnsInstruction;
@@ -52,7 +70,8 @@ export interface VerifyCustomDomainResult {
 export interface ServiceInfo {
   id: string;
   space_id: string;
-  service_type: 'app' | 'service';
+  group_id?: string | null;
+  service_type: "app" | "service";
   status: string;
   hostname: string | null;
   route_ref: string | null;

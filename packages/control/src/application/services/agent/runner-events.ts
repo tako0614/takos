@@ -5,22 +5,25 @@
  * DB persistence, and Durable Object relay.
  */
 
-import type { RunStatus as _RunStatus, Env } from '../../../shared/types/index.ts';
-import type { AgentEvent } from './agent-models.ts';
-import type { EventEmissionError } from './runner-utils.ts';
-import { getDb, runEvents } from '../../../infra/db/index.ts';
-import type { RunTerminalPayload } from '../run-notifier/index.ts';
+import type {
+  Env,
+  RunStatus as _RunStatus,
+} from "../../../shared/types/index.ts";
+import type { AgentEvent } from "./agent-models.ts";
+import type { EventEmissionError } from "./runner-utils.ts";
+import { getDb, runEvents } from "../../../infra/db/index.ts";
+import type { RunTerminalPayload } from "../run-notifier/index.ts";
 import {
-  buildTerminalPayload,
-  buildRunNotifierEmitRequest,
-  getRunNotifierStub,
   buildRunNotifierEmitPayload,
-} from '../run-notifier/index.ts';
-import { logError, logWarn } from '../../../shared/utils/logger.ts';
+  buildRunNotifierEmitRequest,
+  buildTerminalPayload,
+  getRunNotifierStub,
+} from "../run-notifier/index.ts";
+import { logError, logWarn } from "../../../shared/utils/logger.ts";
 import {
   MAX_EVENT_EMISSION_ERRORS as MAX_EMISSION_ERRORS,
-} from '../../../shared/config/limits.ts';
-import type { SqlDatabaseBinding } from '../../../shared/types/bindings.ts';
+} from "../../../shared/config/limits.ts";
+import type { SqlDatabaseBinding } from "../../../shared/types/bindings.ts";
 
 // ── Event emission helpers ──────────────────────────────────────────
 
@@ -35,7 +38,7 @@ export interface EventEmitterState {
 
 export function buildTerminalEventPayloadImpl(
   runId: string,
-  status: 'completed' | 'failed' | 'cancelled',
+  status: "completed" | "failed" | "cancelled",
   details: Record<string, unknown>,
   sessionId: string | null,
 ): RunTerminalPayload {
@@ -52,12 +55,12 @@ export async function emitEventImpl(
   runId: string,
   _spaceId: string,
   getCurrentSessionId: () => Promise<string | null>,
-  type: AgentEvent['type'],
+  type: AgentEvent["type"],
   data: Record<string, unknown>,
   options?: { skipDb?: boolean },
   remoteEmit?: (input: {
     runId: string;
-    type: AgentEvent['type'];
+    type: AgentEvent["type"];
     data: Record<string, unknown>;
     sequence: number;
     skipDb?: boolean;
@@ -69,7 +72,10 @@ export async function emitEventImpl(
 
   // For terminal events, ensure we have the latest session_id from DB
   let eventData = data;
-  if ((type === 'completed' || type === 'error' || type === 'cancelled') && data.run) {
+  if (
+    (type === "completed" || type === "error" || type === "cancelled") &&
+    data.run
+  ) {
     const sessionId = await getCurrentSessionId();
     eventData = {
       ...data,
@@ -83,7 +89,8 @@ export async function emitEventImpl(
   const skipDb = options?.skipDb ?? false;
   const offloadEnabled = Boolean(env.TAKOS_OFFLOAD);
   let legacyEventId: number | null = null;
-  const isTerminal = type === 'completed' || type === 'error' || type === 'cancelled';
+  const isTerminal = type === "completed" || type === "error" ||
+    type === "cancelled";
 
   try {
     if (remoteEmit) {
@@ -111,13 +118,24 @@ export async function emitEventImpl(
     }
 
     const stub = getRunNotifierStub(env, runId);
-    const payload = buildRunNotifierEmitPayload(runId, type, eventData, legacyEventId);
+    const payload = buildRunNotifierEmitPayload(
+      runId,
+      type,
+      eventData,
+      legacyEventId,
+    );
 
     let emitOk = false;
     const doEmit = async () => {
       const emitRes = await stub.fetch(buildRunNotifierEmitRequest(payload));
       if (!emitRes.ok) {
-        const body = await emitRes.text().catch((e) => { logWarn('Failed to read run event emit response body', { module: 'runner-events', error: String(e) }); return ''; });
+        const body = await emitRes.text().catch((e) => {
+          logWarn("Failed to read run event emit response body", {
+            module: "runner-events",
+            error: String(e),
+          });
+          return "";
+        });
         throw new Error(`DO emit non-OK ${emitRes.status}: ${body}`);
       }
       emitOk = true;
@@ -129,31 +147,51 @@ export async function emitEventImpl(
       if (isTerminal) {
         const TERMINAL_MAX_RETRIES = 3;
         for (let attempt = 1; attempt <= TERMINAL_MAX_RETRIES; attempt++) {
-          const backoffMs = Math.min(1000 * Math.pow(2, attempt - 1), EVENT_EMISSION_MAX_BACKOFF_MS);
-          await new Promise(resolve => setTimeout(resolve, backoffMs));
+          const backoffMs = Math.min(
+            1000 * Math.pow(2, attempt - 1),
+            EVENT_EMISSION_MAX_BACKOFF_MS,
+          );
+          await new Promise((resolve) => setTimeout(resolve, backoffMs));
           try {
             await doEmit();
             break;
           } catch (retryErr) {
-            const retryMsg = retryErr instanceof Error ? retryErr.message : String(retryErr);
+            const retryMsg = retryErr instanceof Error
+              ? retryErr.message
+              : String(retryErr);
             if (attempt === TERMINAL_MAX_RETRIES) {
-              logError(`CRITICAL: Terminal event '${type}' emit failed after ${TERMINAL_MAX_RETRIES} retries (run=${runId})`, retryMsg, { module: 'emitevent' });
+              logError(
+                `CRITICAL: Terminal event '${type}' emit failed after ${TERMINAL_MAX_RETRIES} retries (run=${runId})`,
+                retryMsg,
+                { module: "emitevent" },
+              );
             } else {
-              logWarn(`Terminal event '${type}' retry ${attempt}/${TERMINAL_MAX_RETRIES} failed (run=${runId})`, { module: 'emitevent', detail: retryMsg });
+              logWarn(
+                `Terminal event '${type}' retry ${attempt}/${TERMINAL_MAX_RETRIES} failed (run=${runId})`,
+                { module: "emitevent", detail: retryMsg },
+              );
             }
           }
         }
       }
       if (!emitOk) {
-        const msg = firstErr instanceof Error ? firstErr.message : String(firstErr);
-        logError(`DO emit failed for ${type}`, msg, { module: 'emitevent' });
+        const msg = firstErr instanceof Error
+          ? firstErr.message
+          : String(firstErr);
+        logError(`DO emit failed for ${type}`, msg, { module: "emitevent" });
       }
     }
   } catch (err) {
     const errorMsg = err instanceof Error ? err.message : String(err);
-    logError(`Event emission error for ${type} (run=${runId})`, errorMsg, { module: 'emitevent' });
+    logError(`Event emission error for ${type} (run=${runId})`, errorMsg, {
+      module: "emitevent",
+    });
     if (isTerminal) {
-      logError(`CRITICAL: Terminal event '${type}' lost for run=${runId}`, undefined, { module: 'emitevent' });
+      logError(
+        `CRITICAL: Terminal event '${type}' lost for run=${runId}`,
+        undefined,
+        { module: "emitevent" },
+      );
     }
 
     if (state.eventEmissionErrors.length < MAX_EVENT_EMISSION_ERRORS) {

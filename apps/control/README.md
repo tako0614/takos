@@ -5,6 +5,10 @@ Takos control plane. Each source file is a thin Wrangler entry point that
 re-exports from the `takos-control` package, keeping deployment configuration
 separate from business logic.
 
+This directory is the tracked OSS deployment template and local/self-host
+reference. Production and staging operations are centralized in
+`takos-private/`.
+
 ## Worker types
 
 | Worker            | Entry point            | Wrangler config              | Description                                                                |
@@ -13,8 +17,7 @@ separate from business logic.
 | **Background**    | `src/worker.ts`        | `wrangler.worker.toml`       | Queue processing: run dispatch, indexing, workflow execution, egress proxy |
 | **Dispatch**      | `src/dispatch.ts`      | `wrangler.dispatch.toml`     | Dispatch namespace for tenant request routing                              |
 | **Executor host** | `src/executor-host.ts` | `wrangler.executor.toml`     | Manages agent executor container lifecycle                                 |
-| **Runtime host**  | `src/runtime-host.ts`  | `wrangler.runtime-host.toml` | Manages runtime container lifecycle                                        |
-| **Browser host**  | `src/browser-host.ts`  | `wrangler.browser-host.toml` | Manages browser session container lifecycle                                |
+| **Runtime host**  | `src/runtime-host.ts`  | `wrangler.runtime-host.toml` | Hosts the takos-runtime-service container lifecycle                        |
 
 All entry points follow the same pattern:
 
@@ -27,13 +30,15 @@ The actual implementation lives in `packages/control/`.
 
 ## Deployment
 
-Each worker is deployed independently via its own Wrangler config:
+Each worker is deployed independently via its own Wrangler config. The commands
+below are for the tracked template or local/self-host verification only; use
+`takos-private/` for actual production and staging operations:
 
 ```sh
-# Deploy the main web worker
+# Deploy the main web worker in the tracked template / self-host reference
 cd takos && deno task --cwd apps/control deploy:service web staging
 
-# Deploy the background worker
+# Deploy the background worker in the tracked template / self-host reference
 cd takos && deno task --cwd apps/control deploy:service worker staging
 ```
 
@@ -44,7 +49,9 @@ deploy directly from this directory in production.
 
 Database migrations are managed with [Drizzle](https://orm.drizzle.team/) and
 stored in `db/migrations/`. The migration config is defined in
-`drizzle.config.ts`.
+`drizzle.config.ts`. The local/self-host PostgreSQL compatibility backend
+applies these migrations at service startup; `db:migrate` is for Wrangler's
+local D1 backend.
 
 ```sh
 # Generate a new migration

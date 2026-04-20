@@ -1,12 +1,12 @@
 /**
  * Shared utility functions, response helpers, and types for the executor-host
- * subsystem.  All proxy handlers and the main fetch entrypoint depend on these.
+ * subsystem. The main fetch entrypoint and executor control RPC handlers depend
+ * on these.
  */
 
 import type {
   DurableObjectNamespace,
   Queue,
-  R2Bucket,
 } from "../../shared/types/bindings.ts";
 import {
   errorJsonResponse,
@@ -30,23 +30,12 @@ export interface AgentExecutorEnv extends DbEnv, StorageEnv, AiEnv {
   EXECUTOR_CONTAINER: ContainerNamespace;
   EXECUTOR_CONTAINER_TIER2?: ContainerNamespace;
   EXECUTOR_CONTAINER_TIER3?: ContainerNamespace;
-  RUN_NOTIFIER: DurableObjectNamespace;
-  TAKOS_OFFLOAD: R2Bucket;
-  TAKOS_EGRESS: {
-    fetch(input: RequestInfo | URL, init?: RequestInit): Promise<Response>;
-  };
-  RUNTIME_HOST?: {
-    fetch(input: RequestInfo | URL, init?: RequestInit): Promise<Response>;
-  };
-  BROWSER_HOST?: {
-    fetch(input: RequestInfo | URL, init?: RequestInit): Promise<Response>;
-  };
-  /** Service binding to main takos-web worker for control RPC forwarding. */
-  TAKOS_CONTROL?: {
+  /** Service binding to main takos worker for control RPC forwarding. */
+  TAKOS_CONTROL: {
     fetch(input: RequestInfo | URL, init?: RequestInit): Promise<Response>;
   };
   /** Shared secret for authenticating forwarded requests to the main worker. */
-  EXECUTOR_PROXY_SECRET?: string;
+  EXECUTOR_PROXY_SECRET: string;
   INDEX_QUEUE?: Queue<IndexJobQueueMessage>;
   CONTROL_RPC_BASE_URL?: string;
 }
@@ -79,7 +68,8 @@ export interface ExecutorContainerStub {
   revokeProxyTokens?(): Promise<void>;
 }
 
-export interface ContainerNamespace extends DurableObjectNamespace {
+export interface ContainerNamespace
+  extends DurableObjectNamespace<ExecutorContainerStub> {
   get(id: unknown): ExecutorContainerStub;
   getByName(name: string): ExecutorContainerStub;
 }
@@ -117,14 +107,14 @@ export function parseExecutorTier(value: unknown): ExecutorTier {
 
 /**
  * Wrapper type for the Cloudflare AI binding that accepts dynamic model names.
- * The built-in `Ai` type requires a specific `AiModels` key, but proxy callers
+ * The Cloudflare `Ai` type requires a specific `AiModels` key, but proxy callers
  * send arbitrary model name strings resolved at runtime.
  */
 export interface AiRunBinding {
   run(model: string, inputs: Record<string, unknown>): Promise<unknown>;
 }
 
-export type ProxyCapability = "bindings" | "control";
+export type ProxyCapability = "control";
 
 // ---------------------------------------------------------------------------
 // Response helpers
@@ -222,13 +212,7 @@ export function readRunServiceId(body: Record<string, unknown>): string | null {
 const proxyUsageCounters = new Map<string, number>();
 
 export function recordProxyUsage(path: string): void {
-  const bucket = path.startsWith("/proxy/db/")
-    ? "db"
-    : path.startsWith("/proxy/offload/")
-    ? "offload"
-    : path.startsWith("/proxy/do/")
-    ? "do"
-    : path === "/rpc/control/tool-catalog"
+  const bucket = path === "/rpc/control/tool-catalog"
     ? "tool-catalog"
     : path === "/rpc/control/tool-execute"
     ? "tool-execute"
@@ -236,10 +220,10 @@ export function recordProxyUsage(path: string): void {
     ? "tool-cleanup"
     : path === "/rpc/control/run-event"
     ? "run-event"
-    : path.startsWith("/proxy/")
-    ? "other-proxy"
     : path.startsWith("/rpc/control/")
     ? "other-control-rpc"
+    : path.startsWith("/proxy/")
+    ? "legacy-control-rpc"
     : "other";
   proxyUsageCounters.set(bucket, (proxyUsageCounters.get(bucket) ?? 0) + 1);
 }
@@ -251,13 +235,12 @@ export function getProxyUsageSnapshot(): Record<string, number> {
 }
 
 // ---------------------------------------------------------------------------
-// Control RPC forwarding (to main takos-web worker via service binding)
+// Control RPC forwarding (to main takos worker via service binding)
 // ---------------------------------------------------------------------------
 
 /**
  * Map from executor-host paths to the proxy API endpoint names.
- * Covers both /rpc/control/* and legacy /proxy/* paths that require
- * DB/service access in the main worker.
+ * Covers both /rpc/control/* and legacy /proxy/* control paths.
  */
 const CONTROL_RPC_PATH_MAP: Record<string, string> = {
   "/rpc/control/heartbeat": "/internal/executor-rpc/heartbeat",
@@ -303,8 +286,8 @@ export function isControlRpcPath(path: string): boolean {
 }
 
 /**
- * Forward a control RPC request to the main takos-web worker.
- * Returns null if TAKOS_CONTROL is not configured (fall through to legacy handlers).
+ * Forward a control RPC request to the main takos worker.
+ * Returns null only when the path is not a mapped control RPC path.
  */
 export async function forwardToControlPlane(
   path: string,
@@ -312,7 +295,9 @@ export async function forwardToControlPlane(
   env: Env,
 ): Promise<Response | null> {
   const controlBinding = env.TAKOS_CONTROL;
-  if (!controlBinding) return null;
+  if (!controlBinding) {
+    return err("TAKOS_CONTROL service binding not configured", 503);
+  }
 
   const targetPath = CONTROL_RPC_PATH_MAP[path];
   if (!targetPath) return null;
@@ -323,7 +308,7 @@ export async function forwardToControlPlane(
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          "X-Takos-Internal": env.EXECUTOR_PROXY_SECRET ?? "",
+          "X-Takos-Internal": env.EXECUTOR_PROXY_SECRET,
         },
         body: JSON.stringify(body),
       }),

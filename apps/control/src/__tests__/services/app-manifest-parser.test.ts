@@ -1,8 +1,4 @@
-import {
-  assert,
-  assertEquals,
-  assertThrows,
-} from "jsr:@std/assert";
+import { assert, assertEquals, assertThrows } from "jsr:@std/assert";
 
 import {
   appManifestToBundleDocs,
@@ -15,7 +11,7 @@ name: service-app
 version: 1.0.0
 compute:
   my-api:
-    image: ghcr.io/takos/api:latest
+    image: ghcr.io/takos/api@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
     port: 3000
   web:
     build:
@@ -51,7 +47,7 @@ spec:
       entry: src/index.ts
 `),
     Error,
-    "Kubernetes-style manifest envelope is no longer supported",
+    "apiVersion is not supported by the app manifest contract",
   );
 });
 

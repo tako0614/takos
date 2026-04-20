@@ -10,7 +10,11 @@
  * the per-domain method modules.  They are NOT part of the public API.
  */
 
-import type { CFAPIResponse, CloudflareAPIError as _CloudflareAPIError, WFPConfig } from './client.ts';
+import type {
+  CFAPIResponse,
+  CloudflareAPIError as _CloudflareAPIError,
+  WFPConfig,
+} from "./client.ts";
 
 // ---------------------------------------------------------------------------
 // Binding types (public – re-exported from service.ts / index.ts)
@@ -18,27 +22,27 @@ import type { CFAPIResponse, CloudflareAPIError as _CloudflareAPIError, WFPConfi
 
 export interface WorkerBinding {
   type:
-    | 'plain_text'
-    | 'secret_text'
-    | 'd1'
-    | 'r2_bucket'
-    | 'kv_namespace'
-    | 'queue'
-    | 'analytics_engine'
-    | 'workflow'
-    | 'vectorize'
-    | 'service'
-    | 'durable_object_namespace';
+    | "plain_text"
+    | "secret_text"
+    | "d1"
+    | "r2_bucket"
+    | "kv_namespace"
+    | "queue"
+    | "analytics_engine"
+    | "workflow"
+    | "vectorize"
+    | "service"
+    | "durable_object_namespace";
   name: string;
   text?: string;
   database_id?: string;
   bucket_name?: string;
   namespace_id?: string;
   queue_name?: string;
-  queue_backend?: 'sqs' | 'pubsub' | 'redis' | 'persistent';
+  queue_backend?: "sqs" | "pubsub" | "redis" | "persistent";
   queue_url?: string;
   subscription_name?: string;
-  provider_name?: string;
+  backend_name?: string;
   delivery_delay?: number;
   dataset?: string;
   workflow_name?: string;
@@ -59,10 +63,10 @@ export interface CloudflareBindingRecord {
   bucket_name?: string;
   namespace_id?: string;
   queue_name?: string;
-  queue_backend?: 'sqs' | 'pubsub' | 'redis' | 'persistent';
+  queue_backend?: "sqs" | "pubsub" | "redis" | "persistent";
   queue_url?: string;
   subscription_name?: string;
-  provider_name?: string;
+  backend_name?: string;
   delivery_delay?: number;
   dataset?: string;
   workflow_name?: string;
@@ -85,10 +89,21 @@ export interface WfpContext {
   readonly config: WFPConfig;
   scriptPath(workerName: string): string;
   accountPath(suffix: string): string;
-  cfFetch<T>(path: string, options?: RequestInit, timeoutMs?: number): Promise<CFAPIResponse<T>>;
-  cfFetchWithRetry<T>(path: string, options?: RequestInit, maxRetries?: number, timeoutMs?: number): Promise<CFAPIResponse<T>>;
+  cfFetch<T>(
+    path: string,
+    options?: RequestInit,
+    timeoutMs?: number,
+  ): Promise<CFAPIResponse<T>>;
+  cfFetchWithRetry<T>(
+    path: string,
+    options?: RequestInit,
+    maxRetries?: number,
+    timeoutMs?: number,
+  ): Promise<CFAPIResponse<T>>;
   formatBinding(binding: WorkerBinding): Record<string, unknown>;
-  formatBindingForUpdate(binding: WorkerBinding | CloudflareBindingRecord | Record<string, unknown>): Record<string, unknown>;
+  formatBindingForUpdate(
+    binding: WorkerBinding | CloudflareBindingRecord | Record<string, unknown>,
+  ): Record<string, unknown>;
 }
 
 // ---------------------------------------------------------------------------

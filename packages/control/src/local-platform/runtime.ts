@@ -7,7 +7,7 @@
  *   runtime-types.ts          – shared types and constants
  *   runtime-http.ts           – HTTP utilities (forwarding, JSON response, etc.)
  *   runtime-gateway-stubs.ts  – in-process gateway stub factories
- *   runtime-host-fetch.ts     – runtime-host and browser-host fetch builders
+ *   runtime-host-fetch.ts     – runtime-host fetch builder
  *   executor-control-rpc.ts   – executor control RPC handlers + executor-host fetch builder
  *   runtime-env.ts            – environment construction for production and tests
  */
@@ -21,19 +21,17 @@ export { DEFAULT_LOCAL_PORTS } from './runtime-types.ts';
 export type { LocalFetch } from './runtime-types.ts';
 
 // Re-export sub-modules for advanced consumers.
-export { buildLocalRuntimeHostFetch, buildLocalBrowserHostFetch } from './runtime-host-fetch.ts';
+export { buildLocalRuntimeHostFetch } from './runtime-host-fetch.ts';
 export { buildLocalExecutorHostFetch } from './executor-control-rpc.ts';
 
 import type { LocalFetch } from './runtime-types.ts';
-import { buildLocalRuntimeHostFetch, buildLocalBrowserHostFetch } from './runtime-host-fetch.ts';
+import { buildLocalRuntimeHostFetch } from './runtime-host-fetch.ts';
 import { buildLocalExecutorHostFetch } from './executor-control-rpc.ts';
 import {
   createRuntimeHostEnv,
   createRuntimeHostEnvForTests,
   createExecutorHostEnv,
   createExecutorHostEnvForTests,
-  createBrowserHostEnv,
-  createBrowserHostEnvForTests,
 } from './runtime-env.ts';
 
 // ---------------------------------------------------------------------------
@@ -86,11 +84,6 @@ export async function createLocalExecutorHostFetch(): Promise<LocalFetch> {
   return buildLocalExecutorHostFetch(env);
 }
 
-export async function createLocalBrowserHostFetch(): Promise<LocalFetch> {
-  const env = await createBrowserHostEnv();
-  return buildLocalBrowserHostFetch(env);
-}
-
 // ---------------------------------------------------------------------------
 // Host fetch factories – tests
 // ---------------------------------------------------------------------------
@@ -103,12 +96,6 @@ export async function createLocalRuntimeHostFetchForTests(): Promise<LocalFetch>
 
 export async function createLocalExecutorHostFetchForTests(): Promise<LocalFetch> {
   const runtimeFetch = await createLocalRuntimeHostFetchForTests();
-  const browserFetch = await createLocalBrowserHostFetchForTests();
-  const env = await createExecutorHostEnvForTests({ runtimeFetch, browserFetch });
+  const env = await createExecutorHostEnvForTests({ runtimeFetch });
   return buildLocalExecutorHostFetch(env);
-}
-
-export async function createLocalBrowserHostFetchForTests(): Promise<LocalFetch> {
-  const env = await createBrowserHostEnvForTests();
-  return buildLocalBrowserHostFetch(env);
 }

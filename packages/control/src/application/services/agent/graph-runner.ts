@@ -1,27 +1,32 @@
-import type { Env, RunStatus } from '../../../shared/types/index.ts';
-import type { SqlDatabaseBinding } from '../../../shared/types/bindings.ts';
-import type { ToolExecutorLike } from '../../tools/executor.ts';
-import type { AgentContext, AgentConfig, AgentEvent, AgentMessage } from './agent-models.ts';
-import type { ToolExecution } from './runner-utils.ts';
-import type { LLMClient, ModelProvider } from './llm.ts';
-import {
-  buildSkillEnhancedPrompt,
-  type ResolvedSkillPlan,
-} from './skills.ts';
+import type { Env, RunStatus } from "../../../shared/types/index.ts";
+import type { SqlDatabaseBinding } from "../../../shared/types/bindings.ts";
+import type { ToolExecutorLike } from "../../tools/executor.ts";
+import type {
+  AgentConfig,
+  AgentContext,
+  AgentEvent,
+  AgentMessage,
+} from "./agent-models.ts";
+import type { ToolExecution } from "./runner-utils.ts";
+import type { LLMClient, ModelBackend } from "./llm.ts";
+import { buildSkillEnhancedPrompt, type ResolvedSkillPlan } from "./skills.ts";
 import {
   createLangGraphAgent,
-  runLangGraph,
   dbMessagesToLangChain,
   langChainMessageToDb,
   type LangGraphEvent,
-} from './graph-agent.ts';
-import { getTimeoutConfig } from './runner-config.ts';
-import { RunCancelledError } from './run-lifecycle.ts';
-import { withTimeout } from '../../../shared/utils/with-timeout.ts';
-import { buildTerminalPayload, type RunTerminalPayload } from '../run-notifier/index.ts';
-import { runWithSimpleLoop, runWithoutLLM } from './simple-loop.ts';
-import { throwIfAborted } from 'takos-common/abort';
-import type { AgentMemoryRuntime } from '../memory-graph/memory-graph-runtime.ts';
+  runLangGraph,
+} from "./graph-agent.ts";
+import { getTimeoutConfig } from "./runner-config.ts";
+import { RunCancelledError } from "./run-lifecycle.ts";
+import { withTimeout } from "../../../shared/utils/with-timeout.ts";
+import {
+  buildTerminalPayload,
+  type RunTerminalPayload,
+} from "../run-notifier/index.ts";
+import { runWithoutLLM, runWithSimpleLoop } from "./simple-loop.ts";
+import { throwIfAborted } from "takos-common/abort";
+import type { AgentMemoryRuntime } from "../memory-graph/memory-graph-runtime.ts";
 
 type ToolExecutionRecord = {
   name: string;
@@ -46,9 +51,19 @@ type LangGraphRunOptions = {
   maxIterations: number;
   temperature: number;
   toolExecutions: ToolExecutionRecord[];
-  emitEvent: (type: AgentEvent['type'], data: Record<string, unknown>) => Promise<void>;
-  addMessage: (message: AgentMessage, metadata?: Record<string, unknown>) => Promise<void>;
-  updateRunStatus: (status: RunStatus, output?: string, error?: string) => Promise<void>;
+  emitEvent: (
+    type: AgentEvent["type"],
+    data: Record<string, unknown>,
+  ) => Promise<void>;
+  addMessage: (
+    message: AgentMessage,
+    metadata?: Record<string, unknown>,
+  ) => Promise<void>;
+  updateRunStatus: (
+    status: RunStatus,
+    output?: string,
+    error?: string,
+  ) => Promise<void>;
   env?: Env;
   spaceId?: string;
   shouldCancel?: () => boolean | Promise<boolean>;
@@ -56,8 +71,10 @@ type LangGraphRunOptions = {
   memoryRuntime?: AgentMemoryRuntime;
 };
 
-export async function runLangGraphRunner(options: LangGraphRunOptions): Promise<void> {
-  throwIfAborted(options.abortSignal, 'langgraph-start');
+export async function runLangGraphRunner(
+  options: LangGraphRunOptions,
+): Promise<void> {
+  throwIfAborted(options.abortSignal, "langgraph-start");
   if (options.shouldCancel && await options.shouldCancel()) {
     throw new RunCancelledError();
   }
@@ -67,7 +84,7 @@ export async function runLangGraphRunner(options: LangGraphRunOptions): Promise<
   // is only refreshed once at the start of the run (not per-iteration like
   // the Simple Loop path). This is a known limitation — the observer still
   // accumulates overlay claims for finalize() and future runs.
-  let memorySegment = '';
+  let memorySegment = "";
   if (options.memoryRuntime) {
     const activation = options.memoryRuntime.beforeModel();
     if (activation.hasContent) {
@@ -81,8 +98,10 @@ export async function runLangGraphRunner(options: LangGraphRunOptions): Promise<
     options.spaceId,
   ) + memorySegment;
 
-  const lastUserMessage = options.history.filter((message) => message.role === 'user').pop();
-  const input = lastUserMessage?.content || '';
+  const lastUserMessage = options.history.filter((message) =>
+    message.role === "user"
+  ).pop();
+  const input = lastUserMessage?.content || "";
 
   const historyForGraph = options.history.slice(0, -1);
   const historyForDb = historyForGraph.map((message) => ({
@@ -95,8 +114,10 @@ export async function runLangGraphRunner(options: LangGraphRunOptions): Promise<
 
   const availableTools = options.toolExecutor.getAvailableTools();
 
-  const baseTemperature = Number.isFinite(options.temperature) ? options.temperature : 0.7;
-  const temperature = options.model.startsWith('gpt-5') ? 1 : baseTemperature;
+  const baseTemperature = Number.isFinite(options.temperature)
+    ? options.temperature
+    : 0.7;
+  const temperature = options.model.startsWith("gpt-5") ? 1 : baseTemperature;
 
   const agent = createLangGraphAgent({
     apiKey: options.apiKey,
@@ -122,21 +143,24 @@ export async function runLangGraphRunner(options: LangGraphRunOptions): Promise<
       shouldCancel: options.shouldCancel,
       abortSignal: options.abortSignal,
       onEvent: async (event: LangGraphEvent) => {
-        if (event.type === 'completed') return;
+        if (event.type === "completed") return;
         await options.emitEvent(event.type, event.data);
       },
       onMessage: async (message) => {
         const dbMsg = langChainMessageToDb(message);
 
         let messageMetadata: Record<string, unknown> | undefined;
-        if (dbMsg.role === 'assistant' && !dbMsg.tool_calls && options.toolExecutions.length > 0) {
+        if (
+          dbMsg.role === "assistant" && !dbMsg.tool_calls &&
+          options.toolExecutions.length > 0
+        ) {
           messageMetadata = {
             tool_executions: options.toolExecutions.map((exec) => ({
               name: exec.name,
               arguments: exec.arguments,
               result: exec.result
                 ? exec.result.length > 500
-                  ? exec.result.slice(0, 500) + '...'
+                  ? exec.result.slice(0, 500) + "..."
                   : exec.result
                 : undefined,
               error: exec.error,
@@ -147,7 +171,9 @@ export async function runLangGraphRunner(options: LangGraphRunOptions): Promise<
         }
 
         let parsedToolCalls:
-          | Array<{ id: string; name: string; arguments: Record<string, unknown> }>
+          | Array<
+            { id: string; name: string; arguments: Record<string, unknown> }
+          >
           | undefined;
         if (dbMsg.tool_calls) {
           try {
@@ -162,36 +188,38 @@ export async function runLangGraphRunner(options: LangGraphRunOptions): Promise<
 
         await options.addMessage(
           {
-            role: dbMsg.role as AgentMessage['role'],
+            role: dbMsg.role as AgentMessage["role"],
             content: dbMsg.content,
             tool_calls: parsedToolCalls,
             tool_call_id: dbMsg.tool_call_id,
           },
-          messageMetadata
+          messageMetadata,
         );
       },
     }),
     langGraphTimeoutMs,
-    `LangGraph agent execution timed out after ${langGraphTimeoutMs / 1000 / 60} minutes`
+    `LangGraph agent execution timed out after ${
+      langGraphTimeoutMs / 1000 / 60
+    } minutes`,
   );
 
-  throwIfAborted(options.abortSignal, 'langgraph-complete');
+  throwIfAborted(options.abortSignal, "langgraph-complete");
   if (options.shouldCancel && await options.shouldCancel()) {
     throw new RunCancelledError();
   }
 
   await options.updateRunStatus(
-    'completed',
+    "completed",
     JSON.stringify({
       response: result.response,
       iterations: result.iterations,
-      engine: 'langgraph',
-    })
+      engine: "langgraph",
+    }),
   );
-  await options.emitEvent('completed', {
+  await options.emitEvent("completed", {
     ...buildTerminalPayload(
       options.runId,
-      'completed',
+      "completed",
       {
         success: true,
         iterations: result.iterations,
@@ -212,7 +240,7 @@ export interface EngineDispatchDeps {
   config: AgentConfig;
   toolExecutor: ToolExecutorLike | undefined;
   llmClient?: LLMClient;
-  modelProvider: ModelProvider;
+  modelBackend: ModelBackend;
   aiModel: string;
   openAiKey?: string;
   abortSignal?: AbortSignal;
@@ -226,14 +254,27 @@ export interface EngineDispatchDeps {
 
   throwIfCancelled: (ctx: string) => Promise<void>;
   checkCancellation: () => boolean | Promise<boolean>;
-  emitEvent: (type: AgentEvent['type'], data: Record<string, unknown>) => Promise<void>;
-  addMessage: (msg: AgentMessage, meta?: Record<string, unknown>) => Promise<void>;
-  updateRunStatus: (status: RunStatus, output?: string, error?: string) => Promise<void>;
-  buildTerminalEventPayload: (status: 'completed' | 'failed' | 'cancelled', details?: Record<string, unknown>) => RunTerminalPayload;
+  emitEvent: (
+    type: AgentEvent["type"],
+    data: Record<string, unknown>,
+  ) => Promise<void>;
+  addMessage: (
+    msg: AgentMessage,
+    meta?: Record<string, unknown>,
+  ) => Promise<void>;
+  updateRunStatus: (
+    status: RunStatus,
+    output?: string,
+    error?: string,
+  ) => Promise<void>;
+  buildTerminalEventPayload: (
+    status: "completed" | "failed" | "cancelled",
+    details?: Record<string, unknown>,
+  ) => RunTerminalPayload;
   getConversationHistory: () => Promise<AgentMessage[]>;
 }
 
-export type EngineType = 'langgraph' | 'simple' | 'none';
+export type EngineType = "langgraph" | "simple" | "none";
 
 export async function dispatchEngine(
   deps: EngineDispatchDeps,
@@ -241,7 +282,7 @@ export async function dispatchEngine(
 ): Promise<void> {
   const engine = selectEngine(deps);
 
-  if (engine === 'none') {
+  if (engine === "none") {
     await runWithoutLLM(
       {
         toolExecutor: deps.toolExecutor,
@@ -255,8 +296,11 @@ export async function dispatchEngine(
     return;
   }
 
-  if (engine === 'simple') {
-    await deps.emitEvent('thinking', { message: 'Using simple mode for selected model', engine: 'simple' });
+  if (engine === "simple") {
+    await deps.emitEvent("thinking", {
+      message: "Using simple mode for selected model",
+      engine: "simple",
+    });
     await dispatchSimpleLoop(deps);
     return;
   }
@@ -265,9 +309,9 @@ export async function dispatchEngine(
 }
 
 function selectEngine(deps: EngineDispatchDeps): EngineType {
-  if (!deps.llmClient) return 'none';
-  if (deps.modelProvider === 'openai' && deps.openAiKey) return 'langgraph';
-  return 'simple';
+  if (!deps.llmClient) return "none";
+  if (deps.modelBackend === "openai" && deps.openAiKey) return "langgraph";
+  return "simple";
 }
 
 async function executeLangGraphEngine(

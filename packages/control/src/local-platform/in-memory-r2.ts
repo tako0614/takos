@@ -6,26 +6,27 @@
  * process exits.
  */
 
-import type {
-  R2Bucket,
-  R2Object,
-  R2ObjectBody,
-} from '../shared/types/bindings.ts';
+import type { R2Bucket, R2ObjectBody } from "../shared/types/bindings.ts";
 
 async function toBuffer(
   value: ReadableStream | ArrayBuffer | ArrayBufferView | string | Blob | null,
 ): Promise<ArrayBuffer> {
   if (value === null) return new ArrayBuffer(0);
-  if (typeof value === 'string') return new TextEncoder().encode(value).buffer;
+  if (typeof value === "string") return new TextEncoder().encode(value).buffer;
   if (value instanceof ArrayBuffer) return value;
   if (ArrayBuffer.isView(value)) {
-    return value.buffer.slice(value.byteOffset, value.byteOffset + value.byteLength) as ArrayBuffer;
+    return value.buffer.slice(
+      value.byteOffset,
+      value.byteOffset + value.byteLength,
+    ) as ArrayBuffer;
   }
   if (value instanceof Blob) return value.arrayBuffer();
   return new Response(value).arrayBuffer();
 }
 
-function normalizeHttpMetadata(metadata?: Record<string, string> | Headers): Record<string, string> {
+function normalizeHttpMetadata(
+  metadata?: Record<string, string> | Headers,
+): Record<string, string> {
   if (!metadata) return {};
   if (metadata instanceof Headers) {
     return Object.fromEntries(metadata.entries());
@@ -38,13 +39,13 @@ function createR2Object(
   bytes: ArrayBuffer,
   customMetadata: Record<string, string>,
   httpMetadata: Record<string, string>,
-  storageClass = 'Standard',
+  storageClass = "Standard",
 ): R2ObjectBody {
   const blob = new Blob([bytes]);
   const etag = `"${key}-${bytes.byteLength}"`;
-  const object = {
+  const object: R2ObjectBody = {
     key,
-    version: 'local',
+    version: "local",
     size: bytes.byteLength,
     etag,
     httpEtag: etag,
@@ -78,7 +79,7 @@ function createR2Object(
     },
   };
 
-  return object as unknown as R2ObjectBody;
+  return object;
 }
 
 export function createInMemoryR2Bucket(): R2Bucket {
@@ -97,14 +98,20 @@ export function createInMemoryR2Bucket(): R2Bucket {
   }>();
 
   async function toPartEtag(bytes: ArrayBuffer): Promise<string> {
-    const digest = await crypto.subtle.digest('SHA-256', bytes);
-    const hex = Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, '0')).join('');
+    const digest = await crypto.subtle.digest("SHA-256", bytes);
+    const hex = Array.from(
+      new Uint8Array(digest),
+      (byte) => byte.toString(16).padStart(2, "0"),
+    ).join("");
     return `"${hex}"`;
   }
 
-  async function toUploadedBytes(parts: Array<{ partNumber: number; etag: string }>, upload: {
-    parts: Map<number, { bytes: ArrayBuffer; etag: string }>;
-  }): Promise<ArrayBuffer> {
+  async function toUploadedBytes(
+    parts: Array<{ partNumber: number; etag: string }>,
+    upload: {
+      parts: Map<number, { bytes: ArrayBuffer; etag: string }>;
+    },
+  ): Promise<ArrayBuffer> {
     const orderedParts = [...parts].sort((a, b) => a.partNumber - b.partNumber);
     const buffers: Uint8Array[] = [];
     const seen = new Set<number>();
@@ -112,7 +119,9 @@ export function createInMemoryR2Bucket(): R2Bucket {
 
     for (const part of orderedParts) {
       if (seen.has(part.partNumber)) {
-        throw new Error(`Multipart upload has duplicate part ${part.partNumber}`);
+        throw new Error(
+          `Multipart upload has duplicate part ${part.partNumber}`,
+        );
       }
       seen.add(part.partNumber);
 
@@ -121,7 +130,9 @@ export function createInMemoryR2Bucket(): R2Bucket {
         throw new Error(`Multipart upload is missing part ${part.partNumber}`);
       }
       if (storedPart.etag !== part.etag) {
-        throw new Error(`Multipart upload part ${part.partNumber} etag mismatch`);
+        throw new Error(
+          `Multipart upload part ${part.partNumber} etag mismatch`,
+        );
       }
       const bytes = new Uint8Array(storedPart.bytes);
       buffers.push(bytes);
@@ -143,22 +154,32 @@ export function createInMemoryR2Bucket(): R2Bucket {
       throw new Error(`Multipart upload ${uploadId} is not active`);
     }
     if (upload.key !== key) {
-      throw new Error(`Multipart upload ${uploadId} belongs to a different key`);
+      throw new Error(
+        `Multipart upload ${uploadId} belongs to a different key`,
+      );
     }
     return upload;
   }
 
-  const bucket = {
+  const bucket: R2Bucket = {
     async head(key: string) {
       const record = objects.get(key);
       if (!record) return null;
-      const object = createR2Object(key, record.bytes, record.customMetadata, record.httpMetadata, record.storageClass);
-      return {
-        ...object,
-        body: null,
-      } as unknown as R2Object;
+      const object = createR2Object(
+        key,
+        record.bytes,
+        record.customMetadata,
+        record.httpMetadata,
+        record.storageClass,
+      );
+      return object;
     },
-    async get(key: string, options?: { range?: { offset?: number; length?: number; suffix?: number } }) {
+    async get(
+      key: string,
+      options?: {
+        range?: { offset?: number; length?: number; suffix?: number };
+      },
+    ) {
       const record = objects.get(key);
       if (!record) return null;
       let bytes = record.bytes;
@@ -171,15 +192,35 @@ export function createInMemoryR2Bucket(): R2Bucket {
           : bytes.byteLength;
         bytes = bytes.slice(offset, end);
       }
-      return createR2Object(key, bytes, record.customMetadata, record.httpMetadata, record.storageClass);
+      return createR2Object(
+        key,
+        bytes,
+        record.customMetadata,
+        record.httpMetadata,
+        record.storageClass,
+      );
     },
-    async put(key: string, value: ReadableStream | ArrayBuffer | ArrayBufferView | string | Blob | null, options?: { customMetadata?: Record<string, string>; httpMetadata?: Record<string, string>; storageClass?: string }) {
+    async put(
+      key: string,
+      value:
+        | ReadableStream
+        | ArrayBuffer
+        | ArrayBufferView
+        | string
+        | Blob
+        | null,
+      options?: {
+        customMetadata?: Record<string, string>;
+        httpMetadata?: Record<string, string>;
+        storageClass?: string;
+      },
+    ) {
       const bytes = await toBuffer(value);
       objects.set(key, {
         bytes,
         customMetadata: { ...(options?.customMetadata ?? {}) },
         httpMetadata: normalizeHttpMetadata(options?.httpMetadata),
-        storageClass: options?.storageClass ?? 'Standard',
+        storageClass: options?.storageClass ?? "Standard",
       });
       return (await bucket.head(key))!;
     },
@@ -191,35 +232,51 @@ export function createInMemoryR2Bucket(): R2Bucket {
       objects.delete(key);
     },
     async list(options?: { prefix?: string; limit?: number; cursor?: string }) {
-      const prefix = options?.prefix ?? '';
+      const prefix = options?.prefix ?? "";
       const limit = options?.limit ?? 1000;
-      const offset = options?.cursor ? Number.parseInt(options.cursor, 10) || 0 : 0;
+      const offset = options?.cursor
+        ? Number.parseInt(options.cursor, 10) || 0
+        : 0;
       const keys = Array.from(objects.keys())
         .filter((key) => key.startsWith(prefix))
         .sort();
       const page = keys.slice(offset, offset + limit);
       const nextOffset = offset + page.length;
       return {
-        objects: await Promise.all(page.map(async (key) => (await bucket.head(key))!)),
+        objects: await Promise.all(
+          page.map(async (key) => (await bucket.head(key))!),
+        ),
         truncated: nextOffset < keys.length,
         cursor: nextOffset < keys.length ? String(nextOffset) : undefined,
         delimitedPrefixes: [],
       };
     },
-    async createMultipartUpload(key: string, options?: { customMetadata?: Record<string, string>; httpMetadata?: Record<string, string> | Headers; storageClass?: string; ssecKey?: ArrayBuffer | string }) {
+    async createMultipartUpload(
+      key: string,
+      options?: {
+        customMetadata?: Record<string, string>;
+        httpMetadata?: Record<string, string> | Headers;
+        storageClass?: string;
+        ssecKey?: ArrayBuffer | string;
+      },
+    ) {
       const uploadId = crypto.randomUUID();
       multipartUploads.set(uploadId, {
         key,
         customMetadata: { ...(options?.customMetadata ?? {}) },
         httpMetadata: normalizeHttpMetadata(options?.httpMetadata),
-        storageClass: options?.storageClass ?? 'Standard',
+        storageClass: options?.storageClass ?? "Standard",
         parts: new Map<number, { bytes: ArrayBuffer; etag: string }>(),
       });
 
       return {
         key,
         uploadId,
-        async uploadPart(partNumber: number, value: ReadableStream | ArrayBuffer | ArrayBufferView | string | Blob, _options?: { ssecKey?: ArrayBuffer | string }) {
+        async uploadPart(
+          partNumber: number,
+          value: ReadableStream | ArrayBuffer | ArrayBufferView | string | Blob,
+          _options?: { ssecKey?: ArrayBuffer | string },
+        ) {
           const bytes = await toBuffer(value);
           const etag = await toPartEtag(bytes);
           const upload = requireMultipartUpload(uploadId, key);
@@ -231,7 +288,9 @@ export function createInMemoryR2Bucket(): R2Bucket {
           upload.parts.clear();
           multipartUploads.delete(uploadId);
         },
-        async complete(uploadedParts: Array<{ partNumber: number; etag: string }>) {
+        async complete(
+          uploadedParts: Array<{ partNumber: number; etag: string }>,
+        ) {
           const upload = requireMultipartUpload(uploadId, key);
           const bytes = await toUploadedBytes(uploadedParts, upload);
           upload.parts.clear();
@@ -249,7 +308,11 @@ export function createInMemoryR2Bucket(): R2Bucket {
       return {
         key,
         uploadId,
-        async uploadPart(partNumber: number, value: ReadableStream | ArrayBuffer | ArrayBufferView | string | Blob, _options?: { ssecKey?: ArrayBuffer | string }) {
+        async uploadPart(
+          partNumber: number,
+          value: ReadableStream | ArrayBuffer | ArrayBufferView | string | Blob,
+          _options?: { ssecKey?: ArrayBuffer | string },
+        ) {
           const bytes = await toBuffer(value);
           const etag = await toPartEtag(bytes);
           const activeUpload = requireMultipartUpload(uploadId, key);
@@ -261,7 +324,9 @@ export function createInMemoryR2Bucket(): R2Bucket {
           activeUpload.parts.clear();
           multipartUploads.delete(uploadId);
         },
-        async complete(uploadedParts: Array<{ partNumber: number; etag: string }>) {
+        async complete(
+          uploadedParts: Array<{ partNumber: number; etag: string }>,
+        ) {
           const activeUpload = requireMultipartUpload(uploadId, key);
           const bytes = await toUploadedBytes(uploadedParts, activeUpload);
           activeUpload.parts.clear();
@@ -276,5 +341,5 @@ export function createInMemoryR2Bucket(): R2Bucket {
     },
   };
 
-  return bucket as unknown as R2Bucket;
+  return bucket;
 }

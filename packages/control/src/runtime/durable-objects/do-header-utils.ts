@@ -1,7 +1,10 @@
 /** Shared types and helpers for Durable Object implementations. */
 
 export function jsonResponse(data: unknown, status = 200): Response {
-  return new Response(JSON.stringify(data), { status, headers: { 'Content-Type': 'application/json' } });
+  return new Response(JSON.stringify(data), {
+    status,
+    headers: { "Content-Type": "application/json" },
+  });
 }
 
 export interface RingBufferEvent {
@@ -30,8 +33,10 @@ export const MAX_CONNECTIONS = 10_000;
  * Returns the floored integer when positive and finite, otherwise null.
  */
 export function parseEventId(value: unknown): number | null {
-  if (typeof value === 'number' && Number.isFinite(value) && value > 0) return Math.floor(value);
-  if (typeof value === 'string') {
+  if (typeof value === "number" && Number.isFinite(value) && value > 0) {
+    return Math.floor(value);
+  }
+  if (typeof value === "string") {
     const parsed = parseInt(value, 10);
     if (Number.isFinite(parsed) && parsed > 0) return parsed;
   }
@@ -61,7 +66,10 @@ export function addToRingBuffer(
 }
 
 /** Return events with id > lastEventId from the buffer. */
-export function getEventsAfter(buffer: RingBufferEvent[], lastEventId: number): RingBufferEvent[] {
+export function getEventsAfter(
+  buffer: RingBufferEvent[],
+  lastEventId: number,
+): RingBufferEvent[] {
   return buffer.filter((e) => e.id > lastEventId);
 }
 
@@ -69,12 +77,14 @@ export function getEventsAfter(buffer: RingBufferEvent[], lastEventId: number): 
  * Close and remove stale connections that have been idle longer than
  * CONNECTION_TIMEOUT_MS. Returns the number of connections cleaned up.
  */
-export function cleanupStaleConnections(connections: Map<string, ExtendedWebSocket>): number {
+export function cleanupStaleConnections(
+  connections: Map<string, ExtendedWebSocket>,
+): number {
   const now = Date.now();
   let cleaned = 0;
   for (const [id, ws] of connections.entries()) {
     if (ws.lastActivity && now - ws.lastActivity > CONNECTION_TIMEOUT_MS) {
-      safeClose(ws, 1000, 'Connection timeout');
+      safeClose(ws, 1000, "Connection timeout");
       connections.delete(id);
       cleaned++;
     }
@@ -94,14 +104,16 @@ export function safeClose(ws: WebSocket, code?: number, reason?: string): void {
 export const RECONNECT_CLOSE_CODE = 4001;
 
 /** Reason string accompanying the reconnect-suggested close. */
-export const RECONNECT_CLOSE_REASON = 'reconnect-suggested';
+export const RECONNECT_CLOSE_REASON = "reconnect-suggested";
 
 /**
  * Send a heartbeat message to all connections and remove any that fail.
  * Returns the number of connections that were removed.
  */
-export function broadcastHeartbeat(connections: Map<string, ExtendedWebSocket>): number {
-  const message = JSON.stringify({ type: 'heartbeat', timestamp: Date.now() });
+export function broadcastHeartbeat(
+  connections: Map<string, ExtendedWebSocket>,
+): number {
+  const message = JSON.stringify({ type: "heartbeat", timestamp: Date.now() });
   let removed = 0;
   for (const [id, ws] of connections.entries()) {
     try {
@@ -115,7 +127,12 @@ export function broadcastHeartbeat(connections: Map<string, ExtendedWebSocket>):
   return removed;
 }
 
-const INTERNAL_ONLY_HEADERS = ['X-Takos-Internal', 'X-WS-Auth-Validated', 'X-WS-User-Id'] as const;
+const INTERNAL_ONLY_HEADERS = [
+  "X-Takos-Internal",
+  "X-Takos-Internal-Marker",
+  "X-WS-Auth-Validated",
+  "X-WS-User-Id",
+] as const;
 
 /**
  * Build a sanitized header record for Durable Object requests.
@@ -127,14 +144,20 @@ export function buildSanitizedDOHeaders(
 ): Record<string, string> {
   const headers = new Headers(source);
   for (const name of INTERNAL_ONLY_HEADERS) headers.delete(name);
-  for (const [key, value] of Object.entries(trustedOverrides)) headers.set(key, value);
+  for (const [key, value] of Object.entries(trustedOverrides)) {
+    headers.set(key, value);
+  }
   const result: Record<string, string> = {};
-  headers.forEach((v, k) => { result[k] = v; });
+  headers.forEach((v, k) => {
+    result[k] = v;
+  });
   return result;
 }
 
 /** Schedule a cleanup alarm if one is not already set. */
-export async function scheduleCleanupAlarm(state: DurableObjectState): Promise<void> {
+export async function scheduleCleanupAlarm(
+  state: DurableObjectState,
+): Promise<void> {
   const currentAlarm = await state.storage.getAlarm();
   if (!currentAlarm) {
     await state.storage.setAlarm(Date.now() + 2 * 60 * 1000);

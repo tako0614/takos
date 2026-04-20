@@ -10,50 +10,61 @@
  * so that the rest of the codebase can treat them identically to Cloudflare D1.
  */
 
-import { readFile } from 'node:fs/promises';
-import path from 'node:path';
-import { fileURLToPath, pathToFileURL } from 'node:url';
-import { Pool, type PoolClient, type QueryResult } from 'pg';
-import type { D1PreparedStatement } from '../shared/types/bindings.ts';
-import type { Client as LibsqlClient, ResultSet, createClient as createLibsqlClient } from '@libsql/client';
-import { type ServerD1Database, classifyTransactionSql, isExactTransactionControlSql, normalizePostgresSql } from './d1-shared.ts';
-import { logWarn } from '../shared/utils/logger.ts';
+import { readFile } from "node:fs/promises";
+import path from "node:path";
+import { fileURLToPath, pathToFileURL } from "node:url";
+import { Pool, type PoolClient, type QueryResult } from "pg";
+import type { D1PreparedStatement } from "../shared/types/bindings.ts";
+import type {
+  Client as LibsqlClient,
+  createClient as createLibsqlClient,
+  ResultSet,
+  Row as LibsqlRow,
+  Value as LibsqlValue,
+} from "@libsql/client";
+import {
+  classifyTransactionSql,
+  isExactTransactionControlSql,
+  normalizePostgresSql,
+  type ServerD1Database,
+} from "./d1-shared.ts";
+import { logWarn } from "../shared/utils/logger.ts";
 import {
   ensurePostgresAccountsTableShape,
   ensurePostgresDeploymentsTableShape,
+  ensurePostgresResourcesTableShape,
   ensurePostgresRunsTableShape,
   ensurePostgresServicesTableShape,
   ensureServerMigrations,
   ensureServerPostgresMigrations,
   ensureSqliteAccountsTableShape,
   ensureSqliteDeploymentsTableShape,
+  ensureSqliteResourcesTableShape,
   ensureSqliteServicesTableShape,
-} from './d1-migrations.ts';
-import { createPostgresPreparedStatement, createPreparedStatement, createSequentialBatch } from './d1-prepared-statement.ts';
-import { ensureParentDirectory } from './persistent-shared.ts';
+} from "./d1-migrations.ts";
+import {
+  createPostgresPreparedStatement,
+  createPreparedStatement,
+  createSequentialBatch,
+} from "./d1-prepared-statement.ts";
+import { ensureParentDirectory } from "./persistent-shared.ts";
 
-export { splitSqlStatements } from './d1-sql-rewrite.ts';
-export type { ServerD1Database } from './d1-shared.ts';
+export { splitSqlStatements } from "./d1-sql-rewrite.ts";
+export type { ServerD1Database } from "./d1-shared.ts";
 
 async function loadLibsqlCreateClient(): Promise<typeof createLibsqlClient> {
-  const previousDevMode = process.env.LIBSQL_JS_DEV;
-  process.env.LIBSQL_JS_DEV = '1';
-  try {
-    const libsql = await import('@libsql/client');
-    return libsql.createClient;
-  } finally {
-    if (previousDevMode === undefined) {
-      delete process.env.LIBSQL_JS_DEV;
-    } else {
-      process.env.LIBSQL_JS_DEV = previousDevMode;
-    }
-  }
+  const libsql = await import("@libsql/client");
+  return libsql.createClient;
 }
 
 type SqliteLikeClient = {
-  execute(statementOrSql: string | { sql: string; args?: unknown[] }): Promise<ResultSet>;
+  execute(
+    statementOrSql: string | { sql: string; args?: unknown[] },
+  ): Promise<ResultSet>;
   transaction(mode?: string): Promise<{
-    execute(statementOrSql: string | { sql: string; args?: unknown[] }): Promise<ResultSet>;
+    execute(
+      statementOrSql: string | { sql: string; args?: unknown[] },
+    ): Promise<ResultSet>;
     executeMultiple(sql: string): Promise<void>;
     commit(): Promise<void>;
     rollback(): Promise<void>;
@@ -65,23 +76,36 @@ type SqliteLikeClient = {
 
 type NodeSqliteArg = string | number | bigint | Uint8Array | null;
 
-function normalizeSqliteValue(value: unknown): unknown {
+function normalizeSqliteValue(value: unknown): LibsqlValue {
+  if (value === null) return null;
   if (value instanceof Uint8Array) {
-    return value;
+    return value.buffer.slice(
+      value.byteOffset,
+      value.byteOffset + value.byteLength,
+    ) as ArrayBuffer;
   }
   if (value instanceof Date) {
     return value.toISOString();
   }
-  return value;
+  if (
+    typeof value === "string" || typeof value === "number" ||
+    typeof value === "bigint" || value instanceof ArrayBuffer
+  ) {
+    return value;
+  }
+  return String(value);
 }
 
-function toHybridSqliteRow(columns: string[], row: unknown[]): unknown[] & Record<string, unknown> {
+function toHybridSqliteRow(
+  columns: string[],
+  row: unknown[],
+): LibsqlRow {
   const values = row.map((value) => normalizeSqliteValue(value));
-  const hybrid = [...values] as unknown[] & Record<string, unknown>;
-  for (let index = 0; index < columns.length; index++) {
-    hybrid[columns[index]] = values[index];
-  }
-  return hybrid;
+  const namedEntries: Array<[string, LibsqlValue]> = columns.map((
+    column,
+    index,
+  ) => [column, values[index]]);
+  return Object.assign([...values], Object.fromEntries(namedEntries));
 }
 
 function toNodeSqliteResultSet(
@@ -90,17 +114,35 @@ function toNodeSqliteResultSet(
   rowsAffected = 0,
   lastInsertRowid: number | bigint | undefined = undefined,
 ): ResultSet {
-  return {
+  const result: ResultSet = {
     columns,
+    columnTypes: columns.map(() => ""),
     rows: rows.map((row) => toHybridSqliteRow(columns, row)),
     rowsAffected,
-    lastInsertRowid,
-  } as unknown as ResultSet;
+    lastInsertRowid: typeof lastInsertRowid === "number"
+      ? BigInt(lastInsertRowid)
+      : lastInsertRowid,
+    toJSON() {
+      return {
+        columns,
+        columnTypes: columns.map(() => ""),
+        rows: rows.map((row) => toHybridSqliteRow(columns, row)),
+        rowsAffected,
+        lastInsertRowid: typeof lastInsertRowid === "number"
+          ? BigInt(lastInsertRowid).toString()
+          : lastInsertRowid?.toString(),
+      };
+    },
+  };
+  return result;
 }
 
 function normalizeNodeSqliteArg(value: unknown): NodeSqliteArg {
   if (value === null || value === undefined) return null;
-  if (typeof value === 'string' || typeof value === 'number' || typeof value === 'bigint') {
+  if (
+    typeof value === "string" || typeof value === "number" ||
+    typeof value === "bigint"
+  ) {
     return value;
   }
   if (value instanceof Uint8Array) {
@@ -115,30 +157,36 @@ function normalizeNodeSqliteArg(value: unknown): NodeSqliteArg {
   if (value instanceof Date) {
     return value.toISOString();
   }
-  if (typeof value === 'boolean') {
+  if (typeof value === "boolean") {
     return value ? 1 : 0;
   }
   return JSON.stringify(value);
 }
 
-async function createNodeSqliteClient(dbPath: string): Promise<SqliteLikeClient> {
-  const sqlite = await import('node:sqlite');
+async function createNodeSqliteClient(
+  dbPath: string,
+): Promise<SqliteLikeClient> {
+  const sqlite = await import("node:sqlite");
   const db = new sqlite.DatabaseSync(dbPath);
 
   const execute = async (
     statementOrSql: string | { sql: string; args?: unknown[] },
   ): Promise<ResultSet> => {
-    const statement =
-      typeof statementOrSql === 'string'
-        ? { sql: statementOrSql, args: [] as unknown[] }
-        : { sql: statementOrSql.sql, args: statementOrSql.args ?? [] };
+    const statement = typeof statementOrSql === "string"
+      ? { sql: statementOrSql, args: [] as unknown[] }
+      : { sql: statementOrSql.sql, args: statementOrSql.args ?? [] };
     const args = statement.args.map((value) => normalizeNodeSqliteArg(value));
     const prepared = db.prepare(statement.sql);
-    const columns = prepared.columns().map((column: { name: string }) => column.name);
+    const columns = prepared.columns().map((column: { name: string }) =>
+      column.name
+    );
 
     if (columns.length > 0) {
       prepared.setReturnArrays(true);
-      const rows = prepared.all(...args) as unknown as unknown[][];
+      const rawRows = prepared.all(...args);
+      const rows = rawRows.map((row) =>
+        Array.isArray(row) ? row : columns.map((column) => row[column])
+      );
       return toNodeSqliteResultSet(columns, rows, 0);
     }
 
@@ -156,8 +204,10 @@ async function createNodeSqliteClient(dbPath: string): Promise<SqliteLikeClient>
 
   return {
     execute,
-    async transaction(_mode?: 'write' | 'read' | 'deferred' | 'immediate' | 'exclusive') {
-      db.exec('BEGIN');
+    async transaction(
+      _mode?: "write" | "read" | "deferred" | "immediate" | "exclusive",
+    ) {
+      db.exec("BEGIN");
       let finished = false;
 
       return {
@@ -167,12 +217,12 @@ async function createNodeSqliteClient(dbPath: string): Promise<SqliteLikeClient>
         },
         async commit() {
           if (finished) return;
-          db.exec('COMMIT');
+          db.exec("COMMIT");
           finished = true;
         },
         async rollback() {
           if (finished) return;
-          db.exec('ROLLBACK');
+          db.exec("ROLLBACK");
           finished = true;
         },
         close() {
@@ -189,27 +239,35 @@ async function createNodeSqliteClient(dbPath: string): Promise<SqliteLikeClient>
   };
 }
 
-export async function createSqliteD1Database(dbPath: string, migrationsDir: string): Promise<ServerD1Database> {
+export async function createSqliteD1Database(
+  dbPath: string,
+  migrationsDir: string,
+): Promise<ServerD1Database> {
   await ensureParentDirectory(dbPath);
   let client: SqliteLikeClient;
   try {
     const createClient = await loadLibsqlCreateClient();
-    client = createClient({ url: pathToFileURL(dbPath).href }) as unknown as SqliteLikeClient;
+    client = createClient({
+      url: pathToFileURL(dbPath).href,
+    }) as SqliteLikeClient;
   } catch (error) {
-    logWarn('Falling back to node:sqlite local D1 adapter', {
-      module: 'persistent-d1',
+    logWarn("Falling back to node:sqlite local D1 adapter", {
+      module: "persistent-d1",
       dbPath,
       error: error instanceof Error ? error.message : String(error),
     });
     client = await createNodeSqliteClient(dbPath);
   }
-  const libsqlClient = client as unknown as LibsqlClient;
+  const libsqlClient = client as LibsqlClient;
   await ensureServerMigrations(libsqlClient, migrationsDir);
   await ensureSqliteServicesTableShape(libsqlClient);
   await ensureSqliteAccountsTableShape(libsqlClient);
   await ensureSqliteDeploymentsTableShape(libsqlClient);
+  await ensureSqliteResourcesTableShape(libsqlClient);
 
-  const runStatement = <T = Record<string, unknown>>(statement: D1PreparedStatement) => statement.run<T>();
+  const runStatement = <T = Record<string, unknown>>(
+    statement: D1PreparedStatement,
+  ) => statement.run<T>();
   const session = {
     prepare(query: string) {
       return createPreparedStatement(libsqlClient, query);
@@ -220,7 +278,7 @@ export async function createSqliteD1Database(dbPath: string, migrationsDir: stri
     },
   };
 
-  const db = {
+  const db: ServerD1Database = {
     prepare(query: string) {
       return createPreparedStatement(libsqlClient, query);
     },
@@ -235,29 +293,40 @@ export async function createSqliteD1Database(dbPath: string, migrationsDir: stri
     },
     async dump() {
       const bytes = await readFile(dbPath);
-      return bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength) as ArrayBuffer;
+      return bytes.buffer.slice(
+        bytes.byteOffset,
+        bytes.byteOffset + bytes.byteLength,
+      ) as ArrayBuffer;
     },
     close() {
       client.close();
     },
   };
 
-  return db as unknown as ServerD1Database;
+  return db;
 }
 
-export async function createPostgresD1Database(connectionString: string): Promise<ServerD1Database> {
+export async function createPostgresD1Database(
+  connectionString: string,
+  migrationsDirOverride?: string,
+): Promise<ServerD1Database> {
   const pool = new Pool({ connectionString });
-  const migrationsDir = path.resolve(
+  const migrationsDir = migrationsDirOverride ?? path.resolve(
     path.dirname(fileURLToPath(import.meta.url)),
-    '..',
-    '..',
-    'db',
-    'migrations',
+    "..",
+    "..",
+    "..",
+    "..",
+    "apps",
+    "control",
+    "db",
+    "migrations",
   );
   await ensureServerPostgresMigrations(pool, migrationsDir);
   await ensurePostgresServicesTableShape(pool);
   await ensurePostgresAccountsTableShape(pool);
   await ensurePostgresDeploymentsTableShape(pool);
+  await ensurePostgresResourcesTableShape(pool);
   await ensurePostgresRunsTableShape(pool);
   let transactionClient: PoolClient | null = null;
 
@@ -279,9 +348,11 @@ export async function createPostgresD1Database(connectionString: string): Promis
     values: unknown[] = [],
   ): Promise<QueryResult<Record<string, unknown>>> {
     const normalized = normalizePostgresSql(queryText);
-    const transactionKind = isExactTransactionControlSql(normalized) ? classifyTransactionSql(normalized) : null;
+    const transactionKind = isExactTransactionControlSql(normalized)
+      ? classifyTransactionSql(normalized)
+      : null;
 
-    if (transactionKind === 'begin') {
+    if (transactionKind === "begin") {
       const client = await getTransactionClient();
       try {
         return await client.query(normalized, values);
@@ -295,14 +366,17 @@ export async function createPostgresD1Database(connectionString: string): Promis
       const client = transactionClient;
       try {
         const result = await client.query(normalized, values);
-        if (transactionKind === 'commit' || transactionKind === 'rollback') {
+        if (transactionKind === "commit" || transactionKind === "rollback") {
           await releaseTransactionClient();
         }
         return result;
       } catch (error) {
-        if (transactionKind === 'commit') {
-          await client.query('ROLLBACK').catch((e: unknown) => {
-            logWarn('ROLLBACK failed after transaction error (non-critical)', { module: 'persistent-d1', error: e instanceof Error ? e.message : String(e) });
+        if (transactionKind === "commit") {
+          await client.query("ROLLBACK").catch((e: unknown) => {
+            logWarn("ROLLBACK failed after transaction error (non-critical)", {
+              module: "persistent-d1",
+              error: e instanceof Error ? e.message : String(e),
+            });
           });
         }
         await releaseTransactionClient();
@@ -313,7 +387,9 @@ export async function createPostgresD1Database(connectionString: string): Promis
     return pool.query(normalized, values);
   }
 
-  const runStatement = <T = Record<string, unknown>>(statement: D1PreparedStatement) => statement.run<T>();
+  const runStatement = <T = Record<string, unknown>>(
+    statement: D1PreparedStatement,
+  ) => statement.run<T>();
   const session = {
     prepare(query: string) {
       return createPostgresPreparedStatement({ query: runQuery }, query);
@@ -324,7 +400,7 @@ export async function createPostgresD1Database(connectionString: string): Promis
     },
   };
 
-  const db = {
+  const db: ServerD1Database = {
     prepare(query: string) {
       return createPostgresPreparedStatement({ query: runQuery }, query);
     },
@@ -338,14 +414,16 @@ export async function createPostgresD1Database(connectionString: string): Promis
       return session;
     },
     async dump() {
-      throw new Error('DB.dump() is not implemented for the local Postgres adapter');
+      throw new Error(
+        "DB.dump() is not implemented for the local Postgres adapter",
+      );
     },
     close() {
       void pool.end();
     },
   };
 
-  return db as unknown as ServerD1Database;
+  return db;
 }
 
 export async function createSchemaScopedPostgresD1Database(
@@ -394,9 +472,11 @@ export async function createSchemaScopedPostgresD1Database(
     values: unknown[] = [],
   ): Promise<QueryResult<Record<string, unknown>>> {
     const normalized = normalizePostgresSql(queryText);
-    const transactionKind = isExactTransactionControlSql(normalized) ? classifyTransactionSql(normalized) : null;
+    const transactionKind = isExactTransactionControlSql(normalized)
+      ? classifyTransactionSql(normalized)
+      : null;
 
-    if (transactionKind === 'begin') {
+    if (transactionKind === "begin") {
       const client = await getTransactionClient();
       try {
         return await client.query(normalized, values);
@@ -410,17 +490,20 @@ export async function createSchemaScopedPostgresD1Database(
       const client = transactionClient;
       try {
         const result = await client.query(normalized, values);
-        if (transactionKind === 'commit' || transactionKind === 'rollback') {
+        if (transactionKind === "commit" || transactionKind === "rollback") {
           await releaseTransactionClient();
         }
         return result;
       } catch (error) {
-        if (transactionKind === 'commit') {
-          await client.query('ROLLBACK').catch((e: unknown) => {
-            logWarn('ROLLBACK failed after schema-scoped transaction error (non-critical)', {
-              module: 'persistent-d1',
-              error: e instanceof Error ? e.message : String(e),
-            });
+        if (transactionKind === "commit") {
+          await client.query("ROLLBACK").catch((e: unknown) => {
+            logWarn(
+              "ROLLBACK failed after schema-scoped transaction error (non-critical)",
+              {
+                module: "persistent-d1",
+                error: e instanceof Error ? e.message : String(e),
+              },
+            );
           });
         }
         await releaseTransactionClient();
@@ -431,10 +514,17 @@ export async function createSchemaScopedPostgresD1Database(
     return withScopedClient((client) => client.query(normalized, values));
   }
 
-  const runStatement = <T = Record<string, unknown>>(statement: D1PreparedStatement) => statement.run<T>();
+  const runStatement = <T = Record<string, unknown>>(
+    statement: D1PreparedStatement,
+  ) => statement.run<T>();
   const session = {
     prepare(query: string) {
-      return createPostgresPreparedStatement({ query: runQuery }, query, [], `portable-postgres:${schemaName}`);
+      return createPostgresPreparedStatement(
+        { query: runQuery },
+        query,
+        [],
+        `portable-postgres:${schemaName}`,
+      );
     },
     batch: createSequentialBatch(runStatement),
     getBookmark() {
@@ -442,9 +532,14 @@ export async function createSchemaScopedPostgresD1Database(
     },
   };
 
-  const db = {
+  const db: ServerD1Database = {
     prepare(query: string) {
-      return createPostgresPreparedStatement({ query: runQuery }, query, [], `portable-postgres:${schemaName}`);
+      return createPostgresPreparedStatement(
+        { query: runQuery },
+        query,
+        [],
+        `portable-postgres:${schemaName}`,
+      );
     },
     batch: createSequentialBatch(runStatement),
     async exec(query: string) {
@@ -456,12 +551,14 @@ export async function createSchemaScopedPostgresD1Database(
       return session;
     },
     async dump() {
-      throw new Error('DB.dump() is not implemented for the schema-scoped Postgres adapter');
+      throw new Error(
+        "DB.dump() is not implemented for the schema-scoped Postgres adapter",
+      );
     },
     close() {
       void pool.end();
     },
   };
 
-  return db as unknown as ServerD1Database;
+  return db;
 }

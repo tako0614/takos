@@ -2,14 +2,16 @@
  * Workflow Engine – shared types and interfaces
  */
 
-import type { D1Database, Queue } from '../../../shared/types/bindings.ts';
-import type { Conclusion } from 'takos-actions-engine';
-import type { WorkflowJobQueueMessage } from '../../../shared/types/index.ts';
-import type { SelectOf } from '../../../shared/types/drizzle-utils.ts';
-import type { workflowRuns } from '../../../infra/db/index.ts';
-import type * as gitStore from '../git-smart/index.ts';
+import type { D1Database, Queue } from "../../../shared/types/bindings.ts";
+import type { Conclusion } from "takos-actions-engine";
+import type { WorkflowJobQueueMessage } from "../../../shared/types/index.ts";
+import type { SelectOf } from "../../../shared/types/drizzle-utils.ts";
+import type { workflowRuns } from "../../../infra/db/index.ts";
+import type * as gitStore from "../git-smart/index.ts";
 
-export type WorkflowBucket = Parameters<typeof gitStore.getCommitData>[0] & Parameters<typeof gitStore.getBlobAtPath>[0];
+export type WorkflowBucket =
+  & Parameters<typeof gitStore.getCommitData>[0]
+  & Parameters<typeof gitStore.getBlobAtPath>[0];
 
 export interface WorkflowEngineConfig {
   db: D1Database;
@@ -29,7 +31,7 @@ export interface StartRunOptions {
 
 export interface WorkflowJobResult {
   jobId: string;
-  status: 'completed';
+  status: "completed" | "cancelled";
   conclusion: Conclusion;
   outputs: Record<string, string>;
   stepResults: WorkflowStepResult[];
@@ -40,7 +42,7 @@ export interface WorkflowJobResult {
 export interface WorkflowStepResult {
   stepNumber: number;
   name: string;
-  status: 'completed' | 'skipped';
+  status: "completed" | "skipped" | "cancelled";
   conclusion: Conclusion | null;
   exitCode?: number;
   error?: string;

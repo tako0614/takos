@@ -30,7 +30,7 @@ spec:
         - name: oci-orchestrator
           image: "{{ .Values.images.control.repository }}:{{ .Values.images.control.tag }}"
           imagePullPolicy: {{ .Values.images.control.pullPolicy }}
-          command: ["pnpm", "local:oci-orchestrator"]
+          command: ["deno", "task", "dev:local:oci-orchestrator"]
           ports:
             - name: http
               containerPort: {{ .Values.ociOrchestrator.port }}

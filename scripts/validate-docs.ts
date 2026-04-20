@@ -131,7 +131,6 @@ const REQUIRED_CONTROL_SCRIPTS = [
   "dev:local:worker",
   "dev:local:runtime-host",
   "dev:local:executor-host",
-  "dev:local:browser-host",
   "dev:local:oci-orchestrator",
 ];
 const REQUIRED_WRANGLER_CONFIGS = [
@@ -140,7 +139,6 @@ const REQUIRED_WRANGLER_CONFIGS = [
   "wrangler.worker.toml",
   "wrangler.runtime-host.toml",
   "wrangler.executor.toml",
-  "wrangler.browser-host.toml",
 ];
 
 const API_ROUTE_IDENTIFIER_TO_FAMILY: Record<string, string> = {
@@ -159,6 +157,7 @@ const API_ROUTE_IDENTIFIER_TO_FAMILY: Record<string, string> = {
   spacesCommonEnv: "spaces",
   spacesStores: "spaces",
   spacesStoreRegistry: "spaces",
+  spacesTools: "spaces",
   shortcuts: "shortcuts",
   shortcutGroupRoutes: "shortcuts",
   services: "services",
@@ -178,9 +177,9 @@ const API_ROUTE_IDENTIFIER_TO_FAMILY: Record<string, string> = {
   notifications: "notifications",
   createNotificationSseRouter: "notifications",
   pullRequests: "pull-requests",
-  appDeployments: "app-deployments",
-  browserSessions: "browser-sessions",
+  groupDeploymentSnapshots: "group-deployment-snapshots",
   publications: "publications",
+  workersSpaceRoutes: "services",
   billingWebhookHandler: "billing",
   billingRoutes: "billing",
   authApi: "auth",
@@ -396,6 +395,11 @@ function validatePublicContractExamples(
           `[docs] retired manifest fields are not allowed in public contract examples: ${location}`,
         );
       }
+      if (/^\s*provider\s*:/m.test(block.content)) {
+        result.errors.push(
+          `[docs] backend selection fields are not allowed in public manifest examples: ${location}`,
+        );
+      }
       if (/triggers:\s*[\s\S]*?queues:/m.test(block.content)) {
         result.errors.push(
           `[docs] retired queue triggers are not allowed in public contract examples: ${location}`,
@@ -483,13 +487,13 @@ function validateDeployRuntimeContractDocs(
     {
       pattern: /publication の必須 field は `type` と `path`/,
       message:
-        "type/path are required only for route publications; provider publications use provider/kind/spec",
+        "type/path are required only for route publications; Takos capability grants use publisher/type/spec",
       allowContext: /route publication/,
     },
     {
       pattern: /すべての publication (?:は|が).*URL/,
       message:
-        "provider publications do not have route URLs; only route publications expose URL output",
+        "Takos capability grants do not have route URLs; only route publications expose URL output",
       allowContext: /route publication/,
     },
     {
@@ -501,6 +505,22 @@ function validateDeployRuntimeContractDocs(
       pattern: /個別 worker の rollback は deployment history/,
       message:
         "group rollback is group-snapshot only; individual Worker/Container rollback is not current surface",
+    },
+    {
+      pattern:
+        /manifest で宣言される publication \/ binding\s*\(`queue`,\s*`analytics-engine`,\s*`workflow`\)/,
+      message:
+        "queue/analytics/workflow are resource API/runtime binding concerns, not manifest publication/binding fields",
+    },
+    {
+      pattern: /`queue`\s*\(publication \/ binding\)/,
+      message:
+        "queue must be described as resource API/runtime binding, not publication/binding manifest support",
+    },
+    {
+      pattern: /`workflow`[^\n]*binding 可/,
+      message:
+        "workflow must be described as resource API/runtime binding, not manifest publication/binding support",
     },
   ];
 
@@ -721,6 +741,7 @@ function validateManifestDocs(
     "        path: .takos/workflows/deploy.yml",
     "        job: bundle",
     "        artifact: web",
+    "        artifactPath: dist/worker",
     "routes:",
     "  - target: web",
     "    path: /",
@@ -853,7 +874,6 @@ function validatePlatformMatrixDoc(
       "takos-private/.env.server.example",
       "takos-private/compose.server.yml",
       "takos-private/apps/executor",
-      "takos-private/apps/browser",
       "apps/control/SECRETS.md",
       "apps/control/wrangler*.toml",
       "apps/control/.secrets/<env>",
@@ -863,6 +883,37 @@ function validatePlatformMatrixDoc(
     if (!content.includes(snippet)) {
       result.errors.push(
         `[docs] platform matrix is missing tracked template snippet: ${snippet}`,
+      );
+    }
+  }
+}
+
+function validateCompatibilityDocs(
+  docsDir: string,
+  result: ValidationResult,
+): void {
+  const compatibilityDoc = path.join(
+    docsDir,
+    "architecture",
+    "compatibility.md",
+  );
+  if (!isFile(compatibilityDoc)) {
+    result.errors.push("[docs] architecture/compatibility.md is missing");
+    return;
+  }
+
+  const content = readFileSync(compatibilityDoc, "utf8");
+  for (
+    const snippet of [
+      "resource API / runtime binding",
+      "route publication",
+      "Takos capability grant",
+      "backend requirement",
+    ]
+  ) {
+    if (!content.includes(snippet)) {
+      result.errors.push(
+        `[docs] compatibility doc is missing current resource/runtime wording: ${snippet}`,
       );
     }
   }
@@ -890,7 +941,7 @@ function validateApiDocs(
   const content = readFileSync(apiDoc, "utf8");
   for (
     const snippet of [
-      "/api/spaces/:spaceId/app-deployments",
+      "/api/spaces/:spaceId/group-deployment-snapshots",
       "/api/runs/:id/sse",
       "/api/notifications/sse",
       "/api/services/:id/custom-domains",
@@ -993,7 +1044,7 @@ const DOC_ENDPOINT_RE =
  * Current cases: shortcuts.ts exports both a /shortcuts-mounted router and
  * root-mounted shortcut-group routes whose paths start with /spaces/.
  */
-const ABSOLUTE_PATH_SIGNALS = ["/spaces/", "/workspaces/"];
+const ABSOLUTE_PATH_SIGNALS = ["/spaces/"];
 
 function resolveEndpointMount(relPath: string): string {
   const norm = relPath.replace(/\\/g, "/");
@@ -1034,17 +1085,13 @@ function extractSourceApiEndpoints(repoRoot: string): Set<string> {
 
       // If the path looks like a root-scoped route (e.g. shortcut group
       // routes in shortcuts.ts that start with /spaces/), skip the mount prefix.
-      const full = mount && ABSOLUTE_PATH_SIGNALS.some((h) =>
-          routePath.startsWith(h)
-        )
+      const full = rel === "workers/routes.ts" &&
+          routePath === "/:spaceId/services"
+        ? `/api/spaces${routePath}`
+        : mount && ABSOLUTE_PATH_SIGNALS.some((h) => routePath.startsWith(h))
         ? `/api${routePath}`
         : `/api${mount}${routePath}`;
       endpoints.add(`${method} ${full}`);
-
-      // /workspaces/:id is an alias for /spaces/:id — add both
-      if (full.includes("/workspaces/")) {
-        endpoints.add(`${method} ${full.replace("/workspaces/", "/spaces/")}`);
-      }
     }
   }
 
@@ -1103,11 +1150,10 @@ function validateApiEndpointCoverage(
   }
 
   // Known exceptions that the static scanner cannot resolve:
-  // - /workspaces/ is a documented alias of /spaces/ (only /spaces/ in tables)
   // - Billing webhook handler is mounted separately from billing routes
   //   but lives in the same source file, so the scanner applies the wrong prefix
   const isKnownException = (e: string) =>
-    e.includes("/workspaces/") || e === "POST /api/billing/";
+    e === "POST /api/billing/";
 
   const undocumented = [...sourceNorm.entries()]
     .filter(([n]) => !docNorm.has(n))
@@ -1340,6 +1386,7 @@ function main(): void {
   validateApiDocs(repoRoot, docsDir, result);
   validateApiEndpointCoverage(repoRoot, docsDir, result);
   validatePlatformMatrixDoc(docsDir, result);
+  validateCompatibilityDocs(docsDir, result);
   validateSupplementalDocs(repoRoot, result);
   validateCurrentTruthFiles(repoRoot, docsDir, result);
   validatePrimaryDocsStructure(docsDir, result);

@@ -1,50 +1,46 @@
-import { Hono } from 'hono';
-import { z } from 'zod';
-import type { Env } from '../../../shared/types/index.ts';
-import { zValidator } from '../zod-validator.ts';
+import { Hono } from "hono";
+import { z } from "zod";
+import type { Env } from "../../../shared/types/index.ts";
+import { zValidator } from "../zod-validator.ts";
 import {
   discardSession,
   resumeSession,
   startSession,
   stopSession,
-} from './lifecycle.ts';
-import {
-  getSessionHealth,
-  heartbeatSession,
-} from './heartbeat.ts';
+} from "./lifecycle.ts";
+import { getSessionHealth, heartbeatSession } from "./heartbeat.ts";
 import {
   authenticateServiceRequest,
   serviceAuthError,
   toJwtHeartbeatPayload,
-} from './auth.ts';
-import type { BaseVariables } from '../route-auth.ts';
+} from "./auth.ts";
+import type { BaseVariables } from "../route-auth.ts";
 
 const sessions = new Hono<{ Bindings: Env; Variables: BaseVariables }>();
-const startSessionSchema = z.object({ repo_id: z.string(), branch: z.string().optional() });
+const startSessionSchema = z.object({
+  repo_id: z.string(),
+  branch: z.string().optional(),
+});
 const stopSessionSchema = z.object({ commit_message: z.string().optional() });
 
 sessions.post(
-  '/spaces/:spaceId/sessions',
-  zValidator('json', startSessionSchema),
-  async (c) => startSession(c, c.req.valid('json' as never) as z.infer<typeof startSessionSchema>),
+  "/spaces/:spaceId/sessions",
+  zValidator("json", startSessionSchema),
+  async (c) =>
+    startSession(c, c.req.valid("json") as z.infer<typeof startSessionSchema>),
 );
 
 sessions.post(
-  '/workspaces/:workspaceId/sessions',
-  zValidator('json', startSessionSchema),
-  async (c) => startSession(c, c.req.valid('json' as never) as z.infer<typeof startSessionSchema>),
+  "/sessions/:sessionId/stop",
+  zValidator("json", stopSessionSchema),
+  async (c) =>
+    stopSession(c, c.req.valid("json") as z.infer<typeof stopSessionSchema>),
 );
 
-sessions.post(
-  '/sessions/:sessionId/stop',
-  zValidator('json', stopSessionSchema),
-  async (c) => stopSession(c, c.req.valid('json' as never) as z.infer<typeof stopSessionSchema>),
-);
+sessions.post("/sessions/:sessionId/resume", resumeSession);
+sessions.post("/sessions/:sessionId/discard", discardSession);
 
-sessions.post('/sessions/:sessionId/resume', resumeSession);
-sessions.post('/sessions/:sessionId/discard', discardSession);
-
-sessions.post('/sessions/:sessionId/heartbeat', async (c) => {
+sessions.post("/sessions/:sessionId/heartbeat", async (c) => {
   const payload = await authenticateServiceRequest(c);
   if (!payload) {
     return serviceAuthError(c);
@@ -52,6 +48,6 @@ sessions.post('/sessions/:sessionId/heartbeat', async (c) => {
   return heartbeatSession(c, toJwtHeartbeatPayload(payload));
 });
 
-sessions.get('/sessions/:sessionId/health', getSessionHealth);
+sessions.get("/sessions/:sessionId/health", getSessionHealth);
 
 export default sessions;

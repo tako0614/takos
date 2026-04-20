@@ -1,25 +1,33 @@
 // ---------------------------------------------------------------------------
-// Filtering and sorting logic for takopack packages
+// Filtering and sorting logic for release-backed packages
 // ---------------------------------------------------------------------------
 
-import type { PackageWithTakopack, TakopackRatingStats } from './explore-package-types.ts';
+import type {
+  PackageRatingStats,
+  PackageWithRelease,
+} from "./explore-package-types.ts";
 
-export const SORT_ALIASES: Record<string, string> = { popular: 'downloads', new: 'created' };
+export const SORT_ALIASES: Record<string, string> = {
+  popular: "downloads",
+  new: "created",
+};
 
 export function filterPackages(
-  packages: PackageWithTakopack[],
+  packages: PackageWithRelease[],
   category: string | undefined,
   tags: string[],
-): PackageWithTakopack[] {
+): PackageWithRelease[] {
   let filtered = packages;
 
   if (category) {
-    filtered = filtered.filter((p) => p.primaryAsset.bundle_meta?.category === category);
+    filtered = filtered.filter((p) =>
+      p.primaryAsset?.bundle_meta?.category === category
+    );
   }
   if (tags.length > 0) {
     filtered = filtered.filter((p) => {
-      const pkgTags = (p.primaryAsset.bundle_meta?.tags || [])
-        .map((t) => String(t || '').trim().toLowerCase())
+      const pkgTags = (p.primaryAsset?.bundle_meta?.tags || [])
+        .map((t) => String(t || "").trim().toLowerCase())
         .filter(Boolean);
       if (pkgTags.length === 0) return false;
       return tags.every((tag) => pkgTags.includes(tag));
@@ -30,12 +38,12 @@ export function filterPackages(
 }
 
 export function sortPackages(
-  packages: PackageWithTakopack[],
+  packages: PackageWithRelease[],
   sortParam: string,
   sortParamRaw: string,
-  ratingStatsByRepoId: Map<string, TakopackRatingStats>,
+  ratingStatsByRepoId: Map<string, PackageRatingStats>,
 ): void {
-  if (sortParam === 'rating') {
+  if (sortParam === "rating") {
     packages.sort((a, b) => {
       const ra = ratingStatsByRepoId.get(a.release.repository.id);
       const rb = ratingStatsByRepoId.get(b.release.repository.id);
@@ -45,30 +53,44 @@ export function sortPackages(
       const cnta = ra?.rating_count ?? 0;
       const cntb = rb?.rating_count ?? 0;
       if (cnta !== cntb) return cntb - cnta;
-      if (a.totalDownloads !== b.totalDownloads) return b.totalDownloads - a.totalDownloads;
+      if (a.totalDownloads !== b.totalDownloads) {
+        return b.totalDownloads - a.totalDownloads;
+      }
       return getPublishedMs(b) - getPublishedMs(a);
     });
-  } else if (sortParamRaw === 'trending') {
+  } else if (sortParamRaw === "trending") {
     const nowMs = Date.now();
     packages.sort((a, b) => {
       const aMs = getPublishedMs(a);
       const bMs = getPublishedMs(b);
-      const aAgeDays = aMs ? Math.max(0, (nowMs - aMs) / (1000 * 60 * 60 * 24)) : 3650;
-      const bAgeDays = bMs ? Math.max(0, (nowMs - bMs) / (1000 * 60 * 60 * 24)) : 3650;
+      const aAgeDays = aMs
+        ? Math.max(0, (nowMs - aMs) / (1000 * 60 * 60 * 24))
+        : 3650;
+      const bAgeDays = bMs
+        ? Math.max(0, (nowMs - bMs) / (1000 * 60 * 60 * 24))
+        : 3650;
       const aStars = a.release.repository.stars || 0;
       const bStars = b.release.repository.stars || 0;
-      const aScore = (Math.log10(a.totalDownloads + 1) + Math.log10(aStars + 1)) / (aAgeDays + 2);
-      const bScore = (Math.log10(b.totalDownloads + 1) + Math.log10(bStars + 1)) / (bAgeDays + 2);
+      const aScore =
+        (Math.log10(a.totalDownloads + 1) + Math.log10(aStars + 1)) /
+        (aAgeDays + 2);
+      const bScore =
+        (Math.log10(b.totalDownloads + 1) + Math.log10(bStars + 1)) /
+        (bAgeDays + 2);
       if (aScore !== bScore) return bScore - aScore;
-      if (a.totalDownloads !== b.totalDownloads) return b.totalDownloads - a.totalDownloads;
+      if (a.totalDownloads !== b.totalDownloads) {
+        return b.totalDownloads - a.totalDownloads;
+      }
       return bMs - aMs;
     });
-  } else if (sortParam === 'downloads') {
+  } else if (sortParam === "downloads") {
     packages.sort((a, b) => {
-      if (a.totalDownloads !== b.totalDownloads) return b.totalDownloads - a.totalDownloads;
+      if (a.totalDownloads !== b.totalDownloads) {
+        return b.totalDownloads - a.totalDownloads;
+      }
       return getPublishedMs(b) - getPublishedMs(a);
     });
-  } else if (sortParam === 'created') {
+  } else if (sortParam === "created") {
     packages.sort((a, b) => {
       const pa = getPublishedMs(a);
       const pb = getPublishedMs(b);
@@ -78,6 +100,8 @@ export function sortPackages(
   }
 }
 
-export function getPublishedMs(pkg: PackageWithTakopack): number {
-  return pkg.release.publishedAt ? new Date(pkg.release.publishedAt).getTime() : 0;
+export function getPublishedMs(pkg: PackageWithRelease): number {
+  return pkg.release.publishedAt
+    ? new Date(pkg.release.publishedAt).getTime()
+    : 0;
 }

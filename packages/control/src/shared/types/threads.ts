@@ -1,10 +1,10 @@
-export type ThreadStatus = 'active' | 'archived' | 'deleted';
+export type ThreadStatus = "active" | "archived" | "deleted";
 
 export interface Thread {
   id: string;
   space_id: string;
   title: string | null;
-  locale?: 'ja' | 'en' | null;
+  locale?: "ja" | "en" | null;
   status: ThreadStatus;
   summary?: string | null;
   key_points?: string;
@@ -16,9 +16,9 @@ export interface Thread {
 
 /**
  * Canonical MessageRole definition.
- * Duplicated in takos-agent/packages/computer-core/src/shared/types.ts (cross-repo boundary).
+ * Shared by Takos control and agent runtime surfaces.
  */
-export type MessageRole = 'user' | 'assistant' | 'system' | 'tool';
+export type MessageRole = "user" | "assistant" | "system" | "tool";
 
 export interface Message {
   id: string;

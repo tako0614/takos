@@ -1,16 +1,22 @@
-import { parentPort } from 'node:worker_threads';
-import vm from 'node:vm';
-import { TOOL_NAME_PATTERN, DEFAULT_TIMEOUT_MS, MAX_TIMEOUT_MS } from '../../shared/config.ts';
-import { getErrorMessage } from 'takos-common/errors';
-import { createLogger } from 'takos-common/logger';
-import { Buffer } from "node:buffer";
+import { parentPort } from "node:worker_threads";
+import vm from "node:vm";
 import {
+  DEFAULT_TIMEOUT_MS,
+  MAX_TIMEOUT_MS,
+  TOOL_NAME_PATTERN,
+} from "../../shared/config.ts";
+import { getErrorMessage } from "takos-common/errors";
+import { createLogger } from "takos-common/logger";
+import { Buffer } from "node:buffer";
+import { createSandboxFilesystem } from "./filesystem.ts";
+import {
+  assertOutboundUrlAllowed,
   normalizeAllowedDomains,
   parseFetchUrl,
-  assertOutboundUrlAllowed,
-} from './network.ts';
+} from "./network.ts";
+import { parseFilePermission } from "./permissions.ts";
 
-const logger = createLogger({ service: 'takos-runtime' });
+const logger = createLogger({ service: "takos-runtime" });
 
 /**
  * Tool Worker — executes user-defined tool code in a Node.js vm context.
@@ -37,6 +43,7 @@ type ToolRequest = {
   secrets: Record<string, string>;
   config: Record<string, unknown>;
   allowedDomains: string[];
+  filePermission: "read" | "write" | "none";
   timeout: number;
 };
 
@@ -62,14 +69,14 @@ type SandboxSetTimeout = (
 type SandboxClearTimeout = (timerId: SandboxTimer) => void;
 
 const TRUST_MODEL_NOTE =
-  'tool-worker vm is not a strong security boundary; only trusted workspace code is supported';
+  "tool-worker vm is not a strong security boundary; only trusted workspace code is supported";
 
 if (!parentPort) {
-  throw new Error('Tool worker started without parent port');
+  throw new Error("Tool worker started without parent port");
 }
 
 function clampTimeout(timeout: unknown): number {
-  if (typeof timeout !== 'number' || !Number.isFinite(timeout)) {
+  if (typeof timeout !== "number" || !Number.isFinite(timeout)) {
     return DEFAULT_TIMEOUT_MS;
   }
   return Math.min(Math.max(Math.floor(timeout), 1), MAX_TIMEOUT_MS);
@@ -77,14 +84,17 @@ function clampTimeout(timeout: unknown): number {
 
 function toPlainRecord(value: unknown, label: string): Record<string, unknown> {
   if (value === null || value === undefined) return {};
-  if (typeof value !== 'object' || Array.isArray(value)) {
+  if (typeof value !== "object" || Array.isArray(value)) {
     throw new Error(`${label} must be an object`);
   }
   return { ...(value as Record<string, unknown>) };
 }
 
-function deepFreeze<T>(value: T, visited: WeakSet<object> = new WeakSet<object>()): T {
-  if (!value || typeof value !== 'object') {
+function deepFreeze<T>(
+  value: T,
+  visited: WeakSet<object> = new WeakSet<object>(),
+): T {
+  if (!value || typeof value !== "object") {
     return value;
   }
 
@@ -103,14 +113,14 @@ function deepFreeze<T>(value: T, visited: WeakSet<object> = new WeakSet<object>(
 }
 
 function serializeToolOutput(result: unknown): string {
-  if (typeof result === 'string') return result;
-  return JSON.stringify(result, null, 2) ?? 'null';
+  if (typeof result === "string") return result;
+  return JSON.stringify(result, null, 2) ?? "null";
 }
 
 function postResult(startTime: number, result: Partial<ToolResult>): void {
   const response: ToolResult = {
     success: result.success ?? false,
-    output: result.output ?? '',
+    output: result.output ?? "",
     error: result.error,
     executionTime: Date.now() - startTime,
   };
@@ -125,22 +135,27 @@ function createSandboxTimers(timeoutMs: number): {
   const activeTimers = new Set<SandboxTimer>();
 
   const sandboxSetTimeout: SandboxSetTimeout = (handler, delay, ...args) => {
-    if (typeof handler !== 'function') {
-      throw new Error('setTimeout handler must be a function');
+    if (typeof handler !== "function") {
+      throw new Error("setTimeout handler must be a function");
     }
     if (activeTimers.size >= MAX_ACTIVE_TIMERS) {
       throw new Error(`Timer limit exceeded (max ${MAX_ACTIVE_TIMERS})`);
     }
 
-    const numericDelay = typeof delay === 'number' && Number.isFinite(delay) ? delay : 0;
-    const clampedDelay = Math.max(0, Math.min(Math.floor(numericDelay), timeoutMs));
+    const numericDelay = typeof delay === "number" && Number.isFinite(delay)
+      ? delay
+      : 0;
+    const clampedDelay = Math.max(
+      0,
+      Math.min(Math.floor(numericDelay), timeoutMs),
+    );
 
     const timer = setTimeout(() => {
       activeTimers.delete(timer);
       try {
         handler(...args);
       } catch (err) {
-        logger.error('[Tool Timer Error]', { error: getErrorMessage(err) });
+        logger.error("[Tool Timer Error]", { error: getErrorMessage(err) });
       }
     }, clampedDelay);
     activeTimers.add(timer);
@@ -167,42 +182,57 @@ function createSandboxTimers(timeoutMs: number): {
   };
 }
 
-parentPort.on('message', async (message: ToolRequest) => {
+parentPort.on("message", async (message: ToolRequest) => {
   const startTime = Date.now();
   const timeout = clampTimeout(message.timeout);
 
   try {
     if (!TOOL_NAME_PATTERN.test(message.toolName)) {
-      throw new Error('Invalid toolName format');
+      throw new Error("Invalid toolName format");
     }
-    if (typeof message.code !== 'string' || message.code.trim().length === 0) {
-      throw new Error('Tool code is required');
+    if (typeof message.code !== "string" || message.code.trim().length === 0) {
+      throw new Error("Tool code is required");
     }
-    if (Buffer.byteLength(message.code, 'utf-8') > MAX_TOOL_CODE_BYTES) {
-      throw new Error(`Tool code exceeds size limit (${MAX_TOOL_CODE_BYTES} bytes)`);
+    if (Buffer.byteLength(message.code, "utf-8") > MAX_TOOL_CODE_BYTES) {
+      throw new Error(
+        `Tool code exceeds size limit (${MAX_TOOL_CODE_BYTES} bytes)`,
+      );
     }
 
     const allowedDomains = normalizeAllowedDomains(message.allowedDomains);
-    const parameters = deepFreeze(toPlainRecord(message.parameters, 'parameters'));
-    const secrets = deepFreeze(toPlainRecord(message.secrets, 'secrets'));
-    const config = deepFreeze(toPlainRecord(message.config, 'config'));
+    const filePermission = parseFilePermission(message.filePermission);
+    const parameters = deepFreeze(
+      toPlainRecord(message.parameters, "parameters"),
+    );
+    const secrets = deepFreeze(toPlainRecord(message.secrets, "secrets"));
+    const config = deepFreeze(toPlainRecord(message.config, "config"));
     const timers = createSandboxTimers(timeout);
+    const filesystem = createSandboxFilesystem(filePermission, process.cwd());
 
     let activeFetchCount = 0;
 
-    const restrictedFetch = async (url: unknown, init?: RequestInit): Promise<Response> => {
+    const restrictedFetch = async (
+      url: unknown,
+      init?: RequestInit,
+    ): Promise<Response> => {
       if (activeFetchCount >= MAX_CONCURRENT_FETCHES) {
-        throw new Error(`Fetch concurrency limit exceeded (max ${MAX_CONCURRENT_FETCHES})`);
+        throw new Error(
+          `Fetch concurrency limit exceeded (max ${MAX_CONCURRENT_FETCHES})`,
+        );
       }
       activeFetchCount++;
       try {
         let targetUrl = parseFetchUrl(url);
         let requestInit: RequestInit = {
           ...init,
-          redirect: 'manual',
+          redirect: "manual",
         };
 
-        for (let redirectCount = 0; redirectCount <= MAX_FETCH_REDIRECTS; redirectCount++) {
+        for (
+          let redirectCount = 0;
+          redirectCount <= MAX_FETCH_REDIRECTS;
+          redirectCount++
+        ) {
           await assertOutboundUrlAllowed(targetUrl, allowedDomains);
           const response = await fetch(targetUrl, requestInit);
 
@@ -210,23 +240,36 @@ parentPort.on('message', async (message: ToolRequest) => {
             return response;
           }
 
-          const locationHeader = response.headers.get('location');
+          const locationHeader = response.headers.get("location");
           if (!locationHeader) {
-            throw new Error(`Network access denied: redirect response from ${targetUrl.hostname} missing location`);
+            throw new Error(
+              `Network access denied: redirect response from ${targetUrl.hostname} missing location`,
+            );
           }
           if (redirectCount >= MAX_FETCH_REDIRECTS) {
-            throw new Error(`Network access denied: too many redirects (max ${MAX_FETCH_REDIRECTS})`);
+            throw new Error(
+              `Network access denied: too many redirects (max ${MAX_FETCH_REDIRECTS})`,
+            );
           }
 
           const nextUrl = new URL(locationHeader, targetUrl);
-          const method = (requestInit.method ?? 'GET').toUpperCase();
-          if ((response.status === 307 || response.status === 308) && requestInit.body !== undefined) {
-            throw new Error('Network access denied: redirected requests with body are not supported');
+          const method = (requestInit.method ?? "GET").toUpperCase();
+          if (
+            (response.status === 307 || response.status === 308) &&
+            requestInit.body !== undefined
+          ) {
+            throw new Error(
+              "Network access denied: redirected requests with body are not supported",
+            );
           }
-          if (response.status === 303 || ((response.status === 301 || response.status === 302) && method === 'POST')) {
+          if (
+            response.status === 303 ||
+            ((response.status === 301 || response.status === 302) &&
+              method === "POST")
+          ) {
             requestInit = {
               ...requestInit,
-              method: 'GET',
+              method: "GET",
               body: undefined,
             };
           }
@@ -234,21 +277,26 @@ parentPort.on('message', async (message: ToolRequest) => {
           targetUrl = nextUrl;
         }
 
-        throw new Error(`Network access denied: too many redirects (max ${MAX_FETCH_REDIRECTS})`);
+        throw new Error(
+          `Network access denied: too many redirects (max ${MAX_FETCH_REDIRECTS})`,
+        );
       } finally {
         activeFetchCount--;
       }
     };
 
-    logger.warn('[ToolWorker] ' + TRUST_MODEL_NOTE, { toolName: message.toolName });
+    logger.warn("[ToolWorker] " + TRUST_MODEL_NOTE, {
+      toolName: message.toolName,
+    });
 
     const sandboxContext = {
       fetch: restrictedFetch,
+      fs: filesystem,
       // eslint-disable-next-line no-console -- intentional console proxy for sandboxed tool output
       console: Object.freeze({
-        log: (...args: unknown[]) => console.log('[Tool]', ...args),
-        error: (...args: unknown[]) => console.error('[Tool]', ...args),
-        warn: (...args: unknown[]) => console.warn('[Tool]', ...args),
+        log: (...args: unknown[]) => console.log("[Tool]", ...args),
+        error: (...args: unknown[]) => console.error("[Tool]", ...args),
+        warn: (...args: unknown[]) => console.warn("[Tool]", ...args),
       }),
       parameters,
       secrets,
@@ -281,7 +329,7 @@ parentPort.on('message', async (message: ToolRequest) => {
         const exports = {};
         const module = { exports };
         const requestedToolName = ${JSON.stringify(message.toolName)};
-        const { fetch, console, parameters, secrets, config, setTimeout, clearTimeout } = sandbox;
+        const { fetch, fs, console, parameters, secrets, config, setTimeout, clearTimeout } = sandbox;
 
         ${message.code}
 
@@ -296,18 +344,18 @@ parentPort.on('message', async (message: ToolRequest) => {
           throw new Error('Tool function not found: ' + requestedToolName);
         }
 
-        return await toolFn(parameters, { secrets, config, fetch });
+        return await toolFn(parameters, { secrets, config, fetch, fs });
       })
     `;
 
-    const script = new vm.Script(wrappedCode, { filename: 'tool-worker.js' });
+    const script = new vm.Script(wrappedCode, { filename: "tool-worker.js" });
     let executionTimer: ReturnType<typeof setTimeout> | undefined;
     let result: unknown;
 
     try {
       const runner = script.runInContext(context);
-      if (typeof runner !== 'function') {
-        throw new Error('Tool runner initialization failed');
+      if (typeof runner !== "function") {
+        throw new Error("Tool runner initialization failed");
       }
 
       result = await Promise.race([
@@ -324,8 +372,10 @@ parentPort.on('message', async (message: ToolRequest) => {
     }
 
     const output = serializeToolOutput(result);
-    if (Buffer.byteLength(output, 'utf-8') > MAX_OUTPUT_BYTES) {
-      throw new Error(`Tool output exceeds size limit (${MAX_OUTPUT_BYTES} bytes)`);
+    if (Buffer.byteLength(output, "utf-8") > MAX_OUTPUT_BYTES) {
+      throw new Error(
+        `Tool output exceeds size limit (${MAX_OUTPUT_BYTES} bytes)`,
+      );
     }
 
     postResult(startTime, { success: true, output });

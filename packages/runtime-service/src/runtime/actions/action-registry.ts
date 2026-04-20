@@ -1,14 +1,17 @@
-import * as fs from 'node:fs/promises';
-import type { Dirent } from 'node:fs';
-import * as path from 'node:path';
-import * as os from 'node:os';
-import { createHash } from 'node:crypto';
-import { parse as parseYaml } from 'yaml';
-import type { ActionRuns, ActionOutputDefinition } from './composite-executor.ts';
-import { cloneAndCheckout } from '../git.ts';
-import { createLogger } from 'takos-common/logger';
+import * as fs from "node:fs/promises";
+import type { Dirent } from "node:fs";
+import * as path from "node:path";
+import * as os from "node:os";
+import { createHash } from "node:crypto";
+import { parse as parseYaml } from "yaml";
+import type {
+  ActionOutputDefinition,
+  ActionRuns,
+} from "./composite-executor.ts";
+import { cloneAndCheckout } from "../git.ts";
+import { createLogger } from "takos-common/logger";
 
-const logger = createLogger({ service: 'takos-runtime' });
+const logger = createLogger({ service: "takos-runtime" });
 
 // ===========================================================================
 // --- Action metadata loading ---
@@ -37,24 +40,31 @@ export interface ActionMetadata {
 // ---------------------------------------------------------------------------
 
 const ALLOWED_ACTION_KEYS = new Set([
-  'name', 'author', 'description', 'branding',
-  'inputs', 'outputs', 'runs',
+  "name",
+  "author",
+  "description",
+  "branding",
+  "inputs",
+  "outputs",
+  "runs",
 ]);
 
-export async function loadActionMetadata(actionDir: string): Promise<ActionMetadata> {
-  const actionYmlPath = path.join(actionDir, 'action.yml');
-  const actionYamlPath = path.join(actionDir, 'action.yaml');
+export async function loadActionMetadata(
+  actionDir: string,
+): Promise<ActionMetadata> {
+  const actionYmlPath = path.join(actionDir, "action.yml");
+  const actionYamlPath = path.join(actionDir, "action.yaml");
 
   let actionContent: string;
   try {
-    actionContent = await fs.readFile(actionYmlPath, 'utf-8');
+    actionContent = await fs.readFile(actionYmlPath, "utf-8");
   } catch {
-    actionContent = await fs.readFile(actionYamlPath, 'utf-8');
+    actionContent = await fs.readFile(actionYamlPath, "utf-8");
   }
 
   const parsed = parseYaml(actionContent);
-  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
-    throw new Error('Invalid action.yml format: expected a YAML mapping');
+  if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+    throw new Error("Invalid action.yml format: expected a YAML mapping");
   }
 
   const record = parsed as Record<string, unknown>;
@@ -68,25 +78,34 @@ export async function loadActionMetadata(actionDir: string): Promise<ActionMetad
 
   // Validate runs structure
   if (record.runs !== undefined) {
-    if (typeof record.runs !== 'object' || record.runs === null || Array.isArray(record.runs)) {
+    if (
+      typeof record.runs !== "object" || record.runs === null ||
+      Array.isArray(record.runs)
+    ) {
       throw new Error('Invalid action.yml: "runs" must be an object');
     }
     const runs = record.runs as Record<string, unknown>;
-    if (typeof runs.using !== 'string') {
+    if (typeof runs.using !== "string") {
       throw new Error('Invalid action.yml: "runs.using" must be a string');
     }
   }
 
   // Validate inputs structure
   if (record.inputs !== undefined) {
-    if (typeof record.inputs !== 'object' || record.inputs === null || Array.isArray(record.inputs)) {
+    if (
+      typeof record.inputs !== "object" || record.inputs === null ||
+      Array.isArray(record.inputs)
+    ) {
       throw new Error('Invalid action.yml: "inputs" must be an object');
     }
   }
 
   // Validate outputs structure
   if (record.outputs !== undefined) {
-    if (typeof record.outputs !== 'object' || record.outputs === null || Array.isArray(record.outputs)) {
+    if (
+      typeof record.outputs !== "object" || record.outputs === null ||
+      Array.isArray(record.outputs)
+    ) {
       throw new Error('Invalid action.yml: "outputs" must be an object');
     }
   }
@@ -98,17 +117,19 @@ export async function loadActionMetadata(actionDir: string): Promise<ActionMetad
 // Action reference parsing
 // ---------------------------------------------------------------------------
 
-export function parseActionRef(action: string): { owner: string; repo: string; actionPath: string; ref: string } {
-  const atIndex = action.indexOf('@');
-  const refPart = atIndex >= 0 ? action.slice(atIndex + 1) : 'main';
+export function parseActionRef(
+  action: string,
+): { owner: string; repo: string; actionPath: string; ref: string } {
+  const atIndex = action.indexOf("@");
+  const refPart = atIndex >= 0 ? action.slice(atIndex + 1) : "main";
   const pathPart = atIndex >= 0 ? action.slice(0, atIndex) : action;
-  const parts = pathPart.split('/');
+  const parts = pathPart.split("/");
 
   return {
-    owner: parts[0] || '',
-    repo: parts[1] || '',
-    actionPath: parts.slice(2).join('/'),
-    ref: refPart || 'main',
+    owner: parts[0] || "",
+    repo: parts[1] || "",
+    actionPath: parts.slice(2).join("/"),
+    ref: refPart || "main",
   };
 }
 
@@ -127,14 +148,14 @@ export function validateActionComponent(value: string, label: string): void {
 // ---------------------------------------------------------------------------
 
 function normalizeInputValue(value: unknown): string {
-  if (value === null || value === undefined) return '';
-  if (typeof value === 'boolean') return value ? 'true' : 'false';
+  if (value === null || value === undefined) return "";
+  if (typeof value === "boolean") return value ? "true" : "false";
   return String(value);
 }
 
 export function resolveInputs(
   definitions: Record<string, ActionInputDefinition> | undefined,
-  provided: Record<string, unknown>
+  provided: Record<string, unknown>,
 ): { resolvedInputs: Record<string, string>; missing: string[] } {
   const resolvedInputs: Record<string, string> = {};
   const missing: string[] = [];
@@ -153,7 +174,7 @@ export function resolveInputs(
 
       let value = providedMap.get(normalized)?.value;
       if (value === undefined) {
-        if (def && Object.prototype.hasOwnProperty.call(def, 'default')) {
+        if (def && Object.prototype.hasOwnProperty.call(def, "default")) {
           value = def.default;
         } else if (def?.required) {
           missing.push(name);
@@ -175,23 +196,25 @@ export function resolveInputs(
   return { resolvedInputs, missing };
 }
 
-export function buildInputEnv(inputs: Record<string, string>): Record<string, string> {
+export function buildInputEnv(
+  inputs: Record<string, string>,
+): Record<string, string> {
   const env: Record<string, string> = {};
   for (const [key, value] of Object.entries(inputs)) {
-    env[`INPUT_${key.replace(/[^A-Za-z0-9_]/g, '_').toUpperCase()}`] = value;
+    env[`INPUT_${key.replace(/[^A-Za-z0-9_]/g, "_").toUpperCase()}`] = value;
   }
   return env;
 }
 
 // ===========================================================================
-// --- Action cache & marketplace fetching ---
+// --- Action cache & Store action fetching ---
 // ===========================================================================
 
 // ---------------------------------------------------------------------------
 // Constants
 // ---------------------------------------------------------------------------
 
-export const ACTION_CACHE_DIR = path.join(os.tmpdir(), 'takos-actions-cache');
+export const ACTION_CACHE_DIR = path.join(os.tmpdir(), "takos-actions-cache");
 const ACTION_CACHE_MAX_ENTRIES = 30;
 const ACTION_CACHE_MAX_BYTES = 2 * 1024 * 1024 * 1024; // 2GB
 const GET_DIR_SIZE_MAX_DEPTH = 10;
@@ -209,7 +232,10 @@ let actionCachePrunePromise: Promise<void> | null = null;
 // Symlink safety
 // ---------------------------------------------------------------------------
 
-async function removeEscapingSymlinks(dir: string, boundary: string): Promise<void> {
+async function removeEscapingSymlinks(
+  dir: string,
+  boundary: string,
+): Promise<void> {
   const resolvedBoundary = path.resolve(boundary);
   let entries: Array<Dirent>;
   try {
@@ -224,18 +250,26 @@ async function removeEscapingSymlinks(dir: string, boundary: string): Promise<vo
       const lstats = await fs.lstat(entryPath);
       if (lstats.isSymbolicLink()) {
         const target = await fs.realpath(entryPath).catch(() => null);
-        const isWithinBoundary = target !== null
-          && (target === resolvedBoundary || target.startsWith(resolvedBoundary + path.sep));
+        const isWithinBoundary = target !== null &&
+          (target === resolvedBoundary ||
+            target.startsWith(resolvedBoundary + path.sep));
         if (!isWithinBoundary) {
           await fs.unlink(entryPath).catch((e) => {
-            logger.warn('Failed to unlink escaping symlink (non-critical)', { module: 'action-registry', path: entryPath, error: e });
+            logger.warn("Failed to unlink escaping symlink (non-critical)", {
+              module: "action-registry",
+              path: entryPath,
+              error: e,
+            });
           });
         }
       } else if (lstats.isDirectory()) {
         await removeEscapingSymlinks(entryPath, boundary);
       }
     } catch (e) {
-      logger.warn('Failed to stat entry during symlink cleanup (non-critical)', { module: 'action-registry', path: entryPath, error: e });
+      logger.warn(
+        "Failed to stat entry during symlink cleanup (non-critical)",
+        { module: "action-registry", path: entryPath, error: e },
+      );
     }
   }
 }
@@ -258,7 +292,7 @@ function evictActionRepoCache(): void {
 async function getDirectorySize(
   targetPath: string,
   depth: number = 0,
-  visited: Set<string> = new Set()
+  visited: Set<string> = new Set(),
 ): Promise<number> {
   if (depth >= GET_DIR_SIZE_MAX_DEPTH) {
     return 0;
@@ -317,7 +351,8 @@ async function pruneActionCache(keepPaths: string[] = []): Promise<void> {
       return;
     }
 
-    const cacheEntries: Array<{ path: string; mtime: number; size: number }> = [];
+    const cacheEntries: Array<{ path: string; mtime: number; size: number }> =
+      [];
 
     for (const entry of entries) {
       if (!entry.isDirectory()) continue;
@@ -342,7 +377,10 @@ async function pruneActionCache(keepPaths: string[] = []): Promise<void> {
     let totalEntries = cacheEntries.length;
 
     for (const entry of cacheEntries) {
-      if (totalEntries <= ACTION_CACHE_MAX_ENTRIES && totalSize <= ACTION_CACHE_MAX_BYTES) {
+      if (
+        totalEntries <= ACTION_CACHE_MAX_ENTRIES &&
+        totalSize <= ACTION_CACHE_MAX_BYTES
+      ) {
         break;
       }
       try {
@@ -363,7 +401,7 @@ async function pruneActionCache(keepPaths: string[] = []): Promise<void> {
 }
 
 // ---------------------------------------------------------------------------
-// Marketplace repo fetching
+// Store action repo fetching
 // ---------------------------------------------------------------------------
 
 export interface ActionRefInfo {
@@ -373,9 +411,9 @@ export interface ActionRefInfo {
   ref: string;
 }
 
-export async function fetchMarketplaceRepo(
+export async function fetchStoreActionRepo(
   actionRef: ActionRefInfo,
-  env: Record<string, string>
+  env: Record<string, string>,
 ): Promise<string> {
   const cacheKey = `${actionRef.owner}/${actionRef.repo}@${actionRef.ref}`;
 
@@ -394,10 +432,16 @@ export async function fetchMarketplaceRepo(
 
   const fetchPromise = (async () => {
     await fs.mkdir(ACTION_CACHE_DIR, { recursive: true });
-    const hash = createHash('sha256').update(cacheKey).digest('hex').slice(0, 16);
-    const repoDir = path.join(ACTION_CACHE_DIR, `${actionRef.owner}-${actionRef.repo}-${hash}`);
+    const hash = createHash("sha256").update(cacheKey).digest("hex").slice(
+      0,
+      16,
+    );
+    const repoDir = path.join(
+      ACTION_CACHE_DIR,
+      `${actionRef.owner}-${actionRef.repo}-${hash}`,
+    );
 
-    const gitDir = path.join(repoDir, '.git');
+    const gitDir = path.join(repoDir, ".git");
     const gitExists = await fs.stat(gitDir).then(() => true).catch(() => false);
 
     if (!gitExists) {
@@ -414,7 +458,9 @@ export async function fetchMarketplaceRepo(
 
       if (!cloneResult.success) {
         await fs.rm(repoDir, { recursive: true, force: true });
-        throw new Error(`Failed to fetch action ${cacheKey}: ${cloneResult.output}`);
+        throw new Error(
+          `Failed to fetch action ${cacheKey}: ${cloneResult.output}`,
+        );
       }
 
       await removeEscapingSymlinks(repoDir, repoDir);

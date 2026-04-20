@@ -1,43 +1,68 @@
-import type { Env } from '../../../shared/types/index.ts';
-import { getDb, serviceCustomDomains } from '../../../infra/db/index.ts';
-import { and, asc, eq, inArray, isNotNull, lt, or } from 'drizzle-orm';
+import type { Env } from "../../../shared/types/index.ts";
+import { getDb, serviceCustomDomains } from "../../../infra/db/index.ts";
+import { and, asc, eq, inArray, isNotNull, lt, or } from "drizzle-orm";
 
-import { deleteCloudflareCustomHostname, getCloudflareCustomHostnameStatus } from '../platform/custom-domains.ts';
-import { deleteHostnameRouting, resolveHostnameRouting, upsertHostnameRouting } from '../routing/service.ts';
-import type { RoutingTarget } from '../routing/routing-models.ts';
-import { ServiceDesiredStateService } from '../platform/worker-desired-state.ts';
-import { listServiceRouteRecordsByIds } from '../platform/workers.ts';
-import { logError, logWarn } from '../../../shared/utils/logger.ts';
-import { DOH_ENDPOINT, DNS_RESOLVE_TIMEOUT_MS } from '../../../shared/constants/dns.ts';
+import {
+  deleteCloudflareCustomHostname,
+  getCloudflareCustomHostnameStatus,
+} from "../platform/custom-domains.ts";
+import {
+  deleteHostnameRouting,
+  upsertHostnameRouting,
+} from "../routing/service.ts";
+import type { RoutingTarget } from "../routing/routing-models.ts";
+import { resolveRoutingTargetForServiceHostname } from "../routing/group-hostnames.ts";
+import { ServiceDesiredStateService } from "../platform/worker-desired-state.ts";
+import { listServiceRouteRecordsByIds } from "../platform/workers.ts";
+import { logError, logWarn } from "../../../shared/utils/logger.ts";
+import {
+  DNS_RESOLVE_TIMEOUT_MS,
+  DOH_ENDPOINT,
+} from "../../../shared/constants/dns.ts";
 
-const SSL_PENDING_STATES = new Set(['pending', 'pending_validation', 'pending_issuance', 'pending_deployment']);
-const SSL_FAILURE_STATES = new Set(['deleted', 'expired', 'validation_timed_out', 'issuance_timed_out']);
+const SSL_PENDING_STATES = new Set([
+  "pending",
+  "pending_validation",
+  "pending_issuance",
+  "pending_deployment",
+]);
+const SSL_FAILURE_STATES = new Set([
+  "deleted",
+  "expired",
+  "validation_timed_out",
+  "issuance_timed_out",
+]);
 
 async function verifyOwnershipRecord(
   domain: string,
   verificationToken: string,
   verificationMethod: string,
-  platformDomain: string
+  platformDomain: string,
 ): Promise<boolean> {
-  const method = verificationMethod === 'txt' ? 'txt' : 'cname';
-  const expectedValue = method === 'cname'
+  const method = verificationMethod === "txt" ? "txt" : "cname";
+  const expectedValue = method === "cname"
     ? `${verificationToken}.verify.${platformDomain}`
     : `takos-verify=${verificationToken}`;
-  const recordName = method === 'cname'
+  const recordName = method === "cname"
     ? `_acme-challenge.${domain}`
     : `_takos-verify.${domain}`;
-  const recordType = method === 'cname' ? 'CNAME' : 'TXT';
+  const recordType = method === "cname" ? "CNAME" : "TXT";
 
   const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), DNS_RESOLVE_TIMEOUT_MS);
+  const timeoutId = setTimeout(
+    () => controller.abort(),
+    DNS_RESOLVE_TIMEOUT_MS,
+  );
 
   try {
     const response = await fetch(
-      `${DOH_ENDPOINT}?name=${encodeURIComponent(recordName)}&type=${recordType}`,
+      `${DOH_ENDPOINT}?name=${
+        encodeURIComponent(recordName)
+      }&type=${recordType}`,
       {
-        headers: { Accept: 'application/dns-json' },
+        headers: { Accept: "application/dns-json" },
         signal: controller.signal,
-      }
+      },
     );
 
     if (!response.ok) return false;
@@ -51,7 +76,8 @@ async function verifyOwnershipRecord(
     }
 
     for (const answer of data.Answer) {
-      const normalized = answer.data.replace(/^"|"$/g, '').replace(/\.$/, '').toLowerCase();
+      const normalized = answer.data.replace(/^"|"$/g, "").replace(/\.$/, "")
+        .toLowerCase();
       if (normalized === expectedValue.toLowerCase()) {
         return true;
       }
@@ -59,10 +85,12 @@ async function verifyOwnershipRecord(
 
     return false;
   } catch (err) {
-    if (err instanceof Error && err.name === 'AbortError') {
+    if (err instanceof Error && err.name === "AbortError") {
       return false;
     }
-    logError('DNS verification failed', err, { module: 'custom-domain-maintenance' });
+    logError("DNS verification failed", err, {
+      module: "custom-domain-maintenance",
+    });
     return false;
   } finally {
     clearTimeout(timeoutId);
@@ -81,7 +109,7 @@ export interface CustomDomainReverificationSummary {
 
 export async function runCustomDomainReverification(
   env: Env,
-  options?: { batchSize?: number }
+  options?: { batchSize?: number },
 ): Promise<CustomDomainReverificationSummary> {
   const db = getDb(env.DB);
   const desiredState = new ServiceDesiredStateService(env);
@@ -99,7 +127,7 @@ export async function runCustomDomainReverification(
     serviceId: serviceCustomDomains.serviceId,
   })
     .from(serviceCustomDomains)
-    .where(inArray(serviceCustomDomains.status, ['active', 'ssl_pending']))
+    .where(inArray(serviceCustomDomains.status, ["active", "ssl_pending"]))
     .orderBy(asc(serviceCustomDomains.updatedAt))
     .limit(batchSize)
     .all();
@@ -111,7 +139,7 @@ export async function runCustomDomainReverification(
     )).map((service) => [service.id, service]),
   );
 
-  const domains = domainRows.map(row => ({
+  const domains = domainRows.map((row) => ({
     id: row.id,
     domain: row.domain,
     status: row.status,
@@ -121,6 +149,8 @@ export async function runCustomDomainReverification(
     sslStatus: row.sslStatus,
     service: {
       id: row.serviceId,
+      space_id: serviceRouteMap.get(row.serviceId)?.accountId ?? "",
+      group_id: serviceRouteMap.get(row.serviceId)?.groupId ?? null,
       hostname: serviceRouteMap.get(row.serviceId)?.hostname ?? null,
     },
   }));
@@ -138,33 +168,38 @@ export async function runCustomDomainReverification(
   for (const domain of domains) {
     try {
       // ssl_pending domains: skip DNS re-verification, only check CF SSL status
-      if (domain.status === 'ssl_pending') {
+      if (domain.status === "ssl_pending") {
         if (!domain.cfCustomHostnameId) {
           // No CF hostname ID — shouldn't be in ssl_pending, reset to dns_verified
           await db.update(serviceCustomDomains)
-            .set({ status: 'dns_verified', updatedAt: new Date().toISOString() })
+            .set({
+              status: "dns_verified",
+              updatedAt: new Date().toISOString(),
+            })
             .where(eq(serviceCustomDomains.id, domain.id))
             .run();
           summary.failed += 1;
           continue;
         }
 
-        const cfStatus = await getCloudflareCustomHostnameStatus(env, domain.cfCustomHostnameId);
+        const cfStatus = await getCloudflareCustomHostnameStatus(
+          env,
+          domain.cfCustomHostnameId,
+        );
 
-        if (cfStatus && cfStatus.sslStatus === 'active') {
+        if (cfStatus && cfStatus.sslStatus === "active") {
           // SSL provisioned — promote to active and ensure KV routing
           await db.update(serviceCustomDomains)
-            .set({ status: 'active', sslStatus: 'active', updatedAt: new Date().toISOString() })
+            .set({
+              status: "active",
+              sslStatus: "active",
+              updatedAt: new Date().toISOString(),
+            })
             .where(eq(serviceCustomDomains.id, domain.id))
             .run();
-          let target: RoutingTarget | null = null;
-          if (domain.service.hostname) {
-            const resolved = await resolveHostnameRouting({ env, hostname: domain.service.hostname });
-            target = resolved.tombstone ? null : resolved.target;
-          }
-          if (!target) {
-            target = await desiredState.getRoutingTarget(domain.service.id);
-          }
+          let target: RoutingTarget | null =
+            await resolveRoutingTargetForServiceHostname(env, domain.service);
+          target ??= await desiredState.getRoutingTarget(domain.service.id);
           if (target) {
             await upsertHostnameRouting({
               env,
@@ -177,7 +212,11 @@ export async function runCustomDomainReverification(
         } else if (cfStatus && SSL_FAILURE_STATES.has(cfStatus.sslStatus)) {
           // SSL failed/expired — mark as ssl_failed and remove KV routing
           await db.update(serviceCustomDomains)
-            .set({ status: 'ssl_failed', sslStatus: 'failed', updatedAt: new Date().toISOString() })
+            .set({
+              status: "ssl_failed",
+              sslStatus: "failed",
+              updatedAt: new Date().toISOString(),
+            })
             .where(eq(serviceCustomDomains.id, domain.id))
             .run();
           await deleteHostnameRouting({ env, hostname: domain.domain });
@@ -196,7 +235,7 @@ export async function runCustomDomainReverification(
       // Active domains: full DNS ownership re-verification
       await db.update(serviceCustomDomains)
         .set({
-          status: 'verifying',
+          status: "verifying",
           updatedAt: new Date().toISOString(),
         })
         .where(eq(serviceCustomDomains.id, domain.id))
@@ -206,14 +245,14 @@ export async function runCustomDomainReverification(
         domain.domain,
         domain.verificationToken,
         domain.verificationMethod,
-        platformDomain
+        platformDomain,
       );
 
       if (!ownershipValid) {
         await db.update(serviceCustomDomains)
           .set({
-            status: 'failed',
-            sslStatus: 'failed',
+            status: "failed",
+            sslStatus: "failed",
             updatedAt: new Date().toISOString(),
           })
           .where(eq(serviceCustomDomains.id, domain.id))
@@ -223,41 +262,41 @@ export async function runCustomDomainReverification(
         continue;
       }
 
-      let nextStatus: 'active' | 'verifying' | 'failed' | 'expired' = 'active';
-      let nextSslStatus: 'active' | 'pending' | 'failed' = 'active';
+      let nextStatus: "active" | "verifying" | "failed" | "expired" = "active";
+      let nextSslStatus: "active" | "pending" | "failed" = "active";
 
       if (domain.cfCustomHostnameId) {
-        const cfStatus = await getCloudflareCustomHostnameStatus(env, domain.cfCustomHostnameId);
+        const cfStatus = await getCloudflareCustomHostnameStatus(
+          env,
+          domain.cfCustomHostnameId,
+        );
 
         if (cfStatus) {
-          if (cfStatus.sslStatus === 'active') {
-            nextStatus = 'active';
-            nextSslStatus = 'active';
+          if (cfStatus.sslStatus === "active") {
+            nextStatus = "active";
+            nextSslStatus = "active";
           } else if (SSL_FAILURE_STATES.has(cfStatus.sslStatus)) {
-            nextStatus = cfStatus.sslStatus === 'expired' ? 'expired' : 'failed';
-            nextSslStatus = 'failed';
+            nextStatus = cfStatus.sslStatus === "expired"
+              ? "expired"
+              : "failed";
+            nextSslStatus = "failed";
           } else if (SSL_PENDING_STATES.has(cfStatus.sslStatus)) {
-            nextStatus = 'verifying';
-            nextSslStatus = 'pending';
+            nextStatus = "verifying";
+            nextSslStatus = "pending";
           } else {
-            nextStatus = 'verifying';
-            nextSslStatus = 'pending';
+            nextStatus = "verifying";
+            nextSslStatus = "pending";
           }
         } else {
-          nextStatus = 'verifying';
-          nextSslStatus = 'pending';
+          nextStatus = "verifying";
+          nextSslStatus = "pending";
         }
       }
 
-      if (nextStatus === 'active') {
-        let target: RoutingTarget | null = null;
-        if (domain.service.hostname) {
-          const resolved = await resolveHostnameRouting({ env, hostname: domain.service.hostname });
-          target = resolved.tombstone ? null : resolved.target;
-        }
-        if (!target) {
-          target = await desiredState.getRoutingTarget(domain.service.id);
-        }
+      if (nextStatus === "active") {
+        let target: RoutingTarget | null =
+          await resolveRoutingTargetForServiceHostname(env, domain.service);
+        target ??= await desiredState.getRoutingTarget(domain.service.id);
 
         if (target) {
           await upsertHostnameRouting({
@@ -266,7 +305,7 @@ export async function runCustomDomainReverification(
             target,
           });
         }
-      } else if (nextStatus === 'failed' || nextStatus === 'expired') {
+      } else if (nextStatus === "failed" || nextStatus === "expired") {
         await deleteHostnameRouting({ env, hostname: domain.domain });
       }
 
@@ -279,22 +318,22 @@ export async function runCustomDomainReverification(
         .where(eq(serviceCustomDomains.id, domain.id))
         .run();
 
-      if (nextStatus === 'active') {
+      if (nextStatus === "active") {
         summary.active += 1;
-      } else if (nextStatus === 'verifying') {
+      } else if (nextStatus === "verifying") {
         summary.verifying += 1;
-      } else if (nextStatus === 'expired') {
+      } else if (nextStatus === "expired") {
         summary.expired += 1;
       } else {
         summary.failed += 1;
       }
     } catch (err) {
       summary.errors += 1;
-      logError('Reverification error', {
+      logError("Reverification error", {
         domainId: domain.id,
         domain: domain.domain,
         error: err instanceof Error ? err.message : String(err),
-      }, { module: 'custom-domain-maintenance' });
+      }, { module: "custom-domain-maintenance" });
     }
   }
 
@@ -310,7 +349,7 @@ export interface ReconcileStuckDomainsSummary {
 
 export async function reconcileStuckDomains(
   env: Env,
-  options?: { staleThresholdMs?: number }
+  options?: { staleThresholdMs?: number },
 ): Promise<ReconcileStuckDomainsSummary> {
   const db = getDb(env.DB);
   const thresholdMs = options?.staleThresholdMs ?? 60 * 60 * 1000; // 1 hour
@@ -321,15 +360,15 @@ export async function reconcileStuckDomains(
     .where(
       or(
         and(
-          eq(serviceCustomDomains.status, 'dns_verified'),
+          eq(serviceCustomDomains.status, "dns_verified"),
           isNotNull(serviceCustomDomains.cfCustomHostnameId),
           lt(serviceCustomDomains.updatedAt, oneHourAgo),
         ),
         and(
-          eq(serviceCustomDomains.status, 'ssl_pending'),
+          eq(serviceCustomDomains.status, "ssl_pending"),
           lt(serviceCustomDomains.updatedAt, oneHourAgo),
         ),
-      )
+      ),
     )
     .all();
 
@@ -342,7 +381,7 @@ export async function reconcileStuckDomains(
 
   for (const domain of stuckDomains) {
     try {
-      if (domain.status === 'dns_verified' && domain.cfCustomHostnameId) {
+      if (domain.status === "dns_verified" && domain.cfCustomHostnameId) {
         // Double-failure orphan: dns_verified with a stale CF hostname ID
         // Clean up the orphaned CF hostname and reset DB state
         await deleteCloudflareCustomHostname(env, domain.cfCustomHostnameId);
@@ -354,31 +393,41 @@ export async function reconcileStuckDomains(
           })
           .where(eq(serviceCustomDomains.id, domain.id))
           .run();
-        logWarn('Cleaned orphaned CF hostname', { module: 'custom-domain-maintenance', ...{
-          domainId: domain.id,
-          domain: domain.domain,
-          cfHostnameId: domain.cfCustomHostnameId,
-        } });
+        logWarn("Cleaned orphaned CF hostname", {
+          module: "custom-domain-maintenance",
+          ...{
+            domainId: domain.id,
+            domain: domain.domain,
+            cfHostnameId: domain.cfCustomHostnameId,
+          },
+        });
         summary.cleaned += 1;
-      } else if (domain.status === 'ssl_pending') {
+      } else if (domain.status === "ssl_pending") {
         // ssl_pending stuck > 1 hour — check CF status
         if (!domain.cfCustomHostnameId) {
           // No CF hostname — reset to dns_verified for retry
           await db.update(serviceCustomDomains)
-            .set({ status: 'dns_verified', sslStatus: null, updatedAt: new Date().toISOString() })
+            .set({
+              status: "dns_verified",
+              sslStatus: null,
+              updatedAt: new Date().toISOString(),
+            })
             .where(eq(serviceCustomDomains.id, domain.id))
             .run();
           summary.reset += 1;
           continue;
         }
 
-        const cfStatus = await getCloudflareCustomHostnameStatus(env, domain.cfCustomHostnameId);
+        const cfStatus = await getCloudflareCustomHostnameStatus(
+          env,
+          domain.cfCustomHostnameId,
+        );
 
         if (!cfStatus) {
           // CF returned null/error — hostname gone, reset for retry
           await db.update(serviceCustomDomains)
             .set({
-              status: 'dns_verified',
+              status: "dns_verified",
               cfCustomHostnameId: null,
               sslStatus: null,
               updatedAt: new Date().toISOString(),
@@ -390,8 +439,8 @@ export async function reconcileStuckDomains(
           // CF reports failure
           await db.update(serviceCustomDomains)
             .set({
-              status: 'ssl_failed',
-              sslStatus: 'failed',
+              status: "ssl_failed",
+              sslStatus: "failed",
               updatedAt: new Date().toISOString(),
             })
             .where(eq(serviceCustomDomains.id, domain.id))
@@ -403,11 +452,11 @@ export async function reconcileStuckDomains(
       }
     } catch (err) {
       summary.errors += 1;
-      logError('Stuck domain reconciliation error', {
+      logError("Stuck domain reconciliation error", {
         domainId: domain.id,
         domain: domain.domain,
         error: err instanceof Error ? err.message : String(err),
-      }, { module: 'custom-domain-maintenance' });
+      }, { module: "custom-domain-maintenance" });
     }
   }
 

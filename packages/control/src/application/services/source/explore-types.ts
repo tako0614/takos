@@ -2,11 +2,11 @@ export interface ExploreRepoResponse {
   id: string;
   name: string;
   description: string | null;
-  visibility: 'public';
+  visibility: "public";
   default_branch: string;
   stars: number;
   forks: number;
-  workspace: {
+  space: {
     id: string;
     name: string;
   };
@@ -31,7 +31,7 @@ export interface CatalogRepoResponse {
   id: string;
   name: string;
   description: string | null;
-  visibility: 'public';
+  visibility: "public";
   default_branch: string;
   stars: number;
   forks: number;
@@ -41,7 +41,7 @@ export interface CatalogRepoResponse {
   is_starred: boolean;
   created_at: string;
   updated_at: string;
-  workspace: {
+  space: {
     id: string;
     name: string;
   };
@@ -53,7 +53,7 @@ export interface CatalogRepoResponse {
   };
 }
 
-export interface CatalogTakopackResponse {
+export interface CatalogPackageResponse {
   available: boolean;
   app_id: string | null;
   latest_version: string | null;
@@ -68,23 +68,22 @@ export interface CatalogTakopackResponse {
   downloads: number;
   rating_avg: number | null;
   rating_count: number;
-  publish_status: 'none' | 'pending' | 'approved' | 'rejected';
+  publish_status: "none" | "pending" | "approved" | "rejected";
   certified: boolean;
   published_at: string | null;
 }
 
 export interface CatalogInstallationResponse {
   installed: boolean;
-  bundle_deployment_id: string | null;
+  group_deployment_snapshot_id: string | null;
   installed_version: string | null;
   deployed_at: string | null;
 }
 
 export interface CatalogItemResponse {
   repo: CatalogRepoResponse;
-  takopack: CatalogTakopackResponse;
+  package: CatalogPackageResponse;
   installation?: CatalogInstallationResponse;
-  official?: boolean;
 }
 
 export interface CatalogResult {
@@ -93,8 +92,13 @@ export interface CatalogResult {
   has_more: boolean;
 }
 
-export type CatalogSort = 'trending' | 'new' | 'stars' | 'updated' | 'downloads';
-export type CatalogType = 'all' | 'repo' | 'deployable-app' | 'official';
+export type CatalogSort =
+  | "trending"
+  | "new"
+  | "stars"
+  | "updated"
+  | "downloads";
+export type CatalogType = "all" | "repo" | "deployable-app";
 
 export type RepositoryWithAccount = {
   id: string;
@@ -103,7 +107,6 @@ export type RepositoryWithAccount = {
   defaultBranch: string;
   stars: number;
   forks: number;
-  officialCategory: string | null;
   primaryLanguage: string | null;
   license: string | null;
   createdAt: string;
@@ -133,7 +136,7 @@ export interface ReleaseAsset {
   };
 }
 
-export interface ParsedTakopackRelease {
+export interface ParsedCatalogRelease {
   releaseId: string;
   repoId: string;
   appId: string;
@@ -144,7 +147,7 @@ export interface ParsedTakopackRelease {
   icon: string | null;
   category: string | null;
   tags: string[];
-  assetId: string;
+  assetId: string | null;
   downloadCount: number;
   totalDownloads: number;
 }

@@ -16,20 +16,20 @@ export interface ReleaseAsset {
     version: string;
     description?: string;
     icon?: string;
-    category?: 'app' | 'service' | 'library' | 'template' | 'social';
+    category?: "app" | "service" | "library" | "template" | "social";
     tags?: string[];
     dependencies?: Array<{ repo: string; version: string }>;
   };
   created_at: string;
 }
 
-export type TakopackRatingStats = {
+export type PackageRatingStats = {
   rating_avg: number | null;
   rating_count: number;
 };
 
-/** Internal type for a release with its takopack assets. */
-export interface PackageWithTakopack {
+/** Internal type for a release-backed catalog package. */
+export interface PackageWithRelease {
   release: {
     id: string;
     publishedAt: string | Date | null;
@@ -48,7 +48,7 @@ export interface PackageWithTakopack {
       };
     };
   };
-  primaryAsset: ReleaseAsset;
+  primaryAsset: ReleaseAsset | null;
   totalDownloads: number;
 }
 
@@ -83,7 +83,7 @@ export interface PackageDto {
     name: string;
     size: number;
     download_count: number;
-  };
+  } | null;
   total_downloads: number;
   published_at: string | null;
   rating_avg: number | null;
@@ -138,7 +138,7 @@ export interface SuggestPackageDto {
     name: string;
     size: number;
     download_count: number;
-  };
+  } | null;
   total_downloads: number;
   published_at: string | null;
 }

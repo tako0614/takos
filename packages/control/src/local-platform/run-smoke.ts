@@ -1,9 +1,22 @@
-import { createNodeWebEnv, disposeNodePlatformState } from '../node-platform/env-builder.ts';
-import { getDb, accounts, accountMemberships, threads, messages, runs } from '../infra/db/index.ts';
-import { RUN_QUEUE_MESSAGE_VERSION } from '../shared/types/queue-messages.ts';
-import { createPendingRun, updateRunStatus } from '../application/services/runs/create-thread-run-store.ts';
-import { eq } from 'drizzle-orm';
-import { isDirectEntrypoint, logEntrypointError } from './direct-entrypoint.ts';
+import {
+  createNodeWebEnv,
+  disposeNodePlatformState,
+} from "../node-platform/env-builder.ts";
+import {
+  accountMemberships,
+  accounts,
+  getDb,
+  messages,
+  runs,
+  threads,
+} from "../infra/db/index.ts";
+import { RUN_QUEUE_MESSAGE_VERSION } from "../shared/types/queue-messages.ts";
+import {
+  createPendingRun,
+  updateRunStatus,
+} from "../application/services/runs/create-thread-run-store.ts";
+import { eq } from "drizzle-orm";
+import { isDirectEntrypoint, logEntrypointError } from "./direct-entrypoint.ts";
 
 const POLL_INTERVAL_MS = 1_000;
 const POLL_TIMEOUT_MS = 45_000;
@@ -20,42 +33,42 @@ async function ensureSeedData() {
   const env = await createNodeWebEnv();
   const db = getDb(env.DB);
   const suffix = Date.now().toString(36);
-  const workspaceId = `smoke-workspace-${suffix}`;
+  const spaceId = `smoke-space-${suffix}`;
   const userId = `smoke-user-${suffix}`;
   const threadId = `smoke-thread-${suffix}`;
   const runId = `smoke-run-${suffix}`;
   const createdAt = nowIso();
 
   await db.insert(accounts).values({
-    id: workspaceId,
-    type: 'workspace',
-    status: 'active',
-    name: 'Local Smoke Workspace',
-    slug: `local-smoke-workspace-${suffix}`,
+    id: spaceId,
+    type: "workspace",
+    status: "active",
+    name: "Local Smoke Space",
+    slug: `local-smoke-space-${suffix}`,
   }).run();
 
   await db.insert(accounts).values({
     id: userId,
-    type: 'user',
-    status: 'active',
-    name: 'Local Smoke User',
+    type: "user",
+    status: "active",
+    name: "Local Smoke User",
     slug: `local-smoke-user-${suffix}`,
     email: `local-smoke-${suffix}@example.com`,
   }).run();
 
   await db.insert(accountMemberships).values({
     id: `smoke-membership-${suffix}`,
-    accountId: workspaceId,
+    accountId: spaceId,
     memberId: userId,
-    role: 'owner',
-    status: 'active',
+    role: "owner",
+    status: "active",
   }).run();
 
   await db.insert(threads).values({
     id: threadId,
-    accountId: workspaceId,
-    title: 'Local Smoke Thread',
-    status: 'active',
+    accountId: spaceId,
+    title: "Local Smoke Thread",
+    status: "active",
     createdAt,
     updatedAt: createdAt,
   }).run();
@@ -63,9 +76,9 @@ async function ensureSeedData() {
   await db.insert(messages).values({
     id: `smoke-message-${suffix}`,
     threadId,
-    role: 'user',
-    content: 'hello from local smoke run',
-    metadata: '{}',
+    role: "user",
+    content: "hello from local smoke run",
+    metadata: "{}",
     sequence: 1,
     createdAt,
   }).run();
@@ -73,13 +86,13 @@ async function ensureSeedData() {
   await createPendingRun(env.DB, {
     runId,
     threadId,
-    spaceId: workspaceId,
+    spaceId,
     requesterAccountId: userId,
     parentRunId: null,
     childThreadId: null,
     rootThreadId: threadId,
     rootRunId: runId,
-    agentType: 'default',
+    agentType: "default",
     input: JSON.stringify({ smoke: true }),
     createdAt,
   });
@@ -88,16 +101,16 @@ async function ensureSeedData() {
     version: RUN_QUEUE_MESSAGE_VERSION,
     runId,
     timestamp: Date.now(),
-    model: 'local-smoke',
+    model: "local-smoke",
   });
 
   await updateRunStatus(env.DB, {
     runId,
-    status: 'queued',
+    status: "queued",
     error: null,
   });
 
-  return { env, db, runId, threadId, workspaceId, userId };
+  return { env, db, runId, threadId, spaceId, userId };
 }
 
 async function waitForRunCompletion(runId: string) {
@@ -120,12 +133,14 @@ async function waitForRunCompletion(runId: string) {
       throw new Error(`Smoke run not found: ${runId}`);
     }
 
-    if (run.status === 'completed') {
+    if (run.status === "completed") {
       return run;
     }
 
-    if (run.status === 'failed' || run.status === 'cancelled') {
-      throw new Error(`Smoke run ended in ${run.status}: ${run.error ?? 'unknown error'}`);
+    if (run.status === "failed" || run.status === "cancelled") {
+      throw new Error(
+        `Smoke run ended in ${run.status}: ${run.error ?? "unknown error"}`,
+      );
     }
 
     await sleep(POLL_INTERVAL_MS);

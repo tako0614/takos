@@ -4,7 +4,8 @@ import {
   listCatalogItems,
 } from "../../../application/services/source/explore.ts";
 import {
-  getTakopackRatingSummary,
+  filterDeployablePackageReleases,
+  getPackageRatingSummary,
   searchPackages,
   suggestPackages,
 } from "../../../application/services/source/explore-packages.ts";
@@ -44,12 +45,85 @@ export const exploreRouteDeps = {
   listCatalogItems,
 };
 
-function buildRepositoryUrl(env: Env, ownerUsername: string, repoName: string): string {
+function buildRepositoryUrl(
+  env: Env,
+  ownerUsername: string,
+  repoName: string,
+): string {
   const adminDomain = String(env.ADMIN_DOMAIN || "").trim();
   const base = /^https?:\/\//i.test(adminDomain)
     ? adminDomain.replace(/\/+$/, "")
     : `https://${adminDomain.replace(/\/+$/, "")}`;
-  return `${base}/git/${encodeURIComponent(ownerUsername)}/${encodeURIComponent(repoName)}.git`;
+  return `${base}/git/${encodeURIComponent(ownerUsername)}/${
+    encodeURIComponent(repoName)
+  }.git`;
+}
+
+type LatestPackageSelection = {
+  release: {
+    id: string;
+    tag: string;
+    commitSha: string | null;
+    description: string | null;
+    publishedAt: string | null;
+  };
+  asset: ReleaseAsset | null;
+};
+
+async function loadLatestDeployablePackage(
+  db: ReturnType<typeof getDb>,
+  env: Env,
+  repoId: string,
+): Promise<LatestPackageSelection | null> {
+  const pageSize = 10;
+
+  for (let offset = 0;; offset += pageSize) {
+    const releaseRows = await db.select().from(repoReleases).where(
+      and(
+        eq(repoReleases.repoId, repoId),
+        eq(repoReleases.isDraft, false),
+        eq(repoReleases.isPrerelease, false),
+      ),
+    ).orderBy(desc(repoReleases.publishedAt)).limit(pageSize).offset(offset)
+      .all();
+
+    if (releaseRows.length === 0) {
+      return null;
+    }
+
+    const deployableReleaseRows = await filterDeployablePackageReleases(
+      env.DB,
+      env.GIT_OBJECTS,
+      releaseRows.map((release) => ({
+        repoId,
+        tag: release.tag,
+        commitSha: release.commitSha ?? null,
+      })),
+    );
+
+    if (deployableReleaseRows.length === 0) {
+      continue;
+    }
+
+    const deployableTags = new Set(
+      deployableReleaseRows.map((release) => release.tag),
+    );
+    const latestRelease = releaseRows.find((release) =>
+      deployableTags.has(release.tag)
+    );
+    if (!latestRelease) {
+      continue;
+    }
+
+    const assets = await db.select().from(repoReleaseAssets).where(
+      eq(repoReleaseAssets.releaseId, latestRelease.id),
+    ).orderBy(asc(repoReleaseAssets.createdAt)).all();
+
+    return {
+      release: latestRelease,
+      asset: toReleaseAssets(assets)[0] ?? null,
+    };
+  }
 }
 
 export default new Hono<{ Bindings: Env; Variables: Variables }>()
@@ -99,8 +173,7 @@ export default new Hono<{ Bindings: Env; Variables: Variables }>()
       const catalogType = (
           normalizedCatalogType === "all" ||
           normalizedCatalogType === "repo" ||
-          normalizedCatalogType === "deployable-app" ||
-          normalizedCatalogType === "official"
+          normalizedCatalogType === "deployable-app"
         )
         ? normalizedCatalogType
         : null;
@@ -145,6 +218,7 @@ export default new Hono<{ Bindings: Env; Variables: Variables }>()
         certifiedOnly: c.req.query("certified_only") === "true",
         spaceId: resolvedSpaceId,
         userId: user?.id,
+        gitObjects: c.env.GIT_OBJECTS,
       });
 
       return c.json(result);
@@ -316,63 +390,29 @@ export default new Hono<{ Bindings: Env; Variables: Variables }>()
       throw new NotFoundError("Repository");
     }
 
-    const releaseRows = await db.select().from(repoReleases).where(
-      and(
-        eq(repoReleases.repoId, repo.id),
-        eq(repoReleases.isDraft, false),
-        eq(repoReleases.isPrerelease, false),
-      ),
-    ).orderBy(desc(repoReleases.publishedAt)).limit(10).all();
-
-    // Load assets for each release
-    const releaseIds = releaseRows.map((r) => r.id);
-    const allAssets = releaseIds.length > 0
-      ? await db.select().from(repoReleaseAssets).where(
-        inArray(repoReleaseAssets.releaseId, releaseIds),
-      ).orderBy(asc(repoReleaseAssets.createdAt)).all()
-      : [];
-    const assetsByRelease = new Map<string, typeof allAssets>();
-    for (const asset of allAssets) {
-      const list = assetsByRelease.get(asset.releaseId) ?? [];
-      list.push(asset);
-      assetsByRelease.set(asset.releaseId, list);
-    }
-    const releases = releaseRows.map((r) => ({
-      ...r,
-      repoReleaseAssets: assetsByRelease.get(r.id) ?? [],
-    }));
-
-    let latestPackage: {
-      release: typeof releases[0];
-      asset: ReleaseAsset;
-    } | null = null;
-
-    for (const release of releases) {
-      const assets = toReleaseAssets(release.repoReleaseAssets);
-      const takopackAsset = assets.find((a) => a.bundle_format === "takopack");
-      if (takopackAsset) {
-        latestPackage = { release, asset: takopackAsset };
-        break;
-      }
-    }
+    const latestPackage = await loadLatestDeployablePackage(db, c.env, repo.id);
 
     if (!latestPackage) {
-      throw new NotFoundError("Takopack release");
+      throw new NotFoundError("Release");
     }
 
-    const rating = await getTakopackRatingSummary(db, repo.id);
+    const rating = await getPackageRatingSummary(db, repo.id);
 
     return c.json({
       package: {
         name: repo.name,
-        app_id: latestPackage.asset.bundle_meta?.app_id ||
-          latestPackage.asset.bundle_meta?.name || repo.name,
-        version: latestPackage.asset.bundle_meta?.version ||
+        app_id: latestPackage.asset?.bundle_meta?.app_id ||
+          latestPackage.asset?.bundle_meta?.name || repo.name,
+        version: latestPackage.asset?.bundle_meta?.version ||
           latestPackage.release.tag,
-        repository_url: buildRepositoryUrl(c.env, repo.owner_username, repo.name),
-        description: latestPackage.asset.bundle_meta?.description ||
+        repository_url: buildRepositoryUrl(
+          c.env,
+          repo.owner_username,
+          repo.name,
+        ),
+        description: latestPackage.asset?.bundle_meta?.description ||
           latestPackage.release.description,
-        icon: latestPackage.asset.bundle_meta?.icon,
+        icon: latestPackage.asset?.bundle_meta?.icon,
         repository: {
           id: repo.id,
           name: repo.name,
@@ -390,12 +430,14 @@ export default new Hono<{ Bindings: Env; Variables: Variables }>()
           tag: latestPackage.release.tag,
           published_at: latestPackage.release.publishedAt,
         },
-        asset: {
-          id: latestPackage.asset.id,
-          name: latestPackage.asset.name,
-          size: latestPackage.asset.size,
-          download_count: latestPackage.asset.download_count,
-        },
+        asset: latestPackage.asset
+          ? {
+            id: latestPackage.asset.id,
+            name: latestPackage.asset.name,
+            size: latestPackage.asset.size,
+            download_count: latestPackage.asset.download_count,
+          }
+          : null,
         published_at: latestPackage.release.publishedAt,
         rating_avg: rating.rating_avg,
         rating_count: rating.rating_count,
@@ -417,7 +459,23 @@ export default new Hono<{ Bindings: Env; Variables: Variables }>()
       and(eq(repoReleases.repoId, repo.id), eq(repoReleases.isDraft, false)),
     ).orderBy(desc(repoReleases.publishedAt)).all();
 
-    const releaseIds = releaseRows.map((r) => r.id);
+    const deployableReleaseRows = await filterDeployablePackageReleases(
+      c.env.DB,
+      c.env.GIT_OBJECTS,
+      releaseRows.map((release) => ({
+        repoId: repo.id,
+        tag: release.tag,
+        commitSha: release.commitSha ?? null,
+      })),
+    );
+    const deployableReleaseTags = new Set(
+      deployableReleaseRows.map((release) => release.tag),
+    );
+
+    const filteredReleaseRows = releaseRows.filter((release) =>
+      deployableReleaseTags.has(release.tag)
+    );
+    const releaseIds = filteredReleaseRows.map((r) => r.id);
     const allAssets = releaseIds.length > 0
       ? await db.select().from(repoReleaseAssets).where(
         inArray(repoReleaseAssets.releaseId, releaseIds),
@@ -429,7 +487,7 @@ export default new Hono<{ Bindings: Env; Variables: Variables }>()
       list.push(asset);
       assetsByRelease.set(asset.releaseId, list);
     }
-    const releases = releaseRows.map((r) => ({
+    const releases = filteredReleaseRows.map((r) => ({
       ...r,
       repoReleaseAssets: assetsByRelease.get(r.id) ?? [],
     }));
@@ -437,21 +495,22 @@ export default new Hono<{ Bindings: Env; Variables: Variables }>()
     const versions = releases
       .map((release) => {
         const assets = toReleaseAssets(release.repoReleaseAssets);
-        const takopackAsset = assets.find((a) =>
-          a.bundle_format === "takopack"
-        );
-        if (!takopackAsset) return null;
+        const primaryAsset = assets[0] ?? null;
 
         return {
           tag: release.tag,
-          app_id: takopackAsset.bundle_meta?.app_id ||
-            takopackAsset.bundle_meta?.name || repo.name,
-          version: takopackAsset.bundle_meta?.version || release.tag,
-          repository_url: buildRepositoryUrl(c.env, repo.owner_username, repo.name),
+          app_id: primaryAsset?.bundle_meta?.app_id ||
+            primaryAsset?.bundle_meta?.name || repo.name,
+          version: primaryAsset?.bundle_meta?.version || release.tag,
+          repository_url: buildRepositoryUrl(
+            c.env,
+            repo.owner_username,
+            repo.name,
+          ),
           is_prerelease: release.isPrerelease,
-          asset_id: takopackAsset.id,
-          size: takopackAsset.size,
-          download_count: takopackAsset.download_count,
+          asset_id: primaryAsset?.id || null,
+          size: primaryAsset?.size || null,
+          download_count: primaryAsset?.download_count || 0,
           published_at: release.publishedAt,
         };
       })
@@ -459,7 +518,7 @@ export default new Hono<{ Bindings: Env; Variables: Variables }>()
 
     return c.json({ versions });
   })
-  // Takopack Reviews API
+  // Package Reviews API
   .get(
     "/packages/by-repo/:repoId/reviews",
     withCache({
@@ -470,10 +529,13 @@ export default new Hono<{ Bindings: Env; Variables: Variables }>()
     async (c) => {
       const _user = c.get("user");
       const repoId = c.req.param("repoId");
-      const { limit: _limit, offset: _offset } = parsePagination(c.req.query(), {
-        limit: 20,
-        maxLimit: 50,
-      });
+      const { limit: _limit, offset: _offset } = parsePagination(
+        c.req.query(),
+        {
+          limit: 20,
+          maxLimit: 50,
+        },
+      );
       const db = getDb(c.env.DB);
 
       const repo = await db.select({
@@ -486,7 +548,7 @@ export default new Hono<{ Bindings: Env; Variables: Variables }>()
         throw new NotFoundError("Repository");
       }
 
-      const rating = await getTakopackRatingSummary(db, repoId);
+      const rating = await getPackageRatingSummary(db, repoId);
 
       return c.json({
         repo: { id: repo.id, name: repo.name },

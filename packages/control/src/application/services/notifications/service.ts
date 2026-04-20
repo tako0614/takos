@@ -1,11 +1,19 @@
-import type { D1Database } from '../../../shared/types/bindings.ts';
-import { z } from 'zod';
-import type { Env } from '../../../shared/types/index.ts';
-import { getDb, notificationSettings, notificationPreferences, notifications } from '../../../infra/db/index.ts';
-import { eq, and, lt, inArray, isNull, count, desc } from 'drizzle-orm';
-import { generateId, safeJsonParseOrDefault } from '../../../shared/utils/index.ts';
+import type { D1Database } from "../../../shared/types/bindings.ts";
+import { z } from "zod";
+import type { Env } from "../../../shared/types/index.ts";
+import {
+  getDb,
+  notificationPreferences,
+  notifications,
+  notificationSettings,
+} from "../../../infra/db/index.ts";
+import { and, count, desc, eq, inArray, isNull, lt } from "drizzle-orm";
+import {
+  generateId,
+  safeJsonParseOrDefault,
+} from "../../../shared/utils/index.ts";
 
-import { logWarn } from '../../../shared/utils/logger.ts';
+import { logWarn } from "../../../shared/utils/logger.ts";
 import {
   DEFAULT_NOTIFICATION_PREFERENCES,
   NOTIFICATION_CHANNELS,
@@ -13,7 +21,7 @@ import {
   type NotificationChannel,
   type NotificationPreferenceMatrix,
   type NotificationType,
-} from './notification-models.ts';
+} from "./notification-models.ts";
 
 // ── Zod schemas for API input validation ──
 
@@ -30,7 +38,9 @@ export const updateNotificationPreferencesSchema = z.object({
 export const setMutedUntilSchema = z.object({
   muted_until: z
     .string()
-    .refine((v) => Number.isFinite(Date.parse(v)), { message: 'muted_until must be a valid datetime' })
+    .refine((v) => Number.isFinite(Date.parse(v)), {
+      message: "muted_until must be a valid datetime",
+    })
     .nullable(),
 });
 
@@ -38,7 +48,9 @@ export const listNotificationsQuerySchema = z.object({
   limit: z.coerce.number().int().positive().max(50).optional(),
   before: z
     .string()
-    .refine((v) => Number.isFinite(Date.parse(v)), { message: 'before must be a valid datetime' })
+    .refine((v) => Number.isFinite(Date.parse(v)), {
+      message: "before must be a valid datetime",
+    })
     .optional(),
 });
 
@@ -54,18 +66,14 @@ export type NotificationDto = {
   created_at: string;
 };
 
-type NotificationNotifierNamespace = NonNullable<Env['NOTIFICATION_NOTIFIER']>;
+type NotificationNotifierNamespace = NonNullable<Env["NOTIFICATION_NOTIFIER"]>;
 type NotificationNotifierStub = {
   fetch(input: RequestInfo | URL, init?: RequestInit): Promise<Response>;
-};
-type NotificationNotifierNamespaceLike = {
-  idFromName(name: string): unknown;
-  get(id: unknown): NotificationNotifierStub;
 };
 
 function isMissingTableError(err: unknown): boolean {
   const msg = err instanceof Error ? err.message : String(err);
-  return msg.includes('no such table');
+  return msg.includes("no such table");
 }
 
 function extractMissingTableName(err: unknown): string | null {
@@ -74,26 +82,38 @@ function extractMissingTableName(err: unknown): string | null {
   return match?.[1] ?? null;
 }
 
-function throwMissingNotificationTable(err: unknown, fallbackTable: string): never {
+function throwMissingNotificationTable(
+  err: unknown,
+  fallbackTable: string,
+): never {
   const table = extractMissingTableName(err) ?? fallbackTable;
   throw new Error(
     `[notifications] Required table "${table}" is missing. Apply notification migrations before using notifications.`,
   );
 }
 
-function getNotificationNotifierStub(env: Env, userId: string): NotificationNotifierStub | null {
-  const namespace = env.NOTIFICATION_NOTIFIER as NotificationNotifierNamespace | undefined;
+function getNotificationNotifierStub(
+  env: Env,
+  userId: string,
+): NotificationNotifierStub | null {
+  const namespace: NotificationNotifierNamespace | undefined =
+    env.NOTIFICATION_NOTIFIER;
   if (!namespace) return null;
-  const notifierNamespace = namespace as unknown as NotificationNotifierNamespaceLike;
-  return notifierNamespace.get(notifierNamespace.idFromName(userId));
+  return namespace.get(namespace.idFromName(userId));
 }
 
-async function emitNotificationCreated(stub: NotificationNotifierStub, notificationId: string): Promise<void> {
-  const request = new Request('https://internal.do/emit', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', 'X-Takos-Internal': '1' },
+async function emitNotificationCreated(
+  stub: NotificationNotifierStub,
+  notificationId: string,
+): Promise<void> {
+  const request = new Request("https://internal.do/emit", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "X-Takos-Internal-Marker": "1",
+    },
     body: JSON.stringify({
-      type: 'notification.new',
+      type: "notification.new",
       data: {
         notification_id: notificationId,
       },
@@ -102,7 +122,10 @@ async function emitNotificationCreated(stub: NotificationNotifierStub, notificat
   await stub.fetch(request);
 }
 
-export async function ensureNotificationSettings(dbBinding: D1Database, userId: string): Promise<void> {
+export async function ensureNotificationSettings(
+  dbBinding: D1Database,
+  userId: string,
+): Promise<void> {
   const db = getDb(dbBinding);
   const ts = new Date().toISOString();
   try {
@@ -111,33 +134,51 @@ export async function ensureNotificationSettings(dbBinding: D1Database, userId: 
     if (!existingSettings) {
       try {
         await db.insert(notificationSettings).values({
-          accountId: userId, mutedUntil: null, createdAt: ts, updatedAt: ts,
+          accountId: userId,
+          mutedUntil: null,
+          createdAt: ts,
+          updatedAt: ts,
         });
-      } catch (err) { logWarn('Insert notification settings skipped (non-critical, likely race condition)', { module: 'notifications', error: err instanceof Error ? err.message : String(err) }); }
+      } catch (err) {
+        logWarn(
+          "Insert notification settings skipped (non-critical, likely race condition)",
+          {
+            module: "notifications",
+            error: err instanceof Error ? err.message : String(err),
+          },
+        );
+      }
     }
   } catch (err) {
     if (isMissingTableError(err)) {
-      throwMissingNotificationTable(err, 'notification_settings');
+      throwMissingNotificationTable(err, "notification_settings");
     }
     throw err;
   }
 }
 
-export async function getNotificationsMutedUntil(dbBinding: D1Database, userId: string): Promise<string | null> {
+export async function getNotificationsMutedUntil(
+  dbBinding: D1Database,
+  userId: string,
+): Promise<string | null> {
   const db = getDb(dbBinding);
   try {
-    const row = await db.select({ mutedUntil: notificationSettings.mutedUntil }).from(notificationSettings)
+    const row = await db.select({ mutedUntil: notificationSettings.mutedUntil })
+      .from(notificationSettings)
       .where(eq(notificationSettings.accountId, userId)).get();
     return row?.mutedUntil ?? null;
   } catch (err) {
     if (isMissingTableError(err)) {
-      throwMissingNotificationTable(err, 'notification_settings');
+      throwMissingNotificationTable(err, "notification_settings");
     }
     throw err;
   }
 }
 
-export async function isNotificationsMuted(dbBinding: D1Database, userId: string): Promise<boolean> {
+export async function isNotificationsMuted(
+  dbBinding: D1Database,
+  userId: string,
+): Promise<boolean> {
   const mutedUntil = await getNotificationsMutedUntil(dbBinding, userId);
   if (!mutedUntil) return false;
   const untilMs = Date.parse(mutedUntil);
@@ -148,13 +189,14 @@ export async function isNotificationsMuted(dbBinding: D1Database, userId: string
 export async function setNotificationsMutedUntil(
   dbBinding: D1Database,
   userId: string,
-  mutedUntil: string | null
+  mutedUntil: string | null,
 ): Promise<{ muted_until: string | null }> {
   const db = getDb(dbBinding);
   const ts = new Date().toISOString();
   const mutedValue = mutedUntil ? new Date(mutedUntil).toISOString() : null;
   try {
-    const row = await db.select({ mutedUntil: notificationSettings.mutedUntil }).from(notificationSettings)
+    const row = await db.select({ mutedUntil: notificationSettings.mutedUntil })
+      .from(notificationSettings)
       .where(eq(notificationSettings.accountId, userId)).get();
     if (row) {
       const updated = await db.update(notificationSettings)
@@ -166,7 +208,10 @@ export async function setNotificationsMutedUntil(
     } else {
       try {
         const created = await db.insert(notificationSettings).values({
-          accountId: userId, mutedUntil: mutedValue, createdAt: ts, updatedAt: ts,
+          accountId: userId,
+          mutedUntil: mutedValue,
+          createdAt: ts,
+          updatedAt: ts,
         }).returning({ mutedUntil: notificationSettings.mutedUntil }).get();
         return { muted_until: created?.mutedUntil ?? null };
       } catch {
@@ -180,7 +225,7 @@ export async function setNotificationsMutedUntil(
     }
   } catch (err) {
     if (isMissingTableError(err)) {
-      throwMissingNotificationTable(err, 'notification_settings');
+      throwMissingNotificationTable(err, "notification_settings");
     }
     throw err;
   }
@@ -194,7 +239,10 @@ function emptyMatrix(): NotificationPreferenceMatrix {
   return matrix;
 }
 
-export async function ensureNotificationPreferences(dbBinding: D1Database, userId: string): Promise<void> {
+export async function ensureNotificationPreferences(
+  dbBinding: D1Database,
+  userId: string,
+): Promise<void> {
   const db = getDb(dbBinding);
   const ts = new Date().toISOString();
   try {
@@ -206,8 +254,12 @@ export async function ensureNotificationPreferences(dbBinding: D1Database, userI
       .all();
     const existingSet = new Set(existing.map((r) => `${r.type}:${r.channel}`));
     const toCreate: Array<{
-      accountId: string; type: string; channel: string;
-      enabled: boolean; createdAt: string; updatedAt: string;
+      accountId: string;
+      type: string;
+      channel: string;
+      enabled: boolean;
+      createdAt: string;
+      updatedAt: string;
     }> = [];
 
     for (const type of NOTIFICATION_TYPES) {
@@ -215,7 +267,14 @@ export async function ensureNotificationPreferences(dbBinding: D1Database, userI
         const key = `${type}:${channel}`;
         if (existingSet.has(key)) continue;
         const enabled = DEFAULT_NOTIFICATION_PREFERENCES[type][channel];
-        toCreate.push({ accountId: userId, type, channel, enabled, createdAt: ts, updatedAt: ts });
+        toCreate.push({
+          accountId: userId,
+          type,
+          channel,
+          enabled,
+          createdAt: ts,
+          updatedAt: ts,
+        });
       }
     }
 
@@ -224,18 +283,24 @@ export async function ensureNotificationPreferences(dbBinding: D1Database, userI
         await db.insert(notificationPreferences).values(toCreate);
       } catch (err) {
         // Possible race; re-query on next read.
-        logWarn('Failed to create default preferences', { module: 'notifications', error: err instanceof Error ? err.message : String(err) });
+        logWarn("Failed to create default preferences", {
+          module: "notifications",
+          error: err instanceof Error ? err.message : String(err),
+        });
       }
     }
   } catch (err) {
     if (isMissingTableError(err)) {
-      throwMissingNotificationTable(err, 'notification_preferences');
+      throwMissingNotificationTable(err, "notification_preferences");
     }
     throw err;
   }
 }
 
-export async function getNotificationPreferences(dbBinding: D1Database, userId: string): Promise<NotificationPreferenceMatrix> {
+export async function getNotificationPreferences(
+  dbBinding: D1Database,
+  userId: string,
+): Promise<NotificationPreferenceMatrix> {
   await ensureNotificationPreferences(dbBinding, userId);
   const db = getDb(dbBinding);
   try {
@@ -261,14 +326,15 @@ export async function getNotificationPreferences(dbBinding: D1Database, userId: 
       for (const channel of NOTIFICATION_CHANNELS) {
         const key = `${type}:${channel}`;
         if (!seen.has(key)) {
-          matrix[type][channel] = DEFAULT_NOTIFICATION_PREFERENCES[type][channel];
+          matrix[type][channel] =
+            DEFAULT_NOTIFICATION_PREFERENCES[type][channel];
         }
       }
     }
     return matrix;
   } catch (err) {
     if (isMissingTableError(err)) {
-      throwMissingNotificationTable(err, 'notification_preferences');
+      throwMissingNotificationTable(err, "notification_preferences");
     }
     throw err;
   }
@@ -277,7 +343,9 @@ export async function getNotificationPreferences(dbBinding: D1Database, userId: 
 export async function updateNotificationPreferences(
   dbBinding: D1Database,
   userId: string,
-  updates: Array<{ type: NotificationType; channel: NotificationChannel; enabled: boolean }>
+  updates: Array<
+    { type: NotificationType; channel: NotificationChannel; enabled: boolean }
+  >,
 ): Promise<NotificationPreferenceMatrix> {
   const db = getDb(dbBinding);
   const ts = new Date().toISOString();
@@ -289,14 +357,22 @@ export async function updateNotificationPreferences(
     }).from(notificationPreferences)
       .where(eq(notificationPreferences.accountId, userId))
       .all();
-    const existingSet = new Set(existingRows.map((r) => `${r.type}:${r.channel}`));
+    const existingSet = new Set(
+      existingRows.map((r) => `${r.type}:${r.channel}`),
+    );
 
     // 2. Partition updates into creates vs updates
     const toCreate: Array<{
-      accountId: string; type: string; channel: string;
-      enabled: boolean; createdAt: string; updatedAt: string;
+      accountId: string;
+      type: string;
+      channel: string;
+      enabled: boolean;
+      createdAt: string;
+      updatedAt: string;
     }> = [];
-    const toUpdate: Array<{ type: NotificationType; channel: NotificationChannel; enabled: boolean }> = [];
+    const toUpdate: Array<
+      { type: NotificationType; channel: NotificationChannel; enabled: boolean }
+    > = [];
 
     for (const u of updates) {
       const key = `${u.type}:${u.channel}`;
@@ -331,7 +407,7 @@ export async function updateNotificationPreferences(
     }
   } catch (err) {
     if (isMissingTableError(err)) {
-      throwMissingNotificationTable(err, 'notification_preferences');
+      throwMissingNotificationTable(err, "notification_preferences");
     }
     throw err;
   }
@@ -341,11 +417,13 @@ export async function updateNotificationPreferences(
 export async function listNotifications(
   dbBinding: D1Database,
   userId: string,
-  opts?: { limit?: number; before?: string | null }
+  opts?: { limit?: number; before?: string | null },
 ): Promise<{ notifications: NotificationDto[] }> {
   const db = getDb(dbBinding);
   const limitInput = opts?.limit;
-  const limitVal = Number.isFinite(limitInput) ? Math.min(Math.max(limitInput as number, 1), 50) : 20;
+  const limitVal = Number.isFinite(limitInput)
+    ? Math.min(Math.max(limitInput as number, 1), 50)
+    : 20;
 
   let before: string | null = null;
   if (opts?.before) {
@@ -399,13 +477,16 @@ export async function listNotifications(
     };
   } catch (err) {
     if (isMissingTableError(err)) {
-      throwMissingNotificationTable(err, 'notifications');
+      throwMissingNotificationTable(err, "notifications");
     }
     throw err;
   }
 }
 
-export async function getUnreadCount(dbBinding: D1Database, userId: string): Promise<number> {
+export async function getUnreadCount(
+  dbBinding: D1Database,
+  userId: string,
+): Promise<number> {
   const db = getDb(dbBinding);
   const prefs = await getNotificationPreferences(dbBinding, userId);
   const enabledTypes = NOTIFICATION_TYPES.filter((t) => prefs[t].in_app);
@@ -422,7 +503,7 @@ export async function getUnreadCount(dbBinding: D1Database, userId: string): Pro
     return result?.count ?? 0;
   } catch (err) {
     if (isMissingTableError(err)) {
-      throwMissingNotificationTable(err, 'notifications');
+      throwMissingNotificationTable(err, "notifications");
     }
     throw err;
   }
@@ -431,7 +512,7 @@ export async function getUnreadCount(dbBinding: D1Database, userId: string): Pro
 export async function markNotificationRead(
   dbBinding: D1Database,
   userId: string,
-  notificationId: string
+  notificationId: string,
 ): Promise<{ success: true }> {
   const db = getDb(dbBinding);
   try {
@@ -444,7 +525,7 @@ export async function markNotificationRead(
       ));
   } catch (err) {
     if (isMissingTableError(err)) {
-      throwMissingNotificationTable(err, 'notifications');
+      throwMissingNotificationTable(err, "notifications");
     }
     throw err;
   }
@@ -460,12 +541,13 @@ export async function createNotification(
     title: string;
     body?: string | null;
     data?: Record<string, unknown> | null;
-  }
+  },
 ): Promise<{ notification_id: string | null }> {
   const db = getDb(env.DB);
 
   const prefs = await getNotificationPreferences(env.DB, input.userId);
-  const channelPrefs = prefs[input.type] || DEFAULT_NOTIFICATION_PREFERENCES[input.type];
+  const channelPrefs = prefs[input.type] ||
+    DEFAULT_NOTIFICATION_PREFERENCES[input.type];
   const wantsInApp = !!channelPrefs.in_app;
   const wantsPush = !!channelPrefs.push;
   if (!wantsInApp && !wantsPush) {
@@ -479,10 +561,13 @@ export async function createNotification(
   const dataStr = JSON.stringify(input.data ?? {});
   const MAX_NOTIFICATION_DATA_SIZE = 10_000;
   if (dataStr.length > MAX_NOTIFICATION_DATA_SIZE) {
-    logWarn('Notification data exceeds size limit, truncating payload', { module: 'notifications', ...{
-      type: input.type,
-      size: dataStr.length,
-    } });
+    logWarn("Notification data exceeds size limit, truncating payload", {
+      module: "notifications",
+      ...{
+        type: input.type,
+        size: dataStr.length,
+      },
+    });
   }
 
   try {
@@ -493,16 +578,16 @@ export async function createNotification(
       type: input.type,
       title: input.title,
       body: input.body ?? null,
-      data: dataStr.length <= MAX_NOTIFICATION_DATA_SIZE ? dataStr : '{}',
+      data: dataStr.length <= MAX_NOTIFICATION_DATA_SIZE ? dataStr : "{}",
       createdAt: ts,
-      emailStatus: 'skipped',
+      emailStatus: "skipped",
       emailAttempts: 0,
       emailSentAt: null,
       emailError: null,
     });
   } catch (err) {
     if (isMissingTableError(err)) {
-      throwMissingNotificationTable(err, 'notifications');
+      throwMissingNotificationTable(err, "notifications");
     }
     throw err;
   }
@@ -514,7 +599,10 @@ export async function createNotification(
         await emitNotificationCreated(stub, id);
       }
     } catch (err) {
-      logWarn('Failed to emit notification via DO', { module: 'notifications', error: err instanceof Error ? err.message : String(err) });
+      logWarn("Failed to emit notification via DO", {
+        module: "notifications",
+        error: err instanceof Error ? err.message : String(err),
+      });
     }
   }
 

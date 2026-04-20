@@ -3,19 +3,9 @@
 ```yaml
 name: full-stack-app
 
-publish:
-  - name: shared-db
-    provider: takos
-    kind: sql
-    spec:
-      resource: app-db
-      permission: write
-  - name: uploads
-    provider: takos
-    kind: object-store
-    spec:
-      resource: app-uploads
-      permission: write
+env:
+  DATABASE_URL: postgres://example.local/app
+  UPLOADS_ENDPOINT: https://uploads.example.local
 
 compute:
   api:
@@ -25,15 +15,6 @@ compute:
         job: build-api
         artifact: api
         artifactPath: dist/api.js
-    consume:
-      - publication: shared-db
-        env:
-          endpoint: DATABASE_URL
-          apiKey: DATABASE_API_KEY
-      - publication: uploads
-        env:
-          endpoint: UPLOADS_ENDPOINT
-          apiKey: UPLOADS_API_KEY
 
   jobs:
     build:
@@ -47,9 +28,4 @@ compute:
     triggers:
       schedules:
         - cron: "*/10 * * * *"
-    consume:
-      - publication: shared-db
-        env:
-          endpoint: DATABASE_URL
-          apiKey: DATABASE_API_KEY
 ```

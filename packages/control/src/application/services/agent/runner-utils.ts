@@ -2,7 +2,10 @@
  * Internal types and constants for the Agent Runner module.
  */
 
-import { MAX_TOTAL_TOOL_CALLS_PER_RUN, MAX_TOOL_EXECUTIONS_HISTORY } from '../../../shared/config/limits.ts';
+import {
+  MAX_TOOL_EXECUTIONS_HISTORY,
+  MAX_TOTAL_TOOL_CALLS_PER_RUN,
+} from "../../../shared/config/limits.ts";
 
 export const MAX_TOTAL_TOOL_CALLS = MAX_TOTAL_TOOL_CALLS_PER_RUN;
 
@@ -32,23 +35,28 @@ export function anySignal(signals: AbortSignal[]): AbortSignal {
       controller.abort(signal.reason);
       return controller.signal;
     }
-    signal.addEventListener('abort', () => controller.abort(signal.reason), { once: true });
+    signal.addEventListener("abort", () => controller.abort(signal.reason), {
+      once: true,
+    });
   }
   return controller.signal;
 }
 
 /** Truncate error message to prevent excessive output */
 export function sanitizeErrorMessage(error: string): string {
-  return error.length > 10000 ? error.slice(0, 10000) + '...' : error;
+  return error.length > 10000 ? error.slice(0, 10000) + "..." : error;
 }
 
 /** Truncate very large argument values for practical output size */
-export function redactSensitiveArgs(args: Record<string, unknown>): Record<string, unknown> {
+export function redactSensitiveArgs(
+  args: Record<string, unknown>,
+): Record<string, unknown> {
   const processed: Record<string, unknown> = {};
 
   for (const [key, value] of Object.entries(args)) {
-    if (typeof value === 'string' && value.length > 10000) {
-      processed[key] = value.slice(0, 1000) + `... [truncated:${value.length} chars]`;
+    if (typeof value === "string" && value.length > 10000) {
+      processed[key] = value.slice(0, 1000) +
+        `... [truncated:${value.length} chars]`;
     } else {
       processed[key] = value;
     }

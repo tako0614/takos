@@ -1,10 +1,7 @@
-import type { Accessor, Setter } from 'solid-js';
-import { rpc, rpcJson } from '../lib/rpc.ts';
-import type {
-  SourceItem,
-  SourceItemInstallation,
-} from './useSourceData.ts';
-import { PAGE_SIZE } from './useSourcePagination.ts';
+import type { Accessor, Setter } from "solid-js";
+import { rpc, rpcJson } from "../lib/rpc.ts";
+import type { SourceItem, SourceItemInstallation } from "./useSourceData.ts";
+import { PAGE_SIZE } from "./useSourcePagination.ts";
 
 export interface UseSourceFetchQueriesOptions {
   isAuthenticated: Accessor<boolean>;
@@ -12,7 +9,6 @@ export interface UseSourceFetchQueriesOptions {
   debouncedQuery: Accessor<string>;
   sort: Accessor<string>;
   category: Accessor<string>;
-  officialOnly: Accessor<boolean>;
   // Pagination state setters
   setItems: Setter<SourceItem[]>;
   setLoading: Setter<boolean>;
@@ -24,9 +20,17 @@ export interface UseSourceFetchQueriesOptions {
 
 export interface UseSourceFetchQueriesResult {
   fetchInstallations: () => Promise<Map<string, SourceItemInstallation>>;
-  fetchAll: (offset?: number, append?: boolean, requestId?: number) => Promise<void>;
+  fetchAll: (
+    offset?: number,
+    append?: boolean,
+    requestId?: number,
+  ) => Promise<void>;
   fetchMine: (requestId?: number) => Promise<void>;
-  fetchStarred: (offset?: number, append?: boolean, requestId?: number) => Promise<void>;
+  fetchStarred: (
+    offset?: number,
+    append?: boolean,
+    requestId?: number,
+  ) => Promise<void>;
 }
 
 export function useSourceFetchQueries({
@@ -35,7 +39,6 @@ export function useSourceFetchQueries({
   debouncedQuery,
   sort,
   category,
-  officialOnly,
   setItems,
   setLoading,
   setHasMore,
@@ -44,18 +47,23 @@ export function useSourceFetchQueries({
   refs,
 }: UseSourceFetchQueriesOptions): UseSourceFetchQueriesResult {
   // In-flight promise ref to deduplicate concurrent fetchInstallations calls.
-  let installationsInFlight: Promise<Map<string, SourceItemInstallation>> | null = null;
+  let installationsInFlight:
+    | Promise<Map<string, SourceItemInstallation>>
+    | null = null;
 
-  const fetchInstallationsImpl = async (): Promise<Map<string, SourceItemInstallation>> => {
+  const fetchInstallationsImpl = async (): Promise<
+    Map<string, SourceItemInstallation>
+  > => {
     if (!isAuthenticated() || !effectiveSpaceId()) return new Map();
     try {
-      const response = await fetch(`/api/spaces/${effectiveSpaceId()}/app-deployments`);
-      if (!response.ok) throw new Error('Failed to fetch app deployments');
-      // Backend returns `{ app_deployments }` with `source.resolved_repo_id`
-      // (see packages/control/src/server/routes/app-deployments.ts and
-      // application/services/platform/app-deployments-model.ts).
+      const response = await fetch(
+        `/api/spaces/${effectiveSpaceId()}/group-deployment-snapshots`,
+      );
+      if (!response.ok) throw new Error("Failed to fetch deployment snapshots");
+      // Backend returns `{ group_deployment_snapshots }` with `source.resolved_repo_id`
+      // (see the group-deployment-snapshots API route and model).
       const data = await rpcJson<{
-        app_deployments: Array<{
+        group_deployment_snapshots: Array<{
           id: string;
           manifest_version: string | null;
           created_at: string;
@@ -63,12 +71,12 @@ export function useSourceFetchQueries({
         }>;
       }>(response);
       const map = new Map<string, SourceItemInstallation>();
-      for (const pkg of data.app_deployments || []) {
+      for (const pkg of data.group_deployment_snapshots || []) {
         const repoId = pkg.source?.resolved_repo_id || null;
         if (repoId) {
           map.set(repoId, {
             installed: true,
-            app_deployment_id: pkg.id,
+            group_deployment_snapshot_id: pkg.id,
             installed_version: pkg.manifest_version,
             deployed_at: pkg.created_at,
           });
@@ -81,7 +89,9 @@ export function useSourceFetchQueries({
   };
 
   // Memoized wrapper that deduplicates concurrent calls
-  const fetchInstallations = async (): Promise<Map<string, SourceItemInstallation>> => {
+  const fetchInstallations = async (): Promise<
+    Map<string, SourceItemInstallation>
+  > => {
     if (installationsInFlight) {
       return installationsInFlight;
     }
@@ -93,7 +103,11 @@ export function useSourceFetchQueries({
   };
 
   // Fetch catalog (all filter)
-  const fetchAll = async (offset = 0, append = false, requestId = refs.requestSeqRef) => {
+  const fetchAll = async (
+    offset = 0,
+    append = false,
+    requestId = refs.requestSeqRef,
+  ) => {
     if (requestId !== refs.requestSeqRef) return;
     try {
       setLoading(true);
@@ -101,7 +115,7 @@ export function useSourceFetchQueries({
         limit: String(PAGE_SIZE),
         offset: String(offset),
         sort: sort(),
-        type: officialOnly() ? 'official' : 'all',
+        type: "all",
       };
       if (debouncedQuery().trim()) queryParams.q = debouncedQuery().trim();
       if (category()) queryParams.category = category();
@@ -118,7 +132,7 @@ export function useSourceFetchQueries({
             id: string;
             name: string;
             description: string | null;
-            visibility: 'public';
+            visibility: "public";
             default_branch: string;
             stars: number;
             forks: number;
@@ -129,9 +143,14 @@ export function useSourceFetchQueries({
             created_at: string;
             updated_at: string;
             space: { id: string; name: string };
-            owner: { id: string; name: string; username: string; avatar_url: string | null };
+            owner: {
+              id: string;
+              name: string;
+              username: string;
+              avatar_url: string | null;
+            };
           };
-          takopack: {
+          package: {
             available: boolean;
             latest_version: string | null;
             latest_tag: string | null;
@@ -151,11 +170,10 @@ export function useSourceFetchQueries({
           };
           installation?: {
             installed: boolean;
-            app_deployment_id: string | null;
+            group_deployment_snapshot_id: string | null;
             installed_version: string | null;
             deployed_at: string | null;
           };
-          official?: boolean;
         }>;
         total: number;
         has_more: boolean;
@@ -163,40 +181,58 @@ export function useSourceFetchQueries({
 
       if (requestId !== refs.requestSeqRef) return;
 
-      const newItems: SourceItem[] = (data.items || []).map((item) => ({
-        id: item.repo.id,
-        name: item.repo.name,
-        description: item.repo.description,
-        visibility: item.repo.visibility,
-        default_branch: item.repo.default_branch,
-        updated_at: item.repo.updated_at,
-        stars: item.repo.stars,
-        forks: item.repo.forks,
-        language: item.repo.language,
-        license: item.repo.license,
-        category: item.repo.category,
-        is_starred: item.repo.is_starred,
-        is_mine: false,
-        owner: item.repo.owner,
-        space: item.repo.space,
-        takopack: {
-          available: item.takopack.available,
-          latest_version: item.takopack.latest_version,
-          latest_tag: item.takopack.latest_tag,
-          release_tag: item.takopack.release_tag,
-          asset_id: item.takopack.asset_id,
-          tags: item.takopack.tags,
-          downloads: item.takopack.downloads,
-          certified: item.takopack.certified,
-          description: item.takopack.description,
-        },
-        installation: installMap.get(item.repo.id) ?? item.installation,
-        official: item.official,
-      }));
+      const newItems: SourceItem[] = (data.items || []).map((item) => {
+        const installation = item.installation
+          ? {
+            installed: item.installation.installed,
+            group_deployment_snapshot_id:
+              item.installation.group_deployment_snapshot_id,
+            installed_version: item.installation.installed_version,
+            deployed_at: item.installation.deployed_at,
+          }
+          : undefined;
+        return {
+          id: item.repo.id,
+          name: item.repo.name,
+          description: item.repo.description,
+          visibility: item.repo.visibility,
+          default_branch: item.repo.default_branch,
+          updated_at: item.repo.updated_at,
+          stars: item.repo.stars,
+          forks: item.repo.forks,
+          language: item.repo.language,
+          license: item.repo.license,
+          category: item.repo.category,
+          is_starred: item.repo.is_starred,
+          is_mine: false,
+          owner: item.repo.owner,
+          space: item.repo.space,
+          package: {
+            available: item.package.available,
+            latest_version: item.package.latest_version,
+            latest_tag: item.package.latest_tag,
+            release_tag: item.package.release_tag,
+            asset_id: item.package.asset_id,
+            tags: item.package.tags,
+            downloads: item.package.downloads,
+            certified: item.package.certified,
+            description: item.package.description,
+          },
+          installation: installMap.get(item.repo.id) ?? installation,
+        };
+      });
 
-      setItems((prev) => (append
-        ? [...prev, ...newItems.filter((item) => !prev.some((existing) => existing.id === item.id))]
-        : newItems));
+      setItems((
+        prev,
+      ) => (append
+        ? [
+          ...prev,
+          ...newItems.filter((item) =>
+            !prev.some((existing) => existing.id === item.id)
+          ),
+        ]
+        : newItems)
+      );
       setHasMore(Boolean(data.has_more));
       setTotal(data.total || 0);
     } catch {
@@ -237,7 +273,7 @@ export function useSourceFetchQueries({
     try {
       setLoading(true);
       const [reposResponse, installMap] = await Promise.all([
-        rpc.spaces[':spaceId'].repos.$get({
+        rpc.spaces[":spaceId"].repos.$get({
           param: { spaceId: effectiveSpaceId()! },
         }),
         fetchInstallations(),
@@ -247,7 +283,7 @@ export function useSourceFetchQueries({
           id: string;
           name: string;
           description: string | null;
-          visibility: 'public' | 'private';
+          visibility: "public" | "private";
           updated_at: string;
           stars?: number;
           stars_count?: number;
@@ -269,7 +305,9 @@ export function useSourceFetchQueries({
       if (debouncedQuery().trim()) {
         const q = debouncedQuery().toLowerCase();
         repos = repos.filter(
-          (r) => r.name.toLowerCase().includes(q) || (r.description || '').toLowerCase().includes(q),
+          (r) =>
+            r.name.toLowerCase().includes(q) ||
+            (r.description || "").toLowerCase().includes(q),
         );
       }
 
@@ -278,7 +316,7 @@ export function useSourceFetchQueries({
         name: repo.name,
         description: repo.description,
         visibility: repo.visibility,
-        default_branch: 'main',
+        default_branch: "main",
         updated_at: repo.updated_at,
         stars: repo.stars_count ?? repo.stars ?? 0,
         forks: repo.forks_count ?? repo.forks ?? 0,
@@ -286,12 +324,12 @@ export function useSourceFetchQueries({
         is_mine: true,
         owner: repo.owner
           ? {
-              id: repo.owner.id,
-              name: repo.owner.name || repo.owner.username || 'unknown',
-              username: repo.owner.username || '',
-              avatar_url: repo.owner.avatar_url ?? null,
-            }
-          : { name: 'unknown', username: '' },
+            id: repo.owner.id,
+            name: repo.owner.name || repo.owner.username || "unknown",
+            username: repo.owner.username || "",
+            avatar_url: repo.owner.avatar_url ?? null,
+          }
+          : { name: "unknown", username: "" },
         installation: installMap.get(repo.id),
       }));
 
@@ -312,7 +350,11 @@ export function useSourceFetchQueries({
   };
 
   // Fetch starred repos (starred filter)
-  const fetchStarred = async (offset = 0, append = false, requestId = refs.requestSeqRef) => {
+  const fetchStarred = async (
+    offset = 0,
+    append = false,
+    requestId = refs.requestSeqRef,
+  ) => {
     if (requestId !== refs.requestSeqRef) return;
     if (!isAuthenticated()) {
       if (!append) {
@@ -336,7 +378,7 @@ export function useSourceFetchQueries({
           id: string;
           name: string;
           description: string | null;
-          visibility: 'public' | 'private';
+          visibility: "public" | "private";
           updated_at: string;
           stars?: number;
           stars_count?: number;
@@ -361,7 +403,7 @@ export function useSourceFetchQueries({
         name: repo.name,
         description: repo.description,
         visibility: repo.visibility,
-        default_branch: 'main',
+        default_branch: "main",
         updated_at: repo.updated_at,
         stars: repo.stars_count ?? repo.stars ?? 0,
         forks: repo.forks_count ?? repo.forks ?? 0,
@@ -369,18 +411,26 @@ export function useSourceFetchQueries({
         is_mine: false,
         owner: repo.owner
           ? {
-              id: repo.owner.id,
-              name: repo.owner.name,
-              username: repo.owner.username || '',
-              avatar_url: repo.owner.avatar_url,
-            }
-          : { name: 'unknown', username: '' },
+            id: repo.owner.id,
+            name: repo.owner.name,
+            username: repo.owner.username || "",
+            avatar_url: repo.owner.avatar_url,
+          }
+          : { name: "unknown", username: "" },
         installation: installMap.get(repo.id),
       }));
 
-      setItems((prev) => (append
-        ? [...prev, ...newItems.filter((item) => !prev.some((existing) => existing.id === item.id))]
-        : newItems));
+      setItems((
+        prev,
+      ) => (append
+        ? [
+          ...prev,
+          ...newItems.filter((item) =>
+            !prev.some((existing) => existing.id === item.id)
+          ),
+        ]
+        : newItems)
+      );
       setHasMore(Boolean(data.has_more));
       setTotal(data.total || 0);
     } catch {

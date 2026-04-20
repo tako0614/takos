@@ -1,13 +1,8 @@
-import type { PlatformExecutionContext } from '../shared/types/bindings.ts';
-import type {
-  BrowserSessionState,
-  BrowserSessionTokenInfo,
-  CreateSessionPayload,
-} from '../runtime/container-hosts/browser-session-types.ts';
+import type { PlatformExecutionContext } from "../shared/types/bindings.ts";
 import type {
   AgentExecutorControlConfig,
   AgentExecutorDispatchPayload,
-} from '../runtime/container-hosts/executor-dispatch.ts';
+} from "../runtime/container-hosts/executor-dispatch.ts";
 
 /**
  * Default host-side ports for the local-platform stack.
@@ -29,7 +24,6 @@ export const DEFAULT_LOCAL_PORTS = {
   dispatch: 8788,
   runtimeHost: 8789,
   executorHost: 8790,
-  browserHost: 8791,
 } as const;
 
 /**
@@ -40,7 +34,6 @@ export const DEFAULT_LOCAL_PORTS = {
 export const DEFAULT_LOCAL_SERVICE_PORTS = {
   runtime: 8080,
   executor: 8080,
-  browser: 8080,
 } as const;
 
 /**
@@ -54,9 +47,9 @@ export const DEFAULT_LOCAL_SERVICE_PORTS = {
  */
 export const DEFAULT_LOCAL_DOMAINS = {
   /** Admin panel domain (matches TAKOS_ADMIN_DOMAIN in env examples). */
-  admin: 'admin.localhost',
+  admin: "admin.localhost",
   /** Tenant sub-domain base (matches TAKOS_TENANT_BASE_DOMAIN in env examples). */
-  tenantBase: 'app.localhost',
+  tenantBase: "app.localhost",
 } as const;
 
 export type LocalFetch = (
@@ -65,31 +58,27 @@ export type LocalFetch = (
 ) => Promise<Response>;
 
 export type LocalBinding = {
-  fetch(request: Request): Promise<Response>;
+  fetch(input: RequestInfo | URL, init?: RequestInit): Promise<Response>;
 };
 
 export type LocalRuntimeGatewayStub = LocalBinding & {
-  verifyProxyToken(token: string): Promise<{ sessionId: string; spaceId: string } | null>;
+  verifyProxyToken(
+    token: string,
+  ): Promise<{ sessionId: string; spaceId: string } | null>;
+  revokeSessionProxyTokens(sessionId: string): Promise<number>;
 };
 
 export type ProxyTokenInfo = {
   runId: string;
   serviceId: string;
-  capability: 'bindings' | 'control';
+  capability: "control";
 };
 
 export type LocalExecutorGatewayStub = {
-  dispatchStart(body: AgentExecutorDispatchPayload): Promise<{ ok: boolean; status: number; body: string }>;
+  dispatchStart(
+    body: AgentExecutorDispatchPayload,
+  ): Promise<{ ok: boolean; status: number; body: string }>;
   verifyProxyToken(token: string): Promise<ProxyTokenInfo | null>;
 };
 
-export type LocalBrowserGatewayStub = LocalBinding & {
-  createSession(payload: CreateSessionPayload): Promise<{ ok: true; proxyToken: string }>;
-  verifyProxyToken(token: string): Promise<BrowserSessionTokenInfo | null>;
-  getSessionState(): Promise<BrowserSessionState | null>;
-  destroySession(): Promise<void>;
-  forwardToContainer(path: string, init?: RequestInit): Promise<Response>;
-};
-
 export type { AgentExecutorControlConfig, AgentExecutorDispatchPayload };
-export type { BrowserSessionState, BrowserSessionTokenInfo, CreateSessionPayload };

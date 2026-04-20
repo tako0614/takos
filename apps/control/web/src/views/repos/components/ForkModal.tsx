@@ -16,7 +16,6 @@ interface ForkApiResponse {
     id: string;
     name: string;
     space_id: string;
-    is_official: boolean;
     owner_username?: string | null;
     owner_name?: string | null;
   };

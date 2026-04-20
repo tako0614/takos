@@ -24,6 +24,11 @@ export class LocalHostContainerRuntime<Env = unknown> {
   ctx: HostContainerContext;
   env: Env;
   envVars: Record<string, string> = {};
+  container: HostContainerInternals["container"] = {
+    getTcpPort(): HostContainerTcpPortFetcher {
+      throw new Error("Host container TCP ports are unavailable locally");
+    },
+  };
 
   constructor(ctx: HostContainerContext, env: Env) {
     this.ctx = ctx;

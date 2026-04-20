@@ -1,12 +1,12 @@
 /**
  * Seed Repositories
  *
- * A flat list of repository URLs shown to users during new account/workspace
- * creation. The frontend renders these in a selection popup so the user can
- * pick which ones to clone into their workspace.
+ * A flat list of repository URLs an operator may show during new
+ * account/workspace creation. The frontend renders these in a selection popup
+ * so the user can pick which ones to clone into their workspace.
  *
- * This has nothing to do with the store — the store is for discovery.
- * This is purely "here are some repos you probably want on day one".
+ * This has nothing to do with the store — the store is for discovery. Takos
+ * kernel features such as the agent runtime are not represented here.
  */
 
 export interface SeedRepository {
@@ -26,12 +26,4 @@ export interface SeedRepository {
  * The list. Add / remove entries here.
  * Order matters — it's the display order in the popup.
  */
-export const SEED_REPOSITORIES: SeedRepository[] = [
-  {
-    url: 'https://github.com/tako0614/takos-agent.git',
-    name: 'Takos Agent',
-    description: 'Browser automation and agent executor',
-    category: 'tool',
-    checked: true,
-  },
-];
+export const SEED_REPOSITORIES: SeedRepository[] = [];

@@ -129,7 +129,7 @@ Deno.test("notifications routes - GET /api/notifications - rejects invalid befor
     {} as ExecutionContext,
   );
 
-  assertEquals(res.status, 422);
+  assertEquals(res.status, 400);
 });
 
 Deno.test("notifications routes - GET /api/notifications/unread-count - returns unread count", async () => {
@@ -269,7 +269,7 @@ Deno.test("notifications routes - PATCH /api/notifications/preferences - rejects
     {} as ExecutionContext,
   );
 
-  assertEquals(res.status, 422);
+  assertEquals(res.status, 400);
 });
 
 Deno.test("notifications routes - GET /api/notifications/settings - returns muted_until setting", async () => {
@@ -339,7 +339,7 @@ Deno.test("notifications routes - PATCH /api/notifications/settings - rejects in
     {} as ExecutionContext,
   );
 
-  assertEquals(res.status, 422);
+  assertEquals(res.status, 400);
 });
 
 Deno.test("notifications routes - GET /api/notifications/ws - returns 426 without Upgrade: websocket header", async () => {

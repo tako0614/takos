@@ -115,6 +115,9 @@ export {
 export {
   apDeliveryQueue,
   apFollowers,
+  defaultAppDistributionConfig,
+  defaultAppDistributionEntries,
+  defaultAppPreinstallJobs,
   dlqEntries,
   edges,
   fileHandlerMatchers,
@@ -159,7 +162,7 @@ export {
 
 // Groups
 export { groups } from "./schema-groups.ts";
-export { appDeployments } from "./schema-app-deployments.ts";
+export { groupDeploymentSnapshots } from "./schema-group-deployment-snapshots.ts";
 
 // Workers
 export {

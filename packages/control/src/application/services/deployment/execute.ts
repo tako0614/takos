@@ -8,13 +8,14 @@
 import { safeJsonParseOrDefault } from "../../../shared/utils/index.ts";
 import type { Deployment, DeploymentEnv } from "./models.ts";
 import {
-  createDeploymentProvider,
-  parseDeploymentTargetConfig,
-} from "./provider.ts";
+  createDeploymentBackend,
+  parseDeploymentBackendConfig,
+} from "./backend.ts";
 import {
-  createDeploymentProviderRegistry,
-  resolveDeploymentProviderConfigsFromEnv,
-} from "../../../platform/deployment-providers.ts";
+  createDeploymentBackendRegistry,
+  resolveDeploymentBackendConfigsFromEnv,
+} from "../../../platform/deployment-backends.ts";
+import type { WorkerBinding } from "../../../platform/backends/cloudflare/wfp.ts";
 import {
   getDeploymentById,
   getDeploymentEvents,
@@ -32,6 +33,7 @@ import {
   fetchServiceWithDomains,
   restoreRoutingSnapshot,
   type RoutingSnapshot,
+  runRoutingMutationWithRollback,
   snapshotRouting,
 } from "./routing.ts";
 import { rollbackDeploymentSteps } from "./rollback.ts";
@@ -48,6 +50,7 @@ import {
 import {
   decryptBindings,
   getBundleContent,
+  getEnvVars,
   getWasmContent,
   verifyBundleIntegrity,
 } from "./artifact-io.ts";
@@ -57,6 +60,20 @@ import {
   describeReadinessFailure,
   probeWorkerReadiness,
 } from "./readiness-probe.ts";
+import { logWarn } from "../../../shared/utils/logger.ts";
+
+function mergeRuntimeEnvVars(
+  envVars: Record<string, string>,
+  bindings: WorkerBinding[],
+): Record<string, string> {
+  const merged = { ...envVars };
+  for (const binding of bindings) {
+    if (binding.type === "plain_text" || binding.type === "secret_text") {
+      merged[binding.name] = binding.text ?? "";
+    }
+  }
+  return merged;
+}
 
 /**
  * Execute a deployment through all pipeline steps (deploy_worker, update_routing, finalize).
@@ -93,6 +110,7 @@ export async function executeDeploymentPipeline(
   let workerHostname: string | null = null;
   let deploymentArtifactRef: string | null = null;
   let routingRollbackSnapshot: RoutingSnapshot | null = null;
+  let candidateBaseUrl: string | null = null;
 
   try {
     const serviceBasics = await getServiceDeploymentBasics(
@@ -107,21 +125,19 @@ export async function executeDeploymentPipeline(
     deploymentArtifactRef = resolveDeploymentArtifactRef({
       serviceId: deploymentServiceId,
       version: deployment.version,
-      target: parseDeploymentTargetConfig(deployment),
+      target: parseDeploymentBackendConfig(deployment),
       persistedArtifactRef: deployment.artifact_ref,
     });
 
     const deployArtifactRef = deploymentArtifactRef;
-    const providerRegistry = createDeploymentProviderRegistry(
-      resolveDeploymentProviderConfigsFromEnv(
-        env as unknown as Record<string, unknown>,
-      ),
+    const backendRegistry = createDeploymentBackendRegistry(
+      resolveDeploymentBackendConfigsFromEnv(env),
     );
-    const provider = createDeploymentProvider(deployment, {
+    const backend = createDeploymentBackend(deployment, {
       cloudflareEnv: env,
       orchestratorUrl: env.OCI_ORCHESTRATOR_URL,
       orchestratorToken: env.OCI_ORCHESTRATOR_TOKEN,
-      providerRegistry,
+      backendRegistry,
     });
 
     if (!deployArtifactRef) {
@@ -160,18 +176,21 @@ export async function executeDeploymentPipeline(
               ? ["nodejs_compat"]
               : [];
 
-          const bindings =
-            (!isContainerDeploy && deployment.bindings_snapshot_encrypted)
-              ? await decryptBindings(encryptionKey, deployment)
-              : [];
-          const deployResult = await provider.deploy({
+          const bindings = deployment.bindings_snapshot_encrypted
+            ? await decryptBindings(encryptionKey, deployment)
+            : [];
+          const envVars = await getEnvVars(encryptionKey, deployment);
+          const deployResult = await backend.deploy({
             deployment,
             artifactRef: deployArtifactRef,
             bundleContent,
             wasmContent,
             runtime: {
               profile: isContainerDeploy ? "container-service" : "workers",
-              bindings,
+              bindings: isContainerDeploy ? [] : bindings,
+              envVars: isContainerDeploy
+                ? mergeRuntimeEnvVars(envVars, bindings)
+                : envVars,
               config: {
                 compatibility_date: compatibilityDate,
                 compatibility_flags: compatibilityFlags,
@@ -180,23 +199,24 @@ export async function executeDeploymentPipeline(
             },
           });
 
-          // Store resolved endpoint from container provider in provider_state_json
+          // Store resolved endpoint from container backend in backend_state_json
           if (deployResult?.resolvedEndpoint) {
-            const providerState = safeJsonParseOrDefault<
+            candidateBaseUrl = deployResult.resolvedEndpoint.base_url;
+            const backendState = safeJsonParseOrDefault<
               Record<string, unknown>
             >(
-              deployment.provider_state_json,
+              deployment.backend_state_json,
               {},
             );
-            providerState.resolved_endpoint = deployResult.resolvedEndpoint;
+            backendState.resolved_endpoint = deployResult.resolvedEndpoint;
             if (deployResult.logsRef) {
-              providerState.logs_ref = deployResult.logsRef;
+              backendState.logs_ref = deployResult.logsRef;
             }
             await updateDeploymentRecord(env.DB, deploymentId, {
-              providerStateJson: JSON.stringify(providerState),
+              backendStateJson: JSON.stringify(backendState),
             });
             // Update in-memory deployment for routing step
-            deployment.provider_state_json = JSON.stringify(providerState);
+            deployment.backend_state_json = JSON.stringify(backendState);
           }
         },
       );
@@ -228,24 +248,29 @@ export async function executeDeploymentPipeline(
         "deploying_worker",
         "probe_readiness",
         async () => {
-          const deploymentTarget = parseDeploymentTargetConfig(deployment);
+          const deploymentTarget = parseDeploymentBackendConfig(deployment);
           const readinessPath = deploymentTarget.readiness?.path ??
             DEFAULT_READINESS_PATH;
 
-          // Probe URL の base を resolve する。
-          // - worker deploys: services.hostname (例: my-app.takos.app)
-          // - container providers: ここでは到達しない (isContainerDeploy guard 済み)
-          if (!workerHostname) {
-            // hostname 未割り当ての worker (まだ routing が無い空 deploy など) は
-            // probe を skip する。kernel-managed worker (api / dispatch / docs) で
-            // hostname が常に存在するケースでは到達しない。
+          // Worker readiness must probe the candidate deployment, not the
+          // currently routed hostname. If the backend cannot expose a candidate
+          // URL (e.g. WFP-managed workers), skip the probe instead of checking
+          // the existing route.
+          if (!candidateBaseUrl) {
+            logWarn(
+              "Skipping worker readiness probe: candidate URL unavailable",
+              {
+                module: "deployment",
+                deploymentId,
+              },
+            );
             return;
           }
 
-          const baseUrl = workerHostname.startsWith("http://") ||
-              workerHostname.startsWith("https://")
-            ? workerHostname
-            : `https://${workerHostname}`;
+          const baseUrl = candidateBaseUrl.startsWith("http://") ||
+              candidateBaseUrl.startsWith("https://")
+            ? candidateBaseUrl
+            : `https://${candidateBaseUrl}`;
           const probeUrl = buildProbeUrl(baseUrl, readinessPath);
 
           const outcome = await probeWorkerReadiness({
@@ -316,15 +341,15 @@ export async function executeDeploymentPipeline(
           }
 
           // For container deploys, inject the resolved endpoint as the routing target
-          let deploymentTarget = parseDeploymentTargetConfig(deployment);
+          let deploymentTarget = parseDeploymentBackendConfig(deployment);
           if (isContainerDeploy) {
-            const providerState = safeJsonParseOrDefault<
+            const backendState = safeJsonParseOrDefault<
               Record<string, unknown>
             >(
-              deployment.provider_state_json,
+              deployment.backend_state_json,
               {},
             );
-            const resolvedEp = providerState.resolved_endpoint as {
+            const resolvedEp = backendState.resolved_endpoint as {
               base_url?: string;
             } | undefined;
             if (resolvedEp?.base_url) {
@@ -351,7 +376,16 @@ export async function executeDeploymentPipeline(
             hostnameList,
           );
 
-          await applyRoutingToHostnames(env, hostnameList, target);
+          await runRoutingMutationWithRollback(
+            env,
+            routingRollbackSnapshot,
+            () => applyRoutingToHostnames(env, hostnameList, target),
+            {
+              module: "deployment",
+              message:
+                "Failed to restore routing snapshot during deployment routing update (non-critical)",
+            },
+          );
 
           try {
             await applyRoutingDbUpdates(env, routingCtx, nowIso);
@@ -449,14 +483,12 @@ export async function executeDeploymentPipeline(
       routingRollbackSnapshot,
       workerHostname,
       deploymentArtifactRef,
-      provider: createDeploymentProvider(deployment, {
+      backend: createDeploymentBackend(deployment, {
         cloudflareEnv: env,
         orchestratorUrl: env.OCI_ORCHESTRATOR_URL,
         orchestratorToken: env.OCI_ORCHESTRATOR_TOKEN,
-        providerRegistry: createDeploymentProviderRegistry(
-          resolveDeploymentProviderConfigsFromEnv(
-            env as unknown as Record<string, unknown>,
-          ),
+        backendRegistry: createDeploymentBackendRegistry(
+          resolveDeploymentBackendConfigsFromEnv(env),
         ),
       }),
     });

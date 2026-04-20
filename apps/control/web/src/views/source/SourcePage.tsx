@@ -45,8 +45,6 @@ export function SourcePage(props: SourcePageProps) {
     setSort,
     category,
     setCategory,
-    officialOnly,
-    setOfficialOnly,
     query,
     setQuery,
     items,
@@ -69,7 +67,7 @@ export function SourcePage(props: SourcePageProps) {
     toggleStar,
     createRepo,
     openRepo,
-    getItemTakopack,
+    getItemPackage,
   } = useSourceData({
     spaces: () => props.spaces,
     onNavigateToRepo: (username, repoName) =>
@@ -91,9 +89,8 @@ export function SourcePage(props: SourcePageProps) {
   });
 
   const isSearchMode = browseMode() || query().length > 0 ||
-    filter() !== "all" || category() !== "" || officialOnly();
-  const hasActiveFilters = filter() !== "all" || category() !== "" ||
-    officialOnly();
+    filter() !== "all" || category() !== "";
+  const hasActiveFilters = filter() !== "all" || category() !== "";
 
   // Restore scroll position when switching between home/search
   createEffect(() => {
@@ -122,14 +119,12 @@ export function SourcePage(props: SourcePageProps) {
     setQuery("");
     setFilter("all");
     setCategory("");
-    setOfficialOnly(false);
     searchRef?.blur();
   }
 
   function clearFilters() {
     setFilter("all");
     setCategory("");
-    setOfficialOnly(false);
   }
 
   return (
@@ -202,8 +197,6 @@ export function SourcePage(props: SourcePageProps) {
                     setFilter={setFilter}
                     category={category()}
                     setCategory={setCategory}
-                    officialOnly={officialOnly()}
-                    setOfficialOnly={setOfficialOnly}
                     sort={sort()}
                     setSort={setSort}
                     isAuthenticated={props.isAuthenticated}
@@ -219,7 +212,7 @@ export function SourcePage(props: SourcePageProps) {
                 hasMore={hasMore()}
                 filter={filter()}
                 installingId={installingId()}
-                getItemTakopack={getItemTakopack}
+                getItemPackage={getItemPackage}
                 onSelect={setSelectedItem}
                 onInstall={install}
                 onStar={toggleStar}
@@ -240,17 +233,13 @@ export function SourcePage(props: SourcePageProps) {
               items={items()}
               loading={loading()}
               installingId={installingId()}
-              getItemTakopack={getItemTakopack}
+              getItemPackage={getItemPackage}
               onSelect={setSelectedItem}
               onInstall={install}
               onOpenRepo={openRepo}
               onSeeAllTrending={() => {
                 setBrowseMode(true);
                 setSort("trending");
-              }}
-              onSeeAllOfficial={() => {
-                setBrowseMode(true);
-                setOfficialOnly(true);
               }}
               onSeeAllMine={() => {
                 setBrowseMode(true);
@@ -268,8 +257,6 @@ export function SourcePage(props: SourcePageProps) {
           setFilter={setFilter}
           category={category()}
           setCategory={setCategory}
-          officialOnly={officialOnly()}
-          setOfficialOnly={setOfficialOnly}
           isAuthenticated={props.isAuthenticated}
           onRequireLogin={props.onRequireLogin}
         />
@@ -278,7 +265,7 @@ export function SourcePage(props: SourcePageProps) {
       {selectedItem() && (
         <RepoDetailPanel
           item={selectedItem()!}
-          takopack={getItemTakopack(selectedItem()!)}
+          pkg={getItemPackage(selectedItem()!)}
           installingId={installingId()}
           onClose={() => setSelectedItem(null)}
           onInstall={install}

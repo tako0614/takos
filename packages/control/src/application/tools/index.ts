@@ -1,60 +1,75 @@
 export type {
-  ToolContext,
-  ToolDefinition,
-  ToolParameter,
-  ToolCategory,
-  ToolResult,
-  ToolHandler,
-  RegisteredTool,
-  ToolCall,
-  RuntimeExecRequest,
-  RuntimeExecResponse,
   DeployRequest,
   DeployResponse,
-} from './tool-definitions.ts';
+  RegisteredTool,
+  RuntimeExecRequest,
+  RuntimeExecResponse,
+  ToolCall,
+  ToolCategory,
+  ToolContext,
+  ToolDefinition,
+  ToolHandler,
+  ToolParameter,
+  ToolResult,
+} from "./tool-definitions.ts";
 
 export {
-  BUILTIN_TOOLS,
-  BUILTIN_HANDLERS,
-  TOOL_CATEGORIES,
-  getBuiltinTool,
-  getBuiltinHandler,
-  isBuiltinTool,
+  CUSTOM_HANDLERS,
+  CUSTOM_TOOLS,
+  getCustomHandler,
+  getCustomTool,
   getToolsByCategory,
-} from './builtin/index.ts';
+  isCustomTool,
+  TOOL_CATEGORIES,
+} from "./custom/index.ts";
 
-export { ToolExecutor } from './executor.ts';
-export { createToolExecutor, SessionState } from './executor-setup.ts';
-export { toOpenAIFunctions, buildPerRunCapabilityRegistry } from './executor-utils.ts';
-export { ErrorCodes, ToolError, classifyError, SEVERITY_HINTS } from './tool-error-classifier.ts';
-export type { ErrorCode, ErrorSeverity } from './tool-error-classifier.ts';
-export { assertToolPermission, filterAccessibleTools, getAllRequiredCapabilities, canRoleAccessExposedTool, canUseToolCapabilities } from './tool-permission.ts';
-export { ToolCircuitBreaker } from './tool-circuit-breaker.ts';
+export { ToolExecutor } from "./executor.ts";
+export { createToolExecutor, SessionState } from "./executor-setup.ts";
+export {
+  buildPerRunCapabilityRegistry,
+  toOpenAIFunctions,
+} from "./executor-utils.ts";
+export {
+  classifyError,
+  ErrorCodes,
+  SEVERITY_HINTS,
+  ToolError,
+} from "./tool-error-classifier.ts";
+export type { ErrorCode, ErrorSeverity } from "./tool-error-classifier.ts";
+export {
+  assertToolPermission,
+  canRoleAccessExposedTool,
+  canUseToolCapabilities,
+  filterAccessibleTools,
+  getAllRequiredCapabilities,
+} from "./tool-permission.ts";
+export { ToolCircuitBreaker } from "./tool-circuit-breaker.ts";
 export type {
   SensitiveReadPolicy,
-  ToolClass,
   SpaceOperationId,
   SpaceOperationPolicy,
-} from './tool-policy.ts';
+  ToolClass,
+} from "./tool-policy.ts";
 export {
-  AGENT_DISABLED_BUILTIN_TOOLS,
-  SPACE_OPERATION_POLICIES,
-  WORKSPACE_STORAGE_OPS,
-  REPO_OPS,
-  SERVICE_OPS,
-  CUSTOM_DOMAIN_OPS,
-  DEPLOYMENT_OPS,
-  SKILL_OPS,
-  APP_DEPLOYMENT_OPS,
-  MCP_SERVER_OPS,
-  getSpaceOperationPolicy,
-  getToolPolicyMetadata,
+  AGENT_DISABLED_CUSTOM_TOOLS,
+  applyCustomToolPolicyMetadata,
   applyToolPolicyMetadata,
-  applyBuiltinToolPolicyMetadata,
   canRoleAccessOperation,
   canRoleAccessTool,
-  filterToolsForRole,
-  isToolAllowedForAgent,
+  CUSTOM_DOMAIN_OPS,
+  CUSTOM_TOOL_POLICY_METADATA,
+  DEPLOYMENT_OPS,
   filterAgentAllowedToolNames,
-  validateBuiltinToolPolicies,
-} from './tool-policy.ts';
+  filterToolsForRole,
+  getSpaceOperationPolicy,
+  getToolPolicyMetadata,
+  GROUP_DEPLOYMENT_SNAPSHOT_OPS,
+  isToolAllowedForAgent,
+  MCP_SERVER_OPS,
+  REPO_OPS,
+  SERVICE_OPS,
+  SKILL_OPS,
+  SPACE_OPERATION_POLICIES,
+  validateCustomToolPolicies,
+  SPACE_STORAGE_OPS,
+} from "./tool-policy.ts";

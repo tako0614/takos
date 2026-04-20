@@ -1,29 +1,29 @@
-import type { SpaceRole } from '../../shared/types/index.ts';
+import type { SpaceRole } from "../../shared/types/index.ts";
 
-export type CapabilityKind = 'tool' | 'skill';
+export type CapabilityKind = "tool" | "skill";
 
 export type CapabilityNamespace =
-  | 'container'
-  | 'repo'
-  | 'file'
-  | 'deploy'
-  | 'platform'
-  | 'runtime'
-  | 'storage'
-  | 'workspace.files'
-  | 'workspace.env'
-  | 'workspace.skills'
-  | 'workspace.apps'
-  | 'workspace.source'
-  | 'memory'
-  | 'web'
-  | 'artifact'
-  | 'agent'
-  | 'mcp'
-  | 'browser'
-  | 'discovery';
+  | "container"
+  | "repo"
+  | "file"
+  | "deploy"
+  | "platform"
+  | "runtime"
+  | "storage"
+  | "space.files"
+  | "space.env"
+  | "space.skills"
+  | "space.apps"
+  | "space.groups.deployments"
+  | "space.source"
+  | "memory"
+  | "web"
+  | "artifact"
+  | "agent"
+  | "mcp"
+  | "discovery";
 
-export type RiskLevel = 'none' | 'low' | 'medium' | 'high';
+export type RiskLevel = "none" | "low" | "medium" | "high";
 
 export interface CapabilityDescriptor {
   id: string;
@@ -38,7 +38,7 @@ export interface CapabilityDescriptor {
   side_effects: boolean;
   required_roles?: SpaceRole[];
   required_capabilities?: string[];
-  source: 'builtin' | 'mcp' | 'official_skill' | 'custom_skill';
+  source: "custom" | "mcp" | "managed_skill" | "custom_skill";
   discoverable: boolean;
   selectable: boolean;
 }
