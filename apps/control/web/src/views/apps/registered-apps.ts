@@ -1,6 +1,7 @@
 import { type Accessor, createComputed, createSignal, on } from "solid-js";
 import { rpcJson } from "../../lib/rpc.ts";
 import { toSafeHref } from "../../lib/safeHref.ts";
+import { type TranslationKey, useI18n } from "../../store/i18n.ts";
 
 export interface RegisteredApp {
   id: string;
@@ -40,15 +41,31 @@ function toTitleCase(value: string): string {
 
 export function formatAppTypeLabel(
   appType: RegisteredApp["app_type"] | null | undefined,
+  t: (key: TranslationKey) => string,
 ): string {
-  if (!appType) return "Unknown";
-  return appType === "platform" ? "Platform" : "Custom";
+  if (!appType) return t("appStatusUnknown");
+  return appType === "platform" ? t("appTypePlatform") : t("appTypeCustom");
 }
 
 export function formatAppStatusLabel(
   status: string | null | undefined,
+  t: (key: TranslationKey) => string,
 ): string {
-  if (!status) return "Unknown";
+  if (!status) return t("appStatusUnknown");
+  const normalized = status.toLowerCase();
+  const known: Record<string, TranslationKey> = {
+    deployed: "appStatusDeployed",
+    active: "appStatusActive",
+    failed: "appStatusFailed",
+    error: "appStatusError",
+    degraded: "appStatusDegraded",
+    pending: "appStatusPending",
+    queued: "appStatusQueued",
+    in_progress: "appStatusInProgress",
+    paused: "appStatusPaused",
+  };
+  const key = known[normalized];
+  if (key) return t(key);
   return toTitleCase(status);
 }
 
@@ -106,6 +123,7 @@ export function clearRegisteredAppsCacheForTests(): void {
 }
 
 export function useRegisteredApps(spaceId: Accessor<string>) {
+  const { t } = useI18n();
   const initialSpaceId = spaceId();
   const [apps, setApps] = createSignal<RegisteredApp[]>(
     initialSpaceId ? registeredAppsCache.get(initialSpaceId)?.apps ?? [] : [],
@@ -141,7 +159,7 @@ export function useRegisteredApps(spaceId: Accessor<string>) {
         setError(null);
       } else if (apps().length === 0) {
         setError(
-          err instanceof Error ? err.message : "Failed to load apps",
+          err instanceof Error ? err.message : t("failedToLoadApps"),
         );
       }
     } finally {

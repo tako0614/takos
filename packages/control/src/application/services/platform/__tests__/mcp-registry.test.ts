@@ -222,6 +222,16 @@ Deno.test("loadMcpTools keeps same-name publication and external servers distinc
     const keys = Array.from(result.tools.keys());
     assertEquals(keys.includes("ping"), true);
     assertEquals(keys.some((key) => key !== "ping"), true);
+    const publicationTool = result.tools.get("ping")?.definition;
+    const externalTool = result.tools.get("shared-mcp__ping")?.definition;
+    assertEquals(publicationTool?.namespace, "mcp");
+    assertEquals(publicationTool?.family, "mcp.shared-mcp");
+    assertEquals(publicationTool?.risk_level, "low");
+    assertEquals(publicationTool?.side_effects, true);
+    assertEquals(externalTool?.namespace, "mcp");
+    assertEquals(externalTool?.family, "mcp.shared-mcp");
+    assertEquals(externalTool?.risk_level, "medium");
+    assertEquals(externalTool?.side_effects, true);
   } finally {
     connectStub.restore();
     listToolsStub.restore();

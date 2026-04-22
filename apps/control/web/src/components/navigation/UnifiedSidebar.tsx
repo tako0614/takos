@@ -84,7 +84,7 @@ export function UnifiedSidebar(props: UnifiedSidebarProps) {
           <nav
             class="w-[280px] bg-zinc-50 dark:bg-zinc-900 flex flex-col h-full shrink-0 border-r border-zinc-200 dark:border-zinc-800"
             role="navigation"
-            aria-label="Space navigation"
+            aria-label={t("spaceNavigation")}
           >
             {/* Header: back button + space name */}
             <div class="px-4 py-4">
@@ -187,7 +187,7 @@ export function UnifiedSidebar(props: UnifiedSidebarProps) {
       <nav
         class="w-[280px] bg-zinc-50 dark:bg-zinc-900 flex flex-col h-full shrink-0 border-r border-zinc-200 dark:border-zinc-800"
         role="navigation"
-        aria-label="Main navigation"
+        aria-label={t("mainNavigation")}
       >
         <div class="px-4 py-4 flex items-center justify-between">
           <div class="flex items-center gap-2 text-zinc-900 dark:text-zinc-100 font-semibold text-lg">

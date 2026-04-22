@@ -44,7 +44,7 @@ export function ResourceBindingsTab(props: ResourceBindingsTabProps) {
           <div
             class="flex items-center justify-center py-12"
             role="status"
-            aria-label="Loading bindings"
+            aria-label={t("loadingBindings")}
           >
             <Icons.Loader
               class="w-6 h-6 animate-spin text-zinc-400"
@@ -66,7 +66,7 @@ export function ResourceBindingsTab(props: ResourceBindingsTabProps) {
           </div>
         )
         : (
-          <ul class="space-y-2" aria-label="Bound services">
+          <ul class="space-y-2" aria-label={t("boundServices")}>
             {boundServices().map((
               service: { id: string; slug: string; hostname: string },
             ) => (
@@ -87,7 +87,7 @@ export function ResourceBindingsTab(props: ResourceBindingsTabProps) {
                       target="_blank"
                       rel="noopener noreferrer"
                       class="text-sm text-zinc-500 dark:text-zinc-400 hover:underline flex items-center gap-1"
-                      aria-label={`Open ${service.hostname} in new tab`}
+                      aria-label={`${service.hostname} ${t("openInNewTab")}`}
                     >
                       {service.hostname}
                       <Icons.ExternalLink class="w-3 h-3" aria-hidden="true" />
@@ -101,7 +101,7 @@ export function ResourceBindingsTab(props: ResourceBindingsTabProps) {
                   disabled={removingBindingId() === service.id}
                   isLoading={removingBindingId() === service.id}
                   class="text-red-600 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-900/20"
-                  aria-label={`Remove binding for ${service.slug}`}
+                  aria-label={t("removeBindingFor", { name: service.slug })}
                 >
                   {t("removeBinding")}
                 </Button>

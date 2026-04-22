@@ -104,7 +104,10 @@ function isSkillMutationErrorBody(
   return hasError && hasDetails;
 }
 
-export async function readSkillMutationResponse(response: JsonResponseLike) {
+export async function readSkillMutationResponse(
+  response: JsonResponseLike,
+  fallbackMessage: string,
+) {
   if (response.ok) {
     return rpcJson(response);
   }
@@ -112,7 +115,7 @@ export async function readSkillMutationResponse(response: JsonResponseLike) {
   const data = await response.json().catch(() => null);
   const body = isSkillMutationErrorBody(data) ? data : {};
   throw new SkillMutationError(
-    body.error || "Failed to save skill",
+    body.error || fallbackMessage,
     body.details,
   );
 }
@@ -301,16 +304,16 @@ export function SkillFormView(props: {
               color: "var(--color-text-secondary)",
             }}
           >
-            Locale
+            {t("skillLocaleLabel")}
           </label>
           <select
             value={props.form.skillLocale}
             onChange={(e) => updateField("skillLocale", e.currentTarget.value)}
             style={selectStyle}
           >
-            <option value="">auto</option>
-            <option value="ja">ja</option>
-            <option value="en">en</option>
+            <option value="">{t("skillLocaleAuto")}</option>
+            <option value="ja">{t("skillLocaleJa")}</option>
+            <option value="en">{t("skillLocaleEn")}</option>
           </select>
         </div>
         <div
@@ -323,19 +326,19 @@ export function SkillFormView(props: {
               color: "var(--color-text-secondary)",
             }}
           >
-            Category
+            {t("skillCategoryLabel")}
           </label>
           <select
             value={props.form.category}
             onChange={(e) => updateField("category", e.currentTarget.value)}
             style={selectStyle}
           >
-            <option value="">unspecified</option>
-            <option value="research">research</option>
-            <option value="writing">writing</option>
-            <option value="planning">planning</option>
-            <option value="slides">slides</option>
-            <option value="software">software</option>
+            <option value="">{t("skillCategoryUnspecified")}</option>
+            <option value="research">{t("skillCategoryResearch")}</option>
+            <option value="writing">{t("skillCategoryWriting")}</option>
+            <option value="planning">{t("skillCategoryPlanning")}</option>
+            <option value="slides">{t("skillCategorySlides")}</option>
+            <option value="software">{t("skillCategorySoftware")}</option>
           </select>
         </div>
       </div>
@@ -347,37 +350,37 @@ export function SkillFormView(props: {
         }}
       >
         <MetadataInput
-          label="Activation Tags"
+          label={t("skillActivationTags")}
           value={props.form.activationTags}
           onChange={(v) => updateField("activationTags", v)}
           placeholder="slides, narrative"
         />
         <MetadataInput
-          label="Preferred Tools"
+          label={t("skillPreferredTools")}
           value={props.form.preferredTools}
           onChange={(v) => updateField("preferredTools", v)}
           placeholder="create_artifact, space_files_write"
         />
         <MetadataInput
-          label="Durable Outputs"
+          label={t("skillDurableOutputs")}
           value={props.form.durableOutputs}
           onChange={(v) => updateField("durableOutputs", v)}
           placeholder="artifact, workspace_file"
         />
         <MetadataInput
-          label="Output Modes"
+          label={t("skillOutputModes")}
           value={props.form.outputModes}
           onChange={(v) => updateField("outputModes", v)}
           placeholder="chat, artifact"
         />
         <MetadataInput
-          label="Required MCP Servers"
+          label={t("skillRequiredMcpServers")}
           value={props.form.requiredMcpServers}
           onChange={(v) => updateField("requiredMcpServers", v)}
           placeholder="figma, notion"
         />
         <MetadataInput
-          label="Template IDs"
+          label={t("skillTemplateIds")}
           value={props.form.templateIds}
           onChange={(v) => updateField("templateIds", v)}
           placeholder="slides-outline, speaker-notes"

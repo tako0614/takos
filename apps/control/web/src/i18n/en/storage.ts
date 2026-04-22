@@ -32,6 +32,16 @@ export const storage = {
   newName: "New name",
   renameTitle: "Rename",
   failedToCreateFolder: "Failed to create folder",
+  failedToLoadFiles: "Failed to load files",
+  failedToLoadFileContent: "Failed to load file content",
+  failedToSaveFile: "Failed to save file",
+  failedToUploadFile: "Failed to upload file",
+  failedToCreateAttachmentFolder: "Failed to create attachment folder",
+  failedToPrepareAttachmentUpload: "Failed to prepare upload for {name}",
+  failedToUploadAttachment: "Failed to upload {name}",
+  failedToFinalizeAttachmentUpload: "Failed to finalize upload for {name}",
+  failedToMove: "Failed to move",
+  failedToDownloadZip: "Failed to download ZIP",
   deleteConfirmTitle: "Delete",
   deleteFileConfirm: 'Are you sure you want to delete "{name}"?',
   deleteFolderConfirm:
@@ -59,4 +69,5 @@ export const storage = {
   setAsDefault: "Set as default",
   clearDefault: "Clear default",
   included: "Included",
+  moveItemsTo: "Move {count} items to",
 } as const;

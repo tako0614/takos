@@ -76,6 +76,8 @@ export const tools = {
   failedToFetchMcpServers: "MCPサーバーの取得に失敗しました",
   failedToCreateMcpServer: "MCPサーバーの作成に失敗しました",
   failedToUpdateMcpServer: "MCPサーバーの更新に失敗しました",
+  failedToFetchTools: "ツールの取得に失敗しました",
+  missingSpaceId: "スペースIDがありません",
   removeMcpServer: "MCPサーバーを削除",
   removeMcpServerConfirm: "このスペースから「{name}」を削除しますか？",
   failedToRemoveMcpServer: "MCPサーバーの削除に失敗しました",

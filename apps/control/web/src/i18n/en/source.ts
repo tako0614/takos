@@ -51,6 +51,7 @@ export const source = {
   workflowRerunQueued: "Workflow re-run queued",
   failedToRerunWorkflow: "Failed to rerun workflow",
   failedToLoadLogs: "Failed to load logs",
+  failedToFetchWorkflowRuns: "Failed to fetch workflow runs",
   workflowPathRequired: "Workflow path is required",
   inputsMustBeValidJson: "Inputs must be valid JSON",
   workflowDispatched: "Workflow dispatched",
@@ -87,6 +88,7 @@ export const source = {
   noStarredRepositories: "No starred repositories",
   nothingFound: "Nothing found",
   noRepositoriesFound: "No repositories found",
+  resultsForQuery: '{count} results for "{query}"',
   resetFilters: "Reset filters",
   viewLabel: "View",
   sourceFilterAll: "All",
@@ -96,6 +98,9 @@ export const source = {
   sortNew: "New",
   sortStars: "Stars",
   sortUpdated: "Updated",
+  sortRecentlyUpdated: "Recently updated",
+  sortDesc: "Desc",
+  sortAsc: "Asc",
   categoryApps: "Apps",
   categoryServices: "Services",
   categoryLibraries: "Libraries",
@@ -105,6 +110,25 @@ export const source = {
   categoryLabel: "Category",
   myRepos: "My Repos",
   usersLabel: "Users",
+  storeManagementTitle: "Store Management",
+  storeManagementDescription:
+    "Manage your ActivityPub stores, inventory, and remote store connections.",
+  newStoreSlugPlaceholder: "New store slug...",
+  noStoresYet: "No stores yet",
+  remoteStores: "Remote Stores",
+  selectOrCreateStore: "Select a store or create a new one",
+  addRepositoryReference: "Add Repository Reference",
+  repositoryReferenceHint:
+    "Enter the ActivityPub actor URL of a repository to add it to this store's inventory.",
+  inventoryCount: "Inventory ({count} items)",
+  inventoryEmpty:
+    "No items in inventory. All public repos are shown by default.",
+  inventoryExplicitModeHint: "Add a reference to switch to explicit mode.",
+  connectRemoteStore: "Connect Remote Store",
+  remoteStoreIdentifierHint:
+    "Enter a store identifier (slug@domain) or full ActivityPub actor URL.",
+  connectedRemoteStoresCount: "Connected Remote Stores ({count})",
+  noRemoteStoresConnected: "No remote stores connected yet.",
 
   // Source Data Hook
   selectWorkspaceFirst: "Select a space first",
@@ -115,4 +139,10 @@ export const source = {
   failedToUpdateStar: "Failed to update star",
   repositoryCreated: "Repository created",
   failedToCreateRepository: "Failed to create repository",
+  failedToFetchDeploymentSnapshots: "Failed to fetch deployment snapshots",
+  failedToLoadStores: "Failed to load stores",
+  failedToLoadInventory: "Failed to load inventory",
+  failedToLoadRemoteStores: "Failed to load remote stores",
+  missingSpace: "Missing space",
+  missingStoreContext: "Missing store context",
 } as const;

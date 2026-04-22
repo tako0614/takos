@@ -103,8 +103,9 @@ export function ModelTab(props: { spaceId: string }) {
           </div>
           {tokenLimit() !== null && (
             <p class="mt-3 text-xs text-zinc-500 dark:text-zinc-400">
-              {t("tokenLimitLabel")}:{" "}
-              {(tokenLimit()! / 1000).toFixed(0)}k tokens
+              {t("tokenLimitLabel")}: {t("tokenLimitValue", {
+                count: (tokenLimit()! / 1000).toFixed(0),
+              })}
             </p>
           )}
         </div>

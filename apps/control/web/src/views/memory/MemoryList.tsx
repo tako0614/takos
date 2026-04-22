@@ -98,7 +98,7 @@ export function MemoryList(props: MemoryListProps) {
                       }`}
                       onClick={() => setActiveFilter(filter)}
                     >
-                      {filter === "all" ? "All" : props.getTypeIcon(filter)}
+                      {filter === "all" ? t("all") : props.getTypeIcon(filter)}
                       {" "}
                       {filter === "all" ? "" : props.getTypeLabel(filter)}
                     </button>

@@ -108,7 +108,7 @@ export function AgentModal(props: AgentModalProps) {
         <div
           class="flex overflow-x-auto border-b border-zinc-200 dark:border-zinc-700 shrink-0"
           role="tablist"
-          aria-label="Agent settings"
+          aria-label={t("agentSettings")}
         >
           {TAB_CONFIG.map(({ id, icon, labelKey }) => (
             <button

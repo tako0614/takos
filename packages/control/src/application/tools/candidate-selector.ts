@@ -3,8 +3,10 @@ import type { CapabilityDescriptor } from "./capability-types.ts";
 import type { CapabilityRegistry } from "./capability-registry.ts";
 
 export const DISCOVERY_TOOL_NAMES = new Set([
+  "toolbox",
   "capability_search",
   "capability_families",
+  "capability_describe",
   "capability_invoke",
 ]);
 

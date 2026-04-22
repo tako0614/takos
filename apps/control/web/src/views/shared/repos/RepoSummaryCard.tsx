@@ -1,6 +1,7 @@
 import type { JSX } from "solid-js";
 import { Icons } from "../../../lib/Icons.tsx";
 import { formatNumber } from "../../../lib/format.ts";
+import { useI18n } from "../../../store/i18n.ts";
 
 interface RepoSummaryCardProps {
   id: string;
@@ -19,6 +20,8 @@ interface RepoSummaryCardProps {
 }
 
 export function RepoSummaryCard(props: RepoSummaryCardProps) {
+  const { t } = useI18n();
+
   return (
     <div
       class="p-4 rounded-lg bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 hover:border-zinc-300 dark:hover:border-zinc-600 cursor-pointer transition-colors"
@@ -58,8 +61,8 @@ export function RepoSummaryCard(props: RepoSummaryCardProps) {
             }}
             disabled={props.starringDisabled}
             aria-label={props.is_starred
-              ? `Unstar ${props.name}`
-              : `Star ${props.name}`}
+              ? t("unstarRepository", { name: props.name })
+              : t("starRepository", { name: props.name })}
             aria-pressed={props.is_starred}
           >
             <Icons.Star class="w-4 h-4" />

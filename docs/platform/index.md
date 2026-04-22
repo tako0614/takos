@@ -110,6 +110,7 @@ primitive や group は特権化されません。
 
 | ページ                                               | 説明                                                          |
 | ---------------------------------------------------- | ------------------------------------------------------------- |
+| [Road to Takos 1.0](/platform/road-to-1.0)           | 1.0 OSS GA に向けた公開 roadmap summary                      |
 | [Space](/platform/spaces)                            | マルチテナントの隔離単位                                      |
 | [Store](/platform/store)                             | kernel feature としての Store の役割と current implementation |
 | [課金](/platform/billing)                            | プラン・使用量・決済                                          |

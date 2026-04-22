@@ -7,12 +7,14 @@ import {
   useStoreManagement,
   useStoreRegistry,
 } from "../../hooks/useStoreManagement.ts";
+import { useI18n } from "../../store/i18n.ts";
 
 interface StoreManagementPageProps {
   spaceId: string;
 }
 
 export function StoreManagementPage(props: StoreManagementPageProps) {
+  const { t } = useI18n();
   const { stores, loading, error, createStore, deleteStore } =
     useStoreManagement(() => props.spaceId);
   const [selectedStore, setSelectedStore] = createSignal<string | null>(null);
@@ -65,11 +67,10 @@ export function StoreManagementPage(props: StoreManagementPageProps) {
     <div class="flex-1 flex flex-col min-h-0">
       <div class="border-b border-zinc-200 dark:border-zinc-700 px-6 py-4">
         <h1 class="text-lg font-semibold text-zinc-900 dark:text-zinc-100">
-          Store Management
+          {t("storeManagementTitle")}
         </h1>
         <p class="text-sm text-zinc-500 dark:text-zinc-400 mt-1">
-          Manage your ActivityPub stores, inventory, and remote store
-          connections.
+          {t("storeManagementDescription")}
         </p>
       </div>
 
@@ -83,7 +84,7 @@ export function StoreManagementPage(props: StoreManagementPageProps) {
                 value={newSlug()}
                 onInput={(e) => setNewSlug(e.currentTarget.value)}
                 onKeyDown={(e) => e.key === "Enter" && handleCreateStore()}
-                placeholder="New store slug..."
+                placeholder={t("newStoreSlugPlaceholder")}
                 class="flex-1 min-w-0 px-2 py-1.5 text-sm rounded border border-zinc-300 dark:border-zinc-600 bg-white dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100"
               />
               <button
@@ -98,7 +99,7 @@ export function StoreManagementPage(props: StoreManagementPageProps) {
           </div>
           <div class="flex-1 overflow-y-auto">
             {loading() && (
-              <div class="p-3 text-sm text-zinc-500">Loading...</div>
+              <div class="p-3 text-sm text-zinc-500">{t("loading")}</div>
             )}
             {error() && <div class="p-3 text-sm text-red-500">{error()}</div>}
             {stores().map((store: StoreItem) => (
@@ -110,7 +111,7 @@ export function StoreManagementPage(props: StoreManagementPageProps) {
               />
             ))}
             {!loading() && stores().length === 0 && (
-              <div class="p-3 text-sm text-zinc-500">No stores yet</div>
+              <div class="p-3 text-sm text-zinc-500">{t("noStoresYet")}</div>
             )}
           </div>
         </div>
@@ -130,7 +131,7 @@ export function StoreManagementPage(props: StoreManagementPageProps) {
                         : "border-transparent text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300"
                     }`}
                   >
-                    Inventory
+                    {t("inventory")}
                   </button>
                   <button
                     type="button"
@@ -141,7 +142,7 @@ export function StoreManagementPage(props: StoreManagementPageProps) {
                         : "border-transparent text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300"
                     }`}
                   >
-                    Remote Stores
+                    {t("remoteStores")}
                   </button>
                 </div>
                 <div class="flex-1 overflow-y-auto">
@@ -160,7 +161,7 @@ export function StoreManagementPage(props: StoreManagementPageProps) {
             : (
               <div class="flex-1 flex items-center justify-center">
                 <p class="text-sm text-zinc-500">
-                  Select a store or create a new one
+                  {t("selectOrCreateStore")}
                 </p>
               </div>
             )}
@@ -176,6 +177,8 @@ function StoreListItem(props: {
   onSelect: () => void;
   onDelete: () => void;
 }) {
+  const { t } = useI18n();
+
   return (
     <div
       onClick={props.onSelect}
@@ -190,7 +193,7 @@ function StoreListItem(props: {
           {props.store.name || props.store.slug}
         </div>
         {props.store.is_default && (
-          <span class="text-xs text-zinc-400">default</span>
+          <span class="text-xs text-zinc-400">{t("default")}</span>
         )}
       </div>
       {!props.store.is_default && (
@@ -202,7 +205,7 @@ function StoreListItem(props: {
           }}
           class="opacity-0 group-hover:opacity-100 text-xs text-red-500 hover:text-red-700 px-1"
         >
-          Delete
+          {t("delete")}
         </button>
       )}
     </div>
@@ -212,6 +215,7 @@ function StoreListItem(props: {
 function InventoryPanel(
   props: { spaceId: () => string; storeSlug: () => string },
 ) {
+  const { t } = useI18n();
   const { items, total, loading, error, addItem, removeItem } =
     useStoreInventory(
       props.spaceId,
@@ -237,7 +241,7 @@ function InventoryPanel(
     <div class="p-6 space-y-4">
       <div>
         <h3 class="text-sm font-medium text-zinc-700 dark:text-zinc-300 mb-2">
-          Add Repository Reference
+          {t("addRepositoryReference")}
         </h3>
         <div class="flex gap-2">
           <input
@@ -254,12 +258,11 @@ function InventoryPanel(
             disabled={adding() || !newUrl().trim()}
             class="px-4 py-2 text-sm font-medium rounded bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50"
           >
-            Add
+            {t("add")}
           </button>
         </div>
         <p class="text-xs text-zinc-400 mt-1">
-          Enter the ActivityPub actor URL of a repository to add it to this
-          store's inventory.
+          {t("repositoryReferenceHint")}
         </p>
       </div>
 
@@ -267,16 +270,16 @@ function InventoryPanel(
 
       <div>
         <h3 class="text-sm font-medium text-zinc-700 dark:text-zinc-300 mb-2">
-          Inventory ({total()} items)
+          {t("inventoryCount", { count: total() })}
         </h3>
         {loading()
-          ? <div class="text-sm text-zinc-500">Loading...</div>
+          ? <div class="text-sm text-zinc-500">{t("loading")}</div>
           : items().length === 0
           ? (
             <div class="text-sm text-zinc-500 py-4 text-center border border-dashed border-zinc-300 dark:border-zinc-600 rounded">
-              No items in inventory. All public repos are shown by default.
+              {t("inventoryEmpty")}
               <br />
-              Add a reference to switch to explicit mode.
+              {t("inventoryExplicitModeHint")}
             </div>
           )
           : (
@@ -296,7 +299,7 @@ function InventoryPanel(
                     onClick={() => removeItem(item.id)}
                     class="text-xs text-red-500 hover:text-red-700 px-2 py-1"
                   >
-                    Remove
+                    {t("remove")}
                   </button>
                 </div>
               ))}
@@ -308,6 +311,7 @@ function InventoryPanel(
 }
 
 function RegistryPanel(props: { spaceId: () => string }) {
+  const { t } = useI18n();
   const { entries, loading, error, addRemoteStore, removeEntry } =
     useStoreRegistry(
       props.spaceId,
@@ -332,7 +336,7 @@ function RegistryPanel(props: { spaceId: () => string }) {
     <div class="p-6 space-y-4">
       <div>
         <h3 class="text-sm font-medium text-zinc-700 dark:text-zinc-300 mb-2">
-          Connect Remote Store
+          {t("connectRemoteStore")}
         </h3>
         <div class="flex gap-2">
           <input
@@ -349,11 +353,11 @@ function RegistryPanel(props: { spaceId: () => string }) {
             disabled={adding() || !identifier().trim()}
             class="px-4 py-2 text-sm font-medium rounded bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50"
           >
-            Connect
+            {t("connect")}
           </button>
         </div>
         <p class="text-xs text-zinc-400 mt-1">
-          Enter a store identifier (slug@domain) or full ActivityPub actor URL.
+          {t("remoteStoreIdentifierHint")}
         </p>
       </div>
 
@@ -361,14 +365,14 @@ function RegistryPanel(props: { spaceId: () => string }) {
 
       <div>
         <h3 class="text-sm font-medium text-zinc-700 dark:text-zinc-300 mb-2">
-          Connected Remote Stores ({entries().length})
+          {t("connectedRemoteStoresCount", { count: entries().length })}
         </h3>
         {loading()
-          ? <div class="text-sm text-zinc-500">Loading...</div>
+          ? <div class="text-sm text-zinc-500">{t("loading")}</div>
           : entries().length === 0
           ? (
             <div class="text-sm text-zinc-500 py-4 text-center border border-dashed border-zinc-300 dark:border-zinc-600 rounded">
-              No remote stores connected yet.
+              {t("noRemoteStoresConnected")}
             </div>
           )
           : (
@@ -382,10 +386,12 @@ function RegistryPanel(props: { spaceId: () => string }) {
                     <div class="text-xs text-zinc-400">
                       {entry.store_slug}@{entry.domain}
                       {entry.is_active && (
-                        <span class="ml-2 text-green-500">Active</span>
+                        <span class="ml-2 text-green-500">{t("active")}</span>
                       )}
                       {entry.subscription_enabled && (
-                        <span class="ml-2 text-blue-500">Subscribed</span>
+                        <span class="ml-2 text-blue-500">
+                          {t("subscribed")}
+                        </span>
                       )}
                     </div>
                   </div>
@@ -394,7 +400,7 @@ function RegistryPanel(props: { spaceId: () => string }) {
                     onClick={() => removeEntry(entry.id)}
                     class="text-xs text-red-500 hover:text-red-700 px-2 py-1"
                   >
-                    Disconnect
+                    {t("disconnect")}
                   </button>
                 </div>
               ))}

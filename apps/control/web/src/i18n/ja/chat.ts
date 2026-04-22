@@ -71,6 +71,8 @@ export const chat = {
 
   // Chat View
   messageNotLoaded: "現在のビューにメッセージが読み込まれていません",
+  failedToLoadMessages: "メッセージの読み込みに失敗しました",
+  runLabel: "Run {id}",
   failedToSaveTier: "ティアの保存に失敗しました",
   failedToLoadShares: "共有リンクの読み込みに失敗しました",
   failedToCreateShare: "共有の作成に失敗しました",
@@ -80,8 +82,12 @@ export const chat = {
   shareMode: "モード",
   sharePublic: "公開",
   sharePasswordLabel: "パスワード",
+  sharePasswordPlaceholder: "8文字以上",
   shareExpiresDays: "有効期限（日）",
   shareLinks: "リンク",
+  untitledThread: "無題のスレッド",
+  shareLabel: "共有: {mode}",
+  updatedLabel: "更新: {date}",
   shareNoExpiry: "無期限",
   shareExpiresAt: "{date}に期限切れ",
   shareLastAccessed: "最終アクセス {date}",

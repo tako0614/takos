@@ -56,7 +56,7 @@ export function StorageContextMenu(props: StorageContextMenuProps) {
           }}
         >
           <Icons.Eye class="w-4 h-4 text-zinc-400" />
-          {t("open") || "Open"}
+          {t("open")}
         </button>
       </Show>
       <Show when={props.state.file.type === "file"}>

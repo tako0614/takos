@@ -58,7 +58,9 @@ export function ResourceDetail(props: ResourceDetailProps) {
           </div>
           <div
             class="flex items-center gap-2"
-            aria-label={`Status: ${props.resource.status}`}
+            aria-label={t("resourceStatusLabel", {
+              status: props.resource.status,
+            })}
           >
             <span
               class={`w-2 h-2 rounded-full ${
@@ -76,7 +78,7 @@ export function ResourceDetail(props: ResourceDetailProps) {
       <nav
         class="flex gap-1 px-6 pt-4 border-b border-zinc-200 dark:border-zinc-700"
         role="tablist"
-        aria-label="Resource sections"
+        aria-label={t("resourceSections")}
       >
         <button
           type="button"
@@ -138,7 +140,7 @@ export function ResourceDetail(props: ResourceDetailProps) {
         class="flex-1 overflow-auto p-6"
         role="tabpanel"
         id={`tabpanel-${props.tab}`}
-        aria-label={props.tab}
+        aria-label={t(props.tab)}
       >
         {props.tab === "overview" && (
           <ResourceOverviewTab resource={props.resource} />

@@ -109,7 +109,7 @@ export function OAuthSettingsModal(props: OAuthSettingsModalProps) {
               }}
             >
               <Icons.Key />
-              Personal Tokens
+              {t("personalTokens")}
             </div>
           </Tab>
         </TabList>

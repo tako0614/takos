@@ -1,5 +1,6 @@
 import { ErrorBoundary as SolidErrorBoundary } from "solid-js";
 import type { JSX } from "solid-js";
+import { useI18n } from "../../store/i18n.ts";
 
 interface ErrorBoundaryProps {
   children: JSX.Element;
@@ -7,6 +8,8 @@ interface ErrorBoundaryProps {
 }
 
 export function ErrorBoundary(props: ErrorBoundaryProps) {
+  const { t } = useI18n();
+
   return (
     <SolidErrorBoundary
       fallback={(err, reset) => {
@@ -34,17 +37,17 @@ export function ErrorBoundary(props: ErrorBoundaryProps) {
                 </svg>
               </div>
               <h2 class="text-lg font-semibold text-zinc-900 dark:text-zinc-100">
-                Something went wrong
+                {t("unexpectedErrorTitle")}
               </h2>
               <p class="text-sm text-zinc-500 dark:text-zinc-400">
-                An unexpected error occurred. Please try again.
+                {t("unexpectedErrorDescription")}
               </p>
               <button
                 type="button"
                 onClick={reset}
                 class="inline-flex items-center px-4 py-2 rounded-lg bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900 text-sm font-medium hover:bg-zinc-800 dark:hover:bg-zinc-200 transition-colors focus:outline-none focus:ring-2 focus:ring-zinc-900 dark:focus:ring-zinc-100 focus:ring-offset-2 dark:focus:ring-offset-zinc-900"
               >
-                Try again
+                {t("tryAgain")}
               </button>
             </div>
           </div>

@@ -1,10 +1,16 @@
-import { useI18n } from "../../store/i18n.ts";
+import {
+  type TranslationKey,
+  type TranslationParams,
+  useI18n,
+} from "../../store/i18n.ts";
 import { Icons } from "../../lib/Icons.tsx";
 import { Badge, Button, Card } from "../../components/ui/index.ts";
 import type { ManagedSkill, Skill } from "../../types/index.ts";
 
-function formatList(values?: string[]) {
-  return values && values.length > 0 ? values.join(", ") : "none";
+type Translate = (key: TranslationKey, params?: TranslationParams) => string;
+
+function formatList(values: string[] | undefined, t: Translate) {
+  return values && values.length > 0 ? values.join(", ") : t("none");
 }
 
 function renderTriggers(triggersToRender: string[]) {
@@ -32,6 +38,7 @@ function renderTriggers(triggersToRender: string[]) {
 
 function renderExecutionContract(
   skill: Pick<ManagedSkill, "execution_contract">,
+  t: Translate,
 ) {
   const contract = skill.execution_contract;
   if (!contract) {
@@ -48,11 +55,22 @@ function renderExecutionContract(
         color: "var(--color-text-tertiary)",
       }}
     >
-      <span>tools: {formatList(contract.preferred_tools)}</span>
-      <span>outputs: {formatList(contract.durable_output_hints)}</span>
-      <span>modes: {formatList(contract.output_modes)}</span>
-      <span>mcp: {formatList(contract.required_mcp_servers)}</span>
-      <span>templates: {formatList(contract.template_ids)}</span>
+      <span>
+        {t("skillContractTools")}: {formatList(contract.preferred_tools, t)}
+      </span>
+      <span>
+        {t("skillContractOutputs")}:{" "}
+        {formatList(contract.durable_output_hints, t)}
+      </span>
+      <span>
+        {t("skillContractModes")}: {formatList(contract.output_modes, t)}
+      </span>
+      <span>
+        {t("skillContractMcp")}: {formatList(contract.required_mcp_servers, t)}
+      </span>
+      <span>
+        {t("skillContractTemplates")}: {formatList(contract.template_ids, t)}
+      </span>
     </div>
   );
 }
@@ -99,7 +117,7 @@ export function SkillList(props: {
   onToggle: (skill: Skill) => void;
   onCreateNew: () => void;
 }) {
-  const { t, tOr } = useI18n();
+  const { t } = useI18n();
 
   return (
     <>
@@ -120,7 +138,7 @@ export function SkillList(props: {
                 margin: 0,
               }}
             >
-              {tOr("managedSkills", "Managed Skills")}
+              {t("managedSkills")}
             </h4>
             <p
               style={{
@@ -130,10 +148,7 @@ export function SkillList(props: {
                 "margin-bottom": 0,
               }}
             >
-              {tOr(
-                "managedSkillsHint",
-                "Default-injected managed skills available in this workspace",
-              )}
+              {t("managedSkillsHint")}
             </p>
           </div>
           {props.managedSkills.map((skill) => (
@@ -178,7 +193,7 @@ export function SkillList(props: {
                     >
                       {skill.name}
                     </h4>
-                    <Badge variant="default">managed</Badge>
+                    <Badge variant="default">{t("managed")}</Badge>
                     <Badge variant="default">{skill.category}</Badge>
                   </div>
                   <p
@@ -192,7 +207,7 @@ export function SkillList(props: {
                     {skill.description}
                   </p>
                   {renderAvailability(skill)}
-                  {renderExecutionContract(skill)}
+                  {renderExecutionContract(skill, t)}
                 </div>
               </div>
               {renderTriggers(skill.triggers)}
@@ -215,7 +230,7 @@ export function SkillList(props: {
               margin: 0,
             }}
           >
-            {tOr("customSkills", "Custom Skills")}
+            {t("customSkills")}
           </h4>
           {props.skills.length === 0
             ? (
@@ -260,10 +275,7 @@ export function SkillList(props: {
                       "margin-top": "0.25rem",
                     }}
                   >
-                    {tOr(
-                      "skillsEmptyHint",
-                      "Create custom skills to extend your agent's capabilities",
-                    )}
+                    {t("skillsEmptyHint")}
                   </p>
                 </div>
                 <Button

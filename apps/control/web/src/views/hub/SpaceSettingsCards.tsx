@@ -27,11 +27,11 @@ export interface SpaceMember {
 function getRoleLabel(role: string, t: (key: TranslationKey) => string) {
   switch (role) {
     case "owner":
-      return t("roleOwner") || "Owner";
+      return t("roleOwner");
     case "admin":
-      return t("roleAdmin") || "Admin";
+      return t("roleAdmin");
     case "member":
-      return t("roleMember") || "Member";
+      return t("roleMember");
     default:
       return role;
   }
@@ -51,7 +51,7 @@ export function SpaceInfoCard(props: {
   return (
     <Card>
       <CardHeader>
-        <CardTitle>{t("spaceInfo") || "Space Information"}</CardTitle>
+        <CardTitle>{t("spaceInfo")}</CardTitle>
       </CardHeader>
       <CardContent>
         <div class="space-y-4">
@@ -67,14 +67,13 @@ export function SpaceInfoCard(props: {
             />
             {props.isPersonal && (
               <p class="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
-                {t("personalSpaceNameHint") ||
-                  "Personal space name cannot be changed"}
+                {t("personalSpaceNameHint")}
               </p>
             )}
           </div>
           <div>
             <label class="block text-sm font-medium text-zinc-700 dark:text-zinc-300 mb-1">
-              {tOr("spaceSlug", "Space Slug")}
+              {tOr("spaceSlug", t("workspaceSlug"))}
             </label>
             <div class="flex items-center gap-2">
               <code class="flex-1 px-3 py-2 bg-zinc-100 dark:bg-zinc-800 rounded-lg text-sm text-zinc-600 dark:text-zinc-400 font-mono truncate">
@@ -131,17 +130,17 @@ export function MembersCard(props: {
   return (
     <Card>
       <CardHeader>
-        <CardTitle>{t("members") || "Members"}</CardTitle>
+        <CardTitle>{t("members")}</CardTitle>
       </CardHeader>
       <CardContent>
         <div class="mb-4 p-4 bg-zinc-50 dark:bg-zinc-800/50 rounded-xl">
           <h4 class="text-sm font-medium text-zinc-900 dark:text-zinc-100 mb-3">
-            {t("inviteMember") || "Invite Member"}
+            {t("inviteMember")}
           </h4>
           <div class="flex gap-2">
             <Input
               type="email"
-              placeholder={t("emailPlaceholder") || "email@example.com"}
+              placeholder={t("emailPlaceholder")}
               value={props.inviteEmail}
               onInput={(e) => props.setInviteEmail(e.currentTarget.value)}
               class="flex-1"
@@ -164,7 +163,7 @@ export function MembersCard(props: {
               isLoading={props.inviting}
               disabled={!props.inviteEmail.trim()}
             >
-              {t("invite") || "Invite"}
+              {t("invite")}
             </Button>
           </div>
         </div>
@@ -178,7 +177,7 @@ export function MembersCard(props: {
           : props.members.length === 0
           ? (
             <div class="text-center py-8 text-zinc-500 dark:text-zinc-400">
-              {t("noMembers") || "No members yet"}
+              {t("noMembers")}
             </div>
           )
           : (
@@ -235,7 +234,7 @@ export function MembersCard(props: {
                             type="button"
                             class="p-1.5 text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-700 rounded-lg transition-colors"
                             onClick={() => props.onRemove(member)}
-                            title={t("remove") || "Remove"}
+                            title={t("remove")}
                           >
                             <Icons.Trash class="w-4 h-4" />
                           </button>
@@ -267,11 +266,10 @@ export function DangerZoneCard(props: {
         <div class="flex items-center justify-between p-4 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-xl">
           <div>
             <h4 class="font-medium text-zinc-900 dark:text-zinc-100">
-              {t("deleteSpace") || "Delete Space"}
+              {t("deleteSpace")}
             </h4>
             <p class="text-sm text-zinc-500 dark:text-zinc-400">
-              {t("deleteSpaceHint") ||
-                "Permanently delete this space and all its data"}
+              {t("deleteSpaceHint")}
             </p>
           </div>
           <Button
@@ -296,8 +294,7 @@ export function PersonalSpaceNote() {
         <div class="flex items-start gap-3 text-zinc-500 dark:text-zinc-400">
           <Icons.Info class="w-5 h-5 flex-shrink-0 mt-0.5" />
           <p class="text-sm">
-            {t("personalSpaceNote") ||
-              "This is your personal space. It cannot be deleted or shared with others. Use team spaces to collaborate with others."}
+            {t("personalSpaceNote")}
           </p>
         </div>
       </CardContent>
@@ -325,7 +322,7 @@ export function CreateSpaceModal(props: {
       <div class="w-full max-w-md bg-white dark:bg-zinc-900 rounded-2xl shadow-xl overflow-hidden">
         <div class="flex items-center justify-between px-6 py-4 border-b border-zinc-100 dark:border-zinc-800">
           <h3 class="text-lg font-semibold text-zinc-900 dark:text-zinc-100">
-            {t("createSpace") || "Create Space"}
+            {t("createSpace")}
           </h3>
           <button
             type="button"
@@ -351,8 +348,7 @@ export function CreateSpaceModal(props: {
             }}
           />
           <p class="mt-2 text-xs text-zinc-500 dark:text-zinc-400">
-            {t("createSpaceHint") ||
-              "Create a team space to collaborate with others"}
+            {t("createSpaceHint")}
           </p>
           <label class="mt-4 flex gap-3 rounded-xl border border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800/60 px-4 py-3 cursor-pointer">
             <input

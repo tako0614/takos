@@ -131,14 +131,15 @@ export async function initToolExecutor(deps: OrchestrationDeps): Promise<void> {
   deps.setToolExecutor(toolExecutor);
 
   const availableTools = toolExecutor.getAvailableTools();
-  deps.config.tools = availableTools.map((tool) => ({
+  const modelVisibleTools = selectModelVisibleTools(availableTools);
+  deps.config.tools = modelVisibleTools.map((tool) => ({
     name: tool.name,
     description: tool.description,
     parameters: tool.parameters,
   }));
 
   const toolCatalog = buildToolCatalogContent(
-    availableTools.map((tool) => ({
+    modelVisibleTools.map((tool) => ({
       name: tool.name,
       description: tool.description,
     })),
@@ -169,6 +170,11 @@ export async function initToolExecutor(deps: OrchestrationDeps): Promise<void> {
       failed_mcp_servers: failedMcp,
     });
   }
+}
+
+function selectModelVisibleTools<T extends { name: string }>(tools: T[]): T[] {
+  const toolbox = tools.find((tool) => tool.name === "toolbox");
+  return toolbox ? [toolbox] : tools;
 }
 
 // ── Queue job helpers ─────────────────────────────────────────────────

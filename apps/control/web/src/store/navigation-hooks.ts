@@ -196,8 +196,8 @@ export function useNavigation() {
       toast.showToast(
         "success",
         endpoint === "archive"
-          ? (i18n.t("routingStatus_archived") || "Archived")
-          : (i18n.t("routingStatus_active") || "Active"),
+          ? i18n.t("routingStatus_archived")
+          : i18n.t("routingStatus_active"),
       );
     } catch (error) {
       toast.showToast(

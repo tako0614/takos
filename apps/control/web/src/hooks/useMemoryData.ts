@@ -115,7 +115,7 @@ export function useMemoryData(
       setMemories(data.memories || []);
     } catch (err) {
       if (seq !== memoriesSeqRef) return;
-      setError(err instanceof Error ? err.message : "Failed to fetch memories");
+      setError(err instanceof Error ? err.message : t("failedToFetchMemories"));
       setMemories([]);
     } finally {
       if (seq === memoriesSeqRef) {
@@ -143,7 +143,7 @@ export function useMemoryData(
     } catch (err) {
       if (seq !== remindersSeqRef) return;
       setError(
-        err instanceof Error ? err.message : "Failed to fetch reminders",
+        err instanceof Error ? err.message : t("failedToFetchReminders"),
       );
       setReminders([]);
     }

@@ -58,7 +58,7 @@ export function ActionsTab(props: ActionsTabProps) {
     } catch (err) {
       if (seq !== runsSeq || repoId !== props.repoId) return;
       setRunsError(
-        err instanceof Error ? err.message : "Failed to fetch workflow runs",
+        err instanceof Error ? err.message : t("failedToFetchWorkflowRuns"),
       );
     } finally {
       if (seq === runsSeq && repoId === props.repoId) {

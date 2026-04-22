@@ -1,5 +1,6 @@
 import type { Accessor, Setter } from "solid-js";
 import { rpc, rpcJson } from "../lib/rpc.ts";
+import { useI18n } from "../store/i18n.ts";
 import type { SourceItem, SourceItemInstallation } from "./useSourceData.ts";
 import { PAGE_SIZE } from "./useSourcePagination.ts";
 import { lookupInstallation, sourceInstallationKey } from "./sourceInstall.ts";
@@ -47,6 +48,7 @@ export function useSourceFetchQueries({
   setSelectedItem,
   refs,
 }: UseSourceFetchQueriesOptions): UseSourceFetchQueriesResult {
+  const { t } = useI18n();
   // In-flight promise ref to deduplicate concurrent fetchInstallations calls.
   let installationsInFlight:
     | Promise<Map<string, SourceItemInstallation>>
@@ -60,7 +62,7 @@ export function useSourceFetchQueries({
       const response = await fetch(
         `/api/spaces/${effectiveSpaceId()}/group-deployment-snapshots`,
       );
-      if (!response.ok) throw new Error("Failed to fetch deployment snapshots");
+      if (!response.ok) throw new Error(t("failedToFetchDeploymentSnapshots"));
       // Backend returns `{ group_deployment_snapshots }` with `source.resolved_repo_id`
       // (see the group-deployment-snapshots API route and model).
       const data = await rpcJson<{
@@ -246,6 +248,7 @@ export function useSourceFetchQueries({
             downloads: item.package.downloads,
             certified: item.package.certified,
             description: item.package.description,
+            icon: item.package.icon,
           },
         };
         return {

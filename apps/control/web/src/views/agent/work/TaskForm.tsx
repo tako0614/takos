@@ -56,14 +56,8 @@ export function TaskForm(props: TaskFormProps) {
           </h4>
           <p class="text-sm text-zinc-500 dark:text-zinc-400">
             {props.editingTask
-              ? tOr(
-                "taskFormEditHint" as TranslationKey,
-                "Update scope, status, or execution settings without leaving the board.",
-              )
-              : tOr(
-                "taskFormCreateHint" as TranslationKey,
-                "Define one outcome, then let the agent pick it up from chat.",
-              )}
+              ? t("taskFormEditHint" as TranslationKey)
+              : t("taskFormCreateHint" as TranslationKey)}
           </p>
         </div>
         <button
@@ -187,7 +181,7 @@ export function TaskForm(props: TaskFormProps) {
           id="due-date-hint"
           class="text-xs text-zinc-500 dark:text-zinc-400"
         >
-          {t("taskDueDateHint") || "Optional - select a future date"}
+          {t("taskDueDateHint")}
         </span>
       </div>
       {props.error && (

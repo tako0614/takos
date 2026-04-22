@@ -1,6 +1,7 @@
 import { createEffect, createSignal, on } from "solid-js";
 import { rpc, rpcJson, rpcPath } from "../lib/rpc.ts";
 import { getErrorMessage } from "takos-common/errors";
+import { useI18n } from "../store/i18n.ts";
 import type { Resource } from "../types/index.ts";
 import type {
   D1QueryResult,
@@ -8,6 +9,7 @@ import type {
 } from "../views/workers/worker-models.ts";
 
 export function useResourceExplorer(resource: Resource) {
+  const { t } = useI18n();
   const [d1Tables, setD1Tables] = createSignal<string[]>([]);
   const [d1TableData, setD1TableData] = createSignal<D1TableData | null>(null);
   const [d1SelectedTable, setD1SelectedTable] = createSignal<string | null>(
@@ -76,7 +78,7 @@ export function useResourceExplorer(resource: Resource) {
       const result = await rpcJson<D1QueryResult>(res);
       setD1QueryResult(result);
     } catch (err: unknown) {
-      setD1QueryResult({ error: getErrorMessage(err, "Query failed") });
+      setD1QueryResult({ error: getErrorMessage(err, t("queryFailed")) });
     } finally {
       setD1Loading(false);
     }

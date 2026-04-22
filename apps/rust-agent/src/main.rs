@@ -37,7 +37,13 @@ pub type AppResult<T> = Result<T, Box<dyn std::error::Error + Send + Sync>>;
 
 const DEFAULT_MAX_CONCURRENT_RUNS: usize = 5;
 const OPENAI_MAX_TOOL_DEFINITIONS: usize = 128;
-const DEFAULT_PRIORITY_TOOL_NAMES: [&str; 5] = [
+const TOOLBOX_TOOL_NAME: &str = "toolbox";
+const DEFAULT_PRIORITY_TOOL_NAMES: [&str; 10] = [
+    TOOLBOX_TOOL_NAME,
+    "capability_search",
+    "capability_families",
+    "capability_describe",
+    "capability_invoke",
     "skill_context",
     "skill_catalog",
     "skill_describe",
@@ -553,6 +559,13 @@ fn select_model_tools(
     remote_tools: &[crate::control_rpc::ToolDefinition],
     skill_plan: &crate::control_rpc::SkillPlanResponse,
 ) -> Vec<crate::control_rpc::ToolDefinition> {
+    if let Some(toolbox) = remote_tools
+        .iter()
+        .find(|tool| tool.name == TOOLBOX_TOOL_NAME)
+    {
+        return vec![toolbox.clone()];
+    }
+
     let mut selected = Vec::new();
     let mut seen = HashSet::new();
 
@@ -592,11 +605,12 @@ fn push_tool(
     tool: &crate::control_rpc::ToolDefinition,
     selected: &mut Vec<crate::control_rpc::ToolDefinition>,
     seen: &mut HashSet<String>,
-) {
+) -> bool {
     if selected.len() >= OPENAI_MAX_TOOL_DEFINITIONS || !seen.insert(tool.name.clone()) {
-        return;
+        return false;
     }
     selected.push(tool.clone());
+    true
 }
 
 fn run_status_for_loop(status: LoopStatus) -> &'static str {
@@ -714,6 +728,31 @@ mod tests {
     }
 
     #[test]
+    fn select_model_tools_uses_toolbox_as_single_router() {
+        let mut tools = (0..300)
+            .map(|index| tool(&format!("tool_{index}")))
+            .collect::<Vec<_>>();
+        tools.push(tool("toolbox"));
+        let plan = SkillPlanResponse {
+            activated_skills: vec![ActivatedSkill {
+                id: "skill-1".to_string(),
+                name: "Skill".to_string(),
+                execution_contract: SkillExecutionContract {
+                    preferred_tools: vec!["tool_299".to_string()],
+                    ..SkillExecutionContract::default()
+                },
+                ..ActivatedSkill::default()
+            }],
+            ..SkillPlanResponse::default()
+        };
+
+        let selected = select_model_tools(&tools, &plan);
+
+        assert_eq!(selected.len(), 1);
+        assert_eq!(selected[0].name, "toolbox");
+    }
+
+    #[test]
     fn select_model_tools_prioritizes_skill_preferred_tools() {
         let tools = (0..150)
             .map(|index| tool(&format!("tool_{index}")))
@@ -734,6 +773,31 @@ mod tests {
         let selected = select_model_tools(&tools, &plan);
 
         assert_eq!(selected[0].name, "tool_149");
+        assert_eq!(selected.len(), OPENAI_MAX_TOOL_DEFINITIONS);
+    }
+
+    #[test]
+    fn select_model_tools_prioritizes_discovery_tools() {
+        let mut tools = (0..150)
+            .map(|index| tool(&format!("tool_{index}")))
+            .collect::<Vec<_>>();
+        tools.extend([
+            tool("capability_search"),
+            tool("capability_families"),
+            tool("capability_describe"),
+            tool("capability_invoke"),
+        ]);
+
+        let selected = select_model_tools(&tools, &SkillPlanResponse::default());
+        let selected_names = selected
+            .iter()
+            .map(|tool| tool.name.as_str())
+            .collect::<Vec<_>>();
+
+        assert!(selected_names.contains(&"capability_search"));
+        assert!(selected_names.contains(&"capability_families"));
+        assert!(selected_names.contains(&"capability_describe"));
+        assert!(selected_names.contains(&"capability_invoke"));
         assert_eq!(selected.len(), OPENAI_MAX_TOOL_DEFINITIONS);
     }
 

@@ -1,4 +1,5 @@
 import { Icons } from "../../lib/Icons.tsx";
+import { useI18n } from "../../store/i18n.ts";
 import { Button } from "../ui/index.ts";
 
 interface ProfileLoadMoreButtonProps {
@@ -6,6 +7,8 @@ interface ProfileLoadMoreButtonProps {
 }
 
 export function ProfileLoadMoreButton(props: ProfileLoadMoreButtonProps) {
+  const { t } = useI18n();
+
   return (
     <div
       style={{
@@ -21,7 +24,7 @@ export function ProfileLoadMoreButton(props: ProfileLoadMoreButtonProps) {
           <Icons.ChevronDown style={{ width: "1rem", height: "1rem" }} />
         }
       >
-        Load More
+        {t("loadMore")}
       </Button>
     </div>
   );

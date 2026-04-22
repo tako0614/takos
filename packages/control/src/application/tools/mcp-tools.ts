@@ -194,6 +194,10 @@ export async function loadMcpTools(
 
         const namespacedDef: ToolDefinition = {
           ...definition,
+          namespace: "mcp",
+          family: `mcp.${sanitizeMcpToolNamespace(server.name || server.id)}`,
+          risk_level: server.sourceType === "external" ? "medium" : "low",
+          side_effects: true,
           name: exposedName,
         };
         namespacedDef.required_roles = Array.from(DYNAMIC_MCP_ALLOWED_ROLES);

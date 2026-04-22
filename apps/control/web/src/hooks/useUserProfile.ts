@@ -12,6 +12,7 @@ import { useUserFollowers } from "./useUserFollowers.ts";
 import { useUserFollowing } from "./useUserFollowing.ts";
 import { useUserActivity } from "./useUserActivity.ts";
 import { useUserFollowRequests } from "./useUserFollowRequests.ts";
+import { useI18n } from "../store/i18n.ts";
 
 // API Response types kept here for profile-level actions
 interface UserProfileResponse {
@@ -36,6 +37,7 @@ interface BlockMuteResponse {
 }
 
 export function useUserProfile(username: Accessor<string>) {
+  const { t } = useI18n();
   const [profile, setProfile] = createSignal<UserProfile | null>(null);
   const [activeTab, setActiveTab] = createSignal<ProfileTab>("repositories");
   const [loading, setLoading] = createSignal(true);
@@ -82,9 +84,9 @@ export function useUserProfile(username: Accessor<string>) {
       });
       if (!res.ok) {
         if (res.status === 404) {
-          throw new Error("User not found");
+          throw new Error(t("userNotFound"));
         }
-        throw new Error("Failed to load profile");
+        throw new Error(t("failedToLoadProfile"));
       }
       const data = await rpcJson<UserProfileResponse>(res);
       if (
@@ -97,7 +99,7 @@ export function useUserProfile(username: Accessor<string>) {
         requestVersion !== profileRequestVersion ||
         requestedUsername !== currentUsername()
       ) return;
-      setError(err instanceof Error ? err.message : "Unknown error");
+      setError(err instanceof Error ? err.message : t("unknownError"));
     } finally {
       if (
         requestVersion === profileRequestVersion &&
@@ -185,7 +187,7 @@ export function useUserProfile(username: Accessor<string>) {
         );
       }
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to toggle follow");
+      setError(err instanceof Error ? err.message : t("failedToToggleFollow"));
     } finally {
       setFollowLoading(false);
     }
@@ -224,7 +226,7 @@ export function useUserProfile(username: Accessor<string>) {
         }));
       }
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to toggle star");
+      setError(err instanceof Error ? err.message : t("failedToToggleStar"));
     } finally {
       setStarringRepo(null);
     }
@@ -255,7 +257,7 @@ export function useUserProfile(username: Accessor<string>) {
       }
     } catch (err) {
       setError(
-        err instanceof Error ? err.message : "Failed to toggle user follow",
+        err instanceof Error ? err.message : t("failedToToggleUserFollow"),
       );
     }
   };
@@ -290,7 +292,7 @@ export function useUserProfile(username: Accessor<string>) {
         );
       }
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to toggle block");
+      setError(err instanceof Error ? err.message : t("failedToToggleBlock"));
     } finally {
       setBlockLoading(false);
     }
@@ -317,7 +319,7 @@ export function useUserProfile(username: Accessor<string>) {
         setProfile((prev) => (prev ? { ...prev, is_muted: muted } : null));
       }
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to toggle mute");
+      setError(err instanceof Error ? err.message : t("failedToToggleMute"));
     } finally {
       setMuteLoading(false);
     }

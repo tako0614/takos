@@ -373,7 +373,7 @@ export function ChatView(props: ChatViewProps) {
               <div class="min-w-0 flex-1">
                 <div class="flex flex-wrap items-center gap-2 text-xs text-zinc-500 dark:text-zinc-400">
                   <span class="font-medium text-zinc-900 dark:text-zinc-100">
-                    Run {focusRunId()!.slice(0, 8)}
+                    {t("runLabel", { id: focusRunId()!.slice(0, 8) })}
                   </span>
                   <Show when={focusedRunMeta()}>
                     <span>

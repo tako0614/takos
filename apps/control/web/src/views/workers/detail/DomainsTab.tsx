@@ -147,13 +147,13 @@ export function DomainsTab(props: DomainsTabProps) {
                   </p>
                   <div class="space-y-1">
                     <div class="flex gap-2 text-xs">
-                      <span class="text-zinc-500">Record:</span>
+                      <span class="text-zinc-500">{t("recordLabel")}:</span>
                       <code class="text-zinc-700 font-mono">
                         {props.verificationInfo.record}
                       </code>
                     </div>
                     <div class="flex gap-2 text-xs">
-                      <span class="text-zinc-500">Target:</span>
+                      <span class="text-zinc-500">{t("targetLabel")}:</span>
                       <code class="text-zinc-700 font-mono">
                         {props.verificationInfo.target}
                       </code>

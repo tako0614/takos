@@ -61,7 +61,7 @@ export function SkillsTab(props: { spaceId: string }) {
       if (seq !== skillsSeq || spaceId !== props.spaceId) return;
       setSkills([]);
       setManagedSkills([]);
-      showToast("error", t("failedToLoad") || "Failed to load skills");
+      showToast("error", t("failedToLoadSkills"));
     } finally {
       if (seq === skillsSeq && spaceId === props.spaceId) {
         setLoading(false);
@@ -150,7 +150,7 @@ export function SkillsTab(props: { spaceId: string }) {
             metadata,
           },
         });
-        await readSkillMutationResponse(res);
+        await readSkillMutationResponse(res, t("failedToSaveSkill"));
       } else {
         const res = await rpcPath(rpc, "spaces", ":spaceId", "skills").$post({
           param: { spaceId: props.spaceId },
@@ -162,7 +162,7 @@ export function SkillsTab(props: { spaceId: string }) {
             metadata,
           },
         });
-        await readSkillMutationResponse(res);
+        await readSkillMutationResponse(res, t("failedToSaveSkill"));
       }
       closeForm();
       await fetchSkills();
@@ -173,7 +173,7 @@ export function SkillsTab(props: { spaceId: string }) {
           setFieldErrors(details);
         }
       }
-      setError(getErrorMessage(err, "Failed to save skill"));
+      setError(getErrorMessage(err, t("failedToSaveSkill")));
     } finally {
       setSaving(false);
     }
@@ -202,7 +202,7 @@ export function SkillsTab(props: { spaceId: string }) {
       await rpcJson(res);
       await fetchSkills();
     } catch {
-      showToast("error", t("deleteSkillFailed") || "Failed to delete skill");
+      showToast("error", t("deleteSkillFailed"));
     }
   };
 
@@ -222,7 +222,7 @@ export function SkillsTab(props: { spaceId: string }) {
       await rpcJson(res);
       await fetchSkills();
     } catch {
-      showToast("error", t("skillToggleFailed") || "Failed to update skill");
+      showToast("error", t("skillToggleFailed"));
     }
   };
 

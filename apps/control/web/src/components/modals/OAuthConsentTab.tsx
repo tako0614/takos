@@ -1,7 +1,7 @@
 import { createSignal, onMount } from "solid-js";
 import { For, Show } from "solid-js";
 import type { OAuthConsent } from "./OAuthSettingsModal.tsx";
-import { useI18n } from "../../store/i18n.ts";
+import { type TranslationKey, useI18n } from "../../store/i18n.ts";
 import { useConfirmDialog } from "../../store/confirm-dialog.ts";
 import { rpc, rpcJson } from "../../lib/rpc.ts";
 import { formatShortDate } from "../../lib/format.ts";
@@ -15,21 +15,21 @@ import { Button } from "../ui/Button.tsx";
  * Frontend-local scope descriptions. The authoritative scope list lives in
  * src/types/oauth.ts (OAUTH_SCOPES). Keep these two in sync.
  */
-const SCOPE_DESCRIPTIONS: Record<string, string> = {
-  openid: "OpenID Connect identity",
-  profile: "Read your profile information",
-  email: "Read your email address",
-  "spaces:read": "Read your workspaces",
-  "spaces:write": "Create and modify workspaces",
-  "files:read": "Read files in workspaces",
-  "files:write": "Create and modify files",
-  "memories:read": "Read memories",
-  "memories:write": "Create and modify memories",
-  "threads:read": "Read chat threads",
-  "threads:write": "Create and send messages",
-  "agents:execute": "Execute AI agents",
-  "repos:read": "Read repositories",
-  "repos:write": "Create and modify repositories",
+const SCOPE_DESCRIPTION_KEYS: Record<string, TranslationKey> = {
+  openid: "oauthScopeDescOpenid",
+  profile: "oauthScopeDescProfile",
+  email: "oauthScopeDescEmail",
+  "spaces:read": "oauthScopeDescSpacesRead",
+  "spaces:write": "oauthScopeDescSpacesWrite",
+  "files:read": "oauthScopeDescFilesRead",
+  "files:write": "oauthScopeDescFilesWrite",
+  "memories:read": "oauthScopeDescMemoriesRead",
+  "memories:write": "oauthScopeDescMemoriesWrite",
+  "threads:read": "oauthScopeDescThreadsRead",
+  "threads:write": "oauthScopeDescThreadsWrite",
+  "agents:execute": "oauthScopeDescAgentsExecute",
+  "repos:read": "oauthScopeDescReposRead",
+  "repos:write": "oauthScopeDescReposWrite",
 };
 
 interface OAuthConsentTabProps {
@@ -235,7 +235,9 @@ export function OAuthConsentTab(props: OAuthConsentTabProps) {
                             {(scope) => (
                               <Badge
                                 variant="default"
-                                title={SCOPE_DESCRIPTIONS[scope] || scope}
+                                title={SCOPE_DESCRIPTION_KEYS[scope]
+                                  ? t(SCOPE_DESCRIPTION_KEYS[scope])
+                                  : scope}
                               >
                                 {scope}
                               </Badge>

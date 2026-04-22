@@ -1,5 +1,5 @@
 import { Show } from "solid-js";
-import { useI18n } from "../../store/i18n.ts";
+import { type TranslationKey, useI18n } from "../../store/i18n.ts";
 import { Icons } from "../../lib/Icons.tsx";
 import { Button } from "../../components/ui/index.ts";
 import { toSafeHref } from "../../lib/safeHref.ts";
@@ -119,7 +119,7 @@ export function AppsPage(props: AppsPageProps) {
                 const safeHref = toSafeHref(app.url);
                 const iconImageSrc = getAppIconImageSrc(app.icon);
                 const textIcon = getTextIcon(app);
-                const title = getAppTitle(app);
+                const title = getAppTitle(app, t);
                 const appContent = (
                   <>
                     <div class="relative flex h-[72px] w-[72px] shrink-0 items-center justify-center overflow-hidden rounded-lg bg-white text-zinc-700 shadow-sm ring-1 ring-zinc-200 transition-transform group-hover:-translate-y-0.5 group-focus-visible:-translate-y-0.5 dark:bg-zinc-900 dark:text-zinc-200 dark:ring-zinc-800">
@@ -241,13 +241,16 @@ function getTextIcon(app: RegisteredApp): string | null {
   return Array.from(app.name.trim())[0]?.toUpperCase() ?? null;
 }
 
-function getAppTitle(app: RegisteredApp): string {
+function getAppTitle(
+  app: RegisteredApp,
+  t: (key: TranslationKey) => string,
+): string {
   return [
     app.name,
     app.description,
     app.category,
-    formatAppTypeLabel(app.app_type),
-    formatAppStatusLabel(app.service_status),
+    formatAppTypeLabel(app.app_type, t),
+    formatAppStatusLabel(app.service_status, t),
     app.space_name,
     app.service_hostname,
   ].filter(Boolean).join(" / ");

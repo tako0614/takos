@@ -34,7 +34,7 @@ export function useMcpServers({ spaceId }: UseMcpServersOptions) {
       const res = await fetch(
         `/api/mcp/servers?spaceId=${encodeURIComponent(targetSpaceId)}`,
       );
-      if (!res.ok) throw new Error("Failed to fetch MCP servers");
+      if (!res.ok) throw new Error(t("failedToFetchMcpServers"));
       const data = await res.json();
       if (seq !== refreshSeq || targetSpaceId !== currentSpaceId()) return;
       setServers(data.data || []);
@@ -61,7 +61,7 @@ export function useMcpServers({ spaceId }: UseMcpServersOptions) {
     input: { name: string; url: string; scope?: string },
   ) => {
     if (!currentSpaceId()) {
-      throw new Error("Missing space id");
+      throw new Error(t("missingSpaceId"));
     }
     const res = await fetch(basePath(), {
       method: "POST",
@@ -70,7 +70,7 @@ export function useMcpServers({ spaceId }: UseMcpServersOptions) {
     });
     const data = await res.json().catch(() => ({}));
     if (!res.ok) {
-      throw new Error(data.error || "Failed to create MCP server");
+      throw new Error(data.error || t("failedToCreateMcpServer"));
     }
     await refresh();
     return data.data as {
@@ -88,7 +88,7 @@ export function useMcpServers({ spaceId }: UseMcpServersOptions) {
   ) => {
     const targetSpaceId = currentSpaceId();
     if (!targetSpaceId) {
-      throw new Error("Missing space id");
+      throw new Error(t("missingSpaceId"));
     }
     const res = await fetch(
       `/api/mcp/servers/${serverId}?spaceId=${
@@ -102,7 +102,7 @@ export function useMcpServers({ spaceId }: UseMcpServersOptions) {
     );
     const data = await res.json().catch(() => ({}));
     if (!res.ok) {
-      throw new Error(data.error || "Failed to update MCP server");
+      throw new Error(data.error || t("failedToUpdateMcpServer"));
     }
     await refresh();
     return data.data as McpServerRecord;
@@ -141,7 +141,7 @@ export function useMcpServers({ spaceId }: UseMcpServersOptions) {
       );
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
-        throw new Error(data.error || "Failed to remove MCP server");
+        throw new Error(data.error || t("failedToRemoveMcpServer"));
       }
       await refresh();
       return true;
@@ -156,7 +156,7 @@ export function useMcpServers({ spaceId }: UseMcpServersOptions) {
   ): Promise<{ name: string; description: string }[]> => {
     const targetSpaceId = currentSpaceId();
     if (!targetSpaceId) {
-      throw new Error("Missing space id");
+      throw new Error(t("missingSpaceId"));
     }
     const res = await fetch(
       `/api/mcp/servers/${serverId}/tools?spaceId=${
@@ -165,7 +165,7 @@ export function useMcpServers({ spaceId }: UseMcpServersOptions) {
     );
     if (!res.ok) {
       const data = await res.json().catch(() => ({})) as { error?: string };
-      throw new Error(data.error || "Failed to fetch tools");
+      throw new Error(data.error || t("failedToFetchTools"));
     }
     const data = await res.json() as {
       data: { tools: { name: string; description: string }[] };

@@ -35,6 +35,7 @@ export const auth = {
   authorizedAppsDesc: "Apps that have access to your account",
   developerApps: "Developer Apps",
   developerAppsDesc: "OAuth clients you have created",
+  personalTokens: "Personal Tokens",
   noAuthorizedApps: "No authorized apps",
   noAuthorizedAppsDesc:
     "When you authorize third-party apps, they will appear here",
@@ -78,6 +79,20 @@ export const auth = {
   oauthScopeIdentity: "Account Information",
   oauthScopeResources: "Permissions",
   oauthScopeNone: "No additional permissions required.",
+  oauthScopeDescOpenid: "OpenID Connect identity",
+  oauthScopeDescProfile: "Read your profile information",
+  oauthScopeDescEmail: "Read your email address",
+  oauthScopeDescSpacesRead: "Read your workspaces",
+  oauthScopeDescSpacesWrite: "Create and modify workspaces",
+  oauthScopeDescFilesRead: "Read files in workspaces",
+  oauthScopeDescFilesWrite: "Create and modify files",
+  oauthScopeDescMemoriesRead: "Read memories",
+  oauthScopeDescMemoriesWrite: "Create and modify memories",
+  oauthScopeDescThreadsRead: "Read chat threads",
+  oauthScopeDescThreadsWrite: "Create and send messages",
+  oauthScopeDescAgentsExecute: "Execute AI agents",
+  oauthScopeDescReposRead: "Read repositories",
+  oauthScopeDescReposWrite: "Create and modify repositories",
   oauthConsentError: "Authorization Error",
 
   // Device Flow

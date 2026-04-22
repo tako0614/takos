@@ -1,6 +1,7 @@
 import { For, Show } from "solid-js";
 import { Icons } from "../../lib/Icons.tsx";
 import type { SearchOrder, SearchSort, SourceRepo } from "../../types/repos.ts";
+import { useI18n } from "../../store/i18n.ts";
 import { RepoBrowseCard } from "./RepoBrowseCard.tsx";
 
 function SearchRepoList(props: {
@@ -11,6 +12,8 @@ function SearchRepoList(props: {
   onStar: (repo: SourceRepo) => void;
   onLoadMore?: () => void;
 }) {
+  const { t } = useI18n();
+
   return (
     <>
       <Show when={props.searching}>
@@ -24,7 +27,7 @@ function SearchRepoList(props: {
       >
         <div class="flex flex-col items-center justify-center py-12 text-zinc-500">
           <Icons.Search class="w-12 h-12 mb-3" />
-          <p>No repositories found</p>
+          <p>{t("noRepositoriesFound")}</p>
         </div>
       </Show>
       <Show
@@ -50,7 +53,7 @@ function SearchRepoList(props: {
               onClick={props.onLoadMore}
             >
               <Icons.ChevronDown class="w-4 h-4" />
-              Load more
+              {t("loadMore")}
             </button>
           </div>
         </Show>
@@ -75,28 +78,29 @@ interface RepoSearchResultsProps {
 }
 
 export function RepoSearchResults(props: RepoSearchResultsProps) {
+  const { t } = useI18n();
+
   return (
     <div class="p-6">
       <div class="flex flex-wrap items-center gap-3 mb-4 text-sm text-zinc-500 dark:text-zinc-400">
         <h3 class="mr-auto">
-          {props.searching
-            ? "Searching..."
-            : `${
-              props.total ?? props.results?.length ?? 0
-            } results for "${props.query}"`}
+          {props.searching ? t("searching") : t("resultsForQuery", {
+            count: props.total ?? props.results?.length ?? 0,
+            query: props.query,
+          })}
         </h3>
         <Show when={props.onSortChange && props.onOrderChange}>
           <div class="flex items-center gap-2">
-            <label class="text-xs text-zinc-500">Sort</label>
+            <label class="text-xs text-zinc-500">{t("sortLabel")}</label>
             <select
               value={props.sort}
               onInput={(e) =>
                 props.onSortChange!(e.currentTarget.value as SearchSort)}
               class="bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-md px-2 py-1 text-xs text-zinc-900 dark:text-zinc-100"
             >
-              <option value="stars">Stars</option>
-              <option value="updated">Recently updated</option>
-              <option value="created">Newest</option>
+              <option value="stars">{t("sortStars")}</option>
+              <option value="updated">{t("sortRecentlyUpdated")}</option>
+              <option value="created">{t("newest")}</option>
             </select>
             <select
               value={props.order}
@@ -104,8 +108,8 @@ export function RepoSearchResults(props: RepoSearchResultsProps) {
                 props.onOrderChange!(e.currentTarget.value as SearchOrder)}
               class="bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-md px-2 py-1 text-xs text-zinc-900 dark:text-zinc-100"
             >
-              <option value="desc">Desc</option>
-              <option value="asc">Asc</option>
+              <option value="desc">{t("sortDesc")}</option>
+              <option value="asc">{t("sortAsc")}</option>
             </select>
           </div>
         </Show>

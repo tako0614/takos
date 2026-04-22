@@ -258,7 +258,7 @@ export function PRDetail(props: PRDetailProps) {
         <Show when={loading()}>
           <div class="flex flex-col items-center justify-center py-16 text-zinc-500">
             <div class="w-8 h-8 border-2 border-zinc-300 dark:border-zinc-600 border-t-zinc-900 dark:border-t-zinc-100 rounded-full animate-spin" />
-            <span class="mt-3">Loading...</span>
+            <span class="mt-3">{t("loading")}</span>
           </div>
         </Show>
 

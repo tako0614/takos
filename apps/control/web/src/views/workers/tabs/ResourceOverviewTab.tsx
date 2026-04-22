@@ -36,7 +36,7 @@ export function ResourceOverviewTab(props: ResourceOverviewTabProps) {
       <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
         <div class="p-4 rounded-xl bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700">
           <h4 class="text-xs font-medium text-zinc-500 dark:text-zinc-400 uppercase tracking-wider mb-2">
-            Resource ID
+            {t("resourceId")}
           </h4>
           <code class="text-sm text-zinc-900 dark:text-zinc-100 font-mono bg-zinc-100 dark:bg-zinc-700 px-2 py-1 rounded">
             {props.resource.id || "-"}
@@ -140,7 +140,9 @@ function ConnectionInfoDisplay(props: {
                       type="button"
                       onClick={() => handleCopy(key, value)}
                       class="p-2 rounded-lg hover:bg-zinc-100 dark:hover:bg-zinc-700 transition-colors text-zinc-500 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100"
-                      aria-label={`Copy ${key.replace(/_/g, " ")} to clipboard`}
+                      aria-label={t("copyConnectionField", {
+                        field: key.replace(/_/g, " "),
+                      })}
                     >
                       {copied() && copiedKey() === key
                         ? (
@@ -204,7 +206,7 @@ function AccessTokensList(props: {
             </div>
 
             {props.tokens.length > 0 && (
-              <ul class="space-y-2" aria-label="Access tokens">
+              <ul class="space-y-2" aria-label={t("accessTokens")}>
                 {props.tokens.map((token) => (
                   <li class="flex items-center justify-between p-3 rounded-lg bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700">
                     <div class="flex-1 min-w-0">
@@ -223,7 +225,9 @@ function AccessTokensList(props: {
                               : "bg-zinc-100 dark:bg-zinc-700 text-zinc-600 dark:text-zinc-400"
                           }`}
                         >
-                          {token.permission}
+                          {token.permission === "write"
+                            ? t("readWrite")
+                            : t("readOnly")}
                         </span>
                       </div>
                       <div class="mt-1 flex items-center gap-3 text-xs text-zinc-500 dark:text-zinc-400">
@@ -250,7 +254,7 @@ function AccessTokensList(props: {
                         props.onDelete(token.id)}
                       disabled={props.deletingTokenId === token.id}
                       class="p-2 rounded-lg hover:bg-red-100 dark:hover:bg-red-900/30 transition-colors text-zinc-400 hover:text-red-600 dark:hover:text-red-400 disabled:opacity-50"
-                      aria-label={`Delete token ${token.name}`}
+                      aria-label={t("deleteTokenNamed", { name: token.name })}
                     >
                       {props.deletingTokenId === token.id
                         ? (
@@ -362,7 +366,7 @@ function CreateTokenModal(props: {
                     type="button"
                     onClick={handleCopyToken}
                     class="p-2 rounded-lg hover:bg-zinc-100 dark:hover:bg-zinc-700 transition-colors text-zinc-500 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100"
-                    aria-label="Copy token to clipboard"
+                    aria-label={t("copyTokenToClipboard")}
                   >
                     {copied()
                       ? (
@@ -403,7 +407,7 @@ function CreateTokenModal(props: {
                   type="text"
                   value={name()}
                   onInput={(e) => setName(e.currentTarget.value)}
-                  placeholder="e.g., Production API"
+                  placeholder={t("tokenNamePlaceholder")}
                   class="w-full px-3 py-2 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-lg text-sm text-zinc-900 dark:text-zinc-100 focus:outline-none focus:ring-2 focus:ring-zinc-900/10 dark:focus:ring-zinc-100/10"
                 />
               </div>

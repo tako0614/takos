@@ -2,6 +2,7 @@ import type { JSX } from "solid-js";
 import { For, Show } from "solid-js";
 import { Icons } from "../../lib/Icons.tsx";
 import type { FollowUser } from "../../types/profile.ts";
+import { useI18n } from "../../store/i18n.ts";
 
 interface ProfileUserListProps {
   users: FollowUser[];
@@ -12,6 +13,8 @@ interface ProfileUserListProps {
 }
 
 export function ProfileUserList(props: ProfileUserListProps) {
+  const { t } = useI18n();
+
   return (
     <Show
       when={props.users.length > 0}
@@ -71,7 +74,7 @@ export function ProfileUserList(props: ProfileUserListProps) {
                 }`}
                 onClick={() => props.onToggleFollow(user)}
               >
-                {user.is_following ? "Following" : "Follow"}
+                {user.is_following ? t("followingAction") : t("follow")}
               </button>
             </div>
           )}

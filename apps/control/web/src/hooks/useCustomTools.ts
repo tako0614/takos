@@ -30,7 +30,7 @@ export function useCustomTools({ spaceId }: UseCustomToolsOptions) {
     setLoading(true);
     try {
       const res = await fetch(`/api/spaces/${targetSpaceId}/tools`);
-      if (!res.ok) throw new Error("Failed to fetch tools");
+      if (!res.ok) throw new Error(t("failedToFetchTools"));
       const data = await res.json() as { data?: CustomTool[] };
       if (seq !== refreshSeq || targetSpaceId !== currentSpaceId()) return;
       setTools(data.data || []);
@@ -58,7 +58,7 @@ export function useCustomTools({ spaceId }: UseCustomToolsOptions) {
   const getTool = async (toolId: string): Promise<CustomTool | null> => {
     try {
       const res = await fetch(`${basePath()}/${toolId}`);
-      if (!res.ok) throw new Error("Failed to fetch tool");
+      if (!res.ok) throw new Error(t("failedToLoadTool"));
       const data = await res.json() as { data?: CustomTool };
       return data.data || null;
     } catch (error) {

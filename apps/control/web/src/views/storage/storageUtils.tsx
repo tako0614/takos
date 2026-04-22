@@ -168,9 +168,7 @@ export function handlerDisplayName(
   t: (key: TranslationKey) => string,
 ): string {
   if (h.type === "local") {
-    return h.localId === LOCAL_TEXT_EDITOR
-      ? (t("textEditor") || "Text Editor")
-      : (t("imageViewer") || "Image Viewer");
+    return h.localId === LOCAL_TEXT_EDITOR ? t("textEditor") : t("imageViewer");
   }
   return h.handler.name;
 }

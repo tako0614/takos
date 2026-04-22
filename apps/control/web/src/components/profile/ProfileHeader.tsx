@@ -4,6 +4,7 @@ import { Icons } from "../../lib/Icons.tsx";
 import { Avatar, Button } from "../ui/index.ts";
 import type { ProfileTab, UserProfile } from "../../types/profile.ts";
 import { formatDate, formatNumber } from "../../lib/format.ts";
+import { useI18n } from "../../store/i18n.ts";
 
 interface ProfileHeaderProps {
   profile: UserProfile;
@@ -18,6 +19,7 @@ interface ProfileHeaderProps {
 }
 
 export function ProfileHeader(props: ProfileHeaderProps) {
+  const { t } = useI18n();
   const statButtonStyle: JSX.CSSProperties = {
     display: "flex",
     "flex-direction": "column",
@@ -31,10 +33,10 @@ export function ProfileHeader(props: ProfileHeaderProps) {
 
   const followLabel = () =>
     props.profile.is_following
-      ? "Following"
+      ? t("followingAction")
       : props.profile.follow_requested
-      ? "Requested"
-      : "Follow";
+      ? t("followRequested")
+      : t("follow");
   const followVariant = () =>
     (props.profile.is_following || props.profile.follow_requested)
       ? "secondary"
@@ -44,17 +46,17 @@ export function ProfileHeader(props: ProfileHeaderProps) {
     {
       tab: "repositories" as const,
       count: props.profile.public_repo_count,
-      label: "repositories",
+      label: t("profileRepositories"),
     },
     {
       tab: "followers" as const,
       count: props.profile.followers_count,
-      label: "followers",
+      label: t("profileFollowers"),
     },
     {
       tab: "following" as const,
       count: props.profile.following_count,
-      label: "following",
+      label: t("profileFollowing"),
     },
   ];
 
@@ -75,7 +77,7 @@ export function ProfileHeader(props: ProfileHeaderProps) {
               variant="ghost"
               size="sm"
               onClick={props.onBack}
-              aria-label="Go back"
+              aria-label={t("goBack")}
               leftIcon={<Icons.ArrowLeft />}
             />
           </div>
@@ -134,7 +136,7 @@ export function ProfileHeader(props: ProfileHeaderProps) {
                       opacity: 0.8,
                     }}
                   >
-                    (Private)
+                    ({t("profilePrivateBadge")})
                   </span>
                 </Show>
               </span>
@@ -207,7 +209,7 @@ export function ProfileHeader(props: ProfileHeaderProps) {
                       props.followLoading || (props.blockLoading ?? false)}
                     isLoading={props.muteLoading ?? false}
                   >
-                    {props.profile.is_muted ? "Unmute" : "Mute"}
+                    {props.profile.is_muted ? t("unmute") : t("mute")}
                   </Button>
                 </Show>
                 <Show when={props.onToggleBlock}>
@@ -219,7 +221,7 @@ export function ProfileHeader(props: ProfileHeaderProps) {
                       props.followLoading || (props.muteLoading ?? false)}
                     isLoading={props.blockLoading ?? false}
                   >
-                    {props.profile.is_blocking ? "Unblock" : "Block"}
+                    {props.profile.is_blocking ? t("unblock") : t("block")}
                   </Button>
                 </Show>
                 <Button
@@ -247,7 +249,9 @@ export function ProfileHeader(props: ProfileHeaderProps) {
           }}
         >
           <Icons.Clock style={{ width: "1rem", height: "1rem" }} />
-          <span>Joined {formatDate(props.profile.created_at)}</span>
+          <span>
+            {t("joinedDate", { date: formatDate(props.profile.created_at) })}
+          </span>
         </div>
       </div>
     </>

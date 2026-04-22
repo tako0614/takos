@@ -75,20 +75,20 @@ export function SharedThreadPage(props: { token: string }) {
           setData(null);
           return;
         }
-        setError(body.error || "Unauthorized");
+        setError(body.error || t("operationFailed"));
         setData(null);
         return;
       }
       if (!res.ok) {
         const body = await res.json().catch(() => ({})) as { error?: string };
-        setError(body.error || "Not found");
+        setError(body.error || t("notFound"));
         setData(null);
         return;
       }
       const payload = await res.json() as SharedThreadPayload;
       setData(payload);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to load share");
+      setError(err instanceof Error ? err.message : t("failedToLoadShares"));
       setData(null);
     } finally {
       setLoading(false);
@@ -113,7 +113,7 @@ export function SharedThreadPage(props: { token: string }) {
       }
       if (!res.ok) {
         const body = await res.json().catch(() => ({})) as { error?: string };
-        setError(body.error || "Failed to unlock");
+        setError(body.error || t("operationFailed"));
         return;
       }
       const payload = await res.json() as SharedThreadPayload;
@@ -121,7 +121,7 @@ export function SharedThreadPage(props: { token: string }) {
       setRequiresPassword(false);
       setPassword("");
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to unlock");
+      setError(err instanceof Error ? err.message : t("operationFailed"));
     } finally {
       setLoading(false);
     }
@@ -150,11 +150,10 @@ export function SharedThreadPage(props: { token: string }) {
               </div>
               <div class="min-w-0">
                 <h1 class="text-lg font-semibold text-zinc-900 dark:text-zinc-100 truncate">
-                  {t("passwordRequired") || "Password required"}
+                  {t("passwordRequired")}
                 </h1>
                 <p class="text-sm text-zinc-600 dark:text-zinc-300">
-                  {t("enterPasswordToView") ||
-                    "Enter the password to view this shared thread."}
+                  {t("enterPasswordToView")}
                 </p>
               </div>
             </div>
@@ -164,7 +163,7 @@ export function SharedThreadPage(props: { token: string }) {
                 type="password"
                 value={password()}
                 onInput={(e) => setPassword(e.currentTarget.value)}
-                placeholder={t("password") || "Password"}
+                placeholder={t("password")}
                 onKeyDown={(e) => {
                   if (e.key === "Enter") unlock();
                 }}
@@ -176,7 +175,7 @@ export function SharedThreadPage(props: { token: string }) {
                 isLoading={loading()}
                 class="w-full"
               >
-                {t("unlock") || "Unlock"}
+                {t("unlock")}
               </Button>
               <Button
                 variant="ghost"
@@ -184,7 +183,7 @@ export function SharedThreadPage(props: { token: string }) {
                 disabled={loading()}
                 class="w-full"
               >
-                {t("refresh") || "Refresh"}
+                {t("refresh")}
               </Button>
             </div>
 
@@ -206,15 +205,14 @@ export function SharedThreadPage(props: { token: string }) {
               <Icons.AlertTriangle class="w-6 h-6 text-zinc-600 dark:text-zinc-300" />
             </div>
             <h1 class="mt-4 text-lg font-semibold text-zinc-900 dark:text-zinc-100">
-              {t("notFound") || "Not found"}
+              {t("notFound")}
             </h1>
             <p class="mt-2 text-sm text-zinc-600 dark:text-zinc-300">
-              {error() ||
-                (t("shareNotAvailable") || "This share is not available.")}
+              {error() || t("shareNotAvailable")}
             </p>
             <div class="mt-4">
               <Button variant="secondary" onClick={loadShare}>
-                {t("refresh") || "Refresh"}
+                {t("refresh")}
               </Button>
             </div>
           </div>
@@ -227,14 +225,22 @@ export function SharedThreadPage(props: { token: string }) {
         <div class="border-b border-zinc-100 dark:border-zinc-800">
           <div class="max-w-4xl mx-auto px-4 py-5">
             <h1 class="text-xl font-semibold text-zinc-900 dark:text-zinc-100 truncate">
-              {data()!.thread.title || "Untitled Thread"}
+              {data()!.thread.title || t("untitledThread")}
             </h1>
             <div class="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-zinc-500 dark:text-zinc-400">
-              <span>Share: {data()!.share.mode}</span>
+              <span>{t("shareLabel", { mode: data()!.share.mode })}</span>
               {data()!.share.expires_at && (
-                <span>Expires: {formatIso(data()!.share.expires_at!)}</span>
+                <span>
+                  {t("expiresDate", {
+                    date: formatIso(data()!.share.expires_at!),
+                  })}
+                </span>
               )}
-              <span>Updated: {formatIso(data()!.thread.updated_at)}</span>
+              <span>
+                {t("updatedLabel", {
+                  date: formatIso(data()!.thread.updated_at),
+                })}
+              </span>
             </div>
             {error() && (
               <div class="mt-3 text-sm text-red-600 dark:text-red-400">
@@ -248,7 +254,7 @@ export function SharedThreadPage(props: { token: string }) {
           {mappedMessages().length === 0
             ? (
               <div class="px-4 py-12 text-center text-sm text-zinc-500 dark:text-zinc-400">
-                {t("noMessages") || "No messages."}
+                {t("noMessages")}
               </div>
             )
             : (

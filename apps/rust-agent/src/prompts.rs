@@ -12,6 +12,7 @@ pub const TOOL_RUNTIME_RULES: &str = "## Tool Availability
 
 - Only use tools that are explicitly listed in the runtime tool catalog for this run.
 - If a tool is not listed, treat it as unavailable even if you know it exists elsewhere in Takos.
+- When toolbox is available, use it as the full catalog: search, describe, then call.
 - Prefer the smallest tool path that can complete the user goal.
 - Re-check the available tool catalog before assuming a capability exists.";
 

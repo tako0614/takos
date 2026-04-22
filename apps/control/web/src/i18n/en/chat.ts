@@ -71,6 +71,8 @@ export const chat = {
 
   // Chat View
   messageNotLoaded: "Message not loaded in current view",
+  failedToLoadMessages: "Failed to load messages",
+  runLabel: "Run {id}",
   failedToSaveTier: "Failed to save tier",
   failedToLoadShares: "Failed to load shares",
   failedToCreateShare: "Failed to create share",
@@ -80,8 +82,12 @@ export const chat = {
   shareMode: "Mode",
   sharePublic: "Public",
   sharePasswordLabel: "Password",
+  sharePasswordPlaceholder: "min 8 chars",
   shareExpiresDays: "Expires (days)",
   shareLinks: "Links",
+  untitledThread: "Untitled Thread",
+  shareLabel: "Share: {mode}",
+  updatedLabel: "Updated: {date}",
   shareNoExpiry: "no expiry",
   shareExpiresAt: "expires {date}",
   shareLastAccessed: "last {date}",

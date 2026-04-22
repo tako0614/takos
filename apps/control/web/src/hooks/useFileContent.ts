@@ -1,5 +1,6 @@
 import { type Accessor, createSignal } from "solid-js";
 import { getErrorMessage } from "takos-common/errors";
+import { useI18n } from "../store/i18n.ts";
 
 interface UseFileContentReturn {
   content: () => string | null;
@@ -14,6 +15,7 @@ interface UseFileContentReturn {
 export function useFileContent(
   spaceId: Accessor<string>,
 ): UseFileContentReturn {
+  const { t } = useI18n();
   const [content, setContent] = createSignal<string | null>(null);
   const [encoding, setEncoding] = createSignal<"utf-8" | "base64" | null>(null);
   const [loading, setLoading] = createSignal(false);
@@ -35,7 +37,7 @@ export function useFileContent(
       );
       if (!res.ok) {
         const data = await res.json().catch(() => ({})) as { error?: string };
-        throw new Error(data.error || "Failed to load file content");
+        throw new Error(data.error || t("failedToLoadFileContent"));
       }
       const data = await res.json() as {
         content: string;
@@ -44,7 +46,7 @@ export function useFileContent(
       setContent(data.content);
       setEncoding(data.encoding);
     } catch (err) {
-      setError(getErrorMessage(err, "Failed to load file content"));
+      setError(getErrorMessage(err, t("failedToLoadFileContent")));
     } finally {
       setLoading(false);
     }
@@ -71,12 +73,12 @@ export function useFileContent(
       );
       if (!res.ok) {
         const data = await res.json().catch(() => ({})) as { error?: string };
-        throw new Error(data.error || "Failed to save file");
+        throw new Error(data.error || t("failedToSaveFile"));
       }
       setContent(newContent);
       return true;
     } catch (err) {
-      setError(getErrorMessage(err, "Failed to save file"));
+      setError(getErrorMessage(err, t("failedToSaveFile")));
       return false;
     } finally {
       setSaving(false);

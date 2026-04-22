@@ -30,6 +30,8 @@ export const deploy = {
   saveRuntime: "Save Runtime Settings",
   hostname: "Hostname",
   lastUpdated: "Last Updated",
+  loadingBindings: "Loading bindings",
+  boundServices: "Bound services",
 
   // General Settings
   general: "General",
@@ -50,6 +52,8 @@ export const deploy = {
   domainPending: "Pending DNS",
   cnameInstruction: "Add DNS record",
   dnsSetup: "DNS Setup",
+  recordLabel: "Record",
+  targetLabel: "Target",
 
   // Deployment Detail
   status: "Status",
@@ -71,6 +75,8 @@ export const deploy = {
   confirmStopWorker: "Are you sure you want to stop this worker?",
   confirmDeleteWorker:
     "Are you sure you want to delete this worker? All data will be lost.",
+  yurucommuWorkerDeleteWarning:
+    "This worker is linked to Yurucommu. Deleting it may break your Yurucommu instance.",
   retry: "Retry",
   retryStarted: "Retry started",
   failedToRetry: "Failed to retry",
@@ -82,6 +88,8 @@ export const deploy = {
   deploymentHistory: "Deployment History",
   deploymentEvents: "Events",
   deploymentFailed: "Deployment Failed",
+  loadingDeploymentDetails: "Loading deployment details...",
+  versionLabel: "Version",
   bundleHash: "Bundle Hash",
   bundleSize: "Bundle Size",
   deployedBy: "Deployed By",
@@ -107,6 +115,7 @@ export const deploy = {
   boundWorkersHint: "Workers that are using this resource",
   noBindingsHint: "No workers are currently bound to this resource",
   removeBinding: "Remove Binding",
+  removeBindingFor: "Remove binding for {name}",
   bindingRemoved: "Binding removed",
   failedToRemoveBinding: "Failed to remove binding",
 
@@ -161,8 +170,12 @@ export const deploy = {
   noObjects: "No objects",
   size: "Size",
   createdAt: "Created",
+  resourceId: "Resource ID",
+  resourceSections: "Resource sections",
   deleteResourceWarning:
     "This action cannot be undone. All associated data will be deleted.",
+  yurucommuResourceDeleteWarning:
+    "This resource is linked to Yurucommu. Deleting it may break your Yurucommu instance.",
 
   // Workers Tab
   useAgentToCreateWorker: "Use the agent to deploy workers",
@@ -182,6 +195,10 @@ export const deploy = {
   copyTokenNow: "Copy this token now. You won't be able to see it again.",
   accessTokenLabel: "Access Token",
   tokenNameLabel: "Token Name",
+  tokenNamePlaceholder: "e.g., Production API",
+  copyConnectionField: "Copy {field} to clipboard",
+  copyTokenToClipboard: "Copy token to clipboard",
+  deleteTokenNamed: "Delete token {name}",
   permissionLabel: "Permission",
   readOnly: "Read only",
   readWrite: "Read & Write",
@@ -194,4 +211,11 @@ export const deploy = {
 
   // D1 Explorer
   sqlConsole: "SQL Console",
+  databaseTables: "Database tables",
+  loadingTables: "Loading tables",
+  tableList: "Table list",
+  executeSqlQuery: "Execute SQL query",
+  tableDataFor: "Table data for {table}",
+  tableContents: "{table} contents",
+  queryFailed: "Query failed",
 } as const;

@@ -282,7 +282,7 @@ export function RepoDetail(props: RepoDetailProps) {
       showToast(
         "error",
         `${t("deleteFailed")}: ${
-          err instanceof Error ? err.message : "Unknown error"
+          err instanceof Error ? err.message : t("unknownError")
         }`,
       );
     } finally {

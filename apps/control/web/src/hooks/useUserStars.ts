@@ -1,6 +1,7 @@
 import { type Accessor, createEffect, createSignal, on } from "solid-js";
 import type { StarredRepo } from "../types/profile.ts";
 import { rpc, rpcJson } from "../lib/rpc.ts";
+import { useI18n } from "../store/i18n.ts";
 
 interface StarsResponse {
   repos: StarredRepo[];
@@ -10,6 +11,7 @@ interface StarsResponse {
 const ITEMS_PER_PAGE = 20;
 
 export function useUserStars(username: Accessor<string>) {
+  const { t } = useI18n();
   const [starredRepos, setStarredRepos] = createSignal<StarredRepo[]>([]);
   const [offset, setOffset] = createSignal(0);
   const [hasMore, setHasMore] = createSignal(true);
@@ -41,7 +43,7 @@ export function useUserStars(username: Accessor<string>) {
       setHasMore(data.has_more);
     } catch (err) {
       setError(
-        err instanceof Error ? err.message : "Failed to load starred repos",
+        err instanceof Error ? err.message : t("failedToLoadStarredRepos"),
       );
     } finally {
       setLoading(false);

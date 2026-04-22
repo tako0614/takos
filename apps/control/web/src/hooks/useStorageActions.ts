@@ -96,7 +96,7 @@ export function useStorageActions({
     try {
       const res = await downloadFolderZip(currentPath());
       if (!res) {
-        showToast("error", t("failedToGetDownloadUrl") || "Failed to download");
+        showToast("error", t("failedToGetDownloadUrl"));
         return;
       }
 
@@ -115,11 +115,11 @@ export function useStorageActions({
       a.click();
       a.remove();
       URL.revokeObjectURL(url);
-      showToast("success", t("download") || "Download");
+      showToast("success", t("download"));
     } catch (err) {
       showToast(
         "error",
-        err instanceof Error ? err.message : (t("failedToLoad") || "Failed"),
+        err instanceof Error ? err.message : t("failedToLoad"),
       );
     } finally {
       setDownloadingZip(false);

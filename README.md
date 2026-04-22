@@ -530,13 +530,17 @@ deno task local:down        # 停止
 
 ## ロードマップ
 
-- OSS 公開に向けたリポジトリ整備
-- セットアップ手順と運用ドキュメントの整備
-- CI / テスト / ライセンスの公開対応
-- 独自仕様の安定化
-- AI エージェントアーキテクチャの洗練
-- セルフホストを前提とした UX の強化
-- Store / manifest / tool distribution 体験の改善
+Takos 1.0 は、Takos core を OSS GA として扱える状態にすることを目標にしています。
+固定の公開日は置かず、milestone の完了条件を満たしたら次へ進みます。
+
+- M0 Contract Freeze: manifest / CLI / API / terminology の互換境界を固定
+- M1 OSS Self-Host GA: OSS checkout だけで single-node production self-host を再現
+- M2 Deploy / Git / API GA: deploy lifecycle、Git Smart HTTP、Store install、resource surface を安定化
+- M3 Agent GA: Thread / Run、Rust agent、skills、remote tools、memory、usage reporting を production feature 化
+- M4 Release Hardening: release candidate、CLI artifact、docs、migration、smoke test を揃える
+
+詳細な内部計画は `plan/road-to-1.0.md`、公開向けの要約は
+[Road to Takos 1.0](docs/platform/road-to-1.0.md) を参照してください。
 
 ---
 

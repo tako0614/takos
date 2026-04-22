@@ -8,6 +8,7 @@ import {
 } from "solid-js";
 import type { JSX } from "solid-js";
 import { Icons } from "../../lib/Icons.tsx";
+import { useI18n } from "../../store/i18n.ts";
 
 export interface BreadcrumbItem {
   label: string;
@@ -23,6 +24,7 @@ interface BreadcrumbProps {
 }
 
 export function Breadcrumb(props: BreadcrumbProps) {
+  const { t } = useI18n();
   const [isCollapsed, setIsCollapsed] = createSignal(false);
   const [showDropdown, setShowDropdown] = createSignal(false);
   let containerRef: HTMLElement | undefined;
@@ -126,7 +128,7 @@ export function Breadcrumb(props: BreadcrumbProps) {
             class={`flex items-center gap-2 min-w-0 flex-wrap ${
               props.class ?? ""
             }`}
-            aria-label="Breadcrumb"
+            aria-label={t("breadcrumbLabel")}
           >
             <For each={props.items}>
               {(item, index) => {
@@ -147,7 +149,7 @@ export function Breadcrumb(props: BreadcrumbProps) {
         <nav
           ref={containerRef}
           class={`flex items-center gap-2 min-w-0 ${props.class ?? ""}`}
-          aria-label="Breadcrumb"
+          aria-label={t("breadcrumbLabel")}
         >
           <div class="flex items-center gap-2 min-w-0">
             {renderItem(props.items[0], 0, false)}
@@ -159,7 +161,7 @@ export function Breadcrumb(props: BreadcrumbProps) {
               type="button"
               class="flex items-center justify-center w-6 h-6 rounded bg-zinc-100 dark:bg-zinc-800 hover:bg-zinc-200 dark:hover:bg-zinc-700 text-zinc-500 dark:text-zinc-400 transition-colors"
               onClick={() => setShowDropdown(!showDropdown())}
-              aria-label="Show more items"
+              aria-label={t("breadcrumbMoreItems")}
             >
               <Icons.MoreHorizontal class="w-4 h-4" />
             </button>

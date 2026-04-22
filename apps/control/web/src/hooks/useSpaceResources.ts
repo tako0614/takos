@@ -56,7 +56,7 @@ export function useSpaceResources(spaceId: string | null) {
       setResources([]);
       showToast(
         "error",
-        getErrorMessage(error, t("failedToLoad") || "Failed to load"),
+        getErrorMessage(error, t("failedToLoad")),
       );
     } finally {
       setLoadingResources(false);
@@ -96,7 +96,7 @@ export function useSpaceResources(spaceId: string | null) {
   const deleteResource = async (resource: Resource) => {
     const baseMessage = t("confirmDeleteResource");
     const warning = isYurucommuResource(resource)
-      ? `${baseMessage}\n\nWarning: This resource is linked to Yurucommu. Deleting it may break your Yurucommu instance.`
+      ? `${baseMessage}\n\n${t("yurucommuResourceDeleteWarning")}`
       : baseMessage;
     const confirmed = await confirm({
       title: t("deleteResource"),

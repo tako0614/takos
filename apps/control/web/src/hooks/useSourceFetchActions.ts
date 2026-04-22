@@ -21,6 +21,7 @@ function makeEmptyPackage(): SourceItemPackage {
     downloads: 0,
     certified: false,
     description: null,
+    icon: null,
   };
 }
 

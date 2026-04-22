@@ -134,11 +134,11 @@ export function useChatSharing(
       const data = await rpcJson<{ share: ThreadShare; share_url: string }>(
         res,
       );
-      showToast("success", t("created") || "Created");
+      showToast("success", t("created"));
       if (data.share_url) {
         try {
           await navigator.clipboard.writeText(data.share_url);
-          showToast("success", t("copied") || "Copied");
+          showToast("success", t("copied"));
         } catch { /* ignored */ }
       }
       setSharePassword("");
@@ -160,7 +160,7 @@ export function useChatSharing(
         param: { id: currentThreadId, shareId },
       });
       await rpcJson(res);
-      showToast("success", t("revoked") || "Revoked");
+      showToast("success", t("revoked"));
       await fetchShares();
     } catch (err) {
       showToast(
@@ -197,7 +197,7 @@ export function useChatSharing(
       } finally {
         URL.revokeObjectURL(url);
       }
-      showToast("success", t("download") || "Download");
+      showToast("success", t("download"));
     } catch (err) {
       showToast(
         "error",

@@ -26,7 +26,7 @@ export function StorageBulkActions(props: StorageBulkActionsProps) {
           onClick={props.onMove}
         >
           <Icons.FolderOpen class="w-4 h-4" />
-          {t("move") || "Move"}
+          {t("move")}
         </button>
         <button
           type="button"

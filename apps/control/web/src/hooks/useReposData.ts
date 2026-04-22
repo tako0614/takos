@@ -13,6 +13,7 @@ import type {
   SourceTab,
 } from "../types/repos.ts";
 import { rpc, rpcJson } from "../lib/rpc.ts";
+import { useI18n } from "../store/i18n.ts";
 
 interface UseReposDataOptions {
   selectedSpaceId?: Accessor<string | undefined>;
@@ -22,6 +23,7 @@ interface UseReposDataOptions {
 export function useReposData(
   { selectedSpaceId, initialTab }: UseReposDataOptions,
 ) {
+  const { t } = useI18n();
   const [activeTab, setActiveTab] = createSignal<SourceTab>(initialTab);
   const PAGE_SIZE = 20;
   let myReposRequestSeq = 0;
@@ -74,7 +76,7 @@ export function useReposData(
     } catch (err) {
       if (requestId !== myReposRequestSeq) return;
       if (selectedSpaceId?.() !== currentSpaceId) return;
-      setMyReposError(err instanceof Error ? err.message : "Unknown error");
+      setMyReposError(err instanceof Error ? err.message : t("unknownError"));
     } finally {
       if (
         requestId === myReposRequestSeq &&

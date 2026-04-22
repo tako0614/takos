@@ -3,6 +3,7 @@ import { Show } from "solid-js";
 import { Icons } from "../../lib/Icons.tsx";
 import { Badge } from "../ui/index.ts";
 import type { ProfileTab, UserProfile } from "../../types/profile.ts";
+import { useI18n } from "../../store/i18n.ts";
 
 interface ProfileTabsProps {
   activeTab: ProfileTab;
@@ -57,6 +58,8 @@ function TabButton(props: TabButtonProps) {
 }
 
 export function ProfileTabs(props: ProfileTabsProps) {
+  const { t } = useI18n();
+
   return (
     <div
       style={{
@@ -70,33 +73,33 @@ export function ProfileTabs(props: ProfileTabsProps) {
         isActive={props.activeTab === "repositories"}
         onClick={() => props.onSelectTab("repositories")}
         icon={<Icons.Folder style={{ width: "1rem", height: "1rem" }} />}
-        label="Repositories"
+        label={t("profileRepositories")}
         count={props.profile.public_repo_count}
       />
       <TabButton
         isActive={props.activeTab === "stars"}
         onClick={() => props.onSelectTab("stars")}
         icon={<Icons.Star style={{ width: "1rem", height: "1rem" }} />}
-        label="Stars"
+        label={t("profileStars")}
       />
       <TabButton
         isActive={props.activeTab === "activity"}
         onClick={() => props.onSelectTab("activity")}
         icon={<Icons.Zap style={{ width: "1rem", height: "1rem" }} />}
-        label="Activity"
+        label={t("profileActivity")}
       />
       <TabButton
         isActive={props.activeTab === "followers"}
         onClick={() => props.onSelectTab("followers")}
         icon={<Icons.User style={{ width: "1rem", height: "1rem" }} />}
-        label="Followers"
+        label={t("profileFollowers")}
         count={props.profile.followers_count}
       />
       <TabButton
         isActive={props.activeTab === "following"}
         onClick={() => props.onSelectTab("following")}
         icon={<Icons.User style={{ width: "1rem", height: "1rem" }} />}
-        label="Following"
+        label={t("profileFollowing")}
         count={props.profile.following_count}
       />
       <Show when={props.profile.is_self}>
@@ -104,7 +107,7 @@ export function ProfileTabs(props: ProfileTabsProps) {
           isActive={props.activeTab === "requests"}
           onClick={() => props.onSelectTab("requests")}
           icon={<Icons.User style={{ width: "1rem", height: "1rem" }} />}
-          label="Requests"
+          label={t("profileRequests")}
           count={props.requestsCount}
         />
       </Show>

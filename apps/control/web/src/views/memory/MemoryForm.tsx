@@ -41,7 +41,7 @@ export function MemoryCreateForm(props: MemoryCreateFormProps) {
             type="button"
             class="min-w-[44px] min-h-[44px] flex items-center justify-center rounded-lg text-zinc-500 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100 hover:bg-zinc-200 dark:hover:bg-zinc-700 transition-colors"
             onClick={props.onClose}
-            aria-label="Close"
+            aria-label={t("close")}
           >
             <Icons.X />
           </button>
@@ -164,7 +164,7 @@ export function ReminderCreateForm(props: ReminderCreateFormProps) {
             type="button"
             class="min-w-[44px] min-h-[44px] flex items-center justify-center rounded-lg text-zinc-500 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100 hover:bg-zinc-200 dark:hover:bg-zinc-700 transition-colors"
             onClick={props.onClose}
-            aria-label="Close"
+            aria-label={t("close")}
           >
             <Icons.X />
           </button>

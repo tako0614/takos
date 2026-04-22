@@ -1,5 +1,6 @@
 import { createSignal, For, onCleanup, onMount, Show } from "solid-js";
 import type { JSX } from "solid-js";
+import { useI18n } from "../../store/i18n.ts";
 
 interface SelectOption {
   value: string;
@@ -19,6 +20,7 @@ interface SelectProps {
 }
 
 export function Select(props: SelectProps) {
+  const { t } = useI18n();
   const [isOpen, setIsOpen] = createSignal(false);
   let ref: HTMLDivElement | undefined;
 
@@ -100,7 +102,7 @@ export function Select(props: SelectProps) {
         disabled={props.disabled}
       >
         <span>
-          {selectedOption()?.label || props.placeholder || "Select an option"}
+          {selectedOption()?.label || props.placeholder || t("selectOption")}
         </span>
         <ChevronIcon isOpen={isOpen()} />
       </button>
