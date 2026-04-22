@@ -214,6 +214,9 @@ const TABLES = [
 
 // `accounts` is the identity root — preserved by default.
 const ACCOUNT_TABLE = "accounts";
+const PRESERVED_WITH_ACCOUNTS = new Set([
+  "auth_identities",
+]);
 
 async function confirm(question) {
   const rl = readline.createInterface({
@@ -257,7 +260,9 @@ async function main() {
   if (includeAccounts) {
     console.log("This will DELETE ALL data INCLUDING the accounts table.");
   } else {
-    console.log("This will DELETE all data except accounts rows.");
+    console.log(
+      "This will DELETE all data except accounts and auth identity rows.",
+    );
   }
 
   const confirmed = await confirm("Are you sure? (y/N): ");
@@ -268,14 +273,28 @@ async function main() {
 
   console.log("");
 
-  const tablesToDelete = includeAccounts ? [...TABLES, ACCOUNT_TABLE] : TABLES;
+  const tablesToDelete = includeAccounts
+    ? [...TABLES, ACCOUNT_TABLE]
+    : TABLES.filter((table) => !PRESERVED_WITH_ACCOUNTS.has(table));
   const runStep = (label, sql) => {
     process.stdout.write(`${label}... `);
     try {
       executeSql(sql);
       console.log("OK");
-    } catch {
-      console.log("(skipped)");
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      const missingTablePattern = new RegExp(
+        `no such table:\\s+(?:main\\.)?${
+          label.replace(/^Deleting from /, "")
+        }\\b`,
+        "i",
+      );
+      if (missingTablePattern.test(message)) {
+        console.log("(skipped)");
+        return;
+      }
+      console.log("FAILED");
+      throw error;
     }
   };
 
@@ -288,7 +307,9 @@ async function main() {
   if (includeAccounts) {
     console.log("All tables deleted including accounts.");
   } else {
-    console.log("Accounts preserved; all other data removed.");
+    console.log(
+      "Accounts and auth identities preserved; all other data removed.",
+    );
   }
 }
 

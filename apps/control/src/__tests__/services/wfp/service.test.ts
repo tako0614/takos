@@ -428,6 +428,44 @@ Deno.test("WFPService - createKVNamespace - returns the id from API response", a
     restoreFetchMock();
   }
 });
+Deno.test("WFPService - createKVNamespace - reuses an existing namespace when create reports a duplicate title", async () => {
+  try {
+    const fetchMock = spy(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (fetchMock.calls.length === 0) {
+        return new Response(
+          JSON.stringify({
+            success: false,
+            result: null,
+            errors: [{
+              code: 10014,
+              message:
+                "a namespace with this account ID and title already exists",
+            }],
+            messages: [],
+          }),
+          { status: 400 },
+        );
+      }
+      if (url.includes("/storage/kv/namespaces?per_page=1000")) {
+        return mockSuccessResponse([
+          { id: "existing-kv-ns-id", title: "my-kv" },
+        ]);
+      }
+      return mockSuccessResponse({});
+    });
+    const restoreFetch = installFetchMock(fetchMock as unknown as typeof fetch);
+    void restoreFetch;
+
+    const svc = new WFPService(config);
+    const id = await svc.kv.createKVNamespace("my-kv");
+
+    assertEquals(id, "existing-kv-ns-id");
+    assertSpyCalls(fetchMock, 2);
+  } finally {
+    restoreFetchMock();
+  }
+});
 Deno.test("WFPService - createKVNamespace - throws when no id returned", async () => {
   try {
     const fetchMock = spy(async () => mockSuccessResponse({}));

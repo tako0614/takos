@@ -26,6 +26,7 @@ type DefaultAppBackend = "cloudflare" | "local" | "aws" | "gcp" | "k8s";
 export interface DefaultAppDistributionEntry {
   name: string;
   title: string;
+  icon?: string;
   repositoryUrl: string;
   ref: string;
   refType: DefaultAppRefType;
@@ -102,6 +103,7 @@ const FALLBACK_DEFAULT_APP_DISTRIBUTION = [
   {
     name: "takos-docs",
     title: "Docs",
+    icon: "/icons/docs.svg",
     repositoryUrl: "https://github.com/tako0614/takos-docs.git",
     repositoryEnvKey: "TAKOS_DEFAULT_DOCS_APP_REPOSITORY_URL",
     ref: "master",
@@ -109,6 +111,7 @@ const FALLBACK_DEFAULT_APP_DISTRIBUTION = [
   {
     name: "takos-excel",
     title: "Excel",
+    icon: "/icons/excel.svg",
     repositoryUrl: "https://github.com/tako0614/takos-excel.git",
     repositoryEnvKey: "TAKOS_DEFAULT_EXCEL_APP_REPOSITORY_URL",
     ref: "master",
@@ -116,6 +119,7 @@ const FALLBACK_DEFAULT_APP_DISTRIBUTION = [
   {
     name: "takos-slide",
     title: "Slide",
+    icon: "/icons/slide.svg",
     repositoryUrl: "https://github.com/tako0614/takos-slide.git",
     repositoryEnvKey: "TAKOS_DEFAULT_SLIDE_APP_REPOSITORY_URL",
     ref: "master",
@@ -123,9 +127,10 @@ const FALLBACK_DEFAULT_APP_DISTRIBUTION = [
   {
     name: "takos-computer",
     title: "Computer",
+    icon: "/icons/computer.svg",
     repositoryUrl: "https://github.com/tako0614/takos-computer.git",
     repositoryEnvKey: "TAKOS_DEFAULT_COMPUTER_APP_REPOSITORY_URL",
-    ref: "default-app",
+    ref: "master",
   },
 ] as const;
 
@@ -392,6 +397,7 @@ function normalizeEntry(
   const repositoryUrl = readString(record, "repositoryUrl");
   assertValidRepositoryUrl(repositoryUrl);
   const title = readString(record, "title", name);
+  const icon = readOptionalString(record, "icon");
   const preinstall = typeof record.preinstall === "boolean"
     ? record.preinstall
     : defaults.preinstall;
@@ -404,6 +410,7 @@ function normalizeEntry(
   return {
     name,
     title,
+    ...(icon ? { icon } : {}),
     repositoryUrl,
     ref: readString(record, "ref", defaults.ref),
     refType: normalizeRefType(
@@ -546,6 +553,7 @@ function resolveFallbackDefaultAppDistribution(
         {
           name: entry.name,
           title: entry.title,
+          icon: entry.icon,
           repositoryUrl: typeof repositoryOverride === "string" &&
               repositoryOverride.trim()
             ? repositoryOverride.trim()
@@ -1101,7 +1109,7 @@ export async function enqueueDefaultAppPreinstallJob(
   const timestamp = params.timestamp ?? new Date().toISOString();
   const id = defaultAppPreinstallJobId(params.spaceId);
   let status: DefaultAppPreinstallJobStatus = "queued";
-  let distributionJson: string | null = null;
+  const distributionJson: string | null = null;
   let lastError: string | null = null;
   let nextAttemptAt: string | null = timestamp;
 

@@ -124,10 +124,18 @@ Deno.test("reset DB inventory - keeps reset-db.js aligned with the canonical bas
   assertEquals(fullInventory, baselineTables);
 });
 
-Deno.test("reset DB inventory - preserves only accounts by default", () => {
+Deno.test("reset DB inventory - preserves accounts and auth identities by default", () => {
   assertStringIncludes(
     resetDbScript,
-    "This will DELETE all data except accounts rows.",
+    "This will DELETE all data except accounts and auth identity rows.",
+  );
+  assertStringIncludes(
+    resetDbScript,
+    "PRESERVED_WITH_ACCOUNTS = new Set",
+  );
+  assertStringIncludes(
+    resetDbScript,
+    '"auth_identities"',
   );
   assert(!resetDbScript.includes("users"));
   assert(!resetDbScript.includes("principals"));

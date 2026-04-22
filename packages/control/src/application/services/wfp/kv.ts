@@ -8,6 +8,11 @@
 import { InternalError } from "takos-common/errors";
 import type { WfpContext } from "./wfp-contracts.ts";
 
+export type KVNamespaceRecord = {
+  id: string;
+  title: string;
+};
+
 // ---------------------------------------------------------------------------
 // KV CRUD
 // ---------------------------------------------------------------------------
@@ -19,20 +24,72 @@ export async function createKVNamespace(
   ctx: WfpContext,
   title: string,
 ): Promise<string> {
-  const response = await ctx.cfFetchWithRetry<{ id: string }>(
-    ctx.accountPath("/storage/kv/namespaces"),
-    {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ title }),
-    },
-  );
+  let response: { result?: { id?: string } };
+  try {
+    response = await ctx.cfFetchWithRetry<{ id: string }>(
+      ctx.accountPath("/storage/kv/namespaces"),
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ title }),
+      },
+    );
+  } catch (error) {
+    if (!isKVNamespaceAlreadyExistsError(error)) {
+      throw error;
+    }
+    const existing = await findKVNamespaceByTitle(ctx, title);
+    if (existing) return existing.id;
+    throw error;
+  }
   if (!response.result?.id) {
     throw new InternalError(
       `Failed to create KV namespace: no ID returned from API`,
     );
   }
   return response.result.id;
+}
+
+function isKVNamespaceAlreadyExistsError(error: unknown): boolean {
+  if (!(error instanceof Error)) return false;
+  return /namespace with this account ID and title already exists/i.test(
+    error.message,
+  );
+}
+
+async function findKVNamespaceByTitle(
+  ctx: WfpContext,
+  title: string,
+): Promise<KVNamespaceRecord | null> {
+  let cursor: string | undefined;
+  for (let page = 0; page < 10; page += 1) {
+    const response = await listKVNamespaces(ctx, { cursor, limit: 1000 });
+    const match = response.result.find((namespace) =>
+      namespace.title === title
+    );
+    if (match) return match;
+    cursor = response.cursor;
+    if (!cursor) break;
+  }
+  return null;
+}
+
+export async function listKVNamespaces(
+  ctx: WfpContext,
+  options?: { cursor?: string; limit?: number },
+): Promise<{ result: KVNamespaceRecord[]; cursor?: string }> {
+  const params = new URLSearchParams();
+  if (options?.cursor) params.set("cursor", options.cursor);
+  if (options?.limit) params.set("per_page", String(options.limit));
+  const qs = params.toString();
+  const response = await ctx.cfFetchWithRetry<KVNamespaceRecord[]>(
+    ctx.accountPath(`/storage/kv/namespaces${qs ? `?${qs}` : ""}`),
+    { method: "GET" },
+  );
+  return {
+    result: response.result ?? [],
+    cursor: response.result_info?.cursor,
+  };
 }
 
 /**
