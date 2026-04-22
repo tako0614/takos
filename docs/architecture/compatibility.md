@@ -63,7 +63,7 @@ orchestrator を通る。
 | worker / service compute                                 | yes      | yes         | selected worker / container runtime adapter              |
 | attached container                                       | yes      | yes         | selected container runtime adapter + worker-side binding |
 | route                                                    | yes      | yes         | selected routing runtime                                 |
-| route publication (`publish[].publisher/type/outputs`)   | yes      | yes         | publication catalog + route URL output                   |
+| route publication (`publish[].type/outputs.*.routeRef`)  | yes      | yes         | publication catalog + route URL output                   |
 | Takos built-in provider publication consume (`takos.api-key` / `takos.oauth-client`) | yes | yes | grant output for declared consumer                       |
 | explicit consume edge (`compute.*.consume`)              | yes      | yes         | env injection only for declared consumer                 |
 | `scheduled` (`compute.triggers.schedules`)               | yes      | yes         | backend 依存                                             |

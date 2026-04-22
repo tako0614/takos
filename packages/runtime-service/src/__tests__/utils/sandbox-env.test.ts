@@ -1,5 +1,6 @@
 import {
   createSandboxEnv,
+  readSafeEnv,
   validateRuntimeExecEnv,
 } from "../../utils/sandbox-env.ts";
 
@@ -7,6 +8,7 @@ import { assertEquals, assertStringIncludes } from "jsr:@std/assert";
 
 const originalAwsSecret = Deno.env.get("AWS_SECRET_ACCESS_KEY");
 const originalActionsEnvAllowlist = Deno.env.get("TAKOS_ACTIONS_ENV_ALLOWLIST");
+const originalPath = Deno.env.get("PATH");
 
 function restoreEnv(name: string, original: string | undefined): void {
   if (original === undefined) {
@@ -156,5 +158,20 @@ Deno.test("createSandboxEnv - blocks host secrets while allowing documented safe
   } finally {
     restoreEnv("AWS_SECRET_ACCESS_KEY", originalAwsSecret);
     restoreEnv("TAKOS_ACTIONS_ENV_ALLOWLIST", originalActionsEnvAllowlist);
+  }
+});
+
+Deno.test("readSafeEnv - reads only documented safe host env", () => {
+  try {
+    Deno.env.set("PATH", "/usr/local/bin:/usr/bin");
+    Deno.env.set("AWS_SECRET_ACCESS_KEY", "host-secret-value");
+
+    const safeEnv = readSafeEnv();
+
+    assertEquals(safeEnv.PATH, "/usr/local/bin:/usr/bin");
+    assertEquals(safeEnv.AWS_SECRET_ACCESS_KEY, undefined);
+  } finally {
+    restoreEnv("PATH", originalPath);
+    restoreEnv("AWS_SECRET_ACCESS_KEY", originalAwsSecret);
   }
 });

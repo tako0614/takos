@@ -18,6 +18,14 @@ export interface ToolExecution {
   duration_ms?: number;
 }
 
+const DISCOVERY_TOOL_NAMES = new Set([
+  "toolbox",
+  "capability_search",
+  "capability_families",
+  "capability_describe",
+  "capability_invoke",
+]);
+
 export interface EventEmissionError {
   type: string;
   error: string;
@@ -63,6 +71,57 @@ export function redactSensitiveArgs(
   }
 
   return processed;
+}
+
+function optionalString(value: unknown): string | undefined {
+  if (typeof value !== "string") return undefined;
+  const trimmed = value.trim();
+  return trimmed === "" ? undefined : trimmed;
+}
+
+export function buildToolTelemetry(
+  toolName: string,
+  args: Record<string, unknown>,
+): Record<string, unknown> {
+  if (!DISCOVERY_TOOL_NAMES.has(toolName)) {
+    return { tool_kind: "direct" };
+  }
+
+  if (toolName === "toolbox") {
+    const action = optionalString(args.action) ?? "unknown";
+    const telemetry: Record<string, unknown> = {
+      tool_kind: "discovery",
+      discovery_tool: "toolbox",
+      toolbox_action: action,
+    };
+    const query = optionalString(args.query);
+    if (query) telemetry.toolbox_query = query;
+    const target = optionalString(args.tool_name);
+    if (target) telemetry.toolbox_target = target;
+    if (Array.isArray(args.tool_names)) {
+      telemetry.toolbox_targets = args.tool_names
+        .filter((value): value is string => typeof value === "string")
+        .slice(0, 10);
+    }
+    return telemetry;
+  }
+
+  const action = toolName.replace(/^capability_/, "");
+  const telemetry: Record<string, unknown> = {
+    tool_kind: "discovery",
+    discovery_tool: toolName,
+    discovery_action: action,
+  };
+  const query = optionalString(args.query);
+  if (query) telemetry.discovery_query = query;
+  const target = optionalString(args.tool_name);
+  if (target) telemetry.discovery_target = target;
+  if (Array.isArray(args.tool_names)) {
+    telemetry.discovery_targets = args.tool_names
+      .filter((value): value is string => typeof value === "string")
+      .slice(0, 10);
+  }
+  return telemetry;
 }
 
 /** Max tool execution history entries */

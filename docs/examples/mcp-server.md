@@ -19,16 +19,17 @@ compute:
     readiness: /mcp
 
 routes:
-  - target: web
+  - id: mcp
+    target: web
     path: /mcp
 
 publish:
   - name: my-tools
-    type: McpServer
-    publisher: web
+    type: takos.mcp-server.v1
     outputs:
       url:
-        route: /mcp
+        kind: url
+        routeRef: mcp
     spec:
       transport: streamable-http
 ```
@@ -91,7 +92,7 @@ export default {
 
 ## auth を付けたい場合
 
-`authSecretRef` は publication `spec` 内の metadata です。group-managed deploy
+`auth.bearer.secretRef` は publication の platform-managed behavior です。group-managed deploy
 では、publisher service に同名の env/secret が無ければ Takos が secret service
 env を生成します。standalone deploy では同名の secret を別途用意します。Takos の
 MCP client は owner service からその値を解決して `Authorization: Bearer ...`
@@ -100,14 +101,16 @@ MCP client は owner service からその値を解決して `Authorization: Bear
 ```yaml
 publish:
   - name: my-tools
-    type: McpServer
-    publisher: web
+    type: takos.mcp-server.v1
     outputs:
       url:
-        route: /mcp
+        kind: url
+        routeRef: mcp
+    auth:
+      bearer:
+        secretRef: MCP_AUTH_TOKEN
     spec:
       transport: streamable-http
-      authSecretRef: MCP_AUTH_TOKEN
 ```
 
 ## ローカルテスト

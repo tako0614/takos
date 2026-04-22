@@ -74,9 +74,9 @@ No tools are available in this run.`;
     `- \`${tool.name}\`: ${tool.description}`
   );
   const discoveryHint = hasToolbox
-    ? "\n\nUse direct tools for common built-in operations. Use `toolbox` for manuals, extension tools, and less common capabilities: action=`search`, then `describe`, then `call`."
+    ? "\n\nUse direct tools for obvious built-in operations. If the direct surface does not obviously cover the task, use `toolbox` early for manuals, extension tools, and less common capabilities: action=`search`, then `describe`, then `call`. Skip that search for routine direct-tool work."
     : hasCapabilitySearch || hasCapabilityFamilies
-    ? `\n\nIf you are unsure which tool fits, use \`capability_search\` to find relevant tools by natural language or \`capability_families\` to inspect the available capability surface.${
+    ? `\n\nIf you are unsure which tool fits or whether a capability exists, use \`capability_search\` to find relevant tools by natural language or \`capability_families\` to inspect the available capability surface.${
       hasCapabilityDescribe
         ? " Use `capability_describe` to inspect input schemas before invoking discovered tools."
         : ""

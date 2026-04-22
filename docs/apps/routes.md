@@ -7,15 +7,15 @@
 `target` は **compute 名のみ**を受け取る。attached container は単独の route
 target には ならない。attached container を外部から呼びたい場合は、親 worker
 をターゲットに routes を書き、その worker から container を呼び出す。
-route publication の `publisher` も route の `target` と同じ親 worker / service
-を指定する。attached container 自体を public route publication の publisher には
-しない。
+route publication は `outputs.*.routeRef` で route の `id` を参照する。
+attached container 自体を public route publication の publisher にはしない。
 
 ## 基本
 
 ```yaml
 routes:
-  - path: /
+  - id: web
+    path: /
     target: web
 ```
 
@@ -23,11 +23,14 @@ routes:
 
 ```yaml
 routes:
-  - path: /api
+  - id: api
+    path: /api
     target: api
-  - path: /mcp
+  - id: mcp
+    path: /mcp
     target: mcp
-  - path: /dispatch
+  - id: dispatch
+    path: /dispatch
     target: executor-host
 ```
 
@@ -35,6 +38,7 @@ routes:
 
 | field       | required | 説明                                                                   |
 | ----------- | -------- | ---------------------------------------------------------------------- |
+| `id`        | no       | routeRef 用の stable route ID                                          |
 | `target`    | yes      | 対象の compute 名 (Worker または Service)。attached container 名は不可 |
 | `path`      | yes      | 公開パス                                                               |
 | `methods`   | no       | 許可する HTTP メソッド                                                 |
@@ -50,12 +54,12 @@ routes:
   が勝つ
 - prefix が同じ場合: manifest 内で先に宣言された route が勝つ
 
-route publication は `publisher + route` で route を参照します。`publish` には
-`methods` が無いため、method 別に同じ endpoint を公開したい場合でも publication
-から見える route は 1 件にしてください。同じ `publisher + route` が複数件に一致
-する manifest は invalid です。route publication の `publisher` には対応する
-route の `target` を書きます。attached container を外に出したい場合も、親
-worker / service が route と publication を持ちます。
+route publication は `outputs.*.routeRef` で `routes[].id` を参照します。
+`routeRef` から `publisher` は route の `target` として推論されるため、推奨形
+では publication 側に `publisher` を書きません。legacy `publisher + route` も
+受け付けますが、同じ target/path に複数 route が一致する manifest は invalid
+です。attached container を外に出したい場合も、親 worker / service が route と
+publication を持ちます。
 
 ## 次のステップ
 

@@ -128,7 +128,12 @@ Deno.test("applyArtifactChangesToDiff marks unchanged worker when bundle code ch
 
   assertEquals(result.entries[0]?.action, "update");
   assertEquals(result.entries[0]?.reason, "code changed");
-  assertEquals(result.summary, { create: 0, update: 1, delete: 0, unchanged: 0 });
+  assertEquals(result.summary, {
+    create: 0,
+    update: 1,
+    delete: 0,
+    unchanged: 0,
+  });
   assertEquals(result.hasChanges, true);
 });
 
@@ -189,6 +194,10 @@ Deno.test(
           publisher: "api",
           type: "McpServer",
           outputs: { url: { route: "/api" } },
+        },
+        {
+          name: "platform-tools",
+          type: "McpServer",
         },
       ],
       env: {},

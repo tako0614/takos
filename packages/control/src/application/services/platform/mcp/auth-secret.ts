@@ -41,7 +41,8 @@ function nonEmptyToken(value: string | null | undefined): string | null {
 export function readPublicationAuthSecretRef(
   record: Pick<PublicationRecord, "publication">,
 ): string | null {
-  const raw = record.publication.spec?.authSecretRef;
+  const raw = record.publication.auth?.bearer?.secretRef ??
+    record.publication.spec?.authSecretRef;
   if (typeof raw !== "string") return null;
   const trimmed = raw.trim();
   return trimmed.length > 0 ? normalizeEnvName(trimmed) : null;
@@ -139,7 +140,7 @@ export async function resolvePublicationAuthToken(
   const envName = normalizeEnvName(params.authSecretRef);
   if (!params.ownerServiceId) {
     throw new Error(
-      `MCP publication '${params.publicationName}' declares spec.authSecretRef but has no owner service`,
+      `MCP publication '${params.publicationName}' declares auth.bearer.secretRef but has no owner service`,
     );
   }
 

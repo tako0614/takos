@@ -7,6 +7,10 @@ import {
   syncGroupManagedDesiredState,
   syncGroupPublicationDesiredState,
 } from "../group-managed-desired-state.ts";
+import type {
+  AppPublication,
+  AppRoute,
+} from "../../source/app-manifest-types.ts";
 
 function createManagedStateDbMock(rows: unknown[] = []) {
   const resultQuery = {
@@ -69,14 +73,8 @@ Deno.test(
       },
     ];
     const replaceManifestPublicationsCalls: Array<{
-      publish: Array<{
-        name: string;
-        publisher: string;
-        type: string;
-        outputs?: Record<string, { route?: string }>;
-        spec?: Record<string, unknown>;
-      }>;
-      routes: Array<{ target: string; path: string }>;
+      publish: AppPublication[];
+      routes: AppRoute[];
     }> = [];
 
     const desiredState = compileGroupDesiredState({
@@ -89,8 +87,8 @@ Deno.test(
         {
           name: "tools",
           publisher: "web",
-          type: "McpServer",
-          outputs: { url: { route: "/mcp-v2" } },
+          type: "takos.mcp-server.v1",
+          outputs: { url: { kind: "url", route: "/mcp-v2" } },
           spec: { transport: "streamable-http" },
         },
       ],
@@ -156,8 +154,8 @@ Deno.test(
       {
         name: "tools",
         publisher: "web",
-        type: "McpServer",
-        outputs: { url: { route: "/mcp-v2" } },
+        type: "takos.mcp-server.v1",
+        outputs: { url: { kind: "url", route: "/mcp-v2" } },
         spec: { transport: "streamable-http" },
       },
     ]);
@@ -169,12 +167,13 @@ Deno.test(
       {
         name: "tools",
         publisher: "web",
-        type: "McpServer",
-        outputs: { url: { route: "/mcp" } },
+        type: "takos.mcp-server.v1",
+        outputs: { url: { kind: "url", route: "/mcp" } },
         spec: { transport: "streamable-http" },
       },
     ]);
     assertEquals(replaceManifestPublicationsCalls[1].routes, [{
+      id: "web",
       target: "web",
       path: "/mcp",
     }]);

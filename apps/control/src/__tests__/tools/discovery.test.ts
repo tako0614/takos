@@ -323,6 +323,12 @@ Deno.test("discovery tools - capability_invoke - executes a tool via injected ex
   }));
   ctx = makeContext(registry);
   const mockExecutor = {
+    getAvailableTools: () => [{
+      name: "file_read",
+      description: "Read file contents",
+      category: "file",
+      parameters: { type: "object", properties: {} },
+    }],
     execute: async (call: { name: string }) => ({
       output: `executed ${call.name}`,
     }),
@@ -357,6 +363,12 @@ Deno.test("discovery tools - capability_invoke - throws on executor error (visib
   }));
   ctx = makeContext(registry);
   const mockExecutor = {
+    getAvailableTools: () => [{
+      name: "file_read",
+      description: "Read file contents",
+      category: "file",
+      parameters: { type: "object", properties: {} },
+    }],
     execute: async () => ({
       output: "",
       error: "Unknown tool: nonexistent",
@@ -369,7 +381,7 @@ Deno.test("discovery tools - capability_invoke - throws on executor error (visib
 
   await assertRejects(async () => {
     await capabilityInvokeHandler(
-      { tool_name: "nonexistent" },
+      { tool_name: "file_read" },
       ctxWithExecutor,
     );
   }, "Unknown tool");
@@ -472,6 +484,12 @@ Deno.test("discovery tools - capability_invoke - allows invocation of discoverab
   ctx = makeContext(registry);
   // web_fetch is discoverable (default policy)
   const mockExecutor = {
+    getAvailableTools: () => [{
+      name: "web_fetch",
+      description: "Fetch a URL",
+      category: "web",
+      parameters: { type: "object", properties: {} },
+    }],
     execute: async (call: { name: string }) => ({
       output: `executed ${call.name}`,
     }),

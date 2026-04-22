@@ -159,9 +159,12 @@ function mergePublishOverrides(
 
   patch.forEach((entry, index) => {
     const patchRecord = toPlainRecord(entry);
-    const baseIndex = typeof patchRecord.name === "string"
-      ? result.findIndex((publication) => publication.name === patchRecord.name)
-      : index;
+    if (typeof patchRecord.name !== "string" || !patchRecord.name.trim()) {
+      throw new Error(`overrides.publish[${index}].name is required`);
+    }
+    const baseIndex = result.findIndex((publication) =>
+      publication.name === patchRecord.name
+    );
     if (baseIndex < 0 || baseIndex >= result.length) {
       result.push(entry);
       return;
@@ -285,20 +288,22 @@ export function compileGroupDesiredState(
   // are surfaced as `${parent}-${child}` to match bundle workload documents and
   // avoid collisions when multiple workers use the same child container name.
   const routes = Object.fromEntries(
-    routeList.map((route, index) => [
-      route.target
-        ? `${route.target}:${route.path ?? index}`
-        : `route-${index}`,
-      {
-        name: route.target
+    routeList.map((route, index) => {
+      const routeName = route.id ??
+        (route.target
           ? `${route.target}:${route.path ?? index}`
-          : `route-${index}`,
-        target: route.target,
-        ...(route.path ? { path: route.path } : {}),
-        ...(route.methods ? { methods: route.methods } : {}),
-        ...(route.timeoutMs ? { timeoutMs: route.timeoutMs } : {}),
-      } satisfies DesiredRouteState,
-    ]),
+          : `route-${index}`);
+      return [
+        routeName,
+        {
+          name: routeName,
+          target: route.target,
+          ...(route.path ? { path: route.path } : {}),
+          ...(route.methods ? { methods: route.methods } : {}),
+          ...(route.timeoutMs ? { timeoutMs: route.timeoutMs } : {}),
+        } satisfies DesiredRouteState,
+      ];
+    }),
   );
 
   const routeNamesByTarget = new Map<string, string[]>();

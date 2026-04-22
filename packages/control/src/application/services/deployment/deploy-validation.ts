@@ -36,6 +36,7 @@
  */
 import type {
   AppCompute,
+  AppConsume,
   AppManifest,
   AppPublication,
   AppRoute,
@@ -45,10 +46,12 @@ import {
   normalizePublicationDefinition,
   publicationAllowedFields,
   publicationOutputContract,
+  resolveConsumeOutputEnvName,
 } from "../platform/service-publications.ts";
 import {
   isTakosSystemPublicationSource,
   normalizeTakosSystemConsumePublication,
+  type PublicationOutputDescriptor,
 } from "../platform/publication-catalog.ts";
 import { isDigestPinnedImageRef } from "./image-ref.ts";
 
@@ -135,7 +138,7 @@ function getPublications(manifest: ParsedManifest): AppPublication[] {
   return manifest.publish ?? [];
 }
 
-const FILE_HANDLER_PUBLICATION_TYPE = "FileHandler";
+const FILE_HANDLER_PUBLICATION_TYPE = "takos.file-handler.v1";
 
 const FILE_HANDLER_SPEC_FIELDS = new Set([
   "mimeTypes",
@@ -269,6 +272,31 @@ function normalizeConsumeLocalName(consume: {
   return (consume.as ?? consume.publication).trim();
 }
 
+function consumeEnvAliases(
+  consume: AppConsume,
+): Record<string, string> {
+  return consume.inject?.env ?? consume.env ?? {};
+}
+
+function consumeEnvAliasPath(
+  consume: AppConsume,
+  consumePath: string,
+  outputName: string,
+): string {
+  return consume.inject?.env
+    ? `${consumePath}.inject.env.${outputName}`
+    : `${consumePath}.env.${outputName}`;
+}
+
+function selectedConsumeOutputs(
+  consume: AppConsume,
+  outputs: PublicationOutputDescriptor[],
+): PublicationOutputDescriptor[] {
+  if (consume.inject?.defaults) return outputs;
+  const selected = new Set(Object.keys(consumeEnvAliases(consume)));
+  return outputs.filter((output) => selected.has(output.name));
+}
+
 // ── Validator 1: Attached container as route target ─────────────────────────
 
 export function validateAttachedNotRouteTarget(
@@ -338,6 +366,7 @@ export function validateRouteUniqueness(
   const errors: ValidationError[] = [];
   const routes = getRoutes(manifest);
 
+  const byId = new Map<string, number>();
   const byTargetPath = new Map<
     string,
     { index: number; target: string; path: string }
@@ -348,6 +377,19 @@ export function validateRouteUniqueness(
   >();
   for (let i = 0; i < routes.length; i++) {
     const route = routes[i];
+    if (route.id) {
+      const previousId = byId.get(route.id);
+      if (previousId != null) {
+        errors.push({
+          code: "route_duplicate",
+          path: `routes[${i}]`,
+          message:
+            `route id '${route.id}' duplicates routes[${previousId}]. Route ids must be unique because publications use routeRef to point at one route.`,
+        });
+      } else {
+        byId.set(route.id, i);
+      }
+    }
     if (!route.target || !route.path) continue;
     const key = `${route.target}\0${route.path}`;
     const previous = byTargetPath.get(key);
@@ -532,11 +574,12 @@ export function validateConsumeReferences(
       const outputs = new Set(
         publicationOutputContract(publication).map((entry) => entry.name),
       );
-      for (const key of Object.keys(consume.env ?? {})) {
+      const consumePath = `${entry.path}.consume[${index}]`;
+      for (const key of Object.keys(consumeEnvAliases(consume))) {
         if (outputs.has(key)) continue;
         errors.push({
           code: "consume_unknown_output",
-          path: `${entry.path}.consume[${index}].env.${key}`,
+          path: consumeEnvAliasPath(consume, consumePath, key),
           message:
             `publication '${consume.publication}' does not expose output '${key}'. Known outputs: ${
               Array.from(outputs).sort().join(", ")
@@ -583,16 +626,20 @@ export function validateConsumeEnvCollision(
         }
       }
       if (!publication) continue;
-      for (const output of publicationOutputContract(publication)) {
-        const envName = normalizeEnvName(
-          consume.env?.[output.name] ?? output.defaultEnv,
-        );
+      for (
+        const output of selectedConsumeOutputs(
+          consume,
+          publicationOutputContract(publication),
+        )
+      ) {
+        const envName = resolveConsumeOutputEnvName(consume, output);
         if (seen.has(envName)) {
           errors.push({
             code: "consume_env_collision",
             path: `${entry.path}.consume[${index}]`,
-            message:
-              `consume '${normalizeConsumeLocalName(consume)}' resolves env '${envName}' which already exists in compute '${entry.name}'. Pick a different alias or remove the conflicting env/bind.`,
+            message: `consume '${
+              normalizeConsumeLocalName(consume)
+            }' resolves env '${envName}' which already exists in compute '${entry.name}'. Pick a different alias or remove the conflicting env/bind.`,
           });
           continue;
         }
@@ -611,6 +658,7 @@ export function validatePublicationUniqueness(
   const errors: ValidationError[] = [];
   const seen = new Map<string, number>();
   const routePublisherPaths = new Map<string, number>();
+  const routes = getRoutes(manifest);
   for (const [index, publication] of getPublications(manifest).entries()) {
     const name = String(publication.name ?? "").trim();
     if (!name) continue;
@@ -626,18 +674,28 @@ export function validatePublicationUniqueness(
     seen.set(name, index);
 
     const publisher = String(publication.publisher ?? "").trim();
-    if (!publisher) continue;
     for (const output of Object.values(publication.outputs ?? {})) {
-      const routePath = output.route?.trim();
-      if (!routePath) continue;
-      const routeKey = `${publisher}\0${routePath}`;
+      let routeKey: string | null = null;
+      const routeRef = output.routeRef?.trim();
+      if (routeRef) {
+        const route = routes.find((entry) => entry.id === routeRef);
+        routeKey = route
+          ? `${route.target}\0${route.path}`
+          : `routeRef:${routeRef}`;
+      } else {
+        const routePath = output.route?.trim();
+        if (!publisher || !routePath) continue;
+        routeKey = `${publisher}\0${routePath}`;
+      }
+      if (!routeKey) continue;
       const previousRoutePublication = routePublisherPaths.get(routeKey);
       if (previousRoutePublication != null) {
         errors.push({
           code: "publication_duplicate",
           path: `publish[${index}]`,
-          message:
-            `route publication publisher/route '${publisher} ${routePath}' duplicates publish[${previousRoutePublication}]`,
+          message: `route publication target/path '${
+            routeKey.replace("\0", " ")
+          }' duplicates publish[${previousRoutePublication}]`,
         });
         continue;
       }
@@ -657,7 +715,32 @@ export function validatePublicationRouteMatches(
     const publication = entry.normalized;
     if (!publication) continue;
     const target = publication.publisher;
-    for (const [outputName, output] of Object.entries(publication.outputs ?? {})) {
+    for (
+      const [outputName, output] of Object.entries(publication.outputs ?? {})
+    ) {
+      const routeRef = output.routeRef?.trim();
+      if (routeRef) {
+        const matches = routes.filter((route) => route.id === routeRef);
+        if (matches.length === 0) {
+          errors.push({
+            code: "publication_route_mismatch",
+            path: `${entry.path}.outputs.${outputName}.routeRef`,
+            message:
+              `route publication '${publication.name}' routeRef '${routeRef}' does not match any route id`,
+          });
+          continue;
+        }
+        const route = matches[0];
+        if (target && target !== route.target) {
+          errors.push({
+            code: "publication_route_mismatch",
+            path: `${entry.path}.outputs.${outputName}.routeRef`,
+            message:
+              `route publication '${publication.name}' publisher '${target}' does not match routeRef '${routeRef}' target '${route.target}'`,
+          });
+        }
+        continue;
+      }
       const routePath = output.route;
       if (!target || !routePath) continue;
       const matches = routes.filter((route) =>

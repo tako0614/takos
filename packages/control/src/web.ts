@@ -40,6 +40,7 @@ import { staticAssetsMiddleware } from "./server/middleware/static-assets.ts";
 import { isInvalidArrayBufferError } from "./shared/utils/db-guards.ts";
 import { createEnvGuard, validateWebEnv } from "./shared/utils/validate-env.ts";
 import { logError, logInfo, logWarn } from "./shared/utils/logger.ts";
+import { constantTimeEqual } from "./shared/utils/hash.ts";
 import { isAppError, RateLimitError } from "takos-common/errors";
 import { PRODUCTION_DOMAIN } from "./shared/constants/app.ts";
 import { buildWorkersWebPlatform } from "./platform/adapters/workers.ts";
@@ -132,7 +133,7 @@ function validateInternalApiAccess(
   }
 
   const actualSecret = getHeader("X-Takos-Internal-Secret");
-  if (actualSecret !== expectedSecret) {
+  if (!actualSecret || !constantTimeEqual(actualSecret, expectedSecret)) {
     return { ok: false, status: 403, message: "forbidden" };
   }
 

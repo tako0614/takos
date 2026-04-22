@@ -26,13 +26,15 @@ compute:
           scopes:
             - threads:read
             - runs:write
-        env:
-          clientId: OAUTH_CLIENT_ID
-          clientSecret: OAUTH_CLIENT_SECRET
-          issuer: OAUTH_ISSUER_URL
+        inject:
+          env:
+            clientId: OAUTH_CLIENT_ID
+            clientSecret: OAUTH_CLIENT_SECRET
+            issuer: OAUTH_ISSUER_URL
 ```
 
-consumer が alias を省略した場合は次の default env 名が使われます。
+`inject.env` に明示した output だけが注入されます。全 output を default env 名で
+注入したい場合は `inject.defaults: true` を指定します。default env 名は次の通りです。
 
 - `PUBLICATION_APP_OAUTH_CLIENT_ID`
 - `PUBLICATION_APP_OAUTH_CLIENT_SECRET`

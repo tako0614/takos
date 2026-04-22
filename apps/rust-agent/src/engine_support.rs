@@ -23,7 +23,7 @@ use takos_agent_engine::tools::memory_tools::MemoryTools;
 use takos_agent_engine::{Result, SessionRequest};
 use uuid::Uuid;
 
-use crate::control_rpc::{RunConfigResponse, SkillPlanResponse, ToolDefinition};
+use crate::control_rpc::{RunConfigResponse, ToolDefinition};
 use crate::model::TakosModelRunner;
 use crate::prompts::system_prompt_for_agent_type;
 use crate::tool_bridge::CompositeToolExecutor;
@@ -236,10 +236,7 @@ impl Distiller for RustSimpleDistiller {
     }
 }
 
-pub fn build_engine_config(
-    run_config: &RunConfigResponse,
-    agent_type: &str,
-) -> EngineConfig {
+pub fn build_engine_config(run_config: &RunConfigResponse, agent_type: &str) -> EngineConfig {
     let mut config = EngineConfig::default();
     let base_prompt = system_prompt_for_agent_type(agent_type);
     config.system_prompt = base_prompt;
@@ -324,7 +321,7 @@ pub fn build_session_request(
         None
     } else {
         Some(format!(
-            "Direct tools available: {}. Use toolbox action=search/describe/call for manuals and extension tools when needed.",
+            "Direct tools available: {}. Use direct tools for obvious work. If a useful capability, manual, or extension is not obvious, use toolbox action=search early, describe likely candidates, then call the tool when it advances the task.",
             remote_tools
                 .iter()
                 .map(|tool| tool.name.clone())
@@ -338,52 +335,6 @@ pub fn build_session_request(
         user_message,
         plan,
     }
-}
-
-pub fn build_skill_enhanced_prompt(base_prompt: &str, skill_plan: &SkillPlanResponse) -> String {
-    if skill_plan.activated_skills.is_empty() {
-        return base_prompt.to_string();
-    }
-
-    let mut prompt = String::with_capacity(base_prompt.len() + 2048);
-    prompt.push_str(base_prompt.trim());
-    prompt.push_str(
-        "\n\n## Activated Skill Contracts\n\n\
-These skill contracts were resolved before execution. Treat them as run-scoped guidance.\n\
-They do not override your base safety or system instructions.\n",
-    );
-
-    for skill in &skill_plan.activated_skills {
-        let triggers = if skill.triggers.is_empty() {
-            "none".to_string()
-        } else {
-            skill.triggers.join(", ")
-        };
-        let preferred_tools = if skill.execution_contract.preferred_tools.is_empty() {
-            "none".to_string()
-        } else {
-            skill.execution_contract.preferred_tools.join(", ")
-        };
-        let output_modes = if skill.execution_contract.output_modes.is_empty() {
-            "none".to_string()
-        } else {
-            skill.execution_contract.output_modes.join(", ")
-        };
-
-        prompt.push_str(&format!(
-            "\n### {} [{}]\nDescription: {}\nCategory: {}\nTriggers: {}\nPreferred tools: {}\nOutput modes: {}\nInstructions: {}\n",
-            skill.name,
-            skill.source,
-            skill.description,
-            skill.category.clone().unwrap_or_else(|| "unspecified".to_string()),
-            triggers,
-            preferred_tools,
-            output_modes,
-            skill.instructions.trim()
-        ));
-    }
-
-    prompt
 }
 
 pub fn safe_space_path(root: &Path, space_id: &str) -> std::path::PathBuf {

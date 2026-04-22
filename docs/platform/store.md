@@ -195,39 +195,48 @@ manifest と deploy を通じて、以下が自動的に関連づけられます
 
 ## MCP 統合
 
-manifest の `publish` で `type: McpServer` を宣言する。
+manifest の `publish` で `type: takos.mcp-server.v1` を宣言する。
 
 ```yaml
+routes:
+  - id: mcp
+    target: web
+    path: /mcp
+
 publish:
   - name: tools
-    type: McpServer
-    publisher: web
+    type: takos.mcp-server.v1
     outputs:
       url:
-        route: /mcp
+        kind: url
+        routeRef: mcp
     spec:
       transport: streamable-http
 ```
 
 MCP server catalog は deploy manifest の `publish` entry で管理します。deploy
 後に control plane が catalog entry を保存し、agent 側が server をロードする。
-`McpServer` は custom route publication type であり、core の固定 type
-ではありません。詳細は [MCP Server](/apps/mcp) を参照。publication
+`takos.mcp-server.v1` は standard route publication type です。詳細は [MCP Server](/apps/mcp) を参照。publication
 の仕組みについては [Publication](/architecture/app-publications)
 を参照。
 
 ## file handler 統合
 
-manifest の `publish` で `type: FileHandler` を宣言する。
+manifest の `publish` で `type: takos.file-handler.v1` を宣言する。
 
 ```yaml
+routes:
+  - id: file-open
+    target: web
+    path: /files/:id
+
 publish:
   - name: markdown
-    type: FileHandler
-    publisher: web
+    type: takos.file-handler.v1
     outputs:
       url:
-        route: /files/:id
+        kind: url
+        routeRef: file-open
     spec:
       mimeTypes: [text/markdown]
       extensions: [.md]
@@ -236,10 +245,10 @@ publish:
 FileHandler catalog は deploy manifest の `publish` entry で管理します。space
 storage と deployed UI が loose coupling のまま連携できる。`FileHandler` の
 route output は `:id` path segment を必ず含み、storage catalog では `:id` を含まない
-handler を公開しません。`FileHandler` の launch contract は file ID の path
+handler を公開しません。`takos.file-handler.v1` の launch contract は file ID の path
 segment が primary です。current storage UI は起動時に `space_id` query
 parameter も追加しますが、`file_id` query fallback はありません。 `FileHandler`
-は custom route publication type です。詳細は
+は standard route publication type です。詳細は
 [File Handlers](/apps/file-handlers) を参照。publication の仕組みについては
 [Publication](/architecture/app-publications) を参照。
 

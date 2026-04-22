@@ -137,9 +137,10 @@ function emitComputeDocs(
 
 function emitRouteDocs(manifest: AppManifest, docs: BundleDoc[]): void {
   for (const [index, route] of manifest.routes.entries()) {
+    const name = route.id ?? `route-${index + 1}`;
     docs.push({
       type: "Endpoint",
-      name: `route-${index + 1}`,
+      name,
       config: {
         protocol: "http",
         targetRef: route.target,
@@ -151,18 +152,34 @@ function emitRouteDocs(manifest: AppManifest, docs: BundleDoc[]): void {
   }
 }
 
+function inferPublicationTargetRef(
+  manifest: AppManifest,
+  pub: AppManifest["publish"][number],
+): string | undefined {
+  if (pub.publisher) return pub.publisher;
+  for (const output of Object.values(pub.outputs ?? {})) {
+    if (!output.routeRef) continue;
+    const route = manifest.routes.find((entry) => entry.id === output.routeRef);
+    if (route?.target) return route.target;
+  }
+  return undefined;
+}
+
 function emitPublishDocs(manifest: AppManifest, docs: BundleDoc[]): void {
   for (const pub of manifest.publish) {
-    if (!pub.type || !pub.publisher || !pub.outputs) {
+    if (!pub.type || !pub.outputs) {
       continue;
     }
+    const targetRef = inferPublicationTargetRef(manifest, pub);
     docs.push({
       type: pub.type,
       name: pub.name,
       config: {
         ...(pub.spec ? pub.spec : {}),
-        targetRef: pub.publisher,
+        ...(targetRef ? { targetRef } : {}),
         outputs: pub.outputs,
+        ...(pub.display ? { display: pub.display } : {}),
+        ...(pub.auth ? { auth: pub.auth } : {}),
         ...(pub.title ? { title: pub.title } : {}),
       },
     });

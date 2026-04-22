@@ -28,6 +28,7 @@ import { encryptToken, saltFor } from "./crypto.ts";
 import { createMcpOAuthPending, discoverOAuthMetadata } from "./oauth.ts";
 import { mcpServiceDeps } from "./oauth.ts";
 import {
+  isPublicationType,
   listPublications,
   publicationResolvedUrl,
 } from "../service-publications.ts";
@@ -316,7 +317,10 @@ export async function getMcpServerWithTokens(
     const publicationId = serverId.slice("publication:".length);
     const publication = (await listPublications({ DB: dbBinding }, spaceId))
       .find((record) => record.id === publicationId);
-    if (!publication || publication.publicationType !== "McpServer") {
+    if (
+      !publication ||
+      !isPublicationType(publication.publicationType, "takos.mcp-server.v1")
+    ) {
       return null;
     }
     const url = publicationResolvedUrl(publication);
@@ -362,7 +366,9 @@ export async function listMcpServers(
     .all();
   const publicationServers =
     (await listPublications({ DB: dbBinding }, spaceId))
-      .filter((record) => record.publicationType === "McpServer")
+      .filter((record) =>
+        isPublicationType(record.publicationType, "takos.mcp-server.v1")
+      )
       .map((record): McpServerRecord | null => {
         const url = publicationResolvedUrl(record);
         if (!url) return null;
@@ -461,7 +467,9 @@ async function assertNoPublishedMcpServerNameCollision(
   name: string,
 ): Promise<void> {
   const publishedServers = (await listPublications({ DB: dbBinding }, spaceId))
-    .filter((record) => record.publicationType === "McpServer");
+    .filter((record) =>
+      isPublicationType(record.publicationType, "takos.mcp-server.v1")
+    );
   if (publishedServers.some((record) => record.name === name)) {
     throw new Error(
       `MCP server "${name}" already exists as a publication in this space`,

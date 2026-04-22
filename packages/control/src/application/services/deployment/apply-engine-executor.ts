@@ -501,6 +501,7 @@ async function executeWorkloadEntry(
         spaceId: input.group.spaceId,
         serviceId: managed.row.id,
         serviceName: `${input.desiredState.manifest.name}:${input.entry.name}`,
+        groupId: input.groupId,
         groupHostname,
       },
     );

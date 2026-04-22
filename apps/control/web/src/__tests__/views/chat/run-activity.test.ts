@@ -2,9 +2,8 @@ import { assertEquals } from "jsr:@std/assert";
 import type { ChatTimelineEntry } from "../../../views/chat/chat-types.ts";
 import type { ChatRunMetaMap } from "../../../views/chat/chat-types.ts";
 
-const { buildPersistentRunActivityGroups } = await import(
-  "../../../views/chat/run-activity.ts"
-);
+const { buildActiveRunActivityGroups, buildPersistentRunActivityGroups } =
+  await import("../../../views/chat/run-activity.ts");
 
 function entry(
   runId: string,
@@ -61,6 +60,30 @@ Deno.test("buildPersistentRunActivityGroups - hides active runs to avoid duplica
   );
 
   assertEquals(groups, []);
+});
+
+Deno.test("buildActiveRunActivityGroups - restores saved thinking for active runs", () => {
+  const groups = buildActiveRunActivityGroups(
+    [
+      entry("run-1", 1, "thinking", "Reading context"),
+      entry("run-1", 2, "tool_call", "Tool call: file_read"),
+    ],
+    {
+      "run-1": {
+        runId: "run-1",
+        parentRunId: null,
+        agentType: "default",
+        status: "running",
+      },
+    },
+  );
+
+  assertEquals(groups.length, 1);
+  assertEquals(groups[0].status, "running");
+  assertEquals(groups[0].entries.map((item) => item.message), [
+    "Reading context",
+    "Tool call: file_read",
+  ]);
 });
 
 Deno.test("buildPersistentRunActivityGroups - derives terminal status from saved events", () => {

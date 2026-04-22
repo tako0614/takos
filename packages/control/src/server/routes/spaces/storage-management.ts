@@ -93,11 +93,23 @@ export function projectFileHandlerPublication(
   record: PublicationRecord,
   idx: number,
 ): ProjectedFileHandler | null {
-  if (record.publicationType !== "FileHandler") return null;
-  if (!fileHandlerPathHasIdTemplate(record.publication.path)) return null;
-
+  if (
+    record.publicationType !== "FileHandler" &&
+    record.publicationType !== "takos.file-handler.v1"
+  ) return null;
   const openUrl = publicationResolvedUrl(record);
   if (!openUrl) return null;
+  const legacyPath = record.publication.path ??
+    record.publication.outputs?.url?.route;
+  const path = legacyPath ??
+    (() => {
+      try {
+        return new URL(openUrl).pathname;
+      } catch {
+        return undefined;
+      }
+    })();
+  if (!fileHandlerPathHasIdTemplate(path)) return null;
 
   const spec = record.publication.spec ?? {};
   const mimeTypes = readStringList(spec.mimeTypes).map((value) =>

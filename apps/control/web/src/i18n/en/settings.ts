@@ -119,7 +119,7 @@ export const settings = {
   createSpaceHint: "Create a team space to collaborate with others",
   installDefaultAppsOnCreate: "Install default apps",
   installDefaultAppsOnCreateHint:
-    "Preinstall Docs, Excel, Slide, and Computer. You can skip this and install apps later from Store.",
+    "Preinstall Docs, Excel, Slide, Computer, and Yurucommu. You can skip this and install apps later from Store.",
   spaceCreated: "Space created",
   targetSpace: "Target Space",
 

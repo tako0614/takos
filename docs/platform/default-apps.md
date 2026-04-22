@@ -1,38 +1,42 @@
 # Default App Distribution
 
 Takos の default app distribution は、新規 space に preinstall する app
-候補の初期セットです。`takos-apps/` 配下の product/reference repos は default
-app の参照元であり、fallback distribution の直接管理元ではありません。実際の
-fallback distribution は control code の repository refs と env / operator
-overrides から解決されます。
+候補の初期セットです。`takos-apps/` 配下と `yurucommu/` の
+product/reference repos は default app の参照元であり、fallback distribution
+の直接管理元ではありません。実際の fallback distribution は control code の
+repository refs と env / operator overrides から解決されます。
 
 > **重要**: Agent / Chat / Git / Storage / Store は kernel 機能であり、default
 > app distribution には含まれない。これらは kernel に常設され uninstall 不可。
-> 一方、下記の 4 つは default preinstall 候補だが、primitive や group
+> 一方、下記の 5 つは default preinstall 候補だが、primitive や group
 > は特権化されない。
 
 ## 一覧
 
-default app distribution の初期セットは以下の 4 つ（Agent / Chat / Git / Storage
+default app distribution の初期セットは以下の 5 つ（Agent / Chat / Git / Storage
 / Store は kernel 機能のため含まれない）:
 
-| group                                      | 既定 ref      | 役割                                  | custom publication examples     | built-in consumes |
-| ------------------------------------------ | ------------- | ------------------------------------- | ------------------------------- | --------------- |
-| [takos-docs](/platform/takos-docs)         | `master`      | リッチテキストエディタ                | UiSurface / McpServer           | takos-api       |
-| [takos-excel](/platform/takos-excel)       | `master`      | スプレッドシート                      | UiSurface / McpServer           | takos-api       |
-| [takos-slide](/platform/takos-slide)       | `master`      | プレゼンテーション                    | UiSurface / McpServer           | takos-api       |
-| [takos-computer](/platform/takos-computer) | `default-app` | sandbox computer / browser automation | UiSurface / container workload  | takos-api       |
+| group                                      | 既定 ref | 役割                                  | custom publication examples    | built-in consumes |
+| ------------------------------------------ | -------- | ------------------------------------- | ------------------------------ | ----------------- |
+| [takos-docs](/platform/takos-docs)         | `master` | リッチテキストエディタ                | takos.ui-surface.v1 / takos.mcp-server.v1 | takos-api         |
+| [takos-excel](/platform/takos-excel)       | `master` | スプレッドシート                      | takos.ui-surface.v1 / takos.mcp-server.v1 | takos-api         |
+| [takos-slide](/platform/takos-slide)       | `master` | プレゼンテーション                    | takos.ui-surface.v1 / takos.mcp-server.v1 | takos-api         |
+| [takos-computer](/platform/takos-computer) | `master` | sandbox computer / browser automation | takos.ui-surface.v1 / container workload | takos-api         |
+| [yurucommu](/platform/yurucommu)           | `master` | ActivityPub / community social        | takos.ui-surface.v1 / queue worker | takos.oauth-client |
 
 `takos-api` は route / interface publication ではなく、`takos.api-key` built-in
 provider publication を consume する local consume 名です。
 
-office 系 default apps は `UiSurface` と `/mcp` の `McpServer` を publish し、
-MCP publication は `authSecretRef: MCP_AUTH_TOKEN` を宣言する。group-managed
+office 系 default apps は `takos.ui-surface.v1` と `/mcp` の `takos.mcp-server.v1` を publish し、
+MCP publication は `auth.bearer.secretRef: MCP_AUTH_TOKEN` を宣言する。group-managed
 deploy は publisher workload に `MCP_AUTH_TOKEN` を service secret env として
 生成/注入し、app 実装は token 未設定時に fail closed する。local/dev 等で意図的に
 認証なしにする場合だけ `MCP_ALLOW_UNAUTHENTICATED=true` を設定する。
-takos-computer は `UiSurface` を publish し、`takos.api-key` を consume して
+takos-computer は `takos.ui-surface.v1` を publish し、`takos.api-key` を consume して
 worker + attached container で sandbox session / MCP proxy routes を提供する。
+yurucommu は `takos.ui-surface.v1` を publish し、`takos.oauth-client` を consume して
+Takos OAuth で sign-in する。自前の sql/object-store/key-value/queue/secret
+resources を持つため、office 系 default apps より resource footprint が大きい。
 
 ## 動作原理
 
@@ -104,6 +108,7 @@ app を特権化しません。backend / env の指定も operator-only で、`.
 | `TAKOS_DEFAULT_EXCEL_APP_REPOSITORY_URL`    | fallback の `takos-excel` repository URL を置き換える                                                                |
 | `TAKOS_DEFAULT_SLIDE_APP_REPOSITORY_URL`    | fallback の `takos-slide` repository URL を置き換える                                                                |
 | `TAKOS_DEFAULT_COMPUTER_APP_REPOSITORY_URL` | fallback の `takos-computer` repository URL を置き換える                                                             |
+| `TAKOS_DEFAULT_YURUCOMMU_APP_REPOSITORY_URL` | fallback の `yurucommu` repository URL を置き換える                                                                  |
 
 `TAKOS_DEFAULT_APP_DISTRIBUTION_JSON` の entry は以下を受け付けます。
 

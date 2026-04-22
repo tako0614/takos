@@ -121,6 +121,7 @@ export default defineConfig({
           { text: "takos-excel", link: "/platform/takos-excel" },
           { text: "takos-slide", link: "/platform/takos-slide" },
           { text: "takos-computer", link: "/platform/takos-computer" },
+          { text: "yurucommu", link: "/platform/yurucommu" },
         ],
       },
       {

@@ -30,6 +30,9 @@ export const chat = {
 
   // Streaming UI
   thinking: "Processing",
+  thinkingSummary: "Thought",
+  thinkingSummaryTimed: "Thought for {seconds}s",
+  thinkingSummaryLive: "Thinking",
   unknown: "unknown",
   showDetails: "Show details",
   hideDetails: "Hide details",

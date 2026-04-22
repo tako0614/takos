@@ -14,7 +14,7 @@ import {
 import { getDb } from "../../infra/db/index.ts";
 import { accounts, apps as appsTable } from "../../infra/db/schema.ts";
 import { publications, services } from "../../infra/db/schema-services.ts";
-import { and, asc, eq } from "drizzle-orm";
+import { and, asc, eq, or } from "drizzle-orm";
 
 type Variables = {
   user?: User;
@@ -87,7 +87,7 @@ type PublicApp = {
   updated_at?: string | null;
 };
 
-const UI_SURFACE_PUBLICATION_TYPE = "UiSurface";
+const UI_SURFACE_PUBLICATION_TYPES = ["UiSurface", "takos.ui-surface.v1"];
 const DEFAULT_APP_ICON = "";
 
 function resolveCustomAppUrl(
@@ -229,26 +229,36 @@ function legacyRowToPublicApp(row: LegacyAppRow): PublicApp {
 
 function publicationRowToPublicApp(row: PublicationAppRow): PublicApp | null {
   if (row.sourceType !== "manifest") return null;
-  if (row.publicationType !== UI_SURFACE_PUBLICATION_TYPE) return null;
+  if (!UI_SURFACE_PUBLICATION_TYPES.includes(row.publicationType ?? "")) {
+    return null;
+  }
 
   const publication = parseJsonRecord(row.specJson);
   const spec = publication.spec && typeof publication.spec === "object" &&
       !Array.isArray(publication.spec)
     ? publication.spec as Record<string, unknown>
     : {};
+  const display =
+    publication.display && typeof publication.display === "object" &&
+      !Array.isArray(publication.display)
+      ? publication.display as Record<string, unknown>
+      : {};
   if (spec.launcher === false) return null;
 
   const url = stringOrNull(parseJsonRecord(row.resolvedJson).url);
-  const title = stringOrNull(publication.title);
+  const title = stringOrNull(display.title) ?? stringOrNull(publication.title);
   const name = title ?? stringOrNull(publication.name) ?? row.name;
-  const description = stringOrNull(spec.description);
+  const description = stringOrNull(display.description) ??
+    stringOrNull(spec.description);
   const serviceConfig = parseJsonRecord(row.serviceConfig);
   const desiredSpec = recordOrNull(serviceConfig.desiredSpec);
-  const rawIcon = stringOrNull(spec.icon) ?? stringOrNull(desiredSpec?.icon) ??
-    stringOrNull(serviceConfig.icon);
+  const rawIcon = stringOrNull(display.icon) ?? stringOrNull(spec.icon) ??
+    stringOrNull(desiredSpec?.icon) ?? stringOrNull(serviceConfig.icon);
   const icon = resolveLauncherIcon(rawIcon, url) ?? DEFAULT_APP_ICON;
-  const category = stringOrNull(spec.category);
-  const sortOrder = numberOrNull(spec.sortOrder);
+  const category = stringOrNull(display.category) ??
+    stringOrNull(spec.category);
+  const sortOrder = numberOrNull(display.sortOrder) ??
+    numberOrNull(spec.sortOrder);
 
   return {
     id: row.id,
@@ -359,7 +369,10 @@ async function listPublicationAppRows(
     .where(and(
       eq(publications.accountId, accountId),
       eq(publications.sourceType, "manifest"),
-      eq(publications.publicationType, UI_SURFACE_PUBLICATION_TYPE),
+      or(
+        eq(publications.publicationType, "UiSurface"),
+        eq(publications.publicationType, "takos.ui-surface.v1"),
+      ),
     ))
     .orderBy(asc(publications.createdAt), asc(publications.id))
     .all() as PublicationAppRow[];
@@ -393,7 +406,10 @@ async function findPublicationAppRow(
       eq(publications.id, appId),
       eq(publications.accountId, accountId),
       eq(publications.sourceType, "manifest"),
-      eq(publications.publicationType, UI_SURFACE_PUBLICATION_TYPE),
+      or(
+        eq(publications.publicationType, "UiSurface"),
+        eq(publications.publicationType, "takos.ui-surface.v1"),
+      ),
     ))
     .get() as PublicationAppRow | null;
 }

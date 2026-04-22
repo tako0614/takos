@@ -29,15 +29,15 @@ top-level `env` は全 compute に入ります。`compute.<name>.env` はその 
 
 ## consume で env を受け取る
 
-`consume.env` は output 名 -> env 名 の alias map です。output の filter では
-ありません。publication の全 outputs が inject 対象になり、書かなかった output
-は default env 名をそのまま使います。Takos API key / OAuth client は
+`consume.inject.env` は output 名 -> env 名 の explicit inject map です。明示した
+output だけが inject 対象になります。全 outputs を default env 名で受け取りたい
+場合は `inject.defaults: true` を明示します。Takos API key / OAuth client は
 `takos.api-key` / `takos.oauth-client` built-in provider publication として
 consume します。SQL / object-store / queue などの resource は publish ではなく
 resource API / runtime binding 側で扱います。
 
-将来は互換を保ったまま `inject.env` のように inject 先を明示する形へ寄せる
-可能性があります。current contract では `consume.env` が alias map です。
+`consume.env` は legacy shorthand として受け付けますが、docs では
+`inject.env` を使います。legacy `env` も現在は明示 output だけを inject します。
 
 alias に使う env 名は任意文字列ではなく `[A-Za-z_][A-Za-z0-9_]*` に一致する
 必要があります。保存時と注入時には uppercase に正規化されます。
@@ -57,16 +57,18 @@ compute:
         request:
           scopes:
             - files:read
-        env:
-          endpoint: TAKOS_API_ENDPOINT
-          apiKey: TAKOS_API_KEY
+        inject:
+          env:
+            endpoint: TAKOS_API_ENDPOINT
+            apiKey: TAKOS_API_KEY
 ```
 
 この例では `web` に `TAKOS_API_ENDPOINT` と `TAKOS_API_KEY` が入ります。
 
-alias を省略した output は source / local consume 名ごとの default env 名が使われます。
-たとえば `as: takos-api` の default は `PUBLICATION_TAKOS_API_ENDPOINT` と
-`PUBLICATION_TAKOS_API_API_KEY` です。
+default env 名を使いたい場合は `inject.defaults: true` を指定します。たとえば
+`as: takos-api` の default は `PUBLICATION_TAKOS_API_ENDPOINT` と
+`PUBLICATION_TAKOS_API_API_KEY` です。`inject.env` と併用すると、明示 alias が
+ある output は alias、その他は default env 名になります。
 
 ## collision rule
 
@@ -95,8 +97,9 @@ compute:
         request:
           scopes:
             - files:read
-        env:
-          endpoint: DATABASE_URL
+        inject:
+          env:
+            endpoint: DATABASE_URL
 ```
 
 この例は `DATABASE_URL` が衝突するため invalid です。

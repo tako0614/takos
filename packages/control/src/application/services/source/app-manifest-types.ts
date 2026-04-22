@@ -101,7 +101,14 @@ export type AppConsume = {
   publication: string;
   as?: string;
   request?: Record<string, unknown>;
+  inject?: AppConsumeInject;
+  /** @deprecated legacy alias for inject.env. */
   env?: Record<string, string>;
+};
+
+export type AppConsumeInject = {
+  env?: Record<string, string>;
+  defaults?: boolean;
 };
 
 // --- Resources (managed resource + optional workload bindings) ---
@@ -182,6 +189,7 @@ export type AppCompute = {
 // --- Routes ---
 
 export type AppRoute = {
+  id?: string;
   target: string; // compute name (required)
   path: string; // required, must start with '/'
   methods?: string[];
@@ -192,17 +200,39 @@ export type AppRoute = {
 
 export type AppPublication = {
   name: string;
-  publisher: string;
+  publisher?: string;
   type: string;
   outputs?: Record<string, AppPublicationOutput>;
   /** @deprecated retained for stored legacy rows only; public manifests use outputs. */
   path?: string;
+  display?: AppPublicationDisplay;
+  auth?: AppPublicationAuth;
+  /** @deprecated use display.title. */
   title?: string;
   spec?: Record<string, unknown>;
 };
 
+export type AppPublicationOutputKind = "url" | "string" | "secret";
+
 export type AppPublicationOutput = {
+  kind?: AppPublicationOutputKind;
+  routeRef?: string;
+  /** @deprecated use routeRef with routes[].id. */
   route?: string;
+};
+
+export type AppPublicationDisplay = {
+  title?: string;
+  description?: string;
+  icon?: string;
+  category?: string;
+  sortOrder?: number;
+};
+
+export type AppPublicationAuth = {
+  bearer?: {
+    secretRef: string;
+  };
 };
 
 // --- Environment overrides ---

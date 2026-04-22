@@ -249,3 +249,20 @@ Deno.test("CapabilityRegistry - search - returns empty for unmatched query", () 
   const results = registry.search("zzz_nonexistent");
   assertEquals(results.length, 0);
 });
+
+Deno.test("CapabilityRegistry - search - finds manuals by id and manual aliases", () => {
+  registry = new CapabilityRegistry();
+  registry.register(makeDescriptor({
+    id: "skill:research-brief",
+    kind: "skill",
+    name: "Research Brief",
+    namespace: "web",
+    summary: "Research workflow manual",
+    tags: ["research"],
+    source: "managed_skill",
+    selectable: false,
+  }));
+
+  assertEquals(registry.search("research-brief")[0].id, "skill:research-brief");
+  assertEquals(registry.search("取説")[0].id, "skill:research-brief");
+});

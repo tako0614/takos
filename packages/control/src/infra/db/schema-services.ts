@@ -1,3 +1,4 @@
+import { sql } from "drizzle-orm";
 import {
   index,
   integer,
@@ -131,7 +132,18 @@ export const publications = sqliteTable("publications", {
   status: text("status").notNull().default("active"),
   ...timestamps,
 }, (table) => ({
-  uniqAccountName: uniqueIndex("idx_publications_account_name").on(
+  uniqAccountGlobalName: uniqueIndex(
+    "idx_publications_account_global_name",
+  ).on(
+    table.accountId,
+    table.name,
+  ).where(sql`${table.groupId} IS NULL`),
+  uniqAccountGroupName: uniqueIndex("idx_publications_account_group_name").on(
+    table.accountId,
+    table.groupId,
+    table.name,
+  ).where(sql`${table.groupId} IS NOT NULL`),
+  idxAccountName: index("idx_publications_account_name").on(
     table.accountId,
     table.name,
   ),

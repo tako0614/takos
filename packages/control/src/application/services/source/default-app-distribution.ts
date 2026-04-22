@@ -50,6 +50,7 @@ type DefaultAppDistributionEnv = Pick<
   | "TAKOS_DEFAULT_EXCEL_APP_REPOSITORY_URL"
   | "TAKOS_DEFAULT_SLIDE_APP_REPOSITORY_URL"
   | "TAKOS_DEFAULT_COMPUTER_APP_REPOSITORY_URL"
+  | "TAKOS_DEFAULT_YURUCOMMU_APP_REPOSITORY_URL"
 >;
 
 type DefaultAppDistributionDefaults = {
@@ -126,6 +127,13 @@ const FALLBACK_DEFAULT_APP_DISTRIBUTION = [
     title: "Computer",
     repositoryUrl: "https://github.com/tako0614/takos-computer.git",
     repositoryEnvKey: "TAKOS_DEFAULT_COMPUTER_APP_REPOSITORY_URL",
+    ref: "master",
+  },
+  {
+    name: "yurucommu",
+    title: "Yurucommu",
+    repositoryUrl: "https://github.com/tako0614/yurucommu.git",
+    repositoryEnvKey: "TAKOS_DEFAULT_YURUCOMMU_APP_REPOSITORY_URL",
     ref: "master",
   },
 ] as const;

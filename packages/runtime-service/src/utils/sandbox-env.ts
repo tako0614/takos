@@ -154,6 +154,17 @@ export function filterSafeEnv(env: ProcessEnvRecord): ProcessEnvRecord {
   return filtered;
 }
 
+export function readSafeEnv(): ProcessEnvRecord {
+  const filtered: ProcessEnvRecord = {};
+  for (const key of CORE_SAFE_ENV) {
+    const value = Deno.env.get(key);
+    if (value !== undefined && !isSensitiveEnvVar(key)) {
+      filtered[key] = value;
+    }
+  }
+  return filtered;
+}
+
 type ActionsEnvAllowlist = {
   exact: Set<string>;
   prefixes: string[];
@@ -202,8 +213,9 @@ export function createSandboxEnv(
   const actionsEnvAllowlist = readActionsEnvAllowlist();
 
   for (const key of allAllowed) {
-    if (Deno.env.get(key) && !BLOCKED_ENV.has(key)) {
-      sandboxEnv[key] = Deno.env.get(key)!;
+    const value = Deno.env.get(key);
+    if (value && !BLOCKED_ENV.has(key)) {
+      sandboxEnv[key] = value;
     }
   }
 

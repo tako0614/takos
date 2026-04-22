@@ -17,6 +17,7 @@ import type { D1Database } from "../../shared/types/bindings.ts";
 import type { Database } from "../../infra/db/index.ts";
 import { logError } from "../../shared/utils/logger.ts";
 import {
+  isPublicationType,
   listPublications,
   publicationResolvedUrl,
 } from "../services/platform/service-publications.ts";
@@ -117,7 +118,9 @@ export async function loadMcpTools(
     ).all()
       .then((rows) => rows as McpServerLoadRecord[]);
     const publicationServers = (await listPublications({ DB: db }, spaceId))
-      .filter((record) => record.publicationType === "McpServer")
+      .filter((record) =>
+        isPublicationType(record.publicationType, "takos.mcp-server.v1")
+      )
       .map((record): McpServerLoadRecord | null => {
         const url = publicationResolvedUrl(record);
         if (!url) return null;

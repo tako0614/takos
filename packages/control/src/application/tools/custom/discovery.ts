@@ -27,7 +27,7 @@ const ROUTER_TOOL_NAMES = new Set([
 export const TOOLBOX: ToolDefinition = {
   name: "toolbox",
   description:
-    "One entry point for the full tool catalog. Use action=search to find tools, describe to inspect schemas, call to execute a tool, and families to list capability groups.",
+    "Search and use the full tool/manual catalog. Use this proactively when the direct tools do not obviously cover the task: action=search to find tools or manuals, describe to inspect schemas or instructions, call to execute a tool, and families to list capability groups.",
   category: "space",
   parameters: {
     type: "object",
@@ -70,7 +70,7 @@ export const TOOLBOX: ToolDefinition = {
 export const CAPABILITY_SEARCH: ToolDefinition = {
   name: "capability_search",
   description:
-    "Search for tools by capability or intent. Use this when you need to find the right tool quickly or explore a broader capability family.",
+    "Search for tools or manuals by capability or intent. Use this early when you need to find the right tool quickly or verify whether a broader capability exists.",
   category: "space",
   parameters: {
     type: "object",
@@ -214,7 +214,7 @@ async function toolboxSearch(
       d.discoverable && !ROUTER_TOOL_NAMES.has(d.name)
     ).length,
     hint:
-      "Use toolbox action=describe to inspect tool schemas or manual instructions, then action=call to execute tools.",
+      "Use toolbox action=describe to inspect likely tool schemas or manual instructions, then action=call to execute tools. Search again with a narrower query if the first results are not enough.",
   });
 }
 
@@ -293,7 +293,7 @@ async function toolboxDescribe(
     }),
     manuals,
     hint:
-      "Use toolbox action=call with tool_name and arguments matching described tool parameters. Manuals are guidance only and are not callable.",
+      "Use toolbox action=call with tool_name and arguments matching described tool parameters when a described tool advances the task. Manuals are guidance only and are not callable.",
   });
 }
 
@@ -313,7 +313,15 @@ async function toolboxCall(
   const registry = ctx.capabilityRegistry;
   if (registry) {
     const descriptor = registry.get(`tool:${toolName}`);
-    if (descriptor && !descriptor.selectable) {
+    if (!descriptor) {
+      throw new Error(
+        `toolbox call: tool "${toolName}" is missing a capability descriptor.`,
+      );
+    }
+    if (
+      descriptor.kind !== "tool" ||
+      (descriptor.discoverable === false || descriptor.selectable === false)
+    ) {
       throw new Error(
         `toolbox call: tool "${toolName}" is not available for invocation.`,
       );
@@ -324,6 +332,18 @@ async function toolboxCall(
     (ctx as ToolContext & { _toolExecutor?: ToolExecutorLike })._toolExecutor;
   if (!executor) {
     throw new Error("toolbox call: Tool executor not available.");
+  }
+
+  if (!executor.getAvailableTools) {
+    throw new Error("toolbox call: Tool catalog not available.");
+  }
+
+  const availableTool = executor.getAvailableTools()
+    .find((tool) => tool.name === toolName);
+  if (!availableTool) {
+    throw new Error(
+      `toolbox call: tool "${toolName}" is not in the available tool catalog.`,
+    );
   }
 
   const toolArgs =

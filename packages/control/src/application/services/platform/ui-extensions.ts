@@ -10,6 +10,7 @@ import type { D1Database } from "../../../shared/types/bindings.ts";
 import type { R2Bucket } from "../../../shared/types/bindings.ts";
 import { textDate } from "../../../shared/utils/db-guards.ts";
 import {
+  isPublicationType,
   listPublications,
   type PublicationRecord,
   publicationResolvedUrl,
@@ -83,11 +84,14 @@ function sidebarItemFromUiSurfacePublication(
   const url = publicationResolvedUrl(record);
   if (!url) return null;
   const spec = record.publication.spec ?? {};
+  const display = record.publication.display ?? {};
   const sidebarSpec = asRecord(spec.sidebar);
   const label = readOptionalString(sidebarSpec, "label") ??
+    display.title ??
     record.publication.title ??
     record.name;
   const icon = readOptionalString(sidebarSpec, "icon") ??
+    display.icon ??
     readOptionalString(spec, "icon") ??
     "app";
   const path = readOptionalString(sidebarSpec, "path");
@@ -208,7 +212,9 @@ export async function getUISidebarItems(
   spaceId: string,
 ): Promise<UISidebarItem[]> {
   const publicationItems = (await listPublications({ DB: db }, spaceId))
-    .filter((record) => record.publicationType === "UiSurface")
+    .filter((record) =>
+      isPublicationType(record.publicationType, "takos.ui-surface.v1")
+    )
     .map(sidebarItemFromUiSurfacePublication)
     .filter((item): item is NonNullable<typeof item> => item !== null);
 

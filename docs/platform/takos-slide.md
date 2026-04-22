@@ -31,32 +31,44 @@ single worker (web) 構成。
 
 ## Publications
 
-`outputs.url.route: /` は built frontend / static asset surface の mount point を
+`outputs.url.routeRef` が参照する `/` route は built frontend / static asset surface の mount point を
 表し、server entrypoint 自体の root route を意味しない。
 
 ```yaml
+routes:
+  - id: ui
+    target: web
+    path: /
+  - id: mcp
+    target: web
+    path: /mcp
+
 publish:
   - name: slide-ui
-    type: UiSurface
-    publisher: web
+    type: takos.ui-surface.v1
+    display:
+      title: Slide
     outputs:
       url:
-        route: /
-    title: Slide
+        kind: url
+        routeRef: ui
   - name: slide-mcp
-    type: McpServer
-    publisher: web
+    type: takos.mcp-server.v1
+    display:
+      title: Slide MCP
     outputs:
       url:
-        route: /mcp
-    title: Slide MCP
+        kind: url
+        routeRef: mcp
+    auth:
+      bearer:
+        secretRef: MCP_AUTH_TOKEN
     spec:
       transport: streamable-http
-      authSecretRef: MCP_AUTH_TOKEN
 ```
 
-`UiSurface` は custom route publication type であり、deploy manifest の
-`publish` entry で catalog を管理します。`McpServer` は agent runtime が
+`takos.ui-surface.v1` は UI surface publication type であり、deploy manifest の
+`publish` entry で catalog を管理します。`takos.mcp-server.v1` は agent runtime が
 参照する MCP catalog entry です。
 
 ## Takos built-in provider publication
@@ -78,7 +90,7 @@ compute:
 ```
 
 default app manifest / workflow は UI と `/mcp` を同じ worker に含める。MCP
-publication は `authSecretRef: MCP_AUTH_TOKEN` を宣言し、control plane が
+publication は `auth.bearer.secretRef: MCP_AUTH_TOKEN` を宣言し、control plane が
 worker-scoped secret env を用意する。実装は `MCP_AUTH_TOKEN` が未設定、かつ
 `MCP_ALLOW_UNAUTHENTICATED=true` が明示されていない場合に fail closed する。
 manifest の `routes` は `/` と `/mcp` の両方を `web` target に向ける。

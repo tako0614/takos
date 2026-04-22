@@ -52,9 +52,10 @@ compute:
         request:
           scopes:
             - files:read
-        env:
-          endpoint: TAKOS_API_ENDPOINT
-          apiKey: TAKOS_API_KEY
+        inject:
+          env:
+            endpoint: TAKOS_API_ENDPOINT
+            apiKey: TAKOS_API_KEY
 ```
 
 ## フィールド

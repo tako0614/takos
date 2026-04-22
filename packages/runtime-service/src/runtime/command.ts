@@ -1,7 +1,7 @@
 import { spawn } from "node:child_process";
 import type { Readable } from "node:stream";
 import { pushLog } from "./logging.ts";
-import { filterSafeEnv } from "../utils/sandbox-env.ts";
+import { readSafeEnv } from "../utils/sandbox-env.ts";
 import { gracefulKill } from "../utils/process-kill.ts";
 import type { Buffer } from "node:buffer";
 
@@ -107,7 +107,7 @@ export function runCommand(
     let isTimedOut = false;
 
     const childEnv = {
-      ...filterSafeEnv(Deno.env.toObject()),
+      ...readSafeEnv(),
       ...sanitizeUserEnv(options.env ?? {}),
       NODE_OPTIONS: `--max-old-space-size=${MAX_CHILD_MEMORY_MB}`,
     };

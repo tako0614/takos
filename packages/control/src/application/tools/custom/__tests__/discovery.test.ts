@@ -1,4 +1,8 @@
-import { assertEquals, assertStringIncludes } from "jsr:@std/assert";
+import {
+  assertEquals,
+  assertRejects,
+  assertStringIncludes,
+} from "jsr:@std/assert";
 
 import { CapabilityRegistry } from "../../capability-registry.ts";
 import type { CapabilityDescriptor } from "../../capability-types.ts";
@@ -177,7 +181,12 @@ Deno.test("toolbox call executes non-router tools", async () => {
     },
     {
       _toolExecutor: {
-        getAvailableTools: () => [],
+        getAvailableTools: () => [{
+          name: "slide_create",
+          description: "Create a slide deck.",
+          category: "mcp",
+          parameters: { type: "object", properties: {} },
+        }],
         execute: async (
           call: { name: string; arguments: Record<string, unknown> },
         ) => {
@@ -192,6 +201,55 @@ Deno.test("toolbox call executes non-router tools", async () => {
   assertEquals(calls, [
     { name: "slide_create", arguments: { title: "Quarterly Review" } },
   ]);
+});
+
+Deno.test("toolbox call rejects tools outside the available catalog", async () => {
+  await assertRejects(
+    () =>
+      toolboxHandler(
+        {
+          action: "call",
+          tool_name: "missing_tool",
+          arguments: {},
+        },
+        {
+          _toolExecutor: {
+            getAvailableTools: () => [],
+            execute: async () => ({ output: "" }),
+          },
+        } as unknown as ToolContext,
+      ),
+    Error,
+    "not in the available tool catalog",
+  );
+});
+
+Deno.test("toolbox call rejects tools missing capability descriptors when registry is attached", async () => {
+  const registry = new CapabilityRegistry();
+  await assertRejects(
+    () =>
+      toolboxHandler(
+        {
+          action: "call",
+          tool_name: "slide_create",
+          arguments: {},
+        },
+        {
+          capabilityRegistry: registry,
+          _toolExecutor: {
+            getAvailableTools: () => [{
+              name: "slide_create",
+              description: "Create a slide deck.",
+              category: "mcp",
+              parameters: { type: "object", properties: {} },
+            }],
+            execute: async () => ({ output: "" }),
+          },
+        } as unknown as ToolContext,
+      ),
+    Error,
+    "missing a capability descriptor",
+  );
 });
 
 Deno.test("capability aliases delegate to toolbox behavior", async () => {

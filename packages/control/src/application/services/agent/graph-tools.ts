@@ -13,6 +13,7 @@ import type {
   ToolDefinition,
   ToolParameter,
 } from "../../tools/tool-definitions.ts";
+import type { ToolExecution } from "./runner-utils.ts";
 
 // ── Shared helpers ──────────────────────────────────────────────────────
 
@@ -129,6 +130,8 @@ export interface CreateAgentOptions {
   db?: import("../../../shared/types/bindings.ts").SqlDatabaseBinding;
   maxIterations?: number;
   abortSignal?: AbortSignal;
+  onEvent?: (event: LangGraphEvent) => Promise<void> | void;
+  onToolExecution?: (execution: ToolExecution) => void;
 }
 
 /** Generate a unique tool-call ID using crypto random bytes. */

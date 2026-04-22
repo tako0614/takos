@@ -28,6 +28,7 @@ import { withTimeout } from "../../../shared/utils/with-timeout.ts";
 import { logWarn } from "../../../shared/utils/logger.ts";
 import type { SqlDatabaseBinding as _SqlDatabaseBinding } from "../../../shared/types/bindings.ts";
 import { D1CheckpointSaver } from "./graph-checkpointer.ts";
+import { buildToolTelemetry, redactSensitiveArgs } from "./runner-utils.ts";
 import {
   anySignal,
   type CreateAgentOptions,
@@ -123,9 +124,38 @@ export function createLangGraphAgent(options: CreateAgentOptions) {
     db,
     maxIterations = 10,
     abortSignal,
+    onEvent,
+    onToolExecution,
   } = options;
 
   const langChainTools = tools.map((t) => createLangChainTool(t, toolExecutor));
+  const toolDefinitionsByName = new Map(tools.map((tool) => [tool.name, tool]));
+  const emitToolEvent = async (event: {
+    type: "tool_call" | "tool_result";
+    data: Record<string, unknown>;
+  }) => {
+    if (!onEvent) return;
+    try {
+      await onEvent(event);
+    } catch (error) {
+      logWarn("Failed to emit LangGraph tool event", {
+        module: "services/agent/graph-agent",
+        error: error instanceof Error ? error.message : String(error),
+      });
+    }
+  };
+  const observeToolExecution = (
+    execution: Parameters<
+      NonNullable<typeof onToolExecution>
+    >[0],
+  ) => {
+    if (!onToolExecution) return;
+    try {
+      onToolExecution(execution);
+    } catch {
+      // Best-effort tool execution observation.
+    }
+  };
 
   const llm = new ChatOpenAI({
     openAIApiKey: apiKey,
@@ -274,12 +304,71 @@ export function createLangGraphAgent(options: CreateAgentOptions) {
         continue;
       }
 
-      const tool = langChainTools.find((t) => t.name === toolCall.name);
+      const tool = toolDefinitionsByName.get(toolCall.name);
       if (tool) {
+        const toolArgs = toolCall.args && typeof toolCall.args === "object" &&
+            !Array.isArray(toolCall.args)
+          ? toolCall.args as Record<string, unknown>
+          : {};
+        const redactedArgs = redactSensitiveArgs(toolArgs);
+        const telemetry = buildToolTelemetry(toolCall.name, toolArgs);
+        const startedAt = Date.now();
         try {
-          const result = await tool.invoke(toolCall.args);
+          await emitToolEvent({
+            type: "tool_call",
+            data: {
+              tool: toolCall.name,
+              arguments: redactedArgs,
+              tool_call_id: toolCallId,
+              ...telemetry,
+            },
+          });
+
+          const result = await toolExecutor.execute({
+            id: toolCallId,
+            name: toolCall.name,
+            arguments: toolArgs,
+          });
+          const durationMs = Date.now() - startedAt;
+          observeToolExecution({
+            name: toolCall.name,
+            arguments: toolArgs,
+            result: result.error ? undefined : result.output,
+            error: result.error,
+            startedAt,
+            duration_ms: durationMs,
+          });
+
+          await emitToolEvent({
+            type: "tool_result",
+            data: {
+              tool: toolCall.name,
+              output: result.output,
+              error: result.error,
+              tool_call_id: toolCallId,
+              ...telemetry,
+            },
+          });
+
+          if (result.error) {
+            hasError = true;
+            const truncatedError = truncateContent(
+              result.error,
+              MAX_ERROR_MESSAGE_SIZE,
+              "Error",
+            );
+            toolMessages.push(
+              new ToolMessage({
+                tool_call_id: toolCallId,
+                content:
+                  `Error executing tool "${toolCall.name}": ${truncatedError}`,
+              }),
+            );
+            continue;
+          }
+
           const content = truncateContent(
-            stringifyToolResult(result),
+            stringifyToolResult(result.output),
             MAX_TOOL_RESULT_SIZE,
             "Output",
           );

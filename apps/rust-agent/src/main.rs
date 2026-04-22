@@ -2,6 +2,7 @@ mod control_rpc;
 mod engine_support;
 mod managed_skills;
 mod model;
+mod prompt_assets;
 mod prompts;
 mod skills;
 mod tool_bridge;
@@ -585,7 +586,9 @@ fn select_model_tools(
     let mut selected = Vec::new();
     let mut seen = HashSet::new();
 
-    let has_toolbox = remote_tools.iter().any(|tool| tool.name == TOOLBOX_TOOL_NAME);
+    let has_toolbox = remote_tools
+        .iter()
+        .any(|tool| tool.name == TOOLBOX_TOOL_NAME);
 
     for name in CORE_DIRECT_TOOL_NAMES {
         push_tool_by_name(remote_tools, name, &mut selected, &mut seen);
@@ -805,7 +808,7 @@ mod tests {
 
     #[test]
     fn select_model_tools_uses_full_catalog_only_when_no_core_path_exists() {
-        let mut tools = (0..150)
+        let tools = (0..150)
             .map(|index| tool(&format!("tool_{index}")))
             .collect::<Vec<_>>();
 

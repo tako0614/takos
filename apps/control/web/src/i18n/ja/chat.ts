@@ -30,6 +30,9 @@ export const chat = {
 
   // Streaming UI
   thinking: "処理中",
+  thinkingSummary: "思考",
+  thinkingSummaryTimed: "{seconds} 秒間考えました",
+  thinkingSummaryLive: "考え中",
   unknown: "不明",
   showDetails: "詳細を表示",
   hideDetails: "詳細を隠す",

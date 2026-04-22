@@ -65,6 +65,8 @@ Deno.test("descriptor-builder - buildSkillDescriptor - converts a managed skill 
   assertEquals(descriptor.namespace, "web");
   assertEquals(descriptor.source, "managed_skill");
   assertEquals(descriptor.triggers, ["research", "investigate"]);
+  assertEquals(descriptor.tags.includes("manual"), true);
+  assertEquals(descriptor.tags.includes("取説"), true);
 });
 
 Deno.test("descriptor-builder - buildCustomSkillDescriptor - converts a custom skill row to a descriptor", () => {

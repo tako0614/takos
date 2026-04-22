@@ -24,6 +24,7 @@ import { withTimeout } from "../../../shared/utils/with-timeout.ts";
 import {
   addToolExecution,
   anySignal,
+  buildToolTelemetry,
   MAX_TOTAL_TOOL_CALLS,
   redactSensitiveArgs,
 } from "./runner-utils.ts";
@@ -187,6 +188,7 @@ export async function runWithSimpleLoop(deps: SimpleLoopDeps): Promise<void> {
           tool: toolCall.name,
           arguments: redactedArgs,
           tool_call_id: toolCall.id,
+          ...buildToolTelemetry(toolCall.name, toolCall.arguments),
         });
 
         if (!deps.toolExecutor) {
@@ -214,6 +216,7 @@ export async function runWithSimpleLoop(deps: SimpleLoopDeps): Promise<void> {
           output: result.output,
           error: result.error,
           tool_call_id: toolCall.id,
+          ...buildToolTelemetry(toolCall.name, toolCall.arguments),
         });
 
         const toolMsg: AgentMessage = {
