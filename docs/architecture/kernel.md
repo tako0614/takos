@@ -76,7 +76,7 @@ primitive desired declaration を書く flat YAML。envelope なし、全 field
 | `name`    | group 名（routing の hostname に使用）                        |
 | `compute` | worker, service, attached container (consume は各 compute 内) |
 | `routes`  | path → workload のマッピング                                  |
-| `publish` | information sharing catalog                                   |
+| `publish` | typed outputs publication catalog                             |
 
 resource 自体は control-plane managed backing capability として扱う。SQL /
 object-store / queue などの resource API / runtime binding は publish catalog
@@ -137,18 +137,18 @@ kernel は compute に対する resource / publication の解決を行う。
   workflow, durable-object
 - resource は space 単位で分離される
 - resource access は resource API / runtime binding で扱う。publish は
-  route/interface metadata に使い、Takos API key / OAuth client は system
-  publication source として consume する
+  typed outputs catalog に使い、Takos API key / OAuth client は built-in
+  provider publication として consume する
 
 kernel 自身の storage は kernel DB / object-store を使う（group とは別）。
 
 ## Publication / Consume と env injection
 
-group が manifest で `publish` を宣言すると、deploy 時に kernel が information
-sharing catalog を保存し、`compute.<name>.consume` を宣言した consumer にだけ
+group が manifest で `publish` を宣言すると、deploy 時に kernel が typed outputs
+publication catalog を保存し、`compute.<name>.consume` を宣言した consumer にだけ
 env を inject する。route publication は manifest の `publisher` + `type` +
 `outputs` を基準とする。Takos API key / OAuth client は `publish[]` ではなく
-`takos.api-key` / `takos.oauth-client` system publication source として consume
+`takos.api-key` / `takos.oauth-client` built-in provider publication として consume
 する。
 
 ### route publication
@@ -184,9 +184,9 @@ publish:
 - `type`
 - `outputs`
 
-### Takos system publication source
+### Takos built-in provider publication
 
-Takos API key / OAuth client は system publication source として consume する。
+Takos API key / OAuth client は built-in provider publication として consume する。
 
 ```yaml
 consume:
@@ -202,16 +202,16 @@ consume:
 - `publication`
 - `request`
 
-`request` は source ごとの required / optional field が変わる。route publication
+`request` は provider ごとの required / optional field が変わる。route publication
 の URL は assigned hostname と `outputs.*.route` から生成され、path template は
-template URL のまま扱う。Takos system publication source は type が定義する
-outputs を consumer ごとに env へ変換する。
+template URL のまま扱う。Takos built-in provider publication は provider が定義
+する outputs を consumer ごとに env へ変換する。
 
 deploy 時に kernel は:
 
 1. manifest の `publish` を読む
 2. publication catalog を保存する
-3. route publication の auto-hostname URL、Takos system publication outputs
+3. route publication の auto-hostname URL、Takos built-in provider publication outputs
    を解決する
 4. `compute.<name>.consume` を宣言した consumer にだけ env として渡す
 
@@ -226,7 +226,8 @@ scope enforcement は受信側 group の責務。
 ## Capability credentials
 
 Takos API access や OAuth client は app-label 専用の特殊機構ではなく system
-publication source として扱う。`compute.<name>.consume` で request する。
+built-in provider publication として扱う。`compute.<name>.consume` で request
+する。
 
 ```yaml
 compute:
@@ -242,8 +243,8 @@ compute:
           apiKey: INTERNAL_TAKOS_API_KEY
 ```
 
-kernel は system publication outputs を解決するが、consumer が要求していない publication は
-inject しない。
+kernel は built-in provider publication outputs を解決するが、consumer が要求して
+いない publication は inject しない。
 
 ## Dashboard
 

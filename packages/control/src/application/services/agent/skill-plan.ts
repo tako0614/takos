@@ -55,14 +55,20 @@ export async function resolveAndApplySkills(
     ) ?? [],
   });
 
+  const manualCatalogResult: SkillLoadResult = {
+    ...result,
+    selectedSkills: [],
+    activatedSkills: [],
+  };
+
   state.locale = result.skillLocale;
   state.availableSkills = result.availableSkills;
-  state.selectedSkills = result.selectedSkills;
-  state.activatedSkills = result.activatedSkills;
+  state.selectedSkills = [];
+  state.activatedSkills = [];
 
-  await emitSkillLoadOutcome(result, emitEvent);
+  await emitSkillLoadOutcome(manualCatalogResult, emitEvent);
 
-  return result;
+  return manualCatalogResult;
 }
 
 /** Build the skill plan object expected by the LangGraph runner. */

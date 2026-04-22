@@ -11,7 +11,11 @@ import {
   storeRegistryUpdates,
 } from "../../../infra/db/index.ts";
 import { generateId } from "../../../shared/utils/index.ts";
-import { fetchRemoteFeed } from "./remote-store-client.ts";
+import {
+  fetchRemoteFeed,
+  type RemoteActivity,
+  type RemoteFeedResult,
+} from "./remote-store-client.ts";
 import {
   listSubscribedStores,
   markOutboxChecked,
@@ -33,6 +37,41 @@ export interface StoreUpdate {
   published: string | null;
   seen: boolean;
   createdAt: string;
+}
+
+const FEED_POLL_PAGE_LIMIT = 50;
+const FEED_POLL_MAX_PAGES = 20;
+
+type FeedFetcher = (
+  feedUrl: string,
+  options: { page: number; limit: number },
+) => Promise<RemoteFeedResult>;
+
+export async function fetchRemoteFeedActivities(
+  feedUrl: string,
+  fetcher: FeedFetcher = fetchRemoteFeed,
+): Promise<RemoteActivity[]> {
+  const activities: RemoteActivity[] = [];
+  let seen = 0;
+
+  for (let page = 1; page <= FEED_POLL_MAX_PAGES; page++) {
+    const result = await fetcher(feedUrl, {
+      page,
+      limit: FEED_POLL_PAGE_LIMIT,
+    });
+    const pageActivities = result.activities ?? [];
+    if (pageActivities.length === 0) {
+      break;
+    }
+
+    activities.push(...pageActivities);
+    seen += pageActivities.length;
+    if (seen >= result.totalItems) {
+      break;
+    }
+  }
+
+  return activities;
 }
 
 /**
@@ -72,12 +111,8 @@ export async function pollSingleStore(
     return 0;
   }
 
-  // Fetch the first page of the Store Network feed.
-  const result = await fetchRemoteFeed(entry.outboxUrl, {
-    page: 1,
-    limit: 50,
-  });
-  if (!result.activities || result.activities.length === 0) {
+  const activities = await fetchRemoteFeedActivities(entry.outboxUrl);
+  if (activities.length === 0) {
     await markOutboxChecked(dbBinding, entry.id);
     return 0;
   }
@@ -85,7 +120,7 @@ export async function pollSingleStore(
   const db = getDb(dbBinding);
   let newCount = 0;
 
-  for (const activity of result.activities) {
+  for (const activity of activities) {
     const activityId = activity.activityId;
     if (!activityId) continue;
 

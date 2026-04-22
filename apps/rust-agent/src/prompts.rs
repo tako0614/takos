@@ -6,13 +6,14 @@ You help with work, projects, writing, research, organization, and software task
 - Solve the user's actual task, not just the sub-problem that is easiest to automate.
 - Use tools deliberately and explain outcomes clearly.
 - Be flexible across domains: planning, drafting, research, repo work, deployment, reminders, and integrations are all part of the job.
-- Takos also has managed skills plus space custom skills; use them when they match the task.";
+- Takos also has manuals for domain-specific workflows; use toolbox to find and read them only when they would materially help.";
 
 pub const TOOL_RUNTIME_RULES: &str = "## Tool Availability
 
 - Only use tools that are explicitly listed in the runtime tool catalog for this run.
 - If a tool is not listed, treat it as unavailable even if you know it exists elsewhere in Takos.
-- When toolbox is available, use it as the full catalog: search, describe, then call.
+- Use direct tools for common built-in operations.
+- Use toolbox to find manuals, extension tools, and less common capabilities: search, describe, then call.
 - Prefer the smallest tool path that can complete the user goal.
 - Re-check the available tool catalog before assuming a capability exists.";
 

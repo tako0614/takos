@@ -1,4 +1,5 @@
-import { and, count, desc, eq, inArray, sql } from "drizzle-orm";
+import { and, count, desc, eq, or, sql } from "drizzle-orm";
+import type { SQL } from "drizzle-orm";
 import type { D1Database } from "../../../shared/types/bindings.ts";
 import { getDb } from "../../../infra/db/index.ts";
 import {
@@ -13,7 +14,6 @@ import {
   countActiveItems,
   hasExplicitInventory,
   listInventoryActivities,
-  listInventoryItems,
 } from "./store-inventory.ts";
 import { DELETE_REF } from "./push-activities.ts";
 import { resolvePackageIconsForRepos } from "./package-icons.ts";
@@ -118,6 +118,36 @@ interface ExplicitInventoryRow {
   repoUpdatedAt: string | null;
 }
 
+interface PushFeedRow {
+  id: string;
+  repoId: string;
+  accountId: string;
+  ref: string;
+  beforeSha: string | null;
+  afterSha: string;
+  pusherActorUrl: string | null;
+  pusherName: string | null;
+  commitCount: number;
+  commitsJson: string | null;
+  createdAt: string;
+  snapshotOwnerSlug: string | null;
+  snapshotName: string | null;
+  snapshotSummary: string | null;
+  snapshotVisibility: string | null;
+  snapshotDefaultBranch: string | null;
+  snapshotDefaultBranchHash: string | null;
+  snapshotCreatedAt: string | null;
+  snapshotUpdatedAt: string | null;
+  currentRepoId: string | null;
+  currentOwnerSlug: string | null;
+  currentName: string | null;
+  currentDescription: string | null;
+  currentDefaultBranch: string | null;
+  currentDefaultBranchHash: string | null;
+  currentCreatedAt: string | null;
+  currentUpdatedAt: string | null;
+}
+
 function enc(value: string): string {
   return encodeURIComponent(value);
 }
@@ -179,7 +209,11 @@ async function findStore(
   };
 }
 
-function toLocalReference(origin: string, repo: RepoRow): RepositoryReference {
+function toLocalReference(
+  origin: string,
+  repo: RepoRow,
+  packageIcon: string | null = null,
+): RepositoryReference {
   return {
     id: repo.id,
     owner: repo.ownerSlug,
@@ -190,6 +224,7 @@ function toLocalReference(origin: string, repo: RepoRow): RepositoryReference {
     browse_url: localRepositoryUrl(origin, repo.ownerSlug, repo.name),
     default_branch: repo.defaultBranch,
     default_branch_hash: repo.defaultBranchHash,
+    package_icon: packageIcon,
     source: "local",
     created_at: repo.createdAt,
     updated_at: repo.updatedAt,
@@ -199,6 +234,7 @@ function toLocalReference(origin: string, repo: RepoRow): RepositoryReference {
 function toExplicitReference(
   origin: string,
   row: ExplicitInventoryRow,
+  packageIcon: string | null = null,
 ): RepositoryReference {
   if (row.repoId) {
     return {
@@ -216,6 +252,7 @@ function toExplicitReference(
       ),
       default_branch: row.defaultBranch,
       default_branch_hash: row.defaultBranchHash,
+      package_icon: packageIcon,
       source: "local",
       created_at: row.repoCreatedAt || row.itemCreatedAt,
       updated_at: row.repoUpdatedAt || row.itemCreatedAt,
@@ -232,6 +269,7 @@ function toExplicitReference(
     browse_url: row.repoBrowseUrl || row.repositoryUrl,
     default_branch: row.repoDefaultBranch,
     default_branch_hash: row.repoDefaultBranchHash,
+    package_icon: packageIcon,
     source: "remote",
     created_at: row.itemCreatedAt,
     updated_at: row.itemCreatedAt,
@@ -250,6 +288,7 @@ function inventoryEntryToReference(
     repoBrowseUrl?: string | null;
     repoDefaultBranch?: string | null;
     repoDefaultBranchHash?: string | null;
+    packageIcon?: string | null;
     localRepoId: string | null;
     createdAt: string;
   },
@@ -265,10 +304,25 @@ function inventoryEntryToReference(
     browse_url: entry.repoBrowseUrl ?? repositoryUrl,
     default_branch: entry.repoDefaultBranch ?? null,
     default_branch_hash: entry.repoDefaultBranchHash ?? null,
+    package_icon: entry.packageIcon ?? null,
     source: entry.localRepoId ? "local" : "remote",
     created_at: entry.createdAt,
     updated_at: entry.createdAt,
   };
+}
+
+async function packageIconsForRepoIds(
+  dbBinding: D1Database,
+  repoIds: Array<string | null | undefined>,
+): Promise<Map<string, string>> {
+  return await resolvePackageIconsForRepos(
+    dbBinding,
+    repoIds.filter((id): id is string => !!id),
+  );
+}
+
+function explicitRepoId(row: ExplicitInventoryRow): string | null {
+  return row.repoId ?? row.localRepoId;
 }
 
 async function countPublicReposForStore(
@@ -364,7 +418,7 @@ async function selectExplicitInventory(
   dbBinding: D1Database,
   store: StoreRecord,
   options: { limit: number; offset: number },
-  extraWhere?: ReturnType<typeof sql>,
+  extraWhere?: SQL,
 ): Promise<{ total: number; items: ExplicitInventoryRow[] }> {
   const db = getDb(dbBinding);
   const baseWhere = and(
@@ -465,18 +519,34 @@ export async function listPublicStoreInventory(
   );
   if (explicit) {
     const result = await selectExplicitInventory(dbBinding, store, options);
+    const packageIcons = await packageIconsForRepoIds(
+      dbBinding,
+      result.items.map(explicitRepoId),
+    );
     return {
       store: doc,
       total: result.total,
-      items: result.items.map((row) => toExplicitReference(origin, row)),
+      items: result.items.map((row) =>
+        toExplicitReference(
+          origin,
+          row,
+          packageIcons.get(explicitRepoId(row) ?? "") ?? null,
+        )
+      ),
     };
   }
 
   const result = await selectAutoInventory(dbBinding, store, options);
+  const packageIcons = await packageIconsForRepoIds(
+    dbBinding,
+    result.items.map((row) => row.id),
+  );
   return {
     store: doc,
     total: result.total,
-    items: result.items.map((row) => toLocalReference(origin, row)),
+    items: result.items.map((row) =>
+      toLocalReference(origin, row, packageIcons.get(row.id) ?? null)
+    ),
   };
 }
 
@@ -500,9 +570,15 @@ export async function findPublicStoreInventoryItem(
       limit: 1,
       offset: 0,
     }, eq(storeInventoryItems.id, referenceId));
-    return result.items[0]
-      ? toExplicitReference(origin, result.items[0])
-      : null;
+    const row = result.items[0];
+    if (!row) return null;
+    const repoId = explicitRepoId(row);
+    const packageIcons = await packageIconsForRepoIds(dbBinding, [repoId]);
+    return toExplicitReference(
+      origin,
+      row,
+      packageIcons.get(repoId ?? "") ?? null,
+    );
   }
 
   const row = await db.select({
@@ -530,12 +606,12 @@ export async function findPublicStoreInventoryItem(
     .limit(1)
     .get();
 
-  return row
-    ? toLocalReference(origin, {
-      ...row,
-      defaultBranchHash: row.defaultBranchHash ?? null,
-    })
-    : null;
+  if (!row) return null;
+  const packageIcons = await packageIconsForRepoIds(dbBinding, [row.id]);
+  return toLocalReference(origin, {
+    ...row,
+    defaultBranchHash: row.defaultBranchHash ?? null,
+  }, packageIcons.get(row.id) ?? null);
 }
 
 export async function searchPublicStoreRepositories(
@@ -573,10 +649,20 @@ export async function searchPublicStoreRepositories(
       or lower(${storeInventoryItems.repoActorUrl}) like ${likePattern}
     )`,
     );
+    const packageIcons = await packageIconsForRepoIds(
+      dbBinding,
+      result.items.map(explicitRepoId),
+    );
     return {
       store: doc,
       total: result.total,
-      items: result.items.map((row) => toExplicitReference(origin, row)),
+      items: result.items.map((row) =>
+        toExplicitReference(
+          origin,
+          row,
+          packageIcons.get(explicitRepoId(row) ?? "") ?? null,
+        )
+      ),
     };
   }
 
@@ -615,6 +701,11 @@ export async function searchPublicStoreRepositories(
     db.select({ count: count() }).from(repositories).where(where).get(),
   ]);
 
+  const packageIcons = await packageIconsForRepoIds(
+    dbBinding,
+    rows.map((row) => row.id),
+  );
+
   return {
     store: doc,
     total: total?.count ?? 0,
@@ -622,80 +713,229 @@ export async function searchPublicStoreRepositories(
       toLocalReference(origin, {
         ...row,
         defaultBranchHash: row.defaultBranchHash ?? null,
-      })
+      }, packageIcons.get(row.id) ?? null)
     ),
   };
 }
 
-async function repoReferencesByIds(
-  dbBinding: D1Database,
-  origin: string,
-  repoIds: string[],
-): Promise<Map<string, RepositoryReference>> {
-  if (repoIds.length === 0) return new Map();
-  const db = getDb(dbBinding);
-  const rows = await db.select({
-    id: repositories.id,
-    ownerId: accounts.id,
-    ownerSlug: accounts.slug,
-    ownerName: accounts.name,
-    name: repositories.name,
-    description: repositories.description,
-    defaultBranch: repositories.defaultBranch,
-    defaultBranchHash: branches.commitSha,
-    createdAt: repositories.createdAt,
-    updatedAt: repositories.updatedAt,
-  }).from(repositories)
-    .innerJoin(accounts, eq(repositories.accountId, accounts.id))
-    .leftJoin(
-      branches,
-      and(eq(branches.repoId, repositories.id), eq(branches.isDefault, true)),
-    )
-    .where(inArray(repositories.id, repoIds))
-    .all();
+const pushFeedSelection = {
+  id: repoPushActivities.id,
+  repoId: repoPushActivities.repoId,
+  accountId: repoPushActivities.accountId,
+  ref: repoPushActivities.ref,
+  beforeSha: repoPushActivities.beforeSha,
+  afterSha: repoPushActivities.afterSha,
+  pusherActorUrl: repoPushActivities.pusherActorUrl,
+  pusherName: repoPushActivities.pusherName,
+  commitCount: repoPushActivities.commitCount,
+  commitsJson: repoPushActivities.commitsJson,
+  createdAt: repoPushActivities.createdAt,
+  snapshotOwnerSlug: repoPushActivities.repoOwnerSlug,
+  snapshotName: repoPushActivities.repoName,
+  snapshotSummary: repoPushActivities.repoSummary,
+  snapshotVisibility: repoPushActivities.repoVisibility,
+  snapshotDefaultBranch: repoPushActivities.repoDefaultBranch,
+  snapshotDefaultBranchHash: repoPushActivities.repoDefaultBranchHash,
+  snapshotCreatedAt: repoPushActivities.repoCreatedAt,
+  snapshotUpdatedAt: repoPushActivities.repoUpdatedAt,
+  currentRepoId: repositories.id,
+  currentOwnerSlug: accounts.slug,
+  currentName: repositories.name,
+  currentDescription: repositories.description,
+  currentDefaultBranch: repositories.defaultBranch,
+  currentDefaultBranchHash: branches.commitSha,
+  currentCreatedAt: repositories.createdAt,
+  currentUpdatedAt: repositories.updatedAt,
+};
 
-  return new Map(rows.map((row) => [
-    row.id,
-    toLocalReference(origin, {
-      ...row,
-      defaultBranchHash: row.defaultBranchHash ?? null,
-    }),
-  ]));
+function currentRepositoryExists(): SQL {
+  return sql`${repositories.id} is not null`;
 }
 
-async function localRepoIdsForFeed(
+function deleteSnapshotExists(): SQL {
+  return sql`${repoPushActivities.repoName} is not null`;
+}
+
+async function selectAutoPushActivitiesForFeed(
   dbBinding: D1Database,
   store: StoreRecord,
-): Promise<string[]> {
-  const explicit = await hasExplicitInventory(
-    dbBinding,
-    store.accountId,
-    store.slug,
+  options: { limit: number; offset: number },
+): Promise<{ total: number; items: PushFeedRow[] }> {
+  const db = getDb(dbBinding);
+  const repoJoin = and(
+    eq(repositories.id, repoPushActivities.repoId),
+    eq(repositories.accountId, store.accountId),
   );
-  if (explicit) {
-    const active = await listInventoryItems(
-      dbBinding,
-      store.accountId,
-      store.slug,
-      {
-        limit: 500,
-        offset: 0,
-      },
-    );
-    return active.items
-      .map((item) => item.localRepoId)
-      .filter((id): id is string => !!id);
+  const where = and(
+    eq(repoPushActivities.accountId, store.accountId),
+    or(
+      and(currentRepositoryExists(), eq(repositories.visibility, "public")),
+      and(
+        eq(repoPushActivities.ref, DELETE_REF),
+        eq(repoPushActivities.repoVisibility, "public"),
+        deleteSnapshotExists(),
+      ),
+    ),
+  );
+
+  const [rows, total] = await Promise.all([
+    db.select(pushFeedSelection).from(repoPushActivities)
+      .leftJoin(repositories, repoJoin)
+      .leftJoin(accounts, eq(repositories.accountId, accounts.id))
+      .leftJoin(
+        branches,
+        and(eq(branches.repoId, repositories.id), eq(branches.isDefault, true)),
+      )
+      .where(where)
+      .orderBy(desc(repoPushActivities.createdAt))
+      .limit(options.limit)
+      .offset(options.offset)
+      .all(),
+    db.select({ count: count() }).from(repoPushActivities)
+      .leftJoin(repositories, repoJoin)
+      .where(where)
+      .get(),
+  ]);
+
+  return {
+    total: total?.count ?? 0,
+    items: rows.map(normalizePushFeedRow),
+  };
+}
+
+async function selectExplicitPushActivitiesForFeed(
+  dbBinding: D1Database,
+  store: StoreRecord,
+  options: { limit: number; offset: number },
+): Promise<{ total: number; items: PushFeedRow[] }> {
+  const db = getDb(dbBinding);
+  const inventoryJoin = and(
+    eq(storeInventoryItems.localRepoId, repoPushActivities.repoId),
+    eq(storeInventoryItems.accountId, store.accountId),
+    eq(storeInventoryItems.storeSlug, store.slug),
+    eq(storeInventoryItems.isActive, true),
+  );
+  const repoJoin = and(
+    eq(repositories.id, repoPushActivities.repoId),
+    eq(repositories.accountId, store.accountId),
+  );
+  const where = and(
+    eq(repoPushActivities.accountId, store.accountId),
+    or(
+      currentRepositoryExists(),
+      and(
+        eq(repoPushActivities.ref, DELETE_REF),
+        deleteSnapshotExists(),
+      ),
+    ),
+  );
+
+  const [rows, total] = await Promise.all([
+    db.select(pushFeedSelection).from(repoPushActivities)
+      .innerJoin(storeInventoryItems, inventoryJoin)
+      .leftJoin(repositories, repoJoin)
+      .leftJoin(accounts, eq(repositories.accountId, accounts.id))
+      .leftJoin(
+        branches,
+        and(eq(branches.repoId, repositories.id), eq(branches.isDefault, true)),
+      )
+      .where(where)
+      .orderBy(desc(repoPushActivities.createdAt))
+      .limit(options.limit)
+      .offset(options.offset)
+      .all(),
+    db.select({ count: count() }).from(repoPushActivities)
+      .innerJoin(storeInventoryItems, inventoryJoin)
+      .leftJoin(repositories, repoJoin)
+      .where(where)
+      .get(),
+  ]);
+
+  return {
+    total: total?.count ?? 0,
+    items: rows.map(normalizePushFeedRow),
+  };
+}
+
+function normalizePushFeedRow(row: PushFeedRow): PushFeedRow {
+  return {
+    ...row,
+    beforeSha: row.beforeSha ?? null,
+    pusherActorUrl: row.pusherActorUrl ?? null,
+    pusherName: row.pusherName ?? null,
+    commitsJson: row.commitsJson ?? null,
+    snapshotOwnerSlug: row.snapshotOwnerSlug ?? null,
+    snapshotName: row.snapshotName ?? null,
+    snapshotSummary: row.snapshotSummary ?? null,
+    snapshotVisibility: row.snapshotVisibility ?? null,
+    snapshotDefaultBranch: row.snapshotDefaultBranch ?? null,
+    snapshotDefaultBranchHash: row.snapshotDefaultBranchHash ?? null,
+    snapshotCreatedAt: row.snapshotCreatedAt ?? null,
+    snapshotUpdatedAt: row.snapshotUpdatedAt ?? null,
+    currentRepoId: row.currentRepoId ?? null,
+    currentOwnerSlug: row.currentOwnerSlug ?? null,
+    currentName: row.currentName ?? null,
+    currentDescription: row.currentDescription ?? null,
+    currentDefaultBranch: row.currentDefaultBranch ?? null,
+    currentDefaultBranchHash: row.currentDefaultBranchHash ?? null,
+    currentCreatedAt: row.currentCreatedAt ?? null,
+    currentUpdatedAt: row.currentUpdatedAt ?? null,
+  };
+}
+
+function pushRowToReference(
+  origin: string,
+  row: PushFeedRow,
+  packageIcon: string | null,
+): RepositoryReference | null {
+  if (row.currentRepoId) {
+    const ownerSlug = row.currentOwnerSlug ?? row.snapshotOwnerSlug;
+    const name = row.currentName ?? row.snapshotName;
+    if (!ownerSlug || !name) return null;
+    return toLocalReference(origin, {
+      id: row.currentRepoId,
+      ownerId: row.accountId,
+      ownerSlug,
+      ownerName: ownerSlug,
+      name,
+      description: row.currentDescription ?? row.snapshotSummary,
+      defaultBranch: row.currentDefaultBranch ??
+        row.snapshotDefaultBranch ??
+        "main",
+      defaultBranchHash: row.currentDefaultBranchHash ??
+        row.snapshotDefaultBranchHash,
+      createdAt: row.currentCreatedAt ?? row.snapshotCreatedAt ?? row.createdAt,
+      updatedAt: row.currentUpdatedAt ?? row.snapshotUpdatedAt ?? row.createdAt,
+    }, packageIcon);
   }
 
-  const db = getDb(dbBinding);
-  const rows = await db.select({ id: repositories.id }).from(repositories)
-    .where(and(
-      eq(repositories.accountId, store.accountId),
-      eq(repositories.visibility, "public"),
-    ))
-    .limit(500)
-    .all();
-  return rows.map((row) => row.id);
+  if (row.ref !== DELETE_REF || !row.snapshotOwnerSlug || !row.snapshotName) {
+    return null;
+  }
+
+  return {
+    id: row.repoId,
+    owner: row.snapshotOwnerSlug,
+    name: row.snapshotName,
+    summary: row.snapshotSummary,
+    repository_url: localRepositoryUrl(
+      origin,
+      row.snapshotOwnerSlug,
+      row.snapshotName,
+    ),
+    clone_url: localCloneUrl(origin, row.snapshotOwnerSlug, row.snapshotName),
+    browse_url: localRepositoryUrl(
+      origin,
+      row.snapshotOwnerSlug,
+      row.snapshotName,
+    ),
+    default_branch: row.snapshotDefaultBranch,
+    default_branch_hash: row.snapshotDefaultBranchHash,
+    package_icon: null,
+    source: "local",
+    created_at: row.snapshotCreatedAt ?? row.createdAt,
+    updated_at: row.snapshotUpdatedAt ?? row.createdAt,
+  };
 }
 
 export async function listPublicStoreFeed(
@@ -726,28 +966,18 @@ export async function listPublicStoreFeed(
     })
     : { total: 0, items: [] };
 
-  const localRepoIds = await localRepoIdsForFeed(dbBinding, store);
-  const db = getDb(dbBinding);
-  const pushWhere = localRepoIds.length > 0
-    ? inArray(repoPushActivities.repoId, localRepoIds)
-    : undefined;
-  const [pushRows, pushTotal] = pushWhere
-    ? await Promise.all([
-      db.select().from(repoPushActivities)
-        .where(pushWhere)
-        .orderBy(desc(repoPushActivities.createdAt))
-        .limit(mergeLimit)
-        .offset(0)
-        .all(),
-      db.select({ count: count() }).from(repoPushActivities).where(pushWhere)
-        .get(),
-    ])
-    : [[], { count: 0 }];
-
-  const refsByRepoId = await repoReferencesByIds(
+  const pushActivities = explicit
+    ? await selectExplicitPushActivitiesForFeed(dbBinding, store, {
+      limit: mergeLimit,
+      offset: 0,
+    })
+    : await selectAutoPushActivitiesForFeed(dbBinding, store, {
+      limit: mergeLimit,
+      offset: 0,
+    });
+  const packageIcons = await packageIconsForRepoIds(
     dbBinding,
-    origin,
-    pushRows.map((row) => row.repoId),
+    pushActivities.items.map((row) => row.currentRepoId),
   );
 
   const inventoryFeed: StoreFeedItem[] = inventoryActivities.items.map((
@@ -759,8 +989,12 @@ export async function listPublicStoreFeed(
     repository: inventoryEntryToReference(item),
   }));
 
-  const pushFeed: StoreFeedItem[] = pushRows.flatMap((row) => {
-    const reference = refsByRepoId.get(row.repoId);
+  const pushFeed: StoreFeedItem[] = pushActivities.items.flatMap((row) => {
+    const reference = pushRowToReference(
+      origin,
+      row,
+      row.currentRepoId ? packageIcons.get(row.currentRepoId) ?? null : null,
+    );
     if (!reference) return [];
     const type = row.ref === DELETE_REF
       ? "repo.delete"
@@ -786,7 +1020,7 @@ export async function listPublicStoreFeed(
 
   return {
     store: doc,
-    total: inventoryActivities.total + (pushTotal?.count ?? 0),
+    total: inventoryActivities.total + pushActivities.total,
     items,
   };
 }

@@ -32,9 +32,12 @@ top-level `env` は全 compute に入ります。`compute.<name>.env` はその 
 `consume.env` は output 名 -> env 名 の alias map です。output の filter では
 ありません。publication の全 outputs が inject 対象になり、書かなかった output
 は default env 名をそのまま使います。Takos API key / OAuth client は
-`takos.api-key` / `takos.oauth-client` system publication source として consume
-します。SQL / object-store / queue などの resource は publish ではなく resource
-API / runtime binding 側で扱います。
+`takos.api-key` / `takos.oauth-client` built-in provider publication として
+consume します。SQL / object-store / queue などの resource は publish ではなく
+resource API / runtime binding 側で扱います。
+
+将来は互換を保ったまま `inject.env` のように inject 先を明示する形へ寄せる
+可能性があります。current contract では `consume.env` が alias map です。
 
 alias に使う env 名は任意文字列ではなく `[A-Za-z_][A-Za-z0-9_]*` に一致する
 必要があります。保存時と注入時には uppercase に正規化されます。
@@ -100,7 +103,8 @@ compute:
 
 ## Attached container
 
-attached container も通常の `env` を持てます。
+attached container も通常の `env` と `consume` を持てます。consume した
+publication outputs はその attached container にだけ inject されます。
 
 ```yaml
 compute:

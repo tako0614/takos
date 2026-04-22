@@ -30,7 +30,7 @@ use crate::engine_support::{
     last_user_message, safe_space_path,
 };
 use crate::model::TakosModelRunner;
-use crate::skills::{build_skill_catalog, resolve_skill_plan};
+use crate::skills::build_skill_catalog;
 use crate::tool_bridge::{CompositeToolExecutor, ToolExecutionRecord};
 
 pub type AppResult<T> = Result<T, Box<dyn std::error::Error + Send + Sync>>;
@@ -38,17 +38,43 @@ pub type AppResult<T> = Result<T, Box<dyn std::error::Error + Send + Sync>>;
 const DEFAULT_MAX_CONCURRENT_RUNS: usize = 5;
 const OPENAI_MAX_TOOL_DEFINITIONS: usize = 128;
 const TOOLBOX_TOOL_NAME: &str = "toolbox";
-const DEFAULT_PRIORITY_TOOL_NAMES: [&str; 10] = [
+const CORE_DIRECT_TOOL_NAMES: [&str; 30] = [
     TOOLBOX_TOOL_NAME,
+    "container_start",
+    "container_status",
+    "container_commit",
+    "container_stop",
+    "create_repository",
+    "repo_list",
+    "repo_status",
+    "repo_switch",
+    "file_read",
+    "file_write",
+    "file_write_binary",
+    "file_list",
+    "file_delete",
+    "file_mkdir",
+    "file_rename",
+    "file_copy",
+    "runtime_exec",
+    "runtime_status",
+    "web_fetch",
+    "create_artifact",
+    "search",
+    "remember",
+    "recall",
+    "set_reminder",
+    "info_unit_search",
+    "spawn_agent",
+    "wait_agent",
+    "memory_graph_recall",
+    "store_search",
+];
+const FALLBACK_DISCOVERY_TOOL_NAMES: [&str; 4] = [
     "capability_search",
     "capability_families",
     "capability_describe",
     "capability_invoke",
-    "skill_context",
-    "skill_catalog",
-    "skill_describe",
-    "skill_list",
-    "skill_get",
 ];
 
 #[derive(Clone)]
@@ -226,8 +252,8 @@ async fn execute_run(payload: StartPayload, state: Arc<ServiceState>) -> AppResu
         )
         .await
         .unwrap_or_default();
-    let skill_catalog = build_skill_catalog(&skill_runtime_context, &all_tool_names);
-    let skill_plan = resolve_skill_plan(&skill_catalog);
+    let manual_catalog = build_skill_catalog(&skill_runtime_context, &all_tool_names);
+    let manual_count = manual_catalog.skills.len();
     let user_message = last_user_message(
         &history,
         run_context
@@ -243,7 +269,6 @@ async fn execute_run(payload: StartPayload, state: Arc<ServiceState>) -> AppResu
             .as_deref()
             .filter(|value| !value.is_empty())
             .unwrap_or("default"),
-        &skill_plan,
     );
     let engine_session_id =
         derive_engine_session_id(bootstrap.session_id.as_deref(), &bootstrap.thread_id);
@@ -255,9 +280,9 @@ async fn execute_run(payload: StartPayload, state: Arc<ServiceState>) -> AppResu
     let composite_tool_executor = CompositeToolExecutor::new(
         client.clone(),
         tool_catalog.tools.clone(),
-        skill_catalog.clone(),
+        manual_catalog.clone(),
     );
-    let exposed_tools = select_model_tools(&composite_tool_executor.exposed_tools(), &skill_plan);
+    let exposed_tools = select_model_tools(&composite_tool_executor.exposed_tools());
     let model_runner = TakosModelRunner::new_with_openai_api_keys(
         payload.resolved_model(),
         run_config.temperature,
@@ -270,8 +295,7 @@ async fn execute_run(payload: StartPayload, state: Arc<ServiceState>) -> AppResu
         model_runner.clone(),
         composite_tool_executor.clone(),
     )?;
-    let request =
-        build_session_request(engine_session_id, user_message, &skill_plan, &exposed_tools);
+    let request = build_session_request(engine_session_id, user_message, &exposed_tools);
 
     client
         .emit_run_event(
@@ -290,7 +314,7 @@ async fn execute_run(payload: StartPayload, state: Arc<ServiceState>) -> AppResu
                 "agent_type": bootstrap.agent_type,
                 "space_id": bootstrap.space_id,
                 "thread_id": bootstrap.thread_id,
-                "skill_count": skill_plan.activated_skills.len(),
+                "manual_count": manual_count,
                 "remote_tool_count": tool_catalog.tools.len(),
                 "model_tool_count": exposed_tools.len(),
             }),
@@ -557,34 +581,39 @@ fn collect_openai_api_keys(
 
 fn select_model_tools(
     remote_tools: &[crate::control_rpc::ToolDefinition],
-    skill_plan: &crate::control_rpc::SkillPlanResponse,
 ) -> Vec<crate::control_rpc::ToolDefinition> {
-    if let Some(toolbox) = remote_tools
-        .iter()
-        .find(|tool| tool.name == TOOLBOX_TOOL_NAME)
-    {
-        return vec![toolbox.clone()];
-    }
-
     let mut selected = Vec::new();
     let mut seen = HashSet::new();
 
-    for name in DEFAULT_PRIORITY_TOOL_NAMES {
+    let has_toolbox = remote_tools.iter().any(|tool| tool.name == TOOLBOX_TOOL_NAME);
+
+    for name in CORE_DIRECT_TOOL_NAMES {
         push_tool_by_name(remote_tools, name, &mut selected, &mut seen);
     }
-    for skill in &skill_plan.activated_skills {
-        for name in &skill.execution_contract.preferred_tools {
+
+    if !has_toolbox {
+        for name in FALLBACK_DISCOVERY_TOOL_NAMES {
             push_tool_by_name(remote_tools, name, &mut selected, &mut seen);
         }
     }
-    for tool in remote_tools {
-        push_tool(tool, &mut selected, &mut seen);
-        if selected.len() >= OPENAI_MAX_TOOL_DEFINITIONS {
-            break;
+
+    if selected.is_empty() {
+        for tool in remote_tools {
+            if is_hidden_model_tool(&tool.name) {
+                continue;
+            }
+            push_tool(tool, &mut selected, &mut seen);
+            if selected.len() >= OPENAI_MAX_TOOL_DEFINITIONS {
+                break;
+            }
         }
     }
 
     selected
+}
+
+fn is_hidden_model_tool(name: &str) -> bool {
+    matches!(name, "skill_context" | "skill_catalog" | "skill_describe")
 }
 
 fn push_tool_by_name(
@@ -653,9 +682,7 @@ mod tests {
         collect_openai_api_keys, parse_max_concurrent_runs, select_model_tools,
         user_visible_failure_message, RunAdmission, ServiceState, OPENAI_MAX_TOOL_DEFINITIONS,
     };
-    use crate::control_rpc::{
-        ActivatedSkill, SkillExecutionContract, SkillPlanResponse, ToolDefinition,
-    };
+    use crate::control_rpc::ToolDefinition;
     use std::path::PathBuf;
 
     fn tool(name: &str) -> ToolDefinition {
@@ -717,7 +744,7 @@ mod tests {
             .collect::<Vec<_>>();
         tools.push(tool("tool_1"));
 
-        let selected = select_model_tools(&tools, &SkillPlanResponse::default());
+        let selected = select_model_tools(&tools);
         let unique_names = selected
             .iter()
             .map(|tool| tool.name.as_str())
@@ -728,76 +755,67 @@ mod tests {
     }
 
     #[test]
-    fn select_model_tools_uses_toolbox_as_single_router() {
-        let mut tools = (0..300)
-            .map(|index| tool(&format!("tool_{index}")))
-            .collect::<Vec<_>>();
-        tools.push(tool("toolbox"));
-        let plan = SkillPlanResponse {
-            activated_skills: vec![ActivatedSkill {
-                id: "skill-1".to_string(),
-                name: "Skill".to_string(),
-                execution_contract: SkillExecutionContract {
-                    preferred_tools: vec!["tool_299".to_string()],
-                    ..SkillExecutionContract::default()
-                },
-                ..ActivatedSkill::default()
-            }],
-            ..SkillPlanResponse::default()
-        };
-
-        let selected = select_model_tools(&tools, &plan);
-
-        assert_eq!(selected.len(), 1);
-        assert_eq!(selected[0].name, "toolbox");
-    }
-
-    #[test]
-    fn select_model_tools_prioritizes_skill_preferred_tools() {
-        let tools = (0..150)
-            .map(|index| tool(&format!("tool_{index}")))
-            .collect::<Vec<_>>();
-        let plan = SkillPlanResponse {
-            activated_skills: vec![ActivatedSkill {
-                id: "skill-1".to_string(),
-                name: "Skill".to_string(),
-                execution_contract: SkillExecutionContract {
-                    preferred_tools: vec!["tool_149".to_string()],
-                    ..SkillExecutionContract::default()
-                },
-                ..ActivatedSkill::default()
-            }],
-            ..SkillPlanResponse::default()
-        };
-
-        let selected = select_model_tools(&tools, &plan);
-
-        assert_eq!(selected[0].name, "tool_149");
-        assert_eq!(selected.len(), OPENAI_MAX_TOOL_DEFINITIONS);
-    }
-
-    #[test]
-    fn select_model_tools_prioritizes_discovery_tools() {
-        let mut tools = (0..150)
+    fn select_model_tools_keeps_toolbox_plus_core_direct_tools() {
+        let mut tools = (0..20)
             .map(|index| tool(&format!("tool_{index}")))
             .collect::<Vec<_>>();
         tools.extend([
+            tool("toolbox"),
+            tool("file_read"),
+            tool("runtime_exec"),
+            tool("capability_search"),
+            tool("skill_catalog"),
+        ]);
+
+        let selected = select_model_tools(&tools);
+        let names = selected
+            .iter()
+            .map(|tool| tool.name.as_str())
+            .collect::<Vec<_>>();
+
+        assert_eq!(names, vec!["toolbox", "file_read", "runtime_exec"]);
+    }
+
+    #[test]
+    fn select_model_tools_falls_back_to_discovery_when_toolbox_is_missing() {
+        let tools = vec![
             tool("capability_search"),
             tool("capability_families"),
             tool("capability_describe"),
             tool("capability_invoke"),
-        ]);
+            tool("skill_context"),
+        ];
 
-        let selected = select_model_tools(&tools, &SkillPlanResponse::default());
+        let selected = select_model_tools(&tools);
+        let names = selected
+            .iter()
+            .map(|tool| tool.name.as_str())
+            .collect::<Vec<_>>();
+
+        assert_eq!(
+            names,
+            vec![
+                "capability_search",
+                "capability_families",
+                "capability_describe",
+                "capability_invoke",
+            ],
+        );
+    }
+
+    #[test]
+    fn select_model_tools_uses_full_catalog_only_when_no_core_path_exists() {
+        let mut tools = (0..150)
+            .map(|index| tool(&format!("tool_{index}")))
+            .collect::<Vec<_>>();
+
+        let selected = select_model_tools(&tools);
         let selected_names = selected
             .iter()
             .map(|tool| tool.name.as_str())
             .collect::<Vec<_>>();
 
-        assert!(selected_names.contains(&"capability_search"));
-        assert!(selected_names.contains(&"capability_families"));
-        assert!(selected_names.contains(&"capability_describe"));
-        assert!(selected_names.contains(&"capability_invoke"));
+        assert_eq!(selected_names[0], "tool_0");
         assert_eq!(selected.len(), OPENAI_MAX_TOOL_DEFINITIONS);
     }
 

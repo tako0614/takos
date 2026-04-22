@@ -19,7 +19,7 @@ compute:
 ## capability access
 
 Worker が Takos API key や OAuth client を使う場合は
-`takos.api-key` / `takos.oauth-client` system publication source を
+`takos.api-key` / `takos.oauth-client` built-in provider publication を
 `compute.<name>.consume` で受け取ります。SQL や object store は publish
 ではなく resource API / runtime binding 側で扱います。
 

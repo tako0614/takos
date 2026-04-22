@@ -81,8 +81,8 @@ resource record / binding は resource API / runtime binding 側で扱い、cont
 plane 本体の Cloudflare resource（D1 / R2 / KV / Dispatch / Queues / Vectorize
 など）は operator が事前に作成・設定します。
 
-route publication と Takos system publication consume は deploy 時に catalog /
-grant state へ同期されますが、operator が管理する Cloudflare resource
+route publication と Takos built-in provider publication consume は deploy 時に
+catalog / grant state へ同期されますが、operator が管理する Cloudflare resource
 の作成とは別の扱いです。
 
 ### D1 Database

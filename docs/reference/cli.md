@@ -12,8 +12,8 @@ declaration を apply する surface を提供します。group は primitive
 を任意に束ねる state scope で、inventory、snapshot、rollback、uninstall などの
 group 機能を持ちます。resource API / runtime binding と publish catalog
 は分けます。`publish` は route/interface metadata の共有に使い、Takos API key /
-OAuth client は system publication source を `consume` します。SQL / object-store /
-queue などの resource API / runtime binding とは分けます。
+OAuth client は built-in provider publication を `consume` します。SQL /
+object-store / queue などの resource API / runtime binding とは分けます。
 
 - **Primitive records** — workload / route / publication / resource / consume
   edge などの個別 record

@@ -31,6 +31,7 @@ const REPOSITORY = {
   browse_url: "https://test.takos.jp/@alice/demo",
   default_branch: "main",
   default_branch_hash: "abc123",
+  package_icon: "/icons/demo.svg",
   source: "local" as const,
   created_at: "2026-03-01T00:00:00.000Z",
   updated_at: "2026-03-02T00:00:00.000Z",

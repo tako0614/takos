@@ -322,7 +322,7 @@ export async function emitSkillLoadOutcome(
     ).length;
     await emitEvent("thinking", {
       message:
-        `Loaded ${result.availableSkills.length} available skill(s), selected ${result.selectedSkills.length}, activated ${result.activatedSkills.length} for this run`,
+        `Loaded ${result.availableSkills.length} manual(s) for on-demand reference`,
       skill_locale: result.skillLocale,
       available_skill_count: result.availableSkills.length,
       selectable_skill_count: result.availableSkills.filter((skill) =>

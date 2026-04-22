@@ -50,6 +50,11 @@ compute:
 group 全体の環境変数はトップレベル `env` で設定する。詳しくは
 [環境変数](/apps/environment) を参照。
 
+Attached container も Worker / Service と同じように `consume` できます。必要な
+publication だけを明示し、outputs はその container にだけ env として inject
+されます。ただし attached container は public route publication の publisher には
+しません。外部に出す interface は親 Worker / Service が publish します。
+
 ## フィールド
 
 Worker の `containers` map 内で定義する各 container のフィールド。
@@ -88,7 +93,8 @@ public deploy manifest として invalid。`port` は local/private builder meta
 | Attached Container | `compute.<name>.containers.<name>` | worker に紐づく container  | **no**       | executor / host process        |
 
 attached container は **routes の `target` にできない**。`routes` は親 worker /
-service を 対象に書き、そこから attached container を呼び出す。
+service を対象に書き、そこから attached container を呼び出す。route publication
+の `publisher` も親 worker / service にします。
 
 Worker コードからは attached container reference を通じて参照する。binding 名は
 child 名を uppercase に正規化した `${NAME}_CONTAINER` になる。たとえば `worker`

@@ -74,7 +74,7 @@ No tools are available in this run.`;
     `- \`${tool.name}\`: ${tool.description}`
   );
   const discoveryHint = hasToolbox
-    ? "\n\nUse `toolbox` as the full catalog: action=`search`, then `describe`, then `call`."
+    ? "\n\nUse direct tools for common built-in operations. Use `toolbox` for manuals, extension tools, and less common capabilities: action=`search`, then `describe`, then `call`."
     : hasCapabilitySearch || hasCapabilityFamilies
     ? `\n\nIf you are unsure which tool fits, use \`capability_search\` to find relevant tools by natural language or \`capability_families\` to inspect the available capability surface.${
       hasCapabilityDescribe

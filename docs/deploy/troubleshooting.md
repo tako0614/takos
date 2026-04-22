@@ -98,7 +98,7 @@ takos deploy --plan --env staging --space SPACE_ID --target routes.web:/
 
 ## publication / capability 解決失敗
 
-### `Error: ... system publication request ...`
+### `Error: ... provider publication request ...`
 
 このエラーは `takos.api-key` / `takos.oauth-client` の `request` が足りない、
 または未知 field を含む場合に出ます。SQL / object-store / queue などの resource
@@ -130,7 +130,7 @@ takos deploy --plan --env staging --space SPACE_ID --target web
 
 3. よくある原因:
 
-- `consume` が存在しない publication または未知の system publication source を参照している
+- `consume` が存在しない publication または未知の built-in provider publication を参照している
 - `consume.env` が既存 env と衝突している
 - Worker のコードにシンタックスエラーがある
 - readiness probe (`GET /` または `compute.<name>.readiness`) が 200 を返さない

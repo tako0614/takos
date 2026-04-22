@@ -173,8 +173,64 @@ export async function initToolExecutor(deps: OrchestrationDeps): Promise<void> {
 }
 
 function selectModelVisibleTools<T extends { name: string }>(tools: T[]): T[] {
-  const toolbox = tools.find((tool) => tool.name === "toolbox");
-  return toolbox ? [toolbox] : tools;
+  const coreDirectToolNames = new Set([
+    "toolbox",
+    "container_start",
+    "container_status",
+    "container_commit",
+    "container_stop",
+    "create_repository",
+    "repo_list",
+    "repo_status",
+    "repo_switch",
+    "file_read",
+    "file_write",
+    "file_write_binary",
+    "file_list",
+    "file_delete",
+    "file_mkdir",
+    "file_rename",
+    "file_copy",
+    "runtime_exec",
+    "runtime_status",
+    "web_fetch",
+    "create_artifact",
+    "search",
+    "remember",
+    "recall",
+    "set_reminder",
+    "info_unit_search",
+    "spawn_agent",
+    "wait_agent",
+    "memory_graph_recall",
+    "store_search",
+  ]);
+  const fallbackDiscoveryToolNames = new Set([
+    "capability_search",
+    "capability_families",
+    "capability_describe",
+    "capability_invoke",
+  ]);
+  const hiddenCompatToolNames = new Set([
+    "skill_context",
+    "skill_catalog",
+    "skill_describe",
+  ]);
+
+  const hasToolbox = tools.some((tool) => tool.name === "toolbox");
+  const selected = tools.filter((tool) => coreDirectToolNames.has(tool.name));
+  if (!hasToolbox) {
+    selected.push(
+      ...tools.filter((tool) => fallbackDiscoveryToolNames.has(tool.name)),
+    );
+  }
+
+  const deduped = selected.filter((tool, index) =>
+    selected.findIndex((candidate) => candidate.name === tool.name) === index
+  );
+  if (deduped.length > 0) return deduped;
+
+  return tools.filter((tool) => !hiddenCompatToolNames.has(tool.name));
 }
 
 // ── Queue job helpers ─────────────────────────────────────────────────

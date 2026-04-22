@@ -1,6 +1,7 @@
 import fs from "node:fs/promises";
 import path from "node:path";
 
+import { SymlinkEscapeError } from "../../shared/errors.ts";
 import { type FilePermission, parseFilePermission } from "./permissions.ts";
 
 type SandboxFs = {
@@ -55,6 +56,80 @@ function resolveSandboxPath(
   return resolvedPath;
 }
 
+async function resolveSandboxExistingPath(
+  baseDir: string,
+  targetPath: string,
+  label: string,
+  allowBase = false,
+): Promise<string> {
+  const resolvedPath = resolveSandboxPath(
+    baseDir,
+    targetPath,
+    label,
+    allowBase,
+  );
+  const resolvedBase = await realpathOrResolved(baseDir);
+  const resolvedTarget = await fs.realpath(resolvedPath);
+  if (!isWithinBase(resolvedBase, resolvedTarget, true)) {
+    throw new SymlinkEscapeError(label);
+  }
+  return resolvedTarget;
+}
+
+async function resolveSandboxWritablePath(
+  baseDir: string,
+  targetPath: string,
+  label: string,
+  allowBase = false,
+): Promise<string> {
+  const resolvedPath = resolveSandboxPath(
+    baseDir,
+    targetPath,
+    label,
+    allowBase,
+  );
+  await verifyWritablePathWithinBase(baseDir, resolvedPath, label);
+  return resolvedPath;
+}
+
+async function realpathOrResolved(targetPath: string): Promise<string> {
+  try {
+    return await fs.realpath(targetPath);
+  } catch {
+    return path.resolve(targetPath);
+  }
+}
+
+async function verifyWritablePathWithinBase(
+  baseDir: string,
+  targetPath: string,
+  label: string,
+): Promise<void> {
+  const resolvedBase = await realpathOrResolved(baseDir);
+  let candidatePath = path.resolve(targetPath);
+
+  while (true) {
+    try {
+      const resolvedCandidate = await fs.realpath(candidatePath);
+      if (!isWithinBase(resolvedBase, resolvedCandidate, true)) {
+        throw new SymlinkEscapeError(label);
+      }
+      return;
+    } catch (err) {
+      const e = err as NodeJS.ErrnoException;
+      if (e.code !== "ENOENT") {
+        throw err;
+      }
+
+      const parentPath = path.dirname(candidatePath);
+      if (parentPath === candidatePath) {
+        throw new Error(`Invalid ${label} path`);
+      }
+      candidatePath = parentPath;
+    }
+  }
+}
+
 function createPermissionError(
   permission: FilePermission,
   operation: string,
@@ -85,14 +160,22 @@ export function createSandboxFilesystem(
   return {
     async readFile(filePath, encoding = "utf-8") {
       assertReadable(permission, "readFile");
-      const resolvedPath = resolveSandboxPath(baseDir, filePath, "file");
+      const resolvedPath = await resolveSandboxExistingPath(
+        baseDir,
+        filePath,
+        "file",
+      );
       return encoding === null
         ? await fs.readFile(resolvedPath)
         : await fs.readFile(resolvedPath, encoding as never);
     },
     async writeFile(filePath, data, encoding = "utf-8") {
       assertWritable(permission, "writeFile");
-      const resolvedPath = resolveSandboxPath(baseDir, filePath, "file");
+      const resolvedPath = await resolveSandboxWritablePath(
+        baseDir,
+        filePath,
+        "file",
+      );
       await fs.mkdir(path.dirname(resolvedPath), { recursive: true });
       if (typeof data === "string") {
         if (encoding === null) {
@@ -106,7 +189,7 @@ export function createSandboxFilesystem(
     },
     async readdir(dirPath) {
       assertReadable(permission, "readdir");
-      const resolvedPath = resolveSandboxPath(
+      const resolvedPath = await resolveSandboxExistingPath(
         baseDir,
         dirPath,
         "directory",
@@ -116,17 +199,17 @@ export function createSandboxFilesystem(
     },
     async stat(targetPath) {
       assertReadable(permission, "stat");
-      const resolvedPath = resolveSandboxPath(
+      const resolvedPath = await resolveSandboxExistingPath(
         baseDir,
         targetPath,
-        "path",
+        "target",
         true,
       );
       return await fs.stat(resolvedPath);
     },
     async mkdir(dirPath, options) {
       assertWritable(permission, "mkdir");
-      const resolvedPath = resolveSandboxPath(
+      const resolvedPath = await resolveSandboxWritablePath(
         baseDir,
         dirPath,
         "directory",
@@ -136,10 +219,10 @@ export function createSandboxFilesystem(
     },
     async rm(targetPath, options) {
       assertWritable(permission, "rm");
-      const resolvedPath = resolveSandboxPath(
+      const resolvedPath = await resolveSandboxWritablePath(
         baseDir,
         targetPath,
-        "path",
+        "target",
         true,
       );
       await fs.rm(resolvedPath, options);

@@ -536,13 +536,13 @@ function validateDeployRuntimeContractDocs(
     {
       pattern: /publication の必須 field は `type` と `path`/,
       message:
-        "route publications use outputs; Takos system publications are consumed with request",
+        "route publications use outputs; Takos built-in provider publications are consumed with request",
       allowContext: /route publication/,
     },
     {
       pattern: /すべての publication (?:は|が).*URL/,
       message:
-        "Takos system publication outputs are not route URLs; only route publications expose URL output",
+        "Takos built-in provider publication outputs are not route URLs; only route publications expose URL output",
       allowContext: /route publication/,
     },
     {
@@ -1052,7 +1052,7 @@ function validateCompatibilityDocs(
     const snippet of [
       "resource API / runtime binding",
       "route publication",
-      "Takos system publication source",
+      "Takos built-in provider publication",
       "backend requirement",
     ]
   ) {

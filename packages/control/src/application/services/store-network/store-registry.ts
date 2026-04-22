@@ -3,7 +3,7 @@
  * Each workspace can register remote stores and switch between them.
  */
 
-import { and, desc, eq } from "drizzle-orm";
+import { and, desc, eq, or } from "drizzle-orm";
 import type { D1Database } from "../../../shared/types/bindings.ts";
 import type { SelectOf } from "../../../shared/types/drizzle-utils.ts";
 import {
@@ -122,7 +122,13 @@ export async function addRemoteStore(
     .from(storeRegistry)
     .where(and(
       eq(storeRegistry.accountId, accountId),
-      eq(storeRegistry.actorUrl, storeUrl),
+      or(
+        eq(storeRegistry.actorUrl, storeUrl),
+        and(
+          eq(storeRegistry.domain, domain),
+          eq(storeRegistry.storeSlug, storeSlug),
+        ),
+      ),
     ))
     .limit(1)
     .get();
@@ -287,6 +293,7 @@ export async function refreshRemoteStore(
   const timestamp = new Date().toISOString();
 
   const updates = {
+    actorUrl: actor.id,
     name: actor.name || existing.name,
     summary: actor.summary || null,
     iconUrl: actor.iconUrl || null,

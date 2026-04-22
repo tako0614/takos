@@ -333,13 +333,41 @@ Deno.test("skill prompt assembly - injects only activated skill contracts and po
     activatedSkills,
   });
 
-  assertStringIncludes(prompt, "## Dynamic Skill Resolution");
-  assertStringIncludes(prompt, "skill_catalog");
-  assertStringIncludes(prompt, "## Activated Skill Contracts");
+  assertStringIncludes(prompt, "## Manual Reference");
+  assertStringIncludes(prompt, "## Manual Details");
   assertStringIncludes(prompt, "Preferred tools");
   assertStringIncludes(prompt, "Build a slide-by-slide outline.");
   assert(!prompt.includes("## Available Skills"));
   assert(!prompt.includes("Weekly update formatter.\n**Instructions:**"));
+});
+
+Deno.test("skill prompt builder does not inject manuals before explicit activation", () => {
+  const prompt = buildSkillEnhancedPrompt("Base prompt.", {
+    locale: "en",
+    availableSkills: [
+      {
+        id: "research-brief",
+        name: "Research Brief",
+        description: "Research workflow manual.",
+        triggers: ["research"],
+        source: "managed",
+        category: "research",
+        execution_contract: contract({
+          preferred_tools: ["web_fetch"],
+          output_modes: ["chat"],
+          required_mcp_servers: [],
+          template_ids: [],
+        }),
+        availability: "available",
+        availability_reasons: [],
+      },
+    ],
+    selectableSkills: [],
+    selectedSkills: [],
+    activatedSkills: [],
+  });
+
+  assertEquals(prompt, "Base prompt.");
 });
 
 Deno.test("managed skill catalog surface - returns summary data from the list surface and reserves instructions for describe", async () => {

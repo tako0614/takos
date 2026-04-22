@@ -1,14 +1,17 @@
-# Publication / Consume
+# Publication / Consume Contract
 
 Takos の deploy model は publication と resource API / runtime binding
-を分けて扱います。current manifest schema の `publish` は route/interface
-metadata と route output を共有する information catalog
-であり、deploy target や SQL / object-store / queue などの resource
-作成そのものではありません。Takos API key / OAuth client は `publish[]` ではなく
-system publication source を `consume[]` する形で扱います。generic plugin resolver
-でもありません。route
-publication の `type` は custom string として保存され、解釈は platform / app
-側が行います。
+を分けて扱います。`publish` / `consume` は worker / service / attached
+container / Takos built-in provider が参加する情報・capability の交換 protocol
+です。
+
+current manifest schema の `publish` は typed outputs を公開する catalog であり、
+deploy target や SQL / object-store / queue などの resource 作成そのものでは
+ありません。Takos API key / OAuth client は `publish[]` に書く特別な裏口ではなく、
+Takos built-in provider が公開する `takos.api-key` / `takos.oauth-client`
+publication を `consume[]` する形で扱います。generic plugin resolver でも
+ありません。route publication の `type` は custom string として保存され、解釈は
+platform / app 側が行います。
 
 ## 実体モデル
 
@@ -16,8 +19,8 @@ publication は group 内だけの state ではなく、space-level の catalog 
 です。実装では `publications` record として保存され、`name` は space 内で一意に
 扱われます。manifest から作られた publication は `group_id` と
 `source_type=manifest` を持ち、route publication では owner service
-も記録します。Takos が公開する system publication source は DB 上の route
-publication ではなく、consume request から grant state を生成します。
+も記録します。Takos built-in provider publication は DB 上の route publication
+ではなく、consume request から grant state を生成します。
 
 consume は group ではなく service に属します。実装では `service_consumes` record
 として保存され、service が publication 名を参照します。manifest で管理する
@@ -29,7 +32,7 @@ service では `compute.<name>.consume` が deploy 時に `service_consumes`
 
 - publication は space catalog entry
 - route publication は route primitive から作られる projection
-- Takos API / OAuth client は system publication source として consume する
+- Takos API / OAuth client は built-in provider publication として consume する
 - publication output は named values
 - env 注入は explicit consume のみ
 - consume は service-level dependency edge
@@ -67,10 +70,10 @@ route publication は `publisher + route` で route を参照します。同じ
 `publisher + route` に複数 route がある manifest は invalid です。endpoint は 1
 つの route にまとめます。
 
-## Takos system publication source
+## Takos built-in provider publication
 
-Takos API key / OAuth client は Takos が公開する system publication source です。
-manifest では `compute.<name>.consume[]` の `publication` に
+Takos API key / OAuth client は Takos built-in provider が公開する publication
+です。manifest では `compute.<name>.consume[]` の `publication` に
 `takos.api-key` / `takos.oauth-client` を指定します。
 
 ```yaml
@@ -82,10 +85,10 @@ consume:
         - files:read
 ```
 
-`takos.api-key` の outputs は `endpoint` と `apiKey` です。`request` は source
+`takos.api-key` の outputs は `endpoint` と `apiKey` です。`request` は provider
 ごとの required / optional field を持ち、未知の request field は invalid です。
 
-Takos system publication sources:
+Takos built-in provider publications:
 
 - `takos.api-key`
 - `takos.oauth-client`
@@ -116,6 +119,10 @@ alias を省略した場合は default env 名が使われます。SQL / object-
 などの resource access は publication consume ではなく、resource API / runtime
 binding 側で扱います。
 
+`consume.env` は output 名から env 名への alias map です。output filter では
+ないため、publication の全 outputs が inject 対象になります。将来は互換を保った
+まま `inject.env` のように inject 先を明示する shape へ寄せる可能性があります。
+
 manifest の consume は service の desired edge です。deploy 時に service-level
 の `service_consumes` record へ同期されます。manifest 外で
 `/api/services/:id/consumes` を更新した場合、次の manifest apply では manifest
@@ -126,7 +133,7 @@ manifest の consume は service の desired edge です。deploy 時に service
 kernel / control-plane が publish/consume で行うのは次だけです。
 
 1. publication catalog を保存する
-2. Takos system publication source の request を解決する
+2. Takos built-in provider publication の request を解決する
 3. consumer ごとに output contract を env へ変換する
 
 kernel は consumer が要求していない publication を inject しません。

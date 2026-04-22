@@ -16,20 +16,23 @@ overrides から解決されます。
 default app distribution の初期セットは以下の 4 つ（Agent / Chat / Git / Storage
 / Store は kernel 機能のため含まれない）:
 
-| group                                      | 既定 ref      | 役割                                  | custom publication examples     | system consumes |
+| group                                      | 既定 ref      | 役割                                  | custom publication examples     | built-in consumes |
 | ------------------------------------------ | ------------- | ------------------------------------- | ------------------------------- | --------------- |
 | [takos-docs](/platform/takos-docs)         | `master`      | リッチテキストエディタ                | UiSurface / McpServer           | takos-api       |
 | [takos-excel](/platform/takos-excel)       | `master`      | スプレッドシート                      | UiSurface / McpServer           | takos-api       |
 | [takos-slide](/platform/takos-slide)       | `master`      | プレゼンテーション                    | UiSurface / McpServer           | takos-api       |
 | [takos-computer](/platform/takos-computer) | `default-app` | sandbox computer / browser automation | UiSurface / container workload  | takos-api       |
 
-`takos-api` は route / interface publication ではなく、`takos.api-key` system
-publication source を consume する local consume 名です。
+`takos-api` は route / interface publication ではなく、`takos.api-key` built-in
+provider publication を consume する local consume 名です。
 
 office 系 default apps は `UiSurface` と `/mcp` の `McpServer` を publish し、
-web compute に `MCP_AUTH_REQUIRED=1` を設定する。takos-computer は `UiSurface`
-を publish し、`takos.api-key` を consume して worker + attached container で
-sandbox session / MCP proxy routes を提供する。
+MCP publication は `authSecretRef: MCP_AUTH_TOKEN` を宣言する。group-managed
+deploy は publisher workload に `MCP_AUTH_TOKEN` を service secret env として
+生成/注入し、app 実装は token 未設定時に fail closed する。local/dev 等で意図的に
+認証なしにする場合だけ `MCP_ALLOW_UNAUTHENTICATED=true` を設定する。
+takos-computer は `UiSurface` を publish し、`takos.api-key` を consume して
+worker + attached container で sandbox session / MCP proxy routes を提供する。
 
 ## 動作原理
 
@@ -72,13 +75,14 @@ default app は通常の group として扱われるため、次の責務は app
 - env injection で他 group の URL を得る
 
 一方で default app は kernel 内部 API を直接呼び出す特権を持ちません。Takos API
-への access は、他の app と同じく system publication consume と injected secret を経由します。
+への access は、他の app と同じく built-in provider publication consume と
+injected secret を経由します。
 
 kernel は deploy manifest の `publish` から route publication catalog
 を保存する。`UiSurface` などの custom type を sidebar + iframe 統合に使うか
 どうかは platform 側の解釈です。`McpServer` は agent 側が参照する MCP catalog
-entry として扱う。Takos API access は route publication ではなく system
-publication consume として扱う。各 entry は group に所属しなくても動作する。
+entry として扱う。Takos API access は route publication ではなく built-in
+provider publication consume として扱う。各 entry は group に所属しなくても動作する。
 
 ## Operator overrides
 
@@ -280,9 +284,9 @@ kernel と group はドメインが完全に分離される。
 ### Group 間 (サーバー)
 
 group が他 group のサーバー API や kernel API を呼ぶ場合は publication または
-Takos system publication source が供給する endpoint / credential を使う。
+Takos built-in provider publication が供給する endpoint / credential を使う。
 
-1. group が route publication を publish する、または Takos system publication source を consume する
+1. group が route publication を publish する、または Takos built-in provider publication を consume する
 2. 呼び出し側 compute が `consume` で endpoint / credential を受け取る
 3. 呼び出し元 group はその credential を `Authorization` header 等に載せる
 4. 受信側は通常の PAT / OAuth / integration-managed credential として検証する

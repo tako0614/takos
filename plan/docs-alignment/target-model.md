@@ -11,26 +11,28 @@
 - deploy manifest は flat top-level の `.takos/app.yml` / `.takos/app.yaml`。
   filename には `app` が残るが、意味上は app catalog ではなく group deploy
   manifest。
-- public manifest の top-level field は `name`, `version`, `compute`, `routes`,
-  `publish`, `env`, `overrides`。`provider` / `backend` / `resources` は current
-  manifest field ではない。
+- public manifest の top-level field は `name`, `version`, `compute`,
+  `resources`, `routes`, `publish`, `env`, `overrides`。`provider` / `backend`
+  は current manifest field ではない。
 - backend / adapter 選択は operator-only runtime configuration。public manifest,
   public API request, examples には backend 名を書かない。
 - deploy lifecycle の正本語は group deployment snapshot。source kind (`manifest`
   / `git_ref`) は provenance であり lifecycle の差ではない。
-- `publish` は information sharing catalog。route/interface metadata と Takos
-  capability grants だけを扱う。
-- Takos capability grant は `publisher: takos` と `type: api-key` /
-  `type: oauth-client`。SQL / object-store / queue などの resource type は Takos
-  publisher type ではない。
+- `publish` は typed outputs publication catalog。route/interface metadata と
+  route output を扱う。
+- Takos API key / OAuth client は `publisher: takos` ではなく、Takos built-in
+  provider publication (`takos.api-key` / `takos.oauth-client`) を
+  `compute.<name>.consume[]` で request する。SQL / object-store / queue などの
+  resource type は built-in provider publication ではない。
 - route publication の `type` は custom string。`McpServer` / `FileHandler` /
   `UiSurface` は platform / app が解釈する custom type の例で、core の固定 type
   ではない。
-- resource lifecycle は `/api/resources/*`, `takos resource|res`, runtime
-  binding の責務。resource access を `publish[].spec.resource` や
-  `type: resource` で表現しない。
-- `compute.<name>.consume` は publication / grant output を env
-  に注入する明示的な alias map。自動注入はしない。
+- resource lifecycle は manifest の `resources`、`/api/resources/*`,
+  `takos resource|res`, runtime binding の責務。resource access を
+  `publish[].spec.resource` や `type: resource` で表現しない。
+- `compute.<name>.consume` は publication output を env に注入する明示的な
+  dependency edge。`consume.env` は output 名 -> env 名の alias map であり、
+  output filter ではない。自動注入はしない。
 
 ## Implementation Alignment Rules
 
@@ -48,7 +50,8 @@
 - resource CRUD から group desired manifest への逆投影は current public contract
   ではない。既存 foundation を group に所属させる操作は inventory
   操作として扱う。
-- `resources:` / `compute.<name>.resources` manifest syntax は採用しない。
+- resource creation / runtime binding は `resources` か resource API 側に寄せ、
+  publish / consume へ混ぜない。
 
 ## Required Guards
 

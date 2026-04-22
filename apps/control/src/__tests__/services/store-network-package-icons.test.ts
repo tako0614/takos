@@ -1,10 +1,7 @@
 import { assertEquals } from "jsr:@std/assert";
 
 import { resolvePackageIconsForRepos } from "@/application/services/store-network/package-icons.ts";
-import {
-  repoReleaseAssets,
-  repoReleases,
-} from "@/infra/db/index.ts";
+import { repoReleaseAssets, repoReleases } from "@/infra/db/index.ts";
 
 class MockSelectQuery {
   private table: unknown;
@@ -81,7 +78,7 @@ Deno.test("resolvePackageIconsForRepos returns latest release primary asset icon
       },
       {
         releaseId: "release-invalid",
-        bundleMetaJson: "not json",
+        bundleMetaJson: JSON.stringify({ icon: 42 }),
       },
       {
         releaseId: "release-remote",
