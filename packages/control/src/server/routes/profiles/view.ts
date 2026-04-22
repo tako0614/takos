@@ -1,13 +1,21 @@
-import { Hono } from 'hono';
-import type { ProfileRepoResponse, UserProfileResponse } from './api.ts';
-import { batchStarCheck, getUserByUsername, getUserStats, isFollowing } from './profile-queries.ts';
-import { getDb } from '../../../infra/db/index.ts';
-import { repositories, repoStars, accounts } from '../../../infra/db/schema.ts';
-import { eq, and, desc, asc, count } from 'drizzle-orm';
-import type { OptionalAuthRouteEnv } from '../route-auth.ts';
-import { parsePagination, paginatedResponse } from '../../../shared/utils/index.ts';
-import { NotFoundError } from 'takos-common/errors';
-import { textDate } from '../../../shared/utils/db-guards.ts';
+import { Hono } from "hono";
+import type { ProfileRepoResponse, UserProfileResponse } from "./api.ts";
+import {
+  batchStarCheck,
+  getUserByUsername,
+  getUserStats,
+  isFollowing,
+} from "./profile-queries.ts";
+import { getDb } from "../../../infra/db/index.ts";
+import { accounts, repositories, repoStars } from "../../../infra/db/schema.ts";
+import { and, asc, count, desc, eq } from "drizzle-orm";
+import type { OptionalAuthRouteEnv } from "../route-auth.ts";
+import {
+  paginatedResponse,
+  parsePagination,
+} from "../../../shared/utils/index.ts";
+import { NotFoundError } from "takos-common/errors";
+import { textDate } from "../../../shared/utils/db-guards.ts";
 
 const profilesView = new Hono<OptionalAuthRouteEnv>();
 
@@ -19,35 +27,49 @@ export const profilesViewRouteDeps = {
   isFollowing,
 };
 
-profilesView.get(':username', async (c) => {
-  const currentUser = c.get('user');
-  const username = c.req.param('username');
+profilesView.get(":username", async (c) => {
+  const currentUser = c.get("user");
+  const username = c.req.param("username");
   const db = profilesViewRouteDeps.getDb(c.env.DB);
 
-  const profileUser = await profilesViewRouteDeps.getUserByUsername(c.env.DB, username);
+  const profileUser = await profilesViewRouteDeps.getUserByUsername(
+    c.env.DB,
+    username,
+  );
   if (!profileUser) {
-    throw new NotFoundError('User');
+    throw new NotFoundError("User");
   }
 
-  const stats = await profilesViewRouteDeps.getUserStats(c.env.DB, profileUser.id);
-  const following = await profilesViewRouteDeps.isFollowing(c.env.DB, currentUser?.id, profileUser.id);
+  const stats = await profilesViewRouteDeps.getUserStats(
+    c.env.DB,
+    profileUser.id,
+  );
+  const following = await profilesViewRouteDeps.isFollowing(
+    c.env.DB,
+    currentUser?.id,
+    profileUser.id,
+  );
 
   const reposData = await db.select().from(repositories)
     .where(and(
       eq(repositories.accountId, profileUser.id),
-      eq(repositories.visibility, 'public'),
+      eq(repositories.visibility, "public"),
     ))
     .orderBy(desc(repositories.updatedAt))
     .limit(6)
     .all();
 
-  const starredSet = await profilesViewRouteDeps.batchStarCheck(c.env.DB, currentUser?.id, reposData.map((r) => r.id));
+  const starredSet = await profilesViewRouteDeps.batchStarCheck(
+    c.env.DB,
+    currentUser?.id,
+    reposData.map((r) => r.id),
+  );
 
   const repos: ProfileRepoResponse[] = reposData.map((repo) => ({
     owner_username: profileUser.username || username,
     name: repo.name,
     description: repo.description,
-    visibility: repo.visibility as 'public' | 'private',
+    visibility: repo.visibility as "public" | "private",
     default_branch: repo.defaultBranch,
     stars: repo.stars,
     forks: repo.forks,
@@ -80,33 +102,41 @@ profilesView.get(':username', async (c) => {
   });
 });
 
-profilesView.get('/:username/repos', async (c) => {
-  const currentUser = c.get('user');
-  const username = c.req.param('username');
+profilesView.get("/:username/repos", async (c) => {
+  const currentUser = c.get("user");
+  const username = c.req.param("username");
   const { limit, offset } = parsePagination(c.req.query());
-  const sort = c.req.query('sort') || 'updated';
-  const order = c.req.query('order') || 'desc';
+  const sort = c.req.query("sort") || "updated";
+  const order = c.req.query("order") || "desc";
   const db = profilesViewRouteDeps.getDb(c.env.DB);
 
-  const profileUser = await profilesViewRouteDeps.getUserByUsername(c.env.DB, username);
+  const profileUser = await profilesViewRouteDeps.getUserByUsername(
+    c.env.DB,
+    username,
+  );
   if (!profileUser) {
-    throw new NotFoundError('User');
+    throw new NotFoundError("User");
   }
 
   const ALLOWED_SORT_COLUMNS = {
-    'updated': repositories.updatedAt,
-    'stars': repositories.stars,
-    'name': repositories.name,
+    "updated": repositories.updatedAt,
+    "stars": repositories.stars,
+    "name": repositories.name,
   } as const;
-  const orderByColumn = ALLOWED_SORT_COLUMNS[sort as keyof typeof ALLOWED_SORT_COLUMNS] || ALLOWED_SORT_COLUMNS['updated'];
-  const orderByClause = order.toLowerCase() === 'asc' ? asc(orderByColumn) : desc(orderByColumn);
+  const orderByColumn =
+    ALLOWED_SORT_COLUMNS[sort as keyof typeof ALLOWED_SORT_COLUMNS] ||
+    ALLOWED_SORT_COLUMNS["updated"];
+  const orderByClause = order.toLowerCase() === "asc"
+    ? asc(orderByColumn)
+    : desc(orderByColumn);
 
   const repoWhere = and(
     eq(repositories.accountId, profileUser.id),
-    eq(repositories.visibility, 'public'),
+    eq(repositories.visibility, "public"),
   );
 
-  const totalResult = await db.select({ count: count() }).from(repositories).where(repoWhere).get();
+  const totalResult = await db.select({ count: count() }).from(repositories)
+    .where(repoWhere).get();
   const total = totalResult?.count ?? 0;
 
   const reposData = await db.select().from(repositories)
@@ -116,13 +146,17 @@ profilesView.get('/:username/repos', async (c) => {
     .offset(offset)
     .all();
 
-  const starredSet = await profilesViewRouteDeps.batchStarCheck(c.env.DB, currentUser?.id, reposData.map((r) => r.id));
+  const starredSet = await profilesViewRouteDeps.batchStarCheck(
+    c.env.DB,
+    currentUser?.id,
+    reposData.map((r) => r.id),
+  );
 
   const repos: ProfileRepoResponse[] = reposData.map((repo) => ({
     owner_username: profileUser.username || username,
     name: repo.name,
     description: repo.description,
-    visibility: repo.visibility as 'public' | 'private',
+    visibility: repo.visibility as "public" | "private",
     default_branch: repo.defaultBranch,
     stars: repo.stars,
     forks: repo.forks,
@@ -130,22 +164,28 @@ profilesView.get('/:username/repos', async (c) => {
     updated_at: textDate(repo.updatedAt),
   }));
 
-  const { items, ...pagination } = paginatedResponse(repos, total, { limit, offset });
+  const { items, ...pagination } = paginatedResponse(repos, total, {
+    limit,
+    offset,
+  });
   return c.json({
     repos: items,
     ...pagination,
   });
 });
 
-profilesView.get('/:username/stars', async (c) => {
-  const currentUser = c.get('user');
-  const username = c.req.param('username');
+profilesView.get("/:username/stars", async (c) => {
+  const currentUser = c.get("user");
+  const username = c.req.param("username");
   const { limit, offset } = parsePagination(c.req.query());
   const db = profilesViewRouteDeps.getDb(c.env.DB);
 
-  const profileUser = await profilesViewRouteDeps.getUserByUsername(c.env.DB, username);
+  const profileUser = await profilesViewRouteDeps.getUserByUsername(
+    c.env.DB,
+    username,
+  );
   if (!profileUser) {
-    throw new NotFoundError('User');
+    throw new NotFoundError("User");
   }
 
   // Count stars with public repos using a join
@@ -154,7 +194,7 @@ profilesView.get('/:username/stars', async (c) => {
     .innerJoin(repositories, eq(repoStars.repoId, repositories.id))
     .where(and(
       eq(repoStars.accountId, profileUser.id),
-      eq(repositories.visibility, 'public'),
+      eq(repositories.visibility, "public"),
     ))
     .get();
   const total = totalResult?.count ?? 0;
@@ -179,7 +219,7 @@ profilesView.get('/:username/stars', async (c) => {
     .innerJoin(accounts, eq(repositories.accountId, accounts.id))
     .where(and(
       eq(repoStars.accountId, profileUser.id),
-      eq(repositories.visibility, 'public'),
+      eq(repositories.visibility, "public"),
     ))
     .orderBy(desc(repoStars.createdAt))
     .limit(limit)
@@ -193,24 +233,32 @@ profilesView.get('/:username/stars', async (c) => {
   // Viewing own stars page — all are starred; otherwise batch-check
   const starredSet = (currentUser && currentUser.id === profileUser.id)
     ? new Set(starRepoIds)
-    : await profilesViewRouteDeps.batchStarCheck(c.env.DB, currentUser?.id, starRepoIds);
+    : await profilesViewRouteDeps.batchStarCheck(
+      c.env.DB,
+      currentUser?.id,
+      starRepoIds,
+    );
 
-  const repos: (ProfileRepoResponse & { starred_at: string })[] = validStars.map((starData) => {
-    return {
-      owner_username: starData.ownerSlug!,
-      name: starData.repoName,
-      description: starData.repoDescription,
-      visibility: starData.repoVisibility as 'public' | 'private',
-      default_branch: starData.repoDefaultBranch,
-      stars: starData.repoStars,
-      forks: starData.repoForks,
-      is_starred: starredSet.has(starData.repoId),
-      updated_at: textDate(starData.repoUpdatedAt),
-      starred_at: textDate(starData.starCreatedAt),
-    };
+  const repos: (ProfileRepoResponse & { starred_at: string })[] = validStars
+    .map((starData) => {
+      return {
+        owner_username: starData.ownerSlug!,
+        name: starData.repoName,
+        description: starData.repoDescription,
+        visibility: starData.repoVisibility as "public" | "private",
+        default_branch: starData.repoDefaultBranch,
+        stars: starData.repoStars,
+        forks: starData.repoForks,
+        is_starred: starredSet.has(starData.repoId),
+        updated_at: textDate(starData.repoUpdatedAt),
+        starred_at: textDate(starData.starCreatedAt),
+      };
+    });
+
+  const { items, ...pagination } = paginatedResponse(repos, total, {
+    limit,
+    offset,
   });
-
-  const { items, ...pagination } = paginatedResponse(repos, total, { limit, offset });
   return c.json({
     repos: items,
     ...pagination,

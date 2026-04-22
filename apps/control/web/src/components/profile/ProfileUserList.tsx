@@ -1,7 +1,7 @@
-import type { JSX } from 'solid-js';
-import { Show, For } from 'solid-js';
-import { Icons } from '../../lib/Icons.tsx';
-import type { FollowUser } from '../../types/profile.ts';
+import type { JSX } from "solid-js";
+import { For, Show } from "solid-js";
+import { Icons } from "../../lib/Icons.tsx";
+import type { FollowUser } from "../../types/profile.ts";
 
 interface ProfileUserListProps {
   users: FollowUser[];
@@ -18,7 +18,9 @@ export function ProfileUserList(props: ProfileUserListProps) {
       fallback={
         <div class="flex flex-col items-center justify-center py-16 text-zinc-500 dark:text-zinc-400">
           {props.emptyIcon}
-          <p class="text-lg font-medium text-zinc-900 dark:text-zinc-100">{props.emptyTitle}</p>
+          <p class="text-lg font-medium text-zinc-900 dark:text-zinc-100">
+            {props.emptyTitle}
+          </p>
         </div>
       }
     >
@@ -40,13 +42,23 @@ export function ProfileUserList(props: ProfileUserListProps) {
                     </div>
                   }
                 >
-                  <img src={user.picture!} alt={user.name} class="w-10 h-10 rounded-full" />
+                  <img
+                    src={user.picture!}
+                    alt={user.name}
+                    class="w-10 h-10 rounded-full"
+                  />
                 </Show>
                 <div class="min-w-0">
-                  <span class="block font-medium text-zinc-900 dark:text-zinc-100 truncate">{user.name}</span>
-                  <span class="block text-sm text-zinc-500 dark:text-zinc-400 truncate">@{user.username}</span>
+                  <span class="block font-medium text-zinc-900 dark:text-zinc-100 truncate">
+                    {user.name}
+                  </span>
+                  <span class="block text-sm text-zinc-500 dark:text-zinc-400 truncate">
+                    @{user.username}
+                  </span>
                   <Show when={user.bio}>
-                    <p class="mt-1 text-sm text-zinc-500 dark:text-zinc-400 line-clamp-1">{user.bio}</p>
+                    <p class="mt-1 text-sm text-zinc-500 dark:text-zinc-400 line-clamp-1">
+                      {user.bio}
+                    </p>
                   </Show>
                 </div>
               </div>
@@ -54,12 +66,12 @@ export function ProfileUserList(props: ProfileUserListProps) {
                 type="button"
                 class={`flex-shrink-0 px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
                   user.is_following
-                    ? 'bg-zinc-100 dark:bg-zinc-700 text-zinc-900 dark:text-zinc-100 hover:bg-zinc-200 dark:hover:bg-zinc-600'
-                    : 'bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900 hover:bg-zinc-700 dark:hover:bg-zinc-300'
+                    ? "bg-zinc-100 dark:bg-zinc-700 text-zinc-900 dark:text-zinc-100 hover:bg-zinc-200 dark:hover:bg-zinc-600"
+                    : "bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900 hover:bg-zinc-700 dark:hover:bg-zinc-300"
                 }`}
                 onClick={() => props.onToggleFollow(user)}
               >
-                {user.is_following ? 'Following' : 'Follow'}
+                {user.is_following ? "Following" : "Follow"}
               </button>
             </div>
           )}

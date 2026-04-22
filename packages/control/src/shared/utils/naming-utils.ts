@@ -19,6 +19,19 @@
 /** Maximum length of a generated slug. */
 const MAX_SLUG_LENGTH = 32;
 
+export const GROUP_NAME_REQUIREMENTS =
+  "group_name must be 1-63 lowercase letters, numbers, or hyphens; it must start and end with a letter or number";
+
+const GROUP_NAME_PATTERN = /^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/;
+
+export function normalizeGroupName(value: string): string {
+  return value.trim();
+}
+
+export function isValidGroupName(value: string): boolean {
+  return GROUP_NAME_PATTERN.test(normalizeGroupName(value));
+}
+
 /**
  * Convert a display name into a URL-safe slug.
  *
@@ -40,9 +53,9 @@ const MAX_SLUG_LENGTH = 32;
 export function slugifyName(name: string): string {
   return name
     .toLowerCase()
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/^-+|-+$/g, '')
-    .slice(0, MAX_SLUG_LENGTH) || 'space';
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, MAX_SLUG_LENGTH) || "space";
 }
 
 /**
@@ -68,5 +81,5 @@ export function slugifyName(name: string): string {
  * sanitizeRepoName('my_repo-name')  // "my_repo-name"
  */
 export function sanitizeRepoName(name: string): string {
-  return name.trim().toLowerCase().replace(/[^a-z0-9_-]/g, '-');
+  return name.trim().toLowerCase().replace(/[^a-z0-9_-]/g, "-");
 }

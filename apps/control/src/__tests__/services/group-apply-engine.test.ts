@@ -33,6 +33,7 @@ const mocks = {
   })) as any,
   restoreManagedWorkloadDesiredState: (async () => undefined) as any,
   syncGroupManagedDesiredState: (async () => []) as any,
+  syncGroupPublicationDesiredState: (async () => []) as any,
   reconcileGroupRouting: ((..._args: any[]) => undefined) as any,
   assertTranslationSupported: ((..._args: any[]) => undefined) as any,
   groupUpdateRun: ((..._args: any[]) => undefined) as any,
@@ -133,6 +134,9 @@ function installApplyEngineDeps() {
   applyEngineDeps.syncGroupManagedDesiredState = (
     ...args: Parameters<typeof mocks.syncGroupManagedDesiredState>
   ) => mocks.syncGroupManagedDesiredState(...args);
+  applyEngineDeps.syncGroupPublicationDesiredState = (
+    ...args: Parameters<typeof mocks.syncGroupPublicationDesiredState>
+  ) => mocks.syncGroupPublicationDesiredState(...args);
   applyEngineDeps.captureManagedWorkloadDesiredState = (
     ...args: Parameters<typeof mocks.captureManagedWorkloadDesiredState>
   ) => mocks.captureManagedWorkloadDesiredState(...args);

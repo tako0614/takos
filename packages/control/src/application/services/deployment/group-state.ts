@@ -3,8 +3,10 @@ import type {
   AppManifest,
   AppManifestOverride,
   AppPublication,
+  AppResource,
 } from "../source/app-manifest-types.ts";
 import { parseCompute } from "../source/app-manifest-parser/parse-compute.ts";
+import { parseResources } from "../source/app-manifest-parser/parse-resources.ts";
 import { validateRouteTargets } from "../source/app-manifest-parser/parse-routes.ts";
 
 export type GroupWorkloadCategory = "worker" | "container" | "service";
@@ -27,14 +29,19 @@ export interface DesiredRouteState {
   timeoutMs?: number;
 }
 
+export interface DesiredResourceState {
+  name: string;
+  spec: AppResource;
+  specFingerprint: string;
+}
+
 export interface GroupDesiredState {
-  apiVersion: "takos.dev/v1alpha1";
-  kind: "GroupDesiredState";
   groupName: string;
   version: string;
   backend: string;
   env: string;
   manifest: AppManifest;
+  resources: Record<string, DesiredResourceState>;
   workloads: Record<string, DesiredWorkloadState>;
   routes: Record<string, DesiredRouteState>;
 }
@@ -57,6 +64,8 @@ export interface ObservedWorkloadState {
   status: string;
   hostname?: string;
   routeRef?: string;
+  activeDeploymentId?: string;
+  activeArtifactRef?: string;
   workloadKind?: string;
   specFingerprint?: string;
   deployedAt?: string;
@@ -211,6 +220,16 @@ export function applyManifestOverrides(
   if (overrides.routes) {
     merged.routes = overrides.routes;
   }
+  if (overrides.resources) {
+    const mergedResources = deepMerge(
+      (manifest.resources ?? {}) as Record<string, unknown>,
+      overrides.resources as Record<string, unknown>,
+    );
+    merged.resources = parseResources(
+      { resources: mergedResources },
+      merged.compute,
+    );
+  }
   if (overrides.publish) {
     merged.publish = mergePublishOverrides(
       manifest.publish ?? [],
@@ -221,6 +240,7 @@ export function applyManifestOverrides(
     merged.env = { ...manifest.env, ...overrides.env };
   }
   validateComputeDependencies(merged.compute);
+  validateResourceTargets(merged.resources, merged.compute);
   validateRouteTargets(merged.routes, merged.compute);
   merged.overrides = undefined;
   return merged;
@@ -257,6 +277,7 @@ export function compileGroupDesiredState(
   const envName = opts.envName ?? "default";
   const resolvedManifest = applyManifestOverrides(manifest, envName);
   const compute = resolvedManifest.compute ?? {};
+  const resourcesSpec = resolvedManifest.resources ?? {};
   const routeList = resolvedManifest.routes ?? [];
 
   // In the flat schema all top-level compute entries are unique by name.
@@ -288,6 +309,15 @@ export function compileGroupDesiredState(
   }
 
   const desiredWorkloads: Record<string, DesiredWorkloadState> = {};
+  const desiredResources: Record<string, DesiredResourceState> = {};
+
+  for (const [name, spec] of Object.entries(resourcesSpec)) {
+    desiredResources[name] = {
+      name,
+      spec,
+      specFingerprint: stableFingerprint({ spec }),
+    };
+  }
 
   for (const [name, entry] of Object.entries(compute)) {
     desiredWorkloads[name] = {
@@ -306,6 +336,9 @@ export function compileGroupDesiredState(
     // deploy pipeline can treat them as independent reconciliation units.
     if (entry.kind === "worker" && entry.containers) {
       for (const [childName, childEntry] of Object.entries(entry.containers)) {
+        if (childEntry.cloudflare?.container) {
+          continue;
+        }
         const workloadName = attachedWorkloadName(name, childName);
         desiredWorkloads[workloadName] = {
           name: workloadName,
@@ -323,16 +356,30 @@ export function compileGroupDesiredState(
   }
 
   return {
-    apiVersion: "takos.dev/v1alpha1",
-    kind: "GroupDesiredState",
     groupName: opts.groupName ?? manifest.name,
     version: resolvedManifest.version ?? "0.0.0",
     backend: opts.backend ?? "cloudflare",
     env: envName,
     manifest: resolvedManifest,
+    resources: desiredResources,
     workloads: desiredWorkloads,
     routes,
   };
+}
+
+function validateResourceTargets(
+  resources: Record<string, AppResource> | undefined,
+  compute: Record<string, AppCompute>,
+): void {
+  for (const [resourceName, resource] of Object.entries(resources ?? {})) {
+    for (const binding of resource.bindings ?? []) {
+      if (!compute[binding.target]) {
+        throw new Error(
+          `resources.${resourceName}.bindings references unknown compute: ${binding.target}`,
+        );
+      }
+    }
+  }
 }
 
 export function resolveRouteOwner(route: DesiredRouteState): string {

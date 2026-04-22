@@ -1,5 +1,5 @@
-import { createSignal, onMount, onCleanup, Show, For } from 'solid-js';
-import type { JSX } from 'solid-js';
+import { createSignal, For, onCleanup, onMount, Show } from "solid-js";
+import type { JSX } from "solid-js";
 
 interface SelectOption {
   value: string;
@@ -28,62 +28,80 @@ export function Select(props: SelectProps) {
         setIsOpen(false);
       }
     };
-    document.addEventListener('mousedown', handleClickOutside);
-    onCleanup(() => document.removeEventListener('mousedown', handleClickOutside));
+    document.addEventListener("mousedown", handleClickOutside);
+    onCleanup(() =>
+      document.removeEventListener("mousedown", handleClickOutside)
+    );
   });
 
-  const selectedOption = () => props.options.find((opt) => opt.value === props.value);
+  const selectedOption = () =>
+    props.options.find((opt) => opt.value === props.value);
 
   const triggerStyle = (): JSX.CSSProperties => ({
-    width: '100%',
-    padding: '0.5rem 0.75rem',
-    'font-size': '0.875rem',
-    'background-color': 'var(--color-surface-primary)',
-    color: selectedOption() ? 'var(--color-text-primary)' : 'var(--color-text-tertiary)',
-    border: `1px solid ${props.error ? 'var(--color-error)' : 'var(--color-border-primary)'}`,
-    'border-radius': 'var(--radius-md)',
-    cursor: props.disabled ? 'not-allowed' : 'pointer',
-    display: 'flex',
-    'align-items': 'center',
-    'justify-content': 'space-between',
-    opacity: props.disabled ? '0.5' : '1',
-    transition: 'var(--transition-colors)',
+    width: "100%",
+    padding: "0.5rem 0.75rem",
+    "font-size": "0.875rem",
+    "background-color": "var(--color-surface-primary)",
+    color: selectedOption()
+      ? "var(--color-text-primary)"
+      : "var(--color-text-tertiary)",
+    border: `1px solid ${
+      props.error ? "var(--color-error)" : "var(--color-border-primary)"
+    }`,
+    "border-radius": "var(--radius-md)",
+    cursor: props.disabled ? "not-allowed" : "pointer",
+    display: "flex",
+    "align-items": "center",
+    "justify-content": "space-between",
+    opacity: props.disabled ? "0.5" : "1",
+    transition: "var(--transition-colors)",
   });
 
   const dropdownStyle: JSX.CSSProperties = {
-    position: 'absolute',
-    top: '100%',
-    left: '0',
-    right: '0',
-    'margin-top': '0.25rem',
-    'background-color': 'var(--color-surface-elevated)',
-    border: '1px solid var(--color-border-primary)',
-    'border-radius': 'var(--radius-md)',
-    'box-shadow': 'var(--shadow-lg)',
-    'z-index': '50',
-    'max-height': '15rem',
-    'overflow-y': 'auto',
+    position: "absolute",
+    top: "100%",
+    left: "0",
+    right: "0",
+    "margin-top": "0.25rem",
+    "background-color": "var(--color-surface-elevated)",
+    border: "1px solid var(--color-border-primary)",
+    "border-radius": "var(--radius-md)",
+    "box-shadow": "var(--shadow-lg)",
+    "z-index": "50",
+    "max-height": "15rem",
+    "overflow-y": "auto",
   };
 
-  const optionStyle = (opt: SelectOption, isSelected: boolean): JSX.CSSProperties => ({
-    padding: '0.5rem 0.75rem',
-    'font-size': '0.875rem',
-    cursor: opt.disabled ? 'not-allowed' : 'pointer',
-    'background-color': isSelected ? 'var(--color-bg-tertiary)' : 'transparent',
-    color: opt.disabled ? 'var(--color-text-tertiary)' : 'var(--color-text-primary)',
-    opacity: opt.disabled ? '0.5' : '1',
-    transition: 'var(--transition-colors)',
+  const optionStyle = (
+    opt: SelectOption,
+    isSelected: boolean,
+  ): JSX.CSSProperties => ({
+    padding: "0.5rem 0.75rem",
+    "font-size": "0.875rem",
+    cursor: opt.disabled ? "not-allowed" : "pointer",
+    "background-color": isSelected ? "var(--color-bg-tertiary)" : "transparent",
+    color: opt.disabled
+      ? "var(--color-text-tertiary)"
+      : "var(--color-text-primary)",
+    opacity: opt.disabled ? "0.5" : "1",
+    transition: "var(--transition-colors)",
   });
 
   return (
-    <div ref={ref} class={props.class} style={{ position: 'relative', ...props.style }}>
+    <div
+      ref={ref}
+      class={props.class}
+      style={{ position: "relative", ...props.style }}
+    >
       <button
         type="button"
         style={triggerStyle()}
         onClick={() => !props.disabled && setIsOpen(!isOpen())}
         disabled={props.disabled}
       >
-        <span>{selectedOption()?.label || props.placeholder || 'Select an option'}</span>
+        <span>
+          {selectedOption()?.label || props.placeholder || "Select an option"}
+        </span>
         <ChevronIcon isOpen={isOpen()} />
       </button>
 
@@ -108,7 +126,13 @@ export function Select(props: SelectProps) {
       </Show>
 
       <Show when={props.error}>
-        <p style={{ 'margin-top': '0.25rem', 'font-size': '0.75rem', color: 'var(--color-error)' }}>
+        <p
+          style={{
+            "margin-top": "0.25rem",
+            "font-size": "0.75rem",
+            color: "var(--color-error)",
+          }}
+        >
           {props.error}
         </p>
       </Show>
@@ -126,8 +150,8 @@ function ChevronIcon(props: { isOpen: boolean }) {
       stroke="currentColor"
       stroke-width="2"
       style={{
-        transition: 'transform 0.15s ease',
-        transform: props.isOpen ? 'rotate(180deg)' : 'rotate(0deg)',
+        transition: "transform 0.15s ease",
+        transform: props.isOpen ? "rotate(180deg)" : "rotate(0deg)",
       }}
     >
       <path d="M6 9l6 6 6-6" />

@@ -1,11 +1,14 @@
 import { WFPService } from "../../../platform/backends/cloudflare/wfp.ts";
+import type { WorkerBinding } from "../../../platform/backends/cloudflare/wfp.ts";
 import { logWarn } from "../../../shared/utils/logger.ts";
 import { normalizeDeployRuntime } from "./backend-contracts.ts";
 import type {
   DeploymentBackend,
+  DeploymentBackendQueueConsumerSyncInput,
   PersistedDeploymentBackendContract,
 } from "./backend-contracts.ts";
 import type { Deployment } from "./models.ts";
+import type { DeploymentTargetQueueConsumer } from "./models.ts";
 import type {
   DeploymentBackendFactoryConfig,
   OciDeploymentOrchestratorConfig,
@@ -33,10 +36,124 @@ export {
 export function createWorkersDispatchDeploymentBackend(
   wfp: WFPService,
 ): DeploymentBackend {
+  function resolveQueueConsumers(input: {
+    artifactRef: string;
+    deployment: Deployment;
+    bindings: WorkerBinding[];
+  }): Array<{
+    queueName: string;
+    input: {
+      scriptName: string;
+      deadLetterQueue?: string;
+      settings?: DeploymentTargetQueueConsumer["settings"];
+    };
+  }> {
+    const target = parseDeploymentBackendConfig(input.deployment);
+    const consumers = target.queue_consumers ?? [];
+    return consumers.map((consumer) => {
+      const queueName = resolveQueueNameForConsumer(consumer, input.bindings);
+      const deadLetterQueue = resolveDeadLetterQueueName(
+        consumer.dead_letter_queue,
+        input.bindings,
+      );
+      return {
+        queueName,
+        input: {
+          scriptName: input.artifactRef,
+          ...(deadLetterQueue ? { deadLetterQueue } : {}),
+          ...(consumer.settings ? { settings: consumer.settings } : {}),
+        },
+      };
+    });
+  }
+
+  async function syncQueueConsumers(
+    input: DeploymentBackendQueueConsumerSyncInput,
+  ): Promise<void> {
+    const runtime = normalizeDeployRuntime({
+      deployment: input.deployment,
+      artifactRef: input.artifactRef,
+      wasmContent: null,
+      runtime: input.runtime,
+    });
+    const desired = resolveQueueConsumers({
+      deployment: input.deployment,
+      artifactRef: input.artifactRef,
+      bindings: runtime.bindings,
+    });
+
+    const previousArtifactRef = input.previousArtifactRef?.trim() ||
+      input.previousDeployment?.artifact_ref?.trim() || "";
+    const previous = input.previousDeployment && previousArtifactRef
+      ? resolveQueueConsumers({
+        deployment: input.previousDeployment,
+        artifactRef: previousArtifactRef,
+        bindings: input.previousRuntime?.bindings ?? [],
+      })
+      : [];
+    const previousByQueueName = new Map(
+      previous.map((consumer) => [consumer.queueName, consumer]),
+    );
+    const previousQueueNames = new Set(previousByQueueName.keys());
+    const desiredQueueNames = new Set(
+      desired.map((consumer) => consumer.queueName),
+    );
+    const desiredByQueueName = new Map(
+      desired.map((consumer) => [consumer.queueName, consumer]),
+    );
+
+    try {
+      for (const consumer of desired) {
+        const previousConsumer = previousByQueueName.get(consumer.queueName);
+        await wfp.queues.upsertQueueConsumerByQueueName(consumer.queueName, {
+          scriptName: consumer.input.scriptName,
+          ...(previousConsumer
+            ? { replaceScriptName: previousConsumer.input.scriptName }
+            : {}),
+          ...(consumer.input.deadLetterQueue
+            ? { deadLetterQueue: consumer.input.deadLetterQueue }
+            : {}),
+          ...(consumer.input.settings
+            ? { settings: consumer.input.settings }
+            : {}),
+        });
+      }
+
+      for (const consumer of previous) {
+        if (desiredQueueNames.has(consumer.queueName)) {
+          const desiredConsumer = desiredByQueueName.get(consumer.queueName);
+          if (
+            desiredConsumer &&
+            desiredConsumer.input.scriptName !== consumer.input.scriptName
+          ) {
+            await wfp.queues.deleteQueueConsumerByQueueName(
+              consumer.queueName,
+              { scriptName: consumer.input.scriptName },
+            );
+          }
+          continue;
+        }
+        await wfp.queues.deleteQueueConsumerByQueueName(consumer.queueName, {
+          scriptName: previousArtifactRef,
+        });
+      }
+    } catch (error) {
+      await restorePreviousQueueConsumers({
+        wfp,
+        desired,
+        previous,
+        previousQueueNames,
+      });
+      throw error;
+    }
+  }
+
   return {
     name: "workers-dispatch",
     async deploy(input) {
       const runtime = normalizeDeployRuntime(input);
+      const target = parseDeploymentBackendConfig(input.deployment);
+      const cloudflareMetadata = target.cloudflare;
       if (input.wasmContent) {
         await wfp.workers.createWorkerWithWasm(
           input.artifactRef,
@@ -54,6 +171,8 @@ export function createWorkersDispatchDeploymentBackend(
             compatibility_date: runtime.compatibilityDate,
             compatibility_flags: runtime.compatibilityFlags,
             limits: runtime.limits,
+            containers: cloudflareMetadata?.containers,
+            migrations: cloudflareMetadata?.migrations,
           },
         );
         return;
@@ -66,6 +185,8 @@ export function createWorkersDispatchDeploymentBackend(
         compatibility_date: runtime.compatibilityDate,
         compatibility_flags: runtime.compatibilityFlags,
         limits: runtime.limits,
+        containers: cloudflareMetadata?.containers,
+        migrations: cloudflareMetadata?.migrations,
       });
     },
     async assertRollbackTarget(artifactRef) {
@@ -79,7 +200,99 @@ export function createWorkersDispatchDeploymentBackend(
     async cleanupDeploymentArtifact(artifactRef: string) {
       await wfp.workers.deleteWorker(artifactRef);
     },
+    syncQueueConsumers,
   };
+}
+
+async function restorePreviousQueueConsumers(input: {
+  wfp: WFPService;
+  desired: Array<{
+    queueName: string;
+    input: {
+      scriptName: string;
+      deadLetterQueue?: string;
+      settings?: DeploymentTargetQueueConsumer["settings"];
+    };
+  }>;
+  previous: Array<{
+    queueName: string;
+    input: {
+      scriptName: string;
+      deadLetterQueue?: string;
+      settings?: DeploymentTargetQueueConsumer["settings"];
+    };
+  }>;
+  previousQueueNames: Set<string>;
+}): Promise<void> {
+  const desiredByQueueName = new Map(
+    input.desired.map((consumer) => [consumer.queueName, consumer]),
+  );
+  for (const consumer of input.previous) {
+    const desiredConsumer = desiredByQueueName.get(consumer.queueName);
+    await input.wfp.queues.upsertQueueConsumerByQueueName(consumer.queueName, {
+      scriptName: consumer.input.scriptName,
+      ...(desiredConsumer
+        ? { replaceScriptName: desiredConsumer.input.scriptName }
+        : {}),
+      ...(consumer.input.deadLetterQueue
+        ? { deadLetterQueue: consumer.input.deadLetterQueue }
+        : {}),
+      ...(consumer.input.settings ? { settings: consumer.input.settings } : {}),
+    }).catch((restoreError: unknown) => {
+      logWarn("Failed to restore previous Queue consumer after sync failure", {
+        module: "deployment",
+        queueName: consumer.queueName,
+        error: restoreError instanceof Error
+          ? restoreError.message
+          : String(restoreError),
+      });
+    });
+  }
+
+  for (const consumer of input.desired) {
+    if (input.previousQueueNames.has(consumer.queueName)) continue;
+    await input.wfp.queues.deleteQueueConsumerByQueueName(consumer.queueName, {
+      scriptName: consumer.input.scriptName,
+    }).catch((deleteError: unknown) => {
+      logWarn("Failed to delete new Queue consumer after sync failure", {
+        module: "deployment",
+        queueName: consumer.queueName,
+        error: deleteError instanceof Error
+          ? deleteError.message
+          : String(deleteError),
+      });
+    });
+  }
+}
+
+function resolveQueueNameForConsumer(
+  consumer: DeploymentTargetQueueConsumer,
+  bindings: WorkerBinding[],
+): string {
+  if (consumer.queue) return consumer.queue;
+  const bindingName = consumer.binding?.trim();
+  const binding = bindings.find((entry) =>
+    entry.type === "queue" && entry.name === bindingName
+  );
+  const queueName = binding?.queue_name?.trim();
+  if (!queueName) {
+    throw new Error(
+      `Queue trigger binding "${bindingName}" does not resolve to a queue binding`,
+    );
+  }
+  return queueName;
+}
+
+function resolveDeadLetterQueueName(
+  value: string | undefined,
+  bindings: WorkerBinding[],
+): string | undefined {
+  const trimmed = value?.trim();
+  if (!trimmed) return undefined;
+  const binding = bindings.find((entry) =>
+    entry.type === "queue" && entry.name === trimmed
+  );
+  return binding?.queue_name?.trim() || trimmed;
 }
 
 export function createRuntimeHostDeploymentBackend(): DeploymentBackend {

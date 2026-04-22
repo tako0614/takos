@@ -1,7 +1,7 @@
-import { Show, For } from 'solid-js';
-import { Icons } from '../../lib/Icons.tsx';
-import type { SourceRepo } from '../../types/repos.ts';
-import { RepoBrowseCard } from './RepoBrowseCard.tsx';
+import { For, Show } from "solid-js";
+import { Icons } from "../../lib/Icons.tsx";
+import type { SourceRepo } from "../../types/repos.ts";
+import { RepoBrowseCard } from "./RepoBrowseCard.tsx";
 
 function ReposMainContent(props: {
   selectedSpaceId?: string;
@@ -25,17 +25,24 @@ function ReposMainContent(props: {
           <div class="w-8 h-8 border-2 border-zinc-200 dark:border-zinc-700 border-t-zinc-900 dark:border-t-zinc-100 rounded-full animate-spin" />
         </div>
       </Show>
-      <Show when={props.selectedSpaceId && !props.myReposLoading && props.myReposError}>
+      <Show
+        when={props.selectedSpaceId && !props.myReposLoading &&
+          props.myReposError}
+      >
         <div class="flex flex-col items-center justify-center h-full text-zinc-700 dark:text-zinc-300">
           <Icons.AlertTriangle class="w-12 h-12 mb-3" />
           <span>{props.myReposError}</span>
         </div>
       </Show>
-      <Show when={props.selectedSpaceId && !props.myReposLoading && !props.myReposError && (!props.myRepos || props.myRepos.length === 0)}>
+      <Show
+        when={props.selectedSpaceId && !props.myReposLoading &&
+          !props.myReposError && (!props.myRepos || props.myRepos.length === 0)}
+      >
         <div class="flex flex-col items-center justify-center h-full text-zinc-500 dark:text-zinc-400">
           <Icons.GitBranch class="w-12 h-12 mb-3" />
           <p class="mb-4">No repositories yet</p>
-          <button type="button"
+          <button
+            type="button"
             class="flex items-center gap-2 px-4 py-2 bg-zinc-900 text-white rounded-lg hover:bg-zinc-700 transition-colors"
             onClick={props.onOpenCreate}
           >
@@ -44,11 +51,20 @@ function ReposMainContent(props: {
           </button>
         </div>
       </Show>
-      <Show when={props.selectedSpaceId && !props.myReposLoading && !props.myReposError && props.myRepos && props.myRepos.length > 0}>
+      <Show
+        when={props.selectedSpaceId && !props.myReposLoading &&
+          !props.myReposError && props.myRepos && props.myRepos.length > 0}
+      >
         <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-          <For each={props.myRepos}>{(repo) => (
-            <RepoBrowseCard repo={repo} onSelect={props.onSelectRepo} onStar={props.onStar} />
-          )}</For>
+          <For each={props.myRepos}>
+            {(repo) => (
+              <RepoBrowseCard
+                repo={repo}
+                onSelect={props.onSelectRepo}
+                onStar={props.onStar}
+              />
+            )}
+          </For>
         </div>
       </Show>
     </>

@@ -28,6 +28,12 @@
       ]
     }
   },
+  "fmt": {
+    "exclude": [
+      "deploy/helm/takos/templates",
+      "docs/**/*.md"
+    ]
+  },
   "tasks": {
     "build:all": "echo 'No tsc build needed — Deno runs .ts directly'",
     "test:all": "deno test --allow-all --ignore=packages/actions-engine/dist",
@@ -36,6 +42,7 @@
     "lint:agent-docs": "deno task --cwd scripts validate-agent-docs",
     "fmt": "deno fmt",
     "fmt:check": "deno fmt --check",
+    "check:lockfiles": "deno task --cwd scripts check-lockfiles",
     "docs:dev": "deno task --cwd docs dev",
     "docs:build": "deno task --cwd docs build",
     "docs:deploy": "deno task --cwd docs deploy",

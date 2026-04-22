@@ -15,7 +15,16 @@
 
 interface VectorizeAdapter {
   query(vector: number[], options?: Record<string, unknown>): Promise<unknown>;
-  upsert(vectors: Array<{ id: string; values: number[]; namespace?: string; metadata?: Record<string, unknown> }>): Promise<unknown>;
+  upsert(
+    vectors: Array<
+      {
+        id: string;
+        values: number[];
+        namespace?: string;
+        metadata?: Record<string, unknown>;
+      }
+    >,
+  ): Promise<unknown>;
   deleteByIds(ids: string[]): Promise<unknown>;
   getByIds(ids: string[]): Promise<unknown>;
   describe(): Promise<unknown>;
@@ -26,17 +35,43 @@ interface AiAdapter {
 }
 
 interface AnalyticsEngineAdapter {
-  writeDataPoint(event: { blobs?: string[]; doubles?: number[]; indexes?: string[] }): void;
+  writeDataPoint(
+    event: { blobs?: string[]; doubles?: number[]; indexes?: string[] },
+  ): void;
 }
 
 interface WorkflowAdapter {
-  create(options?: { id?: string; params?: unknown }): Promise<{ id: string; pause(): Promise<void>; resume(): Promise<void>; terminate(): Promise<void>; restart(): Promise<void>; status(): Promise<unknown> }>;
-  get(id: string): Promise<{ id: string; pause(): Promise<void>; resume(): Promise<void>; terminate(): Promise<void>; restart(): Promise<void>; status(): Promise<unknown> }>;
+  create(
+    options?: { id?: string; params?: unknown },
+  ): Promise<
+    {
+      id: string;
+      pause(): Promise<void>;
+      resume(): Promise<void>;
+      terminate(): Promise<void>;
+      restart(): Promise<void>;
+      status(): Promise<unknown>;
+    }
+  >;
+  get(
+    id: string,
+  ): Promise<
+    {
+      id: string;
+      pause(): Promise<void>;
+      resume(): Promise<void>;
+      terminate(): Promise<void>;
+      restart(): Promise<void>;
+      status(): Promise<unknown>;
+    }
+  >;
 }
 
 interface QueueAdapter {
   send(message: unknown, options?: { delaySeconds?: number }): Promise<void>;
-  sendBatch(messages: Iterable<{ body: unknown; delaySeconds?: number }>): Promise<void>;
+  sendBatch(
+    messages: Iterable<{ body: unknown; delaySeconds?: number }>,
+  ): Promise<void>;
 }
 
 // ---------------------------------------------------------------------------
@@ -46,7 +81,7 @@ interface QueueAdapter {
 function jsonResponse(data: unknown, status = 200): Response {
   return new Response(JSON.stringify(data), {
     status,
-    headers: { 'Content-Type': 'application/json' },
+    headers: { "Content-Type": "application/json" },
   });
 }
 
@@ -59,7 +94,7 @@ async function parseBody<T = unknown>(request: Request): Promise<T> {
 }
 
 function getMethod(request: Request): string {
-  return new URL(request.url).pathname.replace(/^\//, '');
+  return new URL(request.url).pathname.replace(/^\//, "");
 }
 
 // ---------------------------------------------------------------------------
@@ -74,27 +109,40 @@ export function createVectorizeServiceHandler(
       const method = getMethod(request);
 
       switch (method) {
-        case 'query': {
-          const { vector, options } = await parseBody<{ vector: number[]; options?: Record<string, unknown> }>(request);
+        case "query": {
+          const { vector, options } = await parseBody<
+            { vector: number[]; options?: Record<string, unknown> }
+          >(request);
           const result = await store.query(vector, options);
           return jsonResponse(result);
         }
-        case 'upsert': {
-          const { vectors } = await parseBody<{ vectors: Array<{ id: string; values: number[]; namespace?: string; metadata?: Record<string, unknown> }> }>(request);
+        case "upsert": {
+          const { vectors } = await parseBody<
+            {
+              vectors: Array<
+                {
+                  id: string;
+                  values: number[];
+                  namespace?: string;
+                  metadata?: Record<string, unknown>;
+                }
+              >;
+            }
+          >(request);
           const result = await store.upsert(vectors);
           return jsonResponse(result);
         }
-        case 'deleteByIds': {
+        case "deleteByIds": {
           const { ids } = await parseBody<{ ids: string[] }>(request);
           const result = await store.deleteByIds(ids);
           return jsonResponse(result);
         }
-        case 'getByIds': {
+        case "getByIds": {
           const { ids } = await parseBody<{ ids: string[] }>(request);
           const result = await store.getByIds(ids);
           return jsonResponse(result);
         }
-        case 'describe': {
+        case "describe": {
           const result = await store.describe();
           return jsonResponse(result);
         }
@@ -102,7 +150,10 @@ export function createVectorizeServiceHandler(
           return errorResponse(`Unknown Vectorize method: ${method}`, 404);
       }
     } catch (error) {
-      return errorResponse(error instanceof Error ? error.message : String(error), 500);
+      return errorResponse(
+        error instanceof Error ? error.message : String(error),
+        500,
+      );
     }
   };
 }
@@ -119,8 +170,10 @@ export function createAiServiceHandler(
       const method = getMethod(request);
 
       switch (method) {
-        case 'run': {
-          const { model, inputs } = await parseBody<{ model: string; inputs: { text: string[] } }>(request);
+        case "run": {
+          const { model, inputs } = await parseBody<
+            { model: string; inputs: { text: string[] } }
+          >(request);
           const result = await ai.run(model, inputs);
           return jsonResponse(result);
         }
@@ -128,7 +181,10 @@ export function createAiServiceHandler(
           return errorResponse(`Unknown AI method: ${method}`, 404);
       }
     } catch (error) {
-      return errorResponse(error instanceof Error ? error.message : String(error), 500);
+      return errorResponse(
+        error instanceof Error ? error.message : String(error),
+        500,
+      );
     }
   };
 }
@@ -145,8 +201,10 @@ export function createAnalyticsServiceHandler(
       const method = getMethod(request);
 
       switch (method) {
-        case 'writeDataPoint': {
-          const event = await parseBody<{ blobs?: string[]; doubles?: number[]; indexes?: string[] }>(request);
+        case "writeDataPoint": {
+          const event = await parseBody<
+            { blobs?: string[]; doubles?: number[]; indexes?: string[] }
+          >(request);
           analytics.writeDataPoint(event);
           return jsonResponse({ ok: true });
         }
@@ -154,7 +212,10 @@ export function createAnalyticsServiceHandler(
           return errorResponse(`Unknown Analytics method: ${method}`, 404);
       }
     } catch (error) {
-      return errorResponse(error instanceof Error ? error.message : String(error), 500);
+      return errorResponse(
+        error instanceof Error ? error.message : String(error),
+        500,
+      );
     }
   };
 }
@@ -171,41 +232,43 @@ export function createWorkflowServiceHandler(
       const method = getMethod(request);
 
       switch (method) {
-        case 'create': {
-          const options = await parseBody<{ id?: string; params?: unknown }>(request);
+        case "create": {
+          const options = await parseBody<{ id?: string; params?: unknown }>(
+            request,
+          );
           const instance = await workflow.create(options);
           return jsonResponse({ id: instance.id });
         }
-        case 'get': {
+        case "get": {
           const { id } = await parseBody<{ id: string }>(request);
           const instance = await workflow.get(id);
           return jsonResponse({ id: instance.id });
         }
-        case 'status': {
+        case "status": {
           const { id } = await parseBody<{ id: string }>(request);
           const instance = await workflow.get(id);
           const result = await instance.status();
           return jsonResponse(result);
         }
-        case 'pause': {
+        case "pause": {
           const { id } = await parseBody<{ id: string }>(request);
           const instance = await workflow.get(id);
           await instance.pause();
           return jsonResponse({ ok: true });
         }
-        case 'resume': {
+        case "resume": {
           const { id } = await parseBody<{ id: string }>(request);
           const instance = await workflow.get(id);
           await instance.resume();
           return jsonResponse({ ok: true });
         }
-        case 'terminate': {
+        case "terminate": {
           const { id } = await parseBody<{ id: string }>(request);
           const instance = await workflow.get(id);
           await instance.terminate();
           return jsonResponse({ ok: true });
         }
-        case 'restart': {
+        case "restart": {
           const { id } = await parseBody<{ id: string }>(request);
           const instance = await workflow.get(id);
           await instance.restart();
@@ -215,7 +278,10 @@ export function createWorkflowServiceHandler(
           return errorResponse(`Unknown Workflow method: ${method}`, 404);
       }
     } catch (error) {
-      return errorResponse(error instanceof Error ? error.message : String(error), 500);
+      return errorResponse(
+        error instanceof Error ? error.message : String(error),
+        500,
+      );
     }
   };
 }
@@ -228,13 +294,17 @@ export function createQueueServiceHandler(
       const method = getMethod(request);
 
       switch (method) {
-        case 'send': {
-          const { message, options } = await parseBody<{ message: unknown; options?: { delaySeconds?: number } }>(request);
+        case "send": {
+          const { message, options } = await parseBody<
+            { message: unknown; options?: { delaySeconds?: number } }
+          >(request);
           await queue.send(message, options);
           return jsonResponse({ ok: true });
         }
-        case 'sendBatch': {
-          const { messages } = await parseBody<{ messages: Array<{ body: unknown; delaySeconds?: number }> }>(request);
+        case "sendBatch": {
+          const { messages } = await parseBody<
+            { messages: Array<{ body: unknown; delaySeconds?: number }> }
+          >(request);
           await queue.sendBatch(messages ?? []);
           return jsonResponse({ ok: true });
         }
@@ -242,7 +312,10 @@ export function createQueueServiceHandler(
           return errorResponse(`Unknown Queue method: ${method}`, 404);
       }
     } catch (error) {
-      return errorResponse(error instanceof Error ? error.message : String(error), 500);
+      return errorResponse(
+        error instanceof Error ? error.message : String(error),
+        500,
+      );
     }
   };
 }

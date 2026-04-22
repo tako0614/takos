@@ -113,6 +113,7 @@ export function assertMatchingIdempotentRequest(
     bundleHash: string | null;
     bundleSize: number | null;
     imageRef?: string;
+    targetJson?: string;
     strategy: "direct" | "canary";
     canaryWeight?: number;
   },
@@ -136,12 +137,24 @@ export function assertMatchingIdempotentRequest(
   if (expected.artifactKind === "container-image") {
     const deploymentTarget = parseDeploymentBackendConfig(deployment);
     const existingImageRef = deploymentTarget.artifact?.image_ref;
-    if (existingImageRef !== expected.imageRef) {
+    if (
+      existingImageRef !== expected.imageRef ||
+      (expected.targetJson != null &&
+        deployment.target_json !== expected.targetJson)
+    ) {
       throw new ConflictError(
         "Idempotency-Key reuse does not match the original deployment request",
       );
     }
   } else {
+    if (
+      expected.targetJson != null &&
+      deployment.target_json !== expected.targetJson
+    ) {
+      throw new ConflictError(
+        "Idempotency-Key reuse does not match the original deployment request",
+      );
+    }
     if (
       deployment.bundle_hash !== expected.bundleHash ||
       deployment.bundle_size !== expected.bundleSize

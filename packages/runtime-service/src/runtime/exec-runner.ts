@@ -1,18 +1,18 @@
-import * as crypto from 'node:crypto';
-import * as fs from 'node:fs/promises';
-import * as path from 'node:path';
+import * as crypto from "node:crypto";
+import * as fs from "node:fs/promises";
+import * as path from "node:path";
 import {
   ALLOWED_COMMANDS_SET,
+  MAX_CONCURRENT_EXEC_PER_WORKSPACE,
   MAX_EXEC_OUTPUT_BYTES,
   MAX_EXEC_OUTPUT_TOTAL_BYTES,
-  MAX_CONCURRENT_EXEC_PER_WORKSPACE,
-} from '../shared/config.ts';
-import { pushLog } from './logging.ts';
-import { runCommand } from './command.ts';
-import { resolvePathWithin, verifyPathWithinAfterAccess } from './paths.ts';
-import { validateCommandLine } from './validation.ts';
-import { execTempDirManager } from '../utils/temp-dir.ts';
-import { getErrorMessage } from 'takos-common/errors';
+} from "../shared/config.ts";
+import { pushLog } from "./logging.ts";
+import { runCommand } from "./command.ts";
+import { resolvePathWithin, verifyPathWithinAfterAccess } from "./paths.ts";
+import { validateCommandLine } from "./validation.ts";
+import { execTempDirManager } from "../utils/temp-dir.ts";
+import { getErrorMessage } from "takos-common/errors";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -31,7 +31,7 @@ export interface ExecInput {
 export interface RuntimeProcess {
   id: string;
   space_id: string;
-  status: 'running' | 'completed' | 'failed';
+  status: "running" | "completed" | "failed";
   output: string;
   error?: string;
   exit_code?: number;
@@ -41,7 +41,7 @@ export interface RuntimeProcess {
 
 export interface ExecResult {
   runtime_id: string;
-  status: 'running' | 'completed' | 'failed';
+  status: "running" | "completed" | "failed";
   output: string;
   error?: string;
   exit_code?: number;
@@ -66,14 +66,14 @@ setInterval(() => {
 
   const now = Date.now();
   for (const [id, proc] of runtimeProcesses.entries()) {
-    if (proc.status !== 'running') {
+    if (proc.status !== "running") {
       const age = now - (proc.completed_at ?? proc.started_at);
       if (age > COMPLETED_PROCESS_TTL_MS) {
         runtimeProcesses.delete(id);
       }
     } else if (now - proc.started_at > RUNNING_PROCESS_TTL_MS) {
-      proc.status = 'failed';
-      proc.error = 'Process exceeded maximum TTL and was cleaned up';
+      proc.status = "failed";
+      proc.error = "Process exceeded maximum TTL and was cleaned up";
       proc.completed_at = now;
       runtimeProcesses.delete(id);
     }
@@ -88,11 +88,10 @@ export function getProcess(id: string): RuntimeProcess | undefined {
 
 export function isSpaceConcurrencyExceeded(spaceId: string): boolean {
   const runningCount = Array.from(runtimeProcesses.values())
-    .filter(p => p.space_id === spaceId && p.status === 'running')
+    .filter((p) => p.space_id === spaceId && p.status === "running")
     .length;
   return runningCount >= MAX_CONCURRENT_EXEC_PER_WORKSPACE;
 }
-
 
 /**
  * Evict old completed processes when at capacity.
@@ -102,7 +101,7 @@ export function ensureProcessCapacity(): boolean {
   if (runtimeProcesses.size < MAX_TRACKED_PROCESSES) return true;
 
   const completedProcesses = Array.from(runtimeProcesses.entries())
-    .filter(([, p]) => p.status !== 'running')
+    .filter(([, p]) => p.status !== "running")
     .sort((a, b) => a[1].started_at - b[1].started_at);
 
   const toRemove = Math.max(1, Math.floor(MAX_TRACKED_PROCESSES * 0.1));
@@ -120,10 +119,10 @@ export function ensureProcessCapacity(): boolean {
 export function sanitizeErrorMessage(err: unknown): string {
   const message = getErrorMessage(err);
   return message
-    .replace(/\/[^\s:]+/g, '[path]')
-    .replace(/[A-Z]:\\[^\s:]+/gi, '[path]')
-    .replace(/\.\.\/[^\s:]+/g, '[path]')
-    .replace(/\.\/[^\s:]+/g, '[path]');
+    .replace(/\/[^\s:]+/g, "[path]")
+    .replace(/[A-Z]:\\[^\s:]+/gi, "[path]")
+    .replace(/\.\.\/[^\s:]+/g, "[path]")
+    .replace(/\.\/[^\s:]+/g, "[path]");
 }
 
 const DEFAULT_EXEC_TIMEOUT_SECONDS = 300;
@@ -133,7 +132,7 @@ const MAX_EXECUTION_TIMEOUT_SECONDS = 1800;
 
 function computeTimeout(requestedTimeout: unknown): number {
   const seconds =
-    typeof requestedTimeout === 'number' && Number.isFinite(requestedTimeout)
+    typeof requestedTimeout === "number" && Number.isFinite(requestedTimeout)
       ? Math.floor(requestedTimeout)
       : DEFAULT_EXEC_TIMEOUT_SECONDS;
   return Math.max(1, Math.min(seconds, MAX_EXECUTION_TIMEOUT_SECONDS)) * 1000;
@@ -150,11 +149,11 @@ async function writeInputFiles(
 ): Promise<void> {
   pushLog(logs, `Writing ${files.length} files...`);
   for (const file of files) {
-    const localPath = resolvePathWithin(tempDir, file.path, 'file');
+    const localPath = resolvePathWithin(tempDir, file.path, "file");
     await fs.mkdir(path.dirname(localPath), { recursive: true });
-    await fs.writeFile(localPath, file.content, 'utf-8');
+    await fs.writeFile(localPath, file.content, "utf-8");
   }
-  pushLog(logs, 'Files written successfully');
+  pushLog(logs, "Files written successfully");
 }
 
 async function executeCommands(
@@ -206,7 +205,7 @@ async function collectOutputFiles(
   let totalOutputBytes = 0;
 
   for (const outputPath of returnOutputs) {
-    const localPath = resolvePathWithin(tempDir, outputPath, 'output');
+    const localPath = resolvePathWithin(tempDir, outputPath, "output");
     try {
       const stats = await fs.stat(localPath);
       if (stats.size > MAX_EXEC_OUTPUT_BYTES) {
@@ -214,10 +213,13 @@ async function collectOutputFiles(
         continue;
       }
       if (totalOutputBytes + stats.size > MAX_EXEC_OUTPUT_TOTAL_BYTES) {
-        pushLog(logs, 'Warning: Output size cap reached, skipping remaining files');
+        pushLog(
+          logs,
+          "Warning: Output size cap reached, skipping remaining files",
+        );
         break;
       }
-      const content = await fs.readFile(localPath, 'utf-8');
+      const content = await fs.readFile(localPath, "utf-8");
       outputFiles.push({ path: outputPath, content });
       totalOutputBytes += stats.size;
       pushLog(logs, `Read output: ${outputPath}`);
@@ -241,8 +243,8 @@ export async function runExec(
   const proc: RuntimeProcess = {
     id: processId,
     space_id: input.space_id,
-    status: 'running',
-    output: '',
+    status: "running",
+    output: "",
     started_at: Date.now(),
   };
   runtimeProcesses.set(processId, proc);
@@ -253,7 +255,7 @@ export async function runExec(
 
   try {
     tempDir = await execTempDirManager.createTempDirWithCleanup(
-      `takos-exec-${input.space_id.slice(0, 8)}-`
+      `takos-exec-${input.space_id.slice(0, 8)}-`,
     );
 
     if (input.files && input.files.length > 0) {
@@ -261,11 +263,11 @@ export async function runExec(
     }
 
     const workingDir = input.working_dir
-      ? resolvePathWithin(tempDir, input.working_dir, 'working_dir', true)
+      ? resolvePathWithin(tempDir, input.working_dir, "working_dir", true)
       : tempDir;
 
     await fs.mkdir(workingDir, { recursive: true });
-    await verifyPathWithinAfterAccess(tempDir, workingDir, 'working_dir');
+    await verifyPathWithinAfterAccess(tempDir, workingDir, "working_dir");
 
     const lastExitCode = await executeCommands(
       input.commands,
@@ -276,17 +278,21 @@ export async function runExec(
     );
 
     if (input.return_outputs && input.return_outputs.length > 0) {
-      outputFiles = await collectOutputFiles(tempDir, input.return_outputs, logs);
+      outputFiles = await collectOutputFiles(
+        tempDir,
+        input.return_outputs,
+        logs,
+      );
     }
 
-    proc.status = lastExitCode === 0 ? 'completed' : 'failed';
+    proc.status = lastExitCode === 0 ? "completed" : "failed";
     proc.exit_code = lastExitCode;
-    proc.output = logs.join('\n');
+    proc.output = logs.join("\n");
     proc.completed_at = Date.now();
   } catch (err) {
-    proc.status = 'failed';
+    proc.status = "failed";
     proc.error = sanitizeErrorMessage(err);
-    proc.output = logs.join('\n');
+    proc.output = logs.join("\n");
     proc.completed_at = Date.now();
   } finally {
     if (tempDir) {

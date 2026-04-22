@@ -2,7 +2,7 @@ import type { D1Database } from "@cloudflare/workers-types";
 
 import { assertEquals } from "jsr:@std/assert";
 
-import { localeDeps, getSpaceLocale } from "@/services/identity/locale";
+import { getSpaceLocale, localeDeps } from "@/services/identity/locale";
 
 function createFakeDb(row: { value?: unknown } | null): D1Database {
   return {

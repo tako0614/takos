@@ -1,6 +1,6 @@
-import type { Session, OIDCState } from '../../shared/types/index.ts';
+import type { OIDCState, Session } from "../../shared/types/index.ts";
 
-import { jsonResponse } from './do-header-utils.ts';
+import { jsonResponse } from "./do-header-utils.ts";
 
 interface PersistedData {
   sessions: Record<string, Session>;
@@ -31,7 +31,7 @@ export class SessionDO implements DurableObject {
 
   constructor(private state: DurableObjectState) {
     this.state.blockConcurrencyWhile(async () => {
-      const stored = await this.state.storage.get<PersistedData>('data');
+      const stored = await this.state.storage.get<PersistedData>("data");
       if (stored) {
         this.sessions = new Map(Object.entries(stored.sessions || {}));
         this.oidcStates = new Map(Object.entries(stored.oidcStates || {}));
@@ -44,7 +44,7 @@ export class SessionDO implements DurableObject {
       sessions: Object.fromEntries(this.sessions),
       oidcStates: Object.fromEntries(this.oidcStates),
     };
-    await this.state.storage.put('data', data);
+    await this.state.storage.put("data", data);
   }
 
   private async scheduleCleanupAlarm(): Promise<void> {
@@ -53,14 +53,20 @@ export class SessionDO implements DurableObject {
 
     let earliestExpiry = Infinity;
     for (const session of this.sessions.values()) {
-      if (session.expires_at < earliestExpiry) earliestExpiry = session.expires_at;
+      if (session.expires_at < earliestExpiry) {
+        earliestExpiry = session.expires_at;
+      }
     }
     for (const oidcState of this.oidcStates.values()) {
-      if (oidcState.expires_at < earliestExpiry) earliestExpiry = oidcState.expires_at;
+      if (oidcState.expires_at < earliestExpiry) {
+        earliestExpiry = oidcState.expires_at;
+      }
     }
 
     if (earliestExpiry < Infinity) {
-      await this.state.storage.setAlarm(Math.max(earliestExpiry, Date.now() + 1000));
+      await this.state.storage.setAlarm(
+        Math.max(earliestExpiry, Date.now() + 1000),
+      );
     }
   }
 
@@ -99,7 +105,7 @@ export class SessionDO implements DurableObject {
       // session, and both create one -- the second silently overwrites
       // the first. Similarly, /session/get may evict and persist, which
       // races with concurrent creates/deletes.
-      if (path === '/session/create' && request.method === 'POST') {
+      if (path === "/session/create" && request.method === "POST") {
         const { session } = await request.json<{ session: Session }>();
         return this.state.blockConcurrencyWhile(async () => {
           const existing = this.sessions.get(session.id);
@@ -113,7 +119,7 @@ export class SessionDO implements DurableObject {
         });
       }
 
-      if (path === '/session/get' && request.method === 'POST') {
+      if (path === "/session/get" && request.method === "POST") {
         const { sessionId } = await request.json<{ sessionId: string }>();
         return this.state.blockConcurrencyWhile(async () => {
           const [session, evicted] = getIfValid(this.sessions, sessionId);
@@ -122,7 +128,7 @@ export class SessionDO implements DurableObject {
         });
       }
 
-      if (path === '/session/delete' && request.method === 'POST') {
+      if (path === "/session/delete" && request.method === "POST") {
         const { sessionId } = await request.json<{ sessionId: string }>();
         return this.state.blockConcurrencyWhile(async () => {
           this.sessions.delete(sessionId);
@@ -131,7 +137,7 @@ export class SessionDO implements DurableObject {
         });
       }
 
-      if (path === '/oidc-state/create' && request.method === 'POST') {
+      if (path === "/oidc-state/create" && request.method === "POST") {
         const { oidcState } = await request.json<{ oidcState: OIDCState }>();
         return this.state.blockConcurrencyWhile(async () => {
           this.oidcStates.set(oidcState.state, oidcState);
@@ -141,7 +147,7 @@ export class SessionDO implements DurableObject {
         });
       }
 
-      if (path === '/oidc-state/get' && request.method === 'POST') {
+      if (path === "/oidc-state/get" && request.method === "POST") {
         const { state: stateKey } = await request.json<{ state: string }>();
         return this.state.blockConcurrencyWhile(async () => {
           const [oidcState, evicted] = getIfValid(this.oidcStates, stateKey);
@@ -150,7 +156,7 @@ export class SessionDO implements DurableObject {
         });
       }
 
-      if (path === '/oidc-state/delete' && request.method === 'POST') {
+      if (path === "/oidc-state/delete" && request.method === "POST") {
         const { state: stateKey } = await request.json<{ state: string }>();
         return this.state.blockConcurrencyWhile(async () => {
           this.oidcStates.delete(stateKey);
@@ -159,7 +165,7 @@ export class SessionDO implements DurableObject {
         });
       }
 
-      return new Response('Not Found', { status: 404 });
+      return new Response("Not Found", { status: 404 });
     } catch (error) {
       return jsonResponse({ error: String(error) }, 500);
     }

@@ -2,9 +2,9 @@
  * Pattern constants, limits, and table/prefix tokens for admin-cli.
  */
 
-import * as os from 'node:os';
-import * as path from 'node:path';
-import { fileURLToPath } from 'node:url';
+import * as os from "node:os";
+import * as path from "node:path";
+import { fileURLToPath } from "node:url";
 
 // ---------------------------------------------------------------------------
 // Path constants
@@ -13,11 +13,18 @@ import { fileURLToPath } from 'node:url';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-export const SCRIPTS_DIR = path.resolve(__dirname, '..');
-export const CONTROL_APP_DIR = path.resolve(SCRIPTS_DIR, '..');
-export const WRANGLER_TOML_PATH = path.resolve(CONTROL_APP_DIR, 'wrangler.toml');
-export const AUDIT_LOG_DIR = Deno.env.get('TAKOS_DB_AUDIT_LOG_DIR')?.trim() || path.join(os.homedir(), '.takos', 'audit');
-export const AUDIT_LOG_FILE = path.join(AUDIT_LOG_DIR, 'admin-cli-operations.jsonl');
+export const SCRIPTS_DIR = path.resolve(__dirname, "..");
+export const CONTROL_APP_DIR = path.resolve(SCRIPTS_DIR, "..");
+export const WRANGLER_TOML_PATH = path.resolve(
+  CONTROL_APP_DIR,
+  "wrangler.toml",
+);
+export const AUDIT_LOG_DIR = Deno.env.get("TAKOS_DB_AUDIT_LOG_DIR")?.trim() ||
+  path.join(os.homedir(), ".takos", "audit");
+export const AUDIT_LOG_FILE = path.join(
+  AUDIT_LOG_DIR,
+  "admin-cli-operations.jsonl",
+);
 
 // ---------------------------------------------------------------------------
 // Validation patterns and limits
@@ -31,34 +38,34 @@ export const DEFAULT_R2_PAGE_SIZE = 100;
 export const MAX_R2_PAGE_SIZE = 1000;
 
 export const TENANT_SQL_TABLE_TOKENS = [
-  'threads',
-  'messages',
-  'runs',
-  'artifacts',
-  'run_events',
-  'files',
-  'blobs',
-  'snapshots',
-  'space_stats',
-  'usage_events',
-  'usage_rollups',
-  'repositories',
-  'resources',
-  'service_bindings',
-  'deployments',
-  'spaces',
+  "threads",
+  "messages",
+  "runs",
+  "artifacts",
+  "run_events",
+  "files",
+  "blobs",
+  "snapshots",
+  "space_stats",
+  "usage_events",
+  "usage_rollups",
+  "repositories",
+  "resources",
+  "service_bindings",
+  "deployments",
+  "spaces",
 ];
 
 export const TENANT_R2_PREFIXES = [
-  'threads/',
-  'spaces/',
-  'tenants/',
-  'users/',
-  'messages/',
-  'runs/',
-  'artifacts/',
-  'snapshots/',
-  'blobs/',
-  'repos/',
-  'deployments/',
+  "threads/",
+  "spaces/",
+  "tenants/",
+  "users/",
+  "messages/",
+  "runs/",
+  "artifacts/",
+  "snapshots/",
+  "blobs/",
+  "repos/",
+  "deployments/",
 ];

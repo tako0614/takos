@@ -11,10 +11,10 @@
 
 import {
   type AppCompute,
-  type GroupDeploymentSnapshotBuildSource,
   type AppManifest,
   BUILD_SOURCE_LABELS,
   type BundleDoc,
+  type GroupDeploymentSnapshotBuildSource,
 } from "./app-manifest-types.ts";
 
 function buildSourceLabels(
@@ -39,10 +39,9 @@ function buildSourceLabels(
 
 function emitPackageDoc(manifest: AppManifest, docs: BundleDoc[]): void {
   docs.push({
-    apiVersion: "takos.dev/v1alpha1",
-    kind: "Package",
-    metadata: { name: manifest.name },
-    spec: {
+    type: "Package",
+    name: manifest.name,
+    config: {
       ...(manifest.version ? { version: manifest.version } : {}),
       ...(Object.keys(manifest.env).length > 0 ? { env: manifest.env } : {}),
       ...(manifest.overrides ? { overrides: manifest.overrides } : {}),
@@ -70,13 +69,14 @@ function computeToWorkloadSpec(
   if (compute.triggers) spec.triggers = compute.triggers;
   if (compute.scaling) spec.scaling = compute.scaling;
   if (compute.readiness) spec.readiness = { path: compute.readiness };
+  if (compute.cloudflare) spec.cloudflare = compute.cloudflare;
   return spec;
 }
 
 function computeKindToDocType(kind: AppCompute["kind"]): string {
   switch (kind) {
     case "worker":
-      return "cloudflare.worker";
+      return "takos.worker";
     case "service":
       return "service";
     case "attached-container":
@@ -98,13 +98,10 @@ function emitComputeDocs(
     }
 
     docs.push({
-      apiVersion: "takos.dev/v1alpha1",
-      kind: "Workload",
-      metadata: {
-        name,
-        ...(source ? { labels: buildSourceLabels(source) } : {}),
-      },
-      spec: {
+      type: "Workload",
+      name,
+      ...(source ? { labels: buildSourceLabels(source) } : {}),
+      config: {
         ...computeToWorkloadSpec(compute),
         ...(source ? { artifactRef: source.artifact_path } : {}),
       },
@@ -112,20 +109,19 @@ function emitComputeDocs(
 
     if (compute.kind === "worker" && compute.containers) {
       for (const [childName, child] of Object.entries(compute.containers)) {
+        if (child.cloudflare?.container) continue;
         docs.push({
-          apiVersion: "takos.dev/v1alpha1",
-          kind: "Workload",
-          metadata: { name: `${name}-${childName}` },
-          spec: {
+          type: "Workload",
+          name: `${name}-${childName}`,
+          config: {
             ...computeToWorkloadSpec(child),
             parentRef: name,
           },
         });
         docs.push({
-          apiVersion: "takos.dev/v1alpha1",
-          kind: "Binding",
-          metadata: { name: `${childName}-container-to-${name}` },
-          spec: {
+          type: "Binding",
+          name: `${childName}-container-to-${name}`,
+          config: {
             from: `${name}-${childName}`,
             to: name,
             mount: {
@@ -142,10 +138,9 @@ function emitComputeDocs(
 function emitRouteDocs(manifest: AppManifest, docs: BundleDoc[]): void {
   for (const [index, route] of manifest.routes.entries()) {
     docs.push({
-      apiVersion: "takos.dev/v1alpha1",
-      kind: "Endpoint",
-      metadata: { name: `route-${index + 1}` },
-      spec: {
+      type: "Endpoint",
+      name: `route-${index + 1}`,
+      config: {
         protocol: "http",
         targetRef: route.target,
         ...(route.path ? { path: route.path } : {}),
@@ -158,14 +153,25 @@ function emitRouteDocs(manifest: AppManifest, docs: BundleDoc[]): void {
 
 function emitPublishDocs(manifest: AppManifest, docs: BundleDoc[]): void {
   for (const pub of manifest.publish) {
-    if (pub.publisher === "takos" || !pub.type || !pub.publisher || !pub.path) {
+    if (pub.publisher === "takos") {
+      docs.push({
+        type: "Publication",
+        name: pub.name,
+        config: {
+          publisher: pub.publisher,
+          type: pub.type,
+          ...(pub.spec ? { spec: pub.spec } : {}),
+        },
+      });
+      continue;
+    }
+    if (!pub.type || !pub.publisher || !pub.path) {
       continue;
     }
     docs.push({
-      apiVersion: "takos.dev/v1alpha1" as const,
-      kind: pub.type,
-      metadata: { name: pub.name },
-      spec: {
+      type: pub.type,
+      name: pub.name,
+      config: {
         ...(pub.spec ? pub.spec : {}),
         targetRef: pub.publisher,
         path: pub.path,

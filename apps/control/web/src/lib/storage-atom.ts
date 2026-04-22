@@ -1,6 +1,6 @@
-import { makePersisted } from '@solid-primitives/storage';
-import { createRoot, createSignal } from 'solid-js';
-import type { Signal } from 'solid-js';
+import { makePersisted } from "@solid-primitives/storage";
+import { createRoot, createSignal } from "solid-js";
+import type { Signal } from "solid-js";
 
 /**
  * Creates a Solid signal persisted to localStorage.

@@ -3,22 +3,31 @@
  */
 
 import {
-  type GlobalOptions,
-  type ResolvedConfig,
   DEFAULT_QUERY_LIMIT,
-  MAX_QUERY_LIMIT,
   executeD1Sql,
   extractResults,
   fail,
+  type GlobalOptions,
+  MAX_QUERY_LIMIT,
   parsePositiveInt,
   print,
+  type ResolvedConfig,
   sqlLiteral,
   takeOption,
-} from './index.ts';
+} from "./index.ts";
 
-export async function cmdUsersList(config: ResolvedConfig, options: GlobalOptions, args: string[]): Promise<number> {
+export async function cmdUsersList(
+  config: ResolvedConfig,
+  options: GlobalOptions,
+  args: string[],
+): Promise<number> {
   const localArgs = [...args];
-  const limit = parsePositiveInt(takeOption(localArgs, '--limit'), '--limit', DEFAULT_QUERY_LIMIT, MAX_QUERY_LIMIT);
+  const limit = parsePositiveInt(
+    takeOption(localArgs, "--limit"),
+    "--limit",
+    DEFAULT_QUERY_LIMIT,
+    MAX_QUERY_LIMIT,
+  );
 
   const sql = `
     SELECT id, name, email, username, created_at
@@ -40,9 +49,18 @@ export async function cmdUsersList(config: ResolvedConfig, options: GlobalOption
   return rows.length;
 }
 
-export async function cmdReposList(config: ResolvedConfig, options: GlobalOptions, args: string[]): Promise<number> {
+export async function cmdReposList(
+  config: ResolvedConfig,
+  options: GlobalOptions,
+  args: string[],
+): Promise<number> {
   const localArgs = [...args];
-  const limit = parsePositiveInt(takeOption(localArgs, '--limit'), '--limit', DEFAULT_QUERY_LIMIT, MAX_QUERY_LIMIT);
+  const limit = parsePositiveInt(
+    takeOption(localArgs, "--limit"),
+    "--limit",
+    DEFAULT_QUERY_LIMIT,
+    MAX_QUERY_LIMIT,
+  );
 
   const sql = `
     SELECT r.id, r.name, r.space_id, r.visibility, r.created_at,
@@ -66,17 +84,25 @@ export async function cmdReposList(config: ResolvedConfig, options: GlobalOption
   return rows.length;
 }
 
-export async function cmdReposBranches(config: ResolvedConfig, options: GlobalOptions, args: string[]): Promise<number> {
+export async function cmdReposBranches(
+  config: ResolvedConfig,
+  options: GlobalOptions,
+  args: string[],
+): Promise<number> {
   const repoIdentifier = args[0];
   if (!repoIdentifier) {
-    fail('Usage: repos branches <repo_id_or_name>');
+    fail("Usage: repos branches <repo_id_or_name>");
   }
 
   const repoLookup = await executeD1Sql(
     config,
-    `SELECT id, name FROM repositories WHERE id = ${sqlLiteral(repoIdentifier)} OR name = ${sqlLiteral(repoIdentifier)} LIMIT 1`,
+    `SELECT id, name FROM repositories WHERE id = ${
+      sqlLiteral(repoIdentifier)
+    } OR name = ${sqlLiteral(repoIdentifier)} LIMIT 1`,
   );
-  const repo = extractResults(repoLookup)[0] as Record<string, unknown> | undefined;
+  const repo = extractResults(repoLookup)[0] as
+    | Record<string, unknown>
+    | undefined;
 
   if (!repo) {
     fail(`Repository not found: ${repoIdentifier}`);

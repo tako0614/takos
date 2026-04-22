@@ -1,19 +1,19 @@
-import type { Env } from '../../../shared/types/index.ts';
-import { repositories } from '../../../infra/db/index.ts';
-import { desc, asc } from 'drizzle-orm';
-import type { ExploreReposResult } from './explore-types.ts';
+import type { Env } from "../../../shared/types/index.ts";
+import { repositories } from "../../../infra/db/index.ts";
+import { asc, desc } from "drizzle-orm";
+import type { ExploreReposResult } from "./explore-types.ts";
 import {
   ALLOWED_ORDER_BY_COLUMNS,
+  buildBaseConditions,
+  buildExploreResult,
+  countRepos,
+  queryReposWithAccount,
   resolveOrderByColumn,
   resolveOrderDirection,
-  buildBaseConditions,
-  queryReposWithAccount,
-  countRepos,
-  buildExploreResult,
-} from './source-exploration.ts';
+} from "./source-exploration.ts";
 
 export async function listExploreRepos(
-  dbBinding: Env['DB'],
+  dbBinding: Env["DB"],
   options: {
     sort: string;
     order: string;
@@ -25,7 +25,7 @@ export async function listExploreRepos(
     license?: string;
     since?: string;
     userId?: string;
-  }
+  },
 ): Promise<ExploreReposResult> {
   const sortKey = resolveOrderByColumn(options.sort);
   const orderDirection = resolveOrderDirection(options.order);
@@ -35,18 +35,22 @@ export async function listExploreRepos(
     language: options.language,
     license: options.license,
     since: options.since,
-    sinceField: 'updatedAt',
+    sinceField: "updatedAt",
     searchQuery: options.searchQuery || undefined,
   });
 
   const orderByMap = {
-    'updatedAt': repositories.updatedAt,
-    'createdAt': repositories.createdAt,
-    'forks': repositories.forks,
-    'stars': repositories.stars,
+    "updatedAt": repositories.updatedAt,
+    "createdAt": repositories.createdAt,
+    "forks": repositories.forks,
+    "stars": repositories.stars,
   } as const;
-  const col = orderByMap[ALLOWED_ORDER_BY_COLUMNS[sortKey as keyof typeof ALLOWED_ORDER_BY_COLUMNS] as keyof typeof orderByMap] ?? repositories.stars;
-  const orderByClause = orderDirection === 'asc' ? asc(col) : desc(col);
+  const col = orderByMap[
+    ALLOWED_ORDER_BY_COLUMNS[
+      sortKey as keyof typeof ALLOWED_ORDER_BY_COLUMNS
+    ] as keyof typeof orderByMap
+  ] ?? repositories.stars;
+  const orderByClause = orderDirection === "asc" ? asc(col) : desc(col);
 
   const [repos, total] = await Promise.all([
     queryReposWithAccount(dbBinding, {
@@ -63,12 +67,12 @@ export async function listExploreRepos(
     repos,
     total,
     options.offset,
-    options.userId
+    options.userId,
   );
 }
 
 export async function listTrendingRepos(
-  dbBinding: Env['DB'],
+  dbBinding: Env["DB"],
   options: {
     limit: number;
     offset: number;
@@ -77,19 +81,21 @@ export async function listTrendingRepos(
     license?: string;
     since?: string;
     userId?: string;
-  }
+  },
 ): Promise<ExploreReposResult> {
   const sevenDaysAgo = new Date();
   sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
   const sevenDaysAgoStr = sevenDaysAgo.toISOString();
-  const updatedSince = options.since && options.since > sevenDaysAgoStr ? options.since : sevenDaysAgoStr;
+  const updatedSince = options.since && options.since > sevenDaysAgoStr
+    ? options.since
+    : sevenDaysAgoStr;
 
   const conditions = buildBaseConditions({
     category: options.category,
     language: options.language,
     license: options.license,
     since: updatedSince,
-    sinceField: 'updatedAt',
+    sinceField: "updatedAt",
   });
 
   const repos = await queryReposWithAccount(dbBinding, {
@@ -106,12 +112,12 @@ export async function listTrendingRepos(
     repos,
     total,
     options.offset,
-    options.userId
+    options.userId,
   );
 }
 
 export async function listNewRepos(
-  dbBinding: Env['DB'],
+  dbBinding: Env["DB"],
   options: {
     limit: number;
     offset: number;
@@ -120,14 +126,14 @@ export async function listNewRepos(
     license?: string;
     since?: string;
     userId?: string;
-  }
+  },
 ): Promise<ExploreReposResult> {
   const conditions = buildBaseConditions({
     category: options.category,
     language: options.language,
     license: options.license,
     since: options.since,
-    sinceField: 'createdAt',
+    sinceField: "createdAt",
   });
 
   const [repos, total] = await Promise.all([
@@ -145,12 +151,12 @@ export async function listNewRepos(
     repos,
     total,
     options.offset,
-    options.userId
+    options.userId,
   );
 }
 
 export async function listRecentRepos(
-  dbBinding: Env['DB'],
+  dbBinding: Env["DB"],
   options: {
     limit: number;
     offset: number;
@@ -159,14 +165,14 @@ export async function listRecentRepos(
     license?: string;
     since?: string;
     userId?: string;
-  }
+  },
 ): Promise<ExploreReposResult> {
   const conditions = buildBaseConditions({
     category: options.category,
     language: options.language,
     license: options.license,
     since: options.since,
-    sinceField: 'updatedAt',
+    sinceField: "updatedAt",
   });
 
   const [repos, total] = await Promise.all([
@@ -184,6 +190,6 @@ export async function listRecentRepos(
     repos,
     total,
     options.offset,
-    options.userId
+    options.userId,
   );
 }

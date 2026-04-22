@@ -1,12 +1,10 @@
+import { createMemo } from "solid-js";
 import { useI18n } from "../../../store/i18n.ts";
 import type { TranslationKey } from "../../../i18n.ts";
 import { Icons } from "../../../lib/Icons.tsx";
-import type {
-  AgentTask,
-  AgentTaskPriority,
-  AgentTaskStatus,
-} from "../../../types/index.ts";
+import type { AgentTask, AgentTaskPriority } from "../../../types/index.ts";
 import {
+  type EditableAgentTaskStatus,
   type ModelSelectOption,
   PRIORITY_OPTIONS,
   STATUS_ORDER,
@@ -22,8 +20,8 @@ interface TaskFormProps {
   setTitle: (value: string) => void;
   description: string;
   setDescription: (value: string) => void;
-  status: AgentTaskStatus;
-  setStatus: (value: AgentTaskStatus) => void;
+  status: EditableAgentTaskStatus;
+  setStatus: (value: EditableAgentTaskStatus) => void;
   priority: AgentTaskPriority;
   setPriority: (value: AgentTaskPriority) => void;
   agentType: string;
@@ -39,41 +37,25 @@ interface TaskFormProps {
   onClose: () => void;
 }
 
-export function TaskForm({
-  editingTask,
-  title,
-  setTitle,
-  description,
-  setDescription,
-  status,
-  setStatus,
-  priority,
-  setPriority,
-  agentType,
-  setAgentType,
-  model,
-  setModel,
-  dueAt,
-  setDueAt,
-  availableModels,
-  saving,
-  error,
-  onSubmit,
-  onClose,
-}: TaskFormProps) {
+export function TaskForm(props: TaskFormProps) {
   const { t, tOr } = useI18n();
   const tx = (key: string) => t(key as TranslationKey);
-  const agentTypeOptions = getAgentTypeOptions(agentType);
+  const agentTypeOptions = createMemo(() =>
+    getAgentTypeOptions(props.agentType)
+  );
 
   return (
-    <form class="flex flex-col gap-4" onSubmit={onSubmit}>
+    <form
+      class="flex flex-col gap-4"
+      onSubmit={(e) => props.onSubmit(e)}
+    >
       <div class="flex items-start justify-between gap-3 mb-2">
         <div class="space-y-1">
           <h4 class="text-base font-semibold text-zinc-900 dark:text-zinc-100">
-            {editingTask ? t("editTask") : t("createTask")}
+            {props.editingTask ? t("editTask") : t("createTask")}
           </h4>
           <p class="text-sm text-zinc-500 dark:text-zinc-400">
-            {editingTask
+            {props.editingTask
               ? tOr(
                 "taskFormEditHint" as TranslationKey,
                 "Update scope, status, or execution settings without leaving the board.",
@@ -87,7 +69,7 @@ export function TaskForm({
         <button
           type="button"
           class="p-2 rounded-lg hover:bg-zinc-200 dark:hover:bg-zinc-700 text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-100 transition-colors"
-          onClick={onClose}
+          onClick={() => props.onClose()}
           aria-label={t("close")}
         >
           <Icons.X />
@@ -101,8 +83,8 @@ export function TaskForm({
           type="text"
           class="w-full px-3 py-2 bg-zinc-100 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-lg text-zinc-900 dark:text-zinc-100 placeholder:text-zinc-500 dark:placeholder:text-zinc-400 focus:outline-none focus:border-zinc-900 dark:focus:border-zinc-100"
           placeholder={t("taskTitlePlaceholder")}
-          value={title}
-          onInput={(e) => setTitle(e.target.value)}
+          value={props.title}
+          onInput={(e) => props.setTitle(e.currentTarget.value)}
           autofocus
           required
         />
@@ -114,8 +96,8 @@ export function TaskForm({
         <textarea
           class="w-full px-3 py-2 bg-zinc-100 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-lg text-zinc-900 dark:text-zinc-100 placeholder:text-zinc-500 dark:placeholder:text-zinc-400 focus:outline-none focus:border-zinc-900 dark:focus:border-zinc-100 resize-y min-h-[140px]"
           placeholder={t("taskDescriptionPlaceholder")}
-          value={description}
-          onInput={(e) => setDescription(e.target.value)}
+          value={props.description}
+          onInput={(e) => props.setDescription(e.currentTarget.value)}
           rows={5}
         />
       </div>
@@ -126,8 +108,9 @@ export function TaskForm({
           </label>
           <select
             class="w-full px-3 py-2 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 rounded-lg text-zinc-900 dark:text-zinc-100 focus:outline-none focus:border-zinc-900 dark:focus:border-zinc-100"
-            value={status}
-            onChange={(e) => setStatus(e.target.value as AgentTaskStatus)}
+            value={props.status}
+            onChange={(e) =>
+              props.setStatus(e.currentTarget.value as EditableAgentTaskStatus)}
           >
             {STATUS_ORDER.map((value) => (
               <option value={value}>
@@ -142,8 +125,9 @@ export function TaskForm({
           </label>
           <select
             class="w-full px-3 py-2 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 rounded-lg text-zinc-900 dark:text-zinc-100 focus:outline-none focus:border-zinc-900 dark:focus:border-zinc-100"
-            value={priority}
-            onChange={(e) => setPriority(e.target.value as AgentTaskPriority)}
+            value={props.priority}
+            onChange={(e) =>
+              props.setPriority(e.currentTarget.value as AgentTaskPriority)}
           >
             {PRIORITY_OPTIONS.map((value) => (
               <option value={value}>
@@ -160,10 +144,10 @@ export function TaskForm({
           </label>
           <select
             class="w-full px-3 py-2 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 rounded-lg text-zinc-900 dark:text-zinc-100 focus:outline-none focus:border-zinc-900 dark:focus:border-zinc-100"
-            value={agentType}
-            onChange={(e) => setAgentType(e.target.value)}
+            value={props.agentType}
+            onChange={(e) => props.setAgentType(e.currentTarget.value)}
           >
-            {agentTypeOptions.map((value) => (
+            {agentTypeOptions().map((value) => (
               <option value={value}>
                 {tOr(`agentType.${value}` as TranslationKey, value)}
               </option>
@@ -176,10 +160,10 @@ export function TaskForm({
           </label>
           <select
             class="w-full px-3 py-2 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 rounded-lg text-zinc-900 dark:text-zinc-100 focus:outline-none focus:border-zinc-900 dark:focus:border-zinc-100"
-            value={model}
-            onChange={(e) => setModel(e.target.value)}
+            value={props.model}
+            onChange={(e) => props.setModel(e.currentTarget.value)}
           >
-            {availableModels.map((option) => (
+            {props.availableModels.map((option) => (
               <option value={option.id}>
                 {option.label}
               </option>
@@ -194,8 +178,8 @@ export function TaskForm({
         <input
           type="date"
           class="w-full px-3 py-2 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 rounded-lg text-zinc-900 dark:text-zinc-100 focus:outline-none focus:border-zinc-900 dark:focus:border-zinc-100"
-          value={dueAt}
-          onInput={(e) => setDueAt(e.target.value)}
+          value={props.dueAt}
+          onInput={(e) => props.setDueAt(e.currentTarget.value)}
           min={getLocalDateInputMin()}
           aria-describedby="due-date-hint"
         />
@@ -206,23 +190,25 @@ export function TaskForm({
           {t("taskDueDateHint") || "Optional - select a future date"}
         </span>
       </div>
-      {error && (
-        <div class="text-red-600 dark:text-red-400 text-sm">{error}</div>
+      {props.error && (
+        <div class="text-red-600 dark:text-red-400 text-sm">
+          {props.error}
+        </div>
       )}
       <div class="flex flex-col-reverse sm:flex-row sm:justify-end gap-3 mt-4">
         <button
           type="button"
           class="w-full sm:w-auto px-4 py-2 bg-zinc-100 dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100 rounded-lg hover:bg-zinc-200 dark:hover:bg-zinc-700 transition-colors"
-          onClick={onClose}
+          onClick={() => props.onClose()}
         >
           {t("cancel")}
         </button>
         <button
           type="submit"
           class="w-full sm:w-auto px-4 py-2 bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900 rounded-lg hover:bg-zinc-700 dark:hover:bg-zinc-300 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-          disabled={saving || !title.trim()}
+          disabled={props.saving || !props.title.trim()}
         >
-          {saving ? t("saving") : t("save")}
+          {props.saving ? t("saving") : t("save")}
         </button>
       </div>
     </form>

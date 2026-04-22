@@ -36,7 +36,7 @@ export function takeOption(args: string[], flag: string): string | undefined {
   }
 
   const next = args[index + 1];
-  if (!next || next.startsWith('--')) {
+  if (!next || next.startsWith("--")) {
     fail(`Option ${flag} requires a value.`);
   }
 
@@ -44,7 +44,12 @@ export function takeOption(args: string[], flag: string): string | undefined {
   return next;
 }
 
-export function parsePositiveInt(raw: string | undefined, optionName: string, defaultValue: number, maxValue: number): number {
+export function parsePositiveInt(
+  raw: string | undefined,
+  optionName: string,
+  defaultValue: number,
+  maxValue: number,
+): number {
   if (!raw) {
     return defaultValue;
   }

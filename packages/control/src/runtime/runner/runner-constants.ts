@@ -1,5 +1,8 @@
 // Shared constants and utilities used by both queue and cron handlers.
-import { validateRunnerEnv, createEnvGuard } from '../../shared/utils/validate-env.ts';
+import {
+  createEnvGuard,
+  validateRunnerEnv,
+} from "../../shared/utils/validate-env.ts";
 
 // 5 min stale threshold. The rust-agent emits a heartbeat every 15 s
 // (apps/rust-agent/src/main.rs), so this allows ~20 missed beats before a run

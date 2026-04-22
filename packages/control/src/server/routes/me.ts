@@ -1,27 +1,50 @@
-import { Hono } from 'hono';
-import type { Env, User as _User } from '../../shared/types/index.ts';
-import { safeJsonParseOrDefault, generateId, base64UrlEncode } from '../../shared/utils/index.ts';
-import { validateUsername } from '../../shared/utils/domain-validation.ts';
-import { getDb } from '../../infra/db/index.ts';
-import { accounts, oauthTokens, oauthAuditLogs, personalAccessTokens } from '../../infra/db/schema.ts';
-import { eq, and, ne, desc } from 'drizzle-orm';
-import { getUserConsentsWithClients, revokeConsent } from '../../application/services/oauth/consent.ts';
-import { getClientsByOwner, createClient, updateClient, deleteClient } from '../../application/services/oauth/client.ts';
-import type { ClientRegistrationRequest } from '../../shared/types/oauth.ts';
-import { parseJsonStringArray } from '../../shared/types/oauth.ts';
-import { logOAuthEvent } from '../../application/services/oauth/audit.ts';
-import { parseJsonBody, type BaseVariables } from './route-auth.ts';
-import { parsePagination } from '../../shared/utils/index.ts';
-import { BadRequestError, AuthorizationError, NotFoundError, ConflictError, InternalError } from 'takos-common/errors';
-import { logWarn } from '../../shared/utils/logger.ts';
+import { Hono } from "hono";
+import type { Env, User as _User } from "../../shared/types/index.ts";
+import {
+  base64UrlEncode,
+  generateId,
+  safeJsonParseOrDefault,
+} from "../../shared/utils/index.ts";
+import { validateUsername } from "../../shared/utils/domain-validation.ts";
+import { getDb } from "../../infra/db/index.ts";
+import {
+  accounts,
+  oauthAuditLogs,
+  oauthTokens,
+  personalAccessTokens,
+} from "../../infra/db/schema.ts";
+import { and, desc, eq, ne } from "drizzle-orm";
+import {
+  getUserConsentsWithClients,
+  revokeConsent,
+} from "../../application/services/oauth/consent.ts";
+import {
+  createClient,
+  deleteClient,
+  getClientsByOwner,
+  updateClient,
+} from "../../application/services/oauth/client.ts";
+import type { ClientRegistrationRequest } from "../../shared/types/oauth.ts";
+import { parseJsonStringArray } from "../../shared/types/oauth.ts";
+import { logOAuthEvent } from "../../application/services/oauth/audit.ts";
+import { type BaseVariables, parseJsonBody } from "./route-auth.ts";
+import { parsePagination } from "../../shared/utils/index.ts";
+import {
+  AuthorizationError,
+  BadRequestError,
+  ConflictError,
+  InternalError,
+  NotFoundError,
+} from "takos-common/errors";
+import { logWarn } from "../../shared/utils/logger.ts";
 import {
   ensureUserSettings,
-  updateUserSettings,
   formatUserSettingsResponse,
-} from '../../application/services/identity/user-settings.ts';
-import { toUserResponse } from '../../application/services/identity/response-formatters.ts';
-import { getOrCreatePersonalWorkspace } from '../../application/services/identity/spaces.ts';
-import { computeSHA256 } from '../../shared/utils/hash.ts';
+  updateUserSettings,
+} from "../../application/services/identity/user-settings.ts";
+import { toUserResponse } from "../../application/services/identity/response-formatters.ts";
+import { getOrCreatePersonalWorkspace } from "../../application/services/identity/spaces.ts";
+import { computeSHA256 } from "../../shared/utils/hash.ts";
 
 export const meRouteDeps = {
   getDb,
@@ -69,43 +92,42 @@ function toPersonalSpaceResponse(space: {
 }
 
 export default new Hono<{ Bindings: Env; Variables: BaseVariables }>()
-  .use('*', async (c, next) => {
-    const user = c.get('user');
-    if (user?.principal_kind && user.principal_kind !== 'user') {
-      throw new AuthorizationError('/api/me is only available to human accounts');
+  .use("*", async (c, next) => {
+    const user = c.get("user");
+    if (user?.principal_kind && user.principal_kind !== "user") {
+      throw new AuthorizationError(
+        "/api/me is only available to human accounts",
+      );
     }
     await next();
   })
-  .get('/', async (c) => {
-    const user = c.get('user');
+  .get("/", async (c) => {
+    const user = c.get("user");
     return c.json(meRouteDeps.toUserResponse(user));
   })
-
-  .get('/personal-space', async (c) => {
-    const user = c.get('user');
+  .get("/personal-space", async (c) => {
+    const user = c.get("user");
     const personalSpace = await meRouteDeps.getOrCreatePersonalWorkspace(
       c.env,
       user.id,
     );
 
     if (!personalSpace) {
-      throw new NotFoundError('Personal space');
+      throw new NotFoundError("Personal space");
     }
 
     return c.json({ space: toPersonalSpaceResponse(personalSpace) });
   })
-
   // Get user settings (including setup state)
-  .get('/settings', async (c) => {
-    const user = c.get('user');
+  .get("/settings", async (c) => {
+    const user = c.get("user");
 
     const settings = await meRouteDeps.ensureUserSettings(c.env.DB, user.id);
     return c.json(meRouteDeps.formatUserSettingsResponse(settings));
   })
-
   // Update user settings
-  .patch('/settings', async (c) => {
-    const user = c.get('user');
+  .patch("/settings", async (c) => {
+    const user = c.get("user");
     const body = await parseJsonBody<{
       setup_completed?: boolean;
       auto_update_enabled?: boolean;
@@ -114,21 +136,26 @@ export default new Hono<{ Bindings: Env; Variables: BaseVariables }>()
     }>(c);
 
     if (!body) {
-      throw new BadRequestError('Invalid JSON body');
+      throw new BadRequestError("Invalid JSON body");
     }
 
-    if (body.private_account !== undefined && typeof body.private_account !== 'boolean') {
-      throw new BadRequestError('private_account must be boolean');
+    if (
+      body.private_account !== undefined &&
+      typeof body.private_account !== "boolean"
+    ) {
+      throw new BadRequestError("private_account must be boolean");
     }
 
     let activityVisibility = body.activity_visibility;
     if (activityVisibility !== undefined) {
-      if (typeof activityVisibility !== 'string') {
-        throw new BadRequestError('activity_visibility must be string');
+      if (typeof activityVisibility !== "string") {
+        throw new BadRequestError("activity_visibility must be string");
       }
       activityVisibility = activityVisibility.trim().toLowerCase();
-      if (!['public', 'followers', 'private'].includes(activityVisibility)) {
-        throw new BadRequestError('activity_visibility must be one of public|followers|private');
+      if (!["public", "followers", "private"].includes(activityVisibility)) {
+        throw new BadRequestError(
+          "activity_visibility must be one of public|followers|private",
+        );
       }
     }
 
@@ -138,17 +165,17 @@ export default new Hono<{ Bindings: Env; Variables: BaseVariables }>()
     });
     return c.json(meRouteDeps.formatUserSettingsResponse(settings));
   })
-
   // Update username
-  .patch('/username', async (c) => {
-    const user = c.get('user');
+  .patch("/username", async (c) => {
+    const user = c.get("user");
     const body = await parseJsonBody<{ username?: string }>(c);
 
-    if (!body || typeof body.username !== 'string') {
-      throw new BadRequestError('username is required');
+    if (!body || typeof body.username !== "string") {
+      throw new BadRequestError("username is required");
     }
 
-    const normalizedUsername = body.username.trim().replace(/^@+/, '').toLowerCase();
+    const normalizedUsername = body.username.trim().replace(/^@+/, "")
+      .toLowerCase();
     const usernameError = meRouteDeps.validateUsername(normalizedUsername);
     if (usernameError) {
       throw new BadRequestError(usernameError);
@@ -161,12 +188,14 @@ export default new Hono<{ Bindings: Env; Variables: BaseVariables }>()
     const db = meRouteDeps.getDb(c.env.DB);
     const existingUser = await db.select({ id: accounts.id })
       .from(accounts)
-      .where(and(eq(accounts.slug, normalizedUsername), ne(accounts.id, user.id)))
+      .where(
+        and(eq(accounts.slug, normalizedUsername), ne(accounts.id, user.id)),
+      )
       .limit(1)
       .get();
 
     if (existingUser) {
-      throw new ConflictError('This username is already taken');
+      throw new ConflictError("This username is already taken");
     }
     await db.update(accounts).set({
       slug: normalizedUsername,
@@ -175,13 +204,15 @@ export default new Hono<{ Bindings: Env; Variables: BaseVariables }>()
 
     return c.json({ success: true, username: normalizedUsername });
   })
-
-  .get('/oauth/consents', async (c) => {
-    const user = c.get('user');
-    const consents = await meRouteDeps.getUserConsentsWithClients(c.env.DB, user.id);
+  .get("/oauth/consents", async (c) => {
+    const user = c.get("user");
+    const consents = await meRouteDeps.getUserConsentsWithClients(
+      c.env.DB,
+      user.id,
+    );
 
     return c.json({
-      consents: consents.map(consent => ({
+      consents: consents.map((consent) => ({
         client_id: consent.client_id,
         client_name: consent.client_name,
         client_logo: consent.client_logo,
@@ -192,42 +223,57 @@ export default new Hono<{ Bindings: Env; Variables: BaseVariables }>()
       })),
     });
   })
-
-  .delete('/oauth/consents/:clientId', async (c) => {
-    const user = c.get('user');
-    const clientId = c.req.param('clientId');
+  .delete("/oauth/consents/:clientId", async (c) => {
+    const user = c.get("user");
+    const clientId = c.req.param("clientId");
     const db = meRouteDeps.getDb(c.env.DB);
 
     await db.update(oauthTokens).set({
       revoked: true,
       revokedAt: new Date().toISOString(),
-      revokedReason: 'user_revoked',
-    }).where(and(eq(oauthTokens.accountId, user.id), eq(oauthTokens.clientId, clientId)));
+      revokedReason: "user_revoked",
+    }).where(
+      and(
+        eq(oauthTokens.accountId, user.id),
+        eq(oauthTokens.clientId, clientId),
+      ),
+    );
 
-    const success = await meRouteDeps.revokeConsent(c.env.DB, user.id, clientId);
+    const success = await meRouteDeps.revokeConsent(
+      c.env.DB,
+      user.id,
+      clientId,
+    );
 
     if (!success) {
-      throw new NotFoundError('Consent');
+      throw new NotFoundError("Consent");
     }
 
     try {
       await meRouteDeps.logOAuthEvent(c.env.DB, {
         userId: user.id,
         clientId,
-        eventType: 'consent_revoked',
-        details: { source: 'user' },
+        eventType: "consent_revoked",
+        details: { source: "user" },
       });
     } catch (err) {
-      logWarn('OAuth audit log failed', { action: 'oauth_audit_log', userId: user.id, clientId, error: String(err) });
+      logWarn("OAuth audit log failed", {
+        action: "oauth_audit_log",
+        userId: user.id,
+        clientId,
+        error: String(err),
+      });
     }
 
     return c.json({ success: true });
   })
-
-  .get('/oauth/audit-logs', async (c) => {
-    const user = c.get('user');
-    const { limit, offset } = parsePagination(c.req.query(), { limit: 50, maxLimit: 100 });
-    const clientId = c.req.query('client_id') || null;
+  .get("/oauth/audit-logs", async (c) => {
+    const user = c.get("user");
+    const { limit, offset } = parsePagination(c.req.query(), {
+      limit: 50,
+      maxLimit: 100,
+    });
+    const clientId = c.req.query("client_id") || null;
     const db = meRouteDeps.getDb(c.env.DB);
 
     const conditions = [eq(oauthAuditLogs.accountId, user.id)];
@@ -248,18 +294,20 @@ export default new Hono<{ Bindings: Env; Variables: BaseVariables }>()
         event_type: log.eventType,
         ip_address: log.ipAddress,
         user_agent: log.userAgent,
-        details: safeJsonParseOrDefault<Record<string, unknown>>(log.details, {}),
+        details: safeJsonParseOrDefault<Record<string, unknown>>(
+          log.details,
+          {},
+        ),
         created_at: log.createdAt,
       })),
     });
   })
-
-  .get('/oauth/clients', async (c) => {
-    const user = c.get('user');
+  .get("/oauth/clients", async (c) => {
+    const user = c.get("user");
     const clients = await meRouteDeps.getClientsByOwner(c.env.DB, user.id);
 
     return c.json({
-      clients: clients.map(client => ({
+      clients: clients.map((client) => ({
         client_id: client.client_id,
         name: client.name,
         description: client.description,
@@ -274,49 +322,49 @@ export default new Hono<{ Bindings: Env; Variables: BaseVariables }>()
       })),
     });
   })
-
-  .post('/oauth/clients', async (c) => {
-    const user = c.get('user');
+  .post("/oauth/clients", async (c) => {
+    const user = c.get("user");
     const body = await parseJsonBody<ClientRegistrationRequest>(c);
 
     if (!body) {
-      throw new BadRequestError('Invalid JSON body');
+      throw new BadRequestError("Invalid JSON body");
     }
 
     if (!body.client_name) {
-      throw new BadRequestError('client_name is required');
+      throw new BadRequestError("client_name is required");
     }
     if (!body.redirect_uris || body.redirect_uris.length === 0) {
-      throw new BadRequestError('redirect_uris is required');
+      throw new BadRequestError("redirect_uris is required");
     }
 
     try {
       const response = await meRouteDeps.createClient(c.env.DB, body, user.id);
       return c.json(response, 201);
     } catch (err) {
-      throw new BadRequestError(err instanceof Error ? err.message : 'Failed to create client');
+      throw new BadRequestError(
+        err instanceof Error ? err.message : "Failed to create client",
+      );
     }
   })
-
-  .patch('/oauth/clients/:clientId', async (c) => {
-    const user = c.get('user');
-    const clientId = c.req.param('clientId');
+  .patch("/oauth/clients/:clientId", async (c) => {
+    const user = c.get("user");
+    const clientId = c.req.param("clientId");
     const body = await parseJsonBody<Partial<ClientRegistrationRequest>>(c);
 
     if (!body) {
-      throw new BadRequestError('Invalid JSON body');
+      throw new BadRequestError("Invalid JSON body");
     }
 
     const clients = await meRouteDeps.getClientsByOwner(c.env.DB, user.id);
-    const ownedClient = clients.find(cl => cl.client_id === clientId);
+    const ownedClient = clients.find((cl) => cl.client_id === clientId);
     if (!ownedClient) {
-      throw new NotFoundError('Client');
+      throw new NotFoundError("Client");
     }
 
     try {
       const updated = await meRouteDeps.updateClient(c.env.DB, clientId, body);
       if (!updated) {
-        throw new NotFoundError('Client');
+        throw new NotFoundError("Client");
       }
       return c.json({
         id: updated.id,
@@ -326,34 +374,36 @@ export default new Hono<{ Bindings: Env; Variables: BaseVariables }>()
         logo_uri: updated.logo_uri,
         client_uri: updated.client_uri,
         redirect_uris: meRouteDeps.parseJsonStringArray(updated.redirect_uris),
-        allowed_scopes: meRouteDeps.parseJsonStringArray(updated.allowed_scopes),
+        allowed_scopes: meRouteDeps.parseJsonStringArray(
+          updated.allowed_scopes,
+        ),
         status: updated.status,
       });
     } catch (err) {
-      throw new BadRequestError(err instanceof Error ? err.message : 'Failed to update client');
+      throw new BadRequestError(
+        err instanceof Error ? err.message : "Failed to update client",
+      );
     }
   })
-
-  .delete('/oauth/clients/:clientId', async (c) => {
-    const user = c.get('user');
-    const clientId = c.req.param('clientId');
+  .delete("/oauth/clients/:clientId", async (c) => {
+    const user = c.get("user");
+    const clientId = c.req.param("clientId");
 
     const clients = await meRouteDeps.getClientsByOwner(c.env.DB, user.id);
-    const ownedClient = clients.find(cl => cl.client_id === clientId);
+    const ownedClient = clients.find((cl) => cl.client_id === clientId);
     if (!ownedClient) {
-      throw new NotFoundError('Client');
+      throw new NotFoundError("Client");
     }
 
     const success = await meRouteDeps.deleteClient(c.env.DB, clientId);
     if (!success) {
-      throw new InternalError('Failed to delete client');
+      throw new InternalError("Failed to delete client");
     }
 
     return c.json({ success: true });
   })
-
-  .get('/personal-access-tokens', async (c) => {
-    const user = c.get('user');
+  .get("/personal-access-tokens", async (c) => {
+    const user = c.get("user");
     const db = meRouteDeps.getDb(c.env.DB);
     const rows = await db.select({
       id: personalAccessTokens.id,
@@ -378,15 +428,16 @@ export default new Hono<{ Bindings: Env; Variables: BaseVariables }>()
     }));
     return c.json({ tokens });
   })
-
-  .post('/personal-access-tokens', async (c) => {
-    const user = c.get('user');
-    const body = await parseJsonBody<{ name: string; scopes?: string; expiresAt?: string }>(c);
+  .post("/personal-access-tokens", async (c) => {
+    const user = c.get("user");
+    const body = await parseJsonBody<
+      { name: string; scopes?: string; expiresAt?: string }
+    >(c);
     if (!body) {
-      throw new BadRequestError('Invalid JSON body');
+      throw new BadRequestError("Invalid JSON body");
     }
     if (!body.name?.trim()) {
-      throw new BadRequestError('name is required');
+      throw new BadRequestError("name is required");
     }
 
     const tokenBytes = generateRandomBytes(32);
@@ -396,7 +447,7 @@ export default new Hono<{ Bindings: Env; Variables: BaseVariables }>()
 
     const id = generateId();
     const timestamp = new Date().toISOString();
-    const scopes = body.scopes ?? '*';
+    const scopes = body.scopes ?? "*";
 
     let expiresAt: string | null = null;
     if (body.expiresAt) {
@@ -418,22 +469,34 @@ export default new Hono<{ Bindings: Env; Variables: BaseVariables }>()
       createdAt: timestamp,
     });
 
-    return c.json({ id, name: body.name.trim(), token: tokenPlain, token_prefix: tokenPrefix, scopes, expires_at: expiresAt, created_at: timestamp }, 201);
+    return c.json({
+      id,
+      name: body.name.trim(),
+      token: tokenPlain,
+      token_prefix: tokenPrefix,
+      scopes,
+      expires_at: expiresAt,
+      created_at: timestamp,
+    }, 201);
   })
-
-  .delete('/personal-access-tokens/:id', async (c) => {
-    const user = c.get('user');
-    const tokenId = c.req.param('id');
+  .delete("/personal-access-tokens/:id", async (c) => {
+    const user = c.get("user");
+    const tokenId = c.req.param("id");
 
     const db = meRouteDeps.getDb(c.env.DB);
     const token = await db.select().from(personalAccessTokens).where(
-      and(eq(personalAccessTokens.id, tokenId), eq(personalAccessTokens.accountId, user.id))
+      and(
+        eq(personalAccessTokens.id, tokenId),
+        eq(personalAccessTokens.accountId, user.id),
+      ),
     ).get();
 
     if (!token) {
-      throw new NotFoundError('Token');
+      throw new NotFoundError("Token");
     }
 
-    await db.delete(personalAccessTokens).where(eq(personalAccessTokens.id, tokenId));
+    await db.delete(personalAccessTokens).where(
+      eq(personalAccessTokens.id, tokenId),
+    );
     return c.json({ success: true });
   });

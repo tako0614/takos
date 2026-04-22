@@ -5,8 +5,9 @@
  * which matches the runtime value of text() columns in SQLite.
  */
 export type SelectOf<T extends { $inferSelect: unknown }> = {
-  [K in keyof T['$inferSelect']]: T['$inferSelect'][K] extends never ? string : T['$inferSelect'][K];
+  [K in keyof T["$inferSelect"]]: T["$inferSelect"][K] extends never ? string
+    : T["$inferSelect"][K];
 };
 
 /** Utility to extract the insert type from a Drizzle table */
-export type InsertOf<T extends { $inferInsert: unknown }> = T['$inferInsert'];
+export type InsertOf<T extends { $inferInsert: unknown }> = T["$inferInsert"];

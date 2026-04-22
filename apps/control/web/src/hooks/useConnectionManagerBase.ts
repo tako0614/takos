@@ -1,15 +1,15 @@
-import type { Setter } from 'solid-js';
-import type { TranslationKey } from '../store/i18n.ts';
-import { rpc, rpcJson, rpcPath } from '../lib/rpc.ts';
-import type { Run } from '../types/index.ts';
-import { parseTimelineEventId } from '../views/chat/timeline.ts';
+import type { Setter } from "solid-js";
+import type { TranslationKey } from "../store/i18n.ts";
+import { rpc, rpcJson, rpcPath } from "../lib/rpc.ts";
+import type { Run } from "../types/index.ts";
+import { parseTimelineEventId } from "../views/chat/timeline.ts";
 import {
   ACTIVE_RUN_STATUSES,
-  TERMINAL_RUN_STATUSES,
-  type WebSocketEventPayload,
   EVENT_DISPATCH,
   parseEventData,
-} from './useWsMessageProcessor.ts';
+  TERMINAL_RUN_STATUSES,
+  type WebSocketEventPayload,
+} from "./useWsMessageProcessor.ts";
 
 // ---------------------------------------------------------------------------
 // Shared types
@@ -18,6 +18,7 @@ import {
 type MutableRefObject<T> = { current: T };
 
 export const MAX_RECONNECT_ATTEMPTS = 8;
+const RUN_STATUS_WATCHDOG_INTERVAL_MS = 8_000;
 
 /**
  * Processor-related callbacks and refs provided by the message processor hook.
@@ -26,7 +27,9 @@ export const MAX_RECONNECT_ATTEMPTS = 8;
 export interface ConnectionProcessorDeps {
   setCurrentRun: Setter<Run | null>;
   setIsLoading: Setter<boolean>;
-  setStreaming: Setter<import('../views/chat/chat-types.ts').ChatStreamingState>;
+  setStreaming: Setter<
+    import("../views/chat/chat-types.ts").ChatStreamingState
+  >;
   resetStreamingState: () => void;
   appendTimelineEntry: (
     runId: string,
@@ -35,21 +38,30 @@ export interface ConnectionProcessorDeps {
     eventId?: number,
     createdAt?: number,
   ) => void;
-  verifyRunStatus: (runId: string, refreshMessages?: boolean) => Promise<boolean>;
+  verifyRunStatus: (
+    runId: string,
+    refreshMessages?: boolean,
+  ) => Promise<boolean>;
   upsertRunMeta: (run: Partial<Run> & { id: string }) => void;
-  handleRunCompletedRef: MutableRefObject<(run?: Partial<Run>, sessionId?: string | null) => Promise<void>>;
-  handleWebSocketEventRef: MutableRefObject<(
-    eventType: string,
-    data: unknown,
-    eventId?: number,
-    sourceRunId?: string,
-  ) => void>;
+  handleRunCompletedRef: MutableRefObject<
+    (run?: Partial<Run>, sessionId?: string | null) => Promise<void>
+  >;
+  handleWebSocketEventRef: MutableRefObject<
+    (
+      eventType: string,
+      data: unknown,
+      eventId?: number,
+      sourceRunId?: string,
+    ) => void
+  >;
 }
 
 export interface ConnectionManagerOptions {
   t: (key: TranslationKey, params?: Record<string, string | number>) => string;
   isMountedRef: MutableRefObject<boolean>;
-  startMessagePolling: (currentRunIdRef: MutableRefObject<string | null>) => void;
+  startMessagePolling: (
+    currentRunIdRef: MutableRefObject<string | null>,
+  ) => void;
   stopMessagePolling: () => void;
   setError: (value: string | null) => void;
   currentRunIdRef: MutableRefObject<string | null>;
@@ -82,13 +94,18 @@ export function processIncomingMessage(
   deps: {
     lastEventIdRef: MutableRefObject<number>;
     currentRunIdRef: MutableRefObject<string | null>;
-    verifyRunStatus: (runId: string, refreshMessages?: boolean) => Promise<boolean>;
-    handleWebSocketEventRef: MutableRefObject<(
-      eventType: string,
-      data: unknown,
-      eventId?: number,
-      sourceRunId?: string,
-    ) => void>;
+    verifyRunStatus: (
+      runId: string,
+      refreshMessages?: boolean,
+    ) => Promise<boolean>;
+    handleWebSocketEventRef: MutableRefObject<
+      (
+        eventType: string,
+        data: unknown,
+        eventId?: number,
+        sourceRunId?: string,
+      ) => void
+    >;
   },
 ): void {
   try {
@@ -100,7 +117,7 @@ export function processIncomingMessage(
     };
 
     // Server-side heartbeats -- just a liveness signal.
-    if (message.type === 'heartbeat') {
+    if (message.type === "heartbeat") {
       return;
     }
 
@@ -109,14 +126,16 @@ export function processIncomingMessage(
       event_id: message.event_id,
     });
 
-    if (typeof parsedEventId === 'number') {
+    if (typeof parsedEventId === "number") {
       if (parsedEventId <= deps.lastEventIdRef.current) {
         return;
       }
       // Detect event ID gaps -- large gaps indicate possible event loss
       const gap = parsedEventId - deps.lastEventIdRef.current;
       if (gap > 5 && deps.lastEventIdRef.current > 0) {
-        console.warn(`${logPrefix} Event ID gap detected: ${deps.lastEventIdRef.current} → ${parsedEventId} (gap=${gap})`);
+        console.warn(
+          `${logPrefix} Event ID gap detected: ${deps.lastEventIdRef.current} → ${parsedEventId} (gap=${gap})`,
+        );
         if (deps.currentRunIdRef.current) {
           deps.verifyRunStatus(deps.currentRunIdRef.current);
         }
@@ -149,11 +168,16 @@ export function handleTransportClose(
     currentRunIdRef: MutableRefObject<string | null>;
     reconnectAttemptsRef: MutableRefObject<number>;
     startWebSocketRef: MutableRefObject<(runId: string) => void>;
-    handleRunCompletedRef: MutableRefObject<(run?: Partial<Run>, sessionId?: string | null) => Promise<void>>;
+    handleRunCompletedRef: MutableRefObject<
+      (run?: Partial<Run>, sessionId?: string | null) => Promise<void>
+    >;
     setIsLoading: Setter<boolean>;
     setCurrentRun: Setter<Run | null>;
     setError: (value: string | null) => void;
-    t: (key: TranslationKey, params?: Record<string, string | number>) => string;
+    t: (
+      key: TranslationKey,
+      params?: Record<string, string | number>,
+    ) => string;
   },
 ): void {
   if (!deps.isMountedRef.current) return;
@@ -161,35 +185,50 @@ export function handleTransportClose(
 
   const attemptReconnect = () => {
     deps.reconnectAttemptsRef.current++;
-    if (deps.reconnectAttemptsRef.current <= MAX_RECONNECT_ATTEMPTS && deps.isMountedRef.current) {
-      const delay = Math.min(1000 * Math.pow(2, deps.reconnectAttemptsRef.current - 1), 30000);
+    if (
+      deps.reconnectAttemptsRef.current <= MAX_RECONNECT_ATTEMPTS &&
+      deps.isMountedRef.current
+    ) {
+      const delay = Math.min(
+        1000 * Math.pow(2, deps.reconnectAttemptsRef.current - 1),
+        30000,
+      );
       setTimeout(() => {
-        if (deps.isMountedRef.current && deps.currentRunIdRef.current === savedRunId) {
+        if (
+          deps.isMountedRef.current &&
+          deps.currentRunIdRef.current === savedRunId
+        ) {
           deps.startWebSocketRef.current(savedRunId);
         }
       }, delay);
     } else if (deps.isMountedRef.current) {
       deps.setIsLoading(false);
       deps.setCurrentRun(null);
-      deps.setError(deps.t('networkError'));
+      deps.setError(deps.t("networkError"));
     }
   };
 
   (async () => {
     try {
-      const res = await rpcPath(rpc, 'runs', ':id').$get({
+      const res = await rpcPath(rpc, "runs", ":id").$get({
         param: { id: savedRunId },
       });
       const data = await rpcJson<{ run: Run }>(res);
       const status = data.run?.status;
 
       if (status && TERMINAL_RUN_STATUSES.has(status)) {
-        deps.handleRunCompletedRef.current(data.run, data.run?.session_id ?? undefined);
+        deps.handleRunCompletedRef.current(
+          data.run,
+          data.run?.session_id ?? undefined,
+        );
       } else if (status && ACTIVE_RUN_STATUSES.has(status)) {
         attemptReconnect();
       }
     } catch (statusErr) {
-      console.error(`Failed to check run status after ${logPrefix} close:`, statusErr);
+      console.error(
+        `Failed to check run status after ${logPrefix} close:`,
+        statusErr,
+      );
       attemptReconnect();
     }
   })();
@@ -263,10 +302,23 @@ export function useConnectionManagerBase(
   const wsRef: MutableRefObject<WebSocket | null> = { current: null };
   const rootRunIdRef: MutableRefObject<string | null> = { current: null };
   const reconnectAttemptsRef: MutableRefObject<number> = { current: 0 };
-  const startWebSocketRef: MutableRefObject<(runId: string) => void> = { current: () => {} };
+  const runStatusWatchdogRef: MutableRefObject<
+    ReturnType<typeof setInterval> | null
+  > = { current: null };
+  const runStatusWatchdogInFlightRef: MutableRefObject<boolean> = {
+    current: false,
+  };
+  const startWebSocketRef: MutableRefObject<(runId: string) => void> = {
+    current: () => {},
+  };
 
   const closeWebSocket = (): void => {
     stopMessagePolling();
+    if (runStatusWatchdogRef.current) {
+      clearInterval(runStatusWatchdogRef.current);
+      runStatusWatchdogRef.current = null;
+    }
+    runStatusWatchdogInFlightRef.current = false;
     cleanupTransport();
     reconnectAttemptsRef.current = 0;
   };
@@ -279,7 +331,8 @@ export function useConnectionManagerBase(
     sourceRunId?: string,
   ) => {
     const payload = parseEventData(data);
-    const runId = payload.run?.id || sourceRunId || currentRunIdRef.current || '';
+    const runId = payload.run?.id || sourceRunId || currentRunIdRef.current ||
+      "";
     if (!runId) return;
     const isPrimaryRun = runId === currentRunIdRef.current;
     if (payload.run?.id) {
@@ -324,7 +377,7 @@ export function useConnectionManagerBase(
 
     // Build pre-bound helpers so transports don't need raw deps
     const onMessage = (rawData: string) => {
-      processIncomingMessage(rawData, runId, '[Transport]', {
+      processIncomingMessage(rawData, runId, "[Transport]", {
         lastEventIdRef,
         currentRunIdRef,
         verifyRunStatus,
@@ -333,7 +386,7 @@ export function useConnectionManagerBase(
     };
 
     const onClose = () => {
-      handleTransportClose(currentRunIdRef.current || '', 'Transport', {
+      handleTransportClose(currentRunIdRef.current || "", "Transport", {
         isMountedRef,
         currentRunIdRef,
         reconnectAttemptsRef,
@@ -349,6 +402,23 @@ export function useConnectionManagerBase(
     const onOpen = () => {
       reconnectAttemptsRef.current = 0;
       startMessagePolling(currentRunIdRef);
+      if (runStatusWatchdogRef.current) {
+        clearInterval(runStatusWatchdogRef.current);
+      }
+      runStatusWatchdogRef.current = setInterval(() => {
+        const activeRunId = currentRunIdRef.current;
+        if (!activeRunId || runStatusWatchdogInFlightRef.current) return;
+        runStatusWatchdogInFlightRef.current = true;
+        verifyRunStatus(activeRunId, false)
+          .then((isActive) => {
+            if (!isActive && currentRunIdRef.current === activeRunId) {
+              closeWebSocket();
+            }
+          })
+          .finally(() => {
+            runStatusWatchdogInFlightRef.current = false;
+          });
+      }, RUN_STATUS_WATCHDOG_INTERVAL_MS);
     };
 
     setupTransport({

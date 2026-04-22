@@ -31,7 +31,7 @@ export type ReadinessProbeOutcome =
   | { ok: false; reason: "error"; error: string };
 
 export type ReadinessProbeOptions = {
-  /** Probe 先 URL の base (例: `https://my-app.takos.app`)。trailing slash はあってもなくても可。 */
+  /** Probe 先 URL の base (例: `https://my-app.example.com`)。trailing slash はあってもなくても可。 */
   baseUrl: string;
   /** Probe path (例: `/`, `/healthz`)。先頭 `/` 必須。 */
   path: string;

@@ -3,10 +3,10 @@
  * Each add/remove is recorded as an activity for the store outbox.
  */
 
-import { and, count, desc, eq } from 'drizzle-orm';
-import type { D1Database } from '../../../shared/types/bindings.ts';
-import { getDb, storeInventoryItems } from '../../../infra/db/index.ts';
-import { generateId } from '../../../shared/utils/index.ts';
+import { and, count, desc, eq } from "drizzle-orm";
+import type { D1Database } from "../../../shared/types/bindings.ts";
+import { getDb, storeInventoryItems } from "../../../infra/db/index.ts";
+import { generateId } from "../../../shared/utils/index.ts";
 
 export interface InventoryEntry {
   id: string;
@@ -17,7 +17,7 @@ export interface InventoryEntry {
   repoSummary: string | null;
   repoOwnerSlug: string | null;
   localRepoId: string | null;
-  activityType: 'Add' | 'Remove';
+  activityType: "Add" | "Remove";
   isActive: boolean;
   createdAt: string;
 }
@@ -51,7 +51,7 @@ export async function addToInventory(
     .get();
 
   if (existing) {
-    throw new Error('Repository is already in this store inventory');
+    throw new Error("Repository is already in this store inventory");
   }
 
   const id = generateId();
@@ -66,7 +66,7 @@ export async function addToInventory(
     repoSummary: input.repoSummary ?? null,
     repoOwnerSlug: input.repoOwnerSlug ?? null,
     localRepoId: input.localRepoId ?? null,
-    activityType: 'Add' as const,
+    activityType: "Add" as const,
     isActive: true,
     createdAt: timestamp,
   };
@@ -134,7 +134,7 @@ export async function removeFromInventory(
     storeSlug,
     accountId,
     repoActorUrl,
-    activityType: 'Remove',
+    activityType: "Remove",
     isActive: false,
     createdAt: new Date().toISOString(),
   });
@@ -229,7 +229,7 @@ export async function hasExplicitInventory(
   return !!row;
 }
 
-export type StoreInventoryMode = 'explicit' | 'auto';
+export type StoreInventoryMode = "explicit" | "auto";
 
 /**
  * Resolve which Store inventory mode to use for a given (space, store).
@@ -253,7 +253,7 @@ export async function resolveInventoryMode(
   storeSlug: string,
 ): Promise<StoreInventoryMode> {
   const explicit = await hasExplicitInventory(dbBinding, accountId, storeSlug);
-  return explicit ? 'explicit' : 'auto';
+  return explicit ? "explicit" : "auto";
 }
 
 export async function countActiveItems(
@@ -283,7 +283,7 @@ function toEntry(row: typeof storeInventoryItems.$inferSelect): InventoryEntry {
     repoSummary: row.repoSummary,
     repoOwnerSlug: row.repoOwnerSlug,
     localRepoId: row.localRepoId,
-    activityType: row.activityType as 'Add' | 'Remove',
+    activityType: row.activityType as "Add" | "Remove",
     isActive: !!row.isActive,
     createdAt: row.createdAt,
   };

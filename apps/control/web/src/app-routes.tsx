@@ -1,4 +1,12 @@
-import { createEffect, createMemo, type JSX, lazy, Suspense } from "solid-js";
+import {
+  createEffect,
+  createMemo,
+  type JSX,
+  lazy,
+  Match,
+  Suspense,
+  Switch,
+} from "solid-js";
 import { Navigate, Route, useLocation, useParams } from "@solidjs/router";
 import { LoadingScreen } from "./components/common/LoadingScreen.tsx";
 import { Button } from "./components/ui/Button.tsx";
@@ -203,41 +211,43 @@ function AuthLoadingGate() {
   const { t } = useI18n();
   const currentPath = useCurrentPath();
 
-  if (auth.bootstrapError) {
-    return (
-      <BootstrapErrorScreen
-        title={t("failedToLoad")}
-        message={auth.bootstrapError}
-        retryLabel={t("refresh")}
-        loginLabel={t("continueWithGoogle")}
-        onRetry={() => {
-          void auth.fetchUser();
-        }}
-        onLogin={() => auth.redirectToLogin(currentPath())}
-      />
-    );
-  }
-
-  return <LoadingScreen />;
+  return (
+    <Switch fallback={<LoadingScreen />}>
+      <Match when={auth.bootstrapError}>
+        <BootstrapErrorScreen
+          title={t("failedToLoad")}
+          message={auth.bootstrapError!}
+          retryLabel={t("refresh")}
+          loginLabel={t("continueWithGoogle")}
+          onRetry={() => {
+            void auth.fetchUser();
+          }}
+          onLogin={() => auth.redirectToLogin(currentPath())}
+        />
+      </Match>
+    </Switch>
+  );
 }
 
 function ProtectedRouteLayout(props: { children?: JSX.Element }) {
   const auth = useAuth();
   const currentPath = useCurrentPath();
 
-  if (auth.authState === "loading") {
-    return <AuthLoadingGate />;
-  }
-
-  if (auth.authState === "login") {
-    return <LoginPage onLogin={() => auth.redirectToLogin(currentPath())} />;
-  }
-
-  if (auth.user && !auth.user.setup_completed) {
-    return <SetupPage onComplete={() => completeSetup(auth)} />;
-  }
-
-  return <AuthenticatedLayout>{props.children}</AuthenticatedLayout>;
+  return (
+    <Switch
+      fallback={<AuthenticatedLayout>{props.children}</AuthenticatedLayout>}
+    >
+      <Match when={auth.authState === "loading"}>
+        <AuthLoadingGate />
+      </Match>
+      <Match when={auth.authState === "login"}>
+        <LoginPage onLogin={() => auth.redirectToLogin(currentPath())} />
+      </Match>
+      <Match when={auth.user && !auth.user.setup_completed}>
+        <SetupPage onComplete={() => completeSetup(auth)} />
+      </Match>
+    </Switch>
+  );
 }
 
 function HomeRoute() {
@@ -258,21 +268,22 @@ function HomeRoute() {
   });
   const canonicalHref = useCanonicalHref(targetRoute);
 
-  if (auth.authState === "loading") {
-    return <AuthLoadingGate />;
-  }
-
-  if (auth.authState === "login") {
-    return <LoginPage onLogin={() => auth.redirectToLogin(currentPath())} />;
-  }
-
-  if (auth.user && !auth.user.setup_completed) {
-    return <SetupPage onComplete={() => completeSetup(auth)} />;
-  }
-
-  return canonicalHref()
-    ? <Navigate href={canonicalHref()!} />
-    : <LoadingScreen />;
+  return (
+    <Switch fallback={<LoadingScreen />}>
+      <Match when={auth.authState === "loading"}>
+        <AuthLoadingGate />
+      </Match>
+      <Match when={auth.authState === "login"}>
+        <LoginPage onLogin={() => auth.redirectToLogin(currentPath())} />
+      </Match>
+      <Match when={auth.user && !auth.user.setup_completed}>
+        <SetupPage onComplete={() => completeSetup(auth)} />
+      </Match>
+      <Match when={canonicalHref()}>
+        <Navigate href={canonicalHref()!} />
+      </Match>
+    </Switch>
+  );
 }
 
 function SpaceNotFoundMessage() {
@@ -321,56 +332,63 @@ function StoreRoute() {
     view: "store",
     storeTab: storeTab(),
   }));
+  const storeSpaceId = createMemo(() =>
+    navigation.routeSpaceId ?? navigation.preferredSpaceId
+  );
 
-  if (canonicalHref()) {
-    return <Navigate href={canonicalHref()!} />;
-  }
-
-  if (auth.authState === "loading") {
-    return <AuthLoadingGate />;
-  }
-
-  if (auth.authState === "authenticated") {
-    if (storeTab() === "installed") {
-      const storeSpaceId = navigation.routeSpaceId ??
-        navigation.preferredSpaceId;
-      if (!storeSpaceId) {
-        return <LoadingScreen />;
-      }
-      return (
-        <AuthenticatedLayout>
-          <RouteSurface>
-            <StoreManagementPage spaceId={storeSpaceId} />
-          </RouteSurface>
-        </AuthenticatedLayout>
-      );
-    }
-
-    return (
-      <AuthenticatedLayout>
+  return (
+    <Switch
+      fallback={
         <RouteSurface>
           <SourcePage
-            spaces={auth.spaces}
+            spaces={[]}
             onNavigateToRepo={(username: string, repoName: string) =>
               navigation.navigate({ view: "repo", username, repoName })}
-            isAuthenticated
+            isAuthenticated={false}
             onRequireLogin={() => auth.redirectToLogin(currentPath())}
           />
         </RouteSurface>
-      </AuthenticatedLayout>
-    );
-  }
-
-  return (
-    <RouteSurface>
-      <SourcePage
-        spaces={[]}
-        onNavigateToRepo={(username: string, repoName: string) =>
-          navigation.navigate({ view: "repo", username, repoName })}
-        isAuthenticated={false}
-        onRequireLogin={() => auth.redirectToLogin(currentPath())}
-      />
-    </RouteSurface>
+      }
+    >
+      <Match when={canonicalHref()}>
+        <Navigate href={canonicalHref()!} />
+      </Match>
+      <Match when={auth.authState === "loading"}>
+        <AuthLoadingGate />
+      </Match>
+      <Match
+        when={auth.authState === "authenticated" && storeTab() === "installed"}
+      >
+        <AuthenticatedLayout>
+          <Switch>
+            <Match when={storeSpaceId()}>
+              <RouteSurface>
+                <StoreManagementPage spaceId={storeSpaceId()!} />
+              </RouteSurface>
+            </Match>
+            <Match when={!auth.spacesLoaded}>
+              <LoadingScreen />
+            </Match>
+            <Match when={auth.spacesLoaded}>
+              <NoSpaceAvailableMessage />
+            </Match>
+          </Switch>
+        </AuthenticatedLayout>
+      </Match>
+      <Match when={auth.authState === "authenticated"}>
+        <AuthenticatedLayout>
+          <RouteSurface>
+            <SourcePage
+              spaces={auth.spaces}
+              onNavigateToRepo={(username: string, repoName: string) =>
+                navigation.navigate({ view: "repo", username, repoName })}
+              isAuthenticated
+              onRequireLogin={() => auth.redirectToLogin(currentPath())}
+            />
+          </RouteSurface>
+        </AuthenticatedLayout>
+      </Match>
+    </Switch>
   );
 }
 
@@ -380,70 +398,73 @@ function RepoRoute() {
   const { t } = useI18n();
   const currentPath = useCurrentPath();
   const route = createMemo(() => navigation.route);
-
-  if (auth.authState === "loading") {
-    return <AuthLoadingGate />;
-  }
-
-  if (auth.authState === "authenticated") {
-    const hasInvalidSpaceRoute = Boolean(navigation.route.spaceId) &&
-      !navigation.routeSpaceId &&
-      auth.spacesLoaded;
-
-    if (hasInvalidSpaceRoute) {
-      return (
-        <AuthenticatedLayout>
-          <SpaceNotFoundMessage />
-        </AuthenticatedLayout>
-      );
-    }
-
-    const backSpace = navigation.routeSpaceId
+  const hasInvalidSpaceRoute = createMemo(() =>
+    Boolean(route().spaceId) && !navigation.routeSpaceId && auth.spacesLoaded
+  );
+  const backSpace = createMemo(() =>
+    navigation.routeSpaceId
       ? findSpaceByIdentifier(
         auth.spaces,
         navigation.routeSpaceId,
         t("personal"),
       )
-      : navigation.preferredSpace;
-    const backSpaceId = backSpace ? getSpaceIdentifier(backSpace) : undefined;
+      : navigation.preferredSpace
+  );
+  const backSpaceId = createMemo(() => {
+    const space = backSpace();
+    return space ? getSpaceIdentifier(space) : undefined;
+  });
 
-    return (
-      <AuthenticatedLayout>
+  return (
+    <Switch
+      fallback={
         <RouteSurface>
           <RepoDetailPage
-            spaceId={backSpaceId}
             repoId={route().repoId}
             username={route().username}
             repoName={route().repoName}
             initialFilePath={route().filePath}
             initialFileLine={route().fileLine}
             initialRef={route().ref}
-            onBack={() => {
-              navigation.navigateToChat(backSpaceId);
-            }}
-            isAuthenticated
+            onBack={() =>
+              navigation.navigate({ view: "store", storeTab: "discover" })}
+            isAuthenticated={false}
             onRequireLogin={() => auth.redirectToLogin(currentPath())}
           />
         </RouteSurface>
-      </AuthenticatedLayout>
-    );
-  }
-
-  return (
-    <RouteSurface>
-      <RepoDetailPage
-        repoId={route().repoId}
-        username={route().username}
-        repoName={route().repoName}
-        initialFilePath={route().filePath}
-        initialFileLine={route().fileLine}
-        initialRef={route().ref}
-        onBack={() =>
-          navigation.navigate({ view: "store", storeTab: "discover" })}
-        isAuthenticated={false}
-        onRequireLogin={() => auth.redirectToLogin(currentPath())}
-      />
-    </RouteSurface>
+      }
+    >
+      <Match when={auth.authState === "loading"}>
+        <AuthLoadingGate />
+      </Match>
+      <Match
+        when={auth.authState === "authenticated" && hasInvalidSpaceRoute()}
+      >
+        <AuthenticatedLayout>
+          <SpaceNotFoundMessage />
+        </AuthenticatedLayout>
+      </Match>
+      <Match when={auth.authState === "authenticated"}>
+        <AuthenticatedLayout>
+          <RouteSurface>
+            <RepoDetailPage
+              spaceId={backSpaceId()}
+              repoId={route().repoId}
+              username={route().username}
+              repoName={route().repoName}
+              initialFilePath={route().filePath}
+              initialFileLine={route().fileLine}
+              initialRef={route().ref}
+              onBack={() => {
+                navigation.navigateToChat(backSpaceId());
+              }}
+              isAuthenticated
+              onRequireLogin={() => auth.redirectToLogin(currentPath())}
+            />
+          </RouteSurface>
+        </AuthenticatedLayout>
+      </Match>
+    </Switch>
   );
 }
 
@@ -464,48 +485,51 @@ function ChatRoute() {
     };
   }, route);
 
-  if (guard.canonicalHref()) {
-    return <Navigate href={guard.canonicalHref()!} />;
-  }
-
-  if (guard.isPending()) {
-    return <LoadingScreen />;
-  }
-
-  if (guard.hasInvalidSpaceRoute()) {
-    return <SpaceNotFoundMessage />;
-  }
-
   return (
-    <RouteSurface>
-      <ChatPage
-        spaces={auth.spaces}
-        initialSpaceId={navigation.routeSpaceId}
-        initialThreadId={route().threadId}
-        initialRunId={route().runId}
-        initialMessageId={route().messageId}
-        onSpaceChange={(spaceId: string) => {
-          navigation.navigateToChat(spaceId);
-        }}
-        onThreadChange={(threadId: string | undefined) => {
-          if (navigation.routeSpaceId) {
-            navigation.navigateToChat(navigation.routeSpaceId, threadId);
-          }
-        }}
-        onUpdateThread={(threadId: string, updates: Partial<Thread>) => {
-          navigation.setThreadsBySpace((previous) => {
-            const next: Record<string, Thread[]> = {};
-            for (const key of Object.keys(previous)) {
-              next[key] = previous[key].map((thread) =>
-                thread.id === threadId ? { ...thread, ...updates } : thread
-              );
-            }
-            return next;
-          });
-        }}
-        onNewThreadCreated={navigation.handleNewThreadCreated}
-      />
-    </RouteSurface>
+    <Switch>
+      <Match when={guard.canonicalHref()}>
+        <Navigate href={guard.canonicalHref()!} />
+      </Match>
+      <Match when={guard.isPending()}>
+        <LoadingScreen />
+      </Match>
+      <Match when={guard.hasInvalidSpaceRoute()}>
+        <SpaceNotFoundMessage />
+      </Match>
+      <Match when>
+        <RouteSurface>
+          <ChatPage
+            spaces={auth.spaces}
+            initialSpaceId={navigation.routeSpaceId}
+            initialThreadId={route().threadId}
+            initialRunId={route().runId}
+            initialMessageId={route().messageId}
+            onSpaceChange={(spaceId: string) => {
+              navigation.navigateToChat(spaceId);
+            }}
+            onThreadChange={(threadId: string | undefined) => {
+              const spaceId = navigation.routeSpaceId ??
+                navigation.selectedSpaceId ?? navigation.preferredSpaceId;
+              if (spaceId) {
+                navigation.navigateToChat(spaceId, threadId);
+              }
+            }}
+            onUpdateThread={(threadId: string, updates: Partial<Thread>) => {
+              navigation.setThreadsBySpace((previous) => {
+                const next: Record<string, Thread[]> = {};
+                for (const key of Object.keys(previous)) {
+                  next[key] = previous[key].map((thread) =>
+                    thread.id === threadId ? { ...thread, ...updates } : thread
+                  );
+                }
+                return next;
+              });
+            }}
+            onNewThreadCreated={navigation.handleNewThreadCreated}
+          />
+        </RouteSurface>
+      </Match>
+    </Switch>
   );
 }
 
@@ -521,34 +545,82 @@ function ReposRoute() {
     return spaceId ? { view: "repos", spaceId } : null;
   }, route);
 
-  if (guard.canonicalHref()) {
-    return <Navigate href={guard.canonicalHref()!} />;
-  }
+  return (
+    <Switch>
+      <Match when={guard.canonicalHref()}>
+        <Navigate href={guard.canonicalHref()!} />
+      </Match>
+      <Match when={guard.isPending()}>
+        <LoadingScreen />
+      </Match>
+      <Match when={guard.hasInvalidSpaceRoute()}>
+        <SpaceNotFoundMessage />
+      </Match>
+      <Match when={!resolvedSpaceId() && !auth.spacesLoaded}>
+        <LoadingScreen />
+      </Match>
+      <Match when={!resolvedSpaceId()}>
+        <NoSpaceAvailableMessage />
+      </Match>
+      <Match when={resolvedSpaceId()}>
+        <RouteSurface>
+          <ReposPanel
+            spaceId={resolvedSpaceId()!}
+            onNavigateToRepo={(username: string, repoName: string) =>
+              navigation.navigate({ view: "repo", username, repoName })}
+          />
+        </RouteSurface>
+      </Match>
+    </Switch>
+  );
+}
 
-  if (guard.isPending()) {
-    return <LoadingScreen />;
-  }
-
-  if (guard.hasInvalidSpaceRoute()) {
-    return <SpaceNotFoundMessage />;
-  }
-
-  if (!resolvedSpaceId() && !auth.spacesLoaded) {
-    return <LoadingScreen />;
-  }
-
-  if (!resolvedSpaceId()) {
-    return <LoadingScreen />;
-  }
+function GroupsRoute() {
+  const auth = useAuth();
+  const navigation = useNavigation();
+  const route = createMemo(() => navigation.route);
+  const groupId = createMemo(() => route().groupId);
+  const groupsSpaceId = createMemo(() =>
+    navigation.routeSpaceId ?? navigation.selectedSpaceId ??
+      navigation.preferredSpaceId
+  );
+  const guard = useSpaceRouteGuard(() => {
+    const spaceId = groupsSpaceId();
+    return spaceId
+      ? { view: "deploy", spaceId, deploySection: "groups", groupId: groupId() }
+      : null;
+  }, route);
+  const redirectHref = createMemo(() => {
+    const spaceId = groupsSpaceId();
+    return buildPath({
+      view: "deploy",
+      spaceId: spaceId ?? undefined,
+      deploySection: "groups",
+      groupId: groupId(),
+    });
+  });
 
   return (
-    <RouteSurface>
-      <ReposPanel
-        spaceId={resolvedSpaceId()!}
-        onNavigateToRepo={(username: string, repoName: string) =>
-          navigation.navigate({ view: "repo", username, repoName })}
-      />
-    </RouteSurface>
+    <Switch>
+      <Match when={guard.canonicalHref()}>
+        <Navigate href={guard.canonicalHref()!} />
+      </Match>
+      <Match when={guard.isPending()}>
+        <LoadingScreen />
+      </Match>
+      <Match when={guard.hasInvalidSpaceRoute()}>
+        <SpaceNotFoundMessage />
+      </Match>
+      <Match when={!groupsSpaceId() && !auth.spacesLoaded}>
+        <LoadingScreen />
+      </Match>
+      <Match when={!groupsSpaceId()}>
+        <NoSpaceAvailableMessage />
+      </Match>
+      <Match when={groupsSpaceId()}>
+        <Navigate href={redirectHref()} />
+      </Match>
+    </Switch>
   );
 }
 
@@ -560,6 +632,9 @@ function DeployRoute() {
   const currentDeploySection = createMemo(() =>
     navigation.route.deploySection || "workers"
   );
+  const groupId = createMemo(() =>
+    currentDeploySection() === "groups" ? route().groupId : undefined
+  );
   const deploySpaceId = createMemo(() =>
     navigation.routeSpaceId ?? navigation.selectedSpaceId ??
       navigation.preferredSpaceId
@@ -568,51 +643,61 @@ function DeployRoute() {
     view: "deploy",
     spaceId: deploySpaceId() ?? undefined,
     deploySection: currentDeploySection(),
+    groupId: groupId(),
   }), route);
 
-  if (guard.canonicalHref()) {
-    return <Navigate href={guard.canonicalHref()!} />;
-  }
-
-  if (guard.isPending()) {
-    return <LoadingScreen />;
-  }
-
-  if (guard.hasInvalidSpaceRoute()) {
-    return <SpaceNotFoundMessage />;
-  }
-
-  if (!deploySpaceId() && !auth.spacesLoaded) {
-    return <LoadingScreen />;
-  }
-
   return (
-    <RouteSurface>
-      {deploySpaceId()
-        ? (
-          <DeployPanel
-            spaceId={deploySpaceId()!}
-            spaces={auth.spaces}
-            activeSection={currentDeploySection()}
-            onSectionChange={(section: DeploySection) => {
-              navigation.navigate({
-                view: "deploy",
-                spaceId: deploySpaceId() ?? undefined,
-                deploySection: section,
-              });
-            }}
-            user={auth.user}
-            userSettings={auth.userSettings}
-            onSettingsChange={(settings: UserSettings) =>
-              auth.setUserSettings(settings)}
-            onSpacesRefresh={() => {
-              void auth.fetchSpaces(auth.user);
-            }}
-            isMobile={breakpoint.isMobile}
-          />
-        )
-        : <NoSpaceAvailableMessage />}
-    </RouteSurface>
+    <Switch>
+      <Match when={guard.canonicalHref()}>
+        <Navigate href={guard.canonicalHref()!} />
+      </Match>
+      <Match when={guard.isPending()}>
+        <LoadingScreen />
+      </Match>
+      <Match when={guard.hasInvalidSpaceRoute()}>
+        <SpaceNotFoundMessage />
+      </Match>
+      <Match when={!deploySpaceId() && !auth.spacesLoaded}>
+        <LoadingScreen />
+      </Match>
+      <Match when>
+        <RouteSurface>
+          {deploySpaceId()
+            ? (
+              <DeployPanel
+                spaceId={deploySpaceId()!}
+                spaces={auth.spaces}
+                activeSection={currentDeploySection()}
+                groupId={groupId()}
+                onSectionChange={(section: DeploySection) => {
+                  navigation.navigate({
+                    view: "deploy",
+                    spaceId: deploySpaceId() ?? undefined,
+                    deploySection: section,
+                    groupId: undefined,
+                  });
+                }}
+                onGroupSelect={(nextGroupId) =>
+                  navigation.navigate({
+                    view: "deploy",
+                    spaceId: deploySpaceId() ?? undefined,
+                    deploySection: "groups",
+                    groupId: nextGroupId ?? undefined,
+                  })}
+                user={auth.user}
+                userSettings={auth.userSettings}
+                onSettingsChange={(settings: UserSettings) =>
+                  auth.setUserSettings(settings)}
+                onSpacesRefresh={() => {
+                  void auth.fetchSpaces(auth.user);
+                }}
+                isMobile={breakpoint.isMobile}
+              />
+            )
+            : <NoSpaceAvailableMessage />}
+        </RouteSurface>
+      </Match>
+    </Switch>
   );
 }
 
@@ -637,39 +722,38 @@ function StorageRoute() {
     };
   }, route);
 
-  if (guard.canonicalHref()) {
-    return <Navigate href={guard.canonicalHref()!} />;
-  }
-
-  if (guard.isPending()) {
-    return <LoadingScreen />;
-  }
-
-  if (guard.hasInvalidSpaceRoute()) {
-    return <SpaceNotFoundMessage />;
-  }
-
-  if (!storageSpaceId() && !auth.spacesLoaded) {
-    return <LoadingScreen />;
-  }
-
-  if (!storageSpaceId()) {
-    return <LoadingScreen />;
-  }
-
   return (
-    <RouteSurface>
-      <StoragePage
-        spaceId={storageSpaceId()!}
-        spaces={auth.spaces}
-        initialPath={route().storagePath || "/"}
-        initialFilePath={route().filePath}
-        onPathChange={(path: string) =>
-          navigation.navigate(
-            buildStorageNavigationState(storageSpaceId()!, path),
-          )}
-      />
-    </RouteSurface>
+    <Switch>
+      <Match when={guard.canonicalHref()}>
+        <Navigate href={guard.canonicalHref()!} />
+      </Match>
+      <Match when={guard.isPending()}>
+        <LoadingScreen />
+      </Match>
+      <Match when={guard.hasInvalidSpaceRoute()}>
+        <SpaceNotFoundMessage />
+      </Match>
+      <Match when={!storageSpaceId() && !auth.spacesLoaded}>
+        <LoadingScreen />
+      </Match>
+      <Match when={!storageSpaceId()}>
+        <NoSpaceAvailableMessage />
+      </Match>
+      <Match when={storageSpaceId()}>
+        <RouteSurface>
+          <StoragePage
+            spaceId={storageSpaceId()!}
+            spaces={auth.spaces}
+            initialPath={route().storagePath || "/"}
+            initialFilePath={route().filePath}
+            onPathChange={(path: string) =>
+              navigation.navigate(
+                buildStorageNavigationState(storageSpaceId()!, path),
+              )}
+          />
+        </RouteSurface>
+      </Match>
+    </Switch>
   );
 }
 
@@ -685,33 +769,33 @@ function AppsRoute() {
     spaceId: appsSpaceId() ?? undefined,
   }), route);
 
-  if (guard.canonicalHref()) {
-    return <Navigate href={guard.canonicalHref()!} />;
-  }
-
-  if (guard.isPending()) {
-    return <LoadingScreen />;
-  }
-
-  if (guard.hasInvalidSpaceRoute()) {
-    return <SpaceNotFoundMessage />;
-  }
-
-  if (!appsSpaceId()) {
-    if (!auth.spacesLoaded) {
-      return <LoadingScreen />;
-    }
-    return <NoSpaceAvailableMessage />;
-  }
-
   return (
-    <RouteSurface>
-      <AppsPage
-        spaceId={appsSpaceId()!}
-        onNavigateToStore={() =>
-          navigation.navigate({ view: "store", storeTab: "discover" })}
-      />
-    </RouteSurface>
+    <Switch>
+      <Match when={guard.canonicalHref()}>
+        <Navigate href={guard.canonicalHref()!} />
+      </Match>
+      <Match when={guard.isPending()}>
+        <LoadingScreen />
+      </Match>
+      <Match when={guard.hasInvalidSpaceRoute()}>
+        <SpaceNotFoundMessage />
+      </Match>
+      <Match when={!appsSpaceId() && !auth.spacesLoaded}>
+        <LoadingScreen />
+      </Match>
+      <Match when={!appsSpaceId()}>
+        <NoSpaceAvailableMessage />
+      </Match>
+      <Match when={appsSpaceId()}>
+        <RouteSurface>
+          <AppsPage
+            spaceId={appsSpaceId()!}
+            onNavigateToStore={() =>
+              navigation.navigate({ view: "store", storeTab: "discover" })}
+          />
+        </RouteSurface>
+      </Match>
+    </Switch>
   );
 }
 
@@ -727,31 +811,32 @@ function SpaceSettingsRoute() {
     spaceId: selectedSpaceId() ?? undefined,
   }), route);
 
-  if (guard.canonicalHref()) {
-    return <Navigate href={guard.canonicalHref()!} />;
-  }
-
-  if (guard.isPending()) {
-    return <LoadingScreen />;
-  }
-
-  if (guard.hasInvalidSpaceRoute()) {
-    return <SpaceNotFoundMessage />;
-  }
-
   return (
-    <RouteSurface>
-      <SpaceSettingsPage
-        spaces={auth.spaces}
-        initialSpaceId={selectedSpaceId()}
-        onSpaceDeleted={() => {
-          void auth.fetchSpaces(auth.user);
-        }}
-        onSpaceUpdated={() => {
-          void auth.fetchSpaces(auth.user);
-        }}
-      />
-    </RouteSurface>
+    <Switch>
+      <Match when={guard.canonicalHref()}>
+        <Navigate href={guard.canonicalHref()!} />
+      </Match>
+      <Match when={guard.isPending()}>
+        <LoadingScreen />
+      </Match>
+      <Match when={guard.hasInvalidSpaceRoute()}>
+        <SpaceNotFoundMessage />
+      </Match>
+      <Match when>
+        <RouteSurface>
+          <SpaceSettingsPage
+            spaces={auth.spaces}
+            initialSpaceId={selectedSpaceId()}
+            onSpaceDeleted={() => {
+              void auth.fetchSpaces(auth.user);
+            }}
+            onSpaceUpdated={() => {
+              void auth.fetchSpaces(auth.user);
+            }}
+          />
+        </RouteSurface>
+      </Match>
+    </Switch>
   );
 }
 
@@ -773,19 +858,30 @@ function SettingsRoute() {
 }
 
 function MemoryRoute() {
+  const auth = useAuth();
   const navigation = useNavigation();
-
-  if (!navigation.preferredSpace) {
-    return <LoadingScreen />;
-  }
+  const preferredSpaceId = createMemo(() => {
+    const space = navigation.preferredSpace;
+    return space ? getSpaceIdentifier(space) : undefined;
+  });
 
   return (
-    <RouteSurface>
-      <MemoryPage
-        spaceId={getSpaceIdentifier(navigation.preferredSpace)}
-        onBack={navigation.navigateToPreferredChat}
-      />
-    </RouteSurface>
+    <Switch>
+      <Match when={preferredSpaceId()}>
+        <RouteSurface>
+          <MemoryPage
+            spaceId={preferredSpaceId()!}
+            onBack={navigation.navigateToPreferredChat}
+          />
+        </RouteSurface>
+      </Match>
+      <Match when={!auth.spacesLoaded}>
+        <LoadingScreen />
+      </Match>
+      <Match when={auth.spacesLoaded}>
+        <NoSpaceAvailableMessage />
+      </Match>
+    </Switch>
   );
 }
 
@@ -793,30 +889,34 @@ function ProfileRoute() {
   const navigation = useNavigation();
   const route = createMemo(() => navigation.route);
 
-  if (!route().username) {
-    return <LoadingScreen />;
-  }
-
   return (
-    <RouteSurface>
-      <UserProfilePage
-        username={route().username!}
-        onBack={navigation.navigateToPreferredChat}
-        onNavigateToProfile={(username: string) =>
-          navigation.navigate({ view: "profile", username })}
-        onNavigateToRepo={(username: string, repoName: string) => {
-          navigation.navigate({ view: "repo", username, repoName });
-        }}
-      />
-    </RouteSurface>
+    <Switch fallback={<LoadingScreen />}>
+      <Match when={route().username}>
+        <RouteSurface>
+          <UserProfilePage
+            username={route().username!}
+            onBack={navigation.navigateToPreferredChat}
+            onNavigateToProfile={(username: string) =>
+              navigation.navigate({ view: "profile", username })}
+            onNavigateToRepo={(username: string, repoName: string) => {
+              navigation.navigate({ view: "repo", username, repoName });
+            }}
+          />
+        </RouteSurface>
+      </Match>
+    </Switch>
   );
 }
 
 function LegacyAppShortcutRoute(props: { target: () => RouteState }) {
   const canonicalHref = useCanonicalHref(props.target);
-  return canonicalHref()
-    ? <Navigate href={canonicalHref()!} />
-    : <LoadingScreen />;
+  return (
+    <Switch fallback={<LoadingScreen />}>
+      <Match when={canonicalHref()}>
+        <Navigate href={canonicalHref()!} />
+      </Match>
+    </Switch>
+  );
 }
 
 function ExternalRedirect(props: { href: string }) {
@@ -845,17 +945,22 @@ function LegacyAppRoute() {
     personalLabel: () => i18n.t("personal"),
   });
 
-  const resolution = resolver.resolution();
-  if (resolution?.externalHref) {
-    return <ExternalRedirect href={resolution.externalHref} />;
-  }
-  if (resolution?.targetRoute) {
-    return <Navigate href={buildPath(resolution.targetRoute)} />;
-  }
-  if (resolver.resolving()) {
-    return <LoadingScreen />;
-  }
-  return <LoadingScreen />;
+  const externalHref = createMemo(() => resolver.resolution()?.externalHref);
+  const targetRoute = createMemo(() => resolver.resolution()?.targetRoute);
+
+  return (
+    <Switch fallback={<LoadingScreen />}>
+      <Match when={externalHref()}>
+        <ExternalRedirect href={externalHref()!} />
+      </Match>
+      <Match when={targetRoute()}>
+        <Navigate href={buildPath(targetRoute()!)} />
+      </Match>
+      <Match when={resolver.resolving()}>
+        <LoadingScreen />
+      </Match>
+    </Switch>
+  );
 }
 
 function OAuthAuthorizeRoute() {
@@ -876,13 +981,14 @@ function OAuthDeviceRoute() {
 
 function ShareRoute() {
   const params = useParams<{ token?: string }>();
-  if (!params.token) {
-    return <LoadingScreen />;
-  }
   return (
-    <RouteSurface>
-      <SharedThreadPage token={params.token} />
-    </RouteSurface>
+    <Switch fallback={<LoadingScreen />}>
+      <Match when={params.token}>
+        <RouteSurface>
+          <SharedThreadPage token={params.token!} />
+        </RouteSurface>
+      </Match>
+    </Switch>
   );
 }
 
@@ -931,6 +1037,7 @@ const ROUTE_COMPONENTS: Record<AppRouteComponentKey, () => JSX.Element> = {
   repo: RepoRoute,
   chat: ChatRoute,
   repos: ReposRoute,
+  groups: GroupsRoute,
   storage: StorageRoute,
   apps: AppsRoute,
   deploy: DeployRoute,

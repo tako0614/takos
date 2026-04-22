@@ -1,6 +1,12 @@
-export type FileOrigin = 'user' | 'ai' | 'system';
-export type FileKind = 'source' | 'config' | 'doc' | 'asset' | 'artifact' | 'temp';
-export type FileVisibility = 'private' | 'workspace' | 'public';
+export type FileOrigin = "user" | "ai" | "system";
+export type FileKind =
+  | "source"
+  | "config"
+  | "doc"
+  | "asset"
+  | "artifact"
+  | "temp";
+export type FileVisibility = "private" | "workspace" | "public";
 
 export interface SpaceFile {
   id: string;
@@ -17,7 +23,7 @@ export interface SpaceFile {
   updated_at: string;
 }
 
-export type SpaceStorageFileType = 'file' | 'folder';
+export type SpaceStorageFileType = "file" | "folder";
 
 export interface SpaceStorageFile {
   id: string;

@@ -111,8 +111,8 @@ export interface GroupDeploymentSnapshotQueueMessage {
   version: typeof DEPLOYMENT_QUEUE_MESSAGE_VERSION;
   type: "group_deployment_snapshot";
   spaceId: string;
-  groupId: string;
-  groupName: string;
+  groupId?: string;
+  groupName?: string;
   repositoryUrl: string;
   ref: string;
   refType: GroupDeploymentSnapshotQueueRefType;

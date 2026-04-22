@@ -13,7 +13,12 @@ import {
   type AgentMemoryBackend,
   AgentMemoryRuntime,
 } from "../memory-graph/memory-graph-runtime.ts";
+import {
+  AGENT_MEMORY_BOOTSTRAP_TIMEOUT_MS,
+  AGENT_MEMORY_FINALIZE_TIMEOUT_MS,
+} from "../../../shared/config/timeouts.ts";
 import { logWarn } from "../../../shared/utils/logger.ts";
+import { withTimeout } from "../../../shared/utils/with-timeout.ts";
 
 export interface MemoryManagerDeps {
   db: SqlDatabaseBinding;
@@ -37,13 +42,20 @@ export async function bootstrapMemory(
 ): Promise<void> {
   try {
     const backend = createMemoryBackend(deps);
-    state.runtime = new AgentMemoryRuntime(
+    const runtime = new AgentMemoryRuntime(
       deps.db,
       deps.context,
       deps.env,
       backend,
     );
-    await state.runtime.bootstrap();
+    await withTimeout(
+      runtime.bootstrap(),
+      AGENT_MEMORY_BOOTSTRAP_TIMEOUT_MS,
+      `Memory runtime bootstrap timed out after ${
+        AGENT_MEMORY_BOOTSTRAP_TIMEOUT_MS / 1000
+      } seconds`,
+    );
+    state.runtime = runtime;
     if (toolExecutor) {
       const observer = state.runtime.createToolObserver();
       toolExecutor.setObserver(observer);
@@ -62,16 +74,24 @@ export async function bootstrapMemory(
  * Safe to call even if runtime was never initialized.
  */
 export async function finalizeMemory(state: MemoryState): Promise<void> {
-  if (!state.runtime) return;
+  const runtime = state.runtime;
+  if (!runtime) return;
   try {
-    await state.runtime.finalize();
+    await withTimeout(
+      runtime.finalize(),
+      AGENT_MEMORY_FINALIZE_TIMEOUT_MS,
+      `Memory runtime finalize timed out after ${
+        AGENT_MEMORY_FINALIZE_TIMEOUT_MS / 1000
+      } seconds`,
+    );
   } catch (err) {
     logWarn("Memory runtime finalize failed during cleanup", {
       module: "services/agent/memory-manager",
       detail: err,
     });
+  } finally {
+    state.runtime = undefined;
   }
-  state.runtime = undefined;
 }
 
 function createMemoryBackend(

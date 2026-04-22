@@ -8,6 +8,7 @@ export type View =
   | "repo"
   | "memory"
   | "deploy"
+  | "groups"
   | "apps"
   | "store"
   | "chat"
@@ -22,11 +23,13 @@ export type View =
 export const DEPLOY_SECTIONS = [
   "workers",
   "resources",
+  "groups",
 ] as const;
 export type DeploySection = (typeof DEPLOY_SECTIONS)[number];
 export const DEPLOY_NAV_SECTIONS = [
   "workers",
   "resources",
+  "groups",
 ] as const satisfies readonly DeploySection[];
 
 const DEPLOY_SECTION_SET = new Set<string>(DEPLOY_SECTIONS);
@@ -53,6 +56,7 @@ export interface RouteState {
   ref?: string;
   appId?: string;
   workerId?: string;
+  groupId?: string;
   username?: string;
   repoId?: string;
   repoName?: string;

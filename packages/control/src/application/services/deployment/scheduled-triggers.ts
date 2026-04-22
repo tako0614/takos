@@ -38,7 +38,7 @@ type ScheduledWorkerBinding = {
 };
 
 type ScheduledObservedGroupState = {
-  workloads?: Record<string, { routeRef?: string }>;
+  workloads?: Record<string, { routeRef?: string; activeArtifactRef?: string }>;
 };
 
 function normalizeCron(cron: string): string {
@@ -114,7 +114,8 @@ export function selectScheduledDispatchTargets(
         groupId,
         groupName: desiredState.groupName,
         workloadName,
-        routeRef: observedWorkload?.routeRef?.trim() ||
+        routeRef: observedWorkload?.activeArtifactRef?.trim() ||
+          observedWorkload?.routeRef?.trim() ||
           workloadName,
         cron: normalizeCron(schedule.cron),
       });

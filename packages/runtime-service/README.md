@@ -168,25 +168,25 @@ the service token claims.
 
 ## Configuration
 
-| Env Variable           | Required | Default                 | Description                             |
-| ---------------------- | -------- | ----------------------- | --------------------------------------- |
-| `PORT`                 | No       | `8080`                  | HTTP server port                        |
-| `TAKOS_API_URL`        | Yes      | --                      | Control plane API URL                   |
-| `JWT_PUBLIC_KEY`       | Yes*     | --                      | RS256 public key for token verification |
-| `GIT_ENDPOINT_URL`     | No       | `https://git.takos.dev` | Git endpoint base URL                   |
-| `PROXY_BASE_URL`       | No       | --                      | CLI proxy base URL                      |
-| `R2_ACCOUNT_ID`        | No       | --                      | Cloudflare R2 account                   |
-| `R2_ACCESS_KEY_ID`     | No       | --                      | R2 access key                           |
-| `R2_SECRET_ACCESS_KEY` | No       | --                      | R2 secret key                           |
-| `R2_BUCKET`            | No       | `takos-tenant-source`   | R2/S3 bucket name                       |
-| `S3_ENDPOINT`          | No       | auto                    | S3-compatible endpoint                  |
-| `S3_REGION`            | No       | auto                    | S3 region                               |
-| `S3_ACCESS_KEY_ID`     | No       | `R2_ACCESS_KEY_ID`      | S3-compatible access key                |
-| `S3_SECRET_ACCESS_KEY` | No       | `R2_SECRET_ACCESS_KEY`  | S3-compatible secret key                |
-| `S3_BUCKET`            | No       | `R2_BUCKET`             | S3-compatible bucket name               |
-| `NODE_ENV`             | No       | --                      | `production` enables HTTPS enforcement  |
-| `CF_CONTAINER`         | No       | --                      | Set when running in CF container        |
-| `COMMAND_PROFILE`      | No       | --                      | `extended` for additional commands      |
+| Env Variable           | Required | Default                | Description                             |
+| ---------------------- | -------- | ---------------------- | --------------------------------------- |
+| `PORT`                 | No       | `8080`                 | HTTP server port                        |
+| `TAKOS_API_URL`        | Yes      | --                     | Control plane API URL                   |
+| `JWT_PUBLIC_KEY`       | Yes*     | --                     | RS256 public key for token verification |
+| `GIT_ENDPOINT_URL`     | No       | `https://git.takos.jp` | Git endpoint base URL                   |
+| `PROXY_BASE_URL`       | No       | --                     | CLI proxy base URL                      |
+| `R2_ACCOUNT_ID`        | No       | --                     | Cloudflare R2 account                   |
+| `R2_ACCESS_KEY_ID`     | No       | --                     | R2 access key                           |
+| `R2_SECRET_ACCESS_KEY` | No       | --                     | R2 secret key                           |
+| `R2_BUCKET`            | No       | `takos-tenant-source`  | R2/S3 bucket name                       |
+| `S3_ENDPOINT`          | No       | auto                   | S3-compatible endpoint                  |
+| `S3_REGION`            | No       | auto                   | S3 region                               |
+| `S3_ACCESS_KEY_ID`     | No       | `R2_ACCESS_KEY_ID`     | S3-compatible access key                |
+| `S3_SECRET_ACCESS_KEY` | No       | `R2_SECRET_ACCESS_KEY` | S3-compatible secret key                |
+| `S3_BUCKET`            | No       | `R2_BUCKET`            | S3-compatible bucket name               |
+| `NODE_ENV`             | No       | --                     | `production` enables HTTPS enforcement  |
+| `CF_CONTAINER`         | No       | --                     | Set when running in CF container        |
+| `COMMAND_PROFILE`      | No       | --                     | `extended` for additional commands      |
 
 `S3_*` values are read first. `R2_*` names are compatibility fallbacks.
 

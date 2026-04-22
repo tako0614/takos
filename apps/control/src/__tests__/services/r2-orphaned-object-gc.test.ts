@@ -69,9 +69,10 @@ Deno.test("r2 orphaned object GC - deletes blob objects without DB rows (and not
     select: () => chain(),
     selectDistinct: () => chain(),
   })) as any;
-  r2OrphanedObjectGcDeps.getDb = mocks.getDb as typeof r2OrphanedObjectGcDeps.getDb;
-  (globalThis as typeof globalThis & { __takosDbMock?: unknown }).__takosDbMock =
-    mocks.getDb() as never;
+  r2OrphanedObjectGcDeps.getDb = mocks
+    .getDb as typeof r2OrphanedObjectGcDeps.getDb;
+  (globalThis as typeof globalThis & { __takosDbMock?: unknown })
+    .__takosDbMock = mocks.getDb() as never;
 
   const env = createMockEnv({ TENANT_SOURCE: tenant, TAKOS_OFFLOAD: offload });
   const out = await runR2OrphanedObjectGcBatch(env as unknown as GcEnv, {
@@ -119,9 +120,10 @@ Deno.test("r2 orphaned object GC - deletes tree objects without DB snapshot rows
     select: () => chain(),
     selectDistinct: () => chain(),
   })) as any;
-  r2OrphanedObjectGcDeps.getDb = mocks.getDb as typeof r2OrphanedObjectGcDeps.getDb;
-  (globalThis as typeof globalThis & { __takosDbMock?: unknown }).__takosDbMock =
-    mocks.getDb() as never;
+  r2OrphanedObjectGcDeps.getDb = mocks
+    .getDb as typeof r2OrphanedObjectGcDeps.getDb;
+  (globalThis as typeof globalThis & { __takosDbMock?: unknown })
+    .__takosDbMock = mocks.getDb() as never;
 
   const env = createMockEnv({ TENANT_SOURCE: tenant, TAKOS_OFFLOAD: offload });
   const out = await runR2OrphanedObjectGcBatch(env as unknown as GcEnv, {

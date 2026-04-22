@@ -1,12 +1,16 @@
-import type { D1Database } from '../../../shared/types/bindings.ts';
-import type { Message, MemoryType } from '../../../shared/types/index.ts';
-import { LLMClient } from '../agent/index.ts';
-import { getDb, memories, messages as messagesTable } from '../../../infra/db/index.ts';
-import { eq, asc } from 'drizzle-orm';
-import { generateId } from '../../../shared/utils/index.ts';
-import { chatAndParseJsonArray } from './llm-parser.ts';
-import { MEMORY_TYPES } from './memories.ts';
-import { logError } from '../../../shared/utils/logger.ts';
+import type { D1Database } from "../../../shared/types/bindings.ts";
+import type { MemoryType, Message } from "../../../shared/types/index.ts";
+import { LLMClient } from "../agent/index.ts";
+import {
+  getDb,
+  memories,
+  messages as messagesTable,
+} from "../../../infra/db/index.ts";
+import { asc, eq } from "drizzle-orm";
+import { generateId } from "../../../shared/utils/index.ts";
+import { chatAndParseJsonArray } from "./llm-parser.ts";
+import { MEMORY_TYPES } from "./memories.ts";
+import { logError } from "../../../shared/utils/logger.ts";
 
 interface ExtractedMemory {
   type: MemoryType;
@@ -72,7 +76,7 @@ const PROCEDURE_PATTERNS = [
 const PATTERN_RULES: PatternRule[] = [
   {
     patterns: REMEMBER_PATTERNS,
-    type: 'semantic',
+    type: "semantic",
     importance: 0.9,
     maxContentLength: Infinity,
     cleanMatch: true,
@@ -80,22 +84,22 @@ const PATTERN_RULES: PatternRule[] = [
   },
   {
     patterns: DECISION_PATTERNS,
-    type: 'episode',
-    category: 'decision',
+    type: "episode",
+    category: "decision",
     importance: 0.7,
     maxContentLength: 500,
   },
   {
     patterns: FACT_PATTERNS,
-    type: 'semantic',
-    category: 'fact',
+    type: "semantic",
+    category: "fact",
     importance: 0.6,
     maxContentLength: 200,
   },
   {
     patterns: PROCEDURE_PATTERNS,
-    type: 'procedural',
-    category: 'preference',
+    type: "procedural",
+    category: "preference",
     importance: 0.6,
     maxContentLength: 300,
   },
@@ -109,15 +113,18 @@ export const memoryExtractorDeps = {
   logError,
 };
 
-function matchPatternRule(content: string, rule: PatternRule): ExtractedMemory | null {
+function matchPatternRule(
+  content: string,
+  rule: PatternRule,
+): ExtractedMemory | null {
   for (const pattern of rule.patterns) {
     if (!pattern.test(content)) continue;
     if (content.length >= rule.maxContentLength) continue;
 
     if (rule.cleanMatch) {
       const cleaned = content
-        .replace(pattern, '')
-        .replace(/^[:\s]+/, '')
+        .replace(pattern, "")
+        .replace(/^[:\s]+/, "")
         .trim();
       if (cleaned.length < (rule.minCleanedLength ?? 0)) return null;
       return {
@@ -141,9 +148,9 @@ function matchPatternRule(content: string, rule: PatternRule): ExtractedMemory |
 function isValidExtractedMemory(m: ExtractedMemory): boolean {
   return Boolean(
     m.type &&
-    m.content &&
-    VALID_MEMORY_TYPES.has(m.type) &&
-    typeof m.importance === 'number'
+      m.content &&
+      VALID_MEMORY_TYPES.has(m.type) &&
+      typeof m.importance === "number",
   );
 }
 
@@ -161,7 +168,7 @@ export class MemoryExtractor {
   async extractFromThread(
     _spaceId: string,
     threadId: string,
-    _userId: string
+    _userId: string,
   ): Promise<ExtractedMemory[]> {
     const db = memoryExtractorDeps.getDb(this.dbBinding);
 
@@ -174,16 +181,16 @@ export class MemoryExtractor {
       .limit(50)
       .all();
 
-    const msgList: Message[] = messagesResult.map(m => ({
-      id: '',
+    const msgList: Message[] = messagesResult.map((m) => ({
+      id: "",
       thread_id: threadId,
-      role: m.role as Message['role'],
+      role: m.role as Message["role"],
       content: m.content,
       tool_calls: null,
       tool_call_id: null,
-      metadata: '{}',
+      metadata: "{}",
       sequence: 0,
-      created_at: '',
+      created_at: "",
     }));
 
     if (msgList.length === 0) {
@@ -194,7 +201,11 @@ export class MemoryExtractor {
       try {
         return await this.extractWithLLM(msgList);
       } catch (error) {
-        memoryExtractorDeps.logError('LLM extraction failed, falling back to pattern matching', error, { module: 'services/memory/extractor' });
+        memoryExtractorDeps.logError(
+          "LLM extraction failed, falling back to pattern matching",
+          error,
+          { module: "services/memory/extractor" },
+        );
       }
     }
 
@@ -205,10 +216,11 @@ export class MemoryExtractor {
     messages: Message[],
   ): Promise<ExtractedMemory[]> {
     const conversation = messages
-      .map(m => `${m.role}: ${m.content}`)
-      .join('\n\n');
+      .map((m) => `${m.role}: ${m.content}`)
+      .join("\n\n");
 
-    const userPrompt = `Analyze this conversation and extract important information to remember.
+    const userPrompt =
+      `Analyze this conversation and extract important information to remember.
 
 Conversation:
 ${conversation}
@@ -233,9 +245,11 @@ Format:
   ...
 ]`;
 
-    const parsed = await memoryExtractorDeps.chatAndParseJsonArray<ExtractedMemory>(
+    const parsed = await memoryExtractorDeps.chatAndParseJsonArray<
+      ExtractedMemory
+    >(
       this.llmClient!,
-      'You are a memory extraction assistant. Output only valid JSON.',
+      "You are a memory extraction assistant. Output only valid JSON.",
       userPrompt,
     );
 
@@ -247,7 +261,7 @@ Format:
     const extractedMemories: ExtractedMemory[] = [];
 
     for (const msg of messages) {
-      if (msg.role !== 'user') continue;
+      if (msg.role !== "user") continue;
       const content = msg.content;
 
       for (const rule of PATTERN_RULES) {
@@ -259,7 +273,7 @@ Format:
     }
 
     const seen = new Set<string>();
-    return extractedMemories.filter(m => {
+    return extractedMemories.filter((m) => {
       const key = m.content.substring(0, 50);
       if (seen.has(key)) return false;
       seen.add(key);
@@ -271,7 +285,7 @@ Format:
     spaceId: string,
     threadId: string,
     userId: string,
-    extractedMemories: ExtractedMemory[]
+    extractedMemories: ExtractedMemory[],
   ): Promise<number> {
     const db = memoryExtractorDeps.getDb(this.dbBinding);
     const timestamp = new Date().toISOString();
@@ -289,7 +303,9 @@ Format:
           type: memory.type,
           category: memory.category || null,
           content: memory.content,
-          summary: memory.content.length > 100 ? memory.content.substring(0, 97) + '...' : memory.content,
+          summary: memory.content.length > 100
+            ? memory.content.substring(0, 97) + "..."
+            : memory.content,
           importance: memory.importance,
           occurredAt: timestamp,
           accessCount: 0,
@@ -299,7 +315,9 @@ Format:
 
         saved++;
       } catch (error) {
-        memoryExtractorDeps.logError('Failed to save memory', error, { module: 'services/memory/extractor' });
+        memoryExtractorDeps.logError("Failed to save memory", error, {
+          module: "services/memory/extractor",
+        });
       }
     }
 
@@ -309,16 +327,28 @@ Format:
   async processThread(
     spaceId: string,
     threadId: string,
-    userId: string
+    userId: string,
   ): Promise<{ extracted: number; saved: number }> {
-    const extractedMemories = await this.extractFromThread(spaceId, threadId, userId);
-    const saved = await this.saveMemories(spaceId, threadId, userId, extractedMemories);
+    const extractedMemories = await this.extractFromThread(
+      spaceId,
+      threadId,
+      userId,
+    );
+    const saved = await this.saveMemories(
+      spaceId,
+      threadId,
+      userId,
+      extractedMemories,
+    );
     return { extracted: extractedMemories.length, saved };
   }
 }
 
 const AUTO_EXTRACT_INTERVAL = 10;
 
-export function shouldAutoExtract(messageCount: number, lastExtractedCount: number): boolean {
+export function shouldAutoExtract(
+  messageCount: number,
+  lastExtractedCount: number,
+): boolean {
   return messageCount - lastExtractedCount >= AUTO_EXTRACT_INTERVAL;
 }

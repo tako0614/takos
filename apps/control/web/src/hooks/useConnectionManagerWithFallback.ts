@@ -1,8 +1,11 @@
-import type { Run } from '../types/index.ts';
-import { parseEventData, EVENT_DISPATCH } from './useWsMessageProcessor.ts';
-import type { UseWsConnectionManagerOptions, UseWsConnectionManagerResult } from './useWsConnectionManager.ts';
-import { useWsConnectionManager } from './useWsConnectionManager.ts';
-import { useSseConnectionManager } from './useSseConnectionManager.ts';
+import type { Run } from "../types/index.ts";
+import { EVENT_DISPATCH, parseEventData } from "./useWsMessageProcessor.ts";
+import type {
+  UseWsConnectionManagerOptions,
+  UseWsConnectionManagerResult,
+} from "./useWsConnectionManager.ts";
+import { useWsConnectionManager } from "./useWsConnectionManager.ts";
+import { useSseConnectionManager } from "./useSseConnectionManager.ts";
 
 type MutableRefObject<T> = { current: T };
 
@@ -13,7 +16,7 @@ type MutableRefObject<T> = { current: T };
  */
 const WS_FALLBACK_TIMEOUT_MS = 3_000;
 
-type Transport = 'ws' | 'sse';
+type Transport = "ws" | "sse";
 
 /**
  * Connection manager that tries WebSocket first and falls back to SSE
@@ -35,7 +38,7 @@ type Transport = 'ws' | 'sse';
 export function useConnectionManagerWithFallback(
   options: UseWsConnectionManagerOptions,
 ): UseWsConnectionManagerResult {
-  const activeTransportRef: MutableRefObject<Transport> = { current: 'ws' };
+  const activeTransportRef: MutableRefObject<Transport> = { current: "ws" };
   const fallbackAttemptedRef: MutableRefObject<boolean> = { current: false };
 
   // Both hooks are always instantiated, but only
@@ -49,7 +52,9 @@ export function useConnectionManagerWithFallback(
   const sseStartRef = sseConnection.startWebSocketRef;
 
   const rootRunIdRef: MutableRefObject<string | null> = { current: null };
-  const startWebSocketRef: MutableRefObject<(runId: string) => void> = { current: () => {} };
+  const startWebSocketRef: MutableRefObject<(runId: string) => void> = {
+    current: () => {},
+  };
 
   const closeWebSocket = (): void => {
     // Close whichever transport is active (closing both is safe).
@@ -63,7 +68,14 @@ export function useConnectionManagerWithFallback(
   // Without this, the SSE hook's version (which only closes EventSource) would
   // be active even when WS is the transport, leaving WS connections dangling
   // on run.failed events.
-  const { processor, currentRunIdRef, lastEventIdRef, isMountedRef, setError, t } = options;
+  const {
+    processor,
+    currentRunIdRef,
+    lastEventIdRef,
+    isMountedRef,
+    setError,
+    t,
+  } = options;
   const {
     verifyRunStatus,
     upsertRunMeta,
@@ -83,7 +95,8 @@ export function useConnectionManagerWithFallback(
     sourceRunId?: string,
   ) => {
     const payload = parseEventData(data);
-    const runId = payload.run?.id || sourceRunId || currentRunIdRef.current || '';
+    const runId = payload.run?.id || sourceRunId || currentRunIdRef.current ||
+      "";
     if (!runId) return;
     const isPrimaryRun = runId === currentRunIdRef.current;
     if (payload.run?.id) {
@@ -117,8 +130,11 @@ export function useConnectionManagerWithFallback(
   };
 
   const switchToSse = (runId: string): void => {
-    activeTransportRef.current = 'sse';
-    console.info('[Fallback] WebSocket unavailable, switching to SSE for run', runId);
+    activeTransportRef.current = "sse";
+    console.info(
+      "[Fallback] WebSocket unavailable, switching to SSE for run",
+      runId,
+    );
     wsConnection.closeWebSocket();
     sseStartRef.current(runId);
   };
@@ -127,7 +143,7 @@ export function useConnectionManagerWithFallback(
     rootRunIdRef.current = runId;
 
     // If we've already determined SSE is needed, go straight there.
-    if (activeTransportRef.current === 'sse') {
+    if (activeTransportRef.current === "sse") {
       sseStartRef.current(runId);
       return;
     }

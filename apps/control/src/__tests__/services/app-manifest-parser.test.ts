@@ -36,7 +36,7 @@ Deno.test("parseAppManifestYaml rejects envelope-shaped manifests", () => {
   assertThrows(
     () =>
       parseAppManifestYaml(`
-apiVersion: takos.dev/v1alpha1
+apiVersion: example.com/v1
 kind: App
 metadata:
   name: invalid-app
@@ -47,7 +47,7 @@ spec:
       entry: src/index.ts
 `),
     Error,
-    "apiVersion is not supported by the app manifest contract",
+    "Takos app manifests use the flat contract",
   );
 });
 
@@ -98,6 +98,12 @@ compute:
   );
 
   assert(docs.length > 0);
-  assertEquals(docs[0]?.kind, "Package");
-  assertEquals(docs[0]?.metadata.name, "docs-app");
+  assertEquals(docs[0]?.type, "Package");
+  assertEquals(docs[0]?.name, "docs-app");
+  assertEquals(docs[1]?.labels, {
+    workflow_path: ".takos/workflows/build.yml",
+    workflow_job: "build",
+    workflow_artifact: "dist",
+    artifact_path: "dist/worker.js",
+  });
 });

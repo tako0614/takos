@@ -1,4 +1,4 @@
-import { rpcJson } from "../../lib/rpc.ts";
+import { apiJson, rpcJson } from "../../lib/rpc.ts";
 import { assertEquals, assertRejects } from "jsr:@std/assert";
 
 /**
@@ -70,4 +70,51 @@ Deno.test("rpcJson - returns parsed JSON on 2xx", async () => {
   const res = makeResponse({ hello: "world" }, 200);
   const data = await rpcJson<{ hello: string }>(res);
   assertEquals(data.hello, "world");
+});
+
+Deno.test("apiJson - fetches JSON with an Accept header", async () => {
+  const originalFetch = globalThis.fetch;
+  let requestedPath = "";
+  let acceptHeader = "";
+  try {
+    globalThis.fetch = ((input, init) => {
+      requestedPath = String(input);
+      acceptHeader = new Headers(init?.headers).get("Accept") ?? "";
+      return Promise.resolve(
+        new Response(JSON.stringify({ hello: "world" }), {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        }),
+      );
+    }) as typeof fetch;
+
+    const data = await apiJson<{ hello: string }>("/api/example");
+    assertEquals(requestedPath, "/api/example");
+    assertEquals(acceptHeader, "application/json");
+    assertEquals(data.hello, "world");
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+Deno.test("apiJson - times out hung requests", async () => {
+  const originalFetch = globalThis.fetch;
+  let aborted = false;
+  try {
+    globalThis.fetch = ((_input, init) => {
+      init?.signal?.addEventListener("abort", () => {
+        aborted = true;
+      });
+      return new Promise<Response>(() => {});
+    }) as typeof fetch;
+
+    const err = await assertRejects(
+      () => apiJson("/api/hangs", { timeoutMs: 10 }),
+      Error,
+    );
+    assertEquals(err.message, "Request timed out");
+    assertEquals(aborted, true);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
 });

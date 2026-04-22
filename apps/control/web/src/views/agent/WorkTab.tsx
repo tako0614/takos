@@ -1,4 +1,4 @@
-import { createEffect, createMemo, createSignal } from "solid-js";
+import { createEffect, createMemo, createSignal, Show } from "solid-js";
 import { useI18n } from "../../store/i18n.ts";
 import { useToast } from "../../store/toast.ts";
 import { useRouter } from "../../hooks/useRouter.ts";
@@ -18,7 +18,12 @@ import type {
 import { TaskForm } from "./work/TaskForm.tsx";
 import { TaskCard } from "./work/TaskCard.tsx";
 import { TaskFilters } from "./work/TaskFilters.tsx";
-import type { ModelSettings, TaskFilter } from "./work/task-work-types.ts";
+import {
+  type EditableAgentTaskStatus,
+  type ModelSettings,
+  STATUS_ORDER,
+  type TaskFilter,
+} from "./work/task-work-types.ts";
 import {
   ensureModelOption,
   getModelsForModelBackend,
@@ -27,7 +32,7 @@ import {
 interface TaskFormState {
   title: string;
   description: string;
-  status: AgentTaskStatus;
+  status: EditableAgentTaskStatus;
   priority: AgentTaskPriority;
   agentType: string;
   model: string;
@@ -44,7 +49,13 @@ const INITIAL_FORM_STATE: TaskFormState = {
   dueAt: "",
 };
 
-export function WorkTab({ spaceId }: { spaceId: string }) {
+function toEditableStatus(status: AgentTaskStatus): EditableAgentTaskStatus {
+  return STATUS_ORDER.includes(status as EditableAgentTaskStatus)
+    ? status as EditableAgentTaskStatus
+    : "blocked";
+}
+
+export function WorkTab(props: { spaceId: string }) {
   const { t, tOr, lang } = useI18n();
   const { showToast } = useToast();
   const { navigate } = useRouter();
@@ -62,6 +73,8 @@ export function WorkTab({ spaceId }: { spaceId: string }) {
   const [modelSettings, setModelSettings] = createSignal<ModelSettings | null>(
     null,
   );
+  let tasksSeq = 0;
+  let modelSettingsSeq = 0;
 
   const [form, setForm] = createSignal<TaskFormState>(INITIAL_FORM_STATE);
   const updateForm = <K extends keyof TaskFormState>(
@@ -70,16 +83,19 @@ export function WorkTab({ spaceId }: { spaceId: string }) {
   ) => setForm((prev) => ({ ...prev, [field]: value }));
 
   createEffect(() => {
-    void fetchTasks();
-    void fetchModelSettings();
+    const spaceId = props.spaceId;
+    void fetchTasks(spaceId);
+    void fetchModelSettings(spaceId);
   });
 
-  const fetchModelSettings = async () => {
+  const fetchModelSettings = async (spaceId = props.spaceId) => {
+    const seq = ++modelSettingsSeq;
     try {
       const res = await rpc.spaces[":spaceId"].model.$get({
         param: { spaceId },
       });
       const data = await rpcJson<ModelSettings>(res);
+      if (seq !== modelSettingsSeq || spaceId !== props.spaceId) return;
       const resolvedModel = data.ai_model || data.model || DEFAULT_MODEL_ID;
       const resolvedModelBackend = data.model_backend || "openai";
       const modelBackendKey =
@@ -102,23 +118,29 @@ export function WorkTab({ spaceId }: { spaceId: string }) {
         );
       }
     } catch (err) {
+      if (seq !== modelSettingsSeq || spaceId !== props.spaceId) return;
       console.error("Failed to fetch model settings:", err);
     }
   };
 
-  const fetchTasks = async () => {
+  const fetchTasks = async (spaceId = props.spaceId) => {
+    const seq = ++tasksSeq;
     setLoading(true);
     try {
       const res = await rpc.spaces[":spaceId"]["agent-tasks"].$get({
         param: { spaceId },
       });
       const data = await rpcJson<{ tasks: AgentTask[] }>(res);
+      if (seq !== tasksSeq || spaceId !== props.spaceId) return;
       setTasks(data.tasks || []);
     } catch {
+      if (seq !== tasksSeq || spaceId !== props.spaceId) return;
       setTasks([]);
       showToast("error", t("failedToLoad"));
     } finally {
-      setLoading(false);
+      if (seq === tasksSeq && spaceId === props.spaceId) {
+        setLoading(false);
+      }
     }
   };
 
@@ -140,7 +162,7 @@ export function WorkTab({ spaceId }: { spaceId: string }) {
     setForm({
       title: task.title,
       description: task.description || "",
-      status: task.status,
+      status: toEditableStatus(task.status),
       priority: task.priority,
       agentType: task.agent_type || "default",
       model: task.model || modelSettings()?.ai_model || DEFAULT_MODEL_ID,
@@ -190,7 +212,7 @@ export function WorkTab({ spaceId }: { spaceId: string }) {
         await rpcJson(res);
       } else {
         const res = await rpc.spaces[":spaceId"]["agent-tasks"].$post({
-          param: { spaceId },
+          param: { spaceId: props.spaceId },
           json: payload,
         });
         await rpcJson(res);
@@ -229,7 +251,7 @@ export function WorkTab({ spaceId }: { spaceId: string }) {
 
   const handleStatusChange = async (
     taskId: string,
-    nextStatus: AgentTaskStatus,
+    nextStatus: EditableAgentTaskStatus,
   ) => {
     try {
       const res = await rpc["agent-tasks"][":id"].$patch({
@@ -269,7 +291,7 @@ export function WorkTab({ spaceId }: { spaceId: string }) {
       if (!threadId) {
         const threadRes = await rpcPath(rpc, "spaces", ":spaceId", "threads")
           .$post({
-            param: { spaceId },
+            param: { spaceId: props.spaceId },
             json: { title: task.title, locale: lang },
           });
         const threadResponse = await rpcJson<{ thread: Thread }>(threadRes);
@@ -323,7 +345,7 @@ export function WorkTab({ spaceId }: { spaceId: string }) {
       await fetchTasks();
       navigate({
         view: "chat",
-        spaceId,
+        spaceId: props.spaceId,
         threadId,
         runId: runResponse.run.id,
         messageId: undefined,
@@ -339,7 +361,7 @@ export function WorkTab({ spaceId }: { spaceId: string }) {
     if (!task.thread_id) return;
     navigate({
       view: "chat",
-      spaceId,
+      spaceId: props.spaceId,
       threadId: task.thread_id,
       runId: task.resume_target?.run_id ?? undefined,
       messageId: undefined,
@@ -358,126 +380,128 @@ export function WorkTab({ spaceId }: { spaceId: string }) {
     return ensureModelOption(resolved, form().model);
   });
 
-  if (loading()) {
-    return (
+  return (
+    <Show
+      when={!loading()}
+      fallback={
+        <div class="flex flex-col gap-6">
+          <div class="flex flex-col gap-3">
+            <div class="flex items-center justify-between">
+              <div class="h-5 w-24 bg-zinc-200/50 dark:bg-zinc-700/50 rounded animate-pulse" />
+              <div class="h-10 w-24 bg-zinc-200/50 dark:bg-zinc-700/50 rounded-lg animate-pulse" />
+            </div>
+            <div class="flex gap-2">
+              {[1, 2, 3, 4].map((_i) => (
+                <div class="h-8 w-20 bg-zinc-200/50 dark:bg-zinc-700/50 rounded-lg animate-pulse" />
+              ))}
+            </div>
+          </div>
+          <SkeletonList count={3} />
+        </div>
+      }
+    >
       <div class="flex flex-col gap-6">
         <div class="flex flex-col gap-3">
-          <div class="flex items-center justify-between">
-            <div class="h-5 w-24 bg-zinc-200/50 dark:bg-zinc-700/50 rounded animate-pulse" />
-            <div class="h-10 w-24 bg-zinc-200/50 dark:bg-zinc-700/50 rounded-lg animate-pulse" />
+          <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <h4 class="text-sm font-semibold text-zinc-900 dark:text-zinc-100">
+              {t("taskBoard")}
+            </h4>
+            <button
+              type="button"
+              class={`w-full sm:w-auto px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
+                isCreating()
+                  ? "bg-zinc-100 dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100 hover:bg-zinc-200 dark:hover:bg-zinc-700"
+                  : "bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900 hover:bg-zinc-800 dark:hover:bg-zinc-200"
+              }`}
+              onClick={isCreating() ? closeForm : openCreateForm}
+            >
+              {isCreating() ? t("cancel") : t("addTask")}
+            </button>
           </div>
-          <div class="flex gap-2">
-            {[1, 2, 3, 4].map((_i) => (
-              <div class="h-8 w-20 bg-zinc-200/50 dark:bg-zinc-700/50 rounded-lg animate-pulse" />
-            ))}
-          </div>
-        </div>
-        <SkeletonList count={3} />
-      </div>
-    );
-  }
-
-  return (
-    <div class="flex flex-col gap-6">
-      <div class="flex flex-col gap-3">
-        <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <h4 class="text-sm font-semibold text-zinc-900 dark:text-zinc-100">
-            {t("taskBoard")}
-          </h4>
-          <button
-            type="button"
-            class={`w-full sm:w-auto px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
-              isCreating()
-                ? "bg-zinc-100 dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100 hover:bg-zinc-200 dark:hover:bg-zinc-700"
-                : "bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900 hover:bg-zinc-800 dark:hover:bg-zinc-200"
-            }`}
-            onClick={isCreating() ? closeForm : openCreateForm}
-          >
-            {isCreating() ? t("cancel") : t("addTask")}
-          </button>
-        </div>
-        <TaskFilters
-          activeFilter={activeFilter()}
-          onFilterChange={setActiveFilter}
-        />
-      </div>
-
-      {isCreating() && (
-        <div class="rounded-xl border border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-900 p-4 md:p-5">
-          <TaskForm
-            editingTask={editingTask()}
-            title={form().title}
-            setTitle={(v) => updateForm("title", v)}
-            description={form().description}
-            setDescription={(v) => updateForm("description", v)}
-            status={form().status}
-            setStatus={(v) => updateForm("status", v)}
-            priority={form().priority}
-            setPriority={(v) => updateForm("priority", v)}
-            agentType={form().agentType}
-            setAgentType={(v) => updateForm("agentType", v)}
-            model={form().model}
-            setModel={(v) => updateForm("model", v)}
-            dueAt={form().dueAt}
-            setDueAt={(v) => updateForm("dueAt", v)}
-            availableModels={availableModels()}
-            saving={saving()}
-            error={error()}
-            onSubmit={handleSubmit}
-            onClose={closeForm}
+          <TaskFilters
+            activeFilter={activeFilter()}
+            onFilterChange={setActiveFilter}
           />
         </div>
-      )}
 
-      {filteredTasks().length === 0
-        ? (
-          isCreating()
-            ? null
-            : (
-              <div class="flex flex-col items-center justify-center py-12 text-zinc-500 dark:text-zinc-400 gap-4">
-                <div class="w-16 h-16 rounded-full bg-zinc-100 dark:bg-zinc-800 flex items-center justify-center text-zinc-900 dark:text-zinc-100">
-                  <Icons.Sparkles class="w-8 h-8" />
-                </div>
-                <div class="text-center">
-                  <p class="text-zinc-900 dark:text-zinc-100 font-medium">
-                    {t("noTasks")}
-                  </p>
-                  <p class="text-sm text-zinc-500 dark:text-zinc-400 mt-1">
-                    {tOr(
-                      "tasksEmptyHint",
-                      "Create tasks for your agent to work on autonomously",
-                    )}
-                  </p>
-                </div>
-                <button
-                  type="button"
-                  class="px-4 py-2 bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900 rounded-lg hover:bg-zinc-800 dark:hover:bg-zinc-200 transition-colors flex items-center gap-2"
-                  onClick={openCreateForm}
-                >
-                  <Icons.Plus class="w-4 h-4" />
-                  {t("addTask")}
-                </button>
-              </div>
-            )
-        )
-        : (
-          <div class="flex flex-col gap-4">
-            {filteredTasks().map((task: AgentTask) => (
-              <TaskCard
-                task={task}
-                isPlanning={planningTaskId() === task.id}
-                isStarting={startingTaskId() === task.id}
-                isDeleting={deletingTaskId() === task.id}
-                onStart={handleStart}
-                onPlan={handlePlan}
-                onOpenChat={handleOpenChat}
-                onComplete={(taskId) => handleStatusChange(taskId, "completed")}
-                onEdit={openEditForm}
-                onDelete={handleDelete}
-              />
-            ))}
+        {isCreating() && (
+          <div class="rounded-xl border border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-900 p-4 md:p-5">
+            <TaskForm
+              editingTask={editingTask()}
+              title={form().title}
+              setTitle={(v) => updateForm("title", v)}
+              description={form().description}
+              setDescription={(v) => updateForm("description", v)}
+              status={form().status}
+              setStatus={(v) => updateForm("status", v)}
+              priority={form().priority}
+              setPriority={(v) => updateForm("priority", v)}
+              agentType={form().agentType}
+              setAgentType={(v) => updateForm("agentType", v)}
+              model={form().model}
+              setModel={(v) => updateForm("model", v)}
+              dueAt={form().dueAt}
+              setDueAt={(v) => updateForm("dueAt", v)}
+              availableModels={availableModels()}
+              saving={saving()}
+              error={error()}
+              onSubmit={handleSubmit}
+              onClose={closeForm}
+            />
           </div>
         )}
-    </div>
+
+        {filteredTasks().length === 0
+          ? (
+            isCreating()
+              ? null
+              : (
+                <div class="flex flex-col items-center justify-center py-12 text-zinc-500 dark:text-zinc-400 gap-4">
+                  <div class="w-16 h-16 rounded-full bg-zinc-100 dark:bg-zinc-800 flex items-center justify-center text-zinc-900 dark:text-zinc-100">
+                    <Icons.Sparkles class="w-8 h-8" />
+                  </div>
+                  <div class="text-center">
+                    <p class="text-zinc-900 dark:text-zinc-100 font-medium">
+                      {t("noTasks")}
+                    </p>
+                    <p class="text-sm text-zinc-500 dark:text-zinc-400 mt-1">
+                      {tOr(
+                        "tasksEmptyHint",
+                        "Create tasks for your agent to work on autonomously",
+                      )}
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    class="px-4 py-2 bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900 rounded-lg hover:bg-zinc-800 dark:hover:bg-zinc-200 transition-colors flex items-center gap-2"
+                    onClick={openCreateForm}
+                  >
+                    <Icons.Plus class="w-4 h-4" />
+                    {t("addTask")}
+                  </button>
+                </div>
+              )
+          )
+          : (
+            <div class="flex flex-col gap-4">
+              {filteredTasks().map((task: AgentTask) => (
+                <TaskCard
+                  task={task}
+                  isPlanning={planningTaskId() === task.id}
+                  isStarting={startingTaskId() === task.id}
+                  isDeleting={deletingTaskId() === task.id}
+                  onStart={handleStart}
+                  onPlan={handlePlan}
+                  onOpenChat={handleOpenChat}
+                  onComplete={(taskId) =>
+                    handleStatusChange(taskId, "completed")}
+                  onEdit={openEditForm}
+                  onDelete={handleDelete}
+                />
+              ))}
+            </div>
+          )}
+      </div>
+    </Show>
   );
 }

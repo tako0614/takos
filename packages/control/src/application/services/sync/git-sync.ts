@@ -5,21 +5,29 @@
  * for session initialization, and committing snapshots back to the Git store.
  */
 
-import type { D1Database, R2Bucket } from '../../../shared/types/bindings.ts';
-import { getDb, repositories } from '../../../infra/db/index.ts';
-import { eq } from 'drizzle-orm';
-import * as gitStore from '../git-smart/index.ts';
-import { isProbablyBinaryContent } from '../../../shared/utils/content-type.ts';
-import { logWarn } from '../../../shared/utils/logger.ts';
-import type { SessionFileEntry, SyncResult, SessionRepoMount, SessionSnapshot } from './git-sync-types.ts';
+import type { D1Database, R2Bucket } from "../../../shared/types/bindings.ts";
+import { getDb, repositories } from "../../../infra/db/index.ts";
+import { eq } from "drizzle-orm";
+import * as gitStore from "../git-smart/index.ts";
+import { isProbablyBinaryContent } from "../../../shared/utils/content-type.ts";
+import { logWarn } from "../../../shared/utils/logger.ts";
+import type {
+  SessionFileEntry,
+  SessionRepoMount,
+  SessionSnapshot,
+  SyncResult,
+} from "./git-sync-types.ts";
 
-export type { SessionFileEntry, SyncResult } from './git-sync-types.ts';
+export type { SessionFileEntry, SyncResult } from "./git-sync-types.ts";
 
 /** Extract an error message from a failed HTTP response. */
-export async function extractResponseError(response: Response, fallbackMessage: string): Promise<string> {
+export async function extractResponseError(
+  response: Response,
+  fallbackMessage: string,
+): Promise<string> {
   try {
     const body = await response.json() as Record<string, unknown>;
-    if (typeof body?.error === 'string') return body.error;
+    if (typeof body?.error === "string") return body.error;
     return JSON.stringify(body);
   } catch {
     return `HTTP ${response.status} ${response.statusText}: ${fallbackMessage}`;
@@ -27,7 +35,7 @@ export async function extractResponseError(response: Response, fallbackMessage: 
 }
 
 export function toBase64(data: Uint8Array): string {
-  let binary = '';
+  let binary = "";
   const chunkSize = 0x8000;
   for (let i = 0; i < data.length; i += chunkSize) {
     binary += String.fromCharCode(...data.slice(i, i + chunkSize));
@@ -48,7 +56,7 @@ export function fromBase64(data: string): Uint8Array {
 export async function buildRepoFiles(
   db: D1Database,
   bucket: R2Bucket,
-  repo: SessionRepoMount
+  repo: SessionRepoMount,
 ): Promise<SessionFileEntry[]> {
   const drizzle = getDb(db);
 
@@ -66,7 +74,7 @@ export async function buildRepoFiles(
   }
 
   const branchToUse = repo.branch || repoInfo.defaultBranch;
-  const mountPath = (repo.mountPath || '').replace(/\/+$/, '');
+  const mountPath = (repo.mountPath || "").replace(/\/+$/, "");
 
   const files: SessionFileEntry[] = [];
 
@@ -90,11 +98,13 @@ export async function buildRepoFiles(
       files.push({
         path: filePath,
         content: encoded,
-        encoding: isBinary ? 'base64' : 'utf-8',
+        encoding: isBinary ? "base64" : "utf-8",
         is_binary: isBinary,
       });
     } catch (err) {
-      logWarn(`Failed to fetch file ${file.path}: ${err}`, { module: 'services/sync/runtime-session' });
+      logWarn(`Failed to fetch file ${file.path}: ${err}`, {
+        module: "services/sync/runtime-session",
+      });
     }
   }
 
@@ -113,28 +123,32 @@ export async function syncSnapshotToRepo(
     pathPrefix?: string;
     message: string;
     author?: { name: string; email: string };
-  }
+  },
 ): Promise<SyncResult> {
   if (!options.repoId) {
     return {
       success: false,
       committed: false,
       pushed: false,
-      error: 'Repository ID not set',
+      error: "Repository ID not set",
     };
   }
 
-  const prefix = options.pathPrefix ? options.pathPrefix.replace(/^\/+|\/+$/g, '') : '';
-  const prefixWithSlash = prefix ? `${prefix}/` : '';
+  const prefix = options.pathPrefix
+    ? options.pathPrefix.replace(/^\/+|\/+$/g, "")
+    : "";
+  const prefixWithSlash = prefix ? `${prefix}/` : "";
 
   const filteredFiles = snapshot.files
     .filter((file) => {
-      if (file.path === '.takos-session') return false;
+      if (file.path === ".takos-session") return false;
       if (!prefix) return true;
       return file.path === prefix || file.path.startsWith(prefixWithSlash);
     })
     .map((file) => {
-      const relativePath = prefix ? file.path.replace(prefixWithSlash, '') : file.path;
+      const relativePath = prefix
+        ? file.path.replace(prefixWithSlash, "")
+        : file.path;
       return { ...file, path: relativePath };
     })
     .filter((file) => Boolean(file.path));
@@ -147,13 +161,17 @@ export async function syncSnapshotToRepo(
     };
   }
 
-  const branchName = options.branch || 'main';
-  const currentCommitSha = await gitStore.resolveRef(db, options.repoId, branchName);
+  const branchName = options.branch || "main";
+  const currentCommitSha = await gitStore.resolveRef(
+    db,
+    options.repoId,
+    branchName,
+  );
 
   const fileEntries: Array<{ path: string; sha: string; mode?: string }> = [];
 
   for (const file of filteredFiles) {
-    const contentBytes = file.encoding === 'base64'
+    const contentBytes = file.encoding === "base64"
       ? fromBase64(file.content)
       : new TextEncoder().encode(file.content);
 
@@ -168,7 +186,10 @@ export async function syncSnapshotToRepo(
   const treeOid = await gitStore.buildTreeFromPaths(bucket, fileEntries);
 
   if (currentCommitSha) {
-    const currentCommit = await gitStore.getCommitData(bucket, currentCommitSha);
+    const currentCommit = await gitStore.getCommitData(
+      bucket,
+      currentCommitSha,
+    );
     if (currentCommit && currentCommit.tree === treeOid) {
       return {
         success: true,
@@ -178,7 +199,8 @@ export async function syncSnapshotToRepo(
     }
   }
 
-  const authorInfo = options.author || { name: 'Takos Agent', email: 'agent@takos.io' };
+  const authorInfo = options.author ||
+    { name: "Takos Agent", email: "agent@takos.jp" };
   const unixTimestamp = Math.floor(Date.now() / 1000);
 
   const commit = await gitStore.createCommit(db, bucket, options.repoId, {
@@ -188,13 +210,13 @@ export async function syncSnapshotToRepo(
       name: authorInfo.name,
       email: authorInfo.email,
       timestamp: unixTimestamp,
-      tzOffset: '+0000',
+      tzOffset: "+0000",
     },
     committer: {
       name: authorInfo.name,
       email: authorInfo.email,
       timestamp: unixTimestamp,
-      tzOffset: '+0000',
+      tzOffset: "+0000",
     },
     message: options.message,
   });
@@ -206,7 +228,7 @@ export async function syncSnapshotToRepo(
     options.repoId,
     branchName,
     currentCommitSha,
-    commitOid
+    commitOid,
   );
 
   if (!updateResult.success) {
@@ -215,7 +237,7 @@ export async function syncSnapshotToRepo(
       committed: true,
       commitHash: commitOid,
       pushed: false,
-      error: 'Failed to update branch ref (concurrent modification)',
+      error: "Failed to update branch ref (concurrent modification)",
     };
   }
 

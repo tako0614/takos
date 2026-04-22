@@ -5,6 +5,7 @@ import {
   defaultAppDistributionEntries,
   defaultAppPreinstallJobs,
   getDb,
+  groupDeploymentSnapshots,
   groups,
 } from "../../../infra/db/index.ts";
 import {
@@ -14,6 +15,10 @@ import {
 } from "../../../shared/types/index.ts";
 import { D1TransactionManager } from "../../../shared/utils/db-transaction.ts";
 import { logWarn } from "../../../shared/utils/logger.ts";
+import {
+  GROUP_NAME_REQUIREMENTS,
+  isValidGroupName,
+} from "../../../shared/utils/naming-utils.ts";
 
 type DefaultAppRefType = "branch" | "tag" | "commit";
 type DefaultAppBackend = "cloudflare" | "local" | "aws" | "gcp" | "k8s";
@@ -43,11 +48,13 @@ type DefaultAppDistributionEnv = Pick<
   | "TAKOS_DEFAULT_DOCS_APP_REPOSITORY_URL"
   | "TAKOS_DEFAULT_EXCEL_APP_REPOSITORY_URL"
   | "TAKOS_DEFAULT_SLIDE_APP_REPOSITORY_URL"
+  | "TAKOS_DEFAULT_COMPUTER_APP_REPOSITORY_URL"
 >;
 
 type DefaultAppDistributionDefaults = {
   preinstall: boolean;
   ref: string;
+  refFromEnv: boolean;
   refType: DefaultAppRefType;
   backendName?: DefaultAppBackend;
   envName?: string;
@@ -58,6 +65,13 @@ type DefaultAppDistributionRow =
 type DefaultAppDistributionConfigRow =
   typeof defaultAppDistributionConfig.$inferSelect;
 type DefaultAppPreinstallJobRow = typeof defaultAppPreinstallJobs.$inferSelect;
+type CurrentGroupDeploymentSnapshot = {
+  sourceKind: string | null;
+  sourceRepositoryUrl: string | null;
+  sourceRef: string | null;
+  sourceRefType: string | null;
+  status: string | null;
+};
 
 type PersistedDefaultAppDistribution = {
   configured: boolean;
@@ -90,18 +104,28 @@ const FALLBACK_DEFAULT_APP_DISTRIBUTION = [
     title: "Docs",
     repositoryUrl: "https://github.com/tako0614/takos-docs.git",
     repositoryEnvKey: "TAKOS_DEFAULT_DOCS_APP_REPOSITORY_URL",
+    ref: "master",
   },
   {
     name: "takos-excel",
     title: "Excel",
     repositoryUrl: "https://github.com/tako0614/takos-excel.git",
     repositoryEnvKey: "TAKOS_DEFAULT_EXCEL_APP_REPOSITORY_URL",
+    ref: "master",
   },
   {
     name: "takos-slide",
     title: "Slide",
     repositoryUrl: "https://github.com/tako0614/takos-slide.git",
     repositoryEnvKey: "TAKOS_DEFAULT_SLIDE_APP_REPOSITORY_URL",
+    ref: "master",
+  },
+  {
+    name: "takos-computer",
+    title: "Computer",
+    repositoryUrl: "https://github.com/tako0614/takos-computer.git",
+    repositoryEnvKey: "TAKOS_DEFAULT_COMPUTER_APP_REPOSITORY_URL",
+    ref: "default-app",
   },
 ] as const;
 
@@ -287,9 +311,9 @@ function readOptionalString(
 }
 
 function assertValidGroupName(name: string): void {
-  if (!/^[a-z0-9][a-z0-9-]{1,62}[a-z0-9]$/.test(name)) {
+  if (!isValidGroupName(name)) {
     throw new Error(
-      `default app group name is invalid: ${name}`,
+      `default app group name is invalid: ${name}; ${GROUP_NAME_REQUIREMENTS}`,
     );
   }
 }
@@ -443,9 +467,11 @@ function readDefaults(
   env: DefaultAppDistributionEnv,
 ): DefaultAppDistributionDefaults {
   try {
+    const ref = env.TAKOS_DEFAULT_APP_REF?.trim();
     return {
       preinstall: readBool(env.TAKOS_DEFAULT_APPS_PREINSTALL, true),
-      ref: env.TAKOS_DEFAULT_APP_REF?.trim() || "main",
+      ref: ref || "main",
+      refFromEnv: Boolean(ref),
       refType: normalizeRefType(
         env.TAKOS_DEFAULT_APP_REF_TYPE,
         "TAKOS_DEFAULT_APP_REF_TYPE",
@@ -524,6 +550,7 @@ function resolveFallbackDefaultAppDistribution(
               repositoryOverride.trim()
             ? repositoryOverride.trim()
             : entry.repositoryUrl,
+          ref: defaults.refFromEnv ? defaults.ref : entry.ref,
         },
         defaults,
       );
@@ -633,11 +660,11 @@ export async function resolveDefaultAppDistributionForBootstrap(
   env: DefaultAppDistributionEnv,
 ): Promise<DefaultAppDistributionEntry[]> {
   const defaults = readDefaults(env);
-  const operatorDistribution = parseConfiguredDistribution(env, defaults);
-  if (operatorDistribution) return operatorDistribution;
   if (!defaults.preinstall) {
     return resolveFallbackDefaultAppDistribution(env, defaults);
   }
+  const operatorDistribution = parseConfiguredDistribution(env, defaults);
+  if (operatorDistribution) return operatorDistribution;
 
   let persistedDistribution: PersistedDefaultAppDistribution;
   try {
@@ -720,6 +747,7 @@ function parsePreinstallDistribution(
         normalizeEntry(entry, {
           preinstall: true,
           ref: "main",
+          refFromEnv: false,
           refType: "branch",
         })
       ),
@@ -754,10 +782,8 @@ async function resolvePreinstallPlanForJob(
   row: DefaultAppPreinstallJobRow,
 ): Promise<DefaultAppPreinstallPlan> {
   const status = normalizePreinstallJobStatus(row.status);
-  const stored = status === "blocked_by_config"
-    ? null
-    : parsePreinstallDistribution(row.distributionJson);
-  if (stored) {
+  const stored = parsePreinstallDistribution(row.distributionJson);
+  if (status === "deployment_queued" && stored) {
     return {
       entries: stored.filter((entry) => entry.preinstall),
       refreshed: false,
@@ -775,6 +801,9 @@ async function expectedPreinstallGroupsApplied(
   const expectedGroupIds = parseExpectedGroupIds(row.expectedGroupIdsJson);
   if (expectedGroupIds.length === 0) return false;
   const db = defaultAppDistributionDeps.getDb(env.DB);
+  const expectedEntries = parsePreinstallDistribution(row.distributionJson)
+    ?.filter((entry) => entry.preinstall) ?? null;
+  if (!expectedEntries || expectedEntries.length === 0) return false;
   for (const groupId of expectedGroupIds) {
     const group = await db.select()
       .from(groups)
@@ -784,6 +813,25 @@ async function expectedPreinstallGroupsApplied(
       ))
       .get();
     if (!group?.currentGroupDeploymentSnapshotId) return false;
+    if (!expectedEntries) continue;
+    const expected = expectedEntries.find((entry) =>
+      isMatchingDefaultAppGroup(group, entry)
+    );
+    if (!expected) return false;
+    const snapshot = await db.select({
+      sourceKind: groupDeploymentSnapshots.sourceKind,
+      sourceRepositoryUrl: groupDeploymentSnapshots.sourceRepositoryUrl,
+      sourceRef: groupDeploymentSnapshots.sourceRef,
+      sourceRefType: groupDeploymentSnapshots.sourceRefType,
+      status: groupDeploymentSnapshots.status,
+    }).from(groupDeploymentSnapshots)
+      .where(and(
+        eq(groupDeploymentSnapshots.id, group.currentGroupDeploymentSnapshotId),
+        eq(groupDeploymentSnapshots.groupId, group.id),
+        eq(groupDeploymentSnapshots.spaceId, row.spaceId),
+      ))
+      .get() as CurrentGroupDeploymentSnapshot | null;
+    if (!snapshotMatchesDefaultAppEntry(snapshot, expected)) return false;
   }
   return true;
 }
@@ -806,7 +854,6 @@ function buildDeploymentQueueMessage(
   entry: DefaultAppDistributionEntry,
   params: {
     spaceId: string;
-    groupId: string;
     createdByAccountId?: string;
     timestamp: string;
   },
@@ -815,8 +862,6 @@ function buildDeploymentQueueMessage(
     version: DEPLOYMENT_QUEUE_MESSAGE_VERSION,
     type: "group_deployment_snapshot",
     spaceId: params.spaceId,
-    groupId: params.groupId,
-    groupName: entry.name,
     repositoryUrl: entry.repositoryUrl,
     ref: entry.ref,
     refType: entry.refType,
@@ -828,27 +873,10 @@ function buildDeploymentQueueMessage(
   };
 }
 
-function defaultAppBackendState(
-  entry: DefaultAppDistributionEntry,
-  job: DeploymentQueueMessage,
-  deployJobStatus: "pending_queue" | "queued",
-): string {
-  return JSON.stringify({
-    defaultAppDistribution: {
-      title: entry.title,
-      preinstalled: true,
-      repositoryUrl: entry.repositoryUrl,
-      ref: entry.ref,
-      refType: entry.refType,
-      deployJob: job,
-      deployJobStatus,
-    },
-  });
-}
-
 interface DefaultAppPreinstallResult {
   entries: DefaultAppDistributionEntry[];
   deploymentQueued: boolean;
+  deploymentPending: boolean;
   expectedGroupIds: string[];
 }
 
@@ -862,9 +890,22 @@ function isMatchingDefaultAppGroup(
   entry: DefaultAppDistributionEntry,
 ): boolean {
   return group.sourceKind === "git_ref" &&
+    group.name === entry.name &&
     group.sourceRepositoryUrl === entry.repositoryUrl &&
     group.sourceRef === entry.ref &&
     group.sourceRefType === entry.refType;
+}
+
+function snapshotMatchesDefaultAppEntry(
+  snapshot: CurrentGroupDeploymentSnapshot | null | undefined,
+  entry: DefaultAppDistributionEntry,
+): boolean {
+  return !!snapshot &&
+    snapshot.status === "applied" &&
+    snapshot.sourceKind === "git_ref" &&
+    snapshot.sourceRepositoryUrl === entry.repositoryUrl &&
+    snapshot.sourceRef === entry.ref &&
+    snapshot.sourceRefType === entry.refType;
 }
 
 export async function saveDefaultAppDistributionEntries(
@@ -886,7 +927,6 @@ export async function saveDefaultAppDistributionEntries(
   }
   const db = defaultAppDistributionDeps.getDb(env.DB);
   const timestamp = options.timestamp ?? new Date().toISOString();
-  const preinstallEntries = entries.filter((entry) => entry.preinstall);
   const rows = entries.map((entry, index) => ({
     id: entry.name,
     name: entry.name,
@@ -922,7 +962,7 @@ export async function saveDefaultAppDistributionEntries(
       nextAttemptAt: timestamp,
       lockedAt: null,
       lastError: null,
-      distributionJson: serializePreinstallDistribution(preinstallEntries),
+      distributionJson: null,
       expectedGroupIdsJson: null,
       deploymentQueuedAt: null,
       updatedAt: timestamp,
@@ -998,82 +1038,42 @@ async function preinstallDefaultAppsForSpaceDetailed(
     (await resolveDefaultAppDistributionForBootstrap(env))
       .filter((entry) => entry.preinstall);
   if (entries.length === 0) {
-    return { entries: [], deploymentQueued: false, expectedGroupIds: [] };
+    return {
+      entries: [],
+      deploymentQueued: false,
+      deploymentPending: false,
+      expectedGroupIds: [],
+    };
   }
 
-  const db = defaultAppDistributionDeps.getDb(env.DB);
   const timestamp = params.timestamp ?? new Date().toISOString();
   const installed: DefaultAppDistributionEntry[] = [];
-  const expectedGroupIds: string[] = [];
   let deploymentQueued = false;
+  let deploymentPending = false;
 
   for (const entry of entries) {
-    const existing = await db.select()
-      .from(groups)
-      .where(and(
-        eq(groups.spaceId, params.spaceId),
-        eq(groups.name, entry.name),
-      ))
-      .get();
-    if (existing && !isMatchingDefaultAppGroup(existing, entry)) {
-      throw new DefaultAppPreinstallConflictError(
-        `default app group name conflicts with an existing group: ${entry.name}`,
-      );
-    }
-
-    const groupId = existing?.id ?? crypto.randomUUID();
-    expectedGroupIds.push(groupId);
     const job = buildDeploymentQueueMessage(entry, {
       spaceId: params.spaceId,
-      groupId,
       createdByAccountId: params.createdByAccountId,
       timestamp,
     });
 
-    if (!existing) {
-      await runDbStatement(
-        db.insert(groups).values({
-          id: groupId,
-          spaceId: params.spaceId,
-          name: entry.name,
-          appVersion: null,
-          backend: entry.backendName ?? null,
-          env: entry.envName ?? null,
-          sourceKind: "git_ref",
-          sourceRepositoryUrl: entry.repositoryUrl,
-          sourceRef: entry.ref,
-          sourceRefType: entry.refType,
-          sourceCommitSha: null,
-          currentGroupDeploymentSnapshotId: null,
-          desiredSpecJson: null,
-          backendStateJson: defaultAppBackendState(
-            entry,
-            job,
-            "pending_queue",
-          ),
-          reconcileStatus: "pending",
-          lastAppliedAt: null,
-          createdAt: timestamp,
-          updatedAt: timestamp,
-        }),
-      );
-    } else if (existing.currentGroupDeploymentSnapshotId) {
+    if (!env.DEPLOY_QUEUE) {
+      deploymentPending = true;
       installed.push(entry);
       continue;
     }
-    if (!env.DEPLOY_QUEUE) {
-      throw new Error("default app deployment queue is unavailable");
-    }
     await env.DEPLOY_QUEUE.send(job);
-    await db.update(groups).set({
-      backendStateJson: defaultAppBackendState(entry, job, "queued"),
-      updatedAt: new Date().toISOString(),
-    }).where(eq(groups.id, groupId)).run();
     deploymentQueued = true;
     installed.push(entry);
   }
 
-  return { entries: installed, deploymentQueued, expectedGroupIds };
+  return {
+    entries: installed,
+    deploymentQueued,
+    deploymentPending,
+    expectedGroupIds: [],
+  };
 }
 
 export async function preinstallDefaultAppsForSpace(
@@ -1108,13 +1108,6 @@ export async function enqueueDefaultAppPreinstallJob(
   try {
     const defaults = readDefaults(env);
     if (!defaults.preinstall) return null;
-    const entries = (await resolveDefaultAppDistributionForBootstrap(env))
-      .filter((entry) => entry.preinstall);
-    distributionJson = serializePreinstallDistribution(entries);
-    if (entries.length === 0) {
-      status = "completed";
-      nextAttemptAt = null;
-    }
   } catch (error) {
     if (!isDefaultAppDistributionInvalidError(error)) throw error;
     status = "blocked_by_config";
@@ -1342,12 +1335,18 @@ export async function processDefaultAppPreinstallJobs(
       });
       const status = result.deploymentQueued
         ? "deployment_queued"
+        : result.deploymentPending
+        ? "blocked_by_config"
         : "completed";
       await db.update(defaultAppPreinstallJobs).set({
         status,
-        nextAttemptAt: null,
+        nextAttemptAt: result.deploymentPending
+          ? nextRetryAt(timestamp, attempts)
+          : null,
         lockedAt: null,
-        lastError: null,
+        lastError: result.deploymentPending
+          ? "default app deployment queue is unavailable"
+          : null,
         distributionJson: plan.refreshed
           ? serializePreinstallDistribution(plan.entries)
           : row.distributionJson,
@@ -1359,6 +1358,8 @@ export async function processDefaultAppPreinstallJobs(
       }).where(eq(defaultAppPreinstallJobs.id, row.id)).run();
       if (status === "deployment_queued") {
         summary.deploymentQueued += 1;
+      } else if (status === "blocked_by_config") {
+        summary.blocked += 1;
       } else {
         summary.completed += 1;
       }

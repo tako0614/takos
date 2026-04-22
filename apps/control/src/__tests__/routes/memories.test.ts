@@ -82,8 +82,7 @@ function createApp(user: User) {
 }
 
 function mockWorkspaceAccess() {
-  mocks.requireSpaceAccess =
-    (async () => ({ space: { id: "ws-1" } })) as any;
+  mocks.requireSpaceAccess = (async () => ({ space: { id: "ws-1" } })) as any;
 }
 
 const env = createMockEnv();
@@ -109,10 +108,9 @@ Deno.test("memories routes - GET /api/spaces/:spaceId/memories - returns 404 whe
   /* mocks cleared (no-op in Deno) */ void 0;
   mockWorkspaceAccess();
   mocks.bumpMemoryAccess = (async () => undefined) as any;
-  mocks.requireSpaceAccess =
-    (async () => {
-      throw new NotFoundError("Space");
-    }) as any;
+  mocks.requireSpaceAccess = (async () => {
+    throw new NotFoundError("Space");
+  }) as any;
 
   const app = createApp(createUser());
   const res = await app.fetch(

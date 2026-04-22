@@ -1,6 +1,6 @@
-import type { D1Database } from '../../../shared/types/bindings.ts';
-import { getDb, accountMemberships } from '../../../infra/db/index.ts';
-import { eq, and } from 'drizzle-orm';
+import type { D1Database } from "../../../shared/types/bindings.ts";
+import { accountMemberships, getDb } from "../../../infra/db/index.ts";
+import { and, eq } from "drizzle-orm";
 
 /**
  * Resolve all account IDs accessible to a user via memberships.
@@ -17,7 +17,7 @@ export async function resolveAccessibleAccountIds(
   const drizzle = getDb(db);
   const conditions = [eq(accountMemberships.memberId, userId)];
   if (opts?.activeOnly) {
-    conditions.push(eq(accountMemberships.status, 'active'));
+    conditions.push(eq(accountMemberships.status, "active"));
   }
   const memberships = await drizzle
     .select({ accountId: accountMemberships.accountId })

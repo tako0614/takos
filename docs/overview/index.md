@@ -56,10 +56,9 @@ Takos Docs では、次の 3 層を分けて読みます。
 
 - deploy manifest (`.takos/app.yml` / `.takos/app.yaml`) を書く
 - workflow artifact を用意する
-- 開発中はローカル manifest の `takos deploy --plan --group GROUP` /
-  `takos deploy --group GROUP` を使う
+- 開発中はローカル manifest の `takos deploy --plan` / `takos deploy` を使う
 - canonical repository URL や catalog package からは `takos deploy URL` /
-  `takos install --group GROUP` を使う
+  `takos install OWNER/REPO` を使う
 - group なし primitive は個別 primitive API / CLI で管理する
 
 ### space を運用したい人

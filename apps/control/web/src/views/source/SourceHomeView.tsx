@@ -1,3 +1,4 @@
+import { createMemo } from "solid-js";
 import { Icons } from "../../lib/Icons.tsx";
 import { useI18n } from "../../store/i18n.ts";
 import type {
@@ -7,14 +8,7 @@ import type {
 
 /* ── AppTile: Compact tile for horizontal scroll sections ── */
 
-function AppTile({
-  item,
-  pkg,
-  installingId,
-  onSelect,
-  onInstall,
-  onOpenRepo,
-}: {
+function AppTile(props: {
   item: SourceItem;
   pkg: SourceItemPackage;
   installingId: string | null;
@@ -23,68 +17,69 @@ function AppTile({
   onOpenRepo: (item: SourceItem) => void;
 }) {
   const { t } = useI18n();
-  const installing = installingId === item.id;
-  const installed = item.installation?.installed ?? false;
-  const ownerUsername = item.owner.username || item.owner.name || "?";
-  const ownerInitial = ownerUsername.charAt(0).toUpperCase();
+  const installing = () => props.installingId === props.item.id;
+  const installed = () => props.item.installation?.installed ?? false;
+  const ownerUsername = () =>
+    props.item.owner.username || props.item.owner.name || "?";
+  const ownerInitial = () => ownerUsername().charAt(0).toUpperCase();
 
   return (
     <div
       class="flex-shrink-0 w-28 cursor-pointer"
-      onClick={() => onSelect(item)}
+      onClick={() => props.onSelect(props.item)}
     >
-      {item.owner.avatar_url
+      {props.item.owner.avatar_url
         ? (
           <img
-            src={item.owner.avatar_url}
+            src={props.item.owner.avatar_url}
             alt=""
             class="w-full aspect-square rounded-2xl object-cover mb-2"
           />
         )
         : (
           <div class="w-full aspect-square rounded-2xl bg-gradient-to-br from-zinc-200 to-zinc-300 dark:from-zinc-700 dark:to-zinc-800 flex items-center justify-center text-2xl font-bold text-zinc-500 dark:text-zinc-400 mb-2">
-            {ownerInitial}
+            {ownerInitial()}
           </div>
         )}
       <p class="text-[11px] font-semibold text-zinc-900 dark:text-zinc-100 truncate leading-tight mb-0.5">
-        {item.name}
+        {props.item.name}
       </p>
       <p class="text-[10px] text-zinc-400 dark:text-zinc-500 truncate mb-2">
-        @{ownerUsername}
+        @{ownerUsername()}
       </p>
       <div onClick={(e) => e.stopPropagation()}>
-        {installed
+        {installed()
           ? (
             <div class="text-center text-[11px] font-semibold text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-500/10 rounded-full py-1">
               {t("installed")}
             </div>
           )
-          : item.is_mine
+          : props.item.is_mine
           ? (
             <button
               type="button"
               class="w-full text-center text-[11px] font-semibold text-zinc-600 dark:text-zinc-300 bg-zinc-100 dark:bg-zinc-800 rounded-full py-1 hover:bg-zinc-200 dark:hover:bg-zinc-700 transition-colors"
-              onClick={() => onOpenRepo(item)}
+              onClick={() => props.onOpenRepo(props.item)}
             >
               {t("open")}
             </button>
           )
-          : pkg.available
+          : props.pkg.available
           ? (
             <button
               type="button"
-              disabled={installing}
+              disabled={installing()}
               class="w-full text-center text-[11px] font-semibold text-white bg-zinc-900 dark:text-zinc-900 dark:bg-zinc-100 rounded-full py-1 hover:bg-zinc-700 dark:hover:bg-zinc-300 disabled:opacity-50 transition-colors"
-              onClick={() => onInstall(item)}
+              onClick={() => props.onInstall(props.item)}
             >
-              {installing ? "…" : t("install")}
+              {installing() ? "…" : t("install")}
             </button>
           )
           : (
             <button
               type="button"
               class="w-full text-center text-[11px] font-semibold text-zinc-500 dark:text-zinc-400 bg-zinc-100 dark:bg-zinc-800 rounded-full py-1 hover:bg-zinc-200 dark:hover:bg-zinc-700 transition-colors"
-              onClick={() => onOpenRepo(item)}
+              onClick={() => props.onOpenRepo(props.item)}
             >
               {t("viewLabel")}
             </button>
@@ -96,16 +91,7 @@ function AppTile({
 
 /* ── Section: Horizontal scroll section ── */
 
-function Section({
-  title,
-  items,
-  onSeeAll,
-  installingId,
-  getItemPackage,
-  onSelect,
-  onInstall,
-  onOpenRepo,
-}: {
+function Section(props: {
   title: string;
   items: SourceItem[];
   onSeeAll: () => void;
@@ -116,34 +102,38 @@ function Section({
   onOpenRepo: (item: SourceItem) => void;
 }) {
   const { t } = useI18n();
-  if (!items.length) return null;
+
   return (
-    <div class="mb-7">
-      <div class="flex items-baseline justify-between px-4 mb-3">
-        <h2 class="text-[15px] font-bold text-zinc-900 dark:text-zinc-100">
-          {title}
-        </h2>
-        <button
-          type="button"
-          class="text-xs font-medium text-zinc-500 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100 transition-colors"
-          onClick={onSeeAll}
-        >
-          {t("seeAll")}
-        </button>
-      </div>
-      <div class="flex gap-3.5 overflow-x-auto px-4 pb-1 scrollbar-none">
-        {items.map((item) => (
-          <AppTile
-            item={item}
-            pkg={getItemPackage(item)}
-            installingId={installingId}
-            onSelect={onSelect}
-            onInstall={onInstall}
-            onOpenRepo={onOpenRepo}
-          />
-        ))}
-      </div>
-    </div>
+    <>
+      {props.items.length > 0 && (
+        <div class="mb-7">
+          <div class="flex items-baseline justify-between px-4 mb-3">
+            <h2 class="text-[15px] font-bold text-zinc-900 dark:text-zinc-100">
+              {props.title}
+            </h2>
+            <button
+              type="button"
+              class="text-xs font-medium text-zinc-500 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100 transition-colors"
+              onClick={props.onSeeAll}
+            >
+              {t("seeAll")}
+            </button>
+          </div>
+          <div class="flex gap-3.5 overflow-x-auto px-4 pb-1 scrollbar-none">
+            {props.items.map((item) => (
+              <AppTile
+                item={item}
+                pkg={props.getItemPackage(item)}
+                installingId={props.installingId}
+                onSelect={props.onSelect}
+                onInstall={props.onInstall}
+                onOpenRepo={props.onOpenRepo}
+              />
+            ))}
+          </div>
+        </div>
+      )}
+    </>
   );
 }
 
@@ -163,30 +153,20 @@ interface SourceHomeViewProps {
   onSeeAllMine: () => void;
 }
 
-export function SourceHomeView({
-  scrollContainerRef,
-  onScroll,
-  items,
-  loading,
-  installingId,
-  getItemPackage,
-  onSelect,
-  onInstall,
-  onOpenRepo,
-  onSeeAllTrending,
-  onSeeAllMine,
-}: SourceHomeViewProps) {
+export function SourceHomeView(props: SourceHomeViewProps) {
   const { t } = useI18n();
 
-  const mine = items.filter((i) => i.is_mine);
+  const mine = createMemo(() => props.items.filter((i) => i.is_mine));
+  const trendingItems = () => props.items.slice(0, 12);
+  const mineItems = () => mine().slice(0, 12);
 
   return (
     <div
-      ref={scrollContainerRef as HTMLDivElement | undefined}
-      onScroll={onScroll}
+      ref={props.scrollContainerRef as HTMLDivElement | undefined}
+      onScroll={props.onScroll}
       class="flex-1 overflow-y-auto pt-2 pb-8"
     >
-      {loading && items.length === 0
+      {props.loading && props.items.length === 0
         ? (
           <div class="space-y-8 px-4">
             {[0, 1].map((_i) => (
@@ -209,27 +189,27 @@ export function SourceHomeView({
           <>
             <Section
               title={t("sortTrending")}
-              items={items.slice(0, 12)}
-              onSeeAll={onSeeAllTrending}
-              installingId={installingId}
-              getItemPackage={getItemPackage}
-              onSelect={onSelect}
-              onInstall={onInstall}
-              onOpenRepo={onOpenRepo}
+              items={trendingItems()}
+              onSeeAll={props.onSeeAllTrending}
+              installingId={props.installingId}
+              getItemPackage={props.getItemPackage}
+              onSelect={props.onSelect}
+              onInstall={props.onInstall}
+              onOpenRepo={props.onOpenRepo}
             />
-            {mine.length > 0 && (
+            {mine().length > 0 && (
               <Section
                 title={t("myRepos")}
-                items={mine.slice(0, 12)}
-                onSeeAll={onSeeAllMine}
-                installingId={installingId}
-                getItemPackage={getItemPackage}
-                onSelect={onSelect}
-                onInstall={onInstall}
-                onOpenRepo={onOpenRepo}
+                items={mineItems()}
+                onSeeAll={props.onSeeAllMine}
+                installingId={props.installingId}
+                getItemPackage={props.getItemPackage}
+                onSelect={props.onSelect}
+                onInstall={props.onInstall}
+                onOpenRepo={props.onOpenRepo}
               />
             )}
-            {items.length === 0 && (
+            {props.items.length === 0 && (
               <div class="flex flex-col items-center justify-center py-20 gap-3">
                 <div class="w-16 h-16 rounded-2xl bg-zinc-100 dark:bg-zinc-800 flex items-center justify-center">
                   <Icons.Search class="w-7 h-7 text-zinc-400 opacity-60" />

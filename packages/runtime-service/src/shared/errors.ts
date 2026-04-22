@@ -11,7 +11,7 @@
 export class SymlinkEscapeError extends Error {
   constructor(label: string) {
     super(`Symlink escape detected in ${label} path`);
-    this.name = 'SymlinkEscapeError';
+    this.name = "SymlinkEscapeError";
   }
 }
 
@@ -21,8 +21,12 @@ export class SymlinkEscapeError extends Error {
  */
 export class SymlinkNotAllowedError extends Error {
   constructor(label?: string) {
-    super(label ? `Symlinks are not allowed in ${label} path` : 'Symlinks are not allowed');
-    this.name = 'SymlinkNotAllowedError';
+    super(
+      label
+        ? `Symlinks are not allowed in ${label} path`
+        : "Symlinks are not allowed",
+    );
+    this.name = "SymlinkNotAllowedError";
   }
 }
 
@@ -31,8 +35,8 @@ export class SymlinkNotAllowedError extends Error {
  */
 export class SymlinkWriteError extends Error {
   constructor() {
-    super('Cannot write to symlinks');
-    this.name = 'SymlinkWriteError';
+    super("Cannot write to symlinks");
+    this.name = "SymlinkWriteError";
   }
 }
 
@@ -40,12 +44,17 @@ export class SymlinkWriteError extends Error {
  * Union type covering all workspace boundary violation errors.
  * Useful for type-narrowing in `instanceof` checks.
  */
-export type BoundaryViolationError = SymlinkEscapeError | SymlinkNotAllowedError | SymlinkWriteError;
+export type BoundaryViolationError =
+  | SymlinkEscapeError
+  | SymlinkNotAllowedError
+  | SymlinkWriteError;
 
 /**
  * Returns true when `err` is any of the workspace boundary violation error types.
  */
-export function isBoundaryViolationError(err: unknown): err is BoundaryViolationError {
+export function isBoundaryViolationError(
+  err: unknown,
+): err is BoundaryViolationError {
   return (
     err instanceof SymlinkEscapeError ||
     err instanceof SymlinkNotAllowedError ||
@@ -59,7 +68,7 @@ export function isBoundaryViolationError(err: unknown): err is BoundaryViolation
  */
 export class OwnerBindingError extends Error {
   constructor(message?: string) {
-    super(message ?? 'Session does not belong to the authenticated owner');
-    this.name = 'OwnerBindingError';
+    super(message ?? "Session does not belong to the authenticated owner");
+    this.name = "OwnerBindingError";
   }
 }

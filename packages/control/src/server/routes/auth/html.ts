@@ -5,11 +5,11 @@
 
 function escapeHtml(value: string): string {
   return value
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#39;');
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
 }
 
 const BASE_STYLE = `
@@ -37,7 +37,8 @@ a:hover { text-decoration: underline; }
 .footer { margin-top: 24px; font-size: 12px; color: #52525b; }
 `.trim();
 
-const GOOGLE_SVG = `<svg width="20" height="20" viewBox="0 0 24 24"><path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/><path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/><path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"/><path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/></svg>`;
+const GOOGLE_SVG =
+  `<svg width="20" height="20" viewBox="0 0 24 24"><path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/><path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/><path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"/><path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/></svg>`;
 
 const SPINNER_STYLE = `
 .loading { display: flex; flex-direction: column; align-items: center; gap: 16px; }
@@ -47,7 +48,11 @@ const SPINNER_STYLE = `
 .login-form.visible { display: block; }
 `;
 
-function page(title: string, body: string, extra?: { style?: string; script?: string; nonce?: string }) {
+function page(
+  title: string,
+  body: string,
+  extra?: { style?: string; script?: string; nonce?: string },
+) {
   const nonce = extra?.nonce;
   return `<!DOCTYPE html>
 <html lang="ja">
@@ -55,21 +60,25 @@ function page(title: string, body: string, extra?: { style?: string; script?: st
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>${title} - takos</title>
-<style>${BASE_STYLE}${extra?.style ? '\n' + extra.style : ''}</style>
+<style>${BASE_STYLE}${extra?.style ? "\n" + extra.style : ""}</style>
 </head>
 <body>
 ${body}
-${extra?.script ? `<script${nonce ? ` nonce="${nonce}"` : ''}>${extra.script}</script>` : ''}
+${
+    extra?.script
+      ? `<script${nonce ? ` nonce="${nonce}"` : ""}>${extra.script}</script>`
+      : ""
+  }
 </body>
 </html>`;
 }
 
 function escapeAttr(value: string): string {
   return value
-    .replace(/&/g, '&amp;')
-    .replace(/"/g, '&quot;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;');
+    .replace(/&/g, "&amp;")
+    .replace(/"/g, "&quot;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;");
 }
 
 export { escapeHtml };
@@ -80,11 +89,14 @@ export { escapeHtml };
  * that could lead to XSS when used in href or src attributes.
  */
 function isSafeUrl(url: URL): boolean {
-  return url.protocol === 'https:' || url.protocol === 'http:';
+  return url.protocol === "https:" || url.protocol === "http:";
 }
 
-function resolveHomeLink(homeUrl?: string, homeLabel?: string): { href: string; label: string } {
-  const fallback = { href: '/', label: 'ホーム' };
+function resolveHomeLink(
+  homeUrl?: string,
+  homeLabel?: string,
+): { href: string; label: string } {
+  const fallback = { href: "/", label: "ホーム" };
   if (!homeUrl) {
     return fallback;
   }
@@ -108,33 +120,49 @@ function resolveHomeLink(homeUrl?: string, homeLabel?: string): { href: string; 
 }
 
 /** Simple error page with title, message, and optional link */
-export function errorPage(title: string, message: string, linkHref?: string, linkText?: string): string {
+export function errorPage(
+  title: string,
+  message: string,
+  linkHref?: string,
+  linkText?: string,
+): string {
   const safeTitle = escapeHtml(title);
   const safeMessage = escapeHtml(message);
   const safeLinkHref = linkHref ? escapeAttr(linkHref) : undefined;
-  const safeLinkText = escapeHtml(linkText || 'ホームに戻る');
-  return page(title, `
+  const safeLinkText = escapeHtml(linkText || "ホームに戻る");
+  return page(
+    title,
+    `
 <div class="card">
   <div class="logo">🐙</div>
   <h1 class="error">${safeTitle}</h1>
   <p class="message">${safeMessage}</p>
-  ${safeLinkHref ? `<a href="${safeLinkHref}">${safeLinkText}</a>` : ''}
-</div>`);
+  ${safeLinkHref ? `<a href="${safeLinkHref}">${safeLinkText}</a>` : ""}
+</div>`,
+  );
 }
 
 /** Warning page (e.g. setup required) */
-export function warningPage(title: string, message: string, linkHref?: string, linkText?: string): string {
+export function warningPage(
+  title: string,
+  message: string,
+  linkHref?: string,
+  linkText?: string,
+): string {
   const safeTitle = escapeHtml(title);
   const safeMessage = escapeHtml(message);
   const safeLinkHref = linkHref ? escapeAttr(linkHref) : undefined;
-  const safeLinkText = escapeHtml(linkText || 'ホームに戻る');
-  return page(title, `
+  const safeLinkText = escapeHtml(linkText || "ホームに戻る");
+  return page(
+    title,
+    `
 <div class="card">
   <div class="logo">🐙</div>
   <h1 class="warning">${safeTitle}</h1>
   <p class="message">${safeMessage}</p>
-  ${safeLinkHref ? `<a href="${safeLinkHref}">${safeLinkText}</a>` : ''}
-</div>`);
+  ${safeLinkHref ? `<a href="${safeLinkHref}">${safeLinkText}</a>` : ""}
+</div>`,
+  );
 }
 
 /** External service login page with session check + Google button */
@@ -151,7 +179,9 @@ export function externalLoginPage(opts: {
   const homeLink = resolveHomeLink(opts.homeUrl, opts.homeLabel);
   const safeHomeHref = escapeAttr(homeLink.href);
   const safeHomeLabel = escapeHtml(homeLink.label);
-  return page('ログイン', `
+  return page(
+    "ログイン",
+    `
 <div class="card">
   <div class="logo">🐙</div>
   <h1>takos にログイン</h1>
@@ -164,10 +194,11 @@ export function externalLoginPage(opts: {
     <a href="${safeGoogleOAuthUrl}" class="btn btn-google">${GOOGLE_SVG} Google でログイン</a>
   </div>
   <div class="footer"><a href="${safeHomeHref}">${safeHomeLabel}</a> に戻る</div>
-</div>`, {
-    style: SPINNER_STYLE,
-    nonce: opts.nonce,
-    script: `
+</div>`,
+    {
+      style: SPINNER_STYLE,
+      nonce: opts.nonce,
+      script: `
 var redirectUri = decodeURIComponent('${opts.encodedRedirectUri}');
 (async function() {
   try {
@@ -195,7 +226,8 @@ var redirectUri = decodeURIComponent('${opts.encodedRedirectUri}');
     document.getElementById('loginForm').classList.add('visible');
   }
 })();`,
-  });
+    },
+  );
 }
 
 /** External auth redirect page that POSTs token without leaking it in URL */
@@ -206,7 +238,9 @@ export function externalTokenPostRedirectPage(opts: {
 }): string {
   const redirectUri = escapeAttr(opts.redirectUri);
   const token = escapeAttr(opts.token);
-  return page('Redirecting', `
+  return page(
+    "Redirecting",
+    `
 <div class="card">
   <div class="logo">🐙</div>
   <h1>Redirecting...</h1>
@@ -218,12 +252,14 @@ export function externalTokenPostRedirectPage(opts: {
     <p class="message">JavaScript が無効です。以下のボタンを押してください。</p>
     <button form="externalAuthPost" class="btn btn-allow">続行</button>
   </noscript>
-</div>`, {
-    nonce: opts.nonce,
-    script: `
+</div>`,
+    {
+      nonce: opts.nonce,
+      script: `
 document.getElementById('externalAuthPost')?.submit();
 `,
-  });
+    },
+  );
 }
 
 /**
@@ -237,7 +273,7 @@ function safeLogoUri(uri: string | null): string | null {
     const parsed = new URL(uri);
     // Only allow https: for logo images — no javascript:, data:, http:, etc.
     // data: URIs could embed malicious SVGs with inline scripts.
-    if (parsed.protocol !== 'https:') return null;
+    if (parsed.protocol !== "https:") return null;
     return escapeAttr(parsed.toString());
   } catch {
     return null;
@@ -256,27 +292,49 @@ export function consentPage(opts: {
   const safeLogo = safeLogoUri(opts.clientLogoUri);
   const logo = safeLogo
     ? `<img src="${safeLogo}" alt="" style="width:48px;height:48px;border-radius:12px;margin:0 auto 16px">`
-    : '';
+    : "";
 
   const safeClientName = escapeHtml(opts.clientName);
   const safeUserEmail = escapeHtml(opts.userEmail);
 
   const scopeItems = (items: string[]) =>
-    items.map((s) => `<div style="padding:8px 0;border-bottom:1px solid #27272a;font-size:13px;color:#d4d4d8">${escapeHtml(s)}</div>`).join('');
+    items.map((s) =>
+      `<div style="padding:8px 0;border-bottom:1px solid #27272a;font-size:13px;color:#d4d4d8">${
+        escapeHtml(s)
+      }</div>`
+    ).join("");
 
   const hiddenInputs = Object.entries(opts.hiddenFields)
-    .map(([name, value]) => `<input type="hidden" name="${escapeAttr(name)}" value="${escapeAttr(value)}">`)
-    .join('\n    ');
+    .map(([name, value]) =>
+      `<input type="hidden" name="${escapeAttr(name)}" value="${
+        escapeAttr(value)
+      }">`
+    )
+    .join("\n    ");
 
-  return page(`${safeClientName} を承認`, `
+  return page(
+    `${safeClientName} を承認`,
+    `
 <div class="card">
   ${logo}
   <h1 style="font-size:18px">${safeClientName}</h1>
   <p style="color:#71717a;font-size:12px;margin:4px 0 16px">${safeUserEmail} でログイン中</p>
   <p style="color:#a1a1aa;font-size:14px;margin-bottom:16px"><strong style="color:#fafafa">${safeClientName}</strong> があなたのアカウントへのアクセスを要求しています</p>
   <div style="background:#09090b;border-radius:8px;padding:12px;margin-bottom:8px;text-align:left">
-    ${opts.identityScopes.length > 0 ? `<div style="font-size:12px;font-weight:600;color:#71717a;margin-bottom:4px">アカウント情報</div>${scopeItems(opts.identityScopes)}` : ''}
-    ${opts.resourceScopes.length > 0 ? `<div style="font-size:12px;font-weight:600;color:#71717a;margin-top:8px;margin-bottom:4px">権限</div>${scopeItems(opts.resourceScopes)}` : ''}
+    ${
+      opts.identityScopes.length > 0
+        ? `<div style="font-size:12px;font-weight:600;color:#71717a;margin-bottom:4px">アカウント情報</div>${
+          scopeItems(opts.identityScopes)
+        }`
+        : ""
+    }
+    ${
+      opts.resourceScopes.length > 0
+        ? `<div style="font-size:12px;font-weight:600;color:#71717a;margin-top:8px;margin-bottom:4px">権限</div>${
+          scopeItems(opts.resourceScopes)
+        }`
+        : ""
+    }
   </div>
   <form method="POST" action="/oauth/authorize">
     ${hiddenInputs}
@@ -285,7 +343,8 @@ export function consentPage(opts: {
       <button type="submit" name="action" value="allow" class="btn btn-allow">許可</button>
     </div>
   </form>
-</div>`);
+</div>`,
+  );
 }
 
 /** OAuth device flow: entry page */
@@ -296,14 +355,18 @@ export function deviceCodeEntryPage(opts: {
   homeUrl?: string;
   homeLabel?: string;
 }): string {
-  const safePreset = escapeAttr(opts.presetUserCode ?? '');
+  const safePreset = escapeAttr(opts.presetUserCode ?? "");
   const safeUserEmail = escapeHtml(opts.userEmail);
-  const safeMsg = opts.message ? `<p class="message" style="color:#f59e0b">${escapeHtml(opts.message)}</p>` : '';
+  const safeMsg = opts.message
+    ? `<p class="message" style="color:#f59e0b">${escapeHtml(opts.message)}</p>`
+    : "";
   const homeLink = resolveHomeLink(opts.homeUrl, opts.homeLabel);
   const safeHomeHref = escapeAttr(homeLink.href);
   const safeHomeLabel = escapeHtml(homeLink.label);
 
-  return page('デバイス認証', `
+  return page(
+    "デバイス認証",
+    `
 <div class="card">
   <div class="logo">🐙</div>
   <h1>デバイス認証</h1>
@@ -326,7 +389,8 @@ export function deviceCodeEntryPage(opts: {
     </div>
   </form>
   <div class="footer"><a href="${safeHomeHref}">${safeHomeLabel}</a></div>
-</div>`);
+</div>`,
+  );
 }
 
 /** OAuth device flow: consent page */
@@ -342,7 +406,7 @@ export function deviceConsentPage(opts: {
   const safeLogo = safeLogoUri(opts.clientLogoUri);
   const logo = safeLogo
     ? `<img src="${safeLogo}" alt="" style="width:48px;height:48px;border-radius:12px;margin:0 auto 16px">`
-    : '';
+    : "";
 
   const safeClientName = escapeHtml(opts.clientName);
   const safeUserEmail = escapeHtml(opts.userEmail);
@@ -351,9 +415,15 @@ export function deviceConsentPage(opts: {
   const safeCsrfTokenAttr = escapeAttr(opts.csrfToken);
 
   const scopeItems = (items: string[]) =>
-    items.map((s) => `<div style="padding:8px 0;border-bottom:1px solid #27272a;font-size:13px;color:#d4d4d8">${escapeHtml(s)}</div>`).join('');
+    items.map((s) =>
+      `<div style="padding:8px 0;border-bottom:1px solid #27272a;font-size:13px;color:#d4d4d8">${
+        escapeHtml(s)
+      }</div>`
+    ).join("");
 
-  return page(`${safeClientName} を承認`, `
+  return page(
+    `${safeClientName} を承認`,
+    `
 <div class="card">
   ${logo}
   <h1 style="font-size:18px">${safeClientName}</h1>
@@ -361,9 +431,25 @@ export function deviceConsentPage(opts: {
   <p style="color:#a1a1aa;font-size:14px;margin-bottom:16px"><strong style="color:#fafafa">${safeClientName}</strong> がデバイス認証を要求しています</p>
   <p style="color:#71717a;font-size:12px;margin:-8px 0 16px">コード: <span style="color:#d4d4d8;letter-spacing:2px;text-transform:uppercase">${safeUserCode}</span></p>
   <div style="background:#09090b;border-radius:8px;padding:12px;margin-bottom:8px;text-align:left">
-    ${opts.identityScopes.length > 0 ? `<div style="font-size:12px;font-weight:600;color:#71717a;margin-bottom:4px">アカウント情報</div>${scopeItems(opts.identityScopes)}` : ''}
-    ${opts.resourceScopes.length > 0 ? `<div style="font-size:12px;font-weight:600;color:#71717a;margin-top:8px;margin-bottom:4px">権限</div>${scopeItems(opts.resourceScopes)}` : ''}
-    ${(opts.identityScopes.length === 0 && opts.resourceScopes.length === 0) ? `<div style="font-size:13px;color:#a1a1aa">追加の権限はありません。</div>` : ''}
+    ${
+      opts.identityScopes.length > 0
+        ? `<div style="font-size:12px;font-weight:600;color:#71717a;margin-bottom:4px">アカウント情報</div>${
+          scopeItems(opts.identityScopes)
+        }`
+        : ""
+    }
+    ${
+      opts.resourceScopes.length > 0
+        ? `<div style="font-size:12px;font-weight:600;color:#71717a;margin-top:8px;margin-bottom:4px">権限</div>${
+          scopeItems(opts.resourceScopes)
+        }`
+        : ""
+    }
+    ${
+      (opts.identityScopes.length === 0 && opts.resourceScopes.length === 0)
+        ? `<div style="font-size:13px;color:#a1a1aa">追加の権限はありません。</div>`
+        : ""
+    }
   </div>
   <form method="POST" action="/oauth/device">
     <input type="hidden" name="user_code" value="${safeUserCodeAttr}">
@@ -373,7 +459,8 @@ export function deviceConsentPage(opts: {
       <button type="submit" name="action" value="allow" class="btn btn-allow">許可</button>
     </div>
   </form>
-</div>`);
+</div>`,
+  );
 }
 
 /** OAuth device flow: result page */
@@ -388,11 +475,14 @@ export function deviceResultPage(opts: {
   const homeLink = resolveHomeLink(opts.homeUrl, opts.homeLabel);
   const safeHomeHref = escapeAttr(homeLink.href);
   const safeHomeLabel = escapeHtml(homeLink.label);
-  return page(safeTitle, `
+  return page(
+    safeTitle,
+    `
 <div class="card">
   <div class="logo">🐙</div>
   <h1>${safeTitle}</h1>
   <p class="message">${safeMessage}</p>
   <div class="footer"><a href="${safeHomeHref}">${safeHomeLabel}</a></div>
-</div>`);
+</div>`,
+  );
 }

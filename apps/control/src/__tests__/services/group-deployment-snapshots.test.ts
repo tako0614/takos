@@ -213,6 +213,26 @@ Deno.test("group deployment snapshot service - fallback policy only retries cont
     true,
   );
   assertEquals(
+    shouldTryContentReducingFallback(new RangeError("offset is out of bounds")),
+    true,
+  );
+  assertEquals(
+    shouldTryContentReducingFallback(
+      new Error("Inflate size mismatch at offset 14: expected 267, got 105635"),
+    ),
+    true,
+  );
+  assertEquals(
+    shouldTryContentReducingFallback(
+      new ReferenceError("require is not defined"),
+    ),
+    true,
+  );
+  assertEquals(
+    shouldTryContentReducingFallback(new Error("unexpected EOF")),
+    true,
+  );
+  assertEquals(
     shouldTryContentReducingFallback(new Error("network timeout")),
     false,
   );

@@ -16,11 +16,11 @@ name: my-app
 # NG（name がない、または apiVersion/kind/metadata でラップしている）
 ```
 
-### `--group <name>` is required
+### `group_name is required when the deploy manifest does not provide name`
 
-`takos deploy` / `takos install` は group snapshot 機能を使うため、 対象 group
-を明示する必要があります。manifest の `name` は display 名であり、 group
-名として暗黙解決されません。
+`takos deploy` / `takos install` は group snapshot 機能を使います。通常は
+manifest の `name` が group 名として使われます。このエラーは manifest に
+`name` がなく、かつ `--group` / API の `group_name` override もない場合に出ます。
 
 ```bash
 takos deploy --space SPACE_ID --group my-app
@@ -90,10 +90,10 @@ target filter の対象外で、manifest catalog として同期されます。
 
 ```bash
 # deploy manifest に compute.web と routes: [{ target: web, path: "/" }] がある場合
-takos deploy --plan --env staging --space SPACE_ID --group my-app --target web       # workload
-takos deploy --plan --env staging --space SPACE_ID --group my-app --target 'web:/'   # route
-takos deploy --plan --env staging --space SPACE_ID --group my-app --target workers.web
-takos deploy --plan --env staging --space SPACE_ID --group my-app --target routes.web:/
+takos deploy --plan --env staging --space SPACE_ID --target web       # workload
+takos deploy --plan --env staging --space SPACE_ID --target 'web:/'   # route
+takos deploy --plan --env staging --space SPACE_ID --target workers.web
+takos deploy --plan --env staging --space SPACE_ID --target routes.web:/
 ```
 
 ## publication / capability 解決失敗
@@ -118,13 +118,13 @@ takos deploy --plan --env staging --space SPACE_ID --group my-app --target route
 1. まず plan を確認しましょう:
 
 ```bash
-takos deploy --plan --space SPACE_ID --group my-app
+takos deploy --plan --space SPACE_ID
 ```
 
 2. 変更対象を絞って切り分けます:
 
 ```bash
-takos deploy --plan --env staging --space SPACE_ID --group my-app --target web
+takos deploy --plan --env staging --space SPACE_ID --target web
 ```
 
 3. よくある原因:
@@ -147,7 +147,7 @@ takos endpoint show
 デプロイ前に manifest だけ検証したい場合:
 
 ```bash
-takos deploy --plan --space SPACE_ID --group my-app
+takos deploy --plan --space SPACE_ID
 ```
 
 以下の項目が検証されます。
@@ -162,7 +162,7 @@ takos deploy --plan --space SPACE_ID --group my-app
 
 ## それでも解決しない場合
 
-1. `takos deploy --plan --space SPACE_ID --group GROUP_NAME` で manifest
+1. `takos deploy --plan --space SPACE_ID` で manifest
    の解釈結果と差分を確認
 2. `takos deploy status --space SPACE_ID` で control plane 側の deployment
    状態を確認

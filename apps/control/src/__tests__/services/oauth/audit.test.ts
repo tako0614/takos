@@ -25,7 +25,8 @@ function createMockDrizzleDb() {
 
 const db = createMockDrizzleDb();
 const d1 = db as unknown as D1Database;
-(globalThis as typeof globalThis & { __takosDbMock?: unknown }).__takosDbMock = db as never;
+(globalThis as typeof globalThis & { __takosDbMock?: unknown }).__takosDbMock =
+  db as never;
 
 const mocks = {
   getDb: ((..._args: any[]) => undefined) as any,

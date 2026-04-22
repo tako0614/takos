@@ -1,1 +1,1 @@
-export { getErrorMessage } from 'takos-common/errors';
+export { getErrorMessage } from "takos-common/errors";

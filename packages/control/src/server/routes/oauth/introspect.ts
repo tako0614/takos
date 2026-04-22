@@ -1,16 +1,20 @@
-import { Hono } from 'hono';
-import { validateClientCredentials } from '../../../application/services/oauth/client.ts';
-import { verifyAccessToken, isAccessTokenValid, getRefreshToken } from '../../../application/services/oauth/token.ts';
-import { RateLimiters } from '../../../shared/utils/rate-limiter.ts';
-import type { PublicRouteEnv } from '../route-auth.ts';
-import { getBodyValue, type FormBody } from './request-utils.ts';
+import { Hono } from "hono";
+import { validateClientCredentials } from "../../../application/services/oauth/client.ts";
+import {
+  getRefreshToken,
+  isAccessTokenValid,
+  verifyAccessToken,
+} from "../../../application/services/oauth/token.ts";
+import { RateLimiters } from "../../../shared/utils/rate-limiter.ts";
+import type { PublicRouteEnv } from "../route-auth.ts";
+import { type FormBody, getBodyValue } from "./request-utils.ts";
 
 const oauthIntrospect = new Hono<PublicRouteEnv>();
 
 const introspectRateLimiter = RateLimiters.oauthToken();
-oauthIntrospect.use('/introspect', introspectRateLimiter.middleware());
+oauthIntrospect.use("/introspect", introspectRateLimiter.middleware());
 
-oauthIntrospect.post('/introspect', async (c) => {
+oauthIntrospect.post("/introspect", async (c) => {
   const body = await c.req.parseBody() as FormBody;
   const token = getBodyValue(body.token);
   const clientId = getBodyValue(body.client_id);
@@ -18,14 +22,21 @@ oauthIntrospect.post('/introspect', async (c) => {
 
   if (!token || !clientId) {
     return c.json(
-      { error: 'invalid_request', error_description: 'Missing required parameters' },
-      400
+      {
+        error: "invalid_request",
+        error_description: "Missing required parameters",
+      },
+      400,
     );
   }
 
-  const { valid, error } = await validateClientCredentials(c.env.DB, clientId, clientSecret);
+  const { valid, error } = await validateClientCredentials(
+    c.env.DB,
+    clientId,
+    clientSecret,
+  );
   if (!valid) {
-    return c.json({ error: 'invalid_client', error_description: error }, 401);
+    return c.json({ error: "invalid_client", error_description: error }, 401);
   }
 
   const issuer = `https://${c.env.ADMIN_DOMAIN}`;
@@ -50,7 +61,7 @@ oauthIntrospect.post('/introspect', async (c) => {
       active: true,
       scope: payload.scope,
       client_id: payload.client_id,
-      token_type: 'Bearer',
+      token_type: "Bearer",
       exp: payload.exp,
       iat: payload.iat,
       sub: payload.sub,
@@ -65,12 +76,15 @@ oauthIntrospect.post('/introspect', async (c) => {
     return c.json({ active: false });
   }
 
-  if (refreshToken && !refreshToken.revoked && new Date(refreshToken.expires_at) > new Date()) {
+  if (
+    refreshToken && !refreshToken.revoked &&
+    new Date(refreshToken.expires_at) > new Date()
+  ) {
     return c.json({
       active: true,
       scope: refreshToken.scope,
       client_id: refreshToken.client_id,
-      token_type: 'refresh_token',
+      token_type: "refresh_token",
       exp: Math.floor(new Date(refreshToken.expires_at).getTime() / 1000),
       sub: refreshToken.user_id,
     });

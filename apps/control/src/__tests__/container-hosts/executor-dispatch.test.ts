@@ -63,6 +63,36 @@ Deno.test(
 );
 
 Deno.test(
+  "dispatchAgentExecutorStart - forwards executor pool metadata when provided",
+  async () => {
+    const fetchFn = spy(async (_request: Request) =>
+      new Response("ok", { status: 202 })
+    );
+    const target: AgentExecutorDispatchTarget = {
+      startAndWaitForPorts: spy(async (_port: number) => undefined),
+      fetch: fetchFn,
+    };
+
+    await dispatchAgentExecutorStart(
+      target,
+      {
+        runId: "run-1",
+        workerId: "worker-1",
+        executorTier: 3,
+        executorContainerId: "tier3-scale-0",
+      },
+      { controlRpcToken: "token" },
+    );
+
+    const sentBody = JSON.parse(
+      await ((fetchFn.calls[0]?.args[0] as Request).text()),
+    );
+    assertEquals(sentBody.executorTier, 3);
+    assertEquals(sentBody.executorContainerId, "tier3-scale-0");
+  },
+);
+
+Deno.test(
   "dispatchAgentExecutorStart - returns error result when container returns non-ok response",
   async () => {
     const target: AgentExecutorDispatchTarget = {

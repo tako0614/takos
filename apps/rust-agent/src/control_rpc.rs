@@ -16,6 +16,8 @@ pub struct StartPayload {
     pub service_id: Option<String>,
     pub model: Option<String>,
     pub lease_version: Option<u32>,
+    pub executor_tier: Option<u8>,
+    pub executor_container_id: Option<String>,
     pub control_rpc_base_url: String,
     pub control_rpc_token: String,
 }
@@ -225,6 +227,8 @@ pub struct ControlRpcClient {
     run_id: String,
     service_id: String,
     lease_version: Option<u32>,
+    executor_tier: Option<u8>,
+    executor_container_id: Option<String>,
     sequence: Arc<AtomicU64>,
 }
 
@@ -247,6 +251,8 @@ impl ControlRpcClient {
             run_id: payload.run_id.clone(),
             service_id: payload.resolved_service_id().to_string(),
             lease_version: payload.lease_version,
+            executor_tier: payload.executor_tier,
+            executor_container_id: payload.executor_container_id.clone(),
             sequence: Arc::new(AtomicU64::new(1)),
         })
     }
@@ -527,25 +533,29 @@ impl ControlRpcClient {
         .await
     }
 
-    pub async fn add_assistant_message(&self, thread_id: &str, content: &str) -> AppResult<()> {
+    pub async fn add_assistant_message(
+        &self,
+        thread_id: &str,
+        content: &str,
+        metadata: Option<Value>,
+    ) -> AppResult<()> {
         let idempotency_key = format!(
             "run:{}:assistant-message:{}",
             self.run_id,
             Self::idempotency_hash(content)
         );
-        let _: Value = self
-            .post_json(
-                "/rpc/control/add-message",
-                json!({
-                    "threadId": thread_id,
-                    "idempotencyKey": idempotency_key,
-                    "message": {
-                        "role": "assistant",
-                        "content": content,
-                    }
-                }),
-            )
-            .await?;
+        let mut body = json!({
+            "threadId": thread_id,
+            "idempotencyKey": idempotency_key,
+            "message": {
+                "role": "assistant",
+                "content": content,
+            },
+        });
+        if let Some(metadata) = metadata {
+            body["metadata"] = metadata;
+        }
+        let _: Value = self.post_json("/rpc/control/add-message", body).await?;
         Ok(())
     }
 
@@ -588,14 +598,18 @@ impl ControlRpcClient {
 
     async fn post_json<T: DeserializeOwned>(&self, path: &str, body: Value) -> AppResult<T> {
         let url = format!("{}{}", self.base_url, path);
-        let response = self
+        let mut request = self
             .http
             .post(url)
             .bearer_auth(&self.token)
-            .header("X-Takos-Run-Id", &self.run_id)
-            .json(&body)
-            .send()
-            .await?;
+            .header("X-Takos-Run-Id", &self.run_id);
+        if let Some(executor_tier) = self.executor_tier {
+            request = request.header("X-Takos-Executor-Tier", executor_tier.to_string());
+        }
+        if let Some(executor_container_id) = &self.executor_container_id {
+            request = request.header("X-Takos-Executor-Container-Id", executor_container_id);
+        }
+        let response = request.json(&body).send().await?;
         Self::decode_response(path, response).await
     }
 
@@ -683,4 +697,184 @@ fn activated_skill_array_field(payload: &Value, keys: &[&str]) -> Vec<ActivatedS
             })
         })
         .unwrap_or_default()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{ControlRpcClient, StartPayload};
+    use serde_json::json;
+    use std::io::{Read, Write};
+    use std::net::TcpListener;
+    use std::thread;
+
+    #[tokio::test]
+    async fn control_rpc_client_sends_executor_pool_headers() {
+        let listener = TcpListener::bind("127.0.0.1:0").expect("test listener should bind");
+        let address = listener.local_addr().expect("test listener address");
+        let handle = thread::spawn(move || {
+            let (mut stream, _) = listener.accept().expect("test server should accept");
+            let mut buffer = [0_u8; 4096];
+            let mut request = Vec::new();
+            let mut expected_len: Option<usize> = None;
+            loop {
+                let read = stream.read(&mut buffer).expect("request should read");
+                if read == 0 {
+                    break;
+                }
+                request.extend_from_slice(&buffer[..read]);
+                if expected_len.is_none() {
+                    if let Some(header_end) =
+                        request.windows(4).position(|window| window == b"\r\n\r\n")
+                    {
+                        let headers = String::from_utf8_lossy(&request[..header_end]);
+                        let content_len = headers
+                            .lines()
+                            .find_map(|line| {
+                                let (name, value) = line.split_once(':')?;
+                                if name.eq_ignore_ascii_case("content-length") {
+                                    value.trim().parse::<usize>().ok()
+                                } else {
+                                    None
+                                }
+                            })
+                            .unwrap_or(0);
+                        expected_len = Some(header_end + 4 + content_len);
+                    }
+                }
+                if expected_len
+                    .map(|length| request.len() >= length)
+                    .unwrap_or(false)
+                {
+                    break;
+                }
+            }
+            stream
+                .write_all(
+                    b"HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: 2\r\n\r\n{}",
+                )
+                .expect("response should write");
+            String::from_utf8(request).expect("request should be utf8")
+        });
+
+        let client = ControlRpcClient::new(&StartPayload {
+            run_id: "run-test".to_string(),
+            worker_id: "worker-test".to_string(),
+            service_id: Some("service-test".to_string()),
+            model: Some("local-smoke".to_string()),
+            lease_version: Some(7),
+            executor_tier: Some(3),
+            executor_container_id: Some("tier3-scale-0".to_string()),
+            control_rpc_base_url: format!("http://{address}"),
+            control_rpc_token: "test-token".to_string(),
+        })
+        .expect("control RPC client should build");
+
+        client.heartbeat().await.expect("heartbeat should succeed");
+        let request = handle.join().expect("test server should join");
+        let normalized = request.to_ascii_lowercase();
+
+        assert!(normalized.contains("authorization: bearer test-token\r\n"));
+        assert!(normalized.contains("x-takos-run-id: run-test\r\n"));
+        assert!(normalized.contains("x-takos-executor-tier: 3\r\n"));
+        assert!(
+            normalized.contains("x-takos-executor-container-id: tier3-scale-0\r\n"),
+            "request headers did not include executor container id: {request}",
+        );
+    }
+
+    #[tokio::test]
+    async fn control_rpc_client_add_assistant_message_includes_metadata() {
+        let listener = TcpListener::bind("127.0.0.1:0").expect("test listener should bind");
+        let address = listener.local_addr().expect("test listener address");
+        let handle = thread::spawn(move || {
+            let (mut stream, _) = listener.accept().expect("test server should accept");
+            let mut buffer = [0_u8; 4096];
+            let mut request = Vec::new();
+            let mut expected_len: Option<usize> = None;
+            loop {
+                let read = stream.read(&mut buffer).expect("request should read");
+                if read == 0 {
+                    break;
+                }
+                request.extend_from_slice(&buffer[..read]);
+                if expected_len.is_none() {
+                    if let Some(header_end) =
+                        request.windows(4).position(|window| window == b"\r\n\r\n")
+                    {
+                        let headers = String::from_utf8_lossy(&request[..header_end]);
+                        let content_len = headers
+                            .lines()
+                            .find_map(|line| {
+                                let (name, value) = line.split_once(':')?;
+                                if name.eq_ignore_ascii_case("content-length") {
+                                    value.trim().parse::<usize>().ok()
+                                } else {
+                                    None
+                                }
+                            })
+                            .unwrap_or(0);
+                        expected_len = Some(header_end + 4 + content_len);
+                    }
+                }
+                if expected_len
+                    .map(|length| request.len() >= length)
+                    .unwrap_or(false)
+                {
+                    break;
+                }
+            }
+            stream
+                .write_all(
+                    b"HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: 2\r\n\r\n{}",
+                )
+                .expect("response should write");
+            String::from_utf8(request).expect("request should be utf8")
+        });
+
+        let client = ControlRpcClient::new(&StartPayload {
+            run_id: "run-test".to_string(),
+            worker_id: "worker-test".to_string(),
+            service_id: Some("service-test".to_string()),
+            model: Some("local-smoke".to_string()),
+            lease_version: Some(7),
+            executor_tier: Some(3),
+            executor_container_id: Some("tier3-scale-0".to_string()),
+            control_rpc_base_url: format!("http://{address}"),
+            control_rpc_token: "test-token".to_string(),
+        })
+        .expect("control RPC client should build");
+
+        client
+            .add_assistant_message(
+                "thread-1",
+                "done",
+                Some(json!({
+                    "tool_executions": [{
+                        "tool_call_id": "rust-tool-1",
+                        "name": "repo_list",
+                        "summary": "repo_list output=ok",
+                        "output": "ok",
+                        "error": null,
+                    }]
+                })),
+            )
+            .await
+            .expect("assistant message should succeed");
+
+        let request = handle.join().expect("test server should join");
+        let body = request
+            .split_once("\r\n\r\n")
+            .map(|(_, body)| body)
+            .expect("request should include http body");
+        let parsed: serde_json::Value =
+            serde_json::from_str(body).expect("request body should be json");
+
+        assert_eq!(parsed["threadId"], "thread-1");
+        assert_eq!(parsed["message"]["content"], "done");
+        assert!(parsed["message"]["metadata"].is_null());
+        assert_eq!(
+            parsed["metadata"]["tool_executions"][0]["tool_call_id"],
+            "rust-tool-1",
+        );
+    }
 }

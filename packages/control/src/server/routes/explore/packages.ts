@@ -3,6 +3,7 @@ import type { Env, User } from "../../../shared/types/index.ts";
 import {
   listCatalogItems,
 } from "../../../application/services/source/explore.ts";
+import { resolveDefaultAppDistributionForBootstrap } from "../../../application/services/source/default-app-distribution.ts";
 import {
   filterDeployablePackageReleases,
   getPackageRatingSummary,
@@ -219,6 +220,10 @@ export default new Hono<{ Bindings: Env; Variables: Variables }>()
         spaceId: resolvedSpaceId,
         userId: user?.id,
         gitObjects: c.env.GIT_OBJECTS,
+        repositoryBaseUrl: c.env.ADMIN_DOMAIN,
+        defaultAppEntries: await resolveDefaultAppDistributionForBootstrap(
+          c.env,
+        ),
       });
 
       return c.json(result);

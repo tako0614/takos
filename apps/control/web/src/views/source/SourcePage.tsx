@@ -88,22 +88,23 @@ export function SourcePage(props: SourcePageProps) {
     onCleanup(() => globalThis.removeEventListener("keydown", handler));
   });
 
-  const isSearchMode = browseMode() || query().length > 0 ||
-    filter() !== "all" || category() !== "";
-  const hasActiveFilters = filter() !== "all" || category() !== "";
+  const isSearchMode = () =>
+    browseMode() || query().length > 0 || filter() !== "all" ||
+    category() !== "";
+  const hasActiveFilters = () => filter() !== "all" || category() !== "";
 
   // Restore scroll position when switching between home/search
   createEffect(() => {
-    return restoreScroll(isSearchMode);
+    return restoreScroll(isSearchMode());
   });
 
   const onContentScroll = () => {
-    handleContentScroll(isSearchMode);
+    handleContentScroll(isSearchMode());
   };
 
   // Close mobile filters when leaving search mode
   createEffect(() => {
-    if (!isSearchMode) {
+    if (!isSearchMode()) {
       setShowMobileFilters(false);
     }
   });
@@ -132,7 +133,7 @@ export function SourcePage(props: SourcePageProps) {
       <div class="max-w-2xl mx-auto w-full flex flex-col flex-1 min-h-0">
         {/* -- Header -- */}
         <div class="flex-shrink-0 px-4 pt-4 pb-3 md:pt-5">
-          {!isSearchMode && (
+          {!isSearchMode() && (
             <div class="flex items-center justify-between mb-4">
               <h1 class="text-xl md:text-2xl font-bold tracking-tight text-zinc-900 dark:text-zinc-50">
                 {t("sourceTitle")}
@@ -160,7 +161,7 @@ export function SourcePage(props: SourcePageProps) {
             searchRef={searchRef}
             query={query()}
             setQuery={setQuery}
-            isSearchMode={isSearchMode}
+            isSearchMode={isSearchMode()}
             searchFocused={searchFocused()}
             setSearchFocused={setSearchFocused}
             suggesting={suggesting()}
@@ -171,13 +172,13 @@ export function SourcePage(props: SourcePageProps) {
           />
         </div>
 
-        {isSearchMode
+        {isSearchMode()
           ? (
             <>
               <SourceFilterStatusBar
                 loading={loading()}
                 total={total()}
-                hasActiveFilters={hasActiveFilters}
+                hasActiveFilters={hasActiveFilters()}
                 onClearFilters={clearFilters}
               />
 
@@ -187,7 +188,7 @@ export function SourcePage(props: SourcePageProps) {
                     filter={filter()}
                     sort={sort()}
                     setSort={setSort}
-                    hasActiveFilters={hasActiveFilters}
+                    hasActiveFilters={hasActiveFilters()}
                     onShowFilters={() => setShowMobileFilters(true)}
                   />
                 )

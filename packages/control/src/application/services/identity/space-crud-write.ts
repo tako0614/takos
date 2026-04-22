@@ -24,12 +24,21 @@ import {
   getRepositoryById,
   loadSpaceById,
 } from "./space-crud-read.ts";
-import { enqueueDefaultAppPreinstallJob } from "../source/default-app-distribution.ts";
+import {
+  enqueueDefaultAppPreinstallJob,
+  processDefaultAppPreinstallJobs,
+} from "../source/default-app-distribution.ts";
 import { logWarn } from "../../../shared/utils/logger.ts";
+import { D1TransactionManager } from "../../../shared/utils/db-transaction.ts";
 
 export const spaceCrudWriteDeps = {
   enqueueDefaultAppPreinstallJob,
+  processDefaultAppPreinstallJobs,
 };
+
+function supportsD1Transaction(db: D1Database): boolean {
+  return typeof (db as { prepare?: unknown }).prepare === "function";
+}
 
 async function generateUniqueSlug(
   db: D1Database,
@@ -176,6 +185,24 @@ async function ensureSelfMembership(
   }
 }
 
+async function processDefaultAppsAfterCommit(
+  env: Env,
+  spaceId: string,
+): Promise<void> {
+  try {
+    await spaceCrudWriteDeps.processDefaultAppPreinstallJobs(env, {
+      limit: 1,
+      spaceId,
+    });
+  } catch (error) {
+    logWarn("Default app preinstall immediate processing failed", {
+      module: "spaces",
+      spaceId,
+      error: error instanceof Error ? error.message : String(error),
+    });
+  }
+}
+
 export async function createWorkspaceWithDefaultRepo(
   env: Env,
   userId: string,
@@ -185,6 +212,7 @@ export async function createWorkspaceWithDefaultRepo(
     skipIdCheck?: boolean;
     kind?: "team";
     description?: string;
+    installDefaultApps?: boolean;
   },
 ): Promise<{ workspace: Space; repository: Repository | null }> {
   const spaceId = options?.id || generateId();
@@ -212,30 +240,51 @@ export async function createWorkspaceWithDefaultRepo(
     }
   }
 
-  await createSpaceBundle(env, {
-    spaceId,
-    kind,
-    name: trimmedName,
-    slug,
-    ownerUserId: userId,
-    ownerPrincipalId,
-    description: options?.description ?? null,
-    repoId,
-    repoName: "main",
-    timestamp,
-  });
-  try {
-    await spaceCrudWriteDeps.enqueueDefaultAppPreinstallJob(env, {
+  let preinstallJobId: string | null = null;
+  const shouldInstallDefaultApps = options?.installDefaultApps ?? true;
+  const createSpaceAndPreinstallJob = async () => {
+    await createSpaceBundle(env, {
       spaceId,
-      createdByAccountId: userId,
+      kind,
+      name: trimmedName,
+      slug,
+      ownerUserId: userId,
+      ownerPrincipalId,
+      description: options?.description ?? null,
+      repoId,
+      repoName: "main",
       timestamp,
     });
+    if (shouldInstallDefaultApps) {
+      preinstallJobId = await spaceCrudWriteDeps.enqueueDefaultAppPreinstallJob(
+        env,
+        {
+          spaceId,
+          createdByAccountId: userId,
+          timestamp,
+        },
+      );
+    }
+  };
+
+  try {
+    if (supportsD1Transaction(env.DB)) {
+      const tx = new D1TransactionManager(env.DB);
+      await tx.runInTransaction(createSpaceAndPreinstallJob);
+    } else {
+      await createSpaceAndPreinstallJob();
+    }
   } catch (error) {
     logWarn("Failed to enqueue default app preinstall job", {
       module: "spaces",
       spaceId,
       error: error instanceof Error ? error.message : String(error),
     });
+    throw error;
+  }
+
+  if (preinstallJobId) {
+    await processDefaultAppsAfterCommit(env, spaceId);
   }
 
   const space = await loadSpaceById(env.DB, spaceId);
@@ -310,11 +359,38 @@ export async function getPersonalWorkspace(
   return toPersonalWorkspaceListItem(userAccount, repo);
 }
 
+async function enqueuePersonalWorkspaceDefaultApps(
+  env: Env,
+  userId: string,
+): Promise<void> {
+  try {
+    const preinstallJobId = await spaceCrudWriteDeps
+      .enqueueDefaultAppPreinstallJob(env, {
+        spaceId: userId,
+        createdByAccountId: userId,
+        timestamp: new Date().toISOString(),
+      });
+    if (preinstallJobId) {
+      await processDefaultAppsAfterCommit(env, userId);
+    }
+  } catch (error) {
+    logWarn("Failed to enqueue personal default app preinstall job", {
+      module: "spaces",
+      spaceId: userId,
+      error: error instanceof Error ? error.message : String(error),
+    });
+  }
+}
+
 export async function getOrCreatePersonalWorkspace(
   env: Env,
   userId: string,
 ): Promise<SpaceListItem | null> {
-  return getPersonalWorkspace(env, userId);
+  const workspace = await getPersonalWorkspace(env, userId);
+  if (workspace) {
+    await enqueuePersonalWorkspaceDefaultApps(env, userId);
+  }
+  return workspace;
 }
 
 export async function ensurePersonalWorkspace(

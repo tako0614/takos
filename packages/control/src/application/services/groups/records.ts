@@ -1,8 +1,13 @@
 import { and, eq } from "drizzle-orm";
-import { NotFoundError } from "takos-common/errors";
+import { BadRequestError, NotFoundError } from "takos-common/errors";
 
 import { type Database, getDb, groups } from "../../../infra/db/index.ts";
 import type { Env } from "../../../shared/types/index.ts";
+import {
+  GROUP_NAME_REQUIREMENTS,
+  isValidGroupName,
+  normalizeGroupName,
+} from "../../../shared/utils/naming-utils.ts";
 import type { AppManifest } from "../source/app-manifest-types.ts";
 import type { RepoRefType } from "../platform/group-deployment-snapshot-source.ts";
 
@@ -30,6 +35,17 @@ function resolveDb(env: Env, deps?: GroupRecordDeps): Database {
   return (deps?.getDb ?? getDb)(env.DB);
 }
 
+export function normalizeGroupNameOrThrow(
+  groupName: string,
+  label = "group_name",
+): string {
+  const normalized = normalizeGroupName(groupName);
+  if (!isValidGroupName(normalized)) {
+    throw new BadRequestError(`${label} ${GROUP_NAME_REQUIREMENTS}`);
+  }
+  return normalized;
+}
+
 export async function findGroupByName(
   env: Env,
   spaceId: string,
@@ -37,9 +53,12 @@ export async function findGroupByName(
   deps?: GroupRecordDeps,
 ): Promise<GroupRow | null> {
   const db = resolveDb(env, deps);
+  const normalizedGroupName = normalizeGroupName(groupName);
   return db.select()
     .from(groups)
-    .where(and(eq(groups.spaceId, spaceId), eq(groups.name, groupName)))
+    .where(
+      and(eq(groups.spaceId, spaceId), eq(groups.name, normalizedGroupName)),
+    )
     .get() as Promise<GroupRow | null>;
 }
 
@@ -69,10 +88,11 @@ export async function createGroupByName(
 ): Promise<GroupRow> {
   const db = resolveDb(env, deps);
   const now = new Date().toISOString();
+  const groupName = normalizeGroupNameOrThrow(input.groupName);
   const row = {
     id: crypto.randomUUID(),
     spaceId: input.spaceId,
-    name: input.groupName,
+    name: groupName,
     appVersion: input.appVersion ?? null,
     backend: input.backendName ?? null,
     env: input.envName ?? null,

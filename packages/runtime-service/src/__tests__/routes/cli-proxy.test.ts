@@ -2,6 +2,7 @@ import { createTestApp, testRequest } from "../setup.ts";
 
 import { assertEquals, assertNotEquals } from "jsr:@std/assert";
 import { assertSpyCalls, stub } from "jsr:@std/testing/mock";
+import { RUNTIME_REMOTE_ADDR_BINDING } from "../../middleware/rate-limit.ts";
 
 type CliProxyModule = typeof import("../../routes/cli/proxy.ts");
 
@@ -155,7 +156,7 @@ Deno.test({
 
 Deno.test({
   name:
-    "runtime service - explicitly enabled cli-proxy bypass is loopback-only and service token takes precedence",
+    "runtime service - explicitly enabled cli-proxy bypass ignores spoofed forwarding headers and uses connection loopback",
   sanitizeOps: false,
   sanitizeResources: false,
   async fn() {
@@ -182,32 +183,53 @@ Deno.test({
       },
     });
 
-    const loopback = await testRequest(app as never, {
+    const spoofedForwardedLoopback = await testRequest(app as never, {
       method: "GET",
       path: "/cli-proxy/api/repos/repo-1/status",
       headers: {
         "X-Takos-Session-Id": sessionId,
         "x-forwarded-for": "127.0.0.1",
+        "x-real-ip": "::1",
       },
     });
+    assertEquals(spoofedForwardedLoopback.status, 403);
+    assertEquals(spoofedForwardedLoopback.body, {
+      error: {
+        code: "FORBIDDEN",
+        message: "Authorization header required",
+      },
+    });
+
+    const loopback = await app.request(
+      "/cli-proxy/api/repos/repo-1/status",
+      {
+        method: "GET",
+        headers: {
+          "X-Takos-Session-Id": sessionId,
+        },
+      },
+      { [RUNTIME_REMOTE_ADDR_BINDING]: "127.0.0.1" },
+    );
     assertEquals(loopback.status, 403);
-    assertEquals(loopback.body, {
+    assertEquals(await loopback.json(), {
       error: {
         code: "FORBIDDEN",
         message: "Session not found",
       },
     });
 
-    const invalidToken = await testRequest(app as never, {
-      method: "GET",
-      path: "/cli-proxy/api/repos/repo-1/status",
-      headers: {
-        Authorization: "Bearer invalid-token",
-        "X-Takos-Session-Id": sessionId,
-        "x-forwarded-for": "127.0.0.1",
+    const invalidToken = await app.request(
+      "/cli-proxy/api/repos/repo-1/status",
+      {
+        method: "GET",
+        headers: {
+          Authorization: "Bearer invalid-token",
+          "X-Takos-Session-Id": sessionId,
+        },
       },
-    });
-    assertNotEquals(invalidToken.body, {
+      { [RUNTIME_REMOTE_ADDR_BINDING]: "127.0.0.1" },
+    );
+    assertNotEquals(await invalidToken.json(), {
       error: {
         code: "FORBIDDEN",
         message: "Session not found",
@@ -262,18 +284,20 @@ Deno.test({
       );
 
       try {
-        const response = await testRequest(app as never, {
-          method: "GET",
-          path: "/cli-proxy/api/repos/repo-1/status",
-          headers: {
-            "X-Takos-Session-Id": sessionId,
-            "X-Takos-Space-Id": "space-b",
-            "x-forwarded-for": "127.0.0.1",
+        const response = await app.request(
+          "/cli-proxy/api/repos/repo-1/status",
+          {
+            method: "GET",
+            headers: {
+              "X-Takos-Session-Id": sessionId,
+              "X-Takos-Space-Id": "space-b",
+            },
           },
-        });
+          { [RUNTIME_REMOTE_ADDR_BINDING]: "127.0.0.1" },
+        );
 
         assertEquals(response.status, 403);
-        assertEquals(response.body, {
+        assertEquals(await response.json(), {
           error: {
             code: "FORBIDDEN",
             message: "Session does not belong to the specified space",

@@ -1,5 +1,5 @@
-import { logError } from '../../../shared/utils/logger.ts';
-import type { LLMClient } from '../agent/index.ts';
+import { logError } from "../../../shared/utils/logger.ts";
+import type { LLMClient } from "../agent/index.ts";
 
 const JSON_ARRAY_PATTERN = /\[[\s\S]*\]/;
 
@@ -31,14 +31,16 @@ export async function chatAndParseJsonArray<T>(
   try {
     const response = await llmClient.chat(
       [
-        { role: 'system', content: systemPrompt },
-        { role: 'user', content: userPrompt },
+        { role: "system", content: systemPrompt },
+        { role: "user", content: userPrompt },
       ],
       [],
     );
     return parseJsonArrayFromLLM<T>(response.content);
   } catch (error) {
-    logError('LLM call failed', error, { module: 'services/memory/llm-parser' });
+    logError("LLM call failed", error, {
+      module: "services/memory/llm-parser",
+    });
     return null;
   }
 }

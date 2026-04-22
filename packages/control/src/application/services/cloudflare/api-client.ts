@@ -17,8 +17,8 @@ import {
   type CFAPIResponse,
   classifyAPIError,
   createTimeoutError,
-} from '../wfp/client.ts';
-import { withTimeout } from '../../../shared/utils/with-timeout.ts';
+} from "../wfp/client.ts";
+import { withTimeout } from "../../../shared/utils/with-timeout.ts";
 
 export interface CloudflareApiConfig {
   accountId: string;
@@ -40,7 +40,7 @@ export class CloudflareApiClient {
    */
   private async withTimeout<T>(
     fn: (signal: AbortSignal) => Promise<T>,
-    timeoutMs: number
+    timeoutMs: number,
   ): Promise<T> {
     try {
       return await withTimeout(
@@ -51,7 +51,10 @@ export class CloudflareApiClient {
     } catch (error) {
       // The shared withTimeout throws a plain Error on timeout.
       // Convert to CloudflareAPIError so callers get isRetryable metadata.
-      if (error instanceof Error && error.message.startsWith('Cloudflare API timeout after')) {
+      if (
+        error instanceof Error &&
+        error.message.startsWith("Cloudflare API timeout after")
+      ) {
         throw createTimeoutError(timeoutMs);
       }
       throw error;
@@ -72,7 +75,7 @@ export class CloudflareApiClient {
   async fetch<T>(
     path: string,
     options: RequestInit = {},
-    timeoutMs = 600_000
+    timeoutMs = 600_000,
   ): Promise<CFAPIResponse<T>> {
     const url = `${CF_API_BASE}${path}`;
 
@@ -81,7 +84,7 @@ export class CloudflareApiClient {
         ...options,
         headers: {
           Authorization: `Bearer ${this.config.apiToken}`,
-          'Content-Type': 'application/json',
+          "Content-Type": "application/json",
           ...options.headers,
         },
         signal,
@@ -99,7 +102,10 @@ export class CloudflareApiClient {
 
       const data = (await response.json()) as CFAPIResponse<T>;
       if (!data.success) {
-        const mockResponse = new Response(null, { status: 400, statusText: 'Bad Request' });
+        const mockResponse = new Response(null, {
+          status: 400,
+          statusText: "Bad Request",
+        });
         throw classifyAPIError(mockResponse, data);
       }
 
@@ -113,7 +119,7 @@ export class CloudflareApiClient {
   async fetchRaw(
     path: string,
     options: RequestInit = {},
-    timeoutMs = 600_000
+    timeoutMs = 600_000,
   ): Promise<Response> {
     const url = `${CF_API_BASE}${path}`;
 
@@ -133,34 +139,59 @@ export class CloudflareApiClient {
 
   /** GET /accounts/{accountId}/... */
   async accountGet<T>(subpath: string, timeoutMs?: number): Promise<T> {
-    const res = await this.fetch<T>(`/accounts/${this.config.accountId}${subpath}`, { method: 'GET' }, timeoutMs);
+    const res = await this.fetch<T>(
+      `/accounts/${this.config.accountId}${subpath}`,
+      { method: "GET" },
+      timeoutMs,
+    );
     return res.result;
   }
 
   /** POST /accounts/{accountId}/... */
-  async accountPost<T>(subpath: string, body?: unknown, timeoutMs?: number): Promise<T> {
+  async accountPost<T>(
+    subpath: string,
+    body?: unknown,
+    timeoutMs?: number,
+  ): Promise<T> {
     const res = await this.fetch<T>(
       `/accounts/${this.config.accountId}${subpath}`,
-      { method: 'POST', body: body !== undefined ? JSON.stringify(body) : undefined },
+      {
+        method: "POST",
+        body: body !== undefined ? JSON.stringify(body) : undefined,
+      },
       timeoutMs,
     );
     return res.result;
   }
 
   /** DELETE /accounts/{accountId}/... */
-  async accountDelete<T = unknown>(subpath: string, timeoutMs?: number): Promise<T> {
-    const res = await this.fetch<T>(`/accounts/${this.config.accountId}${subpath}`, { method: 'DELETE' }, timeoutMs);
+  async accountDelete<T = unknown>(
+    subpath: string,
+    timeoutMs?: number,
+  ): Promise<T> {
+    const res = await this.fetch<T>(
+      `/accounts/${this.config.accountId}${subpath}`,
+      { method: "DELETE" },
+      timeoutMs,
+    );
     return res.result;
   }
 
   // ------- Zone-scoped helpers (custom hostnames, etc.) -------
 
   /** POST /zones/{zoneId}/... */
-  async zonePost<T>(subpath: string, body?: unknown, timeoutMs?: number): Promise<T> {
-    if (!this.config.zoneId) throw new Error('CF_ZONE_ID not configured');
+  async zonePost<T>(
+    subpath: string,
+    body?: unknown,
+    timeoutMs?: number,
+  ): Promise<T> {
+    if (!this.config.zoneId) throw new Error("CF_ZONE_ID not configured");
     const res = await this.fetch<T>(
       `/zones/${this.config.zoneId}${subpath}`,
-      { method: 'POST', body: body !== undefined ? JSON.stringify(body) : undefined },
+      {
+        method: "POST",
+        body: body !== undefined ? JSON.stringify(body) : undefined,
+      },
       timeoutMs,
     );
     return res.result;
@@ -168,15 +199,22 @@ export class CloudflareApiClient {
 
   /** GET /zones/{zoneId}/... */
   async zoneGet<T>(subpath: string, timeoutMs?: number): Promise<T> {
-    if (!this.config.zoneId) throw new Error('CF_ZONE_ID not configured');
-    const res = await this.fetch<T>(`/zones/${this.config.zoneId}${subpath}`, { method: 'GET' }, timeoutMs);
+    if (!this.config.zoneId) throw new Error("CF_ZONE_ID not configured");
+    const res = await this.fetch<T>(`/zones/${this.config.zoneId}${subpath}`, {
+      method: "GET",
+    }, timeoutMs);
     return res.result;
   }
 
   /** DELETE /zones/{zoneId}/... */
-  async zoneDelete<T = unknown>(subpath: string, timeoutMs?: number): Promise<T> {
-    if (!this.config.zoneId) throw new Error('CF_ZONE_ID not configured');
-    const res = await this.fetch<T>(`/zones/${this.config.zoneId}${subpath}`, { method: 'DELETE' }, timeoutMs);
+  async zoneDelete<T = unknown>(
+    subpath: string,
+    timeoutMs?: number,
+  ): Promise<T> {
+    if (!this.config.zoneId) throw new Error("CF_ZONE_ID not configured");
+    const res = await this.fetch<T>(`/zones/${this.config.zoneId}${subpath}`, {
+      method: "DELETE",
+    }, timeoutMs);
     return res.result;
   }
 }

@@ -13,30 +13,44 @@
  *   npx tsx scripts/admin-cli.ts moderation ban USER_ID --reason "abuse"
  */
 
-import { sanitizeErrorMessage } from 'takos-control/core/wfp-client';
+import { sanitizeErrorMessage } from "takos-control/core/wfp-client";
 import {
-  type GlobalOptions,
-  type ResolvedConfig,
-  AUDIT_LOG_FILE,
-  WRANGLER_TOML_PATH,
   appendAuditLog,
+  AUDIT_LOG_FILE,
   fail,
+  type GlobalOptions,
   nowIso,
   parseGlobalOptions,
   print,
   resolveConfig,
-} from './admin/index.ts';
-import { cmdD1Ping, cmdD1Query, cmdD1Tables } from './admin/d1-commands.ts';
-import { cmdR2Delete, cmdR2Get, cmdR2List, cmdR2Put, cmdR2UploadDir } from './admin/r2-commands.ts';
-import { cmdModerationBan, cmdModerationShowUser, cmdModerationUnban } from './admin/moderation-commands.ts';
-import { cmdReposBranches, cmdReposList, cmdUsersList } from './admin/platform-commands.ts';
+  type ResolvedConfig,
+  WRANGLER_TOML_PATH,
+} from "./admin/index.ts";
+import { cmdD1Ping, cmdD1Query, cmdD1Tables } from "./admin/d1-commands.ts";
+import {
+  cmdR2Delete,
+  cmdR2Get,
+  cmdR2List,
+  cmdR2Put,
+  cmdR2UploadDir,
+} from "./admin/r2-commands.ts";
+import {
+  cmdModerationBan,
+  cmdModerationShowUser,
+  cmdModerationUnban,
+} from "./admin/moderation-commands.ts";
+import {
+  cmdReposBranches,
+  cmdReposList,
+  cmdUsersList,
+} from "./admin/platform-commands.ts";
 import {
   cmdSecretsGenerateJwt,
   cmdSecretsPrune,
   cmdSecretsPut,
   cmdSecretsStatus,
   cmdSecretsSync,
-} from './admin/secrets-commands.ts';
+} from "./admin/secrets-commands.ts";
 
 // ---------------------------------------------------------------------------
 // Help
@@ -103,7 +117,10 @@ Secrets directory structure:
 // Config show command
 // ---------------------------------------------------------------------------
 
-async function cmdConfigShow(config: ResolvedConfig, options: GlobalOptions): Promise<number> {
+async function cmdConfigShow(
+  config: ResolvedConfig,
+  options: GlobalOptions,
+): Promise<number> {
   const payload = {
     environment: config.environment,
     account_id: config.accountId,
@@ -115,13 +132,18 @@ async function cmdConfigShow(config: ResolvedConfig, options: GlobalOptions): Pr
   if (options.isJson) {
     console.log(JSON.stringify(payload, null, 2));
   } else {
-    console.log('Resolved configuration:');
+    console.log("Resolved configuration:");
     console.log(`  environment: ${payload.environment}`);
     console.log(`  account_id: ${payload.account_id}`);
-    console.log(`  d1_database_id: ${payload.d1_database_id || '(unset)'}`);
+    console.log(`  d1_database_id: ${payload.d1_database_id || "(unset)"}`);
     console.log(`  wrangler_toml: ${payload.wrangler_toml}`);
-    console.log('  r2_aliases:');
-    for (const [alias, bucket] of Object.entries(payload.r2_aliases).sort(([a], [b]) => a.localeCompare(b))) {
+    console.log("  r2_aliases:");
+    for (
+      const [alias, bucket] of Object.entries(payload.r2_aliases).sort((
+        [a],
+        [b],
+      ) => a.localeCompare(b))
+    ) {
       console.log(`    ${alias} -> ${bucket}`);
     }
   }
@@ -135,14 +157,18 @@ async function cmdConfigShow(config: ResolvedConfig, options: GlobalOptions): Pr
 
 function summarizeCommand(args: string[]): string {
   const sanitized = [...args];
-  const tokenIndex = sanitized.indexOf('--api-token');
+  const tokenIndex = sanitized.indexOf("--api-token");
   if (tokenIndex >= 0 && sanitized[tokenIndex + 1]) {
-    sanitized[tokenIndex + 1] = '[REDACTED]';
+    sanitized[tokenIndex + 1] = "[REDACTED]";
   }
-  return sanitized.join(' ');
+  return sanitized.join(" ");
 }
 
-async function dispatchCommand(config: ResolvedConfig, options: GlobalOptions, args: string[]): Promise<number> {
+async function dispatchCommand(
+  config: ResolvedConfig,
+  options: GlobalOptions,
+  args: string[],
+): Promise<number> {
   if (args.length === 0) {
     showHelp();
     return 0;
@@ -150,97 +176,99 @@ async function dispatchCommand(config: ResolvedConfig, options: GlobalOptions, a
 
   const [group, command, ...rest] = args;
 
-  if (group === 'help' || group === '--help') {
+  if (group === "help" || group === "--help") {
     showHelp();
     return 0;
   }
 
-  if (group === 'config') {
-    if (command === 'show') {
+  if (group === "config") {
+    if (command === "show") {
       return cmdConfigShow(config, options);
     }
-    fail('Unknown config command. Use: config show');
+    fail("Unknown config command. Use: config show");
   }
 
-  if (group === 'd1') {
-    if (command === 'ping') {
+  if (group === "d1") {
+    if (command === "ping") {
       return cmdD1Ping(config, options);
     }
-    if (command === 'tables') {
+    if (command === "tables") {
       return cmdD1Tables(config, options);
     }
-    if (command === 'query') {
+    if (command === "query") {
       return cmdD1Query(config, options, rest);
     }
-    fail('Unknown d1 command. Use: d1 ping | d1 tables | d1 query');
+    fail("Unknown d1 command. Use: d1 ping | d1 tables | d1 query");
   }
 
-  if (group === 'r2') {
-    if (command === 'list') {
+  if (group === "r2") {
+    if (command === "list") {
       return cmdR2List(config, options, rest);
     }
-    if (command === 'get') {
+    if (command === "get") {
       return cmdR2Get(config, options, rest);
     }
-    if (command === 'put') {
+    if (command === "put") {
       return cmdR2Put(config, options, rest);
     }
-    if (command === 'delete') {
+    if (command === "delete") {
       return cmdR2Delete(config, options, rest);
     }
-    if (command === 'upload-dir') {
+    if (command === "upload-dir") {
       return cmdR2UploadDir(config, options, rest);
     }
-    fail('Unknown r2 command. Use: r2 list|get|put|delete|upload-dir');
+    fail("Unknown r2 command. Use: r2 list|get|put|delete|upload-dir");
   }
 
-  if (group === 'users') {
-    if (command === 'list') {
+  if (group === "users") {
+    if (command === "list") {
       return cmdUsersList(config, options, rest);
     }
-    fail('Unknown users command. Use: users list');
+    fail("Unknown users command. Use: users list");
   }
 
-  if (group === 'repos') {
-    if (command === 'list') {
+  if (group === "repos") {
+    if (command === "list") {
       return cmdReposList(config, options, rest);
     }
-    if (command === 'branches') {
+    if (command === "branches") {
       return cmdReposBranches(config, options, rest);
     }
-    fail('Unknown repos command. Use: repos list|branches');
+    fail("Unknown repos command. Use: repos list|branches");
   }
 
-  if (group === 'moderation') {
-    if (command === 'show-user') {
+  if (group === "moderation") {
+    if (command === "show-user") {
       return cmdModerationShowUser(config, options, rest);
     }
-    if (command === 'ban') {
+    if (command === "ban") {
       return cmdModerationBan(config, options, rest);
     }
-    if (command === 'unban') {
+    if (command === "unban") {
       return cmdModerationUnban(config, options, rest);
     }
-    fail('Unknown moderation command. Use: moderation show-user|ban|unban');
+    fail("Unknown moderation command. Use: moderation show-user|ban|unban");
   }
 
-  if (group === 'secrets') {
-    if (command === 'status') {
+  if (group === "secrets") {
+    if (command === "status") {
       return cmdSecretsStatus(config, options);
     }
-    if (command === 'sync') {
+    if (command === "sync") {
       return cmdSecretsSync(config, options, rest);
     }
-    if (command === 'put') {
+    if (command === "put") {
       return cmdSecretsPut(config, options, rest);
     }
-    if (command === 'prune') {
+    if (command === "prune") {
       return cmdSecretsPrune(config, options, rest);
     }
-    if (command === 'generate-jwt') {
+    if (command === "generate-jwt") {
       return cmdSecretsGenerateJwt(config, options, rest);
     }
-    fail('Unknown secrets command. Use: secrets status|sync|put|prune|generate-jwt');
+    fail(
+      "Unknown secrets command. Use: secrets status|sync|put|prune|generate-jwt",
+    );
   }
 
   fail(`Unknown command group: ${group}`);
@@ -256,24 +284,46 @@ async function main(): Promise<void> {
 
   if (
     remainingArgs.length === 0 ||
-    remainingArgs[0] === 'help' ||
-    remainingArgs.includes('--help') ||
-    remainingArgs.includes('-h')
+    remainingArgs[0] === "help" ||
+    remainingArgs.includes("--help") ||
+    remainingArgs.includes("-h")
   ) {
     showHelp();
     return;
   }
 
   // secrets commands use wrangler CLI directly and don't need CF API config
-  if (remainingArgs[0] === 'secrets') {
+  if (remainingArgs[0] === "secrets") {
     const [, command, ...rest] = remainingArgs;
-    const dummyConfig = { environment: options.environment, accountId: '', apiToken: '', r2Buckets: {} } as ResolvedConfig;
-    if (command === 'status') { await cmdSecretsStatus(dummyConfig, options); return; }
-    if (command === 'sync') { await cmdSecretsSync(dummyConfig, options, rest); return; }
-    if (command === 'put') { await cmdSecretsPut(dummyConfig, options, rest); return; }
-    if (command === 'prune') { await cmdSecretsPrune(dummyConfig, options, rest); return; }
-    if (command === 'generate-jwt') { await cmdSecretsGenerateJwt(dummyConfig, options, rest); return; }
-    fail('Unknown secrets command. Use: secrets status|sync|put|prune|generate-jwt');
+    const dummyConfig = {
+      environment: options.environment,
+      accountId: "",
+      apiToken: "",
+      r2Buckets: {},
+    } as ResolvedConfig;
+    if (command === "status") {
+      await cmdSecretsStatus(dummyConfig, options);
+      return;
+    }
+    if (command === "sync") {
+      await cmdSecretsSync(dummyConfig, options, rest);
+      return;
+    }
+    if (command === "put") {
+      await cmdSecretsPut(dummyConfig, options, rest);
+      return;
+    }
+    if (command === "prune") {
+      await cmdSecretsPrune(dummyConfig, options, rest);
+      return;
+    }
+    if (command === "generate-jwt") {
+      await cmdSecretsGenerateJwt(dummyConfig, options, rest);
+      return;
+    }
+    fail(
+      "Unknown secrets command. Use: secrets status|sync|put|prune|generate-jwt",
+    );
   }
 
   const config = resolveConfig(options);

@@ -2,7 +2,7 @@ import { existsSync, readFileSync, statSync } from "node:fs";
 import path from "node:path";
 
 function resolveRepoRoot(): string {
-  const configured = Deno.env.get('TAKOS_ECOSYSTEM_ROOT');
+  const configured = Deno.env.get("TAKOS_ECOSYSTEM_ROOT");
   const candidates = [
     configured,
     process.cwd(),
@@ -13,8 +13,10 @@ function resolveRepoRoot(): string {
   for (const candidate of candidates) {
     const agentsPath = path.join(candidate, "AGENTS.md");
     const claudePath = path.join(candidate, "CLAUDE.md");
-    if (existsSync(agentsPath) && statSync(agentsPath).isFile() &&
-        existsSync(claudePath) && statSync(claudePath).isFile()) {
+    if (
+      existsSync(agentsPath) && statSync(agentsPath).isFile() &&
+      existsSync(claudePath) && statSync(claudePath).isFile()
+    ) {
       return candidate;
     }
   }
@@ -54,17 +56,17 @@ function main(): void {
   const claudeLines = claude.split(/\r?\n/).length;
   if (claudeLines > 80) {
     errors.push(
-      `CLAUDE.md is too long (${claudeLines} lines). keep it minimal and AGENTS.md-centric.`
+      `CLAUDE.md is too long (${claudeLines} lines). keep it minimal and AGENTS.md-centric.`,
     );
   } else if (claudeLines > 40) {
     warnings.push(
-      `CLAUDE.md is ${claudeLines} lines. consider reducing duplication with AGENTS.md.`
+      `CLAUDE.md is ${claudeLines} lines. consider reducing duplication with AGENTS.md.`,
     );
   }
 
   if (!agents.includes("ドキュメント駆動開発")) {
     warnings.push(
-      "AGENTS.md does not explicitly contain 'ドキュメント駆動開発'."
+      "AGENTS.md does not explicitly contain 'ドキュメント駆動開発'.",
     );
   }
 

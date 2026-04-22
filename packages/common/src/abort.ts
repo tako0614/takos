@@ -4,7 +4,7 @@
  * Takos の各サービス横断で AbortSignal を扱うための共通ヘルパー。
  */
 
-import { AppError } from './errors.ts';
+import { AppError } from "./errors.ts";
 
 /**
  * 指定したシグナルが中断済みなら `AppError` を投げる。
@@ -13,18 +13,20 @@ import { AppError } from './errors.ts';
  * @param context - 呼び出し箇所の短い識別子。デバッグ向けにエラーメッセージへ追記される
  *                  （例: `'langgraph-start'`）。
  */
-export function throwIfAborted(signal: AbortSignal | undefined, context?: string): void {
+export function throwIfAborted(
+  signal: AbortSignal | undefined,
+  context?: string,
+): void {
   if (!signal?.aborted) {
     return;
   }
 
   const reason = signal.reason;
-  const message =
-    reason instanceof Error
-      ? reason.message
-      : typeof reason === 'string'
-        ? reason
-        : 'Run aborted';
+  const message = reason instanceof Error
+    ? reason.message
+    : typeof reason === "string"
+    ? reason
+    : "Run aborted";
 
   throw new AppError(context ? `${message} (${context})` : message);
 }

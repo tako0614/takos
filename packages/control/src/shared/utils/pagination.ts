@@ -32,15 +32,15 @@ export function parsePagination(
   const fallbackLimit = defaults?.limit ?? 20;
   const maxLimit = defaults?.maxLimit ?? 100;
 
-  const parsedLimit = Number.parseInt(query.limit ?? '', 10);
-  const limit =
-    Number.isFinite(parsedLimit) && parsedLimit > 0
-      ? Math.min(parsedLimit, maxLimit)
-      : fallbackLimit;
+  const parsedLimit = Number.parseInt(query.limit ?? "", 10);
+  const limit = Number.isFinite(parsedLimit) && parsedLimit > 0
+    ? Math.min(parsedLimit, maxLimit)
+    : fallbackLimit;
 
-  const parsedOffset = Number.parseInt(query.offset ?? '', 10);
-  const offset =
-    Number.isFinite(parsedOffset) && parsedOffset >= 0 ? parsedOffset : 0;
+  const parsedOffset = Number.parseInt(query.offset ?? "", 10);
+  const offset = Number.isFinite(parsedOffset) && parsedOffset >= 0
+    ? parsedOffset
+    : 0;
 
   return { limit, offset };
 }

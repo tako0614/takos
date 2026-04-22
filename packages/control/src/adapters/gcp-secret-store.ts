@@ -1,4 +1,4 @@
-import type { GoogleAuth } from 'google-auth-library';
+import type { GoogleAuth } from "google-auth-library";
 import { Buffer } from "node:buffer";
 
 export type GcpSecretStoreConfig = {
@@ -11,13 +11,13 @@ type GoogleAccessToken = {
 };
 
 function encodeSecretPayload(value: string): string {
-  return Buffer.from(value, 'utf-8').toString('base64');
+  return Buffer.from(value, "utf-8").toString("base64");
 }
 
 async function buildAuth(config: GcpSecretStoreConfig): Promise<GoogleAuth> {
-  const { GoogleAuth } = await import('google-auth-library');
+  const { GoogleAuth } = await import("google-auth-library");
   return new GoogleAuth({
-    scopes: ['https://www.googleapis.com/auth/cloud-platform'],
+    scopes: ["https://www.googleapis.com/auth/cloud-platform"],
     ...(config.keyFilePath ? { keyFilename: config.keyFilePath } : {}),
     ...(config.projectId ? { projectId: config.projectId } : {}),
   });
@@ -29,17 +29,24 @@ async function requestJson<T>(
   init?: RequestInit,
   allowNotFound = false,
 ): Promise<T | null> {
-  const accessToken = await auth.getAccessToken() as GoogleAccessToken | string | null;
-  const token = typeof accessToken === 'string' ? accessToken : accessToken?.token ?? null;
+  const accessToken = await auth.getAccessToken() as
+    | GoogleAccessToken
+    | string
+    | null;
+  const token = typeof accessToken === "string"
+    ? accessToken
+    : accessToken?.token ?? null;
   if (!token) {
-    throw new Error('Unable to acquire Google Cloud access token for Secret Manager');
+    throw new Error(
+      "Unable to acquire Google Cloud access token for Secret Manager",
+    );
   }
 
   const response = await fetch(url, {
     ...init,
     headers: {
-      'Authorization': `Bearer ${token}`,
-      'Content-Type': 'application/json',
+      "Authorization": `Bearer ${token}`,
+      "Content-Type": "application/json",
       ...(init?.headers ?? {}),
     },
   });
@@ -50,7 +57,11 @@ async function requestJson<T>(
 
   if (!response.ok) {
     const text = await response.text();
-    throw new Error(`Secret Manager request failed (${response.status}): ${text || response.statusText}`);
+    throw new Error(
+      `Secret Manager request failed (${response.status}): ${
+        text || response.statusText
+      }`,
+    );
   }
 
   if (response.status === 204) {
@@ -77,7 +88,7 @@ export function createGcpSecretStore(config: GcpSecretStoreConfig) {
     const auth = await getAuth();
     const projectId = await auth.getProjectId();
     if (!projectId) {
-      throw new Error('Unable to resolve GCP project id for Secret Manager');
+      throw new Error("Unable to resolve GCP project id for Secret Manager");
     }
     return projectId;
   }
@@ -85,16 +96,23 @@ export function createGcpSecretStore(config: GcpSecretStoreConfig) {
   return {
     async ensureSecret(name: string, value: string): Promise<string> {
       const [auth, projectId] = await Promise.all([getAuth(), getProjectId()]);
-      const baseUrl = `https://secretmanager.googleapis.com/v1/projects/${encodeURIComponent(projectId)}`;
+      const baseUrl = `https://secretmanager.googleapis.com/v1/projects/${
+        encodeURIComponent(projectId)
+      }`;
       const secretPath = `${baseUrl}/secrets/${encodeURIComponent(name)}`;
 
-      const existing = await requestJson<Record<string, unknown>>(auth, secretPath, undefined, true);
+      const existing = await requestJson<Record<string, unknown>>(
+        auth,
+        secretPath,
+        undefined,
+        true,
+      );
       if (!existing) {
         await requestJson(
           auth,
           `${baseUrl}/secrets?secretId=${encodeURIComponent(name)}`,
           {
-            method: 'POST',
+            method: "POST",
             body: JSON.stringify({
               replication: { automatic: {} },
             }),
@@ -106,7 +124,7 @@ export function createGcpSecretStore(config: GcpSecretStoreConfig) {
         auth,
         `${secretPath}:addVersion`,
         {
-          method: 'POST',
+          method: "POST",
           body: JSON.stringify({
             payload: {
               data: encodeSecretPayload(value),
@@ -122,21 +140,27 @@ export function createGcpSecretStore(config: GcpSecretStoreConfig) {
       const [auth, projectId] = await Promise.all([getAuth(), getProjectId()]);
       const response = await requestJson<{ payload?: { data?: string } }>(
         auth,
-        `https://secretmanager.googleapis.com/v1/projects/${encodeURIComponent(projectId)}/secrets/${encodeURIComponent(name)}/versions/latest:access`,
+        `https://secretmanager.googleapis.com/v1/projects/${
+          encodeURIComponent(projectId)
+        }/secrets/${encodeURIComponent(name)}/versions/latest:access`,
       );
       const encoded = response?.payload?.data;
       if (!encoded) {
-        throw new Error(`GCP Secret Manager secret "${name}" does not contain a readable value`);
+        throw new Error(
+          `GCP Secret Manager secret "${name}" does not contain a readable value`,
+        );
       }
-      return Buffer.from(encoded, 'base64').toString('utf-8');
+      return Buffer.from(encoded, "base64").toString("utf-8");
     },
 
     async deleteSecret(name: string): Promise<void> {
       const [auth, projectId] = await Promise.all([getAuth(), getProjectId()]);
       await requestJson(
         auth,
-        `https://secretmanager.googleapis.com/v1/projects/${encodeURIComponent(projectId)}/secrets/${encodeURIComponent(name)}`,
-        { method: 'DELETE' },
+        `https://secretmanager.googleapis.com/v1/projects/${
+          encodeURIComponent(projectId)
+        }/secrets/${encodeURIComponent(name)}`,
+        { method: "DELETE" },
         true,
       );
     },

@@ -6,19 +6,19 @@
 import {
   bytesToHex,
   hexToBytes,
-} from '../../../../shared/utils/encoding-utils.ts';
+} from "../../../../shared/utils/encoding-utils.ts";
 
 function toBufferSource(bytes: Uint8Array): ArrayBuffer {
   return bytes.slice().buffer as ArrayBuffer;
 }
 
 export async function sha1(data: Uint8Array): Promise<string> {
-  const hashBuffer = await crypto.subtle.digest('SHA-1', toBufferSource(data));
+  const hashBuffer = await crypto.subtle.digest("SHA-1", toBufferSource(data));
   return hexFromBuffer(hashBuffer);
 }
 
 export function sha1Bytes(data: Uint8Array): Promise<ArrayBuffer> {
-  return crypto.subtle.digest('SHA-1', toBufferSource(data));
+  return crypto.subtle.digest("SHA-1", toBufferSource(data));
 }
 
 export function hexFromBuffer(buffer: ArrayBuffer): string {

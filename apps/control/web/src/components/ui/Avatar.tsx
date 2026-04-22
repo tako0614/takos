@@ -1,7 +1,7 @@
-import { splitProps } from 'solid-js';
-import type { JSX } from 'solid-js';
+import { splitProps } from "solid-js";
+import type { JSX } from "solid-js";
 
-type AvatarSize = 'xs' | 'sm' | 'md' | 'lg' | 'xl';
+type AvatarSize = "xs" | "sm" | "md" | "lg" | "xl";
 
 interface AvatarProps extends JSX.HTMLAttributes<HTMLDivElement> {
   src?: string;
@@ -11,18 +11,18 @@ interface AvatarProps extends JSX.HTMLAttributes<HTMLDivElement> {
 }
 
 const sizeMap: Record<AvatarSize, { size: string; fontSize: string }> = {
-  xs: { size: '1.5rem', fontSize: '0.625rem' },
-  sm: { size: '2rem', fontSize: '0.75rem' },
-  md: { size: '2.5rem', fontSize: '0.875rem' },
-  lg: { size: '3rem', fontSize: '1rem' },
-  xl: { size: '4rem', fontSize: '1.25rem' },
+  xs: { size: "1.5rem", fontSize: "0.625rem" },
+  sm: { size: "2rem", fontSize: "0.75rem" },
+  md: { size: "2.5rem", fontSize: "0.875rem" },
+  lg: { size: "3rem", fontSize: "1rem" },
+  xl: { size: "4rem", fontSize: "1.25rem" },
 };
 
 function getInitials(name: string): string {
   return name
-    .split(' ')
+    .split(" ")
     .map((n) => n[0])
-    .join('')
+    .join("")
     .toUpperCase()
     .slice(0, 2);
 }
@@ -37,25 +37,34 @@ function stringToColor(str: string): string {
 }
 
 export function Avatar(props: AvatarProps) {
-  const [local, rest] = splitProps(props, ['src', 'alt', 'name', 'size', 'class', 'style']);
+  const [local, rest] = splitProps(props, [
+    "src",
+    "alt",
+    "name",
+    "size",
+    "class",
+    "style",
+  ]);
 
-  const dimension = () => sizeMap[local.size ?? 'md'].size;
-  const fontSize = () => sizeMap[local.size ?? 'md'].fontSize;
+  const dimension = () => sizeMap[local.size ?? "md"].size;
+  const fontSize = () => sizeMap[local.size ?? "md"].fontSize;
 
   const baseStyle = (): JSX.CSSProperties => ({
     width: dimension(),
     height: dimension(),
-    'border-radius': 'var(--radius-full)',
-    overflow: 'hidden',
-    display: 'flex',
-    'align-items': 'center',
-    'justify-content': 'center',
-    'flex-shrink': '0',
-    'background-color': local.name ? stringToColor(local.name) : 'var(--color-bg-tertiary)',
-    color: 'white',
-    'font-size': fontSize(),
-    'font-weight': '500',
-    ...(typeof local.style === 'object' ? local.style : {}),
+    "border-radius": "var(--radius-full)",
+    overflow: "hidden",
+    display: "flex",
+    "align-items": "center",
+    "justify-content": "center",
+    "flex-shrink": "0",
+    "background-color": local.name
+      ? stringToColor(local.name)
+      : "var(--color-bg-tertiary)",
+    color: "white",
+    "font-size": fontSize(),
+    "font-weight": "500",
+    ...(typeof local.style === "object" ? local.style : {}),
   });
 
   if (local.src) {
@@ -63,8 +72,8 @@ export function Avatar(props: AvatarProps) {
       <div class={local.class} style={baseStyle()} {...rest}>
         <img
           src={local.src}
-          alt={local.alt || local.name || 'Avatar'}
-          style={{ width: '100%', height: '100%', 'object-fit': 'cover' }}
+          alt={local.alt || local.name || "Avatar"}
+          style={{ width: "100%", height: "100%", "object-fit": "cover" }}
         />
       </div>
     );
@@ -72,7 +81,7 @@ export function Avatar(props: AvatarProps) {
 
   return (
     <div class={local.class} style={baseStyle()} {...rest}>
-      {local.name ? getInitials(local.name) : '?'}
+      {local.name ? getInitials(local.name) : "?"}
     </div>
   );
 }

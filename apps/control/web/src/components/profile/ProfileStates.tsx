@@ -1,5 +1,5 @@
-import { Show } from 'solid-js';
-import { Icons } from '../../lib/Icons.tsx';
+import { Show } from "solid-js";
+import { Icons } from "../../lib/Icons.tsx";
 
 interface ProfileLoadingStateProps {
   label?: string;
@@ -10,7 +10,7 @@ export function ProfileLoadingState(props: ProfileLoadingStateProps) {
     <div class="flex flex-col h-full bg-zinc-50 dark:bg-zinc-900">
       <div class="flex flex-col items-center justify-center flex-1 text-zinc-500 dark:text-zinc-400">
         <div class="w-8 h-8 border-2 border-zinc-200 dark:border-zinc-700 border-t-zinc-900 dark:border-t-white rounded-full animate-spin" />
-        <span class="mt-3">{props.label ?? 'Loading profile...'}</span>
+        <span class="mt-3">{props.label ?? "Loading profile..."}</span>
       </div>
     </div>
   );

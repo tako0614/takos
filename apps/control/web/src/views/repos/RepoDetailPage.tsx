@@ -24,8 +24,10 @@ export function RepoDetailPage(props: RepoDetailPageProps) {
   );
   const [loading, setLoading] = createSignal(true);
   const [error, setError] = createSignal<string | null>(null);
+  let repoRequestSeq = 0;
 
   const fetchRepo = async () => {
+    const requestId = ++repoRequestSeq;
     try {
       setLoading(true);
       setError(null);
@@ -78,6 +80,7 @@ export function RepoDetailPage(props: RepoDetailPageProps) {
           };
         }>(res);
 
+        if (requestId !== repoRequestSeq) return;
         setRepo({
           ...data.repository,
           space_id: data.repository.space_id || data.space?.id || "",
@@ -98,6 +101,7 @@ export function RepoDetailPage(props: RepoDetailPageProps) {
           owner?: { name?: string | null; picture?: string | null } | null;
         }>(res);
 
+        if (requestId !== repoRequestSeq) return;
         setRepo(data.repository);
         setResolvedSpaceId(data.repository.space_id || props.spaceId || null);
         return;
@@ -105,9 +109,12 @@ export function RepoDetailPage(props: RepoDetailPageProps) {
 
       throw new Error("No repository identifier provided");
     } catch (err) {
+      if (requestId !== repoRequestSeq) return;
       setError(err instanceof Error ? err.message : "Unknown error");
     } finally {
-      setLoading(false);
+      if (requestId === repoRequestSeq) {
+        setLoading(false);
+      }
     }
   };
 

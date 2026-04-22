@@ -1,5 +1,5 @@
-import { createSignal } from 'solid-js';
-import type { Accessor, Setter } from 'solid-js';
+import { createSignal } from "solid-js";
+import type { Accessor, Setter } from "solid-js";
 
 export const PAGE_SIZE = 20;
 
@@ -12,8 +12,16 @@ export interface UseSourcePaginationResult {
     hasMore: boolean,
     appendInFlightHolder: { appendInFlightRef: boolean },
     requestSeqHolder: { requestSeqRef: number },
-    fetchAll: (offset: number, append: boolean, requestId: number) => Promise<void>,
-    fetchStarred: (offset: number, append: boolean, requestId: number) => Promise<void>,
+    fetchAll: (
+      offset: number,
+      append: boolean,
+      requestId: number,
+    ) => Promise<void>,
+    fetchStarred: (
+      offset: number,
+      append: boolean,
+      requestId: number,
+    ) => Promise<void>,
   ) => void;
   resetOffset: () => void;
 }
@@ -30,17 +38,28 @@ export function useSourcePagination(): UseSourcePaginationResult {
     currentHasMore: boolean,
     appendInFlightHolder: { appendInFlightRef: boolean },
     requestSeqHolder: { requestSeqRef: number },
-    fetchAll: (offset: number, append: boolean, requestId: number) => Promise<void>,
-    fetchStarred: (offset: number, append: boolean, requestId: number) => Promise<void>,
+    fetchAll: (
+      offset: number,
+      append: boolean,
+      requestId: number,
+    ) => Promise<void>,
+    fetchStarred: (
+      offset: number,
+      append: boolean,
+      requestId: number,
+    ) => Promise<void>,
   ) => {
-    if (currentLoading || !currentHasMore || appendInFlightHolder.appendInFlightRef) return;
+    if (
+      currentLoading || !currentHasMore ||
+      appendInFlightHolder.appendInFlightRef
+    ) return;
     appendInFlightHolder.appendInFlightRef = true;
     const requestId = requestSeqHolder.requestSeqRef;
     setOffset((prevOffset) => {
       const nextOffset = prevOffset + PAGE_SIZE;
-      if (filter === 'all') {
+      if (filter === "all") {
         void fetchAll(nextOffset, true, requestId);
-      } else if (filter === 'starred') {
+      } else if (filter === "starred") {
         void fetchStarred(nextOffset, true, requestId);
       }
       return nextOffset;

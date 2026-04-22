@@ -1,11 +1,16 @@
-import type { SelectOf } from '../../../shared/types/drizzle-utils.ts';
-import type { OAuthToken, OAuthTokenType } from '../../../shared/types/oauth.ts';
-import type { oauthTokens } from '../../../infra/db/index.ts';
-import { textDate, textDateNullable } from '../../../shared/utils/db-guards.ts';
+import type { SelectOf } from "../../../shared/types/drizzle-utils.ts";
+import type {
+  OAuthToken,
+  OAuthTokenType,
+} from "../../../shared/types/oauth.ts";
+import type { oauthTokens } from "../../../infra/db/index.ts";
+import { textDate, textDateNullable } from "../../../shared/utils/db-guards.ts";
 
 export type OAuthTokenRow = SelectOf<typeof oauthTokens>;
 
-export function toOptionalIsoString(value: string | Date | null | undefined): string | null {
+export function toOptionalIsoString(
+  value: string | Date | null | undefined,
+): string | null {
   return textDateNullable(value);
 }
 
@@ -26,7 +31,7 @@ export function buildRevocationData(reason: string): {
   };
 }
 
-const AUTHORIZATION_CODE_TOKEN_FAMILY_PREFIX = 'auth_code:';
+const AUTHORIZATION_CODE_TOKEN_FAMILY_PREFIX = "auth_code:";
 
 export function buildAuthorizationCodeTokenFamily(codeId: string): string {
   return `${AUTHORIZATION_CODE_TOKEN_FAMILY_PREFIX}${codeId}`;

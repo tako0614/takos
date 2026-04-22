@@ -45,21 +45,21 @@ Deno.test("DEFAULT_READINESS_PATH defaults to '/'", () => {
 
 Deno.test("buildProbeUrl joins base + path without duplicate slashes", () => {
   assertEquals(
-    buildProbeUrl("https://my-app.takos.app", "/"),
-    "https://my-app.takos.app/",
+    buildProbeUrl("https://my-app.example.com", "/"),
+    "https://my-app.example.com/",
   );
   assertEquals(
-    buildProbeUrl("https://my-app.takos.app", "/healthz"),
-    "https://my-app.takos.app/healthz",
+    buildProbeUrl("https://my-app.example.com", "/healthz"),
+    "https://my-app.example.com/healthz",
   );
   assertEquals(
-    buildProbeUrl("https://my-app.takos.app/", "/healthz"),
-    "https://my-app.takos.app/healthz",
+    buildProbeUrl("https://my-app.example.com/", "/healthz"),
+    "https://my-app.example.com/healthz",
   );
   // Defensive: missing leading slash on path is normalized.
   assertEquals(
-    buildProbeUrl("https://my-app.takos.app", "healthz"),
-    "https://my-app.takos.app/healthz",
+    buildProbeUrl("https://my-app.example.com", "healthz"),
+    "https://my-app.example.com/healthz",
   );
 });
 

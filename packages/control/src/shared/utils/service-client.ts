@@ -8,11 +8,7 @@
  * generic model or lose Cloudflare-specific context, so they are intentionally
  * kept separate.
  */
-import {
-  AppError,
-  ErrorCodes,
-  type ErrorCode,
-} from 'takos-common/errors';
+import { AppError, type ErrorCode, ErrorCodes } from "takos-common/errors";
 
 const STATUS_TO_CODE: Record<number, ErrorCode> = {
   400: ErrorCodes.BAD_REQUEST,
@@ -27,10 +23,14 @@ const STATUS_TO_CODE: Record<number, ErrorCode> = {
   504: ErrorCodes.GATEWAY_TIMEOUT,
 };
 
-function mapUpstreamStatus(status: number): { code: ErrorCode; statusCode: number } {
+function mapUpstreamStatus(
+  status: number,
+): { code: ErrorCode; statusCode: number } {
   const mapped = STATUS_TO_CODE[status];
   if (mapped) return { code: mapped, statusCode: status };
-  if (status >= 400 && status < 500) return { code: ErrorCodes.BAD_REQUEST, statusCode: 400 };
+  if (status >= 400 && status < 500) {
+    return { code: ErrorCodes.BAD_REQUEST, statusCode: 400 };
+  }
   return { code: ErrorCodes.INTERNAL_ERROR, statusCode: 500 };
 }
 
@@ -53,7 +53,7 @@ export class ServiceCallError extends AppError {
       code,
       statusCode,
     );
-    this.name = 'ServiceCallError';
+    this.name = "ServiceCallError";
     this.serviceName = opts.serviceName;
     this.upstreamStatus = opts.upstreamStatus;
     this.upstreamCode = opts.upstreamCode;
@@ -78,7 +78,9 @@ export async function parseServiceResponse<T>(
     try {
       return JSON.parse(bodyText) as T;
     } catch (error) {
-      const detail = error instanceof Error && error.message ? `: ${error.message}` : '';
+      const detail = error instanceof Error && error.message
+        ? `: ${error.message}`
+        : "";
       throw new ServiceCallError({
         serviceName,
         upstreamStatus: res.status,

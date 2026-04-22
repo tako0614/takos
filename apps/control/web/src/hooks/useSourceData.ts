@@ -12,6 +12,7 @@ export type {
 
 export interface SourceItemPackage {
   available: boolean;
+  app_id?: string | null;
   latest_version: string | null;
   latest_tag: string | null;
   release_tag: string | null;
@@ -51,6 +52,15 @@ export interface SourceItem {
   };
   space?: { id: string; name: string };
   package?: SourceItemPackage;
+  catalog_origin?: "repository" | "default_app";
+  source?: {
+    kind: "git_ref";
+    repository_url: string;
+    ref: string;
+    ref_type: "branch" | "tag" | "commit";
+    backend?: "cloudflare" | "local" | "aws" | "gcp" | "k8s" | null;
+    env?: string | null;
+  };
   installation?: SourceItemInstallation;
 }
 

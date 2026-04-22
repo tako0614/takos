@@ -1,5 +1,5 @@
-import { createSignal, onCleanup, onMount } from 'solid-js';
-import type { Accessor, JSX, Setter } from 'solid-js';
+import { createSignal, onCleanup, onMount } from "solid-js";
+import type { Accessor, JSX, Setter } from "solid-js";
 
 const [headerContent, setHeaderContent] = createSignal<JSX.Element | null>(
   null,

@@ -50,10 +50,12 @@ Deno.test("group managed desired state sync - syncs publications, consumes, and 
   const deps = {
     createDesiredStateService: () => ({
       listLocalEnvVars: async () => [],
+      listResourceBindings: async () => [],
       replaceLocalEnvVars: async (params: unknown) => {
         replaceLocalEnvVarsCalls.push(params);
       },
     }),
+    listServiceConsumes: async () => [],
     replaceManifestPublications: async (_env, params) => {
       replaceManifestPublicationsCalls.push(params);
     },
@@ -81,6 +83,8 @@ Deno.test("group managed desired state sync - syncs publications, consumes, and 
       envVars: {},
       commonEnvUpdates: [],
     }),
+    createServiceBinding: async () => {},
+    deleteServiceBinding: async () => {},
   } satisfies GroupManagedDesiredStateDeps;
 
   const desired = compileGroupDesiredState(
@@ -268,6 +272,7 @@ Deno.test("group managed desired state sync - syncs publications, consumes, and 
       spaceId: "ws-1",
       serviceId: "svc-edge",
       variables: [
+        { name: "TAKOS_SPACE_ID", value: "ws-1", secret: false },
         { name: "API_URL", value: "https://api.example.test", secret: false },
         { name: "WORKER_MODE", value: "edge", secret: false },
       ],
@@ -276,6 +281,7 @@ Deno.test("group managed desired state sync - syncs publications, consumes, and 
       spaceId: "ws-1",
       serviceId: "svc-api",
       variables: [
+        { name: "TAKOS_SPACE_ID", value: "ws-1", secret: false },
         { name: "API_URL", value: "https://api.example.test", secret: false },
         { name: "API_MODE", value: "service", secret: false },
         {
@@ -294,8 +300,10 @@ Deno.test("group managed desired state sync - preflights consume env collisions 
   const deps = {
     createDesiredStateService: () => ({
       listLocalEnvVars: async () => [],
+      listResourceBindings: async () => [],
       replaceLocalEnvVars: async () => {},
     }),
+    listServiceConsumes: async () => [],
     replaceManifestPublications: async () => {},
     previewServiceConsumeEnvVars: async () => [
       { name: "PUBLICATION_SEARCH_URL", secret: false },
@@ -310,6 +318,8 @@ Deno.test("group managed desired state sync - preflights consume env collisions 
       envVars: {},
       commonEnvUpdates: [],
     }),
+    createServiceBinding: async () => {},
+    deleteServiceBinding: async () => {},
   } satisfies GroupManagedDesiredStateDeps;
 
   const desired = compileGroupDesiredState(

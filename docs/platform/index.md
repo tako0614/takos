@@ -2,7 +2,8 @@
 
 ::: tip このセクションは deploy manifest author / Takos developer
 向けのプラットフォーム概念を整理したセクションです。Takos kernel をホストする
-operator は [Hosting](/hosting/) を参照してください。:::
+operator は [Hosting](/hosting/) を参照してください。
+:::
 
 Takos platform は infra kernel の層です。primitive の実行基盤を提供しつつ、
 space の所有・権限・deploy・resource・metering を管理します。
@@ -78,7 +79,7 @@ ActivityPub と ForgeFed をベースとした、インスタンス間の reposi
 
 ```text
 group workloads
-  examples: takos-docs / takos-excel / takos-slide / third-party
+  examples: takos-docs / takos-excel / takos-slide / takos-computer / third-party
   ↑ publications / capability grants
 kernel features (Agent / Chat, Git, Storage, Store, Auth) ← kernel に常設、uninstall 不可
   ↑
@@ -91,7 +92,7 @@ deploy manifest (.takos/app.yml / .takos/app.yaml)
 
 ## Default app distribution
 
-Takos は takos-docs, takos-excel, takos-slide を default app distribution
+Takos は takos-docs, takos-excel, takos-slide, takos-computer を default app distribution
 の初期セットとして扱います。これは新規 space に preinstall する app
 候補であり、operator は別の app set に差し替えられる。default set に含まれても
 primitive や group は特権化されません。
@@ -113,6 +114,6 @@ primitive や group は特権化されません。
 | [Store](/platform/store)                             | kernel feature としての Store の役割と current implementation |
 | [課金](/platform/billing)                            | プラン・使用量・決済                                          |
 | [ActivityPub](/platform/activitypub)                 | 連合プロトコル対応                                            |
-| [Default App Distribution](/platform/default-apps)   | takos-docs, takos-excel, takos-slide                          |
+| [Default App Distribution](/platform/default-apps)   | takos-docs, takos-excel, takos-slide, takos-computer           |
 | [互換性](/platform/compatibility)                    | tracked template と supported backend surfaces の整理         |
 | [Resource Governance](/platform/resource-governance) | resource CRUD / grant / billing gate の整理                   |

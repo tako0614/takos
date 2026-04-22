@@ -1,9 +1,12 @@
 import { createSignal, onMount } from "solid-js";
-import { rpc, rpcJson, rpcPath } from "../lib/rpc.ts";
+import { apiJson, rpc, rpcJson, rpcPath } from "../lib/rpc.ts";
+import { getErrorMessage } from "../lib/errors.ts";
 import { useConfirmDialog } from "../store/confirm-dialog.ts";
 import { useI18n } from "../store/i18n.ts";
 import { useToast } from "../store/toast.ts";
 import type { Worker } from "../types/index.ts";
+
+const DEPLOY_LIST_TIMEOUT_MS = 15000;
 
 function isYurucommuWorker(worker: Worker): boolean {
   if (!worker.config) return false;
@@ -26,15 +29,19 @@ export function useSpaceWorkers(spaceId: string | null) {
   const refreshWorkers = async () => {
     setLoadingCfWorkers(true);
     try {
-      const res = spaceId
-        ? await rpcPath(rpc, "spaces", ":spaceId", "services").$get({
-          param: { spaceId },
-        })
-        : await rpcPath(rpc, "services").$get({ param: {} });
-      const data = await rpcJson<{ services: Worker[] }>(res);
+      const data = await apiJson<{ services: Worker[] }>(
+        spaceId
+          ? `/api/spaces/${encodeURIComponent(spaceId)}/services`
+          : "/api/services",
+        { timeoutMs: DEPLOY_LIST_TIMEOUT_MS },
+      );
       setCfWorkers(data.services || []);
-    } catch {
+    } catch (error) {
       setCfWorkers([]);
+      showToast(
+        "error",
+        getErrorMessage(error, t("failedToLoad") || "Failed to load"),
+      );
     } finally {
       setLoadingCfWorkers(false);
     }

@@ -69,7 +69,7 @@ function getFiles(objects: R2Object[], prefix: string): R2Object[] {
   });
 }
 
-export function R2BrowserTab({ resource }: R2BrowserTabProps) {
+export function R2BrowserTab(props: R2BrowserTabProps) {
   const { t } = useI18n();
   const { showToast } = useToast();
   const { confirm } = useConfirmDialog();
@@ -92,7 +92,7 @@ export function R2BrowserTab({ resource }: R2BrowserTabProps) {
     setLoading(true);
     try {
       const res = await rpc.resources[":id"].r2.objects.$get({
-        param: { id: resource.id },
+        param: { id: props.resource.id },
         query: {
           prefix: newPrefix || undefined,
           cursor: reset ? undefined : cursor(),
@@ -138,7 +138,7 @@ export function R2BrowserTab({ resource }: R2BrowserTabProps) {
     try {
       const res = await rpcPath(rpc, "resources", ":id", "objects", ":key")
         .$put({
-          param: { id: resource.id, key: encodeURIComponent(key) },
+          param: { id: props.resource.id, key: encodeURIComponent(key) },
           json: {
             value: await file.text(),
             content_type: file.type || "application/octet-stream",
@@ -198,7 +198,7 @@ export function R2BrowserTab({ resource }: R2BrowserTabProps) {
     setDeletingKey(key);
     try {
       const res = await rpc.resources[":id"].r2.objects[":key"].$delete({
-        param: { id: resource.id, key: encodeURIComponent(key) },
+        param: { id: props.resource.id, key: encodeURIComponent(key) },
       });
       if (!res.ok) throw new Error("Delete failed");
       showToast("success", t("deleted"));
@@ -214,7 +214,7 @@ export function R2BrowserTab({ resource }: R2BrowserTabProps) {
     try {
       const res = await rpcPath(rpc, "resources", ":id", "objects", ":key")
         .$get({
-          param: { id: resource.id, key: encodeURIComponent(key) },
+          param: { id: props.resource.id, key: encodeURIComponent(key) },
         });
       const object = await rpcJson<R2ObjectPayload>(res);
       const blob = new Blob([object.value], {
@@ -263,7 +263,7 @@ export function R2BrowserTab({ resource }: R2BrowserTabProps) {
             class="flex items-center gap-2 text-sm text-zinc-900 dark:text-zinc-100 hover:text-blue-600 dark:hover:text-blue-400 transition-colors flex-shrink-0"
           >
             <Icons.Bucket class="w-4 h-4" />
-            <span class="font-medium">{resource.name}</span>
+            <span class="font-medium">{props.resource.name}</span>
           </button>
           <For each={breadcrumbParts()}>
             {(part, index) => (
@@ -303,7 +303,7 @@ export function R2BrowserTab({ resource }: R2BrowserTabProps) {
             type="file"
             multiple
             class="hidden"
-            onChange={(e) => handleFileSelect(e.target.files)}
+            onChange={(e) => handleFileSelect(e.currentTarget.files)}
           />
           <Button
             variant="secondary"

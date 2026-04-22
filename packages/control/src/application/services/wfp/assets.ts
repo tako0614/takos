@@ -7,15 +7,19 @@
  * metadata so the assets are served alongside the worker.
  */
 
-import type { WFPConfig, CFAPIResponse } from './client.ts';
-import { CF_API_BASE, sanitizeErrorMessage } from './client.ts';
-import type { WfpClient } from './client.ts';
-import { bytesToHex, bytesToBase64 } from '../../../shared/utils/encoding-utils.ts';
+import type { CFAPIResponse, WFPConfig } from "./client.ts";
+import { CF_API_BASE, sanitizeErrorMessage } from "./client.ts";
+import type { WfpClient } from "./client.ts";
+import {
+  bytesToBase64,
+  bytesToHex,
+} from "../../../shared/utils/encoding-utils.ts";
 
 const ASSET_UPLOAD_TIMEOUT_MS = 60_000;
 
 export const assetUploadDeps = {
-  digestSha256: async (data: BufferSource): Promise<ArrayBuffer> => crypto.subtle.digest('SHA-256', data),
+  digestSha256: async (data: BufferSource): Promise<ArrayBuffer> =>
+    crypto.subtle.digest("SHA-256", data),
 };
 
 /** Manifest entry for static assets upload */
@@ -50,7 +54,7 @@ export async function createAssetsUploadSession(
   client: WfpClient,
   config: WFPConfig,
   workerName: string,
-  manifest: Record<string, AssetManifestEntry>
+  manifest: Record<string, AssetManifestEntry>,
 ): Promise<AssetsUploadSession> {
   const response = await client.fetch<{
     jwt: string;
@@ -58,10 +62,10 @@ export async function createAssetsUploadSession(
   }>(
     `/accounts/${config.accountId}/workers/dispatch/namespaces/${config.dispatchNamespace}/scripts/${workerName}/assets-upload-session`,
     {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ manifest }),
-    }
+    },
   );
 
   // buckets contains arrays of hashes that need uploading
@@ -87,7 +91,7 @@ export async function createAssetsUploadSession(
 export async function uploadAssets(
   config: WFPConfig,
   sessionJwt: string,
-  files: Record<string, AssetUploadFile>  // hash -> { base64Content, contentType }
+  files: Record<string, AssetUploadFile>, // hash -> { base64Content, contentType }
 ): Promise<string> {
   const formData = new FormData();
   for (const [hash, file] of Object.entries(files)) {
@@ -98,15 +102,19 @@ export async function uploadAssets(
 
   // S22: 60 second timeout for uploads (files can be large)
   const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), ASSET_UPLOAD_TIMEOUT_MS);
+  const timeoutId = setTimeout(
+    () => controller.abort(),
+    ASSET_UPLOAD_TIMEOUT_MS,
+  );
 
   try {
     // This endpoint uses the session JWT for auth, not the API token
-    const url = `${CF_API_BASE}/accounts/${config.accountId}/workers/assets/upload?base64=true`;
+    const url =
+      `${CF_API_BASE}/accounts/${config.accountId}/workers/assets/upload?base64=true`;
     const response = await fetch(url, {
-      method: 'POST',
+      method: "POST",
       headers: {
-        'Authorization': `Bearer ${sessionJwt}`,
+        "Authorization": `Bearer ${sessionJwt}`,
       },
       body: formData,
       signal: controller.signal,
@@ -115,19 +123,23 @@ export async function uploadAssets(
     if (!response.ok) {
       const errorText = await response.text();
       // S7 Fix: Sanitize error message before throwing
-      throw new Error(`Assets upload failed: ${sanitizeErrorMessage(errorText)}`);
+      throw new Error(
+        `Assets upload failed: ${sanitizeErrorMessage(errorText)}`,
+      );
     }
 
     // Parse response to get completion JWT
     const data = await response.json() as CFAPIResponse<{ jwt: string }>;
     if (!data.success || !data.result?.jwt) {
-      throw new Error('Assets upload succeeded but no completion JWT in response');
+      throw new Error(
+        "Assets upload succeeded but no completion JWT in response",
+      );
     }
 
     return data.result.jwt;
   } catch (error) {
-    if (error instanceof Error && error.name === 'AbortError') {
-      throw new Error('Assets upload timeout after 60 seconds');
+    if (error instanceof Error && error.name === "AbortError") {
+      throw new Error("Assets upload timeout after 60 seconds");
     }
     throw error;
   } finally {
@@ -147,12 +159,15 @@ export async function uploadAllAssets(
   client: WfpClient,
   config: WFPConfig,
   workerName: string,
-  files: Array<{ path: string; content: ArrayBuffer; contentType?: string }>
+  files: Array<{ path: string; content: ArrayBuffer; contentType?: string }>,
 ): Promise<string> {
   // Build manifest with hashes
   // Hash must be first 32 hex characters of SHA-256 (per CF docs)
   const manifest: Record<string, AssetManifestEntry> = {};
-  const fileMap: Record<string, { path: string; content: ArrayBuffer; contentType: string }> = {};
+  const fileMap: Record<
+    string,
+    { path: string; content: ArrayBuffer; contentType: string }
+  > = {};
 
   for (const file of files) {
     const hashBuffer = await assetUploadDeps.digestSha256(file.content);
@@ -171,7 +186,12 @@ export async function uploadAllAssets(
   }
 
   // Create upload session
-  const session = await createAssetsUploadSession(client, config, workerName, manifest);
+  const session = await createAssetsUploadSession(
+    client,
+    config,
+    workerName,
+    manifest,
+  );
 
   // If no files need uploading (all cached), session JWT IS the completion token
   if (session.uploadNeeded.length === 0) {
@@ -201,31 +221,31 @@ export async function uploadAllAssets(
 }
 
 function getContentTypeFromPath(path: string): string {
-  const ext = path.split('.').pop()?.toLowerCase();
+  const ext = path.split(".").pop()?.toLowerCase();
   const types: Record<string, string> = {
-    'html': 'text/html',
-    'js': 'application/javascript',
-    'mjs': 'application/javascript',
-    'css': 'text/css',
-    'json': 'application/json',
-    'svg': 'image/svg+xml',
-    'png': 'image/png',
-    'jpg': 'image/jpeg',
-    'jpeg': 'image/jpeg',
-    'gif': 'image/gif',
-    'ico': 'image/x-icon',
-    'woff': 'font/woff',
-    'woff2': 'font/woff2',
-    'ttf': 'font/ttf',
-    'eot': 'application/vnd.ms-fontobject',
-    'webp': 'image/webp',
-    'mp4': 'video/mp4',
-    'webm': 'video/webm',
-    'mp3': 'audio/mpeg',
-    'wav': 'audio/wav',
-    'pdf': 'application/pdf',
-    'zip': 'application/zip',
-    'wasm': 'application/wasm',
+    "html": "text/html",
+    "js": "application/javascript",
+    "mjs": "application/javascript",
+    "css": "text/css",
+    "json": "application/json",
+    "svg": "image/svg+xml",
+    "png": "image/png",
+    "jpg": "image/jpeg",
+    "jpeg": "image/jpeg",
+    "gif": "image/gif",
+    "ico": "image/x-icon",
+    "woff": "font/woff",
+    "woff2": "font/woff2",
+    "ttf": "font/ttf",
+    "eot": "application/vnd.ms-fontobject",
+    "webp": "image/webp",
+    "mp4": "video/mp4",
+    "webm": "video/webm",
+    "mp3": "audio/mpeg",
+    "wav": "audio/wav",
+    "pdf": "application/pdf",
+    "zip": "application/zip",
+    "wasm": "application/wasm",
   };
-  return types[ext || ''] || 'application/octet-stream';
+  return types[ext || ""] || "application/octet-stream";
 }

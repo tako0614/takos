@@ -1,38 +1,44 @@
-import { Hono, type Context } from 'hono';
-import { generateId } from '../../../shared/utils/index.ts';
+import { type Context, Hono } from "hono";
+import { generateId } from "../../../shared/utils/index.ts";
 import {
+  clearSessionCookie,
   createSession,
   deleteSession,
-  setSessionCookie,
-  clearSessionCookie,
   getSessionIdFromCookie,
-} from '../../../application/services/identity/session.ts';
+  setSessionCookie,
+} from "../../../application/services/identity/session.ts";
 import {
+  auditLog,
+  cleanupUserSessions,
+  createAuthSession,
   storeOAuthState,
   validateOAuthState,
-  auditLog,
-  createAuthSession,
-  cleanupUserSessions,
-} from '../../../application/services/identity/auth-utils.ts';
-import type { OptionalAuthRouteEnv } from '../route-auth.ts';
-import { sanitizeReturnTo, provisionGoogleOAuthUser } from './provisioning.ts';
-import { errorPage } from './html.ts';
-import { getDb } from '../../../infra/db/index.ts';
-import { accounts, authIdentities } from '../../../infra/db/schema.ts';
-import { eq, and } from 'drizzle-orm';
-import { logError } from '../../../shared/utils/logger.ts';
-import { getPlatformConfig, getPlatformServices } from '../../../platform/accessors.ts';
+} from "../../../application/services/identity/auth-utils.ts";
+import type { OptionalAuthRouteEnv } from "../route-auth.ts";
+import { provisionGoogleOAuthUser, sanitizeReturnTo } from "./provisioning.ts";
+import { errorPage } from "./html.ts";
+import { getDb } from "../../../infra/db/index.ts";
+import { accounts, authIdentities } from "../../../infra/db/schema.ts";
+import { and, eq } from "drizzle-orm";
+import { logError } from "../../../shared/utils/logger.ts";
+import {
+  getPlatformConfig,
+  getPlatformServices,
+} from "../../../platform/accessors.ts";
 
 export const authSessionRouter = new Hono<OptionalAuthRouteEnv>();
 
 const startGoogleOAuth = async (c: Context<OptionalAuthRouteEnv>) => {
-  const returnTo = sanitizeReturnTo(c.req.query('return_to'));
+  const returnTo = sanitizeReturnTo(c.req.query("return_to"));
   const config = getPlatformConfig(c);
   const dbBinding = getPlatformServices(c).sql?.binding;
   const redirectUri = `https://${config.adminDomain}/auth/callback`;
 
   if (!dbBinding || !config.googleClientId) {
-    return c.html(errorPage('OAuth Error', 'Google OAuth is not configured.', '/', 'Back'), 500);
+    return c.html(
+      errorPage("OAuth Error", "Google OAuth is not configured.", "/", "Back"),
+      500,
+    );
   }
 
   const state = await storeOAuthState(dbBinding, redirectUri, returnTo);
@@ -40,18 +46,18 @@ const startGoogleOAuth = async (c: Context<OptionalAuthRouteEnv>) => {
   const params = new URLSearchParams({
     client_id: config.googleClientId,
     redirect_uri: redirectUri,
-    response_type: 'code',
-    scope: 'openid email profile',
+    response_type: "code",
+    scope: "openid email profile",
     state: state,
-    access_type: 'offline',
-    prompt: 'consent',
+    access_type: "offline",
+    prompt: "consent",
   });
 
   return c.redirect(`https://accounts.google.com/o/oauth2/v2/auth?${params}`);
 };
 
 // GET /auth/login - Start Google OAuth flow (internal)
-authSessionRouter.get('/login', startGoogleOAuth);
+authSessionRouter.get("/login", startGoogleOAuth);
 
 type OAuthUser = {
   id: string;
@@ -84,8 +90,12 @@ function userRowToOAuthUser(row: {
     bio: row.bio,
     picture: row.picture,
     setup_completed: row.setupCompleted,
-    created_at: row.createdAt instanceof Date ? row.createdAt.toISOString() : row.createdAt,
-    updated_at: row.updatedAt instanceof Date ? row.updatedAt.toISOString() : row.updatedAt,
+    created_at: row.createdAt instanceof Date
+      ? row.createdAt.toISOString()
+      : row.createdAt,
+    updated_at: row.updatedAt instanceof Date
+      ? row.updatedAt.toISOString()
+      : row.updatedAt,
   };
 }
 
@@ -93,65 +103,85 @@ function userRowToOAuthUser(row: {
  * Determine email_kind based on the Google user's email and hd claim.
  */
 function determineEmailKind(email: string, hd?: string): string {
-  if (hd || email.endsWith('@gmail.com')) {
-    return 'google_authoritative';
+  if (hd || email.endsWith("@gmail.com")) {
+    return "google_authoritative";
   }
-  return 'google_non_authoritative';
+  return "google_non_authoritative";
 }
 
 // GET /auth/callback - Handle Google OAuth callback
-authSessionRouter.get('/callback', async (c) => {
+authSessionRouter.get("/callback", async (c) => {
   const config = getPlatformConfig(c);
   const services = getPlatformServices(c);
   const dbBinding = services.sql?.binding;
   const sessionStore = services.notifications.sessionStore;
-  const code = c.req.query('code');
-  const state = c.req.query('state') || '';
-  const error = c.req.query('error');
+  const code = c.req.query("code");
+  const state = c.req.query("state") || "";
+  const error = c.req.query("error");
 
   if (error) {
-    await auditLog('oauth_error', { error });
-    return c.html(errorPage('OAuth Error', String(error), '/', 'Back'), 400);
+    await auditLog("oauth_error", { error });
+    return c.html(errorPage("OAuth Error", String(error), "/", "Back"), 400);
   }
 
   if (!code) {
-    return c.html(errorPage('OAuth Error', 'Missing OAuth code.', '/', 'Back'), 400);
+    return c.html(
+      errorPage("OAuth Error", "Missing OAuth code.", "/", "Back"),
+      400,
+    );
   }
 
   if (!state) {
-    await auditLog('oauth_missing_state', {});
-    return c.html(errorPage('OAuth Error', 'Missing OAuth state.', '/', 'Back'), 400);
+    await auditLog("oauth_missing_state", {});
+    return c.html(
+      errorPage("OAuth Error", "Missing OAuth state.", "/", "Back"),
+      400,
+    );
   }
 
-  if (!dbBinding || !sessionStore || !config.googleClientId || !config.googleClientSecret) {
-    return c.html(errorPage('OAuth Error', 'Google OAuth is not configured.', '/', 'Back'), 500);
+  if (
+    !dbBinding || !sessionStore || !config.googleClientId ||
+    !config.googleClientSecret
+  ) {
+    return c.html(
+      errorPage("OAuth Error", "Google OAuth is not configured.", "/", "Back"),
+      500,
+    );
   }
 
   const stateResult = await validateOAuthState(dbBinding, state);
   if (!stateResult.valid) {
-    await auditLog('oauth_invalid_state', { state });
-    return c.html(errorPage('OAuth Error', 'Invalid OAuth state.', '/', 'Back'), 400);
+    await auditLog("oauth_invalid_state", { state });
+    return c.html(
+      errorPage("OAuth Error", "Invalid OAuth state.", "/", "Back"),
+      400,
+    );
   }
 
   const returnTo = sanitizeReturnTo(stateResult.returnTo);
   const redirectUri = `https://${config.adminDomain}/auth/callback`;
 
-  const tokenResponse = await fetch('https://oauth2.googleapis.com/token', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+  const tokenResponse = await fetch("https://oauth2.googleapis.com/token", {
+    method: "POST",
+    headers: { "Content-Type": "application/x-www-form-urlencoded" },
     body: new URLSearchParams({
       client_id: config.googleClientId,
       client_secret: config.googleClientSecret,
       code,
-      grant_type: 'authorization_code',
+      grant_type: "authorization_code",
       redirect_uri: redirectUri,
     }),
   });
 
   if (!tokenResponse.ok) {
     const errorText = await tokenResponse.text();
-    logError('Token exchange failed', errorText, { module: 'routes/auth/session' });
-    return c.html(errorPage('OAuth Error', 'Token exchange failed.', '/', 'Back'), 400);
+    logError("Token exchange failed", errorText, {
+      module: "routes/auth/session",
+    });
+    return c.html(
+      errorPage("OAuth Error", "Token exchange failed.", "/", "Back"),
+      400,
+    );
   }
 
   const tokens = (await tokenResponse.json()) as {
@@ -161,12 +191,18 @@ authSessionRouter.get('/callback', async (c) => {
     id_token: string;
   };
 
-  const userInfoResponse = await fetch('https://www.googleapis.com/oauth2/v2/userinfo', {
-    headers: { Authorization: `Bearer ${tokens.access_token}` },
-  });
+  const userInfoResponse = await fetch(
+    "https://www.googleapis.com/oauth2/v2/userinfo",
+    {
+      headers: { Authorization: `Bearer ${tokens.access_token}` },
+    },
+  );
 
   if (!userInfoResponse.ok) {
-    return c.html(errorPage('OAuth Error', 'Failed to fetch user info.', '/', 'Back'), 400);
+    return c.html(
+      errorPage("OAuth Error", "Failed to fetch user info.", "/", "Back"),
+      400,
+    );
   }
 
   const googleUser = (await userInfoResponse.json()) as {
@@ -184,7 +220,10 @@ authSessionRouter.get('/callback', async (c) => {
   const identity = await db.select({
     userId: authIdentities.userId,
   }).from(authIdentities).where(
-    and(eq(authIdentities.provider, 'google'), eq(authIdentities.providerSub, googleUser.id))
+    and(
+      eq(authIdentities.provider, "google"),
+      eq(authIdentities.providerSub, googleUser.id),
+    ),
   ).get();
 
   let user: OAuthUser | null = null;
@@ -212,12 +251,18 @@ authSessionRouter.get('/callback', async (c) => {
       lastLoginAt: new Date().toISOString(),
       emailSnapshot: googleUser.email,
     }).where(
-      and(eq(authIdentities.provider, 'google'), eq(authIdentities.providerSub, googleUser.id))
+      and(
+        eq(authIdentities.provider, "google"),
+        eq(authIdentities.providerSub, googleUser.id),
+      ),
     );
   } else {
     // No identity found — create new user + auth_identity
     // Do NOT search by email for existing users (key security change)
-    const provisionedUser = await provisionGoogleOAuthUser(dbBinding, googleUser);
+    const provisionedUser = await provisionGoogleOAuthUser(
+      dbBinding,
+      googleUser,
+    );
     user = provisionedUser;
 
     // Create auth_identity for the new user
@@ -226,7 +271,7 @@ authSessionRouter.get('/callback', async (c) => {
     await db.insert(authIdentities).values({
       id: generateId(),
       userId: provisionedUser.id,
-      provider: 'google',
+      provider: "google",
       providerSub: googleUser.id,
       emailSnapshot: googleUser.email,
       emailKind,
@@ -236,34 +281,37 @@ authSessionRouter.get('/callback', async (c) => {
   }
 
   if (!user) {
-    return c.html(errorPage('OAuth Error', 'Failed to resolve user account.', '/', 'Back'), 500);
+    return c.html(
+      errorPage("OAuth Error", "Failed to resolve user account.", "/", "Back"),
+      500,
+    );
   }
 
   const session = await createSession(sessionStore, user.id);
   const maxAge = 7 * 24 * 60 * 60;
 
-  const userAgent = c.req.header('User-Agent');
-  const ipAddress = c.req.header('CF-Connecting-IP');
+  const userAgent = c.req.header("User-Agent");
+  const ipAddress = c.req.header("CF-Connecting-IP");
   await createAuthSession(dbBinding, user.id, userAgent, ipAddress);
   await cleanupUserSessions(dbBinding, user.id, 5);
 
-  await auditLog('oauth_success', { userId: user.id, email: user.email });
+  await auditLog("oauth_success", { userId: user.id, email: user.email });
 
-  const finalReturnTo = user.setup_completed ? returnTo : '/setup';
+  const finalReturnTo = user.setup_completed ? returnTo : "/setup";
 
   return new Response(null, {
     status: 302,
     headers: {
-      'Location': finalReturnTo,
-      'Set-Cookie': setSessionCookie(session.id, maxAge),
+      "Location": finalReturnTo,
+      "Set-Cookie": setSessionCookie(session.id, maxAge),
     },
   });
 });
 
 // POST /auth/logout
-authSessionRouter.post('/logout', async (c) => {
+authSessionRouter.post("/logout", async (c) => {
   const sessionStore = getPlatformServices(c).notifications.sessionStore;
-  const sessionId = getSessionIdFromCookie(c.req.header('Cookie'));
+  const sessionId = getSessionIdFromCookie(c.req.header("Cookie"));
   if (sessionId && sessionStore) {
     await deleteSession(sessionStore, sessionId);
   }
@@ -271,8 +319,8 @@ authSessionRouter.post('/logout', async (c) => {
   return new Response(null, {
     status: 302,
     headers: {
-      'Location': '/',
-      'Set-Cookie': clearSessionCookie(),
+      "Location": "/",
+      "Set-Cookie": clearSessionCookie(),
     },
   });
 });

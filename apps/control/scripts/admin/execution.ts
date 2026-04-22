@@ -2,11 +2,11 @@
  * D1 execution helpers and API client utilities.
  */
 
-import { CloudflareApiClient } from 'takos-control/core/cloudflare-api';
+import { CloudflareApiClient } from "takos-control/core/cloudflare-api";
 
-import type { D1Statement, ResolvedConfig } from './admin-types.ts';
-import { VALID_USER_ID_PATTERN } from './constants.ts';
-import { fail } from './cli-utils.ts';
+import type { D1Statement, ResolvedConfig } from "./admin-types.ts";
+import { VALID_USER_ID_PATTERN } from "./constants.ts";
+import { fail } from "./cli-utils.ts";
 
 // ---------------------------------------------------------------------------
 // D1 execution helpers
@@ -14,7 +14,9 @@ import { fail } from './cli-utils.ts';
 
 export function requireD1DatabaseId(config: ResolvedConfig): string {
   if (!config.d1DatabaseId) {
-    fail('D1 database_id is required (set TAKOS_D1_DATABASE_ID or configure wrangler.toml).');
+    fail(
+      "D1 database_id is required (set TAKOS_D1_DATABASE_ID or configure wrangler.toml).",
+    );
   }
   return config.d1DatabaseId;
 }
@@ -26,10 +28,15 @@ export function createClient(config: ResolvedConfig): CloudflareApiClient {
   });
 }
 
-export async function executeD1Sql(config: ResolvedConfig, sql: string): Promise<D1Statement[]> {
+export async function executeD1Sql(
+  config: ResolvedConfig,
+  sql: string,
+): Promise<D1Statement[]> {
   const client = createClient(config);
   const databaseId = requireD1DatabaseId(config);
-  return client.accountPost<D1Statement[]>(`/d1/database/${databaseId}/query`, { sql });
+  return client.accountPost<D1Statement[]>(`/d1/database/${databaseId}/query`, {
+    sql,
+  });
 }
 
 export function extractResults(statements: D1Statement[]): unknown[] {
@@ -50,7 +57,10 @@ export function extractChangeCount(statements: D1Statement[]): number {
 // R2 bucket resolution
 // ---------------------------------------------------------------------------
 
-export function resolveBucketName(config: ResolvedConfig, input: string): string {
+export function resolveBucketName(
+  config: ResolvedConfig,
+  input: string,
+): string {
   const key = input.toLowerCase();
   return config.r2Buckets[key] || config.r2Buckets[input] || input;
 }

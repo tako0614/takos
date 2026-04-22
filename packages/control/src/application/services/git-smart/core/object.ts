@@ -7,8 +7,13 @@
  * - commit: text format "tree <sha>\nparent <sha>\nauthor ...\ncommitter ...\n\n<message>"
  */
 
-import { sha1, concatBytes, hexToBytes, hexFromBuffer } from './sha1.ts';
-import type { GitObjectType, TreeEntry, GitCommit, GitSignature } from '../git-objects.ts';
+import { concatBytes, hexFromBuffer, hexToBytes, sha1 } from "./sha1.ts";
+import type {
+  GitCommit,
+  GitObjectType,
+  GitSignature,
+  TreeEntry,
+} from "../git-objects.ts";
 
 const TEXT_ENCODER = new TextEncoder();
 const TEXT_DECODER = new TextDecoder();
@@ -23,15 +28,19 @@ export function encodeBlob(content: Uint8Array): Uint8Array {
 export function encodeTree(entries: TreeEntry[]): Uint8Array {
   // Sort entries: git sorts by treating directory names as if they end with '/'
   const sorted = [...entries].sort((a, b) => {
-    const aName = a.mode === '40000' || a.mode === '040000' ? a.name + '/' : a.name;
-    const bName = b.mode === '40000' || b.mode === '040000' ? b.name + '/' : b.name;
+    const aName = a.mode === "40000" || a.mode === "040000"
+      ? a.name + "/"
+      : a.name;
+    const bName = b.mode === "40000" || b.mode === "040000"
+      ? b.name + "/"
+      : b.name;
     return aName < bName ? -1 : aName > bName ? 1 : 0;
   });
 
   const parts: Uint8Array[] = [];
   for (const entry of sorted) {
     // Git stores mode without leading zeros for trees (e.g., "40000" not "040000")
-    const mode = entry.mode.replace(/^0+/, '');
+    const mode = entry.mode.replace(/^0+/, "");
     const entryHeader = TEXT_ENCODER.encode(`${mode} ${entry.name}\0`);
     const shaBytes = hexToBytes(entry.sha);
     parts.push(entryHeader, shaBytes);
@@ -44,14 +53,18 @@ export function encodeTree(entries: TreeEntry[]): Uint8Array {
 
 export function encodeTreeContent(entries: TreeEntry[]): Uint8Array {
   const sorted = [...entries].sort((a, b) => {
-    const aName = a.mode === '40000' || a.mode === '040000' ? a.name + '/' : a.name;
-    const bName = b.mode === '40000' || b.mode === '040000' ? b.name + '/' : b.name;
+    const aName = a.mode === "40000" || a.mode === "040000"
+      ? a.name + "/"
+      : a.name;
+    const bName = b.mode === "40000" || b.mode === "040000"
+      ? b.name + "/"
+      : b.name;
     return aName < bName ? -1 : aName > bName ? 1 : 0;
   });
 
   const parts: Uint8Array[] = [];
   for (const entry of sorted) {
-    const mode = entry.mode.replace(/^0+/, '');
+    const mode = entry.mode.replace(/^0+/, "");
     const entryHeader = TEXT_ENCODER.encode(`${mode} ${entry.name}\0`);
     const shaBytes = hexToBytes(entry.sha);
     parts.push(entryHeader, shaBytes);
@@ -76,12 +89,12 @@ export function encodeCommit(commit: {
   for (const parent of commit.parents) {
     lines.push(`parent ${parent}`);
   }
-  lines.push(formatSignature('author', commit.author));
-  lines.push(formatSignature('committer', commit.committer));
-  lines.push('');
+  lines.push(formatSignature("author", commit.author));
+  lines.push(formatSignature("committer", commit.committer));
+  lines.push("");
   lines.push(commit.message);
 
-  const content = TEXT_ENCODER.encode(lines.join('\n'));
+  const content = TEXT_ENCODER.encode(lines.join("\n"));
   const header = TEXT_ENCODER.encode(`commit ${content.length}\0`);
   return concatBytes(header, content);
 }
@@ -98,29 +111,32 @@ export function encodeCommitContent(commit: {
   for (const parent of commit.parents) {
     lines.push(`parent ${parent}`);
   }
-  lines.push(formatSignature('author', commit.author));
-  lines.push(formatSignature('committer', commit.committer));
-  lines.push('');
+  lines.push(formatSignature("author", commit.author));
+  lines.push(formatSignature("committer", commit.committer));
+  lines.push("");
   lines.push(commit.message);
 
-  return TEXT_ENCODER.encode(lines.join('\n'));
+  return TEXT_ENCODER.encode(lines.join("\n"));
 }
 
 // --- Hashing ---
 
-export async function hashObject(type: GitObjectType, content: Uint8Array): Promise<string> {
+export async function hashObject(
+  type: GitObjectType,
+  content: Uint8Array,
+): Promise<string> {
   const header = TEXT_ENCODER.encode(`${type} ${content.length}\0`);
   const full = concatBytes(header, content);
   return sha1(full);
 }
 
 export async function hashBlob(content: Uint8Array): Promise<string> {
-  return hashObject('blob', content);
+  return hashObject("blob", content);
 }
 
 export async function hashTree(entries: TreeEntry[]): Promise<string> {
   const content = encodeTreeContent(entries);
-  return hashObject('tree', content);
+  return hashObject("tree", content);
 }
 
 export async function hashCommit(commit: {
@@ -131,7 +147,7 @@ export async function hashCommit(commit: {
   message: string;
 }): Promise<string> {
   const content = encodeCommitContent(commit);
-  return hashObject('commit', content);
+  return hashObject("commit", content);
 }
 
 // --- Decoding ---
@@ -142,11 +158,13 @@ export function decodeObjectHeader(raw: Uint8Array): {
   contentOffset: number;
 } {
   const nullIdx = raw.indexOf(0);
-  if (nullIdx === -1) throw new Error('Invalid git object: no null byte in header');
+  if (nullIdx === -1) {
+    throw new Error("Invalid git object: no null byte in header");
+  }
 
   const headerStr = TEXT_DECODER.decode(raw.subarray(0, nullIdx));
-  const spaceIdx = headerStr.indexOf(' ');
-  if (spaceIdx === -1) throw new Error('Invalid git object header');
+  const spaceIdx = headerStr.indexOf(" ");
+  if (spaceIdx === -1) throw new Error("Invalid git object header");
 
   const type = headerStr.substring(0, spaceIdx) as GitObjectType;
   const size = parseInt(headerStr.substring(spaceIdx + 1), 10);
@@ -154,7 +172,9 @@ export function decodeObjectHeader(raw: Uint8Array): {
   return { type, size, contentOffset: nullIdx + 1 };
 }
 
-export function decodeObject(raw: Uint8Array): { type: GitObjectType; content: Uint8Array } {
+export function decodeObject(
+  raw: Uint8Array,
+): { type: GitObjectType; content: Uint8Array } {
   const { type, contentOffset } = decodeObjectHeader(raw);
   return { type, content: raw.subarray(contentOffset) };
 }
@@ -170,7 +190,7 @@ export function decodeTree(content: Uint8Array): TreeEntry[] {
 
     const mode = TEXT_DECODER.decode(content.subarray(offset, spaceIdx));
     // Normalize mode to 6 chars
-    const normalizedMode = mode.padStart(6, '0');
+    const normalizedMode = mode.padStart(6, "0");
 
     // Find null after name
     const nullIdx = content.indexOf(0x00, spaceIdx + 1);
@@ -192,47 +212,49 @@ export function decodeTree(content: Uint8Array): TreeEntry[] {
 
 export function decodeCommit(content: Uint8Array): GitCommit {
   const text = TEXT_DECODER.decode(content);
-  const blankLineIdx = text.indexOf('\n\n');
-  const headerSection = blankLineIdx !== -1 ? text.substring(0, blankLineIdx) : text;
-  const message = blankLineIdx !== -1 ? text.substring(blankLineIdx + 2) : '';
+  const blankLineIdx = text.indexOf("\n\n");
+  const headerSection = blankLineIdx !== -1
+    ? text.substring(0, blankLineIdx)
+    : text;
+  const message = blankLineIdx !== -1 ? text.substring(blankLineIdx + 2) : "";
 
-  let tree = '';
+  let tree = "";
   const parents: string[] = [];
   let author: GitSignature | null = null;
   let committer: GitSignature | null = null;
 
-  for (const line of headerSection.split('\n')) {
-    if (line.startsWith('tree ')) {
+  for (const line of headerSection.split("\n")) {
+    if (line.startsWith("tree ")) {
       tree = line.substring(5);
-    } else if (line.startsWith('parent ')) {
+    } else if (line.startsWith("parent ")) {
       parents.push(line.substring(7));
-    } else if (line.startsWith('author ')) {
+    } else if (line.startsWith("author ")) {
       author = parseSignature(line.substring(7));
-    } else if (line.startsWith('committer ')) {
+    } else if (line.startsWith("committer ")) {
       committer = parseSignature(line.substring(10));
     }
   }
 
   if (!tree || !author || !committer) {
-    throw new Error('Invalid commit object: missing required fields');
+    throw new Error("Invalid commit object: missing required fields");
   }
 
-  return { sha: '', tree, parents, author, committer, message };
+  return { sha: "", tree, parents, author, committer, message };
 }
 
 function parseSignature(raw: string): GitSignature {
   // Format: "Name <email> timestamp tzoffset"
-  const emailEnd = raw.lastIndexOf('>');
-  if (emailEnd === -1) throw new Error('Invalid signature: no email');
+  const emailEnd = raw.lastIndexOf(">");
+  if (emailEnd === -1) throw new Error("Invalid signature: no email");
 
-  const emailStart = raw.lastIndexOf('<', emailEnd);
-  if (emailStart === -1) throw new Error('Invalid signature: no email start');
+  const emailStart = raw.lastIndexOf("<", emailEnd);
+  if (emailStart === -1) throw new Error("Invalid signature: no email start");
 
   const name = raw.substring(0, emailStart).trim();
   const email = raw.substring(emailStart + 1, emailEnd);
-  const rest = raw.substring(emailEnd + 1).trim().split(' ');
+  const rest = raw.substring(emailEnd + 1).trim().split(" ");
   const timestamp = parseInt(rest[0], 10);
-  const tzOffset = rest[1] || '+0000';
+  const tzOffset = rest[1] || "+0000";
 
   return { name, email, timestamp, tzOffset };
 }

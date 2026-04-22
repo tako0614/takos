@@ -2,7 +2,7 @@ import { assertEquals, assertObjectMatch } from "jsr:@std/assert";
 
 async function loadGitHttpModule() {
   if (!Deno.env.get("TAKOS_API_URL")) {
-    Deno.env.set("TAKOS_API_URL", "https://takos.dev");
+    Deno.env.set("TAKOS_API_URL", "https://takos.jp");
   }
   return await import("../../routes/git/http.ts");
 }
@@ -66,7 +66,7 @@ Deno.test("parseLfsBatchRequest rejects malformed payloads", async () => {
 Deno.test("buildLfsBatchObjectResponse preserves upload and missing download behavior", async () => {
   const { buildLfsBatchObjectResponse } = await loadGitHttpModule();
   const oid = "b".repeat(64);
-  const href = `https://git.takos.dev/git/ws/repo.git/info/lfs/objects/${oid}`;
+  const href = `https://git.takos.jp/git/ws/repo.git/info/lfs/objects/${oid}`;
 
   assertObjectMatch(
     buildLfsBatchObjectResponse({

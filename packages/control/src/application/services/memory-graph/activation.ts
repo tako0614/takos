@@ -1,4 +1,9 @@
-import type { Claim, ClaimPath, ActivationBundle, ActivationResult } from './graph-models.ts';
+import type {
+  ActivationBundle,
+  ActivationResult,
+  Claim,
+  ClaimPath,
+} from "./graph-models.ts";
 
 const MAX_SEGMENT_CHARS = 2000;
 const RELATION_RESERVE = 200;
@@ -8,29 +13,39 @@ export function buildActivationBundles(
   evidenceCounts: Map<string, number>,
   pathsByClaim: Map<string, ClaimPath[]>,
 ): ActivationBundle[] {
-  return claims.map(claim => ({
+  return claims.map((claim) => ({
     claim,
     evidenceCount: evidenceCounts.get(claim.id) ?? 0,
     paths: pathsByClaim.get(claim.id) ?? [],
   }));
 }
 
-export function renderActivationSegment(bundles: ActivationBundle[]): ActivationResult {
+export function renderActivationSegment(
+  bundles: ActivationBundle[],
+): ActivationResult {
   if (bundles.length === 0) {
-    return { bundles: [], segment: '', hasContent: false };
+    return { bundles: [], segment: "", hasContent: false };
   }
 
-  const lines: string[] = ['[Active memory]'];
+  const lines: string[] = ["[Active memory]"];
   let totalChars = lines[0].length;
 
-  const sorted = [...bundles].sort((a, b) => b.claim.confidence - a.claim.confidence);
+  const sorted = [...bundles].sort((a, b) =>
+    b.claim.confidence - a.claim.confidence
+  );
 
   for (let i = 0; i < sorted.length; i++) {
     const { claim: c, evidenceCount } = sorted[i];
-    const evidenceNote = evidenceCount > 0 ? ` (${evidenceCount} evidence)` : '';
-    const line = `${i + 1}. [${c.confidence.toFixed(2)}] ${c.subject} ${c.predicate} ${c.object}${evidenceNote}`;
+    const evidenceNote = evidenceCount > 0
+      ? ` (${evidenceCount} evidence)`
+      : "";
+    const line = `${i + 1}. [${
+      c.confidence.toFixed(2)
+    }] ${c.subject} ${c.predicate} ${c.object}${evidenceNote}`;
 
-    if (totalChars + line.length + 1 > MAX_SEGMENT_CHARS - RELATION_RESERVE) break;
+    if (totalChars + line.length + 1 > MAX_SEGMENT_CHARS - RELATION_RESERVE) {
+      break;
+    }
     lines.push(line);
     totalChars += line.length + 1;
   }
@@ -43,8 +58,11 @@ export function renderActivationSegment(bundles: ActivationBundle[]): Activation
       if (seenPaths.has(path.id)) continue;
       seenPaths.add(path.id);
 
-      const summary = path.pathSummary ?? path.pathRelations.join(' -> ');
-      const pathLine = `- "${bundle.claim.subject}" --${summary}--> (${path.hopCount} hops, confidence: ${path.minConfidence.toFixed(2)})`;
+      const summary = path.pathSummary ?? path.pathRelations.join(" -> ");
+      const pathLine =
+        `- "${bundle.claim.subject}" --${summary}--> (${path.hopCount} hops, confidence: ${
+          path.minConfidence.toFixed(2)
+        })`;
 
       if (totalChars + pathLine.length + 20 > MAX_SEGMENT_CHARS) break;
       pathLines.push(pathLine);
@@ -53,8 +71,8 @@ export function renderActivationSegment(bundles: ActivationBundle[]): Activation
   }
 
   if (pathLines.length > 0) {
-    lines.push('', '[Known relations]', ...pathLines);
+    lines.push("", "[Known relations]", ...pathLines);
   }
 
-  return { bundles: sorted, segment: lines.join('\n'), hasContent: true };
+  return { bundles: sorted, segment: lines.join("\n"), hasContent: true };
 }

@@ -40,7 +40,8 @@ export const GROUP_DEPLOYMENT_SNAPSHOT_DEPLOY_FROM_REPO: ToolDefinition = {
       },
       group_name: {
         type: "string",
-        description: "Target group name for the snapshot.",
+        description:
+          "Target group name for the snapshot. Defaults to the repo manifest name.",
       },
       ref: { type: "string", description: "Branch, tag, or commit ref" },
       ref_type: {
@@ -49,7 +50,7 @@ export const GROUP_DEPLOYMENT_SNAPSHOT_DEPLOY_FROM_REPO: ToolDefinition = {
         description: "Ref type",
       },
     },
-    required: ["repository_url", "group_name"],
+    required: ["repository_url"],
   },
 };
 
@@ -127,13 +128,12 @@ export const groupDeploymentSnapshotDeployFromRepoHandler: ToolHandler = async (
   const ref = String(args.ref || "").trim();
   const refType = String(args.ref_type || "branch").trim().toLowerCase();
   if (!repositoryUrl) throw new Error("repository_url is required");
-  if (!groupName) throw new Error("group_name is required");
   if (refType !== "branch" && refType !== "tag" && refType !== "commit") {
     throw new Error("ref_type must be one of: branch, tag, commit");
   }
   const service = new GroupDeploymentSnapshotService(context.env);
   const result = await service.deploy(context.spaceId, context.userId, {
-    groupName,
+    ...(groupName ? { groupName } : {}),
     source: {
       kind: "git_ref",
       repositoryUrl,

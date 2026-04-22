@@ -1,24 +1,27 @@
-import { Hono } from 'hono';
-import { requireSpaceAccess, type AuthenticatedRouteEnv } from '../route-auth.ts';
-import { getRepositoryById } from '../../../application/services/identity/spaces.ts';
-import { getDb } from '../../../infra/db/index.ts';
-import { eq, desc } from 'drizzle-orm';
-import { repositories } from '../../../infra/db/schema.ts';
-import { generateId } from '../../../shared/utils/index.ts';
-import { logError } from '../../../shared/utils/logger.ts';
-import { InternalError } from 'takos-common/errors';
+import { Hono } from "hono";
+import {
+  type AuthenticatedRouteEnv,
+  requireSpaceAccess,
+} from "../route-auth.ts";
+import { getRepositoryById } from "../../../application/services/identity/spaces.ts";
+import { getDb } from "../../../infra/db/index.ts";
+import { desc, eq } from "drizzle-orm";
+import { repositories } from "../../../infra/db/schema.ts";
+import { generateId } from "../../../shared/utils/index.ts";
+import { logError } from "../../../shared/utils/logger.ts";
+import { InternalError } from "takos-common/errors";
 
 export default new Hono<AuthenticatedRouteEnv>()
-  .post('/:spaceId/init-repo', async (c) => {
-    const user = c.get('user');
-    const spaceIdentifier = c.req.param('spaceId');
+  .post("/:spaceId/init-repo", async (c) => {
+    const user = c.get("user");
+    const spaceIdentifier = c.req.param("spaceId");
 
     const access = await requireSpaceAccess(
       c,
       spaceIdentifier,
       user.id,
-      ['owner', 'admin'],
-      'Workspace not found or insufficient permissions'
+      ["owner", "admin"],
+      "Workspace not found or insufficient permissions",
     );
 
     const spaceId = access.space.id;
@@ -34,7 +37,7 @@ export default new Hono<AuthenticatedRouteEnv>()
     if (existingRepo) {
       const repository = await getRepositoryById(c.env.DB, existingRepo.id);
       return c.json({
-        message: 'Repository already exists',
+        message: "Repository already exists",
         skipped: true,
         repository,
       });
@@ -47,10 +50,10 @@ export default new Hono<AuthenticatedRouteEnv>()
       await db.insert(repositories).values({
         id: repoId,
         accountId: spaceId,
-        name: 'main',
-        description: 'Default repository for workspace',
-        visibility: 'private',
-        defaultBranch: 'main',
+        name: "main",
+        description: "Default repository for workspace",
+        visibility: "private",
+        defaultBranch: "main",
         stars: 0,
         forks: 0,
         createdAt: timestamp,
@@ -60,11 +63,15 @@ export default new Hono<AuthenticatedRouteEnv>()
       const repository = await getRepositoryById(c.env.DB, repoId);
 
       return c.json({
-        message: 'Repository initialized successfully',
+        message: "Repository initialized successfully",
         repository,
       }, 201);
     } catch (err) {
-      logError(`Failed to init repo for workspace ${spaceId}`, err, { module: 'routes/spaces/repositories' });
-      throw new InternalError(err instanceof Error ? err.message : 'Failed to initialize repository');
+      logError(`Failed to init repo for workspace ${spaceId}`, err, {
+        module: "routes/spaces/repositories",
+      });
+      throw new InternalError(
+        err instanceof Error ? err.message : "Failed to initialize repository",
+      );
     }
   });

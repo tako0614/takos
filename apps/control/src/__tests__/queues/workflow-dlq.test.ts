@@ -175,7 +175,7 @@ Deno.test("handleWorkflowJobDlq - cancels sibling jobs and pending steps when en
     const sql = call.sql.toLowerCase();
     if (!sql.includes('update "workflow_jobs"')) return false;
     const args = call.args.map((a) => String(a));
-    return args.includes('cancelled');
+    return args.includes("cancelled");
   });
   assertEquals(
     siblingJobUpdate !== undefined,
@@ -187,7 +187,7 @@ Deno.test("handleWorkflowJobDlq - cancels sibling jobs and pending steps when en
     const sql = call.sql.toLowerCase();
     if (!sql.includes('update "workflow_steps"')) return false;
     const args = call.args.map((a) => String(a));
-    return args.includes('cancelled');
+    return args.includes("cancelled");
   });
   assertEquals(
     siblingStepUpdate !== undefined,

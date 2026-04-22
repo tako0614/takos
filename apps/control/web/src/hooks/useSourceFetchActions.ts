@@ -2,6 +2,7 @@ import type { Accessor, Setter } from "solid-js";
 import { useI18n } from "../store/i18n.ts";
 import { rpc, rpcJson } from "../lib/rpc.ts";
 import { useToast } from "../store/toast.ts";
+import { getInstallEnv, getInstallSource } from "./sourceInstall.ts";
 import type {
   SourceItem,
   SourceItemInstallation,
@@ -11,6 +12,7 @@ import type {
 function makeEmptyPackage(): SourceItemPackage {
   return {
     available: false,
+    app_id: null,
     latest_version: null,
     latest_tag: null,
     release_tag: null,
@@ -20,6 +22,16 @@ function makeEmptyPackage(): SourceItemPackage {
     certified: false,
     description: null,
   };
+}
+
+function toRepositoryWebUrl(repositoryUrl: string): string {
+  try {
+    const parsed = new URL(repositoryUrl);
+    parsed.pathname = parsed.pathname.replace(/\.git$/i, "");
+    return parsed.toString();
+  } catch {
+    return repositoryUrl;
+  }
 }
 
 export interface UseSourceFetchActionsOptions {
@@ -79,22 +91,16 @@ export function useSourceFetchActions({
     }
     try {
       setInstallingId(item.id);
-      // Backend expects
-      // a discriminated `source` object with a canonical Takos repository URL.
-      const repositoryUrl =
-        `${globalThis.location.origin}/git/${item.owner.username}/${item.name}.git`;
+      const source = getInstallSource(item);
       const response = await fetch(
         `/api/spaces/${effectiveSpaceId()}/group-deployment-snapshots`,
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
-            source: {
-              kind: "git_ref",
-              repository_url: repositoryUrl,
-              ref: item.default_branch || "main",
-              ref_type: "branch",
-            },
+            source,
+            ...(item.source?.backend ? { backend: item.source.backend } : {}),
+            env: getInstallEnv(item),
           }),
         },
       );
@@ -193,6 +199,9 @@ export function useSourceFetchActions({
   };
 
   const toggleStar = async (item: SourceItem) => {
+    if (item.catalog_origin === "default_app") {
+      return;
+    }
     if (!isAuthenticated()) {
       onRequireLogin();
       return;
@@ -265,6 +274,14 @@ export function useSourceFetchActions({
   };
 
   const openRepo = (item: SourceItem) => {
+    if (item.catalog_origin === "default_app" && item.source?.repository_url) {
+      globalThis.open(
+        toRepositoryWebUrl(item.source.repository_url),
+        "_blank",
+        "noopener,noreferrer",
+      );
+      return;
+    }
     if (item.owner.username && item.name) {
       onNavigateToRepo(item.owner.username, item.name);
     }

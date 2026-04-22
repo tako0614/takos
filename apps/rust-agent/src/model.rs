@@ -2,6 +2,7 @@ use std::io;
 use std::sync::Arc;
 
 use async_trait::async_trait;
+use reqwest::StatusCode;
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use takos_agent_engine::model::{ModelInput, ModelOutput, ModelRunner, ToolCallRequest};
@@ -15,12 +16,13 @@ pub struct TakosModelRunner {
     client: reqwest::Client,
     model: String,
     temperature: Option<f32>,
-    openai_api_key: Option<String>,
+    openai_api_keys: Arc<Vec<String>>,
     tools: Arc<Vec<ToolDefinition>>,
     usage_tracker: Arc<UsageTracker>,
 }
 
 impl TakosModelRunner {
+    #[allow(dead_code)]
     pub fn new(
         model: impl Into<String>,
         temperature: Option<f32>,
@@ -28,11 +30,27 @@ impl TakosModelRunner {
         tools: Vec<ToolDefinition>,
         usage_tracker: Arc<UsageTracker>,
     ) -> Self {
+        Self::new_with_openai_api_keys(
+            model,
+            temperature,
+            openai_api_key.into_iter().collect(),
+            tools,
+            usage_tracker,
+        )
+    }
+
+    pub fn new_with_openai_api_keys(
+        model: impl Into<String>,
+        temperature: Option<f32>,
+        openai_api_keys: Vec<String>,
+        tools: Vec<ToolDefinition>,
+        usage_tracker: Arc<UsageTracker>,
+    ) -> Self {
         Self {
             client: reqwest::Client::new(),
             model: model.into(),
             temperature,
-            openai_api_key: openai_api_key.filter(|value| !value.trim().is_empty()),
+            openai_api_keys: Arc::new(sanitize_api_keys(openai_api_keys)),
             tools: Arc::new(tools),
             usage_tracker,
         }
@@ -47,7 +65,7 @@ impl TakosModelRunner {
     }
 
     fn use_local_smoke(&self) -> bool {
-        self.model == "local-smoke" || self.openai_api_key.is_none()
+        self.model == "local-smoke" || self.openai_api_keys.is_empty()
     }
 
     fn build_runner_prompt(&self, input: &ModelInput) -> String {
@@ -142,12 +160,59 @@ impl TakosModelRunner {
     }
 
     async fn openai_response(&self, input: &ModelInput) -> AppResult<ModelOutput> {
-        let api_key = self
-            .openai_api_key
-            .clone()
-            .ok_or_else(|| io::Error::other("OpenAI API key is not configured"))?;
+        if self.openai_api_keys.is_empty() {
+            return Err(io::Error::other("OpenAI API key is not configured").into());
+        }
 
-        let request = OpenAiChatCompletionRequest {
+        let mut last_auth_error: Option<String> = None;
+        for (index, api_key) in self.openai_api_keys.iter().enumerate() {
+            match self.openai_response_with_key(input, api_key).await {
+                Ok(output) => return Ok(output),
+                Err(err) => {
+                    let message = err.to_string();
+                    if is_openai_auth_failure(&message) && index + 1 < self.openai_api_keys.len() {
+                        last_auth_error = Some(message);
+                        continue;
+                    }
+                    return Err(err);
+                }
+            }
+        }
+
+        Err(io::Error::other(
+            last_auth_error.unwrap_or_else(|| "OpenAI API key is not configured".to_string()),
+        )
+        .into())
+    }
+
+    async fn openai_response_with_key(
+        &self,
+        input: &ModelInput,
+        api_key: &str,
+    ) -> AppResult<ModelOutput> {
+        let response = self
+            .client
+            .post("https://api.openai.com/v1/chat/completions")
+            .bearer_auth(api_key)
+            .json(&self.build_openai_request(input))
+            .send()
+            .await?;
+
+        let status = response.status();
+        let text = response.text().await?;
+        if !status.is_success() {
+            return Err(io::Error::other(format!(
+                "OpenAI chat completions failed: {} {}",
+                status, text
+            ))
+            .into());
+        }
+
+        self.decode_openai_response(text)
+    }
+
+    fn build_openai_request(&self, input: &ModelInput) -> OpenAiChatCompletionRequest {
+        OpenAiChatCompletionRequest {
             model: self.model.clone(),
             temperature: self.temperature,
             messages: vec![
@@ -173,26 +238,10 @@ impl TakosModelRunner {
                 })
                 .collect(),
             tool_choice: Some("auto".to_string()),
-        };
-
-        let response = self
-            .client
-            .post("https://api.openai.com/v1/chat/completions")
-            .bearer_auth(api_key)
-            .json(&request)
-            .send()
-            .await?;
-
-        let status = response.status();
-        let text = response.text().await?;
-        if !status.is_success() {
-            return Err(io::Error::other(format!(
-                "OpenAI chat completions failed: {} {}",
-                status, text
-            ))
-            .into());
         }
+    }
 
+    fn decode_openai_response(&self, text: String) -> AppResult<ModelOutput> {
         let body: OpenAiChatCompletionResponse = serde_json::from_str(&text).map_err(|err| {
             io::Error::other(format!(
                 "failed to decode OpenAI response: {err}; body={text}"
@@ -269,6 +318,25 @@ fn parse_tool_directive(input: &str) -> AppResult<(String, Value)> {
 
 fn estimate_tokens(text: &str) -> usize {
     text.split_whitespace().count().max(1)
+}
+
+fn sanitize_api_keys(keys: Vec<String>) -> Vec<String> {
+    let mut sanitized = Vec::new();
+    for value in keys {
+        let trimmed = value.trim();
+        if trimmed.is_empty() || sanitized.iter().any(|existing| existing == trimmed) {
+            continue;
+        }
+        sanitized.push(trimmed.to_string());
+    }
+    sanitized
+}
+
+fn is_openai_auth_failure(error: &str) -> bool {
+    let normalized = error.to_ascii_lowercase();
+    normalized.contains(StatusCode::UNAUTHORIZED.as_str())
+        || normalized.contains("invalid_api_key")
+        || normalized.contains("incorrect api key")
 }
 
 fn flatten_message_content(content: Option<Value>) -> Option<String> {
@@ -365,4 +433,32 @@ struct OpenAiToolFunction {
 struct OpenAiUsage {
     prompt_tokens: usize,
     completion_tokens: usize,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{is_openai_auth_failure, sanitize_api_keys};
+
+    #[test]
+    fn sanitize_api_keys_filters_empty_and_duplicate_values() {
+        let keys = sanitize_api_keys(vec![
+            " sk-one ".to_string(),
+            "".to_string(),
+            "sk-one".to_string(),
+            "sk-two".to_string(),
+        ]);
+
+        assert_eq!(keys, vec!["sk-one", "sk-two"]);
+    }
+
+    #[test]
+    fn openai_auth_failure_detects_invalid_key_errors() {
+        assert!(is_openai_auth_failure(
+            "OpenAI chat completions failed: 401 Unauthorized {\"code\":\"invalid_api_key\"}",
+        ));
+        assert!(is_openai_auth_failure("Incorrect API key provided"));
+        assert!(!is_openai_auth_failure(
+            "OpenAI chat completions failed: 429 Too Many Requests",
+        ));
+    }
 }

@@ -1,7 +1,7 @@
-import type { RouteState } from '../../types/index.ts';
+import type { RouteState } from "../../types/index.ts";
 
 export function normalizeUsernameInput(value: string): string {
-  return value.toLowerCase().replace(/^@+/, '').replace(/[^a-z0-9_-]/g, '');
+  return value.toLowerCase().replace(/^@+/, "").replace(/[^a-z0-9_-]/g, "");
 }
 
 export function syncRouteWithUsernameChange(
@@ -9,11 +9,13 @@ export function syncRouteWithUsernameChange(
   previousUsername: string,
   nextUsername: string,
 ): RouteState {
-  if (!previousUsername || !nextUsername || route.username !== previousUsername) {
+  if (
+    !previousUsername || !nextUsername || route.username !== previousUsername
+  ) {
     return route;
   }
 
-  if (route.view !== 'profile' && route.view !== 'repo') {
+  if (route.view !== "profile" && route.view !== "repo") {
     return route;
   }
 

@@ -15,7 +15,14 @@ import type {
   RoutingBindings,
   RoutingTarget,
 } from "../routing/routing-models.ts";
-import { parseDeploymentBackendConfig } from "./backend.ts";
+import {
+  createDeploymentBackend,
+  parseDeploymentBackendConfig,
+} from "./backend.ts";
+import {
+  createDeploymentBackendRegistry,
+  resolveDeploymentBackendConfigsFromEnv,
+} from "../../../platform/deployment-backends.ts";
 import {
   type DeploymentRoutingServiceRecord,
   getDeploymentById,
@@ -24,6 +31,8 @@ import {
   updateServiceDeploymentPointers,
 } from "./store.ts";
 import type { Deployment, DeploymentEnv, DeploymentTarget } from "./models.ts";
+import { parseRuntimeConfig } from "./artifact-refs.ts";
+import { decryptBindings } from "./artifact-io.ts";
 import { safeJsonParseOrDefault } from "../../../shared/utils/index.ts";
 import { logWarn } from "../../../shared/utils/logger.ts";
 import {
@@ -73,11 +82,15 @@ function resolveDeploymentRouteRef(input: {
         target_json: input.targetJson,
       })
       : undefined);
+  const artifactRef = input.artifactRef?.trim() || "";
+  if (target?.artifact?.kind === "worker-bundle" && artifactRef) {
+    return artifactRef;
+  }
   const routeRef = target?.route_ref?.trim() ||
     (target?.endpoint?.kind === "service-ref"
       ? target.endpoint.ref.trim()
       : "") ||
-    input.artifactRef?.trim() ||
+    artifactRef ||
     "";
   return routeRef || null;
 }
@@ -443,6 +456,13 @@ function resolveDeploymentTargetForRouting(
   return baseTarget;
 }
 
+function deploymentHasQueueConsumers(deployment: Deployment | null): boolean {
+  return deployment
+    ? (parseDeploymentBackendConfig(deployment).queue_consumers?.length ?? 0) >
+      0
+    : false;
+}
+
 /**
  * Promote a canary deployment to 100% active routing.
  *
@@ -495,23 +515,145 @@ export async function promoteCanaryDeployment(
 
   const { target, auditDetails } = buildRoutingTarget(routingCtx, hostnameList);
 
-  if (hostnameList.length > 0) {
-    await runRoutingMutationWithRollback(
-      env,
-      routingRollbackSnapshot,
-      () => applyRoutingToHostnames(env, hostnameList, target),
-      {
-        module: "routing",
-        message:
-          "Failed to restore routing snapshot during canary promote (non-critical)",
-      },
+  const previousActive = serviceRouteRecord.activeDeploymentId
+    ? await getDeploymentById(env.DB, serviceRouteRecord.activeDeploymentId)
+    : null;
+  const queueSyncNeeded = deploymentHasQueueConsumers(canary) ||
+    deploymentHasQueueConsumers(previousActive);
+  const queueBackend = queueSyncNeeded
+    ? createDeploymentBackend(canary, {
+      cloudflareEnv: env,
+      orchestratorUrl: env.OCI_ORCHESTRATOR_URL,
+      orchestratorToken: env.OCI_ORCHESTRATOR_TOKEN,
+      backendRegistry: createDeploymentBackendRegistry(
+        resolveDeploymentBackendConfigsFromEnv(env),
+      ),
+    })
+    : null;
+  if (queueSyncNeeded && !queueBackend?.syncQueueConsumers) {
+    throw new ConflictError(
+      "Cannot promote canary over queue consumer deployment on a backend without queue consumer sync",
     );
   }
 
+  let queueConsumersSynced = false;
   const nowIso = new Date().toISOString();
   try {
+    if (queueSyncNeeded && queueBackend?.syncQueueConsumers) {
+      const encryptionKey = env.ENCRYPTION_KEY ?? "";
+      const canaryRuntimeConfig = parseRuntimeConfig(
+        canary.runtime_config_snapshot_json,
+      );
+      const canaryBindings = canary.bindings_snapshot_encrypted
+        ? await decryptBindings(encryptionKey, canary)
+        : [];
+      const previousBindings = previousActive?.bindings_snapshot_encrypted
+        ? await decryptBindings(encryptionKey, previousActive)
+        : [];
+      const previousRuntimeConfig = previousActive
+        ? parseRuntimeConfig(previousActive.runtime_config_snapshot_json)
+        : null;
+      await queueBackend.syncQueueConsumers({
+        deployment: canary,
+        artifactRef: canary.artifact_ref,
+        runtime: {
+          profile: "workers",
+          bindings: canaryBindings,
+          config: {
+            compatibility_date: canaryRuntimeConfig.compatibility_date ||
+              "2024-01-01",
+            compatibility_flags: canaryRuntimeConfig.compatibility_flags,
+            limits: canaryRuntimeConfig.limits,
+          },
+        },
+        previousDeployment: previousActive,
+        previousArtifactRef: previousActive?.artifact_ref ?? null,
+        previousRuntime: previousRuntimeConfig
+          ? {
+            profile: "workers",
+            bindings: previousBindings,
+            config: {
+              compatibility_date: previousRuntimeConfig.compatibility_date ||
+                "2024-01-01",
+              compatibility_flags: previousRuntimeConfig.compatibility_flags,
+              limits: previousRuntimeConfig.limits,
+            },
+          }
+          : null,
+      });
+      queueConsumersSynced = true;
+    }
+
+    if (hostnameList.length > 0) {
+      await runRoutingMutationWithRollback(
+        env,
+        routingRollbackSnapshot,
+        () => applyRoutingToHostnames(env, hostnameList, target),
+        {
+          module: "routing",
+          message:
+            "Failed to restore routing snapshot during canary promote (non-critical)",
+        },
+      );
+    }
+
     await applyRoutingDbUpdates(env, routingCtx, nowIso);
   } catch (dbErr) {
+    if (
+      queueConsumersSynced &&
+      queueBackend?.syncQueueConsumers &&
+      previousActive?.artifact_ref
+    ) {
+      const encryptionKey = env.ENCRYPTION_KEY ?? "";
+      const previousBindings = previousActive.bindings_snapshot_encrypted
+        ? await decryptBindings(encryptionKey, previousActive)
+        : [];
+      const canaryBindings = canary.bindings_snapshot_encrypted
+        ? await decryptBindings(encryptionKey, canary)
+        : [];
+      const previousRuntimeConfig = parseRuntimeConfig(
+        previousActive.runtime_config_snapshot_json,
+      );
+      const canaryRuntimeConfig = parseRuntimeConfig(
+        canary.runtime_config_snapshot_json,
+      );
+      await queueBackend.syncQueueConsumers({
+        deployment: previousActive,
+        artifactRef: previousActive.artifact_ref,
+        runtime: {
+          profile: "workers",
+          bindings: previousBindings,
+          config: {
+            compatibility_date: previousRuntimeConfig.compatibility_date ||
+              "2024-01-01",
+            compatibility_flags: previousRuntimeConfig.compatibility_flags,
+            limits: previousRuntimeConfig.limits,
+          },
+        },
+        previousDeployment: canary,
+        previousArtifactRef: canary.artifact_ref,
+        previousRuntime: {
+          profile: "workers",
+          bindings: canaryBindings,
+          config: {
+            compatibility_date: canaryRuntimeConfig.compatibility_date ||
+              "2024-01-01",
+            compatibility_flags: canaryRuntimeConfig.compatibility_flags,
+            limits: canaryRuntimeConfig.limits,
+          },
+        },
+      }).catch((queueRollbackError: unknown) => {
+        logWarn(
+          "Failed to restore queue consumers during canary promote failure",
+          {
+            module: "routing",
+            error: queueRollbackError instanceof Error
+              ? queueRollbackError.message
+              : String(queueRollbackError),
+          },
+        );
+      });
+    }
     if (routingRollbackSnapshot.length > 0) {
       await restoreRoutingSnapshot(env, routingRollbackSnapshot).catch((e) => {
         logWarn(

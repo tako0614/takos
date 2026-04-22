@@ -1,4 +1,4 @@
-import { createSignal } from "solid-js";
+import { createSignal, Match, mergeProps, Switch } from "solid-js";
 import type { JSX } from "solid-js";
 import { useI18n } from "../../../store/i18n.ts";
 import { useToast } from "../../../store/toast.ts";
@@ -17,6 +17,7 @@ import {
 } from "../../../types/index.ts";
 import { WorkersTab } from "../../workers/tabs/WorkersTab.tsx";
 import { ResourcesTab } from "../../workers/tabs/ResourcesTab.tsx";
+import { GroupsPage } from "../../groups/GroupsPage.tsx";
 import { WorkerDetailContainer } from "../../workers/detail/WorkerDetailContainer.tsx";
 import { ResourceDetailContainer } from "../../workers/detail/ResourceDetailContainer.tsx";
 import { CreateResourceModal } from "../../workers/modals/CreateResourceModal.tsx";
@@ -27,7 +28,9 @@ interface DeployPanelProps {
   spaceId: string;
   spaces?: Space[];
   activeSection: DeploySection;
+  groupId?: string;
   onSectionChange?: (section: DeploySection) => void;
+  onGroupSelect?: (groupId: string | null) => void;
   onClose?: () => void;
   user: User | null;
   userSettings: UserSettings | null;
@@ -47,6 +50,7 @@ const DEPLOY_SECTION_META: Record<
     icon: <Icons.Database class="w-3.5 h-3.5" />,
     labelKey: "resources",
   },
+  groups: { icon: <Icons.Users class="w-3.5 h-3.5" />, labelKey: "groups" },
 };
 
 const SECTIONS: {
@@ -58,18 +62,8 @@ const SECTIONS: {
   ...DEPLOY_SECTION_META[id],
 }));
 
-export function DeployPanel({
-  spaceId,
-  spaces: _spaces = [],
-  activeSection,
-  onSectionChange,
-  onClose,
-  user: _user,
-  userSettings: _userSettings,
-  onSettingsChange: _onSettingsChange,
-  onSpacesRefresh: _onSpacesRefresh,
-  isMobile: _isMobile = false,
-}: DeployPanelProps) {
+export function DeployPanel(rawProps: DeployPanelProps) {
+  const props = mergeProps({ spaces: [], isMobile: false }, rawProps);
   const { t } = useI18n();
   const { showToast } = useToast();
   const { confirm } = useConfirmDialog();
@@ -80,14 +74,14 @@ export function DeployPanel({
     loadingCfWorkers: loadingWorkers,
     refreshWorkers,
     deleteWorker,
-  } = useSpaceWorkers(spaceId);
+  } = useSpaceWorkers(props.spaceId);
   const [selectedWorker, setSelectedWorker] = createSignal<Worker | null>(null);
   const [workerTab, setWorkerTab] = createSignal<
     import("../../workers/worker-models.ts").WorkerDetailTab
   >("overview");
 
   const { resources, loadingResources, refreshResources } = useSpaceResources(
-    spaceId,
+    props.spaceId,
   );
   const [selectedResource, setSelectedResource] = createSignal<Resource | null>(
     null,
@@ -105,18 +99,20 @@ export function DeployPanel({
   const handleSectionChange = (section: DeploySection) => {
     setSelectedWorker(null);
     setSelectedResource(null);
-    onSectionChange?.(section);
+    props.onSectionChange?.(section);
   };
 
   const handleCreateResource = async () => {
+    const name = newResourceName().trim();
+    if (!name) return;
     setCreatingResource(true);
     try {
       const res = await rpcPath(rpc, "resources").$post({
         param: {},
         json: {
-          name: newResourceName,
-          type: newResourceType,
-          space_id: spaceId,
+          name,
+          type: newResourceType(),
+          space_id: props.spaceId,
         },
       });
       await rpcJson(res);
@@ -133,7 +129,8 @@ export function DeployPanel({
   };
 
   const handleDeleteResource = async () => {
-    if (!selectedResource) return;
+    const resource = selectedResource();
+    if (!resource) return;
     const confirmed = await confirm({
       title: t("confirmDelete"),
       message: t("deleteResourceWarning"),
@@ -144,7 +141,7 @@ export function DeployPanel({
       try {
         const res = await rpcPath(rpc, "resources", "by-name", ":name").$delete(
           {
-            param: { name: selectedResource.name },
+            param: { name: resource.name },
           },
         );
         await rpcJson(res);
@@ -157,56 +154,8 @@ export function DeployPanel({
     }
   };
 
-  // Detail views rendered full-page (no centering constraint)
-  if (activeSection === "workers" && selectedWorker()) {
-    return (
-      <div class="flex flex-col flex-1 h-full bg-zinc-50 dark:bg-zinc-900 overflow-hidden">
-        <WorkerDetailContainer
-          worker={selectedWorker()!}
-          tab={workerTab()}
-          resources={resources()}
-          onBack={() => {
-            setSelectedWorker(null);
-            setWorkerTab("overview");
-          }}
-          onTabChange={setWorkerTab}
-          onDeleteWorker={async (worker) => {
-            const deleted = await deleteWorker(worker);
-            if (deleted) {
-              setSelectedWorker(null);
-              setWorkerTab("overview");
-            }
-          }}
-          onWorkerUpdated={(workerId, updates) => {
-            setCfWorkers((prev) =>
-              prev.map((w) => w.id === workerId ? { ...w, ...updates } : w)
-            );
-            setSelectedWorker((prev) =>
-              prev && prev.id === workerId ? { ...prev, ...updates } : prev
-            );
-          }}
-          onRefreshWorkers={refreshWorkers}
-        />
-      </div>
-    );
-  }
-
-  if (activeSection === "resources" && selectedResource()) {
-    return (
-      <div class="flex flex-col flex-1 h-full bg-zinc-50 dark:bg-zinc-900 overflow-hidden">
-        <ResourceDetailContainer
-          resource={selectedResource()!}
-          tab={resourceTab()}
-          onTabChange={setResourceTab}
-          onBack={() => setSelectedResource(null)}
-          onDeleteResource={() => handleDeleteResource()}
-        />
-      </div>
-    );
-  }
-
   const renderSectionContent = () => {
-    switch (activeSection) {
+    switch (props.activeSection) {
       case "workers":
         return (
           <WorkersTab
@@ -242,55 +191,112 @@ export function DeployPanel({
           </>
         );
 
+      case "groups":
+        return (
+          <GroupsPage
+            spaceId={props.spaceId}
+            groupId={props.groupId}
+            embedded
+            onGroupSelect={props.onGroupSelect}
+          />
+        );
+
       default:
         return null;
     }
   };
 
   return (
-    <div class="flex flex-col flex-1 h-full bg-zinc-50 dark:bg-zinc-900 overflow-hidden">
-      <div class="flex-1 overflow-hidden">
-        <div class="h-full overflow-y-auto">
-          <div class="max-w-3xl mx-auto w-full px-4">
-            <div class="flex items-center gap-3 pt-8 pb-5">
-              <h1 class="text-2xl font-bold tracking-tight text-zinc-900 dark:text-zinc-50 flex-1">
-                {t("deployNav")}
-              </h1>
-              {onClose && (
-                <button
-                  type="button"
-                  class="p-1.5 rounded-lg hover:bg-zinc-200 dark:hover:bg-zinc-700 text-zinc-500 dark:text-zinc-400 transition-colors"
-                  onClick={onClose}
-                  aria-label={t("close")}
-                >
-                  <Icons.X class="w-4 h-4" />
-                </button>
-              )}
-            </div>
+    <Switch>
+      <Match when={props.activeSection === "workers" && selectedWorker()}>
+        <div class="flex flex-col flex-1 h-full bg-zinc-50 dark:bg-zinc-900 overflow-hidden">
+          <WorkerDetailContainer
+            worker={selectedWorker()!}
+            tab={workerTab()}
+            resources={resources()}
+            onBack={() => {
+              setSelectedWorker(null);
+              setWorkerTab("overview");
+            }}
+            onTabChange={setWorkerTab}
+            onDeleteWorker={async (worker) => {
+              const deleted = await deleteWorker(worker);
+              if (deleted) {
+                setSelectedWorker(null);
+                setWorkerTab("overview");
+              }
+            }}
+            onWorkerUpdated={(workerId, updates) => {
+              setCfWorkers((prev) =>
+                prev.map((w) => w.id === workerId ? { ...w, ...updates } : w)
+              );
+              setSelectedWorker((prev) =>
+                prev && prev.id === workerId ? { ...prev, ...updates } : prev
+              );
+            }}
+            onRefreshWorkers={refreshWorkers}
+          />
+        </div>
+      </Match>
 
-            <div class="flex gap-2 pb-6 flex-wrap">
-              {SECTIONS.map((section) => (
-                <button
-                  type="button"
-                  onClick={() => handleSectionChange(section.id)}
-                  class={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-full text-xs font-medium transition-colors ${
-                    activeSection === section.id
-                      ? "bg-zinc-900 dark:bg-zinc-50 text-white dark:text-zinc-900"
-                      : "bg-white dark:bg-zinc-800 text-zinc-600 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-700"
-                  }`}
-                >
-                  {section.icon}
-                  <span>{t(section.labelKey)}</span>
-                </button>
-              ))}
-            </div>
+      <Match when={props.activeSection === "resources" && selectedResource()}>
+        <div class="flex flex-col flex-1 h-full bg-zinc-50 dark:bg-zinc-900 overflow-hidden">
+          <ResourceDetailContainer
+            resource={selectedResource()!}
+            tab={resourceTab()}
+            onTabChange={setResourceTab}
+            onBack={() => setSelectedResource(null)}
+            onDeleteResource={() => handleDeleteResource()}
+          />
+        </div>
+      </Match>
 
-            <div class="pb-10">
-              {renderSectionContent()}
+      <Match when>
+        <div class="flex flex-col flex-1 h-full bg-zinc-50 dark:bg-zinc-900 overflow-hidden">
+          <div class="flex-1 overflow-hidden">
+            <div class="h-full overflow-y-auto">
+              <div class="max-w-3xl mx-auto w-full px-4">
+                <div class="flex items-center gap-3 pt-8 pb-5">
+                  <h1 class="text-2xl font-bold tracking-tight text-zinc-900 dark:text-zinc-50 flex-1">
+                    {t("deployNav")}
+                  </h1>
+                  {props.onClose && (
+                    <button
+                      type="button"
+                      class="p-1.5 rounded-lg hover:bg-zinc-200 dark:hover:bg-zinc-700 text-zinc-500 dark:text-zinc-400 transition-colors"
+                      onClick={props.onClose}
+                      aria-label={t("close")}
+                    >
+                      <Icons.X class="w-4 h-4" />
+                    </button>
+                  )}
+                </div>
+
+                <div class="flex gap-2 pb-6 flex-wrap">
+                  {SECTIONS.map((section) => (
+                    <button
+                      type="button"
+                      onClick={() => handleSectionChange(section.id)}
+                      class={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-full text-xs font-medium transition-colors ${
+                        props.activeSection === section.id
+                          ? "bg-zinc-900 dark:bg-zinc-50 text-white dark:text-zinc-900"
+                          : "bg-white dark:bg-zinc-800 text-zinc-600 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-700"
+                      }`}
+                    >
+                      {section.icon}
+                      <span>{t(section.labelKey)}</span>
+                    </button>
+                  ))}
+                </div>
+
+                <div class="pb-10">
+                  {renderSectionContent()}
+                </div>
+              </div>
             </div>
           </div>
         </div>
-      </div>
-    </div>
+      </Match>
+    </Switch>
   );
 }

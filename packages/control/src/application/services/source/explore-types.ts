@@ -51,6 +51,7 @@ export interface CatalogRepoResponse {
     username: string;
     avatar_url: string | null;
   };
+  catalog_origin: "repository" | "default_app";
 }
 
 export interface CatalogPackageResponse {
@@ -80,9 +81,19 @@ export interface CatalogInstallationResponse {
   deployed_at: string | null;
 }
 
+export interface CatalogDeploySourceResponse {
+  kind: "git_ref";
+  repository_url: string;
+  ref: string;
+  ref_type: "branch" | "tag" | "commit";
+  backend: "cloudflare" | "local" | "aws" | "gcp" | "k8s" | null;
+  env: string | null;
+}
+
 export interface CatalogItemResponse {
   repo: CatalogRepoResponse;
   package: CatalogPackageResponse;
+  source?: CatalogDeploySourceResponse;
   installation?: CatalogInstallationResponse;
 }
 
@@ -117,6 +128,7 @@ export type RepositoryWithAccount = {
     slug: string;
     picture: string | null;
   };
+  remoteCloneUrl?: string | null;
 };
 
 export interface ReleaseAsset {

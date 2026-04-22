@@ -1,31 +1,35 @@
-import * as gitStore from '../../../application/services/git-smart/index.ts';
-import { getDb, type Database } from '../../../infra/db/index.ts';
-import { eq, and, count, desc, inArray, sql } from 'drizzle-orm';
-import { pullRequests, prReviews, prComments } from '../../../infra/db/schema.ts';
-import type { PullRequestStatus } from '../../../shared/types/index.ts';
-import { buildRepoDiffPayload, type RepoDiffPayload } from './diff.ts';
+import * as gitStore from "../../../application/services/git-smart/index.ts";
+import { type Database, getDb } from "../../../infra/db/index.ts";
+import { and, count, desc, eq, inArray, sql } from "drizzle-orm";
+import {
+  prComments,
+  prReviews,
+  pullRequests,
+} from "../../../infra/db/schema.ts";
+import type { PullRequestStatus } from "../../../shared/types/index.ts";
+import { buildRepoDiffPayload, type RepoDiffPayload } from "./diff.ts";
 import {
   buildUserLiteMap,
+  type PullRequestDto,
+  type PullRequestRecord,
   resolveActorLite,
   toPullRequestDto,
   toPullRequestRecord,
-  type PullRequestDto,
-  type PullRequestRecord,
-} from './dto.ts';
-import { toGitBucket } from '../../../shared/utils/git-bucket.ts';
-import type { AuthenticatedRouteEnv } from '../route-auth.ts';
-import { logError } from '../../../shared/utils/logger.ts';
+} from "./dto.ts";
+import { toGitBucket } from "../../../shared/utils/git-bucket.ts";
+import type { AuthenticatedRouteEnv } from "../route-auth.ts";
+import { logError } from "../../../shared/utils/logger.ts";
 
 export type PullRequestDetail = {
   pullRequest: PullRequestDto;
   diff: RepoDiffPayload | null;
-  diffStats: RepoDiffPayload['stats'] | null;
+  diffStats: RepoDiffPayload["stats"] | null;
   reviewCount: number;
   commentCount: number;
 };
 
 async function buildCommitMetrics(
-  env: AuthenticatedRouteEnv['Bindings'],
+  env: AuthenticatedRouteEnv["Bindings"],
   repoId: string,
   pullRequests: PullRequestRecord[],
 ): Promise<{
@@ -53,7 +57,13 @@ async function buildCommitMetrics(
 
     mergeableByPrId.set(pullRequest.id, true);
     try {
-      const { ahead } = await gitStore.countCommitsBetween(env.DB, bucket, repoId, baseSha, headSha);
+      const { ahead } = await gitStore.countCommitsBetween(
+        env.DB,
+        bucket,
+        repoId,
+        baseSha,
+        headSha,
+      );
       commitsCountByPrId.set(pullRequest.id, ahead);
     } catch {
       // Commit count lookup can fail for orphaned refs; default to 0
@@ -65,11 +75,13 @@ async function buildCommitMetrics(
 }
 
 export async function getNextPullRequestNumber(
-  d1: AuthenticatedRouteEnv['Bindings']['DB'],
+  d1: AuthenticatedRouteEnv["Bindings"]["DB"],
   repoId: string,
 ): Promise<number> {
   const db = getDb(d1);
-  const result = await db.select({ maxNumber: sql<number>`max(${pullRequests.number})` })
+  const result = await db.select({
+    maxNumber: sql<number>`max(${pullRequests.number})`,
+  })
     .from(pullRequests)
     .where(eq(pullRequests.repoId, repoId))
     .get();
@@ -77,14 +89,16 @@ export async function getNextPullRequestNumber(
 }
 
 export async function findPullRequest(
-  d1: AuthenticatedRouteEnv['Bindings']['DB'],
+  d1: AuthenticatedRouteEnv["Bindings"]["DB"],
   repoId: string,
   prNumber: number,
 ): Promise<{ db: Database; pullRequest: PullRequestRecord } | null> {
   const db = getDb(d1);
   const pullRequest = await db.select()
     .from(pullRequests)
-    .where(and(eq(pullRequests.repoId, repoId), eq(pullRequests.number, prNumber)))
+    .where(
+      and(eq(pullRequests.repoId, repoId), eq(pullRequests.number, prNumber)),
+    )
     .get();
   if (!pullRequest) {
     return null;
@@ -93,7 +107,7 @@ export async function findPullRequest(
 }
 
 export async function buildPullRequestList(
-  env: AuthenticatedRouteEnv['Bindings'],
+  env: AuthenticatedRouteEnv["Bindings"],
   repoId: string,
   status: PullRequestStatus | undefined,
   limit: number,
@@ -113,28 +127,35 @@ export async function buildPullRequestList(
   const prList = rows.map((row) => toPullRequestRecord(row));
   const prIds = prList.map((pullRequest) => pullRequest.id);
 
-  const [reviewCounts, commentCounts, { commitsCountByPrId, mergeableByPrId }] = await Promise.all([
-    prIds.length > 0
-      ? db.select({ prId: prReviews.prId, count: count() })
+  const [reviewCounts, commentCounts, { commitsCountByPrId, mergeableByPrId }] =
+    await Promise.all([
+      prIds.length > 0
+        ? db.select({ prId: prReviews.prId, count: count() })
           .from(prReviews)
           .where(inArray(prReviews.prId, prIds))
           .groupBy(prReviews.prId)
           .all()
-      : Promise.resolve([]),
-    prIds.length > 0
-      ? db.select({ prId: prComments.prId, count: count() })
+        : Promise.resolve([]),
+      prIds.length > 0
+        ? db.select({ prId: prComments.prId, count: count() })
           .from(prComments)
           .where(inArray(prComments.prId, prIds))
           .groupBy(prComments.prId)
           .all()
-      : Promise.resolve([]),
-    buildCommitMetrics(env, repoId, prList),
-  ]);
+        : Promise.resolve([]),
+      buildCommitMetrics(env, repoId, prList),
+    ]);
 
-  const reviewCountMap = new Map(reviewCounts.map((row) => [row.prId, row.count]));
-  const commentCountMap = new Map(commentCounts.map((row) => [row.prId, row.count]));
+  const reviewCountMap = new Map(
+    reviewCounts.map((row) => [row.prId, row.count]),
+  );
+  const commentCountMap = new Map(
+    commentCounts.map((row) => [row.prId, row.count]),
+  );
   const authorUserIds = prList
-    .filter((pullRequest) => pullRequest.authorType === 'user' && pullRequest.authorId)
+    .filter((pullRequest) =>
+      pullRequest.authorType === "user" && pullRequest.authorId
+    )
     .map((pullRequest) => pullRequest.authorId as string);
   const userMap = await buildUserLiteMap(db, authorUserIds);
 
@@ -155,24 +176,42 @@ export async function buildPullRequestList(
 }
 
 export async function buildPullRequestDetail(
-  env: AuthenticatedRouteEnv['Bindings'],
+  env: AuthenticatedRouteEnv["Bindings"],
   repoId: string,
   db: Database,
   pullRequest: PullRequestRecord,
 ): Promise<PullRequestDetail> {
   let diff: RepoDiffPayload | null = null;
   try {
-    diff = await buildRepoDiffPayload(env, repoId, pullRequest.baseBranch, pullRequest.headBranch);
+    diff = await buildRepoDiffPayload(
+      env,
+      repoId,
+      pullRequest.baseBranch,
+      pullRequest.headBranch,
+    );
   } catch (err: unknown) {
-    logError('Failed to get diff payload', err, { module: 'routes/pull-requests/read-model' });
+    logError("Failed to get diff payload", err, {
+      module: "routes/pull-requests/read-model",
+    });
   }
 
-  const [reviewResult, commentResult, userMap, { commitsCountByPrId, mergeableByPrId }] = await Promise.all([
-    db.select({ count: count() }).from(prReviews).where(eq(prReviews.prId, pullRequest.id)).get(),
-    db.select({ count: count() }).from(prComments).where(eq(prComments.prId, pullRequest.id)).get(),
+  const [
+    reviewResult,
+    commentResult,
+    userMap,
+    { commitsCountByPrId, mergeableByPrId },
+  ] = await Promise.all([
+    db.select({ count: count() }).from(prReviews).where(
+      eq(prReviews.prId, pullRequest.id),
+    ).get(),
+    db.select({ count: count() }).from(prComments).where(
+      eq(prComments.prId, pullRequest.id),
+    ).get(),
     buildUserLiteMap(
       db,
-      pullRequest.authorType === 'user' && pullRequest.authorId ? [pullRequest.authorId] : [],
+      pullRequest.authorType === "user" && pullRequest.authorId
+        ? [pullRequest.authorId]
+        : [],
     ),
     buildCommitMetrics(env, repoId, [pullRequest]),
   ]);

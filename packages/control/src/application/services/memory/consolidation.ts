@@ -1,11 +1,22 @@
-import type { D1Database } from '../../../shared/types/bindings.ts';
-import type { MemoryType } from '../../../shared/types/index.ts';
-import { LLMClient } from '../agent/index.ts';
-import { getDb, memories } from '../../../infra/db/index.ts';
-import { eq, and, or, lt, isNull, desc, asc, count, sql, inArray } from 'drizzle-orm';
-import { chatAndParseJsonArray } from './llm-parser.ts';
+import type { D1Database } from "../../../shared/types/bindings.ts";
+import type { MemoryType } from "../../../shared/types/index.ts";
+import { LLMClient } from "../agent/index.ts";
+import { getDb, memories } from "../../../infra/db/index.ts";
+import {
+  and,
+  asc,
+  count,
+  desc,
+  eq,
+  inArray,
+  isNull,
+  lt,
+  or,
+  sql,
+} from "drizzle-orm";
+import { chatAndParseJsonArray } from "./llm-parser.ts";
 
-import { logError } from '../../../shared/utils/logger.ts';
+import { logError } from "../../../shared/utils/logger.ts";
 
 interface MergeGroup {
   indices: number[];
@@ -45,13 +56,13 @@ function getNgrams(text: string, n: number = 3): Set<string> {
   const words = text.toLowerCase().split(/\s+/);
   const ngrams = new Set<string>();
   for (let i = 0; i <= words.length - n; i++) {
-    ngrams.add(words.slice(i, i + n).join(' '));
+    ngrams.add(words.slice(i, i + n).join(" "));
   }
   return ngrams;
 }
 
 function jaccardSimilarity(a: Set<string>, b: Set<string>): number {
-  const intersection = new Set([...a].filter(x => b.has(x)));
+  const intersection = new Set([...a].filter((x) => b.has(x)));
   const union = new Set([...a, ...b]);
   return union.size > 0 ? intersection.size / union.size : 0;
 }
@@ -71,12 +82,16 @@ export class MemoryConsolidator {
    * Apply decay to all memories in a space.
    * Uses atomic SQL (julianday) to prevent read-modify-write races.
    */
-  async applyDecay(spaceId: string): Promise<{ updated: number; deleted: number }> {
+  async applyDecay(
+    spaceId: string,
+  ): Promise<{ updated: number; deleted: number }> {
     const db = memoryConsolidatorDeps.getDb(this.dbBinding);
     const nowDate = new Date();
     const nowIso = nowDate.toISOString();
     const cutoffDate = new Date(nowDate);
-    cutoffDate.setDate(cutoffDate.getDate() - DECAY_CONFIG.cleanupThresholdDays);
+    cutoffDate.setDate(
+      cutoffDate.getDate() - DECAY_CONFIG.cleanupThresholdDays,
+    );
     const cutoffIso = cutoffDate.toISOString();
 
     const deleted = await db.run(sql`
@@ -126,7 +141,7 @@ export class MemoryConsolidator {
       .limit(100)
       .all();
 
-    const memoryEntries: MemoryEntry[] = memoriesResult.map(m => ({
+    const memoryEntries: MemoryEntry[] = memoriesResult.map((m) => ({
       id: m.id,
       type: m.type as MemoryType,
       content: m.content,
@@ -155,9 +170,10 @@ export class MemoryConsolidator {
 
       const memoriesText = typeMemories
         .map((m, i) => `[${i}] ${m.content}`)
-        .join('\n');
+        .join("\n");
 
-      const userPrompt = `Identify groups of similar or duplicate memories that should be merged.
+      const userPrompt =
+        `Identify groups of similar or duplicate memories that should be merged.
 
 Memories (${type}):
 ${memoriesText}
@@ -170,9 +186,11 @@ Return JSON with groups of indices that should be merged and a merged content:
 
 Only group genuinely similar/duplicate memories. Return empty array if no merges needed.`;
 
-      const groups = await memoryConsolidatorDeps.chatAndParseJsonArray<MergeGroup>(
+      const groups = await memoryConsolidatorDeps.chatAndParseJsonArray<
+        MergeGroup
+      >(
         this.llmClient,
-        'You are a memory consolidation assistant. Output only valid JSON.',
+        "You are a memory consolidation assistant. Output only valid JSON.",
         userPrompt,
       );
       if (!groups) continue;
@@ -180,13 +198,15 @@ Only group genuinely similar/duplicate memories. Return empty array if no merges
       for (const group of groups) {
         if (group.indices.length < 2) continue;
 
-        const toMerge = group.indices.map(i => typeMemories[i]).filter(Boolean);
+        const toMerge = group.indices.map((i) => typeMemories[i]).filter(
+          Boolean,
+        );
         if (toMerge.length < 2) continue;
 
         toMerge.sort((a, b) => b.importance - a.importance);
         const primary = toMerge[0];
         const others = toMerge.slice(1);
-        const maxImportance = Math.max(...toMerge.map(m => m.importance));
+        const maxImportance = Math.max(...toMerge.map((m) => m.importance));
         await db.update(memories)
           .set({
             content: group.merged,
@@ -195,7 +215,7 @@ Only group genuinely similar/duplicate memories. Return empty array if no merges
           })
           .where(eq(memories.id, primary.id));
 
-        const otherIds = others.map(o => o.id);
+        const otherIds = others.map((o) => o.id);
         if (otherIds.length > 0) {
           await db.delete(memories).where(inArray(memories.id, otherIds));
           merged += otherIds.length;
@@ -206,7 +226,9 @@ Only group genuinely similar/duplicate memories. Return empty array if no merges
     return { merged };
   }
 
-  private async mergeSimilarSimple(spaceId: string): Promise<{ merged: number }> {
+  private async mergeSimilarSimple(
+    spaceId: string,
+  ): Promise<{ merged: number }> {
     const db = memoryConsolidatorDeps.getDb(this.dbBinding);
 
     const memoriesResult = await db.select({
@@ -220,7 +242,7 @@ Only group genuinely similar/duplicate memories. Return empty array if no merges
       .limit(200)
       .all();
 
-    const memoryEntries: SimpleMemoryEntry[] = memoriesResult.map(m => ({
+    const memoryEntries: SimpleMemoryEntry[] = memoriesResult.map((m) => ({
       id: m.id,
       type: m.type,
       content: m.content,
@@ -284,14 +306,14 @@ Only group genuinely similar/duplicate memories. Return empty array if no merges
         lt(memories.createdAt, thirtyDaysAgo.toISOString()),
         or(
           isNull(memories.summary),
-          eq(memories.summary, ''),
+          eq(memories.summary, ""),
         ),
       ))
       .limit(50)
       .all();
 
     const filteredMemories = memoriesResult
-      .filter(m => m.content.length > 200)
+      .filter((m) => m.content.length > 200)
       .slice(0, 20);
 
     if (filteredMemories.length === 0) {
@@ -303,8 +325,12 @@ Only group genuinely similar/duplicate memories. Return empty array if no merges
     for (const memory of filteredMemories) {
       try {
         const response = await this.llmClient.chat([
-          { role: 'system', content: 'Summarize the following text in 1-2 sentences. Keep essential information only.' },
-          { role: 'user', content: memory.content },
+          {
+            role: "system",
+            content:
+              "Summarize the following text in 1-2 sentences. Keep essential information only.",
+          },
+          { role: "user", content: memory.content },
         ], []);
 
         const summary = response.content.trim();
@@ -318,7 +344,9 @@ Only group genuinely similar/duplicate memories. Return empty array if no merges
           summarized++;
         }
       } catch (error) {
-        memoryConsolidatorDeps.logError('Summarization failed', error, { module: 'services/memory/consolidation' });
+        memoryConsolidatorDeps.logError("Summarization failed", error, {
+          module: "services/memory/consolidation",
+        });
       }
     }
 

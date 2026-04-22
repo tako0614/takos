@@ -60,7 +60,7 @@ function buildCommitSignature(
 ): gitStore.GitSignature {
   return {
     name: user.name || "User",
-    email: user.email || "user@takos.dev",
+    email: user.email || "user@takos.jp",
     timestamp: Math.floor(Date.now() / 1000),
     tzOffset: "+0000",
   };

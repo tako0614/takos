@@ -1,5 +1,5 @@
-import { createSignal } from 'solid-js';
-import { type TranslationKey } from '../store/i18n.ts';
+import { createSignal } from "solid-js";
+import { type TranslationKey } from "../store/i18n.ts";
 
 export interface UseFileAttachmentOptions {
   t: (key: TranslationKey, params?: Record<string, string | number>) => string;
@@ -16,14 +16,16 @@ export interface UseFileAttachmentResult {
 
 const MAX_FILE_SIZE = 10 * 1024 * 1024 * 1024;
 
-export function useFileAttachment({ t, setError }: UseFileAttachmentOptions): UseFileAttachmentResult {
+export function useFileAttachment(
+  { t, setError }: UseFileAttachmentOptions,
+): UseFileAttachmentResult {
   const [attachedFiles, setAttachedFiles] = createSignal<File[]>([]);
 
   function addFiles(files: File[]): void {
     const validFiles: File[] = [];
     for (const file of files) {
       if (file.size > MAX_FILE_SIZE) {
-        setError(t('fileTooLarge' as TranslationKey));
+        setError(t("fileTooLarge" as TranslationKey));
         continue;
       }
       validFiles.push(file);
@@ -33,11 +35,13 @@ export function useFileAttachment({ t, setError }: UseFileAttachmentOptions): Us
     }
   }
 
-  function handleFileSelect(e: Event & { currentTarget: HTMLInputElement }): void {
+  function handleFileSelect(
+    e: Event & { currentTarget: HTMLInputElement },
+  ): void {
     const files = e.currentTarget.files;
     if (!files) return;
     addFiles(Array.from(files));
-    e.currentTarget.value = '';
+    e.currentTarget.value = "";
   }
 
   function removeAttachedFile(index: number): void {
@@ -45,7 +49,9 @@ export function useFileAttachment({ t, setError }: UseFileAttachmentOptions): Us
   }
 
   return {
-    get attachedFiles() { return attachedFiles(); },
+    get attachedFiles() {
+      return attachedFiles();
+    },
     setAttachedFiles: (files: File[]) => setAttachedFiles(files),
     addFiles,
     handleFileSelect,

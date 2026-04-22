@@ -69,6 +69,40 @@ Deno.test("buildRoutingTarget - builds canary routing target and clamps weight",
   assertEquals(result.auditDetails.mode, "canary");
 });
 
+Deno.test("buildRoutingTarget - canary worker-bundle slots route to artifact refs", () => {
+  const result = buildRoutingTarget({
+    deploymentId: "dep-2",
+    deploymentVersion: 2,
+    deployArtifactRef: "worker-w-1-v2",
+    deploymentTarget: {
+      route_ref: "worker-w-1",
+      endpoint: { kind: "service-ref", ref: "worker-w-1" },
+      artifact: { kind: "worker-bundle" },
+    },
+    serviceRouteRecord: baseServiceRouteRecord,
+    desiredRoutingStatus: "canary",
+    desiredRoutingWeight: 10,
+    activeDeployment: {
+      id: "dep-1",
+      artifactRef: "worker-w-1-v1",
+      targetJson: JSON.stringify({
+        route_ref: "worker-w-1",
+        endpoint: { kind: "service-ref", ref: "worker-w-1" },
+        artifact: { kind: "worker-bundle" },
+      }),
+      routingStatus: "active",
+    },
+  }, ["test.example.com"]);
+
+  assertEquals(result.target.type, "deployments");
+  if (result.target.type === "deployments") {
+    assertEquals(result.target.deployments.map((entry) => entry.routeRef), [
+      "worker-w-1-v1",
+      "worker-w-1-v2",
+    ]);
+  }
+});
+
 Deno.test("buildRoutingTarget - rounds fractional canary weight before clamping", () => {
   const result = buildRoutingTarget({
     deploymentId: "dep-2",

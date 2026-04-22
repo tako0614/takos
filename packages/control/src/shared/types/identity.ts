@@ -1,4 +1,9 @@
-export type PrincipalKind = 'user' | 'space_agent' | 'service' | 'system' | 'tenant_worker';
+export type PrincipalKind =
+  | "user"
+  | "space_agent"
+  | "service"
+  | "system"
+  | "tenant_worker";
 
 export interface Principal {
   id: string;

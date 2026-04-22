@@ -1,13 +1,16 @@
-import path from 'node:path';
-import fs from 'node:fs';
-import { REPOS_BASE_DIR, WORKDIR_BASE_DIR } from '../shared/config.ts';
-import { SymlinkEscapeError, SymlinkNotAllowedError } from '../shared/errors.ts';
+import path from "node:path";
+import fs from "node:fs";
+import { REPOS_BASE_DIR, WORKDIR_BASE_DIR } from "../shared/config.ts";
+import {
+  SymlinkEscapeError,
+  SymlinkNotAllowedError,
+} from "../shared/errors.ts";
 
 // --- isPathWithinBase ---
 
 function normalizePathForComparison(resolvedPath: string): string {
-  const normalized = resolvedPath.normalize('NFC');
-  return process.platform === 'win32' ? normalized.toLowerCase() : normalized;
+  const normalized = resolvedPath.normalize("NFC");
+  return process.platform === "win32" ? normalized.toLowerCase() : normalized;
 }
 
 interface PathWithinBaseOptions {
@@ -18,18 +21,22 @@ interface PathWithinBaseOptions {
 export function isPathWithinBase(
   basePath: string,
   targetPath: string,
-  options: PathWithinBaseOptions = {}
+  options: PathWithinBaseOptions = {},
 ): boolean {
   const { allowBase = true, resolveInputs = false } = options;
-  const normalizedBase = normalizePathForComparison(resolveInputs ? path.resolve(basePath) : basePath);
-  const normalizedPath = normalizePathForComparison(resolveInputs ? path.resolve(targetPath) : targetPath);
+  const normalizedBase = normalizePathForComparison(
+    resolveInputs ? path.resolve(basePath) : basePath,
+  );
+  const normalizedPath = normalizePathForComparison(
+    resolveInputs ? path.resolve(targetPath) : targetPath,
+  );
   const relativePath = path.relative(normalizedBase, normalizedPath);
 
-  if (relativePath === '' || relativePath === '.') {
+  if (relativePath === "" || relativePath === ".") {
     return allowBase;
   }
 
-  return !relativePath.startsWith('..') && !path.isAbsolute(relativePath);
+  return !relativePath.startsWith("..") && !path.isAbsolute(relativePath);
 }
 
 export function resolvePathWithin(
@@ -37,9 +44,9 @@ export function resolvePathWithin(
   targetPath: string,
   label: string,
   allowBase: boolean = false,
-  allowAbsolute: boolean = false
+  allowAbsolute: boolean = false,
 ): string {
-  if (typeof targetPath !== 'string' || targetPath.trim().length === 0) {
+  if (typeof targetPath !== "string" || targetPath.trim().length === 0) {
     throw new Error(`Invalid ${label} path`);
   }
 
@@ -47,7 +54,7 @@ export function resolvePathWithin(
     throw new Error(`Absolute ${label} paths are not allowed`);
   }
 
-  if (!allowAbsolute && targetPath.includes('..')) {
+  if (!allowAbsolute && targetPath.includes("..")) {
     throw new Error(`Path traversal not allowed in ${label}`);
   }
 
@@ -65,9 +72,11 @@ export function resolvePathWithin(
 export async function verifyPathWithinAfterAccess(
   baseDir: string,
   targetPath: string,
-  label: string
+  label: string,
 ): Promise<string> {
-  const resolvedBase = await fs.promises.realpath(baseDir).catch(() => path.resolve(baseDir));
+  const resolvedBase = await fs.promises.realpath(baseDir).catch(() =>
+    path.resolve(baseDir)
+  );
   const resolvedPath = await fs.promises.realpath(targetPath);
 
   if (!isPathWithinBase(resolvedBase, resolvedPath, { allowBase: true })) {
@@ -80,21 +89,25 @@ export async function verifyPathWithinAfterAccess(
 export async function verifyPathWithinBeforeCreate(
   baseDir: string,
   targetPath: string,
-  label: string
+  label: string,
 ): Promise<void> {
-  const resolvedBase = await fs.promises.realpath(baseDir).catch(() => path.resolve(baseDir));
+  const resolvedBase = await fs.promises.realpath(baseDir).catch(() =>
+    path.resolve(baseDir)
+  );
   let candidatePath = path.resolve(targetPath);
 
   while (true) {
     try {
       const resolvedCandidate = await fs.promises.realpath(candidatePath);
-      if (!isPathWithinBase(resolvedBase, resolvedCandidate, { allowBase: true })) {
+      if (
+        !isPathWithinBase(resolvedBase, resolvedCandidate, { allowBase: true })
+      ) {
         throw new SymlinkEscapeError(label);
       }
       return;
     } catch (err) {
       const e = err as NodeJS.ErrnoException;
-      if (e.code === 'ENOENT') {
+      if (e.code === "ENOENT") {
         const parentPath = path.dirname(candidatePath);
         if (parentPath === candidatePath) {
           throw new Error(`Invalid ${label} path`);
@@ -110,7 +123,7 @@ export async function verifyPathWithinBeforeCreate(
 export async function verifyNoSymlinkPathComponents(
   baseDir: string,
   targetPath: string,
-  label: string
+  label: string,
 ): Promise<void> {
   const resolvedBase = path.resolve(baseDir);
   const resolvedTarget = path.resolve(targetPath);
@@ -120,7 +133,7 @@ export async function verifyNoSymlinkPathComponents(
   }
 
   const relativePath = path.relative(resolvedBase, resolvedTarget);
-  if (relativePath === '' || relativePath === '.') {
+  if (relativePath === "" || relativePath === ".") {
     return;
   }
 
@@ -136,7 +149,7 @@ export async function verifyNoSymlinkPathComponents(
       }
     } catch (err) {
       const e = err as NodeJS.ErrnoException;
-      if (e.code === 'ENOENT') {
+      if (e.code === "ENOENT") {
         return;
       }
       throw err;
@@ -148,7 +161,10 @@ export async function verifyNoSymlinkPathComponents(
  * Resolve a base directory, optionally creating it, and verify it is a directory.
  * Returns the real (symlink-resolved) path of the directory.
  */
-export async function resolveBaseDirectory(baseDir: string, createIfMissing: boolean): Promise<string> {
+export async function resolveBaseDirectory(
+  baseDir: string,
+  createIfMissing: boolean,
+): Promise<string> {
   if (createIfMissing) {
     await fs.promises.mkdir(baseDir, { recursive: true });
   }
@@ -166,7 +182,10 @@ export async function resolveBaseDirectory(baseDir: string, createIfMissing: boo
  * Resolve a target path via realpath and verify it is within the base directory.
  * Returns the resolved path, or null if the path escapes or does not exist.
  */
-export async function resolveAndVerifyPathWithinBase(baseDir: string, targetPath: string): Promise<string | null> {
+export async function resolveAndVerifyPathWithinBase(
+  baseDir: string,
+  targetPath: string,
+): Promise<string | null> {
   try {
     const resolvedPath = await fs.promises.realpath(targetPath);
     if (!isPathWithinBase(baseDir, resolvedPath, { resolveInputs: true })) {
@@ -183,14 +202,17 @@ export async function resolveAndVerifyPathWithinBase(baseDir: string, targetPath
  * Unlike `verifyNoSymlinkPathComponents`, this allows symlinks whose targets resolve
  * within the base directory. Returns true if an escaping symlink is found.
  */
-export async function hasEscapingSymlinkComponent(baseDir: string, targetPath: string): Promise<boolean> {
+export async function hasEscapingSymlinkComponent(
+  baseDir: string,
+  targetPath: string,
+): Promise<boolean> {
   const absoluteTarget = path.resolve(targetPath);
   if (!isPathWithinBase(baseDir, absoluteTarget, { resolveInputs: true })) {
     return true;
   }
 
   const relativePath = path.relative(baseDir, absoluteTarget);
-  if (relativePath === '' || relativePath === '.') {
+  if (relativePath === "" || relativePath === ".") {
     return false;
   }
 
@@ -205,7 +227,7 @@ export async function hasEscapingSymlinkComponent(baseDir: string, targetPath: s
       currentStats = await fs.promises.lstat(currentPath);
     } catch (err) {
       const e = err as NodeJS.ErrnoException;
-      if (e.code === 'ENOENT') {
+      if (e.code === "ENOENT") {
         return false;
       }
       return true;
@@ -215,7 +237,10 @@ export async function hasEscapingSymlinkComponent(baseDir: string, targetPath: s
       continue;
     }
 
-    const resolvedLinkTarget = await resolveAndVerifyPathWithinBase(baseDir, currentPath);
+    const resolvedLinkTarget = await resolveAndVerifyPathWithinBase(
+      baseDir,
+      currentPath,
+    );
     if (!resolvedLinkTarget) {
       return true;
     }
@@ -227,25 +252,31 @@ export async function hasEscapingSymlinkComponent(baseDir: string, targetPath: s
 export function resolveRepoGitPath(repoGitPath: string): string {
   const resolvedPath = path.resolve(repoGitPath);
 
-  if (!path.isAbsolute(repoGitPath) ||
-      !repoGitPath.endsWith('.git') ||
-      !isPathWithinBase(path.resolve(REPOS_BASE_DIR), resolvedPath, { allowBase: false })) {
-    throw new Error('Invalid repoGitPath');
+  if (
+    !path.isAbsolute(repoGitPath) ||
+    !repoGitPath.endsWith(".git") ||
+    !isPathWithinBase(path.resolve(REPOS_BASE_DIR), resolvedPath, {
+      allowBase: false,
+    })
+  ) {
+    throw new Error("Invalid repoGitPath");
   }
 
   return resolvedPath;
 }
 
 function validateRepoNameComponent(value: string, label: string): string {
-  if (typeof value !== 'string' || value.length === 0) {
+  if (typeof value !== "string" || value.length === 0) {
     throw new Error(`${label} is required`);
   }
   if (value.length > 128) {
     throw new Error(`${label} too long (max 128 characters)`);
   }
-  const safeValue = value.replace(/[^a-zA-Z0-9_-]/g, '');
+  const safeValue = value.replace(/[^a-zA-Z0-9_-]/g, "");
   if (safeValue !== value) {
-    throw new Error(`${label} contains invalid characters (only alphanumeric, underscore, and hyphen allowed)`);
+    throw new Error(
+      `${label} contains invalid characters (only alphanumeric, underscore, and hyphen allowed)`,
+    );
   }
   if (!/^[a-zA-Z0-9]/.test(value)) {
     throw new Error(`${label} must start with an alphanumeric character`);
@@ -254,9 +285,13 @@ function validateRepoNameComponent(value: string, label: string): string {
 }
 
 export function getRepoPath(spaceId: string, repoName: string): string {
-  const validatedSpaceId = validateRepoNameComponent(spaceId, 'spaceId');
-  const validatedRepoName = validateRepoNameComponent(repoName, 'repoName');
-  return path.join(REPOS_BASE_DIR, validatedSpaceId, `${validatedRepoName}.git`);
+  const validatedSpaceId = validateRepoNameComponent(spaceId, "spaceId");
+  const validatedRepoName = validateRepoNameComponent(repoName, "repoName");
+  return path.join(
+    REPOS_BASE_DIR,
+    validatedSpaceId,
+    `${validatedRepoName}.git`,
+  );
 }
 
 export function resolveWorkDirPath(targetPath: string, label: string): string {

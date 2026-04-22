@@ -4,6 +4,8 @@ export interface AgentExecutorDispatchPayload {
   serviceId?: string;
   model?: string;
   leaseVersion?: number;
+  executorTier?: 1 | 2 | 3;
+  executorContainerId?: string;
 }
 
 export interface AgentExecutorControlConfig {

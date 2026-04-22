@@ -1,4 +1,4 @@
-import type { Job, Workflow } from 'takos-actions-engine';
+import type { Job, Workflow } from "takos-actions-engine";
 
 export interface WorkflowDispatchEnvOptions {
   workflow: Workflow;
@@ -19,7 +19,9 @@ export interface WorkflowDispatchEnvOptions {
  * but we include workflow-level env and GitHub context defaults here so the
  * queue payload is self-contained and deterministic.
  */
-export function buildWorkflowDispatchEnv(options: WorkflowDispatchEnvOptions): Record<string, string> {
+export function buildWorkflowDispatchEnv(
+  options: WorkflowDispatchEnvOptions,
+): Record<string, string> {
   const {
     workflow,
     workflowPath,
@@ -33,12 +35,12 @@ export function buildWorkflowDispatchEnv(options: WorkflowDispatchEnvOptions): R
   } = options;
 
   const workflowEnv = workflow.env || {};
-  const normalizedRef = ref.startsWith('refs/') ? ref : `refs/heads/${ref}`;
+  const normalizedRef = ref.startsWith("refs/") ? ref : `refs/heads/${ref}`;
 
   return {
     ...workflowEnv,
-    CI: 'true',
-    GITHUB_ACTIONS: 'true',
+    CI: "true",
+    GITHUB_ACTIONS: "true",
     GITHUB_REPOSITORY: repoId,
     GITHUB_REF: normalizedRef,
     GITHUB_SHA: sha,

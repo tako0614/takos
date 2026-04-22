@@ -3,7 +3,8 @@
 ::: tip Internal implementation このページは control plane の internal
 実装を説明する。public contract ではない。実装は変更される可能性がある。public
 contract は [manifest spec](/reference/manifest-spec) と
-[API reference](/reference/api) を参照。:::
+[API reference](/reference/api) を参照。
+:::
 
 Control plane は [Kernel](./kernel.md) の実装面。API, deploy pipeline, DB,
 routing / workflow management を担う。deploy contract は primitive-first で、
@@ -193,7 +194,7 @@ kernel が所有する DB schema。Agent, Git, Storage, Store は kernel
 
 ## Deploy pipeline
 
-kernel 外の primitive に適用される。docs, excel, slide, user-defined workloads
+kernel 外の primitive に適用される。docs, excel, slide, computer, user-defined workloads
 は同じ primitive model で扱う。kernel の機能（agent, git, storage, store）は
 kernel に統合済みであり、deploy pipeline の対象外。
 
@@ -433,8 +434,8 @@ group の worker は自分宛の request だけを受け取る。
 space の初回起動時の順序:
 
 1. kernel が起動する（auth, routing が ready）
-2. docs, excel, slide は default app distribution の初期セットとして preinstall
-   対象にできる。operator はこの app set を差し替えられる。default set
+2. docs, excel, slide, computer は default app distribution の初期セットとして
+   preinstall 対象にできる。operator はこの app set を差し替えられる。default set
    に含まれても primitive や group は特権化されない。
 3. deploy 時に kernel が各 primitive の `publish` / `compute.<name>.consume`
    を解決し、consumer が要求した env だけを inject する（全 group 自動注入は
@@ -531,8 +532,9 @@ control-plane runtime worker (`apps/control/wrangler.worker.toml`) は
 dev 環境では `POST /internal/scheduled?cron={form}` を loopback / cluster
 hostname から叩くと同じ family 判定で HTTP 互換の maintenance job を実行できる
 (`/internal/scheduled` endpoint)。`cron=* * * * *` は quarter hour / hourly の両
-family をまとめて実行する。workflow artifact GC は Cloudflare `scheduled()`
-handler の hourly job として実行する。
+family をまとめて実行する。workflow artifact GC は shared hourly family job と
+して実装されており、Cloudflare `scheduled()` handler と `/internal/scheduled`
+の両方から実行される。
 
 ## DB migration
 

@@ -8,20 +8,20 @@
  * and eliminates the need for binary search to find zlib frame boundaries.
  */
 
-import type { R2Bucket } from '../../../../shared/types/bindings.ts';
-import { inflateSync } from 'fflate';
-import { concatBytes } from '../core/sha1.ts';
-import { putRawObject, getRawObject } from '../core/object-store.ts';
-import { decodeObjectHeader } from '../core/object.ts';
-import { bytesToHex } from '../../../../shared/utils/encoding-utils.ts';
+import type { R2Bucket } from "../../../../shared/types/bindings.ts";
+import { inflateSync } from "fflate";
+import { concatBytes } from "../core/sha1.ts";
+import { getRawObject, putRawObject } from "../core/object-store.ts";
+import { decodeObjectHeader } from "../core/object.ts";
+import { bytesToHex } from "../../../../shared/utils/encoding-utils.ts";
 
 const TEXT_ENCODER = new TextEncoder();
 
 const TYPE_NAMES: Record<number, string> = {
-  1: 'commit',
-  2: 'tree',
-  3: 'blob',
-  4: 'tag',
+  1: "commit",
+  2: "tree",
+  3: "blob",
+  4: "tag",
 };
 
 // OBJ_OFS_DELTA = 6, OBJ_REF_DELTA = 7
@@ -37,16 +37,19 @@ export interface PackfileReadLimits {
   maxPackfileBytes?: number;
 }
 
-
 function readUint32BE(data: Uint8Array, offset: number): number {
-  return (data[offset] << 24) | (data[offset + 1] << 16) | (data[offset + 2] << 8) | data[offset + 3];
+  return (data[offset] << 24) | (data[offset + 1] << 16) |
+    (data[offset + 2] << 8) | data[offset + 3];
 }
-
 
 /**
  * Apply a git delta instruction stream to a base object.
  */
-function applyDelta(base: Uint8Array, delta: Uint8Array, options: { maxResultSize?: number } = {}): Uint8Array {
+function applyDelta(
+  base: Uint8Array,
+  delta: Uint8Array,
+  options: { maxResultSize?: number } = {},
+): Uint8Array {
   let offset = 0;
 
   // Read base size (VLE)
@@ -68,7 +71,9 @@ function applyDelta(base: Uint8Array, delta: Uint8Array, options: { maxResultSiz
     shift += 7;
   } while (byte & 0x80);
 
-  if (options.maxResultSize !== undefined && resultSize > options.maxResultSize) {
+  if (
+    options.maxResultSize !== undefined && resultSize > options.maxResultSize
+  ) {
     throw new Error(`Delta result too large: ${resultSize}`);
   }
 
@@ -94,7 +99,10 @@ function applyDelta(base: Uint8Array, delta: Uint8Array, options: { maxResultSiz
 
       if (copySize === 0) copySize = 0x10000;
 
-      result.set(base.subarray(copyOffset, copyOffset + copySize), resultOffset);
+      result.set(
+        base.subarray(copyOffset, copyOffset + copySize),
+        resultOffset,
+      );
       resultOffset += copySize;
     } else if (cmd > 0) {
       // Insert literal data
@@ -102,7 +110,7 @@ function applyDelta(base: Uint8Array, delta: Uint8Array, options: { maxResultSiz
       resultOffset += cmd;
       offset += cmd;
     } else {
-      throw new Error('Invalid delta instruction: 0x00');
+      throw new Error("Invalid delta instruction: 0x00");
     }
   }
 
@@ -121,12 +129,17 @@ export async function readPackfileAsync(
 ): Promise<string[]> {
   let offset = 0;
 
-  if (limits.maxPackfileBytes !== undefined && data.length > limits.maxPackfileBytes) {
-    throw new Error(`Packfile size ${data.length} exceeds limit of ${limits.maxPackfileBytes}`);
+  if (
+    limits.maxPackfileBytes !== undefined &&
+    data.length > limits.maxPackfileBytes
+  ) {
+    throw new Error(
+      `Packfile size ${data.length} exceeds limit of ${limits.maxPackfileBytes}`,
+    );
   }
 
   const sig = String.fromCharCode(data[0], data[1], data[2], data[3]);
-  if (sig !== 'PACK') throw new Error('Invalid packfile signature');
+  if (sig !== "PACK") throw new Error("Invalid packfile signature");
   offset += 4;
 
   const _version = readUint32BE(data, offset);
@@ -135,19 +148,34 @@ export async function readPackfileAsync(
   const numObjects = readUint32BE(data, offset);
   offset += 4;
 
-  if (limits.maxObjectCount !== undefined && numObjects > limits.maxObjectCount) {
-    throw new Error(`Pack object count ${numObjects} exceeds limit of ${limits.maxObjectCount}`);
+  if (
+    limits.maxObjectCount !== undefined && numObjects > limits.maxObjectCount
+  ) {
+    throw new Error(
+      `Pack object count ${numObjects} exceeds limit of ${limits.maxObjectCount}`,
+    );
   }
 
   const storedShas: string[] = [];
-  const unpackedObjects = new Map<string, { type: string; content: Uint8Array; deltaDepth: number }>();
-  const unpackedObjectsByOffset = new Map<number, { type: string; content: Uint8Array; deltaDepth: number }>();
+  const unpackedObjects = new Map<
+    string,
+    { type: string; content: Uint8Array; deltaDepth: number }
+  >();
+  const unpackedObjectsByOffset = new Map<
+    number,
+    { type: string; content: Uint8Array; deltaDepth: number }
+  >();
   let totalInflated = 0;
 
   const addInflatedBytes = (size: number) => {
     totalInflated += size;
-    if (limits.maxInflatedTotal !== undefined && totalInflated > limits.maxInflatedTotal) {
-      throw new Error(`Inflated total ${totalInflated} exceeds limit of ${limits.maxInflatedTotal}`);
+    if (
+      limits.maxInflatedTotal !== undefined &&
+      totalInflated > limits.maxInflatedTotal
+    ) {
+      throw new Error(
+        `Inflated total ${totalInflated} exceeds limit of ${limits.maxInflatedTotal}`,
+      );
     }
   };
 
@@ -165,8 +193,12 @@ export async function readPackfileAsync(
       shift += 7;
     }
 
-    if (limits.maxObjectInflated !== undefined && size > limits.maxObjectInflated) {
-      throw new Error(`Object inflated size ${size} exceeds limit of ${limits.maxObjectInflated}`);
+    if (
+      limits.maxObjectInflated !== undefined && size > limits.maxObjectInflated
+    ) {
+      throw new Error(
+        `Object inflated size ${size} exceeds limit of ${limits.maxObjectInflated}`,
+      );
     }
 
     let baseSha: string | undefined;
@@ -201,39 +233,59 @@ export async function readPackfileAsync(
       const parsed = { type: typeName, content, deltaDepth: 0 };
       unpackedObjects.set(sha, parsed);
       unpackedObjectsByOffset.set(objectOffset, parsed);
-    } else if ((typeNum === OBJ_REF_DELTA && baseSha) || typeNum === OBJ_OFS_DELTA) {
+    } else if (
+      (typeNum === OBJ_REF_DELTA && baseSha) || typeNum === OBJ_OFS_DELTA
+    ) {
       let baseObj = baseSha ? unpackedObjects.get(baseSha) : undefined;
       if (!baseObj && baseOffset !== undefined) {
         baseObj = unpackedObjectsByOffset.get(baseOffset);
       }
       if (!baseObj) {
         if (baseOffset !== undefined) {
-          throw new Error(`Base object not found for OFS_DELTA at offset ${baseOffset}`);
+          throw new Error(
+            `Base object not found for OFS_DELTA at offset ${baseOffset}`,
+          );
         }
         if (!baseSha) {
-          throw new Error('Base object not found for REF_DELTA');
+          throw new Error("Base object not found for REF_DELTA");
         }
         const rawBase = await getRawObject(bucket, baseSha);
-        if (!rawBase) throw new Error(`Base object not found for REF_DELTA: ${baseSha}`);
+        if (!rawBase) {
+          throw new Error(`Base object not found for REF_DELTA: ${baseSha}`);
+        }
         const decoded = decodeObjectHeader(rawBase);
         const typeEnd = rawBase.indexOf(0x20);
         const typeStr = new TextDecoder().decode(rawBase.subarray(0, typeEnd));
-        baseObj = { type: typeStr, content: rawBase.subarray(decoded.contentOffset), deltaDepth: 0 };
+        baseObj = {
+          type: typeStr,
+          content: rawBase.subarray(decoded.contentOffset),
+          deltaDepth: 0,
+        };
       }
 
       const deltaDepth = baseObj.deltaDepth + 1;
-      if (limits.maxDeltaChainDepth !== undefined && deltaDepth > limits.maxDeltaChainDepth) {
+      if (
+        limits.maxDeltaChainDepth !== undefined &&
+        deltaDepth > limits.maxDeltaChainDepth
+      ) {
         throw new Error(`Delta chain depth exceeds limit: ${deltaDepth}`);
       }
 
       const resolved = applyDelta(baseObj.content, content, {
         maxResultSize: limits.maxDeltaResultInflated,
       });
-      if (limits.maxObjectInflated !== undefined && resolved.length > limits.maxObjectInflated) {
-        throw new Error(`Resolved object inflated size exceeds limit: ${resolved.length}`);
+      if (
+        limits.maxObjectInflated !== undefined &&
+        resolved.length > limits.maxObjectInflated
+      ) {
+        throw new Error(
+          `Resolved object inflated size exceeds limit: ${resolved.length}`,
+        );
       }
       addInflatedBytes(resolved.length);
-      const header = TEXT_ENCODER.encode(`${baseObj.type} ${resolved.length}\0`);
+      const header = TEXT_ENCODER.encode(
+        `${baseObj.type} ${resolved.length}\0`,
+      );
       const raw = concatBytes(header, resolved);
       const sha = await putRawObject(bucket, raw);
       storedShas.push(sha);
@@ -284,7 +336,7 @@ function inflateSyncWithConsumed(
   // DOES track consumed bytes via the .p property (position in input).
 
   // Use fflate Inflate class for consumed-byte tracking
-  const { Inflate } = require('fflate') as typeof import('fflate');
+  const { Inflate } = require("fflate") as typeof import("fflate");
   const outputChunks: Uint8Array[] = [];
   let totalOutput = 0;
 
@@ -302,7 +354,9 @@ function inflateSyncWithConsumed(
   } catch {
     // If raw inflate fails, the data may have a zlib header.
     // fflate's inflateSync handles this automatically.
-    const result = inflateSync(compressed, { out: new Uint8Array(expectedSize) });
+    const result = inflateSync(compressed, {
+      out: new Uint8Array(expectedSize),
+    });
     // For consumed bytes estimation with inflateSync, we need to find
     // where the compressed data ends. Since inflateSync doesn't report this,
     // use a binary search as fallback (but much faster since inflate is sync).

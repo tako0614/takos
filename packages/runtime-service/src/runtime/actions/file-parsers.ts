@@ -7,7 +7,7 @@
  * Supports both `KEY=VALUE` and heredoc `KEY<<DELIMITER` formats.
  */
 export function parseKeyValueFile(content: string): Record<string, string> {
-  const result: Record<string, string> = {};
+  const entries: [string, string][] = [];
   const lines = content.replace(/\r\n/g, "\n").split("\n");
 
   for (let i = 0; i < lines.length; i++) {
@@ -24,7 +24,7 @@ export function parseKeyValueFile(content: string): Record<string, string> {
         valueLines.push(lines[i]);
         i++;
       }
-      result[name] = valueLines.join("\n");
+      entries.push([name, valueLines.join("\n")]);
       continue;
     }
 
@@ -32,10 +32,10 @@ export function parseKeyValueFile(content: string): Record<string, string> {
     if (eqIndex === -1) continue;
     const name = line.slice(0, eqIndex);
     const value = line.slice(eqIndex + 1);
-    result[name] = value;
+    entries.push([name, value]);
   }
 
-  return result;
+  return Object.fromEntries(entries);
 }
 
 /**

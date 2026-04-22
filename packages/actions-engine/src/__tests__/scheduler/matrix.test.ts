@@ -3,10 +3,7 @@ import { assert, assertEquals } from "jsr:@std/assert";
 import { createBaseContext } from "../../context.ts";
 import { createExecutionPlan, JobScheduler } from "../../scheduler/job.ts";
 import { expandMatrix } from "../../scheduler/matrix.ts";
-import {
-  type ShellExecutor,
-  StepRunner,
-} from "../../scheduler/step.ts";
+import { type ShellExecutor, StepRunner } from "../../scheduler/step.ts";
 import type {
   ExecutionContext,
   Step,
@@ -86,7 +83,8 @@ Deno.test("expandMatrix - applies include entries that extend existing combinati
 
   assertEquals(expansions.length, 4);
   const matched = expansions.find(
-    (entry) => entry.matrix?.os === "ubuntu-latest" && entry.matrix?.node === 20,
+    (entry) =>
+      entry.matrix?.os === "ubuntu-latest" && entry.matrix?.node === 20,
   );
   assert(matched);
   assertEquals(matched.matrix?.experimental, true);

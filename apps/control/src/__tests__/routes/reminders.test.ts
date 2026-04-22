@@ -109,7 +109,10 @@ Deno.test("reminders routes - GET /api/spaces/:spaceId/reminders - returns remin
   assertEquals(json.reminders.length, 1);
   assertEquals(mocks.listReminders.calls[0]?.args[0], env.DB);
   assertEquals(mocks.listReminders.calls[0]?.args[1], "ws-1");
-  assertObjectMatch(mocks.listReminders.calls[0]?.args[2] as Record<string, unknown>, { limit: 50 });
+  assertObjectMatch(
+    mocks.listReminders.calls[0]?.args[2] as Record<string, unknown>,
+    { limit: 50 },
+  );
 });
 Deno.test("reminders routes - GET /api/spaces/:spaceId/reminders - returns error when workspace access is denied", async () => {
   /* mocks cleared (no-op in Deno) */ void 0;
@@ -155,7 +158,10 @@ Deno.test("reminders routes - GET /api/spaces/:spaceId/reminders - passes status
 
   assertEquals(mocks.listReminders.calls[0]?.args[0], env.DB);
   assertEquals(mocks.listReminders.calls[0]?.args[1], "ws-1");
-  const listCall = mocks.listReminders.calls[0]?.args[2] as Record<string, unknown>;
+  const listCall = mocks.listReminders.calls[0]?.args[2] as Record<
+    string,
+    unknown
+  >;
   assertEquals(listCall.status, "triggered");
   assertEquals(listCall.limit, 10);
 });
@@ -256,11 +262,28 @@ Deno.test("reminders routes - POST /api/spaces/:spaceId/reminders - creates a re
 
   assertEquals(res.status, 201);
   assertEquals(mocks.createReminder.calls[0]?.args[0], env.DB);
-  assertEquals((mocks.createReminder.calls[0]?.args[1] as Record<string, unknown>).spaceId, "ws-1");
-  assertEquals((mocks.createReminder.calls[0]?.args[1] as Record<string, unknown>).userId, "user-1");
-  assertEquals((mocks.createReminder.calls[0]?.args[1] as Record<string, unknown>).content, "Deploy v2");
-  assertEquals((mocks.createReminder.calls[0]?.args[1] as Record<string, unknown>).triggerType, "time");
-  assertEquals((mocks.createReminder.calls[0]?.args[1] as Record<string, unknown>).priority, undefined);
+  assertEquals(
+    (mocks.createReminder.calls[0]?.args[1] as Record<string, unknown>).spaceId,
+    "ws-1",
+  );
+  assertEquals(
+    (mocks.createReminder.calls[0]?.args[1] as Record<string, unknown>).userId,
+    "user-1",
+  );
+  assertEquals(
+    (mocks.createReminder.calls[0]?.args[1] as Record<string, unknown>).content,
+    "Deploy v2",
+  );
+  assertEquals(
+    (mocks.createReminder.calls[0]?.args[1] as Record<string, unknown>)
+      .triggerType,
+    "time",
+  );
+  assertEquals(
+    (mocks.createReminder.calls[0]?.args[1] as Record<string, unknown>)
+      .priority,
+    undefined,
+  );
 });
 Deno.test("reminders routes - POST /api/spaces/:spaceId/reminders - rejects empty content", async () => {
   /* mocks cleared (no-op in Deno) */ void 0;
@@ -351,7 +374,10 @@ Deno.test("reminders routes - PATCH /api/reminders/:id - updates a reminder", as
   assertEquals(res.status, 200);
   assertEquals(mocks.updateReminder.calls[0]?.args[0], env.DB);
   assertEquals(mocks.updateReminder.calls[0]?.args[1], "rem-1");
-  assertObjectMatch(mocks.updateReminder.calls[0]?.args[2] as Record<string, unknown>, { content: "Updated content" });
+  assertObjectMatch(
+    mocks.updateReminder.calls[0]?.args[2] as Record<string, unknown>,
+    { content: "Updated content" },
+  );
 });
 Deno.test("reminders routes - PATCH /api/reminders/:id - returns 404 when reminder not found", async () => {
   /* mocks cleared (no-op in Deno) */ void 0;

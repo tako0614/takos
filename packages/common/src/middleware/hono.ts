@@ -6,26 +6,26 @@
  * - 一貫したエラーハンドリング
  */
 
-import type { Context, Next, Env, ErrorHandler } from 'hono';
+import type { Context, Env, ErrorHandler, Next } from "hono";
 import {
-  verifyServiceToken,
   type ServiceTokenPayloadWithClaims,
-} from '../jwt.ts';
+  verifyServiceToken,
+} from "../jwt.ts";
 
 export type { ServiceTokenPayloadWithClaims };
 import {
+  type AppError,
   AuthenticationError,
+  type ErrorCode,
   ErrorCodes,
+  type ErrorResponse,
   InternalError,
   isAppError,
   logError,
   NotFoundError,
   RateLimitError,
   ServiceUnavailableError,
-  type AppError,
-  type ErrorCode,
-  type ErrorResponse,
-} from '../errors.ts';
+} from "../errors.ts";
 
 // =============================================================================
 // Hono 用コンテキスト変数の型定義
@@ -44,7 +44,7 @@ import {
 export interface ServiceTokenEnv extends Env {
   Variables: {
     serviceToken: ServiceTokenPayloadWithClaims;
-    serviceAuthMethod: 'jwt';
+    serviceAuthMethod: "jwt";
   };
 }
 
@@ -77,9 +77,9 @@ export interface ServiceTokenConfig {
  * 分離しているため、ロジック変更時は両方更新すること。
  */
 export function getServiceTokenFromHeader(c: Context): string | null {
-  const authHeader = c.req.header('Authorization');
-  if (authHeader?.startsWith('Bearer ')) {
-    return authHeader.slice('Bearer '.length).trim();
+  const authHeader = c.req.header("Authorization");
+  if (authHeader?.startsWith("Bearer ")) {
+    return authHeader.slice("Bearer ".length).trim();
   }
   return null;
 }
@@ -88,7 +88,7 @@ export function getServiceTokenFromHeader(c: Context): string | null {
  * トークンが JWT 形式（`.` で3分割）かどうかを確認する
  */
 function isJwtFormat(token: string): boolean {
-  const parts = token.split('.');
+  const parts = token.split(".");
   return parts.length === 3;
 }
 
@@ -114,7 +114,7 @@ export function createServiceTokenMiddleware(
     jwtPublicKey,
     expectedIssuer,
     expectedAudience,
-    skipPaths = ['/health'],
+    skipPaths = ["/health"],
     clockToleranceSeconds = 30,
   } = config;
 
@@ -127,24 +127,26 @@ export function createServiceTokenMiddleware(
     }
 
     if (!jwtPublicKey) {
-      const error = new ServiceUnavailableError('Service token not configured');
+      const error = new ServiceUnavailableError("Service token not configured");
       return c.json(error.toResponse(), error.statusCode as 503);
     }
 
     if (!expectedIssuer || !expectedAudience) {
-      const error = new ServiceUnavailableError('JWT verification requires expectedIssuer and expectedAudience');
+      const error = new ServiceUnavailableError(
+        "JWT verification requires expectedIssuer and expectedAudience",
+      );
       return c.json(error.toResponse(), error.statusCode as 503);
     }
 
     // リクエストからトークンを抽出
     const token = getServiceTokenFromHeader(c);
     if (!token) {
-      const error = new AuthenticationError('Authorization token is required');
+      const error = new AuthenticationError("Authorization token is required");
       return c.json(error.toResponse(), error.statusCode as 401);
     }
 
     if (!isJwtFormat(token)) {
-      const error = new AuthenticationError('Service token must be a JWT');
+      const error = new AuthenticationError("Service token must be a JWT");
       return c.json(error.toResponse(), error.statusCode as 401);
     }
 
@@ -157,13 +159,13 @@ export function createServiceTokenMiddleware(
     });
 
     if (result.valid && result.payload) {
-      c.set('serviceToken', result.payload);
-      c.set('serviceAuthMethod', 'jwt' as const);
+      c.set("serviceToken", result.payload);
+      c.set("serviceAuthMethod", "jwt" as const);
       await next();
       return;
     }
 
-    const error = new AuthenticationError(result.error || 'Invalid JWT token');
+    const error = new AuthenticationError(result.error || "Invalid JWT token");
     return c.json(error.toResponse(), error.statusCode as 401);
   };
 }
@@ -213,9 +215,9 @@ export function createErrorHandler(
       logger(err, {
         path,
         method: c.req.method,
-        requestId: c.req.header('x-request-id'),
+        requestId: c.req.header("x-request-id"),
       });
-      appError = new InternalError('An unexpected error occurred');
+      appError = new InternalError("An unexpected error occurred");
     }
 
     // レスポンスボディを構築
@@ -228,7 +230,7 @@ export function createErrorHandler(
 
     // レート制限時のレスポンスヘッダを設定
     if (appError instanceof RateLimitError && appError.retryAfter) {
-      c.header('Retry-After', String(appError.retryAfter));
+      c.header("Retry-After", String(appError.retryAfter));
     }
 
     return c.json(response, appError.statusCode as 500);
@@ -248,7 +250,7 @@ export function createErrorHandler(
  * ```
  */
 export function notFoundHandler(c: Context): Response {
-  const error = new NotFoundError('Route');
+  const error = new NotFoundError("Route");
   return c.json(error.toResponse(), 404);
 }
 
@@ -259,7 +261,7 @@ export function notFoundHandler(c: Context): Response {
 function buildErrorBody(
   message: string,
   code: ErrorCode,
-  details?: unknown
+  details?: unknown,
 ): ErrorResponse {
   return {
     error: {
@@ -275,8 +277,8 @@ function buildErrorBody(
  */
 export function badRequest(
   c: Context,
-  message = 'Bad request',
-  details?: unknown
+  message = "Bad request",
+  details?: unknown,
 ): Response {
   return c.json(buildErrorBody(message, ErrorCodes.BAD_REQUEST, details), 400);
 }
@@ -286,8 +288,8 @@ export function badRequest(
  */
 export function notFound(
   c: Context,
-  message = 'Not found',
-  details?: unknown
+  message = "Not found",
+  details?: unknown,
 ): Response {
   return c.json(buildErrorBody(message, ErrorCodes.NOT_FOUND, details), 404);
 }
@@ -297,7 +299,7 @@ export function notFound(
  */
 export function forbidden(
   c: Context,
-  message = 'Access denied',
+  message = "Access denied",
   details?: unknown,
 ): Response {
   return c.json(buildErrorBody(message, ErrorCodes.FORBIDDEN, details), 403);
@@ -308,8 +310,11 @@ export function forbidden(
  */
 export function internalError(
   c: Context,
-  message = 'Internal server error',
-  details?: unknown
+  message = "Internal server error",
+  details?: unknown,
 ): Response {
-  return c.json(buildErrorBody(message, ErrorCodes.INTERNAL_ERROR, details), 500);
+  return c.json(
+    buildErrorBody(message, ErrorCodes.INTERNAL_ERROR, details),
+    500,
+  );
 }

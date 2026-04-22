@@ -3,7 +3,8 @@
 ::: tip Internal implementation このページは kernel の internal 実装を説明する。
 public contract ではない。実装は変更される可能性がある。public contract は
 [manifest spec](/reference/manifest-spec) と [API reference](/reference/api)
-を参照。:::
+を参照。
+:::
 
 Takos は AI によるソフトウェア民主化基盤。kernel は Agent / Chat, Git, Storage,
 Store, Auth を統合した単一のサービス。これらは kernel features であり、group
@@ -83,12 +84,13 @@ object-store / queue などの resource API / runtime binding は publish catalo
 
 ### Default app distribution
 
-default app distribution の初期セットは以下の 3 つ。新規 space の bootstrap で
+default app distribution の初期セットは以下の 4 つ。新規 space の bootstrap で
 preinstall できるが、operator は別の app set に差し替えられる:
 
 - takos-docs
 - takos-excel
 - takos-slide
+- takos-computer
 
 default set に含まれても、primitive や group は特権化されない。
 

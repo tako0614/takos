@@ -42,7 +42,9 @@ Deno.test("namespace-map - applies namespace metadata to CUSTOM_TOOLS", () => {
   assertEquals(fileRead!.side_effects, false);
 });
 Deno.test("namespace-map - applies space file metadata correctly", () => {
-  const spaceFilesRead = CUSTOM_TOOLS.find((t) => t.name === "space_files_read");
+  const spaceFilesRead = CUSTOM_TOOLS.find((t) =>
+    t.name === "space_files_read"
+  );
   assert(spaceFilesRead !== undefined);
   assertEquals(spaceFilesRead!.namespace, "space.files");
   assertEquals(spaceFilesRead!.family, "space.files.ops");

@@ -1,25 +1,25 @@
 export {
-  type AiReviewResult,
   AiReviewError,
+  type AiReviewResult,
   buildPRDiffText,
   runAiReview,
-} from './ai-review.ts';
+} from "./ai-review.ts";
 
 export {
-  type Resolution,
-  type MergeResolutionParams,
-  type MergeResolutionSuccess,
-  type MergeResolutionFailure,
-  type MergeResolutionResult,
-  resolveConflictsAndMerge,
-  type DetailedConflict,
-  type ConflictCheckResult,
   checkConflicts,
   ConflictCheckError,
-} from './merge-resolution.ts';
+  type ConflictCheckResult,
+  type DetailedConflict,
+  type MergeResolutionFailure,
+  type MergeResolutionParams,
+  type MergeResolutionResult,
+  type MergeResolutionSuccess,
+  type Resolution,
+  resolveConflictsAndMerge,
+} from "./merge-resolution.ts";
 
 export {
-  type PullRequestEventDeps,
   createPullRequestEventTask,
   createPullRequestEventTaskFromAccess,
-} from './event-tasks.ts';
+  type PullRequestEventDeps,
+} from "./event-tasks.ts";

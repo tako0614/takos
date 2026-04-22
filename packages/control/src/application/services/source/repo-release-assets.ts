@@ -1,5 +1,5 @@
-import { safeJsonParseOrDefault } from '../../../shared/utils/index.ts';
-import { textDate } from '../../../shared/utils/db-guards.ts';
+import { safeJsonParseOrDefault } from "../../../shared/utils/index.ts";
+import { textDate } from "../../../shared/utils/db-guards.ts";
 
 export interface ReleaseAsset {
   id: string;
@@ -15,7 +15,7 @@ export interface ReleaseAsset {
     version: string;
     description?: string;
     icon?: string;
-    category?: 'app' | 'service' | 'library' | 'template' | 'social';
+    category?: "app" | "service" | "library" | "template" | "social";
     tags?: string[];
     dependencies?: Array<{ repo: string; version: string }>;
   };
@@ -36,12 +36,15 @@ type ReleaseAssetRow = {
 
 export function toReleaseAsset(row: ReleaseAssetRow): ReleaseAsset {
   const bundleMeta = row.bundleMetaJson
-    ? safeJsonParseOrDefault<ReleaseAsset['bundle_meta'] | undefined>(row.bundleMetaJson, undefined)
+    ? safeJsonParseOrDefault<ReleaseAsset["bundle_meta"] | undefined>(
+      row.bundleMetaJson,
+      undefined,
+    )
     : undefined;
   return {
     id: row.id,
     name: row.name,
-    content_type: row.contentType || 'application/octet-stream',
+    content_type: row.contentType || "application/octet-stream",
     size: row.sizeBytes ?? 0,
     r2_key: row.assetKey,
     download_count: row.downloadCount,

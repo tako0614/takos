@@ -48,6 +48,16 @@ spec:
       ports:
         - protocol: TCP
           port: {{ .Values.runtimeHost.port }}
+    {{- if .Values.minio.enabled }}
+    - to:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: minio
+              app.kubernetes.io/instance: {{ .Release.Name | quote }}
+      ports:
+        - protocol: TCP
+          port: 9000
+    {{- end }}
     {{- with .Values.networkPolicy.runtime.extraEgress }}
     {{- toYaml . | nindent 4 }}
     {{- end }}

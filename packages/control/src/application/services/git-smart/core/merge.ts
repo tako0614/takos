@@ -4,16 +4,19 @@
  * Adapted from git-store/merge.ts for native git format.
  */
 
-import type { R2Bucket } from '../../../../shared/types/bindings.ts';
-import type { MergeConflictType, MergeConflict } from '../git-objects.ts';
-import { buildTreeFromPaths, flattenTree } from './tree-ops.ts';
+import type { R2Bucket } from "../../../../shared/types/bindings.ts";
+import type { MergeConflict, MergeConflictType } from "../git-objects.ts";
+import { buildTreeFromPaths, flattenTree } from "./tree-ops.ts";
 
 interface TreeFileEntry {
   sha: string;
   mode: string;
 }
 
-function entriesEqual(a: TreeFileEntry | null, b: TreeFileEntry | null): boolean {
+function entriesEqual(
+  a: TreeFileEntry | null,
+  b: TreeFileEntry | null,
+): boolean {
   if (a === null && b === null) return true;
   if (a === null || b === null) return false;
   return a.sha === b.sha && a.mode === b.mode;
@@ -24,13 +27,15 @@ function classifyConflict(
   local: TreeFileEntry | null,
   upstream: TreeFileEntry | null,
 ): MergeConflictType {
-  if (base === null && local !== null && upstream !== null) return 'add-add';
+  if (base === null && local !== null && upstream !== null) return "add-add";
 
   const localDeleted = base !== null && local === null;
   const upstreamDeleted = base !== null && upstream === null;
-  if ((localDeleted && upstream !== null) || (upstreamDeleted && local !== null)) return 'delete-modify';
+  if (
+    (localDeleted && upstream !== null) || (upstreamDeleted && local !== null)
+  ) return "delete-modify";
 
-  return 'content';
+  return "content";
 }
 
 export async function mergeTrees3Way(
@@ -45,8 +50,10 @@ export async function mergeTrees3Way(
     flattenTree(bucket, upstreamTreeSha),
   ]);
 
-  const toMap = (files: Array<{ path: string; sha: string; mode: string }>): Map<string, TreeFileEntry> =>
-    new Map(files.map(f => [f.path, { sha: f.sha, mode: f.mode }]));
+  const toMap = (
+    files: Array<{ path: string; sha: string; mode: string }>,
+  ): Map<string, TreeFileEntry> =>
+    new Map(files.map((f) => [f.path, { sha: f.sha, mode: f.mode }]));
 
   const baseMap = toMap(baseFiles);
   const localMap = toMap(localFiles);
@@ -55,7 +62,11 @@ export async function mergeTrees3Way(
   const mergedMap = new Map<string, TreeFileEntry>();
   const conflicts: MergeConflict[] = [];
 
-  const allPaths = new Set([...baseMap.keys(), ...localMap.keys(), ...upstreamMap.keys()]);
+  const allPaths = new Set([
+    ...baseMap.keys(),
+    ...localMap.keys(),
+    ...upstreamMap.keys(),
+  ]);
 
   for (const path of allPaths) {
     const baseEntry = baseMap.get(path) || null;
@@ -85,7 +96,10 @@ export async function mergeTrees3Way(
       continue;
     }
 
-    conflicts.push({ path, type: classifyConflict(baseEntry, localEntry, upstreamEntry) });
+    conflicts.push({
+      path,
+      type: classifyConflict(baseEntry, localEntry, upstreamEntry),
+    });
   }
 
   if (conflicts.length > 0) {

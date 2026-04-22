@@ -1,8 +1,8 @@
 export {
-  createNodeWebEnv,
+  clearNodePlatformDataForTests,
   createNodeDispatchEnv,
+  createNodeWebEnv,
   disposeNodePlatformState,
   resetNodePlatformStateForTests,
-  clearNodePlatformDataForTests,
-} from './env-builder.ts';
-export type { DisposeOptions } from './env-builder.ts';
+} from "./env-builder.ts";
+export type { DisposeOptions } from "./env-builder.ts";

@@ -36,9 +36,9 @@ workload を実行せず、primitive の集合と、その集合に対する gro
 - 境界: group 所属は runtime の特権や resource の特別処理を意味しない
 
 manifest は group 専用ファイルではありません。manifest に書かれた primitive
-declaration を apply するとき、`--group` や API の `group_name` によって所属先
-group を指定できます。group を指定しない primitive は、同じ primitive API
-で個別に管理できます。
+declaration を apply するとき、既定では manifest の `name` が所属先 group
+名になります。`--group` や API の `group_name` は override として使います。
+group を指定しない primitive は、同じ primitive API で個別に管理できます。
 
 ## group の作成
 
@@ -49,16 +49,17 @@ group は明示的に作成できます。`takos deploy` / `takos install` で g
 takos deploy --env staging --space SPACE_ID --group my-app
 ```
 
-group 名は `--group` で明示指定します。manifest の `name` は display 名であり、
-group 名として暗黙解決されません。
+group 名は manifest の `name` から暗黙解決されます。`--group` は同じ manifest
+を別 group 名で展開したい場合にだけ指定します。
 
 ```bash
 takos deploy --env staging --space SPACE_ID --group my-custom-group
 ```
 
-::: info group 名は明示指定 `takos deploy` / `takos install` の group snapshot
-機能では `--group` が必須です。group なし primitive は個別 primitive API
-で管理します。 :::
+::: info `takos deploy` / `takos install` は group snapshot 機能を使います。
+manifest の `name` が group 名になり、`--group` は override です。group なし
+primitive は個別 primitive API で管理します。
+:::
 
 ## group の管理
 
@@ -87,7 +88,8 @@ takos group delete my-app --space SPACE_ID
 
 ::: danger group を削除すると、group inventory と group-scoped state
 が消えます。稼働中の workload がある場合は先に
-`takos uninstall GROUP_NAME --space SPACE_ID` で停止・削除してください。:::
+`takos uninstall GROUP_NAME --space SPACE_ID` で停止・削除してください。
+:::
 
 ## deploy / install と group の関係
 

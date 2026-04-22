@@ -115,4 +115,4 @@ export default {
 
 - MCP Server を公開したい → [MCP Server](/examples/mcp-server)
 - コンテナの詳細 → [Containers ガイド](/apps/containers)
-- 完全な構成例 → [Deploy Manifest リファレンス](/apps/manifest#完全な例)
+- 完全な構成例 → [Deploy Manifest リファレンス](/reference/manifest-spec)

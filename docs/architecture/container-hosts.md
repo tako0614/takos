@@ -138,7 +138,8 @@ index、RunNotifier DO では storage-backed dedupe key が重複 emit
 hash を key にする。`update-run-status` は明示的な idempotency key
 はないが、同一 terminal status / usage / output / error の replay では
 `completed_at` を更新しない。caller は retry する endpoint ごとの contract
-を前提に扱う。:::
+を前提に扱う。
+:::
 
 ## エラー envelope
 

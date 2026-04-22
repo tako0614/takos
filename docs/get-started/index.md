@@ -15,10 +15,13 @@ group を構成するときは `.takos/app.yml` と `.takos/workflows/`
 ### 1. CLI をインストール
 
 Takos CLI は `takos-cli/` repository が基準です。現時点では JSR package release
-flow は未整備のため、compiled binary か direct Deno 実行を使います。
+flow は未整備のため、compiled binary か direct Deno 実行を使います。開発用の
+ecosystem checkout では、`takos/` と同じ階層にある `takos-cli/` から install
+します。
 
 ```bash
-cd ../takos-cli
+# takos-ecosystem checkout root で実行
+cd takos-cli
 deno install -gA -n takos src/index.ts
 ```
 
@@ -86,7 +89,7 @@ jobs:
 ### 5. デプロイ
 
 ```bash
-takos deploy --env staging --space SPACE_ID --group my-app
+takos deploy --env staging --space SPACE_ID
 ```
 
 ステージング環境にデプロイされます。URL

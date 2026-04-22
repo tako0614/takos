@@ -30,7 +30,8 @@ export function parseIntEnv(
   defaultValue: number,
   options?: { min?: number; max?: number; warn?: WarnFn },
 ): number {
-  const raw = (typeof Deno !== 'undefined' ? Deno.env.get(name) : undefined)?.trim();
+  const raw = (typeof Deno !== "undefined" ? Deno.env.get(name) : undefined)
+    ?.trim();
   if (!raw) return defaultValue;
   return parseIntValue(name, raw, defaultValue, options);
 }
@@ -45,7 +46,8 @@ export function parseIntEnvRequired(
   name: string,
   options?: { min?: number; max?: number },
 ): number {
-  const raw = (typeof Deno !== 'undefined' ? Deno.env.get(name) : undefined)?.trim();
+  const raw = (typeof Deno !== "undefined" ? Deno.env.get(name) : undefined)
+    ?.trim();
   if (!raw) {
     throw new Error(`Required environment variable ${name} is not set`);
   }
@@ -54,10 +56,14 @@ export function parseIntEnvRequired(
     throw new Error(`Invalid integer for environment variable ${name}: ${raw}`);
   }
   if (options?.min != null && parsed < options.min) {
-    throw new Error(`Environment variable ${name} value ${parsed} is below minimum ${options.min}`);
+    throw new Error(
+      `Environment variable ${name} value ${parsed} is below minimum ${options.min}`,
+    );
   }
   if (options?.max != null && parsed > options.max) {
-    throw new Error(`Environment variable ${name} value ${parsed} exceeds maximum ${options.max}`);
+    throw new Error(
+      `Environment variable ${name} value ${parsed} exceeds maximum ${options.max}`,
+    );
   }
   return parsed;
 }
@@ -78,21 +84,27 @@ export function parseIntValue(
   options?: { min?: number; max?: number; warn?: WarnFn },
 ): number {
   const warn = options?.warn ?? defaultWarn;
-  if (!raw || raw.trim() === '') return defaultValue;
+  if (!raw || raw.trim() === "") return defaultValue;
 
   const trimmed = raw.trim();
   const parsed = Number.parseInt(trimmed, 10);
 
   if (!Number.isFinite(parsed)) {
-    warn(`Invalid integer for ${name}: "${trimmed}", using default ${defaultValue}`);
+    warn(
+      `Invalid integer for ${name}: "${trimmed}", using default ${defaultValue}`,
+    );
     return defaultValue;
   }
   if (options?.min != null && parsed < options.min) {
-    warn(`Value for ${name} (${parsed}) is below minimum ${options.min}, using default ${defaultValue}`);
+    warn(
+      `Value for ${name} (${parsed}) is below minimum ${options.min}, using default ${defaultValue}`,
+    );
     return defaultValue;
   }
   if (options?.max != null && parsed > options.max) {
-    warn(`Value for ${name} (${parsed}) exceeds maximum ${options.max}, using default ${defaultValue}`);
+    warn(
+      `Value for ${name} (${parsed}) exceeds maximum ${options.max}, using default ${defaultValue}`,
+    );
     return defaultValue;
   }
   return parsed;
@@ -114,7 +126,8 @@ export function parseFloatEnv(
   defaultValue: number,
   options?: { min?: number; max?: number; warn?: WarnFn },
 ): number {
-  const raw = (typeof Deno !== 'undefined' ? Deno.env.get(name) : undefined)?.trim();
+  const raw = (typeof Deno !== "undefined" ? Deno.env.get(name) : undefined)
+    ?.trim();
   if (!raw) return defaultValue;
   return parseFloatValue(name, raw, defaultValue, options);
 }
@@ -132,21 +145,27 @@ export function parseFloatValue(
   options?: { min?: number; max?: number; warn?: WarnFn },
 ): number {
   const warn = options?.warn ?? defaultWarn;
-  if (!raw || raw.trim() === '') return defaultValue;
+  if (!raw || raw.trim() === "") return defaultValue;
 
   const trimmed = raw.trim();
   const parsed = Number.parseFloat(trimmed);
 
   if (!Number.isFinite(parsed)) {
-    warn(`Invalid number for ${name}: "${trimmed}", using default ${defaultValue}`);
+    warn(
+      `Invalid number for ${name}: "${trimmed}", using default ${defaultValue}`,
+    );
     return defaultValue;
   }
   if (options?.min != null && parsed < options.min) {
-    warn(`Value for ${name} (${parsed}) is below minimum ${options.min}, using default ${defaultValue}`);
+    warn(
+      `Value for ${name} (${parsed}) is below minimum ${options.min}, using default ${defaultValue}`,
+    );
     return defaultValue;
   }
   if (options?.max != null && parsed > options.max) {
-    warn(`Value for ${name} (${parsed}) exceeds maximum ${options.max}, using default ${defaultValue}`);
+    warn(
+      `Value for ${name} (${parsed}) exceeds maximum ${options.max}, using default ${defaultValue}`,
+    );
     return defaultValue;
   }
   return parsed;

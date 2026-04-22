@@ -1,6 +1,10 @@
-import type { Step } from 'takos-actions-engine';
-import type { StepExecutionContext, StepExecutionResult, RuntimeStepResponse } from './workflow-types.ts';
-import { runtimeJson } from './workflow-runtime-client.ts';
+import type { Step } from "takos-actions-engine";
+import type {
+  RuntimeStepResponse,
+  StepExecutionContext,
+  StepExecutionResult,
+} from "./workflow-types.ts";
+import { runtimeJson } from "./workflow-runtime-client.ts";
 
 // ---------------------------------------------------------------------------
 // Step execution
@@ -8,12 +12,12 @@ import { runtimeJson } from './workflow-runtime-client.ts';
 
 export async function executeStep(
   step: Step,
-  context: StepExecutionContext
+  context: StepExecutionContext,
 ): Promise<StepExecutionResult> {
   if (!step.uses && !step.run) {
     return {
       success: true,
-      stdout: 'No action to perform',
+      stdout: "No action to perform",
       outputs: {},
     };
   }
@@ -21,7 +25,7 @@ export async function executeStep(
   if (!context.env.RUNTIME_HOST) {
     return {
       success: false,
-      error: 'RUNTIME_HOST binding is required',
+      error: "RUNTIME_HOST binding is required",
     };
   }
 
@@ -30,7 +34,7 @@ export async function executeStep(
 
 async function executeViaRuntime(
   step: Step,
-  context: StepExecutionContext
+  context: StepExecutionContext,
 ): Promise<StepExecutionResult> {
   const result = await runtimeJson<RuntimeStepResponse>(
     context.env,
@@ -43,20 +47,20 @@ async function executeViaRuntime(
       env: step.env,
       name: step.name,
       shell: context.shell,
-      'working-directory': context.workingDirectory,
-      'continue-on-error': step['continue-on-error'],
-      'timeout-minutes': step['timeout-minutes'],
-    }
+      "working-directory": context.workingDirectory,
+      "continue-on-error": step["continue-on-error"],
+      "timeout-minutes": step["timeout-minutes"],
+    },
   );
 
-  const success = result.conclusion !== 'failure';
+  const success = result.conclusion !== "failure";
 
   return {
     success,
     exitCode: result.exitCode,
     stdout: result.stdout,
     stderr: result.stderr,
-    error: success ? undefined : result.stderr || 'Step failed',
+    error: success ? undefined : result.stderr || "Step failed",
     outputs: result.outputs || {},
   };
 }

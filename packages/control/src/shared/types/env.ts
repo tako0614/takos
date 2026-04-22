@@ -129,6 +129,11 @@ export interface Env
   GOOGLE_CLIENT_ID: string;
   GOOGLE_CLIENT_SECRET: string;
   ADMIN_DOMAIN: string;
+  /**
+   * Optional operator-controlled origin for server-to-server calls from tenant
+   * workers back into Takos. ADMIN_DOMAIN remains the public OAuth issuer.
+   */
+  TAKOS_INTERNAL_API_URL?: string;
   TENANT_BASE_DOMAIN: string;
   PLATFORM_PRIVATE_KEY: string;
   PLATFORM_PUBLIC_KEY: string;
@@ -138,6 +143,11 @@ export interface Env
   CF_API_TOKEN?: string;
   WFP_DISPATCH_NAMESPACE?: string;
   CF_ZONE_ID?: string;
+  /**
+   * Custom domain TLS provider for operator-managed hostnames.
+   * Defaults to "cloudflare" when CF_ZONE_ID is present, otherwise "none".
+   */
+  TAKOS_CUSTOM_DOMAIN_TLS_PROVIDER?: string;
   OCI_ORCHESTRATOR_URL?: string;
   OCI_ORCHESTRATOR_TOKEN?: string;
   AWS_REGION?: string;
@@ -185,7 +195,7 @@ export interface Env
   TAKOS_DEFAULT_APP_DISTRIBUTION_JSON?: string;
   /** Operator-replaceable default app repository list JSON; wins over DB config. */
   TAKOS_DEFAULT_APP_REPOSITORIES_JSON?: string;
-  /** Set to "false" to skip default docs/excel/slide preinstall on new spaces. */
+  /** Set to "false" to skip default app preinstall on new spaces. */
   TAKOS_DEFAULT_APPS_PREINSTALL?: string;
   /** Default git ref for preinstalled default app repositories. */
   TAKOS_DEFAULT_APP_REF?: string;
@@ -195,6 +205,7 @@ export interface Env
   TAKOS_DEFAULT_DOCS_APP_REPOSITORY_URL?: string;
   TAKOS_DEFAULT_EXCEL_APP_REPOSITORY_URL?: string;
   TAKOS_DEFAULT_SLIDE_APP_REPOSITORY_URL?: string;
+  TAKOS_DEFAULT_COMPUTER_APP_REPOSITORY_URL?: string;
   HOSTNAME_ROUTING: KvStoreBinding;
   ROLLOUT_HEALTH_KV?: KvStoreBinding;
   ROUTING_STORE?: RoutingStore;

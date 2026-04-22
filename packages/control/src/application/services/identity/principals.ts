@@ -6,20 +6,30 @@
  * call-sites compiling by delegating to the `account` table.
  */
 
-import type { D1Database } from '../../../shared/types/bindings.ts';
-import type { Principal, PrincipalKind } from '../../../shared/types/index.ts';
-import { getDb, accounts } from '../../../infra/db/index.ts';
-import { eq } from 'drizzle-orm';
-import { textDate } from '../../../shared/utils/db-guards.ts';
+import type { D1Database } from "../../../shared/types/bindings.ts";
+import type { Principal, PrincipalKind } from "../../../shared/types/index.ts";
+import { accounts, getDb } from "../../../infra/db/index.ts";
+import { eq } from "drizzle-orm";
+import { textDate } from "../../../shared/utils/db-guards.ts";
 
 export const principalsDeps = {
   getDb,
 };
 
-const KNOWN_PRINCIPAL_KINDS = new Set(['user', 'space_agent', 'service', 'system', 'tenant_worker']);
+const KNOWN_PRINCIPAL_KINDS = new Set([
+  "user",
+  "space_agent",
+  "service",
+  "system",
+  "tenant_worker",
+]);
 
-function normalizePrincipalType(type: string | null | undefined): PrincipalKind {
-  return KNOWN_PRINCIPAL_KINDS.has(type ?? '') ? (type as PrincipalKind) : 'service';
+function normalizePrincipalType(
+  type: string | null | undefined,
+): PrincipalKind {
+  return KNOWN_PRINCIPAL_KINDS.has(type ?? "")
+    ? (type as PrincipalKind)
+    : "service";
 }
 
 function accountToPrincipal(row: {
@@ -43,10 +53,12 @@ function accountToPrincipal(row: {
  */
 export async function resolveUserPrincipalId(
   db: D1Database,
-  userId: string
+  userId: string,
 ): Promise<string | null> {
   const drizzle = principalsDeps.getDb(db);
-  const row = await drizzle.select({ id: accounts.id }).from(accounts).where(eq(accounts.id, userId)).get();
+  const row = await drizzle.select({ id: accounts.id }).from(accounts).where(
+    eq(accounts.id, userId),
+  ).get();
   return row?.id || null;
 }
 
@@ -56,16 +68,17 @@ export async function resolveUserPrincipalId(
  */
 export async function resolveActorPrincipalId(
   db: D1Database,
-  actorId: string
+  actorId: string,
 ): Promise<string | null> {
   const drizzle = principalsDeps.getDb(db);
-  const account = await drizzle.select({ id: accounts.id }).from(accounts).where(eq(accounts.id, actorId)).get();
+  const account = await drizzle.select({ id: accounts.id }).from(accounts)
+    .where(eq(accounts.id, actorId)).get();
   return account?.id || null;
 }
 
 export async function getPrincipalById(
   db: D1Database,
-  principalId: string
+  principalId: string,
 ): Promise<Principal | null> {
   const drizzle = principalsDeps.getDb(db);
   const row = await drizzle.select({

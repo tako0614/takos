@@ -2,15 +2,18 @@
  * TOML parsing helpers for reading wrangler.toml configuration.
  */
 
-import * as fs from 'node:fs';
+import * as fs from "node:fs";
 
-import { WRANGLER_TOML_PATH } from './constants.ts';
-import { escapeRegExp } from './sql-utils.ts';
+import { WRANGLER_TOML_PATH } from "./constants.ts";
+import { escapeRegExp } from "./sql-utils.ts";
 
 export function parseTomlPrimitive(rawValue: string): string {
   const trimmed = rawValue.trim();
-  const noComment = trimmed.replace(/\s+#.*$/, '').trim();
-  if ((noComment.startsWith('"') && noComment.endsWith('"')) || (noComment.startsWith("'") && noComment.endsWith("'"))) {
+  const noComment = trimmed.replace(/\s+#.*$/, "").trim();
+  if (
+    (noComment.startsWith('"') && noComment.endsWith('"')) ||
+    (noComment.startsWith("'") && noComment.endsWith("'"))
+  ) {
     return noComment.slice(1, -1);
   }
   return noComment;
@@ -26,10 +29,15 @@ export function parseTomlKeyValueBlock(block: string): Record<string, string> {
   return parsed;
 }
 
-export function readTomlSection(text: string, sectionName: string): Record<string, string> | null {
+export function readTomlSection(
+  text: string,
+  sectionName: string,
+): Record<string, string> | null {
   const sectionRegex = new RegExp(
-    `^\\[${escapeRegExp(sectionName)}\\]\\s*\\n([\\s\\S]*?)(?=^\\[[^\\[]|^\\[\\[|(?![\\s\\S]))`,
-    'm'
+    `^\\[${
+      escapeRegExp(sectionName)
+    }\\]\\s*\\n([\\s\\S]*?)(?=^\\[[^\\[]|^\\[\\[|(?![\\s\\S]))`,
+    "m",
   );
   const section = text.match(sectionRegex);
   if (!section) {
@@ -38,10 +46,15 @@ export function readTomlSection(text: string, sectionName: string): Record<strin
   return parseTomlKeyValueBlock(section[1]);
 }
 
-export function readTomlArraySections(text: string, arraySectionName: string): Array<Record<string, string>> {
+export function readTomlArraySections(
+  text: string,
+  arraySectionName: string,
+): Array<Record<string, string>> {
   const arrayRegex = new RegExp(
-    `^\\[\\[${escapeRegExp(arraySectionName)}\\]\\]\\s*\\n([\\s\\S]*?)(?=^\\[\\[|^\\[[^\\[]|(?![\\s\\S]))`,
-    'gm'
+    `^\\[\\[${
+      escapeRegExp(arraySectionName)
+    }\\]\\]\\s*\\n([\\s\\S]*?)(?=^\\[\\[|^\\[[^\\[]|(?![\\s\\S]))`,
+    "gm",
   );
 
   const entries: Array<Record<string, string>> = [];
@@ -54,7 +67,7 @@ export function readTomlArraySections(text: string, arraySectionName: string): A
 
 export function readWranglerToml(): string | null {
   try {
-    return fs.readFileSync(WRANGLER_TOML_PATH, 'utf8');
+    return fs.readFileSync(WRANGLER_TOML_PATH, "utf8");
   } catch {
     return null;
   }

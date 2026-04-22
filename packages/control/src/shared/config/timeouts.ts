@@ -20,6 +20,12 @@ export const AGENT_TOOL_EXECUTION_TIMEOUT_MS = 300_000; // 5 min
 /** Timeout for the LangGraph-based agent execution path. */
 export const AGENT_LANGGRAPH_TIMEOUT_MS = 900_000; // 15 min
 
+/** Timeout for bootstrapping agent memory before model execution. */
+export const AGENT_MEMORY_BOOTSTRAP_TIMEOUT_MS = 10_000; // 10 sec
+
+/** Timeout for flushing agent memory during cleanup. */
+export const AGENT_MEMORY_FINALIZE_TIMEOUT_MS = 30_000; // 30 sec
+
 // ---------------------------------------------------------------------------
 // Cancellation
 // ---------------------------------------------------------------------------

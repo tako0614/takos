@@ -1,6 +1,6 @@
-import type { ArtifactType } from './artifacts.ts';
-import type { RunStatus, Run } from './runs.ts';
-import type { AgentTaskStatus, AgentTaskPriority } from './agent-tasks.ts';
+import type { ArtifactType } from "./artifacts.ts";
+import type { Run, RunStatus } from "./runs.ts";
+import type { AgentTaskPriority, AgentTaskStatus } from "./agent-tasks.ts";
 
 export interface ThreadHistoryArtifactSummary {
   id: string;

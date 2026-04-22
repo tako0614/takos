@@ -2,7 +2,11 @@ import { createSignal } from "solid-js";
 import { getErrorMessage } from "takos-common/errors";
 
 interface UseCreateSpaceFormOptions {
-  onCreate: (name: string, description: string) => Promise<void>;
+  onCreate: (
+    name: string,
+    description: string,
+    installDefaultApps: boolean,
+  ) => Promise<void>;
   nameRequiredMessage: string;
   failedToCreateMessage: string;
 }
@@ -14,6 +18,7 @@ export function useCreateSpaceForm({
 }: UseCreateSpaceFormOptions) {
   const [name, setName] = createSignal("");
   const [description, setDescription] = createSignal("");
+  const [installDefaultApps, setInstallDefaultApps] = createSignal(true);
   const [loading, setLoading] = createSignal(false);
   const [error, setError] = createSignal<string | null>(null);
 
@@ -22,6 +27,7 @@ export function useCreateSpaceForm({
   const resetForm = () => {
     setName("");
     setDescription("");
+    setInstallDefaultApps(true);
     setLoading(false);
     setError(null);
   };
@@ -38,7 +44,7 @@ export function useCreateSpaceForm({
     setLoading(true);
     setError(null);
     try {
-      await onCreate(name(), description());
+      await onCreate(name(), description(), installDefaultApps());
     } catch (err: unknown) {
       setError(getErrorMessage(err, failedToCreateMessage));
     } finally {
@@ -51,6 +57,8 @@ export function useCreateSpaceForm({
     setName,
     description,
     setDescription,
+    installDefaultApps,
+    setInstallDefaultApps,
     loading,
     error,
     clearError,

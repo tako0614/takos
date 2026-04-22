@@ -1,37 +1,47 @@
-import { Hono } from 'hono';
-import type { RuntimeEnv } from '../../types/hono.d.ts';
+import { Hono } from "hono";
+import type { RuntimeEnv } from "../../types/hono.d.ts";
 import {
   MAX_EXEC_COMMANDS,
   MAX_EXEC_FILE_BYTES,
   MAX_EXEC_FILES,
   MAX_EXEC_OUTPUTS,
   MAX_EXEC_TOTAL_BYTES,
-} from '../../shared/config.ts';
-import { writeAuditLog, type AuditEntry } from '../../utils/audit-log.ts';
-import { badRequest, forbidden, internalError, notFound } from 'takos-common/middleware/hono';
-import { ErrorCodes } from 'takos-common/errors';
-import { createLogger } from 'takos-common/logger';
-import { hasSpaceScopeMismatch, SPACE_SCOPE_MISMATCH_ERROR } from '../../middleware/space-scope.ts';
-import { validateRuntimeExecEnv } from '../../utils/sandbox-env.ts';
+} from "../../shared/config.ts";
+import { type AuditEntry, writeAuditLog } from "../../utils/audit-log.ts";
+import {
+  badRequest,
+  forbidden,
+  internalError,
+  notFound,
+} from "takos-common/middleware/hono";
+import { ErrorCodes } from "takos-common/errors";
+import { createLogger } from "takos-common/logger";
+import {
+  hasSpaceScopeMismatch,
+  SPACE_SCOPE_MISMATCH_ERROR,
+} from "../../middleware/space-scope.ts";
+import { validateRuntimeExecEnv } from "../../utils/sandbox-env.ts";
 
 import { Buffer } from "node:buffer";
 import {
+  ensureProcessCapacity,
   type ExecInput,
   getProcess,
   isSpaceConcurrencyExceeded,
-  ensureProcessCapacity,
-  sanitizeErrorMessage,
   runExec,
-} from '../../runtime/exec-runner.ts';
+  sanitizeErrorMessage,
+} from "../../runtime/exec-runner.ts";
 
-const logger = createLogger({ service: 'takos-runtime' });
+const logger = createLogger({ service: "takos-runtime" });
 
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
 
 function fireAuditLog(entry: AuditEntry): void {
-  void writeAuditLog(entry).catch((err: unknown) => logger.error('[audit] writeAuditLog failed', { error: err }));
+  void writeAuditLog(entry).catch((err: unknown) =>
+    logger.error("[audit] writeAuditLog failed", { error: err })
+  );
 }
 
 /**
@@ -39,7 +49,7 @@ function fireAuditLog(entry: AuditEntry): void {
  */
 function validateExecBody(body: ExecInput): string | null {
   if (!body.space_id || !body.commands || body.commands.length === 0) {
-    return 'Missing required fields: space_id, commands';
+    return "Missing required fields: space_id, commands";
   }
   if (body.commands.length > MAX_EXEC_COMMANDS) {
     return `Too many commands (max ${MAX_EXEC_COMMANDS})`;
@@ -53,13 +63,13 @@ function validateExecBody(body: ExecInput): string | null {
   if (body.files && body.files.length > 0) {
     let totalBytes = 0;
     for (const file of body.files) {
-      const bytes = Buffer.byteLength(file.content ?? '', 'utf-8');
+      const bytes = Buffer.byteLength(file.content ?? "", "utf-8");
       if (bytes > MAX_EXEC_FILE_BYTES) {
         return `File too large: ${file.path}`;
       }
       totalBytes += bytes;
       if (totalBytes > MAX_EXEC_TOTAL_BYTES) {
-        return 'Total file size exceeded';
+        return "Total file size exceeded";
       }
     }
   }
@@ -72,7 +82,7 @@ function validateExecBody(body: ExecInput): string | null {
 
 const app = new Hono<RuntimeEnv>();
 
-app.post('/exec', async (c) => {
+app.post("/exec", async (c) => {
   const execStartTime = Date.now();
   try {
     const body = await c.req.json() as ExecInput;
@@ -88,28 +98,45 @@ app.post('/exec', async (c) => {
 
     // Validate user-supplied environment variables
     if (body.env) {
-      const envValidation = validateRuntimeExecEnv(body.env as Record<string, string> | undefined);
+      const envValidation = validateRuntimeExecEnv(
+        body.env as Record<string, string> | undefined,
+      );
       if (envValidation.ok === false) {
         return badRequest(c, envValidation.error);
       }
     }
 
-    const auditBase: Omit<AuditEntry, 'timestamp' | 'status'> = {
-      event: 'exec',
+    const auditBase: Omit<AuditEntry, "timestamp" | "status"> = {
+      event: "exec",
       spaceId: body.space_id,
       commands: body.commands,
-      ip: c.req.header('x-forwarded-for') || 'unknown',
-      requestId: c.get('requestId'),
+      ip: c.req.header("x-forwarded-for") || "unknown",
+      requestId: c.get("requestId"),
     };
 
-    fireAuditLog({ ...auditBase, timestamp: new Date().toISOString(), status: 'started' });
+    fireAuditLog({
+      ...auditBase,
+      timestamp: new Date().toISOString(),
+      status: "started",
+    });
 
     if (isSpaceConcurrencyExceeded(body.space_id)) {
-      return c.json({ error: { code: ErrorCodes.RATE_LIMITED, message: 'Space concurrency limit reached (max concurrent executions)' } }, 429);
+      return c.json({
+        error: {
+          code: ErrorCodes.RATE_LIMITED,
+          message:
+            "Space concurrency limit reached (max concurrent executions)",
+        },
+      }, 429);
     }
 
     if (!ensureProcessCapacity()) {
-      return c.json({ error: { code: ErrorCodes.SERVICE_UNAVAILABLE, message: 'Server at capacity. Please try again later.' } }, 503);
+      return c.json({
+        error: {
+          code: ErrorCodes.SERVICE_UNAVAILABLE,
+          message: "Server at capacity. Please try again later.",
+        },
+      }, 503);
     }
 
     const result = await runExec(body);
@@ -119,22 +146,22 @@ app.post('/exec', async (c) => {
       timestamp: new Date().toISOString(),
       exitCode: result.exit_code,
       durationMs: Date.now() - execStartTime,
-      status: result.status === 'completed' ? 'completed' : 'failed',
+      status: result.status === "completed" ? "completed" : "failed",
       error: result.error,
     });
 
     return c.json(result);
   } catch (err) {
-    c.get('log')?.error('Exec error', { error: err });
+    c.get("log")?.error("Exec error", { error: err });
     return internalError(c, sanitizeErrorMessage(err));
   }
 });
 
-app.get('/status/:id', (c) => {
-  const proc = getProcess(c.req.param('id'));
+app.get("/status/:id", (c) => {
+  const proc = getProcess(c.req.param("id"));
 
   if (!proc) {
-    return notFound(c, 'Process not found');
+    return notFound(c, "Process not found");
   }
 
   return c.json({

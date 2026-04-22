@@ -1,6 +1,9 @@
-import { assertEquals, assertRejects } from "jsr:@std/assert";
+import { assertEquals, assertRejects, assertThrows } from "jsr:@std/assert";
 
-import { DeploymentService } from "../service.ts";
+import {
+  assertQueueConsumerBackendSupported,
+  DeploymentService,
+} from "../service.ts";
 import { deploymentStoreDeps } from "../store.ts";
 import type { DeploymentEnv } from "../models.ts";
 
@@ -41,4 +44,15 @@ Deno.test("DeploymentService.createDeployment fails fast when worker bundle stor
     deploymentStoreDeps.getDb = originalGetDb;
   }
   assertEquals(dbAccessed, false);
+});
+
+Deno.test("assertQueueConsumerBackendSupported rejects unsupported backends", () => {
+  assertThrows(
+    () =>
+      assertQueueConsumerBackendSupported("runtime-host", {
+        queue_consumers: [{ binding: "DELIVERY_QUEUE" }],
+      }),
+    Error,
+    "queue consumers require the workers-dispatch backend",
+  );
 });

@@ -1,4 +1,4 @@
-import { createSignal } from "solid-js";
+import { createMemo, createSignal } from "solid-js";
 import { Icons } from "../../lib/Icons.tsx";
 import { useI18n } from "../../store/i18n.ts";
 import { Modal } from "../../components/ui/Modal.tsx";
@@ -69,8 +69,9 @@ function SortDropdown(props: {
   buttonClassName?: string;
 }) {
   const { t } = useI18n();
-  const currentSortOpt = SORT_OPTIONS.find((o) => o.value === props.sort) ??
-    SORT_OPTIONS[0];
+  const currentSortOpt = createMemo(() =>
+    SORT_OPTIONS.find((o) => o.value === props.sort) ?? SORT_OPTIONS[0]
+  );
 
   return (
     <div class="relative flex-shrink-0">
@@ -80,7 +81,7 @@ function SortDropdown(props: {
         class={props.buttonClassName ??
           "flex items-center gap-1 px-3 py-1.5 rounded-full bg-white dark:bg-zinc-900 text-xs font-medium text-zinc-600 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors"}
       >
-        {t(currentSortOpt.labelKey)}
+        {t(currentSortOpt().labelKey)}
         <Icons.ChevronDown class="w-3 h-3" />
       </button>
       {props.sortOpen && (

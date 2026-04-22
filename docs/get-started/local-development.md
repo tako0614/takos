@@ -5,7 +5,8 @@ manifest author** はこのページを読む必要はありません。`takos l
 Takos endpoint に認証して `takos deploy --space SPACE_ID --group GROUP_NAME`
 するだけで開発できます。
 
-このページは **Takos kernel 自体を local に立ち上げる operator** 向けです。:::
+このページは **Takos kernel 自体を local に立ち上げる operator** 向けです。
+:::
 
 Docker Compose ベースのローカル開発環境。
 

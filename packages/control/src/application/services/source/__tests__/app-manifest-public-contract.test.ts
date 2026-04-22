@@ -511,6 +511,44 @@ overrides:
   assertEquals(resolved.compute.web.scaling, { minInstances: 2 });
 });
 
+Deno.test("public manifest contract - accepts queue trigger overrides", () => {
+  const manifest = parseAppManifestYaml(`
+name: override-queue-trigger-app
+
+compute:
+  web:
+    build:
+      fromWorkflow:
+        path: .takos/workflows/deploy.yml
+        job: bundle
+        artifact: web
+        artifactPath: dist/worker
+
+routes:
+  - target: web
+    path: /
+
+overrides:
+  production:
+    compute:
+      web:
+        triggers:
+          queues:
+            - binding: delivery_queue
+              deadLetterQueue: DELIVERY_DLQ
+              maxBatchSize: 10
+              maxRetries: 3
+`);
+
+  const resolved = applyManifestOverrides(manifest, "production");
+  assertEquals(resolved.compute.web.triggers?.queues, [{
+    binding: "DELIVERY_QUEUE",
+    deadLetterQueue: "DELIVERY_DLQ",
+    maxBatchSize: 10,
+    maxRetries: 3,
+  }]);
+});
+
 Deno.test("public manifest contract - validates compute overrides after merge", () => {
   const serviceManifest = parseAppManifestYaml(`
 name: override-service-readiness-app
@@ -923,6 +961,173 @@ routes:
   );
 });
 
+Deno.test("public manifest contract - allows native Cloudflare container metadata", () => {
+  const manifest = parseAppManifestYaml(`
+name: native-cloudflare-container-app
+
+compute:
+  web:
+    build:
+      fromWorkflow:
+        path: .takos/workflows/deploy.yml
+        job: bundle
+        artifact: web
+        artifactPath: dist/worker.js
+    containers:
+      sandbox:
+        image: apps/sandbox/Dockerfile
+        dockerfile: apps/sandbox/Dockerfile
+        port: 8080
+        cloudflare:
+          container:
+            binding: SANDBOX_CONTAINER
+            className: SandboxSessionContainer
+            instanceType: basic
+            maxInstances: 100
+            imageBuildContext: .
+            migrationTag: v1
+
+routes:
+  - target: web
+    path: /
+`);
+
+  const sandbox = manifest.compute.web.containers?.sandbox;
+  assertEquals(sandbox?.image, "apps/sandbox/Dockerfile");
+  assertEquals(sandbox?.cloudflare?.container, {
+    binding: "SANDBOX_CONTAINER",
+    className: "SandboxSessionContainer",
+    instanceType: "basic",
+    maxInstances: 100,
+    imageBuildContext: ".",
+    migrationTag: "v1",
+  });
+});
+
+Deno.test("public manifest contract - rejects quoted Cloudflare container booleans", () => {
+  assertThrows(
+    () =>
+      parseAppManifestYaml(`
+name: native-cloudflare-container-app
+
+compute:
+  web:
+    build:
+      fromWorkflow:
+        path: .takos/workflows/deploy.yml
+        job: bundle
+        artifact: web
+        artifactPath: dist/worker.js
+    containers:
+      sandbox:
+        image: apps/sandbox/Dockerfile
+        port: 8080
+        cloudflare:
+          container:
+            className: SandboxSessionContainer
+            sqlite: "false"
+`),
+    Error,
+    "compute.web.containers.sandbox.cloudflare.container.sqlite must be a boolean",
+  );
+});
+
+Deno.test("public manifest contract - parses managed resources and bindings", () => {
+  const manifest = parseAppManifestYaml(`
+name: resource-app
+
+compute:
+  web:
+    build:
+      fromWorkflow:
+        path: .takos/workflows/deploy.yml
+        job: bundle
+        artifact: web
+        artifactPath: dist/worker
+
+resources:
+  session-index:
+    type: key-value
+    bindings:
+      web: SESSION_INDEX
+  host-token:
+    type: secret
+    generate: true
+    bind: SANDBOX_HOST_AUTH_TOKEN
+    to: web
+
+routes:
+  - target: web
+    path: /
+`);
+
+  assertEquals(manifest.resources?.["session-index"].bindings, [{
+    target: "web",
+    binding: "SESSION_INDEX",
+  }]);
+  assertEquals(manifest.resources?.["host-token"].bindings, [{
+    target: "web",
+    binding: "SANDBOX_HOST_AUTH_TOKEN",
+  }]);
+});
+
+Deno.test("public manifest contract - rejects quoted resource generate booleans", () => {
+  assertThrows(
+    () =>
+      parseAppManifestYaml(`
+name: bad-resource-app
+
+compute:
+  web:
+    build:
+      fromWorkflow:
+        path: .takos/workflows/deploy.yml
+        job: bundle
+        artifact: web
+        artifactPath: dist/worker
+
+resources:
+  token:
+    type: secret
+    generate: "false"
+    bind: APP_TOKEN
+    to: web
+`),
+    Error,
+    "resources.token.generate must be a boolean",
+  );
+});
+
+Deno.test("public manifest contract - rejects resource bindings to unknown compute", () => {
+  assertThrows(
+    () =>
+      parseAppManifestYaml(`
+name: bad-resource-app
+
+compute:
+  web:
+    build:
+      fromWorkflow:
+        path: .takos/workflows/deploy.yml
+        job: bundle
+        artifact: web
+        artifactPath: dist/worker
+
+resources:
+  session-index:
+    type: key-value
+    bindings:
+      missing: SESSION_INDEX
+
+routes:
+  - target: web
+    path: /
+`),
+    Error,
+    "resources.session-index.bindings references unknown compute: missing",
+  );
+});
+
 Deno.test("public manifest contract - rejects dockerfile-only attached containers", () => {
   assertThrows(
     () =>
@@ -1118,6 +1323,75 @@ publish:
   assertEquals(manifest.publish[1]?.path, "/assets/:id");
 });
 
+Deno.test("public manifest contract - preserves UiSurface launcher metadata", () => {
+  const manifest = parseAppManifestYaml(`
+name: launcher-app
+
+compute:
+  web:
+    build:
+      fromWorkflow:
+        path: .takos/workflows/deploy.yml
+        job: bundle
+        artifact: web
+        artifactPath: dist/worker
+
+routes:
+  - target: web
+    path: /
+
+publish:
+  - type: UiSurface
+    name: launcher
+    publisher: web
+    path: /
+    title: Launcher
+    spec:
+      description: Launcher app
+      icon: /icons/launcher.svg
+      category: office
+      sortOrder: 10
+      launcher: true
+`);
+
+  assertEquals(manifest.publish[0]?.type, "UiSurface");
+  assertEquals(manifest.publish[0]?.spec, {
+    description: "Launcher app",
+    icon: "/icons/launcher.svg",
+    category: "office",
+    sortOrder: 10,
+    launcher: true,
+  });
+});
+
+Deno.test("public manifest contract - preserves compute publisher image icon metadata", () => {
+  const manifest = parseAppManifestYaml(`
+name: publisher-icon-app
+
+compute:
+  web:
+    icon: /icons/search.png
+    build:
+      fromWorkflow:
+        path: .takos/workflows/deploy.yml
+        job: bundle
+        artifact: web
+        artifactPath: dist/worker
+
+routes:
+  - target: web
+    path: /
+
+publish:
+  - type: UiSurface
+    name: launcher
+    publisher: web
+    path: /
+`);
+
+  assertEquals(manifest.compute.web?.icon, "/icons/search.png");
+});
+
 Deno.test("public manifest contract - parses FileHandler publications with :id paths and selector lists", () => {
   const manifest = parseAppManifestYaml(`
 name: file-handler-app
@@ -1185,6 +1459,41 @@ publish:
     Error,
     "duplicate route publication publisher/path 'web /mcp'",
   );
+});
+
+Deno.test("public manifest contract - defers route publication matching until overrides are applied", () => {
+  const manifest = parseAppManifestYaml(`
+name: overridden-route-publication-app
+
+compute:
+  web:
+    build:
+      fromWorkflow:
+        path: .takos/workflows/deploy.yml
+        job: bundle
+        artifact: web
+        artifactPath: dist/worker
+
+routes:
+  - target: web
+    path: /base
+
+publish:
+  - type: com.example.McpEndpoint
+    name: tools
+    publisher: web
+    path: /production
+
+overrides:
+  production:
+    routes:
+      - target: web
+        path: /production
+`);
+
+  const resolved = applyManifestOverrides(manifest, "production");
+  assertEquals(resolved.routes, [{ target: "web", path: "/production" }]);
+  assertEquals(resolved.publish[0]?.path, "/production");
 });
 
 Deno.test("public manifest contract - rejects FileHandler publications without :id launch paths", () => {
@@ -1342,6 +1651,36 @@ compute:
   ]);
 });
 
+Deno.test("public manifest contract - allows relative OAuth redirect URIs", () => {
+  const manifest = parseAppManifestYaml(`
+name: relative-oauth-redirect-app
+
+publish:
+  - name: app-oauth
+    publisher: takos
+    type: oauth-client
+    spec:
+      redirectUris:
+        - /api/auth/callback
+      scopes:
+        - openid
+
+compute:
+  web:
+    build:
+      fromWorkflow:
+        path: .takos/workflows/deploy.yml
+        job: bundle
+        artifact: web
+        artifactPath: dist/worker
+`);
+
+  assertEquals(manifest.publish[0]?.spec, {
+    redirectUris: ["/api/auth/callback"],
+    scopes: ["openid"],
+  });
+});
+
 Deno.test("public manifest contract - rejects unknown Takos grant spec fields", () => {
   assertThrows(
     () =>
@@ -1450,7 +1789,7 @@ Deno.test("public manifest contract - rejects unsupported top-level manifest fie
   assertThrows(
     () =>
       parseAppManifestYaml(`
-apiVersion: takos.dev/v1alpha1
+apiVersion: example.com/v1
 kind: App
 metadata:
   name: unsupported-top-level-fields-app
@@ -1458,7 +1797,7 @@ spec:
   compute: {}
 `),
     Error,
-    "apiVersion is not supported by the app manifest contract",
+    "Takos app manifests use the flat contract",
   );
 });
 
@@ -1679,11 +2018,9 @@ compute:
   );
 });
 
-Deno.test("public manifest contract - rejects unsupported queue triggers", () => {
-  assertThrows(
-    () =>
-      parseAppManifestYaml(`
-name: unsupported-queue-trigger-app
+Deno.test("public manifest contract - accepts queue consumer triggers", () => {
+  const manifest = parseAppManifestYaml(`
+name: queue-trigger-app
 compute:
   worker:
     build:
@@ -1694,9 +2031,44 @@ compute:
         artifactPath: dist/worker
     triggers:
       queues:
-        - storage: jobs
+        - binding: jobs
+          deadLetterQueue: JOBS_DLQ
+          maxBatchSize: 10
+          maxConcurrency: 2
+          maxRetries: 3
+          maxWaitTimeMs: 5000
+          retryDelaySeconds: 10
+`);
+
+  assertEquals(manifest.compute.worker.triggers?.queues, [{
+    binding: "JOBS",
+    deadLetterQueue: "JOBS_DLQ",
+    maxBatchSize: 10,
+    maxConcurrency: 2,
+    maxRetries: 3,
+    maxWaitTimeMs: 5000,
+    retryDelaySeconds: 10,
+  }]);
+});
+
+Deno.test("public manifest contract - rejects queue triggers without binding or queue", () => {
+  assertThrows(
+    () =>
+      parseAppManifestYaml(`
+name: invalid-queue-trigger-app
+compute:
+  worker:
+    build:
+      fromWorkflow:
+        path: .takos/workflows/deploy.yml
+        job: bundle
+        artifact: web
+        artifactPath: dist/worker
+    triggers:
+      queues:
+        - maxBatchSize: 10
 `),
     Error,
-    "compute.worker.triggers.queues is not supported by the app manifest contract",
+    "compute.worker.triggers.queues[0] requires binding or queue",
   );
 });

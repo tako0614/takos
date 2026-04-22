@@ -106,8 +106,16 @@ export interface DispatchBuildContext {
 export async function buildDispatcher(
   ctx: DispatchBuildContext,
 ): Promise<DispatchEnv["DISPATCHER"]> {
-  if (ctx.dataDir !== null) {
-    // Local mode: forward targets + TenantWorkerRuntimeRegistry (Miniflare)
+  const hasWorkersDispatchEnv = !!optionalEnv("CF_ACCOUNT_ID") &&
+    !!optionalEnv("CF_API_TOKEN") &&
+    !!optionalEnv("WFP_DISPATCH_NAMESPACE");
+  const shouldUseTenantRuntimeRegistry = ctx.dataDir !== null ||
+    !hasWorkersDispatchEnv;
+  if (shouldUseTenantRuntimeRegistry) {
+    // Local/backend-specific mode: forward targets + tenant runtime registry.
+    // dataDir is optional here because k8s/AWS/GCP Helm surfaces may use
+    // cloud/S3-compatible bindings while still needing runtime-host worker
+    // bundle execution for non-Cloudflare worker workloads.
     const explicitTargets = validateLocalForwardTargets(
       parseServiceTargetMap(optionalEnv("TAKOS_LOCAL_DISPATCH_TARGETS_JSON")),
     );
@@ -132,6 +140,6 @@ export async function buildDispatcher(
     );
   }
 
-  // Cloud mode: forward targets only (tenant execution delegated to external platform)
+  // Cloudflare Workers Dispatch mode: tenant execution is delegated to WFP.
   return createFetcherRegistry(ctx.forwardTargets);
 }

@@ -1,28 +1,30 @@
-import { getDb } from '../../../infra/db/index.ts';
-import { edges, nodes, files } from '../../../infra/db/schema.ts';
-import { eq, and, or, inArray } from 'drizzle-orm';
-import type { D1Database } from '../../../shared/types/bindings.ts';
-import type { SpaceFile } from '../../../shared/types/index.ts';
-import { generateId } from '../../../shared/utils/index.ts';
-import { checkSpaceAccess } from '../../../application/services/identity/space-access.ts';
-import type { IndexContext } from './index-context.ts';
-import { resolvePath } from './index-context.ts';
-import { BadRequestError, NotFoundError } from 'takos-common/errors';
+import { getDb } from "../../../infra/db/index.ts";
+import { edges, files, nodes } from "../../../infra/db/schema.ts";
+import { and, eq, inArray, or } from "drizzle-orm";
+import type { D1Database } from "../../../shared/types/bindings.ts";
+import type { SpaceFile } from "../../../shared/types/index.ts";
+import { generateId } from "../../../shared/utils/index.ts";
+import { checkSpaceAccess } from "../../../application/services/identity/space-access.ts";
+import type { IndexContext } from "./index-context.ts";
+import { resolvePath } from "./index-context.ts";
+import { BadRequestError, NotFoundError } from "takos-common/errors";
 
 export async function handleGraphNeighbors(c: IndexContext): Promise<Response> {
-  const user = c.get('user');
-  const spaceId = c.req.param('spaceId');
-  if (!spaceId) throw new BadRequestError('Missing spaceId');
-  const nodeId = c.req.query('node_id');
-  const limitParam = c.req.query('limit');
-  const limit = limitParam ? Math.min(Math.max(1, parseInt(limitParam) || 100), 500) : 100;
+  const user = c.get("user");
+  const spaceId = c.req.param("spaceId");
+  if (!spaceId) throw new BadRequestError("Missing spaceId");
+  const nodeId = c.req.query("node_id");
+  const limitParam = c.req.query("limit");
+  const limit = limitParam
+    ? Math.min(Math.max(1, parseInt(limitParam) || 100), 500)
+    : 100;
 
   const access = await checkSpaceAccess(c.env.DB, spaceId, user.id);
   if (!access) {
-    throw new NotFoundError('Workspace');
+    throw new NotFoundError("Workspace");
   }
   if (!nodeId) {
-    throw new BadRequestError('node_id is required');
+    throw new BadRequestError("node_id is required");
   }
 
   const db = getDb(c.env.DB);
@@ -30,7 +32,7 @@ export async function handleGraphNeighbors(c: IndexContext): Promise<Response> {
     and(
       eq(edges.accountId, spaceId),
       or(eq(edges.sourceId, nodeId), eq(edges.targetId, nodeId)),
-    )
+    ),
   ).limit(limit).all();
 
   const connectedIds = new Set<string>();
@@ -58,14 +60,14 @@ export async function extractAndCreateEdges(
   spaceId: string,
   file: SpaceFile,
   content: string,
-  sourceNodeId: string
+  sourceNodeId: string,
 ): Promise<void> {
   const drizzle = getDb(db);
   const timestamp = new Date().toISOString();
-  const ext = file.path.split('.').pop()?.toLowerCase();
+  const ext = file.path.split(".").pop()?.toLowerCase();
   const imports: string[] = [];
 
-  if (ext === 'ts' || ext === 'tsx' || ext === 'js' || ext === 'jsx') {
+  if (ext === "ts" || ext === "tsx" || ext === "js" || ext === "jsx") {
     const importRegex = /import\s+.*?from\s+['"]([^'"]+)['"]/g;
     let match: RegExpExecArray | null;
     while ((match = importRegex.exec(content)) !== null) {
@@ -76,7 +78,7 @@ export async function extractAndCreateEdges(
     while ((match = requireRegex.exec(content)) !== null) {
       imports.push(match[1]);
     }
-  } else if (ext === 'py') {
+  } else if (ext === "py") {
     const importRegex = /(?:from\s+(\S+)\s+import|import\s+(\S+))/g;
     let match: RegExpExecArray | null;
     while ((match = importRegex.exec(content)) !== null) {
@@ -95,19 +97,26 @@ export async function extractAndCreateEdges(
     ];
 
     for (const path of possiblePaths) {
-      const normalizedPath =
-        path.startsWith('./') || path.startsWith('../') ? resolvePath(file.path, path) : path;
-      const targetFile = await drizzle.select({ id: files.id }).from(files).where(
-        and(eq(files.accountId, spaceId), eq(files.path, normalizedPath))
-      ).get();
+      const normalizedPath = path.startsWith("./") || path.startsWith("../")
+        ? resolvePath(file.path, path)
+        : path;
+      const targetFile = await drizzle.select({ id: files.id }).from(files)
+        .where(
+          and(eq(files.accountId, spaceId), eq(files.path, normalizedPath)),
+        ).get();
 
       if (!targetFile) {
         continue;
       }
 
-      const targetNode = await drizzle.select({ id: nodes.id }).from(nodes).where(
-        and(eq(nodes.accountId, spaceId), eq(nodes.type, 'file'), eq(nodes.refId, targetFile.id))
-      ).get();
+      const targetNode = await drizzle.select({ id: nodes.id }).from(nodes)
+        .where(
+          and(
+            eq(nodes.accountId, spaceId),
+            eq(nodes.type, "file"),
+            eq(nodes.refId, targetFile.id),
+          ),
+        ).get();
 
       if (targetNode) {
         const edgeId = generateId();
@@ -116,9 +125,9 @@ export async function extractAndCreateEdges(
           accountId: spaceId,
           sourceId: sourceNodeId,
           targetId: targetNode.id,
-          type: 'imports',
+          type: "imports",
           weight: 1.0,
-          metadata: '{}',
+          metadata: "{}",
           createdAt: timestamp,
         });
       }

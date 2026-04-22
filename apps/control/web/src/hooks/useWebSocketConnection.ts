@@ -61,6 +61,11 @@ export interface UseWebSocketConnectionResult {
     focus: ThreadHistoryFocus | null;
     taskContext: ThreadHistoryTaskContext | null;
   }) => void;
+  mergeHistorySnapshot: (snapshot: {
+    runs: ThreadHistoryRunNode[];
+    focus: ThreadHistoryFocus | null;
+    taskContext: ThreadHistoryTaskContext | null;
+  }) => void;
   sessionDiff: SessionDiffState | null;
   setSessionDiff: Setter<SessionDiffState | null>;
   loadPendingSessionDiff: (
@@ -199,7 +204,7 @@ export function useWebSocketConnection({
       const treeRuns = historyData.runs.filter((node) =>
         isRunInRootTree(node.run.id, rootRunId, runsById)
       );
-      processor.applyHistorySnapshot({
+      processor.mergeHistorySnapshot({
         runs: treeRuns,
         focus: historyData.focus,
         taskContext: historyData.taskContext,
@@ -318,6 +323,7 @@ export function useWebSocketConnection({
     },
     resetTimeline: processor.resetTimeline,
     applyHistorySnapshot: processor.applyHistorySnapshot,
+    mergeHistorySnapshot: processor.mergeHistorySnapshot,
     get sessionDiff() {
       return sessionDiffHook.sessionDiff;
     },

@@ -19,7 +19,11 @@ import {
   getServiceTokenFromHeader,
   notFoundHandler,
 } from "takos-common/middleware/hono";
-import { createRateLimiter } from "./middleware/rate-limit.ts";
+import {
+  createRateLimiter,
+  getRequestClientAddress,
+  RUNTIME_REMOTE_ADDR_BINDING,
+} from "./middleware/rate-limit.ts";
 import type { RuntimeEnv } from "./types/hono.d.ts";
 import execRoutes from "./routes/runtime/exec.ts";
 import toolsRoutes from "./routes/runtime/tools.ts";
@@ -49,6 +53,7 @@ export type RuntimeServiceOptions = {
   isProduction?: boolean;
   isContainerEnvironment?: boolean;
   allowLocalCliProxyBypass?: boolean;
+  trustProxyHeaders?: boolean;
 };
 
 function isLoopbackAddress(addr: string): boolean {
@@ -70,9 +75,7 @@ function isLocalCliProxyBypassRequest(
   }
 
   const sessionId = c.req.header("X-Takos-Session-Id");
-  const addr = c.req.header("x-forwarded-for")?.split(",")[0]?.trim() ||
-    c.req.header("x-real-ip")?.trim() ||
-    "";
+  const addr = getRequestClientAddress(c, { trustProxyHeaders: false });
   return Boolean(sessionId) && isLoopbackAddress(addr);
 }
 
@@ -96,6 +99,8 @@ export function createRuntimeServiceApp(
       Deno.env.get("TAKOS_RUNTIME_ALLOW_LOOPBACK_CLI_PROXY_BYPASS") === "1" ||
       !!Deno.env.get("TAKOS_LOCAL_DATA_DIR")
     );
+  const trustProxyHeaders = options.trustProxyHeaders ??
+    Deno.env.get("TAKOS_RUNTIME_TRUST_PROXY_HEADERS") === "1";
   const logger = createLogger({
     service: options.serviceName ?? "takos-runtime",
   });
@@ -185,30 +190,37 @@ export function createRuntimeServiceApp(
   const execRateLimiter = createRateLimiter({
     maxRequests: RATE_LIMIT_EXEC_MAX,
     windowMs: RATE_LIMIT_WINDOW_MS,
+    trustProxyHeaders,
   });
   const sessionRateLimiter = createRateLimiter({
     maxRequests: RATE_LIMIT_SESSION_MAX,
     windowMs: RATE_LIMIT_WINDOW_MS,
+    trustProxyHeaders,
   });
   const snapshotRateLimiter = createRateLimiter({
     maxRequests: RATE_LIMIT_SNAPSHOT_MAX,
     windowMs: RATE_LIMIT_WINDOW_MS,
+    trustProxyHeaders,
   });
   const actionsRateLimiter = createRateLimiter({
     maxRequests: RATE_LIMIT_ACTIONS_MAX,
     windowMs: RATE_LIMIT_WINDOW_MS,
+    trustProxyHeaders,
   });
   const gitRateLimiter = createRateLimiter({
     maxRequests: RATE_LIMIT_GIT_MAX,
     windowMs: RATE_LIMIT_WINDOW_MS,
+    trustProxyHeaders,
   });
   const reposRateLimiter = createRateLimiter({
     maxRequests: RATE_LIMIT_REPOS_MAX,
     windowMs: RATE_LIMIT_WINDOW_MS,
+    trustProxyHeaders,
   });
   const cliProxyRateLimiter = createRateLimiter({
     maxRequests: RATE_LIMIT_CLI_PROXY_MAX,
     windowMs: RATE_LIMIT_WINDOW_MS,
+    trustProxyHeaders,
   });
 
   app.use("/exec/*", execRateLimiter);
@@ -276,7 +288,10 @@ export function startRuntimeService(
 
   const server = Deno.serve(
     { port, signal: abortController.signal },
-    app.fetch,
+    (request, info) =>
+      app.fetch(request, {
+        [RUNTIME_REMOTE_ADDR_BINDING]: info.remoteAddr.hostname,
+      }),
   );
   logger.info(`Takos runtime listening on port ${port}`);
   logger.info(`R2 configured: ${isR2Configured()}`);

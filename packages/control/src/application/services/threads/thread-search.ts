@@ -1,9 +1,12 @@
-import { getDb, threads, messages } from '../../../infra/db/index.ts';
-import { eq, and, ne, like, desc, asc, inArray } from 'drizzle-orm';
-import { queryRelevantThreadMessages, THREAD_MESSAGE_VECTOR_KIND } from '../agent/index.ts';
-import type { Env, ThreadStatus } from '../../../shared/types/index.ts';
-import { logWarn } from '../../../shared/utils/logger.ts';
-import { EMBEDDING_MODEL } from '../../../shared/config/limits.ts';
+import { getDb, messages, threads } from "../../../infra/db/index.ts";
+import { and, asc, desc, eq, inArray, like, ne } from "drizzle-orm";
+import {
+  queryRelevantThreadMessages,
+  THREAD_MESSAGE_VECTOR_KIND,
+} from "../agent/index.ts";
+import type { Env, ThreadStatus } from "../../../shared/types/index.ts";
+import { logWarn } from "../../../shared/utils/logger.ts";
+import { EMBEDDING_MODEL } from "../../../shared/config/limits.ts";
 
 export const threadSearchDeps = {
   getDb,
@@ -15,8 +18,8 @@ function buildSnippet(
   content: string,
   query: string,
 ): { snippet: string; match: { start: number; end: number } | null } {
-  const hay = content || '';
-  const needle = query || '';
+  const hay = content || "";
+  const needle = query || "";
   if (!hay || !needle) return { snippet: hay.slice(0, 240), match: null };
 
   const lowerHay = hay.toLowerCase();
@@ -27,11 +30,15 @@ function buildSnippet(
   const radius = 90;
   const start = Math.max(0, idx - radius);
   const end = Math.min(hay.length, idx + needle.length + radius);
-  const snippet = (start > 0 ? '\u2026' : '') + hay.slice(start, end) + (end < hay.length ? '\u2026' : '');
+  const snippet = (start > 0 ? "\u2026" : "") + hay.slice(start, end) +
+    (end < hay.length ? "\u2026" : "");
   const prefixLen = start > 0 ? 1 : 0;
   return {
     snippet,
-    match: { start: prefixLen + (idx - start), end: prefixLen + (idx - start) + needle.length },
+    match: {
+      start: prefixLen + (idx - start),
+      end: prefixLen + (idx - start) + needle.length,
+    },
   };
 }
 
@@ -46,60 +53,90 @@ export async function searchSpaceThreads(options: {
   const { env, spaceId, query, type, limit, offset } = options;
   const db = threadSearchDeps.getDb(env.DB);
   const results: Array<{
-    kind: 'keyword' | 'semantic';
+    kind: "keyword" | "semantic";
     score?: number;
-    thread: { id: string; title: string | null; status: ThreadStatus; updated_at: string; created_at: string };
+    thread: {
+      id: string;
+      title: string | null;
+      status: ThreadStatus;
+      updated_at: string;
+      created_at: string;
+    };
     message: { id: string; sequence: number; role: string; created_at: string };
     snippet: string;
     match?: { start: number; end: number } | null;
   }> = [];
   const semanticAvailable = !!env.AI && !!env.VECTORIZE;
 
-  if ((type === 'semantic' || type === 'all') && semanticAvailable) {
+  if ((type === "semantic" || type === "all") && semanticAvailable) {
     try {
-      const embed = await env.AI!.run(EMBEDDING_MODEL, { text: [query] }) as { data: number[][] };
+      const embed = await env.AI!.run(EMBEDDING_MODEL, { text: [query] }) as {
+        data: number[][];
+      };
       const queryEmbedding = embed?.data?.[0];
       if (queryEmbedding) {
         const search = await env.VECTORIZE!.query(queryEmbedding, {
           topK: Math.max(10, limit * 2),
           filter: { kind: THREAD_MESSAGE_VECTOR_KIND, spaceId },
-          returnMetadata: 'all',
-        }) as { matches: Array<{ id: string; score: number; metadata?: unknown }> };
+          returnMetadata: "all",
+        }) as {
+          matches: Array<{ id: string; score: number; metadata?: unknown }>;
+        };
 
-        const matches = (search.matches || []).filter((match) => typeof match.score === 'number');
-        const threadIds = Array.from(new Set(matches
-          .map((match) => (match.metadata as { threadId?: string })?.threadId)
-          .filter((value: unknown): value is string => typeof value === 'string' && value.length > 0)
-        ));
+        const matches = (search.matches || []).filter((match) =>
+          typeof match.score === "number"
+        );
+        const threadIds = Array.from(
+          new Set(
+            matches
+              .map((match) =>
+                (match.metadata as { threadId?: string })?.threadId
+              )
+              .filter((value: unknown): value is string =>
+                typeof value === "string" && value.length > 0
+              ),
+          ),
+        );
         const threadRows = threadIds.length > 0
           ? await db.select({
-              id: threads.id,
-              title: threads.title,
-              status: threads.status,
-              createdAt: threads.createdAt,
-              updatedAt: threads.updatedAt,
-            }).from(threads)
-            .where(and(inArray(threads.id, threadIds), eq(threads.accountId, spaceId)))
+            id: threads.id,
+            title: threads.title,
+            status: threads.status,
+            createdAt: threads.createdAt,
+            updatedAt: threads.updatedAt,
+          }).from(threads)
+            .where(
+              and(
+                inArray(threads.id, threadIds),
+                eq(threads.accountId, spaceId),
+              ),
+            )
             .all()
           : [];
-        const threadMap = new Map(threadRows.map((thread) => [thread.id, thread]));
+        const threadMap = new Map(
+          threadRows.map((thread) => [thread.id, thread]),
+        );
 
         for (const match of matches) {
           const meta = (match.metadata || {}) as Record<string, unknown>;
-          const threadId = typeof meta.threadId === 'string' ? meta.threadId : '';
-          const messageId = typeof meta.messageId === 'string' ? meta.messageId : '';
-          const sequence = typeof meta.sequence === 'number'
+          const threadId = typeof meta.threadId === "string"
+            ? meta.threadId
+            : "";
+          const messageId = typeof meta.messageId === "string"
+            ? meta.messageId
+            : "";
+          const sequence = typeof meta.sequence === "number"
             ? meta.sequence
-            : typeof meta.sequence === 'string'
-              ? Number.parseInt(meta.sequence, 10)
-              : NaN;
+            : typeof meta.sequence === "string"
+            ? Number.parseInt(meta.sequence, 10)
+            : NaN;
           if (!threadId || !messageId || !Number.isFinite(sequence)) continue;
 
           const thread = threadMap.get(threadId);
-          if (!thread || thread.status === 'deleted') continue;
+          if (!thread || thread.status === "deleted") continue;
 
           results.push({
-            kind: 'semantic',
+            kind: "semantic",
             score: match.score,
             thread: {
               id: thread.id,
@@ -111,10 +148,12 @@ export async function searchSpaceThreads(options: {
             message: {
               id: messageId,
               sequence,
-              role: typeof meta.role === 'string' ? meta.role : 'unknown',
-              created_at: typeof meta.createdAt === 'string' ? meta.createdAt : '',
+              role: typeof meta.role === "string" ? meta.role : "unknown",
+              created_at: typeof meta.createdAt === "string"
+                ? meta.createdAt
+                : "",
             },
-            snippet: typeof meta.content === 'string' ? meta.content : '',
+            snippet: typeof meta.content === "string" ? meta.content : "",
             match: null,
           });
 
@@ -122,11 +161,14 @@ export async function searchSpaceThreads(options: {
         }
       }
     } catch (err) {
-      threadSearchDeps.logWarn('semantic search failed', { module: 'threads.search', error: err instanceof Error ? err.message : String(err) });
+      threadSearchDeps.logWarn("semantic search failed", {
+        module: "threads.search",
+        error: err instanceof Error ? err.message : String(err),
+      });
     }
   }
 
-  if (type === 'keyword' || type === 'all') {
+  if (type === "keyword" || type === "all") {
     // Find threads in the space that are not deleted
     const spaceThreads = await db.select({
       id: threads.id,
@@ -135,7 +177,7 @@ export async function searchSpaceThreads(options: {
       createdAt: threads.createdAt,
       updatedAt: threads.updatedAt,
     }).from(threads)
-      .where(and(eq(threads.accountId, spaceId), ne(threads.status, 'deleted')))
+      .where(and(eq(threads.accountId, spaceId), ne(threads.status, "deleted")))
       .all();
 
     if (spaceThreads.length > 0) {
@@ -165,7 +207,7 @@ export async function searchSpaceThreads(options: {
 
         const snippet = buildSnippet(message.content, query);
         results.push({
-          kind: 'keyword',
+          kind: "keyword",
           thread: {
             id: thread.id,
             title: thread.title,
@@ -216,7 +258,7 @@ export async function searchThreadMessages(options: {
   const { env, spaceId, threadId, query, type, limit, offset } = options;
   const db = threadSearchDeps.getDb(env.DB);
   const results: Array<{
-    kind: 'keyword' | 'semantic';
+    kind: "keyword" | "semantic";
     score?: number;
     message: { id: string; sequence: number; role: string; created_at: string };
     snippet: string;
@@ -224,7 +266,7 @@ export async function searchThreadMessages(options: {
   }> = [];
   const semanticAvailable = !!env.AI && !!env.VECTORIZE;
 
-  if ((type === 'semantic' || type === 'all') && semanticAvailable) {
+  if ((type === "semantic" || type === "all") && semanticAvailable) {
     try {
       const semantic = await threadSearchDeps.queryRelevantThreadMessages({
         env,
@@ -237,24 +279,27 @@ export async function searchThreadMessages(options: {
 
       for (const result of semantic) {
         results.push({
-          kind: 'semantic',
+          kind: "semantic",
           score: result.score,
           message: {
             id: result.messageId || result.id,
             sequence: result.sequence,
             role: result.role,
-            created_at: result.createdAt || '',
+            created_at: result.createdAt || "",
           },
           snippet: result.content,
           match: null,
         });
       }
     } catch (err) {
-      threadSearchDeps.logWarn('semantic search failed', { module: 'threads.messages.search', error: err instanceof Error ? err.message : String(err) });
+      threadSearchDeps.logWarn("semantic search failed", {
+        module: "threads.messages.search",
+        error: err instanceof Error ? err.message : String(err),
+      });
     }
   }
 
-  if (type === 'keyword' || type === 'all') {
+  if (type === "keyword" || type === "all") {
     const messageRows = await db.select({
       id: messages.id,
       role: messages.role,
@@ -274,7 +319,7 @@ export async function searchThreadMessages(options: {
     for (const message of messageRows) {
       const snippet = buildSnippet(message.content, query);
       results.push({
-        kind: 'keyword',
+        kind: "keyword",
         message: {
           id: message.id,
           sequence: message.sequence,

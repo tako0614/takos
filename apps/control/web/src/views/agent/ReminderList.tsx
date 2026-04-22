@@ -69,12 +69,7 @@ function getPriorityBorderStyle(
   }
 }
 
-export function ReminderList({
-  reminders,
-  onDelete,
-  onCreateReminder,
-  savingReminder,
-}: {
+export function ReminderList(props: {
   reminders: Reminder[];
   onDelete: (id: string) => void;
   onCreateReminder: (data: {
@@ -100,7 +95,7 @@ export function ReminderList({
   ) => {
     e.preventDefault();
     if (!reminderContent().trim() || !triggerValue().trim()) return;
-    await onCreateReminder({
+    await props.onCreateReminder({
       content: reminderContent().trim(),
       trigger_type: triggerType(),
       trigger_value: triggerValue().trim(),
@@ -116,7 +111,7 @@ export function ReminderList({
       <div
         style={{ display: "flex", "flex-direction": "column", gap: "0.75rem" }}
       >
-        {reminders.length === 0
+        {props.reminders.length === 0
           ? (
             <div
               style={{
@@ -134,7 +129,7 @@ export function ReminderList({
             </div>
           )
           : (
-            reminders.map((reminder) => (
+            props.reminders.map((reminder) => (
               <Card
                 padding="md"
                 style={getPriorityBorderStyle(reminder.priority)}
@@ -205,7 +200,7 @@ export function ReminderList({
                   <Button
                     variant="ghost"
                     size="sm"
-                    onClick={() => onDelete(reminder.id)}
+                    onClick={() => props.onDelete(reminder.id)}
                     title={t("delete")}
                     style={{ color: "var(--color-text-tertiary)" }}
                   >
@@ -258,7 +253,7 @@ export function ReminderList({
               <Textarea
                 placeholder={t("reminderContentPlaceholder")}
                 value={reminderContent()}
-                onInput={(e) => setReminderContent(e.target.value)}
+                onInput={(e) => setReminderContent(e.currentTarget.value)}
                 rows={3}
                 required
                 autofocus
@@ -325,7 +320,7 @@ export function ReminderList({
                   ? t("triggerValueTimePlaceholder")
                   : t("triggerValueConditionPlaceholder")}
                 value={triggerValue()}
-                onInput={(e) => setTriggerValue(e.target.value)}
+                onInput={(e) => setTriggerValue(e.currentTarget.value)}
                 required
               />
             </div>
@@ -368,7 +363,7 @@ export function ReminderList({
             <Button
               type="submit"
               variant="primary"
-              isLoading={savingReminder}
+              isLoading={props.savingReminder}
               disabled={!reminderContent().trim() || !triggerValue().trim()}
             >
               {t("create")}

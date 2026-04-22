@@ -4,9 +4,12 @@ Takos manifest の deploy / runtime surface は backend-neutral な Takos deploy
 manifest (`.takos/app.yml`) を基準にし、resource layer も backend-neutral な
 abstract type (sql, object-store, key-value, etc.) で書く。Cloudflare / AWS /
 GCP / k8s / local は同じ public contract を共有し、差分は operator 内部の
-adapter に閉じる。
+adapter で吸収する。ただしここでの compatibility は schema / translation parity
+を指し、runtime behavior、provider resource の存在、性能特性の一致を保証しない。
 
 backend は同一ではないため、「何を揃え、何を差分として扱うか」を明示する。
+hosting surface の contract 境界は [環境ごとの差異](/hosting/differences) と
+[Not A Current Contract](/hosting/differences#not-a-current-contract) を参照。
 
 ## 何を揃えるか
 
@@ -26,10 +29,12 @@ Takos が parity の対象にしているもの:
 
 runtime translation report は compiled desired declaration の workload / route
 translation と backend requirement を `compatible` / `unsupported`
-で表現する。resource existence や full runtime compatibility を判定する report
-ではない。以下の backend 固有名は出さず、実際の materialization は operator
-adapter が選ぶ。backend / adapter 名は operator-only configuration であり、
-public deploy manifest の field ではない。
+で表現する。`compatible` は tenant runtime へ渡す schema / translation
+が成立する という意味で、resource existence、backing service
+availability、runtime behavior parity を判定する report ではない。以下の backend
+固有名は出さず、実際の materialization は operator adapter が選ぶ。backend /
+adapter 名は operator-only configuration であり、public deploy manifest の field
+ではない。
 
 | manifest workload                                | Public surface | Internal materialization                                 |
 | ------------------------------------------------ | -------------- | -------------------------------------------------------- |
@@ -53,7 +58,7 @@ orchestrator を通る。
 
 ### manifest-level feature support
 
-| feature                                                  | manifest | bundle docs | runtime parity                                           |
+| feature                                                  | manifest | bundle docs | runtime notes                                            |
 | -------------------------------------------------------- | -------- | ----------- | -------------------------------------------------------- |
 | worker / service compute                                 | yes      | yes         | selected worker / container runtime adapter              |
 | attached container                                       | yes      | yes         | selected container runtime adapter + worker-side binding |
@@ -62,7 +67,7 @@ orchestrator を通る。
 | Takos capability grant (`publish[].publisher/type/spec`) | yes      | yes         | publication catalog + grant output                       |
 | explicit consume edge (`compute.*.consume`)              | yes      | yes         | env injection only for declared consumer                 |
 | `scheduled` (`compute.triggers.schedules`)               | yes      | yes         | backend 依存                                             |
-| `queue trigger` (`compute.triggers.queues`)              | no       | no          | 現行 manifest contract では未サポート（schedules-only）  |
+| `queue trigger` (`compute.triggers.queues`)              | yes      | yes         | backend 依存。Cloudflare/WFP は queue consumer を同期    |
 
 SQL / object-store / queue / analytics-engine / workflow / vector-index /
 durable-object などの resource access は manifest の `publish` / `consume`
@@ -72,7 +77,7 @@ resource binding の入口ではない。
 
 ### resource runtime binding support
 
-| resource type      | public surface                 | runtime parity                                      |
+| resource type      | public surface                 | runtime notes                                       |
 | ------------------ | ------------------------------ | --------------------------------------------------- |
 | `queue`            | resource API / runtime binding | delivery semantics は backend 依存                  |
 | `workflow`         | resource API / runtime binding | orchestration semantics は backend 依存             |
@@ -82,7 +87,7 @@ resource binding の入口ではない。
 
 ## Cloudflare
 
-Cloudflare は主要 production backend。
+Cloudflare は reference / primary production backend。
 
 - actual Cloudflare backend
 - actual Workers backend
@@ -92,7 +97,9 @@ Cloudflare は主要 production backend。
 
 ## Local / Self-host
 
-local / self-host は検証用 backend。
+local は検証用 backend。self-host は production-grade PostgreSQL / Redis /
+object storage / TLS / secret management を組み合わせることで production
+packaging として運用できる。
 
 - Cloudflare account なしで control plane を起動できる
 - tenant worker contract を local で materialize できる
@@ -102,13 +109,16 @@ local / self-host は検証用 backend。
 
 ## AWS / GCP / k8s
 
-backend-specific runtime。
+AWS / GCP の current docs contract は k8s Helm overlay。ECS / Cloud Run は
+tenant image workload adapter として OCI orchestrator 経由で使う対象であり、
+Takos kernel hosting target ではない。
 
 - public spec は backend-neutral な Takos deploy manifest のまま
-- resource は backend-specific または Takos-managed runtime に解決される
+- resource は operator が用意した backing service または Takos-managed runtime
+  に解決される
 - worker workload は operator-selected worker runtime path を使う
-- image-backed workload は `ecs` / `cloud-run` / `k8s` など backend-specific
-  adapter に解決される
+- image-backed workload は `ecs` / `cloud-run` / `k8s` など tenant image
+  workload adapter に解決される
 
 ## 意図的に残している差分
 
@@ -129,8 +139,8 @@ Workers-compatible local adapter を使う。Cloudflare backend と byte-for-byt
 feature ごとに成熟度が異なる。
 
 - `queue`: resource API / runtime binding 対応。delivery parity は backend 依存
-- `queue trigger`: 現行 manifest contract では未対応（worker trigger は
-  `schedules` のみ）
+- `queue trigger`: manifest / bundle docs 対応済み。consumer delivery と
+  batch / retry semantics は backend 依存
 - `scheduled`: manifest / bundle docs 対応済み。cron delivery は backend 依存
 - `workflow`: resource API / runtime binding 対応。orchestration は backend 依存
 - `analytics-engine`: resource API / runtime binding 対応。write path は
@@ -159,7 +169,8 @@ host 用。
 - production traffic 上での最終的な実証
 
 local は production backend の代替ではなく、product contract
-を大きく崩さずに検証するための backend。
+を大きく崩さずに検証するための backend。self-host production は prod-grade
+backing services と operator-managed TLS / ingress / secrets を前提にする。
 
 ## operator への意味
 

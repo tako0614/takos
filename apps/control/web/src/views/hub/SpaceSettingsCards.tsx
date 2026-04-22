@@ -37,14 +37,7 @@ function getRoleLabel(role: string, t: (key: TranslationKey) => string) {
   }
 }
 
-export function SpaceInfoCard({
-  selectedSpace,
-  spaceName,
-  setSpaceName,
-  isPersonal,
-  saving,
-  onSave,
-}: {
+export function SpaceInfoCard(props: {
   selectedSpace: Space;
   spaceName: string;
   setSpaceName: (name: string) => void;
@@ -67,12 +60,12 @@ export function SpaceInfoCard({
               {t("spaceName")}
             </label>
             <Input
-              value={spaceName}
-              onInput={(e) => setSpaceName(e.target.value)}
+              value={props.spaceName}
+              onInput={(e) => props.setSpaceName(e.currentTarget.value)}
               placeholder={t("spaceNamePlaceholder")}
-              disabled={isPersonal}
+              disabled={props.isPersonal}
             />
-            {isPersonal && (
+            {props.isPersonal && (
               <p class="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
                 {t("personalSpaceNameHint") ||
                   "Personal space name cannot be changed"}
@@ -85,14 +78,14 @@ export function SpaceInfoCard({
             </label>
             <div class="flex items-center gap-2">
               <code class="flex-1 px-3 py-2 bg-zinc-100 dark:bg-zinc-800 rounded-lg text-sm text-zinc-600 dark:text-zinc-400 font-mono truncate">
-                {getSpaceIdentifier(selectedSpace)}
+                {getSpaceIdentifier(props.selectedSpace)}
               </code>
               <Button
                 variant="ghost"
                 size="sm"
                 onClick={() => {
                   navigator.clipboard.writeText(
-                    getSpaceIdentifier(selectedSpace),
+                    getSpaceIdentifier(props.selectedSpace),
                   );
                   showToast("success", t("copied"));
                 }}
@@ -103,14 +96,15 @@ export function SpaceInfoCard({
           </div>
         </div>
       </CardContent>
-      {!isPersonal && (
+      {!props.isPersonal && (
         <CardFooter>
           <Button
             variant="primary"
             size="sm"
-            onClick={onSave}
-            isLoading={saving}
-            disabled={!spaceName.trim() || spaceName === selectedSpace.name}
+            onClick={props.onSave}
+            isLoading={props.saving}
+            disabled={!props.spaceName.trim() ||
+              props.spaceName === props.selectedSpace.name}
           >
             {t("save")}
           </Button>
@@ -120,18 +114,7 @@ export function SpaceInfoCard({
   );
 }
 
-export function MembersCard({
-  members,
-  loadingMembers,
-  inviteEmail,
-  setInviteEmail,
-  inviteRole,
-  setInviteRole,
-  inviting,
-  onInvite,
-  onRemove,
-  onChangeRole,
-}: {
+export function MembersCard(props: {
   members: SpaceMember[];
   loadingMembers: boolean;
   inviteEmail: string;
@@ -159,15 +142,17 @@ export function MembersCard({
             <Input
               type="email"
               placeholder={t("emailPlaceholder") || "email@example.com"}
-              value={inviteEmail}
-              onInput={(e) => setInviteEmail(e.target.value)}
+              value={props.inviteEmail}
+              onInput={(e) => props.setInviteEmail(e.currentTarget.value)}
               class="flex-1"
             />
             <select
               class="px-3 py-2 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 rounded-lg text-sm"
-              value={inviteRole}
+              value={props.inviteRole}
               onChange={(e) =>
-                setInviteRole(e.target.value as "admin" | "member")}
+                props.setInviteRole(
+                  e.currentTarget.value as "admin" | "member",
+                )}
             >
               <option value="member">{getRoleLabel("member", t)}</option>
               <option value="admin">{getRoleLabel("admin", t)}</option>
@@ -175,22 +160,22 @@ export function MembersCard({
             <Button
               variant="primary"
               size="sm"
-              onClick={onInvite}
-              isLoading={inviting}
-              disabled={!inviteEmail.trim()}
+              onClick={props.onInvite}
+              isLoading={props.inviting}
+              disabled={!props.inviteEmail.trim()}
             >
               {t("invite") || "Invite"}
             </Button>
           </div>
         </div>
 
-        {loadingMembers
+        {props.loadingMembers
           ? (
             <div class="flex items-center justify-center py-8">
               <div class="w-6 h-6 border-2 border-zinc-300 dark:border-zinc-600 border-t-zinc-900 dark:border-t-zinc-100 rounded-full animate-spin" />
             </div>
           )
-          : members.length === 0
+          : props.members.length === 0
           ? (
             <div class="text-center py-8 text-zinc-500 dark:text-zinc-400">
               {t("noMembers") || "No members yet"}
@@ -198,7 +183,7 @@ export function MembersCard({
           )
           : (
             <div class="space-y-2">
-              {members.map((member) => (
+              {props.members.map((member) => (
                 <div class="flex items-center gap-3 p-3 bg-zinc-50 dark:bg-zinc-800/50 rounded-xl">
                   {member.picture
                     ? (
@@ -234,9 +219,9 @@ export function MembersCard({
                             class="px-2 py-1 text-xs bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 rounded-lg"
                             value={member.role}
                             onChange={(e) =>
-                              onChangeRole(
+                              props.onChangeRole(
                                 member,
-                                e.target.value as "admin" | "member",
+                                e.currentTarget.value as "admin" | "member",
                               )}
                           >
                             <option value="member">
@@ -249,7 +234,7 @@ export function MembersCard({
                           <button
                             type="button"
                             class="p-1.5 text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-700 rounded-lg transition-colors"
-                            onClick={() => onRemove(member)}
+                            onClick={() => props.onRemove(member)}
                             title={t("remove") || "Remove"}
                           >
                             <Icons.Trash class="w-4 h-4" />
@@ -266,9 +251,7 @@ export function MembersCard({
   );
 }
 
-export function DangerZoneCard({
-  onDelete,
-}: {
+export function DangerZoneCard(props: {
   onDelete: () => void;
 }) {
   const { t } = useI18n();
@@ -294,7 +277,7 @@ export function DangerZoneCard({
           <Button
             variant="danger"
             size="sm"
-            onClick={onDelete}
+            onClick={props.onDelete}
           >
             {t("delete")}
           </Button>
@@ -322,21 +305,19 @@ export function PersonalSpaceNote() {
   );
 }
 
-export function CreateSpaceModal({
-  onClose,
-  onCreate,
-  creating,
-}: {
+export function CreateSpaceModal(props: {
   onClose: () => void;
-  onCreate: (name: string) => void;
+  onCreate: (name: string, installDefaultApps: boolean) => void;
   creating: boolean;
 }) {
   const { t } = useI18n();
   const [newSpaceName, setNewSpaceName] = createSignal("");
+  const [installDefaultApps, setInstallDefaultApps] = createSignal(true);
 
   const handleClose = () => {
     setNewSpaceName("");
-    onClose();
+    setInstallDefaultApps(true);
+    props.onClose();
   };
 
   return (
@@ -360,12 +341,12 @@ export function CreateSpaceModal({
           </label>
           <Input
             value={newSpaceName()}
-            onInput={(e) => setNewSpaceName(e.target.value)}
+            onInput={(e) => setNewSpaceName(e.currentTarget.value)}
             placeholder={t("spaceNamePlaceholder")}
             autofocus
             onKeyDown={(e) => {
               if (e.key === "Enter" && newSpaceName().trim()) {
-                onCreate(newSpaceName().trim());
+                props.onCreate(newSpaceName().trim(), installDefaultApps());
               }
             }}
           />
@@ -373,6 +354,22 @@ export function CreateSpaceModal({
             {t("createSpaceHint") ||
               "Create a team space to collaborate with others"}
           </p>
+          <label class="mt-4 flex gap-3 rounded-xl border border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800/60 px-4 py-3 cursor-pointer">
+            <input
+              type="checkbox"
+              class="mt-1 h-4 w-4 rounded border-zinc-300 text-zinc-900 focus:ring-zinc-900 dark:border-zinc-600 dark:bg-zinc-900 dark:focus:ring-zinc-100"
+              checked={installDefaultApps()}
+              onChange={(e) => setInstallDefaultApps(e.currentTarget.checked)}
+            />
+            <span class="space-y-1">
+              <span class="block text-sm font-medium text-zinc-900 dark:text-zinc-100">
+                {t("installDefaultAppsOnCreate")}
+              </span>
+              <span class="block text-xs leading-5 text-zinc-500 dark:text-zinc-400">
+                {t("installDefaultAppsOnCreateHint")}
+              </span>
+            </span>
+          </label>
         </div>
         <div class="flex justify-end gap-3 px-6 py-4 bg-zinc-50 dark:bg-zinc-800/50 border-t border-zinc-100 dark:border-zinc-800">
           <Button
@@ -385,8 +382,9 @@ export function CreateSpaceModal({
           <Button
             variant="primary"
             size="sm"
-            onClick={() => onCreate(newSpaceName().trim())}
-            isLoading={creating}
+            onClick={() =>
+              props.onCreate(newSpaceName().trim(), installDefaultApps())}
+            isLoading={props.creating}
             disabled={!newSpaceName().trim()}
           >
             {t("create")}

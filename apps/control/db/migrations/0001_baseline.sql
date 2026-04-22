@@ -701,7 +701,7 @@ CREATE TABLE "infra_workers" (
     "id" TEXT NOT NULL PRIMARY KEY,
     "account_id" TEXT NOT NULL,
     "name" TEXT NOT NULL,
-    "runtime" TEXT NOT NULL DEFAULT 'cloudflare.worker',
+    "runtime" TEXT NOT NULL DEFAULT 'takos.worker',
     "cf_worker_name" TEXT,
     "bundle_deployment_id" TEXT,
     "created_at" DATETIME NOT NULL,

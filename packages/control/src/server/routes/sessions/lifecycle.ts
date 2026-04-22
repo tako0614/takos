@@ -224,7 +224,7 @@ export async function stopSession(
       `Session ${sessionId.slice(0, 8)} changes`;
     gitResult = await runtimeManager.syncToGit(commitMessage, {
       name: user.name || "Takos Agent",
-      email: user.email || "agent@takos.io",
+      email: user.email || "agent@takos.jp",
     });
 
     if (!gitResult.success && gitResult.error) {

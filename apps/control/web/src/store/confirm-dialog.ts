@@ -1,4 +1,4 @@
-import { createSignal } from 'solid-js';
+import { createSignal } from "solid-js";
 
 export interface ConfirmDialogOptions {
   title: string;
@@ -20,8 +20,8 @@ interface ConfirmDialogState {
 
 const initialState: ConfirmDialogState = {
   isOpen: false,
-  title: '',
-  message: '',
+  title: "",
+  message: "",
   resolve: null,
 };
 

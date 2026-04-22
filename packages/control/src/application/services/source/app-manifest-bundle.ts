@@ -2,10 +2,10 @@ import YAML from "yaml";
 import { computeSHA256 } from "../../../shared/utils/hash.ts";
 import { safeJsonParseOrDefault } from "../../../shared/utils/index.ts";
 import {
-  type GroupDeploymentSnapshotBuildSource,
   type AppManifest,
   BUILD_SOURCE_LABELS,
   type BundleDoc,
+  type GroupDeploymentSnapshotBuildSource,
 } from "./app-manifest-types.ts";
 import { normalizeRepoPath } from "./app-manifest-utils.ts";
 import { buildBundleDocs } from "./app-manifest-bundle-docs.ts";
@@ -102,7 +102,10 @@ export function extractBuildSourcesFromManifestJson(
     {
       objects?: Array<
         {
+          type?: string;
           kind?: string;
+          name?: string;
+          labels?: Record<string, string>;
           metadata?: { name?: string; labels?: Record<string, string> };
         }
       >;
@@ -110,21 +113,25 @@ export function extractBuildSourcesFromManifestJson(
   >(manifestJson, null);
   const objects = Array.isArray(manifest?.objects) ? manifest.objects : [];
   return objects
-    .filter((item) => item.kind === "Workload")
+    .filter((item) => (item.type ?? item.kind) === "Workload")
     .map((item) => {
-      const labels = item.metadata?.labels || {};
+      const labels = {
+        ...(item.metadata?.labels || {}),
+        ...(item.labels || {}),
+      };
+      const name = item.name ?? item.metadata?.name;
       const workflowPath = labels[BUILD_SOURCE_LABELS.workflowPath];
       const workflowJob = labels[BUILD_SOURCE_LABELS.workflowJob];
       const workflowArtifact = labels[BUILD_SOURCE_LABELS.workflowArtifact];
       const artifactPath = labels[BUILD_SOURCE_LABELS.artifactPath];
       if (
         !workflowPath || !workflowJob || !workflowArtifact || !artifactPath ||
-        !item.metadata?.name
+        !name
       ) {
         return null;
       }
       return {
-        service_name: item.metadata.name,
+        service_name: name,
         workflow_path: workflowPath,
         workflow_job: workflowJob,
         workflow_artifact: workflowArtifact,

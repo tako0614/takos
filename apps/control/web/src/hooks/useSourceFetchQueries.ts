@@ -2,6 +2,7 @@ import type { Accessor, Setter } from "solid-js";
 import { rpc, rpcJson } from "../lib/rpc.ts";
 import type { SourceItem, SourceItemInstallation } from "./useSourceData.ts";
 import { PAGE_SIZE } from "./useSourcePagination.ts";
+import { lookupInstallation, sourceInstallationKey } from "./sourceInstall.ts";
 
 export interface UseSourceFetchQueriesOptions {
   isAuthenticated: Accessor<boolean>;
@@ -67,19 +68,34 @@ export function useSourceFetchQueries({
           id: string;
           manifest_version: string | null;
           created_at: string;
-          source?: { resolved_repo_id?: string | null } | null;
+          source?: {
+            kind: "git_ref" | "manifest";
+            resolved_repo_id?: string | null;
+            repository_url?: string | null;
+            ref?: string | null;
+            ref_type?: "branch" | "tag" | "commit" | null;
+          } | null;
         }>;
       }>(response);
       const map = new Map<string, SourceItemInstallation>();
       for (const pkg of data.group_deployment_snapshots || []) {
-        const repoId = pkg.source?.resolved_repo_id || null;
+        const installation = {
+          installed: true,
+          group_deployment_snapshot_id: pkg.id,
+          installed_version: pkg.manifest_version,
+          deployed_at: pkg.created_at,
+        };
+        const repoId = pkg.source?.kind === "git_ref"
+          ? pkg.source.resolved_repo_id || null
+          : null;
         if (repoId) {
-          map.set(repoId, {
-            installed: true,
-            group_deployment_snapshot_id: pkg.id,
-            installed_version: pkg.manifest_version,
-            deployed_at: pkg.created_at,
-          });
+          map.set(repoId, installation);
+        }
+        const key = pkg.source?.kind === "git_ref"
+          ? sourceInstallationKey(pkg.source)
+          : null;
+        if (key) {
+          map.set(key, installation);
         }
       }
       return map;
@@ -149,9 +165,11 @@ export function useSourceFetchQueries({
               username: string;
               avatar_url: string | null;
             };
+            catalog_origin?: "repository" | "default_app";
           };
           package: {
             available: boolean;
+            app_id: string | null;
             latest_version: string | null;
             latest_tag: string | null;
             release_id: string | null;
@@ -167,6 +185,14 @@ export function useSourceFetchQueries({
             publish_status: string;
             certified: boolean;
             published_at: string | null;
+          };
+          source?: {
+            kind: "git_ref";
+            repository_url: string;
+            ref: string;
+            ref_type: "branch" | "tag" | "commit";
+            backend?: "cloudflare" | "local" | "aws" | "gcp" | "k8s" | null;
+            env?: string | null;
           };
           installation?: {
             installed: boolean;
@@ -191,7 +217,7 @@ export function useSourceFetchQueries({
             deployed_at: item.installation.deployed_at,
           }
           : undefined;
-        return {
+        const sourceItem: SourceItem = {
           id: item.repo.id,
           name: item.repo.name,
           description: item.repo.description,
@@ -207,8 +233,11 @@ export function useSourceFetchQueries({
           is_mine: false,
           owner: item.repo.owner,
           space: item.repo.space,
+          catalog_origin: item.repo.catalog_origin ?? "repository",
+          source: item.source,
           package: {
             available: item.package.available,
+            app_id: item.package.app_id,
             latest_version: item.package.latest_version,
             latest_tag: item.package.latest_tag,
             release_tag: item.package.release_tag,
@@ -218,7 +247,14 @@ export function useSourceFetchQueries({
             certified: item.package.certified,
             description: item.package.description,
           },
-          installation: installMap.get(item.repo.id) ?? installation,
+        };
+        return {
+          ...sourceItem,
+          installation: lookupInstallation(
+            installMap,
+            sourceItem,
+            installation,
+          ),
         };
       });
 
@@ -322,6 +358,7 @@ export function useSourceFetchQueries({
         forks: repo.forks_count ?? repo.forks ?? 0,
         is_starred: repo.is_starred ?? false,
         is_mine: true,
+        catalog_origin: "repository",
         owner: repo.owner
           ? {
             id: repo.owner.id,
@@ -409,6 +446,7 @@ export function useSourceFetchQueries({
         forks: repo.forks_count ?? repo.forks ?? 0,
         is_starred: true,
         is_mine: false,
+        catalog_origin: "repository",
         owner: repo.owner
           ? {
             id: repo.owner.id,

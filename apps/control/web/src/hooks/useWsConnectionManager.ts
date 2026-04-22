@@ -1,9 +1,9 @@
 import {
-  useConnectionManagerBase,
   type ConnectionManagerOptions,
   type ConnectionManagerResult,
   type TransportSetupContext,
-} from './useConnectionManagerBase.ts';
+  useConnectionManagerBase,
+} from "./useConnectionManagerBase.ts";
 
 type MutableRefObject<T> = { current: T };
 
@@ -14,7 +14,8 @@ export function useWsConnectionManager(
   options: UseWsConnectionManagerOptions,
 ): UseWsConnectionManagerResult {
   const wsRef: MutableRefObject<WebSocket | null> = { current: null };
-  const heartbeatRef: MutableRefObject<ReturnType<typeof setInterval> | null> = { current: null };
+  const heartbeatRef: MutableRefObject<ReturnType<typeof setInterval> | null> =
+    { current: null };
   const lastPongRef: MutableRefObject<number> = { current: Date.now() };
 
   const cleanupTransport = (): void => {
@@ -30,7 +31,7 @@ export function useWsConnectionManager(
         wsRef.current.onclose = null;
         wsRef.current.close();
       } catch (cleanupErr) {
-        console.debug('WebSocket cleanup error (expected):', cleanupErr);
+        console.debug("WebSocket cleanup error (expected):", cleanupErr);
       }
       wsRef.current = null;
     }
@@ -39,13 +40,16 @@ export function useWsConnectionManager(
   const setupTransport = (ctx: TransportSetupContext): void => {
     const { runId, lastEventId, onMessage, onClose, onOpen } = ctx;
 
-    const protocol = globalThis.location.protocol === 'https:' ? 'wss:' : 'ws:';
+    const protocol = globalThis.location.protocol === "https:" ? "wss:" : "ws:";
     const wsParams = new URLSearchParams();
     if (lastEventId > 0) {
-      wsParams.set('last_event_id', String(lastEventId));
+      wsParams.set("last_event_id", String(lastEventId));
     }
     const wsQuery = wsParams.toString();
-    const wsUrl = `${protocol}//${globalThis.location.host}/api/runs/${runId}/ws${wsQuery ? `?${wsQuery}` : ''}`;
+    const wsUrl =
+      `${protocol}//${globalThis.location.host}/api/runs/${runId}/ws${
+        wsQuery ? `?${wsQuery}` : ""
+      }`;
 
     try {
       const ws = new WebSocket(wsUrl);
@@ -56,14 +60,14 @@ export function useWsConnectionManager(
       // Connection timeout -- if WebSocket doesn't open within 10s, force close.
       const connectTimeout = setTimeout(() => {
         if (ws.readyState !== WebSocket.OPEN) {
-          console.warn('[WS] Connection timeout, closing');
+          console.warn("[WS] Connection timeout, closing");
           ws.close();
         }
       }, 10_000);
 
       ws.onopen = () => {
         clearTimeout(connectTimeout);
-        ws.send(JSON.stringify({ type: 'subscribe', runId }));
+        ws.send(JSON.stringify({ type: "subscribe", runId }));
         lastPongRef.current = Date.now();
         onOpen();
 
@@ -75,13 +79,13 @@ export function useWsConnectionManager(
               ws.close();
               return;
             }
-            ws.send('ping');
+            ws.send("ping");
           }
         }, 30000);
       };
 
       ws.onmessage = (event) => {
-        if (event.data === 'pong') {
+        if (event.data === "pong") {
           lastPongRef.current = Date.now();
           return;
         }
@@ -89,7 +93,7 @@ export function useWsConnectionManager(
         // WS heartbeats also update the pong timestamp
         try {
           const peek = JSON.parse(event.data);
-          if (peek?.type === 'heartbeat') {
+          if (peek?.type === "heartbeat") {
             lastPongRef.current = Date.now();
           }
         } catch {
@@ -100,7 +104,7 @@ export function useWsConnectionManager(
       };
 
       ws.onerror = (event) => {
-        console.warn('WebSocket error event:', event);
+        console.warn("WebSocket error event:", event);
       };
 
       ws.onclose = () => {
@@ -114,7 +118,7 @@ export function useWsConnectionManager(
         onClose();
       };
     } catch (wsErr) {
-      console.error('WebSocket creation failed:', wsErr);
+      console.error("WebSocket creation failed:", wsErr);
     }
   };
 

@@ -1,10 +1,10 @@
-import { Show, For } from 'solid-js';
-import { Icons } from '../../lib/Icons.tsx';
-import { useI18n } from '../../store/i18n.ts';
-import { EmptyState } from '../common/EmptyState.tsx';
-import { RepoSummaryCard } from '../../views/shared/repos/RepoSummaryCard.tsx';
-import type { StarredRepo } from '../../types/profile.ts';
-import { formatDate } from '../../lib/format.ts';
+import { For, Show } from "solid-js";
+import { Icons } from "../../lib/Icons.tsx";
+import { useI18n } from "../../store/i18n.ts";
+import { EmptyState } from "../common/EmptyState.tsx";
+import { RepoSummaryCard } from "../../views/shared/repos/RepoSummaryCard.tsx";
+import type { StarredRepo } from "../../types/profile.ts";
+import { formatDate } from "../../lib/format.ts";
 
 interface ProfileStarsTabProps {
   starredRepos: StarredRepo[];
@@ -22,7 +22,7 @@ export function ProfileStarsTab(props: ProfileStarsTabProps) {
       fallback={
         <EmptyState
           icon={<Icons.Star class="w-12 h-12 mb-4" />}
-          title={t('noStarredReposYet')}
+          title={t("noStarredReposYet")}
         />
       }
     >

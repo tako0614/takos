@@ -55,6 +55,9 @@ export function resolveAttachedContainerBindingPlans(
   const plans: AttachedContainerBindingPlan[] = [];
 
   for (const childName of Object.keys(containers)) {
+    if (containers[childName]?.cloudflare?.container) {
+      continue;
+    }
     const workloadName = attachedWorkloadName(workerName, childName);
     const observedWorkload = observedState?.workloads[workloadName];
     const baseUrl = resolveWorkloadBaseUrl(observedWorkload);

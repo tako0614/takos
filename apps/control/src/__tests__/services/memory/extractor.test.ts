@@ -49,7 +49,10 @@ Object.defineProperties(mocks, {
         !(value as { prototype?: unknown }).prototype
       ) {
         const factory = value as (options?: unknown) => unknown;
-        normalizedValue = function MockLLMClient(this: unknown, options?: unknown) {
+        normalizedValue = function MockLLMClient(
+          this: unknown,
+          options?: unknown,
+        ) {
           return factory(options) as object;
         };
       }

@@ -5,6 +5,7 @@ type AppWorker = AppCompute & { kind: "worker" };
 type AppService = AppCompute & { kind: "service" };
 type AppContainer = AppCompute & { kind: "attached-container" };
 import type { Env } from "../../../shared/types/env.ts";
+import type { DeploymentTargetQueueConsumer } from "./models.ts";
 import {
   type ApplyArtifactInput,
   type ApplyEngineArtifactDeps,
@@ -23,6 +24,11 @@ import {
   injectAttachedContainerBindings,
   resolveAttachedContainerBindingPlans,
 } from "./attached-container-bindings.ts";
+import {
+  buildNativeCloudflareContainerBindings,
+  buildNativeCloudflareWorkerMetadata,
+  mergeNativeCloudflareContainerBindings,
+} from "./cloudflare-container-metadata.ts";
 import { ServiceDesiredStateService } from "../platform/worker-desired-state.ts";
 
 type ApplyGroupRecord = {
@@ -53,6 +59,10 @@ export type ApplyEngineExecutorDeps = ApplyEngineArtifactDeps & {
   deleteResource: typeof import("../entities/resource-ops.ts").deleteResource;
   updateManagedResource:
     typeof import("../entities/resource-ops.ts").updateManagedResource;
+  createServiceBinding:
+    typeof import("../resources/bindings.ts").createServiceBinding;
+  deleteServiceBinding:
+    typeof import("../resources/bindings.ts").deleteServiceBinding;
   deleteWorker: typeof import("../entities/worker-ops.ts").deleteWorker;
   deleteContainer:
     typeof import("../entities/container-ops.ts").deleteContainer;
@@ -74,6 +84,13 @@ type GroupStateLoader = (
   env: Env,
   groupId: string,
 ) => Promise<GroupState | null>;
+
+function isWorkloadCategory(
+  category: DiffEntry["category"],
+): category is ManagedServiceComponentKind {
+  return category === "worker" || category === "container" ||
+    category === "service";
+}
 
 function resolveManagedServiceShape(
   category: ManagedServiceComponentKind,
@@ -128,6 +145,8 @@ function buildManagedDeploymentTarget(
         workerSpec.readiness.length > 0
       ? workerSpec.readiness
       : "/";
+    const queueConsumers = buildQueueConsumerTargets(workerSpec);
+    const cloudflare = buildNativeCloudflareWorkerMetadata(workerSpec);
     return {
       route_ref: managed.row.routeRef ?? undefined,
       endpoint: managed.row.routeRef
@@ -140,6 +159,8 @@ function buildManagedDeploymentTarget(
         kind: "worker-bundle" as const,
       },
       readiness: { path: readinessPath },
+      ...(queueConsumers.length > 0 ? { queue_consumers: queueConsumers } : {}),
+      ...(cloudflare ? { cloudflare } : {}),
     };
   }
 
@@ -181,6 +202,38 @@ function buildManagedDeploymentTarget(
   };
 }
 
+function buildQueueConsumerTargets(
+  workerSpec: AppWorker,
+): DeploymentTargetQueueConsumer[] {
+  return (workerSpec.triggers?.queues ?? []).map((trigger) => {
+    const settings: NonNullable<DeploymentTargetQueueConsumer["settings"]> = {
+      ...(trigger.maxBatchSize != null
+        ? { batch_size: trigger.maxBatchSize }
+        : {}),
+      ...(trigger.maxConcurrency != null
+        ? { max_concurrency: trigger.maxConcurrency }
+        : {}),
+      ...(trigger.maxRetries != null
+        ? { max_retries: trigger.maxRetries }
+        : {}),
+      ...(trigger.maxWaitTimeMs != null
+        ? { max_wait_time_ms: trigger.maxWaitTimeMs }
+        : {}),
+      ...(trigger.retryDelaySeconds != null
+        ? { retry_delay: trigger.retryDelaySeconds }
+        : {}),
+    };
+    return {
+      ...(trigger.binding ? { binding: trigger.binding } : {}),
+      ...(trigger.queue ? { queue: trigger.queue } : {}),
+      ...(trigger.deadLetterQueue
+        ? { dead_letter_queue: trigger.deadLetterQueue }
+        : {}),
+      ...(Object.keys(settings).length > 0 ? { settings } : {}),
+    };
+  });
+}
+
 export async function syncGroupDesiredStateForWorkloads(
   deps: ApplyEngineExecutorDeps,
   getGroupState: GroupStateLoader,
@@ -201,6 +254,7 @@ export async function syncGroupDesiredStateForWorkloads(
     observedState,
     resourceRows,
     targetWorkloadNames: options.targetWorkloadNames,
+    syncPublications: false,
   });
 }
 
@@ -372,9 +426,13 @@ async function buildWorkerDeploymentOverride(
     input.group.spaceId,
     input.managed.row.id,
   );
+  const bindings = mergeNativeCloudflareContainerBindings({
+    existing: snapshot.bindings,
+    nativeBindings: buildNativeCloudflareContainerBindings(workerSpec),
+  });
   const injected = injectAttachedContainerBindings({
     bundleContent: input.artifact.bundleContent,
-    bindings: snapshot.bindings,
+    bindings,
     plans,
   });
 
@@ -517,6 +575,95 @@ async function executeWorkloadEntry(
   await deps.deleteService(env, input.groupId, input.entry.name);
 }
 
+export async function prepareWorkloadApplyEntries(
+  deps: ApplyEngineExecutorDeps,
+  env: Env,
+  input: {
+    entries: DiffEntry[];
+    desiredState: GroupDesiredState;
+    groupId: string;
+    group: ApplyGroupRecord;
+    envName: string;
+  },
+): Promise<ApplyEntryExecutionResult[]> {
+  const failures: ApplyEntryExecutionResult[] = [];
+  for (const entry of input.entries) {
+    if (
+      entry.action !== "create" && entry.action !== "update" ||
+      !isWorkloadCategory(entry.category)
+    ) {
+      continue;
+    }
+    const workload = input.desiredState.workloads[entry.name];
+    if (!workload || workload.category !== entry.category) continue;
+    try {
+      await upsertManagedWorkload(deps, env, {
+        groupId: input.groupId,
+        spaceId: input.group.spaceId,
+        envName: input.envName,
+        name: entry.name,
+        category: entry.category,
+        workload,
+      });
+    } catch (error) {
+      failures.push({
+        name: entry.name,
+        category: entry.category,
+        action: entry.action,
+        status: "failed",
+        error: error instanceof Error ? error.message : String(error),
+      });
+    }
+  }
+  return failures;
+}
+
+async function executeResourceEntry(
+  deps: ApplyEngineExecutorDeps,
+  env: Env,
+  input: {
+    entry: DiffEntry;
+    desiredState: GroupDesiredState;
+    groupId: string;
+    group: ApplyGroupRecord;
+    envName: string;
+  },
+): Promise<void> {
+  if (input.entry.action === "delete") {
+    await deps.deleteResource(env, input.groupId, input.entry.name);
+    return;
+  }
+
+  const resource = input.desiredState.resources[input.entry.name];
+  if (!resource) return;
+
+  const binding = resource.spec.bind ??
+    resource.spec.bindings?.[0]?.binding ??
+    undefined;
+
+  if (input.entry.action === "create") {
+    await deps.createResource(env, input.groupId, input.entry.name, {
+      type: resource.spec.type,
+      ...(binding ? { binding } : {}),
+      groupName: input.group.name,
+      envName: input.envName,
+      spaceId: input.group.spaceId,
+      backendName: input.group.backend ?? "cloudflare",
+      specFingerprint: resource.specFingerprint,
+      spec: resource.spec,
+    });
+    return;
+  }
+
+  if (input.entry.action === "update") {
+    await deps.updateManagedResource(env, input.groupId, input.entry.name, {
+      ...(binding ? { binding } : {}),
+      specFingerprint: resource.specFingerprint,
+      spec: resource.spec,
+    });
+  }
+}
+
 export async function executeApplyEntry(
   deps: ApplyEngineExecutorDeps,
   getGroupState: GroupStateLoader,
@@ -532,6 +679,15 @@ export async function executeApplyEntry(
   const envName = input.opts.envName ?? input.group.env ?? "default";
 
   switch (input.entry.category) {
+    case "resource":
+      return await executeResourceEntry(deps, env, {
+        entry: input.entry,
+        desiredState: input.desiredState,
+        groupId: input.groupId,
+        group: input.group,
+        envName,
+      });
+
     case "worker":
     case "container":
     case "service":

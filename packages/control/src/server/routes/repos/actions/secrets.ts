@@ -1,24 +1,27 @@
-import { Hono } from 'hono';
-import { parseJsonBody } from '../../route-auth.ts';
-import type { AuthenticatedRouteEnv } from '../../route-auth.ts';
-import { BadRequestError } from 'takos-common/errors';
-import { checkRepoAccess } from '../../../../application/services/source/repos.ts';
-import { getDb } from '../../../../infra/db/index.ts';
-import { workflowSecrets } from '../../../../infra/db/schema.ts';
-import { eq, and } from 'drizzle-orm';
-import { encrypt, generateId } from '../../../../shared/utils/index.ts';
-import { NotFoundError, InternalError } from 'takos-common/errors';
-import { ok } from '../../response-utils.ts';
+import { Hono } from "hono";
+import { parseJsonBody } from "../../route-auth.ts";
+import type { AuthenticatedRouteEnv } from "../../route-auth.ts";
+import { BadRequestError } from "takos-common/errors";
+import { checkRepoAccess } from "../../../../application/services/source/repos.ts";
+import { getDb } from "../../../../infra/db/index.ts";
+import { workflowSecrets } from "../../../../infra/db/schema.ts";
+import { and, eq } from "drizzle-orm";
+import { encrypt, generateId } from "../../../../shared/utils/index.ts";
+import { InternalError, NotFoundError } from "takos-common/errors";
+import { ok } from "../../response-utils.ts";
 
 export default new Hono<AuthenticatedRouteEnv>()
-  .get('/repos/:repoId/actions/secrets', async (c) => {
-    const user = c.get('user');
-    const repoId = c.req.param('repoId');
+  .get("/repos/:repoId/actions/secrets", async (c) => {
+    const user = c.get("user");
+    const repoId = c.req.param("repoId");
     const db = getDb(c.env.DB);
 
-    const repoAccess = await checkRepoAccess(c.env, repoId, user?.id, ['owner', 'admin']);
+    const repoAccess = await checkRepoAccess(c.env, repoId, user?.id, [
+      "owner",
+      "admin",
+    ]);
     if (!repoAccess) {
-      throw new NotFoundError('Repository');
+      throw new NotFoundError("Repository");
     }
 
     const secrets = await db.select({
@@ -40,14 +43,14 @@ export default new Hono<AuthenticatedRouteEnv>()
       })),
     });
   })
-  .put('/repos/:repoId/actions/secrets/:name', async (c) => {
-    const user = c.get('user');
-    const repoId = c.req.param('repoId');
-    const name = c.req.param('name');
+  .put("/repos/:repoId/actions/secrets/:name", async (c) => {
+    const user = c.get("user");
+    const repoId = c.req.param("repoId");
+    const name = c.req.param("name");
     const body = await parseJsonBody<{ value: string }>(c);
 
-    if (!body || typeof body.value !== 'string' || body.value.length === 0) {
-      throw new BadRequestError('Secret value is required');
+    if (!body || typeof body.value !== "string" || body.value.length === 0) {
+      throw new BadRequestError("Secret value is required");
     }
     // Cap secret value at 64 KB. The encrypted blob lives in D1 and large
     // values silently bloat row size + encryption cost.
@@ -58,14 +61,17 @@ export default new Hono<AuthenticatedRouteEnv>()
       );
     }
 
-    const repoAccess = await checkRepoAccess(c.env, repoId, user.id, ['owner', 'admin']);
+    const repoAccess = await checkRepoAccess(c.env, repoId, user.id, [
+      "owner",
+      "admin",
+    ]);
     if (!repoAccess) {
-      throw new NotFoundError('Repository');
+      throw new NotFoundError("Repository");
     }
 
     if (!/^[A-Z_][A-Z0-9_]*$/.test(name)) {
       throw new BadRequestError(
-        'Secret name must be uppercase letters, numbers, and underscores, starting with a letter or underscore'
+        "Secret name must be uppercase letters, numbers, and underscores, starting with a letter or underscore",
       );
     }
 
@@ -73,10 +79,12 @@ export default new Hono<AuthenticatedRouteEnv>()
 
     const encryptionKey = c.env.ENCRYPTION_KEY;
     if (!encryptionKey) {
-      throw new InternalError('Encryption not configured');
+      throw new InternalError("Encryption not configured");
     }
 
-    const encryptedValue = JSON.stringify(await encrypt(body.value, encryptionKey, `secret:${repoId}:${name}`));
+    const encryptedValue = JSON.stringify(
+      await encrypt(body.value, encryptionKey, `secret:${repoId}:${name}`),
+    );
     const timestamp = new Date().toISOString();
 
     const existing = await db.select()
@@ -128,15 +136,18 @@ export default new Hono<AuthenticatedRouteEnv>()
       updated_at: timestamp,
     });
   })
-  .delete('/repos/:repoId/actions/secrets/:name', async (c) => {
-    const user = c.get('user');
-    const repoId = c.req.param('repoId');
-    const name = c.req.param('name');
+  .delete("/repos/:repoId/actions/secrets/:name", async (c) => {
+    const user = c.get("user");
+    const repoId = c.req.param("repoId");
+    const name = c.req.param("name");
     const db = getDb(c.env.DB);
 
-    const repoAccess = await checkRepoAccess(c.env, repoId, user.id, ['owner', 'admin']);
+    const repoAccess = await checkRepoAccess(c.env, repoId, user.id, [
+      "owner",
+      "admin",
+    ]);
     if (!repoAccess) {
-      throw new NotFoundError('Repository');
+      throw new NotFoundError("Repository");
     }
 
     const result = await db.delete(workflowSecrets)
@@ -147,7 +158,7 @@ export default new Hono<AuthenticatedRouteEnv>()
       .returning();
 
     if (result.length === 0) {
-      throw new NotFoundError('Secret');
+      throw new NotFoundError("Secret");
     }
 
     return ok(c);

@@ -40,6 +40,7 @@ const REQUIRED_SITE_FILES = [
   "deploy/namespaces.md",
   "deploy/rollback.md",
   "deploy/troubleshooting.md",
+  "hosting/index.md",
   "hosting/self-hosted.md",
   "hosting/local.md",
   "hosting/cloudflare.md",
@@ -282,6 +283,58 @@ function resolveDocsLinkPath(
   return candidates.find((candidate) => existsSync(candidate)) ?? null;
 }
 
+function stripHeadingMarkdown(value: string): string {
+  return value
+    .replace(/\s*\{#[^}]+\}\s*$/, "")
+    .replace(/<[^>]*>/g, "")
+    .replace(/!\[([^\]]*)\]\([^)]+\)/g, "$1")
+    .replace(/\[([^\]]+)\]\([^)]+\)/g, "$1")
+    .replace(/`([^`]*)`/g, "$1")
+    .replace(/[*_~]/g, "")
+    .trim();
+}
+
+function slugifyHeading(value: string): string {
+  return stripHeadingMarkdown(value)
+    .normalize("NFKD")
+    .toLowerCase()
+    .replace(/[\s./]+/g, "-")
+    .replace(/[^\p{Letter}\p{Number}\p{Mark}_-]+/gu, "")
+    .replace(/-+/g, "-")
+    .replace(/^-|-$/g, "");
+}
+
+function extractHeadingAnchors(content: string): Set<string> {
+  const anchors = new Set<string>();
+  const counts = new Map<string, number>();
+
+  for (const match of content.matchAll(/^#{1,6}\s+(.+?)\s*#*\s*$/gm)) {
+    const heading = match[1] ?? "";
+    const explicitId = heading.match(/\s*\{#([^}]+)\}\s*$/)?.[1]?.trim();
+    if (explicitId) {
+      anchors.add(explicitId);
+      continue;
+    }
+
+    const base = slugifyHeading(heading);
+    if (!base) continue;
+
+    const count = counts.get(base) ?? 0;
+    counts.set(base, count + 1);
+    anchors.add(count === 0 ? base : `${base}-${count}`);
+  }
+
+  return anchors;
+}
+
+function decodeAnchor(anchor: string): string {
+  try {
+    return decodeURIComponent(anchor);
+  } catch {
+    return anchor;
+  }
+}
+
 function readJsonFile<T>(targetPath: string): T {
   return JSON.parse(readFileSync(targetPath, "utf8")) as T;
 }
@@ -398,11 +451,6 @@ function validatePublicContractExamples(
       if (/^\s*provider\s*:/m.test(block.content)) {
         result.errors.push(
           `[docs] backend selection fields are not allowed in public manifest examples: ${location}`,
-        );
-      }
-      if (/triggers:\s*[\s\S]*?queues:/m.test(block.content)) {
-        result.errors.push(
-          `[docs] retired queue triggers are not allowed in public contract examples: ${location}`,
         );
       }
       if (/^\s*capabilities:\s*$/m.test(block.content)) {
@@ -599,11 +647,85 @@ function validateRequiredSiteFiles(
   }
 }
 
+function validateDocsCustomBlockMarkers(
+  docsDir: string,
+  result: ValidationResult,
+): void {
+  const files = walkFiles(docsDir).filter((file) => file.endsWith(".md"));
+
+  for (const file of files) {
+    const relativePath = path.relative(docsDir, file);
+    const lines = readFileSync(file, "utf8").split(/\r?\n/);
+    const stack: Array<{ marker: string; lineNumber: number }> = [];
+    let fenceMarker: string | null = null;
+
+    for (const [index, line] of lines.entries()) {
+      const lineNumber = index + 1;
+      const trimmed = line.trim();
+      const fenceMatch = trimmed.match(/^(`{3,}|~{3,})/);
+
+      if (fenceMatch) {
+        const marker = fenceMatch[1] ?? "";
+        if (!fenceMarker) {
+          fenceMarker = marker[0] ?? null;
+        } else if (marker.startsWith(fenceMarker)) {
+          fenceMarker = null;
+        }
+        continue;
+      }
+
+      if (fenceMarker || !trimmed.includes(":::")) continue;
+
+      const openMatch = trimmed.match(/^(:{3,4})\s+[\w-]+(?:\s+.*)?$/);
+      if (openMatch) {
+        stack.push({ marker: openMatch[1] ?? "", lineNumber });
+        continue;
+      }
+
+      const closeMatch = trimmed.match(/^(:{3,4})$/);
+      if (closeMatch) {
+        const marker = closeMatch[1] ?? "";
+        const open = stack.pop();
+        if (!open) {
+          result.errors.push(
+            `[docs] unexpected custom block close marker in ${relativePath}:${lineNumber}`,
+          );
+          continue;
+        }
+        if (open.marker !== marker) {
+          result.errors.push(
+            `[docs] custom block close marker in ${relativePath}:${lineNumber} must match opener from line ${open.lineNumber}`,
+          );
+        }
+        continue;
+      }
+
+      result.errors.push(
+        `[docs] malformed custom block marker in ${relativePath}:${lineNumber}: put :::/:::: markers on their own lines`,
+      );
+    }
+
+    for (const open of stack) {
+      result.errors.push(
+        `[docs] unclosed custom block marker in ${relativePath}:${open.lineNumber}`,
+      );
+    }
+  }
+}
+
 function validateDocsInternalLinks(
   docsDir: string,
   result: ValidationResult,
 ): void {
   const files = walkFiles(docsDir).filter((file) => file.endsWith(".md"));
+  const anchorsByFile = new Map<string, Set<string>>();
+
+  for (const file of files) {
+    anchorsByFile.set(
+      file,
+      extractHeadingAnchors(stripFencedCodeBlocks(readFileSync(file, "utf8"))),
+    );
+  }
 
   for (const file of files) {
     const raw = readFileSync(file, "utf8");
@@ -631,24 +753,46 @@ function validateDocsInternalLinks(
       if (
         target === "" ||
         target === "#" ||
-        target.startsWith("#") ||
         target.startsWith("//") ||
         /^[a-zA-Z][a-zA-Z0-9+.-]*:/.test(target)
       ) {
         continue;
       }
 
-      const noQuery = target.split("?")[0] ?? target;
-      const linkPath = (noQuery.split("#")[0] ?? noQuery).trim();
-      if (linkPath === "") continue;
+      const hashIndex = target.indexOf("#");
+      const linkPath = (hashIndex >= 0 ? target.slice(0, hashIndex) : target)
+        .split("?")[0]
+        ?.trim() ?? "";
+      const anchor = hashIndex >= 0
+        ? (target.slice(hashIndex + 1).split("?")[0]?.trim() ?? "")
+        : "";
 
-      const resolved = resolveDocsLinkPath(docsDir, file, linkPath);
+      const resolved = linkPath === ""
+        ? file
+        : resolveDocsLinkPath(docsDir, file, linkPath);
       if (!resolved) {
         result.warnings.push(
           `[docs] broken link target in ${
             path.relative(docsDir, file)
           }: ${linkPath}`,
         );
+        continue;
+      }
+
+      if (anchor !== "") {
+        const anchors = anchorsByFile.get(resolved);
+        const decodedAnchor = decodeAnchor(anchor);
+        if (
+          anchors &&
+          !anchors.has(anchor) &&
+          !anchors.has(decodedAnchor)
+        ) {
+          result.errors.push(
+            `[docs] broken anchor target in ${
+              path.relative(docsDir, file)
+            }: ${target} -> ${path.relative(docsDir, resolved)}#${anchor}`,
+          );
+        }
       }
     }
   }
@@ -1152,8 +1296,7 @@ function validateApiEndpointCoverage(
   // Known exceptions that the static scanner cannot resolve:
   // - Billing webhook handler is mounted separately from billing routes
   //   but lives in the same source file, so the scanner applies the wrong prefix
-  const isKnownException = (e: string) =>
-    e === "POST /api/billing/";
+  const isKnownException = (e: string) => e === "POST /api/billing/";
 
   const undocumented = [...sourceNorm.entries()]
     .filter(([n]) => !docNorm.has(n))
@@ -1377,6 +1520,7 @@ function main(): void {
   const result: ValidationResult = { errors: [], warnings: [] };
 
   validateRequiredSiteFiles(docsDir, result);
+  validateDocsCustomBlockMarkers(docsDir, result);
   validateDocsInternalLinks(docsDir, result);
   validateDocsScriptRefs(repoRoot, docsDir, result);
   validateSelfContainedDocs(docsDir, result);

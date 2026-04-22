@@ -1,6 +1,6 @@
 import { useI18n } from "../../store/i18n.ts";
 
-export function LoginPage({ onLogin }: { onLogin: () => void }) {
+export function LoginPage(props: { onLogin: () => void }) {
   const { t, lang, setLang } = useI18n();
 
   return (
@@ -19,7 +19,7 @@ export function LoginPage({ onLogin }: { onLogin: () => void }) {
         <button
           type="button"
           class="w-full flex items-center justify-center gap-3 px-4 py-3 bg-white dark:bg-zinc-800 text-zinc-800 dark:text-zinc-100 rounded-lg font-medium hover:bg-zinc-100 dark:hover:bg-zinc-700 transition-colors"
-          onClick={onLogin}
+          onClick={() => props.onLogin()}
         >
           <svg width="20" height="20" viewBox="0 0 24 24">
             <path

@@ -22,13 +22,21 @@ export interface WorkflowInstance {
 }
 
 export interface WorkflowInstanceStatus {
-  status: 'queued' | 'running' | 'paused' | 'completed' | 'errored' | 'terminated';
+  status:
+    | "queued"
+    | "running"
+    | "paused"
+    | "completed"
+    | "errored"
+    | "terminated";
   output?: unknown;
   error?: string;
 }
 
 export interface WorkflowBinding {
-  create(options?: { id?: string; params?: unknown }): Promise<WorkflowInstance>;
+  create(
+    options?: { id?: string; params?: unknown },
+  ): Promise<WorkflowInstance>;
   get(id: string): Promise<WorkflowInstance>;
 }
 
@@ -52,7 +60,9 @@ export type WorkflowBindingConfig = {
   workflowName: string;
 };
 
-export function createWorkflowBinding(config: WorkflowBindingConfig): WorkflowBinding {
+export function createWorkflowBinding(
+  config: WorkflowBindingConfig,
+): WorkflowBinding {
   const { db, serviceId, workflowName } = config;
 
   function makeInstance(id: string): WorkflowInstance {
@@ -60,35 +70,37 @@ export function createWorkflowBinding(config: WorkflowBindingConfig): WorkflowBi
       id,
       async pause() {
         await db.prepare(
-          'UPDATE tenant_workflow_instances SET status = ?, updated_at = ? WHERE id = ? AND status = ?',
-        ).bind('paused', new Date().toISOString(), id, 'running').run();
+          "UPDATE tenant_workflow_instances SET status = ?, updated_at = ? WHERE id = ? AND status = ?",
+        ).bind("paused", new Date().toISOString(), id, "running").run();
       },
       async resume() {
         await db.prepare(
-          'UPDATE tenant_workflow_instances SET status = ?, updated_at = ? WHERE id = ? AND status = ?',
-        ).bind('queued', new Date().toISOString(), id, 'paused').run();
+          "UPDATE tenant_workflow_instances SET status = ?, updated_at = ? WHERE id = ? AND status = ?",
+        ).bind("queued", new Date().toISOString(), id, "paused").run();
       },
       async terminate() {
         await db.prepare(
-          'UPDATE tenant_workflow_instances SET status = ?, updated_at = ? WHERE id = ?',
-        ).bind('terminated', new Date().toISOString(), id).run();
+          "UPDATE tenant_workflow_instances SET status = ?, updated_at = ? WHERE id = ?",
+        ).bind("terminated", new Date().toISOString(), id).run();
       },
       async restart() {
         await db.prepare(
-          'UPDATE tenant_workflow_instances SET status = ?, output = NULL, error = NULL, updated_at = ? WHERE id = ?',
-        ).bind('queued', new Date().toISOString(), id).run();
+          "UPDATE tenant_workflow_instances SET status = ?, output = NULL, error = NULL, updated_at = ? WHERE id = ?",
+        ).bind("queued", new Date().toISOString(), id).run();
       },
       async status(): Promise<WorkflowInstanceStatus> {
         const row = await db.prepare(
-          'SELECT status, output, error FROM tenant_workflow_instances WHERE id = ?',
-        ).bind(id).first<{ status: string; output: string | null; error: string | null }>();
+          "SELECT status, output, error FROM tenant_workflow_instances WHERE id = ?",
+        ).bind(id).first<
+          { status: string; output: string | null; error: string | null }
+        >();
 
         if (!row) {
           throw new Error(`Workflow instance ${id} not found`);
         }
 
         return {
-          status: row.status as WorkflowInstanceStatus['status'],
+          status: row.status as WorkflowInstanceStatus["status"],
           ...(row.output ? { output: JSON.parse(row.output) } : {}),
           ...(row.error ? { error: row.error } : {}),
         };
@@ -97,18 +109,20 @@ export function createWorkflowBinding(config: WorkflowBindingConfig): WorkflowBi
   }
 
   return {
-    async create(options?: { id?: string; params?: unknown }): Promise<WorkflowInstance> {
+    async create(
+      options?: { id?: string; params?: unknown },
+    ): Promise<WorkflowInstance> {
       const id = options?.id ?? crypto.randomUUID();
       const now = new Date().toISOString();
 
       await db.prepare(
-        'INSERT INTO tenant_workflow_instances (id, service_id, workflow_name, params, status, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)',
+        "INSERT INTO tenant_workflow_instances (id, service_id, workflow_name, params, status, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
       ).bind(
         id,
         serviceId,
         workflowName,
         options?.params !== undefined ? JSON.stringify(options.params) : null,
-        'queued',
+        "queued",
         now,
         now,
       ).run();
@@ -118,7 +132,7 @@ export function createWorkflowBinding(config: WorkflowBindingConfig): WorkflowBi
 
     async get(id: string): Promise<WorkflowInstance> {
       const row = await db.prepare(
-        'SELECT id FROM tenant_workflow_instances WHERE id = ?',
+        "SELECT id FROM tenant_workflow_instances WHERE id = ?",
       ).bind(id).first<{ id: string }>();
 
       if (!row) {

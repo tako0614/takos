@@ -1,10 +1,10 @@
-import * as crypto from 'node:crypto';
-import * as fs from 'node:fs/promises';
-import * as os from 'node:os';
-import * as path from 'node:path';
-import { createLogger } from 'takos-common/logger';
+import * as crypto from "node:crypto";
+import * as fs from "node:fs/promises";
+import * as os from "node:os";
+import * as path from "node:path";
+import { createLogger } from "takos-common/logger";
 
-const logger = createLogger({ service: 'takos-runtime' });
+const logger = createLogger({ service: "takos-runtime" });
 
 interface TempDirManagerOptions {
   /** Cleanup timeout in milliseconds (default: 5 minutes) */
@@ -26,7 +26,7 @@ class TempDirManager {
 
   constructor(options: TempDirManagerOptions = {}) {
     this.cleanupTimeoutMs = options.cleanupTimeoutMs ?? 5 * 60 * 1000;
-    this.logPrefix = options.logPrefix ?? 'temp';
+    this.logPrefix = options.logPrefix ?? "temp";
   }
 
   async createTempDirWithCleanup(prefix: string): Promise<string> {
@@ -37,13 +37,20 @@ class TempDirManager {
       try {
         await fs.rm(tempDir, { recursive: true, force: true });
         this.activeTempDirs.delete(id);
-        logger.info('Cleanup: removed stale temp dir', { prefix: this.logPrefix, tempDir });
+        logger.info("Cleanup: removed stale temp dir", {
+          prefix: this.logPrefix,
+          tempDir,
+        });
       } catch {
         // Ignore cleanup errors
       }
     }, this.cleanupTimeoutMs);
 
-    this.activeTempDirs.set(id, { path: tempDir, createdAt: Date.now(), timer });
+    this.activeTempDirs.set(id, {
+      path: tempDir,
+      createdAt: Date.now(),
+      timer,
+    });
 
     return tempDir;
   }
@@ -57,7 +64,10 @@ class TempDirManager {
       }
     }
     await fs.rm(tempDir, { recursive: true, force: true }).catch((err) => {
-      logger.debug('Failed to clean up temp dir', { tempDir, error: err as Error });
+      logger.debug("Failed to clean up temp dir", {
+        tempDir,
+        error: err as Error,
+      });
     });
   }
 }
@@ -65,10 +75,10 @@ class TempDirManager {
 // Default instances for common use cases
 export const execTempDirManager = new TempDirManager({
   cleanupTimeoutMs: 5 * 60 * 1000, // 5 minutes
-  logPrefix: 'exec',
+  logPrefix: "exec",
 });
 
 export const mergeTempDirManager = new TempDirManager({
   cleanupTimeoutMs: 2 * 60 * 60 * 1000, // 2 hours for large merge operations
-  logPrefix: 'merge',
+  logPrefix: "merge",
 });

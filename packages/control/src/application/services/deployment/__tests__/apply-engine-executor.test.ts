@@ -1,7 +1,10 @@
 import { assertEquals, assertRejects } from "jsr:@std/assert";
 
 import { compileGroupDesiredState } from "../group-state.ts";
-import { executeApplyEntry } from "../apply-engine-executor.ts";
+import {
+  executeApplyEntry,
+  prepareWorkloadApplyEntries,
+} from "../apply-engine-executor.ts";
 
 Deno.test(
   "executeApplyEntry restores workload desired state when deployment fails after sync",
@@ -80,6 +83,7 @@ Deno.test(
         serviceId: params.serviceId,
         serviceName: params.serviceName,
         consumes: [],
+        resourceBindings: [],
         localEnvVars: serviceEnvVars.get(params.serviceId) ?? [],
       }),
       restoreManagedWorkloadDesiredState: async (
@@ -89,6 +93,11 @@ Deno.test(
           serviceId: string;
           serviceName: string;
           consumes: Array<{ publication: string }>;
+          resourceBindings: Array<{
+            name: string;
+            type: string;
+            resourceId: string;
+          }>;
           localEnvVars: Array<{
             name: string;
             value: string;
@@ -102,6 +111,8 @@ Deno.test(
       createResource: async () => undefined,
       deleteResource: async () => undefined,
       updateManagedResource: async () => undefined,
+      createServiceBinding: async () => undefined,
+      deleteServiceBinding: async () => undefined,
       deleteWorker: async () => undefined,
       deleteContainer: async () => undefined,
       deleteService: async () => undefined,
@@ -308,6 +319,83 @@ Deno.test(
 
     assertEquals(serviceEnvVars.get("service-web"), [
       { name: "OLD", value: "old-value", secret: false },
+    ]);
+  },
+);
+
+Deno.test(
+  "prepareWorkloadApplyEntries upserts all changed workloads before publication sync",
+  async () => {
+    const prepared: string[] = [];
+    const deps = {
+      upsertGroupManagedService: async (
+        _env: never,
+        input: {
+          manifestName: string;
+          componentKind: string;
+          status: string;
+        },
+      ) => {
+        prepared.push(
+          `${input.manifestName}:${input.componentKind}:${input.status}`,
+        );
+        return {
+          row: {
+            id: `svc_${input.manifestName}`,
+          },
+          config: {
+            manifestName: input.manifestName,
+            componentKind: input.componentKind,
+          },
+        };
+      },
+    };
+    const desiredState = compileGroupDesiredState({
+      name: "demo",
+      compute: {
+        web: { kind: "worker" },
+        api: {
+          kind: "service",
+          image:
+            "ghcr.io/example/api@sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+        },
+      },
+      routes: [{ target: "api", path: "/api" }],
+      publish: [{
+        name: "api-url",
+        publisher: "api",
+        type: "UiSurface",
+        path: "/api",
+      }],
+      env: {},
+    });
+
+    const failures = await prepareWorkloadApplyEntries(
+      deps as never,
+      {} as never,
+      {
+        entries: [
+          { name: "web", category: "worker", action: "create" },
+          { name: "api", category: "service", action: "create" },
+          { name: "route.api./api", category: "route", action: "create" },
+        ],
+        desiredState,
+        groupId: "group_1",
+        group: {
+          id: "group_1",
+          spaceId: "space_1",
+          name: "demo",
+          backend: "cloudflare",
+          env: "default",
+        },
+        envName: "default",
+      },
+    );
+
+    assertEquals(failures, []);
+    assertEquals(prepared, [
+      "web:worker:pending",
+      "api:service:pending",
     ]);
   },
 );

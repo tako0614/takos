@@ -1,7 +1,7 @@
-import { ja } from './i18n/ja.ts';
-import { en } from './i18n/en.ts';
+import { ja } from "./i18n/ja.ts";
+import { en } from "./i18n/en.ts";
 
-export type Language = 'ja' | 'en';
+export type Language = "ja" | "en";
 
 export const translations = {
   ja,
@@ -20,20 +20,24 @@ function interpolate(template: string, params?: TranslationParams): string {
   });
 }
 
-export function getTranslation(lang: Language, key: TranslationKey, params?: TranslationParams): string {
+export function getTranslation(
+  lang: Language,
+  key: TranslationKey,
+  params?: TranslationParams,
+): string {
   const base = translations[lang][key] || translations.en[key] || key;
   return interpolate(base, params);
 }
 
 export function detectLanguage(): Language {
-  const stored = localStorage.getItem('takos-lang');
-  if (stored === 'ja' || stored === 'en') {
+  const stored = localStorage.getItem("takos-lang");
+  if (stored === "ja" || stored === "en") {
     return stored;
   }
   const browserLang = navigator.language.toLowerCase();
-  return browserLang.startsWith('ja') ? 'ja' : 'en';
+  return browserLang.startsWith("ja") ? "ja" : "en";
 }
 
 export function setLanguage(lang: Language): void {
-  localStorage.setItem('takos-lang', lang);
+  localStorage.setItem("takos-lang", lang);
 }

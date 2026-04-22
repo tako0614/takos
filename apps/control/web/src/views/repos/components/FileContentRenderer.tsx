@@ -1,9 +1,9 @@
-import { Show } from 'solid-js';
-import { Icons } from '../../../lib/Icons.tsx';
-import { formatFileSize } from '../../../lib/format.ts';
-import { useI18n } from '../../../store/i18n.ts';
-import { CodeViewer } from './CodeViewer.tsx';
-import type { BlameResponse } from './CodeViewer.tsx';
+import { Show } from "solid-js";
+import { Icons } from "../../../lib/Icons.tsx";
+import { formatFileSize } from "../../../lib/format.ts";
+import { useI18n } from "../../../store/i18n.ts";
+import { CodeViewer } from "./CodeViewer.tsx";
+import type { BlameResponse } from "./CodeViewer.tsx";
 
 interface FileContentRendererProps {
   fileName: string;
@@ -51,25 +51,42 @@ export function FileContentRenderer(props: FileContentRendererProps) {
 
       <Show when={!props.isImage && !props.isPdf && props.isAudio}>
         <div class="flex items-center justify-center p-8">
-          <audio controls src={`data:${props.mimeType};base64,${props.fileContent}`} />
+          <audio
+            controls
+            src={`data:${props.mimeType};base64,${props.fileContent}`}
+          />
         </div>
       </Show>
 
-      <Show when={!props.isImage && !props.isPdf && !props.isAudio && props.isVideo}>
+      <Show
+        when={!props.isImage && !props.isPdf && !props.isAudio && props.isVideo}
+      >
         <div class="flex items-center justify-center p-8">
-          <video controls class="max-w-full max-h-full" src={`data:${props.mimeType};base64,${props.fileContent}`} />
+          <video
+            controls
+            class="max-w-full max-h-full"
+            src={`data:${props.mimeType};base64,${props.fileContent}`}
+          />
         </div>
       </Show>
 
-      <Show when={!props.isImage && !props.isPdf && !props.isAudio && !props.isVideo && props.isBinary}>
+      <Show
+        when={!props.isImage && !props.isPdf && !props.isAudio &&
+          !props.isVideo && props.isBinary}
+      >
         <div class="flex flex-col items-center justify-center gap-4 py-12 text-zinc-500 dark:text-zinc-400">
           <Icons.File class="w-12 h-12" />
-          <p>{t('binaryFileNotDisplayed')}</p>
-          <span>{t('sizeLabel', { size: formatFileSize(props.fileSize) })}</span>
+          <p>{t("binaryFileNotDisplayed")}</p>
+          <span>
+            {t("sizeLabel", { size: formatFileSize(props.fileSize) })}
+          </span>
         </div>
       </Show>
 
-      <Show when={!props.isImage && !props.isPdf && !props.isAudio && !props.isVideo && !props.isBinary}>
+      <Show
+        when={!props.isImage && !props.isPdf && !props.isAudio &&
+          !props.isVideo && !props.isBinary}
+      >
         <CodeViewer
           lines={props.lines}
           language={props.language}

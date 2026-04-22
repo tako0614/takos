@@ -1,5 +1,5 @@
-import type { R2Bucket } from '../../../shared/types/bindings.ts';
-import type { MessageRole } from '../../../shared/types/index.ts';
+import type { R2Bucket } from "../../../shared/types/bindings.ts";
+import type { MessageRole } from "../../../shared/types/index.ts";
 
 export type PersistedMessage = {
   id: string;
@@ -24,44 +24,43 @@ export function shouldOffloadMessage(input: {
   role: MessageRole;
   content: string;
 }): boolean {
-  if (input.role === 'tool') return true;
+  if (input.role === "tool") return true;
   return input.content.length > MESSAGE_OFFLOAD_CONTENT_THRESHOLD_CHARS;
 }
 
 export function makeMessagePreview(content: string): string {
   if (content.length <= MESSAGE_PREVIEW_MAX_CHARS) return content;
-  return content.slice(0, MESSAGE_PREVIEW_MAX_CHARS) + '...';
+  return content.slice(0, MESSAGE_PREVIEW_MAX_CHARS) + "...";
 }
 
 export async function writeMessageToR2(
   bucket: R2Bucket,
   threadId: string,
   messageId: string,
-  payload: PersistedMessage
+  payload: PersistedMessage,
 ): Promise<{ key: string }> {
   const key = messageR2Key(threadId, messageId);
   await bucket.put(key, JSON.stringify(payload), {
-    httpMetadata: { contentType: 'application/json' },
+    httpMetadata: { contentType: "application/json" },
   });
   return { key };
 }
 
 export async function readMessageFromR2(
   bucket: R2Bucket,
-  key: string
+  key: string,
 ): Promise<PersistedMessage | null> {
   const obj = await bucket.get(key);
   if (!obj) return null;
   try {
     const parsed = JSON.parse(await obj.text()) as PersistedMessage;
-    if (!parsed || typeof parsed !== 'object') return null;
-    if (typeof parsed.id !== 'string') return null;
-    if (typeof parsed.thread_id !== 'string') return null;
-    if (typeof parsed.role !== 'string') return null;
-    if (typeof parsed.content !== 'string') return null;
+    if (!parsed || typeof parsed !== "object") return null;
+    if (typeof parsed.id !== "string") return null;
+    if (typeof parsed.thread_id !== "string") return null;
+    if (typeof parsed.role !== "string") return null;
+    if (typeof parsed.content !== "string") return null;
     return parsed;
   } catch {
     return null;
   }
 }
-

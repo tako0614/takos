@@ -29,6 +29,22 @@ function readEnvString(
     : undefined;
 }
 
+const AWS_RESOURCE_BACKEND_ENV_KEYS = [
+  "AWS_DYNAMO_KV_TABLE",
+  "AWS_DYNAMO_HOSTNAME_ROUTING_TABLE",
+  "AWS_SQS_RUN_QUEUE_URL",
+  "AWS_SQS_INDEX_QUEUE_URL",
+  "AWS_SQS_WORKFLOW_QUEUE_URL",
+  "AWS_SQS_DEPLOY_QUEUE_URL",
+  "AWS_SECRETS_MANAGER_PREFIX",
+  "AWS_SECRETS_MANAGER_SECRET_PREFIX",
+  "AWS_SECRETS_MANAGER_KMS_KEY_ID",
+] as const;
+
+function hasAwsResourceBackendEnv(env: AuthenticatedRouteEnv["Bindings"]) {
+  return AWS_RESOURCE_BACKEND_ENV_KEYS.some((key) => readEnvString(env, key));
+}
+
 export function inferResourceBackend(
   env: AuthenticatedRouteEnv["Bindings"],
 ): ResourceBackendName {
@@ -36,23 +52,17 @@ export function inferResourceBackend(
     readEnvString(env, "TAKOS_RESOURCE_BACKEND"),
   );
   if (configuredBackend) return configuredBackend;
-  if (env.CF_ACCOUNT_ID && env.CF_API_TOKEN) return "cloudflare";
-  if (
-    readEnvString(env, "AWS_REGION") ||
-    readEnvString(env, "AWS_ECS_REGION") ||
-    readEnvString(env, "AWS_ECS_CLUSTER_ARN")
-  ) {
-    return "aws";
+  if (readEnvString(env, "K8S_NAMESPACE")) {
+    return "k8s";
   }
+  if (env.CF_ACCOUNT_ID && env.CF_API_TOKEN) return "cloudflare";
+  if (hasAwsResourceBackendEnv(env)) return "aws";
   if (
     readEnvString(env, "GCP_PROJECT_ID") ||
     readEnvString(env, "GCP_REGION") ||
     readEnvString(env, "GCP_CLOUD_RUN_REGION")
   ) {
     return "gcp";
-  }
-  if (readEnvString(env, "K8S_NAMESPACE")) {
-    return "k8s";
   }
   return "local";
 }

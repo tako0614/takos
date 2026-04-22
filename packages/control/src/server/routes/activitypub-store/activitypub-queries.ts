@@ -1,9 +1,17 @@
-import { and, count, desc, eq, sql } from 'drizzle-orm';
-import { getDb } from '../../../infra/db/index.ts';
-import { accounts, branches, repositories, storeInventoryItems } from '../../../infra/db/schema.ts';
-import type { Env } from '../../../shared/types/index.ts';
-import { findActivityPubStoreBySlug } from '../../../application/services/activitypub/stores.ts';
-import { hasExplicitInventory, countActiveItems } from '../../../application/services/activitypub/store-inventory.ts';
+import { and, count, desc, eq, sql } from "drizzle-orm";
+import { getDb } from "../../../infra/db/index.ts";
+import {
+  accounts,
+  branches,
+  repositories,
+  storeInventoryItems,
+} from "../../../infra/db/schema.ts";
+import type { Env } from "../../../shared/types/index.ts";
+import { findActivityPubStoreBySlug } from "../../../application/services/activitypub/stores.ts";
+import {
+  countActiveItems,
+  hasExplicitInventory,
+} from "../../../application/services/activitypub/store-inventory.ts";
 
 export interface StoreRecord {
   accountId: string;
@@ -44,7 +52,7 @@ function normalizeRepoName(value: string): string {
 }
 
 export async function findStoreBySlug(
-  env: Pick<Env, 'DB'>,
+  env: Pick<Env, "DB">,
   storeSlug: string,
 ): Promise<StoreRecord | null> {
   const slug = normalizeSlug(storeSlug);
@@ -57,17 +65,25 @@ export async function findStoreBySlug(
     return null;
   }
 
-  const explicit = await hasExplicitInventory(env.DB, store.accountId, store.slug);
+  const explicit = await hasExplicitInventory(
+    env.DB,
+    store.accountId,
+    store.slug,
+  );
 
   let publicRepoCount: number;
   if (explicit) {
-    publicRepoCount = await countActiveItems(env.DB, store.accountId, store.slug);
+    publicRepoCount = await countActiveItems(
+      env.DB,
+      store.accountId,
+      store.slug,
+    );
   } else {
     const db = getDb(env.DB);
     const repoCount = await db.select({ count: count() }).from(repositories)
       .where(and(
         eq(repositories.accountId, store.accountId),
-        eq(repositories.visibility, 'public'),
+        eq(repositories.visibility, "public"),
       ))
       .get();
     publicRepoCount = repoCount?.count ?? 0;
@@ -88,7 +104,7 @@ export async function findStoreBySlug(
 }
 
 export async function listStoreRepositories(
-  env: Pick<Env, 'DB'>,
+  env: Pick<Env, "DB">,
   storeSlug: string,
   options: { limit: number; offset: number },
 ): Promise<{ total: number; items: StoreRepositoryRecord[] }> {
@@ -97,7 +113,11 @@ export async function listStoreRepositories(
     return { total: 0, items: [] };
   }
 
-  const explicit = await hasExplicitInventory(env.DB, store.accountId, store.slug);
+  const explicit = await hasExplicitInventory(
+    env.DB,
+    store.accountId,
+    store.slug,
+  );
   if (explicit) {
     return listExplicitInventory(env, store, options);
   }
@@ -106,7 +126,7 @@ export async function listStoreRepositories(
 }
 
 async function listAutoInventory(
-  env: Pick<Env, 'DB'>,
+  env: Pick<Env, "DB">,
   store: StoreRecord,
   options: { limit: number; offset: number },
 ): Promise<{ total: number; items: StoreRepositoryRecord[] }> {
@@ -128,12 +148,19 @@ async function listAutoInventory(
     updatedAt: repositories.updatedAt,
   }).from(repositories)
     .innerJoin(accounts, eq(repositories.accountId, accounts.id))
-    .leftJoin(branches, and(eq(branches.repoId, repositories.id), eq(branches.isDefault, true)))
+    .leftJoin(
+      branches,
+      and(eq(branches.repoId, repositories.id), eq(branches.isDefault, true)),
+    )
     .where(and(
       eq(repositories.accountId, store.accountId),
-      eq(repositories.visibility, 'public'),
+      eq(repositories.visibility, "public"),
     ))
-    .orderBy(desc(repositories.updatedAt), desc(repositories.createdAt), repositories.name)
+    .orderBy(
+      desc(repositories.updatedAt),
+      desc(repositories.createdAt),
+      repositories.name,
+    )
     .limit(options.limit)
     .offset(options.offset)
     .all();
@@ -149,7 +176,7 @@ async function listAutoInventory(
 }
 
 async function listExplicitInventory(
-  env: Pick<Env, 'DB'>,
+  env: Pick<Env, "DB">,
   store: StoreRecord,
   options: { limit: number; offset: number },
 ): Promise<{ total: number; items: StoreRepositoryRecord[] }> {
@@ -180,9 +207,15 @@ async function listExplicitInventory(
     repoCreatedAt: repositories.createdAt,
     repoUpdatedAt: repositories.updatedAt,
   }).from(storeInventoryItems)
-    .leftJoin(repositories, eq(storeInventoryItems.localRepoId, repositories.id))
+    .leftJoin(
+      repositories,
+      eq(storeInventoryItems.localRepoId, repositories.id),
+    )
     .leftJoin(accounts, eq(repositories.accountId, accounts.id))
-    .leftJoin(branches, and(eq(branches.repoId, repositories.id), eq(branches.isDefault, true)))
+    .leftJoin(
+      branches,
+      and(eq(branches.repoId, repositories.id), eq(branches.isDefault, true)),
+    )
     .where(and(
       eq(storeInventoryItems.accountId, store.accountId),
       eq(storeInventoryItems.storeSlug, store.slug),
@@ -216,13 +249,13 @@ async function listExplicitInventory(
     // Remote repo — use cached metadata
     return {
       id: row.itemId,
-      ownerId: '',
-      ownerSlug: row.cachedOwnerSlug || '',
-      ownerName: row.cachedOwnerSlug || '',
-      name: row.cachedName || '',
+      ownerId: "",
+      ownerSlug: row.cachedOwnerSlug || "",
+      ownerName: row.cachedOwnerSlug || "",
+      name: row.cachedName || "",
       description: row.cachedSummary,
-      visibility: 'public',
-      defaultBranch: 'main',
+      visibility: "public",
+      defaultBranch: "main",
       defaultBranchHash: null,
       stars: 0,
       forks: 0,
@@ -236,7 +269,7 @@ async function listExplicitInventory(
 }
 
 export async function searchStoreRepositories(
-  env: Pick<Env, 'DB'>,
+  env: Pick<Env, "DB">,
   storeSlug: string,
   query: string,
   options: { limit: number; offset: number },
@@ -251,7 +284,7 @@ export async function searchStoreRepositories(
   const likePattern = `%${normalizedQuery}%`;
   const whereClause = and(
     eq(repositories.accountId, store.accountId),
-    eq(repositories.visibility, 'public'),
+    eq(repositories.visibility, "public"),
     sql`(
       lower(${repositories.name}) like ${likePattern}
       or lower(coalesce(${repositories.description}, '')) like ${likePattern}
@@ -276,9 +309,16 @@ export async function searchStoreRepositories(
       updatedAt: repositories.updatedAt,
     }).from(repositories)
       .innerJoin(accounts, eq(repositories.accountId, accounts.id))
-      .leftJoin(branches, and(eq(branches.repoId, repositories.id), eq(branches.isDefault, true)))
+      .leftJoin(
+        branches,
+        and(eq(branches.repoId, repositories.id), eq(branches.isDefault, true)),
+      )
       .where(whereClause)
-      .orderBy(desc(repositories.updatedAt), desc(repositories.createdAt), repositories.name)
+      .orderBy(
+        desc(repositories.updatedAt),
+        desc(repositories.createdAt),
+        repositories.name,
+      )
       .limit(options.limit)
       .offset(options.offset)
       .all(),
@@ -296,7 +336,7 @@ export async function searchStoreRepositories(
 }
 
 export async function findStoreRepository(
-  env: Pick<Env, 'DB'>,
+  env: Pick<Env, "DB">,
   storeSlug: string,
   ownerSlug: string,
   repoName: string,
@@ -331,10 +371,13 @@ export async function findStoreRepository(
     updatedAt: repositories.updatedAt,
   }).from(repositories)
     .innerJoin(accounts, eq(repositories.accountId, accounts.id))
-    .leftJoin(branches, and(eq(branches.repoId, repositories.id), eq(branches.isDefault, true)))
+    .leftJoin(
+      branches,
+      and(eq(branches.repoId, repositories.id), eq(branches.isDefault, true)),
+    )
     .where(and(
       eq(repositories.accountId, store.accountId),
-      eq(repositories.visibility, 'public'),
+      eq(repositories.visibility, "public"),
       sql`lower(${accounts.slug}) = ${normalizedOwner}`,
       sql`lower(${repositories.name}) = ${normalizedRepo}`,
     ))
@@ -353,7 +396,7 @@ export async function findStoreRepository(
 }
 
 export async function findCanonicalRepo(
-  env: Pick<Env, 'DB'>,
+  env: Pick<Env, "DB">,
   ownerSlug: string,
   repoName: string,
 ): Promise<StoreRepositoryRecord | null> {
@@ -381,9 +424,12 @@ export async function findCanonicalRepo(
     updatedAt: repositories.updatedAt,
   }).from(repositories)
     .innerJoin(accounts, eq(repositories.accountId, accounts.id))
-    .leftJoin(branches, and(eq(branches.repoId, repositories.id), eq(branches.isDefault, true)))
+    .leftJoin(
+      branches,
+      and(eq(branches.repoId, repositories.id), eq(branches.isDefault, true)),
+    )
     .where(and(
-      eq(repositories.visibility, 'public'),
+      eq(repositories.visibility, "public"),
       sql`lower(${accounts.slug}) = ${normalizedOwner}`,
       sql`lower(${repositories.name}) = ${normalizedRepo}`,
     ))
@@ -402,7 +448,7 @@ export async function findCanonicalRepo(
 }
 
 export async function findCanonicalRepoIncludingPrivate(
-  env: Pick<Env, 'DB'>,
+  env: Pick<Env, "DB">,
   ownerSlug: string,
   repoName: string,
 ): Promise<StoreRepositoryRecord | null> {
@@ -430,7 +476,10 @@ export async function findCanonicalRepoIncludingPrivate(
     updatedAt: repositories.updatedAt,
   }).from(repositories)
     .innerJoin(accounts, eq(repositories.accountId, accounts.id))
-    .leftJoin(branches, and(eq(branches.repoId, repositories.id), eq(branches.isDefault, true)))
+    .leftJoin(
+      branches,
+      and(eq(branches.repoId, repositories.id), eq(branches.isDefault, true)),
+    )
     .where(and(
       sql`lower(${accounts.slug}) = ${normalizedOwner}`,
       sql`lower(${repositories.name}) = ${normalizedRepo}`,
@@ -450,7 +499,7 @@ export async function findCanonicalRepoIncludingPrivate(
 }
 
 export async function listStoresForRepo(
-  env: Pick<Env, 'DB'>,
+  env: Pick<Env, "DB">,
   accountId: string,
 ): Promise<StoreRecord[]> {
   const db = getDb(env.DB);

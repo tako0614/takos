@@ -3,19 +3,22 @@
  */
 
 import {
-  type GlobalOptions,
-  type ResolvedConfig,
   enforceTenantSqlAccessPolicy,
   executeD1Sql,
   extractChangeCount,
   extractResults,
+  type GlobalOptions,
   print,
+  type ResolvedConfig,
   takeOption,
   validateQuerySafety,
-} from './index.ts';
+} from "./index.ts";
 
-export async function cmdD1Ping(config: ResolvedConfig, options: GlobalOptions): Promise<number> {
-  const result = await executeD1Sql(config, 'SELECT 1 AS ok');
+export async function cmdD1Ping(
+  config: ResolvedConfig,
+  options: GlobalOptions,
+): Promise<number> {
+  const result = await executeD1Sql(config, "SELECT 1 AS ok");
   if (options.isJson) {
     console.log(JSON.stringify(result, null, 2));
   } else {
@@ -25,10 +28,13 @@ export async function cmdD1Ping(config: ResolvedConfig, options: GlobalOptions):
   return 1;
 }
 
-export async function cmdD1Tables(config: ResolvedConfig, options: GlobalOptions): Promise<number> {
+export async function cmdD1Tables(
+  config: ResolvedConfig,
+  options: GlobalOptions,
+): Promise<number> {
   const result = await executeD1Sql(
     config,
-    "SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' ORDER BY name"
+    "SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' ORDER BY name",
   );
 
   const rows = extractResults(result);
@@ -40,10 +46,14 @@ export async function cmdD1Tables(config: ResolvedConfig, options: GlobalOptions
   return rows.length;
 }
 
-export async function cmdD1Query(config: ResolvedConfig, options: GlobalOptions, args: string[]): Promise<number> {
+export async function cmdD1Query(
+  config: ResolvedConfig,
+  options: GlobalOptions,
+  args: string[],
+): Promise<number> {
   const localArgs = [...args];
-  const sqlOption = takeOption(localArgs, '--sql');
-  const sql = (sqlOption || localArgs.join(' ')).trim();
+  const sqlOption = takeOption(localArgs, "--sql");
+  const sql = (sqlOption || localArgs.join(" ")).trim();
   if (!sql) {
     throw new Error('SQL query is required. Usage: d1 query "<sql>"');
   }
@@ -58,7 +68,7 @@ export async function cmdD1Query(config: ResolvedConfig, options: GlobalOptions,
   } else if (rows.length > 0) {
     console.table(rows as Record<string, unknown>[]);
   } else {
-    print('Query executed successfully.', options.isJson);
+    print("Query executed successfully.", options.isJson);
     print(`Affected rows: ${extractChangeCount(result)}`, options.isJson);
   }
 

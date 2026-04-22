@@ -6,131 +6,124 @@
 
 // --- Types ---
 export type {
-  GitObjectType,
-  TreeEntry,
-  GitSignature,
-  GitCommit,
-  GitTree,
+  CreateCommitParams,
   GitBlob,
   GitBranch,
-  GitTag,
+  GitCommit,
   GitCommitIndex,
+  GitObjectType,
   GitRepoFork,
   GitRepoRemote,
-  CreateCommitParams,
-  RefUpdateResult,
-  MergeConflictType,
+  GitSignature,
+  GitTag,
+  GitTree,
   MergeConflict,
-} from './git-objects.ts';
-export { FILE_MODES, SHA1_PATTERN, isValidSha } from './git-objects.ts';
+  MergeConflictType,
+  RefUpdateResult,
+  TreeEntry,
+} from "./git-objects.ts";
+export { FILE_MODES, isValidSha, SHA1_PATTERN } from "./git-objects.ts";
 
 // --- Core object operations ---
 export {
-  hashObject,
-  hashBlob,
-  hashTree,
-  hashCommit,
+  decodeCommit,
   decodeObject,
   decodeTree,
-  decodeCommit,
   encodeBlob,
-  encodeTree,
   encodeCommit,
-  encodeTreeContent,
   encodeCommitContent,
-} from './core/object.ts';
+  encodeTree,
+  encodeTreeContent,
+  hashBlob,
+  hashCommit,
+  hashObject,
+  hashTree,
+} from "./core/object.ts";
 
-export {
-  sha1,
-  hexToBytes,
-  hexFromBuffer,
-  concatBytes,
-} from './core/sha1.ts';
+export { concatBytes, hexFromBuffer, hexToBytes, sha1 } from "./core/sha1.ts";
 
 // --- Object store ---
 export {
-  putBlob,
-  putTree,
-  putCommit,
-  putRawObject,
+  deflate,
+  deleteObject,
   getBlob,
-  getTreeEntries,
   getCommitData,
+  getCompressedObject,
   getObject,
   getRawObject,
-  getCompressedObject,
-  objectExists,
-  deleteObject,
-  deflate,
+  getTreeEntries,
   inflate,
-} from './core/object-store.ts';
+  objectExists,
+  putBlob,
+  putCommit,
+  putRawObject,
+  putTree,
+} from "./core/object-store.ts";
 
 // --- Refs ---
 export {
+  createBranch,
+  createTag,
+  deleteBranch,
+  deleteTag,
   getBranch,
   getBranchesByNames,
   getDefaultBranch,
-  listBranches,
-  isValidRefName,
-  createBranch,
-  updateBranch,
-  deleteBranch,
-  setDefaultBranch,
   getTag,
-  listTags,
-  createTag,
-  deleteTag,
-  resolveRef,
+  isValidRefName,
   listAllRefs,
-} from './core/refs.ts';
+  listBranches,
+  listTags,
+  resolveRef,
+  setDefaultBranch,
+  updateBranch,
+} from "./core/refs.ts";
 
 // --- Commits ---
 export {
-  createCommit,
-  indexCommit,
-  getCommitFromIndex,
-  getCommit,
-  getCommitLog,
-  getCommitsFromRef,
-  isAncestor,
-  findMergeBase,
-  countCommitsBetween,
   collectReachableObjects,
   collectReachableObjectShas,
-} from './core/commit-index.ts';
+  countCommitsBetween,
+  createCommit,
+  findMergeBase,
+  getCommit,
+  getCommitFromIndex,
+  getCommitLog,
+  getCommitsFromRef,
+  indexCommit,
+  isAncestor,
+} from "./core/commit-index.ts";
 
 // --- Tree operations ---
 export {
-  isValidGitPath,
-  assertValidGitPath,
-  createTree,
-  getTree,
-  getEntryAtPath,
-  listDirectory,
-  getBlobAtPath,
-  buildTreeFromPaths,
   applyTreeChanges,
-  flattenTree,
+  assertValidGitPath,
+  buildTreeFromPaths,
   createEmptyTree,
   createSingleFileTree,
-} from './core/tree-ops.ts';
+  createTree,
+  flattenTree,
+  getBlobAtPath,
+  getEntryAtPath,
+  getTree,
+  isValidGitPath,
+  listDirectory,
+} from "./core/tree-ops.ts";
 
 // --- Merge ---
-export {
-  mergeTrees3Way,
-} from './core/merge.ts';
+export { mergeTrees3Way } from "./core/merge.ts";
 
 // --- Readable commit ---
 export {
+  type ResolveReadableCommitFailureReason,
   resolveReadableCommitFromRef,
   type ResolveReadableCommitResult,
-  type ResolveReadableCommitFailureReason,
-} from './core/readable-commit.ts';
+} from "./core/readable-commit.ts";
 
 // --- High-level operations ---
 export {
-  initRepository,
-  forkRepository,
   checkSyncStatus,
   commitFile,
-} from './operations.ts';
+  forkRepository,
+  initRepository,
+} from "./operations.ts";

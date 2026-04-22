@@ -13,6 +13,7 @@ import {
   createDeploymentBackend,
   parseDeploymentBackendConfig,
 } from "./backend.ts";
+import type { DeploymentBackendQueueConsumerSyncInput } from "./backend-contracts.ts";
 import {
   createDeploymentBackendRegistry,
   resolveDeploymentBackendConfigsFromEnv,
@@ -131,6 +132,9 @@ export async function executeRollback(
   const isContainerRollback =
     targetDeployment.artifact_kind === "container-image";
   const encryptionKey = env.ENCRYPTION_KEY ?? "";
+  const previousActiveDeployment = serviceRollbackInfo.activeDeploymentId
+    ? await getDeploymentById(env.DB, serviceRollbackInfo.activeDeploymentId)
+    : null;
 
   // For container rollback, re-deploy the target image via the backend
   if (isContainerRollback) {
@@ -231,19 +235,6 @@ export async function executeRollback(
 
   const nextTarget: RoutingTarget = rollbackRouting.target;
 
-  if (hostnameList.length > 0) {
-    await runRoutingMutationWithRollback(
-      env,
-      routingRollbackSnapshot,
-      () => applyRoutingToHostnames(env, hostnameList, nextTarget),
-      {
-        module: "rollback-orchestrator",
-        message:
-          "Failed to restore routing snapshot during rollback routing update (non-critical)",
-      },
-    );
-  }
-
   const nowIso = new Date().toISOString();
   const auditDetails: Record<string, unknown> = {
     ...rollbackRouting.auditDetails,
@@ -253,7 +244,98 @@ export async function executeRollback(
     to_version: targetDeployment.version,
   };
 
+  let queueConsumerRevertInput:
+    | DeploymentBackendQueueConsumerSyncInput
+    | null = null;
+  let queueConsumersSynced = false;
+
   try {
+    if (!isContainerRollback && rollbackBackend.syncQueueConsumers) {
+      const runtimeConfig = parseRuntimeConfig(
+        targetDeployment.runtime_config_snapshot_json,
+      );
+      const targetBindings = targetDeployment.bindings_snapshot_encrypted
+        ? await decryptBindings(encryptionKey, targetDeployment)
+        : [];
+      const previousBindings = previousActiveDeployment
+          ?.bindings_snapshot_encrypted
+        ? await decryptBindings(encryptionKey, previousActiveDeployment)
+        : [];
+      const previousRuntimeConfig = previousActiveDeployment
+        ? parseRuntimeConfig(
+          previousActiveDeployment.runtime_config_snapshot_json,
+        )
+        : null;
+      const targetRuntime = {
+        profile: "workers" as const,
+        bindings: targetBindings,
+        config: {
+          compatibility_date: runtimeConfig.compatibility_date || "2024-01-01",
+          compatibility_flags: runtimeConfig.compatibility_flags,
+          limits: runtimeConfig.limits,
+        },
+      };
+      const previousRuntime = previousRuntimeConfig
+        ? {
+          profile: "workers" as const,
+          bindings: previousBindings,
+          config: {
+            compatibility_date: previousRuntimeConfig.compatibility_date ||
+              "2024-01-01",
+            compatibility_flags: previousRuntimeConfig.compatibility_flags,
+            limits: previousRuntimeConfig.limits,
+          },
+        }
+        : null;
+
+      queueConsumerRevertInput = previousActiveDeployment?.artifact_ref
+        ? {
+          deployment: previousActiveDeployment,
+          artifactRef: previousActiveDeployment.artifact_ref,
+          runtime: previousRuntime ?? {
+            profile: "workers",
+            bindings: previousBindings,
+          },
+          previousDeployment: targetDeployment,
+          previousArtifactRef: targetArtifactRef,
+          previousRuntime: targetRuntime,
+        }
+        : {
+          deployment: { ...targetDeployment, target_json: "{}" } as Deployment,
+          artifactRef: targetArtifactRef,
+          runtime: {
+            profile: "workers",
+            bindings: [],
+          },
+          previousDeployment: targetDeployment,
+          previousArtifactRef: targetArtifactRef,
+          previousRuntime: targetRuntime,
+        };
+
+      await rollbackBackend.syncQueueConsumers({
+        deployment: targetDeployment,
+        artifactRef: targetArtifactRef,
+        runtime: targetRuntime,
+        previousDeployment: previousActiveDeployment,
+        previousArtifactRef: previousActiveDeployment?.artifact_ref ?? null,
+        previousRuntime,
+      });
+      queueConsumersSynced = true;
+    }
+
+    if (hostnameList.length > 0) {
+      await runRoutingMutationWithRollback(
+        env,
+        routingRollbackSnapshot,
+        () => applyRoutingToHostnames(env, hostnameList, nextTarget),
+        {
+          module: "rollback-orchestrator",
+          message:
+            "Failed to restore routing snapshot during rollback routing update (non-critical)",
+        },
+      );
+    }
+
     await db.update(deployments)
       .set({
         routingStatus: "archived",
@@ -298,6 +380,25 @@ export async function executeRollback(
         .run();
     }
   } catch (dbErr) {
+    if (
+      queueConsumersSynced &&
+      rollbackBackend.syncQueueConsumers &&
+      queueConsumerRevertInput
+    ) {
+      await rollbackBackend.syncQueueConsumers(queueConsumerRevertInput).catch(
+        (queueRollbackError: unknown) => {
+          logWarn(
+            "Failed to restore queue consumers during rollback failure",
+            {
+              module: "rollback-orchestrator",
+              error: queueRollbackError instanceof Error
+                ? queueRollbackError.message
+                : String(queueRollbackError),
+            },
+          );
+        },
+      );
+    }
     // Best-effort restore previous routing snapshot.
     if (routingRollbackSnapshot.length > 0) {
       await restoreRoutingSnapshot(env, routingRollbackSnapshot).catch((e) => {

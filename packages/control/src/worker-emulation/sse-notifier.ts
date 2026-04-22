@@ -1,5 +1,5 @@
-import { createClient } from 'redis';
-import { logWarn } from '../shared/utils/logger.ts';
+import { createClient } from "redis";
+import { logWarn } from "../shared/utils/logger.ts";
 
 // ---------------------------------------------------------------------------
 // 型
@@ -9,7 +9,10 @@ type RedisClient = ReturnType<typeof createClient>;
 
 export interface SseNotifierService {
   /** チャンネルへイベントを送信する（例: "run:{runId}"、"notifications:{userId}"）。 */
-  emit(channel: string, event: { type: string; data: unknown; event_id?: number }): void;
+  emit(
+    channel: string,
+    event: { type: string; data: unknown; event_id?: number },
+  ): void;
 
   /** チャンネルを購読し、SSE 形式の ReadableStream を返す。 */
   subscribe(channel: string, lastEventId?: number): ReadableStream<Uint8Array>;
@@ -38,18 +41,25 @@ function addToRingBuffer(
   data: unknown,
   preferredEventId?: number,
 ): RingBufferEvent {
-  const eventId =
-    preferredEventId && preferredEventId > counter.value
-      ? preferredEventId
-      : counter.value + 1;
+  const eventId = preferredEventId && preferredEventId > counter.value
+    ? preferredEventId
+    : counter.value + 1;
   counter.value = eventId;
-  const event: RingBufferEvent = { id: eventId, type, data, timestamp: Date.now() };
+  const event: RingBufferEvent = {
+    id: eventId,
+    type,
+    data,
+    timestamp: Date.now(),
+  };
   buffer.push(event);
   if (buffer.length > RING_BUFFER_SIZE) buffer.shift();
   return event;
 }
 
-function getEventsAfter(buffer: RingBufferEvent[], lastEventId: number): RingBufferEvent[] {
+function getEventsAfter(
+  buffer: RingBufferEvent[],
+  lastEventId: number,
+): RingBufferEvent[] {
   return buffer.filter((e) => e.id > lastEventId);
 }
 
@@ -64,13 +74,13 @@ function formatSseMessage(event: RingBufferEvent): Uint8Array {
     `id: ${event.id}`,
     `event: ${event.type}`,
     `data: ${JSON.stringify(event.data)}`,
-    '',
-    '',
+    "",
+    "",
   ];
-  return encoder.encode(lines.join('\n'));
+  return encoder.encode(lines.join("\n"));
 }
 
-const HEARTBEAT_BYTES = encoder.encode(': heartbeat\n\n');
+const HEARTBEAT_BYTES = encoder.encode(": heartbeat\n\n");
 
 // ---------------------------------------------------------------------------
 // 購読管理
@@ -88,7 +98,7 @@ interface ChannelState {
 // Redis Pub/Sub チャンネル命名
 // ---------------------------------------------------------------------------
 
-const REDIS_CHANNEL_PREFIX = 'takos:sse:';
+const REDIS_CHANNEL_PREFIX = "takos:sse:";
 
 interface RedisMessage {
   id: number;
@@ -101,7 +111,9 @@ interface RedisMessage {
 // ファクトリ
 // ---------------------------------------------------------------------------
 
-export async function createSseNotifierService(redisUrl?: string): Promise<SseNotifierService> {
+export async function createSseNotifierService(
+  redisUrl?: string,
+): Promise<SseNotifierService> {
   const channels = new Map<string, ChannelState>();
 
   // Redis クライアント（任意）
@@ -143,7 +155,7 @@ export async function createSseNotifierService(redisUrl?: string): Promise<SseNo
     await Promise.all([pubClient.connect(), subClient.connect()]);
 
     // Redis からのメッセージを受信してローカルで配信する
-    subClient.on('message', (redisChannel: string, message: string) => {
+    subClient.on("message", (redisChannel: string, message: string) => {
       if (!redisChannel.startsWith(REDIS_CHANNEL_PREFIX)) return;
       const channel = redisChannel.slice(REDIS_CHANNEL_PREFIX.length);
 
@@ -188,12 +200,15 @@ export async function createSseNotifierService(redisUrl?: string): Promise<SseNo
     });
   }
 
-// ---------------------------------------------------------------------------
-// サービス実装
-// ---------------------------------------------------------------------------
+  // ---------------------------------------------------------------------------
+  // サービス実装
+  // ---------------------------------------------------------------------------
 
   const service: SseNotifierService = {
-    emit(channel: string, event: { type: string; data: unknown; event_id?: number }): void {
+    emit(
+      channel: string,
+      event: { type: string; data: unknown; event_id?: number },
+    ): void {
       const state = getOrCreateChannel(channel);
       const ringEvent = addToRingBuffer(
         state.buffer,
@@ -216,12 +231,15 @@ export async function createSseNotifierService(redisUrl?: string): Promise<SseNo
           timestamp: ringEvent.timestamp,
         };
         pubClient.publish(redisChannel, JSON.stringify(payload)).catch(() => {
-        // Redis publish のエラーは無視（ローカル配信は成功済み）
+          // Redis publish のエラーは無視（ローカル配信は成功済み）
         });
       }
     },
 
-    subscribe(channel: string, lastEventId?: number): ReadableStream<Uint8Array> {
+    subscribe(
+      channel: string,
+      lastEventId?: number,
+    ): ReadableStream<Uint8Array> {
       const state = getOrCreateChannel(channel);
 
       // このチャンネルの Redis 購読を確保（fire-and-forget）
@@ -233,7 +251,7 @@ export async function createSseNotifierService(redisUrl?: string): Promise<SseNo
 
       return new ReadableStream<Uint8Array>({
         start(controller) {
-      // 1. lastEventId 以降のバッファ済みイベントを再送信する
+          // 1. lastEventId 以降のバッファ済みイベントを再送信する
           if (lastEventId !== undefined && lastEventId > 0) {
             const replay = getEventsAfter(state.buffer, lastEventId);
             for (const event of replay) {
@@ -241,7 +259,7 @@ export async function createSseNotifierService(redisUrl?: string): Promise<SseNo
             }
           }
 
-      // 2. 新規イベントの購読を開始する
+          // 2. 新規イベントの購読を開始する
           subscriber = (event: RingBufferEvent) => {
             if (cancelled) return;
             try {
@@ -295,14 +313,20 @@ export async function createSseNotifierService(redisUrl?: string): Promise<SseNo
       if (subClient) {
         disconnects.push(
           subClient.quit().catch((err) => {
-            logWarn('Failed to quit Redis subscriber client', { module: 'sse-notifier', error: err instanceof Error ? err.message : String(err) });
+            logWarn("Failed to quit Redis subscriber client", {
+              module: "sse-notifier",
+              error: err instanceof Error ? err.message : String(err),
+            });
           }),
         );
       }
       if (pubClient) {
         disconnects.push(
           pubClient.quit().catch((err) => {
-            logWarn('Failed to quit Redis publisher client', { module: 'sse-notifier', error: err instanceof Error ? err.message : String(err) });
+            logWarn("Failed to quit Redis publisher client", {
+              module: "sse-notifier",
+              error: err instanceof Error ? err.message : String(err),
+            });
           }),
         );
       }

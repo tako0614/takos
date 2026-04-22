@@ -1,10 +1,14 @@
-import type { D1Database, R2Bucket, Queue } from '../../../shared/types/bindings.ts';
-import type { RepoAccess } from '../source/repos.ts';
-import { logError } from '../../../shared/utils/logger.ts';
+import type {
+  D1Database,
+  Queue,
+  R2Bucket,
+} from "../../../shared/types/bindings.ts";
+import type { RepoAccess } from "../source/repos.ts";
+import { logError } from "../../../shared/utils/logger.ts";
 import {
-  triggerPullRequestWorkflows,
   type PullRequestWorkflowEvent,
-} from '../actions/index.ts';
+  triggerPullRequestWorkflows,
+} from "../actions/index.ts";
 
 // ---------------------------------------------------------------------------
 // PR workflow event triggers
@@ -44,7 +48,9 @@ export async function createPullRequestEventTask(
       event: options.event,
     });
   } catch (err) {
-    logError('Failed to trigger pull_request workflows', err, { module: 'services/pull-requests' });
+    logError("Failed to trigger pull_request workflows", err, {
+      module: "services/pull-requests",
+    });
   }
 }
 
@@ -60,7 +66,7 @@ export function createPullRequestEventTaskFromAccess(
   return createPullRequestEventTask(deps, {
     repoId: repoAccess.repo.id,
     repoName: repoAccess.repo.name,
-    defaultBranch: repoAccess.repo.default_branch || 'main',
+    defaultBranch: repoAccess.repo.default_branch || "main",
     actorId,
     event,
   });

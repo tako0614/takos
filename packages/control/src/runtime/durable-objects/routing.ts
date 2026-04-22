@@ -1,12 +1,15 @@
-import type { RoutingRecord, RoutingTarget } from '../../application/services/routing/routing-models.ts';
+import type {
+  RoutingRecord,
+  RoutingTarget,
+} from "../../application/services/routing/routing-models.ts";
 
-import { jsonResponse } from './do-header-utils.ts';
+import { jsonResponse } from "./do-header-utils.ts";
 
-type StoredRoutingRecord = Omit<RoutingRecord, 'hostname'>;
+type StoredRoutingRecord = Omit<RoutingRecord, "hostname">;
 
-const ROUTE_PREFIX = 'r:';
-const TOMBSTONE_PREFIX = 't:'; // t:<hex_expiry_ms>:<hostname>
-const ROLLOUT_ALARM_KEY = 'rollout:alarm';
+const ROUTE_PREFIX = "r:";
+const TOMBSTONE_PREFIX = "t:"; // t:<hex_expiry_ms>:<hostname>
+const ROLLOUT_ALARM_KEY = "rollout:alarm";
 
 function routeKey(hostname: string): string {
   return `${ROUTE_PREFIX}${hostname}`;
@@ -14,17 +17,19 @@ function routeKey(hostname: string): string {
 
 function padExpiryHex(expiryMs: number): string {
   // Fixed width so lexicographic order matches numeric order
-  return Math.max(0, Math.floor(expiryMs)).toString(16).padStart(16, '0');
+  return Math.max(0, Math.floor(expiryMs)).toString(16).padStart(16, "0");
 }
 
 function tombstoneKey(tombstoneUntilMs: number, hostname: string): string {
   return `${TOMBSTONE_PREFIX}${padExpiryHex(tombstoneUntilMs)}:${hostname}`;
 }
 
-function parseTombstoneKey(key: string): { tombstoneUntilMs: number; hostname: string } | null {
+function parseTombstoneKey(
+  key: string,
+): { tombstoneUntilMs: number; hostname: string } | null {
   if (!key.startsWith(TOMBSTONE_PREFIX)) return null;
   const rest = key.slice(TOMBSTONE_PREFIX.length);
-  const idx = rest.indexOf(':');
+  const idx = rest.indexOf(":");
   if (idx === -1) return null;
   const hex = rest.slice(0, idx);
   const hostname = rest.slice(idx + 1);
@@ -35,16 +40,22 @@ function parseTombstoneKey(key: string): { tombstoneUntilMs: number; hostname: s
 }
 
 function isRoutingTarget(value: unknown): value is RoutingTarget {
-  if (!value || typeof value !== 'object') return false;
+  if (!value || typeof value !== "object") return false;
   const v = value as Record<string, unknown>;
-  if (v.type === 'deployments' && Array.isArray(v.deployments) && v.deployments.length > 0) {
+  if (
+    v.type === "deployments" && Array.isArray(v.deployments) &&
+    v.deployments.length > 0
+  ) {
     for (const entry of v.deployments) {
-      if (!entry || typeof entry !== 'object') continue;
+      if (!entry || typeof entry !== "object") continue;
       const e = entry as Record<string, unknown>;
-      if (typeof e.routeRef === 'string' && e.routeRef) return true;
+      if (typeof e.routeRef === "string" && e.routeRef) return true;
     }
   }
-  if (v.type === 'http-endpoint-set' && Array.isArray(v.endpoints) && v.endpoints.length > 0) return true;
+  if (
+    v.type === "http-endpoint-set" && Array.isArray(v.endpoints) &&
+    v.endpoints.length > 0
+  ) return true;
   return false;
 }
 
@@ -56,36 +67,44 @@ export class RoutingDO implements DurableObject {
     const path = url.pathname;
 
     try {
-      if (path === '/routing/get' && request.method === 'POST') {
+      if (path === "/routing/get" && request.method === "POST") {
         const body = await request.json<{ hostname: string }>();
         return await this.handleGet(body);
       }
-      if (path === '/routing/put' && request.method === 'POST') {
-        const body = await request.json<{ hostname: string; target: RoutingTarget; updatedAt?: number }>();
+      if (path === "/routing/put" && request.method === "POST") {
+        const body = await request.json<
+          { hostname: string; target: RoutingTarget; updatedAt?: number }
+        >();
         return await this.handlePut(body);
       }
-      if (path === '/routing/delete' && request.method === 'POST') {
-        const body = await request.json<{ hostname: string; tombstoneTtlMs?: number; updatedAt?: number }>();
+      if (path === "/routing/delete" && request.method === "POST") {
+        const body = await request.json<
+          { hostname: string; tombstoneTtlMs?: number; updatedAt?: number }
+        >();
         return await this.handleDelete(body);
       }
-      if (path === '/routing/rollout/pending' && request.method === 'POST') {
-        const pending = await this.state.storage.get<{ hostname: string; triggeredAt: number }>('rollout:pending_advance');
+      if (path === "/routing/rollout/pending" && request.method === "POST") {
+        const pending = await this.state.storage.get<
+          { hostname: string; triggeredAt: number }
+        >("rollout:pending_advance");
         if (pending) {
-          await this.state.storage.delete('rollout:pending_advance');
+          await this.state.storage.delete("rollout:pending_advance");
           return jsonResponse({ pending: true, ...pending });
         }
         return jsonResponse({ pending: false });
       }
-      if (path === '/routing/rollout/schedule' && request.method === 'POST') {
-        const body = await request.json<{ hostname: string; delayMs: number }>();
+      if (path === "/routing/rollout/schedule" && request.method === "POST") {
+        const body = await request.json<
+          { hostname: string; delayMs: number }
+        >();
         return await this.handleRolloutSchedule(body);
       }
-      if (path === '/routing/rollout/cancel' && request.method === 'POST') {
+      if (path === "/routing/rollout/cancel" && request.method === "POST") {
         const body = await request.json<{ hostname: string }>();
         return await this.handleRolloutCancel(body);
       }
 
-      return new Response('Not Found', { status: 404 });
+      return new Response("Not Found", { status: 404 });
     } catch (error) {
       return jsonResponse({ error: String(error) }, 500);
     }
@@ -93,13 +112,15 @@ export class RoutingDO implements DurableObject {
 
   async alarm(): Promise<void> {
     // Check for rollout alarm first
-    const rolloutData = await this.state.storage.get<{ hostname: string; alarmAt: number }>(ROLLOUT_ALARM_KEY);
+    const rolloutData = await this.state.storage.get<
+      { hostname: string; alarmAt: number }
+    >(ROLLOUT_ALARM_KEY);
     if (rolloutData && rolloutData.alarmAt <= Date.now()) {
       await this.state.storage.delete(ROLLOUT_ALARM_KEY);
       // Signal rollout advance via a stored flag that external callers can poll.
       // The actual stage advancement is handled by the RolloutService caller,
       // not inside the DO, since we don't have access to DB/Env here.
-      await this.state.storage.put('rollout:pending_advance', {
+      await this.state.storage.put("rollout:pending_advance", {
         hostname: rolloutData.hostname,
         triggeredAt: Date.now(),
       });
@@ -118,13 +139,13 @@ export class RoutingDO implements DurableObject {
    * - Labels must not start or end with a hyphen.
    */
   private normalizeHostname(raw: string): string | null {
-    if (typeof raw !== 'string') return null;
+    if (typeof raw !== "string") return null;
     const hostname = raw.trim().toLowerCase();
     if (!hostname) return null;
     // RFC 1035: max 253 chars for a fully-qualified name without trailing dot
     if (hostname.length > 253) return null;
 
-    const labels = hostname.split('.');
+    const labels = hostname.split(".");
     // DNS name regex: letters, digits, hyphens; no leading/trailing hyphen
     const labelRegex = /^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/;
     for (const label of labels) {
@@ -136,10 +157,15 @@ export class RoutingDO implements DurableObject {
   }
 
   private async load(hostname: string): Promise<StoredRoutingRecord | null> {
-    return (await this.state.storage.get<StoredRoutingRecord>(routeKey(hostname))) ?? null;
+    return (await this.state.storage.get<StoredRoutingRecord>(
+      routeKey(hostname),
+    )) ?? null;
   }
 
-  private async save(hostname: string, record: StoredRoutingRecord): Promise<void> {
+  private async save(
+    hostname: string,
+    record: StoredRoutingRecord,
+  ): Promise<void> {
     await this.state.storage.put(routeKey(hostname), record);
   }
 
@@ -157,7 +183,10 @@ export class RoutingDO implements DurableObject {
     }
 
     const nowMs = Date.now();
-    if (typeof record.tombstoneUntil === 'number' && record.tombstoneUntil > 0 && record.tombstoneUntil <= nowMs) {
+    if (
+      typeof record.tombstoneUntil === "number" && record.tombstoneUntil > 0 &&
+      record.tombstoneUntil <= nowMs
+    ) {
       await this.deleteTombstoneIndex(hostname, record.tombstoneUntil);
       await this.deleteRecord(hostname);
       await this.scheduleNextCleanupAlarm();
@@ -168,17 +197,22 @@ export class RoutingDO implements DurableObject {
     return jsonResponse({ record: response });
   }
 
-  private async handlePut(body: { hostname: string; target: RoutingTarget; updatedAt?: number }): Promise<Response> {
+  private async handlePut(
+    body: { hostname: string; target: RoutingTarget; updatedAt?: number },
+  ): Promise<Response> {
     const hostname = this.normalizeHostname(body.hostname);
     if (!hostname) {
-      return jsonResponse({ error: 'Invalid hostname' }, 400);
+      return jsonResponse({ error: "Invalid hostname" }, 400);
     }
     if (!isRoutingTarget(body.target)) {
-      return jsonResponse({ error: 'Invalid target' }, 400);
+      return jsonResponse({ error: "Invalid target" }, 400);
     }
 
     const nowMs = Date.now();
-    const updatedAt = typeof body.updatedAt === 'number' && Number.isFinite(body.updatedAt) ? body.updatedAt : nowMs;
+    const updatedAt =
+      typeof body.updatedAt === "number" && Number.isFinite(body.updatedAt)
+        ? body.updatedAt
+        : nowMs;
 
     const prev = await this.load(hostname);
     const version = (prev?.version ?? 0) + 1;
@@ -200,16 +234,22 @@ export class RoutingDO implements DurableObject {
     return jsonResponse({ record: response });
   }
 
-  private async handleDelete(body: { hostname: string; tombstoneTtlMs?: number; updatedAt?: number }): Promise<Response> {
+  private async handleDelete(
+    body: { hostname: string; tombstoneTtlMs?: number; updatedAt?: number },
+  ): Promise<Response> {
     const hostname = this.normalizeHostname(body.hostname);
     if (!hostname) {
-      return jsonResponse({ error: 'Invalid hostname' }, 400);
+      return jsonResponse({ error: "Invalid hostname" }, 400);
     }
 
     const nowMs = Date.now();
-    const updatedAt = typeof body.updatedAt === 'number' && Number.isFinite(body.updatedAt) ? body.updatedAt : nowMs;
+    const updatedAt =
+      typeof body.updatedAt === "number" && Number.isFinite(body.updatedAt)
+        ? body.updatedAt
+        : nowMs;
 
-    const ttlMs = typeof body.tombstoneTtlMs === 'number' && Number.isFinite(body.tombstoneTtlMs)
+    const ttlMs = typeof body.tombstoneTtlMs === "number" &&
+        Number.isFinite(body.tombstoneTtlMs)
       ? Math.max(1_000, Math.min(body.tombstoneTtlMs, 30 * 60_000))
       : 2 * 60_000;
 
@@ -237,12 +277,18 @@ export class RoutingDO implements DurableObject {
     return jsonResponse({ record: response });
   }
 
-  private async putTombstoneIndex(hostname: string, tombstoneUntil: number): Promise<void> {
+  private async putTombstoneIndex(
+    hostname: string,
+    tombstoneUntil: number,
+  ): Promise<void> {
     const key = tombstoneKey(tombstoneUntil, hostname);
     await this.state.storage.put(key, 1);
   }
 
-  private async deleteTombstoneIndex(hostname: string, tombstoneUntil: number): Promise<void> {
+  private async deleteTombstoneIndex(
+    hostname: string,
+    tombstoneUntil: number,
+  ): Promise<void> {
     const key = tombstoneKey(tombstoneUntil, hostname);
     await this.state.storage.delete(key);
   }
@@ -252,7 +298,10 @@ export class RoutingDO implements DurableObject {
 
     // Process in small batches; storage.list is lexicographic by key, so earliest expiries come first.
     while (true) {
-      const batch = await this.state.storage.list<number>({ prefix: TOMBSTONE_PREFIX, limit: 128 });
+      const batch = await this.state.storage.list<number>({
+        prefix: TOMBSTONE_PREFIX,
+        limit: 128,
+      });
       if (batch.size === 0) return;
 
       let progressed = false;
@@ -294,7 +343,10 @@ export class RoutingDO implements DurableObject {
   }
 
   private async scheduleNextCleanupAlarm(): Promise<void> {
-    const earliest = await this.state.storage.list<number>({ prefix: TOMBSTONE_PREFIX, limit: 1 });
+    const earliest = await this.state.storage.list<number>({
+      prefix: TOMBSTONE_PREFIX,
+      limit: 1,
+    });
     const key = earliest.keys().next().value as string | undefined;
     if (!key) {
       await this.state.storage.deleteAlarm();
@@ -316,7 +368,9 @@ export class RoutingDO implements DurableObject {
 
   // --- Rollout alarm support ---
 
-  private async handleRolloutSchedule(body: { hostname: string; delayMs: number }): Promise<Response> {
+  private async handleRolloutSchedule(
+    body: { hostname: string; delayMs: number },
+  ): Promise<Response> {
     const alarmAt = Date.now() + Math.max(0, body.delayMs);
     await this.state.storage.put(ROLLOUT_ALARM_KEY, {
       hostname: body.hostname,
@@ -332,7 +386,9 @@ export class RoutingDO implements DurableObject {
     return jsonResponse({ scheduled: true, alarmAt });
   }
 
-  private async handleRolloutCancel(_body: { hostname: string }): Promise<Response> {
+  private async handleRolloutCancel(
+    _body: { hostname: string },
+  ): Promise<Response> {
     await this.state.storage.delete(ROLLOUT_ALARM_KEY);
     return jsonResponse({ cancelled: true });
   }

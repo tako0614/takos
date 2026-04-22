@@ -1,46 +1,57 @@
-import { createLogger } from 'takos-common/logger';
-import { HEARTBEAT_INTERVAL_MS, PROXY_BASE_URL } from '../shared/config.ts';
+import { createLogger } from "takos-common/logger";
+import { HEARTBEAT_INTERVAL_MS, PROXY_BASE_URL } from "../shared/config.ts";
 
-const logger = createLogger({ service: 'takos-runtime' });
+const logger = createLogger({ service: "takos-runtime" });
 
 let heartbeatConfigWarned = false;
 
-function getHeartbeatConfig(sessionId: string, proxyToken?: string): { url: string; headers: Record<string, string> } | null {
+function getHeartbeatConfig(
+  sessionId: string,
+  proxyToken?: string,
+): { url: string; headers: Record<string, string> } | null {
   if (PROXY_BASE_URL && proxyToken) {
-    const base = PROXY_BASE_URL.endsWith('/') ? PROXY_BASE_URL.slice(0, -1) : PROXY_BASE_URL;
+    const base = PROXY_BASE_URL.endsWith("/")
+      ? PROXY_BASE_URL.slice(0, -1)
+      : PROXY_BASE_URL;
     return {
       url: `${base}/forward/heartbeat/${sessionId}`,
       headers: {
-        'X-Takos-Session-Id': sessionId,
-        'Authorization': `Bearer ${proxyToken}`,
+        "X-Takos-Session-Id": sessionId,
+        "Authorization": `Bearer ${proxyToken}`,
       },
     };
   }
 
   if (!heartbeatConfigWarned) {
     const missing = [
-      !PROXY_BASE_URL ? 'PROXY_BASE_URL' : null,
-      !proxyToken ? 'proxy token' : null,
-    ].filter(Boolean).join(', ');
-    logger.warn('Heartbeat disabled', { missing });
+      !PROXY_BASE_URL ? "PROXY_BASE_URL" : null,
+      !proxyToken ? "proxy token" : null,
+    ].filter(Boolean).join(", ");
+    logger.warn("Heartbeat disabled", { missing });
     heartbeatConfigWarned = true;
   }
   return null;
 }
 
-async function sendHeartbeat(sessionId: string, proxyToken?: string): Promise<void> {
+async function sendHeartbeat(
+  sessionId: string,
+  proxyToken?: string,
+): Promise<void> {
   const config = getHeartbeatConfig(sessionId, proxyToken);
   if (!config) return;
   try {
     const response = await fetch(config.url, {
-      method: 'POST',
+      method: "POST",
       headers: config.headers,
     });
     if (!response.ok) {
-      logger.warn('Heartbeat failed', { status: response.status, statusText: response.statusText });
+      logger.warn("Heartbeat failed", {
+        status: response.status,
+        statusText: response.statusText,
+      });
     }
   } catch (err) {
-    logger.warn('Heartbeat error', { error: err as Error });
+    logger.warn("Heartbeat error", { error: err as Error });
   }
 }
 

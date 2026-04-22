@@ -1,1 +1,1 @@
-export { default } from './routes.ts';
+export { default } from "../custom-domains.ts";

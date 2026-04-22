@@ -17,6 +17,7 @@ Takos endpoint に `takos login` で認証していれば、追加の operator b
 ```bash
 mkdir my-first-group && cd my-first-group
 npm init -y
+mkdir -p src
 ```
 
 ## 2. Worker のコードを書く
@@ -79,6 +80,17 @@ jobs:
 
 ## 5. ビルドスクリプトを用意
 
+`package.json` に build script を追加し、`esbuild` を dev dependency として
+install します。
+
+```bash
+npm pkg set scripts.build="esbuild src/index.ts --bundle --outdir=dist/worker --format=esm"
+npm install --save-dev esbuild
+npm run build
+```
+
+`package.json` には次のような内容が追加されます。
+
 ```json
 {
   "scripts": {
@@ -90,30 +102,28 @@ jobs:
 }
 ```
 
-```bash
-npm install && npm run build
-```
-
 `dist/worker/index.js` が生成されれば OK。
 
 ## 6. デプロイ
 
 ```bash
 takos login
-takos deploy --env staging --space SPACE_ID --group my-first-group
+takos deploy --env staging --space SPACE_ID
 ```
 
 ::: tip CLI は Takos の認証情報を使います。`takos login` 後は `--account-id` や
-`--api-token` を渡す必要はありません。:::
+`--api-token` を渡す必要はありません。
+:::
 
 デプロイ成功すると URL が表示される。ブラウザで開いて "Hello from Takos!"
 が出れば成功。
 
 manifest の整合性だけ先に確認したい場合:
-`takos deploy --plan --space SPACE_ID --group my-first-group`
+`takos deploy --plan --space SPACE_ID`
 
 ::: tip flat manifest `app.yml` は flat 構造です。`apiVersion` / `kind` /
-`metadata` / `spec` のラッパーは不要で、`name` をトップレベルに書きます。:::
+`metadata` / `spec` のラッパーは不要で、`name` をトップレベルに書きます。
+:::
 
 ## 次のステップ
 

@@ -10,26 +10,26 @@
  * standard nested response format.
  */
 
-import type { Context } from 'hono';
+import type { Context } from "hono";
 
 export {
-  ErrorCodes,
-  type ErrorCode,
   AppError,
-  BadRequestError,
   AuthenticationError,
   AuthorizationError,
-  NotFoundError,
+  BadRequestError,
   ConflictError,
-  ValidationError,
-  RateLimitError,
+  type ErrorCode,
+  ErrorCodes,
   InternalError,
-  ServiceUnavailableError,
   isAppError,
-  normalizeError,
   logError,
+  normalizeError,
+  NotFoundError,
+  RateLimitError,
+  ServiceUnavailableError,
+  ValidationError,
   type ValidationErrorDetail,
-} from 'takos-common/errors';
+} from "takos-common/errors";
 
 export interface OAuth2ErrorResponse {
   error: string;
@@ -41,7 +41,7 @@ export function oauth2Error(
   c: Context,
   status: number,
   error: string,
-  description?: string
+  description?: string,
 ): Response {
   const response: OAuth2ErrorResponse = { error };
   if (description) {

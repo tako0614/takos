@@ -20,6 +20,13 @@ function read(relativePath: string, root = appRoot): Promise<string> {
   return readFile(path.join(root, relativePath), "utf8");
 }
 
+function assertSourceMatches(source: string, pattern: RegExp): void {
+  assert(
+    pattern.test(source),
+    `Expected source to match ${pattern}`,
+  );
+}
+
 Deno.test(
   "local public runtime contract - keeps bootstrap and package runtime exports free of loader registration and shim imports",
   async () => {
@@ -86,13 +93,13 @@ Deno.test(
     assertStringIncludes(sourceLocalServer, 'runtime: "node"');
     assertStringIncludes(sourceLocalServer, 'from "./fetch-server.ts"');
 
-    assertStringIncludes(
+    assertSourceMatches(
       packageRuntime,
-      "from '../../src/local-platform/runtime.ts'",
+      /from\s+["']\.\.\/\.\.\/src\/local-platform\/runtime\.ts["']/,
     );
-    assertStringIncludes(
+    assertSourceMatches(
       packageRuntime,
-      "from '../../src/local-platform/local-server.ts'",
+      /from\s+["']\.\.\/\.\.\/src\/local-platform\/local-server\.ts["']/,
     );
     assert(!packageRuntime.includes("fetch-server.ts"));
 
@@ -102,7 +109,10 @@ Deno.test(
     );
     assert(!sourceFetchServer.includes("process.env"));
     assert(!sourceFetchServer.includes("logInfo"));
-    assertStringIncludes(sourceFetchServer, "import('./node-fetch-server.ts')");
+    assertSourceMatches(
+      sourceFetchServer,
+      /import\(["']\.\/node-fetch-server\.ts["']\)/,
+    );
     assertStringIncludes(sourceFetchServer, "serveNodeFetch");
   },
 );

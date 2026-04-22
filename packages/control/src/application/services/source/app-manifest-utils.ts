@@ -69,6 +69,17 @@ export function asOptionalInteger(
   return numeric;
 }
 
+export function asOptionalBoolean(
+  value: unknown,
+  field: string,
+): boolean | undefined {
+  if (value == null) return undefined;
+  if (typeof value !== "boolean") {
+    throw new Error(`${field} must be a boolean`);
+  }
+  return value;
+}
+
 export function normalizeRepoPath(path: string): string {
   return String(path || "")
     .replace(/\\/g, "/")

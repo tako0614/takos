@@ -1,4 +1,4 @@
-import type { KvStoreBinding } from '../../../shared/types/bindings.ts';
+import type { KvStoreBinding } from "../../../shared/types/bindings.ts";
 
 const BUCKET_DURATION_MS = 60_000; // 1-minute buckets
 
@@ -15,7 +15,7 @@ export async function recordRequestOutcome(
   const minute = Math.floor(Date.now() / BUCKET_DURATION_MS);
   // Append-only: unique key per event avoids race conditions
   const key = `rollout:h:${artifactRef}:${minute}:${crypto.randomUUID()}`;
-  await kv.put(key, isError ? '1' : '0', { expirationTtl: 1800 });
+  await kv.put(key, isError ? "1" : "0", { expirationTtl: 1800 });
 }
 
 /**
@@ -36,7 +36,7 @@ export async function getErrorRate(
     for (const key of list.keys) {
       totalRequests++;
       const val = await kv.get(key.name);
-      if (val === '1') totalErrors++;
+      if (val === "1") totalErrors++;
     }
   }
 

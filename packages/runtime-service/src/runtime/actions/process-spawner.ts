@@ -13,6 +13,28 @@ const logger = createLogger({ service: "process-spawner" });
 import type { ExecutorStepResult } from "./executor.ts";
 import type { Buffer } from "node:buffer";
 
+const COMMAND_FILE_MAX_BYTES = 5 * 1024 * 1024;
+const ENV_KEY_PATTERN = /^[A-Za-z_][A-Za-z0-9_]*$/;
+const OUTPUT_KEY_PATTERN = /^[A-Za-z_][A-Za-z0-9_-]*$/;
+const UNSAFE_OBJECT_KEYS = new Set(["__proto__", "prototype", "constructor"]);
+const BLOCKED_ENV_KEYS = new Set([
+  "BASH_ENV",
+  "ENV",
+  "GITHUB_ENV",
+  "GITHUB_OUTPUT",
+  "GITHUB_PATH",
+  "GITHUB_STEP_SUMMARY",
+  "IFS",
+  "LD_AUDIT",
+  "LD_LIBRARY_PATH",
+  "LD_PRELOAD",
+  "NODE_OPTIONS",
+  "PATH",
+  "RUNNER_TEMP",
+  "RUNNER_TOOL_CACHE",
+  "SHELLOPTS",
+]);
+
 // ---------------------------------------------------------------------------
 // Types
 // ---------------------------------------------------------------------------
@@ -43,6 +65,112 @@ interface SpawnContext {
   parseWorkflowCommands: (text: string) => void;
   parseKeyValueFile: (content: string) => Record<string, string>;
   parsePathFile: (content: string) => string[];
+}
+
+function hasControlCharacters(value: string): boolean {
+  for (let i = 0; i < value.length; i++) {
+    const code = value.charCodeAt(i);
+    if (code <= 31 || code === 127) return true;
+  }
+  return false;
+}
+
+function isSafeObjectKey(key: string): boolean {
+  return !UNSAFE_OBJECT_KEYS.has(key);
+}
+
+function isBlockedEnvKey(key: string): boolean {
+  const upper = key.toUpperCase();
+  return BLOCKED_ENV_KEYS.has(upper) ||
+    upper.startsWith("GITHUB_") ||
+    upper.startsWith("RUNNER_") ||
+    upper.startsWith("DYLD_");
+}
+
+function sanitizeKeyValueEntries(
+  entries: Record<string, string>,
+  kind: "env" | "output",
+  logs: string[],
+): Record<string, string> {
+  const result: Record<string, string> = {};
+  const keyPattern = kind === "env" ? ENV_KEY_PATTERN : OUTPUT_KEY_PATTERN;
+
+  for (const [key, value] of Object.entries(entries)) {
+    if (!isSafeObjectKey(key) || !keyPattern.test(key)) {
+      pushLog(logs, `[WARNING] Ignored invalid command file ${kind} key`);
+      continue;
+    }
+    if (kind === "env" && isBlockedEnvKey(key)) {
+      pushLog(logs, `[WARNING] Ignored blocked command file env key: ${key}`);
+      continue;
+    }
+    if (value.length > SANDBOX_LIMITS.maxEnvValueLength) {
+      pushLog(logs, `[WARNING] Ignored oversized command file ${kind}: ${key}`);
+      continue;
+    }
+    result[key] = value;
+  }
+
+  return result;
+}
+
+async function readCommandFile(filePath: string): Promise<string> {
+  try {
+    const stat = await fs.lstat(filePath);
+    if (!stat.isFile() || stat.isSymbolicLink()) {
+      logger.warn("Ignored unsafe command file", { filePath });
+      return "";
+    }
+    if (stat.size > COMMAND_FILE_MAX_BYTES) {
+      logger.warn("Ignored oversized command file", {
+        filePath,
+        size: stat.size,
+        maxBytes: COMMAND_FILE_MAX_BYTES,
+      });
+      return "";
+    }
+    return await fs.readFile(filePath, "utf-8");
+  } catch (e) {
+    logger.warn("Failed to read command file", {
+      filePath,
+      error: String(e),
+    });
+    return "";
+  }
+}
+
+async function sanitizePathEntries(
+  entries: string[],
+  logs: string[],
+): Promise<string[]> {
+  const result: string[] = [];
+  for (const entry of entries) {
+    if (
+      !path.isAbsolute(entry) ||
+      hasControlCharacters(entry) ||
+      entry.includes(path.delimiter)
+    ) {
+      pushLog(logs, "[WARNING] Ignored unsafe command file PATH entry");
+      continue;
+    }
+
+    try {
+      const stat = await fs.lstat(entry);
+      if (!stat.isDirectory()) {
+        pushLog(
+          logs,
+          "[WARNING] Ignored non-directory command file PATH entry",
+        );
+        continue;
+      }
+    } catch {
+      pushLog(logs, "[WARNING] Ignored missing command file PATH entry");
+      continue;
+    }
+
+    result.push(entry);
+  }
+  return result;
 }
 
 // ---------------------------------------------------------------------------
@@ -99,28 +227,42 @@ export async function applyCommandFiles(
   prepared: PreparedCommandFiles,
   ctx: SpawnContext,
 ): Promise<void> {
-  const readFile = (filePath: string): Promise<string> =>
-    fs.readFile(filePath, "utf-8").catch((e) => {
-      logger.warn("Failed to read command file", {
-        filePath,
-        error: String(e),
-      });
-      return "";
-    });
-
   const [outputContent, envContent, pathContent] = await Promise.all([
-    readFile(prepared.files.output),
-    readFile(prepared.files.env),
-    readFile(prepared.files.path),
+    readCommandFile(prepared.files.output),
+    readCommandFile(prepared.files.env),
+    readCommandFile(prepared.files.path),
   ]);
 
   if (outputContent) {
-    Object.assign(ctx.outputs, ctx.parseKeyValueFile(outputContent));
+    Object.assign(
+      ctx.outputs,
+      sanitizeKeyValueEntries(
+        ctx.parseKeyValueFile(outputContent),
+        "output",
+        ctx.logs,
+      ),
+    );
   }
-  if (envContent) Object.assign(ctx.env, ctx.parseKeyValueFile(envContent));
+  if (envContent) {
+    Object.assign(
+      ctx.env,
+      sanitizeKeyValueEntries(
+        ctx.parseKeyValueFile(envContent),
+        "env",
+        ctx.logs,
+      ),
+    );
+  }
   if (pathContent) {
-    for (const entry of ctx.parsePathFile(pathContent)) {
-      ctx.env.PATH = entry + path.delimiter + (ctx.env.PATH || "");
+    for (
+      const entry of await sanitizePathEntries(
+        ctx.parsePathFile(pathContent),
+        ctx.logs,
+      )
+    ) {
+      ctx.env.PATH = ctx.env.PATH
+        ? ctx.env.PATH + path.delimiter + entry
+        : entry;
     }
   }
 }

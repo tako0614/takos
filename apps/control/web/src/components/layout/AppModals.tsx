@@ -8,7 +8,11 @@ import { useAuth } from "../../hooks/useAuth.tsx";
 import { buildChatSearchNavigationState } from "./app-modal-state.ts";
 
 interface AppModalsProps {
-  onCreateSpace: (name: string, description: string) => Promise<void>;
+  onCreateSpace: (
+    name: string,
+    description: string,
+    installDefaultApps: boolean,
+  ) => Promise<void>;
 }
 
 export function AppModals(props: AppModalsProps) {

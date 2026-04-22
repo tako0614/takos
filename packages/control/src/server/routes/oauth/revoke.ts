@@ -1,38 +1,56 @@
-import { Hono } from 'hono';
-import { validateClientCredentials } from '../../../application/services/oauth/client.ts';
-import { getRefreshToken, revokeToken, verifyAccessToken } from '../../../application/services/oauth/token.ts';
-import { tryLogOAuthEvent, getBodyValue, type FormBody } from './request-utils.ts';
-import type { PublicRouteEnv } from '../route-auth.ts';
-import { RateLimiters } from '../../../shared/utils/rate-limiter.ts';
+import { Hono } from "hono";
+import { validateClientCredentials } from "../../../application/services/oauth/client.ts";
+import {
+  getRefreshToken,
+  revokeToken,
+  verifyAccessToken,
+} from "../../../application/services/oauth/token.ts";
+import {
+  type FormBody,
+  getBodyValue,
+  tryLogOAuthEvent,
+} from "./request-utils.ts";
+import type { PublicRouteEnv } from "../route-auth.ts";
+import { RateLimiters } from "../../../shared/utils/rate-limiter.ts";
 
 const oauthRevoke = new Hono<PublicRouteEnv>();
 
 // Apply rate limiting: 10 requests per minute per IP
 const revokeRateLimiter = RateLimiters.oauthRevoke();
-oauthRevoke.use('/revoke', revokeRateLimiter.middleware());
+oauthRevoke.use("/revoke", revokeRateLimiter.middleware());
 
-oauthRevoke.post('/revoke', async (c) => {
+oauthRevoke.post("/revoke", async (c) => {
   const body = await c.req.parseBody() as FormBody;
   const token = getBodyValue(body.token);
-  const tokenTypeHint = getBodyValue(body.token_type_hint) as 'access_token' | 'refresh_token' | undefined;
+  const tokenTypeHint = getBodyValue(body.token_type_hint) as
+    | "access_token"
+    | "refresh_token"
+    | undefined;
   const clientId = getBodyValue(body.client_id);
   const clientSecret = getBodyValue(body.client_secret);
 
   if (!token || !clientId) {
     return c.json(
-      { error: 'invalid_request', error_description: 'Missing required parameters' },
-      400
+      {
+        error: "invalid_request",
+        error_description: "Missing required parameters",
+      },
+      400,
     );
   }
 
-  const { valid, error } = await validateClientCredentials(c.env.DB, clientId, clientSecret);
+  const { valid, error } = await validateClientCredentials(
+    c.env.DB,
+    clientId,
+    clientSecret,
+  );
   if (!valid) {
-    return c.json({ error: 'invalid_client', error_description: error }, 401);
+    return c.json({ error: "invalid_client", error_description: error }, 401);
   }
 
   let isClientMismatch = false;
 
-  if (tokenTypeHint !== 'refresh_token') {
+  if (tokenTypeHint !== "refresh_token") {
     const accessTokenPayload = await verifyAccessToken({
       token,
       publicKeyPem: c.env.PLATFORM_PUBLIC_KEY,
@@ -44,7 +62,7 @@ oauthRevoke.post('/revoke', async (c) => {
     }
   }
 
-  if (!isClientMismatch && tokenTypeHint !== 'access_token') {
+  if (!isClientMismatch && tokenTypeHint !== "access_token") {
     const refreshToken = await getRefreshToken(c.env.DB, token);
     if (refreshToken && refreshToken.client_id !== clientId) {
       isClientMismatch = true;
@@ -56,7 +74,7 @@ oauthRevoke.post('/revoke', async (c) => {
 
     await tryLogOAuthEvent(c, {
       clientId,
-      eventType: 'token_revoked',
+      eventType: "token_revoked",
       details: {
         token_type_hint: tokenTypeHint || null,
       },

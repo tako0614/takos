@@ -2,13 +2,13 @@
  * Push Activities Service — records ForgeFed Push activities for repo outbox.
  */
 
-import { count, desc, eq, inArray } from 'drizzle-orm';
-import type { D1Database } from '../../../shared/types/bindings.ts';
-import { getDb, repoPushActivities } from '../../../infra/db/index.ts';
-import { generateId } from '../../../shared/utils/index.ts';
+import { count, desc, eq, inArray } from "drizzle-orm";
+import type { D1Database } from "../../../shared/types/bindings.ts";
+import { getDb, repoPushActivities } from "../../../infra/db/index.ts";
+import { generateId } from "../../../shared/utils/index.ts";
 
 /** Sentinel ref value used to mark repo deletion activities. */
-export const DELETE_REF = '__delete__';
+export const DELETE_REF = "__delete__";
 
 export interface CommitMeta {
   hash: string;
@@ -129,7 +129,7 @@ export async function recordRepoDeleteActivity(
     accountId: input.accountId,
     ref: DELETE_REF,
     beforeSha: null,
-    afterSha: '',
+    afterSha: "",
     pusherActorUrl: null,
     pusherName: null,
     commitCount: 0,

@@ -3,8 +3,8 @@
 /** Convert a Uint8Array to a lowercase hex string. */
 export function bytesToHex(bytes: Uint8Array): string {
   return Array.from(bytes)
-    .map((b) => b.toString(16).padStart(2, '0'))
-    .join('');
+    .map((b) => b.toString(16).padStart(2, "0"))
+    .join("");
 }
 
 /** Convert a hex string to a Uint8Array. */
@@ -20,7 +20,7 @@ export function hexToBytes(hex: string): Uint8Array {
 
 /** Convert a Uint8Array to a standard base64 string. */
 export function bytesToBase64(bytes: Uint8Array): string {
-  let binary = '';
+  let binary = "";
   for (let i = 0; i < bytes.length; i++) {
     binary += String.fromCharCode(bytes[i]);
   }
@@ -41,8 +41,10 @@ export function base64ToBytes(base64: string): Uint8Array {
 
 /** Compute SHA-256 of a string or ArrayBuffer and return the hex digest. */
 export async function sha256Hex(data: string | ArrayBuffer): Promise<string> {
-  const input = typeof data === 'string' ? new TextEncoder().encode(data) : data;
-  const digest = await crypto.subtle.digest('SHA-256', input);
+  const input = typeof data === "string"
+    ? new TextEncoder().encode(data)
+    : data;
+  const digest = await crypto.subtle.digest("SHA-256", input);
   return bytesToHex(new Uint8Array(digest));
 }
 
@@ -50,16 +52,19 @@ export async function sha256Hex(data: string | ArrayBuffer): Promise<string> {
 
 export function base64UrlEncode(buffer: ArrayBuffer | Uint8Array): string {
   const bytes = buffer instanceof Uint8Array ? buffer : new Uint8Array(buffer);
-  let binary = '';
+  let binary = "";
   for (let i = 0; i < bytes.length; i++) {
     binary += String.fromCharCode(bytes[i]);
   }
-  return btoa(binary).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+  return btoa(binary).replace(/\+/g, "-").replace(/\//g, "_").replace(
+    /=+$/,
+    "",
+  );
 }
 
 export function base64UrlDecode(input: string): Uint8Array {
-  const base64 = input.replace(/-/g, '+').replace(/_/g, '/');
-  const padded = base64 + '='.repeat((4 - (base64.length % 4)) % 4);
+  const base64 = input.replace(/-/g, "+").replace(/_/g, "/");
+  const padded = base64 + "=".repeat((4 - (base64.length % 4)) % 4);
   const binary = atob(padded);
   const bytes = new Uint8Array(binary.length);
   for (let i = 0; i < binary.length; i++) {

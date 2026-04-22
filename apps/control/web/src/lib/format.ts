@@ -4,7 +4,7 @@ function diffInDays(dateString: string): number {
 }
 
 function formatDaysAgo(diffDays: number, date: Date): string {
-  if (diffDays === 1) return 'Yesterday';
+  if (diffDays === 1) return "Yesterday";
   if (diffDays < 7) return `${diffDays} days ago`;
   if (diffDays < 30) return `${Math.floor(diffDays / 7)} weeks ago`;
   if (diffDays < 365) return `${Math.floor(diffDays / 30)} months ago`;
@@ -13,7 +13,7 @@ function formatDaysAgo(diffDays: number, date: Date): string {
 
 export function formatRelativeDate(dateString: string): string {
   const days = diffInDays(dateString);
-  if (days === 0) return 'Today';
+  if (days === 0) return "Today";
   return formatDaysAgo(days, new Date(dateString));
 }
 
@@ -23,7 +23,7 @@ export function formatDetailedRelativeDate(dateString: string): string {
   const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
   const days = Math.floor(diffMs / (1000 * 60 * 60 * 24));
 
-  if (diffMins < 1) return 'Just now';
+  if (diffMins < 1) return "Just now";
   if (diffMins < 60) return `${diffMins}m ago`;
   if (diffHours < 24) return `${diffHours}h ago`;
   return formatDaysAgo(days, new Date(dateString));
@@ -31,22 +31,22 @@ export function formatDetailedRelativeDate(dateString: string): string {
 
 export function formatShortDate(dateString: string): string {
   return new Date(dateString).toLocaleDateString(undefined, {
-    year: 'numeric',
-    month: 'short',
-    day: 'numeric',
+    year: "numeric",
+    month: "short",
+    day: "numeric",
   });
 }
 
 export const formatDate = formatShortDate;
 
 export function formatDateTime(dateString: string | undefined): string {
-  if (!dateString) return '';
+  if (!dateString) return "";
   return new Date(dateString).toLocaleDateString(undefined, {
-    year: 'numeric',
-    month: 'short',
-    day: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
+    year: "numeric",
+    month: "short",
+    day: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
   });
 }
 

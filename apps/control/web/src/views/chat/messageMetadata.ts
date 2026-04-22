@@ -1,4 +1,4 @@
-import type { ToolExecution } from '../../types/index.ts';
+import type { ToolExecution } from "../../types/index.ts";
 
 export interface ChatAttachmentMetadata {
   file_id?: string;
@@ -14,20 +14,20 @@ export interface ParsedChatMessageMetadata {
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null && !Array.isArray(value);
+  return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
 function parseAttachments(raw: unknown): ChatAttachmentMetadata[] {
   if (!Array.isArray(raw)) return [];
   return raw
     .map((entry): ChatAttachmentMetadata | null => {
-      if (!isRecord(entry) || typeof entry.name !== 'string') return null;
+      if (!isRecord(entry) || typeof entry.name !== "string") return null;
       return {
-        file_id: typeof entry.file_id === 'string' ? entry.file_id : undefined,
-        path: typeof entry.path === 'string' ? entry.path : undefined,
+        file_id: typeof entry.file_id === "string" ? entry.file_id : undefined,
+        path: typeof entry.path === "string" ? entry.path : undefined,
         name: entry.name,
-        mime_type: typeof entry.mime_type === 'string' ? entry.mime_type : null,
-        size: typeof entry.size === 'number' ? entry.size : undefined,
+        mime_type: typeof entry.mime_type === "string" ? entry.mime_type : null,
+        size: typeof entry.size === "number" ? entry.size : undefined,
       };
     })
     .filter((entry): entry is ChatAttachmentMetadata => entry !== null);
@@ -35,10 +35,14 @@ function parseAttachments(raw: unknown): ChatAttachmentMetadata[] {
 
 function parseToolExecutions(raw: unknown): ToolExecution[] {
   if (!Array.isArray(raw)) return [];
-  return raw.filter((entry): entry is ToolExecution => isRecord(entry) && typeof entry.name === 'string');
+  return raw.filter((entry): entry is ToolExecution =>
+    isRecord(entry) && typeof entry.name === "string"
+  );
 }
 
-export function parseChatMessageMetadata(metadata: string | null | undefined): ParsedChatMessageMetadata {
+export function parseChatMessageMetadata(
+  metadata: string | null | undefined,
+): ParsedChatMessageMetadata {
   if (!metadata) {
     return { attachments: [], toolExecutions: [] };
   }

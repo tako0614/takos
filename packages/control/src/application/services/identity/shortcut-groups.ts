@@ -1,10 +1,14 @@
-import type { D1Database } from '../../../shared/types/bindings.ts';
-import { getDb, shortcutGroups, shortcutGroupItems } from '../../../infra/db/index.ts';
-import { eq, and, isNull, asc } from 'drizzle-orm';
-import { nanoid } from 'nanoid';
+import type { D1Database } from "../../../shared/types/bindings.ts";
+import {
+  getDb,
+  shortcutGroupItems,
+  shortcutGroups,
+} from "../../../infra/db/index.ts";
+import { and, asc, eq, isNull } from "drizzle-orm";
+import { nanoid } from "nanoid";
 
 export interface ShortcutItem {
-  type: 'service' | 'ui' | 'd1' | 'r2' | 'kv' | 'link';
+  type: "service" | "ui" | "d1" | "r2" | "kv" | "link";
   id: string;
   label: string;
   icon?: string;
@@ -48,9 +52,9 @@ function dbItemToShortcutItem(row: {
   resourceId: string | null;
   url: string | null;
 }): ShortcutItem {
-  const type = row.type === 'worker' ? 'service' : row.type;
+  const type = row.type === "worker" ? "service" : row.type;
   return {
-    type: type as ShortcutItem['type'],
+    type: type as ShortcutItem["type"],
     id: row.id,
     label: row.label,
     icon: row.icon || undefined,
@@ -86,14 +90,19 @@ function mapGroup(g: {
     spaceId: g.accountId,
     name: g.name,
     icon: g.icon || undefined,
-    items: g.items.slice().sort((a, b) => a.position - b.position).map(dbItemToShortcutItem),
+    items: g.items.slice().sort((a, b) => a.position - b.position).map(
+      dbItemToShortcutItem,
+    ),
     bundleDeploymentId: g.bundleDeploymentId || undefined,
     createdAt: g.createdAt,
     updatedAt: g.updatedAt,
   };
 }
 
-async function fetchGroupWithItems(db: ReturnType<typeof getDb>, groupId: string) {
+async function fetchGroupWithItems(
+  db: ReturnType<typeof getDb>,
+  groupId: string,
+) {
   const group = await db
     .select()
     .from(shortcutGroups)
@@ -113,7 +122,7 @@ async function fetchGroupWithItems(db: ReturnType<typeof getDb>, groupId: string
 
 export async function listShortcutGroups(
   d1: D1Database,
-  spaceId: string
+  spaceId: string,
 ): Promise<ShortcutGroup[]> {
   const db = getDb(d1);
 
@@ -141,14 +150,19 @@ export async function listShortcutGroups(
 export async function getShortcutGroup(
   d1: D1Database,
   spaceId: string,
-  groupId: string
+  groupId: string,
 ): Promise<ShortcutGroup | null> {
   const db = getDb(d1);
 
   const group = await db
     .select()
     .from(shortcutGroups)
-    .where(and(eq(shortcutGroups.id, groupId), eq(shortcutGroups.accountId, spaceId)))
+    .where(
+      and(
+        eq(shortcutGroups.id, groupId),
+        eq(shortcutGroups.accountId, spaceId),
+      ),
+    )
     .get();
 
   if (!group) return null;
@@ -166,7 +180,7 @@ export async function getShortcutGroup(
 export async function createShortcutGroup(
   d1: D1Database,
   spaceId: string,
-  input: CreateGroupInput
+  input: CreateGroupInput,
 ): Promise<ShortcutGroup> {
   const db = getDb(d1);
 
@@ -216,7 +230,7 @@ export async function updateShortcutGroup(
   d1: D1Database,
   spaceId: string,
   groupId: string,
-  input: UpdateGroupInput
+  input: UpdateGroupInput,
 ): Promise<ShortcutGroup | null> {
   const db = getDb(d1);
 
@@ -259,7 +273,9 @@ export async function updateShortcutGroup(
     }));
 
     // Replace all items in the relation
-    await db.delete(shortcutGroupItems).where(eq(shortcutGroupItems.groupId, groupId));
+    await db.delete(shortcutGroupItems).where(
+      eq(shortcutGroupItems.groupId, groupId),
+    );
     if (itemsWithIds.length > 0) {
       await db.insert(shortcutGroupItems).values(
         itemsWithIds.map((item, i) => ({
@@ -292,7 +308,7 @@ export async function updateShortcutGroup(
 export async function deleteShortcutGroup(
   d1: D1Database,
   spaceId: string,
-  groupId: string
+  groupId: string,
 ): Promise<boolean> {
   const db = getDb(d1);
 
@@ -323,7 +339,7 @@ export async function addItemToGroup(
   d1: D1Database,
   spaceId: string,
   groupId: string,
-  item: Omit<ShortcutItem, 'id'>
+  item: Omit<ShortcutItem, "id">,
 ): Promise<ShortcutItem | null> {
   const db = getDb(d1);
 
@@ -352,7 +368,10 @@ export async function addItemToGroup(
     id: nanoid(),
   };
 
-  const maxPosition = existingItems.reduce((max, i) => Math.max(max, i.position), -1);
+  const maxPosition = existingItems.reduce(
+    (max, i) => Math.max(max, i.position),
+    -1,
+  );
 
   await db.insert(shortcutGroupItems).values({
     id: newItem.id,
@@ -379,7 +398,7 @@ export async function removeItemFromGroup(
   d1: D1Database,
   spaceId: string,
   groupId: string,
-  itemId: string
+  itemId: string,
 ): Promise<boolean> {
   const db = getDb(d1);
 
@@ -400,7 +419,12 @@ export async function removeItemFromGroup(
   const itemToDelete = await db
     .select()
     .from(shortcutGroupItems)
-    .where(and(eq(shortcutGroupItems.id, itemId), eq(shortcutGroupItems.groupId, groupId)))
+    .where(
+      and(
+        eq(shortcutGroupItems.id, itemId),
+        eq(shortcutGroupItems.groupId, groupId),
+      ),
+    )
     .get();
 
   if (!itemToDelete) {
@@ -408,7 +432,10 @@ export async function removeItemFromGroup(
   }
 
   await db.delete(shortcutGroupItems).where(
-    and(eq(shortcutGroupItems.id, itemId), eq(shortcutGroupItems.groupId, groupId)),
+    and(
+      eq(shortcutGroupItems.id, itemId),
+      eq(shortcutGroupItems.groupId, groupId),
+    ),
   );
 
   await db

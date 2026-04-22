@@ -117,7 +117,7 @@ Deno.test("space group deployment snapshot tool definitions stay stable", () => 
   ]);
   assertEquals(
     GROUP_DEPLOYMENT_SNAPSHOT_DEPLOY_FROM_REPO.parameters.required,
-    ["repository_url", "group_name"],
+    ["repository_url"],
   );
   assertEquals(GROUP_DEPLOYMENT_SNAPSHOT_REMOVE.parameters.required, [
     "group_deployment_snapshot_id",
@@ -225,6 +225,41 @@ Deno.test("group deployment snapshot handlers - call current service methods", a
   }
 });
 
+Deno.test("groupDeploymentSnapshotDeployFromRepoHandler - lets manifest name choose the group", async () => {
+  const deployStub = stub(
+    GroupDeploymentSnapshotService.prototype,
+    "deploy",
+    async () => sampleMutation,
+  );
+
+  try {
+    const result = JSON.parse(
+      await groupDeploymentSnapshotDeployFromRepoHandler(
+        {
+          repository_url: "https://github.com/acme/demo.git",
+          ref: "main",
+        },
+        makeContext(),
+      ),
+    );
+    assertEquals(result.success, true);
+    assertSpyCallArgs(deployStub, 0, [
+      "ws-test",
+      "user-1",
+      {
+        source: {
+          kind: "git_ref",
+          repositoryUrl: "https://github.com/acme/demo.git",
+          ref: "main",
+          refType: "branch",
+        },
+      },
+    ]);
+  } finally {
+    deployStub.restore();
+  }
+});
+
 Deno.test("groupDeploymentSnapshotGetHandler - validates snapshot id before service access", async () => {
   await assertRejects(
     async () => {
@@ -263,20 +298,6 @@ Deno.test("groupDeploymentSnapshotDeployFromRepoHandler - validates repository_u
     },
     Error,
     "ref_type must be one of",
-  );
-
-  await assertRejects(
-    async () => {
-      await groupDeploymentSnapshotDeployFromRepoHandler(
-        {
-          repository_url: "https://github.com/acme/demo.git",
-          group_name: "",
-        },
-        makeContext(),
-      );
-    },
-    Error,
-    "group_name is required",
   );
 });
 

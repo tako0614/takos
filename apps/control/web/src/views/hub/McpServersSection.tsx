@@ -1,4 +1,4 @@
-import { createSignal } from "solid-js";
+import { createSignal, Show } from "solid-js";
 import { Icons } from "../../lib/Icons.tsx";
 import { useI18n } from "../../store/i18n.ts";
 import { useToast } from "../../store/toast.ts";
@@ -30,21 +30,20 @@ export function McpServersSection(props: McpServersSectionProps) {
   });
   const [showCreateModal, setShowCreateModal] = createSignal(false);
 
-  if (!props.selectedSpaceId) {
-    return (
-      <div class="flex flex-col items-center justify-center h-64 gap-4">
-        <div class="w-16 h-16 rounded-2xl bg-zinc-50 dark:bg-zinc-800 flex items-center justify-center">
-          <Icons.Server class="w-8 h-8 text-zinc-300 dark:text-zinc-600" />
-        </div>
-        <p class="text-sm font-medium text-zinc-600 dark:text-zinc-400">
-          {t("selectSpace")}
-        </p>
-      </div>
-    );
-  }
-
   return (
-    <>
+    <Show
+      when={props.selectedSpaceId}
+      fallback={
+        <div class="flex flex-col items-center justify-center h-64 gap-4">
+          <div class="w-16 h-16 rounded-2xl bg-zinc-50 dark:bg-zinc-800 flex items-center justify-center">
+            <Icons.Server class="w-8 h-8 text-zinc-300 dark:text-zinc-600" />
+          </div>
+          <p class="text-sm font-medium text-zinc-600 dark:text-zinc-400">
+            {t("selectSpace")}
+          </p>
+        </div>
+      }
+    >
       <div class="flex items-center justify-between gap-4 mb-4">
         <div>
           <h4 class="text-sm font-semibold text-zinc-900 dark:text-zinc-100">
@@ -57,7 +56,7 @@ export function McpServersSection(props: McpServersSectionProps) {
         <div class="flex items-center gap-2">
           <select
             value={props.selectedSpaceId}
-            onChange={(e) => props.setSelectedSpaceId(e.target.value)}
+            onChange={(e) => props.setSelectedSpaceId(e.currentTarget.value)}
             class="h-10 rounded-xl border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 px-3 text-sm text-zinc-900 dark:text-zinc-100"
           >
             {props.spaces.map((space) => (
@@ -120,12 +119,16 @@ export function McpServersSection(props: McpServersSectionProps) {
             const result = await createExternalServer(input);
             showToast("success", result.message);
             if (result.auth_url) {
-              globalThis.open(result.auth_url, "_blank", "noopener,noreferrer");
+              globalThis.open(
+                result.auth_url,
+                "_blank",
+                "noopener,noreferrer",
+              );
             }
             setShowCreateModal(false);
           }}
         />
       )}
-    </>
+    </Show>
   );
 }

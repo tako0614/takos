@@ -1,4 +1,4 @@
-import type { Context, Env, Next } from 'hono';
+import type { Context, Env, Next } from "hono";
 
 interface RateLimitEntry {
   count: number;
@@ -10,9 +10,50 @@ interface RateLimitOptions<E extends Env = Env> {
   windowMs: number;
   keyFn?: (c: Context<E>) => string;
   maxKeys?: number;
+  trustProxyHeaders?: boolean;
 }
 
-export function createRateLimiter<E extends Env = Env>(options: RateLimitOptions<E>) {
+export const RUNTIME_REMOTE_ADDR_BINDING = "takosRuntimeRemoteAddr";
+
+function cleanAddressCandidate(value: string | undefined): string {
+  const candidate = value?.trim() ?? "";
+  if (!candidate || candidate.length > 128) return "";
+  for (let i = 0; i < candidate.length; i++) {
+    const code = candidate.charCodeAt(i);
+    if (code <= 32 || code === 127) return "";
+  }
+  return candidate;
+}
+
+function getRemoteAddress<E extends Env>(c: Context<E>): string {
+  const env = c.env as Record<string, unknown> | undefined;
+  const value = env?.[RUNTIME_REMOTE_ADDR_BINDING];
+  return typeof value === "string" ? cleanAddressCandidate(value) : "";
+}
+
+function getForwardedAddress<E extends Env>(c: Context<E>): string {
+  const forwardedFor = c.req.header("x-forwarded-for")
+    ?.split(",")[0]
+    ?.trim();
+  const forwardedAddress = cleanAddressCandidate(forwardedFor);
+  if (forwardedAddress) return forwardedAddress;
+  return cleanAddressCandidate(c.req.header("x-real-ip"));
+}
+
+export function getRequestClientAddress<E extends Env>(
+  c: Context<E>,
+  options: { trustProxyHeaders?: boolean } = {},
+): string {
+  if (options.trustProxyHeaders) {
+    const forwardedAddress = getForwardedAddress(c);
+    if (forwardedAddress) return forwardedAddress;
+  }
+  return getRemoteAddress(c) || "unknown";
+}
+
+export function createRateLimiter<E extends Env = Env>(
+  options: RateLimitOptions<E>,
+) {
   const { maxRequests, windowMs, maxKeys = 10000 } = options;
   const store = new Map<string, RateLimitEntry>();
 
@@ -28,19 +69,19 @@ export function createRateLimiter<E extends Env = Env>(options: RateLimitOptions
   Deno.unrefTimer(cleanupTimer);
 
   const defaultKeyFn = (c: Context<E>): string => {
-    // In Hono with @hono/node-server, use the client's IP from the
-    // incoming connection info or forwarded header.
-    const ip =
-      c.req.header('x-forwarded-for')?.split(',')[0]?.trim() ||
-      c.req.header('x-real-ip') ||
-      'unknown';
-    const spaceId = c.req.header('X-Takos-Space-Id') || '';
+    const ip = getRequestClientAddress(c, {
+      trustProxyHeaders: options.trustProxyHeaders === true,
+    });
+    const spaceId = c.req.header("X-Takos-Space-Id") || "";
     return spaceId ? `${ip}:${spaceId}` : ip;
   };
 
   const keyFn = options.keyFn || defaultKeyFn;
 
-  const middleware = async (c: Context<E>, next: Next): Promise<Response | void> => {
+  const middleware = async (
+    c: Context<E>,
+    next: Next,
+  ): Promise<Response | void> => {
     const key = keyFn(c);
     const now = Date.now();
     let entry = store.get(key);
@@ -57,12 +98,12 @@ export function createRateLimiter<E extends Env = Env>(options: RateLimitOptions
         }
         if (!evicted && store.size >= maxKeys) {
           const retryAfter = Math.ceil(windowMs / 1000);
-          c.header('Retry-After', String(retryAfter));
+          c.header("Retry-After", String(retryAfter));
           // Common error envelope: { error: { code, message, details } }
           return c.json({
             error: {
-              code: 'RATE_LIMITED',
-              message: 'Rate limiter capacity reached. Please try again later.',
+              code: "RATE_LIMITED",
+              message: "Rate limiter capacity reached. Please try again later.",
               details: { retryAfter },
             },
           }, 429);
@@ -75,18 +116,18 @@ export function createRateLimiter<E extends Env = Env>(options: RateLimitOptions
     entry.count++;
 
     const remaining = Math.max(0, maxRequests - entry.count);
-    c.header('X-RateLimit-Limit', String(maxRequests));
-    c.header('X-RateLimit-Remaining', String(remaining));
-    c.header('X-RateLimit-Reset', String(Math.ceil(entry.resetAt / 1000)));
+    c.header("X-RateLimit-Limit", String(maxRequests));
+    c.header("X-RateLimit-Remaining", String(remaining));
+    c.header("X-RateLimit-Reset", String(Math.ceil(entry.resetAt / 1000)));
 
     if (entry.count > maxRequests) {
       const retryAfter = Math.ceil((entry.resetAt - now) / 1000);
-      c.header('Retry-After', String(retryAfter));
+      c.header("Retry-After", String(retryAfter));
       // Common error envelope: { error: { code, message, details } }
       return c.json({
         error: {
-          code: 'RATE_LIMITED',
-          message: 'Too many requests. Please try again later.',
+          code: "RATE_LIMITED",
+          message: "Too many requests. Please try again later.",
           details: { retryAfter },
         },
       }, 429);

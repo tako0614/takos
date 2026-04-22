@@ -1,8 +1,8 @@
-import { createSignal } from 'solid-js';
-import type { Setter } from 'solid-js';
-import { getSpaceIdentifier } from '../lib/spaces.ts';
-import { rpc, rpcJson } from '../lib/rpc.ts';
-import type { Space, Thread } from '../types/index.ts';
+import { createSignal } from "solid-js";
+import type { Setter } from "solid-js";
+import { getSpaceIdentifier } from "../lib/spaces.ts";
+import { rpc, rpcJson } from "../lib/rpc.ts";
+import type { Space, Thread } from "../types/index.ts";
 
 const [sidebarSpace, setSidebarSpace] = createSignal<Space | null>(null);
 const [showMobileNavDrawer, setShowMobileNavDrawer] = createSignal(false);
@@ -10,7 +10,7 @@ const [threadsBySpace, setThreadsBySpace] = createSignal<
   Record<string, Thread[]>
 >({});
 
-export const mobileNavDrawerId = 'mobile-navigation-drawer';
+export const mobileNavDrawerId = "mobile-navigation-drawer";
 
 export async function fetchAllThreads(wsList: Space[]): Promise<void> {
   if (wsList.length === 0) return;
@@ -19,9 +19,9 @@ export async function fetchAllThreads(wsList: Space[]): Promise<void> {
     wsList.map(async (space) => {
       const identifier = getSpaceIdentifier(space);
       try {
-        const res = await rpc.spaces[':spaceId'].threads.$get({
+        const res = await rpc.spaces[":spaceId"].threads.$get({
           param: { spaceId: identifier },
-          query: { status: 'active' },
+          query: { status: "active" },
         });
         const data = await rpcJson<{ threads: Thread[] }>(res);
         return [identifier, data.threads] as const;
@@ -41,8 +41,7 @@ export function useNavigationState() {
     showMobileNavDrawer,
     setShowMobileNavDrawer: setShowMobileNavDrawer as Setter<boolean>,
     threadsBySpace,
-    setThreadsBySpace:
-      setThreadsBySpace as Setter<Record<string, Thread[]>>,
+    setThreadsBySpace: setThreadsBySpace as Setter<Record<string, Thread[]>>,
     allThreads: () => Object.values(threadsBySpace()).flat(),
   };
 }

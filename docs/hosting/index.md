@@ -26,9 +26,16 @@ AWS / GCP pages describe the current Helm overlays only. They are not direct ECS
 / Cloud Run deploy guides and do not define a provider resource materialization
 matrix.
 
+Self-hosted packaging can be used for production when PostgreSQL / Redis /
+object storage / TLS / secret management are replaced with production-grade
+backing services. ECS / Cloud Run may appear as tenant image workload adapters
+through the OCI orchestrator, but they are not Takos kernel hosting surfaces.
+
 ## Backend の差分
 
-current hosting surface の比較は [環境ごとの差異](/hosting/differences) を参照。
+current hosting surface の比較と current contract に含まれない項目は
+[環境ごとの差異](/hosting/differences) と
+[Not A Current Contract](/hosting/differences#not-a-current-contract) を参照。
 
 ## 次に読むページ
 

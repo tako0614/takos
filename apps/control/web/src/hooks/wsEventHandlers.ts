@@ -1,34 +1,48 @@
-import type { Setter } from 'solid-js';
-import type { Run } from '../types/index.ts';
-import type { WebSocketEventPayload } from '../views/chat/timeline.ts';
-import { parseTimelineEventId } from '../views/chat/timeline.ts';
-import type { TranslationKey } from '../store/i18n.ts';
+import type { Setter } from "solid-js";
+import type { Run } from "../types/index.ts";
+import type { WebSocketEventPayload } from "../views/chat/timeline.ts";
+import { parseTimelineEventId } from "../views/chat/timeline.ts";
+import type { TranslationKey } from "../store/i18n.ts";
 
 type MutableRefObject<T> = { current: T };
 
 export const VALID_RUN_STATUSES: Set<string> = new Set([
-  'pending', 'queued', 'running', 'completed', 'failed', 'cancelled',
+  "pending",
+  "queued",
+  "running",
+  "completed",
+  "failed",
+  "cancelled",
 ]);
 
 export const ACTIVE_RUN_STATUSES: Set<string> = new Set([
-  'pending', 'queued', 'running',
+  "pending",
+  "queued",
+  "running",
 ]);
 
 export const TERMINAL_RUN_STATUSES: Set<string> = new Set([
-  'completed', 'failed', 'cancelled',
+  "completed",
+  "failed",
+  "cancelled",
 ]);
 
-export function getRunStatusFromPayload(payload: WebSocketEventPayload): Run['status'] | null {
+export function getRunStatusFromPayload(
+  payload: WebSocketEventPayload,
+): Run["status"] | null {
   const status = payload.status ?? payload.run?.status;
   if (status && VALID_RUN_STATUSES.has(status)) {
-    return status as Run['status'];
+    return status as Run["status"];
   }
   return null;
 }
 
-export function resolveThinkingText(payload: WebSocketEventPayload): string {
+export function resolveThinkingText(
+  payload: WebSocketEventPayload,
+  t: EventHandlerContext["t"],
+): string {
   return payload.message || payload.content || payload.text ||
-    (payload.iteration ? `Step ${payload.iteration}...` : 'Processing...');
+    t("timelineThinking");
 }
 
 // ---------------------------------------------------------------------------
@@ -43,19 +57,28 @@ export interface EventHandlerContext {
   eventType: string;
   isPrimaryRun: boolean;
   // deps
-  verifyRunStatus: (runId: string, refreshMessages?: boolean) => Promise<boolean>;
+  verifyRunStatus: (
+    runId: string,
+    refreshMessages?: boolean,
+  ) => Promise<boolean>;
   isMountedRef: MutableRefObject<boolean>;
   currentRunIdRef: MutableRefObject<string | null>;
   lastEventIdRef: MutableRefObject<number>;
-  handleWebSocketEventRef: MutableRefObject<(
-    eventType: string,
-    data: unknown,
-    eventId?: number,
-    sourceRunId?: string,
-  ) => void>;
-  handleRunCompletedRef: MutableRefObject<(run?: Partial<Run>, sessionId?: string | null) => Promise<void>>;
+  handleWebSocketEventRef: MutableRefObject<
+    (
+      eventType: string,
+      data: unknown,
+      eventId?: number,
+      sourceRunId?: string,
+    ) => void
+  >;
+  handleRunCompletedRef: MutableRefObject<
+    (run?: Partial<Run>, sessionId?: string | null) => Promise<void>
+  >;
   setCurrentRun: Setter<Run | null>;
-  setStreaming: Setter<import('../views/chat/chat-types.ts').ChatStreamingState>;
+  setStreaming: Setter<
+    import("../views/chat/chat-types.ts").ChatStreamingState
+  >;
   setIsLoading: Setter<boolean>;
   setError: (value: string | null) => void;
   closeWebSocket: () => void;
@@ -72,7 +95,10 @@ export interface EventHandlerContext {
 
 function handleConnectedEvent(ctx: EventHandlerContext): void {
   const { payload, lastEventIdRef, currentRunIdRef, verifyRunStatus } = ctx;
-  if (typeof payload.lastEventId === 'number' && payload.lastEventId > lastEventIdRef.current) {
+  if (
+    typeof payload.lastEventId === "number" &&
+    payload.lastEventId > lastEventIdRef.current
+  ) {
     lastEventIdRef.current = payload.lastEventId;
   }
   if (currentRunIdRef.current) {
@@ -82,8 +108,12 @@ function handleConnectedEvent(ctx: EventHandlerContext): void {
 
 function handleReplayEvent(ctx: EventHandlerContext): void {
   const {
-    payload, currentRunIdRef, lastEventIdRef, verifyRunStatus,
-    isMountedRef, handleWebSocketEventRef,
+    payload,
+    currentRunIdRef,
+    lastEventIdRef,
+    verifyRunStatus,
+    isMountedRef,
+    handleWebSocketEventRef,
   } = ctx;
   if (!currentRunIdRef.current) return;
 
@@ -95,32 +125,48 @@ function handleReplayEvent(ctx: EventHandlerContext): void {
 
     for (const event of payload.events) {
       const replayEventId = parseTimelineEventId(event);
-      if (typeof replayEventId === 'number') {
+      if (typeof replayEventId === "number") {
         if (replayEventId <= lastEventIdRef.current) continue;
         lastEventIdRef.current = replayEventId;
       }
-      handleWebSocketEventRef.current(event.type, event.data, replayEventId, replayRunId);
+      handleWebSocketEventRef.current(
+        event.type,
+        event.data,
+        replayEventId,
+        replayRunId,
+      );
     }
   });
 }
 
 function handleRunStatusEvent(ctx: EventHandlerContext): void {
   const {
-    payload, isPrimaryRun, runId, eventType, eventId,
-    setCurrentRun, handleRunCompletedRef, appendTimelineEntry,
+    payload,
+    isPrimaryRun,
+    runId,
+    eventType,
+    eventId,
+    setCurrentRun,
+    handleRunCompletedRef,
+    appendTimelineEntry,
   } = ctx;
 
   if (isPrimaryRun) {
     const runStatus = getRunStatusFromPayload(payload);
     if (payload.run) {
       setCurrentRun((prev) =>
-        prev ? { ...prev, ...payload.run, status: runStatus ?? prev.status } : prev,
+        prev
+          ? { ...prev, ...payload.run, status: runStatus ?? prev.status }
+          : prev
       );
     } else if (runStatus) {
       setCurrentRun((prev) => (prev ? { ...prev, status: runStatus } : prev));
     }
     if (runStatus && TERMINAL_RUN_STATUSES.has(runStatus)) {
-      handleRunCompletedRef.current(payload.run, payload.run?.session_id ?? payload.session_id ?? undefined);
+      handleRunCompletedRef.current(
+        payload.run,
+        payload.run?.session_id ?? payload.session_id ?? undefined,
+      );
     }
   }
   appendTimelineEntry(runId, eventType, payload, eventId);
@@ -135,14 +181,22 @@ function handleStartedEvent(ctx: EventHandlerContext): void {
 
 function handleThinkingEvent(ctx: EventHandlerContext): void {
   if (ctx.isPrimaryRun) {
-    const text = resolveThinkingText(ctx.payload);
+    const text = resolveThinkingText(ctx.payload, ctx.t);
     ctx.setStreaming((prev) => ({ ...prev, thinking: text }));
   }
   ctx.appendTimelineEntry(ctx.runId, ctx.eventType, ctx.payload, ctx.eventId);
 }
 
 function handleToolCallEvent(ctx: EventHandlerContext): void {
-  const { payload, isPrimaryRun, setStreaming, runId, eventType, eventId, appendTimelineEntry } = ctx;
+  const {
+    payload,
+    isPrimaryRun,
+    setStreaming,
+    runId,
+    eventType,
+    eventId,
+    appendTimelineEntry,
+  } = ctx;
   if (isPrimaryRun) {
     setStreaming((prev) => ({
       ...prev,
@@ -150,9 +204,9 @@ function handleToolCallEvent(ctx: EventHandlerContext): void {
         ...prev.toolCalls,
         {
           id: payload.id || payload.tool_call_id || `tc-${Date.now()}`,
-          name: payload.name || payload.tool || 'unknown',
+          name: payload.name || payload.tool || "unknown",
           arguments: payload.arguments || payload.args || {},
-          status: 'running',
+          status: "running",
           startedAt: Date.now(),
         },
       ],
@@ -162,19 +216,27 @@ function handleToolCallEvent(ctx: EventHandlerContext): void {
 }
 
 function handleToolResultEvent(ctx: EventHandlerContext): void {
-  const { payload, isPrimaryRun, setStreaming, runId, eventType, eventId, appendTimelineEntry } = ctx;
+  const {
+    payload,
+    isPrimaryRun,
+    setStreaming,
+    runId,
+    eventType,
+    eventId,
+    appendTimelineEntry,
+  } = ctx;
   if (isPrimaryRun) {
     setStreaming((prev) => ({
       ...prev,
       toolCalls: prev.toolCalls.map((tc) =>
         tc.id === payload.tool_call_id || tc.id === payload.id
           ? {
-              ...tc,
-              result: payload.result || payload.output,
-              error: payload.error,
-              status: payload.error ? ('error' as const) : ('completed' as const),
-            }
-          : tc,
+            ...tc,
+            result: payload.result || payload.output,
+            error: payload.error,
+            status: payload.error ? ("error" as const) : ("completed" as const),
+          }
+          : tc
       ),
     }));
   }
@@ -182,7 +244,15 @@ function handleToolResultEvent(ctx: EventHandlerContext): void {
 }
 
 function handleProgressEvent(ctx: EventHandlerContext): void {
-  const { payload, isPrimaryRun, setStreaming, runId, eventType, eventId, appendTimelineEntry } = ctx;
+  const {
+    payload,
+    isPrimaryRun,
+    setStreaming,
+    runId,
+    eventType,
+    eventId,
+    appendTimelineEntry,
+  } = ctx;
   if (isPrimaryRun && (payload.message || payload.content)) {
     setStreaming((prev) => ({
       ...prev,
@@ -198,6 +268,7 @@ function handleMessageEvent(ctx: EventHandlerContext): void {
       ...prev,
       currentMessage: ctx.payload.content || ctx.payload.text || null,
       thinking: null,
+      toolCalls: [],
     }));
   }
   ctx.appendTimelineEntry(ctx.runId, ctx.eventType, ctx.payload, ctx.eventId);
@@ -213,13 +284,26 @@ function handleTerminalEvent(ctx: EventHandlerContext): void {
   ctx.appendTimelineEntry(ctx.runId, ctx.eventType, ctx.payload, ctx.eventId);
 }
 
+function handleErrorEvent(ctx: EventHandlerContext): void {
+  if (ctx.isPrimaryRun) {
+    ctx.setError(
+      ctx.payload.error || ctx.payload.message || ctx.t("networkError"),
+    );
+    ctx.handleRunCompletedRef.current(
+      ctx.payload.run,
+      ctx.payload.run?.session_id ?? ctx.payload.session_id ?? undefined,
+    );
+  }
+  ctx.appendTimelineEntry(ctx.runId, ctx.eventType, ctx.payload, ctx.eventId);
+}
+
 function handleRunFailedEvent(ctx: EventHandlerContext): void {
   if (ctx.isPrimaryRun) {
     ctx.setIsLoading(false);
     ctx.setCurrentRun(null);
     ctx.closeWebSocket();
     ctx.resetStreamingState();
-    ctx.setError(ctx.payload.error || ctx.t('networkError'));
+    ctx.setError(ctx.payload.error || ctx.t("networkError"));
   }
   ctx.appendTimelineEntry(ctx.runId, ctx.eventType, ctx.payload, ctx.eventId);
 }
@@ -238,7 +322,7 @@ export const EVENT_DISPATCH: Record<string, EventHandler> = {
   progress: handleProgressEvent,
   message: handleMessageEvent,
   completed: handleTerminalEvent,
-  error: handleTerminalEvent,
+  error: handleErrorEvent,
   cancelled: handleTerminalEvent,
-  'run.failed': handleRunFailedEvent,
+  "run.failed": handleRunFailedEvent,
 };

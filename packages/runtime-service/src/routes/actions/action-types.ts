@@ -12,8 +12,8 @@ export interface StartJobRequest {
     with?: Record<string, unknown>;
     env?: Record<string, string>;
     if?: string;
-    'continue-on-error'?: boolean;
-    'timeout-minutes'?: number;
+    "continue-on-error"?: boolean;
+    "timeout-minutes"?: number;
   }>;
   env?: Record<string, string>;
   secrets?: Record<string, string>;

@@ -98,7 +98,8 @@ CF Container runtime は internal loopback のみ `127.0.0.1` を立てるため
 kernel 側の CLI traffic flow (PAT auth → runtime-host service binding →
 container loopback) については
 [Control plane § CLI proxy loopback bypass](/architecture/control-plane#cli-proxy-loopback-bypass)
-を参照。:::
+を参照。
+:::
 
 ### CLI traffic flow
 
@@ -174,7 +175,8 @@ kernel 側の public git API (`docs/reference/api.md` の `git` family、
 
 runtime-service の `/git/:spaceId/:repoName.git/*` は runtime container 内
 から呼ばれる内部 endpoint で、すでに spaceId を直接受け取っている前提の fast
-path。外部 caller は kernel 側 endpoint を使うこと。:::
+path。外部 caller は kernel 側 endpoint を使うこと。
+:::
 
 ## レート制限
 

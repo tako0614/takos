@@ -117,7 +117,7 @@ const makeServiceRow = (overrides: Record<string, unknown> = {}) => ({
   workerType: "app",
   status: "deployed",
   config: null,
-  hostname: "my-app.takos.dev",
+  hostname: "my-app.takos.jp",
   routeRef: "worker-w1",
   slug: "my-app",
   createdAt: "2026-01-01T00:00:00.000Z",
@@ -226,7 +226,7 @@ Deno.test("getServiceById - returns mapped worker when found", async () => {
     const worker = await getServiceById({} as D1Database, "w1");
     assertNotEquals(worker, null);
     assertEquals(worker!.id, "w1");
-    assertEquals(worker!.hostname, "my-app.takos.dev");
+    assertEquals(worker!.hostname, "my-app.takos.jp");
     assertEquals(worker!.name, "worker-w1");
     assertEquals(worker!.service_name, "worker-w1");
   } finally {
@@ -245,12 +245,12 @@ Deno.test("createService - creates worker with generated id and hostname", async
       spaceId: "ws-1",
       workerType: "app",
       slug: "my-app",
-      platformDomain: "takos.dev",
+      platformDomain: "takos.jp",
     });
 
     assertEquals(result.id, "worker-new");
     assertEquals(result.slug, "my-app");
-    assertEquals(result.hostname, "my-app.takos.dev");
+    assertEquals(result.hostname, "my-app.takos.jp");
     assertEquals(drizzle.insert.calls.length > 0, true);
   } finally {
     restoreWorkerDeps();
@@ -266,7 +266,7 @@ Deno.test("createService - generates slug from id when not provided", async () =
     const result = await createService({} as D1Database, {
       spaceId: "ws-1",
       workerType: "service",
-      platformDomain: "takos.dev",
+      platformDomain: "takos.jp",
     });
 
     assertEquals(result.slug, "worker-new");
@@ -345,7 +345,7 @@ Deno.test("resolveServiceReferenceRecord - returns worker when found by id/name/
     accountId: "ws-1",
     workerType: "app",
     status: "deployed",
-    hostname: "my-app.takos.dev",
+    hostname: "my-app.takos.jp",
     routeRef: "worker-w1",
     slug: "my-app",
   })) as any;

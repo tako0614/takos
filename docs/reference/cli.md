@@ -47,11 +47,11 @@ public task-oriented surface の domain は次の通りです。
 `.takos/app.yml` / `.takos/app.yaml` を直接扱うのは `takos deploy` で、ローカル
 manifest からの deploy（primary）と repository URL からの
 deploy（alternative）の両方を扱います。preview は
-`takos deploy --plan --space SPACE_ID --group GROUP_NAME`
+`takos deploy --plan --space SPACE_ID`
 を使います。`takos install` は catalog 経由で `takos deploy` を呼ぶ sugar
 です。public spec は backend-neutral で、 実行モデルは tenant runtime
-です。`takos deploy` / `takos install` は group snapshot 機能を使うため
-`--group` が必須です。
+です。`takos deploy` / `takos install` は group snapshot 機能を使い、
+manifest の `name` を group 名として使います。`--group` は override です。
 
 `takos deploy` はローカル working tree 由来でも repo/ref source 由来でも同じ
 pipeline を通り、明示した group inventory へ primitive declaration を apply
@@ -108,10 +108,10 @@ manifest からの deploy（primary）と repository URL からの
 deploy（alternative）の両方を 一つのコマンドで扱います。
 
 ```bash
-takos deploy --space SPACE_ID --group my-app                         # from local .takos/app.yml
-takos deploy --env staging --space SPACE_ID --group my-app           # with environment
-takos deploy https://github.com/... --space SPACE_ID --group my-app  # from repo URL
-takos deploy --plan --space SPACE_ID --group my-app                  # dry-run preview
+takos deploy --space SPACE_ID                         # from local .takos/app.yml
+takos deploy --env staging --space SPACE_ID           # with environment
+takos deploy https://github.com/... --space SPACE_ID  # from repo URL
+takos deploy --plan --space SPACE_ID                  # dry-run preview
 ```
 
 positional argument を省略するとローカルの `.takos/app.yml` または
@@ -128,17 +128,17 @@ positional argument を省略するとローカルの `.takos/app.yml` または
 | `--target <key...>`        | `--plan` 時のみ使う diff entry filter。例: `web`, `web:/`                        |
 | `--ref <ref>`              | branch / tag / commit（repo URL 指定時）                                         |
 | `--ref-type <type>`        | `branch` / `tag` / `commit`（repo URL 指定時、CLI で choice validation）         |
-| `--group <name>`           | primitive を所属させる group 名。deploy / install では必須                       |
+| `--group <name>`           | manifest の `name` から決まる group 名を override する                           |
 | `--env <name>`             | target env                                                                       |
 | `--space <id>`             | 対象 space ID                                                                    |
 | `--json`                   | JSON 出力                                                                        |
 
 `repositoryUrl` と `--manifest` を同時に渡した場合はエラーになります。
 
-`takos deploy --plan --space SPACE_ID --group NAME` は non-mutating preview
+`takos deploy --plan --space SPACE_ID` は non-mutating preview
 です。group が未作成でも DB row
-は作りません。`takos deploy --space SPACE_ID --group NAME` /
-`takos deploy --plan --space SPACE_ID --group NAME` はどちらも runtime
+は作りません。`takos deploy --space SPACE_ID` /
+`takos deploy --plan --space SPACE_ID` はどちらも runtime
 translation report を表示します。表示は
 `Spec: Takos deploy manifest`、`Runtime: tenant runtime`、 `Surface: Portable`
 を前提にしつつ、compiled workload / route を tenant runtime へ渡すための backend
@@ -147,7 +147,8 @@ configuration であり、通常の report には出しません。runtime trans
 が扱うのは `desiredState.workloads` / `desiredState.routes` と runtime
 が満たすべき operator/backend 要件です。未接続の workload / route は fail-fast
 で終了しますが、この report は full runtime compatibility や resource API /
-runtime binding の存在確認を判定しません。
+runtime binding の存在確認を判定しません。`compatible` は schema / translation
+parity であり、behavior parity や provider resource existence ではありません。
 
 `--target` は `takos deploy --plan` と `takos install --plan` でだけ使えます。
 target は diff entry 名で、`web`, `web:/` のほか `workers.web`, `routes.web:/`
@@ -210,13 +211,13 @@ takos rollback my-app --space SPACE_ID    # 直前の snapshot に戻す
 ref を解決したうえで同じ deploy pipeline に入れます。
 
 ```bash
-takos install owner/repo --space SPACE_ID --version v1.0.0 --group my-app
+takos install owner/repo --space SPACE_ID --version v1.0.0
 ```
 
 `takos install` は `--version`、`--group`、`--env`、`--space`、`--target`、
 `--plan`、`--json` を受け付けます。`--version` は package catalog の release
 version または tag を指定し、未指定時は latest package を使います。`--group` は
-deploy group 名を明示し、`--env` は target env を指定します。`--target` は
+manifest の `name` 由来の deploy group 名を override し、`--env` は target env を指定します。`--target` は
 `takos install --plan` でだけ使う diff entry filter です。`--plan` は
 non-mutating preview、`--json` は JSON 出力です。
 
@@ -298,20 +299,24 @@ Cloudflare の account ID / API token は `resource create` / `resource delete` 
 CLI option では渡しません。control/server 側の環境変数または secret
 設定で管理し、CLI は Takos API 認証と `--space` で対象を指定します。
 
-| command family                      | options                                                                               |
-| ----------------------------------- | ------------------------------------------------------------------------------------- |
-| `resource list/show`                | `--space <id>`, `--json`                                                              |
-| `resource create`                   | `--type`, `--binding`, `--env`, `--group`, `--space`, `--json`                        |
-| `resource delete`                   | `--space <id>`                                                                        |
-| `resource attach/detach`            | `attach --group <name>`, `--space <id>`                                               |
-| `resource bind/unbind`              | `--binding <binding>` for bind, `--worker <name>`, `--service <name>`, `--space <id>` |
-| `resource sql`                      | `--space <id>`, `--json`                                                              |
-| `resource object ls/get`            | `ls --prefix <prefix>`, `--space <id>`, `--json`                                      |
-| `resource object put`               | `--value <value>`, `--file <path>`, `--content-type <type>`, `--space <id>`           |
-| `resource object rm`                | `--space <id>`                                                                        |
-| `resource key-value ls/get`         | `ls --prefix <prefix>`, `--space <id>`, `--json`                                      |
-| `resource key-value put/rm`         | `put --value <value>`, `put --file <path>`, `--space <id>`                            |
-| `resource get-secret/rotate-secret` | `--space <id>`, `--json`                                                              |
+| command family                      | options                                                                                                 |
+| ----------------------------------- | ------------------------------------------------------------------------------------------------------- |
+| `resource list/show`                | `--space <id>`, `--json`                                                                                |
+| `resource create`                   | `--type`, `--binding`, `--env`, `--group`, `--space`, `--json`                                          |
+| `resource delete`                   | `--space <id>`                                                                                          |
+| `resource attach/detach`            | `attach --group <name>`, `--space <id>`                                                                 |
+| `resource bind/unbind`              | `--binding <binding>` for bind, `--worker <name>`, `--service <name>`, `--group <name>`, `--space <id>` |
+| `resource sql`                      | `--space <id>`, `--json`                                                                                |
+| `resource object ls/get`            | `ls --prefix <prefix>`, `--space <id>`, `--json`                                                        |
+| `resource object put`               | `--value <value>`, `--file <path>`, `--content-type <type>`, `--space <id>`                             |
+| `resource object rm`                | `--space <id>`                                                                                          |
+| `resource key-value ls/get`         | `ls --prefix <prefix>`, `--space <id>`, `--json`                                                        |
+| `resource key-value put/rm`         | `put --value <value>`, `put --file <path>`, `--space <id>`                                              |
+| `resource get-secret/rotate-secret` | `--space <id>`, `--json`                                                                                |
+
+`--group` を指定すると、manifest 由来の group-managed workload は compute 名で
+解決できます。たとえば `.takos/app.yml` の `compute.web` に resource を bind
+する場合は `--group <group-name> --worker web` を使います。
 
 ## 個別 record 操作
 
@@ -359,7 +364,9 @@ takos discover list /explore/repos
 
 service 系 (`/api/services`) の CRUD / custom domains / deployment status は
 current HTTP API surface として残っており、直接 `/api/services/*` を呼び出して
-操作します。
+操作します。custom domain の TLS は Cloudflare custom-hostname provider が
+設定されている場合だけ Cloudflare-managed です。それ以外の hosting surface では
+operator-managed / external TLS を使います。
 
 ### 共通 task verb
 

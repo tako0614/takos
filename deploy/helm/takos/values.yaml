@@ -274,6 +274,10 @@ ingress:
   enabled: true
   className: "nginx"
   annotations: {}
+  gcpManagedCertificate:
+    enabled: false
+    name: ""
+    domains: []
   tls:
     enabled: true
     secretName: "takos-tls"
@@ -298,7 +302,10 @@ podSecurityContext:
 ## Network Policy
 ## Runtime executes user-controlled commands, so egress is restricted by
 ## default. Add explicit runtime.extraEgress peers for cluster-specific
-## dependencies such as private Git mirrors or object stores.
+## dependencies such as private Git mirrors. When minio.enabled is true, the
+## runtime policy includes bundled MinIO egress automatically. When using
+## externalS3, add runtime.extraEgress entries for the object storage path
+## required by your cluster/CNI.
 ## -----------------------------------------------------------------
 networkPolicy:
   enabled: true

@@ -3,7 +3,7 @@ import { repositoryIsInRemoteInventory } from "@/application/services/activitypu
 
 Deno.test("remote install - verifies canonical repo URL across inventory pages", async () => {
   const originalFetch = globalThis.fetch;
-  const canonicalRepoUrl = "https://repo.takos.social/ap/repos/alice/demo";
+  const canonicalRepoUrl = "https://repo.example.com/ap/repos/alice/demo";
   const requestedPages: string[] = [];
 
   (globalThis as { fetch: typeof fetch }).fetch = (async (input) => {
@@ -12,7 +12,7 @@ Deno.test("remote install - verifies canonical repo URL across inventory pages",
     const page = url.searchParams.get("page");
     const orderedItems = page === "2"
       ? [canonicalRepoUrl]
-      : ["https://repo.takos.social/ap/repos/alice/other"];
+      : ["https://repo.example.com/ap/repos/alice/other"];
 
     return new Response(
       JSON.stringify({
@@ -30,7 +30,7 @@ Deno.test("remote install - verifies canonical repo URL across inventory pages",
 
   try {
     const found = await repositoryIsInRemoteInventory(
-      "https://store.takos.social/ap/stores/curated/inventory",
+      "https://store.example.com/ap/stores/curated/inventory",
       canonicalRepoUrl,
     );
 

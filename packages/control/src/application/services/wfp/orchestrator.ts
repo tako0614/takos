@@ -7,9 +7,13 @@
  * namespace. Also provides the canonical D1 migration SQL for new tenants.
  */
 
-import type { Env } from '../../../shared/types/index.ts';
-import { BadRequestError, InternalError, NotFoundError } from 'takos-common/errors';
-import type { WfpContext, WorkerBinding } from './wfp-contracts.ts';
+import type { Env } from "../../../shared/types/index.ts";
+import {
+  BadRequestError,
+  InternalError,
+  NotFoundError,
+} from "takos-common/errors";
+import type { WfpContext, WorkerBinding } from "./wfp-contracts.ts";
 
 // ---------------------------------------------------------------------------
 // Deployment orchestration
@@ -51,7 +55,7 @@ export async function deployWorkerWithBindings(
     compatibilityFlags?: string[];
     /** JWT from assets upload (for static assets) */
     assetsJwt?: string;
-  }
+  },
 ): Promise<void> {
   let workerScript: string;
 
@@ -60,60 +64,74 @@ export async function deployWorkerWithBindings(
   } else if (options.bundleUrl) {
     const response = await fetch(options.bundleUrl);
     if (!response.ok) {
-      throw new InternalError(`Failed to fetch bundle from ${options.bundleUrl}: ${response.status}`);
+      throw new InternalError(
+        `Failed to fetch bundle from ${options.bundleUrl}: ${response.status}`,
+      );
     }
     workerScript = await response.text();
   } else {
-    throw new BadRequestError('Either bundleUrl or bundleScript is required');
+    throw new BadRequestError("Either bundleUrl or bundleScript is required");
   }
 
-  const wfpBindings: WorkerBinding[] = options.bindings.map(b => {
+  const wfpBindings: WorkerBinding[] = options.bindings.map((b) => {
     switch (b.type) {
-      case 'd1':
-        return { type: 'd1', name: b.name, database_id: b.id };
-      case 'r2':
-      case 'r2_bucket':
-        return { type: 'r2_bucket', name: b.name, bucket_name: b.bucket_name };
-      case 'kv':
-      case 'kv_namespace':
-        return { type: 'kv_namespace', name: b.name, namespace_id: b.namespace_id };
-      case 'queue':
+      case "d1":
+        return { type: "d1", name: b.name, database_id: b.id };
+      case "r2":
+      case "r2_bucket":
+        return { type: "r2_bucket", name: b.name, bucket_name: b.bucket_name };
+      case "kv":
+      case "kv_namespace":
         return {
-          type: 'queue',
+          type: "kv_namespace",
+          name: b.name,
+          namespace_id: b.namespace_id,
+        };
+      case "queue":
+        return {
+          type: "queue",
           name: b.name,
           queue_name: (b as { queue_name?: string }).queue_name,
-          ...(typeof (b as { delivery_delay?: number }).delivery_delay === 'number'
-            ? { delivery_delay: (b as { delivery_delay?: number }).delivery_delay }
+          ...(typeof (b as { delivery_delay?: number }).delivery_delay ===
+              "number"
+            ? {
+              delivery_delay: (b as { delivery_delay?: number }).delivery_delay,
+            }
             : {}),
         };
-      case 'analytics_engine':
+      case "analytics_engine":
         return {
-          type: 'analytics_engine',
+          type: "analytics_engine",
           name: b.name,
           dataset: (b as { dataset?: string }).dataset,
         };
-      case 'workflow':
+      case "workflow":
         return {
-          type: 'workflow',
+          type: "workflow",
           name: b.name,
-          ...(typeof (b as { workflow_name?: string }).workflow_name === 'string'
+          ...(typeof (b as { workflow_name?: string }).workflow_name ===
+              "string"
             ? { workflow_name: (b as { workflow_name?: string }).workflow_name }
             : {}),
-          ...(typeof (b as { class_name?: string }).class_name === 'string'
+          ...(typeof (b as { class_name?: string }).class_name === "string"
             ? { class_name: (b as { class_name?: string }).class_name }
             : {}),
-          ...(typeof (b as { script_name?: string }).script_name === 'string'
+          ...(typeof (b as { script_name?: string }).script_name === "string"
             ? { script_name: (b as { script_name?: string }).script_name }
             : {}),
         };
-      case 'vectorize':
-        return { type: 'vectorize', name: b.name, index_name: b.index_name || b.id };
-      case 'plain_text':
-        return { type: 'plain_text', name: b.name, text: b.text || '' };
-      case 'secret_text':
-        return { type: 'secret_text', name: b.name, text: b.text || '' };
+      case "vectorize":
+        return {
+          type: "vectorize",
+          name: b.name,
+          index_name: b.index_name || b.id,
+        };
+      case "plain_text":
+        return { type: "plain_text", name: b.name, text: b.text || "" };
+      case "secret_text":
+        return { type: "secret_text", name: b.name, text: b.text || "" };
       default:
-        return { type: 'plain_text', name: b.name, text: b.text || '' };
+        return { type: "plain_text", name: b.name, text: b.text || "" };
     }
   });
 
@@ -140,23 +158,27 @@ export async function deployWorkerWithBindings(
  * Embedded fallback is intentionally disabled to avoid silently deploying
  * stale worker bundles that drift from yurucommu source.
  */
-export async function getTakosWorkerScript(env: Pick<Env, 'WORKER_BUNDLES'>): Promise<string> {
+export async function getTakosWorkerScript(
+  env: Pick<Env, "WORKER_BUNDLES">,
+): Promise<string> {
   if (!env.WORKER_BUNDLES) {
     throw new InternalError(
-      'WORKER_BUNDLES is not configured. ' +
-      'Provisioning requires an explicit worker bundle in R2.'
+      "WORKER_BUNDLES is not configured. " +
+        "Provisioning requires an explicit worker bundle in R2.",
     );
   }
 
-  const object = await env.WORKER_BUNDLES.get('worker.js');
+  const object = await env.WORKER_BUNDLES.get("worker.js");
   if (!object) {
-    throw new NotFoundError('worker.js is missing in WORKER_BUNDLES');
+    throw new NotFoundError("worker.js is missing in WORKER_BUNDLES");
   }
   try {
     return await object.text();
   } catch (e) {
     throw new InternalError(
-      `Failed to read worker bundle: ${e instanceof Error ? e.message : String(e)}`
+      `Failed to read worker bundle: ${
+        e instanceof Error ? e.message : String(e)
+      }`,
     );
   }
 }

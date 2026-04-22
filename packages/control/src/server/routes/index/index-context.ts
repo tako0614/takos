@@ -1,5 +1,5 @@
-import type { ExecutionContext } from 'hono';
-import type { AppContext, BaseVariables } from '../route-auth.ts';
+import type { ExecutionContext } from "hono";
+import type { AppContext, BaseVariables } from "../route-auth.ts";
 
 export type IndexContext = AppContext<BaseVariables>;
 
@@ -11,9 +11,12 @@ export type IndexFileBody = {
   path: string;
 };
 
-export function scheduleBackground(c: IndexContext, task: Promise<unknown>): void {
+export function scheduleBackground(
+  c: IndexContext,
+  task: Promise<unknown>,
+): void {
   const ctx = c.executionCtx;
-  if (ctx && 'waitUntil' in ctx) {
+  if (ctx && "waitUntil" in ctx) {
     (ctx as ExecutionContext).waitUntil(task);
   }
 }
@@ -24,10 +27,11 @@ export function getR2Key(spaceId: string, fileId: string): string {
 
 export function chunkContent(
   content: string,
-  maxChunkSize: number = 1000
+  maxChunkSize: number = 1000,
 ): Array<{ startLine: number; endLine: number; content: string }> {
-  const lines = content.split('\n');
-  const chunks: Array<{ startLine: number; endLine: number; content: string }> = [];
+  const lines = content.split("\n");
+  const chunks: Array<{ startLine: number; endLine: number; content: string }> =
+    [];
   let currentChunk: string[] = [];
   let startLine = 1;
   let currentSize = 0;
@@ -40,7 +44,7 @@ export function chunkContent(
       chunks.push({
         startLine,
         endLine: startLine + currentChunk.length - 1,
-        content: currentChunk.join('\n'),
+        content: currentChunk.join("\n"),
       });
       currentChunk = [line];
       startLine = i + 1;
@@ -56,7 +60,7 @@ export function chunkContent(
     chunks.push({
       startLine,
       endLine: startLine + currentChunk.length - 1,
-      content: currentChunk.join('\n'),
+      content: currentChunk.join("\n"),
     });
   }
 
@@ -64,17 +68,17 @@ export function chunkContent(
 }
 
 export function resolvePath(from: string, to: string): string {
-  const fromParts = from.split('/').slice(0, -1);
-  const toParts = to.split('/');
+  const fromParts = from.split("/").slice(0, -1);
+  const toParts = to.split("/");
 
   for (const part of toParts) {
-    if (part === '.') continue;
-    if (part === '..') {
+    if (part === ".") continue;
+    if (part === "..") {
       fromParts.pop();
       continue;
     }
     fromParts.push(part);
   }
 
-  return fromParts.join('/');
+  return fromParts.join("/");
 }

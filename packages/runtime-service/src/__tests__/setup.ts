@@ -1,15 +1,15 @@
-import { Hono } from 'hono';
-import { generateKeyPairSync } from 'node:crypto';
+import { Hono } from "hono";
+import { generateKeyPairSync } from "node:crypto";
 
-const testServiceJwtKeys = generateKeyPairSync('rsa', {
+const testServiceJwtKeys = generateKeyPairSync("rsa", {
   modulusLength: 2048,
-  publicKeyEncoding: { type: 'spki', format: 'pem' },
-  privateKeyEncoding: { type: 'pkcs8', format: 'pem' },
+  publicKeyEncoding: { type: "spki", format: "pem" },
+  privateKeyEncoding: { type: "pkcs8", format: "pem" },
 });
 
 // Set JWT_PUBLIC_KEY for tests if not already set
-if (!Deno.env.get('JWT_PUBLIC_KEY')) {
-  Deno.env.set('JWT_PUBLIC_KEY', testServiceJwtKeys.publicKey);
+if (!Deno.env.get("JWT_PUBLIC_KEY")) {
+  Deno.env.set("JWT_PUBLIC_KEY", testServiceJwtKeys.publicKey);
 }
 
 // [Deno] vi.mock for space-scope and executor removed — tests should use manual stubs
@@ -43,7 +43,7 @@ export async function testRequest(
   const headers: Record<string, string> = { ...(options.headers ?? {}) };
   let body: string | undefined;
   if (options.body !== undefined) {
-    headers['Content-Type'] ||= 'application/json';
+    headers["Content-Type"] ||= "application/json";
     body = JSON.stringify(options.body);
   }
 
@@ -53,8 +53,10 @@ export async function testRequest(
     body,
   });
 
-  const contentType = response.headers.get('content-type') || '';
-  const parsedBody = contentType.includes('application/json') ? await response.json() : await response.text();
+  const contentType = response.headers.get("content-type") || "";
+  const parsedBody = contentType.includes("application/json")
+    ? await response.json()
+    : await response.text();
 
   return {
     status: response.status,

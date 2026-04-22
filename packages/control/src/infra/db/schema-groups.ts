@@ -31,7 +31,9 @@ export const groups = sqliteTable("groups", {
   sourceRef: text("source_ref"),
   sourceRefType: text("source_ref_type"),
   sourceCommitSha: text("source_commit_sha"),
-  currentGroupDeploymentSnapshotId: text("current_group_deployment_snapshot_id"),
+  currentGroupDeploymentSnapshotId: text(
+    "current_group_deployment_snapshot_id",
+  ),
   desiredSpecJson: text("desired_spec_json"),
   backendStateJson: text("backend_state_json"),
   reconcileStatus: text("reconcile_status").notNull().default("idle"),

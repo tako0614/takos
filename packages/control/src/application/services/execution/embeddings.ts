@@ -1,10 +1,15 @@
-import type { Ai, VectorizeIndex, D1Database, R2Bucket } from '../../../shared/types/bindings.ts';
-import type { Env, SpaceFile } from '../../../shared/types/index.ts';
-import { getDb, files as filesTable } from '../../../infra/db/index.ts';
-import { eq, and, ne, isNull, inArray, desc } from 'drizzle-orm';
-import { flattenTree, getBlob } from '../git-smart/index.ts';
+import type {
+  Ai,
+  D1Database,
+  R2Bucket,
+  VectorizeIndex,
+} from "../../../shared/types/bindings.ts";
+import type { Env, SpaceFile } from "../../../shared/types/index.ts";
+import { files as filesTable, getDb } from "../../../infra/db/index.ts";
+import { and, desc, eq, inArray, isNull, ne } from "drizzle-orm";
+import { flattenTree, getBlob } from "../git-smart/index.ts";
 
-import { EMBEDDING_MODEL } from '../../../shared/config/limits.ts';
+import { EMBEDDING_MODEL } from "../../../shared/config/limits.ts";
 const MAX_CHUNK_SIZE = 512;
 
 export interface EmbeddingResult {
@@ -49,7 +54,7 @@ export class EmbeddingsService {
     }) as { data: number[][] };
 
     if (!result.data || result.data.length === 0) {
-      throw new Error('Failed to generate embedding');
+      throw new Error("Failed to generate embedding");
     }
 
     return result.data[0];
@@ -77,8 +82,8 @@ export class EmbeddingsService {
 
   splitIntoChunks(content: string): string[] {
     const chunks: string[] = [];
-    const lines = content.split('\n');
-    let currentChunk = '';
+    const lines = content.split("\n");
+    let currentChunk = "";
     let currentSize = 0;
 
     for (const line of lines) {
@@ -86,12 +91,12 @@ export class EmbeddingsService {
 
       if (currentSize + lineSize > MAX_CHUNK_SIZE && currentChunk) {
         chunks.push(currentChunk.trim());
-        const overlapLines = currentChunk.split('\n').slice(-3);
-        currentChunk = overlapLines.join('\n') + '\n';
+        const overlapLines = currentChunk.split("\n").slice(-3);
+        currentChunk = overlapLines.join("\n") + "\n";
         currentSize = currentChunk.length / 4;
       }
 
-      currentChunk += line + '\n';
+      currentChunk += line + "\n";
       currentSize += lineSize;
     }
 
@@ -105,7 +110,7 @@ export class EmbeddingsService {
   async indexFile(
     spaceId: string,
     file: SpaceFile,
-    content: string
+    content: string,
   ): Promise<number> {
     const chunks = this.splitIntoChunks(content);
     if (chunks.length === 0) return 0;
@@ -172,7 +177,7 @@ export class EmbeddingsService {
       limit?: number;
       fileTypes?: string[];
       minScore?: number;
-    } = {}
+    } = {},
   ): Promise<EmbeddingSearchResult[]> {
     const { limit = 10, minScore = 0.5 } = options;
 
@@ -180,16 +185,21 @@ export class EmbeddingsService {
     const searchResult = await this.vectorize.query(queryEmbedding, {
       topK: limit * 2, // Get more results for filtering
       filter: { spaceId },
-      returnMetadata: 'all',
+      returnMetadata: "all",
     });
 
-    const _fileIds = [...new Set(searchResult.matches
-      .map((m: { metadata?: Record<string, unknown> }) => {
-        const metadata = (m.metadata || {}) as Record<string, unknown>;
-        return typeof metadata.fileId === 'string' ? metadata.fileId : null;
-      })
-      .filter((id: string | null): id is string => typeof id === 'string' && id.length > 0)
-    )];
+    const _fileIds = [
+      ...new Set(
+        searchResult.matches
+          .map((m: { metadata?: Record<string, unknown> }) => {
+            const metadata = (m.metadata || {}) as Record<string, unknown>;
+            return typeof metadata.fileId === "string" ? metadata.fileId : null;
+          })
+          .filter((id: string | null): id is string =>
+            typeof id === "string" && id.length > 0
+          ),
+      ),
+    ];
 
     const results: EmbeddingSearchResult[] = [];
 
@@ -197,11 +207,17 @@ export class EmbeddingsService {
       if (match.score < minScore) continue;
 
       const metadata = (match.metadata || {}) as Record<string, unknown>;
-      if (typeof metadata.fileId !== 'string' || typeof metadata.filePath !== 'string') continue;
-      if (typeof metadata.chunkIndex !== 'number' || typeof metadata.content !== 'string') continue;
+      if (
+        typeof metadata.fileId !== "string" ||
+        typeof metadata.filePath !== "string"
+      ) continue;
+      if (
+        typeof metadata.chunkIndex !== "number" ||
+        typeof metadata.content !== "string"
+      ) continue;
 
       if (options.fileTypes && options.fileTypes.length > 0) {
-        const ext = metadata.filePath.split('.').pop()?.toLowerCase();
+        const ext = metadata.filePath.split(".").pop()?.toLowerCase();
         if (!ext || !options.fileTypes.includes(ext)) continue;
       }
 
@@ -227,7 +243,7 @@ export class EmbeddingsService {
       limit?: number;
       excludeFileId?: string;
       minScore?: number;
-    } = {}
+    } = {},
   ): Promise<EmbeddingSearchResult[]> {
     const { limit = 5, excludeFileId, minScore = 0.7 } = options;
 
@@ -236,7 +252,7 @@ export class EmbeddingsService {
     const searchResult = await this.vectorize.query(embedding, {
       topK: limit * 2,
       filter: { spaceId },
-      returnMetadata: 'all',
+      returnMetadata: "all",
     });
 
     const results: EmbeddingSearchResult[] = [];
@@ -245,8 +261,14 @@ export class EmbeddingsService {
       if (match.score < minScore) continue;
 
       const metadata = (match.metadata || {}) as Record<string, unknown>;
-      if (typeof metadata.fileId !== 'string' || typeof metadata.filePath !== 'string') continue;
-      if (typeof metadata.chunkIndex !== 'number' || typeof metadata.content !== 'string') continue;
+      if (
+        typeof metadata.fileId !== "string" ||
+        typeof metadata.filePath !== "string"
+      ) continue;
+      if (
+        typeof metadata.chunkIndex !== "number" ||
+        typeof metadata.content !== "string"
+      ) continue;
 
       if (excludeFileId && metadata.fileId === excludeFileId) continue;
 
@@ -270,10 +292,14 @@ export class EmbeddingsService {
     storage: R2Bucket | undefined,
     options: {
       forceReindex?: boolean;
-    } = {}
+    } = {},
   ): Promise<{ indexed: number; chunks: number; errors: string[] }> {
     if (!storage) {
-      return { indexed: 0, chunks: 0, errors: ['Storage bucket not available'] };
+      return {
+        indexed: 0,
+        chunks: 0,
+        errors: ["Storage bucket not available"],
+      };
     }
 
     const { forceReindex = false } = options;
@@ -281,8 +307,8 @@ export class EmbeddingsService {
 
     const conditions = [
       eq(filesTable.accountId, spaceId),
-      ne(filesTable.origin, 'system'),
-      inArray(filesTable.kind, ['source', 'config', 'doc']),
+      ne(filesTable.origin, "system"),
+      inArray(filesTable.kind, ["source", "config", "doc"]),
     ];
 
     if (!forceReindex) {
@@ -295,16 +321,16 @@ export class EmbeddingsService {
       .limit(100)
       .all();
 
-    const filesList: SpaceFile[] = filesResult.map(f => ({
+    const filesList: SpaceFile[] = filesResult.map((f) => ({
       id: f.id,
       space_id: f.accountId,
       path: f.path,
-      kind: f.kind as SpaceFile['kind'],
-      visibility: f.visibility as SpaceFile['visibility'],
+      kind: f.kind as SpaceFile["kind"],
+      visibility: f.visibility as SpaceFile["visibility"],
       size: f.size,
       sha256: f.sha256,
       mime_type: f.mimeType,
-      origin: f.origin as SpaceFile['origin'],
+      origin: f.origin as SpaceFile["origin"],
       indexed_at: f.indexedAt ?? null,
       created_at: f.createdAt ?? new Date(0).toISOString(),
       updated_at: f.updatedAt ?? new Date(0).toISOString(),
@@ -329,7 +355,9 @@ export class EmbeddingsService {
         indexed++;
         totalChunks += chunks;
       } catch (err) {
-        errors.push(`${file.path}: ${err instanceof Error ? err.message : String(err)}`);
+        errors.push(
+          `${file.path}: ${err instanceof Error ? err.message : String(err)}`,
+        );
       }
     }
 
@@ -339,7 +367,7 @@ export class EmbeddingsService {
   async indexRepoFiles(
     repoId: string,
     bucket: R2Bucket,
-    treeOid: string
+    treeOid: string,
   ): Promise<{ indexed: number; chunks: number; errors: string[] }> {
     const MAX_FILE_BYTES = 512 * 1024;
     const files = await flattenTree(bucket, treeOid);
@@ -388,7 +416,9 @@ export class EmbeddingsService {
         indexed++;
         totalChunks += chunks.length;
       } catch (err) {
-        errors.push(`${file.path}: ${err instanceof Error ? err.message : String(err)}`);
+        errors.push(
+          `${file.path}: ${err instanceof Error ? err.message : String(err)}`,
+        );
       }
     }
 
@@ -398,7 +428,7 @@ export class EmbeddingsService {
   async searchRepo(
     repoId: string,
     query: string,
-    options: { limit?: number; minScore?: number; pathPrefix?: string } = {}
+    options: { limit?: number; minScore?: number; pathPrefix?: string } = {},
   ): Promise<RepoSearchResult[]> {
     const { limit = 10, minScore = 0.5, pathPrefix } = options;
 
@@ -407,7 +437,7 @@ export class EmbeddingsService {
     const searchResult = await this.vectorize.query(queryEmbedding, {
       topK: limit * 2,
       filter: { repoId },
-      returnMetadata: 'all',
+      returnMetadata: "all",
     });
 
     const results: RepoSearchResult[] = [];
@@ -416,8 +446,8 @@ export class EmbeddingsService {
       if (match.score < minScore) continue;
 
       const metadata = (match.metadata || {}) as Record<string, unknown>;
-      if (typeof metadata.filePath !== 'string') continue;
-      if (typeof metadata.content !== 'string') continue;
+      if (typeof metadata.filePath !== "string") continue;
+      if (typeof metadata.content !== "string") continue;
 
       if (pathPrefix && !metadata.filePath.startsWith(pathPrefix)) continue;
 
@@ -425,7 +455,9 @@ export class EmbeddingsService {
         score: match.score,
         content: metadata.content,
         filePath: metadata.filePath,
-        chunkIndex: typeof metadata.chunkIndex === 'number' ? metadata.chunkIndex : 0,
+        chunkIndex: typeof metadata.chunkIndex === "number"
+          ? metadata.chunkIndex
+          : 0,
       });
 
       if (results.length >= limit) break;
@@ -444,7 +476,9 @@ function hashString(str: string): string {
   return Math.abs(hash).toString(36);
 }
 
-export function createEmbeddingsService(env: Pick<Env, 'AI' | 'VECTORIZE' | 'DB'>): EmbeddingsService | null {
+export function createEmbeddingsService(
+  env: Pick<Env, "AI" | "VECTORIZE" | "DB">,
+): EmbeddingsService | null {
   if (!env.AI || !env.VECTORIZE) {
     return null;
   }
@@ -452,6 +486,8 @@ export function createEmbeddingsService(env: Pick<Env, 'AI' | 'VECTORIZE' | 'DB'
   return new EmbeddingsService(env.AI, env.VECTORIZE, env.DB);
 }
 
-export function isEmbeddingsAvailable(env: Pick<Env, 'AI' | 'VECTORIZE'>): boolean {
+export function isEmbeddingsAvailable(
+  env: Pick<Env, "AI" | "VECTORIZE">,
+): boolean {
   return !!(env.AI && env.VECTORIZE);
 }

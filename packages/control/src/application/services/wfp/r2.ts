@@ -6,9 +6,9 @@
  * S3-compatible PUT endpoint), deletion, and basic usage statistics.
  */
 
-import { CF_API_BASE } from './client.ts';
-import { InternalError } from 'takos-common/errors';
-import type { WfpContext } from './wfp-contracts.ts';
+import { CF_API_BASE } from "./client.ts";
+import { InternalError } from "takos-common/errors";
+import type { WfpContext } from "./wfp-contracts.ts";
 
 // ---------------------------------------------------------------------------
 // R2 CRUD
@@ -17,35 +17,45 @@ import type { WfpContext } from './wfp-contracts.ts';
 /**
  * Create an R2 bucket for tenant.
  */
-export async function createR2Bucket(ctx: WfpContext, name: string): Promise<void> {
+export async function createR2Bucket(
+  ctx: WfpContext,
+  name: string,
+): Promise<void> {
   await ctx.cfFetchWithRetry(
-    ctx.accountPath('/r2/buckets'),
+    ctx.accountPath("/r2/buckets"),
     {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ name }),
-    }
+    },
   );
 }
 
 /**
  * Delete an R2 bucket.
  */
-export async function deleteR2Bucket(ctx: WfpContext, name: string): Promise<void> {
+export async function deleteR2Bucket(
+  ctx: WfpContext,
+  name: string,
+): Promise<void> {
   await ctx.cfFetchWithRetry(
     ctx.accountPath(`/r2/buckets/${name}`),
-    { method: 'DELETE' }
+    { method: "DELETE" },
   );
 }
 
 /**
  * List objects in an R2 bucket.
  */
-export async function listR2Objects(ctx: WfpContext, bucketName: string, options?: {
-  prefix?: string;
-  cursor?: string;
-  limit?: number;
-}): Promise<{
+export async function listR2Objects(
+  ctx: WfpContext,
+  bucketName: string,
+  options?: {
+    prefix?: string;
+    cursor?: string;
+    limit?: number;
+  },
+): Promise<{
   objects: Array<{
     key: string;
     size: number;
@@ -56,9 +66,9 @@ export async function listR2Objects(ctx: WfpContext, bucketName: string, options
   cursor?: string;
 }> {
   const params = new URLSearchParams();
-  if (options?.prefix) params.set('prefix', options.prefix);
-  if (options?.cursor) params.set('cursor', options.cursor);
-  if (options?.limit) params.set('per_page', options.limit.toString());
+  if (options?.prefix) params.set("prefix", options.prefix);
+  if (options?.cursor) params.set("cursor", options.cursor);
+  if (options?.limit) params.set("per_page", options.limit.toString());
 
   const response = await ctx.cfFetch<{
     objects: Array<{
@@ -70,7 +80,7 @@ export async function listR2Objects(ctx: WfpContext, bucketName: string, options
     truncated: boolean;
     cursor?: string;
   }>(
-    ctx.accountPath(`/r2/buckets/${bucketName}/objects?${params.toString()}`)
+    ctx.accountPath(`/r2/buckets/${bucketName}/objects?${params.toString()}`),
   );
   return response.result || { objects: [], truncated: false };
 }
@@ -87,23 +97,29 @@ export async function uploadToR2(
   body: ReadableStream<Uint8Array> | ArrayBuffer | string,
   options?: {
     contentType?: string;
-  }
+  },
 ): Promise<void> {
   const response = await fetch(
-    `${CF_API_BASE}${ctx.accountPath(`/r2/buckets/${bucketName}/objects/${encodeURIComponent(key)}`)}`,
+    `${CF_API_BASE}${
+      ctx.accountPath(
+        `/r2/buckets/${bucketName}/objects/${encodeURIComponent(key)}`,
+      )
+    }`,
     {
-      method: 'PUT',
+      method: "PUT",
       headers: {
-        'Authorization': `Bearer ${ctx.config.apiToken}`,
-        'Content-Type': options?.contentType || 'application/octet-stream',
+        "Authorization": `Bearer ${ctx.config.apiToken}`,
+        "Content-Type": options?.contentType || "application/octet-stream",
       },
       body,
-    }
+    },
   );
 
   if (!response.ok) {
     const text = await response.text();
-    throw new InternalError(`Failed to upload to R2: ${response.status} ${text}`);
+    throw new InternalError(
+      `Failed to upload to R2: ${response.status} ${text}`,
+    );
   }
 }
 
@@ -114,19 +130,25 @@ export async function getR2Object(
   ctx: WfpContext,
   bucketName: string,
   key: string,
-): Promise<{
-  body: ArrayBuffer;
-  contentType: string | null;
-  size: number;
-} | null> {
+): Promise<
+  {
+    body: ArrayBuffer;
+    contentType: string | null;
+    size: number;
+  } | null
+> {
   const response = await fetch(
-    `${CF_API_BASE}${ctx.accountPath(`/r2/buckets/${bucketName}/objects/${encodeURIComponent(key)}`)}`,
+    `${CF_API_BASE}${
+      ctx.accountPath(
+        `/r2/buckets/${bucketName}/objects/${encodeURIComponent(key)}`,
+      )
+    }`,
     {
-      method: 'GET',
+      method: "GET",
       headers: {
-        'Authorization': `Bearer ${ctx.config.apiToken}`,
+        "Authorization": `Bearer ${ctx.config.apiToken}`,
       },
-    }
+    },
   );
 
   if (response.status === 404) {
@@ -135,13 +157,15 @@ export async function getR2Object(
 
   if (!response.ok) {
     const text = await response.text();
-    throw new InternalError(`Failed to read from R2: ${response.status} ${text}`);
+    throw new InternalError(
+      `Failed to read from R2: ${response.status} ${text}`,
+    );
   }
 
   const body = await response.arrayBuffer();
   return {
     body,
-    contentType: response.headers.get('content-type'),
+    contentType: response.headers.get("content-type"),
     size: body.byteLength,
   };
 }
@@ -149,17 +173,26 @@ export async function getR2Object(
 /**
  * Delete an object from an R2 bucket.
  */
-export async function deleteR2Object(ctx: WfpContext, bucketName: string, key: string): Promise<void> {
+export async function deleteR2Object(
+  ctx: WfpContext,
+  bucketName: string,
+  key: string,
+): Promise<void> {
   await ctx.cfFetchWithRetry(
-    ctx.accountPath(`/r2/buckets/${bucketName}/objects/${encodeURIComponent(key)}`),
-    { method: 'DELETE' }
+    ctx.accountPath(
+      `/r2/buckets/${bucketName}/objects/${encodeURIComponent(key)}`,
+    ),
+    { method: "DELETE" },
   );
 }
 
 /**
  * Get R2 bucket usage stats.
  */
-export async function getR2BucketStats(ctx: WfpContext, bucketName: string): Promise<{
+export async function getR2BucketStats(
+  ctx: WfpContext,
+  bucketName: string,
+): Promise<{
   objectCount: number;
   payloadSize: number;
   metadataSize: number;

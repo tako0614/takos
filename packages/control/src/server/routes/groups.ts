@@ -1,1 +1,1 @@
-export { default } from './groups/routes.ts';
+export { default } from "./groups/routes.ts";

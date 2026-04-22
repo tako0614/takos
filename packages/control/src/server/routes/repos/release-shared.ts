@@ -1,33 +1,40 @@
-import type { getDb } from '../../../infra/db/index.ts';
-import { repoReleases, repoReleaseAssets, accounts } from '../../../infra/db/schema.ts';
-import { eq, asc } from 'drizzle-orm';
-import { MAX_RELEASE_ASSET_FILENAME_LENGTH } from '../../../shared/config/limits.ts';
+import type { getDb } from "../../../infra/db/index.ts";
+import {
+  accounts,
+  repoReleaseAssets,
+  repoReleases,
+} from "../../../infra/db/schema.ts";
+import { asc, eq } from "drizzle-orm";
+import { MAX_RELEASE_ASSET_FILENAME_LENGTH } from "../../../shared/config/limits.ts";
 
 export function sanitizeReleaseAssetFilename(fileName: string): string {
-  const normalized = fileName.normalize('NFKC');
-  let stripped = '';
+  const normalized = fileName.normalize("NFKC");
+  let stripped = "";
   for (let i = 0; i < normalized.length; i++) {
     const code = normalized.charCodeAt(i);
     if (code === 0 || code < 0x20 || code === 0x7f) continue;
     stripped += normalized[i];
   }
-  const basename = stripped.replace(/\\/g, '/').split('/').pop() || '';
-  const withoutTraversal = basename.replace(/\.\.+/g, '.');
-  const collapsed = withoutTraversal.replace(/\s+/g, ' ').trim();
+  const basename = stripped.replace(/\\/g, "/").split("/").pop() || "";
+  const withoutTraversal = basename.replace(/\.\.+/g, ".");
+  const collapsed = withoutTraversal.replace(/\s+/g, " ").trim();
   const safe = collapsed
-    .replace(/[^A-Za-z0-9._ -]/g, '_')
-    .replace(/^[. ]+|[. ]+$/g, '')
+    .replace(/[^A-Za-z0-9._ -]/g, "_")
+    .replace(/^[. ]+|[. ]+$/g, "")
     .slice(0, MAX_RELEASE_ASSET_FILENAME_LENGTH);
 
-  return safe || 'asset.bin';
+  return safe || "asset.bin";
 }
 
 export function buildAttachmentDisposition(fileName: string): string {
   const sanitized = sanitizeReleaseAssetFilename(fileName);
-  const asciiFallback = sanitized.replace(/["\\]/g, '_');
+  const asciiFallback = sanitized.replace(/["\\]/g, "_");
   const encoded = encodeURIComponent(sanitized)
-    .replace(/['()]/g, (ch) => `%${ch.charCodeAt(0).toString(16).toUpperCase()}`)
-    .replace(/\*/g, '%2A');
+    .replace(
+      /['()]/g,
+      (ch) => `%${ch.charCodeAt(0).toString(16).toUpperCase()}`,
+    )
+    .replace(/\*/g, "%2A");
 
   return `attachment; filename="${asciiFallback}"; filename*=UTF-8''${encoded}`;
 }
@@ -37,7 +44,9 @@ export async function fetchReleaseWithDetails(
   db: ReturnType<typeof getDb>,
   releaseId: string,
 ) {
-  const release = await db.select().from(repoReleases).where(eq(repoReleases.id, releaseId)).get();
+  const release = await db.select().from(repoReleases).where(
+    eq(repoReleases.id, releaseId),
+  ).get();
   if (!release) return null;
 
   const assets = await db.select().from(repoReleaseAssets)
@@ -45,7 +54,8 @@ export async function fetchReleaseWithDetails(
     .orderBy(asc(repoReleaseAssets.createdAt))
     .all();
 
-  let author: { id: string; name: string; picture: string | null } | null = null;
+  let author: { id: string; name: string; picture: string | null } | null =
+    null;
   if (release.authorAccountId) {
     const authorData = await db.select({
       id: accounts.id,

@@ -1,4 +1,10 @@
-export type ArtifactType = 'code' | 'config' | 'doc' | 'patch' | 'report' | 'other';
+export type ArtifactType =
+  | "code"
+  | "config"
+  | "doc"
+  | "patch"
+  | "report"
+  | "other";
 
 export interface Artifact {
   id: string;

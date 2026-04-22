@@ -1,11 +1,11 @@
-import type { Context } from 'hono';
-import type { AuthenticatedRouteEnv } from '../route-auth.ts';
-import type { RepoAccess } from '../../../application/services/source/repos.ts';
+import type { Context } from "hono";
+import type { AuthenticatedRouteEnv } from "../route-auth.ts";
+import type { RepoAccess } from "../../../application/services/source/repos.ts";
 import {
-  triggerPullRequestWorkflows,
   type PullRequestWorkflowEvent,
-} from '../../../application/services/actions/index.ts';
-import { logError } from '../../../shared/utils/logger.ts';
+  triggerPullRequestWorkflows,
+} from "../../../application/services/actions/index.ts";
+import { logError } from "../../../shared/utils/logger.ts";
 
 // ---------------------------------------------------------------------------
 // Shared helpers for triggering PR workflow events
@@ -19,7 +19,7 @@ function triggerPullRequestEventInBackground(
     defaultBranch: string;
     actorId: string;
     event: PullRequestWorkflowEvent;
-  }
+  },
 ): void {
   const task = triggerPullRequestWorkflows({
     db: c.env.DB,
@@ -32,11 +32,13 @@ function triggerPullRequestEventInBackground(
     actorId: options.actorId,
     event: options.event,
   }).catch((err: unknown) => {
-    logError('Failed to trigger pull_request workflows', err, { module: 'routes/pull-requests/base' });
+    logError("Failed to trigger pull_request workflows", err, {
+      module: "routes/pull-requests/base",
+    });
   });
 
   const executionCtx = c.executionCtx;
-  if (executionCtx && typeof executionCtx.waitUntil === 'function') {
+  if (executionCtx && typeof executionCtx.waitUntil === "function") {
     executionCtx.waitUntil(task);
     return;
   }
@@ -54,7 +56,7 @@ export function triggerPrEvent(
   triggerPullRequestEventInBackground(c, {
     repoId: repoAccess.repo.id,
     repoName: repoAccess.repo.name,
-    defaultBranch: repoAccess.repo.default_branch || 'main',
+    defaultBranch: repoAccess.repo.default_branch || "main",
     actorId,
     event,
   });

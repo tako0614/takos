@@ -1,9 +1,9 @@
-import { logWarn } from './logger.ts';
+import { logWarn } from "./logger.ts";
 
 export async function gzipCompressString(data: string): Promise<ArrayBuffer> {
   const encoder = new TextEncoder();
   const stream = new Blob([encoder.encode(data)]).stream();
-  const compressedStream = stream.pipeThrough(new CompressionStream('gzip'));
+  const compressedStream = stream.pipeThrough(new CompressionStream("gzip"));
   const reader = compressedStream.getReader();
   const chunks: Uint8Array[] = [];
 
@@ -29,12 +29,15 @@ const DEFAULT_MAX_DECOMPRESSED_BYTES = 50 * 1024 * 1024;
 
 export async function gzipDecompressToString(
   data: ArrayBuffer,
-  options: { maxDecompressedBytes?: number } = {}
+  options: { maxDecompressedBytes?: number } = {},
 ): Promise<string> {
-  const maxDecompressedBytes = options.maxDecompressedBytes ?? DEFAULT_MAX_DECOMPRESSED_BYTES;
+  const maxDecompressedBytes = options.maxDecompressedBytes ??
+    DEFAULT_MAX_DECOMPRESSED_BYTES;
 
   const stream = new Blob([data]).stream();
-  const decompressedStream = stream.pipeThrough(new DecompressionStream('gzip'));
+  const decompressedStream = stream.pipeThrough(
+    new DecompressionStream("gzip"),
+  );
   const reader = decompressedStream.getReader();
   const chunks: Uint8Array[] = [];
 
@@ -45,9 +48,21 @@ export async function gzipDecompressToString(
 
     totalDecompressedSize += value.length;
     if (totalDecompressedSize > maxDecompressedBytes) {
-      try { reader.cancel(); } catch (err) { logWarn('Failed to cancel reader after size limit exceeded (non-critical)', { module: 'gzip', error: err instanceof Error ? err.message : String(err) }); }
+      try {
+        reader.cancel();
+      } catch (err) {
+        logWarn(
+          "Failed to cancel reader after size limit exceeded (non-critical)",
+          {
+            module: "gzip",
+            error: err instanceof Error ? err.message : String(err),
+          },
+        );
+      }
       throw new Error(
-        `Decompressed content exceeds limit (${Math.round(maxDecompressedBytes / 1024 / 1024)}MiB)`
+        `Decompressed content exceeds limit (${
+          Math.round(maxDecompressedBytes / 1024 / 1024)
+        }MiB)`,
       );
     }
 
@@ -64,4 +79,3 @@ export async function gzipDecompressToString(
 
   return decoder.decode(result);
 }
-

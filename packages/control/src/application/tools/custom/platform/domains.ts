@@ -1,13 +1,37 @@
 import type { ToolDefinition, ToolHandler } from "../../tool-definitions.ts";
-import { generateId } from "../../../../shared/utils/index.ts";
-import { getDb, serviceCustomDomains } from "../../../../infra/db/index.ts";
-import { and, desc, eq } from "drizzle-orm";
 import {
-  deleteHostnameRouting,
-  upsertHostnameRouting,
-} from "../../../services/routing/service.ts";
-import { ServiceDesiredStateService } from "../../../services/platform/worker-desired-state.ts";
-import { getServiceRouteRecord } from "../../../services/platform/workers.ts";
+  addCustomDomain,
+  deleteCustomDomain,
+  listCustomDomains,
+  verifyCustomDomain,
+} from "../../../services/platform/custom-domains.ts";
+
+type ListedCustomDomain = Awaited<ReturnType<typeof listCustomDomains>>[
+  "domains"
+][number];
+
+function findDomainByName(
+  domains: ListedCustomDomain[],
+  domain: string,
+): ListedCustomDomain | undefined {
+  const normalized = domain.trim().toLowerCase();
+  return domains.find((entry) => entry.domain === normalized);
+}
+
+function formatDnsInstruction(prefix: string, instruction: {
+  type: string;
+  name: string;
+  value: string;
+  description: string;
+}): string {
+  return [
+    `${prefix}:`,
+    `  Type: ${instruction.type}`,
+    `  Name: ${instruction.name}`,
+    `  Value: ${instruction.value}`,
+    `  ${instruction.description}`,
+  ].join("\n");
+}
 
 export const DOMAIN_LIST: ToolDefinition = {
   name: "domain_list",
@@ -89,16 +113,11 @@ export const DOMAIN_REMOVE: ToolDefinition = {
 export const domainListHandler: ToolHandler = async (args, context) => {
   const serviceId = args.service_id as string;
 
-  const db = getDb(context.db);
-  const domains = await db.select({
-    domain: serviceCustomDomains.domain,
-    status: serviceCustomDomains.status,
-    verificationToken: serviceCustomDomains.verificationToken,
-    createdAt: serviceCustomDomains.createdAt,
-  }).from(serviceCustomDomains).where(
-    eq(serviceCustomDomains.serviceId, serviceId),
-  )
-    .orderBy(desc(serviceCustomDomains.createdAt)).all();
+  const { domains } = await listCustomDomains(
+    context.env,
+    serviceId,
+    context.userId,
+  );
 
   if (domains.length === 0) {
     return `No custom domains configured for service: ${serviceId}`;
@@ -119,183 +138,82 @@ export const domainListHandler: ToolHandler = async (args, context) => {
 export const domainAddHandler: ToolHandler = async (args, context) => {
   const serviceId = args.service_id as string;
   const domain = args.domain as string;
-  const { env } = context;
-
-  if (
-    !/^[a-z0-9]([a-z0-9-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)+$/.test(
-      domain.toLowerCase(),
-    )
-  ) {
-    throw new Error("Invalid domain format");
-  }
-
-  const db = getDb(context.db);
-
-  const service = await getServiceRouteRecord(context.db, serviceId);
-
-  if (!service || service.accountId !== context.spaceId) {
-    throw new Error(`Service not found: ${serviceId}`);
-  }
-
-  const existing = await db.select({ id: serviceCustomDomains.id })
-    .from(serviceCustomDomains).where(
-      eq(serviceCustomDomains.domain, domain.toLowerCase()),
-    ).get();
-
-  if (existing) {
-    throw new Error(`Domain already registered: ${domain}`);
-  }
-
-  const verifyToken = `takos-verify-${generateId()}`;
-  const id = generateId();
-  await db.insert(serviceCustomDomains).values({
-    id,
-    serviceId,
-    domain: domain.toLowerCase(),
-    status: "pending",
-    verificationToken: verifyToken,
-    verificationMethod: "cname",
-    createdAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString(),
+  const result = await addCustomDomain(context.env, serviceId, context.userId, {
+    domain,
+    verification_method: "cname",
   });
+  const { body } = result;
 
-  const desiredState = new ServiceDesiredStateService(env);
-  const target = await desiredState.getRoutingTarget(serviceId);
-  if (target) {
-    await upsertHostnameRouting({
-      env,
-      hostname: domain.toLowerCase(),
-      target,
-    });
-  }
-
-  return `Domain added: ${domain}
-
-To verify ownership, add one of these DNS records:
-
-Option 1 - CNAME (recommended):
-  Type: CNAME
-  Name: ${domain}
-  Value: ${env.TENANT_BASE_DOMAIN}
-
-Option 2 - TXT verification:
-  Type: TXT
-  Name: _takos-verify.${domain}
-  Value: ${verifyToken}
-
-After adding DNS records, use domain_verify to complete setup.`;
+  return [
+    `Domain added: ${body.domain}`,
+    "",
+    "Configure these DNS records before verification:",
+    "",
+    formatDnsInstruction("Route target", body.instructions.step1),
+    "",
+    formatDnsInstruction("Ownership verification", body.instructions.step2),
+    "",
+    "After adding DNS records, use domain_verify to complete setup.",
+  ].join("\n");
 };
 
 export const domainVerifyHandler: ToolHandler = async (args, context) => {
   const serviceId = args.service_id as string;
   const domain = args.domain as string;
 
-  const db = getDb(context.db);
-
-  const domainRecord = await db.select({
-    id: serviceCustomDomains.id,
-    verificationToken: serviceCustomDomains.verificationToken,
-  })
-    .from(serviceCustomDomains)
-    .where(
-      and(
-        eq(serviceCustomDomains.serviceId, serviceId),
-        eq(serviceCustomDomains.domain, domain.toLowerCase()),
-      ),
-    )
-    .get();
-
+  const { domains } = await listCustomDomains(
+    context.env,
+    serviceId,
+    context.userId,
+  );
+  const domainRecord = findDomainByName(domains, domain);
   if (!domainRecord) {
     throw new Error(`Domain not found: ${domain}`);
   }
 
-  try {
-    const cnameResp = await fetch(
-      `https://cloudflare-dns.com/dns-query?name=${domain}&type=CNAME`,
-      {
-        headers: { "Accept": "application/dns-json" },
-      },
-    );
-    const cnameData = await cnameResp.json() as {
-      Answer?: Array<{ data: string }>;
-    };
-
-    if (cnameData.Answer?.length) {
-      await db.update(serviceCustomDomains).set({
-        status: "active",
-        verifiedAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
-      })
-        .where(eq(serviceCustomDomains.id, domainRecord.id));
-
-      return `Domain verified via CNAME: ${domain}\nThe domain is now active.`;
-    }
-
-    const txtResp = await fetch(
-      `https://cloudflare-dns.com/dns-query?name=_takos-verify.${domain}&type=TXT`,
-      {
-        headers: { "Accept": "application/dns-json" },
-      },
-    );
-    const txtData = await txtResp.json() as {
-      Answer?: Array<{ data: string }>;
-    };
-
-    if (
-      txtData.Answer?.some((a) =>
-        a.data.includes(domainRecord.verificationToken)
-      )
-    ) {
-      await db.update(serviceCustomDomains).set({
-        status: "active",
-        verifiedAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
-      })
-        .where(eq(serviceCustomDomains.id, domainRecord.id));
-
-      return `Domain verified via TXT: ${domain}\nThe domain is now active.`;
-    }
-
-    return `DNS verification failed for ${domain}
-
-Expected one of:
-- CNAME pointing to the platform domain
-- TXT record "_takos-verify.${domain}" with value "${domainRecord.verificationToken}"
-
-Please check your DNS settings and try again.`;
-  } catch (error) {
-    throw new Error(`DNS lookup failed: ${error}`);
+  const result = await verifyCustomDomain(
+    context.env,
+    serviceId,
+    context.userId,
+    domainRecord.id,
+  );
+  const body = result.body;
+  if ("error" in body) {
+    throw new Error(body.error);
   }
+
+  return [
+    `Domain verification result: ${domainRecord.domain}`,
+    `Status: ${body.status}`,
+    `Message: ${body.message}`,
+    `DNS verified: ${body.dns_verified ?? body.verified ?? false}`,
+    `SSL verified: ${body.ssl_verified ?? false}`,
+    body.ssl_status ? `SSL status: ${body.ssl_status}` : undefined,
+  ].filter((line): line is string => !!line).join("\n");
 };
 
 export const domainRemoveHandler: ToolHandler = async (args, context) => {
   const serviceId = args.service_id as string;
   const domain = args.domain as string;
-  const { env } = context;
 
-  const db = getDb(context.db);
-
-  const domainRecord = await db.select({ id: serviceCustomDomains.id })
-    .from(serviceCustomDomains)
-    .where(
-      and(
-        eq(serviceCustomDomains.serviceId, serviceId),
-        eq(serviceCustomDomains.domain, domain.toLowerCase()),
-      ),
-    )
-    .get();
-
+  const { domains } = await listCustomDomains(
+    context.env,
+    serviceId,
+    context.userId,
+  );
+  const domainRecord = findDomainByName(domains, domain);
   if (!domainRecord) {
     throw new Error(`Domain not found: ${domain}`);
   }
 
-  await db.delete(serviceCustomDomains).where(
-    eq(serviceCustomDomains.id, domainRecord.id),
+  await deleteCustomDomain(
+    context.env,
+    serviceId,
+    context.userId,
+    domainRecord.id,
   );
 
-  await deleteHostnameRouting({ env, hostname: domain.toLowerCase() });
-
-  return `Domain removed: ${domain}`;
+  return `Domain removed: ${domainRecord.domain}`;
 };
 
 export const DOMAIN_TOOLS: ToolDefinition[] = [

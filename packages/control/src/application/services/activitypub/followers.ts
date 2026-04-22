@@ -2,10 +2,10 @@
  * ActivityPub Followers Service — manages Follow/Unfollow for Store and Repo actors.
  */
 
-import { and, count, desc, eq } from 'drizzle-orm';
-import type { D1Database } from '../../../shared/types/bindings.ts';
-import { getDb, apFollowers } from '../../../infra/db/index.ts';
-import { generateId } from '../../../shared/utils/index.ts';
+import { and, count, desc, eq } from "drizzle-orm";
+import type { D1Database } from "../../../shared/types/bindings.ts";
+import { apFollowers, getDb } from "../../../infra/db/index.ts";
+import { generateId } from "../../../shared/utils/index.ts";
 
 export interface FollowerRecord {
   id: string;

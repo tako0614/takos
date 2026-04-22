@@ -25,11 +25,16 @@ import {
   threadSearchDeps,
 } from "@/services/threads/thread-search";
 
-threadSearchDeps.getDb = ((db) => mocks.getDb(db)) as typeof threadSearchDeps.getDb;
+threadSearchDeps.getDb =
+  ((db) => mocks.getDb(db)) as typeof threadSearchDeps.getDb;
 threadSearchDeps.queryRelevantThreadMessages = ((
   ...args: Parameters<typeof threadSearchDeps.queryRelevantThreadMessages>
-) => mocks.queryRelevantThreadMessages(...args)) as typeof threadSearchDeps.queryRelevantThreadMessages;
-threadSearchDeps.logWarn = ((...args) => mocks.logWarn(...args)) as typeof threadSearchDeps.logWarn;
+) =>
+  mocks.queryRelevantThreadMessages(
+    ...args,
+  )) as typeof threadSearchDeps.queryRelevantThreadMessages;
+threadSearchDeps.logWarn =
+  ((...args) => mocks.logWarn(...args)) as typeof threadSearchDeps.logWarn;
 
 function makeEnv(options: { ai?: boolean; vectorize?: boolean } = {}): Env {
   const env: Partial<Env> = {

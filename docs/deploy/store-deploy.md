@@ -7,15 +7,15 @@
 Takos の deploy 入口はシンプルです。
 
 - `takos deploy`: ローカル manifest（primary）または repository URL から
-  明示した group inventory へ primitive declaration を apply する
-- `takos install owner/repo --version TAG --group GROUP`: catalog (Store) が
+  manifest の `name` で決まる group inventory へ primitive declaration を apply する
+- `takos install owner/repo --version TAG`: catalog (Store) が
   owner/repo + version/tag を repository URL + Git tag に解決し、内部的には
   `takos deploy` と同じ pipeline を通る
 
-両者はどちらも同じ group-scoped `takos deploy` pipeline を通ります。`--group`
-で明示した group に、作成・更新された primitive が所属し、group snapshot などの
-group 機能を使えます。`takos install` は catalog で発見した package
-を楽に呼び出すための薄いラッパーです。
+両者はどちらも同じ group-scoped `takos deploy` pipeline を通ります。manifest
+の `name` または `--group` override で決まる group に、作成・更新された primitive
+が所属し、group snapshot などの group 機能を使えます。`takos install` は catalog
+で発見した package を楽に呼び出すための薄いラッパーです。
 
 ## Store の役割
 
@@ -33,20 +33,20 @@ deploy pipeline と group 機能が担当します。
 
 ```bash
 # local manifest から deploy（primary）
-takos deploy --space SPACE_ID --group my-app
-takos deploy --env staging --space SPACE_ID --group my-app
-takos deploy --plan --space SPACE_ID --group my-app
+takos deploy --space SPACE_ID
+takos deploy --env staging --space SPACE_ID
+takos deploy --plan --space SPACE_ID
 ```
 
 ```bash
 # repository URL から deploy
-takos deploy https://github.com/acme/my-app.git --space SPACE_ID --ref main --group my-app
+takos deploy https://github.com/acme/my-app.git --space SPACE_ID --ref main
 ```
 
 ```bash
 # catalog で発見した repo を install
-takos install owner/repo --space SPACE_ID --group my-app
-takos install owner/repo --space SPACE_ID --version v1.0.0 --group my-app
+takos install owner/repo --space SPACE_ID
+takos install owner/repo --space SPACE_ID --version v1.0.0
 ```
 
 `--version v1.0.0` を使って version を指定します。
@@ -83,17 +83,16 @@ API source kind は `manifest` / `git_ref` で分かれますが、これは man
 
 ```bash
 # local manifest から deploy
-takos deploy --env staging --space SPACE_ID --group my-app
+takos deploy --env staging --space SPACE_ID
 
 # repository URL から deploy
 takos deploy https://github.com/acme/my-app.git \
   --space SPACE_ID \
   --ref main \
-  --group my-app \
   --env staging
 
 # dry-run preview
-takos deploy --plan --space SPACE_ID --group my-app
+takos deploy --plan --space SPACE_ID
 ```
 
 positional argument を省略するとローカルの `.takos/app.yml` または
@@ -102,7 +101,7 @@ repository 側の既定 branch 解決に従います。
 
 ## `takos install`
 
-`takos install OWNER/REPO --version TAG --group GROUP` は `takos deploy` の
+`takos install OWNER/REPO --version TAG` は `takos deploy` の
 sugar です。catalog (Store) が owner/repo + version/tag を repository URL + Git
 tag に解決し、`source.kind = "git_ref"` / `ref_type = "tag"` として同じ call
 path を通ります。CLI 自身は repo を clone せず、control plane が repo source
@@ -110,8 +109,8 @@ path を通ります。CLI 自身は repo を clone せず、control plane が r
 
 ```bash
 # 以下は等価
-takos install owner/repo --version v1.2.0 --space SPACE_ID --group my-app
-takos deploy https://github.com/owner/repo.git --ref v1.2.0 --ref-type tag --space SPACE_ID --group my-app
+takos install owner/repo --version v1.2.0 --space SPACE_ID
+takos deploy https://github.com/owner/repo.git --ref v1.2.0 --ref-type tag --space SPACE_ID
 ```
 
 target space に Store app-label / package が install
@@ -135,21 +134,24 @@ takos rollback my-app --space SPACE_ID
 ## デプロイ前の検証
 
 manifest 由来の差分確認には
-`takos deploy --plan --space SPACE_ID --group GROUP_NAME` を使います。
+`takos deploy --plan --space SPACE_ID` を使います。
 
 ```bash
-takos deploy --plan --space SPACE_ID --group my-app
+takos deploy --plan --space SPACE_ID
 ```
 
-`takos deploy --plan --space SPACE_ID --group NAME` は non-mutating preview
+`takos deploy --plan --space SPACE_ID` は non-mutating preview
 です。group が未作成でも DB row は作りません。
 
 ローカル manifest 経路では、CLI が `source.kind = "manifest"` payload を作る前に
-worker bundle の build output を確認します。`artifactPath` は単一 bundle
-file、または `.js` / `.mjs` / `.cjs` が 1 つだけに定まる directory artifact
-を指します。`--target` は `--plan` 時だけ使え、指定した target に 一致する
-compute workload の artifact だけを確認します。apply では `--target`
-を使えません。
+worker bundle の build output を確認します。`artifactPath` は public manifest
+schema では optional の local/private build metadata ですが、local deploy で
+workflow artifact から worker bundle を収集する場合は、単一 bundle file、または
+`.js` / `.mjs` / `.cjs` が 1 つだけに定まる directory artifact
+を指す必要があります。 repo/committed bundle 経路では `build.artifact` や
+committed bundle discovery に fallback します。`--target` は `--plan`
+時だけ使え、指定した target に一致する compute workload の artifact
+だけを確認します。apply では `--target` を使えません。
 
 ## デプロイ状態の確認
 
@@ -165,11 +167,12 @@ group は source 情報を持てます。
 
 - `local`: ローカル manifest を `takos deploy` で手元から deploy
 - `repo:owner/repo@v1.2.0`:
-  `takos install owner/repo --version v1.2.0 --space SPACE_ID --group NAME`
-  または `takos deploy URL --space SPACE_ID --group NAME` で repo から deploy
+  `takos install owner/repo --version v1.2.0 --space SPACE_ID`
+  または `takos deploy URL --space SPACE_ID` で repo から deploy
 
 どちらの source の group も、新しい code を反映するには
-`takos deploy --space SPACE_ID --group NAME` を再実行します。
+`takos deploy --space SPACE_ID` を再実行します。別名 group へ反映したい場合は
+`--group NAME` を override として指定します。
 
 ## イメージ参照の制約
 
@@ -203,7 +206,7 @@ DELETE /api/spaces/:spaceId/group-deployment-snapshots/:groupDeploymentSnapshotI
 ```
 
 group 機能には advanced HTTP API として group API もあります。public CLI の通常
-path は `takos deploy --group GROUP` / `takos deploy --plan --group GROUP`
+path は `takos deploy` / `takos deploy --plan`
 です。
 
 ```text

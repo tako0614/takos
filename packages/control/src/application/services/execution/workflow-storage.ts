@@ -2,12 +2,16 @@
  * Workflow Engine – storage operations (logs and artifacts)
  */
 
-import { generateId } from '../../../shared/utils/index.ts';
-import { getDb, workflowJobs, workflowArtifacts } from '../../../infra/db/index.ts';
-import { eq, lt } from 'drizzle-orm';
-import type { D1Database } from '../../../shared/types/bindings.ts';
-import type { WorkflowBucket } from './workflow-engine-types.ts';
-import { logError, logInfo } from '../../../shared/utils/logger.ts';
+import { generateId } from "../../../shared/utils/index.ts";
+import {
+  getDb,
+  workflowArtifacts,
+  workflowJobs,
+} from "../../../infra/db/index.ts";
+import { eq, lt } from "drizzle-orm";
+import type { D1Database } from "../../../shared/types/bindings.ts";
+import type { WorkflowBucket } from "./workflow-engine-types.ts";
+import { logError, logInfo } from "../../../shared/utils/logger.ts";
 
 // ---------------------------------------------------------------------------
 // storeJobLogs
@@ -24,7 +28,7 @@ export async function storeJobLogs(
 
   await bucket.put(r2Key, logs, {
     httpMetadata: {
-      contentType: 'text/plain',
+      contentType: "text/plain",
     },
   });
 
@@ -57,15 +61,18 @@ export async function createArtifact(
   const artifactId = generateId();
   const r2Key = `workflow-artifacts/${runId}/${artifactId}/${name}`;
   const timestamp = new Date().toISOString();
-  const expiresAt = new Date(Date.now() + expiresInDays * 24 * 60 * 60 * 1000).toISOString();
+  const expiresAt = new Date(Date.now() + expiresInDays * 24 * 60 * 60 * 1000)
+    .toISOString();
 
   await bucket.put(r2Key, data, {
     httpMetadata: {
-      contentType: mimeType || 'application/octet-stream',
+      contentType: mimeType || "application/octet-stream",
     },
   });
 
-  const size = typeof data === 'string' ? new TextEncoder().encode(data).length : data.byteLength;
+  const size = typeof data === "string"
+    ? new TextEncoder().encode(data).length
+    : data.byteLength;
 
   await drizzle.insert(workflowArtifacts)
     .values({
@@ -136,8 +143,8 @@ export async function runWorkflowArtifactGcBatch(
         deletedR2Objects++;
       } catch (err) {
         errors++;
-        logError('Failed to delete expired workflow artifact from R2', err, {
-          module: 'workflow-storage',
+        logError("Failed to delete expired workflow artifact from R2", err, {
+          module: "workflow-storage",
           detail: { id: row.id, r2Key: row.r2Key },
         });
         // Continue to delete the DB row anyway — leaving the row would just
@@ -145,21 +152,28 @@ export async function runWorkflowArtifactGcBatch(
       }
     }
     try {
-      await drizzle.delete(workflowArtifacts).where(eq(workflowArtifacts.id, row.id)).run();
+      await drizzle.delete(workflowArtifacts).where(
+        eq(workflowArtifacts.id, row.id),
+      ).run();
       deletedRows++;
     } catch (err) {
       errors++;
-      logError('Failed to delete expired workflow artifact row', err, {
-        module: 'workflow-storage',
+      logError("Failed to delete expired workflow artifact row", err, {
+        module: "workflow-storage",
         detail: { id: row.id },
       });
     }
   }
 
   if (deletedRows > 0 || deletedR2Objects > 0) {
-    logInfo('workflow artifact GC batch completed', {
-      module: 'workflow-storage',
-      detail: { scanned: expired.length, deletedRows, deletedR2Objects, errors },
+    logInfo("workflow artifact GC batch completed", {
+      module: "workflow-storage",
+      detail: {
+        scanned: expired.length,
+        deletedRows,
+        deletedR2Objects,
+        errors,
+      },
     });
   }
 

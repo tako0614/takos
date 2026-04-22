@@ -35,13 +35,14 @@ export type TaskPlan = {
   reasoning?: string;
 };
 
-export const STATUS_ORDER: AgentTaskStatus[] = [
+export const STATUS_ORDER = [
   "planned",
   "in_progress",
   "blocked",
   "completed",
   "cancelled",
-];
+] as const satisfies readonly AgentTaskStatus[];
+export type EditableAgentTaskStatus = typeof STATUS_ORDER[number];
 export const PRIORITY_OPTIONS: AgentTaskPriority[] = [
   "low",
   "medium",

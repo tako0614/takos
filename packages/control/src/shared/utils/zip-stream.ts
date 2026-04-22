@@ -62,8 +62,10 @@ function dosDateTime(date: Date): { modTime: number; modDate: number } {
   const minutes = d.getUTCMinutes();
   const seconds = d.getUTCSeconds();
 
-  const modTime = ((hours & 0x1f) << 11) | ((minutes & 0x3f) << 5) | ((Math.floor(seconds / 2)) & 0x1f);
-  const modDate = (((year - 1980) & 0x7f) << 9) | ((month & 0x0f) << 5) | (day & 0x1f);
+  const modTime = ((hours & 0x1f) << 11) | ((minutes & 0x3f) << 5) |
+    ((Math.floor(seconds / 2)) & 0x1f);
+  const modDate = (((year - 1980) & 0x7f) << 9) | ((month & 0x0f) << 5) |
+    (day & 0x1f);
   return { modTime, modDate };
 }
 
@@ -75,7 +77,9 @@ function writeU32(view: DataView, offset: number, value: number): void {
   view.setUint32(offset, value >>> 0, true);
 }
 
-function buildLocalHeader(params: { nameBytes: Uint8Array; modTime: number; modDate: number }): Uint8Array {
+function buildLocalHeader(
+  params: { nameBytes: Uint8Array; modTime: number; modDate: number },
+): Uint8Array {
   const { nameBytes, modTime, modDate } = params;
   const buf = new Uint8Array(30 + nameBytes.length);
   const view = new DataView(buf.buffer);
@@ -96,7 +100,9 @@ function buildLocalHeader(params: { nameBytes: Uint8Array; modTime: number; modD
   return buf;
 }
 
-function buildDataDescriptor(params: { crc32: number; compressedSize: number; uncompressedSize: number }): Uint8Array {
+function buildDataDescriptor(
+  params: { crc32: number; compressedSize: number; uncompressedSize: number },
+): Uint8Array {
   const buf = new Uint8Array(16);
   const view = new DataView(buf.buffer);
   writeU32(view, 0, ZIP_DATA_DESCRIPTOR_SIG);
@@ -132,7 +138,9 @@ function buildCentralHeader(entry: CentralDirectoryEntry): Uint8Array {
   return buf;
 }
 
-function buildEndOfCentralDirectory(params: { entries: number; centralSize: number; centralOffset: number }): Uint8Array {
+function buildEndOfCentralDirectory(
+  params: { entries: number; centralSize: number; centralOffset: number },
+): Uint8Array {
   const buf = new Uint8Array(22);
   const view = new DataView(buf.buffer);
 
@@ -147,13 +155,15 @@ function buildEndOfCentralDirectory(params: { entries: number; centralSize: numb
   return buf;
 }
 
-export function createZipStream(entries: ZipStreamEntry[]): ReadableStream<Uint8Array> {
+export function createZipStream(
+  entries: ZipStreamEntry[],
+): ReadableStream<Uint8Array> {
   const encoder = new TextEncoder();
 
   const normalized = entries
     .map((e) => ({
       ...e,
-      name: (e.name || '').replace(/\\/g, '/').replace(/^\/+/, ''),
+      name: (e.name || "").replace(/\\/g, "/").replace(/^\/+/, ""),
     }))
     .filter((e) => e.name.length > 0);
 
@@ -170,7 +180,9 @@ export function createZipStream(entries: ZipStreamEntry[]): ReadableStream<Uint8
 
         for (const entry of normalized) {
           const nameBytes = encoder.encode(entry.name);
-          const { modTime, modDate } = dosDateTime(entry.modifiedAt || new Date());
+          const { modTime, modDate } = dosDateTime(
+            entry.modifiedAt || new Date(),
+          );
           const localHeaderOffset = offset;
 
           enqueue(buildLocalHeader({ nameBytes, modTime, modDate }));
@@ -184,7 +196,9 @@ export function createZipStream(entries: ZipStreamEntry[]): ReadableStream<Uint8
             while (true) {
               const { done, value } = await reader.read();
               if (done) break;
-              const chunk = value instanceof Uint8Array ? value : new Uint8Array(value);
+              const chunk = value instanceof Uint8Array
+                ? value
+                : new Uint8Array(value);
               crc = crc32Update(crc, chunk);
               size += chunk.byteLength;
               enqueue(chunk);
@@ -194,7 +208,13 @@ export function createZipStream(entries: ZipStreamEntry[]): ReadableStream<Uint8
           }
 
           const crc32 = (crc ^ 0xffffffff) >>> 0;
-          enqueue(buildDataDescriptor({ crc32, compressedSize: size, uncompressedSize: size }));
+          enqueue(
+            buildDataDescriptor({
+              crc32,
+              compressedSize: size,
+              uncompressedSize: size,
+            }),
+          );
 
           central.push({
             nameBytes,
@@ -215,7 +235,13 @@ export function createZipStream(entries: ZipStreamEntry[]): ReadableStream<Uint8
           centralSize += header.byteLength;
         }
 
-        enqueue(buildEndOfCentralDirectory({ entries: central.length, centralSize, centralOffset }));
+        enqueue(
+          buildEndOfCentralDirectory({
+            entries: central.length,
+            centralSize,
+            centralOffset,
+          }),
+        );
         controller.close();
       })().catch((err) => {
         controller.error(err);
@@ -223,4 +249,3 @@ export function createZipStream(entries: ZipStreamEntry[]): ReadableStream<Uint8
     },
   });
 }
-

@@ -133,11 +133,49 @@ export type DeploymentTargetReadiness = {
   path: string;
 };
 
+export type DeploymentTargetQueueConsumer = {
+  binding?: string;
+  queue?: string;
+  dead_letter_queue?: string;
+  settings?: {
+    batch_size?: number;
+    max_concurrency?: number;
+    max_retries?: number;
+    max_wait_time_ms?: number;
+    retry_delay?: number;
+  };
+};
+
+export type DeploymentTargetCloudflareContainer = {
+  class_name: string;
+  image: string;
+  instance_type?: string;
+  max_instances?: number;
+  name?: string;
+  image_build_context?: string;
+  image_vars?: Record<string, string>;
+  rollout_active_grace_period?: number;
+  rollout_step_percentage?: number | number[];
+};
+
+export type DeploymentTargetCloudflareMigration = {
+  tag: string;
+  new_classes?: string[];
+  new_sqlite_classes?: string[];
+};
+
+export type DeploymentTargetCloudflareMetadata = {
+  containers?: DeploymentTargetCloudflareContainer[];
+  migrations?: DeploymentTargetCloudflareMigration[];
+};
+
 export type DeploymentTarget = {
   route_ref?: string;
   endpoint?: DeploymentTargetEndpoint;
   artifact?: DeploymentTargetArtifact;
   readiness?: DeploymentTargetReadiness;
+  queue_consumers?: DeploymentTargetQueueConsumer[];
+  cloudflare?: DeploymentTargetCloudflareMetadata;
 };
 
 export interface Deployment {

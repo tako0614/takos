@@ -9,48 +9,48 @@
  * thin factory that wires them together with a shared WfpContext.
  */
 
-import type { WfpEnv } from './client.ts';
+import type { WfpEnv } from "./client.ts";
 import {
-  WfpClient,
-  createWfpConfig,
-  resolveWfpConfig,
-  type WFPConfig,
   type CFAPIResponse,
   type CloudflareAPIError,
-} from './client.ts';
-import { logWarn } from '../../../shared/utils/logger.ts';
-import { formatBinding, formatBindingForUpdate } from './bindings.ts';
+  createWfpConfig,
+  resolveWfpConfig,
+  WfpClient,
+  type WFPConfig,
+} from "./client.ts";
+import { logWarn } from "../../../shared/utils/logger.ts";
+import { formatBinding, formatBindingForUpdate } from "./bindings.ts";
 
 // Re-export public types from their canonical locations
 export type {
-  WorkerBinding,
   CloudflareBindingRecord,
   CreateWorkerOptions,
-} from './wfp-contracts.ts';
+  WorkerBinding,
+} from "./wfp-contracts.ts";
 export type {
   AssetManifestEntry,
-  AssetUploadFile,
-  AssetsUploadSession,
   AssetsUploadCompletion,
-} from './assets.ts';
+  AssetsUploadSession,
+  AssetUploadFile,
+} from "./assets.ts";
 
 // Re-export standalone functions
-export { getTakosWorkerScript, getTakosMigrationSQL } from './orchestrator.ts';
+export { getTakosMigrationSQL, getTakosWorkerScript } from "./orchestrator.ts";
 
 // Re-export the binding helpers for direct usage
-export { formatBinding, formatBindingForUpdate } from './bindings.ts';
+export { formatBinding, formatBindingForUpdate } from "./bindings.ts";
 
 // Import types needed by the factory
-import type { WfpContext } from './wfp-contracts.ts';
+import type { WfpContext } from "./wfp-contracts.ts";
 
 // Import submodule functions
-import * as workerOps from './workers.ts';
-import * as d1Ops from './d1.ts';
-import * as r2Ops from './r2.ts';
-import * as kvOps from './kv.ts';
-import * as queueOps from './queues.ts';
-import * as vectorizeOps from './vectorize.ts';
-import * as orchestratorOps from './orchestrator.ts';
+import * as workerOps from "./workers.ts";
+import * as d1Ops from "./d1.ts";
+import * as r2Ops from "./r2.ts";
+import * as kvOps from "./kv.ts";
+import * as queueOps from "./queues.ts";
+import * as vectorizeOps from "./vectorize.ts";
+import * as orchestratorOps from "./orchestrator.ts";
 
 // ---------------------------------------------------------------------------
 // Internal: context construction
@@ -107,12 +107,14 @@ function buildWfpContext(config: WFPConfig, client: WfpClient): WfpContext {
         const delay = Math.min(baseDelay + jitter, 60000);
 
         logWarn(
-          `Cloudflare API request failed (attempt ${attempt + 1}/${maxRetries}), ` +
+          `Cloudflare API request failed (attempt ${
+            attempt + 1
+          }/${maxRetries}), ` +
             `retrying in ${Math.round(delay / 1000)}s: ${cfError.message}`,
-          { module: 'services/wfp/service' },
+          { module: "services/wfp/service" },
         );
 
-        await new Promise(resolve => setTimeout(resolve, delay));
+        await new Promise((resolve) => setTimeout(resolve, delay));
       }
     }
 
@@ -144,9 +146,19 @@ function bindSubmodules(ctx: WfpContext, config: WFPConfig, client: WfpClient) {
       createWorker: (options: Parameters<typeof workerOps.createWorker>[1]) =>
         workerOps.createWorker(ctx, options),
       createWorkerAssetsUploadSession: (
-        workerName: Parameters<typeof workerOps.createWorkerAssetsUploadSession>[2],
-        manifest: Parameters<typeof workerOps.createWorkerAssetsUploadSession>[3],
-      ) => workerOps.createWorkerAssetsUploadSession(client, config, workerName, manifest),
+        workerName: Parameters<
+          typeof workerOps.createWorkerAssetsUploadSession
+        >[2],
+        manifest: Parameters<
+          typeof workerOps.createWorkerAssetsUploadSession
+        >[3],
+      ) =>
+        workerOps.createWorkerAssetsUploadSession(
+          client,
+          config,
+          workerName,
+          manifest,
+        ),
       uploadWorkerAssets: (
         sessionJwt: Parameters<typeof workerOps.uploadWorkerAssets>[1],
         files: Parameters<typeof workerOps.uploadWorkerAssets>[2],
@@ -155,24 +167,37 @@ function bindSubmodules(ctx: WfpContext, config: WFPConfig, client: WfpClient) {
         workerName: Parameters<typeof workerOps.uploadAllWorkerAssets>[2],
         files: Parameters<typeof workerOps.uploadAllWorkerAssets>[3],
       ) => workerOps.uploadAllWorkerAssets(client, config, workerName, files),
-      deleteWorker: (workerName: string) => workerOps.deleteWorker(ctx, workerName),
+      deleteWorker: (workerName: string) =>
+        workerOps.deleteWorker(ctx, workerName),
       getWorker: (workerName: string) => workerOps.getWorker(ctx, workerName),
-      workerExists: (workerName: string) => workerOps.workerExists(ctx, workerName),
+      workerExists: (workerName: string) =>
+        workerOps.workerExists(ctx, workerName),
       listWorkers: () => workerOps.listWorkers(ctx),
-      updateWorkerSettings: (options: Parameters<typeof workerOps.updateWorkerSettings>[1]) =>
-        workerOps.updateWorkerSettings(ctx, options),
-      getWorkerSettings: (workerName: string) => workerOps.getWorkerSettings(ctx, workerName),
+      updateWorkerSettings: (
+        options: Parameters<typeof workerOps.updateWorkerSettings>[1],
+      ) => workerOps.updateWorkerSettings(ctx, options),
+      getWorkerSettings: (workerName: string) =>
+        workerOps.getWorkerSettings(ctx, workerName),
       createWorkerWithWasm: (
         workerName: Parameters<typeof workerOps.createWorkerWithWasm>[1],
         workerScript: Parameters<typeof workerOps.createWorkerWithWasm>[2],
         wasmContent: Parameters<typeof workerOps.createWorkerWithWasm>[3],
         options: Parameters<typeof workerOps.createWorkerWithWasm>[4],
-      ) => workerOps.createWorkerWithWasm(ctx, workerName, workerScript, wasmContent, options),
+      ) =>
+        workerOps.createWorkerWithWasm(
+          ctx,
+          workerName,
+          workerScript,
+          wasmContent,
+          options,
+        ),
     },
     d1: {
       createD1Database: (name: string) => d1Ops.createD1Database(ctx, name),
-      deleteD1Database: (databaseId: string) => d1Ops.deleteD1Database(ctx, databaseId),
-      runD1SQL: (databaseId: string, sql: string) => d1Ops.runD1SQL(ctx, databaseId, sql),
+      deleteD1Database: (databaseId: string) =>
+        d1Ops.deleteD1Database(ctx, databaseId),
+      runD1SQL: (databaseId: string, sql: string) =>
+        d1Ops.runD1SQL(ctx, databaseId, sql),
       listD1Tables: (databaseId: string) => d1Ops.listD1Tables(ctx, databaseId),
       getD1TableInfo: (databaseId: string, tableName: string) =>
         d1Ops.getD1TableInfo(ctx, databaseId, tableName),
@@ -180,7 +205,8 @@ function bindSubmodules(ctx: WfpContext, config: WFPConfig, client: WfpClient) {
         d1Ops.getD1TableCount(ctx, databaseId, tableName),
       executeD1Query: (databaseId: string, sql: string) =>
         d1Ops.executeD1Query(ctx, databaseId, sql),
-      queryD1: <T>(databaseId: string, sql: string) => d1Ops.queryD1<T>(ctx, databaseId, sql),
+      queryD1: <T>(databaseId: string, sql: string) =>
+        d1Ops.queryD1<T>(ctx, databaseId, sql),
     },
     r2: {
       createR2Bucket: (name: string) => r2Ops.createR2Bucket(ctx, name),
@@ -199,11 +225,13 @@ function bindSubmodules(ctx: WfpContext, config: WFPConfig, client: WfpClient) {
         r2Ops.getR2Object(ctx, bucketName, key),
       deleteR2Object: (bucketName: string, key: string) =>
         r2Ops.deleteR2Object(ctx, bucketName, key),
-      getR2BucketStats: (bucketName: string) => r2Ops.getR2BucketStats(ctx, bucketName),
+      getR2BucketStats: (bucketName: string) =>
+        r2Ops.getR2BucketStats(ctx, bucketName),
     },
     kv: {
       createKVNamespace: (title: string) => kvOps.createKVNamespace(ctx, title),
-      deleteKVNamespace: (namespaceId: string) => kvOps.deleteKVNamespace(ctx, namespaceId),
+      deleteKVNamespace: (namespaceId: string) =>
+        kvOps.deleteKVNamespace(ctx, namespaceId),
       listKVEntries: (
         namespaceId: string,
         options?: { prefix?: string; cursor?: string; limit?: number },
@@ -216,18 +244,45 @@ function bindSubmodules(ctx: WfpContext, config: WFPConfig, client: WfpClient) {
         kvOps.deleteKVValue(ctx, namespaceId, key),
     },
     queues: {
-      createQueue: (queueName: string, options?: Parameters<typeof queueOps.createQueue>[2]) =>
-        queueOps.createQueue(ctx, queueName, options),
+      createQueue: (
+        queueName: string,
+        options?: Parameters<typeof queueOps.createQueue>[2],
+      ) => queueOps.createQueue(ctx, queueName, options),
       listQueues: () => queueOps.listQueues(ctx),
       deleteQueue: (queueId: string) => queueOps.deleteQueue(ctx, queueId),
-      deleteQueueByName: (queueName: string) => queueOps.deleteQueueByName(ctx, queueName),
+      deleteQueueByName: (queueName: string) =>
+        queueOps.deleteQueueByName(ctx, queueName),
+      listQueueConsumers: (queueId: string) =>
+        queueOps.listQueueConsumers(ctx, queueId),
+      createQueueConsumer: (
+        queueId: string,
+        input: Parameters<typeof queueOps.createQueueConsumer>[2],
+      ) => queueOps.createQueueConsumer(ctx, queueId, input),
+      updateQueueConsumer: (
+        queueId: string,
+        consumerId: string,
+        input: Parameters<typeof queueOps.updateQueueConsumer>[3],
+      ) => queueOps.updateQueueConsumer(ctx, queueId, consumerId, input),
+      deleteQueueConsumer: (
+        queueId: string,
+        consumerId: string,
+      ) => queueOps.deleteQueueConsumer(ctx, queueId, consumerId),
+      deleteQueueConsumerByQueueName: (
+        queueName: string,
+        options?: Parameters<typeof queueOps.deleteQueueConsumerByQueueName>[2],
+      ) => queueOps.deleteQueueConsumerByQueueName(ctx, queueName, options),
+      upsertQueueConsumerByQueueName: (
+        queueName: string,
+        input: Parameters<typeof queueOps.upsertQueueConsumerByQueueName>[2],
+      ) => queueOps.upsertQueueConsumerByQueueName(ctx, queueName, input),
     },
     vectorize: {
       createVectorizeIndex: (
         name: string,
         vecConfig: Parameters<typeof vectorizeOps.createVectorizeIndex>[2],
       ) => vectorizeOps.createVectorizeIndex(ctx, name, vecConfig),
-      deleteVectorizeIndex: (name: string) => vectorizeOps.deleteVectorizeIndex(ctx, name),
+      deleteVectorizeIndex: (name: string) =>
+        vectorizeOps.deleteVectorizeIndex(ctx, name),
     },
   } as const;
 }
@@ -253,7 +308,7 @@ export class WFPService {
   private readonly ctx: WfpContext;
 
   constructor(env: WfpEnv | WFPConfig) {
-    const config: WFPConfig = 'accountId' in env ? env : createWfpConfig(env);
+    const config: WFPConfig = "accountId" in env ? env : createWfpConfig(env);
     const client = new WfpClient(config);
     this.ctx = buildWfpContext(config, client);
 

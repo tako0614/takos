@@ -2,8 +2,8 @@ import type {
   SqlDatabaseBinding,
   SqlPreparedStatementBinding,
   SqlResultBinding,
-} from '../types/bindings.ts';
-import { logError } from './logger.ts';
+} from "../types/bindings.ts";
+import { logError } from "./logger.ts";
 
 function toError(error: unknown): Error {
   return error instanceof Error ? error : new Error(String(error));
@@ -17,7 +17,7 @@ export interface BatchResult {
 
 export async function batchExecute(
   _db: SqlDatabaseBinding,
-  statements: SqlPreparedStatementBinding[]
+  statements: SqlPreparedStatementBinding[],
 ): Promise<BatchResult> {
   try {
     const results = await _db.batch(statements);
@@ -52,7 +52,7 @@ export interface CompensationResult<TResult> {
  */
 export async function executeWithCompensation(
   _db: SqlDatabaseBinding,
-  steps: TransactionStep[]
+  steps: TransactionStep[],
 ): Promise<CompensationResult<SqlResultBinding>> {
   const results: SqlResultBinding[] = [];
   const completedCompensations: SqlPreparedStatementBinding[] = [];
@@ -68,14 +68,18 @@ export async function executeWithCompensation(
         completedCompensations.unshift(step.compensate);
       }
     } catch (error) {
-      logError(`Transaction step ${i} (${step.description}) failed`, error, { module: 'utils/db-transaction' });
+      logError(`Transaction step ${i} (${step.description}) failed`, error, {
+        module: "utils/db-transaction",
+      });
 
       const compensationErrors: Error[] = [];
       for (const compensation of completedCompensations) {
         try {
           await compensation.run();
         } catch (compError) {
-          logError('Compensation failed', compError, { module: 'utils/db-transaction' });
+          logError("Compensation failed", compError, {
+            module: "utils/db-transaction",
+          });
           compensationErrors.push(toError(compError));
         }
       }
@@ -85,7 +89,9 @@ export async function executeWithCompensation(
         results,
         failedStep: i,
         error: toError(error),
-        compensationErrors: compensationErrors.length > 0 ? compensationErrors : undefined,
+        compensationErrors: compensationErrors.length > 0
+          ? compensationErrors
+          : undefined,
       };
     }
   }
@@ -110,14 +116,14 @@ export class D1TransactionManager {
   async runInTransaction<T>(fn: () => Promise<T>): Promise<T> {
     if (this.transactionDepth === 0) {
       this.transactionDepth += 1;
-      await this.db.prepare('BEGIN IMMEDIATE').run();
+      await this.db.prepare("BEGIN IMMEDIATE").run();
       try {
         const result = await fn();
-        await this.db.prepare('COMMIT').run();
+        await this.db.prepare("COMMIT").run();
         return result;
       } catch (error) {
         try {
-          await this.db.prepare('ROLLBACK').run();
+          await this.db.prepare("ROLLBACK").run();
         } catch {
           // Ignore rollback failures and rethrow the original error.
         }

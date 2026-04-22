@@ -29,8 +29,6 @@ function makeDesiredState(
     : { kind: "service" as const };
 
   return {
-    apiVersion: "takos.dev/v1alpha1",
-    kind: "GroupDesiredState",
     groupName: "demo",
     version: "1.0.0",
     backend,

@@ -4,24 +4,26 @@
  * Endpoint URL validation and security checks for MCP server URLs.
  */
 
-import type { Env } from '../../../../shared/types/index.ts';
-import { isLocalhost, isPrivateIP } from 'takos-common/validation';
-import type { McpEndpointUrlOptions } from './mcp-models.ts';
+import type { Env } from "../../../../shared/types/index.ts";
+import { isLocalhost, isPrivateIP } from "takos-common/validation";
+import type { McpEndpointUrlOptions } from "./mcp-models.ts";
 
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
 
 function normalizeMcpEndpointHost(hostname: string): string {
-  return hostname.toLowerCase().replace(/^\[|\]$/g, '');
+  return hostname.toLowerCase().replace(/^\[|\]$/g, "");
 }
 
 // ---------------------------------------------------------------------------
 // Public API
 // ---------------------------------------------------------------------------
 
-export function getMcpEndpointUrlOptions(env: Pick<Env, 'ENVIRONMENT'>): McpEndpointUrlOptions {
-  const isDev = env.ENVIRONMENT === 'development';
+export function getMcpEndpointUrlOptions(
+  env: Pick<Env, "ENVIRONMENT">,
+): McpEndpointUrlOptions {
+  const isDev = env.ENVIRONMENT === "development";
   return {
     allowHttp: isDev,
     allowLocalhost: isDev,
@@ -41,8 +43,13 @@ export function assertAllowedMcpEndpointUrl(
     throw new Error(`${label} URL is invalid`);
   }
 
-  if (parsed.protocol !== 'https:' && !(options.allowHttp && parsed.protocol === 'http:')) {
-    throw new Error(`${label} URL must use ${options.allowHttp ? 'HTTP or HTTPS' : 'HTTPS'}`);
+  if (
+    parsed.protocol !== "https:" &&
+    !(options.allowHttp && parsed.protocol === "http:")
+  ) {
+    throw new Error(
+      `${label} URL must use ${options.allowHttp ? "HTTP or HTTPS" : "HTTPS"}`,
+    );
   }
   if (parsed.username || parsed.password) {
     throw new Error(`${label} URL must not include credentials`);
@@ -57,11 +64,17 @@ export function assertAllowedMcpEndpointUrl(
   }
   // Block bare hostnames (no dots) and IPv6 addresses without dots
   // that could bypass the isLocalhost/isPrivateIP checks above
-  if (!options.allowLocalhost && !normalizedHost.includes('.') && !normalizedHost.includes(':')) {
+  if (
+    !options.allowLocalhost && !normalizedHost.includes(".") &&
+    !normalizedHost.includes(":")
+  ) {
     throw new Error(`${label} URL host must be publicly routable`);
   }
   // Explicitly check for IPv6 loopback that may bypass dot-based checks
-  if (!options.allowLocalhost && (normalizedHost === '::1' || normalizedHost === '[::1]')) {
+  if (
+    !options.allowLocalhost &&
+    (normalizedHost === "::1" || normalizedHost === "[::1]")
+  ) {
     throw new Error(`${label} URL host is not allowed`);
   }
 

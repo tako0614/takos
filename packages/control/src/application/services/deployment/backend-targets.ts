@@ -4,11 +4,16 @@ import type {
   DeploymentBackendRef,
   DeploymentTarget,
   DeploymentTargetArtifact,
+  DeploymentTargetCloudflareContainer,
+  DeploymentTargetCloudflareMetadata,
+  DeploymentTargetCloudflareMigration,
   DeploymentTargetEndpoint,
+  DeploymentTargetQueueConsumer,
   DeploymentTargetReadiness,
 } from "./models.ts";
 import { normalizeDeploymentBackendName } from "./models.ts";
 import type { PersistedDeploymentBackendContract } from "./backend-contracts.ts";
+import { BadRequestError } from "takos-common/errors";
 
 function safeJsonParse<T>(raw: string, fallback: T): T {
   try {
@@ -111,6 +116,178 @@ function normalizeTargetReadiness(
   return undefined;
 }
 
+function normalizeFiniteNumber(value: unknown): number | undefined {
+  return typeof value === "number" && Number.isFinite(value)
+    ? Math.floor(value)
+    : undefined;
+}
+
+function normalizeQueueConsumer(
+  raw: unknown,
+): DeploymentTargetQueueConsumer | null {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return null;
+  const parsed = raw as Record<string, unknown>;
+  const binding =
+    typeof parsed.binding === "string" && parsed.binding.length > 0
+      ? parsed.binding
+      : undefined;
+  const queue = typeof parsed.queue === "string" && parsed.queue.length > 0
+    ? parsed.queue
+    : undefined;
+  if (!binding && !queue) return null;
+  const settingsRaw = parsed.settings && typeof parsed.settings === "object" &&
+      !Array.isArray(parsed.settings)
+    ? parsed.settings as Record<string, unknown>
+    : {};
+  const settings = {
+    batch_size: normalizeFiniteNumber(settingsRaw.batch_size),
+    max_concurrency: normalizeFiniteNumber(settingsRaw.max_concurrency),
+    max_retries: normalizeFiniteNumber(settingsRaw.max_retries),
+    max_wait_time_ms: normalizeFiniteNumber(settingsRaw.max_wait_time_ms),
+    retry_delay: normalizeFiniteNumber(settingsRaw.retry_delay),
+  };
+  const filteredSettings = Object.fromEntries(
+    Object.entries(settings).filter(([, value]) => value != null),
+  ) as DeploymentTargetQueueConsumer["settings"];
+  const deadLetterQueue = typeof parsed.dead_letter_queue === "string" &&
+      parsed.dead_letter_queue.length > 0
+    ? parsed.dead_letter_queue
+    : undefined;
+  return {
+    ...(binding ? { binding } : {}),
+    ...(queue ? { queue } : {}),
+    ...(deadLetterQueue ? { dead_letter_queue: deadLetterQueue } : {}),
+    ...(filteredSettings && Object.keys(filteredSettings).length > 0
+      ? { settings: filteredSettings }
+      : {}),
+  };
+}
+
+function normalizeQueueConsumers(
+  raw: Record<string, unknown>,
+): DeploymentTargetQueueConsumer[] | undefined {
+  if (!Array.isArray(raw.queue_consumers)) return undefined;
+  const consumers = raw.queue_consumers
+    .map((entry) => normalizeQueueConsumer(entry))
+    .filter((entry): entry is DeploymentTargetQueueConsumer => entry !== null);
+  return consumers.length > 0 ? consumers : undefined;
+}
+
+function normalizeStringRecord(
+  value: unknown,
+): Record<string, string> | undefined {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return undefined;
+  }
+  const entries = Object.entries(value as Record<string, unknown>)
+    .filter((entry): entry is [string, string] => typeof entry[1] === "string");
+  return entries.length > 0 ? Object.fromEntries(entries) : undefined;
+}
+
+function normalizeStringArray(value: unknown): string[] | undefined {
+  if (!Array.isArray(value)) return undefined;
+  const result = value
+    .filter((entry): entry is string =>
+      typeof entry === "string" && entry.length > 0
+    );
+  return result.length > 0 ? result : undefined;
+}
+
+function normalizeCloudflareContainer(
+  raw: unknown,
+): DeploymentTargetCloudflareContainer | null {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return null;
+  const parsed = raw as Record<string, unknown>;
+  if (
+    typeof parsed.class_name !== "string" || parsed.class_name.length === 0 ||
+    typeof parsed.image !== "string" || parsed.image.length === 0
+  ) {
+    return null;
+  }
+  const maxInstances = normalizeFiniteNumber(parsed.max_instances);
+  const rolloutActiveGracePeriod = normalizeFiniteNumber(
+    parsed.rollout_active_grace_period,
+  );
+  const rolloutStepPercentage = Array.isArray(parsed.rollout_step_percentage)
+    ? parsed.rollout_step_percentage
+      .map((entry) => normalizeFiniteNumber(entry))
+      .filter((entry): entry is number => entry != null)
+    : normalizeFiniteNumber(parsed.rollout_step_percentage);
+  const hasRolloutStepPercentage = Array.isArray(rolloutStepPercentage)
+    ? rolloutStepPercentage.length > 0
+    : rolloutStepPercentage != null;
+  const imageVars = normalizeStringRecord(parsed.image_vars);
+  return {
+    class_name: parsed.class_name,
+    image: parsed.image,
+    ...(typeof parsed.instance_type === "string"
+      ? { instance_type: parsed.instance_type }
+      : {}),
+    ...(maxInstances != null ? { max_instances: maxInstances } : {}),
+    ...(typeof parsed.name === "string" && parsed.name.length > 0
+      ? { name: parsed.name }
+      : {}),
+    ...(typeof parsed.image_build_context === "string" &&
+        parsed.image_build_context.length > 0
+      ? { image_build_context: parsed.image_build_context }
+      : {}),
+    ...(imageVars ? { image_vars: imageVars } : {}),
+    ...(rolloutActiveGracePeriod != null
+      ? { rollout_active_grace_period: rolloutActiveGracePeriod }
+      : {}),
+    ...(hasRolloutStepPercentage
+      ? { rollout_step_percentage: rolloutStepPercentage }
+      : {}),
+  };
+}
+
+function normalizeCloudflareMigration(
+  raw: unknown,
+): DeploymentTargetCloudflareMigration | null {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return null;
+  const parsed = raw as Record<string, unknown>;
+  if (typeof parsed.tag !== "string" || parsed.tag.length === 0) return null;
+  const newClasses = normalizeStringArray(parsed.new_classes);
+  const newSqliteClasses = normalizeStringArray(parsed.new_sqlite_classes);
+  return {
+    tag: parsed.tag,
+    ...(newClasses ? { new_classes: newClasses } : {}),
+    ...(newSqliteClasses ? { new_sqlite_classes: newSqliteClasses } : {}),
+  };
+}
+
+function normalizeCloudflareMetadata(
+  raw: Record<string, unknown>,
+): DeploymentTargetCloudflareMetadata | undefined {
+  const cloudflare = raw.cloudflare;
+  if (
+    !cloudflare || typeof cloudflare !== "object" ||
+    Array.isArray(cloudflare)
+  ) {
+    return undefined;
+  }
+  const parsed = cloudflare as Record<string, unknown>;
+  const containers = Array.isArray(parsed.containers)
+    ? parsed.containers
+      .map((entry) => normalizeCloudflareContainer(entry))
+      .filter((entry): entry is DeploymentTargetCloudflareContainer =>
+        entry !== null
+      )
+    : [];
+  const migrations = Array.isArray(parsed.migrations)
+    ? parsed.migrations
+      .map((entry) => normalizeCloudflareMigration(entry))
+      .filter((entry): entry is DeploymentTargetCloudflareMigration =>
+        entry !== null
+      )
+    : [];
+  const normalized: DeploymentTargetCloudflareMetadata = {
+    ...(containers.length > 0 ? { containers } : {}),
+    ...(migrations.length > 0 ? { migrations } : {}),
+  };
+  return Object.keys(normalized).length > 0 ? normalized : undefined;
+}
+
 function normalizeDeploymentTarget(
   raw: Record<string, unknown>,
 ): DeploymentTarget {
@@ -122,12 +299,16 @@ function normalizeDeploymentTarget(
     : undefined;
   const artifact = normalizeTargetArtifact(raw);
   const readiness = normalizeTargetReadiness(raw);
+  const queueConsumers = normalizeQueueConsumers(raw);
+  const cloudflare = normalizeCloudflareMetadata(raw);
 
   return {
     ...(routeRef ? { route_ref: routeRef } : {}),
     ...(endpoint ? { endpoint } : {}),
     ...(artifact ? { artifact } : {}),
     ...(readiness ? { readiness } : {}),
+    ...(queueConsumers ? { queue_consumers: queueConsumers } : {}),
+    ...(cloudflare ? { cloudflare } : {}),
   };
 }
 
@@ -192,11 +373,26 @@ export function serializeDeploymentBackendTarget(options?: {
   ) {
     raw.readiness = { path: target.readiness.path };
   }
+  if (target?.queue_consumers?.length) {
+    raw.queue_consumers = target.queue_consumers;
+  }
+  if (target?.cloudflare) {
+    raw.cloudflare = target.cloudflare;
+  }
+
+  const requestedBackendName = options?.backend?.name;
+  const backendName = requestedBackendName == null
+    ? "workers-dispatch"
+    : normalizeDeploymentBackendName(requestedBackendName);
+  if (!backendName) {
+    throw new BadRequestError(
+      `Unsupported deployment backend: ${requestedBackendName}`,
+    );
+  }
 
   const normalized = normalizeDeploymentTarget(raw);
   return {
-    backendName: normalizeDeploymentBackendName(options?.backend?.name) ??
-      "workers-dispatch",
+    backendName,
     targetJson: JSON.stringify(normalized),
     backendStateJson: "{}",
   };

@@ -29,6 +29,7 @@ const TASK_STATUS_LABEL_KEYS: Record<AgentTaskStatus, TranslationKey> = {
   blocked: "taskStatus.blocked",
   completed: "taskStatus.completed",
   cancelled: "taskStatus.cancelled",
+  failed: "taskStatus.failed",
 };
 
 const TASK_PRIORITY_LABEL_KEYS: Record<AgentTaskPriority, TranslationKey> = {
@@ -123,6 +124,7 @@ export function ChatView(props: ChatViewProps) {
 
   // Auto-send initialMessage once on mount
   const [pendingSendWithFiles, setPendingSendWithFiles] = createSignal(false);
+  let initialSendThreadId: string | null = null;
   let sendMessageRef = sendMessage;
   createEffect(() => {
     sendMessageRef = sendMessage;
@@ -134,24 +136,32 @@ export function ChatView(props: ChatViewProps) {
   createEffect(() => {
     const currentMessage = initialMessage();
     const currentFiles = initialFiles() ?? [];
+    const currentThreadId = threadId();
     if (!currentMessage) {
       setPendingSendWithFiles(false);
       return;
     }
+    if (initialSendThreadId === currentThreadId) {
+      return;
+    }
+    initialSendThreadId = currentThreadId;
 
+    setInput(currentMessage);
     if (currentFiles.length > 0) {
       addFiles(currentFiles);
       setPendingSendWithFiles(true);
     } else {
-      void sendMessageRef();
-      onInitialMessageSentRef?.();
+      void sendMessageRef().finally(() => {
+        onInitialMessageSentRef?.();
+      });
     }
   });
   createEffect(() => {
     if (pendingSendWithFiles()) {
       setPendingSendWithFiles(false);
-      void sendMessageRef();
-      onInitialMessageSentRef?.();
+      void sendMessageRef().finally(() => {
+        onInitialMessageSentRef?.();
+      });
     }
   });
 
@@ -383,12 +393,30 @@ export function ChatView(props: ChatViewProps) {
                   <div class="mt-3 space-y-2">
                     <For each={focusedRunEntries()}>
                       {(entry) => (
-                        <div class="rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white/80 dark:bg-zinc-950 px-3 py-2">
-                          <p class="text-sm font-medium text-zinc-900 dark:text-zinc-100">
+                        <div
+                          class={`rounded-lg border px-3 py-2 ${
+                            entry.failed
+                              ? "border-red-200 bg-red-50/80 dark:border-red-900/60 dark:bg-red-950/30"
+                              : "border-zinc-200 bg-white/80 dark:border-zinc-700 dark:bg-zinc-950"
+                          }`}
+                        >
+                          <p
+                            class={`text-sm font-medium ${
+                              entry.failed
+                                ? "text-red-900 dark:text-red-100"
+                                : "text-zinc-900 dark:text-zinc-100"
+                            }`}
+                          >
                             {entry.message}
                           </p>
                           <Show when={entry.detail}>
-                            <p class="mt-1 whitespace-pre-wrap text-xs text-zinc-500 dark:text-zinc-400">
+                            <p
+                              class={`mt-1 whitespace-pre-wrap text-xs ${
+                                entry.failed
+                                  ? "text-red-700 dark:text-red-200"
+                                  : "text-zinc-500 dark:text-zinc-400"
+                              }`}
+                            >
                               {entry.detail}
                             </p>
                           </Show>
@@ -420,6 +448,8 @@ export function ChatView(props: ChatViewProps) {
           <ChatMessageFeed
             messages={messages()}
             streaming={streaming()}
+            timelineEntries={timelineEntries()}
+            runMetaById={runMetaById()}
             isLoading={isLoading()}
             sessionDiff={sessionDiff()}
             onMerge={handleMerge}

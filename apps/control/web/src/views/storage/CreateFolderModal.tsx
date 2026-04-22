@@ -1,9 +1,9 @@
-import { createSignal } from 'solid-js';
-import { useI18n } from '../../store/i18n.ts';
-import { useToast } from '../../store/toast.ts';
-import { Modal } from '../../components/ui/Modal.tsx';
-import { Input } from '../../components/ui/Input.tsx';
-import { Button } from '../../components/ui/Button.tsx';
+import { createSignal } from "solid-js";
+import { useI18n } from "../../store/i18n.ts";
+import { useToast } from "../../store/toast.ts";
+import { Modal } from "../../components/ui/Modal.tsx";
+import { Input } from "../../components/ui/Input.tsx";
+import { Button } from "../../components/ui/Button.tsx";
 
 interface CreateFolderModalProps {
   isOpen: boolean;
@@ -14,11 +14,11 @@ interface CreateFolderModalProps {
 export function CreateFolderModal(props: CreateFolderModalProps) {
   const { t } = useI18n();
   const { showToast } = useToast();
-  const [newFolderName, setNewFolderName] = createSignal('');
+  const [newFolderName, setNewFolderName] = createSignal("");
 
   const handleClose = () => {
     props.onClose();
-    setNewFolderName('');
+    setNewFolderName("");
   };
 
   const handleCreate = async () => {
@@ -26,10 +26,13 @@ export function CreateFolderModal(props: CreateFolderModalProps) {
 
     const result = await props.createFolder(newFolderName().trim());
     if (result) {
-      showToast('success', t('folderCreated').replace('{name}', newFolderName()));
+      showToast(
+        "success",
+        t("folderCreated").replace("{name}", newFolderName()),
+      );
       handleClose();
     } else {
-      showToast('error', t('failedToCreateFolder'));
+      showToast("error", t("failedToCreateFolder"));
     }
   };
 
@@ -37,30 +40,31 @@ export function CreateFolderModal(props: CreateFolderModalProps) {
     <Modal
       isOpen={props.isOpen}
       onClose={handleClose}
-      title={t('createNewFolder')}
+      title={t("createNewFolder")}
     >
       <div class="space-y-4">
         <Input
           value={newFolderName()}
-          onInput={(e) => setNewFolderName((e.target as HTMLInputElement).value)}
-          placeholder={t('folderName')}
+          onInput={(e) =>
+            setNewFolderName((e.target as HTMLInputElement).value)}
+          placeholder={t("folderName")}
           autofocus
           onKeyDown={(e) => {
-            if (e.key === 'Enter' && newFolderName().trim()) {
+            if (e.key === "Enter" && newFolderName().trim()) {
               handleCreate();
             }
           }}
         />
         <div class="flex justify-end gap-2">
           <Button variant="ghost" onClick={handleClose}>
-            {t('cancel')}
+            {t("cancel")}
           </Button>
           <Button
             variant="primary"
             onClick={handleCreate}
             disabled={!newFolderName().trim()}
           >
-            {t('create')}
+            {t("create")}
           </Button>
         </div>
       </div>

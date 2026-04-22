@@ -1,10 +1,10 @@
-import { createSignal } from 'solid-js';
-import type { Setter } from 'solid-js';
-import type { RpcResponse } from '../lib/rpc.ts';
-import { useI18n } from '../store/i18n.ts';
-import { useToast } from '../store/toast.ts';
-import { useConfirmDialog } from '../store/confirm-dialog.ts';
-import type { StorageFile } from '../types/index.ts';
+import { createSignal } from "solid-js";
+import type { Setter } from "solid-js";
+import type { RpcResponse } from "../lib/rpc.ts";
+import { useI18n } from "../store/i18n.ts";
+import { useToast } from "../store/toast.ts";
+import { useConfirmDialog } from "../store/confirm-dialog.ts";
+import type { StorageFile } from "../types/index.ts";
 
 interface UseStorageActionsParams {
   getDownloadUrl: (fileId: string) => Promise<string | null>;
@@ -52,19 +52,23 @@ export function useStorageActions({
 
   // File viewer state
   const [viewingFile, setViewingFile] = createSignal<StorageFile | null>(null);
-  const [viewingFileDownloadUrl, setViewingFileDownloadUrl] = createSignal<string | null>(null);
+  const [viewingFileDownloadUrl, setViewingFileDownloadUrl] = createSignal<
+    string | null
+  >(null);
 
   // Rename state
   const [showRenameModal, setShowRenameModal] = createSignal(false);
-  const [renameTarget, setRenameTarget] = createSignal<StorageFile | null>(null);
-  const [newName, setNewName] = createSignal('');
+  const [renameTarget, setRenameTarget] = createSignal<StorageFile | null>(
+    null,
+  );
+  const [newName, setNewName] = createSignal("");
 
   // Zip download state
   const [downloadingZip, setDownloadingZip] = createSignal(false);
   const [downloadedZipBytes, setDownloadedZipBytes] = createSignal(0);
 
   const handleOpenFile = async (file: StorageFile) => {
-    if (file.type === 'folder') return;
+    if (file.type === "folder") return;
     const url = await getDownloadUrl(file.id);
     setViewingFileDownloadUrl(url);
     setViewingFile(file);
@@ -78,9 +82,9 @@ export function useStorageActions({
   const handleDownload = async (file: StorageFile) => {
     const url = await getDownloadUrl(file.id);
     if (url) {
-      globalThis.open(url, '_blank', 'noopener,noreferrer');
+      globalThis.open(url, "_blank", "noopener,noreferrer");
     } else {
-      showToast('error', t('failedToGetDownloadUrl'));
+      showToast("error", t("failedToGetDownloadUrl"));
     }
   };
 
@@ -92,28 +96,31 @@ export function useStorageActions({
     try {
       const res = await downloadFolderZip(currentPath());
       if (!res) {
-        showToast('error', t('failedToGetDownloadUrl') || 'Failed to download');
+        showToast("error", t("failedToGetDownloadUrl") || "Failed to download");
         return;
       }
 
-      const folderName = currentPath() === '/'
-        ? 'workspace'
-        : currentPath().split('/').filter(Boolean).pop() || 'folder';
+      const folderName = currentPath() === "/"
+        ? "workspace"
+        : currentPath().split("/").filter(Boolean).pop() || "folder";
       const filename = `${folderName}.zip`;
 
       const blob = await res.blob();
       setDownloadedZipBytes(blob.size);
       const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
+      const a = document.createElement("a");
       a.href = url;
       a.download = filename;
       document.body.appendChild(a);
       a.click();
       a.remove();
       URL.revokeObjectURL(url);
-      showToast('success', t('download') || 'Download');
+      showToast("success", t("download") || "Download");
     } catch (err) {
-      showToast('error', err instanceof Error ? err.message : (t('failedToLoad') || 'Failed'));
+      showToast(
+        "error",
+        err instanceof Error ? err.message : (t("failedToLoad") || "Failed"),
+      );
     } finally {
       setDownloadingZip(false);
     }
@@ -121,11 +128,11 @@ export function useStorageActions({
 
   const handleDelete = async (file: StorageFile) => {
     const confirmed = await confirm({
-      title: t('deleteConfirmTitle'),
-      message: file.type === 'folder'
-        ? t('deleteFolderConfirm').replace('{name}', file.name)
-        : t('deleteFileConfirm').replace('{name}', file.name),
-      confirmText: t('delete'),
+      title: t("deleteConfirmTitle"),
+      message: file.type === "folder"
+        ? t("deleteFolderConfirm").replace("{name}", file.name)
+        : t("deleteFileConfirm").replace("{name}", file.name),
+      confirmText: t("delete"),
       danger: true,
     });
 
@@ -133,14 +140,14 @@ export function useStorageActions({
 
     const result = await deleteItem(file.id);
     if (result) {
-      showToast('success', t('itemDeleted').replace('{name}', file.name));
-      setSelectedFiles(prev => {
+      showToast("success", t("itemDeleted").replace("{name}", file.name));
+      setSelectedFiles((prev) => {
         const next = new Set(prev);
         next.delete(file.id);
         return next;
       });
     } else {
-      showToast('error', t('failedToDelete'));
+      showToast("error", t("failedToDelete"));
     }
   };
 
@@ -153,7 +160,7 @@ export function useStorageActions({
   const closeRenameModal = () => {
     setShowRenameModal(false);
     setRenameTarget(null);
-    setNewName('');
+    setNewName("");
   };
 
   const handleRename = async () => {
@@ -163,12 +170,12 @@ export function useStorageActions({
 
     const result = await renameItem(target.id, name.trim());
     if (result) {
-      showToast('success', t('renamedTo').replace('{name}', name));
+      showToast("success", t("renamedTo").replace("{name}", name));
       setShowRenameModal(false);
       setRenameTarget(null);
-      setNewName('');
+      setNewName("");
     } else {
-      showToast('error', t('failedToRename'));
+      showToast("error", t("failedToRename"));
     }
   };
 

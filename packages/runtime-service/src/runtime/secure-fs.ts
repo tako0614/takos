@@ -1,15 +1,15 @@
-import * as fs from 'node:fs/promises';
-import { constants as fsConstants } from 'node:fs';
-import * as path from 'node:path';
+import * as fs from "node:fs/promises";
+import { constants as fsConstants } from "node:fs";
+import * as path from "node:path";
 import {
   verifyNoSymlinkPathComponents,
   verifyPathWithinAfterAccess,
   verifyPathWithinBeforeCreate,
-} from './paths.ts';
-import { SymlinkNotAllowedError, SymlinkWriteError } from '../shared/errors.ts';
+} from "./paths.ts";
+import { SymlinkNotAllowedError, SymlinkWriteError } from "../shared/errors.ts";
 
 function isSymlinkOpenError(err: unknown): boolean {
-  return (err as NodeJS.ErrnoException).code === 'ELOOP';
+  return (err as NodeJS.ErrnoException).code === "ELOOP";
 }
 
 export async function writeFileWithinSpace(
@@ -17,18 +17,18 @@ export async function writeFileWithinSpace(
   fullPath: string,
   content: string | Uint8Array,
   encoding?: string,
-  mode?: number
+  mode?: number,
 ): Promise<number> {
-  await verifyNoSymlinkPathComponents(baseDir, fullPath, 'path');
-  await verifyPathWithinBeforeCreate(baseDir, fullPath, 'path');
+  await verifyNoSymlinkPathComponents(baseDir, fullPath, "path");
+  await verifyPathWithinBeforeCreate(baseDir, fullPath, "path");
 
   const dirPath = path.dirname(fullPath);
   await fs.mkdir(dirPath, { recursive: true });
   // Re-verify after mkdir to catch symlink-swap TOCTOU attacks:
   // An attacker could replace a parent directory with a symlink between
   // the initial check and mkdir. This second check closes that window.
-  await verifyNoSymlinkPathComponents(baseDir, dirPath, 'path');
-  await verifyPathWithinAfterAccess(baseDir, dirPath, 'path');
+  await verifyNoSymlinkPathComponents(baseDir, dirPath, "path");
+  await verifyPathWithinAfterAccess(baseDir, dirPath, "path");
 
   try {
     const lstats = await fs.lstat(fullPath);
@@ -36,7 +36,7 @@ export async function writeFileWithinSpace(
       throw new SymlinkWriteError();
     }
   } catch (err) {
-    if ((err as NodeJS.ErrnoException).code !== 'ENOENT') {
+    if ((err as NodeJS.ErrnoException).code !== "ENOENT") {
       throw err;
     }
   }
@@ -45,7 +45,8 @@ export async function writeFileWithinSpace(
   try {
     handle = await fs.open(
       fullPath,
-      fsConstants.O_WRONLY | fsConstants.O_CREAT | fsConstants.O_TRUNC | fsConstants.O_NOFOLLOW
+      fsConstants.O_WRONLY | fsConstants.O_CREAT | fsConstants.O_TRUNC |
+        fsConstants.O_NOFOLLOW,
     );
   } catch (err) {
     if (isSymlinkOpenError(err)) {
@@ -55,13 +56,16 @@ export async function writeFileWithinSpace(
   }
 
   try {
-    await verifyPathWithinAfterAccess(baseDir, fullPath, 'path');
-    if (typeof content === 'string') {
-      await handle.writeFile(content, encoding as Parameters<typeof handle.writeFile>[1]);
+    await verifyPathWithinAfterAccess(baseDir, fullPath, "path");
+    if (typeof content === "string") {
+      await handle.writeFile(
+        content,
+        encoding as Parameters<typeof handle.writeFile>[1],
+      );
     } else {
       await handle.writeFile(content);
     }
-    if (typeof mode === 'number') {
+    if (typeof mode === "number") {
       await handle.chmod(mode);
     }
     const stats = await handle.stat();

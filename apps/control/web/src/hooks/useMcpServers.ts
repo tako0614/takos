@@ -18,9 +18,11 @@ export function useMcpServers({ spaceId }: UseMcpServersOptions) {
     `/api/mcp/servers?spaceId=${encodeURIComponent(currentSpaceId())}`;
   const [servers, setServers] = createSignal<McpServerRecord[]>([]);
   const [loading, setLoading] = createSignal(true);
+  let refreshSeq = 0;
 
   const refresh = async () => {
     const targetSpaceId = currentSpaceId();
+    const seq = ++refreshSeq;
     if (!targetSpaceId) {
       setServers([]);
       setLoading(false);
@@ -29,14 +31,20 @@ export function useMcpServers({ spaceId }: UseMcpServersOptions) {
 
     setLoading(true);
     try {
-      const res = await fetch(basePath());
+      const res = await fetch(
+        `/api/mcp/servers?spaceId=${encodeURIComponent(targetSpaceId)}`,
+      );
       if (!res.ok) throw new Error("Failed to fetch MCP servers");
       const data = await res.json();
+      if (seq !== refreshSeq || targetSpaceId !== currentSpaceId()) return;
       setServers(data.data || []);
     } catch {
+      if (seq !== refreshSeq || targetSpaceId !== currentSpaceId()) return;
       setServers([]);
     } finally {
-      setLoading(false);
+      if (seq === refreshSeq && targetSpaceId === currentSpaceId()) {
+        setLoading(false);
+      }
     }
   };
 

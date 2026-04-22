@@ -1,39 +1,42 @@
-import { createSignal, type Setter } from 'solid-js';
-import type { TranslationKey } from '../store/i18n.ts';
-import { rpc, rpcJson, rpcPath } from '../lib/rpc.ts';
+import { createSignal, type Setter } from "solid-js";
+import type { TranslationKey } from "../store/i18n.ts";
+import { rpc, rpcJson, rpcPath } from "../lib/rpc.ts";
 import type {
   Run,
   ThreadHistoryFocus,
   ThreadHistoryRunNode,
   ThreadHistoryTaskContext,
-} from '../types/index.ts';
+} from "../types/index.ts";
 import type {
   ChatRunArtifactMap,
   ChatRunMetaMap,
   ChatStreamingState,
   ChatTimelineEntry,
-} from '../views/chat/chat-types.ts';
+} from "../views/chat/chat-types.ts";
 import {
   normalizeTimelineEventType,
   parseEventData,
   summarizeEvent,
   type WebSocketEventPayload,
-} from '../views/chat/timeline.ts';
+} from "../views/chat/timeline.ts";
 
 // Re-export from wsEventHandlers for consumers that import from this module
 export {
-  VALID_RUN_STATUSES,
   ACTIVE_RUN_STATUSES,
-  TERMINAL_RUN_STATUSES,
   EVENT_DISPATCH,
+  type EventHandlerContext,
   getRunStatusFromPayload,
   resolveThinkingText,
-  type EventHandlerContext,
-} from './wsEventHandlers.ts';
+  TERMINAL_RUN_STATUSES,
+  VALID_RUN_STATUSES,
+} from "./wsEventHandlers.ts";
 
-import { ACTIVE_RUN_STATUSES } from './wsEventHandlers.ts';
+import { ACTIVE_RUN_STATUSES } from "./wsEventHandlers.ts";
 
-export { parseEventData, type WebSocketEventPayload } from '../views/chat/timeline.ts';
+export {
+  parseEventData,
+  type WebSocketEventPayload,
+} from "../views/chat/timeline.ts";
 
 type MutableRefObject<T> = { current: T };
 
@@ -71,6 +74,11 @@ export interface UseWsMessageProcessorResult {
     focus: ThreadHistoryFocus | null;
     taskContext: ThreadHistoryTaskContext | null;
   }) => void;
+  mergeHistorySnapshot: (snapshot: {
+    runs: ThreadHistoryRunNode[];
+    focus: ThreadHistoryFocus | null;
+    taskContext: ThreadHistoryTaskContext | null;
+  }) => void;
   upsertRunMeta: (run: Partial<Run> & { id: string }) => void;
   appendTimelineEntry: (
     runId: string,
@@ -79,14 +87,21 @@ export interface UseWsMessageProcessorResult {
     eventId?: number,
     createdAt?: number,
   ) => void;
-  verifyRunStatus: (runId: string, refreshMessages?: boolean) => Promise<boolean>;
-  handleRunCompletedRef: MutableRefObject<(run?: Partial<Run>, sessionId?: string | null) => Promise<void>>;
-  handleWebSocketEventRef: MutableRefObject<(
-    eventType: string,
-    data: unknown,
-    eventId?: number,
-    sourceRunId?: string,
-  ) => void>;
+  verifyRunStatus: (
+    runId: string,
+    refreshMessages?: boolean,
+  ) => Promise<boolean>;
+  handleRunCompletedRef: MutableRefObject<
+    (run?: Partial<Run>, sessionId?: string | null) => Promise<void>
+  >;
+  handleWebSocketEventRef: MutableRefObject<
+    (
+      eventType: string,
+      data: unknown,
+      eventId?: number,
+      sourceRunId?: string,
+    ) => void
+  >;
   runEventCursorRef: MutableRefObject<Map<string, number>>;
 }
 
@@ -99,25 +114,41 @@ export function useWsMessageProcessor({
 }: UseWsMessageProcessorOptions): UseWsMessageProcessorResult {
   const [currentRun, setCurrentRun] = createSignal<Run | null>(null);
   const [isLoading, setIsLoading] = createSignal(false);
-  const [streaming, setStreaming] = createSignal<ChatStreamingState>(EMPTY_STREAMING);
-  const [timelineEntries, setTimelineEntries] = createSignal<ChatTimelineEntry[]>([]);
+  const [streaming, setStreaming] = createSignal<ChatStreamingState>(
+    EMPTY_STREAMING,
+  );
+  const [timelineEntries, setTimelineEntries] = createSignal<
+    ChatTimelineEntry[]
+  >([]);
   const [runMetaById, setRunMetaById] = createSignal<ChatRunMetaMap>({});
-  const [artifactsByRunId, setArtifactsByRunId] = createSignal<ChatRunArtifactMap>({});
-  const [historyFocus, setHistoryFocus] = createSignal<ThreadHistoryFocus | null>(null);
-  const [taskContext, setTaskContext] = createSignal<ThreadHistoryTaskContext | null>(null);
+  const [artifactsByRunId, setArtifactsByRunId] = createSignal<
+    ChatRunArtifactMap
+  >({});
+  const [historyFocus, setHistoryFocus] = createSignal<
+    ThreadHistoryFocus | null
+  >(null);
+  const [taskContext, setTaskContext] = createSignal<
+    ThreadHistoryTaskContext | null
+  >(null);
 
-  const runEventCursorRef: MutableRefObject<Map<string, number>> = { current: new Map() };
+  const runEventCursorRef: MutableRefObject<Map<string, number>> = {
+    current: new Map(),
+  };
   const runMetaRef: MutableRefObject<ChatRunMetaMap> = { current: {} };
 
-  const handleRunCompletedRef: MutableRefObject<(run?: Partial<Run>, sessionId?: string | null) => Promise<void>> = {
+  const handleRunCompletedRef: MutableRefObject<
+    (run?: Partial<Run>, sessionId?: string | null) => Promise<void>
+  > = {
     current: async () => {},
   };
-  const handleWebSocketEventRef: MutableRefObject<(
-    eventType: string,
-    data: unknown,
-    eventId?: number,
-    sourceRunId?: string,
-  ) => void> = { current: () => {} };
+  const handleWebSocketEventRef: MutableRefObject<
+    (
+      eventType: string,
+      data: unknown,
+      eventId?: number,
+      sourceRunId?: string,
+    ) => void
+  > = { current: () => {} };
 
   const resetStreamingState = (): void => {
     setStreaming(EMPTY_STREAMING);
@@ -170,14 +201,15 @@ export function useWsMessageProcessor({
           failed: summary.failed,
           createdAt: Date.parse(event.created_at),
         });
-        runEventCursorRef.current.set(node.run.id, event.id);
+        const previous = runEventCursorRef.current.get(node.run.id) ?? 0;
+        if (event.id > previous) {
+          runEventCursorRef.current.set(node.run.id, event.id);
+        }
       }
     }
 
     nextTimelineEntries.sort((a, b) => (
-      a.createdAt === b.createdAt
-        ? a.seq - b.seq
-        : a.createdAt - b.createdAt
+      a.createdAt === b.createdAt ? a.seq - b.seq : a.createdAt - b.createdAt
     ));
 
     runMetaRef.current = nextRunMeta;
@@ -188,15 +220,84 @@ export function useWsMessageProcessor({
     setTaskContext(snapshot.taskContext);
   };
 
+  const mergeHistorySnapshot = (snapshot: {
+    runs: ThreadHistoryRunNode[];
+    focus: ThreadHistoryFocus | null;
+    taskContext: ThreadHistoryTaskContext | null;
+  }): void => {
+    const nextRunMeta: ChatRunMetaMap = { ...runMetaRef.current };
+    const nextArtifacts: ChatRunArtifactMap = { ...artifactsByRunId() };
+    const nextTimelineEntries: ChatTimelineEntry[] = [];
+
+    for (const node of snapshot.runs) {
+      nextRunMeta[node.run.id] = {
+        runId: node.run.id,
+        parentRunId: node.run.parent_run_id,
+        agentType: node.run.agent_type,
+        status: node.run.status,
+      };
+      nextArtifacts[node.run.id] = node.artifacts;
+
+      for (const event of node.events) {
+        const payload = parseEventData(event.data);
+        const normalizedType = normalizeTimelineEventType(event.type);
+        const summary = summarizeEvent(normalizedType, payload, t);
+        nextTimelineEntries.push({
+          key: `${node.run.id}:${event.id}`,
+          seq: event.id,
+          runId: node.run.id,
+          type: normalizedType,
+          eventId: event.id,
+          message: summary.message,
+          detail: summary.detail,
+          failed: summary.failed,
+          createdAt: Date.parse(event.created_at),
+        });
+        const previous = runEventCursorRef.current.get(node.run.id) ?? 0;
+        if (event.id > previous) {
+          runEventCursorRef.current.set(node.run.id, event.id);
+        }
+      }
+    }
+
+    runMetaRef.current = nextRunMeta;
+    setRunMetaById(nextRunMeta);
+    setArtifactsByRunId(nextArtifacts);
+    setTimelineEntries((prev) => {
+      const existingKeys = new Set(prev.map((entry) => entry.key));
+      const merged = [...prev];
+      for (const entry of nextTimelineEntries) {
+        if (!existingKeys.has(entry.key)) {
+          existingKeys.add(entry.key);
+          merged.push(entry);
+        }
+      }
+      merged.sort((a, b) => (
+        a.createdAt === b.createdAt ? a.seq - b.seq : a.createdAt - b.createdAt
+      ));
+      return merged;
+    });
+    if (snapshot.focus) {
+      setHistoryFocus(snapshot.focus);
+    }
+    if (snapshot.taskContext) {
+      setTaskContext(snapshot.taskContext);
+    }
+  };
+
   const upsertRunMeta = (run: Partial<Run> & { id: string }) => {
     setRunMetaById((prev) => {
       const next: ChatRunMetaMap = {
         ...prev,
         [run.id]: {
           runId: run.id,
-          parentRunId: typeof run.parent_run_id === 'string' ? run.parent_run_id : (prev[run.id]?.parentRunId ?? null),
-          agentType: typeof run.agent_type === 'string' ? run.agent_type : (prev[run.id]?.agentType ?? 'default'),
-          status: run.status ?? prev[run.id]?.status ?? 'queued',
+          parentRunId: typeof run.parent_run_id === "string"
+            ? run.parent_run_id
+            : (prev[run.id]?.parentRunId ?? null),
+          agentType: typeof run.agent_type === "string"
+            ? run.agent_type
+            : (prev[run.id]?.agentType ?? "default"),
+          status: run.status ?? prev[run.id]?.status ?? "queued",
         },
       };
       runMetaRef.current = next;
@@ -214,11 +315,11 @@ export function useWsMessageProcessor({
     const normalizedType = normalizeTimelineEventType(eventType);
     const summary = summarizeEvent(normalizedType, payload, t);
     const timestamp = createdAt ?? Date.now();
-    const key = typeof eventId === 'number'
+    const key = typeof eventId === "number"
       ? `${runId}:${eventId}`
       : `${runId}:${normalizedType}:${timestamp}`;
 
-    if (typeof eventId === 'number') {
+    if (typeof eventId === "number") {
       const previous = runEventCursorRef.current.get(runId) ?? 0;
       if (eventId > previous) {
         runEventCursorRef.current.set(runId, eventId);
@@ -238,7 +339,7 @@ export function useWsMessageProcessor({
       }
       const entry = {
         key,
-        seq: typeof eventId === 'number' ? eventId : timestamp,
+        seq: typeof eventId === "number" ? eventId : timestamp,
         runId,
         type: normalizedType,
         eventId,
@@ -250,22 +351,26 @@ export function useWsMessageProcessor({
       // Optimization: skip sort if new entry goes at the end (common case --
       // event IDs and timestamps are monotonically increasing)
       const last = prev[prev.length - 1];
-      if (!last || timestamp > last.createdAt || (timestamp === last.createdAt && entry.seq >= last.seq)) {
+      if (
+        !last || timestamp > last.createdAt ||
+        (timestamp === last.createdAt && entry.seq >= last.seq)
+      ) {
         return [...prev, entry];
       }
       const next = [...prev, entry];
       next.sort((a, b) => (
-        a.createdAt === b.createdAt
-          ? a.seq - b.seq
-          : a.createdAt - b.createdAt
+        a.createdAt === b.createdAt ? a.seq - b.seq : a.createdAt - b.createdAt
       ));
       return next;
     });
   };
 
-  const verifyRunStatus = async (runId: string, refreshMessages = true): Promise<boolean> => {
+  const verifyRunStatus = async (
+    runId: string,
+    refreshMessages = true,
+  ): Promise<boolean> => {
     try {
-      const res = await rpcPath(rpc, 'runs', ':id').$get({
+      const res = await rpcPath(rpc, "runs", ":id").$get({
         param: { id: runId },
       });
       const data = await rpcJson<{ run: Run }>(res);
@@ -296,21 +401,38 @@ export function useWsMessageProcessor({
   };
 
   return {
-    get currentRun() { return currentRun(); },
+    get currentRun() {
+      return currentRun();
+    },
     setCurrentRun,
-    get isLoading() { return isLoading(); },
+    get isLoading() {
+      return isLoading();
+    },
     setIsLoading,
-    get streaming() { return streaming(); },
+    get streaming() {
+      return streaming();
+    },
     setStreaming,
     resetStreamingState,
-    get timelineEntries() { return timelineEntries(); },
-    get runMetaById() { return runMetaById(); },
+    get timelineEntries() {
+      return timelineEntries();
+    },
+    get runMetaById() {
+      return runMetaById();
+    },
     runMetaRef,
-    get artifactsByRunId() { return artifactsByRunId(); },
-    get historyFocus() { return historyFocus(); },
-    get taskContext() { return taskContext(); },
+    get artifactsByRunId() {
+      return artifactsByRunId();
+    },
+    get historyFocus() {
+      return historyFocus();
+    },
+    get taskContext() {
+      return taskContext();
+    },
     resetTimeline,
     applyHistorySnapshot,
+    mergeHistorySnapshot,
     upsertRunMeta,
     appendTimelineEntry,
     verifyRunStatus,

@@ -45,6 +45,7 @@ import {
 
 import {
   buildServiceEnvSalt,
+  decryptServiceEnvRow,
   requireEncryptionKey,
   resolveServiceCommonEnvState,
 } from "./env-state-resolution.ts";
@@ -99,12 +100,27 @@ export class ServiceDesiredStateService {
     spaceId: string,
     serviceId: string,
   ): Promise<ServiceLocalEnvVarState[]> {
-    const resolved = await resolveServiceCommonEnvState(
-      this.env,
-      spaceId,
-      serviceId,
+    const rows = await this.db.select({
+      id: serviceEnvVars.id,
+      serviceId: serviceEnvVars.serviceId,
+      accountId: serviceEnvVars.accountId,
+      name: serviceEnvVars.name,
+      valueEncrypted: serviceEnvVars.valueEncrypted,
+      isSecret: serviceEnvVars.isSecret,
+      updatedAt: serviceEnvVars.updatedAt,
+    })
+      .from(serviceEnvVars)
+      .where(and(
+        eq(serviceEnvVars.accountId, spaceId),
+        eq(serviceEnvVars.serviceId, serviceId),
+      ))
+      .orderBy(desc(serviceEnvVars.updatedAt), serviceEnvVars.name)
+      .all();
+
+    const vars = await Promise.all(
+      rows.map((row) => decryptServiceEnvRow(this.encryptionKey, row)),
     );
-    return resolved.localEnvVars.sort((a, b) => a.name.localeCompare(b.name));
+    return vars.sort((a, b) => a.name.localeCompare(b.name));
   }
 
   async listLocalEnvVarSummaries(
@@ -170,39 +186,27 @@ export class ServiceDesiredStateService {
       });
     }
 
-    // Use raw BEGIN/COMMIT for transactional atomicity since D1 Drizzle
-    // doesn't support .transaction(). Individual statements inside are
-    // Drizzle query-builder calls.
-    await this.env.DB.prepare("BEGIN IMMEDIATE").run();
-    try {
-      await this.db.delete(serviceEnvVars)
-        .where(and(
-          eq(serviceEnvVars.accountId, params.spaceId),
-          eq(serviceEnvVars.serviceId, serviceId),
-        ));
+    // Cloudflare Durable Object storage rejects raw BEGIN/COMMIT SQL. Keep this
+    // operation portable and let the caller's desired-state rollback restore
+    // previous values if a later apply step fails.
+    await this.db.delete(serviceEnvVars)
+      .where(and(
+        eq(serviceEnvVars.accountId, params.spaceId),
+        eq(serviceEnvVars.serviceId, serviceId),
+      ));
 
-      if (encrypted.length > 0) {
-        await this.db.insert(serviceEnvVars)
-          .values(encrypted.map((row) => ({
-            id: generateId(),
-            serviceId,
-            accountId: params.spaceId,
-            name: row.name,
-            valueEncrypted: row.valueEncrypted,
-            isSecret: !!row.isSecret,
-            createdAt: timestamp,
-            updatedAt: timestamp,
-          })));
-      }
-
-      await this.env.DB.prepare("COMMIT").run();
-    } catch (error) {
-      try {
-        await this.env.DB.prepare("ROLLBACK").run();
-      } catch {
-        // Ignore rollback failures and rethrow the original error.
-      }
-      throw error;
+    if (encrypted.length > 0) {
+      await this.db.insert(serviceEnvVars)
+        .values(encrypted.map((row) => ({
+          id: generateId(),
+          serviceId,
+          accountId: params.spaceId,
+          name: row.name,
+          valueEncrypted: row.valueEncrypted,
+          isSecret: !!row.isSecret,
+          createdAt: timestamp,
+          updatedAt: timestamp,
+        })));
     }
   }
 

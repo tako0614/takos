@@ -19,7 +19,7 @@ export interface ProfileRepo {
   id: string;
   name: string;
   description: string | null;
-  visibility: 'public' | 'private';
+  visibility: "public" | "private";
   default_branch: string;
   stars: number;
   forks: number;
@@ -45,7 +45,11 @@ export interface FollowRequest {
   created_at: string;
 }
 
-export type ActivityEventType = 'commit' | 'release' | 'pull_request' | 'deployment';
+export type ActivityEventType =
+  | "commit"
+  | "release"
+  | "pull_request"
+  | "deployment";
 
 export interface ActivityEvent {
   id: string;
@@ -56,7 +60,13 @@ export interface ActivityEvent {
   data?: Record<string, unknown>;
 }
 
-export type ProfileTab = 'repositories' | 'stars' | 'activity' | 'followers' | 'following' | 'requests';
+export type ProfileTab =
+  | "repositories"
+  | "stars"
+  | "activity"
+  | "followers"
+  | "following"
+  | "requests";
 
 export interface UserProfilePageProps {
   username: string;

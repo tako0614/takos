@@ -1,32 +1,36 @@
 // store
 export {
-  listResourcesForWorkspace,
-  listResourcesForUser,
-  listResourcesByType,
+  deleteResource,
   getResourceById,
   getResourceByName,
-  updateResourceMetadata,
+  listResourcesByType,
+  listResourcesForUser,
+  listResourcesForWorkspace,
   markResourceDeleting,
-  deleteResource,
-} from './store.ts';
+  updateResourceMetadata,
+} from "./store.ts";
 
 // access
 export {
+  canAccessResource,
+  checkResourceAccess,
+  deleteResourceAccess,
   listResourceAccess,
   upsertResourceAccess,
-  deleteResourceAccess,
-  checkResourceAccess,
-  canAccessResource,
-} from './access.ts';
+} from "./access.ts";
 
 // bindings
 export {
-  listResourceBindings,
+  buildBindingFromResource,
   countResourceBindings,
   createServiceBinding,
   deleteServiceBinding,
-  buildBindingFromResource,
-} from './bindings.ts';
+  listResourceBindings,
+} from "./bindings.ts";
 
 // lifecycle
-export { provisionManagedResource, provisionCloudflareResource, deleteManagedResource } from './lifecycle.ts';
+export {
+  deleteManagedResource,
+  provisionCloudflareResource,
+  provisionManagedResource,
+} from "./lifecycle.ts";

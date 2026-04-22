@@ -18,24 +18,37 @@ const createOAuthClientSql = readFileSync(
   "utf8",
 );
 
+function assertSourceMatches(source: string, pattern: RegExp): void {
+  assert(
+    pattern.test(source),
+    `Expected source to match ${pattern}`,
+  );
+}
+
 Deno.test("DB ops script contract - requires explicit environment selection for remote backfill and worker binding inspection", () => {
   assertStringIncludes(
     offloadBackfill,
     "--remote requires --env staging|production",
   );
-  assertStringIncludes(offloadBackfill, "const D1_TARGET = 'DB';");
-  assertStringIncludes(offloadBackfill, "staging: 'takos-offload-staging'");
-  assertStringIncludes(offloadBackfill, "production: 'takos-offload'");
+  assertSourceMatches(offloadBackfill, /const D1_TARGET = ["']DB["'];/);
+  assertSourceMatches(
+    offloadBackfill,
+    /staging:\s*["']takos-offload-staging["']/,
+  );
+  assertSourceMatches(offloadBackfill, /production:\s*["']takos-offload["']/);
   assert(!offloadBackfill.includes("const DB_NAME = 'takos-control-db'"));
 
   assertStringIncludes(
     fixWorkerBindings,
     "Usage: node scripts/fix-worker-bindings.js <route-ref> [--local|--env staging|production]",
   );
-  assertStringIncludes(fixWorkerBindings, "'d1', 'execute', 'DB'");
-  assertStringIncludes(
+  assertSourceMatches(
     fixWorkerBindings,
-    "'--remote', '--env', executionTarget.env",
+    /["']d1["'],\s*["']execute["'],\s*["']DB["']/,
+  );
+  assertSourceMatches(
+    fixWorkerBindings,
+    /["']--remote["'],\s*["']--env["'],\s*executionTarget\.env/,
   );
   assert(
     !fixWorkerBindings.includes(

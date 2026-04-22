@@ -1,8 +1,7 @@
-
-import type { Resource, Worker } from '../../../types/index.ts';
-import { WorkerDetail } from '../WorkerDetail.tsx';
-import type { WorkerDetailTab } from '../worker-models.ts';
-import { useWorkerSettings } from '../../../hooks/useWorkerSettings.ts';
+import type { Resource, Worker } from "../../../types/index.ts";
+import { WorkerDetail } from "../WorkerDetail.tsx";
+import type { WorkerDetailTab } from "../worker-models.ts";
+import { useWorkerSettings } from "../../../hooks/useWorkerSettings.ts";
 
 export interface WorkerDetailContainerProps {
   worker: Worker;
@@ -15,29 +14,24 @@ export interface WorkerDetailContainerProps {
   onRefreshWorkers: () => Promise<void> | void;
 }
 
-export function WorkerDetailContainer({
-  worker,
-  tab,
-  resources,
-  onBack,
-  onTabChange,
-  onDeleteWorker,
-  onWorkerUpdated,
-  onRefreshWorkers,
-}: WorkerDetailContainerProps) {
+export function WorkerDetailContainer(props: WorkerDetailContainerProps) {
   const handleWorkerUpdated = (updates: Partial<Worker>) => {
-    onWorkerUpdated(worker.id, updates);
+    props.onWorkerUpdated(props.worker.id, updates);
   };
 
-  const settings = useWorkerSettings(worker, handleWorkerUpdated, onRefreshWorkers);
+  const settings = useWorkerSettings(
+    () => props.worker,
+    handleWorkerUpdated,
+    props.onRefreshWorkers,
+  );
 
   return (
     <WorkerDetail
-      worker={worker}
-      tab={tab}
-      onBack={onBack}
-      onTabChange={onTabChange}
-      onDeleteWorker={onDeleteWorker}
+      worker={props.worker}
+      tab={props.tab}
+      onBack={props.onBack}
+      onTabChange={props.onTabChange}
+      onDeleteWorker={props.onDeleteWorker}
       workerSettingsTab={settings.workerSettingsTab()}
       onWorkerSettingsTabChange={settings.setWorkerSettingsTab}
       editSlug={settings.editSlug()}
@@ -67,7 +61,7 @@ export function WorkerDetailContainer({
       onAddEnvVar={settings.handleAddEnvVar}
       onSaveEnvVars={settings.handleSaveEnvVars}
       bindings={settings.bindings()}
-      resources={resources}
+      resources={props.resources}
       onAddBinding={settings.handleAddBinding}
       onSaveBindings={settings.handleSaveBindings}
       runtimeConfig={settings.runtimeConfig()}

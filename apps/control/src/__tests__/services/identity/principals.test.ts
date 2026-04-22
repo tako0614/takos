@@ -3,10 +3,10 @@ import type { D1Database } from "@cloudflare/workers-types";
 import { assertEquals } from "jsr:@std/assert";
 
 import {
-  principalsDeps,
-  resolveUserPrincipalId,
-  resolveActorPrincipalId,
   getPrincipalById,
+  principalsDeps,
+  resolveActorPrincipalId,
+  resolveUserPrincipalId,
 } from "@/services/identity/principals";
 
 function createFakeDb(rows: unknown[]): D1Database {

@@ -1,14 +1,14 @@
-const BLOCKED_SCHEMES = new Set(['javascript', 'data', 'vbscript']);
-const ALLOWED_SCHEMES = new Set(['http', 'https', 'mailto', 'tel']);
+const BLOCKED_SCHEMES = new Set(["javascript", "data", "vbscript"]);
+const ALLOWED_SCHEMES = new Set(["http", "https", "mailto", "tel"]);
 
 export function toSafeHref(href: string | null | undefined): string | null {
-  if (typeof href !== 'string') return null;
+  if (typeof href !== "string") return null;
 
   const trimmed = href.trim();
   if (!trimmed) return null;
 
   // Strip control characters and whitespace to prevent obfuscated schemes.
-  let compact = '';
+  let compact = "";
   for (let i = 0; i < trimmed.length; i += 1) {
     const code = trimmed.charCodeAt(i);
     if (code <= 0x20 || code === 0x7f) continue;
