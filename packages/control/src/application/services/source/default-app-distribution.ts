@@ -103,7 +103,6 @@ const FALLBACK_DEFAULT_APP_DISTRIBUTION = [
   {
     name: "takos-docs",
     title: "Docs",
-    icon: "/icons/docs.svg",
     repositoryUrl: "https://github.com/tako0614/takos-docs.git",
     repositoryEnvKey: "TAKOS_DEFAULT_DOCS_APP_REPOSITORY_URL",
     ref: "master",
@@ -111,7 +110,6 @@ const FALLBACK_DEFAULT_APP_DISTRIBUTION = [
   {
     name: "takos-excel",
     title: "Excel",
-    icon: "/icons/excel.svg",
     repositoryUrl: "https://github.com/tako0614/takos-excel.git",
     repositoryEnvKey: "TAKOS_DEFAULT_EXCEL_APP_REPOSITORY_URL",
     ref: "master",
@@ -119,7 +117,6 @@ const FALLBACK_DEFAULT_APP_DISTRIBUTION = [
   {
     name: "takos-slide",
     title: "Slide",
-    icon: "/icons/slide.svg",
     repositoryUrl: "https://github.com/tako0614/takos-slide.git",
     repositoryEnvKey: "TAKOS_DEFAULT_SLIDE_APP_REPOSITORY_URL",
     ref: "master",
@@ -127,7 +124,6 @@ const FALLBACK_DEFAULT_APP_DISTRIBUTION = [
   {
     name: "takos-computer",
     title: "Computer",
-    icon: "/icons/computer.svg",
     repositoryUrl: "https://github.com/tako0614/takos-computer.git",
     repositoryEnvKey: "TAKOS_DEFAULT_COMPUTER_APP_REPOSITORY_URL",
     ref: "master",
@@ -553,7 +549,6 @@ function resolveFallbackDefaultAppDistribution(
         {
           name: entry.name,
           title: entry.title,
-          icon: entry.icon,
           repositoryUrl: typeof repositoryOverride === "string" &&
               repositoryOverride.trim()
             ? repositoryOverride.trim()

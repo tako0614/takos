@@ -53,12 +53,6 @@ Deno.test("resolveDefaultAppDistribution returns default app fallback set", () =
     "master",
     "master",
   ]);
-  assertEquals(entries.map((entry) => entry.icon), [
-    "/icons/docs.svg",
-    "/icons/excel.svg",
-    "/icons/slide.svg",
-    "/icons/computer.svg",
-  ]);
   assertEquals(
     entries.map((entry) => entry.repositoryUrl),
     [
