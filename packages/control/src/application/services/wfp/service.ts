@@ -230,6 +230,9 @@ function bindSubmodules(ctx: WfpContext, config: WFPConfig, client: WfpClient) {
     },
     kv: {
       createKVNamespace: (title: string) => kvOps.createKVNamespace(ctx, title),
+      listKVNamespaces: (
+        options?: { cursor?: string; limit?: number },
+      ) => kvOps.listKVNamespaces(ctx, options),
       deleteKVNamespace: (namespaceId: string) =>
         kvOps.deleteKVNamespace(ctx, namespaceId),
       listKVEntries: (
