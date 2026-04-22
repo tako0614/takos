@@ -1,4 +1,4 @@
-import { createSignal } from "solid-js";
+import { createMemo, createSignal } from "solid-js";
 import { useI18n } from "../../store/i18n.ts";
 import type { TranslationKey } from "../../store/i18n.ts";
 import { Icons } from "../../lib/Icons.tsx";
@@ -40,12 +40,7 @@ function getTypeLabel(
 
 import { Select } from "../../components/ui/index.ts";
 
-export function MemoryList({
-  memories,
-  onDelete,
-  onCreateMemory,
-  savingMemory,
-}: {
+export function MemoryList(props: {
   memories: Memory[];
   onDelete: (id: string) => void;
   onCreateMemory: (
@@ -64,21 +59,24 @@ export function MemoryList({
   const [memoryType, setMemoryType] = createSignal<Memory["type"]>("semantic");
   const [memoryCategory, setMemoryCategory] = createSignal("");
 
-  const filteredMemories = memories.filter((m) => {
-    const matchesFilter = activeFilter() === "all" || m.type === activeFilter();
-    const matchesSearch = !searchQuery() ||
-      m.content.toLowerCase().includes(searchQuery().toLowerCase()) ||
-      (m.category &&
-        m.category.toLowerCase().includes(searchQuery().toLowerCase()));
-    return matchesFilter && matchesSearch;
-  });
+  const filteredMemories = createMemo(() =>
+    props.memories.filter((m) => {
+      const matchesFilter = activeFilter() === "all" ||
+        m.type === activeFilter();
+      const matchesSearch = !searchQuery() ||
+        m.content.toLowerCase().includes(searchQuery().toLowerCase()) ||
+        (m.category &&
+          m.category.toLowerCase().includes(searchQuery().toLowerCase()));
+      return matchesFilter && matchesSearch;
+    })
+  );
 
   const handleCreateMemory = async (
     e: Event & { currentTarget: HTMLFormElement },
   ) => {
     e.preventDefault();
     if (!memoryContent().trim()) return;
-    await onCreateMemory({
+    await props.onCreateMemory({
       content: memoryContent().trim(),
       type: memoryType(),
       category: memoryCategory().trim() || undefined,
@@ -96,7 +94,7 @@ export function MemoryList({
         <Input
           placeholder={t("memorySearch")}
           value={searchQuery()}
-          onInput={(e) => setSearchQuery(e.target.value)}
+          onInput={(e) => setSearchQuery(e.currentTarget.value)}
           leftIcon={<Icons.Search style={{ width: "1rem", height: "1rem" }} />}
         />
         <div style={{ display: "flex", "flex-wrap": "wrap", gap: "0.5rem" }}>
@@ -119,7 +117,7 @@ export function MemoryList({
       <div
         style={{ display: "flex", "flex-direction": "column", gap: "0.75rem" }}
       >
-        {filteredMemories.length === 0
+        {filteredMemories().length === 0
           ? (
             <div
               style={{
@@ -137,7 +135,7 @@ export function MemoryList({
             </div>
           )
           : (
-            filteredMemories.map((memory) => (
+            filteredMemories().map((memory) => (
               <Card padding="md">
                 <div
                   style={{
@@ -203,7 +201,7 @@ export function MemoryList({
                   <Button
                     variant="ghost"
                     size="sm"
-                    onClick={() => onDelete(memory.id)}
+                    onClick={() => props.onDelete(memory.id)}
                     title={t("deleteMemory")}
                     style={{ color: "var(--color-text-tertiary)" }}
                   >
@@ -256,7 +254,7 @@ export function MemoryList({
               <Textarea
                 placeholder={t("memoryContentPlaceholder")}
                 value={memoryContent()}
-                onInput={(e) => setMemoryContent(e.target.value)}
+                onInput={(e) => setMemoryContent(e.currentTarget.value)}
                 rows={4}
                 required
                 autofocus
@@ -318,7 +316,7 @@ export function MemoryList({
               <Input
                 placeholder={t("memoryCategoryPlaceholder")}
                 value={memoryCategory()}
-                onInput={(e) => setMemoryCategory(e.target.value)}
+                onInput={(e) => setMemoryCategory(e.currentTarget.value)}
               />
             </div>
           </div>
@@ -333,7 +331,7 @@ export function MemoryList({
             <Button
               type="submit"
               variant="primary"
-              isLoading={savingMemory}
+              isLoading={props.savingMemory}
               disabled={!memoryContent().trim()}
             >
               {t("create")}

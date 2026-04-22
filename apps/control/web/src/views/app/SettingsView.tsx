@@ -1,12 +1,12 @@
-import { useI18n } from '../../store/i18n.ts';
-import { Icons } from '../../lib/Icons.tsx';
-import { Button } from '../../components/ui/index.ts';
-import type { User, UserSettings } from '../../types/index.ts';
-import { SettingsAccount } from './SettingsAccount.tsx';
-import { SettingsLanguage } from './SettingsLanguage.tsx';
-import { SettingsPreferences } from './SettingsPreferences.tsx';
-import { SettingsOAuth } from './SettingsOAuth.tsx';
-import { SettingsBilling } from './SettingsBilling.tsx';
+import { useI18n } from "../../store/i18n.ts";
+import { Icons } from "../../lib/Icons.tsx";
+import { Button } from "../../components/ui/index.ts";
+import type { User, UserSettings } from "../../types/index.ts";
+import { SettingsAccount } from "./SettingsAccount.tsx";
+import { SettingsLanguage } from "./SettingsLanguage.tsx";
+import { SettingsPreferences } from "./SettingsPreferences.tsx";
+import { SettingsOAuth } from "./SettingsOAuth.tsx";
+import { SettingsBilling } from "./SettingsBilling.tsx";
 
 export function SettingsView(props: {
   user: User | null;
@@ -25,7 +25,7 @@ export function SettingsView(props: {
             <Icons.ArrowLeft class="h-4 w-4" />
           </Button>
           <h1 class="text-lg font-semibold text-zinc-900 dark:text-zinc-50">
-            {t('settingsTitle')}
+            {t("settingsTitle")}
           </h1>
         </header>
       )}

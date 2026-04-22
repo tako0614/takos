@@ -28,6 +28,7 @@ import {
   findGroupById,
   findGroupByName,
   type GroupBackendName,
+  normalizeGroupNameOrThrow,
   updateGroupSourceProjection,
 } from "../groups/records.ts";
 import { applyManifestOverrides } from "../deployment/group-state.ts";
@@ -83,7 +84,7 @@ export type {
 } from "./group-deployment-snapshots-model.ts";
 
 type CreateGroupDeploymentSnapshotInput = {
-  groupName: string;
+  groupName?: string;
   backendName?: GroupBackendName;
   envName?: string;
   targets?: string[];
@@ -94,10 +95,17 @@ function requireGroupName(groupName: string | undefined): string {
   const normalized = groupName?.trim();
   if (!normalized) {
     throw new BadRequestError(
-      "group_name is required for group deployment snapshots",
+      "group_name is required when the deploy manifest does not provide name",
     );
   }
-  return normalized;
+  return normalizeGroupNameOrThrow(normalized);
+}
+
+function resolveGroupNameFromManifest(
+  groupName: string | undefined,
+  manifest: AppManifest,
+): string {
+  return requireGroupName(groupName ?? manifest.name);
 }
 
 function fallbackGroupName(row: GroupDeploymentSnapshotRow): string {
@@ -240,6 +248,7 @@ async function buildPlanResponse(input: {
   assertDeployValid(effectiveManifest);
   await assertManifestPublicationPrerequisites(input.env, {
     spaceId: input.spaceId,
+    ...(input.group?.id ? { groupId: input.group.id } : {}),
     manifest: effectiveManifest,
   });
   const desiredState = applyEngineDeps.compileGroupDesiredState(
@@ -433,13 +442,16 @@ export class GroupDeploymentSnapshotService {
     spaceId: string,
     input: {
       manifest: AppManifest;
-      groupName: string;
+      groupName?: string;
       backendName?: GroupBackendName;
       envName?: string;
       targets?: string[];
     },
   ): Promise<GroupDeploymentSnapshotPlanResult> {
-    const groupName = requireGroupName(input.groupName);
+    const groupName = resolveGroupNameFromManifest(
+      input.groupName,
+      input.manifest,
+    );
     const group = await findGroupByName(this.env, spaceId, groupName);
     const currentState = group?.id
       ? await getGroupState(this.env, group.id)
@@ -551,14 +563,17 @@ export class GroupDeploymentSnapshotService {
       packageFiles: Awaited<
         ReturnType<typeof resolveBuildArtifacts>
       >["packageFiles"];
-      groupName: string;
+      groupName?: string;
       backendName?: GroupBackendName;
       envName?: string;
       targets?: string[];
       rollbackOfGroupDeploymentSnapshotId?: string | null;
     },
   ): Promise<GroupDeploymentSnapshotMutationResult> {
-    const groupName = requireGroupName(input.groupName);
+    const groupName = resolveGroupNameFromManifest(
+      input.groupName,
+      input.manifest,
+    );
     assertNoTargetedImmutableDeployment(input.targets);
     const group = await this.ensureTargetGroup(
       spaceId,
@@ -712,14 +727,17 @@ export class GroupDeploymentSnapshotService {
     input: {
       manifest: AppManifest;
       artifacts?: Array<Record<string, unknown>>;
-      groupName: string;
+      groupName?: string;
       backendName?: GroupBackendName;
       envName?: string;
       targets?: string[];
       rollbackOfGroupDeploymentSnapshotId?: string | null;
     },
   ): Promise<GroupDeploymentSnapshotMutationResult> {
-    const groupName = requireGroupName(input.groupName);
+    const groupName = resolveGroupNameFromManifest(
+      input.groupName,
+      input.manifest,
+    );
     assertNoTargetedImmutableDeployment(input.targets);
     const group = await this.ensureTargetGroup(
       spaceId,
@@ -812,7 +830,7 @@ export class GroupDeploymentSnapshotService {
     _userId: string,
     input: {
       manifest: AppManifest;
-      groupName: string;
+      groupName?: string;
       backendName?: GroupBackendName;
       envName?: string;
       targets?: string[];
@@ -828,7 +846,7 @@ export class GroupDeploymentSnapshotService {
       repoId: string;
       ref?: string;
       refType?: RepoRefType;
-      groupName: string;
+      groupName?: string;
       backendName?: GroupBackendName;
       envName?: string;
       targets?: string[];
@@ -861,7 +879,7 @@ export class GroupDeploymentSnapshotService {
     userId: string,
     input: {
       source: GitRefDeploymentSource;
-      groupName: string;
+      groupName?: string;
       backendName?: GroupBackendName;
       envName?: string;
       targets?: string[];

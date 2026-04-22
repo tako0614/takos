@@ -2,6 +2,7 @@
   "version": "1.0.0",
   "tasks": {
     "check-lockfiles": "deno run --allow-read check-lockfiles.mjs",
+    "validate-external-manifests": "deno run --allow-read --allow-env validate-external-manifests.ts",
     "validate-docs": "deno run --allow-read --allow-env validate-docs.ts",
     "validate-agent-docs": "deno run --allow-read --allow-env validate-agent-docs.ts"
   }

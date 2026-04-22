@@ -38,3 +38,4 @@ Takos の group / publication / capability grant contract を前提にした最�
 - [takos-docs](/platform/takos-docs)
 - [takos-excel](/platform/takos-excel)
 - [takos-slide](/platform/takos-slide)
+- [takos-computer](/platform/takos-computer)

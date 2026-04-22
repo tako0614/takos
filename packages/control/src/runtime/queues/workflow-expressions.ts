@@ -1,5 +1,5 @@
-import type { ConditionContext, ExpressionContext } from './workflow-types.ts';
-import { logWarn } from '../../shared/utils/logger.ts';
+import type { ConditionContext, ExpressionContext } from "./workflow-types.ts";
+import { logWarn } from "../../shared/utils/logger.ts";
 
 // ---------------------------------------------------------------------------
 // Expression evaluation
@@ -20,19 +20,19 @@ import { logWarn } from '../../shared/utils/logger.ts';
 // compatibility table.
 export function evaluateCondition(
   expression: string,
-  context: ConditionContext
+  context: ConditionContext,
 ): boolean {
   const expr = expression.trim();
 
-  if (expr === 'always()') return true;
+  if (expr === "always()") return true;
   // `cancelled()` should be true when the parent run was cancelled. The
   // condition context exposes job.status which is set to 'cancelled' on the
   // terminal cancel transition, so we can implement this correctly.
-  if (expr === 'cancelled()') return context.job?.status === 'cancelled';
-  if (expr === 'failure()') return context.job?.status === 'failure';
-  if (expr === 'success()') return context.job?.status === 'success';
+  if (expr === "cancelled()") return context.job?.status === "cancelled";
+  if (expr === "failure()") return context.job?.status === "failure";
+  if (expr === "success()") return context.job?.status === "success";
 
-  if (expr.startsWith('${{') && expr.endsWith('}}')) {
+  if (expr.startsWith("${{") && expr.endsWith("}}")) {
     const inner = expr.slice(3, -2).trim();
 
     const stepsMatch = inner.match(/^steps\.(\w+)\.outputs\.(\w+)$/);
@@ -61,16 +61,16 @@ export function evaluateCondition(
   // README compatibility table for the supported subset.)
   logWarn(
     `Unrecognized workflow expression — evaluated as false. Only a subset of GitHub Actions expression syntax is supported.`,
-    { module: 'workflow-expressions', detail: { expression: expr } },
+    { module: "workflow-expressions", detail: { expression: expr } },
   );
   return false;
 }
 
 export function evaluateExpression(
   expression: string,
-  context: ExpressionContext
+  context: ExpressionContext,
 ): string | null {
-  if (!expression.startsWith('${{') || !expression.endsWith('}}')) {
+  if (!expression.startsWith("${{") || !expression.endsWith("}}")) {
     return expression;
   }
 
@@ -81,8 +81,8 @@ export function evaluateExpression(
     return context.steps?.[stepsMatch[1]]?.[stepsMatch[2]] || null;
   }
 
-  const inputsMatch = inner.match(/^inputs\.(\w+)$/)
-    || inner.match(/^github\.event\.inputs\.(\w+)$/);
+  const inputsMatch = inner.match(/^inputs\.(\w+)$/) ||
+    inner.match(/^github\.event\.inputs\.(\w+)$/);
   if (inputsMatch) {
     const value = context.inputs?.[inputsMatch[1]];
     return value == null ? null : String(value);

@@ -1,11 +1,11 @@
-import type { D1Database } from '../../../shared/types/bindings.ts';
-import type { SelectOf } from '../../../shared/types/drizzle-utils.ts';
-import { base64UrlEncode } from '../../../shared/utils/index.ts';
-import { hashPassword, verifyPassword } from '../identity/auth-utils.ts';
-import { getDb, threadShares } from '../../../infra/db/index.ts';
-import { eq, and, isNull, desc } from 'drizzle-orm';
+import type { D1Database } from "../../../shared/types/bindings.ts";
+import type { SelectOf } from "../../../shared/types/drizzle-utils.ts";
+import { base64UrlEncode } from "../../../shared/utils/index.ts";
+import { hashPassword, verifyPassword } from "../identity/auth-utils.ts";
+import { getDb, threadShares } from "../../../infra/db/index.ts";
+import { and, desc, eq, isNull } from "drizzle-orm";
 
-export type ThreadShareMode = 'public' | 'password';
+export type ThreadShareMode = "public" | "password";
 
 export type ThreadShareRecord = {
   id: string;
@@ -36,7 +36,7 @@ function toRecord(row: SelectOf<typeof threadShares>): ThreadShareRecord {
     space_id: row.accountId,
     created_by: row.createdByAccountId,
     token: row.token,
-    mode: (row.mode === 'password' ? 'password' : 'public') as ThreadShareMode,
+    mode: (row.mode === "password" ? "password" : "public") as ThreadShareMode,
     expires_at: row.expiresAt,
     revoked_at: row.revokedAt,
     last_accessed_at: row.lastAccessedAt,
@@ -65,10 +65,10 @@ export async function createThreadShare(params: {
   const id = threadShareDeps.randomUUID();
 
   let passwordHash: string | null = null;
-  if (mode === 'password') {
-    const pw = (params.password || '').trim();
+  if (mode === "password") {
+    const pw = (params.password || "").trim();
     if (pw.length < 8) {
-      throw new Error('Password is required (min 8 characters)');
+      throw new Error("Password is required (min 8 characters)");
     }
     passwordHash = await threadShareDeps.hashPassword(pw);
   }
@@ -77,10 +77,10 @@ export async function createThreadShare(params: {
   if (params.expiresAt) {
     const d = new Date(params.expiresAt);
     if (Number.isNaN(d.getTime())) {
-      throw new Error('Invalid expires_at');
+      throw new Error("Invalid expires_at");
     }
     if (d.getTime() <= Date.parse(threadShareDeps.now())) {
-      throw new Error('expires_at must be in the future');
+      throw new Error("expires_at must be in the future");
     }
     expiresAt = d.toISOString();
   }
@@ -108,16 +108,19 @@ export async function createThreadShare(params: {
     .get();
 
   if (!row) {
-    throw new Error('Failed to create share');
+    throw new Error("Failed to create share");
   }
 
   return {
     share: toRecord(row),
-    passwordRequired: mode === 'password',
+    passwordRequired: mode === "password",
   };
 }
 
-export async function listThreadShares(d1: D1Database, threadId: string): Promise<ThreadShareRecord[]> {
+export async function listThreadShares(
+  d1: D1Database,
+  threadId: string,
+): Promise<ThreadShareRecord[]> {
   const db = threadShareDeps.getDb(d1);
   const rows = await db.select()
     .from(threadShares)
@@ -149,7 +152,10 @@ export async function revokeThreadShare(params: {
   return result.length > 0;
 }
 
-export async function getThreadShareByToken(d1: D1Database, token: string): Promise<(ThreadShareRecord & { password_hash: string | null }) | null> {
+export async function getThreadShareByToken(
+  d1: D1Database,
+  token: string,
+): Promise<(ThreadShareRecord & { password_hash: string | null }) | null> {
   const db = threadShareDeps.getDb(d1);
   const row = await db.select()
     .from(threadShares)
@@ -171,7 +177,10 @@ export async function getThreadShareByToken(d1: D1Database, token: string): Prom
   };
 }
 
-export async function markThreadShareAccessed(d1: D1Database, shareId: string): Promise<void> {
+export async function markThreadShareAccessed(
+  d1: D1Database,
+  shareId: string,
+): Promise<void> {
   const db = threadShareDeps.getDb(d1);
   await db.update(threadShares)
     .set({ lastAccessedAt: threadShareDeps.now() })
@@ -182,21 +191,25 @@ export async function verifyThreadShareAccess(params: {
   db: D1Database;
   token: string;
   password?: string | null;
-}): Promise<{ share: ThreadShareRecord; threadId: string; spaceId: string } | { error: 'not_found' | 'password_required' | 'forbidden' }> {
+}): Promise<
+  { share: ThreadShareRecord; threadId: string; spaceId: string } | {
+    error: "not_found" | "password_required" | "forbidden";
+  }
+> {
   const { db, token } = params;
   const share = await getThreadShareByToken(db, token);
-  if (!share) return { error: 'not_found' };
+  if (!share) return { error: "not_found" };
 
-  if (share.mode === 'password') {
-    const pw = (params.password || '').trim();
+  if (share.mode === "password") {
+    const pw = (params.password || "").trim();
     if (!pw) {
-      return { error: 'password_required' };
+      return { error: "password_required" };
     }
     if (!share.password_hash) {
-      return { error: 'forbidden' };
+      return { error: "forbidden" };
     }
     const ok = await threadShareDeps.verifyPassword(pw, share.password_hash);
-    if (!ok) return { error: 'forbidden' };
+    if (!ok) return { error: "forbidden" };
   }
 
   await markThreadShareAccessed(db, share.id);

@@ -40,19 +40,19 @@ worker / service / route / publication / resource は個別 record
 HTTP API で扱います。
 
 `takos deploy` / `takos deploy --plan` は manifest や repository を入力にして、
-明示した group inventory へ primitive declaration を apply / preview
+manifest の `name` で決まる group inventory へ primitive declaration を apply / preview
 する入口です。group なしの primitive は個別 primitive API / CLI で管理します。
 
 ## クイックスタート
 
 ```bash
-takos deploy --env staging --space SPACE_ID --group my-app
+takos deploy --env staging --space SPACE_ID
 ```
 
-group snapshot を使う deploy では group 名を必ず指定します:
+group 名を変えたい場合だけ `--group` を指定します:
 
 ```bash
-takos deploy --plan --env staging --space SPACE_ID --group my-app
+takos deploy --plan --env staging --space SPACE_ID --group custom-name
 ```
 
 ## 関連ページ

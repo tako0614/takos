@@ -1,7 +1,7 @@
-import { createSignal, createEffect, on, onCleanup, Show, For } from 'solid-js';
-import { Icons } from '../../../lib/Icons.tsx';
-import { rpc, rpcJson } from '../../../lib/rpc.ts';
-import { useI18n } from '../../../store/i18n.ts';
+import { createEffect, createSignal, For, on, onCleanup, Show } from "solid-js";
+import { Icons } from "../../../lib/Icons.tsx";
+import { rpc, rpcJson } from "../../../lib/rpc.ts";
+import { useI18n } from "../../../store/i18n.ts";
 
 type SearchMatch = {
   path: string;
@@ -18,7 +18,7 @@ interface RepoCodeSearchProps {
 
 export function RepoCodeSearch(props: RepoCodeSearchProps) {
   const { t } = useI18n();
-  const [query, setQuery] = createSignal('');
+  const [query, setQuery] = createSignal("");
   const [matches, setMatches] = createSignal<SearchMatch[]>([]);
   const [loading, setLoading] = createSignal(false);
   const [error, setError] = createSignal<string | null>(null);
@@ -45,9 +45,9 @@ export function RepoCodeSearch(props: RepoCodeSearchProps) {
           try {
             setLoading(true);
             setError(null);
-            const res = await rpc.repos[':repoId'].search.$get({
+            const res = await rpc.repos[":repoId"].search.$get({
               param: { repoId: props.repoId },
-              query: { q: query().trim(), ref: props.branch, limit: '50' },
+              query: { q: query().trim(), ref: props.branch, limit: "50" },
             });
             const data = await rpcJson<{
               matches?: SearchMatch[];
@@ -61,7 +61,7 @@ export function RepoCodeSearch(props: RepoCodeSearchProps) {
             setFilesScanned(data.files_scanned || 0);
             setBytesScanned(data.bytes_scanned || 0);
           } catch (err) {
-            setError(err instanceof Error ? err.message : t('searchFailed'));
+            setError(err instanceof Error ? err.message : t("searchFailed"));
             setMatches([]);
           } finally {
             setLoading(false);
@@ -87,7 +87,7 @@ export function RepoCodeSearch(props: RepoCodeSearchProps) {
           <input
             value={query()}
             onInput={(e) => setQuery(e.currentTarget.value)}
-            placeholder={t('searchInRepository')}
+            placeholder={t("searchInRepository")}
             class="w-full pl-9 pr-3 py-2 text-sm bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 text-zinc-900 dark:text-zinc-100 placeholder:text-zinc-400 dark:placeholder:text-zinc-500 rounded-lg focus:outline-none focus:ring-2 focus:ring-zinc-900/10 dark:focus:ring-zinc-100/10"
           />
         </div>
@@ -100,7 +100,7 @@ export function RepoCodeSearch(props: RepoCodeSearchProps) {
         <Show when={loading()}>
           <div class="flex flex-col items-center justify-center py-16 text-zinc-500 dark:text-zinc-400">
             <div class="w-8 h-8 border-2 border-zinc-300 dark:border-zinc-600 border-t-zinc-900 dark:border-t-zinc-100 rounded-full animate-spin" />
-            <span class="mt-3">{t('searching')}</span>
+            <span class="mt-3">{t("searching")}</span>
           </div>
         </Show>
 
@@ -114,16 +114,21 @@ export function RepoCodeSearch(props: RepoCodeSearchProps) {
         <Show when={!loading() && !error() && !canSearch()}>
           <div class="flex flex-col items-center justify-center py-16 text-zinc-500 dark:text-zinc-400">
             <Icons.Search class="w-10 h-10 text-zinc-400" />
-            <span class="mt-3">{t('typeAtLeast2Chars')}</span>
+            <span class="mt-3">{t("typeAtLeast2Chars")}</span>
           </div>
         </Show>
 
-        <Show when={!loading() && !error() && canSearch() && matches().length === 0}>
+        <Show
+          when={!loading() && !error() && canSearch() && matches().length === 0}
+        >
           <div class="flex flex-col items-center justify-center py-16 text-zinc-500 dark:text-zinc-400">
             <Icons.Search class="w-10 h-10 text-zinc-400" />
-            <span class="mt-3">{t('noMatches')}</span>
+            <span class="mt-3">{t("noMatches")}</span>
             <span class="mt-1 text-xs">
-              {t('scannedStats', { files: filesScanned(), size: formatBytes(bytesScanned()) })}
+              {t("scannedStats", {
+                files: filesScanned(),
+                size: formatBytes(bytesScanned()),
+              })}
             </span>
           </div>
         </Show>
@@ -131,29 +136,37 @@ export function RepoCodeSearch(props: RepoCodeSearchProps) {
         <Show when={!loading() && !error() && matches().length > 0}>
           <div class="flex flex-col">
             <div class="px-4 py-2 text-xs text-zinc-500 dark:text-zinc-400 border-b border-zinc-200 dark:border-zinc-700">
-              {t('matchesCount', { count: matches().length })}
-              {truncated() ? ` ${t('truncatedLabel')}` : ''}
+              {t("matchesCount", { count: matches().length })}
+              {truncated() ? ` ${t("truncatedLabel")}` : ""}
               <span class="ml-2">
-                {t('scannedStats', { files: filesScanned(), size: formatBytes(bytesScanned()) })}
+                {t("scannedStats", {
+                  files: filesScanned(),
+                  size: formatBytes(bytesScanned()),
+                })}
               </span>
             </div>
-            <For each={matches()}>{(m, _idx) => (
-              <button type="button"
-                class="flex flex-col gap-1 px-4 py-3 border-b border-zinc-200 dark:border-zinc-700 hover:bg-zinc-50 dark:hover:bg-zinc-900 text-left"
-                onClick={() => props.onOpenFile(m.path, m.line_number)}
-              >
-                <div class="flex items-center gap-2 text-sm">
-                  <code class="text-zinc-700 dark:text-zinc-300 font-mono truncate">{m.path}</code>
-                  <span class="text-zinc-400">:</span>
-                  <span class="text-zinc-500 dark:text-zinc-400 font-mono text-xs">
-                    {m.line_number}:{m.column}
-                  </span>
-                </div>
-                <div class="text-xs text-zinc-500 dark:text-zinc-400 font-mono whitespace-pre-wrap break-words">
-                  {m.snippet}
-                </div>
-              </button>
-            )}</For>
+            <For each={matches()}>
+              {(m, _idx) => (
+                <button
+                  type="button"
+                  class="flex flex-col gap-1 px-4 py-3 border-b border-zinc-200 dark:border-zinc-700 hover:bg-zinc-50 dark:hover:bg-zinc-900 text-left"
+                  onClick={() => props.onOpenFile(m.path, m.line_number)}
+                >
+                  <div class="flex items-center gap-2 text-sm">
+                    <code class="text-zinc-700 dark:text-zinc-300 font-mono truncate">
+                      {m.path}
+                    </code>
+                    <span class="text-zinc-400">:</span>
+                    <span class="text-zinc-500 dark:text-zinc-400 font-mono text-xs">
+                      {m.line_number}:{m.column}
+                    </span>
+                  </div>
+                  <div class="text-xs text-zinc-500 dark:text-zinc-400 font-mono whitespace-pre-wrap break-words">
+                    {m.snippet}
+                  </div>
+                </button>
+              )}
+            </For>
           </div>
         </Show>
       </div>

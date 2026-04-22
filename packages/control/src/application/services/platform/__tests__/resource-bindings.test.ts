@@ -123,3 +123,67 @@ Deno.test("toServiceBinding accepts canonical public resource type aliases", () 
     },
   );
 });
+
+Deno.test("toServiceBinding uses durable namespace config from resource config", () => {
+  assertEquals(
+    toServiceBinding(bindingRow({
+      bindingName: "DO",
+      bindingType: "durable-object",
+      backingResourceName: "fallback-class",
+      resourceConfig: JSON.stringify({
+        durableNamespace: {
+          className: "ConfiguredDurable",
+          scriptName: "durable-worker",
+        },
+      }),
+    })),
+    {
+      type: "durable_object_namespace",
+      name: "DO",
+      class_name: "ConfiguredDurable",
+      script_name: "durable-worker",
+    },
+  );
+});
+
+Deno.test("toServiceBinding uses workflow runtime export from resource config", () => {
+  assertEquals(
+    toServiceBinding(bindingRow({
+      bindingName: "WORKFLOW",
+      bindingType: "workflow",
+      backingResourceName: "fallback-workflow",
+      resourceConfig: JSON.stringify({
+        workflowRuntime: {
+          service: "workflow-worker",
+          export: "ConfiguredWorkflow",
+        },
+      }),
+    })),
+    {
+      type: "workflow",
+      name: "WORKFLOW",
+      workflow_name: "ConfiguredWorkflow",
+    },
+  );
+});
+
+Deno.test("toServiceBinding uses workflow runtime name when export is absent", () => {
+  assertEquals(
+    toServiceBinding(bindingRow({
+      bindingName: "WORKFLOW",
+      bindingType: "workflow",
+      backingResourceName: "fallback-workflow",
+      resourceConfig: JSON.stringify({
+        workflowRuntime: {
+          service: "workflow-worker",
+          name: "NamedWorkflow",
+        },
+      }),
+    })),
+    {
+      type: "workflow",
+      name: "WORKFLOW",
+      workflow_name: "NamedWorkflow",
+    },
+  );
+});

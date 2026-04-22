@@ -52,8 +52,17 @@ const sourceSchema = z.discriminatedUnion("kind", [
   manifestSourceSchema,
 ]);
 
+const groupBackendSchema = z.enum([
+  "cloudflare",
+  "local",
+  "aws",
+  "gcp",
+  "k8s",
+]);
+
 const createGroupDeploymentSnapshotSchema = z.object({
-  group_name: z.string().min(1),
+  group_name: z.string().min(1).optional(),
+  backend: groupBackendSchema.optional(),
   env: z.string().min(1).optional(),
   target: z.array(z.string().min(1)).optional(),
   source: sourceSchema,
@@ -126,6 +135,7 @@ const routes = new Hono<SpaceAccessRouteEnv>()
           const result = await service.planFromManifest(space.id, user.id, {
             manifest,
             groupName: body.group_name,
+            backendName: body.backend,
             envName: body.env,
             targets: body.target,
           });
@@ -139,6 +149,7 @@ const routes = new Hono<SpaceAccessRouteEnv>()
             refType: body.source.ref_type,
           },
           groupName: body.group_name,
+          backendName: body.backend,
           envName: body.env,
           targets: body.target,
         });
@@ -180,6 +191,7 @@ const routes = new Hono<SpaceAccessRouteEnv>()
               manifest,
               artifacts: body.source.artifacts,
               groupName: body.group_name,
+              backendName: body.backend,
               envName: body.env,
               targets: body.target,
             },
@@ -201,6 +213,7 @@ const routes = new Hono<SpaceAccessRouteEnv>()
             ref: body.source.ref,
             refType: body.source.ref_type,
           },
+          backendName: body.backend,
         });
         return c.json({
           group_deployment_snapshot: toApiGroupDeploymentSnapshot(

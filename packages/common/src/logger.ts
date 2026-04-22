@@ -5,7 +5,7 @@
  * `console` への JSON 出力により、CF 側の可観測性（observability）でレベル別集計が可能。
  */
 
-export type LogLevel = 'debug' | 'info' | 'warn' | 'error';
+export type LogLevel = "debug" | "info" | "warn" | "error";
 
 const LEVEL_ORDER: Record<LogLevel, number> = {
   debug: 0,
@@ -47,7 +47,9 @@ function serializeError(value: unknown): Record<string, unknown> {
   return { message: String(value) };
 }
 
-function formatData(data?: Record<string, unknown>): Record<string, unknown> | undefined {
+function formatData(
+  data?: Record<string, unknown>,
+): Record<string, unknown> | undefined {
   if (!data) return undefined;
   const result: Record<string, unknown> = {};
   for (const [key, value] of Object.entries(data)) {
@@ -61,7 +63,7 @@ function formatData(data?: Record<string, unknown>): Record<string, unknown> | u
 }
 
 const LEVEL_NAMES = Object.fromEntries(
-  Object.entries(LEVEL_ORDER).map(([k, v]) => [v, k])
+  Object.entries(LEVEL_ORDER).map(([k, v]) => [v, k]),
 ) as Record<number, LogLevel>;
 
 class LoggerImpl implements Logger {
@@ -70,12 +72,16 @@ class LoggerImpl implements Logger {
   private fields: Record<string, unknown>;
 
   constructor(opts?: LoggerOptions & { _fields?: Record<string, unknown> }) {
-    this.minLevel = LEVEL_ORDER[opts?.level ?? 'debug'];
+    this.minLevel = LEVEL_ORDER[opts?.level ?? "debug"];
     this.service = opts?.service;
     this.fields = { ...opts?.defaultFields, ...opts?._fields };
   }
 
-  private emit(level: LogLevel, msg: string, data?: Record<string, unknown>): void {
+  private emit(
+    level: LogLevel,
+    msg: string,
+    data?: Record<string, unknown>,
+  ): void {
     if (LEVEL_ORDER[level] < this.minLevel) return;
 
     const entry: LogEntry = {
@@ -89,37 +95,37 @@ class LoggerImpl implements Logger {
 
     const line = JSON.stringify(entry);
     switch (level) {
-      case 'debug':
+      case "debug":
         // eslint-disable-next-line no-console -- 実装上のロガー利用
         console.log(line);
         break;
-      case 'info':
+      case "info":
         // eslint-disable-next-line no-console -- 実装上のロガー利用
         console.log(line);
         break;
-      case 'warn':
+      case "warn":
         console.warn(line);
         break;
-      case 'error':
+      case "error":
         console.error(line);
         break;
     }
   }
 
   debug(msg: string, data?: Record<string, unknown>): void {
-    this.emit('debug', msg, data);
+    this.emit("debug", msg, data);
   }
 
   info(msg: string, data?: Record<string, unknown>): void {
-    this.emit('info', msg, data);
+    this.emit("info", msg, data);
   }
 
   warn(msg: string, data?: Record<string, unknown>): void {
-    this.emit('warn', msg, data);
+    this.emit("warn", msg, data);
   }
 
   error(msg: string, data?: Record<string, unknown>): void {
-    this.emit('error', msg, data);
+    this.emit("error", msg, data);
   }
 
   child(fields: Record<string, unknown>): Logger {

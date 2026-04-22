@@ -67,6 +67,7 @@ export const agent = {
   "taskStatus.blocked": "停止中",
   "taskStatus.completed": "完了",
   "taskStatus.cancelled": "中止",
+  "taskStatus.failed": "失敗",
   "taskPriority.low": "低",
   "taskPriority.medium": "中",
   "taskPriority.high": "高",

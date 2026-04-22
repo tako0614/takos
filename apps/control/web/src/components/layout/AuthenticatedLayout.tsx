@@ -78,6 +78,15 @@ export function AuthenticatedLayout(props: { children: JSX.Element }) {
           spaceId: navigation.selectedSpaceId ?? undefined,
         });
       }),
+    onNavigateGroups: () =>
+      navigation.runSidebarAction(() => {
+        navigation.navigate({
+          view: "deploy",
+          spaceId: navigation.selectedSpaceId ?? undefined,
+          deploySection: "groups",
+          groupId: undefined,
+        });
+      }),
     onNavigateApps: () =>
       navigation.runSidebarAction(() => {
         navigation.navigate({
@@ -159,6 +168,16 @@ export function AuthenticatedLayout(props: { children: JSX.Element }) {
         navigation.navigate({
           view: "deploy",
           spaceId: getSpaceIdentifier(navigation.sidebarSpace),
+        });
+      }),
+    onNavigateSpaceGroups: () =>
+      navigation.runSidebarAction(() => {
+        if (!navigation.sidebarSpace) return;
+        navigation.navigate({
+          view: "deploy",
+          spaceId: getSpaceIdentifier(navigation.sidebarSpace),
+          deploySection: "groups",
+          groupId: undefined,
         });
       }),
     onNavigateSpaceRepos: () =>

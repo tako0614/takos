@@ -70,6 +70,6 @@ export {
   SERVICE_OPS,
   SKILL_OPS,
   SPACE_OPERATION_POLICIES,
-  validateCustomToolPolicies,
   SPACE_STORAGE_OPS,
+  validateCustomToolPolicies,
 } from "./tool-policy.ts";

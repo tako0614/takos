@@ -5,12 +5,12 @@
 import process from "node:process";
 import { resolveCloudflareDispatchNamespace } from "./cloudflare-dispatch-namespace.ts";
 
-const CF_API_BASE = 'https://api.cloudflare.com/client/v4';
+const CF_API_BASE = "https://api.cloudflare.com/client/v4";
 
 async function main() {
   const workerName = process.argv[2];
   if (!workerName) {
-    console.error('Usage: npx tsx scripts/delete-wfp-worker.ts <worker-name>');
+    console.error("Usage: npx tsx scripts/delete-wfp-worker.ts <worker-name>");
     process.exit(1);
   }
 
@@ -18,14 +18,15 @@ async function main() {
   // Canonical env vars: CLOUDFLARE_API_TOKEN, CLOUDFLARE_ACCOUNT_ID
   // CF_API_TOKEN and CF_ACCOUNT_ID are deprecated aliases kept for backward compatibility.
   const token = process.env.CLOUDFLARE_API_TOKEN || process.env.CF_API_TOKEN;
-  const accountId = process.env.CLOUDFLARE_ACCOUNT_ID || process.env.CF_ACCOUNT_ID;
+  const accountId = process.env.CLOUDFLARE_ACCOUNT_ID ||
+    process.env.CF_ACCOUNT_ID;
   const namespace = resolveCloudflareDispatchNamespace();
   if (!token) {
-    console.error('CLOUDFLARE_API_TOKEN not set');
+    console.error("CLOUDFLARE_API_TOKEN not set");
     process.exit(1);
   }
   if (!accountId) {
-    console.error('CLOUDFLARE_ACCOUNT_ID not set');
+    console.error("CLOUDFLARE_ACCOUNT_ID not set");
     process.exit(1);
   }
 
@@ -34,20 +35,20 @@ async function main() {
   const response = await fetch(
     `${CF_API_BASE}/accounts/${accountId}/workers/dispatch/namespaces/${namespace}/scripts/${workerName}`,
     {
-      method: 'DELETE',
+      method: "DELETE",
       headers: {
-        'Authorization': `Bearer ${token}`,
+        "Authorization": `Bearer ${token}`,
       },
-    }
+    },
   );
 
   const data = await response.json() as { success?: boolean };
   console.log(JSON.stringify(data, null, 2));
 
   if (data.success) {
-    console.log('Worker deleted successfully');
+    console.log("Worker deleted successfully");
   } else {
-    console.error('Failed to delete worker');
+    console.error("Failed to delete worker");
     process.exit(1);
   }
 }

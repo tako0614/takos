@@ -26,6 +26,7 @@ single worker (web) 構成。
 ```text
 {hostname}
   /     → built frontend / static asset surface (deployment mount)
+  /mcp  → Slide MCP server (streamable HTTP)
 ```
 
 ## Publications
@@ -40,11 +41,19 @@ publish:
     publisher: web
     path: /
     title: Slide
+  - name: slide-mcp
+    type: McpServer
+    publisher: web
+    path: /mcp
+    title: Slide MCP
+    spec:
+      transport: streamable-http
+      authSecretRef: MCP_AUTH_TOKEN
 ```
 
 `UiSurface` は custom route publication type であり、deploy manifest の
-`publish` entry で catalog を管理します。source tree には standalone MCP server
-もあるが、現在の default deploy workflow artifact には含めない。
+`publish` entry で catalog を管理します。`McpServer` は agent runtime が
+参照する MCP catalog entry です。
 
 ## Capability grants
 
@@ -62,10 +71,11 @@ publish:
         - files:write
 ```
 
-default app manifest / workflow は UI の built frontend / static asset surface
-だけを publish する。source tree の standalone MCP server は同じ app source に
-含まれるが、現在の default deploy surface では MCP / health route
-として公開しない。
+default app manifest / workflow は UI と `/mcp` を同じ worker に含める。MCP
+publication は `authSecretRef: MCP_AUTH_TOKEN` を宣言し、control plane が
+worker-scoped secret env を用意する。`compute.web.env` には
+`MCP_AUTH_REQUIRED=1` を設定し、manifest の `routes` は `/` と `/mcp` の両方を
+`web` target に向ける。
 
 ## Scopes
 

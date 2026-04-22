@@ -28,6 +28,7 @@ export default defineConfig({
       { text: "はじめる", link: "/get-started/" },
       { text: "アプリ構成", link: "/apps/" },
       { text: "デプロイ", link: "/deploy/" },
+      { text: "ホスティング", link: "/hosting/" },
       { text: "プラットフォーム", link: "/platform/" },
       { text: "リファレンス", link: "/reference/" },
       { text: "サンプル", link: "/examples/" },
@@ -77,6 +78,7 @@ export default defineConfig({
       {
         text: "ホスティング",
         items: [
+          { text: "概要", link: "/hosting/" },
           { text: "環境ごとの差異", link: "/hosting/differences" },
           { text: "Cloudflare", link: "/hosting/cloudflare" },
           { text: "AWS", link: "/hosting/aws" },
@@ -117,6 +119,7 @@ export default defineConfig({
           { text: "takos-docs", link: "/platform/takos-docs" },
           { text: "takos-excel", link: "/platform/takos-excel" },
           { text: "takos-slide", link: "/platform/takos-slide" },
+          { text: "takos-computer", link: "/platform/takos-computer" },
         ],
       },
       {

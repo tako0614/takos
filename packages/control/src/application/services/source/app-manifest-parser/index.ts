@@ -11,6 +11,7 @@
 //   - name       (required)
 //   - version    (optional — semver if present)
 //   - compute    (required shape)
+//   - resources  (optional managed resource declarations)
 //   - routes     (optional)
 //   - publish    (optional)
 //   - env        (optional — flat Record<string, string>)
@@ -28,6 +29,7 @@ import type {
   AppPublication,
 } from "../app-manifest-types.ts";
 import {
+  asOptionalBoolean,
   asOptionalInteger,
   asRecord,
   asRequiredString,
@@ -45,12 +47,14 @@ import {
 import { validateSemver } from "./parse-common.ts";
 import { parseCompute } from "./parse-compute.ts";
 import { parsePublish } from "./parse-publish.ts";
+import { parseResources } from "./parse-resources.ts";
 import { parseRoutes } from "./parse-routes.ts";
 
 const TOP_LEVEL_FIELDS = new Set([
   "name",
   "version",
   "compute",
+  "resources",
   "routes",
   "publish",
   "env",
@@ -82,6 +86,16 @@ function assertAllowedFields(
 }
 
 function assertAllowedTopLevelFields(record: Record<string, unknown>): void {
+  const envelopeFields = ["apiVersion", "kind", "metadata", "spec"];
+  const hasEnvelopeField = envelopeFields.some((field) =>
+    Object.hasOwn(record, field)
+  );
+  if (hasEnvelopeField) {
+    throw new Error(
+      "Takos app manifests use the flat contract; remove apiVersion/kind/metadata/spec and put name, compute, routes, publish, env, and overrides at the top level",
+    );
+  }
+
   for (const key of Object.keys(record)) {
     if (!TOP_LEVEL_FIELDS.has(key)) {
       throw new Error(`${key} is not supported by the app manifest contract`);
@@ -90,6 +104,7 @@ function assertAllowedTopLevelFields(record: Record<string, unknown>): void {
 }
 
 const OVERRIDE_COMPUTE_FIELDS = new Set([
+  "icon",
   "build",
   "image",
   "port",
@@ -103,6 +118,7 @@ const OVERRIDE_COMPUTE_FIELDS = new Set([
   "healthCheck",
   "dockerfile",
   "consume",
+  "cloudflare",
 ]);
 
 const OVERRIDE_BUILD_FIELDS = new Set(["fromWorkflow"]);
@@ -116,8 +132,18 @@ const OVERRIDE_FROM_WORKFLOW_FIELDS = new Set([
 
 const OVERRIDE_VOLUME_FIELDS = new Set(["source", "target", "persistent"]);
 
-const OVERRIDE_TRIGGER_FIELDS = new Set(["schedules"]);
+const OVERRIDE_TRIGGER_FIELDS = new Set(["schedules", "queues"]);
 const OVERRIDE_SCHEDULE_FIELDS = new Set(["cron"]);
+const OVERRIDE_QUEUE_TRIGGER_FIELDS = new Set([
+  "binding",
+  "queue",
+  "deadLetterQueue",
+  "maxBatchSize",
+  "maxConcurrency",
+  "maxRetries",
+  "maxWaitTimeMs",
+  "retryDelaySeconds",
+]);
 const OVERRIDE_CONSUME_FIELDS = new Set(["publication", "env"]);
 const OVERRIDE_PUBLISH_FIELDS = new Set([
   "name",
@@ -128,11 +154,39 @@ const OVERRIDE_PUBLISH_FIELDS = new Set([
   "title",
 ]);
 
+const OVERRIDE_RESOURCE_FIELDS = new Set([
+  "type",
+  "bind",
+  "to",
+  "bindings",
+  "migrations",
+  "queue",
+  "vectorIndex",
+  "generate",
+  "analyticsEngine",
+  "workflow",
+  "durableObject",
+]);
+
 const OVERRIDE_HEALTH_CHECK_FIELDS = new Set([
   "path",
   "interval",
   "timeout",
   "unhealthyThreshold",
+]);
+const OVERRIDE_CLOUDFLARE_FIELDS = new Set(["container"]);
+const OVERRIDE_CLOUDFLARE_CONTAINER_FIELDS = new Set([
+  "binding",
+  "className",
+  "instanceType",
+  "maxInstances",
+  "name",
+  "imageBuildContext",
+  "imageVars",
+  "rolloutActiveGracePeriod",
+  "rolloutStepPercentage",
+  "migrationTag",
+  "sqlite",
 ]);
 
 function parseOverrideBuild(
@@ -208,7 +262,10 @@ function parseOverrideVolumes(
     const target = asString(mountRecord.target, `${prefix}.${name}.target`);
     if (target) mount.target = target;
     if (mountRecord.persistent != null) {
-      mount.persistent = Boolean(mountRecord.persistent);
+      mount.persistent = asOptionalBoolean(
+        mountRecord.persistent,
+        `${prefix}.${name}.persistent`,
+      );
     }
     result[name] = mount;
   }
@@ -235,6 +292,89 @@ function parseOverrideSchedules(
   });
 }
 
+function parseOverrideQueueBindingName(
+  raw: unknown,
+  field: string,
+): string | undefined {
+  const value = asString(raw, field);
+  if (!value) return undefined;
+  if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(value)) {
+    throw new Error(`${field} must be a valid worker binding name`);
+  }
+  return value.toUpperCase();
+}
+
+function parseOverrideQueues(
+  prefix: string,
+  raw: unknown,
+): Record<string, unknown>[] | undefined {
+  if (raw == null) return undefined;
+  if (!Array.isArray(raw)) {
+    throw new Error(`${prefix} must be an array`);
+  }
+  return raw.map((entry, index) => {
+    const queuePrefix = `${prefix}[${index}]`;
+    const record = requireRecord(entry, queuePrefix);
+    assertAllowedFields(
+      record,
+      queuePrefix,
+      OVERRIDE_QUEUE_TRIGGER_FIELDS,
+    );
+    const binding = parseOverrideQueueBindingName(
+      record.binding,
+      `${queuePrefix}.binding`,
+    );
+    const queue = asString(record.queue, `${queuePrefix}.queue`);
+    if (binding && queue) {
+      throw new Error(
+        `${queuePrefix} must specify either binding or queue, not both`,
+      );
+    }
+    if (!binding && !queue) {
+      throw new Error(`${queuePrefix} requires binding or queue`);
+    }
+    const deadLetterQueue = asString(
+      record.deadLetterQueue,
+      `${queuePrefix}.deadLetterQueue`,
+    );
+    const maxBatchSize = asOptionalInteger(
+      record.maxBatchSize,
+      `${queuePrefix}.maxBatchSize`,
+      { min: 1 },
+    );
+    const maxConcurrency = asOptionalInteger(
+      record.maxConcurrency,
+      `${queuePrefix}.maxConcurrency`,
+      { min: 1 },
+    );
+    const maxRetries = asOptionalInteger(
+      record.maxRetries,
+      `${queuePrefix}.maxRetries`,
+      { min: 0 },
+    );
+    const maxWaitTimeMs = asOptionalInteger(
+      record.maxWaitTimeMs,
+      `${queuePrefix}.maxWaitTimeMs`,
+      { min: 0 },
+    );
+    const retryDelaySeconds = asOptionalInteger(
+      record.retryDelaySeconds,
+      `${queuePrefix}.retryDelaySeconds`,
+      { min: 0 },
+    );
+    return {
+      ...(binding ? { binding } : {}),
+      ...(queue ? { queue } : {}),
+      ...(deadLetterQueue ? { deadLetterQueue } : {}),
+      ...(maxBatchSize != null ? { maxBatchSize } : {}),
+      ...(maxConcurrency != null ? { maxConcurrency } : {}),
+      ...(maxRetries != null ? { maxRetries } : {}),
+      ...(maxWaitTimeMs != null ? { maxWaitTimeMs } : {}),
+      ...(retryDelaySeconds != null ? { retryDelaySeconds } : {}),
+    };
+  });
+}
+
 function parseOverrideTriggers(
   prefix: string,
   raw: unknown,
@@ -246,8 +386,10 @@ function parseOverrideTriggers(
     `${prefix}.schedules`,
     record.schedules,
   );
+  const queues = parseOverrideQueues(`${prefix}.queues`, record.queues);
   const result: Record<string, unknown> = {};
   if (schedules) result.schedules = schedules;
+  if (queues) result.queues = queues;
   return result;
 }
 
@@ -306,6 +448,28 @@ function parseOverrideConsumes(
   });
 }
 
+function parseOverrideCloudflare(
+  prefix: string,
+  raw: unknown,
+): Record<string, unknown> | undefined {
+  if (raw == null) return undefined;
+  const record = requireRecord(raw, prefix);
+  assertAllowedFields(record, prefix, OVERRIDE_CLOUDFLARE_FIELDS);
+  const result: Record<string, unknown> = {};
+
+  if (record.container != null) {
+    const container = requireRecord(record.container, `${prefix}.container`);
+    assertAllowedFields(
+      container,
+      `${prefix}.container`,
+      OVERRIDE_CLOUDFLARE_CONTAINER_FIELDS,
+    );
+    result.container = { ...container };
+  }
+
+  return Object.keys(result).length > 0 ? result : undefined;
+}
+
 function parseOverrideComputeEntry(
   prefix: string,
   raw: unknown,
@@ -314,6 +478,9 @@ function parseOverrideComputeEntry(
   assertAllowedFields(record, prefix, OVERRIDE_COMPUTE_FIELDS);
 
   const result: Record<string, unknown> = {};
+  const icon = asString(record.icon, `${prefix}.icon`);
+  if (icon) result.icon = icon;
+
   const build = parseOverrideBuild(`${prefix}.build`, record.build);
   if (build !== undefined) result.build = build;
 
@@ -356,6 +523,12 @@ function parseOverrideComputeEntry(
 
   const consume = parseOverrideConsumes(`${prefix}.consume`, record.consume);
   if (consume) result.consume = consume;
+
+  const cloudflare = parseOverrideCloudflare(
+    `${prefix}.cloudflare`,
+    record.cloudflare,
+  );
+  if (cloudflare) result.cloudflare = cloudflare;
 
   const healthCheck = parseOverrideHealthCheck(
     `${prefix}.healthCheck`,
@@ -438,6 +611,21 @@ function parseOverridePublish(
   );
 }
 
+function parseOverrideResources(
+  raw: unknown,
+): Record<string, unknown> | undefined {
+  if (raw == null) return undefined;
+  const record = requireRecord(raw, "overrides.resources");
+  const result: Record<string, unknown> = {};
+  for (const [resourceName, value] of Object.entries(record)) {
+    const prefix = `overrides.resources.${resourceName}`;
+    const resourceRecord = requireRecord(value, prefix);
+    assertAllowedFields(resourceRecord, prefix, OVERRIDE_RESOURCE_FIELDS);
+    result[resourceName] = resourceRecord;
+  }
+  return result;
+}
+
 function parseOverrides(
   raw: unknown,
 ): Record<string, AppManifestOverride> | undefined {
@@ -449,7 +637,7 @@ function parseOverrides(
     assertAllowedFields(
       envRecord,
       `overrides.${envName}`,
-      new Set(["compute", "routes", "publish", "env"]),
+      new Set(["compute", "routes", "publish", "env", "resources"]),
     );
     const entry: AppManifestOverride = {};
     if (envRecord.compute != null) {
@@ -477,36 +665,14 @@ function parseOverrides(
       const envMap = asStringMap(envRecord.env, `overrides.${envName}.env`);
       if (envMap) entry.env = envMap;
     }
+    if (envRecord.resources != null) {
+      entry.resources = parseOverrideResources(envRecord.resources) as never;
+    }
     if (Object.keys(entry).length > 0) {
       result[envName] = entry;
     }
   }
   return Object.keys(result).length > 0 ? result : undefined;
-}
-
-function validatePublicationRoutes(
-  publish: AppPublication[],
-  routes: Array<{ target: string; path: string }>,
-): void {
-  for (const [index, publication] of publish.entries()) {
-    if (publication.publisher === "takos") continue;
-    const target = publication.publisher;
-    const path = publication.path;
-    if (!target || !path) continue;
-    const matches = routes.filter((route) =>
-      route.target === target && route.path === path
-    );
-    if (matches.length === 0) {
-      throw new Error(
-        `publish[${index}] publisher/path does not match any route: ${target} ${path}`,
-      );
-    }
-    if (matches.length > 1) {
-      throw new Error(
-        `publish[${index}] publisher/path matches multiple routes: ${target} ${path}`,
-      );
-    }
-  }
 }
 
 export function parseAppManifestYaml(raw: string): AppManifest {
@@ -524,9 +690,9 @@ export function parseAppManifestYaml(raw: string): AppManifest {
 
   // --- Major sections ---
   const compute = parseCompute(record);
+  const resources = parseResources(record, compute);
   const routes = parseRoutes(record, compute);
   const publish = parsePublish(record);
-  validatePublicationRoutes(publish, routes);
 
   // --- Env (flat Record<string, string>) ---
   const env = asStringMap(record.env, "env") ?? {};
@@ -551,6 +717,7 @@ export function parseAppManifestYaml(raw: string): AppManifest {
     name,
     ...(version ? { version } : {}),
     compute,
+    resources,
     routes,
     publish,
     env,

@@ -39,7 +39,44 @@ const denoConfig = JSON.parse(
 ) as {
   tasks?: Record<string, string>;
 };
+
+function assertSourceMatches(source: string, pattern: RegExp): void {
+  assert(
+    pattern.test(source),
+    `Expected source to match ${pattern}`,
+  );
+}
 const tasks = denoConfig.tasks ?? {};
+
+const postBaselineMigrationTables = [
+  "ap_delivery_queue",
+  "ap_followers",
+  "group_deployment_snapshots",
+  "groups",
+  "memory_claim_edges",
+  "memory_claims",
+  "memory_evidence",
+  "memory_paths",
+  "publications",
+  "repo_grants",
+  "repo_push_activities",
+  "service_bindings",
+  "service_common_env_links",
+  "service_consumes",
+  "service_env_vars",
+  "service_mcp_endpoints",
+  "service_runtime_flags",
+  "service_runtime_limits",
+  "service_runtime_settings",
+  "service_runtimes",
+  "services",
+  "store_inventory_items",
+  "store_registry",
+  "store_registry_updates",
+  "stripe_webhook_events",
+  "tenant_workflow_instances",
+  "tool_operations",
+];
 
 function parseBaselineTables(source: string): string[] {
   return [
@@ -71,8 +108,11 @@ function parseDropTables(source: string): string[] {
 }
 Deno.test("reset DB inventory - keeps reset-db.js aligned with the canonical baseline SQL table inventory", () => {
   const baselineTables = [
-    ...parseBaselineTables(baselineSql),
-    ...parseBaselineTables(defaultAppDistributionSql),
+    ...new Set([
+      ...parseBaselineTables(baselineSql),
+      ...parseBaselineTables(defaultAppDistributionSql),
+      ...postBaselineMigrationTables,
+    ]),
   ].sort();
   const resetTables = parseQuotedArray(resetDbScript, "TABLES");
 
@@ -122,10 +162,10 @@ Deno.test("reset DB inventory - requires explicit remote environment selection f
     offloadBackfillScript,
     "--remote requires --env staging|production",
   );
-  assertStringIncludes(offloadBackfillScript, "const D1_TARGET = 'DB';");
+  assertSourceMatches(offloadBackfillScript, /const D1_TARGET = ["']DB["'];/);
   assert(!offloadBackfillScript.includes("takos-control-db"));
   assertStringIncludes(fixWorkerBindingsScript, "--env staging|production");
-  assertStringIncludes(fixWorkerBindingsScript, "'DB'");
+  assertSourceMatches(fixWorkerBindingsScript, /["']DB["']/);
   assert(!fixWorkerBindingsScript.includes("takos-control-db"));
 });
 
@@ -136,8 +176,11 @@ Deno.test("reset DB inventory - keeps OAuth seed SQL aligned with the canonical 
 
 Deno.test("reset DB inventory - keeps drop_all.sql aligned with the canonical baseline SQL table inventory", () => {
   const baselineTables = [
-    ...parseBaselineTables(baselineSql),
-    ...parseBaselineTables(defaultAppDistributionSql),
+    ...new Set([
+      ...parseBaselineTables(baselineSql),
+      ...parseBaselineTables(defaultAppDistributionSql),
+      ...postBaselineMigrationTables,
+    ]),
   ].sort();
   const dropTables = parseDropTables(dropAllSql);
 

@@ -1,22 +1,33 @@
-import type { Queue, D1Database } from '../../../shared/types/bindings.ts';
-import { createExecutionPlan, type Workflow, type Job } from 'takos-actions-engine';
-import { generateId } from '../../../shared/utils/index.ts';
-import { getDb, workflowSecrets, workflowJobs, workflowSteps } from '../../../infra/db/index.ts';
-import { eq } from 'drizzle-orm';
+import type { D1Database, Queue } from "../../../shared/types/bindings.ts";
+import {
+  createExecutionPlan,
+  type Job,
+  type Workflow,
+} from "takos-actions-engine";
+import { generateId } from "../../../shared/utils/index.ts";
+import {
+  getDb,
+  workflowJobs,
+  workflowSecrets,
+  workflowSteps,
+} from "../../../infra/db/index.ts";
+import { eq } from "drizzle-orm";
 import {
   WORKFLOW_QUEUE_MESSAGE_VERSION,
   type WorkflowJobQueueMessage,
-} from '../../../shared/types/index.ts';
-import { buildWorkflowDispatchEnv } from './actions-env.ts';
-import { logWarn } from '../../../shared/utils/logger.ts';
-import { toWorkflowJobDefinition } from '../execution/workflow-engine-converters.ts';
+} from "../../../shared/types/index.ts";
+import { buildWorkflowDispatchEnv } from "./actions-env.ts";
+import { logWarn } from "../../../shared/utils/logger.ts";
+import { toWorkflowJobDefinition } from "../execution/workflow-engine-converters.ts";
 
 export async function getWorkflowSecretIds(
   db: D1Database,
-  repoId: string
+  repoId: string,
 ): Promise<string[]> {
   const drizzle = getDb(db);
-  const secretRecords = await drizzle.select({ id: workflowSecrets.id }).from(workflowSecrets).where(eq(workflowSecrets.repoId, repoId)).all();
+  const secretRecords = await drizzle.select({ id: workflowSecrets.id }).from(
+    workflowSecrets,
+  ).where(eq(workflowSecrets.repoId, repoId)).all();
   return secretRecords.map((s) => s.id);
 }
 
@@ -31,10 +42,23 @@ export async function enqueueFirstPhaseJobs(options: {
   sha: string;
   db: D1Database;
 }) {
-  const { queue, workflow, workflowPath, jobKeyToId, repoId, runId, ref, sha, db } = options;
+  const {
+    queue,
+    workflow,
+    workflowPath,
+    jobKeyToId,
+    repoId,
+    runId,
+    ref,
+    sha,
+    db,
+  } = options;
 
   if (!queue) {
-    logWarn('WORKFLOW_QUEUE not configured, workflow jobs will not be enqueued', { module: 'services/actions/actions-execution' });
+    logWarn(
+      "WORKFLOW_QUEUE not configured, workflow jobs will not be enqueued",
+      { module: "services/actions/actions-execution" },
+    );
     return;
   }
 
@@ -63,7 +87,7 @@ export async function enqueueFirstPhaseJobs(options: {
 
     const message: WorkflowJobQueueMessage = {
       version: WORKFLOW_QUEUE_MESSAGE_VERSION,
-      type: 'job',
+      type: "job",
       runId,
       jobId,
       repoId,
@@ -121,7 +145,7 @@ export async function createWorkflowJobs(options: {
       runId,
       jobKey,
       name: jobName,
-      status: 'queued',
+      status: "queued",
       queuedAt: timestamp,
       createdAt: timestamp,
     });
@@ -129,14 +153,15 @@ export async function createWorkflowJobs(options: {
     for (let i = 0; i < jobDef.steps.length; i++) {
       const step = jobDef.steps[i];
       const stepId = generateId();
-      const stepName = step.name || step.uses || step.run?.slice(0, 50) || `Step ${i + 1}`;
+      const stepName = step.name || step.uses || step.run?.slice(0, 50) ||
+        `Step ${i + 1}`;
 
       stepDataList.push({
         id: stepId,
         jobId,
         number: i + 1,
         name: stepName,
-        status: 'pending',
+        status: "pending",
         runCommand: step.run || null,
         usesAction: step.uses || null,
         createdAt: timestamp,

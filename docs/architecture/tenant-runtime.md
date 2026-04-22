@@ -42,7 +42,8 @@ scope での役割が異なる。
   を管理する
 - Cloudflare backend でも current 実装では OCI deployment adapter を使う
 - AWS / GCP / k8s では backend-specific adapter (`ecs`, `cloud-run`, `k8s`)
-  に解決される
+  に解決される。`ecs` / `cloud-run` は tenant image workload adapter であり、
+  Takos kernel hosting target ではない
 - `image` は digest pin (`@sha256:...`) 必須。rollback は group snapshot
   に保存された image ref と execution context を再適用する
 - Service / Attached Container は listen port を推測しないため、manifest の
@@ -97,7 +98,7 @@ dispatch は次を行う。
 ## Cloudflare backend
 
 Cloudflare では `worker-bundle` を Workers backend に載せ、tenant runtime
-として実行する。
+として実行する。Cloudflare は reference / primary backend。
 
 - deploy backend は Cloudflare backend
 - worker artifact は Cloudflare Workers backend で materialize
@@ -120,13 +121,16 @@ Cloudflare account なしで tenant worker contract を検証するための bac
 
 ## Backend-specific runtime backends
 
-AWS / GCP / k8s では public spec は変わらないが、runtime topology は
-backend-specific になる。
+AWS / GCP の current hosting docs は k8s Helm overlay です。runtime topology は
+operator が選ぶ backing service と adapter に依存します。
 
 - worker workload: operator-selected worker runtime path
 - image-backed workload: `ecs` / `cloud-run` / `k8s` など backend-specific
-  container service
+  tenant image workload adapter
 - routing: Takos-managed hostname routing + backend ingress
+
+hosting surface の contract 境界は
+[Not A Current Contract](/hosting/differences#not-a-current-contract) を参照。
 
 ## Routing contract
 
@@ -153,5 +157,7 @@ tenant runtime を再現する。
 
 ## Compatibility
 
-Takos は backend-neutral tenant contract を共有するが、backend
-は同一ではない。詳細は [互換性と制限](./compatibility.md) を参照。
+Takos は backend-neutral tenant contract を共有するが、compatible は schema /
+translation parity を指し、runtime behavior や resource existence
+の一致ではない。 詳細は [互換性と制限](./compatibility.md) と
+[環境ごとの差異](/hosting/differences) を参照。

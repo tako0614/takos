@@ -23,7 +23,7 @@ import {
 } from "./domain-models.ts";
 import type { AddCustomDomainResult, DnsInstruction } from "./domain-models.ts";
 import { getServiceForUser, requireServiceWriteAccess } from "./access.ts";
-import { deleteCloudflareCustomHostname } from "./cloudflare.ts";
+import { deleteManagedCustomHostname } from "./custom-hostname-provider.ts";
 import {
   getCanonicalCnameTargetForService,
   resolveRoutingTargetForServiceHostname,
@@ -303,15 +303,15 @@ export async function deleteCustomDomain(
 
   if (customDomain.cfCustomHostnameId) {
     try {
-      await deleteCloudflareCustomHostname(
+      await deleteManagedCustomHostname(
         env,
         customDomain.cfCustomHostnameId,
       );
     } catch (cfError) {
-      logError("Failed to delete Cloudflare custom hostname", cfError, {
+      logError("Failed to delete managed custom hostname", cfError, {
         module: "services/platform/custom-domains",
       });
-      cleanupErrors.push("Cloudflare hostname cleanup failed");
+      cleanupErrors.push("Managed hostname cleanup failed");
     }
   }
 

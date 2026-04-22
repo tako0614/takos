@@ -4,9 +4,9 @@
 import type {
   ExecutionContext,
   GitHubContext,
-  RunnerContext,
   InputsContext,
-} from './workflow-models.ts';
+  RunnerContext,
+} from "./workflow-models.ts";
 
 // ---------------------------------------------------------------------------
 // ベースコンテキスト
@@ -34,46 +34,54 @@ export interface ContextBuilderOptions {
  * ベース実行コンテキストを作成する
  */
 export function createBaseContext(
-  options: ContextBuilderOptions = {}
+  options: ContextBuilderOptions = {},
 ): ExecutionContext {
   const os = process.platform;
   const arch = process.arch;
 
   const github: GitHubContext = {
-    event_name: 'push',
+    event_name: "push",
     event: {},
-    ref: 'refs/heads/main',
-    ref_name: 'main',
-    sha: '0000000000000000000000000000000000000000',
-    repository: 'owner/repo',
-    repository_owner: 'owner',
-    actor: 'actor',
-    workflow: 'workflow',
-    job: 'job',
-    run_id: '1',
+    ref: "refs/heads/main",
+    ref_name: "main",
+    sha: "0000000000000000000000000000000000000000",
+    repository: "owner/repo",
+    repository_owner: "owner",
+    actor: "actor",
+    workflow: "workflow",
+    job: "job",
+    run_id: "1",
     run_number: 1,
     run_attempt: 1,
-    server_url: 'https://github.com',
-    api_url: 'https://api.github.com',
-    graphql_url: 'https://api.github.com/graphql',
-    workspace: '/home/runner/work/repo/repo',
-    action: '',
-    action_path: '',
-    token: '',
+    server_url: "https://github.com",
+    api_url: "https://api.github.com",
+    graphql_url: "https://api.github.com/graphql",
+    workspace: "/home/runner/work/repo/repo",
+    action: "",
+    action_path: "",
+    token: "",
     ...options.github,
   };
 
-  const osName = os === 'win32' ? 'Windows' as const : os === 'darwin' ? 'macOS' as const : 'Linux' as const;
-  const archMap: Record<string, 'X64' | 'ARM64' | 'ARM' | 'X86'> = { x64: 'X64', arm64: 'ARM64', arm: 'ARM' };
-  const archName = archMap[arch] ?? 'X86';
+  const osName = os === "win32"
+    ? "Windows" as const
+    : os === "darwin"
+    ? "macOS" as const
+    : "Linux" as const;
+  const archMap: Record<string, "X64" | "ARM64" | "ARM" | "X86"> = {
+    x64: "X64",
+    arm64: "ARM64",
+    arm: "ARM",
+  };
+  const archName = archMap[arch] ?? "X86";
 
   const runner: RunnerContext = {
-    name: 'local-runner',
+    name: "local-runner",
     os: osName,
     arch: archName,
-    temp: Deno.env.get('RUNNER_TEMP') || '/tmp',
-    tool_cache: Deno.env.get('RUNNER_TOOL_CACHE') || '/opt/hostedtoolcache',
-    debug: Deno.env.get('RUNNER_DEBUG') || '',
+    temp: Deno.env.get("RUNNER_TEMP") || "/tmp",
+    tool_cache: Deno.env.get("RUNNER_TOOL_CACHE") || "/opt/hostedtoolcache",
+    debug: Deno.env.get("RUNNER_DEBUG") || "",
     ...options.runner,
   };
 
@@ -83,7 +91,7 @@ export function createBaseContext(
     vars: options.vars || {},
     secrets: options.secrets || {},
     runner,
-    job: { status: 'success' },
+    job: { status: "success" },
     steps: {},
     needs: {},
     inputs: options.inputs,
@@ -110,14 +118,14 @@ const GITHUB_ENV_SIMPLE_PATTERN = /^([a-zA-Z_][a-zA-Z0-9_]*)=(.*)$/;
 export function parseGitHubEnvFile(content: string): Record<string, string> {
   const env: Record<string, string> = {};
   const lines = content
-    .split('\n')
-    .map((line) => (line.endsWith('\r') ? line.slice(0, -1) : line));
+    .split("\n")
+    .map((line) => (line.endsWith("\r") ? line.slice(0, -1) : line));
   let i = 0;
 
   while (i < lines.length) {
     const line = lines[i].trim();
 
-    if (!line || line.startsWith('#')) {
+    if (!line || line.startsWith("#")) {
       i++;
       continue;
     }
@@ -134,7 +142,7 @@ export function parseGitHubEnvFile(content: string): Record<string, string> {
         i++;
       }
 
-      env[name] = valueLines.join('\n');
+      env[name] = valueLines.join("\n");
       i++; // Skip delimiter line
       continue;
     }

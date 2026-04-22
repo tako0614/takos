@@ -1,6 +1,8 @@
-import type { BillingMode, BillingTopupPack } from '../../types/index.ts';
+import type { BillingMode, BillingTopupPack } from "../../types/index.ts";
 
-export function sortBillingTopupPacks(packs: BillingTopupPack[]): BillingTopupPack[] {
+export function sortBillingTopupPacks(
+  packs: BillingTopupPack[],
+): BillingTopupPack[] {
   return [...packs].sort((left, right) => {
     if (left.featured !== right.featured) {
       return left.featured ? -1 : 1;
@@ -12,18 +14,22 @@ export function sortBillingTopupPacks(packs: BillingTopupPack[]): BillingTopupPa
   });
 }
 
-export function formatBillingCurrency(cents: number, language: 'ja' | 'en', currency = 'USD'): string {
-  const locale = language === 'ja' ? 'ja-JP' : 'en-US';
+export function formatBillingCurrency(
+  cents: number,
+  language: "ja" | "en",
+  currency = "USD",
+): string {
+  const locale = language === "ja" ? "ja-JP" : "en-US";
   try {
     return new Intl.NumberFormat(locale, {
-      style: 'currency',
+      style: "currency",
       currency,
       maximumFractionDigits: 2,
     }).format(cents / 100);
   } catch {
     return new Intl.NumberFormat(locale, {
-      style: 'currency',
-      currency: 'USD',
+      style: "currency",
+      currency: "USD",
       maximumFractionDigits: 2,
     }).format(cents / 100);
   }
@@ -31,32 +37,34 @@ export function formatBillingCurrency(cents: number, language: 'ja' | 'en', curr
 
 export function formatBillingDate(
   value: string | number | null | undefined,
-  language: 'ja' | 'en',
+  language: "ja" | "en",
 ): string {
   if (value == null) {
-    return '-';
+    return "-";
   }
 
-  const date = typeof value === 'number'
+  const date = typeof value === "number"
     ? new Date(value * 1000)
     : new Date(value);
   if (Number.isNaN(date.getTime())) {
-    return '-';
+    return "-";
   }
 
-  return new Intl.DateTimeFormat(language === 'ja' ? 'ja-JP' : 'en-US', {
-    year: 'numeric',
-    month: 'short',
-    day: 'numeric',
+  return new Intl.DateTimeFormat(language === "ja" ? "ja-JP" : "en-US", {
+    year: "numeric",
+    month: "short",
+    day: "numeric",
   }).format(date);
 }
 
-export function describeBillingMode(mode: BillingMode): 'free' | 'plus' | 'pro' {
-  if (mode === 'plus_subscription') {
-    return 'plus';
+export function describeBillingMode(
+  mode: BillingMode,
+): "free" | "plus" | "pro" {
+  if (mode === "plus_subscription") {
+    return "plus";
   }
-  if (mode === 'pro_prepaid') {
-    return 'pro';
+  if (mode === "pro_prepaid") {
+    return "pro";
   }
-  return 'free';
+  return "free";
 }

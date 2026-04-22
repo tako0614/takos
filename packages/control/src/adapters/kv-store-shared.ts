@@ -9,7 +9,7 @@
 // ---------------------------------------------------------------------------
 
 /** The `type` parameter accepted by `KVNamespace.get()`. */
-export type KVValueType = 'text' | 'json' | 'arrayBuffer' | 'stream';
+export type KVValueType = "text" | "json" | "arrayBuffer" | "stream";
 
 /** Shape returned by `KVNamespace.getWithMetadata()`. */
 export type KVGetWithMetadataResult = {
@@ -46,9 +46,11 @@ export function nowEpoch(): number {
  * Handles the various shapes backends hand us (string from DynamoDB
  * `AttributeValue.N`, number from Firestore, or undefined/null).
  */
-export function isExpired(expiration: string | number | null | undefined): boolean {
+export function isExpired(
+  expiration: string | number | null | undefined,
+): boolean {
   if (expiration === undefined || expiration === null) return false;
-  const exp = typeof expiration === 'string' ? Number(expiration) : expiration;
+  const exp = typeof expiration === "string" ? Number(expiration) : expiration;
   return exp > 0 && exp <= nowEpoch();
 }
 
@@ -65,7 +67,9 @@ export function computeExpiration(options?: {
   expirationTtl?: number;
 }): number | null {
   if (options?.expiration !== undefined) return options.expiration;
-  if (options?.expirationTtl !== undefined) return nowEpoch() + options.expirationTtl;
+  if (options?.expirationTtl !== undefined) {
+    return nowEpoch() + options.expirationTtl;
+  }
   return null;
 }
 
@@ -82,11 +86,11 @@ export function computeExpiration(options?: {
  */
 export function coerceValue(raw: string, type?: KVValueType): unknown {
   switch (type) {
-    case 'json':
+    case "json":
       return JSON.parse(raw);
-    case 'arrayBuffer':
+    case "arrayBuffer":
       return new TextEncoder().encode(raw).buffer;
-    case 'stream': {
+    case "stream": {
       const bytes = new TextEncoder().encode(raw);
       return new ReadableStream({
         start(controller) {
@@ -95,7 +99,7 @@ export function coerceValue(raw: string, type?: KVValueType): unknown {
         },
       });
     }
-    case 'text':
+    case "text":
     default:
       return raw;
   }
@@ -112,7 +116,7 @@ export function coerceValue(raw: string, type?: KVValueType): unknown {
 export async function serializeValue(
   value: string | ArrayBuffer | ReadableStream,
 ): Promise<string> {
-  if (typeof value === 'string') return value;
+  if (typeof value === "string") return value;
 
   if (value instanceof ArrayBuffer) {
     return new TextDecoder().decode(value);
@@ -148,6 +152,6 @@ export function deserializeMetadata(
   raw: string | Record<string, string> | null | undefined,
 ): Record<string, string> | null {
   if (!raw) return null;
-  if (typeof raw === 'string') return JSON.parse(raw) as Record<string, string>;
+  if (typeof raw === "string") return JSON.parse(raw) as Record<string, string>;
   return raw;
 }

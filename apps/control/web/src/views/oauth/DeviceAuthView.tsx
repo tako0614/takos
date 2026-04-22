@@ -120,127 +120,126 @@ export function DeviceAuthView() {
     }
   };
 
-  if (loading()) {
-    return <LoadingScreen />;
-  }
+  const renderContent = () => {
+    if (loading()) {
+      return <LoadingScreen />;
+    }
 
-  const currentState = state();
-  if (!currentState) {
-    return <LoadingScreen />;
-  }
+    const currentState = state();
+    if (!currentState) {
+      return <LoadingScreen />;
+    }
 
-  // Code entry screen
-  if (currentState.status === "code_entry") {
-    const s = currentState;
+    if (currentState.status === "code_entry") {
+      const s = currentState;
+      return (
+        <ConsentLayout>
+          <ConsentLogo />
+          <h1 class="text-xl font-bold text-[var(--color-text-primary)] mb-2">
+            {t("deviceAuthTitle")}
+          </h1>
+          <p class="text-xs text-[var(--color-text-tertiary)] mb-4">
+            {s.user.email} {t("oauthConsentLoggedInAs")}
+          </p>
+          <p class="text-sm text-[var(--color-text-secondary)] mb-4">
+            {t("deviceAuthCodePrompt")}
+          </p>
+          <form onSubmit={handleCodeSubmit} class="text-left">
+            <label class="block text-xs text-[var(--color-text-tertiary)] mb-2">
+              {t("deviceAuthCodeLabel")}
+            </label>
+            <input
+              type="text"
+              value={codeInput()}
+              onInput={(e) => setCodeInput(e.currentTarget.value)}
+              autocomplete="one-time-code"
+              inputmode="text"
+              placeholder={t("deviceAuthCodePlaceholder")}
+              required
+              class="w-full px-3 py-3 rounded-lg border border-[var(--color-border-primary)] bg-[var(--color-bg-primary)] text-[var(--color-text-primary)] text-base tracking-wider uppercase placeholder:text-[var(--color-text-tertiary)] placeholder:normal-case placeholder:tracking-normal"
+            />
+            <div class="mt-4">
+              <Button variant="primary" class="w-full" type="submit">
+                {t("deviceAuthContinue")}
+              </Button>
+            </div>
+          </form>
+        </ConsentLayout>
+      );
+    }
+
+    if (currentState.status === "consent_required") {
+      const s = currentState;
+      return (
+        <ConsentLayout>
+          <ConsentLogo src={s.client.logo_uri} />
+          <h1 class="text-lg font-bold text-[var(--color-text-primary)] mb-1">
+            {s.client.name}
+          </h1>
+          <p class="text-xs text-[var(--color-text-tertiary)] mb-4">
+            {s.user.email} {t("oauthConsentLoggedInAs")}
+          </p>
+          <p class="text-sm text-[var(--color-text-secondary)] mb-2">
+            <strong class="text-[var(--color-text-primary)]">
+              {s.client.name}
+            </strong>
+            {t("oauthConsentDeviceRequesting")}
+          </p>
+          <p class="text-xs text-[var(--color-text-tertiary)] mb-4">
+            {t("deviceAuthCode")}:{" "}
+            <span class="tracking-wider uppercase text-[var(--color-text-secondary)]">
+              {s.user_code}
+            </span>
+          </p>
+
+          <div class="mb-4">
+            <ScopeList
+              identity={s.scopes.identity}
+              resources={s.scopes.resources}
+            />
+          </div>
+
+          <div class="flex gap-3">
+            <Button
+              variant="secondary"
+              class="flex-1"
+              disabled={submitting()}
+              onClick={() => handleDecision("deny")}
+            >
+              {t("oauthConsentDeny")}
+            </Button>
+            <Button
+              variant="primary"
+              class="flex-1"
+              isLoading={submitting()}
+              onClick={() => handleDecision("allow")}
+            >
+              {t("oauthConsentAllow")}
+            </Button>
+          </div>
+        </ConsentLayout>
+      );
+    }
+
+    if (currentState.status === "unauthenticated") {
+      return <LoadingScreen />;
+    }
+
     return (
       <ConsentLayout>
         <ConsentLogo />
         <h1 class="text-xl font-bold text-[var(--color-text-primary)] mb-2">
-          {t("deviceAuthTitle")}
+          {currentState.title}
         </h1>
-        <p class="text-xs text-[var(--color-text-tertiary)] mb-4">
-          {s.user.email} {t("oauthConsentLoggedInAs")}
-        </p>
         <p class="text-sm text-[var(--color-text-secondary)] mb-4">
-          {t("deviceAuthCodePrompt")}
+          {currentState.message}
         </p>
-        <form onSubmit={handleCodeSubmit} class="text-left">
-          <label class="block text-xs text-[var(--color-text-tertiary)] mb-2">
-            {t("deviceAuthCodeLabel")}
-          </label>
-          <input
-            type="text"
-            value={codeInput()}
-            onInput={(e) => setCodeInput(e.target.value)}
-            autocomplete="one-time-code"
-            inputmode="text"
-            placeholder={t("deviceAuthCodePlaceholder")}
-            required
-            class="w-full px-3 py-3 rounded-lg border border-[var(--color-border-primary)] bg-[var(--color-bg-primary)] text-[var(--color-text-primary)] text-base tracking-wider uppercase placeholder:text-[var(--color-text-tertiary)] placeholder:normal-case placeholder:tracking-normal"
-          />
-          <div class="mt-4">
-            <Button variant="primary" class="w-full" type="submit">
-              {t("deviceAuthContinue")}
-            </Button>
-          </div>
-        </form>
+        <a href="/" class="text-sm text-[var(--color-primary)] hover:underline">
+          Home
+        </a>
       </ConsentLayout>
     );
-  }
+  };
 
-  // Consent screen
-  if (currentState.status === "consent_required") {
-    const s = currentState;
-    return (
-      <ConsentLayout>
-        <ConsentLogo src={s.client.logo_uri} />
-        <h1 class="text-lg font-bold text-[var(--color-text-primary)] mb-1">
-          {s.client.name}
-        </h1>
-        <p class="text-xs text-[var(--color-text-tertiary)] mb-4">
-          {s.user.email} {t("oauthConsentLoggedInAs")}
-        </p>
-        <p class="text-sm text-[var(--color-text-secondary)] mb-2">
-          <strong class="text-[var(--color-text-primary)]">
-            {s.client.name}
-          </strong>
-          {t("oauthConsentDeviceRequesting")}
-        </p>
-        <p class="text-xs text-[var(--color-text-tertiary)] mb-4">
-          {t("deviceAuthCode")}:{" "}
-          <span class="tracking-wider uppercase text-[var(--color-text-secondary)]">
-            {s.user_code}
-          </span>
-        </p>
-
-        <div class="mb-4">
-          <ScopeList
-            identity={s.scopes.identity}
-            resources={s.scopes.resources}
-          />
-        </div>
-
-        <div class="flex gap-3">
-          <Button
-            variant="secondary"
-            class="flex-1"
-            disabled={submitting()}
-            onClick={() => handleDecision("deny")}
-          >
-            {t("oauthConsentDeny")}
-          </Button>
-          <Button
-            variant="primary"
-            class="flex-1"
-            isLoading={submitting()}
-            onClick={() => handleDecision("allow")}
-          >
-            {t("oauthConsentAllow")}
-          </Button>
-        </div>
-      </ConsentLayout>
-    );
-  }
-
-  if (currentState.status === "unauthenticated") {
-    return <LoadingScreen />;
-  }
-
-  // Result / Error / Auto-approved screens
-  // At this point, code_entry / consent_required / unauthenticated are already handled above
-  const resultState = currentState;
-  return (
-    <ConsentLayout>
-      <ConsentLogo />
-      <h1 class="text-xl font-bold text-[var(--color-text-primary)] mb-2">
-        {resultState.title}
-      </h1>
-      <p class="text-sm text-[var(--color-text-secondary)] mb-4">
-        {resultState.message}
-      </p>
-      <a href="/" class="text-sm text-[var(--color-primary)] hover:underline">
-        Home
-      </a>
-    </ConsentLayout>
-  );
+  return <>{renderContent()}</>;
 }

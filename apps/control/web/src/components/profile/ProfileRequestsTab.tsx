@@ -1,8 +1,8 @@
-import { Show, For } from 'solid-js';
-import { Icons } from '../../lib/Icons.tsx';
-import { useI18n } from '../../store/i18n.ts';
-import { EmptyState } from '../common/EmptyState.tsx';
-import type { FollowRequest } from '../../types/profile.ts';
+import { For, Show } from "solid-js";
+import { Icons } from "../../lib/Icons.tsx";
+import { useI18n } from "../../store/i18n.ts";
+import { EmptyState } from "../common/EmptyState.tsx";
+import type { FollowRequest } from "../../types/profile.ts";
 
 export function ProfileRequestsTab(props: {
   requests: FollowRequest[];
@@ -19,19 +19,18 @@ export function ProfileRequestsTab(props: {
       fallback={
         <EmptyState
           icon={<Icons.Inbox class="w-12 h-12 mb-4" />}
-          title={t('noFollowRequests')}
+          title={t("noFollowRequests")}
         />
       }
     >
       <div class="grid gap-3">
         <For each={props.requests}>
           {(req) => (
-            <div
-              class="flex items-center gap-4 p-4 rounded-lg bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700"
-            >
+            <div class="flex items-center gap-4 p-4 rounded-lg bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700">
               <div
                 class="flex items-center gap-3 flex-1 min-w-0 cursor-pointer"
-                onClick={() => props.onNavigateToProfile?.(req.requester.username)}
+                onClick={() =>
+                  props.onNavigateToProfile?.(req.requester.username)}
                 role="button"
                 tabIndex={0}
               >
@@ -43,11 +42,19 @@ export function ProfileRequestsTab(props: {
                     </div>
                   }
                 >
-                  <img src={req.requester.picture!} alt={req.requester.name} class="w-10 h-10 rounded-full" />
+                  <img
+                    src={req.requester.picture!}
+                    alt={req.requester.name}
+                    class="w-10 h-10 rounded-full"
+                  />
                 </Show>
                 <div class="min-w-0">
-                  <span class="block font-medium text-zinc-900 dark:text-zinc-100 truncate">{req.requester.name}</span>
-                  <span class="block text-sm text-zinc-500 dark:text-zinc-400 truncate">@{req.requester.username}</span>
+                  <span class="block font-medium text-zinc-900 dark:text-zinc-100 truncate">
+                    {req.requester.name}
+                  </span>
+                  <span class="block text-sm text-zinc-500 dark:text-zinc-400 truncate">
+                    @{req.requester.username}
+                  </span>
                   <Show when={req.requester.bio}>
                     <p class="mt-1 text-sm text-zinc-500 dark:text-zinc-400 line-clamp-1">
                       {req.requester.bio}
@@ -63,7 +70,7 @@ export function ProfileRequestsTab(props: {
                   onClick={() => props.onReject(req.id)}
                   disabled={props.actionLoadingId === req.id}
                 >
-                  {t('reject')}
+                  {t("reject")}
                 </button>
                 <button
                   type="button"
@@ -71,7 +78,7 @@ export function ProfileRequestsTab(props: {
                   onClick={() => props.onAccept(req.id)}
                   disabled={props.actionLoadingId === req.id}
                 >
-                  {props.actionLoadingId === req.id ? '...' : t('accept')}
+                  {props.actionLoadingId === req.id ? "..." : t("accept")}
                 </button>
               </div>
             </div>

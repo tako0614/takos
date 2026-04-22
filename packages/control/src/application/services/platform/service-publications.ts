@@ -9,12 +9,12 @@ import type {
 import type { ObservedGroupState } from "../deployment/group-state.ts";
 import { getGroupAutoHostname } from "../routing/group-hostnames.ts";
 import {
-  assertGrantPublicationPrerequisites,
   cleanupGrantConsumeState,
   GRANT_PUBLICATION_FIELDS,
   grantOutputContract,
   listPublicationKindDefinitions,
   normalizeGrantPublication,
+  type PublicationNormalizeOptions,
   type PublicationOutputDescriptor,
   resolveGrantConsumeOutputs,
   resolveTakosIssuerUrl,
@@ -268,6 +268,7 @@ function normalizeRoutePublication(
 
 export function normalizePublicationDefinition(
   publication: AppPublication,
+  options: PublicationNormalizeOptions = {},
 ): AppPublication {
   const name = normalizeName(publication.name, "publication.name");
   if (isGrantPublication(publication)) {
@@ -279,12 +280,50 @@ export function normalizePublicationDefinition(
     return normalizeGrantPublication({
       ...publication,
       name,
-    });
+    }, options);
   }
   return normalizeRoutePublication({
     ...publication,
     name,
   });
+}
+
+function hasRelativeOAuthRedirectUris(publication: AppPublication): boolean {
+  if (
+    publication.publisher !== "takos" || publication.type !== "oauth-client"
+  ) {
+    return false;
+  }
+  const spec = publication.spec;
+  if (!spec || typeof spec !== "object" || Array.isArray(spec)) return false;
+  const redirectUris = (spec as Record<string, unknown>).redirectUris;
+  return Array.isArray(redirectUris) &&
+    redirectUris.some((uri) => typeof uri === "string" && uri.startsWith("/"));
+}
+
+function resolveManifestOAuthRedirectUris(
+  publication: AppPublication,
+  groupHostname: string | null,
+): AppPublication {
+  if (!hasRelativeOAuthRedirectUris(publication)) return publication;
+  if (!groupHostname) {
+    throw new Error(
+      `publication '${publication.name}' has relative OAuth redirect URI entries but the group hostname is unavailable`,
+    );
+  }
+  const spec = publication.spec as Record<string, unknown>;
+  const redirectUris = spec.redirectUris as unknown[];
+  return {
+    ...publication,
+    spec: {
+      ...spec,
+      redirectUris: redirectUris.map((uri) =>
+        typeof uri === "string" && uri.startsWith("/")
+          ? buildPublicUrl(groupHostname, uri)
+          : uri
+      ),
+    },
+  };
 }
 
 export function normalizeServiceConsumes(
@@ -342,6 +381,14 @@ function toPublicationRecord(row: PublicationRow): PublicationRecord {
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,
   };
+}
+
+function publicationsHaveSameDefinition(
+  left: AppPublication,
+  right: AppPublication,
+): boolean {
+  return JSON.stringify(normalizePublicationDefinition(left)) ===
+    JSON.stringify(normalizePublicationDefinition(right));
 }
 
 function parseConsumeConfig(
@@ -451,11 +498,12 @@ async function upsertPublicationRow(
     params.spaceId,
     params.publication.name,
   );
-  const groupId = params.groupId ?? null;
-  const catalogName = isGrantPublication(params.publication) ? "takos" : null;
+  const grantPublication = isGrantPublication(params.publication);
+  const groupId = grantPublication ? null : params.groupId ?? null;
+  const catalogName = grantPublication ? "takos" : null;
   const values = {
     groupId,
-    ownerServiceId: params.ownerServiceId ?? null,
+    ownerServiceId: grantPublication ? null : params.ownerServiceId ?? null,
     sourceType: params.sourceType,
     catalogName,
     publicationType: params.publication.type,
@@ -467,6 +515,21 @@ async function upsertPublicationRow(
 
   if (existing) {
     const existingGroupId = existing.groupId ?? null;
+    if (
+      grantPublication &&
+      existing.sourceType === params.sourceType &&
+      isGrantPublication(parsePublicationRecord(existing.specJson)) &&
+      publicationsHaveSameDefinition(
+        parsePublicationRecord(existing.specJson),
+        params.publication,
+      )
+    ) {
+      await db.update(publications)
+        .set(values)
+        .where(eq(publications.id, existing.id))
+        .run();
+      return;
+    }
     if (
       existing.sourceType !== params.sourceType || existingGroupId !== groupId
     ) {
@@ -501,6 +564,48 @@ async function deletePublicationRow(
   if (!row) return;
   const db = getDb(env.DB);
   await db.delete(publications).where(eq(publications.id, row.id));
+}
+
+async function restorePublicationRow(
+  env: Pick<Env, "DB">,
+  row: PublicationRow,
+): Promise<void> {
+  const db = getDb(env.DB);
+  await db.update(publications)
+    .set({
+      groupId: row.groupId,
+      ownerServiceId: row.ownerServiceId,
+      sourceType: row.sourceType,
+      catalogName: row.catalogName,
+      publicationType: row.publicationType,
+      specJson: row.specJson,
+      resolvedJson: row.resolvedJson,
+      status: row.status,
+      updatedAt: row.updatedAt,
+    })
+    .where(eq(publications.id, row.id))
+    .run();
+}
+
+async function assertPublicationHasNoConsumers(
+  env: Pick<Env, "DB">,
+  spaceId: string,
+  name: string,
+): Promise<void> {
+  const db = getDb(env.DB);
+  const consumer = await db.select({ id: serviceConsumes.id })
+    .from(serviceConsumes)
+    .where(and(
+      eq(serviceConsumes.accountId, spaceId),
+      eq(serviceConsumes.publicationName, name),
+    ))
+    .limit(1)
+    .get();
+  if (consumer) {
+    throw new Error(
+      `publication '${name}' is still consumed by one or more services`,
+    );
+  }
 }
 
 async function listServiceConsumeRows(
@@ -629,11 +734,6 @@ function findRouteTargetForPublication(
   if (routes.length === 0) {
     throw new Error(
       `publication '${publication.name}' publisher/path '${target} ${path}' does not match any route`,
-    );
-  }
-  if (routes.length > 1) {
-    throw new Error(
-      `publication '${publication.name}' publisher/path '${target} ${path}' matches multiple routes`,
     );
   }
   return routes[0].target;
@@ -792,15 +892,32 @@ export async function upsertApiPublication(
   if (!isGrantPublication(publication)) {
     throw routePublicationApiWriteError();
   }
+  const previousRow = await getPublicationRowByName(
+    env,
+    params.spaceId,
+    publication.name,
+  );
   await upsertPublicationRow(env, {
     spaceId: params.spaceId,
     sourceType: "api",
     publication,
   });
-  await syncConsumersForPublication(env, {
-    spaceId: params.spaceId,
-    publicationName: publication.name,
-  });
+  try {
+    await syncConsumersForPublication(env, {
+      spaceId: params.spaceId,
+      publicationName: publication.name,
+    });
+  } catch (error) {
+    if (previousRow) {
+      await restorePublicationRow(env, previousRow);
+    } else {
+      await deletePublicationRow(
+        env,
+        await getPublicationRowByName(env, params.spaceId, publication.name),
+      );
+    }
+    throw error;
+  }
   const stored = await getPublicationByName(
     env,
     params.spaceId,
@@ -819,20 +936,7 @@ export async function deletePublicationByName(
     name: string;
   },
 ): Promise<void> {
-  const db = getDb(env.DB);
-  const consumer = await db.select({ id: serviceConsumes.id })
-    .from(serviceConsumes)
-    .where(and(
-      eq(serviceConsumes.accountId, params.spaceId),
-      eq(serviceConsumes.publicationName, params.name),
-    ))
-    .limit(1)
-    .get();
-  if (consumer) {
-    throw new Error(
-      `publication '${params.name}' is still consumed by one or more services`,
-    );
-  }
+  await assertPublicationHasNoConsumers(env, params.spaceId, params.name);
   const row = await getPublicationRowByName(env, params.spaceId, params.name);
   await deletePublicationRow(env, row);
 }
@@ -852,19 +956,30 @@ export async function replaceManifestPublications(
     observedState: ObservedGroupState;
   },
 ): Promise<void> {
+  const groupHostname = await getGroupAutoHostname(env, {
+    groupId: params.groupId,
+    spaceId: params.spaceId,
+  });
   const desired = (params.manifest.publish ?? [])
-    .map(normalizePublicationDefinition);
+    .map((publication) =>
+      normalizePublicationDefinition(
+        resolveManifestOAuthRedirectUris(publication, groupHostname),
+      )
+    );
   const desiredByName = new Map(
     desired.map((publication) => [publication.name, publication]),
   );
   const existingRows = await listPublicationRows(env, params.spaceId, {
     groupId: params.groupId,
   });
-  const groupHostname = await getGroupAutoHostname(env, {
-    groupId: params.groupId,
-    spaceId: params.spaceId,
-  });
-
+  const staleRows = existingRows.filter((row) =>
+    row.groupId === params.groupId &&
+    row.sourceType === "manifest" &&
+    !desiredByName.has(row.name)
+  );
+  for (const row of staleRows) {
+    await assertPublicationHasNoConsumers(env, params.spaceId, row.name);
+  }
   for (const publication of desired) {
     const routeResolved = !isGrantPublication(publication)
       ? resolveRoutePublication(
@@ -888,18 +1003,16 @@ export async function replaceManifestPublications(
     });
   }
 
-  for (const row of existingRows) {
-    if (row.groupId !== params.groupId) continue;
-    if (row.sourceType !== "manifest") continue;
-    if (desiredByName.has(row.name)) continue;
+  for (const row of staleRows) {
     await deletePublicationRow(env, row);
   }
 }
 
 export async function assertManifestPublicationPrerequisites(
-  env: Pick<Env, "DB">,
+  env: Pick<Env, "DB"> & Partial<Pick<Env, "TENANT_BASE_DOMAIN">>,
   params: {
     spaceId: string;
+    groupId?: string;
     manifest: {
       compute?: Record<string, AppCompute>;
       env?: Record<string, string>;
@@ -909,10 +1022,35 @@ export async function assertManifestPublicationPrerequisites(
 ): Promise<void> {
   const errors: string[] = [];
   const desiredByName = new Map<string, AppPublication>();
+  let groupHostname: string | null | undefined;
+  async function resolveGroupHostname(): Promise<string | null> {
+    if (!params.groupId) return null;
+    if (groupHostname !== undefined) return groupHostname;
+    groupHostname = await getGroupAutoHostname({
+      DB: env.DB,
+      TENANT_BASE_DOMAIN: env.TENANT_BASE_DOMAIN ?? "",
+    }, {
+      groupId: params.groupId,
+      spaceId: params.spaceId,
+    });
+    return groupHostname;
+  }
+
   for (const publication of params.manifest.publish ?? []) {
     let normalized: AppPublication;
     try {
-      normalized = normalizePublicationDefinition(publication);
+      normalized = normalizePublicationDefinition(publication, {
+        allowRelativeOAuthRedirectUris: true,
+      });
+      if (
+        hasRelativeOAuthRedirectUris(normalized) &&
+        params.groupId &&
+        !(await resolveGroupHostname())
+      ) {
+        throw new Error(
+          "relative OAuth redirect URI entries require a resolvable group hostname",
+        );
+      }
       desiredByName.set(normalized.name, normalized);
     } catch (error) {
       const name = publication.name || "(unnamed)";
@@ -924,20 +1062,6 @@ export async function assertManifestPublicationPrerequisites(
       continue;
     }
     if (!isGrantPublication(normalized)) continue;
-    try {
-      await assertGrantPublicationPrerequisites({
-        env,
-        spaceId: params.spaceId,
-        publication: normalized,
-      });
-    } catch (error) {
-      const name = publication.name || "(unnamed)";
-      errors.push(
-        `publication '${name}': ${
-          error instanceof Error ? error.message : String(error)
-        }`,
-      );
-    }
   }
 
   const publicationRecordCache = new Map<string, PublicationRecord | null>();
@@ -1007,6 +1131,16 @@ export async function assertManifestPublicationPrerequisites(
     if (!publication) {
       errors.push(
         `${entry.path}: consume references unknown publication '${entry.consume.publication}' in this space`,
+      );
+      continue;
+    }
+    const manifestPublication = desiredByName.get(entry.consume.publication);
+    if (
+      manifestPublication && !isGrantPublication(manifestPublication) &&
+      params.groupId && !(await resolveGroupHostname())
+    ) {
+      errors.push(
+        `${entry.path}: consume references same-manifest route publication '${entry.consume.publication}' but the group hostname is unavailable`,
       );
       continue;
     }

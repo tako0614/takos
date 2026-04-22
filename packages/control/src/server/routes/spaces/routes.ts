@@ -1,4 +1,4 @@
-import { Hono } from "hono";
+import { type Context, Hono } from "hono";
 import { z } from "zod";
 import {
   type AuthenticatedRouteEnv,
@@ -71,6 +71,23 @@ export const spacesRouteDeps = {
   processDefaultAppPreinstallJobs,
 };
 
+function scheduleDefaultAppPreinstallTick(
+  c: Context<AuthenticatedRouteEnv>,
+  spaceId: string,
+): void {
+  c.executionCtx?.waitUntil(
+    spacesRouteDeps.processDefaultAppPreinstallJobs(c.env, {
+      limit: 3,
+      spaceId,
+    }).catch((error) => {
+      logWarn("Default app preinstall background tick failed", {
+        module: "routes/spaces",
+        error: error instanceof Error ? error.message : String(error),
+      });
+    }),
+  );
+}
+
 export default new Hono<AuthenticatedRouteEnv>()
   .get("/", async (c) => {
     const user = c.get("user");
@@ -80,10 +97,12 @@ export default new Hono<AuthenticatedRouteEnv>()
       user.id,
     );
 
-    if (!workspaces.some((workspace) => workspace.kind === "user")) {
-      const personalWorkspace = await spacesRouteDeps
-        .getOrCreatePersonalWorkspace(c.env, user.id);
-      if (personalWorkspace) {
+    const personalWorkspace = await spacesRouteDeps
+      .getOrCreatePersonalWorkspace(c.env, user.id);
+    if (personalWorkspace) {
+      if (
+        !workspaces.some((workspace) => workspace.id === personalWorkspace.id)
+      ) {
         workspaces = [
           personalWorkspace,
           ...workspaces.filter((workspace) =>
@@ -91,6 +110,7 @@ export default new Hono<AuthenticatedRouteEnv>()
           ),
         ];
       }
+      scheduleDefaultAppPreinstallTick(c, personalWorkspace.id);
     }
 
     return c.json({ spaces: workspaces.map(toWorkspaceResponse) });
@@ -103,6 +123,7 @@ export default new Hono<AuthenticatedRouteEnv>()
         name: z.string(),
         id: z.string().optional(),
         description: z.string().optional(),
+        installDefaultApps: z.boolean().optional(),
       }),
     ),
     async (c) => {
@@ -119,19 +140,12 @@ export default new Hono<AuthenticatedRouteEnv>()
             c.env,
             user.id,
             body.name.trim(),
-            { id: body.id },
+            {
+              id: body.id,
+              description: body.description,
+              installDefaultApps: body.installDefaultApps ?? true,
+            },
           );
-        c.executionCtx?.waitUntil(
-          spacesRouteDeps.processDefaultAppPreinstallJobs(c.env, {
-            limit: 3,
-            spaceId: workspace.id,
-          }).catch((error) => {
-            logWarn("Default app preinstall background tick failed", {
-              module: "routes/spaces",
-              error: error instanceof Error ? error.message : String(error),
-            });
-          }),
-        );
 
         return c.json(
           { space: toWorkspaceResponse(workspace), repository },
@@ -150,6 +164,7 @@ export default new Hono<AuthenticatedRouteEnv>()
     if (!await spacesRouteDeps.getOrCreatePersonalWorkspace(c.env, user.id)) {
       throw new NotFoundError("Personal space");
     }
+    scheduleDefaultAppPreinstallTick(c, user.id);
 
     const access = await requireSpaceAccess(c, "me", user.id);
 

@@ -34,6 +34,11 @@ Each worker is deployed independently via its own Wrangler config. The commands
 below are for the tracked template or local/self-host verification only; use
 `takos-private/` for actual production and staging operations:
 
+- `deploy:service <service> production` deploys the base Wrangler config as-is
+  and does not pass `--env production`
+- `deploy:service <service> staging` targets the `[env.staging]` overlay with
+  `--env staging`
+
 ```sh
 # Deploy the main web worker in the tracked template / self-host reference
 cd takos && deno task --cwd apps/control deploy:service web staging

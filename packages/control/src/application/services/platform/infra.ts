@@ -24,6 +24,62 @@ export const infraServiceDeps = {
   now: () => new Date().toISOString(),
 };
 
+type InfraRuntimeTargetInput = {
+  endpointName: string;
+  routes: HttpRoute[];
+  targetServiceRef: string;
+  timeoutMs?: number | null;
+  runtime?: string | null;
+  serviceRef?: string | null;
+};
+
+function isHttpUrl(value: string | null | undefined): value is string {
+  if (!value) return false;
+  try {
+    const parsed = new URL(value);
+    return parsed.protocol === "http:" || parsed.protocol === "https:";
+  } catch {
+    return false;
+  }
+}
+
+export function buildStoredEndpointForRuntime(
+  input: InfraRuntimeTargetInput,
+): StoredHttpEndpoint | null {
+  const runtime = input.runtime?.trim() || "takos.worker";
+  const targetRef = input.serviceRef?.trim() || input.targetServiceRef.trim();
+  if (!targetRef) return null;
+
+  const base = {
+    name: input.endpointName,
+    routes: input.routes,
+    ...(input.timeoutMs !== null && input.timeoutMs !== undefined
+      ? { timeoutMs: input.timeoutMs }
+      : {}),
+  };
+
+  if (isHttpUrl(targetRef)) {
+    return {
+      ...base,
+      target: { kind: "http-url", baseUrl: targetRef },
+    };
+  }
+
+  if (
+    runtime === "cloudflare.worker" ||
+    runtime === "takos.worker" ||
+    runtime === "runtime-host.worker" ||
+    runtime === "workers-compatible"
+  ) {
+    return {
+      ...base,
+      target: { kind: "service-ref", ref: targetRef },
+    };
+  }
+
+  return null;
+}
+
 export class InfraService {
   constructor(private env: Env) {}
 
@@ -188,10 +244,7 @@ export class InfraService {
     });
   }
 
-  /**
-   * Build an http-endpoint-set RoutingTarget from InfraEndpoint records.
-   * Current contract only exposes cloudflare.worker targets to routing.
-   */
+  /** Build an http-endpoint-set RoutingTarget from InfraEndpoint records. */
   async buildRoutingTarget(
     spaceId: string,
     bundleDeploymentId: string,
@@ -254,20 +307,15 @@ export class InfraService {
           : undefined,
       }));
       const serviceRuntime = serviceRuntimeByName.get(ep.targetServiceRef);
-      const cloudflareServiceRef = serviceRuntime?.cloudflareServiceRef ||
-        ep.targetServiceRef;
-      const runtime = serviceRuntime?.runtime || "cloudflare.worker";
-
-      if (runtime !== "cloudflare.worker") continue;
-
-      storedEndpoints.push({
-        name: ep.name,
+      const storedEndpoint = buildStoredEndpointForRuntime({
+        endpointName: ep.name,
         routes: epRoutes,
-        target: { kind: "service-ref", ref: cloudflareServiceRef },
-        ...(ep.timeoutMs !== null && ep.timeoutMs !== undefined
-          ? { timeoutMs: ep.timeoutMs }
-          : {}),
+        targetServiceRef: ep.targetServiceRef,
+        timeoutMs: ep.timeoutMs,
+        runtime: serviceRuntime?.runtime,
+        serviceRef: serviceRuntime?.cloudflareServiceRef,
       });
+      if (storedEndpoint) storedEndpoints.push(storedEndpoint);
     }
 
     if (storedEndpoints.length === 0) return null;

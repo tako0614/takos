@@ -78,8 +78,11 @@ function resolveRouteTargetEndpoint(
   }
 
   if (target.category === "worker") {
-    if (!target.routeRef) {
-      throw new Error(`worker "${route.target}" is missing a routeRef`);
+    const dispatchRef = target.activeArtifactRef?.trim() ||
+      target.routeRef?.trim() ||
+      "";
+    if (!dispatchRef) {
+      throw new Error(`worker "${route.target}" is missing a dispatch ref`);
     }
     return {
       name: route.name,
@@ -91,7 +94,7 @@ function resolveRouteTargetEndpoint(
       ],
       target: {
         kind: "service-ref",
-        ref: target.routeRef,
+        ref: dispatchRef,
       },
       ...(route.timeoutMs ? { timeoutMs: route.timeoutMs } : {}),
     };

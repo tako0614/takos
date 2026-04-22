@@ -10,9 +10,9 @@ const mocks = {
 
 // [Deno] vi.mock removed - manually stub imports from '@/shared/utils/gzip'
 import {
-  usageEventsDeps,
   getUsageEventsFromR2,
   type PersistedUsageEvent,
+  usageEventsDeps,
   usageSegmentKey,
   writeUsageEventSegmentToR2,
 } from "@/services/offload/usage-events";

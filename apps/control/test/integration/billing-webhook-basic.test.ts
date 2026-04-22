@@ -21,7 +21,20 @@ Deno.test("billing webhook returns 500 when webhook configuration is missing", a
     if (isAppError(error)) {
       return c.json(
         error.toResponse(),
-        error.statusCode as 400 | 401 | 403 | 404 | 409 | 410 | 422 | 429 | 500 | 501 | 502 | 503 | 504,
+        error.statusCode as
+          | 400
+          | 401
+          | 403
+          | 404
+          | 409
+          | 410
+          | 422
+          | 429
+          | 500
+          | 501
+          | 502
+          | 503
+          | 504,
       );
     }
     throw error;
@@ -56,7 +69,20 @@ Deno.test("billing webhook returns 400 when the Stripe signature is missing", as
     if (isAppError(error)) {
       return c.json(
         error.toResponse(),
-        error.statusCode as 400 | 401 | 403 | 404 | 409 | 410 | 422 | 429 | 500 | 501 | 502 | 503 | 504,
+        error.statusCode as
+          | 400
+          | 401
+          | 403
+          | 404
+          | 409
+          | 410
+          | 422
+          | 429
+          | 500
+          | 501
+          | 502
+          | 503
+          | 504,
       );
     }
     throw error;

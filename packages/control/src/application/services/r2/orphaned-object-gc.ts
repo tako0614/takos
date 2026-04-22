@@ -1,6 +1,12 @@
-import type { D1Database, R2Bucket } from '../../../shared/types/bindings.ts';
-import { getDb, blobs, sessionFiles, sessions, snapshots } from '../../../infra/db/index.ts';
-import { eq, and, inArray } from 'drizzle-orm';
+import type { D1Database, R2Bucket } from "../../../shared/types/bindings.ts";
+import {
+  blobs,
+  getDb,
+  sessionFiles,
+  sessions,
+  snapshots,
+} from "../../../infra/db/index.ts";
+import { and, eq, inArray } from "drizzle-orm";
 
 type OffloadEnv = {
   DB: D1Database;
@@ -26,8 +32,8 @@ export interface R2OrphanedObjectGcSummary {
   next_cursors: { blobs?: string; trees?: string };
 }
 
-const STATE_KEY = 'ops/job-state/r2-orphaned-object-gc.json';
-const AUDIT_PREFIX = 'ops/r2-orphaned-object-gc';
+const STATE_KEY = "ops/job-state/r2-orphaned-object-gc.json";
+const AUDIT_PREFIX = "ops/r2-orphaned-object-gc";
 
 export const r2OrphanedObjectGcDeps = {
   getDb,
@@ -36,11 +42,11 @@ export const r2OrphanedObjectGcDeps = {
 };
 
 function stableIsoNoMillis(date: Date): string {
-  return date.toISOString().replace(/\.\d{3}Z$/, 'Z');
+  return date.toISOString().replace(/\.\d{3}Z$/, "Z");
 }
 
 function safeKeyTimestamp(iso: string): string {
-  return iso.replace(/:/g, '-');
+  return iso.replace(/:/g, "-");
 }
 
 async function readJson<T>(bucket: R2Bucket, key: string): Promise<T | null> {
@@ -53,9 +59,13 @@ async function readJson<T>(bucket: R2Bucket, key: string): Promise<T | null> {
   }
 }
 
-async function writeJson(bucket: R2Bucket, key: string, value: unknown): Promise<void> {
+async function writeJson(
+  bucket: R2Bucket,
+  key: string,
+  value: unknown,
+): Promise<void> {
   await bucket.put(key, JSON.stringify(value), {
-    httpMetadata: { contentType: 'application/json; charset=utf-8' },
+    httpMetadata: { contentType: "application/json; charset=utf-8" },
   });
 }
 
@@ -68,25 +78,33 @@ function uploadedMs(obj: { uploaded?: Date }): number | null {
 const WORKSPACE_ID_RE = /^[a-zA-Z0-9_-]{6,128}$/;
 
 function parseBlobKey(key: string): { spaceId: string; hash: string } | null {
-  if (!key.startsWith('blobs/')) return null;
-  const parts = key.slice(6).split('/');
+  if (!key.startsWith("blobs/")) return null;
+  const parts = key.slice(6).split("/");
   if (parts.length !== 2) return null;
   const [spaceId, hash] = parts;
-  if (!WORKSPACE_ID_RE.test(spaceId) || !/^[0-9a-f]{64}$/.test(hash)) return null;
+  if (!WORKSPACE_ID_RE.test(spaceId) || !/^[0-9a-f]{64}$/.test(hash)) {
+    return null;
+  }
   return { spaceId, hash };
 }
 
-function parseTreeKey(key: string): { spaceId: string; snapshotId: string } | null {
-  if (!key.startsWith('trees/') || !key.endsWith('.json.gz')) return null;
-  const parts = key.slice(6).split('/');
+function parseTreeKey(
+  key: string,
+): { spaceId: string; snapshotId: string } | null {
+  if (!key.startsWith("trees/") || !key.endsWith(".json.gz")) return null;
+  const parts = key.slice(6).split("/");
   if (parts.length !== 2) return null;
   const [spaceId, name] = parts;
   const snapshotId = name.slice(0, -8);
-  if (!WORKSPACE_ID_RE.test(spaceId) || !WORKSPACE_ID_RE.test(snapshotId)) return null;
+  if (!WORKSPACE_ID_RE.test(spaceId) || !WORKSPACE_ID_RE.test(snapshotId)) {
+    return null;
+  }
   return { spaceId, snapshotId };
 }
 
-function groupBySpaceId<T extends { spaceId: string }>(items: T[]): Map<string, T[]> {
+function groupBySpaceId<T extends { spaceId: string }>(
+  items: T[],
+): Map<string, T[]> {
   const map = new Map<string, T[]>();
   for (const item of items) {
     let list = map.get(item.spaceId);
@@ -124,18 +142,22 @@ export async function runR2OrphanedObjectGcBatch(
     listLimit?: number;
     maxDeletes?: number;
     minAgeMinutes?: number;
-  }
+  },
 ): Promise<R2OrphanedObjectGcSummary> {
   const source = env.TENANT_SOURCE;
-  if (!source) return skippedSummary('TENANT_SOURCE bucket not configured');
+  if (!source) return skippedSummary("TENANT_SOURCE bucket not configured");
 
   const offload = env.TAKOS_OFFLOAD;
-  if (!offload) return skippedSummary('TAKOS_OFFLOAD bucket not configured');
+  if (!offload) return skippedSummary("TAKOS_OFFLOAD bucket not configured");
 
   const dryRun = options?.dryRun ?? false;
   const listLimit = clamp(options?.listLimit ?? 200, 1, 1000);
   const maxDeletes = clamp(options?.maxDeletes ?? 200, 0, 1000);
-  const minAgeMinutes = clamp(options?.minAgeMinutes ?? 24 * 60, 0, 30 * 24 * 60);
+  const minAgeMinutes = clamp(
+    options?.minAgeMinutes ?? 24 * 60,
+    0,
+    30 * 24 * 60,
+  );
 
   const startedAt = stableIsoNoMillis(new Date());
   const cutoffMs = Date.now() - minAgeMinutes * 60_000;
@@ -144,7 +166,9 @@ export async function runR2OrphanedObjectGcBatch(
     offload,
     STATE_KEY,
   );
-  const cursors = prior?.version === 1 && prior.cursors ? { ...prior.cursors } : {};
+  const cursors = prior?.version === 1 && prior.cursors
+    ? { ...prior.cursors }
+    : {};
 
   const db = r2OrphanedObjectGcDeps.getDb(env.DB);
 
@@ -159,13 +183,23 @@ export async function runR2OrphanedObjectGcBatch(
     next_cursors: {},
   };
 
-  const deletedKeys: { blobs: string[]; trees: string[] } = { blobs: [], trees: [] };
+  const deletedKeys: { blobs: string[]; trees: string[] } = {
+    blobs: [],
+    trees: [],
+  };
 
   // Blob GC: delete objects whose DB blob row is missing AND not referenced by any session_file.
-  const blobsPage = await source.list({ prefix: 'blobs/', cursor: cursors.blobs, limit: listLimit });
-  summary.next_cursors.blobs = blobsPage.truncated ? blobsPage.cursor : undefined;
+  const blobsPage = await source.list({
+    prefix: "blobs/",
+    cursor: cursors.blobs,
+    limit: listLimit,
+  });
+  summary.next_cursors.blobs = blobsPage.truncated
+    ? blobsPage.cursor
+    : undefined;
 
-  const blobCandidates: Array<{ key: string; spaceId: string; hash: string }> = [];
+  const blobCandidates: Array<{ key: string; spaceId: string; hash: string }> =
+    [];
   for (const obj of blobsPage.objects) {
     summary.scanned.blobs += 1;
     if (minAgeMinutes > 0) {
@@ -185,17 +219,20 @@ export async function runR2OrphanedObjectGcBatch(
     const existing = new Set(
       (await db.select({ hash: blobs.hash }).from(blobs)
         .where(and(eq(blobs.accountId, spaceId), inArray(blobs.hash, hashes)))
-        .all()
-      ).map((b) => b.hash)
+        .all()).map((b) => b.hash),
     );
 
     const referenced = new Set(
       (await db.selectDistinct({ hash: sessionFiles.hash })
         .from(sessionFiles)
         .innerJoin(sessions, eq(sessionFiles.sessionId, sessions.id))
-        .where(and(inArray(sessionFiles.hash, hashes), eq(sessions.accountId, spaceId)))
-        .all()
-      ).map((r) => r.hash)
+        .where(
+          and(
+            inArray(sessionFiles.hash, hashes),
+            eq(sessions.accountId, spaceId),
+          ),
+        )
+        .all()).map((r) => r.hash),
     );
 
     for (const item of items) {
@@ -213,10 +250,18 @@ export async function runR2OrphanedObjectGcBatch(
   deletedKeys.blobs.push(...blobDeletesLimited);
 
   // Tree GC: delete objects whose DB snapshot row is missing.
-  const treesPage = await source.list({ prefix: 'trees/', cursor: cursors.trees, limit: listLimit });
-  summary.next_cursors.trees = treesPage.truncated ? treesPage.cursor : undefined;
+  const treesPage = await source.list({
+    prefix: "trees/",
+    cursor: cursors.trees,
+    limit: listLimit,
+  });
+  summary.next_cursors.trees = treesPage.truncated
+    ? treesPage.cursor
+    : undefined;
 
-  const treeCandidates: Array<{ key: string; spaceId: string; snapshotId: string }> = [];
+  const treeCandidates: Array<
+    { key: string; spaceId: string; snapshotId: string }
+  > = [];
   for (const obj of treesPage.objects) {
     summary.scanned.trees += 1;
     if (minAgeMinutes > 0) {
@@ -235,9 +280,10 @@ export async function runR2OrphanedObjectGcBatch(
 
     const existingIds = new Set(
       (await db.select({ id: snapshots.id }).from(snapshots)
-        .where(and(eq(snapshots.accountId, spaceId), inArray(snapshots.id, ids)))
-        .all()
-      ).map((s) => s.id)
+        .where(
+          and(eq(snapshots.accountId, spaceId), inArray(snapshots.id, ids)),
+        )
+        .all()).map((s) => s.id),
     );
 
     for (const item of items) {
@@ -254,23 +300,35 @@ export async function runR2OrphanedObjectGcBatch(
   summary.deleted.trees = treeDeletesLimited.length;
   deletedKeys.trees.push(...treeDeletesLimited);
 
-  const nextCursors: CursorState['cursors'] = {};
-  if (summary.next_cursors.blobs) nextCursors.blobs = summary.next_cursors.blobs;
-  if (summary.next_cursors.trees) nextCursors.trees = summary.next_cursors.trees;
+  const nextCursors: CursorState["cursors"] = {};
+  if (summary.next_cursors.blobs) {
+    nextCursors.blobs = summary.next_cursors.blobs;
+  }
+  if (summary.next_cursors.trees) {
+    nextCursors.trees = summary.next_cursors.trees;
+  }
 
-  await writeJson(offload, STATE_KEY, {
-    version: 1,
-    last_success_at: stableIsoNoMillis(new Date()),
-    cursors: nextCursors,
-  } satisfies CursorState);
+  await writeJson(
+    offload,
+    STATE_KEY,
+    {
+      version: 1,
+      last_success_at: stableIsoNoMillis(new Date()),
+      cursors: nextCursors,
+    } satisfies CursorState,
+  );
 
   if (deletedKeys.blobs.length > 0 || deletedKeys.trees.length > 0) {
-    await writeJson(offload, `${AUDIT_PREFIX}/deleted/${safeKeyTimestamp(startedAt)}.json`, {
-      started_at: startedAt,
-      dry_run: dryRun,
-      min_age_minutes: minAgeMinutes,
-      deleted: deletedKeys,
-    });
+    await writeJson(
+      offload,
+      `${AUDIT_PREFIX}/deleted/${safeKeyTimestamp(startedAt)}.json`,
+      {
+        started_at: startedAt,
+        dry_run: dryRun,
+        min_age_minutes: minAgeMinutes,
+        deleted: deletedKeys,
+      },
+    );
   }
 
   return summary;

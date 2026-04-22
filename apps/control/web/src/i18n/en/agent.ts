@@ -66,6 +66,7 @@ export const agent = {
   "taskStatus.blocked": "Blocked",
   "taskStatus.completed": "Completed",
   "taskStatus.cancelled": "Cancelled",
+  "taskStatus.failed": "Failed",
   "taskPriority.low": "Low",
   "taskPriority.medium": "Medium",
   "taskPriority.high": "High",

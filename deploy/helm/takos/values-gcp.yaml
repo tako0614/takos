@@ -22,8 +22,26 @@ externalS3:
   endpoint: "https://storage.googleapis.com"
   region: "asia-northeast1"
   bucket: "takos-tenant-source"
-  accessKeyId: "" # Use Workload Identity instead
+  accessKeyId: "" # Set a GCS interoperability HMAC access key via the s3 Secret
   secretAccessKey: ""
+
+networkPolicy:
+  runtime:
+    extraEgress:
+      # Standard Kubernetes NetworkPolicy cannot match GCS by DNS name.
+      # This keeps the default runtime egress policy usable with managed GCS by
+      # allowing public HTTPS while continuing to deny private-network egress.
+      - to:
+          - ipBlock:
+              cidr: 0.0.0.0/0
+              except:
+                - 10.0.0.0/8
+                - 172.16.0.0/12
+                - 192.168.0.0/16
+                - 100.64.0.0/10
+        ports:
+          - protocol: TCP
+            port: 443
 
 # Production domains
 domains:
@@ -51,6 +69,10 @@ ingress:
   annotations:
     kubernetes.io/ingress.global-static-ip-name: "" # Set to reserved static IP name
     networking.gke.io/managed-certificates: "takos-managed-cert"
+  gcpManagedCertificate:
+    enabled: true
+    name: "takos-managed-cert"
+    domains: []
   tls:
     enabled: false # GCP managed certificates handle TLS
 
@@ -84,7 +106,8 @@ executor:
     minReplicas: 2
     maxReplicas: 20
 
-# GKE Workload Identity
+# GKE Workload Identity for Kubernetes API/cloud integrations. Object storage
+# still uses the S3-compatible GCS interoperability HMAC credentials above.
 serviceAccount:
   create: true
   annotations:

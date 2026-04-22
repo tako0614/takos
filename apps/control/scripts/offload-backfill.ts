@@ -20,40 +20,43 @@
  * - Event IDs are re-numbered per-run starting at 1 (dense, monotonic).
  */
 
-import { spawnSync } from 'node:child_process';
-import * as fs from 'node:fs';
-import * as os from 'node:os';
-import * as path from 'node:path';
-import { gzipSync } from 'node:zlib';
+import { spawnSync } from "node:child_process";
+import * as fs from "node:fs";
+import * as os from "node:os";
+import * as path from "node:path";
+import { gzipSync } from "node:zlib";
 import { Buffer } from "node:buffer";
 
-type RemoteEnvironment = 'staging' | 'production';
+type RemoteEnvironment = "staging" | "production";
 
-const D1_TARGET = 'DB';
-const LOCAL_OFFLOAD_BUCKET = 'takos-offload';
+const D1_TARGET = "DB";
+const LOCAL_OFFLOAD_BUCKET = "takos-offload";
 const REMOTE_OFFLOAD_BUCKETS: Record<RemoteEnvironment, string> = {
-  staging: 'takos-offload-staging',
-  production: 'takos-offload',
+  staging: "takos-offload-staging",
+  production: "takos-offload",
 };
 const RUN_EVENT_SEGMENT_SIZE = 100;
 
 const args = process.argv.slice(2);
 const command = args[0];
-const isRemote = args.includes('--remote');
-const isDryRun = args.includes('--dry-run');
-const isForce = args.includes('--force');
-const remoteEnvironment = getArgValue('--env');
+const isRemote = args.includes("--remote");
+const isDryRun = args.includes("--dry-run");
+const isForce = args.includes("--force");
+const remoteEnvironment = getArgValue("--env");
 
-const remoteFlag = isRemote ? '--remote' : '--local';
+const remoteFlag = isRemote ? "--remote" : "--local";
 // Wrangler R2: remote is default, local uses --local.
-const r2Flag = isRemote ? '' : '--local';
+const r2Flag = isRemote ? "" : "--local";
 
-if (isRemote && remoteEnvironment !== 'staging' && remoteEnvironment !== 'production') {
-  die('--remote requires --env staging|production');
+if (
+  isRemote && remoteEnvironment !== "staging" &&
+  remoteEnvironment !== "production"
+) {
+  die("--remote requires --env staging|production");
 }
 
 if (!isRemote && remoteEnvironment) {
-  die('--env is only valid together with --remote');
+  die("--env is only valid together with --remote");
 }
 
 function die(message: string): never {
@@ -78,31 +81,33 @@ function withRemoteEnv(args: string[]): string[] {
   if (!isRemote) {
     return args;
   }
-  return [...args, '--env', remoteEnvironment as RemoteEnvironment];
+  return [...args, "--env", remoteEnvironment as RemoteEnvironment];
 }
 
 function escapeSqlLiteral(value: string): string {
   return value.replace(/'/g, "''");
 }
 
-function runWranglerWithPipes(args: string[]): { status: number | null; stdout: string; stderr: string } {
-  const result = spawnSync('npx', ['wrangler', ...args], {
-    encoding: 'utf-8',
-    stdio: ['pipe', 'pipe', 'pipe'],
+function runWranglerWithPipes(
+  args: string[],
+): { status: number | null; stdout: string; stderr: string } {
+  const result = spawnSync("npx", ["wrangler", ...args], {
+    encoding: "utf-8",
+    stdio: ["pipe", "pipe", "pipe"],
   });
   if (result.error) {
     throw new Error(`Failed to run wrangler: ${result.error.message}`);
   }
   return {
     status: result.status,
-    stdout: result.stdout || '',
-    stderr: result.stderr || '',
+    stdout: result.stdout || "",
+    stderr: result.stderr || "",
   };
 }
 
 function runWranglerInherit(args: string[]): void {
-  const result = spawnSync('npx', ['wrangler', ...args], {
-    stdio: 'inherit',
+  const result = spawnSync("npx", ["wrangler", ...args], {
+    stdio: "inherit",
   });
   if (result.error) {
     throw new Error(`Failed to run wrangler: ${result.error.message}`);
@@ -113,7 +118,15 @@ function runWranglerInherit(args: string[]): void {
 }
 
 function d1Query<T = any>(sql: string): T[] {
-  const d1Args = withRemoteEnv(['d1', 'execute', D1_TARGET, remoteFlag, '--command', sql, '--json']);
+  const d1Args = withRemoteEnv([
+    "d1",
+    "execute",
+    D1_TARGET,
+    remoteFlag,
+    "--command",
+    sql,
+    "--json",
+  ]);
   const result = runWranglerWithPipes(d1Args);
   if (result.stdout) {
     try {
@@ -123,16 +136,28 @@ function d1Query<T = any>(sql: string): T[] {
       // fall through to status/error handling
     }
   }
-  throw new Error(`D1 query failed: ${result.stderr || `exit code ${result.status ?? -1}`}`);
+  throw new Error(
+    `D1 query failed: ${result.stderr || `exit code ${result.status ?? -1}`}`,
+  );
 }
 
 function d1Execute(sql: string): void {
-  runWranglerInherit(withRemoteEnv(['d1', 'execute', D1_TARGET, remoteFlag, '--command', sql]));
+  runWranglerInherit(
+    withRemoteEnv(["d1", "execute", D1_TARGET, remoteFlag, "--command", sql]),
+  );
 }
 
 function r2ListPrefix(prefix: string): unknown[] {
   // `wrangler r2 object list` supports `--prefix` and `--json`.
-  const args = ['r2', 'object', 'list', getOffloadBucket(), '--prefix', prefix, '--json'];
+  const args = [
+    "r2",
+    "object",
+    "list",
+    getOffloadBucket(),
+    "--prefix",
+    prefix,
+    "--json",
+  ];
   if (r2Flag) args.splice(4, 0, r2Flag);
   try {
     const result = runWranglerWithPipes(args);
@@ -148,13 +173,22 @@ function r2ListPrefix(prefix: string): unknown[] {
 }
 
 function r2PutObject(key: string, filePath: string): void {
-  const args = ['r2', 'object', 'put', `${getOffloadBucket()}/${key}`, '--file', filePath];
+  const args = [
+    "r2",
+    "object",
+    "put",
+    `${getOffloadBucket()}/${key}`,
+    "--file",
+    filePath,
+  ];
   if (r2Flag) args.push(r2Flag);
   runWranglerInherit(args);
 }
 
 function segmentKey(runId: string, segmentIndex: number): string {
-  return `runs/${runId}/events/${String(segmentIndex).padStart(6, '0')}.jsonl.gz`;
+  return `runs/${runId}/events/${
+    String(segmentIndex).padStart(6, "0")
+  }.jsonl.gz`;
 }
 
 type D1RunEventRow = {
@@ -178,26 +212,31 @@ type D1MessageRow = {
 };
 
 async function backfillRunEvents(): Promise<void> {
-  const runIdArg = getArgValue('--run-id');
-  const limitRuns = Math.max(1, Math.min(parseInt(getArgValue('--limit-runs') || '200', 10) || 200, 10_000));
+  const runIdArg = getArgValue("--run-id");
+  const limitRuns = Math.max(
+    1,
+    Math.min(parseInt(getArgValue("--limit-runs") || "200", 10) || 200, 10_000),
+  );
 
-  const runIds: string[] = runIdArg
-    ? [runIdArg]
-    : d1Query<{ run_id: string }>(
-        `SELECT DISTINCT run_id FROM run_events ORDER BY run_id LIMIT ${limitRuns}`
-      ).map((r) => r.run_id);
+  const runIds: string[] = runIdArg ? [runIdArg] : d1Query<{ run_id: string }>(
+    `SELECT DISTINCT run_id FROM run_events ORDER BY run_id LIMIT ${limitRuns}`,
+  ).map((r) => r.run_id);
 
   if (runIds.length === 0) {
-    console.log('No runs found in D1 run_events.');
+    console.log("No runs found in D1 run_events.");
     return;
   }
 
   console.log(
-    `Backfilling run_events -> R2 (${isRemote ? `remote:${remoteEnvironment}` : 'local'})` +
-      ` runs=${runIds.length} dryRun=${isDryRun} force=${isForce}`
+    `Backfilling run_events -> R2 (${
+      isRemote ? `remote:${remoteEnvironment}` : "local"
+    })` +
+      ` runs=${runIds.length} dryRun=${isDryRun} force=${isForce}`,
   );
 
-  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'takos-offload-backfill-'));
+  const tempDir = fs.mkdtempSync(
+    path.join(os.tmpdir(), "takos-offload-backfill-"),
+  );
 
   try {
     for (const runId of runIds) {
@@ -205,13 +244,17 @@ async function backfillRunEvents(): Promise<void> {
       if (!isForce) {
         const existing = r2ListPrefix(prefix);
         if (existing.length > 0) {
-          console.log(`- ${runId}: skip (R2 prefix exists: ${existing.length} objects)`);
+          console.log(
+            `- ${runId}: skip (R2 prefix exists: ${existing.length} objects)`,
+          );
           continue;
         }
       }
 
       const rows = d1Query<D1RunEventRow>(
-        `SELECT id, type, data, created_at FROM run_events WHERE run_id = '${escapeSqlLiteral(runId)}' ORDER BY id ASC`
+        `SELECT id, type, data, created_at FROM run_events WHERE run_id = '${
+          escapeSqlLiteral(runId)
+        }' ORDER BY id ASC`,
       );
 
       if (rows.length === 0) {
@@ -225,16 +268,23 @@ async function backfillRunEvents(): Promise<void> {
 
       const flush = () => {
         if (segmentLines.length === 0) return;
-        const jsonl = segmentLines.join('\n') + '\n';
-        const gz = gzipSync(Buffer.from(jsonl, 'utf-8'));
+        const jsonl = segmentLines.join("\n") + "\n";
+        const gz = gzipSync(Buffer.from(jsonl, "utf-8"));
         const key = segmentKey(runId, segmentIndex);
-        const tmpFile = path.join(tempDir, `${runId}-events-${String(segmentIndex).padStart(6, '0')}.jsonl.gz`);
+        const tmpFile = path.join(
+          tempDir,
+          `${runId}-events-${String(segmentIndex).padStart(6, "0")}.jsonl.gz`,
+        );
         fs.writeFileSync(tmpFile, gz);
 
         if (isDryRun) {
-          console.log(`  - ${runId}: would put ${key} (${segmentLines.length} events, ${gz.length} bytes)`);
+          console.log(
+            `  - ${runId}: would put ${key} (${segmentLines.length} events, ${gz.length} bytes)`,
+          );
         } else {
-          console.log(`  - ${runId}: put ${key} (${segmentLines.length} events, ${gz.length} bytes)`);
+          console.log(
+            `  - ${runId}: put ${key} (${segmentLines.length} events, ${gz.length} bytes)`,
+          );
           r2PutObject(key, tmpFile);
         }
 
@@ -249,9 +299,11 @@ async function backfillRunEvents(): Promise<void> {
           JSON.stringify({
             event_id: eventId,
             type: row.type,
-            data: typeof row.data === 'string' ? row.data : JSON.stringify(row.data),
+            data: typeof row.data === "string"
+              ? row.data
+              : JSON.stringify(row.data),
             created_at: row.created_at,
-          })
+          }),
         );
 
         if (segmentLines.length >= RUN_EVENT_SEGMENT_SIZE) {
@@ -272,12 +324,18 @@ async function backfillRunEvents(): Promise<void> {
 }
 
 async function backfillMessages(): Promise<void> {
-  const threadIdArg = getArgValue('--thread-id');
-  const limitMessages = Math.max(1, Math.min(parseInt(getArgValue('--limit-messages') || '500', 10) || 500, 50_000));
+  const threadIdArg = getArgValue("--thread-id");
+  const limitMessages = Math.max(
+    1,
+    Math.min(
+      parseInt(getArgValue("--limit-messages") || "500", 10) || 500,
+      50_000,
+    ),
+  );
 
   const whereParts: string[] = [];
   if (!isForce) {
-    whereParts.push('r2_key IS NULL');
+    whereParts.push("r2_key IS NULL");
   }
   if (threadIdArg) {
     whereParts.push(`thread_id = '${escapeSqlLiteral(threadIdArg)}'`);
@@ -285,7 +343,7 @@ async function backfillMessages(): Promise<void> {
   // Offload candidates (must match runtime policy): tool messages or large payloads.
   whereParts.push(`(role = 'tool' OR length(content) > 4000)`);
 
-  const where = whereParts.length ? `WHERE ${whereParts.join(' AND ')}` : '';
+  const where = whereParts.length ? `WHERE ${whereParts.join(" AND ")}` : "";
   const rows = d1Query<D1MessageRow>(`
     SELECT id, thread_id, role, content, tool_calls, tool_call_id, metadata, sequence, created_at, r2_key
     FROM messages
@@ -295,16 +353,20 @@ async function backfillMessages(): Promise<void> {
   `);
 
   if (rows.length === 0) {
-    console.log('No message rows eligible for offload backfill.');
+    console.log("No message rows eligible for offload backfill.");
     return;
   }
 
   console.log(
-    `Backfilling messages -> R2 (${isRemote ? `remote:${remoteEnvironment}` : 'local'})` +
-      ` rows=${rows.length} dryRun=${isDryRun} force=${isForce}`
+    `Backfilling messages -> R2 (${
+      isRemote ? `remote:${remoteEnvironment}` : "local"
+    })` +
+      ` rows=${rows.length} dryRun=${isDryRun} force=${isForce}`,
   );
 
-  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'takos-offload-msg-backfill-'));
+  const tempDir = fs.mkdtempSync(
+    path.join(os.tmpdir(), "takos-offload-msg-backfill-"),
+  );
   try {
     for (const row of rows) {
       const key = `threads/${row.thread_id}/messages/${row.id}.json`;
@@ -315,13 +377,13 @@ async function backfillMessages(): Promise<void> {
         content: row.content,
         tool_calls: row.tool_calls ?? null,
         tool_call_id: row.tool_call_id ?? null,
-        metadata: row.metadata || '{}',
+        metadata: row.metadata || "{}",
         sequence: row.sequence,
         created_at: row.created_at,
       };
 
       const tmpFile = path.join(tempDir, `msg-${row.id}.json`);
-      fs.writeFileSync(tmpFile, JSON.stringify(payload), 'utf-8');
+      fs.writeFileSync(tmpFile, JSON.stringify(payload), "utf-8");
 
       if (isDryRun) {
         console.log(`- ${row.id}: would put ${key}`);
@@ -376,17 +438,17 @@ Options:
 }
 
 async function main(): Promise<void> {
-  if (!command || command === 'help' || command === '--help') {
+  if (!command || command === "help" || command === "--help") {
     showHelp();
     return;
   }
 
-  if (command === 'run-events') {
+  if (command === "run-events") {
     await backfillRunEvents();
     return;
   }
 
-  if (command === 'messages') {
+  if (command === "messages") {
     await backfillMessages();
     return;
   }

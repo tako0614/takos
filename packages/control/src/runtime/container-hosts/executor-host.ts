@@ -18,6 +18,7 @@
 import type {
   DurableObjectState,
   ExportedHandler,
+  ScheduledEvent,
 } from "@cloudflare/workers-types";
 
 import { HostContainerRuntime } from "./container-runtime.ts";
@@ -47,16 +48,21 @@ import {
 import {
   err,
   forwardToControlPlane,
+  getExecutorPoolConfig,
   getProxyUsageSnapshot,
   isControlRpcPath,
   parseExecutorTier,
   recordProxyUsage,
   resolveContainerNamespace,
+  resolveExecutorTierCapacity,
   unauthorized,
 } from "./executor-utils.ts";
 import type {
   AgentExecutorEnv,
   Env,
+  ExecutorContainerStub,
+  ExecutorPoolLoad,
+  ExecutorTier,
   ProxyTokenInfo,
 } from "./executor-utils.ts";
 import {
@@ -85,7 +91,7 @@ export { getRequiredProxyCapability };
 // ---------------------------------------------------------------------------
 
 function createExecutorContainerClass(
-  tier: import("./executor-utils.ts").ExecutorTier,
+  tier: ExecutorTier,
   sleepAfterOverride?: string,
 ) {
   return class extends HostContainerRuntime<Env> {
@@ -100,7 +106,62 @@ function createExecutorContainerClass(
       this.envVars = {
         ...buildAgentExecutorContainerEnvVars(env),
         EXECUTOR_TIER: String(tier),
+        MAX_CONCURRENT_RUNS: String(resolveExecutorTierCapacity(env, tier)),
       };
+    }
+
+    private async loadTokenMap(): Promise<Map<string, ProxyTokenInfo>> {
+      if (this.cachedTokens) return this.cachedTokens;
+      const stored = await this.ctx.storage.get<
+        Record<string, ProxyTokenInfo>
+      >("proxyTokens");
+      this.cachedTokens = new Map(Object.entries(stored ?? {}));
+      return this.cachedTokens;
+    }
+
+    private async persistTokenMap(
+      tokens: Map<string, ProxyTokenInfo>,
+    ): Promise<void> {
+      await this.ctx.storage.put("proxyTokens", Object.fromEntries(tokens));
+      this.cachedTokens = tokens;
+    }
+
+    private async pruneStaleTokens(
+      tokens: Map<string, ProxyTokenInfo>,
+    ): Promise<Map<string, ProxyTokenInfo>> {
+      const now = Date.now();
+      let changed = false;
+      for (const [token, info] of tokens) {
+        const lastSeen = info.lastHeartbeatAt ?? info.startedAt;
+        if (
+          typeof lastSeen === "number" &&
+          now - lastSeen > STALE_PROXY_TOKEN_MS
+        ) {
+          tokens.delete(token);
+          changed = true;
+        }
+      }
+      if (changed) await this.persistTokenMap(tokens);
+      return tokens;
+    }
+
+    private getContainerId(body?: AgentExecutorDispatchPayload): string {
+      return body?.executorContainerId || `tier${tier}-unknown`;
+    }
+
+    async getLoad(): Promise<ExecutorPoolLoad> {
+      const tokens = await this.pruneStaleTokens(await this.loadTokenMap());
+      return {
+        tier,
+        containerId: this.getContainerId(),
+        active: tokens.size,
+        capacity: resolveExecutorTierCapacity(this.env, tier),
+      };
+    }
+
+    async warm(): Promise<ExecutorPoolLoad> {
+      await this.startAndWaitForPorts(8080);
+      return await this.getLoad();
     }
 
     async dispatchStart(
@@ -114,50 +175,88 @@ function createExecutorContainerClass(
           body: JSON.stringify({ error: "Missing serviceId or workerId" }),
         };
       }
+      const tokens = await this.loadTokenMap();
+      const capacity = resolveExecutorTierCapacity(this.env, tier);
+      if (tokens.size >= capacity) {
+        return {
+          ok: false,
+          status: 503,
+          body: JSON.stringify({
+            error: "At capacity",
+            tier,
+            active: tokens.size,
+            capacity,
+          }),
+        };
+      }
       const controlConfig: AgentExecutorControlConfig =
         buildAgentExecutorProxyConfig(this.env, {
           runId: body.runId,
           serviceId,
         });
-      const tokenMap: Record<string, ProxyTokenInfo> = {
-        [controlConfig.controlRpcToken]: {
-          runId: body.runId,
-          serviceId,
-          capability: "control",
-        },
-      };
-      await this.ctx.storage.put("proxyTokens", tokenMap);
-      this.cachedTokens = new Map(Object.entries(tokenMap));
+      const executorContainerId = this.getContainerId(body);
+      const now = Date.now();
+      tokens.set(controlConfig.controlRpcToken, {
+        runId: body.runId,
+        serviceId,
+        capability: "control",
+        executorTier: tier,
+        executorContainerId,
+        startedAt: now,
+        lastHeartbeatAt: now,
+      });
+      await this.persistTokenMap(tokens);
 
-      return await dispatchAgentExecutorStart(
-        {
-          startAndWaitForPorts: this.startAndWaitForPorts.bind(this),
-          fetch: async (request: Request) => {
-            this.renewActivityTimeout();
-            const tcpPort = this.container.getTcpPort(8080);
-            return await tcpPort.fetch(
-              request.url.replace("https:", "http:"),
-              request,
-            );
+      try {
+        const result = await dispatchAgentExecutorStart(
+          {
+            startAndWaitForPorts: this.startAndWaitForPorts.bind(this),
+            fetch: async (request: Request) => {
+              this.renewActivityTimeout();
+              const tcpPort = this.container.getTcpPort(8080);
+              return await tcpPort.fetch(
+                request.url.replace("https:", "http:"),
+                request,
+              );
+            },
           },
-        },
-        body,
-        controlConfig,
-      );
+          {
+            ...body,
+            executorTier: tier,
+            executorContainerId,
+          },
+          controlConfig,
+        );
+        if (!result.ok) {
+          await this.revokeProxyToken(controlConfig.controlRpcToken);
+        }
+        return result;
+      } catch (error) {
+        await this.revokeProxyToken(controlConfig.controlRpcToken);
+        throw error;
+      }
     }
 
     async verifyProxyToken(token: string): Promise<ProxyTokenInfo | null> {
-      if (!this.cachedTokens) {
-        const stored = await this.ctx.storage.get<
-          Record<string, ProxyTokenInfo>
-        >("proxyTokens");
-        if (!stored) return null;
-        this.cachedTokens = new Map(Object.entries(stored));
-      }
-      for (const [storedToken, info] of this.cachedTokens) {
+      const tokens = await this.loadTokenMap();
+      for (const [storedToken, info] of tokens) {
         if (constantTimeEqual(token, storedToken)) return info;
       }
       return null;
+    }
+
+    async touchProxyToken(token: string): Promise<void> {
+      const tokens = await this.loadTokenMap();
+      const info = tokens.get(token);
+      if (!info) return;
+      tokens.set(token, { ...info, lastHeartbeatAt: Date.now() });
+      await this.persistTokenMap(tokens);
+    }
+
+    async revokeProxyToken(token: string): Promise<void> {
+      const tokens = await this.loadTokenMap();
+      tokens.delete(token);
+      await this.persistTokenMap(tokens);
     }
 
     async revokeProxyTokens(): Promise<void> {
@@ -173,6 +272,8 @@ export const ExecutorContainerTier1 = createExecutorContainerClass(1, "10m");
 export const ExecutorContainerTier2 = createExecutorContainerClass(2, "5m");
 /** Tier 3 — large instances, max memory */
 export const ExecutorContainerTier3 = createExecutorContainerClass(3, "3m");
+/** Legacy class name kept so existing Durable Object migrations remain valid. */
+export const TakosAgentExecutorContainer = ExecutorContainerTier1;
 
 // ---------------------------------------------------------------------------
 // Main fetch handler
@@ -180,6 +281,123 @@ export const ExecutorContainerTier3 = createExecutorContainerClass(3, "3m");
 
 // Cached environment validation guard.
 const envGuard = createEnvGuard(validateExecutorHostEnv);
+const STALE_PROXY_TOKEN_MS = 15 * 60 * 1000;
+
+function poolSlotId(env: Env, tier: ExecutorTier, index: number): string {
+  const suffix = normalizePoolRevision(env.EXECUTOR_POOL_REVISION);
+  const base = tier === 1
+    ? `tier1-warm-${index}`
+    : `tier${tier}-scale-${index}`;
+  return suffix ? `${base}-${suffix}` : base;
+}
+
+function normalizePoolRevision(value: unknown): string | null {
+  if (typeof value !== "string") return null;
+  const revision = value.trim().toLowerCase().replace(/[^a-z0-9-]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 48);
+  return revision || null;
+}
+
+async function readPoolLoad(
+  env: Env,
+  tier: ExecutorTier,
+  containerId: string,
+): Promise<{
+  stub: ExecutorContainerStub;
+  load: ExecutorPoolLoad;
+}> {
+  const ns = resolveContainerNamespace(env, tier);
+  const stub = ns.getByName(containerId);
+  const load = stub.getLoad ? await stub.getLoad() : {
+    tier,
+    containerId,
+    active: 0,
+    capacity: resolveExecutorTierCapacity(env, tier),
+  };
+  return {
+    stub,
+    load: {
+      ...load,
+      tier,
+      containerId,
+      capacity: load.capacity || resolveExecutorTierCapacity(env, tier),
+    },
+  };
+}
+
+async function collectExecutorPoolLoads(env: Env): Promise<ExecutorPoolLoad[]> {
+  const config = getExecutorPoolConfig(env);
+  const loads: ExecutorPoolLoad[] = [];
+
+  for (let i = 0; i < config.tier1WarmPoolSize; i++) {
+    loads.push((await readPoolLoad(env, 1, poolSlotId(env, 1, i))).load);
+  }
+
+  if (env.EXECUTOR_CONTAINER_TIER3) {
+    for (let i = 0; i < config.tier3PoolSize; i++) {
+      loads.push((await readPoolLoad(env, 3, poolSlotId(env, 3, i))).load);
+    }
+  }
+
+  return loads;
+}
+
+async function selectExecutorPoolSlot(env: Env): Promise<
+  {
+    tier: ExecutorTier;
+    containerId: string;
+    stub: ExecutorContainerStub;
+  } | null
+> {
+  const config = getExecutorPoolConfig(env);
+
+  for (let i = 0; i < config.tier1WarmPoolSize; i++) {
+    const containerId = poolSlotId(env, 1, i);
+    const { stub, load } = await readPoolLoad(env, 1, containerId);
+    if (load.active < load.capacity) return { tier: 1, containerId, stub };
+  }
+
+  if (!env.EXECUTOR_CONTAINER_TIER3) return null;
+
+  let best:
+    | {
+      tier: ExecutorTier;
+      containerId: string;
+      stub: ExecutorContainerStub;
+      load: ExecutorPoolLoad;
+    }
+    | null = null;
+  for (let i = 0; i < config.tier3PoolSize; i++) {
+    const containerId = poolSlotId(env, 3, i);
+    const { stub, load } = await readPoolLoad(env, 3, containerId);
+    if (load.active >= load.capacity) continue;
+    if (!best || load.active < best.load.active) {
+      best = { tier: 3, containerId, stub, load };
+    }
+  }
+
+  if (!best) return null;
+  return {
+    tier: best.tier,
+    containerId: best.containerId,
+    stub: best.stub,
+  };
+}
+
+async function warmTier1Pool(env: Env): Promise<ExecutorPoolLoad[]> {
+  const config = getExecutorPoolConfig(env);
+  const warmed: ExecutorPoolLoad[] = [];
+  for (let i = 0; i < config.tier1WarmPoolSize; i++) {
+    const containerId = poolSlotId(env, 1, i);
+    const { stub } = await readPoolLoad(env, 1, containerId);
+    const load = stub.warm
+      ? await stub.warm()
+      : (await readPoolLoad(env, 1, containerId)).load;
+    warmed.push({ ...load, tier: 1, containerId });
+  }
+  return warmed;
+}
 
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
@@ -207,6 +425,14 @@ export default {
       });
     }
 
+    if (path === "/internal/executor-pool" && request.method === "GET") {
+      return jsonResponse({
+        status: "ok",
+        service: "takos-executor-host",
+        pools: await collectExecutorPoolLoads(env),
+      });
+    }
+
     // /dispatch — called by takos-worker via service binding (same CF account).
     // Service binding provides implicit authentication; no JWT required.
     if (path === "/dispatch" && request.method === "POST") {
@@ -219,12 +445,27 @@ export default {
         return errorJsonResponse("Missing runId", 400);
       }
 
-      const tier = parseExecutorTier(body.tier);
-      const ns = resolveContainerNamespace(env, tier);
-      const stub = ns.getByName(runId);
+      if (body.tier !== undefined || body.executorTier !== undefined) {
+        const tier = parseExecutorTier(body.executorTier ?? body.tier);
+        const ns = resolveContainerNamespace(env, tier);
+        const containerId = body.executorContainerId || runId;
+        const stub = ns.getByName(containerId);
+        return await forwardAgentExecutorDispatch(stub, {
+          ...body,
+          executorTier: tier,
+          executorContainerId: containerId,
+        });
+      }
 
-      // Container dispatch is the canonical OSS execution path.
-      return await forwardAgentExecutorDispatch(stub, body);
+      const selected = await selectExecutorPoolSlot(env);
+      if (!selected) {
+        return errorJsonResponse("No executor capacity available", 503);
+      }
+      return await forwardAgentExecutorDispatch(selected.stub, {
+        ...body,
+        executorTier: selected.tier,
+        executorContainerId: selected.containerId,
+      });
     }
 
     // /proxy/* and /rpc/control/* — called by executor/container with per-run tokens
@@ -237,13 +478,16 @@ export default {
       const tier = parseExecutorTier(
         request.headers.get("X-Takos-Executor-Tier"),
       );
+      const executorContainerId = request.headers.get(
+        "X-Takos-Executor-Container-Id",
+      );
       if (!runId || !token) {
         return unauthorized();
       }
 
       // Verify token via DO RPC (DO stores the random tokens generated at dispatch)
       const ns = resolveContainerNamespace(env, tier);
-      const stub = ns.getByName(runId);
+      const stub = ns.getByName(executorContainerId || runId);
       const tokenInfo = await stub.verifyProxyToken(token);
       if (!tokenInfo) {
         return unauthorized();
@@ -279,10 +523,13 @@ export default {
         if (!forwarded) {
           return err(`Unknown control RPC path: ${path}`, 404);
         }
+        if (path === "/rpc/control/heartbeat" && forwarded.ok) {
+          await stub.touchProxyToken?.(token);
+        }
         if (
           shouldRevokeProxyTokensAfterControlForward(path, body)
         ) {
-          await revokeProxyTokensAfterTerminalResponse(forwarded, stub);
+          await revokeProxyTokenAfterTerminalResponse(forwarded, stub, token);
         }
         return forwarded;
       }
@@ -291,6 +538,18 @@ export default {
     }
 
     return new Response("takos-executor-host", { status: 200 });
+  },
+
+  async scheduled(_event: ScheduledEvent, env: Env): Promise<void> {
+    const envError = envGuard(env);
+    if (envError) return;
+    try {
+      await warmTier1Pool(env);
+    } catch (error) {
+      logError("Executor warm pool cron failed", error, {
+        module: "executor-host",
+      });
+    }
   },
 } satisfies ExportedHandler<Env>;
 
@@ -333,26 +592,31 @@ function shouldRevokeProxyTokensAfterControlForward(
   ) {
     return true;
   }
-  if (path === "/rpc/control/update-run-status") {
-    return isTerminalRunStatus(body.status);
-  }
   if (path === "/rpc/control/run-event") {
     return isTerminalRunEvent(body.type, body.data);
   }
   return false;
 }
 
-async function revokeProxyTokensAfterTerminalResponse(
+async function revokeProxyTokenAfterTerminalResponse(
   response: Response,
-  stub: { revokeProxyTokens?(): Promise<void> },
+  stub: {
+    revokeProxyToken?(token: string): Promise<void>;
+    revokeProxyTokens?(): Promise<void>;
+  },
+  token: string,
 ): Promise<void> {
-  if (!response.ok || !stub.revokeProxyTokens) {
+  if (!response.ok) {
     return;
   }
   try {
-    await stub.revokeProxyTokens();
+    if (stub.revokeProxyToken) {
+      await stub.revokeProxyToken(token);
+      return;
+    }
+    await stub.revokeProxyTokens?.();
   } catch (error) {
-    logError("Proxy token revoke failed after terminal run update", error, {
+    logError("Proxy token revoke failed after terminal control RPC", error, {
       module: "executor-host",
     });
   }

@@ -3,8 +3,8 @@ import { getDb, serviceCustomDomains } from "../../../infra/db/index.ts";
 import { and, asc, eq, inArray, isNotNull, lt, or } from "drizzle-orm";
 
 import {
-  deleteCloudflareCustomHostname,
-  getCloudflareCustomHostnameStatus,
+  deleteManagedCustomHostname,
+  getManagedCustomHostnameStatus,
 } from "../platform/custom-domains.ts";
 import {
   deleteHostnameRouting,
@@ -15,10 +15,7 @@ import { resolveRoutingTargetForServiceHostname } from "../routing/group-hostnam
 import { ServiceDesiredStateService } from "../platform/worker-desired-state.ts";
 import { listServiceRouteRecordsByIds } from "../platform/workers.ts";
 import { logError, logWarn } from "../../../shared/utils/logger.ts";
-import {
-  DNS_RESOLVE_TIMEOUT_MS,
-  DOH_ENDPOINT,
-} from "../../../shared/constants/dns.ts";
+import { verifyDNS } from "../platform/custom-domains/dns.ts";
 
 const SSL_PENDING_STATES = new Set([
   "pending",
@@ -32,70 +29,6 @@ const SSL_FAILURE_STATES = new Set([
   "validation_timed_out",
   "issuance_timed_out",
 ]);
-
-async function verifyOwnershipRecord(
-  domain: string,
-  verificationToken: string,
-  verificationMethod: string,
-  platformDomain: string,
-): Promise<boolean> {
-  const method = verificationMethod === "txt" ? "txt" : "cname";
-  const expectedValue = method === "cname"
-    ? `${verificationToken}.verify.${platformDomain}`
-    : `takos-verify=${verificationToken}`;
-  const recordName = method === "cname"
-    ? `_acme-challenge.${domain}`
-    : `_takos-verify.${domain}`;
-  const recordType = method === "cname" ? "CNAME" : "TXT";
-
-  const controller = new AbortController();
-  const timeoutId = setTimeout(
-    () => controller.abort(),
-    DNS_RESOLVE_TIMEOUT_MS,
-  );
-
-  try {
-    const response = await fetch(
-      `${DOH_ENDPOINT}?name=${
-        encodeURIComponent(recordName)
-      }&type=${recordType}`,
-      {
-        headers: { Accept: "application/dns-json" },
-        signal: controller.signal,
-      },
-    );
-
-    if (!response.ok) return false;
-
-    const data = (await response.json()) as {
-      Answer?: Array<{ data: string }>;
-    };
-
-    if (!data.Answer || data.Answer.length === 0) {
-      return false;
-    }
-
-    for (const answer of data.Answer) {
-      const normalized = answer.data.replace(/^"|"$/g, "").replace(/\.$/, "")
-        .toLowerCase();
-      if (normalized === expectedValue.toLowerCase()) {
-        return true;
-      }
-    }
-
-    return false;
-  } catch (err) {
-    if (err instanceof Error && err.name === "AbortError") {
-      return false;
-    }
-    logError("DNS verification failed", err, {
-      module: "custom-domain-maintenance",
-    });
-    return false;
-  } finally {
-    clearTimeout(timeoutId);
-  }
-}
 
 export interface CustomDomainReverificationSummary {
   scanned: number;
@@ -167,10 +100,10 @@ export async function runCustomDomainReverification(
 
   for (const domain of domains) {
     try {
-      // ssl_pending domains: skip DNS re-verification, only check CF SSL status
+      // ssl_pending domains: skip DNS re-verification, only check provider SSL status
       if (domain.status === "ssl_pending") {
         if (!domain.cfCustomHostnameId) {
-          // No CF hostname ID — shouldn't be in ssl_pending, reset to dns_verified
+          // No managed hostname ID — shouldn't be in ssl_pending, reset to dns_verified
           await db.update(serviceCustomDomains)
             .set({
               status: "dns_verified",
@@ -182,12 +115,12 @@ export async function runCustomDomainReverification(
           continue;
         }
 
-        const cfStatus = await getCloudflareCustomHostnameStatus(
+        const hostnameStatus = await getManagedCustomHostnameStatus(
           env,
           domain.cfCustomHostnameId,
         );
 
-        if (cfStatus && cfStatus.sslStatus === "active") {
+        if (hostnameStatus && hostnameStatus.sslStatus === "active") {
           // SSL provisioned — promote to active and ensure KV routing
           await db.update(serviceCustomDomains)
             .set({
@@ -209,7 +142,9 @@ export async function runCustomDomainReverification(
           }
           summary.sslPromoted += 1;
           summary.active += 1;
-        } else if (cfStatus && SSL_FAILURE_STATES.has(cfStatus.sslStatus)) {
+        } else if (
+          hostnameStatus && SSL_FAILURE_STATES.has(hostnameStatus.sslStatus)
+        ) {
           // SSL failed/expired — mark as ssl_failed and remove KV routing
           await db.update(serviceCustomDomains)
             .set({
@@ -241,14 +176,19 @@ export async function runCustomDomainReverification(
         .where(eq(serviceCustomDomains.id, domain.id))
         .run();
 
-      const ownershipValid = await verifyOwnershipRecord(
+      const ownershipMethod = domain.verificationMethod === "txt"
+        ? "txt"
+        : "cname";
+      const ownershipExpected = ownershipMethod === "cname"
+        ? `${domain.verificationToken}.verify.${platformDomain}`
+        : domain.verificationToken;
+      const ownershipVerification = await verifyDNS(
         domain.domain,
-        domain.verificationToken,
-        domain.verificationMethod,
-        platformDomain,
+        ownershipExpected,
+        ownershipMethod,
       );
 
-      if (!ownershipValid) {
+      if (!ownershipVerification.verified) {
         await db.update(serviceCustomDomains)
           .set({
             status: "failed",
@@ -263,24 +203,25 @@ export async function runCustomDomainReverification(
       }
 
       let nextStatus: "active" | "verifying" | "failed" | "expired" = "active";
-      let nextSslStatus: "active" | "pending" | "failed" = "active";
+      let nextSslStatus: "active" | "pending" | "failed" | "external" =
+        domain.cfCustomHostnameId ? "active" : "external";
 
       if (domain.cfCustomHostnameId) {
-        const cfStatus = await getCloudflareCustomHostnameStatus(
+        const hostnameStatus = await getManagedCustomHostnameStatus(
           env,
           domain.cfCustomHostnameId,
         );
 
-        if (cfStatus) {
-          if (cfStatus.sslStatus === "active") {
+        if (hostnameStatus) {
+          if (hostnameStatus.sslStatus === "active") {
             nextStatus = "active";
             nextSslStatus = "active";
-          } else if (SSL_FAILURE_STATES.has(cfStatus.sslStatus)) {
-            nextStatus = cfStatus.sslStatus === "expired"
+          } else if (SSL_FAILURE_STATES.has(hostnameStatus.sslStatus)) {
+            nextStatus = hostnameStatus.sslStatus === "expired"
               ? "expired"
               : "failed";
             nextSslStatus = "failed";
-          } else if (SSL_PENDING_STATES.has(cfStatus.sslStatus)) {
+          } else if (SSL_PENDING_STATES.has(hostnameStatus.sslStatus)) {
             nextStatus = "verifying";
             nextSslStatus = "pending";
           } else {
@@ -382,9 +323,9 @@ export async function reconcileStuckDomains(
   for (const domain of stuckDomains) {
     try {
       if (domain.status === "dns_verified" && domain.cfCustomHostnameId) {
-        // Double-failure orphan: dns_verified with a stale CF hostname ID
-        // Clean up the orphaned CF hostname and reset DB state
-        await deleteCloudflareCustomHostname(env, domain.cfCustomHostnameId);
+        // Double-failure orphan: dns_verified with a stale managed hostname ID.
+        // Clean up the orphaned external hostname and reset DB state.
+        await deleteManagedCustomHostname(env, domain.cfCustomHostnameId);
         await db.update(serviceCustomDomains)
           .set({
             cfCustomHostnameId: null,
@@ -393,19 +334,19 @@ export async function reconcileStuckDomains(
           })
           .where(eq(serviceCustomDomains.id, domain.id))
           .run();
-        logWarn("Cleaned orphaned CF hostname", {
+        logWarn("Cleaned orphaned managed custom hostname", {
           module: "custom-domain-maintenance",
           ...{
             domainId: domain.id,
             domain: domain.domain,
-            cfHostnameId: domain.cfCustomHostnameId,
+            customHostnameId: domain.cfCustomHostnameId,
           },
         });
         summary.cleaned += 1;
       } else if (domain.status === "ssl_pending") {
-        // ssl_pending stuck > 1 hour — check CF status
+        // ssl_pending stuck > 1 hour — check managed hostname status
         if (!domain.cfCustomHostnameId) {
-          // No CF hostname — reset to dns_verified for retry
+          // No managed hostname — reset to dns_verified for retry
           await db.update(serviceCustomDomains)
             .set({
               status: "dns_verified",
@@ -418,13 +359,13 @@ export async function reconcileStuckDomains(
           continue;
         }
 
-        const cfStatus = await getCloudflareCustomHostnameStatus(
+        const hostnameStatus = await getManagedCustomHostnameStatus(
           env,
           domain.cfCustomHostnameId,
         );
 
-        if (!cfStatus) {
-          // CF returned null/error — hostname gone, reset for retry
+        if (!hostnameStatus) {
+          // Provider returned null/error — hostname gone, reset for retry
           await db.update(serviceCustomDomains)
             .set({
               status: "dns_verified",
@@ -435,8 +376,8 @@ export async function reconcileStuckDomains(
             .where(eq(serviceCustomDomains.id, domain.id))
             .run();
           summary.reset += 1;
-        } else if (SSL_FAILURE_STATES.has(cfStatus.sslStatus)) {
-          // CF reports failure
+        } else if (SSL_FAILURE_STATES.has(hostnameStatus.sslStatus)) {
+          // Provider reports failure
           await db.update(serviceCustomDomains)
             .set({
               status: "ssl_failed",
@@ -448,7 +389,7 @@ export async function reconcileStuckDomains(
           await deleteHostnameRouting({ env, hostname: domain.domain });
           summary.cleaned += 1;
         }
-        // If still pending at CF, leave alone — CF provisioning can be slow
+        // If still pending at the provider, leave alone — provisioning can be slow
       }
     } catch (err) {
       summary.errors += 1;

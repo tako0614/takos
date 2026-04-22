@@ -1,20 +1,26 @@
-import type { RunStatus } from '../../../shared/types/index.ts';
+import type { RunStatus } from "../../../shared/types/index.ts";
 
-export type RunTerminalEventType = 'completed' | 'error' | 'cancelled' | 'run.failed';
-export type RunTerminalStatus = 'completed' | 'failed' | 'cancelled';
+export type RunTerminalEventType =
+  | "completed"
+  | "error"
+  | "cancelled"
+  | "run.failed";
+export type RunTerminalStatus = "completed" | "failed" | "cancelled";
 
 export const RUN_TERMINAL_EVENT_TYPES = new Set<RunTerminalEventType>([
-  'completed',
-  'error',
-  'cancelled',
-  'run.failed',
+  "completed",
+  "error",
+  "cancelled",
+  "run.failed",
 ]);
 
-export const RUN_TERMINAL_STATUSES: ReadonlySet<RunStatus> = new Set<RunStatus>([
-  'completed',
-  'failed',
-  'cancelled',
-]);
+export const RUN_TERMINAL_STATUSES: ReadonlySet<RunStatus> = new Set<RunStatus>(
+  [
+    "completed",
+    "failed",
+    "cancelled",
+  ],
+);
 
 export type RunTerminalPayload = {
   status: RunTerminalStatus;
@@ -47,7 +53,7 @@ export function buildRunFailedPayload(
 ): RunTerminalPayload {
   return buildTerminalPayload(
     runId,
-    'failed',
+    "failed",
     {
       error,
       ...(options.permanent ? { permanent: true } : {}),
@@ -56,26 +62,33 @@ export function buildRunFailedPayload(
   );
 }
 
-export const TERMINAL_STATUS_BY_EVENT_TYPE: Readonly<Record<RunTerminalEventType, RunTerminalStatus>> = {
-  completed: 'completed',
-  error: 'failed',
-  cancelled: 'cancelled',
-  'run.failed': 'failed',
+export const TERMINAL_STATUS_BY_EVENT_TYPE: Readonly<
+  Record<RunTerminalEventType, RunTerminalStatus>
+> = {
+  completed: "completed",
+  error: "failed",
+  cancelled: "cancelled",
+  "run.failed": "failed",
 };
 
-export function isRunTerminalStatus(status: unknown): status is RunTerminalStatus {
-  return status === 'completed' || status === 'failed' || status === 'cancelled';
+export function isRunTerminalStatus(
+  status: unknown,
+): status is RunTerminalStatus {
+  return status === "completed" || status === "failed" ||
+    status === "cancelled";
 }
 
 function asRecord(value: unknown): Record<string, unknown> | null {
-  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
     return null;
   }
   return value as Record<string, unknown>;
 }
 
-export function parseRunEventPayload(data: unknown): Record<string, unknown> | null {
-  if (typeof data === 'string') {
+export function parseRunEventPayload(
+  data: unknown,
+): Record<string, unknown> | null {
+  if (typeof data === "string") {
     try {
       return asRecord(JSON.parse(data));
     } catch {
@@ -92,7 +105,7 @@ export function deriveTerminalStatusFromRunEvent(
   if (eventType in TERMINAL_STATUS_BY_EVENT_TYPE) {
     return TERMINAL_STATUS_BY_EVENT_TYPE[eventType as RunTerminalEventType];
   }
-  if (eventType !== 'run_status') {
+  if (eventType !== "run_status") {
     return null;
   }
 

@@ -1,6 +1,4 @@
-import type {
-  R2Object,
-} from '../shared/types/bindings.ts';
+import type { R2Object } from "../shared/types/bindings.ts";
 
 // ---------------------------------------------------------------------------
 // Cloudflare R2 compatibility types
@@ -43,4 +41,3 @@ export interface R2RangeLike {
   offset: number;
   length?: number;
 }
-

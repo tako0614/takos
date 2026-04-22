@@ -1,17 +1,19 @@
-import type { D1Database } from '../../../shared/types/bindings.ts';
-import type { SelectOf } from '../../../shared/types/drizzle-utils.ts';
-import { oauthDeviceCodes } from '../../../infra/db/index.ts';
-import type { OAuthDeviceCode } from '../../../shared/types/oauth.ts';
-import { OAUTH_CONSTANTS } from '../../../shared/types/oauth.ts';
-import { generateId, generateRandomString } from './pkce.ts';
-import { computeSHA256 } from '../../../shared/utils/hash.ts';
-import { getDb } from '../../../infra/db/index.ts';
-import { eq, and, isNull } from 'drizzle-orm';
-import { textDate, textDateNullable } from '../../../shared/utils/db-guards.ts';
+import type { D1Database } from "../../../shared/types/bindings.ts";
+import type { SelectOf } from "../../../shared/types/drizzle-utils.ts";
+import { oauthDeviceCodes } from "../../../infra/db/index.ts";
+import type { OAuthDeviceCode } from "../../../shared/types/oauth.ts";
+import { OAUTH_CONSTANTS } from "../../../shared/types/oauth.ts";
+import { generateId, generateRandomString } from "./pkce.ts";
+import { computeSHA256 } from "../../../shared/utils/hash.ts";
+import { getDb } from "../../../infra/db/index.ts";
+import { and, eq, isNull } from "drizzle-orm";
+import { textDate, textDateNullable } from "../../../shared/utils/db-guards.ts";
 
 type OAuthDeviceCodeRow = SelectOf<typeof oauthDeviceCodes>;
 
-function toOptionalIsoString(value: string | Date | null | undefined): string | null {
+function toOptionalIsoString(
+  value: string | Date | null | undefined,
+): string | null {
   return textDateNullable(value);
 }
 
@@ -22,7 +24,7 @@ function toApiDeviceCode(row: OAuthDeviceCodeRow): OAuthDeviceCode {
     user_code_hash: row.userCodeHash,
     client_id: row.clientId,
     scope: row.scope,
-    status: row.status as OAuthDeviceCode['status'],
+    status: row.status as OAuthDeviceCode["status"],
     user_id: row.accountId ?? null,
     interval_seconds: row.intervalSeconds,
     last_polled_at: toOptionalIsoString(row.lastPolledAt),
@@ -35,13 +37,13 @@ function toApiDeviceCode(row: OAuthDeviceCodeRow): OAuthDeviceCode {
   };
 }
 
-const USER_CODE_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+const USER_CODE_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
 
 export function normalizeUserCode(raw: string): string {
-  return String(raw || '')
+  return String(raw || "")
     .trim()
     .toUpperCase()
-    .replace(/[^A-Z0-9]/g, '');
+    .replace(/[^A-Z0-9]/g, "");
 }
 
 function formatUserCode(normalized: string): string {
@@ -52,7 +54,7 @@ function formatUserCode(normalized: string): string {
   for (let i = 0; i < value.length; i += group) {
     parts.push(value.slice(i, i + group));
   }
-  return parts.join('-');
+  return parts.join("-");
 }
 
 function generateUserCodeNormalized(): string {
@@ -64,7 +66,7 @@ function generateUserCodeNormalized(): string {
     const idx = bytes[i] % USER_CODE_ALPHABET.length;
     out.push(USER_CODE_ALPHABET[idx]!);
   }
-  return out.join('');
+  return out.join("");
 }
 
 export interface CreatedDeviceAuthorization {
@@ -83,11 +85,13 @@ export async function createDeviceAuthorization(
     scope: string;
     expiresInSeconds?: number;
     intervalSeconds?: number;
-  }
+  },
 ): Promise<CreatedDeviceAuthorization> {
   const db = getDb(dbBinding);
-  const expiresIn = params.expiresInSeconds ?? OAUTH_CONSTANTS.DEVICE_CODE_EXPIRES_IN;
-  const interval = params.intervalSeconds ?? OAUTH_CONSTANTS.DEVICE_POLL_INTERVAL_SECONDS;
+  const expiresIn = params.expiresInSeconds ??
+    OAUTH_CONSTANTS.DEVICE_CODE_EXPIRES_IN;
+  const interval = params.intervalSeconds ??
+    OAUTH_CONSTANTS.DEVICE_POLL_INTERVAL_SECONDS;
 
   for (let attempt = 0; attempt < 5; attempt++) {
     const id = generateId();
@@ -107,7 +111,7 @@ export async function createDeviceAuthorization(
         userCodeHash,
         clientId: params.clientId,
         scope: params.scope,
-        status: 'pending',
+        status: "pending",
         accountId: null,
         intervalSeconds: interval,
         lastPolledAt: null,
@@ -129,19 +133,19 @@ export async function createDeviceAuthorization(
       };
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
-      if (message.includes('UNIQUE') || message.includes('unique')) {
+      if (message.includes("UNIQUE") || message.includes("unique")) {
         continue;
       }
       throw err;
     }
   }
 
-  throw new Error('Failed to generate unique device authorization codes');
+  throw new Error("Failed to generate unique device authorization codes");
 }
 
 export async function getDeviceAuthorizationByUserCode(
   dbBinding: D1Database,
-  rawUserCode: string
+  rawUserCode: string,
 ): Promise<OAuthDeviceCode | null> {
   const db = getDb(dbBinding);
   const normalized = normalizeUserCode(rawUserCode);
@@ -156,7 +160,7 @@ export async function getDeviceAuthorizationByUserCode(
 
 export async function getDeviceAuthorizationByDeviceCode(
   dbBinding: D1Database,
-  deviceCode: string
+  deviceCode: string,
 ): Promise<OAuthDeviceCode | null> {
   const db = getDb(dbBinding);
   if (!deviceCode) return null;
@@ -171,11 +175,11 @@ export async function getDeviceAuthorizationByDeviceCode(
 async function resolveDeviceAuthorization(
   dbBinding: D1Database,
   params: { id: string; userId: string },
-  decision: 'approved' | 'denied',
+  decision: "approved" | "denied",
 ): Promise<boolean> {
   const db = getDb(dbBinding);
   const now = new Date().toISOString();
-  const timestampField = decision === 'approved' ? 'approvedAt' : 'deniedAt';
+  const timestampField = decision === "approved" ? "approvedAt" : "deniedAt";
 
   const result = await db.update(oauthDeviceCodes).set({
     status: decision,
@@ -185,8 +189,8 @@ async function resolveDeviceAuthorization(
   }).where(
     and(
       eq(oauthDeviceCodes.id, params.id),
-      eq(oauthDeviceCodes.status, 'pending'),
-    )
+      eq(oauthDeviceCodes.status, "pending"),
+    ),
   );
 
   return (result.meta.changes ?? 0) > 0;
@@ -194,53 +198,57 @@ async function resolveDeviceAuthorization(
 
 export async function approveDeviceAuthorization(
   dbBinding: D1Database,
-  params: { id: string; userId: string }
+  params: { id: string; userId: string },
 ): Promise<boolean> {
-  return resolveDeviceAuthorization(dbBinding, params, 'approved');
+  return resolveDeviceAuthorization(dbBinding, params, "approved");
 }
 
 export async function denyDeviceAuthorization(
   dbBinding: D1Database,
-  params: { id: string; userId: string }
+  params: { id: string; userId: string },
 ): Promise<boolean> {
-  return resolveDeviceAuthorization(dbBinding, params, 'denied');
+  return resolveDeviceAuthorization(dbBinding, params, "denied");
 }
 
 export type DeviceCodePollResult =
-  | { kind: 'not_found' }
-  | { kind: 'client_mismatch' }
-  | { kind: 'expired' }
-  | { kind: 'denied' }
-  | { kind: 'used' }
-  | { kind: 'pending'; slowDown: boolean; intervalSeconds: number }
-  | { kind: 'approved'; id: string; userId: string; scope: string };
+  | { kind: "not_found" }
+  | { kind: "client_mismatch" }
+  | { kind: "expired" }
+  | { kind: "denied" }
+  | { kind: "used" }
+  | { kind: "pending"; slowDown: boolean; intervalSeconds: number }
+  | { kind: "approved"; id: string; userId: string; scope: string };
 
 export async function pollDeviceAuthorization(
   dbBinding: D1Database,
-  params: { deviceCode: string; clientId: string }
+  params: { deviceCode: string; clientId: string },
 ): Promise<DeviceCodePollResult> {
   const db = getDb(dbBinding);
   const deviceCode = params.deviceCode;
-  if (!deviceCode) return { kind: 'not_found' };
+  if (!deviceCode) return { kind: "not_found" };
   const deviceCodeHash = await computeSHA256(deviceCode);
 
   const record = await db.select().from(oauthDeviceCodes)
     .where(eq(oauthDeviceCodes.deviceCodeHash, deviceCodeHash)).get();
-  if (!record) return { kind: 'not_found' };
+  if (!record) return { kind: "not_found" };
 
   const api = toApiDeviceCode(record);
 
   if (api.client_id !== params.clientId) {
-    return { kind: 'client_mismatch' };
+    return { kind: "client_mismatch" };
   }
 
   const nowMs = Date.now();
   if (new Date(api.expires_at).getTime() <= nowMs) {
-    return { kind: 'expired' };
+    return { kind: "expired" };
   }
 
-  const lastMs = api.last_polled_at ? new Date(api.last_polled_at).getTime() : null;
-  const currentInterval = Number.isFinite(api.interval_seconds) ? api.interval_seconds : OAUTH_CONSTANTS.DEVICE_POLL_INTERVAL_SECONDS;
+  const lastMs = api.last_polled_at
+    ? new Date(api.last_polled_at).getTime()
+    : null;
+  const currentInterval = Number.isFinite(api.interval_seconds)
+    ? api.interval_seconds
+    : OAUTH_CONSTANTS.DEVICE_POLL_INTERVAL_SECONDS;
 
   let slowDown = false;
   let nextInterval = currentInterval;
@@ -257,38 +265,43 @@ export async function pollDeviceAuthorization(
   }).where(eq(oauthDeviceCodes.id, api.id));
 
   switch (api.status) {
-    case 'pending':
-      return { kind: 'pending', slowDown, intervalSeconds: nextInterval };
-    case 'denied':
-      return { kind: 'denied' };
-    case 'used':
-      return { kind: 'used' };
-    case 'approved':
+    case "pending":
+      return { kind: "pending", slowDown, intervalSeconds: nextInterval };
+    case "denied":
+      return { kind: "denied" };
+    case "used":
+      return { kind: "used" };
+    case "approved":
       // Fail-close if user_id is unexpectedly missing
-      if (!api.user_id) return { kind: 'not_found' };
-      return { kind: 'approved', id: api.id, userId: api.user_id, scope: api.scope };
+      if (!api.user_id) return { kind: "not_found" };
+      return {
+        kind: "approved",
+        id: api.id,
+        userId: api.user_id,
+        scope: api.scope,
+      };
     default:
-      return { kind: 'not_found' };
+      return { kind: "not_found" };
   }
 }
 
 export async function consumeApprovedDeviceAuthorization(
   dbBinding: D1Database,
-  id: string
+  id: string,
 ): Promise<boolean> {
   const db = getDb(dbBinding);
   const now = new Date().toISOString();
 
   const result = await db.update(oauthDeviceCodes).set({
-    status: 'used',
+    status: "used",
     usedAt: now,
     updatedAt: now,
   }).where(
     and(
       eq(oauthDeviceCodes.id, id),
-      eq(oauthDeviceCodes.status, 'approved'),
+      eq(oauthDeviceCodes.status, "approved"),
       isNull(oauthDeviceCodes.usedAt),
-    )
+    ),
   );
 
   return (result.meta.changes ?? 0) > 0;

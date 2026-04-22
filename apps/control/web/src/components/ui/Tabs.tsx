@@ -1,5 +1,11 @@
-import { createContext, useContext, createSignal, splitProps, Show } from 'solid-js';
-import type { JSX } from 'solid-js';
+import {
+  createContext,
+  createSignal,
+  Show,
+  splitProps,
+  useContext,
+} from "solid-js";
+import type { JSX } from "solid-js";
 
 interface TabsContextValue {
   activeTab: () => string;
@@ -32,16 +38,18 @@ export function Tabs(props: TabsProps) {
 interface TabListProps extends JSX.HTMLAttributes<HTMLDivElement> {}
 
 export function TabList(props: TabListProps) {
-  const [local, rest] = splitProps(props, ['children', 'class', 'style']);
+  const [local, rest] = splitProps(props, ["children", "class", "style"]);
 
   return (
     <div
-      class={local.class ?? ''}
+      class={local.class ?? ""}
       style={{
-        display: 'flex',
-        gap: '0.25rem',
-        'border-bottom': '1px solid var(--color-border-primary)',
-        ...(typeof local.style === 'object' && local.style !== null ? local.style : {}),
+        display: "flex",
+        gap: "0.25rem",
+        "border-bottom": "1px solid var(--color-border-primary)",
+        ...(typeof local.style === "object" && local.style !== null
+          ? local.style
+          : {}),
       }}
       role="tablist"
       {...rest}
@@ -56,24 +64,28 @@ interface TabProps extends JSX.ButtonHTMLAttributes<HTMLButtonElement> {
 }
 
 export function Tab(props: TabProps) {
-  const [local, rest] = splitProps(props, ['id', 'children', 'class', 'style']);
+  const [local, rest] = splitProps(props, ["id", "children", "class", "style"]);
 
   const context = useContext(TabsContext);
-  if (!context) throw new Error('Tab must be used within Tabs');
+  if (!context) throw new Error("Tab must be used within Tabs");
 
   const { activeTab, setActiveTab } = context;
 
   const tabStyle = (): JSX.CSSProperties => ({
-    padding: '0.75rem 1rem',
-    'font-size': '0.875rem',
-    'font-weight': 500,
-    'background-color': 'transparent',
-    border: 'none',
-    'border-bottom': `2px solid ${activeTab() === local.id ? 'var(--color-primary)' : 'transparent'}`,
-    color: activeTab() === local.id ? 'var(--color-text-primary)' : 'var(--color-text-secondary)',
-    cursor: 'pointer',
-    transition: 'var(--transition-colors)',
-    'margin-bottom': '-1px',
+    padding: "0.75rem 1rem",
+    "font-size": "0.875rem",
+    "font-weight": 500,
+    "background-color": "transparent",
+    border: "none",
+    "border-bottom": `2px solid ${
+      activeTab() === local.id ? "var(--color-primary)" : "transparent"
+    }`,
+    color: activeTab() === local.id
+      ? "var(--color-text-primary)"
+      : "var(--color-text-secondary)",
+    cursor: "pointer",
+    transition: "var(--transition-colors)",
+    "margin-bottom": "-1px",
   });
 
   return (
@@ -81,10 +93,12 @@ export function Tab(props: TabProps) {
       type="button"
       role="tab"
       aria-selected={activeTab() === local.id}
-      class={local.class ?? ''}
+      class={local.class ?? ""}
       style={{
         ...tabStyle(),
-        ...(typeof local.style === 'object' && local.style !== null ? local.style : {}),
+        ...(typeof local.style === "object" && local.style !== null
+          ? local.style
+          : {}),
       }}
       onClick={() => setActiveTab(local.id)}
       {...rest}
@@ -99,10 +113,10 @@ interface TabPanelProps extends JSX.HTMLAttributes<HTMLDivElement> {
 }
 
 export function TabPanel(props: TabPanelProps) {
-  const [local, rest] = splitProps(props, ['id', 'children', 'class', 'style']);
+  const [local, rest] = splitProps(props, ["id", "children", "class", "style"]);
 
   const context = useContext(TabsContext);
-  if (!context) throw new Error('TabPanel must be used within Tabs');
+  if (!context) throw new Error("TabPanel must be used within Tabs");
 
   const { activeTab } = context;
 
@@ -110,10 +124,12 @@ export function TabPanel(props: TabPanelProps) {
     <Show when={activeTab() === local.id}>
       <div
         role="tabpanel"
-        class={local.class ?? ''}
+        class={local.class ?? ""}
         style={{
-          padding: '1rem 0',
-          ...(typeof local.style === 'object' && local.style !== null ? local.style : {}),
+          padding: "1rem 0",
+          ...(typeof local.style === "object" && local.style !== null
+            ? local.style
+            : {}),
         }}
         {...rest}
       >

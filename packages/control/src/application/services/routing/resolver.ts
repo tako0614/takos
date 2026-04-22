@@ -155,7 +155,7 @@ export function selectDeploymentTargetFromRoutingTarget(
 /**
  * Select a worker name from an http-endpoint-set routing target.
  * Uses the longest URL-path-segment-safe pathPrefix match among
- * cloudflare.worker endpoints.
+ * worker-compatible service-ref or http-url endpoints.
  */
 export function selectHttpEndpointFromHttpEndpointSet(
   endpoints: StoredHttpEndpoint[],

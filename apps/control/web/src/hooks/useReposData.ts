@@ -1,13 +1,27 @@
-import { createSignal, createEffect, on, onCleanup, type Accessor } from 'solid-js';
-import type { ExploreSort, SearchOrder, SearchSort, SourceRepo, SourceTab } from '../types/repos.ts';
-import { rpc, rpcJson } from '../lib/rpc.ts';
+import {
+  type Accessor,
+  createEffect,
+  createSignal,
+  on,
+  onCleanup,
+} from "solid-js";
+import type {
+  ExploreSort,
+  SearchOrder,
+  SearchSort,
+  SourceRepo,
+  SourceTab,
+} from "../types/repos.ts";
+import { rpc, rpcJson } from "../lib/rpc.ts";
 
 interface UseReposDataOptions {
   selectedSpaceId?: Accessor<string | undefined>;
   initialTab: SourceTab;
 }
 
-export function useReposData({ selectedSpaceId, initialTab }: UseReposDataOptions) {
+export function useReposData(
+  { selectedSpaceId, initialTab }: UseReposDataOptions,
+) {
   const [activeTab, setActiveTab] = createSignal<SourceTab>(initialTab);
   const PAGE_SIZE = 20;
   let myReposRequestSeq = 0;
@@ -21,7 +35,7 @@ export function useReposData({ selectedSpaceId, initialTab }: UseReposDataOption
 
   const [exploreRepos, setExploreRepos] = createSignal<SourceRepo[]>([]);
   const [exploreLoading, setExploreLoading] = createSignal(false);
-  const [exploreSort, setExploreSort] = createSignal<ExploreSort>('trending');
+  const [exploreSort, setExploreSort] = createSignal<ExploreSort>("trending");
   const [exploreOffset, setExploreOffset] = createSignal(0);
   const [exploreHasMore, setExploreHasMore] = createSignal(false);
   const [exploreTotal, setExploreTotal] = createSignal(0);
@@ -32,11 +46,11 @@ export function useReposData({ selectedSpaceId, initialTab }: UseReposDataOption
   const [starredHasMore, setStarredHasMore] = createSignal(false);
   const [starredTotal, setStarredTotal] = createSignal(0);
 
-  const [searchQuery, setSearchQuery] = createSignal('');
+  const [searchQuery, setSearchQuery] = createSignal("");
   const [searchResults, setSearchResults] = createSignal<SourceRepo[]>([]);
   const [searching, setSearching] = createSignal(false);
-  const [searchSort, setSearchSort] = createSignal<SearchSort>('stars');
-  const [searchOrder, setSearchOrder] = createSignal<SearchOrder>('desc');
+  const [searchSort, setSearchSort] = createSignal<SearchSort>("stars");
+  const [searchOrder, setSearchOrder] = createSignal<SearchOrder>("desc");
   const [searchOffset, setSearchOffset] = createSignal(0);
   const [searchHasMore, setSearchHasMore] = createSignal(false);
   const [searchTotal, setSearchTotal] = createSignal(0);
@@ -50,7 +64,7 @@ export function useReposData({ selectedSpaceId, initialTab }: UseReposDataOption
     try {
       setMyReposLoading(true);
       setMyReposError(null);
-      const res = await rpc.spaces[':spaceId'].repos.$get({
+      const res = await rpc.spaces[":spaceId"].repos.$get({
         param: { spaceId: currentSpaceId },
       });
       const data = await rpcJson<{ repositories?: SourceRepo[] }>(res);
@@ -60,9 +74,12 @@ export function useReposData({ selectedSpaceId, initialTab }: UseReposDataOption
     } catch (err) {
       if (requestId !== myReposRequestSeq) return;
       if (selectedSpaceId?.() !== currentSpaceId) return;
-      setMyReposError(err instanceof Error ? err.message : 'Unknown error');
+      setMyReposError(err instanceof Error ? err.message : "Unknown error");
     } finally {
-      if (requestId === myReposRequestSeq && selectedSpaceId?.() === currentSpaceId) {
+      if (
+        requestId === myReposRequestSeq &&
+        selectedSpaceId?.() === currentSpaceId
+      ) {
         setMyReposLoading(false);
       }
     }
@@ -72,15 +89,21 @@ export function useReposData({ selectedSpaceId, initialTab }: UseReposDataOption
     const requestId = ++exploreRequestSeq;
     try {
       setExploreLoading(true);
-      const offset = typeof offsetOverride === 'number'
+      const offset = typeof offsetOverride === "number"
         ? offsetOverride
         : reset
-          ? 0
-          : exploreOffset();
+        ? 0
+        : exploreOffset();
       const res = await rpc.explore.repos.$get({
-        query: { sort: exploreSort(), limit: String(PAGE_SIZE), offset: String(offset) },
+        query: {
+          sort: exploreSort(),
+          limit: String(PAGE_SIZE),
+          offset: String(offset),
+        },
       });
-      const data = await rpcJson<{ repos?: SourceRepo[]; has_more?: boolean; total?: number }>(res);
+      const data = await rpcJson<
+        { repos?: SourceRepo[]; has_more?: boolean; total?: number }
+      >(res);
       if (requestId !== exploreRequestSeq) return;
       if (reset) {
         setExploreRepos(data.repos || []);
@@ -92,7 +115,7 @@ export function useReposData({ selectedSpaceId, initialTab }: UseReposDataOption
       setExploreTotal(data.total || 0);
     } catch (err) {
       if (requestId !== exploreRequestSeq) return;
-      console.error('Failed to fetch explore repos:', err);
+      console.error("Failed to fetch explore repos:", err);
     } finally {
       if (requestId === exploreRequestSeq) {
         setExploreLoading(false);
@@ -104,15 +127,17 @@ export function useReposData({ selectedSpaceId, initialTab }: UseReposDataOption
     const requestId = ++starredRequestSeq;
     try {
       setStarredLoading(true);
-      const offset = typeof offsetOverride === 'number'
+      const offset = typeof offsetOverride === "number"
         ? offsetOverride
         : reset
-          ? 0
-          : starredOffset();
+        ? 0
+        : starredOffset();
       const res = await rpc.repos.starred.$get({
         query: { limit: String(PAGE_SIZE), offset: String(offset) },
       });
-      const data = await rpcJson<{ repos?: SourceRepo[]; has_more?: boolean; total?: number }>(res);
+      const data = await rpcJson<
+        { repos?: SourceRepo[]; has_more?: boolean; total?: number }
+      >(res);
       if (requestId !== starredRequestSeq) return;
       if (reset) {
         setStarredRepos(data.repos || []);
@@ -124,7 +149,7 @@ export function useReposData({ selectedSpaceId, initialTab }: UseReposDataOption
       setStarredTotal(data.total || 0);
     } catch (err) {
       if (requestId !== starredRequestSeq) return;
-      console.error('Failed to fetch starred repos:', err);
+      console.error("Failed to fetch starred repos:", err);
     } finally {
       if (requestId === starredRequestSeq) {
         setStarredLoading(false);
@@ -132,19 +157,31 @@ export function useReposData({ selectedSpaceId, initialTab }: UseReposDataOption
     }
   };
 
-  const searchRepos = async (query: string, reset = false, offsetOverride?: number) => {
+  const searchRepos = async (
+    query: string,
+    reset = false,
+    offsetOverride?: number,
+  ) => {
     const requestId = ++searchRequestSeq;
     try {
       setSearching(true);
-      const offset = typeof offsetOverride === 'number'
+      const offset = typeof offsetOverride === "number"
         ? offsetOverride
         : reset
-          ? 0
-          : searchOffset();
+        ? 0
+        : searchOffset();
       const res = await rpc.explore.repos.$get({
-        query: { q: query, limit: String(PAGE_SIZE), offset: String(offset), sort: searchSort(), order: searchOrder() },
+        query: {
+          q: query,
+          limit: String(PAGE_SIZE),
+          offset: String(offset),
+          sort: searchSort(),
+          order: searchOrder(),
+        },
       });
-      const data = await rpcJson<{ repos?: SourceRepo[]; has_more?: boolean; total?: number }>(res);
+      const data = await rpcJson<
+        { repos?: SourceRepo[]; has_more?: boolean; total?: number }
+      >(res);
       if (requestId !== searchRequestSeq) return;
       if (reset) {
         setSearchResults(data.repos || []);
@@ -156,7 +193,7 @@ export function useReposData({ selectedSpaceId, initialTab }: UseReposDataOption
       setSearchTotal(data.total || 0);
     } catch (err) {
       if (requestId !== searchRequestSeq) return;
-      console.error('Failed to search repos:', err);
+      console.error("Failed to search repos:", err);
     } finally {
       if (requestId === searchRequestSeq) {
         setSearching(false);
@@ -169,7 +206,7 @@ export function useReposData({ selectedSpaceId, initialTab }: UseReposDataOption
     () => [selectedSpaceId?.(), activeTab()],
     () => {
       const currentSpaceId = selectedSpaceId?.();
-      if (currentSpaceId && activeTab() === 'repos') {
+      if (currentSpaceId && activeTab() === "repos") {
         void fetchMyRepos();
         return;
       }
@@ -186,7 +223,7 @@ export function useReposData({ selectedSpaceId, initialTab }: UseReposDataOption
   createEffect(on(
     () => [activeTab(), exploreSort()],
     () => {
-      if (activeTab() === 'explore') {
+      if (activeTab() === "explore") {
         void fetchExploreRepos(true);
       }
     },
@@ -196,7 +233,7 @@ export function useReposData({ selectedSpaceId, initialTab }: UseReposDataOption
   createEffect(on(
     () => activeTab(),
     () => {
-      if (activeTab() === 'starred') {
+      if (activeTab() === "starred") {
         void fetchStarredRepos(true);
       }
     },
@@ -228,12 +265,12 @@ export function useReposData({ selectedSpaceId, initialTab }: UseReposDataOption
   const handleCreateRepo = async (
     name: string,
     description: string,
-    visibility: 'public' | 'private',
+    visibility: "public" | "private",
   ) => {
     const currentSpaceId = selectedSpaceId?.();
     if (!currentSpaceId) return;
     try {
-      const res = await rpc.spaces[':spaceId'].repos.$post({
+      const res = await rpc.spaces[":spaceId"].repos.$post({
         param: { spaceId: currentSpaceId },
         json: { name, description, visibility },
       });
@@ -241,16 +278,16 @@ export function useReposData({ selectedSpaceId, initialTab }: UseReposDataOption
       setShowCreateModal(false);
       void fetchMyRepos();
     } catch (err) {
-      console.error('Failed to create repo:', err);
+      console.error("Failed to create repo:", err);
     }
   };
 
   const handleStar = async (repo: SourceRepo) => {
     try {
       if (repo.is_starred) {
-        await rpc.repos[':repoId'].star.$delete({ param: { repoId: repo.id } });
+        await rpc.repos[":repoId"].star.$delete({ param: { repoId: repo.id } });
       } else {
-        await rpc.repos[':repoId'].star.$post({ param: { repoId: repo.id } });
+        await rpc.repos[":repoId"].star.$post({ param: { repoId: repo.id } });
       }
 
       const isNowStarred = !repo.is_starred;
@@ -277,7 +314,7 @@ export function useReposData({ selectedSpaceId, initialTab }: UseReposDataOption
         setStarredTotal((prev) => prev + 1);
       }
     } catch (err) {
-      console.error('Failed to toggle star:', err);
+      console.error("Failed to toggle star:", err);
     }
   };
 

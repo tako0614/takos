@@ -223,11 +223,16 @@ Deno.test(
     shortcutDeps.generateShortcutId = () => "sc-new";
 
     try {
-      const result = await createShortcut({} as D1Database, "user-1", "space-1", {
-        name: "Created",
-        resourceType: "service",
-        resourceId: "w-1",
-      });
+      const result = await createShortcut(
+        {} as D1Database,
+        "user-1",
+        "space-1",
+        {
+          name: "Created",
+          resourceType: "service",
+          resourceId: "w-1",
+        },
+      );
 
       assertEquals(result.name, "Created");
       assertEquals(result.resource_type, "service");

@@ -2,10 +2,11 @@ import type { DiffEntry } from "./diff.ts";
 import type { GroupDesiredState } from "./group-state.ts";
 
 const CATEGORY_PRIORITY: Record<string, number> = {
-  container: 0,
-  worker: 1,
-  service: 2,
-  route: 3,
+  resource: 0,
+  container: 1,
+  worker: 2,
+  service: 3,
+  route: 4,
 };
 
 export function topologicalSortApplyEntries(

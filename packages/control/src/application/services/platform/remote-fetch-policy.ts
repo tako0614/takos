@@ -24,5 +24,9 @@ export function shouldTryContentReducingFallback(error: unknown): boolean {
     /Object inflated size .* exceeds limit/i.test(message) ||
     /Resolved object inflated size exceeds limit/i.test(message) ||
     /Delta result too large/i.test(message) ||
-    /Delta chain depth exceeds limit/i.test(message);
+    /Delta chain depth exceeds limit/i.test(message) ||
+    /Inflate size mismatch/i.test(message) ||
+    /offset is out of bounds/i.test(message) ||
+    /require is not defined/i.test(message) ||
+    /unexpected EOF/i.test(message);
 }

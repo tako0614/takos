@@ -31,8 +31,8 @@ export interface GroupDeploymentSnapshotQueueMessage {
   version: number;
   type: "group_deployment_snapshot";
   spaceId: string;
-  groupId: string;
-  groupName: string;
+  groupId?: string;
+  groupName?: string;
   repositoryUrl: string;
   ref: string;
   refType: "branch" | "tag" | "commit";
@@ -59,8 +59,8 @@ export function isValidDeploymentQueueMessage(
   }
   if (m.type === "group_deployment_snapshot") {
     return typeof m.spaceId === "string" &&
-      typeof m.groupId === "string" &&
-      typeof m.groupName === "string" &&
+      (m.groupId === undefined || typeof m.groupId === "string") &&
+      (m.groupName === undefined || typeof m.groupName === "string") &&
       typeof m.repositoryUrl === "string" &&
       typeof m.ref === "string" &&
       ["branch", "tag", "commit"].includes(m.refType as string) &&
@@ -127,6 +127,33 @@ function defaultAppBackendState(
   });
 }
 
+function readDefaultAppBackendError(
+  backendStateJson: string | null | undefined,
+): string | null {
+  if (!backendStateJson) return null;
+  try {
+    const state = JSON.parse(backendStateJson) as {
+      defaultAppDistribution?: { error?: unknown };
+    };
+    const error = state.defaultAppDistribution?.error;
+    return typeof error === "string" && error.trim() ? error.trim() : null;
+  } catch {
+    return null;
+  }
+}
+
+function buildDefaultAppDlqError(
+  existingGroup: typeof groups.$inferSelect | null | undefined,
+): string {
+  const dlqError =
+    `DLQ: Group deployment snapshot failed permanently after max retries`;
+  const previousError = readDefaultAppBackendError(
+    existingGroup?.backendStateJson,
+  );
+  if (!previousError || previousError.startsWith("DLQ:")) return dlqError;
+  return `${dlqError}; last error: ${previousError}`;
+}
+
 type CurrentGroupDeploymentSnapshot = {
   sourceKind: string | null;
   sourceRepositoryUrl: string | null;
@@ -135,8 +162,33 @@ type CurrentGroupDeploymentSnapshot = {
   status: string | null;
 };
 
+type ExpectedDefaultAppGroupSource = {
+  name?: string;
+  repositoryUrl: string;
+  ref: string;
+  refType: "branch" | "tag" | "commit";
+};
+
 function defaultAppPreinstallJobId(spaceId: string): string {
   return `default-app-preinstall:${spaceId}`;
+}
+
+function groupDeploymentJobLabel(
+  message: GroupDeploymentSnapshotQueueMessage,
+): string {
+  return message.groupId ?? message.groupName ??
+    `${message.repositoryUrl}@${message.ref}`;
+}
+
+function messageWithResolvedGroup(
+  message: GroupDeploymentSnapshotQueueMessage,
+  group: { id: string; name: string },
+): GroupDeploymentSnapshotQueueMessage {
+  return {
+    ...message,
+    groupId: group.id,
+    groupName: group.name,
+  };
 }
 
 function errorMessage(error: unknown): string {
@@ -170,20 +222,40 @@ function distributionContainsMessage(
   distributionJson: string | null | undefined,
   message: GroupDeploymentSnapshotQueueMessage,
 ): boolean {
-  if (!distributionJson) return true;
+  const entries = parseDefaultAppDistributionSources(distributionJson);
+  if (entries === null) return !distributionJson;
+  return entries.some((entry) =>
+    defaultAppSourceMatchesMessage(entry, message)
+  );
+}
+
+function parseDefaultAppDistributionSources(
+  distributionJson: string | null | undefined,
+): ExpectedDefaultAppGroupSource[] | null {
+  if (!distributionJson) return null;
   try {
     const parsed = JSON.parse(distributionJson) as unknown;
-    if (!Array.isArray(parsed)) return false;
-    return parsed.some((entry) => {
-      if (!entry || typeof entry !== "object") return false;
+    if (!Array.isArray(parsed)) return null;
+    const entries: ExpectedDefaultAppGroupSource[] = [];
+    for (const entry of parsed) {
+      if (!entry || typeof entry !== "object") continue;
       const record = entry as Record<string, unknown>;
-      return record.name === message.groupName &&
-        record.repositoryUrl === message.repositoryUrl &&
-        record.ref === message.ref &&
-        record.refType === message.refType;
-    });
+      if (record.preinstall === false) continue;
+      if (
+        typeof record.repositoryUrl !== "string" ||
+        typeof record.ref !== "string" ||
+        !["branch", "tag", "commit"].includes(record.refType as string)
+      ) continue;
+      entries.push({
+        ...(typeof record.name === "string" ? { name: record.name } : {}),
+        repositoryUrl: record.repositoryUrl,
+        ref: record.ref,
+        refType: record.refType as "branch" | "tag" | "commit",
+      });
+    }
+    return entries;
   } catch {
-    return false;
+    return null;
   }
 }
 
@@ -205,12 +277,42 @@ function currentDeploymentSnapshotMatches(
   snapshot: CurrentGroupDeploymentSnapshot | null | undefined,
   message: GroupDeploymentSnapshotQueueMessage,
 ): boolean {
+  return currentDeploymentSnapshotMatchesSource(snapshot, {
+    repositoryUrl: message.repositoryUrl,
+    ref: message.ref,
+    refType: message.refType,
+  });
+}
+
+function currentDeploymentSnapshotMatchesSource(
+  snapshot: CurrentGroupDeploymentSnapshot | null | undefined,
+  source: ExpectedDefaultAppGroupSource,
+): boolean {
   return !!snapshot &&
     snapshot.status === "applied" &&
     snapshot.sourceKind === "git_ref" &&
-    snapshot.sourceRepositoryUrl === message.repositoryUrl &&
-    snapshot.sourceRef === message.ref &&
-    snapshot.sourceRefType === message.refType;
+    snapshot.sourceRepositoryUrl === source.repositoryUrl &&
+    snapshot.sourceRef === source.ref &&
+    snapshot.sourceRefType === source.refType;
+}
+
+function defaultAppGroupMatchesSource(
+  group: typeof groups.$inferSelect,
+  source: ExpectedDefaultAppGroupSource,
+): boolean {
+  return group.sourceKind === "git_ref" &&
+    group.sourceRepositoryUrl === source.repositoryUrl &&
+    group.sourceRef === source.ref &&
+    group.sourceRefType === source.refType;
+}
+
+function defaultAppSourceMatchesMessage(
+  source: ExpectedDefaultAppGroupSource,
+  message: GroupDeploymentSnapshotQueueMessage,
+): boolean {
+  return source.repositoryUrl === message.repositoryUrl &&
+    source.ref === message.ref &&
+    source.refType === message.refType;
 }
 
 async function currentGroupDeploymentSnapshotMatchesMessage(
@@ -238,12 +340,60 @@ async function currentGroupDeploymentSnapshotMatchesMessage(
   return currentDeploymentSnapshotMatches(snapshot, message);
 }
 
+async function currentGroupDeploymentSnapshotMatchesSource(
+  db: Database,
+  group: typeof groups.$inferSelect,
+  spaceId: string,
+  source: ExpectedDefaultAppGroupSource,
+): Promise<boolean> {
+  if (!defaultAppGroupMatchesSource(group, source)) return false;
+  if (!group.currentGroupDeploymentSnapshotId) return false;
+  const snapshot = await db.select({
+    sourceKind: groupDeploymentSnapshots.sourceKind,
+    sourceRepositoryUrl: groupDeploymentSnapshots.sourceRepositoryUrl,
+    sourceRef: groupDeploymentSnapshots.sourceRef,
+    sourceRefType: groupDeploymentSnapshots.sourceRefType,
+    status: groupDeploymentSnapshots.status,
+  }).from(groupDeploymentSnapshots)
+    .where(and(
+      eq(
+        groupDeploymentSnapshots.id,
+        group.currentGroupDeploymentSnapshotId,
+      ),
+      eq(groupDeploymentSnapshots.groupId, group.id),
+      eq(groupDeploymentSnapshots.spaceId, spaceId),
+    ))
+    .get() as CurrentGroupDeploymentSnapshot | null;
+  return currentDeploymentSnapshotMatchesSource(snapshot, source);
+}
+
+function expectedDefaultAppSourceForGroup(
+  group: typeof groups.$inferSelect,
+  entries: ExpectedDefaultAppGroupSource[],
+): ExpectedDefaultAppGroupSource | null {
+  return entries.find((entry) => defaultAppGroupMatchesSource(group, entry)) ??
+    null;
+}
+
 async function allDefaultAppPreinstallGroupsApplied(
   db: Database,
   message: GroupDeploymentSnapshotQueueMessage,
   expectedGroupIds: string[],
 ): Promise<boolean> {
-  if (expectedGroupIds.length > 0) {
+  const distributionSources = parseDefaultAppDistributionSources(
+    (await db.select().from(defaultAppPreinstallJobs)
+      .where(
+        eq(
+          defaultAppPreinstallJobs.id,
+          defaultAppPreinstallJobId(message.spaceId),
+        ),
+      )
+      .get())?.distributionJson,
+  );
+  const shouldUseExpectedIds = expectedGroupIds.length > 0 &&
+    (!distributionSources ||
+      expectedGroupIds.length >= distributionSources.length);
+  if (shouldUseExpectedIds) {
     for (const groupId of expectedGroupIds) {
       const group = await db.select().from(groups)
         .where(and(
@@ -251,10 +401,26 @@ async function allDefaultAppPreinstallGroupsApplied(
           eq(groups.id, groupId),
         ))
         .get();
-      if (
-        !group ||
+      if (!group) return false;
+      if (distributionSources && distributionSources.length > 0) {
+        const expected = expectedDefaultAppSourceForGroup(
+          group,
+          distributionSources,
+        );
+        if (!expected) return false;
+        if (
+          !await currentGroupDeploymentSnapshotMatchesSource(
+            db,
+            group,
+            message.spaceId,
+            expected,
+          )
+        ) return false;
+      } else if (
         !await currentGroupDeploymentSnapshotMatchesMessage(db, group, message)
-      ) return false;
+      ) {
+        return false;
+      }
     }
     return true;
   }
@@ -263,6 +429,32 @@ async function allDefaultAppPreinstallGroupsApplied(
     .where(eq(groups.spaceId, message.spaceId))
     .all();
   const defaultAppGroups = rows.filter(isDefaultAppPreinstallGroup);
+  if (distributionSources && distributionSources.length > 0) {
+    return distributionSources.every((source) => {
+      const group = defaultAppGroups.find((row) =>
+        defaultAppGroupMatchesSource(row, source)
+      );
+      return !!group &&
+        group.currentGroupDeploymentSnapshotId !== null &&
+        group.currentGroupDeploymentSnapshotId !== undefined;
+    }) &&
+      (
+        await Promise.all(
+          distributionSources.map((source) => {
+            const group = defaultAppGroups.find((row) =>
+              defaultAppGroupMatchesSource(row, source)
+            );
+            if (!group) return Promise.resolve(false);
+            return currentGroupDeploymentSnapshotMatchesSource(
+              db,
+              group,
+              message.spaceId,
+              source,
+            );
+          }),
+        )
+      ).every(Boolean);
+  }
   return defaultAppGroups.length > 0 &&
     (
       await Promise.all(
@@ -292,6 +484,7 @@ async function updateDefaultAppPreinstallJobOutcome(
   if (!job) return;
   const expectedGroupIds = parseExpectedGroupIds(job.expectedGroupIdsJson);
   if (
+    message.groupId &&
     expectedGroupIds.length > 0 &&
     !expectedGroupIds.includes(message.groupId)
   ) {
@@ -339,26 +532,45 @@ function isStaleGroupDeploymentJob(
   message: GroupDeploymentSnapshotQueueMessage,
 ): boolean {
   return group.spaceId !== message.spaceId ||
-    group.name !== message.groupName ||
+    (message.groupName !== undefined && group.name !== message.groupName) ||
     group.sourceKind !== "git_ref" ||
     group.sourceRepositoryUrl !== message.repositoryUrl ||
     group.sourceRef !== message.ref ||
     group.sourceRefType !== message.refType;
 }
 
+async function findQueuedDeploymentGroup(
+  db: Database,
+  message: GroupDeploymentSnapshotQueueMessage,
+): Promise<typeof groups.$inferSelect | null> {
+  if (message.groupId) {
+    return (await db.select().from(groups)
+      .where(eq(groups.id, message.groupId))
+      .get()) ?? null;
+  }
+  if (message.groupName) {
+    return (await db.select().from(groups)
+      .where(and(
+        eq(groups.spaceId, message.spaceId),
+        eq(groups.name, message.groupName),
+      ))
+      .get()) ?? null;
+  }
+  return null;
+}
+
 async function handleGroupDeploymentSnapshotJob(
   message: GroupDeploymentSnapshotQueueMessage,
   env: DeploymentEnv,
 ): Promise<void> {
-  logInfo(`Processing group deployment snapshot ${message.groupId}`, {
+  const label = groupDeploymentJobLabel(message);
+  logInfo(`Processing group deployment snapshot ${label}`, {
     module: "deploy_queue",
   });
 
   const db = getDb(env.DB);
-  const group = await db.select().from(groups)
-    .where(eq(groups.id, message.groupId))
-    .get();
-  if (!group) {
+  const group = await findQueuedDeploymentGroup(db, message);
+  if (message.groupId && !group) {
     await updateDefaultAppPreinstallJobOutcome(
       db,
       message,
@@ -370,140 +582,203 @@ async function handleGroupDeploymentSnapshotJob(
     });
     return;
   }
-  if (isStaleGroupDeploymentJob(group, message)) {
+  if (group && isStaleGroupDeploymentJob(group, message)) {
+    const resolvedMessage = messageWithResolvedGroup(message, group);
     await updateDefaultAppPreinstallJobOutcome(
       db,
-      message,
+      resolvedMessage,
       "failed",
-      `Stale group deployment job ${message.groupId}`,
+      `Stale group deployment job ${group.id}`,
     );
-    logWarn(`Stale group deployment job ${message.groupId}; dropping`, {
+    logWarn(`Stale group deployment job ${group.id}; dropping`, {
       module: "deploy_queue",
     });
     return;
   }
   if (
-    group.currentGroupDeploymentSnapshotId &&
+    group?.currentGroupDeploymentSnapshotId &&
     await currentGroupDeploymentSnapshotMatchesMessage(db, group, message)
   ) {
+    const resolvedMessage = messageWithResolvedGroup(message, group);
     await db.update(groups).set({
       reconcileStatus: "ready",
-      backendStateJson: defaultAppBackendState("completed", message),
+      backendStateJson: defaultAppBackendState("completed", resolvedMessage),
       updatedAt: new Date().toISOString(),
-    }).where(eq(groups.id, message.groupId)).run();
-    await updateDefaultAppPreinstallJobOutcome(db, message, "completed");
-    logInfo(`Group ${message.groupId} already has an applied snapshot`, {
+    }).where(eq(groups.id, group.id)).run();
+    await updateDefaultAppPreinstallJobOutcome(
+      db,
+      resolvedMessage,
+      "completed",
+    );
+    logInfo(`Group ${group.id} already has an applied snapshot`, {
       module: "deploy_queue",
     });
     return;
   }
-  if (group.currentGroupDeploymentSnapshotId) {
+  if (group?.currentGroupDeploymentSnapshotId) {
+    const resolvedMessage = messageWithResolvedGroup(message, group);
     await updateDefaultAppPreinstallJobOutcome(
       db,
-      message,
+      resolvedMessage,
       "failed",
-      `Current snapshot for group ${message.groupId} does not match default app preinstall job`,
+      `Current snapshot for group ${group.id} does not match default app preinstall job`,
     );
     logWarn(
-      `Group ${message.groupId} has a current snapshot that does not match the default app preinstall job; skipping completion`,
+      `Group ${group.id} has a current snapshot that does not match the default app preinstall job; skipping completion`,
       { module: "deploy_queue" },
     );
     return;
   }
 
-  const now = new Date().toISOString();
-  const claimResult = await db.update(groups).set({
-    reconcileStatus: "in_progress",
-    backendStateJson: defaultAppBackendState("in_progress", message),
-    updatedAt: now,
-  }).where(
-    and(
-      eq(groups.id, message.groupId),
-      eq(groups.spaceId, message.spaceId),
-      eq(groups.name, message.groupName),
-      eq(groups.sourceKind, "git_ref"),
-      eq(groups.sourceRepositoryUrl, message.repositoryUrl),
-      eq(groups.sourceRef, message.ref),
-      eq(groups.sourceRefType, message.refType),
-      isNull(groups.currentGroupDeploymentSnapshotId),
-      ne(groups.reconcileStatus, "in_progress"),
-    ),
-  ).run();
-  const claimedRows = changedRows(claimResult);
-  if (claimedRows !== null && claimedRows === 0) {
-    const current = await db.select().from(groups)
-      .where(eq(groups.id, message.groupId))
-      .get();
-    if (
-      current?.currentGroupDeploymentSnapshotId &&
-      await currentGroupDeploymentSnapshotMatchesMessage(db, current, message)
-    ) {
-      await db.update(groups).set({
-        reconcileStatus: "ready",
-        backendStateJson: defaultAppBackendState("completed", message),
-        updatedAt: new Date().toISOString(),
-      }).where(eq(groups.id, message.groupId)).run();
-      await updateDefaultAppPreinstallJobOutcome(db, message, "completed");
-      logInfo(`Group ${message.groupId} already has an applied snapshot`, {
+  if (group) {
+    const resolvedMessage = messageWithResolvedGroup(message, group);
+    const now = new Date().toISOString();
+    const claimResult = await db.update(groups).set({
+      reconcileStatus: "in_progress",
+      backendStateJson: defaultAppBackendState("in_progress", resolvedMessage),
+      updatedAt: now,
+    }).where(
+      and(
+        eq(groups.id, group.id),
+        eq(groups.spaceId, message.spaceId),
+        ...(message.groupName ? [eq(groups.name, message.groupName)] : []),
+        eq(groups.sourceKind, "git_ref"),
+        eq(groups.sourceRepositoryUrl, message.repositoryUrl),
+        eq(groups.sourceRef, message.ref),
+        eq(groups.sourceRefType, message.refType),
+        isNull(groups.currentGroupDeploymentSnapshotId),
+        ne(groups.reconcileStatus, "in_progress"),
+      ),
+    ).run();
+    const claimedRows = changedRows(claimResult);
+    if (claimedRows !== null && claimedRows === 0) {
+      const current = await db.select().from(groups)
+        .where(eq(groups.id, group.id))
+        .get();
+      if (
+        current?.currentGroupDeploymentSnapshotId &&
+        await currentGroupDeploymentSnapshotMatchesMessage(db, current, message)
+      ) {
+        const currentMessage = messageWithResolvedGroup(message, current);
+        await db.update(groups).set({
+          reconcileStatus: "ready",
+          backendStateJson: defaultAppBackendState("completed", currentMessage),
+          updatedAt: new Date().toISOString(),
+        }).where(eq(groups.id, current.id)).run();
+        await updateDefaultAppPreinstallJobOutcome(
+          db,
+          currentMessage,
+          "completed",
+        );
+        logInfo(`Group ${current.id} already has an applied snapshot`, {
+          module: "deploy_queue",
+        });
+        return;
+      }
+      if (current?.currentGroupDeploymentSnapshotId) {
+        const currentMessage = messageWithResolvedGroup(message, current);
+        await updateDefaultAppPreinstallJobOutcome(
+          db,
+          currentMessage,
+          "failed",
+          `Current snapshot for group ${current.id} does not match default app preinstall job`,
+        );
+        logWarn(
+          `Group ${current.id} already has a current snapshot but it does not match the default app preinstall job; skipping completion`,
+          { module: "deploy_queue" },
+        );
+        return;
+      }
+      logInfo(`Group ${group.id} deployment snapshot already claimed`, {
         module: "deploy_queue",
       });
       return;
     }
-    if (current?.currentGroupDeploymentSnapshotId) {
-      await updateDefaultAppPreinstallJobOutcome(
-        db,
-        message,
-        "failed",
-        `Current snapshot for group ${message.groupId} does not match default app preinstall job`,
-      );
-      logWarn(
-        `Group ${message.groupId} already has a current snapshot but it does not match the default app preinstall job; skipping completion`,
-        { module: "deploy_queue" },
-      );
-      return;
-    }
-    logInfo(`Group ${message.groupId} deployment snapshot already claimed`, {
-      module: "deploy_queue",
-    });
-    return;
   }
 
   try {
     const service = new GroupDeploymentSnapshotService(env as unknown as Env);
-    await service.deploy(message.spaceId, message.createdByAccountId, {
-      groupName: message.groupName,
-      ...(message.backendName ? { backendName: message.backendName } : {}),
-      ...(message.envName ? { envName: message.envName } : {}),
-      source: {
-        kind: "git_ref",
-        repositoryUrl: message.repositoryUrl,
-        ref: message.ref,
-        refType: message.refType,
+    const result = await service.deploy(
+      message.spaceId,
+      message.createdByAccountId,
+      {
+        ...(message.groupName ? { groupName: message.groupName } : {}),
+        ...(message.backendName ? { backendName: message.backendName } : {}),
+        ...(message.envName ? { envName: message.envName } : {}),
+        source: {
+          kind: "git_ref",
+          repositoryUrl: message.repositoryUrl,
+          ref: message.ref,
+          refType: message.refType,
+        },
       },
-    });
-    logInfo(`Group deployment snapshot ${message.groupId} completed`, {
-      module: "deploy_queue",
-    });
+    );
+    const completedMessage = messageWithResolvedGroup(
+      message,
+      result.groupDeploymentSnapshot.group,
+    );
+    if (result.groupDeploymentSnapshot.status !== "applied") {
+      const error = new Error(
+        `Group deployment snapshot ${result.groupDeploymentSnapshot.id} finished with status ${result.groupDeploymentSnapshot.status}`,
+      );
+      await db.update(groups).set({
+        reconcileStatus: "degraded",
+        backendStateJson: defaultAppBackendState(
+          "failed",
+          completedMessage,
+          error,
+        ),
+        updatedAt: new Date().toISOString(),
+      }).where(eq(groups.id, result.groupDeploymentSnapshot.group.id)).run();
+      await updateDefaultAppPreinstallJobOutcome(
+        db,
+        completedMessage,
+        "failed",
+        error,
+      );
+      throw error;
+    }
+    logInfo(
+      `Group deployment snapshot ${
+        groupDeploymentJobLabel(completedMessage)
+      } completed`,
+      {
+        module: "deploy_queue",
+      },
+    );
     await db.update(groups).set({
       reconcileStatus: "ready",
-      backendStateJson: defaultAppBackendState("completed", message),
+      backendStateJson: defaultAppBackendState("completed", completedMessage),
       updatedAt: new Date().toISOString(),
-    }).where(eq(groups.id, message.groupId)).run();
-    await updateDefaultAppPreinstallJobOutcome(db, message, "completed");
-  } catch (error) {
-    await db.update(groups).set({
-      reconcileStatus: "degraded",
-      backendStateJson: defaultAppBackendState("failed", message, error),
-      updatedAt: new Date().toISOString(),
-    }).where(eq(groups.id, message.groupId)).run();
+    }).where(eq(groups.id, result.groupDeploymentSnapshot.group.id)).run();
     await updateDefaultAppPreinstallJobOutcome(
       db,
-      message,
+      completedMessage,
+      "completed",
+    );
+  } catch (error) {
+    const failedMessage = group
+      ? messageWithResolvedGroup(message, group)
+      : message;
+    if (failedMessage.groupId) {
+      await db.update(groups).set({
+        reconcileStatus: "degraded",
+        backendStateJson: defaultAppBackendState(
+          "failed",
+          failedMessage,
+          error,
+        ),
+        updatedAt: new Date().toISOString(),
+      }).where(eq(groups.id, failedMessage.groupId)).run();
+    }
+    await updateDefaultAppPreinstallJobOutcome(
+      db,
+      failedMessage,
       "failed",
       error,
     );
     logError(
-      `Group deployment snapshot ${message.groupId} failed`,
+      `Group deployment snapshot ${label} failed`,
       error,
       { module: "deploy_queue" },
     );
@@ -519,19 +794,29 @@ export async function handleDeploymentJobDlq(
   message: DeploymentQueueMessage,
   env: DeploymentEnv,
   attempts: number,
+  queueName = "takos-deployment-jobs-dlq",
 ): Promise<void> {
   if (message.type === "group_deployment_snapshot") {
     const db = getDb(env.DB);
-    const error =
-      `DLQ: Group deployment snapshot failed permanently after max retries`;
-    await db.update(groups).set({
-      reconcileStatus: "degraded",
-      backendStateJson: defaultAppBackendState("failed", message, error),
-      updatedAt: new Date().toISOString(),
-    }).where(eq(groups.id, message.groupId)).run();
+    const existingGroup = await findQueuedDeploymentGroup(db, message);
+    const error = buildDefaultAppDlqError(existingGroup);
+    const failedMessage = existingGroup
+      ? messageWithResolvedGroup(message, existingGroup)
+      : message;
+    if (failedMessage.groupId) {
+      await db.update(groups).set({
+        reconcileStatus: "degraded",
+        backendStateJson: defaultAppBackendState(
+          "failed",
+          failedMessage,
+          error,
+        ),
+        updatedAt: new Date().toISOString(),
+      }).where(eq(groups.id, failedMessage.groupId)).run();
+    }
     await updateDefaultAppPreinstallJobOutcome(
       db,
-      message,
+      failedMessage,
       "failed",
       error,
     );
@@ -540,7 +825,10 @@ export async function handleDeploymentJobDlq(
         JSON.stringify({
           level: "CRITICAL",
           event: "GROUP_DEPLOYMENT_SNAPSHOT_DLQ_ENTRY",
-          groupId: message.groupId,
+          queue: queueName,
+          groupId: failedMessage.groupId ?? null,
+          groupName: failedMessage.groupName ?? null,
+          repositoryUrl: failedMessage.repositoryUrl,
           timestamp: new Date().toISOString(),
           retryCount: attempts,
           originalTimestamp: message.timestamp,
@@ -557,6 +845,7 @@ export async function handleDeploymentJobDlq(
   const dlqEntry = {
     level: "CRITICAL",
     event: "DEPLOYMENT_DLQ_ENTRY",
+    queue: queueName,
     deploymentId,
     timestamp: new Date().toISOString(),
     retryCount: attempts,

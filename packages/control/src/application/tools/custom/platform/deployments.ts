@@ -14,7 +14,7 @@ import {
 import { and, desc, eq } from "drizzle-orm";
 import { createOptionalCloudflareWfpBackend } from "../../../../platform/backends/cloudflare/wfp.ts";
 import { deleteHostnameRouting } from "../../../services/routing/service.ts";
-import { deleteCloudflareCustomHostname } from "../../../services/platform/custom-domains.ts";
+import { deleteManagedCustomHostname } from "../../../services/platform/custom-domains.ts";
 import { getServiceRouteRecord } from "../../../services/platform/workers.ts";
 import { logWarn } from "../../../../shared/utils/logger.ts";
 
@@ -337,7 +337,7 @@ export const workerDeleteHandler: ToolHandler = async (args, context) => {
     }
     if (customDomain.cfCustomHostnameId) {
       try {
-        await deleteCloudflareCustomHostname(
+        await deleteManagedCustomHostname(
           env,
           customDomain.cfCustomHostnameId,
         );

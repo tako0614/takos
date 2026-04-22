@@ -1,6 +1,6 @@
-import { createSignal } from 'solid-js';
-import { useI18n } from '../store/i18n.ts';
-import { useToast } from '../store/toast.ts';
+import { createSignal } from "solid-js";
+import { useI18n } from "../store/i18n.ts";
+import { useToast } from "../store/toast.ts";
 
 interface UseFileUploadParams {
   uploadFile: (file: File) => Promise<unknown>;
@@ -11,7 +11,9 @@ interface UseFileUploadResult {
   handleFileSelect: (files: FileList | null) => void;
 }
 
-export function useFileUpload({ uploadFile }: UseFileUploadParams): UseFileUploadResult {
+export function useFileUpload(
+  { uploadFile }: UseFileUploadParams,
+): UseFileUploadResult {
   const { t } = useI18n();
   const { showToast } = useToast();
   const [uploading, setUploading] = createSignal(false);
@@ -36,10 +38,16 @@ export function useFileUpload({ uploadFile }: UseFileUploadParams): UseFileUploa
     setUploading(false);
 
     if (successCount > 0) {
-      showToast('success', t('filesUploaded').replace('{count}', String(successCount)));
+      showToast(
+        "success",
+        t("filesUploaded").replace("{count}", String(successCount)),
+      );
     }
     if (failCount > 0) {
-      showToast('error', t('filesFailedToUpload').replace('{count}', String(failCount)));
+      showToast(
+        "error",
+        t("filesFailedToUpload").replace("{count}", String(failCount)),
+      );
     }
   };
 

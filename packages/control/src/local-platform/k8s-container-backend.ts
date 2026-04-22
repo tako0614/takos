@@ -316,7 +316,7 @@ export class K8sContainerBackend implements ContainerBackend {
     // Merge labels
     const labels: Record<string, string> = {
       "app.kubernetes.io/managed-by": "takos-oci-orchestrator",
-      "takos.dev/pod-name": podName,
+      "takos-pod-name": podName,
       ...opts.labels,
     };
 

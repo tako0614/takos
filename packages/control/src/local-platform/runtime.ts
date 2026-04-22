@@ -12,27 +12,30 @@
  *   runtime-env.ts            – environment construction for production and tests
  */
 
-import { loadLocalWebEnv, loadLocalDispatchEnv } from './load-adapter.ts';
-import { createLocalExecutionContext } from './execution-context.ts';
-import { buildNodeWebPlatform, buildNodeDispatchPlatform } from '../platform/adapters/node.ts';
+import { loadLocalDispatchEnv, loadLocalWebEnv } from "./load-adapter.ts";
+import { createLocalExecutionContext } from "./execution-context.ts";
+import {
+  buildNodeDispatchPlatform,
+  buildNodeWebPlatform,
+} from "../platform/adapters/node.ts";
 
 // Re-export constants and types so existing consumers keep working.
-export { DEFAULT_LOCAL_PORTS } from './runtime-types.ts';
-export type { LocalFetch } from './runtime-types.ts';
+export { DEFAULT_LOCAL_PORTS } from "./runtime-types.ts";
+export type { LocalFetch } from "./runtime-types.ts";
 
 // Re-export sub-modules for advanced consumers.
-export { buildLocalRuntimeHostFetch } from './runtime-host-fetch.ts';
-export { buildLocalExecutorHostFetch } from './executor-control-rpc.ts';
+export { buildLocalRuntimeHostFetch } from "./runtime-host-fetch.ts";
+export { buildLocalExecutorHostFetch } from "./executor-control-rpc.ts";
 
-import type { LocalFetch } from './runtime-types.ts';
-import { buildLocalRuntimeHostFetch } from './runtime-host-fetch.ts';
-import { buildLocalExecutorHostFetch } from './executor-control-rpc.ts';
+import type { LocalFetch } from "./runtime-types.ts";
+import { buildLocalRuntimeHostFetch } from "./runtime-host-fetch.ts";
+import { buildLocalExecutorHostFetch } from "./executor-control-rpc.ts";
 import {
-  createRuntimeHostEnv,
-  createRuntimeHostEnvForTests,
   createExecutorHostEnv,
   createExecutorHostEnvForTests,
-} from './runtime-env.ts';
+  createRuntimeHostEnv,
+  createRuntimeHostEnvForTests,
+} from "./runtime-env.ts";
 
 // ---------------------------------------------------------------------------
 // Web / Dispatch fetch factories
@@ -40,7 +43,7 @@ import {
 
 export async function createLocalWebFetch(): Promise<LocalFetch> {
   const env = await loadLocalWebEnv();
-  const { createWebWorker } = await import('../web.ts');
+  const { createWebWorker } = await import("../web.ts");
   const webWorker = createWebWorker(buildNodeWebPlatform);
   return (request, executionContext = createLocalExecutionContext()) =>
     webWorker.fetch(request, env, executionContext);
@@ -48,7 +51,7 @@ export async function createLocalWebFetch(): Promise<LocalFetch> {
 
 export async function createLocalWebFetchForTests(): Promise<LocalFetch> {
   const env = await loadLocalWebEnv();
-  const { createWebWorker } = await import('../web.ts');
+  const { createWebWorker } = await import("../web.ts");
   const webWorker = createWebWorker(buildNodeWebPlatform);
   return (request, executionContext = createLocalExecutionContext()) =>
     webWorker.fetch(request, env, executionContext);
@@ -56,7 +59,7 @@ export async function createLocalWebFetchForTests(): Promise<LocalFetch> {
 
 export async function createLocalDispatchFetch(): Promise<LocalFetch> {
   const env = await loadLocalDispatchEnv();
-  const { createDispatchWorker } = await import('../dispatch.ts');
+  const { createDispatchWorker } = await import("../dispatch.ts");
   const dispatchWorker = createDispatchWorker(buildNodeDispatchPlatform);
   return (request, executionContext = createLocalExecutionContext()) =>
     dispatchWorker.fetch(request, env, executionContext);
@@ -64,7 +67,7 @@ export async function createLocalDispatchFetch(): Promise<LocalFetch> {
 
 export async function createLocalDispatchFetchForTests(): Promise<LocalFetch> {
   const env = await loadLocalDispatchEnv();
-  const { createDispatchWorker } = await import('../dispatch.ts');
+  const { createDispatchWorker } = await import("../dispatch.ts");
   const dispatchWorker = createDispatchWorker(buildNodeDispatchPlatform);
   return (request, executionContext = createLocalExecutionContext()) =>
     dispatchWorker.fetch(request, env, executionContext);
@@ -88,13 +91,17 @@ export async function createLocalExecutorHostFetch(): Promise<LocalFetch> {
 // Host fetch factories – tests
 // ---------------------------------------------------------------------------
 
-export async function createLocalRuntimeHostFetchForTests(): Promise<LocalFetch> {
+export async function createLocalRuntimeHostFetchForTests(): Promise<
+  LocalFetch
+> {
   const webFetch = await createLocalWebFetchForTests();
   const env = await createRuntimeHostEnvForTests({ webFetch });
   return buildLocalRuntimeHostFetch(env);
 }
 
-export async function createLocalExecutorHostFetchForTests(): Promise<LocalFetch> {
+export async function createLocalExecutorHostFetchForTests(): Promise<
+  LocalFetch
+> {
   const runtimeFetch = await createLocalRuntimeHostFetchForTests();
   const env = await createExecutorHostEnvForTests({ runtimeFetch });
   return buildLocalExecutorHostFetch(env);

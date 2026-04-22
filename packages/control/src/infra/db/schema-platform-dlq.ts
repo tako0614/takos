@@ -1,5 +1,5 @@
-import { sqliteTable, text, integer } from 'drizzle-orm/sqlite-core';
-import { createdAtColumn } from './schema-utils.ts';
+import { integer, sqliteTable, text } from "drizzle-orm/sqlite-core";
+import { createdAtColumn } from "./schema-utils.ts";
 
 /**
  * Index naming drift NOTE (Round 11 audit Finding #6).
@@ -20,11 +20,11 @@ import { createdAtColumn } from './schema-utils.ts';
  */
 
 // 114. DlqEntry
-export const dlqEntries = sqliteTable('dlq_entries', {
-  id: text('id').primaryKey(),
-  queue: text('queue').notNull(),
-  messageBody: text('message_body'),
-  error: text('error'),
-  retryCount: integer('retry_count'),
+export const dlqEntries = sqliteTable("dlq_entries", {
+  id: text("id").primaryKey(),
+  queue: text("queue").notNull(),
+  messageBody: text("message_body"),
+  error: text("error"),
+  retryCount: integer("retry_count"),
   ...createdAtColumn,
 });

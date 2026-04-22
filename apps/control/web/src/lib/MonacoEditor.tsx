@@ -1,11 +1,11 @@
-import * as monaco from 'monaco-editor';
-import editorWorker from 'monaco-editor/esm/vs/editor/editor.worker?worker';
-import jsonWorker from 'monaco-editor/esm/vs/language/json/json.worker?worker';
-import cssWorker from 'monaco-editor/esm/vs/language/css/css.worker?worker';
-import htmlWorker from 'monaco-editor/esm/vs/language/html/html.worker?worker';
-import tsWorker from 'monaco-editor/esm/vs/language/typescript/ts.worker?worker';
-import { onMount, onCleanup, createEffect } from 'solid-js';
-import type { JSX } from 'solid-js';
+import * as monaco from "monaco-editor";
+import editorWorker from "monaco-editor/esm/vs/editor/editor.worker?worker";
+import jsonWorker from "monaco-editor/esm/vs/language/json/json.worker?worker";
+import cssWorker from "monaco-editor/esm/vs/language/css/css.worker?worker";
+import htmlWorker from "monaco-editor/esm/vs/language/html/html.worker?worker";
+import tsWorker from "monaco-editor/esm/vs/language/typescript/ts.worker?worker";
+import { createEffect, onCleanup, onMount } from "solid-js";
+import type { JSX } from "solid-js";
 
 const monacoGlobal = globalThis as typeof globalThis & {
   MonacoEnvironment?: {
@@ -16,10 +16,16 @@ const monacoGlobal = globalThis as typeof globalThis & {
 if (!monacoGlobal.MonacoEnvironment) {
   monacoGlobal.MonacoEnvironment = {
     getWorker(_, label) {
-      if (label === 'json') return new jsonWorker();
-      if (label === 'css' || label === 'scss' || label === 'less') return new cssWorker();
-      if (label === 'html' || label === 'handlebars' || label === 'razor') return new htmlWorker();
-      if (label === 'typescript' || label === 'javascript') return new tsWorker();
+      if (label === "json") return new jsonWorker();
+      if (label === "css" || label === "scss" || label === "less") {
+        return new cssWorker();
+      }
+      if (label === "html" || label === "handlebars" || label === "razor") {
+        return new htmlWorker();
+      }
+      if (label === "typescript" || label === "javascript") {
+        return new tsWorker();
+      }
       return new editorWorker();
     },
   };
@@ -34,7 +40,10 @@ interface MonacoEditorProps {
   width?: string | number;
   options?: monaco.editor.IStandaloneEditorConstructionOptions;
   onChange?: (value: string | undefined) => void;
-  onMount?: (editor: monaco.editor.IStandaloneCodeEditor, monaco: typeof import('monaco-editor')) => void;
+  onMount?: (
+    editor: monaco.editor.IStandaloneCodeEditor,
+    monaco: typeof import("monaco-editor"),
+  ) => void;
   class?: string;
   loading?: JSX.Element;
 }
@@ -47,9 +56,9 @@ export default function MonacoEditor(props: MonacoEditorProps) {
     if (!containerRef) return;
 
     editor = monaco.editor.create(containerRef, {
-      value: props.value ?? props.defaultValue ?? '',
-      language: props.language ?? 'plaintext',
-      theme: props.theme ?? 'vs-dark',
+      value: props.value ?? props.defaultValue ?? "",
+      language: props.language ?? "plaintext",
+      theme: props.theme ?? "vs-dark",
       automaticLayout: true,
       ...props.options,
     });
@@ -91,8 +100,12 @@ export default function MonacoEditor(props: MonacoEditorProps) {
   });
 
   const style = (): JSX.CSSProperties => ({
-    height: typeof props.height === 'number' ? `${props.height}px` : (props.height ?? '100%'),
-    width: typeof props.width === 'number' ? `${props.width}px` : (props.width ?? '100%'),
+    height: typeof props.height === "number"
+      ? `${props.height}px`
+      : (props.height ?? "100%"),
+    width: typeof props.width === "number"
+      ? `${props.width}px`
+      : (props.width ?? "100%"),
   });
 
   return <div ref={containerRef} class={props.class} style={style()} />;

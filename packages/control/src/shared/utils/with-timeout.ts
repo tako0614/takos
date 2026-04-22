@@ -1,7 +1,7 @@
 export async function withTimeout<T>(
   promiseOrFactory: Promise<T> | ((signal?: AbortSignal) => Promise<T>),
   timeoutMs: number,
-  errorMessage: string
+  errorMessage: string,
 ): Promise<T> {
   const abortController = new AbortController();
   let timeoutId: ReturnType<typeof setTimeout> | undefined;
@@ -14,7 +14,7 @@ export async function withTimeout<T>(
   });
 
   try {
-    const actualPromise = typeof promiseOrFactory === 'function'
+    const actualPromise = typeof promiseOrFactory === "function"
       ? promiseOrFactory(abortController.signal)
       : promiseOrFactory;
 

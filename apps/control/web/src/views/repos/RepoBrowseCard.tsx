@@ -1,14 +1,14 @@
-import { Show } from 'solid-js';
-import { Icons } from '../../lib/Icons.tsx';
-import type { SourceRepo } from '../../types/repos.ts';
+import { Show } from "solid-js";
+import { Icons } from "../../lib/Icons.tsx";
+import type { SourceRepo } from "../../types/repos.ts";
 
 const formatRepoDate = (dateString: string) => {
   const date = new Date(dateString);
   const now = new Date();
   const diffMs = now.getTime() - date.getTime();
   const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
-  if (diffDays === 0) return 'Today';
-  if (diffDays === 1) return 'Yesterday';
+  if (diffDays === 0) return "Today";
+  if (diffDays === 1) return "Yesterday";
   if (diffDays < 7) return `${diffDays}d ago`;
   if (diffDays < 30) return `${Math.floor(diffDays / 7)}w ago`;
   return date.toLocaleDateString();
@@ -29,9 +29,11 @@ interface RepoBrowseCardProps {
 
 export function RepoBrowseCard(props: RepoBrowseCardProps) {
   const ownerUsername = () => props.repo.owner?.username?.trim() || null;
-  const ownerName = () => props.repo.owner?.name || 'unknown';
-  const ownerLabel = () => ownerUsername() ? `@${ownerUsername()}` : ownerName();
-  const ownerInitial = () => (ownerUsername() || ownerName() || '?').charAt(0).toUpperCase();
+  const ownerName = () => props.repo.owner?.name || "unknown";
+  const ownerLabel = () =>
+    ownerUsername() ? `@${ownerUsername()}` : ownerName();
+  const ownerInitial = () =>
+    (ownerUsername() || ownerName() || "?").charAt(0).toUpperCase();
 
   return (
     <div
@@ -40,36 +42,51 @@ export function RepoBrowseCard(props: RepoBrowseCardProps) {
     >
       <Show when={props.showOwner && props.repo.owner}>
         <div class="flex items-center gap-2 mb-2 text-sm text-zinc-500 dark:text-zinc-400">
-          {props.repo.owner?.avatar_url ? (
-            <img src={props.repo.owner.avatar_url} alt="" class="w-4 h-4 rounded-full" />
-          ) : (
-            <div class="w-4 h-4 rounded-full bg-zinc-200 dark:bg-zinc-700 flex items-center justify-center text-xs">
-              {ownerInitial()}
-            </div>
-          )}
+          {props.repo.owner?.avatar_url
+            ? (
+              <img
+                src={props.repo.owner.avatar_url}
+                alt=""
+                class="w-4 h-4 rounded-full"
+              />
+            )
+            : (
+              <div class="w-4 h-4 rounded-full bg-zinc-200 dark:bg-zinc-700 flex items-center justify-center text-xs">
+                {ownerInitial()}
+              </div>
+            )}
           <span>{ownerLabel()}</span>
         </div>
       </Show>
       <div class="flex items-center gap-2 mb-2">
         <Icons.GitBranch class="w-5 h-5 text-zinc-900 dark:text-zinc-100" />
-        <span class="font-medium text-zinc-900 dark:text-zinc-100 truncate">{props.repo.name}</span>
+        <span class="font-medium text-zinc-900 dark:text-zinc-100 truncate">
+          {props.repo.name}
+        </span>
         <span
           class={`ml-auto px-2 py-0.5 text-xs rounded-full flex-shrink-0 ${
-            props.repo.visibility === 'public'
-              ? 'bg-zinc-200 dark:bg-zinc-700 text-zinc-900 dark:text-zinc-100'
-              : 'bg-zinc-100 dark:bg-zinc-800 text-zinc-500 dark:text-zinc-400'
+            props.repo.visibility === "public"
+              ? "bg-zinc-200 dark:bg-zinc-700 text-zinc-900 dark:text-zinc-100"
+              : "bg-zinc-100 dark:bg-zinc-800 text-zinc-500 dark:text-zinc-400"
           }`}
         >
-          {props.repo.visibility === 'public' ? <Icons.Globe /> : <Icons.Lock />}
+          {props.repo.visibility === "public"
+            ? <Icons.Globe />
+            : <Icons.Lock />}
         </span>
       </div>
       <Show when={props.repo.description}>
-        <p class="text-sm text-zinc-500 dark:text-zinc-400 mb-3 line-clamp-2">{props.repo.description}</p>
+        <p class="text-sm text-zinc-500 dark:text-zinc-400 mb-3 line-clamp-2">
+          {props.repo.description}
+        </p>
       </Show>
       <div class="flex items-center gap-3 text-xs text-zinc-500 dark:text-zinc-400">
-        <button type="button"
+        <button
+          type="button"
           class={`flex items-center gap-1 px-1.5 py-0.5 rounded transition-colors ${
-            props.repo.is_starred ? 'text-zinc-900 dark:text-zinc-100' : 'hover:text-zinc-900 dark:hover:text-zinc-100'
+            props.repo.is_starred
+              ? "text-zinc-900 dark:text-zinc-100"
+              : "hover:text-zinc-900 dark:hover:text-zinc-100"
           }`}
           onClick={(e) => {
             e.stopPropagation();

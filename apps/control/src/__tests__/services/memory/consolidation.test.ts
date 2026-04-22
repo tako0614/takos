@@ -19,8 +19,7 @@ Object.defineProperty(mocks, "getDb", {
   get: () => consolidatorGetDb,
   set: (value) => {
     consolidatorGetDb = value;
-    memoryConsolidatorDeps.getDb =
-      value as typeof memoryConsolidatorDeps.getDb;
+    memoryConsolidatorDeps.getDb = value as typeof memoryConsolidatorDeps.getDb;
   },
 });
 

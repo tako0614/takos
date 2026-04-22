@@ -6,11 +6,13 @@
  * to keep the main service file focused on coordination.
  */
 import { safeJsonParseOrDefault } from "../../../shared/utils/index.ts";
-import type { Deployment, DeploymentEnv } from "./models.ts";
+import type { Deployment, DeploymentEnv, DeploymentEvent } from "./models.ts";
 import {
   createDeploymentBackend,
+  type DeploymentBackend,
   parseDeploymentBackendConfig,
 } from "./backend.ts";
+import type { DeploymentBackendQueueConsumerSyncInput } from "./backend-contracts.ts";
 import {
   createDeploymentBackendRegistry,
   resolveDeploymentBackendConfigsFromEnv,
@@ -75,6 +77,124 @@ function mergeRuntimeEnvVars(
   return merged;
 }
 
+export function resolveCompletedStepNames(
+  events: DeploymentEvent[],
+): string[] {
+  const completed = new Set<string>();
+  for (const event of events) {
+    if (!event.step_name) continue;
+    if (event.event_type === "step_completed") {
+      completed.add(event.step_name);
+      continue;
+    }
+    if (event.event_type === "rollback_step") {
+      completed.delete(event.step_name);
+    }
+  }
+  return [...completed];
+}
+
+export function resolveCandidateBaseUrlFromBackendState(
+  backendStateJson: string | null | undefined,
+): string | null {
+  const backendState = safeJsonParseOrDefault<Record<string, unknown>>(
+    backendStateJson ?? "{}",
+    {},
+  );
+  const endpoint = backendState.resolved_endpoint;
+  if (!endpoint || typeof endpoint !== "object" || Array.isArray(endpoint)) {
+    return null;
+  }
+  const baseUrl = (endpoint as Record<string, unknown>).base_url;
+  return typeof baseUrl === "string" && baseUrl.trim() ? baseUrl.trim() : null;
+}
+
+type QueueConsumerSyncPlan = {
+  syncInput: DeploymentBackendQueueConsumerSyncInput;
+  rollbackInput: DeploymentBackendQueueConsumerSyncInput;
+};
+
+async function buildQueueConsumerSyncPlan(input: {
+  env: DeploymentEnv;
+  encryptionKey: string;
+  deployment: Deployment;
+  deployArtifactRef: string;
+  activeDeploymentId: string | null;
+}): Promise<QueueConsumerSyncPlan> {
+  const runtimeConfig = parseRuntimeConfig(
+    input.deployment.runtime_config_snapshot_json,
+  );
+  const bindings = input.deployment.bindings_snapshot_encrypted
+    ? await decryptBindings(input.encryptionKey, input.deployment)
+    : [];
+  const previousDeployment = input.activeDeploymentId &&
+      input.activeDeploymentId !== input.deployment.id
+    ? await getDeploymentById(input.env.DB, input.activeDeploymentId)
+    : null;
+  const previousBindings = previousDeployment?.bindings_snapshot_encrypted
+    ? await decryptBindings(input.encryptionKey, previousDeployment)
+    : [];
+  const previousRuntimeConfig = previousDeployment
+    ? parseRuntimeConfig(previousDeployment.runtime_config_snapshot_json)
+    : null;
+  const currentRuntime = {
+    profile: "workers" as const,
+    bindings,
+    config: {
+      compatibility_date: runtimeConfig.compatibility_date ||
+        CF_COMPATIBILITY_DATE,
+      compatibility_flags: runtimeConfig.compatibility_flags,
+      limits: runtimeConfig.limits,
+    },
+  };
+  const previousRuntime = previousRuntimeConfig
+    ? {
+      profile: "workers" as const,
+      bindings: previousBindings,
+      config: {
+        compatibility_date: previousRuntimeConfig.compatibility_date ||
+          CF_COMPATIBILITY_DATE,
+        compatibility_flags: previousRuntimeConfig.compatibility_flags,
+        limits: previousRuntimeConfig.limits,
+      },
+    }
+    : null;
+
+  return {
+    syncInput: {
+      deployment: input.deployment,
+      artifactRef: input.deployArtifactRef,
+      runtime: currentRuntime,
+      previousDeployment,
+      previousArtifactRef: previousDeployment?.artifact_ref ?? null,
+      previousRuntime,
+    },
+    rollbackInput: previousDeployment?.artifact_ref
+      ? {
+        deployment: previousDeployment,
+        artifactRef: previousDeployment.artifact_ref,
+        runtime: previousRuntime ?? {
+          profile: "workers",
+          bindings: previousBindings,
+        },
+        previousDeployment: input.deployment,
+        previousArtifactRef: input.deployArtifactRef,
+        previousRuntime: currentRuntime,
+      }
+      : {
+        deployment: { ...input.deployment, target_json: "{}" } as Deployment,
+        artifactRef: input.deployArtifactRef,
+        runtime: {
+          profile: "workers",
+          bindings: [],
+        },
+        previousDeployment: input.deployment,
+        previousArtifactRef: input.deployArtifactRef,
+        previousRuntime: currentRuntime,
+      },
+  };
+}
+
 /**
  * Execute a deployment through all pipeline steps (deploy_worker, update_routing, finalize).
  *
@@ -95,9 +215,9 @@ export async function executeDeploymentPipeline(
     return deployment;
   }
 
-  const completedStepNames = (await getDeploymentEvents(env.DB, deploymentId))
-    .filter((event) => event.event_type === "step_completed" && event.step_name)
-    .map((event) => event.step_name as string);
+  const completedStepNames = resolveCompletedStepNames(
+    await getDeploymentEvents(env.DB, deploymentId),
+  );
 
   await updateDeploymentState(
     env.DB,
@@ -111,6 +231,11 @@ export async function executeDeploymentPipeline(
   let deploymentArtifactRef: string | null = null;
   let routingRollbackSnapshot: RoutingSnapshot | null = null;
   let candidateBaseUrl: string | null = null;
+  let queueConsumerRollbackBackend: DeploymentBackend | null = null;
+  let queueConsumerRollbackInput:
+    | DeploymentBackendQueueConsumerSyncInput
+    | null = null;
+  let queueConsumersSynced = false;
 
   try {
     const serviceBasics = await getServiceDeploymentBasics(
@@ -139,6 +264,7 @@ export async function executeDeploymentPipeline(
       orchestratorToken: env.OCI_ORCHESTRATOR_TOKEN,
       backendRegistry,
     });
+    queueConsumerRollbackBackend = backend;
 
     if (!deployArtifactRef) {
       throw new InternalError("Deployment artifact ref is missing");
@@ -256,6 +382,9 @@ export async function executeDeploymentPipeline(
           // currently routed hostname. If the backend cannot expose a candidate
           // URL (e.g. WFP-managed workers), skip the probe instead of checking
           // the existing route.
+          candidateBaseUrl ??= resolveCandidateBaseUrlFromBackendState(
+            deployment.backend_state_json,
+          );
           if (!candidateBaseUrl) {
             logWarn(
               "Skipping worker readiness probe: candidate URL unavailable",
@@ -290,6 +419,43 @@ export async function executeDeploymentPipeline(
       completedStepNames.push("probe_readiness");
     }
 
+    const shouldSyncQueueConsumers = !isContainerDeploy &&
+      !!backend.syncQueueConsumers &&
+      deployment.routing_status !== "canary";
+    const queueConsumerSyncPlan = shouldSyncQueueConsumers
+      ? await buildQueueConsumerSyncPlan({
+        env,
+        encryptionKey,
+        deployment,
+        deployArtifactRef,
+        activeDeploymentId: serviceBasics.activeDeploymentId,
+      })
+      : null;
+    if (queueConsumerSyncPlan) {
+      queueConsumerRollbackInput = queueConsumerSyncPlan.rollbackInput;
+      queueConsumersSynced = completedStepNames.includes(
+        "sync_queue_consumers",
+      );
+    }
+
+    if (
+      queueConsumerSyncPlan &&
+      backend.syncQueueConsumers &&
+      !completedStepNames.includes("sync_queue_consumers")
+    ) {
+      await executeDeploymentStep(
+        env.DB,
+        deploymentId,
+        "setting_bindings",
+        "sync_queue_consumers",
+        async () => {
+          await backend.syncQueueConsumers?.(queueConsumerSyncPlan.syncInput);
+          queueConsumersSynced = true;
+        },
+      );
+      completedStepNames.push("sync_queue_consumers");
+    }
+
     if (!completedStepNames.includes("update_routing")) {
       await executeDeploymentStep(
         env.DB,
@@ -310,13 +476,15 @@ export async function executeDeploymentPipeline(
 
           const hostnameList = collectHostnames(serviceRouteRecord);
 
-          if (hostnameList.length === 0) {
-            return;
-          }
+          routingRollbackSnapshot = hostnameList.length > 0
+            ? await snapshotRouting(env, hostnameList)
+            : [];
 
-          routingRollbackSnapshot = await snapshotRouting(env, hostnameList);
-
-          if (env.WORKER_BUNDLES && routingRollbackSnapshot) {
+          if (
+            env.WORKER_BUNDLES &&
+            routingRollbackSnapshot &&
+            routingRollbackSnapshot.length > 0
+          ) {
             const snapshotKey = `deployment-snapshots/${deploymentId}.json`;
             await env.WORKER_BUNDLES.put(
               snapshotKey,
@@ -474,6 +642,37 @@ export async function executeDeploymentPipeline(
   } catch (error) {
     const errorMessage = extractErrorMessage(error);
     const now = new Date().toISOString();
+
+    if (
+      queueConsumersSynced &&
+      queueConsumerRollbackBackend?.syncQueueConsumers &&
+      queueConsumerRollbackInput
+    ) {
+      await queueConsumerRollbackBackend.syncQueueConsumers(
+        queueConsumerRollbackInput,
+      ).catch(async (queueRollbackError: unknown) => {
+        logError(
+          "Failed to restore queue consumers after deployment failure",
+          queueRollbackError,
+          { module: "deployment" },
+        );
+        await logDeploymentEvent(
+          env.DB,
+          deploymentId,
+          "rollback_failed",
+          "sync_queue_consumers",
+          `Failed to restore queue consumers: ${
+            extractErrorMessage(queueRollbackError)
+          }`,
+        ).catch((logErrorEvent) => {
+          logError(
+            "Failed to log queue consumer rollback failure",
+            logErrorEvent,
+            { module: "deployment" },
+          );
+        });
+      });
+    }
 
     await rollbackDeploymentSteps({
       env,

@@ -1,4 +1,6 @@
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
+use std::sync::Mutex;
 
 use async_trait::async_trait;
 use serde_json::json;
@@ -17,12 +19,25 @@ const LOCAL_MEMORY_TOOL_NAMES: [&str; 4] = [
     "timeline_search",
 ];
 
+#[derive(Debug, Clone, serde::Serialize)]
+pub struct ToolExecutionRecord {
+    pub tool_call_id: String,
+    pub name: String,
+    pub arguments: serde_json::Value,
+    pub summary: String,
+    pub result: Option<String>,
+    pub output: String,
+    pub error: Option<String>,
+}
+
 #[derive(Clone)]
 pub struct CompositeToolExecutor {
     client: ControlRpcClient,
     remote_tools: Arc<Vec<ToolDefinition>>,
     local_skill_catalog: Arc<SkillCatalogResponse>,
     local_executor: Option<Arc<DefaultToolExecutor>>,
+    tool_executions: Arc<Mutex<Vec<ToolExecutionRecord>>>,
+    tool_call_sequence: Arc<AtomicU64>,
 }
 
 impl CompositeToolExecutor {
@@ -36,6 +51,8 @@ impl CompositeToolExecutor {
             remote_tools: Arc::new(remote_tools),
             local_skill_catalog: Arc::new(local_skill_catalog),
             local_executor: None,
+            tool_executions: Arc::new(Mutex::new(Vec::new())),
+            tool_call_sequence: Arc::new(AtomicU64::new(1)),
         }
     }
 
@@ -46,6 +63,14 @@ impl CompositeToolExecutor {
 
     pub fn exposed_tools(&self) -> Vec<ToolDefinition> {
         self.remote_tools.as_ref().clone()
+    }
+
+    pub fn take_tool_executions(&self) -> Vec<ToolExecutionRecord> {
+        let mut guard = self
+            .tool_executions
+            .lock()
+            .expect("tool execution buffer lock poisoned");
+        std::mem::take(&mut *guard)
     }
 }
 
@@ -62,28 +87,51 @@ impl ToolExecutor for CompositeToolExecutor {
             return executor.execute(call).await;
         }
 
-        if LOCAL_SKILL_TOOL_NAMES.contains(&call.name.as_str()) {
+        let tool_name = call.name.clone();
+        let tool_arguments = call.arguments.clone();
+        let tool_call_id = stable_tool_call_id(
+            self.tool_call_sequence.fetch_add(1, Ordering::Relaxed),
+            &tool_name,
+            &tool_arguments,
+        );
+
+        if LOCAL_SKILL_TOOL_NAMES.contains(&tool_name.as_str()) {
+            emit_tool_call_event(&self.client, &tool_call_id, &tool_name, &tool_arguments)
+                .await
+                .ok();
+            emit_thinking_event(&self.client, format!("Running tool {}", tool_name))
+                .await
+                .ok();
             let output = execute_local_skill_tool(
-                &call.name,
-                &call.arguments,
+                &tool_name,
+                &tool_arguments,
                 self.local_skill_catalog.as_ref(),
             )
             .ok_or_else(|| {
-                EngineError::Tool(format!("unsupported local skill tool {}", call.name))
+                EngineError::Tool(format!("unsupported local skill tool {}", tool_name))
             })?;
-            let summary = format!("{} output={}", call.name, truncate_summary(&output));
+            let summary = format!("{} output={}", tool_name, truncate_summary(&output));
             self.client
                 .emit_run_event(
                     "tool_result",
-                    json!({
-                        "name": call.name,
-                        "summary": summary,
-                    }),
+                    tool_result_event(&tool_call_id, &tool_name, &summary, &output, None),
                 )
                 .await
                 .ok();
+            self.record_tool_execution(ToolExecutionRecord {
+                tool_call_id,
+                name: tool_name.clone(),
+                arguments: tool_arguments.clone(),
+                summary: summary.clone(),
+                result: Some(output.clone()),
+                output: output.clone(),
+                error: None,
+            });
+            emit_thinking_event(&self.client, format!("Tool {} finished", tool_name))
+                .await
+                .ok();
             return Ok(ToolCallResult {
-                name: call.name,
+                name: tool_name,
                 content: json!({ "output": output }),
                 summary,
             });
@@ -92,29 +140,66 @@ impl ToolExecutor for CompositeToolExecutor {
         self.client
             .emit_run_event(
                 "tool_call",
-                json!({
-                    "name": call.name,
-                    "arguments": call.arguments,
-                }),
+                tool_call_event(&tool_call_id, &tool_name, &tool_arguments),
             )
             .await
             .ok();
-
-        let rpc_result = self
-            .client
-            .tool_execute(&call.name, call.arguments.clone())
+        emit_thinking_event(&self.client, format!("Running tool {}", tool_name))
             .await
-            .map_err(|err| EngineError::Tool(err.to_string()))?;
+            .ok();
 
-        let result = rpc_tool_result_to_engine(&call.name, rpc_result);
+        let rpc_result = match self
+            .client
+            .tool_execute(&tool_name, tool_arguments.clone())
+            .await
+        {
+            Ok(result) => result,
+            Err(err) => {
+                let error = err.to_string();
+                let summary = format!("{} error={}", tool_name, error);
+                self.client
+                    .emit_run_event(
+                        "tool_result",
+                        tool_result_event(&tool_call_id, &tool_name, &summary, "", Some(&error)),
+                    )
+                    .await
+                    .ok();
+                emit_thinking_event(&self.client, format!("Tool {} finished", tool_name))
+                    .await
+                    .ok();
+                return Err(EngineError::Tool(error));
+            }
+        };
+
+        let result = rpc_tool_result_to_engine(&tool_name, rpc_result.clone());
+        let (output, error) = rpc_tool_result_output_and_error(&rpc_result);
         self.client
             .emit_run_event(
                 "tool_result",
-                json!({
-                    "name": result.name,
-                    "summary": result.summary,
-                }),
+                tool_result_event(
+                    &tool_call_id,
+                    &result.name,
+                    &result.summary,
+                    &output,
+                    error.as_deref(),
+                ),
             )
+            .await
+            .ok();
+        self.record_tool_execution(ToolExecutionRecord {
+            tool_call_id,
+            name: result.name.clone(),
+            arguments: tool_arguments.clone(),
+            summary: result.summary.clone(),
+            result: if error.is_none() {
+                Some(output.clone())
+            } else {
+                None
+            },
+            output: output.clone(),
+            error,
+        });
+        emit_thinking_event(&self.client, format!("Tool {} finished", result.name))
             .await
             .ok();
 
@@ -122,22 +207,34 @@ impl ToolExecutor for CompositeToolExecutor {
     }
 }
 
+impl CompositeToolExecutor {
+    fn record_tool_execution(&self, record: ToolExecutionRecord) {
+        let mut guard = self
+            .tool_executions
+            .lock()
+            .expect("tool execution buffer lock poisoned");
+        guard.push(record);
+    }
+}
+
 fn rpc_tool_result_to_engine(name: &str, rpc: RpcToolResult) -> ToolCallResult {
-    let content = if let Some(error) = rpc.error.clone() {
+    let output = rpc.output.clone();
+    let error = rpc.error.clone();
+    let content = if let Some(error) = error.clone() {
         json!({
-            "output": rpc.output,
+            "output": output,
             "error": error,
         })
     } else {
         json!({
-            "output": rpc.output,
+            "output": output,
         })
     };
 
-    let summary = if let Some(error) = rpc.error {
+    let summary = if let Some(error) = error {
         format!("{name} error={error}")
     } else {
-        format!("{name} output={}", truncate_summary(&rpc.output))
+        format!("{name} output={}", truncate_summary(&output))
     };
 
     ToolCallResult {
@@ -145,6 +242,86 @@ fn rpc_tool_result_to_engine(name: &str, rpc: RpcToolResult) -> ToolCallResult {
         content,
         summary,
     }
+}
+
+fn rpc_tool_result_output_and_error(rpc: &RpcToolResult) -> (String, Option<String>) {
+    (rpc.output.clone(), rpc.error.clone())
+}
+
+fn stable_tool_call_id(sequence: u64, name: &str, arguments: &serde_json::Value) -> String {
+    let payload = json!({
+        "sequence": sequence,
+        "name": name,
+        "arguments": arguments,
+    });
+    format!("rust-tool-{}", hash_string(&payload.to_string()))
+}
+
+fn hash_string(value: &str) -> String {
+    let mut hash: u64 = 0xcbf29ce484222325;
+    for byte in value.as_bytes() {
+        hash ^= *byte as u64;
+        hash = hash.wrapping_mul(0x100000001b3);
+    }
+    format!("{:x}", hash)
+}
+
+fn tool_call_event(
+    tool_call_id: &str,
+    name: &str,
+    arguments: &serde_json::Value,
+) -> serde_json::Value {
+    json!({
+        "id": tool_call_id,
+        "tool_call_id": tool_call_id,
+        "name": name,
+        "arguments": arguments,
+    })
+}
+
+fn tool_result_event(
+    tool_call_id: &str,
+    name: &str,
+    summary: &str,
+    output: &str,
+    error: Option<&str>,
+) -> serde_json::Value {
+    json!({
+        "id": tool_call_id,
+        "tool_call_id": tool_call_id,
+        "name": name,
+        "summary": summary,
+        "result": if error.is_none() { json!(output) } else { serde_json::Value::Null },
+        "output": output,
+        "error": error,
+    })
+}
+
+async fn emit_thinking_event(
+    client: &ControlRpcClient,
+    message: String,
+) -> std::result::Result<(), ()> {
+    client
+        .emit_run_event(
+            "thinking",
+            json!({
+                "message": message,
+            }),
+        )
+        .await
+        .map_err(|_| ())
+}
+
+async fn emit_tool_call_event(
+    client: &ControlRpcClient,
+    tool_call_id: &str,
+    name: &str,
+    arguments: &serde_json::Value,
+) -> std::result::Result<(), ()> {
+    client
+        .emit_run_event("tool_call", tool_call_event(tool_call_id, name, arguments))
+        .await
+        .map_err(|_| ())
 }
 
 #[allow(dead_code)]
@@ -229,7 +406,10 @@ fn truncate_summary(output: &str) -> String {
 
 #[cfg(test)]
 mod tests {
-    use super::{truncate_summary, CompositeToolExecutor};
+    use super::{
+        rpc_tool_result_output_and_error, rpc_tool_result_to_engine, stable_tool_call_id,
+        tool_result_event, truncate_summary, CompositeToolExecutor,
+    };
     use crate::control_rpc::{
         ControlRpcClient, SkillCatalogResponse, StartPayload, ToolDefinition,
     };
@@ -242,6 +422,8 @@ mod tests {
             service_id: None,
             model: Some("local-smoke".to_string()),
             lease_version: None,
+            executor_tier: None,
+            executor_container_id: None,
             control_rpc_base_url: "http://127.0.0.1:8790".to_string(),
             control_rpc_token: "test-token".to_string(),
         })
@@ -282,5 +464,64 @@ mod tests {
             .collect::<Vec<_>>();
 
         assert_eq!(names, vec!["skill_list", "repo_list"]);
+    }
+
+    #[test]
+    fn stable_tool_call_id_depends_on_call_details() {
+        let id1 = stable_tool_call_id(1, "repo_list", &json!({ "path": "/tmp" }));
+        let id2 = stable_tool_call_id(1, "repo_list", &json!({ "path": "/tmp" }));
+        let id3 = stable_tool_call_id(2, "repo_list", &json!({ "path": "/tmp" }));
+        let id4 = stable_tool_call_id(1, "repo_list", &json!({ "path": "/var" }));
+
+        assert_eq!(id1, id2);
+        assert_ne!(id1, id3);
+        assert_ne!(id1, id4);
+    }
+
+    #[test]
+    fn tool_result_event_includes_result_output_error_and_summary() {
+        let payload = tool_result_event(
+            "rust-tool-1",
+            "repo_list",
+            "repo_list output=ok",
+            "ok",
+            Some("boom"),
+        );
+
+        assert_eq!(payload["id"], "rust-tool-1");
+        assert_eq!(payload["tool_call_id"], "rust-tool-1");
+        assert_eq!(payload["name"], "repo_list");
+        assert_eq!(payload["summary"], "repo_list output=ok");
+        assert_eq!(payload["output"], "ok");
+        assert_eq!(payload["error"], "boom");
+        assert!(payload["result"].is_null());
+    }
+
+    #[test]
+    fn rpc_tool_result_to_engine_preserves_output_and_error() {
+        let result = rpc_tool_result_to_engine(
+            "repo_list",
+            crate::control_rpc::RpcToolResult {
+                output: "ok".to_string(),
+                error: Some("boom".to_string()),
+            },
+        );
+
+        assert_eq!(result.name, "repo_list");
+        assert_eq!(result.summary, "repo_list error=boom");
+        assert_eq!(result.content["output"], "ok");
+        assert_eq!(result.content["error"], "boom");
+    }
+
+    #[test]
+    fn rpc_tool_result_output_and_error_extracts_both_fields() {
+        let rpc = crate::control_rpc::RpcToolResult {
+            output: "ok".to_string(),
+            error: Some("boom".to_string()),
+        };
+        let (output, error) = rpc_tool_result_output_and_error(&rpc);
+
+        assert_eq!(output, "ok");
+        assert_eq!(error.as_deref(), Some("boom"));
     }
 }

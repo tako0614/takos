@@ -424,7 +424,7 @@ const repoSync = new Hono<AuthenticatedRouteEnv>()
         const timestamp = new Date().toISOString();
         const signature = {
           name: user.name || "User",
-          email: user.email || "user@takos.dev",
+          email: user.email || "user@takos.jp",
           timestamp: Math.floor(new Date(timestamp).getTime() / 1000),
           tzOffset: "+0000",
         };

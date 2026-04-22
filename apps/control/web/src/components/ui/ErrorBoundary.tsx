@@ -1,5 +1,5 @@
-import { ErrorBoundary as SolidErrorBoundary } from 'solid-js';
-import type { JSX } from 'solid-js';
+import { ErrorBoundary as SolidErrorBoundary } from "solid-js";
+import type { JSX } from "solid-js";
 
 interface ErrorBoundaryProps {
   children: JSX.Element;
@@ -13,7 +13,7 @@ export function ErrorBoundary(props: ErrorBoundaryProps) {
         if (props.fallback) {
           return props.fallback;
         }
-        console.error('[ErrorBoundary]', err);
+        console.error("[ErrorBoundary]", err);
         return (
           <div class="flex flex-1 items-center justify-center p-6">
             <div class="max-w-md text-center space-y-4">

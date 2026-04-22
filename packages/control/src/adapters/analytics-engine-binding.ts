@@ -26,15 +26,17 @@ export type AnalyticsEngineConfig = {
   /** OTEL collector endpoint (e.g., http://localhost:4318/v1/logs). */
   otelEndpoint?: string;
   /** Backend mode. Defaults to 'noop'. */
-  mode?: 'otel' | 'buffer' | 'noop';
+  mode?: "otel" | "buffer" | "noop";
 };
 
 // ---------------------------------------------------------------------------
 // Implementation
 // ---------------------------------------------------------------------------
 
-export function createAnalyticsEngineBinding(config: AnalyticsEngineConfig): AnalyticsEngineDataset & { getBuffer(): AnalyticsEngineDataPoint[] } {
-  const mode = config.mode ?? (config.otelEndpoint ? 'otel' : 'noop');
+export function createAnalyticsEngineBinding(
+  config: AnalyticsEngineConfig,
+): AnalyticsEngineDataset & { getBuffer(): AnalyticsEngineDataPoint[] } {
+  const mode = config.mode ?? (config.otelEndpoint ? "otel" : "noop");
   const buffer: AnalyticsEngineDataPoint[] = [];
 
   // Batched OTEL flush
@@ -47,7 +49,12 @@ export function createAnalyticsEngineBinding(config: AnalyticsEngineConfig): Ana
     const batch = pendingBatch.splice(0);
     const body = JSON.stringify({
       resourceLogs: [{
-        resource: { attributes: [{ key: 'service.name', value: { stringValue: `takos-analytics:${config.dataset}` } }] },
+        resource: {
+          attributes: [{
+            key: "service.name",
+            value: { stringValue: `takos-analytics:${config.dataset}` },
+          }],
+        },
         scopeLogs: [{
           scope: { name: config.dataset },
           logRecords: batch.map((dp) => ({
@@ -66,19 +73,23 @@ export function createAnalyticsEngineBinding(config: AnalyticsEngineConfig): Ana
 
     // Fire-and-forget POST to OTEL collector
     fetch(config.otelEndpoint, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
       body,
-    }).catch(() => { /* fire-and-forget: OTEL collector POST failure is non-critical */ });
+    }).catch(
+      () => {
+        /* fire-and-forget: OTEL collector POST failure is non-critical */
+      },
+    );
   }
 
   return {
     writeDataPoint(event: AnalyticsEngineDataPoint): void {
       switch (mode) {
-        case 'buffer':
+        case "buffer":
           buffer.push(event);
           break;
-        case 'otel':
+        case "otel":
           pendingBatch.push(event);
           // Batch flush: 100 data points or 1 second, whichever comes first
           if (pendingBatch.length >= 100) {
@@ -90,7 +101,7 @@ export function createAnalyticsEngineBinding(config: AnalyticsEngineConfig): Ana
             }, 1000);
           }
           break;
-        case 'noop':
+        case "noop":
         default:
           break;
       }

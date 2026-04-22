@@ -42,10 +42,30 @@ export class LocalHostContainerRuntime<Env = unknown> {
   async destroy(): Promise<void> {}
 }
 
-const isNodeLikeRuntime = typeof process !== "undefined" &&
-  Boolean(process.versions?.node);
+type RuntimeGlobal = typeof globalThis & {
+  Deno?: unknown;
+  WebSocketPair?: unknown;
+};
 
-const runtimeModule = isNodeLikeRuntime
+type ProcessLike = {
+  versions?: {
+    node?: string;
+  };
+};
+
+export function shouldUseLocalHostContainerRuntime(
+  globalScope: RuntimeGlobal = globalThis as RuntimeGlobal,
+  processLike: ProcessLike | undefined = process,
+): boolean {
+  const isDenoRuntime = typeof globalScope.Deno !== "undefined";
+  const isNodeRuntime = typeof processLike !== "undefined" &&
+    Boolean(processLike.versions?.node);
+  const isWorkersRuntime = typeof globalScope.WebSocketPair !== "undefined";
+
+  return isDenoRuntime || (isNodeRuntime && !isWorkersRuntime);
+}
+
+const runtimeModule = shouldUseLocalHostContainerRuntime()
   ? null
   : await import("@cloudflare/containers");
 

@@ -1,7 +1,7 @@
-import type { Env } from '../../../shared/types/index.ts';
-import { getDb, sessions, blobs, snapshots } from '../../../infra/db/index.ts';
-import { and, type eq as _eq, inArray, lte, lt, asc } from 'drizzle-orm';
-import { SnapshotManager } from '../sync/snapshot.ts';
+import type { Env } from "../../../shared/types/index.ts";
+import { blobs, getDb, sessions, snapshots } from "../../../infra/db/index.ts";
+import { and, asc, type eq as _eq, inArray, lt, lte } from "drizzle-orm";
+import { SnapshotManager } from "../sync/snapshot.ts";
 
 export interface SnapshotGcSpaceResult {
   spaceId: string;
@@ -28,7 +28,7 @@ export interface SnapshotGcBatchSummary {
 function addSpaceIds(
   into: Set<string>,
   rows: Array<{ accountId: string }>,
-  maxSpaces: number
+  maxSpaces: number,
 ): void {
   for (const row of rows) {
     if (into.size >= maxSpaces) break;
@@ -42,7 +42,7 @@ export async function runSnapshotGcBatch(
     maxSpaces?: number;
     candidateScanLimit?: number;
     staleSnapshotAgeMinutes?: number;
-  }
+  },
 ): Promise<SnapshotGcBatchSummary> {
   if (!env.TENANT_SOURCE) {
     return {
@@ -58,16 +58,24 @@ export async function runSnapshotGcBatch(
 
   const db = getDb(env.DB);
   const maxSpaces = Math.max(1, Math.min(options?.maxSpaces ?? 5, 25));
-  const candidateScanLimit = Math.max(10, Math.min(options?.candidateScanLimit ?? 200, 1000));
-  const staleSnapshotAgeMinutes = Math.max(1, Math.min(options?.staleSnapshotAgeMinutes ?? 30, 24 * 60));
-  const snapshotCutoff = new Date(Date.now() - staleSnapshotAgeMinutes * 60 * 1000).toISOString();
+  const candidateScanLimit = Math.max(
+    10,
+    Math.min(options?.candidateScanLimit ?? 200, 1000),
+  );
+  const staleSnapshotAgeMinutes = Math.max(
+    1,
+    Math.min(options?.staleSnapshotAgeMinutes ?? 30, 24 * 60),
+  );
+  const snapshotCutoff = new Date(
+    Date.now() - staleSnapshotAgeMinutes * 60 * 1000,
+  ).toISOString();
 
   const spaceIds = new Set<string>();
 
   // Workspaces with sessions ready for cleanup (merged/discarded/dead).
   const sessionRows = await db.select({ accountId: sessions.accountId })
     .from(sessions)
-    .where(inArray(sessions.status, ['merged', 'discarded', 'dead']))
+    .where(inArray(sessions.status, ["merged", "discarded", "dead"]))
     .orderBy(asc(sessions.updatedAt))
     .limit(candidateScanLimit)
     .all();
@@ -92,9 +100,9 @@ export async function runSnapshotGcBatch(
       .from(snapshots)
       .where(
         and(
-          inArray(snapshots.status, ['pending', 'failed']),
+          inArray(snapshots.status, ["pending", "failed"]),
           lt(snapshots.createdAt, snapshotCutoff),
-        )
+        ),
       )
       .orderBy(asc(snapshots.createdAt))
       .limit(candidateScanLimit)

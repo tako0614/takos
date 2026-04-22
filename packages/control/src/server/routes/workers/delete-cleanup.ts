@@ -4,7 +4,7 @@ import {
   deleteServiceTakosAccessTokenConfig,
 } from "../../../application/services/common-env/index.ts";
 import {
-  deleteCloudflareCustomHostname,
+  deleteManagedCustomHostname,
 } from "../../../application/services/platform/custom-domains.ts";
 import {
   deleteService,
@@ -49,12 +49,12 @@ async function cleanupServiceCustomDomains(
     }
 
     try {
-      await deleteCloudflareCustomHostname(
+      await deleteManagedCustomHostname(
         c.env,
         customDomain.cfCustomHostnameId,
       );
     } catch (e) {
-      logWarn("Failed to delete CF custom hostname", {
+      logWarn("Failed to delete managed custom hostname", {
         module: "routes/services/base",
         error: e instanceof Error ? e.message : String(e),
       });

@@ -1,5 +1,5 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
-@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500&display=swap');
+@import url("https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap");
+@import url("https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500&display=swap");
 
 /* Theme System */
 :root {
@@ -47,10 +47,15 @@
   /* Shadows */
   --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.05);
   --shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
-  --shadow-lg: 0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1);
+  --shadow-lg:
+    0 10px 15px -3px rgb(0 0 0 / 0.1),
+    0 4px 6px -4px rgb(0 0 0 / 0.1);
 
   /* Transitions */
-  --transition-colors: color 0.15s ease, background-color 0.15s ease, border-color 0.15s ease;
+  --transition-colors:
+    color 0.15s ease,
+    background-color 0.15s ease,
+    border-color 0.15s ease;
   --transition-transform: transform 0.15s ease;
   --transition-opacity: opacity 0.15s ease;
 
@@ -95,7 +100,9 @@
 
   --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.3);
   --shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.4), 0 2px 4px -2px rgb(0 0 0 / 0.3);
-  --shadow-lg: 0 10px 15px -3px rgb(0 0 0 / 0.4), 0 4px 6px -4px rgb(0 0 0 / 0.3);
+  --shadow-lg:
+    0 10px 15px -3px rgb(0 0 0 / 0.4),
+    0 4px 6px -4px rgb(0 0 0 / 0.3);
 }
 
 @import "tailwindcss";
@@ -104,8 +111,14 @@
 @custom-variant dark (&:where([data-theme="dark"], [data-theme="dark"] *));
 
 @theme {
-  --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-  --font-mono: 'JetBrains Mono', ui-monospace, monospace;
+  --font-sans:
+    "Inter",
+    -apple-system,
+    BlinkMacSystemFont,
+    "Segoe UI",
+    Roboto,
+    sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, monospace;
 }
 
 @layer base {
@@ -166,12 +179,24 @@
   color: var(--color-text-primary);
   @apply font-semibold mt-6 mb-3;
 }
-.markdown-content h1 { @apply text-2xl; }
-.markdown-content h2 { @apply text-xl; }
-.markdown-content h3 { @apply text-lg; }
-.markdown-content p { @apply mb-4; }
-.markdown-content ul, .markdown-content ol { @apply pl-6 mb-4; }
-.markdown-content li { @apply mb-1; }
+.markdown-content h1 {
+  @apply text-2xl;
+}
+.markdown-content h2 {
+  @apply text-xl;
+}
+.markdown-content h3 {
+  @apply text-lg;
+}
+.markdown-content p {
+  @apply mb-4;
+}
+.markdown-content ul, .markdown-content ol {
+  @apply pl-6 mb-4;
+}
+.markdown-content li {
+  @apply mb-1;
+}
 .markdown-content code {
   background-color: var(--color-bg-secondary);
   color: var(--color-text-primary);
@@ -182,7 +207,9 @@
   border-color: var(--color-border-primary);
   @apply border rounded-lg p-4 overflow-x-auto mb-4;
 }
-.markdown-content pre code { @apply bg-transparent p-0; }
+.markdown-content pre code {
+  @apply bg-transparent p-0;
+}
 .markdown-content a {
   color: var(--color-text-primary);
   @apply underline underline-offset-2;
@@ -195,7 +222,9 @@
   color: var(--color-text-secondary);
   @apply border-l-2 pl-4 italic my-4;
 }
-.markdown-content table { @apply w-full border-collapse mb-4; }
+.markdown-content table {
+  @apply w-full border-collapse mb-4;
+}
 .markdown-content th, .markdown-content td {
   border-color: var(--color-border-primary);
   @apply border px-3 py-2 text-left;
@@ -207,30 +236,50 @@
 
 /* Animations */
 @keyframes spin {
-  to { transform: rotate(360deg); }
+  to {
+    transform: rotate(360deg);
+  }
 }
 .animate-spin {
   animation: spin 1s linear infinite;
 }
 
 @keyframes slideUp {
-  from { opacity: 0; transform: translateY(1rem); }
-  to { opacity: 1; transform: translateY(0); }
+  from {
+    opacity: 0;
+    transform: translateY(1rem);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 @keyframes slideInLeft {
-  from { transform: translateX(-100%); }
-  to { transform: translateX(0); }
+  from {
+    transform: translateX(-100%);
+  }
+  to {
+    transform: translateX(0);
+  }
 }
 
 @keyframes slideInBottom {
-  from { transform: translateY(100%); }
-  to { transform: translateY(0); }
+  from {
+    transform: translateY(100%);
+  }
+  to {
+    transform: translateY(0);
+  }
 }
 
 @keyframes fadeIn {
-  from { opacity: 0; }
-  to { opacity: 1; }
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
 }
 
 .animate-slide-in-left {
@@ -247,8 +296,12 @@
 
 /* Wiggle animation for draggable icons */
 @keyframes wiggle {
-  0%, 100% { transform: rotate(-1deg); }
-  50% { transform: rotate(1deg); }
+  0%, 100% {
+    transform: rotate(-1deg);
+  }
+  50% {
+    transform: rotate(1deg);
+  }
 }
 
 .animate-wiggle {

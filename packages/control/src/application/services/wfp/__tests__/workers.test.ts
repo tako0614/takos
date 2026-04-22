@@ -1,6 +1,6 @@
 import { assertEquals } from "jsr:@std/assert";
 
-import { createWorkerWithWasm } from "../workers.ts";
+import { createWorker, createWorkerWithWasm } from "../workers.ts";
 import type { WfpContext } from "../wfp-contracts.ts";
 
 function createFakeContext(): {
@@ -79,4 +79,48 @@ Deno.test("createWorkerWithWasm formats D1 bindings with database_id", async () 
       id: "db-123",
     },
   ]);
+});
+
+Deno.test("createWorker includes native Cloudflare container metadata", async () => {
+  const { ctx, requests } = createFakeContext();
+
+  await createWorker(ctx, {
+    workerName: "computer",
+    workerScript: "export default {}",
+    bindings: [{
+      type: "durable_object_namespace",
+      name: "SANDBOX_CONTAINER",
+      class_name: "SandboxSessionContainer",
+    }],
+    containers: [{
+      class_name: "SandboxSessionContainer",
+      image: "apps/sandbox/Dockerfile",
+      instance_type: "basic",
+      max_instances: 100,
+    }],
+    migrations: [{
+      tag: "v1",
+      new_sqlite_classes: ["SandboxSessionContainer"],
+    }],
+  });
+
+  const formData = requests[0]?.options.body as FormData;
+  const metadataBlob = formData.get("metadata");
+  const metadata = JSON.parse(await (metadataBlob as Blob).text()) as {
+    containers: unknown;
+    migrations: unknown;
+  };
+
+  assertEquals(metadata.containers, [{
+    class_name: "SandboxSessionContainer",
+    image: "apps/sandbox/Dockerfile",
+    instance_type: "basic",
+    max_instances: 100,
+  }]);
+  assertEquals(metadata.migrations, {
+    new_tag: "v1",
+    steps: [{
+      new_sqlite_classes: ["SandboxSessionContainer"],
+    }],
+  });
 });

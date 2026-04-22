@@ -1,6 +1,13 @@
-import { createSignal, onMount, onCleanup, Show, For } from 'solid-js';
-import type { JSX } from 'solid-js';
-import { Icons } from '../../lib/Icons.tsx';
+import {
+  createEffect,
+  createSignal,
+  For,
+  onCleanup,
+  onMount,
+  Show,
+} from "solid-js";
+import type { JSX } from "solid-js";
+import { Icons } from "../../lib/Icons.tsx";
 
 export interface BreadcrumbItem {
   label: string;
@@ -21,6 +28,15 @@ export function Breadcrumb(props: BreadcrumbProps) {
   let containerRef: HTMLElement | undefined;
   let dropdownRef: HTMLDivElement | undefined;
 
+  const checkWidth = () => {
+    setIsCollapsed(
+      (containerRef?.offsetWidth ?? Infinity) < 400 ||
+        props.items.length > (props.maxItems ?? 4),
+    );
+  };
+
+  createEffect(checkWidth);
+
   onMount(() => {
     const handleClickOutside = (event: MouseEvent) => {
       if (dropdownRef && !dropdownRef.contains(event.target as Node)) {
@@ -28,18 +44,14 @@ export function Breadcrumb(props: BreadcrumbProps) {
       }
     };
 
-    document.addEventListener('mousedown', handleClickOutside);
-    onCleanup(() => document.removeEventListener('mousedown', handleClickOutside));
-
-    const checkWidth = () => {
-      if (containerRef) {
-        setIsCollapsed(containerRef.offsetWidth < 400 || props.items.length > (props.maxItems ?? 4));
-      }
-    };
+    document.addEventListener("mousedown", handleClickOutside);
+    onCleanup(() =>
+      document.removeEventListener("mousedown", handleClickOutside)
+    );
 
     checkWidth();
-    globalThis.addEventListener('resize', checkWidth);
-    onCleanup(() => globalThis.removeEventListener('resize', checkWidth));
+    globalThis.addEventListener("resize", checkWidth);
+    onCleanup(() => globalThis.removeEventListener("resize", checkWidth));
   });
 
   const separatorElement = () =>
@@ -47,16 +59,21 @@ export function Breadcrumb(props: BreadcrumbProps) {
       <Icons.ChevronRight class="w-4 h-4 text-zinc-400 dark:text-zinc-500 flex-shrink-0" />
     );
 
-  const renderItem = (item: BreadcrumbItem, _index: number, isLast: boolean) => {
+  const renderItem = (
+    item: BreadcrumbItem,
+    _index: number,
+    isLast: boolean,
+  ) => {
     const content = (
       <span
         class={`
           text-sm truncate max-w-[150px]
-          ${isLast
-            ? 'text-zinc-900 dark:text-zinc-100 font-medium'
-            : 'text-zinc-500 dark:text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200'
-          }
-          ${!isLast && (item.href || item.onClick) ? 'cursor-pointer' : ''}
+          ${
+          isLast
+            ? "text-zinc-900 dark:text-zinc-100 font-medium"
+            : "text-zinc-500 dark:text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200"
+        }
+          ${!isLast && (item.href || item.onClick) ? "cursor-pointer" : ""}
         `}
       >
         {item.label}
@@ -106,7 +123,9 @@ export function Breadcrumb(props: BreadcrumbProps) {
         fallback={
           <nav
             ref={containerRef}
-            class={`flex items-center gap-2 min-w-0 flex-wrap ${props.class ?? ''}`}
+            class={`flex items-center gap-2 min-w-0 flex-wrap ${
+              props.class ?? ""
+            }`}
             aria-label="Breadcrumb"
           >
             <For each={props.items}>
@@ -127,7 +146,7 @@ export function Breadcrumb(props: BreadcrumbProps) {
       >
         <nav
           ref={containerRef}
-          class={`flex items-center gap-2 min-w-0 ${props.class ?? ''}`}
+          class={`flex items-center gap-2 min-w-0 ${props.class ?? ""}`}
           aria-label="Breadcrumb"
         >
           <div class="flex items-center gap-2 min-w-0">
@@ -154,7 +173,9 @@ export function Breadcrumb(props: BreadcrumbProps) {
                       class="w-full px-3 py-2 text-left text-sm text-zinc-700 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-700 transition-colors"
                       onClick={() => {
                         if (item.onClick) item.onClick();
-                        else if (item.href) globalThis.location.href = item.href;
+                        else if (item.href) {
+                          globalThis.location.href = item.href;
+                        }
                         setShowDropdown(false);
                       }}
                     >
@@ -169,7 +190,11 @@ export function Breadcrumb(props: BreadcrumbProps) {
           {separatorElement()}
 
           <div class="flex items-center min-w-0">
-            {renderItem(props.items[props.items.length - 1], props.items.length - 1, true)}
+            {renderItem(
+              props.items[props.items.length - 1],
+              props.items.length - 1,
+              true,
+            )}
           </div>
         </nav>
       </Show>

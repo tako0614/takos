@@ -1,6 +1,10 @@
-import { mkdir, readFile, writeFile } from 'node:fs/promises';
-import path from 'node:path';
-import type { RoutingRecord, RoutingStore, RoutingTarget } from '../application/services/routing/routing-models.ts';
+import { mkdir, readFile, writeFile } from "node:fs/promises";
+import path from "node:path";
+import type {
+  RoutingRecord,
+  RoutingStore,
+  RoutingTarget,
+} from "../application/services/routing/routing-models.ts";
 
 type RoutingState = Record<string, RoutingRecord>;
 
@@ -19,7 +23,11 @@ export function createInMemoryRoutingStore(): RoutingStore {
     async getRecord(hostname: string): Promise<RoutingRecord | null> {
       return cloneRecord(records.get(normalizeHostname(hostname)) ?? null);
     },
-    async putRecord(hostname: string, target: RoutingTarget, updatedAt: number): Promise<RoutingRecord> {
+    async putRecord(
+      hostname: string,
+      target: RoutingTarget,
+      updatedAt: number,
+    ): Promise<RoutingRecord> {
       const key = normalizeHostname(hostname);
       const current = records.get(key);
       const next: RoutingRecord = {
@@ -31,7 +39,11 @@ export function createInMemoryRoutingStore(): RoutingStore {
       records.set(key, next);
       return cloneRecord(next)!;
     },
-    async deleteRecord(hostname: string, tombstoneTtlMs: number, updatedAt: number): Promise<RoutingRecord> {
+    async deleteRecord(
+      hostname: string,
+      tombstoneTtlMs: number,
+      updatedAt: number,
+    ): Promise<RoutingRecord> {
       const key = normalizeHostname(hostname);
       const current = records.get(key);
       const next: RoutingRecord = {
@@ -53,17 +65,20 @@ async function ensureParentDirectory(filePath: string): Promise<void> {
 
 async function readState(filePath: string): Promise<RoutingState> {
   try {
-    return JSON.parse(await readFile(filePath, 'utf8')) as RoutingState;
+    return JSON.parse(await readFile(filePath, "utf8")) as RoutingState;
   } catch (error) {
     const nodeError = error as NodeJS.ErrnoException;
-    if (nodeError.code === 'ENOENT') return {};
+    if (nodeError.code === "ENOENT") return {};
     throw error;
   }
 }
 
-async function writeState(filePath: string, state: RoutingState): Promise<void> {
+async function writeState(
+  filePath: string,
+  state: RoutingState,
+): Promise<void> {
   await ensureParentDirectory(filePath);
-  await writeFile(filePath, `${JSON.stringify(state, null, 2)}\n`, 'utf8');
+  await writeFile(filePath, `${JSON.stringify(state, null, 2)}\n`, "utf8");
 }
 
 export function createPersistentRoutingStore(filePath: string): RoutingStore {
@@ -85,7 +100,11 @@ export function createPersistentRoutingStore(filePath: string): RoutingStore {
       const state = await loadState();
       return cloneRecord(state[normalizeHostname(hostname)] ?? null);
     },
-    async putRecord(hostname: string, target: RoutingTarget, updatedAt: number): Promise<RoutingRecord> {
+    async putRecord(
+      hostname: string,
+      target: RoutingTarget,
+      updatedAt: number,
+    ): Promise<RoutingRecord> {
       const state = await loadState();
       const key = normalizeHostname(hostname);
       const current = state[key];
@@ -99,7 +118,11 @@ export function createPersistentRoutingStore(filePath: string): RoutingStore {
       await flushState();
       return cloneRecord(next)!;
     },
-    async deleteRecord(hostname: string, tombstoneTtlMs: number, updatedAt: number): Promise<RoutingRecord> {
+    async deleteRecord(
+      hostname: string,
+      tombstoneTtlMs: number,
+      updatedAt: number,
+    ): Promise<RoutingRecord> {
       const state = await loadState();
       const key = normalizeHostname(hostname);
       const current = state[key];

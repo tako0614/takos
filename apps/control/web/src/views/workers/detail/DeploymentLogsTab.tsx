@@ -47,7 +47,7 @@ interface DeploymentLogsTabProps {
   worker: Worker;
 }
 
-export function DeploymentLogsTab({ worker }: DeploymentLogsTabProps) {
+export function DeploymentLogsTab(props: DeploymentLogsTabProps) {
   const { t } = useI18n();
   const { showToast } = useToast();
   const { confirm } = useConfirmDialog();
@@ -62,27 +62,37 @@ export function DeploymentLogsTab({ worker }: DeploymentLogsTabProps) {
   const [rollingBackVersion, setRollingBackVersion] = createSignal<
     number | null
   >(null);
+  let deploymentsSeq = 0;
+  let detailsSeq = 0;
 
   createEffect(() => {
-    loadDeployments();
+    void loadDeployments();
   });
 
   const loadDeployments = async () => {
+    const workerId = props.worker.id;
+    const seq = ++deploymentsSeq;
     try {
       setLoading(true);
       const res = await rpcPath(rpc, "services", ":id", "deployments").$get({
-        param: { id: worker.id },
+        param: { id: workerId },
       });
       const data = await rpcJson<{ deployments: Deployment[] }>(res);
+      if (seq !== deploymentsSeq || workerId !== props.worker.id) return;
       setDeployments(data.deployments || []);
     } catch (err) {
+      if (seq !== deploymentsSeq || workerId !== props.worker.id) return;
       console.error("Failed to load deployments:", err);
     } finally {
-      setLoading(false);
+      if (seq === deploymentsSeq && workerId === props.worker.id) {
+        setLoading(false);
+      }
     }
   };
 
   const loadDeploymentDetails = async (deploymentId: string) => {
+    const workerId = props.worker.id;
+    const seq = ++detailsSeq;
     try {
       setLoadingDetailsId(deploymentId);
       const res = await rpcPath(
@@ -92,10 +102,11 @@ export function DeploymentLogsTab({ worker }: DeploymentLogsTabProps) {
         "deployments",
         ":deploymentId",
       ).$get({
-        param: { id: worker.id, deploymentId },
+        param: { id: workerId, deploymentId },
       });
       const data = await rpcJson<{ events?: DeploymentEvent[] }>(res);
 
+      if (seq !== detailsSeq || workerId !== props.worker.id) return;
       if (data.events) {
         setDeployments((prev) =>
           prev.map((
@@ -104,9 +115,12 @@ export function DeploymentLogsTab({ worker }: DeploymentLogsTabProps) {
         );
       }
     } catch (err) {
+      if (seq !== detailsSeq || workerId !== props.worker.id) return;
       console.error("Failed to load deployment details:", err);
     } finally {
-      setLoadingDetailsId(null);
+      if (seq === detailsSeq && workerId === props.worker.id) {
+        setLoadingDetailsId(null);
+      }
     }
   };
 
@@ -175,7 +189,7 @@ export function DeploymentLogsTab({ worker }: DeploymentLogsTabProps) {
         "deployments",
         "rollback",
       ).$post({
-        param: { id: worker.id },
+        param: { id: props.worker.id },
         json: { target_version: version },
       });
       await rpcJson(res);
@@ -200,192 +214,199 @@ export function DeploymentLogsTab({ worker }: DeploymentLogsTabProps) {
     }s`;
   };
 
-  if (loading()) {
-    return (
-      <div class="flex items-center justify-center py-12">
-        <Icons.Loader class="w-6 h-6 animate-spin text-zinc-400" />
-      </div>
-    );
-  }
-
-  if (deployments().length === 0) {
-    return (
-      <Card padding="lg">
-        <div class="text-center py-8">
-          <Icons.Upload class="w-12 h-12 mx-auto text-zinc-300 dark:text-zinc-600 mb-4" />
-          <p class="text-zinc-500 dark:text-zinc-400">{t("noDeployments")}</p>
-        </div>
-      </Card>
-    );
-  }
-
   return (
-    <div class="space-y-4">
-      <div class="flex items-center justify-between">
-        <h2 class="text-lg font-semibold text-zinc-900 dark:text-zinc-100">
-          {t("deploymentHistory")}
-        </h2>
-        <Button
-          variant="secondary"
-          size="sm"
-          onClick={loadDeployments}
-          leftIcon={<Icons.RefreshCw class="w-4 h-4" />}
-        >
-          {t("refresh")}
-        </Button>
-      </div>
-
-      <div class="space-y-3">
-        {deployments().map((deployment: Deployment) => (
-          <Card padding="none" class="overflow-hidden">
-            <div
-              class="flex items-center gap-4 px-4 py-3 cursor-pointer hover:bg-zinc-50 dark:hover:bg-zinc-800 transition-colors"
-              onClick={() =>
-                toggleExpanded(deployment)}
-            >
-              <div class="flex items-center gap-2">
-                {expandedDeployment() === deployment.id
-                  ? <Icons.ChevronDown class="w-4 h-4 text-zinc-400" />
-                  : <Icons.ChevronRight class="w-4 h-4 text-zinc-400" />}
-                {getStatusBadge(deployment.status)}
-                {getRoutingBadge(deployment)}
-              </div>
-
-              <div class="flex-1 min-w-0">
-                <div class="flex items-center gap-2">
-                  <span class="text-sm font-mono text-zinc-600 dark:text-zinc-400">
-                    v{deployment.version}
-                  </span>
-                  {deployment.bundle_hash && (
-                    <span class="text-xs font-mono text-zinc-500 dark:text-zinc-400">
-                      {deployment.bundle_hash.slice(0, 8)}
-                    </span>
-                  )}
-                  {deployment.deployed_by && (
-                    <span class="text-xs text-zinc-500">
-                      {t("deployedBy")}: {deployment.deployed_by}
-                    </span>
-                  )}
-                  {deployment.deploy_message && (
-                    <span class="text-xs text-zinc-500 truncate">
-                      {deployment.deploy_message}
-                    </span>
-                  )}
-                </div>
-              </div>
-
-              <div class="flex items-center gap-4 text-xs text-zinc-500">
-                {deployment.bundle_size && (
-                  <span>{formatBytes(deployment.bundle_size)}</span>
-                )}
-                {getDuration(deployment) && (
-                  <span>{getDuration(deployment)}</span>
-                )}
-                <span>{formatDateTime(deployment.created_at)}</span>
-              </div>
+    <>
+      {loading()
+        ? (
+          <div class="flex items-center justify-center py-12">
+            <Icons.Loader class="w-6 h-6 animate-spin text-zinc-400" />
+          </div>
+        )
+        : deployments().length === 0
+        ? (
+          <Card padding="lg">
+            <div class="text-center py-8">
+              <Icons.Upload class="w-12 h-12 mx-auto text-zinc-300 dark:text-zinc-600 mb-4" />
+              <p class="text-zinc-500 dark:text-zinc-400">
+                {t("noDeployments")}
+              </p>
             </div>
+          </Card>
+        )
+        : <DeploymentHistoryContent />}
+    </>
+  );
 
-            {expandedDeployment() === deployment.id && (
-              <div class="border-t border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800/50 px-4 py-3">
-                {loadingDetailsId() === deployment.id && (
-                  <div class="mb-3 flex items-center gap-2 text-xs text-zinc-500 dark:text-zinc-400">
-                    <Icons.Loader class="w-4 h-4 animate-spin" />
-                    <span>Loading deployment details...</span>
-                  </div>
-                )}
-                {deployment.error_message && (
-                  <div class="mb-3 p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg">
-                    <div class="flex items-center gap-2 text-red-700 dark:text-red-400 text-sm font-medium mb-1">
-                      <Icons.AlertTriangle class="w-4 h-4" />
-                      {t("deploymentFailed")}
-                    </div>
-                    <p class="text-sm text-red-600 dark:text-red-400 font-mono">
-                      {deployment.error_message}
-                    </p>
-                  </div>
-                )}
+  function DeploymentHistoryContent() {
+    return (
+      <div class="space-y-4">
+        <div class="flex items-center justify-between">
+          <h2 class="text-lg font-semibold text-zinc-900 dark:text-zinc-100">
+            {t("deploymentHistory")}
+          </h2>
+          <Button
+            variant="secondary"
+            size="sm"
+            onClick={loadDeployments}
+            leftIcon={<Icons.RefreshCw class="w-4 h-4" />}
+          >
+            {t("refresh")}
+          </Button>
+        </div>
 
-                <div class="mb-3 flex items-center justify-between gap-3">
-                  <div class="flex items-center gap-2">
-                    {deployment.routing_status === "archived" &&
-                      deployment.status === "success" && (
-                      <Button
-                        variant="danger"
-                        size="sm"
-                        isLoading={rollingBackVersion() === deployment.version}
-                        disabled={rollingBackVersion() !== null}
-                        onClick={() =>
-                          void rollbackToVersion(deployment.version)}
-                        leftIcon={<Icons.RefreshCw class="w-4 h-4" />}
-                      >
-                        {t("rollbackToVersion", {
-                          version: deployment.version,
-                        })}
-                      </Button>
-                    )}
-                  </div>
-                  {deployment.artifact_ref && (
-                    <span class="text-xs font-mono text-zinc-500 truncate">
-                      {deployment.artifact_ref}
-                    </span>
-                  )}
+        <div class="space-y-3">
+          {deployments().map((deployment: Deployment) => (
+            <Card padding="none" class="overflow-hidden">
+              <div
+                class="flex items-center gap-4 px-4 py-3 cursor-pointer hover:bg-zinc-50 dark:hover:bg-zinc-800 transition-colors"
+                onClick={() =>
+                  toggleExpanded(deployment)}
+              >
+                <div class="flex items-center gap-2">
+                  {expandedDeployment() === deployment.id
+                    ? <Icons.ChevronDown class="w-4 h-4 text-zinc-400" />
+                    : <Icons.ChevronRight class="w-4 h-4 text-zinc-400" />}
+                  {getStatusBadge(deployment.status)}
+                  {getRoutingBadge(deployment)}
                 </div>
 
-                <div class="grid grid-cols-2 gap-4 text-sm">
-                  <div>
-                    <span class="text-zinc-500 dark:text-zinc-400">
-                      Version:
-                    </span>
-                    <span class="ml-2 font-mono text-zinc-700 dark:text-zinc-300">
+                <div class="flex-1 min-w-0">
+                  <div class="flex items-center gap-2">
+                    <span class="text-sm font-mono text-zinc-600 dark:text-zinc-400">
                       v{deployment.version}
                     </span>
+                    {deployment.bundle_hash && (
+                      <span class="text-xs font-mono text-zinc-500 dark:text-zinc-400">
+                        {deployment.bundle_hash.slice(0, 8)}
+                      </span>
+                    )}
+                    {deployment.deployed_by && (
+                      <span class="text-xs text-zinc-500">
+                        {t("deployedBy")}: {deployment.deployed_by}
+                      </span>
+                    )}
+                    {deployment.deploy_message && (
+                      <span class="text-xs text-zinc-500 truncate">
+                        {deployment.deploy_message}
+                      </span>
+                    )}
                   </div>
-                  {deployment.bundle_hash && (
-                    <div>
-                      <span class="text-zinc-500 dark:text-zinc-400">
-                        {t("bundleHash")}:
-                      </span>
-                      <span class="ml-2 font-mono text-zinc-700 dark:text-zinc-300">
-                        {deployment.bundle_hash}
-                      </span>
+                </div>
+
+                <div class="flex items-center gap-4 text-xs text-zinc-500">
+                  {deployment.bundle_size && (
+                    <span>{formatBytes(deployment.bundle_size)}</span>
+                  )}
+                  {getDuration(deployment) && (
+                    <span>{getDuration(deployment)}</span>
+                  )}
+                  <span>{formatDateTime(deployment.created_at)}</span>
+                </div>
+              </div>
+
+              {expandedDeployment() === deployment.id && (
+                <div class="border-t border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800/50 px-4 py-3">
+                  {loadingDetailsId() === deployment.id && (
+                    <div class="mb-3 flex items-center gap-2 text-xs text-zinc-500 dark:text-zinc-400">
+                      <Icons.Loader class="w-4 h-4 animate-spin" />
+                      <span>Loading deployment details...</span>
                     </div>
                   )}
-                  {deployment.bundle_size && (
+                  {deployment.error_message && (
+                    <div class="mb-3 p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg">
+                      <div class="flex items-center gap-2 text-red-700 dark:text-red-400 text-sm font-medium mb-1">
+                        <Icons.AlertTriangle class="w-4 h-4" />
+                        {t("deploymentFailed")}
+                      </div>
+                      <p class="text-sm text-red-600 dark:text-red-400 font-mono">
+                        {deployment.error_message}
+                      </p>
+                    </div>
+                  )}
+
+                  <div class="mb-3 flex items-center justify-between gap-3">
+                    <div class="flex items-center gap-2">
+                      {deployment.routing_status === "archived" &&
+                        deployment.status === "success" && (
+                        <Button
+                          variant="danger"
+                          size="sm"
+                          isLoading={rollingBackVersion() ===
+                            deployment.version}
+                          disabled={rollingBackVersion() !== null}
+                          onClick={() =>
+                            void rollbackToVersion(deployment.version)}
+                          leftIcon={<Icons.RefreshCw class="w-4 h-4" />}
+                        >
+                          {t("rollbackToVersion", {
+                            version: deployment.version,
+                          })}
+                        </Button>
+                      )}
+                    </div>
+                    {deployment.artifact_ref && (
+                      <span class="text-xs font-mono text-zinc-500 truncate">
+                        {deployment.artifact_ref}
+                      </span>
+                    )}
+                  </div>
+
+                  <div class="grid grid-cols-2 gap-4 text-sm">
                     <div>
                       <span class="text-zinc-500 dark:text-zinc-400">
-                        {t("bundleSize")}:
+                        Version:
                       </span>
-                      <span class="ml-2 text-zinc-700 dark:text-zinc-300">
-                        {formatBytes(deployment.bundle_size)}
+                      <span class="ml-2 font-mono text-zinc-700 dark:text-zinc-300">
+                        v{deployment.version}
                       </span>
+                    </div>
+                    {deployment.bundle_hash && (
+                      <div>
+                        <span class="text-zinc-500 dark:text-zinc-400">
+                          {t("bundleHash")}:
+                        </span>
+                        <span class="ml-2 font-mono text-zinc-700 dark:text-zinc-300">
+                          {deployment.bundle_hash}
+                        </span>
+                      </div>
+                    )}
+                    {deployment.bundle_size && (
+                      <div>
+                        <span class="text-zinc-500 dark:text-zinc-400">
+                          {t("bundleSize")}:
+                        </span>
+                        <span class="ml-2 text-zinc-700 dark:text-zinc-300">
+                          {formatBytes(deployment.bundle_size)}
+                        </span>
+                      </div>
+                    )}
+                  </div>
+
+                  {deployment.events && deployment.events.length > 0 && (
+                    <div class="mt-4">
+                      <h4 class="text-sm font-medium text-zinc-700 dark:text-zinc-300 mb-2">
+                        {t("deploymentEvents")}
+                      </h4>
+                      <div class="space-y-2">
+                        {deployment.events.map((event: DeploymentEvent) => (
+                          <div class="flex items-start gap-2 text-xs">
+                            <span class="text-zinc-400 font-mono whitespace-nowrap">
+                              {new Date(event.created_at).toLocaleTimeString()}
+                            </span>
+                            <span class="text-zinc-600 dark:text-zinc-400">
+                              {event.message}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
                     </div>
                   )}
                 </div>
-
-                {deployment.events && deployment.events.length > 0 && (
-                  <div class="mt-4">
-                    <h4 class="text-sm font-medium text-zinc-700 dark:text-zinc-300 mb-2">
-                      {t("deploymentEvents")}
-                    </h4>
-                    <div class="space-y-2">
-                      {deployment.events.map((event: DeploymentEvent) => (
-                        <div class="flex items-start gap-2 text-xs">
-                          <span class="text-zinc-400 font-mono whitespace-nowrap">
-                            {new Date(event.created_at).toLocaleTimeString()}
-                          </span>
-                          <span class="text-zinc-600 dark:text-zinc-400">
-                            {event.message}
-                          </span>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
-              </div>
-            )}
-          </Card>
-        ))}
+              )}
+            </Card>
+          ))}
+        </div>
       </div>
-    </div>
-  );
+    );
+  }
 }

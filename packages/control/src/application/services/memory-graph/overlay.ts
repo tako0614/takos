@@ -1,4 +1,9 @@
-import type { Claim, Evidence, ClaimInsert, EvidenceInsert } from './graph-models.ts';
+import type {
+  Claim,
+  ClaimInsert,
+  Evidence,
+  EvidenceInsert,
+} from "./graph-models.ts";
 
 const MAX_OVERLAY_CLAIMS = 200;
 const MAX_EVIDENCE_CONTENT = 2048;
@@ -10,7 +15,7 @@ export class RunOverlay {
   addClaim(insert: ClaimInsert): Claim {
     if (this.claims.size >= MAX_OVERLAY_CLAIMS) {
       const lowest = [...this.claims.values()].reduce((a, b) =>
-        a.confidence < b.confidence ? a : b,
+        a.confidence < b.confidence ? a : b
       );
       this.claims.delete(lowest.id);
     }
@@ -24,7 +29,7 @@ export class RunOverlay {
       predicate: insert.predicate,
       object: insert.object,
       confidence: insert.confidence ?? 0.5,
-      status: insert.status ?? 'active',
+      status: insert.status ?? "active",
       supersededBy: insert.supersededBy ?? null,
       sourceRunId: insert.sourceRunId ?? null,
       createdAt: now,
@@ -61,16 +66,16 @@ export class RunOverlay {
   findClaimsBySubject(subject: string): Claim[] {
     const lower = subject.toLowerCase();
     return [...this.claims.values()].filter(
-      c => c.subject.toLowerCase().includes(lower),
+      (c) => c.subject.toLowerCase().includes(lower),
     );
   }
 
   searchClaims(query: string): Claim[] {
     const lower = query.toLowerCase();
-    return [...this.claims.values()].filter(c =>
+    return [...this.claims.values()].filter((c) =>
       c.subject.toLowerCase().includes(lower) ||
       c.predicate.toLowerCase().includes(lower) ||
-      c.object.toLowerCase().includes(lower),
+      c.object.toLowerCase().includes(lower)
     );
   }
 
@@ -83,7 +88,7 @@ export class RunOverlay {
   }
 
   getEvidenceForClaim(claimId: string): Evidence[] {
-    return this.evidence.filter(e => e.claimId === claimId);
+    return this.evidence.filter((e) => e.claimId === claimId);
   }
 
   get claimCount(): number {

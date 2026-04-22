@@ -22,8 +22,26 @@ externalS3:
   endpoint: "https://s3.amazonaws.com"
   region: "ap-northeast-1"
   bucket: "takos-tenant-source"
-  accessKeyId: "" # Use IAM roles for EKS instead
+  accessKeyId: "" # Or provide via the existing s3 Secret
   secretAccessKey: ""
+
+networkPolicy:
+  runtime:
+    extraEgress:
+      # Standard Kubernetes NetworkPolicy cannot match AWS S3 by DNS name.
+      # This keeps the default runtime egress policy usable with managed S3 by
+      # allowing public HTTPS while continuing to deny private-network egress.
+      - to:
+          - ipBlock:
+              cidr: 0.0.0.0/0
+              except:
+                - 10.0.0.0/8
+                - 172.16.0.0/12
+                - 192.168.0.0/16
+                - 100.64.0.0/10
+        ports:
+          - protocol: TCP
+            port: 443
 
 # Production domains
 domains:

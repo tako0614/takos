@@ -2,7 +2,8 @@
 
 ::: tip Internal implementation このページは deploy system の internal
 実装を説明する。public contract は [manifest spec](/reference/manifest-spec) と
-[API reference](/reference/api) を参照。:::
+[API reference](/reference/api) を参照。
+:::
 
 Takos の deploy system は **primitive-first** です。worker / service / route /
 publication / resource / consume edge は個別 record として保存され、group

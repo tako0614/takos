@@ -485,12 +485,14 @@ swap すること。
 
 ::: warning Delivery retry 現状、`deliverToFollowers` は delivery queue
 に積まれ、**retry / backoff / DLQ を伴う配送経路が実装済み**。配送先が一時的に
-down しても、kernel 側の cron / queue ベースで再試行される。:::
+down しても、kernel 側の cron / queue ベースで再試行される。
+:::
 
 ::: tip repo_push_activities retention `repo_push_activities` table は現状 GC
 されません。busy repo では数万行に達して outbox pagination
 が遅くなる可能性があります。必要な場合は operator が DB
-を直接クリーンアップする。:::
+を直接クリーンアップする。
+:::
 
 ---
 

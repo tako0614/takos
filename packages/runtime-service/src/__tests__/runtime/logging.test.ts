@@ -58,7 +58,9 @@ Deno.test("pushLog - adds truncation notice only once", async () => {
     for (let i = 0; i < 20; i += 1) {
       module.pushLog(logs, `line ${i}`);
     }
-    const truncationCount = logs.filter((line: string) => line === "...log truncated").length;
+    const truncationCount = logs.filter((line: string) =>
+      line === "...log truncated"
+    ).length;
     assertEquals(truncationCount, 1);
   } finally {
     module.loggingDeps.maxLogLines = originalMaxLogLines;

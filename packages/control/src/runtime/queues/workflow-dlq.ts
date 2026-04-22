@@ -24,6 +24,7 @@ export async function handleWorkflowJobDlq(
   body: unknown,
   env: WorkflowQueueEnv,
   attempts?: number,
+  queueName = "takos-workflow-jobs-dlq",
 ): Promise<void> {
   if (!isValidWorkflowJobQueueMessage(body)) {
     logError(
@@ -59,7 +60,7 @@ export async function handleWorkflowJobDlq(
   const dlqEntry = {
     level: "CRITICAL",
     event: "WORKFLOW_JOB_DLQ_ENTRY",
-    queue: "takos-workflow-jobs-dlq",
+    queue: queueName,
     runId,
     jobId,
     repoId,

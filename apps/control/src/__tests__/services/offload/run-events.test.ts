@@ -10,12 +10,12 @@ const mocks = {
 
 // [Deno] vi.mock removed - manually stub imports from '@/shared/utils/gzip'
 import {
-  runEventsDeps,
   buildRunEventSegmentKey,
   getRunEventsAfterFromR2,
   listRunEventSegmentIndexes,
   type PersistedRunEvent,
   readRunEventSegmentFromR2,
+  runEventsDeps,
   segmentIndexForEventId,
   writeRunEventSegmentToR2,
 } from "@/services/offload/run-events";

@@ -4,22 +4,28 @@ import { Icons } from "../../../lib/Icons.tsx";
 
 interface CreateSpaceModalProps {
   onClose: () => void;
-  onCreate: (name: string, description: string) => Promise<void>;
+  onCreate: (
+    name: string,
+    description: string,
+    installDefaultApps: boolean,
+  ) => Promise<void>;
 }
 
-export function CreateSpaceModal({ onClose, onCreate }: CreateSpaceModalProps) {
+export function CreateSpaceModal(props: CreateSpaceModalProps) {
   const { t } = useI18n();
   const {
     name,
     setName,
     description,
     setDescription,
+    installDefaultApps,
+    setInstallDefaultApps,
     loading,
     error,
     clearError,
     handleSubmit,
   } = useCreateSpaceForm({
-    onCreate,
+    onCreate: props.onCreate,
     nameRequiredMessage: t("nameRequired"),
     failedToCreateMessage: t("failedToCreate"),
   });
@@ -27,7 +33,7 @@ export function CreateSpaceModal({ onClose, onCreate }: CreateSpaceModalProps) {
   return (
     <div
       class="fixed inset-0 bg-black/50 flex items-center justify-center z-50"
-      onClick={onClose}
+      onClick={props.onClose}
       role="dialog"
       aria-modal="true"
       aria-labelledby="create-space-title"
@@ -46,7 +52,7 @@ export function CreateSpaceModal({ onClose, onCreate }: CreateSpaceModalProps) {
           <button
             type="button"
             class="w-8 h-8 flex items-center justify-center rounded-lg text-zinc-500 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100 hover:bg-zinc-200 dark:hover:bg-zinc-700 transition-colors focus:outline-none focus:ring-2 focus:ring-zinc-900 dark:focus:ring-zinc-100"
-            onClick={onClose}
+            onClick={props.onClose}
             aria-label={t("close")}
           >
             <Icons.X class="w-5 h-5" />
@@ -72,8 +78,8 @@ export function CreateSpaceModal({ onClose, onCreate }: CreateSpaceModalProps) {
                 }`}
                 placeholder={t("spaceNamePlaceholder")}
                 value={name()}
-                onChange={(e) => {
-                  setName(e.target.value);
+                onInput={(e) => {
+                  setName(e.currentTarget.value);
                   if (error()) clearError();
                 }}
                 autofocus
@@ -97,10 +103,26 @@ export function CreateSpaceModal({ onClose, onCreate }: CreateSpaceModalProps) {
                 class="w-full px-3 py-2 bg-white dark:bg-zinc-700 border border-zinc-200 dark:border-zinc-600 rounded-lg text-zinc-900 dark:text-zinc-100 placeholder:text-zinc-500 dark:placeholder:text-zinc-400 focus:outline-none focus:ring-2 focus:ring-zinc-900 dark:focus:ring-zinc-100 transition-colors resize-none"
                 placeholder={t("descriptionPlaceholder")}
                 value={description()}
-                onInput={(e) => setDescription(e.target.value)}
+                onInput={(e) => setDescription(e.currentTarget.value)}
                 rows={3}
               />
             </div>
+            <label class="flex gap-3 rounded-xl border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 px-4 py-3 cursor-pointer">
+              <input
+                type="checkbox"
+                class="mt-1 h-4 w-4 rounded border-zinc-300 text-zinc-900 focus:ring-zinc-900 dark:border-zinc-600 dark:bg-zinc-800 dark:focus:ring-zinc-100"
+                checked={installDefaultApps()}
+                onChange={(e) => setInstallDefaultApps(e.currentTarget.checked)}
+              />
+              <span class="space-y-1">
+                <span class="block text-sm font-medium text-zinc-900 dark:text-zinc-100">
+                  {t("installDefaultAppsOnCreate")}
+                </span>
+                <span class="block text-xs leading-5 text-zinc-500 dark:text-zinc-400">
+                  {t("installDefaultAppsOnCreateHint")}
+                </span>
+              </span>
+            </label>
             {error() && (
               <div
                 class="text-sm text-zinc-700 dark:text-zinc-300 flex items-center gap-2"
@@ -115,7 +137,7 @@ export function CreateSpaceModal({ onClose, onCreate }: CreateSpaceModalProps) {
             <button
               type="button"
               class="px-4 py-2 bg-zinc-100 dark:bg-zinc-700 text-zinc-900 dark:text-zinc-100 rounded-lg hover:bg-zinc-200 dark:hover:bg-zinc-600 transition-colors focus:outline-none focus:ring-2 focus:ring-zinc-500"
-              onClick={onClose}
+              onClick={props.onClose}
             >
               {t("cancel")}
             </button>

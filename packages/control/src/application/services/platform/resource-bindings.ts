@@ -150,6 +150,18 @@ function parseBindingConfig(config: string): Record<string, unknown> {
   return safeJsonParseOrDefault<Record<string, unknown>>(config, {});
 }
 
+function asObject(value: unknown): Record<string, unknown> | undefined {
+  return value && typeof value === "object" && !Array.isArray(value)
+    ? value as Record<string, unknown>
+    : undefined;
+}
+
+function nonEmptyString(value: unknown): string | undefined {
+  return typeof value === "string" && value.trim().length > 0
+    ? value.trim()
+    : undefined;
+}
+
 function sanitizePortableName(name: string): string {
   const sanitized = name.replace(/[^a-zA-Z0-9._-]/g, "-").replace(/-+/g, "-")
     .replace(/^-|-$/g, "");
@@ -251,29 +263,47 @@ export function toServiceBinding(
         name: row.bindingName,
         text: options.secretText ?? row.backingResourceId ?? "",
       };
-    case "workflow_runtime":
-      if (
-        !row.backingResourceName && !row.backingResourceId
-      ) return null;
+    case "workflow_runtime": {
+      const workflowConfig = asObject(config.workflowRuntime) ??
+        asObject(config.workflow) ??
+        asObject(resourceConfig.workflowRuntime) ??
+        asObject(resourceConfig.workflow);
+      const workflowName = nonEmptyString(config.workflowName) ??
+        nonEmptyString(config.workflow_name) ??
+        nonEmptyString(workflowConfig?.export) ??
+        nonEmptyString(workflowConfig?.name) ??
+        row.backingResourceName ??
+        row.backingResourceId ??
+        undefined;
+      if (!workflowName) return null;
       return {
         type: "workflow",
         name: row.bindingName,
-        workflow_name: row.backingResourceName ||
-          row.backingResourceId || undefined,
+        workflow_name: workflowName,
       };
+    }
     case "durable_namespace": {
-      const className = typeof config.className === "string"
-        ? config.className
-        : row.backingResourceName || row.backingResourceId ||
-          undefined;
+      const bindingDurableConfig = asObject(config.durableObject) ??
+        asObject(config.durableNamespace);
+      const resourceDurableConfig = asObject(resourceConfig.durableNamespace) ??
+        asObject(resourceConfig.durableObject);
+      const className = nonEmptyString(config.className) ??
+        nonEmptyString(bindingDurableConfig?.className) ??
+        nonEmptyString(resourceConfig.className) ??
+        nonEmptyString(resourceDurableConfig?.className) ??
+        row.backingResourceName ??
+        row.backingResourceId ??
+        undefined;
       if (!className) return null;
+      const scriptName = nonEmptyString(config.scriptName) ??
+        nonEmptyString(bindingDurableConfig?.scriptName) ??
+        nonEmptyString(resourceConfig.scriptName) ??
+        nonEmptyString(resourceDurableConfig?.scriptName);
       return {
         type: "durable_object_namespace",
         name: row.bindingName,
         class_name: className,
-        script_name: typeof config.scriptName === "string"
-          ? config.scriptName
-          : undefined,
+        script_name: scriptName,
       };
     }
     case "service":

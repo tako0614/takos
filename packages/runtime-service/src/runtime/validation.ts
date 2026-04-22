@@ -1,19 +1,30 @@
-import { ALLOWED_COMMANDS_SET, COMMAND_BLOCKLIST_PATTERNS } from '../shared/config.ts';
-import { createLogger } from 'takos-common/logger';
+import {
+  ALLOWED_COMMANDS_SET,
+  COMMAND_BLOCKLIST_PATTERNS,
+} from "../shared/config.ts";
+import { createLogger } from "takos-common/logger";
 import type { Buffer } from "node:buffer";
 
-const STRICT_SESSION_ID_PATTERN = /^[A-Za-z0-9](?:[A-Za-z0-9]|[-_](?![-_])){14,126}[A-Za-z0-9]$/;
+const STRICT_SESSION_ID_PATTERN =
+  /^[A-Za-z0-9](?:[A-Za-z0-9]|[-_](?![-_])){14,126}[A-Za-z0-9]$/;
 const VALID_GIT_REF_PATTERN = /^[A-Za-z0-9_./@^~:-]+$/;
 const VALID_GIT_PATH_PATTERN = /^[A-Za-z0-9_.@/-]+$/;
 const VALID_EMAIL_PATTERN = /^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$/;
 
-function requireNonEmptyString(value: unknown, label: string): asserts value is string {
-  if (typeof value !== 'string' || value.trim().length === 0) {
+function requireNonEmptyString(
+  value: unknown,
+  label: string,
+): asserts value is string {
+  if (typeof value !== "string" || value.trim().length === 0) {
     throw new Error(`${label} is required`);
   }
 }
 
-function requireMaxLength(value: string, maxLength: number, label: string): void {
+function requireMaxLength(
+  value: string,
+  maxLength: number,
+  label: string,
+): void {
   if (value.length > maxLength) {
     throw new Error(`${label} too long`);
   }
@@ -30,7 +41,10 @@ function hasControlCharacters(value: string): boolean {
 function hasCommandControlCharacters(value: string): boolean {
   for (let i = 0; i < value.length; i++) {
     const code = value.charCodeAt(i);
-    if (code <= 8 || (code >= 11 && code <= 12) || (code >= 14 && code <= 31) || code === 127) {
+    if (
+      code <= 8 || (code >= 11 && code <= 12) || (code >= 14 && code <= 31) ||
+      code === 127
+    ) {
       return true;
     }
   }
@@ -45,12 +59,12 @@ function rejectControlChars(value: string, label: string): void {
 
 export function validateCommandLine(commandLine: string): void {
   const trimmed = commandLine.trim();
-  if (trimmed.length === 0 || trimmed.includes('\0')) {
-    throw new Error('Invalid command');
+  if (trimmed.length === 0 || trimmed.includes("\0")) {
+    throw new Error("Invalid command");
   }
   for (const pattern of COMMAND_BLOCKLIST_PATTERNS) {
     if (pattern.test(trimmed)) {
-      throw new Error('Dangerous command arguments detected');
+      throw new Error("Dangerous command arguments detected");
     }
   }
 }
@@ -70,12 +84,17 @@ export function isProbablyBinary(buffer: Buffer): boolean {
 }
 
 export function isValidSessionId(sessionId: string): boolean {
-  return typeof sessionId === 'string' && STRICT_SESSION_ID_PATTERN.test(sessionId);
+  return typeof sessionId === "string" &&
+    STRICT_SESSION_ID_PATTERN.test(sessionId);
 }
 
-export function getWorkerResourceLimits(maxMemory?: number): { maxOldGenerationSizeMb: number } | undefined {
+export function getWorkerResourceLimits(
+  maxMemory?: number,
+): { maxOldGenerationSizeMb: number } | undefined {
   if (!maxMemory) return undefined;
-  return { maxOldGenerationSizeMb: Math.max(16, Math.min(Math.floor(maxMemory), 512)) };
+  return {
+    maxOldGenerationSizeMb: Math.max(16, Math.min(Math.floor(maxMemory), 512)),
+  };
 }
 
 /**
@@ -84,38 +103,41 @@ export function getWorkerResourceLimits(maxMemory?: number): { maxOldGenerationS
  * We only validate for Git's own ref format requirements (matching `git check-ref-format` rules).
  */
 export function validateGitRef(ref: string): void {
-  requireNonEmptyString(ref, 'Git ref');
-  requireMaxLength(ref, 256, 'Git ref');
-  if (ref.includes('\0')) {
-    throw new Error('Git ref contains invalid characters');
+  requireNonEmptyString(ref, "Git ref");
+  requireMaxLength(ref, 256, "Git ref");
+  if (ref.includes("\0")) {
+    throw new Error("Git ref contains invalid characters");
   }
-  if (ref.startsWith('.') || ref.endsWith('.') || ref.includes('..') || ref.includes('@{')) {
-    throw new Error('Git ref format is invalid');
+  if (
+    ref.startsWith(".") || ref.endsWith(".") || ref.includes("..") ||
+    ref.includes("@{")
+  ) {
+    throw new Error("Git ref format is invalid");
   }
-  if (ref.startsWith('-')) {
-    throw new Error('Git ref must not start with a dash');
+  if (ref.startsWith("-")) {
+    throw new Error("Git ref must not start with a dash");
   }
-  if (ref.includes('\\')) {
-    throw new Error('Git ref contains invalid characters');
+  if (ref.includes("\\")) {
+    throw new Error("Git ref contains invalid characters");
   }
   // Git forbids .lock suffix, leading colon, trailing slash, and space/tilde/caret/colon sequences
-  if (ref.endsWith('.lock')) {
-    throw new Error('Git ref must not end with .lock');
+  if (ref.endsWith(".lock")) {
+    throw new Error("Git ref must not end with .lock");
   }
-  if (ref.startsWith(':')) {
-    throw new Error('Git ref must not start with a colon');
+  if (ref.startsWith(":")) {
+    throw new Error("Git ref must not start with a colon");
   }
-  if (ref.endsWith('/')) {
-    throw new Error('Git ref must not end with a slash');
+  if (ref.endsWith("/")) {
+    throw new Error("Git ref must not end with a slash");
   }
   if (/\s/.test(ref)) {
-    throw new Error('Git ref must not contain whitespace');
+    throw new Error("Git ref must not contain whitespace");
   }
   if (hasControlCharacters(ref)) {
-    throw new Error('Git ref contains control characters');
+    throw new Error("Git ref contains control characters");
   }
   if (!VALID_GIT_REF_PATTERN.test(ref)) {
-    throw new Error('Git ref contains invalid characters');
+    throw new Error("Git ref contains invalid characters");
   }
 }
 
@@ -125,16 +147,19 @@ export function validateGitRef(ref: string): void {
  * Disallows: path traversal (..), shell metacharacters, null bytes
  */
 export function validateGitPath(filePath: string): void {
-  if (typeof filePath !== 'string') {
-    throw new Error('Git path must be a string');
+  if (typeof filePath !== "string") {
+    throw new Error("Git path must be a string");
   }
-  requireMaxLength(filePath, 4096, 'Git path');
-  rejectControlChars(filePath, 'Git path');
-  if (filePath.includes('..') || filePath.startsWith('/') || /^[A-Za-z]:/.test(filePath)) {
-    throw new Error('Path traversal not allowed');
+  requireMaxLength(filePath, 4096, "Git path");
+  rejectControlChars(filePath, "Git path");
+  if (
+    filePath.includes("..") || filePath.startsWith("/") ||
+    /^[A-Za-z]:/.test(filePath)
+  ) {
+    throw new Error("Path traversal not allowed");
   }
   if (filePath.length > 0 && !VALID_GIT_PATH_PATTERN.test(filePath)) {
-    throw new Error('Git path contains invalid characters');
+    throw new Error("Git path contains invalid characters");
   }
 }
 
@@ -143,11 +168,11 @@ export function validateGitPath(filePath: string): void {
  * Must be a reasonable name without shell metacharacters.
  */
 export function validateGitAuthorName(name: string): void {
-  requireNonEmptyString(name, 'Author name');
-  requireMaxLength(name, 256, 'Author name');
-  rejectControlChars(name, 'Author name');
+  requireNonEmptyString(name, "Author name");
+  requireMaxLength(name, 256, "Author name");
+  rejectControlChars(name, "Author name");
   if (/[<>;&|`$(){}[\]\\"]/.test(name)) {
-    throw new Error('Author name contains disallowed characters');
+    throw new Error("Author name contains disallowed characters");
   }
 }
 
@@ -156,11 +181,11 @@ export function validateGitAuthorName(name: string): void {
  * Must be a valid email format.
  */
 export function validateGitAuthorEmail(email: string): void {
-  requireNonEmptyString(email, 'Author email');
-  requireMaxLength(email, 256, 'Author email');
-  rejectControlChars(email, 'Author email');
+  requireNonEmptyString(email, "Author email");
+  requireMaxLength(email, 256, "Author email");
+  rejectControlChars(email, "Author email");
   if (!VALID_EMAIL_PATTERN.test(email)) {
-    throw new Error('Author email format is invalid');
+    throw new Error("Author email format is invalid");
   }
 }
 
@@ -183,13 +208,15 @@ const SAFE_NAME_PATTERN = /^[a-zA-Z0-9]([a-zA-Z0-9_-]*[a-zA-Z0-9])?$/;
  * Returns the sanitized name or null if invalid.
  */
 export function validateGitName(name: string): string | null {
-  if (typeof name !== 'string' || name.length === 0 || name.length > 128) {
+  if (typeof name !== "string" || name.length === 0 || name.length > 128) {
     return null;
   }
 
   // Reject null bytes, control characters, path traversal, and URL-encoded traversal
   if (hasControlCharacters(name)) return null;
-  if (name.includes('..') || name.includes('/') || name.includes('\\')) return null;
+  if (name.includes("..") || name.includes("/") || name.includes("\\")) {
+    return null;
+  }
   if (/%2e|%2f|%5c/i.test(name)) return null;
   if (/__|--/.test(name)) return null;
 
@@ -209,21 +236,23 @@ const SPACE_ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9_-]{0,127}$/;
  * Throws on invalid input, returns the validated ID string on success.
  */
 export function validateSpaceId(spaceId: string): string {
-  if (typeof spaceId !== 'string' || spaceId.length === 0) {
-    throw new Error('space_id is required');
+  if (typeof spaceId !== "string" || spaceId.length === 0) {
+    throw new Error("space_id is required");
   }
   if (!SPACE_ID_PATTERN.test(spaceId)) {
-    throw new Error('Invalid space_id format');
+    throw new Error("Invalid space_id format");
   }
   return spaceId;
 }
-
 
 /**
  * Validates a name parameter (space_id, repo_name, etc.) using SAFE_NAME_PATTERN.
  * Returns an error message string on failure, or null on success.
  */
-export function validateNameParam(value: string | undefined, label: string): string | null {
+export function validateNameParam(
+  value: string | undefined,
+  label: string,
+): string | null {
   if (!value) return `${label} is required`;
   if (!SAFE_NAME_PATTERN.test(value)) return `Invalid ${label} format`;
   return null;
@@ -233,7 +262,7 @@ export function validateNameParam(value: string | undefined, label: string): str
 // --- Command validation ---
 // ---------------------------------------------------------------------------
 
-const commandValidationLogger = createLogger({ service: 'takos-runtime' });
+const commandValidationLogger = createLogger({ service: "takos-runtime" });
 
 const SHELL_METACHAR_PATTERN = /[|&;`$(){}]/;
 
@@ -243,7 +272,7 @@ function hasDisallowedShellMetacharacters(value: string): boolean {
   }
   // Strip GitHub Actions expression syntax ${{ ... }} before checking.
   // This allows actions-style expressions while still blocking raw shell metacharacters.
-  const stripped = value.replace(/\$\{\{[^}]*\}\}/g, '');
+  const stripped = value.replace(/\$\{\{[^}]*\}\}/g, "");
   if (!SHELL_METACHAR_PATTERN.test(stripped)) {
     return false;
   }
@@ -252,42 +281,49 @@ function hasDisallowedShellMetacharacters(value: string): boolean {
 }
 
 export function validateCommand(command: string): string | null {
-  if (typeof command !== 'string' || command.trim().length === 0) {
-    return 'Command is empty or invalid';
+  if (typeof command !== "string" || command.trim().length === 0) {
+    return "Command is empty or invalid";
   }
 
   if (command.length > 100000) {
-    return 'Command is too long';
+    return "Command is too long";
   }
 
   if (hasCommandControlCharacters(command)) {
-    return 'Command contains invalid control characters';
+    return "Command contains invalid control characters";
   }
 
-  const lines = command.split('\n').map(line => line.trim()).filter(line => line.length > 0 && !line.startsWith('#'));
-  const combinedCommand = lines.join('\n');
-  if (combinedCommand.length > 0 && hasDisallowedShellMetacharacters(combinedCommand)) {
-    return 'Command contains shell metacharacters (|, &, ;, `, $, etc.) which are not allowed';
+  const lines = command.split("\n").map((line) => line.trim()).filter((line) =>
+    line.length > 0 && !line.startsWith("#")
+  );
+  const combinedCommand = lines.join("\n");
+  if (
+    combinedCommand.length > 0 &&
+    hasDisallowedShellMetacharacters(combinedCommand)
+  ) {
+    return "Command contains shell metacharacters (|, &, ;, `, $, etc.) which are not allowed";
   }
 
   for (const line of lines) {
     if (hasDisallowedShellMetacharacters(line)) {
-      return 'Command contains shell metacharacters (|, &, ;, `, $, etc.) which are not allowed';
+      return "Command contains shell metacharacters (|, &, ;, `, $, etc.) which are not allowed";
     }
 
     for (const pattern of COMMAND_BLOCKLIST_PATTERNS) {
       if (pattern.test(line)) {
-        return 'Command contains potentially dangerous patterns';
+        return "Command contains potentially dangerous patterns";
       }
     }
 
     const firstCommand = line.split(/\s+/)[0];
     const isAllowed = ALLOWED_COMMANDS_SET.has(firstCommand) ||
-      firstCommand.startsWith('./') ||
-      firstCommand.startsWith('.\\');
+      firstCommand.startsWith("./") ||
+      firstCommand.startsWith(".\\");
 
     if (!isAllowed) {
-      commandValidationLogger.warn('Rejected unrecognized command', { command: firstCommand });
+      commandValidationLogger.warn("Rejected unrecognized command", {
+        command: firstCommand,
+      });
       return `Command not allowed: ${firstCommand}`;
     }
   }

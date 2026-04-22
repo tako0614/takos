@@ -1,6 +1,11 @@
 import { ExecutorContainerTier1 } from "@/container-hosts/executor-host";
 
-import { assert, assertEquals, assertNotEquals } from "jsr:@std/assert";
+import {
+  assert,
+  assertEquals,
+  assertNotEquals,
+  assertObjectMatch,
+} from "jsr:@std/assert";
 import { assertSpyCallArgs, spy } from "jsr:@std/testing/mock";
 
 function createMockCtxAndEnv() {
@@ -11,10 +16,13 @@ function createMockCtxAndEnv() {
       put: async (key: string, value: unknown) => {
         storage.set(key, value);
       },
+      delete: async (key: string) => {
+        storage.delete(key);
+      },
     },
   };
 
-  const env = {
+  const env: Record<string, string> = {
     CONTROL_RPC_BASE_URL: "https://control-rpc.example.internal",
   };
 
@@ -33,6 +41,7 @@ Deno.test(
     assertEquals(container.envVars, {
       CONTROL_RPC_BASE_URL: "https://control-rpc.example.internal",
       EXECUTOR_TIER: "1",
+      MAX_CONCURRENT_RUNS: "4",
     });
   },
 );
@@ -60,6 +69,7 @@ Deno.test(
       runId: "run-1",
       workerId: "worker-1",
       model: "gpt-5.2",
+      executorContainerId: "tier1-warm-0",
     });
 
     assertEquals(result, {
@@ -74,6 +84,8 @@ Deno.test(
     assertEquals(payload.runId, "run-1");
     assertEquals(payload.workerId, "worker-1");
     assertEquals(payload.model, "gpt-5.2");
+    assertEquals(payload.executorTier, 1);
+    assertEquals(payload.executorContainerId, "tier1-warm-0");
     assertEquals(
       payload.controlRpcBaseUrl,
       "https://control-rpc.example.internal",
@@ -86,25 +98,113 @@ Deno.test(
         runId: string;
         serviceId: string;
         capability: "control";
+        executorTier: 1;
+        executorContainerId: string;
+        startedAt: number;
+        lastHeartbeatAt: number;
       }
     >;
     assert(tokenMap !== undefined);
     assertEquals(Object.keys(tokenMap).length, 1);
 
-    const tokenInfos = Object.values(tokenMap);
-    assert(
-      tokenInfos.some((item: any) =>
-        JSON.stringify(item) === JSON.stringify({
-          runId: "run-1",
-          serviceId: "worker-1",
-          capability: "control",
-        })
-      ),
-    );
+    const tokenInfo = Object.values(tokenMap)[0];
+    assert(tokenInfo !== undefined);
+    assertObjectMatch(tokenInfo, {
+      runId: "run-1",
+      serviceId: "worker-1",
+      capability: "control",
+      executorTier: 1,
+      executorContainerId: "tier1-warm-0",
+    });
+    assertEquals(typeof tokenInfo.startedAt, "number");
+    assertEquals(typeof tokenInfo.lastHeartbeatAt, "number");
 
     for (const [token, info] of Object.entries(tokenMap)) {
       assertEquals(await container.verifyProxyToken(token), info);
     }
+  },
+);
+
+Deno.test(
+  "ExecutorContainerTier1 - accepts multiple runs up to configured capacity",
+  async () => {
+    ({ ctx, env, storage } = createMockCtxAndEnv());
+    const container = new ExecutorContainerTier1(ctx as any, env as any);
+
+    (container as any).container = {
+      getTcpPort: (_port: number) => ({
+        fetch: async (_url: string, _request: Request) =>
+          new Response("accepted", { status: 202 }),
+      }),
+    };
+    (container as any).startAndWaitForPorts = async (_port: number) => {};
+
+    const first = await container.dispatchStart({
+      runId: "run-1",
+      workerId: "worker-1",
+      executorContainerId: "tier1-warm-0",
+    });
+    const second = await container.dispatchStart({
+      runId: "run-2",
+      workerId: "worker-2",
+      executorContainerId: "tier1-warm-0",
+    });
+
+    assertEquals(first.status, 202);
+    assertEquals(second.status, 202);
+
+    const tokenMap = storage.get("proxyTokens") as Record<string, unknown>;
+    assertEquals(Object.keys(tokenMap).length, 2);
+    assertEquals(await container.getLoad(), {
+      tier: 1,
+      containerId: "tier1-unknown",
+      active: 2,
+      capacity: 4,
+    });
+  },
+);
+
+Deno.test(
+  "ExecutorContainerTier1 - rejects dispatchStart when token capacity is exhausted",
+  async () => {
+    ({ ctx, env, storage } = createMockCtxAndEnv());
+    env = {
+      ...env,
+      EXECUTOR_TIER1_MAX_CONCURRENT_RUNS: "1",
+    };
+    const container = new ExecutorContainerTier1(ctx as any, env as any);
+
+    (container as any).container = {
+      getTcpPort: (_port: number) => ({
+        fetch: async (_url: string, _request: Request) =>
+          new Response("accepted", { status: 202 }),
+      }),
+    };
+    (container as any).startAndWaitForPorts = async (_port: number) => {};
+
+    const first = await container.dispatchStart({
+      runId: "run-1",
+      workerId: "worker-1",
+      executorContainerId: "tier1-warm-0",
+    });
+    const second = await container.dispatchStart({
+      runId: "run-2",
+      workerId: "worker-2",
+      executorContainerId: "tier1-warm-0",
+    });
+
+    assertEquals(first.status, 202);
+    assertEquals(second.ok, false);
+    assertEquals(second.status, 503);
+    assertEquals(JSON.parse(second.body), {
+      error: "At capacity",
+      tier: 1,
+      active: 1,
+      capacity: 1,
+    });
+
+    const tokenMap = storage.get("proxyTokens") as Record<string, unknown>;
+    assertEquals(Object.keys(tokenMap).length, 1);
   },
 );
 

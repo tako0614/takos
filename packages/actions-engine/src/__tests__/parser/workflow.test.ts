@@ -195,7 +195,9 @@ Deno.test("workflow validation - rejects unknown pull_request event types", () =
       typeof item.path === "string" &&
       item.path === "on.pull_request.types.1"
     ),
-    `Expected enum validation error at on.pull_request.types.1, got ${JSON.stringify(result.diagnostics)}`,
+    `Expected enum validation error at on.pull_request.types.1, got ${
+      JSON.stringify(result.diagnostics)
+    }`,
   );
 });
 Deno.test("workflow validation - accepts all GitHub Actions pull_request types including assigned, labeled, milestoned, enqueued", () => {

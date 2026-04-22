@@ -89,8 +89,11 @@ export default {
 
 ## auth を付けたい場合
 
-`authSecretRef` は publication `spec` 内の metadata です。実際の token 値は
-service env settings か secret resource / runtime binding から供給します。
+`authSecretRef` は publication `spec` 内の metadata です。group-managed deploy
+では、publisher service に同名の env/secret が無ければ Takos が secret service
+env を生成します。standalone deploy では同名の secret を別途用意します。Takos の
+MCP client は owner service からその値を解決して `Authorization: Bearer ...`
+を送るので、worker 側でも同じ token を検証して ください。
 
 ```yaml
 publish:

@@ -11,7 +11,11 @@ const mocks = {
 
 // [Deno] vi.mock removed - manually stub imports from '@/db'
 // [Deno] vi.mock removed - manually stub imports from '@/shared/utils'
-import { InfraService, infraServiceDeps } from "@/services/platform/infra";
+import {
+  buildStoredEndpointForRuntime,
+  InfraService,
+  infraServiceDeps,
+} from "@/services/platform/infra";
 
 const originalInfraServiceDeps = { ...infraServiceDeps };
 
@@ -66,6 +70,17 @@ function makeEnv(): Env {
   return { DB: {} } as unknown as Env;
 }
 
+Deno.test("buildStoredEndpointForRuntime - keeps cloudflare.worker as a legacy runtime alias", () => {
+  const endpoint = buildStoredEndpointForRuntime({
+    endpointName: "api",
+    routes: [],
+    targetServiceRef: "cf-api",
+    runtime: "cloudflare.worker",
+  });
+
+  assertEquals(endpoint?.target, { kind: "service-ref", ref: "cf-api" });
+});
+
 Deno.test("InfraService.upsertWorker - creates a new infra worker when none exists", async () => {
   /* mocks cleared (no-op in Deno) */ void 0;
   const drizzle = createDrizzleMock();
@@ -78,7 +93,7 @@ Deno.test("InfraService.upsertWorker - creates a new infra worker when none exis
       spaceId: "ws-1",
       bundleDeploymentId: "bd-1",
       name: "api-worker",
-      runtime: "cloudflare.worker",
+      runtime: "takos.worker",
       cloudflareServiceRef: "cf-api",
     });
 
@@ -100,7 +115,7 @@ Deno.test("InfraService.upsertWorker - updates existing infra worker", async () 
       spaceId: "ws-1",
       bundleDeploymentId: "bd-1",
       name: "api-worker",
-      runtime: "cloudflare.worker",
+      runtime: "takos.worker",
     });
 
     assertEquals(id, "existing-id");
@@ -208,7 +223,7 @@ Deno.test("InfraService.buildRoutingTarget - builds routing target from endpoint
       {
         name: "api-worker",
         cloudflareServiceRef: "cf-api",
-        runtime: "cloudflare.worker",
+        runtime: "takos.worker",
       },
     ];
   }) as any;
@@ -232,7 +247,7 @@ Deno.test("InfraService.buildRoutingTarget - builds routing target from endpoint
     restoreInfraDeps();
   }
 });
-Deno.test("InfraService.buildRoutingTarget - skips non-cloudflare.worker endpoints", async () => {
+Deno.test("InfraService.buildRoutingTarget - skips unknown non-url runtimes", async () => {
   /* mocks cleared (no-op in Deno) */ void 0;
   const drizzle = createDrizzleMock();
   let allCallCount = 0;

@@ -216,12 +216,15 @@ export function SpaceSettingsSection(props: SpaceSettingsSectionProps) {
     }
   };
 
-  const handleCreateSpace = async (name: string) => {
+  const handleCreateSpace = async (
+    name: string,
+    installDefaultApps: boolean,
+  ) => {
     if (!name) return;
     try {
       setCreatingSpace(true);
       const res = await rpc.spaces.$post({
-        json: { name },
+        json: { name, installDefaultApps },
       });
       const data = await rpcJson<{ space: { slug: string } }>(res);
       showToast("success", t("spaceCreated") || "Space created");
@@ -263,7 +266,7 @@ export function SpaceSettingsSection(props: SpaceSettingsSectionProps) {
         <select
           class="w-full max-w-md px-3 py-2.5 bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 rounded-xl text-sm text-zinc-900 dark:text-zinc-100 focus:outline-none focus:ring-2 focus:ring-zinc-900/10 dark:focus:ring-zinc-100/10"
           value={selectedSpaceId() ?? ""}
-          onChange={(e) => props.setSelectedSpaceId(e.target.value)}
+          onChange={(e) => props.setSelectedSpaceId(e.currentTarget.value)}
         >
           <option value="" disabled>
             {t("selectSpace") || "Select a space"}

@@ -77,7 +77,8 @@ app container ではない。image-backed Service / Attached Container は
 `oci-orchestrator` が扱う。
 
 private server stack の基準は `takos-private/`
-で、`takos-private/.env.server.example`、`takos-private/compose.server.yml`、`takos-private/apps/executor`
+で、`takos-private/.env.server.example`、`takos-private/compose.server.yml`、
+`apps/rust-agent/Dockerfile`
 を使います。OSS local stack は `./.env.local.example` と `compose.local.yml`
 を使い、private 側は sibling checkout で別管理です。
 
@@ -232,7 +233,9 @@ deno task --cwd apps/control db:migrate
 - backend-neutral deploy spec を local backend 上で実現するが、Cloudflare
   backend と完全同一ではない
 - backend-specific な queue consumer / scheduler / workflow semantics
-  は再現しきれない
+  は再現しきれない。queue binding の basic delivery は動かせるが、
+  `triggers.queues` の deploy は `workers-dispatch` backend 必須で、local
+  `runtime-host` では fail-fast する
 - vectorize binding には PostgreSQL + pgvector が必要（`PGVECTOR_ENABLED=true`）
 - Durable Object binding は persistent local runtime で利用できるが、Cloudflare
   backend と byte-for-byte 同一ではない

@@ -1,8 +1,8 @@
-import { createSignal, type Accessor } from 'solid-js';
-import type { StorageFile } from '../types/index.ts';
-import type { RpcResponse } from '../lib/rpc.ts';
-import { rpc, rpcJson } from '../lib/rpc.ts';
-import { getErrorMessage } from 'takos-common/errors';
+import { type Accessor, createSignal } from "solid-js";
+import type { StorageFile } from "../types/index.ts";
+import type { RpcResponse } from "../lib/rpc.ts";
+import { rpc, rpcJson } from "../lib/rpc.ts";
+import { getErrorMessage } from "takos-common/errors";
 
 interface UseSpaceStorageReturn {
   files: () => StorageFile[];
@@ -18,21 +18,25 @@ interface UseSpaceStorageReturn {
   renameItem: (fileId: string, name: string) => Promise<StorageFile | null>;
   moveItem: (fileId: string, parentPath: string) => Promise<StorageFile | null>;
   bulkMoveItems: (fileIds: string[], parentPath: string) => Promise<boolean>;
-  bulkRenameItems: (renames: Array<{ file_id: string; name: string }>) => Promise<boolean>;
+  bulkRenameItems: (
+    renames: Array<{ file_id: string; name: string }>,
+  ) => Promise<boolean>;
   getDownloadUrl: (fileId: string) => Promise<string | null>;
   downloadFolderZip: (path: string) => Promise<RpcResponse | null>;
 }
 
-export function useSpaceStorage(spaceId: Accessor<string | undefined>): UseSpaceStorageReturn {
+export function useSpaceStorage(
+  spaceId: Accessor<string | undefined>,
+): UseSpaceStorageReturn {
   const [files, setFiles] = createSignal<StorageFile[]>([]);
-  const [currentPath, setCurrentPath] = createSignal('/');
+  const [currentPath, setCurrentPath] = createSignal("/");
   const [loading, setLoading] = createSignal(false);
   const [error, setError] = createSignal<string | null>(null);
   const [truncated, setTruncated] = createSignal(false);
   // Monotonic counter to prevent stale loadFiles responses from overwriting newer ones
   let loadVersion = 0;
 
-  const loadFiles = async (path = '/') => {
+  const loadFiles = async (path = "/") => {
     const currentSpaceId = spaceId();
     if (!currentSpaceId) return;
 
@@ -41,7 +45,7 @@ export function useSpaceStorage(spaceId: Accessor<string | undefined>): UseSpace
     setError(null);
 
     try {
-      const res = await rpc.spaces[':spaceId'].storage.$get({
+      const res = await rpc.spaces[":spaceId"].storage.$get({
         param: { spaceId: currentSpaceId },
         query: { path },
       });
@@ -50,14 +54,16 @@ export function useSpaceStorage(spaceId: Accessor<string | undefined>): UseSpace
       if (version !== loadVersion) return;
       if (spaceId() !== currentSpaceId) return;
 
-      const data = await rpcJson<{ files: StorageFile[]; path: string; truncated?: boolean }>(res);
+      const data = await rpcJson<
+        { files: StorageFile[]; path: string; truncated?: boolean }
+      >(res);
       setFiles(data.files || []);
       setCurrentPath(data.path || path);
       setTruncated(data.truncated ?? false);
     } catch (err) {
       if (version !== loadVersion) return;
       if (spaceId() !== currentSpaceId) return;
-      setError(getErrorMessage(err, 'Failed to load files'));
+      setError(getErrorMessage(err, "Failed to load files"));
       setFiles([]);
       setCurrentPath(path);
       setTruncated(false);
@@ -74,7 +80,7 @@ export function useSpaceStorage(spaceId: Accessor<string | undefined>): UseSpace
     setError(null);
 
     try {
-      const res = await rpc.spaces[':spaceId'].storage.folders.$post({
+      const res = await rpc.spaces[":spaceId"].storage.folders.$post({
         param: { spaceId: currentSpaceId },
         json: { name, parent_path: currentPath() },
       });
@@ -83,7 +89,7 @@ export function useSpaceStorage(spaceId: Accessor<string | undefined>): UseSpace
       await loadFiles(currentPath());
       return data.folder;
     } catch (err) {
-      setError(getErrorMessage(err, 'Failed to create folder'));
+      setError(getErrorMessage(err, "Failed to create folder"));
       return null;
     }
   };
@@ -94,7 +100,7 @@ export function useSpaceStorage(spaceId: Accessor<string | undefined>): UseSpace
     setError(null);
 
     try {
-      const urlRes = await rpc.spaces[':spaceId'].storage['upload-url'].$post({
+      const urlRes = await rpc.spaces[":spaceId"].storage["upload-url"].$post({
         param: { spaceId: currentSpaceId },
         json: {
           name: file.name,
@@ -112,27 +118,28 @@ export function useSpaceStorage(spaceId: Accessor<string | undefined>): UseSpace
       }>(urlRes);
 
       const uploadRes = await fetch(urlData.upload_url, {
-        method: 'PUT',
+        method: "PUT",
         body: file,
         headers: {
-          'Content-Type': file.type || 'application/octet-stream',
+          "Content-Type": file.type || "application/octet-stream",
         },
       });
 
       if (!uploadRes.ok) {
-        throw new Error('Failed to upload file');
+        throw new Error("Failed to upload file");
       }
 
-      const confirmRes = await rpc.spaces[':spaceId'].storage['confirm-upload'].$post({
-        param: { spaceId: currentSpaceId },
-        json: { file_id: urlData.file_id },
-      });
+      const confirmRes = await rpc.spaces[":spaceId"].storage["confirm-upload"]
+        .$post({
+          param: { spaceId: currentSpaceId },
+          json: { file_id: urlData.file_id },
+        });
 
       const confirmData = await rpcJson<{ file: StorageFile }>(confirmRes);
       await loadFiles(currentPath());
       return confirmData.file;
     } catch (err) {
-      setError(getErrorMessage(err, 'Failed to upload file'));
+      setError(getErrorMessage(err, "Failed to upload file"));
       return null;
     }
   };
@@ -143,7 +150,7 @@ export function useSpaceStorage(spaceId: Accessor<string | undefined>): UseSpace
     setError(null);
 
     try {
-      const res = await rpc.spaces[':spaceId'].storage[':fileId'].$delete({
+      const res = await rpc.spaces[":spaceId"].storage[":fileId"].$delete({
         param: { spaceId: currentSpaceId, fileId },
       });
 
@@ -152,7 +159,7 @@ export function useSpaceStorage(spaceId: Accessor<string | undefined>): UseSpace
       await loadFiles(currentPath());
       return true;
     } catch (err) {
-      setError(getErrorMessage(err, 'Failed to delete'));
+      setError(getErrorMessage(err, "Failed to delete"));
       return false;
     }
   };
@@ -163,7 +170,7 @@ export function useSpaceStorage(spaceId: Accessor<string | undefined>): UseSpace
     setError(null);
 
     try {
-      const res = await rpc.spaces[':spaceId'].storage['bulk-delete'].$post({
+      const res = await rpc.spaces[":spaceId"].storage["bulk-delete"].$post({
         param: { spaceId: currentSpaceId },
         json: { file_ids: fileIds },
       });
@@ -173,18 +180,21 @@ export function useSpaceStorage(spaceId: Accessor<string | undefined>): UseSpace
       await loadFiles(currentPath());
       return true;
     } catch (err) {
-      setError(getErrorMessage(err, 'Failed to delete'));
+      setError(getErrorMessage(err, "Failed to delete"));
       return false;
     }
   };
 
-  const renameItem = async (fileId: string, name: string): Promise<StorageFile | null> => {
+  const renameItem = async (
+    fileId: string,
+    name: string,
+  ): Promise<StorageFile | null> => {
     const currentSpaceId = spaceId();
     if (!currentSpaceId) return null;
     setError(null);
 
     try {
-      const res = await rpc.spaces[':spaceId'].storage[':fileId'].$patch({
+      const res = await rpc.spaces[":spaceId"].storage[":fileId"].$patch({
         param: { spaceId: currentSpaceId, fileId },
         json: { name },
       });
@@ -193,18 +203,21 @@ export function useSpaceStorage(spaceId: Accessor<string | undefined>): UseSpace
       await loadFiles(currentPath());
       return data.file;
     } catch (err) {
-      setError(getErrorMessage(err, 'Failed to rename'));
+      setError(getErrorMessage(err, "Failed to rename"));
       return null;
     }
   };
 
-  const moveItem = async (fileId: string, parentPath: string): Promise<StorageFile | null> => {
+  const moveItem = async (
+    fileId: string,
+    parentPath: string,
+  ): Promise<StorageFile | null> => {
     const currentSpaceId = spaceId();
     if (!currentSpaceId) return null;
     setError(null);
 
     try {
-      const res = await rpc.spaces[':spaceId'].storage[':fileId'].$patch({
+      const res = await rpc.spaces[":spaceId"].storage[":fileId"].$patch({
         param: { spaceId: currentSpaceId, fileId },
         json: { parent_path: parentPath },
       });
@@ -213,18 +226,21 @@ export function useSpaceStorage(spaceId: Accessor<string | undefined>): UseSpace
       await loadFiles(currentPath());
       return data.file;
     } catch (err) {
-      setError(getErrorMessage(err, 'Failed to move'));
+      setError(getErrorMessage(err, "Failed to move"));
       return null;
     }
   };
 
-  const bulkMoveItems = async (fileIds: string[], parentPath: string): Promise<boolean> => {
+  const bulkMoveItems = async (
+    fileIds: string[],
+    parentPath: string,
+  ): Promise<boolean> => {
     const currentSpaceId = spaceId();
     if (!currentSpaceId || fileIds.length === 0) return false;
     setError(null);
 
     try {
-      const res = await rpc.spaces[':spaceId'].storage['bulk-move'].$post({
+      const res = await rpc.spaces[":spaceId"].storage["bulk-move"].$post({
         param: { spaceId: currentSpaceId },
         json: { file_ids: fileIds, parent_path: parentPath },
       });
@@ -234,18 +250,20 @@ export function useSpaceStorage(spaceId: Accessor<string | undefined>): UseSpace
       await loadFiles(currentPath());
       return true;
     } catch (err) {
-      setError(getErrorMessage(err, 'Failed to move'));
+      setError(getErrorMessage(err, "Failed to move"));
       return false;
     }
   };
 
-  const bulkRenameItems = async (renames: Array<{ file_id: string; name: string }>): Promise<boolean> => {
+  const bulkRenameItems = async (
+    renames: Array<{ file_id: string; name: string }>,
+  ): Promise<boolean> => {
     const currentSpaceId = spaceId();
     if (!currentSpaceId || renames.length === 0) return false;
     setError(null);
 
     try {
-      const res = await rpc.spaces[':spaceId'].storage['bulk-rename'].$post({
+      const res = await rpc.spaces[":spaceId"].storage["bulk-rename"].$post({
         param: { spaceId: currentSpaceId },
         json: { renames },
       });
@@ -255,7 +273,7 @@ export function useSpaceStorage(spaceId: Accessor<string | undefined>): UseSpace
       await loadFiles(currentPath());
       return true;
     } catch (err) {
-      setError(getErrorMessage(err, 'Failed to rename'));
+      setError(getErrorMessage(err, "Failed to rename"));
       return false;
     }
   };
@@ -265,7 +283,7 @@ export function useSpaceStorage(spaceId: Accessor<string | undefined>): UseSpace
     if (!currentSpaceId) return null;
 
     try {
-      const res = await rpc.spaces[':spaceId'].storage['download-url'].$get({
+      const res = await rpc.spaces[":spaceId"].storage["download-url"].$get({
         param: { spaceId: currentSpaceId },
         query: { file_id: fileId },
       });
@@ -273,29 +291,31 @@ export function useSpaceStorage(spaceId: Accessor<string | undefined>): UseSpace
       const data = await rpcJson<{ download_url: string }>(res);
       return data.download_url;
     } catch (err) {
-      setError(getErrorMessage(err, 'Failed to get download URL'));
+      setError(getErrorMessage(err, "Failed to get download URL"));
       return null;
     }
   };
 
-  const downloadFolderZip = async (path: string): Promise<RpcResponse | null> => {
+  const downloadFolderZip = async (
+    path: string,
+  ): Promise<RpcResponse | null> => {
     const currentSpaceId = spaceId();
     if (!currentSpaceId) return null;
 
     try {
-      const res = await rpc.spaces[':spaceId'].storage['download-zip'].$get({
+      const res = await rpc.spaces[":spaceId"].storage["download-zip"].$get({
         param: { spaceId: currentSpaceId },
         query: { path },
       });
 
       if (!res.ok) {
         const data = await res.json().catch(() => ({})) as { error?: string };
-        throw new Error(data.error || 'Failed to download ZIP');
+        throw new Error(data.error || "Failed to download ZIP");
       }
 
       return res;
     } catch (err) {
-      setError(getErrorMessage(err, 'Failed to download ZIP'));
+      setError(getErrorMessage(err, "Failed to download ZIP"));
       return null;
     }
   };

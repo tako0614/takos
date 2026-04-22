@@ -1,7 +1,7 @@
 import { assertEquals, assertRejects } from "jsr:@std/assert";
 import { getTableName } from "drizzle-orm";
 
-import { handleDeploymentJob } from "../deploy-jobs.ts";
+import { handleDeploymentJob, handleDeploymentJobDlq } from "../deploy-jobs.ts";
 import { GroupDeploymentSnapshotService } from "../../../application/services/platform/group-deployment-snapshots.ts";
 import type { DeploymentEnv } from "../../../application/services/deployment/index.ts";
 
@@ -324,6 +324,172 @@ Deno.test("handleDeploymentJob marks the group and preinstall job failed when de
   assertEquals(
     String(state.groupUpdates.at(-1)?.backendStateJson).includes(
       '"deployJobStatus":"failed"',
+    ),
+    true,
+  );
+});
+
+Deno.test("handleDeploymentJob lets the manifest resolve group identity", async () => {
+  const originalDeploy = GroupDeploymentSnapshotService.prototype.deploy;
+  let deployInput: Record<string, unknown> | null = null;
+  GroupDeploymentSnapshotService.prototype.deploy = async (
+    _spaceId,
+    _userId,
+    input,
+  ) => {
+    deployInput = input as Record<string, unknown>;
+    return {
+      groupDeploymentSnapshot: {
+        id: "snapshot-1",
+        status: "applied",
+        group: { id: "manifest-group", name: "manifest-app" },
+      },
+      applyResult: {
+        groupId: "manifest-group",
+        applied: [],
+        skipped: [],
+        diff: {
+          entries: [],
+          hasChanges: false,
+          summary: { create: 0, update: 0, delete: 0, unchanged: 0 },
+        },
+        translationReport: {
+          supported: true,
+          requirements: [],
+          workloads: [],
+          routes: [],
+          unsupported: [],
+        },
+      },
+    } as unknown as Awaited<
+      ReturnType<GroupDeploymentSnapshotService["deploy"]>
+    >;
+  };
+
+  const state = {
+    groupRow: {
+      id: "manifest-group",
+      spaceId: "space-1",
+      name: "manifest-app",
+      sourceKind: "git_ref",
+      sourceRepositoryUrl: "https://example.com/manifest-app.git",
+      sourceRef: "main",
+      sourceRefType: "branch",
+      currentGroupDeploymentSnapshotId: "snapshot-1",
+      backendStateJson: "{}",
+      reconcileStatus: "idle",
+    },
+    snapshotRow: null as Record<string, unknown> | null,
+    jobRow: null as Record<string, unknown> | null,
+    groupUpdates: [] as Array<Record<string, unknown>>,
+    jobUpdates: [] as Array<Record<string, unknown>>,
+  };
+  const env = makeEnv({
+    DB: buildDb(state) as unknown as DeploymentEnv["DB"],
+  });
+
+  try {
+    await handleDeploymentJob({
+      version: 1,
+      type: "group_deployment_snapshot",
+      spaceId: "space-1",
+      repositoryUrl: "https://example.com/manifest-app.git",
+      ref: "main",
+      refType: "branch",
+      createdByAccountId: "user-1",
+      timestamp: 1_700_000_000_000,
+    }, env);
+  } finally {
+    GroupDeploymentSnapshotService.prototype.deploy = originalDeploy;
+  }
+
+  assertEquals(
+    (deployInput as Record<string, unknown> | null)?.["groupName"],
+    undefined,
+  );
+  assertEquals(state.groupUpdates.at(-1)?.reconcileStatus, "ready");
+  assertEquals(
+    String(state.groupUpdates.at(-1)?.backendStateJson).includes(
+      '"groupName":"manifest-app"',
+    ),
+    true,
+  );
+});
+
+Deno.test("handleDeploymentJobDlq preserves the previous default app deployment error", async () => {
+  const state = {
+    groupRow: {
+      id: "group-1",
+      spaceId: "space-1",
+      name: "operator-docs",
+      sourceKind: "git_ref",
+      sourceRepositoryUrl: "https://example.com/operator-docs.git",
+      sourceRef: "main",
+      sourceRefType: "branch",
+      currentGroupDeploymentSnapshotId: null,
+      backendStateJson: JSON.stringify({
+        defaultAppDistribution: {
+          preinstalled: true,
+          error: "offset is out of bounds",
+        },
+      }),
+      reconcileStatus: "degraded",
+    },
+    snapshotRow: null as Record<string, unknown> | null,
+    jobRow: {
+      id: "default-app-preinstall:space-1",
+      spaceId: "space-1",
+      createdByAccountId: "user-1",
+      distributionJson: JSON.stringify([{
+        name: "operator-docs",
+        title: "Docs",
+        repositoryUrl: "https://example.com/operator-docs.git",
+        ref: "main",
+        refType: "branch",
+        preinstall: true,
+      }]),
+      expectedGroupIdsJson: JSON.stringify(["group-1"]),
+      deploymentQueuedAt: "2026-01-01T00:00:00.000Z",
+      status: "deployment_queued",
+      attempts: 1,
+      nextAttemptAt: null,
+      lockedAt: null,
+      lastError: null,
+    },
+    groupUpdates: [] as Array<Record<string, unknown>>,
+    jobUpdates: [] as Array<Record<string, unknown>>,
+  };
+  const env = makeEnv({
+    DB: buildDb(state) as unknown as DeploymentEnv["DB"],
+  });
+
+  await handleDeploymentJobDlq(
+    {
+      version: 1,
+      type: "group_deployment_snapshot",
+      spaceId: "space-1",
+      groupId: "group-1",
+      groupName: "operator-docs",
+      repositoryUrl: "https://example.com/operator-docs.git",
+      ref: "main",
+      refType: "branch",
+      createdByAccountId: "user-1",
+      reason: "default_app_preinstall",
+      timestamp: 1_700_000_000_000,
+    },
+    env,
+    5,
+  );
+
+  assertEquals(
+    String(state.groupUpdates.at(-1)?.backendStateJson).includes(
+      "last error: offset is out of bounds",
+    ),
+    true,
+  );
+  assertEquals(
+    String(state.jobUpdates.at(-1)?.lastError).includes(
+      "last error: offset is out of bounds",
     ),
     true,
   );

@@ -1,9 +1,9 @@
-import * as fs from 'node:fs/promises';
-import * as path from 'node:path';
-import * as os from 'node:os';
-import { createLogger } from 'takos-common/logger';
+import * as fs from "node:fs/promises";
+import * as path from "node:path";
+import * as os from "node:os";
+import { createLogger } from "takos-common/logger";
 
-const logger = createLogger({ service: 'takos-runtime' });
+const logger = createLogger({ service: "takos-runtime" });
 
 export interface AuditEntry {
   timestamp: string;
@@ -14,14 +14,15 @@ export interface AuditEntry {
   commands?: string[];
   exitCode?: number;
   durationMs?: number;
-  status: 'started' | 'completed' | 'failed';
+  status: "started" | "completed" | "failed";
   error?: string;
   ip?: string;
   requestId?: string;
 }
 
-const AUDIT_LOG_DIR = Deno.env.get('TAKOS_AUDIT_LOG_DIR') || path.join(os.tmpdir(), 'takos-audit');
-const AUDIT_LOG_FILE = path.join(AUDIT_LOG_DIR, 'execution-audit.jsonl');
+const AUDIT_LOG_DIR = Deno.env.get("TAKOS_AUDIT_LOG_DIR") ||
+  path.join(os.tmpdir(), "takos-audit");
+const AUDIT_LOG_FILE = path.join(AUDIT_LOG_DIR, "execution-audit.jsonl");
 
 const MAX_AUDIT_FILE_SIZE = 50 * 1024 * 1024;
 const MAX_ROTATED_FILES = 5;
@@ -33,7 +34,12 @@ async function ensureDir(): Promise<void> {
   try {
     await fs.mkdir(AUDIT_LOG_DIR, { recursive: true });
     dirEnsured = true;
-  } catch (err) { logger.warn('Failed to create audit log directory (non-critical)', { module: 'audit-log', error: err }); }
+  } catch (err) {
+    logger.warn("Failed to create audit log directory (non-critical)", {
+      module: "audit-log",
+      error: err,
+    });
+  }
 }
 
 async function rotateIfNeeded(): Promise<void> {
@@ -46,26 +52,52 @@ async function rotateIfNeeded(): Promise<void> {
       const to = `${AUDIT_LOG_FILE}.${i + 1}`;
       try {
         await fs.rename(from, to);
-      } catch (err) { logger.warn('Failed to rotate audit log file (non-critical)', { module: 'audit-log', error: err }); }
+      } catch (err) {
+        logger.warn("Failed to rotate audit log file (non-critical)", {
+          module: "audit-log",
+          error: err,
+        });
+      }
     }
 
     try {
       await fs.rename(AUDIT_LOG_FILE, `${AUDIT_LOG_FILE}.1`);
-    } catch (err) { logger.warn('Failed to rename current audit log for rotation (non-critical)', { module: 'audit-log', error: err }); }
+    } catch (err) {
+      logger.warn(
+        "Failed to rename current audit log for rotation (non-critical)",
+        { module: "audit-log", error: err },
+      );
+    }
 
     try {
       await fs.unlink(`${AUDIT_LOG_FILE}.${MAX_ROTATED_FILES + 1}`);
-    } catch (err) { logger.warn('Failed to delete oldest rotated audit log (non-critical)', { module: 'audit-log', error: err }); }
-  } catch (err) { logger.warn('Failed to stat audit log for rotation check (non-critical)', { module: 'audit-log', error: err }); }
+    } catch (err) {
+      logger.warn("Failed to delete oldest rotated audit log (non-critical)", {
+        module: "audit-log",
+        error: err,
+      });
+    }
+  } catch (err) {
+    logger.warn("Failed to stat audit log for rotation check (non-critical)", {
+      module: "audit-log",
+      error: err,
+    });
+  }
 }
 
 function redactCommand(cmd: string): string {
   return cmd
-    .replace(/:\/\/([^@\s]+)@/g, '://***@')
-    .replace(/(Authorization:\s*)(Bearer\s+)?\S+/gi, '$1***')
-    .replace(/\b((?:SECRET|TOKEN|PASSWORD|API_KEY|ACCESS_KEY|PRIVATE_KEY|AUTH)[A-Z_]*)=(\S+)/gi, '$1=***')
+    .replace(/:\/\/([^@\s]+)@/g, "://***@")
+    .replace(/(Authorization:\s*)(Bearer\s+)?\S+/gi, "$1***")
+    .replace(
+      /\b((?:SECRET|TOKEN|PASSWORD|API_KEY|ACCESS_KEY|PRIVATE_KEY|AUTH)[A-Z_]*)=(\S+)/gi,
+      "$1=***",
+    )
     // Redact common secret patterns in key=value and key: value formats
-    .replace(/\b(api[_-]?key|access[_-]?token|refresh[_-]?token|client[_-]?secret)[\s]*[=:]\s*\S+/gi, '$1=***');
+    .replace(
+      /\b(api[_-]?key|access[_-]?token|refresh[_-]?token|client[_-]?secret)[\s]*[=:]\s*\S+/gi,
+      "$1=***",
+    );
 }
 
 function redactAuditEntry(entry: AuditEntry): AuditEntry {
@@ -84,9 +116,9 @@ export async function writeAuditLog(entry: AuditEntry): Promise<void> {
     await ensureDir();
     await rotateIfNeeded();
     const safeEntry = redactAuditEntry(entry);
-    const line = JSON.stringify(safeEntry) + '\n';
-    await fs.appendFile(AUDIT_LOG_FILE, line, 'utf-8');
+    const line = JSON.stringify(safeEntry) + "\n";
+    await fs.appendFile(AUDIT_LOG_FILE, line, "utf-8");
   } catch (err) {
-    logger.error('[AUDIT] Failed to write audit log', { error: err });
+    logger.error("[AUDIT] Failed to write audit log", { error: err });
   }
 }

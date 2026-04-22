@@ -195,6 +195,9 @@ export function AuthenticatedRoutes() {
     const currentDeploySection = navigation.route.deploySection ||
       deploySection() ||
       "workers";
+    const groupId = currentDeploySection === "groups"
+      ? navigation.route.groupId
+      : undefined;
     const deploySpaceId = navigation.routeSpaceId ??
       navigation.selectedSpaceId ??
       navigation.preferredSpaceId;
@@ -208,6 +211,7 @@ export function AuthenticatedRoutes() {
         view: "deploy",
         spaceId: deploySpaceId,
         deploySection: currentDeploySection,
+        groupId,
       })
     ) {
       return <LoadingScreen />;
@@ -222,14 +226,23 @@ export function AuthenticatedRoutes() {
                 spaceId={deploySpaceId}
                 spaces={auth.spaces}
                 activeSection={currentDeploySection}
+                groupId={groupId}
                 onSectionChange={(section) => {
                   setDeploySection(section);
                   navigation.navigate({
                     view: "deploy",
                     spaceId: deploySpaceId,
                     deploySection: section,
+                    groupId: undefined,
                   });
                 }}
+                onGroupSelect={(nextGroupId) =>
+                  navigation.navigate({
+                    view: "deploy",
+                    spaceId: deploySpaceId,
+                    deploySection: "groups",
+                    groupId: nextGroupId ?? undefined,
+                  })}
                 user={auth.user}
                 userSettings={auth.userSettings}
                 onSettingsChange={auth.setUserSettings}

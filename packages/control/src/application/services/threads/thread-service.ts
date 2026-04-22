@@ -1,13 +1,39 @@
-import type { D1Database } from '../../../shared/types/bindings.ts';
-import type { Env, Message, MessageRole, Run, RunStatus, Thread, ThreadStatus, SpaceRole } from '../../../shared/types/index.ts';
-import type { InsertOf, SelectOf } from '../../../shared/types/drizzle-utils.ts';
-import { generateId } from '../../../shared/utils/index.ts';
-import { checkSpaceAccess } from '../identity/space-access.ts';
-import { getDb, threads, messages, runs } from '../../../infra/db/index.ts';
-import { eq, and, ne, desc, asc, count, max, type sql as _sql } from 'drizzle-orm';
-import { isValidOpaqueId } from '../../../shared/utils/db-guards.ts';
-import { makeMessagePreview, readMessageFromR2, shouldOffloadMessage, writeMessageToR2 } from '../offload/messages.ts';
-import { logWarn } from '../../../shared/utils/logger.ts';
+import type { D1Database } from "../../../shared/types/bindings.ts";
+import type {
+  Env,
+  Message,
+  MessageRole,
+  Run,
+  RunStatus,
+  SpaceRole,
+  Thread,
+  ThreadStatus,
+} from "../../../shared/types/index.ts";
+import type {
+  InsertOf,
+  SelectOf,
+} from "../../../shared/types/drizzle-utils.ts";
+import { generateId } from "../../../shared/utils/index.ts";
+import { checkSpaceAccess } from "../identity/space-access.ts";
+import { getDb, messages, runs, threads } from "../../../infra/db/index.ts";
+import {
+  and,
+  asc,
+  count,
+  desc,
+  eq,
+  max,
+  ne,
+  type sql as _sql,
+} from "drizzle-orm";
+import { isValidOpaqueId } from "../../../shared/utils/db-guards.ts";
+import {
+  makeMessagePreview,
+  readMessageFromR2,
+  shouldOffloadMessage,
+  writeMessageToR2,
+} from "../offload/messages.ts";
+import { logWarn } from "../../../shared/utils/logger.ts";
 
 export interface ThreadAccess {
   thread: Thread;
@@ -48,10 +74,10 @@ function toThread(t: SelectOf<typeof threads>): Thread {
     id: t.id,
     space_id: t.accountId,
     title: t.title ?? null,
-    locale: (t.locale === 'ja' || t.locale === 'en') ? t.locale : null,
+    locale: (t.locale === "ja" || t.locale === "en") ? t.locale : null,
     status: t.status as ThreadStatus,
     summary: t.summary ?? null,
-    key_points: t.keyPoints ?? '[]',
+    key_points: t.keyPoints ?? "[]",
     retrieval_index: t.retrievalIndex ?? -1,
     context_window: t.contextWindow ?? 50,
     created_at: t.createdAt,
@@ -107,14 +133,15 @@ export async function checkThreadAccess(
   dbBinding: D1Database,
   threadId: string,
   userId: string,
-  requiredRole?: SpaceRole[]
+  requiredRole?: SpaceRole[],
 ): Promise<ThreadAccess | null> {
   if (!isValidOpaqueId(threadId) || !isValidOpaqueId(userId)) {
     return null;
   }
 
   const db = threadServiceDeps.getDb(dbBinding);
-  const row = await db.select().from(threads).where(eq(threads.id, threadId)).get();
+  const row = await db.select().from(threads).where(eq(threads.id, threadId))
+    .get();
 
   if (!row) {
     return null;
@@ -122,7 +149,12 @@ export async function checkThreadAccess(
 
   const thread = toThread(row);
 
-  const access = await threadServiceDeps.checkSpaceAccess(dbBinding, thread.space_id, userId, requiredRole);
+  const access = await threadServiceDeps.checkSpaceAccess(
+    dbBinding,
+    thread.space_id,
+    userId,
+    requiredRole,
+  );
   if (!access) {
     return null;
   }
@@ -133,7 +165,7 @@ export async function checkThreadAccess(
 export async function listThreads(
   dbBinding: D1Database,
   spaceId: string,
-  options: { status?: ThreadStatus }
+  options: { status?: ThreadStatus },
 ): Promise<Thread[]> {
   const db = threadServiceDeps.getDb(dbBinding);
 
@@ -142,7 +174,7 @@ export async function listThreads(
   if (options.status) {
     conditions.push(eq(threads.status, options.status));
   } else {
-    conditions.push(ne(threads.status, 'deleted'));
+    conditions.push(ne(threads.status, "deleted"));
   }
 
   const results = await db.select().from(threads)
@@ -156,7 +188,7 @@ export async function listThreads(
 export async function createThread(
   dbBinding: D1Database,
   spaceId: string,
-  input: { title?: string; locale?: 'ja' | 'en' | null }
+  input: { title?: string; locale?: "ja" | "en" | null },
 ): Promise<Thread | null> {
   const db = threadServiceDeps.getDb(dbBinding);
   const id = threadServiceDeps.generateId();
@@ -168,7 +200,7 @@ export async function createThread(
     accountId: spaceId,
     title,
     locale: input.locale ?? null,
-    status: 'active',
+    status: "active",
     createdAt: timestamp,
     updatedAt: timestamp,
   }).returning().get();
@@ -179,9 +211,17 @@ export async function createThread(
 export async function updateThread(
   dbBinding: D1Database,
   threadId: string,
-  updates: { title?: string | null; locale?: 'ja' | 'en' | null; status?: ThreadStatus; context_window?: number }
+  updates: {
+    title?: string | null;
+    locale?: "ja" | "en" | null;
+    status?: ThreadStatus;
+    context_window?: number;
+  },
 ): Promise<Thread | null> {
-  if (updates.title === undefined && updates.locale === undefined && !updates.status && updates.context_window === undefined) {
+  if (
+    updates.title === undefined && updates.locale === undefined &&
+    !updates.status && updates.context_window === undefined
+  ) {
     return null;
   }
 
@@ -218,7 +258,7 @@ export async function updateThread(
 export async function updateThreadStatus(
   dbBinding: D1Database,
   threadId: string,
-  status: ThreadStatus
+  status: ThreadStatus,
 ): Promise<void> {
   const db = threadServiceDeps.getDb(dbBinding);
   const timestamp = new Date().toISOString();
@@ -231,13 +271,13 @@ export async function updateThreadStatus(
 export async function deleteThread(
   _env: Env,
   dbBinding: D1Database,
-  threadId: string
+  threadId: string,
 ): Promise<void> {
   const db = threadServiceDeps.getDb(dbBinding);
   const timestamp = new Date().toISOString();
 
   await db.update(threads)
-    .set({ status: 'deleted', updatedAt: timestamp })
+    .set({ status: "deleted", updatedAt: timestamp })
     .where(eq(threads.id, threadId));
 }
 
@@ -246,7 +286,7 @@ export async function listThreadMessages(
   dbBinding: D1Database,
   threadId: string,
   limit: number,
-  offset: number
+  offset: number,
 ): Promise<{ messages: Message[]; total: number; runs: Run[] }> {
   if (!isValidOpaqueId(threadId)) {
     return { messages: [], total: 0, runs: [] };
@@ -289,13 +329,18 @@ export async function listThreadMessages(
     const bucket = env.TAKOS_OFFLOAD;
     const candidates = rows
       .map((m, idx) => ({ idx, key: m.r2Key }))
-      .filter((x) => typeof x.key === 'string' && x.key.length > 0) as Array<{ idx: number; key: string }>;
+      .filter((x) => typeof x.key === "string" && x.key.length > 0) as Array<
+        { idx: number; key: string }
+      >;
 
     const concurrency = 20;
     for (let i = 0; i < candidates.length; i += concurrency) {
       const batch = candidates.slice(i, i + concurrency);
       await Promise.all(batch.map(async ({ idx, key }) => {
-      const persisted = await threadServiceDeps.readMessageFromR2(bucket, key);
+        const persisted = await threadServiceDeps.readMessageFromR2(
+          bucket,
+          key,
+        );
         if (!persisted) return;
         if (persisted.id !== rows[idx].id) return;
         if (persisted.thread_id !== threadId) return;
@@ -327,7 +372,7 @@ export async function createMessage(
     tool_calls?: unknown[];
     tool_call_id?: string | null;
     metadata?: Record<string, unknown>;
-  }
+  },
 ): Promise<Message | null> {
   const db = threadServiceDeps.getDb(dbBinding);
 
@@ -338,7 +383,9 @@ export async function createMessage(
   const sequence = (agg?.maxSeq ?? -1) + 1;
   const id = threadServiceDeps.generateId();
   const timestamp = new Date().toISOString();
-  const toolCallsStr = input.tool_calls ? JSON.stringify(input.tool_calls) : null;
+  const toolCallsStr = input.tool_calls
+    ? JSON.stringify(input.tool_calls)
+    : null;
   const metadataStr = JSON.stringify(input.metadata || {});
 
   let r2Key: string | null = null;
@@ -346,25 +393,39 @@ export async function createMessage(
   let toolCallsForD1: string | null = toolCallsStr;
 
   const offloadBucket = env.TAKOS_OFFLOAD;
-  if (offloadBucket && threadServiceDeps.shouldOffloadMessage({ role: input.role, content: input.content })) {
+  if (
+    offloadBucket &&
+    threadServiceDeps.shouldOffloadMessage({
+      role: input.role,
+      content: input.content,
+    })
+  ) {
     try {
-      const { key } = await threadServiceDeps.writeMessageToR2(offloadBucket, thread.id, id, {
+      const { key } = await threadServiceDeps.writeMessageToR2(
+        offloadBucket,
+        thread.id,
         id,
-        thread_id: thread.id,
-        role: input.role,
-        content: input.content,
-        tool_calls: toolCallsStr,
-        tool_call_id: input.tool_call_id || null,
-        metadata: metadataStr,
-        sequence,
-        created_at: timestamp,
-      });
+        {
+          id,
+          thread_id: thread.id,
+          role: input.role,
+          content: input.content,
+          tool_calls: toolCallsStr,
+          tool_call_id: input.tool_call_id || null,
+          metadata: metadataStr,
+          sequence,
+          created_at: timestamp,
+        },
+      );
       r2Key = key;
       contentForD1 = makeMessagePreview(input.content);
       // Keep D1 small; hydrate from R2 on read.
       toolCallsForD1 = null;
     } catch (err) {
-      threadServiceDeps.logWarn(`Failed to persist message ${id} to R2, storing inline`, { module: 'message_offload', detail: err });
+      threadServiceDeps.logWarn(
+        `Failed to persist message ${id} to R2, storing inline`,
+        { module: "message_offload", detail: err },
+      );
     }
   }
 
@@ -387,22 +448,29 @@ export async function createMessage(
 
   // Update thread's updatedAt (non-critical, don't let failure block message creation)
   try {
-      await db.update(threads)
-        .set({ updatedAt: timestamp })
-        .where(eq(threads.id, thread.id));
-    } catch (err) {
-      threadServiceDeps.logWarn('Failed to update thread updatedAt', { module: 'services/threads/thread-service', detail: err });
+    await db.update(threads)
+      .set({ updatedAt: timestamp })
+      .where(eq(threads.id, thread.id));
+  } catch (err) {
+    threadServiceDeps.logWarn("Failed to update thread updatedAt", {
+      module: "services/threads/thread-service",
+      detail: err,
+    });
   }
 
   // Auto-set title from first user message
-  if (input.role === 'user' && sequence === 0 && !thread.title) {
-    const autoTitle = input.content.slice(0, 50) + (input.content.length > 50 ? '...' : '');
+  if (input.role === "user" && sequence === 0 && !thread.title) {
+    const autoTitle = input.content.slice(0, 50) +
+      (input.content.length > 50 ? "..." : "");
     try {
       await db.update(threads)
         .set({ title: autoTitle, updatedAt: timestamp })
         .where(eq(threads.id, thread.id));
     } catch (err) {
-      threadServiceDeps.logWarn('Failed to auto-set thread title', { module: 'services/threads/thread-service', detail: err });
+      threadServiceDeps.logWarn("Failed to auto-set thread title", {
+        module: "services/threads/thread-service",
+        detail: err,
+      });
     }
   }
 

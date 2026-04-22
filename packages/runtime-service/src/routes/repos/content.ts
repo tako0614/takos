@@ -1,14 +1,18 @@
-import { Hono } from 'hono';
-import type { RuntimeEnv } from '../../types/hono.d.ts';
-import { runGitCommand } from '../../runtime/git.ts';
-import { getErrorMessage } from 'takos-common/errors';
+import { Hono } from "hono";
+import type { RuntimeEnv } from "../../types/hono.d.ts";
+import { runGitCommand } from "../../runtime/git.ts";
+import { getErrorMessage } from "takos-common/errors";
 import {
   getVerifiedRepoPath,
-  validateRef,
-  validatePathParam,
   requireRepoParams,
-} from './repo-validation.ts';
-import { badRequest, internalError, notFound } from 'takos-common/middleware/hono';
+  validatePathParam,
+  validateRef,
+} from "./repo-validation.ts";
+import {
+  badRequest,
+  internalError,
+  notFound,
+} from "takos-common/middleware/hono";
 
 const app = new Hono<RuntimeEnv>();
 
@@ -16,12 +20,12 @@ const app = new Hono<RuntimeEnv>();
 // tree: ls-tree + blob
 // ---------------------------------------------------------------------------
 
-app.get('/repos/:spaceId/:repoName/tree', async (c) => {
+app.get("/repos/:spaceId/:repoName/tree", async (c) => {
   try {
-    const spaceId = c.req.param('spaceId');
-    const repoName = c.req.param('repoName');
-    const ref = c.req.query('ref') || 'HEAD';
-    const treePath = c.req.query('path') || '';
+    const spaceId = c.req.param("spaceId");
+    const repoName = c.req.param("repoName");
+    const ref = c.req.query("ref") || "HEAD";
+    const treePath = c.req.query("path") || "";
 
     const paramsErr = requireRepoParams(c, spaceId, repoName);
     if (paramsErr) return paramsErr;
@@ -33,28 +37,31 @@ app.get('/repos/:spaceId/:repoName/tree', async (c) => {
     }
 
     const repoResult = await getVerifiedRepoPath(c, spaceId, repoName);
-    if ('error' in repoResult) return repoResult.error;
+    if ("error" in repoResult) return repoResult.error;
     const gitPath = repoResult.gitPath;
 
-    const lsTreeArgs = ['ls-tree', '-l', ref];
+    const lsTreeArgs = ["ls-tree", "-l", ref];
     if (treePath) {
-      lsTreeArgs.push('--', treePath);
+      lsTreeArgs.push("--", treePath);
     }
 
     const { exitCode, output } = await runGitCommand(lsTreeArgs, gitPath);
 
     if (exitCode !== 0) {
-      if (output.includes('Not a valid object name') || output.includes('does not exist')) {
+      if (
+        output.includes("Not a valid object name") ||
+        output.includes("does not exist")
+      ) {
         return notFound(c, `Reference not found: ${ref}`, { output });
       }
-      return internalError(c, 'Failed to list tree', { output });
+      return internalError(c, "Failed to list tree", { output });
     }
 
     const entries = output
-      .split('\n')
+      .split("\n")
       .filter((line) => line.trim().length > 0)
       .map((line) => {
-        const tabIndex = line.indexOf('\t');
+        const tabIndex = line.indexOf("\t");
         if (tabIndex === -1) return null;
 
         const metaParts = line.slice(0, tabIndex).split(/\s+/);
@@ -62,12 +69,14 @@ app.get('/repos/:spaceId/:repoName/tree', async (c) => {
 
         const [mode, type, hash, sizeStr] = metaParts;
         const name = line.slice(tabIndex + 1);
-        const parsedSize = type === 'blob' ? parseInt(sizeStr, 10) : undefined;
-        const size = parsedSize !== undefined && Number.isFinite(parsedSize) ? parsedSize : undefined;
+        const parsedSize = type === "blob" ? parseInt(sizeStr, 10) : undefined;
+        const size = parsedSize !== undefined && Number.isFinite(parsedSize)
+          ? parsedSize
+          : undefined;
 
         return {
           mode,
-          type: type as 'blob' | 'tree',
+          type: type as "blob" | "tree",
           hash,
           size,
           name,
@@ -79,7 +88,7 @@ app.get('/repos/:spaceId/:repoName/tree', async (c) => {
     return c.json({
       success: true,
       ref,
-      path: treePath || '/',
+      path: treePath || "/",
       entries,
     });
   } catch (err) {
@@ -87,18 +96,18 @@ app.get('/repos/:spaceId/:repoName/tree', async (c) => {
   }
 });
 
-app.get('/repos/:spaceId/:repoName/blob', async (c) => {
+app.get("/repos/:spaceId/:repoName/blob", async (c) => {
   try {
-    const spaceId = c.req.param('spaceId');
-    const repoName = c.req.param('repoName');
-    const ref = c.req.query('ref') || 'HEAD';
-    const filePath = c.req.query('path');
+    const spaceId = c.req.param("spaceId");
+    const repoName = c.req.param("repoName");
+    const ref = c.req.query("ref") || "HEAD";
+    const filePath = c.req.query("path");
 
     const paramsErr = requireRepoParams(c, spaceId, repoName);
     if (paramsErr) return paramsErr;
 
     if (!filePath) {
-      return badRequest(c, 'path query parameter is required');
+      return badRequest(c, "path query parameter is required");
     }
 
     const refErr = validateRef(c, ref);
@@ -107,19 +116,28 @@ app.get('/repos/:spaceId/:repoName/blob', async (c) => {
     if (pathErr) return pathErr;
 
     const repoResult = await getVerifiedRepoPath(c, spaceId, repoName);
-    if ('error' in repoResult) return repoResult.error;
+    if ("error" in repoResult) return repoResult.error;
     const gitPath = repoResult.gitPath;
 
-    const { exitCode, output } = await runGitCommand(['show', `${ref}:${filePath}`], gitPath);
+    const { exitCode, output } = await runGitCommand([
+      "show",
+      `${ref}:${filePath}`,
+    ], gitPath);
 
     if (exitCode !== 0) {
-      if (output.includes('does not exist') || output.includes('Not a valid object')) {
+      if (
+        output.includes("does not exist") ||
+        output.includes("Not a valid object")
+      ) {
         return notFound(c, `File not found: ${filePath} at ${ref}`, { output });
       }
-      return internalError(c, 'Failed to get file content', { output });
+      return internalError(c, "Failed to get file content", { output });
     }
 
-    const lsResult = await runGitCommand(['ls-tree', '-l', ref, '--', filePath], gitPath);
+    const lsResult = await runGitCommand(
+      ["ls-tree", "-l", ref, "--", filePath],
+      gitPath,
+    );
 
     let size: number | undefined;
     let mode: string | undefined;
@@ -149,18 +167,18 @@ app.get('/repos/:spaceId/:repoName/blob', async (c) => {
 // history: commit log
 // ---------------------------------------------------------------------------
 
-app.get('/repos/:spaceId/:repoName/commits', async (c) => {
+app.get("/repos/:spaceId/:repoName/commits", async (c) => {
   try {
-    const spaceId = c.req.param('spaceId');
-    const repoName = c.req.param('repoName');
-    const limit = c.req.query('limit') || '20';
-    const branch = c.req.query('branch') || 'HEAD';
+    const spaceId = c.req.param("spaceId");
+    const repoName = c.req.param("repoName");
+    const limit = c.req.query("limit") || "20";
+    const branch = c.req.query("branch") || "HEAD";
 
     const paramsErr = requireRepoParams(c, spaceId, repoName);
     if (paramsErr) return paramsErr;
 
     const repoResult = await getVerifiedRepoPath(c, spaceId, repoName);
-    if ('error' in repoResult) return repoResult.error;
+    if ("error" in repoResult) return repoResult.error;
     const gitPath = repoResult.gitPath;
 
     const refErr = validateRef(c, branch);
@@ -168,25 +186,28 @@ app.get('/repos/:spaceId/:repoName/commits', async (c) => {
 
     const limitNum = Math.min(Math.max(parseInt(limit, 10) || 20, 1), 100);
     const { exitCode, output } = await runGitCommand(
-      ['log', branch, `-n${limitNum}`, '--format=%H|%s|%an|%ae|%aI'],
-      gitPath
+      ["log", branch, `-n${limitNum}`, "--format=%H|%s|%an|%ae|%aI"],
+      gitPath,
     );
 
     if (exitCode !== 0) {
-      if (output.includes('unknown revision') || output.includes('does not have any commits')) {
+      if (
+        output.includes("unknown revision") ||
+        output.includes("does not have any commits")
+      ) {
         return c.json({
           success: true,
           commits: [],
         });
       }
-      return internalError(c, 'Failed to get commit history', { output });
+      return internalError(c, "Failed to get commit history", { output });
     }
 
     const commits = output
-      .split('\n')
+      .split("\n")
       .filter((line) => line.trim().length > 0)
       .map((line) => {
-        const [hash, message, authorName, authorEmail, date] = line.split('|');
+        const [hash, message, authorName, authorEmail, date] = line.split("|");
         return {
           hash,
           message,

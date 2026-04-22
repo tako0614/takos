@@ -1,8 +1,8 @@
-import { and, eq, like } from 'drizzle-orm';
-import type { D1Database } from '../../../shared/types/bindings.ts';
-import { accountMetadata, accounts, getDb } from '../../../infra/db/index.ts';
+import { and, eq, like } from "drizzle-orm";
+import type { D1Database } from "../../../shared/types/bindings.ts";
+import { accountMetadata, accounts, getDb } from "../../../infra/db/index.ts";
 
-const STORE_KEY_PREFIX = 'activitypub_store:';
+const STORE_KEY_PREFIX = "activitypub_store:";
 
 export interface ActivityPubStoreDefinition {
   accountId: string;
@@ -31,8 +31,10 @@ interface StoredActivityPubStoreRecord {
   iconUrl: string | null;
 }
 
-function normalizeOptionalText(value: string | null | undefined): string | null {
-  if (typeof value !== 'string') {
+function normalizeOptionalText(
+  value: string | null | undefined,
+): string | null {
+  if (typeof value !== "string") {
     return null;
   }
   const trimmed = value.trim();
@@ -43,8 +45,8 @@ export function normalizeActivityPubStoreSlug(value: string): string {
   return value
     .trim()
     .toLowerCase()
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/^-+|-+$/g, '')
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
     .slice(0, 32);
 }
 
@@ -57,7 +59,9 @@ function parseStoredActivityPubStoreRecord(
   rawValue: string,
 ): StoredActivityPubStoreRecord {
   try {
-    const parsed = JSON.parse(rawValue) as Partial<StoredActivityPubStoreRecord> | null;
+    const parsed = JSON.parse(rawValue) as
+      | Partial<StoredActivityPubStoreRecord>
+      | null;
     return {
       version: 1,
       slug,
@@ -78,7 +82,11 @@ function parseStoredActivityPubStoreRecord(
 
 function serializeStoredActivityPubStoreRecord(
   slug: string,
-  input: { name?: string | null; summary?: string | null; iconUrl?: string | null },
+  input: {
+    name?: string | null;
+    summary?: string | null;
+    iconUrl?: string | null;
+  },
 ): string {
   const record: StoredActivityPubStoreRecord = {
     version: 1,
@@ -260,21 +268,21 @@ export async function createActivityPubStore(
 ): Promise<ActivityPubStoreDefinition> {
   const account = await getAccountById(dbBinding, accountId);
   if (!account) {
-    throw new Error('Workspace not found');
+    throw new Error("Workspace not found");
   }
 
   const slug = normalizeActivityPubStoreSlug(input.slug);
   if (!slug) {
-    throw new Error('slug is required');
+    throw new Error("slug is required");
   }
 
   if (slug === account.slug) {
-    throw new Error('slug conflicts with the default store');
+    throw new Error("slug conflicts with the default store");
   }
 
   const existing = await findActivityPubStoreBySlug(dbBinding, slug);
   if (existing) {
-    throw new Error('store slug already exists');
+    throw new Error("store slug already exists");
   }
 
   const timestamp = new Date().toISOString();
@@ -298,11 +306,11 @@ export async function updateActivityPubStore(
   dbBinding: D1Database,
   accountId: string,
   storeSlug: string,
-  input: Omit<UpsertActivityPubStoreInput, 'slug'>,
+  input: Omit<UpsertActivityPubStoreInput, "slug">,
 ): Promise<ActivityPubStoreDefinition | null> {
   const account = await getAccountById(dbBinding, accountId);
   if (!account) {
-    throw new Error('Workspace not found');
+    throw new Error("Workspace not found");
   }
 
   const slug = normalizeActivityPubStoreSlug(storeSlug);
@@ -359,7 +367,7 @@ export async function deleteActivityPubStore(
 ): Promise<boolean> {
   const account = await getAccountById(dbBinding, accountId);
   if (!account) {
-    throw new Error('Workspace not found');
+    throw new Error("Workspace not found");
   }
 
   const slug = normalizeActivityPubStoreSlug(storeSlug);
@@ -368,7 +376,9 @@ export async function deleteActivityPubStore(
   }
 
   const db = getDb(dbBinding);
-  const existing = await db.select({ key: accountMetadata.key }).from(accountMetadata)
+  const existing = await db.select({ key: accountMetadata.key }).from(
+    accountMetadata,
+  )
     .where(and(
       eq(accountMetadata.accountId, accountId),
       eq(accountMetadata.key, buildStoreMetadataKey(slug)),

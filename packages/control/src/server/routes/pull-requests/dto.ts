@@ -1,11 +1,14 @@
-import type { PullRequestStatus, AuthorType } from '../../../shared/types/index.ts';
-import type { SelectOf } from '../../../shared/types/drizzle-utils.ts';
-import type { pullRequests } from '../../../infra/db/schema.ts';
-import { accounts } from '../../../infra/db/schema.ts';
-import { getDb, type Database } from '../../../infra/db/index.ts';
-import { inArray } from 'drizzle-orm';
-import type { D1Database } from '../../../shared/types/bindings.ts';
-import { textDate, textDateNullable } from '../../../shared/utils/db-guards.ts';
+import type {
+  AuthorType,
+  PullRequestStatus,
+} from "../../../shared/types/index.ts";
+import type { SelectOf } from "../../../shared/types/drizzle-utils.ts";
+import type { pullRequests } from "../../../infra/db/schema.ts";
+import { accounts } from "../../../infra/db/schema.ts";
+import { type Database, getDb } from "../../../infra/db/index.ts";
+import { inArray } from "drizzle-orm";
+import type { D1Database } from "../../../shared/types/bindings.ts";
+import { textDate, textDateNullable } from "../../../shared/utils/db-guards.ts";
 type PrRecord = SelectOf<typeof pullRequests>;
 
 export type UserLiteDto = {
@@ -20,7 +23,7 @@ export type PullRequestDto = {
   number: number;
   title: string;
   description: string | null;
-  status: 'open' | 'merged' | 'closed';
+  status: "open" | "merged" | "closed";
   author: UserLiteDto;
   source_branch: string;
   target_branch: string;
@@ -37,9 +40,9 @@ export type PullRequestDto = {
 export type PullRequestReviewDto = {
   id: string;
   pr_id: string;
-  reviewer_type: 'user' | 'ai';
+  reviewer_type: "user" | "ai";
   reviewer_id: string | null;
-  status: 'approved' | 'changes_requested' | 'commented';
+  status: "approved" | "changes_requested" | "commented";
   body: string | null;
   analysis: string | null;
   created_at: string;
@@ -49,7 +52,7 @@ export type PullRequestReviewDto = {
 export type PullRequestCommentDto = {
   id: string;
   pr_id: string;
-  author_type: 'user' | 'ai';
+  author_type: "user" | "ai";
   author_id: string | null;
   body: string;
   path: string | null;
@@ -59,20 +62,20 @@ export type PullRequestCommentDto = {
 };
 
 export const AI_USER_LITE: UserLiteDto = {
-  id: 'ai',
-  name: 'Takos AI',
+  id: "ai",
+  name: "Takos AI",
   avatar_url: null,
 };
 
 export const AGENT_USER_LITE: UserLiteDto = {
-  id: 'agent',
-  name: 'Takos Agent',
+  id: "agent",
+  name: "Takos Agent",
   avatar_url: null,
 };
 
 export const UNKNOWN_USER_LITE: UserLiteDto = {
-  id: 'unknown',
-  name: 'Unknown',
+  id: "unknown",
+  name: "Unknown",
   avatar_url: null,
 };
 
@@ -108,16 +111,17 @@ export function toUserLiteDto(user: UserRecordLite): UserLiteDto {
 
 export async function buildUserLiteMap(
   dbOrD1: Database | D1Database,
-  userIds: string[]
+  userIds: string[],
 ): Promise<Map<string, UserLiteDto>> {
   const ids = Array.from(new Set(userIds.filter(Boolean)));
   if (ids.length === 0) {
     return new Map();
   }
 
-  const db = 'select' in dbOrD1 && typeof (dbOrD1 as Database).select === 'function'
-    ? dbOrD1 as Database
-    : getDb(dbOrD1 as D1Database);
+  const db =
+    "select" in dbOrD1 && typeof (dbOrD1 as Database).select === "function"
+      ? dbOrD1 as Database
+      : getDb(dbOrD1 as D1Database);
 
   const users = await db.select({
     id: accounts.id,
@@ -133,13 +137,13 @@ export function resolveActorLite(options: {
   actorId: string | null | undefined;
   userMap: Map<string, UserLiteDto>;
 }): UserLiteDto {
-  const type = (options.actorType || '').toLowerCase();
+  const type = (options.actorType || "").toLowerCase();
   const id = options.actorId || null;
 
-  if (type === 'ai') {
+  if (type === "ai") {
     return AI_USER_LITE;
   }
-  if (type === 'agent') {
+  if (type === "agent") {
     return AGENT_USER_LITE;
   }
 
@@ -178,10 +182,12 @@ export function toPullRequestDto(
     isMergeable: boolean;
   },
 ): PullRequestDto {
-  const status: PullRequestDto['status'] =
-    pullRequest.status === 'merged' || pullRequest.status === 'closed' ? pullRequest.status : 'open';
+  const status: PullRequestDto["status"] =
+    pullRequest.status === "merged" || pullRequest.status === "closed"
+      ? pullRequest.status
+      : "open";
   const mergedAt = pullRequest.mergedAt || null;
-  const closedAt = status === 'closed' ? pullRequest.updatedAt : null;
+  const closedAt = status === "closed" ? pullRequest.updatedAt : null;
 
   return {
     id: pullRequest.id,
@@ -208,19 +214,25 @@ export async function buildPullRequestDtoFull(
   db: Database,
   pullRequest: PullRequestRecord,
 ): Promise<PullRequestDto> {
-  const { prReviews, prComments } = await import('../../../infra/db/schema.ts');
-  const { count, eq } = await import('drizzle-orm');
+  const { prReviews, prComments } = await import("../../../infra/db/schema.ts");
+  const { count, eq } = await import("drizzle-orm");
 
   const [reviewResult, commentResult] = await Promise.all([
-    db.select({ count: count() }).from(prReviews).where(eq(prReviews.prId, pullRequest.id)).get(),
-    db.select({ count: count() }).from(prComments).where(eq(prComments.prId, pullRequest.id)).get(),
+    db.select({ count: count() }).from(prReviews).where(
+      eq(prReviews.prId, pullRequest.id),
+    ).get(),
+    db.select({ count: count() }).from(prComments).where(
+      eq(prComments.prId, pullRequest.id),
+    ).get(),
   ]);
   const reviewsCount = reviewResult?.count ?? 0;
   const commentsCount = commentResult?.count ?? 0;
 
   const userMap = await buildUserLiteMap(
     db,
-    pullRequest.authorType === 'user' && pullRequest.authorId ? [pullRequest.authorId] : [],
+    pullRequest.authorType === "user" && pullRequest.authorId
+      ? [pullRequest.authorId]
+      : [],
   );
   const author = resolveActorLite({
     actorType: pullRequest.authorType,
@@ -233,6 +245,6 @@ export async function buildPullRequestDtoFull(
     commitsCount: 0,
     commentsCount,
     reviewsCount,
-    isMergeable: pullRequest.status === 'open',
+    isMergeable: pullRequest.status === "open",
   });
 }

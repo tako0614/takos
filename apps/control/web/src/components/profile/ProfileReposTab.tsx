@@ -1,10 +1,10 @@
-import { Show, For } from 'solid-js';
-import { Icons } from '../../lib/Icons.tsx';
-import { useI18n } from '../../store/i18n.ts';
-import { EmptyState } from '../common/EmptyState.tsx';
-import { RepoSummaryCard } from '../../views/shared/repos/RepoSummaryCard.tsx';
-import type { ProfileRepo } from '../../types/profile.ts';
-import { formatDate } from '../../lib/format.ts';
+import { For, Show } from "solid-js";
+import { Icons } from "../../lib/Icons.tsx";
+import { useI18n } from "../../store/i18n.ts";
+import { EmptyState } from "../common/EmptyState.tsx";
+import { RepoSummaryCard } from "../../views/shared/repos/RepoSummaryCard.tsx";
+import type { ProfileRepo } from "../../types/profile.ts";
+import { formatDate } from "../../lib/format.ts";
 
 interface ProfileReposTabProps {
   repos: ProfileRepo[];
@@ -22,7 +22,7 @@ export function ProfileReposTab(props: ProfileReposTabProps) {
       fallback={
         <EmptyState
           icon={<Icons.Folder class="w-12 h-12 mb-4" />}
-          title={t('noPublicReposYet')}
+          title={t("noPublicReposYet")}
         />
       }
     >
@@ -42,19 +42,24 @@ export function ProfileReposTab(props: ProfileReposTabProps) {
               badge={
                 <span
                   class={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs ${
-                    repo.visibility === 'public'
-                      ? 'bg-zinc-100 dark:bg-zinc-700 text-zinc-900 dark:text-zinc-100'
-                      : 'bg-zinc-200 dark:bg-zinc-700 text-zinc-600 dark:text-zinc-400'
+                    repo.visibility === "public"
+                      ? "bg-zinc-100 dark:bg-zinc-700 text-zinc-900 dark:text-zinc-100"
+                      : "bg-zinc-200 dark:bg-zinc-700 text-zinc-600 dark:text-zinc-400"
                   }`}
                 >
-                  <Show when={repo.visibility === 'public'} fallback={<Icons.Eye class="w-3 h-3" />}>
+                  <Show
+                    when={repo.visibility === "public"}
+                    fallback={<Icons.Eye class="w-3 h-3" />}
+                  >
                     <Icons.Globe class="w-3 h-3" />
                   </Show>
                   {repo.visibility}
                 </span>
               }
               footer={
-                <span class="text-xs text-zinc-500 dark:text-zinc-400">Updated {formatDate(repo.updated_at)}</span>
+                <span class="text-xs text-zinc-500 dark:text-zinc-400">
+                  Updated {formatDate(repo.updated_at)}
+                </span>
               }
             />
           )}

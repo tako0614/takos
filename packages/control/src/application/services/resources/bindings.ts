@@ -22,6 +22,32 @@ function derivePortableQueueSubscriptionName(name: string): string {
   return `${sanitizePortableName(name)}-subscription`;
 }
 
+function parseResourceConfig(
+  config?: string | Record<string, unknown> | null,
+): Record<string, unknown> {
+  if (!config) return {};
+  if (typeof config === "string") {
+    try {
+      return JSON.parse(config) as Record<string, unknown>;
+    } catch {
+      return {};
+    }
+  }
+  return config;
+}
+
+function asObject(value: unknown): Record<string, unknown> | undefined {
+  return value && typeof value === "object" && !Array.isArray(value)
+    ? value as Record<string, unknown>
+    : undefined;
+}
+
+function nonEmptyString(value: unknown): string | undefined {
+  return typeof value === "string" && value.trim().length > 0
+    ? value.trim()
+    : undefined;
+}
+
 export async function listServiceBindings(db: D1Database, resourceId: string) {
   const drizzle = resourceBindingDeps.getDb(db);
 
@@ -216,13 +242,24 @@ export async function buildBindingFromResource(
           resource.backing_resource_id ?? undefined,
       };
     case "workflow":
-    case "workflow_runtime":
+    case "workflow_runtime": {
+      const config = parseResourceConfig(resource.config);
+      const workflowConfig = asObject(config.workflowRuntime) ??
+        asObject(config.workflow);
+      const workflowName = nonEmptyString(config.workflowName) ??
+        nonEmptyString(config.workflow_name) ??
+        nonEmptyString(workflowConfig?.export) ??
+        nonEmptyString(workflowConfig?.name) ??
+        resource.backing_resource_name ??
+        resource.backing_resource_id ??
+        undefined;
+      if (!workflowName) return null;
       return {
         type: "workflow",
         name: bindingName,
-        workflow_name: resource.backing_resource_name ??
-          resource.backing_resource_id ?? undefined,
+        workflow_name: workflowName,
       };
+    }
 
     case "secretRef":
       return {
@@ -240,35 +277,21 @@ export async function buildBindingFromResource(
       };
 
     case "durableObject":
+    case "durable-object":
     case "durable_namespace":
     case "durable_object": {
-      let config: Record<string, unknown> = {};
-      if (resource.config) {
-        try {
-          config = (typeof resource.config === "string"
-            ? JSON.parse(resource.config)
-            : resource.config) as Record<string, unknown>;
-        } catch {
-          config = {};
-        }
-      }
-      const durableObject =
-        typeof config.durableObject === "object" && config.durableObject
-          ? config.durableObject as Record<string, unknown>
-          : null;
-      const durableNamespace =
-        typeof config.durableNamespace === "object" && config.durableNamespace
-          ? config.durableNamespace as Record<string, unknown>
-          : null;
-      const className = (config.className as string) ||
-        (durableObject?.className as string | undefined) ||
-        (durableNamespace?.className as string | undefined) ||
-        resource.backing_resource_name ||
+      const config = parseResourceConfig(resource.config);
+      const durableObject = asObject(config.durableObject);
+      const durableNamespace = asObject(config.durableNamespace);
+      const className = nonEmptyString(config.className) ??
+        nonEmptyString(durableObject?.className) ??
+        nonEmptyString(durableNamespace?.className) ??
+        resource.backing_resource_name ??
         undefined;
       if (!className) return null;
-      const scriptName = (config.scriptName as string | undefined) ||
-        (durableObject?.scriptName as string | undefined) ||
-        (durableNamespace?.scriptName as string | undefined);
+      const scriptName = nonEmptyString(config.scriptName) ??
+        nonEmptyString(durableObject?.scriptName) ??
+        nonEmptyString(durableNamespace?.scriptName);
       return {
         type: "durable_object_namespace",
         name: bindingName,

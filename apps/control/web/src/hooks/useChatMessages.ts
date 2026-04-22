@@ -24,7 +24,6 @@ export interface UseChatMessagesOptions {
   currentRunIdRef: { current: string | null };
   lastEventIdRef: { current: number };
   resetStreamingState: () => void;
-  resetTimeline: () => void;
   setIsLoading: Setter<boolean>;
   setCurrentRun: Setter<Run | null>;
   startWebSocket: (runId: string) => void;
@@ -60,7 +59,6 @@ export function useChatMessages({
   currentRunIdRef,
   lastEventIdRef,
   resetStreamingState,
-  resetTimeline,
   setIsLoading,
   setCurrentRun,
   startWebSocket,
@@ -99,7 +97,6 @@ export function useChatMessages({
     currentRunIdRef.current = null;
     lastEventIdRef.current = 0;
     resetStreamingState();
-    resetTimeline();
     setInput("");
     setAttachedFiles([]);
     setIsLoading(true);

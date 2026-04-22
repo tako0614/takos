@@ -1,11 +1,12 @@
-import { createContext, useContext } from 'solid-js';
-import type { Thread, Space } from '../../types/index.ts';
+import { createContext, useContext } from "solid-js";
+import type { Space, Thread } from "../../types/index.ts";
 
 export interface SidebarCallbacks {
   // Navigation
   onNewChat: () => void;
   onNavigateStorage: () => void;
   onNavigateDeploy: () => void;
+  onNavigateGroups: () => void;
   onNavigateApps: () => void;
   onNavigateStore: () => void;
   onNavigateRepos: () => void;
@@ -17,6 +18,7 @@ export interface SidebarCallbacks {
   onNavigateSpaceChat: () => void;
   onNavigateSpaceStorage: () => void;
   onNavigateSpaceDeploy: () => void;
+  onNavigateSpaceGroups: () => void;
   onNavigateSpaceRepos: () => void;
   onNavigateSpaceApps: () => void;
   onNavigateSpaceSettings: () => void;
@@ -36,7 +38,9 @@ export const SidebarContext = createContext<SidebarCallbacks>();
 export function useSidebarCallbacks(): SidebarCallbacks {
   const ctx = useContext(SidebarContext);
   if (!ctx) {
-    throw new Error('useSidebarCallbacks must be used within a SidebarProvider');
+    throw new Error(
+      "useSidebarCallbacks must be used within a SidebarProvider",
+    );
   }
   return ctx;
 }

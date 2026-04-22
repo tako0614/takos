@@ -1,9 +1,9 @@
-import { createSignal } from 'solid-js';
-import type { Setter } from 'solid-js';
-import { useToast } from '../store/toast.ts';
-import { useI18n } from '../store/i18n.ts';
-import { useConfirmDialog } from '../store/confirm-dialog.ts';
-import type { StorageFile } from '../types/index.ts';
+import { createSignal } from "solid-js";
+import type { Setter } from "solid-js";
+import { useToast } from "../store/toast.ts";
+import { useI18n } from "../store/i18n.ts";
+import { useConfirmDialog } from "../store/confirm-dialog.ts";
+import type { StorageFile } from "../types/index.ts";
 
 interface UseStorageBulkOperationsParams {
   files: () => StorageFile[];
@@ -11,14 +11,16 @@ interface UseStorageBulkOperationsParams {
   setSelectedFiles: Setter<Set<string>>;
   deleteItems: (ids: string[]) => Promise<boolean>;
   bulkMoveItems: (ids: string[], dest: string) => Promise<boolean>;
-  bulkRenameItems: (renames: Array<{ file_id: string; name: string }>) => Promise<boolean>;
+  bulkRenameItems: (
+    renames: Array<{ file_id: string; name: string }>,
+  ) => Promise<boolean>;
 }
 
 function normalizePath(path: string): string {
-  let p = (path || '').trim();
-  if (!p) return '/';
-  if (!p.startsWith('/')) p = '/' + p;
-  if (p.length > 1 && p.endsWith('/')) p = p.slice(0, -1);
+  let p = (path || "").trim();
+  if (!p) return "/";
+  if (!p.startsWith("/")) p = "/" + p;
+  if (p.length > 1 && p.endsWith("/")) p = p.slice(0, -1);
   return p;
 }
 
@@ -29,7 +31,9 @@ interface UseStorageBulkOperationsResult {
   bulkMoving: () => boolean;
   showBulkRenameModal: () => boolean;
   bulkRenames: () => Array<{ file_id: string; old_name: string; name: string }>;
-  setBulkRenames: Setter<Array<{ file_id: string; old_name: string; name: string }>>;
+  setBulkRenames: Setter<
+    Array<{ file_id: string; old_name: string; name: string }>
+  >;
   bulkRenaming: () => boolean;
   openBulkMove: () => void;
   closeBulkMove: () => void;
@@ -54,20 +58,22 @@ export function useStorageBulkOperations({
   const { confirm } = useConfirmDialog();
 
   const [showBulkMoveModal, setShowBulkMoveModal] = createSignal(false);
-  const [bulkMovePath, setBulkMovePath] = createSignal('');
+  const [bulkMovePath, setBulkMovePath] = createSignal("");
   const [bulkMoving, setBulkMoving] = createSignal(false);
   const [showBulkRenameModal, setShowBulkRenameModal] = createSignal(false);
-  const [bulkRenames, setBulkRenames] = createSignal<Array<{ file_id: string; old_name: string; name: string }>>([]);
+  const [bulkRenames, setBulkRenames] = createSignal<
+    Array<{ file_id: string; old_name: string; name: string }>
+  >([]);
   const [bulkRenaming, setBulkRenaming] = createSignal(false);
 
   const openBulkMove = () => {
-    setBulkMovePath('/');
+    setBulkMovePath("/");
     setShowBulkMoveModal(true);
   };
 
   const closeBulkMove = () => {
     setShowBulkMoveModal(false);
-    setBulkMovePath('');
+    setBulkMovePath("");
   };
 
   const handleBulkMove = async () => {
@@ -79,11 +85,11 @@ export function useStorageBulkOperations({
     setBulkMoving(false);
 
     if (ok) {
-      showToast('success', t('moved') || 'Moved');
+      showToast("success", t("moved") || "Moved");
       setSelectedFiles(new Set<string>());
       setShowBulkMoveModal(false);
     } else {
-      showToast('error', t('failedToSave'));
+      showToast("error", t("failedToSave"));
     }
   };
 
@@ -113,11 +119,11 @@ export function useStorageBulkOperations({
     setBulkRenaming(false);
 
     if (ok) {
-      showToast('success', t('renamed') || 'Renamed');
+      showToast("success", t("renamed") || "Renamed");
       setSelectedFiles(new Set<string>());
       setShowBulkRenameModal(false);
     } else {
-      showToast('error', t('failedToRename'));
+      showToast("error", t("failedToRename"));
     }
   };
 
@@ -125,9 +131,12 @@ export function useStorageBulkOperations({
     if (selectedFiles().size === 0) return;
 
     const confirmed = await confirm({
-      title: t('deleteSelectedTitle'),
-      message: t('deleteSelectedConfirm').replace('{count}', String(selectedFiles().size)),
-      confirmText: t('delete'),
+      title: t("deleteSelectedTitle"),
+      message: t("deleteSelectedConfirm").replace(
+        "{count}",
+        String(selectedFiles().size),
+      ),
+      confirmText: t("delete"),
       danger: true,
     });
 
@@ -135,10 +144,13 @@ export function useStorageBulkOperations({
 
     const result = await deleteItems(Array.from(selectedFiles()));
     if (result) {
-      showToast('success', t('itemsDeleted').replace('{count}', String(selectedFiles().size)));
+      showToast(
+        "success",
+        t("itemsDeleted").replace("{count}", String(selectedFiles().size)),
+      );
       setSelectedFiles(new Set<string>());
     } else {
-      showToast('error', t('failedToDeleteSome'));
+      showToast("error", t("failedToDeleteSome"));
     }
   };
 

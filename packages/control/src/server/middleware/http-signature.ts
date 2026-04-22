@@ -8,7 +8,7 @@
  * @see https://datatracker.ietf.org/doc/html/draft-cavage-http-signatures-12
  */
 
-import { apFetch } from '../../application/services/activitypub/remote-store-client.ts';
+import { apFetch } from "../../application/services/activitypub/remote-store-client.ts";
 
 /* ------------------------------------------------------------------ */
 /*  Types                                                              */
@@ -52,16 +52,16 @@ function parseSignatureHeader(header: string): ParsedSignature {
 
   const keyId = params.keyId;
   if (!keyId) {
-    throw new HttpSignatureError('Signature header missing keyId');
+    throw new HttpSignatureError("Signature header missing keyId");
   }
 
   const signature = params.signature;
   if (!signature) {
-    throw new HttpSignatureError('Signature header missing signature value');
+    throw new HttpSignatureError("Signature header missing signature value");
   }
 
-  const algorithm = (params.algorithm ?? 'rsa-sha256').toLowerCase();
-  const headers = (params.headers ?? 'date').split(/\s+/);
+  const algorithm = (params.algorithm ?? "rsa-sha256").toLowerCase();
+  const headers = (params.headers ?? "date").split(/\s+/);
 
   return { keyId, algorithm, headers, signature };
 }
@@ -90,20 +90,22 @@ function buildSigningString(
   for (const header of signedHeaders) {
     const lower = header.toLowerCase();
 
-    if (lower === '(request-target)') {
+    if (lower === "(request-target)") {
       const method = request.method.toLowerCase();
       const target = url.pathname + url.search;
       lines.push(`(request-target): ${method} ${target}`);
     } else {
       const value = request.headers.get(lower);
       if (value === null) {
-        throw new HttpSignatureError(`Missing header referenced in signature: ${lower}`);
+        throw new HttpSignatureError(
+          `Missing header referenced in signature: ${lower}`,
+        );
       }
       lines.push(`${lower}: ${value}`);
     }
   }
 
-  return lines.join('\n');
+  return lines.join("\n");
 }
 
 /* ------------------------------------------------------------------ */
@@ -116,21 +118,21 @@ function buildSigningString(
 async function importPublicKey(pem: string): Promise<CryptoKey> {
   // Strip PEM armour and whitespace to get raw base64
   const b64 = pem
-    .replace(/-----BEGIN PUBLIC KEY-----/, '')
-    .replace(/-----END PUBLIC KEY-----/, '')
-    .replace(/\s+/g, '');
+    .replace(/-----BEGIN PUBLIC KEY-----/, "")
+    .replace(/-----END PUBLIC KEY-----/, "")
+    .replace(/\s+/g, "");
 
   const binaryDer = base64ToArrayBuffer(b64);
 
   return crypto.subtle.importKey(
-    'spki',
+    "spki",
     binaryDer,
     {
-      name: 'RSASSA-PKCS1-v1_5',
-      hash: { name: 'SHA-256' },
+      name: "RSASSA-PKCS1-v1_5",
+      hash: { name: "SHA-256" },
     },
     false,
-    ['verify'],
+    ["verify"],
   );
 }
 
@@ -177,7 +179,10 @@ function getCachedActorKey(keyId: string): ActorCacheEntry | null {
   return cached;
 }
 
-function setCachedActorKey(keyId: string, entry: Omit<ActorCacheEntry, 'expiresAt'>): void {
+function setCachedActorKey(
+  keyId: string,
+  entry: Omit<ActorCacheEntry, "expiresAt">,
+): void {
   if (actorKeyCache.size >= ACTOR_CACHE_MAX_ENTRIES) {
     // Drop the oldest entry (insertion order via Map iterator).
     const oldestKey = actorKeyCache.keys().next().value;
@@ -185,7 +190,10 @@ function setCachedActorKey(keyId: string, entry: Omit<ActorCacheEntry, 'expiresA
       actorKeyCache.delete(oldestKey);
     }
   }
-  actorKeyCache.set(keyId, { ...entry, expiresAt: Date.now() + ACTOR_CACHE_TTL_MS });
+  actorKeyCache.set(keyId, {
+    ...entry,
+    expiresAt: Date.now() + ACTOR_CACHE_TTL_MS,
+  });
 }
 
 /** Test helper — clear the cache between unit tests so they start clean. */
@@ -217,7 +225,9 @@ export function evictActorKeyByActorUrl(actorUrl: string): void {
  * Uses `apFetch` which has built-in SSRF protection. Results are cached for
  * 24 h per `keyId`; cache misses fall through to the network.
  */
-async function fetchActorPublicKey(keyId: string): Promise<{ actorUrl: string; publicKeyPem: string }> {
+async function fetchActorPublicKey(
+  keyId: string,
+): Promise<{ actorUrl: string; publicKeyPem: string }> {
   const cached = getCachedActorKey(keyId);
   if (cached) {
     return { actorUrl: cached.actorUrl, publicKeyPem: cached.publicKeyPem };
@@ -225,24 +235,32 @@ async function fetchActorPublicKey(keyId: string): Promise<{ actorUrl: string; p
 
   // keyId is typically "https://remote.example/ap/stores/alice#main-key"
   // The actor URL is everything before the fragment
-  const hashIndex = keyId.indexOf('#');
+  const hashIndex = keyId.indexOf("#");
   const actorUrl = hashIndex >= 0 ? keyId.slice(0, hashIndex) : keyId;
 
   const response = await apFetch(actorUrl);
   if (!response.ok) {
-    throw new HttpSignatureError(`Failed to fetch actor document from ${actorUrl}: HTTP ${response.status}`);
+    throw new HttpSignatureError(
+      `Failed to fetch actor document from ${actorUrl}: HTTP ${response.status}`,
+    );
   }
 
   const actor = await response.json() as Record<string, unknown>;
-  const publicKey = actor.publicKey as { id?: string; publicKeyPem?: string } | undefined;
+  const publicKey = actor.publicKey as
+    | { id?: string; publicKeyPem?: string }
+    | undefined;
 
   if (!publicKey?.publicKeyPem) {
-    throw new HttpSignatureError('Actor document does not contain a publicKey with publicKeyPem');
+    throw new HttpSignatureError(
+      "Actor document does not contain a publicKey with publicKeyPem",
+    );
   }
 
   // Verify that the key's id matches the keyId from the signature
   if (publicKey.id && publicKey.id !== keyId) {
-    throw new HttpSignatureError(`Key ID mismatch: signature references ${keyId} but actor has ${publicKey.id}`);
+    throw new HttpSignatureError(
+      `Key ID mismatch: signature references ${keyId} but actor has ${publicKey.id}`,
+    );
   }
 
   setCachedActorKey(keyId, { actorUrl, publicKeyPem: publicKey.publicKeyPem });
@@ -269,7 +287,7 @@ function base64ToArrayBuffer(b64: string): ArrayBuffer {
 export class HttpSignatureError extends Error {
   constructor(message: string) {
     super(message);
-    this.name = 'HttpSignatureError';
+    this.name = "HttpSignatureError";
   }
 }
 
@@ -302,17 +320,19 @@ export async function verifyHttpSignature(
   request: Request,
   body?: Uint8Array,
 ): Promise<HttpSignatureResult> {
-  const signatureHeader = request.headers.get('signature');
+  const signatureHeader = request.headers.get("signature");
   if (!signatureHeader) {
-    throw new HttpSignatureError('No Signature header present');
+    throw new HttpSignatureError("No Signature header present");
   }
 
   // 1. Parse the Signature header
   const parsed = parseSignatureHeader(signatureHeader);
 
   // 2. Only RSA-SHA256 is supported (by far the most common in ActivityPub)
-  if (parsed.algorithm !== 'rsa-sha256' && parsed.algorithm !== 'hs2019') {
-    throw new HttpSignatureError(`Unsupported signature algorithm: ${parsed.algorithm}`);
+  if (parsed.algorithm !== "rsa-sha256" && parsed.algorithm !== "hs2019") {
+    throw new HttpSignatureError(
+      `Unsupported signature algorithm: ${parsed.algorithm}`,
+    );
   }
 
   // 3. Fetch the actor's public key
@@ -324,7 +344,9 @@ export async function verifyHttpSignature(
     cryptoKey = await importPublicKey(publicKeyPem);
   } catch (err) {
     throw new HttpSignatureError(
-      `Failed to import public key: ${err instanceof Error ? err.message : String(err)}`,
+      `Failed to import public key: ${
+        err instanceof Error ? err.message : String(err)
+      }`,
     );
   }
 
@@ -339,7 +361,7 @@ export async function verifyHttpSignature(
 
   // 8. Verify using Web Crypto API
   const verified = await crypto.subtle.verify(
-    'RSASSA-PKCS1-v1_5',
+    "RSASSA-PKCS1-v1_5",
     cryptoKey,
     signatureBytes,
     signingStringBytes,
@@ -363,11 +385,11 @@ export async function verifyHttpSignature(
   // the digest). Re-hash and compare on every request that carries a
   // `Digest` header. Missing Digest is accepted (not yet mandatory per our
   // docs/platform/activitypub.md).
-  const digestHeader = request.headers.get('digest');
+  const digestHeader = request.headers.get("digest");
   if (digestHeader) {
     if (!body) {
       throw new HttpSignatureError(
-        'Digest header present but body was not provided to the verifier',
+        "Digest header present but body was not provided to the verifier",
       );
     }
     await verifyDigestHeader(digestHeader, body);
@@ -395,36 +417,36 @@ async function verifyDigestHeader(
   // Digest header MAY list multiple algorithms separated by comma, e.g.
   //   SHA-256=xyz, SHA-512=abc
   // We only check SHA-256. If none of the entries is SHA-256, reject.
-  const entries = digestHeader.split(',').map((e) => e.trim());
+  const entries = digestHeader.split(",").map((e) => e.trim());
   const sha256Entry = entries.find((e) => /^sha-256=/i.test(e));
   if (!sha256Entry) {
     throw new HttpSignatureError(
-      'Digest header does not contain a SHA-256 value',
+      "Digest header does not contain a SHA-256 value",
     );
   }
 
-  const expectedB64 = sha256Entry.slice('sha-256='.length);
+  const expectedB64 = sha256Entry.slice("sha-256=".length);
   if (!expectedB64) {
-    throw new HttpSignatureError('Digest header SHA-256 value is empty');
+    throw new HttpSignatureError("Digest header SHA-256 value is empty");
   }
 
   // Copy into a fresh ArrayBuffer so the type system is happy with
   // `SharedArrayBuffer | ArrayBuffer` unions on `body.buffer`.
   const ab = new ArrayBuffer(body.byteLength);
   new Uint8Array(ab).set(body);
-  const actualHash = await crypto.subtle.digest('SHA-256', ab);
+  const actualHash = await crypto.subtle.digest("SHA-256", ab);
   const actualB64 = arrayBufferToBase64(actualHash);
 
   if (actualB64 !== expectedB64) {
     throw new HttpSignatureError(
-      'Digest header does not match SHA-256 of body',
+      "Digest header does not match SHA-256 of body",
     );
   }
 }
 
 function arrayBufferToBase64(buffer: ArrayBuffer): string {
   const bytes = new Uint8Array(buffer);
-  let binary = '';
+  let binary = "";
   for (let i = 0; i < bytes.byteLength; i++) {
     binary += String.fromCharCode(bytes[i]);
   }

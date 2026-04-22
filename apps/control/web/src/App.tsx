@@ -17,7 +17,11 @@ function AppShell(props: { children: JSX.Element }) {
   const navigation = useNavigation();
   const i18n = useI18n();
 
-  const handleCreateSpace = async (name: string, description: string) => {
+  const handleCreateSpace = async (
+    name: string,
+    description: string,
+    installDefaultApps: boolean,
+  ) => {
     const trimmedName = name.trim();
     const trimmedDescription = description.trim();
     let space: Space;
@@ -27,6 +31,7 @@ function AppShell(props: { children: JSX.Element }) {
         json: {
           name: trimmedName,
           description: trimmedDescription || undefined,
+          installDefaultApps,
         },
       });
       const data = await rpcJson<{ space: Space }>(response);

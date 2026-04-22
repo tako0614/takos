@@ -3,21 +3,21 @@ import { fetchRemoteOutbox } from "@/application/services/activitypub/remote-sto
 
 Deno.test("remote store client - parses Add activity object URI as repository reference", async () => {
   const originalFetch = globalThis.fetch;
-  const repoActorUrl = "https://repo.takos.social/ap/repos/alice/demo";
+  const repoActorUrl = "https://repo.example.com/ap/repos/alice/demo";
 
   (globalThis as { fetch: typeof fetch }).fetch = (async () =>
     new Response(
       JSON.stringify({
-        id: "https://store.takos.social/ap/stores/curated/outbox?page=1",
+        id: "https://store.example.com/ap/stores/curated/outbox?page=1",
         type: "OrderedCollectionPage",
         totalItems: 1,
         orderedItems: [{
-          id: "https://store.takos.social/ap/stores/curated/activities/add/1",
+          id: "https://store.example.com/ap/stores/curated/activities/add/1",
           type: "Add",
-          actor: "https://store.takos.social/ap/stores/curated",
+          actor: "https://store.example.com/ap/stores/curated",
           published: "2026-03-02T00:00:00.000Z",
           object: repoActorUrl,
-          target: "https://store.takos.social/ap/stores/curated/inventory",
+          target: "https://store.example.com/ap/stores/curated/inventory",
         }],
       }),
       {
@@ -28,7 +28,7 @@ Deno.test("remote store client - parses Add activity object URI as repository re
 
   try {
     const outbox = await fetchRemoteOutbox(
-      "https://store.takos.social/ap/stores/curated/outbox",
+      "https://store.example.com/ap/stores/curated/outbox",
       { page: 1 },
     );
 

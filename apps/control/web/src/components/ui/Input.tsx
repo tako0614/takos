@@ -1,5 +1,5 @@
-import { splitProps } from 'solid-js';
-import type { JSX } from 'solid-js';
+import { splitProps } from "solid-js";
+import type { JSX } from "solid-js";
 
 interface InputProps extends JSX.InputHTMLAttributes<HTMLInputElement> {
   leftIcon?: JSX.Element;
@@ -9,7 +9,13 @@ interface InputProps extends JSX.InputHTMLAttributes<HTMLInputElement> {
 }
 
 export function Input(props: InputProps) {
-  const [local, rest] = splitProps(props, ['leftIcon', 'rightIcon', 'error', 'class', 'ref']);
+  const [local, rest] = splitProps(props, [
+    "leftIcon",
+    "rightIcon",
+    "error",
+    "class",
+    "ref",
+  ]);
 
   return (
     <div>
@@ -26,10 +32,14 @@ export function Input(props: InputProps) {
             bg-[var(--color-surface-primary)] text-[var(--color-text-primary)]
             border rounded-[var(--radius-md)] outline-none transition-colors
             focus:border-[var(--color-border-focus)]
-            ${local.leftIcon ? 'pl-10' : 'pl-3'}
-            ${local.rightIcon ? 'pr-10' : 'pr-3'}
-            ${local.error ? 'border-[var(--color-error)]' : 'border-[var(--color-border-primary)]'}
-            ${local.class ?? ''}
+            ${local.leftIcon ? "pl-10" : "pl-3"}
+            ${local.rightIcon ? "pr-10" : "pr-3"}
+            ${
+            local.error
+              ? "border-[var(--color-error)]"
+              : "border-[var(--color-border-primary)]"
+          }
+            ${local.class ?? ""}
           `}
           {...rest}
         />

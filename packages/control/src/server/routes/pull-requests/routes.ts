@@ -1,14 +1,17 @@
-import { Hono } from 'hono';
-import { z } from 'zod';
-import type { PullRequestStatus, AuthorType } from '../../../shared/types/index.ts';
-import { generateId } from '../../../shared/utils/index.ts';
-import { parseJsonBody, type AuthenticatedRouteEnv } from '../route-auth.ts';
-import { parsePagination } from '../../../shared/utils/index.ts';
-import { zValidator } from '../zod-validator.ts';
-import { checkRepoAccess } from '../../../application/services/source/repos.ts';
-import { getDb } from '../../../infra/db/index.ts';
-import { eq } from 'drizzle-orm';
-import { pullRequests } from '../../../infra/db/schema.ts';
+import { Hono } from "hono";
+import { z } from "zod";
+import type {
+  AuthorType,
+  PullRequestStatus,
+} from "../../../shared/types/index.ts";
+import { generateId } from "../../../shared/utils/index.ts";
+import { type AuthenticatedRouteEnv, parseJsonBody } from "../route-auth.ts";
+import { parsePagination } from "../../../shared/utils/index.ts";
+import { zValidator } from "../zod-validator.ts";
+import { checkRepoAccess } from "../../../application/services/source/repos.ts";
+import { getDb } from "../../../infra/db/index.ts";
+import { eq } from "drizzle-orm";
+import { pullRequests } from "../../../infra/db/schema.ts";
 
 import {
   buildPullRequestDtoFull,
@@ -16,25 +19,25 @@ import {
   resolveActorLite,
   toPullRequestDto,
   toPullRequestRecord,
-} from './dto.ts';
-import { buildDetailedRepoDiffPayload } from './diff.ts';
-import { BadRequestError, NotFoundError } from 'takos-common/errors';
+} from "./dto.ts";
+import { buildDetailedRepoDiffPayload } from "./diff.ts";
+import { BadRequestError, NotFoundError } from "takos-common/errors";
 import {
   buildPullRequestDetail,
   buildPullRequestList,
   findPullRequest,
   getNextPullRequestNumber,
-} from './read-model.ts';
-import { triggerPrEvent } from './workflow-trigger.ts';
+} from "./read-model.ts";
+import { triggerPrEvent } from "./workflow-trigger.ts";
 
 // ---------------------------------------------------------------------------
 // CRUD Routes (create, list, get, get-diff, update, close)
 // ---------------------------------------------------------------------------
 
 export default new Hono<AuthenticatedRouteEnv>()
-  .post('/repos/:repoId/pulls', async (c) => {
-    const user = c.get('user');
-    const repoId = c.req.param('repoId');
+  .post("/repos/:repoId/pulls", async (c) => {
+    const user = c.get("user");
+    const repoId = c.req.param("repoId");
     const body = await parseJsonBody<{
       title: string;
       description?: string;
@@ -45,27 +48,31 @@ export default new Hono<AuthenticatedRouteEnv>()
     }>(c);
 
     if (!body) {
-      throw new BadRequestError('Invalid JSON body');
+      throw new BadRequestError("Invalid JSON body");
     }
 
-    const repoAccess = await checkRepoAccess(c.env, repoId, user.id, ['owner', 'admin', 'editor']);
+    const repoAccess = await checkRepoAccess(c.env, repoId, user.id, [
+      "owner",
+      "admin",
+      "editor",
+    ]);
     if (!repoAccess) {
-      throw new NotFoundError('Repository');
+      throw new NotFoundError("Repository");
     }
 
     if (!body.title || body.title.trim().length === 0) {
-      throw new BadRequestError('Title is required');
+      throw new BadRequestError("Title is required");
     }
 
     if (!body.head_branch || body.head_branch.trim().length === 0) {
-      throw new BadRequestError('Head branch is required');
+      throw new BadRequestError("Head branch is required");
     }
 
     const db = getDb(c.env.DB);
     const id = generateId();
     const number = await getNextPullRequestNumber(c.env.DB, repoId);
     const baseBranch = body.base_branch || repoAccess.repo.default_branch;
-    const authorType = body.author_type || 'user';
+    const authorType = body.author_type || "user";
     const timestamp = new Date().toISOString();
 
     const pullRequest = await db.insert(pullRequests).values({
@@ -76,7 +83,7 @@ export default new Hono<AuthenticatedRouteEnv>()
       description: body.description || null,
       headBranch: body.head_branch.trim(),
       baseBranch,
-      status: 'open',
+      status: "open",
       authorType,
       authorId: user.id,
       runId: body.run_id || null,
@@ -86,11 +93,11 @@ export default new Hono<AuthenticatedRouteEnv>()
     const normalizedPullRequest = toPullRequestRecord(pullRequest);
 
     triggerPrEvent(c, repoAccess, user.id, {
-      action: 'opened',
+      action: "opened",
       number: normalizedPullRequest.number,
       title: normalizedPullRequest.title,
       body: normalizedPullRequest.description,
-      state: 'open',
+      state: "open",
       merged: false,
       headRef: normalizedPullRequest.headBranch,
       baseRef: normalizedPullRequest.baseBranch,
@@ -114,45 +121,68 @@ export default new Hono<AuthenticatedRouteEnv>()
       }),
     }, 201);
   })
-  .get('/repos/:repoId/pulls', zValidator('query', z.object({
-    status: z.string().optional(),
-    limit: z.string().optional(),
-    offset: z.string().optional(),
-  })), async (c) => {
-    const user = c.get('user');
-    const repoId = c.req.param('repoId');
-    const { status: statusRaw, limit: limitRaw, offset: offsetRaw } = c.req.valid('query');
-    const status = statusRaw as PullRequestStatus | undefined;
-    const { limit, offset } = parsePagination({ limit: limitRaw, offset: offsetRaw }, { limit: 50, maxLimit: 100 });
+  .get(
+    "/repos/:repoId/pulls",
+    zValidator(
+      "query",
+      z.object({
+        status: z.string().optional(),
+        limit: z.string().optional(),
+        offset: z.string().optional(),
+      }),
+    ),
+    async (c) => {
+      const user = c.get("user");
+      const repoId = c.req.param("repoId");
+      const { status: statusRaw, limit: limitRaw, offset: offsetRaw } = c.req
+        .valid("query");
+      const status = statusRaw as PullRequestStatus | undefined;
+      const { limit, offset } = parsePagination({
+        limit: limitRaw,
+        offset: offsetRaw,
+      }, { limit: 50, maxLimit: 100 });
 
-    const repoAccess = await checkRepoAccess(c.env, repoId, user?.id, undefined, { allowPublicRead: true });
-    if (!repoAccess) {
-      throw new NotFoundError('Repository');
-    }
-
-    return c.json({
-      pull_requests: await buildPullRequestList(
+      const repoAccess = await checkRepoAccess(
         c.env,
         repoId,
-        status,
-        limit,
-        offset,
-      ),
-    });
-  })
-  .get('/repos/:repoId/pulls/:prNumber', async (c) => {
-    const user = c.get('user');
-    const repoId = c.req.param('repoId');
-    const prNumber = parseInt(c.req.param('prNumber'));
+        user?.id,
+        undefined,
+        { allowPublicRead: true },
+      );
+      if (!repoAccess) {
+        throw new NotFoundError("Repository");
+      }
 
-    const repoAccess = await checkRepoAccess(c.env, repoId, user?.id, undefined, { allowPublicRead: true });
+      return c.json({
+        pull_requests: await buildPullRequestList(
+          c.env,
+          repoId,
+          status,
+          limit,
+          offset,
+        ),
+      });
+    },
+  )
+  .get("/repos/:repoId/pulls/:prNumber", async (c) => {
+    const user = c.get("user");
+    const repoId = c.req.param("repoId");
+    const prNumber = parseInt(c.req.param("prNumber"));
+
+    const repoAccess = await checkRepoAccess(
+      c.env,
+      repoId,
+      user?.id,
+      undefined,
+      { allowPublicRead: true },
+    );
     if (!repoAccess) {
-      throw new NotFoundError('Repository');
+      throw new NotFoundError("Repository");
     }
 
     const found = await findPullRequest(c.env.DB, repoId, prNumber);
     if (!found) {
-      throw new NotFoundError('Pull request');
+      throw new NotFoundError("Pull request");
     }
     const { db, pullRequest } = found;
 
@@ -171,115 +201,147 @@ export default new Hono<AuthenticatedRouteEnv>()
       comment_count: detail.commentCount,
     });
   })
-  .get('/repos/:repoId/pulls/:prNumber/diff', async (c) => {
-    const user = c.get('user');
-    const repoId = c.req.param('repoId');
-    const prNumber = parseInt(c.req.param('prNumber'));
+  .get("/repos/:repoId/pulls/:prNumber/diff", async (c) => {
+    const user = c.get("user");
+    const repoId = c.req.param("repoId");
+    const prNumber = parseInt(c.req.param("prNumber"));
 
-    const repoAccess = await checkRepoAccess(c.env, repoId, user?.id, undefined, { allowPublicRead: true });
+    const repoAccess = await checkRepoAccess(
+      c.env,
+      repoId,
+      user?.id,
+      undefined,
+      { allowPublicRead: true },
+    );
     if (!repoAccess) {
-      throw new NotFoundError('Repository');
+      throw new NotFoundError("Repository");
     }
 
     const found = await findPullRequest(c.env.DB, repoId, prNumber);
     if (!found) {
-      throw new NotFoundError('Pull request');
+      throw new NotFoundError("Pull request");
     }
     const { pullRequest } = found;
 
-    const diffResult = await buildDetailedRepoDiffPayload(c.env, repoId, pullRequest.baseBranch, pullRequest.headBranch);
+    const diffResult = await buildDetailedRepoDiffPayload(
+      c.env,
+      repoId,
+      pullRequest.baseBranch,
+      pullRequest.headBranch,
+    );
     if (!diffResult.success) {
       return c.json(diffResult.body, diffResult.status);
     }
 
     return c.json(diffResult.payload);
   })
-  .patch('/repos/:repoId/pulls/:prNumber', zValidator('json', z.object({
-    title: z.string().optional(),
-    description: z.string().optional(),
-  })), async (c) => {
-    const user = c.get('user');
-    const repoId = c.req.param('repoId');
-    const prNumber = parseInt(c.req.param('prNumber'));
-    const body = c.req.valid('json');
+  .patch(
+    "/repos/:repoId/pulls/:prNumber",
+    zValidator(
+      "json",
+      z.object({
+        title: z.string().optional(),
+        description: z.string().optional(),
+      }),
+    ),
+    async (c) => {
+      const user = c.get("user");
+      const repoId = c.req.param("repoId");
+      const prNumber = parseInt(c.req.param("prNumber"));
+      const body = c.req.valid("json");
 
-    const repoAccess = await checkRepoAccess(c.env, repoId, user.id, ['owner', 'admin', 'editor']);
+      const repoAccess = await checkRepoAccess(c.env, repoId, user.id, [
+        "owner",
+        "admin",
+        "editor",
+      ]);
+      if (!repoAccess) {
+        throw new NotFoundError("Repository");
+      }
+
+      const found = await findPullRequest(c.env.DB, repoId, prNumber);
+      if (!found) {
+        throw new NotFoundError("Pull request");
+      }
+      const { db, pullRequest } = found;
+
+      if (pullRequest.status !== "open") {
+        throw new BadRequestError(
+          "Cannot update a closed or merged pull request",
+        );
+      }
+
+      const updateData: {
+        title?: string;
+        description?: string;
+        updatedAt: string;
+      } = {
+        updatedAt: new Date().toISOString(),
+      };
+
+      if (body.title !== undefined && body.title.trim().length > 0) {
+        updateData.title = body.title.trim();
+      }
+
+      if (body.description !== undefined) {
+        updateData.description = body.description;
+      }
+
+      if (Object.keys(updateData).length === 1) {
+        throw new BadRequestError("No valid updates provided");
+      }
+
+      const updated = await db.update(pullRequests)
+        .set(updateData)
+        .where(eq(pullRequests.id, pullRequest.id))
+        .returning()
+        .get();
+      const normalizedUpdated = toPullRequestRecord(updated);
+
+      triggerPrEvent(c, repoAccess, user.id, {
+        action: "edited",
+        number: normalizedUpdated.number,
+        title: normalizedUpdated.title,
+        body: normalizedUpdated.description,
+        state: "open",
+        merged: false,
+        headRef: normalizedUpdated.headBranch,
+        baseRef: normalizedUpdated.baseBranch,
+        authorId: normalizedUpdated.authorId,
+      });
+
+      const dto = await buildPullRequestDtoFull(db, normalizedUpdated);
+
+      return c.json({ pull_request: dto });
+    },
+  )
+  .post("/repos/:repoId/pulls/:prNumber/close", async (c) => {
+    const user = c.get("user");
+    const repoId = c.req.param("repoId");
+    const prNumber = parseInt(c.req.param("prNumber"));
+
+    const repoAccess = await checkRepoAccess(c.env, repoId, user.id, [
+      "owner",
+      "admin",
+      "editor",
+    ]);
     if (!repoAccess) {
-      throw new NotFoundError('Repository');
+      throw new NotFoundError("Repository");
     }
 
     const found = await findPullRequest(c.env.DB, repoId, prNumber);
     if (!found) {
-      throw new NotFoundError('Pull request');
+      throw new NotFoundError("Pull request");
     }
     const { db, pullRequest } = found;
 
-    if (pullRequest.status !== 'open') {
-      throw new BadRequestError('Cannot update a closed or merged pull request');
-    }
-
-    const updateData: { title?: string; description?: string; updatedAt: string } = {
-      updatedAt: new Date().toISOString(),
-    };
-
-    if (body.title !== undefined && body.title.trim().length > 0) {
-      updateData.title = body.title.trim();
-    }
-
-    if (body.description !== undefined) {
-      updateData.description = body.description;
-    }
-
-    if (Object.keys(updateData).length === 1) {
-      throw new BadRequestError('No valid updates provided');
-    }
-
-    const updated = await db.update(pullRequests)
-      .set(updateData)
-      .where(eq(pullRequests.id, pullRequest.id))
-      .returning()
-      .get();
-    const normalizedUpdated = toPullRequestRecord(updated);
-
-    triggerPrEvent(c, repoAccess, user.id, {
-      action: 'edited',
-      number: normalizedUpdated.number,
-      title: normalizedUpdated.title,
-      body: normalizedUpdated.description,
-      state: 'open',
-      merged: false,
-      headRef: normalizedUpdated.headBranch,
-      baseRef: normalizedUpdated.baseBranch,
-      authorId: normalizedUpdated.authorId,
-    });
-
-    const dto = await buildPullRequestDtoFull(db, normalizedUpdated);
-
-    return c.json({ pull_request: dto });
-  })
-  .post('/repos/:repoId/pulls/:prNumber/close', async (c) => {
-    const user = c.get('user');
-    const repoId = c.req.param('repoId');
-    const prNumber = parseInt(c.req.param('prNumber'));
-
-    const repoAccess = await checkRepoAccess(c.env, repoId, user.id, ['owner', 'admin', 'editor']);
-    if (!repoAccess) {
-      throw new NotFoundError('Repository');
-    }
-
-    const found = await findPullRequest(c.env.DB, repoId, prNumber);
-    if (!found) {
-      throw new NotFoundError('Pull request');
-    }
-    const { db, pullRequest } = found;
-
-    if (pullRequest.status !== 'open') {
-      throw new BadRequestError('Pull request is already closed or merged');
+    if (pullRequest.status !== "open") {
+      throw new BadRequestError("Pull request is already closed or merged");
     }
 
     const updated = await db.update(pullRequests)
       .set({
-        status: 'closed',
+        status: "closed",
         updatedAt: new Date().toISOString(),
       })
       .where(eq(pullRequests.id, pullRequest.id))
@@ -288,11 +350,11 @@ export default new Hono<AuthenticatedRouteEnv>()
     const normalizedUpdated = toPullRequestRecord(updated);
 
     triggerPrEvent(c, repoAccess, user.id, {
-      action: 'closed',
+      action: "closed",
       number: normalizedUpdated.number,
       title: normalizedUpdated.title,
       body: normalizedUpdated.description,
-      state: 'closed',
+      state: "closed",
       merged: false,
       headRef: normalizedUpdated.headBranch,
       baseRef: normalizedUpdated.baseBranch,

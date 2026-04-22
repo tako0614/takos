@@ -39,13 +39,32 @@ export interface RunLifecycleDeps {
   sanitizeErrorMessage: (error: string) => string;
 }
 
+async function runBestEffortLifecycleTask(
+  name: string,
+  task: () => Promise<void>,
+): Promise<void> {
+  try {
+    await task();
+  } catch (error) {
+    logError(`${name} failed`, error, {
+      module: "services/agent/run-lifecycle",
+    });
+  }
+}
+
 export async function handleSuccessfulRunCompletion(
   deps: RunLifecycleDeps,
 ): Promise<void> {
-  await deps.enqueuePostRunJobs();
+  await runBestEffortLifecycleTask(
+    "Enqueue post-run jobs",
+    deps.enqueuePostRunJobs,
+  );
   // Auto-close session if still open after successful completion
   // Agent can still explicitly call container_commit/container_stop for control
-  await deps.autoCloseSession("completed");
+  await runBestEffortLifecycleTask(
+    "Auto-close session",
+    () => deps.autoCloseSession("completed"),
+  );
 }
 
 export async function handleCancelledRun(
@@ -56,8 +75,14 @@ export async function handleCancelledRun(
     "cancelled",
     deps.buildTerminalEventPayload("cancelled"),
   );
-  await deps.autoCloseSession("failed");
-  await deps.enqueuePostRunJobs();
+  await runBestEffortLifecycleTask(
+    "Auto-close session",
+    () => deps.autoCloseSession("failed"),
+  );
+  await runBestEffortLifecycleTask(
+    "Enqueue post-run jobs",
+    deps.enqueuePostRunJobs,
+  );
 }
 
 export async function handleFailedRun(
@@ -75,6 +100,12 @@ export async function handleFailedRun(
     "error",
     deps.buildTerminalEventPayload("failed", { error: errorMessage }),
   );
-  await deps.autoCloseSession("failed");
-  await deps.enqueuePostRunJobs();
+  await runBestEffortLifecycleTask(
+    "Auto-close session",
+    () => deps.autoCloseSession("failed"),
+  );
+  await runBestEffortLifecycleTask(
+    "Enqueue post-run jobs",
+    deps.enqueuePostRunJobs,
+  );
 }

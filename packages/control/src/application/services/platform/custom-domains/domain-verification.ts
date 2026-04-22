@@ -21,10 +21,10 @@ import type {
 import { getServiceForUser, requireServiceWriteAccess } from "./access.ts";
 import { verifyDNS } from "./dns.ts";
 import {
-  createCloudflareCustomHostname,
-  deleteCloudflareCustomHostname,
-  getCloudflareCustomHostnameStatus,
-} from "./cloudflare.ts";
+  createManagedCustomHostname,
+  deleteManagedCustomHostname,
+  getManagedCustomHostnameStatus,
+} from "./custom-hostname-provider.ts";
 import {
   getCanonicalCnameTargetForService,
   resolveRoutingTargetForServiceHostname,
@@ -130,12 +130,12 @@ export async function verifyCustomDomain(
     .set({ status: "dns_verified", updatedAt: new Date().toISOString() })
     .where(eq(serviceCustomDomains.id, domainId));
 
-  const cfResult = await createCloudflareCustomHostname(
+  const hostnameResult = await createManagedCustomHostname(
     env,
     customDomain.domain,
   );
 
-  if (!cfResult.success) {
+  if (!hostnameResult.success) {
     await db.update(serviceCustomDomains)
       .set({
         status: "ssl_failed",
@@ -148,25 +148,26 @@ export async function verifyCustomDomain(
       status: 500,
       body: {
         status: "ssl_failed",
-        message: cfResult.error || "Failed to configure SSL/TLS certificate",
+        message: hostnameResult.error ||
+          "Failed to configure SSL/TLS certificate",
         dns_verified: true,
         ssl_verified: false,
       },
     };
   }
 
-  const hasCustomHostname = !!cfResult.customHostnameId;
-  const initialStatus: DomainStatus = hasCustomHostname
+  const hasManagedHostname = !!hostnameResult.customHostnameId;
+  const initialStatus: DomainStatus = hasManagedHostname
     ? "ssl_pending"
     : "active";
-  const initialSslStatus = hasCustomHostname ? "pending" : "active";
+  const initialSslStatus = hasManagedHostname ? "pending" : "external";
 
   const nowTimestamp = new Date().toISOString();
   try {
     await db.update(serviceCustomDomains)
       .set({
         status: initialStatus,
-        cfCustomHostnameId: cfResult.customHostnameId || null,
+        cfCustomHostnameId: hostnameResult.customHostnameId || null,
         sslStatus: initialSslStatus,
         verifiedAt: nowTimestamp,
         updatedAt: nowTimestamp,
@@ -176,8 +177,8 @@ export async function verifyCustomDomain(
     logError("DB update failed", dbError, {
       module: "services/platform/custom-domains",
     });
-    if (cfResult.customHostnameId) {
-      await deleteCloudflareCustomHostname(env, cfResult.customHostnameId);
+    if (hostnameResult.customHostnameId) {
+      await deleteManagedCustomHostname(env, hostnameResult.customHostnameId);
     }
     return { status: 500, body: { error: "Failed to update domain status" } };
   }
@@ -212,8 +213,11 @@ export async function verifyCustomDomain(
           module: "services/platform/custom-domains",
         });
       }
-      if (cfResult.customHostnameId) {
-        await deleteCloudflareCustomHostname(env, cfResult.customHostnameId);
+      if (hostnameResult.customHostnameId) {
+        await deleteManagedCustomHostname(
+          env,
+          hostnameResult.customHostnameId,
+        );
       }
       return {
         status: 500,
@@ -222,7 +226,7 @@ export async function verifyCustomDomain(
     }
   }
 
-  if (hasCustomHostname) {
+  if (hasManagedHostname) {
     return {
       status: 200,
       body: {
@@ -241,11 +245,12 @@ export async function verifyCustomDomain(
     status: 200,
     body: {
       status: "active",
-      message: "Domain verified and activated successfully",
+      message:
+        "Domain verified and activated. TLS is handled by the operator-managed ingress for this backend.",
       dns_verified: true,
-      ssl_verified: true,
+      ssl_verified: false,
       verified_at: new Date().toISOString(),
-      ssl_status: "active",
+      ssl_status: "external",
     },
   };
 }
@@ -277,13 +282,13 @@ export async function getCustomDomainDetails(
   let domainStatus = customDomain.status;
 
   if (customDomain.cfCustomHostnameId && customDomain.sslStatus === "pending") {
-    const cfStatus = await getCloudflareCustomHostnameStatus(
+    const hostnameStatus = await getManagedCustomHostnameStatus(
       env,
       customDomain.cfCustomHostnameId,
     );
 
-    if (cfStatus) {
-      if (cfStatus.sslStatus === "active") {
+    if (hostnameStatus) {
+      if (hostnameStatus.sslStatus === "active") {
         sslStatus = "active";
         domainStatus = "active";
         await db.update(serviceCustomDomains)
@@ -295,10 +300,12 @@ export async function getCustomDomainDetails(
           .where(eq(serviceCustomDomains.id, domainId));
       } else if (
         ["pending_validation", "pending_issuance", "pending_deployment"]
-          .includes(cfStatus.sslStatus)
+          .includes(hostnameStatus.sslStatus)
       ) {
         sslStatus = "pending";
-      } else if (SSL_TERMINAL_FAILURE_STATUSES.includes(cfStatus.sslStatus)) {
+      } else if (
+        SSL_TERMINAL_FAILURE_STATUSES.includes(hostnameStatus.sslStatus)
+      ) {
         sslStatus = "failed";
         domainStatus = "ssl_failed";
         await db.update(serviceCustomDomains)
@@ -369,12 +376,12 @@ export async function refreshSslStatus(
     };
   }
 
-  const cfStatus = await getCloudflareCustomHostnameStatus(
+  const hostnameStatus = await getManagedCustomHostnameStatus(
     env,
     customDomain.cfCustomHostnameId,
   );
 
-  if (!cfStatus) {
+  if (!hostnameStatus) {
     return {
       status: customDomain.status,
       ssl_status: customDomain.sslStatus,
@@ -384,10 +391,12 @@ export async function refreshSslStatus(
   let newSslStatus: string;
   let newDomainStatus: string;
 
-  if (cfStatus.sslStatus === "active") {
+  if (hostnameStatus.sslStatus === "active") {
     newSslStatus = "active";
     newDomainStatus = "active";
-  } else if (SSL_TERMINAL_FAILURE_STATUSES.includes(cfStatus.sslStatus)) {
+  } else if (
+    SSL_TERMINAL_FAILURE_STATUSES.includes(hostnameStatus.sslStatus)
+  ) {
     newSslStatus = "failed";
     newDomainStatus = "ssl_failed";
   } else {
@@ -411,6 +420,6 @@ export async function refreshSslStatus(
   return {
     status: newDomainStatus,
     ssl_status: newSslStatus,
-    hostname_status: cfStatus.status,
+    hostname_status: hostnameStatus.status,
   };
 }

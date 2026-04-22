@@ -126,12 +126,7 @@ const selectStyle: JSX.CSSProperties = {
   padding: "0.5rem 0.75rem",
 };
 
-function MetadataInput({
-  label,
-  value,
-  onChange,
-  placeholder,
-}: {
+function MetadataInput(props: {
   label: string;
   value: string;
   onChange: (value: string) => void;
@@ -146,28 +141,19 @@ function MetadataInput({
           color: "var(--color-text-secondary)",
         }}
       >
-        {label}
+        {props.label}
       </label>
       <Input
-        value={value}
+        value={props.value}
         onInput={(e) =>
-          onChange(e.target.value)}
-        placeholder={placeholder}
+          props.onChange(e.currentTarget.value)}
+        placeholder={props.placeholder}
       />
     </div>
   );
 }
 
-export function SkillFormView({
-  form,
-  setForm,
-  isEditing,
-  saving,
-  error,
-  fieldErrors,
-  onSubmit,
-  onClose,
-}: {
+export function SkillFormView(props: {
   form: SkillFormData;
   setForm: (form: SkillFormData) => void;
   isEditing: boolean;
@@ -183,13 +169,13 @@ export function SkillFormView({
     key: K,
     value: SkillFormData[K],
   ) => {
-    setForm({ ...form, [key]: value });
+    props.setForm({ ...props.form, [key]: value });
   };
 
   return (
     <form
       style={{ display: "flex", "flex-direction": "column", gap: "1rem" }}
-      onSubmit={onSubmit}
+      onSubmit={props.onSubmit}
     >
       <div
         style={{
@@ -199,7 +185,7 @@ export function SkillFormView({
           "margin-bottom": "0.5rem",
         }}
       >
-        <Button type="button" variant="ghost" size="sm" onClick={onClose}>
+        <Button type="button" variant="ghost" size="sm" onClick={props.onClose}>
           <Icons.ArrowLeft />
         </Button>
         <h4
@@ -210,7 +196,7 @@ export function SkillFormView({
             margin: 0,
           }}
         >
-          {isEditing ? t("editSkill") : t("createSkill")}
+          {props.isEditing ? t("editSkill") : t("createSkill")}
         </h4>
       </div>
       <div
@@ -227,8 +213,8 @@ export function SkillFormView({
         </label>
         <Input
           placeholder={t("skillNamePlaceholder")}
-          value={form.name}
-          onInput={(e) => updateField("name", e.target.value)}
+          value={props.form.name}
+          onInput={(e) => updateField("name", e.currentTarget.value)}
           autofocus
           required
         />
@@ -247,8 +233,8 @@ export function SkillFormView({
         </label>
         <Input
           placeholder={t("skillDescriptionPlaceholder")}
-          value={form.description}
-          onInput={(e) => updateField("description", e.target.value)}
+          value={props.form.description}
+          onInput={(e) => updateField("description", e.currentTarget.value)}
         />
       </div>
       <div
@@ -265,8 +251,8 @@ export function SkillFormView({
         </label>
         <Textarea
           placeholder={t("skillInstructionsPlaceholder")}
-          value={form.instructions}
-          onInput={(e) => updateField("instructions", e.target.value)}
+          value={props.form.instructions}
+          onInput={(e) => updateField("instructions", e.currentTarget.value)}
           required
           rows={8}
           style={{ "min-height": "200px" }}
@@ -286,8 +272,8 @@ export function SkillFormView({
         </label>
         <Input
           placeholder={t("skillTriggersPlaceholder")}
-          value={form.triggers}
-          onInput={(e) => updateField("triggers", e.target.value)}
+          value={props.form.triggers}
+          onInput={(e) => updateField("triggers", e.currentTarget.value)}
         />
         <span
           style={{
@@ -318,8 +304,8 @@ export function SkillFormView({
             Locale
           </label>
           <select
-            value={form.skillLocale}
-            onChange={(e) => updateField("skillLocale", e.target.value)}
+            value={props.form.skillLocale}
+            onChange={(e) => updateField("skillLocale", e.currentTarget.value)}
             style={selectStyle}
           >
             <option value="">auto</option>
@@ -340,8 +326,8 @@ export function SkillFormView({
             Category
           </label>
           <select
-            value={form.category}
-            onChange={(e) => updateField("category", e.target.value)}
+            value={props.form.category}
+            onChange={(e) => updateField("category", e.currentTarget.value)}
             style={selectStyle}
           >
             <option value="">unspecified</option>
@@ -362,42 +348,42 @@ export function SkillFormView({
       >
         <MetadataInput
           label="Activation Tags"
-          value={form.activationTags}
+          value={props.form.activationTags}
           onChange={(v) => updateField("activationTags", v)}
           placeholder="slides, narrative"
         />
         <MetadataInput
           label="Preferred Tools"
-          value={form.preferredTools}
+          value={props.form.preferredTools}
           onChange={(v) => updateField("preferredTools", v)}
           placeholder="create_artifact, space_files_write"
         />
         <MetadataInput
           label="Durable Outputs"
-          value={form.durableOutputs}
+          value={props.form.durableOutputs}
           onChange={(v) => updateField("durableOutputs", v)}
           placeholder="artifact, workspace_file"
         />
         <MetadataInput
           label="Output Modes"
-          value={form.outputModes}
+          value={props.form.outputModes}
           onChange={(v) => updateField("outputModes", v)}
           placeholder="chat, artifact"
         />
         <MetadataInput
           label="Required MCP Servers"
-          value={form.requiredMcpServers}
+          value={props.form.requiredMcpServers}
           onChange={(v) => updateField("requiredMcpServers", v)}
           placeholder="figma, notion"
         />
         <MetadataInput
           label="Template IDs"
-          value={form.templateIds}
+          value={props.form.templateIds}
           onChange={(v) => updateField("templateIds", v)}
           placeholder="slides-outline, speaker-notes"
         />
       </div>
-      {Object.keys(fieldErrors).length > 0
+      {Object.keys(props.fieldErrors).length > 0
         ? (
           <div
             style={{
@@ -408,15 +394,15 @@ export function SkillFormView({
               color: "var(--color-error)",
             }}
           >
-            {Object.entries(fieldErrors).map(([field, message]) => (
+            {Object.entries(props.fieldErrors).map(([field, message]) => (
               <span>{field}: {message}</span>
             ))}
           </div>
         )
         : null}
-      {error && (
+      {props.error && (
         <div style={{ color: "var(--color-error)", "font-size": "0.875rem" }}>
-          {error}
+          {props.error}
         </div>
       )}
       <div
@@ -427,14 +413,15 @@ export function SkillFormView({
           "margin-top": "1rem",
         }}
       >
-        <Button type="button" variant="secondary" onClick={onClose}>
+        <Button type="button" variant="secondary" onClick={props.onClose}>
           {t("cancel")}
         </Button>
         <Button
           type="submit"
           variant="primary"
-          isLoading={saving}
-          disabled={!form.name.trim() || !form.instructions.trim()}
+          isLoading={props.saving}
+          disabled={!props.form.name.trim() ||
+            !props.form.instructions.trim()}
         >
           {t("save")}
         </Button>

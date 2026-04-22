@@ -129,29 +129,49 @@ export function RepoDetail(props: RepoDetailProps) {
     status: "idle",
     content: null,
   });
+  let readmeSeq = 0;
+  let branchesSeq = 0;
 
   const isAuthenticated = () => props.isAuthenticated ?? true;
 
   const fetchReadme = async () => {
+    const repoId = props.repo.id;
+    const branch = currentBranch();
+    const seq = ++readmeSeq;
     setReadmeState((prev) => ({ status: "loading", content: prev.content }));
     try {
       const content = await resolveReadmeContent(
-        props.repo.id,
-        currentBranch(),
+        repoId,
+        branch,
       );
+      if (
+        seq !== readmeSeq || repoId !== props.repo.id ||
+        branch !== currentBranch()
+      ) {
+        return;
+      }
       setReadmeState({ status: "done", content });
     } catch {
+      if (
+        seq !== readmeSeq || repoId !== props.repo.id ||
+        branch !== currentBranch()
+      ) {
+        return;
+      }
       setReadmeState({ status: "done", content: null });
     }
   };
 
   const fetchBranches = async () => {
+    const repoId = props.repo.id;
+    const seq = ++branchesSeq;
     try {
       const res = await rpc.repos[":repoId"].branches.$get({
-        param: { repoId: props.repo.id },
+        param: { repoId },
         query: {},
       });
       const data = await rpcJson<{ branches?: Branch[] }>(res);
+      if (seq !== branchesSeq || repoId !== props.repo.id) return;
       setBranches(data.branches || []);
     } catch {
       // Branch fetch is optional, silently ignore errors

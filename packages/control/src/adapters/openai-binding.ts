@@ -12,13 +12,23 @@
 // cloudflare-compat is not necessary; we just conform to the subset that
 // EmbeddingsService calls.
 
-import { logWarn } from '../shared/utils/logger.ts';
+import { logWarn } from "../shared/utils/logger.ts";
 
-const MODEL_MAP: Record<string, { openAiModel: string; dimensions?: number }> = {
-  '@cf/baai/bge-base-en-v1.5': { openAiModel: 'text-embedding-3-small', dimensions: 768 },
-  '@cf/baai/bge-small-en-v1.5': { openAiModel: 'text-embedding-3-small', dimensions: 384 },
-  '@cf/baai/bge-large-en-v1.5': { openAiModel: 'text-embedding-3-large', dimensions: 1024 },
-};
+const MODEL_MAP: Record<string, { openAiModel: string; dimensions?: number }> =
+  {
+    "@cf/baai/bge-base-en-v1.5": {
+      openAiModel: "text-embedding-3-small",
+      dimensions: 768,
+    },
+    "@cf/baai/bge-small-en-v1.5": {
+      openAiModel: "text-embedding-3-small",
+      dimensions: 384,
+    },
+    "@cf/baai/bge-large-en-v1.5": {
+      openAiModel: "text-embedding-3-large",
+      dimensions: 1024,
+    },
+  };
 
 export type OpenAiAiBindingConfig = {
   apiKey: string;
@@ -38,7 +48,8 @@ interface EmbeddingOutput {
  * used by `EmbeddingsService`, delegating to OpenAI's embedding endpoint.
  */
 export function createOpenAiAiBinding(config: OpenAiAiBindingConfig) {
-  const baseUrl = config.baseUrl?.replace(/\/+$/, '') ?? 'https://api.openai.com/v1';
+  const baseUrl = config.baseUrl?.replace(/\/+$/, "") ??
+    "https://api.openai.com/v1";
 
   return {
     async run(model: string, inputs: EmbeddingInput): Promise<EmbeddingOutput> {
@@ -46,14 +57,14 @@ export function createOpenAiAiBinding(config: OpenAiAiBindingConfig) {
       if (!mapping) {
         throw new Error(
           `OpenAI Ai adapter: unsupported model "${model}". ` +
-          `Supported: ${Object.keys(MODEL_MAP).join(', ')}`,
+            `Supported: ${Object.keys(MODEL_MAP).join(", ")}`,
         );
       }
 
       const response = await fetch(`${baseUrl}/embeddings`, {
-        method: 'POST',
+        method: "POST",
         headers: {
-          'Content-Type': 'application/json',
+          "Content-Type": "application/json",
           Authorization: `Bearer ${config.apiKey}`,
         },
         body: JSON.stringify({
@@ -64,9 +75,17 @@ export function createOpenAiAiBinding(config: OpenAiAiBindingConfig) {
       });
 
       if (!response.ok) {
-        const body = await response.text().catch((e) => { logWarn('Failed to read OpenAI error response body', { module: 'openai-binding', error: String(e) }); return ''; });
+        const body = await response.text().catch((e) => {
+          logWarn("Failed to read OpenAI error response body", {
+            module: "openai-binding",
+            error: String(e),
+          });
+          return "";
+        });
         throw new Error(
-          `OpenAI embeddings API error (${response.status}): ${body.slice(0, 500)}`,
+          `OpenAI embeddings API error (${response.status}): ${
+            body.slice(0, 500)
+          }`,
         );
       }
 

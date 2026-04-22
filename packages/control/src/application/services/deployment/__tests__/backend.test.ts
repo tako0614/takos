@@ -1,9 +1,14 @@
-import { assertEquals, assertObjectMatch } from "jsr:@std/assert";
+import {
+  assertEquals,
+  assertObjectMatch,
+  assertRejects,
+} from "jsr:@std/assert";
 import { spy } from "jsr:@std/testing/mock";
 
 import {
   createDeploymentBackend,
   createOciDeploymentBackend,
+  createWorkersDispatchDeploymentBackend,
 } from "../backend.ts";
 import type { Deployment } from "../models.ts";
 
@@ -147,4 +152,320 @@ Deno.test("createDeploymentBackend treats legacy cloudflare deployment rows as w
   );
 
   assertEquals(backend.name, "workers-dispatch");
+});
+
+Deno.test("workers-dispatch backend upserts declared queue consumers", async () => {
+  const workerCalls: unknown[] = [];
+  const queueCalls: unknown[] = [];
+  const backend = createWorkersDispatchDeploymentBackend({
+    workers: {
+      createWorker(options: unknown) {
+        workerCalls.push(options);
+        return Promise.resolve();
+      },
+    },
+    queues: {
+      upsertQueueConsumerByQueueName(queueName: string, input: unknown) {
+        queueCalls.push({ queueName, input });
+        return Promise.resolve({ id: "consumer-1", queueName });
+      },
+      deleteQueueConsumerByQueueName(queueName: string, input: unknown) {
+        queueCalls.push({ queueName, input, action: "delete" });
+        return Promise.resolve(1);
+      },
+    },
+  } as never);
+
+  const deployment = {
+    id: "dep-1",
+    space_id: "space-1",
+    target_json: JSON.stringify({
+      queue_consumers: [{
+        binding: "DELIVERY_QUEUE",
+        dead_letter_queue: "DELIVERY_DLQ",
+        settings: {
+          batch_size: 10,
+          max_retries: 3,
+        },
+      }],
+    }),
+  } as Deployment;
+
+  const runtime = {
+    profile: "workers" as const,
+    bindings: [
+      {
+        type: "queue" as const,
+        name: "DELIVERY_QUEUE",
+        queue_name: "yurucommu-delivery",
+      },
+      {
+        type: "queue" as const,
+        name: "DELIVERY_DLQ",
+        queue_name: "yurucommu-delivery-dlq",
+      },
+    ],
+  };
+
+  await backend.deploy({
+    deployment,
+    artifactRef: "app-web-v1",
+    bundleContent: "export default {}",
+    wasmContent: null,
+    runtime,
+  });
+
+  assertEquals(workerCalls.length, 1);
+  assertEquals(queueCalls, []);
+
+  await backend.syncQueueConsumers?.({
+    deployment,
+    artifactRef: "app-web-v1",
+    runtime,
+  });
+
+  assertEquals(queueCalls, [{
+    queueName: "yurucommu-delivery",
+    input: {
+      scriptName: "app-web-v1",
+      deadLetterQueue: "yurucommu-delivery-dlq",
+      settings: {
+        batch_size: 10,
+        max_retries: 3,
+      },
+    },
+  }]);
+});
+
+Deno.test("workers-dispatch backend deletes stale queue consumers during sync", async () => {
+  const queueCalls: unknown[] = [];
+  const backend = createWorkersDispatchDeploymentBackend({
+    workers: {
+      createWorker() {
+        return Promise.resolve();
+      },
+    },
+    queues: {
+      upsertQueueConsumerByQueueName(queueName: string, input: unknown) {
+        queueCalls.push({ action: "upsert", queueName, input });
+        return Promise.resolve({ id: "consumer-2", queueName });
+      },
+      deleteQueueConsumerByQueueName(queueName: string, input: unknown) {
+        queueCalls.push({ action: "delete", queueName, input });
+        return Promise.resolve(1);
+      },
+    },
+  } as never);
+
+  await backend.syncQueueConsumers?.({
+    deployment: {
+      id: "dep-2",
+      space_id: "space-1",
+      target_json: JSON.stringify({
+        queue_consumers: [{
+          binding: "NEW_QUEUE",
+        }],
+      }),
+    } as Deployment,
+    artifactRef: "app-web-v2",
+    runtime: {
+      profile: "workers",
+      bindings: [{
+        type: "queue",
+        name: "NEW_QUEUE",
+        queue_name: "new-delivery",
+      }],
+    },
+    previousDeployment: {
+      id: "dep-1",
+      space_id: "space-1",
+      artifact_ref: "app-web-v1",
+      target_json: JSON.stringify({
+        queue_consumers: [{
+          binding: "OLD_QUEUE",
+        }],
+      }),
+    } as Deployment,
+    previousRuntime: {
+      profile: "workers",
+      bindings: [{
+        type: "queue",
+        name: "OLD_QUEUE",
+        queue_name: "old-delivery",
+      }],
+    },
+  });
+
+  assertEquals(queueCalls, [
+    {
+      action: "upsert",
+      queueName: "new-delivery",
+      input: { scriptName: "app-web-v2" },
+    },
+    {
+      action: "delete",
+      queueName: "old-delivery",
+      input: { scriptName: "app-web-v1" },
+    },
+  ]);
+});
+
+Deno.test("workers-dispatch backend replaces previous queue consumer explicitly", async () => {
+  const queueCalls: unknown[] = [];
+  const backend = createWorkersDispatchDeploymentBackend({
+    workers: {
+      createWorker() {
+        return Promise.resolve();
+      },
+    },
+    queues: {
+      upsertQueueConsumerByQueueName(queueName: string, input: unknown) {
+        queueCalls.push({ action: "upsert", queueName, input });
+        return Promise.resolve({ id: "consumer-2", queueName });
+      },
+      deleteQueueConsumerByQueueName(queueName: string, input: unknown) {
+        queueCalls.push({ action: "delete", queueName, input });
+        return Promise.resolve(1);
+      },
+    },
+  } as never);
+
+  await backend.syncQueueConsumers?.({
+    deployment: {
+      id: "dep-2",
+      space_id: "space-1",
+      target_json: JSON.stringify({
+        queue_consumers: [{ binding: "DELIVERY_QUEUE" }],
+      }),
+    } as Deployment,
+    artifactRef: "app-web-v2",
+    runtime: {
+      profile: "workers",
+      bindings: [{
+        type: "queue",
+        name: "DELIVERY_QUEUE",
+        queue_name: "delivery",
+      }],
+    },
+    previousDeployment: {
+      id: "dep-1",
+      space_id: "space-1",
+      artifact_ref: "app-web-v1",
+      target_json: JSON.stringify({
+        queue_consumers: [{ binding: "DELIVERY_QUEUE" }],
+      }),
+    } as Deployment,
+    previousRuntime: {
+      profile: "workers",
+      bindings: [{
+        type: "queue",
+        name: "DELIVERY_QUEUE",
+        queue_name: "delivery",
+      }],
+    },
+  });
+
+  assertEquals(queueCalls, [
+    {
+      action: "upsert",
+      queueName: "delivery",
+      input: {
+        scriptName: "app-web-v2",
+        replaceScriptName: "app-web-v1",
+      },
+    },
+    {
+      action: "delete",
+      queueName: "delivery",
+      input: { scriptName: "app-web-v1" },
+    },
+  ]);
+});
+
+Deno.test("workers-dispatch backend restores previous queue consumers after sync failure", async () => {
+  const queueCalls: unknown[] = [];
+  const backend = createWorkersDispatchDeploymentBackend({
+    workers: {
+      createWorker() {
+        return Promise.resolve();
+      },
+    },
+    queues: {
+      upsertQueueConsumerByQueueName(queueName: string, input: unknown) {
+        queueCalls.push({ action: "upsert", queueName, input });
+        return Promise.resolve({ id: "consumer-2", queueName });
+      },
+      deleteQueueConsumerByQueueName(queueName: string, input: unknown) {
+        queueCalls.push({ action: "delete", queueName, input });
+        if (queueName === "old-delivery") {
+          return Promise.reject(new Error("delete failed"));
+        }
+        return Promise.resolve(1);
+      },
+    },
+  } as never);
+
+  await assertRejects(
+    async () => {
+      await backend.syncQueueConsumers!({
+        deployment: {
+          id: "dep-2",
+          space_id: "space-1",
+          target_json: JSON.stringify({
+            queue_consumers: [{ binding: "NEW_QUEUE" }],
+          }),
+        } as Deployment,
+        artifactRef: "app-web-v2",
+        runtime: {
+          profile: "workers",
+          bindings: [{
+            type: "queue",
+            name: "NEW_QUEUE",
+            queue_name: "new-delivery",
+          }],
+        },
+        previousDeployment: {
+          id: "dep-1",
+          space_id: "space-1",
+          artifact_ref: "app-web-v1",
+          target_json: JSON.stringify({
+            queue_consumers: [{ binding: "OLD_QUEUE" }],
+          }),
+        } as Deployment,
+        previousRuntime: {
+          profile: "workers",
+          bindings: [{
+            type: "queue",
+            name: "OLD_QUEUE",
+            queue_name: "old-delivery",
+          }],
+        },
+      });
+    },
+    Error,
+    "delete failed",
+  );
+
+  assertEquals(queueCalls, [
+    {
+      action: "upsert",
+      queueName: "new-delivery",
+      input: { scriptName: "app-web-v2" },
+    },
+    {
+      action: "delete",
+      queueName: "old-delivery",
+      input: { scriptName: "app-web-v1" },
+    },
+    {
+      action: "upsert",
+      queueName: "old-delivery",
+      input: { scriptName: "app-web-v1" },
+    },
+    {
+      action: "delete",
+      queueName: "new-delivery",
+      input: { scriptName: "app-web-v2" },
+    },
+  ]);
 });

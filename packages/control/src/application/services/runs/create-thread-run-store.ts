@@ -1,17 +1,22 @@
-import type { D1Database } from '../../../shared/types/bindings.ts';
-import type { Run } from '../../../shared/types/index.ts';
-import { getDb, runs, accountMemberships, accounts } from '../../../infra/db/index.ts';
-import { eq, and, gt, inArray, count, isNull, isNotNull } from 'drizzle-orm';
-import { resolveActorPrincipalId } from '../identity/principals.ts';
-import { isInvalidArrayBufferError } from '../../../shared/utils/db-guards.ts';
+import type { D1Database } from "../../../shared/types/bindings.ts";
+import type { Run } from "../../../shared/types/index.ts";
+import {
+  accountMemberships,
+  accounts,
+  getDb,
+  runs,
+} from "../../../infra/db/index.ts";
+import { and, count, eq, gt, inArray, isNotNull, isNull } from "drizzle-orm";
+import { resolveActorPrincipalId } from "../identity/principals.ts";
+import { isInvalidArrayBufferError } from "../../../shared/utils/db-guards.ts";
 import {
   asRunRow,
-  runRowToApi,
   type D1CountRow,
   type RunHierarchyNode,
+  runRowToApi,
   type SpaceModelLookup,
-} from './run-serialization.ts';
-import { logError, logWarn } from '../../../shared/utils/logger.ts';
+} from "./run-serialization.ts";
+import { logError, logWarn } from "../../../shared/utils/logger.ts";
 
 const TOP_LEVEL_RUN_RATE_LIMIT = {
   maxRunsPerMinute: 30,
@@ -41,7 +46,7 @@ type CreatePendingRunParams = {
 
 type UpdateRunStatusParams = {
   runId: string;
-  status: 'queued' | 'failed';
+  status: "queued" | "failed";
   error: string | null;
 };
 
@@ -50,7 +55,7 @@ export type RunRateLimitResult = {
   reason?: string;
 };
 
-type RunRateLimitKind = 'top_level' | 'child';
+type RunRateLimitKind = "top_level" | "child";
 
 async function withDrizzleInvalidArrayBufferFallback<T>(
   description: string,
@@ -64,7 +69,10 @@ async function withDrizzleInvalidArrayBufferFallback<T>(
       throw error;
     }
 
-    logWarn(`Falling back to D1 for ${description} after invalid array buffer error`, { module: 'services/runs/create-thread-run-store' });
+    logWarn(
+      `Falling back to D1 for ${description} after invalid array buffer error`,
+      { module: "services/runs/create-thread-run-store" },
+    );
     return fallbackOp();
   }
 }
@@ -81,12 +89,15 @@ async function checkRunRateLimitsFallback(
   kind: RunRateLimitKind,
 ): Promise<RunRateLimitResult> {
   try {
-    const rateLimit = kind === 'child' ? CHILD_RUN_RATE_LIMIT : TOP_LEVEL_RUN_RATE_LIMIT;
-    const parentPredicate = kind === 'child' ? 'IS NOT NULL' : 'IS NULL';
+    const rateLimit = kind === "child"
+      ? CHILD_RUN_RATE_LIMIT
+      : TOP_LEVEL_RUN_RATE_LIMIT;
+    const parentPredicate = kind === "child" ? "IS NOT NULL" : "IS NULL";
     const oneMinuteAgo = new Date(Date.now() - 60 * 1000).toISOString();
     const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000).toISOString();
 
-    const minuteCount = readCount(await db.prepare(`
+    const minuteCount = readCount(
+      await db.prepare(`
       SELECT COUNT(*) AS count
       FROM runs
       WHERE account_id IN (
@@ -96,18 +107,20 @@ async function checkRunRateLimitsFallback(
       )
       AND parent_run_id ${parentPredicate}
       AND created_at > ?
-    `).bind(actorId, oneMinuteAgo).first<D1CountRow>());
+    `).bind(actorId, oneMinuteAgo).first<D1CountRow>(),
+    );
 
     if (minuteCount >= rateLimit.maxRunsPerMinute) {
       return {
         allowed: false,
-        reason: kind === 'child'
+        reason: kind === "child"
           ? `Child run rate limit exceeded: max ${rateLimit.maxRunsPerMinute} child runs per minute`
           : `Rate limit exceeded: max ${rateLimit.maxRunsPerMinute} runs per minute`,
       };
     }
 
-    const hourCount = readCount(await db.prepare(`
+    const hourCount = readCount(
+      await db.prepare(`
       SELECT COUNT(*) AS count
       FROM runs
       WHERE account_id IN (
@@ -117,29 +130,32 @@ async function checkRunRateLimitsFallback(
       )
       AND parent_run_id ${parentPredicate}
       AND created_at > ?
-    `).bind(actorId, oneHourAgo).first<D1CountRow>());
+    `).bind(actorId, oneHourAgo).first<D1CountRow>(),
+    );
 
     if (hourCount >= rateLimit.maxRunsPerHour) {
       return {
         allowed: false,
-        reason: kind === 'child'
+        reason: kind === "child"
           ? `Child run rate limit exceeded: max ${rateLimit.maxRunsPerHour} child runs per hour`
           : `Rate limit exceeded: max ${rateLimit.maxRunsPerHour} runs per hour`,
       };
     }
 
-    const concurrentCount = readCount(await db.prepare(`
+    const concurrentCount = readCount(
+      await db.prepare(`
       SELECT COUNT(*) AS count
       FROM runs
       WHERE account_id = ?
       AND parent_run_id ${parentPredicate}
       AND status IN ('queued', 'running')
-    `).bind(spaceId).first<D1CountRow>());
+    `).bind(spaceId).first<D1CountRow>(),
+    );
 
     if (concurrentCount >= rateLimit.maxConcurrentRuns) {
       return {
         allowed: false,
-        reason: kind === 'child'
+        reason: kind === "child"
           ? `Too many concurrent child runs: max ${rateLimit.maxConcurrentRuns} per workspace`
           : `Too many concurrent runs: max ${rateLimit.maxConcurrentRuns} per workspace`,
       };
@@ -147,7 +163,11 @@ async function checkRunRateLimitsFallback(
 
     return { allowed: true };
   } catch (fallbackError) {
-    logError('Failed D1 fallback run rate limit lookup after error', fallbackError, { module: 'services/runs/create-thread-run-store' });
+    logError(
+      "Failed D1 fallback run rate limit lookup after error",
+      fallbackError,
+      { module: "services/runs/create-thread-run-store" },
+    );
     return { allowed: true };
   }
 }
@@ -189,7 +209,7 @@ export async function getRunHierarchyNode(
 ): Promise<RunHierarchyNode | null> {
   const db = getDb(dbBinding);
   return withDrizzleInvalidArrayBufferFallback(
-    'parent run lookup',
+    "parent run lookup",
     async () => {
       const row = await db.select({
         id: runs.id,
@@ -244,7 +264,7 @@ export async function getSpaceModel(
 ): Promise<SpaceModelLookup | null> {
   const db = getDb(dbBinding);
   return withDrizzleInvalidArrayBufferFallback(
-    'space model lookup',
+    "space model lookup",
     async () => {
       const row = await db.select({ aiModel: accounts.aiModel })
         .from(accounts)
@@ -300,7 +320,7 @@ export async function getRunResponse(
 ): Promise<Run | null> {
   const db = getDb(dbBinding);
   return withDrizzleInvalidArrayBufferFallback(
-    'run readback lookup',
+    "run readback lookup",
     async () => {
       const row = await db.select().from(runs)
         .where(eq(runs.id, runId))
@@ -374,7 +394,7 @@ export async function createPendingRun(
 ): Promise<void> {
   const db = getDb(dbBinding);
   return withDrizzleInvalidArrayBufferFallback(
-    'run create',
+    "run create",
     async () => {
       await db.insert(runs).values({
         id: params.runId,
@@ -387,9 +407,9 @@ export async function createPendingRun(
         rootThreadId: params.rootThreadId,
         rootRunId: params.rootRunId,
         agentType: params.agentType,
-        status: 'pending',
+        status: "pending",
         input: params.input,
-        usage: '{}',
+        usage: "{}",
         createdAt: params.createdAt,
       });
     },
@@ -414,7 +434,7 @@ export async function updateRunStatus(
 ): Promise<void> {
   const db = getDb(dbBinding);
   return withDrizzleInvalidArrayBufferFallback(
-    'run status update',
+    "run status update",
     async () => {
       await db.update(runs)
         .set({
@@ -436,13 +456,19 @@ export async function checkRunRateLimits(
   },
 ): Promise<RunRateLimitResult> {
   const db = getDb(dbBinding);
-  const kind: RunRateLimitKind = options?.isChildRun ? 'child' : 'top_level';
-  const rateLimit = kind === 'child' ? CHILD_RUN_RATE_LIMIT : TOP_LEVEL_RUN_RATE_LIMIT;
-  const parentCondition = kind === 'child' ? isNotNull(runs.parentRunId) : isNull(runs.parentRunId);
+  const kind: RunRateLimitKind = options?.isChildRun ? "child" : "top_level";
+  const rateLimit = kind === "child"
+    ? CHILD_RUN_RATE_LIMIT
+    : TOP_LEVEL_RUN_RATE_LIMIT;
+  const parentCondition = kind === "child"
+    ? isNotNull(runs.parentRunId)
+    : isNull(runs.parentRunId);
   const oneMinuteAgo = new Date(Date.now() - 60 * 1000).toISOString();
   const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000).toISOString();
   try {
-    let userSpaces = await db.select({ accountId: accountMemberships.accountId })
+    let userSpaces = await db.select({
+      accountId: accountMemberships.accountId,
+    })
       .from(accountMemberships)
       .where(eq(accountMemberships.memberId, actorId))
       .all();
@@ -450,7 +476,9 @@ export async function checkRunRateLimits(
     if (userSpaces.length === 0) {
       const principalId = await resolveActorPrincipalId(dbBinding, actorId);
       if (principalId && principalId !== actorId) {
-        userSpaces = await db.select({ accountId: accountMemberships.accountId })
+        userSpaces = await db.select({
+          accountId: accountMemberships.accountId,
+        })
           .from(accountMemberships)
           .where(eq(accountMemberships.memberId, principalId))
           .all();
@@ -475,7 +503,7 @@ export async function checkRunRateLimits(
     if (minuteCount >= rateLimit.maxRunsPerMinute) {
       return {
         allowed: false,
-        reason: kind === 'child'
+        reason: kind === "child"
           ? `Child run rate limit exceeded: max ${rateLimit.maxRunsPerMinute} child runs per minute`
           : `Rate limit exceeded: max ${rateLimit.maxRunsPerMinute} runs per minute`,
       };
@@ -493,7 +521,7 @@ export async function checkRunRateLimits(
     if (hourCount >= rateLimit.maxRunsPerHour) {
       return {
         allowed: false,
-        reason: kind === 'child'
+        reason: kind === "child"
           ? `Child run rate limit exceeded: max ${rateLimit.maxRunsPerHour} child runs per hour`
           : `Rate limit exceeded: max ${rateLimit.maxRunsPerHour} runs per hour`,
       };
@@ -503,7 +531,7 @@ export async function checkRunRateLimits(
       .where(and(
         eq(runs.accountId, spaceId),
         parentCondition,
-        inArray(runs.status, ['queued', 'running']),
+        inArray(runs.status, ["queued", "running"]),
       ))
       .get();
     const concurrentCount = concurrentResult?.count ?? 0;
@@ -511,7 +539,7 @@ export async function checkRunRateLimits(
     if (concurrentCount >= rateLimit.maxConcurrentRuns) {
       return {
         allowed: false,
-        reason: kind === 'child'
+        reason: kind === "child"
           ? `Too many concurrent child runs: max ${rateLimit.maxConcurrentRuns} per workspace`
           : `Too many concurrent runs: max ${rateLimit.maxConcurrentRuns} per workspace`,
       };

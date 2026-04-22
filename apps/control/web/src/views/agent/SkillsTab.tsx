@@ -1,4 +1,4 @@
-import { createEffect, createSignal } from "solid-js";
+import { createEffect, createSignal, Show } from "solid-js";
 import { useI18n } from "../../store/i18n.ts";
 import { useToast } from "../../store/toast.ts";
 import { useConfirmDialog } from "../../store/confirm-dialog.ts";
@@ -16,7 +16,7 @@ import {
   splitCsv,
 } from "./SkillForm.tsx";
 
-export function SkillsTab({ spaceId }: { spaceId: string }) {
+export function SkillsTab(props: { spaceId: string }) {
   const { t } = useI18n();
   const { showToast } = useToast();
   const { confirm } = useConfirmDialog();
@@ -32,12 +32,14 @@ export function SkillsTab({ spaceId }: { spaceId: string }) {
   const [fieldErrors, setFieldErrors] = createSignal<Record<string, string>>(
     {},
   );
+  let skillsSeq = 0;
 
   createEffect(() => {
-    void fetchSkills();
+    void fetchSkills(props.spaceId);
   });
 
-  const fetchSkills = async () => {
+  const fetchSkills = async (spaceId = props.spaceId) => {
+    const seq = ++skillsSeq;
     setLoading(true);
     try {
       const [customRes, managedRes] = await Promise.all([
@@ -52,14 +54,18 @@ export function SkillsTab({ spaceId }: { spaceId: string }) {
       const managedData = await rpcJson<{ skills: ManagedSkill[] }>(
         managedRes,
       );
+      if (seq !== skillsSeq || spaceId !== props.spaceId) return;
       setSkills(customData.skills || []);
       setManagedSkills(managedData.skills || []);
     } catch {
+      if (seq !== skillsSeq || spaceId !== props.spaceId) return;
       setSkills([]);
       setManagedSkills([]);
       showToast("error", t("failedToLoad") || "Failed to load skills");
     } finally {
-      setLoading(false);
+      if (seq === skillsSeq && spaceId === props.spaceId) {
+        setLoading(false);
+      }
     }
   };
 
@@ -135,7 +141,7 @@ export function SkillsTab({ spaceId }: { spaceId: string }) {
           "id",
           ":skillId",
         ).$put({
-          param: { spaceId, skillId: editingSkill()!.id },
+          param: { spaceId: props.spaceId, skillId: editingSkill()!.id },
           json: {
             name: f.name.trim(),
             description: f.description.trim() || undefined,
@@ -147,7 +153,7 @@ export function SkillsTab({ spaceId }: { spaceId: string }) {
         await readSkillMutationResponse(res);
       } else {
         const res = await rpcPath(rpc, "spaces", ":spaceId", "skills").$post({
-          param: { spaceId },
+          param: { spaceId: props.spaceId },
           json: {
             name: f.name.trim(),
             description: f.description.trim() || undefined,
@@ -191,7 +197,7 @@ export function SkillsTab({ spaceId }: { spaceId: string }) {
         "id",
         ":skillId",
       ).$delete({
-        param: { spaceId, skillId: skill.id },
+        param: { spaceId: props.spaceId, skillId: skill.id },
       });
       await rpcJson(res);
       await fetchSkills();
@@ -210,7 +216,7 @@ export function SkillsTab({ spaceId }: { spaceId: string }) {
         "id",
         ":skillId",
       ).$patch({
-        param: { spaceId, skillId: skill.id },
+        param: { spaceId: props.spaceId, skillId: skill.id },
         json: { enabled: !skill.enabled },
       });
       await rpcJson(res);
@@ -220,33 +226,31 @@ export function SkillsTab({ spaceId }: { spaceId: string }) {
     }
   };
 
-  if (loading()) {
-    return <SkeletonList count={3} />;
-  }
-
-  if (isCreating()) {
-    return (
-      <SkillFormView
-        form={form()}
-        setForm={setForm}
-        isEditing={!!editingSkill()}
-        saving={saving()}
-        error={error()}
-        fieldErrors={fieldErrors()}
-        onSubmit={handleSubmit}
-        onClose={closeForm}
-      />
-    );
-  }
-
   return (
-    <SkillList
-      skills={skills()}
-      managedSkills={managedSkills()}
-      onEdit={openEditForm}
-      onDelete={handleDelete}
-      onToggle={handleToggle}
-      onCreateNew={openCreateForm}
-    />
+    <Show when={!loading()} fallback={<SkeletonList count={3} />}>
+      {isCreating()
+        ? (
+          <SkillFormView
+            form={form()}
+            setForm={setForm}
+            isEditing={!!editingSkill()}
+            saving={saving()}
+            error={error()}
+            fieldErrors={fieldErrors()}
+            onSubmit={handleSubmit}
+            onClose={closeForm}
+          />
+        )
+        : (
+          <SkillList
+            skills={skills()}
+            managedSkills={managedSkills()}
+            onEdit={openEditForm}
+            onDelete={handleDelete}
+            onToggle={handleToggle}
+            onCreateNew={openCreateForm}
+          />
+        )}
+    </Show>
   );
 }

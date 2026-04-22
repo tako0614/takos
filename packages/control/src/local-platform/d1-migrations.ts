@@ -97,7 +97,9 @@ function rewriteLegacySqliteServicesInsertStatement(statement: string): string {
   return statement.replace(
     /^(INSERT INTO "services"\s*\(\n)([\s\S]*?)(\n\)\s*\nSELECT\n)/i,
     (_match, prefix: string, columns: string, suffix: string) =>
-      `${prefix}${columns.replace(/"worker_type"/g, '"service_type"')}${suffix}`,
+      `${prefix}${
+        columns.replace(/"worker_type"/g, '"service_type"')
+      }${suffix}`,
   );
 }
 
@@ -174,10 +176,11 @@ export async function ensureServerMigrations(
       client,
       await stripExistingSqliteServiceAddColumns(client, migrationSql),
     );
-    const normalizedMigrationSql = await normalizeSqliteLegacyServicesMigrationStatements(
-      client,
-      sqliteMigrationSql,
-    );
+    const normalizedMigrationSql =
+      await normalizeSqliteLegacyServicesMigrationStatements(
+        client,
+        sqliteMigrationSql,
+      );
     const transaction = await client.transaction("write");
     try {
       for (const statement of splitSqlStatements(normalizedMigrationSql)) {

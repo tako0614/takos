@@ -1,4 +1,4 @@
-export type GitObjectType = 'blob' | 'tree' | 'commit' | 'tag';
+export type GitObjectType = "blob" | "tree" | "commit" | "tag";
 
 export interface TreeEntry {
   mode: string;
@@ -99,7 +99,7 @@ export interface RefUpdateResult {
   error?: string;
 }
 
-export type MergeConflictType = 'content' | 'delete-modify' | 'add-add';
+export type MergeConflictType = "content" | "delete-modify" | "add-add";
 
 export interface MergeConflict {
   path: string;
@@ -107,10 +107,10 @@ export interface MergeConflict {
 }
 
 export const FILE_MODES = {
-  REGULAR_FILE: '100644',
-  EXECUTABLE: '100755',
-  SYMLINK: '120000',
-  DIRECTORY: '040000',
+  REGULAR_FILE: "100644",
+  EXECUTABLE: "100755",
+  SYMLINK: "120000",
+  DIRECTORY: "040000",
 } as const;
 
 /** SHA-1 hex pattern (40 lowercase hex chars) */

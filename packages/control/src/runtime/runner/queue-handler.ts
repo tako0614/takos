@@ -14,6 +14,7 @@ import {
 
 import { logError, logInfo, logWarn } from "../../shared/utils/logger.ts";
 import { envGuard, STALE_WORKER_THRESHOLD_MS } from "./runner-constants.ts";
+import { classifyWorkerQueueName } from "../queues/queue-names.ts";
 
 export async function handleQueue(
   batch: MessageBatch<unknown>,
@@ -30,9 +31,9 @@ export async function handleQueue(
   }
 
   const rawQueueName = batch.queue;
-  const queueName = rawQueueName.replace(/-staging$/i, "");
+  const queueKind = classifyWorkerQueueName(rawQueueName);
 
-  if (queueName !== "takos-runs" && queueName !== "takos-runs-dlq") {
+  if (queueKind !== "runs" && queueKind !== "runs_dlq") {
     logWarn(`Unknown queue: ${rawQueueName}`, { module: "runner_queue" });
     for (const message of batch.messages) {
       message.ack();
@@ -55,7 +56,7 @@ export async function handleQueue(
     return;
   }
 
-  if (queueName === "takos-runs-dlq") {
+  if (queueKind === "runs_dlq") {
     for (const message of batch.messages) {
       const body = message.body as RunQueueMessage;
       const { runId } = body;

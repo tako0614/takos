@@ -19,7 +19,9 @@ export function SettingsAccount(props: { user: User | null }) {
   const navigation = useNavigation();
 
   const [editingUsername, setEditingUsername] = createSignal(false);
-  const [usernameDraft, setUsernameDraft] = createSignal(props.user?.username ?? "");
+  const [usernameDraft, setUsernameDraft] = createSignal(
+    props.user?.username ?? "",
+  );
   const [usernameError, setUsernameError] = createSignal<string | null>(null);
   const [usernameAvailable, setUsernameAvailable] = createSignal<
     boolean | null
@@ -182,8 +184,10 @@ export function SettingsAccount(props: { user: User | null }) {
             >
               <Input
                 value={usernameDraft()}
-                onChange={(event) =>
-                  setUsernameDraft(normalizeUsernameInput(event.target.value))}
+                onInput={(event) =>
+                  setUsernameDraft(
+                    normalizeUsernameInput(event.currentTarget.value),
+                  )}
                 placeholder={t("usernamePlaceholder")}
                 autofocus
                 maxLength={30}

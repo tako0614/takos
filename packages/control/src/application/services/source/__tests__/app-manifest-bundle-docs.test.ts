@@ -48,29 +48,59 @@ Deno.test("buildBundleDocs emits route publication kinds for bundle manifest", (
 
   const docs = buildBundleDocs(manifest, emptyBuildSources());
 
-  assertEquals(docs.map((doc) => doc.kind), [
+  assertEquals(docs.map((doc) => doc.type), [
     "Package",
     "com.example.McpEndpoint",
     "com.example.FileEndpoint",
     "com.example.Surface",
   ]);
-  assertEquals(docs[1]?.spec, {
+  assertEquals(docs[1]?.config, {
     targetRef: "web",
     path: "/mcp",
     title: "Search MCP",
     protocol: "streamable-http",
   });
-  assertEquals(docs[2]?.spec, {
+  assertEquals(docs[2]?.config, {
     targetRef: "web",
     path: "/files/:id",
     title: "Markdown",
     contentTypes: ["text/markdown"],
   });
-  assertEquals(docs[3]?.spec, {
+  assertEquals(docs[3]?.config, {
     targetRef: "web",
     path: "/",
     title: "Docs",
     placement: "sidebar",
+  });
+});
+
+Deno.test("buildBundleDocs preserves Takos grant publications", () => {
+  const manifest: AppManifest = {
+    name: "grant-bundle-app",
+    compute: {},
+    routes: [],
+    publish: [
+      {
+        name: "takos-api",
+        type: "api-key",
+        publisher: "takos",
+        spec: { scopes: ["files:read", "files:write"] },
+      },
+    ],
+    env: {},
+  };
+
+  const docs = buildBundleDocs(manifest, emptyBuildSources());
+
+  assertEquals(docs.map((doc) => doc.type), ["Package", "Publication"]);
+  assertEquals(docs[1], {
+    type: "Publication",
+    name: "takos-api",
+    config: {
+      publisher: "takos",
+      type: "api-key",
+      spec: { scopes: ["files:read", "files:write"] },
+    },
   });
 });
 
@@ -106,13 +136,14 @@ Deno.test("buildBundleDocs emits image-backed attached container workloads with 
 
   const docs = buildBundleDocs(manifest, emptyBuildSources());
 
-  assertEquals(docs.map((doc) => doc.kind), [
+  assertEquals(docs.map((doc) => doc.type), [
     "Package",
     "Workload",
     "Workload",
     "Binding",
   ]);
-  assertEquals(docs[2]?.spec, {
+  assertEquals(docs[1]?.config?.type, "takos.worker");
+  assertEquals(docs[2]?.config, {
     type: "container",
     pluginConfig: {
       imageRef:

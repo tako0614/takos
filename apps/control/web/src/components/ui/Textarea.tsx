@@ -1,23 +1,24 @@
-import { splitProps } from 'solid-js';
-import type { JSX } from 'solid-js';
+import { splitProps } from "solid-js";
+import type { JSX } from "solid-js";
 
-interface TextareaProps extends JSX.TextareaHTMLAttributes<HTMLTextAreaElement> {
+interface TextareaProps
+  extends JSX.TextareaHTMLAttributes<HTMLTextAreaElement> {
   error?: string;
-  resize?: 'none' | 'vertical' | 'horizontal' | 'both';
+  resize?: "none" | "vertical" | "horizontal" | "both";
   ref?: HTMLTextAreaElement | ((el: HTMLTextAreaElement) => void);
 }
 
-type ResizeOption = NonNullable<TextareaProps['resize']>;
+type ResizeOption = NonNullable<TextareaProps["resize"]>;
 
 const resizeClasses: Record<ResizeOption, string> = {
-  none: 'resize-none',
-  vertical: 'resize-y',
-  horizontal: 'resize-x',
-  both: 'resize',
+  none: "resize-none",
+  vertical: "resize-y",
+  horizontal: "resize-x",
+  both: "resize",
 };
 
 export function Textarea(props: TextareaProps) {
-  const [local, rest] = splitProps(props, ['error', 'resize', 'class', 'ref']);
+  const [local, rest] = splitProps(props, ["error", "resize", "class", "ref"]);
 
   return (
     <div>
@@ -28,9 +29,13 @@ export function Textarea(props: TextareaProps) {
           bg-[var(--color-surface-primary)] text-[var(--color-text-primary)]
           border rounded-[var(--radius-md)] outline-none transition-colors
           focus:border-[var(--color-border-focus)]
-          ${local.error ? 'border-[var(--color-error)]' : 'border-[var(--color-border-primary)]'}
-          ${resizeClasses[local.resize ?? 'vertical']}
-          ${local.class ?? ''}
+          ${
+          local.error
+            ? "border-[var(--color-error)]"
+            : "border-[var(--color-border-primary)]"
+        }
+          ${resizeClasses[local.resize ?? "vertical"]}
+          ${local.class ?? ""}
         `}
         {...rest}
       />

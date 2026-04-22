@@ -2,20 +2,20 @@
  * Secrets management commands: status, sync, put, prune, generate-jwt.
  */
 
-import { spawn } from 'node:child_process';
+import { spawn } from "node:child_process";
 import { Buffer } from "node:buffer";
-import * as fs from 'node:fs';
-import * as path from 'node:path';
+import * as fs from "node:fs";
+import * as path from "node:path";
 import {
+  CONTROL_APP_DIR,
   type DeployEnvironment,
+  fail,
   type GlobalOptions,
   type ResolvedConfig,
-  CONTROL_APP_DIR,
   SCRIPTS_DIR,
-  fail,
   takeFlag,
   takeOption,
-} from './index.ts';
+} from "./index.ts";
 
 // ---------------------------------------------------------------------------
 // Worker secrets configuration
@@ -32,41 +32,57 @@ export type WorkerSecretSpec = {
 
 export const WORKER_SECRETS: WorkerSecretSpec[] = [
   {
-    alias: 'web',
-    config: 'wrangler.toml',
+    alias: "web",
+    config: "wrangler.toml",
     required: [
-      'GOOGLE_CLIENT_SECRET',
-      'PLATFORM_PRIVATE_KEY', 'PLATFORM_PUBLIC_KEY',
-      'CF_API_TOKEN',
-      'ENCRYPTION_KEY',
+      "GOOGLE_CLIENT_SECRET",
+      "PLATFORM_PRIVATE_KEY",
+      "PLATFORM_PUBLIC_KEY",
+      "CF_API_TOKEN",
+      "ENCRYPTION_KEY",
     ],
     optional: [
-      'OPENAI_API_KEY', 'ANTHROPIC_API_KEY', 'GOOGLE_API_KEY', 'SERPER_API_KEY',
-      'STRIPE_SECRET_KEY', 'STRIPE_WEBHOOK_SECRET',
-      'AUDIT_IP_HASH_KEY',
+      "OPENAI_API_KEY",
+      "ANTHROPIC_API_KEY",
+      "GOOGLE_API_KEY",
+      "SERPER_API_KEY",
+      "STRIPE_SECRET_KEY",
+      "STRIPE_WEBHOOK_SECRET",
+      "AUDIT_IP_HASH_KEY",
     ],
   },
   {
-    alias: 'worker',
-    config: 'wrangler.worker.toml',
-    required: ['ENCRYPTION_KEY'],
-    optional: ['OPENAI_API_KEY', 'ANTHROPIC_API_KEY', 'GOOGLE_API_KEY', 'SERPER_API_KEY', 'CF_API_TOKEN'],
+    alias: "worker",
+    config: "wrangler.worker.toml",
+    required: ["ENCRYPTION_KEY"],
+    optional: [
+      "OPENAI_API_KEY",
+      "ANTHROPIC_API_KEY",
+      "GOOGLE_API_KEY",
+      "SERPER_API_KEY",
+      "CF_API_TOKEN",
+    ],
   },
   {
-    alias: 'runtime-host',
-    config: 'wrangler.runtime-host.toml',
+    alias: "runtime-host",
+    config: "wrangler.runtime-host.toml",
     required: [],
-    optional: ['JWT_PUBLIC_KEY'],
+    optional: ["JWT_PUBLIC_KEY"],
   },
   {
-    alias: 'executor',
-    config: 'wrangler.executor.toml',
+    alias: "executor",
+    config: "wrangler.executor.toml",
     required: [],
-    optional: ['OPENAI_API_KEY', 'ANTHROPIC_API_KEY', 'GOOGLE_API_KEY', 'SERPER_API_KEY'],
+    optional: [
+      "OPENAI_API_KEY",
+      "ANTHROPIC_API_KEY",
+      "GOOGLE_API_KEY",
+      "SERPER_API_KEY",
+    ],
   },
   {
-    alias: 'dispatch',
-    config: 'wrangler.dispatch.toml',
+    alias: "dispatch",
+    config: "wrangler.dispatch.toml",
     required: [],
     optional: [],
   },
@@ -74,16 +90,16 @@ export const WORKER_SECRETS: WorkerSecretSpec[] = [
 
 /** Known legacy secrets that should be removed */
 export const LEGACY_SECRETS = new Set([
-  'BUILD_SERVICE_TOKEN',
-  'JWT_SECRET',
-  'SERVICE_API_KEY',
-  'SERVICE_SIGNING_ACTIVE_KID',
-  'SERVICE_SIGNING_KEYS',
-  'YURUCOMMU_HOSTED_API_KEY',
-  'HOSTED_SERVICE_SECRET',
+  "BUILD_SERVICE_TOKEN",
+  "JWT_SECRET",
+  "SERVICE_API_KEY",
+  "SERVICE_SIGNING_ACTIVE_KID",
+  "SERVICE_SIGNING_KEYS",
+  "YURUCOMMU_HOSTED_API_KEY",
+  "HOSTED_SERVICE_SECRET",
 ]);
 
-const SECRETS_DIR_BASE = path.resolve(SCRIPTS_DIR, '../.secrets');
+const SECRETS_DIR_BASE = path.resolve(SCRIPTS_DIR, "../.secrets");
 
 // ---------------------------------------------------------------------------
 // Internal helpers
@@ -96,30 +112,33 @@ function resolveSecretsDir(environment: DeployEnvironment): string {
 function readSecretFile(dir: string, name: string): string | null {
   const filePath = path.join(dir, name);
   if (!fs.existsSync(filePath)) return null;
-  return fs.readFileSync(filePath, 'utf8').replace(/\r\n/g, '\n').trim();
+  return fs.readFileSync(filePath, "utf8").replace(/\r\n/g, "\n").trim();
 }
 
 function isPlaceholder(value: string): boolean {
   return (
     !value ||
-    value.includes('REPLACE_WITH_') ||
-    value.includes('your-') ||
-    value === 'placeholder-secret' ||
-    value === 'local-dev-jwt-secret'
+    value.includes("REPLACE_WITH_") ||
+    value.includes("your-") ||
+    value === "placeholder-secret" ||
+    value === "local-dev-jwt-secret"
   );
 }
 
-function wranglerEnvArgs(configFile: string, environment: DeployEnvironment): string[] {
-  const args = ['--config', configFile];
+function wranglerEnvArgs(
+  configFile: string,
+  environment: DeployEnvironment,
+): string[] {
+  const args = ["--config", configFile];
   // production uses default env (no --env flag) in wrangler
-  if (environment !== 'production') {
-    args.push('--env', environment);
+  if (environment !== "production") {
+    args.push("--env", environment);
   }
   return args;
 }
 
 function runWranglerSecret(
-  action: 'put' | 'delete',
+  action: "put" | "delete",
   secretName: string,
   configFile: string,
   environment: DeployEnvironment,
@@ -127,28 +146,43 @@ function runWranglerSecret(
 ): Promise<void> {
   return new Promise((resolve, reject) => {
     const args = [
-      'exec', 'wrangler', 'secret', action, secretName,
+      "exec",
+      "wrangler",
+      "secret",
+      action,
+      secretName,
       ...wranglerEnvArgs(configFile, environment),
     ];
 
-    const child = spawn('pnpm', args, {
-      stdio: ['pipe', 'pipe', 'pipe'],
+    const child = spawn("pnpm", args, {
+      stdio: ["pipe", "pipe", "pipe"],
       env: Deno.env.toObject(),
       cwd: CONTROL_APP_DIR,
     });
 
-    let stderr = '';
-    child.stderr.on('data', (d: Buffer) => { stderr += d.toString(); });
+    let stderr = "";
+    child.stderr.on("data", (d: Buffer) => {
+      stderr += d.toString();
+    });
 
-    if (action === 'put' && value != null) {
+    if (action === "put" && value != null) {
       child.stdin.write(`${value}\n`);
     }
     child.stdin.end();
 
-    child.on('error', reject);
-    child.on('exit', (code) => {
-      if (code === 0) { resolve(); return; }
-      reject(new Error(`wrangler secret ${action} ${secretName} failed (exit ${code ?? '?'}): ${stderr.trim()}`));
+    child.on("error", reject);
+    child.on("exit", (code) => {
+      if (code === 0) {
+        resolve();
+        return;
+      }
+      reject(
+        new Error(
+          `wrangler secret ${action} ${secretName} failed (exit ${
+            code ?? "?"
+          }): ${stderr.trim()}`,
+        ),
+      );
     });
   });
 }
@@ -159,26 +193,36 @@ async function listWranglerSecrets(
 ): Promise<string[]> {
   return new Promise((resolve, reject) => {
     const args = [
-      'exec', 'wrangler', 'secret', 'list',
+      "exec",
+      "wrangler",
+      "secret",
+      "list",
       ...wranglerEnvArgs(configFile, environment),
     ];
 
-    const child = spawn('pnpm', args, {
-      stdio: ['pipe', 'pipe', 'pipe'],
+    const child = spawn("pnpm", args, {
+      stdio: ["pipe", "pipe", "pipe"],
       env: Deno.env.toObject(),
       cwd: CONTROL_APP_DIR,
     });
 
-    let stdout = '';
-    let stderr = '';
-    child.stdout.on('data', (d: Buffer) => { stdout += d.toString(); });
-    child.stderr.on('data', (d: Buffer) => { stderr += d.toString(); });
+    let stdout = "";
+    let stderr = "";
+    child.stdout.on("data", (d: Buffer) => {
+      stdout += d.toString();
+    });
+    child.stderr.on("data", (d: Buffer) => {
+      stderr += d.toString();
+    });
 
-    child.on('error', reject);
-    child.on('exit', (code) => {
+    child.on("error", reject);
+    child.on("exit", (code) => {
       if (code !== 0) {
         // Worker may not exist yet
-        if (stderr.includes('not found')) { resolve([]); return; }
+        if (stderr.includes("not found")) {
+          resolve([]);
+          return;
+        }
         reject(new Error(`wrangler secret list failed: ${stderr.trim()}`));
         return;
       }
@@ -196,7 +240,10 @@ async function listWranglerSecrets(
 // Commands
 // ---------------------------------------------------------------------------
 
-export async function cmdSecretsStatus(_config: ResolvedConfig, options: GlobalOptions): Promise<number> {
+export async function cmdSecretsStatus(
+  _config: ResolvedConfig,
+  options: GlobalOptions,
+): Promise<number> {
   const env = options.environment;
   const secretsDir = resolveSecretsDir(env);
   const hasDir = fs.existsSync(secretsDir);
@@ -241,20 +288,26 @@ export async function cmdSecretsStatus(_config: ResolvedConfig, options: GlobalO
     console.log(JSON.stringify(statuses, null, 2));
   } else {
     console.log(`\nSecrets status for [${env}]`);
-    console.log(`Local secrets dir: ${secretsDir} ${hasDir ? '(exists)' : '(not found)'}\n`);
+    console.log(
+      `Local secrets dir: ${secretsDir} ${
+        hasDir ? "(exists)" : "(not found)"
+      }\n`,
+    );
 
     for (const s of statuses) {
-      const tag = s.missing.length > 0 ? ' ⚠' : ' ✓';
+      const tag = s.missing.length > 0 ? " ⚠" : " ✓";
       console.log(`${tag} ${s.worker} (${s.config})`);
-      console.log(`    deployed: ${s.deployed.length}  required: ${s.required.length}  optional: ${s.optional.length}`);
+      console.log(
+        `    deployed: ${s.deployed.length}  required: ${s.required.length}  optional: ${s.optional.length}`,
+      );
       if (s.missing.length > 0) {
-        console.log(`    MISSING:  ${s.missing.join(', ')}`);
+        console.log(`    MISSING:  ${s.missing.join(", ")}`);
       }
       if (s.legacy.length > 0) {
-        console.log(`    LEGACY:   ${s.legacy.join(', ')}`);
+        console.log(`    LEGACY:   ${s.legacy.join(", ")}`);
       }
       if (s.localFiles.length > 0) {
-        console.log(`    local:    ${s.localFiles.join(', ')}`);
+        console.log(`    local:    ${s.localFiles.join(", ")}`);
       }
     }
   }
@@ -262,14 +315,20 @@ export async function cmdSecretsStatus(_config: ResolvedConfig, options: GlobalO
   return statuses.length;
 }
 
-export async function cmdSecretsSync(_config: ResolvedConfig, options: GlobalOptions, args: string[]): Promise<number> {
+export async function cmdSecretsSync(
+  _config: ResolvedConfig,
+  options: GlobalOptions,
+  args: string[],
+): Promise<number> {
   const env = options.environment;
-  const dryRun = takeFlag(args, '--dry-run');
-  const workerFilter = takeOption(args, '--worker');
+  const dryRun = takeFlag(args, "--dry-run");
+  const workerFilter = takeOption(args, "--worker");
   const secretsDir = resolveSecretsDir(env);
 
   if (!fs.existsSync(secretsDir)) {
-    fail(`Secrets directory not found: ${secretsDir}\nCreate it with: mkdir -p ${secretsDir}`);
+    fail(
+      `Secrets directory not found: ${secretsDir}\nCreate it with: mkdir -p ${secretsDir}`,
+    );
   }
 
   const specs = workerFilter
@@ -277,7 +336,11 @@ export async function cmdSecretsSync(_config: ResolvedConfig, options: GlobalOpt
     : WORKER_SECRETS;
 
   if (workerFilter && specs.length === 0) {
-    fail(`Unknown worker alias: ${workerFilter}. Available: ${WORKER_SECRETS.map((s) => s.alias).join(', ')}`);
+    fail(
+      `Unknown worker alias: ${workerFilter}. Available: ${
+        WORKER_SECRETS.map((s) => s.alias).join(", ")
+      }`,
+    );
   }
 
   let totalPut = 0;
@@ -297,40 +360,50 @@ export async function cmdSecretsSync(_config: ResolvedConfig, options: GlobalOpt
       }
 
       const exists = deployed.includes(secretName);
-      const action = exists ? 'UPDATE' : 'CREATE';
+      const action = exists ? "UPDATE" : "CREATE";
 
       if (dryRun) {
         console.log(`  [dry-run] ${action} ${spec.alias}/${secretName}`);
       } else {
         process.stdout.write(`  ${action} ${spec.alias}/${secretName} ... `);
-        await runWranglerSecret('put', secretName, spec.config, env, value);
-        console.log('ok');
+        await runWranglerSecret("put", secretName, spec.config, env, value);
+        console.log("ok");
       }
       totalPut++;
     }
   }
 
-  console.log(`\n${dryRun ? '[dry-run] Would sync' : 'Synced'} ${totalPut} secret(s)`);
+  console.log(
+    `\n${dryRun ? "[dry-run] Would sync" : "Synced"} ${totalPut} secret(s)`,
+  );
   return totalPut;
 }
 
-export async function cmdSecretsPut(_config: ResolvedConfig, options: GlobalOptions, args: string[]): Promise<number> {
+export async function cmdSecretsPut(
+  _config: ResolvedConfig,
+  options: GlobalOptions,
+  args: string[],
+): Promise<number> {
   const env = options.environment;
   const secretName = args.shift();
-  if (!secretName) fail('Usage: secrets put <SECRET_NAME> [--value-file <path>] [--worker <alias>]');
+  if (!secretName) {
+    fail(
+      "Usage: secrets put <SECRET_NAME> [--value-file <path>] [--worker <alias>]",
+    );
+  }
 
-  const valueFile = takeOption(args, '--value-file');
-  const workerFilter = takeOption(args, '--worker');
+  const valueFile = takeOption(args, "--value-file");
+  const workerFilter = takeOption(args, "--worker");
 
   let value: string;
   if (valueFile) {
-    value = fs.readFileSync(valueFile, 'utf8').replace(/\r\n/g, '\n').trim();
+    value = fs.readFileSync(valueFile, "utf8").replace(/\r\n/g, "\n").trim();
   } else if (!process.stdin.isTTY) {
     const chunks: Buffer[] = [];
     for await (const chunk of process.stdin) {
       chunks.push(Buffer.from(chunk));
     }
-    value = Buffer.concat(chunks).toString('utf8').trim();
+    value = Buffer.concat(chunks).toString("utf8").trim();
   } else {
     // Try .secrets/<env>/<name>
     const secretsDir = resolveSecretsDir(env);
@@ -338,35 +411,45 @@ export async function cmdSecretsPut(_config: ResolvedConfig, options: GlobalOpti
     if (fileValue && !isPlaceholder(fileValue)) {
       value = fileValue;
     } else {
-      fail(`No value provided. Use --value-file, pipe stdin, or place in ${secretsDir}/${secretName}`);
+      fail(
+        `No value provided. Use --value-file, pipe stdin, or place in ${secretsDir}/${secretName}`,
+      );
     }
   }
 
-  if (isPlaceholder(value)) fail('Refusing to upload placeholder value');
+  if (isPlaceholder(value)) fail("Refusing to upload placeholder value");
 
   const specs = workerFilter
     ? WORKER_SECRETS.filter((s) => s.alias === workerFilter)
-    : WORKER_SECRETS.filter((s) => [...s.required, ...s.optional].includes(secretName));
+    : WORKER_SECRETS.filter((s) =>
+      [...s.required, ...s.optional].includes(secretName)
+    );
 
   if (specs.length === 0) {
-    fail(`No workers expect secret "${secretName}". Use --worker <alias> to force.`);
+    fail(
+      `No workers expect secret "${secretName}". Use --worker <alias> to force.`,
+    );
   }
 
   let count = 0;
   for (const spec of specs) {
     process.stdout.write(`  PUT ${spec.alias}/${secretName} ... `);
-    await runWranglerSecret('put', secretName, spec.config, env, value);
-    console.log('ok');
+    await runWranglerSecret("put", secretName, spec.config, env, value);
+    console.log("ok");
     count++;
   }
 
   return count;
 }
 
-export async function cmdSecretsPrune(_config: ResolvedConfig, options: GlobalOptions, args: string[]): Promise<number> {
+export async function cmdSecretsPrune(
+  _config: ResolvedConfig,
+  options: GlobalOptions,
+  args: string[],
+): Promise<number> {
   const env = options.environment;
-  const dryRun = takeFlag(args, '--dry-run');
-  const workerFilter = takeOption(args, '--worker');
+  const dryRun = takeFlag(args, "--dry-run");
+  const workerFilter = takeOption(args, "--worker");
 
   const specs = workerFilter
     ? WORKER_SECRETS.filter((s) => s.alias === workerFilter)
@@ -383,58 +466,86 @@ export async function cmdSecretsPrune(_config: ResolvedConfig, options: GlobalOp
         console.log(`  [dry-run] DELETE ${spec.alias}/${secretName}`);
       } else {
         process.stdout.write(`  DELETE ${spec.alias}/${secretName} ... `);
-        await runWranglerSecret('delete', secretName, spec.config, env);
-        console.log('ok');
+        await runWranglerSecret("delete", secretName, spec.config, env);
+        console.log("ok");
       }
       totalDeleted++;
     }
   }
 
   if (totalDeleted === 0) {
-    console.log('No legacy secrets found.');
+    console.log("No legacy secrets found.");
   } else {
-    console.log(`\n${dryRun ? '[dry-run] Would prune' : 'Pruned'} ${totalDeleted} legacy secret(s)`);
+    console.log(
+      `\n${
+        dryRun ? "[dry-run] Would prune" : "Pruned"
+      } ${totalDeleted} legacy secret(s)`,
+    );
   }
 
   return totalDeleted;
 }
 
-export async function cmdSecretsGenerateJwt(_config: ResolvedConfig, options: GlobalOptions, args: string[]): Promise<number> {
+export async function cmdSecretsGenerateJwt(
+  _config: ResolvedConfig,
+  options: GlobalOptions,
+  args: string[],
+): Promise<number> {
   const env = options.environment;
-  const prefix = takeOption(args, '--prefix') || 'platform';
-  const outputDir = takeOption(args, '--output-dir') || resolveSecretsDir(env);
-  const upload = takeFlag(args, '--upload');
+  const prefix = takeOption(args, "--prefix") || "platform";
+  const outputDir = takeOption(args, "--output-dir") || resolveSecretsDir(env);
+  const upload = takeFlag(args, "--upload");
 
-  const { generateKeyPairSync } = await import('crypto');
-  const { privateKey, publicKey } = generateKeyPairSync('rsa', {
+  const { generateKeyPairSync } = await import("crypto");
+  const { privateKey, publicKey } = generateKeyPairSync("rsa", {
     modulusLength: 2048,
-    publicKeyEncoding: { type: 'spki', format: 'pem' },
-    privateKeyEncoding: { type: 'pkcs8', format: 'pem' },
+    publicKeyEncoding: { type: "spki", format: "pem" },
+    privateKeyEncoding: { type: "pkcs8", format: "pem" },
   });
 
-  const privateKeyName = 'PLATFORM_PRIVATE_KEY';
-  const publicKeyName = 'PLATFORM_PUBLIC_KEY';
+  const privateKeyName = "PLATFORM_PRIVATE_KEY";
+  const publicKeyName = "PLATFORM_PUBLIC_KEY";
 
   fs.mkdirSync(outputDir, { recursive: true });
-  fs.writeFileSync(path.join(outputDir, privateKeyName), String(privateKey), 'utf8');
-  fs.writeFileSync(path.join(outputDir, publicKeyName), String(publicKey), 'utf8');
+  fs.writeFileSync(
+    path.join(outputDir, privateKeyName),
+    String(privateKey),
+    "utf8",
+  );
+  fs.writeFileSync(
+    path.join(outputDir, publicKeyName),
+    String(publicKey),
+    "utf8",
+  );
   console.log(`Generated ${prefix} JWT key pair:`);
   console.log(`  ${outputDir}/${privateKeyName}`);
   console.log(`  ${outputDir}/${publicKeyName}`);
 
   if (upload) {
     const specs = WORKER_SECRETS.filter(
-      (s) => [...s.required, ...s.optional].includes(privateKeyName)
+      (s) => [...s.required, ...s.optional].includes(privateKeyName),
     );
     for (const spec of specs) {
       process.stdout.write(`  PUT ${spec.alias}/${privateKeyName} ... `);
-      await runWranglerSecret('put', privateKeyName, spec.config, env, String(privateKey));
-      console.log('ok');
+      await runWranglerSecret(
+        "put",
+        privateKeyName,
+        spec.config,
+        env,
+        String(privateKey),
+      );
+      console.log("ok");
 
       if ([...spec.required, ...spec.optional].includes(publicKeyName)) {
         process.stdout.write(`  PUT ${spec.alias}/${publicKeyName} ... `);
-        await runWranglerSecret('put', publicKeyName, spec.config, env, String(publicKey));
-        console.log('ok');
+        await runWranglerSecret(
+          "put",
+          publicKeyName,
+          spec.config,
+          env,
+          String(publicKey),
+        );
+        console.log("ok");
       }
     }
   }

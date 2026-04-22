@@ -1,10 +1,10 @@
-import { Show } from 'solid-js';
-import type { PullRequest } from '../../../types/index.ts';
-import { Icons } from '../../../lib/Icons.tsx';
-import { Button } from '../../../components/ui/Button.tsx';
-import { Card } from '../../../components/ui/Card.tsx';
-import { ConflictResolver } from './ConflictResolver.tsx';
-import { useI18n } from '../../../store/i18n.ts';
+import { Show } from "solid-js";
+import type { PullRequest } from "../../../types/index.ts";
+import { Icons } from "../../../lib/Icons.tsx";
+import { Button } from "../../../components/ui/Button.tsx";
+import { Card } from "../../../components/ui/Card.tsx";
+import { ConflictResolver } from "./ConflictResolver.tsx";
+import { useI18n } from "../../../store/i18n.ts";
 
 interface PRActionsProps {
   repoId: string;
@@ -28,19 +28,26 @@ export function PRActions(props: PRActionsProps) {
   return (
     <Card padding="md">
       <div class="flex items-center gap-2 text-sm mb-3">
-        <Show when={props.pr.is_mergeable} fallback={
-          <>
-            <Icons.AlertTriangle class="w-4 h-4 text-zinc-500" />
-            <span class="text-zinc-600 dark:text-zinc-400">{t('prHasConflicts')}</span>
-          </>
-        }>
+        <Show
+          when={props.pr.is_mergeable}
+          fallback={
+            <>
+              <Icons.AlertTriangle class="w-4 h-4 text-zinc-500" />
+              <span class="text-zinc-600 dark:text-zinc-400">
+                {t("prHasConflicts")}
+              </span>
+            </>
+          }
+        >
           <Icons.Check class="w-4 h-4 text-zinc-900 dark:text-zinc-100" />
-          <span class="text-zinc-700 dark:text-zinc-300">{t('prNoConflicts')}</span>
+          <span class="text-zinc-700 dark:text-zinc-300">
+            {t("prNoConflicts")}
+          </span>
         </Show>
       </div>
 
       <Show when={props.showConflictResolver && !props.pr.is_mergeable}>
-        <div style={{ "margin-bottom": '0.75rem' }}>
+        <div style={{ "margin-bottom": "0.75rem" }}>
           <ConflictResolver
             repoId={props.repoId}
             prNumber={props.pr.number}
@@ -56,12 +63,18 @@ export function PRActions(props: PRActionsProps) {
         <Button
           variant="primary"
           class="flex-1"
-          onClick={props.pr.is_mergeable ? props.onMerge : () => props.onShowConflictResolver(true)}
+          onClick={props.pr.is_mergeable
+            ? props.onMerge
+            : () => props.onShowConflictResolver(true)}
           disabled={props.merging || props.showConflictResolver}
           isLoading={props.merging}
           leftIcon={!props.merging ? <Icons.GitMerge /> : undefined}
         >
-          {props.merging ? t('prMerging') : props.pr.is_mergeable ? t('prMergePullRequest') : t('resolveConflicts')}
+          {props.merging
+            ? t("prMerging")
+            : props.pr.is_mergeable
+            ? t("prMergePullRequest")
+            : t("resolveConflicts")}
         </Button>
         <Button
           variant="secondary"
@@ -69,9 +82,9 @@ export function PRActions(props: PRActionsProps) {
           disabled={props.aiReviewing}
           isLoading={props.aiReviewing}
           leftIcon={<Icons.Wand class="w-4 h-4" />}
-          title={t('aiReviewTitle')}
+          title={t("aiReviewTitle")}
         >
-          {t('aiReview')}
+          {t("aiReview")}
         </Button>
         <Show when={!props.showReviewForm}>
           <Button
@@ -79,7 +92,7 @@ export function PRActions(props: PRActionsProps) {
             onClick={() => props.onShowReviewForm(true)}
             leftIcon={<Icons.Eye class="w-4 h-4" />}
           >
-            {t('prReview')}
+            {t("prReview")}
           </Button>
         </Show>
         <Button
@@ -88,7 +101,7 @@ export function PRActions(props: PRActionsProps) {
           disabled={props.closing}
           isLoading={props.closing}
         >
-          {props.closing ? t('prClosing') : t('prClosePullRequest')}
+          {props.closing ? t("prClosing") : t("prClosePullRequest")}
         </Button>
       </div>
     </Card>

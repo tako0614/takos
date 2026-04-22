@@ -78,7 +78,7 @@ export const THREAD_CONTEXT_MAX_CHARS = 12_000;
 // ---------------------------------------------------------------------------
 
 /** Default embedding model used across all services (Cloudflare Workers AI). */
-export const EMBEDDING_MODEL = '@cf/baai/bge-base-en-v1.5';
+export const EMBEDDING_MODEL = "@cf/baai/bge-base-en-v1.5";
 
 /**
  * Default vector dimensions for Vectorize indexes.

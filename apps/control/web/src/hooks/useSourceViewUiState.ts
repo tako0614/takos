@@ -1,6 +1,6 @@
-import { createSignal, createEffect } from 'solid-js';
+import { createEffect, createSignal } from "solid-js";
 
-const SOURCE_VIEW_UI_STATE_KEY = 'takos.source.view-ui-state.v1';
+const SOURCE_VIEW_UI_STATE_KEY = "takos.source.view-ui-state.v1";
 
 export type SourceViewUiState = {
   browseMode: boolean;
@@ -14,16 +14,23 @@ function readSourceViewUiState(): Partial<SourceViewUiState> {
   try {
     const raw = storage.getItem(SOURCE_VIEW_UI_STATE_KEY);
     if (!raw) return {};
-    const parsed = JSON.parse(raw) as Partial<SourceViewUiState> & { scrollTop?: number };
-    const legacyScrollTop = typeof parsed.scrollTop === 'number' && Number.isFinite(parsed.scrollTop)
-      ? parsed.scrollTop
-      : undefined;
+    const parsed = JSON.parse(raw) as Partial<SourceViewUiState> & {
+      scrollTop?: number;
+    };
+    const legacyScrollTop =
+      typeof parsed.scrollTop === "number" && Number.isFinite(parsed.scrollTop)
+        ? parsed.scrollTop
+        : undefined;
     return {
-      browseMode: typeof parsed.browseMode === 'boolean' ? parsed.browseMode : undefined,
-      homeScrollTop: typeof parsed.homeScrollTop === 'number' && Number.isFinite(parsed.homeScrollTop)
+      browseMode: typeof parsed.browseMode === "boolean"
+        ? parsed.browseMode
+        : undefined,
+      homeScrollTop: typeof parsed.homeScrollTop === "number" &&
+          Number.isFinite(parsed.homeScrollTop)
         ? parsed.homeScrollTop
         : legacyScrollTop,
-      searchScrollTop: typeof parsed.searchScrollTop === 'number' && Number.isFinite(parsed.searchScrollTop)
+      searchScrollTop: typeof parsed.searchScrollTop === "number" &&
+          Number.isFinite(parsed.searchScrollTop)
         ? parsed.searchScrollTop
         : undefined,
     };
@@ -87,8 +94,12 @@ export function useSourceViewUiState() {
   return {
     browseMode,
     setBrowseMode,
-    get scrollContainerRef() { return scrollContainerRef; },
-    set scrollContainerRef(el: HTMLDivElement | undefined) { scrollContainerRef = el; },
+    get scrollContainerRef() {
+      return scrollContainerRef;
+    },
+    set scrollContainerRef(el: HTMLDivElement | undefined) {
+      scrollContainerRef = el;
+    },
     restoreScroll,
     handleContentScroll,
   };

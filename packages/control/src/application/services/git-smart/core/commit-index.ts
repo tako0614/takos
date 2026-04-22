@@ -4,14 +4,21 @@
  * Adapted from git-store/commit.ts with native git object format.
  */
 
-import type { D1Database, R2Bucket } from '../../../../shared/types/bindings.ts';
-import type { GitCommit, GitSignature, CreateCommitParams } from '../git-objects.ts';
-import { isValidSha } from '../git-objects.ts';
-import { putCommit, getCommitData } from './object-store.ts';
-import { getDb, commits } from '../../../../infra/db/index.ts';
-import { eq, and } from 'drizzle-orm';
-import { generateId } from '../../../../shared/utils/index.ts';
-import { textDateNullable } from '../../../../shared/utils/db-guards.ts';
+import type {
+  D1Database,
+  R2Bucket,
+} from "../../../../shared/types/bindings.ts";
+import type {
+  CreateCommitParams,
+  GitCommit,
+  GitSignature,
+} from "../git-objects.ts";
+import { isValidSha } from "../git-objects.ts";
+import { getCommitData, putCommit } from "./object-store.ts";
+import { commits, getDb } from "../../../../infra/db/index.ts";
+import { and, eq } from "drizzle-orm";
+import { generateId } from "../../../../shared/utils/index.ts";
+import { textDateNullable } from "../../../../shared/utils/db-guards.ts";
 
 interface CommitIndexRow {
   sha: string;
@@ -30,19 +37,27 @@ function indexedToCommit(row: CommitIndexRow): GitCommit {
   return {
     sha: row.sha,
     tree: row.treeSha,
-    parents: row.parentShas ? (() => { try { return JSON.parse(row.parentShas!) as string[]; } catch { return []; } })() : [],
+    parents: row.parentShas
+      ? (() => {
+        try {
+          return JSON.parse(row.parentShas!) as string[];
+        } catch {
+          return [];
+        }
+      })()
+      : [],
     message: row.message,
     author: {
       name: row.authorName,
       email: row.authorEmail,
       timestamp: Math.floor(new Date(row.authorDate).getTime() / 1000),
-      tzOffset: '+0000',
+      tzOffset: "+0000",
     },
     committer: {
       name: row.committerName,
       email: row.committerEmail,
       timestamp: Math.floor(new Date(row.commitDate).getTime() / 1000),
-      tzOffset: '+0000',
+      tzOffset: "+0000",
     },
   };
 }
@@ -50,10 +65,10 @@ function indexedToCommit(row: CommitIndexRow): GitCommit {
 function makeSignature(sig?: GitSignature): GitSignature {
   const ts = new Date().toISOString();
   return sig || {
-    name: 'System',
-    email: 'system@takos.dev',
+    name: "System",
+    email: "system@takos.jp",
     timestamp: Math.floor(new Date(ts).getTime() / 1000),
-    tzOffset: '+0000',
+    tzOffset: "+0000",
   };
 }
 
@@ -85,7 +100,9 @@ export async function createCommit(
     repoId,
     sha,
     treeSha: params.tree,
-    parentShas: params.parents.length > 0 ? JSON.stringify(params.parents) : null,
+    parentShas: params.parents.length > 0
+      ? JSON.stringify(params.parents)
+      : null,
     authorName: author.name,
     authorEmail: author.email,
     authorDate: sigTimestampToIso(author),
@@ -126,7 +143,9 @@ export async function indexCommit(
     repoId,
     sha: commit.sha,
     treeSha: commit.tree,
-    parentShas: commit.parents.length > 0 ? JSON.stringify(commit.parents) : null,
+    parentShas: commit.parents.length > 0
+      ? JSON.stringify(commit.parents)
+      : null,
     authorName: commit.author.name,
     authorEmail: commit.author.email,
     authorDate: sigTimestampToIso(commit.author),
@@ -138,7 +157,9 @@ export async function indexCommit(
 }
 
 export async function getCommitFromIndex(
-  dbBinding: D1Database, repoId: string, sha: string,
+  dbBinding: D1Database,
+  repoId: string,
+  sha: string,
 ): Promise<GitCommit | null> {
   const db = getDb(dbBinding);
   const indexed = await db.select().from(commits)
@@ -152,15 +173,20 @@ export async function getCommitFromIndex(
     message: indexed.message,
     authorName: indexed.authorName,
     authorEmail: indexed.authorEmail,
-    authorDate: textDateNullable(indexed.authorDate) ?? new Date(0).toISOString(),
+    authorDate: textDateNullable(indexed.authorDate) ??
+      new Date(0).toISOString(),
     committerName: indexed.committerName,
     committerEmail: indexed.committerEmail,
-    commitDate: textDateNullable(indexed.commitDate) ?? new Date(0).toISOString(),
+    commitDate: textDateNullable(indexed.commitDate) ??
+      new Date(0).toISOString(),
   });
 }
 
 export async function getCommit(
-  dbBinding: D1Database, bucket: R2Bucket, repoId: string, sha: string,
+  dbBinding: D1Database,
+  bucket: R2Bucket,
+  repoId: string,
+  sha: string,
 ): Promise<GitCommit | null> {
   const indexed = await getCommitFromIndex(dbBinding, repoId, sha);
   if (indexed) return indexed;
@@ -169,7 +195,11 @@ export async function getCommit(
 }
 
 export async function getCommitLog(
-  dbBinding: D1Database, bucket: R2Bucket, repoId: string, startSha: string, limit = 50,
+  dbBinding: D1Database,
+  bucket: R2Bucket,
+  repoId: string,
+  startSha: string,
+  limit = 50,
 ): Promise<GitCommit[]> {
   if (!startSha || limit <= 0) return [];
 
@@ -192,7 +222,11 @@ export async function getCommitLog(
 }
 
 export async function getCommitsFromRef(
-  dbBinding: D1Database, bucket: R2Bucket, repoId: string, startSha: string, limit = 50,
+  dbBinding: D1Database,
+  bucket: R2Bucket,
+  repoId: string,
+  startSha: string,
+  limit = 50,
 ): Promise<GitCommit[]> {
   const visited = new Set<string>();
   const commitList: GitCommit[] = [];
@@ -217,7 +251,11 @@ export async function getCommitsFromRef(
 }
 
 export async function isAncestor(
-  dbBinding: D1Database, bucket: R2Bucket, repoId: string, ancestorSha: string, descendantSha: string,
+  dbBinding: D1Database,
+  bucket: R2Bucket,
+  repoId: string,
+  ancestorSha: string,
+  descendantSha: string,
 ): Promise<boolean> {
   if (ancestorSha === descendantSha) return true;
 
@@ -241,7 +279,11 @@ export async function isAncestor(
 }
 
 export async function findMergeBase(
-  dbBinding: D1Database, bucket: R2Bucket, repoId: string, sha1: string, sha2: string,
+  dbBinding: D1Database,
+  bucket: R2Bucket,
+  repoId: string,
+  sha1: string,
+  sha2: string,
 ): Promise<string | null> {
   const ancestors1 = new Set<string>();
   const queue1: string[] = [sha1];
@@ -274,18 +316,44 @@ export async function findMergeBase(
 }
 
 export async function countCommitsBetween(
-  dbBinding: D1Database, bucket: R2Bucket, repoId: string, baseSha: string, headSha: string,
+  dbBinding: D1Database,
+  bucket: R2Bucket,
+  repoId: string,
+  baseSha: string,
+  headSha: string,
 ): Promise<{ ahead: number; behind: number; has_merge_base: boolean }> {
-  const mergeBase = await findMergeBase(dbBinding, bucket, repoId, baseSha, headSha);
+  const mergeBase = await findMergeBase(
+    dbBinding,
+    bucket,
+    repoId,
+    baseSha,
+    headSha,
+  );
   if (!mergeBase) return { ahead: 0, behind: 0, has_merge_base: false };
 
-  const ahead = await countCommitsTo(dbBinding, bucket, repoId, headSha, mergeBase);
-  const behind = await countCommitsTo(dbBinding, bucket, repoId, baseSha, mergeBase);
+  const ahead = await countCommitsTo(
+    dbBinding,
+    bucket,
+    repoId,
+    headSha,
+    mergeBase,
+  );
+  const behind = await countCommitsTo(
+    dbBinding,
+    bucket,
+    repoId,
+    baseSha,
+    mergeBase,
+  );
   return { ahead, behind, has_merge_base: true };
 }
 
 async function countCommitsTo(
-  dbBinding: D1Database, bucket: R2Bucket, repoId: string, fromSha: string, stopAtSha: string,
+  dbBinding: D1Database,
+  bucket: R2Bucket,
+  repoId: string,
+  fromSha: string,
+  stopAtSha: string,
 ): Promise<number> {
   let commitCount = 0;
   const visited = new Set<string>();
@@ -356,14 +424,14 @@ async function collectTreeObjects(
   visited.add(treeSha);
   result.push(treeSha);
 
-  const { getTreeEntries } = await import('./object-store.ts');
+  const { getTreeEntries } = await import("./object-store.ts");
   const entries = await getTreeEntries(bucket, treeSha);
   if (!entries) return;
 
   for (const entry of entries) {
     if (visited.has(entry.sha) || haves.has(entry.sha)) continue;
 
-    if (entry.mode === '040000' || entry.mode === '40000') {
+    if (entry.mode === "040000" || entry.mode === "40000") {
       await collectTreeObjects(bucket, entry.sha, result, visited, haves);
     } else {
       visited.add(entry.sha);
@@ -381,8 +449,8 @@ export async function collectReachableObjectShas(
   bucket: R2Bucket,
   repoId: string,
 ): Promise<Set<string>> {
-  const { listAllRefs } = await import('./refs.ts');
-  const { getTreeEntries } = await import('./object-store.ts');
+  const { listAllRefs } = await import("./refs.ts");
+  const { getTreeEntries } = await import("./object-store.ts");
 
   const refs = await listAllRefs(dbBinding, repoId);
 
@@ -426,7 +494,10 @@ export async function collectReachableObjectShas(
 
       for (const entry of entries) {
         reachable.add(entry.sha);
-        if ((entry.mode === '040000' || entry.mode === '40000') && !visitedTrees.has(entry.sha)) {
+        if (
+          (entry.mode === "040000" || entry.mode === "40000") &&
+          !visitedTrees.has(entry.sha)
+        ) {
           treeQueue.push(entry.sha);
         }
       }

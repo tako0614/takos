@@ -1,6 +1,6 @@
 export function splitSqlStatements(sql: string): string[] {
   const statements: string[] = [];
-  let current = '';
+  let current = "";
   let inSingleQuote = false;
   let inDoubleQuote = false;
   let inLineComment = false;
@@ -10,8 +10,8 @@ export function splitSqlStatements(sql: string): string[] {
 
   for (let index = 0; index < sql.length; index += 1) {
     const char = sql[index];
-    const previous = index > 0 ? sql[index - 1] : '';
-    const next = index + 1 < sql.length ? sql[index + 1] : '';
+    const previous = index > 0 ? sql[index - 1] : "";
+    const next = index + 1 < sql.length ? sql[index + 1] : "";
 
     if (dollarQuoteTag) {
       if (sql.startsWith(dollarQuoteTag, index)) {
@@ -26,30 +26,32 @@ export function splitSqlStatements(sql: string): string[] {
 
     if (inLineComment) {
       current += char;
-      if (char === '\n') inLineComment = false;
+      if (char === "\n") inLineComment = false;
       continue;
     }
 
     if (inBlockComment) {
       current += char;
-      if (previous === '*' && char === '/') inBlockComment = false;
+      if (previous === "*" && char === "/") inBlockComment = false;
       continue;
     }
 
-    if (!inSingleQuote && !inDoubleQuote && char === '-' && next === '-') {
+    if (!inSingleQuote && !inDoubleQuote && char === "-" && next === "-") {
       inLineComment = true;
       current += char;
       continue;
     }
 
-    if (!inSingleQuote && !inDoubleQuote && char === '/' && next === '*') {
+    if (!inSingleQuote && !inDoubleQuote && char === "/" && next === "*") {
       inBlockComment = true;
       current += char;
       continue;
     }
 
-    if (!inSingleQuote && !inDoubleQuote && char === '$') {
-      const dollarQuoteMatch = sql.slice(index).match(/^\$[A-Za-z_][A-Za-z0-9_]*\$|^\$\$/);
+    if (!inSingleQuote && !inDoubleQuote && char === "$") {
+      const dollarQuoteMatch = sql.slice(index).match(
+        /^\$[A-Za-z_][A-Za-z0-9_]*\$|^\$\$/,
+      );
       if (dollarQuoteMatch) {
         dollarQuoteTag = dollarQuoteMatch[0];
         current += dollarQuoteTag;
@@ -58,17 +60,17 @@ export function splitSqlStatements(sql: string): string[] {
       }
     }
 
-    if (char === '\'' && !inDoubleQuote && previous !== '\\') {
+    if (char === "'" && !inDoubleQuote && previous !== "\\") {
       inSingleQuote = !inSingleQuote;
-    } else if (char === '"' && !inSingleQuote && previous !== '\\') {
+    } else if (char === '"' && !inSingleQuote && previous !== "\\") {
       inDoubleQuote = !inDoubleQuote;
     }
 
     current += char;
-    if (char === ';' && !inSingleQuote && !inDoubleQuote) {
+    if (char === ";" && !inSingleQuote && !inDoubleQuote) {
       const trimmed = current.trim();
       if (!trimmed || /^;+$/u.test(trimmed)) {
-        current = '';
+        current = "";
         continue;
       }
       if (!inTrigger && /\bCREATE\s+TRIGGER\b/i.test(trimmed)) {
@@ -77,62 +79,72 @@ export function splitSqlStatements(sql: string): string[] {
       if (inTrigger) {
         if (/\bEND;\s*$/i.test(trimmed)) {
           statements.push(trimmed);
-          current = '';
+          current = "";
           inTrigger = false;
         }
       } else {
-        statements.push(trimmed.replace(/;+$/u, ''));
-        current = '';
+        statements.push(trimmed.replace(/;+$/u, ""));
+        current = "";
       }
     }
   }
 
   const trailing = current.trim();
   if (trailing && !/^;+$/u.test(trailing)) {
-    statements.push(trailing.replace(/;+$/u, ''));
+    statements.push(trailing.replace(/;+$/u, ""));
   }
   return statements;
 }
 
 export function stripLeadingSqlComments(statement: string): string {
   return statement
-    .split('\n')
-    .filter((line) => !line.trim().startsWith('--'))
-    .join('\n')
+    .split("\n")
+    .filter((line) => !line.trim().startsWith("--"))
+    .join("\n")
     .trim();
 }
 
-export function isRecoverableSqliteSchemaDuplication(error: unknown, normalizedStatement: string): boolean {
-  const sqliteError = error as { message?: string; code?: string; rawCode?: number };
-  const message = sqliteError.message ?? '';
+export function isRecoverableSqliteSchemaDuplication(
+  error: unknown,
+  normalizedStatement: string,
+): boolean {
+  const sqliteError = error as {
+    message?: string;
+    code?: string;
+    rawCode?: number;
+  };
+  const message = sqliteError.message ?? "";
   if (!/already exists|duplicate column name/i.test(message)) {
     return false;
   }
 
-  return /^(CREATE TABLE|CREATE UNIQUE INDEX|CREATE INDEX|ALTER TABLE\s+"[^"]+"\s+ADD COLUMN)/i.test(
-    normalizedStatement,
-  );
+  return /^(CREATE TABLE|CREATE UNIQUE INDEX|CREATE INDEX|ALTER TABLE\s+"[^"]+"\s+ADD COLUMN)/i
+    .test(
+      normalizedStatement,
+    );
 }
 
 export function normalizeMigrationSql(fileName: string, sql: string): string {
   if (
-    fileName === '0011_service_registry_tables.sql' ||
-    fileName === '0011_services_physical_tables.sql' ||
-    fileName === '0013_service_tables.sql' ||
-    fileName === '0013_service_table_shape_repair.sql' ||
-    fileName === '0019_service_side_columns.sql'
+    fileName === "0011_service_registry_tables.sql" ||
+    fileName === "0011_services_physical_tables.sql" ||
+    fileName === "0013_service_tables.sql" ||
+    fileName === "0013_service_table_shape_repair.sql" ||
+    fileName === "0019_service_side_columns.sql"
   ) {
-    return '';
+    return "";
   }
 
   return sql
-    .split('\n')
-    .filter((line) => !(
-      line.includes('"accounts_google_sub_key"') ||
-      line.includes('"accounts_google_sub_idx"') ||
-      line.includes('"accounts_takos_auth_id_idx"')
-    ))
-    .join('\n');
+    .split("\n")
+    .filter((line) =>
+      !(
+        line.includes('"accounts_google_sub_key"') ||
+        line.includes('"accounts_google_sub_idx"') ||
+        line.includes('"accounts_takos_auth_id_idx"')
+      )
+    )
+    .join("\n");
 }
 
 function rewriteCreateTableForPostgres(statement: string): string[] {
@@ -140,22 +152,26 @@ function rewriteCreateTableForPostgres(statement: string): string[] {
   if (!tableMatch) return [statement];
 
   const tableName = tableMatch[1];
-  const lines = statement.replace(/;$/, '').split('\n');
+  const lines = statement.replace(/;$/, "").split("\n");
   const retainedLines: string[] = [];
   const foreignKeyStatements: string[] = [];
 
   for (const line of lines) {
     const trimmed = line.trim();
-    if (trimmed.startsWith('CONSTRAINT ') && trimmed.includes(' FOREIGN KEY ')) {
+    if (
+      trimmed.startsWith("CONSTRAINT ") && trimmed.includes(" FOREIGN KEY ")
+    ) {
       foreignKeyStatements.push(
-        `ALTER TABLE "${tableName}" ADD ${trimmed.replace(/,$/, '')};`,
+        `ALTER TABLE "${tableName}" ADD ${trimmed.replace(/,$/, "")};`,
       );
       continue;
     }
     retainedLines.push(line);
   }
 
-  const createTableStatement = `${retainedLines.join('\n').replace(/,\s*\n\)\s*$/m, '\n)')};`;
+  const createTableStatement = `${
+    retainedLines.join("\n").replace(/,\s*\n\)\s*$/m, "\n)")
+  };`;
   return [createTableStatement, ...foreignKeyStatements];
 }
 
@@ -164,20 +180,26 @@ export function rewriteInsertOrIgnoreForPostgres(statement: string): string {
     return statement;
   }
 
-  const withoutKeyword = statement.replace(/^\s*INSERT\s+OR\s+IGNORE\s+INTO\b/i, 'INSERT INTO');
+  const withoutKeyword = statement.replace(
+    /^\s*INSERT\s+OR\s+IGNORE\s+INTO\b/i,
+    "INSERT INTO",
+  );
   const trimmed = withoutKeyword.trimEnd();
   if (/ON\s+CONFLICT\b/i.test(trimmed)) {
     return withoutKeyword;
   }
-  return `${trimmed.replace(/;?\s*$/, '')} ON CONFLICT DO NOTHING;`;
+  return `${trimmed.replace(/;?\s*$/, "")} ON CONFLICT DO NOTHING;`;
 }
 
-export function normalizePostgresMigrationSql(fileName: string, sql: string): string {
-  if (fileName === '0015_deployments_service_id.sql') {
+export function normalizePostgresMigrationSql(
+  fileName: string,
+  sql: string,
+): string {
+  if (fileName === "0015_deployments_service_id.sql") {
     return `ALTER TABLE "deployments" RENAME COLUMN "worker_id" TO "service_id";`;
   }
 
-  if (fileName === '0022_apps_service_id.sql') {
+  if (fileName === "0022_apps_service_id.sql") {
     return `
 DO $$
 BEGIN
@@ -193,7 +215,7 @@ CREATE INDEX IF NOT EXISTS "idx_apps_service_id" ON "apps" ("service_id");
 `;
   }
 
-  if (fileName === '0023_shortcut_group_items_service_id.sql') {
+  if (fileName === "0023_shortcut_group_items_service_id.sql") {
     return `
 DO $$
 BEGIN
@@ -207,7 +229,7 @@ END $$;
 `;
   }
 
-  if (fileName === '0024_mcp_servers_service_id.sql') {
+  if (fileName === "0024_mcp_servers_service_id.sql") {
     return `
 DO $$
 BEGIN
@@ -223,7 +245,7 @@ CREATE INDEX IF NOT EXISTS "idx_mcp_servers_service_id" ON "mcp_servers" ("servi
 `;
   }
 
-  if (fileName === '0025_file_handlers_service_hostname.sql') {
+  if (fileName === "0025_file_handlers_service_hostname.sql") {
     return `
 DO $$
 BEGIN
@@ -237,7 +259,7 @@ END $$;
 `;
   }
 
-  if (fileName === '0026_runs_service_id.sql') {
+  if (fileName === "0026_runs_service_id.sql") {
     return `
 DO $$
 BEGIN
@@ -253,7 +275,7 @@ CREATE INDEX IF NOT EXISTS "idx_runs_service_id" ON "runs" ("service_id");
 `;
   }
 
-  if (fileName === '0031_runs_service_heartbeat.sql') {
+  if (fileName === "0031_runs_service_heartbeat.sql") {
     return `
 DO $$
 BEGIN
@@ -269,7 +291,7 @@ CREATE INDEX IF NOT EXISTS "idx_runs_service_heartbeat" ON "runs" ("service_hear
 `;
   }
 
-  if (fileName === '0033_drop_legacy_worker_mirrors.sql') {
+  if (fileName === "0033_drop_legacy_worker_mirrors.sql") {
     return `
 DO $$
 BEGIN
@@ -292,8 +314,8 @@ DROP TABLE IF EXISTS "workers";
   }
 
   if (
-    fileName === '0020_service_adjacent_service_id_columns.sql'
-    || fileName === '0019_service_side_columns.sql'
+    fileName === "0020_service_adjacent_service_id_columns.sql" ||
+    fileName === "0019_service_side_columns.sql"
   ) {
     return `
 DO $$
@@ -354,17 +376,17 @@ CREATE INDEX IF NOT EXISTS "idx_managed_takos_tokens_service_id"
   }
 
   if (
-    fileName === '0016_workers_deployments_fk_repair.sql' ||
-    fileName === '0017_deployment_events_deployments_fk_repair.sql' ||
-    fileName === '0018_drop_worker_binding_mirrors.sql' ||
-    fileName === '0019_service_side_columns.sql'
+    fileName === "0016_workers_deployments_fk_repair.sql" ||
+    fileName === "0017_deployment_events_deployments_fk_repair.sql" ||
+    fileName === "0018_drop_worker_binding_mirrors.sql" ||
+    fileName === "0019_service_side_columns.sql"
   ) {
-    return '';
+    return "";
   }
 
   const transformed = normalizeMigrationSql(fileName, sql)
-    .replace(/^\s*PRAGMA\s+[^;]+;?\s*$/gim, '')
-    .replace(/\bDATETIME\b/g, 'TIMESTAMPTZ')
+    .replace(/^\s*PRAGMA\s+[^;]+;?\s*$/gim, "")
+    .replace(/\bDATETIME\b/g, "TIMESTAMPTZ")
     .replace(
       /strftime\('%Y-%m-%dT%H:%M:%fZ',\s*'now'\)/gi,
       `to_char(CURRENT_TIMESTAMP AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"')`,
@@ -387,10 +409,12 @@ CREATE INDEX IF NOT EXISTS "idx_managed_takos_tokens_service_id"
 
   for (const statement of splitSqlStatements(transformed)) {
     const postgresStatement = rewriteInsertOrIgnoreForPostgres(statement);
-    const [primaryStatement, ...foreignKeys] = rewriteCreateTableForPostgres(postgresStatement);
+    const [primaryStatement, ...foreignKeys] = rewriteCreateTableForPostgres(
+      postgresStatement,
+    );
     rewrittenStatements.push(primaryStatement);
     deferredForeignKeys.push(...foreignKeys);
   }
 
-  return [...rewrittenStatements, ...deferredForeignKeys].join('\n\n');
+  return [...rewrittenStatements, ...deferredForeignKeys].join("\n\n");
 }

@@ -2,21 +2,24 @@
 
 `takos deploy` は Takos の group-scoped deploy entrypoint です。deploy manifest
 (`.takos/app.yml` / `.takos/app.yaml`) または repository URL を入力にして、
-worker / service / route / publication / grant の primitive declaration を
-明示した group inventory へ渡します。
+worker / service / resource / route / publication / grant の primitive declaration を
+manifest の `name` で決まる group inventory へ渡します。`--group` は override
+です。
 
-runtime model は tenant runtime で、operator-selected backend に同じ
-backend-neutral spec を流します。`--group` で指定した group に作成・更新される
-primitive が所属し、group snapshot / rollback / uninstall などの group
-機能を使えます。group 所属は runtime や resource provider
+runtime model は tenant runtime で、operator-selected backend に backend-neutral
+schema / translation surface を流します。これは runtime behavior や provider
+resource existence の一致を意味しません。manifest の `name` または `--group`
+override で決まる group に作成・更新される primitive が所属し、group snapshot / rollback / uninstall
+などの group 機能を使えます。group 所属は runtime や resource provider
 の特別処理ではありません。group なしの primitive は個別 primitive API
 で管理します。
 
 `publish` は他の primitive へ共有する information sharing / capability output
 catalog です。Takos capability grant（`api-key` /
 `oauth-client`）もここに含めます。SQL / object-store / queue などの resource は
-`/api/resources/*` などの resource API / runtime binding で管理します。backend
-の選択は operator-only で、manifest には書きません。
+manifest の `resources`、または `/api/resources/*` などの resource API /
+runtime binding で管理します。backend の選択は operator-only で、manifest
+には書きません。
 
 ローカル manifest 経路では、CLI が `build.fromWorkflow` の workflow を
 workflow-runner でローカル実行し、その build artifact を `source.artifacts`
@@ -27,13 +30,13 @@ workflow-runner でローカル実行し、その build artifact を `source.art
 
 ```bash
 # ローカル manifest から group inventory へ deploy
-takos deploy --env staging --space SPACE_ID --group my-app
+takos deploy --env staging --space SPACE_ID
 
 # repository URL から deploy
-takos deploy https://github.com/acme/my-app.git --env staging --space SPACE_ID --group my-app
+takos deploy https://github.com/acme/my-app.git --env staging --space SPACE_ID
 
 # dry-run preview
-takos deploy --plan --space SPACE_ID --group my-app
+takos deploy --plan --space SPACE_ID
 ```
 
 positional argument を省略するとローカルの `.takos/app.yml` または
@@ -54,7 +57,7 @@ positional argument を省略するとローカルの `.takos/app.yml` または
 | `--target <key...>`        | `takos deploy --plan` / `takos install --plan` で使う diff entry filter。例: `web`, `web:/` |
 | `--ref <ref>`              | branch / tag / commit（repo URL 指定時）                                                    |
 | `--ref-type <type>`        | `branch` / `tag` / `commit`（repo URL 指定時、CLI で choice validation）                    |
-| `--group <name>`           | primitive を所属させる group 名。`takos deploy` / `takos install` では必須                  |
+| `--group <name>`           | manifest の `name` から決まる group 名を override する                                      |
 | `--space <id>`             | 対象 space ID                                                                               |
 
 `repositoryUrl` と `--manifest` は同時指定できません。
@@ -63,19 +66,19 @@ positional argument を省略するとローカルの `.takos/app.yml` または
 
 1. `.takos/app.yml` / `.takos/app.yaml` か `--manifest` で指定した deploy
    manifest を読み込む
-2. `takos deploy --plan --space SPACE_ID --group GROUP_NAME` で non-mutating な
+2. `takos deploy --plan --space SPACE_ID` で non-mutating な
    preview を取り、差分と runtime translation report を確認する
-3. `takos deploy --space SPACE_ID --group GROUP_NAME` で primitive declaration
+3. `takos deploy --space SPACE_ID` で primitive declaration
    を compile し、 service / route / publication / grant へ apply する
-4. `--group` で明示した group の inventory に対象 primitive を所属させ、
+4. manifest の `name` または `--group` override で決まる group の inventory に対象 primitive を所属させ、
    group-scoped state を更新する
 5. workload / routes の差分を計算し、publication は catalog として同期する。
    Takos capability grants は validation / sync する
-6. group 指定がある場合は group snapshot を更新する
+6. 指定した group の snapshot を更新する
 
-- `takos deploy --plan --space SPACE_ID --group NAME` は DB
+- `takos deploy --plan --space SPACE_ID` は DB
   を更新しません。group が未作成でも preview だけ返します。
-- `takos deploy --space SPACE_ID --group NAME` は group が未作成なら apply
+- `takos deploy --space SPACE_ID` は group が未作成なら apply
   時に作成します。
 - `--env` は preview の評価条件であり、実際の metadata 更新は deploy
   時にだけ起きます。backend 選択は operator/runtime configuration の責務で、
@@ -126,13 +129,14 @@ CLI では `Spec: Takos deploy manifest`、`Runtime: tenant runtime`、
 へ渡すための backend requirement preflight を示します。backend adapter 名は
 operator 内部の実装詳細として扱い、通常の report には出しません。
 
-- `compatible`: tenant runtime contract として実現できる
+- `compatible`: tenant runtime へ渡す schema / translation が成立する
 - `unsupported`: current deploy pipeline には接続されておらず fail-fast で止まる
 
 runtime translation report が対象にするのは `desiredState.workloads` /
 `desiredState.routes` と、runtime が満たすべき operator/backend 要件です。SQL /
 object-store / queue などの resource は publish catalog の対象ではなく、
-resource record は `/api/resources/*` などの resource API で扱います。この
+resource record は manifest `resources` または `/api/resources/*` などの
+resource API で扱います。この
 report は full runtime compatibility や resource existence を判定しません。
 manifest 側の workload / route / publication / consume の整合性は manifest
 validation と deploy validation で確認します。
@@ -142,22 +146,25 @@ validation と deploy validation で確認します。
 ごとに異なります。backend / adapter 名は operator-only configuration
 であり、public deploy manifest には書きません。runtime translation report で
 `unsupported` と判定された workload / route は実行前に失敗します。resource は
-manifest の publish catalog とは別に resource API で扱います。operator 向けの
+manifest の publish catalog ではなく、manifest `resources` または resource API
+で扱います。operator 向けの
 現在の backing 実装は
 [hosting/aws](/hosting/aws)、[hosting/gcp](/hosting/gcp)、[hosting/kubernetes](/hosting/kubernetes)
-を参照してください。:::
+と [Not A Current Contract](/hosting/differences#not-a-current-contract)
+を参照してください。
+:::
 
 ## 例
 
 ```bash
 # 一部 workload / route の plan だけ確認
-takos deploy --plan --env production --space SPACE_ID --group my-app --target web --target 'web:/'
+takos deploy --plan --env production --space SPACE_ID --target web --target 'web:/'
 
 # repo URL から特定の tag を deploy
-takos deploy https://github.com/acme/my-app.git --space SPACE_ID --group my-app --ref v1.2.0 --ref-type tag
+takos deploy https://github.com/acme/my-app.git --space SPACE_ID --ref v1.2.0 --ref-type tag
 
 # dry-run preview
-takos deploy --plan --space SPACE_ID --group my-app
+takos deploy --plan --space SPACE_ID
 ```
 
 ローカル working tree からの `takos deploy` も repo URL からの `takos deploy`

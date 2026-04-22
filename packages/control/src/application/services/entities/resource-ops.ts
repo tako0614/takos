@@ -11,6 +11,7 @@ import { and, eq, ne } from "drizzle-orm";
 import { getDb } from "../../../infra/db/client.ts";
 import { groups } from "../../../infra/db/schema-groups.ts";
 import { resources } from "../../../infra/db/schema-platform-resources.ts";
+import { serviceBindings } from "../../../infra/db/schema-services.ts";
 import type { Env } from "../../../shared/types/env.ts";
 import {
   resolveResourceDriver,
@@ -475,6 +476,11 @@ export async function deleteResource(
     // The real resource may already have been deleted externally.
     console.warn(`Failed to delete managed resource for "${name}":`, error);
   }
+
+  await db
+    .delete(serviceBindings)
+    .where(eq(serviceBindings.resourceId, row.id))
+    .run();
 
   // Remove from DB
   await db

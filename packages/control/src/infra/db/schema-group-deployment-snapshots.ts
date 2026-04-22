@@ -20,52 +20,63 @@ import { accounts } from "./schema-accounts.ts";
  * .index() names so they don't add to the drift.
  */
 
-export const groupDeploymentSnapshots = sqliteTable("group_deployment_snapshots", {
-  id: text("id").primaryKey(),
-  spaceId: text("space_id").notNull(),
-  groupId: text("group_id").notNull(),
-  groupNameSnapshot: text("group_name_snapshot"),
-  createdByAccountId: text("created_by_account_id").references(() => accounts.id),
-  sourceKind: text("source_kind").notNull(),
-  sourceRepositoryUrl: text("source_repository_url"),
-  sourceResolvedRepoId: text("source_resolved_repo_id"),
-  sourceRepoId: text("source_repo_id"),
-  sourceOwner: text("source_owner"),
-  sourceRepoName: text("source_repo_name"),
-  sourceVersion: text("source_version"),
-  sourceRef: text("source_ref"),
-  sourceRefType: text("source_ref_type"),
-  sourceCommitSha: text("source_commit_sha"),
-  sourceReleaseId: text("source_release_id"),
-  sourceTag: text("source_tag"),
-  status: text("status").notNull().default("applied"),
-  manifestJson: text("manifest_json").notNull(),
-  buildSourcesJson: text("build_sources_json"),
-  hostnamesJson: text("hostnames_json"),
-  snapshotR2Key: text("snapshot_r2_key"),
-  snapshotSha256: text("snapshot_sha256"),
-  snapshotSizeBytes: integer("snapshot_size_bytes"),
-  snapshotFormat: text("snapshot_format"),
-  resultJson: text("result_json"),
-  rollbackOfGroupDeploymentSnapshotId: text("rollback_of_group_deployment_snapshot_id"),
-  ...timestamps,
-}, (table) => ({
-  idxSpaceCreated: index("idx_group_deployment_snapshots_space_created").on(
-    table.spaceId,
-    table.createdAt,
-  ),
-  idxGroupCreated: index("idx_group_deployment_snapshots_group_created").on(
-    table.groupId,
-    table.createdAt,
-  ),
-  idxStatus: index("idx_group_deployment_snapshots_status").on(table.status),
-  idxRollbackOf: index("idx_group_deployment_snapshots_rollback_of").on(
-    table.rollbackOfGroupDeploymentSnapshotId,
-  ),
-  idxSourceRepositoryUrl: index("idx_group_deployment_snapshots_source_repository_url").on(
-    table.sourceRepositoryUrl,
-  ),
-  idxSnapshotR2Key: index("idx_group_deployment_snapshots_snapshot_r2_key").on(
-    table.snapshotR2Key,
-  ),
-}));
+export const groupDeploymentSnapshots = sqliteTable(
+  "group_deployment_snapshots",
+  {
+    id: text("id").primaryKey(),
+    spaceId: text("space_id").notNull(),
+    groupId: text("group_id").notNull(),
+    groupNameSnapshot: text("group_name_snapshot"),
+    createdByAccountId: text("created_by_account_id").references(() =>
+      accounts.id
+    ),
+    sourceKind: text("source_kind").notNull(),
+    sourceRepositoryUrl: text("source_repository_url"),
+    sourceResolvedRepoId: text("source_resolved_repo_id"),
+    sourceRepoId: text("source_repo_id"),
+    sourceOwner: text("source_owner"),
+    sourceRepoName: text("source_repo_name"),
+    sourceVersion: text("source_version"),
+    sourceRef: text("source_ref"),
+    sourceRefType: text("source_ref_type"),
+    sourceCommitSha: text("source_commit_sha"),
+    sourceReleaseId: text("source_release_id"),
+    sourceTag: text("source_tag"),
+    status: text("status").notNull().default("applied"),
+    manifestJson: text("manifest_json").notNull(),
+    buildSourcesJson: text("build_sources_json"),
+    hostnamesJson: text("hostnames_json"),
+    snapshotR2Key: text("snapshot_r2_key"),
+    snapshotSha256: text("snapshot_sha256"),
+    snapshotSizeBytes: integer("snapshot_size_bytes"),
+    snapshotFormat: text("snapshot_format"),
+    resultJson: text("result_json"),
+    rollbackOfGroupDeploymentSnapshotId: text(
+      "rollback_of_group_deployment_snapshot_id",
+    ),
+    ...timestamps,
+  },
+  (table) => ({
+    idxSpaceCreated: index("idx_group_deployment_snapshots_space_created").on(
+      table.spaceId,
+      table.createdAt,
+    ),
+    idxGroupCreated: index("idx_group_deployment_snapshots_group_created").on(
+      table.groupId,
+      table.createdAt,
+    ),
+    idxStatus: index("idx_group_deployment_snapshots_status").on(table.status),
+    idxRollbackOf: index("idx_group_deployment_snapshots_rollback_of").on(
+      table.rollbackOfGroupDeploymentSnapshotId,
+    ),
+    idxSourceRepositoryUrl: index(
+      "idx_group_deployment_snapshots_source_repository_url",
+    ).on(
+      table.sourceRepositoryUrl,
+    ),
+    idxSnapshotR2Key: index("idx_group_deployment_snapshots_snapshot_r2_key")
+      .on(
+        table.snapshotR2Key,
+      ),
+  }),
+);

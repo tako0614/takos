@@ -31,33 +31,72 @@ use crate::engine_support::{
 };
 use crate::model::TakosModelRunner;
 use crate::skills::{build_skill_catalog, resolve_skill_plan};
-use crate::tool_bridge::CompositeToolExecutor;
+use crate::tool_bridge::{CompositeToolExecutor, ToolExecutionRecord};
 
 pub type AppResult<T> = Result<T, Box<dyn std::error::Error + Send + Sync>>;
+
+const DEFAULT_MAX_CONCURRENT_RUNS: usize = 5;
+const OPENAI_MAX_TOOL_DEFINITIONS: usize = 128;
+const DEFAULT_PRIORITY_TOOL_NAMES: [&str; 5] = [
+    "skill_context",
+    "skill_catalog",
+    "skill_describe",
+    "skill_list",
+    "skill_get",
+];
 
 #[derive(Clone)]
 struct ServiceState {
     data_dir: PathBuf,
     active_runs: Arc<Mutex<HashSet<String>>>,
+    max_concurrent_runs: usize,
 }
 
 impl ServiceState {
-    fn new(data_dir: PathBuf) -> Self {
+    fn new(data_dir: PathBuf, max_concurrent_runs: usize) -> Self {
         Self {
             data_dir,
             active_runs: Arc::new(Mutex::new(HashSet::new())),
+            max_concurrent_runs,
         }
     }
 
-    fn try_register_run(&self, run_id: &str) -> bool {
+    fn active_run_count(&self) -> usize {
+        let guard = self.active_runs.lock().expect("run registry lock poisoned");
+        guard.len()
+    }
+
+    fn available_run_slots(&self) -> usize {
+        self.max_concurrent_runs
+            .saturating_sub(self.active_run_count())
+    }
+
+    fn try_register_run(&self, run_id: &str) -> RunAdmission {
         let mut guard = self.active_runs.lock().expect("run registry lock poisoned");
-        guard.insert(run_id.to_string())
+        if guard.contains(run_id) {
+            return RunAdmission::Duplicate;
+        }
+        if guard.len() >= self.max_concurrent_runs {
+            return RunAdmission::AtCapacity {
+                active: guard.len(),
+                max: self.max_concurrent_runs,
+            };
+        }
+        guard.insert(run_id.to_string());
+        RunAdmission::Registered
     }
 
     fn finish_run(&self, run_id: &str) {
         let mut guard = self.active_runs.lock().expect("run registry lock poisoned");
         guard.remove(run_id);
     }
+}
+
+#[derive(Debug, PartialEq, Eq)]
+enum RunAdmission {
+    Registered,
+    Duplicate,
+    AtCapacity { active: usize, max: usize },
 }
 
 #[tokio::main]
@@ -69,7 +108,8 @@ async fn main() -> AppResult<()> {
         .unwrap_or_else(|_| PathBuf::from("/var/lib/takos/rust-agent"));
     std::fs::create_dir_all(&data_dir)?;
 
-    let state = Arc::new(ServiceState::new(data_dir));
+    let max_concurrent_runs = parse_max_concurrent_runs(env::var("MAX_CONCURRENT_RUNS").ok());
+    let state = Arc::new(ServiceState::new(data_dir, max_concurrent_runs));
     let app = Router::new()
         .route("/health", get(health))
         .route("/start", post(start))
@@ -85,10 +125,15 @@ async fn main() -> AppResult<()> {
     Ok(())
 }
 
-async fn health() -> Json<Value> {
+async fn health(State(state): State<Arc<ServiceState>>) -> Json<Value> {
     Json(json!({
         "status": "ok",
         "service": "takos-rust-agent",
+        "runs": {
+            "active": state.active_run_count(),
+            "max": state.max_concurrent_runs,
+            "available": state.available_run_slots(),
+        },
     }))
 }
 
@@ -98,15 +143,28 @@ async fn start(
 ) -> (StatusCode, Json<Value>) {
     let run_id = payload.run_id.clone();
     let service_id = payload.resolved_service_id().to_string();
-    if !state.try_register_run(&run_id) {
-        return (
-            StatusCode::ACCEPTED,
-            Json(json!({
-                "accepted": true,
-                "runId": run_id,
-                "duplicate": true,
-            })),
-        );
+    match state.try_register_run(&run_id) {
+        RunAdmission::Registered => {}
+        RunAdmission::Duplicate => {
+            return (
+                StatusCode::ACCEPTED,
+                Json(json!({
+                    "accepted": true,
+                    "runId": run_id,
+                    "duplicate": true,
+                })),
+            );
+        }
+        RunAdmission::AtCapacity { active, max } => {
+            return (
+                StatusCode::SERVICE_UNAVAILABLE,
+                Json(json!({
+                    "error": "At capacity",
+                    "active": active,
+                    "max": max,
+                })),
+            );
+        }
     }
 
     let payload_for_task = payload.clone();
@@ -193,18 +251,31 @@ async fn execute_run(payload: StartPayload, state: Arc<ServiceState>) -> AppResu
         tool_catalog.tools.clone(),
         skill_catalog.clone(),
     );
-    let exposed_tools = composite_tool_executor.exposed_tools();
-    let model_runner = TakosModelRunner::new(
+    let exposed_tools = select_model_tools(&composite_tool_executor.exposed_tools(), &skill_plan);
+    let model_runner = TakosModelRunner::new_with_openai_api_keys(
         payload.resolved_model(),
         run_config.temperature,
-        api_keys.openai.or_else(|| env::var("OPENAI_API_KEY").ok()),
+        collect_openai_api_keys(api_keys.openai, env::var("OPENAI_API_KEY").ok()),
         exposed_tools.clone(),
         usage_tracker,
     );
-    let deps = build_engine_deps(&store_root, model_runner.clone(), composite_tool_executor)?;
+    let deps = build_engine_deps(
+        &store_root,
+        model_runner.clone(),
+        composite_tool_executor.clone(),
+    )?;
     let request =
         build_session_request(engine_session_id, user_message, &skill_plan, &exposed_tools);
 
+    client
+        .emit_run_event(
+            "thinking",
+            json!({
+                "message": "Loaded context and configuration for this run.",
+            }),
+        )
+        .await
+        .ok();
     client
         .emit_run_event(
             "started",
@@ -215,6 +286,7 @@ async fn execute_run(payload: StartPayload, state: Arc<ServiceState>) -> AppResu
                 "thread_id": bootstrap.thread_id,
                 "skill_count": skill_plan.activated_skills.len(),
                 "remote_tool_count": tool_catalog.tools.len(),
+                "model_tool_count": exposed_tools.len(),
             }),
         )
         .await
@@ -226,6 +298,15 @@ async fn execute_run(payload: StartPayload, state: Arc<ServiceState>) -> AppResu
         cancellation_token.clone(),
         Duration::from_secs(15),
     ));
+    client
+        .emit_run_event(
+            "thinking",
+            json!({
+                "message": "Starting model execution.",
+            }),
+        )
+        .await
+        .ok();
     let run_result = run_turn_with_options(
         &engine_config,
         &deps,
@@ -240,14 +321,44 @@ async fn execute_run(payload: StartPayload, state: Arc<ServiceState>) -> AppResu
     let _ = heartbeat_handle.await;
 
     let usage = model_runner.usage_payload();
+    client
+        .emit_run_event(
+            "progress",
+            json!({
+                "message": "Cleaning up tool state.",
+            }),
+        )
+        .await
+        .ok();
     let cleanup_result = client.tool_cleanup().await;
+    client
+        .emit_run_event(
+            "progress",
+            json!({
+                "message": if cleanup_result.is_ok() {
+                    "Tool cleanup completed."
+                } else {
+                    "Tool cleanup encountered an error."
+                },
+            }),
+        )
+        .await
+        .ok();
+    let tool_executions = composite_tool_executor.take_tool_executions();
 
     match run_result {
         Ok(response) => {
-            handle_success(&client, &bootstrap.thread_id, &response, usage).await?;
+            handle_success(
+                &client,
+                &bootstrap.thread_id,
+                &response,
+                usage,
+                tool_executions,
+            )
+            .await?;
         }
         Err(err) => {
-            handle_failure(&client, &err, usage).await?;
+            handle_failure(&client, Some(&bootstrap.thread_id), &err, usage).await?;
             cleanup_result.ok();
             return Err(Box::new(err));
         }
@@ -284,10 +395,20 @@ async fn handle_success(
     thread_id: &str,
     response: &SessionResponse,
     usage: UsagePayload,
+    tool_executions: Vec<ToolExecutionRecord>,
 ) -> AppResult<()> {
     let status = run_status_for_loop(response.status.clone());
     if let Some(message) = &response.assistant_message {
-        client.add_assistant_message(thread_id, message).await?;
+        let metadata = if tool_executions.is_empty() {
+            None
+        } else {
+            Some(json!({
+                "tool_executions": tool_executions,
+            }))
+        };
+        client
+            .add_assistant_message(thread_id, message, metadata)
+            .await?;
         client
             .emit_run_event(
                 "message",
@@ -331,17 +452,45 @@ async fn handle_success(
 
 async fn handle_failure(
     client: &ControlRpcClient,
+    thread_id: Option<&str>,
     err: &impl std::fmt::Display,
     usage: UsagePayload,
 ) -> AppResult<()> {
-    let status = if err.to_string().contains("operation cancelled") {
+    let error_message = err.to_string();
+    let status = if error_message.contains("operation cancelled") {
         "cancelled"
     } else {
         "failed"
     };
     client
-        .update_run_status(status, usage.clone(), None, Some(&err.to_string()))
+        .update_run_status(status, usage.clone(), None, Some(&error_message))
         .await?;
+
+    if status == "failed" {
+        if let Some(thread_id) = thread_id {
+            let user_message = user_visible_failure_message(&error_message);
+            match client
+                .add_assistant_message(thread_id, &user_message, None)
+                .await
+            {
+                Ok(()) => {
+                    client
+                        .emit_run_event(
+                            "message",
+                            json!({
+                                "content": user_message,
+                            }),
+                        )
+                        .await
+                        .ok();
+                }
+                Err(add_err) => {
+                    warn!(run_id = client.run_id(), error = %add_err, "failed to persist user-visible run failure message");
+                }
+            }
+        }
+    }
+
     client
         .emit_run_event(
             if status == "cancelled" {
@@ -350,7 +499,7 @@ async fn handle_failure(
                 "error"
             },
             json!({
-                "message": err.to_string(),
+                "message": error_message,
                 "usage": {
                     "inputTokens": usage.input_tokens,
                     "outputTokens": usage.output_tokens,
@@ -360,6 +509,94 @@ async fn handle_failure(
         .await
         .ok();
     Ok(())
+}
+
+fn user_visible_failure_message(error: &str) -> String {
+    let normalized = error.to_ascii_lowercase();
+    if normalized.contains("incorrect api key")
+        || normalized.contains("invalid_api_key")
+        || (normalized.contains("401 unauthorized") && normalized.contains("openai"))
+    {
+        return "The agent could not call the language model because the configured OpenAI API key is invalid. Update OPENAI_API_KEY for this environment and retry.".to_string();
+    }
+    if normalized.contains("api key is not configured")
+        || normalized.contains("api key not configured")
+    {
+        return "The agent could not call the language model because no OpenAI API key is configured for this environment. Set OPENAI_API_KEY and retry.".to_string();
+    }
+    if normalized.contains("rate limit") || normalized.contains("429") {
+        return "The agent could not call the language model because the provider rate limit was reached. Wait a bit and retry.".to_string();
+    }
+    if normalized.contains("model error") || normalized.contains("openai chat completions failed") {
+        return "The agent failed while calling the language model. Check the run details, fix the model configuration, and retry.".to_string();
+    }
+    "The agent run failed before it could produce a response. Check the run details and retry."
+        .to_string()
+}
+
+fn collect_openai_api_keys(
+    control_key: Option<String>,
+    container_key: Option<String>,
+) -> Vec<String> {
+    let mut keys: Vec<String> = Vec::new();
+    for value in [control_key, container_key].into_iter().flatten() {
+        let trimmed = value.trim();
+        if trimmed.is_empty() || keys.iter().any(|existing| existing == trimmed) {
+            continue;
+        }
+        keys.push(trimmed.to_string());
+    }
+    keys
+}
+
+fn select_model_tools(
+    remote_tools: &[crate::control_rpc::ToolDefinition],
+    skill_plan: &crate::control_rpc::SkillPlanResponse,
+) -> Vec<crate::control_rpc::ToolDefinition> {
+    let mut selected = Vec::new();
+    let mut seen = HashSet::new();
+
+    for name in DEFAULT_PRIORITY_TOOL_NAMES {
+        push_tool_by_name(remote_tools, name, &mut selected, &mut seen);
+    }
+    for skill in &skill_plan.activated_skills {
+        for name in &skill.execution_contract.preferred_tools {
+            push_tool_by_name(remote_tools, name, &mut selected, &mut seen);
+        }
+    }
+    for tool in remote_tools {
+        push_tool(tool, &mut selected, &mut seen);
+        if selected.len() >= OPENAI_MAX_TOOL_DEFINITIONS {
+            break;
+        }
+    }
+
+    selected
+}
+
+fn push_tool_by_name(
+    tools: &[crate::control_rpc::ToolDefinition],
+    name: &str,
+    selected: &mut Vec<crate::control_rpc::ToolDefinition>,
+    seen: &mut HashSet<String>,
+) {
+    if selected.len() >= OPENAI_MAX_TOOL_DEFINITIONS {
+        return;
+    }
+    if let Some(tool) = tools.iter().find(|tool| tool.name == name) {
+        push_tool(tool, selected, seen);
+    }
+}
+
+fn push_tool(
+    tool: &crate::control_rpc::ToolDefinition,
+    selected: &mut Vec<crate::control_rpc::ToolDefinition>,
+    seen: &mut HashSet<String>,
+) {
+    if selected.len() >= OPENAI_MAX_TOOL_DEFINITIONS || !seen.insert(tool.name.clone()) {
+        return;
+    }
+    selected.push(tool.clone());
 }
 
 fn run_status_for_loop(status: LoopStatus) -> &'static str {
@@ -379,4 +616,136 @@ fn init_tracing() {
         .with_target(false)
         .compact()
         .init();
+}
+
+fn parse_max_concurrent_runs(raw: Option<String>) -> usize {
+    let Some(raw) = raw else {
+        return DEFAULT_MAX_CONCURRENT_RUNS;
+    };
+    let trimmed = raw.trim();
+    if trimmed.is_empty() {
+        return DEFAULT_MAX_CONCURRENT_RUNS;
+    }
+    trimmed
+        .parse::<usize>()
+        .ok()
+        .filter(|value| *value >= 1)
+        .unwrap_or(DEFAULT_MAX_CONCURRENT_RUNS)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{
+        collect_openai_api_keys, parse_max_concurrent_runs, select_model_tools,
+        user_visible_failure_message, RunAdmission, ServiceState, OPENAI_MAX_TOOL_DEFINITIONS,
+    };
+    use crate::control_rpc::{
+        ActivatedSkill, SkillExecutionContract, SkillPlanResponse, ToolDefinition,
+    };
+    use std::path::PathBuf;
+
+    fn tool(name: &str) -> ToolDefinition {
+        ToolDefinition {
+            name: name.to_string(),
+            description: format!("{name} description"),
+            parameters: serde_json::json!({ "type": "object" }),
+        }
+    }
+
+    #[test]
+    fn parse_max_concurrent_runs_defaults_to_five() {
+        assert_eq!(parse_max_concurrent_runs(None), 5);
+        assert_eq!(parse_max_concurrent_runs(Some("".to_string())), 5);
+        assert_eq!(parse_max_concurrent_runs(Some("0".to_string())), 5);
+        assert_eq!(parse_max_concurrent_runs(Some("invalid".to_string())), 5);
+    }
+
+    #[test]
+    fn failure_message_for_invalid_openai_key_is_user_visible_and_sanitized() {
+        let message = user_visible_failure_message(
+            "model error: OpenAI chat completions failed: 401 Unauthorized {\"error\":{\"message\":\"Incorrect API key provided: sk-secret\"}}",
+        );
+        assert!(message.contains("OpenAI API key is invalid"));
+        assert!(!message.contains("sk-secret"));
+        assert!(!message.contains("401"));
+    }
+
+    #[test]
+    fn failure_message_for_missing_openai_key_is_actionable() {
+        let message = user_visible_failure_message("OpenAI API key is not configured");
+        assert!(message.contains("no OpenAI API key is configured"));
+        assert!(message.contains("OPENAI_API_KEY"));
+    }
+
+    #[test]
+    fn collect_openai_api_keys_keeps_control_then_container_fallback() {
+        let keys = collect_openai_api_keys(
+            Some(" sk-control ".to_string()),
+            Some("sk-container".to_string()),
+        );
+
+        assert_eq!(keys, vec!["sk-control", "sk-container"]);
+    }
+
+    #[test]
+    fn collect_openai_api_keys_filters_empty_and_duplicate_values() {
+        let keys =
+            collect_openai_api_keys(Some("sk-same".to_string()), Some(" sk-same ".to_string()));
+
+        assert_eq!(keys, vec!["sk-same"]);
+        assert!(collect_openai_api_keys(Some("   ".to_string()), None).is_empty());
+    }
+
+    #[test]
+    fn select_model_tools_caps_openai_tool_count_and_deduplicates_names() {
+        let mut tools = (0..150)
+            .map(|index| tool(&format!("tool_{index}")))
+            .collect::<Vec<_>>();
+        tools.push(tool("tool_1"));
+
+        let selected = select_model_tools(&tools, &SkillPlanResponse::default());
+        let unique_names = selected
+            .iter()
+            .map(|tool| tool.name.as_str())
+            .collect::<std::collections::HashSet<_>>();
+
+        assert_eq!(selected.len(), OPENAI_MAX_TOOL_DEFINITIONS);
+        assert_eq!(unique_names.len(), OPENAI_MAX_TOOL_DEFINITIONS);
+    }
+
+    #[test]
+    fn select_model_tools_prioritizes_skill_preferred_tools() {
+        let tools = (0..150)
+            .map(|index| tool(&format!("tool_{index}")))
+            .collect::<Vec<_>>();
+        let plan = SkillPlanResponse {
+            activated_skills: vec![ActivatedSkill {
+                id: "skill-1".to_string(),
+                name: "Skill".to_string(),
+                execution_contract: SkillExecutionContract {
+                    preferred_tools: vec!["tool_149".to_string()],
+                    ..SkillExecutionContract::default()
+                },
+                ..ActivatedSkill::default()
+            }],
+            ..SkillPlanResponse::default()
+        };
+
+        let selected = select_model_tools(&tools, &plan);
+
+        assert_eq!(selected[0].name, "tool_149");
+        assert_eq!(selected.len(), OPENAI_MAX_TOOL_DEFINITIONS);
+    }
+
+    #[test]
+    fn run_admission_accepts_duplicates_before_capacity_check() {
+        let state = ServiceState::new(PathBuf::from("/tmp/takos-test"), 1);
+
+        assert_eq!(state.try_register_run("run-1"), RunAdmission::Registered);
+        assert_eq!(state.try_register_run("run-1"), RunAdmission::Duplicate);
+        assert_eq!(
+            state.try_register_run("run-2"),
+            RunAdmission::AtCapacity { active: 1, max: 1 },
+        );
+    }
 }

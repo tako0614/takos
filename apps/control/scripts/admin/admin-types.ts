@@ -2,7 +2,7 @@
  * Shared type definitions for admin-cli command modules.
  */
 
-export type DeployEnvironment = 'production' | 'staging';
+export type DeployEnvironment = "production" | "staging";
 
 export type GlobalOptions = {
   environment: DeployEnvironment;

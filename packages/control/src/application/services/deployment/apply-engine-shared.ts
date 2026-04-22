@@ -20,6 +20,10 @@ import {
   listResources,
   updateManagedResource,
 } from "../entities/resource-ops.ts";
+import {
+  createServiceBinding,
+  deleteServiceBinding,
+} from "../resources/bindings.ts";
 import { deleteWorker } from "../entities/worker-ops.ts";
 import { deleteContainer } from "../entities/container-ops.ts";
 import { deleteService } from "../entities/service-ops.ts";
@@ -34,6 +38,7 @@ import {
   captureManagedWorkloadDesiredState,
   restoreManagedWorkloadDesiredState,
   syncGroupManagedDesiredState,
+  syncGroupPublicationDesiredState,
 } from "./group-managed-desired-state.ts";
 import { reconcileGroupRouting } from "./group-routing.ts";
 import { safeJsonParseOrDefault } from "../../../shared/utils/logger.ts";
@@ -87,6 +92,8 @@ export const applyEngineDeps = {
   createResource,
   deleteResource,
   updateManagedResource,
+  createServiceBinding,
+  deleteServiceBinding,
   deleteWorker,
   deleteContainer,
   deleteService,
@@ -99,6 +106,7 @@ export const applyEngineDeps = {
   captureManagedWorkloadDesiredState,
   restoreManagedWorkloadDesiredState,
   syncGroupManagedDesiredState,
+  syncGroupPublicationDesiredState,
   reconcileGroupRouting,
   buildTranslationReport,
   buildTranslationContextFromEnv,

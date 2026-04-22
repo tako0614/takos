@@ -1,22 +1,22 @@
-import { createPersistedSignal } from '../lib/storage-atom.ts';
+import { createPersistedSignal } from "../lib/storage-atom.ts";
 import {
+  getTranslation,
   type Language,
   type TranslationKey,
   type TranslationParams,
-  getTranslation,
-} from '../i18n.ts';
+} from "../i18n.ts";
 
 export type { TranslationKey, TranslationParams };
 
-const STORAGE_KEY = 'takos-lang';
+const STORAGE_KEY = "takos-lang";
 
 function detectInitialLanguage(): Language {
   const storage = globalThis.localStorage;
-  if (!storage) return 'en';
+  if (!storage) return "en";
   const stored = storage.getItem(STORAGE_KEY);
-  if (stored === 'ja' || stored === 'en') return stored;
+  if (stored === "ja" || stored === "en") return stored;
   const browserLang = globalThis.navigator.language.toLowerCase();
-  return browserLang.startsWith('ja') ? 'ja' : 'en';
+  return browserLang.startsWith("ja") ? "ja" : "en";
 }
 
 const [language, setLanguage] = createPersistedSignal<Language>(

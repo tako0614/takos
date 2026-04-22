@@ -1,27 +1,41 @@
 // Barrel re-export — keeps the original import path working for all consumers.
 
-export { CustomDomainError } from './custom-domains/domain-models.ts';
+export { CustomDomainError } from "./custom-domains/domain-models.ts";
 export type {
-  DomainStatus,
-  DnsInstruction,
   AddCustomDomainBody,
   AddCustomDomainResult,
-  VerifyDomainSuccessBody,
-  VerifyDomainErrorBody,
-  VerifyCustomDomainResult,
+  DnsInstruction,
+  DomainStatus,
   ServiceInfo,
-} from './custom-domains/domain-models.ts';
-
-export { deleteCloudflareCustomHostname, getCloudflareCustomHostnameStatus } from './custom-domains/cloudflare.ts';
+  VerifyCustomDomainResult,
+  VerifyDomainErrorBody,
+  VerifyDomainSuccessBody,
+} from "./custom-domains/domain-models.ts";
 
 export {
-  listCustomDomains,
+  createManagedCustomHostname,
+  deleteManagedCustomHostname,
+  getManagedCustomHostnameStatus,
+  resolveCustomHostnameProviderName,
+} from "./custom-domains/custom-hostname-provider.ts";
+export {
+  deleteCloudflareCustomHostname,
+  getCloudflareCustomHostnameStatus,
+} from "./custom-domains/cloudflare.ts";
+export type {
+  CreateCustomHostnameResult,
+  CustomHostnameProviderName,
+  CustomHostnameStatus,
+} from "./custom-domains/custom-hostname-provider.ts";
+
+export {
   addCustomDomain,
   deleteCustomDomain,
-} from './custom-domains/domain-crud.ts';
+  listCustomDomains,
+} from "./custom-domains/domain-crud.ts";
 
 export {
-  verifyCustomDomain,
   getCustomDomainDetails,
   refreshSslStatus,
-} from './custom-domains/domain-verification.ts';
+  verifyCustomDomain,
+} from "./custom-domains/domain-verification.ts";

@@ -1,35 +1,37 @@
-import type { D1Database } from '../../../shared/types/bindings.ts';
-import type { SelectOf } from '../../../shared/types/drizzle-utils.ts';
-import { oauthAuthorizationCodes } from '../../../infra/db/index.ts';
+import type { D1Database } from "../../../shared/types/bindings.ts";
+import type { SelectOf } from "../../../shared/types/drizzle-utils.ts";
+import { oauthAuthorizationCodes } from "../../../infra/db/index.ts";
 import type {
-  OAuthAuthorizationCode,
-  OAuthClient,
   AuthorizationRequest,
   CodeChallengeMethod,
-} from '../../../shared/types/oauth.ts';
-import { OAUTH_CONSTANTS } from '../../../shared/types/oauth.ts';
+  OAuthAuthorizationCode,
+  OAuthClient,
+} from "../../../shared/types/oauth.ts";
+import { OAUTH_CONSTANTS } from "../../../shared/types/oauth.ts";
 import {
-  generateRandomString,
   generateId,
-  verifyCodeChallenge,
+  generateRandomString,
   isValidCodeChallenge,
-} from './pkce.ts';
-import { computeSHA256 } from '../../../shared/utils/hash.ts';
+  verifyCodeChallenge,
+} from "./pkce.ts";
+import { computeSHA256 } from "../../../shared/utils/hash.ts";
 import {
-  getClientById,
-  validateRedirectUri,
-  supportsGrantType,
   getClientAllowedScopes,
-} from './client.ts';
-import { parseScopes, areScopesAllowed, validateScopes } from './scopes.ts';
-import { getDb } from '../../../infra/db/index.ts';
-import { eq, and, lt } from 'drizzle-orm';
-import { revokeTokensByAuthorizationCode } from './token.ts';
-import { textDate } from '../../../shared/utils/db-guards.ts';
+  getClientById,
+  supportsGrantType,
+  validateRedirectUri,
+} from "./client.ts";
+import { areScopesAllowed, parseScopes, validateScopes } from "./scopes.ts";
+import { getDb } from "../../../infra/db/index.ts";
+import { and, eq, lt } from "drizzle-orm";
+import { revokeTokensByAuthorizationCode } from "./token.ts";
+import { textDate } from "../../../shared/utils/db-guards.ts";
 
 type OAuthAuthorizationCodeRow = SelectOf<typeof oauthAuthorizationCodes>;
 
-function toApiAuthorizationCode(row: OAuthAuthorizationCodeRow): OAuthAuthorizationCode {
+function toApiAuthorizationCode(
+  row: OAuthAuthorizationCodeRow,
+): OAuthAuthorizationCode {
   return {
     id: row.id,
     code_hash: row.codeHash,
@@ -67,65 +69,92 @@ function invalidResult(
 
 export async function validateAuthorizationRequest(
   dbBinding: D1Database,
-  request: Partial<AuthorizationRequest>
+  request: Partial<AuthorizationRequest>,
 ): Promise<AuthorizationValidationResult> {
-  if (request.response_type !== 'code') {
-    return invalidResult('unsupported_response_type', 'Only response_type=code is supported');
+  if (request.response_type !== "code") {
+    return invalidResult(
+      "unsupported_response_type",
+      "Only response_type=code is supported",
+    );
   }
 
   if (!request.client_id) {
-    return invalidResult('invalid_request', 'client_id is required');
+    return invalidResult("invalid_request", "client_id is required");
   }
 
   const client = await getClientById(dbBinding, request.client_id);
   if (!client) {
-    return invalidResult('invalid_client', 'Client not found');
+    return invalidResult("invalid_client", "Client not found");
   }
 
   if (!request.redirect_uri) {
-    return invalidResult('invalid_request', 'redirect_uri is required');
+    return invalidResult("invalid_request", "redirect_uri is required");
   }
 
   if (!validateRedirectUri(client, request.redirect_uri)) {
-    return invalidResult('invalid_request', 'redirect_uri not registered');
+    return invalidResult("invalid_request", "redirect_uri not registered");
   }
 
   // From here, errors can safely redirect to the redirect_uri
   const redirectUri = request.redirect_uri;
 
   if (!request.state) {
-    return invalidResult('invalid_request', 'state is required', redirectUri);
+    return invalidResult("invalid_request", "state is required", redirectUri);
   }
 
   if (!request.code_challenge) {
-    return invalidResult('invalid_request', 'code_challenge is required (PKCE)', redirectUri);
+    return invalidResult(
+      "invalid_request",
+      "code_challenge is required (PKCE)",
+      redirectUri,
+    );
   }
 
-  if (request.code_challenge_method !== 'S256') {
-    return invalidResult('invalid_request', 'code_challenge_method must be S256', redirectUri);
+  if (request.code_challenge_method !== "S256") {
+    return invalidResult(
+      "invalid_request",
+      "code_challenge_method must be S256",
+      redirectUri,
+    );
   }
 
   if (!isValidCodeChallenge(request.code_challenge)) {
-    return invalidResult('invalid_request', 'Invalid code_challenge format', redirectUri);
+    return invalidResult(
+      "invalid_request",
+      "Invalid code_challenge format",
+      redirectUri,
+    );
   }
 
-  if (!supportsGrantType(client, 'authorization_code')) {
-    return invalidResult('unauthorized_client', 'Client does not support authorization_code grant', redirectUri);
+  if (!supportsGrantType(client, "authorization_code")) {
+    return invalidResult(
+      "unauthorized_client",
+      "Client does not support authorization_code grant",
+      redirectUri,
+    );
   }
 
   if (!request.scope) {
-    return invalidResult('invalid_request', 'scope is required', redirectUri);
+    return invalidResult("invalid_request", "scope is required", redirectUri);
   }
 
   const requestedScopes = parseScopes(request.scope);
   const { valid: scopesValid, unknown } = validateScopes(requestedScopes);
   if (!scopesValid) {
-    return invalidResult('invalid_scope', `Unknown scopes: ${unknown.join(', ')}`, redirectUri);
+    return invalidResult(
+      "invalid_scope",
+      `Unknown scopes: ${unknown.join(", ")}`,
+      redirectUri,
+    );
   }
 
   const allowedScopes = getClientAllowedScopes(client);
   if (!areScopesAllowed(requestedScopes, allowedScopes)) {
-    return invalidResult('invalid_scope', 'Requested scope exceeds allowed scopes', redirectUri);
+    return invalidResult(
+      "invalid_scope",
+      "Requested scope exceeds allowed scopes",
+      redirectUri,
+    );
   }
 
   return { valid: true, client, redirectUri };
@@ -140,7 +169,7 @@ export async function generateAuthorizationCode(
     scope: string;
     codeChallenge: string;
     codeChallengeMethod: CodeChallengeMethod;
-  }
+  },
 ): Promise<string> {
   const db = getDb(dbBinding);
 
@@ -149,7 +178,7 @@ export async function generateAuthorizationCode(
   const id = generateId();
 
   const expiresAt = new Date(
-    Date.now() + OAUTH_CONSTANTS.AUTHORIZATION_CODE_EXPIRES_IN * 1000
+    Date.now() + OAUTH_CONSTANTS.AUTHORIZATION_CODE_EXPIRES_IN * 1000,
   );
 
   await db.insert(oauthAuthorizationCodes).values({
@@ -183,13 +212,13 @@ export async function exchangeAuthorizationCode(
     clientId: string;
     redirectUri: string;
     codeVerifier: string;
-  }
+  },
 ): Promise<CodeExchangeResult> {
   const db = getDb(dbBinding);
   const { code, clientId, redirectUri, codeVerifier } = params;
 
   function invalidGrant(errorDescription: string): CodeExchangeResult {
-    return { valid: false, error: 'invalid_grant', errorDescription };
+    return { valid: false, error: "invalid_grant", errorDescription };
   }
 
   const codeHash = await computeSHA256(code);
@@ -197,41 +226,44 @@ export async function exchangeAuthorizationCode(
     .where(eq(oauthAuthorizationCodes.codeHash, codeHash)).get();
 
   if (!authCode) {
-    return invalidGrant('Authorization code not found');
+    return invalidGrant("Authorization code not found");
   }
 
   const apiAuthCode = toApiAuthorizationCode(authCode);
 
   // Replay attack detection: revoke all tokens if code was already used
   if (apiAuthCode.used) {
-    await authorizationDeps.revokeTokensByAuthorizationCode(dbBinding, apiAuthCode.id);
-    return invalidGrant('Authorization code already used');
+    await authorizationDeps.revokeTokensByAuthorizationCode(
+      dbBinding,
+      apiAuthCode.id,
+    );
+    return invalidGrant("Authorization code already used");
   }
 
   if (new Date(apiAuthCode.expires_at) < new Date()) {
-    return invalidGrant('Authorization code expired');
+    return invalidGrant("Authorization code expired");
   }
 
   if (apiAuthCode.client_id !== clientId) {
-    return invalidGrant('Client ID mismatch');
+    return invalidGrant("Client ID mismatch");
   }
 
   if (apiAuthCode.redirect_uri !== redirectUri) {
-    return invalidGrant('Redirect URI mismatch');
+    return invalidGrant("Redirect URI mismatch");
   }
 
-  if (apiAuthCode.code_challenge_method !== 'S256') {
-    return invalidGrant('Unsupported PKCE code challenge method');
+  if (apiAuthCode.code_challenge_method !== "S256") {
+    return invalidGrant("Unsupported PKCE code challenge method");
   }
 
   const pkceValid = await verifyCodeChallenge(
     codeVerifier,
     apiAuthCode.code_challenge,
-    apiAuthCode.code_challenge_method
+    apiAuthCode.code_challenge_method,
   );
 
   if (!pkceValid) {
-    return invalidGrant('PKCE verification failed');
+    return invalidGrant("PKCE verification failed");
   }
 
   // Atomic CAS to prevent race conditions
@@ -241,23 +273,28 @@ export async function exchangeAuthorizationCode(
       and(
         eq(oauthAuthorizationCodes.id, apiAuthCode.id),
         eq(oauthAuthorizationCodes.used, false),
-      )
+      ),
     );
 
   if ((updateResult.meta.changes ?? 0) === 0) {
-    await authorizationDeps.revokeTokensByAuthorizationCode(dbBinding, apiAuthCode.id);
-    return invalidGrant('Authorization code already used');
+    await authorizationDeps.revokeTokensByAuthorizationCode(
+      dbBinding,
+      apiAuthCode.id,
+    );
+    return invalidGrant("Authorization code already used");
   }
 
   return { valid: true, code: apiAuthCode };
 }
 
-export async function deleteExpiredCodes(dbBinding: D1Database): Promise<number> {
+export async function deleteExpiredCodes(
+  dbBinding: D1Database,
+): Promise<number> {
   const db = getDb(dbBinding);
   const now = new Date().toISOString();
 
   const result = await db.delete(oauthAuthorizationCodes).where(
-    lt(oauthAuthorizationCodes.expiresAt, now)
+    lt(oauthAuthorizationCodes.expiresAt, now),
   );
 
   return result.meta.changes ?? 0;
@@ -267,24 +304,24 @@ export function buildErrorRedirect(
   redirectUri: string,
   state: string,
   error: string,
-  errorDescription?: string
+  errorDescription?: string,
 ): string {
   const url = new URL(redirectUri);
-  url.searchParams.set('error', error);
+  url.searchParams.set("error", error);
   if (errorDescription) {
-    url.searchParams.set('error_description', errorDescription);
+    url.searchParams.set("error_description", errorDescription);
   }
-  url.searchParams.set('state', state);
+  url.searchParams.set("state", state);
   return url.toString();
 }
 
 export function buildSuccessRedirect(
   redirectUri: string,
   state: string,
-  code: string
+  code: string,
 ): string {
   const url = new URL(redirectUri);
-  url.searchParams.set('code', code);
-  url.searchParams.set('state', state);
+  url.searchParams.set("code", code);
+  url.searchParams.set("state", state);
   return url.toString();
 }

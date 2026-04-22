@@ -1,9 +1,9 @@
 class ContainerTcpPortShim {
   async fetch(url, request) {
     return Response.json({
-      error: 'Cloudflare Containers are unavailable in local mode',
+      error: "Cloudflare Containers are unavailable in local mode",
       url,
-      method: request?.method ?? 'GET',
+      method: request?.method ?? "GET",
     }, { status: 503 });
   }
 }

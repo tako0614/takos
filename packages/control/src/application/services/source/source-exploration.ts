@@ -157,6 +157,7 @@ export async function queryReposWithAccount(
     forks: repositories.forks,
     primaryLanguage: repositories.primaryLanguage,
     license: repositories.license,
+    remoteCloneUrl: repositories.remoteCloneUrl,
     createdAt: repositories.createdAt,
     updatedAt: repositories.updatedAt,
     accountId: accounts.id,
@@ -181,6 +182,7 @@ export async function queryReposWithAccount(
     forks: r.forks,
     primaryLanguage: r.primaryLanguage,
     license: r.license,
+    remoteCloneUrl: r.remoteCloneUrl,
     createdAt: r.createdAt,
     updatedAt: r.updatedAt,
     account: {

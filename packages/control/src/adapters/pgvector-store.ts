@@ -8,7 +8,10 @@
 
 // Minimal Pool interface to avoid depending on @types/pg.
 interface PgPool {
-  query(text: string, values?: unknown[]): Promise<{ rows: Record<string, unknown>[]; rowCount: number | null }>;
+  query(
+    text: string,
+    values?: unknown[],
+  ): Promise<{ rows: Record<string, unknown>[]; rowCount: number | null }>;
 }
 
 // ---------------------------------------------------------------------------
@@ -57,14 +60,14 @@ export type PgVectorStoreConfig = {
   tableName?: string;
 };
 
-const DEFAULT_TABLE = 'vector_embeddings';
+const DEFAULT_TABLE = "vector_embeddings";
 
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
 
 function toSqlVector(values: number[]): string {
-  return `[${values.join(',')}]`;
+  return `[${values.join(",")}]`;
 }
 
 /**
@@ -78,7 +81,7 @@ function buildFilterClause(
   paramOffset: number,
 ): { clause: string; params: unknown[] } {
   if (!filter || Object.keys(filter).length === 0) {
-    return { clause: '', params: [] };
+    return { clause: "", params: [] };
   }
 
   const conditions: string[] = [];
@@ -90,7 +93,7 @@ function buildFilterClause(
   }
 
   return {
-    clause: `AND ${conditions.join(' AND ')}`,
+    clause: `AND ${conditions.join(" AND ")}`,
     params,
   };
 }
@@ -110,7 +113,8 @@ export function createPgVectorStore(config: PgVectorStoreConfig) {
       options?: VectorizeQueryOptions,
     ): Promise<VectorizeMatches> {
       const topK = options?.topK ?? 10;
-      const returnMetadata = options?.returnMetadata !== false && options?.returnMetadata !== 'none';
+      const returnMetadata = options?.returnMetadata !== false &&
+        options?.returnMetadata !== "none";
       const returnValues = options?.returnValues === true;
 
       const { clause: filterClause, params: filterParams } = buildFilterClause(
@@ -119,11 +123,11 @@ export function createPgVectorStore(config: PgVectorStoreConfig) {
       );
 
       const selectCols = [
-        'id',
+        "id",
         `1 - (embedding <=> $1::vector) AS score`,
-        ...(returnMetadata ? ['metadata'] : []),
-        ...(returnValues ? ['embedding'] : []),
-      ].join(', ');
+        ...(returnMetadata ? ["metadata"] : []),
+        ...(returnValues ? ["embedding"] : []),
+      ].join(", ");
 
       const sql = `
         SELECT ${selectCols}
@@ -133,13 +137,22 @@ export function createPgVectorStore(config: PgVectorStoreConfig) {
         LIMIT ${topK}
       `;
 
-      const result = await pool.query(sql, [toSqlVector(vector), ...filterParams]);
+      const result = await pool.query(sql, [
+        toSqlVector(vector),
+        ...filterParams,
+      ]);
 
-      const matches: VectorizeMatch[] = result.rows.map((row: Record<string, unknown>) => ({
+      const matches: VectorizeMatch[] = result.rows.map((
+        row: Record<string, unknown>,
+      ) => ({
         id: row.id as string,
         score: row.score as number,
-        ...(returnMetadata && row.metadata ? { metadata: row.metadata as Record<string, unknown> } : {}),
-        ...(returnValues && row.embedding ? { values: parsePgVector(row.embedding as string) } : {}),
+        ...(returnMetadata && row.metadata
+          ? { metadata: row.metadata as Record<string, unknown> }
+          : {}),
+        ...(returnValues && row.embedding
+          ? { values: parsePgVector(row.embedding as string) }
+          : {}),
       }));
 
       return { matches, count: matches.length };
@@ -158,14 +171,20 @@ export function createPgVectorStore(config: PgVectorStoreConfig) {
       for (let i = 0; i < vectors.length; i++) {
         const v = vectors[i];
         const offset = i * 3;
-        valuePlaceholders.push(`($${offset + 1}, $${offset + 2}::vector, $${offset + 3}::jsonb)`);
-        params.push(v.id, toSqlVector(v.values), JSON.stringify(v.metadata ?? {}));
+        valuePlaceholders.push(
+          `($${offset + 1}, $${offset + 2}::vector, $${offset + 3}::jsonb)`,
+        );
+        params.push(
+          v.id,
+          toSqlVector(v.values),
+          JSON.stringify(v.metadata ?? {}),
+        );
         ids.push(v.id);
       }
 
       const sql = `
         INSERT INTO ${table} (id, embedding, metadata)
-        VALUES ${valuePlaceholders.join(', ')}
+        VALUES ${valuePlaceholders.join(", ")}
         ON CONFLICT (id) DO UPDATE SET
           embedding = EXCLUDED.embedding,
           metadata = EXCLUDED.metadata
@@ -180,7 +199,7 @@ export function createPgVectorStore(config: PgVectorStoreConfig) {
     async deleteByIds(ids: string[]): Promise<VectorizeVectorMutation> {
       if (ids.length === 0) return { ids: [], count: 0 };
 
-      const placeholders = ids.map((_, i) => `$${i + 1}`).join(', ');
+      const placeholders = ids.map((_, i) => `$${i + 1}`).join(", ");
       const sql = `DELETE FROM ${table} WHERE id IN (${placeholders})`;
 
       const result = await pool.query(sql, ids);
@@ -193,8 +212,9 @@ export function createPgVectorStore(config: PgVectorStoreConfig) {
     async getByIds(ids: string[]): Promise<VectorizeVector[]> {
       if (ids.length === 0) return [];
 
-      const placeholders = ids.map((_, i) => `$${i + 1}`).join(', ');
-      const sql = `SELECT id, embedding, metadata FROM ${table} WHERE id IN (${placeholders})`;
+      const placeholders = ids.map((_, i) => `$${i + 1}`).join(", ");
+      const sql =
+        `SELECT id, embedding, metadata FROM ${table} WHERE id IN (${placeholders})`;
 
       const result = await pool.query(sql, ids);
 
@@ -212,10 +232,10 @@ export function createPgVectorStore(config: PgVectorStoreConfig) {
       const count = Number(result.rows[0]?.total ?? 0);
       return {
         name: table,
-        config: { dimensions: 0, metric: 'cosine' as const },
+        config: { dimensions: 0, metric: "cosine" as const },
         vectorsCount: count,
         processedUpToDatetime: new Date().toISOString(),
-        processedUpToMutation: '',
+        processedUpToMutation: "",
       };
     },
   };
@@ -229,8 +249,8 @@ export function createPgVectorStore(config: PgVectorStoreConfig) {
  * Parse pgvector text representation `[0.1,0.2,0.3]` into number[].
  */
 function parsePgVector(raw: string): number[] {
-  if (typeof raw !== 'string') return [];
-  const inner = raw.replace(/^\[/, '').replace(/\]$/, '');
+  if (typeof raw !== "string") return [];
+  const inner = raw.replace(/^\[/, "").replace(/\]$/, "");
   if (!inner) return [];
-  return inner.split(',').map(Number);
+  return inner.split(",").map(Number);
 }

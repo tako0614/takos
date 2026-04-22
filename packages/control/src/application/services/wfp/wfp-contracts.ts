@@ -77,6 +77,33 @@ export interface CloudflareBindingRecord {
   environment?: string;
 }
 
+export interface WorkerContainerMetadata {
+  class_name: string;
+  image: string;
+  instance_type?: string;
+  max_instances?: number;
+  name?: string;
+  image_build_context?: string;
+  image_vars?: Record<string, string>;
+  rollout_active_grace_period?: number;
+  rollout_step_percentage?: number | number[];
+}
+
+export interface WorkerMigrationMetadata {
+  tag: string;
+  new_classes?: string[];
+  new_sqlite_classes?: string[];
+}
+
+export interface WorkerActorMigrationsMetadata {
+  old_tag?: string;
+  new_tag: string;
+  steps: Array<{
+    new_classes?: string[];
+    new_sqlite_classes?: string[];
+  }>;
+}
+
 // ---------------------------------------------------------------------------
 // Internal helper context passed to submodules
 // ---------------------------------------------------------------------------
@@ -120,6 +147,8 @@ export interface CreateWorkerOptions {
     cpu_ms?: number;
     subrequests?: number;
   };
+  containers?: WorkerContainerMetadata[];
+  migrations?: WorkerMigrationMetadata[];
   /** JWT from assets upload completion (for static assets) */
   assetsJwt?: string;
 }

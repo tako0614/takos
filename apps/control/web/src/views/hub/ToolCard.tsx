@@ -6,7 +6,7 @@ export interface ToolCardProps {
   tool: CustomTool;
 }
 
-export function ToolCard({ tool }: ToolCardProps) {
+export function ToolCard(props: ToolCardProps) {
   const { t } = useI18n();
   return (
     <div class="flex items-center gap-4 p-4 bg-white dark:bg-zinc-900 border border-zinc-100 dark:border-zinc-800 rounded-xl hover:border-zinc-200 dark:hover:border-zinc-700 transition-colors">
@@ -17,16 +17,16 @@ export function ToolCard({ tool }: ToolCardProps) {
       <div class="flex-1 min-w-0">
         <div class="flex items-center gap-2">
           <h4 class="text-sm font-semibold text-zinc-900 dark:text-zinc-100 truncate">
-            {tool.name}
+            {props.tool.name}
           </h4>
-          {tool.bundleDeploymentId && (
+          {props.tool.bundleDeploymentId && (
             <span class="px-2 py-0.5 text-[10px] font-medium bg-zinc-100 dark:bg-zinc-800 text-zinc-500 dark:text-zinc-400 rounded">
               {t("packageLabel")}
             </span>
           )}
         </div>
         <p class="text-xs text-zinc-500 dark:text-zinc-400 truncate mt-0.5">
-          {tool.description}
+          {props.tool.description}
         </p>
       </div>
     </div>

@@ -27,6 +27,7 @@ Examples for the tracked template or local/self-host environments only.
 ```bash
 wrangler secret put GOOGLE_CLIENT_SECRET --config wrangler.toml
 wrangler secret put OPENAI_API_KEY --config wrangler.worker.toml --env staging
+wrangler secret put OPENAI_API_KEY --config wrangler.executor.toml --env staging
 wrangler secret put ENCRYPTION_KEY --config wrangler.worker.toml
 wrangler secret put PLATFORM_PUBLIC_KEY --config wrangler.runtime-host.toml < platform-public.pem
 wrangler secret put EXECUTOR_PROXY_SECRET --config wrangler.toml
@@ -127,6 +128,12 @@ Required secrets:
 
 - `EXECUTOR_PROXY_SECRET`
 
+Optional:
+
+- `OPENAI_API_KEY`
+- `ANTHROPIC_API_KEY`
+- `GOOGLE_API_KEY`
+
 Primary non-secret vars:
 
 - `ADMIN_DOMAIN`
@@ -178,8 +185,11 @@ printf "%s" "$secret" | wrangler secret put EXECUTOR_PROXY_SECRET --config wrang
 ```
 
 Use the same `EXECUTOR_PROXY_SECRET` value on the main `takos` worker and
-`takos-executor-host`. The executor-host does not keep LLM provider API keys; it
-forwards authenticated control RPC to the main worker through `TAKOS_CONTROL`.
+`takos-executor-host`. The Rust executor first asks the main worker for LLM
+provider keys through authenticated control RPC. If the main worker returns an
+invalid OpenAI key, the Rust executor can fall back to `OPENAI_API_KEY` injected
+from `wrangler.executor.toml`, which is useful for rotating executor model keys
+without touching the web/API worker.
 
 ### Cloudflare API token
 

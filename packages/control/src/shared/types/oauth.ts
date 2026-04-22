@@ -1,9 +1,9 @@
-export type OAuthClientType = 'confidential' | 'public';
-export type OAuthClientStatus = 'active' | 'suspended' | 'revoked';
-export type OAuthTokenType = 'access' | 'refresh';
-export type OAuthConsentStatus = 'active' | 'revoked';
-export type OAuthDeviceCodeStatus = 'pending' | 'approved' | 'denied' | 'used';
-export type CodeChallengeMethod = 'S256';
+export type OAuthClientType = "confidential" | "public";
+export type OAuthClientStatus = "active" | "suspended" | "revoked";
+export type OAuthTokenType = "access" | "refresh";
+export type OAuthConsentStatus = "active" | "revoked";
+export type OAuthDeviceCodeStatus = "pending" | "approved" | "denied" | "used";
+export type CodeChallengeMethod = "S256";
 
 /**
  * A branded string type representing a JSON-serialized array stored in SQLite TEXT columns.
@@ -15,13 +15,16 @@ export type CodeChallengeMethod = 'S256';
  *   const raw: JsonStringArray = '["a","b"]' as JsonStringArray;
  *   const parsed: string[] = parseJsonStringArray(raw); // ["a", "b"]
  */
-export type JsonStringArray = string & { readonly __brand: 'JsonStringArray' };
+export type JsonStringArray = string & { readonly __brand: "JsonStringArray" };
 
 /**
  * Parse a {@link JsonStringArray} into a native `string[]`.
  * Returns `fallback` if the value is not valid JSON.
  */
-export function parseJsonStringArray(value: JsonStringArray | string, fallback: string[] = []): string[] {
+export function parseJsonStringArray(
+  value: JsonStringArray | string,
+  fallback: string[] = [],
+): string[] {
   try {
     const parsed: unknown = JSON.parse(value);
     return Array.isArray(parsed) ? (parsed as string[]) : fallback;
@@ -133,7 +136,7 @@ export interface OAuthConsent {
 }
 
 export interface AuthorizationRequest {
-  response_type: 'code';
+  response_type: "code";
   client_id: string;
   redirect_uri: string;
   scope: string;
@@ -142,7 +145,8 @@ export interface AuthorizationRequest {
   code_challenge_method: CodeChallengeMethod;
 }
 
-export const DEVICE_CODE_GRANT_TYPE = 'urn:ietf:params:oauth:grant-type:device_code' as const;
+export const DEVICE_CODE_GRANT_TYPE =
+  "urn:ietf:params:oauth:grant-type:device_code" as const;
 
 export interface DeviceAuthorizationResponse {
   device_code: string;
@@ -155,7 +159,7 @@ export interface DeviceAuthorizationResponse {
 
 export interface TokenResponse {
   access_token: string;
-  token_type: 'Bearer';
+  token_type: "Bearer";
   expires_in: number;
   refresh_token?: string;
   scope: string;
@@ -183,7 +187,10 @@ export interface ClientRegistrationRequest {
   policy_uri?: string;
   tos_uri?: string;
   contacts?: string[];
-  token_endpoint_auth_method?: 'client_secret_post' | 'client_secret_basic' | 'none';
+  token_endpoint_auth_method?:
+    | "client_secret_post"
+    | "client_secret_basic"
+    | "none";
 }
 
 export interface ClientRegistrationResponse {
@@ -223,29 +230,101 @@ export interface OAuthServerMetadata {
 export interface OAuthScope {
   name: string;
   description: string;
-  category: 'identity' | 'resource';
+  category: "identity" | "resource";
 }
 
 export const OAUTH_SCOPES: Record<string, OAuthScope> = {
-  openid: { name: 'openid', description: 'OpenID Connect identity', category: 'identity' },
-  profile: { name: 'profile', description: 'User profile (name, picture)', category: 'identity' },
-  email: { name: 'email', description: 'Email address', category: 'identity' },
-  'spaces:read': { name: 'spaces:read', description: 'Read workspaces', category: 'resource' },
-  'spaces:write': { name: 'spaces:write', description: 'Write workspaces', category: 'resource' },
-  'files:read': { name: 'files:read', description: 'Read files', category: 'resource' },
-  'files:write': { name: 'files:write', description: 'Write files', category: 'resource' },
-  'memories:read': { name: 'memories:read', description: 'Read memories', category: 'resource' },
-  'memories:write': { name: 'memories:write', description: 'Write memories', category: 'resource' },
-  'threads:read': { name: 'threads:read', description: 'Read threads', category: 'resource' },
-  'threads:write': { name: 'threads:write', description: 'Write threads', category: 'resource' },
-  'runs:read': { name: 'runs:read', description: 'Read runs', category: 'resource' },
-  'runs:write': { name: 'runs:write', description: 'Trigger or cancel runs', category: 'resource' },
-  'agents:execute': { name: 'agents:execute', description: 'Execute agents', category: 'resource' },
-  'repos:read': { name: 'repos:read', description: 'Read repositories', category: 'resource' },
-  'repos:write': { name: 'repos:write', description: 'Write repositories', category: 'resource' },
-  'mcp:invoke': { name: 'mcp:invoke', description: 'Invoke MCP servers', category: 'resource' },
-  'events:subscribe': { name: 'events:subscribe', description: 'Subscribe to space lifecycle events', category: 'resource' },
-  'billing:meter': { name: 'billing:meter', description: 'Submit usage records', category: 'resource' },
+  openid: {
+    name: "openid",
+    description: "OpenID Connect identity",
+    category: "identity",
+  },
+  profile: {
+    name: "profile",
+    description: "User profile (name, picture)",
+    category: "identity",
+  },
+  email: { name: "email", description: "Email address", category: "identity" },
+  "spaces:read": {
+    name: "spaces:read",
+    description: "Read workspaces",
+    category: "resource",
+  },
+  "spaces:write": {
+    name: "spaces:write",
+    description: "Write workspaces",
+    category: "resource",
+  },
+  "files:read": {
+    name: "files:read",
+    description: "Read files",
+    category: "resource",
+  },
+  "files:write": {
+    name: "files:write",
+    description: "Write files",
+    category: "resource",
+  },
+  "memories:read": {
+    name: "memories:read",
+    description: "Read memories",
+    category: "resource",
+  },
+  "memories:write": {
+    name: "memories:write",
+    description: "Write memories",
+    category: "resource",
+  },
+  "threads:read": {
+    name: "threads:read",
+    description: "Read threads",
+    category: "resource",
+  },
+  "threads:write": {
+    name: "threads:write",
+    description: "Write threads",
+    category: "resource",
+  },
+  "runs:read": {
+    name: "runs:read",
+    description: "Read runs",
+    category: "resource",
+  },
+  "runs:write": {
+    name: "runs:write",
+    description: "Trigger or cancel runs",
+    category: "resource",
+  },
+  "agents:execute": {
+    name: "agents:execute",
+    description: "Execute agents",
+    category: "resource",
+  },
+  "repos:read": {
+    name: "repos:read",
+    description: "Read repositories",
+    category: "resource",
+  },
+  "repos:write": {
+    name: "repos:write",
+    description: "Write repositories",
+    category: "resource",
+  },
+  "mcp:invoke": {
+    name: "mcp:invoke",
+    description: "Invoke MCP servers",
+    category: "resource",
+  },
+  "events:subscribe": {
+    name: "events:subscribe",
+    description: "Subscribe to space lifecycle events",
+    category: "resource",
+  },
+  "billing:meter": {
+    name: "billing:meter",
+    description: "Submit usage records",
+    category: "resource",
+  },
 };
 
 export const ALL_SCOPES = Object.keys(OAUTH_SCOPES);

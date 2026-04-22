@@ -1,2 +1,2 @@
-export { default } from './routes.ts';
-export { shortcutGroupRoutes } from './routes.ts';
+export { default } from "./routes.ts";
+export { shortcutGroupRoutes } from "./routes.ts";

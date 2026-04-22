@@ -3,16 +3,20 @@
  * Each workspace can register remote stores and switch between them.
  */
 
-import { and, eq, desc } from 'drizzle-orm';
-import type { D1Database } from '../../../shared/types/bindings.ts';
-import type { SelectOf } from '../../../shared/types/drizzle-utils.ts';
-import { getDb, storeRegistry, storeRegistryUpdates } from '../../../infra/db/index.ts';
-import { generateId } from '../../../shared/utils/index.ts';
+import { and, desc, eq } from "drizzle-orm";
+import type { D1Database } from "../../../shared/types/bindings.ts";
+import type { SelectOf } from "../../../shared/types/drizzle-utils.ts";
 import {
-  resolveStoreViaWebFinger,
+  getDb,
+  storeRegistry,
+  storeRegistryUpdates,
+} from "../../../infra/db/index.ts";
+import { generateId } from "../../../shared/utils/index.ts";
+import {
   fetchRemoteStoreActor,
   type RemoteStoreActor,
-} from './remote-store-client.ts';
+  resolveStoreViaWebFinger,
+} from "./remote-store-client.ts";
 
 export interface StoreRegistryEntry {
   id: string;
@@ -108,7 +112,9 @@ export async function addRemoteStore(
   input: AddRemoteStoreInput,
 ): Promise<StoreRegistryEntry> {
   // 1. Resolve via WebFinger
-  const { actorUrl, domain, storeSlug } = await resolveStoreViaWebFinger(input.identifier);
+  const { actorUrl, domain, storeSlug } = await resolveStoreViaWebFinger(
+    input.identifier,
+  );
 
   // 2. Check for duplicates
   const db = getDb(dbBinding);
@@ -132,12 +138,24 @@ export async function addRemoteStore(
   if (input.setActive) {
     await db.update(storeRegistry)
       .set({ isActive: false, updatedAt: new Date().toISOString() })
-      .where(and(eq(storeRegistry.accountId, accountId), eq(storeRegistry.isActive, true)));
+      .where(
+        and(
+          eq(storeRegistry.accountId, accountId),
+          eq(storeRegistry.isActive, true),
+        ),
+      );
   }
 
   // 5. Insert
   const id = generateId();
-  const values = actorToInsertValues(id, accountId, domain, storeSlug, actor, input);
+  const values = actorToInsertValues(
+    id,
+    accountId,
+    domain,
+    storeSlug,
+    actor,
+    input,
+  );
   await db.insert(storeRegistry).values(values);
 
   return rowToEntry({
@@ -205,7 +223,9 @@ export async function removeRemoteStore(
   if (!existing) return false;
 
   // Delete associated updates first, then the registry entry
-  await db.delete(storeRegistryUpdates).where(eq(storeRegistryUpdates.registryEntryId, entryId));
+  await db.delete(storeRegistryUpdates).where(
+    eq(storeRegistryUpdates.registryEntryId, entryId),
+  );
   await db.delete(storeRegistry).where(eq(storeRegistry.id, entryId));
   return true;
 }
@@ -225,7 +245,12 @@ export async function setActiveStore(
   // Deactivate all
   await db.update(storeRegistry)
     .set({ isActive: false, updatedAt: timestamp })
-    .where(and(eq(storeRegistry.accountId, accountId), eq(storeRegistry.isActive, true)));
+    .where(
+      and(
+        eq(storeRegistry.accountId, accountId),
+        eq(storeRegistry.isActive, true),
+      ),
+    );
 
   // Activate the specified one
   if (entryId) {

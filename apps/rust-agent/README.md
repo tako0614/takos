@@ -62,6 +62,17 @@ stateful backend と tool backend は Workers/TS のまま運用できます。
 
 `rust-agent` は remote tool backend を内包しません。tool 実行は次の 2 層です。
 
+`/start` は executor-host から渡される `executorTier` /
+`executorContainerId` を受け取り、全 Control RPC に
+`X-Takos-Executor-Tier` / `X-Takos-Executor-Container-Id` として転送します。
+これにより tiered executor pool の token verify / heartbeat / token revoke は
+Rust container でも同じ contract で動きます。
+
+同時実行上限は `MAX_CONCURRENT_RUNS` で指定します。未設定時の既定値は `5`
+です。executor-host の tiered pool では tier1 に `4`、tier3 に `32`
+を注入します。同じ `runId` の duplicate `/start` は accepted として扱い、別の
+run が上限を超えた場合は `503 At capacity` を返します。
+
 - model-visible catalog / tool discovery
   - control plane の remote catalog が正本
   - `CompositeToolExecutor::exposed_tools()` は remote_tools のみを返し、model

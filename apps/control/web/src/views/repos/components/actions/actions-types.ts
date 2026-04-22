@@ -9,8 +9,19 @@
  * The engine itself does not emit 'waiting' — it is derived by the web frontend when a
  * queued run has not yet started any job execution.
  */
-export type RunStatus = 'queued' | 'in_progress' | 'completed' | 'cancelled' | 'waiting';
-export type RunConclusion = 'success' | 'failure' | 'cancelled' | 'skipped' | 'timed_out' | null;
+export type RunStatus =
+  | "queued"
+  | "in_progress"
+  | "completed"
+  | "cancelled"
+  | "waiting";
+export type RunConclusion =
+  | "success"
+  | "failure"
+  | "cancelled"
+  | "skipped"
+  | "timed_out"
+  | null;
 
 export interface WorkflowRunSummary {
   id: string;
@@ -44,7 +55,7 @@ export interface WorkflowJob {
   steps?: Array<{
     number: number;
     name: string;
-    status: 'pending' | 'in_progress' | 'completed' | 'skipped';
+    status: "pending" | "in_progress" | "completed" | "skipped";
     conclusion: RunConclusion;
     started_at?: string | null;
     completed_at?: string | null;
@@ -77,14 +88,23 @@ export interface JobLogState {
 
 export const LOG_CHUNK_BYTES = 128 * 1024;
 
-export function statusBadge(status: RunStatus, conclusion?: RunConclusion): string {
-  if (status === 'completed') {
-    if (conclusion === 'success') return 'bg-zinc-100 text-zinc-700 border-zinc-300';
-    if (conclusion === 'cancelled') return 'bg-zinc-50 text-zinc-400 border-zinc-300';
-    if (conclusion === 'skipped') return 'bg-zinc-50 text-zinc-400 border-zinc-200';
-    return 'bg-zinc-50 text-zinc-500 border-zinc-400';
+export function statusBadge(
+  status: RunStatus,
+  conclusion?: RunConclusion,
+): string {
+  if (status === "completed") {
+    if (conclusion === "success") {
+      return "bg-zinc-100 text-zinc-700 border-zinc-300";
+    }
+    if (conclusion === "cancelled") {
+      return "bg-zinc-50 text-zinc-400 border-zinc-300";
+    }
+    if (conclusion === "skipped") {
+      return "bg-zinc-50 text-zinc-400 border-zinc-200";
+    }
+    return "bg-zinc-50 text-zinc-500 border-zinc-400";
   }
-  if (status === 'in_progress') return 'bg-zinc-900 text-white border-zinc-900';
-  if (status === 'cancelled') return 'bg-zinc-50 text-zinc-400 border-zinc-300';
-  return 'bg-zinc-100 text-zinc-600 border-zinc-200';
+  if (status === "in_progress") return "bg-zinc-900 text-white border-zinc-900";
+  if (status === "cancelled") return "bg-zinc-50 text-zinc-400 border-zinc-300";
+  return "bg-zinc-100 text-zinc-600 border-zinc-200";
 }

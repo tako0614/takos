@@ -5,15 +5,15 @@ const LOOKUP_EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 export function isInvalidArrayBufferError(error: unknown): boolean {
   const message = (() => {
-    if (typeof error === 'string') return error;
-    if (typeof error === 'object' && error !== null) {
+    if (typeof error === "string") return error;
+    if (typeof error === "object" && error !== null) {
       const value = (error as { message?: unknown }).message;
-      if (typeof value === 'string') return value;
+      if (typeof value === "string") return value;
     }
     try {
       return String(error);
     } catch {
-      return '';
+      return "";
     }
   })();
   return (
@@ -23,7 +23,7 @@ export function isInvalidArrayBufferError(error: unknown): boolean {
 }
 
 export function isValidOpaqueId(value: unknown): value is string {
-  if (typeof value !== 'string') return false;
+  if (typeof value !== "string") return false;
   const normalized = value.trim();
   if (!normalized) return false;
   if (normalized.length > MAX_OPAQUE_ID_LENGTH) return false;
@@ -39,16 +39,22 @@ export function isValidOpaqueId(value: unknown): value is string {
  * This helper safely narrows the type so callers don't need inline casts.
  */
 export function textDate(value: string | Date | unknown): string {
-  return typeof value === 'string' ? value : value instanceof Date ? value.toISOString() : String(value);
+  return typeof value === "string"
+    ? value
+    : value instanceof Date
+    ? value.toISOString()
+    : String(value);
 }
 
 /** Nullable variant of {@link textDate}. */
-export function textDateNullable(value: string | Date | null | undefined | unknown): string | null {
+export function textDateNullable(
+  value: string | Date | null | undefined | unknown,
+): string | null {
   return value == null ? null : textDate(value);
 }
 
 export function isValidLookupEmail(value: unknown): value is string {
-  if (typeof value !== 'string') return false;
+  if (typeof value !== "string") return false;
   const normalized = value.trim();
   if (!normalized) return false;
   if (normalized.length > MAX_LOOKUP_EMAIL_LENGTH) return false;

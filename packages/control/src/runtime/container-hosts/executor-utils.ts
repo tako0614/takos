@@ -26,6 +26,20 @@ import type {
 
 export type ExecutorTier = 1 | 2 | 3;
 
+export interface ExecutorPoolConfig {
+  tier1WarmPoolSize: number;
+  tier1MaxConcurrentRuns: number;
+  tier3PoolSize: number;
+  tier3MaxConcurrentRuns: number;
+}
+
+export interface ExecutorPoolLoad {
+  tier: ExecutorTier;
+  containerId: string;
+  active: number;
+  capacity: number;
+}
+
 export interface AgentExecutorEnv extends DbEnv, StorageEnv, AiEnv {
   EXECUTOR_CONTAINER: ContainerNamespace;
   EXECUTOR_CONTAINER_TIER2?: ContainerNamespace;
@@ -38,6 +52,11 @@ export interface AgentExecutorEnv extends DbEnv, StorageEnv, AiEnv {
   EXECUTOR_PROXY_SECRET: string;
   INDEX_QUEUE?: Queue<IndexJobQueueMessage>;
   CONTROL_RPC_BASE_URL?: string;
+  EXECUTOR_TIER1_WARM_POOL_SIZE?: string;
+  EXECUTOR_TIER1_MAX_CONCURRENT_RUNS?: string;
+  EXECUTOR_TIER3_POOL_SIZE?: string;
+  EXECUTOR_TIER3_MAX_CONCURRENT_RUNS?: string;
+  EXECUTOR_POOL_REVISION?: string;
 }
 
 // Local alias for internal usage across sub-modules
@@ -57,6 +76,10 @@ export interface ProxyTokenInfo {
   runId: string;
   serviceId: string;
   capability: ProxyCapability;
+  executorTier?: ExecutorTier;
+  executorContainerId?: string;
+  startedAt?: number;
+  lastHeartbeatAt?: number;
 }
 
 export interface ExecutorContainerStub {
@@ -64,7 +87,11 @@ export interface ExecutorContainerStub {
   dispatchStart(
     body: AgentExecutorDispatchPayload,
   ): Promise<AgentExecutorDispatchResult>;
+  warm?(): Promise<ExecutorPoolLoad>;
+  getLoad?(): Promise<ExecutorPoolLoad>;
   verifyProxyToken(token: string): Promise<ProxyTokenInfo | null>;
+  touchProxyToken?(token: string): Promise<void>;
+  revokeProxyToken?(token: string): Promise<void>;
   revokeProxyTokens?(): Promise<void>;
 }
 
@@ -102,6 +129,66 @@ export function parseExecutorTier(value: unknown): ExecutorTier {
     ? parseInt(value, 10)
     : NaN;
   if (n === 2 || n === 3) return n;
+  return 1;
+}
+
+function parsePositiveInteger(
+  value: unknown,
+  fallback: number,
+  options: { min?: number; max?: number } = {},
+): number {
+  const parsed = typeof value === "number"
+    ? value
+    : typeof value === "string" && value.trim().length > 0
+    ? Number(value)
+    : NaN;
+  if (!Number.isFinite(parsed)) return fallback;
+  const integer = Math.floor(parsed);
+  const min = options.min ?? 1;
+  const max = options.max ?? Number.MAX_SAFE_INTEGER;
+  return Math.min(Math.max(integer, min), max);
+}
+
+export function getExecutorPoolConfig(
+  env: Pick<
+    AgentExecutorEnv,
+    | "EXECUTOR_TIER1_WARM_POOL_SIZE"
+    | "EXECUTOR_TIER1_MAX_CONCURRENT_RUNS"
+    | "EXECUTOR_TIER3_POOL_SIZE"
+    | "EXECUTOR_TIER3_MAX_CONCURRENT_RUNS"
+  >,
+): ExecutorPoolConfig {
+  return {
+    tier1WarmPoolSize: parsePositiveInteger(
+      env.EXECUTOR_TIER1_WARM_POOL_SIZE,
+      1,
+      { min: 1, max: 100 },
+    ),
+    tier1MaxConcurrentRuns: parsePositiveInteger(
+      env.EXECUTOR_TIER1_MAX_CONCURRENT_RUNS,
+      4,
+      { min: 1, max: 100 },
+    ),
+    tier3PoolSize: parsePositiveInteger(
+      env.EXECUTOR_TIER3_POOL_SIZE,
+      25,
+      { min: 1, max: 500 },
+    ),
+    tier3MaxConcurrentRuns: parsePositiveInteger(
+      env.EXECUTOR_TIER3_MAX_CONCURRENT_RUNS,
+      32,
+      { min: 1, max: 500 },
+    ),
+  };
+}
+
+export function resolveExecutorTierCapacity(
+  env: AgentExecutorEnv,
+  tier: ExecutorTier,
+): number {
+  const config = getExecutorPoolConfig(env);
+  if (tier === 3) return config.tier3MaxConcurrentRuns;
+  if (tier === 1) return config.tier1MaxConcurrentRuns;
   return 1;
 }
 

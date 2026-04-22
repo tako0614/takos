@@ -1,4 +1,4 @@
-export type RepositoryVisibility = 'public' | 'private';
+export type RepositoryVisibility = "public" | "private";
 
 export interface Repository {
   id: string;
@@ -15,9 +15,9 @@ export interface Repository {
   updated_at: string;
 }
 
-export type PullRequestStatus = 'open' | 'merged' | 'closed';
-export type AuthorType = 'user' | 'agent';
-export type PullRequestCommentAuthorType = 'user' | 'ai';
+export type PullRequestStatus = "open" | "merged" | "closed";
+export type AuthorType = "user" | "agent";
+export type PullRequestCommentAuthorType = "user" | "ai";
 
 export interface PullRequest {
   id: string;
@@ -36,8 +36,8 @@ export interface PullRequest {
   updated_at: string;
 }
 
-export type ReviewStatus = 'approved' | 'changes_requested' | 'commented';
-export type ReviewerType = 'user' | 'ai';
+export type ReviewStatus = "approved" | "changes_requested" | "commented";
+export type ReviewerType = "user" | "ai";
 
 export interface PullRequestReview {
   id: string;

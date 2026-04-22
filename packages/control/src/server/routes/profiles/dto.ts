@@ -19,7 +19,7 @@ export interface ProfileRepoResponse {
   owner_username: string;
   name: string;
   description: string | null;
-  visibility: 'public' | 'private';
+  visibility: "public" | "private";
   default_branch: string;
   stars: number;
   forks: number;

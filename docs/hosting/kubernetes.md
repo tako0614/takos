@@ -8,7 +8,13 @@ Takos 上で group を deploy する方法は [Deploy](/deploy/) を参照して
 ::: warning current contract このページは Helm chart が表現している contract
 だけを説明します。provider-neutral resource materialization matrix や、各 cloud
 の managed service への自動 provisioning は current Helm contract
-ではありません。:::
+ではありません。
+:::
+
+AWS / GCP 向けの current docs はこの chart の Helm overlay です。current
+contract に含まれない項目は
+[Not A Current Contract](/hosting/differences#not-a-current-contract)
+を参照してください。
 
 ## Chart components
 
@@ -113,6 +119,10 @@ externalS3:
 Worker compute は Kubernetes Deployment として直接生成されません。current chart
 では `runtime-host` が tenant worker runtime を担当し、image-backed `services` /
 `containers` は `oci-orchestrator` を通して扱います。
+
+ECS / Cloud Run は tenant image workload adapter として `oci-orchestrator`
+経由で接続されることがありますが、Takos kernel の hosting target
+ではありません。
 
 `oci-orchestrator` は chart 内で Deployment / Service / RBAC として作られます。
 認証付きで使う場合は `secrets.ociOrchestratorToken` を設定し、chart が作る

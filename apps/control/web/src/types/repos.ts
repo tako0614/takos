@@ -1,7 +1,7 @@
-export type SourceTab = 'repos' | 'explore' | 'starred';
-export type ExploreSort = 'trending' | 'recent' | 'new';
-export type SearchSort = 'stars' | 'updated' | 'created';
-export type SearchOrder = 'desc' | 'asc';
+export type SourceTab = "repos" | "explore" | "starred";
+export type ExploreSort = "trending" | "recent" | "new";
+export type SearchSort = "stars" | "updated" | "created";
+export type SearchOrder = "desc" | "asc";
 
 export interface SourceRepoOwner {
   id?: string;
@@ -14,7 +14,7 @@ export interface SourceRepo {
   id: string;
   name: string;
   description: string | null;
-  visibility: 'public' | 'private';
+  visibility: "public" | "private";
   updated_at: string;
   stars?: number;
   stars_count?: number;

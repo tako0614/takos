@@ -24,6 +24,8 @@ import type {
   CreateWorkerOptions,
   WfpContext,
   WorkerBinding,
+  WorkerContainerMetadata,
+  WorkerMigrationMetadata,
 } from "./wfp-contracts.ts";
 import { buildWorkerMetadata } from "./worker-metadata.ts";
 
@@ -45,6 +47,8 @@ export async function createWorker(
     compatibility_date,
     compatibility_flags,
     limits,
+    containers,
+    migrations,
     assetsJwt,
   } = options;
 
@@ -53,6 +57,8 @@ export async function createWorker(
     compatibility_date,
     compatibility_flags,
     limits,
+    containers,
+    migrations,
     assetsJwt,
   });
 
@@ -288,6 +294,8 @@ export async function createWorkerWithWasm(
       cpu_ms?: number;
       subrequests?: number;
     };
+    containers?: WorkerContainerMetadata[];
+    migrations?: WorkerMigrationMetadata[];
     /** JWT from assets upload completion (for static assets) */
     assetsJwt?: string;
   },
@@ -297,6 +305,8 @@ export async function createWorkerWithWasm(
     compatibility_date,
     compatibility_flags,
     limits,
+    containers,
+    migrations,
     assetsJwt,
   } = options;
 
@@ -351,6 +361,8 @@ export async function createWorkerWithWasm(
     compatibility_date,
     compatibility_flags,
     limits,
+    containers,
+    migrations,
     assetsJwt,
   });
 

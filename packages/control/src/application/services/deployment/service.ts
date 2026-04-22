@@ -14,14 +14,17 @@ import type {
   ArtifactKind,
   CreateDeploymentInput,
   Deployment,
+  DeploymentBackendName,
   DeploymentEnv,
   DeploymentEvent,
+  DeploymentTarget,
   RollbackInput,
 } from "./models.ts";
 import {
   parseDeploymentBackendConfig,
   serializeDeploymentBackendTarget,
 } from "./backend.ts";
+import { resolveDefaultDeploymentBackendRef } from "./backend-defaults.ts";
 import {
   createDeploymentWithVersion,
   getDeploymentById,
@@ -58,6 +61,20 @@ import {
   getEnvVars,
   getMaskedEnvVars,
 } from "./artifact-io.ts";
+
+export function assertQueueConsumerBackendSupported(
+  backendName: DeploymentBackendName,
+  target: DeploymentTarget,
+): void {
+  if (
+    (target.queue_consumers?.length ?? 0) > 0 &&
+    backendName !== "workers-dispatch"
+  ) {
+    throw new BadRequestError(
+      `queue consumers require the workers-dispatch backend (got: ${backendName})`,
+    );
+  }
+}
 
 export class DeploymentService {
   private encryptionKey: string;
@@ -107,13 +124,26 @@ export class DeploymentService {
     const strategy = input.strategy ?? "direct";
     const requestedCanaryWeight = input.canaryWeight ?? 1;
     const serializedTarget = serializeDeploymentBackendTarget({
-      backend: input.backend,
+      backend: input.backend ??
+        resolveDefaultDeploymentBackendRef(this.env, artifactKind),
       target: input.target,
     });
     const normalizedTarget = parseDeploymentBackendConfig({
       backend_name: serializedTarget.backendName,
       target_json: serializedTarget.targetJson,
     });
+    if (
+      strategy === "canary" &&
+      (normalizedTarget.queue_consumers?.length ?? 0) > 0
+    ) {
+      throw new BadRequestError(
+        "canary strategy is not supported for deployments with queue consumers",
+      );
+    }
+    assertQueueConsumerBackendSupported(
+      serializedTarget.backendName,
+      normalizedTarget,
+    );
     const artifactBaseRef = resolveDeploymentArtifactBaseRef(
       serviceId,
       normalizedTarget,
@@ -139,6 +169,7 @@ export class DeploymentService {
           bundleHash,
           bundleSize,
           imageRef,
+          targetJson: serializedTarget.targetJson,
           strategy,
           canaryWeight: requestedCanaryWeight,
         });
@@ -272,6 +303,7 @@ export class DeploymentService {
             bundleHash,
             bundleSize,
             imageRef,
+            targetJson: serializedTarget.targetJson,
             strategy,
             canaryWeight: requestedCanaryWeight,
           });

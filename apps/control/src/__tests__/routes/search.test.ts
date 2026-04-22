@@ -48,8 +48,9 @@ function createUser(): User {
 function createApp(user: User) {
   const app = new Hono<{ Bindings: Env; Variables: { user: User } }>();
   installAppErrorHandler(app);
-  routeAuthDeps.requireSpaceAccess = ((...args: Parameters<typeof mocks.requireSpaceAccess>) =>
-    mocks.requireSpaceAccess(...args)) as any;
+  routeAuthDeps.requireSpaceAccess =
+    ((...args: Parameters<typeof mocks.requireSpaceAccess>) =>
+      mocks.requireSpaceAccess(...args)) as any;
   app.use("*", async (c, next) => {
     c.set("user", user);
     await next();

@@ -1,4 +1,4 @@
-import { createEffect, createSignal, on } from "solid-js";
+import { type Accessor, createEffect, createSignal, on } from "solid-js";
 import { rpc, rpcJson, rpcPath } from "../lib/rpc.ts";
 import { useToast } from "../store/toast.ts";
 import { useI18n } from "../store/i18n.ts";
@@ -10,9 +10,21 @@ type ApiServiceBinding = {
   service_slug: string | null;
 };
 
-export function useResourceBindings(resource: Resource | null) {
+type ResourceSource = Accessor<Resource | null> | Resource | null;
+
+function toResourceAccessor(
+  resource: ResourceSource,
+): Accessor<Resource | null> {
+  if (typeof resource === "function") {
+    return resource;
+  }
+  return () => resource;
+}
+
+export function useResourceBindings(resourceSource: ResourceSource) {
   const { showToast } = useToast();
   const { t } = useI18n();
+  const resource = toResourceAccessor(resourceSource);
 
   const [boundServices, setBoundServices] = createSignal<
     Array<{ id: string; slug: string; hostname: string }>
@@ -20,12 +32,17 @@ export function useResourceBindings(resource: Resource | null) {
   const [loadingBindings, setLoadingBindings] = createSignal(false);
 
   const fetchBindings = async () => {
-    if (!resource) return;
+    const currentResource = resource();
+    if (!currentResource) {
+      setBoundServices([]);
+      return;
+    }
 
+    const resourceName = currentResource.name;
     setLoadingBindings(true);
     try {
       const res = await rpcPath(rpc, "resources", "by-name", ":name").$get({
-        param: { name: resource.name },
+        param: { name: resourceName },
       });
 
       const data = await rpcJson<{ bindings?: ApiServiceBinding[] }>(res);
@@ -45,17 +62,25 @@ export function useResourceBindings(resource: Resource | null) {
         });
       }
 
-      setBoundServices(Array.from(map.values()));
+      if (resource()?.name === resourceName) {
+        setBoundServices(Array.from(map.values()));
+      }
     } catch {
-      setBoundServices([]);
+      if (resource()?.name === resourceName) {
+        setBoundServices([]);
+      }
     } finally {
-      setLoadingBindings(false);
+      if (resource()?.name === resourceName) {
+        setLoadingBindings(false);
+      }
     }
   };
 
   const onRemoveBinding = async (serviceId: string) => {
-    if (!resource) return;
+    const currentResource = resource();
+    if (!currentResource) return;
 
+    const resourceName = currentResource.name;
     try {
       const res = await rpcPath(
         rpc,
@@ -65,7 +90,7 @@ export function useResourceBindings(resource: Resource | null) {
         "bind",
         ":serviceId",
       ).$delete({
-        param: { name: resource.name, serviceId },
+        param: { name: resourceName, serviceId },
       });
       await rpcJson(res);
       showToast("success", t("bindingRemoved"));
@@ -75,9 +100,10 @@ export function useResourceBindings(resource: Resource | null) {
     }
   };
 
-  createEffect(on(() => resource?.name, () => {
-    if (!resource) {
+  createEffect(on(() => resource()?.name, () => {
+    if (!resource()) {
       setBoundServices([]);
+      setLoadingBindings(false);
       return;
     }
     void fetchBindings();

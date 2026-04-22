@@ -28,16 +28,24 @@ import {
   listThreadShares,
   markThreadShareAccessed,
   revokeThreadShare,
-  verifyThreadShareAccess,
   threadShareDeps,
+  verifyThreadShareAccess,
 } from "@/services/threads/thread-shares";
 
-threadShareDeps.getDb = ((db) => mocks.getDb(db)) as typeof threadShareDeps.getDb;
-threadShareDeps.hashPassword = ((...args) => mocks.hashPassword(...args)) as typeof threadShareDeps.hashPassword;
-threadShareDeps.verifyPassword = ((...args) => mocks.verifyPassword(...args)) as typeof threadShareDeps.verifyPassword;
-threadShareDeps.base64UrlEncode = ((...args) => mocks.base64UrlEncode(...args)) as typeof threadShareDeps.base64UrlEncode;
+threadShareDeps.getDb =
+  ((db) => mocks.getDb(db)) as typeof threadShareDeps.getDb;
+threadShareDeps.hashPassword =
+  ((...args) =>
+    mocks.hashPassword(...args)) as typeof threadShareDeps.hashPassword;
+threadShareDeps.verifyPassword =
+  ((...args) =>
+    mocks.verifyPassword(...args)) as typeof threadShareDeps.verifyPassword;
+threadShareDeps.base64UrlEncode =
+  ((...args) =>
+    mocks.base64UrlEncode(...args)) as typeof threadShareDeps.base64UrlEncode;
 threadShareDeps.now = (() => mocks.now()) as typeof threadShareDeps.now;
-threadShareDeps.randomUUID = (() => mocks.randomUUID()) as typeof threadShareDeps.randomUUID;
+threadShareDeps.randomUUID =
+  (() => mocks.randomUUID()) as typeof threadShareDeps.randomUUID;
 
 type DbRow = Record<string, unknown>;
 

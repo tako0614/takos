@@ -21,6 +21,7 @@ import {
   validateWorkflowRunnerEnv,
 } from "../../shared/utils/validate-env.ts";
 import { logError, logWarn } from "../../shared/utils/logger.ts";
+import { classifyWorkerQueueName } from "./queue-names.ts";
 
 // Cached environment validation guards.
 const workflowEnvGuard = createEnvGuard(validateWorkflowRunnerEnv);
@@ -33,12 +34,12 @@ export default {
     batch: MessageBatch<unknown>,
     env: WorkflowRunnerEnv,
   ): Promise<void> {
-    const queueName = batch.queue.replace(/-staging$/i, "");
-    const envError = queueName === "takos-deployment-jobs" ||
-        queueName === "takos-deployment-jobs-dlq"
+    const queueKind = classifyWorkerQueueName(batch.queue);
+    const envError = queueKind === "deployment_jobs" ||
+        queueKind === "deployment_jobs_dlq"
       ? deploymentEnvGuard(env)
-      : queueName === "takos-workflow-jobs" ||
-          queueName === "takos-workflow-jobs-dlq"
+      : queueKind === "workflow_jobs" ||
+          queueKind === "workflow_jobs_dlq"
       ? workflowEnvGuard(env)
       : null;
     if (envError) {
@@ -48,7 +49,7 @@ export default {
       return;
     }
 
-    if (queueName === "takos-workflow-jobs") {
+    if (queueKind === "workflow_jobs") {
       const consumer = createWorkflowQueueConsumer(env);
       // MessageBatch<unknown> is structurally compatible with the consumer's
       // expected batch shape ({ messages: ReadonlyArray<{ body: unknown; ack; retry }> }).
@@ -56,10 +57,15 @@ export default {
       return;
     }
 
-    if (queueName === "takos-workflow-jobs-dlq") {
+    if (queueKind === "workflow_jobs_dlq") {
       for (const message of batch.messages) {
         try {
-          await handleWorkflowJobDlq(message.body, env, message.attempts);
+          await handleWorkflowJobDlq(
+            message.body,
+            env,
+            message.attempts,
+            batch.queue,
+          );
           message.ack();
         } catch (err) {
           logError("Handler failed", err, { module: "workflow_dlq" });
@@ -69,7 +75,7 @@ export default {
       return;
     }
 
-    if (queueName === "takos-deployment-jobs") {
+    if (queueKind === "deployment_jobs") {
       for (const message of batch.messages) {
         const body = message.body;
         if (!isValidDeploymentQueueMessage(body)) {
@@ -97,13 +103,14 @@ export default {
       return;
     }
 
-    if (queueName === "takos-deployment-jobs-dlq") {
+    if (queueKind === "deployment_jobs_dlq") {
       for (const message of batch.messages) {
         try {
           await handleDeploymentJobDlq(
             message.body as DeploymentQueueMessage,
             env,
             message.attempts,
+            batch.queue,
           );
           message.ack();
         } catch (err) {

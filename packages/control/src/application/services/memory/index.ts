@@ -1,17 +1,17 @@
-export { MemoryExtractor, shouldAutoExtract } from './extractor.ts';
-export { MemoryConsolidator } from './consolidation.ts';
+export { MemoryExtractor, shouldAutoExtract } from "./extractor.ts";
+export { MemoryConsolidator } from "./consolidation.ts";
 export {
-  listMemories,
   bumpMemoryAccess,
-  searchMemories,
-  getMemoryById,
   createMemory,
-  updateMemory,
-  deleteMemory,
-  listReminders,
-  getReminderById,
   createReminder,
-  updateReminder,
+  deleteMemory,
   deleteReminder,
+  getMemoryById,
+  getReminderById,
+  listMemories,
+  listReminders,
+  searchMemories,
   triggerReminder,
-} from './memories.ts';
+  updateMemory,
+  updateReminder,
+} from "./memories.ts";

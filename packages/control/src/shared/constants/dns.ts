@@ -6,7 +6,7 @@
  */
 
 /** Cloudflare DNS-over-HTTPS JSON API endpoint. */
-export const DOH_ENDPOINT = 'https://cloudflare-dns.com/dns-query';
+export const DOH_ENDPOINT = "https://cloudflare-dns.com/dns-query";
 
 /** Timeout (ms) for individual DoH resolution requests. */
 export const DNS_RESOLVE_TIMEOUT_MS = 5000;

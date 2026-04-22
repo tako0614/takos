@@ -1,4 +1,4 @@
-import { createEffect, createSignal, on } from "solid-js";
+import { type Accessor, createEffect, createSignal, on } from "solid-js";
 import { rpc, rpcJson, rpcPath } from "../lib/rpc.ts";
 import { useConfirmDialog } from "../store/confirm-dialog.ts";
 import { useI18n } from "../store/i18n.ts";
@@ -58,7 +58,7 @@ function normalizeBindingType(type: string): string {
 }
 
 export function useWorkerSettings(
-  worker: Worker | null,
+  worker: Accessor<Worker | null>,
   onWorkerUpdated: (updates: Partial<Worker>) => void,
   onRefreshWorkers: () => void,
 ) {
@@ -115,7 +115,7 @@ export function useWorkerSettings(
         >(settingsRes),
       ]);
 
-      const currentWorker = worker;
+      const currentWorker = worker();
       let workerBindings: Binding[] = [];
       if (currentWorker?.space_id) {
         const resourcesRes = await rpcPath(rpc, "resources").$get({
@@ -182,12 +182,12 @@ export function useWorkerSettings(
     }
   };
 
-  createEffect(on(() => worker, () => {
-    if (!worker) return;
-    setEditSlug(worker.slug ?? "");
+  createEffect(on(worker, (currentWorker) => {
+    if (!currentWorker) return;
+    setEditSlug(currentWorker.slug ?? "");
     setVerificationInfo(null);
-    fetchWorkerDomains(worker.id);
-    fetchWorkerSettings(worker.id);
+    fetchWorkerDomains(currentWorker.id);
+    fetchWorkerSettings(currentWorker.id);
   }));
 
   const handleAddEnvVar = () => {
@@ -215,11 +215,12 @@ export function useWorkerSettings(
   };
 
   const handleSaveEnvVars = async () => {
-    if (!worker) return;
+    const currentWorker = worker();
+    if (!currentWorker) return;
     setSavingWorkerSettings(true);
     try {
       const res = await rpcPath(rpc, "services", ":id", "env").$patch({
-        param: { id: worker.id },
+        param: { id: currentWorker.id },
         json: {
           variables: envVars().filter((e) => e.value).map((e) => ({
             name: e.name,
@@ -252,7 +253,8 @@ export function useWorkerSettings(
   };
 
   const handleSaveBindings = async () => {
-    if (!worker) return;
+    const currentWorker = worker();
+    if (!currentWorker) return;
     setSavingWorkerSettings(true);
     try {
       const pendingBindings = bindings().filter((binding) =>
@@ -262,14 +264,14 @@ export function useWorkerSettings(
         const res = await rpcPath(rpc, "resources", ":id", "bind").$post({
           param: { id: binding.resource_id! },
           json: {
-            service_id: worker.id,
+            service_id: currentWorker.id,
             binding_name: binding.name,
           },
         });
         await rpcJson(res);
       }));
       showToast("success", t("saved"));
-      await fetchWorkerSettings(worker.id);
+      await fetchWorkerSettings(currentWorker.id);
     } catch {
       showToast("error", t("failedToSave"));
     } finally {
@@ -278,7 +280,8 @@ export function useWorkerSettings(
   };
 
   const handleSaveRuntimeConfig = async () => {
-    if (!worker) return;
+    const currentWorker = worker();
+    if (!currentWorker) return;
     setSavingWorkerSettings(true);
     try {
       const config = runtimeConfig();
@@ -287,7 +290,7 @@ export function useWorkerSettings(
       if (config.subrequests) limits.subrequests = config.subrequests;
 
       const res = await rpcPath(rpc, "services", ":id", "settings").$patch({
-        param: { id: worker.id },
+        param: { id: currentWorker.id },
         json: {
           compatibility_date: config.compatibility_date,
           compatibility_flags: config.compatibility_flags,
@@ -304,11 +307,12 @@ export function useWorkerSettings(
   };
 
   const handleSaveSlug = async () => {
-    if (!worker || !editSlug().trim()) return;
+    const currentWorker = worker();
+    if (!currentWorker || !editSlug().trim()) return;
     setSavingSlug(true);
     try {
       const res = await rpcPath(rpc, "services", ":id", "slug").$patch({
-        param: { id: worker.id },
+        param: { id: currentWorker.id },
         json: { slug: editSlug().trim() },
       });
       const result = await rpcJson<
@@ -328,12 +332,13 @@ export function useWorkerSettings(
   };
 
   const handleAddWorkerDomain = async () => {
-    if (!worker || !newWorkerDomain().trim()) return;
+    const currentWorker = worker();
+    if (!currentWorker || !newWorkerDomain().trim()) return;
     setAddingWorkerDomain(true);
     try {
       const res = await rpcPath(rpc, "services", ":id", "custom-domains").$post(
         {
-          param: { id: worker.id },
+          param: { id: currentWorker.id },
           json: { domain: newWorkerDomain().trim() },
         },
       );
@@ -354,7 +359,7 @@ export function useWorkerSettings(
       setNewWorkerDomain("");
       setVerificationInfo(result.verification);
       showToast("success", t("domainAdded"));
-      fetchWorkerDomains(worker.id);
+      fetchWorkerDomains(currentWorker.id);
     } catch (err) {
       showToast(
         "error",
@@ -366,7 +371,8 @@ export function useWorkerSettings(
   };
 
   const handleVerifyWorkerDomain = async (domainId: string) => {
-    if (!worker) return;
+    const currentWorker = worker();
+    if (!currentWorker) return;
     try {
       const res = await rpcPath(
         rpc,
@@ -376,7 +382,7 @@ export function useWorkerSettings(
         ":domainId",
         "verify",
       ).$post({
-        param: { id: worker.id, domainId },
+        param: { id: currentWorker.id, domainId },
       });
       const result = await rpcJson<{ verified: boolean; message: string }>(res);
       if (result.verified) {
@@ -385,14 +391,15 @@ export function useWorkerSettings(
       } else {
         showToast("error", result.message || t("verificationFailed"));
       }
-      fetchWorkerDomains(worker.id);
+      fetchWorkerDomains(currentWorker.id);
     } catch {
       showToast("error", t("verificationFailed"));
     }
   };
 
   const handleDeleteWorkerDomain = async (domainId: string) => {
-    if (!worker) return;
+    const currentWorker = worker();
+    if (!currentWorker) return;
     const confirmed = await confirm({
       title: t("deleteDomain"),
       message: t("confirmDeleteDomain"),
@@ -408,11 +415,11 @@ export function useWorkerSettings(
         "custom-domains",
         ":domainId",
       ).$delete({
-        param: { id: worker.id, domainId },
+        param: { id: currentWorker.id, domainId },
       });
       await rpcJson(res);
       showToast("success", t("deleted"));
-      fetchWorkerDomains(worker.id);
+      fetchWorkerDomains(currentWorker.id);
     } catch {
       showToast("error", t("failedToDelete"));
     }

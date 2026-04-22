@@ -1,22 +1,27 @@
-import type { ContainerBackend } from './container-backend.ts';
+import type { ContainerBackend } from "./container-backend.ts";
 import {
   createDefaultOciOrchestratorBackendResolver,
   startLocalOciOrchestratorServer,
-} from './oci-orchestrator.ts';
+} from "./oci-orchestrator.ts";
 
 async function resolveBackend(): Promise<ContainerBackend> {
-  const backendEnv = (Deno.env.get('OCI_BACKEND') ?? 'docker').trim().toLowerCase();
+  const backendEnv = (Deno.env.get("OCI_BACKEND") ?? "docker").trim()
+    .toLowerCase();
 
   switch (backendEnv) {
-    case 'k8s':
-    case 'kubernetes': {
-      const { K8sContainerBackend } = await import('./k8s-container-backend.ts');
+    case "k8s":
+    case "kubernetes": {
+      const { K8sContainerBackend } = await import(
+        "./k8s-container-backend.ts"
+      );
       return new K8sContainerBackend();
     }
 
-    case 'docker':
+    case "docker":
     default: {
-      const { DockerContainerBackend } = await import('./docker-container-backend.ts');
+      const { DockerContainerBackend } = await import(
+        "./docker-container-backend.ts"
+      );
       return new DockerContainerBackend();
     }
   }

@@ -9,5 +9,5 @@ in the current run.
 - Use tools deliberately and explain outcomes clearly.
 - Be flexible across domains: planning, drafting, research, repo work,
   deployment, reminders, and integrations are all part of the job.
-- Takos also has Takos-managed skills plus space custom skills; use them
-  when they match the task.
+- Takos also has Takos-managed skills plus space custom skills; use them when
+  they match the task.

@@ -1,8 +1,8 @@
 /**
  * DAG（有向非巡回グラフ）で依存関係を解決
  */
-import type { Workflow } from '../workflow-models.ts';
-import { normalizeNeedsInput } from './job.ts';
+import type { Workflow } from "../workflow-models.ts";
+import { normalizeNeedsInput } from "./job.ts";
 
 /**
  * 依存関係解決失敗時に投げるエラー
@@ -10,10 +10,10 @@ import { normalizeNeedsInput } from './job.ts';
 export class DependencyError extends Error {
   constructor(
     message: string,
-    public readonly jobs?: string[]
+    public readonly jobs?: string[],
   ) {
     super(message);
-    this.name = 'DependencyError';
+    this.name = "DependencyError";
   }
 }
 
@@ -31,7 +31,7 @@ export interface DependencyGraph {
 
 function getOrCreateGraphSet(
   map: Map<string, Set<string>>,
-  key: string
+  key: string,
 ): Set<string> {
   const existing = map.get(key);
   if (existing) {
@@ -67,7 +67,7 @@ export function buildDependencyGraph(workflow: Workflow): DependencyGraph {
       if (!nodes.has(need)) {
         throw new DependencyError(
           `Job "${jobId}" depends on unknown job "${need}"`,
-          [jobId, need]
+          [jobId, need],
         );
       }
       getOrCreateGraphSet(edges, jobId).add(need);
@@ -123,8 +123,8 @@ function assertAcyclic(graph: DependencyGraph): void {
   const cycle = detectCycle(graph);
   if (cycle.length > 0) {
     throw new DependencyError(
-      `Circular dependency detected: ${cycle.join(' -> ')}`,
-      cycle
+      `Circular dependency detected: ${cycle.join(" -> ")}`,
+      cycle,
     );
   }
 }
@@ -163,7 +163,7 @@ export function groupIntoPhases(graph: DependencyGraph): string[][] {
 
     if (phase.length === 0) {
       // サイクル検出が正常ならここは発生しない
-      throw new DependencyError('Unable to resolve dependencies');
+      throw new DependencyError("Unable to resolve dependencies");
     }
 
     // 予測可能な順序となるようソート
@@ -177,4 +177,3 @@ export function groupIntoPhases(graph: DependencyGraph): string[][] {
 
   return phases;
 }
-

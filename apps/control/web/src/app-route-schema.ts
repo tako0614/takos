@@ -17,6 +17,7 @@ export type AppRouteComponentKey =
   | "repo"
   | "chat"
   | "repos"
+  | "groups"
   | "storage"
   | "apps"
   | "deploy"
@@ -203,12 +204,18 @@ function buildChatPath(state: RouteState): string {
 
 function buildDeployPath(state: RouteState): string {
   if (state.spaceId) {
+    if (state.deploySection === "groups" && state.groupId) {
+      return `/deploy/w/${state.spaceId}/groups/${state.groupId}`;
+    }
     if (state.deploySection && state.deploySection !== "workers") {
       return `/deploy/w/${state.spaceId}/${state.deploySection}`;
     }
     return `/deploy/w/${state.spaceId}`;
   }
   if (state.deploySection && state.deploySection !== "workers") {
+    if (state.deploySection === "groups" && state.groupId) {
+      return `/deploy/groups/${state.groupId}`;
+    }
     return `/deploy/${state.deploySection}`;
   }
   return "/deploy";
@@ -219,6 +226,15 @@ function buildReposPath(state: RouteState): string {
     return `/repos/${state.spaceId}`;
   }
   return "/repos";
+}
+
+function buildGroupsPath(state: RouteState): string {
+  if (state.spaceId) {
+    return state.groupId
+      ? `/groups/${state.spaceId}/${state.groupId}`
+      : `/groups/${state.spaceId}`;
+  }
+  return "/groups";
 }
 
 function buildAppsPath(state: RouteState): string {
@@ -447,6 +463,39 @@ export const APP_ROUTE_SCHEMAS: readonly AppRouteSchema[] = [
       state.view === "repos" ? buildReposPath(state) : undefined,
   },
   {
+    key: "groups",
+    componentKey: "deploy",
+    componentPatterns: [
+      "/groups/:spaceId?/:groupId?",
+      "/w/:spaceId/groups/:groupId?",
+    ],
+    placement: "protected",
+    match: (parts) => {
+      if (parts[0] === "groups") {
+        return parts[1]
+          ? {
+            view: "deploy",
+            spaceId: parts[1],
+            deploySection: "groups",
+            groupId: parts[2],
+          }
+          : { view: "deploy", deploySection: "groups" };
+      }
+      if (parts[0] === "w" && parts[1] && parts[2] === "groups") {
+        return {
+          view: "deploy",
+          spaceId: parts[1],
+          spaceSlug: parts[1],
+          deploySection: "groups",
+          groupId: parts[3],
+        };
+      }
+      return undefined;
+    },
+    build: (state) =>
+      state.view === "groups" ? buildGroupsPath(state) : undefined,
+  },
+  {
     key: "space-repo",
     componentKey: "space-repo",
     componentPatterns: ["/w/:spaceId/repos/:repoId"],
@@ -518,8 +567,8 @@ export const APP_ROUTE_SCHEMAS: readonly AppRouteSchema[] = [
     componentPatterns: [
       "/deploy",
       "/deploy/:segment",
-      "/deploy/:spaceId/:section?",
-      "/deploy/w/:spaceId/:section?",
+      "/deploy/:spaceId/:section?/:groupId?",
+      "/deploy/w/:spaceId/:section?/:groupId?",
       "/resources",
       "/workers",
       "/deployments",
@@ -539,10 +588,12 @@ export const APP_ROUTE_SCHEMAS: readonly AppRouteSchema[] = [
 
       if (parts[1] === "w") {
         if (parts[2]) {
+          const deploySection = parseDeploySection(parts[3]) || "workers";
           return {
             view: "deploy",
             spaceId: parts[2],
-            deploySection: parseDeploySection(parts[3]) || "workers",
+            deploySection,
+            groupId: deploySection === "groups" ? parts[4] : undefined,
           };
         }
         return { view: "deploy", deploySection: "workers" };
@@ -550,14 +601,20 @@ export const APP_ROUTE_SCHEMAS: readonly AppRouteSchema[] = [
 
       const maybeSection = parseDeploySection(parts[1]);
       if (maybeSection) {
-        return { view: "deploy", deploySection: maybeSection };
+        return {
+          view: "deploy",
+          deploySection: maybeSection,
+          groupId: maybeSection === "groups" ? parts[2] : undefined,
+        };
       }
 
       if (parts[1]) {
+        const deploySection = parseDeploySection(parts[2]) || "workers";
         return {
           view: "deploy",
           spaceId: parts[1],
-          deploySection: parseDeploySection(parts[2]) || "workers",
+          deploySection,
+          groupId: deploySection === "groups" ? parts[3] : undefined,
         };
       }
 

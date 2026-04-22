@@ -9,6 +9,7 @@
     "jsr:@std/data-structures@^1.0.10": "1.0.10",
     "jsr:@std/fs@*": "1.0.23",
     "jsr:@std/internal@^1.0.12": "1.0.12",
+    "jsr:@std/path@*": "1.1.4",
     "jsr:@std/path@^1.1.4": "1.1.4",
     "jsr:@std/testing@*": "1.0.17",
     "jsr:@std/testing@^1.0.17": "1.0.17",
@@ -45,6 +46,7 @@
     "npm:nanoid@5": "5.1.7",
     "npm:pg@^8.20.0": "8.20.0",
     "npm:redis@^5.11.0": "5.11.0",
+    "npm:solid-js@*": "1.9.12",
     "npm:solid-js@^1.9.12": "1.9.12",
     "npm:tailwindcss@^4.1.18": "4.2.2",
     "npm:vite-plugin-solid@^2.11.11": "2.11.11_solid-js@1.9.12_vite@6.4.1__yaml@2.8.3_yaml@2.8.3",
@@ -74,7 +76,7 @@
     "@std/fs@1.0.23": {
       "integrity": "3ecbae4ce4fee03b180fa710caff36bb5adb66631c46a6460aaad49515565a37",
       "dependencies": [
-        "jsr:@std/path"
+        "jsr:@std/path@^1.1.4"
       ]
     },
     "@std/internal@1.0.12": {

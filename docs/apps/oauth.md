@@ -46,12 +46,18 @@ consumer が alias を省略した場合は次の default env 名が使われま
 
 | field                | required | 説明                                                                                                                |
 | -------------------- | -------- | ------------------------------------------------------------------------------------------------------------------- |
-| `redirectUris`       | yes      | HTTPS の redirect URI 一覧。local development では `localhost`, `127.0.0.1`, `[::1]`, `.localhost` の HTTP URI も可 |
+| `redirectUris`       | yes      | HTTPS の redirect URI 一覧。manifest では `/api/auth/callback` のような相対 path も可                               |
 | `scopes`             | yes      | OAuth scope 一覧                                                                                                    |
 | `clientName`         | no       | 認可画面に表示する client 名                                                                                        |
 | `metadata.logoUri`   | no       | ロゴ URL                                                                                                            |
 | `metadata.tosUri`    | no       | 利用規約 URL                                                                                                        |
 | `metadata.policyUri` | no       | プライバシーポリシー URL                                                                                            |
+
+相対 `redirectUris` は manifest deploy 時に group の auto hostname へ解決されます。
+そのため `TENANT_BASE_DOMAIN` と space / group slug から hostname を解決できない
+環境では deploy validation が失敗します。API から OAuth client を直接作る場合は、
+相対 path ではなく絶対 HTTPS URL を渡してください。local development では
+`localhost`, `127.0.0.1`, `[::1]`, `.localhost` の HTTP URI も受け付けます。
 
 `clientName` と `metadata.*` は optional です。`metadata` 配下は `logoUri` /
 `tosUri` / `policyUri` を受け付けます。
@@ -84,14 +90,72 @@ const response = await fetch("https://takos.example.com/oauth/token", {
 
 ## Device Flow
 
-CLI / TV / IoT などブラウザを直接扱えない client では Device Flow を使えます。
+Device Flow は Takos OAuth server が support する grant type です。ただし
+`.takos/app.yml` の `oauth-client` publication で作る client は Authorization
+Code Flow と refresh token を前提にします。Device Flow を使う client は Dynamic
+Client Registration などで `grant_types` に
+`urn:ietf:params:oauth:grant-type:device_code` を含めて登録してください。
+
+CLI / TV / IoT などブラウザを直接扱えない client では、次の流れで使います。
 
 ```text
-1. POST /oauth/device/code
+1. POST /oauth/device/code で device_code / user_code を発行する
 2. verification_uri と user_code をユーザーに提示
 3. ユーザーが別端末で認可
-4. /oauth/token を polling
+4. interval 以上の間隔で /oauth/token を polling
 ```
+
+device authorization request:
+
+```typescript
+const response = await fetch("https://takos.example.com/oauth/device/code", {
+  method: "POST",
+  headers: {
+    "Content-Type": "application/x-www-form-urlencoded",
+  },
+  body: new URLSearchParams({
+    client_id: clientId,
+    // confidential client の場合だけ送る
+    client_secret: clientSecret,
+    scope: "threads:read runs:write",
+  }),
+});
+```
+
+response:
+
+```json
+{
+  "device_code": "device-code",
+  "user_code": "ABCD-EFGH",
+  "verification_uri": "https://takos.example.com/oauth/device",
+  "verification_uri_complete": "https://takos.example.com/oauth/device?user_code=ABCD-EFGH",
+  "expires_in": 900,
+  "interval": 5
+}
+```
+
+token polling:
+
+```typescript
+const response = await fetch("https://takos.example.com/oauth/token", {
+  method: "POST",
+  headers: {
+    "Content-Type": "application/x-www-form-urlencoded",
+  },
+  body: new URLSearchParams({
+    grant_type: "urn:ietf:params:oauth:grant-type:device_code",
+    device_code: deviceCode,
+    client_id: clientId,
+    // confidential client の場合だけ送る
+    client_secret: clientSecret,
+  }),
+});
+```
+
+未認可の間は `authorization_pending`、polling が早すぎる場合は `slow_down`
+が返ります。ユーザーが拒否した場合は `access_denied`、期限切れは
+`expired_token`、使用済みまたは無効な code は `invalid_grant` です。
 
 ## スコープ
 

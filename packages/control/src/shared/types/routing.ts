@@ -16,15 +16,15 @@ export type RoutingRecord = {
 };
 
 export type RoutingTarget =
-  | { type: 'deployments'; deployments: WeightedDeploymentTarget[] }
-  | { type: 'http-endpoint-set'; endpoints: StoredHttpEndpoint[] };
+  | { type: "deployments"; deployments: WeightedDeploymentTarget[] }
+  | { type: "http-endpoint-set"; endpoints: StoredHttpEndpoint[] };
 
 export type WeightedDeploymentTarget = {
   routeRef: string;
   weight: number;
   // Optional metadata for observability/debugging.
   deploymentId?: string;
-  status?: 'active' | 'canary' | 'rollback';
+  status?: "active" | "canary" | "rollback";
 };
 
 export type HttpRoute = {
@@ -37,18 +37,26 @@ export type StoredHttpEndpoint = {
   routes: HttpRoute[];
   target:
     | {
-        kind: 'service-ref';
-        ref: string;
-      }
+      kind: "service-ref";
+      ref: string;
+    }
     | {
-        kind: 'http-url';
-        baseUrl: string;
-      };
+      kind: "http-url";
+      baseUrl: string;
+    };
   timeoutMs?: number;
 };
 
 export type RoutingStore = {
   getRecord(hostname: string): Promise<RoutingRecord | null>;
-  putRecord(hostname: string, target: RoutingTarget, updatedAt: number): Promise<RoutingRecord>;
-  deleteRecord(hostname: string, tombstoneTtlMs: number, updatedAt: number): Promise<RoutingRecord>;
+  putRecord(
+    hostname: string,
+    target: RoutingTarget,
+    updatedAt: number,
+  ): Promise<RoutingRecord>;
+  deleteRecord(
+    hostname: string,
+    tombstoneTtlMs: number,
+    updatedAt: number,
+  ): Promise<RoutingRecord>;
 };

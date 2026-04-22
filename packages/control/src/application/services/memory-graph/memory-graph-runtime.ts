@@ -1,22 +1,34 @@
-import type { D1Database } from '../../../shared/types/bindings.ts';
-import type { Env, IndexJobQueueMessage } from '../../../shared/types/index.ts';
-import { INDEX_QUEUE_MESSAGE_VERSION } from '../../../shared/types/index.ts';
-import type { AgentContext } from '../agent/agent-models.ts';
-import type { ActivationResult, Claim, Evidence, ToolObserver } from './graph-models.ts';
-import { RunOverlay } from './overlay.ts';
+import type { D1Database } from "../../../shared/types/bindings.ts";
+import type { Env, IndexJobQueueMessage } from "../../../shared/types/index.ts";
+import { INDEX_QUEUE_MESSAGE_VERSION } from "../../../shared/types/index.ts";
+import type { AgentContext } from "../agent/agent-models.ts";
+import type {
+  ActivationResult,
+  Claim,
+  Evidence,
+  ToolObserver,
+} from "./graph-models.ts";
+import { RunOverlay } from "./overlay.ts";
 import {
+  countEvidenceForClaims,
   getActiveClaims,
   getPathsForClaim,
-  countEvidenceForClaims,
-  upsertClaim,
   insertEvidence,
-} from './claim-store.ts';
-import { buildActivationBundles, renderActivationSegment } from './activation.ts';
-import { createToolObserver } from './observer.ts';
-import { generateId } from '../../../shared/utils/index.ts';
-import { logWarn } from '../../../shared/utils/logger.ts';
+  upsertClaim,
+} from "./claim-store.ts";
+import {
+  buildActivationBundles,
+  renderActivationSegment,
+} from "./activation.ts";
+import { createToolObserver } from "./observer.ts";
+import { generateId } from "../../../shared/utils/index.ts";
+import { logWarn } from "../../../shared/utils/logger.ts";
 
-const EMPTY_ACTIVATION: ActivationResult = { bundles: [], segment: '', hasContent: false };
+const EMPTY_ACTIVATION: ActivationResult = {
+  bundles: [],
+  segment: "",
+  hasContent: false,
+};
 
 export interface AgentMemoryBackend {
   bootstrap(): Promise<ActivationResult>;
@@ -37,7 +49,12 @@ export class AgentMemoryRuntime {
   private overlayActivationCache: ActivationResult | null = null;
   private backend?: AgentMemoryBackend;
 
-  constructor(db: D1Database, context: AgentContext, env: Env, backend?: AgentMemoryBackend) {
+  constructor(
+    db: D1Database,
+    context: AgentContext,
+    env: Env,
+    backend?: AgentMemoryBackend,
+  ) {
     this.db = db;
     this.context = context;
     this.env = env;
@@ -50,10 +67,13 @@ export class AgentMemoryRuntime {
         this.cachedActivation = await this.backend.bootstrap();
         return this.cachedActivation;
       } catch (err) {
-        logWarn('Remote memory graph bootstrap failed, continuing without activation', {
-          module: 'memory-graph',
-          detail: err,
-        });
+        logWarn(
+          "Remote memory graph bootstrap failed, continuing without activation",
+          {
+            module: "memory-graph",
+            detail: err,
+          },
+        );
         this.cachedActivation = EMPTY_ACTIVATION;
         return this.cachedActivation;
       }
@@ -66,13 +86,15 @@ export class AgentMemoryRuntime {
         return this.cachedActivation;
       }
 
-      const claimIds = claims.map(c => c.id);
+      const claimIds = claims.map((c) => c.id);
       const topClaims = claims.slice(0, 20);
 
       const [evidenceCounts, pathsArrays] = await Promise.all([
         countEvidenceForClaims(this.db, claimIds),
         Promise.all(
-          topClaims.map(c => getPathsForClaim(this.db, this.context.spaceId, c.id, 5)),
+          topClaims.map((c) =>
+            getPathsForClaim(this.db, this.context.spaceId, c.id, 5)
+          ),
         ),
       ]);
 
@@ -83,12 +105,16 @@ export class AgentMemoryRuntime {
         }
       }
 
-      const bundles = buildActivationBundles(claims, evidenceCounts, pathsByClaim);
+      const bundles = buildActivationBundles(
+        claims,
+        evidenceCounts,
+        pathsByClaim,
+      );
       this.cachedActivation = renderActivationSegment(bundles);
       return this.cachedActivation;
     } catch (err) {
-      logWarn('Memory graph bootstrap failed, continuing without activation', {
-        module: 'memory-graph',
+      logWarn("Memory graph bootstrap failed, continuing without activation", {
+        module: "memory-graph",
         detail: err,
       });
       this.cachedActivation = EMPTY_ACTIVATION;
@@ -115,7 +141,8 @@ export class AgentMemoryRuntime {
     }
 
     // Merge bootstrap claims with overlay claims
-    const bootstrapClaims = this.cachedActivation?.bundles.map(b => b.claim) ?? [];
+    const bootstrapClaims =
+      this.cachedActivation?.bundles.map((b) => b.claim) ?? [];
     const overlayClaims = this.overlay.getAllClaims();
 
     // Overlay claims take priority (by subject match), then sort by confidence desc
@@ -128,7 +155,7 @@ export class AgentMemoryRuntime {
     for (const c of overlayClaims) {
       // Overlay claims may supersede bootstrap claims with same subject+predicate
       const existingKey = [...claimMap.values()].find(
-        e => e.subject === c.subject && e.predicate === c.predicate,
+        (e) => e.subject === c.subject && e.predicate === c.predicate,
       );
       if (existingKey) {
         supersededMap.set(existingKey.id, c.id);
@@ -146,7 +173,10 @@ export class AgentMemoryRuntime {
     if (this.cachedActivation) {
       for (const bundle of this.cachedActivation.bundles) {
         const targetId = supersededMap.get(bundle.claim.id) ?? bundle.claim.id;
-        evidenceCounts.set(targetId, (evidenceCounts.get(targetId) ?? 0) + bundle.evidenceCount);
+        evidenceCounts.set(
+          targetId,
+          (evidenceCounts.get(targetId) ?? 0) + bundle.evidenceCount,
+        );
       }
     }
     const overlayEvidence = this.overlay.getAllEvidence();
@@ -163,7 +193,11 @@ export class AgentMemoryRuntime {
   }
 
   createToolObserver(): ToolObserver {
-    return createToolObserver(this.context.spaceId, this.context.runId, this.overlay);
+    return createToolObserver(
+      this.context.spaceId,
+      this.context.runId,
+      this.overlay,
+    );
   }
 
   async finalize(): Promise<void> {
@@ -182,7 +216,10 @@ export class AgentMemoryRuntime {
       await this.flushOverlay();
       await this.enqueuePathBuildJob();
     } catch (err) {
-      logWarn('Memory graph finalize failed', { module: 'memory-graph', detail: err });
+      logWarn("Memory graph finalize failed", {
+        module: "memory-graph",
+        detail: err,
+      });
     }
   }
 
@@ -202,17 +239,19 @@ export class AgentMemoryRuntime {
     if (!this.env.INDEX_QUEUE) return;
 
     try {
-      await this.env.INDEX_QUEUE.send({
-        version: INDEX_QUEUE_MESSAGE_VERSION,
-        jobId: generateId(),
-        spaceId: this.context.spaceId,
-        type: 'memory_build_paths',
-        targetId: this.context.runId,
-        timestamp: Date.now(),
-      } satisfies IndexJobQueueMessage);
+      await this.env.INDEX_QUEUE.send(
+        {
+          version: INDEX_QUEUE_MESSAGE_VERSION,
+          jobId: generateId(),
+          spaceId: this.context.spaceId,
+          type: "memory_build_paths",
+          targetId: this.context.runId,
+          timestamp: Date.now(),
+        } satisfies IndexJobQueueMessage,
+      );
     } catch (err) {
-      logWarn('Failed to enqueue memory_build_paths job', {
-        module: 'memory-graph',
+      logWarn("Failed to enqueue memory_build_paths job", {
+        module: "memory-graph",
         detail: err,
       });
     }

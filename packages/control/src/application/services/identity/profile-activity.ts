@@ -1,7 +1,15 @@
-import type { D1Database } from '../../../shared/types/bindings.ts';
-import { getDb as realGetDb, commits, repoReleases, pullRequests, repositories, accounts, serviceDeployments } from '../../../infra/db/index.ts';
-import { eq, and, lt, desc } from 'drizzle-orm';
-import { listServiceRouteRecordsByIds as realListServiceRouteRecordsByIds } from '../platform/workers.ts';
+import type { D1Database } from "../../../shared/types/bindings.ts";
+import {
+  accounts,
+  commits,
+  getDb as realGetDb,
+  pullRequests,
+  repoReleases,
+  repositories,
+  serviceDeployments,
+} from "../../../infra/db/index.ts";
+import { and, desc, eq, lt } from "drizzle-orm";
+import { listServiceRouteRecordsByIds as realListServiceRouteRecordsByIds } from "../platform/workers.ts";
 
 export const profileActivityDeps = {
   getDb: realGetDb,
@@ -15,7 +23,11 @@ function resolveRepoOwnerUsername(account: {
   return account.slug || account.id;
 }
 
-export type ActivityEventType = 'commit' | 'release' | 'pull_request' | 'deployment';
+export type ActivityEventType =
+  | "commit"
+  | "release"
+  | "pull_request"
+  | "deployment";
 
 export interface ActivityEvent {
   id: string;
@@ -57,7 +69,7 @@ export async function fetchProfileActivity(
   // Build commit conditions
   const commitConditions = [
     eq(commits.authorEmail, profileUserEmail),
-    eq(repositories.visibility, 'public'),
+    eq(repositories.visibility, "public"),
   ];
   if (before) {
     commitConditions.push(lt(commits.commitDate, before));
@@ -66,7 +78,7 @@ export async function fetchProfileActivity(
   // Build release conditions
   const releaseConditions = [
     eq(repoReleases.authorAccountId, profileUserId),
-    eq(repositories.visibility, 'public'),
+    eq(repositories.visibility, "public"),
   ];
   if (before) {
     releaseConditions.push(lt(repoReleases.createdAt, before));
@@ -74,9 +86,9 @@ export async function fetchProfileActivity(
 
   // Build PR conditions
   const prConditions = [
-    eq(pullRequests.authorType, 'user'),
+    eq(pullRequests.authorType, "user"),
     eq(pullRequests.authorId, profileUserId),
-    eq(repositories.visibility, 'public'),
+    eq(repositories.visibility, "public"),
   ];
   if (before) {
     prConditions.push(lt(pullRequests.createdAt, before));
@@ -167,12 +179,15 @@ export async function fetchProfileActivity(
   const events: ActivityEvent[] = [];
 
   for (const row of commitRows) {
-    const ownerUsername = resolveRepoOwnerUsername({ id: row.accountId, slug: row.accountSlug });
+    const ownerUsername = resolveRepoOwnerUsername({
+      id: row.accountId,
+      slug: row.accountSlug,
+    });
     if (!ownerUsername) continue;
-    const title = row.message.split('\n')[0] || 'Commit';
+    const title = row.message.split("\n")[0] || "Commit";
     events.push({
       id: row.id,
-      type: 'commit',
+      type: "commit",
       created_at: row.commitDate ?? new Date(0).toISOString(),
       title,
       repo: {
@@ -184,11 +199,14 @@ export async function fetchProfileActivity(
   }
 
   for (const row of releaseRows) {
-    const ownerUsername = resolveRepoOwnerUsername({ id: row.accountId, slug: row.accountSlug });
+    const ownerUsername = resolveRepoOwnerUsername({
+      id: row.accountId,
+      slug: row.accountSlug,
+    });
     if (!ownerUsername) continue;
     events.push({
       id: row.id,
-      type: 'release',
+      type: "release",
       created_at: row.publishedAt || row.createdAt || new Date(0).toISOString(),
       title: `Released ${row.tag}`,
       repo: {
@@ -203,11 +221,14 @@ export async function fetchProfileActivity(
   }
 
   for (const row of prRows) {
-    const ownerUsername = resolveRepoOwnerUsername({ id: row.accountId, slug: row.accountSlug });
+    const ownerUsername = resolveRepoOwnerUsername({
+      id: row.accountId,
+      slug: row.accountSlug,
+    });
     if (!ownerUsername) continue;
     events.push({
       id: row.id,
-      type: 'pull_request',
+      type: "pull_request",
       created_at: row.createdAt ?? new Date(0).toISOString(),
       title: `PR #${row.number}: ${row.title}`,
       repo: {
@@ -226,10 +247,11 @@ export async function fetchProfileActivity(
     if (!service?.hostname) {
       continue;
     }
-    const label = service.hostname || service.slug || service.routeRef || 'Service';
+    const label = service.hostname || service.slug || service.routeRef ||
+      "Service";
     events.push({
       id: row.id,
-      type: 'deployment',
+      type: "deployment",
       created_at: row.completedAt || row.createdAt || new Date(0).toISOString(),
       title: `Deployed ${label}`,
       repo: null,

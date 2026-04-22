@@ -1,1 +1,1 @@
-export * from '../route-auth.ts';
+export * from "../route-auth.ts";

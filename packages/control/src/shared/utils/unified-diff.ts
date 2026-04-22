@@ -1,5 +1,5 @@
 export type DiffLine = {
-  type: 'context' | 'add' | 'delete';
+  type: "context" | "add" | "delete";
   content: string;
 };
 
@@ -11,9 +11,12 @@ export type DiffHunk = {
   lines: DiffLine[];
 };
 
-export function generateDiffHunks(oldContent: string, newContent: string): DiffHunk[] {
-  const oldLines = oldContent.split('\n');
-  const newLines = newContent.split('\n');
+export function generateDiffHunks(
+  oldContent: string,
+  newContent: string,
+): DiffHunk[] {
+  const oldLines = oldContent.split("\n");
+  const newLines = newContent.split("\n");
   const lines: DiffLine[] = [];
   let oldIdx = 0;
   let newIdx = 0;
@@ -23,23 +26,23 @@ export function generateDiffHunks(oldContent: string, newContent: string): DiffH
     const newLine = newLines[newIdx];
 
     if (oldIdx >= oldLines.length) {
-      lines.push({ type: 'add', content: newLine });
+      lines.push({ type: "add", content: newLine });
       newIdx++;
       continue;
     }
     if (newIdx >= newLines.length) {
-      lines.push({ type: 'delete', content: oldLine });
+      lines.push({ type: "delete", content: oldLine });
       oldIdx++;
       continue;
     }
     if (oldLine === newLine) {
-      lines.push({ type: 'context', content: oldLine });
+      lines.push({ type: "context", content: oldLine });
       oldIdx++;
       newIdx++;
       continue;
     }
-    lines.push({ type: 'delete', content: oldLine });
-    lines.push({ type: 'add', content: newLine });
+    lines.push({ type: "delete", content: oldLine });
+    lines.push({ type: "add", content: newLine });
     oldIdx++;
     newIdx++;
   }
@@ -61,16 +64,16 @@ export function formatUnifiedDiff(
   path: string,
   oldContent: string,
   newContent: string,
-  status: 'added' | 'modified' | 'deleted'
+  status: "added" | "modified" | "deleted",
 ): string {
   const hunks = generateDiffHunks(oldContent, newContent);
   const header = [
     `diff --git a/${path} b/${path}`,
-    status === 'added' ? 'new file mode 100644' : '',
-    status === 'deleted' ? 'deleted file mode 100644' : '',
-    `--- ${status === 'added' ? '/dev/null' : `a/${path}`}`,
-    `+++ ${status === 'deleted' ? '/dev/null' : `b/${path}`}`,
-  ].filter(Boolean).join('\n');
+    status === "added" ? "new file mode 100644" : "",
+    status === "deleted" ? "deleted file mode 100644" : "",
+    `--- ${status === "added" ? "/dev/null" : `a/${path}`}`,
+    `+++ ${status === "deleted" ? "/dev/null" : `b/${path}`}`,
+  ].filter(Boolean).join("\n");
 
   if (hunks.length === 0) {
     return `${header}\n`;
@@ -78,11 +81,15 @@ export function formatUnifiedDiff(
 
   const body = hunks.map((hunk) => {
     const lines = hunk.lines.map((line) => {
-      const prefix = line.type === 'add' ? '+' : line.type === 'delete' ? '-' : ' ';
+      const prefix = line.type === "add"
+        ? "+"
+        : line.type === "delete"
+        ? "-"
+        : " ";
       return `${prefix}${line.content}`;
-    }).join('\n');
+    }).join("\n");
     return `@@ -${hunk.oldStart},${hunk.oldLines} +${hunk.newStart},${hunk.newLines} @@\n${lines}`;
-  }).join('\n');
+  }).join("\n");
 
   return `${header}\n${body}\n`;
 }
@@ -90,20 +97,26 @@ export function formatUnifiedDiff(
 /** Number of bytes sampled from the start of a blob to detect binary content. */
 const BINARY_DETECTION_SAMPLE_SIZE = 1024;
 
-export function decodeBlobContent(blob: Uint8Array): { text: string; isBinary: boolean } {
+export function decodeBlobContent(
+  blob: Uint8Array,
+): { text: string; isBinary: boolean } {
   let binaryScore = 0;
-  for (let i = 0; i < Math.min(blob.length, BINARY_DETECTION_SAMPLE_SIZE); i++) {
+  for (
+    let i = 0;
+    i < Math.min(blob.length, BINARY_DETECTION_SAMPLE_SIZE);
+    i++
+  ) {
     if (blob[i] === 0) {
       binaryScore++;
     }
   }
   if (binaryScore > 0) {
-    return { text: '', isBinary: true };
+    return { text: "", isBinary: true };
   }
   try {
     const text = new TextDecoder().decode(blob);
     return { text, isBinary: false };
   } catch {
-    return { text: '', isBinary: true };
+    return { text: "", isBinary: true };
   }
 }

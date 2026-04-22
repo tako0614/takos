@@ -5,12 +5,12 @@
  * No auth required — this is static public config.
  */
 
-import { Hono } from 'hono';
-import { SEED_REPOSITORIES } from '../../application/services/seed-repositories.ts';
+import { Hono } from "hono";
+import { SEED_REPOSITORIES } from "../../application/services/seed-repositories.ts";
 
 const router = new Hono();
 
-router.get('/seed-repositories', (c) => {
+router.get("/seed-repositories", (c) => {
   return c.json({ repositories: SEED_REPOSITORIES });
 });
 

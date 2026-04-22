@@ -272,6 +272,80 @@ Deno.test("listCatalogItems treats public non-draft releases as deployable apps 
   });
 });
 
+Deno.test("listCatalogItems marks repository packages installed by source URL and release tag", async () => {
+  const db = createCatalogDb({
+    repos: [{
+      id: "repo-app",
+      name: "deployable-app",
+      description: "A deployable app",
+      defaultBranch: "main",
+      stars: 25,
+      forks: 3,
+      primaryLanguage: "TypeScript",
+      license: "MIT",
+      remoteCloneUrl: "https://github.com/acme/deployable-app.git",
+      createdAt: "2026-01-01T00:00:00.000Z",
+      updatedAt: "2026-01-03T00:00:00.000Z",
+      accountId: "space-1",
+      accountName: "Space 1",
+      accountSlug: "space-1",
+      accountPicture: null,
+    }],
+    releases: [{
+      id: "release-app",
+      repoId: "repo-app",
+      tag: "v1.0.0",
+      commitSha: "commit-1",
+      description: "First release",
+      publishedAt: "2026-01-04T00:00:00.000Z",
+      repoName: "deployable-app",
+    }],
+    assets: [],
+    deployments: [],
+    snapshots: [{
+      id: "group-snapshot-1",
+      sourceRepoId: null,
+      sourceResolvedRepoId: null,
+      sourceRepositoryUrl: "https://takos.jp/git/space-1/deployable-app.git",
+      sourceVersion: null,
+      sourceTag: null,
+      sourceRef: "v1.0.0",
+      sourceRefType: "tag",
+      manifestJson: JSON.stringify({ version: "1.0.0" }),
+      createdAt: "2026-01-06T00:00:00.000Z",
+      deployedAt: "2026-01-06T00:00:00.000Z",
+    }],
+  });
+
+  await withDeployManifestAvailability(true, async () => {
+    const result = await listCatalogItems(db, {
+      sort: "stars",
+      limit: 20,
+      offset: 0,
+      type: "deployable-app",
+      certifiedOnly: false,
+      spaceId: "space-1",
+      gitObjects: {} as Env["GIT_OBJECTS"],
+      repositoryBaseUrl: "takos.jp",
+    });
+
+    const item = result.items[0]!;
+    assertEquals(item.source, {
+      kind: "git_ref",
+      repository_url: "https://takos.jp/git/space-1/deployable-app.git",
+      ref: "v1.0.0",
+      ref_type: "tag",
+      backend: null,
+      env: "staging",
+    });
+    assertEquals(
+      item.installation?.group_deployment_snapshot_id,
+      "group-snapshot-1",
+    );
+    assertEquals(item.installation?.installed_version, "1.0.0");
+  });
+});
+
 Deno.test("listCatalogItems requires .takos/app.yml when git objects are available", async () => {
   const db = createCatalogDb({
     repos: [
@@ -458,4 +532,97 @@ Deno.test("listCatalogItems marks release catalog entries unavailable when git o
     certifiedOnly: false,
   });
   assertEquals(deployable.items, []);
+});
+
+Deno.test("listCatalogItems includes default app distribution entries in the catalog", async () => {
+  const db = createCatalogDb({
+    repos: [],
+    releases: [],
+    assets: [],
+    deployments: [],
+  });
+
+  const result = await listCatalogItems(db, {
+    sort: "stars",
+    limit: 20,
+    offset: 0,
+    type: "deployable-app",
+    certifiedOnly: true,
+    searchQuery: "docs",
+    tagsRaw: "default-app",
+    defaultAppEntries: [{
+      name: "takos-docs",
+      title: "Docs",
+      repositoryUrl: "https://github.com/tako0614/takos-docs.git",
+      ref: "main",
+      refType: "branch",
+      preinstall: true,
+      backendName: "cloudflare",
+      envName: "staging",
+    }],
+    now: "2026-04-22T00:00:00.000Z",
+  });
+
+  assertEquals(result.total, 1);
+  const item = result.items[0]!;
+  assertEquals(item.repo.id, "default-app:takos-docs");
+  assertEquals(item.repo.name, "Docs");
+  assertEquals(item.repo.catalog_origin, "default_app");
+  assertEquals(item.package.available, true);
+  assertEquals(item.package.app_id, "takos-docs");
+  assertEquals(item.package.certified, true);
+  assertEquals(item.package.publish_status, "approved");
+  assertEquals(item.source, {
+    kind: "git_ref",
+    repository_url: "https://github.com/tako0614/takos-docs.git",
+    ref: "main",
+    ref_type: "branch",
+    backend: "cloudflare",
+    env: "staging",
+  });
+});
+
+Deno.test("listCatalogItems marks default app entries installed by matching source URL and ref", async () => {
+  const db = createCatalogDb({
+    repos: [],
+    releases: [],
+    assets: [],
+    deployments: [],
+    snapshots: [{
+      id: "default-docs-snapshot",
+      sourceRepoId: null,
+      sourceResolvedRepoId: null,
+      sourceRepositoryUrl: "https://github.com/tako0614/takos-docs.git",
+      sourceVersion: null,
+      sourceTag: null,
+      sourceRef: "main",
+      sourceRefType: "branch",
+      manifestJson: JSON.stringify({ version: "1.2.3" }),
+      createdAt: "2026-04-22T01:00:00.000Z",
+    }],
+  });
+
+  const result = await listCatalogItems(db, {
+    sort: "stars",
+    limit: 20,
+    offset: 0,
+    type: "deployable-app",
+    certifiedOnly: false,
+    spaceId: "space-1",
+    defaultAppEntries: [{
+      name: "takos-docs",
+      title: "Docs",
+      repositoryUrl: "https://github.com/tako0614/takos-docs.git",
+      ref: "main",
+      refType: "branch",
+      preinstall: true,
+    }],
+    now: "2026-04-22T00:00:00.000Z",
+  });
+
+  assertEquals(
+    result.items[0]?.installation?.group_deployment_snapshot_id,
+    "default-docs-snapshot",
+  );
+  assertEquals(result.items[0]?.installation?.installed_version, "1.2.3");
 });

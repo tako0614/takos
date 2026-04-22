@@ -97,8 +97,9 @@ compute:
 
 ## authSecretRef
 
-`authSecretRef` は `spec` 内の custom metadata です。MCP client に「どの env
-名の token を送ればよいか」を伝えたいときに使います。
+`authSecretRef` は `spec` 内の custom metadata です。MCP client に bearer auth
+が必要なことと、「publisher service のどの env/secret 名から token
+を解決するか」を伝えるために使います。
 
 ```yaml
 publish:
@@ -112,8 +113,13 @@ publish:
       authSecretRef: MCP_AUTH_TOKEN
 ```
 
-実際の `MCP_AUTH_TOKEN` の値は manifest では自動生成されません。service env
-settings か secret resource / runtime binding から供給してください。
+group-managed deploy では、publisher service に同名の env/secret
+がまだ無い場合、 Takos が secret service env を生成します。既に service env /
+common env / secret binding がある場合は既存値を優先します。manifest 外の
+standalone deploy では同名の secret を別途用意してください。Takos の MCP client
+は publication の owner service からその値を解決して `Authorization: Bearer ...`
+を送ります。 worker 側の `/mcp` endpoint も同じ token
+を検証する実装にしておく必要があります。
 
 ## 実 URL
 

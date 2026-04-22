@@ -4,9 +4,9 @@
  * Shared types, interfaces, and constants used across MCP modules.
  */
 
-import type { Env } from '../../../../shared/types/index.ts';
-import type { SelectOf } from '../../../../shared/types/drizzle-utils.ts';
-import type { mcpServers } from '../../../../infra/db/index.ts';
+import type { Env } from "../../../../shared/types/index.ts";
+import type { SelectOf } from "../../../../shared/types/drizzle-utils.ts";
+import type { mcpServers } from "../../../../infra/db/index.ts";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -57,7 +57,7 @@ export interface McpServerRecord {
 }
 
 export interface RegisterExternalMcpServerResult {
-  status: 'already_registered' | 'registered' | 'pending_oauth';
+  status: "already_registered" | "registered" | "pending_oauth";
   name: string;
   url: string;
   authUrl?: string;
@@ -78,7 +78,10 @@ export interface TokenResponse {
   scope?: string;
 }
 
-export type McpIssuerEnv = Pick<Env, 'SERVICE_INTERNAL_JWT_ISSUER' | 'ADMIN_DOMAIN'>;
+export type McpIssuerEnv = Pick<
+  Env,
+  "SERVICE_INTERNAL_JWT_ISSUER" | "ADMIN_DOMAIN"
+>;
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -94,11 +97,15 @@ export const STRICT_MCP_ENDPOINT_URL_OPTIONS: McpEndpointUrlOptions = {
 // Helpers
 // ---------------------------------------------------------------------------
 
-export function getInternalMcpIssuer(env: Pick<Env, 'SERVICE_INTERNAL_JWT_ISSUER' | 'ADMIN_DOMAIN'>): string {
+export function getInternalMcpIssuer(
+  env: Pick<Env, "SERVICE_INTERNAL_JWT_ISSUER" | "ADMIN_DOMAIN">,
+): string {
   return env.SERVICE_INTERNAL_JWT_ISSUER || `https://${env.ADMIN_DOMAIN}`;
 }
 
-export function mapMcpServerRow(row: SelectOf<typeof mcpServers>): McpServerRecord {
+export function mapMcpServerRow(
+  row: SelectOf<typeof mcpServers>,
+): McpServerRecord {
   return {
     id: row.id,
     spaceId: row.accountId,

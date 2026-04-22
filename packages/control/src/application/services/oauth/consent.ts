@@ -1,13 +1,16 @@
-import type { D1Database } from '../../../shared/types/bindings.ts';
-import type { SelectOf } from '../../../shared/types/drizzle-utils.ts';
-import { oauthConsents, oauthClients } from '../../../infra/db/index.ts';
-import type { OAuthConsent, JsonStringArray } from '../../../shared/types/oauth.ts';
-import { parseJsonStringArray } from '../../../shared/types/oauth.ts';
-import { generateId } from './pkce.ts';
-import { getDb } from '../../../infra/db/index.ts';
-import { eq, and, inArray, desc } from 'drizzle-orm';
-import { revokeAllUserClientTokens } from './token.ts';
-import { textDate } from '../../../shared/utils/db-guards.ts';
+import type { D1Database } from "../../../shared/types/bindings.ts";
+import type { SelectOf } from "../../../shared/types/drizzle-utils.ts";
+import { oauthClients, oauthConsents } from "../../../infra/db/index.ts";
+import type {
+  JsonStringArray,
+  OAuthConsent,
+} from "../../../shared/types/oauth.ts";
+import { parseJsonStringArray } from "../../../shared/types/oauth.ts";
+import { generateId } from "./pkce.ts";
+import { getDb } from "../../../infra/db/index.ts";
+import { and, desc, eq, inArray } from "drizzle-orm";
+import { revokeAllUserClientTokens } from "./token.ts";
+import { textDate } from "../../../shared/utils/db-guards.ts";
 
 type OAuthConsentRow = SelectOf<typeof oauthConsents>;
 
@@ -17,7 +20,7 @@ function toApiConsent(row: OAuthConsentRow): OAuthConsent {
     user_id: row.accountId,
     client_id: row.clientId,
     scopes: row.scopes as JsonStringArray,
-    status: row.status as 'active' | 'revoked',
+    status: row.status as "active" | "revoked",
     granted_at: textDate(row.grantedAt),
     updated_at: textDate(row.updatedAt),
   };
@@ -26,7 +29,7 @@ function toApiConsent(row: OAuthConsentRow): OAuthConsent {
 export async function getConsent(
   dbBinding: D1Database,
   userId: string,
-  clientId: string
+  clientId: string,
 ): Promise<OAuthConsent | null> {
   const db = getDb(dbBinding);
 
@@ -34,8 +37,8 @@ export async function getConsent(
     and(
       eq(oauthConsents.accountId, userId),
       eq(oauthConsents.clientId, clientId),
-      eq(oauthConsents.status, 'active'),
-    )
+      eq(oauthConsents.status, "active"),
+    ),
   ).get();
 
   if (!consent) {
@@ -53,7 +56,7 @@ export async function hasFullConsent(
   dbBinding: D1Database,
   userId: string,
   clientId: string,
-  requestedScopes: string[]
+  requestedScopes: string[],
 ): Promise<boolean> {
   const consent = await getConsent(dbBinding, userId, clientId);
   if (!consent) return false;
@@ -66,7 +69,7 @@ export async function getNewScopes(
   dbBinding: D1Database,
   userId: string,
   clientId: string,
-  requestedScopes: string[]
+  requestedScopes: string[],
 ): Promise<string[]> {
   const consent = await getConsent(dbBinding, userId, clientId);
   if (!consent) return requestedScopes;
@@ -79,7 +82,7 @@ export async function grantConsent(
   dbBinding: D1Database,
   userId: string,
   clientId: string,
-  scopes: string[]
+  scopes: string[],
 ): Promise<OAuthConsent> {
   const db = getDb(dbBinding);
   const now = new Date().toISOString();
@@ -111,7 +114,7 @@ export async function grantConsent(
     accountId: userId,
     clientId,
     scopes: scopesJson,
-    status: 'active',
+    status: "active",
     grantedAt: now,
     updatedAt: now,
   });
@@ -121,7 +124,7 @@ export async function grantConsent(
     user_id: userId,
     client_id: clientId,
     scopes: scopesJson,
-    status: 'active',
+    status: "active",
     granted_at: now,
     updated_at: now,
   };
@@ -130,19 +133,19 @@ export async function grantConsent(
 export async function revokeConsent(
   dbBinding: D1Database,
   userId: string,
-  clientId: string
+  clientId: string,
 ): Promise<boolean> {
   const db = getDb(dbBinding);
 
   try {
     const result = await db.update(oauthConsents).set({
-      status: 'revoked',
+      status: "revoked",
       updatedAt: new Date().toISOString(),
     }).where(
       and(
         eq(oauthConsents.accountId, userId),
         eq(oauthConsents.clientId, clientId),
-      )
+      ),
     );
 
     if ((result.meta.changes ?? 0) > 0) {
@@ -159,7 +162,7 @@ export async function removeConsentScopes(
   dbBinding: D1Database,
   userId: string,
   clientId: string,
-  scopesToRemove: string[]
+  scopesToRemove: string[],
 ): Promise<boolean> {
   const db = getDb(dbBinding);
 
@@ -173,7 +176,7 @@ export async function removeConsentScopes(
   const remainingScopes = currentScopes.filter((s) => !removeSet.has(s));
 
   if (remainingScopes.length === 0) {
-      return revokeConsent(dbBinding, userId, clientId);
+    return revokeConsent(dbBinding, userId, clientId);
   }
 
   await db.update(oauthConsents).set({
@@ -186,15 +189,15 @@ export async function removeConsentScopes(
 
 export async function getUserConsents(
   dbBinding: D1Database,
-  userId: string
+  userId: string,
 ): Promise<OAuthConsent[]> {
   const db = getDb(dbBinding);
 
   const consents = await db.select().from(oauthConsents).where(
     and(
       eq(oauthConsents.accountId, userId),
-      eq(oauthConsents.status, 'active'),
-    )
+      eq(oauthConsents.status, "active"),
+    ),
   ).orderBy(desc(oauthConsents.grantedAt)).all();
 
   return consents.map(toApiConsent);
@@ -208,15 +211,15 @@ export interface ConsentWithClient extends OAuthConsent {
 
 export async function getUserConsentsWithClients(
   dbBinding: D1Database,
-  userId: string
+  userId: string,
 ): Promise<ConsentWithClient[]> {
   const db = getDb(dbBinding);
 
   const consents = await db.select().from(oauthConsents).where(
     and(
       eq(oauthConsents.accountId, userId),
-      eq(oauthConsents.status, 'active'),
-    )
+      eq(oauthConsents.status, "active"),
+    ),
   ).orderBy(desc(oauthConsents.grantedAt)).all();
 
   if (consents.length === 0) {
@@ -230,7 +233,7 @@ export async function getUserConsentsWithClients(
     logoUri: oauthClients.logoUri,
     clientUri: oauthClients.clientUri,
   }).from(oauthClients).where(
-    inArray(oauthClients.clientId, clientIds)
+    inArray(oauthClients.clientId, clientIds),
   ).all();
 
   const clientMap = new Map(clients.map((c) => [c.clientId, c]));

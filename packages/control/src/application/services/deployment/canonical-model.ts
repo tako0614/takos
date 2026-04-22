@@ -25,12 +25,14 @@ export type CanonicalManifestResourceSpec = {
   };
   generate?: boolean;
   workflow?: {
-    class: string;
-    script: string;
+    service?: string;
+    export?: string;
+    timeoutMs?: number;
+    maxRetries?: number;
   };
   durableObject?: {
-    class: string;
-    script: string;
+    className?: string;
+    scriptName?: string;
   };
 };
 

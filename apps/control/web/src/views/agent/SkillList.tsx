@@ -91,14 +91,7 @@ function renderAvailability(skill: ManagedSkill) {
   );
 }
 
-export function SkillList({
-  skills,
-  managedSkills,
-  onEdit,
-  onDelete,
-  onToggle,
-  onCreateNew,
-}: {
+export function SkillList(props: {
   skills: Skill[];
   managedSkills: ManagedSkill[];
   onEdit: (skill: Skill) => void;
@@ -143,7 +136,7 @@ export function SkillList({
               )}
             </p>
           </div>
-          {managedSkills.map((skill) => (
+          {props.managedSkills.map((skill) => (
             <Card padding="md">
               <div
                 style={{
@@ -224,7 +217,7 @@ export function SkillList({
           >
             {tOr("customSkills", "Custom Skills")}
           </h4>
-          {skills.length === 0
+          {props.skills.length === 0
             ? (
               <div
                 style={{
@@ -278,7 +271,7 @@ export function SkillList({
                   leftIcon={
                     <Icons.Plus style={{ width: "1rem", height: "1rem" }} />
                   }
-                  onClick={onCreateNew}
+                  onClick={props.onCreateNew}
                 >
                   {t("addSkill")}
                 </Button>
@@ -292,7 +285,7 @@ export function SkillList({
                   gap: "0.75rem",
                 }}
               >
-                {skills.map((skill) => (
+                {props.skills.map((skill) => (
                   <Card
                     padding="md"
                     style={{ opacity: skill.enabled ? 1 : 0.5 }}
@@ -355,7 +348,7 @@ export function SkillList({
                         <Button
                           variant={skill.enabled ? "primary" : "secondary"}
                           size="sm"
-                          onClick={() => onToggle(skill)}
+                          onClick={() => props.onToggle(skill)}
                           title={skill.enabled
                             ? t("skillEnabled")
                             : t("skillDisabled")}
@@ -365,7 +358,7 @@ export function SkillList({
                         <Button
                           variant="ghost"
                           size="sm"
-                          onClick={() => onEdit(skill)}
+                          onClick={() => props.onEdit(skill)}
                           title={t("edit")}
                         >
                           <Icons.Edit />
@@ -373,7 +366,7 @@ export function SkillList({
                         <Button
                           variant="ghost"
                           size="sm"
-                          onClick={() => onDelete(skill)}
+                          onClick={() => props.onDelete(skill)}
                           title={t("deleteSkill")}
                           style={{ color: "var(--color-text-tertiary)" }}
                         >
@@ -418,7 +411,7 @@ export function SkillList({
       <Button
         variant="secondary"
         leftIcon={<Icons.Plus />}
-        onClick={onCreateNew}
+        onClick={props.onCreateNew}
         style={{
           width: "100%",
           "margin-top": "1rem",

@@ -2,19 +2,27 @@
  * Workflow Engine – pure helper / conversion functions
  */
 
-import type { Job } from 'takos-actions-engine';
-import type { WorkflowJobDefinition, WorkflowShell } from '../../../shared/types/index.ts';
-import type { DrizzleWorkflowRun, WorkflowRunRecord } from './workflow-engine-types.ts';
-import { textDateNullable } from '../../../shared/utils/db-guards.ts';
+import type { Job } from "takos-actions-engine";
+import type {
+  WorkflowJobDefinition,
+  WorkflowShell,
+} from "../../../shared/types/index.ts";
+import type {
+  DrizzleWorkflowRun,
+  WorkflowRunRecord,
+} from "./workflow-engine-types.ts";
+import { textDateNullable } from "../../../shared/utils/db-guards.ts";
 
-export function normalizeWorkflowShell(shell: string | undefined): WorkflowShell | undefined {
+export function normalizeWorkflowShell(
+  shell: string | undefined,
+): WorkflowShell | undefined {
   if (
-    shell === 'bash' ||
-    shell === 'pwsh' ||
-    shell === 'python' ||
-    shell === 'sh' ||
-    shell === 'cmd' ||
-    shell === 'powershell'
+    shell === "bash" ||
+    shell === "pwsh" ||
+    shell === "python" ||
+    shell === "sh" ||
+    shell === "cmd" ||
+    shell === "powershell"
   ) {
     return shell;
   }
@@ -22,13 +30,13 @@ export function normalizeWorkflowShell(shell: string | undefined): WorkflowShell
 }
 
 export function toWorkflowJobDefinition(job: Job): WorkflowJobDefinition {
-  const defaults: WorkflowJobDefinition['defaults'] = job.defaults?.run
+  const defaults: WorkflowJobDefinition["defaults"] = job.defaults?.run
     ? {
-        run: {
-          shell: normalizeWorkflowShell(job.defaults.run.shell),
-          'working-directory': job.defaults.run['working-directory'],
-        },
-      }
+      run: {
+        shell: normalizeWorkflowShell(job.defaults.run.shell),
+        "working-directory": job.defaults.run["working-directory"],
+      },
+    }
     : undefined;
 
   return {

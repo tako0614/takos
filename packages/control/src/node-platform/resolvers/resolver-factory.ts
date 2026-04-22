@@ -46,7 +46,9 @@ export interface ResolverConfig<T> {
  * The returned async function walks the cloud adapters in order, then tries
  * persistent-local, then in-memory.
  */
-export function createResolver<T>(config: ResolverConfig<T>): (dataDir: string | null) => Promise<T> {
+export function createResolver<T>(
+  config: ResolverConfig<T>,
+): (dataDir: string | null) => Promise<T> {
   return async (dataDir: string | null): Promise<T> => {
     // Cloud adapters
     for (const probe of config.cloudAdapters) {
@@ -77,7 +79,10 @@ export interface ResolverWithRedisConfig<T> {
 export function createResolverWithRedis<T>(
   config: ResolverWithRedisConfig<T>,
 ): (redisUrl: string | null, dataDir: string | null) => Promise<T> {
-  return async (redisUrl: string | null, dataDir: string | null): Promise<T> => {
+  return async (
+    redisUrl: string | null,
+    dataDir: string | null,
+  ): Promise<T> => {
     for (const probe of config.cloudAdapters) {
       const result = await probe.tryCreate();
       if (result != null) return result;

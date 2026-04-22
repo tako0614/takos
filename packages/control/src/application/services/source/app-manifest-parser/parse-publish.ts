@@ -5,7 +5,10 @@ import {
   asString,
   asStringArray,
 } from "../app-manifest-utils.ts";
-import { normalizeGrantPublication } from "../../platform/publication-catalog.ts";
+import {
+  normalizeGrantPublication,
+  type PublicationNormalizeOptions,
+} from "../../platform/publication-catalog.ts";
 
 const PUBLICATION_FIELDS = new Set([
   "name",
@@ -130,6 +133,7 @@ export function parsePublicationEntry(
   index: number,
   raw: unknown,
   prefixBase = "publish",
+  options: PublicationNormalizeOptions = {},
 ): AppPublication {
   const prefix = `${prefixBase}[${index}]`;
   const record = asRecord(raw);
@@ -160,7 +164,7 @@ export function parsePublicationEntry(
       publisher,
       type,
       ...(spec ? { spec } : {}),
-    });
+    }, options);
   }
 
   if (!path) {
@@ -215,7 +219,9 @@ export function parsePublish(
     throw new Error("publish must be an array");
   }
   const entries = topLevel.publish.map((entry, index) =>
-    parsePublicationEntry(index, entry)
+    parsePublicationEntry(index, entry, "publish", {
+      allowRelativeOAuthRedirectUris: true,
+    })
   );
   validateUniqueness(entries);
   return entries;

@@ -4,8 +4,12 @@
  * PKCE (Proof Key for Code Exchange) helpers and token encryption/decryption.
  */
 
-import { encrypt, decrypt, type EncryptedData } from '../../../../shared/utils/crypto.ts';
-import { base64UrlEncode } from '../../../../shared/utils/encoding-utils.ts';
+import {
+  decrypt,
+  encrypt,
+  type EncryptedData,
+} from "../../../../shared/utils/crypto.ts";
+import { base64UrlEncode } from "../../../../shared/utils/encoding-utils.ts";
 
 // ---------------------------------------------------------------------------
 // PKCE helpers
@@ -23,7 +27,7 @@ export function generateCodeVerifier(): string {
 
 export async function deriveCodeChallenge(verifier: string): Promise<string> {
   const encoded = new TextEncoder().encode(verifier);
-  const digest = await crypto.subtle.digest('SHA-256', encoded);
+  const digest = await crypto.subtle.digest("SHA-256", encoded);
   return base64UrlEncode(new Uint8Array(digest));
 }
 
@@ -35,7 +39,10 @@ export function generateState(): string {
 // Encryption helpers (tokens)
 // ---------------------------------------------------------------------------
 
-export function saltFor(serverId: string, field: 'access' | 'refresh' | 'verifier'): string {
+export function saltFor(
+  serverId: string,
+  field: "access" | "refresh" | "verifier",
+): string {
   return `mcp:token:${field}:${serverId}`;
 }
 
@@ -57,7 +64,11 @@ export async function decryptToken(
   try {
     parsed = JSON.parse(encryptedJson) as EncryptedData;
   } catch (err) {
-    throw new Error(`Failed to parse encrypted token JSON: ${err instanceof Error ? err.message : String(err)}`);
+    throw new Error(
+      `Failed to parse encrypted token JSON: ${
+        err instanceof Error ? err.message : String(err)
+      }`,
+    );
   }
   return decrypt(parsed, masterSecret, salt);
 }

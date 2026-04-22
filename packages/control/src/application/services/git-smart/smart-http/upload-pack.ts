@@ -7,11 +7,20 @@
  * 4. Send response with side-band-64k framing
  */
 
-import type { D1Database, R2Bucket } from '../../../../shared/types/bindings.ts';
-import { parsePktLines, pktLineText, encodePktLine, encodeSideBandData, flushPkt } from '../protocol/pkt-line.ts';
-import { collectReachableObjects } from '../core/commit-index.ts';
-import { writePackfile } from '../protocol/packfile-writer.ts';
-import { concatBytes } from '../core/sha1.ts';
+import type {
+  D1Database,
+  R2Bucket,
+} from "../../../../shared/types/bindings.ts";
+import {
+  encodePktLine,
+  encodeSideBandData,
+  flushPkt,
+  parsePktLines,
+  pktLineText,
+} from "../protocol/pkt-line.ts";
+import { collectReachableObjects } from "../core/commit-index.ts";
+import { writePackfile } from "../protocol/packfile-writer.ts";
+import { concatBytes } from "../core/sha1.ts";
 
 export async function handleUploadPack(
   db: D1Database,
@@ -25,28 +34,34 @@ export async function handleUploadPack(
   const haves = new Set<string>();
 
   for (const line of lines) {
-    if (line.type !== 'data' || !line.data) continue;
+    if (line.type !== "data" || !line.data) continue;
     const text = pktLineText(line);
 
-    if (text.startsWith('want ')) {
+    if (text.startsWith("want ")) {
       // "want <sha> [capabilities]"
-      const sha = text.split(' ')[1];
+      const sha = text.split(" ")[1];
       if (sha && sha.length === 40) wants.push(sha);
-    } else if (text.startsWith('have ')) {
-      const sha = text.split(' ')[1];
+    } else if (text.startsWith("have ")) {
+      const sha = text.split(" ")[1];
       if (sha && sha.length === 40) haves.add(sha);
-    } else if (text === 'done') {
+    } else if (text === "done") {
       break;
     }
   }
 
   if (wants.length === 0) {
     // Nothing requested
-    return encodePktLine('NAK\n');
+    return encodePktLine("NAK\n");
   }
 
   // Collect objects to send
-  const objectShas = await collectReachableObjects(db, bucket, repoId, wants, haves);
+  const objectShas = await collectReachableObjects(
+    db,
+    bucket,
+    repoId,
+    wants,
+    haves,
+  );
 
   // Build packfile
   const packfile = await writePackfile(bucket, objectShas);
@@ -55,12 +70,15 @@ export async function handleUploadPack(
   const parts: Uint8Array[] = [];
 
   // NAK (no common base in simple case)
-  parts.push(encodePktLine('NAK\n'));
+  parts.push(encodePktLine("NAK\n"));
 
   // Send packfile data in chunks via side-band channel 1
   const CHUNK_SIZE = 65515; // 65520 - 5 (pkt-line overhead + channel byte)
   for (let i = 0; i < packfile.length; i += CHUNK_SIZE) {
-    const chunk = packfile.subarray(i, Math.min(i + CHUNK_SIZE, packfile.length));
+    const chunk = packfile.subarray(
+      i,
+      Math.min(i + CHUNK_SIZE, packfile.length),
+    );
     parts.push(encodeSideBandData(1, chunk));
   }
 

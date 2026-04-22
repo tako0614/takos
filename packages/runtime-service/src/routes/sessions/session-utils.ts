@@ -1,21 +1,23 @@
-import type { Context } from 'hono';
-import type { RuntimeEnv } from '../../types/hono.d.ts';
-import { sessionStore } from './storage.ts';
-import { badRequest } from 'takos-common/middleware/hono';
+import type { Context } from "hono";
+import type { RuntimeEnv } from "../../types/hono.d.ts";
+import { sessionStore } from "./storage.ts";
+import { badRequest } from "takos-common/middleware/hono";
 
 // ---------------------------------------------------------------------------
 // Owner extraction
 // ---------------------------------------------------------------------------
 
-export function getOwnerSubFromServiceContext(payload: Record<string, unknown> | undefined): string | undefined {
-  if (!payload || typeof payload.sub !== 'string') {
+export function getOwnerSubFromServiceContext(
+  payload: Record<string, unknown> | undefined,
+): string | undefined {
+  if (!payload || typeof payload.sub !== "string") {
     return undefined;
   }
   return payload.sub;
 }
 
 export function getSessionOwnerSub(c: Context<RuntimeEnv>): string | undefined {
-  const payload = c.get('serviceToken');
+  const payload = c.get("serviceToken");
   return getOwnerSubFromServiceContext(payload);
 }
 
@@ -33,7 +35,7 @@ export interface SessionSpaceIds {
 }
 
 function asBodyRecord(body: unknown): BodyRecord {
-  if (body && typeof body === 'object') {
+  if (body && typeof body === "object") {
     return body as BodyRecord;
   }
   return {};
@@ -41,13 +43,15 @@ function asBodyRecord(body: unknown): BodyRecord {
 
 function readRequiredValue(body: BodyRecord, key: string): string | null {
   const value = body[key];
-  return typeof value === 'string' && value.length > 0 ? value : null;
+  return typeof value === "string" && value.length > 0 ? value : null;
 }
 
-export function parseRequiredSessionSpaceIds(body: unknown): SessionSpaceIds | null {
+export function parseRequiredSessionSpaceIds(
+  body: unknown,
+): SessionSpaceIds | null {
   const record = asBodyRecord(body);
-  const sessionId = readRequiredValue(record, 'session_id');
-  const spaceId = readRequiredValue(record, 'space_id');
+  const sessionId = readRequiredValue(record, "session_id");
+  const spaceId = readRequiredValue(record, "space_id");
   if (!sessionId || !spaceId) {
     return null;
   }
@@ -56,7 +60,7 @@ export function parseRequiredSessionSpaceIds(body: unknown): SessionSpaceIds | n
 
 export function parseRequiredSpaceId(body: unknown): string | null {
   const record = asBodyRecord(body);
-  return readRequiredValue(record, 'space_id');
+  return readRequiredValue(record, "space_id");
 }
 
 // ---------------------------------------------------------------------------
@@ -76,14 +80,18 @@ export interface ResolvedSession {
  */
 export async function resolveSessionWorkDir(
   c: Context<RuntimeEnv>,
-  body: unknown
+  body: unknown,
 ): Promise<ResolvedSession | { error: Response }> {
   const ids = parseRequiredSessionSpaceIds(body);
   if (!ids) {
-    return { error: badRequest(c, 'session_id and space_id are required') };
+    return { error: badRequest(c, "session_id and space_id are required") };
   }
   const { sessionId, spaceId } = ids;
   const ownerSub = getSessionOwnerSub(c);
-  const workDir = await sessionStore.getSessionDir(sessionId, spaceId, ownerSub);
+  const workDir = await sessionStore.getSessionDir(
+    sessionId,
+    spaceId,
+    ownerSub,
+  );
   return { sessionId, spaceId, ownerSub, workDir };
 }

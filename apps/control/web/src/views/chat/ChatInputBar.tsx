@@ -155,7 +155,10 @@ export function ChatInputBar(props: ChatInputBarProps) {
             onKeyDown={handleKeyDown}
             onPaste={handlePaste}
             onCompositionStart={() => setIsComposing(true)}
-            onCompositionEnd={() => setIsComposing(false)}
+            onCompositionEnd={(e) => {
+              setIsComposing(false);
+              props.onInputChange(e.currentTarget.value);
+            }}
             disabled={props.isLoading}
             rows={1}
           />

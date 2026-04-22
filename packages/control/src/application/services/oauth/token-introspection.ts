@@ -1,14 +1,14 @@
-import type { D1Database } from '../../../shared/types/bindings.ts';
-import type { OAuthToken } from '../../../shared/types/oauth.ts';
-import { oauthTokens } from '../../../infra/db/index.ts';
-import { getDb } from '../../../infra/db/index.ts';
-import { eq, and } from 'drizzle-orm';
-import { computeSHA256 } from '../../../shared/utils/hash.ts';
-import { toApiToken } from './token-helpers.ts';
+import type { D1Database } from "../../../shared/types/bindings.ts";
+import type { OAuthToken } from "../../../shared/types/oauth.ts";
+import { oauthTokens } from "../../../infra/db/index.ts";
+import { getDb } from "../../../infra/db/index.ts";
+import { and, eq } from "drizzle-orm";
+import { computeSHA256 } from "../../../shared/utils/hash.ts";
+import { toApiToken } from "./token-helpers.ts";
 
 export async function getRefreshToken(
   dbBinding: D1Database,
-  token: string
+  token: string,
 ): Promise<OAuthToken | null> {
   const db = getDb(dbBinding);
   const tokenHash = await computeSHA256(token);
@@ -16,9 +16,9 @@ export async function getRefreshToken(
   const result = await db.select().from(oauthTokens).where(
     and(
       eq(oauthTokens.tokenHash, tokenHash),
-      eq(oauthTokens.tokenType, 'refresh'),
+      eq(oauthTokens.tokenType, "refresh"),
       eq(oauthTokens.revoked, false),
-    )
+    ),
   ).get();
 
   if (!result) {
@@ -30,7 +30,7 @@ export async function getRefreshToken(
 
 export async function isAccessTokenValid(
   dbBinding: D1Database,
-  jti: string
+  jti: string,
 ): Promise<boolean> {
   const db = getDb(dbBinding);
   const tokenHash = await computeSHA256(jti);
@@ -41,9 +41,9 @@ export async function isAccessTokenValid(
   }).from(oauthTokens).where(
     and(
       eq(oauthTokens.tokenHash, tokenHash),
-      eq(oauthTokens.tokenType, 'access'),
+      eq(oauthTokens.tokenType, "access"),
       eq(oauthTokens.revoked, false),
-    )
+    ),
   ).get();
 
   if (!result) {

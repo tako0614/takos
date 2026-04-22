@@ -13,12 +13,14 @@
  *   - https://github.com/owner/repo
  *   - https://gitlab.example.com/group/subgroup/repo.git
  */
-export function parseGitUrl(url: string): { host: string; path: string; owner: string; repo: string } {
+export function parseGitUrl(
+  url: string,
+): { host: string; path: string; owner: string; repo: string } {
   let normalized = url.trim();
 
   // Remove trailing slashes and .git suffix for parsing
-  normalized = normalized.replace(/\/+$/, '');
-  const withoutGit = normalized.replace(/\.git$/, '');
+  normalized = normalized.replace(/\/+$/, "");
+  const withoutGit = normalized.replace(/\.git$/, "");
 
   let parsed: URL;
   try {
@@ -27,18 +29,20 @@ export function parseGitUrl(url: string): { host: string; path: string; owner: s
     throw new Error(`Invalid Git URL: ${url}`);
   }
 
-  if (parsed.protocol !== 'https:' && parsed.protocol !== 'http:') {
-    throw new Error(`Unsupported protocol: ${parsed.protocol} (only https:// is supported)`);
+  if (parsed.protocol !== "https:" && parsed.protocol !== "http:") {
+    throw new Error(
+      `Unsupported protocol: ${parsed.protocol} (only https:// is supported)`,
+    );
   }
 
-  const pathParts = parsed.pathname.split('/').filter(Boolean);
+  const pathParts = parsed.pathname.split("/").filter(Boolean);
 
   if (pathParts.length < 2) {
     throw new Error(`Git URL must include owner and repository: ${url}`);
   }
 
   const repo = pathParts[pathParts.length - 1];
-  const owner = pathParts.slice(0, -1).join('/');
+  const owner = pathParts.slice(0, -1).join("/");
 
   return {
     host: parsed.host,
@@ -68,9 +72,9 @@ export function inferRepoName(url: string): string {
  * mounted under the `.git` suffix.
  */
 export function normalizeGitUrl(url: string): string {
-  let normalized = url.trim().replace(/\/+$/, '');
-  if (!normalized.endsWith('.git')) {
-    normalized += '.git';
+  let normalized = url.trim().replace(/\/+$/, "");
+  if (!normalized.endsWith(".git")) {
+    normalized += ".git";
   }
   return normalized;
 }
@@ -78,7 +82,10 @@ export function normalizeGitUrl(url: string): string {
 /**
  * Build an HTTP Basic auth header.
  */
-export function buildBasicAuthHeader(username: string, password: string): string {
+export function buildBasicAuthHeader(
+  username: string,
+  password: string,
+): string {
   const encoded = btoa(`${username}:${password}`);
   return `Basic ${encoded}`;
 }
@@ -119,8 +126,8 @@ export function buildAuthHeader(auth?: {
 export function sanitizeImportName(name: string): string {
   return name
     .toLowerCase()
-    .replace(/[^a-z0-9._-]/g, '-')
-    .replace(/-+/g, '-')
-    .replace(/^-|-$/g, '')
+    .replace(/[^a-z0-9._-]/g, "-")
+    .replace(/-+/g, "-")
+    .replace(/^-|-$/g, "")
     .slice(0, 100);
 }

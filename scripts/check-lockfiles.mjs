@@ -86,7 +86,7 @@ if (sortedViolations.length > 0) {
       "package-lock.json is not allowed under pnpm-managed roots.",
       "Remove:",
       ...sortedViolations.map((filePath) => ` - ${filePath}`),
-    ].join("\n")
+    ].join("\n"),
   );
   Deno.exit(1);
 }

@@ -3,21 +3,29 @@
 // because they represent enriched API responses with joined data, so they
 // are defined locally and reference the backend types for shared primitives.
 import type {
-  RepositoryVisibility,
-  PullRequestStatus,
-  ReviewStatus,
   PullRequestCommentAuthorType,
+  PullRequestStatus,
   Repository as BackendRepository,
-} from 'takos-control/shared/types';
+  RepositoryVisibility,
+  ReviewStatus,
+} from "takos-control/shared/types";
 
 /**
  * Frontend Repository: extends the backend core with UI-specific enriched
  * fields (e.g. fork info, owner display names, starred status).
  */
-export interface Repository
-  extends Pick<
+export interface Repository extends
+  Pick<
     BackendRepository,
-    'id' | 'space_id' | 'name' | 'description' | 'default_branch' | 'stars' | 'forks' | 'created_at' | 'updated_at'
+    | "id"
+    | "space_id"
+    | "name"
+    | "description"
+    | "default_branch"
+    | "stars"
+    | "forks"
+    | "created_at"
+    | "updated_at"
   > {
   visibility: RepositoryVisibility;
   is_starred?: boolean;
@@ -69,7 +77,7 @@ export interface Branch {
 export interface RepoFile {
   name: string;
   path: string;
-  type: 'file' | 'directory';
+  type: "file" | "directory";
   size?: number;
   sha: string;
   last_commit?: {
@@ -85,7 +93,7 @@ export interface FileContent {
   name: string;
   size: number;
   content: string;
-  encoding: 'utf-8' | 'base64';
+  encoding: "utf-8" | "base64";
   mime_type?: string;
   sha: string;
   last_commit?: {
@@ -151,7 +159,7 @@ export interface PRReview {
     name: string;
     avatar_url?: string;
   };
-  reviewer_type: 'user' | 'ai';
+  reviewer_type: "user" | "ai";
   status: ReviewStatus;
   body: string | null;
   analysis?: string | null;
@@ -180,7 +188,7 @@ export interface PRComment {
 export interface FileDiff {
   path: string;
   old_path?: string;
-  status: 'added' | 'modified' | 'deleted' | 'renamed';
+  status: "added" | "modified" | "deleted" | "renamed";
   additions: number;
   deletions: number;
   hunks: DiffHunk[];
@@ -195,7 +203,7 @@ export interface DiffHunk {
 }
 
 export interface DiffLine {
-  type: 'context' | 'addition' | 'deletion';
+  type: "context" | "addition" | "deletion";
   content: string;
   old_line?: number;
   new_line?: number;

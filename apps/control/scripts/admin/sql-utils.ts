@@ -8,11 +8,11 @@ export function sqlLiteral(value: string): string {
 
 export function sqlNullable(value: string | null | undefined): string {
   if (value == null) {
-    return 'NULL';
+    return "NULL";
   }
   return sqlLiteral(value);
 }
 
 export function escapeRegExp(value: string): string {
-  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }

@@ -1,14 +1,18 @@
 /**
  * YAML ワークフローパーサー
  */
-import { parse as parseYaml, stringify as stringifyYaml, YAMLParseError } from 'yaml';
+import {
+  parse as parseYaml,
+  stringify as stringifyYaml,
+  YAMLParseError,
+} from "yaml";
 import type {
-  Workflow,
   ParsedWorkflow,
+  Workflow,
   WorkflowDiagnostic,
   WorkflowTrigger,
-} from '../workflow-models.ts';
-import { normalizeNeedsInput } from '../scheduler/job.ts';
+} from "../workflow-models.ts";
+import { normalizeNeedsInput } from "../scheduler/job.ts";
 
 /**
  * ワークフロー解析失敗時に投げるエラー
@@ -16,10 +20,10 @@ import { normalizeNeedsInput } from '../scheduler/job.ts';
 export class WorkflowParseError extends Error {
   constructor(
     message: string,
-    public readonly diagnostics: WorkflowDiagnostic[]
+    public readonly diagnostics: WorkflowDiagnostic[],
   ) {
     super(message);
-    this.name = 'WorkflowParseError';
+    this.name = "WorkflowParseError";
   }
 }
 
@@ -38,7 +42,7 @@ function normalizeSchedule(value: unknown): unknown {
     return value;
   }
   // 単一オブジェクトなら配列に包む
-  if (typeof value === 'object') {
+  if (typeof value === "object") {
     return [value];
   }
   return value;
@@ -49,7 +53,7 @@ function normalizeSchedule(value: unknown): unknown {
  */
 function normalizeTrigger(on: unknown): WorkflowTrigger {
   // 文字列形式: on: push
-  if (typeof on === 'string') {
+  if (typeof on === "string") {
     return { [on]: null } as WorkflowTrigger;
   }
 
@@ -57,7 +61,7 @@ function normalizeTrigger(on: unknown): WorkflowTrigger {
   if (Array.isArray(on)) {
     const trigger: Record<string, unknown> = {};
     for (const event of on) {
-      if (typeof event === 'string') {
+      if (typeof event === "string") {
         trigger[event] = null;
       }
     }
@@ -65,9 +69,9 @@ function normalizeTrigger(on: unknown): WorkflowTrigger {
   }
 
   // オブジェクト形式: on: { push: { branches: [...] } }
-  if (typeof on === 'object' && on !== null) {
+  if (typeof on === "object" && on !== null) {
     const trigger = { ...(on as Record<string, unknown>) };
-    if ('schedule' in trigger) {
+    if ("schedule" in trigger) {
       trigger.schedule = normalizeSchedule(trigger.schedule);
     }
     return trigger as WorkflowTrigger;
@@ -80,9 +84,9 @@ function normalizeTrigger(on: unknown): WorkflowTrigger {
  * ワークフロー構造を標準化する
  */
 function normalizeWorkflow(raw: unknown): Workflow {
-  if (typeof raw !== 'object' || raw === null) {
-    throw new WorkflowParseError('Workflow must be an object', [
-      { severity: 'error', message: 'Workflow must be an object' },
+  if (typeof raw !== "object" || raw === null) {
+    throw new WorkflowParseError("Workflow must be an object", [
+      { severity: "error", message: "Workflow must be an object" },
     ]);
   }
 
@@ -92,13 +96,15 @@ function normalizeWorkflow(raw: unknown): Workflow {
   const on = normalizeTrigger(obj.on);
 
   // jobs を標準化
-  const jobs: Workflow['jobs'] = {};
+  const jobs: Workflow["jobs"] = {};
   const rawJobs = obj.jobs;
-  if (typeof rawJobs === 'object' && rawJobs !== null) {
-    for (const [jobId, job] of Object.entries(
-      rawJobs as Record<string, unknown>
-    )) {
-      if (typeof job !== 'object' || job === null) {
+  if (typeof rawJobs === "object" && rawJobs !== null) {
+    for (
+      const [jobId, job] of Object.entries(
+        rawJobs as Record<string, unknown>,
+      )
+    ) {
+      if (typeof job !== "object" || job === null) {
         continue;
       }
       const jobObj = job as Record<string, unknown>;
@@ -107,23 +113,23 @@ function normalizeWorkflow(raw: unknown): Workflow {
         ...jobObj,
         needs: normalizedNeeds.length > 0 ? normalizedNeeds : undefined,
         steps: Array.isArray(jobObj.steps) ? jobObj.steps : [],
-      } as Workflow['jobs'][string];
+      } as Workflow["jobs"][string];
     }
   }
 
   return {
-    name: typeof obj.name === 'string' ? obj.name : undefined,
-    'run-name':
-      typeof obj['run-name'] === 'string' ? (obj['run-name'] as string) : undefined,
+    name: typeof obj.name === "string" ? obj.name : undefined,
+    "run-name": typeof obj["run-name"] === "string"
+      ? (obj["run-name"] as string)
+      : undefined,
     on,
-    env:
-      typeof obj.env === 'object' && obj.env !== null
-        ? (obj.env as Record<string, string>)
-        : undefined,
+    env: typeof obj.env === "object" && obj.env !== null
+      ? (obj.env as Record<string, string>)
+      : undefined,
     jobs,
-    permissions: obj.permissions as Workflow['permissions'],
-    concurrency: obj.concurrency as Workflow['concurrency'],
-    defaults: obj.defaults as Workflow['defaults'],
+    permissions: obj.permissions as Workflow["permissions"],
+    concurrency: obj.concurrency as Workflow["concurrency"],
+    defaults: obj.defaults as Workflow["defaults"],
   };
 }
 
@@ -151,7 +157,7 @@ export function parseWorkflow(content: string): ParsedWorkflow {
   } catch (error) {
     if (error instanceof YAMLParseError) {
       diagnostics.push({
-        severity: 'error',
+        severity: "error",
         message: error.message,
         line: error.linePos?.[0]?.line,
         column: error.linePos?.[0]?.col,
@@ -160,17 +166,17 @@ export function parseWorkflow(content: string): ParsedWorkflow {
       diagnostics.push(...error.diagnostics);
     } else if (error instanceof Error) {
       diagnostics.push({
-        severity: 'error',
+        severity: "error",
         message: error.message,
       });
     } else {
       diagnostics.push({
-        severity: 'error',
-        message: 'Unknown parse error',
+        severity: "error",
+        message: "Unknown parse error",
       });
     }
 
-    throw new WorkflowParseError('Failed to parse workflow', diagnostics);
+    throw new WorkflowParseError("Failed to parse workflow", diagnostics);
   }
 }
 
@@ -181,11 +187,11 @@ export function parseWorkflow(content: string): ParsedWorkflow {
  * @returns 解析済みワークフロー
  */
 export async function parseWorkflowFile(
-  filePath: string
+  filePath: string,
 ): Promise<ParsedWorkflow> {
   // Node.js の fs は動的 import を使用
-  const { readFile } = await import('node:fs/promises');
-  const content = await readFile(filePath, 'utf-8');
+  const { readFile } = await import("node:fs/promises");
+  const content = await readFile(filePath, "utf-8");
   return parseWorkflow(content);
 }
 

@@ -1,20 +1,26 @@
-import type { D1Database } from '../../../shared/types/bindings.ts';
-import type { SelectOf } from '../../../shared/types/drizzle-utils.ts';
-import { oauthClients } from '../../../infra/db/index.ts';
+import type { D1Database } from "../../../shared/types/bindings.ts";
+import type { SelectOf } from "../../../shared/types/drizzle-utils.ts";
+import { oauthClients } from "../../../infra/db/index.ts";
 import type {
-  OAuthClient,
-  OAuthClientStatus,
   ClientRegistrationRequest,
   ClientRegistrationResponse,
   JsonStringArray,
-} from '../../../shared/types/oauth.ts';
-import { OAUTH_CONSTANTS, parseJsonStringArray } from '../../../shared/types/oauth.ts';
-import { generateRandomString, generateId } from './pkce.ts';
-import { constantTimeEqual, computeSHA256 } from '../../../shared/utils/hash.ts';
-import { parseScopes, validateScopes } from './scopes.ts';
-import { getDb } from '../../../infra/db/index.ts';
-import { eq, and, desc } from 'drizzle-orm';
-import { textDate } from '../../../shared/utils/db-guards.ts';
+  OAuthClient,
+  OAuthClientStatus,
+} from "../../../shared/types/oauth.ts";
+import {
+  OAUTH_CONSTANTS,
+  parseJsonStringArray,
+} from "../../../shared/types/oauth.ts";
+import { generateId, generateRandomString } from "./pkce.ts";
+import {
+  computeSHA256,
+  constantTimeEqual,
+} from "../../../shared/utils/hash.ts";
+import { parseScopes, validateScopes } from "./scopes.ts";
+import { getDb } from "../../../infra/db/index.ts";
+import { and, desc, eq } from "drizzle-orm";
+import { textDate } from "../../../shared/utils/db-guards.ts";
 
 type OAuthClientRow = SelectOf<typeof oauthClients>;
 
@@ -23,7 +29,7 @@ function toApiClient(row: OAuthClientRow): OAuthClient {
     id: row.id,
     client_id: row.clientId,
     client_secret_hash: row.clientSecretHash ?? null,
-    client_type: row.clientType as 'confidential' | 'public',
+    client_type: row.clientType as "confidential" | "public",
     name: row.name,
     description: row.description ?? null,
     logo_uri: row.logoUri ?? null,
@@ -44,15 +50,15 @@ function toApiClient(row: OAuthClientRow): OAuthClient {
 
 export async function getClientById(
   dbBinding: D1Database,
-  clientId: string
+  clientId: string,
 ): Promise<OAuthClient | null> {
   const db = getDb(dbBinding);
 
   const client = await db.select().from(oauthClients).where(
     and(
       eq(oauthClients.clientId, clientId),
-      eq(oauthClients.status, 'active'),
-    )
+      eq(oauthClients.status, "active"),
+    ),
   ).get();
 
   if (!client) {
@@ -64,11 +70,13 @@ export async function getClientById(
 
 export async function getClientByInternalId(
   dbBinding: D1Database,
-  id: string
+  id: string,
 ): Promise<OAuthClient | null> {
   const db = getDb(dbBinding);
 
-  const client = await db.select().from(oauthClients).where(eq(oauthClients.id, id)).get();
+  const client = await db.select().from(oauthClients).where(
+    eq(oauthClients.id, id),
+  ).get();
 
   if (!client) {
     return null;
@@ -79,7 +87,7 @@ export async function getClientByInternalId(
 
 export async function getClientsByOwner(
   dbBinding: D1Database,
-  ownerId: string
+  ownerId: string,
 ): Promise<OAuthClient[]> {
   const db = getDb(dbBinding);
 
@@ -94,38 +102,46 @@ export async function getClientsByOwner(
 export async function createClient(
   dbBinding: D1Database,
   request: ClientRegistrationRequest,
-  ownerId?: string
+  ownerId?: string,
 ): Promise<ClientRegistrationResponse> {
   const db = getDb(dbBinding);
 
   const id = generateId();
   const clientId = generateRandomString(OAUTH_CONSTANTS.CLIENT_ID_LENGTH);
-  const clientSecret = generateRandomString(OAUTH_CONSTANTS.CLIENT_SECRET_LENGTH);
-  const registrationAccessToken = generateRandomString(OAUTH_CONSTANTS.REGISTRATION_ACCESS_TOKEN_LENGTH);
+  const clientSecret = generateRandomString(
+    OAUTH_CONSTANTS.CLIENT_SECRET_LENGTH,
+  );
+  const registrationAccessToken = generateRandomString(
+    OAUTH_CONSTANTS.REGISTRATION_ACCESS_TOKEN_LENGTH,
+  );
 
   const clientSecretHash = await computeSHA256(clientSecret);
-  const registrationAccessTokenHash = await computeSHA256(registrationAccessToken);
+  const registrationAccessTokenHash = await computeSHA256(
+    registrationAccessToken,
+  );
 
   const requestedScopes = request.scope ? parseScopes(request.scope) : [];
   const { valid, unknown } = validateScopes(requestedScopes);
   if (!valid) {
-    throw new Error(`Unknown scopes: ${unknown.join(', ')}`);
+    throw new Error(`Unknown scopes: ${unknown.join(", ")}`);
   }
 
   validateRedirectUris(request.redirect_uris);
 
-  const grantTypes = request.grant_types ?? ['authorization_code', 'refresh_token'];
-  const responseTypes = request.response_types ?? ['code'];
+  const grantTypes = request.grant_types ??
+    ["authorization_code", "refresh_token"];
+  const responseTypes = request.response_types ?? ["code"];
 
-  const clientType =
-    request.token_endpoint_auth_method === 'none' ? 'public' : 'confidential';
+  const clientType = request.token_endpoint_auth_method === "none"
+    ? "public"
+    : "confidential";
 
   const now = new Date().toISOString();
 
   await db.insert(oauthClients).values({
     id,
     clientId,
-    clientSecretHash: clientType === 'confidential' ? clientSecretHash : null,
+    clientSecretHash: clientType === "confidential" ? clientSecretHash : null,
     clientType,
     name: request.client_name,
     description: null,
@@ -139,14 +155,14 @@ export async function createClient(
     allowedScopes: JSON.stringify(requestedScopes) as JsonStringArray,
     ownerAccountId: ownerId ?? null,
     registrationAccessTokenHash,
-    status: 'active',
+    status: "active",
     createdAt: now,
     updatedAt: now,
   });
 
   return {
     client_id: clientId,
-    client_secret: clientType === 'confidential' ? clientSecret : undefined,
+    client_secret: clientType === "confidential" ? clientSecret : undefined,
     client_id_issued_at: Math.floor(Date.now() / 1000),
     // 0 = secret never expires per RFC 7591. Expiry enforcement is not yet
     // implemented in validateClient(); changing this value to a future
@@ -158,7 +174,7 @@ export async function createClient(
     redirect_uris: request.redirect_uris,
     grant_types: grantTypes,
     response_types: responseTypes,
-    scope: requestedScopes.join(' '),
+    scope: requestedScopes.join(" "),
     client_uri: request.client_uri,
     logo_uri: request.logo_uri,
     policy_uri: request.policy_uri,
@@ -169,7 +185,7 @@ export async function createClient(
 export async function updateClient(
   dbBinding: D1Database,
   clientId: string,
-  updates: Partial<ClientRegistrationRequest>
+  updates: Partial<ClientRegistrationRequest>,
 ): Promise<OAuthClient | null> {
   const db = getDb(dbBinding);
 
@@ -186,7 +202,9 @@ export async function updateClient(
 
   if (updates.redirect_uris) {
     validateRedirectUris(updates.redirect_uris);
-    updateData.redirectUris = JSON.stringify(updates.redirect_uris) as JsonStringArray;
+    updateData.redirectUris = JSON.stringify(
+      updates.redirect_uris,
+    ) as JsonStringArray;
   }
 
   if (updates.logo_uri !== undefined) {
@@ -209,7 +227,7 @@ export async function updateClient(
     const scopes = parseScopes(updates.scope);
     const { valid, unknown } = validateScopes(scopes);
     if (!valid) {
-      throw new Error(`Unknown scopes: ${unknown.join(', ')}`);
+      throw new Error(`Unknown scopes: ${unknown.join(", ")}`);
     }
     updateData.allowedScopes = JSON.stringify(scopes) as JsonStringArray;
   }
@@ -220,19 +238,24 @@ export async function updateClient(
 
   updateData.updatedAt = new Date().toISOString();
 
-  await db.update(oauthClients).set(updateData).where(eq(oauthClients.clientId, clientId));
+  await db.update(oauthClients).set(updateData).where(
+    eq(oauthClients.clientId, clientId),
+  );
 
   return getClientById(dbBinding, clientId);
 }
 
-export async function deleteClient(dbBinding: D1Database, clientId: string): Promise<boolean> {
-  return updateClientStatus(dbBinding, clientId, 'revoked');
+export async function deleteClient(
+  dbBinding: D1Database,
+  clientId: string,
+): Promise<boolean> {
+  return updateClientStatus(dbBinding, clientId, "revoked");
 }
 
 export async function updateClientStatus(
   dbBinding: D1Database,
   clientId: string,
-  status: OAuthClientStatus
+  status: OAuthClientStatus,
 ): Promise<boolean> {
   const db = getDb(dbBinding);
 
@@ -250,26 +273,29 @@ export async function updateClientStatus(
 export async function validateClientCredentials(
   dbBinding: D1Database,
   clientId: string,
-  clientSecret?: string
+  clientSecret?: string,
 ): Promise<{ valid: boolean; client: OAuthClient | null; error?: string }> {
   const client = await getClientById(dbBinding, clientId);
 
   if (!client) {
-    return { valid: false, client: null, error: 'Client not found' };
+    return { valid: false, client: null, error: "Client not found" };
   }
 
-  if (client.status !== 'active') {
-    return { valid: false, client: null, error: 'Client is not active' };
+  if (client.status !== "active") {
+    return { valid: false, client: null, error: "Client is not active" };
   }
 
-  if (client.client_type === 'confidential') {
+  if (client.client_type === "confidential") {
     if (!clientSecret) {
-      return { valid: false, client, error: 'Client secret required' };
+      return { valid: false, client, error: "Client secret required" };
     }
 
     const secretHash = await computeSHA256(clientSecret);
-    if (!client.client_secret_hash || !constantTimeEqual(secretHash, client.client_secret_hash)) {
-      return { valid: false, client: null, error: 'Invalid client secret' };
+    if (
+      !client.client_secret_hash ||
+      !constantTimeEqual(secretHash, client.client_secret_hash)
+    ) {
+      return { valid: false, client: null, error: "Invalid client secret" };
     }
   }
 
@@ -279,7 +305,7 @@ export async function validateClientCredentials(
 export async function validateRegistrationToken(
   dbBinding: D1Database,
   clientId: string,
-  token: string
+  token: string,
 ): Promise<boolean> {
   const client = await getClientById(dbBinding, clientId);
   if (!client || !client.registration_access_token_hash) {
@@ -290,14 +316,17 @@ export async function validateRegistrationToken(
   return constantTimeEqual(tokenHash, client.registration_access_token_hash);
 }
 
-export function validateRedirectUri(client: OAuthClient, redirectUri: string): boolean {
+export function validateRedirectUri(
+  client: OAuthClient,
+  redirectUri: string,
+): boolean {
   const registeredUris = parseJsonStringArray(client.redirect_uris);
   return registeredUris.includes(redirectUri);
 }
 
 export function validateRedirectUris(uris: string[]): void {
   if (!uris || uris.length === 0) {
-    throw new Error('At least one redirect_uri is required');
+    throw new Error("At least one redirect_uri is required");
   }
 
   for (const uri of uris) {
@@ -308,7 +337,7 @@ export function validateRedirectUris(uris: string[]): void {
         throw new Error(`Invalid redirect_uri: ${uri} - must be absolute URI`);
       }
 
-      if (parsed.protocol !== 'https:' && !isLocalhost(parsed.hostname)) {
+      if (parsed.protocol !== "https:" && !isLocalhost(parsed.hostname)) {
         throw new Error(`Invalid redirect_uri: ${uri} - must use HTTPS`);
       }
 
@@ -316,7 +345,7 @@ export function validateRedirectUris(uris: string[]): void {
         throw new Error(`Invalid redirect_uri: ${uri} - fragment not allowed`);
       }
     } catch (e) {
-      if (e instanceof Error && e.message.startsWith('Invalid redirect_uri')) {
+      if (e instanceof Error && e.message.startsWith("Invalid redirect_uri")) {
         throw e;
       }
       throw new Error(`Invalid redirect_uri: ${uri}`);
@@ -326,14 +355,17 @@ export function validateRedirectUris(uris: string[]): void {
 
 function isLocalhost(hostname: string): boolean {
   return (
-    hostname === 'localhost' ||
-    hostname === '127.0.0.1' ||
-    hostname === '[::1]' ||
-    hostname.endsWith('.localhost')
+    hostname === "localhost" ||
+    hostname === "127.0.0.1" ||
+    hostname === "[::1]" ||
+    hostname.endsWith(".localhost")
   );
 }
 
-export function supportsGrantType(client: OAuthClient, grantType: string): boolean {
+export function supportsGrantType(
+  client: OAuthClient,
+  grantType: string,
+): boolean {
   const grantTypes = parseJsonStringArray(client.grant_types);
   return grantTypes.includes(grantType);
 }

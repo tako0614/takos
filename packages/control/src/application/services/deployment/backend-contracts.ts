@@ -25,12 +25,24 @@ export type DeploymentBackendDeployInput = {
   runtime: DeploymentBackendRuntimeInput;
 };
 
+export type DeploymentBackendQueueConsumerSyncInput = {
+  deployment: Deployment;
+  artifactRef: string;
+  runtime: DeploymentBackendRuntimeInput;
+  previousDeployment?: Deployment | null;
+  previousArtifactRef?: string | null;
+  previousRuntime?: DeploymentBackendRuntimeInput | null;
+};
+
 export type DeploymentBackend = {
   name: DeploymentBackendName;
   deploy(
     input: DeploymentBackendDeployInput,
   ): Promise<DeploymentBackendDeployResult | void>;
   assertRollbackTarget(artifactRef: string): Promise<void>;
+  syncQueueConsumers?(
+    input: DeploymentBackendQueueConsumerSyncInput,
+  ): Promise<void>;
   cleanupDeploymentArtifact?(artifactRef: string): Promise<void>;
 };
 

@@ -35,7 +35,7 @@ function makeContext(overrides: Partial<ToolContext> = {}): ToolContext {
     capabilities: [],
     sessionId: "session-1",
     env: {
-      TENANT_BASE_DOMAIN: "takos.dev",
+      TENANT_BASE_DOMAIN: "takos.jp",
     } as unknown as Env,
     db: {} as D1Database,
     setSessionId: ((..._args: any[]) => undefined) as any,

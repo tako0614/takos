@@ -1,11 +1,18 @@
-import * as gitStore from '../../../application/services/git-smart/index.ts';
-import { decodeBlobContent } from '../../../shared/utils/unified-diff.ts';
-import { diffLinesLcs } from '../../../shared/utils/lcs-diff.ts';
-import type { AuthenticatedRouteEnv } from '../route-auth.ts';
-import { toGitBucket, type GitBucket } from '../../../shared/utils/git-bucket.ts';
-import { GIT_DIFF_MAX_FILE_BYTES, GIT_DIFF_MAX_LINES, GIT_DIFF_MAX_FILES } from '../../../shared/config/limits.ts';
+import * as gitStore from "../../../application/services/git-smart/index.ts";
+import { decodeBlobContent } from "../../../shared/utils/unified-diff.ts";
+import { diffLinesLcs } from "../../../shared/utils/lcs-diff.ts";
+import type { AuthenticatedRouteEnv } from "../route-auth.ts";
+import {
+  type GitBucket,
+  toGitBucket,
+} from "../../../shared/utils/git-bucket.ts";
+import {
+  GIT_DIFF_MAX_FILE_BYTES,
+  GIT_DIFF_MAX_FILES,
+  GIT_DIFF_MAX_LINES,
+} from "../../../shared/config/limits.ts";
 
-export type FileStatus = 'added' | 'modified' | 'deleted';
+export type FileStatus = "added" | "modified" | "deleted";
 
 export type RepoDiffFile = {
   path: string;
@@ -15,7 +22,7 @@ export type RepoDiffFile = {
 };
 
 type DiffLine = {
-  type: 'context' | 'addition' | 'deletion';
+  type: "context" | "addition" | "deletion";
   content: string;
   old_line?: number;
   new_line?: number;
@@ -49,22 +56,25 @@ type TreeFileEntry = { path: string; sha: string; mode: string };
 function parseFlattenLimitError(error: unknown): string | null {
   const message = error instanceof Error ? error.message : String(error);
   if (
-    message.includes('Tree flatten depth limit exceeded')
-    || message.includes('Tree flatten entry limit exceeded')
+    message.includes("Tree flatten depth limit exceeded") ||
+    message.includes("Tree flatten entry limit exceeded")
   ) {
     return message;
   }
   return null;
 }
 
-function determineFileStatus(baseOid: string | null, headOid: string | null): FileStatus | null {
-  if (!baseOid && headOid) return 'added';
-  if (baseOid && !headOid) return 'deleted';
-  if (baseOid && headOid && baseOid !== headOid) return 'modified';
+function determineFileStatus(
+  baseOid: string | null,
+  headOid: string | null,
+): FileStatus | null {
+  if (!baseOid && headOid) return "added";
+  if (baseOid && !headOid) return "deleted";
+  if (baseOid && headOid && baseOid !== headOid) return "modified";
   return null;
 }
 
-function computeDiffStats(files: RepoDiffFile[]): RepoDiffPayload['stats'] {
+function computeDiffStats(files: RepoDiffFile[]): RepoDiffPayload["stats"] {
   return {
     total_additions: files.reduce((sum, file) => sum + file.additions, 0),
     total_deletions: files.reduce((sum, file) => sum + file.deletions, 0),
@@ -73,7 +83,7 @@ function computeDiffStats(files: RepoDiffFile[]): RepoDiffPayload['stats'] {
 }
 
 function buildDiffLines(
-  ops: Array<{ type: 'equal' | 'insert' | 'delete'; line: string }>,
+  ops: Array<{ type: "equal" | "insert" | "delete"; line: string }>,
 ): { lines: DiffLine[]; additions: number; deletions: number } {
   const lines: DiffLine[] = [];
   let additions = 0;
@@ -82,17 +92,22 @@ function buildDiffLines(
   let newLineNo = 1;
 
   for (const op of ops) {
-    if (op.type === 'equal') {
-      lines.push({ type: 'context', content: op.line, old_line: oldLineNo, new_line: newLineNo });
+    if (op.type === "equal") {
+      lines.push({
+        type: "context",
+        content: op.line,
+        old_line: oldLineNo,
+        new_line: newLineNo,
+      });
       oldLineNo++;
       newLineNo++;
-    } else if (op.type === 'delete') {
+    } else if (op.type === "delete") {
       deletions++;
-      lines.push({ type: 'deletion', content: op.line, old_line: oldLineNo });
+      lines.push({ type: "deletion", content: op.line, old_line: oldLineNo });
       oldLineNo++;
     } else {
       additions++;
-      lines.push({ type: 'addition', content: op.line, new_line: newLineNo });
+      lines.push({ type: "addition", content: op.line, new_line: newLineNo });
       newLineNo++;
     }
   }
@@ -105,9 +120,9 @@ async function loadBlobText(
   oid: string | null,
   maxBytes: number,
 ): Promise<string | null> {
-  if (!oid) return '';
+  if (!oid) return "";
   const blob = await gitStore.getBlob(bucket, oid);
-  if (!blob) return '';
+  if (!blob) return "";
   if (blob.length > maxBytes) return null;
   const decoded = decodeBlobContent(blob);
   if (decoded.isBinary) return null;
@@ -132,7 +147,9 @@ async function computeFileDiffWithHunks(
     return { path, status, additions: 0, deletions: 0, hunks: [] };
   }
 
-  const splitLines = (text: string): string[] => (text.length === 0 ? [] : text.split('\n'));
+  const splitLines = (
+    text: string,
+  ): string[] => (text.length === 0 ? [] : text.split("\n"));
   const oldLines = splitLines(oldText);
   const newLines = splitLines(newText);
 
@@ -144,7 +161,13 @@ async function computeFileDiffWithHunks(
   const { lines, additions, deletions } = buildDiffLines(ops);
 
   const hunks: DiffHunk[] = lines.length > 0
-    ? [{ old_start: 1, old_lines: oldLines.length, new_start: 1, new_lines: newLines.length, lines }]
+    ? [{
+      old_start: 1,
+      old_lines: oldLines.length,
+      new_start: 1,
+      new_lines: newLines.length,
+      lines,
+    }]
     : [];
 
   return { path, status, additions, deletions, hunks };
@@ -178,7 +201,17 @@ async function computeDetailedFileDiffs(
     const status = determineFileStatus(baseOid, headOid);
     if (!status) continue;
 
-    files.push(await computeFileDiffWithHunks(bucket, path, status, baseOid, headOid, MAX_FILE_BYTES, MAX_LINES));
+    files.push(
+      await computeFileDiffWithHunks(
+        bucket,
+        path,
+        status,
+        baseOid,
+        headOid,
+        MAX_FILE_BYTES,
+        MAX_LINES,
+      ),
+    );
   }
 
   return { files, truncated };
@@ -195,15 +228,15 @@ function computeSummaryFileDiffs(
   for (const [path, oid] of headMap) {
     const baseOid = baseMap.get(path);
     if (!baseOid) {
-      files.push({ path, status: 'added', additions: 1, deletions: 0 });
+      files.push({ path, status: "added", additions: 1, deletions: 0 });
     } else if (baseOid !== oid) {
-      files.push({ path, status: 'modified', additions: 1, deletions: 1 });
+      files.push({ path, status: "modified", additions: 1, deletions: 1 });
     }
   }
 
   for (const [path] of baseMap) {
     if (!headMap.has(path)) {
-      files.push({ path, status: 'deleted', additions: 0, deletions: 1 });
+      files.push({ path, status: "deleted", additions: 0, deletions: 1 });
     }
   }
 
@@ -213,7 +246,7 @@ function computeSummaryFileDiffs(
 
 async function resolveTreeFiles(
   bucket: GitBucket,
-  env: AuthenticatedRouteEnv['Bindings'],
+  env: AuthenticatedRouteEnv["Bindings"],
   repoId: string,
   ref: string,
 ): Promise<TreeFileEntry[] | null> {
@@ -225,7 +258,7 @@ async function resolveTreeFiles(
 }
 
 export async function buildRepoDiffPayload(
-  env: AuthenticatedRouteEnv['Bindings'],
+  env: AuthenticatedRouteEnv["Bindings"],
   repoId: string,
   baseRef: string,
   headRef: string,
@@ -242,7 +275,12 @@ export async function buildRepoDiffPayload(
     if (!baseFiles || !headFiles) return null;
 
     const files = computeSummaryFileDiffs(baseFiles, headFiles);
-    return { base: baseRef, head: headRef, files, stats: computeDiffStats(files) };
+    return {
+      base: baseRef,
+      head: headRef,
+      files,
+      stats: computeDiffStats(files),
+    };
   } catch (error) {
     if (parseFlattenLimitError(error)) return null;
     throw error;
@@ -250,30 +288,47 @@ export async function buildRepoDiffPayload(
 }
 
 export async function buildDetailedRepoDiffPayload(
-  env: AuthenticatedRouteEnv['Bindings'],
+  env: AuthenticatedRouteEnv["Bindings"],
   repoId: string,
   baseRef: string,
   headRef: string,
 ): Promise<
-  | { success: true; payload: { base: string; head: string; files: DetailedDiffFile[]; stats: RepoDiffPayload['stats']; truncated: boolean } }
-  | { success: false; status: 404 | 422 | 500; body: { error: string; message?: string } }
+  | {
+    success: true;
+    payload: {
+      base: string;
+      head: string;
+      files: DetailedDiffFile[];
+      stats: RepoDiffPayload["stats"];
+      truncated: boolean;
+    };
+  }
+  | {
+    success: false;
+    status: 404 | 422 | 500;
+    body: { error: string; message?: string };
+  }
 > {
   const bucketBinding = env.GIT_OBJECTS;
   if (!bucketBinding) {
-    return { success: false, status: 500, body: { error: 'Git storage not configured' } };
+    return {
+      success: false,
+      status: 500,
+      body: { error: "Git storage not configured" },
+    };
   }
   const bucket = toGitBucket(bucketBinding);
 
   const baseSha = await gitStore.resolveRef(env.DB, repoId, baseRef);
   const headSha = await gitStore.resolveRef(env.DB, repoId, headRef);
   if (!baseSha || !headSha) {
-    return { success: false, status: 404, body: { error: 'Ref not found' } };
+    return { success: false, status: 404, body: { error: "Ref not found" } };
   }
 
   const baseCommit = await gitStore.getCommitData(bucket, baseSha);
   const headCommit = await gitStore.getCommitData(bucket, headSha);
   if (!baseCommit || !headCommit) {
-    return { success: false, status: 404, body: { error: 'Commit not found' } };
+    return { success: false, status: 404, body: { error: "Commit not found" } };
   }
 
   let baseFiles: TreeFileEntry[];
@@ -288,7 +343,7 @@ export async function buildDetailedRepoDiffPayload(
         success: false,
         status: 422,
         body: {
-          error: 'Pull request diff exceeds flatten limits',
+          error: "Pull request diff exceeds flatten limits",
           message: flattenMessage,
         },
       };
@@ -296,7 +351,11 @@ export async function buildDetailedRepoDiffPayload(
     throw error;
   }
 
-  const { files, truncated } = await computeDetailedFileDiffs(bucket, baseFiles, headFiles);
+  const { files, truncated } = await computeDetailedFileDiffs(
+    bucket,
+    baseFiles,
+    headFiles,
+  );
   return {
     success: true,
     payload: {

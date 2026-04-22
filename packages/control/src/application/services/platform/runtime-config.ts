@@ -1,26 +1,26 @@
-import { BadRequestError } from 'takos-common/errors';
+import { BadRequestError } from "takos-common/errors";
 
 import {
   getDb,
-  serviceRuntimeSettings,
   serviceRuntimeFlags,
   serviceRuntimeLimits,
-} from '../../../infra/db/index.ts';
-import { eq, and } from 'drizzle-orm';
-import { normalizeLimits, parseRuntimeRow } from './resource-bindings.ts';
+  serviceRuntimeSettings,
+} from "../../../infra/db/index.ts";
+import { and, eq } from "drizzle-orm";
+import { normalizeLimits, parseRuntimeRow } from "./resource-bindings.ts";
 import type {
   DesiredStateEnv,
   ServiceRuntimeConfigState,
-  ServiceRuntimeLimits,
-  ServiceRuntimeRow,
   ServiceRuntimeFlagRow,
   ServiceRuntimeLimitRow,
-} from './desired-state-types.ts';
+  ServiceRuntimeLimits,
+  ServiceRuntimeRow,
+} from "./desired-state-types.ts";
 
 export async function getRuntimeConfig(
   env: DesiredStateEnv,
   spaceId: string,
-  serviceId: string
+  serviceId: string,
 ): Promise<ServiceRuntimeConfigState> {
   const db = getDb(env.DB);
 
@@ -68,15 +68,23 @@ export async function saveRuntimeConfig(
     compatibilityDate?: string;
     compatibilityFlags?: string[];
     limits?: ServiceRuntimeLimits;
-  }
+  },
 ): Promise<ServiceRuntimeConfigState> {
   const db = getDb(env.DB);
   const serviceId = params.serviceId ?? params.workerId;
   if (!serviceId) {
-    throw new BadRequestError('Service runtime config requires a service identifier');
+    throw new BadRequestError(
+      "Service runtime config requires a service identifier",
+    );
   }
   const timestamp = new Date().toISOString();
-  const compatibilityFlags = Array.from(new Set((params.compatibilityFlags || []).filter((flag) => typeof flag === 'string' && flag.trim().length > 0)));
+  const compatibilityFlags = Array.from(
+    new Set(
+      (params.compatibilityFlags || []).filter((flag) =>
+        typeof flag === "string" && flag.trim().length > 0
+      ),
+    ),
+  );
   const limits = normalizeLimits(params.limits);
 
   // Upsert runtime settings

@@ -109,6 +109,24 @@ export function resolveTakosApiUrl(
   return `https://${adminDomain}`;
 }
 
+export function resolveTakosInternalApiUrl(
+  env: Pick<Env, "ADMIN_DOMAIN" | "TAKOS_INTERNAL_API_URL">,
+): string | null {
+  const internalUrl = String(env.TAKOS_INTERNAL_API_URL || "").trim();
+  if (internalUrl) {
+    try {
+      const parsed = new URL(internalUrl);
+      parsed.pathname = parsed.pathname.replace(/\/+$/, "");
+      parsed.search = "";
+      parsed.hash = "";
+      return parsed.toString().replace(/\/$/, "");
+    } catch {
+      throw new Error("TAKOS_INTERNAL_API_URL must be an absolute URL");
+    }
+  }
+  return resolveTakosApiUrl(env);
+}
+
 async function loadSpaceIdentity(
   db: D1Database,
   spaceId: string,

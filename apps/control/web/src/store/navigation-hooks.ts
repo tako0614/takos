@@ -1,22 +1,22 @@
-import { createEffect, createMemo } from 'solid-js';
+import { createEffect, createMemo } from "solid-js";
 import {
   findSpaceByIdentifier,
   getPersonalSpace,
   getSpaceIdentifier,
-} from '../lib/spaces.ts';
-import { rpc, rpcJson } from '../lib/rpc.ts';
-import { useBreakpoint } from '../hooks/useBreakpoint.ts';
-import { useRouter } from '../hooks/useRouter.ts';
-import { useAuth } from '../hooks/useAuth.tsx';
-import { useI18n } from './i18n.ts';
-import { useToast } from './toast.ts';
-import { useConfirmDialog } from './confirm-dialog.ts';
-import type { Space, Thread } from '../types/index.ts';
+} from "../lib/spaces.ts";
+import { rpc, rpcJson } from "../lib/rpc.ts";
+import { useBreakpoint } from "../hooks/useBreakpoint.ts";
+import { useRouter } from "../hooks/useRouter.ts";
+import { useAuth } from "../hooks/useAuth.tsx";
+import { useI18n } from "./i18n.ts";
+import { useToast } from "./toast.ts";
+import { useConfirmDialog } from "./confirm-dialog.ts";
+import type { Space, Thread } from "../types/index.ts";
 import {
   fetchAllThreads as fetchAllThreadsAction,
   mobileNavDrawerId,
   useNavigationState,
-} from './navigation-atoms.ts';
+} from "./navigation-atoms.ts";
 
 export function useNavigationEffects() {
   const auth = useAuth();
@@ -57,7 +57,7 @@ export function useNavigation() {
   const { confirm } = useConfirmDialog();
   const navigationState = useNavigationState();
 
-  const personalLabel = createMemo(() => i18n.t('personal'));
+  const personalLabel = createMemo(() => i18n.t("personal"));
   const preferredSpace = createMemo(() =>
     getPersonalSpace(auth.spaces, personalLabel()) || auth.spaces[0] ||
     undefined
@@ -78,9 +78,7 @@ export function useNavigation() {
   });
   const selectedSpaceId = createMemo(() => {
     const route = router.route;
-    return route.spaceId
-      ? routeSpaceId() ?? null
-      : preferredSpaceId() ?? null;
+    return route.spaceId ? routeSpaceId() ?? null : preferredSpaceId() ?? null;
   });
   const waitingForSpaceResolution = createMemo(() => {
     const route = router.route;
@@ -90,7 +88,7 @@ export function useNavigation() {
   const navigateToChat = (spaceId?: string, threadId?: string) => {
     if (spaceId && threadId) {
       router.navigate({
-        view: 'chat',
+        view: "chat",
         spaceId,
         threadId,
         runId: undefined,
@@ -100,7 +98,7 @@ export function useNavigation() {
     }
     if (spaceId) {
       router.navigate({
-        view: 'chat',
+        view: "chat",
         spaceId,
         threadId: undefined,
         runId: undefined,
@@ -109,7 +107,7 @@ export function useNavigation() {
       return;
     }
     router.navigate({
-      view: 'chat',
+      view: "chat",
       threadId: undefined,
       runId: undefined,
       messageId: undefined,
@@ -119,14 +117,14 @@ export function useNavigation() {
   const replaceToChat = (spaceId?: string) => {
     if (spaceId) {
       router.replace({
-        view: 'chat',
+        view: "chat",
         spaceId,
         runId: undefined,
         messageId: undefined,
       });
       return;
     }
-    router.replace({ view: 'chat', runId: undefined, messageId: undefined });
+    router.replace({ view: "chat", runId: undefined, messageId: undefined });
   };
 
   const navigateToPreferredChat = () => {
@@ -136,7 +134,7 @@ export function useNavigation() {
   const handleEnterSpace = (space: Space) => {
     navigationState.setSidebarSpace(space);
     router.navigate({
-      view: 'chat',
+      view: "chat",
       spaceId: getSpaceIdentifier(space),
       threadId: undefined,
       runId: undefined,
@@ -146,7 +144,7 @@ export function useNavigation() {
 
   const handleExitSpace = () => {
     navigationState.setSidebarSpace(null);
-    router.replace({ view: 'apps', spaceId: preferredSpaceId() });
+    router.replace({ view: "apps", spaceId: preferredSpaceId() });
   };
 
   const fetchAllThreads = async (wsList?: Space[]) => {
@@ -161,15 +159,15 @@ export function useNavigation() {
 
   const handleDeleteThread = async (threadId: string) => {
     const confirmed = await confirm({
-      title: i18n.t('confirmDelete'),
-      message: i18n.t('confirmDeleteThread'),
-      confirmText: i18n.t('delete'),
+      title: i18n.t("confirmDelete"),
+      message: i18n.t("confirmDeleteThread"),
+      confirmText: i18n.t("delete"),
       danger: true,
     });
     if (!confirmed) return;
 
     try {
-      const res = await rpc.threads[':id'].$delete({ param: { id: threadId } });
+      const res = await rpc.threads[":id"].$delete({ param: { id: threadId } });
       await rpcJson(res);
       navigationState.setThreadsBySpace((prev) => {
         const next: Record<string, Thread[]> = {};
@@ -181,30 +179,30 @@ export function useNavigation() {
       if (router.route.threadId === threadId) {
         navigateToChat(selectedSpaceId() ?? undefined);
       }
-      toast.showToast('success', i18n.t('deleted'));
+      toast.showToast("success", i18n.t("deleted"));
     } catch {
-      toast.showToast('error', i18n.t('failedToDelete'));
+      toast.showToast("error", i18n.t("failedToDelete"));
     }
   };
 
   const toggleArchiveThread = async (thread: Thread) => {
     try {
-      const endpoint = thread.status === 'archived' ? 'unarchive' : 'archive';
-      const res = await (endpoint === 'archive'
-        ? rpc.threads[':id'].archive.$post({ param: { id: thread.id } })
-        : rpc.threads[':id'].unarchive.$post({ param: { id: thread.id } }));
+      const endpoint = thread.status === "archived" ? "unarchive" : "archive";
+      const res = await (endpoint === "archive"
+        ? rpc.threads[":id"].archive.$post({ param: { id: thread.id } })
+        : rpc.threads[":id"].unarchive.$post({ param: { id: thread.id } }));
       await rpcJson(res);
       await fetchAllThreads();
       toast.showToast(
-        'success',
-        endpoint === 'archive'
-          ? (i18n.t('routingStatus_archived') || 'Archived')
-          : (i18n.t('routingStatus_active') || 'Active'),
+        "success",
+        endpoint === "archive"
+          ? (i18n.t("routingStatus_archived") || "Archived")
+          : (i18n.t("routingStatus_active") || "Active"),
       );
     } catch (error) {
       toast.showToast(
-        'error',
-        error instanceof Error ? error.message : i18n.t('failedToSave'),
+        "error",
+        error instanceof Error ? error.message : i18n.t("failedToSave"),
       );
     }
   };

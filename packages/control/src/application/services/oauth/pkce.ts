@@ -1,6 +1,6 @@
-import type { CodeChallengeMethod } from '../../../shared/types/oauth.ts';
-import { constantTimeEqual } from '../../../shared/utils/hash.ts';
-import { base64UrlEncode, bytesToHex } from '../../../shared/utils/index.ts';
+import type { CodeChallengeMethod } from "../../../shared/types/oauth.ts";
+import { constantTimeEqual } from "../../../shared/utils/hash.ts";
+import { base64UrlEncode, bytesToHex } from "../../../shared/utils/index.ts";
 
 export function generateCodeVerifier(): string {
   const bytes = new Uint8Array(32);
@@ -10,22 +10,22 @@ export function generateCodeVerifier(): string {
 
 export async function generateCodeChallenge(
   verifier: string,
-  method: CodeChallengeMethod = 'S256'
+  method: CodeChallengeMethod = "S256",
 ): Promise<string> {
-  if (method !== 'S256') {
-    throw new Error('Unsupported PKCE code challenge method');
+  if (method !== "S256") {
+    throw new Error("Unsupported PKCE code challenge method");
   }
 
   const encoder = new TextEncoder();
   const data = encoder.encode(verifier);
-  const digest = await crypto.subtle.digest('SHA-256', data);
+  const digest = await crypto.subtle.digest("SHA-256", data);
   return base64UrlEncode(new Uint8Array(digest));
 }
 
 export async function verifyCodeChallenge(
   codeVerifier: string,
   codeChallenge: string,
-  method: CodeChallengeMethod = 'S256'
+  method: CodeChallengeMethod = "S256",
 ): Promise<boolean> {
   const computedChallenge = await generateCodeChallenge(codeVerifier, method);
   return constantTimeEqual(computedChallenge, codeChallenge);
@@ -45,7 +45,6 @@ export function isValidCodeChallenge(challenge: string): boolean {
   return /^[A-Za-z0-9\-_]+$/.test(challenge);
 }
 
-
 export function generateRandomString(length: number): string {
   const bytes = new Uint8Array(length);
   crypto.getRandomValues(bytes);
@@ -56,5 +55,7 @@ export function generateId(): string {
   const bytes = new Uint8Array(16);
   crypto.getRandomValues(bytes);
   const hex = bytesToHex(bytes);
-  return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
+  return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${
+    hex.slice(16, 20)
+  }-${hex.slice(20)}`;
 }

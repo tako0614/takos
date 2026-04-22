@@ -1,22 +1,24 @@
 /**
  * Private helpers for repo CRUD routes (format, cleanup, owner resolution).
  */
-import type { RepositoryVisibility } from '../../../shared/types/index.ts';
-import type { AuthenticatedRouteEnv } from '../route-auth.ts';
-import * as gitStore from '../../../application/services/git-smart/index.ts';
-import { collectReachableObjectShas } from '../../../application/services/git-smart/index.ts';
-import type { Database } from '../../../infra/db/index.ts';
-import { accounts, repositories } from '../../../infra/db/schema.ts';
-import { eq, ne } from 'drizzle-orm';
-import { logWarn } from '../../../shared/utils/logger.ts';
-import { MAX_REPO_OBJECT_CLEANUP_CANDIDATES } from '../../../shared/config/limits.ts';
-import { textDateNullable } from '../../../shared/utils/db-guards.ts';
+import type { RepositoryVisibility } from "../../../shared/types/index.ts";
+import type { AuthenticatedRouteEnv } from "../route-auth.ts";
+import * as gitStore from "../../../application/services/git-smart/index.ts";
+import { collectReachableObjectShas } from "../../../application/services/git-smart/index.ts";
+import type { Database } from "../../../infra/db/index.ts";
+import { accounts, repositories } from "../../../infra/db/schema.ts";
+import { eq, ne } from "drizzle-orm";
+import { logWarn } from "../../../shared/utils/logger.ts";
+import { MAX_REPO_OBJECT_CLEANUP_CANDIDATES } from "../../../shared/config/limits.ts";
+import { textDateNullable } from "../../../shared/utils/db-guards.ts";
 
 // ---------------------------------------------------------------------------
 // Constants & type aliases
 // ---------------------------------------------------------------------------
 
-type GitObjectsBucket = NonNullable<AuthenticatedRouteEnv['Bindings']['GIT_OBJECTS']>;
+type GitObjectsBucket = NonNullable<
+  AuthenticatedRouteEnv["Bindings"]["GIT_OBJECTS"]
+>;
 type ReachableObjectsBucket = Parameters<typeof collectReachableObjectShas>[1];
 type DeleteBucket = Parameters<typeof gitStore.deleteObject>[0];
 
@@ -40,7 +42,10 @@ export type RepositoryResponseSource = {
  * Resolve the display username for an account (workspace or user).
  * The account's own slug is the username -- no personal workspace indirection needed.
  */
-export async function resolveOwnerUsername(db: Database, spaceId: string): Promise<string> {
+export async function resolveOwnerUsername(
+  db: Database,
+  spaceId: string,
+): Promise<string> {
   const workspace = await db.select({
     slug: accounts.slug,
   })
@@ -48,7 +53,7 @@ export async function resolveOwnerUsername(db: Database, spaceId: string): Promi
     .where(eq(accounts.id, spaceId))
     .get();
 
-  return workspace?.slug || '';
+  return workspace?.slug || "";
 }
 
 // ---------------------------------------------------------------------------
@@ -57,7 +62,7 @@ export async function resolveOwnerUsername(db: Database, spaceId: string): Promi
 
 export function formatRepositoryResponse(
   repository: RepositoryResponseSource,
-  ownerUsername: string
+  ownerUsername: string,
 ) {
   return {
     owner_username: ownerUsername,
@@ -79,14 +84,18 @@ export function formatRepositoryResponse(
 
 export async function deleteR2Prefix(
   bucket: GitObjectsBucket,
-  prefix: string
+  prefix: string,
 ): Promise<void> {
   let cursor: string | undefined;
 
   do {
     const listing = await bucket.list({ prefix, cursor });
     if (listing.objects.length > 0) {
-      await Promise.all(listing.objects.map((object: { key: string }) => bucket.delete(object.key)));
+      await Promise.all(
+        listing.objects.map((object: { key: string }) =>
+          bucket.delete(object.key)
+        ),
+      );
     }
     cursor = listing.truncated ? listing.cursor : undefined;
   } while (cursor);
@@ -94,10 +103,10 @@ export async function deleteR2Prefix(
 
 export async function cleanupRepoGitObjects(
   db: Database,
-  d1: AuthenticatedRouteEnv['Bindings']['DB'],
+  d1: AuthenticatedRouteEnv["Bindings"]["DB"],
   bucket: GitObjectsBucket,
   deletedRepoId: string,
-  candidateOids: Set<string>
+  candidateOids: Set<string>,
 ): Promise<void> {
   if (candidateOids.size === 0) {
     return;
@@ -118,7 +127,7 @@ export async function cleanupRepoGitObjects(
     const reachable = await collectReachableObjectShas(
       d1,
       bucket as ReachableObjectsBucket,
-      repo.id
+      repo.id,
     );
     for (const oid of candidateList) {
       if (!sharedOids.has(oid) && reachable.has(oid)) {
@@ -135,7 +144,9 @@ export async function cleanupRepoGitObjects(
   const chunkSize = 100;
   for (let i = 0; i < deletable.length; i += chunkSize) {
     const chunk = deletable.slice(i, i + chunkSize);
-    await Promise.allSettled(chunk.map((oid) => gitStore.deleteObject(bucket as DeleteBucket, oid)));
+    await Promise.allSettled(
+      chunk.map((oid) => gitStore.deleteObject(bucket as DeleteBucket, oid)),
+    );
   }
 }
 
@@ -144,7 +155,7 @@ export async function cleanupRepoGitObjects(
  * Returns null if the candidate set is too large.
  */
 export async function collectCleanupCandidates(
-  d1: AuthenticatedRouteEnv['Bindings']['DB'],
+  d1: AuthenticatedRouteEnv["Bindings"]["DB"],
   bucket: GitObjectsBucket,
   repoId: string,
 ): Promise<Set<string> | null> {
@@ -153,15 +164,18 @@ export async function collectCleanupCandidates(
     if (reachable.size <= MAX_REPO_OBJECT_CLEANUP_CANDIDATES) {
       return reachable;
     }
-    logWarn('Skipping git object cleanup due to oversized candidate set', {
-      action: 'deleteRepository',
+    logWarn("Skipping git object cleanup due to oversized candidate set", {
+      action: "deleteRepository",
       repoId,
       size: reachable.size,
       max: MAX_REPO_OBJECT_CLEANUP_CANDIDATES,
     });
     return null;
   } catch {
-    logWarn('Failed to collect reachable objects before repo deletion', { action: 'deleteRepository', repoId });
+    logWarn("Failed to collect reachable objects before repo deletion", {
+      action: "deleteRepository",
+      repoId,
+    });
     return null;
   }
 }

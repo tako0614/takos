@@ -1,8 +1,10 @@
 import { hc } from "hono/client";
 import type { ClientResponse } from "hono/client";
 import type { ApiRoutes } from "takos-control/rpc-types";
+import { withTimeout } from "./withTimeout.ts";
 
 export const rpc = hc<ApiRoutes>("/api");
+const DEFAULT_API_TIMEOUT_MS = 15000;
 
 // ---------------------------------------------------------------------------
 // rpcPath – type-safe traversal of the Hono RPC proxy for routes that lack
@@ -149,6 +151,34 @@ export async function rpcJson<T>(response: JsonResponseLike): Promise<T> {
     throw new Error(message || "Request failed");
   }
   return await response.json() as T;
+}
+
+export interface ApiJsonOptions {
+  timeoutMs?: number;
+  init?: RequestInit;
+}
+
+export async function apiJson<T>(
+  path: string,
+  options: ApiJsonOptions = {},
+): Promise<T> {
+  const { timeoutMs = DEFAULT_API_TIMEOUT_MS, init } = options;
+  const response = await withTimeout(
+    (signal) => {
+      const headers = new Headers(init?.headers);
+      if (!headers.has("Accept")) {
+        headers.set("Accept", "application/json");
+      }
+      return fetch(path, {
+        ...init,
+        headers,
+        signal,
+      });
+    },
+    timeoutMs,
+    "Request timed out",
+  );
+  return await rpcJson<T>(response);
 }
 
 // ---------------------------------------------------------------------------

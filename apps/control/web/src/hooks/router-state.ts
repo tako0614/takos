@@ -52,6 +52,7 @@ export function normalizeNavigationState(
       threadId: undefined,
       runId: undefined,
       messageId: undefined,
+      groupId: undefined,
     };
   }
 
@@ -81,6 +82,7 @@ export function normalizeNavigationState(
       filePath: undefined,
       fileLine: undefined,
       ref: undefined,
+      groupId: undefined,
     };
   }
 
@@ -110,6 +112,51 @@ export function normalizeNavigationState(
       threadId: undefined,
       runId: undefined,
       messageId: undefined,
+      groupId: undefined,
+    };
+  }
+
+  if (nextView === "groups") {
+    const stayingInGroups = previous.view === "groups";
+    const nextGroupIdSpecified = hasRouteStateField(nextState, "groupId");
+    return {
+      ...merged,
+      groupId: nextGroupIdSpecified
+        ? nextState.groupId
+        : stayingInGroups
+        ? previous.groupId
+        : undefined,
+      storagePath: undefined,
+      filePath: undefined,
+      fileLine: undefined,
+      ref: undefined,
+      threadId: undefined,
+      runId: undefined,
+      messageId: undefined,
+    };
+  }
+
+  if (nextView === "deploy") {
+    const nextGroupIdSpecified = hasRouteStateField(nextState, "groupId");
+    const deploySection = nextState.deploySection ?? previous.deploySection;
+    const stayingInDeployGroups = previous.view === "deploy" &&
+      previous.deploySection === "groups";
+    return {
+      ...merged,
+      groupId: deploySection === "groups"
+        ? nextGroupIdSpecified
+          ? nextState.groupId
+          : stayingInDeployGroups
+          ? previous.groupId
+          : undefined
+        : undefined,
+      storagePath: undefined,
+      filePath: undefined,
+      fileLine: undefined,
+      ref: undefined,
+      threadId: undefined,
+      runId: undefined,
+      messageId: undefined,
     };
   }
 
@@ -122,6 +169,7 @@ export function normalizeNavigationState(
     threadId: undefined,
     runId: undefined,
     messageId: undefined,
+    groupId: undefined,
   };
 }
 

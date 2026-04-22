@@ -1,11 +1,11 @@
-import type { Resource } from '../../../types/index.ts';
-import { ResourceDetail } from '../ResourceDetail.tsx';
-import type { ResourceDetailTab } from '../worker-models.ts';
+import type { Resource } from "../../../types/index.ts";
+import { ResourceDetail } from "../ResourceDetail.tsx";
+import type { ResourceDetailTab } from "../worker-models.ts";
 import {
   getResourceStatusBgClass,
   getResourceTypeIcon,
   getResourceTypeName,
-} from '../utils/resourceUtils.tsx';
+} from "../utils/resourceUtils.tsx";
 
 export interface ResourceDetailContainerProps {
   resource: Resource;
@@ -15,23 +15,17 @@ export interface ResourceDetailContainerProps {
   onDeleteResource: (resource: Resource) => void;
 }
 
-export function ResourceDetailContainer({
-  resource,
-  tab,
-  onBack,
-  onTabChange,
-  onDeleteResource,
-}: ResourceDetailContainerProps) {
+export function ResourceDetailContainer(props: ResourceDetailContainerProps) {
   return (
     <ResourceDetail
-      resource={resource}
-      tab={tab}
-      onBack={onBack}
-      onTabChange={onTabChange}
+      resource={props.resource}
+      tab={props.tab}
+      onBack={props.onBack}
+      onTabChange={props.onTabChange}
       getResourceTypeIcon={getResourceTypeIcon}
       getResourceTypeName={getResourceTypeName}
       getResourceStatusBgClass={getResourceStatusBgClass}
-      onDeleteResource={() => onDeleteResource(resource)}
+      onDeleteResource={() => props.onDeleteResource(props.resource)}
     />
   );
 }

@@ -60,9 +60,14 @@ service = "takos"
 [vars]
 ADMIN_DOMAIN = "admin.example.com"
 CONTROL_RPC_BASE_URL = "https://your-executor-host.workers.dev"
+# Optional: bump this when you need executor pool slots to start fresh
+# containers after an image/config rollout.
+EXECUTOR_POOL_REVISION = "default"
 
 # Secrets (set via wrangler secret put):
 # - EXECUTOR_PROXY_SECRET: Same value as the main takos worker.
+# - OPENAI_API_KEY / ANTHROPIC_API_KEY / GOOGLE_API_KEY: optional Rust executor
+#   model-key fallback.
 
 [env.staging]
 name = "takos-executor-host-staging"

@@ -253,9 +253,9 @@ export function ChatPage(props: ChatPageProps) {
       const data = await rpcJson<{ thread: Thread }>(res);
       const thread = data.thread;
       props.onNewThreadCreated?.(spaceId, thread);
-      setSelectedThread(thread);
       setPendingMessage(message);
       setPendingFiles(files ?? null);
+      setSelectedThread(thread);
       props.onThreadChange?.(thread.id);
     } catch (err) {
       showToast(

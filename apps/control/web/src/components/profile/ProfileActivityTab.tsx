@@ -1,30 +1,37 @@
-import { Show, For } from 'solid-js';
-import { Icons } from '../../lib/Icons.tsx';
-import { useI18n } from '../../store/i18n.ts';
-import { EmptyState } from '../common/EmptyState.tsx';
-import type { ActivityEvent } from '../../types/profile.ts';
+import { For, Show } from "solid-js";
+import { Icons } from "../../lib/Icons.tsx";
+import { useI18n } from "../../store/i18n.ts";
+import { EmptyState } from "../common/EmptyState.tsx";
+import type { ActivityEvent } from "../../types/profile.ts";
 
 function formatDay(value: string): string {
   const d = new Date(value);
   if (!Number.isFinite(d.getTime())) return value;
-  return d.toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
+  return d.toLocaleDateString(undefined, {
+    year: "numeric",
+    month: "short",
+    day: "numeric",
+  });
 }
 
 function formatTime(value: string): string {
   const d = new Date(value);
   if (!Number.isFinite(d.getTime())) return value;
-  return d.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' });
+  return d.toLocaleTimeString(undefined, {
+    hour: "2-digit",
+    minute: "2-digit",
+  });
 }
 
-function iconForEvent(type: ActivityEvent['type']) {
+function iconForEvent(type: ActivityEvent["type"]) {
   switch (type) {
-    case 'commit':
+    case "commit":
       return <Icons.GitCommit class="w-4 h-4" />;
-    case 'pull_request':
+    case "pull_request":
       return <Icons.GitPullRequest class="w-4 h-4" />;
-    case 'release':
+    case "release":
       return <Icons.Tag class="w-4 h-4" />;
-    case 'deployment':
+    case "deployment":
       return <Icons.Zap class="w-4 h-4" />;
     default:
       return <Icons.Info class="w-4 h-4" />;
@@ -55,7 +62,7 @@ export function ProfileActivityTab(props: {
       fallback={
         <EmptyState
           icon={<Icons.Zap class="w-12 h-12 mb-4" />}
-          title={t('noActivityYet')}
+          title={t("noActivityYet")}
         />
       }
     >
@@ -64,13 +71,13 @@ export function ProfileActivityTab(props: {
           <For each={entries()}>
             {([day, dayEvents]) => (
               <div>
-                <h3 class="text-sm font-semibold text-zinc-700 dark:text-zinc-300">{day}</h3>
+                <h3 class="text-sm font-semibold text-zinc-700 dark:text-zinc-300">
+                  {day}
+                </h3>
                 <div class="mt-3 space-y-3">
                   <For each={dayEvents}>
                     {(ev) => (
-                      <div
-                        class="flex gap-3 p-4 rounded-lg bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700"
-                      >
+                      <div class="flex gap-3 p-4 rounded-lg bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700">
                         <div class="mt-0.5 text-zinc-500 dark:text-zinc-400">
                           {iconForEvent(ev.type)}
                         </div>
@@ -82,13 +89,19 @@ export function ProfileActivityTab(props: {
                             when={ev.repo?.owner_username && ev.repo?.name}
                             fallback={
                               <div class="mt-1 text-sm text-zinc-500 dark:text-zinc-400">
-                                {ev.type === 'deployment' ? 'Infrastructure' : ''}
+                                {ev.type === "deployment"
+                                  ? "Infrastructure"
+                                  : ""}
                               </div>
                             }
                           >
                             <button
                               type="button"
-                              onClick={() => props.onNavigateToRepo?.(ev.repo!.owner_username, ev.repo!.name)}
+                              onClick={() =>
+                                props.onNavigateToRepo?.(
+                                  ev.repo!.owner_username,
+                                  ev.repo!.name,
+                                )}
                               class="mt-1 text-sm text-blue-600 dark:text-blue-400 hover:underline"
                             >
                               {ev.repo!.owner_username}/{ev.repo!.name}

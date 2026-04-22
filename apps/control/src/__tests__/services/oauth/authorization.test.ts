@@ -134,7 +134,8 @@ function assertErrorDescriptionIncludes(
 
 const db = createMockDrizzleDb();
 const d1 = db as unknown as D1Database;
-(globalThis as typeof globalThis & { __takosDbMock?: unknown }).__takosDbMock = db as never;
+(globalThis as typeof globalThis & { __takosDbMock?: unknown }).__takosDbMock =
+  db as never;
 
 const mocks = {
   getDb: ((..._args: any[]) => undefined) as any,
@@ -581,7 +582,8 @@ Deno.test("exchangeAuthorizationCode - returns invalid_grant and revokes tokens 
 
   db._.get = (async () => row) as any;
   mocks.revokeTokensByAuthorizationCode.calls.length = 0;
-  authorizationDeps.revokeTokensByAuthorizationCode = mocks.revokeTokensByAuthorizationCode as typeof authorizationDeps.revokeTokensByAuthorizationCode;
+  authorizationDeps.revokeTokensByAuthorizationCode = mocks
+    .revokeTokensByAuthorizationCode as typeof authorizationDeps.revokeTokensByAuthorizationCode;
 
   try {
     const result = await exchangeAuthorizationCode(d1, {
@@ -594,7 +596,10 @@ Deno.test("exchangeAuthorizationCode - returns invalid_grant and revokes tokens 
     assertEquals(result.valid, false);
     assertEquals(result.error, "invalid_grant");
     assertErrorDescriptionIncludes(result, "already used");
-    assertEquals(mocks.revokeTokensByAuthorizationCode.calls[0][1], "code-id-1");
+    assertEquals(
+      mocks.revokeTokensByAuthorizationCode.calls[0][1],
+      "code-id-1",
+    );
   } finally {
     Object.assign(authorizationDeps, originalAuthorizationDeps);
   }
@@ -710,7 +715,8 @@ Deno.test("exchangeAuthorizationCode - returns invalid_grant when CAS update ret
 
   db._.get = (async () => row) as any;
   mocks.revokeTokensByAuthorizationCode.calls.length = 0;
-  authorizationDeps.revokeTokensByAuthorizationCode = mocks.revokeTokensByAuthorizationCode as typeof authorizationDeps.revokeTokensByAuthorizationCode;
+  authorizationDeps.revokeTokensByAuthorizationCode = mocks
+    .revokeTokensByAuthorizationCode as typeof authorizationDeps.revokeTokensByAuthorizationCode;
 
   // Override the update mock to simulate zero changes (another process used the code)
   db.update = (() => ({

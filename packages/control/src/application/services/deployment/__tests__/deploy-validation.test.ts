@@ -212,6 +212,39 @@ Deno.test("validateOnlineDeployImageSources rejects dockerfile-only attached con
   assertEquals(errors[0].path, "compute.web.containers.sandbox");
 });
 
+Deno.test("validateOnlineDeployImageSources accepts native Cloudflare Dockerfile containers", () => {
+  const manifest = makeManifest({
+    compute: {
+      web: {
+        kind: "worker",
+        build: {
+          fromWorkflow: {
+            path: ".takos/workflows/deploy.yml",
+            job: "bundle",
+            artifact: "web",
+            artifactPath: "dist/worker",
+          },
+        },
+        containers: {
+          sandbox: {
+            kind: "attached-container",
+            image: "apps/sandbox/Dockerfile",
+            port: 8080,
+            cloudflare: {
+              container: {
+                binding: "SANDBOX_CONTAINER",
+                className: "SandboxSessionContainer",
+              },
+            },
+          },
+        },
+      },
+    },
+  });
+  const errors = validateOnlineDeployImageSources(manifest);
+  assertEquals(errors, []);
+});
+
 Deno.test("validateOnlineDeployImageSources rejects unpinned service images", () => {
   const manifest = makeManifest({
     compute: {
@@ -561,6 +594,24 @@ Deno.test("validatePublicationRouteMatches checks resolved routes after override
   const errors = validatePublicationRouteMatches(resolved);
   assertEquals(errors.length, 1);
   assertEquals(errors[0].code, "publication_route_mismatch");
+});
+
+Deno.test("validatePublicationRouteMatches allows method-split routes for one publication", () => {
+  const manifest = makeManifest({
+    routes: [
+      { target: "web", path: "/mcp", methods: ["GET"] },
+      { target: "web", path: "/mcp", methods: ["POST"] },
+    ],
+    publish: [
+      {
+        name: "tools",
+        type: "com.example.McpEndpoint",
+        publisher: "web",
+        path: "/mcp",
+      },
+    ],
+  });
+  assertEquals(validatePublicationRouteMatches(manifest), []);
 });
 
 Deno.test("runDeployValidations aggregates publication normalization failures", () => {

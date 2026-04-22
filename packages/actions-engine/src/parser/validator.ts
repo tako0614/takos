@@ -1,10 +1,14 @@
 /**
  * Zod を使ったワークフロー検証
  */
-import { z } from 'zod';
-import { buildDependencyGraph, detectCycle, DependencyError } from '../scheduler/dependency.ts';
-import type { Workflow, WorkflowDiagnostic } from '../workflow-models.ts';
-import { normalizeNeedsInput } from '../scheduler/job.ts';
+import { z } from "zod";
+import {
+  buildDependencyGraph,
+  DependencyError,
+  detectCycle,
+} from "../scheduler/dependency.ts";
+import type { Workflow, WorkflowDiagnostic } from "../workflow-models.ts";
+import { normalizeNeedsInput } from "../scheduler/job.ts";
 
 // =============================================================================
 // Zod スキーマ
@@ -15,11 +19,11 @@ import { normalizeNeedsInput } from '../scheduler/job.ts';
  */
 const branchFilterSchema = z.object({
   branches: z.array(z.string()).optional(),
-  'branches-ignore': z.array(z.string()).optional(),
+  "branches-ignore": z.array(z.string()).optional(),
   tags: z.array(z.string()).optional(),
-  'tags-ignore': z.array(z.string()).optional(),
+  "tags-ignore": z.array(z.string()).optional(),
   paths: z.array(z.string()).optional(),
-  'paths-ignore': z.array(z.string()).optional(),
+  "paths-ignore": z.array(z.string()).optional(),
 });
 
 /**
@@ -32,27 +36,27 @@ const pushTriggerSchema = branchFilterSchema.nullable();
  * GitHub Actions 互換。
  */
 const pullRequestEventTypeEnum = z.enum([
-  'assigned',
-  'unassigned',
-  'labeled',
-  'unlabeled',
-  'opened',
-  'edited',
-  'closed',
-  'reopened',
-  'synchronize',
-  'converted_to_draft',
-  'ready_for_review',
-  'locked',
-  'unlocked',
-  'review_requested',
-  'review_request_removed',
-  'auto_merge_enabled',
-  'auto_merge_disabled',
-  'milestoned',
-  'demilestoned',
-  'enqueued',
-  'dequeued',
+  "assigned",
+  "unassigned",
+  "labeled",
+  "unlabeled",
+  "opened",
+  "edited",
+  "closed",
+  "reopened",
+  "synchronize",
+  "converted_to_draft",
+  "ready_for_review",
+  "locked",
+  "unlocked",
+  "review_requested",
+  "review_request_removed",
+  "auto_merge_enabled",
+  "auto_merge_disabled",
+  "milestoned",
+  "demilestoned",
+  "enqueued",
+  "dequeued",
 ]);
 
 /**
@@ -68,46 +72,46 @@ const pullRequestTriggerSchema = branchFilterSchema
  * issues イベント種別の enum
  */
 const issuesEventTypeEnum = z.enum([
-  'opened',
-  'edited',
-  'deleted',
-  'transferred',
-  'pinned',
-  'unpinned',
-  'closed',
-  'reopened',
-  'assigned',
-  'unassigned',
-  'labeled',
-  'unlabeled',
-  'locked',
-  'unlocked',
-  'milestoned',
-  'demilestoned',
+  "opened",
+  "edited",
+  "deleted",
+  "transferred",
+  "pinned",
+  "unpinned",
+  "closed",
+  "reopened",
+  "assigned",
+  "unassigned",
+  "labeled",
+  "unlabeled",
+  "locked",
+  "unlocked",
+  "milestoned",
+  "demilestoned",
 ]);
 
 /**
  * issue_comment イベント種別の enum
  */
-const issueCommentEventTypeEnum = z.enum(['created', 'edited', 'deleted']);
+const issueCommentEventTypeEnum = z.enum(["created", "edited", "deleted"]);
 
 /**
  * release イベント種別の enum
  */
 const releaseEventTypeEnum = z.enum([
-  'published',
-  'unpublished',
-  'created',
-  'edited',
-  'deleted',
-  'prereleased',
-  'released',
+  "published",
+  "unpublished",
+  "created",
+  "edited",
+  "deleted",
+  "prereleased",
+  "released",
 ]);
 
 /**
  * watch イベント種別の enum
  */
-const watchEventTypeEnum = z.enum(['started']);
+const watchEventTypeEnum = z.enum(["started"]);
 
 /**
  * workflow_dispatch 入力のスキーマ
@@ -116,7 +120,7 @@ const workflowDispatchInputSchema = z.object({
   description: z.string().optional(),
   required: z.boolean().optional(),
   default: z.string().optional(),
-  type: z.enum(['string', 'boolean', 'choice', 'environment']).optional(),
+  type: z.enum(["string", "boolean", "choice", "environment"]).optional(),
   options: z.array(z.string()).optional(),
 });
 
@@ -143,7 +147,7 @@ const workflowCallInputSchema = z.object({
   description: z.string().optional(),
   required: z.boolean().optional(),
   default: z.union([z.string(), z.boolean(), z.number()]).optional(),
-  type: z.enum(['string', 'boolean', 'number']),
+  type: z.enum(["string", "boolean", "number"]),
 });
 
 /**
@@ -230,25 +234,26 @@ const stepSchema = z
     name: z.string().optional(),
     uses: z.string().optional(),
     run: z.string().optional(),
-    'working-directory': z.string().optional(),
-    shell: z.enum(['bash', 'pwsh', 'python', 'sh', 'cmd', 'powershell']).optional(),
+    "working-directory": z.string().optional(),
+    shell: z.enum(["bash", "pwsh", "python", "sh", "cmd", "powershell"])
+      .optional(),
     with: z.record(z.unknown()).optional(),
     env: z.record(z.string()).optional(),
     if: z.string().optional(),
-    'continue-on-error': z.boolean().optional(),
-    'timeout-minutes': z.number().positive().optional(),
+    "continue-on-error": z.boolean().optional(),
+    "timeout-minutes": z.number().positive().optional(),
   })
   .refine(
     (step) => step.uses !== undefined || step.run !== undefined,
     {
       message: 'Step must have either "uses" or "run"',
-    }
+    },
   )
   .refine(
     (step) => !(step.uses !== undefined && step.run !== undefined),
     {
       message: 'Step cannot have both "uses" and "run"',
-    }
+    },
   );
 
 /**
@@ -256,11 +261,11 @@ const stepSchema = z
  */
 const matrixConfigSchema = z
   .record(z.unknown())
-      .refine(
-        (obj) => {
+  .refine(
+    (obj) => {
       // 'include' と 'exclude' を特別キーとして許可
       for (const [key, value] of Object.entries(obj)) {
-        if (key === 'include' || key === 'exclude') {
+        if (key === "include" || key === "exclude") {
           if (!Array.isArray(value)) return false;
         } else if (!Array.isArray(value)) {
           return false;
@@ -269,8 +274,8 @@ const matrixConfigSchema = z
       return true;
     },
     {
-      message: 'Matrix values must be arrays (except include/exclude)',
-    }
+      message: "Matrix values must be arrays (except include/exclude)",
+    },
   );
 
 /**
@@ -278,8 +283,8 @@ const matrixConfigSchema = z
  */
 const jobStrategySchema = z.object({
   matrix: matrixConfigSchema.optional(),
-  'fail-fast': z.boolean().optional(),
-  'max-parallel': z.number().positive().optional(),
+  "fail-fast": z.boolean().optional(),
+  "max-parallel": z.number().positive().optional(),
 });
 
 /**
@@ -306,9 +311,9 @@ const containerConfigSchema = z.union([
  * 権限のスキーマ
  */
 const permissionsSchema = z.union([
-  z.literal('read-all'),
-  z.literal('write-all'),
-  z.record(z.enum(['read', 'write', 'none'])),
+  z.literal("read-all"),
+  z.literal("write-all"),
+  z.record(z.enum(["read", "write", "none"])),
 ]);
 
 /**
@@ -318,7 +323,7 @@ const concurrencySchema = z.union([
   z.string(),
   z.object({
     group: z.string(),
-    'cancel-in-progress': z.boolean().optional(),
+    "cancel-in-progress": z.boolean().optional(),
   }),
 ]);
 
@@ -340,7 +345,7 @@ const jobDefaultsSchema = z.object({
   run: z
     .object({
       shell: z.string().optional(),
-      'working-directory': z.string().optional(),
+      "working-directory": z.string().optional(),
     })
     .optional(),
 });
@@ -350,17 +355,17 @@ const jobDefaultsSchema = z.object({
  */
 const jobSchema = z.object({
   name: z.string().optional(),
-  'runs-on': z.union([z.string(), z.array(z.string())]),
+  "runs-on": z.union([z.string(), z.array(z.string())]),
   needs: z.union([z.string(), z.array(z.string())]).optional(),
   if: z.string().optional(),
   env: z.record(z.string()).optional(),
-  steps: z.array(stepSchema).min(1, 'Job must have at least one step'),
+  steps: z.array(stepSchema).min(1, "Job must have at least one step"),
   outputs: z.record(z.string()).optional(),
   strategy: jobStrategySchema.optional(),
   container: containerConfigSchema.optional(),
   services: z.record(containerConfigSchema).optional(),
-  'timeout-minutes': z.number().positive().optional(),
-  'continue-on-error': z.boolean().optional(),
+  "timeout-minutes": z.number().positive().optional(),
+  "continue-on-error": z.boolean().optional(),
   permissions: permissionsSchema.optional(),
   concurrency: concurrencySchema.optional(),
   defaults: jobDefaultsSchema.optional(),
@@ -372,7 +377,7 @@ const jobSchema = z.object({
  */
 const workflowSchema = z.object({
   name: z.string().optional(),
-  'run-name': z.string().optional(),
+  "run-name": z.string().optional(),
   on: z.union([
     workflowTriggerSchema,
     z.string(),
@@ -382,7 +387,7 @@ const workflowSchema = z.object({
   jobs: z
     .record(jobSchema)
     .refine((jobs) => Object.keys(jobs).length > 0, {
-      message: 'Workflow must have at least one job',
+      message: "Workflow must have at least one job",
     }),
   permissions: permissionsSchema.optional(),
   concurrency: concurrencySchema.optional(),
@@ -410,7 +415,7 @@ export interface ValidationResult {
 function flattenZodIssues(issues: readonly z.ZodIssue[]): z.ZodIssue[] {
   const flat: z.ZodIssue[] = [];
   for (const issue of issues) {
-    if (issue.code === 'invalid_union') {
+    if (issue.code === "invalid_union") {
       // invalid_type で 'expected' と実際の型が大きく違う branch はスキップし、
       // より深い path を報告する branch を優先する
       const branches = issue.unionErrors ?? [];
@@ -444,7 +449,7 @@ function collectSchemaDiagnostics(
   schema: z.ZodTypeAny,
   input: unknown,
   diagnostics: WorkflowDiagnostic[],
-  formatPath: (issuePath: Array<string | number>) => string
+  formatPath: (issuePath: Array<string | number>) => string,
 ): void {
   const result = schema.safeParse(input);
   if (result.success) {
@@ -453,7 +458,7 @@ function collectSchemaDiagnostics(
 
   for (const issue of flattenZodIssues(result.error.issues)) {
     diagnostics.push({
-      severity: 'error',
+      severity: "error",
       message: issue.message,
       path: formatPath(issue.path),
     });
@@ -463,9 +468,11 @@ function collectSchemaDiagnostics(
 /**
  * 診断結果から検証結果を構築
  */
-function buildValidationResult(diagnostics: WorkflowDiagnostic[]): ValidationResult {
+function buildValidationResult(
+  diagnostics: WorkflowDiagnostic[],
+): ValidationResult {
   return {
-    valid: !diagnostics.some((d) => d.severity === 'error'),
+    valid: !diagnostics.some((d) => d.severity === "error"),
     diagnostics,
   };
 }
@@ -477,7 +484,12 @@ export function validateWorkflow(workflow: Workflow): ValidationResult {
   const diagnostics: WorkflowDiagnostic[] = [];
 
   // スキーマ検証
-  collectSchemaDiagnostics(workflowSchema, workflow, diagnostics, (issuePath) => issuePath.join('.'));
+  collectSchemaDiagnostics(
+    workflowSchema,
+    workflow,
+    diagnostics,
+    (issuePath) => issuePath.join("."),
+  );
 
   // 追加のセマンティック検証
   const semanticDiagnostics = validateSemantics(workflow);
@@ -501,7 +513,7 @@ function validateSemantics(workflow: Workflow): WorkflowDiagnostic[] {
     for (const need of needs) {
       if (!jobNames.has(need)) {
         diagnostics.push({
-          severity: 'error',
+          severity: "error",
           message: `Job "${jobId}" references unknown job "${need}" in needs`,
           path: `jobs.${jobId}.needs`,
         });
@@ -509,7 +521,7 @@ function validateSemantics(workflow: Workflow): WorkflowDiagnostic[] {
 
       if (need === jobId) {
         diagnostics.push({
-          severity: 'error',
+          severity: "error",
           message: `Job "${jobId}" cannot depend on itself`,
           path: `jobs.${jobId}.needs`,
         });
@@ -523,7 +535,7 @@ function validateSemantics(workflow: Workflow): WorkflowDiagnostic[] {
       if (step.id) {
         if (stepIds.has(step.id)) {
           diagnostics.push({
-            severity: 'error',
+            severity: "error",
             message: `Duplicate step ID "${step.id}" in job "${jobId}"`,
             path: `jobs.${jobId}.steps[${i}].id`,
           });
@@ -533,15 +545,15 @@ function validateSemantics(workflow: Workflow): WorkflowDiagnostic[] {
     }
   }
 
-    // 共有の依存グラフで循環依存を検出
+  // 共有の依存グラフで循環依存を検出
   try {
     const graph = buildDependencyGraph(workflow);
     const cycle = detectCycle(graph);
     if (cycle.length > 0) {
       diagnostics.push({
-        severity: 'error',
-        message: `Circular dependency detected: ${cycle.join(' -> ')}`,
-        path: 'jobs',
+        severity: "error",
+        message: `Circular dependency detected: ${cycle.join(" -> ")}`,
+        path: "jobs",
       });
     }
   } catch (e) {

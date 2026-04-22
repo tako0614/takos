@@ -79,8 +79,6 @@ function endpointTarget(name: string, baseUrl: string): RoutingTarget {
 
 function desiredState(): GroupDesiredState {
   return {
-    apiVersion: "takos.dev/v1alpha1",
-    kind: "GroupDesiredState",
     groupName: "docs",
     version: "1.0.0",
     backend: "local",
@@ -89,10 +87,12 @@ function desiredState(): GroupDesiredState {
       name: "docs",
       version: "1.0.0",
       compute: {},
+      resources: {},
       routes: [],
       publish: [],
       env: {},
     },
+    resources: {},
     workloads: {},
     routes: {
       "web:/": {
@@ -118,6 +118,7 @@ function workloads(): ObservedGroupState["workloads"] {
       status: "deployed",
       hostname: "legacy-web.apps.example",
       routeRef: "web-route-ref",
+      activeArtifactRef: "web-route-ref-v3",
       updatedAt: "2026-04-18T00:00:00.000Z",
     },
     api: {
@@ -194,6 +195,13 @@ Deno.test("reconcileGroupRouting uses one group hostname set for all routes", as
         ? target.endpoints.map((endpoint) => endpoint.name)
         : [],
       ["web:/", "api:/api"],
+    );
+    assertEquals(
+      target?.type === "http-endpoint-set"
+        ? target.endpoints.find((endpoint) => endpoint.name === "web:/")
+          ?.target
+        : null,
+      { kind: "service-ref", ref: "web-route-ref-v3" },
     );
   }
 

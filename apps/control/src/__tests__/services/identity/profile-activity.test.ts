@@ -14,7 +14,8 @@ type FakeStep = {
 
 const originalProfileActivityDeps = {
   getDb: profileActivityDeps.getDb,
-  listServiceRouteRecordsByIds: profileActivityDeps.listServiceRouteRecordsByIds,
+  listServiceRouteRecordsByIds:
+    profileActivityDeps.listServiceRouteRecordsByIds,
 };
 
 function createFakeDrizzleDatabase(steps: FakeStep[]) {
@@ -60,17 +61,27 @@ function restoreProfileActivityDeps() {
 
 function installProfileActivityDeps(
   steps: FakeStep[],
-  routes: Array<{ id: string; hostname: string | null; routeRef?: string | null; slug?: string | null }> = [],
+  routes: Array<
+    {
+      id: string;
+      hostname: string | null;
+      routeRef?: string | null;
+      slug?: string | null;
+    }
+  > = [],
 ) {
   const db = createFakeDrizzleDatabase(steps);
   profileActivityDeps.getDb = () => db as never;
-  profileActivityDeps.listServiceRouteRecordsByIds = async () => routes as never;
+  profileActivityDeps.listServiceRouteRecordsByIds = async () =>
+    routes as never;
 }
 
 Deno.test(
   "fetchProfileActivity - returns empty events when all queries return empty",
   async () => {
-    installProfileActivityDeps([{ all: [] }, { all: [] }, { all: [] }, { all: [] }]);
+    installProfileActivityDeps([{ all: [] }, { all: [] }, { all: [] }, {
+      all: [],
+    }]);
 
     try {
       const result = await fetchProfileActivity({} as D1Database, {

@@ -187,6 +187,15 @@ function getComputeEntries(manifest: ParsedManifest): ComputeEntry[] {
   return entries;
 }
 
+function isNativeCloudflareContainer(compute: AppCompute): boolean {
+  return compute.kind === "attached-container" &&
+    !!compute.cloudflare?.container;
+}
+
+function isCloudflareDockerfileImage(image: string): boolean {
+  return /(^|\/)Dockerfile(?:\.[A-Za-z0-9._-]+)?$/.test(image);
+}
+
 type PublicationEntry = {
   path: string;
   publication: AppPublication;
@@ -228,7 +237,9 @@ function collectValidatedPublications(
     try {
       entries.push({
         ...publication,
-        normalized: normalizePublicationDefinition(publication.publication),
+        normalized: normalizePublicationDefinition(publication.publication, {
+          allowRelativeOAuthRedirectUris: true,
+        }),
       });
     } catch (err) {
       entries.push({
@@ -394,12 +405,16 @@ export function validateOnlineDeployImageSources(
       });
       continue;
     }
-    if (!isDigestPinnedImageRef(image)) {
+    if (
+      !isDigestPinnedImageRef(image) &&
+      !(isNativeCloudflareContainer(entry.compute) &&
+        isCloudflareDockerfileImage(image))
+    ) {
       errors.push({
         code: "deploy_image_invalid",
         path: `${entry.path}.image`,
         message:
-          `${entry.compute.kind} '${entry.name}' image must be digest-pinned with @sha256:<64 hex chars> for online deploy.`,
+          `${entry.compute.kind} '${entry.name}' image must be digest-pinned with @sha256:<64 hex chars> for online deploy, except native Cloudflare containers may point at a repository-relative Dockerfile.`,
       });
     }
   }
@@ -611,13 +626,12 @@ export function validatePublicationRouteMatches(
     const matches = routes.filter((route) =>
       route.target === target && route.path === path
     );
-    if (matches.length === 1) continue;
+    if (matches.length >= 1) continue;
     errors.push({
       code: "publication_route_mismatch",
       path: entry.path,
-      message: matches.length === 0
-        ? `route publication '${publication.name}' publisher/path '${target} ${path}' does not match any route`
-        : `route publication '${publication.name}' publisher/path '${target} ${path}' matches multiple routes`,
+      message:
+        `route publication '${publication.name}' publisher/path '${target} ${path}' does not match any route`,
     });
   }
   return errors;

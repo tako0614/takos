@@ -140,7 +140,6 @@ export function useChatSession({
     currentRunIdRef: ws.currentRunIdRef,
     lastEventIdRef: ws.lastEventIdRef,
     resetStreamingState: ws.resetStreamingState,
-    resetTimeline: ws.resetTimeline,
     setIsLoading: ws.setIsLoading,
     setCurrentRun: ws.setCurrentRun,
     startWebSocket: ws.startWebSocket,

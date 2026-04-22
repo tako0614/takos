@@ -18,12 +18,16 @@ import type {
   AppConsume,
   AppTriggers,
   BuildConfig,
+  CloudflareComputeConfig,
+  CloudflareContainerInstanceType,
   ComputeKind,
   HealthCheck,
+  QueueTrigger,
   ScheduleTrigger,
   VolumeMount,
 } from "../app-manifest-types.ts";
 import {
+  asOptionalBoolean,
   asOptionalInteger,
   asRecord,
   asRequiredString,
@@ -40,6 +44,7 @@ import {
 } from "../app-manifest-validation.ts";
 
 const COMPUTE_FIELDS = new Set([
+  "icon",
   "build",
   "image",
   "port",
@@ -53,6 +58,7 @@ const COMPUTE_FIELDS = new Set([
   "healthCheck",
   "dockerfile",
   "consume",
+  "cloudflare",
 ]);
 const INTERNAL_COMPUTE_FIELDS = new Set([...COMPUTE_FIELDS, "kind"]);
 
@@ -70,9 +76,41 @@ const HEALTH_CHECK_FIELDS = new Set([
   "timeout",
   "unhealthyThreshold",
 ]);
-const TRIGGER_FIELDS = new Set(["schedules"]);
+const TRIGGER_FIELDS = new Set(["schedules", "queues"]);
 const SCHEDULE_FIELDS = new Set(["cron"]);
+const QUEUE_TRIGGER_FIELDS = new Set([
+  "binding",
+  "queue",
+  "deadLetterQueue",
+  "maxBatchSize",
+  "maxConcurrency",
+  "maxRetries",
+  "maxWaitTimeMs",
+  "retryDelaySeconds",
+]);
 const CONSUME_FIELDS = new Set(["publication", "env"]);
+const CLOUDFLARE_FIELDS = new Set(["container"]);
+const CLOUDFLARE_CONTAINER_FIELDS = new Set([
+  "binding",
+  "className",
+  "instanceType",
+  "maxInstances",
+  "name",
+  "imageBuildContext",
+  "imageVars",
+  "rolloutActiveGracePeriod",
+  "rolloutStepPercentage",
+  "migrationTag",
+  "sqlite",
+]);
+const CLOUDFLARE_CONTAINER_INSTANCE_TYPES = new Set([
+  "lite",
+  "basic",
+  "standard-1",
+  "standard-2",
+  "standard-3",
+  "standard-4",
+]);
 
 function assertAllowedFields(
   record: Record<string, unknown>,
@@ -179,7 +217,12 @@ function parseVolumeMounts(
       source,
       target,
       ...(mountRecord.persistent != null
-        ? { persistent: Boolean(mountRecord.persistent) }
+        ? {
+          persistent: asOptionalBoolean(
+            mountRecord.persistent,
+            `${prefix}.volumes.${name}.persistent`,
+          ),
+        }
         : {}),
     };
   }
@@ -250,6 +293,85 @@ function parseSchedules(
   });
 }
 
+function parseQueueBindingName(
+  raw: unknown,
+  field: string,
+): string | undefined {
+  const value = asString(raw, field);
+  if (!value) return undefined;
+  if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(value)) {
+    throw new Error(`${field} must be a valid worker binding name`);
+  }
+  return value.toUpperCase();
+}
+
+function parseQueueTriggers(
+  prefix: string,
+  raw: unknown,
+): QueueTrigger[] | undefined {
+  if (raw == null) return undefined;
+  if (!Array.isArray(raw)) {
+    throw new Error(`${prefix}.triggers.queues must be an array`);
+  }
+  return raw.map((entry, index) => {
+    const record = asRecord(entry);
+    const queuePrefix = `${prefix}.triggers.queues[${index}]`;
+    assertAllowedFields(record, queuePrefix, QUEUE_TRIGGER_FIELDS);
+    const binding = parseQueueBindingName(
+      record.binding,
+      `${queuePrefix}.binding`,
+    );
+    const queue = asString(record.queue, `${queuePrefix}.queue`);
+    if (binding && queue) {
+      throw new Error(
+        `${queuePrefix} must specify either binding or queue, not both`,
+      );
+    }
+    if (!binding && !queue) {
+      throw new Error(`${queuePrefix} requires binding or queue`);
+    }
+    const deadLetterQueue = asString(
+      record.deadLetterQueue,
+      `${queuePrefix}.deadLetterQueue`,
+    );
+    const maxBatchSize = asOptionalInteger(
+      record.maxBatchSize,
+      `${queuePrefix}.maxBatchSize`,
+      { min: 1 },
+    );
+    const maxConcurrency = asOptionalInteger(
+      record.maxConcurrency,
+      `${queuePrefix}.maxConcurrency`,
+      { min: 1 },
+    );
+    const maxRetries = asOptionalInteger(
+      record.maxRetries,
+      `${queuePrefix}.maxRetries`,
+      { min: 0 },
+    );
+    const maxWaitTimeMs = asOptionalInteger(
+      record.maxWaitTimeMs,
+      `${queuePrefix}.maxWaitTimeMs`,
+      { min: 0 },
+    );
+    const retryDelaySeconds = asOptionalInteger(
+      record.retryDelaySeconds,
+      `${queuePrefix}.retryDelaySeconds`,
+      { min: 0 },
+    );
+    return {
+      ...(binding ? { binding } : {}),
+      ...(queue ? { queue } : {}),
+      ...(deadLetterQueue ? { deadLetterQueue } : {}),
+      ...(maxBatchSize != null ? { maxBatchSize } : {}),
+      ...(maxConcurrency != null ? { maxConcurrency } : {}),
+      ...(maxRetries != null ? { maxRetries } : {}),
+      ...(maxWaitTimeMs != null ? { maxWaitTimeMs } : {}),
+      ...(retryDelaySeconds != null ? { retryDelaySeconds } : {}),
+    };
+  });
+}
+
 function parseTriggers(
   prefix: string,
   raw: unknown,
@@ -258,8 +380,10 @@ function parseTriggers(
   const record = asRecord(raw);
   assertAllowedFields(record, `${prefix}.triggers`, TRIGGER_FIELDS);
   const schedules = parseSchedules(prefix, record.schedules);
+  const queues = parseQueueTriggers(prefix, record.queues);
   const result: AppTriggers = {
     ...(schedules && schedules.length > 0 ? { schedules } : {}),
+    ...(queues && queues.length > 0 ? { queues } : {}),
   };
   return Object.keys(result).length > 0 ? result : undefined;
 }
@@ -320,6 +444,166 @@ function parseConsume(
   }
 
   return result;
+}
+
+function parseBindingName(raw: unknown, field: string): string | undefined {
+  const value = asString(raw, field);
+  if (!value) return undefined;
+  if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(value)) {
+    throw new Error(`${field} must be a valid worker binding name`);
+  }
+  return value.toUpperCase();
+}
+
+function parseClassName(raw: unknown, field: string): string {
+  const value = asRequiredString(raw, field);
+  if (!/^[A-Za-z_$][A-Za-z0-9_$]*$/.test(value)) {
+    throw new Error(`${field} must be a valid exported class name`);
+  }
+  return value;
+}
+
+function parseOptionalPositiveInteger(
+  raw: unknown,
+  field: string,
+): number | undefined {
+  return asOptionalInteger(raw, field, { min: 1 });
+}
+
+function parseComputeImage(
+  raw: unknown,
+  field: string,
+  options: { allowCloudflareDockerfile?: boolean } = {},
+): string | undefined {
+  const image = asString(raw, field);
+  if (!image) return undefined;
+  if (/@sha256:[a-f0-9]{64}$/i.test(image)) return image.trim();
+  if (!options.allowCloudflareDockerfile) {
+    return validateDigestPinnedImageRef(image, field);
+  }
+  const normalized = normalizeRepoRelativePath(image, field);
+  if (!/(^|\/)Dockerfile(?:\.[A-Za-z0-9._-]+)?$/.test(normalized)) {
+    throw new Error(
+      `${field} must be a digest-pinned image ref or a repository-relative Dockerfile path for Cloudflare container compute`,
+    );
+  }
+  return normalized;
+}
+
+function parseRolloutStepPercentage(
+  raw: unknown,
+  field: string,
+): number | number[] | undefined {
+  if (raw == null) return undefined;
+  const validate = (value: unknown, itemField: string): number => {
+    const parsed = Number(value);
+    if (!Number.isInteger(parsed) || parsed < 1 || parsed > 100) {
+      throw new Error(`${itemField} must be an integer between 1 and 100`);
+    }
+    return parsed;
+  };
+  if (Array.isArray(raw)) {
+    if (raw.length === 0) {
+      throw new Error(`${field} must not be an empty array`);
+    }
+    return raw.map((value, index) => validate(value, `${field}[${index}]`));
+  }
+  return validate(raw, field);
+}
+
+function parseCloudflareConfig(
+  prefix: string,
+  raw: unknown,
+): CloudflareComputeConfig | undefined {
+  if (raw == null) return undefined;
+  const record = asRecord(raw);
+  assertAllowedFields(record, `${prefix}.cloudflare`, CLOUDFLARE_FIELDS);
+  if (record.container == null) return undefined;
+
+  const containerRecord = asRecord(record.container);
+  assertAllowedFields(
+    containerRecord,
+    `${prefix}.cloudflare.container`,
+    CLOUDFLARE_CONTAINER_FIELDS,
+  );
+  const instanceType = asString(
+    containerRecord.instanceType,
+    `${prefix}.cloudflare.container.instanceType`,
+  );
+  if (
+    instanceType && !CLOUDFLARE_CONTAINER_INSTANCE_TYPES.has(instanceType)
+  ) {
+    throw new Error(
+      `${prefix}.cloudflare.container.instanceType must be one of ${
+        Array.from(CLOUDFLARE_CONTAINER_INSTANCE_TYPES).join("/")
+      }`,
+    );
+  }
+  const imageBuildContext = asString(
+    containerRecord.imageBuildContext,
+    `${prefix}.cloudflare.container.imageBuildContext`,
+  );
+  const migrationTag = asString(
+    containerRecord.migrationTag,
+    `${prefix}.cloudflare.container.migrationTag`,
+  );
+  const name = asString(
+    containerRecord.name,
+    `${prefix}.cloudflare.container.name`,
+  );
+  const imageVars = asStringMap(
+    containerRecord.imageVars,
+    `${prefix}.cloudflare.container.imageVars`,
+  );
+  const rolloutActiveGracePeriod = containerRecord.rolloutActiveGracePeriod !=
+      null
+    ? asOptionalInteger(
+      containerRecord.rolloutActiveGracePeriod,
+      `${prefix}.cloudflare.container.rolloutActiveGracePeriod`,
+      { min: 0 },
+    )
+    : undefined;
+  const rolloutStepPercentage = parseRolloutStepPercentage(
+    containerRecord.rolloutStepPercentage,
+    `${prefix}.cloudflare.container.rolloutStepPercentage`,
+  );
+  const binding = parseBindingName(
+    containerRecord.binding,
+    `${prefix}.cloudflare.container.binding`,
+  );
+  const maxInstances = parseOptionalPositiveInteger(
+    containerRecord.maxInstances,
+    `${prefix}.cloudflare.container.maxInstances`,
+  );
+  return {
+    container: {
+      className: parseClassName(
+        containerRecord.className,
+        `${prefix}.cloudflare.container.className`,
+      ),
+      ...(binding ? { binding } : {}),
+      ...(instanceType
+        ? { instanceType: instanceType as CloudflareContainerInstanceType }
+        : {}),
+      ...(maxInstances != null ? { maxInstances } : {}),
+      ...(name ? { name } : {}),
+      ...(imageBuildContext
+        ? { imageBuildContext: normalizeRepoPath(imageBuildContext) }
+        : {}),
+      ...(imageVars ? { imageVars } : {}),
+      ...(rolloutActiveGracePeriod != null ? { rolloutActiveGracePeriod } : {}),
+      ...(rolloutStepPercentage != null ? { rolloutStepPercentage } : {}),
+      ...(migrationTag ? { migrationTag } : {}),
+      ...(containerRecord.sqlite != null
+        ? {
+          sqlite: asOptionalBoolean(
+            containerRecord.sqlite,
+            `${prefix}.cloudflare.container.sqlite`,
+          ),
+        }
+        : {}),
+    },
+  };
 }
 
 function describeComputeKind(kind: ComputeKind): string {
@@ -402,12 +686,18 @@ function parseComputeEntry(
     options.allowInternalKind ? INTERNAL_COMPUTE_FIELDS : COMPUTE_FIELDS,
   );
   const kind = detectComputeKind(prefix, record, parentKind);
+  const cloudflare = parseCloudflareConfig(prefix, record.cloudflare);
+  if (cloudflare?.container && kind !== "attached-container") {
+    throw new Error(
+      `${prefix}.cloudflare.container is only supported for attached container compute`,
+    );
+  }
 
   const build = parseBuildConfig(prefix, record.build);
-  const image = validateDigestPinnedImageRef(
-    asString(record.image, `${prefix}.image`),
-    `${prefix}.image`,
-  );
+  const icon = asString(record.icon, `${prefix}.icon`);
+  const image = parseComputeImage(record.image, `${prefix}.image`, {
+    allowCloudflareDockerfile: !!cloudflare?.container,
+  });
   const port = record.port != null
     ? (() => {
       const value = Number(record.port);
@@ -492,6 +782,7 @@ function parseComputeEntry(
 
   return {
     kind,
+    ...(icon ? { icon } : {}),
     ...(build ? { build } : {}),
     ...(image ? { image } : {}),
     ...(port != null ? { port } : {}),
@@ -505,6 +796,7 @@ function parseComputeEntry(
     ...(healthCheck ? { healthCheck } : {}),
     ...(dockerfile ? { dockerfile: normalizeRepoPath(dockerfile) } : {}),
     ...(consume ? { consume } : {}),
+    ...(cloudflare ? { cloudflare } : {}),
   };
 }
 

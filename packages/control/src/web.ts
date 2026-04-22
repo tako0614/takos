@@ -184,6 +184,207 @@ function scheduledWorkflowWindowMinutes(cron: string): number {
   return 1;
 }
 
+type ScheduledJobError = { job: string; error: string };
+
+type ScheduledFamilyMaintenanceDeps = {
+  cleanupDeadSessions: typeof cleanupDeadSessions;
+  reconcileStuckDomains: typeof reconcileStuckDomains;
+  runCustomDomainReverification: typeof runCustomDomainReverification;
+  runR2OrphanedObjectGcBatch: typeof runR2OrphanedObjectGcBatch;
+  runSnapshotGcBatch: typeof runSnapshotGcBatch;
+  runWorkflowArtifactGcBatch: typeof runWorkflowArtifactGcBatch;
+  tickDeliveryQueue: typeof tickDeliveryQueue;
+  processDefaultAppPreinstallJobs: typeof processDefaultAppPreinstallJobs;
+  logInfo: typeof logInfo;
+};
+
+const defaultScheduledFamilyMaintenanceDeps: ScheduledFamilyMaintenanceDeps = {
+  cleanupDeadSessions,
+  reconcileStuckDomains,
+  runCustomDomainReverification,
+  runR2OrphanedObjectGcBatch,
+  runSnapshotGcBatch,
+  runWorkflowArtifactGcBatch,
+  tickDeliveryQueue,
+  processDefaultAppPreinstallJobs,
+  logInfo,
+};
+
+function toScheduledError(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
+}
+
+export async function runScheduledFamilyMaintenance(
+  env: Env,
+  cron: string,
+  errors: ScheduledJobError[],
+  options: { logSuccesses?: boolean } = {},
+  deps: ScheduledFamilyMaintenanceDeps = defaultScheduledFamilyMaintenanceDeps,
+): Promise<void> {
+  const { logSuccesses = false } = options;
+  const runQuarterHourJobs = isQuarterHourCron(cron) || cron === "* * * * *";
+  const runHourlyJobs = isHourlyCron(cron) || cron === "* * * * *";
+
+  if (runQuarterHourJobs) {
+    try {
+      const summary = await deps.runCustomDomainReverification(env, {
+        batchSize: 200,
+      });
+      const reconSummary = await deps.reconcileStuckDomains(env);
+
+      if (logSuccesses) {
+        deps.logInfo("custom-domain reverification completed", {
+          module: "cron",
+          ...{
+            cron,
+            ...summary,
+          },
+        });
+        deps.logInfo("stuck-domain reconciliation completed", {
+          module: "cron",
+          ...{
+            cron,
+            ...reconSummary,
+          },
+        });
+      }
+    } catch (error) {
+      errors.push({
+        job: "custom-domains",
+        error: toScheduledError(error),
+      });
+    }
+
+    try {
+      const summary = await deps.processDefaultAppPreinstallJobs(env, {
+        limit: 10,
+      });
+
+      if (logSuccesses && summary.processed > 0) {
+        deps.logInfo("default app preinstall jobs processed", {
+          module: "cron",
+          cron,
+          ...summary,
+        });
+      }
+    } catch (error) {
+      errors.push({
+        job: "default-app-preinstall",
+        error: toScheduledError(error),
+      });
+    }
+  }
+
+  if (runHourlyJobs) {
+    try {
+      const sessionSummary = await deps.cleanupDeadSessions(env);
+
+      if (logSuccesses) {
+        deps.logInfo("dead session cleanup completed", {
+          module: "cron",
+          ...{
+            cron,
+            marked_dead: sessionSummary.markedDead,
+            cutoff_time: sessionSummary.cutoffTime,
+            startup_cutoff: sessionSummary.startupCutoff,
+          },
+        });
+      }
+    } catch (error) {
+      errors.push({
+        job: "sessions.cleanup-dead",
+        error: toScheduledError(error),
+      });
+    }
+
+    try {
+      const gcSummary = await deps.runSnapshotGcBatch(env, {
+        maxSpaces: 5,
+      });
+
+      if (logSuccesses) {
+        deps.logInfo("snapshot GC batch completed", {
+          module: "cron",
+          ...{
+            cron,
+            ...gcSummary,
+          },
+        });
+      }
+    } catch (error) {
+      errors.push({
+        job: "snapshot-gc",
+        error: toScheduledError(error),
+      });
+    }
+
+    try {
+      const orphanSummary = await deps.runR2OrphanedObjectGcBatch(env, {
+        dryRun: false,
+        minAgeMinutes: 24 * 60,
+        listLimit: 200,
+        maxDeletes: 200,
+      });
+
+      if (logSuccesses && !orphanSummary.skipped) {
+        deps.logInfo("r2 orphaned object GC batch completed", {
+          module: "cron",
+          ...{ cron, ...orphanSummary },
+        });
+      }
+    } catch (error) {
+      errors.push({
+        job: "r2-orphaned-object-gc",
+        error: toScheduledError(error),
+      });
+    }
+
+    try {
+      const wfGcSummary = await deps.runWorkflowArtifactGcBatch(
+        env.DB,
+        env.GIT_OBJECTS,
+        { maxDeletes: 100 },
+      );
+
+      if (logSuccesses && wfGcSummary.deletedRows > 0) {
+        deps.logInfo("workflow artifact GC batch completed", {
+          module: "cron",
+          ...{ cron, ...wfGcSummary },
+        });
+      }
+    } catch (error) {
+      errors.push({
+        job: "workflow-artifact-gc",
+        error: toScheduledError(error),
+      });
+    }
+
+    try {
+      const apSummary = await deps.tickDeliveryQueue({
+        db: env.DB,
+        env,
+        batch: 50,
+      });
+
+      if (logSuccesses && apSummary.scanned > 0) {
+        deps.logInfo("ap delivery queue tick completed", {
+          module: "cron",
+          cron,
+          scanned: String(apSummary.scanned),
+          delivered: String(apSummary.delivered),
+          requeued: String(apSummary.requeued),
+          dlq: String(apSummary.dlq),
+        });
+      }
+    } catch (error) {
+      errors.push({
+        job: "ap-delivery-queue-tick",
+        error: toScheduledError(error),
+      });
+    }
+  }
+}
+
 // CORS - explicit configuration for security
 // Configured with:
 // - Allowed origins: Admin domain (env.ADMIN_DOMAIN) and localhost for development
@@ -397,37 +598,7 @@ app.post("/internal/scheduled", async (c) => {
     | null = null;
 
   try {
-    if (isQuarterHourCron(cron) || cron === "* * * * *") {
-      await runCustomDomainReverification(env, { batchSize: 200 });
-      await reconcileStuckDomains(env);
-      try {
-        await processDefaultAppPreinstallJobs(env, { limit: 10 });
-      } catch (error) {
-        errors.push({
-          job: "default-app-preinstall",
-          error: error instanceof Error ? error.message : String(error),
-        });
-      }
-    }
-    if (isHourlyCron(cron) || cron === "* * * * *") {
-      await cleanupDeadSessions(env);
-      await runSnapshotGcBatch(env, { maxSpaces: 5 });
-      await runR2OrphanedObjectGcBatch(env, {
-        dryRun: false,
-        minAgeMinutes: 24 * 60,
-        listLimit: 200,
-        maxDeletes: 200,
-      });
-      // Round 11: drain due ActivityPub delivery retries.
-      try {
-        await tickDeliveryQueue({ db: env.DB, env, batch: 50 });
-      } catch (error) {
-        errors.push({
-          job: "ap-delivery-queue-tick",
-          error: error instanceof Error ? error.message : String(error),
-        });
-      }
-    }
+    await runScheduledFamilyMaintenance(env, cron, errors);
     await runCommonEnvScheduledMaintenance({ env, cron, errors });
     const platform = (c.env as Env & { PLATFORM?: ControlPlatform<Env> })
       .PLATFORM;
@@ -773,161 +944,9 @@ export function createWebWorker(
       const cron = controller.cron;
       const errors: Array<{ job: string; error: string }> = [];
 
-      if (isQuarterHourCron(cron)) {
-        try {
-          // Re-verify active custom domains and remove expired/failed routing automatically.
-          const summary = await runCustomDomainReverification(bindings, {
-            batchSize: 200,
-          });
-          logInfo("custom-domain reverification completed", {
-            module: "cron",
-            ...{
-              cron,
-              ...summary,
-            },
-          });
-
-          // Reconcile domains stuck in intermediate states (double-failure recovery)
-          const reconSummary = await reconcileStuckDomains(bindings);
-          logInfo("stuck-domain reconciliation completed", {
-            module: "cron",
-            ...{
-              cron,
-              ...reconSummary,
-            },
-          });
-        } catch (error) {
-          errors.push({
-            job: "custom-domains",
-            error: error instanceof Error ? error.message : String(error),
-          });
-        }
-
-        try {
-          const summary = await processDefaultAppPreinstallJobs(bindings, {
-            limit: 10,
-          });
-          if (summary.processed > 0) {
-            logInfo("default app preinstall jobs processed", {
-              module: "cron",
-              cron,
-              ...summary,
-            });
-          }
-        } catch (error) {
-          errors.push({
-            job: "default-app-preinstall",
-            error: error instanceof Error ? error.message : String(error),
-          });
-        }
-      }
-
-      // Hourly maintenance window: keep batch small to stay within cron execution limits.
-      if (isHourlyCron(cron)) {
-        try {
-          const sessionSummary = await cleanupDeadSessions(bindings);
-          logInfo("dead session cleanup completed", {
-            module: "cron",
-            ...{
-              cron,
-              marked_dead: sessionSummary.markedDead,
-              cutoff_time: sessionSummary.cutoffTime,
-              startup_cutoff: sessionSummary.startupCutoff,
-            },
-          });
-        } catch (error) {
-          errors.push({
-            job: "sessions.cleanup-dead",
-            error: error instanceof Error ? error.message : String(error),
-          });
-        }
-
-        try {
-          const gcSummary = await runSnapshotGcBatch(bindings, {
-            maxSpaces: 5,
-          });
-          logInfo("snapshot GC batch completed", {
-            module: "cron",
-            ...{
-              cron,
-              ...gcSummary,
-            },
-          });
-        } catch (error) {
-          errors.push({
-            job: "snapshot-gc",
-            error: error instanceof Error ? error.message : String(error),
-          });
-        }
-
-        try {
-          const orphanSummary = await runR2OrphanedObjectGcBatch(bindings, {
-            dryRun: false,
-            minAgeMinutes: 24 * 60,
-            listLimit: 200,
-            maxDeletes: 200,
-          });
-          if (!orphanSummary.skipped) {
-            logInfo("r2 orphaned object GC batch completed", {
-              module: "cron",
-              ...{ cron, ...orphanSummary },
-            });
-          }
-        } catch (error) {
-          errors.push({
-            job: "r2-orphaned-object-gc",
-            error: error instanceof Error ? error.message : String(error),
-          });
-        }
-
-        // Workflow artifact GC: delete expired R2 objects + DB rows. The
-        // `idx_workflow_artifacts_expires_at` index makes this scan cheap.
-        try {
-          const wfGcSummary = await runWorkflowArtifactGcBatch(
-            bindings.DB,
-            bindings.GIT_OBJECTS,
-            { maxDeletes: 100 },
-          );
-          if (wfGcSummary.deletedRows > 0) {
-            logInfo("workflow artifact GC batch completed", {
-              module: "cron",
-              ...{ cron, ...wfGcSummary },
-            });
-          }
-        } catch (error) {
-          errors.push({
-            job: "workflow-artifact-gc",
-            error: error instanceof Error ? error.message : String(error),
-          });
-        }
-
-        // Round 11 (ActivityPub delivery queue): drain pending retries on the
-        // hourly cron tick. The queue persists per-(activity, inbox) entries
-        // that failed their first delivery so failed fan-outs are retried
-        // on an exponential backoff ladder rather than silently dropped.
-        try {
-          const apSummary = await tickDeliveryQueue({
-            db: bindings.DB,
-            env: bindings,
-            batch: 50,
-          });
-          if (apSummary.scanned > 0) {
-            logInfo("ap delivery queue tick completed", {
-              module: "cron",
-              cron,
-              scanned: String(apSummary.scanned),
-              delivered: String(apSummary.delivered),
-              requeued: String(apSummary.requeued),
-              dlq: String(apSummary.dlq),
-            });
-          }
-        } catch (error) {
-          errors.push({
-            job: "ap-delivery-queue-tick",
-            error: error instanceof Error ? error.message : String(error),
-          });
-        }
-      }
+      await runScheduledFamilyMaintenance(bindings, cron, errors, {
+        logSuccesses: true,
+      });
 
       await runCommonEnvScheduledMaintenance({ env: bindings, cron, errors });
 

@@ -140,6 +140,7 @@ export const storeSearchHandler: ToolHandler = async (args, context) => {
     spaceId: context.spaceId,
     userId: context.userId,
     gitObjects: context.env.GIT_OBJECTS,
+    repositoryBaseUrl: context.env.ADMIN_DOMAIN,
   });
 
   const items = result.items.map((item) => ({

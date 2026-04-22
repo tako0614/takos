@@ -83,8 +83,8 @@ export function isValidDeploymentQueueMessage(
   }
   if (m.type === "group_deployment_snapshot") {
     return typeof m.spaceId === "string" &&
-      typeof m.groupId === "string" &&
-      typeof m.groupName === "string" &&
+      (m.groupId === undefined || typeof m.groupId === "string") &&
+      (m.groupName === undefined || typeof m.groupName === "string") &&
       typeof m.repositoryUrl === "string" &&
       typeof m.ref === "string" &&
       ["branch", "tag", "commit"].includes(m.refType as string) &&

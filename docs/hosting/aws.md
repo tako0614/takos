@@ -7,9 +7,13 @@ overlay です。
 ::: warning current contract AWS ページの契約は Helm chart + AWS overlay
 までです。ECS / Fargate へ Takos kernel を直接デプロイする手順、DynamoDB / SQS /
 Secrets Manager を app resource backend として自動 materialize する
-matrix、Terraform / CDK overlay は current docs contract ではありません。:::
+matrix、Terraform / CDK overlay は current docs contract ではありません。
+:::
 
 Takos 上で group を deploy する方法は [Deploy](/deploy/) を参照してください。
+current contract に含まれない項目は
+[Not A Current Contract](/hosting/differences#not-a-current-contract)
+も参照してください。
 
 ## Helm overlay が行うこと
 
@@ -22,6 +26,7 @@ Takos 上で group を deploy する方法は [Deploy](/deploy/) を参照して
 | object storage  | bundled MinIO を無効化し、S3-compatible `externalS3` を使う                           |
 | ingress         | ALB ingress class と ALB annotation を使う                                            |
 | service account | IRSA 用 annotation を受け取る                                                         |
+| network policy  | runtime から public HTTPS object storage への egress を追加する                       |
 | workloads       | control / runtime / executor / oci-orchestrator を Kubernetes Deployment として動かす |
 
 chart が生成する S3 env は `AWS_S3_*` と runtime-service 互換の `S3_*`
@@ -49,7 +54,15 @@ fullname 由来の Secret 名を参照します。`<release>` は Helm release
 
 外部 secret の `platform` には `PLATFORM_PRIVATE_KEY` / `PLATFORM_PUBLIC_KEY` /
 `ENCRYPTION_KEY` / `EXECUTOR_PROXY_SECRET` / `TAKOS_INTERNAL_API_SECRET`
-を含めてください。
+を含めてください。 外部 secret の `s3` には、IRSA ではなくアクセスキーで使う場合
+`AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY` と `S3_ACCESS_KEY_ID` /
+`S3_SECRET_ACCESS_KEY` を含めてください。
+
+runtime pod の NetworkPolicy は base chart で egress を絞ります。AWS overlay は
+standard Kubernetes NetworkPolicy で DNS 名を指定できないため、private network
+宛を除く public HTTPS egress を追加します。VPC endpoint や CNI の FQDN policy
+を使う場合は `networkPolicy.runtime.extraEgress`
+を環境に合わせて上書きしてください。
 
 ## インストール
 
@@ -75,6 +88,8 @@ certificate ARN を設定します。
 ## chart contract に含まれないもの
 
 - ECS / Fargate への Takos kernel direct deploy
+- ECS は tenant image workload adapter として OCI orchestrator
+  経由で使う対象であり、 kernel hosting surface ではない
 - DynamoDB / SQS / Secrets Manager を app resource backend として自動
   provisioning する contract
 - Terraform / CDK による AWS resource 作成手順

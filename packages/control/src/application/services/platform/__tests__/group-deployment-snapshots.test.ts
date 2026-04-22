@@ -30,7 +30,7 @@ Deno.test("GroupDeploymentSnapshotService rejects targeted immutable snapshot de
   );
 });
 
-Deno.test("GroupDeploymentSnapshotService requires an explicit group name", async () => {
+Deno.test("GroupDeploymentSnapshotService requires a group name only when the manifest omits name", async () => {
   const env = {
     DB: {} as Env["DB"],
     TENANT_SOURCE: {} as never,
@@ -42,7 +42,7 @@ Deno.test("GroupDeploymentSnapshotService requires an explicit group name", asyn
     () =>
       service.deployFromManifest("space-1", "user-1", {
         manifest: {
-          name: "demo",
+          name: "",
           compute: {},
           routes: [],
           publish: [],
@@ -50,6 +50,30 @@ Deno.test("GroupDeploymentSnapshotService requires an explicit group name", asyn
         },
       } as never),
     BadRequestError,
-    "group_name is required",
+    "group_name is required when the deploy manifest does not provide name",
+  );
+});
+
+Deno.test("GroupDeploymentSnapshotService rejects invalid manifest-derived group names", async () => {
+  const env = {
+    DB: {} as Env["DB"],
+    TENANT_SOURCE: {} as never,
+    GIT_OBJECTS: {} as never,
+  } as unknown as Env;
+  const service = new GroupDeploymentSnapshotService(env);
+
+  await assertRejects(
+    () =>
+      service.deployFromManifest("space-1", "user-1", {
+        manifest: {
+          name: "Bad Group",
+          compute: {},
+          routes: [],
+          publish: [],
+          env: {},
+        },
+      }),
+    BadRequestError,
+    "group_name must be 1-63 lowercase",
   );
 });

@@ -78,12 +78,12 @@ export default {
 ## デプロイ
 
 ```bash
-takos deploy --env staging --space SPACE_ID --group simple-worker
+takos deploy --env staging --space SPACE_ID
 ```
 
 ## ポイント
 
-- `name` は display 名です。group snapshot に入れる名前は `--group` で指定します
+- `name` は display 名であり、deploy / install 時の既定 group 名にもなります
 - `routes` の `path: /` で Worker
   をルートパスに公開しています。ドメインはシステムが自動付与します
 - Worker のコードは標準 Fetch API の `fetch` ハンドラです

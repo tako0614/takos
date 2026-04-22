@@ -2,7 +2,7 @@
 export interface SessionFileEntry {
   path: string;
   content: string;
-  encoding?: 'utf-8' | 'base64';
+  encoding?: "utf-8" | "base64";
   is_binary?: boolean;
 }
 
@@ -28,7 +28,7 @@ export interface SessionSnapshot {
     content: string;
     size: number;
     is_binary?: boolean;
-    encoding?: 'utf-8' | 'base64';
+    encoding?: "utf-8" | "base64";
   }>;
   file_count: number;
   total_size?: number;

@@ -6,13 +6,16 @@
  * - JSON Web Key Set (JWKS)
  */
 
-import { Hono } from 'hono';
-import * as jose from 'jose';
-import type { Env } from '../../shared/types/index.ts';
-import type { OAuthServerMetadata } from '../../shared/types/oauth.ts';
-import { ALL_SCOPES, DEVICE_CODE_GRANT_TYPE } from '../../shared/types/oauth.ts';
-import { logError } from '../../shared/utils/logger.ts';
-import { InternalError } from 'takos-common/errors';
+import { Hono } from "hono";
+import * as jose from "jose";
+import type { Env } from "../../shared/types/index.ts";
+import type { OAuthServerMetadata } from "../../shared/types/oauth.ts";
+import {
+  ALL_SCOPES,
+  DEVICE_CODE_GRANT_TYPE,
+} from "../../shared/types/oauth.ts";
+import { logError } from "../../shared/utils/logger.ts";
+import { InternalError } from "takos-common/errors";
 
 const wellKnown = new Hono<{ Bindings: Env }>();
 
@@ -20,7 +23,7 @@ const wellKnown = new Hono<{ Bindings: Env }>();
  * GET /.well-known/oauth-authorization-server
  * OAuth 2.0 Authorization Server Metadata (RFC 8414)
  */
-wellKnown.get('/oauth-authorization-server', async (c) => {
+wellKnown.get("/oauth-authorization-server", async (c) => {
   const issuer = `https://${c.env.ADMIN_DOMAIN}`;
 
   const metadata: OAuthServerMetadata = {
@@ -33,18 +36,22 @@ wellKnown.get('/oauth-authorization-server', async (c) => {
     registration_endpoint: `${issuer}/oauth/register`,
     jwks_uri: `${issuer}/.well-known/jwks.json`,
     scopes_supported: ALL_SCOPES,
-    response_types_supported: ['code'],
-    grant_types_supported: ['authorization_code', 'refresh_token', DEVICE_CODE_GRANT_TYPE],
-    token_endpoint_auth_methods_supported: [
-      'client_secret_basic',
-      'client_secret_post',
-      'none',
+    response_types_supported: ["code"],
+    grant_types_supported: [
+      "authorization_code",
+      "refresh_token",
+      DEVICE_CODE_GRANT_TYPE,
     ],
-    code_challenge_methods_supported: ['S256'],
+    token_endpoint_auth_methods_supported: [
+      "client_secret_basic",
+      "client_secret_post",
+      "none",
+    ],
+    code_challenge_methods_supported: ["S256"],
   };
 
   return c.json(metadata, 200, {
-    'Cache-Control': 'public, max-age=3600',
+    "Cache-Control": "public, max-age=3600",
   });
 });
 
@@ -52,10 +59,10 @@ wellKnown.get('/oauth-authorization-server', async (c) => {
  * GET /.well-known/jwks.json
  * JSON Web Key Set
  */
-wellKnown.get('/jwks.json', async (c) => {
+wellKnown.get("/jwks.json", async (c) => {
   try {
     // Import public key
-    const publicKey = await jose.importSPKI(c.env.PLATFORM_PUBLIC_KEY, 'RS256');
+    const publicKey = await jose.importSPKI(c.env.PLATFORM_PUBLIC_KEY, "RS256");
 
     // Export as JWK
     const jwk = await jose.exportJWK(publicKey);
@@ -63,9 +70,9 @@ wellKnown.get('/jwks.json', async (c) => {
     // Add metadata
     const keyWithMetadata = {
       ...jwk,
-      kid: 'takos-oauth-1',
-      use: 'sig',
-      alg: 'RS256',
+      kid: "takos-oauth-1",
+      use: "sig",
+      alg: "RS256",
     };
 
     const jwks = {
@@ -73,11 +80,11 @@ wellKnown.get('/jwks.json', async (c) => {
     };
 
     return c.json(jwks, 200, {
-      'Cache-Control': 'public, max-age=86400', // 24 hours
+      "Cache-Control": "public, max-age=86400", // 24 hours
     });
   } catch (error) {
-    logError('JWKS generation error', error, { module: 'routes/well-known' });
-    throw new InternalError('Failed to generate JWKS');
+    logError("JWKS generation error", error, { module: "routes/well-known" });
+    throw new InternalError("Failed to generate JWKS");
   }
 });
 
@@ -85,7 +92,7 @@ wellKnown.get('/jwks.json', async (c) => {
  * GET /.well-known/openid-configuration
  * OpenID Connect Discovery (subset for OAuth2)
  */
-wellKnown.get('/openid-configuration', async (c) => {
+wellKnown.get("/openid-configuration", async (c) => {
   const issuer = `https://${c.env.ADMIN_DOMAIN}`;
 
   const config = {
@@ -99,21 +106,25 @@ wellKnown.get('/openid-configuration', async (c) => {
     registration_endpoint: `${issuer}/oauth/register`,
     jwks_uri: `${issuer}/.well-known/jwks.json`,
     scopes_supported: ALL_SCOPES,
-    response_types_supported: ['code'],
-    grant_types_supported: ['authorization_code', 'refresh_token', DEVICE_CODE_GRANT_TYPE],
-    subject_types_supported: ['public'],
-    id_token_signing_alg_values_supported: ['RS256'],
-    token_endpoint_auth_methods_supported: [
-      'client_secret_basic',
-      'client_secret_post',
-      'none',
+    response_types_supported: ["code"],
+    grant_types_supported: [
+      "authorization_code",
+      "refresh_token",
+      DEVICE_CODE_GRANT_TYPE,
     ],
-    code_challenge_methods_supported: ['S256'],
-    claims_supported: ['sub', 'iss', 'aud', 'exp', 'iat', 'scope', 'client_id'],
+    subject_types_supported: ["public"],
+    id_token_signing_alg_values_supported: ["RS256"],
+    token_endpoint_auth_methods_supported: [
+      "client_secret_basic",
+      "client_secret_post",
+      "none",
+    ],
+    code_challenge_methods_supported: ["S256"],
+    claims_supported: ["sub", "iss", "aud", "exp", "iat", "scope", "client_id"],
   };
 
   return c.json(config, 200, {
-    'Cache-Control': 'public, max-age=3600',
+    "Cache-Control": "public, max-age=3600",
   });
 });
 

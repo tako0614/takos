@@ -9,9 +9,9 @@
 // ============================================================
 
 import type {
-  GroupDeploymentSnapshotBuildSource,
   AppManifest,
   BundleDoc,
+  GroupDeploymentSnapshotBuildSource,
 } from "./app-manifest-types.ts";
 import { buildBundleDocs } from "./app-manifest-bundle-docs.ts";
 

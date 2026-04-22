@@ -127,6 +127,54 @@ Deno.test("dispatch routes service-ref deployments through the registry with dep
   });
 });
 
+Deno.test("dispatch retries Cloudflare WFP service lookup without deploymentId", async () => {
+  const env = createDispatchEnv();
+  const calls: Array<{ name: string; deploymentId?: string }> = [];
+  const target: RoutingTarget = {
+    type: "deployments",
+    deployments: [{
+      routeRef: "worker-demo",
+      deploymentId: "deployment-v2",
+      weight: 100,
+      status: "active",
+    }],
+  };
+  const worker = createDispatchWorker((bindings) =>
+    createPlatform(bindings, { target, tombstone: false, source: "store" }, {
+      get(name, options) {
+        calls.push({ name, deploymentId: options?.deploymentId });
+        if (options?.deploymentId) {
+          throw new TypeError("No such worker parameter: deploymentId");
+        }
+        return {
+          async fetch(request: Request) {
+            return Response.json({
+              worker: request.headers.get("X-Tenant-Worker"),
+              deployment: request.headers.get("X-Tenant-Deployment"),
+            });
+          },
+        };
+      },
+    })
+  );
+
+  const response = await worker.fetch(
+    new Request("https://tenant.local/api"),
+    env,
+    createExecutionContext(),
+  );
+
+  assertEquals(response.status, 200);
+  assertEquals(await response.json(), {
+    worker: "worker-demo",
+    deployment: "deployment-v2",
+  });
+  assertEquals(calls, [
+    { name: "worker-demo", deploymentId: "deployment-v2" },
+    { name: "worker-demo", deploymentId: undefined },
+  ]);
+});
+
 Deno.test("dispatch forwards http-url targets without tenant-internal headers", async () => {
   const env = createDispatchEnv();
   const target: RoutingTarget = {

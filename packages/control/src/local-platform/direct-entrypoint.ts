@@ -1,17 +1,17 @@
-import path from 'node:path';
-import { pathToFileURL } from 'node:url';
+import path from "node:path";
+import { pathToFileURL } from "node:url";
 
 async function resolveEntrypointUrl(): Promise<string | null> {
   const entrypoint = process.argv[1];
   if (!entrypoint) return null;
   if (
-    entrypoint.startsWith('.') ||
-    entrypoint.startsWith('/') ||
-    entrypoint.startsWith('file:')
+    entrypoint.startsWith(".") ||
+    entrypoint.startsWith("/") ||
+    entrypoint.startsWith("file:")
   ) {
     return pathToFileURL(path.resolve(process.cwd(), entrypoint)).href;
   }
-  if (typeof import.meta.resolve === 'function') {
+  if (typeof import.meta.resolve === "function") {
     return import.meta.resolve(entrypoint);
   }
   return null;

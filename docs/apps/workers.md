@@ -65,7 +65,7 @@ runtime binding で扱います。
 
 ## triggers
 
-Worker が持てる trigger は schedule だけです。
+Worker は schedule と queue consumer trigger を持てます。
 
 ```yaml
 compute:
@@ -76,8 +76,30 @@ compute:
         - cron: "*/15 * * * *"
 ```
 
-queue consumer は resource API / runtime binding を使う通常の compute として
-実装します。
+queue consumer は既存の queue runtime binding を consumer として使う場合は
+`binding` で参照します。dead-letter queue も同じ Worker に queue binding されて
+いる場合は binding 名を指定できます。
+
+```yaml
+compute:
+  jobs:
+    build: ...
+    triggers:
+      queues:
+        - binding: JOBS
+          deadLetterQueue: JOBS_DLQ
+          maxBatchSize: 10
+          maxRetries: 3
+```
+
+`queue` に backing queue 名を直接指定することもできますが、manifest-managed app
+では `binding` を推奨します。
+
+queue consumer は deployment が active / rollback になった時点で backend に同期
+されます。consumer は HTTP routing のような traffic split を持たないため、
+`triggers.queues` を持つ deployment では canary strategy は使えません。
+現時点で queue consumer trigger の deploy は `workers-dispatch` backend 必須です。
+local `runtime-host` では silent success にせず fail-fast します。
 
 ## readiness
 
@@ -123,6 +145,7 @@ compute:
 | `containers`         | no       | attached container 定義                                |
 | `depends`            | no       | 同一 manifest の compute 依存                          |
 | `triggers.schedules` | no       | cron schedule                                          |
+| `triggers.queues`    | no       | queue consumer trigger                                 |
 | `consume`            | no       | grant / publication outputs の明示 inject              |
 | `env`                | no       | Worker 固有 env                                        |
 | `scaling`            | no       | parser / desired metadata。runtime へ直接 apply しない |

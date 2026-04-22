@@ -1,5 +1,5 @@
-import { createSignal, createMemo } from 'solid-js';
-import type { SchemaParameter } from '../views/hub/ToolModals.tsx';
+import { createMemo, createSignal } from "solid-js";
+import type { SchemaParameter } from "../views/hub/ToolModals.tsx";
 
 interface InputSchema {
   properties?: Record<string, { type: string; description?: string }>;
@@ -11,8 +11,8 @@ function parseSchemaParameters(schema?: InputSchema): SchemaParameter[] {
 
   return Object.entries(schema.properties).map(([name, prop]) => ({
     name,
-    type: prop.type as SchemaParameter['type'],
-    description: prop.description || '',
+    type: prop.type as SchemaParameter["type"],
+    description: prop.description || "",
     required: schema.required?.includes(name) || false,
   }));
 }
@@ -23,7 +23,9 @@ interface UseToolFormOptions {
 }
 
 export function useToolForm(options: UseToolFormOptions = {}) {
-  const [description, setDescription] = createSignal(options.initialDescription ?? '');
+  const [description, setDescription] = createSignal(
+    options.initialDescription ?? "",
+  );
   const [parameters, setParameters] = createSignal<SchemaParameter[]>(
     parseSchemaParameters(options.initialSchema),
   );
@@ -42,7 +44,7 @@ export function useToolForm(options: UseToolFormOptions = {}) {
   const closeAddParam = () => setShowAddParam(false);
 
   const reset = () => {
-    setDescription(options.initialDescription ?? '');
+    setDescription(options.initialDescription ?? "");
     setParameters(parseSchemaParameters(options.initialSchema));
     setShowAddParam(false);
   };

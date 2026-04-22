@@ -1,6 +1,6 @@
-import type { Env } from '../../../shared/types/index.ts';
-import { getDb, sessions } from '../../../infra/db/index.ts';
-import { and, eq, lt, isNull, or, type sql as _sql } from 'drizzle-orm';
+import type { Env } from "../../../shared/types/index.ts";
+import { getDb, sessions } from "../../../infra/db/index.ts";
+import { and, eq, isNull, lt, or, type sql as _sql } from "drizzle-orm";
 
 export interface CleanupDeadSessionsSummary {
   markedDead: number;
@@ -11,8 +11,8 @@ export interface CleanupDeadSessionsSummary {
 }
 
 export async function cleanupDeadSessions(
-  env: Pick<Env, 'DB'>,
-  options?: { heartbeatTimeoutMs?: number; startupGraceMs?: number }
+  env: Pick<Env, "DB">,
+  options?: { heartbeatTimeoutMs?: number; startupGraceMs?: number },
 ): Promise<CleanupDeadSessionsSummary> {
   const db = getDb(env.DB);
 
@@ -24,16 +24,16 @@ export async function cleanupDeadSessions(
   const timestamp = new Date().toISOString();
 
   const result = await db.update(sessions)
-    .set({ status: 'dead', updatedAt: timestamp })
+    .set({ status: "dead", updatedAt: timestamp })
     .where(
       and(
-        eq(sessions.status, 'running'),
+        eq(sessions.status, "running"),
         lt(sessions.createdAt, startupCutoff),
         or(
           isNull(sessions.lastHeartbeat),
           lt(sessions.lastHeartbeat, cutoffTime),
         ),
-      )
+      ),
     )
     .run();
 

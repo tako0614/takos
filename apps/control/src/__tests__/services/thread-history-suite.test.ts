@@ -1,7 +1,10 @@
 import { assertEquals, assertObjectMatch } from "jsr:@std/assert";
 
 import type { Env } from "@/types";
-import { getThreadHistory, threadHistoryDeps } from "@/services/threads/thread-history";
+import {
+  getThreadHistory,
+  threadHistoryDeps,
+} from "@/services/threads/thread-history";
 
 type QueuedResponse = {
   get?: unknown;
@@ -62,7 +65,8 @@ function createQueuedDrizzle(responses: QueuedResponse[]) {
       return this;
     },
     get: async () => addSnakeCaseAliases(response.get) ?? null,
-    all: async () => (response.all ?? []).map((entry) => addSnakeCaseAliases(entry)),
+    all: async () =>
+      (response.all ?? []).map((entry) => addSnakeCaseAliases(entry)),
   });
 
   return {
@@ -76,7 +80,8 @@ const originalThreadHistoryDeps = { ...threadHistoryDeps };
 
 function restoreThreadHistoryDeps() {
   threadHistoryDeps.getDb = originalThreadHistoryDeps.getDb;
-  threadHistoryDeps.listThreadMessages = originalThreadHistoryDeps.listThreadMessages;
+  threadHistoryDeps.listThreadMessages =
+    originalThreadHistoryDeps.listThreadMessages;
   threadHistoryDeps.logError = originalThreadHistoryDeps.logError;
 }
 
@@ -237,7 +242,8 @@ Deno.test("getThreadHistory - assembles a parent-centric root snapshot across ch
       ],
     },
   ]);
-  threadHistoryDeps.getDb = (() => db) as unknown as typeof threadHistoryDeps.getDb;
+  threadHistoryDeps.getDb =
+    (() => db) as unknown as typeof threadHistoryDeps.getDb;
   threadHistoryDeps.listThreadMessages = (async () => ({
     messages: [
       {
@@ -257,10 +263,14 @@ Deno.test("getThreadHistory - assembles a parent-centric root snapshot across ch
   })) as unknown as typeof threadHistoryDeps.listThreadMessages;
 
   try {
-    const result = await getThreadHistory({ DB: {} as Env["DB"] } as Env, "thread-1", {
-      limit: 100,
-      offset: 0,
-    });
+    const result = await getThreadHistory(
+      { DB: {} as Env["DB"] } as Env,
+      "thread-1",
+      {
+        limit: 100,
+        offset: 0,
+      },
+    );
 
     assertEquals(result.focus, {
       latest_run_id: "run-child",
@@ -414,15 +424,20 @@ Deno.test("getThreadHistory - can return a root-run scoped snapshot without relo
     { all: [] },
   ]);
 
-  threadHistoryDeps.getDb = (() => db) as unknown as typeof threadHistoryDeps.getDb;
+  threadHistoryDeps.getDb =
+    (() => db) as unknown as typeof threadHistoryDeps.getDb;
 
   try {
-    const result = await getThreadHistory({ DB: {} as Env["DB"] } as Env, "thread-1", {
-      limit: 100,
-      offset: 0,
-      includeMessages: false,
-      rootRunId: "run-root",
-    });
+    const result = await getThreadHistory(
+      { DB: {} as Env["DB"] } as Env,
+      "thread-1",
+      {
+        limit: 100,
+        offset: 0,
+        includeMessages: false,
+        rootRunId: "run-root",
+      },
+    );
 
     assertEquals(result.messages, []);
     assertEquals(result.runs.map((entry) => entry.run.id), [
@@ -556,14 +571,19 @@ Deno.test("getThreadHistory - defaults a child thread request to its own delegat
     { all: [] },
   ]);
 
-  threadHistoryDeps.getDb = (() => db) as unknown as typeof threadHistoryDeps.getDb;
+  threadHistoryDeps.getDb =
+    (() => db) as unknown as typeof threadHistoryDeps.getDb;
 
   try {
-    const result = await getThreadHistory({ DB: {} as Env["DB"] } as Env, "child-thread-1", {
-      limit: 100,
-      offset: 0,
-      includeMessages: false,
-    });
+    const result = await getThreadHistory(
+      { DB: {} as Env["DB"] } as Env,
+      "child-thread-1",
+      {
+        limit: 100,
+        offset: 0,
+        includeMessages: false,
+      },
+    );
 
     assertEquals(result.runs.map((entry) => entry.run.id), [
       "run-child",

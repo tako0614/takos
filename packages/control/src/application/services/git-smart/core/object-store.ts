@@ -7,23 +7,28 @@
  * Uses CompressionStream/DecompressionStream (built into Workers runtime).
  */
 
-import type { R2Bucket } from '../../../../shared/types/bindings.ts';
-import type { GitObjectType, TreeEntry, GitCommit, GitSignature } from '../git-objects.ts';
-import { isValidSha } from '../git-objects.ts';
-import { sha1, concatBytes } from './sha1.ts';
+import type { R2Bucket } from "../../../../shared/types/bindings.ts";
+import type {
+  GitCommit,
+  GitObjectType,
+  GitSignature,
+  TreeEntry,
+} from "../git-objects.ts";
+import { isValidSha } from "../git-objects.ts";
+import { concatBytes, sha1 } from "./sha1.ts";
 import {
-  encodeBlob,
-  encodeTree,
-  encodeCommit,
-  encodeTreeContent,
-  encodeCommitContent,
-  hashObject,
+  decodeCommit,
   decodeObject,
   decodeTree,
-  decodeCommit,
-} from './object.ts';
+  encodeBlob,
+  encodeCommit,
+  encodeCommitContent,
+  encodeTree,
+  encodeTreeContent,
+  hashObject,
+} from "./object.ts";
 
-const OBJECT_PREFIX = 'git/v2/objects';
+const OBJECT_PREFIX = "git/v2/objects";
 
 function getObjectKey(sha: string): string {
   return `${OBJECT_PREFIX}/${sha.substring(0, 2)}/${sha.substring(2)}`;
@@ -36,7 +41,7 @@ function toArrayBufferView(data: Uint8Array): Uint8Array<ArrayBuffer> {
 }
 
 async function deflate(data: Uint8Array): Promise<Uint8Array> {
-  const cs = new CompressionStream('deflate');
+  const cs = new CompressionStream("deflate");
   const writer = cs.writable.getWriter();
   writer.write(toArrayBufferView(data));
   writer.close();
@@ -52,7 +57,7 @@ async function deflate(data: Uint8Array): Promise<Uint8Array> {
 }
 
 async function inflate(data: Uint8Array): Promise<Uint8Array> {
-  const ds = new DecompressionStream('deflate');
+  const ds = new DecompressionStream("deflate");
   const writer = ds.writable.getWriter();
   writer.write(toArrayBufferView(data));
   writer.close();
@@ -73,7 +78,7 @@ export async function putBlob(
   bucket: R2Bucket,
   content: Uint8Array,
 ): Promise<string> {
-  const sha = await hashObject('blob', content);
+  const sha = await hashObject("blob", content);
   const key = getObjectKey(sha);
 
   const existing = await bucket.head(key);
@@ -91,7 +96,7 @@ export async function putTree(
   entries: TreeEntry[],
 ): Promise<string> {
   const treeContent = encodeTreeContent(entries);
-  const sha = await hashObject('tree', treeContent);
+  const sha = await hashObject("tree", treeContent);
   const key = getObjectKey(sha);
 
   const existing = await bucket.head(key);
@@ -115,7 +120,7 @@ export async function putCommit(
   },
 ): Promise<string> {
   const commitContent = encodeCommitContent(commit);
-  const sha = await hashObject('commit', commitContent);
+  const sha = await hashObject("commit", commitContent);
   const key = getObjectKey(sha);
 
   const existing = await bucket.head(key);
@@ -175,7 +180,7 @@ export async function getBlob(
   sha: string,
 ): Promise<Uint8Array | null> {
   const obj = await getObject(bucket, sha);
-  if (!obj || obj.type !== 'blob') return null;
+  if (!obj || obj.type !== "blob") return null;
   return obj.content;
 }
 
@@ -184,7 +189,7 @@ export async function getTreeEntries(
   sha: string,
 ): Promise<TreeEntry[] | null> {
   const obj = await getObject(bucket, sha);
-  if (!obj || obj.type !== 'tree') return null;
+  if (!obj || obj.type !== "tree") return null;
   return decodeTree(obj.content);
 }
 
@@ -193,7 +198,7 @@ export async function getCommitData(
   sha: string,
 ): Promise<GitCommit | null> {
   const obj = await getObject(bucket, sha);
-  if (!obj || obj.type !== 'commit') return null;
+  if (!obj || obj.type !== "commit") return null;
   const commit = decodeCommit(obj.content);
   commit.sha = sha;
   return commit;
@@ -232,4 +237,4 @@ export async function deleteObject(
   await bucket.delete(key);
 }
 
-export { deflate, inflate, getObjectKey };
+export { deflate, getObjectKey, inflate };

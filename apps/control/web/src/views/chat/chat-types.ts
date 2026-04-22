@@ -1,23 +1,28 @@
-import type { Run, ThreadHistoryArtifactSummary, ThreadHistoryFocus, ThreadHistoryTaskContext } from '../../types/index.ts';
+import type {
+  Run,
+  ThreadHistoryArtifactSummary,
+  ThreadHistoryFocus,
+  ThreadHistoryTaskContext,
+} from "../../types/index.ts";
 
 export type ChatTimelineEventType =
-  | 'started'
-  | 'run_status'
-  | 'thinking'
-  | 'tool_call'
-  | 'tool_result'
-  | 'progress'
-  | 'message'
-  | 'completed'
-  | 'error'
-  | 'cancelled'
-  | 'run.failed';
+  | "started"
+  | "run_status"
+  | "thinking"
+  | "tool_call"
+  | "tool_result"
+  | "progress"
+  | "message"
+  | "completed"
+  | "error"
+  | "cancelled"
+  | "run.failed";
 
 export interface ChatRunMeta {
   runId: string;
   parentRunId: string | null;
   agentType: string;
-  status: Run['status'];
+  status: Run["status"];
 }
 
 export type ChatRunArtifactMap = Record<string, ThreadHistoryArtifactSummary[]>;
@@ -42,7 +47,7 @@ export interface ChatStreamingState {
     arguments: Record<string, unknown>;
     result?: string;
     error?: string;
-    status: 'pending' | 'running' | 'completed' | 'error';
+    status: "pending" | "running" | "completed" | "error";
     startedAt?: number;
   }>;
   currentMessage: string | null;

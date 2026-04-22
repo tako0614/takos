@@ -1,12 +1,13 @@
 import { Show } from "solid-js";
 import { useI18n } from "../../store/i18n.ts";
 import { Icons } from "../../lib/Icons.tsx";
-import { Badge, Button } from "../../components/ui/index.ts";
+import { Button } from "../../components/ui/index.ts";
 import { toSafeHref } from "../../lib/safeHref.ts";
 import {
   formatAppStatusLabel,
   formatAppTypeLabel,
-  getAppStatusVariant,
+  getAppIconImageSrc,
+  type RegisteredApp,
   useRegisteredApps,
 } from "./registered-apps.ts";
 
@@ -15,9 +16,9 @@ export interface AppsPageProps {
   onNavigateToStore?: () => void;
 }
 
-export function AppsPage({ spaceId, onNavigateToStore }: AppsPageProps) {
+export function AppsPage(props: AppsPageProps) {
   const { t } = useI18n();
-  const { apps, loading, error, fetchApps } = useRegisteredApps(() => spaceId);
+  const { apps, loading, error } = useRegisteredApps(() => props.spaceId);
 
   const appsCount = () => apps().length;
   const hasApps = () => appsCount() > 0;
@@ -27,46 +28,66 @@ export function AppsPage({ spaceId, onNavigateToStore }: AppsPageProps) {
   return (
     <div class="flex h-full flex-col overflow-hidden bg-zinc-50 dark:bg-zinc-900">
       <div class="flex-1 overflow-auto">
-        <div class="mx-auto w-full max-w-6xl px-4 pb-10 pt-8">
-          <div class="flex items-start justify-between gap-4 pb-6">
+        <div class="mx-auto flex min-h-full w-full max-w-6xl flex-col px-5 pb-10 pt-6 sm:px-8">
+          <div class="flex flex-col gap-3 pb-8 sm:flex-row sm:items-start sm:justify-between">
             <div class="min-w-0">
-              <h1 class="text-2xl font-bold tracking-tight text-zinc-900 dark:text-zinc-50">
+              <h1 class="text-2xl font-semibold tracking-tight text-zinc-900 dark:text-zinc-50">
                 {t("apps")}
               </h1>
               <p class="mt-1 text-sm text-zinc-500 dark:text-zinc-400">
-                {t("appsInstalledDescription")}
+                <Show
+                  when={hasApps()}
+                  fallback={t("appsInstalledDescription")}
+                >
+                  {appsCount()} {t("installed")}
+                </Show>
               </p>
             </div>
-            <Show when={hasApps()}>
-              <Badge size="md" variant="info" class="shrink-0">
-                {appsCount()}
-              </Badge>
-            </Show>
+            <div class="flex shrink-0 flex-wrap items-center gap-2">
+              <Show when={props.onNavigateToStore}>
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  onClick={props.onNavigateToStore}
+                  leftIcon={<Icons.ShoppingBag class="h-4 w-4" />}
+                >
+                  {t("browseStore")}
+                </Button>
+              </Show>
+            </div>
           </div>
 
           <Show when={errorMessage()}>
-            <div class="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700 dark:border-red-900/40 dark:bg-red-950/30 dark:text-red-200">
-              <div class="flex items-start justify-between gap-3">
-                <p>{errorMessage()}</p>
-                <Button variant="secondary" size="sm" onClick={fetchApps}>
-                  {t("refresh")}
-                </Button>
-              </div>
+            <div class="mb-5 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700 dark:border-red-900/40 dark:bg-red-950/30 dark:text-red-200">
+              <p>{errorMessage()}</p>
             </div>
           </Show>
 
           <Show when={loadingState()}>
-            <div class="rounded-lg border border-zinc-200 bg-white px-6 py-10 text-center dark:border-zinc-800 dark:bg-zinc-950">
-              <div class="mx-auto mb-3 h-6 w-6 animate-spin rounded-full border-2 border-zinc-400 border-t-transparent dark:border-zinc-500" />
-              <p class="text-sm text-zinc-500 dark:text-zinc-400">
-                {t("loading")}
-              </p>
+            <div class="pt-3">
+              <div class="mb-5 flex items-center gap-2 text-sm text-zinc-500 dark:text-zinc-400">
+                <div class="h-4 w-4 animate-spin rounded-full border-2 border-zinc-400 border-t-transparent dark:border-zinc-500" />
+                <span>{t("loading")}</span>
+              </div>
+              <div class={LAUNCHER_GRID_CLASS}>
+                {SKELETON_ITEMS.map((_, index) => (
+                  <div
+                    class="flex min-h-[138px] flex-col items-center rounded-lg px-2 py-3"
+                    aria-hidden="true"
+                    data-index={index}
+                  >
+                    <div class="h-[72px] w-[72px] animate-pulse rounded-lg bg-white/80 shadow-sm ring-1 ring-zinc-200 dark:bg-zinc-900 dark:ring-zinc-800" />
+                    <div class="mt-3 h-3 w-20 animate-pulse rounded-full bg-zinc-200 dark:bg-zinc-800" />
+                    <div class="mt-2 h-2 w-14 animate-pulse rounded-full bg-zinc-200/80 dark:bg-zinc-800/80" />
+                  </div>
+                ))}
+              </div>
             </div>
           </Show>
 
           <Show when={!loadingState() && !errorMessage() && !hasApps()}>
-            <div class="mt-6 rounded-lg border border-dashed border-zinc-300 bg-white px-6 py-12 text-center dark:border-zinc-700 dark:bg-zinc-900">
-              <div class="mx-auto flex h-16 w-16 items-center justify-center rounded-lg bg-zinc-100 text-zinc-500 dark:bg-zinc-800 dark:text-zinc-300">
+            <div class="mt-4 flex min-h-[340px] flex-col items-center justify-center rounded-lg border border-dashed border-zinc-300 bg-white/60 px-6 py-12 text-center dark:border-zinc-800 dark:bg-zinc-900/45">
+              <div class="mx-auto flex h-16 w-16 items-center justify-center rounded-lg bg-white text-zinc-500 shadow-sm ring-1 ring-zinc-200 dark:bg-zinc-900 dark:text-zinc-300 dark:ring-zinc-800">
                 <Icons.Package class="h-8 w-8" />
               </div>
               <h2 class="mt-5 text-lg font-semibold text-zinc-900 dark:text-zinc-100">
@@ -75,17 +96,17 @@ export function AppsPage({ spaceId, onNavigateToStore }: AppsPageProps) {
               <p class="mt-2 text-sm text-zinc-500 dark:text-zinc-400">
                 {t("appsInstalledEmptyDesc")}
               </p>
-              {onNavigateToStore
+              {props.onNavigateToStore
                 ? (
                   <div class="mt-5">
-                    <button
-                      type="button"
-                      onClick={onNavigateToStore}
-                      class="inline-flex items-center gap-2 rounded-lg bg-zinc-900 px-4 py-2 text-sm font-medium text-white hover:bg-zinc-700 dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-zinc-300"
+                    <Button
+                      variant="primary"
+                      size="sm"
+                      onClick={props.onNavigateToStore}
+                      leftIcon={<Icons.ShoppingBag class="h-4 w-4" />}
                     >
-                      <Icons.ShoppingBag class="h-4 w-4" />
                       {t("browseStore")}
-                    </button>
+                    </Button>
                   </div>
                 )
                 : null}
@@ -93,76 +114,79 @@ export function AppsPage({ spaceId, onNavigateToStore }: AppsPageProps) {
           </Show>
 
           <Show when={!loadingState() && !errorMessage() && hasApps()}>
-            <div class="grid gap-3">
+            <div class={LAUNCHER_GRID_CLASS}>
               {apps().map((app) => {
                 const safeHref = toSafeHref(app.url);
-                return (
-                  <article class="rounded-lg border border-zinc-200 bg-white p-4 shadow-sm dark:border-zinc-800 dark:bg-zinc-950">
-                    <div class="flex items-start gap-4">
-                      <div class="flex h-12 w-12 shrink-0 items-center justify-center rounded-lg bg-zinc-100 text-2xl text-zinc-900 dark:bg-zinc-800 dark:text-zinc-100">
-                        {app.icon || <Icons.Package class="h-6 w-6" />}
-                      </div>
-
-                      <div class="min-w-0 flex-1">
-                        <div class="flex flex-wrap items-center gap-2">
-                          <h2 class="min-w-0 truncate text-base font-semibold text-zinc-900 dark:text-zinc-50">
-                            {app.name}
-                          </h2>
-                          <Badge size="sm">{t("installed")}</Badge>
-                          <Badge size="sm" variant="info">
-                            {formatAppTypeLabel(app.app_type)}
-                          </Badge>
-                          <Badge
-                            size="sm"
-                            variant={getAppStatusVariant(app.service_status)}
+                const iconImageSrc = getAppIconImageSrc(app.icon);
+                const textIcon = getTextIcon(app);
+                const title = getAppTitle(app);
+                const appContent = (
+                  <>
+                    <div class="relative flex h-[72px] w-[72px] shrink-0 items-center justify-center overflow-hidden rounded-lg bg-white text-zinc-700 shadow-sm ring-1 ring-zinc-200 transition-transform group-hover:-translate-y-0.5 group-focus-visible:-translate-y-0.5 dark:bg-zinc-900 dark:text-zinc-200 dark:ring-zinc-800">
+                      <Show
+                        when={iconImageSrc}
+                        fallback={
+                          <Show
+                            when={textIcon}
+                            fallback={<Icons.Package class="h-8 w-8" />}
                           >
-                            {formatAppStatusLabel(app.service_status)}
-                          </Badge>
-                        </div>
-
-                        <p class="mt-1 text-sm text-zinc-600 dark:text-zinc-400">
-                          {app.description || t("noDescription")}
-                        </p>
-
-                        <div class="mt-4 flex flex-wrap gap-x-4 gap-y-2 text-sm text-zinc-500 dark:text-zinc-400">
-                          <Show when={app.space_name}>
-                            <span class="inline-flex min-w-0 items-center gap-1.5">
-                              <Icons.Users class="h-4 w-4 shrink-0" />
-                              <span class="truncate">{app.space_name}</span>
+                            <span class="max-w-full truncate px-2 text-3xl leading-none text-zinc-800 dark:text-zinc-100">
+                              {textIcon}
                             </span>
                           </Show>
-                          <Show when={app.service_hostname}>
-                            <span class="inline-flex min-w-0 items-center gap-1.5">
-                              <Icons.Server class="h-4 w-4 shrink-0" />
-                              <span class="truncate">
-                                {app.service_hostname}
-                              </span>
-                            </span>
-                          </Show>
-                          <Show when={app.url}>
-                            <span class="inline-flex min-w-0 items-center gap-1.5">
-                              <Icons.Globe class="h-4 w-4 shrink-0" />
-                              <span class="truncate">{app.url}</span>
-                            </span>
-                          </Show>
-                        </div>
-                      </div>
-
-                      <div class="flex shrink-0 flex-col gap-2">
-                        <Show when={safeHref}>
-                          <a
-                            href={safeHref || undefined}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            class="inline-flex items-center justify-center gap-2 rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm font-medium text-zinc-900 hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100 dark:hover:bg-zinc-800"
-                          >
-                            <Icons.ExternalLink class="h-4 w-4" />
-                            {t("openInNewTab")}
-                          </a>
-                        </Show>
-                      </div>
+                        }
+                      >
+                        <img
+                          src={iconImageSrc || undefined}
+                          alt=""
+                          loading="lazy"
+                          class="h-full w-full object-cover"
+                        />
+                      </Show>
+                      <Show when={shouldShowStatusDot(app.service_status)}>
+                        <span
+                          class={`absolute right-1.5 top-1.5 h-2.5 w-2.5 rounded-full shadow-sm ring-2 ring-white dark:ring-zinc-900 ${
+                            getStatusDotClass(app.service_status)
+                          }`}
+                        />
+                      </Show>
                     </div>
-                  </article>
+
+                    <span class="mt-3 flex min-h-10 max-w-full items-start justify-center text-center text-sm font-medium leading-5 text-zinc-700 dark:text-zinc-200">
+                      <span
+                        class="break-words"
+                        style="display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;"
+                      >
+                        {app.name}
+                      </span>
+                    </span>
+                  </>
+                );
+
+                return (
+                  <Show
+                    when={safeHref}
+                    fallback={
+                      <div
+                        class={`${LAUNCHER_ITEM_CLASS} cursor-default opacity-75`}
+                        title={title}
+                        aria-disabled="true"
+                      >
+                        {appContent}
+                      </div>
+                    }
+                  >
+                    <a
+                      href={safeHref || undefined}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      class={LAUNCHER_ITEM_CLASS}
+                      title={title}
+                      aria-label={`${app.name} - ${t("openInNewTab")}`}
+                    >
+                      {appContent}
+                    </a>
+                  </Show>
                 );
               })}
             </div>
@@ -171,4 +195,60 @@ export function AppsPage({ spaceId, onNavigateToStore }: AppsPageProps) {
       </div>
     </div>
   );
+}
+
+const LAUNCHER_GRID_CLASS =
+  "grid grid-cols-[repeat(auto-fill,minmax(104px,1fr))] gap-x-3 gap-y-7 sm:grid-cols-[repeat(auto-fill,minmax(120px,1fr))] sm:gap-x-6 sm:gap-y-8";
+
+const LAUNCHER_ITEM_CLASS =
+  "group relative flex min-h-[124px] flex-col items-center rounded-lg px-2 py-3 text-center transition hover:bg-white/70 focus-visible:bg-white/80 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-zinc-900 dark:hover:bg-zinc-900/70 dark:focus-visible:bg-zinc-900/80 dark:focus-visible:outline-zinc-100";
+
+const SKELETON_ITEMS = Array.from({ length: 12 });
+
+function getStatusDotClass(status: string | null | undefined): string {
+  const normalized = status?.toLowerCase();
+  if (!normalized) return "bg-zinc-400";
+  if (normalized === "deployed" || normalized === "active") {
+    return "bg-emerald-500";
+  }
+  if (
+    normalized === "failed" || normalized === "error" ||
+    normalized === "degraded"
+  ) {
+    return "bg-red-500";
+  }
+  if (
+    normalized.includes("pending") || normalized.includes("queue") ||
+    normalized.includes("progress") || normalized === "paused"
+  ) {
+    return "bg-amber-400";
+  }
+  return "bg-sky-500";
+}
+
+function shouldShowStatusDot(status: string | null | undefined): boolean {
+  const normalized = status?.toLowerCase();
+  return normalized !== "deployed" && normalized !== "active";
+}
+
+function getTextIcon(app: RegisteredApp): string | null {
+  const icon = app.icon?.trim();
+  if (!icon || getAppIconImageSrc(icon)) return null;
+
+  const chars = Array.from(icon);
+  if (chars.length <= 3) return icon;
+
+  return Array.from(app.name.trim())[0]?.toUpperCase() ?? null;
+}
+
+function getAppTitle(app: RegisteredApp): string {
+  return [
+    app.name,
+    app.description,
+    app.category,
+    formatAppTypeLabel(app.app_type),
+    formatAppStatusLabel(app.service_status),
+    app.space_name,
+    app.service_hostname,
+  ].filter(Boolean).join(" / ");
 }

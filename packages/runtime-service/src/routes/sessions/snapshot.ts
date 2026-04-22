@@ -1,24 +1,38 @@
-import * as fs from 'node:fs/promises';
-import { constants as fsConstants } from 'node:fs';
-import * as path from 'node:path';
-import { Hono } from 'hono';
-import type { RuntimeEnv } from '../../types/hono.d.ts';
+import * as fs from "node:fs/promises";
+import { constants as fsConstants } from "node:fs";
+import * as path from "node:path";
+import { Hono } from "hono";
+import type { RuntimeEnv } from "../../types/hono.d.ts";
 import {
   resolvePathWithin,
   verifyPathWithinAfterAccess,
-} from '../../runtime/paths.ts';
-import { isProbablyBinary } from '../../runtime/validation.ts';
-import { resolveSessionWorkDir } from './session-utils.ts';
-import { OwnerBindingError, SymlinkWriteError, isBoundaryViolationError } from '../../shared/errors.ts';
-import { forbidden, internalError } from 'takos-common/middleware/hono';
+} from "../../runtime/paths.ts";
+import { isProbablyBinary } from "../../runtime/validation.ts";
+import { resolveSessionWorkDir } from "./session-utils.ts";
+import {
+  isBoundaryViolationError,
+  OwnerBindingError,
+  SymlinkWriteError,
+} from "../../shared/errors.ts";
+import { forbidden, internalError } from "takos-common/middleware/hono";
 import type { Buffer } from "node:buffer";
 
-function handleRouteError(c: import('hono').Context<RuntimeEnv>, err: unknown, label: string, opts?: { checkSymlink?: boolean }): Response {
+function handleRouteError(
+  c: import("hono").Context<RuntimeEnv>,
+  err: unknown,
+  label: string,
+  opts?: { checkSymlink?: boolean },
+): Response {
   if (err instanceof OwnerBindingError) return forbidden(c, err.message);
   if (opts?.checkSymlink && isBoundaryViolationError(err)) {
-    return forbidden(c, err instanceof SymlinkWriteError ? 'Cannot write to symlinks' : 'Path escapes workspace boundary');
+    return forbidden(
+      c,
+      err instanceof SymlinkWriteError
+        ? "Cannot write to symlinks"
+        : "Path escapes workspace boundary",
+    );
   }
-  c.get('log')?.error(`${label} error`, { error: err as Error });
+  c.get("log")?.error(`${label} error`, { error: err as Error });
   return internalError(c, `${label} failed`);
 }
 
@@ -26,16 +40,24 @@ function handleRouteError(c: import('hono').Context<RuntimeEnv>, err: unknown, l
 // Helpers
 // ---------------------------------------------------------------------------
 
-async function safeReadFileNoFollow(filePath: string): Promise<{ buffer: Buffer; size: number } | null> {
+async function safeReadFileNoFollow(
+  filePath: string,
+): Promise<{ buffer: Buffer; size: number } | null> {
   let handle: fs.FileHandle | null = null;
   try {
-    handle = await fs.open(filePath, fsConstants.O_RDONLY | fsConstants.O_NOFOLLOW);
+    handle = await fs.open(
+      filePath,
+      fsConstants.O_RDONLY | fsConstants.O_NOFOLLOW,
+    );
     const stat = await handle.stat();
     if (!stat.isFile()) return null;
     const buffer = await handle.readFile();
     return { buffer, size: stat.size };
   } catch (err: unknown) {
-    if (err && typeof err === 'object' && 'code' in err && (err as { code: string }).code === 'ELOOP') {
+    if (
+      err && typeof err === "object" && "code" in err &&
+      (err as { code: string }).code === "ELOOP"
+    ) {
       return null;
     }
     throw err;
@@ -45,20 +67,20 @@ async function safeReadFileNoFollow(filePath: string): Promise<{ buffer: Buffer;
 }
 
 const SNAPSHOT_EXCLUDE_DIRS = new Set([
-  'node_modules',
-  '.git',
-  '.next',
-  '.nuxt',
-  '.output',
-  'dist',
-  'build',
-  '.cache',
-  '.turbo',
-  '.wrangler',
-  'coverage',
-  '__pycache__',
-  'venv',
-  '.venv',
+  "node_modules",
+  ".git",
+  ".next",
+  ".nuxt",
+  ".output",
+  "dist",
+  "build",
+  ".cache",
+  ".turbo",
+  ".wrangler",
+  "coverage",
+  "__pycache__",
+  "venv",
+  ".venv",
 ]);
 
 const MAX_SNAPSHOT_FILE_SIZE = 5 * 1024 * 1024;
@@ -69,7 +91,7 @@ type SnapshotFile = {
   content: string;
   size: number;
   is_binary?: boolean;
-  encoding?: 'utf-8' | 'base64';
+  encoding?: "utf-8" | "base64";
 };
 
 // ---------------------------------------------------------------------------
@@ -78,7 +100,7 @@ type SnapshotFile = {
 
 const app = new Hono<RuntimeEnv>();
 
-app.post('/session/snapshot', async (c) => {
+app.post("/session/snapshot", async (c) => {
   try {
     const body = await c.req.json() as {
       session_id: string;
@@ -89,14 +111,16 @@ app.post('/session/snapshot', async (c) => {
     const { path: snapshotPath, include_binary } = body;
 
     const session = await resolveSessionWorkDir(c, body);
-    if ('error' in session) return session.error;
+    if ("error" in session) return session.error;
     const { sessionId: session_id, workDir } = session;
-    const targetDir = snapshotPath ? resolvePathWithin(workDir, snapshotPath, 'path', true) : workDir;
+    const targetDir = snapshotPath
+      ? resolvePathWithin(workDir, snapshotPath, "path", true)
+      : workDir;
     const targetLstats = await fs.lstat(targetDir);
     if (targetLstats.isSymbolicLink()) {
-      return forbidden(c, 'Symlinks are not allowed');
+      return forbidden(c, "Symlinks are not allowed");
     }
-    await verifyPathWithinAfterAccess(workDir, targetDir, 'path');
+    await verifyPathWithinAfterAccess(workDir, targetDir, "path");
 
     const files: SnapshotFile[] = [];
     let totalSize = 0;
@@ -107,11 +131,11 @@ app.post('/session/snapshot', async (c) => {
 
     const excludeDirs = new Set(SNAPSHOT_EXCLUDE_DIRS);
     if (snapshotPath) {
-      const rootDir = snapshotPath.split('/').filter(Boolean)[0];
+      const rootDir = snapshotPath.split("/").filter(Boolean)[0];
       if (rootDir) excludeDirs.delete(rootDir);
     }
 
-    const walkDir = async (dir: string, prefix: string = ''): Promise<void> => {
+    const walkDir = async (dir: string, prefix: string = ""): Promise<void> => {
       const items = await fs.readdir(dir, { withFileTypes: true });
       for (const item of items) {
         const fullPath = path.join(dir, item.name);
@@ -131,7 +155,7 @@ app.post('/session/snapshot', async (c) => {
             continue;
           }
           try {
-            await verifyPathWithinAfterAccess(workDir, fullPath, 'path');
+            await verifyPathWithinAfterAccess(workDir, fullPath, "path");
           } catch {
             skippedSymlinkPaths.push(relativePath);
             continue;
@@ -143,7 +167,7 @@ app.post('/session/snapshot', async (c) => {
         if (!lstats.isFile()) continue;
 
         try {
-          await verifyPathWithinAfterAccess(workDir, fullPath, 'path');
+          await verifyPathWithinAfterAccess(workDir, fullPath, "path");
 
           const result = await safeReadFileNoFollow(fullPath);
           if (!result) {
@@ -159,11 +183,13 @@ app.post('/session/snapshot', async (c) => {
           }
 
           if (totalSize + size > MAX_SNAPSHOT_TOTAL_SIZE) {
-            c.get('log')?.info('Snapshot total size limit reached', { totalSize });
+            c.get("log")?.info("Snapshot total size limit reached", {
+              totalSize,
+            });
             return;
           }
 
-          await verifyPathWithinAfterAccess(workDir, fullPath, 'path');
+          await verifyPathWithinAfterAccess(workDir, fullPath, "path");
           const isBinary = isProbablyBinary(buffer);
 
           if (isBinary && !include_binary) {
@@ -171,7 +197,7 @@ app.post('/session/snapshot', async (c) => {
             continue;
           }
 
-          const encoding = isBinary ? 'base64' : 'utf-8';
+          const encoding = isBinary ? "base64" : "utf-8";
           files.push({
             path: relativePath,
             content: buffer.toString(encoding),
@@ -186,10 +212,14 @@ app.post('/session/snapshot', async (c) => {
       }
     };
 
-    const startPrefix = snapshotPath ? snapshotPath.replace(/^\/+/, '') : '';
+    const startPrefix = snapshotPath ? snapshotPath.replace(/^\/+/, "") : "";
     await walkDir(targetDir, startPrefix);
 
-    c.get('log')?.info('Snapshot complete', { fileCount: files.length, totalSize, skippedDirs: skippedDirs.length });
+    c.get("log")?.info("Snapshot complete", {
+      fileCount: files.length,
+      totalSize,
+      skippedDirs: skippedDirs.length,
+    });
 
     return c.json({
       success: true,
@@ -203,7 +233,7 @@ app.post('/session/snapshot', async (c) => {
       skipped_symlink_paths: skippedSymlinkPaths,
     });
   } catch (err) {
-    return handleRouteError(c, err, 'Snapshot', { checkSymlink: true });
+    return handleRouteError(c, err, "Snapshot", { checkSymlink: true });
   }
 });
 

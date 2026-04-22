@@ -1,4 +1,4 @@
-import { createEffect, onCleanup } from 'solid-js';
+import { createEffect, onCleanup } from "solid-js";
 
 const layerStack: string[] = [];
 
@@ -10,7 +10,9 @@ interface UseDialogLifecycleOptions {
   lockBodyScroll?: boolean;
 }
 
-export function useDialogLifecycle(options: UseDialogLifecycleOptions): () => boolean {
+export function useDialogLifecycle(
+  options: UseDialogLifecycleOptions,
+): () => boolean {
   const currentLayerId = options.layerId;
 
   createEffect(() => {
@@ -33,21 +35,23 @@ export function useDialogLifecycle(options: UseDialogLifecycleOptions): () => bo
       if (event.isComposing || event.keyCode === 229) {
         return;
       }
-      if ((options.closeOnEscape ?? true) && event.key === 'Escape') {
-        if (currentLayerId && layerStack[layerStack.length - 1] !== currentLayerId) {
+      if ((options.closeOnEscape ?? true) && event.key === "Escape") {
+        if (
+          currentLayerId && layerStack[layerStack.length - 1] !== currentLayerId
+        ) {
           return;
         }
         options.onEscape?.();
       }
     };
 
-    document.addEventListener('keydown', handleKeyDown);
+    document.addEventListener("keydown", handleKeyDown);
     if (options.lockBodyScroll ?? true) {
-      document.body.style.overflow = 'hidden';
+      document.body.style.overflow = "hidden";
     }
 
     onCleanup(() => {
-      document.removeEventListener('keydown', handleKeyDown);
+      document.removeEventListener("keydown", handleKeyDown);
       if (options.lockBodyScroll ?? true) {
         document.body.style.overflow = previousOverflow;
       }

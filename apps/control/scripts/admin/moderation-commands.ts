@@ -3,28 +3,33 @@
  */
 
 import {
-  type GlobalOptions,
-  type ResolvedConfig,
   ensureValidUserId,
   executeD1Sql,
   extractResults,
   fail,
+  type GlobalOptions,
   nowIso,
   print,
   randomId,
+  type ResolvedConfig,
   sqlLiteral,
   sqlNullable,
   takeOption,
-} from './index.ts';
+} from "./index.ts";
 
 // ---------------------------------------------------------------------------
 // Internal helpers
 // ---------------------------------------------------------------------------
 
-async function fetchUserRow(config: ResolvedConfig, userId: string): Promise<Record<string, unknown>> {
+async function fetchUserRow(
+  config: ResolvedConfig,
+  userId: string,
+): Promise<Record<string, unknown>> {
   const result = await executeD1Sql(
     config,
-    `SELECT id, email, username, name FROM users WHERE id = ${sqlLiteral(userId)} LIMIT 1`,
+    `SELECT id, email, username, name FROM users WHERE id = ${
+      sqlLiteral(userId)
+    } LIMIT 1`,
   );
 
   const row = extractResults(result)[0] as Record<string, unknown> | undefined;
@@ -34,10 +39,15 @@ async function fetchUserRow(config: ResolvedConfig, userId: string): Promise<Rec
   return row;
 }
 
-async function fetchModerationRow(config: ResolvedConfig, userId: string): Promise<Record<string, unknown> | null> {
+async function fetchModerationRow(
+  config: ResolvedConfig,
+  userId: string,
+): Promise<Record<string, unknown> | null> {
   const result = await executeD1Sql(
     config,
-    `SELECT user_id, status, suspended_until, banned_at, warn_count, last_warn_at, reason, updated_at FROM user_moderation WHERE user_id = ${sqlLiteral(userId)} LIMIT 1`,
+    `SELECT user_id, status, suspended_until, banned_at, warn_count, last_warn_at, reason, updated_at FROM user_moderation WHERE user_id = ${
+      sqlLiteral(userId)
+    } LIMIT 1`,
   );
 
   const row = extractResults(result)[0] as Record<string, unknown> | undefined;
@@ -48,16 +58,18 @@ async function insertModerationAuditLog(input: {
   config: ResolvedConfig;
   actorUserId?: string;
   targetUser: Record<string, unknown>;
-  actionType: 'ban' | 'unban';
+  actionType: "ban" | "unban";
   reason?: string;
   previousStatus: string;
   nextStatus: string;
   createdAt: string;
 }): Promise<void> {
-  const targetUserId = String(input.targetUser.id || '');
-  const targetLabel = String(input.targetUser.username || input.targetUser.email || targetUserId);
+  const targetUserId = String(input.targetUser.id || "");
+  const targetLabel = String(
+    input.targetUser.username || input.targetUser.email || targetUserId,
+  );
   const details = JSON.stringify({
-    source: 'admin-cli',
+    source: "admin-cli",
     previous_status: input.previousStatus,
     next_status: input.nextStatus,
     environment: input.config.environment,
@@ -84,12 +96,15 @@ async function insertModerationAuditLog(input: {
   await executeD1Sql(input.config, sql);
 }
 
-async function validateActorUserId(config: ResolvedConfig, actorUserId: string | undefined): Promise<void> {
+async function validateActorUserId(
+  config: ResolvedConfig,
+  actorUserId: string | undefined,
+): Promise<void> {
   if (!actorUserId) {
     return;
   }
 
-  ensureValidUserId(actorUserId, 'actor_user_id');
+  ensureValidUserId(actorUserId, "actor_user_id");
 
   const result = await executeD1Sql(
     config,
@@ -105,12 +120,16 @@ async function validateActorUserId(config: ResolvedConfig, actorUserId: string |
 // Commands
 // ---------------------------------------------------------------------------
 
-export async function cmdModerationShowUser(config: ResolvedConfig, options: GlobalOptions, args: string[]): Promise<number> {
+export async function cmdModerationShowUser(
+  config: ResolvedConfig,
+  options: GlobalOptions,
+  args: string[],
+): Promise<number> {
   const userId = args[0];
   if (!userId) {
-    fail('Usage: moderation show-user <user_id>');
+    fail("Usage: moderation show-user <user_id>");
   }
-  ensureValidUserId(userId, 'user_id');
+  ensureValidUserId(userId, "user_id");
 
   const user = await fetchUserRow(config, userId);
   const moderation = await fetchModerationRow(config, userId);
@@ -119,7 +138,7 @@ export async function cmdModerationShowUser(config: ResolvedConfig, options: Glo
     user,
     moderation: moderation || {
       user_id: userId,
-      status: 'active',
+      status: "active",
       suspended_until: null,
       banned_at: null,
       warn_count: 0,
@@ -132,30 +151,36 @@ export async function cmdModerationShowUser(config: ResolvedConfig, options: Glo
   if (options.isJson) {
     console.log(JSON.stringify(output, null, 2));
   } else {
-    print('User:', options.isJson);
+    print("User:", options.isJson);
     console.table([output.user as Record<string, unknown>]);
-    print('Moderation:', options.isJson);
+    print("Moderation:", options.isJson);
     console.table([output.moderation as Record<string, unknown>]);
   }
 
   return 1;
 }
 
-export async function cmdModerationBan(config: ResolvedConfig, options: GlobalOptions, args: string[]): Promise<number> {
+export async function cmdModerationBan(
+  config: ResolvedConfig,
+  options: GlobalOptions,
+  args: string[],
+): Promise<number> {
   const localArgs = [...args];
   const userId = localArgs.shift();
   if (!userId) {
-    fail('Usage: moderation ban <user_id> [--reason <text>] [--actor-user-id <id>]');
+    fail(
+      "Usage: moderation ban <user_id> [--reason <text>] [--actor-user-id <id>]",
+    );
   }
-  ensureValidUserId(userId, 'user_id');
+  ensureValidUserId(userId, "user_id");
 
-  const reason = takeOption(localArgs, '--reason');
-  const actorUserId = takeOption(localArgs, '--actor-user-id');
+  const reason = takeOption(localArgs, "--reason");
+  const actorUserId = takeOption(localArgs, "--actor-user-id");
   await validateActorUserId(config, actorUserId);
 
   const user = await fetchUserRow(config, userId);
   const previousModeration = await fetchModerationRow(config, userId);
-  const previousStatus = String(previousModeration?.status || 'active');
+  const previousStatus = String(previousModeration?.status || "active");
   const timestamp = nowIso();
 
   const sql = `
@@ -181,15 +206,20 @@ export async function cmdModerationBan(config: ResolvedConfig, options: GlobalOp
     config,
     actorUserId,
     targetUser: user,
-    actionType: 'ban',
+    actionType: "ban",
     reason,
     previousStatus,
-    nextStatus: 'banned',
+    nextStatus: "banned",
     createdAt: timestamp,
   });
 
   const moderation = await fetchModerationRow(config, userId);
-  const output = { user, moderation, previous_status: previousStatus, updated_status: 'banned' };
+  const output = {
+    user,
+    moderation,
+    previous_status: previousStatus,
+    updated_status: "banned",
+  };
 
   if (options.isJson) {
     console.log(JSON.stringify(output, null, 2));
@@ -204,21 +234,27 @@ export async function cmdModerationBan(config: ResolvedConfig, options: GlobalOp
   return 1;
 }
 
-export async function cmdModerationUnban(config: ResolvedConfig, options: GlobalOptions, args: string[]): Promise<number> {
+export async function cmdModerationUnban(
+  config: ResolvedConfig,
+  options: GlobalOptions,
+  args: string[],
+): Promise<number> {
   const localArgs = [...args];
   const userId = localArgs.shift();
   if (!userId) {
-    fail('Usage: moderation unban <user_id> [--reason <text>] [--actor-user-id <id>]');
+    fail(
+      "Usage: moderation unban <user_id> [--reason <text>] [--actor-user-id <id>]",
+    );
   }
-  ensureValidUserId(userId, 'user_id');
+  ensureValidUserId(userId, "user_id");
 
-  const reason = takeOption(localArgs, '--reason');
-  const actorUserId = takeOption(localArgs, '--actor-user-id');
+  const reason = takeOption(localArgs, "--reason");
+  const actorUserId = takeOption(localArgs, "--actor-user-id");
   await validateActorUserId(config, actorUserId);
 
   const user = await fetchUserRow(config, userId);
   const previousModeration = await fetchModerationRow(config, userId);
-  const previousStatus = String(previousModeration?.status || 'active');
+  const previousStatus = String(previousModeration?.status || "active");
   const timestamp = nowIso();
 
   const sql = `
@@ -245,15 +281,20 @@ export async function cmdModerationUnban(config: ResolvedConfig, options: Global
     config,
     actorUserId,
     targetUser: user,
-    actionType: 'unban',
+    actionType: "unban",
     reason,
     previousStatus,
-    nextStatus: 'active',
+    nextStatus: "active",
     createdAt: timestamp,
   });
 
   const moderation = await fetchModerationRow(config, userId);
-  const output = { user, moderation, previous_status: previousStatus, updated_status: 'active' };
+  const output = {
+    user,
+    moderation,
+    previous_status: previousStatus,
+    updated_status: "active",
+  };
 
   if (options.isJson) {
     console.log(JSON.stringify(output, null, 2));

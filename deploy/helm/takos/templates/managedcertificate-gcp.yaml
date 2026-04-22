@@ -1,0 +1,18 @@
+{{- if and .Values.ingress.enabled .Values.ingress.gcpManagedCertificate.enabled }}
+apiVersion: networking.gke.io/v1
+kind: ManagedCertificate
+metadata:
+  name: {{ .Values.ingress.gcpManagedCertificate.name | default (printf "%s-managed-cert" (include "takos.fullname" .)) | quote }}
+  labels:
+    {{- include "takos.labels" . | nindent 4 }}
+spec:
+  domains:
+    {{- if .Values.ingress.gcpManagedCertificate.domains }}
+    {{- range .Values.ingress.gcpManagedCertificate.domains }}
+    - {{ . | quote }}
+    {{- end }}
+    {{- else }}
+    - {{ .Values.domains.admin | quote }}
+    - {{ printf "*.%s" .Values.domains.tenantBase | quote }}
+    {{- end }}
+{{- end }}

@@ -27,6 +27,25 @@ interface DispatchNamespace {
   get(name: string, options?: { deploymentId?: string }): ServiceBinding;
 }
 
+function getTenantWorker(
+  dispatcher: NonNullable<
+    ControlPlatform<DispatchEnv>["services"]["serviceRegistry"]
+  >,
+  name: string,
+  deploymentId?: string,
+): ServiceBinding {
+  if (!deploymentId) return dispatcher.get(name);
+  try {
+    return dispatcher.get(name, { deploymentId });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    if (message.includes("No such worker parameter: deploymentId")) {
+      return dispatcher.get(name);
+    }
+    throw error;
+  }
+}
+
 function buildForwardedRequestToBase(
   baseUrl: string,
   request: Request,
@@ -213,9 +232,13 @@ export function createDispatchWorker(
           headers.delete("X-Tenant-Deployment");
         }
 
-        const userWorker = platform.services.serviceRegistry?.get(routeRef, {
-          deploymentId: deploymentTarget.deploymentId,
-        });
+        const userWorker = platform.services.serviceRegistry
+          ? getTenantWorker(
+            platform.services.serviceRegistry,
+            routeRef,
+            deploymentTarget.deploymentId,
+          )
+          : null;
         if (!userWorker) {
           return errorJsonResponse("Local service target not configured", 503, {
             worker: routeRef,

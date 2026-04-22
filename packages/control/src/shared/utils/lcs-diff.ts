@@ -1,13 +1,16 @@
 export type LineDiffOp =
-  | { type: 'equal'; line: string }
-  | { type: 'insert'; line: string }
-  | { type: 'delete'; line: string };
+  | { type: "equal"; line: string }
+  | { type: "insert"; line: string }
+  | { type: "delete"; line: string };
 
 /**
  * Line diff based on LCS (O(n*m) time/memory). Intended for small files only.
  * Returns an edit script that transforms oldLines -> newLines.
  */
-export function diffLinesLcs(oldLines: string[], newLines: string[]): LineDiffOp[] {
+export function diffLinesLcs(
+  oldLines: string[],
+  newLines: string[],
+): LineDiffOp[] {
   const n = oldLines.length;
   const m = newLines.length;
 
@@ -34,7 +37,7 @@ export function diffLinesLcs(oldLines: string[], newLines: string[]): LineDiffOp
   let j = m;
   while (i > 0 && j > 0) {
     if (oldLines[i - 1] === newLines[j - 1]) {
-      ops.push({ type: 'equal', line: newLines[j - 1] });
+      ops.push({ type: "equal", line: newLines[j - 1] });
       i--;
       j--;
       continue;
@@ -42,24 +45,23 @@ export function diffLinesLcs(oldLines: string[], newLines: string[]): LineDiffOp
     const up = dp[(i - 1) * width + j];
     const left = dp[i * width + (j - 1)];
     if (up >= left) {
-      ops.push({ type: 'delete', line: oldLines[i - 1] });
+      ops.push({ type: "delete", line: oldLines[i - 1] });
       i--;
     } else {
-      ops.push({ type: 'insert', line: newLines[j - 1] });
+      ops.push({ type: "insert", line: newLines[j - 1] });
       j--;
     }
   }
 
   while (i > 0) {
-    ops.push({ type: 'delete', line: oldLines[i - 1] });
+    ops.push({ type: "delete", line: oldLines[i - 1] });
     i--;
   }
   while (j > 0) {
-    ops.push({ type: 'insert', line: newLines[j - 1] });
+    ops.push({ type: "insert", line: newLines[j - 1] });
     j--;
   }
 
   ops.reverse();
   return ops;
 }
-

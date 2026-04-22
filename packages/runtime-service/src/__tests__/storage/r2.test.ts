@@ -9,9 +9,13 @@ const originalTakosApiUrl = Deno.env.get("TAKOS_API_URL");
 if (!originalTakosApiUrl) {
   Deno.env.set("TAKOS_API_URL", "https://takos.jp");
 }
-const { downloadSpaceFiles, s3Client, uploadSpaceFiles } = await import(
-  new URL("../../storage/r2.ts", import.meta.url).href
-);
+const {
+  createS3ClientConfig,
+  downloadSpaceFiles,
+  isObjectStorageConfigured,
+  s3Client,
+  uploadSpaceFiles,
+} = await import(new URL("../../storage/r2.ts", import.meta.url).href);
 if (!originalTakosApiUrl) {
   Deno.env.delete("TAKOS_API_URL");
 }
@@ -19,6 +23,63 @@ if (!originalTakosApiUrl) {
 function createTempDir(prefix: string): Promise<string> {
   return fs.mkdtemp(path.join(os.tmpdir(), prefix));
 }
+
+Deno.test("r2 client config - omits static credentials so AWS default provider chain can resolve them", () => {
+  const config = createS3ClientConfig({
+    region: "ap-northeast-1",
+    endpoint: "",
+    accessKeyId: "",
+    secretAccessKey: "",
+  });
+
+  assertEquals(config.region, "ap-northeast-1");
+  assertEquals("endpoint" in config, false);
+  assertEquals("credentials" in config, false);
+});
+
+Deno.test("r2 client config - preserves static credentials for S3-compatible storage", () => {
+  const config = createS3ClientConfig({
+    region: "auto",
+    endpoint: "https://example.r2.cloudflarestorage.com",
+    accessKeyId: "access-key",
+    secretAccessKey: "secret-key",
+  });
+
+  assertEquals(config.region, "auto");
+  assertEquals(config.endpoint, "https://example.r2.cloudflarestorage.com");
+  assertEquals(config.credentials, {
+    accessKeyId: "access-key",
+    secretAccessKey: "secret-key",
+  });
+});
+
+Deno.test("r2 configured check - accepts explicit bucket and region without static credentials", () => {
+  assertEquals(
+    isObjectStorageConfigured({
+      bucket: "takos-runtime",
+      region: "ap-northeast-1",
+      endpoint: "",
+      accessKeyId: "",
+      secretAccessKey: "",
+      hasExplicitConfig: true,
+    }),
+    true,
+  );
+});
+
+Deno.test("r2 configured check - rejects partial static credentials", () => {
+  assertEquals(
+    isObjectStorageConfigured({
+      bucket: "takos-runtime",
+      region: "ap-northeast-1",
+      endpoint: "https://example.r2.cloudflarestorage.com",
+      accessKeyId: "access-key",
+      secretAccessKey: "",
+      hasExplicitConfig: true,
+    }),
+    false,
+  );
+});
 
 Deno.test("r2 symlink boundary hardening - skips upload paths that symlink outside base directory", async () => {
   const workspaceDir = await createTempDir("takos-r2-upload-ws-");

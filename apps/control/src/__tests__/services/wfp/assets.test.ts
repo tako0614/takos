@@ -1,6 +1,6 @@
 import {
-  type AssetUploadFile,
   assetUploadDeps,
+  type AssetUploadFile,
   createAssetsUploadSession,
   uploadAllAssets,
   uploadAssets,
@@ -233,7 +233,8 @@ Deno.test("uploadAllAssets - uploads needed files and returns completion JWT", a
   try {
     // We need to mock crypto.subtle.digest for hash computation
     const mockDigest = async () => new ArrayBuffer(32);
-    assetUploadDeps.digestSha256 = mockDigest as typeof assetUploadDeps.digestSha256;
+    assetUploadDeps.digestSha256 =
+      mockDigest as typeof assetUploadDeps.digestSha256;
 
     // Client returns one hash that needs uploading
     const mockClient = {

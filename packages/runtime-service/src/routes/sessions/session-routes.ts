@@ -129,7 +129,7 @@ app.post("/sessions", async (c) => {
         }
       }
 
-      await runGitCommand(["config", "user.email", "agent@takos.io"], workDir);
+      await runGitCommand(["config", "user.email", "agent@takos.jp"], workDir);
       await runGitCommand(["config", "user.name", "Takos Agent"], workDir);
 
       gitMode = true;

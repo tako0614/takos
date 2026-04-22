@@ -1,39 +1,45 @@
-import { createUniqueId, createEffect, onCleanup, Show } from 'solid-js';
-import type { JSX } from 'solid-js';
-import { Icons } from '../../lib/Icons.tsx';
-import { useDialogLifecycle } from '../../hooks/useDialogLifecycle.ts';
-import { useI18n } from '../../store/i18n.ts';
+import { createEffect, createUniqueId, onCleanup, Show } from "solid-js";
+import type { JSX } from "solid-js";
+import { Icons } from "../../lib/Icons.tsx";
+import { useDialogLifecycle } from "../../hooks/useDialogLifecycle.ts";
+import { useI18n } from "../../store/i18n.ts";
 
 interface MobileDrawerProps {
   isOpen: boolean;
   onClose: () => void;
   children: JSX.Element;
   title?: string;
-  side?: 'left' | 'right';
+  side?: "left" | "right";
   panelId?: string;
 }
 
 const FOCUSABLE_SELECTOR = [
-  'a[href]',
-  'button:not([disabled])',
-  'textarea:not([disabled])',
-  'input:not([disabled])',
-  'select:not([disabled])',
+  "a[href]",
+  "button:not([disabled])",
+  "textarea:not([disabled])",
+  "input:not([disabled])",
+  "select:not([disabled])",
   '[tabindex]:not([tabindex="-1"])',
-].join(', ');
+].join(", ");
 
 function getFocusableElements(container: HTMLElement): HTMLElement[] {
-  return Array.from(container.querySelectorAll<HTMLElement>(FOCUSABLE_SELECTOR)).filter(
-    (element) => !element.hasAttribute('disabled') && element.tabIndex !== -1,
-  );
+  return Array.from(container.querySelectorAll<HTMLElement>(FOCUSABLE_SELECTOR))
+    .filter(
+      (element) => !element.hasAttribute("disabled") && element.tabIndex !== -1,
+    );
 }
 
-function shouldRestoreFocus(previousFocusedElement: HTMLElement | null, currentContainer: HTMLElement): boolean {
+function shouldRestoreFocus(
+  previousFocusedElement: HTMLElement | null,
+  currentContainer: HTMLElement,
+): boolean {
   if (!previousFocusedElement || !document.contains(previousFocusedElement)) {
     return false;
   }
   const openDialogs = Array.from(
-    document.querySelectorAll<HTMLElement>('[role="dialog"][aria-modal="true"]'),
+    document.querySelectorAll<HTMLElement>(
+      '[role="dialog"][aria-modal="true"]',
+    ),
   ).filter((dialog) => dialog !== currentContainer);
   if (openDialogs.length === 0) {
     return true;
@@ -49,10 +55,12 @@ export function MobileDrawer(props: MobileDrawerProps) {
   let startX = 0;
   let currentX = 0;
 
-  const side = () => props.side ?? 'left';
+  const side = () => props.side ?? "left";
 
   const isTopLayer = useDialogLifecycle({
-    get isOpen() { return props.isOpen; },
+    get isOpen() {
+      return props.isOpen;
+    },
     layerId,
     onEscape: props.onClose,
     closeOnEscape: true,
@@ -71,7 +79,7 @@ export function MobileDrawer(props: MobileDrawerProps) {
 
     const handleTabKey = (event: KeyboardEvent) => {
       if (!isTopLayer()) return;
-      if (event.key !== 'Tab') return;
+      if (event.key !== "Tab") return;
       const currentFocusable = getFocusableElements(container);
       if (currentFocusable.length === 0) {
         event.preventDefault();
@@ -97,10 +105,13 @@ export function MobileDrawer(props: MobileDrawerProps) {
       }
     };
 
-    document.addEventListener('keydown', handleTabKey);
+    document.addEventListener("keydown", handleTabKey);
     onCleanup(() => {
-      document.removeEventListener('keydown', handleTabKey);
-      if (previousFocusedElement && shouldRestoreFocus(previousFocusedElement, container)) {
+      document.removeEventListener("keydown", handleTabKey);
+      if (
+        previousFocusedElement &&
+        shouldRestoreFocus(previousFocusedElement, container)
+      ) {
         previousFocusedElement.focus();
       }
     });
@@ -115,12 +126,12 @@ export function MobileDrawer(props: MobileDrawerProps) {
     currentX = e.touches[0].clientX;
     const diff = currentX - startX;
 
-    if (side() === 'left' && diff < 0) {
+    if (side() === "left" && diff < 0) {
       const translateX = Math.max(diff, -280);
       if (drawerRef) {
         drawerRef.style.transform = `translateX(${translateX}px)`;
       }
-    } else if (side() === 'right' && diff > 0) {
+    } else if (side() === "right" && diff > 0) {
       const translateX = Math.min(diff, 280);
       if (drawerRef) {
         drawerRef.style.transform = `translateX(${translateX}px)`;
@@ -132,12 +143,15 @@ export function MobileDrawer(props: MobileDrawerProps) {
     const diff = currentX - startX;
     const threshold = 80;
 
-    if ((side() === 'left' && diff < -threshold) || (side() === 'right' && diff > threshold)) {
+    if (
+      (side() === "left" && diff < -threshold) ||
+      (side() === "right" && diff > threshold)
+    ) {
       props.onClose();
     }
 
     if (drawerRef) {
-      drawerRef.style.transform = '';
+      drawerRef.style.transform = "";
     }
   };
 
@@ -155,10 +169,16 @@ export function MobileDrawer(props: MobileDrawerProps) {
           role="dialog"
           aria-modal="true"
           aria-labelledby={props.title ? titleId : undefined}
-          aria-label={props.title ? undefined : t('menu')}
+          aria-label={props.title ? undefined : t("menu")}
           tabIndex={-1}
-          class={`absolute top-0 bottom-0 w-[280px] max-w-[85vw] bg-white dark:bg-zinc-900 shadow-xl ${side() === 'left' ? 'animate-slide-in-left' : 'animate-slide-in-right'} flex flex-col pt-[var(--spacing-safe-top)] ${
-            side() === 'left' ? 'left-0 pl-[var(--spacing-safe-left)]' : 'right-0 pr-[var(--spacing-safe-right)]'
+          class={`absolute top-0 bottom-0 w-[280px] max-w-[85vw] bg-white dark:bg-zinc-900 shadow-xl ${
+            side() === "left"
+              ? "animate-slide-in-left"
+              : "animate-slide-in-right"
+          } flex flex-col pt-[var(--spacing-safe-top)] ${
+            side() === "left"
+              ? "left-0 pl-[var(--spacing-safe-left)]"
+              : "right-0 pr-[var(--spacing-safe-right)]"
           }`}
           onTouchStart={handleTouchStart}
           onTouchMove={handleTouchMove}
@@ -166,12 +186,17 @@ export function MobileDrawer(props: MobileDrawerProps) {
         >
           <Show when={props.title}>
             <div class="flex items-center justify-between px-4 py-3 border-b border-zinc-100 dark:border-zinc-800">
-              <h2 id={titleId} class="text-lg font-semibold text-zinc-900 dark:text-zinc-100">{props.title}</h2>
+              <h2
+                id={titleId}
+                class="text-lg font-semibold text-zinc-900 dark:text-zinc-100"
+              >
+                {props.title}
+              </h2>
               <button
                 type="button"
                 class="w-10 h-10 flex items-center justify-center rounded-lg hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors"
                 onClick={props.onClose}
-                aria-label={t('close')}
+                aria-label={t("close")}
               >
                 <Icons.X class="w-5 h-5 text-zinc-500 dark:text-zinc-400" />
               </button>

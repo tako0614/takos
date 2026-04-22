@@ -1,4 +1,4 @@
-export type MemoryType = 'episode' | 'semantic' | 'procedural';
+export type MemoryType = "episode" | "semantic" | "procedural";
 
 export interface Memory {
   id: string;
@@ -24,9 +24,13 @@ export interface Memory {
   updated_at: string;
 }
 
-export type ReminderTriggerType = 'time' | 'condition' | 'context';
-export type ReminderStatus = 'pending' | 'triggered' | 'completed' | 'dismissed';
-export type ReminderPriority = 'low' | 'normal' | 'high' | 'critical';
+export type ReminderTriggerType = "time" | "condition" | "context";
+export type ReminderStatus =
+  | "pending"
+  | "triggered"
+  | "completed"
+  | "dismissed";
+export type ReminderPriority = "low" | "normal" | "high" | "critical";
 
 export interface Reminder {
   id: string;

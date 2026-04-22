@@ -4,6 +4,7 @@ import {
   ensureManagedTakosTokenValue,
   normalizeTakosScopes,
   resolveTakosApiUrl,
+  resolveTakosInternalApiUrl,
   upsertManagedTakosTokenConfig,
 } from "../common-env/takos-managed.ts";
 import {
@@ -39,7 +40,10 @@ export interface PublicationKindDescriptor {
   outputs: PublicationOutputDescriptor[];
 }
 
-type PublicationEnv = Pick<Env, "DB" | "ENCRYPTION_KEY" | "ADMIN_DOMAIN">;
+type PublicationEnv = Pick<
+  Env,
+  "DB" | "ENCRYPTION_KEY" | "ADMIN_DOMAIN" | "TAKOS_INTERNAL_API_URL"
+>;
 
 type PublicationOutputValue = {
   value: string;
@@ -75,12 +79,19 @@ type PublicationResolveParams = {
 
 type PublicationKindDefinition = {
   descriptor: PublicationKindDescriptor;
-  normalize(publication: AppPublication): AppPublication;
+  normalize(
+    publication: AppPublication,
+    options?: PublicationNormalizeOptions,
+  ): AppPublication;
   syncConsumeState(params: PublicationSyncParams): Promise<ConsumeState>;
   cleanupConsumeState(params: PublicationCleanupParams): Promise<void>;
   resolveOutputs(
     params: PublicationResolveParams,
   ): Promise<Record<string, PublicationOutputValue>>;
+};
+
+export type PublicationNormalizeOptions = {
+  allowRelativeOAuthRedirectUris?: boolean;
 };
 
 const PUBLICATION_ENV_PLACEHOLDER = "{PUBLICATION}";
@@ -94,6 +105,10 @@ const PUBLICATION_OUTPUT_CLIENT_SECRET_ENV =
   `PUBLICATION_${PUBLICATION_ENV_PLACEHOLDER}_CLIENT_SECRET`;
 const PUBLICATION_OUTPUT_ISSUER_ENV =
   `PUBLICATION_${PUBLICATION_ENV_PLACEHOLDER}_ISSUER`;
+const PUBLICATION_OUTPUT_TOKEN_ENDPOINT_ENV =
+  `PUBLICATION_${PUBLICATION_ENV_PLACEHOLDER}_TOKEN_ENDPOINT`;
+const PUBLICATION_OUTPUT_USERINFO_ENDPOINT_ENV =
+  `PUBLICATION_${PUBLICATION_ENV_PLACEHOLDER}_USERINFO_ENDPOINT`;
 
 type TakosPublicationType = "api-key" | "oauth-client";
 
@@ -209,9 +224,22 @@ function normalizePublicationMetadata(
 function normalizeOAuthRedirectUris(
   values: unknown,
   field: string,
+  options: PublicationNormalizeOptions = {},
 ): string[] {
   const normalized = normalizeStringList(values, field);
   for (const uri of normalized) {
+    if (options.allowRelativeOAuthRedirectUris && uri.startsWith("/")) {
+      if (uri.startsWith("//")) {
+        throw new Error(`Invalid ${field} entry: ${uri}`);
+      }
+      const parsedRelative = new URL(uri, "https://takos.local");
+      if (parsedRelative.hash) {
+        throw new Error(
+          `Invalid ${field} entry: ${uri} must not include a fragment`,
+        );
+      }
+      continue;
+    }
     let parsed: URL;
     try {
       parsed = new URL(uri);
@@ -258,6 +286,7 @@ function normalizeTakosApiPublication(
 
 function normalizeTakosOAuthPublication(
   publication: AppPublication,
+  options: PublicationNormalizeOptions = {},
 ): AppPublication {
   const name = normalizeName(publication.name, "publication.name");
   if (
@@ -271,6 +300,7 @@ function normalizeTakosOAuthPublication(
   const redirectUris = normalizeOAuthRedirectUris(
     spec.redirectUris,
     `publication '${name}'.spec.redirectUris`,
+    options,
   );
   const scopes = normalizeStringList(
     spec.scopes,
@@ -447,7 +477,7 @@ const takosApiDefinition: PublicationKindDefinition = {
     });
   },
   async resolveOutputs(params) {
-    const endpoint = resolveTakosApiUrl(params.env);
+    const endpoint = resolveTakosInternalApiUrl(params.env);
     if (!endpoint) {
       throw new Error("ADMIN_DOMAIN must be set to use Takos publications");
     }
@@ -491,6 +521,16 @@ const takosOAuthDefinition: PublicationKindDefinition = {
         true,
       ),
       withDefaultEnvTemplate("issuer", PUBLICATION_OUTPUT_ISSUER_ENV, false),
+      withDefaultEnvTemplate(
+        "tokenEndpoint",
+        PUBLICATION_OUTPUT_TOKEN_ENDPOINT_ENV,
+        false,
+      ),
+      withDefaultEnvTemplate(
+        "userinfoEndpoint",
+        PUBLICATION_OUTPUT_USERINFO_ENDPOINT_ENV,
+        false,
+      ),
     ],
   },
   normalize: normalizeTakosOAuthPublication,
@@ -560,6 +600,10 @@ const takosOAuthDefinition: PublicationKindDefinition = {
     if (!issuer) {
       throw new Error("ADMIN_DOMAIN must be set to use Takos publications");
     }
+    const serverApiUrl = resolveTakosInternalApiUrl(params.env);
+    if (!serverApiUrl) {
+      throw new Error("ADMIN_DOMAIN must be set to use Takos publications");
+    }
     const clientId = typeof params.state?.clientId === "string"
       ? params.state.clientId
       : null;
@@ -582,6 +626,14 @@ const takosOAuthDefinition: PublicationKindDefinition = {
       clientId: { value: clientId, secret: false },
       clientSecret: { value: clientSecret, secret: true },
       issuer: { value: issuer, secret: false },
+      tokenEndpoint: {
+        value: `${serverApiUrl.replace(/\/$/, "")}/oauth/token`,
+        secret: false,
+      },
+      userinfoEndpoint: {
+        value: `${serverApiUrl.replace(/\/$/, "")}/oauth/userinfo`,
+        secret: false,
+      },
     };
   },
 };
@@ -630,8 +682,9 @@ function getPublicationDefinition(
 
 export function normalizeGrantPublication(
   publication: AppPublication,
+  options: PublicationNormalizeOptions = {},
 ): AppPublication {
-  return getPublicationDefinition(publication).normalize(publication);
+  return getPublicationDefinition(publication).normalize(publication, options);
 }
 
 export function assertGrantPublicationPrerequisites(params: {

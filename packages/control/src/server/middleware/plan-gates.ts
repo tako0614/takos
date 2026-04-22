@@ -1,12 +1,12 @@
-import type { MiddlewareHandler } from 'hono';
-import type { Env, User } from '../../shared/types/index.ts';
+import type { MiddlewareHandler } from "hono";
+import type { Env, User } from "../../shared/types/index.ts";
 import {
   checkWeeklyRuntimeLimit,
   WEEKLY_RUNTIME_LIMIT_SECONDS,
   WEEKLY_RUNTIME_WINDOW_DAYS,
-} from '../../application/services/billing/billing.ts';
-import { PaymentRequiredError } from 'takos-common/errors';
-import { logError } from '../../shared/utils/logger.ts';
+} from "../../application/services/billing/billing.ts";
+import { PaymentRequiredError } from "takos-common/errors";
+import { logError } from "../../shared/utils/logger.ts";
 
 export const planGateDeps = {
   checkWeeklyRuntimeLimit,
@@ -34,12 +34,12 @@ export function requireWeeklyRuntimeLimitForAgent(options?: {
 
   return async (c, next) => {
     const method = c.req.method.toUpperCase();
-    if (method === 'GET' || method === 'HEAD' || method === 'OPTIONS') {
+    if (method === "GET" || method === "HEAD" || method === "OPTIONS") {
       await next();
       return;
     }
 
-    const user = c.get('user');
+    const user = c.get("user");
     if (!user) {
       await next();
       return;
@@ -57,7 +57,9 @@ export function requireWeeklyRuntimeLimitForAgent(options?: {
         },
       );
     } catch (err) {
-      logError('Failed to check weekly runtime limit', err, { module: 'plangate' });
+      logError("Failed to check weekly runtime limit", err, {
+        module: "plangate",
+      });
       // Allow request through on check failure to avoid blocking users
       await next();
       return;
@@ -65,10 +67,11 @@ export function requireWeeklyRuntimeLimitForAgent(options?: {
 
     if (!check.allowed && !options?.shadow) {
       if (check.retryAfterSeconds > 0) {
-        c.header('Retry-After', String(check.retryAfterSeconds));
+        c.header("Retry-After", String(check.retryAfterSeconds));
       }
-      throw new PaymentRequiredError('Weekly runtime limit exceeded', {
-        reason: `Weekly runtime limit reached (${check.usedSeconds}/${check.limitSeconds} seconds in rolling ${check.windowDays}-day window)`,
+      throw new PaymentRequiredError("Weekly runtime limit exceeded", {
+        reason:
+          `Weekly runtime limit reached (${check.usedSeconds}/${check.limitSeconds} seconds in rolling ${check.windowDays}-day window)`,
         used_seconds_7d: check.usedSeconds,
         limit_seconds_7d: check.limitSeconds,
         retry_after_seconds: check.retryAfterSeconds,

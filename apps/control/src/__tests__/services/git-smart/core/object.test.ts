@@ -10,10 +10,7 @@ import {
 } from "@/services/git-smart/core/object";
 import type { GitSignature, TreeEntry } from "@/services/git-smart/types";
 
-import {
-  assertEquals,
-  assertThrows,
-} from "jsr:@std/assert";
+import { assertEquals, assertThrows } from "jsr:@std/assert";
 
 const enc = new TextEncoder();
 

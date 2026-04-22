@@ -5,9 +5,9 @@
  * Current state is reconstructed from canonical tables (`groups`, `resources`,
  * `services`) plus the group's observed routing snapshot.
  *
- * Resource reconciliation was retired from the manifest deploy pipeline. The
- * current-state resource snapshot is still carried for observability and
- * legacy internal APIs, but app-manifest diffs intentionally ignore it.
+ * Resource reconciliation is part of the manifest deploy pipeline for
+ * manifest-owned resources. The current-state snapshot is reconstructed from
+ * canonical resource rows and compared with `manifest.resources`.
  */
 
 import type { GroupDesiredState, ObservedGroupState } from "./group-state.ts";
@@ -15,6 +15,7 @@ import type { GroupDesiredState, ObservedGroupState } from "./group-state.ts";
 export type DiffAction = "create" | "update" | "delete" | "unchanged";
 
 export type EntityCategory =
+  | "resource"
   | "worker"
   | "container"
   | "service"
@@ -79,7 +80,7 @@ function desiredEntryMatchesTarget(
 }
 
 export function validateTargetsAgainstDesiredState(
-  desired: Pick<GroupDesiredState, "workloads" | "routes">,
+  desired: Pick<GroupDesiredState, "resources" | "workloads" | "routes">,
   targets?: string[],
 ): string[] {
   const normalizedTargets = (targets ?? []).map((target) => target.trim())
@@ -88,6 +89,12 @@ export function validateTargetsAgainstDesiredState(
 
   const unmatched: string[] = [];
   for (const target of normalizedTargets) {
+    const resourceMatch = Object.values(desired.resources).some((resource) =>
+      desiredEntryMatchesTarget(
+        { name: resource.name, category: "resource" },
+        target,
+      )
+    );
     const workloadMatch = Object.values(desired.workloads).some((workload) =>
       desiredEntryMatchesTarget(
         { name: workload.name, category: workload.category },
@@ -97,7 +104,7 @@ export function validateTargetsAgainstDesiredState(
     const routeMatch = Object.values(desired.routes).some((route) =>
       desiredEntryMatchesTarget({ name: route.name, category: "route" }, target)
     );
-    if (!workloadMatch && !routeMatch) {
+    if (!resourceMatch && !workloadMatch && !routeMatch) {
       unmatched.push(target);
     }
   }
@@ -149,6 +156,61 @@ export function computeDiff(
   current: GroupState | null,
 ): DiffResult {
   const entries: DiffEntry[] = [];
+
+  const desiredResources = desired.resources;
+  const currentResources = current?.resources ?? {};
+
+  for (const [name, resource] of Object.entries(desiredResources)) {
+    const existing = currentResources[name];
+    if (!existing) {
+      entries.push({
+        name,
+        category: "resource",
+        action: "create",
+        type: resource.spec.type,
+        reason: "new",
+      });
+      continue;
+    }
+    if (existing.type !== resource.spec.type) {
+      entries.push({
+        name,
+        category: "resource",
+        action: "update",
+        type: resource.spec.type,
+        reason: "resource type changed",
+      });
+      continue;
+    }
+    if ((existing.specFingerprint ?? "") !== resource.specFingerprint) {
+      entries.push({
+        name,
+        category: "resource",
+        action: "update",
+        type: resource.spec.type,
+        reason: "spec changed",
+      });
+    } else {
+      entries.push({
+        name,
+        category: "resource",
+        action: "unchanged",
+        type: resource.spec.type,
+      });
+    }
+  }
+
+  for (const [name, resource] of Object.entries(currentResources)) {
+    if (!desiredResources[name]) {
+      entries.push({
+        name,
+        category: "resource",
+        action: "delete",
+        type: resource.type,
+        reason: "removed from manifest",
+      });
+    }
+  }
 
   const desiredWorkloads = desired.workloads;
   const currentWorkloads = current?.workloads ?? {};

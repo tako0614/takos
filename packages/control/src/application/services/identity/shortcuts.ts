@@ -1,10 +1,20 @@
-import type { D1Database } from '../../../shared/types/bindings.ts';
-import { getDb as realGetDb, shortcuts as shortcutsTable, services as servicesTable, resources as resourcesTable } from '../../../infra/db/index.ts';
-import { eq, and, asc, inArray } from 'drizzle-orm';
-import { textDate } from '../../../shared/utils/db-guards.ts';
+import type { D1Database } from "../../../shared/types/bindings.ts";
+import {
+  getDb as realGetDb,
+  resources as resourcesTable,
+  services as servicesTable,
+  shortcuts as shortcutsTable,
+} from "../../../infra/db/index.ts";
+import { and, asc, eq, inArray } from "drizzle-orm";
+import { textDate } from "../../../shared/utils/db-guards.ts";
 
-export const ALLOWED_SHORTCUT_RESOURCE_TYPES = ['service', 'resource', 'link'] as const;
-export type ShortcutResourceType = (typeof ALLOWED_SHORTCUT_RESOURCE_TYPES)[number];
+export const ALLOWED_SHORTCUT_RESOURCE_TYPES = [
+  "service",
+  "resource",
+  "link",
+] as const;
+export type ShortcutResourceType =
+  (typeof ALLOWED_SHORTCUT_RESOURCE_TYPES)[number];
 
 export interface ShortcutInput {
   name: string;
@@ -40,7 +50,7 @@ export interface ShortcutResponse {
 export function generateShortcutId(): string {
   const bytes = new Uint8Array(8);
   crypto.getRandomValues(bytes);
-  return Array.from(bytes).map(b => b.toString(36)).join('');
+  return Array.from(bytes).map((b) => b.toString(36)).join("");
 }
 
 export const shortcutDeps = {
@@ -48,8 +58,12 @@ export const shortcutDeps = {
   generateShortcutId,
 };
 
-export function isShortcutResourceType(value: string): value is ShortcutResourceType {
-  return ALLOWED_SHORTCUT_RESOURCE_TYPES.includes(value as ShortcutResourceType);
+export function isShortcutResourceType(
+  value: string,
+): value is ShortcutResourceType {
+  return ALLOWED_SHORTCUT_RESOURCE_TYPES.includes(
+    value as ShortcutResourceType,
+  );
 }
 
 function toApiShortcut(s: {
@@ -76,16 +90,16 @@ function toApiShortcut(s: {
   resourceTypeName?: string | null;
 }): ShortcutResponse {
   return {
-    id: s.id ?? '',
-    user_id: s.userAccountId ?? s.user_account_id ?? '',
-    space_id: s.accountId ?? s.account_id ?? '',
-    resource_type: s.resourceType ?? s.resource_type ?? '',
-    resource_id: s.resourceId ?? s.resource_id ?? '',
-    name: s.name ?? '',
+    id: s.id ?? "",
+    user_id: s.userAccountId ?? s.user_account_id ?? "",
+    space_id: s.accountId ?? s.account_id ?? "",
+    resource_type: s.resourceType ?? s.resource_type ?? "",
+    resource_id: s.resourceId ?? s.resource_id ?? "",
+    name: s.name ?? "",
     icon: s.icon ?? null,
     position: s.position ?? 0,
-    created_at: textDate(s.createdAt ?? s.created_at ?? ''),
-    updated_at: textDate(s.updatedAt ?? s.updated_at ?? ''),
+    created_at: textDate(s.createdAt ?? s.created_at ?? ""),
+    updated_at: textDate(s.updatedAt ?? s.updated_at ?? ""),
     service_hostname: extra?.serviceHostname,
     service_status: extra?.serviceStatus,
     resource_name: extra?.resourceName,
@@ -93,36 +107,53 @@ function toApiShortcut(s: {
   };
 }
 
-export async function listShortcuts(db: D1Database, userId: string, spaceId: string): Promise<ShortcutResponse[]> {
+export async function listShortcuts(
+  db: D1Database,
+  userId: string,
+  spaceId: string,
+): Promise<ShortcutResponse[]> {
   const drizzle = shortcutDeps.getDb(db);
 
-  const rows = await drizzle.select().from(shortcutsTable).where(and(eq(shortcutsTable.userAccountId, userId), eq(shortcutsTable.accountId, spaceId))).orderBy(asc(shortcutsTable.position), asc(shortcutsTable.createdAt)).all();
+  const rows = await drizzle.select().from(shortcutsTable).where(
+    and(
+      eq(shortcutsTable.userAccountId, userId),
+      eq(shortcutsTable.accountId, spaceId),
+    ),
+  ).orderBy(asc(shortcutsTable.position), asc(shortcutsTable.createdAt)).all();
 
   // Collect resource IDs for batch lookup
   const serviceIds: string[] = [];
   const resourceIds: string[] = [];
 
   for (const s of rows) {
-    if (s.resourceType === 'service' || s.resourceType === 'worker') {
+    if (s.resourceType === "service" || s.resourceType === "worker") {
       serviceIds.push(s.resourceId);
-    } else if (s.resourceType === 'resource') {
+    } else if (s.resourceType === "resource") {
       resourceIds.push(s.resourceId);
     }
   }
 
   // Batch fetch services
   const services = serviceIds.length > 0
-    ? await drizzle.select({ id: servicesTable.id, hostname: servicesTable.hostname, status: servicesTable.status }).from(servicesTable).where(inArray(servicesTable.id, serviceIds)).all()
+    ? await drizzle.select({
+      id: servicesTable.id,
+      hostname: servicesTable.hostname,
+      status: servicesTable.status,
+    }).from(servicesTable).where(inArray(servicesTable.id, serviceIds)).all()
     : [];
   const serviceMap = new Map(services.map((service) => [service.id, service]));
 
   // Batch fetch resources
   const resources = resourceIds.length > 0
-    ? await drizzle.select({ id: resourcesTable.id, name: resourcesTable.name, type: resourcesTable.type }).from(resourcesTable).where(inArray(resourcesTable.id, resourceIds)).all()
+    ? await drizzle.select({
+      id: resourcesTable.id,
+      name: resourcesTable.name,
+      type: resourcesTable.type,
+    }).from(resourcesTable).where(inArray(resourcesTable.id, resourceIds)).all()
     : [];
-  const resourceMap = new Map(resources.map(r => [r.id, r]));
+  const resourceMap = new Map(resources.map((r) => [r.id, r]));
 
-  return rows.map(s => {
+  return rows.map((s) => {
     const extra: {
       serviceHostname?: string | null;
       serviceStatus?: string | null;
@@ -130,15 +161,17 @@ export async function listShortcuts(db: D1Database, userId: string, spaceId: str
       resourceTypeName?: string | null;
     } = {};
 
-    const resourceType = s.resourceType === 'worker' ? 'service' : s.resourceType;
+    const resourceType = s.resourceType === "worker"
+      ? "service"
+      : s.resourceType;
 
-    if (resourceType === 'service') {
+    if (resourceType === "service") {
       const service = serviceMap.get(s.resourceId);
       if (service) {
         extra.serviceHostname = service.hostname;
         extra.serviceStatus = service.status;
       }
-    } else if (s.resourceType === 'resource') {
+    } else if (s.resourceType === "resource") {
       const resource = resourceMap.get(s.resourceId);
       if (resource) {
         extra.resourceName = resource.name;
@@ -157,7 +190,7 @@ export async function createShortcut(
   db: D1Database,
   userId: string,
   spaceId: string,
-  input: ShortcutInput
+  input: ShortcutInput,
 ): Promise<ShortcutResponse> {
   if (!isShortcutResourceType(input.resourceType)) {
     throw new Error(`Invalid shortcut resource type: ${input.resourceType}`);
@@ -179,9 +212,11 @@ export async function createShortcut(
     createdAt: timestamp,
     updatedAt: timestamp,
   }).returning().get();
-  const created = await drizzle.select().from(shortcutsTable).where(eq(shortcutsTable.id, id)).get();
+  const created = await drizzle.select().from(shortcutsTable).where(
+    eq(shortcutsTable.id, id),
+  ).get();
   if (!created) {
-    throw new Error('Failed to create shortcut');
+    throw new Error("Failed to create shortcut");
   }
 
   return toApiShortcut(created);
@@ -192,7 +227,7 @@ export async function updateShortcut(
   userId: string,
   spaceId: string,
   id: string,
-  updates: ShortcutUpdateInput
+  updates: ShortcutUpdateInput,
 ): Promise<boolean> {
   const drizzle = shortcutDeps.getDb(db);
 
@@ -219,15 +254,32 @@ export async function updateShortcut(
 
   data.updatedAt = new Date().toISOString();
 
-  await drizzle.update(shortcutsTable).set(data).where(and(eq(shortcutsTable.id, id), eq(shortcutsTable.userAccountId, userId), eq(shortcutsTable.accountId, spaceId)));
+  await drizzle.update(shortcutsTable).set(data).where(
+    and(
+      eq(shortcutsTable.id, id),
+      eq(shortcutsTable.userAccountId, userId),
+      eq(shortcutsTable.accountId, spaceId),
+    ),
+  );
 
   return true;
 }
 
-export async function deleteShortcut(db: D1Database, userId: string, spaceId: string, id: string): Promise<void> {
+export async function deleteShortcut(
+  db: D1Database,
+  userId: string,
+  spaceId: string,
+  id: string,
+): Promise<void> {
   const drizzle = shortcutDeps.getDb(db);
 
-  await drizzle.delete(shortcutsTable).where(and(eq(shortcutsTable.id, id), eq(shortcutsTable.userAccountId, userId), eq(shortcutsTable.accountId, spaceId)));
+  await drizzle.delete(shortcutsTable).where(
+    and(
+      eq(shortcutsTable.id, id),
+      eq(shortcutsTable.userAccountId, userId),
+      eq(shortcutsTable.accountId, spaceId),
+    ),
+  );
 }
 
 export async function reorderShortcuts(
@@ -241,7 +293,7 @@ export async function reorderShortcuts(
   const timestamp = new Date().toISOString();
   const statements = orderedIds.map((id, position) =>
     db.prepare(
-      'UPDATE shortcuts SET position = ?, updated_at = ? WHERE id = ? AND user_account_id = ? AND account_id = ?'
+      "UPDATE shortcuts SET position = ?, updated_at = ? WHERE id = ? AND user_account_id = ? AND account_id = ?",
     ).bind(position, timestamp, id, userId, spaceId)
   );
 

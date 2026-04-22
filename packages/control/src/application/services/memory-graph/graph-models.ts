@@ -1,5 +1,5 @@
-export type ClaimType = 'fact' | 'preference' | 'decision' | 'observation';
-export type ClaimStatus = 'active' | 'superseded' | 'retracted';
+export type ClaimType = "fact" | "preference" | "decision" | "observation";
+export type ClaimStatus = "active" | "superseded" | "retracted";
 
 export interface Claim {
   id: string;
@@ -29,8 +29,12 @@ export interface ClaimInsert {
   sourceRunId?: string | null;
 }
 
-export type EvidenceKind = 'supports' | 'contradicts' | 'context';
-export type EvidenceSourceType = 'tool_result' | 'user_message' | 'agent_inference' | 'memory_recall';
+export type EvidenceKind = "supports" | "contradicts" | "context";
+export type EvidenceSourceType =
+  | "tool_result"
+  | "user_message"
+  | "agent_inference"
+  | "memory_recall";
 
 export interface Evidence {
   id: string;
@@ -57,7 +61,12 @@ export interface EvidenceInsert {
   taint?: string | null;
 }
 
-export type ClaimRelation = 'depends_on' | 'contradicts' | 'supports' | 'supersedes' | 'related_to';
+export type ClaimRelation =
+  | "depends_on"
+  | "contradicts"
+  | "supports"
+  | "supersedes"
+  | "related_to";
 
 export interface ClaimEdge {
   id: string;

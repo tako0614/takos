@@ -1,18 +1,24 @@
-import type { DurableNamespaceBinding, KvStoreBinding } from '../../../shared/types/bindings.ts';
+import type {
+  DurableNamespaceBinding,
+  KvStoreBinding,
+} from "../../../shared/types/bindings.ts";
 
 // Re-export routing primitives from shared/types so that consumers importing
 // from this module continue to work without changes.
 export type {
+  HttpRoute,
+  RoutingRecord,
   RoutingStore,
+  RoutingTarget,
+  StoredHttpEndpoint,
+  WeightedDeploymentTarget,
+} from "../../../shared/types/routing.ts";
+
+import type { RoutingStore } from "../../../shared/types/routing.ts";
+import type {
   RoutingRecord,
   RoutingTarget,
-  WeightedDeploymentTarget,
-  HttpRoute,
-  StoredHttpEndpoint,
-} from '../../../shared/types/routing.ts';
-
-import type { RoutingStore } from '../../../shared/types/routing.ts';
-import type { RoutingTarget, RoutingRecord } from '../../../shared/types/routing.ts';
+} from "../../../shared/types/routing.ts";
 
 export type RoutingDurableObjectNamespace = DurableNamespaceBinding;
 export type RoutingKvNamespace = KvStoreBinding;
@@ -34,13 +40,13 @@ export type ParsedRoutingValue = {
   version?: number;
   updatedAt?: number;
   tombstoneUntil?: number;
-  rawFormat: 'empty' | 'string' | 'json' | 'unknown';
+  rawFormat: "empty" | "string" | "json" | "unknown";
 };
 
 export type ResolvedRouting = {
   target: RoutingTarget | null;
   tombstone: boolean;
-  source: 'l1' | 'kv' | 'do' | 'kv_fallback' | 'store';
+  source: "l1" | "kv" | "do" | "kv_fallback" | "store";
   kv?: ParsedRoutingValue;
   record?: RoutingRecord | null;
 };

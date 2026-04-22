@@ -1,9 +1,12 @@
 import { createSignal, onMount } from "solid-js";
-import { rpc, rpcJson, rpcPath } from "../lib/rpc.ts";
+import { apiJson, rpc, rpcJson, rpcPath } from "../lib/rpc.ts";
+import { getErrorMessage } from "../lib/errors.ts";
 import { useConfirmDialog } from "../store/confirm-dialog.ts";
 import { useI18n } from "../store/i18n.ts";
 import { useToast } from "../store/toast.ts";
 import type { Resource } from "../types/index.ts";
+
+const DEPLOY_LIST_TIMEOUT_MS = 15000;
 
 function isYurucommuResource(resource: Resource): boolean {
   if (!resource.metadata) return false;
@@ -34,20 +37,27 @@ export function useSpaceResources(spaceId: string | null) {
   const refreshResources = async () => {
     setLoadingResources(true);
     try {
-      const res = await rpcPath(rpc, "resources").$get({
-        param: {},
-        query: spaceId ? { space_id: spaceId } : {},
-      });
-      const data = await rpcJson<
+      const search = new URLSearchParams();
+      if (spaceId) {
+        search.set("space_id", spaceId);
+      }
+      const query = search.toString();
+      const data = await apiJson<
         { resources?: Resource[]; owned?: Resource[]; shared?: Resource[] }
-      >(res);
+      >(`/api/resources${query ? `?${query}` : ""}`, {
+        timeoutMs: DEPLOY_LIST_TIMEOUT_MS,
+      });
       if (data.resources) {
         setResources(data.resources);
       } else {
         setResources([...(data.owned || []), ...(data.shared || [])]);
       }
-    } catch {
+    } catch (error) {
       setResources([]);
+      showToast(
+        "error",
+        getErrorMessage(error, t("failedToLoad") || "Failed to load"),
+      );
     } finally {
       setLoadingResources(false);
     }

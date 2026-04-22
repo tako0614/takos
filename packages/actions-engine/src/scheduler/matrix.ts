@@ -15,7 +15,7 @@ import type {
   MatrixConfig,
   MatrixContext,
   StrategyContext,
-} from '../workflow-models.ts';
+} from "../workflow-models.ts";
 
 /**
  * マトリクス展開の結果（展開された組み合わせ 1 件）
@@ -35,7 +35,7 @@ export interface MatrixExpansion {
 function getMatrixBaseKeys(matrix: MatrixConfig): string[] {
   const keys: string[] = [];
   for (const key of Object.keys(matrix)) {
-    if (key === 'include' || key === 'exclude') {
+    if (key === "include" || key === "exclude") {
       continue;
     }
     keys.push(key);
@@ -49,7 +49,7 @@ function getMatrixBaseKeys(matrix: MatrixConfig): string[] {
  */
 function matchesExcludeEntry(
   combination: MatrixContext,
-  excludeEntry: Record<string, unknown>
+  excludeEntry: Record<string, unknown>,
 ): boolean {
   for (const [key, value] of Object.entries(excludeEntry)) {
     if (!(key in combination)) {
@@ -69,7 +69,7 @@ function deepEqual(a: unknown, b: unknown): boolean {
   if (a === null || b === null || typeof a !== typeof b) {
     return false;
   }
-  if (typeof a !== 'object') {
+  if (typeof a !== "object") {
     return false;
   }
   if (Array.isArray(a) !== Array.isArray(b)) {
@@ -89,7 +89,7 @@ function deepEqual(a: unknown, b: unknown): boolean {
   return aKeys.every((key) =>
     deepEqual(
       (a as Record<string, unknown>)[key],
-      (b as Record<string, unknown>)[key]
+      (b as Record<string, unknown>)[key],
     )
   );
 }
@@ -99,7 +99,7 @@ function deepEqual(a: unknown, b: unknown): boolean {
  */
 function buildCartesianProduct(
   matrix: MatrixConfig,
-  keys: string[]
+  keys: string[],
 ): MatrixContext[] {
   if (keys.length === 0) {
     return [];
@@ -136,7 +136,7 @@ function buildCartesianProduct(
 function applyIncludeEntries(
   combinations: MatrixContext[],
   includes: Record<string, unknown>[],
-  baseKeys: string[]
+  baseKeys: string[],
 ): MatrixContext[] {
   const baseKeySet = new Set(baseKeys);
   const result: MatrixContext[] = combinations.map((entry) => ({ ...entry }));
@@ -146,7 +146,7 @@ function applyIncludeEntries(
       baseKeySet.has(key)
     );
     const includeExtraKeys = Object.keys(includeEntry).filter(
-      (key) => !baseKeySet.has(key)
+      (key) => !baseKeySet.has(key),
     );
 
     // ベース matrix キーが無い include は新しい combination を追加するだけ
@@ -198,23 +198,23 @@ function hashMatrixCombination(combination: MatrixContext): string {
   for (const key of sortedKeys) {
     const value = combination[key];
     let serialized: string;
-    if (typeof value === 'string') {
+    if (typeof value === "string") {
       serialized = value;
-    } else if (typeof value === 'number' || typeof value === 'boolean') {
+    } else if (typeof value === "number" || typeof value === "boolean") {
       serialized = String(value);
     } else if (value === null || value === undefined) {
-      serialized = 'null';
+      serialized = "null";
     } else {
       serialized = JSON.stringify(value);
     }
     segments.push(`${key}=${serialized}`);
   }
   if (segments.length === 0) {
-    return 'default';
+    return "default";
   }
   // Replace potentially unsafe characters so the id suffix stays filesystem-friendly
-  const joined = segments.join(',');
-  return joined.replace(/[^A-Za-z0-9_\-=,.]/g, '_');
+  const joined = segments.join(",");
+  return joined.replace(/[^A-Za-z0-9_\-=,.]/g, "_");
 }
 
 /**
@@ -223,7 +223,7 @@ function hashMatrixCombination(combination: MatrixContext): string {
  * `matrix` が未指定 / 空の場合は空配列を返す（呼び出し側で単発実行扱いにする）。
  */
 export function expandMatrix(
-  strategy: JobStrategy | undefined
+  strategy: JobStrategy | undefined,
 ): MatrixExpansion[] {
   if (!strategy?.matrix) {
     return [];
@@ -255,7 +255,7 @@ export function expandMatrix(
   const combinationsWithIncludes = applyIncludeEntries(
     filteredCombinations,
     includeEntries,
-    baseKeys
+    baseKeys,
   );
 
   // ベースキー無しで include だけが指定されていた場合、
@@ -271,21 +271,22 @@ export function expandMatrix(
     return [];
   }
 
-  const failFast = strategy['fail-fast'] ?? true;
-  const maxParallel = strategy['max-parallel'] ?? combinationsWithIncludes.length;
+  const failFast = strategy["fail-fast"] ?? true;
+  const maxParallel = strategy["max-parallel"] ??
+    combinationsWithIncludes.length;
 
   // 各組み合わせを MatrixExpansion へ変換
   const expansions: MatrixExpansion[] = combinationsWithIncludes.map(
     (combination, index) => ({
       matrix: combination,
       strategy: {
-        'fail-fast': failFast,
-        'job-index': index,
-        'job-total': combinationsWithIncludes.length,
-        'max-parallel': maxParallel,
+        "fail-fast": failFast,
+        "job-index": index,
+        "job-total": combinationsWithIncludes.length,
+        "max-parallel": maxParallel,
       },
       hash: hashMatrixCombination(combination),
-    })
+    }),
   );
 
   return expansions;

@@ -31,7 +31,15 @@ Takos 上で group を deploy する方法は [Deploy](/deploy/) を参照して
   鍵ローテーション計画と一緒に管理する
 
 詳細な production checklist は [Kubernetes](/hosting/kubernetes) と各
-cloud-specific ページを参照してください。:::
+cloud-specific ページを参照してください。
+:::
+
+セルフホストは検証専用ではありません。PostgreSQL / Redis / S3-compatible object
+storage / TLS / secret management を production-grade backing services
+に置き換えた構成は production packaging として扱えます。current contract
+に含まれない項目は
+[Not A Current Contract](/hosting/differences#not-a-current-contract)
+を参照してください。
 
 ## 必要なもの
 
@@ -329,16 +337,16 @@ services:
 
 #### Executor
 
-- **イメージ**: private server stack は
-  `takos-private/apps/executor/Dockerfile`、OSS local stack は
-  `apps/rust-agent/Dockerfile` からビルド
+- **イメージ**: private server stack / OSS local stack とも
+  `apps/rust-agent/Dockerfile` から `takos-rust-agent` container をビルド
 - **ポート**: `TAKOS_EXECUTOR_PORT`（デフォルト `8082`）→ コンテナポート `8080`
 - **役割**: エージェント実行コンテナ
-- **構成**: `takos-private/apps/executor` が Takos control RPC / remote tools /
-  skill prompt bridge を提供
+- **構成**: `apps/rust-agent` が Takos control RPC / remote tools /
+  skill prompt bridge を提供。`takos-private/apps/executor` は legacy / fallback
+  用の TypeScript executor として残す
 
-この executor container は private server stack では `takos-private`
-側で組み立てます。OSS local stack では `rust-agent` container を使います。Takos
+この executor container は private server stack でも `rust-agent` container
+を使います。Takos
 は platform 全体を単一の runtime に寄せず、agent loop を executor container
 に分離し、control plane は space state と remote tool 実体を保持します。
 
@@ -347,8 +355,9 @@ services:
 - **コマンド**: `deno task --cwd apps/control dev:local:oci-orchestrator`
 - **ポート**: `TAKOS_OCI_ORCHESTRATOR_PORT`（デフォルト `9002`）
 - **役割**: backend-specific な container runtime。worker-attached / Service
-  container workload の互換実行面で、既定では Docker を使い、`k8s` / `cloud-run`
-  / `ecs` backend は OCI orchestrator 経由の backend-specific runtime を使う
+  container workload の実行面で、既定では Docker を使う。`k8s` / `cloud-run` /
+  `ecs` は OCI orchestrator 経由の tenant image workload adapter であり、 Takos
+  kernel hosting target ではない
 - **特殊設定**: Docker fallback を使う場合は `/var/run/docker.sock`
   をマウントしてホストの Docker を操作
 - **ネットワーク**: `default` + `takos-containers`（コンテナ間通信用）

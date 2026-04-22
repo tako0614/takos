@@ -1,5 +1,8 @@
-import type { RepositoryVisibility, User } from '../../../shared/types/index.ts';
-import { textDateNullable } from '../../../shared/utils/db-guards.ts';
+import type {
+  RepositoryVisibility,
+  User,
+} from "../../../shared/types/index.ts";
+import { textDateNullable } from "../../../shared/utils/db-guards.ts";
 
 // ---------------------------------------------------------------------------
 // Repository response formatter
@@ -19,7 +22,7 @@ export type RepositoryResponseSource = {
 
 export function formatRepositoryResponse(
   repository: RepositoryResponseSource,
-  ownerUsername: string
+  ownerUsername: string,
 ) {
   return {
     owner_username: ownerUsername,
@@ -48,22 +51,26 @@ export function toWorkspaceResponse(ws: {
   owner_principal_id?: string;
   automation_principal_id?: string | null;
   head_snapshot_id?: string | null;
-  security_posture?: 'standard' | 'restricted_egress';
+  security_posture?: "standard" | "restricted_egress";
   created_at: string;
   updated_at: string;
   member_role?: string;
-  repository?: { id: string; name: string | null; default_branch: string | null } | null;
+  repository?: {
+    id: string;
+    name: string | null;
+    default_branch: string | null;
+  } | null;
 }) {
-  const slug = ws.slug || ws.id || 'unknown';
+  const slug = ws.slug || ws.id || "unknown";
   return {
     id: ws.id,
     slug,
     name: ws.name,
     description: ws.description ?? null,
-    kind: ws.kind || 'team',
+    kind: ws.kind || "team",
     owner_principal_id: ws.owner_principal_id || null,
     automation_principal_id: ws.automation_principal_id ?? null,
-    security_posture: ws.security_posture ?? 'standard',
+    security_posture: ws.security_posture ?? "standard",
     created_at: ws.created_at,
     updated_at: ws.updated_at,
   };

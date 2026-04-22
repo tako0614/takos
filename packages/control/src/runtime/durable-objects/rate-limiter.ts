@@ -1,13 +1,13 @@
 import {
-  hitSlidingWindow,
   cleanupExpiredEntries,
   enforceKeyLimit,
+  hitSlidingWindow,
   hitTokenBucket,
   type TokenBucketState,
-} from '../../shared/utils/rate-limiter.ts';
+} from "../../shared/utils/rate-limiter.ts";
 
-import { jsonResponse } from './do-header-utils.ts';
-import { logWarn } from '../../shared/utils/logger.ts';
+import { jsonResponse } from "./do-header-utils.ts";
+import { logWarn } from "../../shared/utils/logger.ts";
 
 interface RateLimitEntry {
   timestamps: number[];
@@ -18,7 +18,7 @@ interface RateLimitStorage {
   tokenBuckets?: Record<string, TokenBucketState>;
 }
 
-type RateLimiterAlgorithm = 'sliding_window' | 'token_bucket' | 'shadow';
+type RateLimiterAlgorithm = "sliding_window" | "token_bucket" | "shadow";
 
 interface RateLimitRequest {
   key: string;
@@ -46,9 +46,11 @@ export class RateLimiterDO implements DurableObject {
   constructor(state: DurableObjectState) {
     this.state = state;
     this.state.blockConcurrencyWhile(async () => {
-      const stored = await this.state.storage.get<RateLimitStorage>('data');
+      const stored = await this.state.storage.get<RateLimitStorage>("data");
       if (stored?.entries) {
-        this.entries = new Map(Object.entries(stored.entries).map(([k, v]) => [k, v.timestamps]));
+        this.entries = new Map(
+          Object.entries(stored.entries).map(([k, v]) => [k, v.timestamps]),
+        );
       }
       if (stored?.tokenBuckets) {
         this.tokenBuckets = new Map(Object.entries(stored.tokenBuckets));
@@ -56,7 +58,9 @@ export class RateLimiterDO implements DurableObject {
       // Schedule periodic cleanup alarm
       const existing = await this.state.storage.getAlarm();
       if (!existing) {
-        await this.state.storage.setAlarm(Date.now() + RateLimiterDO.CLEANUP_INTERVAL_MS);
+        await this.state.storage.setAlarm(
+          Date.now() + RateLimiterDO.CLEANUP_INTERVAL_MS,
+        );
       }
     });
   }
@@ -64,13 +68,15 @@ export class RateLimiterDO implements DurableObject {
   private async persist(): Promise<void> {
     const data: RateLimitStorage = {
       entries: Object.fromEntries(
-        Array.from(this.entries.entries()).map(([k, v]) => [k, { timestamps: v }])
+        Array.from(this.entries.entries()).map((
+          [k, v],
+        ) => [k, { timestamps: v }]),
       ),
       tokenBuckets: Object.fromEntries(
-        Array.from(this.tokenBuckets.entries()).map(([k, v]) => [k, v])
+        Array.from(this.tokenBuckets.entries()).map(([k, v]) => [k, v]),
       ),
     };
-    await this.state.storage.put('data', data);
+    await this.state.storage.put("data", data);
   }
 
   private maybeCleanup(windowMs: number): void {
@@ -93,20 +99,29 @@ export class RateLimiterDO implements DurableObject {
         enforceKeyLimit(this.entries, RateLimiterDO.MAX_KEYS);
       } catch (err) {
         // Fallback: brute-force evict oldest entries so the map cannot grow unbounded.
-        const toRemove = Math.max(0, this.entries.size - RateLimiterDO.MAX_KEYS + 100);
+        const toRemove = Math.max(
+          0,
+          this.entries.size - RateLimiterDO.MAX_KEYS + 100,
+        );
         let removed = 0;
         for (const key of this.entries.keys()) {
           if (removed >= toRemove) break;
           this.entries.delete(key);
           removed++;
         }
-        logWarn(`Rate limiter: enforceKeyLimit failed, force-removed ${removed} entries`, { module: 'durable-objects/rate-limiter', detail: err });
+        logWarn(
+          `Rate limiter: enforceKeyLimit failed, force-removed ${removed} entries`,
+          { module: "durable-objects/rate-limiter", detail: err },
+        );
       }
     }
     if (this.tokenBuckets.size >= RateLimiterDO.MAX_KEYS) {
       const toRemove = Math.max(
         0,
-        Math.min(this.tokenBuckets.size - RateLimiterDO.MAX_KEYS + 100, this.tokenBuckets.size)
+        Math.min(
+          this.tokenBuckets.size - RateLimiterDO.MAX_KEYS + 100,
+          this.tokenBuckets.size,
+        ),
       );
       let removed = 0;
       for (const key of this.tokenBuckets.keys()) {
@@ -115,7 +130,10 @@ export class RateLimiterDO implements DurableObject {
         removed++;
       }
       if (removed > 0) {
-        logWarn(`Rate limiter: Force-removed ${removed} token bucket entries due to key limit`, { module: 'durable-objects/rate-limiter' });
+        logWarn(
+          `Rate limiter: Force-removed ${removed} token bucket entries due to key limit`,
+          { module: "durable-objects/rate-limiter" },
+        );
       }
     }
   }
@@ -131,20 +149,20 @@ export class RateLimiterDO implements DurableObject {
       // requests; without serialization, maybeCleanup, checkKeyLimit,
       // and the read-modify-write cycles in handleCheck/handleHit can
       // interleave and corrupt state.
-      if (path === '/check' && request.method === 'POST') {
+      if (path === "/check" && request.method === "POST") {
         const data = await request.json() as RateLimitRequest;
         return this.state.blockConcurrencyWhile(() => this.handleCheck(data));
       }
-      if (path === '/hit' && request.method === 'POST') {
+      if (path === "/hit" && request.method === "POST") {
         const data = await request.json() as RateLimitRequest;
         return this.state.blockConcurrencyWhile(() => this.handleHit(data));
       }
-      if (path === '/reset' && request.method === 'POST') {
+      if (path === "/reset" && request.method === "POST") {
         const data = await request.json() as { key: string };
         return this.state.blockConcurrencyWhile(() => this.handleReset(data));
       }
 
-      return new Response('Not Found', { status: 404 });
+      return new Response("Not Found", { status: 404 });
     } catch (error) {
       return jsonResponse({ error: String(error) }, 500);
     }
@@ -152,47 +170,64 @@ export class RateLimiterDO implements DurableObject {
 
   private async handleCheck(data: RateLimitRequest): Promise<Response> {
     const { key, maxRequests, windowMs } = data;
-    const algorithm: RateLimiterAlgorithm = data.algorithm ?? 'sliding_window';
+    const algorithm: RateLimiterAlgorithm = data.algorithm ?? "sliding_window";
     this.maybeCleanup(windowMs);
 
-    if (algorithm === 'token_bucket') {
+    if (algorithm === "token_bucket") {
       const state = this.tokenBuckets.get(key);
-      const { state: next, result } = hitTokenBucket(state, { maxRequests, windowMs }, undefined, true);
+      const { state: next, result } = hitTokenBucket(
+        state,
+        { maxRequests, windowMs },
+        undefined,
+        true,
+      );
       this.tokenBuckets.set(key, next);
       this.entries.delete(key);
 
-      return jsonResponse({ ...result, algorithm: 'token_bucket' });
+      return jsonResponse({ ...result, algorithm: "token_bucket" });
     }
 
     const timestamps = this.entries.get(key) || [];
-    const sliding = hitSlidingWindow(timestamps, { maxRequests, windowMs }, undefined, true).result;
+    const sliding =
+      hitSlidingWindow(timestamps, { maxRequests, windowMs }, undefined, true)
+        .result;
 
-    if (algorithm === 'shadow') {
+    if (algorithm === "shadow") {
       const state = this.tokenBuckets.get(key);
-      const { state: next, result: tokenBucket } = hitTokenBucket(state, { maxRequests, windowMs }, undefined, true);
+      const { state: next, result: tokenBucket } = hitTokenBucket(
+        state,
+        { maxRequests, windowMs },
+        undefined,
+        true,
+      );
       this.tokenBuckets.set(key, next);
 
       return jsonResponse({
         ...sliding,
-        algorithm: 'sliding_window',
+        algorithm: "sliding_window",
         shadow: { token_bucket: tokenBucket },
       });
     }
 
-    return jsonResponse({ ...sliding, algorithm: 'sliding_window' });
+    return jsonResponse({ ...sliding, algorithm: "sliding_window" });
   }
 
   private async handleHit(data: RateLimitRequest): Promise<Response> {
     const { key, maxRequests, windowMs } = data;
-    const algorithm: RateLimiterAlgorithm = data.algorithm ?? 'sliding_window';
-    const shadowSampleRate = Number.isFinite(data.shadowSampleRate) ? Math.max(0, Math.min(1, data.shadowSampleRate!)) : 0.01;
+    const algorithm: RateLimiterAlgorithm = data.algorithm ?? "sliding_window";
+    const shadowSampleRate = Number.isFinite(data.shadowSampleRate)
+      ? Math.max(0, Math.min(1, data.shadowSampleRate!))
+      : 0.01;
 
     this.maybeCleanup(windowMs);
     this.checkKeyLimit();
 
-    if (algorithm === 'token_bucket') {
+    if (algorithm === "token_bucket") {
       const state = this.tokenBuckets.get(key);
-      const { state: next, result } = hitTokenBucket(state, { maxRequests, windowMs });
+      const { state: next, result } = hitTokenBucket(state, {
+        maxRequests,
+        windowMs,
+      });
       this.tokenBuckets.set(key, next);
       this.entries.delete(key);
 
@@ -200,7 +235,7 @@ export class RateLimiterDO implements DurableObject {
         await this.persist();
       }
 
-      return jsonResponse({ ...result, algorithm: 'token_bucket' });
+      return jsonResponse({ ...result, algorithm: "token_bucket" });
     }
 
     const timestamps = this.entries.get(key) || [];
@@ -211,7 +246,7 @@ export class RateLimiterDO implements DurableObject {
       this.entries.set(key, slidingOut.timestamps);
     }
 
-    if (algorithm === 'shadow') {
+    if (algorithm === "shadow") {
       const bucketState = this.tokenBuckets.get(key);
       const tokenOut = hitTokenBucket(bucketState, { maxRequests, windowMs });
       this.tokenBuckets.set(key, tokenOut.state);
@@ -222,20 +257,23 @@ export class RateLimiterDO implements DurableObject {
       }
 
       if (slidingAllowed !== tokenAllowed && Math.random() < shadowSampleRate) {
-        logWarn('shadow mismatch', { module: 'ratelimiterdo', ...{
-          key,
-          maxRequests,
-          windowMs,
-          sliding_allowed: slidingAllowed,
-          token_allowed: tokenAllowed,
-          sliding_remaining: slidingOut.result.remaining,
-          token_remaining: tokenOut.result.remaining,
-        } });
+        logWarn("shadow mismatch", {
+          module: "ratelimiterdo",
+          ...{
+            key,
+            maxRequests,
+            windowMs,
+            sliding_allowed: slidingAllowed,
+            token_allowed: tokenAllowed,
+            sliding_remaining: slidingOut.result.remaining,
+            token_remaining: tokenOut.result.remaining,
+          },
+        });
       }
 
       return jsonResponse({
         ...slidingOut.result,
-        algorithm: 'sliding_window',
+        algorithm: "sliding_window",
         shadow: { token_bucket: tokenOut.result },
       });
     }
@@ -244,7 +282,7 @@ export class RateLimiterDO implements DurableObject {
       await this.persist();
     }
 
-    return jsonResponse({ ...slidingOut.result, algorithm: 'sliding_window' });
+    return jsonResponse({ ...slidingOut.result, algorithm: "sliding_window" });
   }
 
   async alarm(): Promise<void> {
@@ -255,7 +293,9 @@ export class RateLimiterDO implements DurableObject {
     // Re-schedule if there are still entries
     if (this.entries.size > 0 || this.tokenBuckets.size > 0) {
       await this.persist();
-      await this.state.storage.setAlarm(Date.now() + RateLimiterDO.CLEANUP_INTERVAL_MS);
+      await this.state.storage.setAlarm(
+        Date.now() + RateLimiterDO.CLEANUP_INTERVAL_MS,
+      );
     }
   }
 

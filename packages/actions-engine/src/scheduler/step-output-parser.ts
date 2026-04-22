@@ -22,15 +22,15 @@ export function parseOutputs(stdout: string): Record<string, string> {
 
 export function iterateNormalizedLines(
   content: string,
-  iterate: (line: string) => void
+  iterate: (line: string) => void,
 ): void {
   if (content.length === 0) {
     return;
   }
 
-  const lines = content.split('\n');
+  const lines = content.split("\n");
   for (let line of lines) {
-    if (line.endsWith('\r')) {
+    if (line.endsWith("\r")) {
       line = line.slice(0, -1);
     }
     iterate(line);
@@ -39,20 +39,20 @@ export function iterateNormalizedLines(
 
 export function parseLegacyOutputLine(
   line: string,
-  outputs: Record<string, string>
+  outputs: Record<string, string>,
 ): void {
-  const prefix = '::set-output name=';
+  const prefix = "::set-output name=";
   if (!line.startsWith(prefix)) {
     return;
   }
 
-  const separatorIndex = line.indexOf('::', prefix.length);
+  const separatorIndex = line.indexOf("::", prefix.length);
   if (separatorIndex === -1) {
     return;
   }
 
   const name = line.slice(prefix.length, separatorIndex);
-  if (name.length === 0 || name.includes(':')) {
+  if (name.length === 0 || name.includes(":")) {
     return;
   }
 
@@ -62,9 +62,9 @@ export function parseLegacyOutputLine(
 
 export function parseSimpleOutputLine(
   line: string,
-  outputs: Record<string, string>
+  outputs: Record<string, string>,
 ): void {
-  const separatorIndex = line.indexOf('=');
+  const separatorIndex = line.indexOf("=");
   if (separatorIndex <= 0) {
     return;
   }

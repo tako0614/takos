@@ -13,6 +13,7 @@ import {
   resolveRoutePublication,
   upsertApiPublication,
 } from "../service-publications.ts";
+import { publications, serviceConsumes } from "../../../../infra/db/index.ts";
 import type { Env } from "../../../../shared/types/index.ts";
 
 type PublicationTestRow = {
@@ -160,6 +161,83 @@ Deno.test("service publications reject insecure oauth redirect uris", () => {
     Error,
     "must use HTTPS",
   );
+});
+
+Deno.test("service publications allow relative oauth redirect uris only for manifest normalization", () => {
+  assertThrows(
+    () =>
+      normalizePublicationDefinition({
+        name: "relative-oauth",
+        publisher: "takos",
+        type: "oauth-client",
+        spec: {
+          redirectUris: ["/api/auth/callback"],
+          scopes: ["openid", "profile"],
+        },
+      }),
+    Error,
+    "Invalid publication 'relative-oauth'.spec.redirectUris entry",
+  );
+
+  const oauthClient = normalizePublicationDefinition(
+    {
+      name: "relative-oauth",
+      publisher: "takos",
+      type: "oauth-client",
+      spec: {
+        redirectUris: ["/api/auth/callback"],
+        scopes: ["openid", "profile"],
+      },
+    },
+    { allowRelativeOAuthRedirectUris: true },
+  );
+
+  assertEquals(oauthClient.spec, {
+    redirectUris: ["/api/auth/callback"],
+    scopes: ["openid", "profile"],
+  });
+});
+
+Deno.test("publication prerequisites require a group hostname for relative OAuth redirect URIs", async () => {
+  const manifest = {
+    publish: [{
+      name: "app-oauth",
+      publisher: "takos",
+      type: "oauth-client",
+      spec: {
+        redirectUris: ["/api/auth/callback"],
+        scopes: ["openid", "profile"],
+      },
+    }],
+  };
+
+  await assertRejects(
+    () =>
+      assertManifestPublicationPrerequisites(makePublicationEnv(null), {
+        spaceId: "space_1",
+        groupId: "group_1",
+        manifest,
+      }),
+    Error,
+    "relative OAuth redirect URI entries require a resolvable group hostname",
+  );
+});
+
+Deno.test("publication prerequisites allow relative OAuth redirect URIs before group materialization", async () => {
+  await assertManifestPublicationPrerequisites(makePublicationEnv(null), {
+    spaceId: "space_1",
+    manifest: {
+      publish: [{
+        name: "app-oauth",
+        publisher: "takos",
+        type: "oauth-client",
+        spec: {
+          redirectUris: ["/api/auth/callback"],
+          scopes: ["openid", "profile"],
+        },
+      }],
+    },
+  });
 });
 
 Deno.test("service publications keep Takos type strict and route type open-ended", () => {
@@ -322,6 +400,16 @@ Deno.test("service publication output contracts are stable", () => {
         defaultEnv: "PUBLICATION_NOTES_OAUTH_ISSUER",
         secret: false,
       },
+      {
+        name: "tokenEndpoint",
+        defaultEnv: "PUBLICATION_NOTES_OAUTH_TOKEN_ENDPOINT",
+        secret: false,
+      },
+      {
+        name: "userinfoEndpoint",
+        defaultEnv: "PUBLICATION_NOTES_OAUTH_USERINFO_ENDPOINT",
+        secret: false,
+      },
     ],
   );
   assertEquals(
@@ -460,6 +548,32 @@ Deno.test("publication prerequisites allow same-manifest consumes before catalog
   });
 });
 
+Deno.test("publication prerequisites require a group hostname for same-manifest route consumes", async () => {
+  await assertRejects(
+    () =>
+      assertManifestPublicationPrerequisites(makePublicationEnv(null), {
+        spaceId: "space_1",
+        groupId: "group_1",
+        manifest: {
+          publish: [{
+            name: "search",
+            publisher: "web",
+            type: "com.example.McpEndpoint",
+            path: "/mcp",
+          }],
+          compute: {
+            web: {
+              kind: "worker",
+              consume: [{ publication: "search" }],
+            },
+          },
+        },
+      }),
+    Error,
+    "consume references same-manifest route publication 'search' but the group hostname is unavailable",
+  );
+});
+
 Deno.test("publication prerequisites reject missing catalog consumes", async () => {
   await assertRejects(
     () =>
@@ -566,6 +680,69 @@ Deno.test("service publications reject API route publication writes clearly", as
   );
 });
 
+Deno.test("service publications roll back new API publication when consumer sync fails", async () => {
+  let row: PublicationTestRow | null = null;
+  const env = {
+    DB: {
+      select: () => ({
+        from: (table: unknown) => ({
+          where: () => ({
+            get: () => table === publications ? row : null,
+            all: () => {
+              if (table === serviceConsumes) {
+                throw new Error("consume sync failed");
+              }
+              return row ? [row] : [];
+            },
+            orderBy: () => ({
+              all: () => row ? [row] : [],
+            }),
+          }),
+        }),
+      }),
+      insert: (table: unknown) => ({
+        values: (values: PublicationTestRow) => ({
+          run: () => {
+            if (table === publications) {
+              row = values;
+            }
+          },
+        }),
+      }),
+      update: () => ({
+        set: () => ({
+          where: () => ({
+            run: () => undefined,
+          }),
+        }),
+      }),
+      delete: (table: unknown) => ({
+        where: () => {
+          if (table === publications) row = null;
+        },
+      }),
+    } as never,
+    ENCRYPTION_KEY: "test-key",
+    ADMIN_DOMAIN: "admin.example.test",
+  } as Pick<Env, "DB" | "ENCRYPTION_KEY" | "ADMIN_DOMAIN">;
+
+  await assertRejects(
+    () =>
+      upsertApiPublication(env, {
+        spaceId: "space_1",
+        publication: {
+          name: "takos-api",
+          publisher: "takos",
+          type: "api-key",
+          spec: { scopes: ["files:read"] },
+        },
+      }),
+    Error,
+    "consume sync failed",
+  );
+  assertEquals(row, null);
+});
+
 Deno.test("service publications reject API overwrite of manifest-owned publication", async () => {
   await assertRejects(
     () =>
@@ -642,4 +819,242 @@ Deno.test("service publications reject manifest overwrite of another group publi
     Error,
     "already exists in this space and is owned by manifest group 'group_other'",
   );
+});
+
+Deno.test("service publications share identical manifest Takos grants across groups", async () => {
+  let row: PublicationTestRow | null = {
+    ...makePublicationRow({
+      name: "takos-api",
+      publisher: "takos",
+      type: "api-key",
+      spec: { scopes: ["files:read"] },
+    }),
+    sourceType: "manifest",
+    groupId: "group_other",
+  };
+  const env = {
+    DB: {
+      select: () => ({
+        from: (table: unknown) => ({
+          where: () => ({
+            get: () => table === publications ? row : null,
+            all: () => table === serviceConsumes ? [] : [],
+            orderBy: () => ({
+              all: () => {
+                if (table !== publications || !row) return [];
+                return row.groupId === "group_current" ? [row] : [];
+              },
+            }),
+          }),
+        }),
+      }),
+      insert: () => ({
+        values: () => {
+          throw new Error("insert should not run for shared Takos grant");
+        },
+      }),
+      update: (table: unknown) => ({
+        set: (values: Partial<PublicationTestRow>) => ({
+          where: () => ({
+            run: () => {
+              if (table === publications && row) {
+                row = { ...row, ...values };
+              }
+            },
+          }),
+        }),
+      }),
+      delete: () => {
+        throw new Error("delete should not run for shared Takos grant");
+      },
+    } as never,
+    ENCRYPTION_KEY: "test-key",
+    ADMIN_DOMAIN: "admin.example.test",
+    TENANT_BASE_DOMAIN: "",
+  };
+
+  await replaceManifestPublications(env, {
+    spaceId: "space_1",
+    groupId: "group_current",
+    manifest: {
+      publish: [{
+        name: "takos-api",
+        publisher: "takos",
+        type: "api-key",
+        spec: { scopes: ["files:read"] },
+      }],
+      routes: [],
+    },
+    observedState: {
+      groupId: "group_current",
+      groupName: "current",
+      backend: "local",
+      env: "default",
+      updatedAt: "2026-04-18T00:00:00.000Z",
+      resources: {},
+      routes: {},
+      workloads: {},
+    },
+  });
+
+  assertEquals(row?.groupId, null);
+  assertEquals(row?.ownerServiceId, null);
+  assertEquals(row?.catalogName, "takos");
+});
+
+Deno.test("service publications reject manifest removal while still consumed", async () => {
+  const row = {
+    ...makePublicationRow({
+      name: "shared-api",
+      publisher: "api",
+      type: "McpServer",
+      path: "/mcp",
+    }, { url: "https://api.example/mcp" }),
+    groupId: "group_current",
+    ownerServiceId: "svc_api",
+    sourceType: "manifest",
+  };
+  const env = {
+    DB: {
+      select: () => ({
+        from: () => ({
+          where: () => ({
+            orderBy: () => ({
+              all: () => [row],
+            }),
+            limit: () => ({
+              get: () => ({ id: "consume_1" }),
+            }),
+          }),
+        }),
+      }),
+      insert: () => ({
+        values: () => {
+          throw new Error("insert should not run");
+        },
+      }),
+      update: () => ({
+        set: () => {
+          throw new Error("update should not run");
+        },
+      }),
+      delete: () => {
+        throw new Error("delete should not run while consumed");
+      },
+    } as never,
+    ENCRYPTION_KEY: "test-key",
+    ADMIN_DOMAIN: "admin.example.test",
+    TENANT_BASE_DOMAIN: "",
+  };
+
+  await assertRejects(
+    () =>
+      replaceManifestPublications(env, {
+        spaceId: "space_1",
+        groupId: "group_current",
+        manifest: { publish: [], routes: [] },
+        observedState: {
+          groupId: "group_current",
+          groupName: "current",
+          backend: "local",
+          env: "default",
+          updatedAt: "2026-04-18T00:00:00.000Z",
+          resources: {},
+          routes: {},
+          workloads: {},
+        },
+      }),
+    Error,
+    "publication 'shared-api' is still consumed by one or more services",
+  );
+});
+
+Deno.test("service publications preflight consumed removals before manifest writes", async () => {
+  const row = {
+    ...makePublicationRow({
+      name: "shared-api",
+      publisher: "api",
+      type: "McpServer",
+      path: "/mcp",
+    }, { url: "https://api.example/mcp" }),
+    groupId: "group_current",
+    ownerServiceId: "svc_api",
+    sourceType: "manifest",
+  };
+  let writeCount = 0;
+  const env = {
+    DB: {
+      select: () => ({
+        from: () => ({
+          where: () => ({
+            orderBy: () => ({
+              all: () => [row],
+            }),
+            limit: () => ({
+              get: () => ({ id: "consume_1" }),
+            }),
+          }),
+        }),
+      }),
+      insert: () => ({
+        values: () => {
+          writeCount++;
+          throw new Error("insert should not run before removal preflight");
+        },
+      }),
+      update: () => ({
+        set: () => {
+          writeCount++;
+          throw new Error("update should not run before removal preflight");
+        },
+      }),
+      delete: () => {
+        writeCount++;
+        throw new Error("delete should not run while consumed");
+      },
+    } as never,
+    ENCRYPTION_KEY: "test-key",
+    ADMIN_DOMAIN: "admin.example.test",
+    TENANT_BASE_DOMAIN: "",
+  };
+
+  await assertRejects(
+    () =>
+      replaceManifestPublications(env, {
+        spaceId: "space_1",
+        groupId: "group_current",
+        manifest: {
+          publish: [{
+            name: "new-api",
+            publisher: "web",
+            type: "McpServer",
+            path: "/mcp",
+          }],
+          routes: [{ target: "web", path: "/mcp" }],
+        },
+        observedState: {
+          groupId: "group_current",
+          groupName: "current",
+          backend: "local",
+          env: "default",
+          updatedAt: "2026-04-18T00:00:00.000Z",
+          resources: {},
+          routes: {},
+          workloads: {
+            web: {
+              serviceId: "svc_web",
+              name: "web",
+              category: "worker",
+              status: "deployed",
+              hostname: "web.example.test",
+              routeRef: "web-route-ref",
+              updatedAt: "2026-04-18T00:00:00.000Z",
+            },
+          },
+        },
+      }),
+    Error,
+    "publication 'shared-api' is still consumed by one or more services",
+  );
+  assertEquals(writeCount, 0);
 });

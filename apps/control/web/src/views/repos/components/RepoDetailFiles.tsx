@@ -1,9 +1,9 @@
-import { Show } from 'solid-js';
-import type { Repository, Branch } from '../../../types/index.ts';
-import { FileTree } from './FileTree.tsx';
-import { FileViewer } from './FileViewer.tsx';
-import { RepoDetailReadme } from './RepoDetailReadme.tsx';
-import { RepoDetailSidebar } from './RepoDetailSidebar.tsx';
+import { Show } from "solid-js";
+import type { Branch, Repository } from "../../../types/index.ts";
+import { FileTree } from "./FileTree.tsx";
+import { FileViewer } from "./FileViewer.tsx";
+import { RepoDetailReadme } from "./RepoDetailReadme.tsx";
+import { RepoDetailSidebar } from "./RepoDetailSidebar.tsx";
 
 interface RepoDetailFilesProps {
   repo: Repository;
@@ -46,7 +46,10 @@ export function RepoDetailFiles(props: RepoDetailFilesProps) {
               />
             </div>
 
-            <RepoDetailReadme readme={props.readme} readmeLoading={props.readmeLoading} />
+            <RepoDetailReadme
+              readme={props.readme}
+              readmeLoading={props.readmeLoading}
+            />
           </div>
 
           <RepoDetailSidebar

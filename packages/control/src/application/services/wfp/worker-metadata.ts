@@ -6,15 +6,20 @@
  * and worker metadata assembly for dispatch namespace deployments.
  */
 
-import { CF_COMPATIBILITY_DATE } from '../../../shared/constants/index.ts';
-import type { D1QueryResult } from './wfp-contracts.ts';
+import { CF_COMPATIBILITY_DATE } from "../../../shared/constants/index.ts";
+import type {
+  D1QueryResult,
+  WorkerActorMigrationsMetadata,
+  WorkerContainerMetadata,
+  WorkerMigrationMetadata,
+} from "./wfp-contracts.ts";
 
 /**
  * Sanitize a SQL table name to prevent injection.
  * Strips all characters except alphanumerics and underscores.
  */
 export function sanitizeTableName(name: string): string {
-  return name.replace(/[^a-zA-Z0-9_]/g, '');
+  return name.replace(/[^a-zA-Z0-9_]/g, "");
 }
 
 /**
@@ -23,6 +28,19 @@ export function sanitizeTableName(name: string): string {
  */
 export function extractD1Results<T>(raw: D1QueryResult<T>[]): T[] {
   return raw?.[0]?.results ?? [];
+}
+
+function toActorMigrations(
+  migrations: WorkerMigrationMetadata[] | undefined,
+): WorkerActorMigrationsMetadata | undefined {
+  if (!migrations?.length) return undefined;
+  const steps = migrations.map(({ tag: _tag, ...step }) => step)
+    .filter((step) => Object.keys(step).length > 0);
+  if (steps.length === 0) return undefined;
+  return {
+    new_tag: migrations[migrations.length - 1].tag,
+    steps,
+  };
 }
 
 /**
@@ -34,10 +52,12 @@ export function buildWorkerMetadata(options: {
   compatibility_date?: string;
   compatibility_flags?: string[];
   limits?: { cpu_ms?: number; subrequests?: number };
+  containers?: WorkerContainerMetadata[];
+  migrations?: WorkerMigrationMetadata[];
   assetsJwt?: string;
 }): Record<string, unknown> {
   const metadata: Record<string, unknown> = {
-    main_module: 'worker.js',
+    main_module: "worker.js",
     bindings: options.bindings,
     compatibility_date: options.compatibility_date || CF_COMPATIBILITY_DATE,
   };
@@ -48,6 +68,15 @@ export function buildWorkerMetadata(options: {
 
   if (options.limits) {
     metadata.limits = options.limits;
+  }
+
+  if (options.containers?.length) {
+    metadata.containers = options.containers;
+  }
+
+  const migrations = toActorMigrations(options.migrations);
+  if (migrations) {
+    metadata.migrations = migrations;
   }
 
   if (options.assetsJwt) {

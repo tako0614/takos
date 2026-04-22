@@ -1,31 +1,38 @@
-import type { D1Database } from '../../../shared/types/bindings.ts';
-import type { Database } from '../../../infra/db/index.ts';
-import type { Env } from '../../../shared/types/index.ts';
-import type { FollowUserResponse } from './dto.ts';
-import { paginatedResponse } from '../../../shared/utils/index.ts';
-import { createNotification } from '../../../application/services/notifications/service.ts';
-import { isMutedBy } from './profile-queries.ts';
+import type { D1Database } from "../../../shared/types/bindings.ts";
+import type { Database } from "../../../infra/db/index.ts";
+import type { Env } from "../../../shared/types/index.ts";
+import type { FollowUserResponse } from "./dto.ts";
+import { paginatedResponse } from "../../../shared/utils/index.ts";
+import { createNotification } from "../../../application/services/notifications/service.ts";
+import { isMutedBy } from "./profile-queries.ts";
 import {
-  accountBlocks, accountFollows, accountFollowRequests, accountMutes,
+  accountBlocks,
+  accountFollowRequests,
+  accountFollows,
+  accountMutes,
   accounts,
-} from '../../../infra/db/schema.ts';
-import { eq, and, count, inArray, asc, desc } from 'drizzle-orm';
+} from "../../../infra/db/schema.ts";
+import { and, asc, count, desc, eq, inArray } from "drizzle-orm";
 
 export async function getBlockFlags(
   db: Database,
   currentUserId: string | undefined,
-  targetUserId: string
+  targetUserId: string,
 ): Promise<{ blocked_by_target: boolean; is_blocking: boolean }> {
   if (!currentUserId) return { blocked_by_target: false, is_blocking: false };
 
-  const blockedByTarget = await db.select({ blockerAccountId: accountBlocks.blockerAccountId })
+  const blockedByTarget = await db.select({
+    blockerAccountId: accountBlocks.blockerAccountId,
+  })
     .from(accountBlocks)
     .where(and(
       eq(accountBlocks.blockerAccountId, targetUserId),
       eq(accountBlocks.blockedAccountId, currentUserId),
     ))
     .get();
-  const isBlocking = await db.select({ blockerAccountId: accountBlocks.blockerAccountId })
+  const isBlocking = await db.select({
+    blockerAccountId: accountBlocks.blockerAccountId,
+  })
     .from(accountBlocks)
     .where(and(
       eq(accountBlocks.blockerAccountId, currentUserId),
@@ -40,25 +47,34 @@ export async function fetchFollowList(
   db: Database,
   profileUserId: string,
   currentUserId: string | undefined,
-  mode: 'followers' | 'following',
+  mode: "followers" | "following",
   options: { limit: number; offset: number; sort: string; order: string },
 ): Promise<{ users: FollowUserResponse[]; total: number; has_more: boolean }> {
   const { limit, offset, sort, order } = options;
-  const orderDirection: 'asc' | 'desc' = order.toLowerCase() === 'asc' ? 'asc' : 'desc';
+  const orderDirection: "asc" | "desc" = order.toLowerCase() === "asc"
+    ? "asc"
+    : "desc";
 
-  const isFollowers = mode === 'followers';
-  const whereField = isFollowers ? accountFollows.followingAccountId : accountFollows.followerAccountId;
-  const joinField = isFollowers ? accountFollows.followerAccountId : accountFollows.followingAccountId;
+  const isFollowers = mode === "followers";
+  const whereField = isFollowers
+    ? accountFollows.followingAccountId
+    : accountFollows.followerAccountId;
+  const joinField = isFollowers
+    ? accountFollows.followerAccountId
+    : accountFollows.followingAccountId;
 
   const where = eq(whereField, profileUserId);
 
-  const totalResult = await db.select({ count: count() }).from(accountFollows).where(where).get();
+  const totalResult = await db.select({ count: count() }).from(accountFollows)
+    .where(where).get();
   const total = totalResult?.count ?? 0;
 
   // Build a query joining accountFollows with accounts
-  const orderByClause = sort === 'username'
-    ? (orderDirection === 'asc' ? asc(accounts.slug) : desc(accounts.slug))
-    : (orderDirection === 'asc' ? asc(accountFollows.createdAt) : desc(accountFollows.createdAt));
+  const orderByClause = sort === "username"
+    ? (orderDirection === "asc" ? asc(accounts.slug) : desc(accounts.slug))
+    : (orderDirection === "asc"
+      ? asc(accountFollows.createdAt)
+      : desc(accountFollows.createdAt));
 
   const followsData = await db.select({
     followId: joinField,
@@ -82,7 +98,9 @@ export async function fetchFollowList(
 
   let followingSet = new Set<string>();
   if (currentUserId && candidateUserIds.length > 0) {
-    const followRows = await db.select({ followingAccountId: accountFollows.followingAccountId })
+    const followRows = await db.select({
+      followingAccountId: accountFollows.followingAccountId,
+    })
       .from(accountFollows)
       .where(and(
         eq(accountFollows.followerAccountId, currentUserId),
@@ -112,17 +130,17 @@ export async function sendFollowNotificationIfNotMuted(
   d1: D1Database,
   targetUserId: string,
   actor: { id: string; username: string; name: string; picture: string | null },
-  type: 'social.follow.requested' | 'social.followed',
+  type: "social.follow.requested" | "social.followed",
 ): Promise<void> {
   const targetMutedActor = await isMutedBy(d1, targetUserId, actor.id);
   if (targetMutedActor) return;
 
-  const isRequest = type === 'social.follow.requested';
-  const prefix = isRequest ? 'requester' : 'follower';
+  const isRequest = type === "social.follow.requested";
+  const prefix = isRequest ? "requester" : "follower";
   await createNotification(env, {
     userId: targetUserId,
     type,
-    title: isRequest ? 'New follow request' : 'New follower',
+    title: isRequest ? "New follow request" : "New follower",
     body: isRequest
       ? `${actor.username} requested to follow you`
       : `${actor.username} started following you`,
@@ -137,7 +155,7 @@ export async function sendFollowNotificationIfNotMuted(
 export async function isMutedByViewer(
   db: Database,
   currentUserId: string | undefined,
-  targetUserId: string
+  targetUserId: string,
 ): Promise<boolean> {
   if (!currentUserId) return false;
   const row = await db.select({ muterAccountId: accountMutes.muterAccountId })
@@ -153,7 +171,7 @@ export async function isMutedByViewer(
 export async function hasPendingFollowRequest(
   db: Database,
   requesterId: string | undefined,
-  targetId: string
+  targetId: string,
 ): Promise<boolean> {
   if (!requesterId) return false;
   const row = await db.select({ id: accountFollowRequests.id })
@@ -161,7 +179,7 @@ export async function hasPendingFollowRequest(
     .where(and(
       eq(accountFollowRequests.requesterAccountId, requesterId),
       eq(accountFollowRequests.targetAccountId, targetId),
-      eq(accountFollowRequests.status, 'pending'),
+      eq(accountFollowRequests.status, "pending"),
     ))
     .get();
   return !!row;

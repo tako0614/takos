@@ -5,14 +5,14 @@ import type {
   Queue,
   R2Bucket,
   VectorizeIndex,
-} from '../../shared/types/bindings.ts';
+} from "../../shared/types/bindings.ts";
 import type {
   DbEnv,
   DeploymentQueueMessage,
   IndexJobQueueMessage,
   RunQueueMessage,
   WorkflowJobQueueMessage,
-} from '../../shared/types/index.ts';
+} from "../../shared/types/index.ts";
 
 /**
  * Unified Env for takos-worker.
@@ -44,6 +44,7 @@ export type WorkerEnv = DbEnv & {
   CF_ACCOUNT_ID?: string;
   CF_API_TOKEN?: string;
   CF_ZONE_ID?: string;
+  TAKOS_CUSTOM_DOMAIN_TLS_PROVIDER?: string;
   WORKER_BUNDLES?: R2Bucket;
   TENANT_BUILDS?: R2Bucket;
   OCI_ORCHESTRATOR_URL?: string;

@@ -3,10 +3,11 @@
 // Usage: deno run --allow-all scripts/deploy.mjs <service> <environment> [--debug]
 //
 // Services: web, dispatch, worker, runtime-host, executor-host
-// Environments: production, staging
+// Environments: production (base config), staging ([env.staging])
 // Flags: --debug  (only valid for web + staging — uses staging-debug build)
 
 import { execSync } from "node:child_process";
+import process from "node:process";
 
 // ---------------------------------------------------------------------------
 // Config
@@ -22,16 +23,6 @@ const SERVICES = {
 
 const ENVIRONMENTS = ["production", "staging"];
 
-// ---------------------------------------------------------------------------
-// Parse args
-// ---------------------------------------------------------------------------
-
-const args = process.argv.slice(2);
-const debug = args.includes("--debug");
-const positional = args.filter((a) => !a.startsWith("--"));
-
-const [service, env] = positional;
-
 function usage() {
   console.error(`
 Usage: deno task deploy:service <service> <environment> [--debug]
@@ -44,8 +35,8 @@ Services:
   executor-host  Executor host service
 
 Environments:
-  production     Deploy to production
-  staging        Deploy to staging
+  production     Deploy using the base Wrangler config (no --env flag)
+  staging        Deploy using the [env.staging] overlay (--env staging)
 
 Flags:
   --debug        Build with staging-debug mode (web + staging only)
@@ -59,36 +50,73 @@ Examples:
   Deno.exit(1);
 }
 
-// ---------------------------------------------------------------------------
-// Validate
-// ---------------------------------------------------------------------------
-
-if (!service || !env) {
-  console.error("Error: service and environment are required.\n");
+function fail(message) {
+  console.error(`${message}\n`);
   usage();
 }
 
-if (!(service in SERVICES)) {
-  console.error(
-    `Error: unknown service "${service}". Valid services: ${
-      Object.keys(SERVICES).join(", ")
-    }\n`,
+export function getWranglerDeployArgs(env) {
+  return env === "staging" ? ["--env", "staging"] : [];
+}
+
+export function buildDeployCommands(
+  service,
+  env,
+  { debug = false } = {},
+) {
+  if (!(service in SERVICES)) {
+    throw new Error(`Unknown service "${service}"`);
+  }
+
+  const wranglerArgs = getWranglerDeployArgs(env);
+  const deployBase = ["deno", "run", "-A", "npm:wrangler", "deploy"];
+  const commands = [];
+
+  if (service === "web") {
+    commands.push(
+      debug ? "deno task build --mode staging-debug" : "deno task build",
+    );
+    commands.push([...deployBase, ...wranglerArgs].join(" "));
+    return commands;
+  }
+
+  const config = SERVICES[service];
+  commands.push(
+    [...deployBase, "--config", config, ...wranglerArgs].join(" "),
   );
-  usage();
+  return commands;
 }
 
-if (!ENVIRONMENTS.includes(env)) {
-  console.error(
-    `Error: unknown environment "${env}". Valid environments: ${
-      ENVIRONMENTS.join(", ")
-    }\n`,
-  );
-  usage();
-}
+export function parseDeployArgs(argv = process.argv.slice(2)) {
+  const debug = argv.includes("--debug");
+  const positional = argv.filter((arg) => !arg.startsWith("--"));
+  const [service, env] = positional;
 
-if (debug && (service !== "web" || env !== "staging")) {
-  console.error("Error: --debug is only supported for web + staging.\n");
-  usage();
+  if (!service || !env) {
+    fail("Error: service and environment are required.");
+  }
+
+  if (!(service in SERVICES)) {
+    fail(
+      `Error: unknown service "${service}". Valid services: ${
+        Object.keys(SERVICES).join(", ")
+      }`,
+    );
+  }
+
+  if (!ENVIRONMENTS.includes(env)) {
+    fail(
+      `Error: unknown environment "${env}". Valid environments: ${
+        ENVIRONMENTS.join(", ")
+      }`,
+    );
+  }
+
+  if (debug && (service !== "web" || env !== "staging")) {
+    fail("Error: --debug is only supported for web + staging.");
+  }
+
+  return { service, env, debug };
 }
 
 // ---------------------------------------------------------------------------
@@ -101,13 +129,17 @@ function run(cmd) {
   execSync(cmd, { stdio: "inherit" });
 }
 
-if (service === "web") {
-  // Web requires building the frontend before deploying.
-  run(debug ? "deno task build --mode staging-debug" : "deno task build");
-  run(`deno run -A npm:wrangler deploy --env ${env}`);
-} else {
-  const config = SERVICES[service];
-  run(`deno run -A npm:wrangler deploy --config ${config} --env ${env}`);
+export function main(argv = process.argv.slice(2)) {
+  const { service, env, debug } = parseDeployArgs(argv);
+  const commands = buildDeployCommands(service, env, { debug });
+
+  for (const command of commands) {
+    run(command);
+  }
+
+  console.log(`\nDeployed ${service} to ${env} successfully.`);
 }
 
-console.log(`\nDeployed ${service} to ${env} successfully.`);
+if (import.meta.main) {
+  main();
+}

@@ -129,24 +129,6 @@ export async function resolveBuildArtifacts(
           `compute.${workerName}.build.fromWorkflow.path must be under .takos/workflows/`,
         );
       }
-      const workflowContent = await readRepoTextFileAtTarget(
-        env,
-        target,
-        workflowPath,
-      );
-      if (!workflowContent) {
-        throw new NotFoundError(
-          `Workflow file not found at repo ref: ${workflowPath}`,
-        );
-      }
-
-      let workflow = workflowCache.get(workflowPath);
-      if (!workflow) {
-        workflow = parseAndValidateWorkflowYaml(workflowContent, workflowPath);
-        workflowCache.set(workflowPath, workflow);
-      }
-      validateDeployProducerJob(workflow, workflowPath, build.job);
-
       const useCommittedArtifact = async (reason: string): Promise<void> => {
         const committedFallbackPath = artifactPath ??
           normalizeRepoRelativePath(
@@ -188,6 +170,24 @@ export async function resolveBuildArtifacts(
         );
         continue;
       }
+
+      const workflowContent = await readRepoTextFileAtTarget(
+        env,
+        target,
+        workflowPath,
+      );
+      if (!workflowContent) {
+        throw new NotFoundError(
+          `Workflow file not found at repo ref: ${workflowPath}`,
+        );
+      }
+
+      let workflow = workflowCache.get(workflowPath);
+      if (!workflow) {
+        workflow = parseAndValidateWorkflowYaml(workflowContent, workflowPath);
+        workflowCache.set(workflowPath, workflow);
+      }
+      validateDeployProducerJob(workflow, workflowPath, build.job);
 
       const workflowRunRef = buildWorkflowRunRef(target.refType, target.ref);
       const baseConditions = and(
@@ -294,6 +294,7 @@ export async function resolveBuildArtifacts(
     }
     if (compute.kind === "worker" && compute.containers) {
       for (const [childName, child] of Object.entries(compute.containers)) {
+        if (child.cloudflare?.container) continue;
         const artifact = resolveContainerImageArtifact(
           childName,
           "container",

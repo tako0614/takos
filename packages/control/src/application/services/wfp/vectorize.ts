@@ -6,8 +6,8 @@
  * deletion of vector search indexes.
  */
 
-import { InternalError } from 'takos-common/errors';
-import type { WfpContext } from './wfp-contracts.ts';
+import { InternalError } from "takos-common/errors";
+import type { WfpContext } from "./wfp-contracts.ts";
 
 // ---------------------------------------------------------------------------
 // Vectorize CRUD
@@ -19,13 +19,16 @@ import type { WfpContext } from './wfp-contracts.ts';
 export async function createVectorizeIndex(
   ctx: WfpContext,
   name: string,
-  config: { dimensions: number; metric: 'cosine' | 'euclidean' | 'dot-product' }
+  config: {
+    dimensions: number;
+    metric: "cosine" | "euclidean" | "dot-product";
+  },
 ): Promise<string> {
   const response = await ctx.cfFetchWithRetry<{ name: string }>(
-    ctx.accountPath('/vectorize/v2/indexes'),
+    ctx.accountPath("/vectorize/v2/indexes"),
     {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         name,
         config: {
@@ -33,10 +36,12 @@ export async function createVectorizeIndex(
           metric: config.metric,
         },
       }),
-    }
+    },
   );
   if (!response.result?.name) {
-    throw new InternalError(`Failed to create Vectorize index: no name returned from API`);
+    throw new InternalError(
+      `Failed to create Vectorize index: no name returned from API`,
+    );
   }
   return response.result.name;
 }
@@ -44,9 +49,12 @@ export async function createVectorizeIndex(
 /**
  * Delete a Vectorize index.
  */
-export async function deleteVectorizeIndex(ctx: WfpContext, name: string): Promise<void> {
+export async function deleteVectorizeIndex(
+  ctx: WfpContext,
+  name: string,
+): Promise<void> {
   await ctx.cfFetchWithRetry(
     ctx.accountPath(`/vectorize/v2/indexes/${name}`),
-    { method: 'DELETE' }
+    { method: "DELETE" },
   );
 }

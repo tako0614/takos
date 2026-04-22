@@ -108,6 +108,30 @@ Deno.test("selectScheduledDispatchTargets - falls back to workload name when rou
   ]);
 });
 
+Deno.test("selectScheduledDispatchTargets - prefers active artifact refs", () => {
+  const desiredState = buildDesiredState();
+  const targets = selectScheduledDispatchTargets(desiredState, "0 * * * *", {
+    observedState: {
+      workloads: {
+        api: {
+          routeRef: "cron-app-api-route",
+          activeArtifactRef: "cron-app-api-route-v4",
+        },
+      },
+    },
+  });
+
+  assertEquals(targets, [
+    {
+      groupId: "cron-app",
+      groupName: "cron-app",
+      workloadName: "api",
+      routeRef: "cron-app-api-route-v4",
+      cron: "0 * * * *",
+    },
+  ]);
+});
+
 Deno.test("selectScheduledDispatchTargets - deduplicates duplicate cron entries", () => {
   const desiredState = buildDesiredState();
   const targets = selectScheduledDispatchTargets(desiredState, "*/15 * * * *");
