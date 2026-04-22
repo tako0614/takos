@@ -5,7 +5,7 @@
     ".": "./src/index.ts"
   },
   "tasks": {
-    "start": "deno run --allow-all src/index.ts",
+    "start": "deno run --allow-read=.,../../packages,../../../takos-cli,/tmp,/repos --allow-write=.,/tmp,/repos --allow-env --allow-net --allow-run=/bin/bash,/bin/sh,/usr/bin/bash,/usr/bin/sh,/usr/local/bin/bash,bash,sh,pwsh,powershell,powershell.exe,cmd.exe,git,tar,node,npm,npx,pnpm,yarn,bun,esbuild,wrangler,takos,echo,ls,cat,pwd,mkdir,cp,mv,rm,touch,chmod,chown,head,tail,grep,find,sort,uniq,wc,diff,unzip,gzip,gunzip,zip,sed,awk,xargs,env,which,whereis,file,basename,dirname,realpath,readlink,tsc,webpack,vite,jest,vitest,mocha,ps,top,curl,wget,kill,killall,pkill,printenv src/index.ts",
     "dev": "deno run --allow-all --watch src/index.ts",
     "test": "deno test --allow-all src/",
     "test:coverage": "deno test --allow-all --coverage src/"

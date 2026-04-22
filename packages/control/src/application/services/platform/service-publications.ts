@@ -266,7 +266,7 @@ function normalizeRoutePublication(
   const type = normalizeName(publication.type || "", "publication.type");
   if (publisher === "takos") {
     throw new Error(
-      `publication '${name}' uses reserved publisher 'takos'; use Takos system publication sources from consume[] instead`,
+      `publication '${name}' uses reserved publisher 'takos'; use Takos built-in provider publications from consume[] instead`,
     );
   }
   if (!publication.outputs || Object.keys(publication.outputs).length === 0) {

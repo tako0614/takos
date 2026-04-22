@@ -93,8 +93,9 @@ worker / service / attached container は `services` と `deployments`
 
 SQL / object-store / queue などの stateful capability は `resources` record
 として管理する。manifest の `publish` は resource creation ではなく、
-route/interface metadata を共有する catalog です。Takos API key / OAuth client は
-system publication source として consume します。
+typed outputs を共有する catalog です。route publication は route/interface
+metadata と route output を公開します。Takos API key / OAuth client は built-in
+provider publication として consume します。
 
 resource の abstract type (`sql`, `object-store`, `key-value`, `queue`,
 `vector-index`, `analytics-engine`, `secret`, `workflow`, `durable-object`) は
@@ -128,9 +129,9 @@ publication は `publisher + route` で route を参照するため、同じ
 
 ### Publications / consumes
 
-`publish` は primitive が他者へ共有する information sharing output
-を宣言する。route publication は公開 interface metadata です。Takos API key /
-OAuth client は system publication source として `consume` で request します。env へは
+`publish` は primitive が他者へ共有する typed outputs を宣言する。route
+publication は公開 interface metadata です。Takos API key / OAuth client は
+built-in provider publication として `consume` で request します。env へは
 `compute.<name>.consume` を宣言した consumer にだけ inject される。
 
 publication は space-level catalog entry です。group 所属 publication は group
@@ -249,8 +250,8 @@ group なし primitive:
    - per-compute `depends` で順序を制御
 4. Managed-state sync
    - publication catalog を同期
-   - Takos system publication consume を検証し、`compute.<name>.consume` を宣言した
-     consumer の env に inject
+   - Takos built-in provider publication consume を検証し、
+     `compute.<name>.consume` を宣言した consumer の env に inject
 5. Routing reconcile
    - workload apply と managed-state sync が成功した場合だけ route を reconcile
 6. Snapshot update

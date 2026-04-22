@@ -16,8 +16,8 @@ hosting surface の contract 境界は [環境ごとの差異](/hosting/differen
 Takos が parity の対象にしているもの:
 
 - tenant artifact と deploy/runtime contract
-- manifest で宣言される workload / route / route publication / Takos system
-  publication consume edge と compute trigger (`scheduled`) の contract
+- manifest で宣言される workload / route / route publication / Takos built-in
+  provider publication consume edge と compute trigger (`scheduled`) の contract
 - resource API / runtime binding で扱う abstract resource type
 - group snapshot
 - routing target が保持する service identity / deployment identity
@@ -64,7 +64,7 @@ orchestrator を通る。
 | attached container                                       | yes      | yes         | selected container runtime adapter + worker-side binding |
 | route                                                    | yes      | yes         | selected routing runtime                                 |
 | route publication (`publish[].publisher/type/outputs`)   | yes      | yes         | publication catalog + route URL output                   |
-| Takos system publication source consume (`takos.api-key` / `takos.oauth-client`) | yes | yes | grant output for declared consumer                       |
+| Takos built-in provider publication consume (`takos.api-key` / `takos.oauth-client`) | yes | yes | grant output for declared consumer                       |
 | explicit consume edge (`compute.*.consume`)              | yes      | yes         | env injection only for declared consumer                 |
 | `scheduled` (`compute.triggers.schedules`)               | yes      | yes         | backend 依存                                             |
 | `queue trigger` (`compute.triggers.queues`)              | yes      | yes         | backend 依存。Cloudflare/WFP は queue consumer を同期    |
@@ -72,8 +72,8 @@ orchestrator を通る。
 SQL / object-store / queue / analytics-engine / workflow / vector-index /
 durable-object などの resource access は manifest の `publish` / `consume`
 surface ではなく、resource API / runtime binding 側で扱う。`publish` は route
-publication catalog であり、Takos API key / OAuth client は system publication
-source を consume する。resource creation や
+publication catalog であり、Takos API key / OAuth client は built-in provider
+publication を consume する。resource creation や
 resource binding の入口ではない。
 
 ### resource runtime binding support

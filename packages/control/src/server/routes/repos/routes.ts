@@ -360,11 +360,31 @@ export default new Hono<AuthenticatedRouteEnv>()
         : null;
 
       // Record a delete event before the repo is removed so Store Network feeds
-      // can expose the deletion without outbound federation delivery.
+      // can expose the deletion after the repository row is gone.
       try {
+        const [ownerSlug, defaultBranch] = await Promise.all([
+          resolveOwnerUsername(db, repoAccess.repo.space_id),
+          db.select({ commitSha: branches.commitSha }).from(branches)
+            .where(and(
+              eq(branches.repoId, repoId),
+              eq(branches.name, repoAccess.repo.default_branch || "main"),
+            ))
+            .limit(1)
+            .get(),
+        ]);
         await recordRepoDeleteActivity(c.env.DB, {
           repoId,
           accountId: repoAccess.repo.space_id,
+          repository: {
+            ownerSlug: ownerSlug || repoAccess.repo.space_id,
+            name: repoAccess.repo.name,
+            summary: repoAccess.repo.description,
+            visibility: repoAccess.repo.visibility,
+            defaultBranch: repoAccess.repo.default_branch || "main",
+            defaultBranchHash: defaultBranch?.commitSha ?? null,
+            createdAt: repoAccess.repo.created_at,
+            updatedAt: repoAccess.repo.updated_at,
+          },
         });
       } catch (_err) {
         logWarn("Failed to record repo delete activity", {

@@ -4,5 +4,8 @@
   run.
 - If a tool is not listed, treat it as unavailable even if you know it exists
   elsewhere in Takos.
+- Use direct tools for common built-in operations.
+- Use toolbox to find manuals, extension tools, and less common capabilities:
+  search, describe, then call.
 - Prefer the smallest tool path that can complete the user goal.
 - Re-check the available tool catalog before assuming a capability exists.

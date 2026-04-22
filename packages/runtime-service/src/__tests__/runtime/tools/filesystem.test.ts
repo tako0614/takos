@@ -1,4 +1,11 @@
-import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import {
+  mkdir,
+  mkdtemp,
+  readFile,
+  rm,
+  symlink,
+  writeFile,
+} from "node:fs/promises";
 import path from "node:path";
 import { tmpdir } from "node:os";
 
@@ -81,5 +88,49 @@ Deno.test("sandbox filesystem enforces read, write, and none permissions", async
     );
   } finally {
     await rm(baseDir, { recursive: true, force: true });
+  }
+});
+
+Deno.test("sandbox filesystem rejects symlink escapes", async () => {
+  const baseDir = await mkdtemp(path.join(tmpdir(), "takos-runtime-tool-"));
+  const outsideDir = await mkdtemp(
+    path.join(tmpdir(), "takos-runtime-outside-"),
+  );
+  const outsideFile = path.join(outsideDir, "secret.txt");
+  await writeFile(outsideFile, "secret", "utf-8");
+
+  try {
+    await symlink(outsideFile, path.join(baseDir, "escape.txt"));
+    await symlink(outsideDir, path.join(baseDir, "escape-dir"));
+
+    const readFs = createSandboxFilesystem("read", baseDir);
+    await assertRejects(
+      () => readFs.readFile("escape.txt"),
+      Error,
+      "Symlink escape detected in file path",
+    );
+
+    const writeFs = createSandboxFilesystem("write", baseDir);
+    await assertRejects(
+      () => writeFs.writeFile("escape-dir/pwned.txt", "pwned"),
+      Error,
+      "Symlink escape detected in file path",
+    );
+    await assertRejects(
+      () => writeFs.rm("escape.txt"),
+      Error,
+      "Symlink escape detected in target path",
+    );
+
+    await mkdir(path.join(baseDir, "safe-dir"));
+    await writeFs.writeFile("safe-dir/notes.txt", "safe");
+    assertEquals(
+      await readFile(path.join(baseDir, "safe-dir/notes.txt"), "utf-8"),
+      "safe",
+    );
+    assertEquals(await readFile(outsideFile, "utf-8"), "secret");
+  } finally {
+    await rm(baseDir, { recursive: true, force: true });
+    await rm(outsideDir, { recursive: true, force: true });
   }
 });

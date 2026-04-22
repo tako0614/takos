@@ -106,11 +106,11 @@ worker / service / route / publication / resource を使う。
 
 ### Publication
 
-space-level の information sharing catalog entry。`publications` record
-として保存され、名前は space 内で一意。manifest 由来の publication は primitive
-declaration の projection として保存される。Takos API key / OAuth client は
-manifest の `publish[]` ではなく system publication source として `consume[]`
-から request する。
+space-level の typed outputs catalog entry。`publications` record として保存され、
+名前は space 内で一意。manifest 由来の publication は primitive declaration
+の projection として保存される。Takos API key / OAuth client は manifest の
+`publish[]` ではなく built-in provider publication として `consume[]` から
+request する。
 
 route publication は route primitive から作られる catalog projection
 で、`name` + `publisher` + `type` + `outputs` で表す。`publisher` は対応する

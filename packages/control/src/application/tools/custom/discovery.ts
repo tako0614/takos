@@ -47,14 +47,15 @@ export const TOOLBOX: ToolDefinition = {
       },
       tool_name: {
         type: "string",
-        description: "Tool name for action=describe or action=call.",
+        description:
+          "Tool name for action=describe or action=call. For action=describe this may also be a manual id or name returned by search.",
       },
       tool_names: {
         type: "array",
-        description: "Tool names for action=describe.",
+        description: "Tool or manual names for action=describe.",
         items: {
           type: "string",
-          description: "Tool name.",
+          description: "Tool or manual name.",
         },
       },
       arguments: {
@@ -141,15 +142,15 @@ export const CAPABILITY_DESCRIBE: ToolDefinition = {
       tool_name: {
         type: "string",
         description:
-          "Single tool name to describe. Use tool_names for multiple tools.",
+          "Single tool or manual name to describe. Use tool_names for multiple entries.",
       },
       tool_names: {
         type: "array",
         description:
-          "Tool names to describe. Keep this small and describe only candidates you may invoke.",
+          "Tool or manual names to describe. Keep this small and describe only candidates you may use.",
         items: {
           type: "string",
-          description: "Tool name returned by capability_search.",
+          description: "Tool or manual name returned by capability_search.",
         },
       },
     },
@@ -202,7 +203,7 @@ async function toolboxSearch(
   return JSON.stringify({
     results: results.map((d) => ({
       id: d.id,
-      kind: d.kind,
+      kind: displayKind(d),
       name: d.name,
       summary: d.summary,
       family: d.family,
@@ -210,11 +211,10 @@ async function toolboxSearch(
       risk_level: d.risk_level,
     })),
     total_available: registry.all().filter((d) =>
-      !ROUTER_TOOL_NAMES.has(d.name)
-    )
-      .length,
+      d.discoverable && !ROUTER_TOOL_NAMES.has(d.name)
+    ).length,
     hint:
-      "Use toolbox action=describe to inspect schemas, then action=call to execute the selected tool.",
+      "Use toolbox action=describe to inspect tool schemas or manual instructions, then action=call to execute tools.",
   });
 }
 
@@ -224,7 +224,10 @@ async function toolboxFamilies(ctx: ToolContext): Promise<string> {
 
   const counts = new Map<string, number>();
   for (const descriptor of registry.all()) {
-    if (ROUTER_TOOL_NAMES.has(descriptor.name) || !descriptor.family) continue;
+    if (
+      ROUTER_TOOL_NAMES.has(descriptor.name) || !descriptor.family ||
+      !descriptor.discoverable
+    ) continue;
     counts.set(descriptor.family, (counts.get(descriptor.family) ?? 0) + 1);
   }
 
@@ -233,7 +236,7 @@ async function toolboxFamilies(ctx: ToolContext): Promise<string> {
       .map(([family, count]) => ({ family, count }))
       .sort((a, b) => a.family.localeCompare(b.family)),
     total_capabilities: registry.all().filter((d) =>
-      !ROUTER_TOOL_NAMES.has(d.name)
+      d.discoverable && !ROUTER_TOOL_NAMES.has(d.name)
     ).length,
   });
 }
@@ -256,14 +259,25 @@ async function toolboxDescribe(
   const toolsByName = new Map(
     executor.getAvailableTools().map((tool) => [tool.name, tool]),
   );
+  const registry = ctx.capabilityRegistry;
 
+  const manuals: Array<ReturnType<typeof formatManualDescriptor>> = [];
   return JSON.stringify({
-    tools: toolNames.map((name) => {
+    tools: toolNames.flatMap((name) => {
+      const manual = findManualDescriptor(registry, name);
+      if (manual) {
+        manuals.push(formatManualDescriptor(manual));
+        return [];
+      }
       const tool = toolsByName.get(name);
       if (!tool) {
-        return { name, available: false };
+        return [{ name, available: false }];
       }
-      return {
+      const descriptor = registry?.get(`tool:${tool.name}`);
+      if (descriptor && !descriptor.discoverable) {
+        return [{ name, available: false }];
+      }
+      return [{
         name: tool.name,
         available: true,
         description: tool.description,
@@ -275,10 +289,11 @@ async function toolboxDescribe(
         required_roles: tool.required_roles,
         required_capabilities: tool.required_capabilities,
         parameters: tool.parameters,
-      };
+      }];
     }),
+    manuals,
     hint:
-      "Use toolbox action=call with tool_name and arguments matching the described parameters.",
+      "Use toolbox action=call with tool_name and arguments matching described tool parameters. Manuals are guidance only and are not callable.",
   });
 }
 
@@ -298,7 +313,7 @@ async function toolboxCall(
   const registry = ctx.capabilityRegistry;
   if (registry) {
     const descriptor = registry.get(`tool:${toolName}`);
-    if (descriptor && !descriptor.discoverable) {
+    if (descriptor && !descriptor.selectable) {
       throw new Error(
         `toolbox call: tool "${toolName}" is not available for invocation.`,
       );
@@ -348,8 +363,14 @@ function normalizeToolNames(args: Record<string, unknown>): string[] {
   if (typeof args.tool_name === "string") {
     values.push(args.tool_name);
   }
+  if (typeof args.manual_ref === "string") {
+    values.push(args.manual_ref);
+  }
   if (Array.isArray(args.tool_names)) {
     values.push(...args.tool_names);
+  }
+  if (Array.isArray(args.manual_refs)) {
+    values.push(...args.manual_refs);
   }
 
   const seen = new Set<string>();
@@ -363,4 +384,41 @@ function normalizeToolNames(args: Record<string, unknown>): string[] {
     if (names.length >= 20) break;
   }
   return names;
+}
+
+function displayKind(descriptor: { kind: string }): string {
+  return descriptor.kind === "skill" ? "manual" : descriptor.kind;
+}
+
+function findManualDescriptor(
+  registry: ToolContext["capabilityRegistry"] | undefined,
+  ref: string,
+) {
+  if (!registry) return undefined;
+  const normalized = ref.trim().toLowerCase();
+  return registry.all().find((descriptor) => {
+    if (descriptor.kind !== "skill" || !descriptor.discoverable) return false;
+    return descriptor.id.toLowerCase() === normalized ||
+      descriptor.name.toLowerCase() === normalized ||
+      descriptor.id.toLowerCase() === `skill:${normalized}`;
+  });
+}
+
+function formatManualDescriptor(
+  descriptor: NonNullable<ReturnType<typeof findManualDescriptor>>,
+) {
+  return {
+    id: descriptor.id,
+    kind: displayKind(descriptor),
+    name: descriptor.name,
+    available: true,
+    summary: descriptor.summary,
+    family: descriptor.family,
+    namespace: descriptor.namespace,
+    triggers: descriptor.triggers ?? [],
+    recommended_tools: descriptor.recommended_tools ?? [],
+    output_modes: descriptor.output_modes ?? [],
+    durable_output_hints: descriptor.durable_output_hints ?? [],
+    instructions: descriptor.instructions ?? "",
+  };
 }

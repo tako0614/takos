@@ -7,6 +7,9 @@
 `target` は **compute 名のみ**を受け取る。attached container は単独の route
 target には ならない。attached container を外部から呼びたい場合は、親 worker
 をターゲットに routes を書き、その worker から container を呼び出す。
+route publication の `publisher` も route の `target` と同じ親 worker / service
+を指定する。attached container 自体を public route publication の publisher には
+しない。
 
 ## 基本
 
@@ -51,7 +54,8 @@ route publication は `publisher + route` で route を参照します。`publis
 `methods` が無いため、method 別に同じ endpoint を公開したい場合でも publication
 から見える route は 1 件にしてください。同じ `publisher + route` が複数件に一致
 する manifest は invalid です。route publication の `publisher` には対応する
-route の `target` を書きます。
+route の `target` を書きます。attached container を外に出したい場合も、親
+worker / service が route と publication を持ちます。
 
 ## 次のステップ
 

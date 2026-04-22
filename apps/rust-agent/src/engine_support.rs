@@ -239,11 +239,10 @@ impl Distiller for RustSimpleDistiller {
 pub fn build_engine_config(
     run_config: &RunConfigResponse,
     agent_type: &str,
-    skill_plan: &SkillPlanResponse,
 ) -> EngineConfig {
     let mut config = EngineConfig::default();
     let base_prompt = system_prompt_for_agent_type(agent_type);
-    config.system_prompt = build_skill_enhanced_prompt(&base_prompt, skill_plan);
+    config.system_prompt = base_prompt;
     if let Some(max_graph_steps) = run_config
         .max_graph_steps
         .or(run_config.max_iterations)
@@ -319,20 +318,13 @@ pub fn last_user_message(
 pub fn build_session_request(
     session_id: SessionId,
     user_message: String,
-    skill_plan: &SkillPlanResponse,
     remote_tools: &[ToolDefinition],
 ) -> SessionRequest {
-    let plan = if skill_plan.activated_skills.is_empty() {
+    let plan = if remote_tools.is_empty() {
         None
     } else {
         Some(format!(
-            "Activated skills: {}. Remote tools available: {}.",
-            skill_plan
-                .activated_skills
-                .iter()
-                .map(|skill| skill.name.clone())
-                .collect::<Vec<_>>()
-                .join(", "),
+            "Direct tools available: {}. Use toolbox action=search/describe/call for manuals and extension tools when needed.",
             remote_tools
                 .iter()
                 .map(|tool| tool.name.clone())

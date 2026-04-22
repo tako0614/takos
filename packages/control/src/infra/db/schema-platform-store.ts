@@ -79,10 +79,22 @@ export const repoPushActivities = sqliteTable("repo_push_activities", {
   pusherName: text("pusher_name"),
   commitCount: integer("commit_count").notNull().default(0),
   commitsJson: text("commits_json"),
+  repoOwnerSlug: text("repo_owner_slug"),
+  repoName: text("repo_name"),
+  repoSummary: text("repo_summary"),
+  repoVisibility: text("repo_visibility"),
+  repoDefaultBranch: text("repo_default_branch"),
+  repoDefaultBranchHash: text("repo_default_branch_hash"),
+  repoCreatedAt: text("repo_created_at"),
+  repoUpdatedAt: text("repo_updated_at"),
   ...createdAtColumn,
 }, (table) => ({
   idxRepo: index("idx_push_activities_repo").on(table.repoId),
   idxAccount: index("idx_push_activities_account").on(table.accountId),
+  idxAccountCreated: index("idx_push_activities_account_created").on(
+    table.accountId,
+    table.createdAt,
+  ),
   idxCreated: index("idx_push_activities_created").on(
     table.repoId,
     table.createdAt,

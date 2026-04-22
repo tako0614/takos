@@ -31,6 +31,10 @@ export interface CapabilityDescriptor {
   namespace: CapabilityNamespace;
   name: string;
   summary: string;
+  instructions?: string;
+  recommended_tools?: string[];
+  output_modes?: string[];
+  durable_output_hints?: string[];
   tags: string[];
   triggers?: string[];
   family?: string;

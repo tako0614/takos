@@ -60,10 +60,11 @@ publish:
 `publish` entry で catalog を管理します。`McpServer` は agent runtime が
 参照する MCP catalog entry です。
 
-## Takos system publication
+## Takos built-in provider publication
 
 `takos-api` は route / interface publication ではなく、kernel API への access を
-受け取る local consume 名です。
+受け取る local consume 名です。実体は `takos.api-key` built-in provider
+publication の consume です。
 
 ```yaml
 compute:
@@ -79,10 +80,10 @@ compute:
 
 default app manifest / workflow は UI と `/mcp` を同じ worker に含める。MCP
 publication は `authSecretRef: MCP_AUTH_TOKEN` を宣言し、control plane が
-worker-scoped secret env を用意する。`compute.web.env` には
-`MCP_AUTH_REQUIRED=1` を設定し、manifest の `routes` は `/` と `/mcp` の両方を
-`web` target に向ける。`/` を UI 直下として扱うのは deployment 側の責務で、
-entrypoint そのものの責務ではない。
+worker-scoped secret env を用意する。実装は `MCP_AUTH_TOKEN` が未設定、かつ
+`MCP_ALLOW_UNAUTHENTICATED=true` が明示されていない場合に fail closed する。
+manifest の `routes` は `/` と `/mcp` の両方を `web` target に向ける。`/` を
+UI 直下として扱うのは deployment 側の責務で、entrypoint そのものの責務ではない。
 
 ## MCP tools
 

@@ -74,7 +74,7 @@ Deno.test("buildBundleDocs emits route publication kinds for bundle manifest", (
   });
 });
 
-Deno.test("buildBundleDocs preserves Takos system publication consumes on workloads", () => {
+Deno.test("buildBundleDocs preserves Takos built-in provider publication consumes on workloads", () => {
   const manifest: AppManifest = {
     name: "grant-bundle-app",
     compute: {

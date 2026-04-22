@@ -24,6 +24,22 @@ Deno.test("toolbox search hides router tools and points agents back to toolbox",
         selectable: true,
       },
       {
+        id: "skill:research-brief",
+        kind: "skill",
+        namespace: "web",
+        name: "Research Brief",
+        summary: "Research workflow manual.",
+        instructions: "Gather facts before concluding.",
+        tags: ["research", "sources"],
+        triggers: ["research"],
+        family: "skill.research",
+        risk_level: "none",
+        side_effects: false,
+        source: "managed_skill",
+        discoverable: true,
+        selectable: false,
+      },
+      {
         id: "tool:sheet_create",
         kind: "tool",
         namespace: "mcp",
@@ -42,12 +58,21 @@ Deno.test("toolbox search hides router tools and points agents back to toolbox",
 
   const output = JSON.parse(
     await toolboxHandler(
-      { action: "search", query: "spreadsheet", limit: 3 },
+      { action: "search", query: "spreadsheet research", limit: 3 },
       { capabilityRegistry: registry } as ToolContext,
     ),
   );
 
-  assertEquals(output.results[0].name, "sheet_create");
+  assertEquals(
+    output.results.some((result: { name: string }) =>
+      result.name === "sheet_create"
+    ),
+    true,
+  );
+  assertEquals(
+    output.results.some((result: { kind: string }) => result.kind === "manual"),
+    true,
+  );
   assertEquals(
     output.results.some((result: { name: string }) =>
       result.name === "toolbox"
@@ -56,6 +81,47 @@ Deno.test("toolbox search hides router tools and points agents back to toolbox",
   );
   assertStringIncludes(output.hint, "toolbox action=describe");
   assertStringIncludes(output.hint, "action=call");
+});
+
+Deno.test("toolbox describe returns manual instructions for skill descriptors", async () => {
+  const registry = new CapabilityRegistry();
+  registry.register({
+    id: "skill:research-brief",
+    kind: "skill",
+    namespace: "web",
+    name: "Research Brief",
+    summary: "Research workflow manual.",
+    instructions: "Gather facts before concluding.",
+    recommended_tools: ["web_fetch"],
+    output_modes: ["chat"],
+    durable_output_hints: ["artifact"],
+    tags: ["research"],
+    triggers: ["research"],
+    family: "skill.research",
+    risk_level: "none",
+    side_effects: false,
+    source: "managed_skill",
+    discoverable: true,
+    selectable: false,
+  });
+
+  const output = JSON.parse(
+    await toolboxHandler(
+      { action: "describe", tool_name: "research-brief" },
+      {
+        capabilityRegistry: registry,
+        _toolExecutor: {
+          getAvailableTools: () => [],
+          execute: async () => ({ output: "" }),
+        },
+      } as unknown as ToolContext,
+    ),
+  );
+
+  assertEquals(output.tools, []);
+  assertEquals(output.manuals[0].kind, "manual");
+  assertEquals(output.manuals[0].recommended_tools, ["web_fetch"]);
+  assertStringIncludes(output.manuals[0].instructions, "Gather facts");
 });
 
 Deno.test("toolbox describe returns full schemas for discovered tools", async () => {

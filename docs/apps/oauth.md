@@ -1,6 +1,6 @@
 # OAuth
 
-Takos の OAuth client は `takos.oauth-client` system publication source を
+Takos の OAuth client は `takos.oauth-client` built-in provider publication を
 `compute.<name>.consume` で request して受け取ります。group 層の専用 field
 ではなく、他の publication と同じ publish / consume contract の一部です。
 未知の `request` field は deploy validation で invalid です。

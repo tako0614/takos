@@ -23,12 +23,12 @@ cd takos && deno task -c apps/runtime/deno.json start
 
 ## Available tasks
 
-| Task            | Command                                     | Description              |
-| --------------- | ------------------------------------------- | ------------------------ |
-| `start`         | `deno run --allow-all src/index.ts`         | Start the service        |
-| `dev`           | `deno run --allow-all --watch src/index.ts` | Start with file watching |
-| `test`          | `deno test --allow-all src/`                | Run tests                |
-| `test:coverage` | `deno test --allow-all --coverage src/`     | Run tests with coverage  |
+| Task            | Command                                     | Description                              |
+| --------------- | ------------------------------------------- | ---------------------------------------- |
+| `start`         | `deno task -c apps/runtime/deno.json start` | Start with production-scoped permissions |
+| `dev`           | `deno run --allow-all --watch src/index.ts` | Start with file watching                 |
+| `test`          | `deno test --allow-all src/`                | Run tests                                |
+| `test:coverage` | `deno test --allow-all --coverage src/`     | Run tests with coverage                  |
 
 ## Environment variables
 

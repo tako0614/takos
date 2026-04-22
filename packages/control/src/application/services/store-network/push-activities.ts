@@ -30,6 +30,17 @@ export interface RecordPushInput {
   commits?: CommitMeta[];
 }
 
+export interface RepositorySnapshot {
+  ownerSlug: string;
+  name: string;
+  summary: string | null;
+  visibility: "public" | "private" | "internal" | string;
+  defaultBranch: string | null;
+  defaultBranchHash: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface PushActivityRecord {
   id: string;
   repoId: string;
@@ -41,6 +52,7 @@ export interface PushActivityRecord {
   pusherName: string | null;
   commitCount: number;
   commits: CommitMeta[];
+  repositorySnapshot: RepositorySnapshot | null;
   createdAt: string;
 }
 
@@ -64,11 +76,19 @@ export async function recordPushActivity(
     pusherName: input.pusherName,
     commitCount: input.commitCount,
     commitsJson: commits.length > 0 ? JSON.stringify(commits) : null,
+    repoOwnerSlug: null,
+    repoName: null,
+    repoSummary: null,
+    repoVisibility: null,
+    repoDefaultBranch: null,
+    repoDefaultBranchHash: null,
+    repoCreatedAt: null,
+    repoUpdatedAt: null,
     createdAt: timestamp,
   };
 
   await db.insert(repoPushActivities).values(record);
-  return { ...record, commits };
+  return { ...record, commits, repositorySnapshot: null };
 }
 
 export async function listPushActivities(
@@ -105,6 +125,7 @@ export async function listPushActivities(
       pusherName: row.pusherName,
       commitCount: row.commitCount,
       commits: parseCommits(row.commitsJson),
+      repositorySnapshot: snapshotFromRow(row),
       createdAt: row.createdAt,
     })),
   };
@@ -117,7 +138,11 @@ export async function listPushActivities(
  */
 export async function recordRepoDeleteActivity(
   dbBinding: D1Database,
-  input: { repoId: string; accountId: string },
+  input: {
+    repoId: string;
+    accountId: string;
+    repository: RepositorySnapshot;
+  },
 ): Promise<PushActivityRecord> {
   const db = getDb(dbBinding);
   const id = generateId();
@@ -134,11 +159,19 @@ export async function recordRepoDeleteActivity(
     pusherName: null,
     commitCount: 0,
     commitsJson: null,
+    repoOwnerSlug: input.repository.ownerSlug,
+    repoName: input.repository.name,
+    repoSummary: input.repository.summary,
+    repoVisibility: input.repository.visibility,
+    repoDefaultBranch: input.repository.defaultBranch,
+    repoDefaultBranchHash: input.repository.defaultBranchHash,
+    repoCreatedAt: input.repository.createdAt,
+    repoUpdatedAt: input.repository.updatedAt,
     createdAt: timestamp,
   };
 
   await db.insert(repoPushActivities).values(record);
-  return { ...record, commits: [] };
+  return { ...record, commits: [], repositorySnapshot: input.repository };
 }
 
 /**
@@ -181,6 +214,7 @@ export async function listPushActivitiesForRepoIds(
       pusherName: row.pusherName,
       commitCount: row.commitCount,
       commits: parseCommits(row.commitsJson),
+      repositorySnapshot: snapshotFromRow(row),
       createdAt: row.createdAt,
     })),
   };
@@ -193,4 +227,20 @@ function parseCommits(json: string | null): CommitMeta[] {
   } catch {
     return [];
   }
+}
+
+function snapshotFromRow(
+  row: typeof repoPushActivities.$inferSelect,
+): RepositorySnapshot | null {
+  if (!row.repoOwnerSlug || !row.repoName) return null;
+  return {
+    ownerSlug: row.repoOwnerSlug,
+    name: row.repoName,
+    summary: row.repoSummary,
+    visibility: row.repoVisibility ?? "private",
+    defaultBranch: row.repoDefaultBranch,
+    defaultBranchHash: row.repoDefaultBranchHash,
+    createdAt: row.repoCreatedAt ?? row.createdAt,
+    updatedAt: row.repoUpdatedAt ?? row.createdAt,
+  };
 }

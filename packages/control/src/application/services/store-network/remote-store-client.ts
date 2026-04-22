@@ -9,6 +9,9 @@ type JsonObject = Record<string, unknown>;
 
 const JSON_ACCEPT = "application/json";
 const FETCH_TIMEOUT_MS = 10_000;
+const MAX_STORE_REDIRECTS = 5;
+const STORE_API_PATH_PATTERN = /^\/api\/public\/stores\/([^/]+)\/?$/;
+const STORE_SLUG_PATTERN = /^[a-z0-9][a-z0-9-]{0,31}$/;
 
 export interface RemoteStoreDocument {
   id: string;
@@ -37,6 +40,7 @@ export interface RemoteRepository {
   defaultBranchHash?: string | null;
   cloneUrl?: string | null;
   browseUrl?: string | null;
+  packageIcon?: string | null;
 }
 
 export interface RemoteCollection {
@@ -72,6 +76,11 @@ export interface StoreResolutionResult {
   storeSlug: string;
 }
 
+interface NormalizedStoreUrl extends StoreResolutionResult {
+  origin: string;
+  pathname: string;
+}
+
 export class RemoteStoreError extends Error {
   constructor(message: string) {
     super(message);
@@ -79,16 +88,24 @@ export class RemoteStoreError extends Error {
   }
 }
 
-export function assertSafeUrl(rawUrl: string): void {
+function parseUrl(rawUrl: string, errorMessage = "Invalid URL"): URL {
   let parsed: URL;
   try {
-    parsed = new URL(rawUrl);
+    parsed = new URL(rawUrl.trim());
   } catch {
-    throw new RemoteStoreError("Invalid URL");
+    throw new RemoteStoreError(errorMessage);
   }
 
-  if (parsed.protocol !== "https:" && parsed.protocol !== "http:") {
-    throw new RemoteStoreError("Only HTTP(S) URLs are allowed");
+  return parsed;
+}
+
+function assertSafeParsedUrl(parsed: URL): void {
+  if (parsed.protocol !== "https:") {
+    throw new RemoteStoreError("Only HTTPS URLs are allowed");
+  }
+
+  if (parsed.username || parsed.password) {
+    throw new RemoteStoreError("URL credentials are not allowed");
   }
 
   const hostname = parsed.hostname.toLowerCase();
@@ -101,20 +118,20 @@ export function assertSafeUrl(rawUrl: string): void {
   }
 
   if (/^\d{1,3}(\.\d{1,3}){3}$/.test(hostname)) {
-    const parts = hostname.split(".").map(Number);
-    const isPrivate = parts[0] === 10 ||
-      parts[0] === 127 ||
-      (parts[0] === 172 && parts[1] >= 16 && parts[1] <= 31) ||
-      (parts[0] === 192 && parts[1] === 168) ||
-      (parts[0] === 169 && parts[1] === 254) ||
-      parts[0] === 0;
-    if (isPrivate) {
-      throw new RemoteStoreError("Blocked request to private IP");
-    }
+    throw new RemoteStoreError("Blocked request to IP address");
   }
 
   if (hostname.startsWith("[") || hostname.includes(":")) {
     throw new RemoteStoreError("Blocked request to IPv6 address");
+  }
+
+  if (
+    hostname.length > 253 || hostname.endsWith(".") ||
+    hostname.split(".").some((label) =>
+      !/^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/.test(label)
+    )
+  ) {
+    throw new RemoteStoreError("Invalid domain");
   }
 
   const blockedSuffixes = [
@@ -130,16 +147,150 @@ export function assertSafeUrl(rawUrl: string): void {
   }
 }
 
+export function assertSafeUrl(rawUrl: string): void {
+  assertSafeParsedUrl(parseUrl(rawUrl));
+}
+
+function validateStoreSlug(storeSlug: string): void {
+  if (!STORE_SLUG_PATTERN.test(storeSlug)) {
+    throw new RemoteStoreError("Invalid store slug");
+  }
+}
+
+function normalizeStoreApiUrl(rawUrl: string): NormalizedStoreUrl {
+  const parsed = parseUrl(rawUrl, "Invalid store URL");
+  assertSafeParsedUrl(parsed);
+
+  if (parsed.search || parsed.hash) {
+    throw new RemoteStoreError(
+      "Store URL must not include query or fragment",
+    );
+  }
+
+  const match = parsed.pathname.match(STORE_API_PATH_PATTERN);
+  if (!match) {
+    throw new RemoteStoreError("Invalid store URL format");
+  }
+
+  let storeSlug: string;
+  try {
+    storeSlug = decodeURIComponent(match[1]);
+  } catch {
+    throw new RemoteStoreError("Invalid store slug");
+  }
+  validateStoreSlug(storeSlug);
+
+  if (match[1] !== encodeURIComponent(storeSlug)) {
+    throw new RemoteStoreError("Invalid store URL format");
+  }
+
+  const normalized = new URL(parsed.toString());
+  normalized.pathname = `/api/public/stores/${encodeURIComponent(storeSlug)}`;
+  normalized.search = "";
+  normalized.hash = "";
+
+  return {
+    storeUrl: normalized.toString(),
+    domain: normalized.host,
+    storeSlug,
+    origin: normalized.origin,
+    pathname: normalized.pathname,
+  };
+}
+
+function normalizeIdentifierDomain(rawDomain: string): string {
+  const domain = rawDomain.trim().toLowerCase();
+  if (!domain) {
+    throw new RemoteStoreError(
+      "Invalid store identifier: slug and domain must not be empty",
+    );
+  }
+  if (
+    domain.includes("://") || domain.includes("/") ||
+    domain.includes("\\") || domain.includes("?") ||
+    domain.includes("#") || domain.includes("@") ||
+    domain.includes(":")
+  ) {
+    throw new RemoteStoreError("Invalid store domain");
+  }
+
+  const parsed = parseUrl(`https://${domain}/`, "Invalid store domain");
+  if (
+    parsed.pathname !== "/" || parsed.search || parsed.hash ||
+    parsed.username || parsed.password
+  ) {
+    throw new RemoteStoreError("Invalid store domain");
+  }
+  assertSafeParsedUrl(parsed);
+  return parsed.host;
+}
+
+function normalizeStoreDocumentId(
+  rawId: unknown,
+  expected: NormalizedStoreUrl,
+): string {
+  if (rawId === undefined || rawId === null || rawId === "") {
+    return expected.storeUrl;
+  }
+  if (typeof rawId !== "string") {
+    throw new RemoteStoreError("Invalid remote store id");
+  }
+
+  const actual = normalizeStoreApiUrl(rawId);
+  if (actual.storeUrl !== expected.storeUrl) {
+    throw new RemoteStoreError("Remote store id does not match requested URL");
+  }
+  return actual.storeUrl;
+}
+
+function normalizeStoreEndpointUrl(
+  rawValue: unknown,
+  expected: NormalizedStoreUrl,
+  fieldName: string,
+  suffixPath: string,
+): string {
+  const expectedPath = `${expected.pathname}/${suffixPath}`;
+  if (rawValue === undefined || rawValue === null || rawValue === "") {
+    return `${expected.origin}${expectedPath}`;
+  }
+  if (typeof rawValue !== "string") {
+    throw new RemoteStoreError(`Invalid ${fieldName}`);
+  }
+
+  let parsed: URL;
+  try {
+    parsed = new URL(rawValue.trim(), expected.storeUrl);
+  } catch {
+    throw new RemoteStoreError(`Invalid ${fieldName}`);
+  }
+  assertSafeParsedUrl(parsed);
+
+  if (parsed.origin !== expected.origin) {
+    throw new RemoteStoreError(
+      `${fieldName} must be same-origin with store id`,
+    );
+  }
+  if (parsed.pathname !== expectedPath || parsed.search || parsed.hash) {
+    throw new RemoteStoreError(
+      `${fieldName} must point to ${expectedPath}`,
+    );
+  }
+
+  return parsed.toString();
+}
+
 export async function storeFetch(
   url: string,
   accept = JSON_ACCEPT,
+  redirectDepth = 0,
 ): Promise<Response> {
-  assertSafeUrl(url);
+  const currentUrl = parseUrl(url);
+  assertSafeParsedUrl(currentUrl);
 
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
   try {
-    const response = await fetch(url, {
+    const response = await fetch(currentUrl.toString(), {
       headers: { Accept: accept },
       signal: controller.signal,
       redirect: "manual",
@@ -148,8 +299,18 @@ export async function storeFetch(
     if (response.status >= 300 && response.status < 400) {
       const location = response.headers.get("location");
       if (location) {
-        const redirectUrl = new URL(location, url).toString();
-        return storeFetch(redirectUrl, accept);
+        if (redirectDepth >= MAX_STORE_REDIRECTS) {
+          throw new RemoteStoreError("Too many redirects");
+        }
+        const redirectUrl = new URL(location, currentUrl);
+        if (redirectUrl.protocol !== "https:") {
+          throw new RemoteStoreError("Redirected to non-HTTPS URL");
+        }
+        assertSafeParsedUrl(redirectUrl);
+        if (redirectUrl.origin !== currentUrl.origin) {
+          throw new RemoteStoreError("Cross-origin redirects are not allowed");
+        }
+        return storeFetch(redirectUrl.toString(), accept, redirectDepth + 1);
       }
     }
 
@@ -175,35 +336,27 @@ export function resolveStoreIdentifier(
   }
 
   if (trimmed.includes("://")) {
-    let url: URL;
-    try {
-      url = new URL(trimmed);
-    } catch {
-      throw new RemoteStoreError("Invalid store URL");
-    }
-    if (url.protocol !== "https:") {
-      throw new RemoteStoreError("Only HTTPS store URLs are allowed");
-    }
-    const match = url.pathname.match(/^\/api\/public\/stores\/([^/]+)$/);
-    if (!match) {
-      throw new RemoteStoreError("Invalid store URL format");
-    }
+    const normalized = normalizeStoreApiUrl(trimmed);
     return {
-      storeUrl: url.toString(),
-      domain: url.host,
-      storeSlug: decodeURIComponent(match[1]),
+      storeUrl: normalized.storeUrl,
+      domain: normalized.domain,
+      storeSlug: normalized.storeSlug,
     };
   }
 
   if (trimmed.includes("@")) {
-    const atIndex = trimmed.lastIndexOf("@");
-    const storeSlug = trimmed.slice(0, atIndex);
-    const domain = trimmed.slice(atIndex + 1);
+    const parts = trimmed.split("@");
+    if (parts.length !== 2) {
+      throw new RemoteStoreError("Invalid store identifier");
+    }
+    const storeSlug = parts[0].trim();
+    const domain = normalizeIdentifierDomain(parts[1]);
     if (!storeSlug || !domain) {
       throw new RemoteStoreError(
         "Invalid store identifier: slug and domain must not be empty",
       );
     }
+    validateStoreSlug(storeSlug);
     return {
       storeUrl: `https://${domain}/api/public/stores/${
         encodeURIComponent(storeSlug)
@@ -221,14 +374,15 @@ export function resolveStoreIdentifier(
 export async function fetchRemoteStoreDocument(
   storeUrl: string,
 ): Promise<RemoteStoreDocument> {
-  const response = await storeFetch(storeUrl);
+  const expected = normalizeStoreApiUrl(storeUrl);
+  const response = await storeFetch(expected.storeUrl);
   if (!response.ok) {
     throw new RemoteStoreError("Failed to fetch remote store");
   }
 
   const body = await response.json() as JsonObject;
   const store = isJsonObject(body.store) ? body.store : body;
-  return parseStoreDocument(store, storeUrl);
+  return parseStoreDocument(store, expected);
 }
 
 export async function fetchRemoteRepositories(
@@ -328,22 +482,34 @@ export async function fetchRemoteFeed(
 
 function parseStoreDocument(
   store: JsonObject,
-  fallbackUrl: string,
+  expected: NormalizedStoreUrl,
 ): RemoteStoreDocument {
+  const id = normalizeStoreDocumentId(store.id, expected);
   return {
-    id: String(store.id ?? fallbackUrl),
-    slug: String(store.slug ?? ""),
+    id,
+    slug: expected.storeSlug,
     name: String(store.name ?? ""),
     summary: typeof store.summary === "string" ? store.summary : null,
     iconUrl: typeof store.icon_url === "string" ? store.icon_url : null,
     repositoryCount: Number(store.repository_count ?? 0),
-    inventoryUrl: String(store.inventory_url ?? `${fallbackUrl}/inventory`),
-    searchUrl: String(
-      store.search_url ?? `${fallbackUrl}/search/repositories`,
+    inventoryUrl: normalizeStoreEndpointUrl(
+      store.inventory_url,
+      expected,
+      "inventory_url",
+      "inventory",
     ),
-    feedUrl: typeof store.feed_url === "string"
-      ? store.feed_url
-      : `${fallbackUrl}/feed`,
+    searchUrl: normalizeStoreEndpointUrl(
+      store.search_url,
+      expected,
+      "search_url",
+      "search/repositories",
+    ),
+    feedUrl: normalizeStoreEndpointUrl(
+      store.feed_url,
+      expected,
+      "feed_url",
+      "feed",
+    ),
     createdAt: typeof store.created_at === "string" ? store.created_at : null,
     updatedAt: typeof store.updated_at === "string" ? store.updated_at : null,
   };
@@ -407,6 +573,11 @@ function parseRepositoryObject(obj: JsonObject): RemoteRepository {
       : typeof obj.browseUrl === "string"
       ? obj.browseUrl
       : repositoryUrl,
+    packageIcon: typeof obj.package_icon === "string"
+      ? obj.package_icon
+      : typeof obj.packageIcon === "string"
+      ? obj.packageIcon
+      : null,
   };
 }
 

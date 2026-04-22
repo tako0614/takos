@@ -1,4 +1,5 @@
-FROM denoland/deno:2 AS builder
+FROM denoland/deno:2.7.10 AS builder
+ENV DENO_DIR=/deno-dir
 WORKDIR /workspace
 
 # Build context is the ecosystem root so the runtime image can include the
@@ -18,7 +19,8 @@ RUN deno cache src/index.ts
 WORKDIR /workspace/takos
 RUN deno cache apps/runtime/src/index.ts
 
-FROM denoland/deno:alpine-2
+FROM denoland/deno:alpine-2.7.10
+ENV DENO_DIR=/deno-dir
 WORKDIR /workspace
 
 # These tools are required at runtime:
@@ -33,16 +35,16 @@ RUN apk add --no-cache \
     ca-certificates
 
 COPY --from=builder /workspace /workspace
-COPY --from=builder /root/.cache/deno /root/.cache/deno
+COPY --from=builder /deno-dir /deno-dir
 
 # Install takos CLI globally
-RUN printf '#!/bin/sh\ncd /workspace/takos-cli\nexec deno run --allow-all src/index.ts "$@"\n' > /usr/local/bin/takos && chmod +x /usr/local/bin/takos
+RUN printf '#!/bin/sh\ncd /workspace/takos-cli\nexec deno run --allow-read --allow-write --allow-env --allow-net --allow-run --allow-sys=homedir src/index.ts "$@"\n' > /usr/local/bin/takos && chmod +x /usr/local/bin/takos
 
 WORKDIR /workspace/takos/apps/runtime
 
 # Run as non-root for security
 RUN addgroup -S takos && adduser -S takos -G takos && \
-    chown -R takos:takos /workspace
+    chown -R takos:takos /workspace /deno-dir
 USER takos
 
 # Set environment
@@ -54,4 +56,11 @@ ENV CF_CONTAINER=true
 
 EXPOSE 8080
 
-CMD ["deno", "run", "--allow-all", "src/index.ts"]
+CMD ["deno", \
+    "run", \
+    "--allow-read=.,../../packages,../../../takos-cli,/tmp,/repos", \
+    "--allow-write=.,/tmp,/repos", \
+    "--allow-env", \
+    "--allow-net", \
+    "--allow-run=/bin/bash,/bin/sh,/usr/bin/bash,/usr/bin/sh,/usr/local/bin/bash,bash,sh,pwsh,powershell,powershell.exe,cmd.exe,git,tar,node,npm,npx,pnpm,yarn,bun,esbuild,wrangler,takos,echo,ls,cat,pwd,mkdir,cp,mv,rm,touch,chmod,chown,head,tail,grep,find,sort,uniq,wc,diff,unzip,gzip,gunzip,zip,sed,awk,xargs,env,which,whereis,file,basename,dirname,realpath,readlink,tsc,webpack,vite,jest,vitest,mocha,ps,top,curl,wget,kill,killall,pkill,printenv", \
+    "src/index.ts"]

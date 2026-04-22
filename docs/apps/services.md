@@ -36,8 +36,8 @@ routes:
 
 Service には環境変数を設定できる。publication を `consume` する compute
 だけに、その outputs が注入される。Takos API key / OAuth client も
-`takos.api-key` / `takos.oauth-client` という system publication source として
-同じ `consume` contract で受け取る。
+`takos.api-key` / `takos.oauth-client` という built-in provider publication
+として同じ `consume` contract で受け取る。
 
 ```yaml
 compute:

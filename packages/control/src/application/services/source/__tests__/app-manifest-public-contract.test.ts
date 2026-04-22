@@ -1603,7 +1603,7 @@ publish:
   );
 });
 
-Deno.test("public manifest contract - parses Takos system publications as compute consume requests", () => {
+Deno.test("public manifest contract - parses Takos built-in provider publications as compute consume requests", () => {
   const manifest = parseAppManifestYaml(`
 name: publication-app
 
@@ -1687,7 +1687,7 @@ compute:
   });
 });
 
-Deno.test("public manifest contract - rejects malformed Takos system consume requests", () => {
+Deno.test("public manifest contract - rejects malformed Takos built-in provider consume requests", () => {
   assertThrows(
     () =>
       parseAppManifestYaml(`
