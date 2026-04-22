@@ -33,6 +33,17 @@ export const storage = {
   newName: "新しい名前",
   renameTitle: "名前を変更",
   failedToCreateFolder: "フォルダの作成に失敗しました",
+  failedToLoadFiles: "ファイルの読み込みに失敗しました",
+  failedToLoadFileContent: "ファイル内容の読み込みに失敗しました",
+  failedToSaveFile: "ファイルの保存に失敗しました",
+  failedToUploadFile: "ファイルのアップロードに失敗しました",
+  failedToCreateAttachmentFolder: "添付ファイルフォルダの作成に失敗しました",
+  failedToPrepareAttachmentUpload: "{name} のアップロード準備に失敗しました",
+  failedToUploadAttachment: "{name} のアップロードに失敗しました",
+  failedToFinalizeAttachmentUpload:
+    "{name} のアップロード完了処理に失敗しました",
+  failedToMove: "移動に失敗しました",
+  failedToDownloadZip: "ZIPのダウンロードに失敗しました",
   deleteConfirmTitle: "削除の確認",
   deleteFileConfirm: "「{name}」を削除してもよろしいですか？",
   deleteFolderConfirm:
@@ -60,4 +71,5 @@ export const storage = {
   setAsDefault: "既定に設定",
   clearDefault: "既定を解除",
   included: "同梱",
+  moveItemsTo: "{count}件を移動先へ:",
 } as const;

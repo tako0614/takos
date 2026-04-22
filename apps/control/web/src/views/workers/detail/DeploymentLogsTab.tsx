@@ -309,7 +309,7 @@ export function DeploymentLogsTab(props: DeploymentLogsTabProps) {
                   {loadingDetailsId() === deployment.id && (
                     <div class="mb-3 flex items-center gap-2 text-xs text-zinc-500 dark:text-zinc-400">
                       <Icons.Loader class="w-4 h-4 animate-spin" />
-                      <span>Loading deployment details...</span>
+                      <span>{t("loadingDeploymentDetails")}</span>
                     </div>
                   )}
                   {deployment.error_message && (
@@ -354,7 +354,7 @@ export function DeploymentLogsTab(props: DeploymentLogsTabProps) {
                   <div class="grid grid-cols-2 gap-4 text-sm">
                     <div>
                       <span class="text-zinc-500 dark:text-zinc-400">
-                        Version:
+                        {t("versionLabel")}:
                       </span>
                       <span class="ml-2 font-mono text-zinc-700 dark:text-zinc-300">
                         v{deployment.version}

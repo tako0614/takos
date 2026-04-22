@@ -231,7 +231,7 @@ export function useChatSession({
         if (!polling.isMountedRef.current) return;
         if (threadId() !== currentThreadId) return;
         polling.setError(
-          t("failedToLoad" as TranslationKey) || "Failed to load messages",
+          t("failedToLoadMessages" as TranslationKey),
         );
       }
     };

@@ -1,5 +1,6 @@
 import { type Accessor, createEffect, createSignal, on } from "solid-js";
 import { rpc, rpcJson, rpcPath } from "../lib/rpc.ts";
+import { useI18n } from "../store/i18n.ts";
 
 export interface StoreItem {
   slug: string;
@@ -37,6 +38,7 @@ export interface RegistryEntry {
 }
 
 export function useStoreManagement(spaceId: Accessor<string | undefined>) {
+  const { t } = useI18n();
   const [stores, setStores] = createSignal<StoreItem[]>([]);
   const [loading, setLoading] = createSignal(false);
   const [error, setError] = createSignal<string | null>(null);
@@ -65,7 +67,7 @@ export function useStoreManagement(spaceId: Accessor<string | undefined>) {
     } catch (err) {
       if (requestId !== storesRequestSeq) return;
       if (spaceId() !== currentSpaceId) return;
-      setError(err instanceof Error ? err.message : "Failed to load stores");
+      setError(err instanceof Error ? err.message : t("failedToLoadStores"));
     } finally {
       if (requestId === storesRequestSeq && spaceId() === currentSpaceId) {
         setLoading(false);
@@ -76,7 +78,7 @@ export function useStoreManagement(spaceId: Accessor<string | undefined>) {
   const createStore = async (slug: string, name?: string, summary?: string) => {
     const currentSpaceId = spaceId();
     if (!currentSpaceId) {
-      throw new Error("Missing space");
+      throw new Error(t("missingSpace"));
     }
     const res = await rpc.spaces[":spaceId"].stores.$post({
       param: { spaceId: currentSpaceId },
@@ -92,7 +94,7 @@ export function useStoreManagement(spaceId: Accessor<string | undefined>) {
   const deleteStore = async (storeSlug: string) => {
     const currentSpaceId = spaceId();
     if (!currentSpaceId) {
-      throw new Error("Missing space");
+      throw new Error(t("missingSpace"));
     }
     await rpc.spaces[":spaceId"].stores[":storeSlug"].$delete({
       param: { spaceId: currentSpaceId, storeSlug },
@@ -113,6 +115,7 @@ export function useStoreInventory(
   spaceId: Accessor<string | undefined>,
   storeSlug: Accessor<string | undefined>,
 ) {
+  const { t } = useI18n();
   const [items, setItems] = createSignal<InventoryItem[]>([]);
   const [total, setTotal] = createSignal(0);
   const [loading, setLoading] = createSignal(false);
@@ -159,7 +162,7 @@ export function useStoreInventory(
       if (spaceId() !== currentSpaceId || storeSlug() !== currentStoreSlug) {
         return;
       }
-      setError(err instanceof Error ? err.message : "Failed to load inventory");
+      setError(err instanceof Error ? err.message : t("failedToLoadInventory"));
     } finally {
       if (
         requestId === itemsRequestSeq &&
@@ -175,7 +178,7 @@ export function useStoreInventory(
     const currentSpaceId = spaceId();
     const currentStoreSlug = storeSlug();
     if (!currentSpaceId || !currentStoreSlug) {
-      throw new Error("Missing store context");
+      throw new Error(t("missingStoreContext"));
     }
     const res = await rpc.spaces[":spaceId"].stores[":storeSlug"].inventory
       .$post({
@@ -190,7 +193,7 @@ export function useStoreInventory(
     const currentSpaceId = spaceId();
     const currentStoreSlug = storeSlug();
     if (!currentSpaceId || !currentStoreSlug) {
-      throw new Error("Missing store context");
+      throw new Error(t("missingStoreContext"));
     }
     await rpc.spaces[":spaceId"].stores[":storeSlug"].inventory[":itemId"]
       .$delete({
@@ -210,6 +213,7 @@ export function useStoreInventory(
 }
 
 export function useStoreRegistry(spaceId: Accessor<string | undefined>) {
+  const { t } = useI18n();
   const [entries, setEntries] = createSignal<RegistryEntry[]>([]);
   const [loading, setLoading] = createSignal(false);
   const [error, setError] = createSignal<string | null>(null);
@@ -240,7 +244,7 @@ export function useStoreRegistry(spaceId: Accessor<string | undefined>) {
       if (requestId !== entriesRequestSeq) return;
       if (spaceId() !== currentSpaceId) return;
       setError(
-        err instanceof Error ? err.message : "Failed to load remote stores",
+        err instanceof Error ? err.message : t("failedToLoadRemoteStores"),
       );
     } finally {
       if (requestId === entriesRequestSeq && spaceId() === currentSpaceId) {
@@ -252,7 +256,7 @@ export function useStoreRegistry(spaceId: Accessor<string | undefined>) {
   const addRemoteStore = async (identifier: string, subscribe = false) => {
     const currentSpaceId = spaceId();
     if (!currentSpaceId) {
-      throw new Error("Missing space");
+      throw new Error(t("missingSpace"));
     }
     const res = await rpcPath(rpc, "spaces", ":spaceId", "store-registry")
       .$post({
@@ -266,7 +270,7 @@ export function useStoreRegistry(spaceId: Accessor<string | undefined>) {
   const removeEntry = async (entryId: string) => {
     const currentSpaceId = spaceId();
     if (!currentSpaceId) {
-      throw new Error("Missing space");
+      throw new Error(t("missingSpace"));
     }
     await rpcPath(rpc, "spaces", ":spaceId", "store-registry", ":entryId")
       .$delete({

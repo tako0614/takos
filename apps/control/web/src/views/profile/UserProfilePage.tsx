@@ -14,9 +14,11 @@ import {
   ProfileUserList,
 } from "../../components/profile/ProfileUserList.tsx";
 import { useUserProfile } from "../../hooks/useUserProfile.ts";
+import { useI18n } from "../../store/i18n.ts";
 import type { UserProfilePageProps } from "../../types/profile.ts";
 
 export function UserProfilePage(props: UserProfilePageProps) {
+  const { t } = useI18n();
   const {
     profile,
     repos,
@@ -125,7 +127,7 @@ export function UserProfilePage(props: UserProfilePageProps) {
             <div class="space-y-4">
               <div class="flex items-center gap-2">
                 <span class="text-sm text-zinc-500 dark:text-zinc-400">
-                  Sort:
+                  {t("sortLabel")}
                 </span>
                 <select
                   class="px-3 py-2 rounded-lg bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 text-sm text-zinc-900 dark:text-zinc-100"
@@ -137,13 +139,13 @@ export function UserProfilePage(props: UserProfilePageProps) {
                     );
                   }}
                 >
-                  <option value="created">Newest</option>
-                  <option value="username">Username</option>
+                  <option value="created">{t("newest")}</option>
+                  <option value="username">{t("usernameLabel")}</option>
                 </select>
               </div>
               <ProfileUserList
                 users={followers()}
-                emptyTitle="No followers yet"
+                emptyTitle={t("noFollowersYet")}
                 emptyIcon={<ProfileEmptyIcon />}
                 onNavigateToProfile={props.onNavigateToProfile}
                 onToggleFollow={toggleUserFollow}
@@ -155,7 +157,7 @@ export function UserProfilePage(props: UserProfilePageProps) {
             <div class="space-y-4">
               <div class="flex items-center gap-2">
                 <span class="text-sm text-zinc-500 dark:text-zinc-400">
-                  Sort:
+                  {t("sortLabel")}
                 </span>
                 <select
                   class="px-3 py-2 rounded-lg bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 text-sm text-zinc-900 dark:text-zinc-100"
@@ -167,13 +169,13 @@ export function UserProfilePage(props: UserProfilePageProps) {
                     );
                   }}
                 >
-                  <option value="created">Newest</option>
-                  <option value="username">Username</option>
+                  <option value="created">{t("newest")}</option>
+                  <option value="username">{t("usernameLabel")}</option>
                 </select>
               </div>
               <ProfileUserList
                 users={following()}
-                emptyTitle="Not following anyone yet"
+                emptyTitle={t("notFollowingAnyoneYet")}
                 emptyIcon={<ProfileEmptyIcon />}
                 onNavigateToProfile={props.onNavigateToProfile}
                 onToggleFollow={toggleUserFollow}

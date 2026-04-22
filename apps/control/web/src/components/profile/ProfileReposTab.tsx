@@ -53,12 +53,14 @@ export function ProfileReposTab(props: ProfileReposTabProps) {
                   >
                     <Icons.Globe class="w-3 h-3" />
                   </Show>
-                  {repo.visibility}
+                  {repo.visibility === "public"
+                    ? t("visibilityPublic")
+                    : t("visibilityPrivate")}
                 </span>
               }
               footer={
                 <span class="text-xs text-zinc-500 dark:text-zinc-400">
-                  Updated {formatDate(repo.updated_at)}
+                  {t("updatedDate", { date: formatDate(repo.updated_at) })}
                 </span>
               }
             />

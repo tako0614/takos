@@ -1,16 +1,22 @@
 import { Show } from "solid-js";
 import { Icons } from "../../lib/Icons.tsx";
 import type { SourceRepo } from "../../types/repos.ts";
+import { useI18n } from "../../store/i18n.ts";
 
-const formatRepoDate = (dateString: string) => {
+const formatRepoDate = (
+  dateString: string,
+  t: ReturnType<typeof useI18n>["t"],
+) => {
   const date = new Date(dateString);
   const now = new Date();
   const diffMs = now.getTime() - date.getTime();
   const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
-  if (diffDays === 0) return "Today";
-  if (diffDays === 1) return "Yesterday";
-  if (diffDays < 7) return `${diffDays}d ago`;
-  if (diffDays < 30) return `${Math.floor(diffDays / 7)}w ago`;
+  if (diffDays === 0) return t("today");
+  if (diffDays === 1) return t("yesterday");
+  if (diffDays < 7) return t("daysAgo", { days: diffDays });
+  if (diffDays < 30) {
+    return t("weeksAgo", { weeks: Math.floor(diffDays / 7) });
+  }
   return date.toLocaleDateString();
 };
 
@@ -28,6 +34,7 @@ interface RepoBrowseCardProps {
 }
 
 export function RepoBrowseCard(props: RepoBrowseCardProps) {
+  const { t } = useI18n();
   const ownerUsername = () => props.repo.owner?.username?.trim() || null;
   const ownerName = () => props.repo.owner?.name || "unknown";
   const ownerLabel = () =>
@@ -100,7 +107,7 @@ export function RepoBrowseCard(props: RepoBrowseCardProps) {
           <Icons.GitMerge />
           {getRepoForks(props.repo)}
         </span>
-        <span class="ml-auto">{formatRepoDate(props.repo.updated_at)}</span>
+        <span class="ml-auto">{formatRepoDate(props.repo.updated_at, t)}</span>
       </div>
     </div>
   );

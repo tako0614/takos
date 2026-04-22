@@ -128,13 +128,13 @@ export function SpaceSettingsSection(props: SpaceSettingsSectionProps) {
         json: { email: inviteEmail().trim(), role: inviteRole() },
       });
       await rpcJson(res);
-      showToast("success", t("memberInvited") || "Member invited");
+      showToast("success", t("memberInvited"));
       setInviteEmail("");
       fetchMembers();
     } catch (err: unknown) {
       showToast(
         "error",
-        getErrorMessage(err, t("failedToInvite") || "Failed to invite member"),
+        getErrorMessage(err, t("failedToInvite")),
       );
     } finally {
       setInviting(false);
@@ -145,12 +145,9 @@ export function SpaceSettingsSection(props: SpaceSettingsSectionProps) {
     const targetSpaceId = selectedSpaceId();
     if (!targetSpaceId) return;
     const confirmed = await confirm({
-      title: t("removeMember") || "Remove Member",
-      message: t("removeMemberWarning") ||
-        `Are you sure you want to remove ${
-          member.name || member.email || "this member"
-        } from the space?`,
-      confirmText: t("remove") || "Remove",
+      title: t("removeMember"),
+      message: t("removeMemberWarning"),
+      confirmText: t("remove"),
       danger: true,
     });
     if (!confirmed) return;
@@ -160,12 +157,12 @@ export function SpaceSettingsSection(props: SpaceSettingsSectionProps) {
         param: { spaceId: targetSpaceId, username: member.username },
       });
       await rpcJson(res);
-      showToast("success", t("memberRemoved") || "Member removed");
+      showToast("success", t("memberRemoved"));
       fetchMembers();
     } catch (err: unknown) {
       showToast(
         "error",
-        getErrorMessage(err, t("failedToRemove") || "Failed to remove member"),
+        getErrorMessage(err, t("failedToRemove")),
       );
     }
   };
@@ -182,12 +179,12 @@ export function SpaceSettingsSection(props: SpaceSettingsSectionProps) {
         json: { role: newRole },
       });
       await rpcJson(res);
-      showToast("success", t("memberUpdated") || "Member role updated");
+      showToast("success", t("memberUpdated"));
       fetchMembers();
     } catch (err: unknown) {
       showToast(
         "error",
-        getErrorMessage(err, t("failedToUpdate") || "Failed to update member"),
+        getErrorMessage(err, t("failedToUpdate")),
       );
     }
   };
@@ -196,9 +193,8 @@ export function SpaceSettingsSection(props: SpaceSettingsSectionProps) {
     const targetSpaceId = selectedSpaceId();
     if (!targetSpaceId || isPersonal()) return;
     const confirmed = await confirm({
-      title: t("deleteSpace") || "Delete Space",
-      message: t("deleteSpaceWarning") ||
-        "Are you sure you want to delete this space? This action cannot be undone and all data will be permanently deleted.",
+      title: t("deleteSpace"),
+      message: t("deleteSpaceWarning"),
       confirmText: t("delete"),
       danger: true,
     });
@@ -209,7 +205,7 @@ export function SpaceSettingsSection(props: SpaceSettingsSectionProps) {
         param: { spaceId: targetSpaceId },
       });
       await rpcJson(res);
-      showToast("success", t("spaceDeleted") || "Space deleted");
+      showToast("success", t("spaceDeleted"));
       props.onSpaceDeleted?.();
     } catch (err: unknown) {
       showToast("error", getErrorMessage(err, t("failedToDelete")));
@@ -227,7 +223,7 @@ export function SpaceSettingsSection(props: SpaceSettingsSectionProps) {
         json: { name, installDefaultApps },
       });
       const data = await rpcJson<{ space: { slug: string } }>(res);
-      showToast("success", t("spaceCreated") || "Space created");
+      showToast("success", t("spaceCreated"));
       setShowCreateSpace(false);
       props.onSpaceUpdated?.();
       props.setSelectedSpaceId(data.space.slug);
@@ -245,14 +241,14 @@ export function SpaceSettingsSection(props: SpaceSettingsSectionProps) {
           <Icons.Settings class="w-4 h-4" />
         </div>
         <h3 class="text-base font-semibold text-zinc-900 dark:text-zinc-100">
-          {t("spaceSettings") || "Space Settings"}
+          {t("spaceSettings")}
         </h3>
       </div>
 
       <div class="px-6 py-4 bg-white dark:bg-zinc-900 border-b border-zinc-100 dark:border-zinc-800">
         <div class="flex items-center justify-between mb-2">
           <label class="text-sm font-medium text-zinc-500 dark:text-zinc-400">
-            {t("selectSpace") || "Select Space"}
+            {t("selectSpace")}
           </label>
           <Button
             variant="ghost"
@@ -260,7 +256,7 @@ export function SpaceSettingsSection(props: SpaceSettingsSectionProps) {
             onClick={() => setShowCreateSpace(true)}
           >
             <Icons.Plus class="w-4 h-4 mr-1" />
-            {t("createSpace") || "Create"}
+            {t("createSpace")}
           </Button>
         </div>
         <select
@@ -269,7 +265,7 @@ export function SpaceSettingsSection(props: SpaceSettingsSectionProps) {
           onChange={(e) => props.setSelectedSpaceId(e.currentTarget.value)}
         >
           <option value="" disabled>
-            {t("selectSpace") || "Select a space"}
+            {t("selectSpace")}
           </option>
           {personalSpace() && (
             <option value="me">
@@ -324,7 +320,7 @@ export function SpaceSettingsSection(props: SpaceSettingsSectionProps) {
         )
         : (
           <div class="flex-1 flex items-center justify-center text-zinc-500 dark:text-zinc-400">
-            {t("selectSpaceHint") || "Select a space to view settings"}
+            {t("selectSpaceHint")}
           </div>
         )}
     </div>

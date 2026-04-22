@@ -3,6 +3,7 @@ import { RepoDetail } from "./components/RepoDetail.tsx";
 import { Icons } from "../../lib/Icons.tsx";
 import type { Repository } from "../../types/index.ts";
 import { rpc, rpcJson } from "../../lib/rpc.ts";
+import { useI18n } from "../../store/i18n.ts";
 
 interface RepoDetailPageProps {
   spaceId?: string;
@@ -18,6 +19,7 @@ interface RepoDetailPageProps {
 }
 
 export function RepoDetailPage(props: RepoDetailPageProps) {
+  const { t } = useI18n();
   const [repo, setRepo] = createSignal<Repository | null>(null);
   const [resolvedSpaceId, setResolvedSpaceId] = createSignal<string | null>(
     props.spaceId || null,
@@ -107,10 +109,10 @@ export function RepoDetailPage(props: RepoDetailPageProps) {
         return;
       }
 
-      throw new Error("No repository identifier provided");
+      throw new Error(t("repositoryIdentifierMissing"));
     } catch (err) {
       if (requestId !== repoRequestSeq) return;
-      setError(err instanceof Error ? err.message : "Unknown error");
+      setError(err instanceof Error ? err.message : t("unknownError"));
     } finally {
       if (requestId === repoRequestSeq) {
         setLoading(false);
@@ -137,13 +139,13 @@ export function RepoDetailPage(props: RepoDetailPageProps) {
         ? (
           <div class="flex flex-col items-center justify-center h-full bg-zinc-50 dark:bg-zinc-900 text-zinc-500 dark:text-zinc-400 gap-3">
             <Icons.AlertTriangle class="w-6 h-6" />
-            <span class="text-sm">{error() || "Repository not found"}</span>
+            <span class="text-sm">{error() || t("repositoryNotFound")}</span>
             <button
               type="button"
               class="px-3 py-1.5 text-sm bg-zinc-100 dark:bg-zinc-800 text-zinc-700 dark:text-zinc-200 rounded-lg hover:bg-zinc-200 dark:hover:bg-zinc-700 transition-colors"
               onClick={props.onBack}
             >
-              Go Back
+              {t("goBack")}
             </button>
           </div>
         )

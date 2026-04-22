@@ -30,6 +30,8 @@ export const deploy = {
   saveRuntime: "ランタイム設定を保存",
   hostname: "ホスト名",
   lastUpdated: "最終更新",
+  loadingBindings: "バインディングを読み込み中",
+  boundServices: "バインドされたサービス",
 
   // General Settings
   general: "基本情報",
@@ -50,6 +52,8 @@ export const deploy = {
   domainPending: "DNS設定待ち",
   cnameInstruction: "DNSレコードを追加してください",
   dnsSetup: "DNS設定",
+  recordLabel: "レコード",
+  targetLabel: "ターゲット",
 
   // Deployment Detail
   status: "ステータス",
@@ -71,6 +75,8 @@ export const deploy = {
   confirmStopWorker: "このワーカーを停止しますか？",
   confirmDeleteWorker:
     "このワーカーを削除しますか？すべてのデータが失われます。",
+  yurucommuWorkerDeleteWarning:
+    "このWorkerはYurucommuに紐づいています。削除するとYurucommuインスタンスが動作しなくなる可能性があります。",
   retry: "再試行",
   retryStarted: "再試行を開始しました",
   failedToRetry: "再試行に失敗しました",
@@ -82,6 +88,8 @@ export const deploy = {
   deploymentHistory: "デプロイ履歴",
   deploymentEvents: "イベント",
   deploymentFailed: "デプロイ失敗",
+  loadingDeploymentDetails: "デプロイ詳細を読み込み中...",
+  versionLabel: "バージョン",
   bundleHash: "バンドルハッシュ",
   bundleSize: "バンドルサイズ",
   deployedBy: "デプロイ者",
@@ -107,6 +115,7 @@ export const deploy = {
   boundWorkersHint: "このリソースを使用しているワーカー",
   noBindingsHint: "現在このリソースにバインドされているワーカーはありません",
   removeBinding: "バインディングを削除",
+  removeBindingFor: "{name} のバインディングを削除",
   bindingRemoved: "バインディングを削除しました",
   failedToRemoveBinding: "バインディングの削除に失敗しました",
 
@@ -160,8 +169,12 @@ export const deploy = {
   noObjects: "オブジェクトがありません",
   size: "サイズ",
   createdAt: "作成日",
+  resourceId: "リソースID",
+  resourceSections: "リソースセクション",
   deleteResourceWarning:
     "この操作は取り消せません。関連するすべてのデータが削除されます。",
+  yurucommuResourceDeleteWarning:
+    "このリソースはYurucommuに紐づいています。削除するとYurucommuインスタンスが動作しなくなる可能性があります。",
 
   // Workers Tab
   useAgentToCreateWorker: "エージェントを使用してWorkerをデプロイしてください",
@@ -181,6 +194,10 @@ export const deploy = {
   copyTokenNow: "トークンを今すぐコピーしてください。再表示はできません。",
   accessTokenLabel: "アクセストークン",
   tokenNameLabel: "トークン名",
+  tokenNamePlaceholder: "例: Production API",
+  copyConnectionField: "{field}をクリップボードにコピー",
+  copyTokenToClipboard: "トークンをクリップボードにコピー",
+  deleteTokenNamed: "{name} を削除",
   permissionLabel: "権限",
   readOnly: "読み取り専用",
   readWrite: "読み書き",
@@ -193,4 +210,11 @@ export const deploy = {
 
   // D1 Explorer
   sqlConsole: "SQLコンソール",
+  databaseTables: "データベーステーブル",
+  loadingTables: "テーブルを読み込み中",
+  tableList: "テーブル一覧",
+  executeSqlQuery: "SQLクエリを実行",
+  tableDataFor: "{table} のテーブルデータ",
+  tableContents: "{table} の内容",
+  queryFailed: "クエリに失敗しました",
 } as const;

@@ -1,6 +1,7 @@
 import { rpc, rpcJson } from "../lib/rpc.ts";
 import type { Accessor } from "solid-js";
 import type { ChatAttachmentMetadata } from "../views/chat/messageMetadata.ts";
+import { useI18n } from "../store/i18n.ts";
 
 function sanitizeAttachmentFileName(name: string): string {
   const trimmed = name.trim();
@@ -46,6 +47,8 @@ export function useChatAttachments({
   spaceId,
   threadId,
 }: UseChatAttachmentsOptions): UseChatAttachmentsResult {
+  const { t } = useI18n();
+
   const ensureAttachmentFolder = async (
     path: string,
     spaceIdOverride?: string,
@@ -65,7 +68,7 @@ export function useChatAttachments({
           () => ({} as { error?: string }),
         );
         const error = (data as { error?: string }).error ||
-          "Failed to create attachment folder";
+          t("failedToCreateAttachmentFolder");
         if (!error.includes("already exists")) {
           throw new Error(error);
         }
@@ -110,7 +113,8 @@ export function useChatAttachments({
           () => ({} as { error?: string }),
         );
         throw new Error(
-          data.error || `Failed to prepare upload for ${file.name}`,
+          data.error ||
+            t("failedToPrepareAttachmentUpload", { name: file.name }),
         );
       }
 
@@ -128,7 +132,7 @@ export function useChatAttachments({
       });
 
       if (!blobRes.ok) {
-        throw new Error(`Failed to upload ${file.name}`);
+        throw new Error(t("failedToUploadAttachment", { name: file.name }));
       }
 
       const confirmRes = await rpc.spaces[":spaceId"].storage["confirm-upload"]
@@ -142,7 +146,8 @@ export function useChatAttachments({
           () => ({} as { error?: string }),
         );
         throw new Error(
-          data.error || `Failed to finalize upload for ${file.name}`,
+          data.error ||
+            t("failedToFinalizeAttachmentUpload", { name: file.name }),
         );
       }
 

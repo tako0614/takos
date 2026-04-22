@@ -56,7 +56,7 @@ function toEditableStatus(status: AgentTaskStatus): EditableAgentTaskStatus {
 }
 
 export function WorkTab(props: { spaceId: string }) {
-  const { t, tOr, lang } = useI18n();
+  const { t, lang } = useI18n();
   const { showToast } = useToast();
   const { navigate } = useRouter();
   const { confirm } = useConfirmDialog();
@@ -465,10 +465,7 @@ export function WorkTab(props: { spaceId: string }) {
                       {t("noTasks")}
                     </p>
                     <p class="text-sm text-zinc-500 dark:text-zinc-400 mt-1">
-                      {tOr(
-                        "tasksEmptyHint",
-                        "Create tasks for your agent to work on autonomously",
-                      )}
+                      {t("tasksEmptyHint")}
                     </p>
                   </div>
                   <button

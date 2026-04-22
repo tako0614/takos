@@ -66,11 +66,21 @@ No tools are available in this run.`;
   const hasCapabilityFamilies = sorted.some((tool) =>
     tool.name === "capability_families"
   );
+  const hasCapabilityDescribe = sorted.some((tool) =>
+    tool.name === "capability_describe"
+  );
+  const hasToolbox = sorted.some((tool) => tool.name === "toolbox");
   const toolLines = sorted.map((tool) =>
     `- \`${tool.name}\`: ${tool.description}`
   );
-  const discoveryHint = hasCapabilitySearch || hasCapabilityFamilies
-    ? `\n\nIf you are unsure which tool fits, use \`capability_search\` to find relevant tools by natural language or \`capability_families\` to inspect the available capability surface.`
+  const discoveryHint = hasToolbox
+    ? "\n\nUse `toolbox` as the full catalog: action=`search`, then `describe`, then `call`."
+    : hasCapabilitySearch || hasCapabilityFamilies
+    ? `\n\nIf you are unsure which tool fits, use \`capability_search\` to find relevant tools by natural language or \`capability_families\` to inspect the available capability surface.${
+      hasCapabilityDescribe
+        ? " Use `capability_describe` to inspect input schemas before invoking discovered tools."
+        : ""
+    }`
     : "";
   return `
 

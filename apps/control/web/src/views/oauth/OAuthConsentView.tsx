@@ -76,7 +76,7 @@ export function OAuthConsentView() {
           setConsentData(data);
         }
       })
-      .catch(() => setError("Failed to load authorization data"));
+      .catch(() => setError(t("failedToLoad")));
   });
 
   const handleDecision = async (action: "allow" | "deny") => {
@@ -110,7 +110,7 @@ export function OAuthConsentView() {
         setSubmitting(false);
       }
     } catch {
-      setError("Failed to submit decision");
+      setError(t("operationFailed"));
       setSubmitting(false);
     }
   };

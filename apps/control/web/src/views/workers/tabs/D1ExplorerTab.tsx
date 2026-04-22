@@ -23,7 +23,7 @@ export function D1ExplorerTab(props: D1ExplorerTabProps) {
 
   return (
     <div class="flex gap-6 h-full" role="region" aria-label={t("explorer")}>
-      <nav class="w-64 flex-shrink-0" aria-label="Database tables">
+      <nav class="w-64 flex-shrink-0" aria-label={t("databaseTables")}>
         <h4 class="text-sm font-medium text-zinc-900 dark:text-zinc-100 mb-3">
           {t("tables")}
         </h4>
@@ -31,12 +31,12 @@ export function D1ExplorerTab(props: D1ExplorerTabProps) {
           <div
             class="flex items-center gap-2 text-zinc-500 dark:text-zinc-400"
             role="status"
-            aria-label="Loading tables"
+            aria-label={t("loadingTables")}
           >
             <Icons.Loader class="w-4 h-4 animate-spin" />
           </div>
         )}
-        <div class="space-y-1" role="listbox" aria-label="Table list">
+        <div class="space-y-1" role="listbox" aria-label={t("tableList")}>
           {d1Tables().map((table: string) => (
             <button
               type="button"
@@ -81,7 +81,7 @@ export function D1ExplorerTab(props: D1ExplorerTabProps) {
             class="mt-3 inline-flex items-center gap-2 px-4 py-2 bg-zinc-900 dark:bg-zinc-100 hover:bg-zinc-800 dark:hover:bg-zinc-200 text-white dark:text-zinc-900 rounded-lg text-sm font-medium transition-colors disabled:opacity-50"
             onClick={executeD1Query}
             disabled={d1Loading() || !d1Query().trim()}
-            aria-label={t("execute") + " SQL query"}
+            aria-label={t("executeSqlQuery")}
           >
             <Icons.Play class="w-4 h-4" aria-hidden="true" />
             <span>{t("execute")}</span>
@@ -96,11 +96,15 @@ export function D1ExplorerTab(props: D1ExplorerTabProps) {
               class="overflow-auto max-h-96"
               tabIndex={0}
               role="region"
-              aria-label={`Table data for ${d1SelectedTable()}`}
+              aria-label={t("tableDataFor", {
+                table: d1SelectedTable() ?? "",
+              })}
             >
               <table
                 class="w-full text-sm"
-                aria-label={`${d1SelectedTable()} contents`}
+                aria-label={t("tableContents", {
+                  table: d1SelectedTable() ?? "",
+                })}
               >
                 <thead>
                   <tr class="border-b border-zinc-200 dark:border-zinc-700">
@@ -141,7 +145,7 @@ export function D1ExplorerTab(props: D1ExplorerTabProps) {
               class="text-xs text-zinc-500 dark:text-zinc-400 font-mono bg-zinc-100 dark:bg-zinc-700 p-3 rounded-lg overflow-auto max-h-64"
               tabIndex={0}
               role="region"
-              aria-label="Query result"
+              aria-label={t("queryResult")}
             >
               {JSON.stringify(d1QueryResult(), null, 2)}
             </pre>

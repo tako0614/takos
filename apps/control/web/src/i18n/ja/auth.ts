@@ -35,6 +35,7 @@ export const auth = {
   authorizedAppsDesc: "アカウントへのアクセスを許可したアプリ",
   developerApps: "開発者アプリ",
   developerAppsDesc: "あなたが作成したOAuthクライアント",
+  personalTokens: "パーソナルトークン",
   noAuthorizedApps: "認可済みアプリはありません",
   noAuthorizedAppsDesc:
     "サードパーティアプリにアクセスを許可すると、ここに表示されます",
@@ -78,6 +79,20 @@ export const auth = {
   oauthScopeIdentity: "アカウント情報",
   oauthScopeResources: "権限",
   oauthScopeNone: "追加の権限はありません。",
+  oauthScopeDescOpenid: "OpenID Connect の識別情報",
+  oauthScopeDescProfile: "プロフィール情報の読み取り",
+  oauthScopeDescEmail: "メールアドレスの読み取り",
+  oauthScopeDescSpacesRead: "スペースの読み取り",
+  oauthScopeDescSpacesWrite: "スペースの作成・変更",
+  oauthScopeDescFilesRead: "スペース内ファイルの読み取り",
+  oauthScopeDescFilesWrite: "ファイルの作成・変更",
+  oauthScopeDescMemoriesRead: "メモリの読み取り",
+  oauthScopeDescMemoriesWrite: "メモリの作成・変更",
+  oauthScopeDescThreadsRead: "チャットスレッドの読み取り",
+  oauthScopeDescThreadsWrite: "メッセージの作成・送信",
+  oauthScopeDescAgentsExecute: "AIエージェントの実行",
+  oauthScopeDescReposRead: "リポジトリの読み取り",
+  oauthScopeDescReposWrite: "リポジトリの作成・変更",
   oauthConsentError: "認証エラー",
 
   // Device Flow

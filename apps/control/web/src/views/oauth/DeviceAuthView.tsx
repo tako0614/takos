@@ -58,7 +58,11 @@ export function DeviceAuthView() {
 
       setState(data);
     } catch {
-      setState({ status: "error", title: "Error", message: "Failed to load." });
+      setState({
+        status: "error",
+        title: t("error"),
+        message: t("failedToLoad"),
+      });
     } finally {
       setLoading(false);
     }
@@ -101,7 +105,7 @@ export function DeviceAuthView() {
       const data = await res.json() as DeviceDecisionResponse;
 
       if ("error" in data) {
-        setState({ status: "error", title: "Error", message: data.error });
+        setState({ status: "error", title: t("error"), message: data.error });
       } else {
         setState({
           status: "result",
@@ -112,8 +116,8 @@ export function DeviceAuthView() {
     } catch {
       setState({
         status: "error",
-        title: "Error",
-        message: "Failed to submit.",
+        title: t("error"),
+        message: t("operationFailed"),
       });
     } finally {
       setSubmitting(false);

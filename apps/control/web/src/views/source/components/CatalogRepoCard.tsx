@@ -1,9 +1,11 @@
 import { createSignal } from "solid-js";
 import { Icons } from "../../../lib/Icons.tsx";
+import { useI18n } from "../../../store/i18n.ts";
 import type {
   SourceItem,
   SourceItemPackage,
 } from "../../../hooks/useSourceData.ts";
+import { getPackageIconImageSrc } from "../packageIcon.ts";
 
 interface CatalogRepoCardProps {
   item: SourceItem;
@@ -17,10 +19,12 @@ interface CatalogRepoCardProps {
 }
 
 export function CatalogRepoCard(props: CatalogRepoCardProps) {
+  const { t } = useI18n();
   const [manageOpen, setManageOpen] = createSignal(false);
   const installing = () => props.installingId === props.item.id;
   const installed = () => props.item.installation?.installed ?? false;
   const canStar = () => props.item.catalog_origin !== "default_app";
+  const packageIconSrc = () => getPackageIconImageSrc(props.pkg.icon);
 
   const ownerUsername = () =>
     props.item.owner.username || props.item.owner.name || "?";
@@ -33,7 +37,15 @@ export function CatalogRepoCard(props: CatalogRepoCardProps) {
     >
       {/* App icon */}
       <div class="mb-2.5">
-        {props.item.owner.avatar_url
+        {packageIconSrc()
+          ? (
+            <img
+              src={packageIconSrc()!}
+              alt=""
+              class="w-12 h-12 rounded-xl object-cover shadow-sm"
+            />
+          )
+          : props.item.owner.avatar_url
           ? (
             <img
               src={props.item.owner.avatar_url}
@@ -90,7 +102,7 @@ export function CatalogRepoCard(props: CatalogRepoCardProps) {
           )
           : (
             <span class="text-[11px] font-medium text-blue-500 dark:text-blue-400">
-              Default
+              {t("default")}
             </span>
           )}
 
@@ -102,7 +114,7 @@ export function CatalogRepoCard(props: CatalogRepoCardProps) {
               class="text-[11px] font-semibold text-zinc-600 dark:text-zinc-300 hover:text-zinc-900 dark:hover:text-zinc-100 transition-colors"
               onClick={() => props.onOpenRepo(props.item)}
             >
-              Open
+              {t("open")}
             </button>
           )
           : installed()
@@ -116,7 +128,7 @@ export function CatalogRepoCard(props: CatalogRepoCardProps) {
                 <Icons.Check class="w-3 h-3" />
                 {props.item.installation?.installed_version
                   ? `v${props.item.installation.installed_version}`
-                  : "Installed"}
+                  : t("installed")}
                 <Icons.ChevronDown class="w-2.5 h-2.5 ml-0.5" />
               </button>
               {manageOpen() && (
@@ -134,7 +146,7 @@ export function CatalogRepoCard(props: CatalogRepoCardProps) {
                         setManageOpen(false);
                       }}
                     >
-                      Rollback
+                      {t("rollback")}
                     </button>
                     <button
                       type="button"
@@ -144,7 +156,7 @@ export function CatalogRepoCard(props: CatalogRepoCardProps) {
                         setManageOpen(false);
                       }}
                     >
-                      Uninstall
+                      {t("uninstall")}
                     </button>
                   </div>
                 </>
@@ -162,7 +174,7 @@ export function CatalogRepoCard(props: CatalogRepoCardProps) {
               {installing()
                 ? <Icons.Loader class="w-3.5 h-3.5 animate-spin inline" />
                 : (
-                  "Install"
+                  t("install")
                 )}
             </button>
           )
@@ -172,7 +184,7 @@ export function CatalogRepoCard(props: CatalogRepoCardProps) {
               class="text-[11px] font-semibold text-zinc-400 dark:text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300 transition-colors"
               onClick={() => props.onOpenRepo(props.item)}
             >
-              View
+              {t("view")}
             </button>
           )}
       </div>

@@ -1,10 +1,26 @@
 import { hc } from "hono/client";
 import type { ClientResponse } from "hono/client";
 import type { ApiRoutes } from "takos-control/rpc-types";
+import { getTranslation, type Language, type TranslationKey } from "../i18n.ts";
 import { withTimeout } from "./withTimeout.ts";
 
 export const rpc = hc<ApiRoutes>("/api");
 const DEFAULT_API_TIMEOUT_MS = 15000;
+
+function currentLanguage(): Language {
+  try {
+    const stored = globalThis.localStorage?.getItem("takos-lang");
+    if (stored === "ja" || stored === "en") return stored;
+  } catch {
+    // localStorage may be unavailable in tests or privacy-restricted contexts.
+  }
+  const browserLang = globalThis.navigator?.language?.toLowerCase();
+  return browserLang?.startsWith("ja") ? "ja" : "en";
+}
+
+function fallbackMessage(key: TranslationKey): string {
+  return getTranslation(currentLanguage(), key);
+}
 
 // ---------------------------------------------------------------------------
 // rpcPath – type-safe traversal of the Hono RPC proxy for routes that lack
@@ -58,8 +74,8 @@ export class BillingQuotaError extends Error {
   reason: string;
   plan: string;
   constructor(data: { reason?: string; plan?: string }) {
-    super(data.reason || "Billing quota exceeded");
-    this.reason = data.reason || "Billing quota exceeded";
+    super(data.reason || fallbackMessage("billingQuotaExceeded"));
+    this.reason = data.reason || fallbackMessage("billingQuotaExceeded");
     this.plan = data.plan || "";
   }
 }
@@ -143,12 +159,12 @@ export async function rpcJson<T>(response: JsonResponseLike): Promise<T> {
       globalThis.location.href = `/auth/login?return_to=${
         encodeURIComponent(returnTo)
       }`;
-      throw new Error(message || "Authentication required");
+      throw new Error(message || fallbackMessage("authenticationRequired"));
     }
     if (response.status === 402 && data.code === "BILLING_QUOTA_EXCEEDED") {
       throw new BillingQuotaError(data);
     }
-    throw new Error(message || "Request failed");
+    throw new Error(message || fallbackMessage("requestFailed"));
   }
   return await response.json() as T;
 }
@@ -176,7 +192,7 @@ export async function apiJson<T>(
       });
     },
     timeoutMs,
-    "Request timed out",
+    fallbackMessage("requestTimedOut"),
   );
   return await rpcJson<T>(response);
 }

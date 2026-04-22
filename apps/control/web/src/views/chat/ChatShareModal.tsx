@@ -76,8 +76,8 @@ export function ChatShareModal(props: ChatShareModalProps) {
               onInput={(e: Event & { currentTarget: HTMLInputElement }) =>
                 props.onSharePasswordChange(e.currentTarget.value)}
               placeholder={props.shareMode === "password"
-                ? "min 8 chars"
-                : "(optional)"}
+                ? t("sharePasswordPlaceholder")
+                : `(${t("optional")})`}
               disabled={props.shareMode !== "password"}
             />
           </div>
@@ -152,7 +152,7 @@ export function ChatShareModal(props: ChatShareModalProps) {
                         </span>
                         <Show when={s.revoked_at}>
                           <span class="text-xs px-2 py-0.5 rounded-full bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300">
-                            {t("revoked") || "Revoked"}
+                            {t("revoked")}
                           </span>
                         </Show>
                       </div>
@@ -174,7 +174,7 @@ export function ChatShareModal(props: ChatShareModalProps) {
                         onClick={async () => {
                           try {
                             await navigator.clipboard.writeText(s.share_url);
-                            showToast("success", t("copied") || "Copied");
+                            showToast("success", t("copied"));
                           } catch {
                             showToast("error", t("failedToCopy"));
                           }
@@ -189,7 +189,7 @@ export function ChatShareModal(props: ChatShareModalProps) {
                         class="min-w-[44px] min-h-[44px] px-2 rounded-lg hover:bg-red-100 dark:hover:bg-red-900/30 transition-colors text-zinc-500 dark:text-zinc-400 hover:text-red-700 dark:hover:text-red-300 flex items-center justify-center"
                         onClick={() => props.onRevokeShare(s.id)}
                         disabled={!!s.revoked_at}
-                        title={t("revoke") || "Revoke"}
+                        title={t("revoke")}
                       >
                         <Icons.Trash class="w-4 h-4" />
                       </button>

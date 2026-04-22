@@ -40,7 +40,7 @@ export function useSpaceWorkers(spaceId: string | null) {
       setCfWorkers([]);
       showToast(
         "error",
-        getErrorMessage(error, t("failedToLoad") || "Failed to load"),
+        getErrorMessage(error, t("failedToLoad")),
       );
     } finally {
       setLoadingCfWorkers(false);
@@ -54,7 +54,7 @@ export function useSpaceWorkers(spaceId: string | null) {
   const deleteWorker = async (worker: Worker) => {
     const baseMessage = t("confirmDeleteWorker");
     const warning = isYurucommuWorker(worker)
-      ? `${baseMessage}\n\nWarning: This worker is linked to Yurucommu. Deleting it may break your Yurucommu instance.`
+      ? `${baseMessage}\n\n${t("yurucommuWorkerDeleteWarning")}`
       : baseMessage;
     const confirmed = await confirm({
       title: t("deleteWorker"),

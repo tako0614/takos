@@ -105,6 +105,7 @@ export default defineConfig({
       {
         text: "プラットフォーム",
         items: [
+          { text: "Road to 1.0", link: "/platform/road-to-1.0" },
           { text: "Space", link: "/platform/spaces" },
           { text: "Threads and Runs", link: "/platform/threads-and-runs" },
           { text: "Store", link: "/platform/store" },

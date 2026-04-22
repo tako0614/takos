@@ -273,7 +273,7 @@ function mapDefaultAppCatalogItem(
       release_tag: entry.refType === "tag" ? entry.ref : null,
       asset_id: null,
       description,
-      icon: null,
+      icon: entry.icon ?? null,
       category: "app",
       tags,
       downloads: 0,

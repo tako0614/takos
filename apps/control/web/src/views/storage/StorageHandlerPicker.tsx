@@ -44,7 +44,7 @@ export function StorageHandlerPicker(props: {
       <div class="flex-1 flex items-center justify-center p-8">
         <div class="w-full max-w-sm">
           <p class="text-sm font-medium text-zinc-700 dark:text-zinc-300 mb-4 text-center">
-            {props.t("openWith") || "Open with..."}
+            {props.t("openWith")}
           </p>
           <div class="space-y-2">
             <For each={props.handlers}>
@@ -60,7 +60,7 @@ export function StorageHandlerPicker(props: {
                     </span>
                     <Show when={h.type === "local"}>
                       <span class="ml-2 text-xs text-zinc-400">
-                        {props.t("included") || "Included"}
+                        {props.t("included")}
                       </span>
                     </Show>
                   </button>
@@ -68,9 +68,9 @@ export function StorageHandlerPicker(props: {
                     type="button"
                     onClick={() => props.onSelect(h, true)}
                     class="px-3 py-3 rounded-xl border border-zinc-200 dark:border-zinc-700 hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-colors text-xs text-zinc-500 hover:text-blue-600 dark:hover:text-blue-400 whitespace-nowrap"
-                    title={props.t("setAsDefault") || "Set as default"}
+                    title={props.t("setAsDefault")}
                   >
-                    {props.t("setAsDefault") || "Set as default"}
+                    {props.t("setAsDefault")}
                   </button>
                 </div>
               )}
@@ -125,7 +125,7 @@ export function StorageHandlerDropdown(props: {
       class="absolute right-0 top-full mt-1 bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-lg shadow-lg py-1 z-20 min-w-[220px]"
     >
       <div class="px-3 py-1.5 text-xs text-zinc-400 uppercase tracking-wider">
-        {props.t("openWith") || "Open with"}
+        {props.t("openWith")}
       </div>
       <For each={props.handlers}>
         {(h) => {
@@ -147,7 +147,7 @@ export function StorageHandlerDropdown(props: {
                 {handlerDisplayName(h, props.t)}
                 <Show when={h.type === "local"}>
                   <span class="ml-1 text-xs text-zinc-400">
-                    {props.t("included") || "Included"}
+                    {props.t("included")}
                   </span>
                 </Show>
               </button>
@@ -155,7 +155,7 @@ export function StorageHandlerDropdown(props: {
                 type="button"
                 onClick={() => props.onSetDefault(h)}
                 class="px-2 py-2 text-xs text-zinc-400 hover:text-blue-500 opacity-0 group-hover:opacity-100 transition-opacity"
-                title={props.t("setAsDefault") || "Set as default"}
+                title={props.t("setAsDefault")}
               >
                 <Icons.Star class="w-3.5 h-3.5" />
               </button>
@@ -169,7 +169,7 @@ export function StorageHandlerDropdown(props: {
           onClick={props.onClearDefault}
           class="w-full text-left px-3 py-2 text-xs text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-700 transition-colors"
         >
-          {props.t("clearDefault") || "Clear default"}
+          {props.t("clearDefault")}
         </button>
       </div>
     </div>

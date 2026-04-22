@@ -1,6 +1,7 @@
 import { type Accessor, createEffect, createSignal, on } from "solid-js";
 import type { FollowUser } from "../types/profile.ts";
 import { rpc, rpcJson } from "../lib/rpc.ts";
+import { useI18n } from "../store/i18n.ts";
 
 interface FollowingResponse {
   following: FollowUser[];
@@ -10,6 +11,7 @@ interface FollowingResponse {
 const ITEMS_PER_PAGE = 20;
 
 export function useUserFollowing(username: Accessor<string>) {
+  const { t } = useI18n();
   const [following, setFollowing] = createSignal<FollowUser[]>([]);
   const [offset, setOffset] = createSignal(0);
   const [hasMore, setHasMore] = createSignal(true);
@@ -47,7 +49,7 @@ export function useUserFollowing(username: Accessor<string>) {
       }
       setHasMore(data.has_more);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to load following");
+      setError(err instanceof Error ? err.message : t("failedToLoadFollowing"));
     } finally {
       setLoading(false);
     }

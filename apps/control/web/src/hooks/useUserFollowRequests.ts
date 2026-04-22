@@ -1,6 +1,7 @@
 import { type Accessor, createEffect, createSignal, on } from "solid-js";
 import type { FollowRequest } from "../types/profile.ts";
 import { rpc, rpcJson } from "../lib/rpc.ts";
+import { useI18n } from "../store/i18n.ts";
 
 interface FollowRequestsResponse {
   requests: FollowRequest[];
@@ -19,6 +20,7 @@ export function useUserFollowRequests(
   username: Accessor<string>,
   onFollowersCountUpdate?: (count: number) => void,
 ) {
+  const { t } = useI18n();
   const [requests, setRequests] = createSignal<FollowRequest[]>([]);
   const [offset, setOffset] = createSignal(0);
   const [hasMore, setHasMore] = createSignal(true);
@@ -60,7 +62,7 @@ export function useUserFollowRequests(
       setHasMore(!!data.has_more);
     } catch (err) {
       setError(
-        err instanceof Error ? err.message : "Failed to load follow requests",
+        err instanceof Error ? err.message : t("failedToLoadFollowRequests"),
       );
     } finally {
       setLoading(false);
@@ -86,7 +88,7 @@ export function useUserFollowRequests(
       }
     } catch (err) {
       setError(
-        err instanceof Error ? err.message : "Failed to accept follow request",
+        err instanceof Error ? err.message : t("failedToAcceptFollowRequest"),
       );
     } finally {
       setActionLoadingId(null);
@@ -108,7 +110,7 @@ export function useUserFollowRequests(
       }
     } catch (err) {
       setError(
-        err instanceof Error ? err.message : "Failed to reject follow request",
+        err instanceof Error ? err.message : t("failedToRejectFollowRequest"),
       );
     } finally {
       setActionLoadingId(null);

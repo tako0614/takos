@@ -3,6 +3,7 @@
  * Provides visual placeholder while content is loading
  */
 import { For } from "solid-js";
+import { useI18n } from "../store/i18n.ts";
 
 interface SkeletonProps {
   class?: string;
@@ -46,11 +47,13 @@ function SkeletonCard(props: SkeletonProps) {
 }
 
 export function SkeletonList(props: SkeletonProps & { count?: number }) {
+  const { t } = useI18n();
+
   return (
     <div
       class={`space-y-3 ${props.class ?? ""}`}
       role="status"
-      aria-label="Loading content"
+      aria-label={t("loadingContent")}
     >
       <For each={Array.from({ length: props.count ?? 3 })}>
         {() => <SkeletonCard />}

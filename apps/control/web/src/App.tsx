@@ -40,7 +40,7 @@ function AppShell(props: { children: JSX.Element }) {
       throw new Error(
         getErrorMessage(
           error,
-          i18n.t("failedToCreate") || "Failed to create",
+          i18n.t("failedToCreate"),
         ),
       );
     }
@@ -52,7 +52,7 @@ function AppShell(props: { children: JSX.Element }) {
       });
     } catch (error) {
       throw new Error(
-        getErrorMessage(error, i18n.t("failedToLoad") || "Failed to load"),
+        getErrorMessage(error, i18n.t("failedToLoad")),
       );
     }
 

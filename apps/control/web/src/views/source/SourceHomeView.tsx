@@ -5,6 +5,7 @@ import type {
   SourceItem,
   SourceItemPackage,
 } from "../../hooks/useSourceData.ts";
+import { getPackageIconImageSrc } from "./packageIcon.ts";
 
 /* ── AppTile: Compact tile for horizontal scroll sections ── */
 
@@ -22,13 +23,22 @@ function AppTile(props: {
   const ownerUsername = () =>
     props.item.owner.username || props.item.owner.name || "?";
   const ownerInitial = () => ownerUsername().charAt(0).toUpperCase();
+  const packageIconSrc = () => getPackageIconImageSrc(props.pkg.icon);
 
   return (
     <div
       class="flex-shrink-0 w-28 cursor-pointer"
       onClick={() => props.onSelect(props.item)}
     >
-      {props.item.owner.avatar_url
+      {packageIconSrc()
+        ? (
+          <img
+            src={packageIconSrc()!}
+            alt=""
+            class="w-full aspect-square rounded-2xl object-cover shadow-sm mb-2"
+          />
+        )
+        : props.item.owner.avatar_url
         ? (
           <img
             src={props.item.owner.avatar_url}

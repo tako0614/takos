@@ -553,6 +553,7 @@ Deno.test("listCatalogItems includes default app distribution entries in the cat
     defaultAppEntries: [{
       name: "takos-docs",
       title: "Docs",
+      icon: "/icons/docs.svg",
       repositoryUrl: "https://github.com/tako0614/takos-docs.git",
       ref: "main",
       refType: "branch",
@@ -570,6 +571,7 @@ Deno.test("listCatalogItems includes default app distribution entries in the cat
   assertEquals(item.repo.catalog_origin, "default_app");
   assertEquals(item.package.available, true);
   assertEquals(item.package.app_id, "takos-docs");
+  assertEquals(item.package.icon, "/icons/docs.svg");
   assertEquals(item.package.certified, true);
   assertEquals(item.package.publish_status, "approved");
   assertEquals(item.source, {

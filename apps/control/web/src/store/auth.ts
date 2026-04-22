@@ -2,6 +2,7 @@ import { rpcJson } from "../lib/rpc.ts";
 import { getErrorMessage } from "../lib/errors.ts";
 import { withTimeout } from "../lib/withTimeout.ts";
 import { normalizeSpaces } from "../lib/spaces.ts";
+import { getTranslation, type Language } from "../i18n.ts";
 import type { TranslationKey, TranslationParams } from "./i18n.ts";
 import type { Space, User, UserSettings } from "../types/index.ts";
 
@@ -28,6 +29,17 @@ export interface AuthSnapshot {
 
 const AUTH_BOOT_TIMEOUT_MS = 10000;
 
+function currentLanguage(): Language {
+  try {
+    const stored = globalThis.localStorage?.getItem("takos-lang");
+    if (stored === "ja" || stored === "en") return stored;
+  } catch {
+    // localStorage may be unavailable in tests or privacy-restricted contexts.
+  }
+  const browserLang = globalThis.navigator?.language?.toLowerCase();
+  return browserLang?.startsWith("ja") ? "ja" : "en";
+}
+
 export const INITIAL_AUTH_SNAPSHOT: AuthSnapshot = {
   authState: "loading",
   user: null,
@@ -48,7 +60,7 @@ async function fetchApi(
         signal,
       }),
     timeoutMs,
-    "Request timed out",
+    getTranslation(currentLanguage(), "requestTimedOut"),
   );
 }
 
@@ -113,7 +125,7 @@ export async function fetchSpaces(
     if (notifyOnError) {
       deps.showToast(
         "error",
-        getErrorMessage(error, deps.t("failedToLoad") || "Failed to load"),
+        getErrorMessage(error, deps.t("failedToLoad")),
       );
     }
     if (throwOnError) {
@@ -129,7 +141,7 @@ export async function fetchSpaces(
 export async function loadAuthSnapshot(
   deps: AuthActionDeps,
 ): Promise<AuthSnapshot> {
-  const fallbackError = deps.t("failedToLoad") || "Failed to load";
+  const fallbackError = deps.t("failedToLoad");
 
   try {
     const res = await fetchApi("/api/me");

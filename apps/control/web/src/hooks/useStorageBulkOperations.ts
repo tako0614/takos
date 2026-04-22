@@ -85,7 +85,7 @@ export function useStorageBulkOperations({
     setBulkMoving(false);
 
     if (ok) {
-      showToast("success", t("moved") || "Moved");
+      showToast("success", t("moved"));
       setSelectedFiles(new Set<string>());
       setShowBulkMoveModal(false);
     } else {
@@ -119,7 +119,7 @@ export function useStorageBulkOperations({
     setBulkRenaming(false);
 
     if (ok) {
-      showToast("success", t("renamed") || "Renamed");
+      showToast("success", t("renamed"));
       setSelectedFiles(new Set<string>());
       setShowBulkRenameModal(false);
     } else {

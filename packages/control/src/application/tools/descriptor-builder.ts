@@ -9,6 +9,12 @@ import { TOOL_NAMESPACE_MAP } from "./namespace-map.ts";
 /** Derive tags from a tool's category + namespace metadata. */
 function deriveToolTags(tool: ToolDefinition): string[] {
   const tags: string[] = [tool.category];
+  if (tool.namespace) {
+    tags.push(tool.namespace);
+  }
+  if (tool.family) {
+    tags.push(tool.family);
+  }
   const meta = TOOL_NAMESPACE_MAP[tool.name];
   if (meta) {
     tags.push(meta.namespace);

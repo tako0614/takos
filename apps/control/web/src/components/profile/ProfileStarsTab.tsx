@@ -41,7 +41,7 @@ export function ProfileStarsTab(props: ProfileStarsTabProps) {
               starringDisabled={props.starringRepo === repo.id}
               badge={
                 <span class="text-xs text-zinc-500 dark:text-zinc-400">
-                  Starred {formatDate(repo.starred_at)}
+                  {t("starredDate", { date: formatDate(repo.starred_at) })}
                 </span>
               }
             />

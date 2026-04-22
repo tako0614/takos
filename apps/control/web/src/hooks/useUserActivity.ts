@@ -1,6 +1,7 @@
 import { type Accessor, createEffect, createSignal, on } from "solid-js";
 import type { ActivityEvent } from "../types/profile.ts";
 import { rpc, rpcJson } from "../lib/rpc.ts";
+import { useI18n } from "../store/i18n.ts";
 
 interface ActivityResponse {
   events: ActivityEvent[];
@@ -10,6 +11,7 @@ interface ActivityResponse {
 const ITEMS_PER_PAGE = 20;
 
 export function useUserActivity(username: Accessor<string>) {
+  const { t } = useI18n();
   const [events, setEvents] = createSignal<ActivityEvent[]>([]);
   const [hasMore, setHasMore] = createSignal(true);
   const [loading, setLoading] = createSignal(false);
@@ -38,7 +40,7 @@ export function useUserActivity(username: Accessor<string>) {
 
       if (!res.ok) {
         const data = await res.json().catch(() => ({})) as { error?: string };
-        setError(data.error || "Failed to load activity");
+        setError(data.error || t("failedToLoadActivity"));
         setHasMore(false);
         return;
       }
@@ -52,7 +54,7 @@ export function useUserActivity(username: Accessor<string>) {
       }
       setHasMore(!!data.has_more);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to load activity");
+      setError(err instanceof Error ? err.message : t("failedToLoadActivity"));
     } finally {
       setLoading(false);
     }

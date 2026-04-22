@@ -297,9 +297,11 @@ function SpaceNotFoundMessage() {
 }
 
 function NoSpaceAvailableMessage() {
+  const { t } = useI18n();
+
   return (
     <div class="flex-1 flex items-center justify-center">
-      <p class="text-zinc-500">No space available</p>
+      <p class="text-zinc-500">{t("noSpaceAvailable")}</p>
     </div>
   );
 }

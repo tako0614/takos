@@ -52,6 +52,7 @@ export const source = {
   workflowRerunQueued: "ワークフローの再実行をキューに追加しました",
   failedToRerunWorkflow: "ワークフローの再実行に失敗しました",
   failedToLoadLogs: "ログの読み込みに失敗しました",
+  failedToFetchWorkflowRuns: "ワークフロー実行の取得に失敗しました",
   workflowPathRequired: "ワークフローパスは必須です",
   inputsMustBeValidJson: "入力は有効なJSONである必要があります",
   workflowDispatched: "ワークフローをディスパッチしました",
@@ -88,6 +89,7 @@ export const source = {
   noStarredRepositories: "スター付きリポジトリがありません",
   nothingFound: "見つかりませんでした",
   noRepositoriesFound: "リポジトリが見つかりません",
+  resultsForQuery: "{count}件の結果: 「{query}」",
   resetFilters: "フィルターをリセット",
   viewLabel: "表示",
   sourceFilterAll: "すべて",
@@ -97,6 +99,9 @@ export const source = {
   sortNew: "新着",
   sortStars: "スター",
   sortUpdated: "更新順",
+  sortRecentlyUpdated: "最近更新",
+  sortDesc: "降順",
+  sortAsc: "昇順",
   categoryApps: "アプリ",
   categoryServices: "サービス",
   categoryLibraries: "ライブラリ",
@@ -106,6 +111,25 @@ export const source = {
   categoryLabel: "カテゴリ",
   myRepos: "マイリポジトリ",
   usersLabel: "ユーザー",
+  storeManagementTitle: "ストア管理",
+  storeManagementDescription:
+    "ActivityPubストア、インベントリ、リモートストア接続を管理します。",
+  newStoreSlugPlaceholder: "新しいストアslug...",
+  noStoresYet: "ストアはまだありません",
+  remoteStores: "リモートストア",
+  selectOrCreateStore: "ストアを選択するか新しく作成してください",
+  addRepositoryReference: "リポジトリ参照を追加",
+  repositoryReferenceHint:
+    "ストアのインベントリに追加するリポジトリのActivityPub actor URLを入力してください。",
+  inventoryCount: "インベントリ（{count}件）",
+  inventoryEmpty:
+    "インベントリに項目がありません。公開リポジトリはデフォルトで表示されます。",
+  inventoryExplicitModeHint: "参照を追加すると明示モードに切り替わります。",
+  connectRemoteStore: "リモートストアに接続",
+  remoteStoreIdentifierHint:
+    "ストア識別子（slug@domain）または完全なActivityPub actor URLを入力してください。",
+  connectedRemoteStoresCount: "接続済みリモートストア（{count}件）",
+  noRemoteStoresConnected: "接続済みのリモートストアはまだありません。",
 
   // Source Data Hook
   selectWorkspaceFirst: "スペースを先に選択してください",
@@ -116,4 +140,11 @@ export const source = {
   failedToUpdateStar: "スターの更新に失敗しました",
   repositoryCreated: "リポジトリを作成しました",
   failedToCreateRepository: "リポジトリの作成に失敗しました",
+  failedToFetchDeploymentSnapshots:
+    "デプロイスナップショットの取得に失敗しました",
+  failedToLoadStores: "ストアの読み込みに失敗しました",
+  failedToLoadInventory: "インベントリの読み込みに失敗しました",
+  failedToLoadRemoteStores: "リモートストアの読み込みに失敗しました",
+  missingSpace: "スペースが選択されていません",
+  missingStoreContext: "ストアの情報が不足しています",
 } as const;

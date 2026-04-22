@@ -8,6 +8,7 @@ import type {
   SourceItemPackage,
 } from "../../../hooks/useSourceData.ts";
 import { useI18n } from "../../../store/i18n.ts";
+import { getPackageIconImageSrc } from "../packageIcon.ts";
 
 interface RepoDetailPanelProps {
   item: SourceItem;
@@ -26,6 +27,7 @@ export function RepoDetailPanel(props: RepoDetailPanelProps) {
   const installing = () => props.installingId === props.item.id;
   const installed = () => props.item.installation?.installed ?? false;
   const canStar = () => props.item.catalog_origin !== "default_app";
+  const packageIconSrc = () => getPackageIconImageSrc(props.pkg.icon);
 
   const ownerUsername = () =>
     props.item.owner.username || props.item.owner.name || "?";
@@ -46,7 +48,7 @@ export function RepoDetailPanel(props: RepoDetailPanelProps) {
             type="button"
             class="w-8 h-8 flex items-center justify-center rounded-full bg-zinc-100 dark:bg-zinc-800 text-zinc-500 dark:text-zinc-400 hover:bg-zinc-200 dark:hover:bg-zinc-700 transition-colors"
             onClick={props.onClose}
-            aria-label={t("close") || "Close"}
+            aria-label={t("close")}
           >
             <Icons.X class="w-4 h-4" />
           </button>
@@ -54,7 +56,15 @@ export function RepoDetailPanel(props: RepoDetailPanelProps) {
 
         {/* App hero */}
         <div class="px-6 pb-5 flex flex-col items-center text-center">
-          {props.item.owner.avatar_url
+          {packageIconSrc()
+            ? (
+              <img
+                src={packageIconSrc()!}
+                alt=""
+                class="w-20 h-20 rounded-2xl object-cover shadow-md mb-4"
+              />
+            )
+            : props.item.owner.avatar_url
             ? (
               <img
                 src={props.item.owner.avatar_url}
@@ -79,12 +89,12 @@ export function RepoDetailPanel(props: RepoDetailPanelProps) {
           <div class="flex flex-wrap justify-center gap-1.5 mt-2">
             {props.item.is_mine && (
               <span class="px-2.5 py-0.5 rounded-full bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-300 text-xs font-medium">
-                Mine
+                {t("mine")}
               </span>
             )}
             {props.item.catalog_origin === "default_app" && (
               <span class="px-2.5 py-0.5 rounded-full bg-blue-50 dark:bg-blue-500/10 text-blue-600 dark:text-blue-300 text-xs font-medium">
-                Default
+                {t("default")}
               </span>
             )}
             {installed() && (
@@ -92,18 +102,18 @@ export function RepoDetailPanel(props: RepoDetailPanelProps) {
                 <Icons.Check class="w-3 h-3" />
                 {props.item.installation?.installed_version
                   ? `v${props.item.installation.installed_version}`
-                  : "Installed"}
+                  : t("installed")}
               </span>
             )}
             {props.pkg.certified && (
               <span class="px-2.5 py-0.5 rounded-full bg-blue-50 dark:bg-blue-500/10 text-blue-600 dark:text-blue-300 text-xs font-medium">
-                Certified
+                {t("certified")}
               </span>
             )}
             {props.item.visibility === "private" && (
               <span class="px-2.5 py-0.5 rounded-full bg-zinc-100 dark:bg-zinc-800 text-zinc-500 text-xs flex items-center gap-1">
                 <Icons.Lock class="w-3 h-3" />
-                Private
+                {t("private")}
               </span>
             )}
           </div>
@@ -131,7 +141,7 @@ export function RepoDetailPanel(props: RepoDetailPanelProps) {
             : (
               <div class="flex flex-col items-center gap-0.5 text-blue-500 dark:text-blue-400">
                 <Icons.Package class="w-4 h-4" />
-                <span class="text-xs font-medium">Default</span>
+                <span class="text-xs font-medium">{t("default")}</span>
               </div>
             )}
           <div class="flex flex-col items-center gap-0.5 text-zinc-400 dark:text-zinc-500">
@@ -183,7 +193,7 @@ export function RepoDetailPanel(props: RepoDetailPanelProps) {
               <div class="flex items-center gap-2">
                 <Icons.Package class="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
                 <span class="text-sm font-semibold text-zinc-900 dark:text-zinc-100">
-                  Package
+                  {t("packageLabel")}
                 </span>
                 {props.pkg.latest_version && (
                   <span class="text-xs px-2 py-0.5 rounded-full bg-emerald-100 dark:bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 ml-auto">
@@ -213,11 +223,13 @@ export function RepoDetailPanel(props: RepoDetailPanelProps) {
                 ? (
                   <div class="space-y-2.5">
                     <p class="text-xs text-zinc-400 dark:text-zinc-500">
-                      Installed {props.item.installation?.deployed_at
-                        ? formatDetailedRelativeDate(
-                          props.item.installation.deployed_at,
-                        )
-                        : ""}
+                      {props.item.installation?.deployed_at
+                        ? t("installedAt", {
+                          date: formatDetailedRelativeDate(
+                            props.item.installation.deployed_at,
+                          ),
+                        })
+                        : t("installed")}
                     </p>
                     <div class="flex gap-2">
                       <button
@@ -225,14 +237,14 @@ export function RepoDetailPanel(props: RepoDetailPanelProps) {
                         class="flex-1 py-2 rounded-xl bg-zinc-100 dark:bg-zinc-800 text-xs font-medium text-zinc-700 dark:text-zinc-200 hover:bg-zinc-200 dark:hover:bg-zinc-700 transition-colors"
                         onClick={() => props.onRollback(props.item)}
                       >
-                        Rollback
+                        {t("rollback")}
                       </button>
                       <button
                         type="button"
                         class="flex-1 py-2 rounded-xl bg-red-50 dark:bg-red-900/20 text-xs font-medium text-red-600 dark:text-red-400 hover:bg-red-100 dark:hover:bg-red-900/40 transition-colors"
                         onClick={() => props.onUninstall(props.item)}
                       >
-                        Uninstall
+                        {t("uninstall")}
                       </button>
                     </div>
                   </div>
@@ -247,7 +259,7 @@ export function RepoDetailPanel(props: RepoDetailPanelProps) {
                     {installing()
                       ? <Icons.Loader class="w-4 h-4 animate-spin" />
                       : <Icons.Download class="w-4 h-4" />}
-                    {installing() ? "Installing…" : "Install"}
+                    {installing() ? t("installing") : t("install")}
                   </button>
                 )}
             </div>
@@ -260,12 +272,14 @@ export function RepoDetailPanel(props: RepoDetailPanelProps) {
             onClick={() => props.onOpenRepo(props.item)}
           >
             <Icons.ExternalLink class="w-4 h-4" />
-            Open Repository
+            {t("openRepository")}
           </button>
 
           {/* Updated */}
           <p class="text-xs text-zinc-400 dark:text-zinc-500 text-center">
-            Updated {formatDetailedRelativeDate(props.item.updated_at)}
+            {t("updatedDate", {
+              date: formatDetailedRelativeDate(props.item.updated_at),
+            })}
           </p>
         </div>
       </aside>

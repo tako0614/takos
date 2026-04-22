@@ -77,7 +77,7 @@ export function MemoryPage(props: MemoryPageProps) {
         </button>
         <h1 class="flex items-center gap-2 text-xl font-semibold text-zinc-900 dark:text-zinc-100">
           <Icons.HardDrive />
-          <span>Memory</span>
+          <span>{t("memories")}</span>
         </h1>
         <div class="ml-auto">
           <button

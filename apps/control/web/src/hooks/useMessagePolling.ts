@@ -80,10 +80,7 @@ export function useMessagePolling({
       if (threadId() !== currentThreadId) return;
       if (showError) {
         messageFetchErrorVisible = true;
-        setError(
-          t("failedToLoadMessages" as TranslationKey) ||
-            "Failed to load messages",
-        );
+        setError(t("failedToLoadMessages" as TranslationKey));
       }
     } finally {
       if (messageFetchAbortRef === controller) {

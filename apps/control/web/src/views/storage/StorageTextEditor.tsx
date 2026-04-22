@@ -68,7 +68,7 @@ export function StorageTextEditor(props: {
     const success = await saveContent(props.file.id, editedContent()!);
     if (success) {
       setIsDirty(false);
-      showToast("success", t("saved") || "Saved");
+      showToast("success", t("saved"));
       props.onSave?.();
     }
   };
@@ -98,7 +98,7 @@ export function StorageTextEditor(props: {
           isLoading={saving()}
           leftIcon={<Icons.Save class="w-4 h-4" />}
         >
-          {t("save") || "Save"}
+          {t("save")}
         </Button>
       )
       : undefined;

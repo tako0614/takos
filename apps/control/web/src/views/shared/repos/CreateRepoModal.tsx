@@ -49,13 +49,13 @@ export function CreateRepoModal(props: CreateRepoModalProps) {
             id="create-repo-modal-title"
             class="text-lg font-semibold text-zinc-900 dark:text-zinc-100"
           >
-            {t("createRepository") || "Create Repository"}
+            {t("createRepository")}
           </h2>
           <button
             type="button"
             class="w-8 h-8 flex items-center justify-center rounded-lg text-zinc-500 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100 hover:bg-white/10 transition-colors focus:outline-none focus:ring-2 focus:ring-zinc-900"
             onClick={() => props.onClose()}
-            aria-label={t("close") || "Close"}
+            aria-label={t("close")}
           >
             <Icons.X class="w-5 h-5" />
           </button>
@@ -67,8 +67,7 @@ export function CreateRepoModal(props: CreateRepoModalProps) {
                 for="repo-name"
                 class="block text-sm font-medium text-zinc-500 dark:text-zinc-400"
               >
-                {t("repositoryName") || "Repository name"}{" "}
-                <span class="text-zinc-500">*</span>
+                {t("repositoryName")} <span class="text-zinc-500">*</span>
               </label>
               <input
                 id="repo-name"
@@ -86,24 +85,23 @@ export function CreateRepoModal(props: CreateRepoModalProps) {
                 for="repo-description"
                 class="block text-sm font-medium text-zinc-500 dark:text-zinc-400"
               >
-                {t("description") || "Description"}{" "}
+                {t("description")}{" "}
                 <span class="text-zinc-500">
-                  ({t("optional") || "optional"})
+                  ({t("optional")})
                 </span>
               </label>
               <textarea
                 id="repo-description"
                 value={description()}
                 onInput={(e) => setDescription(e.currentTarget.value)}
-                placeholder={t("repositoryDescriptionPlaceholder") ||
-                  "A short description of your repository"}
+                placeholder={t("repositoryDescriptionPlaceholder")}
                 rows={3}
                 class="w-full px-3 py-2 bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-lg text-zinc-900 dark:text-zinc-100 placeholder:text-zinc-500 dark:placeholder:text-zinc-500 focus:outline-none focus:ring-2 focus:ring-zinc-900 dark:focus:ring-zinc-100 transition-colors resize-none"
               />
             </div>
             <div class="space-y-2">
               <span class="block text-sm font-medium text-zinc-500 dark:text-zinc-400">
-                {t("visibility") || "Visibility"}
+                {t("visibility")}
               </span>
               <div class="space-y-2">
                 <label
@@ -124,10 +122,10 @@ export function CreateRepoModal(props: CreateRepoModalProps) {
                   <Icons.Globe class="w-5 h-5 text-zinc-900" />
                   <div class="flex-1">
                     <strong class="block text-sm text-zinc-900 dark:text-zinc-100">
-                      Public
+                      {t("visibilityPublic")}
                     </strong>
                     <span class="text-xs text-zinc-500 dark:text-zinc-400">
-                      Anyone can see this repository
+                      {t("visibilityPublicDescription")}
                     </span>
                   </div>
                 </label>
@@ -149,10 +147,10 @@ export function CreateRepoModal(props: CreateRepoModalProps) {
                   <Icons.Lock class="w-5 h-5 text-zinc-500" />
                   <div class="flex-1">
                     <strong class="block text-sm text-zinc-900 dark:text-zinc-100">
-                      Private
+                      {t("visibilityPrivate")}
                     </strong>
                     <span class="text-xs text-zinc-500 dark:text-zinc-400">
-                      Only you can see this repository
+                      {t("visibilityPrivateDescription")}
                     </span>
                   </div>
                 </label>
@@ -165,7 +163,7 @@ export function CreateRepoModal(props: CreateRepoModalProps) {
               class="px-4 py-2 bg-zinc-100 dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100 rounded-lg hover:bg-zinc-200 dark:hover:bg-zinc-700 transition-colors focus:outline-none focus:ring-2 focus:ring-zinc-500"
               onClick={() => props.onClose()}
             >
-              {t("cancel") || "Cancel"}
+              {t("cancel")}
             </button>
             <button
               type="submit"
@@ -173,7 +171,7 @@ export function CreateRepoModal(props: CreateRepoModalProps) {
               disabled={!name().trim()}
               aria-disabled={!name().trim()}
             >
-              {t("createRepository") || "Create Repository"}
+              {t("createRepository")}
             </button>
           </div>
         </form>

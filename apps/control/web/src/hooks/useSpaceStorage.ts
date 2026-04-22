@@ -3,6 +3,7 @@ import type { StorageFile } from "../types/index.ts";
 import type { RpcResponse } from "../lib/rpc.ts";
 import { rpc, rpcJson } from "../lib/rpc.ts";
 import { getErrorMessage } from "takos-common/errors";
+import { useI18n } from "../store/i18n.ts";
 
 interface UseSpaceStorageReturn {
   files: () => StorageFile[];
@@ -28,6 +29,7 @@ interface UseSpaceStorageReturn {
 export function useSpaceStorage(
   spaceId: Accessor<string | undefined>,
 ): UseSpaceStorageReturn {
+  const { t } = useI18n();
   const [files, setFiles] = createSignal<StorageFile[]>([]);
   const [currentPath, setCurrentPath] = createSignal("/");
   const [loading, setLoading] = createSignal(false);
@@ -63,7 +65,7 @@ export function useSpaceStorage(
     } catch (err) {
       if (version !== loadVersion) return;
       if (spaceId() !== currentSpaceId) return;
-      setError(getErrorMessage(err, "Failed to load files"));
+      setError(getErrorMessage(err, t("failedToLoadFiles")));
       setFiles([]);
       setCurrentPath(path);
       setTruncated(false);
@@ -89,7 +91,7 @@ export function useSpaceStorage(
       await loadFiles(currentPath());
       return data.folder;
     } catch (err) {
-      setError(getErrorMessage(err, "Failed to create folder"));
+      setError(getErrorMessage(err, t("failedToCreateFolder")));
       return null;
     }
   };
@@ -126,7 +128,7 @@ export function useSpaceStorage(
       });
 
       if (!uploadRes.ok) {
-        throw new Error("Failed to upload file");
+        throw new Error(t("failedToUploadFile"));
       }
 
       const confirmRes = await rpc.spaces[":spaceId"].storage["confirm-upload"]
@@ -139,7 +141,7 @@ export function useSpaceStorage(
       await loadFiles(currentPath());
       return confirmData.file;
     } catch (err) {
-      setError(getErrorMessage(err, "Failed to upload file"));
+      setError(getErrorMessage(err, t("failedToUploadFile")));
       return null;
     }
   };
@@ -159,7 +161,7 @@ export function useSpaceStorage(
       await loadFiles(currentPath());
       return true;
     } catch (err) {
-      setError(getErrorMessage(err, "Failed to delete"));
+      setError(getErrorMessage(err, t("failedToDelete")));
       return false;
     }
   };
@@ -180,7 +182,7 @@ export function useSpaceStorage(
       await loadFiles(currentPath());
       return true;
     } catch (err) {
-      setError(getErrorMessage(err, "Failed to delete"));
+      setError(getErrorMessage(err, t("failedToDelete")));
       return false;
     }
   };
@@ -203,7 +205,7 @@ export function useSpaceStorage(
       await loadFiles(currentPath());
       return data.file;
     } catch (err) {
-      setError(getErrorMessage(err, "Failed to rename"));
+      setError(getErrorMessage(err, t("failedToRename")));
       return null;
     }
   };
@@ -226,7 +228,7 @@ export function useSpaceStorage(
       await loadFiles(currentPath());
       return data.file;
     } catch (err) {
-      setError(getErrorMessage(err, "Failed to move"));
+      setError(getErrorMessage(err, t("failedToMove")));
       return null;
     }
   };
@@ -250,7 +252,7 @@ export function useSpaceStorage(
       await loadFiles(currentPath());
       return true;
     } catch (err) {
-      setError(getErrorMessage(err, "Failed to move"));
+      setError(getErrorMessage(err, t("failedToMove")));
       return false;
     }
   };
@@ -273,7 +275,7 @@ export function useSpaceStorage(
       await loadFiles(currentPath());
       return true;
     } catch (err) {
-      setError(getErrorMessage(err, "Failed to rename"));
+      setError(getErrorMessage(err, t("failedToRename")));
       return false;
     }
   };
@@ -291,7 +293,7 @@ export function useSpaceStorage(
       const data = await rpcJson<{ download_url: string }>(res);
       return data.download_url;
     } catch (err) {
-      setError(getErrorMessage(err, "Failed to get download URL"));
+      setError(getErrorMessage(err, t("failedToGetDownloadUrl")));
       return null;
     }
   };
@@ -310,12 +312,12 @@ export function useSpaceStorage(
 
       if (!res.ok) {
         const data = await res.json().catch(() => ({})) as { error?: string };
-        throw new Error(data.error || "Failed to download ZIP");
+        throw new Error(data.error || t("failedToDownloadZip"));
       }
 
       return res;
     } catch (err) {
-      setError(getErrorMessage(err, "Failed to download ZIP"));
+      setError(getErrorMessage(err, t("failedToDownloadZip")));
       return null;
     }
   };

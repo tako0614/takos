@@ -1,6 +1,7 @@
 import { For, Show } from "solid-js";
 import { Icons } from "../../lib/Icons.tsx";
 import type { SourceRepo } from "../../types/repos.ts";
+import { useI18n } from "../../store/i18n.ts";
 import { RepoBrowseCard } from "./RepoBrowseCard.tsx";
 
 function ReposMainContent(props: {
@@ -12,12 +13,14 @@ function ReposMainContent(props: {
   onStar: (repo: SourceRepo) => void;
   onOpenCreate: () => void;
 }) {
+  const { t } = useI18n();
+
   return (
     <>
       <Show when={!props.selectedSpaceId}>
         <div class="flex flex-col items-center justify-center h-full text-zinc-500 dark:text-zinc-400">
           <Icons.Folder class="w-12 h-12 mb-3" />
-          <p>Select a space</p>
+          <p>{t("selectSpace")}</p>
         </div>
       </Show>
       <Show when={props.selectedSpaceId && props.myReposLoading}>
@@ -40,14 +43,14 @@ function ReposMainContent(props: {
       >
         <div class="flex flex-col items-center justify-center h-full text-zinc-500 dark:text-zinc-400">
           <Icons.GitBranch class="w-12 h-12 mb-3" />
-          <p class="mb-4">No repositories yet</p>
+          <p class="mb-4">{t("noRepositoriesYet")}</p>
           <button
             type="button"
             class="flex items-center gap-2 px-4 py-2 bg-zinc-900 text-white rounded-lg hover:bg-zinc-700 transition-colors"
             onClick={props.onOpenCreate}
           >
             <Icons.Plus class="w-4 h-4" />
-            Create Repository
+            {t("createRepository")}
           </button>
         </div>
       </Show>

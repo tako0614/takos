@@ -21,6 +21,7 @@ export interface SourceItemPackage {
   downloads: number;
   certified: boolean;
   description: string | null;
+  icon: string | null;
 }
 
 export interface SourceItemInstallation {

@@ -45,7 +45,7 @@ export function CreateResourceModal(props: CreateResourceModalProps) {
             type="button"
             class="w-8 h-8 flex items-center justify-center rounded-lg text-zinc-500 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100 hover:bg-zinc-100 dark:hover:bg-zinc-700 transition-colors focus:outline-none focus:ring-2 focus:ring-zinc-900 dark:focus:ring-zinc-100"
             onClick={props.onClose}
-            aria-label={t("close") || "Close"}
+            aria-label={t("close")}
           >
             <Icons.X class="w-5 h-5" />
           </button>

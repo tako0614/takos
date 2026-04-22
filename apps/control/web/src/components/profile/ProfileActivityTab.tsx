@@ -90,7 +90,7 @@ export function ProfileActivityTab(props: {
                             fallback={
                               <div class="mt-1 text-sm text-zinc-500 dark:text-zinc-400">
                                 {ev.type === "deployment"
-                                  ? "Infrastructure"
+                                  ? t("infrastructure")
                                   : ""}
                               </div>
                             }

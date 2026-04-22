@@ -563,6 +563,12 @@ export const TOOL_NAMESPACE_MAP: Record<string, ToolNamespaceMeta> = {
     side_effects: true,
   },
 
+  toolbox: {
+    namespace: "discovery",
+    family: "discovery.toolbox",
+    risk_level: "medium",
+    side_effects: true,
+  },
   capability_search: {
     namespace: "discovery",
     family: "discovery.search",
@@ -572,6 +578,12 @@ export const TOOL_NAMESPACE_MAP: Record<string, ToolNamespaceMeta> = {
   capability_families: {
     namespace: "discovery",
     family: "discovery.search",
+    risk_level: "none",
+    side_effects: false,
+  },
+  capability_describe: {
+    namespace: "discovery",
+    family: "discovery.describe",
     risk_level: "none",
     side_effects: false,
   },

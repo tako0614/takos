@@ -1,5 +1,6 @@
 import { splitProps } from "solid-js";
 import type { JSX } from "solid-js";
+import { useI18n } from "../../store/i18n.ts";
 
 type AvatarSize = "xs" | "sm" | "md" | "lg" | "xl";
 
@@ -37,6 +38,7 @@ function stringToColor(str: string): string {
 }
 
 export function Avatar(props: AvatarProps) {
+  const { t } = useI18n();
   const [local, rest] = splitProps(props, [
     "src",
     "alt",
@@ -72,7 +74,7 @@ export function Avatar(props: AvatarProps) {
       <div class={local.class} style={baseStyle()} {...rest}>
         <img
           src={local.src}
-          alt={local.alt || local.name || "Avatar"}
+          alt={local.alt || local.name || t("avatar")}
           style={{ width: "100%", height: "100%", "object-fit": "cover" }}
         />
       </div>

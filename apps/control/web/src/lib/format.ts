@@ -3,17 +3,37 @@ function diffInDays(dateString: string): number {
   return Math.floor(diffMs / (1000 * 60 * 60 * 24));
 }
 
+function currentLocale(): string {
+  try {
+    const stored = globalThis.localStorage?.getItem("takos-lang");
+    if (stored === "ja") return "ja-JP";
+    if (stored === "en") return "en-US";
+  } catch {
+    // localStorage may be unavailable in tests or privacy-restricted contexts.
+  }
+  const browserLang = globalThis.navigator?.language?.toLowerCase();
+  return browserLang?.startsWith("ja") ? "ja-JP" : "en-US";
+}
+
+function relativeFormatter(): Intl.RelativeTimeFormat {
+  return new Intl.RelativeTimeFormat(currentLocale(), { numeric: "auto" });
+}
+
 function formatDaysAgo(diffDays: number, date: Date): string {
-  if (diffDays === 1) return "Yesterday";
-  if (diffDays < 7) return `${diffDays} days ago`;
-  if (diffDays < 30) return `${Math.floor(diffDays / 7)} weeks ago`;
-  if (diffDays < 365) return `${Math.floor(diffDays / 30)} months ago`;
-  return date.toLocaleDateString();
+  const formatter = relativeFormatter();
+  if (diffDays < 7) return formatter.format(-diffDays, "day");
+  if (diffDays < 30) {
+    return formatter.format(-Math.floor(diffDays / 7), "week");
+  }
+  if (diffDays < 365) {
+    return formatter.format(-Math.floor(diffDays / 30), "month");
+  }
+  return date.toLocaleDateString(currentLocale());
 }
 
 export function formatRelativeDate(dateString: string): string {
   const days = diffInDays(dateString);
-  if (days === 0) return "Today";
+  if (days === 0) return relativeFormatter().format(0, "day");
   return formatDaysAgo(days, new Date(dateString));
 }
 
@@ -23,14 +43,17 @@ export function formatDetailedRelativeDate(dateString: string): string {
   const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
   const days = Math.floor(diffMs / (1000 * 60 * 60 * 24));
 
-  if (diffMins < 1) return "Just now";
-  if (diffMins < 60) return `${diffMins}m ago`;
-  if (diffHours < 24) return `${diffHours}h ago`;
+  if (diffMins < 1) {
+    return currentLocale().startsWith("ja") ? "たった今" : "Just now";
+  }
+  const formatter = relativeFormatter();
+  if (diffMins < 60) return formatter.format(-diffMins, "minute");
+  if (diffHours < 24) return formatter.format(-diffHours, "hour");
   return formatDaysAgo(days, new Date(dateString));
 }
 
 export function formatShortDate(dateString: string): string {
-  return new Date(dateString).toLocaleDateString(undefined, {
+  return new Date(dateString).toLocaleDateString(currentLocale(), {
     year: "numeric",
     month: "short",
     day: "numeric",
@@ -41,7 +64,7 @@ export const formatDate = formatShortDate;
 
 export function formatDateTime(dateString: string | undefined): string {
   if (!dateString) return "";
-  return new Date(dateString).toLocaleDateString(undefined, {
+  return new Date(dateString).toLocaleDateString(currentLocale(), {
     year: "numeric",
     month: "short",
     day: "numeric",

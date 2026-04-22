@@ -81,7 +81,7 @@ export function SetupPage(props: SetupPageProps) {
       await rpcJson(res);
       props.onComplete();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Unknown error");
+      setError(err instanceof Error ? err.message : t("unknownError"));
     } finally {
       setSubmitting(false);
     }

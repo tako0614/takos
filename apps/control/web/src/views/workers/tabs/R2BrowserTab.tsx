@@ -200,7 +200,7 @@ export function R2BrowserTab(props: R2BrowserTabProps) {
       const res = await rpc.resources[":id"].r2.objects[":key"].$delete({
         param: { id: props.resource.id, key: encodeURIComponent(key) },
       });
-      if (!res.ok) throw new Error("Delete failed");
+      if (!res.ok) throw new Error(t("failedToDelete"));
       showToast("success", t("deleted"));
       fetchObjects(prefix(), true);
     } catch {

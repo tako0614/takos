@@ -74,6 +74,8 @@ export const tools = {
   failedToFetchMcpServers: "Failed to fetch MCP servers",
   failedToCreateMcpServer: "Failed to create MCP server",
   failedToUpdateMcpServer: "Failed to update MCP server",
+  failedToFetchTools: "Failed to fetch tools",
+  missingSpaceId: "Missing space id",
   removeMcpServer: "Remove MCP Server",
   removeMcpServerConfirm: 'Remove "{name}" from this space?',
   failedToRemoveMcpServer: "Failed to remove MCP server",
