@@ -108,14 +108,15 @@ worker / service / route / publication / resource を使う。
 
 space-level の information sharing catalog entry。`publications` record
 として保存され、名前は space 内で一意。manifest 由来の publication は primitive
-declaration の projection として保存され、API 由来の Takos capability grant は
-`source_type=api` として存在できる。
+declaration の projection として保存される。Takos API key / OAuth client は
+manifest の `publish[]` ではなく system publication source として `consume[]`
+から request する。
 
 route publication は route primitive から作られる catalog projection
-で、`name` + `publisher` + `type` + `path` で表す。`publisher` は対応する
-compute target であり、`publisher + path` は manifest の `routes[]` 1
-件に一致する必要がある。Takos capability grant は `publisher: takos` と `type` +
-`spec` で表す。publication / grant output は `compute.<name>.consume` を宣言した
+で、`name` + `publisher` + `type` + `outputs` で表す。`publisher` は対応する
+compute target であり、各 `outputs.*.route` の `publisher + route` は manifest の
+`routes[]` 1 件に一致する必要がある。publication output は
+`compute.<name>.consume` を宣言した
 consumer にだけ env として渡される。ここでの publish は resource creation
 ではなく access output の共有を指す。kernel features (Agent / Chat, Git, Store,
 Auth) は publication ではなく kernel API として直接提供される。
@@ -191,7 +192,7 @@ OAuth / managed token が要求・付与する権限の粒度。
 
 ### Store
 
-kernel が提供する app-label / package の検索・配布・ActivityPub federation
+kernel が提供する app-label / package の検索・配布・Store Network
 機能。kernel の一部であり、group ではない。
 
 ### Canonical URL

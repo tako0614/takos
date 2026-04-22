@@ -1,25 +1,13 @@
 # OAuth
 
-Takos の OAuth client は capability grant として宣言します。group 層の専用 field
-ではなく、`publish[].publisher/type` と `compute.<name>.consume` の 1 例です。
-`oauth-client` は Takos publisher type の 1 つで、未知の `type` は deploy
-validation で invalid です。
+Takos の OAuth client は `takos.oauth-client` system publication source を
+`compute.<name>.consume` で request して受け取ります。group 層の専用 field
+ではなく、他の publication と同じ publish / consume contract の一部です。
+未知の `request` field は deploy validation で invalid です。
 
 ## 基本
 
 ```yaml
-publish:
-  - name: app-oauth
-    publisher: takos
-    type: oauth-client
-    spec:
-      clientName: My App
-      redirectUris:
-        - https://example.com/callback
-      scopes:
-        - threads:read
-        - runs:write
-
 compute:
   web:
     build:
@@ -29,7 +17,15 @@ compute:
         artifact: web
         artifactPath: dist/worker
     consume:
-      - publication: app-oauth
+      - publication: takos.oauth-client
+        as: app-oauth
+        request:
+          clientName: My App
+          redirectUris:
+            - https://example.com/callback
+          scopes:
+            - threads:read
+            - runs:write
         env:
           clientId: OAUTH_CLIENT_ID
           clientSecret: OAUTH_CLIENT_SECRET
@@ -42,7 +38,7 @@ consumer が alias を省略した場合は次の default env 名が使われま
 - `PUBLICATION_APP_OAUTH_CLIENT_SECRET`
 - `PUBLICATION_APP_OAUTH_ISSUER`
 
-## 利用可能な spec fields
+## 利用可能な request fields
 
 | field                | required | 説明                                                                                                                |
 | -------------------- | -------- | ------------------------------------------------------------------------------------------------------------------- |
@@ -91,8 +87,8 @@ const response = await fetch("https://takos.example.com/oauth/token", {
 ## Device Flow
 
 Device Flow は Takos OAuth server が support する grant type です。ただし
-`.takos/app.yml` の `oauth-client` publication で作る client は Authorization
-Code Flow と refresh token を前提にします。Device Flow を使う client は Dynamic
+`.takos/app.yml` の `takos.oauth-client` consume request で作る client は
+Authorization Code Flow と refresh token を前提にします。Device Flow を使う client は Dynamic
 Client Registration などで `grant_types` に
 `urn:ietf:params:oauth:grant-type:device_code` を含めて登録してください。
 

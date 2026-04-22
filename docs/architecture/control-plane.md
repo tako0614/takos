@@ -236,14 +236,14 @@ pipeline と連動する:
 publication に TTL はない。manifest-managed entry が存在する限り publication
 も存在する。必須 field は entry の種類によって異なる。
 
-- route publication: `name` + `publisher` + `type` + `path`
-- Takos capability grant: `name` + `publisher: takos` + `type` + `spec`
+- route publication: `name` + `publisher` + `type` + `outputs`
+- Takos system publication source: `takos.api-key` / `takos.oauth-client` を
+  `compute.<name>.consume` から request
 
-route publication の URL は assigned hostname と manifest の `path` から
+route publication の URL は assigned hostname と `outputs.*.route` から
 生成され、path template は template URL のまま扱う。`type` は custom string
-で、core は type の意味を解釈しない。Takos capability grant の `publisher` は
-`takos`、`type` は Takos publisher type だけを受け付け、`spec` は type ごとの
-required / optional field を持つ。kernel features (Agent / Chat, Git, Storage,
+で、core は type の意味を解釈しない。Takos system publication source の
+`request` は source ごとの required / optional field を持つ。kernel features (Agent / Chat, Git, Storage,
 Store, Auth) は kernel API として直接提供されるため、route publication
 の対象外。
 
@@ -410,8 +410,8 @@ routes:
 
 1 つの group hostname に対して複数の route を設定可能。dispatch は path + method
 で最長一致を選択する。同じ path で method が重なる route は duplicate として
-invalid。route publication は `publisher + path` で route
-を参照するため、manifest 全体で同じ `publisher + path`
+invalid。route publication は `publisher + route` で route
+を参照するため、manifest 全体で同じ `publisher + route`
 が複数件に一致してはいけない。
 
 ### Dispatch の routing 境界

@@ -41,7 +41,7 @@ Space は Takos の最上位の隔離単位です。
 
 Kernel は primitive を安全に動かすための共通基盤です。
 
-- auth / principal / capability grant
+- auth / principal / system publication grants
 - deploy / group snapshot / rollback
 - resource broker
 - publication index
@@ -54,7 +54,7 @@ Storage, Store, Auth) は group ではなく kernel に統合されている。
 
 - default app distribution と third-party primitive / group は同じ model で扱う
 - default apps は distribution / catalog metadata として扱う
-- group 間の連携は publication / Takos capability grant で宣言する
+- group 間の連携は publication / Takos system publication source で宣言する
 
 ### 課金
 
@@ -65,22 +65,21 @@ Storage, Store, Auth) は group ではなく kernel に統合されている。
 - **Pay As You Go**: プリペイド残高からの従量課金
 - メーターごとのクォータ管理と自動リセット
 
-### ActivityPub Federation
+### Store Network
 
-ActivityPub と ForgeFed をベースとした、インスタンス間の repository catalog
-連携です。
+Store と repository 参照を共有するための、インスタンス間の公開 REST API です。
 
-- git データは各インスタンスに分散したまま、メタデータのみを共有
-- kernel の Store features は federation を利用する catalog UI の 1 つになれる
-- WebFinger による発見、Follow による購読
-- リモート catalog から repository 参照を import して利用可能
+- git データは各インスタンスに分散したまま、参照 metadata のみを共有
+- `slug@domain` は `https://domain/api/public/stores/:slug` に解決
+- feed は pull 型で inventory / repository event を同期
+- リモート catalog から repository reference を import して利用可能
 
 ## レイヤー関係
 
 ```text
 group workloads
   examples: takos-docs / takos-excel / takos-slide / takos-computer / third-party
-  ↑ publications / capability grants
+  ↑ publications / system consumes
 kernel features (Agent / Chat, Git, Storage, Store, Auth) ← kernel に常設、uninstall 不可
   ↑
 kernel (identity / space / deploy / resources / metering)
@@ -114,7 +113,7 @@ primitive や group は特権化されません。
 | [Space](/platform/spaces)                            | マルチテナントの隔離単位                                      |
 | [Store](/platform/store)                             | kernel feature としての Store の役割と current implementation |
 | [課金](/platform/billing)                            | プラン・使用量・決済                                          |
-| [ActivityPub](/platform/activitypub)                 | 連合プロトコル対応                                            |
+| [Store Network](/platform/store-network)             | Store と repository 参照の公開 REST API                       |
 | [Default App Distribution](/platform/default-apps)   | takos-docs, takos-excel, takos-slide, takos-computer           |
 | [互換性](/platform/compatibility)                    | tracked template と supported backend surfaces の整理         |
 | [Resource Governance](/platform/resource-governance) | resource CRUD / grant / billing gate の整理                   |

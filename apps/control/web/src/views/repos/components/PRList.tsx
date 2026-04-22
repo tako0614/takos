@@ -269,7 +269,7 @@ export function PRList(props: PRListProps) {
                             <Show when={pr.author.avatar_url}>
                               <img
                                 src={pr.author.avatar_url}
-                                alt={pr.author.name}
+                                alt={t("avatarAlt", { name: pr.author.name })}
                                 class="w-4 h-4 rounded-full"
                               />
                             </Show>

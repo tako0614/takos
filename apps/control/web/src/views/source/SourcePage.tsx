@@ -142,6 +142,7 @@ export function SourcePage(props: SourcePageProps) {
                 <button
                   type="button"
                   title={t("newRepository")}
+                  aria-label={t("newRepository")}
                   class="w-10 h-10 md:w-8 md:h-8 flex items-center justify-center rounded-full bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900 hover:bg-zinc-700 dark:hover:bg-zinc-300 transition-colors"
                   onClick={() => {
                     if (!props.isAuthenticated) {

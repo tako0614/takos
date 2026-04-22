@@ -4,6 +4,7 @@ import { Icons } from "../../../lib/Icons.tsx";
 import type { Resource } from "../../../types/index.ts";
 import {
   getResourceStatusBgClass,
+  getResourceStatusLabel,
   getResourceTypeIcon,
   getResourceTypeName,
 } from "../utils/resourceUtils.tsx";
@@ -65,10 +66,13 @@ export function ResourcesTab(props: ResourcesTabProps) {
                     class={`w-2 h-2 rounded-full shrink-0 ${
                       getResourceStatusBgClass(resource.status)
                     }`}
+                    aria-label={t("resourceStatusLabel", {
+                      status: getResourceStatusLabel(resource.status, t),
+                    })}
                   />
                 </div>
                 <p class="text-xs text-zinc-400 dark:text-zinc-500 mt-1.5">
-                  {getResourceTypeName(resource.type)}
+                  {getResourceTypeName(resource.type, t)}
                 </p>
               </div>
             </div>

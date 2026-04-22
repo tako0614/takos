@@ -32,7 +32,7 @@ const REQUIRED_SITE_FILES = [
   "platform/threads-and-runs.md",
   "platform/spaces.md",
   "platform/billing.md",
-  "platform/activitypub.md",
+  "platform/store-network.md",
   "platform/resource-governance.md",
   "platform/compatibility.md",
   "deploy/index.md",
@@ -147,6 +147,7 @@ const API_ROUTE_IDENTIFIER_TO_FAMILY: Record<string, string> = {
   explore: "explore",
   profilesApi: "profiles",
   publicShare: "public-share",
+  publicStores: "public-stores",
   mcpRoutes: "mcp",
   createEventsRouter: "events",
   setup: "setup",
@@ -535,13 +536,13 @@ function validateDeployRuntimeContractDocs(
     {
       pattern: /publication の必須 field は `type` と `path`/,
       message:
-        "type/path are required only for route publications; Takos capability grants use publisher/type/spec",
+        "route publications use outputs; Takos system publications are consumed with request",
       allowContext: /route publication/,
     },
     {
       pattern: /すべての publication (?:は|が).*URL/,
       message:
-        "Takos capability grants do not have route URLs; only route publications expose URL output",
+        "Takos system publication outputs are not route URLs; only route publications expose URL output",
       allowContext: /route publication/,
     },
     {
@@ -1051,7 +1052,7 @@ function validateCompatibilityDocs(
     const snippet of [
       "resource API / runtime binding",
       "route publication",
-      "Takos capability grant",
+      "Takos system publication source",
       "backend requirement",
     ]
   ) {
@@ -1114,6 +1115,7 @@ const ENDPOINT_FILE_MOUNT: Record<string, string> = {
   "events/routes.ts": "/events",
   "publications/routes.ts": "/publications",
   "public-share.ts": "/public",
+  "public-store/routes.ts": "/public/stores",
   "billing/webhook.ts": "/billing/webhook",
   "runs/sse.ts": "/runs",
   "notifications-sse.ts": "/notifications",

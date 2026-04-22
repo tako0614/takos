@@ -3,7 +3,11 @@ import { Icons } from "../../../../lib/Icons.tsx";
 import { formatDetailedRelativeDate } from "../../../../lib/format.ts";
 import { useI18n } from "../../../../store/i18n.ts";
 import type { JobLogState, WorkflowJob } from "./actions-types.ts";
-import { statusBadge } from "./actions-types.ts";
+import {
+  statusBadge,
+  workflowRunStatusLabel,
+  workflowStepStatusLabel,
+} from "./actions-types.ts";
 
 interface JobCardProps {
   job: WorkflowJob;
@@ -38,7 +42,11 @@ export function JobCard(props: JobCardProps) {
               )
             }`}
           >
-            {props.job.status}
+            {workflowRunStatusLabel(
+              props.job.status,
+              props.job.conclusion,
+              t,
+            )}
           </span>
           <button
             type="button"
@@ -59,7 +67,13 @@ export function JobCard(props: JobCardProps) {
             {(step) => (
               <div class="flex items-center justify-between text-xs text-zinc-500 dark:text-zinc-400">
                 <span>{step.number}. {step.name}</span>
-                <span class="uppercase">{step.status}</span>
+                <span>
+                  {workflowStepStatusLabel(
+                    step.status,
+                    step.conclusion,
+                    t,
+                  )}
+                </span>
               </div>
             )}
           </For>

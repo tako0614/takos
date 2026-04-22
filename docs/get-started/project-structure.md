@@ -37,18 +37,14 @@ compute:
         artifact: web
         artifactPath: dist/worker
     consume:
-      - publication: takos-api
+      - publication: takos.api-key
+        as: takos-api
+        request:
+          scopes:
+            - files:read
         env:
           endpoint: TAKOS_API_ENDPOINT
           apiKey: TAKOS_API_KEY
-
-publish:
-  - name: takos-api
-    publisher: takos
-    type: api-key
-    spec:
-      scopes:
-        - files:read
 
 routes:
   - target: web
@@ -65,8 +61,8 @@ routes:
 がこのファイルを参照する。
 
 stateful resource の schema や初期化手順は publish ではなく resource API /
-runtime binding 側で扱う。`publish[].publisher/type` は route publication と
-Takos capability grant のために使う。
+runtime binding 側で扱う。Takos API key / OAuth client は `publish[]` ではなく
+`takos.api-key` / `takos.oauth-client` を `consume` して受け取る。
 
 ## 制約
 

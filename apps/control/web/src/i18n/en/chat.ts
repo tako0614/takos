@@ -84,6 +84,7 @@ export const chat = {
   sharePasswordLabel: "Password",
   sharePasswordPlaceholder: "min 8 chars",
   shareExpiresDays: "Expires (days)",
+  shareExpiresDaysPlaceholder: "e.g. 7",
   shareLinks: "Links",
   untitledThread: "Untitled Thread",
   shareLabel: "Share: {mode}",

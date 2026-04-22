@@ -47,9 +47,9 @@ routes:
   が勝つ
 - prefix が同じ場合: manifest 内で先に宣言された route が勝つ
 
-route publication は `publisher + path` で route を参照します。`publish` には
+route publication は `publisher + route` で route を参照します。`publish` には
 `methods` が無いため、method 別に同じ endpoint を公開したい場合でも publication
-から見える route は 1 件にしてください。同じ `publisher + path` が複数件に一致
+から見える route は 1 件にしてください。同じ `publisher + route` が複数件に一致
 する manifest は invalid です。route publication の `publisher` には対応する
 route の `target` を書きます。
 

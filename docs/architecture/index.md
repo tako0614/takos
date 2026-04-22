@@ -41,7 +41,7 @@ kernel が提供するもの:
 - [Kernel](./kernel.md) — Takos の定義、routing、publication
 - [Deploy System](./deploy-system.md) — primitive と group 機能の deploy
   pipeline
-- [Publication / Grants](./app-publications.md) — publication の仕組みと env
+- [Publication / Consume](./app-publications.md) — publication の仕組みと env
   injection
 - [Control Plane](./control-plane.md) — API, DB, routing layer
 - [Tenant Runtime](./tenant-runtime.md) — dispatch, worker execution, container

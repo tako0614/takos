@@ -36,11 +36,15 @@ interface RepoBrowseCardProps {
 export function RepoBrowseCard(props: RepoBrowseCardProps) {
   const { t } = useI18n();
   const ownerUsername = () => props.repo.owner?.username?.trim() || null;
-  const ownerName = () => props.repo.owner?.name || "unknown";
+  const ownerName = () => props.repo.owner?.name || t("unknown");
   const ownerLabel = () =>
     ownerUsername() ? `@${ownerUsername()}` : ownerName();
   const ownerInitial = () =>
     (ownerUsername() || ownerName() || "?").charAt(0).toUpperCase();
+  const visibilityLabel = () =>
+    props.repo.visibility === "public"
+      ? t("visibilityPublic")
+      : t("visibilityPrivate");
 
   return (
     <div
@@ -76,6 +80,8 @@ export function RepoBrowseCard(props: RepoBrowseCardProps) {
               ? "bg-zinc-200 dark:bg-zinc-700 text-zinc-900 dark:text-zinc-100"
               : "bg-zinc-100 dark:bg-zinc-800 text-zinc-500 dark:text-zinc-400"
           }`}
+          title={visibilityLabel()}
+          aria-label={visibilityLabel()}
         >
           {props.repo.visibility === "public"
             ? <Icons.Globe />
@@ -99,6 +105,10 @@ export function RepoBrowseCard(props: RepoBrowseCardProps) {
             e.stopPropagation();
             props.onStar(props.repo);
           }}
+          aria-label={props.repo.is_starred
+            ? t("unstarRepository", { name: props.repo.name })
+            : t("starRepository", { name: props.repo.name })}
+          aria-pressed={props.repo.is_starred}
         >
           <Icons.Star />
           {getRepoStars(props.repo)}

@@ -333,6 +333,10 @@ export function RepoDetail(props: RepoDetailProps) {
   ];
 
   const ownerName = () => props.repo.owner_username || props.repo.owner_name;
+  const visibilityLabel = () =>
+    props.repo.visibility === "private"
+      ? t("visibilityPrivate")
+      : t("visibilityPublic");
 
   return (
     <div class="flex flex-col h-full bg-zinc-50 dark:bg-zinc-900">
@@ -365,7 +369,7 @@ export function RepoDetail(props: RepoDetailProps) {
                       : "text-green-600 dark:text-green-400 bg-green-50 dark:bg-green-900/20"
                   }`}
                 >
-                  {props.repo.visibility}
+                  {visibilityLabel()}
                 </span>
               </div>
 
@@ -376,6 +380,10 @@ export function RepoDetail(props: RepoDetailProps) {
                     star().starred ? "text-amber-500" : ""
                   }`}
                   onClick={toggleStar}
+                  aria-label={star().starred
+                    ? t("unstarRepository", { name: props.repo.name })
+                    : t("starRepository", { name: props.repo.name })}
+                  aria-pressed={star().starred}
                 >
                   <Icons.Sparkles class="w-3.5 h-3.5" />
                   <span>{star().count}</span>
@@ -390,6 +398,7 @@ export function RepoDetail(props: RepoDetailProps) {
                     }
                     setShowForkModal(true);
                   }}
+                  aria-label={t("forkRepository")}
                 >
                   <Icons.GitMerge class="w-3.5 h-3.5" />
                   <span>{forksCount()}</span>
@@ -413,13 +422,14 @@ export function RepoDetail(props: RepoDetailProps) {
                   onClick={() =>
                     showToast(
                       "info",
-                      `Upstream: ${
-                        props.repo.forked_from?.owner_username || "unknown"
+                      `${t("upstreamSync")}: ${
+                        props.repo.forked_from?.owner_username || t("unknown")
                       }/${props.repo.forked_from?.name}`,
                     )}
                 >
                   {props.repo.forked_from!.owner_username ||
-                    props.repo.forked_from!.owner_name || "unknown"}/{props.repo
+                    props.repo.forked_from!.owner_name || t("unknown")}/{props
+                    .repo
                     .forked_from!.name}
                 </button>
               </div>

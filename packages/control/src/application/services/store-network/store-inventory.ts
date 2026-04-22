@@ -7,15 +7,23 @@ import { and, count, desc, eq } from "drizzle-orm";
 import type { D1Database } from "../../../shared/types/bindings.ts";
 import { getDb, storeInventoryItems } from "../../../infra/db/index.ts";
 import { generateId } from "../../../shared/utils/index.ts";
+import { resolvePackageIconsForRepos } from "./package-icons.ts";
 
 export interface InventoryEntry {
   id: string;
   storeSlug: string;
   accountId: string;
+  repositoryUrl: string;
+  /** @deprecated legacy storage/API alias for repositoryUrl */
   repoActorUrl: string;
   repoName: string | null;
   repoSummary: string | null;
   repoOwnerSlug: string | null;
+  repoCloneUrl: string | null;
+  repoBrowseUrl: string | null;
+  repoDefaultBranch: string | null;
+  repoDefaultBranchHash: string | null;
+  packageIcon: string | null;
   localRepoId: string | null;
   activityType: "Add" | "Remove";
   isActive: boolean;
@@ -25,10 +33,16 @@ export interface InventoryEntry {
 export interface AddToInventoryInput {
   accountId: string;
   storeSlug: string;
-  repoActorUrl: string;
+  repositoryUrl?: string;
+  /** @deprecated use repositoryUrl */
+  repoActorUrl?: string;
   repoName?: string;
   repoSummary?: string;
   repoOwnerSlug?: string;
+  repoCloneUrl?: string;
+  repoBrowseUrl?: string;
+  repoDefaultBranch?: string;
+  repoDefaultBranchHash?: string;
   localRepoId?: string;
 }
 
@@ -37,6 +51,11 @@ export async function addToInventory(
   input: AddToInventoryInput,
 ): Promise<InventoryEntry> {
   const db = getDb(dbBinding);
+  const repositoryUrl = (input.repositoryUrl ?? input.repoActorUrl ?? "")
+    .trim();
+  if (!repositoryUrl) {
+    throw new Error("repository_url is required");
+  }
 
   // Check for duplicate active entry
   const existing = await db.select({ id: storeInventoryItems.id })
@@ -44,7 +63,7 @@ export async function addToInventory(
     .where(and(
       eq(storeInventoryItems.accountId, input.accountId),
       eq(storeInventoryItems.storeSlug, input.storeSlug),
-      eq(storeInventoryItems.repoActorUrl, input.repoActorUrl),
+      eq(storeInventoryItems.repoActorUrl, repositoryUrl),
       eq(storeInventoryItems.isActive, true),
     ))
     .limit(1)
@@ -61,10 +80,14 @@ export async function addToInventory(
     id,
     storeSlug: input.storeSlug,
     accountId: input.accountId,
-    repoActorUrl: input.repoActorUrl,
+    repoActorUrl: repositoryUrl,
     repoName: input.repoName ?? null,
     repoSummary: input.repoSummary ?? null,
     repoOwnerSlug: input.repoOwnerSlug ?? null,
+    repoCloneUrl: input.repoCloneUrl ?? null,
+    repoBrowseUrl: input.repoBrowseUrl ?? null,
+    repoDefaultBranch: input.repoDefaultBranch ?? null,
+    repoDefaultBranchHash: input.repoDefaultBranchHash ?? null,
     localRepoId: input.localRepoId ?? null,
     activityType: "Add" as const,
     isActive: true,
@@ -72,7 +95,12 @@ export async function addToInventory(
   };
 
   await db.insert(storeInventoryItems).values(record);
-  return record;
+  const packageIcon = input.localRepoId
+    ? (await resolvePackageIconsForRepos(dbBinding, [input.localRepoId])).get(
+      input.localRepoId,
+    ) ?? null
+    : null;
+  return { ...record, repositoryUrl, packageIcon };
 }
 
 /**
@@ -134,6 +162,10 @@ export async function removeFromInventory(
     storeSlug,
     accountId,
     repoActorUrl,
+    repoCloneUrl: null,
+    repoBrowseUrl: null,
+    repoDefaultBranch: null,
+    repoDefaultBranchHash: null,
     activityType: "Remove",
     isActive: false,
     createdAt: new Date().toISOString(),
@@ -172,9 +204,19 @@ export async function listInventoryItems(
       .get(),
   ]);
 
+  const packageIcons = await resolvePackageIconsForRepos(
+    dbBinding,
+    rows.map((row) => row.localRepoId).filter((id): id is string => !!id),
+  );
+
   return {
     total: totalResult?.count ?? 0,
-    items: rows.map(toEntry),
+    items: rows.map((row) =>
+      toEntry(
+        row,
+        row.localRepoId ? packageIcons.get(row.localRepoId) ?? null : null,
+      )
+    ),
   };
 }
 
@@ -206,9 +248,19 @@ export async function listInventoryActivities(
       .get(),
   ]);
 
+  const packageIcons = await resolvePackageIconsForRepos(
+    dbBinding,
+    rows.map((row) => row.localRepoId).filter((id): id is string => !!id),
+  );
+
   return {
     total: totalResult?.count ?? 0,
-    items: rows.map(toEntry),
+    items: rows.map((row) =>
+      toEntry(
+        row,
+        row.localRepoId ? packageIcons.get(row.localRepoId) ?? null : null,
+      )
+    ),
   };
 }
 
@@ -273,15 +325,24 @@ export async function countActiveItems(
   return result?.count ?? 0;
 }
 
-function toEntry(row: typeof storeInventoryItems.$inferSelect): InventoryEntry {
+function toEntry(
+  row: typeof storeInventoryItems.$inferSelect,
+  packageIcon: string | null = null,
+): InventoryEntry {
   return {
     id: row.id,
     storeSlug: row.storeSlug,
     accountId: row.accountId,
+    repositoryUrl: row.repoActorUrl,
     repoActorUrl: row.repoActorUrl,
     repoName: row.repoName,
     repoSummary: row.repoSummary,
     repoOwnerSlug: row.repoOwnerSlug,
+    repoCloneUrl: row.repoCloneUrl ?? null,
+    repoBrowseUrl: row.repoBrowseUrl ?? null,
+    repoDefaultBranch: row.repoDefaultBranch ?? null,
+    repoDefaultBranchHash: row.repoDefaultBranchHash ?? null,
+    packageIcon,
     localRepoId: row.localRepoId,
     activityType: row.activityType as "Add" | "Remove",
     isActive: !!row.isActive,

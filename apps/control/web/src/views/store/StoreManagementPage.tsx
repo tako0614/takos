@@ -8,6 +8,7 @@ import {
   useStoreRegistry,
 } from "../../hooks/useStoreManagement.ts";
 import { useI18n } from "../../store/i18n.ts";
+import { getPackageIconImageSrc } from "../source/packageIcon.ts";
 
 interface StoreManagementPageProps {
   spaceId: string;
@@ -185,7 +186,7 @@ function StoreListItem(props: {
       class={`px-3 py-2.5 cursor-pointer border-b border-zinc-100 dark:border-zinc-800 flex items-center justify-between group ${
         props.selected
           ? "bg-blue-50 dark:bg-blue-900/20"
-          : "hover:bg-zinc-50 dark:hover:bg-zinc-800/50"
+        : "hover:bg-zinc-50 dark:hover:bg-zinc-800/50"
       }`}
     >
       <div class="min-w-0">
@@ -249,7 +250,7 @@ function InventoryPanel(
             value={newUrl()}
             onInput={(e) => setNewUrl(e.currentTarget.value)}
             onKeyDown={(e) => e.key === "Enter" && handleAdd()}
-            placeholder="https://instance.example/ap/repos/owner/repo"
+            placeholder="https://instance.example/@owner/repo"
             class="flex-1 px-3 py-2 text-sm rounded border border-zinc-300 dark:border-zinc-600 bg-white dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100"
           />
           <button
@@ -286,12 +287,18 @@ function InventoryPanel(
             <div class="border border-zinc-200 dark:border-zinc-700 rounded divide-y divide-zinc-200 dark:divide-zinc-700">
               {items().map((item: InventoryItem) => (
                 <div class="px-4 py-3 flex items-center justify-between">
-                  <div class="min-w-0">
-                    <div class="text-sm font-medium text-zinc-900 dark:text-zinc-100 truncate">
-                      {item.repo_name || item.repo_actor_url}
-                    </div>
-                    <div class="text-xs text-zinc-400 truncate">
-                      {item.repo_actor_url}
+                  <div class="min-w-0 flex items-center gap-3">
+                    <RepositoryIcon
+                      src={item.package_icon}
+                      label={item.repo_name || item.repository_url}
+                    />
+                    <div class="min-w-0">
+                      <div class="text-sm font-medium text-zinc-900 dark:text-zinc-100 truncate">
+                        {item.repo_name || item.repository_url}
+                      </div>
+                      <div class="text-xs text-zinc-400 truncate">
+                        {item.repository_url}
+                      </div>
                     </div>
                   </div>
                   <button
@@ -409,4 +416,31 @@ function RegistryPanel(props: { spaceId: () => string }) {
       </div>
     </div>
   );
+}
+
+function RepositoryIcon(props: {
+  src: string | null | undefined;
+  label: string;
+}) {
+  const iconSrc = () => getPackageIconImageSrc(props.src);
+  const initial = () =>
+    props.label.trim().charAt(0).toUpperCase() ||
+    props.label.trim().charAt(1).toUpperCase() ||
+    "?";
+
+  return iconSrc()
+    ? (
+      <img
+        src={iconSrc()!}
+        alt=""
+        class="w-9 h-9 rounded-lg object-cover shadow-sm flex-shrink-0"
+      />
+    )
+    : (
+      <div
+        class="w-9 h-9 rounded-lg bg-zinc-100 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 flex items-center justify-center text-xs font-semibold text-zinc-500 dark:text-zinc-300 flex-shrink-0"
+      >
+        {initial()}
+      </div>
+    );
 }

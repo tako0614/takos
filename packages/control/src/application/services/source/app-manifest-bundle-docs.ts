@@ -153,19 +153,7 @@ function emitRouteDocs(manifest: AppManifest, docs: BundleDoc[]): void {
 
 function emitPublishDocs(manifest: AppManifest, docs: BundleDoc[]): void {
   for (const pub of manifest.publish) {
-    if (pub.publisher === "takos") {
-      docs.push({
-        type: "Publication",
-        name: pub.name,
-        config: {
-          publisher: pub.publisher,
-          type: pub.type,
-          ...(pub.spec ? { spec: pub.spec } : {}),
-        },
-      });
-      continue;
-    }
-    if (!pub.type || !pub.publisher || !pub.path) {
+    if (!pub.type || !pub.publisher || !pub.outputs) {
       continue;
     }
     docs.push({
@@ -174,7 +162,7 @@ function emitPublishDocs(manifest: AppManifest, docs: BundleDoc[]): void {
       config: {
         ...(pub.spec ? pub.spec : {}),
         targetRef: pub.publisher,
-        path: pub.path,
+        outputs: pub.outputs,
         ...(pub.title ? { title: pub.title } : {}),
       },
     });

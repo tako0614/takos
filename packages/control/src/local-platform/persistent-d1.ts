@@ -29,6 +29,7 @@ import {
   type ServerD1Database,
 } from "./d1-shared.ts";
 import { logWarn } from "../shared/utils/logger.ts";
+import { UnsupportedOperationError } from "../shared/utils/unsupported-operation.ts";
 import {
   ensurePostgresAccountsTableShape,
   ensurePostgresDeploymentsTableShape,
@@ -414,7 +415,8 @@ export async function createPostgresD1Database(
       return session;
     },
     async dump() {
-      throw new Error(
+      throw new UnsupportedOperationError(
+        "dump",
         "DB.dump() is not implemented for the local Postgres adapter",
       );
     },
@@ -551,7 +553,8 @@ export async function createSchemaScopedPostgresD1Database(
       return session;
     },
     async dump() {
-      throw new Error(
+      throw new UnsupportedOperationError(
+        "dump",
         "DB.dump() is not implemented for the schema-scoped Postgres adapter",
       );
     },

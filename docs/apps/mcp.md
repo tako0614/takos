@@ -23,7 +23,9 @@ publish:
   - name: search
     type: McpServer
     publisher: web
-    path: /mcp
+    outputs:
+      url:
+        route: /mcp
     title: Search MCP
     spec:
       transport: streamable-http
@@ -106,7 +108,9 @@ publish:
   - name: search
     type: McpServer
     publisher: web
-    path: /mcp
+    outputs:
+      url:
+        route: /mcp
     title: Search MCP
     spec:
       transport: streamable-http
@@ -123,7 +127,7 @@ standalone deploy では同名の secret を別途用意してください。Tak
 
 ## 実 URL
 
-route publication の output は `url` です。値は assigned hostname と宣言した
-`path` から生成されます。path が template の場合は template URL のまま consumer
-に渡ります。default env 名は publication 名から決まり、`search` なら
+route publication の main output は慣例的に `url` です。値は assigned hostname
+と宣言した `outputs.url.route` から生成されます。route が template の場合は
+template URL のまま consumer に渡ります。default env 名は publication 名から決まり、`search` なら
 `PUBLICATION_SEARCH_URL` になります。

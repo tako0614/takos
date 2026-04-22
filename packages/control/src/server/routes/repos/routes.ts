@@ -33,11 +33,7 @@ import { and, eq, sql } from "drizzle-orm";
 import { invalidateCacheOnMutation } from "../../middleware/cache.ts";
 import { logError, logWarn } from "../../../shared/utils/logger.ts";
 import { requireFound } from "../validation-utils.ts";
-import { recordRepoDeleteActivity } from "../../../application/services/activitypub/push-activities.ts";
-import {
-  deliverToFollowers,
-  resolveActivityDeliverySigning,
-} from "../../../application/services/activitypub/activity-delivery.ts";
+import { recordRepoDeleteActivity } from "../../../application/services/store-network/push-activities.ts";
 
 // Re-export shared utilities so existing sibling imports (e.g. `from './routes.ts'`) keep working.
 export {
@@ -363,43 +359,10 @@ export default new Hono<AuthenticatedRouteEnv>()
         ? await collectCleanupCandidates(c.env.DB, c.env.GIT_OBJECTS, repoId)
         : null;
 
-      // Round 11: resolve the repo actor URL BEFORE the row is deleted so the
-      // Delete activity can be delivered to followers with the canonical URL.
-      // Once the repositories row is gone the join below fails and we cannot
-      // recover the owner slug, so this must happen before the delete.
-      let repoActorUrl: string | null = null;
+      // Record a delete event before the repo is removed so Store Network feeds
+      // can expose the deletion without outbound federation delivery.
       try {
-        const joined = await db.select({
-          repoName: repositories.name,
-          ownerSlug: accounts.slug,
-        })
-          .from(repositories)
-          .leftJoin(accounts, eq(accounts.id, repositories.accountId))
-          .where(eq(repositories.id, repoId))
-          .get();
-        if (joined && joined.ownerSlug) {
-          const origin = new URL(c.req.url).origin;
-          repoActorUrl = `${origin}/ap/repos/${
-            encodeURIComponent(joined.ownerSlug)
-          }/${encodeURIComponent(joined.repoName)}`;
-        }
-      } catch (err) {
-        logWarn("Failed to resolve repo actor URL for delete delivery", {
-          action: "deleteRepository",
-          repoId,
-        });
-        logError("Delete actor URL resolution error", err, {
-          action: "deleteRepository",
-          repoId,
-        });
-      }
-
-      // Record a Delete activity before the repo is removed
-      let deleteActivityRecord:
-        | Awaited<ReturnType<typeof recordRepoDeleteActivity>>
-        | null = null;
-      try {
-        deleteActivityRecord = await recordRepoDeleteActivity(c.env.DB, {
+        await recordRepoDeleteActivity(c.env.DB, {
           repoId,
           accountId: repoAccess.repo.space_id,
         });
@@ -408,66 +371,6 @@ export default new Hono<AuthenticatedRouteEnv>()
           action: "deleteRepository",
           repoId,
         });
-      }
-
-      // Round 11 finding #3: previously `recordRepoDeleteActivity` was called
-      // but the corresponding Delete activity was NEVER delivered to followers.
-      // Federation peers were left with stale Repository objects. Emit the
-      // ForgeFed-flavoured Delete+Tombstone now (Wave 2B wraps the object as a
-      // Tombstone) and hand it off to the retry-queue-backed deliverToFollowers.
-      if (repoActorUrl && deleteActivityRecord) {
-        const createdAt = deleteActivityRecord.createdAt;
-        const deleteActivity: Record<string, unknown> = {
-          "@context": [
-            "https://www.w3.org/ns/activitystreams",
-            "https://forgefed.org/ns",
-          ],
-          id: `${repoActorUrl}/activities/delete/${
-            encodeURIComponent(createdAt)
-          }`,
-          type: "Delete",
-          actor: repoActorUrl,
-          published: createdAt,
-          to: ["https://www.w3.org/ns/activitystreams#Public"],
-          object: {
-            type: "Tombstone",
-            id: repoActorUrl,
-            formerType: "Repository",
-            deleted: createdAt,
-          },
-        };
-
-        const signing = resolveActivityDeliverySigning(c.env, repoActorUrl);
-        if (signing) {
-          c.executionCtx.waitUntil(
-            deliverToFollowers(
-              c.env.DB,
-              repoActorUrl,
-              deleteActivity,
-              signing.signingKeyPem,
-              signing.keyId,
-            )
-              .catch((err: unknown) => {
-                logError(
-                  "Failed to deliver Delete activity to followers",
-                  err,
-                  {
-                    action: "deliver_repo_delete",
-                    repoId,
-                  },
-                );
-              }),
-          );
-        } else {
-          logError(
-            "Cannot deliver Delete activity without PLATFORM_PRIVATE_KEY",
-            undefined,
-            {
-              action: "deliver_repo_delete",
-              repoId,
-            },
-          );
-        }
       }
 
       await db.delete(branches).where(eq(branches.repoId, repoId));

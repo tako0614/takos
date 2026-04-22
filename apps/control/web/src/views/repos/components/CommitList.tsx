@@ -168,7 +168,9 @@ export function CommitList(props: CommitListProps) {
                                 ? (
                                   <img
                                     src={commit.author.avatar_url}
-                                    alt={commit.author.name + "'s avatar"}
+                                    alt={t("avatarAlt", {
+                                      name: commit.author.name,
+                                    })}
                                     class="w-8 h-8 rounded-full"
                                   />
                                 )
@@ -207,9 +209,9 @@ export function CommitList(props: CommitListProps) {
                                 type="button"
                                 class="flex items-center gap-1.5 px-2 py-1 bg-zinc-100 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded text-xs font-mono text-zinc-500 dark:text-zinc-400 hover:bg-zinc-200 dark:hover:bg-zinc-700 hover:text-zinc-900 dark:hover:text-zinc-100 transition-colors"
                                 onClick={() => copyCommitSha(commit.sha)}
-                                aria-label={`Copy commit SHA ${
-                                  commit.sha.slice(0, 7)
-                                }`}
+                                aria-label={t("copyCommitShaWithValue", {
+                                  sha: commit.sha.slice(0, 7),
+                                })}
                                 title={t("copyCommitSha")}
                               >
                                 <Icons.Copy class="w-3 h-3" />

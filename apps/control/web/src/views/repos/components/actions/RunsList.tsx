@@ -3,7 +3,7 @@ import { Icons } from "../../../../lib/Icons.tsx";
 import { formatDetailedRelativeDate } from "../../../../lib/format.ts";
 import { useI18n } from "../../../../store/i18n.ts";
 import type { WorkflowRunSummary } from "./actions-types.ts";
-import { statusBadge } from "./actions-types.ts";
+import { statusBadge, workflowRunStatusLabel } from "./actions-types.ts";
 
 interface RunsListProps {
   runs: WorkflowRunSummary[];
@@ -65,11 +65,15 @@ export function RunsList(props: RunsListProps) {
                           )
                         }`}
                       >
-                        {run.status}
+                        {workflowRunStatusLabel(
+                          run.status,
+                          run.conclusion,
+                          t,
+                        )}
                       </span>
                     </div>
                     <div class="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
-                      {run.ref || "unknown ref"} ·{" "}
+                      {run.ref || t("unknownRef")} ·{" "}
                       {formatDetailedRelativeDate(run.created_at)}
                     </div>
                   </div>

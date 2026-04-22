@@ -52,14 +52,24 @@ Deno.test(
 Deno.test("manifestNeedsEarlyPublicationSync only triggers for same-manifest consumes", () => {
   assertEquals(
     manifestNeedsEarlyPublicationSync({
-      publish: [{ name: "ui", publisher: "web", type: "UiSurface", path: "/" }],
+      publish: [{
+        name: "ui",
+        publisher: "web",
+        type: "UiSurface",
+        outputs: { url: { route: "/" } },
+      }],
       compute: { web: { kind: "worker" } },
     }),
     false,
   );
   assertEquals(
     manifestNeedsEarlyPublicationSync({
-      publish: [{ name: "ui", publisher: "web", type: "UiSurface", path: "/" }],
+      publish: [{
+        name: "ui",
+        publisher: "web",
+        type: "UiSurface",
+        outputs: { url: { route: "/" } },
+      }],
       compute: {
         web: {
           kind: "worker",
@@ -71,7 +81,12 @@ Deno.test("manifestNeedsEarlyPublicationSync only triggers for same-manifest con
   );
   assertEquals(
     manifestNeedsEarlyPublicationSync({
-      publish: [{ name: "ui", publisher: "web", type: "UiSurface", path: "/" }],
+      publish: [{
+        name: "ui",
+        publisher: "web",
+        type: "UiSurface",
+        outputs: { url: { route: "/" } },
+      }],
       compute: {
         web: {
           kind: "worker",
@@ -167,13 +182,13 @@ Deno.test(
           name: "web-tools",
           publisher: "web",
           type: "McpServer",
-          path: "/",
+          outputs: { url: { route: "/" } },
         },
         {
           name: "api-tools",
           publisher: "api",
           type: "McpServer",
-          path: "/api",
+          outputs: { url: { route: "/api" } },
         },
       ],
       env: {},

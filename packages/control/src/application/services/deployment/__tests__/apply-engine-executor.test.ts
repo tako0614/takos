@@ -365,7 +365,7 @@ Deno.test(
         name: "api-url",
         publisher: "api",
         type: "UiSurface",
-        path: "/api",
+        outputs: { url: { route: "/api" } },
       }],
       env: {},
     });

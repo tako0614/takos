@@ -62,7 +62,7 @@ export function ChatShareModal(props: ChatShareModalProps) {
               value={props.shareExpiresInDays}
               onInput={(e: Event & { currentTarget: HTMLInputElement }) =>
                 props.onShareExpiresInDaysChange(e.currentTarget.value)}
-              placeholder="e.g. 7"
+              placeholder={t("shareExpiresDaysPlaceholder")}
               inputmode="numeric"
             />
           </div>

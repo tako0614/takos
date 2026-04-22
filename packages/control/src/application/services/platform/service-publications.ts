@@ -12,8 +12,10 @@ import {
   cleanupGrantConsumeState,
   GRANT_PUBLICATION_FIELDS,
   grantOutputContract,
+  isTakosSystemPublicationSource,
   listPublicationKindDefinitions,
   normalizeGrantPublication,
+  normalizeTakosSystemConsumePublication,
   type PublicationNormalizeOptions,
   type PublicationOutputDescriptor,
   resolveGrantConsumeOutputs,
@@ -58,7 +60,7 @@ const ROUTE_PUBLICATION_FIELDS = new Set([
   "name",
   "publisher",
   "type",
-  "path",
+  "outputs",
   "title",
   "spec",
 ]);
@@ -84,6 +86,15 @@ function parsePublicationRecord(raw: string): AppPublication {
   if (typeof record.path === "string") {
     publication.path = record.path;
   }
+  if (
+    record.outputs &&
+    typeof record.outputs === "object" &&
+    !Array.isArray(record.outputs)
+  ) {
+    publication.outputs = record.outputs as AppPublication["outputs"];
+  } else if (typeof record.path === "string") {
+    publication.outputs = { url: { route: record.path } };
+  }
   if (typeof record.title === "string") {
     publication.title = record.title;
   }
@@ -107,6 +118,13 @@ function normalizeName(name: string, field: string): string {
 
 function isGrantPublication(publication: AppPublication): boolean {
   return publication.publisher === "takos";
+}
+
+function consumeLocalName(consume: Pick<AppConsume, "publication" | "as">): string {
+  return normalizeName(
+    consume.as ?? consume.publication,
+    "consume.as",
+  );
 }
 
 function normalizeEnvName(name: string): string {
@@ -246,9 +264,26 @@ function normalizeRoutePublication(
     "publication.publisher",
   );
   const type = normalizeName(publication.type || "", "publication.type");
-  const path = normalizeName(publication.path || "", "publication.path");
-  if (!path.startsWith("/")) {
-    throw new Error(`publication '${name}'.path must start with '/'`);
+  if (publisher === "takos") {
+    throw new Error(
+      `publication '${name}' uses reserved publisher 'takos'; use Takos system publication sources from consume[] instead`,
+    );
+  }
+  if (!publication.outputs || Object.keys(publication.outputs).length === 0) {
+    throw new Error(`publication '${name}'.outputs is required`);
+  }
+  const outputs: AppPublication["outputs"] = {};
+  for (const [outputName, output] of Object.entries(publication.outputs)) {
+    const route = output.route?.trim();
+    if (!route) {
+      throw new Error(`publication '${name}'.outputs.${outputName}.route is required`);
+    }
+    if (!route.startsWith("/")) {
+      throw new Error(
+        `publication '${name}'.outputs.${outputName}.route must start with '/'`,
+      );
+    }
+    outputs[outputName] = { route };
   }
   if (
     publication.spec != null &&
@@ -260,7 +295,7 @@ function normalizeRoutePublication(
     name,
     publisher,
     type,
-    path,
+    outputs,
     ...(publication.title ? { title: String(publication.title).trim() } : {}),
     ...(publication.spec ? { spec: publication.spec } : {}),
   };
@@ -272,9 +307,9 @@ export function normalizePublicationDefinition(
 ): AppPublication {
   const name = normalizeName(publication.name, "publication.name");
   if (isGrantPublication(publication)) {
-    if (publication.path || publication.title) {
+    if (publication.path || publication.title || publication.outputs) {
       throw new Error(
-        `publication '${name}' must not combine publisher 'takos' with route fields path/title`,
+        `publication '${name}' must not combine publisher 'takos' with route fields outputs/path/title`,
       );
     }
     return normalizeGrantPublication({
@@ -336,22 +371,39 @@ export function normalizeServiceConsumes(
       consume.publication,
       "consume.publication",
     );
-    if (seen.has(publication)) {
+    const alias = consume.as
+      ? normalizeName(consume.as, `consume '${publication}'.as`)
+      : undefined;
+    const localName = alias ?? publication;
+    if (seen.has(localName)) {
       throw new Error(
-        `consume contains duplicate publication reference: ${publication}`,
+        `consume contains duplicate local consume name: ${localName}`,
       );
     }
-    seen.add(publication);
+    seen.add(localName);
+    const request = consume.request
+      ? (() => {
+        if (
+          typeof consume.request !== "object" ||
+          Array.isArray(consume.request)
+        ) {
+          throw new Error(`consume '${localName}'.request must be an object`);
+        }
+        return consume.request;
+      })()
+      : undefined;
     const env = consume.env
       ? Object.fromEntries(
         Object.entries(consume.env).map(([outputName, envName]) => [
-          normalizeName(outputName, `consume '${publication}'.env output`),
+          normalizeName(outputName, `consume '${localName}'.env output`),
           normalizeEnvName(envName),
         ]),
       )
       : undefined;
     return {
       publication,
+      ...(alias ? { as: alias } : {}),
+      ...(request ? { request } : {}),
       ...(env && Object.keys(env).length > 0 ? { env } : {}),
     };
   });
@@ -395,6 +447,17 @@ function parseConsumeConfig(
   row: ServiceConsumeRow,
 ): AppConsume {
   const config = parseJsonRecord(row.configJson);
+  const publication = typeof config.publication === "string" &&
+      config.publication.trim()
+    ? config.publication.trim()
+    : row.publicationName;
+  const alias = typeof config.as === "string" && config.as.trim()
+    ? config.as.trim()
+    : (publication === row.publicationName ? undefined : row.publicationName);
+  const request = config.request && typeof config.request === "object" &&
+      !Array.isArray(config.request)
+    ? config.request as Record<string, unknown>
+    : undefined;
   const envRaw = config.env && typeof config.env === "object" &&
       !Array.isArray(config.env)
     ? config.env as Record<string, unknown>
@@ -407,7 +470,9 @@ function parseConsumeConfig(
     )
     : undefined;
   return {
-    publication: row.publicationName,
+    publication,
+    ...(alias ? { as: alias } : {}),
+    ...(request && Object.keys(request).length > 0 ? { request } : {}),
     ...(env && Object.keys(env).length > 0 ? { env } : {}),
   };
 }
@@ -593,15 +658,11 @@ async function assertPublicationHasNoConsumers(
   name: string,
 ): Promise<void> {
   const db = getDb(env.DB);
-  const consumer = await db.select({ id: serviceConsumes.id })
+  const consumers = await db.select()
     .from(serviceConsumes)
-    .where(and(
-      eq(serviceConsumes.accountId, spaceId),
-      eq(serviceConsumes.publicationName, name),
-    ))
-    .limit(1)
-    .get();
-  if (consumer) {
+    .where(eq(serviceConsumes.accountId, spaceId))
+    .all();
+  if (consumers.some((row) => parseConsumeConfig(row).publication === name)) {
     throw new Error(
       `publication '${name}' is still consumed by one or more services`,
     );
@@ -634,15 +695,20 @@ async function upsertServiceConsumeRow(
 ): Promise<void> {
   const db = getDb(env.DB);
   const now = new Date().toISOString();
+  const localName = consumeLocalName(params.consume);
+  const configJson = JSON.stringify({
+    publication: params.consume.publication,
+    ...(params.consume.as ? { as: params.consume.as } : {}),
+    ...(params.consume.request ? { request: params.consume.request } : {}),
+    ...(params.consume.env ? { env: params.consume.env } : {}),
+  });
   await db.insert(serviceConsumes)
     .values({
       id: generateId(),
       accountId: params.spaceId,
       serviceId: params.serviceId,
-      publicationName: params.consume.publication,
-      configJson: JSON.stringify({
-        ...(params.consume.env ? { env: params.consume.env } : {}),
-      }),
+      publicationName: localName,
+      configJson,
       stateJson: JSON.stringify(params.state ?? {}),
       createdAt: now,
       updatedAt: now,
@@ -650,9 +716,7 @@ async function upsertServiceConsumeRow(
     .onConflictDoUpdate({
       target: [serviceConsumes.serviceId, serviceConsumes.publicationName],
       set: {
-        configJson: JSON.stringify({
-          ...(params.consume.env ? { env: params.consume.env } : {}),
-        }),
+        configJson,
         stateJson: JSON.stringify(params.state ?? {}),
         updatedAt: now,
       },
@@ -720,20 +784,20 @@ async function syncConsumeState(
 function findRouteTargetForPublication(
   publication: AppPublication,
   manifestRoutes: Array<{ target: string; path: string }>,
+  routePath: string,
 ): string {
   const target = publication.publisher;
-  const path = publication.path;
-  if (!target || !path) {
+  if (!target || !routePath) {
     throw new Error(
-      `publication '${publication.name}' is missing publisher/path`,
+      `publication '${publication.name}' is missing publisher/route output`,
     );
   }
   const routes = manifestRoutes.filter((entry) =>
-    entry.target === target && entry.path === path
+    entry.target === target && entry.path === routePath
   );
   if (routes.length === 0) {
     throw new Error(
-      `publication '${publication.name}' publisher/path '${target} ${path}' does not match any route`,
+      `publication '${publication.name}' publisher/route '${target} ${routePath}' does not match any route`,
     );
   }
   return routes[0].target;
@@ -745,23 +809,35 @@ export function resolveRoutePublication(
   manifestRoutes: Array<{ target: string; path: string }>,
   options: { groupHostname?: string | null } = {},
 ): { ownerServiceId: string; resolved: Record<string, string> } {
-  const path = publication.path;
-  if (!path) {
-    throw new Error(`publication '${publication.name}' is missing a path`);
+  const outputs = publication.outputs ?? {};
+  const resolved: Record<string, string> = {};
+  let ownerServiceId: string | null = null;
+  for (const [outputName, output] of Object.entries(outputs)) {
+    const routePath = output.route;
+    if (!routePath) continue;
+    const target = findRouteTargetForPublication(
+      publication,
+      manifestRoutes,
+      routePath,
+    );
+    const workload = observedState.workloads[target];
+    const hostname = options.groupHostname ?? workload?.hostname;
+    if (!workload?.serviceId || !hostname) {
+      throw new Error(
+        `publication '${publication.name}' cannot resolve route target '${target}'`,
+      );
+    }
+    ownerServiceId ??= workload.serviceId;
+    resolved[outputName] = buildPublicUrl(hostname, routePath);
   }
-  const target = findRouteTargetForPublication(publication, manifestRoutes);
-  const workload = observedState.workloads[target];
-  const hostname = options.groupHostname ?? workload?.hostname;
-  if (!workload?.serviceId || !hostname) {
+  if (!ownerServiceId || Object.keys(resolved).length === 0) {
     throw new Error(
-      `publication '${publication.name}' cannot resolve route target '${target}'`,
+      `publication '${publication.name}' does not declare any route outputs`,
     );
   }
   return {
-    ownerServiceId: workload.serviceId,
-    resolved: {
-      url: buildPublicUrl(hostname, path),
-    },
+    ownerServiceId,
+    resolved,
   };
 }
 
@@ -771,11 +847,13 @@ export function publicationOutputContract(
   if (isGrantPublication(publication)) {
     return grantOutputContract(publication);
   }
-  return [{
-    name: "url",
-    defaultEnv: publicationUrlDefaultEnv(publication.name),
+  return Object.keys(publication.outputs ?? {}).map((name) => ({
+    name,
+    defaultEnv: publicationUrlDefaultEnv(
+      name === "url" ? publication.name : `${publication.name}-${name}`,
+    ),
     secret: false,
-  }];
+  }));
 }
 
 async function resolvePublicationOutputValues(
@@ -789,17 +867,17 @@ async function resolvePublicationOutputValues(
 ): Promise<Record<string, { value: string; secret: boolean }>> {
   const publication = params.publication.publication;
   if (!isGrantPublication(publication)) {
-    if (!params.publication.resolved.url) {
-      throw new Error(
-        `publication '${publication.name}' does not have a resolved URL`,
-      );
-    }
-    return {
-      url: {
-        value: params.publication.resolved.url,
-        secret: false,
-      },
-    };
+    return Object.fromEntries(
+      publicationOutputContract(publication).map((output) => {
+        const value = params.publication.resolved[output.name];
+        if (!value) {
+          throw new Error(
+            `publication '${publication.name}' does not have resolved output '${output.name}'`,
+          );
+        }
+        return [output.name, { value, secret: output.secret }];
+      }),
+    );
   }
 
   return resolveGrantConsumeOutputs({
@@ -828,12 +906,12 @@ async function syncConsumersForPublication(
   const publication = toPublicationRecord(publicationRow);
   const rows = await db.select()
     .from(serviceConsumes)
-    .where(and(
-      eq(serviceConsumes.accountId, params.spaceId),
-      eq(serviceConsumes.publicationName, params.publicationName),
-    ))
+    .where(eq(serviceConsumes.accountId, params.spaceId))
     .all();
   for (const row of rows) {
+    if (parseConsumeConfig(row).publication !== params.publicationName) {
+      continue;
+    }
     const state = await syncConsumeState(env, {
       spaceId: params.spaceId,
       serviceId: row.serviceId,
@@ -876,6 +954,51 @@ export async function getPublicationByName(
 ): Promise<PublicationRecord | null> {
   const row = await getPublicationRowByName(env, spaceId, name);
   return row ? toPublicationRecord(row) : null;
+}
+
+type ConsumePublicationDefinition = {
+  publication: AppPublication;
+  outputs: PublicationOutputDescriptor[];
+  record?: PublicationRecord;
+};
+
+function resolveTakosSystemConsumeDefinition(
+  consume: AppConsume,
+  options: { groupHostname?: string | null } = {},
+): ConsumePublicationDefinition {
+  const normalized = normalizeTakosSystemConsumePublication(consume, {
+    allowRelativeOAuthRedirectUris: true,
+  });
+  const publication = options.groupHostname === undefined
+    ? normalized
+    : resolveManifestOAuthRedirectUris(normalized, options.groupHostname);
+  return {
+    publication,
+    outputs: publicationOutputContract(publication),
+  };
+}
+
+async function resolveConsumePublicationDefinition(
+  env: Pick<Env, "DB">,
+  params: {
+    spaceId: string;
+    consume: AppConsume;
+    groupHostname?: string | null;
+  },
+): Promise<ConsumePublicationDefinition | null> {
+  if (isTakosSystemPublicationSource(params.consume.publication)) {
+    return resolveTakosSystemConsumeDefinition(params.consume, {
+      groupHostname: params.groupHostname,
+    });
+  }
+  const record = await getPublicationByName(
+    env,
+    params.spaceId,
+    params.consume.publication,
+  );
+  return record
+    ? { publication: record.publication, outputs: record.outputs, record }
+    : null;
 }
 
 export async function upsertApiPublication(
@@ -1066,11 +1189,30 @@ export async function assertManifestPublicationPrerequisites(
 
   const publicationRecordCache = new Map<string, PublicationRecord | null>();
   async function resolveConsumePublication(
-    name: string,
+    consume: AppConsume,
   ): Promise<
     | { publication: AppPublication; outputs: PublicationOutputDescriptor[] }
     | null
   > {
+    const name = consume.publication;
+    if (isTakosSystemPublicationSource(name)) {
+      const normalized = normalizeTakosSystemConsumePublication(consume, {
+        allowRelativeOAuthRedirectUris: true,
+      });
+      if (
+        hasRelativeOAuthRedirectUris(normalized) &&
+        params.groupId &&
+        !(await resolveGroupHostname())
+      ) {
+        throw new Error(
+          "relative OAuth redirect URI entries require a resolvable group hostname",
+        );
+      }
+      return {
+        publication: normalized,
+        outputs: publicationOutputContract(normalized),
+      };
+    }
     const manifestPublication = desiredByName.get(name);
     if (manifestPublication) {
       return {
@@ -1119,7 +1261,7 @@ export async function assertManifestPublicationPrerequisites(
       | { publication: AppPublication; outputs: PublicationOutputDescriptor[] }
       | null;
     try {
-      publication = await resolveConsumePublication(entry.consume.publication);
+      publication = await resolveConsumePublication(entry.consume);
     } catch (error) {
       errors.push(
         `${entry.path}: ${
@@ -1194,7 +1336,7 @@ export async function listServiceConsumes(
 ): Promise<AppConsume[]> {
   const rows = await listServiceConsumeRows(env, spaceId, serviceId);
   return rows.map(parseConsumeConfig).sort((a, b) =>
-    a.publication.localeCompare(b.publication)
+    consumeLocalName(a).localeCompare(consumeLocalName(b))
   );
 }
 
@@ -1204,39 +1346,49 @@ export async function replaceServiceConsumes(
     spaceId: string;
     serviceId: string;
     serviceName: string;
+    groupHostname?: string | null;
     consumes?: AppConsume[];
   },
 ): Promise<AppConsume[]> {
   const consumes = normalizeServiceConsumes(params.consumes);
   const consumeByName = new Map(
-    consumes.map((consume) => [consume.publication, consume]),
+    consumes.map((consume) => [consumeLocalName(consume), consume]),
   );
   const existingRows = await listServiceConsumeRows(
     env,
     params.spaceId,
     params.serviceId,
   );
-  const publicationRows = await Promise.all(
+  const publicationDefinitions = await Promise.all(
     consumes.map((consume) =>
-      getPublicationRowByName(env, params.spaceId, consume.publication)
+      resolveConsumePublicationDefinition(env, {
+        spaceId: params.spaceId,
+        consume,
+        groupHostname: params.groupHostname,
+      })
     ),
   );
-  const publicationMap = new Map<string, PublicationRecord>();
-  publicationRows.forEach((row, index) => {
-    if (!row) {
+  const publicationMap = new Map<string, ConsumePublicationDefinition>();
+  publicationDefinitions.forEach((definition, index) => {
+    if (!definition) {
       throw new Error(
         `consume references unknown publication: ${
           consumes[index].publication
         }`,
       );
     }
-    publicationMap.set(consumes[index].publication, toPublicationRecord(row));
+    publicationMap.set(consumeLocalName(consumes[index]), definition);
   });
 
   for (const row of existingRows) {
     if (consumeByName.has(row.publicationName)) continue;
+    const existingConsume = parseConsumeConfig(row);
     const publication = publicationMap.get(row.publicationName) ??
-      await getPublicationByName(env, params.spaceId, row.publicationName);
+      await resolveConsumePublicationDefinition(env, {
+        spaceId: params.spaceId,
+        consume: existingConsume,
+        groupHostname: params.groupHostname,
+      });
     const state = parseConsumeState(row);
     if (publication) {
       await cleanupConsumeState(env, {
@@ -1263,10 +1415,11 @@ export async function replaceServiceConsumes(
   }
 
   for (const consume of consumes) {
+    const localName = consumeLocalName(consume);
     const existing = existingRows.find((row) =>
-      row.publicationName === consume.publication
+      row.publicationName === localName
     );
-    const publication = publicationMap.get(consume.publication);
+    const publication = publicationMap.get(localName);
     if (!publication) {
       throw new Error(
         `consume references unknown publication: ${consume.publication}`,
@@ -1299,21 +1452,23 @@ export async function previewServiceConsumeEnvVars(
   },
 ): Promise<Array<{ name: string; secret: boolean }>> {
   const consumes = normalizeServiceConsumes(params.consumes);
-  const publicationRows = await Promise.all(
+  const publicationDefinitions = await Promise.all(
     consumes.map((consume) =>
-      getPublicationRowByName(env, params.spaceId, consume.publication)
+      resolveConsumePublicationDefinition(env, {
+        spaceId: params.spaceId,
+        consume,
+      })
     ),
   );
   const out = new Map<string, { secret: boolean }>();
 
-  publicationRows.forEach((row, index) => {
+  publicationDefinitions.forEach((publication, index) => {
     const consume = consumes[index];
-    if (!row) {
+    if (!publication) {
       throw new Error(
         `consume references unknown publication: ${consume.publication}`,
       );
     }
-    const publication = toPublicationRecord(row);
     assertConsumeOutputAliases(consume, publication.outputs);
     for (const output of publication.outputs) {
       const envName = resolveConsumeOutputEnvName(consume, output);
@@ -1347,11 +1502,11 @@ export async function deleteServiceConsumes(
   for (const row of rows) {
     const state = parseConsumeState(row);
     if (hasGrantCleanupEnv(env)) {
-      const publication = await getPublicationByName(
-        env,
-        params.spaceId,
-        row.publicationName,
-      );
+      const consume = parseConsumeConfig(row);
+      const publication = await resolveConsumePublicationDefinition(env, {
+        spaceId: params.spaceId,
+        consume,
+      });
       if (publication) {
         await cleanupConsumeState(env, {
           spaceId: params.spaceId,
@@ -1394,11 +1549,10 @@ export async function resolveServiceConsumeEnvVars(
 
   for (const row of rows) {
     const consume = parseConsumeConfig(row);
-    const publication = await getPublicationByName(
-      env,
-      params.spaceId,
-      consume.publication,
-    );
+    const publication = await resolveConsumePublicationDefinition(env, {
+      spaceId: params.spaceId,
+      consume,
+    });
     if (!publication) {
       throw new Error(
         `consume references unknown publication: ${consume.publication}`,
@@ -1409,7 +1563,20 @@ export async function resolveServiceConsumeEnvVars(
     const values = await resolvePublicationOutputValues(env, {
       spaceId: params.spaceId,
       serviceId: params.serviceId,
-      publication,
+      publication: {
+        id: "",
+        name: publication.publication.name,
+        sourceType: "api",
+        groupId: null,
+        ownerServiceId: null,
+        catalogName: null,
+        publicationType: publication.publication.type,
+        publication: publication.publication,
+        outputs: publication.outputs,
+        resolved: publication.record?.resolved ?? {},
+        createdAt: "",
+        updatedAt: "",
+      },
       consumeRow: row,
     });
     for (const output of contract) {

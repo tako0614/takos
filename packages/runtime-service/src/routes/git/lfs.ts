@@ -1,4 +1,5 @@
 import type { Context, Hono } from "hono";
+import { randomUUID } from "node:crypto";
 import * as fs from "node:fs";
 import * as fsPromises from "node:fs/promises";
 import path from "node:path";
@@ -135,9 +136,7 @@ async function handleUpload(c: Context<RuntimeEnv>): Promise<Response> {
 
   await fsPromises.mkdir(path.dirname(objectPath), { recursive: true });
 
-  const tempPath = `${objectPath}.tmp-${Date.now()}-${
-    Math.random().toString(16).slice(2)
-  }`;
+  const tempPath = `${objectPath}.tmp-${Date.now()}-${randomUUID()}`;
   try {
     let receivedBytes = 0;
     const sizeLimiter = new Transform({

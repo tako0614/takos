@@ -18,19 +18,12 @@ compute:
 
 ## capability access
 
-Worker が Takos API key や OAuth client を使う場合は capability grant を
-`publish[].publisher/type` と `compute.<name>.consume` で受け取ります。SQL や
-object store は publish ではなく resource API / runtime binding 側で扱います。
+Worker が Takos API key や OAuth client を使う場合は
+`takos.api-key` / `takos.oauth-client` system publication source を
+`compute.<name>.consume` で受け取ります。SQL や object store は publish
+ではなく resource API / runtime binding 側で扱います。
 
 ```yaml
-publish:
-  - name: takos-api
-    publisher: takos
-    type: api-key
-    spec:
-      scopes:
-        - files:read
-
 compute:
   web:
     build:
@@ -40,7 +33,11 @@ compute:
         artifact: web
         artifactPath: dist/worker
     consume:
-      - publication: takos-api
+      - publication: takos.api-key
+        as: takos-api
+        request:
+          scopes:
+            - files:read
         env:
           endpoint: TAKOS_API_ENDPOINT
           apiKey: TAKOS_API_KEY
@@ -146,6 +143,6 @@ compute:
 | `depends`            | no       | 同一 manifest の compute 依存                          |
 | `triggers.schedules` | no       | cron schedule                                          |
 | `triggers.queues`    | no       | queue consumer trigger                                 |
-| `consume`            | no       | grant / publication outputs の明示 inject              |
+| `consume`            | no       | publication outputs の明示 inject                      |
 | `env`                | no       | Worker 固有 env                                        |
 | `scaling`            | no       | parser / desired metadata。runtime へ直接 apply しない |

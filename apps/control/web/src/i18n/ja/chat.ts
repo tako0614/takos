@@ -84,6 +84,7 @@ export const chat = {
   sharePasswordLabel: "パスワード",
   sharePasswordPlaceholder: "8文字以上",
   shareExpiresDays: "有効期限（日）",
+  shareExpiresDaysPlaceholder: "例: 7",
   shareLinks: "リンク",
   untitledThread: "無題のスレッド",
   shareLabel: "共有: {mode}",

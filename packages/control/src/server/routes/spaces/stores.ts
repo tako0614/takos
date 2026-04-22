@@ -7,30 +7,20 @@ import {
 import { BadRequestError, NotFoundError } from "takos-common/errors";
 import { zValidator } from "../zod-validator.ts";
 import {
-  createActivityPubStore,
-  deleteActivityPubStore,
-  listActivityPubStoresForWorkspace,
-  updateActivityPubStore,
-} from "../../../application/services/activitypub/stores.ts";
+  createStore,
+  deleteStore,
+  listStoresForWorkspace,
+  updateStore,
+} from "../../../application/services/store-network/stores.ts";
 import {
   addToInventory,
   findInventoryItemById,
   listInventoryItems,
   removeFromInventory,
-} from "../../../application/services/activitypub/store-inventory.ts";
-import {
-  createGrant,
-  listGrants,
-  revokeGrant,
-} from "../../../application/services/activitypub/grants.ts";
-import { getRepositoryById } from "../../../application/services/source/repos.ts";
+} from "../../../application/services/store-network/store-inventory.ts";
 import { InternalError } from "takos-common/errors";
 import { logError } from "../../../shared/utils/logger.ts";
 import { parsePagination } from "../../../shared/utils/index.ts";
-import {
-  deliverToFollowers,
-  resolveActivityDeliverySigning,
-} from "../../../application/services/activitypub/activity-delivery.ts";
 
 const storeBodySchema = z.object({
   slug: z.string().optional(),
@@ -41,18 +31,14 @@ const storeBodySchema = z.object({
 
 export const spacesStoresRouteDeps = {
   requireSpaceAccess,
-  listActivityPubStoresForWorkspace,
-  createActivityPubStore,
-  updateActivityPubStore,
-  deleteActivityPubStore,
+  listStoresForWorkspace,
+  createStore,
+  updateStore,
+  deleteStore,
   addToInventory,
   removeFromInventory,
   listInventoryItems,
   findInventoryItemById,
-  createGrant,
-  listGrants,
-  revokeGrant,
-  deliverToFollowers,
 };
 
 export default new Hono<AuthenticatedRouteEnv>()
@@ -66,7 +52,7 @@ export default new Hono<AuthenticatedRouteEnv>()
 
     try {
       const stores = await spacesStoresRouteDeps
-        .listActivityPubStoresForWorkspace(c.env.DB, access.space.id);
+        .listStoresForWorkspace(c.env.DB, access.space.id);
       return c.json({
         stores: stores.map((store) => ({
           slug: store.slug,
@@ -100,7 +86,7 @@ export default new Hono<AuthenticatedRouteEnv>()
     }
 
     try {
-      const store = await spacesStoresRouteDeps.createActivityPubStore(
+      const store = await spacesStoresRouteDeps.createStore(
         c.env.DB,
         access.space.id,
         {
@@ -146,7 +132,7 @@ export default new Hono<AuthenticatedRouteEnv>()
       const body = c.req.valid("json");
 
       try {
-        const store = await spacesStoresRouteDeps.updateActivityPubStore(
+        const store = await spacesStoresRouteDeps.updateStore(
           c.env.DB,
           access.space.id,
           c.req.param("storeSlug"),
@@ -192,7 +178,7 @@ export default new Hono<AuthenticatedRouteEnv>()
     );
 
     try {
-      const deleted = await spacesStoresRouteDeps.deleteActivityPubStore(
+      const deleted = await spacesStoresRouteDeps.deleteStore(
         c.env.DB,
         access.space.id,
         c.req.param("storeSlug"),
@@ -232,11 +218,13 @@ export default new Hono<AuthenticatedRouteEnv>()
       total: result.total,
       items: result.items.map((item) => ({
         id: item.id,
-        // Canonical surface field names (per docs/reference/api.md).
-        canonical_repo_url: item.repoActorUrl,
+        repository_url: item.repositoryUrl,
         label: item.repoName,
-        // Legacy aliases kept for backward compatibility.
-        repo_actor_url: item.repoActorUrl,
+        clone_url: item.repoCloneUrl,
+        browse_url: item.repoBrowseUrl,
+        default_branch: item.repoDefaultBranch,
+        default_branch_hash: item.repoDefaultBranchHash,
+        package_icon: item.packageIcon,
         repo_name: item.repoName,
         repo_summary: item.repoSummary,
         repo_owner_slug: item.repoOwnerSlug,
@@ -250,22 +238,21 @@ export default new Hono<AuthenticatedRouteEnv>()
     zValidator(
       "json",
       z.object({
-        // Canonical surface field (per docs/reference/api.md): the canonical repo URL.
-        canonical_repo_url: z.string().min(1).optional(),
-        // Legacy alias kept for backward compatibility with existing clients.
-        repo_actor_url: z.string().min(1).optional(),
-        // Canonical surface field: short human-readable label for the entry.
+        repository_url: z.string().min(1).optional(),
+        clone_url: z.string().optional(),
+        browse_url: z.string().optional(),
+        default_branch: z.string().optional(),
+        default_branch_hash: z.string().optional(),
         label: z.string().optional(),
-        // Legacy aliases kept for backward compatibility.
         repo_name: z.string().optional(),
         repo_summary: z.string().optional(),
         repo_owner_slug: z.string().optional(),
         local_repo_id: z.string().optional(),
       }).refine(
-        (v) => !!(v.canonical_repo_url ?? v.repo_actor_url),
+        (v) => !!v.repository_url,
         {
-          message: "canonical_repo_url is required",
-          path: ["canonical_repo_url"],
+          message: "repository_url is required",
+          path: ["repository_url"],
         },
       ),
     ),
@@ -281,70 +268,33 @@ export default new Hono<AuthenticatedRouteEnv>()
 
       try {
         const storeSlug = c.req.param("storeSlug");
-        const canonicalRepoUrl =
-          (body.canonical_repo_url ?? body.repo_actor_url) as string;
+        const repositoryUrl = body.repository_url as string;
         const labelOrName = body.label ?? body.repo_name;
         const item = await spacesStoresRouteDeps.addToInventory(c.env.DB, {
           accountId: access.space.id,
           storeSlug,
-          repoActorUrl: canonicalRepoUrl,
+          repositoryUrl,
           repoName: labelOrName,
           repoSummary: body.repo_summary,
           repoOwnerSlug: body.repo_owner_slug,
+          repoCloneUrl: body.clone_url,
+          repoBrowseUrl: body.browse_url,
+          repoDefaultBranch: body.default_branch,
+          repoDefaultBranchHash: body.default_branch_hash,
           localRepoId: body.local_repo_id,
         });
-
-        // Deliver Add activity to store followers (fire-and-forget)
-        const origin = new URL(c.req.url).origin;
-        const storeActorUrl = `${origin}/ap/stores/${
-          encodeURIComponent(storeSlug)
-        }`;
-        const addActivity: Record<string, unknown> = {
-          "@context": "https://www.w3.org/ns/activitystreams",
-          type: "Add",
-          actor: storeActorUrl,
-          published: item.createdAt,
-          to: ["https://www.w3.org/ns/activitystreams#Public"],
-          object: item.repoActorUrl,
-          target: `${storeActorUrl}/inventory`,
-        };
-        const signing = resolveActivityDeliverySigning(c.env, storeActorUrl);
-        if (signing) {
-          c.executionCtx.waitUntil(
-            spacesStoresRouteDeps.deliverToFollowers(
-              c.env.DB,
-              storeActorUrl,
-              addActivity,
-              signing.signingKeyPem,
-              signing.keyId,
-            )
-              .catch((err: unknown) => {
-                logError("Failed to deliver Add activity to followers", err, {
-                  action: "deliver_inventory_add",
-                  storeSlug,
-                });
-              }),
-          );
-        } else {
-          logError(
-            "Cannot deliver Add activity without PLATFORM_PRIVATE_KEY",
-            undefined,
-            {
-              action: "deliver_inventory_add",
-              storeSlug,
-            },
-          );
-        }
 
         return c.json({
           item: {
             id: item.id,
-            // Canonical surface field names (per docs/reference/api.md).
-            canonical_repo_url: item.repoActorUrl,
+            repository_url: item.repositoryUrl,
             label: item.repoName,
+            clone_url: item.repoCloneUrl,
+            browse_url: item.repoBrowseUrl,
+            default_branch: item.repoDefaultBranch,
+            default_branch_hash: item.repoDefaultBranchHash,
+            package_icon: item.packageIcon,
             created_at: item.createdAt,
-            // Legacy aliases kept for backward compatibility.
-            repo_actor_url: item.repoActorUrl,
             repo_name: item.repoName,
           },
         }, 201);
@@ -368,8 +318,8 @@ export default new Hono<AuthenticatedRouteEnv>()
     const storeSlug = c.req.param("storeSlug");
     const itemId = c.req.param("itemId");
 
-    // Resolve the entry by id (scoped to this space + store) so we can build
-    // the federated Remove activity with the canonical repo URL.
+    // Resolve the entry by id (scoped to this space + store) so deletion can
+    // target the stored repository URL without scanning the full inventory.
     const item = await spacesStoresRouteDeps.findInventoryItemById(
       c.env.DB,
       access.space.id,
@@ -384,170 +334,8 @@ export default new Hono<AuthenticatedRouteEnv>()
       c.env.DB,
       access.space.id,
       storeSlug,
-      item.repoActorUrl,
+      item.repositoryUrl,
     );
 
-    // Deliver Remove activity to store followers (fire-and-forget)
-    const origin = new URL(c.req.url).origin;
-    const storeActorUrl = `${origin}/ap/stores/${
-      encodeURIComponent(storeSlug)
-    }`;
-    const removeActivity: Record<string, unknown> = {
-      "@context": "https://www.w3.org/ns/activitystreams",
-      type: "Remove",
-      actor: storeActorUrl,
-      published: new Date().toISOString(),
-      to: ["https://www.w3.org/ns/activitystreams#Public"],
-      object: item.repoActorUrl,
-      target: `${storeActorUrl}/inventory`,
-    };
-    const signing = resolveActivityDeliverySigning(c.env, storeActorUrl);
-    if (signing) {
-      c.executionCtx.waitUntil(
-        spacesStoresRouteDeps.deliverToFollowers(
-          c.env.DB,
-          storeActorUrl,
-          removeActivity,
-          signing.signingKeyPem,
-          signing.keyId,
-        )
-          .catch((err: unknown) => {
-            logError("Failed to deliver Remove activity to followers", err, {
-              action: "deliver_inventory_remove",
-              storeSlug,
-            });
-          }),
-      );
-    } else {
-      logError(
-        "Cannot deliver Remove activity without PLATFORM_PRIVATE_KEY",
-        undefined,
-        {
-          action: "deliver_inventory_remove",
-          storeSlug,
-        },
-      );
-    }
-
-    // `deleted` is the canonical surface field per task spec; `success` is
-    // kept for backward compatibility with existing clients.
     return c.json({ deleted: true, success: true });
-  })
-  // --- Repo Grants ---
-
-  .get("/:spaceId/repos/:repoId/grants", async (c) => {
-    const user = c.get("user");
-    const access = await spacesStoresRouteDeps.requireSpaceAccess(
-      c,
-      c.req.param("spaceId"),
-      user.id,
-    );
-
-    const repoId = c.req.param("repoId");
-    const repo = await getRepositoryById(c.env.DB, repoId);
-    if (!repo || repo.space_id !== access.space.id) {
-      throw new NotFoundError("Repository");
-    }
-
-    try {
-      const grants = await spacesStoresRouteDeps.listGrants(c.env.DB, repoId);
-      return c.json({
-        grants: grants.map((grant) => ({
-          id: grant.id,
-          repo_id: grant.repoId,
-          grantee_actor_url: grant.granteeActorUrl,
-          capability: grant.capability,
-          granted_by: grant.grantedBy,
-          expires_at: grant.expiresAt,
-          created_at: grant.createdAt,
-        })),
-      });
-    } catch (error) {
-      logError("Failed to list grants", error, {
-        module: "routes/spaces/stores",
-      });
-      throw new InternalError("Failed to list grants");
-    }
-  })
-  .post(
-    "/:spaceId/repos/:repoId/grants",
-    zValidator(
-      "json",
-      z.object({
-        grantee_actor_url: z.string().min(1),
-        capability: z.enum(["visit", "read", "write", "admin"]),
-      }),
-    ),
-    async (c) => {
-      const user = c.get("user");
-      const access = await spacesStoresRouteDeps.requireSpaceAccess(
-        c,
-        c.req.param("spaceId"),
-        user.id,
-        ["owner", "admin"],
-      );
-
-      const repoId = c.req.param("repoId");
-      const repo = await getRepositoryById(c.env.DB, repoId);
-      if (!repo || repo.space_id !== access.space.id) {
-        throw new NotFoundError("Repository");
-      }
-
-      const body = c.req.valid("json");
-
-      try {
-        const grant = await spacesStoresRouteDeps.createGrant(c.env.DB, {
-          repoId,
-          granteeActorUrl: body.grantee_actor_url,
-          capability: body.capability,
-          grantedBy: user.id,
-        });
-        return c.json({
-          grant: {
-            id: grant.id,
-            repo_id: grant.repoId,
-            grantee_actor_url: grant.granteeActorUrl,
-            capability: grant.capability,
-            granted_by: grant.grantedBy,
-            expires_at: grant.expiresAt,
-            created_at: grant.createdAt,
-          },
-        }, 201);
-      } catch (error) {
-        if (error instanceof Error) {
-          throw new BadRequestError(error.message);
-        }
-        logError("Failed to create grant", error, {
-          module: "routes/spaces/stores",
-        });
-        throw new InternalError("Failed to create grant");
-      }
-    },
-  )
-  .delete("/:spaceId/repos/:repoId/grants/:grantId", async (c) => {
-    const user = c.get("user");
-    const access = await spacesStoresRouteDeps.requireSpaceAccess(
-      c,
-      c.req.param("spaceId"),
-      user.id,
-      ["owner", "admin"],
-    );
-
-    const repoId = c.req.param("repoId");
-    const repo = await getRepositoryById(c.env.DB, repoId);
-    if (!repo || repo.space_id !== access.space.id) {
-      throw new NotFoundError("Repository");
-    }
-
-    const grantId = c.req.param("grantId");
-
-    // Verify the grant belongs to this repo before revoking
-    const grants = await spacesStoresRouteDeps.listGrants(c.env.DB, repoId);
-    const grant = grants.find((g) => g.id === grantId);
-    if (!grant) {
-      throw new NotFoundError("Grant");
-    }
-
-    await spacesStoresRouteDeps.revokeGrant(c.env.DB, grantId);
-    return c.json({ success: true });
   });

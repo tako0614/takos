@@ -16,6 +16,7 @@ export const source = {
   createRelease: "Create Release",
   updateRelease: "Update Release",
   releaseName: "Release Name",
+  releaseNamePlaceholder: "Version 1.0.0",
   releaseNotes: "Release notes...",
   markAsPreRelease: "Mark as pre-release (beta, alpha, etc.)",
   saveDraftHint: "Save as draft (not visible to public)",
@@ -29,6 +30,7 @@ export const source = {
   noCommitsFound: "No commits found",
   showFullCommitMessage: "Show full commit message",
   copyCommitSha: "Copy commit SHA",
+  copyCommitShaWithValue: "Copy commit SHA {sha}",
   loadMoreCommits: "Load more commits",
 
   // Code Search
@@ -63,6 +65,22 @@ export const source = {
   loadingRun: "Loading run...",
   selectRunToSeeDetails: "Select a run to see details.",
   noJobsRecorded: "No jobs recorded.",
+  workflowRunStatus_queued: "Queued",
+  workflowRunStatus_in_progress: "In progress",
+  workflowRunStatus_completed: "Completed",
+  workflowRunStatus_cancelled: "Cancelled",
+  workflowRunStatus_waiting: "Waiting",
+  workflowRunConclusion_success: "Success",
+  workflowRunConclusion_failure: "Failure",
+  workflowRunConclusion_cancelled: "Cancelled",
+  workflowRunConclusion_skipped: "Skipped",
+  workflowRunConclusion_timed_out: "Timed out",
+  workflowStepStatus_pending: "Pending",
+  workflowStepStatus_in_progress: "In progress",
+  workflowStepStatus_completed: "Completed",
+  workflowStepStatus_skipped: "Skipped",
+  unknownRef: "unknown ref",
+  unknownSha: "unknown sha",
 
   // Dispatch Workflow Form
   workflowPathLabel: "Workflow path",
@@ -112,21 +130,21 @@ export const source = {
   usersLabel: "Users",
   storeManagementTitle: "Store Management",
   storeManagementDescription:
-    "Manage your ActivityPub stores, inventory, and remote store connections.",
+    "Manage your stores, inventory, and remote store connections.",
   newStoreSlugPlaceholder: "New store slug...",
   noStoresYet: "No stores yet",
   remoteStores: "Remote Stores",
   selectOrCreateStore: "Select a store or create a new one",
   addRepositoryReference: "Add Repository Reference",
   repositoryReferenceHint:
-    "Enter the ActivityPub actor URL of a repository to add it to this store's inventory.",
+    "Enter the repository URL to add it to this store's inventory.",
   inventoryCount: "Inventory ({count} items)",
   inventoryEmpty:
     "No items in inventory. All public repos are shown by default.",
   inventoryExplicitModeHint: "Add a reference to switch to explicit mode.",
   connectRemoteStore: "Connect Remote Store",
   remoteStoreIdentifierHint:
-    "Enter a store identifier (slug@domain) or full ActivityPub actor URL.",
+    "Enter a store identifier (slug@domain) or public Store API URL.",
   connectedRemoteStoresCount: "Connected Remote Stores ({count})",
   noRemoteStoresConnected: "No remote stores connected yet.",
 

@@ -30,6 +30,7 @@ import {
   mergeNativeCloudflareContainerBindings,
 } from "./cloudflare-container-metadata.ts";
 import { ServiceDesiredStateService } from "../platform/worker-desired-state.ts";
+import { getGroupAutoHostname } from "../routing/group-hostnames.ts";
 
 type ApplyGroupRecord = {
   id: string;
@@ -490,12 +491,17 @@ async function executeWorkloadEntry(
       assertApplyImageArtifact(input.entry.name, input.category, artifact);
     }
 
+    const groupHostname = await getGroupAutoHostname(env, {
+      groupId: input.groupId,
+      spaceId: input.group.spaceId,
+    });
     const desiredStateSnapshot = await deps.captureManagedWorkloadDesiredState(
       env,
       {
         spaceId: input.group.spaceId,
         serviceId: managed.row.id,
         serviceName: `${input.desiredState.manifest.name}:${input.entry.name}`,
+        groupHostname,
       },
     );
 

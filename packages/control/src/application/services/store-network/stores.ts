@@ -4,7 +4,7 @@ import { accountMetadata, accounts, getDb } from "../../../infra/db/index.ts";
 
 const STORE_KEY_PREFIX = "activitypub_store:";
 
-export interface ActivityPubStoreDefinition {
+export interface StoreNetworkStoreDefinition {
   accountId: string;
   accountSlug: string;
   slug: string;
@@ -16,14 +16,14 @@ export interface ActivityPubStoreDefinition {
   isDefault: boolean;
 }
 
-export interface UpsertActivityPubStoreInput {
+export interface UpsertStoreNetworkStoreInput {
   slug: string;
   name?: string | null;
   summary?: string | null;
   iconUrl?: string | null;
 }
 
-interface StoredActivityPubStoreRecord {
+interface StoredStoreNetworkStoreRecord {
   version: 1;
   slug: string;
   name: string | null;
@@ -41,7 +41,7 @@ function normalizeOptionalText(
   return trimmed.length > 0 ? trimmed : null;
 }
 
-export function normalizeActivityPubStoreSlug(value: string): string {
+export function normalizeStoreNetworkStoreSlug(value: string): string {
   return value
     .trim()
     .toLowerCase()
@@ -54,13 +54,13 @@ function buildStoreMetadataKey(slug: string): string {
   return `${STORE_KEY_PREFIX}${slug}`;
 }
 
-function parseStoredActivityPubStoreRecord(
+function parseStoredStoreNetworkStoreRecord(
   slug: string,
   rawValue: string,
-): StoredActivityPubStoreRecord {
+): StoredStoreNetworkStoreRecord {
   try {
     const parsed = JSON.parse(rawValue) as
-      | Partial<StoredActivityPubStoreRecord>
+      | Partial<StoredStoreNetworkStoreRecord>
       | null;
     return {
       version: 1,
@@ -80,7 +80,7 @@ function parseStoredActivityPubStoreRecord(
   }
 }
 
-function serializeStoredActivityPubStoreRecord(
+function serializeStoredStoreNetworkStoreRecord(
   slug: string,
   input: {
     name?: string | null;
@@ -88,7 +88,7 @@ function serializeStoredActivityPubStoreRecord(
     iconUrl?: string | null;
   },
 ): string {
-  const record: StoredActivityPubStoreRecord = {
+  const record: StoredStoreNetworkStoreRecord = {
     version: 1,
     slug,
     name: normalizeOptionalText(input.name),
@@ -106,7 +106,7 @@ function buildDefaultStoreDefinition(account: {
   picture: string | null;
   createdAt: string;
   updatedAt: string;
-}): ActivityPubStoreDefinition {
+}): StoreNetworkStoreDefinition {
   return {
     accountId: account.id,
     accountSlug: account.slug,
@@ -134,8 +134,8 @@ function buildCustomStoreDefinition(
     updatedAt: string;
   },
   slug: string,
-): ActivityPubStoreDefinition {
-  const parsed = parseStoredActivityPubStoreRecord(slug, metadataRow.value);
+): StoreNetworkStoreDefinition {
+  const parsed = parseStoredStoreNetworkStoreRecord(slug, metadataRow.value);
   return {
     accountId: account.id,
     accountSlug: account.slug,
@@ -165,10 +165,10 @@ async function getAccountById(dbBinding: D1Database, accountId: string) {
     .get();
 }
 
-export async function listActivityPubStoresForWorkspace(
+export async function listStoresForWorkspace(
   dbBinding: D1Database,
   accountId: string,
-): Promise<ActivityPubStoreDefinition[]> {
+): Promise<StoreNetworkStoreDefinition[]> {
   const account = await getAccountById(dbBinding, accountId);
   if (!account) {
     return [];
@@ -195,17 +195,17 @@ export async function listActivityPubStoresForWorkspace(
       }
       return buildCustomStoreDefinition(account, row, slug);
     })
-    .filter((store): store is ActivityPubStoreDefinition => store !== null)
+    .filter((store): store is StoreNetworkStoreDefinition => store !== null)
     .sort((a, b) => a.slug.localeCompare(b.slug));
 
   return [buildDefaultStoreDefinition(account), ...customStores];
 }
 
-export async function findActivityPubStoreBySlug(
+export async function findStoreBySlug(
   dbBinding: D1Database,
   storeSlug: string,
-): Promise<ActivityPubStoreDefinition | null> {
-  const slug = normalizeActivityPubStoreSlug(storeSlug);
+): Promise<StoreNetworkStoreDefinition | null> {
+  const slug = normalizeStoreNetworkStoreSlug(storeSlug);
   if (!slug) {
     return null;
   }
@@ -261,17 +261,17 @@ export async function findActivityPubStoreBySlug(
   return buildDefaultStoreDefinition(account);
 }
 
-export async function createActivityPubStore(
+export async function createStore(
   dbBinding: D1Database,
   accountId: string,
-  input: UpsertActivityPubStoreInput,
-): Promise<ActivityPubStoreDefinition> {
+  input: UpsertStoreNetworkStoreInput,
+): Promise<StoreNetworkStoreDefinition> {
   const account = await getAccountById(dbBinding, accountId);
   if (!account) {
     throw new Error("Workspace not found");
   }
 
-  const slug = normalizeActivityPubStoreSlug(input.slug);
+  const slug = normalizeStoreNetworkStoreSlug(input.slug);
   if (!slug) {
     throw new Error("slug is required");
   }
@@ -280,7 +280,7 @@ export async function createActivityPubStore(
     throw new Error("slug conflicts with the default store");
   }
 
-  const existing = await findActivityPubStoreBySlug(dbBinding, slug);
+  const existing = await findStoreBySlug(dbBinding, slug);
   if (existing) {
     throw new Error("store slug already exists");
   }
@@ -290,30 +290,30 @@ export async function createActivityPubStore(
   await db.insert(accountMetadata).values({
     accountId,
     key: buildStoreMetadataKey(slug),
-    value: serializeStoredActivityPubStoreRecord(slug, input),
+    value: serializeStoredStoreNetworkStoreRecord(slug, input),
     createdAt: timestamp,
     updatedAt: timestamp,
   });
 
   return buildCustomStoreDefinition(account, {
-    value: serializeStoredActivityPubStoreRecord(slug, input),
+    value: serializeStoredStoreNetworkStoreRecord(slug, input),
     createdAt: timestamp,
     updatedAt: timestamp,
   }, slug);
 }
 
-export async function updateActivityPubStore(
+export async function updateStore(
   dbBinding: D1Database,
   accountId: string,
   storeSlug: string,
-  input: Omit<UpsertActivityPubStoreInput, "slug">,
-): Promise<ActivityPubStoreDefinition | null> {
+  input: Omit<UpsertStoreNetworkStoreInput, "slug">,
+): Promise<StoreNetworkStoreDefinition | null> {
   const account = await getAccountById(dbBinding, accountId);
   if (!account) {
     throw new Error("Workspace not found");
   }
 
-  const slug = normalizeActivityPubStoreSlug(storeSlug);
+  const slug = normalizeStoreNetworkStoreSlug(storeSlug);
   if (!slug || slug === account.slug) {
     return null;
   }
@@ -335,8 +335,8 @@ export async function updateActivityPubStore(
     return null;
   }
 
-  const parsed = parseStoredActivityPubStoreRecord(slug, existing.value);
-  const nextValue = serializeStoredActivityPubStoreRecord(slug, {
+  const parsed = parseStoredStoreNetworkStoreRecord(slug, existing.value);
+  const nextValue = serializeStoredStoreNetworkStoreRecord(slug, {
     name: input.name !== undefined ? input.name : parsed.name,
     summary: input.summary !== undefined ? input.summary : parsed.summary,
     iconUrl: input.iconUrl !== undefined ? input.iconUrl : parsed.iconUrl,
@@ -360,7 +360,7 @@ export async function updateActivityPubStore(
   }, slug);
 }
 
-export async function deleteActivityPubStore(
+export async function deleteStore(
   dbBinding: D1Database,
   accountId: string,
   storeSlug: string,
@@ -370,7 +370,7 @@ export async function deleteActivityPubStore(
     throw new Error("Workspace not found");
   }
 
-  const slug = normalizeActivityPubStoreSlug(storeSlug);
+  const slug = normalizeStoreNetworkStoreSlug(storeSlug);
   if (!slug || slug === account.slug) {
     return false;
   }

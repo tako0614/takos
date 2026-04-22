@@ -46,6 +46,10 @@ import {
   publicationAllowedFields,
   publicationOutputContract,
 } from "../platform/service-publications.ts";
+import {
+  isTakosSystemPublicationSource,
+  normalizeTakosSystemConsumePublication,
+} from "../platform/publication-catalog.ts";
 import { isDigestPinnedImageRef } from "./image-ref.ts";
 
 // ── Public types ─────────────────────────────────────────────────────────────
@@ -256,6 +260,13 @@ function collectValidatedPublications(
     }
   }
   return { entries, errors };
+}
+
+function normalizeConsumeLocalName(consume: {
+  publication: string;
+  as?: string;
+}): string {
+  return (consume.as ?? consume.publication).trim();
 }
 
 // ── Validator 1: Attached container as route target ─────────────────────────
@@ -493,7 +504,21 @@ export function validateConsumeReferences(
   );
   for (const entry of getComputeEntries(manifest)) {
     for (const [index, consume] of (entry.compute.consume ?? []).entries()) {
-      const publication = publicationMap.get(consume.publication);
+      let publication = publicationMap.get(consume.publication) ?? null;
+      if (!publication && isTakosSystemPublicationSource(consume.publication)) {
+        try {
+          publication = normalizeTakosSystemConsumePublication(consume, {
+            allowRelativeOAuthRedirectUris: true,
+          });
+        } catch (error) {
+          errors.push({
+            code: "publication_invalid_definition",
+            path: `${entry.path}.consume[${index}]`,
+            message: error instanceof Error ? error.message : String(error),
+          });
+          continue;
+        }
+      }
       if (!publication) {
         if (
           entries.some((entry) =>
@@ -547,7 +572,16 @@ export function validateConsumeEnvCollision(
       ...localEnvNames,
     ]);
     for (const [index, consume] of (entry.compute.consume ?? []).entries()) {
-      const publication = publicationMap.get(consume.publication);
+      let publication = publicationMap.get(consume.publication) ?? null;
+      if (!publication && isTakosSystemPublicationSource(consume.publication)) {
+        try {
+          publication = normalizeTakosSystemConsumePublication(consume, {
+            allowRelativeOAuthRedirectUris: true,
+          });
+        } catch {
+          continue;
+        }
+      }
       if (!publication) continue;
       for (const output of publicationOutputContract(publication)) {
         const envName = normalizeEnvName(
@@ -558,7 +592,7 @@ export function validateConsumeEnvCollision(
             code: "consume_env_collision",
             path: `${entry.path}.consume[${index}]`,
             message:
-              `consume '${consume.publication}' resolves env '${envName}' which already exists in compute '${entry.name}'. Pick a different alias or remove the conflicting env/bind.`,
+              `consume '${normalizeConsumeLocalName(consume)}' resolves env '${envName}' which already exists in compute '${entry.name}'. Pick a different alias or remove the conflicting env/bind.`,
           });
           continue;
         }
@@ -591,22 +625,24 @@ export function validatePublicationUniqueness(
     }
     seen.set(name, index);
 
-    if (publication.publisher === "takos") continue;
     const publisher = String(publication.publisher ?? "").trim();
-    const path = String(publication.path ?? "").trim();
-    if (!publisher || !path) continue;
-    const routeKey = `${publisher}\0${path}`;
-    const previousRoutePublication = routePublisherPaths.get(routeKey);
-    if (previousRoutePublication != null) {
-      errors.push({
-        code: "publication_duplicate",
-        path: `publish[${index}]`,
-        message:
-          `route publication publisher/path '${publisher} ${path}' duplicates publish[${previousRoutePublication}]`,
-      });
-      continue;
+    if (!publisher) continue;
+    for (const output of Object.values(publication.outputs ?? {})) {
+      const routePath = output.route?.trim();
+      if (!routePath) continue;
+      const routeKey = `${publisher}\0${routePath}`;
+      const previousRoutePublication = routePublisherPaths.get(routeKey);
+      if (previousRoutePublication != null) {
+        errors.push({
+          code: "publication_duplicate",
+          path: `publish[${index}]`,
+          message:
+            `route publication publisher/route '${publisher} ${routePath}' duplicates publish[${previousRoutePublication}]`,
+        });
+        continue;
+      }
+      routePublisherPaths.set(routeKey, index);
     }
-    routePublisherPaths.set(routeKey, index);
   }
   return errors;
 }
@@ -619,20 +655,22 @@ export function validatePublicationRouteMatches(
   const routes = getRoutes(manifest);
   for (const entry of entries) {
     const publication = entry.normalized;
-    if (!publication || publication.publisher === "takos") continue;
+    if (!publication) continue;
     const target = publication.publisher;
-    const path = publication.path;
-    if (!target || !path) continue;
-    const matches = routes.filter((route) =>
-      route.target === target && route.path === path
-    );
-    if (matches.length >= 1) continue;
-    errors.push({
-      code: "publication_route_mismatch",
-      path: entry.path,
-      message:
-        `route publication '${publication.name}' publisher/path '${target} ${path}' does not match any route`,
-    });
+    for (const [outputName, output] of Object.entries(publication.outputs ?? {})) {
+      const routePath = output.route;
+      if (!target || !routePath) continue;
+      const matches = routes.filter((route) =>
+        route.target === target && route.path === routePath
+      );
+      if (matches.length >= 1) continue;
+      errors.push({
+        code: "publication_route_mismatch",
+        path: `${entry.path}.outputs.${outputName}`,
+        message:
+          `route publication '${publication.name}' publisher/route '${target} ${routePath}' does not match any route`,
+      });
+    }
   }
   return errors;
 }

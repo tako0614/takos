@@ -11,9 +11,9 @@ Takos の CLI は manifest / repository / catalog source から primitive
 declaration を apply する surface を提供します。group は primitive
 を任意に束ねる state scope で、inventory、snapshot、rollback、uninstall などの
 group 機能を持ちます。resource API / runtime binding と publish catalog
-は分けます。`publish` は route/interface metadata と Takos capability output
-の共有に使い、SQL / object-store / queue などの resource API / runtime binding
-とは分けます。
+は分けます。`publish` は route/interface metadata の共有に使い、Takos API key /
+OAuth client は system publication source を `consume` します。SQL / object-store /
+queue などの resource API / runtime binding とは分けます。
 
 - **Primitive records** — workload / route / publication / resource / consume
   edge などの個別 record
@@ -169,7 +169,7 @@ directory 内に複数の JavaScript bundle 候補がある場合は `takos depl
 | --------------- | ------------------------------------------------------- | ------------------------------------------------------- |
 | source          | local working tree                                      | `repository_url + ref/ref_type`                         |
 | source 解決     | CLI が manifest / artifact を読む                       | control plane が repo source を解決                     |
-| primitive apply | worker / service / route / publication / grant を apply | worker / service / route / publication / grant を apply |
+| primitive apply | worker / service / route / publication / consume を apply | worker / service / route / publication / consume を apply |
 | group snapshot  | group 指定時に作る                                      | group 指定時に作る                                      |
 | rollback        | group snapshot がある場合に再適用                       | group snapshot がある場合に再適用                       |
 | API source kind | `manifest`                                              | `git_ref`                                               |

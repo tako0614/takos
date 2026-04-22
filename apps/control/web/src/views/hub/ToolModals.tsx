@@ -1,6 +1,6 @@
 import { createSignal } from "solid-js";
 import { Icons } from "../../lib/Icons.tsx";
-import { useI18n } from "../../store/i18n.ts";
+import { type TranslationKey, useI18n } from "../../store/i18n.ts";
 import { Button } from "../../components/ui/Button.tsx";
 import { Modal } from "../../components/ui/Modal.tsx";
 import { Input } from "../../components/ui/Input.tsx";
@@ -33,6 +33,20 @@ export function buildSchema(parameters: SchemaParameter[]): object {
     properties,
     required: required.length > 0 ? required : undefined,
   };
+}
+
+function schemaTypeLabel(
+  type: SchemaParameter["type"],
+  t: (key: TranslationKey) => string,
+): string {
+  const keys: Record<SchemaParameter["type"], TranslationKey> = {
+    string: "schemaTypeString",
+    number: "schemaTypeNumber",
+    boolean: "schemaTypeBoolean",
+    array: "schemaTypeArray",
+    object: "schemaTypeObject",
+  };
+  return t(keys[type]);
 }
 
 interface ParameterListProps {
@@ -71,7 +85,7 @@ function ParameterList(props: ParameterListProps) {
                       {param.name}
                     </span>
                     <span class="text-xs px-1.5 py-0.5 bg-zinc-200 dark:bg-zinc-700 text-zinc-600 dark:text-zinc-400 rounded">
-                      {param.type}
+                      {schemaTypeLabel(param.type, t)}
                     </span>
                     {param.required && (
                       <span class="text-xs px-1.5 py-0.5 bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400 rounded">
@@ -157,11 +171,11 @@ function AddParameterModal(props: {
                 setParamType(e.currentTarget.value as SchemaParameter["type"])}
               class="w-full px-3 py-2 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-lg text-sm"
             >
-              <option value="string">string</option>
-              <option value="number">number</option>
-              <option value="boolean">boolean</option>
-              <option value="array">array</option>
-              <option value="object">object</option>
+              <option value="string">{schemaTypeLabel("string", t)}</option>
+              <option value="number">{schemaTypeLabel("number", t)}</option>
+              <option value="boolean">{schemaTypeLabel("boolean", t)}</option>
+              <option value="array">{schemaTypeLabel("array", t)}</option>
+              <option value="object">{schemaTypeLabel("object", t)}</option>
             </select>
           </div>
 

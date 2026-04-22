@@ -408,7 +408,7 @@ export function ReleaseList(props: ReleaseListProps) {
             </label>
             <Input
               type="text"
-              placeholder="Version 1.0.0"
+              placeholder={t("releaseNamePlaceholder")}
               value={formData().name}
               onInput={(e: Event & { currentTarget: HTMLInputElement }) =>
                 setFormData((prev) => ({

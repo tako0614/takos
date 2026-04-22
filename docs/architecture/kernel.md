@@ -18,7 +18,7 @@ features**（常時提供、削除・差し替え不可）:
 - **Agent / Chat**: AI との対話でソフトウェアを開発・運用
 - **Git**: コード管理
 - **Storage**: ファイル管理
-- **Store**: catalog app / package の検索・配布・ActivityPub federation
+- **Store**: catalog app / package の検索・配布・Store Network
 - **Auth**: 認証・認可
 - **Dashboard**: space 管理
 - **Deploy / Routing**: external group のデプロイと公開
@@ -137,17 +137,19 @@ kernel は compute に対する resource / publication の解決を行う。
   workflow, durable-object
 - resource は space 単位で分離される
 - resource access は resource API / runtime binding で扱う。publish は
-  route/interface metadata と Takos capability output に使う
+  route/interface metadata に使い、Takos API key / OAuth client は system
+  publication source として consume する
 
 kernel 自身の storage は kernel DB / object-store を使う（group とは別）。
 
-## Publication / Capability grant と env injection
+## Publication / Consume と env injection
 
 group が manifest で `publish` を宣言すると、deploy 時に kernel が information
 sharing catalog を保存し、`compute.<name>.consume` を宣言した consumer にだけ
 env を inject する。route publication は manifest の `publisher` + `type` +
-`path` を基準とし、Takos capability grant は `publish[].publisher/type` として
-保存される。
+`outputs` を基準とする。Takos API key / OAuth client は `publish[]` ではなく
+`takos.api-key` / `takos.oauth-client` system publication source として consume
+する。
 
 ### route publication
 
@@ -159,13 +161,17 @@ publish:
   - name: tools
     type: McpServer
     publisher: web
-    path: /mcp
+    outputs:
+      url:
+        route: /mcp
     spec:
       transport: streamable-http
   - name: docs
     type: UiSurface
     publisher: web
-    path: /
+    outputs:
+      url:
+        route: /
     title: Docs
     spec:
       icon: book
@@ -176,41 +182,36 @@ publish:
 - `name`
 - `publisher`
 - `type`
-- `path`
+- `outputs`
 
-### Takos capability grant
+### Takos system publication source
 
-Takos capability grant は Takos API key / OAuth client の access output
-declaration。
+Takos API key / OAuth client は system publication source として consume する。
 
 ```yaml
-publish:
-  - name: takos-api
-    publisher: takos
-    type: api-key
-    spec:
+consume:
+  - publication: takos.api-key
+    as: takos-api
+    request:
       scopes:
         - files:read
 ```
 
 必須 field:
 
-- `name`
-- `publisher`
-- `type`
-- `spec`
+- `publication`
+- `request`
 
-`publisher` は `takos`、`type` は Takos publisher type だけを受け付ける。`spec`
-は type ごとに required / optional field が変わる。route publication の URL は
-assigned hostname と manifest の `path` から生成され、path template は template
-URL のまま扱う。Takos capability grant は type が定義する outputs を consumer
-ごとに env へ変換する。
+`request` は source ごとの required / optional field が変わる。route publication
+の URL は assigned hostname と `outputs.*.route` から生成され、path template は
+template URL のまま扱う。Takos system publication source は type が定義する
+outputs を consumer ごとに env へ変換する。
 
 deploy 時に kernel は:
 
 1. manifest の `publish` を読む
 2. publication catalog を保存する
-3. route publication の auto-hostname URL、Takos capability grant の outputs
+3. route publication の auto-hostname URL、Takos system publication outputs
    を解決する
 4. `compute.<name>.consume` を宣言した consumer にだけ env として渡す
 
@@ -224,28 +225,24 @@ scope enforcement は受信側 group の責務。
 
 ## Capability credentials
 
-Takos API access や OAuth client は app-label 専用の特殊機構ではなく capability
-grant として扱う。`publish[].publisher/type` として保存する。
+Takos API access や OAuth client は app-label 専用の特殊機構ではなく system
+publication source として扱う。`compute.<name>.consume` で request する。
 
 ```yaml
-publish:
-  - name: takos-api
-    publisher: takos
-    type: api-key
-    spec:
-      scopes:
-        - files:read
-
 compute:
   web:
     consume:
-      - publication: takos-api
+      - publication: takos.api-key
+        as: takos-api
+        request:
+          scopes:
+            - files:read
         env:
           endpoint: INTERNAL_TAKOS_API_URL
           apiKey: INTERNAL_TAKOS_API_KEY
 ```
 
-kernel は grant outputs を解決するが、consumer が要求していない publication は
+kernel は system publication outputs を解決するが、consumer が要求していない publication は
 inject しない。
 
 ## Dashboard

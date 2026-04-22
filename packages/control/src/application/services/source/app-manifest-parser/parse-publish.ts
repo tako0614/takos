@@ -1,27 +1,21 @@
-import type { AppPublication } from "../app-manifest-types.ts";
+import type {
+  AppPublication,
+  AppPublicationOutput,
+} from "../app-manifest-types.ts";
 import {
   asRecord,
   asRequiredString,
   asString,
   asStringArray,
 } from "../app-manifest-utils.ts";
-import {
-  normalizeGrantPublication,
-  type PublicationNormalizeOptions,
-} from "../../platform/publication-catalog.ts";
 
 const PUBLICATION_FIELDS = new Set([
   "name",
   "publisher",
   "type",
-  "path",
+  "outputs",
   "title",
   "spec",
-]);
-
-const TAKOS_PUBLICATION_TYPES = new Set([
-  "api-key",
-  "oauth-client",
 ]);
 
 const FILE_HANDLER_PUBLICATION_TYPE = "FileHandler";
@@ -29,23 +23,6 @@ const FILE_HANDLER_PUBLICATION_TYPE = "FileHandler";
 const FILE_HANDLER_SPEC_FIELDS = new Set([
   "mimeTypes",
   "extensions",
-]);
-
-const TAKOS_API_KEY_SPEC_FIELDS = new Set([
-  "scopes",
-]);
-
-const TAKOS_OAUTH_SPEC_FIELDS = new Set([
-  "clientName",
-  "redirectUris",
-  "scopes",
-  "metadata",
-]);
-
-const TAKOS_OAUTH_METADATA_FIELDS = new Set([
-  "logoUri",
-  "tosUri",
-  "policyUri",
 ]);
 
 function fileHandlerPathHasIdTemplate(path: string | undefined): boolean {
@@ -78,13 +55,48 @@ function parseOptionalSpec(
   return value as Record<string, unknown>;
 }
 
+function parsePublicationOutputs(
+  prefix: string,
+  raw: unknown,
+): Record<string, AppPublicationOutput> {
+  if (raw == null) {
+    throw new Error(`${prefix}.outputs is required`);
+  }
+  const record = asRecord(raw);
+  const outputs: Record<string, AppPublicationOutput> = {};
+  for (const [name, value] of Object.entries(record)) {
+    const outputPrefix = `${prefix}.outputs.${name}`;
+    const output = asRecord(value);
+    assertAllowedFields(output, outputPrefix, new Set(["route"]));
+    const route = asString(output.route, `${outputPrefix}.route`);
+    if (!route) {
+      throw new Error(`${outputPrefix}.route is required`);
+    }
+    if (!route.startsWith("/")) {
+      throw new Error(`${outputPrefix}.route must start with '/' (got: ${route})`);
+    }
+    outputs[name] = { route };
+  }
+  if (Object.keys(outputs).length === 0) {
+    throw new Error(`${prefix}.outputs must declare at least one output`);
+  }
+  return outputs;
+}
+
+function firstRouteOutput(
+  outputs: Record<string, AppPublicationOutput>,
+): string | undefined {
+  return Object.values(outputs).find((output) => output.route)?.route;
+}
+
 function validateFileHandlerPublication(
   prefix: string,
-  path: string | undefined,
+  outputs: Record<string, AppPublicationOutput>,
   spec: Record<string, unknown> | undefined,
 ): void {
+  const path = firstRouteOutput(outputs);
   if (!fileHandlerPathHasIdTemplate(path)) {
-    throw new Error(`${prefix}.path must include :id for FileHandler`);
+    throw new Error(`${prefix}.outputs must include a route with :id for FileHandler`);
   }
 
   const mimeTypes = asStringArray(spec?.mimeTypes, `${prefix}.spec.mimeTypes`);
@@ -103,37 +115,10 @@ function validateFileHandlerPublication(
   }
 }
 
-function validateTakosGrantSpec(
-  prefix: string,
-  type: string,
-  spec: Record<string, unknown> | undefined,
-): void {
-  if (!spec) return;
-  if (type === "api-key") {
-    assertAllowedFields(spec, `${prefix}.spec`, TAKOS_API_KEY_SPEC_FIELDS);
-    return;
-  }
-  if (type !== "oauth-client") return;
-  assertAllowedFields(spec, `${prefix}.spec`, TAKOS_OAUTH_SPEC_FIELDS);
-  const metadata = spec.metadata;
-  if (
-    metadata &&
-    typeof metadata === "object" &&
-    !Array.isArray(metadata)
-  ) {
-    assertAllowedFields(
-      metadata as Record<string, unknown>,
-      `${prefix}.spec.metadata`,
-      TAKOS_OAUTH_METADATA_FIELDS,
-    );
-  }
-}
-
 export function parsePublicationEntry(
   index: number,
   raw: unknown,
   prefixBase = "publish",
-  options: PublicationNormalizeOptions = {},
 ): AppPublication {
   const prefix = `${prefixBase}[${index}]`;
   const record = asRecord(raw);
@@ -142,47 +127,24 @@ export function parsePublicationEntry(
   const name = asRequiredString(record.name, `${prefix}.name`);
   const publisher = asRequiredString(record.publisher, `${prefix}.publisher`);
   const type = asRequiredString(record.type, `${prefix}.type`);
-  const path = asString(record.path, `${prefix}.path`);
+  if (publisher === "takos") {
+    throw new Error(
+      `${prefix}.publisher 'takos' is not supported in app manifests; consume platform publications such as takos.api-key instead`,
+    );
+  }
+  const outputs = parsePublicationOutputs(prefix, record.outputs);
   const title = asString(record.title, `${prefix}.title`);
   const spec = parseOptionalSpec(prefix, record.spec);
 
-  if (publisher === "takos") {
-    if (record.path != null) {
-      throw new Error(`${prefix}.path is not supported for publisher 'takos'`);
-    }
-    if (record.title != null) {
-      throw new Error(`${prefix}.title is not supported for publisher 'takos'`);
-    }
-    if (!TAKOS_PUBLICATION_TYPES.has(type)) {
-      throw new Error(
-        `${prefix}.type is unsupported for publisher 'takos': ${type}`,
-      );
-    }
-    validateTakosGrantSpec(prefix, type, spec);
-    return normalizeGrantPublication({
-      name,
-      publisher,
-      type,
-      ...(spec ? { spec } : {}),
-    }, options);
-  }
-
-  if (!path) {
-    throw new Error(`${prefix}.path is required for non-Takos publications`);
-  }
-  if (!path.startsWith("/")) {
-    throw new Error(`${prefix}.path must start with '/' (got: ${path})`);
-  }
-
   if (type === FILE_HANDLER_PUBLICATION_TYPE) {
-    validateFileHandlerPublication(prefix, path, spec);
+    validateFileHandlerPublication(prefix, outputs, spec);
   }
 
   return {
     name,
     publisher,
     type,
-    path,
+    outputs,
     ...(title ? { title } : {}),
     ...(spec ? { spec } : {}),
   };
@@ -197,15 +159,17 @@ function validateUniqueness(entries: AppPublication[]): void {
       throw new Error(`publish[${index}] duplicate publication name: ${key}`);
     }
     seen.add(key);
-    if (entry.publisher === "takos" || !entry.path) return;
-    const routeKey = `${entry.publisher}\0${entry.path}`;
-    const previous = routePublisherPaths.get(routeKey);
-    if (previous != null) {
-      throw new Error(
-        `publish[${index}] duplicate route publication publisher/path '${entry.publisher} ${entry.path}' duplicates publish[${previous}]`,
-      );
+    for (const output of Object.values(entry.outputs ?? {})) {
+      if (!output.route) continue;
+      const routeKey = `${entry.publisher}\0${output.route}`;
+      const previous = routePublisherPaths.get(routeKey);
+      if (previous != null) {
+        throw new Error(
+          `publish[${index}] duplicate route publication publisher/route '${entry.publisher} ${output.route}' duplicates publish[${previous}]`,
+        );
+      }
+      routePublisherPaths.set(routeKey, index);
     }
-    routePublisherPaths.set(routeKey, index);
   });
 }
 
@@ -219,9 +183,7 @@ export function parsePublish(
     throw new Error("publish must be an array");
   }
   const entries = topLevel.publish.map((entry, index) =>
-    parsePublicationEntry(index, entry, "publish", {
-      allowRelativeOAuthRedirectUris: true,
-    })
+    parsePublicationEntry(index, entry, "publish")
   );
   validateUniqueness(entries);
   return entries;

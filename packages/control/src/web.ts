@@ -15,7 +15,6 @@ import { authCliRouter } from "./server/routes/auth/cli.ts";
 import { authLinkRouter } from "./server/routes/auth/link.ts";
 import oauth from "./server/routes/oauth/routes.ts";
 import wellKnown from "./server/routes/well-known.ts";
-import activitypubStore from "./server/routes/activitypub-store/routes.ts";
 import { registerProfileRoutes } from "./server/routes/profiles/register.ts";
 import { smartHttpRoutes } from "./server/routes/smart-http.ts";
 import {
@@ -27,7 +26,6 @@ import {
 import { runR2OrphanedObjectGcBatch } from "./application/services/r2/orphaned-object-gc.ts";
 import { runCommonEnvScheduledMaintenance } from "./application/services/common-env/index.ts";
 import { runWorkflowArtifactGcBatch } from "./application/services/execution/workflow-storage.ts";
-import { tickDeliveryQueue } from "./application/services/activitypub/delivery-queue.ts";
 import { dispatchScheduledComputeTriggers } from "./application/services/deployment/scheduled-triggers.ts";
 import { triggerScheduledWorkflows } from "./application/services/actions/actions-triggers.ts";
 import {
@@ -193,7 +191,6 @@ type ScheduledFamilyMaintenanceDeps = {
   runR2OrphanedObjectGcBatch: typeof runR2OrphanedObjectGcBatch;
   runSnapshotGcBatch: typeof runSnapshotGcBatch;
   runWorkflowArtifactGcBatch: typeof runWorkflowArtifactGcBatch;
-  tickDeliveryQueue: typeof tickDeliveryQueue;
   processDefaultAppPreinstallJobs: typeof processDefaultAppPreinstallJobs;
   logInfo: typeof logInfo;
 };
@@ -205,7 +202,6 @@ const defaultScheduledFamilyMaintenanceDeps: ScheduledFamilyMaintenanceDeps = {
   runR2OrphanedObjectGcBatch,
   runSnapshotGcBatch,
   runWorkflowArtifactGcBatch,
-  tickDeliveryQueue,
   processDefaultAppPreinstallJobs,
   logInfo,
 };
@@ -355,30 +351,6 @@ export async function runScheduledFamilyMaintenance(
     } catch (error) {
       errors.push({
         job: "workflow-artifact-gc",
-        error: toScheduledError(error),
-      });
-    }
-
-    try {
-      const apSummary = await deps.tickDeliveryQueue({
-        db: env.DB,
-        env,
-        batch: 50,
-      });
-
-      if (logSuccesses && apSummary.scanned > 0) {
-        deps.logInfo("ap delivery queue tick completed", {
-          module: "cron",
-          cron,
-          scanned: String(apSummary.scanned),
-          delivered: String(apSummary.delivered),
-          requeued: String(apSummary.requeued),
-          dlq: String(apSummary.dlq),
-        });
-      }
-    } catch (error) {
-      errors.push({
-        job: "ap-delivery-queue-tick",
         error: toScheduledError(error),
       });
     }
@@ -553,7 +525,6 @@ app.route("/oauth", oauth);
 
 // Well-known endpoints (public)
 app.route("/.well-known", wellKnown);
-app.route("/", activitypubStore);
 
 // ============================================================================
 // Internal Executor RPC Proxy (service-binding only, no public access)

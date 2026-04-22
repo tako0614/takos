@@ -45,8 +45,8 @@ interface SeedRepository {
 
 - package catalog: public な package release を検索する
 - package install: Store package の source を解決して deploy pipeline に渡す
-- remote repository import: ActivityPub remote store
-  からリポジトリ参照を取り込む
+- remote repository import: Store Network の remote store
+  から repository reference を取り込む
 
 catalog の `deployable-app` は release-backed の deployable package を
 指します。`all` は全 catalog item、`repo` は repository card、`deployable-app`
@@ -202,7 +202,9 @@ publish:
   - name: tools
     type: McpServer
     publisher: web
-    path: /mcp
+    outputs:
+      url:
+        route: /mcp
     spec:
       transport: streamable-http
 ```
@@ -211,7 +213,7 @@ MCP server catalog は deploy manifest の `publish` entry で管理します。
 後に control plane が catalog entry を保存し、agent 側が server をロードする。
 `McpServer` は custom route publication type であり、core の固定 type
 ではありません。詳細は [MCP Server](/apps/mcp) を参照。publication
-の仕組みについては [Publication / Grants](/architecture/app-publications)
+の仕組みについては [Publication](/architecture/app-publications)
 を参照。
 
 ## file handler 統合
@@ -223,7 +225,9 @@ publish:
   - name: markdown
     type: FileHandler
     publisher: web
-    path: /files/:id
+    outputs:
+      url:
+        route: /files/:id
     spec:
       mimeTypes: [text/markdown]
       extensions: [.md]
@@ -231,13 +235,13 @@ publish:
 
 FileHandler catalog は deploy manifest の `publish` entry で管理します。space
 storage と deployed UI が loose coupling のまま連携できる。`FileHandler` の
-`path` は `:id` path segment を必ず含み、storage catalog では `:id` を含まない
+route output は `:id` path segment を必ず含み、storage catalog では `:id` を含まない
 handler を公開しません。`FileHandler` の launch contract は file ID の path
 segment が primary です。current storage UI は起動時に `space_id` query
 parameter も追加しますが、`file_id` query fallback はありません。 `FileHandler`
 は custom route publication type です。詳細は
 [File Handlers](/apps/file-handlers) を参照。publication の仕組みについては
-[Publication / Grants](/architecture/app-publications) を参照。
+[Publication](/architecture/app-publications) を参照。
 
 ## 次に読むページ
 

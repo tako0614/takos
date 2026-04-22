@@ -2,6 +2,7 @@ import { createMemo, type JSX } from "solid-js";
 import { useI18n } from "../../store/i18n.ts";
 import type { Resource } from "../../types/index.ts";
 import type { ResourceDetailTab } from "./worker-models.ts";
+import { getResourceStatusLabel } from "./utils/resourceUtils.tsx";
 import { Breadcrumb } from "../../components/ui/Breadcrumb.tsx";
 import { ResourceOverviewTab } from "./tabs/ResourceOverviewTab.tsx";
 import { D1ExplorerTab } from "./tabs/D1ExplorerTab.tsx";
@@ -22,6 +23,9 @@ export interface ResourceDetailProps {
 
 export function ResourceDetail(props: ResourceDetailProps) {
   const { t } = useI18n();
+  const statusLabel = createMemo(() =>
+    getResourceStatusLabel(props.resource.status, t)
+  );
 
   const tabClass = (tabId: ResourceDetailTab): string =>
     `px-4 py-2 text-sm font-medium rounded-t-lg transition-colors ${
@@ -59,7 +63,7 @@ export function ResourceDetail(props: ResourceDetailProps) {
           <div
             class="flex items-center gap-2"
             aria-label={t("resourceStatusLabel", {
-              status: props.resource.status,
+              status: statusLabel(),
             })}
           >
             <span
@@ -69,7 +73,7 @@ export function ResourceDetail(props: ResourceDetailProps) {
               aria-hidden="true"
             />
             <span class="text-sm text-zinc-500 dark:text-zinc-400">
-              {props.resource.status}
+              {statusLabel()}
             </span>
           </div>
         </div>

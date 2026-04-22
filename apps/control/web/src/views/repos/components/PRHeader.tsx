@@ -10,17 +10,34 @@ interface PRHeaderProps {
   onBack: () => void;
 }
 
-function renderAvatar(author: { name: string; avatar_url?: string }) {
+function renderAvatar(
+  author: { name: string; avatar_url?: string },
+  alt: string,
+) {
   if (author.avatar_url) {
     return (
       <img
         src={author.avatar_url}
-        alt={author.name}
+        alt={alt}
         class="w-5 h-5 rounded-full"
       />
     );
   }
   return null;
+}
+
+function getStatusLabel(
+  status: PullRequest["status"],
+  t: ReturnType<typeof useI18n>["t"],
+) {
+  switch (status) {
+    case "open":
+      return t("prStatusOpen");
+    case "merged":
+      return t("prStatusMerged");
+    case "closed":
+      return t("prStatusClosed");
+  }
 }
 
 function getStatusIcon(status: PullRequest["status"]) {
@@ -76,7 +93,7 @@ export function PRHeader(props: PRHeaderProps) {
             </h1>
             <div class={getStatusBadgeClasses(props.pr.status)}>
               {getStatusIcon(props.pr.status)}
-              <span>{props.pr.status}</span>
+              <span>{getStatusLabel(props.pr.status, t)}</span>
             </div>
           </div>
         </div>
@@ -91,7 +108,10 @@ export function PRHeader(props: PRHeaderProps) {
       >
         <div class="flex items-center gap-4 text-sm text-zinc-500 flex-wrap">
           <span class="flex items-center gap-2">
-            {renderAvatar(props.pr.author)}
+            {renderAvatar(
+              props.pr.author,
+              t("avatarAlt", { name: props.pr.author.name }),
+            )}
             <span class="text-zinc-900 dark:text-zinc-100">
               {props.pr.author.name}
             </span>

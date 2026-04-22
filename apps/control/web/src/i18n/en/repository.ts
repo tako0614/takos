@@ -111,6 +111,7 @@ export const repository = {
   lastUpdate: "Last update",
   loadingFiles: "Loading files...",
   directoryEmpty: "This directory is empty",
+  rootDirectory: "root",
   today: "today",
   yesterday: "yesterday",
   daysAgo: "{days} days ago",
@@ -140,6 +141,9 @@ export const repository = {
   prStatusOpen: "Open",
   prStatusMerged: "Merged",
   prStatusClosed: "Closed",
+  prReviewStatusApproved: "Approved",
+  prReviewStatusChangesRequested: "Changes requested",
+  prReviewStatusCommented: "Commented",
   conflicts: "Conflicts",
   prMergedAt: "merged {date}",
   prClosedAt: "closed {date}",
@@ -175,6 +179,9 @@ export const repository = {
   fileDoesNotExist: "(file does not exist)",
   oursLabel: "(ours)",
   theirsLabel: "(theirs)",
+  conflictTypeContent: "Content conflict",
+  conflictTypeDeleteModify: "Delete/modify",
+  conflictTypeAddAdd: "Added by both",
 
   // File Viewer
   loadingFile: "Loading file...",
@@ -193,6 +200,10 @@ export const repository = {
   failedToLoadBlame: "Failed to load blame",
   failedToLoadHistory: "Failed to load history",
   sizeLabel: "Size: {size}",
+  fileStatusAdded: "Added",
+  fileStatusModified: "Modified",
+  fileStatusDeleted: "Deleted",
+  fileStatusRenamed: "Renamed",
 
   // Repository
   processing: "Processing...",

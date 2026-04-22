@@ -48,6 +48,7 @@ export const common = {
   mainNavigation: "Main navigation",
   resourceStatusLabel: "Status: {status}",
   avatar: "Avatar",
+  avatarAlt: "{name}'s avatar",
   selectOption: "Select an option",
 
   // App

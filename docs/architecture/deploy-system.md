@@ -44,22 +44,22 @@ compute:
         artifact: web
         artifactPath: dist/worker
     consume:
-      - publication: takos-api
+      - publication: takos.api-key
+        as: takos-api
+        request:
+          scopes:
+            - files:read
         env:
           endpoint: TAKOS_API_ENDPOINT
           apiKey: TAKOS_API_KEY
 
 publish:
-  - name: takos-api
-    publisher: takos
-    type: api-key
-    spec:
-      scopes:
-        - files:read
   - name: search
     type: McpServer
     publisher: web
-    path: /mcp
+    outputs:
+      url:
+        route: /mcp
     spec:
       transport: streamable-http
 
@@ -92,9 +92,9 @@ worker / service / attached container は `services` と `deployments`
 ### Resources
 
 SQL / object-store / queue などの stateful capability は `resources` record
-として管理する。manifest の `publish` は resource creation
-ではなく、route/interface metadata と Takos capability output を共有する catalog
-です。
+として管理する。manifest の `publish` は resource creation ではなく、
+route/interface metadata を共有する catalog です。Takos API key / OAuth client は
+system publication source として consume します。
 
 resource の abstract type (`sql`, `object-store`, `key-value`, `queue`,
 `vector-index`, `analytics-engine`, `secret`, `workflow`, `durable-object`) は
@@ -123,14 +123,14 @@ hostname は routing layer で管理:
 - custom domain: 任意（DNS 検証 + SSL）
 
 同じ `path` で HTTP method が重なる route は duplicate として invalid。route
-publication は `publisher + path` で route を参照するため、同じ
-`publisher + path` を複数 route に分けることも invalid。
+publication は `publisher + route` で route を参照するため、同じ
+`publisher + route` を複数 route に分けることも invalid。
 
 ### Publications / consumes
 
-`publish` は primitive が他者へ共有する information sharing / access output
-を宣言する。route publication は公開 interface metadata、Takos capability grant
-は API key / OAuth client の access output metadata です。env へは
+`publish` は primitive が他者へ共有する information sharing output
+を宣言する。route publication は公開 interface metadata です。Takos API key /
+OAuth client は system publication source として `consume` で request します。env へは
 `compute.<name>.consume` を宣言した consumer にだけ inject される。
 
 publication は space-level catalog entry です。group 所属 publication は group
@@ -142,13 +142,17 @@ publish:
   - name: tools
     type: McpServer
     publisher: web
-    path: /mcp
+    outputs:
+      url:
+        route: /mcp
     spec:
       transport: streamable-http
   - name: docs
     type: UiSurface
     publisher: web
-    path: /
+    outputs:
+      url:
+        route: /
     title: Docs
     spec:
       icon: book
@@ -160,7 +164,11 @@ consumer は output ごとに env 名を決める。
 compute:
   web:
     consume:
-      - publication: takos-api
+      - publication: takos.api-key
+        as: takos-api
+        request:
+          scopes:
+            - files:read
         env:
           endpoint: INTERNAL_TAKOS_API_URL
           apiKey: INTERNAL_TAKOS_API_KEY
@@ -187,7 +195,7 @@ takos group show NAME --space SPACE_ID
 
 - resource: `takos resource` / `takos res` または `/api/resources/*`
 - compute / route / custom domain: `/api/services/*`
-- publication / grant: `/api/publications/*`
+- publication: `/api/publications/*`
 
 既存 service / resource を後から group inventory に入れたい場合は
 `PATCH /api/services/:id/group` / `PATCH /api/resources/:id/group` を呼ぶ。
@@ -233,7 +241,7 @@ group なし primitive:
    - deploy manifest を parse して primitive desired declaration に compile
    - group が指定されている場合は group membership を付与する
 2. Diff
-   - worker / service / attached container / route / publication / grant を現在
+   - worker / service / attached container / route / publication / consume を現在
      state と比較
    - resource creation は resource API 側の責務として扱う
 3. Workload apply
@@ -241,7 +249,7 @@ group なし primitive:
    - per-compute `depends` で順序を制御
 4. Managed-state sync
    - publication catalog を同期
-   - Takos capability grant を検証し、`compute.<name>.consume` を宣言した
+   - Takos system publication consume を検証し、`compute.<name>.consume` を宣言した
      consumer の env に inject
 5. Routing reconcile
    - workload apply と managed-state sync が成功した場合だけ route を reconcile

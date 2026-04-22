@@ -152,6 +152,10 @@ export const deploy = {
   r2Storage: "R2ストレージ",
   kvStore: "KVストア",
   vectorizeIndex: "Vectorizeインデックス",
+  workerResource: "ワーカー",
+  resourceStatus_active: "アクティブ",
+  resourceStatus_creating: "作成中",
+  resourceStatus_error: "エラー",
 
   // R2 Browser
   r2LastModified: "更新日時",

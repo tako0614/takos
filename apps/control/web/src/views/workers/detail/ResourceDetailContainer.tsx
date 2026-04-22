@@ -1,4 +1,5 @@
 import type { Resource } from "../../../types/index.ts";
+import { useI18n } from "../../../store/i18n.ts";
 import { ResourceDetail } from "../ResourceDetail.tsx";
 import type { ResourceDetailTab } from "../worker-models.ts";
 import {
@@ -16,6 +17,8 @@ export interface ResourceDetailContainerProps {
 }
 
 export function ResourceDetailContainer(props: ResourceDetailContainerProps) {
+  const { t } = useI18n();
+
   return (
     <ResourceDetail
       resource={props.resource}
@@ -23,7 +26,7 @@ export function ResourceDetailContainer(props: ResourceDetailContainerProps) {
       onBack={props.onBack}
       onTabChange={props.onTabChange}
       getResourceTypeIcon={getResourceTypeIcon}
-      getResourceTypeName={getResourceTypeName}
+      getResourceTypeName={(type) => getResourceTypeName(type, t)}
       getResourceStatusBgClass={getResourceStatusBgClass}
       onDeleteResource={() => props.onDeleteResource(props.resource)}
     />
